@@ -1,0 +1,38 @@
+[
+  {
+    "id": "squad_1",
+    "label": "1st Rifle Squad",
+    "type": "infantry_squad",
+    "side": "player",
+    "x": 3,
+    "y": 5,
+    "speedCellsPerSecond": 2.0
+  },
+  {
+    "id": "squad_2",
+    "label": "2nd Rifle Squad",
+    "type": "infantry_squad",
+    "side": "player",
+    "x": 5,
+    "y": 7,
+    "speedCellsPerSecond": 2.15
+  },
+  {
+    "id": "mg_team",
+    "label": "MG Team",
+    "type": "support_team",
+    "side": "player",
+    "x": 2,
+    "y": 13,
+    "speedCellsPerSecond": 1.65
+  },
+  {
+    "id": "scout_team",
+    "label": "Scout Team",
+    "type": "rifle_team",
+    "side": "player",
+    "x": 9,
+    "y": 15,
+    "speedCellsPerSecond": 2.45
+  }
+]
