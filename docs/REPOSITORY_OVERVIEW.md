@@ -18,7 +18,7 @@ There is currently no `package.json`, `src/` directory, application build system
 ```text
 .github/       Pull Request template
 config/        OpenCode job defaults
- docs/         Repository, AI-workflow, and subproject documentation
+docs/          Repository, AI-workflow, and subproject documentation
 scripts/       Python repository utilities
 AGENTS.md      Agent workflow and GitHub collaboration contract
 README.md      Short project entry point
