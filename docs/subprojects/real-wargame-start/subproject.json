@@ -1,0 +1,60 @@
+{
+  "id": "real-wargame-start",
+  "title": "2D Tactical Command Game — Project Start",
+  "status": "active",
+  "goal": "Запустить проект 2D Tactical Command Game (PixiJS + TypeScript + Vite) по мастер-документу. Первый результат — Tactical Map Workshop v0.1: редактор карты 20×20 с terrain-кистями, высотами, JSON import/export, debug overlay, test scene.",
+  "current_focus": "Реализовать Map Workshop v0.1 по GDD (гл. 9): Vite+TS+PixiJS проект, главное меню, сетка 20×20, terrain field/forest/road/swamp, высота -1/0/+1/+2, экспорт/импорт JSON, debug overlay, тестовая сцена.",
+  "key_decisions": [
+    "Стек: PixiJS + TypeScript + Vite + JSON (GDD гл. 5).",
+    "Архитектура: display (PixiJS) отделён от brain (simulation core); core не зависит от PixiJS (GDD гл. 6).",
+    "Data-first: карты, оружие, юниты, поведение — JSON; редакторы меняют данные (GDD гл. 8).",
+    "Первая версия — мастерская карты; бой, AI, геномы, сервер — позже (GDD гл. 9.1)."
+  ],
+  "must_read_first": [
+    "Inbox/MASTER_PROJECT_S_2D_TACTICAL_COMMAND_GAME.md",
+    "docs/subprojects/real-wargame-start/SUBPROJECT.md",
+    "docs/subprojects/real-wargame-start/subproject.json",
+    "docs/subprojects/real-wargame-start/JOURNAL.md"
+  ],
+  "main_files": [],
+  "test_files": [],
+  "manual_docs": [
+    "Inbox/MASTER_PROJECT_S_2D_TACTICAL_COMMAND_GAME.md"
+  ],
+  "do_not_read_by_default": [
+    "docs/ai/",
+    "docs/subprojects/github-collaboration/",
+    "docs/subprojects/repo-migration/",
+    "AGENTS.md",
+    "Large unrelated reports or telemetry dumps"
+  ],
+  "commands": [
+    "npm run dev",
+    "npm run build",
+    "python scripts/subproject_context.py real-wargame-start --brief",
+    "python scripts/subproject_context.py real-wargame-start --opencode",
+    "python scripts/subproject_context.py real-wargame-start --files"
+  ],
+  "important_sessions": [],
+  "context_sources": [],
+  "safety_rules": [
+    "Не изменять файлы за пределами docs/subprojects/real-wargame-start/ без явного разрешения.",
+    "Не добавлять в v0.1: бой, подавление, геномы, GOAP, HTN, баллистику, артиллерию, связь, сервер, БД (GDD гл. 9.3).",
+    "Сохранять разделение core/rendering/editors/data; core не должен импортировать PixiJS.",
+    "Не добавлять доктринальные AI-правила или сложную CI/CD в прототипе."
+  ],
+  "suggested_verification": [
+    "npm run dev — проект открывается в браузере",
+    "python scripts/subproject_context.py real-wargame-start --brief",
+    "python scripts/subproject_context.py real-wargame-start --opencode",
+    "python scripts/subproject_context.py real-wargame-start --files"
+  ],
+  "zworker": {
+    "boundaries": [
+      "Use only publicly readable source links and explicitly provided context.",
+      "Return ZIP with answer.md at root and repo-relative files.",
+      "Do not claim local git, test, or runtime state."
+    ],
+    "expected_answer_format": "ZIP with answer.md at root and repo-relative files"
+  }
+}
