@@ -6,3 +6,6 @@ _local/
 .ai/zchat/runtime/**
 .ai/zworker/runtime/
 .ai/zworker/runtime/**
+node_modules/
+dist/
+.vite/
