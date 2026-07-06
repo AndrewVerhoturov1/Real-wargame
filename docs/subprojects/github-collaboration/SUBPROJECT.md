@@ -6,7 +6,7 @@
 
 ## Current focus
 
-Довести Q-режим до рабочего v1 рядом с уже существующим R/manual zworker процессом: Q должен быть короткой GitHub-aware постановкой, где внешний исполнитель создаёт ветку/PR и возвращает отчёт для Codex, а Codex проверяет PR и передаёт решение человеку.
+Довести Q- и X-режим до рабочего v1 рядом с уже существующим R/manual zworker процессом: Q — короткая GitHub-aware постановка, X — W-class strong reasoning через ветку/PR/markdown-отчёт. Codex проверяет PR и передаёт решение человеку.
 
 ## Key decisions
 
@@ -21,6 +21,7 @@
 - Q-режим — v1 для внешнего исполнителя с GitHub-доступом: короткая постановка, самостоятельное чтение правил/навигации, отдельная ветка, PR и отчёт для Codex.
 - Q-режим не заменяет контроль Codex: Codex всё равно проверяет PR, diff, scope, риски и не мержит без разрешения человека.
 - Q-режим требует проверки на практике после первого реального внешнего исполнителя с GitHub-доступом.
+- X-режим — v1 W-class strong external web/chat reasoning: прямая доставка через GitHub (ветка + PR), markdown-отчёт, порядок истины: PR diff/commits первичны, отчёт вторичен. Не использует ZIP, не пишет в main, не мержит, не включает auto-merge.
 
 ## Read first
 
@@ -52,6 +53,7 @@
 - `subproject.json` содержит поля, используемые `scripts/subproject_context.py`;
 - R/manual zworker flow сохранён как ZIP с `answer.md`;
 - Q-mode описан как branch + PR + report для Codex;
+- X-mode описан как W-class strong reasoning: branch + PR + markdown-report для Codex;
 - `AGENTS.md` сохраняет существующий Subproject Workflow и расширяет его центральным контрактом.
 
 Needs local verification: запуск `python scripts/subproject_context.py github-collaboration --brief` в локальной среде.

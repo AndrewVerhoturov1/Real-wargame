@@ -3,7 +3,7 @@
   "title": "GitHub Collaboration",
   "status": "draft",
   "goal": "Создать и поддерживать понятную систему совместной разработки через GitHub, где человек принимает решения, а агенты безопасно работают через ветки, Pull Request и ограниченные задачи.",
-  "current_focus": "Довести Q-режим до рабочего v1 рядом с R/manual zworker процессом: внешний GitHub-capable исполнитель работает через ветку/PR/report, Codex проверяет, человек решает.",
+  "current_focus": "Довести Q- и X-режим до рабочего v1 рядом с R/manual zworker процессом: Q — короткая GitHub-aware постановка, X — W-class strong reasoning через ветку/PR/markdown-отчёт. Codex проверяет, человек решает.",
   "key_decisions": [
     "Публичный контракт: одна задача -> одна ветка -> один Pull Request.",
     "main не является рабочей веткой для содержательных изменений.",
@@ -15,7 +15,8 @@
     "R-режим сохраняется как полный ручной zworker-запрос с raw-ссылками и ZIP-ответом.",
     "Q-режим — v1: короткая GitHub-aware постановка, отдельная ветка, PR и отчёт для Codex.",
     "Q-режим не допускает прямую запись в main, auto-merge или merge без человека.",
-    "Q-режим требует проверки на практике после первого реального внешнего исполнителя с GitHub-доступом."
+    "Q-режим требует проверки на практике после первого реального внешнего исполнителя с GitHub-доступом.",
+    "X-режим — v1 W-class strong external web/chat reasoning: прямая доставка через GitHub (ветка + PR), markdown-отчёт, порядок истины: PR diff/commits первичны, отчёт вторичен. Не использует ZIP, не пишет в main, не мержит, не включает auto-merge."
   ],
   "must_read_first": [
     "docs/subprojects/github-collaboration/SUBPROJECT.md",
@@ -94,13 +95,15 @@
     "Не утверждать, что локальные проверки запускались, если они не запускались.",
     "Не использовать Q-режим, если у внешнего исполнителя нет GitHub-доступа или задача требует фиксированного ZIP-результата.",
     "В Q-режиме внешний исполнитель должен создать отдельную ветку и PR, а затем вернуть Codex отчёт.",
-    "Q-режим остаётся v1 и требует проверки на практике."
+    "Q-режим остаётся v1 и требует проверки на практике.",
+    "X-режим — v1 W-class strong reasoning: ветка + PR + markdown-отчёт, не использует ZIP, не пишет в main, не мержит, не включает auto-merge. Authoritative truth order: PR diff/branch/commits первичны, отчёт вторичен.",
+    "Для X-режима внешний исполнитель должен создать ветку и PR, вернуть markdown-отчёт. Не использовать X, если у исполнителя нет GitHub-доступа."
   ],
   "suggested_verification": [
     "python scripts/subproject_context.py github-collaboration --brief",
     "python scripts/subproject_context.py github-collaboration --opencode",
     "Проверить, что AGENTS.md сохранил исходный Subproject Workflow",
-    "Проверить, что docs/ai/ZWORKER_MODES.md сохраняет R-режим и описывает Q как branch + PR + report",
+    "Проверить, что docs/ai/ZWORKER_MODES.md сохраняет R-режим и описывает Q как branch + PR + report, а X как W-class strong reasoning",
     "Проверить, что docs/ai/TASK_PACK_Q_TEMPLATE.md короткий и операционный",
     "Проверить, что PR_REVIEW_CHECKLIST.md содержит Q-mode проверки"
   ],
@@ -151,6 +154,17 @@
         "no direct main write or auto-merge",
         "checks are honestly reported",
         "human receives a simple recommendation"
+      ]
+    },
+    "x_mode": {
+      "status": "v1 draft, needs real-world verification",
+      "purpose": "W-class strong external web/chat reasoning with direct GitHub branch+PR delivery and markdown report.",
+      "truth_order": "PR diff/branch/commits first; report second.",
+      "restrictions": [
+        "no ZIP",
+        "no direct main write",
+        "no merge",
+        "no auto-merge"
       ]
     }
   }
