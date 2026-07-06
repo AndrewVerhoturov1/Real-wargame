@@ -1,0 +1,30 @@
+{
+  "id": "replace-me",
+  "title": "Replace me",
+  "status": "draft",
+  "goal": "Describe the stable outcome.",
+  "current_focus": "Describe one active focus.",
+  "key_decisions": [
+    "Record durable decisions that should not be rediscovered."
+  ],
+  "must_read_first": [
+    "docs/subprojects/replace-me/SUBPROJECT.md",
+    "docs/subprojects/replace-me/subproject.json",
+    "docs/subprojects/replace-me/JOURNAL.md"
+  ],
+  "main_files": [],
+  "test_files": [],
+  "manual_docs": [],
+  "do_not_read_by_default": [],
+  "commands": [
+    "python scripts/subproject_context.py replace-me --brief"
+  ],
+  "important_sessions": [],
+  "context_sources": [],
+  "safety_rules": [],
+  "suggested_verification": [],
+  "zworker": {
+    "boundaries": [],
+    "expected_answer_format": "ZIP with answer.md at root"
+  }
+}

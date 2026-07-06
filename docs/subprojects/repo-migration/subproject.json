@@ -1,0 +1,46 @@
+{
+  "id": "repo-migration",
+  "title": "Repo Migration",
+  "status": "draft",
+  "goal": "Prepare Real-wargame repo for work without copying global skills.",
+  "current_focus": "Initial setup complete - skills globalized, subproject system ready.",
+  "key_decisions": [
+    "Skills globalized to C:\\Users\\andre\\.agents\\skills",
+    "Minimal repo-local artifacts only - no .agents/skills folder",
+    "UTF-8 for all text files"
+  ],
+  "must_read_first": [
+    "docs/subprojects/repo-migration/SUBPROJECT.md",
+    "docs/subprojects/repo-migration/subproject.json",
+    "docs/subprojects/repo-migration/JOURNAL.md"
+  ],
+  "main_files": [
+    "opencode.json",
+    "README.md",
+    ".gitignore",
+    "docs/subprojects/README.md",
+    "docs/subprojects/_template/*",
+    "docs/subprojects/repo-migration/*",
+    "scripts/subproject_context.py",
+    "config/opencode_job_defaults.json"
+  ],
+  "test_files": [],
+  "manual_docs": [],
+  "do_not_read_by_default": [
+    "Any codex-token-monitor artifacts",
+    "_local directory",
+    ".opencode directory"
+  ],
+  "commands": [
+    "python scripts/subproject_context.py repo-migration --brief",
+    "python scripts/subproject_context.py repo-migration --opencode"
+  ],
+  "important_sessions": [],
+  "context_sources": [],
+  "safety_rules": [],
+  "suggested_verification": [],
+  "zworker": {
+    "boundaries": [],
+    "expected_answer_format": "ZIP with answer.md at root"
+  }
+}
