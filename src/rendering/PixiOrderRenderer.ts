@@ -5,8 +5,9 @@ import type { UnitModel } from '../core/units/UnitModel';
 export class PixiOrderRenderer {
   readonly container = new Container();
 
-  render(map: TacticalMap, units: UnitModel[], selectedUnitId: string | null): void {
+  render(map: TacticalMap, units: UnitModel[], selectedUnitIds: string[]): void {
     this.container.removeChildren();
+    const selectedIds = new Set(selectedUnitIds);
 
     for (const unit of units) {
       if (!unit.order) {
@@ -15,7 +16,7 @@ export class PixiOrderRenderer {
 
       const from = gridToWorld(map, unit.position);
       const to = gridToWorld(map, unit.order.target);
-      const isSelected = unit.id === selectedUnitId;
+      const isSelected = selectedIds.has(unit.id);
       const graphics = new Graphics();
 
       graphics.lineStyle(isSelected ? 4 : 2, isSelected ? 0xfff2a8 : 0xf1d77a, isSelected ? 0.95 : 0.55);
