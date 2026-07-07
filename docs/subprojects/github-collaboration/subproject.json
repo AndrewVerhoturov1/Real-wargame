@@ -3,7 +3,7 @@
   "title": "GitHub Collaboration",
   "status": "draft",
   "goal": "Создать и поддерживать понятную систему совместной разработки через GitHub, где человек принимает решения, а агенты безопасно работают через ветки, Pull Request и ограниченные задачи.",
-  "current_focus": "Довести Q-режим до рабочего v1 рядом с R/manual zworker процессом: внешний GitHub-capable исполнитель работает через ветку/PR/report, Codex проверяет, человек решает.",
+  "current_focus": "Довести Q-режим до рабочего v1 рядом с R/manual zworker процессом: внешний GitHub-capable исполнитель работает через ветку/PR/report, Codex проверяет, человек решает. Добавить X-режим (r-init) как preview-интеграционный workflow. Route X — отдельный механизм доставки, используемый r-init, но не идентичный ему.",
   "key_decisions": [
     "Публичный контракт: одна задача -> одна ветка -> один Pull Request.",
     "main не является рабочей веткой для содержательных изменений.",
@@ -15,7 +15,8 @@
     "R-режим сохраняется как полный ручной zworker-запрос с raw-ссылками и ZIP-ответом.",
     "Q-режим — v1: короткая GitHub-aware постановка, отдельная ветка, PR и отчёт для Codex.",
     "Q-режим не допускает прямую запись в main, auto-merge или merge без человека.",
-    "Q-режим требует проверки на практике после первого реального внешнего исполнителя с GitHub-доступом."
+    "Q-режим требует проверки на практике после первого реального внешнего исполнителя с GitHub-доступом.",
+    "X-режим — preview-интеграционный workflow (r-init). Route X — отдельный механизм доставки, не идентичный r-init."
   ],
   "must_read_first": [
     "docs/subprojects/github-collaboration/SUBPROJECT.md",
@@ -43,6 +44,7 @@
     "docs/ai/PR_REVIEW_CHECKLIST.md",
     "docs/ai/ZWORKER_MODES.md",
     "docs/ai/POST_PR_CONSOLIDATION.md",
+    "docs/ai/R_INIT_WORKFLOW.md",
     "docs/subprojects/github-collaboration/SUBPROJECT.md",
     "docs/subprojects/github-collaboration/subproject.json",
     "docs/subprojects/github-collaboration/JOURNAL.md"
@@ -53,7 +55,8 @@
     "docs/ai/TASK_PACK_TEMPLATE.md",
     "docs/ai/TASK_PACK_Q_TEMPLATE.md",
     "docs/ai/PR_REVIEW_CHECKLIST.md",
-    "docs/ai/ZWORKER_MODES.md"
+    "docs/ai/ZWORKER_MODES.md",
+    "docs/ai/R_INIT_WORKFLOW.md"
   ],
   "do_not_read_by_default": [
     "_local directory",
@@ -94,7 +97,9 @@
     "Не утверждать, что локальные проверки запускались, если они не запускались.",
     "Не использовать Q-режим, если у внешнего исполнителя нет GitHub-доступа или задача требует фиксированного ZIP-результата.",
     "В Q-режиме внешний исполнитель должен создать отдельную ветку и PR, а затем вернуть Codex отчёт.",
-    "Q-режим остаётся v1 и требует проверки на практике."
+    "Q-режим остаётся v1 и требует проверки на практике.",
+    "X-режим (r-init) требует явного GO человека перед merge. Route X — механизм доставки, не идентичный r-init.",
+    "В r-init preview к PR прикладывается .bat-лаунчер и чеклист ручного тестирования."
   ],
   "suggested_verification": [
     "python scripts/subproject_context.py github-collaboration --brief",
@@ -102,7 +107,9 @@
     "Проверить, что AGENTS.md сохранил исходный Subproject Workflow",
     "Проверить, что docs/ai/ZWORKER_MODES.md сохраняет R-режим и описывает Q как branch + PR + report",
     "Проверить, что docs/ai/TASK_PACK_Q_TEMPLATE.md короткий и операционный",
-    "Проверить, что PR_REVIEW_CHECKLIST.md содержит Q-mode проверки"
+    "Проверить, что PR_REVIEW_CHECKLIST.md содержит Q-mode проверки",
+    "Проверить, что docs/ai/R_INIT_WORKFLOW.md содержит preview-ветка, .bat-лаунчер, чеклист, GO/NO-GO, merge-handoff и статусы компонентов",
+    "Проверить, что docs/ai/ZWORKER_MODES.md описывает X-режим (r-init) как третий режим"
   ],
   "zworker": {
     "boundaries": [
@@ -151,6 +158,22 @@
         "no direct main write or auto-merge",
         "checks are honestly reported",
         "human receives a simple recommendation"
+      ]
+    },
+    "x_mode": {
+      "status": "v1 draft, added alongside R and Q. Route X is a separate delivery mechanism, not identical to r-init.",
+      "purpose": "Preview-integration workflow (r-init): preview branch, .bat launcher, human test checklist, GO/NO-GO, merge-handoff. Route X is a separate delivery mechanism used by r-init.",
+      "codex_creates": [
+        "preview branch with prefix preview/ or r-init/",
+        "Pull Request with [r-init] or [preview] label",
+        ".bat launcher for terminal-free testing",
+        "human test checklist with expected results",
+        "merge-handoff template"
+      ],
+      "human_does": [
+        "double-click .bat to launch",
+        "walk through the checklist",
+        "say GO (merge) or NO-GO (rework)"
       ]
     }
   }
