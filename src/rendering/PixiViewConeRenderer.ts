@@ -7,8 +7,9 @@ const ARC_STEPS = 18;
 export class PixiViewConeRenderer {
   readonly container = new Container();
 
-  render(map: TacticalMap, units: UnitModel[], selectedUnitId: string | null): void {
+  render(map: TacticalMap, units: UnitModel[], selectedUnitIds: string[]): void {
     this.container.removeChildren();
+    const selectedIds = new Set(selectedUnitIds);
 
     for (const unit of units) {
       const center = gridToWorld(map, unit.position);
@@ -16,7 +17,7 @@ export class PixiViewConeRenderer {
       const halfAngle = unit.viewAngleRadians / 2;
       const startAngle = unit.facingRadians - halfAngle;
       const endAngle = unit.facingRadians + halfAngle;
-      const isSelected = unit.id === selectedUnitId;
+      const isSelected = selectedIds.has(unit.id);
       const graphics = new Graphics();
 
       graphics.beginFill(0xf1d77a, isSelected ? 0.16 : 0.07);
