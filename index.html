@@ -15,6 +15,10 @@
       <p data-i18n="primaryInstruction">Left click a counter to select it. Right click the map to issue a move order.</p>
       <p data-i18n="cameraInstruction">Mouse wheel zooms. Middle mouse or Space + left drag pans.</p>
       <p data-i18n="newFeatures">Large map, crisp HTML labels, map objects, held items and view cones are enabled.</p>
+      <div class="hud-controls" aria-label="Map display controls">
+        <button id="grid-toggle" class="hud-toggle" type="button" aria-pressed="true">Grid: on</button>
+        <button id="vision-toggle" class="hud-toggle" type="button" aria-pressed="true">View cones: on</button>
+      </div>
       <pre id="debug-panel">Loading tactical board...</pre>
     </aside>
     <script type="module" src="/src/main.ts"></script>
