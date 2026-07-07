@@ -2,6 +2,7 @@ import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap, normalizeMap, type TacticalMap, type TacticalMapData } from '../map/MapModel';
 import { createMoveOrder } from '../orders/MoveOrder';
 import {
+  getPressureReportAtPosition,
   normalizePressureZones,
   type PressureZone,
   type PressureZoneData,
@@ -114,8 +115,29 @@ export function issueMoveOrderToSelectedUnit(
     unit.order = createMoveOrder(unitTarget);
     unit.behaviorRuntime.lastEvent = 'move_order_received';
     unit.behaviorRuntime.reason = 'Move order received.';
+    applyPressurePreview(state, unit, unitTarget);
     setUnitDirection(unit, unitTarget);
   }
+}
+
+function applyPressurePreview(state: SimulationState, unit: UnitModel, target: GridPosition): void {
+  const report = getPressureReportAtPosition(target, state.pressureZones);
+
+  if (!report) {
+    unit.behaviorRuntime.state = 'moving';
+    unit.behaviorRuntime.posture = 'standing';
+    unit.behaviorRuntime.danger = 0;
+    unit.behaviorRuntime.currentAction = 'move';
+    return;
+  }
+
+  unit.behaviorRuntime.state = 'moving';
+  unit.behaviorRuntime.posture = 'crouched';
+  unit.behaviorRuntime.rawDanger = report.rawPressure;
+  unit.behaviorRuntime.danger = Math.round(report.rawPressure);
+  unit.behaviorRuntime.stress = Math.max(unit.behaviorRuntime.stress, Math.min(100, report.rawPressure / 2));
+  unit.behaviorRuntime.currentAction = 'cautious_move';
+  unit.behaviorRuntime.reason = `pressure_target:${report.zone.id}`;
 }
 
 function getSelectionCenter(units: UnitModel[]): GridPosition {
