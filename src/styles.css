@@ -68,7 +68,8 @@ canvas {
   line-height: 1.2;
 }
 
-#language-toggle {
+#language-toggle,
+.hud-toggle {
   flex: 0 0 auto;
   min-width: 82px;
   padding: 7px 10px;
@@ -82,8 +83,28 @@ canvas {
   pointer-events: auto;
 }
 
-#language-toggle:hover {
+#language-toggle:hover,
+.hud-toggle:hover {
   background: rgba(255, 242, 168, 0.18);
+}
+
+.hud-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+  pointer-events: auto;
+}
+
+.hud-toggle {
+  min-width: 118px;
+  text-align: center;
+}
+
+.hud-toggle-off {
+  color: #c8c1aa;
+  border-color: rgba(214, 206, 178, 0.24);
+  background: rgba(214, 206, 178, 0.05);
 }
 
 #hud p {
