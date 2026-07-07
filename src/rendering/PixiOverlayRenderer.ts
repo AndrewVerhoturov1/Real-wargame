@@ -1,5 +1,6 @@
 import { Container, Graphics } from 'pixi.js';
 import { gridToCellCenter } from '../core/map/MapModel';
+import type { PressureZone } from '../core/pressure/PressureZone';
 import type { SimulationState } from '../core/simulation/SimulationState';
 
 export class PixiOverlayRenderer {
@@ -7,6 +8,7 @@ export class PixiOverlayRenderer {
 
   render(state: SimulationState, showGrid = true): void {
     this.container.removeChildren();
+    drawPressureZones(this.container, state.pressureZones, state.map.cellSize);
 
     if (showGrid && state.mouseGridPosition) {
       const { map } = state;
@@ -39,5 +41,29 @@ export class PixiOverlayRenderer {
 
       this.container.addChild(graphics);
     }
+  }
+}
+
+function drawPressureZones(container: Container, zones: PressureZone[], cellSize: number): void {
+  for (const zone of zones) {
+    const graphics = new Graphics();
+    const alpha = Math.max(0.08, Math.min(0.28, zone.strength / 350));
+
+    graphics.lineStyle(2, 0xb6633c, 0.75);
+    graphics.beginFill(0xb6633c, alpha);
+
+    if (zone.shape === 'circle') {
+      graphics.drawCircle(zone.x * cellSize, zone.y * cellSize, zone.radiusCells * cellSize);
+    } else {
+      graphics.drawRect(
+        (zone.x - zone.widthCells / 2) * cellSize,
+        (zone.y - zone.heightCells / 2) * cellSize,
+        zone.widthCells * cellSize,
+        zone.heightCells * cellSize,
+      );
+    }
+
+    graphics.endFill();
+    container.addChild(graphics);
   }
 }
