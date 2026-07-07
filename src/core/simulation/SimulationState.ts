@@ -122,22 +122,19 @@ export function issueMoveOrderToSelectedUnit(
 
 function applyPressurePreview(state: SimulationState, unit: UnitModel, target: GridPosition): void {
   const report = getPressureReportAtPosition(target, state.pressureZones);
+  unit.behaviorRuntime.state = 'moving';
+  unit.behaviorRuntime.posture = 'standing';
+  unit.behaviorRuntime.currentAction = 'move';
 
   if (!report) {
-    unit.behaviorRuntime.state = 'moving';
-    unit.behaviorRuntime.posture = 'standing';
     unit.behaviorRuntime.danger = 0;
-    unit.behaviorRuntime.currentAction = 'move';
+    unit.behaviorRuntime.reason = 'move_target_clear';
     return;
   }
 
-  unit.behaviorRuntime.state = 'moving';
-  unit.behaviorRuntime.posture = 'crouched';
   unit.behaviorRuntime.rawDanger = report.rawPressure;
   unit.behaviorRuntime.danger = Math.round(report.rawPressure);
-  unit.behaviorRuntime.stress = Math.max(unit.behaviorRuntime.stress, Math.min(100, report.rawPressure / 2));
-  unit.behaviorRuntime.currentAction = 'cautious_move';
-  unit.behaviorRuntime.reason = `pressure_target:${report.zone.id}`;
+  unit.behaviorRuntime.reason = `move_target_pressure:${report.zone.id}`;
 }
 
 function getSelectionCenter(units: UnitModel[]): GridPosition {
