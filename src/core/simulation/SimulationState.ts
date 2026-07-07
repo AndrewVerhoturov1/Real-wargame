@@ -1,6 +1,11 @@
 import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap, normalizeMap, type TacticalMap, type TacticalMapData } from '../map/MapModel';
 import { createMoveOrder } from '../orders/MoveOrder';
+import {
+  normalizePressureZones,
+  type PressureZone,
+  type PressureZoneData,
+} from '../pressure/PressureZone';
 import { normalizeUnits, type UnitData, type UnitModel } from '../units/UnitModel';
 
 export interface SelectionBox {
@@ -11,16 +16,22 @@ export interface SelectionBox {
 export interface SimulationState {
   map: TacticalMap;
   units: UnitModel[];
+  pressureZones: PressureZone[];
   selectedUnitId: string | null;
   selectedUnitIds: string[];
   mouseGridPosition: GridPosition | null;
   selectionBox: SelectionBox | null;
 }
 
-export function createInitialState(mapData: TacticalMapData, unitsData: UnitData[]): SimulationState {
+export function createInitialState(
+  mapData: TacticalMapData,
+  unitsData: UnitData[],
+  pressureZoneData: PressureZoneData[] = [],
+): SimulationState {
   return {
     map: normalizeMap(mapData),
     units: normalizeUnits(unitsData),
+    pressureZones: normalizePressureZones(pressureZoneData),
     selectedUnitId: null,
     selectedUnitIds: [],
     mouseGridPosition: null,
@@ -101,6 +112,8 @@ export function issueMoveOrderToSelectedUnit(
         });
 
     unit.order = createMoveOrder(unitTarget);
+    unit.behaviorRuntime.lastEvent = 'move_order_received';
+    unit.behaviorRuntime.reason = 'Move order received.';
     setUnitDirection(unit, unitTarget);
   }
 }
