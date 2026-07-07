@@ -1,30 +1,36 @@
 [
   {
     "id": "squad_1",
-    "label": "1st Rifle Squad",
+    "label": "1st Squad",
     "type": "infantry_squad",
     "side": "player",
     "x": 3,
     "y": 5,
-    "speedCellsPerSecond": 2.0
+    "speedCellsPerSecond": 2.0,
+    "facingDegrees": 20,
+    "viewAngleDegrees": 118
   },
   {
     "id": "squad_2",
-    "label": "2nd Rifle Squad",
+    "label": "2nd Squad",
     "type": "infantry_squad",
     "side": "player",
     "x": 5,
     "y": 7,
-    "speedCellsPerSecond": 2.15
+    "speedCellsPerSecond": 2.15,
+    "facingDegrees": -25,
+    "viewAngleDegrees": 118
   },
   {
-    "id": "mg_team",
-    "label": "MG Team",
+    "id": "support_team",
+    "label": "Support Team",
     "type": "support_team",
     "side": "player",
     "x": 2,
     "y": 13,
-    "speedCellsPerSecond": 1.65
+    "speedCellsPerSecond": 1.65,
+    "facingDegrees": 10,
+    "viewAngleDegrees": 118
   },
   {
     "id": "scout_team",
@@ -33,6 +39,8 @@
     "side": "player",
     "x": 9,
     "y": 15,
-    "speedCellsPerSecond": 2.45
+    "speedCellsPerSecond": 2.45,
+    "facingDegrees": 35,
+    "viewAngleDegrees": 118
   }
 ]
