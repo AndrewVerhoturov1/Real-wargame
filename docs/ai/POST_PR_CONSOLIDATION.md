@@ -93,6 +93,9 @@ reject               отклонить
 merged               принято в main
 superseded            заменено другим результатом
 blocked              нельзя продолжать без уточнения
+included in preview   включено в r-init preview
+excluded              исключено из r-init preview
+needs follow-up       требует отдельной доработки после merge
 ```
 
 ## Как работать с несколькими PR одновременно
