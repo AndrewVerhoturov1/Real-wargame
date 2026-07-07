@@ -32,6 +32,10 @@ Every task report MUST include:
 - **branch_cleanup_reason**: if left open, the required Russian phrase;
 - **risks**: known risks or "none known".
 
+## Local Sync
+
+10. External push/PR to `real-wargame-preview` delivers changes to GitHub only, not to the user's PC. The local preview folder must be pulled/synced from `origin/real-wargame-preview` by Codex/OpenCode before the result can be considered ready for local testing. Include `remote_preview_commit` in the report so Codex can verify local sync.
+
 ## Prohibited
 
 - No direct writes to `main`.
