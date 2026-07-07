@@ -47,4 +47,16 @@ export function issueMoveOrderToSelectedUnit(
 
   const target = clampGridPositionToMap(state.map, gridToCellCenter(state.map, rawTarget));
   selectedUnit.order = createMoveOrder(target);
+  setUnitDirection(selectedUnit, target);
+}
+
+function setUnitDirection(unit: UnitModel, target: GridPosition): void {
+  const dx = target.x - unit.position.x;
+  const dy = target.y - unit.position.y;
+
+  if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) {
+    return;
+  }
+
+  unit.facingRadians = Math.atan2(dy, dx);
 }
