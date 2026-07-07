@@ -1,5 +1,5 @@
 import { Container, Graphics } from 'pixi.js';
-import { gridToCellCenter, type TacticalMap } from '../core/map/MapModel';
+import { gridToCellCenter } from '../core/map/MapModel';
 import type { SimulationState } from '../core/simulation/SimulationState';
 
 export class PixiOverlayRenderer {
