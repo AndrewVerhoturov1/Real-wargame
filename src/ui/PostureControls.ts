@@ -47,8 +47,60 @@ export function installPostureControls(debugPanel: HTMLElement, state: Simulatio
     controls.appendChild(button);
   }
 
+  const passport = document.createElement('pre');
+  passport.className = 'soldier-passport';
+  passport.style.margin = '10px 0 0';
+  passport.style.padding = '12px';
+  passport.style.borderRadius = '10px';
+  passport.style.background = 'rgba(255, 242, 168, 0.08)';
+  passport.style.color = '#f6edcf';
+  passport.style.fontSize = '12px';
+  passport.style.lineHeight = '1.45';
+  passport.style.whiteSpace = 'pre-wrap';
+
   debugPanel.insertAdjacentElement('afterend', controls);
+  controls.insertAdjacentElement('afterend', passport);
   installRussianInspectorText(debugPanel);
+  window.setInterval(() => renderSoldierPassport(passport, state), 250);
+}
+
+function renderSoldierPassport(passport: HTMLElement, state: SimulationState): void {
+  const unit = getSelectedUnit(state);
+
+  if (!unit) {
+    passport.textContent = 'Паспорт солдата: выберите юнита.';
+    return;
+  }
+
+  const traits = unit.soldier.traits;
+  const condition = unit.soldier.condition;
+
+  passport.textContent = [
+    'Паспорт солдата:',
+    '',
+    'Постоянные качества:',
+    `Устойчивость: ${traits.resilience}`,
+    `Осторожность: ${traits.caution}`,
+    `Решительность: ${traits.decisiveness}`,
+    `Дисциплина: ${traits.discipline}`,
+    `Инициативность: ${traits.initiative}`,
+    `Тактика: ${traits.tactics}`,
+    `Владение оружием: ${traits.weaponSkill}`,
+    '',
+    'Текущее состояние:',
+    `Усталость: ${condition.fatigue}`,
+    `Стресс: ${Math.round(unit.behaviorRuntime.stress)}`,
+    `Боевой дух: ${condition.morale}`,
+    `Растерянность: ${condition.confusion}`,
+    `Здоровье: ${condition.health}`,
+    '',
+    'Восприятие и движение:',
+    `Внимательность: ${condition.attention}`,
+    `Обзор: ${condition.view}`,
+    `Интуиция: ${condition.intuition}`,
+    `Скорость: ${condition.speed}`,
+    `Скрытность: ${condition.stealth}`,
+  ].join('\n');
 }
 
 function installRussianInspectorText(debugPanel: HTMLElement): void {
