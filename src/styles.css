@@ -1,0 +1,80 @@
+:root {
+  color: #f3ead4;
+  background: #121612;
+  font-family: Arial, Helvetica, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background:
+    radial-gradient(circle at 20% 10%, rgba(121, 143, 89, 0.16), transparent 32rem),
+    linear-gradient(135deg, #11150f, #1c2118 54%, #0d100c);
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+#hud {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: min(360px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid rgba(255, 242, 168, 0.28);
+  border-radius: 14px;
+  background: rgba(11, 14, 10, 0.78);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+#hud h1 {
+  margin: 0 0 8px;
+  color: #fff2a8;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+#hud p {
+  margin: 6px 0;
+  color: #d6ceb2;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+#debug-panel {
+  min-height: 128px;
+  margin: 12px 0 0;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(255, 242, 168, 0.08);
+  color: #f6edcf;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}

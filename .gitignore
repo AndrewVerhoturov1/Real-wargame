@@ -8,3 +8,6 @@ _local/
 .ai/zworker/runtime/**
 .env
 .env.*
+node_modules/
+dist/
+.vite/
