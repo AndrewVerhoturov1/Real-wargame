@@ -275,6 +275,10 @@ Create a separate branch and Pull Request. Then reply with:
 Do not merge. Do not enable auto-merge. Do not push directly to main. Do not claim local checks were run unless they were actually run.
 ```
 
+## Двухпапочная preview-схема
+
+Проект использует две папки: `Real-wargame` (main) и `Real-wargame-preview` (real-wargame-preview). Все изменения сначала попадают в preview-ветку и тестируются в preview-папке. `main` меняется только после GO пользователя. Подробно: `docs/workflow/LOCAL_TWO_FOLDER_WORKFLOW.md`.
+
 ## X-режим: r-init preview-интеграция
 
 X (режим r-init) — preview-интеграционный режим для изменений, которые нужно проверить вживую до merge. Route X — отдельный механизм браузерной/GitHub-доставки, который r-init может использовать как транспорт; r-init и Route X не идентичны.

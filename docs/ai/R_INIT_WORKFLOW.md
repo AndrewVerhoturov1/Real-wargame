@@ -22,6 +22,8 @@ R-init — preview-интеграционный режим, в котором и
 
 ## Preview-ветка и Preview-PR
 
+Preview-веткой по умолчанию является `real-wargame-preview`. Если задача не требует отдельной черновой ветки, изменения вносятся сразу в `real-wargame-preview`. Пользователь тестирует в локальной preview-папке `Real-wargame-preview`.
+
 1. Codex создаёт отдельную ветку с префиксом `preview/` или `r-init/`.
 2. Codex открывает Pull Request из этой ветки в `main`.
 3. PR помечается меткой `[r-init]` или `[preview]` в заголовке или описании.
