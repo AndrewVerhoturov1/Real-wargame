@@ -8,10 +8,14 @@
   <body>
     <div id="app"></div>
     <aside id="hud" aria-label="Tactical board HUD">
-      <h1>Tactical Board Prototype v0.2</h1>
-      <p>Left click a counter to select it. Right click the map to issue a move order.</p>
-      <p>Mouse wheel zooms. Middle mouse or Space + left drag pans.</p>
-      <pre id="debug-panel">Loading tactical board…</pre>
+      <div class="hud-header">
+        <h1 data-i18n="title">Tactical Board Prototype v0.2</h1>
+        <button id="language-toggle" type="button" aria-label="Switch language">RU</button>
+      </div>
+      <p data-i18n="primaryInstruction">Left click a counter to select it. Right click the map to issue a move order.</p>
+      <p data-i18n="cameraInstruction">Mouse wheel zooms. Middle mouse or Space + left drag pans.</p>
+      <p data-i18n="newFeatures">Large map, crisp HTML labels, map objects, held items and view cones are enabled.</p>
+      <pre id="debug-panel">Loading tactical board...</pre>
     </aside>
     <script type="module" src="/src/main.ts"></script>
   </body>
