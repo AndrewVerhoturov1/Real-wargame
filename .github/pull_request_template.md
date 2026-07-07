@@ -1,5 +1,7 @@
 ## PR Description
 
+> **Note:** The default delivery method for external GitHub-aware chats is a **direct commit/push to `real-wargame-preview`**. PRs are the **fallback** when direct push is not possible.
+
 ### Required docs read
 - [ ] I have read `AGENTS.md`
 - [ ] I have read `docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md`

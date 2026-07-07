@@ -46,4 +46,4 @@ Git устроен так: когда вы переключаете ветку (
 
 ## Внешние исполнители
 
-Внешние GitHub-aware исполнители (web-chat, Q-mode, zworker с GitHub-доступом) обязаны прочитать `docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md` перед началом работы.
+Внешние GitHub-aware исполнители (web-chat, Q-mode, zworker с GitHub-доступом) обязаны прочитать `docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md` перед началом работы. По умолчанию они коммитят/пушат результат напрямую в `real-wargame-preview`. Если прямой пуш невозможен — используют временную ветку + PR с последующей очисткой.

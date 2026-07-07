@@ -15,6 +15,10 @@ jobs:
         run: |
           set -e
 
+          # This workflow guards PRs targeting main.
+          # Note: The preferred external delivery is direct push to real-wargame-preview, not PRs.
+          # PRs targeting main from task branches are a preview-policy violation without GO.
+
           BASE_BRANCH="${{ github.base_ref }}"
           HEAD_BRANCH="${{ github.head_ref }}"
 
@@ -25,6 +29,7 @@ jobs:
 
           DEFAULT_TARGET="real-wargame-preview"
           echo "Default target branch: $DEFAULT_TARGET"
+          echo "Default external delivery: direct push to $DEFAULT_TARGET (PR is fallback)"
           echo ""
 
           # Check: if base is main, flag it unless MAIN_GO is recorded
@@ -61,3 +66,4 @@ jobs:
         run: |
           echo "Preview policy result: ${{ env.preview_policy }}"
           echo "Default target for this repository is: real-wargame-preview"
+          echo "Default external delivery is: direct push to preview (PR is fallback)"

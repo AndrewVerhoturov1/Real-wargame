@@ -22,14 +22,13 @@ R-init — preview-интеграционный режим, в котором и
 - тривиальных изменений (опечатки, переименования);
 - экстренных исправлений, где дорога каждая минута.
 
-## Preview-ветка и Preview-PR
+## Preview-ветка
 
 Этот проект использует постоянную preview-ветку `real-wargame-preview`. Пользователь тестирует в локальной preview-папке `Real-wargame-preview`.
 
-1. Codex создаёт отдельную task-ветку (например, `codex/<feature-name>`) от `real-wargame-preview` или из неё.
-2. Codex открывает Pull Request из task-ветки в `real-wargame-preview` (не в `main`).
-3. После GO пользователя выполняется merge из `real-wargame-preview` в `main`.
-4. К PR прикладывается `.bat`-лаунчер (см. раздел «Launcher»).
+1. Изменения попадают в `real-wargame-preview` (прямым пушем или через PR, если прямой пуш невозможен).
+2. После GO пользователя выполняется merge из `real-wargame-preview` в `main`.
+3. К результату прикладывается `.bat`-лаунчер (см. раздел «Launcher»).
 
 ## Launcher: .bat для терминал-фри тестирования
 
