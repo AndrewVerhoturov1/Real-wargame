@@ -18,6 +18,7 @@ export class HtmlOverlayRenderer {
 
   render(state: SimulationState, locale: Locale): void {
     const visibleKeys = new Set<string>();
+    const selectedIds = new Set(state.selectedUnitIds);
 
     for (const cell of state.map.cells) {
       if (cell.height === 0) {
@@ -56,7 +57,7 @@ export class HtmlOverlayRenderer {
     for (const unit of state.units) {
       const key = `unit:${unit.id}`;
       visibleKeys.add(key);
-      const label = this.getLabel(key, unit.id === state.selectedUnitId ? 'unit-label unit-label-selected' : 'unit-label');
+      const label = this.getLabel(key, selectedIds.has(unit.id) ? 'unit-label unit-label-selected' : 'unit-label');
       const world = gridToWorld(state.map, unit.position);
       const screen = this.projector.worldToScreen({
         x: world.x,
