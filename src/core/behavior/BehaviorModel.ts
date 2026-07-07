@@ -13,6 +13,38 @@ export interface BehaviorSettings {
   stressRecoveryPerSecond: number;
 }
 
+export interface SoldierTraits {
+  resilience: number;
+  caution: number;
+  decisiveness: number;
+  discipline: number;
+  initiative: number;
+  tactics: number;
+  weaponSkill: number;
+}
+
+export interface SoldierCondition {
+  fatigue: number;
+  morale: number;
+  confusion: number;
+  health: number;
+  attention: number;
+  view: number;
+  intuition: number;
+  speed: number;
+  stealth: number;
+}
+
+export interface SoldierParameters {
+  traits: SoldierTraits;
+  condition: SoldierCondition;
+}
+
+export interface SoldierParameterOverrides {
+  traits?: Partial<SoldierTraits>;
+  condition?: Partial<SoldierCondition>;
+}
+
 export interface UnitBehaviorRuntime {
   state: UnitState;
   previousState: UnitState;
@@ -83,6 +115,119 @@ export const BEHAVIOR_PROFILES: Record<BehaviorProfileId, BehaviorSettings> = {
   },
 };
 
+export const SOLDIER_PARAMETERS_BY_PROFILE: Record<BehaviorProfileId, SoldierParameters> = {
+  green: {
+    traits: {
+      resilience: 35,
+      caution: 62,
+      decisiveness: 35,
+      discipline: 45,
+      initiative: 28,
+      tactics: 32,
+      weaponSkill: 38,
+    },
+    condition: {
+      fatigue: 0,
+      morale: 58,
+      confusion: 12,
+      health: 100,
+      attention: 45,
+      view: 52,
+      intuition: 25,
+      speed: 52,
+      stealth: 35,
+    },
+  },
+  regular: {
+    traits: {
+      resilience: 55,
+      caution: 50,
+      decisiveness: 52,
+      discipline: 58,
+      initiative: 45,
+      tactics: 55,
+      weaponSkill: 55,
+    },
+    condition: {
+      fatigue: 0,
+      morale: 68,
+      confusion: 5,
+      health: 100,
+      attention: 58,
+      view: 60,
+      intuition: 42,
+      speed: 58,
+      stealth: 50,
+    },
+  },
+  veteran: {
+    traits: {
+      resilience: 78,
+      caution: 58,
+      decisiveness: 70,
+      discipline: 72,
+      initiative: 66,
+      tactics: 78,
+      weaponSkill: 76,
+    },
+    condition: {
+      fatigue: 0,
+      morale: 82,
+      confusion: 0,
+      health: 100,
+      attention: 72,
+      view: 66,
+      intuition: 70,
+      speed: 60,
+      stealth: 66,
+    },
+  },
+  cautious: {
+    traits: {
+      resilience: 58,
+      caution: 82,
+      decisiveness: 42,
+      discipline: 60,
+      initiative: 40,
+      tactics: 62,
+      weaponSkill: 54,
+    },
+    condition: {
+      fatigue: 0,
+      morale: 64,
+      confusion: 4,
+      health: 100,
+      attention: 68,
+      view: 64,
+      intuition: 58,
+      speed: 54,
+      stealth: 62,
+    },
+  },
+  reckless: {
+    traits: {
+      resilience: 68,
+      caution: 25,
+      decisiveness: 78,
+      discipline: 48,
+      initiative: 74,
+      tactics: 45,
+      weaponSkill: 58,
+    },
+    condition: {
+      fatigue: 0,
+      morale: 76,
+      confusion: 4,
+      health: 100,
+      attention: 50,
+      view: 56,
+      intuition: 44,
+      speed: 66,
+      stealth: 35,
+    },
+  },
+};
+
 export const POSTURE_MOVE_MULTIPLIER: Record<UnitPosture, number> = {
   standing: 1,
   crouched: 0.65,
@@ -110,6 +255,24 @@ export function createBehaviorSettings(
   return {
     ...BEHAVIOR_PROFILES[profileId],
     ...overrides,
+  };
+}
+
+export function createSoldierParameters(
+  profileId: BehaviorProfileId,
+  overrides: SoldierParameterOverrides = {},
+): SoldierParameters {
+  const base = SOLDIER_PARAMETERS_BY_PROFILE[profileId];
+
+  return {
+    traits: {
+      ...base.traits,
+      ...overrides.traits,
+    },
+    condition: {
+      ...base.condition,
+      ...overrides.condition,
+    },
   };
 }
 
