@@ -3,11 +3,18 @@ import { clampGridPositionToMap, normalizeMap, type TacticalMap, type TacticalMa
 import { createMoveOrder } from '../orders/MoveOrder';
 import { normalizeUnits, type UnitData, type UnitModel } from '../units/UnitModel';
 
+export interface SelectionBox {
+  start: GridPosition;
+  current: GridPosition;
+}
+
 export interface SimulationState {
   map: TacticalMap;
   units: UnitModel[];
   selectedUnitId: string | null;
+  selectedUnitIds: string[];
   mouseGridPosition: GridPosition | null;
+  selectionBox: SelectionBox | null;
 }
 
 export function createInitialState(mapData: TacticalMapData, unitsData: UnitData[]): SimulationState {
@@ -15,7 +22,9 @@ export function createInitialState(mapData: TacticalMapData, unitsData: UnitData
     map: normalizeMap(mapData),
     units: normalizeUnits(unitsData),
     selectedUnitId: null,
+    selectedUnitIds: [],
     mouseGridPosition: null,
+    selectionBox: null,
   };
 }
 
@@ -27,27 +36,97 @@ export function getSelectedUnit(state: SimulationState): UnitModel | undefined {
   return state.units.find((unit) => unit.id === state.selectedUnitId);
 }
 
+export function getSelectedUnits(state: SimulationState): UnitModel[] {
+  const selectedIds = new Set(state.selectedUnitIds);
+  return state.units.filter((unit) => selectedIds.has(unit.id));
+}
+
 export function selectUnit(state: SimulationState, unitId: string | null): void {
   state.selectedUnitId = unitId;
+  state.selectedUnitIds = unitId ? [unitId] : [];
+}
+
+export function selectUnits(state: SimulationState, unitIds: string[]): void {
+  const uniqueIds = [...new Set(unitIds)];
+  state.selectedUnitIds = uniqueIds;
+  state.selectedUnitId = uniqueIds[0] ?? null;
+}
+
+export function selectUnitsInBox(state: SimulationState, box: SelectionBox): void {
+  selectUnits(
+    state,
+    state.units
+      .filter((unit) => isInsideBox(unit.position, box))
+      .map((unit) => unit.id),
+  );
 }
 
 export function setMouseGridPosition(state: SimulationState, position: GridPosition | null): void {
   state.mouseGridPosition = position;
 }
 
+export function startSelectionBox(state: SimulationState, start: GridPosition): void {
+  state.selectionBox = { start, current: start };
+}
+
+export function updateSelectionBox(state: SimulationState, current: GridPosition): void {
+  if (state.selectionBox) {
+    state.selectionBox = { start: state.selectionBox.start, current };
+  }
+}
+
+export function clearSelectionBox(state: SimulationState): void {
+  state.selectionBox = null;
+}
+
 export function issueMoveOrderToSelectedUnit(
   state: SimulationState,
   rawTarget: GridPosition,
 ): void {
-  const selectedUnit = getSelectedUnit(state);
+  const selectedUnits = getSelectedUnits(state);
 
-  if (!selectedUnit) {
+  if (selectedUnits.length === 0) {
     return;
   }
 
   const target = clampGridPositionToMap(state.map, rawTarget);
-  selectedUnit.order = createMoveOrder(target);
-  setUnitDirection(selectedUnit, target);
+  const center = getSelectionCenter(selectedUnits);
+
+  for (const unit of selectedUnits) {
+    const unitTarget = selectedUnits.length === 1
+      ? target
+      : clampGridPositionToMap(state.map, {
+          x: target.x + unit.position.x - center.x,
+          y: target.y + unit.position.y - center.y,
+        });
+
+    unit.order = createMoveOrder(unitTarget);
+    setUnitDirection(unit, unitTarget);
+  }
+}
+
+function getSelectionCenter(units: UnitModel[]): GridPosition {
+  const total = units.reduce(
+    (sum, unit) => ({
+      x: sum.x + unit.position.x,
+      y: sum.y + unit.position.y,
+    }),
+    { x: 0, y: 0 },
+  );
+
+  return {
+    x: total.x / units.length,
+    y: total.y / units.length,
+  };
+}
+
+function isInsideBox(position: GridPosition, box: SelectionBox): boolean {
+  const minX = Math.min(box.start.x, box.current.x);
+  const maxX = Math.max(box.start.x, box.current.x);
+  const minY = Math.min(box.start.y, box.current.y);
+  const maxY = Math.max(box.start.y, box.current.y);
+
+  return position.x >= minX && position.x <= maxX && position.y >= minY && position.y <= maxY;
 }
 
 function setUnitDirection(unit: UnitModel, target: GridPosition): void {

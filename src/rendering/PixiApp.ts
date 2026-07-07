@@ -24,11 +24,15 @@ export class PixiTacticalBoardApp {
   private readonly boardInput: BoardInputController;
   private readonly htmlOverlayRenderer: HtmlOverlayRenderer;
   private locale: Locale = 'en';
+  private showGrid = true;
+  private showViewCones = true;
 
   constructor(
     private readonly root: HTMLElement,
     private readonly debugPanel: HTMLElement,
     private readonly languageToggle: HTMLButtonElement,
+    private readonly gridToggle: HTMLButtonElement,
+    private readonly visionToggle: HTMLButtonElement,
     private readonly state: SimulationState,
   ) {
     this.app = new Application({
@@ -63,9 +67,11 @@ export class PixiTacticalBoardApp {
   }
 
   start(): void {
-    this.mapRenderer.render(this.state.map);
+    this.mapRenderer.render(this.state.map, this.showGrid);
     this.updateStaticText();
     this.languageToggle.addEventListener('click', this.handleLanguageToggle);
+    this.gridToggle.addEventListener('click', this.handleGridToggle);
+    this.visionToggle.addEventListener('click', this.handleVisionToggle);
     this.camera.attach();
     this.boardInput.attach();
 
@@ -77,6 +83,8 @@ export class PixiTacticalBoardApp {
 
   destroy(): void {
     this.languageToggle.removeEventListener('click', this.handleLanguageToggle);
+    this.gridToggle.removeEventListener('click', this.handleGridToggle);
+    this.visionToggle.removeEventListener('click', this.handleVisionToggle);
     this.camera.destroy();
     this.boardInput.destroy();
     this.htmlOverlayRenderer.destroy();
@@ -84,10 +92,15 @@ export class PixiTacticalBoardApp {
   }
 
   private renderFrame(): void {
-    this.viewConeRenderer.render(this.state.map, this.state.units, this.state.selectedUnitId);
-    this.orderRenderer.render(this.state.map, this.state.units, this.state.selectedUnitId);
-    this.overlayRenderer.render(this.state);
-    this.unitRenderer.render(this.state.map, this.state.units, this.state.selectedUnitId);
+    if (this.showViewCones) {
+      this.viewConeRenderer.render(this.state.map, this.state.units, this.state.selectedUnitIds);
+    } else {
+      this.viewConeRenderer.render(this.state.map, [], []);
+    }
+
+    this.orderRenderer.render(this.state.map, this.state.units, this.state.selectedUnitIds);
+    this.overlayRenderer.render(this.state, this.showGrid);
+    this.unitRenderer.render(this.state.map, this.state.units, this.state.selectedUnitIds);
     this.htmlOverlayRenderer.render(this.state, this.locale);
     this.updateDebugPanel();
   }
@@ -95,6 +108,19 @@ export class PixiTacticalBoardApp {
   private readonly handleLanguageToggle = (): void => {
     this.locale = nextLocale(this.locale);
     this.updateStaticText();
+    this.renderFrame();
+  };
+
+  private readonly handleGridToggle = (): void => {
+    this.showGrid = !this.showGrid;
+    this.mapRenderer.render(this.state.map, this.showGrid);
+    this.updateDisplayToggles();
+    this.renderFrame();
+  };
+
+  private readonly handleVisionToggle = (): void => {
+    this.showViewCones = !this.showViewCones;
+    this.updateDisplayToggles();
     this.renderFrame();
   };
 
@@ -112,6 +138,37 @@ export class PixiTacticalBoardApp {
 
     this.languageToggle.textContent = copy.debug.languageToggle;
     this.languageToggle.setAttribute('aria-label', copy.debug.languageToggleAria);
+    this.updateDisplayToggles();
+  }
+
+  private updateDisplayToggles(): void {
+    const labels = this.getDisplayToggleLabels();
+
+    this.gridToggle.textContent = this.showGrid ? labels.gridOn : labels.gridOff;
+    this.gridToggle.setAttribute('aria-pressed', String(this.showGrid));
+    this.gridToggle.classList.toggle('hud-toggle-off', !this.showGrid);
+
+    this.visionToggle.textContent = this.showViewCones ? labels.viewOn : labels.viewOff;
+    this.visionToggle.setAttribute('aria-pressed', String(this.showViewCones));
+    this.visionToggle.classList.toggle('hud-toggle-off', !this.showViewCones);
+  }
+
+  private getDisplayToggleLabels(): { gridOn: string; gridOff: string; viewOn: string; viewOff: string } {
+    if (this.locale === 'ru') {
+      return {
+        gridOn: 'Сетка: вкл',
+        gridOff: 'Сетка: выкл',
+        viewOn: 'Обзор: вкл',
+        viewOff: 'Обзор: выкл',
+      };
+    }
+
+    return {
+      gridOn: 'Grid: on',
+      gridOff: 'Grid: off',
+      viewOn: 'View cones: on',
+      viewOff: 'View cones: off',
+    };
   }
 
   private updateDebugPanel(): void {
@@ -123,7 +180,7 @@ export class PixiTacticalBoardApp {
       ? gridToCellLabel(this.state.map, selectedUnit.order.target)
       : UI_COPY[this.locale].debug.none;
     const selectedLabel = selectedUnit
-      ? `${selectedUnit.labels[this.locale]} (${selectedUnit.id})`
+      ? `${selectedUnit.labels[this.locale]} (${selectedUnit.id})${this.state.selectedUnitIds.length > 1 ? ` +${this.state.selectedUnitIds.length - 1}` : ''}`
       : UI_COPY[this.locale].debug.none;
     const copy = UI_COPY[this.locale].debug;
 

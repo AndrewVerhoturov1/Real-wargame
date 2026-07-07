@@ -5,7 +5,7 @@ import { TERRAIN_STYLE } from './terrainStyle';
 export class PixiMapRenderer {
   readonly container = new Container();
 
-  render(map: TacticalMap): void {
+  render(map: TacticalMap, showGrid = true): void {
     this.container.removeChildren();
 
     for (const cell of map.cells) {
@@ -14,7 +14,10 @@ export class PixiMapRenderer {
       const y = cell.y * map.cellSize;
       const graphics = new Graphics();
 
-      graphics.lineStyle(1, 0x1b2417, 0.28);
+      if (showGrid) {
+        graphics.lineStyle(1, 0x1b2417, 0.28);
+      }
+
       graphics.beginFill(style.fill, 1);
       graphics.drawRect(x, y, map.cellSize, map.cellSize);
       graphics.endFill();

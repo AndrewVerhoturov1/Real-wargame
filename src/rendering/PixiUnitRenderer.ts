@@ -7,12 +7,13 @@ const UNIT_RADIUS_PX = 11;
 export class PixiUnitRenderer {
   readonly container = new Container();
 
-  render(map: TacticalMap, units: UnitModel[], selectedUnitId: string | null): void {
+  render(map: TacticalMap, units: UnitModel[], selectedUnitIds: string[]): void {
     this.container.removeChildren();
+    const selectedIds = new Set(selectedUnitIds);
 
     for (const unit of units) {
       const position = gridToWorld(map, unit.position);
-      const isSelected = unit.id === selectedUnitId;
+      const isSelected = selectedIds.has(unit.id);
       const graphics = new Graphics();
 
       graphics.lineStyle(2, 0x111111, 0.9);
