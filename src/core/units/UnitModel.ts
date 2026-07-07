@@ -1,8 +1,16 @@
+import {
+  createBehaviorRuntime,
+  createBehaviorSettings,
+  normalizeBehaviorProfileId,
+  type BehaviorProfileId,
+  type BehaviorSettings,
+  type UnitBehaviorRuntime,
+} from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import type { MoveOrder } from '../orders/MoveOrder';
 
 export type UnitSide = 'player';
-export type UnitType = 'infantry_squad' | 'rifle_team' | 'support_team';
+export type UnitType = 'infantry_squad' | 'scout_team' | 'support_team';
 export type UnitHeldItem = 'long_item' | 'support_item' | 'short_item';
 
 export interface UnitData {
@@ -18,6 +26,8 @@ export interface UnitData {
   facingDegrees?: number;
   viewAngleDegrees?: number;
   viewRangeCells?: number;
+  behaviorProfile?: BehaviorProfileId;
+  behavior?: Partial<BehaviorSettings>;
 }
 
 export interface UnitModel {
@@ -35,11 +45,15 @@ export interface UnitModel {
   facingRadians: number;
   viewAngleRadians: number;
   viewRangeCells: number;
+  behaviorProfile: BehaviorProfileId;
+  behaviorSettings: BehaviorSettings;
+  behaviorRuntime: UnitBehaviorRuntime;
 }
 
 export function normalizeUnits(data: UnitData[]): UnitModel[] {
   return data.map((unit) => {
     const fallbackLabel = unit.label ?? unit.id;
+    const behaviorProfile = normalizeBehaviorProfileId(unit.behaviorProfile);
 
     return {
       id: unit.id,
@@ -59,6 +73,9 @@ export function normalizeUnits(data: UnitData[]): UnitModel[] {
       facingRadians: degreesToRadians(unit.facingDegrees ?? 0),
       viewAngleRadians: degreesToRadians(unit.viewAngleDegrees ?? 90),
       viewRangeCells: unit.viewRangeCells ?? 7,
+      behaviorProfile,
+      behaviorSettings: createBehaviorSettings(behaviorProfile, unit.behavior),
+      behaviorRuntime: createBehaviorRuntime(),
     };
   });
 }
@@ -88,7 +105,7 @@ function defaultHeldItemForUnitType(type: UnitType): UnitHeldItem {
     return 'support_item';
   }
 
-  if (type === 'rifle_team') {
+  if (type === 'scout_team') {
     return 'short_item';
   }
 
