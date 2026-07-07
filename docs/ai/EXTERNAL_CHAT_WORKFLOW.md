@@ -8,7 +8,8 @@
 2. Прочитать task-pack, issue или Q-задачу.
 3. Понять разрешённый scope.
 4. Проверить, какие файлы можно менять, а какие нельзя.
-5. Не начинать "широкую уборку" без отдельного разрешения.
+5. Если задача связана с PixiJS/canvas/graphics/scene/assets/SVG/events/performance/migration-v8 — прочитать `docs/ai/PIXIJS_SKILLS_INDEX.md` и `.agents/skills/pixijs/SKILL.md`, затем только релевантные PixiJS skills.
+6. Не начинать "широкую уборку" без отдельного разрешения.
 
 ## Рабочий порядок
 
