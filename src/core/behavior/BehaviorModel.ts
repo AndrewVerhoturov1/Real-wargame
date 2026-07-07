@@ -1,4 +1,4 @@
-export type UnitState = 'idle' | 'moving' | 'observing' | 'taking_cover' | 'suppressed';
+export type UnitState = 'idle' | 'moving' | 'observing' | 'taking_cover' | 'stressed';
 export type UnitPosture = 'standing' | 'crouched' | 'prone';
 export type BehaviorProfileId = 'green' | 'regular' | 'veteran' | 'cautious' | 'reckless';
 
@@ -9,8 +9,8 @@ export interface BehaviorSettings {
   fear: number;
   dangerCrouchThreshold: number;
   dangerProneThreshold: number;
-  suppressionStopThreshold: number;
-  suppressionRecoveryPerSecond: number;
+  stressStopThreshold: number;
+  stressRecoveryPerSecond: number;
 }
 
 export interface UnitBehaviorRuntime {
@@ -20,7 +20,7 @@ export interface UnitBehaviorRuntime {
   previousPosture: UnitPosture;
   danger: number;
   rawDanger: number;
-  suppression: number;
+  stress: number;
   currentAction: string;
   reason: string;
   lastEvent: string | null;
@@ -38,8 +38,8 @@ export const BEHAVIOR_PROFILES: Record<BehaviorProfileId, BehaviorSettings> = {
     fear: 1.35,
     dangerCrouchThreshold: 28,
     dangerProneThreshold: 58,
-    suppressionStopThreshold: 68,
-    suppressionRecoveryPerSecond: 12,
+    stressStopThreshold: 68,
+    stressRecoveryPerSecond: 12,
   },
   regular: {
     obedience: 1,
@@ -48,8 +48,8 @@ export const BEHAVIOR_PROFILES: Record<BehaviorProfileId, BehaviorSettings> = {
     fear: 1,
     dangerCrouchThreshold: 40,
     dangerProneThreshold: 70,
-    suppressionStopThreshold: 82,
-    suppressionRecoveryPerSecond: 16,
+    stressStopThreshold: 82,
+    stressRecoveryPerSecond: 16,
   },
   veteran: {
     obedience: 1.1,
@@ -58,8 +58,8 @@ export const BEHAVIOR_PROFILES: Record<BehaviorProfileId, BehaviorSettings> = {
     fear: 0.75,
     dangerCrouchThreshold: 50,
     dangerProneThreshold: 82,
-    suppressionStopThreshold: 92,
-    suppressionRecoveryPerSecond: 22,
+    stressStopThreshold: 92,
+    stressRecoveryPerSecond: 22,
   },
   cautious: {
     obedience: 0.95,
@@ -68,8 +68,8 @@ export const BEHAVIOR_PROFILES: Record<BehaviorProfileId, BehaviorSettings> = {
     fear: 1.15,
     dangerCrouchThreshold: 30,
     dangerProneThreshold: 62,
-    suppressionStopThreshold: 74,
-    suppressionRecoveryPerSecond: 15,
+    stressStopThreshold: 74,
+    stressRecoveryPerSecond: 15,
   },
   reckless: {
     obedience: 1.15,
@@ -78,8 +78,8 @@ export const BEHAVIOR_PROFILES: Record<BehaviorProfileId, BehaviorSettings> = {
     fear: 0.65,
     dangerCrouchThreshold: 58,
     dangerProneThreshold: 88,
-    suppressionStopThreshold: 96,
-    suppressionRecoveryPerSecond: 18,
+    stressStopThreshold: 96,
+    stressRecoveryPerSecond: 18,
   },
 };
 
@@ -121,7 +121,7 @@ export function createBehaviorRuntime(): UnitBehaviorRuntime {
     previousPosture: 'standing',
     danger: 0,
     rawDanger: 0,
-    suppression: 0,
+    stress: 0,
     currentAction: 'waiting',
     reason: 'No order has been issued yet.',
     lastEvent: null,
