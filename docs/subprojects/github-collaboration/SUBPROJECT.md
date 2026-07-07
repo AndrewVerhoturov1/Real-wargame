@@ -7,6 +7,7 @@
 ## Current focus
 
 Довести Q-режим до рабочего v1 рядом с уже существующим R/manual zworker процессом: Q должен быть короткой GitHub-aware постановкой, где внешний исполнитель создаёт ветку/PR и возвращает отчёт для Codex, а Codex проверяет PR и передаёт решение человеку.
+Добавить X-режим (r-init) как preview-интеграционный workflow: preview-ветка, .bat-лаунчер, чеклист, GO/NO-GO, merge-handoff. Route X — отдельный механизм доставки, используемый r-init, но не идентичный ему.
 
 ## Key decisions
 
@@ -21,6 +22,7 @@
 - Q-режим — v1 для внешнего исполнителя с GitHub-доступом: короткая постановка, самостоятельное чтение правил/навигации, отдельная ветка, PR и отчёт для Codex.
 - Q-режим не заменяет контроль Codex: Codex всё равно проверяет PR, diff, scope, риски и не мержит без разрешения человека.
 - Q-режим требует проверки на практике после первого реального внешнего исполнителя с GitHub-доступом.
+- X-режим — preview-интеграционный workflow (r-init). Route X — отдельный механизм доставки, не идентичный r-init.
 
 ## Read first
 
@@ -34,6 +36,7 @@
 8. `docs/ai/WORKFLOW_OVERVIEW.md`
 9. `docs/ai/ROLES.md`
 10. `docs/ai/POST_PR_CONSOLIDATION.md`
+11. `docs/ai/R_INIT_WORKFLOW.md`
 
 ## Boundaries
 
@@ -52,6 +55,7 @@
 - `subproject.json` содержит поля, используемые `scripts/subproject_context.py`;
 - R/manual zworker flow сохранён как ZIP с `answer.md`;
 - Q-mode описан как branch + PR + report для Codex;
+- X-mode (r-init) описан как preview-ветка + .bat-лаунчер + чеклист + GO/NO-GO + merge-handoff; Route X — отдельный механизм доставки, не идентичный r-init;
 - `AGENTS.md` сохраняет существующий Subproject Workflow и расширяет его центральным контрактом.
 
 Needs local verification: запуск `python scripts/subproject_context.py github-collaboration --brief` в локальной среде.
