@@ -22,6 +22,23 @@ export interface MapCellData {
   height?: -1 | 0 | 1 | 2;
 }
 
+export interface MapCellRunData {
+  x1: number;
+  x2: number;
+  y: number;
+  terrain?: TerrainKind;
+  height?: -1 | 0 | 1 | 2;
+}
+
+export interface MapCellRectData {
+  x1: number;
+  x2: number;
+  y1: number;
+  y2: number;
+  terrain?: TerrainKind;
+  height?: -1 | 0 | 1 | 2;
+}
+
 export interface MapObjectData {
   id: string;
   kind: MapObjectKind;
@@ -40,6 +57,8 @@ export interface TacticalMapData {
   cellSize: number;
   defaultTerrain?: TerrainKind;
   defaultHeight?: -1 | 0 | 1 | 2;
+  cellRuns?: MapCellRunData[];
+  cellRects?: MapCellRectData[];
   cells?: MapCellData[];
   objects?: MapObjectData[];
 }
@@ -77,6 +96,30 @@ export function normalizeMap(data: TacticalMapData): TacticalMap {
   const defaultTerrain = data.defaultTerrain ?? 'field';
   const defaultHeight = data.defaultHeight ?? 0;
   const overrides = new Map<string, MapCellData>();
+
+  for (const rect of data.cellRects ?? []) {
+    for (let y = rect.y1; y <= rect.y2; y += 1) {
+      for (let x = rect.x1; x <= rect.x2; x += 1) {
+        overrides.set(cellKey(x, y), {
+          x,
+          y,
+          terrain: rect.terrain,
+          height: rect.height,
+        });
+      }
+    }
+  }
+
+  for (const run of data.cellRuns ?? []) {
+    for (let x = run.x1; x <= run.x2; x += 1) {
+      overrides.set(cellKey(x, run.y), {
+        x,
+        y: run.y,
+        terrain: run.terrain,
+        height: run.height,
+      });
+    }
+  }
 
   for (const cell of data.cells ?? []) {
     overrides.set(cellKey(cell.x, cell.y), cell);
