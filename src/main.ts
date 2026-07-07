@@ -28,7 +28,19 @@ const tacticalBoard = new PixiTacticalBoardApp(root, debugPanel, languageToggle,
 
 installPostureControls(debugPanel, state);
 tacticalBoard.start();
+forceRussianTopControls();
 
 window.addEventListener('beforeunload', () => {
   tacticalBoard.destroy();
 });
+
+function forceRussianTopControls(): void {
+  document.documentElement.lang = 'ru';
+  languageToggle.textContent = 'Русский';
+  gridToggle.textContent = 'Сетка: выкл';
+  visionToggle.textContent = 'Обзор: выкл';
+  gridToggle.setAttribute('aria-pressed', 'false');
+  visionToggle.setAttribute('aria-pressed', 'false');
+  gridToggle.classList.add('hud-toggle-off');
+  visionToggle.classList.add('hud-toggle-off');
+}
