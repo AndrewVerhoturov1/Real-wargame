@@ -241,6 +241,12 @@ Expected size: <small | medium | large | planning-only>
 - docs/subprojects/<id>/subproject.json
 - docs/subprojects/<id>/JOURNAL.md
 
+Если задача связана с PixiJS/canvas/2D-графикой/assets/SVG/events/performance/migration-v8 — дополнительно:
+
+- docs/ai/PIXIJS_SKILLS_INDEX.md
+- .agents/skills/pixijs/SKILL.md
+- <релевантные PixiJS skills по таблице из PIXIJS_SKILLS_INDEX.md>
+
 ## Goal
 
 <Короткая цель задачи.>
