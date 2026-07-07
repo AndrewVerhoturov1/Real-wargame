@@ -93,14 +93,14 @@ export class PixiTacticalBoardApp {
 
   private renderFrame(): void {
     if (this.showViewCones) {
-      this.viewConeRenderer.render(this.state.map, this.state.units, this.state.selectedUnitId);
+      this.viewConeRenderer.render(this.state.map, this.state.units, this.state.selectedUnitIds);
     } else {
-      this.viewConeRenderer.render(this.state.map, [], null);
+      this.viewConeRenderer.render(this.state.map, [], []);
     }
 
-    this.orderRenderer.render(this.state.map, this.state.units, this.state.selectedUnitId);
-    this.overlayRenderer.render(this.state);
-    this.unitRenderer.render(this.state.map, this.state.units, this.state.selectedUnitId);
+    this.orderRenderer.render(this.state.map, this.state.units, this.state.selectedUnitIds);
+    this.overlayRenderer.render(this.state, this.showGrid);
+    this.unitRenderer.render(this.state.map, this.state.units, this.state.selectedUnitIds);
     this.htmlOverlayRenderer.render(this.state, this.locale);
     this.updateDebugPanel();
   }
@@ -180,7 +180,7 @@ export class PixiTacticalBoardApp {
       ? gridToCellLabel(this.state.map, selectedUnit.order.target)
       : UI_COPY[this.locale].debug.none;
     const selectedLabel = selectedUnit
-      ? `${selectedUnit.labels[this.locale]} (${selectedUnit.id})`
+      ? `${selectedUnit.labels[this.locale]} (${selectedUnit.id})${this.state.selectedUnitIds.length > 1 ? ` +${this.state.selectedUnitIds.length - 1}` : ''}`
       : UI_COPY[this.locale].debug.none;
     const copy = UI_COPY[this.locale].debug;
 
