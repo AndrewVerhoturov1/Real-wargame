@@ -7,6 +7,7 @@ import type { PressureZoneData } from './core/pressure/PressureZone';
 import { createInitialState } from './core/simulation/SimulationState';
 import type { UnitData } from './core/units/UnitModel';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
+import { installPostureControls } from './ui/PostureControls';
 
 const root = document.querySelector<HTMLElement>('#app');
 const debugPanel = document.querySelector<HTMLElement>('#debug-panel');
@@ -25,6 +26,7 @@ const state = createInitialState(
 );
 const tacticalBoard = new PixiTacticalBoardApp(root, debugPanel, languageToggle, gridToggle, visionToggle, state);
 
+installPostureControls(debugPanel, state);
 tacticalBoard.start();
 
 window.addEventListener('beforeunload', () => {
