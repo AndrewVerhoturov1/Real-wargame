@@ -75,6 +75,11 @@ function translateInspectorText(text: string): string {
     .replaceAll('Behavior inspector: select a unit.', 'Инспектор поведения: выберите юнита.')
     .replaceAll('Behavior inspector', 'Инспектор поведения')
     .replaceAll('Profile', 'Профиль')
+    .replaceAll('regular', 'обычный')
+    .replaceAll('green', 'новичок')
+    .replaceAll('veteran', 'опытный')
+    .replaceAll('cautious', 'осторожный')
+    .replaceAll('reckless', 'рискованный')
     .replaceAll('State reason', 'Причина состояния')
     .replaceAll('Posture reason', 'Причина положения')
     .replaceAll('Last event', 'Последнее событие')
@@ -88,7 +93,7 @@ function translateInspectorText(text: string): string {
     .replaceAll('Reason', 'Причина')
     .replaceAll('Thresholds', 'Пороги')
     .replaceAll('crouch', 'пригнуться')
-    .replaceAll('prone', 'лечь')
+    .replaceAll('prone', 'лежит')
     .replaceAll('standing', 'стоя')
     .replaceAll('crouched', 'пригнулся')
     .replaceAll('moving', 'движется')
@@ -109,6 +114,7 @@ function translateInspectorText(text: string): string {
     .replaceAll('move_order_received', 'приказ движения получен')
     .replaceAll('none', 'нет')
     .replaceAll('outside map', 'вне карты')
+    .replaceAll('prev:', 'было:')
     .replaceAll('Scope: no combat, no AI, no pathfinding.', 'Граница: без боя, без поведения, без поиска пути.')
     .replaceAll('Labels are rendered as HTML, not Pixi text textures.', 'Подписи показаны отдельным слоем.');
 }
