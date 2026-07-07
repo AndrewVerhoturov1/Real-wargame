@@ -1,6 +1,19 @@
 import type { GridPosition, WorldPosition } from '../geometry';
 
-export type TerrainKind = 'field' | 'forest' | 'road' | 'swamp';
+export type TerrainKind = 'field' | 'forest' | 'road' | 'swamp' | 'rough' | 'water';
+
+export type MapObjectKind =
+  | 'tree'
+  | 'rock'
+  | 'structure'
+  | 'cover'
+  | 'ditch'
+  | 'crates'
+  | 'fence'
+  | 'post'
+  | 'logs'
+  | 'well'
+  | 'bridge';
 
 export interface MapCellData {
   x: number;
@@ -9,13 +22,45 @@ export interface MapCellData {
   height?: -1 | 0 | 1 | 2;
 }
 
+export interface MapCellRunData {
+  x1: number;
+  x2: number;
+  y: number;
+  terrain?: TerrainKind;
+  height?: -1 | 0 | 1 | 2;
+}
+
+export interface MapCellRectData {
+  x1: number;
+  x2: number;
+  y1: number;
+  y2: number;
+  terrain?: TerrainKind;
+  height?: -1 | 0 | 1 | 2;
+}
+
+export interface MapObjectData {
+  id: string;
+  kind: MapObjectKind;
+  x: number;
+  y: number;
+  rotationDegrees?: number;
+  widthCells?: number;
+  heightCells?: number;
+  label?: string;
+  labelRu?: string;
+}
+
 export interface TacticalMapData {
   width: number;
   height: number;
   cellSize: number;
   defaultTerrain?: TerrainKind;
   defaultHeight?: -1 | 0 | 1 | 2;
+  cellRuns?: MapCellRunData[];
+  cellRects?: MapCellRectData[];
   cells?: MapCellData[];
+  objects?: MapObjectData[];
 }
 
 export interface MapCell {
@@ -25,17 +70,56 @@ export interface MapCell {
   height: -1 | 0 | 1 | 2;
 }
 
+export interface MapObject {
+  id: string;
+  kind: MapObjectKind;
+  x: number;
+  y: number;
+  rotationRadians: number;
+  widthCells: number;
+  heightCells: number;
+  labels: {
+    en: string;
+    ru: string;
+  } | null;
+}
+
 export interface TacticalMap {
   width: number;
   height: number;
   cellSize: number;
   cells: MapCell[];
+  objects: MapObject[];
 }
 
 export function normalizeMap(data: TacticalMapData): TacticalMap {
   const defaultTerrain = data.defaultTerrain ?? 'field';
   const defaultHeight = data.defaultHeight ?? 0;
   const overrides = new Map<string, MapCellData>();
+
+  for (const rect of data.cellRects ?? []) {
+    for (let y = rect.y1; y <= rect.y2; y += 1) {
+      for (let x = rect.x1; x <= rect.x2; x += 1) {
+        overrides.set(cellKey(x, y), {
+          x,
+          y,
+          terrain: rect.terrain,
+          height: rect.height,
+        });
+      }
+    }
+  }
+
+  for (const run of data.cellRuns ?? []) {
+    for (let x = run.x1; x <= run.x2; x += 1) {
+      overrides.set(cellKey(x, run.y), {
+        x,
+        y: run.y,
+        terrain: run.terrain,
+        height: run.height,
+      });
+    }
+  }
 
   for (const cell of data.cells ?? []) {
     overrides.set(cellKey(cell.x, cell.y), cell);
@@ -60,6 +144,7 @@ export function normalizeMap(data: TacticalMapData): TacticalMap {
     height: data.height,
     cellSize: data.cellSize,
     cells,
+    objects: normalizeMapObjects(data.objects ?? []),
   };
 }
 
@@ -107,10 +192,32 @@ export function clampGridPositionToMap(map: TacticalMap, grid: GridPosition): Gr
   };
 }
 
+function normalizeMapObjects(objects: MapObjectData[]): MapObject[] {
+  return objects.map((object) => ({
+    id: object.id,
+    kind: object.kind,
+    x: object.x,
+    y: object.y,
+    rotationRadians: degreesToRadians(object.rotationDegrees ?? 0),
+    widthCells: object.widthCells ?? 1,
+    heightCells: object.heightCells ?? 1,
+    labels: object.label
+      ? {
+          en: object.label,
+          ru: object.labelRu ?? object.label,
+        }
+      : null,
+  }));
+}
+
 function cellKey(x: number, y: number): string {
   return `${x}:${y}`;
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function degreesToRadians(degrees: number): number {
+  return (degrees * Math.PI) / 180;
 }

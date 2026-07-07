@@ -22,4 +22,12 @@ export const TERRAIN_STYLE: Record<TerrainKind, TerrainStyle> = {
     fill: 0x3d6f73,
     label: 'Swamp',
   },
+  rough: {
+    fill: 0x8a805f,
+    label: 'Rough ground',
+  },
+  water: {
+    fill: 0x385f73,
+    label: 'Water',
+  },
 };

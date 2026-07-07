@@ -8,13 +8,14 @@ import { PixiTacticalBoardApp } from './rendering/PixiApp';
 
 const root = document.querySelector<HTMLElement>('#app');
 const debugPanel = document.querySelector<HTMLElement>('#debug-panel');
+const languageToggle = document.querySelector<HTMLButtonElement>('#language-toggle');
 
-if (!root || !debugPanel) {
+if (!root || !debugPanel || !languageToggle) {
   throw new Error('Tactical board root elements are missing.');
 }
 
 const state = createInitialState(mapData as TacticalMapData, unitsData as UnitData[]);
-const tacticalBoard = new PixiTacticalBoardApp(root, debugPanel, state);
+const tacticalBoard = new PixiTacticalBoardApp(root, debugPanel, languageToggle, state);
 
 tacticalBoard.start();
 
