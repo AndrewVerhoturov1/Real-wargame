@@ -41,6 +41,10 @@
 - [ ] Внешний исполнитель указал human verification steps.
 - [ ] Если PR не создан, указана причина `PR not created: ...`.
 
+## Если PR пришёл из X-режима
+
+- [ ] Проверен authoritative truth order: diff/commits первичны, отчёт исполнителя вторичен (см. docs/ai/ZWORKER_MODES.md).
+
 ## Если PR из r-init (preview)
 
 - [ ] PR имеет метку `[r-init]` или `[preview]` в заголовке/описании.
