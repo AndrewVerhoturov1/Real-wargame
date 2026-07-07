@@ -74,6 +74,8 @@ export const UI_COPY: Record<Locale, GameCopy> = {
   },
 };
 
+UI_COPY.en = UI_COPY.ru;
+
 export function nextLocale(locale: Locale): Locale {
   return locale === 'en' ? 'ru' : 'en';
 }
