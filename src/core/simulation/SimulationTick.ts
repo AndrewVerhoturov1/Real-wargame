@@ -1,10 +1,4 @@
-import {
-  POSTURE_EXPOSURE_MULTIPLIER,
-  POSTURE_MOVE_MULTIPLIER,
-  clampPercent,
-  type UnitPosture,
-  type UnitState,
-} from '../behavior/BehaviorModel';
+import { clampPercent } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import { getPressureReportAtPosition } from '../pressure/PressureZone';
 import type { UnitModel } from '../units/UnitModel';
@@ -14,22 +8,21 @@ const ORDER_COMPLETION_EPSILON_CELLS = 0.02;
 
 export function tickSimulation(state: SimulationState, deltaSeconds: number): void {
   for (const unit of state.units) {
-    refreshUnitPressure(unit, state, deltaSeconds);
-    refreshUnitDecision(unit);
-    refreshUnitMovement(unit, deltaSeconds);
+    updateMetrics(unit, state, deltaSeconds);
+    updateStateLabels(unit);
+    moveUnit(unit, deltaSeconds);
   }
 }
 
-function refreshUnitPressure(unit: UnitModel, state: SimulationState, deltaSeconds: number): void {
+function updateMetrics(unit: UnitModel, state: SimulationState, deltaSeconds: number): void {
   const report = getPressureReportAtPosition(unit.position, state.pressureZones);
-  const exposure = POSTURE_EXPOSURE_MULTIPLIER[unit.behaviorRuntime.posture];
 
   unit.behaviorRuntime.rawDanger = report?.rawPressure ?? 0;
-  unit.behaviorRuntime.danger = Math.round(unit.behaviorRuntime.rawDanger * exposure);
+  unit.behaviorRuntime.danger = Math.round(unit.behaviorRuntime.rawDanger);
 
   if (report) {
     unit.behaviorRuntime.stress = clampPercent(
-      unit.behaviorRuntime.stress + report.stressPerSecond * exposure * unit.behaviorSettings.fear * deltaSeconds,
+      unit.behaviorRuntime.stress + report.stressPerSecond * unit.behaviorSettings.fear * deltaSeconds,
     );
     unit.behaviorRuntime.lastEvent = `pressure:${report.zone.id}`;
     unit.behaviorRuntime.reason = `inside pressure zone ${report.zone.id}`;
@@ -39,62 +32,28 @@ function refreshUnitPressure(unit: UnitModel, state: SimulationState, deltaSecon
   unit.behaviorRuntime.stress = clampPercent(
     unit.behaviorRuntime.stress - unit.behaviorSettings.stressRecoveryPerSecond * deltaSeconds,
   );
-
-  if (unit.behaviorRuntime.lastEvent?.startsWith('pressure:')) {
-    unit.behaviorRuntime.lastEvent = 'pressure_clear';
-  }
+  unit.behaviorRuntime.reason = unit.order ? 'moving outside pressure zone' : 'outside pressure zone';
 }
 
-function refreshUnitDecision(unit: UnitModel): void {
-  const runtime = unit.behaviorRuntime;
-  const settings = unit.behaviorSettings;
-  const hasOrder = unit.order !== null;
+function updateStateLabels(unit: UnitModel): void {
+  unit.behaviorRuntime.posture = 'standing';
+  unit.behaviorRuntime.currentAction = unit.order ? 'move' : 'observe';
 
-  if (runtime.stress >= settings.stressStopThreshold) {
-    setPosture(unit, 'prone', `stress ${Math.round(runtime.stress)} >= ${settings.stressStopThreshold}`);
-    setState(unit, 'stressed', `stress ${Math.round(runtime.stress)} >= ${settings.stressStopThreshold}`);
-    runtime.currentAction = 'wait_low';
-    runtime.reason = 'stress too high';
+  if (unit.order) {
+    setState(unit, 'moving', 'active move order');
     return;
   }
 
-  if (runtime.danger >= settings.dangerProneThreshold) {
-    setPosture(unit, 'prone', `danger ${runtime.danger} >= ${settings.dangerProneThreshold}`);
-    setState(unit, hasOrder ? 'taking_cover' : 'observing', `danger ${runtime.danger} >= ${settings.dangerProneThreshold}`);
-    runtime.currentAction = hasOrder ? 'low_move' : 'low_observe';
-    runtime.reason = 'high pressure';
-    return;
-  }
-
-  if (runtime.danger >= settings.dangerCrouchThreshold) {
-    setPosture(unit, 'crouched', `danger ${runtime.danger} >= ${settings.dangerCrouchThreshold}`);
-    setState(unit, hasOrder ? 'moving' : 'observing', `danger ${runtime.danger} >= ${settings.dangerCrouchThreshold}`);
-    runtime.currentAction = hasOrder ? 'cautious_move' : 'cautious_observe';
-    runtime.reason = 'medium pressure';
-    return;
-  }
-
-  setPosture(unit, 'standing', `danger ${runtime.danger} < ${settings.dangerCrouchThreshold}`);
-
-  if (hasOrder) {
-    setState(unit, 'moving', 'move order active');
-    runtime.currentAction = 'move';
-    runtime.reason = 'pressure acceptable';
-    return;
-  }
-
-  setState(unit, runtime.state === 'idle' ? 'idle' : 'observing', 'no active order');
-  runtime.currentAction = runtime.state === 'idle' ? 'waiting' : 'observe';
-  runtime.reason = runtime.state === 'idle' ? 'no active order' : 'target reached';
+  setState(unit, unit.behaviorRuntime.state === 'idle' ? 'idle' : 'observing', 'no active move order');
 }
 
-function refreshUnitMovement(unit: UnitModel, deltaSeconds: number): void {
-  if (!unit.order || unit.behaviorRuntime.state === 'stressed') {
+function moveUnit(unit: UnitModel, deltaSeconds: number): void {
+  if (!unit.order) {
     return;
   }
 
   const remainingDistance = getDistance(unit.position, unit.order.target);
-  const stepDistance = unit.speedCellsPerSecond * POSTURE_MOVE_MULTIPLIER[unit.behaviorRuntime.posture] * deltaSeconds;
+  const stepDistance = unit.speedCellsPerSecond * deltaSeconds;
   unit.position = moveToPoint(unit.position, unit.order.target, stepDistance);
 
   if (remainingDistance <= stepDistance + ORDER_COMPLETION_EPSILON_CELLS) {
@@ -107,7 +66,7 @@ function refreshUnitMovement(unit: UnitModel, deltaSeconds: number): void {
   }
 }
 
-function setState(unit: UnitModel, nextState: UnitState, reason: string): void {
+function setState(unit: UnitModel, nextState: UnitModel['behaviorRuntime']['state'], reason: string): void {
   if (unit.behaviorRuntime.state === nextState) {
     return;
   }
@@ -115,16 +74,6 @@ function setState(unit: UnitModel, nextState: UnitState, reason: string): void {
   unit.behaviorRuntime.previousState = unit.behaviorRuntime.state;
   unit.behaviorRuntime.state = nextState;
   unit.behaviorRuntime.stateChangedBecause = reason;
-}
-
-function setPosture(unit: UnitModel, nextPosture: UnitPosture, reason: string): void {
-  if (unit.behaviorRuntime.posture === nextPosture) {
-    return;
-  }
-
-  unit.behaviorRuntime.previousPosture = unit.behaviorRuntime.posture;
-  unit.behaviorRuntime.posture = nextPosture;
-  unit.behaviorRuntime.postureChangedBecause = reason;
 }
 
 function getDistance(a: GridPosition, b: GridPosition): number {
