@@ -1,5 +1,5 @@
 import type { GridPosition } from '../geometry';
-import { clampGridPositionToMap, gridToCellCenter, normalizeMap, type TacticalMap, type TacticalMapData } from '../map/MapModel';
+import { clampGridPositionToMap, normalizeMap, type TacticalMap, type TacticalMapData } from '../map/MapModel';
 import { createMoveOrder } from '../orders/MoveOrder';
 import { normalizeUnits, type UnitData, type UnitModel } from '../units/UnitModel';
 
@@ -45,7 +45,7 @@ export function issueMoveOrderToSelectedUnit(
     return;
   }
 
-  const target = clampGridPositionToMap(state.map, gridToCellCenter(state.map, rawTarget));
+  const target = clampGridPositionToMap(state.map, rawTarget);
   selectedUnit.order = createMoveOrder(target);
   setUnitDirection(selectedUnit, target);
 }
