@@ -3,40 +3,64 @@ import type { MoveOrder } from '../orders/MoveOrder';
 
 export type UnitSide = 'player';
 export type UnitType = 'infantry_squad' | 'rifle_team' | 'support_team';
+export type UnitHeldItem = 'long_item' | 'support_item' | 'short_item';
 
 export interface UnitData {
   id: string;
   label?: string;
+  labelRu?: string;
   type: UnitType;
   side: UnitSide;
   x: number;
   y: number;
   speedCellsPerSecond?: number;
+  heldItem?: UnitHeldItem;
+  facingDegrees?: number;
+  viewAngleDegrees?: number;
+  viewRangeCells?: number;
 }
 
 export interface UnitModel {
   id: string;
-  label: string;
+  labels: {
+    en: string;
+    ru: string;
+  };
   type: UnitType;
   side: UnitSide;
   position: GridPosition;
   speedCellsPerSecond: number;
   order: MoveOrder | null;
+  heldItem: UnitHeldItem;
+  facingRadians: number;
+  viewAngleRadians: number;
+  viewRangeCells: number;
 }
 
 export function normalizeUnits(data: UnitData[]): UnitModel[] {
-  return data.map((unit) => ({
-    id: unit.id,
-    label: unit.label ?? unit.id,
-    type: unit.type,
-    side: unit.side,
-    position: {
-      x: unit.x + 0.5,
-      y: unit.y + 0.5,
-    },
-    speedCellsPerSecond: unit.speedCellsPerSecond ?? 2.2,
-    order: null,
-  }));
+  return data.map((unit) => {
+    const fallbackLabel = unit.label ?? unit.id;
+
+    return {
+      id: unit.id,
+      labels: {
+        en: fallbackLabel,
+        ru: unit.labelRu ?? fallbackLabel,
+      },
+      type: unit.type,
+      side: unit.side,
+      position: {
+        x: unit.x + 0.5,
+        y: unit.y + 0.5,
+      },
+      speedCellsPerSecond: unit.speedCellsPerSecond ?? 2.2,
+      order: null,
+      heldItem: unit.heldItem ?? defaultHeldItemForUnitType(unit.type),
+      facingRadians: degreesToRadians(unit.facingDegrees ?? 0),
+      viewAngleRadians: degreesToRadians(unit.viewAngleDegrees ?? 90),
+      viewRangeCells: unit.viewRangeCells ?? 7,
+    };
+  });
 }
 
 export function findUnitAtGridPosition(
@@ -57,4 +81,20 @@ export function findUnitAtGridPosition(
   }
 
   return undefined;
+}
+
+function defaultHeldItemForUnitType(type: UnitType): UnitHeldItem {
+  if (type === 'support_team') {
+    return 'support_item';
+  }
+
+  if (type === 'rifle_team') {
+    return 'short_item';
+  }
+
+  return 'long_item';
+}
+
+function degreesToRadians(degrees: number): number {
+  return (degrees * Math.PI) / 180;
 }
