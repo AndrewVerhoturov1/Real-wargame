@@ -1,12 +1,37 @@
 import type { GridPosition, WorldPosition } from '../geometry';
 
-export type TerrainKind = 'field' | 'forest' | 'road' | 'swamp';
+export type TerrainKind = 'field' | 'forest' | 'road' | 'swamp' | 'rough' | 'water';
+
+export type MapObjectKind =
+  | 'tree'
+  | 'rock'
+  | 'structure'
+  | 'cover'
+  | 'ditch'
+  | 'crates'
+  | 'fence'
+  | 'post'
+  | 'logs'
+  | 'well'
+  | 'bridge';
 
 export interface MapCellData {
   x: number;
   y: number;
   terrain?: TerrainKind;
   height?: -1 | 0 | 1 | 2;
+}
+
+export interface MapObjectData {
+  id: string;
+  kind: MapObjectKind;
+  x: number;
+  y: number;
+  rotationDegrees?: number;
+  widthCells?: number;
+  heightCells?: number;
+  label?: string;
+  labelRu?: string;
 }
 
 export interface TacticalMapData {
@@ -16,6 +41,7 @@ export interface TacticalMapData {
   defaultTerrain?: TerrainKind;
   defaultHeight?: -1 | 0 | 1 | 2;
   cells?: MapCellData[];
+  objects?: MapObjectData[];
 }
 
 export interface MapCell {
@@ -25,11 +51,26 @@ export interface MapCell {
   height: -1 | 0 | 1 | 2;
 }
 
+export interface MapObject {
+  id: string;
+  kind: MapObjectKind;
+  x: number;
+  y: number;
+  rotationRadians: number;
+  widthCells: number;
+  heightCells: number;
+  labels: {
+    en: string;
+    ru: string;
+  } | null;
+}
+
 export interface TacticalMap {
   width: number;
   height: number;
   cellSize: number;
   cells: MapCell[];
+  objects: MapObject[];
 }
 
 export function normalizeMap(data: TacticalMapData): TacticalMap {
@@ -60,6 +101,7 @@ export function normalizeMap(data: TacticalMapData): TacticalMap {
     height: data.height,
     cellSize: data.cellSize,
     cells,
+    objects: normalizeMapObjects(data.objects ?? []),
   };
 }
 
@@ -107,10 +149,32 @@ export function clampGridPositionToMap(map: TacticalMap, grid: GridPosition): Gr
   };
 }
 
+function normalizeMapObjects(objects: MapObjectData[]): MapObject[] {
+  return objects.map((object) => ({
+    id: object.id,
+    kind: object.kind,
+    x: object.x,
+    y: object.y,
+    rotationRadians: degreesToRadians(object.rotationDegrees ?? 0),
+    widthCells: object.widthCells ?? 1,
+    heightCells: object.heightCells ?? 1,
+    labels: object.label
+      ? {
+          en: object.label,
+          ru: object.labelRu ?? object.label,
+        }
+      : null,
+  }));
+}
+
 function cellKey(x: number, y: number): string {
   return `${x}:${y}`;
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function degreesToRadians(degrees: number): number {
+  return (degrees * Math.PI) / 180;
 }
