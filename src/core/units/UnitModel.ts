@@ -1,9 +1,12 @@
 import {
   createBehaviorRuntime,
   createBehaviorSettings,
+  createSoldierParameters,
   normalizeBehaviorProfileId,
   type BehaviorProfileId,
   type BehaviorSettings,
+  type SoldierParameterOverrides,
+  type SoldierParameters,
   type UnitBehaviorRuntime,
 } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
@@ -28,6 +31,7 @@ export interface UnitData {
   viewRangeCells?: number;
   behaviorProfile?: BehaviorProfileId;
   behavior?: Partial<BehaviorSettings>;
+  soldier?: SoldierParameterOverrides;
 }
 
 export interface UnitModel {
@@ -48,6 +52,7 @@ export interface UnitModel {
   behaviorProfile: BehaviorProfileId;
   behaviorSettings: BehaviorSettings;
   behaviorRuntime: UnitBehaviorRuntime;
+  soldier: SoldierParameters;
 }
 
 export function normalizeUnits(data: UnitData[]): UnitModel[] {
@@ -76,6 +81,7 @@ export function normalizeUnits(data: UnitData[]): UnitModel[] {
       behaviorProfile,
       behaviorSettings: createBehaviorSettings(behaviorProfile, unit.behavior),
       behaviorRuntime: createBehaviorRuntime(),
+      soldier: createSoldierParameters(behaviorProfile, unit.soldier),
     };
   });
 }
