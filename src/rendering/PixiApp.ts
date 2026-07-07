@@ -4,24 +4,31 @@ import { getSelectedUnit, type SimulationState } from '../core/simulation/Simula
 import { tickSimulation } from '../core/simulation/SimulationTick';
 import { BoardInputController } from '../input/BoardInputController';
 import { CameraController } from '../input/CameraController';
+import { formatDegrees, nextLocale, UI_COPY, type Locale } from '../i18n';
+import { HtmlOverlayRenderer } from './HtmlOverlayRenderer';
 import { PixiMapRenderer } from './PixiMapRenderer';
 import { PixiOrderRenderer } from './PixiOrderRenderer';
 import { PixiOverlayRenderer } from './PixiOverlayRenderer';
 import { PixiUnitRenderer } from './PixiUnitRenderer';
+import { PixiViewConeRenderer } from './PixiViewConeRenderer';
 
 export class PixiTacticalBoardApp {
   private readonly app: Application;
   private readonly worldContainer = new Container();
   private readonly mapRenderer = new PixiMapRenderer();
+  private readonly viewConeRenderer = new PixiViewConeRenderer();
   private readonly orderRenderer = new PixiOrderRenderer();
   private readonly overlayRenderer = new PixiOverlayRenderer();
   private readonly unitRenderer = new PixiUnitRenderer();
   private readonly camera: CameraController;
   private readonly boardInput: BoardInputController;
+  private readonly htmlOverlayRenderer: HtmlOverlayRenderer;
+  private locale: Locale = 'en';
 
   constructor(
     private readonly root: HTMLElement,
     private readonly debugPanel: HTMLElement,
+    private readonly languageToggle: HTMLButtonElement,
     private readonly state: SimulationState,
   ) {
     this.app = new Application({
@@ -39,6 +46,7 @@ export class PixiTacticalBoardApp {
     this.app.stage.addChild(this.worldContainer);
     this.worldContainer.addChild(
       this.mapRenderer.container,
+      this.viewConeRenderer.container,
       this.orderRenderer.container,
       this.overlayRenderer.container,
       this.unitRenderer.container,
@@ -46,10 +54,18 @@ export class PixiTacticalBoardApp {
 
     this.camera = new CameraController(canvas, this.worldContainer);
     this.boardInput = new BoardInputController(canvas, this.camera, this.state);
+    this.htmlOverlayRenderer = new HtmlOverlayRenderer(this.root, {
+      worldToScreen: (world) => ({
+        x: world.x * this.worldContainer.scale.x + this.worldContainer.x,
+        y: world.y * this.worldContainer.scale.y + this.worldContainer.y,
+      }),
+    });
   }
 
   start(): void {
     this.mapRenderer.render(this.state.map);
+    this.updateStaticText();
+    this.languageToggle.addEventListener('click', this.handleLanguageToggle);
     this.camera.attach();
     this.boardInput.attach();
 
@@ -60,35 +76,67 @@ export class PixiTacticalBoardApp {
   }
 
   destroy(): void {
+    this.languageToggle.removeEventListener('click', this.handleLanguageToggle);
     this.camera.destroy();
     this.boardInput.destroy();
+    this.htmlOverlayRenderer.destroy();
     this.app.destroy(true);
   }
 
   private renderFrame(): void {
+    this.viewConeRenderer.render(this.state.map, this.state.units, this.state.selectedUnitId);
     this.orderRenderer.render(this.state.map, this.state.units, this.state.selectedUnitId);
     this.overlayRenderer.render(this.state);
     this.unitRenderer.render(this.state.map, this.state.units, this.state.selectedUnitId);
+    this.htmlOverlayRenderer.render(this.state, this.locale);
     this.updateDebugPanel();
+  }
+
+  private readonly handleLanguageToggle = (): void => {
+    this.locale = nextLocale(this.locale);
+    this.updateStaticText();
+    this.renderFrame();
+  };
+
+  private updateStaticText(): void {
+    const copy = UI_COPY[this.locale];
+    document.documentElement.lang = this.locale;
+
+    document.querySelectorAll<HTMLElement>('[data-i18n]').forEach((element) => {
+      const key = element.dataset.i18n as keyof typeof copy.static | undefined;
+
+      if (key && copy.static[key]) {
+        element.textContent = copy.static[key];
+      }
+    });
+
+    this.languageToggle.textContent = copy.debug.languageToggle;
+    this.languageToggle.setAttribute('aria-label', copy.debug.languageToggleAria);
   }
 
   private updateDebugPanel(): void {
     const selectedUnit = getSelectedUnit(this.state);
     const mouseLabel = this.state.mouseGridPosition
       ? gridToCellLabel(this.state.map, this.state.mouseGridPosition)
-      : 'outside map';
+      : UI_COPY[this.locale].debug.outsideMap;
     const orderTarget = selectedUnit?.order
       ? gridToCellLabel(this.state.map, selectedUnit.order.target)
-      : 'none';
+      : UI_COPY[this.locale].debug.none;
+    const selectedLabel = selectedUnit
+      ? `${selectedUnit.labels[this.locale]} (${selectedUnit.id})`
+      : UI_COPY[this.locale].debug.none;
+    const copy = UI_COPY[this.locale].debug;
 
     this.debugPanel.textContent = [
-      `Mouse cell: ${mouseLabel}`,
-      `Selected: ${selectedUnit ? `${selectedUnit.label} (${selectedUnit.id})` : 'none'}`,
-      `Move target: ${orderTarget}`,
-      `Zoom: ${this.camera.zoom.toFixed(2)}x`,
+      `${copy.mouseCell}: ${mouseLabel}`,
+      `${copy.selected}: ${selectedLabel}`,
+      `${copy.moveTarget}: ${orderTarget}`,
+      `${copy.facing}: ${selectedUnit ? formatDegrees(selectedUnit.facingRadians) : copy.none}`,
+      `${copy.zoom}: ${this.camera.zoom.toFixed(2)}x`,
+      `${copy.map}: ${this.state.map.width}×${this.state.map.height}`,
       '',
-      'Scope: no combat, no AI, no pathfinding.',
-      'Core state is separate from Pixi rendering.',
+      copy.noCombatScope,
+      copy.htmlLabels,
     ].join('\n');
   }
 }
