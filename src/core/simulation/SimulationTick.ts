@@ -36,7 +36,6 @@ function updateMetrics(unit: UnitModel, state: SimulationState, deltaSeconds: nu
 }
 
 function updateStateLabels(unit: UnitModel): void {
-  unit.behaviorRuntime.posture = 'standing';
   unit.behaviorRuntime.currentAction = unit.order ? 'move' : 'observe';
 
   if (unit.order) {
