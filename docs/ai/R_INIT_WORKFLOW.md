@@ -1,6 +1,8 @@
 # R-INIT: Preview-интеграционный workflow
 
-R-init — preview-интеграционный режим, в котором изменения сначала выкладываются в preview-ветку и preview-PR для ручного тестирования человеком, и только после явного GO попадают в `main`. Route X — отдельный механизм браузерной/GitHub-доставки, который r-init может использовать как транспортный слой; r-init и Route X не идентичны.
+R-init — preview-интеграционный режим, в котором изменения сначала выкладываются в preview-ветку `real-wargame-preview` для ручного тестирования человеком, и только после явного GO попадают в `main`. Route X — отдельный механизм браузерной/GitHub-доставки, который r-init может использовать как транспортный слой; r-init и Route X не идентичны.
+
+Политика permanent preview закреплена в `docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md` и `docs/workflow/SKILL_PATCH_PREVIEW_BRANCH_POLICY.md`.
 
 Режим дополняет существующие R (ручной zworker) и Q (GitHub-aware внешний исполнитель), добавляя слой preview-проверки перед merge.
 
@@ -22,11 +24,11 @@ R-init — preview-интеграционный режим, в котором и
 
 ## Preview-ветка и Preview-PR
 
-Preview-веткой по умолчанию является `real-wargame-preview`. Если задача не требует отдельной черновой ветки, изменения вносятся сразу в `real-wargame-preview`. Пользователь тестирует в локальной preview-папке `Real-wargame-preview`.
+Этот проект использует постоянную preview-ветку `real-wargame-preview`. Пользователь тестирует в локальной preview-папке `Real-wargame-preview`.
 
-1. Codex создаёт отдельную ветку с префиксом `preview/` или `r-init/`.
-2. Codex открывает Pull Request из этой ветки в `main`.
-3. PR помечается меткой `[r-init]` или `[preview]` в заголовке или описании.
+1. Codex создаёт отдельную task-ветку (например, `codex/<feature-name>`) от `real-wargame-preview` или из неё.
+2. Codex открывает Pull Request из task-ветки в `real-wargame-preview` (не в `main`).
+3. После GO пользователя выполняется merge из `real-wargame-preview` в `main`.
 4. К PR прикладывается `.bat`-лаунчер (см. раздел «Launcher»).
 
 ## Launcher: .bat для терминал-фри тестирования
@@ -77,9 +79,9 @@ NO-GO — нужно доработать, пока не принимаем.
 
 1. Codex убеждается, что все пункты чеклиста пройдены.
 2. Codex проверяет, что нет незакрытых замечаний.
-3. Codex выполняет merge в `main`.
-4. Preview-ветка удаляется (опционально).
-5. Codex обновляет статусы компонентов.
+3. Codex выполняет merge из `real-wargame-preview` в `main`.
+4. Codex обновляет статусы компонентов.
+5. Task-ветка при необходимости закрывается/удаляется.
 
 ### После NO-GO
 

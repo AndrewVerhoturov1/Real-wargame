@@ -1,47 +1,41 @@
-# Pull Request
+## PR Description
 
-## Что сделано
+### Required docs read
+- [ ] I have read `AGENTS.md`
+- [ ] I have read `docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md`
+- [ ] I have read the relevant navigation documents
 
+### Base branch
+- **Base branch:** `real-wargame-preview` / `main` (delete one)
 
-## Зачем это сделано
+> **Note:** The default target is `real-wargame-preview`. Targeting `main` requires explicit user GO documented below.
 
+- [ ] This PR targets `real-wargame-preview`
+- [ ] This PR targets `main` (if checked, user `MAIN_GO_APPROVED_BY_USER` must be `yes` below)
 
-## Какие файлы изменены
+If targeting `main`:
+- `MAIN_GO_APPROVED_BY_USER`: yes / no
+- Why not preview: \<explanation\>
 
+### Task branch
+- **Task branch name:**
+- **Transfer path:** how did the result get into the target branch? (PR merge / direct push / local merge / etc.)
 
-## Как проверить человеку
+### Checks
+- [ ] Checks were run (list below)
+- [ ] Checks were NOT run (explain why)
 
+**Checks run:**
+- \<check name\>: passed / failed / not run
 
-## Команды проверки
+### Manual checks needed (for human reviewer)
+- \<item\>
 
-- [ ] Проверка не требуется / только документы
-- [ ] Команда 1:
-- [ ] Команда 2:
-- [ ] Команда 3:
+### Branch cleanup
+- [ ] Temporary task branch has been closed/deleted
+- [ ] Temporary task branch remains open
 
-## Что не проверялось
+If left open, reason: «Временная ветка оставлена открытой, потому что ...»
 
-
-## Риски
-
-
-## Если это Q-mode PR
-
-Заполнить, если PR создан внешним исполнителем по Q-задаче:
-
-- Repository:
-- Branch:
-- PR number/link:
-- Checks run:
-- Not checked:
-- Human verification steps:
-- Questions for Codex/human:
-
-## Нужно ли локально смотреть результат человеку
-
-Да/нет. Если да, что именно смотреть:
-
-
-## Можно ли мержить без явного разрешения человека?
-
-Нет.
+### Risks
+- \<risk or "none known"\>

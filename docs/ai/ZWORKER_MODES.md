@@ -277,7 +277,7 @@ Do not merge. Do not enable auto-merge. Do not push directly to main. Do not cla
 
 ## Двухпапочная preview-схема
 
-Проект использует две папки: `Real-wargame` (main) и `Real-wargame-preview` (real-wargame-preview). Все изменения сначала попадают в preview-ветку и тестируются в preview-папке. `main` меняется только после GO пользователя. Подробно: `docs/workflow/LOCAL_TWO_FOLDER_WORKFLOW.md`.
+Проект использует две папки: `Real-wargame` (main) и `Real-wargame-preview` (real-wargame-preview). Все изменения сначала попадают в preview-ветку и тестируются в preview-папке. `main` меняется только после GO пользователя. Подробно: `docs/workflow/LOCAL_TWO_FOLDER_WORKFLOW.md`, `docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md`.
 
 ## X-режим: r-init preview-интеграция
 
@@ -297,8 +297,8 @@ X (режим r-init) — preview-интеграционный режим для
 
 ### Что Codex делает в X
 
-1. Создаёт отдельную ветку с префиксом `preview/` или `r-init/`.
-2. Открывает Pull Request с меткой `[r-init]` или `[preview]`.
+1. Создаёт отдельную task-ветку (например, `codex/<feature-name>`) от `real-wargame-preview`.
+2. Открывает Pull Request из task-ветки в `real-wargame-preview` (не `main`).
 3. Добавляет `.bat`-лаунчер для терминал-фри запуска.
 4. Даёт человеку чеклист ручного тестирования.
 5. Ждёт GO или NO-GO.
@@ -311,7 +311,7 @@ X (режим r-init) — preview-интеграционный режим для
 
 ### После GO
 
-Codex выполняет merge, обновляет статусы компонентов и при необходимости удаляет preview-ветку.
+Codex выполняет merge из `real-wargame-preview` в `main`, обновляет статусы компонентов и при необходимости закрывает task-ветку.
 
 ### После NO-GO
 
