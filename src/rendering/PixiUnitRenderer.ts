@@ -16,18 +16,10 @@ export class PixiUnitRenderer {
       const isSelected = selectedIds.has(unit.id);
       const graphics = new Graphics();
 
-      graphics.lineStyle(2, 0x111111, 0.9);
-      graphics.beginFill(unit.type === 'support_team' ? 0x394a6d : 0x485f35, 1);
-      graphics.drawCircle(position.x, position.y, UNIT_RADIUS_PX);
-      graphics.endFill();
-
+      drawStressHalo(graphics, position.x, position.y, unit);
+      drawUnitBody(graphics, position.x, position.y, unit);
       drawFrontMarker(graphics, position.x, position.y, unit.facingRadians, unit.heldItem);
-
-      graphics.lineStyle(2, 0xe2d9b8, 0.95);
-      graphics.moveTo(position.x - 4, position.y - 4);
-      graphics.lineTo(position.x + 4, position.y + 4);
-      graphics.moveTo(position.x + 4, position.y - 4);
-      graphics.lineTo(position.x - 4, position.y + 4);
+      drawPostureMarker(graphics, position.x, position.y, unit);
 
       if (isSelected) {
         graphics.lineStyle(3, 0xfff2a8, 0.96);
@@ -37,6 +29,73 @@ export class PixiUnitRenderer {
       this.container.addChild(graphics);
     }
   }
+}
+
+function drawUnitBody(graphics: Graphics, x: number, y: number, unit: UnitModel): void {
+  const fill = getUnitFill(unit);
+
+  graphics.lineStyle(2, 0x111111, 0.9);
+
+  if (unit.behaviorRuntime.posture === 'prone') {
+    graphics.beginFill(fill, 1);
+    graphics.drawRoundedRect(x - 15, y - 6, 30, 12, 5);
+    graphics.endFill();
+    return;
+  }
+
+  const radius = unit.behaviorRuntime.posture === 'crouched' ? UNIT_RADIUS_PX - 3 : UNIT_RADIUS_PX;
+  graphics.beginFill(fill, 1);
+  graphics.drawCircle(x, y, radius);
+  graphics.endFill();
+}
+
+function drawPostureMarker(graphics: Graphics, x: number, y: number, unit: UnitModel): void {
+  if (unit.behaviorRuntime.posture === 'standing') {
+    return;
+  }
+
+  graphics.lineStyle(2, 0xf6edcf, 0.9);
+
+  if (unit.behaviorRuntime.posture === 'crouched') {
+    graphics.moveTo(x - 8, y + 14);
+    graphics.lineTo(x + 8, y + 14);
+    return;
+  }
+
+  graphics.moveTo(x - 12, y + 13);
+  graphics.lineTo(x + 12, y + 13);
+  graphics.moveTo(x - 10, y + 17);
+  graphics.lineTo(x + 10, y + 17);
+}
+
+function drawStressHalo(graphics: Graphics, x: number, y: number, unit: UnitModel): void {
+  if (unit.behaviorRuntime.stress <= 0) {
+    return;
+  }
+
+  const alpha = Math.min(0.7, Math.max(0.12, unit.behaviorRuntime.stress / 160));
+  graphics.lineStyle(2, 0xb6633c, alpha);
+  graphics.drawCircle(x, y, 17);
+}
+
+function getUnitFill(unit: UnitModel): number {
+  if (unit.behaviorRuntime.state === 'stressed') {
+    return 0x743635;
+  }
+
+  if (unit.behaviorRuntime.state === 'taking_cover') {
+    return 0x8a6b39;
+  }
+
+  if (unit.type === 'support_team') {
+    return 0x394a6d;
+  }
+
+  if (unit.type === 'scout_team') {
+    return 0x4c6742;
+  }
+
+  return 0x485f35;
 }
 
 function drawFrontMarker(
