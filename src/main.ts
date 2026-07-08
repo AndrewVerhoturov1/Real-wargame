@@ -37,10 +37,10 @@ window.addEventListener('beforeunload', () => {
 function forceRussianTopControls(): void {
   document.documentElement.lang = 'ru';
   languageToggle.textContent = 'Русский';
-  gridToggle.textContent = 'Сетка: выкл';
+  gridToggle.textContent = 'Сетка: вкл';
   visionToggle.textContent = 'Обзор: выкл';
-  gridToggle.setAttribute('aria-pressed', 'false');
+  gridToggle.setAttribute('aria-pressed', 'true');
   visionToggle.setAttribute('aria-pressed', 'false');
-  gridToggle.classList.add('hud-toggle-off');
+  gridToggle.classList.remove('hud-toggle-off');
   visionToggle.classList.add('hud-toggle-off');
 }
