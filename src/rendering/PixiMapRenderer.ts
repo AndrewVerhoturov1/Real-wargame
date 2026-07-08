@@ -5,7 +5,7 @@ import { TERRAIN_STYLE } from './terrainStyle';
 export class PixiMapRenderer {
   readonly container = new Container();
 
-  render(map: TacticalMap, showGrid = true): void {
+  render(map: TacticalMap, showGrid = true, selectedObjectId: string | null = null): void {
     this.container.removeChildren();
 
     for (const cell of map.cells) {
@@ -27,7 +27,7 @@ export class PixiMapRenderer {
     }
 
     for (const object of map.objects) {
-      this.container.addChild(renderMapObject(map, object));
+      this.container.addChild(renderMapObject(map, object, object.id === selectedObjectId));
     }
 
     const border = new Graphics();
@@ -92,7 +92,7 @@ function renderScaleLabel(map: TacticalMap): Container {
   return container;
 }
 
-function renderMapObject(map: TacticalMap, object: MapObject): Graphics {
+function renderMapObject(map: TacticalMap, object: MapObject, isSelected: boolean): Graphics {
   const graphics = new Graphics();
   const x = (object.x + 0.5) * map.cellSize;
   const y = (object.y + 0.5) * map.cellSize;
@@ -136,6 +136,11 @@ function renderMapObject(map: TacticalMap, object: MapObject): Graphics {
     case 'bridge':
       drawTopDownBridge(graphics, width, height);
       break;
+  }
+
+  if (isSelected) {
+    graphics.lineStyle(3, 0xfff2a8, 0.95);
+    graphics.drawRoundedRect(-width / 2 - 5, -height / 2 - 5, width + 10, height + 10, 5);
   }
 
   return graphics;
