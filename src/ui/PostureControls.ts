@@ -1,6 +1,8 @@
 import type { UnitPosture } from '../core/behavior/BehaviorModel';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 
+const PASSPORT_UPDATE_INTERVAL_MS = 500;
+
 const OPTIONS: Array<{ posture: UnitPosture; icon: string; label: string }> = [
   { posture: 'standing', icon: '▮', label: 'Стоя' },
   { posture: 'crouched', icon: '▰', label: 'Пригнулся' },
@@ -68,7 +70,7 @@ export function installPostureControls(debugPanel: HTMLElement, state: Simulatio
   postureSection.insertAdjacentElement('afterend', passportSection);
 
   installRussianInspectorText(debugPanel);
-  window.setInterval(() => renderSoldierPassport(passport, state), 250);
+  window.setInterval(() => renderSoldierPassport(passport, state), PASSPORT_UPDATE_INTERVAL_MS);
 }
 
 function prepareScrollableHud(debugPanel: HTMLElement): void {
@@ -120,14 +122,13 @@ function renderSoldierPassport(passport: HTMLElement, state: SimulationState): v
   const unit = getSelectedUnit(state);
 
   if (!unit) {
-    passport.textContent = 'Выберите юнита.';
+    updateTextIfChanged(passport, 'Выберите юнита.');
     return;
   }
 
   const traits = unit.soldier.traits;
   const condition = unit.soldier.condition;
-
-  passport.textContent = [
+  const nextText = [
     'Постоянные качества:',
     `Устойчивость: ${traits.resilience}`,
     `Осторожность: ${traits.caution}`,
@@ -151,6 +152,14 @@ function renderSoldierPassport(passport: HTMLElement, state: SimulationState): v
     `Скорость: ${condition.speed}`,
     `Скрытность: ${condition.stealth}`,
   ].join('\n');
+
+  updateTextIfChanged(passport, nextText);
+}
+
+function updateTextIfChanged(element: HTMLElement, nextText: string): void {
+  if (element.textContent !== nextText) {
+    element.textContent = nextText;
+  }
 }
 
 function installRussianInspectorText(debugPanel: HTMLElement): void {
