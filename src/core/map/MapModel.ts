@@ -1,6 +1,10 @@
 import type { GridPosition, WorldPosition } from '../geometry';
 
 export type TerrainKind = 'field' | 'forest' | 'road' | 'swamp' | 'rough' | 'water';
+export type ElevationLevel = -2 | -1 | 0 | 1 | 2 | 3 | 4;
+export type ForestLayerKind = 0 | 1 | 2;
+
+export const ELEVATION_LEVELS = [-2, -1, 0, 1, 2, 3, 4] as const;
 
 export type MapObjectKind =
   | 'tree'
@@ -19,7 +23,8 @@ export interface MapCellData {
   x: number;
   y: number;
   terrain?: TerrainKind;
-  height?: -1 | 0 | 1 | 2;
+  height?: number;
+  forest?: number;
 }
 
 export interface MapCellRunData {
@@ -27,7 +32,8 @@ export interface MapCellRunData {
   x2: number;
   y: number;
   terrain?: TerrainKind;
-  height?: -1 | 0 | 1 | 2;
+  height?: number;
+  forest?: number;
 }
 
 export interface MapCellRectData {
@@ -36,7 +42,8 @@ export interface MapCellRectData {
   y1: number;
   y2: number;
   terrain?: TerrainKind;
-  height?: -1 | 0 | 1 | 2;
+  height?: number;
+  forest?: number;
 }
 
 export interface MapObjectData {
@@ -57,7 +64,9 @@ export interface TacticalMapData {
   cellSize: number;
   metersPerCell?: number;
   defaultTerrain?: TerrainKind;
-  defaultHeight?: -1 | 0 | 1 | 2;
+  defaultHeight?: number;
+  heightMap?: number[][];
+  forestMap?: number[][];
   cellRuns?: MapCellRunData[];
   cellRects?: MapCellRectData[];
   cells?: MapCellData[];
@@ -68,7 +77,8 @@ export interface MapCell {
   x: number;
   y: number;
   terrain: TerrainKind;
-  height: -1 | 0 | 1 | 2;
+  height: ElevationLevel;
+  forest: ForestLayerKind;
 }
 
 export interface MapObject {
@@ -90,13 +100,15 @@ export interface TacticalMap {
   height: number;
   cellSize: number;
   metersPerCell: number;
+  defaultTerrain: TerrainKind;
+  defaultHeight: ElevationLevel;
   cells: MapCell[];
   objects: MapObject[];
 }
 
 export function normalizeMap(data: TacticalMapData): TacticalMap {
   const defaultTerrain = data.defaultTerrain ?? 'field';
-  const defaultHeight = data.defaultHeight ?? 0;
+  const defaultHeight = normalizeElevationLevel(data.defaultHeight);
   const overrides = new Map<string, MapCellData>();
 
   for (const rect of data.cellRects ?? []) {
@@ -107,6 +119,7 @@ export function normalizeMap(data: TacticalMapData): TacticalMap {
           y,
           terrain: rect.terrain,
           height: rect.height,
+          forest: rect.forest,
         });
       }
     }
@@ -119,6 +132,7 @@ export function normalizeMap(data: TacticalMapData): TacticalMap {
         y: run.y,
         terrain: run.terrain,
         height: run.height,
+        forest: run.forest,
       });
     }
   }
@@ -132,11 +146,15 @@ export function normalizeMap(data: TacticalMapData): TacticalMap {
   for (let y = 0; y < data.height; y += 1) {
     for (let x = 0; x < data.width; x += 1) {
       const override = overrides.get(cellKey(x, y));
+      const heightFromMap = readMatrixValue(data.heightMap, x, y);
+      const forestFromMap = readMatrixValue(data.forestMap, x, y);
+
       cells.push({
         x,
         y,
         terrain: override?.terrain ?? defaultTerrain,
-        height: override?.height ?? defaultHeight,
+        height: normalizeElevationLevel(override?.height ?? heightFromMap ?? defaultHeight),
+        forest: normalizeForestLayer(override?.forest ?? forestFromMap ?? 0),
       });
     }
   }
@@ -146,9 +164,39 @@ export function normalizeMap(data: TacticalMapData): TacticalMap {
     height: data.height,
     cellSize: data.cellSize,
     metersPerCell: data.metersPerCell ?? 10,
+    defaultTerrain,
+    defaultHeight,
     cells,
     objects: normalizeMapObjects(data.objects ?? []),
   };
+}
+
+export function normalizeElevationLevel(value: number | undefined): ElevationLevel {
+  const rounded = Number.isFinite(value) ? Math.round(value as number) : 0;
+
+  if (rounded <= -2) {
+    return -2;
+  }
+
+  if (rounded >= 4) {
+    return 4;
+  }
+
+  return rounded as ElevationLevel;
+}
+
+export function normalizeForestLayer(value: number | undefined): ForestLayerKind {
+  const rounded = Number.isFinite(value) ? Math.round(value as number) : 0;
+
+  if (rounded <= 0) {
+    return 0;
+  }
+
+  if (rounded >= 2) {
+    return 2;
+  }
+
+  return 1;
 }
 
 export function getCell(map: TacticalMap, x: number, y: number): MapCell | undefined {
@@ -243,6 +291,10 @@ function getDefaultObjectSize(kind: MapObjectKind): { widthCells: number; height
     default:
       return { widthCells: 2, heightCells: 1.5 };
   }
+}
+
+function readMatrixValue(matrix: number[][] | undefined, x: number, y: number): number | undefined {
+  return matrix?.[y]?.[x];
 }
 
 function cellKey(x: number, y: number): string {
