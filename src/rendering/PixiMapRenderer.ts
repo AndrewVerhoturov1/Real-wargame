@@ -32,6 +32,7 @@ const FOREST_PALETTE: Record<ForestLayerKind, LayerPaletteEntry> = {
 
 const MIN_VISIBLE_ELEVATION = 0.35;
 const CONTOUR_THRESHOLDS = [-1.5, -0.5, 0.5, 1.5, 2.5, 3.5];
+const TEXTURE_DETAIL_SCALE = 2;
 
 export class PixiMapRenderer {
   readonly container = new Container();
@@ -141,9 +142,7 @@ function renderElevationLayer(map: TacticalMap): Sprite | null {
     return null;
   }
 
-  const canvas = document.createElement('canvas');
-  canvas.width = map.width * map.cellSize;
-  canvas.height = map.height * map.cellSize;
+  const canvas = createHighQualityCanvas(map);
   const context = canvas.getContext('2d');
 
   if (!context) {
@@ -155,7 +154,9 @@ function renderElevationLayer(map: TacticalMap): Sprite | null {
 
   for (let y = 0; y < canvas.height; y += 1) {
     for (let x = 0; x < canvas.width; x += 1) {
-      const value = sampleSmoothedHeight(smoothedHeights, map, x / map.cellSize, y / map.cellSize);
+      const mapX = x / TEXTURE_DETAIL_SCALE;
+      const mapY = y / TEXTURE_DETAIL_SCALE;
+      const value = sampleSmoothedHeight(smoothedHeights, map, mapX / map.cellSize, mapY / map.cellSize);
       const band = elevationBandForValue(value);
       const pixelIndex = (y * canvas.width + x) * 4;
 
@@ -175,7 +176,7 @@ function renderElevationLayer(map: TacticalMap): Sprite | null {
   context.putImageData(image, 0, 0);
   drawElevationContourLines(context, smoothedHeights, map);
 
-  return new Sprite(Texture.from(canvas));
+  return createScaledSprite(canvas);
 }
 
 function renderForestLayer(map: TacticalMap): Sprite | null {
@@ -183,15 +184,15 @@ function renderForestLayer(map: TacticalMap): Sprite | null {
     return null;
   }
 
-  const canvas = document.createElement('canvas');
-  canvas.width = map.width * map.cellSize;
-  canvas.height = map.height * map.cellSize;
+  const canvas = createHighQualityCanvas(map);
   const context = canvas.getContext('2d');
 
   if (!context) {
     return null;
   }
 
+  context.save();
+  context.scale(TEXTURE_DETAIL_SCALE, TEXTURE_DETAIL_SCALE);
   for (const cell of map.cells) {
     if (cell.forest === 0) {
       continue;
@@ -199,8 +200,22 @@ function renderForestLayer(map: TacticalMap): Sprite | null {
 
     drawForestCell(context, map, cell.x, cell.y, cell.forest);
   }
+  context.restore();
 
-  return new Sprite(Texture.from(canvas));
+  return createScaledSprite(canvas);
+}
+
+function createHighQualityCanvas(map: TacticalMap): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = map.width * map.cellSize * TEXTURE_DETAIL_SCALE;
+  canvas.height = map.height * map.cellSize * TEXTURE_DETAIL_SCALE;
+  return canvas;
+}
+
+function createScaledSprite(canvas: HTMLCanvasElement): Sprite {
+  const sprite = new Sprite(Texture.from(canvas));
+  sprite.scale.set(1 / TEXTURE_DETAIL_SCALE);
+  return sprite;
 }
 
 function drawForestCell(
@@ -302,17 +317,18 @@ function drawElevationContourLines(
   smoothedHeights: number[][],
   map: TacticalMap,
 ): void {
-  const step = Math.max(5, Math.floor(map.cellSize / 3));
+  const step = Math.max(3, Math.floor(map.cellSize / 5));
   const width = map.width * map.cellSize;
   const height = map.height * map.cellSize;
 
   context.save();
-  context.lineWidth = Math.max(1.5, map.cellSize * 0.065);
+  context.scale(TEXTURE_DETAIL_SCALE, TEXTURE_DETAIL_SCALE);
+  context.lineWidth = Math.max(1.2, map.cellSize * 0.05);
   context.lineCap = 'round';
   context.lineJoin = 'round';
 
   for (const threshold of CONTOUR_THRESHOLDS) {
-    context.strokeStyle = threshold > 0 ? 'rgba(84, 55, 26, 0.42)' : 'rgba(16, 43, 55, 0.38)';
+    context.strokeStyle = threshold > 0 ? 'rgba(74, 48, 24, 0.46)' : 'rgba(15, 38, 50, 0.42)';
 
     for (let y = 0; y < height - step; y += step) {
       for (let x = 0; x < width - step; x += step) {
