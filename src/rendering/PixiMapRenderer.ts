@@ -323,18 +323,21 @@ function drawElevationContourLines(
 
   context.save();
   context.scale(TEXTURE_DETAIL_SCALE, TEXTURE_DETAIL_SCALE);
-  context.lineWidth = Math.max(1.2, map.cellSize * 0.05);
-  context.lineCap = 'round';
+  context.lineWidth = Math.max(0.65, map.cellSize * 0.026);
+  context.lineCap = 'butt';
   context.lineJoin = 'round';
+  context.strokeStyle = 'rgba(68, 48, 27, 0.58)';
 
   for (const threshold of CONTOUR_THRESHOLDS) {
-    context.strokeStyle = threshold > 0 ? 'rgba(74, 48, 24, 0.46)' : 'rgba(15, 38, 50, 0.42)';
+    context.beginPath();
 
     for (let y = 0; y < height - step; y += step) {
       for (let x = 0; x < width - step; x += step) {
         drawContourCell(context, smoothedHeights, map, x, y, step, threshold);
       }
     }
+
+    context.stroke();
   }
 
   context.restore();
@@ -391,10 +394,8 @@ function pushIntersection(
 }
 
 function drawSegment(context: CanvasRenderingContext2D, start: { x: number; y: number }, end: { x: number; y: number }): void {
-  context.beginPath();
   context.moveTo(start.x, start.y);
   context.lineTo(end.x, end.y);
-  context.stroke();
 }
 
 function getStaticLayerKey(map: TacticalMap, showGrid: boolean): string {
@@ -447,7 +448,7 @@ function renderMeterGrid(map: TacticalMap): Graphics {
   for (let y = 0; y <= map.height; y += 1) {
     const py = y * map.cellSize;
     graphics.moveTo(0, py);
-    graphics.lineTo(mapWidth, py);
+    graphics.lineTo(mapWidth);
   }
 
   graphics.lineStyle(2, 0xf6edcf, 0.22);
