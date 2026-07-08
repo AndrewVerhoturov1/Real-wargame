@@ -1,1 +1,18 @@
-[]
+[
+  {
+    "id": "editor_zone_1",
+    "label": "editor_zone_1",
+    "labelRu": "Зона 1",
+    "type": "debug",
+    "shape": "circle",
+    "x": 34.044,
+    "y": 16.823,
+    "radiusCells": 3,
+    "widthCells": 0,
+    "heightCells": 0,
+    "strength": 50,
+    "stressPerSecond": 15,
+    "reason": "Editor zone",
+    "reasonRu": "Зона редактора"
+  }
+]
