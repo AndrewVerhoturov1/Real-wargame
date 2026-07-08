@@ -15,6 +15,7 @@ import { PixiUnitRenderer } from './PixiUnitRenderer';
 import { PixiViewConeRenderer } from './PixiViewConeRenderer';
 
 const DEBUG_PANEL_UPDATE_INTERVAL_MS = 300;
+const TARGET_MAX_FPS = 45;
 
 export class PixiTacticalBoardApp {
   private readonly app: Application;
@@ -31,7 +32,7 @@ export class PixiTacticalBoardApp {
   private readonly performanceMonitor = new PerformanceMonitor();
   private locale: Locale = 'en';
   private showGrid = true;
-  private showViewCones = true;
+  private showViewCones = false;
   private lastMapRenderKey = '';
   private lastDebugPanelUpdateMs = 0;
 
@@ -49,6 +50,7 @@ export class PixiTacticalBoardApp {
       antialias: false,
       resizeTo: this.root,
     });
+    this.app.ticker.maxFPS = TARGET_MAX_FPS;
 
     const canvas = this.app.view as HTMLCanvasElement;
     canvas.setAttribute('aria-label', 'Tactical board prototype canvas');
@@ -81,6 +83,7 @@ export class PixiTacticalBoardApp {
 
   start(): void {
     this.renderEditableMapLayerIfNeeded(true);
+    this.viewConeRenderer.clear();
     this.updateStaticText();
     this.updateDebugPanelIfNeeded(true);
     this.languageToggle.addEventListener('click', this.handleLanguageToggle);
@@ -111,6 +114,7 @@ export class PixiTacticalBoardApp {
       pixiMajorVersion: '7',
       antialias: false,
       backgroundAlpha: 1,
+      maxFPS: TARGET_MAX_FPS,
       mapRender: 'Pixi Graphics / vector shapes',
       zoomMode: 'stable wheel-scaled step without animation',
       grid: this.showGrid,
@@ -137,8 +141,6 @@ export class PixiTacticalBoardApp {
 
     if (this.showViewCones) {
       this.viewConeRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
-    } else {
-      this.viewConeRenderer.render(this.state.map, [], []);
     }
 
     this.orderRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
@@ -204,6 +206,9 @@ export class PixiTacticalBoardApp {
 
   private readonly handleVisionToggle = (): void => {
     this.showViewCones = !this.showViewCones;
+    if (!this.showViewCones) {
+      this.viewConeRenderer.clear();
+    }
     this.updateDisplayToggles();
     this.renderFrame();
   };
