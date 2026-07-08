@@ -1,4 +1,4 @@
-import type { GridPosition } from '../geometry';
+import { distance, type GridPosition } from '../geometry';
 import {
   clampGridPositionToMap,
   normalizeMap,
@@ -13,6 +13,7 @@ import {
   normalizePressureZones,
   type PressureZone,
   type PressureZoneData,
+  type PressureZoneShape,
 } from '../pressure/PressureZone';
 import { findUnitAtGridPosition, normalizeUnits, type UnitData, type UnitModel, type UnitType } from '../units/UnitModel';
 
@@ -21,9 +22,15 @@ export interface SelectionBox {
   current: GridPosition;
 }
 
-export type EditorTool = 'select' | 'spawn_object' | 'spawn_unit' | 'delete';
+export type EditorTool = 'select' | 'spawn_object' | 'spawn_unit' | 'spawn_zone' | 'delete';
 export type EditorResizeHandle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
-export type EditorDragMode = 'move_object' | 'move_unit' | 'resize_object' | 'rotate_object';
+export type EditorDragMode =
+  | 'move_object'
+  | 'move_unit'
+  | 'resize_object'
+  | 'rotate_object'
+  | 'move_zone'
+  | 'resize_zone';
 
 export interface EditorLayers {
   objects: boolean;
@@ -39,6 +46,15 @@ export interface EditorObjectSnapshot {
   rotationRadians: number;
 }
 
+export interface EditorZoneSnapshot {
+  x: number;
+  y: number;
+  shape: PressureZoneShape;
+  radiusCells: number;
+  widthCells: number;
+  heightCells: number;
+}
+
 export interface EditorUnitSnapshot {
   position: GridPosition;
 }
@@ -47,9 +63,11 @@ export interface EditorDragState {
   mode: EditorDragMode;
   objectId?: string;
   unitId?: string;
+  zoneId?: string;
   resizeHandle?: EditorResizeHandle;
   startGrid: GridPosition;
   startObject?: EditorObjectSnapshot;
+  startZone?: EditorZoneSnapshot;
   startUnit?: EditorUnitSnapshot;
 }
 
@@ -59,14 +77,22 @@ export interface EditorState {
   tool: EditorTool;
   objectKind: MapObjectKind;
   unitType: UnitType;
+  zoneShape: PressureZoneShape;
+  zoneRadiusCells: number;
+  zoneWidthCells: number;
+  zoneHeightCells: number;
+  zoneStrength: number;
+  zoneStressPerSecond: number;
   objectWidthCells: number;
   objectHeightCells: number;
   objectRotationDegrees: number;
   selectedObjectId: string | null;
+  selectedZoneId: string | null;
   layers: EditorLayers;
   drag: EditorDragState | null;
   nextObjectIndex: number;
   nextUnitIndex: number;
+  nextZoneIndex: number;
   lastMessage: string;
 }
 
@@ -100,10 +126,17 @@ export function createInitialState(
       tool: 'select',
       objectKind: 'tree',
       unitType: 'infantry_squad',
+      zoneShape: 'circle',
+      zoneRadiusCells: 3,
+      zoneWidthCells: 5,
+      zoneHeightCells: 3,
+      zoneStrength: 50,
+      zoneStressPerSecond: 15,
       objectWidthCells: 1,
       objectHeightCells: 1,
       objectRotationDegrees: 0,
       selectedObjectId: null,
+      selectedZoneId: null,
       layers: {
         objects: true,
         units: true,
@@ -112,6 +145,7 @@ export function createInitialState(
       drag: null,
       nextObjectIndex: 1,
       nextUnitIndex: 1,
+      nextZoneIndex: 1,
       lastMessage: 'Редактор выключен.',
     },
   };
@@ -136,6 +170,14 @@ export function getSelectedMapObject(state: SimulationState): MapObject | undefi
   }
 
   return state.map.objects.find((object) => object.id === state.editor.selectedObjectId);
+}
+
+export function getSelectedPressureZone(state: SimulationState): PressureZone | undefined {
+  if (state.editor.selectedZoneId === null) {
+    return undefined;
+  }
+
+  return state.pressureZones.find((zone) => zone.id === state.editor.selectedZoneId);
 }
 
 export function selectUnit(state: SimulationState, unitId: string | null): void {
@@ -221,6 +263,9 @@ export function beginEditorPointerAction(state: SimulationState, rawGrid: GridPo
     case 'spawn_unit':
       spawnEditorUnit(state, grid);
       return;
+    case 'spawn_zone':
+      spawnEditorZone(state, grid);
+      return;
     case 'delete':
       deleteEditorTargetAt(state, grid);
       return;
@@ -252,6 +297,12 @@ export function updateEditorPointerAction(state: SimulationState, rawGrid: GridP
       return;
     case 'rotate_object':
       dragRotateObject(state, drag, grid);
+      return;
+    case 'move_zone':
+      dragSelectedZone(state, drag, grid);
+      return;
+    case 'resize_zone':
+      dragResizeZone(state, drag, grid);
       return;
   }
 }
@@ -287,6 +338,19 @@ export function updateSelectedEditorObject(state: SimulationState, changes: Part
   state.editor.lastMessage = `Предмет изменён: ${object.id}`;
 }
 
+export function updateSelectedEditorZone(state: SimulationState, changes: Partial<Pick<PressureZone, 'shape' | 'radiusCells' | 'widthCells' | 'heightCells' | 'strength' | 'stressPerSecond'>>): void {
+  const zone = getSelectedPressureZone(state);
+
+  if (!zone) {
+    state.editor.lastMessage = 'Зона не выбрана.';
+    return;
+  }
+
+  Object.assign(zone, changes);
+  syncZoneEditorNumbers(state, zone);
+  state.editor.lastMessage = `Зона изменена: ${zone.id}`;
+}
+
 export function nudgeSelectedEditorObject(state: SimulationState, dx: number, dy: number): void {
   const object = getSelectedMapObject(state);
 
@@ -302,6 +366,23 @@ export function nudgeSelectedEditorObject(state: SimulationState, dx: number, dy
   object.x = center.x - 0.5;
   object.y = center.y - 0.5;
   state.editor.lastMessage = `Предмет сдвинут: ${object.id}`;
+}
+
+export function nudgeSelectedEditorZone(state: SimulationState, dx: number, dy: number): void {
+  const zone = getSelectedPressureZone(state);
+
+  if (!zone) {
+    state.editor.lastMessage = 'Зона не выбрана.';
+    return;
+  }
+
+  const center = clampGridPositionToMap(state.map, {
+    x: zone.x + dx,
+    y: zone.y + dy,
+  });
+  zone.x = center.x;
+  zone.y = center.y;
+  state.editor.lastMessage = `Зона сдвинута: ${zone.id}`;
 }
 
 export function resizeSelectedEditorObject(state: SimulationState, widthDelta: number, heightDelta: number): void {
@@ -351,16 +432,27 @@ export function deleteSelectedEditorTargets(state: SimulationState): void {
     return;
   }
 
+  if (state.editor.selectedZoneId) {
+    const zoneId = state.editor.selectedZoneId;
+    state.pressureZones = state.pressureZones.filter((zone) => zone.id !== zoneId);
+    state.editor.selectedZoneId = null;
+    state.editor.drag = null;
+    state.editor.lastMessage = `Зона удалена: ${zoneId}`;
+    return;
+  }
+
   state.editor.lastMessage = 'Нечего удалить.';
 }
 
 export function clearEditorScene(state: SimulationState): void {
   state.map.objects = [];
   state.units = [];
+  state.pressureZones = [];
   state.editor.selectedObjectId = null;
+  state.editor.selectedZoneId = null;
   state.editor.drag = null;
   selectUnit(state, null);
-  state.editor.lastMessage = 'Все предметы и юниты очищены.';
+  state.editor.lastMessage = 'Все предметы, юниты и зоны очищены.';
 }
 
 function beginSelectOrTransformAction(state: SimulationState, grid: GridPosition): void {
@@ -368,7 +460,7 @@ function beginSelectOrTransformAction(state: SimulationState, grid: GridPosition
     const selectedObject = getSelectedMapObject(state);
 
     if (selectedObject) {
-      const handle = getObjectHandleAtPosition(selectedObject, grid);
+      const handle = getObjectHandleAtPosition(state.map, selectedObject, grid);
 
       if (handle === 'rotate') {
         state.editor.drag = createObjectDragState(selectedObject, grid, 'rotate_object');
@@ -404,6 +496,7 @@ function beginSelectOrTransformAction(state: SimulationState, grid: GridPosition
 
     if (unit) {
       state.editor.selectedObjectId = null;
+      state.editor.selectedZoneId = null;
       selectUnit(state, unit.id);
       state.editor.drag = {
         mode: 'move_unit',
@@ -418,7 +511,37 @@ function beginSelectOrTransformAction(state: SimulationState, grid: GridPosition
     }
   }
 
+  if (state.editor.layers.pressureZones) {
+    const selectedZone = getSelectedPressureZone(state);
+
+    if (selectedZone) {
+      const handle = getZoneHandleAtPosition(selectedZone, grid);
+
+      if (handle) {
+        state.editor.drag = createZoneDragState(selectedZone, grid, 'resize_zone', handle);
+        state.editor.lastMessage = `Потяни ручку зоны, чтобы изменить размер: ${selectedZone.id}`;
+        return;
+      }
+
+      if (isPositionInsideZone(grid, selectedZone)) {
+        state.editor.drag = createZoneDragState(selectedZone, grid, 'move_zone');
+        state.editor.lastMessage = `Потяни зону, чтобы переместить: ${selectedZone.id}`;
+        return;
+      }
+    }
+
+    const zone = findPressureZoneAtGridPosition(state, grid);
+
+    if (zone) {
+      selectZoneForEditing(state, zone);
+      state.editor.drag = createZoneDragState(zone, grid, 'move_zone');
+      state.editor.lastMessage = `Выбрана зона. Потяни её, чтобы переместить: ${zone.id}`;
+      return;
+    }
+  }
+
   state.editor.selectedObjectId = null;
+  state.editor.selectedZoneId = null;
   selectUnit(state, null);
   state.editor.lastMessage = 'Ничего не выбрано.';
 }
@@ -440,6 +563,28 @@ function createObjectDragState(
       widthCells: object.widthCells,
       heightCells: object.heightCells,
       rotationRadians: object.rotationRadians,
+    },
+  };
+}
+
+function createZoneDragState(
+  zone: PressureZone,
+  startGrid: GridPosition,
+  mode: EditorDragMode,
+  resizeHandle?: EditorResizeHandle,
+): EditorDragState {
+  return {
+    mode,
+    zoneId: zone.id,
+    resizeHandle,
+    startGrid,
+    startZone: {
+      x: zone.x,
+      y: zone.y,
+      shape: zone.shape,
+      radiusCells: zone.radiusCells,
+      widthCells: zone.widthCells,
+      heightCells: zone.heightCells,
     },
   };
 }
@@ -476,6 +621,23 @@ function dragSelectedUnit(state: SimulationState, drag: EditorDragState, grid: G
   state.editor.lastMessage = `Юнит перемещается: ${unit.id}`;
 }
 
+function dragSelectedZone(state: SimulationState, drag: EditorDragState, grid: GridPosition): void {
+  const zone = drag.zoneId ? state.pressureZones.find((item) => item.id === drag.zoneId) : undefined;
+
+  if (!zone || !drag.startZone) {
+    return;
+  }
+
+  const center = clampGridPositionToMap(state.map, {
+    x: drag.startZone.x + grid.x - drag.startGrid.x,
+    y: drag.startZone.y + grid.y - drag.startGrid.y,
+  });
+
+  zone.x = center.x;
+  zone.y = center.y;
+  state.editor.lastMessage = `Зона перемещается: ${zone.id}`;
+}
+
 function dragResizeObject(state: SimulationState, drag: EditorDragState, grid: GridPosition): void {
   const object = drag.objectId ? state.map.objects.find((item) => item.id === drag.objectId) : undefined;
 
@@ -501,6 +663,40 @@ function dragResizeObject(state: SimulationState, drag: EditorDragState, grid: G
   state.editor.objectWidthCells = roundOne(object.widthCells);
   state.editor.objectHeightCells = roundOne(object.heightCells);
   state.editor.lastMessage = `Размер меняется: ${object.id}`;
+}
+
+function dragResizeZone(state: SimulationState, drag: EditorDragState, grid: GridPosition): void {
+  const zone = drag.zoneId ? state.pressureZones.find((item) => item.id === drag.zoneId) : undefined;
+
+  if (!zone || !drag.startZone || !drag.resizeHandle) {
+    return;
+  }
+
+  if (drag.startZone.shape === 'circle') {
+    zone.radiusCells = clampNumber(distance(grid, { x: drag.startZone.x, y: drag.startZone.y }), 0.5, 30);
+    state.editor.zoneRadiusCells = roundOne(zone.radiusCells);
+    state.editor.lastMessage = `Радиус зоны меняется: ${zone.id}`;
+    return;
+  }
+
+  const localX = grid.x - drag.startZone.x;
+  const localY = grid.y - drag.startZone.y;
+  let nextWidth = drag.startZone.widthCells;
+  let nextHeight = drag.startZone.heightCells;
+
+  if (drag.resizeHandle.includes('e') || drag.resizeHandle.includes('w')) {
+    nextWidth = Math.abs(localX) * 2;
+  }
+
+  if (drag.resizeHandle.includes('n') || drag.resizeHandle.includes('s')) {
+    nextHeight = Math.abs(localY) * 2;
+  }
+
+  zone.widthCells = clampNumber(nextWidth, 0.5, 40);
+  zone.heightCells = clampNumber(nextHeight, 0.5, 40);
+  state.editor.zoneWidthCells = roundOne(zone.widthCells);
+  state.editor.zoneHeightCells = roundOne(zone.heightCells);
+  state.editor.lastMessage = `Размер зоны меняется: ${zone.id}`;
 }
 
 function dragRotateObject(state: SimulationState, drag: EditorDragState, grid: GridPosition): void {
@@ -543,6 +739,7 @@ function spawnEditorObject(state: SimulationState, grid: GridPosition): void {
 
   state.editor.nextObjectIndex = index + 1;
   state.editor.selectedObjectId = id;
+  state.editor.selectedZoneId = null;
   state.editor.drag = null;
   selectUnit(state, null);
   state.editor.lastMessage = `Создан предмет: ${id}`;
@@ -573,9 +770,47 @@ function spawnEditorUnit(state: SimulationState, grid: GridPosition): void {
   state.units.push(unit);
   state.editor.nextUnitIndex = index + 1;
   state.editor.selectedObjectId = null;
+  state.editor.selectedZoneId = null;
   state.editor.drag = null;
   selectUnit(state, id);
   state.editor.lastMessage = `Создан юнит: ${id}`;
+}
+
+function spawnEditorZone(state: SimulationState, grid: GridPosition): void {
+  if (!state.editor.layers.pressureZones) {
+    state.editor.lastMessage = 'Слой зон скрыт. Включи слой, чтобы создавать зоны.';
+    return;
+  }
+
+  const index = state.editor.nextZoneIndex;
+  const id = `editor_zone_${index}`;
+  state.pressureZones.push({
+    id,
+    labels: {
+      en: id,
+      ru: `Зона ${index}`,
+    },
+    type: 'debug',
+    shape: state.editor.zoneShape,
+    x: grid.x,
+    y: grid.y,
+    radiusCells: state.editor.zoneShape === 'circle' ? state.editor.zoneRadiusCells : 0,
+    widthCells: state.editor.zoneShape === 'rect' ? state.editor.zoneWidthCells : 0,
+    heightCells: state.editor.zoneShape === 'rect' ? state.editor.zoneHeightCells : 0,
+    strength: clampNumber(state.editor.zoneStrength, 0, 100),
+    stressPerSecond: Math.max(0, state.editor.zoneStressPerSecond),
+    reasons: {
+      en: 'Editor zone',
+      ru: 'Зона редактора',
+    },
+  });
+
+  state.editor.nextZoneIndex = index + 1;
+  state.editor.selectedObjectId = null;
+  state.editor.selectedZoneId = id;
+  state.editor.drag = null;
+  selectUnit(state, null);
+  state.editor.lastMessage = `Создана зона: ${id}`;
 }
 
 function selectEditorTargetAt(state: SimulationState, grid: GridPosition): void {
@@ -592,14 +827,26 @@ function selectEditorTargetAt(state: SimulationState, grid: GridPosition): void 
   if (state.editor.layers.units) {
     const unit = findUnitAtGridPosition(state.units, grid);
     state.editor.selectedObjectId = null;
+    state.editor.selectedZoneId = null;
     selectUnit(state, unit?.id ?? null);
     state.editor.lastMessage = unit ? `Выбран юнит: ${unit.id}` : 'Ничего не выбрано.';
     return;
   }
 
+  if (state.editor.layers.pressureZones) {
+    const zone = findPressureZoneAtGridPosition(state, grid);
+
+    if (zone) {
+      selectZoneForEditing(state, zone);
+      state.editor.lastMessage = `Выбрана зона: ${zone.id}`;
+      return;
+    }
+  }
+
   state.editor.selectedObjectId = null;
+  state.editor.selectedZoneId = null;
   selectUnit(state, null);
-  state.editor.lastMessage = 'Ничего не выбрано: слои предметов и юнитов скрыты.';
+  state.editor.lastMessage = 'Ничего не выбрано.';
 }
 
 function deleteEditorTargetAt(state: SimulationState, grid: GridPosition): void {
@@ -627,15 +874,44 @@ function deleteEditorTargetAt(state: SimulationState, grid: GridPosition): void 
     }
   }
 
+  if (state.editor.layers.pressureZones) {
+    const zone = findPressureZoneAtGridPosition(state, grid);
+
+    if (zone) {
+      state.pressureZones = state.pressureZones.filter((item) => item.id !== zone.id);
+      state.editor.selectedZoneId = null;
+      state.editor.drag = null;
+      state.editor.lastMessage = `Зона удалена: ${zone.id}`;
+      return;
+    }
+  }
+
   state.editor.lastMessage = 'В точке нечего удалить.';
 }
 
 function selectObjectForEditing(state: SimulationState, object: MapObject): void {
   state.editor.selectedObjectId = object.id;
+  state.editor.selectedZoneId = null;
   state.editor.objectWidthCells = roundOne(object.widthCells);
   state.editor.objectHeightCells = roundOne(object.heightCells);
   state.editor.objectRotationDegrees = Math.round(radiansToDegrees(object.rotationRadians));
   selectUnit(state, null);
+}
+
+function selectZoneForEditing(state: SimulationState, zone: PressureZone): void {
+  state.editor.selectedZoneId = zone.id;
+  state.editor.selectedObjectId = null;
+  syncZoneEditorNumbers(state, zone);
+  selectUnit(state, null);
+}
+
+function syncZoneEditorNumbers(state: SimulationState, zone: PressureZone): void {
+  state.editor.zoneShape = zone.shape;
+  state.editor.zoneRadiusCells = roundOne(zone.radiusCells);
+  state.editor.zoneWidthCells = roundOne(zone.widthCells);
+  state.editor.zoneHeightCells = roundOne(zone.heightCells);
+  state.editor.zoneStrength = roundOne(zone.strength);
+  state.editor.zoneStressPerSecond = roundOne(zone.stressPerSecond);
 }
 
 function findMapObjectAtGridPosition(state: SimulationState, grid: GridPosition): MapObject | undefined {
@@ -650,33 +926,79 @@ function findMapObjectAtGridPosition(state: SimulationState, grid: GridPosition)
   return undefined;
 }
 
-function getObjectHandleAtPosition(object: MapObject, grid: GridPosition): EditorResizeHandle | 'rotate' | null {
+function findPressureZoneAtGridPosition(state: SimulationState, grid: GridPosition): PressureZone | undefined {
+  for (let index = state.pressureZones.length - 1; index >= 0; index -= 1) {
+    const zone = state.pressureZones[index];
+
+    if (isPositionInsideZone(grid, zone)) {
+      return zone;
+    }
+  }
+
+  return undefined;
+}
+
+function getObjectHandleAtPosition(map: TacticalMap, object: MapObject, grid: GridPosition): EditorResizeHandle | 'rotate' | null {
   const center = { x: object.x + 0.5, y: object.y + 0.5 };
   const local = toLocalObjectPoint(grid, center, object.rotationRadians);
   const halfWidth = object.widthCells / 2;
   const halfHeight = object.heightCells / 2;
-  const hitRadius = 0.45;
-  const rotateHandleOffset = 0.95;
+  const padCells = 5 / map.cellSize;
+  const handleHit = Math.max(0.14, 6 / map.cellSize);
+  const rotateOffset = Math.max(0.9, 30 / map.cellSize);
 
-  if (Math.hypot(local.x, local.y + halfHeight + rotateHandleOffset) <= 0.65) {
+  if (Math.hypot(local.x, local.y + halfHeight + rotateOffset) <= handleHit * 1.8) {
     return 'rotate';
   }
 
-  const nearLeft = Math.abs(local.x + halfWidth) <= hitRadius;
-  const nearRight = Math.abs(local.x - halfWidth) <= hitRadius;
-  const nearTop = Math.abs(local.y + halfHeight) <= hitRadius;
-  const nearBottom = Math.abs(local.y - halfHeight) <= hitRadius;
-  const insideWidthBand = Math.abs(local.x) <= halfWidth + hitRadius;
-  const insideHeightBand = Math.abs(local.y) <= halfHeight + hitRadius;
+  const points: Array<[EditorResizeHandle, number, number]> = [
+    ['nw', -halfWidth - padCells, -halfHeight - padCells],
+    ['n', 0, -halfHeight - padCells],
+    ['ne', halfWidth + padCells, -halfHeight - padCells],
+    ['e', halfWidth + padCells, 0],
+    ['se', halfWidth + padCells, halfHeight + padCells],
+    ['s', 0, halfHeight + padCells],
+    ['sw', -halfWidth - padCells, halfHeight + padCells],
+    ['w', -halfWidth - padCells, 0],
+  ];
 
-  if (nearLeft && nearTop) return 'nw';
-  if (nearRight && nearTop) return 'ne';
-  if (nearLeft && nearBottom) return 'sw';
-  if (nearRight && nearBottom) return 'se';
-  if (nearLeft && insideHeightBand) return 'w';
-  if (nearRight && insideHeightBand) return 'e';
-  if (nearTop && insideWidthBand) return 'n';
-  if (nearBottom && insideWidthBand) return 's';
+  for (const [handle, x, y] of points) {
+    if (Math.hypot(local.x - x, local.y - y) <= handleHit) {
+      return handle;
+    }
+  }
+
+  return null;
+}
+
+function getZoneHandleAtPosition(zone: PressureZone, grid: GridPosition): EditorResizeHandle | null {
+  const hitRadius = 0.35;
+
+  if (zone.shape === 'circle') {
+    const radius = distance(grid, { x: zone.x, y: zone.y });
+    return Math.abs(radius - zone.radiusCells) <= hitRadius ? 'e' : null;
+  }
+
+  const halfWidth = zone.widthCells / 2;
+  const halfHeight = zone.heightCells / 2;
+  const localX = grid.x - zone.x;
+  const localY = grid.y - zone.y;
+  const points: Array<[EditorResizeHandle, number, number]> = [
+    ['nw', -halfWidth, -halfHeight],
+    ['n', 0, -halfHeight],
+    ['ne', halfWidth, -halfHeight],
+    ['e', halfWidth, 0],
+    ['se', halfWidth, halfHeight],
+    ['s', 0, halfHeight],
+    ['sw', -halfWidth, halfHeight],
+    ['w', -halfWidth, 0],
+  ];
+
+  for (const [handle, x, y] of points) {
+    if (Math.hypot(localX - x, localY - y) <= hitRadius) {
+      return handle;
+    }
+  }
 
   return null;
 }
@@ -686,6 +1008,19 @@ function isPositionInsideObject(position: GridPosition, object: MapObject): bool
   const local = toLocalObjectPoint(position, center, object.rotationRadians);
 
   return Math.abs(local.x) <= object.widthCells / 2 && Math.abs(local.y) <= object.heightCells / 2;
+}
+
+function isPositionInsideZone(position: GridPosition, zone: PressureZone): boolean {
+  if (zone.shape === 'circle') {
+    return distance(position, { x: zone.x, y: zone.y }) <= zone.radiusCells;
+  }
+
+  return (
+    position.x >= zone.x - zone.widthCells / 2 &&
+    position.x <= zone.x + zone.widthCells / 2 &&
+    position.y >= zone.y - zone.heightCells / 2 &&
+    position.y <= zone.y + zone.heightCells / 2
+  );
 }
 
 function toLocalObjectPoint(position: GridPosition, center: GridPosition, rotationRadians: number): GridPosition {
