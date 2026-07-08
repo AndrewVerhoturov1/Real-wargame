@@ -21,12 +21,36 @@ export interface SelectionBox {
   current: GridPosition;
 }
 
-export type EditorTool = 'select' | 'move' | 'spawn_object' | 'spawn_unit' | 'delete';
+export type EditorTool = 'select' | 'spawn_object' | 'spawn_unit' | 'delete';
+export type EditorResizeHandle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+export type EditorDragMode = 'move_object' | 'move_unit' | 'resize_object' | 'rotate_object';
 
 export interface EditorLayers {
   objects: boolean;
   units: boolean;
   pressureZones: boolean;
+}
+
+export interface EditorObjectSnapshot {
+  x: number;
+  y: number;
+  widthCells: number;
+  heightCells: number;
+  rotationRadians: number;
+}
+
+export interface EditorUnitSnapshot {
+  position: GridPosition;
+}
+
+export interface EditorDragState {
+  mode: EditorDragMode;
+  objectId?: string;
+  unitId?: string;
+  resizeHandle?: EditorResizeHandle;
+  startGrid: GridPosition;
+  startObject?: EditorObjectSnapshot;
+  startUnit?: EditorUnitSnapshot;
 }
 
 export interface EditorState {
@@ -40,6 +64,7 @@ export interface EditorState {
   objectRotationDegrees: number;
   selectedObjectId: string | null;
   layers: EditorLayers;
+  drag: EditorDragState | null;
   nextObjectIndex: number;
   nextUnitIndex: number;
   lastMessage: string;
@@ -84,6 +109,7 @@ export function createInitialState(
         units: true,
         pressureZones: true,
       },
+      drag: null,
       nextObjectIndex: 1,
       nextUnitIndex: 1,
       lastMessage: 'Редактор выключен.',
@@ -179,16 +205,14 @@ export function issueMoveOrderToSelectedUnit(
   }
 }
 
-export function handleEditorClick(state: SimulationState, rawGrid: GridPosition): void {
+export function beginEditorPointerAction(state: SimulationState, rawGrid: GridPosition): void {
   const grid = clampGridPositionToMap(state.map, rawGrid);
 
   if (!state.editor.enabled) {
     return;
   }
 
-  if (state.editor.tool === 'select' && state.editor.layers.objects && tryObjectHandleClick(state, grid)) {
-    return;
-  }
+  state.editor.drag = null;
 
   switch (state.editor.tool) {
     case 'spawn_object':
@@ -200,14 +224,52 @@ export function handleEditorClick(state: SimulationState, rawGrid: GridPosition)
     case 'delete':
       deleteEditorTargetAt(state, grid);
       return;
-    case 'move':
-      moveSelectedEditorTarget(state, grid);
-      return;
     case 'select':
     default:
-      selectEditorTargetAt(state, grid);
+      beginSelectOrTransformAction(state, grid);
       return;
   }
+}
+
+export function updateEditorPointerAction(state: SimulationState, rawGrid: GridPosition): void {
+  const drag = state.editor.drag;
+
+  if (!drag) {
+    return;
+  }
+
+  const grid = clampGridPositionToMap(state.map, rawGrid);
+
+  switch (drag.mode) {
+    case 'move_object':
+      dragSelectedObject(state, drag, grid);
+      return;
+    case 'move_unit':
+      dragSelectedUnit(state, drag, grid);
+      return;
+    case 'resize_object':
+      dragResizeObject(state, drag, grid);
+      return;
+    case 'rotate_object':
+      dragRotateObject(state, drag, grid);
+      return;
+  }
+}
+
+export function finishEditorPointerAction(state: SimulationState, rawGrid: GridPosition): void {
+  if (state.editor.drag) {
+    updateEditorPointerAction(state, rawGrid);
+    state.editor.drag = null;
+  }
+}
+
+export function cancelEditorPointerAction(state: SimulationState): void {
+  state.editor.drag = null;
+}
+
+export function handleEditorClick(state: SimulationState, rawGrid: GridPosition): void {
+  beginEditorPointerAction(state, rawGrid);
+  finishEditorPointerAction(state, rawGrid);
 }
 
 export function updateSelectedEditorObject(state: SimulationState, changes: Partial<Pick<MapObject, 'widthCells' | 'heightCells' | 'rotationRadians'>>): void {
@@ -219,6 +281,9 @@ export function updateSelectedEditorObject(state: SimulationState, changes: Part
   }
 
   Object.assign(object, changes);
+  state.editor.objectWidthCells = object.widthCells;
+  state.editor.objectHeightCells = object.heightCells;
+  state.editor.objectRotationDegrees = Math.round(radiansToDegrees(object.rotationRadians));
   state.editor.lastMessage = `Предмет изменён: ${object.id}`;
 }
 
@@ -272,6 +337,7 @@ export function deleteSelectedEditorTargets(state: SimulationState): void {
     const objectId = state.editor.selectedObjectId;
     state.map.objects = state.map.objects.filter((object) => object.id !== objectId);
     state.editor.selectedObjectId = null;
+    state.editor.drag = null;
     state.editor.lastMessage = `Предмет удалён: ${objectId}`;
     return;
   }
@@ -280,19 +346,176 @@ export function deleteSelectedEditorTargets(state: SimulationState): void {
     const unitId = state.selectedUnitId;
     state.units = state.units.filter((unit) => unit.id !== unitId);
     selectUnit(state, null);
+    state.editor.drag = null;
     state.editor.lastMessage = `Юнит удалён: ${unitId}`;
     return;
   }
 
-  state.editor.lastMessage = 'Нечего удалять.';
+  state.editor.lastMessage = 'Нечего удалить.';
 }
 
 export function clearEditorScene(state: SimulationState): void {
   state.map.objects = [];
   state.units = [];
   state.editor.selectedObjectId = null;
+  state.editor.drag = null;
   selectUnit(state, null);
   state.editor.lastMessage = 'Все предметы и юниты очищены.';
+}
+
+function beginSelectOrTransformAction(state: SimulationState, grid: GridPosition): void {
+  if (state.editor.layers.objects) {
+    const selectedObject = getSelectedMapObject(state);
+
+    if (selectedObject) {
+      const handle = getObjectHandleAtPosition(selectedObject, grid);
+
+      if (handle === 'rotate') {
+        state.editor.drag = createObjectDragState(selectedObject, grid, 'rotate_object');
+        state.editor.lastMessage = `Потяни круглую ручку, чтобы вращать: ${selectedObject.id}`;
+        return;
+      }
+
+      if (handle) {
+        state.editor.drag = createObjectDragState(selectedObject, grid, 'resize_object', handle);
+        state.editor.lastMessage = `Потяни квадратную ручку, чтобы менять размер: ${selectedObject.id}`;
+        return;
+      }
+
+      if (isPositionInsideObject(grid, selectedObject)) {
+        state.editor.drag = createObjectDragState(selectedObject, grid, 'move_object');
+        state.editor.lastMessage = `Потяни предмет, чтобы переместить: ${selectedObject.id}`;
+        return;
+      }
+    }
+
+    const object = findMapObjectAtGridPosition(state, grid);
+
+    if (object) {
+      selectObjectForEditing(state, object);
+      state.editor.drag = createObjectDragState(object, grid, 'move_object');
+      state.editor.lastMessage = `Выбран предмет. Потяни его, чтобы переместить: ${object.id}`;
+      return;
+    }
+  }
+
+  if (state.editor.layers.units) {
+    const unit = findUnitAtGridPosition(state.units, grid);
+
+    if (unit) {
+      state.editor.selectedObjectId = null;
+      selectUnit(state, unit.id);
+      state.editor.drag = {
+        mode: 'move_unit',
+        unitId: unit.id,
+        startGrid: grid,
+        startUnit: {
+          position: { ...unit.position },
+        },
+      };
+      state.editor.lastMessage = `Выбран юнит. Потяни его, чтобы переместить: ${unit.id}`;
+      return;
+    }
+  }
+
+  state.editor.selectedObjectId = null;
+  selectUnit(state, null);
+  state.editor.lastMessage = 'Ничего не выбрано.';
+}
+
+function createObjectDragState(
+  object: MapObject,
+  startGrid: GridPosition,
+  mode: EditorDragMode,
+  resizeHandle?: EditorResizeHandle,
+): EditorDragState {
+  return {
+    mode,
+    objectId: object.id,
+    resizeHandle,
+    startGrid,
+    startObject: {
+      x: object.x,
+      y: object.y,
+      widthCells: object.widthCells,
+      heightCells: object.heightCells,
+      rotationRadians: object.rotationRadians,
+    },
+  };
+}
+
+function dragSelectedObject(state: SimulationState, drag: EditorDragState, grid: GridPosition): void {
+  const object = drag.objectId ? state.map.objects.find((item) => item.id === drag.objectId) : undefined;
+
+  if (!object || !drag.startObject) {
+    return;
+  }
+
+  const center = clampGridPositionToMap(state.map, {
+    x: drag.startObject.x + 0.5 + grid.x - drag.startGrid.x,
+    y: drag.startObject.y + 0.5 + grid.y - drag.startGrid.y,
+  });
+
+  object.x = center.x - 0.5;
+  object.y = center.y - 0.5;
+  state.editor.lastMessage = `Предмет перемещается: ${object.id}`;
+}
+
+function dragSelectedUnit(state: SimulationState, drag: EditorDragState, grid: GridPosition): void {
+  const unit = drag.unitId ? state.units.find((item) => item.id === drag.unitId) : undefined;
+
+  if (!unit || !drag.startUnit) {
+    return;
+  }
+
+  unit.position = clampGridPositionToMap(state.map, {
+    x: drag.startUnit.position.x + grid.x - drag.startGrid.x,
+    y: drag.startUnit.position.y + grid.y - drag.startGrid.y,
+  });
+  unit.order = null;
+  state.editor.lastMessage = `Юнит перемещается: ${unit.id}`;
+}
+
+function dragResizeObject(state: SimulationState, drag: EditorDragState, grid: GridPosition): void {
+  const object = drag.objectId ? state.map.objects.find((item) => item.id === drag.objectId) : undefined;
+
+  if (!object || !drag.startObject || !drag.resizeHandle) {
+    return;
+  }
+
+  const center = getObjectCenter(drag.startObject);
+  const local = toLocalObjectPoint(grid, center, drag.startObject.rotationRadians);
+  let nextWidth = drag.startObject.widthCells;
+  let nextHeight = drag.startObject.heightCells;
+
+  if (drag.resizeHandle.includes('e') || drag.resizeHandle.includes('w')) {
+    nextWidth = Math.abs(local.x) * 2;
+  }
+
+  if (drag.resizeHandle.includes('n') || drag.resizeHandle.includes('s')) {
+    nextHeight = Math.abs(local.y) * 2;
+  }
+
+  object.widthCells = clampNumber(nextWidth, 0.1, 20);
+  object.heightCells = clampNumber(nextHeight, 0.1, 20);
+  state.editor.objectWidthCells = roundOne(object.widthCells);
+  state.editor.objectHeightCells = roundOne(object.heightCells);
+  state.editor.lastMessage = `Размер меняется: ${object.id}`;
+}
+
+function dragRotateObject(state: SimulationState, drag: EditorDragState, grid: GridPosition): void {
+  const object = drag.objectId ? state.map.objects.find((item) => item.id === drag.objectId) : undefined;
+
+  if (!object || !drag.startObject) {
+    return;
+  }
+
+  const center = getObjectCenter(drag.startObject);
+  const startAngle = Math.atan2(drag.startGrid.y - center.y, drag.startGrid.x - center.x);
+  const currentAngle = Math.atan2(grid.y - center.y, grid.x - center.x);
+  object.rotationRadians = drag.startObject.rotationRadians + currentAngle - startAngle;
+  state.editor.objectRotationDegrees = Math.round(radiansToDegrees(object.rotationRadians));
+  state.editor.lastMessage = `Поворот меняется: ${object.id}`;
 }
 
 function spawnEditorObject(state: SimulationState, grid: GridPosition): void {
@@ -320,6 +543,7 @@ function spawnEditorObject(state: SimulationState, grid: GridPosition): void {
 
   state.editor.nextObjectIndex = index + 1;
   state.editor.selectedObjectId = id;
+  state.editor.drag = null;
   selectUnit(state, null);
   state.editor.lastMessage = `Создан предмет: ${id}`;
 }
@@ -349,6 +573,7 @@ function spawnEditorUnit(state: SimulationState, grid: GridPosition): void {
   state.units.push(unit);
   state.editor.nextUnitIndex = index + 1;
   state.editor.selectedObjectId = null;
+  state.editor.drag = null;
   selectUnit(state, id);
   state.editor.lastMessage = `Создан юнит: ${id}`;
 }
@@ -358,11 +583,7 @@ function selectEditorTargetAt(state: SimulationState, grid: GridPosition): void 
     const object = findMapObjectAtGridPosition(state, grid);
 
     if (object) {
-      state.editor.selectedObjectId = object.id;
-      state.editor.objectWidthCells = object.widthCells;
-      state.editor.objectHeightCells = object.heightCells;
-      state.editor.objectRotationDegrees = Math.round(radiansToDegrees(object.rotationRadians));
-      selectUnit(state, null);
+      selectObjectForEditing(state, object);
       state.editor.lastMessage = `Выбран предмет: ${object.id}`;
       return;
     }
@@ -388,6 +609,7 @@ function deleteEditorTargetAt(state: SimulationState, grid: GridPosition): void 
     if (object) {
       state.map.objects = state.map.objects.filter((item) => item.id !== object.id);
       state.editor.selectedObjectId = null;
+      state.editor.drag = null;
       state.editor.lastMessage = `Предмет удалён: ${object.id}`;
       return;
     }
@@ -399,6 +621,7 @@ function deleteEditorTargetAt(state: SimulationState, grid: GridPosition): void 
     if (unit) {
       state.units = state.units.filter((item) => item.id !== unit.id);
       selectUnit(state, null);
+      state.editor.drag = null;
       state.editor.lastMessage = `Юнит удалён: ${unit.id}`;
       return;
     }
@@ -407,81 +630,81 @@ function deleteEditorTargetAt(state: SimulationState, grid: GridPosition): void 
   state.editor.lastMessage = 'В точке нечего удалить.';
 }
 
-function moveSelectedEditorTarget(state: SimulationState, grid: GridPosition): void {
-  const object = getSelectedMapObject(state);
-
-  if (object) {
-    object.x = grid.x - 0.5;
-    object.y = grid.y - 0.5;
-    state.editor.lastMessage = `Предмет перемещён: ${object.id}`;
-    return;
-  }
-
-  const unit = getSelectedUnit(state);
-
-  if (unit) {
-    unit.position = grid;
-    unit.order = null;
-    state.editor.lastMessage = `Юнит перемещён: ${unit.id}`;
-    return;
-  }
-
-  state.editor.lastMessage = 'Нечего перемещать: выбери предмет или юнит.';
-}
-
-function tryObjectHandleClick(state: SimulationState, grid: GridPosition): boolean {
-  const object = getSelectedMapObject(state);
-
-  if (!object) {
-    return false;
-  }
-
-  const center = { x: object.x + 0.5, y: object.y + 0.5 };
-  const dx = grid.x - center.x;
-  const dy = grid.y - center.y;
-  const cos = Math.cos(-object.rotationRadians);
-  const sin = Math.sin(-object.rotationRadians);
-  const localX = dx * cos - dy * sin;
-  const localY = dx * sin + dy * cos;
-  const halfWidth = object.widthCells / 2;
-  const halfHeight = object.heightCells / 2;
-  const hitRadius = 0.35;
-
-  if (Math.hypot(localX, localY + halfHeight + 0.7) <= hitRadius) {
-    rotateSelectedEditorObject(state, 15);
-    return true;
-  }
-
-  const onRight = Math.abs(localX - halfWidth) <= hitRadius && Math.abs(localY) <= halfHeight + hitRadius;
-  const onLeft = Math.abs(localX + halfWidth) <= hitRadius && Math.abs(localY) <= halfHeight + hitRadius;
-  const onBottom = Math.abs(localY - halfHeight) <= hitRadius && Math.abs(localX) <= halfWidth + hitRadius;
-  const onTop = Math.abs(localY + halfHeight) <= hitRadius && Math.abs(localX) <= halfWidth + hitRadius;
-
-  if (onRight || onLeft || onBottom || onTop) {
-    resizeSelectedEditorObject(state, onRight || onLeft ? 0.5 : 0, onTop || onBottom ? 0.5 : 0);
-    return true;
-  }
-
-  return false;
+function selectObjectForEditing(state: SimulationState, object: MapObject): void {
+  state.editor.selectedObjectId = object.id;
+  state.editor.objectWidthCells = roundOne(object.widthCells);
+  state.editor.objectHeightCells = roundOne(object.heightCells);
+  state.editor.objectRotationDegrees = Math.round(radiansToDegrees(object.rotationRadians));
+  selectUnit(state, null);
 }
 
 function findMapObjectAtGridPosition(state: SimulationState, grid: GridPosition): MapObject | undefined {
   for (let index = state.map.objects.length - 1; index >= 0; index -= 1) {
     const object = state.map.objects[index];
-    const center = { x: object.x + 0.5, y: object.y + 0.5 };
-    const dx = grid.x - center.x;
-    const dy = grid.y - center.y;
-    const cos = Math.cos(-object.rotationRadians);
-    const sin = Math.sin(-object.rotationRadians);
-    const localX = dx * cos - dy * sin;
-    const localY = dx * sin + dy * cos;
 
-    if (Math.abs(localX) <= object.widthCells / 2 && Math.abs(localY) <= object.heightCells / 2) {
+    if (isPositionInsideObject(grid, object)) {
       return object;
     }
   }
 
   return undefined;
+}
+
+function getObjectHandleAtPosition(object: MapObject, grid: GridPosition): EditorResizeHandle | 'rotate' | null {
+  const center = { x: object.x + 0.5, y: object.y + 0.5 };
+  const local = toLocalObjectPoint(grid, center, object.rotationRadians);
+  const halfWidth = object.widthCells / 2;
+  const halfHeight = object.heightCells / 2;
+  const hitRadius = 0.45;
+  const rotateHandleOffset = 0.95;
+
+  if (Math.hypot(local.x, local.y + halfHeight + rotateHandleOffset) <= 0.65) {
+    return 'rotate';
+  }
+
+  const nearLeft = Math.abs(local.x + halfWidth) <= hitRadius;
+  const nearRight = Math.abs(local.x - halfWidth) <= hitRadius;
+  const nearTop = Math.abs(local.y + halfHeight) <= hitRadius;
+  const nearBottom = Math.abs(local.y - halfHeight) <= hitRadius;
+  const insideWidthBand = Math.abs(local.x) <= halfWidth + hitRadius;
+  const insideHeightBand = Math.abs(local.y) <= halfHeight + hitRadius;
+
+  if (nearLeft && nearTop) return 'nw';
+  if (nearRight && nearTop) return 'ne';
+  if (nearLeft && nearBottom) return 'sw';
+  if (nearRight && nearBottom) return 'se';
+  if (nearLeft && insideHeightBand) return 'w';
+  if (nearRight && insideHeightBand) return 'e';
+  if (nearTop && insideWidthBand) return 'n';
+  if (nearBottom && insideWidthBand) return 's';
+
+  return null;
+}
+
+function isPositionInsideObject(position: GridPosition, object: MapObject): boolean {
+  const center = { x: object.x + 0.5, y: object.y + 0.5 };
+  const local = toLocalObjectPoint(position, center, object.rotationRadians);
+
+  return Math.abs(local.x) <= object.widthCells / 2 && Math.abs(local.y) <= object.heightCells / 2;
+}
+
+function toLocalObjectPoint(position: GridPosition, center: GridPosition, rotationRadians: number): GridPosition {
+  const dx = position.x - center.x;
+  const dy = position.y - center.y;
+  const cos = Math.cos(-rotationRadians);
+  const sin = Math.sin(-rotationRadians);
+
+  return {
+    x: dx * cos - dy * sin,
+    y: dx * sin + dy * cos,
+  };
+}
+
+function getObjectCenter(object: EditorObjectSnapshot): GridPosition {
+  return {
+    x: object.x + 0.5,
+    y: object.y + 0.5,
+  };
 }
 
 function applyPressurePreview(state: SimulationState, unit: UnitModel, target: GridPosition): void {
@@ -546,4 +769,8 @@ function degreesToRadians(degrees: number): number {
 
 function radiansToDegrees(radians: number): number {
   return (radians * 180) / Math.PI;
+}
+
+function roundOne(value: number): number {
+  return Math.round(value * 10) / 10;
 }
