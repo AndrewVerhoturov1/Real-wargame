@@ -58,7 +58,7 @@ test('capture Real-Wargame preview screenshots', async ({ page }) => {
 
   const hillCenter = boardPoint(27, 17);
   await page.mouse.move(hillCenter.x, hillCenter.y);
-  await page.mouse.wheel(0, -600);
+  await page.mouse.wheel(0, -6000);
   await page.waitForTimeout(500);
   await saveScreenshot(page, '05-zoomed-map.png');
 });
