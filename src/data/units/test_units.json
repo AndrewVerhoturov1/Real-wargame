@@ -5,11 +5,13 @@
     "labelRu": "Солдат",
     "type": "scout_team",
     "side": "player",
-    "x": 32,
-    "y": 20,
+    "x": 28.57,
+    "y": 16.659,
     "speedCellsPerSecond": 2.3,
-    "facingDegrees": 0,
+    "heldItem": "short_item",
+    "facingDegrees": -33.9,
     "viewAngleDegrees": 118,
+    "viewRangeCells": 7,
     "behaviorProfile": "regular"
   }
 ]
