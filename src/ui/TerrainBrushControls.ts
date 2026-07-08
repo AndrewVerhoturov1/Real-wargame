@@ -26,27 +26,11 @@ export function installTerrainBrushControls(debugPanel: HTMLElement, state: Simu
 
   ensureBrushDefaults(state);
 
-  const section = document.createElement('details');
-  section.className = 'hud-section editor-section terrain-brush-section';
-  section.open = true;
-  section.style.marginTop = '10px';
-  section.style.pointerEvents = 'auto';
-  section.style.display = 'none';
-
-  const summary = document.createElement('summary');
-  summary.textContent = 'Кисти карты: высота и лес';
-  summary.style.cursor = 'pointer';
-  summary.style.color = '#fff2a8';
-  summary.style.fontWeight = '700';
-  summary.style.fontSize = '13px';
-  summary.style.padding = '7px 0';
-
   const content = document.createElement('div');
-  content.style.display = 'grid';
-  content.style.gap = '8px';
-  content.style.marginTop = '6px';
+  content.className = 'terrain-brush-content';
 
   const status = createSmallText('Выбери кисть и рисуй по карте левой кнопкой мыши.');
+  status.className = 'editor-status-block';
   const heightButton = createButton('Кисть: высота');
   const forestButton = createButton('Кисть: лес');
   const selectButton = createButton('Вернуться к выбору');
@@ -104,19 +88,15 @@ export function installTerrainBrushControls(debugPanel: HTMLElement, state: Simu
   });
 
   const buttonRow = document.createElement('div');
-  buttonRow.style.display = 'flex';
-  buttonRow.style.flexWrap = 'wrap';
-  buttonRow.style.gap = '6px';
+  buttonRow.className = 'editor-button-row';
   buttonRow.append(heightButton, forestButton, selectButton);
 
   const clearRow = document.createElement('div');
-  clearRow.style.display = 'flex';
-  clearRow.style.flexWrap = 'wrap';
-  clearRow.style.gap = '6px';
+  clearRow.className = 'editor-button-row';
   clearRow.append(clearHeightButton, clearForestButton);
 
   content.append(
-    createSmallText('Высоты и лес теперь создаются кистями. Данные остаются по клеткам, но карта рисует слой высот отдельно.'),
+    createSmallText('Высоты и лес создаются кистями. Данные остаются по клеткам, а карта рисует их как слой.'),
     buttonRow,
     createLabeledControl('Уровень высоты', heightSelect),
     createLabeledControl('Слой леса', forestSelect),
@@ -125,11 +105,20 @@ export function installTerrainBrushControls(debugPanel: HTMLElement, state: Simu
     status,
   );
 
-  section.append(summary, content);
-  hud.appendChild(section);
+  const slot = document.querySelector<HTMLElement>('.editor-map-brush-slot');
+  if (slot) {
+    slot.appendChild(content);
+  } else {
+    const section = document.createElement('details');
+    section.className = 'hud-section editor-section terrain-brush-section';
+    section.open = true;
+    const summary = document.createElement('summary');
+    summary.textContent = 'Кисти карты: высота и лес';
+    section.append(summary, content);
+    hud.appendChild(section);
+  }
 
   window.setInterval(() => {
-    section.style.display = state.editor.enabled ? '' : 'none';
     renderBrushStatus(status, state);
   }, 300);
 }
@@ -187,18 +176,13 @@ function createButton(label: string): HTMLButtonElement {
 function createSmallText(text: string): HTMLElement {
   const element = document.createElement('div');
   element.textContent = text;
-  element.style.fontSize = '12px';
-  element.style.color = '#f6edcf';
-  element.style.whiteSpace = 'pre-wrap';
+  element.className = 'editor-help-text';
   return element;
 }
 
 function createLabeledControl(label: string, control: HTMLElement): HTMLElement {
   const wrapper = document.createElement('label');
-  wrapper.style.display = 'grid';
-  wrapper.style.gap = '4px';
-  wrapper.style.fontSize = '12px';
-  wrapper.style.color = '#f6edcf';
+  wrapper.className = 'editor-labeled-control';
   wrapper.append(label, control);
   return wrapper;
 }
