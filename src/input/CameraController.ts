@@ -22,7 +22,11 @@ export class CameraController {
 
   attach(): void {
     this.targetScale = this.worldContainer.scale.x;
-    this.targetPosition = { x: this.worldContainer.x, y: this.worldContainer.y };
+    this.targetPosition = {
+      x: Math.round(this.worldContainer.x),
+      y: Math.round(this.worldContainer.y),
+    };
+    this.worldContainer.position.set(this.targetPosition.x, this.targetPosition.y);
     this.canvas.addEventListener('wheel', this.handleWheel, { passive: false });
     this.canvas.addEventListener('pointerdown', this.handlePointerDown);
     window.addEventListener('pointermove', this.handlePointerMove);
@@ -79,8 +83,8 @@ export class CameraController {
 
     this.targetScale = nextScale;
     this.targetPosition = {
-      x: screenX - beforeZoomWorldPosition.x * nextScale,
-      y: screenY - beforeZoomWorldPosition.y * nextScale,
+      x: Math.round(screenX - beforeZoomWorldPosition.x * nextScale),
+      y: Math.round(screenY - beforeZoomWorldPosition.y * nextScale),
     };
     this.startSmoothZoom();
   };
@@ -104,8 +108,8 @@ export class CameraController {
 
     this.worldContainer.scale.set(scaleDone ? this.targetScale : nextScale);
     this.worldContainer.position.set(
-      xDone ? this.targetPosition.x : nextX,
-      yDone ? this.targetPosition.y : nextY,
+      xDone ? this.targetPosition.x : Math.round(nextX),
+      yDone ? this.targetPosition.y : Math.round(nextY),
     );
 
     if (scaleDone && xDone && yDone) {
@@ -136,8 +140,8 @@ export class CameraController {
 
     const dx = event.clientX - this.lastPointerPosition.x;
     const dy = event.clientY - this.lastPointerPosition.y;
-    const nextX = this.worldContainer.x + dx;
-    const nextY = this.worldContainer.y + dy;
+    const nextX = Math.round(this.worldContainer.x + dx);
+    const nextY = Math.round(this.worldContainer.y + dy);
 
     this.worldContainer.position.set(nextX, nextY);
     this.targetPosition = { x: nextX, y: nextY };
