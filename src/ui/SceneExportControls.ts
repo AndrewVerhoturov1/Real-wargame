@@ -1,5 +1,5 @@
 import type { SimulationState } from '../core/simulation/SimulationState';
-import { downloadCurrentSceneJson } from './SceneExport';
+import { downloadCurrentSceneJson, loadSceneJsonFromFile } from './SceneExport';
 
 export function installSceneExportControls(state: SimulationState): void {
   const editorRoot = document.querySelector<HTMLElement>('.editor-controls');
@@ -9,24 +9,52 @@ export function installSceneExportControls(state: SimulationState): void {
   }
 
   const title = document.createElement('div');
-  title.textContent = 'Сохранение';
+  title.textContent = 'Сохранение / загрузка';
   title.style.fontWeight = '700';
   title.style.fontSize = '12px';
   title.style.color = '#fff2a8';
 
   const hint = document.createElement('div');
-  hint.textContent = 'Скачивает текущую сцену в JSON: карта, предметы, юниты и зоны. Файл можно отдать Codex, чтобы закрепить изменения в проекте.';
+  hint.textContent = 'Можно скачать текущую сцену в JSON или загрузить JSON сцены обратно в редактор.';
   hint.style.fontSize = '12px';
   hint.style.color = '#f6edcf';
 
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.textContent = 'Скачать JSON сцены';
-  button.style.pointerEvents = 'auto';
-  button.style.cursor = 'pointer';
-  button.addEventListener('click', () => {
+  const downloadButton = document.createElement('button');
+  downloadButton.type = 'button';
+  downloadButton.textContent = 'Скачать JSON сцены';
+  downloadButton.style.pointerEvents = 'auto';
+  downloadButton.style.cursor = 'pointer';
+  downloadButton.addEventListener('click', () => {
     downloadCurrentSceneJson(state);
   });
 
-  editorRoot.append(title, hint, button);
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = 'application/json,.json';
+  fileInput.style.display = 'none';
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files?.[0];
+    fileInput.value = '';
+
+    if (!file) {
+      return;
+    }
+
+    void loadSceneJsonFromFile(state, file)
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : 'Не удалось загрузить JSON сцены.';
+        state.editor.lastMessage = `Ошибка загрузки JSON: ${message}`;
+      });
+  });
+
+  const loadButton = document.createElement('button');
+  loadButton.type = 'button';
+  loadButton.textContent = 'Загрузить JSON сцены';
+  loadButton.style.pointerEvents = 'auto';
+  loadButton.style.cursor = 'pointer';
+  loadButton.addEventListener('click', () => {
+    fileInput.click();
+  });
+
+  editorRoot.append(title, hint, downloadButton, loadButton, fileInput);
 }
