@@ -34,8 +34,7 @@ const UNIT_TYPE_OPTIONS: Array<{ value: UnitType; label: string }> = [
 ];
 
 const TOOL_OPTIONS: Array<{ value: EditorTool; label: string; hint: string }> = [
-  { value: 'select', label: 'Выбрать', hint: 'клик по предмету или юниту' },
-  { value: 'move', label: 'Переместить', hint: 'выбери объект, потом кликни в новую точку' },
+  { value: 'select', label: 'Выбрать / тянуть', hint: 'клик выбирает, зажатая мышь двигает, ручки меняют размер и поворот' },
   { value: 'spawn_object', label: 'Создать предмет', hint: 'клик по карте создаёт предмет' },
   { value: 'spawn_unit', label: 'Создать юнит', hint: 'клик по карте создаёт юнит' },
   { value: 'delete', label: 'Удалить', hint: 'клик по предмету или юниту удаляет его' },
@@ -57,10 +56,10 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
 
   const enabledButton = createButton('Редактор: выкл');
   const floatingButton = createFloatingEditorButton();
-  const section = createSection('Редактор карты', root, false);
+  const section = createSection('Инспектор редактора', root, false);
 
-  enabledButton.addEventListener('click', () => toggleEditorMode(state, section, enabledButton, floatingButton));
-  floatingButton.addEventListener('click', () => toggleEditorMode(state, section, enabledButton, floatingButton));
+  enabledButton.addEventListener('click', () => toggleEditorMode(hud, state, section, enabledButton, floatingButton, status));
+  floatingButton.addEventListener('click', () => toggleEditorMode(hud, state, section, enabledButton, floatingButton, status));
 
   const toolRow = document.createElement('div');
   toolRow.style.display = 'flex';
@@ -88,6 +87,7 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
         state.editor.selectedObjectId = null;
       }
       state.editor.lastMessage = checked ? 'Слой предметов включён.' : 'Слой предметов скрыт.';
+      renderEditorStatus(status, state, enabledButton, floatingButton, section);
     }),
     createLayerToggle('👁 Юниты', state.editor.layers.units, (checked) => {
       state.editor.layers.units = checked;
@@ -96,10 +96,12 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
         state.selectedUnitIds = [];
       }
       state.editor.lastMessage = checked ? 'Слой юнитов включён.' : 'Слой юнитов скрыт.';
+      renderEditorStatus(status, state, enabledButton, floatingButton, section);
     }),
     createLayerToggle('👁 Зоны параметров', state.editor.layers.pressureZones, (checked) => {
       state.editor.layers.pressureZones = checked;
       state.editor.lastMessage = checked ? 'Слой зон включён.' : 'Слой зон скрыт.';
+      renderEditorStatus(status, state, enabledButton, floatingButton, section);
     }),
   );
 
@@ -109,6 +111,7 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
     (value) => {
       state.editor.objectKind = value as MapObjectKind;
       state.editor.lastMessage = 'Тип создаваемого предмета изменён.';
+      renderEditorStatus(status, state, enabledButton, floatingButton, section);
     },
   );
 
@@ -118,6 +121,7 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
     (value) => {
       state.editor.unitType = value as UnitType;
       state.editor.lastMessage = 'Тип создаваемого юнита изменён.';
+      renderEditorStatus(status, state, enabledButton, floatingButton, section);
     },
   );
 
@@ -189,11 +193,12 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
 
   root.append(
     enabledButton,
-    createSmallText('Режим редактора: в нём юниты не получают боевые приказы. Левый клик работает как инструмент редактора, правый клик на движение отключён.'),
+    createSmallText('В режиме редактора игровой инспектор скрыт. Юниты не получают боевые приказы. Левый клик работает как редактор, правый клик на движение отключён.'),
     createGroupTitle('Слои'),
     layersPanel,
     createGroupTitle('Инструмент'),
     toolRow,
+    createSmallText('В режиме “Выбрать / тянуть”: потяни предмет за тело, чтобы переместить; потяни квадратную ручку, чтобы изменить размер; потяни круглую ручку сверху, чтобы повернуть.'),
     createGroupTitle('Создание'),
     createLabeledControl('Тип предмета', objectKindSelect),
     createLabeledControl('Тип юнита', unitTypeSelect),
@@ -201,32 +206,55 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
     createLabeledControl('Высота нового предмета, клеток', heightInput),
     createLabeledControl('Поворот нового предмета, градусов', rotationInput),
     applyObjectButton,
-    createGroupTitle('Управление выбранным предметом'),
+    createGroupTitle('Точные кнопки выбранного предмета'),
     quickControls,
     deleteSelectedButton,
     clearAllButton,
+    createGroupTitle('Состояние редактора'),
     status,
   );
 
   hud.appendChild(section);
   document.body.appendChild(floatingButton);
+  syncInspectorVisibility(hud, state, section);
   renderEditorStatus(status, state, enabledButton, floatingButton, section);
-  window.setInterval(() => renderEditorStatus(status, state, enabledButton, floatingButton, section), 300);
+  window.setInterval(() => {
+    syncInspectorVisibility(hud, state, section);
+    renderEditorStatus(status, state, enabledButton, floatingButton, section);
+  }, 300);
 }
 
 function toggleEditorMode(
+  hud: HTMLElement,
   state: SimulationState,
   section: HTMLDetailsElement,
   enabledButton: HTMLButtonElement,
   floatingButton: HTMLButtonElement,
+  status: HTMLElement,
 ): void {
   state.editor.enabled = !state.editor.enabled;
   state.editor.panelOpen = state.editor.enabled;
-  section.open = state.editor.panelOpen;
+  section.open = state.editor.enabled;
+  state.editor.drag = null;
+  state.editor.tool = 'select';
   state.editor.lastMessage = state.editor.enabled
-    ? 'Редактор включён. Юниты в этом режиме не получают приказы движения.'
-    : 'Редактор выключен. Обычное управление юнитами возвращено.';
-  renderEditorStatus(section.querySelector('pre') as HTMLElement, state, enabledButton, floatingButton, section);
+    ? 'Редактор включён. Игровой инспектор скрыт. Можно тянуть предметы и ручки прямо на карте.'
+    : 'Редактор выключен. Игровой инспектор снова виден.';
+  syncInspectorVisibility(hud, state, section);
+  renderEditorStatus(status, state, enabledButton, floatingButton, section);
+}
+
+function syncInspectorVisibility(hud: HTMLElement, state: SimulationState, editorSection: HTMLDetailsElement): void {
+  for (const section of hud.querySelectorAll<HTMLElement>('.hud-section')) {
+    const isEditorSection = section.classList.contains('editor-section');
+    section.style.display = isEditorSection
+      ? state.editor.enabled ? '' : 'none'
+      : state.editor.enabled ? 'none' : '';
+  }
+
+  if (state.editor.enabled) {
+    editorSection.open = true;
+  }
 }
 
 function createFloatingEditorButton(): HTMLButtonElement {
@@ -255,14 +283,6 @@ function createSection(title: string, content: HTMLElement, open: boolean): HTML
   summary.style.fontWeight = '700';
   summary.style.fontSize = '13px';
   summary.style.padding = '7px 0';
-  summary.addEventListener('click', () => {
-    window.setTimeout(() => {
-      section.dispatchEvent(new Event('editor-section-toggle'));
-    }, 0);
-  });
-  section.addEventListener('editor-section-toggle', () => {
-    content.dataset.open = String(section.open);
-  });
   section.append(summary, content);
 
   return section;
@@ -407,11 +427,13 @@ function renderEditorStatus(
     `Поворот нового предмета: ${state.editor.objectRotationDegrees}°`,
     `Сообщение: ${state.editor.lastMessage}`,
     '',
-    'На карте:',
-    '- рамка вокруг предмета показывает выбор;',
-    '- квадратики на рамке увеличивают размер при клике;',
-    '- круглая ручка сверху поворачивает предмет на 15°;',
-    '- инструмент “Переместить” переносит выбранный предмет или юнит кликом.',
+    'Как работает на карте:',
+    '- клик по предмету выбирает его;',
+    '- зажатая мышь по телу предмета двигает его;',
+    '- зажатая мышь по квадратной ручке меняет размер;',
+    '- зажатая мышь по круглой ручке сверху вращает предмет;',
+    '- зажатая мышь по юниту двигает юнит;',
+    '- отдельный инструмент “Переместить” больше не нужен.',
   ].join('\n');
 }
 
