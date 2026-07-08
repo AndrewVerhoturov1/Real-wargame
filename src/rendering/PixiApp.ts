@@ -33,6 +33,7 @@ export class PixiTacticalBoardApp {
   private locale: Locale = 'en';
   private showGrid = true;
   private showViewCones = false;
+  private showHeightLabels = false;
   private lastMapRenderKey = '';
   private lastDebugPanelUpdateMs = 0;
 
@@ -42,6 +43,7 @@ export class PixiTacticalBoardApp {
     private readonly languageToggle: HTMLButtonElement,
     private readonly gridToggle: HTMLButtonElement,
     private readonly visionToggle: HTMLButtonElement,
+    private readonly heightToggle: HTMLButtonElement,
     private readonly state: SimulationState,
   ) {
     this.app = new Application({
@@ -89,6 +91,7 @@ export class PixiTacticalBoardApp {
     this.languageToggle.addEventListener('click', this.handleLanguageToggle);
     this.gridToggle.addEventListener('click', this.handleGridToggle);
     this.visionToggle.addEventListener('click', this.handleVisionToggle);
+    this.heightToggle.addEventListener('click', this.handleHeightToggle);
     this.camera.attach();
     this.boardInput.attach();
 
@@ -102,6 +105,7 @@ export class PixiTacticalBoardApp {
     this.languageToggle.removeEventListener('click', this.handleLanguageToggle);
     this.gridToggle.removeEventListener('click', this.handleGridToggle);
     this.visionToggle.removeEventListener('click', this.handleVisionToggle);
+    this.heightToggle.removeEventListener('click', this.handleHeightToggle);
     this.camera.destroy();
     this.boardInput.destroy();
     this.htmlOverlayRenderer.destroy();
@@ -115,11 +119,12 @@ export class PixiTacticalBoardApp {
       antialias: true,
       backgroundAlpha: 1,
       maxFPS: TARGET_MAX_FPS,
-      mapRender: 'batched Pixi Graphics by terrain type, grid, objects, zones',
+      mapRender: 'batched Pixi Graphics terrain + cached canvas elevation texture, grid, objects, zones',
       zoomMode: 'stable wheel-scaled step without animation',
       grid: this.showGrid,
       viewCones: this.showViewCones,
-      htmlLabels: 'map labels are HTML overlay, hidden in editor for objects and units',
+      heightLabels: this.showHeightLabels,
+      htmlLabels: 'map labels are HTML overlay, height numbers are hidden until the debug toggle is enabled',
     });
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -146,7 +151,7 @@ export class PixiTacticalBoardApp {
     this.orderRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
     this.overlayRenderer.render(this.state, this.showGrid, this.state.editor.layers.pressureZones);
     this.unitRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
-    this.htmlOverlayRenderer.render(this.state, this.locale);
+    this.htmlOverlayRenderer.render(this.state, this.locale, this.showHeightLabels);
     this.updateDebugPanelIfNeeded(false);
     this.performanceMonitor.recordFrame(this.state, this.camera.zoom, performance.now() - renderStartedAt);
   }
@@ -213,6 +218,12 @@ export class PixiTacticalBoardApp {
     this.renderFrame();
   };
 
+  private readonly handleHeightToggle = (): void => {
+    this.showHeightLabels = !this.showHeightLabels;
+    this.updateDisplayToggles();
+    this.renderFrame();
+  };
+
   private updateStaticText(): void {
     const copy = UI_COPY[this.locale];
     document.documentElement.lang = this.locale;
@@ -241,15 +252,28 @@ export class PixiTacticalBoardApp {
     this.visionToggle.textContent = this.showViewCones ? labels.viewOn : labels.viewOff;
     this.visionToggle.setAttribute('aria-pressed', String(this.showViewCones));
     this.visionToggle.classList.toggle('hud-toggle-off', !this.showViewCones);
+
+    this.heightToggle.textContent = this.showHeightLabels ? labels.heightOn : labels.heightOff;
+    this.heightToggle.setAttribute('aria-pressed', String(this.showHeightLabels));
+    this.heightToggle.classList.toggle('hud-toggle-off', !this.showHeightLabels);
   }
 
-  private getDisplayToggleLabels(): { gridOn: string; gridOff: string; viewOn: string; viewOff: string } {
+  private getDisplayToggleLabels(): {
+    gridOn: string;
+    gridOff: string;
+    viewOn: string;
+    viewOff: string;
+    heightOn: string;
+    heightOff: string;
+  } {
     if (this.locale === 'ru') {
       return {
         gridOn: 'Сетка: вкл',
         gridOff: 'Сетка: выкл',
         viewOn: 'Обзор: вкл',
         viewOff: 'Обзор: выкл',
+        heightOn: 'Цифры высоты: вкл',
+        heightOff: 'Цифры высоты: выкл',
       };
     }
 
@@ -258,6 +282,8 @@ export class PixiTacticalBoardApp {
       gridOff: 'Grid: off',
       viewOn: 'View cones: on',
       viewOff: 'View cones: off',
+      heightOn: 'Height numbers: on',
+      heightOff: 'Height numbers: off',
     };
   }
 
