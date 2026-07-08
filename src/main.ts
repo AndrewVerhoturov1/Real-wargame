@@ -8,8 +8,8 @@ import { createInitialState } from './core/simulation/SimulationState';
 import type { UnitData } from './core/units/UnitModel';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
 import { installEditorControls } from './ui/EditorControls';
+import { installGameHudControls } from './ui/GameHudControls';
 import { installPerformanceReportControls } from './ui/PerformanceReportControls';
-import { installPostureControls } from './ui/PostureControls';
 import { installSceneExportControls } from './ui/SceneExportControls';
 import { installTerrainBrushControls } from './ui/TerrainBrushControls';
 
@@ -39,7 +39,7 @@ const tacticalBoard = new PixiTacticalBoardApp(
   state,
 );
 
-installPostureControls(debugPanel, state);
+installGameHudControls(state);
 installEditorControls(debugPanel, state);
 installTerrainBrushControls(debugPanel, state);
 installSceneExportControls(state);
