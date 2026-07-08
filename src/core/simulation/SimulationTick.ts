@@ -1,10 +1,15 @@
 import { clampPercent } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
+import { clampGridPositionToMap } from '../map/MapModel';
 import { getPressureReportAtPosition } from '../pressure/PressureZone';
 import type { UnitModel } from '../units/UnitModel';
 import type { SimulationState } from './SimulationState';
 
 const ORDER_COMPLETION_EPSILON_CELLS = 0.02;
+const UNIT_VISUAL_BODY_RADIUS_CELLS = 0.42;
+const UNIT_COLLISION_RADIUS_CELLS = UNIT_VISUAL_BODY_RADIUS_CELLS / 3;
+const UNIT_MIN_CENTER_DISTANCE_CELLS = UNIT_COLLISION_RADIUS_CELLS * 2;
+const COLLISION_PASSES = 3;
 
 export function tickSimulation(state: SimulationState, deltaSeconds: number): void {
   for (const unit of state.units) {
@@ -12,6 +17,8 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
     updateStateLabels(unit);
     moveUnit(unit, deltaSeconds);
   }
+
+  resolveUnitCollisions(state);
 }
 
 function updateMetrics(unit: UnitModel, state: SimulationState, deltaSeconds: number): void {
@@ -65,6 +72,47 @@ function moveUnit(unit: UnitModel, deltaSeconds: number): void {
   }
 }
 
+function resolveUnitCollisions(state: SimulationState): void {
+  for (let pass = 0; pass < COLLISION_PASSES; pass += 1) {
+    for (let leftIndex = 0; leftIndex < state.units.length; leftIndex += 1) {
+      for (let rightIndex = leftIndex + 1; rightIndex < state.units.length; rightIndex += 1) {
+        separateUnits(state, state.units[leftIndex], state.units[rightIndex], leftIndex, rightIndex);
+      }
+    }
+  }
+}
+
+function separateUnits(
+  state: SimulationState,
+  left: UnitModel,
+  right: UnitModel,
+  leftIndex: number,
+  rightIndex: number,
+): void {
+  const dx = right.position.x - left.position.x;
+  const dy = right.position.y - left.position.y;
+  const distance = Math.hypot(dx, dy);
+
+  if (distance >= UNIT_MIN_CENTER_DISTANCE_CELLS) {
+    return;
+  }
+
+  const safeDistance = distance > 0.0001 ? distance : 0.0001;
+  const fallbackAngle = (leftIndex + rightIndex) * 2.399963229728653;
+  const normalX = distance > 0.0001 ? dx / safeDistance : Math.cos(fallbackAngle);
+  const normalY = distance > 0.0001 ? dy / safeDistance : Math.sin(fallbackAngle);
+  const pushDistance = (UNIT_MIN_CENTER_DISTANCE_CELLS - safeDistance) / 2;
+
+  left.position = clampGridPositionToMap(state.map, {
+    x: left.position.x - normalX * pushDistance,
+    y: left.position.y - normalY * pushDistance,
+  });
+  right.position = clampGridPositionToMap(state.map, {
+    x: right.position.x + normalX * pushDistance,
+    y: right.position.y + normalY * pushDistance,
+  });
+}
+
 function setState(unit: UnitModel, nextState: UnitModel['behaviorRuntime']['state'], reason: string): void {
   if (unit.behaviorRuntime.state === nextState) {
     return;
@@ -88,9 +136,8 @@ function moveToPoint(current: GridPosition, target: GridPosition, maxDistance: n
     return { ...target };
   }
 
-  const ratio = maxDistance / length;
   return {
-    x: current.x + dx * ratio,
-    y: current.y + dy * ratio,
+    x: current.x + (dx / length) * maxDistance,
+    y: current.y + (dy / length) * maxDistance,
   };
 }
