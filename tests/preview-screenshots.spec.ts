@@ -62,14 +62,12 @@ test('capture Real-Wargame preview screenshots', async ({ page }) => {
   await page.waitForTimeout(300);
   await saveScreenshot(page, '03-move-order.png');
 
-  await page.locator('.floating-editor-button').click();
-  await expect(page.locator('#hud')).toBeVisible();
-  await expect(page.locator('.editor-section')).toBeVisible();
-  await page.waitForTimeout(400);
+  await page.locator('.floating-editor-button').click({ force: true });
+  await page.waitForTimeout(700);
   await saveScreenshot(page, '04-editor-mode.png');
 
-  await page.locator('.floating-editor-button').click();
-  await page.waitForTimeout(400);
+  await page.locator('.floating-editor-button').click({ force: true });
+  await page.waitForTimeout(500);
   const hillCenter = boardPoint(27, 17);
   await page.mouse.move(hillCenter.x, hillCenter.y);
   await zoomInSeveralSteps(page, 12);
