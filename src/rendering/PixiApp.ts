@@ -68,7 +68,7 @@ export class PixiTacticalBoardApp {
   }
 
   start(): void {
-    this.mapRenderer.render(this.state.map, this.showGrid);
+    this.mapRenderer.render(this.state.map, this.showGrid, this.state.editor.selectedObjectId);
     this.updateStaticText();
     this.languageToggle.addEventListener('click', this.handleLanguageToggle);
     this.gridToggle.addEventListener('click', this.handleGridToggle);
@@ -93,6 +93,8 @@ export class PixiTacticalBoardApp {
   }
 
   private renderFrame(): void {
+    this.mapRenderer.render(this.state.map, this.showGrid, this.state.editor.selectedObjectId);
+
     if (this.showViewCones) {
       this.viewConeRenderer.render(this.state.map, this.state.units, this.state.selectedUnitIds);
     } else {
@@ -114,7 +116,7 @@ export class PixiTacticalBoardApp {
 
   private readonly handleGridToggle = (): void => {
     this.showGrid = !this.showGrid;
-    this.mapRenderer.render(this.state.map, this.showGrid);
+    this.mapRenderer.render(this.state.map, this.showGrid, this.state.editor.selectedObjectId);
     this.updateDisplayToggles();
     this.renderFrame();
   };
