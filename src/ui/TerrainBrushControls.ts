@@ -82,7 +82,7 @@ export function installTerrainBrushControls(debugPanel: HTMLElement, state: Simu
   });
 
   selectButton.addEventListener('click', () => {
-    state.editor.tool = 'select';
+    setEditorTool(state, 'select');
     state.editor.lastMessage = 'Инструмент выбора включён.';
     renderBrushStatus(status, state);
   });
@@ -154,7 +154,7 @@ function getBrushState(state: SimulationState): typeof state.editor & {
 }
 
 function setEditorTool(state: SimulationState, tool: string): void {
-  (state.editor as typeof state.editor & { tool: string }).tool = tool;
+  (state.editor as unknown as { tool: string }).tool = tool;
 }
 
 function renderBrushStatus(status: HTMLElement, state: SimulationState): void {
