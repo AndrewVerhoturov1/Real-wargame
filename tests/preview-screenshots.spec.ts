@@ -11,7 +11,7 @@ const VIEWPORT = {
 
 // These coordinates match the current Pixi tactical board layout:
 // worldContainer origin: 72,72; map cell size: 24 px.
-// The first test unit starts at grid cell 3,5 and is normalized to 3.5,5.5.
+// The current preview scene has one soldier at grid cell 32,20.
 const BOARD_ORIGIN = { x: 72, y: 72 };
 const CELL_SIZE = 24;
 
@@ -43,8 +43,8 @@ test('capture Real-Wargame preview screenshots', async ({ page }) => {
   await page.waitForTimeout(800);
   await saveScreenshot(page, '01-initial.png');
 
-  const firstUnit = boardPoint(3, 5);
-  await page.mouse.click(firstUnit.x, firstUnit.y);
+  const soldier = boardPoint(32, 20);
+  await page.mouse.click(soldier.x, soldier.y);
   await page.waitForTimeout(300);
   await saveScreenshot(page, '02-selected-unit.png');
 
