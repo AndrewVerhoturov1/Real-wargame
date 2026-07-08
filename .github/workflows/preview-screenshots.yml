@@ -37,7 +37,8 @@ jobs:
       - name: Install Chromium for Playwright
         run: npx playwright install --with-deps chromium
 
-      - name: Build project
+      - name: Check production build without blocking screenshots
+        continue-on-error: true
         run: npm run build
 
       - name: Capture screenshots
