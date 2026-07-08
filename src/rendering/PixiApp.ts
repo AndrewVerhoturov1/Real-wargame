@@ -119,7 +119,7 @@ export class PixiTacticalBoardApp {
       antialias: true,
       backgroundAlpha: 1,
       maxFPS: TARGET_MAX_FPS,
-      mapRender: 'batched Pixi Graphics terrain + readable smoothed elevation texture, grid, objects, zones',
+      mapRender: 'batched Pixi Graphics terrain + physical-map elevation bands + forest texture layer, grid, objects, zones',
       zoomMode: 'stable wheel-scaled step without animation',
       grid: this.showGrid,
       viewCones: this.showViewCones,
@@ -191,8 +191,15 @@ export class PixiTacticalBoardApp {
       `grid:${this.showGrid ? '1' : '0'}`,
       `objects:${this.state.editor.layers.objects ? '1' : '0'}`,
       `selected:${this.state.editor.selectedObjectId ?? 'none'}`,
+      `cells:${this.getTerrainLayerRenderKey()}`,
       objectKey,
     ].join(';');
+  }
+
+  private getTerrainLayerRenderKey(): string {
+    return this.state.map.cells
+      .map((cell) => `${cell.terrain}:${cell.height}:${cell.forest}`)
+      .join('|');
   }
 
   private readonly handleLanguageToggle = (): void => {
