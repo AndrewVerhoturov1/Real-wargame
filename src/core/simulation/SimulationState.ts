@@ -21,10 +21,17 @@ export interface SelectionBox {
   current: GridPosition;
 }
 
-export type EditorTool = 'select' | 'spawn_object' | 'spawn_unit' | 'delete';
+export type EditorTool = 'select' | 'move' | 'spawn_object' | 'spawn_unit' | 'delete';
+
+export interface EditorLayers {
+  objects: boolean;
+  units: boolean;
+  pressureZones: boolean;
+}
 
 export interface EditorState {
   enabled: boolean;
+  panelOpen: boolean;
   tool: EditorTool;
   objectKind: MapObjectKind;
   unitType: UnitType;
@@ -32,6 +39,7 @@ export interface EditorState {
   objectHeightCells: number;
   objectRotationDegrees: number;
   selectedObjectId: string | null;
+  layers: EditorLayers;
   nextObjectIndex: number;
   nextUnitIndex: number;
   lastMessage: string;
@@ -63,6 +71,7 @@ export function createInitialState(
     selectionBox: null,
     editor: {
       enabled: false,
+      panelOpen: false,
       tool: 'select',
       objectKind: 'tree',
       unitType: 'infantry_squad',
@@ -70,6 +79,11 @@ export function createInitialState(
       objectHeightCells: 1,
       objectRotationDegrees: 0,
       selectedObjectId: null,
+      layers: {
+        objects: true,
+        units: true,
+        pressureZones: true,
+      },
       nextObjectIndex: 1,
       nextUnitIndex: 1,
       lastMessage: 'Редактор выключен.',
@@ -168,6 +182,14 @@ export function issueMoveOrderToSelectedUnit(
 export function handleEditorClick(state: SimulationState, rawGrid: GridPosition): void {
   const grid = clampGridPositionToMap(state.map, rawGrid);
 
+  if (!state.editor.enabled) {
+    return;
+  }
+
+  if (state.editor.tool === 'select' && state.editor.layers.objects && tryObjectHandleClick(state, grid)) {
+    return;
+  }
+
   switch (state.editor.tool) {
     case 'spawn_object':
       spawnEditorObject(state, grid);
@@ -177,6 +199,9 @@ export function handleEditorClick(state: SimulationState, rawGrid: GridPosition)
       return;
     case 'delete':
       deleteEditorTargetAt(state, grid);
+      return;
+    case 'move':
+      moveSelectedEditorTarget(state, grid);
       return;
     case 'select':
     default:
@@ -195,6 +220,51 @@ export function updateSelectedEditorObject(state: SimulationState, changes: Part
 
   Object.assign(object, changes);
   state.editor.lastMessage = `Предмет изменён: ${object.id}`;
+}
+
+export function nudgeSelectedEditorObject(state: SimulationState, dx: number, dy: number): void {
+  const object = getSelectedMapObject(state);
+
+  if (!object) {
+    state.editor.lastMessage = 'Предмет не выбран.';
+    return;
+  }
+
+  const center = clampGridPositionToMap(state.map, {
+    x: object.x + 0.5 + dx,
+    y: object.y + 0.5 + dy,
+  });
+  object.x = center.x - 0.5;
+  object.y = center.y - 0.5;
+  state.editor.lastMessage = `Предмет сдвинут: ${object.id}`;
+}
+
+export function resizeSelectedEditorObject(state: SimulationState, widthDelta: number, heightDelta: number): void {
+  const object = getSelectedMapObject(state);
+
+  if (!object) {
+    state.editor.lastMessage = 'Предмет не выбран.';
+    return;
+  }
+
+  object.widthCells = clampNumber(object.widthCells + widthDelta, 0.1, 20);
+  object.heightCells = clampNumber(object.heightCells + heightDelta, 0.1, 20);
+  state.editor.objectWidthCells = object.widthCells;
+  state.editor.objectHeightCells = object.heightCells;
+  state.editor.lastMessage = `Размер изменён: ${object.id}`;
+}
+
+export function rotateSelectedEditorObject(state: SimulationState, degreesDelta: number): void {
+  const object = getSelectedMapObject(state);
+
+  if (!object) {
+    state.editor.lastMessage = 'Предмет не выбран.';
+    return;
+  }
+
+  object.rotationRadians += degreesToRadians(degreesDelta);
+  state.editor.objectRotationDegrees = Math.round(radiansToDegrees(object.rotationRadians));
+  state.editor.lastMessage = `Поворот изменён: ${object.id}`;
 }
 
 export function deleteSelectedEditorTargets(state: SimulationState): void {
@@ -217,7 +287,20 @@ export function deleteSelectedEditorTargets(state: SimulationState): void {
   state.editor.lastMessage = 'Нечего удалять.';
 }
 
+export function clearEditorScene(state: SimulationState): void {
+  state.map.objects = [];
+  state.units = [];
+  state.editor.selectedObjectId = null;
+  selectUnit(state, null);
+  state.editor.lastMessage = 'Все предметы и юниты очищены.';
+}
+
 function spawnEditorObject(state: SimulationState, grid: GridPosition): void {
+  if (!state.editor.layers.objects) {
+    state.editor.lastMessage = 'Слой предметов скрыт. Включи слой, чтобы создавать предметы.';
+    return;
+  }
+
   const index = state.editor.nextObjectIndex;
   const id = `editor_object_${index}`;
 
@@ -242,6 +325,11 @@ function spawnEditorObject(state: SimulationState, grid: GridPosition): void {
 }
 
 function spawnEditorUnit(state: SimulationState, grid: GridPosition): void {
+  if (!state.editor.layers.units) {
+    state.editor.lastMessage = 'Слой юнитов скрыт. Включи слой, чтобы создавать юнитов.';
+    return;
+  }
+
   const index = state.editor.nextUnitIndex;
   const id = `editor_unit_${index}`;
   const [unit] = normalizeUnits([
@@ -266,41 +354,115 @@ function spawnEditorUnit(state: SimulationState, grid: GridPosition): void {
 }
 
 function selectEditorTargetAt(state: SimulationState, grid: GridPosition): void {
-  const object = findMapObjectAtGridPosition(state, grid);
+  if (state.editor.layers.objects) {
+    const object = findMapObjectAtGridPosition(state, grid);
 
-  if (object) {
-    state.editor.selectedObjectId = object.id;
-    selectUnit(state, null);
-    state.editor.lastMessage = `Выбран предмет: ${object.id}`;
+    if (object) {
+      state.editor.selectedObjectId = object.id;
+      state.editor.objectWidthCells = object.widthCells;
+      state.editor.objectHeightCells = object.heightCells;
+      state.editor.objectRotationDegrees = Math.round(radiansToDegrees(object.rotationRadians));
+      selectUnit(state, null);
+      state.editor.lastMessage = `Выбран предмет: ${object.id}`;
+      return;
+    }
+  }
+
+  if (state.editor.layers.units) {
+    const unit = findUnitAtGridPosition(state.units, grid);
+    state.editor.selectedObjectId = null;
+    selectUnit(state, unit?.id ?? null);
+    state.editor.lastMessage = unit ? `Выбран юнит: ${unit.id}` : 'Ничего не выбрано.';
     return;
   }
 
-  const unit = findUnitAtGridPosition(state.units, grid);
   state.editor.selectedObjectId = null;
-  selectUnit(state, unit?.id ?? null);
-  state.editor.lastMessage = unit ? `Выбран юнит: ${unit.id}` : 'Ничего не выбрано.';
+  selectUnit(state, null);
+  state.editor.lastMessage = 'Ничего не выбрано: слои предметов и юнитов скрыты.';
 }
 
 function deleteEditorTargetAt(state: SimulationState, grid: GridPosition): void {
-  const object = findMapObjectAtGridPosition(state, grid);
+  if (state.editor.layers.objects) {
+    const object = findMapObjectAtGridPosition(state, grid);
 
-  if (object) {
-    state.map.objects = state.map.objects.filter((item) => item.id !== object.id);
-    state.editor.selectedObjectId = null;
-    state.editor.lastMessage = `Предмет удалён: ${object.id}`;
-    return;
+    if (object) {
+      state.map.objects = state.map.objects.filter((item) => item.id !== object.id);
+      state.editor.selectedObjectId = null;
+      state.editor.lastMessage = `Предмет удалён: ${object.id}`;
+      return;
+    }
   }
 
-  const unit = findUnitAtGridPosition(state.units, grid);
+  if (state.editor.layers.units) {
+    const unit = findUnitAtGridPosition(state.units, grid);
 
-  if (unit) {
-    state.units = state.units.filter((item) => item.id !== unit.id);
-    selectUnit(state, null);
-    state.editor.lastMessage = `Юнит удалён: ${unit.id}`;
-    return;
+    if (unit) {
+      state.units = state.units.filter((item) => item.id !== unit.id);
+      selectUnit(state, null);
+      state.editor.lastMessage = `Юнит удалён: ${unit.id}`;
+      return;
+    }
   }
 
   state.editor.lastMessage = 'В точке нечего удалить.';
+}
+
+function moveSelectedEditorTarget(state: SimulationState, grid: GridPosition): void {
+  const object = getSelectedMapObject(state);
+
+  if (object) {
+    object.x = grid.x - 0.5;
+    object.y = grid.y - 0.5;
+    state.editor.lastMessage = `Предмет перемещён: ${object.id}`;
+    return;
+  }
+
+  const unit = getSelectedUnit(state);
+
+  if (unit) {
+    unit.position = grid;
+    unit.order = null;
+    state.editor.lastMessage = `Юнит перемещён: ${unit.id}`;
+    return;
+  }
+
+  state.editor.lastMessage = 'Нечего перемещать: выбери предмет или юнит.';
+}
+
+function tryObjectHandleClick(state: SimulationState, grid: GridPosition): boolean {
+  const object = getSelectedMapObject(state);
+
+  if (!object) {
+    return false;
+  }
+
+  const center = { x: object.x + 0.5, y: object.y + 0.5 };
+  const dx = grid.x - center.x;
+  const dy = grid.y - center.y;
+  const cos = Math.cos(-object.rotationRadians);
+  const sin = Math.sin(-object.rotationRadians);
+  const localX = dx * cos - dy * sin;
+  const localY = dx * sin + dy * cos;
+  const halfWidth = object.widthCells / 2;
+  const halfHeight = object.heightCells / 2;
+  const hitRadius = 0.35;
+
+  if (Math.hypot(localX, localY + halfHeight + 0.7) <= hitRadius) {
+    rotateSelectedEditorObject(state, 15);
+    return true;
+  }
+
+  const onRight = Math.abs(localX - halfWidth) <= hitRadius && Math.abs(localY) <= halfHeight + hitRadius;
+  const onLeft = Math.abs(localX + halfWidth) <= hitRadius && Math.abs(localY) <= halfHeight + hitRadius;
+  const onBottom = Math.abs(localY - halfHeight) <= hitRadius && Math.abs(localX) <= halfWidth + hitRadius;
+  const onTop = Math.abs(localY + halfHeight) <= hitRadius && Math.abs(localX) <= halfWidth + hitRadius;
+
+  if (onRight || onLeft || onBottom || onTop) {
+    resizeSelectedEditorObject(state, onRight || onLeft ? 0.5 : 0, onTop || onBottom ? 0.5 : 0);
+    return true;
+  }
+
+  return false;
 }
 
 function findMapObjectAtGridPosition(state: SimulationState, grid: GridPosition): MapObject | undefined {
@@ -374,6 +536,14 @@ function setUnitDirection(unit: UnitModel, target: GridPosition): void {
   unit.facingRadians = Math.atan2(dy, dx);
 }
 
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 function degreesToRadians(degrees: number): number {
   return (degrees * Math.PI) / 180;
+}
+
+function radiansToDegrees(radians: number): number {
+  return (radians * 180) / Math.PI;
 }
