@@ -1,6 +1,63 @@
-import { Container, Graphics } from 'pixi.js';
-import type { MapObject, TacticalMap } from '../core/map/MapModel';
+import { Container, Graphics, Sprite, Texture } from 'pixi.js';
+import {
+  ELEVATION_LEVELS,
+  type ElevationLevel,
+  type MapObject,
+  type TacticalMap,
+} from '../core/map/MapModel';
 import { TERRAIN_STYLE } from './terrainStyle';
+
+interface ElevationPaintStyle {
+  fill: string;
+  detail: string;
+  radiusScale: number;
+  blurScale: number;
+}
+
+const ELEVATION_PAINT: Record<ElevationLevel, ElevationPaintStyle> = {
+  [-2]: {
+    fill: 'rgba(39, 64, 60, 0.44)',
+    detail: 'rgba(20, 34, 35, 0.16)',
+    radiusScale: 0.96,
+    blurScale: 0.36,
+  },
+  [-1]: {
+    fill: 'rgba(67, 89, 66, 0.3)',
+    detail: 'rgba(31, 47, 38, 0.1)',
+    radiusScale: 0.9,
+    blurScale: 0.32,
+  },
+  0: {
+    fill: 'rgba(0, 0, 0, 0)',
+    detail: 'rgba(0, 0, 0, 0)',
+    radiusScale: 0,
+    blurScale: 0,
+  },
+  1: {
+    fill: 'rgba(165, 151, 92, 0.24)',
+    detail: 'rgba(240, 212, 134, 0.1)',
+    radiusScale: 0.88,
+    blurScale: 0.3,
+  },
+  2: {
+    fill: 'rgba(183, 151, 92, 0.32)',
+    detail: 'rgba(246, 215, 139, 0.12)',
+    radiusScale: 0.94,
+    blurScale: 0.32,
+  },
+  3: {
+    fill: 'rgba(196, 164, 105, 0.4)',
+    detail: 'rgba(255, 230, 158, 0.16)',
+    radiusScale: 0.98,
+    blurScale: 0.34,
+  },
+  4: {
+    fill: 'rgba(218, 183, 112, 0.5)',
+    detail: 'rgba(255, 238, 176, 0.22)',
+    radiusScale: 1.04,
+    blurScale: 0.36,
+  },
+};
 
 export class PixiMapRenderer {
   readonly container = new Container();
@@ -33,6 +90,11 @@ export class PixiMapRenderer {
     this.lastStaticKey = nextKey;
     this.staticContainer.removeChildren();
     renderTerrainBatches(this.staticContainer, map);
+
+    const elevationLayer = renderElevationLayer(map);
+    if (elevationLayer) {
+      this.staticContainer.addChild(elevationLayer);
+    }
 
     if (showGrid) {
       this.staticContainer.addChild(renderMeterGrid(map));
@@ -95,13 +157,144 @@ function renderTerrainBatches(container: Container, map: TacticalMap): void {
   }
 }
 
+function renderElevationLayer(map: TacticalMap): Sprite | null {
+  if (!map.cells.some((cell) => cell.height !== 0)) {
+    return null;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = map.width * map.cellSize;
+  canvas.height = map.height * map.cellSize;
+  const context = canvas.getContext('2d');
+
+  if (!context) {
+    return null;
+  }
+
+  for (const level of ELEVATION_LEVELS) {
+    if (level === 0) {
+      continue;
+    }
+
+    drawElevationLevel(context, map, level);
+  }
+
+  for (const level of ELEVATION_LEVELS) {
+    if (level === 0) {
+      continue;
+    }
+
+    drawElevationDetails(context, map, level);
+  }
+
+  return new Sprite(Texture.from(canvas));
+}
+
+function drawElevationLevel(context: CanvasRenderingContext2D, map: TacticalMap, level: ElevationLevel): void {
+  const style = ELEVATION_PAINT[level];
+  const cellSize = map.cellSize;
+  const baseRadius = cellSize * style.radiusScale;
+  const blur = cellSize * style.blurScale;
+
+  for (const cell of map.cells) {
+    if (cell.height !== level) {
+      continue;
+    }
+
+    const seed = makeSeed(cell.x, cell.y, level, 1);
+    const centerX = (cell.x + 0.5) * cellSize + (random01(seed) - 0.5) * cellSize * 0.18;
+    const centerY = (cell.y + 0.5) * cellSize + (random01(seed + 17) - 0.5) * cellSize * 0.18;
+    const stretchX = 0.78 + random01(seed + 31) * 0.48;
+    const stretchY = 0.78 + random01(seed + 47) * 0.48;
+
+    drawOrganicPatch(context, centerX, centerY, baseRadius, blur, stretchX, stretchY, style.fill, seed);
+  }
+}
+
+function drawElevationDetails(context: CanvasRenderingContext2D, map: TacticalMap, level: ElevationLevel): void {
+  const style = ELEVATION_PAINT[level];
+  const cellSize = map.cellSize;
+
+  context.save();
+  context.lineWidth = Math.max(1, cellSize * 0.045);
+  context.strokeStyle = style.detail;
+  context.lineCap = 'round';
+
+  for (const cell of map.cells) {
+    if (cell.height !== level) {
+      continue;
+    }
+
+    const seed = makeSeed(cell.x, cell.y, level, 3);
+    if (random01(seed) < 0.58) {
+      continue;
+    }
+
+    const centerX = (cell.x + 0.5) * cellSize;
+    const centerY = (cell.y + 0.5) * cellSize;
+    const length = cellSize * (0.34 + random01(seed + 5) * 0.34);
+    const angle = random01(seed + 9) * Math.PI * 2;
+
+    context.beginPath();
+    context.moveTo(centerX - Math.cos(angle) * length, centerY - Math.sin(angle) * length * 0.45);
+    context.quadraticCurveTo(
+      centerX,
+      centerY + (random01(seed + 13) - 0.5) * cellSize * 0.25,
+      centerX + Math.cos(angle) * length,
+      centerY + Math.sin(angle) * length * 0.45,
+    );
+    context.stroke();
+  }
+
+  context.restore();
+}
+
+function drawOrganicPatch(
+  context: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  radius: number,
+  blur: number,
+  stretchX: number,
+  stretchY: number,
+  fill: string,
+  seed: number,
+): void {
+  const points = 18;
+
+  context.save();
+  context.translate(centerX, centerY);
+  context.scale(stretchX, stretchY);
+  context.shadowColor = fill;
+  context.shadowBlur = blur;
+  context.fillStyle = fill;
+  context.beginPath();
+
+  for (let index = 0; index < points; index += 1) {
+    const angle = (index / points) * Math.PI * 2;
+    const pointRadius = radius * (0.72 + random01(seed + index * 37) * 0.36);
+    const x = Math.cos(angle) * pointRadius;
+    const y = Math.sin(angle) * pointRadius;
+
+    if (index === 0) {
+      context.moveTo(x, y);
+    } else {
+      context.lineTo(x, y);
+    }
+  }
+
+  context.closePath();
+  context.fill();
+  context.restore();
+}
+
 function getStaticLayerKey(map: TacticalMap, showGrid: boolean): string {
   return [
     `size:${map.width}x${map.height}`,
     `cell:${map.cellSize}`,
     `meters:${map.metersPerCell}`,
     `grid:${showGrid ? '1' : '0'}`,
-    `cells:${map.cells.map((cell) => `${cell.x}:${cell.y}:${cell.terrain}:${cell.height}`).join('|')}`,
+    `cells:${map.cells.map((cell) => `${cell.x}:${cell.y}:${cell.terrain}:${cell.height}:${cell.forest}`).join('|')}`,
   ].join(';');
 }
 
@@ -405,4 +598,16 @@ function drawSegmentedCover(
   }
 
   graphics.endFill();
+}
+
+function makeSeed(x: number, y: number, level: ElevationLevel, salt: number): number {
+  return ((x + 1) * 73856093) ^ ((y + 1) * 19349663) ^ ((level + 9) * 83492791) ^ (salt * 2654435761);
+}
+
+function random01(seed: number): number {
+  let value = seed >>> 0;
+  value ^= value << 13;
+  value ^= value >>> 17;
+  value ^= value << 5;
+  return ((value >>> 0) % 10000) / 10000;
 }
