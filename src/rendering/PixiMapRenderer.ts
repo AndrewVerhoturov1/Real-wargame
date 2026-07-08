@@ -448,7 +448,7 @@ function renderMeterGrid(map: TacticalMap): Graphics {
   for (let y = 0; y <= map.height; y += 1) {
     const py = y * map.cellSize;
     graphics.moveTo(0, py);
-    graphics.lineTo(mapWidth);
+    graphics.lineTo(mapWidth, py);
   }
 
   graphics.lineStyle(2, 0xf6edcf, 0.22);
