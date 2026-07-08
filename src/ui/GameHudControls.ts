@@ -1,7 +1,9 @@
 import type { UnitPosture } from '../core/behavior/BehaviorModel';
+import { buildUnitKnowledgeReport, type KnowledgeCover, type KnowledgeDanger } from '../core/knowledge/UnitKnowledge';
 import { buildEnvironmentSensorReport } from '../core/sensors/EnvironmentSensors';
-import { getCell, gridToCellLabel, type MapCell, type MapObject, type MapObjectKind } from '../core/map/MapModel';
+import { getCell, gridToCellLabel, type MapCell } from '../core/map/MapModel';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
+import { setKnowledgeOverlayActive } from '../core/ui/RuntimeUiState';
 import type { UnitModel } from '../core/units/UnitModel';
 
 const HUD_UPDATE_INTERVAL_MS = 250;
@@ -13,8 +15,6 @@ const POSTURE_OPTIONS: Array<{ posture: UnitPosture; label: string; icon: string
   { posture: 'crouched', label: 'Пригнулся', icon: '▰' },
   { posture: 'prone', label: 'Лежит', icon: '━' },
 ];
-
-const COVER_KINDS = new Set<MapObjectKind>(['tree', 'rock', 'structure', 'cover', 'ditch', 'crates', 'fence', 'logs']);
 
 export function installGameHudControls(state: SimulationState): void {
   const topBar = document.createElement('div');
@@ -104,6 +104,7 @@ function renderGameHud(
   renderCellStrip(cellStrip, state);
   renderUnitCommandCard(unitCard, state);
   renderRightTab(tabContent, state, activeTab);
+  setKnowledgeOverlayActive(state, activeTab === 'layers' && !state.editor.enabled && getSelectedUnit(state) !== undefined);
 
   for (const [tab, button] of tabButtons) {
     button.classList.toggle('active', tab === activeTab);
@@ -136,7 +137,9 @@ function renderUnitCommandCard(unitCard: HTMLElement, state: SimulationState): v
   }
 
   const runtime = unit.behaviorRuntime;
-  const order = unit.order ? `движение к ${Math.round(unit.order.target.x)}, ${Math.round(unit.order.target.y)}` : 'нет приказа';
+  const order = unit.order
+    ? `движение к ${formatMeters(distanceMeters(state, unit.position.x, unit.position.y, unit.order.target.x, unit.order.target.y))}`
+    : 'нет приказа';
   const cell = getCell(state.map, Math.floor(unit.position.x), Math.floor(unit.position.y));
 
   unitCard.innerHTML = [
@@ -146,7 +149,7 @@ function renderUnitCommandCard(unitCard: HTMLElement, state: SimulationState): v
     `<div>Поза: <b>${formatPosture(runtime.posture)}</b></div>`,
     `<div>Приказ: <b>${order}</b></div>`,
     `<div>Опасность: <b>${runtime.danger}</b> / стресс ${Math.round(runtime.stress)}</div>`,
-    `<div>Позиция: <b>${Math.floor(unit.position.x)}, ${Math.floor(unit.position.y)}</b>${cell ? ` / ${formatElevation(cell.height)}` : ''}</div>`,
+    `<div>Высота: <b>${cell ? formatElevation(cell.height) : 'нет'}</b></div>`,
     '</div>',
     '<div class="unit-command-actions"></div>',
   ].join('');
@@ -207,52 +210,79 @@ function renderUnitTab(unit: UnitModel, state: SimulationState): string {
     row('Позиция', `${Math.floor(unit.position.x)}, ${Math.floor(unit.position.y)}`),
     row('Высота', cell ? formatElevation(cell.height) : 'нет'),
     row('Лес', cell ? formatForest(cell.forest) : 'нет'),
-    row('Скорость', `${unit.speedCellsPerSecond} кл/сек`),
-    row('Обзор', `${unit.viewRangeCells} клеток`),
+    row('Скорость', `${formatMeters(unit.speedCellsPerSecond * state.map.metersPerCell)}/сек`),
+    row('Обзор', formatMeters(unit.viewRangeCells * state.map.metersPerCell)),
   ]);
 }
 
 function renderLayersTab(unit: UnitModel, state: SimulationState): string {
-  const visibleObjects = state.map.objects
-    .map((object) => ({ object, distanceCells: distanceCells(unit.position.x, unit.position.y, object.x, object.y) }))
-    .filter((entry) => entry.distanceCells <= unit.viewRangeCells)
-    .sort((a, b) => a.distanceCells - b.distanceCells);
-  const visibleCovers = visibleObjects
-    .filter((entry) => COVER_KINDS.has(entry.object.kind))
-    .slice(0, 8);
-  const visibleZones = state.pressureZones
-    .map((zone) => ({ zone, distanceCells: distanceCells(unit.position.x, unit.position.y, zone.x, zone.y) }))
-    .filter((entry) => entry.distanceCells <= unit.viewRangeCells)
-    .sort((a, b) => a.distanceCells - b.distanceCells)
-    .slice(0, 5);
-
-  const coverRows = visibleCovers.length > 0
-    ? visibleCovers.map(({ object, distanceCells }) => coverCard(object, distanceCells)).join('')
-    : '<div class="knowledge-card muted">Видимых укрытий пока нет.</div>';
-  const zoneRows = visibleZones.length > 0
-    ? visibleZones.map(({ zone, distanceCells }) => `<div class="knowledge-line"><span>${escapeHtml(zone.labels.ru)}</span><b>${Math.round(distanceCells)} кл., опасность ${zone.strength}</b></div>`).join('')
-    : '<div class="knowledge-line"><span>Зоны опасности</span><b>не видит</b></div>';
+  const report = buildUnitKnowledgeReport(state, unit);
 
   return [
-    '<h2>Слои и известная информация</h2>',
+    '<h2>Слои / знание юнита</h2>',
     '<div class="knowledge-section">',
-    '<h3>Известно юниту</h3>',
-    row('Дальность взгляда', `${unit.viewRangeCells} клеток`),
-    row('Видимые объекты', String(visibleObjects.length)),
-    row('Видимые укрытия', String(visibleCovers.length)),
-    row('Видимые зоны', String(visibleZones.length)),
-    '</div>',
-    '<div class="knowledge-section">',
-    '<h3>Укрытия, которые он видит</h3>',
-    '<div class="knowledge-list">',
-    coverRows,
-    '</div>',
+    '<h3>Карта знаний</h3>',
+    row('Видит до', formatMeters(report.viewRangeMeters)),
+    row('Известная область', formatMeters(report.knownAreaMeters)),
+    row('Оверлей', 'жёлтое — укрытия, красное — опасность, зелёное — область обзора'),
     '</div>',
     '<div class="knowledge-section">',
-    '<h3>Опасные зоны в известной области</h3>',
-    '<div class="game-panel-rows">',
-    zoneRows,
+    '<h3>Ближние укрытия</h3>',
+    renderCoverList(report.nearbyCovers, 'Ближних укрытий пока нет.'),
     '</div>',
+    '<div class="knowledge-section">',
+    '<h3>Укрытия для плана</h3>',
+    renderCoverList(report.planCovers, 'Дальних видимых укрытий для плана пока нет.'),
+    '</div>',
+    '<div class="knowledge-section">',
+    '<h3>Опасность</h3>',
+    renderDangerList(report.dangers),
+    '</div>',
+  ].join('');
+}
+
+function renderCoverList(covers: KnowledgeCover[], emptyText: string): string {
+  if (covers.length === 0) {
+    return `<div class="knowledge-card muted">${emptyText}</div>`;
+  }
+
+  return [
+    '<div class="compact-knowledge-list">',
+    ...covers.map((cover) => compactCoverRow(cover)),
+    '</div>',
+  ].join('');
+}
+
+function renderDangerList(dangers: KnowledgeDanger[]): string {
+  if (dangers.length === 0) {
+    return '<div class="knowledge-card muted">Видимой или подтверждённой опасности пока нет.</div>';
+  }
+
+  return [
+    '<div class="compact-knowledge-list">',
+    ...dangers.map((danger) => compactDangerRow(danger)),
+    '</div>',
+  ].join('');
+}
+
+function compactCoverRow(cover: KnowledgeCover): string {
+  return [
+    '<div class="compact-knowledge-row">',
+    `<strong>${escapeHtml(cover.labelRu)}</strong>`,
+    `<span>${formatMeters(cover.distanceMeters)}</span>`,
+    `<b>${Math.round(cover.quality)}/100</b>`,
+    `<em>${escapeHtml(cover.sourceRu)}</em>`,
+    '</div>',
+  ].join('');
+}
+
+function compactDangerRow(danger: KnowledgeDanger): string {
+  return [
+    '<div class="compact-knowledge-row danger-row">',
+    `<strong>${escapeHtml(danger.labelRu)}</strong>`,
+    `<span>${formatMeters(danger.distanceMeters)}</span>`,
+    `<b>${danger.strength}/100</b>`,
+    `<em>${escapeHtml(danger.sourceRu)}</em>`,
     '</div>',
   ].join('');
 }
@@ -282,21 +312,9 @@ function renderSensorsTab(unit: UnitModel, state: SimulationState): string {
     row('Укрытие', String(report.cover)),
     row('Скрытность', String(report.concealment)),
     row('Открытость', String(report.openness)),
-    row('Лучшее укрытие', bestCover.exists ? `${bestCover.quality}, ${bestCover.distanceCells} кл.` : 'нет'),
-    row('Угроза', threat.exists ? `${threat.label}, ${threat.distanceCells} кл.` : 'нет'),
+    row('Лучшее укрытие', bestCover.exists ? `${bestCover.quality}, ${formatMeters(bestCover.distanceCells * state.map.metersPerCell)}` : 'нет'),
+    row('Угроза', threat.exists ? `${threat.label}, ${formatMeters(threat.distanceCells * state.map.metersPerCell)}` : 'нет'),
   ]);
-}
-
-function coverCard(object: MapObject, distanceCellsValue: number): string {
-  const score = coverScore(object.kind, distanceCellsValue);
-
-  return [
-    '<div class="knowledge-card">',
-    `<div><strong>${escapeHtml(object.labels?.ru ?? formatObjectKind(object.kind))}</strong><span>${escapeHtml(formatObjectKind(object.kind))}</span></div>`,
-    `<div><span>Дистанция</span><b>${distanceCellsValue.toFixed(1)} кл.</b></div>`,
-    `<div><span>Пригодность</span><b>${formatCoverScore(score)}</b></div>`,
-    '</div>',
-  ].join('');
 }
 
 function setManualPosture(unit: UnitModel, posture: UnitPosture, label: string): void {
@@ -312,6 +330,7 @@ function toggleEditorModeFromGame(state: SimulationState): void {
   state.editor.panelOpen = state.editor.enabled;
   state.editor.drag = null;
   state.editor.tool = 'select';
+  setKnowledgeOverlayActive(state, false);
   state.editor.lastMessage = state.editor.enabled
     ? 'Редактор включён через верхнюю плашку режима.'
     : 'Редактор выключен через верхнюю плашку режима.';
@@ -344,38 +363,12 @@ function moveExistingButton(selector: string, target: HTMLElement): void {
   }
 }
 
-function distanceCells(x1: number, y1: number, x2: number, y2: number): number {
-  return Math.hypot(x1 - x2, y1 - y2);
+function distanceMeters(state: SimulationState, x1: number, y1: number, x2: number, y2: number): number {
+  return Math.hypot(x1 - x2, y1 - y2) * state.map.metersPerCell;
 }
 
-function coverScore(kind: MapObjectKind, distanceCellsValue: number): number {
-  const base: Record<MapObjectKind, number> = {
-    structure: 90,
-    cover: 85,
-    ditch: 80,
-    logs: 74,
-    rock: 70,
-    crates: 62,
-    fence: 56,
-    tree: 50,
-    post: 30,
-    well: 25,
-    bridge: 20,
-  };
-  return Math.max(0, Math.min(100, Math.round((base[kind] ?? 35) - distanceCellsValue * 4)));
-}
-
-function formatCoverScore(score: number): string {
-  if (score >= 80) {
-    return `${score}/100 отлично`;
-  }
-  if (score >= 60) {
-    return `${score}/100 хорошо`;
-  }
-  if (score >= 40) {
-    return `${score}/100 годится`;
-  }
-  return `${score}/100 слабо`;
+function formatMeters(value: number): string {
+  return `${Math.round(value)} м`;
 }
 
 function formatElevation(height: number): string {
@@ -412,23 +405,6 @@ function formatForest(forest: number): string {
     return 'редкий';
   }
   return 'нет';
-}
-
-function formatObjectKind(kind: MapObjectKind): string {
-  const names: Record<MapObjectKind, string> = {
-    tree: 'дерево',
-    rock: 'камень',
-    structure: 'дом',
-    cover: 'укрытие',
-    ditch: 'канава',
-    crates: 'ящики',
-    fence: 'забор',
-    post: 'пост',
-    logs: 'брёвна',
-    well: 'колодец',
-    bridge: 'мост',
-  };
-  return names[kind] ?? kind;
 }
 
 function formatPosture(posture: UnitPosture): string {
