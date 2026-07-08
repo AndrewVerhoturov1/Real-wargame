@@ -1,5 +1,7 @@
+import { normalizeMap, type TacticalMapData } from '../core/map/MapModel';
+import { normalizePressureZones, type PressureZoneData } from '../core/pressure/PressureZone';
 import type { SimulationState } from '../core/simulation/SimulationState';
-import type { UnitModel } from '../core/units/UnitModel';
+import { normalizeUnits, type UnitData, type UnitModel } from '../core/units/UnitModel';
 
 export interface ExportedSceneData {
   version: string;
@@ -20,6 +22,34 @@ export interface ExportedSceneData {
   pressureZones: Array<Record<string, unknown>>;
 }
 
+export async function loadSceneJsonFromFile(state: SimulationState, file: File): Promise<void> {
+  const text = await file.text();
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(text) as unknown;
+  } catch {
+    throw new Error('Файл не похож на правильный JSON.');
+  }
+
+  const scene = normalizeImportedScene(parsed);
+
+  state.map = normalizeMap(scene.map);
+  state.units = normalizeUnits(scene.units);
+  state.pressureZones = normalizePressureZones(scene.pressureZones);
+  state.selectedUnitId = null;
+  state.selectedUnitIds = [];
+  state.selectionBox = null;
+  state.editor.selectedObjectId = null;
+  state.editor.selectedZoneId = null;
+  state.editor.drag = null;
+  state.editor.tool = 'select';
+  state.editor.nextObjectIndex = nextIndex(scene.map.objects ?? [], 'editor_object_');
+  state.editor.nextUnitIndex = nextIndex(scene.units, 'editor_unit_');
+  state.editor.nextZoneIndex = nextIndex(scene.pressureZones, 'editor_zone_');
+  state.editor.lastMessage = `JSON сцены загружен: карта ${state.map.width}×${state.map.height}, юнитов ${state.units.length}, зон ${state.pressureZones.length}.`;
+}
+
 export function downloadCurrentSceneJson(state: SimulationState): void {
   const scene = buildExportedScene(state);
   const json = JSON.stringify(scene, null, 2);
@@ -32,6 +62,21 @@ export function downloadCurrentSceneJson(state: SimulationState): void {
   link.click();
   URL.revokeObjectURL(url);
   state.editor.lastMessage = 'JSON сцены скачан. Его можно отдать Codex для закрепления в файлах проекта.';
+}
+
+function normalizeImportedScene(value: unknown): {
+  map: TacticalMapData;
+  units: UnitData[];
+  pressureZones: PressureZoneData[];
+} {
+  const scene = requireRecord(value, 'Файл должен содержать объект сцены.');
+  const map = requireRecord(scene.map, 'В JSON сцены нет блока map.');
+
+  return {
+    map: map as unknown as TacticalMapData,
+    units: readArray(scene.units) as unknown as UnitData[],
+    pressureZones: readArray(scene.pressureZones) as unknown as PressureZoneData[],
+  };
 }
 
 function buildExportedScene(state: SimulationState): ExportedSceneData {
@@ -124,6 +169,35 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
     viewRangeCells: roundThree(unit.viewRangeCells),
     behaviorProfile: unit.behaviorProfile,
   };
+}
+
+function nextIndex(items: Array<{ id?: string }>, prefix: string): number {
+  let maxIndex = 0;
+
+  for (const item of items) {
+    if (!item.id?.startsWith(prefix)) {
+      continue;
+    }
+
+    const suffix = Number.parseInt(item.id.slice(prefix.length), 10);
+    if (Number.isFinite(suffix)) {
+      maxIndex = Math.max(maxIndex, suffix);
+    }
+  }
+
+  return maxIndex + 1;
+}
+
+function requireRecord(value: unknown, message: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error(message);
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function readArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
 }
 
 function buildTimestampForFileName(): string {
