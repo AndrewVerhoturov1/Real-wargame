@@ -43,7 +43,8 @@ export class PixiTacticalBoardApp {
   ) {
     this.app = new Application({
       backgroundColor: 0x121612,
-      antialias: true,
+      backgroundAlpha: 1,
+      antialias: false,
       resizeTo: this.root,
     });
 
