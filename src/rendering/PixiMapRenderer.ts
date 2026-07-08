@@ -31,6 +31,7 @@ export class PixiMapRenderer {
     }
 
     this.lastStaticKey = nextKey;
+    this.staticContainer.cacheAsBitmap = false;
     this.staticContainer.removeChildren();
 
     for (const cell of map.cells) {
@@ -55,6 +56,7 @@ export class PixiMapRenderer {
     border.lineStyle(3, 0x10160f, 0.85);
     border.drawRect(0, 0, map.width * map.cellSize, map.height * map.cellSize);
     this.staticContainer.addChild(border);
+    this.staticContainer.cacheAsBitmap = true;
   }
 
   private renderObjectLayerIfNeeded(
