@@ -4,7 +4,7 @@ This file is a temporary smoke-check change used to trigger the `Preview screens
 
 Date: 2026-07-08
 
-Retry: build step is now non-blocking, screenshots should still run.
+Retry: screenshot test now clicks the current preview soldier at grid cell 32,20.
 
 Expected result:
 
