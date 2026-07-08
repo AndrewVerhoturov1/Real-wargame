@@ -61,16 +61,23 @@ test('capture Real-Wargame preview screenshots', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Слои' }).click();
   await page.waitForTimeout(300);
-  await saveScreenshot(page, '03-layers-tab.png');
+  await saveScreenshot(page, '03-layers-tab-knowledge-overlay.png');
+
+  const losTarget = boardPoint(35, 16);
+  await page.keyboard.down('Alt');
+  await page.mouse.move(losTarget.x, losTarget.y);
+  await page.waitForTimeout(350);
+  await saveScreenshot(page, '04-alt-line-of-sight.png');
+  await page.keyboard.up('Alt');
 
   const moveTarget = boardPoint(22, 17);
   await page.mouse.click(moveTarget.x, moveTarget.y, { button: 'right' });
   await page.waitForTimeout(300);
-  await saveScreenshot(page, '04-move-order.png');
+  await saveScreenshot(page, '05-move-order.png');
 
   await page.locator('.mode-toggle-button').click({ force: true });
   await page.waitForTimeout(700);
-  await saveScreenshot(page, '05-editor-mode.png');
+  await saveScreenshot(page, '06-editor-mode.png');
 
   await page.locator('.mode-toggle-button').click({ force: true });
   await page.waitForTimeout(500);
@@ -78,5 +85,5 @@ test('capture Real-Wargame preview screenshots', async ({ page }) => {
   await page.mouse.move(hillCenter.x, hillCenter.y);
   await zoomInSeveralSteps(page, 12);
   await page.waitForTimeout(500);
-  await saveScreenshot(page, '06-zoomed-map.png');
+  await saveScreenshot(page, '07-zoomed-map.png');
 });
