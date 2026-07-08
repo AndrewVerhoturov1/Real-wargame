@@ -8,6 +8,16 @@
   line-height: 1.35;
 }
 
+input[type="checkbox"] {
+  width: auto;
+  min-height: auto;
+  accent-color: #fff2a8;
+}
+
+.editor-layer-toggle {
+  justify-content: flex-start;
+}
+
 body.editor-mode .floating-editor-button {
   bottom: 24px;
 }
