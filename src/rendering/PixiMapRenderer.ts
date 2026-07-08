@@ -80,7 +80,7 @@ function renderScaleLabel(map: TacticalMap): Container {
     fill: 0xfff2a8,
     fontFamily: 'Arial, sans-serif',
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: 'bold',
   });
 
   background.beginFill(0x121612, 0.8);
