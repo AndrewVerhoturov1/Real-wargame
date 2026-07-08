@@ -1,13 +1,16 @@
 import { distance, type GridPosition } from '../core/geometry';
 import { worldToGrid } from '../core/map/MapModel';
 import {
+  beginEditorPointerAction,
+  cancelEditorPointerAction,
   clearSelectionBox,
-  handleEditorClick,
+  finishEditorPointerAction,
   issueMoveOrderToSelectedUnit,
   selectUnit,
   selectUnitsInBox,
   setMouseGridPosition,
   startSelectionBox,
+  updateEditorPointerAction,
   updateSelectionBox,
   type SimulationState,
 } from '../core/simulation/SimulationState';
@@ -62,6 +65,12 @@ export class BoardInputController {
       this.leftStartGrid = grid;
       this.isDragSelecting = false;
       this.canvas.setPointerCapture(event.pointerId);
+
+      if (this.state.editor.enabled) {
+        event.preventDefault();
+        beginEditorPointerAction(this.state, grid);
+      }
+
       return;
     }
 
@@ -79,7 +88,12 @@ export class BoardInputController {
     const grid = worldToGrid(this.state.map, world);
     setMouseGridPosition(this.state, grid);
 
-    if (this.leftPointerId !== event.pointerId || !this.leftStartGrid || this.state.editor.enabled) {
+    if (this.leftPointerId !== event.pointerId || !this.leftStartGrid) {
+      return;
+    }
+
+    if (this.state.editor.enabled) {
+      updateEditorPointerAction(this.state, grid);
       return;
     }
 
@@ -102,7 +116,7 @@ export class BoardInputController {
     const grid = worldToGrid(this.state.map, world);
 
     if (this.state.editor.enabled) {
-      handleEditorClick(this.state, grid);
+      finishEditorPointerAction(this.state, grid);
       this.clearLeftPointer(event.pointerId);
       return;
     }
@@ -122,6 +136,7 @@ export class BoardInputController {
   private readonly handlePointerCancel = (event: PointerEvent): void => {
     if (this.leftPointerId === event.pointerId) {
       clearSelectionBox(this.state);
+      cancelEditorPointerAction(this.state);
       this.clearLeftPointer(event.pointerId);
     }
   };
