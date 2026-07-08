@@ -45,8 +45,10 @@ test('capture Real-Wargame preview screenshots', async ({ page }) => {
   const canvas = page.locator('canvas');
   await expect(canvas).toBeVisible();
   await expect(page.locator('.top-command-bar')).toBeVisible();
+  await expect(page.locator('.mode-toggle-button')).toBeVisible();
   await expect(page.locator('.game-bottom-panel')).toBeVisible();
   await expect(page.locator('.game-right-panel')).toBeVisible();
+  await expect(page.locator('#vision-toggle')).toBeHidden();
 
   // Let Pixi finish the first render/ticker pass.
   await page.waitForTimeout(800);
@@ -57,20 +59,24 @@ test('capture Real-Wargame preview screenshots', async ({ page }) => {
   await page.waitForTimeout(300);
   await saveScreenshot(page, '02-selected-unit.png');
 
+  await page.getByRole('button', { name: 'Слои' }).click();
+  await page.waitForTimeout(300);
+  await saveScreenshot(page, '03-layers-tab.png');
+
   const moveTarget = boardPoint(22, 17);
   await page.mouse.click(moveTarget.x, moveTarget.y, { button: 'right' });
   await page.waitForTimeout(300);
-  await saveScreenshot(page, '03-move-order.png');
+  await saveScreenshot(page, '04-move-order.png');
 
-  await page.locator('.floating-editor-button').click({ force: true });
+  await page.locator('.mode-toggle-button').click({ force: true });
   await page.waitForTimeout(700);
-  await saveScreenshot(page, '04-editor-mode.png');
+  await saveScreenshot(page, '05-editor-mode.png');
 
-  await page.locator('.floating-editor-button').click({ force: true });
+  await page.locator('.mode-toggle-button').click({ force: true });
   await page.waitForTimeout(500);
   const hillCenter = boardPoint(27, 17);
   await page.mouse.move(hillCenter.x, hillCenter.y);
   await zoomInSeveralSteps(page, 12);
   await page.waitForTimeout(500);
-  await saveScreenshot(page, '05-zoomed-map.png');
+  await saveScreenshot(page, '06-zoomed-map.png');
 });
