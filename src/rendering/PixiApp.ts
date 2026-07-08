@@ -27,6 +27,7 @@ export class PixiTacticalBoardApp {
   private locale: Locale = 'en';
   private showGrid = true;
   private showViewCones = true;
+  private lastMapRenderKey = '';
 
   constructor(
     private readonly root: HTMLElement,
@@ -68,7 +69,7 @@ export class PixiTacticalBoardApp {
   }
 
   start(): void {
-    this.renderEditableMapLayer();
+    this.renderEditableMapLayerIfNeeded(true);
     this.updateStaticText();
     this.languageToggle.addEventListener('click', this.handleLanguageToggle);
     this.gridToggle.addEventListener('click', this.handleGridToggle);
@@ -93,7 +94,7 @@ export class PixiTacticalBoardApp {
   }
 
   private renderFrame(): void {
-    this.renderEditableMapLayer();
+    this.renderEditableMapLayerIfNeeded(false);
 
     const visibleUnits = this.state.editor.layers.units ? this.state.units : [];
     const visibleSelectedIds = this.state.editor.layers.units ? this.state.selectedUnitIds : [];
@@ -111,13 +112,43 @@ export class PixiTacticalBoardApp {
     this.updateDebugPanel();
   }
 
-  private renderEditableMapLayer(): void {
+  private renderEditableMapLayerIfNeeded(force: boolean): void {
+    const nextKey = this.getMapRenderKey();
+
+    if (!force && nextKey === this.lastMapRenderKey) {
+      return;
+    }
+
+    this.lastMapRenderKey = nextKey;
     this.mapRenderer.render(
       this.state.map,
       this.showGrid,
       this.state.editor.selectedObjectId,
       this.state.editor.layers.objects,
     );
+  }
+
+  private getMapRenderKey(): string {
+    const objectKey = this.state.editor.layers.objects
+      ? this.state.map.objects
+          .map((object) => [
+            object.id,
+            object.kind,
+            roundForRenderKey(object.x),
+            roundForRenderKey(object.y),
+            roundForRenderKey(object.widthCells),
+            roundForRenderKey(object.heightCells),
+            roundForRenderKey(object.rotationRadians),
+          ].join(':'))
+          .join('|')
+      : 'objects-hidden';
+
+    return [
+      `grid:${this.showGrid ? '1' : '0'}`,
+      `objects:${this.state.editor.layers.objects ? '1' : '0'}`,
+      `selected:${this.state.editor.selectedObjectId ?? 'none'}`,
+      objectKey,
+    ].join(';');
   }
 
   private readonly handleLanguageToggle = (): void => {
@@ -128,7 +159,7 @@ export class PixiTacticalBoardApp {
 
   private readonly handleGridToggle = (): void => {
     this.showGrid = !this.showGrid;
-    this.renderEditableMapLayer();
+    this.renderEditableMapLayerIfNeeded(true);
     this.updateDisplayToggles();
     this.renderFrame();
   };
@@ -270,4 +301,8 @@ function formatBehaviorInspector(unit: UnitModel | undefined, locale: Locale): s
     `${labels.lastEvent}: ${runtime.lastEvent ?? labels.none}`,
     `${labels.thresholds}: crouch ${settings.dangerCrouchThreshold}, prone ${settings.dangerProneThreshold}`,
   ];
+}
+
+function roundForRenderKey(value: number): string {
+  return value.toFixed(3);
 }
