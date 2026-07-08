@@ -1,11 +1,52 @@
-.floating-editor-button {
-  bottom: 112px;
+.mode-toggle-button {
+  min-width: 132px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: #121612;
+  background: #fff2a8;
+  border-color: #fff2a8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mode-toggle-button.mode-toggle-editor {
+  color: #fff2a8;
+  background: #3b2410;
+  border-color: rgba(255, 242, 168, 0.42);
+}
+
+.floating-editor-button,
+#vision-toggle {
+  display: none !important;
+}
+
+.game-bottom-panel {
+  height: 118px;
+  grid-template-columns: minmax(260px, 360px) minmax(620px, 1fr);
 }
 
 .cell-readout {
-  max-height: 92px;
+  height: 118px;
+  max-height: 118px;
   overflow: hidden;
   line-height: 1.35;
+}
+
+.unit-command-card {
+  height: 118px;
+  min-height: 118px;
+  max-height: 118px;
+  overflow: hidden;
+}
+
+.unit-card-main {
+  grid-template-columns: repeat(3, minmax(130px, 1fr));
+  align-content: start;
+}
+
+.unit-command-actions {
+  max-height: 98px;
+  overflow: hidden;
 }
 
 input[type="checkbox"] {
@@ -18,12 +59,153 @@ input[type="checkbox"] {
   justify-content: flex-start;
 }
 
+.editor-controls {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  min-height: 0;
+}
+
+.editor-close-button {
+  width: 100%;
+  padding: 9px 12px;
+  color: #121612;
+  background: #fff2a8;
+  border-color: #fff2a8;
+  font-weight: 800;
+}
+
+.editor-workbench {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  max-height: calc(100vh - 170px);
+}
+
+.editor-tab-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.editor-tab-row button {
+  min-width: 0;
+  padding: 7px 4px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+
+.editor-tab-row button.active {
+  color: #121612;
+  background: #fff2a8;
+  border-color: #fff2a8;
+}
+
+.editor-tab-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.editor-tab-panel {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.editor-tab-panel[hidden] {
+  display: none;
+}
+
+.editor-map-brush-slot,
+.editor-scene-tools-slot,
+.terrain-brush-content {
+  display: grid;
+  gap: 8px;
+}
+
+.knowledge-section {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.knowledge-section h3 {
+  margin: 4px 0 0;
+  color: #fff2a8;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.knowledge-list {
+  display: grid;
+  gap: 7px;
+}
+
+.knowledge-card {
+  display: grid;
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid rgba(255, 242, 168, 0.13);
+  border-radius: 10px;
+  background: rgba(255, 242, 168, 0.06);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.knowledge-card > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.knowledge-card strong {
+  color: #fff2a8;
+}
+
+.knowledge-card span,
+.knowledge-line span {
+  color: #c8c1aa;
+}
+
+.knowledge-card b,
+.knowledge-line b {
+  color: #f6edcf;
+}
+
+.knowledge-card.muted {
+  color: #c8c1aa;
+}
+
+.knowledge-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(255, 242, 168, 0.06);
+  font-size: 12px;
+}
+
 body.editor-mode .floating-editor-button {
-  bottom: 24px;
+  display: none !important;
 }
 
 @media (max-width: 980px) {
-  .floating-editor-button {
-    bottom: 160px;
+  .game-bottom-panel {
+    height: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .cell-readout,
+  .unit-command-card {
+    height: auto;
+    max-height: none;
+  }
+
+  .editor-tab-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
