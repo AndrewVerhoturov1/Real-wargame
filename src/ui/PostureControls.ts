@@ -8,6 +8,8 @@ const OPTIONS: Array<{ posture: UnitPosture; icon: string; label: string }> = [
 ];
 
 export function installPostureControls(debugPanel: HTMLElement, state: SimulationState): void {
+  prepareScrollableHud(debugPanel);
+
   const controls = document.createElement('div');
   controls.className = 'posture-controls';
   controls.style.pointerEvents = 'auto';
@@ -58,17 +60,67 @@ export function installPostureControls(debugPanel: HTMLElement, state: Simulatio
   passport.style.lineHeight = '1.45';
   passport.style.whiteSpace = 'pre-wrap';
 
-  debugPanel.insertAdjacentElement('afterend', controls);
-  controls.insertAdjacentElement('afterend', passport);
+  const inspectorSection = wrapAsSection('Инспектор поведения', debugPanel, true);
+  const postureSection = createSection('Положение юнита', controls, true);
+  const passportSection = createSection('Паспорт солдата', passport, true);
+
+  inspectorSection.insertAdjacentElement('afterend', postureSection);
+  postureSection.insertAdjacentElement('afterend', passportSection);
+
   installRussianInspectorText(debugPanel);
   window.setInterval(() => renderSoldierPassport(passport, state), 250);
+}
+
+function prepareScrollableHud(debugPanel: HTMLElement): void {
+  const hud = debugPanel.closest<HTMLElement>('#hud');
+
+  if (!hud) {
+    return;
+  }
+
+  hud.style.maxHeight = 'calc(100vh - 32px)';
+  hud.style.overflowY = 'auto';
+  hud.style.pointerEvents = 'auto';
+  hud.style.scrollbarGutter = 'stable';
+}
+
+function wrapAsSection(title: string, content: HTMLElement, open: boolean): HTMLDetailsElement {
+  const section = createEmptySection(title, open);
+  content.parentElement?.insertBefore(section, content);
+  section.appendChild(content);
+  return section;
+}
+
+function createSection(title: string, content: HTMLElement, open: boolean): HTMLDetailsElement {
+  const section = createEmptySection(title, open);
+  section.appendChild(content);
+  return section;
+}
+
+function createEmptySection(title: string, open: boolean): HTMLDetailsElement {
+  const section = document.createElement('details');
+  section.className = 'hud-section';
+  section.open = open;
+  section.style.marginTop = '10px';
+  section.style.pointerEvents = 'auto';
+
+  const summary = document.createElement('summary');
+  summary.textContent = title;
+  summary.style.cursor = 'pointer';
+  summary.style.color = '#fff2a8';
+  summary.style.fontWeight = '700';
+  summary.style.fontSize = '13px';
+  summary.style.padding = '7px 0';
+  section.appendChild(summary);
+
+  return section;
 }
 
 function renderSoldierPassport(passport: HTMLElement, state: SimulationState): void {
   const unit = getSelectedUnit(state);
 
   if (!unit) {
-    passport.textContent = 'Паспорт солдата: выберите юнита.';
+    passport.textContent = 'Выберите юнита.';
     return;
   }
 
@@ -76,8 +128,6 @@ function renderSoldierPassport(passport: HTMLElement, state: SimulationState): v
   const condition = unit.soldier.condition;
 
   passport.textContent = [
-    'Паспорт солдата:',
-    '',
     'Постоянные качества:',
     `Устойчивость: ${traits.resilience}`,
     `Осторожность: ${traits.caution}`,
