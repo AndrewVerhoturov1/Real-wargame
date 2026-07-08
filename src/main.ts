@@ -9,6 +9,7 @@ import type { UnitData } from './core/units/UnitModel';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
 import { installEditorControls } from './ui/EditorControls';
 import { installPostureControls } from './ui/PostureControls';
+import { installSceneExportControls } from './ui/SceneExportControls';
 
 const root = document.querySelector<HTMLElement>('#app');
 const debugPanel = document.querySelector<HTMLElement>('#debug-panel');
@@ -29,6 +30,7 @@ const tacticalBoard = new PixiTacticalBoardApp(root, debugPanel, languageToggle,
 
 installPostureControls(debugPanel, state);
 installEditorControls(debugPanel, state);
+installSceneExportControls(state);
 tacticalBoard.start();
 forceRussianTopControls();
 
