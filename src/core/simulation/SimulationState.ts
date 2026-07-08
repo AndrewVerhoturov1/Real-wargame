@@ -14,7 +14,7 @@ import {
   type PressureZone,
   type PressureZoneData,
 } from '../pressure/PressureZone';
-import { normalizeUnits, type UnitData, type UnitModel, type UnitType } from '../units/UnitModel';
+import { findUnitAtGridPosition, normalizeUnits, type UnitData, type UnitModel, type UnitType } from '../units/UnitModel';
 
 export interface SelectionBox {
   start: GridPosition;
