@@ -47,7 +47,7 @@ export class PixiTacticalBoardApp {
     this.app = new Application({
       backgroundColor: 0x121612,
       backgroundAlpha: 1,
-      antialias: false,
+      antialias: true,
       resizeTo: this.root,
     });
     this.app.ticker.maxFPS = TARGET_MAX_FPS;
@@ -112,7 +112,7 @@ export class PixiTacticalBoardApp {
   downloadPerformanceReport(): void {
     const report = this.performanceMonitor.buildReport(this.state, this.camera.zoom, {
       pixiMajorVersion: '7',
-      antialias: false,
+      antialias: true,
       backgroundAlpha: 1,
       maxFPS: TARGET_MAX_FPS,
       mapRender: 'batched Pixi Graphics by terrain type, grid, objects, zones',
