@@ -5,13 +5,46 @@ import type { SimulationState } from '../core/simulation/SimulationState';
 
 export class PixiOverlayRenderer {
   readonly container = new Container();
+  private readonly zoneContainer = new Container();
+  private readonly dynamicContainer = new Container();
+  private lastZoneKey = '';
+  private lastDynamicKey = '';
+
+  constructor() {
+    this.container.addChild(this.zoneContainer, this.dynamicContainer);
+  }
 
   render(state: SimulationState, showGrid = true, showPressureZones = true): void {
-    this.container.removeChildren();
+    this.renderZoneLayerIfNeeded(state, showPressureZones);
+    this.renderDynamicLayerIfNeeded(state, showGrid);
+  }
+
+  private renderZoneLayerIfNeeded(state: SimulationState, showPressureZones: boolean): void {
+    const nextKey = getZoneLayerKey(state, showPressureZones);
+
+    if (nextKey === this.lastZoneKey) {
+      return;
+    }
+
+    this.lastZoneKey = nextKey;
+    this.zoneContainer.cacheAsBitmap = false;
+    this.zoneContainer.removeChildren();
 
     if (showPressureZones) {
-      drawPressureZones(this.container, state.pressureZones, state.map.cellSize, state.editor.selectedZoneId);
+      drawPressureZones(this.zoneContainer, state.pressureZones, state.map.cellSize, state.editor.selectedZoneId);
+      this.zoneContainer.cacheAsBitmap = state.editor.selectedZoneId === null;
     }
+  }
+
+  private renderDynamicLayerIfNeeded(state: SimulationState, showGrid: boolean): void {
+    const nextKey = getDynamicLayerKey(state, showGrid);
+
+    if (nextKey === this.lastDynamicKey) {
+      return;
+    }
+
+    this.lastDynamicKey = nextKey;
+    this.dynamicContainer.removeChildren();
 
     if (showGrid && state.mouseGridPosition) {
       const { map } = state;
@@ -26,7 +59,7 @@ export class PixiOverlayRenderer {
         map.cellSize,
       );
 
-      this.container.addChild(graphics);
+      this.dynamicContainer.addChild(graphics);
     }
 
     if (state.selectionBox) {
@@ -42,9 +75,46 @@ export class PixiOverlayRenderer {
       graphics.drawRect(minX, minY, maxX - minX, maxY - minY);
       graphics.endFill();
 
-      this.container.addChild(graphics);
+      this.dynamicContainer.addChild(graphics);
     }
   }
+}
+
+function getZoneLayerKey(state: SimulationState, showPressureZones: boolean): string {
+  if (!showPressureZones) {
+    return 'zones:hidden';
+  }
+
+  return [
+    `cell:${state.map.cellSize}`,
+    `selected:${state.editor.selectedZoneId ?? 'none'}`,
+    `zones:${state.pressureZones.map((zone) => [
+      zone.id,
+      zone.shape,
+      zone.x.toFixed(3),
+      zone.y.toFixed(3),
+      zone.radiusCells.toFixed(3),
+      zone.widthCells.toFixed(3),
+      zone.heightCells.toFixed(3),
+      zone.strength.toFixed(1),
+    ].join(':')).join('|')}`,
+  ].join(';');
+}
+
+function getDynamicLayerKey(state: SimulationState, showGrid: boolean): string {
+  const mouse = state.mouseGridPosition
+    ? `${state.mouseGridPosition.x.toFixed(2)}:${state.mouseGridPosition.y.toFixed(2)}`
+    : 'none';
+  const box = state.selectionBox
+    ? `${state.selectionBox.start.x.toFixed(2)}:${state.selectionBox.start.y.toFixed(2)}:${state.selectionBox.current.x.toFixed(2)}:${state.selectionBox.current.y.toFixed(2)}`
+    : 'none';
+
+  return [
+    `grid:${showGrid ? '1' : '0'}`,
+    `mouse:${mouse}`,
+    `box:${box}`,
+    `cell:${state.map.cellSize}`,
+  ].join(';');
 }
 
 function drawPressureZones(
