@@ -15,6 +15,7 @@ import {
   updateSelectionBox,
   type SimulationState,
 } from '../core/simulation/SimulationState';
+import { setVisibilityProbe } from '../core/ui/RuntimeUiState';
 import { findUnitAtGridPosition } from '../core/units/UnitModel';
 import type { CameraController } from './CameraController';
 
@@ -24,6 +25,8 @@ export class BoardInputController {
   private leftPointerId: number | null = null;
   private leftStartGrid: GridPosition | null = null;
   private isDragSelecting = false;
+  private lastPointerGrid: GridPosition | null = null;
+  private altProbeActive = false;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -38,6 +41,8 @@ export class BoardInputController {
     this.canvas.addEventListener('pointerup', this.handlePointerUp);
     this.canvas.addEventListener('pointercancel', this.handlePointerCancel);
     this.canvas.addEventListener('pointerleave', this.handlePointerLeave);
+    window.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('keyup', this.handleKeyUp);
   }
 
   destroy(): void {
@@ -47,10 +52,32 @@ export class BoardInputController {
     this.canvas.removeEventListener('pointerup', this.handlePointerUp);
     this.canvas.removeEventListener('pointercancel', this.handlePointerCancel);
     this.canvas.removeEventListener('pointerleave', this.handlePointerLeave);
+    window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keyup', this.handleKeyUp);
   }
 
   private readonly handleContextMenu = (event: MouseEvent): void => {
     event.preventDefault();
+  };
+
+  private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Alt') {
+      return;
+    }
+
+    this.altProbeActive = true;
+    if (!this.state.editor.enabled) {
+      setVisibilityProbe(this.state, true, this.lastPointerGrid);
+    }
+  };
+
+  private readonly handleKeyUp = (event: KeyboardEvent): void => {
+    if (event.key !== 'Alt') {
+      return;
+    }
+
+    this.altProbeActive = false;
+    setVisibilityProbe(this.state, false, null);
   };
 
   private readonly handlePointerDown = (event: PointerEvent): void => {
@@ -60,6 +87,8 @@ export class BoardInputController {
 
     const world = this.camera.screenToWorld(event);
     const grid = worldToGrid(this.state.map, world);
+    this.lastPointerGrid = grid;
+    this.updateAltProbe(event, grid);
 
     if (event.button === 0) {
       this.leftPointerId = event.pointerId;
@@ -91,7 +120,9 @@ export class BoardInputController {
   private readonly handlePointerMove = (event: PointerEvent): void => {
     const world = this.camera.screenToWorld(event);
     const grid = worldToGrid(this.state.map, world);
+    this.lastPointerGrid = grid;
     setMouseGridPosition(this.state, grid);
+    this.updateAltProbe(event, grid);
 
     if (this.leftPointerId !== event.pointerId || !this.leftStartGrid) {
       return;
@@ -123,6 +154,8 @@ export class BoardInputController {
 
     const world = this.camera.screenToWorld(event);
     const grid = worldToGrid(this.state.map, world);
+    this.lastPointerGrid = grid;
+    this.updateAltProbe(event, grid);
 
     if (this.state.editor.enabled) {
       if (!isTerrainPaintTool(String(this.state.editor.tool))) {
@@ -153,8 +186,15 @@ export class BoardInputController {
   };
 
   private readonly handlePointerLeave = (): void => {
+    this.lastPointerGrid = null;
     setMouseGridPosition(this.state, null);
+    setVisibilityProbe(this.state, false, null);
   };
+
+  private updateAltProbe(event: PointerEvent, grid: GridPosition): void {
+    const active = !this.state.editor.enabled && (event.altKey || this.altProbeActive);
+    setVisibilityProbe(this.state, active, active ? grid : null);
+  }
 
   private clearLeftPointer(pointerId: number): void {
     if (this.canvas.hasPointerCapture(pointerId)) {
