@@ -11,7 +11,7 @@ const VIEWPORT = {
 
 // These coordinates match the current Pixi tactical board layout:
 // worldContainer origin: 72,72; map cell size: 24 px.
-// The current preview scene has one soldier at grid cell 32,20.
+// The current preview scene has one soldier from the exported user map near grid 28.57,16.66.
 const BOARD_ORIGIN = { x: 72, y: 72 };
 const CELL_SIZE = 24;
 
@@ -43,12 +43,12 @@ test('capture Real-Wargame preview screenshots', async ({ page }) => {
   await page.waitForTimeout(800);
   await saveScreenshot(page, '01-initial.png');
 
-  const soldier = boardPoint(32, 20);
+  const soldier = boardPoint(28.57, 16.66);
   await page.mouse.click(soldier.x, soldier.y);
   await page.waitForTimeout(300);
   await saveScreenshot(page, '02-selected-unit.png');
 
-  const moveTarget = boardPoint(22, 20);
+  const moveTarget = boardPoint(22, 17);
   await page.mouse.click(moveTarget.x, moveTarget.y, { button: 'right' });
   await page.waitForTimeout(300);
   await saveScreenshot(page, '03-move-order.png');
@@ -56,7 +56,8 @@ test('capture Real-Wargame preview screenshots', async ({ page }) => {
   await page.waitForTimeout(1500);
   await saveScreenshot(page, '04-after-movement.png');
 
-  await page.mouse.move(640, 420);
+  const hillCenter = boardPoint(27, 17);
+  await page.mouse.move(hillCenter.x, hillCenter.y);
   await page.mouse.wheel(0, -600);
   await page.waitForTimeout(500);
   await saveScreenshot(page, '05-zoomed-map.png');
