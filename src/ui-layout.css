@@ -139,7 +139,8 @@ input[type="checkbox"] {
   letter-spacing: 0.02em;
 }
 
-.knowledge-list {
+.knowledge-list,
+.compact-knowledge-list {
   display: grid;
   gap: 7px;
 }
@@ -187,6 +188,51 @@ input[type="checkbox"] {
   border-radius: 8px;
   background: rgba(255, 242, 168, 0.06);
   font-size: 12px;
+}
+
+.compact-knowledge-row {
+  display: grid;
+  grid-template-columns: minmax(82px, 1fr) 52px 54px 78px;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 7px;
+  border: 1px solid rgba(255, 242, 168, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 242, 168, 0.055);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.compact-knowledge-row strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff2a8;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-knowledge-row span {
+  color: #d6ceb2;
+  text-align: right;
+}
+
+.compact-knowledge-row b {
+  color: #f6edcf;
+  text-align: right;
+}
+
+.compact-knowledge-row em {
+  overflow: hidden;
+  color: #c8c1aa;
+  font-style: normal;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-knowledge-row.danger-row {
+  border-color: rgba(255, 78, 61, 0.22);
+  background: rgba(255, 78, 61, 0.07);
 }
 
 body.editor-mode .floating-editor-button {
