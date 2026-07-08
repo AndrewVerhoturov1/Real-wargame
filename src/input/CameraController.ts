@@ -1,14 +1,19 @@
 import type { Container } from 'pixi.js';
 import type { WorldPosition } from '../core/geometry';
 
-const MIN_SCALE = 0.55;
+const MIN_SCALE = 0.45;
 const MAX_SCALE = 2.8;
-const ZOOM_STEP = 1.12;
+const ZOOM_STEP = 1.08;
+const ZOOM_SMOOTHING = 0.28;
+const ZOOM_EPSILON = 0.001;
 
 export class CameraController {
   private isPanning = false;
   private isSpaceHeld = false;
   private lastPointerPosition: WorldPosition | null = null;
+  private targetScale = 1;
+  private targetPosition: WorldPosition = { x: 0, y: 0 };
+  private zoomAnimationFrame: number | null = null;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -16,6 +21,8 @@ export class CameraController {
   ) {}
 
   attach(): void {
+    this.targetScale = this.worldContainer.scale.x;
+    this.targetPosition = { x: this.worldContainer.x, y: this.worldContainer.y };
     this.canvas.addEventListener('wheel', this.handleWheel, { passive: false });
     this.canvas.addEventListener('pointerdown', this.handlePointerDown);
     window.addEventListener('pointermove', this.handlePointerMove);
@@ -31,6 +38,11 @@ export class CameraController {
     window.removeEventListener('pointerup', this.handlePointerUp);
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('keyup', this.handleKeyUp);
+
+    if (this.zoomAnimationFrame !== null) {
+      window.cancelAnimationFrame(this.zoomAnimationFrame);
+      this.zoomAnimationFrame = null;
+    }
   }
 
   screenToWorld(event: MouseEvent | PointerEvent): WorldPosition {
@@ -57,21 +69,51 @@ export class CameraController {
 
     const beforeZoomWorldPosition = this.screenToWorld(event);
     const nextScale = clamp(
-      this.worldContainer.scale.x * (event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP),
+      this.targetScale * (event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP),
       MIN_SCALE,
       MAX_SCALE,
     );
-
-    this.worldContainer.scale.set(nextScale);
-
     const rect = this.canvas.getBoundingClientRect();
     const screenX = event.clientX - rect.left;
     const screenY = event.clientY - rect.top;
 
+    this.targetScale = nextScale;
+    this.targetPosition = {
+      x: screenX - beforeZoomWorldPosition.x * nextScale,
+      y: screenY - beforeZoomWorldPosition.y * nextScale,
+    };
+    this.startSmoothZoom();
+  };
+
+  private startSmoothZoom(): void {
+    if (this.zoomAnimationFrame !== null) {
+      return;
+    }
+
+    this.zoomAnimationFrame = window.requestAnimationFrame(this.animateZoom);
+  }
+
+  private readonly animateZoom = (): void => {
+    const currentScale = this.worldContainer.scale.x;
+    const nextScale = lerp(currentScale, this.targetScale, ZOOM_SMOOTHING);
+    const nextX = lerp(this.worldContainer.x, this.targetPosition.x, ZOOM_SMOOTHING);
+    const nextY = lerp(this.worldContainer.y, this.targetPosition.y, ZOOM_SMOOTHING);
+    const scaleDone = Math.abs(nextScale - this.targetScale) < ZOOM_EPSILON;
+    const xDone = Math.abs(nextX - this.targetPosition.x) < ZOOM_EPSILON;
+    const yDone = Math.abs(nextY - this.targetPosition.y) < ZOOM_EPSILON;
+
+    this.worldContainer.scale.set(scaleDone ? this.targetScale : nextScale);
     this.worldContainer.position.set(
-      screenX - beforeZoomWorldPosition.x * nextScale,
-      screenY - beforeZoomWorldPosition.y * nextScale,
+      xDone ? this.targetPosition.x : nextX,
+      yDone ? this.targetPosition.y : nextY,
     );
+
+    if (scaleDone && xDone && yDone) {
+      this.zoomAnimationFrame = null;
+      return;
+    }
+
+    this.zoomAnimationFrame = window.requestAnimationFrame(this.animateZoom);
   };
 
   private readonly handlePointerDown = (event: PointerEvent): void => {
@@ -94,11 +136,11 @@ export class CameraController {
 
     const dx = event.clientX - this.lastPointerPosition.x;
     const dy = event.clientY - this.lastPointerPosition.y;
+    const nextX = this.worldContainer.x + dx;
+    const nextY = this.worldContainer.y + dy;
 
-    this.worldContainer.position.set(
-      this.worldContainer.x + dx,
-      this.worldContainer.y + dy,
-    );
+    this.worldContainer.position.set(nextX, nextY);
+    this.targetPosition = { x: nextX, y: nextY };
 
     this.lastPointerPosition = {
       x: event.clientX,
@@ -128,4 +170,8 @@ export class CameraController {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function lerp(from: number, to: number, alpha: number): number {
+  return from + (to - from) * alpha;
 }
