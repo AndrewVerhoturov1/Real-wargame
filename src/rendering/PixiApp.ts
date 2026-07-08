@@ -1,6 +1,6 @@
 import { Application, Container } from 'pixi.js';
 import { PerformanceMonitor } from '../core/debug/PerformanceMonitor';
-import { gridToCellLabel } from '../core/map/MapModel';
+import { getCell, gridToCellLabel, type MapCell } from '../core/map/MapModel';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { tickSimulation } from '../core/simulation/SimulationTick';
 import type { UnitModel } from '../core/units/UnitModel';
@@ -119,7 +119,7 @@ export class PixiTacticalBoardApp {
       antialias: true,
       backgroundAlpha: 1,
       maxFPS: TARGET_MAX_FPS,
-      mapRender: 'batched Pixi Graphics terrain + cached canvas elevation texture, grid, objects, zones',
+      mapRender: 'batched Pixi Graphics terrain + readable smoothed elevation texture, grid, objects, zones',
       zoomMode: 'stable wheel-scaled step without animation',
       grid: this.showGrid,
       viewCones: this.showViewCones,
@@ -300,6 +300,9 @@ export class PixiTacticalBoardApp {
 
   private updateDebugPanel(): void {
     const selectedUnit = getSelectedUnit(this.state);
+    const hoveredCell = this.state.mouseGridPosition
+      ? getCell(this.state.map, Math.floor(this.state.mouseGridPosition.x), Math.floor(this.state.mouseGridPosition.y))
+      : undefined;
     const mouseLabel = this.state.mouseGridPosition
       ? gridToCellLabel(this.state.map, this.state.mouseGridPosition)
       : UI_COPY[this.locale].debug.outsideMap;
@@ -313,6 +316,7 @@ export class PixiTacticalBoardApp {
 
     this.debugPanel.textContent = [
       `${copy.mouseCell}: ${mouseLabel}`,
+      ...formatHoveredCellDetails(hoveredCell, this.locale),
       `${copy.selected}: ${selectedLabel}`,
       `${copy.moveTarget}: ${orderTarget}`,
       `${copy.facing}: ${selectedUnit ? formatDegrees(selectedUnit.facingRadians) : copy.none}`,
@@ -325,6 +329,88 @@ export class PixiTacticalBoardApp {
       copy.htmlLabels,
     ].join('\n');
   }
+}
+
+function formatHoveredCellDetails(cell: MapCell | undefined, locale: Locale): string[] {
+  if (!cell) {
+    return locale === 'ru'
+      ? ['Высота: вне карты', 'Местность: вне карты', 'Лес: вне карты']
+      : ['Height: outside map', 'Terrain: outside map', 'Forest: outside map'];
+  }
+
+  if (locale === 'ru') {
+    return [
+      `Высота: ${formatElevationLevel(cell.height, locale)}`,
+      `Местность: ${formatTerrainKind(cell.terrain, locale)}`,
+      `Лес: ${formatForestLayer(cell.forest, locale)}`,
+    ];
+  }
+
+  return [
+    `Height: ${formatElevationLevel(cell.height, locale)}`,
+    `Terrain: ${formatTerrainKind(cell.terrain, locale)}`,
+    `Forest: ${formatForestLayer(cell.forest, locale)}`,
+  ];
+}
+
+function formatElevationLevel(height: number, locale: Locale): string {
+  const prefix = height > 0 ? '+' : '';
+  const nameRu: Record<number, string> = {
+    [-2]: 'глубокая низина',
+    [-1]: 'низина',
+    0: 'ровно',
+    1: 'лёгкий подъём',
+    2: 'холм',
+    3: 'высокая местность',
+    4: 'гребень / вершина',
+  };
+  const nameEn: Record<number, string> = {
+    [-2]: 'deep low ground',
+    [-1]: 'low ground',
+    0: 'flat',
+    1: 'rise',
+    2: 'hill',
+    3: 'high ground',
+    4: 'ridge / crest',
+  };
+
+  return `${prefix}${height} — ${(locale === 'ru' ? nameRu : nameEn)[height] ?? 'unknown'}`;
+}
+
+function formatTerrainKind(terrain: string, locale: Locale): string {
+  const ru: Record<string, string> = {
+    field: 'поле / открытая земля',
+    forest: 'лесная местность',
+    road: 'дорога',
+    swamp: 'болото',
+    rough: 'пересечённая местность',
+    water: 'вода',
+  };
+  const en: Record<string, string> = {
+    field: 'field / open ground',
+    forest: 'forest terrain',
+    road: 'road',
+    swamp: 'swamp',
+    rough: 'rough ground',
+    water: 'water',
+  };
+
+  return (locale === 'ru' ? ru : en)[terrain] ?? terrain;
+}
+
+function formatForestLayer(forest: number, locale: Locale): string {
+  const ru: Record<number, string> = {
+    0: 'нет',
+    1: 'редкий лес',
+    2: 'густой лес',
+  };
+  const en: Record<number, string> = {
+    0: 'none',
+    1: 'sparse forest',
+    2: 'dense forest',
+  };
+
+  return (locale === 'ru' ? ru : en)[forest] ?? String(forest);
 }
 
 function formatBehaviorInspector(unit: UnitModel | undefined, locale: Locale): string[] {
