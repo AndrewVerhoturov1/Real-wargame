@@ -12,6 +12,8 @@ export interface ExportedSceneData {
     metersPerCell: number;
     defaultTerrain: string;
     defaultHeight: number;
+    heightMap: number[][];
+    forestMap: number[][];
     objects: Array<Record<string, unknown>>;
   };
   units: Array<Record<string, unknown>>;
@@ -34,9 +36,9 @@ export function downloadCurrentSceneJson(state: SimulationState): void {
 
 function buildExportedScene(state: SimulationState): ExportedSceneData {
   return {
-    version: 'scene-export-v1',
+    version: 'scene-export-v2',
     exportedAt: new Date().toISOString(),
-    noteRu: 'Это экспорт текущей сцены из браузерного редактора. Чтобы закрепить изменения в проекте, передайте этот файл Codex: он должен разнести map / units / pressureZones по исходным JSON-файлам проекта.',
+    noteRu: 'Это экспорт текущей сцены из браузерного редактора. heightMap хранит высоты -2..4, forestMap подготовлен под слои леса 0/1/2. Чтобы закрепить изменения в проекте, передайте этот файл Codex: он должен разнести map / units / pressureZones по исходным JSON-файлам проекта.',
     map: {
       width: state.map.width,
       height: state.map.height,
@@ -44,6 +46,8 @@ function buildExportedScene(state: SimulationState): ExportedSceneData {
       metersPerCell: state.map.metersPerCell,
       defaultTerrain: state.map.defaultTerrain,
       defaultHeight: state.map.defaultHeight,
+      heightMap: buildHeightMap(state),
+      forestMap: buildForestMap(state),
       objects: state.map.objects.map((object) => ({
         id: object.id,
         kind: object.kind,
@@ -74,6 +78,34 @@ function buildExportedScene(state: SimulationState): ExportedSceneData {
       reasonRu: zone.reasons.ru,
     })),
   };
+}
+
+function buildHeightMap(state: SimulationState): number[][] {
+  const rows: number[][] = [];
+
+  for (let y = 0; y < state.map.height; y += 1) {
+    const row: number[] = [];
+    for (let x = 0; x < state.map.width; x += 1) {
+      row.push(state.map.cells[y * state.map.width + x]?.height ?? state.map.defaultHeight);
+    }
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function buildForestMap(state: SimulationState): number[][] {
+  const rows: number[][] = [];
+
+  for (let y = 0; y < state.map.height; y += 1) {
+    const row: number[] = [];
+    for (let x = 0; x < state.map.width; x += 1) {
+      row.push(state.map.cells[y * state.map.width + x]?.forest ?? 0);
+    }
+    rows.push(row);
+  }
+
+  return rows;
 }
 
 function exportUnit(unit: UnitModel): Record<string, unknown> {
