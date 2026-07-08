@@ -15,7 +15,7 @@ import { PixiUnitRenderer } from './PixiUnitRenderer';
 import { PixiViewConeRenderer } from './PixiViewConeRenderer';
 
 const DEBUG_PANEL_UPDATE_INTERVAL_MS = 300;
-const TARGET_MAX_FPS = 45;
+const TARGET_MAX_FPS = 60;
 
 export class PixiTacticalBoardApp {
   private readonly app: Application;
@@ -115,7 +115,7 @@ export class PixiTacticalBoardApp {
       antialias: false,
       backgroundAlpha: 1,
       maxFPS: TARGET_MAX_FPS,
-      mapRender: 'Pixi Graphics / vector shapes',
+      mapRender: 'batched Pixi Graphics by terrain type, grid, objects, zones',
       zoomMode: 'stable wheel-scaled step without animation',
       grid: this.showGrid,
       viewCones: this.showViewCones,
