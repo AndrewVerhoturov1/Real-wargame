@@ -1,0 +1,19 @@
+.floating-editor-button {
+  bottom: 112px;
+}
+
+.cell-readout {
+  max-height: 92px;
+  overflow: hidden;
+  line-height: 1.35;
+}
+
+body.editor-mode .floating-editor-button {
+  bottom: 24px;
+}
+
+@media (max-width: 980px) {
+  .floating-editor-button {
+    bottom: 160px;
+  }
+}
