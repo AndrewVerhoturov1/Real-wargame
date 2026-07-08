@@ -1,29 +1,37 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import {
   type ElevationLevel,
+  type ForestLayerKind,
   type MapObject,
   type TacticalMap,
 } from '../core/map/MapModel';
 import { TERRAIN_STYLE } from './terrainStyle';
 
-interface ElevationPaletteEntry {
+interface LayerPaletteEntry {
   red: number;
   green: number;
   blue: number;
   alpha: number;
 }
 
-const ELEVATION_PALETTE: Record<ElevationLevel, ElevationPaletteEntry> = {
-  [-2]: { red: 38, green: 68, blue: 78, alpha: 130 },
-  [-1]: { red: 72, green: 92, blue: 86, alpha: 92 },
+const ELEVATION_PALETTE: Record<ElevationLevel, LayerPaletteEntry> = {
+  [-2]: { red: 32, green: 66, blue: 82, alpha: 150 },
+  [-1]: { red: 65, green: 91, blue: 91, alpha: 112 },
   0: { red: 128, green: 128, blue: 105, alpha: 0 },
-  1: { red: 154, green: 137, blue: 76, alpha: 82 },
-  2: { red: 184, green: 142, blue: 72, alpha: 108 },
-  3: { red: 204, green: 156, blue: 78, alpha: 132 },
-  4: { red: 226, green: 182, blue: 96, alpha: 156 },
+  1: { red: 148, green: 132, blue: 74, alpha: 96 },
+  2: { red: 180, green: 138, blue: 66, alpha: 126 },
+  3: { red: 205, green: 153, blue: 70, alpha: 152 },
+  4: { red: 232, green: 184, blue: 94, alpha: 178 },
 };
 
-const MIN_VISIBLE_ELEVATION = 0.22;
+const FOREST_PALETTE: Record<ForestLayerKind, LayerPaletteEntry> = {
+  0: { red: 0, green: 0, blue: 0, alpha: 0 },
+  1: { red: 34, green: 86, blue: 55, alpha: 118 },
+  2: { red: 19, green: 58, blue: 37, alpha: 165 },
+};
+
+const MIN_VISIBLE_ELEVATION = 0.35;
+const CONTOUR_THRESHOLDS = [-1.5, -0.5, 0.5, 1.5, 2.5, 3.5];
 
 export class PixiMapRenderer {
   readonly container = new Container();
@@ -60,6 +68,11 @@ export class PixiMapRenderer {
     const elevationLayer = renderElevationLayer(map);
     if (elevationLayer) {
       this.staticContainer.addChild(elevationLayer);
+    }
+
+    const forestLayer = renderForestLayer(map);
+    if (forestLayer) {
+      this.staticContainer.addChild(forestLayer);
     }
 
     if (showGrid) {
@@ -143,14 +156,15 @@ function renderElevationLayer(map: TacticalMap): Sprite | null {
   for (let y = 0; y < canvas.height; y += 1) {
     for (let x = 0; x < canvas.width; x += 1) {
       const value = sampleSmoothedHeight(smoothedHeights, map, x / map.cellSize, y / map.cellSize);
+      const band = elevationBandForValue(value);
       const pixelIndex = (y * canvas.width + x) * 4;
 
-      if (Math.abs(value) < MIN_VISIBLE_ELEVATION) {
+      if (band === 0) {
         image.data[pixelIndex + 3] = 0;
         continue;
       }
 
-      const color = colorForElevationValue(value);
+      const color = ELEVATION_PALETTE[band];
       image.data[pixelIndex] = color.red;
       image.data[pixelIndex + 1] = color.green;
       image.data[pixelIndex + 2] = color.blue;
@@ -159,9 +173,69 @@ function renderElevationLayer(map: TacticalMap): Sprite | null {
   }
 
   context.putImageData(image, 0, 0);
-  drawElevationContourHints(context, smoothedHeights, map);
+  drawElevationContourLines(context, smoothedHeights, map);
 
   return new Sprite(Texture.from(canvas));
+}
+
+function renderForestLayer(map: TacticalMap): Sprite | null {
+  if (!map.cells.some((cell) => cell.forest !== 0)) {
+    return null;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = map.width * map.cellSize;
+  canvas.height = map.height * map.cellSize;
+  const context = canvas.getContext('2d');
+
+  if (!context) {
+    return null;
+  }
+
+  for (const cell of map.cells) {
+    if (cell.forest === 0) {
+      continue;
+    }
+
+    drawForestCell(context, map, cell.x, cell.y, cell.forest);
+  }
+
+  return new Sprite(Texture.from(canvas));
+}
+
+function drawForestCell(
+  context: CanvasRenderingContext2D,
+  map: TacticalMap,
+  cellX: number,
+  cellY: number,
+  forest: ForestLayerKind,
+): void {
+  const size = map.cellSize;
+  const left = cellX * size;
+  const top = cellY * size;
+  const palette = FOREST_PALETTE[forest];
+  const seed = makeSeed(cellX, cellY, forest, 11);
+  const count = forest === 2 ? 7 : 3;
+
+  context.save();
+  context.fillStyle = `rgba(${palette.red}, ${palette.green}, ${palette.blue}, ${palette.alpha / 255})`;
+  context.beginPath();
+  context.ellipse(left + size * 0.5, top + size * 0.5, size * 0.52, size * 0.42, random01(seed) * Math.PI, 0, Math.PI * 2);
+  context.fill();
+
+  for (let index = 0; index < count; index += 1) {
+    const dotSeed = makeSeed(cellX, cellY, forest, index + 31);
+    const x = left + size * (0.18 + random01(dotSeed) * 0.64);
+    const y = top + size * (0.18 + random01(dotSeed + 9) * 0.64);
+    const radius = size * (forest === 2 ? 0.12 + random01(dotSeed + 13) * 0.08 : 0.09 + random01(dotSeed + 13) * 0.06);
+
+    context.fillStyle = forest === 2 ? 'rgba(8, 38, 22, 0.72)' : 'rgba(22, 76, 42, 0.58)';
+    context.beginPath();
+    context.arc(x, y, radius, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  context.restore();
 }
 
 function buildSmoothedHeightGrid(map: TacticalMap): number[][] {
@@ -178,7 +252,7 @@ function buildSmoothedHeightGrid(map: TacticalMap): number[][] {
         for (let ox = -1; ox <= 1; ox += 1) {
           const sampleX = clampInt(x + ox, 0, map.width - 1);
           const sampleY = clampInt(y + oy, 0, map.height - 1);
-          const weight = ox === 0 && oy === 0 ? 4 : ox === 0 || oy === 0 ? 2 : 1;
+          const weight = ox === 0 && oy === 0 ? 5 : ox === 0 || oy === 0 ? 2 : 1;
           const height = map.cells[sampleY * map.width + sampleX]?.height ?? 0;
 
           total += height * weight;
@@ -215,65 +289,96 @@ function sampleSmoothedHeight(
   return lerp(top, bottom, ty);
 }
 
-function colorForElevationValue(value: number): ElevationPaletteEntry {
-  const clamped = clamp(value, -2, 4);
-  const lower = Math.floor(clamped) as ElevationLevel;
-  const upper = Math.ceil(clamped) as ElevationLevel;
-
-  if (lower === upper) {
-    return ELEVATION_PALETTE[lower];
+function elevationBandForValue(value: number): ElevationLevel {
+  if (Math.abs(value) < MIN_VISIBLE_ELEVATION) {
+    return 0;
   }
 
-  const factor = clamped - lower;
-  const low = ELEVATION_PALETTE[lower];
-  const high = ELEVATION_PALETTE[upper];
-
-  return {
-    red: Math.round(lerp(low.red, high.red, factor)),
-    green: Math.round(lerp(low.green, high.green, factor)),
-    blue: Math.round(lerp(low.blue, high.blue, factor)),
-    alpha: Math.round(lerp(low.alpha, high.alpha, factor)),
-  };
+  return clampInt(Math.round(value), -2, 4) as ElevationLevel;
 }
 
-function drawElevationContourHints(
+function drawElevationContourLines(
   context: CanvasRenderingContext2D,
   smoothedHeights: number[][],
   map: TacticalMap,
 ): void {
-  const step = Math.max(4, Math.floor(map.cellSize / 3));
+  const step = Math.max(5, Math.floor(map.cellSize / 3));
+  const width = map.width * map.cellSize;
+  const height = map.height * map.cellSize;
 
   context.save();
-  context.lineWidth = Math.max(1, map.cellSize * 0.045);
+  context.lineWidth = Math.max(1.5, map.cellSize * 0.065);
   context.lineCap = 'round';
   context.lineJoin = 'round';
 
-  for (let y = step; y < map.height * map.cellSize - step; y += step) {
-    for (let x = step; x < map.width * map.cellSize - step; x += step) {
-      const center = sampleSmoothedHeight(smoothedHeights, map, x / map.cellSize, y / map.cellSize);
-      const right = sampleSmoothedHeight(smoothedHeights, map, (x + step) / map.cellSize, y / map.cellSize);
-      const down = sampleSmoothedHeight(smoothedHeights, map, x / map.cellSize, (y + step) / map.cellSize);
-      const centerBand = Math.round(center);
+  for (const threshold of CONTOUR_THRESHOLDS) {
+    context.strokeStyle = threshold > 0 ? 'rgba(84, 55, 26, 0.42)' : 'rgba(16, 43, 55, 0.38)';
 
-      if (centerBand !== 0 && Math.round(right) !== centerBand) {
-        context.strokeStyle = centerBand > 0 ? 'rgba(74, 55, 31, 0.14)' : 'rgba(20, 36, 42, 0.14)';
-        context.beginPath();
-        context.moveTo(x, y - step * 0.45);
-        context.lineTo(x, y + step * 0.45);
-        context.stroke();
-      }
-
-      if (centerBand !== 0 && Math.round(down) !== centerBand) {
-        context.strokeStyle = centerBand > 0 ? 'rgba(74, 55, 31, 0.14)' : 'rgba(20, 36, 42, 0.14)';
-        context.beginPath();
-        context.moveTo(x - step * 0.45, y);
-        context.lineTo(x + step * 0.45, y);
-        context.stroke();
+    for (let y = 0; y < height - step; y += step) {
+      for (let x = 0; x < width - step; x += step) {
+        drawContourCell(context, smoothedHeights, map, x, y, step, threshold);
       }
     }
   }
 
   context.restore();
+}
+
+function drawContourCell(
+  context: CanvasRenderingContext2D,
+  smoothedHeights: number[][],
+  map: TacticalMap,
+  x: number,
+  y: number,
+  step: number,
+  threshold: number,
+): void {
+  const tl = sampleSmoothedHeight(smoothedHeights, map, x / map.cellSize, y / map.cellSize);
+  const tr = sampleSmoothedHeight(smoothedHeights, map, (x + step) / map.cellSize, y / map.cellSize);
+  const br = sampleSmoothedHeight(smoothedHeights, map, (x + step) / map.cellSize, (y + step) / map.cellSize);
+  const bl = sampleSmoothedHeight(smoothedHeights, map, x / map.cellSize, (y + step) / map.cellSize);
+  const points: Array<{ x: number; y: number }> = [];
+
+  pushIntersection(points, tl, tr, threshold, { x, y }, { x: x + step, y });
+  pushIntersection(points, tr, br, threshold, { x: x + step, y }, { x: x + step, y: y + step });
+  pushIntersection(points, bl, br, threshold, { x, y: y + step }, { x: x + step, y: y + step });
+  pushIntersection(points, tl, bl, threshold, { x, y }, { x, y: y + step });
+
+  if (points.length === 2) {
+    drawSegment(context, points[0], points[1]);
+  } else if (points.length === 4) {
+    drawSegment(context, points[0], points[1]);
+    drawSegment(context, points[2], points[3]);
+  }
+}
+
+function pushIntersection(
+  points: Array<{ x: number; y: number }>,
+  startValue: number,
+  endValue: number,
+  threshold: number,
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+): void {
+  const startAbove = startValue >= threshold;
+  const endAbove = endValue >= threshold;
+
+  if (startAbove === endAbove) {
+    return;
+  }
+
+  const factor = clamp((threshold - startValue) / (endValue - startValue), 0, 1);
+  points.push({
+    x: lerp(start.x, end.x, factor),
+    y: lerp(start.y, end.y, factor),
+  });
+}
+
+function drawSegment(context: CanvasRenderingContext2D, start: { x: number; y: number }, end: { x: number; y: number }): void {
+  context.beginPath();
+  context.moveTo(start.x, start.y);
+  context.lineTo(end.x, end.y);
+  context.stroke();
 }
 
 function getStaticLayerKey(map: TacticalMap, showGrid: boolean): string {
@@ -586,6 +691,18 @@ function drawSegmentedCover(
   }
 
   graphics.endFill();
+}
+
+function makeSeed(x: number, y: number, level: number, salt: number): number {
+  return ((x + 1) * 73856093) ^ ((y + 1) * 19349663) ^ ((level + 9) * 83492791) ^ (salt * 2654435761);
+}
+
+function random01(seed: number): number {
+  let value = seed >>> 0;
+  value ^= value << 13;
+  value ^= value >>> 17;
+  value ^= value << 5;
+  return ((value >>> 0) % 10000) / 10000;
 }
 
 function lerp(start: number, end: number, factor: number): number {
