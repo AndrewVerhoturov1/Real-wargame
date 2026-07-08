@@ -44,7 +44,9 @@ test('capture Real-Wargame preview screenshots', async ({ page }) => {
 
   const canvas = page.locator('canvas');
   await expect(canvas).toBeVisible();
-  await expect(page.locator('#debug-panel')).toBeVisible();
+  await expect(page.locator('.top-command-bar')).toBeVisible();
+  await expect(page.locator('.game-bottom-panel')).toBeVisible();
+  await expect(page.locator('.game-right-panel')).toBeVisible();
 
   // Let Pixi finish the first render/ticker pass.
   await page.waitForTimeout(800);
@@ -60,9 +62,14 @@ test('capture Real-Wargame preview screenshots', async ({ page }) => {
   await page.waitForTimeout(300);
   await saveScreenshot(page, '03-move-order.png');
 
-  await page.waitForTimeout(1500);
-  await saveScreenshot(page, '04-after-movement.png');
+  await page.locator('.floating-editor-button').click();
+  await expect(page.locator('#hud')).toBeVisible();
+  await expect(page.locator('.editor-section')).toBeVisible();
+  await page.waitForTimeout(400);
+  await saveScreenshot(page, '04-editor-mode.png');
 
+  await page.locator('.floating-editor-button').click();
+  await page.waitForTimeout(400);
   const hillCenter = boardPoint(27, 17);
   await page.mouse.move(hillCenter.x, hillCenter.y);
   await zoomInSeveralSteps(page, 12);
