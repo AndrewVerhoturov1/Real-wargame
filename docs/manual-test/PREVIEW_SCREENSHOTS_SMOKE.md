@@ -4,6 +4,8 @@ This file is a temporary smoke-check change used to trigger the `Preview screens
 
 Date: 2026-07-08
 
+Retry: build step is now non-blocking, screenshots should still run.
+
 Expected result:
 
 ```text
