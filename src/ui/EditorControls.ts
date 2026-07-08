@@ -1,8 +1,12 @@
 import type { MapObjectKind } from '../core/map/MapModel';
 import {
+  clearEditorScene,
   deleteSelectedEditorTargets,
   getSelectedMapObject,
   getSelectedUnit,
+  nudgeSelectedEditorObject,
+  resizeSelectedEditorObject,
+  rotateSelectedEditorObject,
   type EditorTool,
   type SimulationState,
   updateSelectedEditorObject,
@@ -31,6 +35,7 @@ const UNIT_TYPE_OPTIONS: Array<{ value: UnitType; label: string }> = [
 
 const TOOL_OPTIONS: Array<{ value: EditorTool; label: string; hint: string }> = [
   { value: 'select', label: 'Выбрать', hint: 'клик по предмету или юниту' },
+  { value: 'move', label: 'Переместить', hint: 'выбери объект, потом кликни в новую точку' },
   { value: 'spawn_object', label: 'Создать предмет', hint: 'клик по карте создаёт предмет' },
   { value: 'spawn_unit', label: 'Создать юнит', hint: 'клик по карте создаёт юнит' },
   { value: 'delete', label: 'Удалить', hint: 'клик по предмету или юниту удаляет его' },
@@ -47,17 +52,15 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
   root.className = 'editor-controls';
   root.style.pointerEvents = 'auto';
   root.style.display = 'grid';
-  root.style.gap = '8px';
+  root.style.gap = '10px';
   root.style.marginTop = '8px';
 
   const enabledButton = createButton('Редактор: выкл');
-  enabledButton.addEventListener('click', () => {
-    state.editor.enabled = !state.editor.enabled;
-    state.editor.lastMessage = state.editor.enabled
-      ? 'Редактор включён. Левый клик работает как инструмент редактора.'
-      : 'Редактор выключен. Левый клик снова выбирает юнитов, правый клик отдаёт приказ.';
-    renderEditorStatus(status, state, enabledButton);
-  });
+  const floatingButton = createFloatingEditorButton();
+  const section = createSection('Редактор карты', root, false);
+
+  enabledButton.addEventListener('click', () => toggleEditorMode(state, section, enabledButton, floatingButton));
+  floatingButton.addEventListener('click', () => toggleEditorMode(state, section, enabledButton, floatingButton));
 
   const toolRow = document.createElement('div');
   toolRow.style.display = 'flex';
@@ -70,10 +73,35 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
     button.addEventListener('click', () => {
       state.editor.tool = option.value;
       state.editor.lastMessage = `Инструмент: ${option.label} — ${option.hint}.`;
-      renderEditorStatus(status, state, enabledButton);
+      renderEditorStatus(status, state, enabledButton, floatingButton, section);
     });
     toolRow.appendChild(button);
   }
+
+  const layersPanel = document.createElement('div');
+  layersPanel.style.display = 'grid';
+  layersPanel.style.gap = '5px';
+  layersPanel.append(
+    createLayerToggle('👁 Предметы', state.editor.layers.objects, (checked) => {
+      state.editor.layers.objects = checked;
+      if (!checked) {
+        state.editor.selectedObjectId = null;
+      }
+      state.editor.lastMessage = checked ? 'Слой предметов включён.' : 'Слой предметов скрыт.';
+    }),
+    createLayerToggle('👁 Юниты', state.editor.layers.units, (checked) => {
+      state.editor.layers.units = checked;
+      if (!checked) {
+        state.selectedUnitId = null;
+        state.selectedUnitIds = [];
+      }
+      state.editor.lastMessage = checked ? 'Слой юнитов включён.' : 'Слой юнитов скрыт.';
+    }),
+    createLayerToggle('👁 Зоны параметров', state.editor.layers.pressureZones, (checked) => {
+      state.editor.layers.pressureZones = checked;
+      state.editor.lastMessage = checked ? 'Слой зон включён.' : 'Слой зон скрыт.';
+    }),
+  );
 
   const objectKindSelect = createSelect(
     OBJECT_KIND_OPTIONS,
@@ -81,7 +109,6 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
     (value) => {
       state.editor.objectKind = value as MapObjectKind;
       state.editor.lastMessage = 'Тип создаваемого предмета изменён.';
-      renderEditorStatus(status, state, enabledButton);
     },
   );
 
@@ -91,7 +118,6 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
     (value) => {
       state.editor.unitType = value as UnitType;
       state.editor.lastMessage = 'Тип создаваемого юнита изменён.';
-      renderEditorStatus(status, state, enabledButton);
     },
   );
 
@@ -105,20 +131,53 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
     state.editor.objectRotationDegrees = value;
   });
 
-  const applyObjectButton = createButton('Применить к выбранному предмету');
+  const applyObjectButton = createButton('Применить числа к выбранному предмету');
   applyObjectButton.addEventListener('click', () => {
     updateSelectedEditorObject(state, {
       widthCells: state.editor.objectWidthCells,
       heightCells: state.editor.objectHeightCells,
       rotationRadians: degreesToRadians(state.editor.objectRotationDegrees),
     });
-    renderEditorStatus(status, state, enabledButton);
+    renderEditorStatus(status, state, enabledButton, floatingButton, section);
   });
+
+  const quickControls = document.createElement('div');
+  quickControls.style.display = 'grid';
+  quickControls.style.gap = '6px';
+
+  const moveRow = createButtonRow([
+    ['←', () => nudgeSelectedEditorObject(state, -0.5, 0)],
+    ['↑', () => nudgeSelectedEditorObject(state, 0, -0.5)],
+    ['↓', () => nudgeSelectedEditorObject(state, 0, 0.5)],
+    ['→', () => nudgeSelectedEditorObject(state, 0.5, 0)],
+  ]);
+  const sizeRow = createButtonRow([
+    ['Ширина −', () => resizeSelectedEditorObject(state, -0.5, 0)],
+    ['Ширина +', () => resizeSelectedEditorObject(state, 0.5, 0)],
+    ['Высота −', () => resizeSelectedEditorObject(state, 0, -0.5)],
+    ['Высота +', () => resizeSelectedEditorObject(state, 0, 0.5)],
+  ]);
+  const rotateRow = createButtonRow([
+    ['⟲ 15°', () => rotateSelectedEditorObject(state, -15)],
+    ['⟳ 15°', () => rotateSelectedEditorObject(state, 15)],
+  ]);
+
+  quickControls.append(moveRow, sizeRow, rotateRow);
 
   const deleteSelectedButton = createButton('Удалить выбранное');
   deleteSelectedButton.addEventListener('click', () => {
     deleteSelectedEditorTargets(state);
-    renderEditorStatus(status, state, enabledButton);
+    renderEditorStatus(status, state, enabledButton, floatingButton, section);
+  });
+
+  const clearAllButton = createButton('Очистить всё');
+  clearAllButton.style.background = '#5c1f1f';
+  clearAllButton.style.color = '#fff2a8';
+  clearAllButton.addEventListener('click', () => {
+    if (window.confirm('Очистить все предметы и всех юнитов на карте?')) {
+      clearEditorScene(state);
+      renderEditorStatus(status, state, enabledButton, floatingButton, section);
+    }
   });
 
   const status = document.createElement('pre');
@@ -130,22 +189,56 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
 
   root.append(
     enabledButton,
-    createSmallText('Инструмент редактора:'),
+    createSmallText('Режим редактора: в нём юниты не получают боевые приказы. Левый клик работает как инструмент редактора, правый клик на движение отключён.'),
+    createGroupTitle('Слои'),
+    layersPanel,
+    createGroupTitle('Инструмент'),
     toolRow,
+    createGroupTitle('Создание'),
     createLabeledControl('Тип предмета', objectKindSelect),
     createLabeledControl('Тип юнита', unitTypeSelect),
-    createLabeledControl('Ширина предмета, клеток', widthInput),
-    createLabeledControl('Высота предмета, клеток', heightInput),
-    createLabeledControl('Поворот предмета, градусов', rotationInput),
+    createLabeledControl('Ширина нового предмета, клеток', widthInput),
+    createLabeledControl('Высота нового предмета, клеток', heightInput),
+    createLabeledControl('Поворот нового предмета, градусов', rotationInput),
     applyObjectButton,
+    createGroupTitle('Управление выбранным предметом'),
+    quickControls,
     deleteSelectedButton,
+    clearAllButton,
     status,
   );
 
-  const section = createSection('Редактор карты', root, false);
   hud.appendChild(section);
-  renderEditorStatus(status, state, enabledButton);
-  window.setInterval(() => renderEditorStatus(status, state, enabledButton), 300);
+  document.body.appendChild(floatingButton);
+  renderEditorStatus(status, state, enabledButton, floatingButton, section);
+  window.setInterval(() => renderEditorStatus(status, state, enabledButton, floatingButton, section), 300);
+}
+
+function toggleEditorMode(
+  state: SimulationState,
+  section: HTMLDetailsElement,
+  enabledButton: HTMLButtonElement,
+  floatingButton: HTMLButtonElement,
+): void {
+  state.editor.enabled = !state.editor.enabled;
+  state.editor.panelOpen = state.editor.enabled;
+  section.open = state.editor.panelOpen;
+  state.editor.lastMessage = state.editor.enabled
+    ? 'Редактор включён. Юниты в этом режиме не получают приказы движения.'
+    : 'Редактор выключен. Обычное управление юнитами возвращено.';
+  renderEditorStatus(section.querySelector('pre') as HTMLElement, state, enabledButton, floatingButton, section);
+}
+
+function createFloatingEditorButton(): HTMLButtonElement {
+  const button = createButton('Редактор');
+  button.style.position = 'fixed';
+  button.style.left = '16px';
+  button.style.bottom = '16px';
+  button.style.zIndex = '20';
+  button.style.padding = '10px 14px';
+  button.style.borderRadius = '10px';
+  button.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.35)';
+  return button;
 }
 
 function createSection(title: string, content: HTMLElement, open: boolean): HTMLDetailsElement {
@@ -162,6 +255,14 @@ function createSection(title: string, content: HTMLElement, open: boolean): HTML
   summary.style.fontWeight = '700';
   summary.style.fontSize = '13px';
   summary.style.padding = '7px 0';
+  summary.addEventListener('click', () => {
+    window.setTimeout(() => {
+      section.dispatchEvent(new Event('editor-section-toggle'));
+    }, 0);
+  });
+  section.addEventListener('editor-section-toggle', () => {
+    content.dataset.open = String(section.open);
+  });
   section.append(summary, content);
 
   return section;
@@ -176,11 +277,51 @@ function createButton(label: string): HTMLButtonElement {
   return button;
 }
 
+function createButtonRow(items: Array<[string, () => void]>): HTMLElement {
+  const row = document.createElement('div');
+  row.style.display = 'flex';
+  row.style.flexWrap = 'wrap';
+  row.style.gap = '6px';
+
+  for (const [label, action] of items) {
+    const button = createButton(label);
+    button.addEventListener('click', action);
+    row.appendChild(button);
+  }
+
+  return row;
+}
+
+function createLayerToggle(label: string, value: boolean, onChange: (checked: boolean) => void): HTMLElement {
+  const wrapper = document.createElement('label');
+  wrapper.style.display = 'flex';
+  wrapper.style.alignItems = 'center';
+  wrapper.style.gap = '8px';
+  wrapper.style.color = '#f6edcf';
+  wrapper.style.fontSize = '12px';
+
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = value;
+  input.addEventListener('change', () => onChange(input.checked));
+  wrapper.append(input, label);
+  return wrapper;
+}
+
 function createSmallText(text: string): HTMLElement {
   const element = document.createElement('div');
   element.textContent = text;
   element.style.fontSize = '12px';
   element.style.color = '#f6edcf';
+  return element;
+}
+
+function createGroupTitle(text: string): HTMLElement {
+  const element = document.createElement('div');
+  element.textContent = text;
+  element.style.fontWeight = '700';
+  element.style.fontSize = '12px';
+  element.style.color = '#fff2a8';
   return element;
 }
 
@@ -200,7 +341,6 @@ function createSelect<T extends string>(
   onChange: (value: T) => void,
 ): HTMLSelectElement {
   const select = document.createElement('select');
-  select.value = value;
 
   for (const option of options) {
     const item = document.createElement('option');
@@ -209,6 +349,7 @@ function createSelect<T extends string>(
     select.appendChild(item);
   }
 
+  select.value = value;
   select.addEventListener('change', () => onChange(select.value as T));
   return select;
 }
@@ -235,27 +376,42 @@ function createNumberInput(
   return input;
 }
 
-function renderEditorStatus(status: HTMLElement, state: SimulationState, enabledButton: HTMLButtonElement): void {
+function renderEditorStatus(
+  status: HTMLElement | null,
+  state: SimulationState,
+  enabledButton: HTMLButtonElement,
+  floatingButton: HTMLButtonElement,
+  section: HTMLDetailsElement,
+): void {
+  if (!status) {
+    return;
+  }
+
   const selectedObject = getSelectedMapObject(state);
   const selectedUnit = getSelectedUnit(state);
   const tool = TOOL_OPTIONS.find((option) => option.value === state.editor.tool);
 
   enabledButton.textContent = state.editor.enabled ? 'Редактор: вкл' : 'Редактор: выкл';
+  floatingButton.textContent = state.editor.enabled ? 'Редактор: вкл' : 'Редактор';
+  floatingButton.style.background = state.editor.enabled ? '#fff2a8' : '';
+  floatingButton.style.color = state.editor.enabled ? '#121612' : '';
+  state.editor.panelOpen = section.open;
 
   status.textContent = [
     `Состояние: ${state.editor.enabled ? 'включён' : 'выключен'}`,
     `Инструмент: ${tool?.label ?? state.editor.tool}`,
+    `Слои: предметы ${state.editor.layers.objects ? 'видны' : 'скрыты'}, юниты ${state.editor.layers.units ? 'видны' : 'скрыты'}, зоны ${state.editor.layers.pressureZones ? 'видны' : 'скрыты'}`,
     `Предмет: ${selectedObject ? selectedObject.id : 'не выбран'}`,
     `Юнит: ${selectedUnit ? selectedUnit.id : 'не выбран'}`,
     `Размер нового предмета: ${state.editor.objectWidthCells}×${state.editor.objectHeightCells} клеток`,
     `Поворот нового предмета: ${state.editor.objectRotationDegrees}°`,
     `Сообщение: ${state.editor.lastMessage}`,
     '',
-    'Как пользоваться:',
-    '1. Включи редактор.',
-    '2. Выбери инструмент.',
-    '3. Кликни по карте.',
-    '4. Для изменения размера/поворота выбери предмет, задай числа и нажми применить.',
+    'На карте:',
+    '- рамка вокруг предмета показывает выбор;',
+    '- квадратики на рамке увеличивают размер при клике;',
+    '- круглая ручка сверху поворачивает предмет на 15°;',
+    '- инструмент “Переместить” переносит выбранный предмет или юнит кликом.',
   ].join('\n');
 }
 
