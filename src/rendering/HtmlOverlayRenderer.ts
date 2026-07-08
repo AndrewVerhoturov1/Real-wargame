@@ -19,6 +19,8 @@ export class HtmlOverlayRenderer {
   render(state: SimulationState, locale: Locale): void {
     const visibleKeys = new Set<string>();
     const selectedIds = new Set(state.selectedUnitIds);
+    const showObjectLabels = state.editor.layers.objects && !state.editor.enabled;
+    const showUnitLabels = state.editor.layers.units && !state.editor.enabled;
 
     for (const cell of state.map.cells) {
       if (cell.height === 0) {
@@ -33,11 +35,11 @@ export class HtmlOverlayRenderer {
         y: cell.y * state.map.cellSize + 4,
       });
 
-      label.textContent = cell.height > 0 ? `+${cell.height}` : `${cell.height}`;
+      updateLabelText(label, cell.height > 0 ? `+${cell.height}` : `${cell.height}`);
       placeLabel(label, screen.x, screen.y);
     }
 
-    if (state.editor.layers.objects) {
+    if (showObjectLabels) {
       for (const object of state.map.objects) {
         if (!object.labels) {
           continue;
@@ -51,12 +53,12 @@ export class HtmlOverlayRenderer {
           y: (object.y + object.heightCells / 2 + 0.65) * state.map.cellSize,
         });
 
-        label.textContent = object.labels[locale];
+        updateLabelText(label, object.labels[locale]);
         placeLabel(label, screen.x, screen.y);
       }
     }
 
-    if (state.editor.layers.units) {
+    if (showUnitLabels) {
       for (const unit of state.units) {
         const key = `unit:${unit.id}`;
         visibleKeys.add(key);
@@ -67,7 +69,7 @@ export class HtmlOverlayRenderer {
           y: world.y + 22,
         });
 
-        label.textContent = unit.labels[locale];
+        updateLabelText(label, unit.labels[locale]);
         placeLabel(label, screen.x, screen.y);
       }
     }
@@ -101,6 +103,16 @@ export class HtmlOverlayRenderer {
   }
 }
 
+function updateLabelText(label: HTMLElement, text: string): void {
+  if (label.textContent !== text) {
+    label.textContent = text;
+  }
+}
+
 function placeLabel(label: HTMLElement, x: number, y: number): void {
-  label.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+  const nextTransform = `translate3d(${x}px, ${y}px, 0)`;
+
+  if (label.style.transform !== nextTransform) {
+    label.style.transform = nextTransform;
+  }
 }
