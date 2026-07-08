@@ -13,6 +13,8 @@ import { PixiOverlayRenderer } from './PixiOverlayRenderer';
 import { PixiUnitRenderer } from './PixiUnitRenderer';
 import { PixiViewConeRenderer } from './PixiViewConeRenderer';
 
+const DEBUG_PANEL_UPDATE_INTERVAL_MS = 120;
+
 export class PixiTacticalBoardApp {
   private readonly app: Application;
   private readonly worldContainer = new Container();
@@ -28,6 +30,7 @@ export class PixiTacticalBoardApp {
   private showGrid = true;
   private showViewCones = true;
   private lastMapRenderKey = '';
+  private lastDebugPanelUpdateMs = 0;
 
   constructor(
     private readonly root: HTMLElement,
@@ -71,6 +74,7 @@ export class PixiTacticalBoardApp {
   start(): void {
     this.renderEditableMapLayerIfNeeded(true);
     this.updateStaticText();
+    this.updateDebugPanelIfNeeded(true);
     this.languageToggle.addEventListener('click', this.handleLanguageToggle);
     this.gridToggle.addEventListener('click', this.handleGridToggle);
     this.visionToggle.addEventListener('click', this.handleVisionToggle);
@@ -109,7 +113,7 @@ export class PixiTacticalBoardApp {
     this.overlayRenderer.render(this.state, this.showGrid, this.state.editor.layers.pressureZones);
     this.unitRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
     this.htmlOverlayRenderer.render(this.state, this.locale);
-    this.updateDebugPanel();
+    this.updateDebugPanelIfNeeded(false);
   }
 
   private renderEditableMapLayerIfNeeded(force: boolean): void {
@@ -154,6 +158,7 @@ export class PixiTacticalBoardApp {
   private readonly handleLanguageToggle = (): void => {
     this.locale = nextLocale(this.locale);
     this.updateStaticText();
+    this.updateDebugPanelIfNeeded(true);
     this.renderFrame();
   };
 
@@ -215,6 +220,17 @@ export class PixiTacticalBoardApp {
       viewOn: 'View cones: on',
       viewOff: 'View cones: off',
     };
+  }
+
+  private updateDebugPanelIfNeeded(force: boolean): void {
+    const now = performance.now();
+
+    if (!force && now - this.lastDebugPanelUpdateMs < DEBUG_PANEL_UPDATE_INTERVAL_MS) {
+      return;
+    }
+
+    this.lastDebugPanelUpdateMs = now;
+    this.updateDebugPanel();
   }
 
   private updateDebugPanel(): void {
