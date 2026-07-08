@@ -8,6 +8,7 @@ import { createInitialState } from './core/simulation/SimulationState';
 import type { UnitData } from './core/units/UnitModel';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
 import { installEditorControls } from './ui/EditorControls';
+import { installPerformanceReportControls } from './ui/PerformanceReportControls';
 import { installPostureControls } from './ui/PostureControls';
 import { installSceneExportControls } from './ui/SceneExportControls';
 
@@ -31,6 +32,7 @@ const tacticalBoard = new PixiTacticalBoardApp(root, debugPanel, languageToggle,
 installPostureControls(debugPanel, state);
 installEditorControls(debugPanel, state);
 installSceneExportControls(state);
+installPerformanceReportControls(() => tacticalBoard.downloadPerformanceReport());
 tacticalBoard.start();
 forceRussianTopControls();
 
