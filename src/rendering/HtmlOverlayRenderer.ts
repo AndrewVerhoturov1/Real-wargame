@@ -37,35 +37,39 @@ export class HtmlOverlayRenderer {
       placeLabel(label, screen.x, screen.y);
     }
 
-    for (const object of state.map.objects) {
-      if (!object.labels) {
-        continue;
+    if (state.editor.layers.objects) {
+      for (const object of state.map.objects) {
+        if (!object.labels) {
+          continue;
+        }
+
+        const key = `object:${object.id}`;
+        visibleKeys.add(key);
+        const label = this.getLabel(key, 'map-object-label');
+        const screen = this.projector.worldToScreen({
+          x: (object.x + 0.5) * state.map.cellSize,
+          y: (object.y + object.heightCells / 2 + 0.65) * state.map.cellSize,
+        });
+
+        label.textContent = object.labels[locale];
+        placeLabel(label, screen.x, screen.y);
       }
-
-      const key = `object:${object.id}`;
-      visibleKeys.add(key);
-      const label = this.getLabel(key, 'map-object-label');
-      const screen = this.projector.worldToScreen({
-        x: (object.x + 0.5) * state.map.cellSize,
-        y: (object.y + object.heightCells / 2 + 0.65) * state.map.cellSize,
-      });
-
-      label.textContent = object.labels[locale];
-      placeLabel(label, screen.x, screen.y);
     }
 
-    for (const unit of state.units) {
-      const key = `unit:${unit.id}`;
-      visibleKeys.add(key);
-      const label = this.getLabel(key, selectedIds.has(unit.id) ? 'unit-label unit-label-selected' : 'unit-label');
-      const world = gridToWorld(state.map, unit.position);
-      const screen = this.projector.worldToScreen({
-        x: world.x,
-        y: world.y + 22,
-      });
+    if (state.editor.layers.units) {
+      for (const unit of state.units) {
+        const key = `unit:${unit.id}`;
+        visibleKeys.add(key);
+        const label = this.getLabel(key, selectedIds.has(unit.id) ? 'unit-label unit-label-selected' : 'unit-label');
+        const world = gridToWorld(state.map, unit.position);
+        const screen = this.projector.worldToScreen({
+          x: world.x,
+          y: world.y + 22,
+        });
 
-      label.textContent = unit.labels[locale];
-      placeLabel(label, screen.x, screen.y);
+        label.textContent = unit.labels[locale];
+        placeLabel(label, screen.x, screen.y);
+      }
     }
 
     for (const [key, label] of this.labels) {
