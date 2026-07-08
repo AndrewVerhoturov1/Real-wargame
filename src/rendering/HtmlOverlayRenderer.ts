@@ -110,7 +110,7 @@ function updateLabelText(label: HTMLElement, text: string): void {
 }
 
 function placeLabel(label: HTMLElement, x: number, y: number): void {
-  const nextTransform = `translate3d(${x}px, ${y}px, 0)`;
+  const nextTransform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
 
   if (label.style.transform !== nextTransform) {
     label.style.transform = nextTransform;
