@@ -17,8 +17,9 @@ const debugPanel = document.querySelector<HTMLElement>('#debug-panel');
 const languageToggle = document.querySelector<HTMLButtonElement>('#language-toggle');
 const gridToggle = document.querySelector<HTMLButtonElement>('#grid-toggle');
 const visionToggle = document.querySelector<HTMLButtonElement>('#vision-toggle');
+const heightToggle = document.querySelector<HTMLButtonElement>('#height-toggle');
 
-if (!root || !debugPanel || !languageToggle || !gridToggle || !visionToggle) {
+if (!root || !debugPanel || !languageToggle || !gridToggle || !visionToggle || !heightToggle) {
   throw new Error('Tactical board root elements are missing.');
 }
 
@@ -27,7 +28,15 @@ const state = createInitialState(
   unitsData as UnitData[],
   pressureZoneData as PressureZoneData[],
 );
-const tacticalBoard = new PixiTacticalBoardApp(root, debugPanel, languageToggle, gridToggle, visionToggle, state);
+const tacticalBoard = new PixiTacticalBoardApp(
+  root,
+  debugPanel,
+  languageToggle,
+  gridToggle,
+  visionToggle,
+  heightToggle,
+  state,
+);
 
 installPostureControls(debugPanel, state);
 installEditorControls(debugPanel, state);
@@ -45,8 +54,11 @@ function forceRussianTopControls(): void {
   languageToggle.textContent = 'Русский';
   gridToggle.textContent = 'Сетка: вкл';
   visionToggle.textContent = 'Обзор: выкл';
+  heightToggle.textContent = 'Цифры высоты: выкл';
   gridToggle.setAttribute('aria-pressed', 'true');
   visionToggle.setAttribute('aria-pressed', 'false');
+  heightToggle.setAttribute('aria-pressed', 'false');
   gridToggle.classList.remove('hud-toggle-off');
   visionToggle.classList.add('hud-toggle-off');
+  heightToggle.classList.add('hud-toggle-off');
 }
