@@ -5,7 +5,12 @@ import { TERRAIN_STYLE } from './terrainStyle';
 export class PixiMapRenderer {
   readonly container = new Container();
 
-  render(map: TacticalMap, showGrid = true, selectedObjectId: string | null = null): void {
+  render(
+    map: TacticalMap,
+    showGrid = true,
+    selectedObjectId: string | null = null,
+    showObjects = true,
+  ): void {
     this.container.removeChildren();
 
     for (const cell of map.cells) {
@@ -26,8 +31,10 @@ export class PixiMapRenderer {
       this.container.addChild(renderScaleLabel(map));
     }
 
-    for (const object of map.objects) {
-      this.container.addChild(renderMapObject(map, object, object.id === selectedObjectId));
+    if (showObjects) {
+      for (const object of map.objects) {
+        this.container.addChild(renderMapObject(map, object, object.id === selectedObjectId));
+      }
     }
 
     const border = new Graphics();
@@ -139,11 +146,46 @@ function renderMapObject(map: TacticalMap, object: MapObject, isSelected: boolea
   }
 
   if (isSelected) {
-    graphics.lineStyle(3, 0xfff2a8, 0.95);
-    graphics.drawRoundedRect(-width / 2 - 5, -height / 2 - 5, width + 10, height + 10, 5);
+    drawSelectedObjectControls(graphics, width, height);
   }
 
   return graphics;
+}
+
+function drawSelectedObjectControls(graphics: Graphics, width: number, height: number): void {
+  const pad = 5;
+  const handle = 8;
+  const left = -width / 2 - pad;
+  const right = width / 2 + pad;
+  const top = -height / 2 - pad;
+  const bottom = height / 2 + pad;
+
+  graphics.lineStyle(3, 0xfff2a8, 0.95);
+  graphics.drawRoundedRect(left, top, right - left, bottom - top, 5);
+
+  graphics.beginFill(0xfff2a8, 1);
+  for (const point of [
+    [left, top],
+    [(left + right) / 2, top],
+    [right, top],
+    [right, (top + bottom) / 2],
+    [right, bottom],
+    [(left + right) / 2, bottom],
+    [left, bottom],
+    [left, (top + bottom) / 2],
+  ] as Array<[number, number]>) {
+    graphics.drawRect(point[0] - handle / 2, point[1] - handle / 2, handle, handle);
+  }
+  graphics.endFill();
+
+  graphics.lineStyle(2, 0xfff2a8, 0.9);
+  graphics.moveTo(0, top);
+  graphics.lineTo(0, top - 18);
+  graphics.beginFill(0x121612, 1);
+  graphics.drawCircle(0, top - 25, 6);
+  graphics.endFill();
+  graphics.lineStyle(2, 0xfff2a8, 1);
+  graphics.drawCircle(0, top - 25, 6);
 }
 
 function drawTopDownTree(graphics: Graphics, width: number, height: number): void {
