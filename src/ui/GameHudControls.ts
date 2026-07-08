@@ -1,18 +1,20 @@
 import type { UnitPosture } from '../core/behavior/BehaviorModel';
 import { buildEnvironmentSensorReport } from '../core/sensors/EnvironmentSensors';
-import { getCell, gridToCellLabel, type MapCell } from '../core/map/MapModel';
+import { getCell, gridToCellLabel, type MapCell, type MapObject, type MapObjectKind } from '../core/map/MapModel';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import type { UnitModel } from '../core/units/UnitModel';
 
 const HUD_UPDATE_INTERVAL_MS = 250;
 
-type GameHudTab = 'unit' | 'behavior' | 'sensors' | 'debug';
+type GameHudTab = 'unit' | 'layers' | 'behavior' | 'sensors';
 
 const POSTURE_OPTIONS: Array<{ posture: UnitPosture; label: string; icon: string }> = [
   { posture: 'standing', label: 'Стоя', icon: '▮' },
   { posture: 'crouched', label: 'Пригнулся', icon: '▰' },
   { posture: 'prone', label: 'Лежит', icon: '━' },
 ];
+
+const COVER_KINDS = new Set<MapObjectKind>(['tree', 'rock', 'structure', 'cover', 'ditch', 'crates', 'fence', 'logs']);
 
 export function installGameHudControls(state: SimulationState): void {
   const topBar = document.createElement('div');
@@ -22,18 +24,19 @@ export function installGameHudControls(state: SimulationState): void {
   title.className = 'top-command-title';
   title.innerHTML = '<strong>Тактическая карта</strong><span>прототип v0.3</span>';
 
-  const modeBadge = document.createElement('div');
-  modeBadge.className = 'mode-badge';
-  modeBadge.textContent = 'Режим: игра';
+  const modeButton = document.createElement('button');
+  modeButton.type = 'button';
+  modeButton.className = 'mode-toggle-button';
+  modeButton.textContent = 'Режим: игра';
+  modeButton.addEventListener('click', () => toggleEditorModeFromGame(state));
 
   const topControls = document.createElement('div');
   topControls.className = 'top-command-controls';
   moveExistingButton('#grid-toggle', topControls);
-  moveExistingButton('#vision-toggle', topControls);
   moveExistingButton('#height-toggle', topControls);
   moveExistingButton('#language-toggle', topControls);
 
-  topBar.append(title, modeBadge, topControls);
+  topBar.append(title, modeButton, topControls);
 
   const gameShell = document.createElement('div');
   gameShell.className = 'game-hud-shell';
@@ -50,16 +53,16 @@ export function installGameHudControls(state: SimulationState): void {
   const tabButtons = new Map<GameHudTab, HTMLButtonElement>();
   for (const [tab, label] of [
     ['unit', 'Юнит'],
+    ['layers', 'Слои'],
     ['behavior', 'Поведение'],
     ['sensors', 'Сенсоры'],
-    ['debug', 'Отладка'],
   ] as Array<[GameHudTab, string]>) {
     const button = document.createElement('button');
     button.type = 'button';
     button.textContent = label;
     button.addEventListener('click', () => {
       activeTab = tab;
-      renderGameHud(state, modeBadge, cellStrip, unitCard, tabContent, tabButtons, activeTab);
+      renderGameHud(state, modeButton, cellStrip, unitCard, tabContent, tabButtons, activeTab);
     });
     tabButtons.set(tab, button);
     tabRow.appendChild(button);
@@ -79,14 +82,14 @@ export function installGameHudControls(state: SimulationState): void {
   document.body.append(topBar, gameShell);
 
   window.setInterval(() => {
-    renderGameHud(state, modeBadge, cellStrip, unitCard, tabContent, tabButtons, activeTab);
+    renderGameHud(state, modeButton, cellStrip, unitCard, tabContent, tabButtons, activeTab);
   }, HUD_UPDATE_INTERVAL_MS);
-  renderGameHud(state, modeBadge, cellStrip, unitCard, tabContent, tabButtons, activeTab);
+  renderGameHud(state, modeButton, cellStrip, unitCard, tabContent, tabButtons, activeTab);
 }
 
 function renderGameHud(
   state: SimulationState,
-  modeBadge: HTMLElement,
+  modeButton: HTMLButtonElement,
   cellStrip: HTMLElement,
   unitCard: HTMLElement,
   tabContent: HTMLElement,
@@ -94,8 +97,9 @@ function renderGameHud(
   activeTab: GameHudTab,
 ): void {
   document.body.classList.toggle('editor-mode', state.editor.enabled);
-  modeBadge.textContent = state.editor.enabled ? 'Режим: редактор' : 'Режим: игра';
-  modeBadge.classList.toggle('mode-badge-editor', state.editor.enabled);
+  modeButton.textContent = state.editor.enabled ? 'Режим: редактор' : 'Режим: игра';
+  modeButton.classList.toggle('mode-toggle-editor', state.editor.enabled);
+  modeButton.title = state.editor.enabled ? 'Нажми, чтобы вернуться в игру' : 'Нажми, чтобы открыть редактор карты';
 
   renderCellStrip(cellStrip, state);
   renderUnitCommandCard(unitCard, state);
@@ -179,17 +183,17 @@ function renderRightTab(tabContent: HTMLElement, state: SimulationState, activeT
     return;
   }
 
+  if (activeTab === 'layers') {
+    tabContent.innerHTML = unit ? renderLayersTab(unit, state) : emptyTab('Выберите солдата, чтобы увидеть известную ему информацию.');
+    return;
+  }
+
   if (activeTab === 'behavior') {
     tabContent.innerHTML = unit ? renderBehaviorTab(unit) : emptyTab('Выберите солдата, чтобы увидеть поведение.');
     return;
   }
 
-  if (activeTab === 'sensors') {
-    tabContent.innerHTML = unit ? renderSensorsTab(unit, state) : emptyTab('Выберите солдата, чтобы увидеть сенсоры окружения.');
-    return;
-  }
-
-  tabContent.innerHTML = renderDebugTab(state, unit);
+  tabContent.innerHTML = unit ? renderSensorsTab(unit, state) : emptyTab('Выберите солдата, чтобы увидеть сенсоры окружения.');
 }
 
 function renderUnitTab(unit: UnitModel, state: SimulationState): string {
@@ -206,6 +210,51 @@ function renderUnitTab(unit: UnitModel, state: SimulationState): string {
     row('Скорость', `${unit.speedCellsPerSecond} кл/сек`),
     row('Обзор', `${unit.viewRangeCells} клеток`),
   ]);
+}
+
+function renderLayersTab(unit: UnitModel, state: SimulationState): string {
+  const visibleObjects = state.map.objects
+    .map((object) => ({ object, distanceCells: distanceCells(unit.position.x, unit.position.y, object.x, object.y) }))
+    .filter((entry) => entry.distanceCells <= unit.viewRangeCells)
+    .sort((a, b) => a.distanceCells - b.distanceCells);
+  const visibleCovers = visibleObjects
+    .filter((entry) => COVER_KINDS.has(entry.object.kind))
+    .slice(0, 8);
+  const visibleZones = state.pressureZones
+    .map((zone) => ({ zone, distanceCells: distanceCells(unit.position.x, unit.position.y, zone.x, zone.y) }))
+    .filter((entry) => entry.distanceCells <= unit.viewRangeCells)
+    .sort((a, b) => a.distanceCells - b.distanceCells)
+    .slice(0, 5);
+
+  const coverRows = visibleCovers.length > 0
+    ? visibleCovers.map(({ object, distanceCells }) => coverCard(object, distanceCells)).join('')
+    : '<div class="knowledge-card muted">Видимых укрытий пока нет.</div>';
+  const zoneRows = visibleZones.length > 0
+    ? visibleZones.map(({ zone, distanceCells }) => `<div class="knowledge-line"><span>${escapeHtml(zone.labels.ru)}</span><b>${Math.round(distanceCells)} кл., опасность ${zone.strength}</b></div>`).join('')
+    : '<div class="knowledge-line"><span>Зоны опасности</span><b>не видит</b></div>';
+
+  return [
+    '<h2>Слои и известная информация</h2>',
+    '<div class="knowledge-section">',
+    '<h3>Известно юниту</h3>',
+    row('Дальность взгляда', `${unit.viewRangeCells} клеток`),
+    row('Видимые объекты', String(visibleObjects.length)),
+    row('Видимые укрытия', String(visibleCovers.length)),
+    row('Видимые зоны', String(visibleZones.length)),
+    '</div>',
+    '<div class="knowledge-section">',
+    '<h3>Укрытия, которые он видит</h3>',
+    '<div class="knowledge-list">',
+    coverRows,
+    '</div>',
+    '</div>',
+    '<div class="knowledge-section">',
+    '<h3>Опасные зоны в известной области</h3>',
+    '<div class="game-panel-rows">',
+    zoneRows,
+    '</div>',
+    '</div>',
+  ].join('');
 }
 
 function renderBehaviorTab(unit: UnitModel): string {
@@ -238,19 +287,16 @@ function renderSensorsTab(unit: UnitModel, state: SimulationState): string {
   ]);
 }
 
-function renderDebugTab(state: SimulationState, unit: UnitModel | undefined): string {
-  const hoveredCell = getHoveredCell(state);
+function coverCard(object: MapObject, distanceCellsValue: number): string {
+  const score = coverScore(object.kind, distanceCellsValue);
 
-  return panelHtml('Отладка', [
-    row('Карта', `${state.map.width}×${state.map.height}`),
-    row('Клетка мыши', state.mouseGridPosition ? gridToCellLabel(state.map, state.mouseGridPosition) : 'вне карты'),
-    row('Высота мыши', hoveredCell ? formatElevation(hoveredCell.height) : 'нет'),
-    row('Юнитов', String(state.units.length)),
-    row('Предметов', String(state.map.objects.length)),
-    row('Зон', String(state.pressureZones.length)),
-    row('Выбран', unit ? unit.id : 'нет'),
-    row('Редактор', state.editor.enabled ? 'вкл' : 'выкл'),
-  ]);
+  return [
+    '<div class="knowledge-card">',
+    `<div><strong>${escapeHtml(object.labels?.ru ?? formatObjectKind(object.kind))}</strong><span>${escapeHtml(formatObjectKind(object.kind))}</span></div>`,
+    `<div><span>Дистанция</span><b>${distanceCellsValue.toFixed(1)} кл.</b></div>`,
+    `<div><span>Пригодность</span><b>${formatCoverScore(score)}</b></div>`,
+    '</div>',
+  ].join('');
 }
 
 function setManualPosture(unit: UnitModel, posture: UnitPosture, label: string): void {
@@ -259,6 +305,16 @@ function setManualPosture(unit: UnitModel, posture: UnitPosture, label: string):
   unit.behaviorRuntime.postureChangedBecause = `ручной выбор: ${label}`;
   unit.behaviorRuntime.lastEvent = `ручное положение: ${label}`;
   unit.behaviorRuntime.reason = `положение задано вручную: ${label}`;
+}
+
+function toggleEditorModeFromGame(state: SimulationState): void {
+  state.editor.enabled = !state.editor.enabled;
+  state.editor.panelOpen = state.editor.enabled;
+  state.editor.drag = null;
+  state.editor.tool = 'select';
+  state.editor.lastMessage = state.editor.enabled
+    ? 'Редактор включён через верхнюю плашку режима.'
+    : 'Редактор выключен через верхнюю плашку режима.';
 }
 
 function getHoveredCell(state: SimulationState): MapCell | undefined {
@@ -286,6 +342,40 @@ function moveExistingButton(selector: string, target: HTMLElement): void {
   if (element) {
     target.appendChild(element);
   }
+}
+
+function distanceCells(x1: number, y1: number, x2: number, y2: number): number {
+  return Math.hypot(x1 - x2, y1 - y2);
+}
+
+function coverScore(kind: MapObjectKind, distanceCellsValue: number): number {
+  const base: Record<MapObjectKind, number> = {
+    structure: 90,
+    cover: 85,
+    ditch: 80,
+    logs: 74,
+    rock: 70,
+    crates: 62,
+    fence: 56,
+    tree: 50,
+    post: 30,
+    well: 25,
+    bridge: 20,
+  };
+  return Math.max(0, Math.min(100, Math.round((base[kind] ?? 35) - distanceCellsValue * 4)));
+}
+
+function formatCoverScore(score: number): string {
+  if (score >= 80) {
+    return `${score}/100 отлично`;
+  }
+  if (score >= 60) {
+    return `${score}/100 хорошо`;
+  }
+  if (score >= 40) {
+    return `${score}/100 годится`;
+  }
+  return `${score}/100 слабо`;
 }
 
 function formatElevation(height: number): string {
@@ -322,6 +412,23 @@ function formatForest(forest: number): string {
     return 'редкий';
   }
   return 'нет';
+}
+
+function formatObjectKind(kind: MapObjectKind): string {
+  const names: Record<MapObjectKind, string> = {
+    tree: 'дерево',
+    rock: 'камень',
+    structure: 'дом',
+    cover: 'укрытие',
+    ditch: 'канава',
+    crates: 'ящики',
+    fence: 'забор',
+    post: 'пост',
+    logs: 'брёвна',
+    well: 'колодец',
+    bridge: 'мост',
+  };
+  return names[kind] ?? kind;
 }
 
 function formatPosture(posture: UnitPosture): string {
