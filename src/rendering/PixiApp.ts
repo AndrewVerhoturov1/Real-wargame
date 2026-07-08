@@ -68,7 +68,7 @@ export class PixiTacticalBoardApp {
   }
 
   start(): void {
-    this.mapRenderer.render(this.state.map, this.showGrid, this.state.editor.selectedObjectId);
+    this.renderEditableMapLayer();
     this.updateStaticText();
     this.languageToggle.addEventListener('click', this.handleLanguageToggle);
     this.gridToggle.addEventListener('click', this.handleGridToggle);
@@ -93,19 +93,31 @@ export class PixiTacticalBoardApp {
   }
 
   private renderFrame(): void {
-    this.mapRenderer.render(this.state.map, this.showGrid, this.state.editor.selectedObjectId);
+    this.renderEditableMapLayer();
+
+    const visibleUnits = this.state.editor.layers.units ? this.state.units : [];
+    const visibleSelectedIds = this.state.editor.layers.units ? this.state.selectedUnitIds : [];
 
     if (this.showViewCones) {
-      this.viewConeRenderer.render(this.state.map, this.state.units, this.state.selectedUnitIds);
+      this.viewConeRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
     } else {
       this.viewConeRenderer.render(this.state.map, [], []);
     }
 
-    this.orderRenderer.render(this.state.map, this.state.units, this.state.selectedUnitIds);
-    this.overlayRenderer.render(this.state, this.showGrid);
-    this.unitRenderer.render(this.state.map, this.state.units, this.state.selectedUnitIds);
+    this.orderRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
+    this.overlayRenderer.render(this.state, this.showGrid, this.state.editor.layers.pressureZones);
+    this.unitRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
     this.htmlOverlayRenderer.render(this.state, this.locale);
     this.updateDebugPanel();
+  }
+
+  private renderEditableMapLayer(): void {
+    this.mapRenderer.render(
+      this.state.map,
+      this.showGrid,
+      this.state.editor.selectedObjectId,
+      this.state.editor.layers.objects,
+    );
   }
 
   private readonly handleLanguageToggle = (): void => {
@@ -116,7 +128,7 @@ export class PixiTacticalBoardApp {
 
   private readonly handleGridToggle = (): void => {
     this.showGrid = !this.showGrid;
-    this.mapRenderer.render(this.state.map, this.showGrid, this.state.editor.selectedObjectId);
+    this.renderEditableMapLayer();
     this.updateDisplayToggles();
     this.renderFrame();
   };
