@@ -1,54 +1,15 @@
 [
   {
-    "id": "squad_1",
-    "label": "1st Squad",
-    "labelRu": "1-е отделение",
-    "type": "infantry_squad",
-    "side": "player",
-    "x": 3,
-    "y": 5,
-    "speedCellsPerSecond": 2.0,
-    "facingDegrees": 20,
-    "viewAngleDegrees": 118,
-    "behaviorProfile": "regular"
-  },
-  {
-    "id": "squad_2",
-    "label": "2nd Squad",
-    "labelRu": "2-е отделение",
-    "type": "infantry_squad",
-    "side": "player",
-    "x": 5,
-    "y": 7,
-    "speedCellsPerSecond": 2.15,
-    "facingDegrees": -25,
-    "viewAngleDegrees": 118,
-    "behaviorProfile": "green"
-  },
-  {
-    "id": "support_team",
-    "label": "Support Team",
-    "labelRu": "Группа поддержки",
-    "type": "support_team",
-    "side": "player",
-    "x": 2,
-    "y": 13,
-    "speedCellsPerSecond": 1.65,
-    "facingDegrees": 10,
-    "viewAngleDegrees": 118,
-    "behaviorProfile": "veteran"
-  },
-  {
-    "id": "scout_team",
-    "label": "Scout Team",
-    "labelRu": "Разведгруппа",
+    "id": "soldier_1",
+    "label": "Soldier",
+    "labelRu": "Солдат",
     "type": "scout_team",
     "side": "player",
-    "x": 9,
-    "y": 15,
-    "speedCellsPerSecond": 2.45,
-    "facingDegrees": 35,
+    "x": 32,
+    "y": 20,
+    "speedCellsPerSecond": 2.3,
+    "facingDegrees": 0,
     "viewAngleDegrees": 118,
-    "behaviorProfile": "cautious"
+    "behaviorProfile": "regular"
   }
 ]
