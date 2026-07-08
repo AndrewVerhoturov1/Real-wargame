@@ -4,9 +4,23 @@ Real-time strategy game project.
 
 Behavior foundation preview work is staged on `real-wargame-preview`.
 
+If you are reading this from `main`, remember that active preview work and the newest agent instructions may be on `real-wargame-preview`.
+
 ## Agent startup
 
-Read `AGENTS.md` before working in this repository.
+Start here:
+
+```text
+docs/ai/AGENT_START_HERE.md
+```
+
+Then read:
+
+```text
+AGENTS.md
+docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md
+docs/ai/SKILLS_INDEX.md
+```
 
 If the task asks to run the game locally, open the preview build, capture screenshots, show the game in chat, inspect a GitHub Actions screenshot artifact, or prepare terminal-free launch instructions, read this skill first:
 
