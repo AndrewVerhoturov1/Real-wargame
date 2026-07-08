@@ -32,19 +32,7 @@ export class PixiMapRenderer {
 
     this.lastStaticKey = nextKey;
     this.staticContainer.removeChildren();
-
-    for (const cell of map.cells) {
-      const style = TERRAIN_STYLE[cell.terrain];
-      const x = cell.x * map.cellSize;
-      const y = cell.y * map.cellSize;
-      const graphics = new Graphics();
-
-      graphics.beginFill(style.fill, 1);
-      graphics.drawRect(x, y, map.cellSize, map.cellSize);
-      graphics.endFill();
-
-      this.staticContainer.addChild(graphics);
-    }
+    renderTerrainBatches(this.staticContainer, map);
 
     if (showGrid) {
       this.staticContainer.addChild(renderMeterGrid(map));
@@ -77,6 +65,33 @@ export class PixiMapRenderer {
     for (const object of map.objects) {
       this.objectContainer.addChild(renderMapObject(map, object, object.id === selectedObjectId));
     }
+  }
+}
+
+function renderTerrainBatches(container: Container, map: TacticalMap): void {
+  const terrainGraphics = new Map<string, Graphics>();
+
+  for (const cell of map.cells) {
+    const style = TERRAIN_STYLE[cell.terrain];
+    let graphics = terrainGraphics.get(cell.terrain);
+
+    if (!graphics) {
+      graphics = new Graphics();
+      graphics.beginFill(style.fill, 1);
+      terrainGraphics.set(cell.terrain, graphics);
+    }
+
+    graphics.drawRect(
+      cell.x * map.cellSize,
+      cell.y * map.cellSize,
+      map.cellSize,
+      map.cellSize,
+    );
+  }
+
+  for (const graphics of terrainGraphics.values()) {
+    graphics.endFill();
+    container.addChild(graphics);
   }
 }
 
