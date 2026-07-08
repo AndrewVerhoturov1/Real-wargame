@@ -6,9 +6,12 @@ import type { SimulationState } from '../core/simulation/SimulationState';
 export class PixiOverlayRenderer {
   readonly container = new Container();
 
-  render(state: SimulationState, showGrid = true): void {
+  render(state: SimulationState, showGrid = true, showPressureZones = true): void {
     this.container.removeChildren();
-    drawPressureZones(this.container, state.pressureZones, state.map.cellSize);
+
+    if (showPressureZones) {
+      drawPressureZones(this.container, state.pressureZones, state.map.cellSize);
+    }
 
     if (showGrid && state.mouseGridPosition) {
       const { map } = state;
