@@ -1,4 +1,5 @@
 import { Application, Container } from 'pixi.js';
+import { PerformanceMonitor } from '../core/debug/PerformanceMonitor';
 import { gridToCellLabel } from '../core/map/MapModel';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { tickSimulation } from '../core/simulation/SimulationTick';
@@ -27,6 +28,7 @@ export class PixiTacticalBoardApp {
   private readonly boardInput: BoardInputController;
   private readonly htmlOverlayRenderer: HtmlOverlayRenderer;
   private readonly fixedScaleLabel = document.createElement('div');
+  private readonly performanceMonitor = new PerformanceMonitor();
   private locale: Locale = 'en';
   private showGrid = true;
   private showViewCones = true;
@@ -104,7 +106,30 @@ export class PixiTacticalBoardApp {
     this.app.destroy(true);
   }
 
+  downloadPerformanceReport(): void {
+    const report = this.performanceMonitor.buildReport(this.state, this.camera.zoom, {
+      pixiMajorVersion: '7',
+      antialias: false,
+      backgroundAlpha: 1,
+      mapRender: 'Pixi Graphics / vector shapes',
+      zoomMode: 'stable wheel-scaled step without animation',
+      grid: this.showGrid,
+      viewCones: this.showViewCones,
+      htmlLabels: 'map labels are HTML overlay, hidden in editor for objects and units',
+    });
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = `real-wargame-performance-${buildTimestampForFileName()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    this.state.editor.lastMessage = 'Отчёт производительности скачан. Его можно прислать для разбора тормозов.';
+  }
+
   private renderFrame(): void {
+    const renderStartedAt = performance.now();
     this.renderEditableMapLayerIfNeeded(false);
 
     const visibleUnits = this.state.editor.layers.units ? this.state.units : [];
@@ -121,6 +146,7 @@ export class PixiTacticalBoardApp {
     this.unitRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
     this.htmlOverlayRenderer.render(this.state, this.locale);
     this.updateDebugPanelIfNeeded(false);
+    this.performanceMonitor.recordFrame(this.state, this.camera.zoom, performance.now() - renderStartedAt);
   }
 
   private renderEditableMapLayerIfNeeded(force: boolean): void {
@@ -325,6 +351,15 @@ function formatBehaviorInspector(unit: UnitModel | undefined, locale: Locale): s
     `${labels.lastEvent}: ${runtime.lastEvent ?? labels.none}`,
     `${labels.thresholds}: crouch ${settings.dangerCrouchThreshold}, prone ${settings.dangerProneThreshold}`,
   ];
+}
+
+function buildTimestampForFileName(): string {
+  return new Date()
+    .toISOString()
+    .replaceAll(':', '-')
+    .replaceAll('.', '-')
+    .replace('T', '_')
+    .replace('Z', '');
 }
 
 function roundForRenderKey(value: number): string {
