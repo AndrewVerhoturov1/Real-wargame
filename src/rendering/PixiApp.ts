@@ -26,6 +26,7 @@ export class PixiTacticalBoardApp {
   private readonly camera: CameraController;
   private readonly boardInput: BoardInputController;
   private readonly htmlOverlayRenderer: HtmlOverlayRenderer;
+  private readonly fixedScaleLabel = document.createElement('div');
   private locale: Locale = 'en';
   private showGrid = true;
   private showViewCones = true;
@@ -50,6 +51,10 @@ export class PixiTacticalBoardApp {
     canvas.setAttribute('aria-label', 'Tactical board prototype canvas');
     canvas.tabIndex = 0;
     this.root.appendChild(canvas);
+
+    this.fixedScaleLabel.className = 'map-scale-fixed-label';
+    this.fixedScaleLabel.textContent = `1 клетка = ${this.state.map.metersPerCell} м`;
+    this.root.appendChild(this.fixedScaleLabel);
 
     this.worldContainer.position.set(72, 72);
     this.app.stage.addChild(this.worldContainer);
@@ -94,6 +99,7 @@ export class PixiTacticalBoardApp {
     this.camera.destroy();
     this.boardInput.destroy();
     this.htmlOverlayRenderer.destroy();
+    this.fixedScaleLabel.remove();
     this.app.destroy(true);
   }
 
@@ -187,6 +193,7 @@ export class PixiTacticalBoardApp {
       }
     });
 
+    this.fixedScaleLabel.textContent = `1 клетка = ${this.state.map.metersPerCell} м`;
     this.languageToggle.textContent = copy.debug.languageToggle;
     this.languageToggle.setAttribute('aria-label', copy.debug.languageToggleAria);
     this.updateDisplayToggles();
