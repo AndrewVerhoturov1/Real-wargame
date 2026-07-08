@@ -7,6 +7,7 @@ import type { PressureZoneData } from './core/pressure/PressureZone';
 import { createInitialState } from './core/simulation/SimulationState';
 import type { UnitData } from './core/units/UnitModel';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
+import { installEditorControls } from './ui/EditorControls';
 import { installPostureControls } from './ui/PostureControls';
 
 const root = document.querySelector<HTMLElement>('#app');
@@ -27,6 +28,7 @@ const state = createInitialState(
 const tacticalBoard = new PixiTacticalBoardApp(root, debugPanel, languageToggle, gridToggle, visionToggle, state);
 
 installPostureControls(debugPanel, state);
+installEditorControls(debugPanel, state);
 tacticalBoard.start();
 forceRussianTopControls();
 
