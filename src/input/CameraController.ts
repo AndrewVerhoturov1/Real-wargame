@@ -3,7 +3,8 @@ import type { WorldPosition } from '../core/geometry';
 
 const MIN_SCALE = 0.45;
 const MAX_SCALE = 2.8;
-const ZOOM_STEP = 1.07;
+const ZOOM_SENSITIVITY = 0.00042;
+const MAX_WHEEL_DELTA = 180;
 
 export class CameraController {
   private isPanning = false;
@@ -61,11 +62,9 @@ export class CameraController {
 
     const beforeZoomWorldPosition = this.screenToWorld(event);
     const currentScale = this.worldContainer.scale.x;
-    const nextScale = clamp(
-      currentScale * (event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP),
-      MIN_SCALE,
-      MAX_SCALE,
-    );
+    const normalizedDelta = clamp(event.deltaY, -MAX_WHEEL_DELTA, MAX_WHEEL_DELTA);
+    const zoomFactor = Math.exp(-normalizedDelta * ZOOM_SENSITIVITY);
+    const nextScale = clamp(currentScale * zoomFactor, MIN_SCALE, MAX_SCALE);
     const rect = this.canvas.getBoundingClientRect();
     const screenX = event.clientX - rect.left;
     const screenY = event.clientY - rect.top;
