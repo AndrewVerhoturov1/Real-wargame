@@ -29,6 +29,13 @@ async function saveScreenshot(page: Page, name: string): Promise<void> {
   });
 }
 
+async function zoomInSeveralSteps(page: Page, steps: number): Promise<void> {
+  for (let index = 0; index < steps; index += 1) {
+    await page.mouse.wheel(0, -600);
+    await page.waitForTimeout(40);
+  }
+}
+
 test('capture Real-Wargame preview screenshots', async ({ page }) => {
   mkdirSync(SCREENSHOT_DIR, { recursive: true });
 
@@ -58,7 +65,7 @@ test('capture Real-Wargame preview screenshots', async ({ page }) => {
 
   const hillCenter = boardPoint(27, 17);
   await page.mouse.move(hillCenter.x, hillCenter.y);
-  await page.mouse.wheel(0, -6000);
+  await zoomInSeveralSteps(page, 12);
   await page.waitForTimeout(500);
   await saveScreenshot(page, '05-zoomed-map.png');
 });
