@@ -6,10 +6,10 @@
   "defaultTerrain": "field",
   "defaultHeight": 0,
   "cellRects": [
-    { "x1": 3, "x2": 11, "y1": 3, "y2": 9, "terrain": "forest", "height": 1, "forest": 2 },
-    { "x1": 38, "x2": 48, "y1": 6, "y2": 14, "terrain": "forest", "height": 1, "forest": 2 },
-    { "x1": 6, "x2": 18, "y1": 27, "y2": 36, "terrain": "swamp", "height": -2 },
-    { "x1": 18, "x2": 27, "y1": 8, "y2": 16, "terrain": "rough", "height": 1 },
+    { "x1": 3, "x2": 11, "y1": 3, "y2": 9, "terrain": "forest", "height": 0, "forest": 2 },
+    { "x1": 38, "x2": 48, "y1": 6, "y2": 14, "terrain": "forest", "height": 0, "forest": 2 },
+    { "x1": 6, "x2": 18, "y1": 27, "y2": 36, "terrain": "swamp", "height": 0 },
+    { "x1": 18, "x2": 27, "y1": 8, "y2": 16, "terrain": "rough", "height": 0 },
     { "x1": 51, "x2": 53, "y1": 0, "y2": 39, "terrain": "water", "height": -2 },
     { "x1": 31, "x2": 31, "y1": 5, "y2": 39, "terrain": "road", "height": 0 }
   ],
