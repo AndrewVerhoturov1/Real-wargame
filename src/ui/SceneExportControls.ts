@@ -2,7 +2,8 @@ import type { SimulationState } from '../core/simulation/SimulationState';
 import { downloadCurrentSceneJson, loadSceneJsonFromFile } from './SceneExport';
 
 export function installSceneExportControls(state: SimulationState): void {
-  const editorRoot = document.querySelector<HTMLElement>('.editor-controls');
+  const editorRoot = document.querySelector<HTMLElement>('.editor-scene-tools-slot')
+    ?? document.querySelector<HTMLElement>('.editor-controls');
 
   if (!editorRoot) {
     return;
@@ -10,14 +11,11 @@ export function installSceneExportControls(state: SimulationState): void {
 
   const title = document.createElement('div');
   title.textContent = 'Сохранение / загрузка';
-  title.style.fontWeight = '700';
-  title.style.fontSize = '12px';
-  title.style.color = '#fff2a8';
+  title.className = 'editor-group-title';
 
   const hint = document.createElement('div');
   hint.textContent = 'Можно скачать текущую сцену в JSON или загрузить JSON сцены обратно в редактор.';
-  hint.style.fontSize = '12px';
-  hint.style.color = '#f6edcf';
+  hint.className = 'editor-help-text';
 
   const downloadButton = document.createElement('button');
   downloadButton.type = 'button';
@@ -56,5 +54,9 @@ export function installSceneExportControls(state: SimulationState): void {
     fileInput.click();
   });
 
-  editorRoot.append(title, hint, downloadButton, loadButton, fileInput);
+  const row = document.createElement('div');
+  row.className = 'editor-button-row';
+  row.append(downloadButton, loadButton);
+
+  editorRoot.append(title, hint, row, fileInput);
 }
