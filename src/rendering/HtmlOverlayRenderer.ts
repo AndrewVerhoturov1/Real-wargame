@@ -16,27 +16,29 @@ export class HtmlOverlayRenderer {
     this.root.appendChild(this.container);
   }
 
-  render(state: SimulationState, locale: Locale): void {
+  render(state: SimulationState, locale: Locale, showHeightLabels = false): void {
     const visibleKeys = new Set<string>();
     const selectedIds = new Set(state.selectedUnitIds);
     const showObjectLabels = state.editor.layers.objects && !state.editor.enabled;
     const showUnitLabels = state.editor.layers.units && !state.editor.enabled;
 
-    for (const cell of state.map.cells) {
-      if (cell.height === 0) {
-        continue;
+    if (showHeightLabels) {
+      for (const cell of state.map.cells) {
+        if (cell.height === 0) {
+          continue;
+        }
+
+        const key = `height:${cell.x}:${cell.y}`;
+        visibleKeys.add(key);
+        const label = this.getLabel(key, 'map-height-label');
+        const screen = this.projector.worldToScreen({
+          x: cell.x * state.map.cellSize + 5,
+          y: cell.y * state.map.cellSize + 4,
+        });
+
+        updateLabelText(label, cell.height > 0 ? `+${cell.height}` : `${cell.height}`);
+        placeLabel(label, screen.x, screen.y);
       }
-
-      const key = `height:${cell.x}:${cell.y}`;
-      visibleKeys.add(key);
-      const label = this.getLabel(key, 'map-height-label');
-      const screen = this.projector.worldToScreen({
-        x: cell.x * state.map.cellSize + 5,
-        y: cell.y * state.map.cellSize + 4,
-      });
-
-      updateLabelText(label, cell.height > 0 ? `+${cell.height}` : `${cell.height}`);
-      placeLabel(label, screen.x, screen.y);
     }
 
     if (showObjectLabels) {
