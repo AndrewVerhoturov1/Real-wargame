@@ -10,22 +10,22 @@ export function isTerrainPaintTool(tool: string): tool is TerrainPaintTool {
 
 export function paintEditorTerrainAt(state: SimulationState, grid: GridPosition): void {
   const editor = state.editor as typeof state.editor & {
-    tool?: string;
     brushSizeCells?: number;
     heightBrushLevel?: number;
     forestBrushKind?: number;
   };
+  const tool = String((state.editor as unknown as { tool?: string }).tool ?? '');
 
-  if (!isTerrainPaintTool(editor.tool ?? '')) {
+  if (!isTerrainPaintTool(tool)) {
     return;
   }
 
   const radius = Math.max(0, (editor.brushSizeCells ?? 1) / 2);
-  const changed = editor.tool === 'paint_height'
+  const changed = tool === 'paint_height'
     ? paintHeight(state.map, grid, editor.heightBrushLevel ?? 1, radius)
     : paintForest(state.map, grid, editor.forestBrushKind ?? 1, radius);
 
-  if (editor.tool === 'paint_height') {
+  if (tool === 'paint_height') {
     state.editor.lastMessage = changed > 0
       ? `Высота: покрашено клеток ${changed}, уровень ${formatHeight(editor.heightBrushLevel ?? 1)}.`
       : 'Высота: кисть не попала на карту.';
