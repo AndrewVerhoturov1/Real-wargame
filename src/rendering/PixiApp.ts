@@ -13,7 +13,7 @@ import { PixiOverlayRenderer } from './PixiOverlayRenderer';
 import { PixiUnitRenderer } from './PixiUnitRenderer';
 import { PixiViewConeRenderer } from './PixiViewConeRenderer';
 
-const DEBUG_PANEL_UPDATE_INTERVAL_MS = 120;
+const DEBUG_PANEL_UPDATE_INTERVAL_MS = 300;
 
 export class PixiTacticalBoardApp {
   private readonly app: Application;
@@ -258,7 +258,7 @@ export class PixiTacticalBoardApp {
       `${copy.selected}: ${selectedLabel}`,
       `${copy.moveTarget}: ${orderTarget}`,
       `${copy.facing}: ${selectedUnit ? formatDegrees(selectedUnit.facingRadians) : copy.none}`,
-      `${copy.zoom}: ${this.camera.zoom.toFixed(2)}x`,
+      `${copy.zoom}: ${this.camera.zoom.toFixed(1)}x`,
       `${copy.map}: ${this.state.map.width}×${this.state.map.height}`,
       '',
       ...formatBehaviorInspector(selectedUnit, this.locale),
