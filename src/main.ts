@@ -11,6 +11,7 @@ import { installEditorControls } from './ui/EditorControls';
 import { installPerformanceReportControls } from './ui/PerformanceReportControls';
 import { installPostureControls } from './ui/PostureControls';
 import { installSceneExportControls } from './ui/SceneExportControls';
+import { installTerrainBrushControls } from './ui/TerrainBrushControls';
 
 const root = document.querySelector<HTMLElement>('#app');
 const debugPanel = document.querySelector<HTMLElement>('#debug-panel');
@@ -40,6 +41,7 @@ const tacticalBoard = new PixiTacticalBoardApp(
 
 installPostureControls(debugPanel, state);
 installEditorControls(debugPanel, state);
+installTerrainBrushControls(debugPanel, state);
 installSceneExportControls(state);
 installPerformanceReportControls(() => tacticalBoard.downloadPerformanceReport());
 tacticalBoard.start();
