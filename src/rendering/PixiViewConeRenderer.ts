@@ -6,6 +6,12 @@ export class PixiViewConeRenderer {
   readonly container = new Container();
 
   render(_map: TacticalMap, _units: UnitModel[], _selectedUnitIds: string[]): void {
-    this.container.removeChildren();
+    this.clear();
+  }
+
+  clear(): void {
+    if (this.container.children.length > 0) {
+      this.container.removeChildren();
+    }
   }
 }

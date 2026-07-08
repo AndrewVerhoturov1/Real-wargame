@@ -1,5 +1,8 @@
 import type { UnitPosture } from '../core/behavior/BehaviorModel';
+import { buildEnvironmentSensorReport } from '../core/sensors/EnvironmentSensors';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
+
+const PANEL_UPDATE_INTERVAL_MS = 500;
 
 const OPTIONS: Array<{ posture: UnitPosture; icon: string; label: string }> = [
   { posture: 'standing', icon: '▮', label: 'Стоя' },
@@ -49,26 +52,37 @@ export function installPostureControls(debugPanel: HTMLElement, state: Simulatio
     controls.appendChild(button);
   }
 
-  const passport = document.createElement('pre');
-  passport.className = 'soldier-passport';
-  passport.style.margin = '10px 0 0';
-  passport.style.padding = '12px';
-  passport.style.borderRadius = '10px';
-  passport.style.background = 'rgba(255, 242, 168, 0.08)';
-  passport.style.color = '#f6edcf';
-  passport.style.fontSize = '12px';
-  passport.style.lineHeight = '1.45';
-  passport.style.whiteSpace = 'pre-wrap';
+  const passport = createPanelTextBlock('soldier-passport');
+  const sensors = createPanelTextBlock('environment-sensors');
 
   const inspectorSection = wrapAsSection('Инспектор поведения', debugPanel, true);
   const postureSection = createSection('Положение юнита', controls, true);
   const passportSection = createSection('Паспорт солдата', passport, true);
+  const sensorsSection = createSection('Сенсоры окружения v0.8', sensors, true);
 
   inspectorSection.insertAdjacentElement('afterend', postureSection);
   postureSection.insertAdjacentElement('afterend', passportSection);
+  passportSection.insertAdjacentElement('afterend', sensorsSection);
 
   installRussianInspectorText(debugPanel);
-  window.setInterval(() => renderSoldierPassport(passport, state), 250);
+  window.setInterval(() => {
+    renderSoldierPassport(passport, state);
+    renderEnvironmentSensors(sensors, state);
+  }, PANEL_UPDATE_INTERVAL_MS);
+}
+
+function createPanelTextBlock(className: string): HTMLPreElement {
+  const block = document.createElement('pre');
+  block.className = className;
+  block.style.margin = '10px 0 0';
+  block.style.padding = '12px';
+  block.style.borderRadius = '10px';
+  block.style.background = 'rgba(255, 242, 168, 0.08)';
+  block.style.color = '#f6edcf';
+  block.style.fontSize = '12px';
+  block.style.lineHeight = '1.45';
+  block.style.whiteSpace = 'pre-wrap';
+  return block;
 }
 
 function prepareScrollableHud(debugPanel: HTMLElement): void {
@@ -120,14 +134,13 @@ function renderSoldierPassport(passport: HTMLElement, state: SimulationState): v
   const unit = getSelectedUnit(state);
 
   if (!unit) {
-    passport.textContent = 'Выберите юнита.';
+    updateTextIfChanged(passport, 'Выберите юнита.');
     return;
   }
 
   const traits = unit.soldier.traits;
   const condition = unit.soldier.condition;
-
-  passport.textContent = [
+  const nextText = [
     'Постоянные качества:',
     `Устойчивость: ${traits.resilience}`,
     `Осторожность: ${traits.caution}`,
@@ -151,6 +164,57 @@ function renderSoldierPassport(passport: HTMLElement, state: SimulationState): v
     `Скорость: ${condition.speed}`,
     `Скрытность: ${condition.stealth}`,
   ].join('\n');
+
+  updateTextIfChanged(passport, nextText);
+}
+
+function renderEnvironmentSensors(sensors: HTMLElement, state: SimulationState): void {
+  const unit = getSelectedUnit(state);
+
+  if (!unit) {
+    updateTextIfChanged(sensors, 'Выберите юнита.');
+    return;
+  }
+
+  const report = buildEnvironmentSensorReport(state, unit);
+  const bestCover = report.bestCoverNearby;
+  const threat = report.knownThreat;
+  const bestCoverDistance = bestCover.exists
+    ? `${bestCover.distanceCells} кл. / ${bestCover.distanceMeters} м`
+    : 'нет';
+  const threatDistance = threat.exists
+    ? `${threat.distanceCells} кл. / ${threat.distanceMeters} м`
+    : 'нет';
+  const nextText = [
+    'Текущая точка:',
+    `Опасность: ${report.danger}`,
+    `Напряжение от зоны: ${report.zoneStressPerSecond}/сек`,
+    `Укрытие: ${report.cover}`,
+    `Скрытность: ${report.concealment}`,
+    `Открытость: ${report.openness}`,
+    '',
+    'Лучшее укрытие рядом:',
+    `Есть: ${bestCover.exists ? 'да' : 'нет'}`,
+    `Качество: ${bestCover.quality}`,
+    `Дистанция: ${bestCoverDistance}`,
+    `Направление: ${bestCover.direction}`,
+    '',
+    'Известная угроза:',
+    `Есть: ${threat.exists ? 'да' : 'нет'}`,
+    `Источник: ${threat.label}`,
+    `Дистанция: ${threatDistance}`,
+    `Уверенность: ${threat.confidence}`,
+    '',
+    'Важно: сенсоры только показывают данные. Автоповедение пока выключено.',
+  ].join('\n');
+
+  updateTextIfChanged(sensors, nextText);
+}
+
+function updateTextIfChanged(element: HTMLElement, nextText: string): void {
+  if (element.textContent !== nextText) {
+    element.textContent = nextText;
+  }
 }
 
 function installRussianInspectorText(debugPanel: HTMLElement): void {

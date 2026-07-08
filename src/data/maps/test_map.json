@@ -1,7 +1,7 @@
 {
   "width": 64,
   "height": 40,
-  "cellSize": 32,
+  "cellSize": 24,
   "metersPerCell": 10,
   "defaultTerrain": "field",
   "defaultHeight": 0,

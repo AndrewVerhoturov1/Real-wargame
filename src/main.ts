@@ -7,7 +7,10 @@ import type { PressureZoneData } from './core/pressure/PressureZone';
 import { createInitialState } from './core/simulation/SimulationState';
 import type { UnitData } from './core/units/UnitModel';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
+import { installEditorControls } from './ui/EditorControls';
+import { installPerformanceReportControls } from './ui/PerformanceReportControls';
 import { installPostureControls } from './ui/PostureControls';
+import { installSceneExportControls } from './ui/SceneExportControls';
 
 const root = document.querySelector<HTMLElement>('#app');
 const debugPanel = document.querySelector<HTMLElement>('#debug-panel');
@@ -27,6 +30,9 @@ const state = createInitialState(
 const tacticalBoard = new PixiTacticalBoardApp(root, debugPanel, languageToggle, gridToggle, visionToggle, state);
 
 installPostureControls(debugPanel, state);
+installEditorControls(debugPanel, state);
+installSceneExportControls(state);
+installPerformanceReportControls(() => tacticalBoard.downloadPerformanceReport());
 tacticalBoard.start();
 forceRussianTopControls();
 

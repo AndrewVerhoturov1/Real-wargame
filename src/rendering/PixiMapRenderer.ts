@@ -1,40 +1,132 @@
-import { Container, Graphics, Text } from 'pixi.js';
+import { Container, Graphics } from 'pixi.js';
 import type { MapObject, TacticalMap } from '../core/map/MapModel';
 import { TERRAIN_STYLE } from './terrainStyle';
 
 export class PixiMapRenderer {
   readonly container = new Container();
+  private readonly staticContainer = new Container();
+  private readonly objectContainer = new Container();
+  private lastStaticKey = '';
+  private lastObjectKey = '';
 
-  render(map: TacticalMap, showGrid = true): void {
-    this.container.removeChildren();
+  constructor() {
+    this.container.addChild(this.staticContainer, this.objectContainer);
+  }
 
-    for (const cell of map.cells) {
-      const style = TERRAIN_STYLE[cell.terrain];
-      const x = cell.x * map.cellSize;
-      const y = cell.y * map.cellSize;
-      const graphics = new Graphics();
+  render(
+    map: TacticalMap,
+    showGrid = true,
+    selectedObjectId: string | null = null,
+    showObjects = true,
+  ): void {
+    this.renderStaticLayerIfNeeded(map, showGrid);
+    this.renderObjectLayerIfNeeded(map, selectedObjectId, showObjects);
+  }
 
-      graphics.beginFill(style.fill, 1);
-      graphics.drawRect(x, y, map.cellSize, map.cellSize);
-      graphics.endFill();
+  private renderStaticLayerIfNeeded(map: TacticalMap, showGrid: boolean): void {
+    const nextKey = getStaticLayerKey(map, showGrid);
 
-      this.container.addChild(graphics);
+    if (nextKey === this.lastStaticKey) {
+      return;
     }
+
+    this.lastStaticKey = nextKey;
+    this.staticContainer.removeChildren();
+    renderTerrainBatches(this.staticContainer, map);
 
     if (showGrid) {
-      this.container.addChild(renderMeterGrid(map));
-      this.container.addChild(renderScaleLabel(map));
-    }
-
-    for (const object of map.objects) {
-      this.container.addChild(renderMapObject(map, object));
+      this.staticContainer.addChild(renderMeterGrid(map));
     }
 
     const border = new Graphics();
     border.lineStyle(3, 0x10160f, 0.85);
     border.drawRect(0, 0, map.width * map.cellSize, map.height * map.cellSize);
-    this.container.addChild(border);
+    this.staticContainer.addChild(border);
   }
+
+  private renderObjectLayerIfNeeded(
+    map: TacticalMap,
+    selectedObjectId: string | null,
+    showObjects: boolean,
+  ): void {
+    const nextKey = getObjectLayerKey(map, selectedObjectId, showObjects);
+
+    if (nextKey === this.lastObjectKey) {
+      return;
+    }
+
+    this.lastObjectKey = nextKey;
+    this.objectContainer.removeChildren();
+
+    if (!showObjects) {
+      return;
+    }
+
+    for (const object of map.objects) {
+      this.objectContainer.addChild(renderMapObject(map, object, object.id === selectedObjectId));
+    }
+  }
+}
+
+function renderTerrainBatches(container: Container, map: TacticalMap): void {
+  const terrainGraphics = new Map<string, Graphics>();
+
+  for (const cell of map.cells) {
+    const style = TERRAIN_STYLE[cell.terrain];
+    let graphics = terrainGraphics.get(cell.terrain);
+
+    if (!graphics) {
+      graphics = new Graphics();
+      graphics.beginFill(style.fill, 1);
+      terrainGraphics.set(cell.terrain, graphics);
+    }
+
+    graphics.drawRect(
+      cell.x * map.cellSize,
+      cell.y * map.cellSize,
+      map.cellSize,
+      map.cellSize,
+    );
+  }
+
+  for (const graphics of terrainGraphics.values()) {
+    graphics.endFill();
+    container.addChild(graphics);
+  }
+}
+
+function getStaticLayerKey(map: TacticalMap, showGrid: boolean): string {
+  return [
+    `size:${map.width}x${map.height}`,
+    `cell:${map.cellSize}`,
+    `meters:${map.metersPerCell}`,
+    `grid:${showGrid ? '1' : '0'}`,
+    `cells:${map.cells.map((cell) => `${cell.x}:${cell.y}:${cell.terrain}:${cell.height}`).join('|')}`,
+  ].join(';');
+}
+
+function getObjectLayerKey(
+  map: TacticalMap,
+  selectedObjectId: string | null,
+  showObjects: boolean,
+): string {
+  if (!showObjects) {
+    return `objects:hidden;selected:${selectedObjectId ?? 'none'}`;
+  }
+
+  return [
+    `cell:${map.cellSize}`,
+    `selected:${selectedObjectId ?? 'none'}`,
+    `objects:${map.objects.map((object) => [
+      object.id,
+      object.kind,
+      object.x.toFixed(3),
+      object.y.toFixed(3),
+      object.widthCells.toFixed(3),
+      object.heightCells.toFixed(3),
+      object.rotationRadians.toFixed(3),
+    ].join(':')).join('|')}`,
+  ].join(';');
 }
 
 function renderMeterGrid(map: TacticalMap): Graphics {
@@ -73,26 +165,7 @@ function renderMeterGrid(map: TacticalMap): Graphics {
   return graphics;
 }
 
-function renderScaleLabel(map: TacticalMap): Container {
-  const container = new Container();
-  const background = new Graphics();
-  const label = new Text(`1 клетка = ${map.metersPerCell} м`, {
-    fill: 0xfff2a8,
-    fontFamily: 'Arial, sans-serif',
-    fontSize: 13,
-    fontWeight: 'bold',
-  });
-
-  background.beginFill(0x121612, 0.8);
-  background.drawRoundedRect(8, 8, label.width + 20, label.height + 12, 6);
-  background.endFill();
-  label.position.set(18, 14);
-
-  container.addChild(background, label);
-  return container;
-}
-
-function renderMapObject(map: TacticalMap, object: MapObject): Graphics {
+function renderMapObject(map: TacticalMap, object: MapObject, isSelected: boolean): Graphics {
   const graphics = new Graphics();
   const x = (object.x + 0.5) * map.cellSize;
   const y = (object.y + 0.5) * map.cellSize;
@@ -138,7 +211,47 @@ function renderMapObject(map: TacticalMap, object: MapObject): Graphics {
       break;
   }
 
+  if (isSelected) {
+    drawSelectedObjectControls(graphics, width, height);
+  }
+
   return graphics;
+}
+
+function drawSelectedObjectControls(graphics: Graphics, width: number, height: number): void {
+  const pad = 5;
+  const handle = 8;
+  const left = -width / 2 - pad;
+  const right = width / 2 + pad;
+  const top = -height / 2 - pad;
+  const bottom = height / 2 + pad;
+
+  graphics.lineStyle(3, 0xfff2a8, 0.95);
+  graphics.drawRoundedRect(left, top, right - left, bottom - top, 5);
+
+  graphics.beginFill(0xfff2a8, 1);
+  for (const point of [
+    [left, top],
+    [(left + right) / 2, top],
+    [right, top],
+    [right, (top + bottom) / 2],
+    [right, bottom],
+    [(left + right) / 2, bottom],
+    [left, bottom],
+    [left, (top + bottom) / 2],
+  ] as Array<[number, number]>) {
+    graphics.drawRect(point[0] - handle / 2, point[1] - handle / 2, handle, handle);
+  }
+  graphics.endFill();
+
+  graphics.lineStyle(2, 0xfff2a8, 0.9);
+  graphics.moveTo(0, top);
+  graphics.lineTo(0, top - 18);
+  graphics.beginFill(0x121612, 1);
+  graphics.drawCircle(0, top - 25, 6);
+  graphics.endFill();
+  graphics.lineStyle(2, 0xfff2a8, 1);
+  graphics.drawCircle(0, top - 25, 6);
 }
 
 function drawTopDownTree(graphics: Graphics, width: number, height: number): void {

@@ -1,4 +1,5 @@
 import { Application, Container } from 'pixi.js';
+import { PerformanceMonitor } from '../core/debug/PerformanceMonitor';
 import { gridToCellLabel } from '../core/map/MapModel';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { tickSimulation } from '../core/simulation/SimulationTick';
@@ -13,6 +14,9 @@ import { PixiOverlayRenderer } from './PixiOverlayRenderer';
 import { PixiUnitRenderer } from './PixiUnitRenderer';
 import { PixiViewConeRenderer } from './PixiViewConeRenderer';
 
+const DEBUG_PANEL_UPDATE_INTERVAL_MS = 300;
+const TARGET_MAX_FPS = 60;
+
 export class PixiTacticalBoardApp {
   private readonly app: Application;
   private readonly worldContainer = new Container();
@@ -24,9 +28,13 @@ export class PixiTacticalBoardApp {
   private readonly camera: CameraController;
   private readonly boardInput: BoardInputController;
   private readonly htmlOverlayRenderer: HtmlOverlayRenderer;
+  private readonly fixedScaleLabel = document.createElement('div');
+  private readonly performanceMonitor = new PerformanceMonitor();
   private locale: Locale = 'en';
   private showGrid = true;
-  private showViewCones = true;
+  private showViewCones = false;
+  private lastMapRenderKey = '';
+  private lastDebugPanelUpdateMs = 0;
 
   constructor(
     private readonly root: HTMLElement,
@@ -38,14 +46,20 @@ export class PixiTacticalBoardApp {
   ) {
     this.app = new Application({
       backgroundColor: 0x121612,
+      backgroundAlpha: 1,
       antialias: true,
       resizeTo: this.root,
     });
+    this.app.ticker.maxFPS = TARGET_MAX_FPS;
 
     const canvas = this.app.view as HTMLCanvasElement;
     canvas.setAttribute('aria-label', 'Tactical board prototype canvas');
     canvas.tabIndex = 0;
     this.root.appendChild(canvas);
+
+    this.fixedScaleLabel.className = 'map-scale-fixed-label';
+    this.fixedScaleLabel.textContent = `1 клетка = ${this.state.map.metersPerCell} м`;
+    this.root.appendChild(this.fixedScaleLabel);
 
     this.worldContainer.position.set(72, 72);
     this.app.stage.addChild(this.worldContainer);
@@ -68,8 +82,10 @@ export class PixiTacticalBoardApp {
   }
 
   start(): void {
-    this.mapRenderer.render(this.state.map, this.showGrid);
+    this.renderEditableMapLayerIfNeeded(true);
+    this.viewConeRenderer.clear();
     this.updateStaticText();
+    this.updateDebugPanelIfNeeded(true);
     this.languageToggle.addEventListener('click', this.handleLanguageToggle);
     this.gridToggle.addEventListener('click', this.handleGridToggle);
     this.visionToggle.addEventListener('click', this.handleVisionToggle);
@@ -89,38 +105,110 @@ export class PixiTacticalBoardApp {
     this.camera.destroy();
     this.boardInput.destroy();
     this.htmlOverlayRenderer.destroy();
+    this.fixedScaleLabel.remove();
     this.app.destroy(true);
   }
 
+  downloadPerformanceReport(): void {
+    const report = this.performanceMonitor.buildReport(this.state, this.camera.zoom, {
+      pixiMajorVersion: '7',
+      antialias: true,
+      backgroundAlpha: 1,
+      maxFPS: TARGET_MAX_FPS,
+      mapRender: 'batched Pixi Graphics by terrain type, grid, objects, zones',
+      zoomMode: 'stable wheel-scaled step without animation',
+      grid: this.showGrid,
+      viewCones: this.showViewCones,
+      htmlLabels: 'map labels are HTML overlay, hidden in editor for objects and units',
+    });
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = `real-wargame-performance-${buildTimestampForFileName()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    this.state.editor.lastMessage = 'Отчёт производительности скачан. Его можно прислать для разбора тормозов.';
+  }
+
   private renderFrame(): void {
+    const renderStartedAt = performance.now();
+    this.renderEditableMapLayerIfNeeded(false);
+
+    const visibleUnits = this.state.editor.layers.units ? this.state.units : [];
+    const visibleSelectedIds = this.state.editor.layers.units ? this.state.selectedUnitIds : [];
+
     if (this.showViewCones) {
-      this.viewConeRenderer.render(this.state.map, this.state.units, this.state.selectedUnitIds);
-    } else {
-      this.viewConeRenderer.render(this.state.map, [], []);
+      this.viewConeRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
     }
 
-    this.orderRenderer.render(this.state.map, this.state.units, this.state.selectedUnitIds);
-    this.overlayRenderer.render(this.state, this.showGrid);
-    this.unitRenderer.render(this.state.map, this.state.units, this.state.selectedUnitIds);
+    this.orderRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
+    this.overlayRenderer.render(this.state, this.showGrid, this.state.editor.layers.pressureZones);
+    this.unitRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
     this.htmlOverlayRenderer.render(this.state, this.locale);
-    this.updateDebugPanel();
+    this.updateDebugPanelIfNeeded(false);
+    this.performanceMonitor.recordFrame(this.state, this.camera.zoom, performance.now() - renderStartedAt);
+  }
+
+  private renderEditableMapLayerIfNeeded(force: boolean): void {
+    const nextKey = this.getMapRenderKey();
+
+    if (!force && nextKey === this.lastMapRenderKey) {
+      return;
+    }
+
+    this.lastMapRenderKey = nextKey;
+    this.mapRenderer.render(
+      this.state.map,
+      this.showGrid,
+      this.state.editor.selectedObjectId,
+      this.state.editor.layers.objects,
+    );
+  }
+
+  private getMapRenderKey(): string {
+    const objectKey = this.state.editor.layers.objects
+      ? this.state.map.objects
+          .map((object) => [
+            object.id,
+            object.kind,
+            roundForRenderKey(object.x),
+            roundForRenderKey(object.y),
+            roundForRenderKey(object.widthCells),
+            roundForRenderKey(object.heightCells),
+            roundForRenderKey(object.rotationRadians),
+          ].join(':'))
+          .join('|')
+      : 'objects-hidden';
+
+    return [
+      `grid:${this.showGrid ? '1' : '0'}`,
+      `objects:${this.state.editor.layers.objects ? '1' : '0'}`,
+      `selected:${this.state.editor.selectedObjectId ?? 'none'}`,
+      objectKey,
+    ].join(';');
   }
 
   private readonly handleLanguageToggle = (): void => {
     this.locale = nextLocale(this.locale);
     this.updateStaticText();
+    this.updateDebugPanelIfNeeded(true);
     this.renderFrame();
   };
 
   private readonly handleGridToggle = (): void => {
     this.showGrid = !this.showGrid;
-    this.mapRenderer.render(this.state.map, this.showGrid);
+    this.renderEditableMapLayerIfNeeded(true);
     this.updateDisplayToggles();
     this.renderFrame();
   };
 
   private readonly handleVisionToggle = (): void => {
     this.showViewCones = !this.showViewCones;
+    if (!this.showViewCones) {
+      this.viewConeRenderer.clear();
+    }
     this.updateDisplayToggles();
     this.renderFrame();
   };
@@ -137,6 +225,7 @@ export class PixiTacticalBoardApp {
       }
     });
 
+    this.fixedScaleLabel.textContent = `1 клетка = ${this.state.map.metersPerCell} м`;
     this.languageToggle.textContent = copy.debug.languageToggle;
     this.languageToggle.setAttribute('aria-label', copy.debug.languageToggleAria);
     this.updateDisplayToggles();
@@ -172,6 +261,17 @@ export class PixiTacticalBoardApp {
     };
   }
 
+  private updateDebugPanelIfNeeded(force: boolean): void {
+    const now = performance.now();
+
+    if (!force && now - this.lastDebugPanelUpdateMs < DEBUG_PANEL_UPDATE_INTERVAL_MS) {
+      return;
+    }
+
+    this.lastDebugPanelUpdateMs = now;
+    this.updateDebugPanel();
+  }
+
   private updateDebugPanel(): void {
     const selectedUnit = getSelectedUnit(this.state);
     const mouseLabel = this.state.mouseGridPosition
@@ -190,7 +290,7 @@ export class PixiTacticalBoardApp {
       `${copy.selected}: ${selectedLabel}`,
       `${copy.moveTarget}: ${orderTarget}`,
       `${copy.facing}: ${selectedUnit ? formatDegrees(selectedUnit.facingRadians) : copy.none}`,
-      `${copy.zoom}: ${this.camera.zoom.toFixed(2)}x`,
+      `${copy.zoom}: ${this.camera.zoom.toFixed(1)}x`,
       `${copy.map}: ${this.state.map.width}×${this.state.map.height}`,
       '',
       ...formatBehaviorInspector(selectedUnit, this.locale),
@@ -256,4 +356,17 @@ function formatBehaviorInspector(unit: UnitModel | undefined, locale: Locale): s
     `${labels.lastEvent}: ${runtime.lastEvent ?? labels.none}`,
     `${labels.thresholds}: crouch ${settings.dangerCrouchThreshold}, prone ${settings.dangerProneThreshold}`,
   ];
+}
+
+function buildTimestampForFileName(): string {
+  return new Date()
+    .toISOString()
+    .replaceAll(':', '-')
+    .replaceAll('.', '-')
+    .replace('T', '_')
+    .replace('Z', '');
+}
+
+function roundForRenderKey(value: number): string {
+  return value.toFixed(3);
 }

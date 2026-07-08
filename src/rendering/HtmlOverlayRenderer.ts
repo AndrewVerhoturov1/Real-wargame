@@ -19,6 +19,8 @@ export class HtmlOverlayRenderer {
   render(state: SimulationState, locale: Locale): void {
     const visibleKeys = new Set<string>();
     const selectedIds = new Set(state.selectedUnitIds);
+    const showObjectLabels = state.editor.layers.objects && !state.editor.enabled;
+    const showUnitLabels = state.editor.layers.units && !state.editor.enabled;
 
     for (const cell of state.map.cells) {
       if (cell.height === 0) {
@@ -33,39 +35,43 @@ export class HtmlOverlayRenderer {
         y: cell.y * state.map.cellSize + 4,
       });
 
-      label.textContent = cell.height > 0 ? `+${cell.height}` : `${cell.height}`;
+      updateLabelText(label, cell.height > 0 ? `+${cell.height}` : `${cell.height}`);
       placeLabel(label, screen.x, screen.y);
     }
 
-    for (const object of state.map.objects) {
-      if (!object.labels) {
-        continue;
+    if (showObjectLabels) {
+      for (const object of state.map.objects) {
+        if (!object.labels) {
+          continue;
+        }
+
+        const key = `object:${object.id}`;
+        visibleKeys.add(key);
+        const label = this.getLabel(key, 'map-object-label');
+        const screen = this.projector.worldToScreen({
+          x: (object.x + 0.5) * state.map.cellSize,
+          y: (object.y + object.heightCells / 2 + 0.65) * state.map.cellSize,
+        });
+
+        updateLabelText(label, object.labels[locale]);
+        placeLabel(label, screen.x, screen.y);
       }
-
-      const key = `object:${object.id}`;
-      visibleKeys.add(key);
-      const label = this.getLabel(key, 'map-object-label');
-      const screen = this.projector.worldToScreen({
-        x: (object.x + 0.5) * state.map.cellSize,
-        y: (object.y + object.heightCells / 2 + 0.65) * state.map.cellSize,
-      });
-
-      label.textContent = object.labels[locale];
-      placeLabel(label, screen.x, screen.y);
     }
 
-    for (const unit of state.units) {
-      const key = `unit:${unit.id}`;
-      visibleKeys.add(key);
-      const label = this.getLabel(key, selectedIds.has(unit.id) ? 'unit-label unit-label-selected' : 'unit-label');
-      const world = gridToWorld(state.map, unit.position);
-      const screen = this.projector.worldToScreen({
-        x: world.x,
-        y: world.y + 22,
-      });
+    if (showUnitLabels) {
+      for (const unit of state.units) {
+        const key = `unit:${unit.id}`;
+        visibleKeys.add(key);
+        const label = this.getLabel(key, selectedIds.has(unit.id) ? 'unit-label unit-label-selected' : 'unit-label');
+        const world = gridToWorld(state.map, unit.position);
+        const screen = this.projector.worldToScreen({
+          x: world.x,
+          y: world.y + 22,
+        });
 
-      label.textContent = unit.labels[locale];
-      placeLabel(label, screen.x, screen.y);
+        updateLabelText(label, unit.labels[locale]);
+        placeLabel(label, screen.x, screen.y);
+      }
     }
 
     for (const [key, label] of this.labels) {
@@ -97,6 +103,16 @@ export class HtmlOverlayRenderer {
   }
 }
 
+function updateLabelText(label: HTMLElement, text: string): void {
+  if (label.textContent !== text) {
+    label.textContent = text;
+  }
+}
+
 function placeLabel(label: HTMLElement, x: number, y: number): void {
-  label.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+  const nextTransform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+
+  if (label.style.transform !== nextTransform) {
+    label.style.transform = nextTransform;
+  }
 }

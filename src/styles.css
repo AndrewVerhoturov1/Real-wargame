@@ -39,6 +39,22 @@ canvas {
   cursor: crosshair;
 }
 
+.map-scale-fixed-label {
+  position: fixed;
+  left: 88px;
+  top: 80px;
+  z-index: 12;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: #fff2a8;
+  background: rgba(18, 22, 18, 0.92);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  pointer-events: none;
+  text-shadow: 0 1px 2px #000;
+}
+
 #hud {
   position: fixed;
   top: 16px;
@@ -47,9 +63,8 @@ canvas {
   padding: 16px;
   border: 1px solid rgba(255, 242, 168, 0.28);
   border-radius: 14px;
-  background: rgba(11, 14, 10, 0.78);
+  background: rgba(11, 14, 10, 0.94);
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.36);
-  backdrop-filter: blur(8px);
   pointer-events: none;
   z-index: 20;
 }
@@ -141,9 +156,8 @@ canvas {
   left: 0;
   top: 0;
   white-space: nowrap;
-  will-change: transform;
   font-family: Arial, Helvetica, sans-serif;
-  text-rendering: geometricPrecision;
+  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   transform-origin: left top;
 }
@@ -152,7 +166,7 @@ canvas {
   padding: 2px 6px;
   border-radius: 999px;
   color: #f6edcf;
-  background: rgba(16, 20, 14, 0.72);
+  background: rgba(16, 20, 14, 0.86);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
   font-size: 12px;
   font-weight: 700;
@@ -169,7 +183,7 @@ canvas {
   padding: 2px 5px;
   border-radius: 5px;
   color: #efe5c8;
-  background: rgba(21, 25, 17, 0.6);
+  background: rgba(21, 25, 17, 0.82);
   font-size: 11px;
   translate: -50% 0;
 }

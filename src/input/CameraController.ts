@@ -1,9 +1,10 @@
 import type { Container } from 'pixi.js';
 import type { WorldPosition } from '../core/geometry';
 
-const MIN_SCALE = 0.55;
+const MIN_SCALE = 0.45;
 const MAX_SCALE = 2.8;
-const ZOOM_STEP = 1.12;
+const ZOOM_SENSITIVITY = 0.00042;
+const MAX_WHEEL_DELTA = 180;
 
 export class CameraController {
   private isPanning = false;
@@ -16,6 +17,10 @@ export class CameraController {
   ) {}
 
   attach(): void {
+    this.worldContainer.position.set(
+      Math.round(this.worldContainer.x),
+      Math.round(this.worldContainer.y),
+    );
     this.canvas.addEventListener('wheel', this.handleWheel, { passive: false });
     this.canvas.addEventListener('pointerdown', this.handlePointerDown);
     window.addEventListener('pointermove', this.handlePointerMove);
@@ -56,22 +61,18 @@ export class CameraController {
     event.preventDefault();
 
     const beforeZoomWorldPosition = this.screenToWorld(event);
-    const nextScale = clamp(
-      this.worldContainer.scale.x * (event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP),
-      MIN_SCALE,
-      MAX_SCALE,
-    );
-
-    this.worldContainer.scale.set(nextScale);
-
+    const currentScale = this.worldContainer.scale.x;
+    const normalizedDelta = clamp(event.deltaY, -MAX_WHEEL_DELTA, MAX_WHEEL_DELTA);
+    const zoomFactor = Math.exp(-normalizedDelta * ZOOM_SENSITIVITY);
+    const nextScale = clamp(currentScale * zoomFactor, MIN_SCALE, MAX_SCALE);
     const rect = this.canvas.getBoundingClientRect();
     const screenX = event.clientX - rect.left;
     const screenY = event.clientY - rect.top;
+    const nextX = Math.round(screenX - beforeZoomWorldPosition.x * nextScale);
+    const nextY = Math.round(screenY - beforeZoomWorldPosition.y * nextScale);
 
-    this.worldContainer.position.set(
-      screenX - beforeZoomWorldPosition.x * nextScale,
-      screenY - beforeZoomWorldPosition.y * nextScale,
-    );
+    this.worldContainer.scale.set(nextScale);
+    this.worldContainer.position.set(nextX, nextY);
   };
 
   private readonly handlePointerDown = (event: PointerEvent): void => {
@@ -94,11 +95,10 @@ export class CameraController {
 
     const dx = event.clientX - this.lastPointerPosition.x;
     const dy = event.clientY - this.lastPointerPosition.y;
+    const nextX = Math.round(this.worldContainer.x + dx);
+    const nextY = Math.round(this.worldContainer.y + dy);
 
-    this.worldContainer.position.set(
-      this.worldContainer.x + dx,
-      this.worldContainer.y + dy,
-    );
+    this.worldContainer.position.set(nextX, nextY);
 
     this.lastPointerPosition = {
       x: event.clientX,
