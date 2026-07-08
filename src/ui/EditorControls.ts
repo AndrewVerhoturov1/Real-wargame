@@ -66,9 +66,10 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
 
   const enabledButton = createButton('Редактор: выкл');
   const floatingButton = createFloatingEditorButton();
-  const section = createSection('Инспектор редактора', root, false);
+  const section = createSection('Редактор карты', root, false);
 
   const status = document.createElement('pre');
+  status.className = 'editor-status-block';
   status.style.margin = '0';
   status.style.whiteSpace = 'pre-wrap';
   status.style.fontSize = '12px';
@@ -79,9 +80,7 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
   floatingButton.addEventListener('click', () => toggleEditorMode(hud, state, section, enabledButton, floatingButton, status));
 
   const toolRow = document.createElement('div');
-  toolRow.style.display = 'flex';
-  toolRow.style.flexWrap = 'wrap';
-  toolRow.style.gap = '6px';
+  toolRow.className = 'editor-tool-row';
 
   for (const option of TOOL_OPTIONS) {
     const button = createButton(option.label);
@@ -95,8 +94,7 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
   }
 
   const layersPanel = document.createElement('div');
-  layersPanel.style.display = 'grid';
-  layersPanel.style.gap = '5px';
+  layersPanel.className = 'editor-layers-panel';
   layersPanel.append(
     createLayerToggle('👁 Предметы', state.editor.layers.objects, (checked) => {
       state.editor.layers.objects = checked;
@@ -205,8 +203,7 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
   });
 
   const objectQuickControls = document.createElement('div');
-  objectQuickControls.style.display = 'grid';
-  objectQuickControls.style.gap = '6px';
+  objectQuickControls.className = 'editor-quick-controls';
 
   const moveRow = createButtonRow([
     ['←', () => nudgeSelectedEditorObject(state, -0.5, 0)],
@@ -241,8 +238,7 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
   });
 
   const clearAllButton = createButton('Очистить всё');
-  clearAllButton.style.background = '#5c1f1f';
-  clearAllButton.style.color = '#fff2a8';
+  clearAllButton.className = 'danger-button';
   clearAllButton.addEventListener('click', () => {
     if (window.confirm('Очистить все предметы, всех юнитов и все зоны на карте?')) {
       clearEditorScene(state);
@@ -252,12 +248,11 @@ export function installEditorControls(debugPanel: HTMLElement, state: Simulation
 
   root.append(
     enabledButton,
-    createSmallText('В режиме редактора игровой инспектор скрыт. Юниты не получают боевые приказы. Левый клик работает как редактор, правый клик на движение отключён.'),
+    createSmallText('Редактор — отдельный рабочий режим. Игровые панели скрываются, карта остаётся в центре.'),
     createGroupTitle('Слои'),
     layersPanel,
     createGroupTitle('Инструмент'),
     toolRow,
-    createSmallText('В режиме “Выбрать / тянуть”: потяни предмет или зону за тело, чтобы переместить; потяни ручку, чтобы изменить размер; потяни круглую ручку предмета сверху, чтобы повернуть.'),
     createGroupTitle('Создание предмета'),
     createLabeledControl('Тип предмета', objectKindSelect),
     createLabeledControl('Тип юнита', unitTypeSelect),
@@ -307,13 +302,15 @@ function toggleEditorMode(
   state.editor.drag = null;
   state.editor.tool = 'select';
   state.editor.lastMessage = state.editor.enabled
-    ? 'Редактор включён. Игровой инспектор скрыт. Можно тянуть предметы, юнитов, зоны и ручки прямо на карте.'
-    : 'Редактор выключен. Игровой инспектор снова виден.';
+    ? 'Редактор включён. Игровые панели скрыты. Можно редактировать карту.'
+    : 'Редактор выключен. Игровой интерфейс снова виден.';
   syncInspectorVisibility(hud, state, section);
   renderEditorStatus(status, state, enabledButton, floatingButton, section);
 }
 
 function syncInspectorVisibility(hud: HTMLElement, state: SimulationState, editorSection: HTMLDetailsElement): void {
+  document.body.classList.toggle('editor-mode', state.editor.enabled);
+
   for (const section of hud.querySelectorAll<HTMLElement>('.hud-section')) {
     const isEditorSection = section.classList.contains('editor-section');
     section.style.display = isEditorSection
@@ -328,13 +325,7 @@ function syncInspectorVisibility(hud: HTMLElement, state: SimulationState, edito
 
 function createFloatingEditorButton(): HTMLButtonElement {
   const button = createButton('Редактор');
-  button.style.position = 'fixed';
-  button.style.left = '16px';
-  button.style.bottom = '16px';
-  button.style.zIndex = '20';
-  button.style.padding = '10px 14px';
-  button.style.borderRadius = '10px';
-  button.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.35)';
+  button.className = 'floating-editor-button';
   return button;
 }
 
@@ -368,9 +359,7 @@ function createButton(label: string): HTMLButtonElement {
 
 function createButtonRow(items: Array<[string, () => void]>): HTMLElement {
   const row = document.createElement('div');
-  row.style.display = 'flex';
-  row.style.flexWrap = 'wrap';
-  row.style.gap = '6px';
+  row.className = 'editor-button-row';
 
   for (const [label, action] of items) {
     const button = createButton(label);
@@ -383,11 +372,7 @@ function createButtonRow(items: Array<[string, () => void]>): HTMLElement {
 
 function createLayerToggle(label: string, value: boolean, onChange: (checked: boolean) => void): HTMLElement {
   const wrapper = document.createElement('label');
-  wrapper.style.display = 'flex';
-  wrapper.style.alignItems = 'center';
-  wrapper.style.gap = '8px';
-  wrapper.style.color = '#f6edcf';
-  wrapper.style.fontSize = '12px';
+  wrapper.className = 'editor-layer-toggle';
 
   const input = document.createElement('input');
   input.type = 'checkbox';
@@ -400,26 +385,20 @@ function createLayerToggle(label: string, value: boolean, onChange: (checked: bo
 function createSmallText(text: string): HTMLElement {
   const element = document.createElement('div');
   element.textContent = text;
-  element.style.fontSize = '12px';
-  element.style.color = '#f6edcf';
+  element.className = 'editor-help-text';
   return element;
 }
 
 function createGroupTitle(text: string): HTMLElement {
   const element = document.createElement('div');
   element.textContent = text;
-  element.style.fontWeight = '700';
-  element.style.fontSize = '12px';
-  element.style.color = '#fff2a8';
+  element.className = 'editor-group-title';
   return element;
 }
 
 function createLabeledControl(label: string, control: HTMLElement): HTMLElement {
   const wrapper = document.createElement('label');
-  wrapper.style.display = 'grid';
-  wrapper.style.gap = '4px';
-  wrapper.style.fontSize = '12px';
-  wrapper.style.color = '#f6edcf';
+  wrapper.className = 'editor-labeled-control';
   wrapper.append(label, control);
   return wrapper;
 }
@@ -482,9 +461,8 @@ function renderEditorStatus(
   const tool = TOOL_OPTIONS.find((option) => option.value === state.editor.tool);
 
   enabledButton.textContent = state.editor.enabled ? 'Редактор: вкл' : 'Редактор: выкл';
-  floatingButton.textContent = state.editor.enabled ? 'Редактор: вкл' : 'Редактор';
-  floatingButton.style.background = state.editor.enabled ? '#fff2a8' : '';
-  floatingButton.style.color = state.editor.enabled ? '#121612' : '';
+  floatingButton.textContent = state.editor.enabled ? 'Закрыть редактор' : 'Редактор';
+  floatingButton.classList.toggle('active', state.editor.enabled);
   state.editor.panelOpen = section.open;
 
   status.textContent = [
@@ -498,16 +476,6 @@ function renderEditorStatus(
     `Поворот нового предмета: ${state.editor.objectRotationDegrees}°`,
     `Новая зона: ${state.editor.zoneShape === 'circle' ? 'круг' : 'прямоугольник'}, опасность ${state.editor.zoneStrength}, стресс ${state.editor.zoneStressPerSecond}/сек`,
     `Сообщение: ${state.editor.lastMessage}`,
-    '',
-    'Как работает на карте:',
-    '- клик по предмету выбирает его;',
-    '- зажатая мышь по телу предмета двигает его;',
-    '- зажатая мышь по квадратной ручке предмета меняет размер;',
-    '- зажатая мышь по круглой ручке предмета сверху вращает предмет;',
-    '- зажатая мышь по юниту двигает юнит;',
-    '- клик по зоне выбирает её;',
-    '- зажатая мышь по телу зоны двигает зону;',
-    '- зажатая мышь по границе/ручке зоны меняет размер зоны.',
   ].join('\n');
 }
 
