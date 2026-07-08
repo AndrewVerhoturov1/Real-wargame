@@ -1,7 +1,10 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Text } from 'pixi.js';
+import { buildUnitKnowledgeReport } from '../core/knowledge/UnitKnowledge';
 import { gridToCellCenter } from '../core/map/MapModel';
 import type { PressureZone } from '../core/pressure/PressureZone';
-import type { SimulationState } from '../core/simulation/SimulationState';
+import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
+import { getKnowledgeOverlayState, getVisibilityProbeState } from '../core/ui/RuntimeUiState';
+import { computeLineOfSight } from '../core/visibility/LineOfSight';
 
 export class PixiOverlayRenderer {
   readonly container = new Container();
@@ -46,6 +49,9 @@ export class PixiOverlayRenderer {
     this.lastDynamicKey = nextKey;
     this.dynamicContainer.removeChildren();
 
+    drawKnowledgeOverlay(this.dynamicContainer, state);
+    drawVisibilityProbe(this.dynamicContainer, state);
+
     if (showGrid && state.mouseGridPosition) {
       const { map } = state;
       const cell = gridToCellCenter(map, state.mouseGridPosition);
@@ -80,6 +86,102 @@ export class PixiOverlayRenderer {
   }
 }
 
+function drawKnowledgeOverlay(container: Container, state: SimulationState): void {
+  const overlay = getKnowledgeOverlayState(state);
+  const unit = getSelectedUnit(state);
+
+  if (!overlay.active || !unit) {
+    return;
+  }
+
+  const report = buildUnitKnowledgeReport(state, unit);
+  const graphics = new Graphics();
+  const cellSize = state.map.cellSize;
+
+  graphics.beginFill(0x4fbf72, 0.055);
+  graphics.lineStyle(1, 0x4fbf72, 0.2);
+  graphics.drawCircle(unit.position.x * cellSize, unit.position.y * cellSize, unit.viewRangeCells * cellSize);
+  graphics.endFill();
+
+  for (const cover of report.planCovers) {
+    graphics.lineStyle(2, 0xfff2a8, 0.75);
+    graphics.beginFill(0xfff2a8, 0.12);
+    graphics.drawRoundedRect(cover.x * cellSize - 6, cover.y * cellSize - 6, 12, 12, 3);
+    graphics.endFill();
+  }
+
+  for (const cover of report.nearbyCovers) {
+    graphics.lineStyle(2, 0xfff2a8, 0.95);
+    graphics.beginFill(0xfff2a8, 0.24);
+    graphics.drawCircle(cover.x * cellSize, cover.y * cellSize, 7);
+    graphics.endFill();
+  }
+
+  for (const danger of report.dangers) {
+    graphics.lineStyle(2, 0xff4e3d, 0.9);
+    graphics.beginFill(0xff4e3d, 0.12);
+    graphics.drawCircle(danger.x * cellSize, danger.y * cellSize, 10);
+    graphics.endFill();
+    graphics.moveTo(danger.x * cellSize - 7, danger.y * cellSize - 7);
+    graphics.lineTo(danger.x * cellSize + 7, danger.y * cellSize + 7);
+    graphics.moveTo(danger.x * cellSize + 7, danger.y * cellSize - 7);
+    graphics.lineTo(danger.x * cellSize - 7, danger.y * cellSize + 7);
+  }
+
+  container.addChild(graphics);
+}
+
+function drawVisibilityProbe(container: Container, state: SimulationState): void {
+  const probe = getVisibilityProbeState(state);
+  const unit = getSelectedUnit(state);
+
+  if (!probe.active || !probe.target || !unit) {
+    return;
+  }
+
+  const result = computeLineOfSight(state.map, unit, probe.target);
+  const cellSize = state.map.cellSize;
+  const graphics = new Graphics();
+  const origin = result.origin;
+  const target = result.target;
+  const visibleEnd = result.blockedAt ?? target;
+
+  graphics.lineStyle(3, 0x2dff55, 0.95);
+  graphics.moveTo(origin.x * cellSize, origin.y * cellSize);
+  graphics.lineTo(visibleEnd.x * cellSize, visibleEnd.y * cellSize);
+
+  if (result.blocked && result.blockedAt) {
+    graphics.lineStyle(3, 0xff3535, 0.95);
+    graphics.moveTo(result.blockedAt.x * cellSize, result.blockedAt.y * cellSize);
+    graphics.lineTo(target.x * cellSize, target.y * cellSize);
+
+    graphics.lineStyle(2, 0xff3535, 1);
+    graphics.drawCircle(result.blockedAt.x * cellSize, result.blockedAt.y * cellSize, 6);
+    graphics.moveTo(result.blockedAt.x * cellSize - 7, result.blockedAt.y * cellSize - 7);
+    graphics.lineTo(result.blockedAt.x * cellSize + 7, result.blockedAt.y * cellSize + 7);
+    graphics.moveTo(result.blockedAt.x * cellSize + 7, result.blockedAt.y * cellSize - 7);
+    graphics.lineTo(result.blockedAt.x * cellSize - 7, result.blockedAt.y * cellSize + 7);
+  }
+
+  container.addChild(graphics);
+
+  const text = new Text({
+    text: result.blocked
+      ? `До курсора: ${Math.round(result.totalDistanceMeters)} м\nВидно: ${Math.round(result.visibleDistanceMeters)} м\nПреграда: ${result.blockerReasonRu}`
+      : `До курсора: ${Math.round(result.totalDistanceMeters)} м\nПрямая видимость есть`,
+    style: {
+      fill: 0xfff2a8,
+      fontFamily: 'Arial, Helvetica, sans-serif',
+      fontSize: 12,
+      fontWeight: '700',
+      stroke: 0x10160f,
+      strokeThickness: 3,
+    },
+  });
+  text.position.set(target.x * cellSize + 10, target.y * cellSize + 10);
+  container.addChild(text);
+}
+
 function getZoneLayerKey(state: SimulationState, showPressureZones: boolean): string {
   if (!showPressureZones) {
     return 'zones:hidden';
@@ -108,12 +210,23 @@ function getDynamicLayerKey(state: SimulationState, showGrid: boolean): string {
   const box = state.selectionBox
     ? `${state.selectionBox.start.x.toFixed(2)}:${state.selectionBox.start.y.toFixed(2)}:${state.selectionBox.current.x.toFixed(2)}:${state.selectionBox.current.y.toFixed(2)}`
     : 'none';
+  const knowledgeOverlay = getKnowledgeOverlayState(state).active ? '1' : '0';
+  const probe = getVisibilityProbeState(state);
+  const probeKey = probe.active && probe.target
+    ? `${probe.target.x.toFixed(2)}:${probe.target.y.toFixed(2)}`
+    : 'off';
+  const selectedUnit = state.selectedUnitId ?? 'none';
 
   return [
     `grid:${showGrid ? '1' : '0'}`,
     `mouse:${mouse}`,
     `box:${box}`,
     `cell:${state.map.cellSize}`,
+    `selectedUnit:${selectedUnit}`,
+    `knowledge:${knowledgeOverlay}`,
+    `probe:${probeKey}`,
+    `objects:${state.map.objects.length}`,
+    `zones:${state.pressureZones.length}`,
   ].join(';');
 }
 
