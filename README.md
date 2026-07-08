@@ -2,6 +2,8 @@
 
 Real-time strategy game project.
 
+Behavior foundation preview work is staged on `real-wargame-preview`.
+
 ## Subprojects
 
 See `docs/subprojects/README.md` for subproject system documentation.

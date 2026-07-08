@@ -2,6 +2,7 @@ import { distance, type GridPosition } from '../core/geometry';
 import { worldToGrid } from '../core/map/MapModel';
 import {
   clearSelectionBox,
+  handleEditorClick,
   issueMoveOrderToSelectedUnit,
   selectUnit,
   selectUnitsInBox,
@@ -66,7 +67,10 @@ export class BoardInputController {
 
     if (event.button === 2) {
       event.preventDefault();
-      issueMoveOrderToSelectedUnit(this.state, grid);
+
+      if (!this.state.editor.enabled) {
+        issueMoveOrderToSelectedUnit(this.state, grid);
+      }
     }
   };
 
@@ -75,7 +79,7 @@ export class BoardInputController {
     const grid = worldToGrid(this.state.map, world);
     setMouseGridPosition(this.state, grid);
 
-    if (this.leftPointerId !== event.pointerId || !this.leftStartGrid) {
+    if (this.leftPointerId !== event.pointerId || !this.leftStartGrid || this.state.editor.enabled) {
       return;
     }
 
@@ -96,6 +100,12 @@ export class BoardInputController {
 
     const world = this.camera.screenToWorld(event);
     const grid = worldToGrid(this.state.map, world);
+
+    if (this.state.editor.enabled) {
+      handleEditorClick(this.state, grid);
+      this.clearLeftPointer(event.pointerId);
+      return;
+    }
 
     if (this.isDragSelecting && this.state.selectionBox) {
       updateSelectionBox(this.state, grid);

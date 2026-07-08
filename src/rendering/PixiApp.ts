@@ -2,6 +2,7 @@ import { Application, Container } from 'pixi.js';
 import { gridToCellLabel } from '../core/map/MapModel';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { tickSimulation } from '../core/simulation/SimulationTick';
+import type { UnitModel } from '../core/units/UnitModel';
 import { BoardInputController } from '../input/BoardInputController';
 import { CameraController } from '../input/CameraController';
 import { formatDegrees, nextLocale, UI_COPY, type Locale } from '../i18n';
@@ -192,8 +193,67 @@ export class PixiTacticalBoardApp {
       `${copy.zoom}: ${this.camera.zoom.toFixed(2)}x`,
       `${copy.map}: ${this.state.map.width}×${this.state.map.height}`,
       '',
+      ...formatBehaviorInspector(selectedUnit, this.locale),
+      '',
       copy.noCombatScope,
       copy.htmlLabels,
     ].join('\n');
   }
+}
+
+function formatBehaviorInspector(unit: UnitModel | undefined, locale: Locale): string[] {
+  if (!unit) {
+    return locale === 'ru'
+      ? ['Инспектор поведения: выберите юнита.']
+      : ['Behavior inspector: select a unit.'];
+  }
+
+  const runtime = unit.behaviorRuntime;
+  const settings = unit.behaviorSettings;
+  const labels = locale === 'ru'
+    ? {
+        title: 'Инспектор поведения',
+        profile: 'Профиль',
+        state: 'Состояние',
+        posture: 'Положение',
+        action: 'Действие',
+        danger: 'Danger',
+        stress: 'Stress',
+        reason: 'Причина',
+        stateReason: 'Почему состояние',
+        postureReason: 'Почему положение',
+        lastEvent: 'Последнее событие',
+        thresholds: 'Пороги',
+        none: 'нет',
+      }
+    : {
+        title: 'Behavior inspector',
+        profile: 'Profile',
+        state: 'State',
+        posture: 'Posture',
+        action: 'Action',
+        danger: 'Danger',
+        stress: 'Stress',
+        reason: 'Reason',
+        stateReason: 'State reason',
+        postureReason: 'Posture reason',
+        lastEvent: 'Last event',
+        thresholds: 'Thresholds',
+        none: 'none',
+      };
+
+  return [
+    `${labels.title}:`,
+    `${labels.profile}: ${unit.behaviorProfile}`,
+    `${labels.state}: ${runtime.state} (prev: ${runtime.previousState})`,
+    `${labels.posture}: ${runtime.posture} (prev: ${runtime.previousPosture})`,
+    `${labels.action}: ${runtime.currentAction}`,
+    `${labels.danger}: ${runtime.danger} / raw ${runtime.rawDanger}`,
+    `${labels.stress}: ${Math.round(runtime.stress)} / stop ${settings.stressStopThreshold}`,
+    `${labels.reason}: ${runtime.reason}`,
+    `${labels.stateReason}: ${runtime.stateChangedBecause}`,
+    `${labels.postureReason}: ${runtime.postureChangedBecause}`,
+    `${labels.lastEvent}: ${runtime.lastEvent ?? labels.none}`,
+    `${labels.thresholds}: crouch ${settings.dangerCrouchThreshold}, prone ${settings.dangerProneThreshold}`,
+  ];
 }

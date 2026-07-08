@@ -55,6 +55,7 @@ export interface TacticalMapData {
   width: number;
   height: number;
   cellSize: number;
+  metersPerCell?: number;
   defaultTerrain?: TerrainKind;
   defaultHeight?: -1 | 0 | 1 | 2;
   cellRuns?: MapCellRunData[];
@@ -88,6 +89,7 @@ export interface TacticalMap {
   width: number;
   height: number;
   cellSize: number;
+  metersPerCell: number;
   cells: MapCell[];
   objects: MapObject[];
 }
@@ -143,6 +145,7 @@ export function normalizeMap(data: TacticalMapData): TacticalMap {
     width: data.width,
     height: data.height,
     cellSize: data.cellSize,
+    metersPerCell: data.metersPerCell ?? 10,
     cells,
     objects: normalizeMapObjects(data.objects ?? []),
   };
@@ -172,7 +175,7 @@ export function gridToWorld(map: TacticalMap, grid: GridPosition): WorldPosition
 
 export function gridToCellLabel(map: TacticalMap, grid: GridPosition): string {
   const cell = gridToCellCenter(map, grid);
-  return `${Math.floor(cell.x)}, ${Math.floor(cell.y)}`;
+  return `${Math.floor(cell.x)}, ${Math.floor(cell.y)} (${map.metersPerCell} м/клетка)`;
 }
 
 export function gridToCellCenter(map: TacticalMap, grid: GridPosition): GridPosition {
@@ -193,21 +196,53 @@ export function clampGridPositionToMap(map: TacticalMap, grid: GridPosition): Gr
 }
 
 function normalizeMapObjects(objects: MapObjectData[]): MapObject[] {
-  return objects.map((object) => ({
-    id: object.id,
-    kind: object.kind,
-    x: object.x,
-    y: object.y,
-    rotationRadians: degreesToRadians(object.rotationDegrees ?? 0),
-    widthCells: object.widthCells ?? 1,
-    heightCells: object.heightCells ?? 1,
-    labels: object.label
-      ? {
-          en: object.label,
-          ru: object.labelRu ?? object.label,
-        }
-      : null,
-  }));
+  return objects.map((object) => {
+    const defaultSize = getDefaultObjectSize(object.kind);
+
+    return {
+      id: object.id,
+      kind: object.kind,
+      x: object.x,
+      y: object.y,
+      rotationRadians: degreesToRadians(object.rotationDegrees ?? 0),
+      widthCells: object.widthCells ?? defaultSize.widthCells,
+      heightCells: object.heightCells ?? defaultSize.heightCells,
+      labels: object.label
+        ? {
+            en: object.label,
+            ru: object.labelRu ?? object.label,
+          }
+        : null,
+    };
+  });
+}
+
+function getDefaultObjectSize(kind: MapObjectKind): { widthCells: number; heightCells: number } {
+  switch (kind) {
+    case 'tree':
+      return { widthCells: 0.75, heightCells: 0.75 };
+    case 'rock':
+      return { widthCells: 0.45, heightCells: 0.35 };
+    case 'crates':
+      return { widthCells: 0.75, heightCells: 0.65 };
+    case 'post':
+      return { widthCells: 0.55, heightCells: 0.55 };
+    case 'logs':
+      return { widthCells: 1.25, heightCells: 0.45 };
+    case 'well':
+      return { widthCells: 0.7, heightCells: 0.7 };
+    case 'cover':
+      return { widthCells: 2.5, heightCells: 0.45 };
+    case 'ditch':
+      return { widthCells: 4.5, heightCells: 0.55 };
+    case 'fence':
+      return { widthCells: 4, heightCells: 0.25 };
+    case 'bridge':
+      return { widthCells: 2.6, heightCells: 1.1 };
+    case 'structure':
+    default:
+      return { widthCells: 2, heightCells: 1.5 };
+  }
 }
 
 function cellKey(x: number, y: number): string {
