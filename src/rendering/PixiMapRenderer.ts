@@ -1,4 +1,4 @@
-import { Container, Graphics, Text } from 'pixi.js';
+import { Container, Graphics } from 'pixi.js';
 import type { MapObject, TacticalMap } from '../core/map/MapModel';
 import { TERRAIN_STYLE } from './terrainStyle';
 
@@ -31,7 +31,6 @@ export class PixiMapRenderer {
     }
 
     this.lastStaticKey = nextKey;
-    this.staticContainer.cacheAsBitmap = false;
     this.staticContainer.removeChildren();
 
     for (const cell of map.cells) {
@@ -49,14 +48,12 @@ export class PixiMapRenderer {
 
     if (showGrid) {
       this.staticContainer.addChild(renderMeterGrid(map));
-      this.staticContainer.addChild(renderScaleLabel(map));
     }
 
     const border = new Graphics();
     border.lineStyle(3, 0x10160f, 0.85);
     border.drawRect(0, 0, map.width * map.cellSize, map.height * map.cellSize);
     this.staticContainer.addChild(border);
-    this.staticContainer.cacheAsBitmap = true;
   }
 
   private renderObjectLayerIfNeeded(
@@ -151,25 +148,6 @@ function renderMeterGrid(map: TacticalMap): Graphics {
   }
 
   return graphics;
-}
-
-function renderScaleLabel(map: TacticalMap): Container {
-  const container = new Container();
-  const background = new Graphics();
-  const label = new Text(`1 клетка = ${map.metersPerCell} м`, {
-    fill: 0xfff2a8,
-    fontFamily: 'Arial, sans-serif',
-    fontSize: 13,
-    fontWeight: 'bold',
-  });
-
-  background.beginFill(0x121612, 0.8);
-  background.drawRoundedRect(8, 8, label.width + 20, label.height + 12, 6);
-  background.endFill();
-  label.position.set(18, 14);
-
-  container.addChild(background, label);
-  return container;
 }
 
 function renderMapObject(map: TacticalMap, object: MapObject, isSelected: boolean): Graphics {
