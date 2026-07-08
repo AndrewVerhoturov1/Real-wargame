@@ -1,4 +1,5 @@
 import { distance, type GridPosition } from '../core/geometry';
+import { paintEditorTerrainAt, isTerrainPaintTool } from '../core/map/MapPaint';
 import { worldToGrid } from '../core/map/MapModel';
 import {
   beginEditorPointerAction,
@@ -68,7 +69,11 @@ export class BoardInputController {
 
       if (this.state.editor.enabled) {
         event.preventDefault();
-        beginEditorPointerAction(this.state, grid);
+        if (isTerrainPaintTool(String(this.state.editor.tool))) {
+          paintEditorTerrainAt(this.state, grid);
+        } else {
+          beginEditorPointerAction(this.state, grid);
+        }
       }
 
       return;
@@ -93,7 +98,11 @@ export class BoardInputController {
     }
 
     if (this.state.editor.enabled) {
-      updateEditorPointerAction(this.state, grid);
+      if (isTerrainPaintTool(String(this.state.editor.tool))) {
+        paintEditorTerrainAt(this.state, grid);
+      } else {
+        updateEditorPointerAction(this.state, grid);
+      }
       return;
     }
 
@@ -116,7 +125,9 @@ export class BoardInputController {
     const grid = worldToGrid(this.state.map, world);
 
     if (this.state.editor.enabled) {
-      finishEditorPointerAction(this.state, grid);
+      if (!isTerrainPaintTool(String(this.state.editor.tool))) {
+        finishEditorPointerAction(this.state, grid);
+      }
       this.clearLeftPointer(event.pointerId);
       return;
     }
