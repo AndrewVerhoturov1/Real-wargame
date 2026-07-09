@@ -63,7 +63,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Compares one selected numeric soldier-memory value with a threshold using above or below mode.',
     labelRu: 'Числовой порог',
     descriptionRu: 'Сравнивает выбранный числовой параметр памяти солдата с порогом в режиме выше или ниже.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   FlagCheck: {
     type: 'FlagCheck',
@@ -72,7 +72,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Checks whether a selected true/false soldier-memory flag has the expected value.',
     labelRu: 'Проверка флага',
     descriptionRu: 'Проверяет, равно ли выбранное да/нет значение памяти солдата ожидаемому значению.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   DistanceCheck: {
     type: 'DistanceCheck',
@@ -81,7 +81,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Checks whether a selected distance is closer or farther than a threshold.',
     labelRu: 'Порог расстояния',
     descriptionRu: 'Проверяет, ближе или дальше выбранная дистанция заданного порога.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   StableThreshold: {
     type: 'StableThreshold',
@@ -90,7 +90,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Uses two thresholds to avoid flickering decisions: one to turn on and one to turn off.',
     labelRu: 'Стабильный порог',
     descriptionRu: 'Использует два порога, чтобы решение не мигало: один для включения, второй для выключения.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   TacticalCheck: {
     type: 'TacticalCheck',
@@ -99,7 +99,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Checks a selected tactical possibility such as line of sight, line of fire, path, cover, or ammo.',
     labelRu: 'Тактическая проверка',
     descriptionRu: 'Проверяет выбранную тактическую возможность: видимость, линию огня, путь, укрытие или боеприпасы.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   ParameterScore: {
     type: 'ParameterScore',
@@ -108,7 +108,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Adds or subtracts score based on any selected numeric soldier-memory parameter.',
     labelRu: 'Оценка параметра',
     descriptionRu: 'Добавляет или вычитает баллы на основе любого выбранного числового параметра памяти солдата.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   DistanceScore: {
     type: 'DistanceScore',
@@ -117,7 +117,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Adds score based on distance to a selected object, point, or target.',
     labelRu: 'Оценка расстояния',
     descriptionRu: 'Добавляет баллы на основе расстояния до выбранного объекта, точки или цели.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   DecisionInertia: {
     type: 'DecisionInertia',
@@ -126,7 +126,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Adds score to keep the current or recent decision for a short time.',
     labelRu: 'Инерция решения',
     descriptionRu: 'Добавляет баллы, чтобы удержать текущее или недавнее решение на короткое время.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   RandomChance: {
     type: 'RandomChance',
@@ -135,7 +135,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Adds controlled randomness or passes by probability, optionally modified by a parameter.',
     labelRu: 'Шанс',
     descriptionRu: 'Добавляет управляемую случайность или пропускает проверку по вероятности с возможным модификатором.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   FindBestObject: {
     type: 'FindBestObject',
@@ -144,7 +144,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Finds the best object of a selected kind: cover, enemy, ally, firing position, retreat point, or route point.',
     labelRu: 'Поиск объекта',
     descriptionRu: 'Ищет лучший объект выбранного типа: укрытие, врага, союзника, позицию для стрельбы, точку отхода или маршрутную точку.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   SelectTarget: {
     type: 'SelectTarget',
@@ -153,7 +153,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Chooses a target by a simple rule and writes it to soldier memory.',
     labelRu: 'Выбор цели',
     descriptionRu: 'Выбирает цель по простому правилу и записывает её в память солдата.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   WriteMemory: {
     type: 'WriteMemory',
@@ -162,7 +162,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Writes a selected value into soldier memory.',
     labelRu: 'Запись памяти',
     descriptionRu: 'Записывает выбранное значение в память солдата.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   CopyMemory: {
     type: 'CopyMemory',
@@ -171,7 +171,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Copies one soldier-memory value into another memory key.',
     labelRu: 'Копия памяти',
     descriptionRu: 'Копирует одно значение памяти солдата в другой ключ памяти.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   ForbidAction: {
     type: 'ForbidAction',
@@ -180,7 +180,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Writes a temporary ban for a selected action, with a human-readable reason.',
     labelRu: 'Запрет действия',
     descriptionRu: 'Записывает временный запрет выбранного действия с понятной причиной.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   SetPosture: {
     type: 'SetPosture',
@@ -189,7 +189,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Commands the soldier to stand, crouch, or go prone.',
     labelRu: 'Поза',
     descriptionRu: 'Команда солдату встать, пригнуться или лечь.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   SetAction: {
     type: 'SetAction',
@@ -198,7 +198,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Issues a selected action such as move, fire, reload, retreat, wait, suppress, or continue order.',
     labelRu: 'Действие',
     descriptionRu: 'Выдаёт выбранное действие: двигаться, стрелять, перезарядиться, отступить, ждать, подавлять или продолжать приказ.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   SetMovementMode: {
     type: 'SetMovementMode',
@@ -207,7 +207,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Sets how the soldier moves: fast, careful, crawl, bounds, follow formation, or follow tank.',
     labelRu: 'Режим движения',
     descriptionRu: 'Задаёт как двигаться: быстро, осторожно, ползком, перебежками, в строю или за танком.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   SayMessage: {
     type: 'SayMessage',
@@ -216,7 +216,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Shows a short speech bubble or text message above the soldier.',
     labelRu: 'Реплика бойца',
     descriptionRu: 'Показывает короткую фразу или сообщение над бойцом.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
   WriteReason: {
     type: 'WriteReason',
@@ -225,7 +225,7 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Adds a human-readable explanation to the latest decision.',
     labelRu: 'Объяснение',
     descriptionRu: 'Добавляет понятное объяснение к последнему решению.',
-    canHaveChildren: false,
+    canHaveChildren: true,
   },
 } as const satisfies Record<string, AiNodeTypeDefinition>;
 
