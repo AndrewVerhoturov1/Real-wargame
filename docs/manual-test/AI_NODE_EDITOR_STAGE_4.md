@@ -102,7 +102,7 @@ Console / JSON
 Открыть левую панель `+ Add node`. В палитре нажать:
 
 ```text
-Blackboard Value Above Threshold / Параметр выше порога
+Blackboard Threshold Condition / Параметр выше/ниже порога
 ```
 
 Ожидание:
@@ -111,17 +111,18 @@ Blackboard Value Above Threshold / Параметр выше порога
 новая нода появилась примерно в центре текущего вида;
 она выбрана;
 справа открыт человеческий интерфейс без JSON на первом уровне;
-есть список sourceKey/параметров и ползунок threshold.
+есть список sourceKey/параметров, кнопки выше/ниже и ползунок threshold.
 ```
 
-Важно: отдельных нод `DangerAbove` и `StressAbove` больше быть не должно. Для danger/stress используется одна и та же нода `BlackboardValueAbove` с разным `parameters.sourceKey`.
+Важно: отдельных нод `DangerAbove` и `StressAbove` больше быть не должно. Для danger/stress и других числовых параметров используется одна и та же нода `BlackboardValueAbove` с разными `parameters.sourceKey`, `parameters.comparison` и `parameters.threshold`.
 
-### 2. Настроить параметр без JSON
+### 2. Настроить режим «параметр выше порога» без JSON
 
-В правой панели выбрать параметр, например:
+В правой панели выбрать, например:
 
 ```text
 sourceKey = danger
+comparison = above / Параметр выше порога
 threshold = 45
 ```
 
@@ -130,10 +131,29 @@ threshold = 45
 ```text
 формула показывает danger > 45;
 тестовый ползунок меняет PASS/FAIL;
-кнопка Save condition сохраняет sourceKey и threshold.
+кнопка Save condition сохраняет sourceKey, comparison и threshold.
 ```
 
-### 3. Проверить существующие danger/stress условия
+### 3. Настроить режим «параметр ниже порога» без JSON
+
+В той же панели выбрать, например:
+
+```text
+sourceKey = morale
+comparison = below / Параметр ниже порога
+threshold = 30
+```
+
+Ожидание:
+
+```text
+формула показывает morale < 30;
+PASS появляется, когда тестовое значение ниже 30;
+FAIL появляется, когда тестовое значение 30 или выше;
+Save condition сохраняет comparison = below.
+```
+
+### 4. Проверить существующие danger/stress условия
 
 Кликнуть по bundled-ноду:
 
@@ -146,6 +166,7 @@ critical_danger_condition
 ```text
 это тоже BlackboardValueAbove;
 sourceKey = danger;
+comparison = above;
 threshold = 60.
 ```
 
@@ -160,15 +181,18 @@ critical_stress_condition
 ```text
 это тоже BlackboardValueAbove;
 sourceKey = stress;
+comparison = above;
 threshold = 55.
 ```
 
-### 4. Проверить подсказки
+### 5. Проверить подсказки
 
 Навести мышь на любой важный элемент и подождать 2 секунды:
 
 ```text
 sourceKey select;
+кнопка Параметр выше порога;
+кнопка Параметр ниже порога;
 threshold slider;
 preview value slider;
 PASS/FAIL badge;
@@ -184,7 +208,7 @@ Save condition.
 подсказка объясняет, что именно делает элемент и как влияет на решение.
 ```
 
-### 5. Перетащить ноду
+### 6. Перетащить ноду
 
 Зажать новую ноду мышью, перетащить и отпустить.
 
@@ -196,7 +220,7 @@ Save condition.
 позиция запомнилась в браузере.
 ```
 
-### 6. Передвигать canvas
+### 7. Передвигать canvas
 
 Зажать пустое место поля редактора и потянуть.
 
@@ -207,7 +231,7 @@ Save condition.
 ноды и линии двигаются вместе.
 ```
 
-### 7. Масштабировать canvas
+### 8. Масштабировать canvas
 
 Покрутить колесо мыши над полем редактора или нажать:
 
@@ -226,7 +250,7 @@ Fit показывает граф удобнее;
 100% возвращает обычный масштаб.
 ```
 
-### 8. Связать ноды протягиванием
+### 9. Связать ноды протягиванием
 
 У каждой ноды справа есть маленькая жёлтая точка-порт.
 
@@ -248,7 +272,7 @@ Fit показывает граф удобнее;
 
 Fallback-способ через список `Link selected → child` можно оставить, но главный способ — протягивание из точки.
 
-### 9. Контекстное меню
+### 10. Контекстное меню
 
 Правый клик по ноде.
 
@@ -259,7 +283,7 @@ Fallback-способ через список `Link selected → child` можн
 есть Select, Add child, Duplicate, Set as link source, Link source → this, Center view, Unlink all children, Delete.
 ```
 
-### 10. Проверить изменённый граф через local engine
+### 11. Проверить изменённый граф через local engine
 
 Нажать:
 
@@ -273,9 +297,9 @@ Validate
 validation.valid = true
 ```
 
-Если граф сломан, ожидаемая нормальная ошибка — русско/английское сообщение с nodeId.
+Если граф сломан, ожидаемая нормальная ошибка — русско/английское сообщение с nodeId. Для универсальной пороговой ноды проверяются `sourceKey`, `comparison` (`above`/`below`) и числовой `threshold`.
 
-### 11. Экспортировать JSON
+### 12. Экспортировать JSON
 
 Нажать:
 
@@ -288,10 +312,10 @@ Export
 ```text
 браузер скачал soldier_default_survival_graph.json или soldier_custom_graph.json;
 в файле есть английский base и русский overlay: displayName + displayNameRu;
-универсальная пороговая нода хранит sourceKey + threshold.
+универсальная пороговая нода хранит sourceKey + comparison + threshold.
 ```
 
-### 12. Импортировать JSON обратно
+### 13. Импортировать JSON обратно
 
 Нажать:
 
@@ -309,7 +333,7 @@ Import
 Validate всё ещё проходит.
 ```
 
-### 13. Сбросить к базовому графу
+### 14. Сбросить к базовому графу
 
 Нажать:
 
@@ -321,7 +345,8 @@ Reset
 
 ```text
 граф вернулся к bundled Soldier Survival Graph;
-critical_danger_condition и critical_stress_condition остались универсальными BlackboardValueAbove.
+critical_danger_condition и critical_stress_condition остались универсальными BlackboardValueAbove;
+у них comparison = above.
 ```
 
 ## Что этот этап ещё НЕ делает
