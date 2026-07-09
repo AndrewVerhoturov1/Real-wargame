@@ -58,6 +58,12 @@ export interface UnitBehaviorRuntime {
   lastEvent: string | null;
   stateChangedBecause: string;
   postureChangedBecause: string;
+  aiSpeech: string | null;
+  aiSpeechRu: string | null;
+  aiSpeechUntilMs: number;
+  aiGraphReason: string;
+  aiGraphLastTickMs: number;
+  aiNodeCooldowns: Record<string, number>;
 }
 
 export const DEFAULT_BEHAVIOR_PROFILE: BehaviorProfileId = 'regular';
@@ -290,6 +296,12 @@ export function createBehaviorRuntime(): UnitBehaviorRuntime {
     lastEvent: null,
     stateChangedBecause: 'Initial idle state.',
     postureChangedBecause: 'Initial standing posture.',
+    aiSpeech: null,
+    aiSpeechRu: null,
+    aiSpeechUntilMs: 0,
+    aiGraphReason: 'AI graph is not connected yet.',
+    aiGraphLastTickMs: 0,
+    aiNodeCooldowns: {},
   };
 }
 
