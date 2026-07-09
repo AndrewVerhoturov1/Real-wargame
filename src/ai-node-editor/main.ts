@@ -30,7 +30,7 @@ let engineOnline = false;
 let lastHealthText = 'Проверка local engine ещё не выполнялась.';
 let validationText = 'Нажми «Проверить граф через engine».';
 let evaluationText = 'Нажми «Evaluate once» для тестового солдата.';
-let graphJsonText = JSON.stringify(graph, null, 2);
+const graphJsonText = JSON.stringify(graph, null, 2);
 
 render();
 void refreshEngineStatus();
@@ -244,7 +244,7 @@ async function refreshEngineStatus(): Promise<void> {
     lastHealthText = engineOnline
       ? `engine online: ${payload.service ?? 'local-ai-engine'} / browserDoesHeavyAi=${String(payload.browserDoesHeavyAi)}`
       : 'engine ответил, но вернул ошибку';
-  } catch (error) {
+  } catch {
     engineOnline = false;
     lastHealthText = `engine offline: запусти Run-AI-Engine.bat или Run-AI-Node-Editor.bat`;
   }
