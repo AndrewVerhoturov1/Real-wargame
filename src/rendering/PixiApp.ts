@@ -17,6 +17,8 @@ import { PixiViewConeRenderer } from './PixiViewConeRenderer';
 const DEBUG_PANEL_UPDATE_INTERVAL_MS = 300;
 const TARGET_MAX_FPS = 60;
 
+type PausableSimulationState = SimulationState & { paused?: boolean };
+
 export class PixiTacticalBoardApp {
   private readonly app: Application;
   private readonly worldContainer = new Container();
@@ -96,7 +98,7 @@ export class PixiTacticalBoardApp {
     this.boardInput.attach();
 
     this.app.ticker.add(() => {
-      if (!this.state.paused) {
+      if (!this.getPaused()) {
         tickSimulation(this.state, this.app.ticker.elapsedMS / 1000);
       }
       this.renderFrame();
@@ -142,6 +144,10 @@ export class PixiTacticalBoardApp {
     link.click();
     URL.revokeObjectURL(url);
     this.state.editor.lastMessage = 'Отчёт производительности скачан. Его можно прислать для разбора тормозов.';
+  }
+
+  private getPaused(): boolean {
+    return Boolean((this.state as PausableSimulationState).paused);
   }
 
   private renderFrame(): void {
@@ -328,7 +334,7 @@ export class PixiTacticalBoardApp {
       : UI_COPY[this.locale].debug.none;
     const copy = UI_COPY[this.locale].debug;
     const pauseLabel = this.locale === 'ru' ? 'Пауза' : 'Pause';
-    const pauseState = this.state.paused
+    const pauseState = this.getPaused()
       ? this.locale === 'ru' ? 'вкл — симуляция остановлена' : 'on — simulation stopped'
       : this.locale === 'ru' ? 'выкл — симуляция идёт' : 'off — simulation running';
 
