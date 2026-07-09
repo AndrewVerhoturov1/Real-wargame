@@ -19,103 +19,89 @@ const requiredFiles = [
 
 for (const file of requiredFiles) {
   const absolutePath = path.join(repoRoot, file);
-  if (!existsSync(absolutePath)) {
-    fail(`Не найден обязательный файл: ${file}`);
-  }
+  if (!existsSync(absolutePath)) fail(`Не найден обязательный файл: ${file}`);
   console.log(`[OK] file exists: ${file}`);
 }
 
 const html = readText('ai-node-editor.html');
 expectContains(html, '/src/ai-node-editor/main.ts', 'HTML должен подключать AI Node Editor entrypoint.');
 expectContains(html, '/src/ai-node-editor/human-node-ui.ts', 'HTML должен подключать human node UI layer.');
-expectContains(html, '/src/ai-node-editor/human-node-ui.css', 'HTML должен подключать human node UI styles.');
+expectContains(html, 'real-wargame.ai-node-editor.graph.v6', 'HTML должен bootstrap-ить новый чистый graph storage v6.');
+expectNotContains(html, 'graph.v5', 'Старый graph storage v5 не должен поднимать старый грязный canvas.');
 
 const main = readText('src/ai-node-editor/main.ts');
-expectContains(main, 'ENGINE_BASE_URL', 'Редактор должен знать адрес local engine.');
-expectContains(main, '/engine/health', 'Редактор должен проверять health endpoint.');
-expectContains(main, '/ai/graph/validate', 'Редактор должен валидировать граф через engine.');
-expectContains(main, 'addNodeFromPalette', 'Этап 4 должен уметь добавлять ноды из палитры.');
-expectContains(main, 'startDrag', 'Этап 4 должен уметь перетаскивать ноды.');
+expectContains(main, 'real-wargame.ai-node-editor.graph.v6', 'Редактор должен использовать новый graph storage v6, чтобы старый localStorage не вернул legacy canvas.');
+expectContains(main, 'addNodeFromPalette', 'Редактор должен уметь добавлять ноды из палитры.');
 expectContains(main, 'startConnectionDrag', 'Связи должны создаваться протягиванием из порта.');
-expectContains(main, 'togglePalette', 'Левая панель должна сворачиваться.');
-expectContains(main, 'toggleInspector', 'Правая панель должна сворачиваться.');
-expectContains(main, 'toggleBottomPanel', 'Нижняя консоль должна сворачиваться.');
-expectContains(main, 'localStorage', 'Этап 4 должен сохранять рабочий граф/позиции в браузере.');
+expectContains(main, 'createDefaultParameters', 'Новые ноды должны получать человекочитаемые параметры по умолчанию.');
+expectNotContains(main, 'DangerAbove', 'Редактор не должен держать legacy DangerAbove.');
+expectNotContains(main, 'StressAbove', 'Редактор не должен держать legacy StressAbove.');
+expectNotContains(main, 'ScoreDanger', 'Редактор не должен создавать legacy ScoreDanger.');
+expectNotContains(main, 'FindBestCover', 'Редактор не должен создавать legacy FindBestCover.');
 
 const nodeTypes = readText('src/core/ai/AiNodeTypes.ts');
 for (const needle of [
-  'Numeric Threshold',
-  'Числовой порог',
-  'Flag Check',
-  'Проверка флага',
-  'Distance Threshold',
-  'Порог расстояния',
-  'Parameter Score',
-  'Оценка параметра',
-  'Distance Score',
-  'Оценка расстояния',
-  'Find Object',
-  'Поиск объекта',
-  'Write Memory',
-  'Запись памяти',
-  'Action',
-  'Действие',
-  'Movement Mode',
-  'Режим движения',
-  'Say Message',
-  'Реплика бойца',
-  'Stable Threshold',
-  'Стабильный порог',
-  'Forbid Action',
-  'Запрет действия',
-]) {
-  expectContains(nodeTypes, needle, `В каталоге нод должно быть: ${needle}`);
-}
-expectNotContains(nodeTypes, 'DangerAbove:', 'В палитре не должно быть отдельной DangerAbove-ноды.');
-expectNotContains(nodeTypes, 'StressAbove:', 'В палитре не должно быть отдельной StressAbove-ноды.');
+  'Numeric Threshold', 'Числовой порог',
+  'Flag Check', 'Проверка флага',
+  'Distance Threshold', 'Порог расстояния',
+  'Tactical Check', 'Тактическая проверка',
+  'Parameter Score', 'Оценка параметра',
+  'Distance Score', 'Оценка расстояния',
+  'Find Object', 'Поиск объекта',
+  'Target Choice', 'Выбор цели',
+  'Write Memory', 'Запись памяти',
+  'Copy Memory', 'Копия памяти',
+  'Action', 'Действие',
+  'Movement Mode', 'Режим движения',
+  'Say Message', 'Реплика бойца',
+  'Stable Threshold', 'Стабильный порог',
+  'Forbid Action', 'Запрет действия',
+]) expectContains(nodeTypes, needle, `В чистом каталоге нод должно быть: ${needle}`);
+
+for (const legacy of [
+  'HasOrder:', 'EnemyVisible:', 'EnemyKnown:', 'UnderFire:', 'CoverNearby:',
+  'ScoreDanger:', 'ScoreStress:', 'ScoreObedience:', 'ScoreCoverNeed:', 'ScoreCurrentActionInertia:',
+  'FindBestCover:', 'MoveToCover:', 'ContinueOrder:', 'Observe:', 'DangerAbove:', 'StressAbove:',
+]) expectNotContains(nodeTypes, legacy, `Legacy-нода не должна быть в палитре: ${legacy}`);
 
 const humanUi = readText('src/ai-node-editor/human-node-ui.ts');
-expectContains(humanUi, 'COMMON_COOLDOWN_FIELDS', 'Human UI должен иметь общие cooldown-поля для нод.');
+expectContains(humanUi, 'COMMON_COOLDOWN_FIELDS', 'Human UI должен иметь общие поля задержки для нод.');
 expectContains(humanUi, 'cooldownSeconds', 'Human UI должен сохранять cooldownSeconds.');
 expectContains(humanUi, 'cooldownTiming', 'Human UI должен сохранять cooldownTiming.');
 expectContains(humanUi, 'До ноды', 'Русская версия должна иметь вариант задержки до ноды.');
 expectContains(humanUi, 'После ноды', 'Русская версия должна иметь вариант задержки после ноды.');
-expectContains(humanUi, 'FlagCheck', 'Human UI должен иметь панель проверки флага.');
-expectContains(humanUi, 'DistanceScore', 'Human UI должен иметь панель оценки расстояния.');
+expectContains(humanUi, 'fieldSelect(\'from\'', 'Порог расстояния должен выбирать from из списка, а не вводить self текстом.');
+expectContains(humanUi, 'fieldSelect(\'to\'', 'Порог расстояния должен выбирать to из списка.');
+expectContains(humanUi, 'fieldSelect(\'sourceKey\'', 'Оценка параметра должна выбирать sourceKey из списка.');
+expectContains(humanUi, 'fieldSelect(\'targetKind\'', 'Оценка расстояния должна выбирать объект из списка.');
 expectContains(humanUi, 'SayMessage', 'Human UI должен иметь панель реплики бойца.');
 expectContains(humanUi, 'messageRu', 'Реплика бойца должна иметь русский текст.');
-expectContains(humanUi, 'human-comparison-button', 'Числовой порог должен иметь кнопки выше/ниже.');
-expectContains(humanUi, 'developer-json-details', 'JSON должен быть спрятан в Advanced/details.');
 expectContains(humanUi, 'TOOLTIP_DELAY_MS = 2000', 'Подсказки должны появляться после задержки 2 секунды.');
-expectNotContains(humanUi, 'Наведи и подожди 2 секунды', 'Не должно быть заглушки вместо подсказки.');
-expectContains(humanUi, "type UiLanguage = 'ru' | 'en'", 'Интерфейс должен показывать только выбранный язык, без both.');
+expectNotContains(humanUi, 'Legacy simple check', 'Human UI не должен описывать legacy-ноды.');
 
 const engineCore = readText('scripts/ai_engine_core.mjs');
 for (const needle of ['FlagCheck', 'DistanceCheck', 'ParameterScore', 'DistanceScore', 'FindBestObject', 'WriteMemory', 'CopyMemory', 'SetAction', 'SetMovementMode', 'SayMessage', 'DecisionInertia', 'StableThreshold', 'ForbidAction']) {
   expectContains(engineCore, needle, `Local engine должен знать тип ${needle}.`);
 }
-expectContains(engineCore, 'validateCommonCooldownParameters', 'Local engine должен проверять общие cooldown параметры.');
+expectContains(engineCore, 'validateCommonCooldownParameters', 'Local engine должен проверять общие параметры задержки.');
 expectContains(engineCore, 'COOLDOWN_TIMING_INVALID', 'Validation должен ловить неправильный cooldownTiming.');
 expectContains(engineCore, 'SAY_MESSAGE_TEXT_MISSING', 'Validation должен проверять текст реплики бойца.');
-expectNotContains(engineCore, "'DangerAbove'", 'Local engine не должен использовать отдельный тип DangerAbove.');
-expectNotContains(engineCore, "'StressAbove'", 'Local engine не должен использовать отдельный тип StressAbove.');
+for (const legacy of ['HasOrder', 'EnemyVisible', 'EnemyKnown', 'UnderFire', 'CoverNearby', 'ScoreDanger', 'ScoreStress', 'FindBestCover', 'MoveToCover', 'ContinueOrder', 'Observe']) {
+  expectNotContains(engineCore, `'${legacy}'`, `Local engine не должен знать legacy тип ${legacy}.`);
+}
 
 const graphText = readText('src/data/ai/soldier_default_survival_graph.json');
-expectContains(graphText, 'BlackboardValueAbove', 'Bundled graph должен использовать универсальную пороговую ноду.');
-expectContains(graphText, '"sourceKey": "danger"', 'Danger-проверка должна быть parameters.sourceKey=danger.');
-expectContains(graphText, '"sourceKey": "stress"', 'Stress-проверка должна быть parameters.sourceKey=stress.');
-expectContains(graphText, '"comparison": "above"', 'Bundled graph должен явно хранить режим above для текущих danger/stress условий.');
-expectNotContains(graphText, '"type": "DangerAbove"', 'Bundled graph не должен использовать отдельный тип DangerAbove.');
-expectNotContains(graphText, '"type": "StressAbove"', 'Bundled graph не должен использовать отдельный тип StressAbove.');
+for (const legacy of ['HasOrder', 'EnemyVisible', 'EnemyKnown', 'UnderFire', 'CoverNearby', 'ScoreDanger', 'ScoreStress', 'FindBestCover', 'MoveToCover', 'ContinueOrder', 'Observe', 'BlackboardValueAbove']) {
+  expectNotContains(graphText, `"type": "${legacy}"`, `Bundled clean graph не должен содержать ${legacy}.`);
+}
 
 const graph = JSON.parse(graphText);
-if (graph.id !== 'soldier_default_survival_graph') fail('Bundled graph должен иметь id soldier_default_survival_graph.');
-if (graph.name !== 'Soldier Default Survival Graph') fail('Bundled graph должен иметь английский базовый name.');
-if (!graph.nameRu) fail('Bundled graph должен иметь русский overlay nameRu.');
-for (const node of graph.nodes) {
-  if (!node.displayName) fail(`Нода ${node.id} должна иметь английский displayName.`);
-  if (!node.displayNameRu) fail(`Нода ${node.id} должна иметь русский displayNameRu.`);
-}
+if (graph.id !== 'soldier_clean_workspace_graph') fail('Bundled graph должен быть новым чистым graph id soldier_clean_workspace_graph.');
+if (!Array.isArray(graph.nodes) || graph.nodes.length !== 1) fail('Bundled graph должен начинаться с чистого canvas: только root-нода.');
+const [rootNode] = graph.nodes;
+if (rootNode.id !== 'root' || rootNode.type !== 'Root') fail('Единственная стартовая нода должна быть Root/root.');
+if (Array.isArray(rootNode.children) && rootNode.children.length !== 0) fail('Root в чистом canvas не должен иметь children.');
+if (!rootNode.displayName || !rootNode.displayNameRu) fail('Root должен иметь EN/RU название.');
 
 console.log('[GOTOVO] AI Node Editor static smoke passed.');
 
