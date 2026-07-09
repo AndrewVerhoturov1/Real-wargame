@@ -11,14 +11,8 @@ export const KNOWN_NODE_TYPES = new Set([
   'WriteReason',
 ]);
 
-export const LEAF_NODE_TYPES = new Set([
-  'BlackboardValueAbove', 'FlagCheck', 'DistanceCheck', 'StableThreshold', 'TacticalCheck',
-  'ParameterScore', 'DistanceScore', 'DecisionInertia', 'RandomChance',
-  'FindBestObject', 'SelectTarget',
-  'WriteMemory', 'CopyMemory', 'ForbidAction',
-  'SetPosture', 'SetAction', 'SetMovementMode', 'SayMessage',
-  'WriteReason',
-]);
+// Universal nodes are now chainable: a condition can gate SayMessage, SetPosture, SetAction, etc.
+export const LEAF_NODE_TYPES = new Set();
 
 const DISTANCE_FROM_VALUES = new Set(['self', 'currentTarget', 'orderTarget', 'cover', 'ally', 'enemy']);
 const DISTANCE_TO_VALUES = new Set(['enemy', 'cover', 'orderPoint', 'commander', 'squad', 'retreatPoint']);
@@ -32,7 +26,7 @@ const MOVEMENT_MODE_VALUES = new Set(['fast', 'careful', 'crawl', 'bounds', 'for
 const TARGET_RULE_VALUES = new Set(['nearest', 'most_dangerous', 'shooting_at_us', 'order_target', 'best_line_of_fire']);
 
 export const ENGINE_NAME = 'real-wargame-local-ai-engine';
-export const ENGINE_VERSION = '0.7.0-clean-universal-node-catalog';
+export const ENGINE_VERSION = '0.7.1-chainable-universal-node-catalog';
 
 export function resolveBundledGraphPath(repoRoot) {
   return path.join(repoRoot, 'src', 'data', 'ai', 'soldier_default_survival_graph.json');
@@ -56,6 +50,7 @@ export function validateGraph(value) {
 
   const nodeById = new Map();
   const rootNodeIds = [];
+
   for (const [index, node] of value.nodes.entries()) {
     if (!isRecord(node)) {
       result.push(errorIssue('NODE_NOT_OBJECT', `Node #${index + 1} must be a JSON object.`, `Нода #${index + 1} должна быть JSON-объектом.`));
@@ -70,7 +65,6 @@ export function validateGraph(value) {
       continue;
     }
     nodeById.set(node.id, node);
-
     if (!isNonEmptyString(node.type)) {
       result.push(errorIssue('NODE_WITHOUT_TYPE', `Node ${node.id} must have a string type.`, `У ноды ${node.id} должен быть строковый type.`, node.id));
       continue;
@@ -143,8 +137,8 @@ export function createHealthPayload(port) {
     version: ENGINE_VERSION,
     port,
     mode: 'headless-local-engine',
-    scope: 'Stage 4: local headless engine with clean universal node catalog, blank starter canvas, and common before/after delay parameters.',
-    scopeRu: 'Этап 4: локальный headless engine с чистым универсальным набором нод, пустым стартовым canvas и общей задержкой до/после ноды.',
+    scope: 'Stage 4: local headless engine with chainable universal node catalog, blank starter canvas, and common before/after delay parameters.',
+    scopeRu: 'Этап 4: локальный headless engine с цепочкой универсальных нод, пустым стартовым canvas и общей задержкой до/после ноды.',
     textBase: 'en',
     overlayLanguage: 'ru',
     browserDoesHeavyAi: false,
@@ -153,9 +147,7 @@ export function createHealthPayload(port) {
 }
 
 function buildPreviewCommand(actionNode) {
-  if (!isRecord(actionNode)) {
-    return { type: 'none', reason: 'No action node has been added yet.', reasonRu: 'Нода действия ещё не добавлена.' };
-  }
+  if (!isRecord(actionNode)) return { type: 'none', reason: 'No action node has been added yet.', reasonRu: 'Нода действия ещё не добавлена.' };
   const parameters = isRecord(actionNode.parameters) ? actionNode.parameters : {};
   if (actionNode.type === 'SetAction') return { type: String(parameters.action ?? 'wait'), targetKey: parameters.targetKey ?? null, reason: 'Preview command from Action node.', reasonRu: 'Предварительная команда из ноды Действие.' };
   if (actionNode.type === 'SetPosture') return { type: 'set_posture', posture: String(parameters.posture ?? 'prone'), reason: 'Preview command from Posture node.', reasonRu: 'Предварительная команда из ноды Поза.' };
@@ -166,7 +158,6 @@ function buildPreviewCommand(actionNode) {
 
 function validateChildrenShape(node, result) {
   if (!Array.isArray(node.children)) return result.push(errorIssue('CHILDREN_NOT_ARRAY', `Node ${node.id} children must be an array of string ids.`, `У ноды ${node.id} поле children должно быть массивом строковых id.`, node.id));
-  if (LEAF_NODE_TYPES.has(node.type) && node.children.length > 0) result.push(errorIssue('LEAF_NODE_HAS_CHILDREN', `Node ${node.id} of type ${node.type} must not have children.`, `Нода ${node.id} типа ${node.type} не должна иметь children.`, node.id));
   for (const childId of node.children) if (!isNonEmptyString(childId)) result.push(errorIssue('CHILD_ID_NOT_STRING', `All children of node ${node.id} must be non-empty strings.`, `У ноды ${node.id} все children должны быть непустыми строками.`, node.id));
 }
 
@@ -188,102 +179,31 @@ function validateCommonCooldownParameters(parameters, result, nodeId) {
 function validateSpecificNodeParameters(node, blackboardDefaults, result) {
   const parameters = isRecord(node.parameters) ? node.parameters : {};
   if (['BlackboardValueAbove', 'StableThreshold', 'ParameterScore'].includes(node.type)) validateSourceKey(parameters, blackboardDefaults, node.id, result);
-  if (node.type === 'BlackboardValueAbove') {
-    validateNumericParameter(parameters.threshold, 'threshold', node.id, result);
-    validateAllowed(parameters.comparison ?? 'above', ['above', 'below'], 'COMPARISON_INVALID', 'comparison', node.id, result);
-  }
-  if (node.type === 'FlagCheck') {
-    validateString(parameters.flagKey, 'flagKey', node.id, result);
-    if (typeof parameters.expected !== 'boolean') result.push(errorIssue('FLAG_EXPECTED_INVALID', `Node ${node.id} parameters.expected must be boolean.`, `У ноды ${node.id} parameters.expected должен быть boolean.`, node.id));
-  }
-  if (node.type === 'DistanceCheck') {
-    validateAllowed(parameters.from, DISTANCE_FROM_VALUES, 'DISTANCE_FROM_INVALID', 'from', node.id, result);
-    validateAllowed(parameters.to, DISTANCE_TO_VALUES, 'DISTANCE_TO_INVALID', 'to', node.id, result);
-    validateAllowed(parameters.comparison, ['closer', 'farther'], 'DISTANCE_COMPARISON_INVALID', 'comparison', node.id, result);
-    validateNumericParameter(parameters.thresholdMeters, 'thresholdMeters', node.id, result);
-  }
-  if (node.type === 'StableThreshold') {
-    validateNumericParameter(parameters.enterThreshold, 'enterThreshold', node.id, result);
-    validateNumericParameter(parameters.exitThreshold, 'exitThreshold', node.id, result);
-  }
-  if (node.type === 'TacticalCheck') {
-    validateAllowed(parameters.checkKind, TACTICAL_CHECK_VALUES, 'TACTICAL_CHECK_KIND_INVALID', 'checkKind', node.id, result);
-    if (typeof parameters.expected !== 'boolean') result.push(errorIssue('TACTICAL_EXPECTED_INVALID', `Node ${node.id} parameters.expected must be boolean.`, `У ноды ${node.id} parameters.expected должен быть boolean.`, node.id));
-  }
-  if (node.type === 'ParameterScore') {
-    validateNumericParameter(parameters.weight, 'weight', node.id, result);
-    validateAllowed(parameters.direction ?? 'positive', ['positive', 'negative'], 'SCORE_DIRECTION_INVALID', 'direction', node.id, result);
-  }
-  if (node.type === 'DistanceScore') {
-    validateAllowed(parameters.targetKind, TARGET_KIND_VALUES, 'DISTANCE_SCORE_TARGET_INVALID', 'targetKind', node.id, result);
-    validateAllowed(parameters.preference, ['closer', 'farther'], 'DISTANCE_SCORE_PREFERENCE_INVALID', 'preference', node.id, result);
-    validateNumericParameter(parameters.idealMeters, 'idealMeters', node.id, result);
-    validateNumericParameter(parameters.weight, 'weight', node.id, result);
-  }
-  if (node.type === 'DecisionInertia') {
-    validateAllowed(parameters.action, ACTION_VALUES, 'INERTIA_ACTION_INVALID', 'action', node.id, result);
-    validateNumericParameter(parameters.bonus, 'bonus', node.id, result);
-    validateNumericParameter(parameters.minimumSeconds, 'minimumSeconds', node.id, result);
-  }
+  if (node.type === 'BlackboardValueAbove') { validateNumericParameter(parameters.threshold, 'threshold', node.id, result); validateAllowed(parameters.comparison ?? 'above', ['above', 'below'], 'COMPARISON_INVALID', 'comparison', node.id, result); }
+  if (node.type === 'FlagCheck') { validateString(parameters.flagKey, 'flagKey', node.id, result); if (typeof parameters.expected !== 'boolean') result.push(errorIssue('FLAG_EXPECTED_INVALID', `Node ${node.id} parameters.expected must be boolean.`, `У ноды ${node.id} parameters.expected должен быть boolean.`, node.id)); }
+  if (node.type === 'DistanceCheck') { validateAllowed(parameters.from, DISTANCE_FROM_VALUES, 'DISTANCE_FROM_INVALID', 'from', node.id, result); validateAllowed(parameters.to, DISTANCE_TO_VALUES, 'DISTANCE_TO_INVALID', 'to', node.id, result); validateAllowed(parameters.comparison, ['closer', 'farther'], 'DISTANCE_COMPARISON_INVALID', 'comparison', node.id, result); validateNumericParameter(parameters.thresholdMeters, 'thresholdMeters', node.id, result); }
+  if (node.type === 'StableThreshold') { validateNumericParameter(parameters.enterThreshold, 'enterThreshold', node.id, result); validateNumericParameter(parameters.exitThreshold, 'exitThreshold', node.id, result); }
+  if (node.type === 'TacticalCheck') { validateAllowed(parameters.checkKind, TACTICAL_CHECK_VALUES, 'TACTICAL_CHECK_KIND_INVALID', 'checkKind', node.id, result); if (typeof parameters.expected !== 'boolean') result.push(errorIssue('TACTICAL_EXPECTED_INVALID', `Node ${node.id} parameters.expected must be boolean.`, `У ноды ${node.id} parameters.expected должен быть boolean.`, node.id)); }
+  if (node.type === 'ParameterScore') { validateNumericParameter(parameters.weight, 'weight', node.id, result); validateAllowed(parameters.direction ?? 'positive', ['positive', 'negative'], 'SCORE_DIRECTION_INVALID', 'direction', node.id, result); }
+  if (node.type === 'DistanceScore') { validateAllowed(parameters.targetKind, TARGET_KIND_VALUES, 'DISTANCE_SCORE_TARGET_INVALID', 'targetKind', node.id, result); validateAllowed(parameters.preference, ['closer', 'farther'], 'DISTANCE_SCORE_PREFERENCE_INVALID', 'preference', node.id, result); validateNumericParameter(parameters.idealMeters, 'idealMeters', node.id, result); validateNumericParameter(parameters.weight, 'weight', node.id, result); }
+  if (node.type === 'DecisionInertia') { validateAllowed(parameters.action, ACTION_VALUES, 'INERTIA_ACTION_INVALID', 'action', node.id, result); validateNumericParameter(parameters.bonus, 'bonus', node.id, result); validateNumericParameter(parameters.minimumSeconds, 'minimumSeconds', node.id, result); }
   if (node.type === 'RandomChance') validateNumericParameter(parameters.probabilityPercent, 'probabilityPercent', node.id, result);
-  if (node.type === 'FindBestObject') {
-    validateAllowed(parameters.objectKind, FIND_OBJECT_KIND_VALUES, 'FIND_OBJECT_KIND_INVALID', 'objectKind', node.id, result);
-    validateAllowed(parameters.criteria ?? 'safer', FIND_CRITERIA_VALUES, 'FIND_CRITERIA_INVALID', 'criteria', node.id, result);
-    validateNumericParameter(parameters.searchRadiusMeters, 'searchRadiusMeters', node.id, result);
-    validateString(parameters.writeTo, 'writeTo', node.id, result);
-  }
-  if (node.type === 'SelectTarget') {
-    validateAllowed(parameters.rule, TARGET_RULE_VALUES, 'TARGET_RULE_INVALID', 'rule', node.id, result);
-    validateString(parameters.writeTo, 'writeTo', node.id, result);
-  }
+  if (node.type === 'FindBestObject') { validateAllowed(parameters.objectKind, FIND_OBJECT_KIND_VALUES, 'FIND_OBJECT_KIND_INVALID', 'objectKind', node.id, result); validateAllowed(parameters.criteria ?? 'safer', FIND_CRITERIA_VALUES, 'FIND_CRITERIA_INVALID', 'criteria', node.id, result); validateNumericParameter(parameters.searchRadiusMeters, 'searchRadiusMeters', node.id, result); validateString(parameters.writeTo, 'writeTo', node.id, result); }
+  if (node.type === 'SelectTarget') { validateAllowed(parameters.rule, TARGET_RULE_VALUES, 'TARGET_RULE_INVALID', 'rule', node.id, result); validateString(parameters.writeTo, 'writeTo', node.id, result); }
   if (node.type === 'WriteMemory') validateString(parameters.writeTo, 'writeTo', node.id, result);
-  if (node.type === 'CopyMemory') {
-    validateString(parameters.fromKey, 'fromKey', node.id, result);
-    validateString(parameters.toKey, 'toKey', node.id, result);
-  }
-  if (node.type === 'ForbidAction') {
-    validateAllowed(parameters.action, ACTION_VALUES, 'FORBID_ACTION_INVALID', 'action', node.id, result);
-    validateNumericParameter(parameters.durationSeconds, 'durationSeconds', node.id, result);
-  }
+  if (node.type === 'CopyMemory') { validateString(parameters.fromKey, 'fromKey', node.id, result); validateString(parameters.toKey, 'toKey', node.id, result); }
+  if (node.type === 'ForbidAction') { validateAllowed(parameters.action, ACTION_VALUES, 'FORBID_ACTION_INVALID', 'action', node.id, result); validateNumericParameter(parameters.durationSeconds, 'durationSeconds', node.id, result); }
   if (node.type === 'SetPosture') validateAllowed(parameters.posture, POSTURE_VALUES, 'POSTURE_INVALID', 'posture', node.id, result);
   if (node.type === 'SetAction') validateAllowed(parameters.action, ACTION_VALUES, 'ACTION_INVALID', 'action', node.id, result);
   if (node.type === 'SetMovementMode') validateAllowed(parameters.mode, MOVEMENT_MODE_VALUES, 'MOVEMENT_MODE_INVALID', 'mode', node.id, result);
-  if (node.type === 'SayMessage') {
-    if (!isNonEmptyString(parameters.message) && !isNonEmptyString(parameters.messageRu)) result.push(errorIssue('SAY_MESSAGE_TEXT_MISSING', `Node ${node.id} must have message or messageRu.`, `У ноды ${node.id} должен быть message или messageRu.`, node.id));
-    if (parameters.durationSeconds !== undefined && (typeof parameters.durationSeconds !== 'number' || parameters.durationSeconds <= 0)) result.push(errorIssue('SAY_MESSAGE_DURATION_INVALID', `Node ${node.id} durationSeconds must be a positive number.`, `У ноды ${node.id} durationSeconds должен быть положительным числом.`, node.id));
-  }
+  if (node.type === 'SayMessage') { if (!isNonEmptyString(parameters.message) && !isNonEmptyString(parameters.messageRu)) result.push(errorIssue('SAY_MESSAGE_TEXT_MISSING', `Node ${node.id} must have message or messageRu.`, `У ноды ${node.id} должен быть message или messageRu.`, node.id)); if (parameters.durationSeconds !== undefined && (typeof parameters.durationSeconds !== 'number' || parameters.durationSeconds <= 0)) result.push(errorIssue('SAY_MESSAGE_DURATION_INVALID', `Node ${node.id} durationSeconds must be a positive number.`, `У ноды ${node.id} durationSeconds должен быть положительным числом.`, node.id)); }
 }
 
-function validateSourceKey(parameters, blackboardDefaults, nodeId, result) {
-  validateString(parameters.sourceKey, 'sourceKey', nodeId, result);
-  if (isNonEmptyString(parameters.sourceKey) && isRecord(blackboardDefaults)) {
-    const defaultValue = blackboardDefaults[parameters.sourceKey];
-    if (defaultValue !== undefined && typeof defaultValue !== 'number') result.push(warningIssue('SOURCE_NOT_NUMERIC', `Node ${nodeId} sourceKey ${parameters.sourceKey} is not numeric in blackboardDefaults.`, `У ноды ${nodeId} sourceKey ${parameters.sourceKey} не является числом в blackboardDefaults.`, nodeId));
-  }
-}
-
-function validateString(value, key, nodeId, result) {
-  if (!isNonEmptyString(value)) result.push(errorIssue('STRING_PARAMETER_MISSING', `Node ${nodeId} must have string parameters.${key}.`, `У ноды ${nodeId} должен быть строковый parameters.${key}.`, nodeId));
-}
-
-function validateNumericParameter(value, key, nodeId, result) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) result.push(errorIssue('NUMERIC_PARAMETER_MISSING', `Node ${nodeId} must have numeric parameters.${key}.`, `У ноды ${nodeId} должен быть числовой parameters.${key}.`, nodeId));
-}
-
-function validateAllowed(value, allowed, code, key, nodeId, result) {
-  const allowedSet = allowed instanceof Set ? allowed : new Set(allowed);
-  if (!isNonEmptyString(value) || !allowedSet.has(value)) result.push(errorIssue(code, `Node ${nodeId} parameters.${key} must be one of: ${Array.from(allowedSet).join(', ')}.`, `У ноды ${nodeId} parameters.${key} должен быть одним из: ${Array.from(allowedSet).join(', ')}.`, nodeId));
-}
-
-function validateBlackboardDefaults(defaults, result) {
-  if (defaults === undefined) return result.push(errorIssue('BLACKBOARD_DEFAULTS_MISSING', 'AI graph must have blackboardDefaults.', 'У AI-графа должно быть поле blackboardDefaults.'));
-  if (!isRecord(defaults)) return result.push(errorIssue('BLACKBOARD_DEFAULTS_NOT_OBJECT', 'blackboardDefaults must be a JSON object.', 'Поле blackboardDefaults должно быть JSON-объектом.'));
-  for (const [key, value] of Object.entries(defaults)) {
-    if (!isNonEmptyString(key)) result.push(errorIssue('BLACKBOARD_KEY_EMPTY', 'blackboardDefaults contains an empty key.', 'В blackboardDefaults найден пустой ключ.'));
-    if (!isSupportedValue(value)) result.push(errorIssue('BLACKBOARD_VALUE_UNSUPPORTED', `Blackboard value ${key} has an unsupported format.`, `Blackboard-значение ${key} имеет неподдерживаемый формат.`));
-  }
-}
-
+function validateSourceKey(parameters, blackboardDefaults, nodeId, result) { validateString(parameters.sourceKey, 'sourceKey', nodeId, result); if (isNonEmptyString(parameters.sourceKey) && isRecord(blackboardDefaults)) { const defaultValue = blackboardDefaults[parameters.sourceKey]; if (defaultValue !== undefined && typeof defaultValue !== 'number') result.push(warningIssue('SOURCE_NOT_NUMERIC', `Node ${nodeId} sourceKey ${parameters.sourceKey} is not numeric in blackboardDefaults.`, `У ноды ${nodeId} sourceKey ${parameters.sourceKey} не является числом в blackboardDefaults.`, nodeId)); } }
+function validateString(value, key, nodeId, result) { if (!isNonEmptyString(value)) result.push(errorIssue('STRING_PARAMETER_MISSING', `Node ${nodeId} must have string parameters.${key}.`, `У ноды ${nodeId} должен быть строковый parameters.${key}.`, nodeId)); }
+function validateNumericParameter(value, key, nodeId, result) { if (typeof value !== 'number' || !Number.isFinite(value)) result.push(errorIssue('NUMERIC_PARAMETER_MISSING', `Node ${nodeId} must have numeric parameters.${key}.`, `У ноды ${nodeId} должен быть числовой parameters.${key}.`, nodeId)); }
+function validateAllowed(value, allowed, code, key, nodeId, result) { const allowedSet = allowed instanceof Set ? allowed : new Set(allowed); if (!isNonEmptyString(value) || !allowedSet.has(value)) result.push(errorIssue(code, `Node ${nodeId} parameters.${key} must be one of: ${Array.from(allowedSet).join(', ')}.`, `У ноды ${nodeId} parameters.${key} должен быть одним из: ${Array.from(allowedSet).join(', ')}.`, nodeId)); }
+function validateBlackboardDefaults(defaults, result) { if (defaults === undefined) return result.push(errorIssue('BLACKBOARD_DEFAULTS_MISSING', 'AI graph must have blackboardDefaults.', 'У AI-графа должно быть поле blackboardDefaults.')); if (!isRecord(defaults)) return result.push(errorIssue('BLACKBOARD_DEFAULTS_NOT_OBJECT', 'blackboardDefaults must be a JSON object.', 'Поле blackboardDefaults должно быть JSON-объектом.')); for (const [key, value] of Object.entries(defaults)) { if (!isNonEmptyString(key)) result.push(errorIssue('BLACKBOARD_KEY_EMPTY', 'blackboardDefaults contains an empty key.', 'В blackboardDefaults найден пустой ключ.')); if (!isSupportedValue(value)) result.push(errorIssue('BLACKBOARD_VALUE_UNSUPPORTED', `Blackboard value ${key} has an unsupported format.`, `Blackboard-значение ${key} имеет неподдерживаемый формат.`)); } }
 function errorIssue(code, message, messageRu, nodeId) { return { severity: 'error', code, message, messageRu, ...(nodeId ? { nodeId } : {}) }; }
 function warningIssue(code, message, messageRu, nodeId) { return { severity: 'warning', code, message, messageRu, ...(nodeId ? { nodeId } : {}) }; }
 function isSupportedValue(value) { return value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || isPositionRecord(value); }
