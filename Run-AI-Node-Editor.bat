@@ -107,8 +107,8 @@ echo Chto proverit rukami:
 echo 1. S leva est palitra FLOW / CONDITIONS / SCORES / QUERIES / ACTIONS.
 echo 2. V centre vidny karty-nody i linii svyazey.
 echo 3. Sprava inspector menyaetsya pri klike po node.
-echo 4. Vverhu status engine dolzhen stat online.
-echo 5. Knopki "Proverit graf cherez engine" i "Evaluate once" dolzhny pokazat JSON.
+echo 4-5. Nazhmi knopku "Avtoproverka 4-5" vverhu redaktora.
+echo      Vnizu dolzhno poyavitsya: "Punkt 4 OK" i "Punkt 5 OK".
 echo.
 echo Okna "Real-Wargame AI Engine" i "Real-Wargame Dev" ostavlyay otkrytymi, poka proveryaesh.
 echo.
