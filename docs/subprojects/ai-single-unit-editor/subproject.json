@@ -2,8 +2,8 @@
   "id": "ai-single-unit-editor",
   "title": "AI Single-Unit Editor — Node-Based Constructor",
   "status": "draft",
-  "goal": "Создать node-based редактор ИИ одиночного юнита, привязанный к существующей RTS wrapper (Real-wargame), где поведение солдата собирается из нод, но тяжёлые расчёты выполняет локальный движок, а браузерная вкладка только редактирует и показывает объяснения.",
-  "current_focus": "Этап 3: visible AI Node Editor. Есть отдельный ai-node-editor.html, палитра нод, видимый граф bundled Soldier Survival Graph, инспектор, engine status, validation/evaluate-once через local engine, кнопка Редактор ИИ в тактической карте и батник Run-AI-Node-Editor.bat. Следующие этапы: authoring/перетаскивание/сохранение JSON и подключение к живому солдату.",
+  "goal": "Создать node-based редактор ИИ одиночного юнита, привязанный к существующей RTS wrapper (Real-wargame), где поведение солдата собирается из нод, тяжёлые расчёты выполняет локальный движок, а договор данных имеет английскую базу с русским overlay-слоем для человека.",
+  "current_focus": "Этап 3: visible AI Node Editor + English base / Russian overlay. Есть отдельный ai-node-editor.html, палитра нод, видимый граф bundled Soldier Survival Graph, инспектор, engine status, validation/evaluate-once через local engine, кнопка Редактор ИИ в тактической карте и батник Run-AI-Node-Editor.bat. Договор графа и engine response теперь имеют английские поля label/description/displayName/reason/explanation и русские overlay-поля *Ru. Следующие этапы: authoring/перетаскивание/сохранение JSON и подключение к живому солдату.",
   "key_decisions": [
     "Node editor не является самостоятельным generic framework; он привязан к data contract с RTS wrapper.",
     "Первая версия — только одиночный юнит (single-unit); squad-level AI отложен.",
@@ -12,7 +12,8 @@
     "Тяжёлые расчёты ИИ должны выполняться не в браузерной вкладке, а в локальном движке: сначала Node.js/TypeScript local engine host, затем worker_threads, позже Rust/Tauri sidecar только при доказанной необходимости.",
     "AI Node Editor открывается в новой вкладке/отдельном entrypoint, не смешивается с текущей tactical board UI.",
     "Браузерный редактор отвечает за граф, палитру, инспектор, импорт/экспорт и показ объяснений; local engine отвечает за AI tick, сенсоры, поиск укрытий, Utility AI scoring, инерцию решений и validation/evaluate-once.",
-    "Этап 3 редактора пока visible/read-only для bundled graph: можно выбрать ноду, увидеть инспектор, вызвать validation/evaluate-once через engine, но ещё нельзя сохранять новые ноды и управлять SimulationTick."
+    "Этап 3 редактора пока visible/read-only для bundled graph: можно выбрать ноду, увидеть инспектор, вызвать validation/evaluate-once через engine, но ещё нельзя сохранять новые ноды и управлять SimulationTick.",
+    "Служебная база AI-договора должна быть английской: label, description, displayName, reason, explanation, error. Русский текст хранится отдельным overlay-слоем: labelRu, descriptionRu, displayNameRu, reasonRu, explanationRu, errorRu."
   ],
   "must_read_first": [
     "docs/subprojects/ai-single-unit-editor/SUBPROJECT.md",
@@ -114,7 +115,8 @@
     "2026-07-09: local engine + new-tab AI Node Editor implementation plan added; heavy AI calculations must run in a local engine, not in the browser tab",
     "2026-07-09: data contract layer added: AiGraph/AiNodeTypes/AiBlackboard/AiGraphValidation, soldier_default_survival_graph.json, validate:ai-graph script",
     "2026-07-09: stage 2 headless local AI engine added: local_ai_engine.mjs, local_ai_engine_smoke.mjs, ai_engine_core.mjs, engine npm scripts, Run-AI-Engine*.bat, and manual test guide",
-    "2026-07-09: stage 3 visible AI Node Editor added: ai-node-editor.html, src/ai-node-editor/main.ts/css, editor smoke, Run-AI-Node-Editor.bat, tactical map button, manual test guide"
+    "2026-07-09: stage 3 visible AI Node Editor added: ai-node-editor.html, src/ai-node-editor/main.ts/css, editor smoke, Run-AI-Node-Editor.bat, tactical map button, manual test guide",
+    "2026-07-09: AI graph/engine contract migrated toward English base + Russian overlay to reduce Cyrillic risk in logic/data contracts"
   ],
   "context_sources": [
     "docs/subprojects/real-wargame-start/",
@@ -129,11 +131,12 @@
     "Не выполнять тяжёлые расчёты ИИ в браузерной вкладке: браузер показывает и редактирует, local engine считает.",
     "AI Node Editor должен открываться в новой вкладке/entrypoint и не ломать текущий tactical board/editor UI.",
     "Не изменять core/rendering/input разделение; core не должен импортировать PixiJS.",
-    "Не ломать экспорт/загрузку JSON сцены и существующий редактор карт."
+    "Не ломать экспорт/загрузку JSON сцены и существующий редактор карт.",
+    "Не использовать кириллицу как единственный служебный текст в AI data contract: английский base обязателен, русский только overlay через *Ru поля."
   ],
   "suggested_verification": [
     "Run-AI-Node-Editor.bat — пользовательская проверка видимого редактора, engine status, validation/evaluate-once",
-    "npm run editor:smoke — статическая проверка entrypoint/editor files",
+    "npm run editor:smoke — статическая проверка entrypoint/editor files и English base + Russian overlay в bundled graph",
     "Run-AI-Engine-Smoke.bat — пользовательская проверка health/validate/evaluate-once без терминала",
     "npm run engine:smoke — автоматическая проверка local AI engine",
     "npm run validate:ai-graph — bundled soldier_default_survival_graph.json должен пройти headless validation",
