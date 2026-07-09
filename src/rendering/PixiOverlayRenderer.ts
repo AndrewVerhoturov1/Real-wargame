@@ -14,16 +14,19 @@ import { computeLineOfSight } from '../core/visibility/LineOfSight';
 export class PixiOverlayRenderer {
   readonly container = new Container();
   private readonly zoneContainer = new Container();
+  private readonly realReliefContainer = new Container();
   private readonly dynamicContainer = new Container();
   private lastZoneKey = '';
+  private lastRealReliefKey = '';
   private lastDynamicKey = '';
 
   constructor() {
-    this.container.addChild(this.zoneContainer, this.dynamicContainer);
+    this.container.addChild(this.zoneContainer, this.realReliefContainer, this.dynamicContainer);
   }
 
   render(state: SimulationState, showGrid = true, showPressureZones = true): void {
     this.renderZoneLayerIfNeeded(state, showPressureZones);
+    this.renderRealReliefLayerIfNeeded(state);
     this.renderDynamicLayerIfNeeded(state, showGrid);
   }
 
@@ -44,6 +47,25 @@ export class PixiOverlayRenderer {
     }
   }
 
+  private renderRealReliefLayerIfNeeded(state: SimulationState): void {
+    const nextKey = getRealReliefLayerKey(state);
+
+    if (nextKey === this.lastRealReliefKey) {
+      return;
+    }
+
+    this.lastRealReliefKey = nextKey;
+    this.realReliefContainer.cacheAsBitmap = false;
+    this.realReliefContainer.removeChildren();
+
+    if (!getRealReliefOverlayState(state).active || !hasHeightVariation(state.map)) {
+      return;
+    }
+
+    drawRealReliefOverlay(this.realReliefContainer, state);
+    this.realReliefContainer.cacheAsBitmap = true;
+  }
+
   private renderDynamicLayerIfNeeded(state: SimulationState, showGrid: boolean): void {
     const nextKey = getDynamicLayerKey(state, showGrid);
 
@@ -54,7 +76,6 @@ export class PixiOverlayRenderer {
     this.lastDynamicKey = nextKey;
     this.dynamicContainer.removeChildren();
 
-    drawRealReliefOverlay(this.dynamicContainer, state);
     drawKnowledgeOverlay(this.dynamicContainer, state);
     drawVisibilityProbe(this.dynamicContainer, state);
 
@@ -93,19 +114,13 @@ export class PixiOverlayRenderer {
 }
 
 function drawRealReliefOverlay(container: Container, state: SimulationState): void {
-  if (!getRealReliefOverlayState(state).active || !hasHeightVariation(state.map)) {
-    return;
-  }
-
   const graphics = new Graphics();
   const { map } = state;
-  const step = Math.max(4, Math.floor(map.cellSize / 2));
-  const width = map.width * map.cellSize;
-  const height = map.height * map.cellSize;
+  const cellSize = map.cellSize;
 
-  for (let y = 0; y < height; y += step) {
-    for (let x = 0; x < width; x += step) {
-      const level = sampleSmoothHeightLevel(map, x / map.cellSize, y / map.cellSize);
+  for (let y = 0; y < map.height; y += 1) {
+    for (let x = 0; x < map.width; x += 1) {
+      const level = sampleSmoothHeightLevel(map, x + 0.5, y + 0.5);
       const color = reliefColor(level);
       const alpha = Math.min(0.34, Math.abs(level) * 0.12 + 0.07);
 
@@ -114,7 +129,7 @@ function drawRealReliefOverlay(container: Container, state: SimulationState): vo
       }
 
       graphics.beginFill(color, alpha);
-      graphics.drawRect(x, y, step + 0.5, step + 0.5);
+      graphics.drawRect(x * cellSize, y * cellSize, cellSize + 0.5, cellSize + 0.5);
       graphics.endFill();
     }
   }
@@ -242,6 +257,22 @@ function getZoneLayerKey(state: SimulationState, showPressureZones: boolean): st
   ].join(';');
 }
 
+function getRealReliefLayerKey(state: SimulationState): string {
+  const active = getRealReliefOverlayState(state).active ? '1' : '0';
+
+  if (!active) {
+    return 'relief:hidden';
+  }
+
+  return [
+    'relief:cached',
+    `active:${active}`,
+    `size:${state.map.width}x${state.map.height}`,
+    `cell:${state.map.cellSize}`,
+    `height:${state.map.cells.map((cell) => cell.height).join(',')}`,
+  ].join(';');
+}
+
 function getDynamicLayerKey(state: SimulationState, showGrid: boolean): string {
   const mouse = state.mouseGridPosition
     ? `${state.mouseGridPosition.x.toFixed(2)}:${state.mouseGridPosition.y.toFixed(2)}`
@@ -250,7 +281,6 @@ function getDynamicLayerKey(state: SimulationState, showGrid: boolean): string {
     ? `${state.selectionBox.start.x.toFixed(2)}:${state.selectionBox.start.y.toFixed(2)}:${state.selectionBox.current.x.toFixed(2)}:${state.selectionBox.current.y.toFixed(2)}`
     : 'none';
   const knowledgeOverlay = getKnowledgeOverlayState(state).active ? '1' : '0';
-  const realRelief = getRealReliefOverlayState(state).active ? '1' : '0';
   const probe = getVisibilityProbeState(state);
   const probeKey = probe.active && probe.target
     ? `${probe.target.x.toFixed(2)}:${probe.target.y.toFixed(2)}`
@@ -264,7 +294,6 @@ function getDynamicLayerKey(state: SimulationState, showGrid: boolean): string {
     `cell:${state.map.cellSize}`,
     `selectedUnit:${selectedUnit}`,
     `knowledge:${knowledgeOverlay}`,
-    `relief:${realRelief}`,
     `probe:${probeKey}`,
     `objects:${state.map.objects.length}`,
     `zones:${state.pressureZones.length}`,
