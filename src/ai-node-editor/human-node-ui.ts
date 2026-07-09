@@ -531,164 +531,46 @@ function savePanelParameters(panel: HTMLElement, node: HumanNode, comparison: Th
         ? field.value === 'true'
         : field.value;
   }
-  if (isUniversalThresholdNode(node)) {
-    existing.comparison = comparison;
-  }
+  if (isUniversalThresholdNode(node)) existing.comparison = comparison;
   node.parameters = existing;
   if (parametersTextArea) parametersTextArea.value = JSON.stringify(existing, null, 2);
   renderedPanelKey = null;
   saveNodeButton?.click();
 }
 
-function isUniversalThresholdNode(node: HumanNode | null): node is HumanNode {
-  return node?.type === 'BlackboardValueAbove';
-}
-
-function fallbackPanelConfig(node: HumanNode): HumanPanelConfig {
-  return { title: node.displayName || node.type, titleRu: node.displayNameRu || node.type, description: node.description || 'Generic node parameters.', descriptionRu: node.descriptionRu || 'Общие параметры ноды.', fields: [] };
-}
-
-function getSourceKey(node: HumanNode): string {
-  const sourceKey = node.parameters?.sourceKey;
-  return typeof sourceKey === 'string' && sourceKey.length > 0 ? sourceKey : 'danger';
-}
-
-function getComparison(node: HumanNode): ThresholdComparison {
-  return normalizeComparison(node.parameters?.comparison);
-}
-
-function normalizeComparison(value: unknown): ThresholdComparison {
-  return value === 'below' ? 'below' : 'above';
-}
-
-function getThreshold(node: HumanNode): number {
-  return readNumber(node.parameters?.threshold, 50);
-}
-
-function compareThreshold(value: number, threshold: number, comparison: ThresholdComparison): boolean {
-  return comparison === 'below' ? value < threshold : value > threshold;
-}
-
-function comparisonSymbol(comparison: ThresholdComparison): string {
-  return comparison === 'below' ? '<' : '>';
-}
-
-function getSourceOption(sourceKey: string): NumericSourceOption {
-  return getNumericSourceOptions().find((item) => item.key === sourceKey) ?? source(sourceKey || 'danger', sourceKey || 'Danger', sourceKey || 'Опасность', `Numeric blackboard value ${sourceKey}.`, `Числовой параметр blackboard ${sourceKey}.`, 50);
-}
-
-function getNumericSourceOptions(): NumericSourceOption[] {
-  const graph = readGraph();
-  const options = [...BUILTIN_NUMERIC_SOURCES];
-  const defaults = graph.blackboardDefaults;
-  if (defaults) {
-    for (const [key, value] of Object.entries(defaults)) {
-      if (typeof value === 'number' && !options.some((item) => item.key === key)) {
-        options.push(source(key, key, key, `Numeric blackboard value ${key}.`, `Числовой параметр blackboard ${key}.`, clampNumber(value, 0, 100)));
-      }
-    }
-  }
-  return options;
-}
-
-function labelForSource(sourceOption: NumericSourceOption): string {
-  return currentLanguage === 'ru' ? sourceOption.labelRu : sourceOption.label;
-}
-
-function makeSourceHelp(sourceOption: NumericSourceOption): string {
-  return currentLanguage === 'ru'
-    ? `${sourceOption.labelRu}: ${sourceOption.descriptionRu} Нода читает blackboard.${sourceOption.key}.`
-    : `${sourceOption.label}: ${sourceOption.description} The node reads blackboard.${sourceOption.key}.`;
-}
-
-function makeThresholdHelp(comparison: ThresholdComparison): string {
-  return comparison === 'below'
-    ? t('Порог для режима ниже. Например 30 означает: 29 и ниже — PASS, 30 и выше — FAIL.', 'Threshold for below mode. For example, 30 means 29 and lower is PASS, 30 and higher is FAIL.')
-    : t('Порог для режима выше. Например 60 означает: 60 или ниже — FAIL, 61 и выше — PASS.', 'Threshold for above mode. For example, 60 means 60 or lower is FAIL, 61 and higher is PASS.');
-}
-
-function makeResultText(sourceOption: NumericSourceOption, comparison: ThresholdComparison, previewValue: number, threshold: number, passed: boolean): string {
-  const symbol = comparisonSymbol(comparison);
-  if (passed) return t(`${sourceOption.key}=${previewValue} ${symbol} ${threshold}: ветка может продолжиться.`, `${sourceOption.key}=${previewValue} ${symbol} ${threshold}: the branch can continue.`);
-  return t(`${sourceOption.key}=${previewValue} не выполняет ${symbol} ${threshold}: ветка остановится.`, `${sourceOption.key}=${previewValue} does not satisfy ${symbol} ${threshold}: the branch stops.`);
-}
-
-function findNode(nodeId: string): HumanNode | null {
-  const graph = readGraph();
-  return graph.nodes?.find((node) => node.id === nodeId) ?? null;
-}
-
-function readGraph(): HumanGraph {
-  try {
-    const raw = localStorage.getItem(GRAPH_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as HumanGraph;
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function labelForNode(node: HumanNode | null): string {
-  if (!node) return t('неизвестная нода', 'unknown node');
-  return currentLanguage === 'ru' ? node.displayNameRu || node.displayName || node.id : node.displayName || node.displayNameRu || node.id;
-}
-
-function readLanguage(): UiLanguage {
-  return localStorage.getItem(HUMAN_LANGUAGE_KEY) === 'en' ? 'en' : 'ru';
-}
-
-function readPreviewValue(sourceOption: NumericSourceOption): number {
-  return clampNumber(Number(localStorage.getItem(`${PREVIEW_STORAGE_PREFIX}${sourceOption.key}`) ?? sourceOption.defaultPreview), 0, 100);
-}
-
-function readNumber(value: JsonValue | undefined, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
-
-function safeParseJsonObject(value: string): JsonObject {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as JsonObject;
-  } catch {
-    return {};
-  }
-  return {};
-}
-
+function isUniversalThresholdNode(node: HumanNode | null): node is HumanNode { return node?.type === 'BlackboardValueAbove'; }
+function fallbackPanelConfig(node: HumanNode): HumanPanelConfig { return { title: node.displayName || node.type, titleRu: node.displayNameRu || node.type, description: node.description || 'Generic node parameters.', descriptionRu: node.descriptionRu || 'Общие параметры ноды.', fields: [] }; }
+function getSourceKey(node: HumanNode): string { const sourceKey = node.parameters?.sourceKey; return typeof sourceKey === 'string' && sourceKey.length > 0 ? sourceKey : 'danger'; }
+function getComparison(node: HumanNode): ThresholdComparison { return normalizeComparison(node.parameters?.comparison); }
+function normalizeComparison(value: unknown): ThresholdComparison { return value === 'below' ? 'below' : 'above'; }
+function getThreshold(node: HumanNode): number { return readNumber(node.parameters?.threshold, 50); }
+function compareThreshold(value: number, threshold: number, comparison: ThresholdComparison): boolean { return comparison === 'below' ? value < threshold : value > threshold; }
+function comparisonSymbol(comparison: ThresholdComparison): string { return comparison === 'below' ? '<' : '>'; }
+function getSourceOption(sourceKey: string): NumericSourceOption { return getNumericSourceOptions().find((item) => item.key === sourceKey) ?? source(sourceKey || 'danger', sourceKey || 'Danger', sourceKey || 'Опасность', `Numeric blackboard value ${sourceKey}.`, `Числовой параметр blackboard ${sourceKey}.`, 50); }
+function getNumericSourceOptions(): NumericSourceOption[] { const graph = readGraph(); const options = [...BUILTIN_NUMERIC_SOURCES]; const defaults = graph.blackboardDefaults; if (defaults) { for (const [key, value] of Object.entries(defaults)) { if (typeof value === 'number' && !options.some((item) => item.key === key)) options.push(source(key, key, key, `Numeric blackboard value ${key}.`, `Числовой параметр blackboard ${key}.`, clampNumber(value, 0, 100))); } } return options; }
+function labelForSource(sourceOption: NumericSourceOption): string { return currentLanguage === 'ru' ? sourceOption.labelRu : sourceOption.label; }
+function makeSourceHelp(sourceOption: NumericSourceOption): string { return currentLanguage === 'ru' ? `${sourceOption.labelRu}: ${sourceOption.descriptionRu} Нода читает blackboard.${sourceOption.key}.` : `${sourceOption.label}: ${sourceOption.description} The node reads blackboard.${sourceOption.key}.`; }
+function makeThresholdHelp(comparison: ThresholdComparison): string { return comparison === 'below' ? t('Порог для режима ниже. Например 30 означает: 29 и ниже — PASS, 30 и выше — FAIL.', 'Threshold for below mode. For example, 30 means 29 and lower is PASS, 30 and higher is FAIL.') : t('Порог для режима выше. Например 60 означает: 60 или ниже — FAIL, 61 и выше — PASS.', 'Threshold for above mode. For example, 60 means 60 or lower is FAIL, 61 and higher is PASS.'); }
+function makeResultText(sourceOption: NumericSourceOption, comparison: ThresholdComparison, previewValue: number, threshold: number, passed: boolean): string { const symbol = comparisonSymbol(comparison); if (passed) return t(`${sourceOption.key}=${previewValue} ${symbol} ${threshold}: ветка может продолжиться.`, `${sourceOption.key}=${previewValue} ${symbol} ${threshold}: the branch can continue.`); return t(`${sourceOption.key}=${previewValue} не выполняет ${symbol} ${threshold}: ветка остановится.`, `${sourceOption.key}=${previewValue} does not satisfy ${symbol} ${threshold}: the branch stops.`); }
+function findNode(nodeId: string): HumanNode | null { const graph = readGraph(); return graph.nodes?.find((node) => node.id === nodeId) ?? null; }
+function readGraph(): HumanGraph { try { const raw = localStorage.getItem(GRAPH_STORAGE_KEY); if (!raw) return {}; const parsed = JSON.parse(raw) as HumanGraph; return parsed && typeof parsed === 'object' ? parsed : {}; } catch { return {}; } }
+function labelForNode(node: HumanNode | null): string { if (!node) return t('неизвестная нода', 'unknown node'); return currentLanguage === 'ru' ? node.displayNameRu || node.displayName || node.id : node.displayName || node.displayNameRu || node.id; }
+function readLanguage(): UiLanguage { return localStorage.getItem(HUMAN_LANGUAGE_KEY) === 'en' ? 'en' : 'ru'; }
+function readPreviewValue(sourceOption: NumericSourceOption): number { return clampNumber(Number(localStorage.getItem(`${PREVIEW_STORAGE_PREFIX}${sourceOption.key}`) ?? sourceOption.defaultPreview), 0, 100); }
+function readNumber(value: JsonValue | undefined, fallback: number): number { return typeof value === 'number' && Number.isFinite(value) ? value : fallback; }
+function safeParseJsonObject(value: string): JsonObject { try { const parsed = JSON.parse(value) as unknown; if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as JsonObject; } catch { return {}; } return {}; }
 function fieldText(key: string, label: string, labelRu: string, help: string, helpRu: string, defaultValue: string): HumanField { return { key, kind: 'text', label, labelRu, help, helpRu, defaultValue }; }
 function fieldNumber(key: string, label: string, labelRu: string, help: string, helpRu: string, defaultValue: number): HumanField { return { key, kind: 'number', label, labelRu, help, helpRu, defaultValue }; }
 function fieldBoolean(key: string, label: string, labelRu: string, help: string, helpRu: string, defaultValue: boolean): HumanField { return { key, kind: 'boolean', label, labelRu, help, helpRu, defaultValue }; }
 function fieldSelect(key: string, label: string, labelRu: string, help: string, helpRu: string, defaultValue: string, options: readonly { value: string; label: string; labelRu: string }[]): HumanField { return { key, kind: 'select', label, labelRu, help, helpRu, defaultValue, options }; }
 function option(value: string, label: string, labelRu: string): { value: string; label: string; labelRu: string } { return { value, label, labelRu }; }
 function source(key: string, label: string, labelRu: string, description: string, descriptionRu: string, defaultPreview: number): NumericSourceOption { return { key, label, labelRu, description, descriptionRu, defaultPreview }; }
-
-function setHelp(target: string | Element, text: string): void {
-  const elements = typeof target === 'string' ? Array.from(document.querySelectorAll<Element>(target)) : [target];
-  for (const element of elements) element.setAttribute('data-help', text);
-}
-
-function showTooltip(text: string, x: number, y: number): void {
-  hideTooltip();
-  const tooltip = document.createElement('div');
-  tooltip.className = 'human-tooltip';
-  tooltip.textContent = text;
-  document.body.appendChild(tooltip);
-  tooltipElement = tooltip;
-  positionTooltip(tooltip, x, y);
-}
-
-function positionTooltip(tooltip: HTMLElement, x: number, y: number): void {
-  const margin = 14;
-  const maxX = window.innerWidth - tooltip.offsetWidth - margin;
-  const maxY = window.innerHeight - tooltip.offsetHeight - margin;
-  tooltip.style.left = `${Math.max(margin, Math.min(maxX, x + 16))}px`;
-  tooltip.style.top = `${Math.max(margin, Math.min(maxY, y + 16))}px`;
-}
-
+function setHelp(target: string | Element, text: string): void { const elements = typeof target === 'string' ? Array.from(document.querySelectorAll<Element>(target)) : [target]; for (const element of elements) element.setAttribute('data-help', text); }
+function showTooltip(text: string, x: number, y: number): void { hideTooltip(); const tooltip = document.createElement('div'); tooltip.className = 'human-tooltip'; tooltip.textContent = text; document.body.appendChild(tooltip); tooltipElement = tooltip; positionTooltip(tooltip, x, y); }
+function positionTooltip(tooltip: HTMLElement, x: number, y: number): void { const margin = 14; const maxX = window.innerWidth - tooltip.offsetWidth - margin; const maxY = window.innerHeight - tooltip.offsetHeight - margin; tooltip.style.left = `${Math.max(margin, Math.min(maxX, x + 16))}px`; tooltip.style.top = `${Math.max(margin, Math.min(maxY, y + 16))}px`; }
 function clearTooltipTimer(): void { if (tooltipTimer !== null) { window.clearTimeout(tooltipTimer); tooltipTimer = null; } }
 function hideTooltip(): void { tooltipElement?.remove(); tooltipElement = null; }
 function t(ru: string, en: string): string { return currentLanguage === 'ru' ? ru : en; }
 function clampNumber(value: number, min: number, max: number): number { if (!Number.isFinite(value)) return min; return Math.max(min, Math.min(max, Math.round(value))); }
-function escapeHtml(value: string): string { return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#039;'); }
+function escapeHtml(value: string): string { return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
 function escapeAttribute(value: string): string { return escapeHtml(value).replace(/\n/g, ' '); }
