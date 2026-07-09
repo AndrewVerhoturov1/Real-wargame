@@ -1,5 +1,6 @@
 import './styles.css';
 import './ai-game-bridge.css';
+import './shared/app-shell-menu.css';
 import './ui-layout.css';
 import mapData from './data/maps/test_map.json';
 import pressureZoneData from './data/pressure_zones/test_pressure_zones.json';
@@ -10,6 +11,7 @@ import type { PressureZoneData } from './core/pressure/PressureZone';
 import { createInitialState } from './core/simulation/SimulationState';
 import type { UnitData } from './core/units/UnitModel';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
+import { installAppShellMenu } from './shared/AppShellMenu';
 import { installEditorControls } from './ui/EditorControls';
 import { installGameHudControls } from './ui/GameHudControls';
 import { installPerformanceReportControls } from './ui/PerformanceReportControls';
@@ -27,6 +29,8 @@ const aiEditorOpenButton = document.querySelector<HTMLButtonElement>('#ai-editor
 if (!root || !debugPanel || !languageToggle || !gridToggle || !visionToggle || !heightToggle || !aiEditorOpenButton) {
   throw new Error('Tactical board root elements are missing.');
 }
+
+installAppShellMenu({ mode: 'game' });
 
 const state = createInitialState(
   mapData as TacticalMapData,
@@ -75,6 +79,6 @@ function forceRussianTopControls(): void {
 
 function installAiEditorOpenButton(button: HTMLButtonElement): void {
   button.addEventListener('click', () => {
-    window.open('/ai-node-editor.html', '_blank', 'noopener,noreferrer');
+    window.open('/ai-node-editor.html', '_blank');
   });
 }
