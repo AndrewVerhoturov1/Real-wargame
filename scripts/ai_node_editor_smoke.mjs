@@ -7,15 +7,20 @@ const repoRoot = path.resolve(__dirname, '..');
 
 const requiredFiles = [
   'ai-node-editor.html',
+  'lab-launch.html',
+  'Run-Real-Wargame-Lab.bat',
   'src/ai-node-editor/main.ts',
   'src/ai-node-editor/human-node-ui.ts',
   'src/ai-node-editor/ai-node-editor.css',
   'src/ai-node-editor/ai-node-editor-authoring.css',
   'src/ai-node-editor/human-node-ui.css',
   'src/ai-game-bridge.css',
+  'src/shared/AppShellMenu.ts',
+  'src/shared/app-shell-menu.css',
   'src/core/ai/AiGameBridge.ts',
   'src/data/ai/soldier_default_survival_graph.json',
   'scripts/local_ai_engine.mjs',
+  'scripts/real_wargame_lab_manager.mjs',
   'Run-AI-Node-Editor.bat',
 ];
 
@@ -31,8 +36,15 @@ expectContains(html, '/src/ai-node-editor/human-node-ui.ts', 'HTML должен 
 expectContains(html, 'real-wargame.ai-node-editor.graph.v6', 'HTML должен bootstrap-ить новый чистый graph storage v6.');
 expectNotContains(html, 'graph.v5', 'Старый graph storage v5 не должен поднимать старый грязный canvas.');
 
+const labLaunchHtml = readText('lab-launch.html');
+expectContains(labLaunchHtml, '/src/shared/AppShellMenu.ts', 'Страница общего запуска должна использовать shared shell для открытия вкладок.');
+expectContains(labLaunchHtml, 'openGameTab', 'Общий запуск должен открывать игру.');
+expectContains(labLaunchHtml, 'openEditorTab', 'Общий запуск должен открывать редактор.');
+
 const main = readText('src/ai-node-editor/main.ts');
 expectContains(main, 'real-wargame.ai-node-editor.graph.v6', 'Редактор должен использовать новый graph storage v6.');
+expectContains(main, 'installAppShellMenu', 'Редактор должен подключать общее верхнее меню.');
+expectContains(main, "mode: 'editor'", 'Редактор должен использовать editor-режим общего меню.');
 expectContains(main, 'addNodeFromPalette', 'Редактор должен уметь добавлять ноды из палитры.');
 expectContains(main, 'startConnectionDrag', 'Связи должны создаваться протягиванием из порта.');
 expectContains(main, 'createDefaultParameters', 'Новые ноды должны получать человекочитаемые параметры по умолчанию.');
@@ -45,6 +57,45 @@ const appMain = readText('src/main.ts');
 expectContains(appMain, 'installAiGameBridge', 'Игра должна подключать мост AI-графа к SimulationState.');
 expectContains(appMain, 'installAiGameBridge(state)', 'Мост должен запускаться после создания state.');
 expectContains(appMain, './ai-game-bridge.css', 'Игра должна подключать стили реплик бойца.');
+expectContains(appMain, 'installAppShellMenu', 'Игра должна подключать общее верхнее меню.');
+expectContains(appMain, "mode: 'game'", 'Игра должна использовать game-режим общего меню.');
+
+const shellMenu = readText('src/shared/AppShellMenu.ts');
+for (const needle of [
+  'Редактор ИИ солдат',
+  'Новая игра',
+  'Выход',
+  'Обновить',
+  'Открыть игру',
+  'openEditorTab',
+  'openGameTab',
+  'requestLabShutdown',
+  'BroadcastChannel',
+  'real-wargame.lab.close-tabs',
+  'http://127.0.0.1:8799/lab/shutdown',
+]) expectContains(shellMenu, needle, `Общее меню должно содержать: ${needle}`);
+
+const shellCss = readText('src/shared/app-shell-menu.css');
+expectContains(shellCss, '.app-shell-menu', 'CSS должен оформлять общее меню.');
+expectContains(shellCss, '.app-shell-exit-button', 'CSS должен выделять кнопку выхода.');
+
+const labManager = readText('scripts/real_wargame_lab_manager.mjs');
+for (const needle of [
+  'LAB_MANAGER_PORT = 8799',
+  'startChildProcess',
+  'npm run dev',
+  'npm run engine:dev',
+  '/lab/health',
+  '/lab/shutdown',
+  'killPorts',
+  '5173',
+  '8787',
+]) expectContains(labManager, needle, `Lab manager должен содержать: ${needle}`);
+
+const labBat = readText('Run-Real-Wargame-Lab.bat');
+expectContains(labBat, 'real_wargame_lab_manager.mjs', 'Общий запуск должен стартовать lab manager.');
+expectContains(labBat, 'WindowStyle Hidden', 'Общий запуск должен быть тихим/скрытым.');
+expectContains(labBat, 'lab-launch.html', 'Общий запуск должен открыть страницу, которая открывает игру и редактор.');
 
 const gameBridge = readText('src/core/ai/AiGameBridge.ts');
 expectContains(gameBridge, 'GRAPH_STORAGE_KEY', 'Мост должен читать тот же graph storage v6, что редактор.');
