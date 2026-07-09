@@ -96,7 +96,9 @@ export class PixiTacticalBoardApp {
     this.boardInput.attach();
 
     this.app.ticker.add(() => {
-      tickSimulation(this.state, this.app.ticker.elapsedMS / 1000);
+      if (!this.state.paused) {
+        tickSimulation(this.state, this.app.ticker.elapsedMS / 1000);
+      }
       this.renderFrame();
     });
   }
@@ -111,6 +113,11 @@ export class PixiTacticalBoardApp {
     this.htmlOverlayRenderer.destroy();
     this.fixedScaleLabel.remove();
     this.app.destroy(true);
+  }
+
+  forceRender(): void {
+    this.renderFrame();
+    this.updateDebugPanelIfNeeded(true);
   }
 
   downloadPerformanceReport(): void {
@@ -320,6 +327,10 @@ export class PixiTacticalBoardApp {
       ? `${selectedUnit.labels[this.locale]} (${selectedUnit.id})${this.state.selectedUnitIds.length > 1 ? ` +${this.state.selectedUnitIds.length - 1}` : ''}`
       : UI_COPY[this.locale].debug.none;
     const copy = UI_COPY[this.locale].debug;
+    const pauseLabel = this.locale === 'ru' ? 'Пауза' : 'Pause';
+    const pauseState = this.state.paused
+      ? this.locale === 'ru' ? 'вкл — симуляция остановлена' : 'on — simulation stopped'
+      : this.locale === 'ru' ? 'выкл — симуляция идёт' : 'off — simulation running';
 
     this.debugPanel.textContent = [
       `${copy.mouseCell}: ${mouseLabel}`,
@@ -329,6 +340,7 @@ export class PixiTacticalBoardApp {
       `${copy.facing}: ${selectedUnit ? formatDegrees(selectedUnit.facingRadians) : copy.none}`,
       `${copy.zoom}: ${this.camera.zoom.toFixed(1)}x`,
       `${copy.map}: ${this.state.map.width}×${this.state.map.height}`,
+      `${pauseLabel}: ${pauseState}`,
       '',
       ...formatBehaviorInspector(selectedUnit, this.locale),
       '',
