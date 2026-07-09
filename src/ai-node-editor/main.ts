@@ -1,7 +1,9 @@
 import './ai-node-editor.css';
 import './ai-node-editor-authoring.css';
+import '../shared/app-shell-menu.css';
 import graphData from '../data/ai/soldier_default_survival_graph.json';
 import { AI_NODE_TYPE_DEFINITIONS, type AiNodeCategory } from '../core/ai/AiNodeTypes';
+import { installAppShellMenu } from '../shared/AppShellMenu';
 
 const ENGINE_BASE_URL = 'http://127.0.0.1:8787';
 const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
@@ -14,6 +16,8 @@ const NODE_HEIGHT = 88;
 
 const root = document.querySelector<HTMLElement>('#ai-node-editor-root');
 if (!root) throw new Error('AI node editor root is missing.');
+
+installAppShellMenu({ mode: 'editor' });
 
 type JsonPrimitive = string | number | boolean | null;
 type JsonPosition = { x: number; y: number };
@@ -352,142 +356,142 @@ function onWorkspaceWheel(event: WheelEvent): void { event.preventDefault(); zoo
 function zoomBy(factor: number): void { const rect = document.querySelector<HTMLElement>('#graph-workspace')?.getBoundingClientRect(); zoomAt((rect?.left ?? 0) + (rect?.width ?? 800) / 2, (rect?.top ?? 0) + (rect?.height ?? 600) / 2, factor); }
 function zoomAt(clientX: number, clientY: number, factor: number): void { const before = screenToWorld(clientX, clientY); uiState.zoom = clamp(round2(uiState.zoom * factor), 0.35, 2.2); const rect = document.querySelector<HTMLElement>('#graph-workspace')?.getBoundingClientRect(); if (rect) { uiState.panX = clientX - rect.left - before.x * uiState.zoom; uiState.panY = clientY - rect.top - before.y * uiState.zoom; } saveUiState(); render(); }
 function resetZoom(): void { uiState.zoom = 1; uiState.panX = 0; uiState.panY = 0; saveUiState(); render(); }
-function fitGraphToView(): void { const rect = document.querySelector<HTMLElement>('#graph-workspace')?.getBoundingClientRect(); if (!rect || editorGraph.nodes.length === 0) return; const bounds = getGraphBounds(); const width = Math.max(1, bounds.maxX - bounds.minX + NODE_WIDTH); const height = Math.max(1, bounds.maxY - bounds.minY + NODE_HEIGHT); uiState.zoom = clamp(round2(Math.min((rect.width - 80) / width, (rect.height - 80) / height)), 0.35, 1.4); uiState.panX = Math.round((rect.width - width * uiState.zoom) / 2 - bounds.minX * uiState.zoom); uiState.panY = Math.round((rect.height - height * uiState.zoom) / 2 - bounds.minY * uiState.zoom); saveUiState(); render(); }
+function fitGraphToView(): void { const rect = document.querySelector<HTMLElement>('#graph-workspace')?.getBoundingClientRect(); if (!rect || editorGraph.nodes.length === 0) return; const bounds = getGraphBounds(); const width = Math.max(1, bounds.maxX - bounds.minX + NODE_WIDTH); const height = Math.max(1, bounds.maxY - bounds.minY + NODE_HEIGHT); uiState.zoom = clamp(round2(Math.min((rect.width - 80) / width, (rect.height - 80) / height)), 0.35, 1.25); uiState.panX = Math.round((rect.width - width * uiState.zoom) / 2 - bounds.minX * uiState.zoom); uiState.panY = Math.round((rect.height - height * uiState.zoom) / 2 - bounds.minY * uiState.zoom); saveUiState(); render(); }
+function toggleDetailMode(): void { uiState.nodeDetailMode = uiState.nodeDetailMode === 'compact' ? 'detailed' : 'compact'; saveUiState(); render(); }
+function cycleLanguageMode(): void { uiState.languageMode = uiState.languageMode === 'ru' ? 'en' : uiState.languageMode === 'en' ? 'both' : 'ru'; saveUiState(); render(); }
+function applyCanvasTransform(): void { const canvas = document.querySelector<HTMLElement>('.graph-canvas'); if (canvas) canvas.style.transform = `translate(${uiState.panX}px, ${uiState.panY}px) scale(${uiState.zoom})`; }
+
+function screenToWorld(clientX: number, clientY: number): NodePosition { const rect = document.querySelector<HTMLElement>('#graph-workspace')?.getBoundingClientRect(); return { x: (clientX - (rect?.left ?? 0) - uiState.panX) / uiState.zoom, y: (clientY - (rect?.top ?? 0) - uiState.panY) / uiState.zoom }; }
+function getGraphBounds(): { minX: number; minY: number; maxX: number; maxY: number } { const positions = editorGraph.nodes.map((node) => getNodePosition(node.id)); return { minX: Math.min(...positions.map((p) => p.x)), minY: Math.min(...positions.map((p) => p.y)), maxX: Math.max(...positions.map((p) => p.x)), maxY: Math.max(...positions.map((p) => p.y)) }; }
+
+function updateSvgPaths(): void { const svg = document.querySelector<SVGElement>('.graph-svg'); if (svg) svg.innerHTML = `${renderEdgePaths()}${renderConnectionPreview()}`; }
+function makeEdgePath(x1: number, y1: number, x2: number, y2: number): string { const delta = Math.max(80, Math.abs(x2 - x1) * 0.5); return `M ${x1} ${y1} C ${x1 + delta} ${y1}, ${x2 - delta} ${y2}, ${x2} ${y2}`; }
 
 function addNodeFromPalette(type: string): void {
-  const definition = getNodeTypeDefinition(type);
-  if (!definition) { validationText = `Cannot add unknown node type: ${type}.`; openBottom('console'); render(); return; }
+  const definition = AI_NODE_TYPE_DEFINITIONS[type as keyof typeof AI_NODE_TYPE_DEFINITIONS];
+  if (!definition) return;
   const id = makeUniqueNodeId(type);
-  const position = viewportCenterToWorld();
+  const selectedPosition = getNodePosition(selectedNodeId);
   editorGraph.nodes.push({ id, type, displayName: definition.label, displayNameRu: definition.labelRu, description: definition.description, descriptionRu: definition.descriptionRu, children: [], parameters: createDefaultParameters(type) });
-  nodePositions[id] = position;
+  nodePositions[id] = { x: selectedPosition.x + 270, y: selectedPosition.y + Math.max(0, editorGraph.nodes.length % 5) * 118 };
   selectedNodeId = id;
   uiState.inspectorOpen = true;
-  validationText = `Added node ${id}. Добавлена нода ${id}.`;
-  saveEditorState();
-  openBottom('console');
-  render();
+  saveGraph(); savePositions(); render();
 }
 
-function saveSelectedNodeFromInspector(): void {
-  const node = findSelectedNode();
-  try {
-    node.displayName = getInputValue('node-display-name').trim() || node.displayName;
-    node.displayNameRu = getInputValue('node-display-name-ru').trim() || node.displayNameRu;
-    node.description = getTextAreaValue('node-description').trim() || undefined;
-    node.descriptionRu = getTextAreaValue('node-description-ru').trim() || undefined;
-    node.parameters = parseParametersText(getTextAreaValue('node-parameters'));
-    validationText = `Saved node ${node.id}. Нода сохранена.`;
-    saveEditorState();
-    openBottom('console');
-    render();
-  } catch (error) {
-    validationText = `Parameter JSON error / ошибка параметров: ${formatError(error)}`;
-    openBottom('console');
-    render();
+function createDefaultParameters(type: string): JsonObject {
+  const common = { cooldownSeconds: 0, cooldownTiming: 'after' };
+  switch (type) {
+    case 'BlackboardValueAbove': return { ...common, sourceKey: 'danger', comparison: 'above', threshold: 60 };
+    case 'FlagCheck': return { ...common, flagKey: 'underFire', expected: true };
+    case 'DistanceCheck': return { ...common, from: 'self', to: 'cover', comparison: 'closer', thresholdMeters: 30 };
+    case 'StableThreshold': return { ...common, sourceKey: 'danger', enterThreshold: 70, exitThreshold: 45, stateKey: 'danger_stable' };
+    case 'TacticalCheck': return { ...common, checkKind: 'cover_exists', expected: true };
+    case 'ParameterScore': return { ...common, sourceKey: 'danger', direction: 'positive', weight: 1 };
+    case 'DistanceScore': return { ...common, targetKind: 'cover', preference: 'closer', idealMeters: 25, weight: 1 };
+    case 'DecisionInertia': return { ...common, action: 'move_to', bonus: 20, minimumSeconds: 3 };
+    case 'RandomChance': return { ...common, probabilityPercent: 50, sourceKey: 'morale' };
+    case 'FindBestObject': return { ...common, objectKind: 'cover', criteria: 'safer', searchRadiusMeters: 50, writeTo: 'best_cover_position' };
+    case 'SelectTarget': return { ...common, rule: 'nearest', writeTo: 'current_target' };
+    case 'WriteMemory': return { ...common, writeTo: 'current_goal', value: 'take_cover' };
+    case 'CopyMemory': return { ...common, fromKey: 'best_cover_position', toKey: 'move_target' };
+    case 'ForbidAction': return { ...common, action: 'fire', durationSeconds: 5, reasonRu: 'Нельзя стрелять сейчас.' };
+    case 'SetPosture': return { ...common, posture: 'prone' };
+    case 'SetAction': return { ...common, action: 'move_to', targetKey: 'best_cover_position' };
+    case 'SetMovementMode': return { ...common, mode: 'careful' };
+    case 'SayMessage': return { ...common, message: 'Under fire!', messageRu: 'Под огнём!', durationSeconds: 2 };
+    case 'WriteReason': return { ...common, reason: 'Chosen by graph.', reasonRu: 'Выбрано графом.' };
+    default: return common;
   }
 }
 
-function linkSelectedNodeToChosenChild(): void { addLink(findSelectedNode().id, document.querySelector<HTMLSelectElement>('#link-target-select')?.value ?? ''); }
-function addLink(parentId: string, childId: string): void { const parent = editorGraph.nodes.find((node) => node.id === parentId); if (!parent || !childId || parent.id === childId || !editorGraph.nodes.some((node) => node.id === childId)) { validationText = 'Cannot create link. Нельзя создать связь.'; openBottom('console'); render(); return; } if (!parent.children.includes(childId)) parent.children.push(childId); selectedNodeId = parent.id; validationText = `Linked ${parent.id} → ${childId}. Связь добавлена.`; saveEditorState(); openBottom('console'); render(); }
-function unlinkChild(parentId: string, childId: string): void { const parent = editorGraph.nodes.find((node) => node.id === parentId); if (!parent) return; parent.children = parent.children.filter((id) => id !== childId); validationText = `Removed link ${parentId} → ${childId}.`; saveEditorState(); openBottom('console'); render(); }
-function deleteSelectedNode(): void { deleteNode(selectedNodeId); }
-function deleteNode(nodeId: string): void { if (nodeId === editorGraph.rootNodeId) { validationText = 'Root cannot be deleted. Корень удалить нельзя.'; openBottom('console'); render(); return; } editorGraph.nodes = editorGraph.nodes.filter((node) => node.id !== nodeId); for (const node of editorGraph.nodes) node.children = node.children.filter((childId) => childId !== nodeId); delete nodePositions[nodeId]; selectedNodeId = ensureSelectedNodeId(editorGraph.rootNodeId); validationText = `Deleted node ${nodeId}. Нода удалена.`; saveEditorState(); openBottom('console'); render(); }
-function duplicateNode(nodeId: string): void { const source = editorGraph.nodes.find((node) => node.id === nodeId); if (!source) return; const id = makeUniqueNodeId(source.type); const sourcePosition = getNodePosition(source.id); editorGraph.nodes.push({ ...source, id, displayName: `${source.displayName} Copy`, displayNameRu: `${source.displayNameRu} копия`, children: [], parameters: { ...source.parameters } }); nodePositions[id] = { x: sourcePosition.x + 34, y: sourcePosition.y + 34 }; selectedNodeId = id; validationText = `Duplicated ${source.id} → ${id}.`; saveEditorState(); openBottom('console'); render(); }
-function addChildAction(parentId: string): void { const definition = getNodeTypeDefinition('SetAction'); if (!definition) return; const parentPosition = getNodePosition(parentId); const id = makeUniqueNodeId('SetAction'); editorGraph.nodes.push({ id, type: 'SetAction', displayName: definition.label, displayNameRu: definition.labelRu, description: definition.description, descriptionRu: definition.descriptionRu, children: [], parameters: createDefaultParameters('SetAction') }); nodePositions[id] = { x: parentPosition.x + 290, y: parentPosition.y + 30 }; addLink(parentId, id); }
+function makeUniqueNodeId(type: string): string { const base = type.replace(/[^a-zA-Z0-9]+/g, '_').toLowerCase(); let index = 1; let id = `${base}_${index}`; const used = new Set(editorGraph.nodes.map((node) => node.id)); while (used.has(id)) { index += 1; id = `${base}_${index}`; } return id; }
+function addLink(parentId: string, childId: string): void { if (parentId === childId) { render(); return; } const parent = editorGraph.nodes.find((node) => node.id === parentId); if (!parent) return; if (!parent.children.includes(childId)) parent.children.push(childId); selectedNodeId = childId; uiState.inspectorOpen = true; saveGraph(); render(); }
+function unlinkChild(parentId: string, childId: string): void { const parent = editorGraph.nodes.find((node) => node.id === parentId); if (!parent) return; parent.children = parent.children.filter((id) => id !== childId); saveGraph(); render(); }
+function linkSelectedNodeToChosenChild(): void { const targetId = document.querySelector<HTMLSelectElement>('#link-target-select')?.value; if (targetId) addLink(selectedNodeId, targetId); }
 
-function exportGraphJson(): void { const blob = new Blob([`${JSON.stringify(editorGraph, null, 2)}\n`], { type: 'application/json;charset=utf-8' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `${editorGraph.id || 'soldier_custom_graph'}.json`; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url); validationText = 'Exported JSON. JSON экспортирован.'; openBottom('console'); render(); }
-function importGraphFromFileInput(event: Event): void { const input = event.target as HTMLInputElement; const file = input.files?.[0]; input.value = ''; if (!file) return; const reader = new FileReader(); reader.addEventListener('load', () => { try { editorGraph = normalizeGraph(JSON.parse(String(reader.result ?? '{}'))); selectedNodeId = ensureSelectedNodeId(editorGraph.rootNodeId); nodePositions = {}; ensurePositionsForGraph(); saveEditorState(); validationText = `Imported ${file.name}. JSON импортирован.`; openBottom('console'); render(); } catch (error) { validationText = `Import error / ошибка импорта: ${formatError(error)}`; openBottom('console'); render(); } }); reader.readAsText(file, 'utf-8'); }
-function resetGraphToBundled(): void { editorGraph = normalizeGraph(graphData as unknown); nodePositions = { ...initialNodePositions }; selectedNodeId = ensureSelectedNodeId(editorGraph.rootNodeId); uiState.zoom = 0.9; uiState.panX = 24; uiState.panY = 18; validationText = 'Reset to clean canvas. Граф сброшен к чистому canvas.'; evaluationText = 'Evaluate пока проверяет структуру графа и возвращает первое найденное действие, если оно есть.'; saveEditorState(); openBottom('console'); render(); }
+function handleContextMenuAction(action: string): void {
+  const node = findSelectedNode();
+  contextMenuState = null;
+  switch (action) {
+    case 'select': selectNode(node.id); return;
+    case 'add-child': { const id = makeUniqueNodeId('SetAction'); const position = getNodePosition(node.id); const definition = AI_NODE_TYPE_DEFINITIONS.SetAction; editorGraph.nodes.push({ id, type: 'SetAction', displayName: definition.label, displayNameRu: definition.labelRu, description: definition.description, descriptionRu: definition.descriptionRu, children: [], parameters: createDefaultParameters('SetAction') }); node.children.push(id); nodePositions[id] = { x: position.x + 270, y: position.y + 40 }; selectedNodeId = id; break; }
+    case 'duplicate': duplicateSelectedNode(); return;
+    case 'set-link-source': uiState.linkSourceNodeId = node.id; saveUiState(); break;
+    case 'link-source-to-this': if (uiState.linkSourceNodeId) addLink(uiState.linkSourceNodeId, node.id); uiState.linkSourceNodeId = null; break;
+    case 'center': centerNode(node.id); return;
+    case 'unlink-all': node.children = []; break;
+    case 'delete': deleteSelectedNode(); return;
+  }
+  saveGraph(); savePositions(); render();
+}
 
-async function refreshEngineStatus(): Promise<void> { try { const payload = await requestEngine<EngineHealthPayload>('/engine/health'); engineOnline = payload.ok === true; lastHealthText = engineOnline ? `engine online · ${payload.textBase ?? 'en'}/${payload.overlayLanguage ?? 'ru'} · browserAI=${String(payload.browserDoesHeavyAi)}` : 'engine error'; } catch { engineOnline = false; lastHealthText = 'engine offline'; } render(); }
-async function runSimpleCheck45(): Promise<void> { validationText = 'Running auto check 4–5... / Идёт автопроверка пунктов 4–5...'; evaluationText = 'Waiting for local engine... / Жду ответ local engine...'; openBottom('console'); render(); const lines: string[] = []; try { const health = await requestEngine<EngineHealthPayload>('/engine/health'); const point4Ok = health.ok === true && health.browserDoesHeavyAi === false && health.textBase === 'en'; engineOnline = point4Ok; lastHealthText = point4Ok ? 'point 4 OK' : 'point 4 failed'; lines.push(point4Ok ? 'Point 4 OK / Пункт 4 OK — local engine connected.' : 'Point 4 ERROR / Пункт 4 ОШИБКА — unexpected engine health payload.'); } catch (error) { engineOnline = false; lastHealthText = 'engine offline'; lines.push(`Point 4 ERROR / Пункт 4 ОШИБКА — local engine does not answer: ${formatError(error)}.`); }
-  try { const validation = await requestEngine<EngineValidationPayload>('/ai/graph/validate', { graph: editorGraph }); const evaluation = await requestEngine<EngineEvaluationPayload>('/ai/graph/evaluate-once', createEvaluatePayload()); const point5Ok = validation.ok === true && validation.validation?.valid === true && evaluation.ok === true && typeof evaluation.explanation === 'string' && typeof evaluation.explanationRu === 'string'; lines.push(point5Ok ? 'Point 5 OK / Пункт 5 OK — graph validated and evaluate-once returned EN+RU explanation.' : 'Point 5 ERROR / Пункт 5 ОШИБКА — validation or evaluation failed.'); evaluationText = JSON.stringify(evaluation, null, 2); } catch (error) { lines.push(`Point 5 ERROR / Пункт 5 ОШИБКА — validation/evaluate-once failed: ${formatError(error)}.`); evaluationText = `Evaluate-once error: ${formatError(error)}`; }
-  validationText = lines.join('\n'); render(); }
-async function validateGraphThroughEngine(): Promise<void> { try { const payload = await requestEngine<EngineValidationPayload>('/ai/graph/validate', { graph: editorGraph }); validationText = JSON.stringify(payload, null, 2); engineOnline = payload.ok === true; lastHealthText = payload.ok ? 'validation OK' : 'validation errors'; openBottom('console'); } catch (error) { engineOnline = false; validationText = `Local engine error / ошибка связи: ${formatError(error)}`; lastHealthText = 'validation impossible'; openBottom('console'); } render(); }
-async function evaluateOnceThroughEngine(): Promise<void> { try { const payload = await requestEngine<EngineEvaluationPayload>('/ai/graph/evaluate-once', createEvaluatePayload()); evaluationText = JSON.stringify(payload, null, 2); validationText = 'Evaluate once finished. See inspector result card / результат справа.'; engineOnline = payload.ok === true; lastHealthText = payload.ok ? 'evaluate OK' : 'evaluate error'; } catch (error) { engineOnline = false; evaluationText = `Local engine error / ошибка связи: ${formatError(error)}`; lastHealthText = 'evaluate impossible'; } render(); }
-function createEvaluatePayload(): EngineEvaluateRequest { return { graph: editorGraph, unitId: 'editor_preview_soldier', hasOrder: true, blackboard: { danger: 85, stress: 70, suppression: 35, morale: 60, health: 100, ammo: 30, hasOrder: true, enemyVisible: true, underFire: true, current_action: 'wait', best_cover_position: { x: 18.5, y: 12.5 } } }; }
-async function requestEngine<TPayload>(pathname: string, body?: unknown): Promise<TPayload> { const response = await fetch(`${ENGINE_BASE_URL}${pathname}`, { method: body === undefined ? 'GET' : 'POST', headers: body === undefined ? undefined : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) }); const payload = await response.json() as TPayload; if (!response.ok) throw new Error(JSON.stringify(payload)); return payload; }
+function duplicateSelectedNode(): void { const node = findSelectedNode(); const id = makeUniqueNodeId(node.type); const position = getNodePosition(node.id); editorGraph.nodes.push({ ...node, id, children: [...node.children], parameters: { ...node.parameters }, displayName: `${node.displayName} Copy`, displayNameRu: `${node.displayNameRu} копия` }); nodePositions[id] = { x: position.x + 240, y: position.y + 36 }; selectedNodeId = id; saveGraph(); savePositions(); render(); }
+function centerNode(nodeId: string): void { const position = getNodePosition(nodeId); const rect = document.querySelector<HTMLElement>('#graph-workspace')?.getBoundingClientRect(); if (rect) { uiState.panX = Math.round(rect.width / 2 - (position.x + NODE_WIDTH / 2) * uiState.zoom); uiState.panY = Math.round(rect.height / 2 - (position.y + NODE_HEIGHT / 2) * uiState.zoom); saveUiState(); } render(); }
 
-function handleContextMenuAction(action: string): void { const nodeId = contextMenuState?.nodeId; contextMenuState = null; if (!nodeId) { render(); return; } if (action === 'select') return selectNode(nodeId); if (action === 'add-child') return addChildAction(nodeId); if (action === 'duplicate') return duplicateNode(nodeId); if (action === 'set-link-source') { uiState.linkSourceNodeId = nodeId; validationText = `Link source set: ${nodeId}.`; saveUiState(); openBottom('console'); render(); return; } if (action === 'link-source-to-this') { if (uiState.linkSourceNodeId) { addLink(uiState.linkSourceNodeId, nodeId); uiState.linkSourceNodeId = null; saveUiState(); } return; } if (action === 'center') return centerViewOnNode(nodeId); if (action === 'unlink-all') { const node = editorGraph.nodes.find((candidate) => candidate.id === nodeId); if (node) { node.children = []; validationText = `Removed all children from ${nodeId}.`; saveEditorState(); openBottom('console'); } render(); return; } if (action === 'delete') return deleteNode(nodeId); render(); }
-function closeContextMenuIfNeeded(event: MouseEvent): void { if ((event.target as HTMLElement).closest('.node-context-menu')) return; if (contextMenuState) { contextMenuState = null; render(); } }
+function saveSelectedNodeFromInspector(): void {
+  const node = findSelectedNode();
+  const nextDisplay = document.querySelector<HTMLInputElement>('#node-display-name')?.value.trim();
+  const nextDisplayRu = document.querySelector<HTMLInputElement>('#node-display-name-ru')?.value.trim();
+  const nextDescription = document.querySelector<HTMLTextAreaElement>('#node-description')?.value;
+  const nextDescriptionRu = document.querySelector<HTMLTextAreaElement>('#node-description-ru')?.value;
+  const paramsRaw = document.querySelector<HTMLTextAreaElement>('#node-parameters')?.value ?? '{}';
+  try {
+    const parsed = JSON.parse(paramsRaw);
+    if (!isRecord(parsed)) throw new Error('parameters must be an object');
+    node.displayName = nextDisplay || node.displayName;
+    node.displayNameRu = nextDisplayRu || node.displayNameRu;
+    node.description = nextDescription;
+    node.descriptionRu = nextDescriptionRu;
+    node.parameters = parsed as JsonObject;
+    saveGraph(); validationText = `Node saved: ${node.id}`; render();
+  } catch (error) {
+    validationText = `Parameters JSON error: ${error instanceof Error ? error.message : String(error)}`;
+    uiState.bottomOpen = true; uiState.bottomTab = 'console'; render();
+  }
+}
+
+function deleteSelectedNode(): void { if (selectedNodeId === editorGraph.rootNodeId) return; const deleting = selectedNodeId; editorGraph.nodes = editorGraph.nodes.filter((node) => node.id !== deleting); for (const node of editorGraph.nodes) node.children = node.children.filter((child) => child !== deleting); delete nodePositions[deleting]; selectedNodeId = ensureSelectedNodeId(editorGraph.rootNodeId); saveGraph(); savePositions(); render(); }
+function resetGraphToBundled(): void { editorGraph = normalizeGraph(graphData as unknown); nodePositions = { ...initialNodePositions }; selectedNodeId = editorGraph.rootNodeId; saveGraph(); savePositions(); validationText = 'Canvas очищен: только Старт.'; render(); }
+function exportGraphJson(): void { const blob = new Blob([JSON.stringify(editorGraph, null, 2)], { type: 'application/json;charset=utf-8' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `${editorGraph.id || 'ai-graph'}.json`; link.click(); URL.revokeObjectURL(url); }
+function importGraphFromFileInput(event: Event): void { const file = (event.target as HTMLInputElement).files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { editorGraph = normalizeGraph(JSON.parse(String(reader.result))); ensurePositionsForGraph(); selectedNodeId = ensureSelectedNodeId(editorGraph.rootNodeId); saveGraph(); savePositions(); validationText = `Imported ${file.name}`; render(); } catch (error) { validationText = `Import error: ${error instanceof Error ? error.message : String(error)}`; render(); } }; reader.readAsText(file, 'utf-8'); }
+
+async function refreshEngineStatus(): Promise<void> { try { const health = await fetchJson<EngineHealthPayload>(`${ENGINE_BASE_URL}/engine/health`); engineOnline = Boolean(health.ok); lastHealthText = engineOnline ? `engine online · text=${health.textBase ?? 'en'} · overlay=${health.overlayLanguage ?? 'ru'}` : 'engine responded with error'; } catch { engineOnline = false; lastHealthText = 'engine offline: run Run-AI-Node-Editor.bat'; } render(); }
+async function runSimpleCheck45(): Promise<void> { await refreshEngineStatus(); await validateGraphThroughEngine(); await evaluateOnceThroughEngine(); const ok4 = engineOnline ? 'Пункт 4 OK: local engine online.' : 'Пункт 4 FAIL: local engine offline.'; const ok5 = evaluationText.includes('ok') || evaluationText.includes('valid') || evaluationText.includes('валид') ? 'Пункт 5 OK: evaluate-once ответил.' : 'Пункт 5 FAIL: evaluate-once не ответил.'; validationText = `${ok4}\n${ok5}\n\n${validationText}`; uiState.bottomOpen = true; uiState.bottomTab = 'console'; render(); }
+async function validateGraphThroughEngine(): Promise<void> { try { const payload = await fetchJson<EngineValidationPayload>(`${ENGINE_BASE_URL}/ai/graph/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editorGraph) }); validationText = JSON.stringify(payload, null, 2); } catch (error) { validationText = `Validate failed: ${error instanceof Error ? error.message : String(error)}`; } uiState.bottomOpen = true; uiState.bottomTab = 'console'; render(); }
+async function evaluateOnceThroughEngine(): Promise<void> { const request: EngineEvaluateRequest = { graph: editorGraph, unitId: 'soldier_editor_preview', blackboard: editorGraph.blackboardDefaults, hasOrder: false }; try { const payload = await fetchJson<EngineEvaluationPayload>(`${ENGINE_BASE_URL}/ai/graph/evaluate-once`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) }); evaluationText = JSON.stringify(payload, null, 2); } catch (error) { evaluationText = `Evaluate failed: ${error instanceof Error ? error.message : String(error)}`; } render(); }
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> { const response = await fetch(url, init); if (!response.ok) throw new Error(`${response.status} ${response.statusText}`); return await response.json() as T; }
+
 function togglePalette(): void { uiState.paletteOpen = !uiState.paletteOpen; saveUiState(); render(); }
 function toggleInspector(): void { uiState.inspectorOpen = !uiState.inspectorOpen; saveUiState(); render(); }
 function toggleBottomPanel(): void { uiState.bottomOpen = !uiState.bottomOpen; saveUiState(); render(); }
 function setBottomTab(tab: BottomTab): void { uiState.bottomTab = tab; uiState.bottomOpen = true; saveUiState(); render(); }
-function openBottom(tab: BottomTab): void { uiState.bottomOpen = true; uiState.bottomTab = tab; saveUiState(); }
-function toggleDetailMode(): void { uiState.nodeDetailMode = uiState.nodeDetailMode === 'compact' ? 'detailed' : 'compact'; saveUiState(); render(); }
-function cycleLanguageMode(): void { uiState.languageMode = uiState.languageMode === 'ru' ? 'en' : uiState.languageMode === 'en' ? 'both' : 'ru'; saveUiState(); render(); }
-function applyCanvasTransform(): void { const canvas = document.querySelector<HTMLElement>('.graph-canvas'); if (canvas) canvas.style.transform = `translate(${uiState.panX}px, ${uiState.panY}px) scale(${uiState.zoom})`; }
-function updateSvgPaths(): void { const svg = document.querySelector<SVGSVGElement>('.graph-svg'); if (svg) svg.innerHTML = `${renderEdgePaths()}${renderConnectionPreview()}`; }
-function makeEdgePath(startX: number, startY: number, endX: number, endY: number): string { const midX = Math.round((startX + endX) / 2); return `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`; }
-function screenToWorld(clientX: number, clientY: number): NodePosition { const rect = document.querySelector<HTMLElement>('#graph-workspace')?.getBoundingClientRect(); return { x: ((clientX - (rect?.left ?? 0)) - uiState.panX) / uiState.zoom, y: ((clientY - (rect?.top ?? 0)) - uiState.panY) / uiState.zoom }; }
-function viewportCenterToWorld(): NodePosition { const rect = document.querySelector<HTMLElement>('#graph-workspace')?.getBoundingClientRect(); return { x: clamp(Math.round((((rect?.width ?? 900) / 2) - uiState.panX) / uiState.zoom - NODE_WIDTH / 2), 20, CANVAS_WIDTH - NODE_WIDTH - 20), y: clamp(Math.round((((rect?.height ?? 600) / 2) - uiState.panY) / uiState.zoom - NODE_HEIGHT / 2), 20, CANVAS_HEIGHT - NODE_HEIGHT - 20) }; }
-function centerViewOnNode(nodeId: string): void { const rect = document.querySelector<HTMLElement>('#graph-workspace')?.getBoundingClientRect(); const position = getNodePosition(nodeId); uiState.panX = Math.round((rect?.width ?? 900) / 2 - (position.x + NODE_WIDTH / 2) * uiState.zoom); uiState.panY = Math.round((rect?.height ?? 600) / 2 - (position.y + NODE_HEIGHT / 2) * uiState.zoom); saveUiState(); render(); }
-function getGraphBounds(): { minX: number; minY: number; maxX: number; maxY: number } { const positions = editorGraph.nodes.map((node) => getNodePosition(node.id)); return { minX: Math.min(...positions.map((position) => position.x)), minY: Math.min(...positions.map((position) => position.y)), maxX: Math.max(...positions.map((position) => position.x)), maxY: Math.max(...positions.map((position) => position.y)) }; }
-function getNodeTitle(node: EditableAiNode): string { if (uiState.languageMode === 'en') return node.displayName; if (uiState.languageMode === 'both') return `${node.displayNameRu} · ${node.displayName}`; return node.displayNameRu || node.displayName; }
-function getNodeSubtitle(node: EditableAiNode): string { if (uiState.languageMode === 'en') return `RU: ${node.displayNameRu || node.displayName}`; return `EN: ${node.displayName}`; }
-function getNodeVisibleDescription(node: EditableAiNode): string { if (uiState.languageMode === 'en') return node.description || getNodeDescription(node, 'en'); if (uiState.languageMode === 'both') return `${node.descriptionRu || getNodeDescription(node, 'ru')} / ${node.description || getNodeDescription(node, 'en')}`; return node.descriptionRu || getNodeDescription(node, 'ru'); }
-function isPortEvent(event: Event): boolean { return Boolean((event.target as HTMLElement).closest('.node-port')); }
+function closeContextMenuIfNeeded(event: MouseEvent): void { if (!(event.target as HTMLElement).closest('.node-context-menu')) { contextMenuState = null; render(); } }
+
+function findSelectedNode(): EditableAiNode { return editorGraph.nodes.find((node) => node.id === selectedNodeId) ?? editorGraph.nodes[0]; }
+function ensureSelectedNodeId(preferred: string): string { return editorGraph.nodes.some((node) => node.id === preferred) ? preferred : editorGraph.nodes[0]?.id ?? 'root'; }
+function getNodePosition(nodeId: string): NodePosition { return nodePositions[nodeId] ?? initialNodePositions[nodeId] ?? { x: 140, y: 140 }; }
+function getNodeCategory(node: EditableAiNode): AiNodeCategory { return AI_NODE_TYPE_DEFINITIONS[node.type as keyof typeof AI_NODE_TYPE_DEFINITIONS]?.category ?? 'debug'; }
+function getNodeTitle(node: EditableAiNode): string { if (uiState.languageMode === 'en') return node.displayName; if (uiState.languageMode === 'both') return `${node.displayNameRu} / ${node.displayName}`; return node.displayNameRu || node.displayName; }
+function getNodeSubtitle(node: EditableAiNode): string { const definition = AI_NODE_TYPE_DEFINITIONS[node.type as keyof typeof AI_NODE_TYPE_DEFINITIONS]; return uiState.languageMode === 'en' ? definition?.description ?? node.type : definition?.descriptionRu ?? node.type; }
+function getNodeVisibleDescription(node: EditableAiNode): string { if (uiState.languageMode === 'en') return node.description ?? ''; if (uiState.languageMode === 'both') return `${node.descriptionRu ?? ''}\n${node.description ?? ''}`.trim(); return node.descriptionRu ?? node.description ?? ''; }
+function isPortEvent(event: PointerEvent): boolean { return Boolean((event.target as HTMLElement).closest('.node-port')); }
 
 function loadStoredGraph(): EditableAiGraph | null { try { const raw = localStorage.getItem(GRAPH_STORAGE_KEY); return raw ? normalizeGraph(JSON.parse(raw)) : null; } catch { return null; } }
-function loadStoredPositions(): Record<string, NodePosition> { try { const raw = localStorage.getItem(POSITION_STORAGE_KEY); return raw ? normalizePositions(JSON.parse(raw)) : { ...initialNodePositions }; } catch { return { ...initialNodePositions }; } }
-function loadStoredUiState(): EditorUiState { const defaults: EditorUiState = { paletteOpen: false, inspectorOpen: true, bottomOpen: false, bottomTab: 'console', zoom: 0.9, panX: 24, panY: 18, languageMode: 'ru', nodeDetailMode: 'compact', linkSourceNodeId: null }; try { const raw = localStorage.getItem(UI_STORAGE_KEY); if (!raw) return defaults; const parsed = JSON.parse(raw) as Partial<EditorUiState>; return { ...defaults, ...parsed, zoom: typeof parsed.zoom === 'number' ? clamp(parsed.zoom, 0.35, 2.2) : defaults.zoom, panX: typeof parsed.panX === 'number' ? parsed.panX : defaults.panX, panY: typeof parsed.panY === 'number' ? parsed.panY : defaults.panY }; } catch { return defaults; } }
-function saveEditorState(): void { localStorage.setItem(GRAPH_STORAGE_KEY, JSON.stringify(editorGraph)); savePositions(); saveUiState(); }
+function loadStoredPositions(): Record<string, NodePosition> { try { const raw = localStorage.getItem(POSITION_STORAGE_KEY); const parsed = raw ? JSON.parse(raw) : {}; return isRecord(parsed) ? parsed as Record<string, NodePosition> : { ...initialNodePositions }; } catch { return { ...initialNodePositions }; } }
+function loadStoredUiState(): EditorUiState { try { const parsed = JSON.parse(localStorage.getItem(UI_STORAGE_KEY) ?? '{}'); return { paletteOpen: parsed.paletteOpen ?? false, inspectorOpen: parsed.inspectorOpen ?? true, bottomOpen: parsed.bottomOpen ?? false, bottomTab: parsed.bottomTab === 'json' ? 'json' : 'console', zoom: typeof parsed.zoom === 'number' ? parsed.zoom : 1, panX: typeof parsed.panX === 'number' ? parsed.panX : 0, panY: typeof parsed.panY === 'number' ? parsed.panY : 0, languageMode: parsed.languageMode === 'en' || parsed.languageMode === 'both' ? parsed.languageMode : 'ru', nodeDetailMode: parsed.nodeDetailMode === 'detailed' ? 'detailed' : 'compact', linkSourceNodeId: typeof parsed.linkSourceNodeId === 'string' ? parsed.linkSourceNodeId : null }; } catch { return { paletteOpen: false, inspectorOpen: true, bottomOpen: false, bottomTab: 'console', zoom: 1, panX: 0, panY: 0, languageMode: 'ru', nodeDetailMode: 'compact', linkSourceNodeId: null }; } }
+function saveGraph(): void { localStorage.setItem(GRAPH_STORAGE_KEY, JSON.stringify(editorGraph)); }
 function savePositions(): void { localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(nodePositions)); }
 function saveUiState(): void { localStorage.setItem(UI_STORAGE_KEY, JSON.stringify(uiState)); }
+function ensurePositionsForGraph(): void { for (const node of editorGraph.nodes) if (!nodePositions[node.id]) nodePositions[node.id] = initialNodePositions[node.id] ?? { x: 140 + editorGraph.nodes.indexOf(node) * 240, y: 140 }; }
 
-function normalizeGraph(value: unknown): EditableAiGraph { if (!isRecord(value)) throw new Error('Graph JSON must be an object.'); const nodes = (Array.isArray(value.nodes) ? value.nodes : []).map(normalizeNode); if (nodes.length === 0) throw new Error('Graph must contain at least one node.'); const rootNodeId = readString(value, 'rootNodeId', nodes[0].id); return { version: 1, id: readString(value, 'id', 'soldier_custom_graph'), name: readString(value, 'name', 'Soldier Custom Graph'), nameRu: readOptionalString(value, 'nameRu'), description: readOptionalString(value, 'description'), descriptionRu: readOptionalString(value, 'descriptionRu'), rootNodeId, blackboardDefaults: normalizeJsonObject(value.blackboardDefaults), nodes }; }
-function normalizeNode(value: unknown, index: number): EditableAiNode { if (!isRecord(value)) throw new Error(`Node #${index + 1} must be an object.`); const type = readString(value, 'type', 'SetAction'); const definition = getNodeTypeDefinition(type); const id = readString(value, 'id', `${toSnakeCase(type)}_${index + 1}`); return { id, type, displayName: readString(value, 'displayName', definition?.label ?? type), displayNameRu: readString(value, 'displayNameRu', definition?.labelRu ?? type), description: readOptionalString(value, 'description') ?? definition?.description, descriptionRu: readOptionalString(value, 'descriptionRu') ?? definition?.descriptionRu, children: Array.isArray(value.children) ? value.children.filter((child): child is string => typeof child === 'string' && child.length > 0) : [], parameters: normalizeJsonObject(value.parameters) }; }
-function normalizeJsonObject(value: unknown): JsonObject { if (!isRecord(value)) return {}; const result: JsonObject = {}; for (const [key, rawValue] of Object.entries(value)) if (isJsonValue(rawValue)) result[key] = rawValue; return result; }
-function normalizePositions(value: unknown): Record<string, NodePosition> { if (!isRecord(value)) return { ...initialNodePositions }; const result: Record<string, NodePosition> = { ...initialNodePositions }; for (const [nodeId, position] of Object.entries(value)) if (isRecord(position) && typeof position.x === 'number' && typeof position.y === 'number') result[nodeId] = { x: position.x, y: position.y }; return result; }
-function parseParametersText(text: string): JsonObject { const parsed = JSON.parse(text.trim() || '{}') as unknown; if (!isRecord(parsed)) throw new Error('parameters must be a JSON object.'); for (const [key, value] of Object.entries(parsed)) if (!isJsonValue(value)) throw new Error(`parameter ${key} has unsupported value; allowed: string, number, boolean, null, {x,y}.`); return parsed as JsonObject; }
+function normalizeGraph(value: unknown): EditableAiGraph { const raw = value as Partial<EditableAiGraph>; const nodes = Array.isArray(raw.nodes) ? raw.nodes.map(normalizeNode) : []; if (nodes.length === 0) nodes.push({ id: 'root', type: 'Root', displayName: 'Start', displayNameRu: 'Старт', description: '', descriptionRu: '', children: [], parameters: {} }); return { version: 1, id: String(raw.id ?? 'soldier_graph'), name: String(raw.name ?? 'Soldier Graph'), nameRu: typeof raw.nameRu === 'string' ? raw.nameRu : 'Граф солдата', description: typeof raw.description === 'string' ? raw.description : '', descriptionRu: typeof raw.descriptionRu === 'string' ? raw.descriptionRu : '', rootNodeId: String(raw.rootNodeId ?? nodes[0].id), blackboardDefaults: isRecord(raw.blackboardDefaults) ? raw.blackboardDefaults as JsonObject : {}, nodes }; }
+function normalizeNode(value: unknown): EditableAiNode { const raw = value as Partial<EditableAiNode>; const definition = AI_NODE_TYPE_DEFINITIONS[String(raw.type ?? 'Root') as keyof typeof AI_NODE_TYPE_DEFINITIONS]; return { id: String(raw.id ?? makeUniqueNodeId(String(raw.type ?? 'Root'))), type: String(raw.type ?? 'Root'), displayName: String(raw.displayName ?? definition?.label ?? raw.type ?? 'Node'), displayNameRu: String(raw.displayNameRu ?? definition?.labelRu ?? raw.type ?? 'Нода'), description: typeof raw.description === 'string' ? raw.description : definition?.description ?? '', descriptionRu: typeof raw.descriptionRu === 'string' ? raw.descriptionRu : definition?.descriptionRu ?? '', children: Array.isArray(raw.children) ? raw.children.filter((child): child is string => typeof child === 'string') : [], parameters: isRecord(raw.parameters) ? raw.parameters as JsonObject : {} }; }
 
-function createDefaultParameters(type: string): JsonObject {
-  const cooldown = { cooldownSeconds: 0, cooldownTiming: 'after' };
-  if (type === 'BlackboardValueAbove') return { sourceKey: 'danger', comparison: 'above', threshold: 50, ...cooldown };
-  if (type === 'FlagCheck') return { flagKey: 'enemyVisible', expected: true, ...cooldown };
-  if (type === 'DistanceCheck') return { from: 'self', to: 'cover', comparison: 'closer', thresholdMeters: 30, ...cooldown };
-  if (type === 'StableThreshold') return { sourceKey: 'danger', enterThreshold: 65, exitThreshold: 45, stateKey: 'danger_state', ...cooldown };
-  if (type === 'TacticalCheck') return { checkKind: 'line_of_sight', expected: true, ...cooldown };
-  if (type === 'ParameterScore') return { sourceKey: 'danger', weight: 1, direction: 'positive', ...cooldown };
-  if (type === 'DistanceScore') return { targetKind: 'cover', preference: 'closer', idealMeters: 20, weight: 1, ...cooldown };
-  if (type === 'DecisionInertia') return { action: 'move_to_cover', bonus: 12, minimumSeconds: 2, ...cooldown };
-  if (type === 'RandomChance') return { probabilityPercent: 30, modifierKey: 'morale', ...cooldown };
-  if (type === 'FindBestObject') return { objectKind: 'cover', searchRadiusMeters: 35, writeTo: 'best_object', criteria: 'safer', ...cooldown };
-  if (type === 'SelectTarget') return { rule: 'most_dangerous', writeTo: 'current_target', ...cooldown };
-  if (type === 'WriteMemory') return { writeTo: 'current_goal', value: 'move_to_cover', ...cooldown };
-  if (type === 'CopyMemory') return { fromKey: 'visible_enemy_position', toKey: 'remembered_enemy_position', ...cooldown };
-  if (type === 'ForbidAction') return { action: 'continue_order', reason: 'danger too high', durationSeconds: 3, ...cooldown };
-  if (type === 'SetPosture') return { posture: 'prone', ...cooldown };
-  if (type === 'SetAction') return { action: 'move_to', targetKey: 'best_cover_position', ...cooldown };
-  if (type === 'SetMovementMode') return { mode: 'careful', ...cooldown };
-  if (type === 'SayMessage') return { messageRu: 'Под огнём!', message: 'Under fire!', durationSeconds: 2, ...cooldown };
-  if (type === 'WriteReason') return { reasonRu: 'Объяснить, почему выбрана эта ветка.', reason: 'Explain why this branch was selected.', ...cooldown };
-  return { ...cooldown };
-}
-
-function ensurePositionsForGraph(): void { editorGraph.nodes.forEach((node, index) => { if (!nodePositions[node.id]) nodePositions[node.id] = initialNodePositions[node.id] ?? createFallbackPosition(index); }); }
-function getNodePosition(nodeId: string): NodePosition { if (!nodePositions[nodeId]) nodePositions[nodeId] = createFallbackPosition(editorGraph.nodes.findIndex((node) => node.id === nodeId)); return nodePositions[nodeId]; }
-function createFallbackPosition(index: number): NodePosition { const safeIndex = Math.max(0, index); return { x: 80 + (safeIndex % 5) * 260, y: 80 + Math.floor(safeIndex / 5) * 130 }; }
-function ensureSelectedNodeId(preferredId: string): string { if (editorGraph.nodes.some((node) => node.id === preferredId)) return preferredId; return editorGraph.nodes[0]?.id ?? 'root'; }
-function findSelectedNode(): EditableAiNode { return editorGraph.nodes.find((node) => node.id === selectedNodeId) ?? editorGraph.nodes[0]; }
-function getNodeTypeDefinition(type: string) { return Object.values(AI_NODE_TYPE_DEFINITIONS).find((definition) => definition.type === type); }
-function getNodeCategory(node: EditableAiNode): AiNodeCategory { return getNodeTypeDefinition(node.type)?.category ?? 'debug'; }
-function getNodeDescription(node: EditableAiNode, language: 'ru' | 'en'): string { const definition = getNodeTypeDefinition(node.type); return language === 'ru' ? definition?.descriptionRu ?? 'Описание отсутствует.' : definition?.description ?? 'No description.'; }
-function makeUniqueNodeId(type: string): string { const base = toSnakeCase(type); let index = 1; let id = `${base}_${index}`; while (editorGraph.nodes.some((node) => node.id === id)) { index += 1; id = `${base}_${index}`; } return id; }
-
-function getInputValue(id: string): string { return document.querySelector<HTMLInputElement>(`#${id}`)?.value ?? ''; }
-function getTextAreaValue(id: string): string { return document.querySelector<HTMLTextAreaElement>(`#${id}`)?.value ?? ''; }
-function readString(record: Record<string, unknown>, key: string, fallback: string): string { const value = record[key]; return typeof value === 'string' && value.trim().length > 0 ? value : fallback; }
-function readOptionalString(record: Record<string, unknown>, key: string): string | undefined { const value = record[key]; return typeof value === 'string' && value.trim().length > 0 ? value : undefined; }
-function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
-function isJsonValue(value: unknown): value is JsonValue { return value === null || ['string', 'number', 'boolean'].includes(typeof value) || (isRecord(value) && typeof value.x === 'number' && typeof value.y === 'number'); }
-function toSnakeCase(value: string): string { return value.replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'node'; }
+function escapeHtml(value: string): string { return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;'); }
+function escapeAttribute(value: string): string { return escapeHtml(value); }
+function cssEscape(value: string): string { return value.replace(/(["\\])/g, '\\$1'); }
+function shorten(value: string, max: number): string { return value.length > max ? `${value.slice(0, max)}…` : value; }
 function clamp(value: number, min: number, max: number): number { return Math.max(min, Math.min(max, value)); }
 function round2(value: number): number { return Math.round(value * 100) / 100; }
-function shorten(value: string, maxLength: number): string { return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value; }
-function formatError(error: unknown): string { return error instanceof Error ? error.message : String(error); }
-function cssEscape(value: string): string { return typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(value) : value.replace(/"/g, '\\"'); }
-function escapeHtml(value: string): string { return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
-function escapeAttribute(value: string): string { return escapeHtml(value).replace(/\n/g, ' '); }
+function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
