@@ -1,0 +1,79 @@
+{
+  "id": "ai-single-unit-editor",
+  "title": "AI Single-Unit Editor — Node-Based Constructor",
+  "status": "draft",
+  "goal": "Создать node-based редактор ИИ одиночного юнита, привязанный к существующей RTS wrapper (Real-wargame), где поведение солдата собирается из нод, опирается на существующие BehaviorModel, UnitModel, GameHudControls, SimulationState и roadmap Soldier Behavior Lab.",
+  "current_focus": "Определить data contract между node editor и RTS симуляцией: какие ноды/связи/триггеры нужны для первой рабочей версии одиночного поведения (idle, patrol, react to contact, move to cover). Согласовать интеграцию с существующей RTS обёрткой без переписывания симуляции.",
+  "key_decisions": [
+    "Node editor не является самостоятельным generic framework; он привязан к data contract с RTS wrapper.",
+    "Первая версия — только одиночный юнит (single-unit); squad-level AI отложен.",
+    "Не переписывать существующую RTS симуляцию; node editor работает через существующие BehaviorModel, UnitModel, SimulationState, GameHudControls.",
+    "Поведение описывается графом нод (conditions + actions + transitions), а не императивным кодом."
+  ],
+  "must_read_first": [
+    "docs/subprojects/ai-single-unit-editor/SUBPROJECT.md",
+    "docs/subprojects/ai-single-unit-editor/subproject.json",
+    "docs/subprojects/ai-single-unit-editor/JOURNAL.md",
+    "docs/subprojects/real-wargame-start/SUBPROJECT.md",
+    "docs/subprojects/real-wargame-start/ROADMAP_SOLDIER_BEHAVIOR_LAB.md",
+    "docs/subprojects/real-wargame-start/RTS_FOUNDATION_DECISIONS.md"
+  ],
+  "main_files": [
+    "src/core/behavior/BehaviorModel.ts",
+    "src/core/units/UnitModel.ts",
+    "src/core/simulation/SimulationState.ts",
+    "src/ui/GameHudControls.ts",
+    "src/rendering/PixiUnitRenderer.ts",
+    "src/core/knowledge/UnitKnowledge.ts",
+    "src/core/sensors/EnvironmentSensors.ts",
+    "src/data/maps/test_map.json",
+    "src/data/units/test_units.json"
+  ],
+  "test_files": [],
+  "manual_docs": [
+    "docs/subprojects/real-wargame-start/ROADMAP_SOLDIER_BEHAVIOR_LAB.md",
+    "docs/subprojects/real-wargame-start/RTS_FOUNDATION_DECISIONS.md",
+    "docs/subprojects/real-wargame-start/test-program.md"
+  ],
+  "do_not_read_by_default": [
+    "docs/ai/ unless task requires agent workflow changes",
+    "docs/subprojects/github-collaboration/",
+    "docs/subprojects/real-wargame-start/CODEX_HANDOFF_TAC_BOARD_V0_1.md",
+    "Large unrelated reports or telemetry dumps"
+  ],
+  "commands": [
+    "python scripts/subproject_context.py --list",
+    "python scripts/subproject_context.py ai-single-unit-editor --brief",
+    "python scripts/subproject_context.py ai-single-unit-editor --opencode",
+    "python scripts/subproject_context.py ai-single-unit-editor --files"
+  ],
+  "important_sessions": [
+    "2026-07-09: subproject scaffold created from _template with ai-single-unit-editor id"
+  ],
+  "context_sources": [
+    "docs/subprojects/real-wargame-start/",
+    "docs/subprojects/_template/",
+    "inbox/MASTER_PROJECT_S_2D_TACTICAL_COMMAND_GAME.md"
+  ],
+  "safety_rules": [
+    "Не переписывать всю RTS-симуляцию: node editor только надстройка над существующим SimulationState, BehaviorModel, UnitModel.",
+    "Не делать сразу squad-level AI: первая версия ограничена одним юнитом.",
+    "Не делать отвязанный generic node framework без data contract: редактор осмыслен только в связке с RTS wrapper.",
+    "Не изменять core/rendering/input разделение; core не должен импортировать PixiJS.",
+    "Не ломать экспорт/загрузку JSON сцены и существующий редактор карт."
+  ],
+  "suggested_verification": [
+    "python scripts/subproject_context.py --list — ai-single-unit-editor должен быть в списке",
+    "python scripts/subproject_context.py ai-single-unit-editor --brief — поля goal, current_focus, must_read_first, main_files, commands",
+    "python scripts/subproject_context.py ai-single-unit-editor --opencode — task memory, safety rules, suggested verification",
+    "python scripts/subproject_context.py ai-single-unit-editor --files — main_files, test_files, manual_docs"
+  ],
+  "zworker": {
+    "boundaries": [
+      "Use only publicly readable source links and explicitly provided context.",
+      "Return ZIP with answer.md at root and repo-relative files.",
+      "Do not claim local git, test, build, browser, or runtime state."
+    ],
+    "expected_answer_format": "ZIP with answer.md at root and repo-relative files"
+  }
+}
