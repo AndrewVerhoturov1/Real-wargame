@@ -1,4 +1,5 @@
 import './ai-node-editor.css';
+import './ai-node-editor-stage4.css';
 import graphData from '../data/ai/soldier_default_survival_graph.json';
 import { AI_NODE_TYPE_DEFINITIONS, type AiNodeCategory, type AiNodeType } from '../core/ai/AiNodeTypes';
 
