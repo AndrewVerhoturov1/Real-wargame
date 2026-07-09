@@ -3,6 +3,7 @@
   "id": "soldier_default_survival_graph",
   "name": "Soldier Default Survival Graph",
   "nameRu": "Базовый граф выживания солдата",
+  "description": "First single-soldier JSON graph: choose between cover, continuing the order, and observing.",
   "descriptionRu": "Первый JSON-граф одиночного солдата: выбрать между укрытием, продолжением приказа и наблюдением.",
   "rootNodeId": "root",
   "blackboardDefaults": {
@@ -18,20 +19,25 @@
     {
       "id": "root",
       "type": "Root",
+      "displayName": "Soldier Behavior Start",
       "displayNameRu": "Старт поведения солдата",
       "children": ["soldier_decision"]
     },
     {
       "id": "soldier_decision",
       "type": "UtilitySelector",
+      "displayName": "Soldier Action Choice",
       "displayNameRu": "Выбор действия солдата",
+      "description": "Compares behavior options and selects the highest-scoring branch.",
       "descriptionRu": "Сравнивает варианты поведения и выбирает ветку с лучшим баллом.",
       "children": ["critical_survival", "continue_order", "observe_area"]
     },
     {
       "id": "critical_survival",
       "type": "ActionBranch",
+      "displayName": "Critical Survival",
       "displayNameRu": "Критическое выживание",
+      "description": "When danger is high, the soldier should look for cover or go prone.",
       "descriptionRu": "При высокой опасности солдат должен искать укрытие или лечь.",
       "children": [
         "critical_danger_condition",
@@ -48,6 +54,7 @@
     {
       "id": "critical_danger_condition",
       "type": "DangerAbove",
+      "displayName": "Danger Above 60",
       "displayNameRu": "Опасность выше 60",
       "parameters": {
         "threshold": 60
@@ -56,6 +63,7 @@
     {
       "id": "critical_stress_condition",
       "type": "StressAbove",
+      "displayName": "Stress Above 55",
       "displayNameRu": "Стресс выше 55",
       "parameters": {
         "threshold": 55
@@ -64,6 +72,7 @@
     {
       "id": "score_danger_for_cover",
       "type": "ScoreDanger",
+      "displayName": "Danger Pushes Toward Cover",
       "displayNameRu": "Опасность толкает к укрытию",
       "parameters": {
         "weight": 0.8,
@@ -73,6 +82,7 @@
     {
       "id": "score_stress_for_cover",
       "type": "ScoreStress",
+      "displayName": "Stress Pushes Toward Cover",
       "displayNameRu": "Стресс толкает к укрытию",
       "parameters": {
         "weight": 0.45,
@@ -82,6 +92,7 @@
     {
       "id": "score_cover_need",
       "type": "ScoreCoverNeed",
+      "displayName": "Cover Need",
       "displayNameRu": "Нужда в укрытии",
       "parameters": {
         "baseScore": 20
@@ -90,6 +101,7 @@
     {
       "id": "find_best_cover",
       "type": "FindBestCover",
+      "displayName": "Find Best Cover",
       "displayNameRu": "Найти лучшее укрытие",
       "parameters": {
         "searchRadiusMeters": 35,
@@ -99,6 +111,7 @@
     {
       "id": "move_to_cover",
       "type": "MoveToCover",
+      "displayName": "Move To Found Cover",
       "displayNameRu": "Двигаться к найденному укрытию",
       "parameters": {
         "targetBlackboardKey": "best_cover_position"
@@ -107,6 +120,7 @@
     {
       "id": "fallback_prone",
       "type": "SetPosture",
+      "displayName": "If No Cover — Go Prone",
       "displayNameRu": "Если укрытия нет — лечь",
       "parameters": {
         "posture": "prone"
@@ -115,15 +129,19 @@
     {
       "id": "reason_survival",
       "type": "WriteReason",
+      "displayName": "Explain Survival Reaction",
       "displayNameRu": "Объяснить уход в укрытие",
       "parameters": {
+        "reason": "Danger or stress is above the threshold: the soldier searches for cover, and if no cover is available, goes prone.",
         "reasonRu": "Опасность или стресс выше порога: солдат ищет укрытие, а если укрытия нет — ложится."
       }
     },
     {
       "id": "continue_order",
       "type": "ActionBranch",
+      "displayName": "Continue Order",
       "displayNameRu": "Продолжать приказ",
+      "description": "If risk is acceptable, the soldier continues the current order.",
       "descriptionRu": "Если риск допустим, солдат продолжает текущий приказ.",
       "children": [
         "has_order",
@@ -137,11 +155,13 @@
     {
       "id": "has_order",
       "type": "HasOrder",
+      "displayName": "Has Current Order",
       "displayNameRu": "Есть текущий приказ"
     },
     {
       "id": "score_obedience",
       "type": "ScoreObedience",
+      "displayName": "Obedience To Order",
       "displayNameRu": "Послушание приказу",
       "parameters": {
         "baseScore": 35
@@ -150,6 +170,7 @@
     {
       "id": "score_danger_against_order",
       "type": "ScoreDanger",
+      "displayName": "Danger Against Continuing Order",
       "displayNameRu": "Опасность против продолжения приказа",
       "parameters": {
         "weight": 0.7,
@@ -159,6 +180,7 @@
     {
       "id": "score_inertia_continue",
       "type": "ScoreCurrentActionInertia",
+      "displayName": "Do Not Switch Without Reason",
       "displayNameRu": "Не дёргаться без причины",
       "parameters": {
         "action": "continue_order",
@@ -168,33 +190,41 @@
     {
       "id": "continue_order_action",
       "type": "ContinueOrder",
+      "displayName": "Keep Executing Order",
       "displayNameRu": "Исполнять приказ дальше"
     },
     {
       "id": "reason_continue_order",
       "type": "WriteReason",
+      "displayName": "Explain Continuing Order",
       "displayNameRu": "Объяснить продолжение приказа",
       "parameters": {
+        "reason": "Danger is acceptable and the order still matters: the soldier continues execution.",
         "reasonRu": "Опасность допустима, а приказ остаётся важным: солдат продолжает выполнение."
       }
     },
     {
       "id": "observe_area",
       "type": "ActionBranch",
+      "displayName": "Observe",
       "displayNameRu": "Наблюдать",
+      "description": "Low-priority default branch when there is no urgent threat or active order.",
       "descriptionRu": "Низкоприоритетная ветка по умолчанию, когда нет срочной угрозы или приказа.",
       "children": ["observe_action", "reason_observe"]
     },
     {
       "id": "observe_action",
       "type": "Observe",
+      "displayName": "Observe Sector",
       "displayNameRu": "Наблюдать сектор"
     },
     {
       "id": "reason_observe",
       "type": "WriteReason",
+      "displayName": "Explain Observation",
       "displayNameRu": "Объяснить наблюдение",
       "parameters": {
+        "reason": "There is no urgent threat or active order: the soldier observes the sector.",
         "reasonRu": "Срочной угрозы или активного приказа нет: солдат наблюдает сектор."
       }
     }
