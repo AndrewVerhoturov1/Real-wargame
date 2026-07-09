@@ -53,19 +53,21 @@
     },
     {
       "id": "critical_danger_condition",
-      "type": "DangerAbove",
+      "type": "BlackboardValueAbove",
       "displayName": "Danger Above 60",
       "displayNameRu": "Опасность выше 60",
       "parameters": {
+        "sourceKey": "danger",
         "threshold": 60
       }
     },
     {
       "id": "critical_stress_condition",
-      "type": "StressAbove",
+      "type": "BlackboardValueAbove",
       "displayName": "Stress Above 55",
       "displayNameRu": "Стресс выше 55",
       "parameters": {
+        "sourceKey": "stress",
         "threshold": 55
       }
     },
