@@ -46,6 +46,14 @@ export function requestLabShutdown(): Promise<void> {
   }).then(() => undefined).catch(() => undefined);
 }
 
+export function exitLab(): void {
+  setShellStatus('Закрываю игру и редактор...');
+  void requestLabShutdown();
+  broadcastCloseTabs();
+  window.setTimeout(closeThisTab, 350);
+  window.setTimeout(() => setShellStatus('Если вкладка не закрылась сама, её можно закрыть вручную.'), 1200);
+}
+
 function renderMenu(mode: AppShellMenuMode): string {
   const title = mode === 'editor'
     ? 'Редактор ИИ солдата'
@@ -82,14 +90,6 @@ function startNewGame(): void {
   const stamp = String(Date.now());
   localStorage.setItem(NEW_GAME_SIGNAL_KEY, stamp);
   window.location.href = `/?newGame=${encodeURIComponent(stamp)}`;
-}
-
-function exitLab(): void {
-  setShellStatus('Закрываю игру и редактор...');
-  void requestLabShutdown();
-  broadcastCloseTabs();
-  window.setTimeout(closeThisTab, 350);
-  window.setTimeout(() => setShellStatus('Если вкладка не закрылась сама, её можно закрыть вручную.'), 1200);
 }
 
 function installCloseListeners(): void {
