@@ -112,9 +112,10 @@ export class HtmlOverlayRenderer {
     const text = result.blocked
       ? `До курсора: ${Math.round(result.totalDistanceMeters)} м\nВидно: ${Math.round(result.visibleDistanceMeters)} м\nПреграда: ${result.blockerReasonRu}`
       : `До курсора: ${Math.round(result.totalDistanceMeters)} м\nПрямая видимость есть`;
+    const position = getProbeLabelPosition(this.root, screen.x, screen.y);
 
     updateLabelText(label, text);
-    placeLabel(label, screen.x + 10, screen.y + 10);
+    placeLabel(label, position.x, position.y);
   }
 
   private getLabel(key: string, className: string): HTMLDivElement {
@@ -145,4 +146,25 @@ function placeLabel(label: HTMLElement, x: number, y: number): void {
   if (label.style.transform !== nextTransform) {
     label.style.transform = nextTransform;
   }
+}
+
+function getProbeLabelPosition(root: HTMLElement, x: number, y: number): WorldPosition {
+  const rightPanelWidth = 370;
+  const labelWidth = 270;
+  const labelHeight = 72;
+  const margin = 14;
+  const rootWidth = root.clientWidth || window.innerWidth;
+  const rootHeight = root.clientHeight || window.innerHeight;
+  const rightSafeLimit = Math.max(margin, rootWidth - rightPanelWidth - labelWidth);
+  const preferredX = x > rightSafeLimit ? x - labelWidth - margin : x + 10;
+  const preferredY = y + 10;
+
+  return {
+    x: clamp(preferredX, margin, Math.max(margin, rootWidth - labelWidth - margin)),
+    y: clamp(preferredY, margin, Math.max(margin, rootHeight - labelHeight - margin)),
+  };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
