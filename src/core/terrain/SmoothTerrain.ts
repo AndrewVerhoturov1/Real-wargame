@@ -5,8 +5,15 @@ const HEIGHT_WEIGHT_CENTER = 6;
 const HEIGHT_WEIGHT_NEAR = 3;
 const HEIGHT_WEIGHT_FAR = 1;
 
+interface CachedSmoothGrid {
+  key: string;
+  grid: number[][];
+}
+
+const smoothGridCache = new WeakMap<TacticalMap, CachedSmoothGrid>();
+
 export function sampleSmoothHeightLevel(map: TacticalMap, gridX: number, gridY: number): number {
-  const smoothed = buildSmoothedHeightGrid(map);
+  const smoothed = getSmoothedHeightGrid(map);
   const x = clamp(gridX - 0.5, 0, map.width - 1);
   const y = clamp(gridY - 0.5, 0, map.height - 1);
   const x1 = Math.floor(x);
@@ -19,6 +26,19 @@ export function sampleSmoothHeightLevel(map: TacticalMap, gridX: number, gridY: 
   const bottom = lerp(smoothed[y2][x1], smoothed[y2][x2], tx);
 
   return lerp(top, bottom, ty);
+}
+
+export function getSmoothedHeightGrid(map: TacticalMap): number[][] {
+  const key = buildHeightKey(map);
+  const cached = smoothGridCache.get(map);
+
+  if (cached?.key === key) {
+    return cached.grid;
+  }
+
+  const grid = buildSmoothedHeightGrid(map);
+  smoothGridCache.set(map, { key, grid });
+  return grid;
 }
 
 export function buildSmoothedHeightGrid(map: TacticalMap): number[][] {
@@ -59,6 +79,10 @@ export function buildSmoothedHeightGrid(map: TacticalMap): number[][] {
 
 export function hasHeightVariation(map: TacticalMap): boolean {
   return map.cells.some((cell) => cell.height !== map.defaultHeight);
+}
+
+function buildHeightKey(map: TacticalMap): string {
+  return `${map.width}x${map.height}:${map.defaultHeight}:${map.cells.map((cell) => cell.height).join(',')}`;
 }
 
 function lerp(start: number, end: number, factor: number): number {
