@@ -9,6 +9,7 @@ const requiredFiles = [
   'ai-node-editor.html',
   'src/ai-node-editor/main.ts',
   'src/ai-node-editor/ai-node-editor.css',
+  'src/ai-node-editor/ai-node-editor-authoring.css',
   'src/data/ai/soldier_default_survival_graph.json',
   'scripts/local_ai_engine.mjs',
   'Run-AI-Node-Editor.bat',
@@ -24,6 +25,7 @@ for (const file of requiredFiles) {
 
 const html = readText('ai-node-editor.html');
 expectContains(html, '/src/ai-node-editor/main.ts', 'HTML должен подключать AI Node Editor entrypoint.');
+expectContains(html, '/src/ai-node-editor/ai-node-editor-authoring.css', 'HTML должен подключать стили authoring stage 4.');
 expectContains(html, 'Редактор ИИ солдата', 'HTML должен иметь русский title редактора.');
 
 const main = readText('src/ai-node-editor/main.ts');
@@ -50,6 +52,11 @@ const css = readText('src/ai-node-editor/ai-node-editor.css');
 expectContains(css, '.graph-node', 'CSS должен оформлять видимые ноды.');
 expectContains(css, '.graph-svg', 'CSS должен оформлять связи графа.');
 expectContains(css, '.engine-status', 'CSS должен оформлять статус engine.');
+
+const authoringCss = readText('src/ai-node-editor/ai-node-editor-authoring.css');
+expectContains(authoringCss, '.inspector-field', 'Authoring CSS должен оформлять поля инспектора.');
+expectContains(authoringCss, '.child-link-row', 'Authoring CSS должен оформлять связи children.');
+expectContains(authoringCss, 'overflow: auto', 'Authoring CSS должен дать рабочей области прокрутку.');
 
 const index = readText('index.html');
 expectContains(index, 'ai-editor-open', 'Тактическая карта должна иметь кнопку открытия AI Editor.');
