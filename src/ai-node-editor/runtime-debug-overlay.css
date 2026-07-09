@@ -1,0 +1,142 @@
+.ai-runtime-debug-panel {
+  position: absolute;
+  right: 14px;
+  top: 56px;
+  z-index: 30;
+  width: 320px;
+  max-height: calc(100% - 80px);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid rgba(255, 242, 168, 0.28);
+  border-radius: 14px;
+  background: rgba(17, 21, 15, 0.92);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.38);
+  color: #f4ecd5;
+  pointer-events: auto;
+}
+
+.ai-runtime-debug-panel h3 {
+  margin: 0 0 8px;
+  color: #fff2a8;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ai-runtime-debug-panel p {
+  margin: 0 0 8px;
+  color: #c8c1aa;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.ai-runtime-debug-panel p.stale {
+  color: #ffd38a;
+}
+
+.ai-runtime-debug-panel dl {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.ai-runtime-debug-panel dl div {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  gap: 8px;
+}
+
+.ai-runtime-debug-panel dt {
+  color: #bfb79e;
+  font-size: 11px;
+}
+
+.ai-runtime-debug-panel dd {
+  margin: 0;
+  color: #f4ecd5;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.ai-runtime-debug-panel ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-runtime-debug-panel li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 242, 168, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 242, 168, 0.04);
+  font-size: 11px;
+}
+
+.ai-runtime-debug-panel li.winner {
+  border-color: rgba(255, 242, 168, 0.72);
+  background: rgba(255, 242, 168, 0.13);
+}
+
+.ai-runtime-debug-panel li.veto {
+  border-color: rgba(255, 116, 96, 0.55);
+  background: rgba(255, 116, 96, 0.10);
+}
+
+.graph-node.runtime-debug-idle {
+  opacity: 0.58;
+}
+
+.graph-node.runtime-debug-pass {
+  border-color: rgba(143, 202, 114, 0.88);
+  box-shadow: 0 0 0 2px rgba(143, 202, 114, 0.18), 0 18px 30px rgba(0, 0, 0, 0.30);
+}
+
+.graph-node.runtime-debug-fail {
+  border-color: rgba(255, 116, 96, 0.86);
+  box-shadow: 0 0 0 2px rgba(255, 116, 96, 0.18), 0 18px 30px rgba(0, 0, 0, 0.30);
+}
+
+.graph-node.runtime-debug-skip {
+  border-color: rgba(190, 190, 190, 0.62);
+  box-shadow: 0 0 0 2px rgba(190, 190, 190, 0.12), 0 18px 30px rgba(0, 0, 0, 0.30);
+}
+
+.graph-node.runtime-debug-score {
+  outline: 2px dashed rgba(196, 153, 255, 0.72);
+  outline-offset: 3px;
+}
+
+.graph-node.runtime-debug-branch {
+  box-shadow: 0 0 0 2px rgba(217, 184, 92, 0.18), 0 18px 30px rgba(0, 0, 0, 0.30);
+}
+
+.graph-node.runtime-debug-winner {
+  border-color: #fff2a8;
+  box-shadow: 0 0 0 4px rgba(255, 242, 168, 0.25), 0 0 28px rgba(255, 242, 168, 0.20), 0 18px 30px rgba(0, 0, 0, 0.36);
+}
+
+.graph-node.runtime-debug-veto {
+  border-color: rgba(255, 116, 96, 0.95);
+  box-shadow: 0 0 0 3px rgba(255, 116, 96, 0.20), 0 18px 30px rgba(0, 0, 0, 0.34);
+}
+
+.runtime-debug-badge {
+  display: inline-block;
+  margin-top: 8px;
+  max-width: 100%;
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: #121612;
+  background: #fff2a8;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
