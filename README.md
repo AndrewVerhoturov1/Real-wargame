@@ -29,19 +29,53 @@ real-wargame-preview
 - знания выбранного юнита: ближние укрытия, дальние укрытия для плана, опасность;
 - экспорт и загрузка JSON сцены;
 - отчёт производительности из браузера;
-- GitHub Actions screenshot smoke через Playwright/Chromium.
+- GitHub Actions screenshot smoke через Playwright/Chromium;
+- data contract AI-графа одиночного солдата;
+- headless local AI engine для проверки bundled AI-графа через localhost API.
 
 Главный смысл проекта на этом этапе — не “красивая RTS”, а удобная лаборатория карты, видимости, укрытий и будущего поведения солдат.
 
 ## Пользовательский запуск preview
 
-Для ручной проверки использовать:
+Для ручной проверки тактической карты использовать:
 
 ```text
-scripts/windows/run-preview.bat
+Run-Real-Wargame.bat
+```
+
+Для ручной проверки local AI engine stage 2 использовать:
+
+```text
+Run-AI-Engine-Smoke.bat
+```
+
+Если нужен просто запущенный engine и health JSON в браузере:
+
+```text
+Run-AI-Engine.bat
 ```
 
 Не требовать от пользователя Git-команд, терминала, checkout, merge или ручного переключения веток.
+
+## Local AI Engine stage 2
+
+Текущий local AI engine — headless-проверка для подпроекта `ai-single-unit-editor`.
+
+Он проверяет:
+
+```text
+GET  /engine/health
+POST /ai/graph/validate
+POST /ai/graph/evaluate-once
+```
+
+Подробная ручная проверка:
+
+```text
+docs/manual-test/AI_ENGINE_STAGE_2.md
+```
+
+Ограничение: этот этап ещё не открывает визуальный AI Node Editor и не подключает граф к живому `SimulationTick`.
 
 ## Agent startup
 
@@ -67,10 +101,11 @@ If the task asks to run the game locally, open the preview build, capture screen
 
 ## Subprojects
 
-Current active subproject:
+Current active subprojects:
 
 ```text
 docs/subprojects/real-wargame-start/
+docs/subprojects/ai-single-unit-editor/
 ```
 
 Important subproject files:
@@ -81,6 +116,10 @@ docs/subprojects/real-wargame-start/subproject.json
 docs/subprojects/real-wargame-start/JOURNAL.md
 docs/subprojects/real-wargame-start/RTS_FOUNDATION_DECISIONS.md
 docs/subprojects/real-wargame-start/test-program.md
+docs/subprojects/ai-single-unit-editor/SUBPROJECT.md
+docs/subprojects/ai-single-unit-editor/subproject.json
+docs/subprojects/ai-single-unit-editor/JOURNAL.md
+docs/subprojects/ai-single-unit-editor/LOCAL_ENGINE_NODE_EDITOR_IMPLEMENTATION_PLAN.md
 ```
 
 See `docs/subprojects/README.md` for the subproject system documentation.
@@ -92,4 +131,7 @@ python scripts/subproject_context.py --list
 python scripts/subproject_context.py real-wargame-start --brief
 python scripts/subproject_context.py real-wargame-start --opencode
 python scripts/subproject_context.py real-wargame-start --files
+python scripts/subproject_context.py ai-single-unit-editor --brief
+python scripts/subproject_context.py ai-single-unit-editor --opencode
+python scripts/subproject_context.py ai-single-unit-editor --files
 ```
