@@ -95,10 +95,10 @@ export const AI_NODE_TYPE_DEFINITIONS = {
   BlackboardValueAbove: {
     type: 'BlackboardValueAbove',
     category: 'condition',
-    label: 'Blackboard Value Above Threshold',
-    description: 'Compares one selected numeric soldier-memory value with a threshold.',
-    labelRu: 'Параметр выше порога',
-    descriptionRu: 'Сравнивает выбранный числовой параметр памяти солдата с порогом.',
+    label: 'Blackboard Threshold Condition',
+    description: 'Compares one selected numeric soldier-memory value with a threshold using above or below mode.',
+    labelRu: 'Параметр выше/ниже порога',
+    descriptionRu: 'Сравнивает выбранный числовой параметр памяти солдата с порогом в режиме выше или ниже.',
     canHaveChildren: false,
   },
   CoverNearby: {
