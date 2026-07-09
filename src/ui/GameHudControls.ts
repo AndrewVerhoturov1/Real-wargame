@@ -1,9 +1,13 @@
 import type { UnitPosture } from '../core/behavior/BehaviorModel';
 import { buildUnitKnowledgeReport, type KnowledgeCover, type KnowledgeDanger } from '../core/knowledge/UnitKnowledge';
-import { buildEnvironmentSensorReport } from '../core/sensors/EnvironmentSensors';
 import { getCell, gridToCellLabel, type MapCell } from '../core/map/MapModel';
+import { buildEnvironmentSensorReport } from '../core/sensors/EnvironmentSensors';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
-import { setKnowledgeOverlayActive } from '../core/ui/RuntimeUiState';
+import {
+  getRealReliefOverlayState,
+  setKnowledgeOverlayActive,
+  toggleRealReliefOverlay,
+} from '../core/ui/RuntimeUiState';
 import type { UnitModel } from '../core/units/UnitModel';
 
 const HUD_UPDATE_INTERVAL_MS = 250;
@@ -30,9 +34,20 @@ export function installGameHudControls(state: SimulationState): void {
   modeButton.textContent = 'Режим: игра';
   modeButton.addEventListener('click', () => toggleEditorModeFromGame(state));
 
+  const realReliefButton = document.createElement('button');
+  realReliefButton.type = 'button';
+  realReliefButton.className = 'hud-toggle real-relief-toggle hud-toggle-off';
+  realReliefButton.textContent = 'Реальный рельеф: выкл';
+  realReliefButton.title = 'Показывает плавный слой высоты, который используется в расчёте видимости.';
+  realReliefButton.addEventListener('click', () => {
+    toggleRealReliefOverlay(state);
+    renderGameHud(state, modeButton, realReliefButton, cellStrip, unitCard, tabContent, tabButtons, activeTab);
+  });
+
   const topControls = document.createElement('div');
   topControls.className = 'top-command-controls';
   moveExistingButton('#grid-toggle', topControls);
+  topControls.appendChild(realReliefButton);
   moveExistingButton('#height-toggle', topControls);
   moveExistingButton('#language-toggle', topControls);
 
@@ -62,7 +77,7 @@ export function installGameHudControls(state: SimulationState): void {
     button.textContent = label;
     button.addEventListener('click', () => {
       activeTab = tab;
-      renderGameHud(state, modeButton, cellStrip, unitCard, tabContent, tabButtons, activeTab);
+      renderGameHud(state, modeButton, realReliefButton, cellStrip, unitCard, tabContent, tabButtons, activeTab);
     });
     tabButtons.set(tab, button);
     tabRow.appendChild(button);
@@ -82,14 +97,15 @@ export function installGameHudControls(state: SimulationState): void {
   document.body.append(topBar, gameShell);
 
   window.setInterval(() => {
-    renderGameHud(state, modeButton, cellStrip, unitCard, tabContent, tabButtons, activeTab);
+    renderGameHud(state, modeButton, realReliefButton, cellStrip, unitCard, tabContent, tabButtons, activeTab);
   }, HUD_UPDATE_INTERVAL_MS);
-  renderGameHud(state, modeButton, cellStrip, unitCard, tabContent, tabButtons, activeTab);
+  renderGameHud(state, modeButton, realReliefButton, cellStrip, unitCard, tabContent, tabButtons, activeTab);
 }
 
 function renderGameHud(
   state: SimulationState,
   modeButton: HTMLButtonElement,
+  realReliefButton: HTMLButtonElement,
   cellStrip: HTMLElement,
   unitCard: HTMLElement,
   tabContent: HTMLElement,
@@ -100,6 +116,11 @@ function renderGameHud(
   modeButton.textContent = state.editor.enabled ? 'Режим: редактор' : 'Режим: игра';
   modeButton.classList.toggle('mode-toggle-editor', state.editor.enabled);
   modeButton.title = state.editor.enabled ? 'Нажми, чтобы вернуться в игру' : 'Нажми, чтобы открыть редактор карты';
+
+  const realReliefActive = getRealReliefOverlayState(state).active;
+  realReliefButton.textContent = realReliefActive ? 'Реальный рельеф: вкл' : 'Реальный рельеф: выкл';
+  realReliefButton.setAttribute('aria-pressed', String(realReliefActive));
+  realReliefButton.classList.toggle('hud-toggle-off', !realReliefActive);
 
   renderCellStrip(cellStrip, state);
   renderUnitCommandCard(unitCard, state);
@@ -267,7 +288,7 @@ function renderDangerList(dangers: KnowledgeDanger[]): string {
 
 function compactCoverRow(cover: KnowledgeCover): string {
   return [
-    '<div class="compact-knowledge-row">',
+    `<div class="compact-knowledge-row ${cover.currentCover ? 'near-cover-row' : 'plan-cover-row'}">`,
     `<strong>${escapeHtml(cover.labelRu)}</strong>`,
     `<span>${formatMeters(cover.distanceMeters)}</span>`,
     `<b>${Math.round(cover.quality)}/100</b>`,
