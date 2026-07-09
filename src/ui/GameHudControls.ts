@@ -41,7 +41,6 @@ export function installGameHudControls(state: SimulationState): void {
   realReliefButton.title = 'Показывает плавный слой высоты, который используется в расчёте видимости.';
   realReliefButton.addEventListener('click', () => {
     toggleRealReliefOverlay(state);
-    renderGameHud(state, modeButton, realReliefButton, cellStrip, unitCard, tabContent, tabButtons, activeTab);
   });
 
   const topControls = document.createElement('div');
@@ -245,7 +244,7 @@ function renderLayersTab(unit: UnitModel, state: SimulationState): string {
     '<h3>Карта знаний</h3>',
     row('Видит до', formatMeters(report.viewRangeMeters)),
     row('Известная область', formatMeters(report.knownAreaMeters)),
-    row('Оверлей', 'жёлтое — укрытия, красное — опасность, зелёное — область обзора'),
+    row('Оверлей', 'квадрат — ближнее, круг — дальнее, красное — опасность'),
     '</div>',
     '<div class="knowledge-section">',
     '<h3>Ближние укрытия</h3>',
