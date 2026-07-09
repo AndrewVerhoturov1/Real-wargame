@@ -3,15 +3,16 @@
   "title": "AI Single-Unit Editor — Node-Based Constructor",
   "status": "draft",
   "goal": "Создать node-based редактор ИИ одиночного юнита, привязанный к существующей RTS wrapper (Real-wargame), где поведение солдата собирается из нод, но тяжёлые расчёты выполняет локальный движок, а браузерная вкладка только редактирует и показывает объяснения.",
-  "current_focus": "Зафиксировать data contract и план внедрения: новая вкладка AI Node Editor, JSON-граф одиночного солдата, локальный engine host для расчётов, связь UI с движком через localhost API/WebSocket, без переписывания существующей RTS-симуляции.",
+  "current_focus": "Этап 1: data contract AI-графа одиночного солдата. Зафиксированы типы нод, blackboard, первый bundled Soldier Survival Graph и headless validation. Следующие этапы: local engine host, новая вкладка ai-node-editor.html, затем подключение графа к одному солдату.",
   "key_decisions": [
     "Node editor не является самостоятельным generic framework; он привязан к data contract с RTS wrapper.",
     "Первая версия — только одиночный юнит (single-unit); squad-level AI отложен.",
     "Не переписывать существующую RTS симуляцию; node editor работает через существующие BehaviorModel, UnitModel, SimulationState, GameHudControls.",
-    "Поведение описывается графом нод (conditions + scores + tactical queries + actions), а не императивным кодом.",
+    "Поведение описывается графом нод (flow + conditions + scores + tactical queries + actions + blackboard/debug), а не императивным кодом.",
     "Тяжёлые расчёты ИИ должны выполняться не в браузерной вкладке, а в локальном движке: сначала Node.js/TypeScript local engine host, затем worker_threads, позже Rust/Tauri sidecar только при доказанной необходимости.",
     "AI Node Editor открывается в новой вкладке/отдельном entrypoint, не смешивается с текущей tactical board UI.",
-    "Браузерный редактор отвечает за граф, палитру, инспектор, импорт/экспорт и показ объяснений; local engine отвечает за AI tick, сенсоры, поиск укрытий, Utility AI scoring, инерцию решений и validation/evaluate-once."
+    "Браузерный редактор отвечает за граф, палитру, инспектор, импорт/экспорт и показ объяснений; local engine отвечает за AI tick, сенсоры, поиск укрытий, Utility AI scoring, инерцию решений и validation/evaluate-once.",
+    "Первый bounded слой — data contract: TypeScript-типы, JSON-граф и headless validation без визуального редактора и без интеграции в SimulationTick."
   ],
   "must_read_first": [
     "docs/subprojects/ai-single-unit-editor/SUBPROJECT.md",
@@ -23,6 +24,12 @@
     "docs/subprojects/real-wargame-start/RTS_FOUNDATION_DECISIONS.md"
   ],
   "main_files": [
+    "src/core/ai/AiGraph.ts",
+    "src/core/ai/AiNodeTypes.ts",
+    "src/core/ai/AiBlackboard.ts",
+    "src/core/ai/AiGraphValidation.ts",
+    "src/data/ai/soldier_default_survival_graph.json",
+    "scripts/validate_ai_graph.mjs",
     "src/core/behavior/BehaviorModel.ts",
     "src/core/units/UnitModel.ts",
     "src/core/simulation/SimulationState.ts",
@@ -35,10 +42,6 @@
   ],
   "planned_files": [
     "ai-node-editor.html",
-    "src/core/ai/AiGraph.ts",
-    "src/core/ai/AiNodeTypes.ts",
-    "src/core/ai/AiBlackboard.ts",
-    "src/core/ai/AiGraphValidation.ts",
     "src/core/ai/AiGraphRunner.ts",
     "src/core/ai/SoldierDecision.ts",
     "src/core/ai/SoldierActions.ts",
@@ -55,11 +58,12 @@
     "src/ai-node-editor/GraphCanvas.ts",
     "src/ai-node-editor/NodeInspector.ts",
     "src/ai-node-editor/EngineConnectionStatus.ts",
-    "src/data/ai/soldier_default_survival_graph.json",
     "src/data/ai/soldier_node_library.json",
     "src/data/ai/soldier_blackboard_schema.json"
   ],
-  "test_files": [],
+  "test_files": [
+    "scripts/validate_ai_graph.mjs"
+  ],
   "manual_docs": [
     "docs/subprojects/ai-single-unit-editor/LOCAL_ENGINE_NODE_EDITOR_IMPLEMENTATION_PLAN.md",
     "docs/subprojects/real-wargame-start/ROADMAP_SOLDIER_BEHAVIOR_LAB.md",
@@ -73,6 +77,8 @@
     "Large unrelated reports or telemetry dumps"
   ],
   "commands": [
+    "npm run validate:ai-graph",
+    "npm run build",
     "python scripts/subproject_context.py --list",
     "python scripts/subproject_context.py ai-single-unit-editor --brief",
     "python scripts/subproject_context.py ai-single-unit-editor --opencode",
@@ -80,7 +86,8 @@
   ],
   "important_sessions": [
     "2026-07-09: subproject scaffold created from _template with ai-single-unit-editor id",
-    "2026-07-09: local engine + new-tab AI Node Editor implementation plan added; heavy AI calculations must run in a local engine, not in the browser tab"
+    "2026-07-09: local engine + new-tab AI Node Editor implementation plan added; heavy AI calculations must run in a local engine, not in the browser tab",
+    "2026-07-09: data contract layer added: AiGraph/AiNodeTypes/AiBlackboard/AiGraphValidation, soldier_default_survival_graph.json, validate:ai-graph script"
   ],
   "context_sources": [
     "docs/subprojects/real-wargame-start/",
@@ -98,11 +105,13 @@
     "Не ломать экспорт/загрузку JSON сцены и существующий редактор карт."
   ],
   "suggested_verification": [
+    "npm run validate:ai-graph — bundled soldier_default_survival_graph.json должен пройти headless validation",
+    "npm run build — TypeScript data contract должен компилироваться вместе с проектом",
     "python scripts/subproject_context.py --list — ai-single-unit-editor должен быть в списке",
     "python scripts/subproject_context.py ai-single-unit-editor --brief — поля goal, current_focus, must_read_first, main_files, commands",
     "python scripts/subproject_context.py ai-single-unit-editor --opencode — task memory, safety rules, suggested verification",
     "python scripts/subproject_context.py ai-single-unit-editor --files — main_files, planned_files, test_files, manual_docs",
-    "После реализации: AI Node Editor открывается в новой вкладке, показывает статус local engine и не считает тяжёлый AI в браузере"
+    "После реализации следующих этапов: AI Node Editor открывается в новой вкладке, показывает статус local engine и не считает тяжёлый AI в браузере"
   ],
   "zworker": {
     "boundaries": [
