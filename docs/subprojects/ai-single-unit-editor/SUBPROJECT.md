@@ -8,7 +8,7 @@
 
 ## Current focus
 
-Текущий этап: **вертикальный goal-срез “редактор нод → выбранный боец на карте”**.
+Текущий этап: **вертикальный goal-срез “редактор нод → GraphRunner → выбранный боец на карте”**.
 
 Сейчас уже есть:
 
@@ -20,7 +20,9 @@
 общий cooldown у каждой ноды: cooldownSeconds + cooldownTiming before/after;
 цепочки универсальных нод, например Проверка флага → Реплика бойца → Поза;
 local engine validation/evaluate-once для универсального графа;
-AI Game Bridge, который читает graph из localStorage v6 и прогоняет его для выбранного бойца;
+отдельный src/core/ai/AiGraphRunner.ts для исполнения графа без PixiJS/SimulationState/localStorage;
+UtilitySelector v1 с настоящей оценкой веток через score-ноды;
+AI Game Bridge, который читает graph из localStorage v6, строит blackboard и вызывает runAiGraph для выбранного бойца;
 видимый результат в игре: реплика над бойцом, поза/действие в behaviorRuntime;
 общий тихий запуск игры + редактора + local engine через Run-Real-Wargame-Lab.bat;
 общее меню в игре и редакторе;
@@ -35,7 +37,9 @@ AI Game Bridge, который читает graph из localStorage v6 и про
 - Поведение описывается графом нод: flow + conditions + scores + tactical queries + actions + memory/debug.
 - Старые точечные ноды (`HasOrder`, `UnderFire`, `CoverNearby`, `FindBestCover`, `MoveToCover`, `ContinueOrder`, `Observe` и похожие) не возвращать, если их можно выразить универсальными нодами.
 - Тяжёлые расчёты ИИ выполняет local engine. Браузерная вкладка редактирует граф, показывает подсказки, отправляет validation/evaluate-once и исполняет лёгкий bridge для выбранного бойца.
-- AI Node Editor открывается в новой вкладке/entrypoint, не смешивается с текущим tactical board UI.
+- `AiGraphRunner.ts` — основной TS-runner для игры; он не зависит от PixiJS, DOM, localStorage или SimulationState.
+- `AiGameBridge.ts` — адаптер: читает graph/localStorage, строит blackboard, даёт tactical callbacks, вызывает runner и применяет effects.
+- Local engine пока имеет JS-реализацию GraphRunner-смысла в `scripts/ai_engine_core.mjs`, потому что `tsconfig` сейчас noEmit и TS core не собирается в Node JS напрямую.
 - Английский base обязателен для data contract: `label`, `description`, `displayName`, `reason`, `explanation`. Русский overlay: `labelRu`, `descriptionRu`, `displayNameRu`, `reasonRu`, `explanationRu`.
 - Браузер не пишет JSON прямо в repo-файлы; authoring использует `localStorage v6` + JSON export/import.
 - Общий запуск должен быть удобным для человека: один `.bat`, тихие процессы, меню “игра ↔ редактор”, общий `Выход`.
@@ -60,6 +64,7 @@ AI Game Bridge, который читает graph из localStorage v6 и про
 - `src/core/ai/AiNodeTypes.ts`
 - `src/core/ai/AiBlackboard.ts`
 - `src/core/ai/AiGraphValidation.ts`
+- `src/core/ai/AiGraphRunner.ts`
 - `src/data/ai/soldier_default_survival_graph.json`
 - `scripts/validate_ai_graph.mjs`
 
@@ -89,6 +94,7 @@ AI Game Bridge, который читает graph из localStorage v6 и про
 ## Current game-bridge files
 
 - `src/core/ai/AiGameBridge.ts`
+- `src/core/ai/AiGraphRunner.ts`
 - `src/core/behavior/BehaviorModel.ts`
 - `src/rendering/HtmlOverlayRenderer.ts`
 - `src/ai-game-bridge.css`
@@ -135,13 +141,14 @@ AI Game Bridge сейчас работает только как первый в
 берёт выбранного бойца;
 строит blackboard из текущей игры;
 читает graph из real-wargame.ai-node-editor.graph.v6;
-прогоняет граф примерно раз в 0.6 секунды;
-исполняет часть универсальных нод;
+создаёт tacticalHost callbacks;
+вызывает runAiGraph;
+применяет effects к UnitModel;
 показывает SayMessage над бойцом;
 меняет posture/currentAction/order для простых действий.
 ```
 
-Поддержано в живом bridge:
+Поддержано в GraphRunner/bridge:
 
 ```text
 Root / Sequence / Selector / UtilitySelector / ActionBranch;
@@ -150,16 +157,23 @@ BlackboardValueAbove;
 DistanceCheck;
 TacticalCheck;
 FindBestObject;
+SelectTarget;
 WriteMemory / CopyMemory;
 SetPosture;
 SetAction;
 SetMovementMode;
 SayMessage;
 WriteReason;
+ParameterScore;
+DistanceScore;
+DecisionInertia;
+RandomChance;
+StableThreshold;
+ForbidAction;
 cooldownSeconds / cooldownTiming.
 ```
 
-Ограничение: scoring-ноды пока только приняты как допустимые, но не дают полноценный utility selector. Это следующий крупный этап.
+Ограничение: это UtilitySelector v1 для одиночного выбранного бойца, а не полный squad AI и не финальная тактическая система.
 
 ## Known browser/UI caveat
 
@@ -215,4 +229,4 @@ python scripts/subproject_context.py ai-single-unit-editor --files
 docs/manual-test/AI_NODE_EDITOR_STAGE_4.md
 ```
 
-Важно: после правок UI не утверждать “проверено глазами”, если не запускались браузер/скриншоты. Если скриншоты нужны, использовать существующий Playwright/GitHub Actions screenshot workflow и реально смотреть PNG artifact.
+Важно: после правок UI не утверждать “проверено глазами”, если не запускались браузер/скриншоты. В GraphRunner-задаче скриншоты не нужны и не делались.
