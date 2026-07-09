@@ -140,7 +140,7 @@ test('capture AI Node Editor screenshots and universal threshold interactions', 
   await saveScreenshot(page, '10-ai-editor-node-added.png');
   await saveScreenshot(page, '15-universal-threshold-danger-interface.png');
 
-  await page.locator('.human-threshold-slider').hover();
+  await page.locator('.human-control').filter({ has: page.locator('.human-threshold-slider') }).hover();
   await page.waitForTimeout(2200);
   await expect(page.locator('.human-tooltip')).toBeVisible();
   await expect(page.locator('.human-tooltip')).toContainText(/Порог|Threshold/);
