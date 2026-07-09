@@ -98,11 +98,41 @@
   background: rgba(8, 10, 8, 0.32);
 }
 
+.human-control.wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .human-control span {
   grid-column: 1 / -1;
   color: #fff2a8;
   font-size: 12px;
   font-weight: 800;
+}
+
+.human-control select {
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 7px;
+  border: 1px solid rgba(255, 242, 168, 0.18);
+  border-radius: 8px;
+  color: #f4ecd5;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.human-mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  padding: 7px;
+  border: 1px solid rgba(255, 242, 168, 0.12);
+  border-radius: 10px;
+  background: rgba(8, 10, 8, 0.32);
+}
+
+.human-mode-toggle .ai-editor-button {
+  white-space: normal;
+  min-height: 32px;
+  line-height: 1.15;
 }
 
 .human-control input[type="range"] {
