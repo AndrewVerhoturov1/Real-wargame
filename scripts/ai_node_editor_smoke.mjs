@@ -33,7 +33,7 @@ expectContains(main, '/ai/graph/validate', 'Редактор должен вал
 expectContains(main, '/ai/graph/evaluate-once', 'Редактор должен выполнять evaluate-once через engine.');
 expectContains(main, 'browserDoesHeavyAi', 'Редактор должен показывать, что тяжёлый AI не в браузере.');
 expectContains(main, 'graph-workspace', 'Редактор должен иметь видимую область графа.');
-expectContains(main, 'Node Editor', 'Редактор должен оставаться отдельным AI Node Editor entrypoint.');
+expectContains(main, 'Редактор ИИ одиночного солдата', 'Редактор должен иметь видимый русский заголовок.');
 
 const css = readText('src/ai-node-editor/ai-node-editor.css');
 expectContains(css, '.graph-node', 'CSS должен оформлять видимые ноды.');
