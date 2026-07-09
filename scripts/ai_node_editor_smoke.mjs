@@ -1,0 +1,77 @@
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, '..');
+
+const requiredFiles = [
+  'ai-node-editor.html',
+  'src/ai-node-editor/main.ts',
+  'src/ai-node-editor/ai-node-editor.css',
+  'src/data/ai/soldier_default_survival_graph.json',
+  'scripts/local_ai_engine.mjs',
+  'Run-AI-Node-Editor.bat',
+];
+
+for (const file of requiredFiles) {
+  const absolutePath = path.join(repoRoot, file);
+  if (!existsSync(absolutePath)) {
+    fail(`Не найден обязательный файл: ${file}`);
+  }
+  console.log(`[OK] file exists: ${file}`);
+}
+
+const html = readText('ai-node-editor.html');
+expectContains(html, '/src/ai-node-editor/main.ts', 'HTML должен подключать AI Node Editor entrypoint.');
+expectContains(html, 'Редактор ИИ солдата', 'HTML должен иметь русский title редактора.');
+
+const main = readText('src/ai-node-editor/main.ts');
+expectContains(main, 'ENGINE_BASE_URL', 'Редактор должен знать адрес local engine.');
+expectContains(main, '/engine/health', 'Редактор должен проверять health endpoint.');
+expectContains(main, '/ai/graph/validate', 'Редактор должен валидировать граф через engine.');
+expectContains(main, '/ai/graph/evaluate-once', 'Редактор должен выполнять evaluate-once через engine.');
+expectContains(main, 'browserDoesHeavyAi', 'Редактор должен показывать, что тяжёлый AI не в браузере.');
+expectContains(main, 'graph-workspace', 'Редактор должен иметь видимую область графа.');
+expectContains(main, 'Node Editor', 'Редактор должен оставаться отдельным AI Node Editor entrypoint.');
+
+const css = readText('src/ai-node-editor/ai-node-editor.css');
+expectContains(css, '.graph-node', 'CSS должен оформлять видимые ноды.');
+expectContains(css, '.graph-svg', 'CSS должен оформлять связи графа.');
+expectContains(css, '.engine-status', 'CSS должен оформлять статус engine.');
+
+const index = readText('index.html');
+expectContains(index, 'ai-editor-open', 'Тактическая карта должна иметь кнопку открытия AI Editor.');
+
+const tacticalMain = readText('src/main.ts');
+expectContains(tacticalMain, "window.open('/ai-node-editor.html'", 'Кнопка должна открывать редактор в новой вкладке.');
+
+const graph = JSON.parse(readText('src/data/ai/soldier_default_survival_graph.json'));
+if (graph.id !== 'soldier_default_survival_graph') {
+  fail('Bundled graph должен иметь id soldier_default_survival_graph.');
+}
+
+const nodeIds = new Set(graph.nodes.map((node) => node.id));
+for (const nodeId of ['root', 'soldier_decision', 'critical_survival', 'continue_order', 'observe_area']) {
+  if (!nodeIds.has(nodeId)) {
+    fail(`В bundled graph нет ожидаемой ноды: ${nodeId}`);
+  }
+}
+
+console.log('[GOTOVO] AI Node Editor static smoke passed.');
+
+function readText(filePath) {
+  return readFileSync(path.join(repoRoot, filePath), 'utf8');
+}
+
+function expectContains(content, needle, message) {
+  if (!content.includes(needle)) {
+    fail(message);
+  }
+  console.log(`[OK] contains: ${needle}`);
+}
+
+function fail(message) {
+  console.error(`[OSHIBKA] ${message}`);
+  process.exit(1);
+}
