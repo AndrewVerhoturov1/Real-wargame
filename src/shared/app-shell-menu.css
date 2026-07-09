@@ -1,0 +1,94 @@
+.app-shell-menu {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  z-index: 80;
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(255, 242, 168, 0.24);
+  color: #f6edcf;
+  background: rgba(8, 11, 8, 0.96);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.34);
+  font-family: Arial, Helvetica, sans-serif;
+  pointer-events: auto;
+}
+
+.app-shell-menu strong {
+  color: #fff2a8;
+  font-size: 14px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.app-shell-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+
+.app-shell-actions button {
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 242, 168, 0.28);
+  border-radius: 999px;
+  color: #f6edcf;
+  background: rgba(255, 242, 168, 0.08);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.app-shell-actions button:hover {
+  background: rgba(255, 242, 168, 0.16);
+}
+
+.app-shell-actions .app-shell-exit-button {
+  color: #fff2a8;
+  border-color: rgba(255, 104, 86, 0.54);
+  background: rgba(102, 24, 18, 0.88);
+}
+
+.app-shell-status {
+  min-width: 180px;
+  color: #c8c1aa;
+  font-size: 12px;
+  text-align: right;
+}
+
+.with-app-shell-menu .top-command-bar {
+  top: 58px;
+}
+
+.with-app-shell-menu .map-scale-fixed-label {
+  top: 124px;
+}
+
+.with-app-shell-menu .game-right-panel {
+  top: 120px;
+  max-height: calc(100vh - 234px);
+}
+
+.with-app-shell-menu #hud {
+  top: 120px;
+}
+
+.with-app-shell-menu .ai-editor-shell {
+  height: 100vh;
+  padding-top: 44px;
+}
+
+@media (max-width: 900px) {
+  .app-shell-menu {
+    grid-template-columns: 1fr;
+  }
+
+  .app-shell-status {
+    min-width: 0;
+    text-align: left;
+  }
+}
