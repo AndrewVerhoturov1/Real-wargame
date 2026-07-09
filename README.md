@@ -32,7 +32,8 @@ real-wargame-preview
 - GitHub Actions screenshot smoke через Playwright/Chromium;
 - data contract AI-графа одиночного солдата;
 - headless local AI engine для проверки bundled AI-графа через localhost API;
-- видимый AI Node Editor в отдельной вкладке `/ai-node-editor.html`.
+- AI Node Editor в отдельной вкладке `/ai-node-editor.html`;
+- authoring в AI Node Editor: добавить/перетащить/связать/изменить ноду, экспорт/импорт JSON.
 
 Главный смысл проекта на этом этапе — не “красивая RTS”, а удобная лаборатория карты, видимости, укрытий и будущего поведения солдат.
 
@@ -44,7 +45,7 @@ real-wargame-preview
 Run-Real-Wargame.bat
 ```
 
-Для ручной проверки видимого редактора нод и local engine stage 3 использовать:
+Для ручной проверки редактора нод, authoring и local engine использовать:
 
 ```text
 Run-AI-Node-Editor.bat
@@ -64,29 +65,32 @@ Run-AI-Engine.bat
 
 Не требовать от пользователя Git-команд, терминала, checkout, merge или ручного переключения веток.
 
-## AI Node Editor stage 3
+## AI Node Editor stage 4
 
-Текущий AI Node Editor — отдельная видимая вкладка для подпроекта `ai-single-unit-editor`.
+Текущий AI Node Editor — отдельная вкладка для подпроекта `ai-single-unit-editor`.
 
-Он показывает:
+Он умеет:
 
 ```text
-палитру нод;
-граф нод и связи;
-инспектор выбранной ноды;
-статус local engine;
-результат validation/evaluate-once через localhost API.
+добавлять ноды из палитры;
+перетаскивать ноды;
+связывать parent → child;
+редактировать displayName/displayNameRu/description/descriptionRu/parameters;
+удалять ноды, кроме root;
+хранить рабочий граф и позиции в localStorage;
+экспортировать и импортировать JSON;
+проверять изменённый граф через local engine.
 ```
 
 Подробная ручная проверка:
 
 ```text
-docs/manual-test/AI_NODE_EDITOR_STAGE_3.md
+docs/manual-test/AI_NODE_EDITOR_STAGE_4.md
 ```
 
-Ограничение: этот этап ещё не сохраняет новые ноды, не перетаскивает их мышью и не подключает граф к живому `SimulationTick`.
+Ограничение: этот этап ещё не подключает граф к живому `SimulationTick` и не двигает настоящего солдата на карте.
 
-## Local AI Engine stage 2
+## Local AI Engine stage 2+
 
 Текущий local AI engine — headless-проверка для подпроекта `ai-single-unit-editor`.
 
