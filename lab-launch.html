@@ -55,7 +55,7 @@
       <p><code>Выход</code> в игре или редакторе остановит процессы общего запуска.</p>
     </main>
     <script type="module">
-      import { installAppShellMenu, openGameTab, openEditorTab, requestLabShutdown } from '/src/shared/AppShellMenu.ts';
+      import { installAppShellMenu, openGameTab, openEditorTab, exitLab } from '/src/shared/AppShellMenu.ts';
 
       installAppShellMenu({ mode: 'launcher' });
 
@@ -64,7 +64,7 @@
 
       document.querySelector('#open-game')?.addEventListener('click', openGameTab);
       document.querySelector('#open-editor')?.addEventListener('click', openEditorTab);
-      document.querySelector('#exit-lab')?.addEventListener('click', () => { void requestLabShutdown(); window.close(); });
+      document.querySelector('#exit-lab')?.addEventListener('click', exitLab);
 
       window.setTimeout(() => {
         openGameTab();
