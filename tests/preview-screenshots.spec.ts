@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 
@@ -8,6 +9,8 @@ const VIEWPORT = {
   width: 1440,
   height: 900,
 };
+
+let aiEngineProcess: ChildProcessWithoutNullStreams | null = null;
 
 // These coordinates match the current Pixi tactical board layout:
 // worldContainer origin: 72,72; map cell size: 24 px.
@@ -29,9 +32,40 @@ async function saveScreenshot(page: Page, name: string): Promise<void> {
   });
 }
 
-test('capture Real-Wargame preview screenshots', async ({ page }) => {
-  mkdirSync(SCREENSHOT_DIR, { recursive: true });
+async function waitForAiEngine(): Promise<void> {
+  const startedAt = Date.now();
+  let lastError = '';
 
+  while (Date.now() - startedAt < 12_000) {
+    try {
+      const response = await fetch('http://127.0.0.1:8787/engine/health');
+      if (response.ok) {
+        return;
+      }
+      lastError = `HTTP ${response.status}`;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 350));
+  }
+
+  throw new Error(`AI engine did not start: ${lastError}`);
+}
+
+test.beforeAll(async () => {
+  mkdirSync(SCREENSHOT_DIR, { recursive: true });
+  aiEngineProcess = spawn('node', ['scripts/local_ai_engine.mjs'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  await waitForAiEngine();
+});
+
+test.afterAll(() => {
+  aiEngineProcess?.kill('SIGTERM');
+  aiEngineProcess = null;
+});
+
+test('capture Real-Wargame preview screenshots', async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await page.goto('/');
 
@@ -77,4 +111,61 @@ test('capture Real-Wargame preview screenshots', async ({ page }) => {
   await page.waitForTimeout(700);
   await expect(page.locator('#hud')).toBeVisible();
   await saveScreenshot(page, '07-editor-mode.png');
+});
+
+test('capture AI Node Editor screenshots and interactions', async ({ page }) => {
+  await page.setViewportSize(VIEWPORT);
+  await page.addInitScript(() => window.localStorage.clear());
+  await page.goto('/ai-node-editor.html');
+
+  await expect(page.getByRole('heading', { name: /Soldier AI Node Editor/ })).toBeVisible();
+  await expect(page.locator('.graph-canvas')).toBeVisible();
+  await expect(page.locator('.graph-node')).toHaveCountGreaterThan(3);
+  await page.waitForTimeout(500);
+  await saveScreenshot(page, '08-ai-editor-initial-compact.png');
+
+  await page.getByRole('button', { name: '+ Add node' }).click();
+  await expect(page.locator('.palette-panel')).toBeVisible();
+  await page.waitForTimeout(250);
+  await saveScreenshot(page, '09-ai-editor-palette-open.png');
+
+  await page.getByRole('button', { name: /Danger Above Threshold/ }).click();
+  await page.waitForTimeout(350);
+  await expect(page.locator('.graph-node.selected')).toBeVisible();
+  await saveScreenshot(page, '10-ai-editor-node-added.png');
+
+  await page.getByRole('button', { name: 'Fit' }).click();
+  await page.waitForTimeout(250);
+  await saveScreenshot(page, '11-ai-editor-fit-view.png');
+
+  const rootOut = page.locator('.graph-node[data-node-id="root"] .node-port.out');
+  const selectedNode = page.locator('.graph-node.selected');
+  const rootBox = await rootOut.boundingBox();
+  const selectedBox = await selectedNode.boundingBox();
+  if (!rootBox || !selectedBox) {
+    throw new Error('Could not find port or selected node bounds for drag-link screenshot.');
+  }
+  await page.mouse.move(rootBox.x + rootBox.width / 2, rootBox.y + rootBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(selectedBox.x + selectedBox.width / 2, selectedBox.y + selectedBox.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(350);
+  await saveScreenshot(page, '12-ai-editor-drag-link-created.png');
+
+  const rootNode = page.locator('.graph-node[data-node-id="root"]');
+  const rootNodeBox = await rootNode.boundingBox();
+  if (!rootNodeBox) {
+    throw new Error('Could not find root node bounds for context menu screenshot.');
+  }
+  await page.mouse.click(rootNodeBox.x + 40, rootNodeBox.y + 35, { button: 'right' });
+  await expect(page.locator('.node-context-menu')).toBeVisible();
+  await page.waitForTimeout(250);
+  await saveScreenshot(page, '13-ai-editor-context-menu.png');
+
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /Auto 4/ }).click();
+  await expect(page.locator('text=Point 4 OK')).toBeVisible();
+  await expect(page.locator('text=Point 5 OK')).toBeVisible();
+  await page.waitForTimeout(350);
+  await saveScreenshot(page, '14-ai-editor-auto-check-ok.png');
 });
