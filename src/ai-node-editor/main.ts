@@ -28,7 +28,7 @@ const nodeLayouts: Record<string, { x: number; y: number }> = {
 let selectedNodeId = graph.rootNodeId;
 let engineOnline = false;
 let lastHealthText = 'Проверка local engine ещё не выполнялась.';
-let validationText = 'Нажми «Проверить граф через engine».';
+let validationText = 'Нажми «Автопроверка 4–5», чтобы не читать JSON руками.';
 let evaluationText = 'Нажми «Evaluate once» для тестового солдата.';
 const graphJsonText = JSON.stringify(graph, null, 2);
 
@@ -50,7 +50,8 @@ function render(): void {
             <span>${escapeHtml(lastHealthText)}</span>
           </div>
           <button id="refresh-engine" class="ai-editor-button" type="button">Проверить engine</button>
-          <button id="validate-graph" class="ai-editor-button primary" type="button">Проверить граф через engine</button>
+          <button id="run-check-45" class="ai-editor-button primary" type="button">Автопроверка 4–5</button>
+          <button id="validate-graph" class="ai-editor-button" type="button">Проверить граф через engine</button>
           <button id="evaluate-once" class="ai-editor-button" type="button">Evaluate once</button>
         </div>
       </header>
@@ -201,8 +202,8 @@ function renderEngineResultCard(): string {
       <pre>1. Видна палитра нод слева.
 2. Виден граф в центре.
 3. Выбор ноды меняет инспектор справа.
-4. Engine status показывает подключение к 127.0.0.1:8787.
-5. Validation и Evaluate once идут через local engine, не внутри редактора.</pre>
+4. Нажми «Автопроверка 4–5»: должно быть «Пункт 4 OK».
+5. В той же автопроверке должно быть «Пункт 5 OK».</pre>
     </section>
   `;
 }
@@ -225,6 +226,10 @@ function installEventHandlers(): void {
 
   document.querySelector<HTMLButtonElement>('#refresh-engine')?.addEventListener('click', () => {
     void refreshEngineStatus();
+  });
+
+  document.querySelector<HTMLButtonElement>('#run-check-45')?.addEventListener('click', () => {
+    void runSimpleCheck45();
   });
 
   document.querySelector<HTMLButtonElement>('#validate-graph')?.addEventListener('click', () => {
@@ -251,20 +256,59 @@ async function refreshEngineStatus(): Promise<void> {
   render();
 }
 
-async function validateGraphThroughEngine(): Promise<void> {
+async function runSimpleCheck45(): Promise<void> {
+  validationText = 'Идёт автопроверка пунктов 4–5...';
+  evaluationText = 'Жду ответ local engine...';
+  render();
+
+  const lines: string[] = [];
+
   try {
-    const response = await fetch(`${ENGINE_BASE_URL}/ai/graph/validate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ graph }),
-    });
-    const payload = await response.json() as EngineValidationPayload;
-    validationText = JSON.stringify(payload, null, 2);
-    engineOnline = response.ok || response.status === 422;
-    lastHealthText = response.ok ? 'engine online: graph validation OK' : 'engine online: graph validation вернула ошибки';
+    const health = await requestEngine<EngineHealthPayload>('/engine/health');
+    const point4Ok = health.ok === true && health.browserDoesHeavyAi === false;
+    engineOnline = point4Ok;
+    lastHealthText = point4Ok
+      ? 'engine online: пункт 4 OK'
+      : 'engine ответил, но пункт 4 не прошёл';
+    lines.push(point4Ok
+      ? 'Пункт 4 OK — local engine подключён, browserDoesHeavyAi=false.'
+      : 'Пункт 4 ОШИБКА — engine ответил, но browserDoesHeavyAi не false.');
   } catch (error) {
     engineOnline = false;
-    validationText = `Ошибка связи с local engine: ${error instanceof Error ? error.message : String(error)}`;
+    lastHealthText = 'engine offline: пункт 4 не прошёл';
+    lines.push(`Пункт 4 ОШИБКА — local engine не отвечает: ${formatError(error)}.`);
+  }
+
+  try {
+    const validation = await requestEngine<EngineValidationPayload>('/ai/graph/validate', { graph });
+    const evaluation = await requestEngine<EngineEvaluationPayload>('/ai/graph/evaluate-once', createEvaluatePayload());
+    const validateOk = validation.ok === true && validation.validation?.valid === true;
+    const evaluateOk = evaluation.ok === true
+      && evaluation.selectedBranchNodeId === 'critical_survival'
+      && evaluation.command?.type === 'move_to';
+    const point5Ok = validateOk && evaluateOk;
+    lines.push(point5Ok
+      ? 'Пункт 5 OK — граф проверен через engine, evaluate-once выбрал critical_survival и command.type=move_to.'
+      : `Пункт 5 ОШИБКА — validateOk=${String(validateOk)}, evaluateOk=${String(evaluateOk)}.`);
+    evaluationText = JSON.stringify(evaluation, null, 2);
+  } catch (error) {
+    lines.push(`Пункт 5 ОШИБКА — validation/evaluate-once не прошли: ${formatError(error)}.`);
+    evaluationText = `Ошибка evaluate-once: ${formatError(error)}`;
+  }
+
+  validationText = lines.join('\n');
+  render();
+}
+
+async function validateGraphThroughEngine(): Promise<void> {
+  try {
+    const payload = await requestEngine<EngineValidationPayload>('/ai/graph/validate', { graph });
+    validationText = JSON.stringify(payload, null, 2);
+    engineOnline = payload.ok === true;
+    lastHealthText = payload.ok ? 'engine online: graph validation OK' : 'engine online: graph validation вернула ошибки';
+  } catch (error) {
+    engineOnline = false;
+    validationText = `Ошибка связи с local engine: ${formatError(error)}`;
     lastHealthText = 'engine offline: validation невозможна';
   }
   render();
@@ -272,31 +316,43 @@ async function validateGraphThroughEngine(): Promise<void> {
 
 async function evaluateOnceThroughEngine(): Promise<void> {
   try {
-    const response = await fetch(`${ENGINE_BASE_URL}/ai/graph/evaluate-once`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        graph,
-        unitId: 'editor_preview_soldier',
-        hasOrder: true,
-        blackboard: {
-          danger: 85,
-          stress: 70,
-          current_action: 'continue_order',
-          best_cover_position: { x: 18.5, y: 12.5 },
-        },
-      }),
-    });
-    const payload = await response.json();
+    const payload = await requestEngine<EngineEvaluationPayload>('/ai/graph/evaluate-once', createEvaluatePayload());
     evaluationText = JSON.stringify(payload, null, 2);
-    engineOnline = response.ok;
-    lastHealthText = response.ok ? 'engine online: evaluate-once OK' : 'engine online: evaluate-once вернул ошибку';
+    engineOnline = payload.ok === true;
+    lastHealthText = payload.ok ? 'engine online: evaluate-once OK' : 'engine online: evaluate-once вернул ошибку';
   } catch (error) {
     engineOnline = false;
-    evaluationText = `Ошибка связи с local engine: ${error instanceof Error ? error.message : String(error)}`;
+    evaluationText = `Ошибка связи с local engine: ${formatError(error)}`;
     lastHealthText = 'engine offline: evaluate-once невозможен';
   }
   render();
+}
+
+function createEvaluatePayload(): EngineEvaluateRequest {
+  return {
+    graph,
+    unitId: 'editor_preview_soldier',
+    hasOrder: true,
+    blackboard: {
+      danger: 85,
+      stress: 70,
+      current_action: 'continue_order',
+      best_cover_position: { x: 18.5, y: 12.5 },
+    },
+  };
+}
+
+async function requestEngine<TPayload>(pathname: string, body?: unknown): Promise<TPayload> {
+  const response = await fetch(`${ENGINE_BASE_URL}${pathname}`, {
+    method: body === undefined ? 'GET' : 'POST',
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const payload = await response.json() as TPayload;
+  if (!response.ok) {
+    throw new Error(JSON.stringify(payload));
+  }
+  return payload;
 }
 
 function getNodeCategory(node: AiNode): AiNodeCategory {
@@ -332,6 +388,10 @@ function escapeHtml(value: string): string {
     .replaceAll("'", '&#039;');
 }
 
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 interface EngineHealthPayload {
   ok?: boolean;
   service?: string;
@@ -340,5 +400,27 @@ interface EngineHealthPayload {
 
 interface EngineValidationPayload {
   ok?: boolean;
-  validation?: unknown;
+  validation?: {
+    valid?: boolean;
+  };
+}
+
+interface EngineEvaluationPayload {
+  ok?: boolean;
+  selectedBranchNodeId?: string;
+  command?: {
+    type?: string;
+  };
+}
+
+interface EngineEvaluateRequest {
+  graph: AiGraph;
+  unitId: string;
+  hasOrder: boolean;
+  blackboard: {
+    danger: number;
+    stress: number;
+    current_action: string;
+    best_cover_position: { x: number; y: number };
+  };
 }
