@@ -141,7 +141,10 @@ test('capture AI Node Editor screenshots and interactions', async ({ page }) => 
   await page.locator('.human-threshold-slider').hover();
   await page.waitForTimeout(2200);
   await expect(page.locator('.human-tooltip')).toBeVisible();
+  await expect(page.locator('.human-tooltip')).toContainText(/Порог опасности|Danger threshold/);
   await saveScreenshot(page, '16-danger-node-tooltip-after-hover.png');
+  await page.mouse.move(20, 20);
+  await page.waitForTimeout(120);
 
   await page.locator('.human-threshold-slider').evaluate((element) => {
     const input = element as HTMLInputElement;
@@ -161,6 +164,26 @@ test('capture AI Node Editor screenshots and interactions', async ({ page }) => 
   await page.waitForTimeout(450);
   await expect(page.locator('.human-node-panel.danger-above')).toBeVisible();
   await saveScreenshot(page, '18-danger-node-saved.png');
+
+  await page.getByRole('button', { name: /Stress Above Threshold/ }).click();
+  await page.waitForTimeout(500);
+  await expect(page.locator('.human-node-panel.stress-above')).toBeVisible();
+  await expect(page.locator('.human-stress-preview-slider')).toBeVisible();
+  await saveScreenshot(page, '19-stress-node-human-interface.png');
+
+  await page.locator('.human-threshold-slider').evaluate((element) => {
+    const input = element as HTMLInputElement;
+    input.value = '30';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.locator('.human-stress-preview-slider').evaluate((element) => {
+    const input = element as HTMLInputElement;
+    input.value = '70';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(page.locator('.human-node-panel.stress-above .danger-result.pass')).toBeVisible();
+  await page.waitForTimeout(250);
+  await saveScreenshot(page, '20-stress-node-threshold-changed.png');
 
   await page.getByRole('button', { name: 'Fit' }).click();
   await page.waitForTimeout(250);
