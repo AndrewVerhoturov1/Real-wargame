@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Запуск Real-Wargame Lab</title>
+    <script type="module" src="/src/shared/AppShellMenu.ts"></script>
+    <link rel="stylesheet" href="/src/shared/app-shell-menu.css" />
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        color: #f6edcf;
+        background: linear-gradient(135deg, #11150f, #202818);
+        font-family: Arial, Helvetica, sans-serif;
+      }
+      main {
+        width: min(720px, calc(100vw - 32px));
+        padding: 28px;
+        border: 1px solid rgba(255, 242, 168, 0.24);
+        border-radius: 18px;
+        background: rgba(10, 13, 9, 0.9);
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
+      }
+      h1 { margin: 0 0 10px; color: #fff2a8; }
+      p { color: #d6ceb2; line-height: 1.45; }
+      .launch-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+      button {
+        min-height: 38px;
+        padding: 9px 13px;
+        border: 1px solid rgba(255, 242, 168, 0.3);
+        border-radius: 12px;
+        color: #f6edcf;
+        background: rgba(255, 242, 168, 0.08);
+        cursor: pointer;
+        font-weight: 800;
+      }
+      button.primary { color: #121612; background: #fff2a8; border-color: #fff2a8; }
+      code { color: #fff2a8; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Real-Wargame Lab</h1>
+      <p>Общий запуск открыл эту служебную страницу. Она пытается открыть игру и редактор ИИ солдата в новых вкладках.</p>
+      <p>Если браузер заблокировал новые вкладки, нажми кнопки ниже вручную.</p>
+      <div class="launch-actions">
+        <button id="open-game" class="primary" type="button">Открыть игру</button>
+        <button id="open-editor" type="button">Открыть редактор ИИ</button>
+        <button id="exit-lab" type="button">Выход</button>
+      </div>
+      <p id="launch-status">Готовлю вкладки...</p>
+      <p><code>Выход</code> в игре или редакторе остановит процессы общего запуска.</p>
+    </main>
+    <script type="module">
+      import { installAppShellMenu, openGameTab, openEditorTab, requestLabShutdown } from '/src/shared/AppShellMenu.ts';
+
+      installAppShellMenu({ mode: 'launcher' });
+
+      const status = document.querySelector('#launch-status');
+      const setStatus = (text) => { if (status) status.textContent = text; };
+
+      document.querySelector('#open-game')?.addEventListener('click', openGameTab);
+      document.querySelector('#open-editor')?.addEventListener('click', openEditorTab);
+      document.querySelector('#exit-lab')?.addEventListener('click', () => { void requestLabShutdown(); window.close(); });
+
+      window.setTimeout(() => {
+        openGameTab();
+        window.setTimeout(openEditorTab, 250);
+        setStatus('Если вкладки не открылись, используй кнопки выше.');
+      }, 250);
+    </script>
+  </body>
+</html>
