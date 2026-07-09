@@ -1,21 +1,32 @@
 {
   "id": "real-wargame-start",
-  "title": "2D Tactical Command Game — Project Start",
+  "title": "2D Tactical Command Game — RTS Foundation / Soldier Behavior Lab",
   "status": "active",
-  "goal": "Запустить проект 2D Tactical Command Game (PixiJS + TypeScript + Vite) по мастер-документу. Первый интегрированный результат — Tactical Board Prototype v0.1: карта 20×20, камера, подразделения, выделение, приказы движения, линии приказов и debug overlay.",
-  "current_focus": "Интегрировать и проверить Tactical Board Prototype v0.1: Vite+TS+PixiJS runtime, карта 20×20, zoom/pan, тестовые подразделения, selection, right-click move order, order line, direct movement and debug HUD.",
+  "goal": "Собрать рабочую основу 2D Tactical Command Game / Soldier Behavior Lab на PixiJS + TypeScript + Vite: карта, юниты, редактор, высоты, лес, укрытия, видимость, базовый интерфейс и удобная проверка через preview. Главный фокус — будущие мозги солдат, а не стратегический ИИ командира.",
+  "current_focus": "Этап RTS-заготовки в целом готов и считается рабочей базой. Дальше карту, интерфейс, редактор, видимость и укрытия править по ходу разработки поведения солдат.",
   "key_decisions": [
-    "Практический первый шаг — Tactical Board Prototype v0.1 перед Map Workshop, чтобы проверить базовый командный цикл.",
-    "Стек: PixiJS + TypeScript + Vite + JSON.",
+    "RTS-заготовка готова как рабочая основа: это не финальная игра, а стенд для карты, редактора, видимости, укрытий и будущего поведения солдат.",
+    "Стек: PixiJS + TypeScript + Vite + JSON; Godot к этому репозиторию не относится.",
     "Архитектура: rendering/input на PixiJS отделены от simulation core; core не импортирует PixiJS.",
-    "Data-first: тестовая карта и подразделения загружаются из JSON.",
-    "Граница v0.1: без боя, врагов, AI, pathfinding, line of sight, редактора карты, сервера и БД."
+    "Data-first: карта, юниты и зоны хранятся в JSON; браузерный редактор экспортирует/загружает JSON сцены, но не пишет напрямую в исходные файлы проекта.",
+    "Масштаб preview: карта 64×40, cellSize 24, 1 клетка = 10 м; в интерфейсе расстояния показывать в метрах.",
+    "Высоты: уровни -2..+4 отображаются кривыми цветными зонами/линиями, а не россыпью +1 на каждой клетке; цифры высоты остаются отладочным переключателем.",
+    "Расчёт видимости использует сглаженный реальный рельеф; линии высот не должны работать как вертикальные стены.",
+    "Слой Реальный рельеф — отдельный кэшированный слой, не пересобирается от движения мыши и Alt-линии.",
+    "Лес — слой карты 0/1/2: нет леса, редкий лес, густой лес; ближний лес в знаниях юнита показывается подробнее, дальний — компактными ориентирами.",
+    "Объекты имеют физическую высоту losHeightMeters; дом, дерево, камень, ящики/бочки, брёвна, забор и т.п. учитываются в линии видимости с учётом высоты рельефа.",
+    "Укрытия делятся на ближние для текущего использования и дальние для планирования; списки и подписи должны быть в метрах.",
+    "Alt-линия видимости показывает зелёный видимый участок, красный закрытый участок, HTML-подпись, расстояние в метрах и причину преграды.",
+    "Игровой режим и редактор разделены: игра — верхняя панель, правая вкладочная панель, нижняя карточка юнита; редактор — вкладки и инструменты.",
+    "По умолчанию antialias true, view cones off, height numbers off; не возвращать antialias false как постоянное решение.",
+    "Пользовательская проверка идёт через scripts/windows/run-preview.bat и GO/NO-GO, без просьб выполнять Git/терминал руками."
   ],
   "must_read_first": [
-    "docs/subprojects/real-wargame-start/CODEX_HANDOFF_TAC_BOARD_V0_1.md",
     "docs/subprojects/real-wargame-start/SUBPROJECT.md",
     "docs/subprojects/real-wargame-start/subproject.json",
     "docs/subprojects/real-wargame-start/JOURNAL.md",
+    "docs/subprojects/real-wargame-start/RTS_FOUNDATION_DECISIONS.md",
+    "docs/subprojects/real-wargame-start/test-program.md",
     "Inbox/MASTER_PROJECT_S_2D_TACTICAL_COMMAND_GAME.md"
   ],
   "main_files": [
@@ -28,6 +39,10 @@
     "src/core/orders/MoveOrder.ts",
     "src/core/simulation/SimulationState.ts",
     "src/core/simulation/SimulationTick.ts",
+    "src/core/visibility/LineOfSight.ts",
+    "src/core/terrain/SmoothTerrain.ts",
+    "src/core/knowledge/UnitKnowledge.ts",
+    "src/core/sensors/EnvironmentSensors.ts",
     "src/core/units/UnitModel.ts",
     "src/input/BoardInputController.ts",
     "src/input/CameraController.ts",
@@ -36,24 +51,36 @@
     "src/rendering/PixiOrderRenderer.ts",
     "src/rendering/PixiOverlayRenderer.ts",
     "src/rendering/PixiUnitRenderer.ts",
+    "src/rendering/HtmlOverlayRenderer.ts",
     "src/rendering/terrainStyle.ts",
+    "src/ui/EditorControls.ts",
+    "src/ui/GameHudControls.ts",
+    "src/ui/SceneExport.ts",
+    "src/ui/SceneExportControls.ts",
+    "src/ui/PerformanceReportControls.ts",
     "src/data/maps/test_map.json",
     "src/data/units/test_units.json",
-    "src/styles.css"
+    "src/styles.css",
+    "src/ui-layout.css"
   ],
-  "test_files": [],
+  "test_files": [
+    "tests/preview-screenshots.spec.ts",
+    ".github/workflows/preview-screenshots.yml"
+  ],
   "manual_docs": [
-    "docs/subprojects/real-wargame-start/CODEX_HANDOFF_TAC_BOARD_V0_1.md",
+    "docs/subprojects/real-wargame-start/RTS_FOUNDATION_DECISIONS.md",
+    "docs/subprojects/real-wargame-start/test-program.md",
+    "docs/manual-test/PREVIEW_SCREENSHOTS.md",
     "Inbox/MASTER_PROJECT_S_2D_TACTICAL_COMMAND_GAME.md"
   ],
   "do_not_read_by_default": [
-    "docs/ai/",
+    "docs/ai/ unless task requires agent workflow changes",
     "docs/subprojects/github-collaboration/",
     "docs/subprojects/repo-migration/",
-    "AGENTS.md",
     "Large unrelated reports or telemetry dumps"
   ],
   "commands": [
+    "scripts/windows/run-preview.bat",
     "npm install",
     "npm run build",
     "npm run dev",
@@ -61,25 +88,33 @@
     "python scripts/subproject_context.py real-wargame-start --opencode",
     "python scripts/subproject_context.py real-wargame-start --files"
   ],
-  "important_sessions": [],
+  "important_sessions": [
+    "2026-07-08..2026-07-09: RTS foundation, editor, physical-map relief, forest layer, object cover, Alt line of sight, UI tabs and preview checks on real-wargame-preview"
+  ],
   "context_sources": [
     "codex/patch-pack-subproject-context",
-    "codex/tactical-board-prototype-v0-1"
+    "codex/tactical-board-prototype-v0-1",
+    "real-wargame-preview RTS foundation work"
   ],
   "safety_rules": [
-    "Не менять AGENTS.md, docs/ai/** или docs/subprojects/github-collaboration/** без отдельной необходимости.",
-    "Не добавлять в v0.1 бой, врагов, AI, GOAP, HTN, Utility AI, pathfinding, line of sight, редактор карты, сервер или БД.",
+    "Работать в real-wargame-preview; main не менять и не мержить без явного GO пользователя.",
+    "Не просить пользователя выполнять Git/терминал/ветки руками.",
+    "Не откатывать сглаживание/кэш рельефа и не возвращать antialias false как постоянное решение.",
+    "Не ломать экспорт/загрузку JSON сцены.",
+    "Не смешивать RTS-заготовку с финальной системой боя: бой, баллистика, полноценный pathfinding, связь, мораль и сложный ИИ — следующие этапы.",
     "Сохранять разделение core/rendering/input/data; core не должен импортировать PixiJS.",
     "Не утверждать, что локальная сборка или браузерная проверка выполнена, если она не запускалась."
   ],
   "suggested_verification": [
-    "npm install && npm run build",
-    "npm run dev — проект открывается в браузере",
-    "Выбрать подразделение и выдать приказ правой кнопкой; проверить линию приказа, движение и debug HUD",
-    "Проверить wheel zoom и pan средней кнопкой либо Space + left drag",
-    "python scripts/subproject_context.py real-wargame-start --brief",
-    "python scripts/subproject_context.py real-wargame-start --opencode",
-    "python scripts/subproject_context.py real-wargame-start --files"
+    "scripts/windows/run-preview.bat — пользовательская проверка без терминала",
+    "Открыть карту, проверить зум, pan, выбор солдата и правый клик для приказа",
+    "Проверить игровой интерфейс: верхняя панель, правая вкладочная панель, нижняя карточка юнита",
+    "Проверить редактор: режим редактора, вкладки, кисти высот/леса, предметы, юниты, зоны",
+    "Проверить JSON сцены: скачать и загрузить обратно",
+    "Проверить Alt-линию видимости: метры, зелёная/красная линия, HTML-подпись, причина преграды",
+    "Проверить слой Реальный рельеф: включается, не выглядит как россыпь +1, не должен заметно тормозить",
+    "Проверить объектные высоты: низкие бочки/ящики не должны автоматически закрывать обзор с высоты, дома/деревья должны закрывать сильнее",
+    "Проверить GitHub Actions Preview screenshots, если нужен удалённый визуальный smoke"
   ],
   "zworker": {
     "boundaries": [
