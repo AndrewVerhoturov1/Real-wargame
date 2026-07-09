@@ -33,7 +33,8 @@ real-wargame-preview
 - data contract AI-графа одиночного солдата;
 - headless local AI engine для проверки bundled AI-графа через localhost API;
 - AI Node Editor в отдельной вкладке `/ai-node-editor.html`;
-- authoring в AI Node Editor: добавить/перетащить/связать/изменить ноду, экспорт/импорт JSON.
+- authoring в AI Node Editor: добавить/перетащить/связать/изменить ноду, экспорт/импорт JSON;
+- компактный AI Node Editor UI: скрываемые боковые панели, сворачиваемая нижняя консоль, zoom/pan canvas, Fit, контекстное меню и drag-link через порт ноды.
 
 Главный смысл проекта на этом этапе — не “красивая RTS”, а удобная лаборатория карты, видимости, укрытий и будущего поведения солдат.
 
@@ -72,9 +73,12 @@ Run-AI-Engine.bat
 Он умеет:
 
 ```text
-добавлять ноды из палитры;
+добавлять ноды из палитры кнопкой + Add node;
 перетаскивать ноды;
-связывать parent → child;
+перетаскивать canvas за пустое место;
+масштабировать canvas колесом мыши и кнопками + / - / Fit;
+связывать parent → child протягиванием линии из правой точки-порта ноды;
+открывать контекстное меню правым кликом по ноде;
 редактировать displayName/displayNameRu/description/descriptionRu/parameters;
 удалять ноды, кроме root;
 хранить рабочий граф и позиции в localStorage;
