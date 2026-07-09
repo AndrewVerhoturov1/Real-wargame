@@ -28,17 +28,17 @@ try {
   writeArtifact('01-health.json', health);
   assert(health.ok === true, 'health.ok должен быть true');
   assert(health.browserDoesHeavyAi === false, 'browserDoesHeavyAi должен быть false');
-  console.log('[OK] /engine/health отвечает, тяжёлый ИИ не заявлен как браузерный.');
+  assert(String(health.version).includes('graph-runner'), 'engine должен заявлять GraphRunner версию');
+  console.log('[OK] /engine/health отвечает, GraphRunner заявлен, тяжёлый ИИ не браузерный.');
 
   const validation = await requestJson('POST', '/ai/graph/validate', {});
   writeArtifact('02-validation.json', validation);
   assert(validation.ok === true, 'bundled AI-граф должен пройти validation');
   assert(validation.validation.valid === true, 'validation.valid должен быть true');
-  console.log('[OK] /ai/graph/validate проверил bundled soldier graph.');
+  console.log('[OK] /ai/graph/validate проверил bundled clean graph.');
 
-  const evaluation = await requestJson('POST', '/ai/graph/evaluate-once', {
-    unitId: 'manual_soldier_1',
-    hasOrder: true,
+  const cleanEvaluation = await requestJson('POST', '/ai/graph/evaluate-once', {
+    unitId: 'manual_soldier_clean',
     blackboard: {
       danger: 85,
       stress: 70,
@@ -46,11 +46,33 @@ try {
       best_cover_position: { x: 18.5, y: 12.5 },
     },
   });
-  writeArtifact('03-evaluate-once.json', evaluation);
-  assert(evaluation.ok === true, 'evaluate-once должен вернуть ok=true');
-  assert(evaluation.selectedBranchNodeId === 'critical_survival', 'при danger=85/stress=70 должна победить ветка critical_survival');
-  assert(evaluation.command.type === 'move_to', 'при найденном укрытии команда должна быть move_to');
-  console.log('[OK] /ai/graph/evaluate-once выбрал уход к укрытию для опасной ситуации.');
+  writeArtifact('03-clean-evaluate-once.json', cleanEvaluation);
+  assert(cleanEvaluation.ok === true, 'clean evaluate-once должен вернуть ok=true');
+  assert(cleanEvaluation.command.type === 'none', 'чистый root-only graph не должен выдавать старую hard-coded команду');
+  assert(Array.isArray(cleanEvaluation.scores) && cleanEvaluation.scores.length === 0, 'чистый graph не должен иметь score breakdown');
+  console.log('[OK] clean evaluate-once честно сообщает: нода действия ещё не подключена.');
+
+  const utilityEvaluation = await requestJson('POST', '/ai/graph/evaluate-once', {
+    unitId: 'manual_soldier_utility',
+    graph: createUtilitySmokeGraph(),
+    hasOrder: true,
+    blackboard: {
+      danger: 85,
+      morale: 20,
+      underFire: true,
+      hasOrder: true,
+      current_action: 'continue_order',
+      best_cover_position: { x: 18.5, y: 12.5 },
+      self_position: { x: 10, y: 10 },
+    },
+  });
+  writeArtifact('04-utility-evaluate-once.json', utilityEvaluation);
+  assert(utilityEvaluation.ok === true, 'utility evaluate-once должен вернуть ok=true');
+  assert(utilityEvaluation.selectedBranchNodeId === 'branch_cover', 'при danger=85 должна победить ветка branch_cover');
+  assert(utilityEvaluation.command.type === 'move_to', 'победившая ветка должна дать move_to');
+  assert(Array.isArray(utilityEvaluation.scores) && utilityEvaluation.scores.length === 2, 'UtilitySelector должен вернуть оценки двух веток');
+  assert(utilityEvaluation.scores[0].breakdown.length > 0, 'ветка должна иметь score breakdown');
+  console.log('[OK] UtilitySelector выбрал лучшую ветку по score-ноды и выдал move_to.');
 
   console.log('');
   console.log('[GOTOVO] Local AI engine smoke passed.');
@@ -62,6 +84,42 @@ try {
   process.exitCode = 1;
 } finally {
   child.kill('SIGTERM');
+}
+
+function createUtilitySmokeGraph() {
+  return {
+    version: 1,
+    id: 'utility_selector_smoke_graph',
+    name: 'Utility Selector Smoke Graph',
+    nameRu: 'Проверочный граф UtilitySelector',
+    rootNodeId: 'root',
+    blackboardDefaults: {
+      danger: 0,
+      morale: 60,
+      underFire: false,
+      hasOrder: false,
+      current_action: 'wait',
+      best_cover_position: null,
+      self_position: { x: 0, y: 0 },
+    },
+    nodes: [
+      node('root', 'Root', ['utility'], 'Start', 'Старт'),
+      node('utility', 'UtilitySelector', ['branch_cover', 'branch_order'], 'Best choice', 'Лучший выбор'),
+      node('branch_cover', 'ActionBranch', ['under_fire', 'score_danger', 'find_cover', 'move_cover'], 'Take cover branch', 'Ветка укрытия'),
+      node('under_fire', 'FlagCheck', [], 'Under fire?', 'Под огнём?', { flagKey: 'underFire', expected: true }),
+      node('score_danger', 'ParameterScore', [], 'Danger score', 'Оценка опасности', { sourceKey: 'danger', direction: 'positive', weight: 1 }),
+      node('find_cover', 'FindBestObject', [], 'Find cover', 'Найти укрытие', { objectKind: 'cover', criteria: 'safer', searchRadiusMeters: 35, writeTo: 'best_cover_position' }),
+      node('move_cover', 'SetAction', [], 'Move to cover', 'Двигаться к укрытию', { action: 'move_to', targetKey: 'best_cover_position' }),
+      node('branch_order', 'ActionBranch', ['has_order', 'score_morale', 'continue_order'], 'Continue order branch', 'Ветка продолжения приказа'),
+      node('has_order', 'FlagCheck', [], 'Has order?', 'Есть приказ?', { flagKey: 'hasOrder', expected: true }),
+      node('score_morale', 'ParameterScore', [], 'Morale score', 'Оценка морали', { sourceKey: 'morale', direction: 'positive', weight: 1 }),
+      node('continue_order', 'SetAction', [], 'Continue order', 'Продолжать приказ', { action: 'continue_order', targetKey: 'order_target_position' }),
+    ],
+  };
+}
+
+function node(id, type, children, displayName, displayNameRu, parameters = {}) {
+  return { id, type, displayName, displayNameRu, children, parameters };
 }
 
 async function waitForHealth() {
@@ -98,7 +156,7 @@ function requestJson(method, pathname, payload) {
         let json;
         try {
           json = JSON.parse(text);
-        } catch (error) {
+        } catch {
           reject(new Error(`Не удалось прочитать JSON от ${pathname}: ${text}`));
           return;
         }
