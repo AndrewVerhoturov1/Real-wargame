@@ -11,11 +11,13 @@ import {
   runAiGraph,
   type AiGraphEffect,
   type AiGraphRunnerBlackboard,
+  type AiGraphRunnerResult,
   type AiGraphTacticalHost,
 } from './AiGraphRunner';
 import bundledGraph from '../../data/ai/soldier_default_survival_graph.json';
 
 const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
+const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 const AI_GRAPH_TICK_INTERVAL_MS = 600;
 const COVER_SEARCH_RADIUS_CELLS = 5;
 
@@ -44,7 +46,7 @@ export function tickAiGameBridge(state: SimulationState, nowMs = Date.now()): vo
     ? state.units.find((candidate) => candidate.id === state.selectedUnitId)
     : undefined;
 
-  if (!unit || state.editor.enabled) {
+  if (!unit || state.editor.enabled || state.paused) {
     return;
   }
 
@@ -63,6 +65,7 @@ export function tickAiGameBridge(state: SimulationState, nowMs = Date.now()): vo
     tacticalHost: createTacticalHost(state, unit),
   });
 
+  publishRuntimeDebugTrace(state, unit, graph, result, nowMs);
   unit.behaviorRuntime.aiNodeCooldowns = { ...result.cooldowns };
   applyGraphEffects(state, unit, result.effects, result.blackboard, nowMs);
   unit.behaviorRuntime.aiGraphReason = result.explanationRu ?? result.explanation;
@@ -214,6 +217,42 @@ function applyPosture(unit: UnitModel, value: string): void {
 
   unit.behaviorRuntime.currentAction = `posture:${nextPosture}`;
   unit.behaviorRuntime.lastEvent = 'ai_graph_set_posture';
+}
+
+function publishRuntimeDebugTrace(
+  state: SimulationState,
+  unit: UnitModel,
+  graph: AiGraph,
+  result: AiGraphRunnerResult,
+  nowMs: number,
+): void {
+  try {
+    const payload = {
+      version: 1,
+      kind: 'ai-graph-runtime-debug',
+      graphId: graph.id,
+      graphName: graph.name,
+      graphNameRu: graph.nameRu,
+      graphNodeCount: graph.nodes.length,
+      unitId: unit.id,
+      unitLabel: unit.labels.ru ?? unit.labels.en,
+      selectedBranchNodeId: result.selectedBranchNodeId,
+      selectedBranchName: result.selectedBranchName,
+      selectedBranchNameRu: result.selectedBranchNameRu,
+      ok: result.ok,
+      paused: state.paused,
+      nowMs,
+      explanation: result.explanation,
+      explanationRu: result.explanationRu,
+      trace: result.trace,
+      scores: result.scores,
+      effects: result.effects,
+      blackboard: result.blackboard,
+    };
+    window.localStorage.setItem(DEBUG_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Debug overlay is optional. If localStorage is blocked or full, gameplay must continue.
+  }
 }
 
 function evaluateTacticalCheck(
