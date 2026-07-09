@@ -79,7 +79,7 @@ function scheduleApply(force = false): void {
 
 function applyRuntimeDebugOverlay(): void {
   const payload = readDebugPayload();
-  const signature = payload ? `${payload.unitId}:${payload.nowMs}:${payload.selectedBranchNodeId}:${payload.trace.length}:${payload.scores.length}` : 'empty';
+  const signature = payload ? `${payload.unitId}:${payload.nowMs}:${payload.selectedBranchNodeId}:${payload.trace.length}:${payload.scores.length}:${payload.paused ? 'paused' : 'live'}` : 'empty';
   const hasGraphNodes = document.querySelector('.graph-node[data-node-id]') !== null;
   if (!hasGraphNodes) return;
   if (signature === lastAppliedSignature && document.querySelector('.ai-runtime-debug-panel')) return;
@@ -99,7 +99,7 @@ function applyRuntimeDebugOverlay(): void {
       return;
     }
 
-    element.classList.add(...debug.classes);
+    element.classList.add(...Array.from(debug.classes));
     element.title = debug.title;
     const badge = document.createElement('span');
     badge.className = 'runtime-debug-badge';
