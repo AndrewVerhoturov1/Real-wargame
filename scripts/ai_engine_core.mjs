@@ -11,8 +11,7 @@ export const KNOWN_NODE_TYPES = new Set([
   'EnemyVisible',
   'EnemyKnown',
   'UnderFire',
-  'DangerAbove',
-  'StressAbove',
+  'BlackboardValueAbove',
   'CoverNearby',
   'ScoreDanger',
   'ScoreStress',
@@ -32,8 +31,7 @@ export const LEAF_NODE_TYPES = new Set([
   'EnemyVisible',
   'EnemyKnown',
   'UnderFire',
-  'DangerAbove',
-  'StressAbove',
+  'BlackboardValueAbove',
   'CoverNearby',
   'ScoreDanger',
   'ScoreStress',
@@ -49,7 +47,7 @@ export const LEAF_NODE_TYPES = new Set([
 ]);
 
 export const ENGINE_NAME = 'real-wargame-local-ai-engine';
-export const ENGINE_VERSION = '0.3.0-english-base-russian-overlay';
+export const ENGINE_VERSION = '0.4.0-universal-blackboard-threshold';
 
 export function resolveBundledGraphPath(repoRoot) {
   return path.join(repoRoot, 'src', 'data', 'ai', 'soldier_default_survival_graph.json');
@@ -126,6 +124,7 @@ export function validateGraph(value) {
     }
 
     validateNodeParameters(node.parameters, result, node.id);
+    validateSpecificNodeParameters(node, value.blackboardDefaults, result);
   }
 
   if (rootNodeIds.length > 1) {
@@ -191,7 +190,11 @@ export function evaluateSoldierOnce(input) {
   const currentAction = isNonEmptyString(blackboard.current_action) ? blackboard.current_action : 'observe';
   const coverPosition = isPositionRecord(blackboard.best_cover_position) ? blackboard.best_cover_position : null;
 
-  const survivalVeto = danger < 60 && stress < 55;
+  const dangerThreshold = readBranchThreshold(graph, 'critical_survival', 'danger', 60);
+  const stressThreshold = readBranchThreshold(graph, 'critical_survival', 'stress', 55);
+  const dangerConditionPassed = isBlackboardValueAbove(blackboard, 'danger', dangerThreshold);
+  const stressConditionPassed = isBlackboardValueAbove(blackboard, 'stress', stressThreshold);
+  const survivalVeto = !dangerConditionPassed && !stressConditionPassed;
   const survivalScore = survivalVeto ? -999 : danger * 0.8 + stress * 0.45 + 20 + (coverPosition ? 15 : 0);
   const continueVeto = !hasOrder;
   const continueScore = continueVeto ? -999 : 35 - danger * 0.7 + (currentAction === 'continue_order' ? 12 : 0);
@@ -205,12 +208,14 @@ export function evaluateSoldierOnce(input) {
       score: roundScore(survivalScore),
       vetoed: survivalVeto,
       ...(survivalVeto ? {
-        vetoReason: 'Danger and stress are below the survival reaction threshold.',
-        vetoReasonRu: 'Опасность и стресс ниже порога реакции выживания.',
+        vetoReason: `danger <= ${dangerThreshold} and stress <= ${stressThreshold}.`,
+        vetoReasonRu: `Опасность <= ${dangerThreshold} и стресс <= ${stressThreshold}.`,
       } : {}),
       breakdown: [
         scoreItem('score_danger_for_cover', 'Danger', 'Опасность', danger * 0.8, `danger ${danger} * 0.8`, `danger ${danger} * 0.8`),
         scoreItem('score_stress_for_cover', 'Stress', 'Стресс', stress * 0.45, `stress ${stress} * 0.45`, `stress ${stress} * 0.45`),
+        scoreItem('critical_danger_condition', 'Danger Threshold', 'Порог опасности', dangerConditionPassed ? 0 : -999, `danger ${danger} > ${dangerThreshold}`, `danger ${danger} > ${dangerThreshold}`),
+        scoreItem('critical_stress_condition', 'Stress Threshold', 'Порог стресса', stressConditionPassed ? 0 : -999, `stress ${stress} > ${stressThreshold}`, `stress ${stress} > ${stressThreshold}`),
         scoreItem('score_cover_need', 'Cover Need', 'Нужда в укрытии', 20, 'base cover value', 'базовая ценность укрытия'),
         scoreItem('find_best_cover', 'Found Cover', 'Найденное укрытие', coverPosition ? 15 : 0, coverPosition ? 'best_cover_position is present' : 'best_cover_position is missing', coverPosition ? 'best_cover_position есть' : 'best_cover_position нет'),
       ],
@@ -273,8 +278,8 @@ export function createHealthPayload(port) {
     version: ENGINE_VERSION,
     port,
     mode: 'headless-local-engine',
-    scope: 'Stage 3: local headless engine for single-soldier AI graph validation and evaluate-once.',
-    scopeRu: 'Этап 3: локальный headless engine для проверки AI-графа одиночного солдата и evaluate-once.',
+    scope: 'Stage 4: local headless engine for single-soldier AI graph validation and evaluate-once with a universal threshold condition node.',
+    scopeRu: 'Этап 4: локальный headless engine для проверки AI-графа одиночного солдата и evaluate-once с универсальной пороговой нодой.',
     textBase: 'en',
     overlayLanguage: 'ru',
     browserDoesHeavyAi: false,
@@ -344,6 +349,22 @@ function buildExplanation(branchNodeId, danger, stress, coverPosition, language)
     : `Soldier observes: danger=${danger}, stress=${stress}, no urgent reaction is required.`;
 }
 
+function readBranchThreshold(graph, branchNodeId, sourceKey, fallback) {
+  const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+  const branch = nodes.find((node) => isRecord(node) && node.id === branchNodeId);
+  const childIds = Array.isArray(branch?.children) ? branch.children : [];
+  const thresholdNode = nodes.find((node) => isRecord(node)
+    && node.type === 'BlackboardValueAbove'
+    && isRecord(node.parameters)
+    && node.parameters.sourceKey === sourceKey
+    && childIds.includes(node.id));
+  return clampPercent(toNumber(thresholdNode?.parameters?.threshold, fallback));
+}
+
+function isBlackboardValueAbove(blackboard, sourceKey, threshold) {
+  return clampPercent(toNumber(blackboard[sourceKey], 0)) > clampPercent(threshold);
+}
+
 function validateChildrenShape(node, result) {
   if (!Array.isArray(node.children)) {
     result.push(errorIssue('CHILDREN_NOT_ARRAY', `Node ${node.id} children must be an array of string ids.`, `У ноды ${node.id} поле children должно быть массивом строковых id.`, node.id));
@@ -378,6 +399,30 @@ function validateNodeParameters(parameters, result, nodeId) {
 
     if (!isSupportedValue(value)) {
       result.push(errorIssue('PARAMETER_VALUE_UNSUPPORTED', `Node ${nodeId} parameter ${key} has an unsupported value. Allowed: string, number, boolean, null, and position {x,y}.`, `У ноды ${nodeId} параметр ${key} имеет неподдерживаемое значение. Разрешены строки, числа, boolean, null и позиция {x,y}.`, nodeId));
+    }
+  }
+}
+
+function validateSpecificNodeParameters(node, blackboardDefaults, result) {
+  if (node.type !== 'BlackboardValueAbove') {
+    return;
+  }
+
+  const parameters = isRecord(node.parameters) ? node.parameters : {};
+  if (!isNonEmptyString(parameters.sourceKey)) {
+    result.push(errorIssue('BLACKBOARD_THRESHOLD_SOURCE_MISSING', `Node ${node.id} must have parameters.sourceKey.`, `У ноды ${node.id} должен быть parameters.sourceKey.`, node.id));
+  }
+
+  if (typeof parameters.threshold !== 'number' || !Number.isFinite(parameters.threshold)) {
+    result.push(errorIssue('BLACKBOARD_THRESHOLD_VALUE_MISSING', `Node ${node.id} must have numeric parameters.threshold.`, `У ноды ${node.id} должен быть числовой parameters.threshold.`, node.id));
+  } else if (parameters.threshold < 0 || parameters.threshold > 100) {
+    result.push(warningIssue('BLACKBOARD_THRESHOLD_OUT_OF_RANGE', `Node ${node.id} threshold should normally be 0..100.`, `У ноды ${node.id} порог обычно должен быть 0..100.`, node.id));
+  }
+
+  if (isNonEmptyString(parameters.sourceKey) && isRecord(blackboardDefaults)) {
+    const defaultValue = blackboardDefaults[parameters.sourceKey];
+    if (defaultValue !== undefined && typeof defaultValue !== 'number') {
+      result.push(warningIssue('BLACKBOARD_THRESHOLD_SOURCE_NOT_NUMERIC', `Node ${node.id} sourceKey ${parameters.sourceKey} is not numeric in blackboardDefaults.`, `У ноды ${node.id} sourceKey ${parameters.sourceKey} не является числом в blackboardDefaults.`, node.id));
     }
   }
 }
