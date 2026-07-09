@@ -1,8 +1,8 @@
-# Manual test — AI Node Editor Stage 4 Authoring
+# Manual test — AI Node Editor Stage 4 Authoring + GraphRunner
 
 Дата: 2026-07-09  
 Ветка: `real-wargame-preview`  
-Назначение: проверить чистый canvas редактора, универсальные ноды без старых точечных legacy-нод, первый мост с выбранным бойцом на карте, общий запуск и select-поля человеческих панелей.
+Назначение: проверить чистый canvas редактора, универсальные ноды без старых точечных legacy-нод, GraphRunner/UtilitySelector v1, первый мост с выбранным бойцом на карте, общий запуск и select-поля человеческих панелей.
 
 ## Основной запуск
 
@@ -21,12 +21,6 @@ Run-Real-Wargame-Lab.bat
 окна Vite/local engine/lab manager не торчат отдельными видимыми консолями;
 в игре есть верхнее меню: Редактор ИИ солдат / Новая игра / Выход;
 в редакторе есть верхнее меню: Обновить / Открыть игру / Выход.
-```
-
-Диагностический старый запуск редактора остаётся:
-
-```text
-Run-AI-Node-Editor.bat
 ```
 
 ## Проверка выхода
@@ -118,19 +112,6 @@ Point 5 OK / Пункт 5 OK
 Наблюдать
 ```
 
-Их замены:
-
-```text
-Есть приказ        → Проверка флага: hasOrder = true
-Враг виден         → Проверка флага: enemyVisible = true
-Враг известен      → Проверка флага: enemyKnown = true
-Под огнём          → Проверка флага: underFire = true
-Рядом есть укрытие → Тактическая проверка: cover_exists = true
-                   → или Поиск объекта: objectKind = cover
-Продолжать приказ  → Действие: continue_order
-Наблюдать          → Действие: wait или отдельная будущая настройка observe в Действие
-```
-
 ## Проверка select-полей: баг мгновенного сброса
 
 Выбрать любую ноду с человеческой панелью и поменять несколько select-полей:
@@ -167,7 +148,7 @@ src/ai-node-editor/main.ts — closeContextMenuIfNeeded / document click handlin
 src/ai-node-editor/human-node-ui.ts — MutationObserver и renderHumanInspectorForSelectedNode
 ```
 
-## Проверка цепочки goal
+## Проверка обычной цепочки goal
 
 Собрать цепочку:
 
@@ -198,69 +179,40 @@ src/ai-node-editor/human-node-ui.ts — MutationObserver и renderHumanInspector
 
 ```text
 Validate проходит;
-local engine больше не ругается, что condition/action ноды имеют children;
 вкладка игры читает этот же граф из localStorage v6;
 если выбранный боец находится под давлением/огнём, над ним появляется фраза;
 положение бойца в инспекторе поведения становится prone.
 ```
 
-## Проверка ноды «Числовой порог»
+## Проверка GraphRunner + UtilitySelector v1
 
-Добавить:
+Собрать граф:
 
 ```text
-Числовой порог
+Старт
+  → Лучший выбор / UtilitySelector
+      → Вариант действия: Лечь под огнём
+          → Проверка флага: underFire = true
+          → Оценка параметра: danger, Добавить, weight = 1
+          → Реплика бойца: Под огнём!
+          → Поза: prone
+      → Вариант действия: Продолжать приказ
+          → Проверка флага: hasOrder = true
+          → Оценка параметра: morale, Добавить, weight = 1
+          → Действие: continue_order
 ```
 
 Ожидание:
 
 ```text
-справа человеческая панель без JSON на первом уровне;
-есть выбор параметра из списка;
-есть кнопки Параметр выше порога / Параметр ниже порога;
-есть ползунок порога;
-есть тестовое значение и PASS/FAIL;
-есть блок Задержка ноды.
+Validate проходит;
+local engine evaluate-once возвращает scores/breakdown для веток;
+если выбранный боец под огнём и danger выше morale — побеждает ветка “Лечь под огнём”;
+над бойцом появляется реплика, поза становится prone;
+если изменить score/условия так, что вторая ветка сильнее — должна победить ветка continue_order.
 ```
 
-Проверить режим ниже:
-
-```text
-sourceKey = morale
-comparison = below
-threshold = 30
-preview value = 25
-```
-
-Ожидание:
-
-```text
-формула показывает 25 < 30;
-результат PASS;
-Save parameters сохраняет sourceKey + comparison + threshold + cooldownSeconds + cooldownTiming.
-```
-
-## Проверка селекторов вместо ручного псевдокода
-
-### Порог расстояния
-
-Добавить:
-
-```text
-Порог расстояния
-```
-
-Ожидание:
-
-```text
-from / Откуда — selector, а не свободный текст;
-self / Сам боец — пункт списка;
-to / Куда — selector;
-comparison / Режим — selector: Ближе чем / Дальше чем;
-thresholdMeters — число.
-```
-
-### Оценка параметра
+## Проверка score-ноды «Оценка параметра»
 
 Добавить:
 
@@ -273,10 +225,11 @@ thresholdMeters — число.
 ```text
 sourceKey / Параметр — selector: danger, stress, suppression, fatigue, morale, health, ammo, distanceToCover;
 direction / Направление — selector: Добавить / Вычесть;
-weight — число.
+weight — число;
+в UtilitySelector эта нода влияет на score ветки.
 ```
 
-### Оценка расстояния
+## Проверка score-ноды «Оценка расстояния»
 
 Добавить:
 
@@ -289,36 +242,26 @@ weight — число.
 ```text
 targetKind / Объект — selector;
 preference / Лучше когда — selector: Ближе / Дальше;
-idealMeters и weight — числа.
+idealMeters и weight — числа;
+в UtilitySelector эта нода влияет на score ветки.
 ```
 
-### Запрет действия / Действие / Инерция решения
+## Проверка запрета действия
+
+Внутрь ветки с `Действие: continue_order` добавить:
+
+```text
+Запрет действия:
+  action = continue_order
+  durationSeconds = 3
+```
 
 Ожидание:
 
 ```text
-action выбирается из списка, а не вводится как псевдокод;
-доступны move_to, fire, reload, retreat, wait, suppress, continue_order.
-```
-
-## Проверка задержки ноды
-
-Выбрать любую ноду.
-
-Ожидание в правой панели:
-
-```text
-Задержка, секунд
-Когда работает задержка
-До ноды
-После ноды
-```
-
-Смысл:
-
-```text
-До ноды — сначала ждёт, потом нода может сработать;
-После ноды — нода срабатывает, потом уходит в задержку.
+ветка с continue_order получает veto;
+UtilitySelector выбирает другую проходящую ветку, если она есть;
+в local engine JSON у score ветки виден vetoed=true / vetoReason.
 ```
 
 ## Проверка через local engine
@@ -344,7 +287,8 @@ sourceKey / comparison / threshold;
 from/to как значения из selector;
 cooldownSeconds >= 0;
 cooldownTiming = before или after;
-message/messageRu у Реплики бойца.
+message/messageRu у Реплики бойца;
+UtilitySelector graph возвращает scores/breakdown/effects в evaluate-once.
 ```
 
 ## Что этот этап уже связывает с игрой
@@ -353,7 +297,10 @@ message/messageRu у Реплики бойца.
 выбранный боец на карте;
 graph из localStorage v6;
 blackboard из текущей игры: danger, stress, underFire, hasOrder, distanceToCover;
-FlagCheck / Числовой порог / Порог расстояния / TacticalCheck;
+GraphRunner v1;
+UtilitySelector v1;
+ParameterScore / DistanceScore / DecisionInertia / RandomChance;
+StableThreshold / ForbidAction;
 FindBestObject для ближайшего укрытия;
 SetAction для простого move_to/wait/continue_order и других action-меток;
 SetPosture для stand/crouch/prone;
@@ -365,16 +312,17 @@ cooldownSeconds/cooldownTiming в живом bridge.
 ## Что этот этап ещё НЕ делает
 
 ```text
-не делает полноценный умный ИИ;
-не исполняет все scoring-ноды как настоящий utility selector;
+не делает полноценный умный ИИ всей игры;
 не двигает всех бойцов сразу — мост работает с выбранным бойцом;
+не делает squad AI;
 не делает WebSocket;
-не делает worker_threads.
+не делает worker_threads;
+не показывает визуальный debug победившей ветки прямо на canvas — это следующая задача.
 ```
 
 ## Что прислать в чат при ошибке
 
 1. Текст из окна `Run-Real-Wargame-Lab.bat` или `Run-AI-Node-Editor.bat`.
 2. Что написано внизу в `Validation / Engine result`.
-3. Что именно делал: add / drag / pan / zoom / port-link / context-menu / save / export / import / select.
+3. Что именно делал: add / drag / pan / zoom / port-link / context-menu / save / export / import / select / UtilitySelector.
 4. Если ошибка после `Validate`, прислать JSON ошибки из нижнего окна.
