@@ -33,10 +33,18 @@ expectContains(main, '/ai/graph/validate', 'Редактор должен вал
 expectContains(main, '/ai/graph/evaluate-once', 'Редактор должен выполнять evaluate-once через engine.');
 expectContains(main, 'browserDoesHeavyAi', 'Редактор должен показывать, что тяжёлый AI не в браузере.');
 expectContains(main, 'graph-workspace', 'Редактор должен иметь видимую область графа.');
-expectContains(main, 'Редактор ИИ одиночного солдата', 'Редактор должен иметь видимый русский заголовок.');
-expectContains(main, 'Автопроверка 4–5', 'Редактор должен иметь простую кнопку автопроверки пунктов 4–5.');
-expectContains(main, 'Пункт 4 OK', 'Редактор должен объяснять пункт 4 простым OK-текстом.');
-expectContains(main, 'Пункт 5 OK', 'Редактор должен объяснять пункт 5 простым OK-текстом.');
+expectContains(main, 'Soldier AI Node Editor', 'Редактор должен иметь английский базовый заголовок.');
+expectContains(main, 'Редактор ИИ солдата', 'Редактор должен иметь русский overlay-заголовок.');
+expectContains(main, 'Auto check 4–5', 'Редактор должен иметь простую кнопку автопроверки пунктов 4–5.');
+expectContains(main, 'Point 4 OK', 'Редактор должен объяснять пункт 4 простым OK-текстом.');
+expectContains(main, 'Point 5 OK', 'Редактор должен объяснять пункт 5 простым OK-текстом.');
+expectContains(main, 'addNodeFromPalette', 'Этап 4 должен уметь добавлять ноды из палитры.');
+expectContains(main, 'startDrag', 'Этап 4 должен уметь перетаскивать ноды.');
+expectContains(main, 'linkSelectedNodeToChosenChild', 'Этап 4 должен уметь связывать выбранную ноду с дочерней.');
+expectContains(main, 'saveSelectedNodeFromInspector', 'Этап 4 должен уметь сохранять изменения инспектора.');
+expectContains(main, 'exportGraphJson', 'Этап 4 должен уметь экспортировать JSON.');
+expectContains(main, 'importGraphFromFileInput', 'Этап 4 должен уметь импортировать JSON.');
+expectContains(main, 'localStorage', 'Этап 4 должен сохранять рабочий граф/позиции в браузере.');
 
 const css = readText('src/ai-node-editor/ai-node-editor.css');
 expectContains(css, '.graph-node', 'CSS должен оформлять видимые ноды.');
