@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "validate:ai-graph": "node scripts/validate_ai_graph.mjs"
   },
   "dependencies": {
     "pixi.js": "^7.4.3"
