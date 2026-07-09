@@ -2,7 +2,7 @@ name: Preview Policy
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited]
+    types: [opened, synchronize, reopened, edited, ready_for_review]
 
 jobs:
   check-preview-policy:
@@ -67,3 +67,45 @@ jobs:
           echo "Preview policy result: ${{ env.preview_policy }}"
           echo "Default target for this repository is: real-wargame-preview"
           echo "Default external delivery is: direct push to preview (PR is fallback)"
+
+  visual-qa-screenshots:
+    name: Visual QA screenshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    needs: check-preview-policy
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Install Playwright test runner for this workflow
+        run: npm install --no-save @playwright/test
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Check production build without blocking screenshots
+        continue-on-error: true
+        run: npm run build
+
+      - name: Capture screenshots
+        run: npx playwright test tests/preview-screenshots.spec.ts --project=chromium --reporter=line
+
+      - name: Upload screenshots
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-wargame-visual-qa-screenshots
+          path: artifacts/screenshots/
+          if-no-files-found: warn
+          retention-days: 14
