@@ -1,0 +1,23 @@
+.unit-speech-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: 220px;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 242, 168, 0.42);
+  border-radius: 12px 12px 12px 3px;
+  color: #121612;
+  background: rgba(255, 242, 168, 0.95);
+  box-shadow: 0 7px 18px rgba(0, 0, 0, 0.38);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  transform-origin: left top;
+  translate: -50% -100%;
+  white-space: normal;
+  pointer-events: none;
+}
