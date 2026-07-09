@@ -54,6 +54,7 @@ export interface MapObjectData {
   rotationDegrees?: number;
   widthCells?: number;
   heightCells?: number;
+  losHeightMeters?: number;
   label?: string;
   labelRu?: string;
 }
@@ -89,6 +90,7 @@ export interface MapObject {
   rotationRadians: number;
   widthCells: number;
   heightCells: number;
+  losHeightMeters: number;
   labels: {
     en: string;
     ru: string;
@@ -255,6 +257,7 @@ function normalizeMapObjects(objects: MapObjectData[]): MapObject[] {
       rotationRadians: degreesToRadians(object.rotationDegrees ?? 0),
       widthCells: object.widthCells ?? defaultSize.widthCells,
       heightCells: object.heightCells ?? defaultSize.heightCells,
+      losHeightMeters: normalizeObjectHeightMeters(object.losHeightMeters ?? defaultSize.losHeightMeters),
       labels: object.label
         ? {
             en: object.label,
@@ -265,32 +268,40 @@ function normalizeMapObjects(objects: MapObjectData[]): MapObject[] {
   });
 }
 
-function getDefaultObjectSize(kind: MapObjectKind): { widthCells: number; heightCells: number } {
+function getDefaultObjectSize(kind: MapObjectKind): { widthCells: number; heightCells: number; losHeightMeters: number } {
   switch (kind) {
     case 'tree':
-      return { widthCells: 0.75, heightCells: 0.75 };
+      return { widthCells: 0.75, heightCells: 0.75, losHeightMeters: 6 };
     case 'rock':
-      return { widthCells: 0.45, heightCells: 0.35 };
+      return { widthCells: 0.45, heightCells: 0.35, losHeightMeters: 1.2 };
     case 'crates':
-      return { widthCells: 0.75, heightCells: 0.65 };
+      return { widthCells: 0.75, heightCells: 0.65, losHeightMeters: 1.25 };
     case 'post':
-      return { widthCells: 0.55, heightCells: 0.55 };
+      return { widthCells: 0.55, heightCells: 0.55, losHeightMeters: 1.35 };
     case 'logs':
-      return { widthCells: 1.25, heightCells: 0.45 };
+      return { widthCells: 1.25, heightCells: 0.45, losHeightMeters: 0.8 };
     case 'well':
-      return { widthCells: 0.7, heightCells: 0.7 };
+      return { widthCells: 0.7, heightCells: 0.7, losHeightMeters: 1.1 };
     case 'cover':
-      return { widthCells: 2.5, heightCells: 0.45 };
+      return { widthCells: 2.5, heightCells: 0.45, losHeightMeters: 1.1 };
     case 'ditch':
-      return { widthCells: 4.5, heightCells: 0.55 };
+      return { widthCells: 4.5, heightCells: 0.55, losHeightMeters: 0.2 };
     case 'fence':
-      return { widthCells: 4, heightCells: 0.25 };
+      return { widthCells: 4, heightCells: 0.25, losHeightMeters: 1.2 };
     case 'bridge':
-      return { widthCells: 2.6, heightCells: 1.1 };
+      return { widthCells: 2.6, heightCells: 1.1, losHeightMeters: 0.8 };
     case 'structure':
     default:
-      return { widthCells: 2, heightCells: 1.5 };
+      return { widthCells: 2, heightCells: 1.5, losHeightMeters: 5 };
   }
+}
+
+function normalizeObjectHeightMeters(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+
+  return Math.max(0, Math.min(20, Math.round(value * 10) / 10));
 }
 
 function readMatrixValue(matrix: number[][] | undefined, x: number, y: number): number | undefined {
