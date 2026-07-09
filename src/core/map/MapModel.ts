@@ -90,7 +90,7 @@ export interface MapObject {
   rotationRadians: number;
   widthCells: number;
   heightCells: number;
-  losHeightMeters: number;
+  losHeightMeters?: number;
   labels: {
     en: string;
     ru: string;
