@@ -6,7 +6,7 @@
 
 ## Current focus
 
-Этап 2: headless local AI engine. Уже есть JSON-договор графа, первый `soldier_default_survival_graph.json`, проверка `validate:ai-graph`, локальный Node.js engine с endpoint-ами health / validate / evaluate-once и батники для ручной проверки. Следующие этапы: новая вкладка `ai-node-editor.html`, статус подключения к engine, затем подключение Soldier Survival Brain к одному солдату.
+Этап 3: видимый AI Node Editor. Уже есть отдельный entrypoint `ai-node-editor.html`, палитра нод, видимый граф bundled Soldier Survival Graph, инспектор выбранной ноды, статус local engine, кнопки validation/evaluate-once через localhost API и батник `Run-AI-Node-Editor.bat`. Следующие этапы: authoring (создание/перемещение/соединение нод и сохранение JSON), затем подключение Soldier Survival Brain к одному живому солдату.
 
 ## Key decisions
 
@@ -16,7 +16,7 @@
 - Поведение описывается графом нод: flow + conditions + scores + tactical queries + actions + blackboard/debug.
 - Тяжёлые расчёты ИИ выполняет local engine, а браузерная вкладка только редактирует граф, отправляет его на проверку и показывает объяснения.
 - AI Node Editor открывается в новой вкладке/entrypoint, не смешивается с текущим tactical board UI.
-- На этапе 2 local engine ещё не управляет живым солдатом в `SimulationTick`; он проверяет graph validation и один расчёт evaluate-once через localhost API.
+- На этапе 3 редактор уже видимый, но ещё не сохраняет новые ноды и не управляет живым `SimulationTick`.
 
 ## Read first
 
@@ -24,10 +24,11 @@
 2. `docs/subprojects/ai-single-unit-editor/subproject.json`
 3. `docs/subprojects/ai-single-unit-editor/JOURNAL.md` (если существует)
 4. `docs/subprojects/ai-single-unit-editor/LOCAL_ENGINE_NODE_EDITOR_IMPLEMENTATION_PLAN.md`
-5. `docs/manual-test/AI_ENGINE_STAGE_2.md`
-6. `python scripts/subproject_context.py ai-single-unit-editor --brief`
-7. `docs/subprojects/real-wargame-start/ROADMAP_SOLDIER_BEHAVIOR_LAB.md`
-8. `docs/subprojects/real-wargame-start/RTS_FOUNDATION_DECISIONS.md`
+5. `docs/manual-test/AI_NODE_EDITOR_STAGE_3.md`
+6. `docs/manual-test/AI_ENGINE_STAGE_2.md`
+7. `python scripts/subproject_context.py ai-single-unit-editor --brief`
+8. `docs/subprojects/real-wargame-start/ROADMAP_SOLDIER_BEHAVIOR_LAB.md`
+9. `docs/subprojects/real-wargame-start/RTS_FOUNDATION_DECISIONS.md`
 
 ## Current data-contract files
 
@@ -47,6 +48,16 @@
 - `Run-AI-Engine-Smoke.bat`
 - `docs/manual-test/AI_ENGINE_STAGE_2.md`
 
+## Current visible-editor files
+
+- `ai-node-editor.html`
+- `src/ai-node-editor/main.ts`
+- `src/ai-node-editor/ai-node-editor.css`
+- `scripts/ai_node_editor_smoke.mjs`
+- `Run-AI-Node-Editor.bat`
+- `docs/manual-test/AI_NODE_EDITOR_STAGE_3.md`
+- `index.html` / `src/main.ts` — кнопка `Редактор ИИ` открывает editor в новой вкладке
+
 ## Boundaries
 
 - Не переписывать всю RTS-симуляцию: node editor только надстройка над существующим `SimulationState`, `BehaviorModel`, `UnitModel`.
@@ -58,13 +69,14 @@
 
 ## Testing
 
-На этапе 2 основная проверка:
+На этапе 3 основная проверка:
 
 ```text
-Run-AI-Engine-Smoke.bat
+Run-AI-Node-Editor.bat
+npm run editor:smoke
 npm run engine:smoke
 npm run validate:ai-graph
 npm run build
 ```
 
-`Run-AI-Engine-Smoke.bat` запускает local engine, проверяет `/engine/health`, `/ai/graph/validate`, `/ai/graph/evaluate-once` и сохраняет JSON-отчёты в `artifacts/ai-engine/`.
+`Run-AI-Node-Editor.bat` запускает local engine, Vite dev-server и открывает `/ai-node-editor.html`. `editor:smoke` проверяет структуру entrypoint/editor files без браузера.
