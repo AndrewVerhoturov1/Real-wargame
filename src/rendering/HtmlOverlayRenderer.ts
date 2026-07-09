@@ -1,6 +1,8 @@
 import type { WorldPosition } from '../core/geometry';
 import { gridToWorld } from '../core/map/MapModel';
-import type { SimulationState } from '../core/simulation/SimulationState';
+import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
+import { getVisibilityProbeState } from '../core/ui/RuntimeUiState';
+import { computeLineOfSight } from '../core/visibility/LineOfSight';
 import type { Locale } from '../i18n';
 
 export interface ScreenProjector {
@@ -76,6 +78,8 @@ export class HtmlOverlayRenderer {
       }
     }
 
+    this.renderVisibilityProbeLabel(state, visibleKeys);
+
     for (const [key, label] of this.labels) {
       if (!visibleKeys.has(key)) {
         label.remove();
@@ -87,6 +91,30 @@ export class HtmlOverlayRenderer {
   destroy(): void {
     this.container.remove();
     this.labels.clear();
+  }
+
+  private renderVisibilityProbeLabel(state: SimulationState, visibleKeys: Set<string>): void {
+    const probe = getVisibilityProbeState(state);
+    const unit = getSelectedUnit(state);
+
+    if (!probe.active || !probe.target || !unit) {
+      return;
+    }
+
+    const key = 'line-of-sight:label';
+    visibleKeys.add(key);
+    const result = computeLineOfSight(state.map, unit, probe.target);
+    const label = this.getLabel(key, 'los-probe-label');
+    const screen = this.projector.worldToScreen({
+      x: probe.target.x * state.map.cellSize,
+      y: probe.target.y * state.map.cellSize,
+    });
+    const text = result.blocked
+      ? `До курсора: ${Math.round(result.totalDistanceMeters)} м\nВидно: ${Math.round(result.visibleDistanceMeters)} м\nПреграда: ${result.blockerReasonRu}`
+      : `До курсора: ${Math.round(result.totalDistanceMeters)} м\nПрямая видимость есть`;
+
+    updateLabelText(label, text);
+    placeLabel(label, screen.x + 10, screen.y + 10);
   }
 
   private getLabel(key: string, className: string): HTMLDivElement {
