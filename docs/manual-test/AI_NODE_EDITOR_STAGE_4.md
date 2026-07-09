@@ -97,12 +97,12 @@ Console / JSON
 
 ## Authoring-проверка
 
-### 1. Добавить ноду
+### 1. Добавить универсальную пороговую ноду
 
-Открыть левую панель `+ Add node`. В палитре нажать любую ноду, например:
+Открыть левую панель `+ Add node`. В палитре нажать:
 
 ```text
-Danger Above Threshold
+Blackboard Value Above Threshold / Параметр выше порога
 ```
 
 Ожидание:
@@ -110,10 +110,81 @@ Danger Above Threshold
 ```text
 новая нода появилась примерно в центре текущего вида;
 она выбрана;
-справа открыт её инспектор.
+справа открыт человеческий интерфейс без JSON на первом уровне;
+есть список sourceKey/параметров и ползунок threshold.
 ```
 
-### 2. Перетащить ноду
+Важно: отдельных нод `DangerAbove` и `StressAbove` больше быть не должно. Для danger/stress используется одна и та же нода `BlackboardValueAbove` с разным `parameters.sourceKey`.
+
+### 2. Настроить параметр без JSON
+
+В правой панели выбрать параметр, например:
+
+```text
+sourceKey = danger
+threshold = 45
+```
+
+Ожидание:
+
+```text
+формула показывает danger > 45;
+тестовый ползунок меняет PASS/FAIL;
+кнопка Save condition сохраняет sourceKey и threshold.
+```
+
+### 3. Проверить существующие danger/stress условия
+
+Кликнуть по bundled-ноду:
+
+```text
+critical_danger_condition
+```
+
+Ожидание:
+
+```text
+это тоже BlackboardValueAbove;
+sourceKey = danger;
+threshold = 60.
+```
+
+Кликнуть по bundled-ноду:
+
+```text
+critical_stress_condition
+```
+
+Ожидание:
+
+```text
+это тоже BlackboardValueAbove;
+sourceKey = stress;
+threshold = 55.
+```
+
+### 4. Проверить подсказки
+
+Навести мышь на любой важный элемент и подождать 2 секунды:
+
+```text
+sourceKey select;
+threshold slider;
+preview value slider;
+PASS/FAIL badge;
+связь;
+порт ноды;
+Save condition.
+```
+
+Ожидание:
+
+```text
+появляется конкретная подсказка, а не заглушка;
+подсказка объясняет, что именно делает элемент и как влияет на решение.
+```
+
+### 5. Перетащить ноду
 
 Зажать новую ноду мышью, перетащить и отпустить.
 
@@ -125,7 +196,7 @@ Danger Above Threshold
 позиция запомнилась в браузере.
 ```
 
-### 3. Передвигать canvas
+### 6. Передвигать canvas
 
 Зажать пустое место поля редактора и потянуть.
 
@@ -136,7 +207,7 @@ Danger Above Threshold
 ноды и линии двигаются вместе.
 ```
 
-### 4. Масштабировать canvas
+### 7. Масштабировать canvas
 
 Покрутить колесо мыши над полем редактора или нажать:
 
@@ -155,7 +226,7 @@ Fit показывает граф удобнее;
 100% возвращает обычный масштаб.
 ```
 
-### 5. Связать ноды протягиванием
+### 8. Связать ноды протягиванием
 
 У каждой ноды справа есть маленькая жёлтая точка-порт.
 
@@ -177,7 +248,7 @@ Fit показывает граф удобнее;
 
 Fallback-способ через список `Link selected → child` можно оставить, но главный способ — протягивание из точки.
 
-### 6. Контекстное меню
+### 9. Контекстное меню
 
 Правый клик по ноде.
 
@@ -188,30 +259,7 @@ Fallback-способ через список `Link selected → child` можн
 есть Select, Add child, Duplicate, Set as link source, Link source → this, Center view, Unlink all children, Delete.
 ```
 
-### 7. Изменить параметры
-
-В инспекторе изменить, например:
-
-```json
-{
-  "threshold": 45
-}
-```
-
-Нажать:
-
-```text
-Save node
-```
-
-Ожидание:
-
-```text
-сообщение Saved node;
-Graph JSON preview снизу показывает новое значение.
-```
-
-### 8. Проверить изменённый граф через local engine
+### 10. Проверить изменённый граф через local engine
 
 Нажать:
 
@@ -227,7 +275,7 @@ validation.valid = true
 
 Если граф сломан, ожидаемая нормальная ошибка — русско/английское сообщение с nodeId.
 
-### 9. Экспортировать JSON
+### 11. Экспортировать JSON
 
 Нажать:
 
@@ -239,10 +287,11 @@ Export
 
 ```text
 браузер скачал soldier_default_survival_graph.json или soldier_custom_graph.json;
-в файле есть английский base и русский overlay: displayName + displayNameRu.
+в файле есть английский base и русский overlay: displayName + displayNameRu;
+универсальная пороговая нода хранит sourceKey + threshold.
 ```
 
-### 10. Импортировать JSON обратно
+### 12. Импортировать JSON обратно
 
 Нажать:
 
@@ -260,7 +309,7 @@ Import
 Validate всё ещё проходит.
 ```
 
-### 11. Сбросить к базовому графу
+### 13. Сбросить к базовому графу
 
 Нажать:
 
@@ -271,7 +320,8 @@ Reset
 Ожидание:
 
 ```text
-граф вернулся к bundled Soldier Survival Graph.
+граф вернулся к bundled Soldier Survival Graph;
+critical_danger_condition и critical_stress_condition остались универсальными BlackboardValueAbove.
 ```
 
 ## Что этот этап ещё НЕ делает
