@@ -1,0 +1,141 @@
+.ai-editor-shell {
+  grid-template-rows: 82px minmax(0, 1fr) 150px;
+}
+
+.ai-editor-title h1 span {
+  color: #d9b85c;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ai-editor-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 920px;
+}
+
+.ai-editor-button.danger {
+  border-color: rgba(255, 120, 96, 0.4);
+  color: #ffd0c7;
+  background: rgba(255, 78, 61, 0.1);
+}
+
+.ai-editor-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.graph-workspace {
+  overflow: auto;
+}
+
+.graph-workspace::after {
+  content: '';
+  display: block;
+  width: 1680px;
+  height: 1160px;
+}
+
+.graph-svg {
+  width: 1680px;
+  height: 1160px;
+}
+
+.graph-node {
+  width: 220px;
+  user-select: none;
+  touch-action: none;
+}
+
+.graph-node:hover {
+  border-color: rgba(255, 242, 168, 0.7);
+}
+
+.node-secondary {
+  color: #d9b85c !important;
+  font-size: 10px !important;
+}
+
+.palette-node em {
+  color: #d9b85c;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.toolbar-note {
+  margin: 0 0 10px;
+  color: #c8c1aa;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.inspector-field {
+  display: grid;
+  gap: 5px;
+  color: #d9b85c;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.inspector-field input,
+.inspector-field select,
+.inspector-field textarea {
+  width: 100%;
+  min-height: 34px;
+  padding: 8px 9px;
+  border: 1px solid rgba(255, 242, 168, 0.18);
+  border-radius: 9px;
+  color: #f4ecd5;
+  background: rgba(6, 8, 6, 0.52);
+  outline: none;
+}
+
+.inspector-field textarea {
+  resize: vertical;
+  min-height: 68px;
+  font-family: Consolas, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.inspector-field input:focus,
+.inspector-field select:focus,
+.inspector-field textarea:focus {
+  border-color: rgba(255, 242, 168, 0.72);
+  box-shadow: 0 0 0 2px rgba(255, 242, 168, 0.12);
+}
+
+.child-link-list {
+  display: grid;
+  gap: 6px;
+}
+
+.child-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  padding: 6px;
+  border-radius: 8px;
+  background: rgba(255, 242, 168, 0.05);
+}
+
+.child-link-row code {
+  overflow: hidden;
+  color: #f4ecd5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-button {
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 242, 168, 0.18);
+  border-radius: 7px;
+  color: #f4ecd5;
+  background: rgba(255, 242, 168, 0.08);
+  font-size: 11px;
+}
+
+.danger-zone {
+  border-color: rgba(255, 120, 96, 0.22);
+}
