@@ -3,25 +3,36 @@ import path from 'node:path';
 
 export const KNOWN_NODE_TYPES = new Set([
   'Root', 'UtilitySelector', 'Sequence', 'Selector', 'ActionBranch',
-  'HasOrder', 'EnemyVisible', 'EnemyKnown', 'UnderFire', 'BlackboardValueAbove', 'FlagCheck', 'DistanceCheck', 'StableThreshold', 'TacticalCheck', 'CoverNearby',
-  'ScoreDanger', 'ScoreStress', 'ScoreObedience', 'ScoreCoverNeed', 'ScoreCurrentActionInertia', 'ParameterScore', 'DistanceScore', 'DecisionInertia', 'RandomChance',
-  'FindBestCover', 'FindBestObject', 'SelectTarget',
+  'BlackboardValueAbove', 'FlagCheck', 'DistanceCheck', 'StableThreshold', 'TacticalCheck',
+  'ParameterScore', 'DistanceScore', 'DecisionInertia', 'RandomChance',
+  'FindBestObject', 'SelectTarget',
   'WriteMemory', 'CopyMemory', 'ForbidAction',
-  'SetPosture', 'MoveToCover', 'ContinueOrder', 'Observe', 'SetAction', 'SetMovementMode', 'SayMessage',
+  'SetPosture', 'SetAction', 'SetMovementMode', 'SayMessage',
   'WriteReason',
 ]);
 
 export const LEAF_NODE_TYPES = new Set([
-  'HasOrder', 'EnemyVisible', 'EnemyKnown', 'UnderFire', 'BlackboardValueAbove', 'FlagCheck', 'DistanceCheck', 'StableThreshold', 'TacticalCheck', 'CoverNearby',
-  'ScoreDanger', 'ScoreStress', 'ScoreObedience', 'ScoreCoverNeed', 'ScoreCurrentActionInertia', 'ParameterScore', 'DistanceScore', 'DecisionInertia', 'RandomChance',
-  'FindBestCover', 'FindBestObject', 'SelectTarget',
+  'BlackboardValueAbove', 'FlagCheck', 'DistanceCheck', 'StableThreshold', 'TacticalCheck',
+  'ParameterScore', 'DistanceScore', 'DecisionInertia', 'RandomChance',
+  'FindBestObject', 'SelectTarget',
   'WriteMemory', 'CopyMemory', 'ForbidAction',
-  'SetPosture', 'MoveToCover', 'ContinueOrder', 'Observe', 'SetAction', 'SetMovementMode', 'SayMessage',
+  'SetPosture', 'SetAction', 'SetMovementMode', 'SayMessage',
   'WriteReason',
 ]);
 
+const DISTANCE_FROM_VALUES = new Set(['self', 'currentTarget', 'orderTarget', 'cover', 'ally', 'enemy']);
+const DISTANCE_TO_VALUES = new Set(['enemy', 'cover', 'orderPoint', 'commander', 'squad', 'retreatPoint']);
+const TACTICAL_CHECK_VALUES = new Set(['line_of_sight', 'line_of_fire', 'path_exists', 'cover_exists', 'ammo_available', 'can_execute_order']);
+const TARGET_KIND_VALUES = new Set(['cover', 'enemy', 'ally', 'orderPoint', 'commander', 'squad']);
+const FIND_OBJECT_KIND_VALUES = new Set(['cover', 'enemy', 'ally', 'firing_position', 'retreat_point', 'route_point']);
+const FIND_CRITERIA_VALUES = new Set(['closer', 'safer', 'has_line_of_fire', 'farther_from_enemy']);
+const ACTION_VALUES = new Set(['move_to', 'fire', 'reload', 'retreat', 'wait', 'suppress', 'continue_order']);
+const POSTURE_VALUES = new Set(['stand', 'crouch', 'prone']);
+const MOVEMENT_MODE_VALUES = new Set(['fast', 'careful', 'crawl', 'bounds', 'formation', 'follow_tank']);
+const TARGET_RULE_VALUES = new Set(['nearest', 'most_dangerous', 'shooting_at_us', 'order_target', 'best_line_of_fire']);
+
 export const ENGINE_NAME = 'real-wargame-local-ai-engine';
-export const ENGINE_VERSION = '0.6.1-universal-node-validation';
+export const ENGINE_VERSION = '0.7.0-clean-universal-node-catalog';
 
 export function resolveBundledGraphPath(repoRoot) {
   return path.join(repoRoot, 'src', 'data', 'ai', 'soldier_default_survival_graph.json');
@@ -59,6 +70,7 @@ export function validateGraph(value) {
       continue;
     }
     nodeById.set(node.id, node);
+
     if (!isNonEmptyString(node.type)) {
       result.push(errorIssue('NODE_WITHOUT_TYPE', `Node ${node.id} must have a string type.`, `У ноды ${node.id} должен быть строковый type.`, node.id));
       continue;
@@ -71,6 +83,7 @@ export function validateGraph(value) {
     validateSpecificNodeParameters(node, value.blackboardDefaults, result);
   }
 
+  if (rootNodeIds.length === 0) result.push(errorIssue('ROOT_NODE_MISSING', 'Graph must contain one Root node.', 'В графе должна быть одна нода Root.'));
   if (rootNodeIds.length > 1) result.push(warningIssue('MULTIPLE_ROOT_NODES', `Graph has multiple Root nodes: ${rootNodeIds.join(', ')}. rootNodeId is used.`, `В графе несколько нод Root: ${rootNodeIds.join(', ')}. Используется rootNodeId.`));
   const rootNode = nodeById.get(value.rootNodeId);
   if (isNonEmptyString(value.rootNodeId) && !rootNode) result.push(errorIssue('ROOT_NODE_NOT_FOUND', `rootNodeId points to a missing node: ${value.rootNodeId}.`, `rootNodeId указывает на несуществующую ноду: ${value.rootNodeId}.`));
@@ -98,97 +111,58 @@ export function evaluateSoldierOnce(input) {
     return { ok: false, validation, error: 'Graph validation failed, soldier decision was not calculated.', errorRu: 'Граф не прошёл проверку, решение солдата не рассчитано.' };
   }
 
-  const blackboard = { ...(isRecord(graph.blackboardDefaults) ? graph.blackboardDefaults : {}), ...(isRecord(input.blackboard) ? input.blackboard : {}) };
   const unitId = isNonEmptyString(input.unitId) ? input.unitId : 'soldier_1';
-  const danger = clampPercent(toNumber(blackboard.danger, 0));
-  const stress = clampPercent(toNumber(blackboard.stress, 0));
-  const hasOrder = typeof input.hasOrder === 'boolean' ? input.hasOrder : Boolean(input.currentOrder ?? blackboard.current_order);
-  const currentAction = isNonEmptyString(blackboard.current_action) ? blackboard.current_action : 'observe';
-  const coverPosition = isPositionRecord(blackboard.best_cover_position) ? blackboard.best_cover_position : null;
+  const nodes = Array.isArray(graph.nodes) ? graph.nodes.filter(isRecord) : [];
+  const actionNode = nodes.find((node) => ['SetAction', 'SetPosture', 'SetMovementMode', 'SayMessage'].includes(node.type));
+  const explanation = actionNode
+    ? `Clean universal graph is valid. First action-like node is ${actionNode.id} (${actionNode.type}).`
+    : 'Clean universal graph is valid. No action node is connected yet, so no live command is produced.';
+  const explanationRu = actionNode
+    ? `Чистый универсальный граф валиден. Первая нода действия: ${actionNode.id} (${actionNode.type}).`
+    : 'Чистый универсальный граф валиден. Нода действия ещё не добавлена, поэтому живой команды пока нет.';
 
-  const dangerCondition = readBranchThresholdCondition(graph, 'critical_survival', 'danger', 60, 'above');
-  const stressCondition = readBranchThresholdCondition(graph, 'critical_survival', 'stress', 55, 'above');
-  const dangerConditionPassed = evaluateThresholdCondition(blackboard, dangerCondition);
-  const stressConditionPassed = evaluateThresholdCondition(blackboard, stressCondition);
-  const survivalVeto = !dangerConditionPassed && !stressConditionPassed;
-  const survivalScore = survivalVeto ? -999 : danger * 0.8 + stress * 0.45 + 20 + (coverPosition ? 15 : 0);
-  const continueVeto = !hasOrder;
-  const continueScore = continueVeto ? -999 : 35 - danger * 0.7 + (currentAction === 'continue_order' ? 12 : 0);
-  const observeScore = 5 - danger * 0.1 + (currentAction === 'observe' ? 8 : 0);
-
-  const scores = [
-    {
-      branchNodeId: 'critical_survival', branchName: 'Critical Survival', branchNameRu: 'Критическое выживание', score: roundScore(survivalScore), vetoed: survivalVeto,
-      ...(survivalVeto ? { vetoReason: `${conditionToText(dangerCondition, 'en')} and ${conditionToText(stressCondition, 'en')}.`, vetoReasonRu: `${conditionToText(dangerCondition, 'ru')} и ${conditionToText(stressCondition, 'ru')}.` } : {}),
-      breakdown: [
-        scoreItem('score_danger_for_cover', 'Danger', 'Опасность', danger * 0.8, `danger ${danger} * 0.8`, `danger ${danger} * 0.8`),
-        scoreItem('score_stress_for_cover', 'Stress', 'Стресс', stress * 0.45, `stress ${stress} * 0.45`, `stress ${stress} * 0.45`),
-        scoreItem('critical_danger_condition', 'Danger Threshold', 'Порог опасности', dangerConditionPassed ? 0 : -999, conditionFormula(dangerCondition, blackboard), conditionFormula(dangerCondition, blackboard)),
-        scoreItem('critical_stress_condition', 'Stress Threshold', 'Порог стресса', stressConditionPassed ? 0 : -999, conditionFormula(stressCondition, blackboard), conditionFormula(stressCondition, blackboard)),
-        scoreItem('score_cover_need', 'Cover Need', 'Нужда в укрытии', 20, 'base cover value', 'базовая ценность укрытия'),
-        scoreItem('find_best_cover', 'Found Cover', 'Найденное укрытие', coverPosition ? 15 : 0, coverPosition ? 'best_cover_position is present' : 'best_cover_position is missing', coverPosition ? 'best_cover_position есть' : 'best_cover_position нет'),
-      ],
-    },
-    {
-      branchNodeId: 'continue_order', branchName: 'Continue Order', branchNameRu: 'Продолжать приказ', score: roundScore(continueScore), vetoed: continueVeto,
-      ...(continueVeto ? { vetoReason: 'The soldier has no active order.', vetoReasonRu: 'У солдата нет активного приказа.' } : {}),
-      breakdown: [
-        scoreItem('score_obedience', 'Obedience To Order', 'Послушание приказу', hasOrder ? 35 : 0, hasOrder ? 'active order is present' : 'active order is missing', hasOrder ? 'активный приказ есть' : 'активного приказа нет'),
-        scoreItem('score_danger_against_order', 'Danger Against Order', 'Опасность против приказа', -danger * 0.7, `danger ${danger} * -0.7`, `danger ${danger} * -0.7`),
-        scoreItem('score_inertia_continue', 'Action Inertia', 'Инерция действия', currentAction === 'continue_order' ? 12 : 0, currentAction === 'continue_order' ? 'already continuing order' : 'no continue-order inertia', currentAction === 'continue_order' ? 'уже продолжает приказ' : 'инерции продолжения нет'),
-      ],
-    },
-    {
-      branchNodeId: 'observe_area', branchName: 'Observe', branchNameRu: 'Наблюдать', score: roundScore(observeScore), vetoed: false,
-      breakdown: [scoreItem('observe_action', 'Base Observe', 'Базовое наблюдение', 5, 'default action', 'действие по умолчанию'), scoreItem('score_danger_against_observe', 'Danger Against Observe', 'Опасность мешает наблюдению', -danger * 0.1, `danger ${danger} * -0.1`, `danger ${danger} * -0.1`), scoreItem('score_inertia_observe', 'Observe Inertia', 'Инерция наблюдения', currentAction === 'observe' ? 8 : 0, currentAction === 'observe' ? 'already observing' : 'no observe inertia', currentAction === 'observe' ? 'уже наблюдает' : 'инерции наблюдения нет')],
-    },
-  ];
-
-  const selected = scores.filter((score) => !score.vetoed).reduce((best, candidate) => candidate.score > best.score ? candidate : best, scores.find((score) => !score.vetoed) ?? scores[2]);
-  const command = commandForSelectedBranch(selected.branchNodeId, coverPosition);
-  return { ok: true, validation, unitId, graphId: String(graph.id), selectedBranchNodeId: selected.branchNodeId, selectedBranchName: selected.branchName, selectedBranchNameRu: selected.branchNameRu, command, scores, explanation: buildExplanation(selected.branchNodeId, danger, stress, coverPosition, 'en'), explanationRu: buildExplanation(selected.branchNodeId, danger, stress, coverPosition, 'ru') };
+  return {
+    ok: true,
+    validation,
+    unitId,
+    graphId: String(graph.id),
+    selectedBranchNodeId: actionNode?.id ?? graph.rootNodeId,
+    selectedBranchName: actionNode?.type ?? 'No Action',
+    selectedBranchNameRu: actionNode ? String(actionNode.type) : 'Нет действия',
+    command: buildPreviewCommand(actionNode),
+    scores: [],
+    explanation,
+    explanationRu,
+  };
 }
 
 export function createHealthPayload(port) {
-  return { ok: true, service: ENGINE_NAME, version: ENGINE_VERSION, port, mode: 'headless-local-engine', scope: 'Stage 4: local headless engine with universal node catalog and common cooldown parameters.', scopeRu: 'Этап 4: локальный headless engine с универсальным набором нод и общими параметрами задержки.', textBase: 'en', overlayLanguage: 'ru', browserDoesHeavyAi: false, endpoints: ['GET /engine/health', 'POST /ai/graph/validate', 'POST /ai/graph/evaluate-once'] };
+  return {
+    ok: true,
+    service: ENGINE_NAME,
+    version: ENGINE_VERSION,
+    port,
+    mode: 'headless-local-engine',
+    scope: 'Stage 4: local headless engine with clean universal node catalog, blank starter canvas, and common before/after delay parameters.',
+    scopeRu: 'Этап 4: локальный headless engine с чистым универсальным набором нод, пустым стартовым canvas и общей задержкой до/после ноды.',
+    textBase: 'en',
+    overlayLanguage: 'ru',
+    browserDoesHeavyAi: false,
+    endpoints: ['GET /engine/health', 'POST /ai/graph/validate', 'POST /ai/graph/evaluate-once'],
+  };
 }
 
-function commandForSelectedBranch(branchNodeId, coverPosition) {
-  if (branchNodeId === 'critical_survival') {
-    if (coverPosition) return { type: 'move_to', target: coverPosition, reason: 'Danger is high and cover is available: move to cover.', reasonRu: 'Опасность высока, найдено укрытие: двигаться к укрытию.' };
-    return { type: 'set_posture', posture: 'prone', reason: 'Danger is high and no cover is available: go prone.', reasonRu: 'Опасность высока, укрытие не найдено: лечь на землю.' };
+function buildPreviewCommand(actionNode) {
+  if (!isRecord(actionNode)) {
+    return { type: 'none', reason: 'No action node has been added yet.', reasonRu: 'Нода действия ещё не добавлена.' };
   }
-  if (branchNodeId === 'continue_order') return { type: 'continue_order', reason: 'An order exists and risk did not overcome obedience.', reasonRu: 'Приказ есть, риск не перебил послушание приказу.' };
-  return { type: 'observe', reason: 'No more urgent action is needed: observe the sector.', reasonRu: 'Нет более срочного действия: наблюдать сектор.' };
+  const parameters = isRecord(actionNode.parameters) ? actionNode.parameters : {};
+  if (actionNode.type === 'SetAction') return { type: String(parameters.action ?? 'wait'), targetKey: parameters.targetKey ?? null, reason: 'Preview command from Action node.', reasonRu: 'Предварительная команда из ноды Действие.' };
+  if (actionNode.type === 'SetPosture') return { type: 'set_posture', posture: String(parameters.posture ?? 'prone'), reason: 'Preview command from Posture node.', reasonRu: 'Предварительная команда из ноды Поза.' };
+  if (actionNode.type === 'SetMovementMode') return { type: 'set_movement_mode', mode: String(parameters.mode ?? 'careful'), reason: 'Preview command from Movement Mode node.', reasonRu: 'Предварительная команда из ноды Режим движения.' };
+  if (actionNode.type === 'SayMessage') return { type: 'say_message', message: parameters.message ?? null, messageRu: parameters.messageRu ?? null, durationSeconds: parameters.durationSeconds ?? 2, reason: 'Preview command from Say Message node.', reasonRu: 'Предварительная команда из ноды Реплика бойца.' };
+  return { type: 'none', reason: 'No supported preview action found.', reasonRu: 'Поддерживаемое preview-действие не найдено.' };
 }
-
-function buildExplanation(branchNodeId, danger, stress, coverPosition, language) {
-  if (branchNodeId === 'critical_survival') {
-    if (coverPosition) return language === 'ru' ? `Солдат выбрал укрытие: danger=${danger}, stress=${stress}, точка укрытия есть (${coverPosition.x}, ${coverPosition.y}).` : `Soldier chose cover: danger=${danger}, stress=${stress}, cover point is available (${coverPosition.x}, ${coverPosition.y}).`;
-    return language === 'ru' ? `Солдат лёг: danger=${danger}, stress=${stress}, подходящего укрытия в blackboard нет.` : `Soldier went prone: danger=${danger}, stress=${stress}, no suitable cover point is in the blackboard.`;
-  }
-  if (branchNodeId === 'continue_order') return language === 'ru' ? `Солдат продолжает приказ: danger=${danger}, stress=${stress}, ветка приказа получила лучший балл.` : `Soldier continues the order: danger=${danger}, stress=${stress}, the order branch got the best score.`;
-  return language === 'ru' ? `Солдат наблюдает: danger=${danger}, stress=${stress}, срочная реакция не требуется.` : `Soldier observes: danger=${danger}, stress=${stress}, no urgent reaction is required.`;
-}
-
-function readBranchThresholdCondition(graph, branchNodeId, sourceKey, fallbackThreshold, fallbackComparison) {
-  const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
-  const branch = nodes.find((node) => isRecord(node) && node.id === branchNodeId);
-  const childIds = Array.isArray(branch?.children) ? branch.children : [];
-  const thresholdNode = nodes.find((node) => isRecord(node) && node.type === 'BlackboardValueAbove' && isRecord(node.parameters) && node.parameters.sourceKey === sourceKey && childIds.includes(node.id));
-  const parameters = isRecord(thresholdNode?.parameters) ? thresholdNode.parameters : {};
-  return { sourceKey, threshold: clampPercent(toNumber(parameters.threshold, fallbackThreshold)), comparison: normalizeComparison(parameters.comparison, fallbackComparison) };
-}
-
-function evaluateThresholdCondition(blackboard, condition) {
-  const value = clampPercent(toNumber(blackboard[condition.sourceKey], 0));
-  return condition.comparison === 'below' ? value < condition.threshold : value > condition.threshold;
-}
-
-function conditionFormula(condition, blackboard) { return `${condition.sourceKey} ${clampPercent(toNumber(blackboard[condition.sourceKey], 0))} ${comparisonSymbol(condition.comparison)} ${condition.threshold}`; }
-function conditionToText(condition, language) { return language === 'ru' ? `${condition.sourceKey} не выполняет ${comparisonSymbol(condition.comparison)} ${condition.threshold}` : `${condition.sourceKey} does not satisfy ${comparisonSymbol(condition.comparison)} ${condition.threshold}`; }
-function comparisonSymbol(comparison) { return comparison === 'below' ? '<' : '>'; }
-function normalizeComparison(value, fallback = 'above') { if (value === 'below') return 'below'; if (value === 'above') return 'above'; return fallback === 'below' ? 'below' : 'above'; }
 
 function validateChildrenShape(node, result) {
   if (!Array.isArray(node.children)) return result.push(errorIssue('CHILDREN_NOT_ARRAY', `Node ${node.id} children must be an array of string ids.`, `У ноды ${node.id} поле children должно быть массивом строковых id.`, node.id));
@@ -216,28 +190,64 @@ function validateSpecificNodeParameters(node, blackboardDefaults, result) {
   if (['BlackboardValueAbove', 'StableThreshold', 'ParameterScore'].includes(node.type)) validateSourceKey(parameters, blackboardDefaults, node.id, result);
   if (node.type === 'BlackboardValueAbove') {
     validateNumericParameter(parameters.threshold, 'threshold', node.id, result);
-    if (parameters.comparison !== undefined && parameters.comparison !== 'above' && parameters.comparison !== 'below') result.push(errorIssue('COMPARISON_INVALID', `Node ${node.id} parameters.comparison must be "above" or "below".`, `У ноды ${node.id} parameters.comparison должен быть "above" или "below".`, node.id));
-  }
-  if (node.type === 'DistanceCheck') {
-    validateNumericParameter(parameters.thresholdMeters, 'thresholdMeters', node.id, result);
-    if (parameters.comparison !== undefined && parameters.comparison !== 'closer' && parameters.comparison !== 'farther') result.push(errorIssue('DISTANCE_COMPARISON_INVALID', `Node ${node.id} parameters.comparison must be "closer" or "farther".`, `У ноды ${node.id} parameters.comparison должен быть "closer" или "farther".`, node.id));
-  }
-  if (node.type === 'ParameterScore') {
-    validateNumericParameter(parameters.weight, 'weight', node.id, result);
-    if (parameters.direction !== undefined && parameters.direction !== 'positive' && parameters.direction !== 'negative') result.push(errorIssue('SCORE_DIRECTION_INVALID', `Node ${node.id} parameters.direction must be "positive" or "negative".`, `У ноды ${node.id} parameters.direction должен быть "positive" или "negative".`, node.id));
-  }
-  if (node.type === 'DistanceScore') {
-    validateNumericParameter(parameters.weight, 'weight', node.id, result);
-    validateNumericParameter(parameters.idealMeters, 'idealMeters', node.id, result);
+    validateAllowed(parameters.comparison ?? 'above', ['above', 'below'], 'COMPARISON_INVALID', 'comparison', node.id, result);
   }
   if (node.type === 'FlagCheck') {
-    if (!isNonEmptyString(parameters.flagKey)) result.push(errorIssue('FLAG_KEY_MISSING', `Node ${node.id} must have parameters.flagKey.`, `У ноды ${node.id} должен быть parameters.flagKey.`, node.id));
+    validateString(parameters.flagKey, 'flagKey', node.id, result);
     if (typeof parameters.expected !== 'boolean') result.push(errorIssue('FLAG_EXPECTED_INVALID', `Node ${node.id} parameters.expected must be boolean.`, `У ноды ${node.id} parameters.expected должен быть boolean.`, node.id));
+  }
+  if (node.type === 'DistanceCheck') {
+    validateAllowed(parameters.from, DISTANCE_FROM_VALUES, 'DISTANCE_FROM_INVALID', 'from', node.id, result);
+    validateAllowed(parameters.to, DISTANCE_TO_VALUES, 'DISTANCE_TO_INVALID', 'to', node.id, result);
+    validateAllowed(parameters.comparison, ['closer', 'farther'], 'DISTANCE_COMPARISON_INVALID', 'comparison', node.id, result);
+    validateNumericParameter(parameters.thresholdMeters, 'thresholdMeters', node.id, result);
   }
   if (node.type === 'StableThreshold') {
     validateNumericParameter(parameters.enterThreshold, 'enterThreshold', node.id, result);
     validateNumericParameter(parameters.exitThreshold, 'exitThreshold', node.id, result);
   }
+  if (node.type === 'TacticalCheck') {
+    validateAllowed(parameters.checkKind, TACTICAL_CHECK_VALUES, 'TACTICAL_CHECK_KIND_INVALID', 'checkKind', node.id, result);
+    if (typeof parameters.expected !== 'boolean') result.push(errorIssue('TACTICAL_EXPECTED_INVALID', `Node ${node.id} parameters.expected must be boolean.`, `У ноды ${node.id} parameters.expected должен быть boolean.`, node.id));
+  }
+  if (node.type === 'ParameterScore') {
+    validateNumericParameter(parameters.weight, 'weight', node.id, result);
+    validateAllowed(parameters.direction ?? 'positive', ['positive', 'negative'], 'SCORE_DIRECTION_INVALID', 'direction', node.id, result);
+  }
+  if (node.type === 'DistanceScore') {
+    validateAllowed(parameters.targetKind, TARGET_KIND_VALUES, 'DISTANCE_SCORE_TARGET_INVALID', 'targetKind', node.id, result);
+    validateAllowed(parameters.preference, ['closer', 'farther'], 'DISTANCE_SCORE_PREFERENCE_INVALID', 'preference', node.id, result);
+    validateNumericParameter(parameters.idealMeters, 'idealMeters', node.id, result);
+    validateNumericParameter(parameters.weight, 'weight', node.id, result);
+  }
+  if (node.type === 'DecisionInertia') {
+    validateAllowed(parameters.action, ACTION_VALUES, 'INERTIA_ACTION_INVALID', 'action', node.id, result);
+    validateNumericParameter(parameters.bonus, 'bonus', node.id, result);
+    validateNumericParameter(parameters.minimumSeconds, 'minimumSeconds', node.id, result);
+  }
+  if (node.type === 'RandomChance') validateNumericParameter(parameters.probabilityPercent, 'probabilityPercent', node.id, result);
+  if (node.type === 'FindBestObject') {
+    validateAllowed(parameters.objectKind, FIND_OBJECT_KIND_VALUES, 'FIND_OBJECT_KIND_INVALID', 'objectKind', node.id, result);
+    validateAllowed(parameters.criteria ?? 'safer', FIND_CRITERIA_VALUES, 'FIND_CRITERIA_INVALID', 'criteria', node.id, result);
+    validateNumericParameter(parameters.searchRadiusMeters, 'searchRadiusMeters', node.id, result);
+    validateString(parameters.writeTo, 'writeTo', node.id, result);
+  }
+  if (node.type === 'SelectTarget') {
+    validateAllowed(parameters.rule, TARGET_RULE_VALUES, 'TARGET_RULE_INVALID', 'rule', node.id, result);
+    validateString(parameters.writeTo, 'writeTo', node.id, result);
+  }
+  if (node.type === 'WriteMemory') validateString(parameters.writeTo, 'writeTo', node.id, result);
+  if (node.type === 'CopyMemory') {
+    validateString(parameters.fromKey, 'fromKey', node.id, result);
+    validateString(parameters.toKey, 'toKey', node.id, result);
+  }
+  if (node.type === 'ForbidAction') {
+    validateAllowed(parameters.action, ACTION_VALUES, 'FORBID_ACTION_INVALID', 'action', node.id, result);
+    validateNumericParameter(parameters.durationSeconds, 'durationSeconds', node.id, result);
+  }
+  if (node.type === 'SetPosture') validateAllowed(parameters.posture, POSTURE_VALUES, 'POSTURE_INVALID', 'posture', node.id, result);
+  if (node.type === 'SetAction') validateAllowed(parameters.action, ACTION_VALUES, 'ACTION_INVALID', 'action', node.id, result);
+  if (node.type === 'SetMovementMode') validateAllowed(parameters.mode, MOVEMENT_MODE_VALUES, 'MOVEMENT_MODE_INVALID', 'mode', node.id, result);
   if (node.type === 'SayMessage') {
     if (!isNonEmptyString(parameters.message) && !isNonEmptyString(parameters.messageRu)) result.push(errorIssue('SAY_MESSAGE_TEXT_MISSING', `Node ${node.id} must have message or messageRu.`, `У ноды ${node.id} должен быть message или messageRu.`, node.id));
     if (parameters.durationSeconds !== undefined && (typeof parameters.durationSeconds !== 'number' || parameters.durationSeconds <= 0)) result.push(errorIssue('SAY_MESSAGE_DURATION_INVALID', `Node ${node.id} durationSeconds must be a positive number.`, `У ноды ${node.id} durationSeconds должен быть положительным числом.`, node.id));
@@ -245,14 +255,25 @@ function validateSpecificNodeParameters(node, blackboardDefaults, result) {
 }
 
 function validateSourceKey(parameters, blackboardDefaults, nodeId, result) {
-  if (!isNonEmptyString(parameters.sourceKey)) result.push(errorIssue('SOURCE_KEY_MISSING', `Node ${nodeId} must have parameters.sourceKey.`, `У ноды ${nodeId} должен быть parameters.sourceKey.`, nodeId));
+  validateString(parameters.sourceKey, 'sourceKey', nodeId, result);
   if (isNonEmptyString(parameters.sourceKey) && isRecord(blackboardDefaults)) {
     const defaultValue = blackboardDefaults[parameters.sourceKey];
     if (defaultValue !== undefined && typeof defaultValue !== 'number') result.push(warningIssue('SOURCE_NOT_NUMERIC', `Node ${nodeId} sourceKey ${parameters.sourceKey} is not numeric in blackboardDefaults.`, `У ноды ${nodeId} sourceKey ${parameters.sourceKey} не является числом в blackboardDefaults.`, nodeId));
   }
 }
 
-function validateNumericParameter(value, key, nodeId, result) { if (typeof value !== 'number' || !Number.isFinite(value)) result.push(errorIssue('NUMERIC_PARAMETER_MISSING', `Node ${nodeId} must have numeric parameters.${key}.`, `У ноды ${nodeId} должен быть числовой parameters.${key}.`, nodeId)); }
+function validateString(value, key, nodeId, result) {
+  if (!isNonEmptyString(value)) result.push(errorIssue('STRING_PARAMETER_MISSING', `Node ${nodeId} must have string parameters.${key}.`, `У ноды ${nodeId} должен быть строковый parameters.${key}.`, nodeId));
+}
+
+function validateNumericParameter(value, key, nodeId, result) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) result.push(errorIssue('NUMERIC_PARAMETER_MISSING', `Node ${nodeId} must have numeric parameters.${key}.`, `У ноды ${nodeId} должен быть числовой parameters.${key}.`, nodeId));
+}
+
+function validateAllowed(value, allowed, code, key, nodeId, result) {
+  const allowedSet = allowed instanceof Set ? allowed : new Set(allowed);
+  if (!isNonEmptyString(value) || !allowedSet.has(value)) result.push(errorIssue(code, `Node ${nodeId} parameters.${key} must be one of: ${Array.from(allowedSet).join(', ')}.`, `У ноды ${nodeId} parameters.${key} должен быть одним из: ${Array.from(allowedSet).join(', ')}.`, nodeId));
+}
 
 function validateBlackboardDefaults(defaults, result) {
   if (defaults === undefined) return result.push(errorIssue('BLACKBOARD_DEFAULTS_MISSING', 'AI graph must have blackboardDefaults.', 'У AI-графа должно быть поле blackboardDefaults.'));
@@ -263,13 +284,9 @@ function validateBlackboardDefaults(defaults, result) {
   }
 }
 
-function scoreItem(sourceNodeId, label, labelRu, value, reason, reasonRu) { return { sourceNodeId, label, labelRu, value: roundScore(value), reason, reasonRu }; }
 function errorIssue(code, message, messageRu, nodeId) { return { severity: 'error', code, message, messageRu, ...(nodeId ? { nodeId } : {}) }; }
 function warningIssue(code, message, messageRu, nodeId) { return { severity: 'warning', code, message, messageRu, ...(nodeId ? { nodeId } : {}) }; }
 function isSupportedValue(value) { return value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || isPositionRecord(value); }
 function isPositionRecord(value) { return isRecord(value) && typeof value.x === 'number' && typeof value.y === 'number'; }
-function toNumber(value, fallback) { return typeof value === 'number' && Number.isFinite(value) ? value : fallback; }
-function clampPercent(value) { return Math.max(0, Math.min(100, value)); }
-function roundScore(value) { return Math.round(value * 10) / 10; }
 function isRecord(value) { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 function isNonEmptyString(value) { return typeof value === 'string' && value.trim().length > 0; }
