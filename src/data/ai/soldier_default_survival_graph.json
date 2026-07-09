@@ -1,0 +1,202 @@
+{
+  "version": 1,
+  "id": "soldier_default_survival_graph",
+  "name": "Soldier Default Survival Graph",
+  "nameRu": "Базовый граф выживания солдата",
+  "descriptionRu": "Первый JSON-граф одиночного солдата: выбрать между укрытием, продолжением приказа и наблюдением.",
+  "rootNodeId": "root",
+  "blackboardDefaults": {
+    "danger": 0,
+    "stress": 0,
+    "visible_enemy_id": null,
+    "known_enemy_position": null,
+    "best_cover_position": null,
+    "current_action": "observe",
+    "is_in_cover": false
+  },
+  "nodes": [
+    {
+      "id": "root",
+      "type": "Root",
+      "displayNameRu": "Старт поведения солдата",
+      "children": ["soldier_decision"]
+    },
+    {
+      "id": "soldier_decision",
+      "type": "UtilitySelector",
+      "displayNameRu": "Выбор действия солдата",
+      "descriptionRu": "Сравнивает варианты поведения и выбирает ветку с лучшим баллом.",
+      "children": ["critical_survival", "continue_order", "observe_area"]
+    },
+    {
+      "id": "critical_survival",
+      "type": "ActionBranch",
+      "displayNameRu": "Критическое выживание",
+      "descriptionRu": "При высокой опасности солдат должен искать укрытие или лечь.",
+      "children": [
+        "critical_danger_condition",
+        "critical_stress_condition",
+        "score_danger_for_cover",
+        "score_stress_for_cover",
+        "score_cover_need",
+        "find_best_cover",
+        "move_to_cover",
+        "fallback_prone",
+        "reason_survival"
+      ]
+    },
+    {
+      "id": "critical_danger_condition",
+      "type": "DangerAbove",
+      "displayNameRu": "Опасность выше 60",
+      "parameters": {
+        "threshold": 60
+      }
+    },
+    {
+      "id": "critical_stress_condition",
+      "type": "StressAbove",
+      "displayNameRu": "Стресс выше 55",
+      "parameters": {
+        "threshold": 55
+      }
+    },
+    {
+      "id": "score_danger_for_cover",
+      "type": "ScoreDanger",
+      "displayNameRu": "Опасность толкает к укрытию",
+      "parameters": {
+        "weight": 0.8,
+        "direction": "positive"
+      }
+    },
+    {
+      "id": "score_stress_for_cover",
+      "type": "ScoreStress",
+      "displayNameRu": "Стресс толкает к укрытию",
+      "parameters": {
+        "weight": 0.45,
+        "direction": "positive"
+      }
+    },
+    {
+      "id": "score_cover_need",
+      "type": "ScoreCoverNeed",
+      "displayNameRu": "Нужда в укрытии",
+      "parameters": {
+        "baseScore": 20
+      }
+    },
+    {
+      "id": "find_best_cover",
+      "type": "FindBestCover",
+      "displayNameRu": "Найти лучшее укрытие",
+      "parameters": {
+        "searchRadiusMeters": 35,
+        "writeTo": "best_cover_position"
+      }
+    },
+    {
+      "id": "move_to_cover",
+      "type": "MoveToCover",
+      "displayNameRu": "Двигаться к найденному укрытию",
+      "parameters": {
+        "targetBlackboardKey": "best_cover_position"
+      }
+    },
+    {
+      "id": "fallback_prone",
+      "type": "SetPosture",
+      "displayNameRu": "Если укрытия нет — лечь",
+      "parameters": {
+        "posture": "prone"
+      }
+    },
+    {
+      "id": "reason_survival",
+      "type": "WriteReason",
+      "displayNameRu": "Объяснить уход в укрытие",
+      "parameters": {
+        "reasonRu": "Опасность или стресс выше порога: солдат ищет укрытие, а если укрытия нет — ложится."
+      }
+    },
+    {
+      "id": "continue_order",
+      "type": "ActionBranch",
+      "displayNameRu": "Продолжать приказ",
+      "descriptionRu": "Если риск допустим, солдат продолжает текущий приказ.",
+      "children": [
+        "has_order",
+        "score_obedience",
+        "score_danger_against_order",
+        "score_inertia_continue",
+        "continue_order_action",
+        "reason_continue_order"
+      ]
+    },
+    {
+      "id": "has_order",
+      "type": "HasOrder",
+      "displayNameRu": "Есть текущий приказ"
+    },
+    {
+      "id": "score_obedience",
+      "type": "ScoreObedience",
+      "displayNameRu": "Послушание приказу",
+      "parameters": {
+        "baseScore": 35
+      }
+    },
+    {
+      "id": "score_danger_against_order",
+      "type": "ScoreDanger",
+      "displayNameRu": "Опасность против продолжения приказа",
+      "parameters": {
+        "weight": 0.7,
+        "direction": "negative"
+      }
+    },
+    {
+      "id": "score_inertia_continue",
+      "type": "ScoreCurrentActionInertia",
+      "displayNameRu": "Не дёргаться без причины",
+      "parameters": {
+        "action": "continue_order",
+        "bonus": 12
+      }
+    },
+    {
+      "id": "continue_order_action",
+      "type": "ContinueOrder",
+      "displayNameRu": "Исполнять приказ дальше"
+    },
+    {
+      "id": "reason_continue_order",
+      "type": "WriteReason",
+      "displayNameRu": "Объяснить продолжение приказа",
+      "parameters": {
+        "reasonRu": "Опасность допустима, а приказ остаётся важным: солдат продолжает выполнение."
+      }
+    },
+    {
+      "id": "observe_area",
+      "type": "ActionBranch",
+      "displayNameRu": "Наблюдать",
+      "descriptionRu": "Низкоприоритетная ветка по умолчанию, когда нет срочной угрозы или приказа.",
+      "children": ["observe_action", "reason_observe"]
+    },
+    {
+      "id": "observe_action",
+      "type": "Observe",
+      "displayNameRu": "Наблюдать сектор"
+    },
+    {
+      "id": "reason_observe",
+      "type": "WriteReason",
+      "displayNameRu": "Объяснить наблюдение",
+      "parameters": {
+        "reasonRu": "Срочной угрозы или активного приказа нет: солдат наблюдает сектор."
+      }
+    }
+  ]
+}
