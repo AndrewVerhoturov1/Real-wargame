@@ -21,6 +21,8 @@ const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 const AI_GRAPH_TICK_INTERVAL_MS = 600;
 const COVER_SEARCH_RADIUS_CELLS = 5;
 
+type PausableSimulationState = SimulationState & { paused?: boolean };
+
 export interface AiGameBridgeHandle {
   destroy(): void;
   tickNow(): void;
@@ -46,7 +48,7 @@ export function tickAiGameBridge(state: SimulationState, nowMs = Date.now()): vo
     ? state.units.find((candidate) => candidate.id === state.selectedUnitId)
     : undefined;
 
-  if (!unit || state.editor.enabled || state.paused) {
+  if (!unit || state.editor.enabled || isPaused(state)) {
     return;
   }
 
@@ -240,7 +242,7 @@ function publishRuntimeDebugTrace(
       selectedBranchName: result.selectedBranchName,
       selectedBranchNameRu: result.selectedBranchNameRu,
       ok: result.ok,
-      paused: state.paused,
+      paused: isPaused(state),
       nowMs,
       explanation: result.explanation,
       explanationRu: result.explanationRu,
@@ -437,6 +439,10 @@ function readBoolean(value: AiBlackboardValue | undefined, fallback = false): bo
 
 function isGraphValue(value: unknown): value is AiBlackboardValue {
   return value === null || ['string', 'number', 'boolean'].includes(typeof value) || readPosition(value as AiBlackboardValue) !== null;
+}
+
+function isPaused(state: SimulationState): boolean {
+  return Boolean((state as PausableSimulationState).paused);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
