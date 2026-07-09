@@ -1,9 +1,14 @@
-import { Container, Graphics, Text } from 'pixi.js';
+import { Container, Graphics } from 'pixi.js';
 import { buildUnitKnowledgeReport } from '../core/knowledge/UnitKnowledge';
 import { gridToCellCenter } from '../core/map/MapModel';
 import type { PressureZone } from '../core/pressure/PressureZone';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
-import { getKnowledgeOverlayState, getVisibilityProbeState } from '../core/ui/RuntimeUiState';
+import { hasHeightVariation, sampleSmoothHeightLevel } from '../core/terrain/SmoothTerrain';
+import {
+  getKnowledgeOverlayState,
+  getRealReliefOverlayState,
+  getVisibilityProbeState,
+} from '../core/ui/RuntimeUiState';
 import { computeLineOfSight } from '../core/visibility/LineOfSight';
 
 export class PixiOverlayRenderer {
@@ -49,6 +54,7 @@ export class PixiOverlayRenderer {
     this.lastDynamicKey = nextKey;
     this.dynamicContainer.removeChildren();
 
+    drawRealReliefOverlay(this.dynamicContainer, state);
     drawKnowledgeOverlay(this.dynamicContainer, state);
     drawVisibilityProbe(this.dynamicContainer, state);
 
@@ -86,6 +92,36 @@ export class PixiOverlayRenderer {
   }
 }
 
+function drawRealReliefOverlay(container: Container, state: SimulationState): void {
+  if (!getRealReliefOverlayState(state).active || !hasHeightVariation(state.map)) {
+    return;
+  }
+
+  const graphics = new Graphics();
+  const { map } = state;
+  const step = Math.max(4, Math.floor(map.cellSize / 2));
+  const width = map.width * map.cellSize;
+  const height = map.height * map.cellSize;
+
+  for (let y = 0; y < height; y += step) {
+    for (let x = 0; x < width; x += step) {
+      const level = sampleSmoothHeightLevel(map, x / map.cellSize, y / map.cellSize);
+      const color = reliefColor(level);
+      const alpha = Math.min(0.34, Math.abs(level) * 0.12 + 0.07);
+
+      if (Math.abs(level) < 0.08) {
+        continue;
+      }
+
+      graphics.beginFill(color, alpha);
+      graphics.drawRect(x, y, step + 0.5, step + 0.5);
+      graphics.endFill();
+    }
+  }
+
+  container.addChild(graphics);
+}
+
 function drawKnowledgeOverlay(container: Container, state: SimulationState): void {
   const overlay = getKnowledgeOverlayState(state);
   const unit = getSelectedUnit(state);
@@ -106,14 +142,14 @@ function drawKnowledgeOverlay(container: Container, state: SimulationState): voi
   for (const cover of report.planCovers) {
     graphics.lineStyle(2, 0xfff2a8, 0.75);
     graphics.beginFill(0xfff2a8, 0.12);
-    graphics.drawRoundedRect(cover.x * cellSize - 6, cover.y * cellSize - 6, 12, 12, 3);
+    graphics.drawCircle(cover.x * cellSize, cover.y * cellSize, 6);
     graphics.endFill();
   }
 
   for (const cover of report.nearbyCovers) {
     graphics.lineStyle(2, 0xfff2a8, 0.95);
     graphics.beginFill(0xfff2a8, 0.24);
-    graphics.drawCircle(cover.x * cellSize, cover.y * cellSize, 7);
+    graphics.drawRoundedRect(cover.x * cellSize - 7, cover.y * cellSize - 7, 14, 14, 2);
     graphics.endFill();
   }
 
@@ -164,20 +200,25 @@ function drawVisibilityProbe(container: Container, state: SimulationState): void
   }
 
   container.addChild(graphics);
+}
 
-  const label = result.blocked
-    ? `До курсора: ${Math.round(result.totalDistanceMeters)} м\nВидно: ${Math.round(result.visibleDistanceMeters)} м\nПреграда: ${result.blockerReasonRu}`
-    : `До курсора: ${Math.round(result.totalDistanceMeters)} м\nПрямая видимость есть`;
-  const text = new Text(label, {
-    fill: 0xfff2a8,
-    fontFamily: 'Arial, Helvetica, sans-serif',
-    fontSize: 12,
-    fontWeight: '700',
-    stroke: 0x10160f,
-    strokeThickness: 3,
-  });
-  text.position.set(target.x * cellSize + 10, target.y * cellSize + 10);
-  container.addChild(text);
+function reliefColor(level: number): number {
+  if (level < -1.25) {
+    return 0x315c74;
+  }
+  if (level < -0.25) {
+    return 0x4b7275;
+  }
+  if (level < 0.75) {
+    return 0x8a8d5a;
+  }
+  if (level < 1.75) {
+    return 0xb6a44c;
+  }
+  if (level < 2.75) {
+    return 0xd2a24a;
+  }
+  return 0xf0c262;
 }
 
 function getZoneLayerKey(state: SimulationState, showPressureZones: boolean): string {
@@ -209,6 +250,7 @@ function getDynamicLayerKey(state: SimulationState, showGrid: boolean): string {
     ? `${state.selectionBox.start.x.toFixed(2)}:${state.selectionBox.start.y.toFixed(2)}:${state.selectionBox.current.x.toFixed(2)}:${state.selectionBox.current.y.toFixed(2)}`
     : 'none';
   const knowledgeOverlay = getKnowledgeOverlayState(state).active ? '1' : '0';
+  const realRelief = getRealReliefOverlayState(state).active ? '1' : '0';
   const probe = getVisibilityProbeState(state);
   const probeKey = probe.active && probe.target
     ? `${probe.target.x.toFixed(2)}:${probe.target.y.toFixed(2)}`
@@ -222,6 +264,7 @@ function getDynamicLayerKey(state: SimulationState, showGrid: boolean): string {
     `cell:${state.map.cellSize}`,
     `selectedUnit:${selectedUnit}`,
     `knowledge:${knowledgeOverlay}`,
+    `relief:${realRelief}`,
     `probe:${probeKey}`,
     `objects:${state.map.objects.length}`,
     `zones:${state.pressureZones.length}`,
