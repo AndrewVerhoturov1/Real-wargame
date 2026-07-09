@@ -129,7 +129,7 @@ test('capture AI Node Editor screenshots and universal threshold interactions', 
   await page.waitForTimeout(250);
   await saveScreenshot(page, '09-ai-editor-palette-open.png');
 
-  await page.getByRole('button', { name: /Blackboard Value Above Threshold/ }).click();
+  await page.getByRole('button', { name: /Blackboard Threshold Condition|Параметр выше\/ниже порога/ }).click();
   await page.waitForTimeout(500);
   await expect(page.locator('.graph-node.selected')).toBeVisible();
   await expect(page.locator('.human-node-panel.blackboard-value-above')).toBeVisible();
@@ -162,18 +162,7 @@ test('capture AI Node Editor screenshots and universal threshold interactions', 
   await page.waitForTimeout(250);
   await saveScreenshot(page, '17-universal-threshold-changed.png');
 
-  await page.getByRole('button', { name: /Save condition|Сохранить условие/ }).click();
-  await page.waitForTimeout(450);
-  await expect(page.locator('.human-node-panel.blackboard-value-above')).toBeVisible();
-  await saveScreenshot(page, '18-universal-threshold-saved.png');
-
-  await page.locator('.graph-node[data-node-id="critical_stress_condition"]').click();
-  await page.waitForTimeout(500);
-  await expect(page.locator('.human-node-panel.blackboard-value-above')).toBeVisible();
-  await expect(page.locator('.human-source-select')).toHaveValue('stress');
-  await expect(page.locator('.human-source-key')).toContainText('stress');
-  await saveScreenshot(page, '19-existing-stress-uses-universal-threshold.png');
-
+  await page.getByRole('button', { name: /Параметр ниже порога|Value below threshold/ }).click();
   await page.locator('.human-threshold-slider').evaluate((element) => {
     const input = element as HTMLInputElement;
     input.value = '30';
@@ -181,12 +170,25 @@ test('capture AI Node Editor screenshots and universal threshold interactions', 
   });
   await page.locator('.human-preview-slider').evaluate((element) => {
     const input = element as HTMLInputElement;
-    input.value = '70';
+    input.value = '25';
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
   await expect(page.locator('.human-node-panel.blackboard-value-above .danger-result.pass')).toBeVisible();
+  await expect(page.locator('.human-formula-value')).toContainText('25 < 30');
   await page.waitForTimeout(250);
-  await saveScreenshot(page, '20-existing-stress-universal-threshold-changed.png');
+  await saveScreenshot(page, '18-universal-threshold-below-mode.png');
+
+  await page.getByRole('button', { name: /Save condition|Сохранить условие/ }).click();
+  await page.waitForTimeout(450);
+  await expect(page.locator('.human-node-panel.blackboard-value-above')).toBeVisible();
+  await saveScreenshot(page, '19-universal-threshold-saved.png');
+
+  await page.locator('.graph-node[data-node-id="critical_stress_condition"]').click();
+  await page.waitForTimeout(500);
+  await expect(page.locator('.human-node-panel.blackboard-value-above')).toBeVisible();
+  await expect(page.locator('.human-source-select')).toHaveValue('stress');
+  await expect(page.locator('.human-source-key')).toContainText('stress');
+  await saveScreenshot(page, '20-existing-stress-uses-universal-threshold.png');
 
   await page.getByRole('button', { name: 'Fit' }).click();
   await page.waitForTimeout(250);
