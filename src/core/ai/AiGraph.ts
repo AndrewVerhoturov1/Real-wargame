@@ -11,7 +11,8 @@ export interface AiGraph {
   readonly version: AiGraphVersion;
   readonly id: string;
   readonly name: string;
-  readonly nameRu: string;
+  readonly nameRu?: string;
+  readonly description?: string;
   readonly descriptionRu?: string;
   readonly rootNodeId: AiNodeId;
   readonly blackboardDefaults: AiBlackboardDefaults;
@@ -23,6 +24,7 @@ export interface AiNode {
   readonly type: AiNodeType | string;
   readonly displayName?: string;
   readonly displayNameRu?: string;
+  readonly description?: string;
   readonly descriptionRu?: string;
   readonly children?: readonly AiNodeId[];
   readonly parameters?: AiNodeParameters;
@@ -30,17 +32,21 @@ export interface AiNode {
 
 export interface ScoreBreakdownItem {
   readonly sourceNodeId: AiNodeId;
-  readonly labelRu: string;
+  readonly label: string;
+  readonly labelRu?: string;
   readonly value: number;
-  readonly reasonRu: string;
+  readonly reason: string;
+  readonly reasonRu?: string;
 }
 
 export interface AiBranchScore {
   readonly branchNodeId: AiNodeId;
-  readonly branchNameRu: string;
+  readonly branchName: string;
+  readonly branchNameRu?: string;
   readonly score: number;
   readonly breakdown: readonly ScoreBreakdownItem[];
   readonly vetoed: boolean;
+  readonly vetoReason?: string;
   readonly vetoReasonRu?: string;
 }
 
@@ -50,32 +56,39 @@ export type SoldierCommand =
   | {
       readonly type: 'set_posture';
       readonly posture: SoldierPostureCommandValue;
-      readonly reasonRu: string;
+      readonly reason: string;
+      readonly reasonRu?: string;
     }
   | {
       readonly type: 'move_to';
       readonly target: GridPosition;
-      readonly reasonRu: string;
+      readonly reason: string;
+      readonly reasonRu?: string;
     }
   | {
       readonly type: 'continue_order';
-      readonly reasonRu: string;
+      readonly reason: string;
+      readonly reasonRu?: string;
     }
   | {
       readonly type: 'observe';
-      readonly reasonRu: string;
+      readonly reason: string;
+      readonly reasonRu?: string;
     }
   | {
       readonly type: 'stop';
-      readonly reasonRu: string;
+      readonly reason: string;
+      readonly reasonRu?: string;
     };
 
 export interface SoldierDecisionResult {
   readonly unitId: string;
   readonly graphId: string;
   readonly selectedBranchNodeId: AiNodeId;
-  readonly selectedBranchNameRu: string;
+  readonly selectedBranchName: string;
+  readonly selectedBranchNameRu?: string;
   readonly command: SoldierCommand;
   readonly scores: readonly AiBranchScore[];
-  readonly explanationRu: string;
+  readonly explanation: string;
+  readonly explanationRu?: string;
 }
