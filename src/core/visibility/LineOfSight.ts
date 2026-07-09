@@ -1,9 +1,11 @@
 import { distance, type GridPosition } from '../geometry';
 import { getCell, type MapObject, type TacticalMap } from '../map/MapModel';
+import { sampleSmoothHeightLevel } from '../terrain/SmoothTerrain';
 import type { UnitModel } from '../units/UnitModel';
 
 const ELEVATION_STEP_METERS = 2;
 const SAMPLE_STEP_CELLS = 0.12;
+const TERRAIN_BLOCK_MARGIN_METERS = 0.95;
 
 export interface LineOfSightProbeResult {
   origin: GridPosition;
@@ -32,10 +34,8 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
     };
   }
 
-  const originCell = getCell(map, Math.floor(origin.x), Math.floor(origin.y));
-  const targetCell = getCell(map, Math.floor(target.x), Math.floor(target.y));
-  const originGround = (originCell?.height ?? 0) * ELEVATION_STEP_METERS;
-  const targetGround = (targetCell?.height ?? 0) * ELEVATION_STEP_METERS;
+  const originGround = sampleSmoothHeightLevel(map, origin.x, origin.y) * ELEVATION_STEP_METERS;
+  const targetGround = sampleSmoothHeightLevel(map, target.x, target.y) * ELEVATION_STEP_METERS;
   const originEye = originGround + eyeHeightForPosture(unit.behaviorRuntime.posture);
   const targetEye = targetGround + 1.4;
   const steps = Math.max(2, Math.ceil(totalDistanceCells / SAMPLE_STEP_CELLS));
@@ -76,19 +76,20 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
       forestMeters = Math.max(0, forestMeters - map.metersPerCell * 0.4);
     }
 
-    const groundHeight = cell.height * ELEVATION_STEP_METERS;
+    const smoothHeightLevel = sampleSmoothHeightLevel(map, sample.x, sample.y);
+    const groundHeight = smoothHeightLevel * ELEVATION_STEP_METERS;
     const lineHeight = lerp(originEye, targetEye, factor);
     const isNearOrigin = currentDistanceMeters < map.metersPerCell * 0.7;
     const isNearTarget = totalDistanceMeters - currentDistanceMeters < map.metersPerCell * 0.7;
 
-    if (!isNearOrigin && !isNearTarget && groundHeight > lineHeight + 0.75) {
+    if (!isNearOrigin && !isNearTarget && groundHeight > lineHeight + TERRAIN_BLOCK_MARGIN_METERS) {
       return blockedResult(
         origin,
         target,
         totalDistanceMeters,
         currentDistanceMeters,
         sample,
-        `склон / высота ${formatSigned(cell.height)}`,
+        `плавный склон / рельеф ${formatSigned(smoothHeightLevel)}`,
       );
     }
   }
@@ -153,10 +154,10 @@ function blocksLineOfSight(object: MapObject): boolean {
     case 'logs':
     case 'fence':
     case 'tree':
-      return true;
-    case 'ditch':
     case 'post':
     case 'well':
+      return true;
+    case 'ditch':
     case 'bridge':
     default:
       return false;
@@ -177,13 +178,17 @@ function formatObjectBlocker(object: MapObject): string {
     case 'cover':
       return 'укрытие';
     case 'crates':
-      return 'ящики';
+      return 'ящики / бочки';
     case 'logs':
       return 'брёвна';
     case 'fence':
       return 'забор';
     case 'tree':
       return 'дерево';
+    case 'post':
+      return 'пост / бочки';
+    case 'well':
+      return 'колодец / круглый объект';
     default:
       return object.kind;
   }
@@ -202,7 +207,8 @@ function eyeHeightForPosture(posture: UnitModel['behaviorRuntime']['posture']): 
 }
 
 function formatSigned(value: number): string {
-  return value > 0 ? `+${value}` : String(value);
+  const rounded = Math.round(value * 10) / 10;
+  return rounded > 0 ? `+${rounded}` : String(rounded);
 }
 
 function lerp(start: number, end: number, factor: number): number {
