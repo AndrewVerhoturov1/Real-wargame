@@ -19,91 +19,74 @@ interface HumanNode {
 }
 
 interface HumanGraph {
+  blackboardDefaults?: JsonObject;
   nodes?: HumanNode[];
 }
 
-interface ThresholdNodeConfig {
-  type: 'DangerAbove' | 'StressAbove';
-  className: string;
-  sourceKey: 'danger' | 'stress';
-  previewStorageKey: string;
-  previewSliderClass: string;
-  defaultThreshold: number;
-  defaultPreview: number;
-  titleRu: string;
-  titleEn: string;
+interface NumericSourceOption {
+  key: string;
+  label: string;
+  labelRu: string;
+  description: string;
   descriptionRu: string;
-  descriptionEn: string;
-  thresholdHelpRu: string;
-  thresholdHelpEn: string;
-  previewHelpRu: string;
-  previewHelpEn: string;
-  sourceHelpRu: string;
-  sourceHelpEn: string;
-  memoryHelpRu: string;
-  memoryHelpEn: string;
-  formulaHelpRu: string;
-  formulaHelpEn: string;
-  resultHelpRu: string;
-  resultHelpEn: string;
+  defaultPreview: number;
 }
 
 const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v5';
 const HUMAN_LANGUAGE_KEY = 'real-wargame.ai-node-editor.human-language.v1';
 const TOOLTIP_DELAY_MS = 2000;
+const PREVIEW_STORAGE_PREFIX = 'real-wargame.ai-node-editor.preview-value.v1.';
 
-const THRESHOLD_NODE_CONFIGS: Record<ThresholdNodeConfig['type'], ThresholdNodeConfig> = {
-  DangerAbove: {
-    type: 'DangerAbove',
-    className: 'danger-above',
-    sourceKey: 'danger',
-    previewStorageKey: 'real-wargame.ai-node-editor.preview-danger.v2',
-    previewSliderClass: 'human-danger-preview-slider',
-    defaultThreshold: 60,
+const BUILTIN_NUMERIC_SOURCES: readonly NumericSourceOption[] = [
+  {
+    key: 'danger',
+    label: 'Danger',
+    labelRu: 'Опасность',
+    description: 'Current danger score from fire, enemy visibility, cover, and other threats.',
+    descriptionRu: 'Текущая опасность от огня, видимости врага, укрытий и других угроз.',
     defaultPreview: 85,
-    titleRu: 'Опасность выше порога',
-    titleEn: 'Danger above threshold',
-    descriptionRu: 'Проверяет: стала ли опасность для солдата выше выбранного порога. Если да, граф может идти дальше по этой ветке.',
-    descriptionEn: 'Checks whether soldier danger is above the selected threshold. If yes, the graph can continue through this branch.',
-    thresholdHelpRu: 'Порог опасности. Например 60 означает: пока danger 60 или ниже — условие не проходит; danger 61 и выше — проходит. Чем ниже порог, тем раньше солдат считает ситуацию опасной.',
-    thresholdHelpEn: 'Danger threshold. For example, 60 means: danger 60 or lower fails; danger 61 and higher passes. Lower values make the soldier react sooner.',
-    previewHelpRu: 'Тестовое значение danger. Это учебная проверка прямо в редакторе: двигай ползунок и смотри, когда нода меняет FAIL на PASS. Настоящего солдата на карте это не меняет.',
-    previewHelpEn: 'Preview danger value. This is an editor-only test: move the slider and see when the node changes from FAIL to PASS. It does not change the real map soldier.',
-    sourceHelpRu: 'Источник — числовая оценка danger. Её должен рассчитать сенсор/движок по огню, видимости врага, укрытиям и другим угрозам.',
-    sourceHelpEn: 'Source is the numeric danger score. Sensors/engine should calculate it from fire, enemy visibility, cover, and other threats.',
-    memoryHelpRu: 'blackboard.danger — место в памяти солдата, где хранится текущая опасность. Эта нода только читает значение, не создаёт его сама.',
-    memoryHelpEn: 'blackboard.danger is the soldier memory slot with current danger. This node only reads it; it does not create the value.',
-    formulaHelpRu: 'Формула этой ноды простая: текущее значение danger должно быть строго больше порога. Равное значение не проходит.',
-    formulaHelpEn: 'The node formula is simple: current danger must be strictly greater than the threshold. Equal value does not pass.',
-    resultHelpRu: 'PASS значит: условие прошло и граф может идти к дочерним нодам. FAIL значит: эта ветка останавливается на проверке опасности.',
-    resultHelpEn: 'PASS means the condition passed and the graph can continue to child nodes. FAIL means this branch stops at the danger check.',
   },
-  StressAbove: {
-    type: 'StressAbove',
-    className: 'stress-above',
-    sourceKey: 'stress',
-    previewStorageKey: 'real-wargame.ai-node-editor.preview-stress.v2',
-    previewSliderClass: 'human-stress-preview-slider',
-    defaultThreshold: 55,
+  {
+    key: 'stress',
+    label: 'Stress',
+    labelRu: 'Стресс',
+    description: 'Internal combat pressure: suppression, fatigue, nearby losses, and fear.',
+    descriptionRu: 'Внутреннее боевое напряжение: подавление, усталость, потери рядом и страх.',
     defaultPreview: 70,
-    titleRu: 'Стресс выше порога',
-    titleEn: 'Stress above threshold',
-    descriptionRu: 'Проверяет: стал ли стресс солдата выше выбранного порога. Если да, солдат может перейти к осторожному или защитному поведению.',
-    descriptionEn: 'Checks whether soldier stress is above the selected threshold. If yes, the soldier can switch to cautious or defensive behavior.',
-    thresholdHelpRu: 'Порог стресса. Например 55 означает: stress 55 или ниже — условие не проходит; stress 56 и выше — проходит. Низкий порог делает солдата более нервным.',
-    thresholdHelpEn: 'Stress threshold. For example, 55 means: stress 55 or lower fails; stress 56 and higher passes. Lower threshold makes the soldier more nervous.',
-    previewHelpRu: 'Тестовое значение stress. Оно показывает, как нода реагирует на боевое напряжение: потери рядом, огонь, усталость, подавление. Настоящую карту не меняет.',
-    previewHelpEn: 'Preview stress value. It shows how the node reacts to combat pressure: nearby losses, fire, fatigue, suppression. It does not change the real map.',
-    sourceHelpRu: 'Источник — числовая оценка stress. Это не сама опасность, а внутреннее напряжение солдата от боя и давления.',
-    sourceHelpEn: 'Source is the numeric stress score. It is not danger itself, but the soldier internal pressure from combat.',
-    memoryHelpRu: 'blackboard.stress — место в памяти солдата, где хранится текущий стресс. Другие системы должны обновлять его перед работой графа.',
-    memoryHelpEn: 'blackboard.stress is the soldier memory slot with current stress. Other systems should update it before the graph runs.',
-    formulaHelpRu: 'Формула этой ноды: текущее значение stress должно быть строго больше порога. Это отделяет спокойное состояние от напряжённого.',
-    formulaHelpEn: 'The node formula: current stress must be strictly greater than the threshold. This separates calm state from pressured state.',
-    resultHelpRu: 'PASS значит: стресс уже достаточно высок, можно включать осторожность, поиск укрытия или отказ от рискованного действия. FAIL значит: стресс ещё терпимый.',
-    resultHelpEn: 'PASS means stress is high enough to enable caution, cover seeking, or refusing risky behavior. FAIL means stress is still tolerable.',
   },
-};
+  {
+    key: 'suppression',
+    label: 'Suppression',
+    labelRu: 'Подавление',
+    description: 'How strongly incoming fire prevents normal action.',
+    descriptionRu: 'Насколько входящий огонь мешает нормально действовать.',
+    defaultPreview: 50,
+  },
+  {
+    key: 'fatigue',
+    label: 'Fatigue',
+    labelRu: 'Усталость',
+    description: 'Physical tiredness from movement, stress, and combat load.',
+    descriptionRu: 'Физическая усталость от движения, стресса и боевой нагрузки.',
+    defaultPreview: 35,
+  },
+  {
+    key: 'morale',
+    label: 'Morale',
+    labelRu: 'Боевой дух',
+    description: 'Current morale or willingness to keep acting under pressure.',
+    descriptionRu: 'Текущий боевой дух или готовность продолжать действовать под давлением.',
+    defaultPreview: 65,
+  },
+  {
+    key: 'health',
+    label: 'Health',
+    labelRu: 'Здоровье',
+    description: 'Physical condition from 0 to 100 if the simulation writes it to blackboard.',
+    descriptionRu: 'Физическое состояние от 0 до 100, если симуляция записывает его в blackboard.',
+    defaultPreview: 80,
+  },
+];
 
 let currentLanguage: UiLanguage = readLanguage();
 let tooltipTimer: number | null = null;
@@ -225,10 +208,10 @@ function applySingleLanguageView(): void {
 }
 
 function annotateCommonControls(): void {
-  setHelp('#toggle-palette', t('Открывает список типов нод. После выбора нода появится в центре текущего вида и сразу станет выбранной.', 'Opens the node type list. After choosing a type, the node appears in the current view center and becomes selected.'));
+  setHelp('#toggle-palette', t('Открывает список типов нод. Для проверок вроде danger > 60 используй одну универсальную ноду «Параметр выше порога».', 'Opens the node type list. For checks like danger > 60, use one universal “Blackboard Value Above Threshold” node.'));
   setHelp('#toggle-inspector', t('Показывает или скрывает правую панель выбранной ноды. Скрывай её, когда нужно больше места для графа.', 'Shows or hides the selected-node panel. Hide it when you need more graph space.'));
   setHelp('#run-check-45', t('Запускает быструю проверку: local engine отвечает, граф проходит validation, тестовый солдат получает решение.', 'Runs a quick check: local engine responds, graph validates, and the test soldier gets a decision.'));
-  setHelp('#validate-graph', t('Отправляет текущий изменённый граф в local engine. Если связи или типы нод сломаны, ошибка появится в консоли.', 'Sends the current edited graph to the local engine. If links or node types are broken, the error appears in the console.'));
+  setHelp('#validate-graph', t('Отправляет текущий изменённый граф в local engine. Если связи, типы нод или параметры sourceKey/threshold сломаны, ошибка появится в консоли.', 'Sends the current edited graph to the local engine. If links, node types, or sourceKey/threshold parameters are broken, the error appears in the console.'));
   setHelp('#evaluate-once', t('Просит local engine один раз рассчитать решение тестового солдата по текущему графу.', 'Asks the local engine to calculate one test-soldier decision from the current graph.'));
   setHelp('#export-graph', t('Скачивает текущий граф в JSON-файл. Это безопасно: исходники репозитория напрямую не меняются.', 'Downloads the current graph as a JSON file. This is safe: repository source files are not changed directly.'));
   setHelp('#fit-graph', t('Подгоняет масштаб и положение canvas так, чтобы ноды было удобнее видеть.', 'Fits canvas scale and pan so nodes are easier to see.'));
@@ -240,10 +223,10 @@ function annotateGraphObjects(): void {
   document.querySelectorAll<HTMLElement>('.graph-node[data-node-id]').forEach((nodeElement) => {
     const nodeId = nodeElement.dataset.nodeId ?? '';
     const node = findNode(nodeId);
-    const config = getThresholdConfig(node?.type ?? '');
+    const source = node ? getNodeSourceOption(node) : null;
     const title = labelForNode(node);
-    const text = config
-      ? t(`Эта нода проверяет ${config.sourceKey}: если значение выше порога, результат PASS и граф может идти дальше по связям. Кликни ноду, чтобы настроить порог без JSON.`, `This node checks ${config.sourceKey}: if the value is above threshold, result is PASS and the graph can continue through links. Click it to edit the threshold without JSON.`)
+    const text = isUniversalThresholdNode(node)
+      ? t(`Универсальная проверка: берёт параметр ${source?.key ?? 'sourceKey'} из blackboard и сравнивает с порогом. Кликни, чтобы выбрать параметр из списка.`, `Universal check: reads ${source?.key ?? 'sourceKey'} from blackboard and compares it with a threshold. Click to choose the parameter from a list.`)
       : t(`Нода «${title}». Клик — выбрать. Правая кнопка — меню. Жёлтая точка справа — протянуть связь к следующей ноде.`, `Node “${title}”. Click to select. Right click for menu. Yellow right dot creates a link to the next node.`);
     setHelp(nodeElement, text);
   });
@@ -269,11 +252,11 @@ function renderHumanInspectorForSelectedNode(): void {
     return;
   }
 
-  const config = getThresholdConfig(node?.type ?? '');
   const existingPanel = inspector.querySelector<HTMLElement>('.human-node-panel');
-  const panelKey = node && config ? `${node.id}:${node.type}:${currentLanguage}` : null;
+  const sourceKey = node ? getSourceKey(node) : '';
+  const panelKey = node && isUniversalThresholdNode(node) ? `${node.id}:${node.type}:${sourceKey}:${currentLanguage}` : null;
 
-  if (!node || !config || !panelKey) {
+  if (!node || !isUniversalThresholdNode(node) || !panelKey) {
     existingPanel?.remove();
     renderedPanelKey = null;
     inspector.querySelectorAll<HTMLElement>('.human-hidden-original').forEach((element) => element.classList.remove('human-hidden-original'));
@@ -293,58 +276,70 @@ function renderHumanInspectorForSelectedNode(): void {
 
   const summaryCard = originalCards[0];
   const panel = document.createElement('section');
-  panel.className = `human-node-panel threshold-node ${config.className}`;
+  panel.className = 'human-node-panel threshold-node blackboard-value-above';
   panel.dataset.panelKey = panelKey;
-  panel.innerHTML = renderThresholdPanel(node, config);
+  panel.innerHTML = renderUniversalThresholdPanel(node);
   if (summaryCard) {
     summaryCard.insertAdjacentElement('afterend', panel);
   } else {
     inspector.prepend(panel);
   }
 
-  installThresholdPanelHandlers(panel, node, config);
+  installUniversalThresholdPanelHandlers(panel, node);
   renderedPanelKey = panelKey;
 }
 
-function renderThresholdPanel(node: HumanNode, config: ThresholdNodeConfig): string {
-  const threshold = readNumber(node.parameters?.threshold, config.defaultThreshold);
-  const previewValue = readPreviewValue(config);
+function renderUniversalThresholdPanel(node: HumanNode): string {
+  const sourceKey = getSourceKey(node);
+  const source = getSourceOption(sourceKey);
+  const threshold = getThreshold(node);
+  const previewValue = readPreviewValue(source);
   const passed = previewValue > threshold;
+  const sourceOptions = getNumericSourceOptions().map((option) => `
+    <option value="${escapeAttribute(option.key)}" ${option.key === source.key ? 'selected' : ''}>${escapeHtml(labelForSource(option))} · ${escapeHtml(option.key)}</option>
+  `).join('');
   const childList = Array.isArray(node.children) && node.children.length > 0
     ? node.children.map((childId) => `<li data-help="${escapeAttribute(t('Дочерняя нода. Если условие PASS, выполнение сможет перейти сюда.', 'Child node. If the condition is PASS, execution can continue here.'))}"><code>${escapeHtml(childId)}</code> — ${escapeHtml(t('следующая нода, если условие прошло', 'next node if the condition passes'))}</li>`).join('')
     : `<li data-help="${escapeAttribute(t('У этой проверки пока нет продолжения. Чтобы добавить его, протяни связь из правой точки ноды к другой ноде.', 'This check has no continuation yet. To add one, drag a link from the right dot to another node.'))}">${escapeHtml(t('Связей пока нет. Протяни линию из правой точки ноды к другой ноде.', 'No links yet. Drag from the right dot to another node.'))}</li>`;
 
   return `
-    <header class="human-panel-header" data-help="${escapeAttribute(t('Заголовок показывает тип выбранной ноды и текущий итог проверки: PASS или FAIL.', 'Header shows the selected node type and current check result: PASS or FAIL.'))}">
+    <header class="human-panel-header" data-help="${escapeAttribute(t('Это одна универсальная нода для проверок вида любой_числовой_параметр > порог.', 'This is one universal node for checks like any_numeric_parameter > threshold.'))}">
       <div>
-        <span class="human-kicker">${escapeHtml(t('Человеческий интерфейс ноды', 'Human node interface'))}</span>
-        <h3>${escapeHtml(t(config.titleRu, config.titleEn))}</h3>
+        <span class="human-kicker">${escapeHtml(t('Универсальная нода условия', 'Universal condition node'))}</span>
+        <h3>${escapeHtml(t('Параметр выше порога', 'Blackboard value above threshold'))}</h3>
       </div>
-      <span class="danger-result threshold-result ${passed ? 'pass' : 'fail'}" data-help="${escapeAttribute(t(config.resultHelpRu, config.resultHelpEn))}">${passed ? 'PASS' : 'FAIL'}</span>
+      <span class="danger-result threshold-result ${passed ? 'pass' : 'fail'}" data-help="${escapeAttribute(makeResultHelp(source))}">${passed ? 'PASS' : 'FAIL'}</span>
     </header>
 
-    <p class="human-description" data-help="${escapeAttribute(t('Короткое описание смысла ноды. Здесь должно быть понятно, зачем она нужна, без чтения кода.', 'Short explanation of what the node does. It should be understandable without reading code.'))}">${escapeHtml(t(config.descriptionRu, config.descriptionEn))}</p>
+    <p class="human-description" data-help="${escapeAttribute(t('Раньше для danger и stress были отдельные ноды. Теперь это одна нода: выбираешь параметр из списка и задаёшь порог.', 'Danger and stress used to require separate nodes. Now this is one node: choose a parameter from the list and set a threshold.'))}">${escapeHtml(t('Выбери числовой параметр памяти солдата и порог. Нода пропускает ветку, если текущее значение строго выше порога.', 'Choose a numeric soldier-memory parameter and a threshold. The node passes when the current value is strictly above the threshold.'))}</p>
+
+    <label class="human-control wide" data-help="${escapeAttribute(makeSourceHelp(source))}">
+      <span>${escapeHtml(t('Слушать параметр', 'Listen to parameter'))}</span>
+      <select class="human-source-select" data-help="${escapeAttribute(makeSourceHelp(source))}">
+        ${sourceOptions}
+      </select>
+    </label>
 
     <div class="human-info-grid">
-      <div data-help="${escapeAttribute(t(config.sourceHelpRu, config.sourceHelpEn))}"><b>${escapeHtml(t('Источник', 'Source'))}</b><span>${escapeHtml(config.sourceKey)}</span></div>
-      <div data-help="${escapeAttribute(t(config.memoryHelpRu, config.memoryHelpEn))}"><b>${escapeHtml(t('Память солдата', 'Soldier memory'))}</b><span>blackboard.${escapeHtml(config.sourceKey)}</span></div>
-      <div data-help="${escapeAttribute(t(config.formulaHelpRu, config.formulaHelpEn))}"><b>${escapeHtml(t('Формула', 'Formula'))}</b><span class="human-formula-value">${escapeHtml(`${previewValue} > ${threshold}`)}</span></div>
-      <div data-help="${escapeAttribute(t(config.resultHelpRu, config.resultHelpEn))}"><b>${escapeHtml(t('Результат', 'Result'))}</b><span class="human-result-label">${escapeHtml(passed ? t('условие прошло', 'condition passed') : t('условие не прошло', 'condition failed'))}</span></div>
+      <div data-help="${escapeAttribute(makeSourceHelp(source))}"><b>${escapeHtml(t('Источник', 'Source'))}</b><span class="human-source-key">${escapeHtml(source.key)}</span></div>
+      <div data-help="${escapeAttribute(t(`blackboard.${source.key} — место в памяти солдата, откуда нода читает текущее значение.`, `blackboard.${source.key} is the soldier memory slot read by this node.`))}"><b>${escapeHtml(t('Память солдата', 'Soldier memory'))}</b><span>blackboard.${escapeHtml(source.key)}</span></div>
+      <div data-help="${escapeAttribute(t('Формула: текущее значение должно быть строго больше порога. Равное значение не проходит.', 'Formula: current value must be strictly greater than threshold. Equal value does not pass.'))}"><b>${escapeHtml(t('Формула', 'Formula'))}</b><span class="human-formula-value">${escapeHtml(`${previewValue} > ${threshold}`)}</span></div>
+      <div data-help="${escapeAttribute(makeResultHelp(source))}"><b>${escapeHtml(t('Результат', 'Result'))}</b><span class="human-result-label">${escapeHtml(passed ? t('условие прошло', 'condition passed') : t('условие не прошло', 'condition failed'))}</span></div>
     </div>
 
-    <label class="human-control" data-help="${escapeAttribute(t(config.thresholdHelpRu, config.thresholdHelpEn))}">
+    <label class="human-control" data-help="${escapeAttribute(t('Порог. Например 60 означает: 60 или ниже — FAIL, 61 и выше — PASS.', 'Threshold. For example, 60 means: 60 or lower is FAIL, 61 and higher is PASS.'))}">
       <span>${escapeHtml(t('Порог', 'Threshold'))}: <output class="human-threshold-value">${threshold}</output></span>
-      <input class="human-threshold-slider" type="range" min="0" max="100" step="1" value="${threshold}" data-help="${escapeAttribute(t(config.thresholdHelpRu, config.thresholdHelpEn))}" />
+      <input class="human-threshold-slider" type="range" min="0" max="100" step="1" value="${threshold}" data-help="${escapeAttribute(t('Двигай порог и смотри, когда PASS меняется на FAIL. Это значение сохранится в parameters.threshold.', 'Move the threshold and see when PASS changes to FAIL. This value is saved to parameters.threshold.'))}" />
       <input class="human-threshold-number" type="number" min="0" max="100" step="1" value="${threshold}" data-help="${escapeAttribute(t('То же значение порога, но числом. Удобно ввести точное значение руками.', 'The same threshold value as a number. Useful when you need an exact value.'))}" />
     </label>
 
-    <label class="human-control" data-help="${escapeAttribute(t(config.previewHelpRu, config.previewHelpEn))}">
+    <label class="human-control" data-help="${escapeAttribute(t('Тестовое значение нужно только для понимания работы ноды в редакторе. Оно не меняет настоящего солдата на карте.', 'Preview value only explains the node behavior in the editor. It does not change the real map soldier.'))}">
       <span>${escapeHtml(t('Текущее тестовое значение', 'Preview current value'))}: <output class="human-preview-value">${previewValue}</output></span>
-      <input class="${config.previewSliderClass} human-preview-slider" type="range" min="0" max="100" step="1" value="${previewValue}" data-help="${escapeAttribute(t(config.previewHelpRu, config.previewHelpEn))}" />
+      <input class="human-preview-slider" type="range" min="0" max="100" step="1" value="${previewValue}" data-help="${escapeAttribute(t(`Пробное значение ${source.key}. Двигай его, чтобы увидеть, когда условие станет PASS или FAIL.`, `Preview value for ${source.key}. Move it to see when the condition becomes PASS or FAIL.`))}" />
     </label>
 
-    <div class="human-result-explain ${passed ? 'pass' : 'fail'}" data-help="${escapeAttribute(t(config.resultHelpRu, config.resultHelpEn))}">
-      ${escapeHtml(makeResultText(config, previewValue, threshold, passed))}
+    <div class="human-result-explain ${passed ? 'pass' : 'fail'}" data-help="${escapeAttribute(makeResultHelp(source))}">
+      ${escapeHtml(makeResultText(source, previewValue, threshold, passed))}
     </div>
 
     <section class="human-links" data-help="${escapeAttribute(t('Список дочерних нод. Если проверка PASS, граф может продолжить работу по этим связям.', 'List of child nodes. If the check is PASS, the graph can continue through these links.'))}">
@@ -353,18 +348,19 @@ function renderThresholdPanel(node: HumanNode, config: ThresholdNodeConfig): str
     </section>
 
     <div class="human-actions">
-      <button class="ai-editor-button primary human-save-threshold" type="button" data-help="${escapeAttribute(t('Записывает выбранный порог в параметры этой ноды. После этого Validate/Evaluate будут использовать новое значение.', 'Writes the selected threshold into this node parameters. Validate/Evaluate will use the new value after saving.'))}">${escapeHtml(t('Сохранить порог', 'Save threshold'))}</button>
+      <button class="ai-editor-button primary human-save-threshold" type="button" data-help="${escapeAttribute(t('Записывает выбранный sourceKey и threshold в параметры этой универсальной ноды.', 'Writes selected sourceKey and threshold into this universal node parameters.'))}">${escapeHtml(t('Сохранить условие', 'Save condition'))}</button>
       <button class="ai-editor-button human-open-json" type="button" data-help="${escapeAttribute(t('Открывает технический JSON этой ноды. Это запасной режим для отладки, не основной интерфейс.', 'Opens this node technical JSON. This is a fallback debug view, not the main interface.'))}">${escapeHtml(t('Показать JSON', 'Show JSON'))}</button>
     </div>
 
-    <details class="developer-json-details" data-help="${escapeAttribute(t('Скрытый технический слой. Нужен разработчику или агенту, но обычная настройка ноды должна делаться полями выше.', 'Hidden technical layer. Useful for a developer or agent, but normal node tuning should use the fields above.'))}">
+    <details class="developer-json-details" data-help="${escapeAttribute(t('Скрытый технический слой. Обычная настройка должна делаться выбором параметра и ползунком выше.', 'Hidden technical layer. Normal tuning should use the parameter selector and slider above.'))}">
       <summary>${escapeHtml(t('Дополнительно: JSON для разработчика', 'Advanced: developer JSON'))}</summary>
       <pre>${escapeHtml(JSON.stringify(node.parameters ?? {}, null, 2))}</pre>
     </details>
   `;
 }
 
-function installThresholdPanelHandlers(panel: HTMLElement, node: HumanNode, config: ThresholdNodeConfig): void {
+function installUniversalThresholdPanelHandlers(panel: HTMLElement, node: HumanNode): void {
+  const sourceSelect = panel.querySelector<HTMLSelectElement>('.human-source-select');
   const thresholdSlider = panel.querySelector<HTMLInputElement>('.human-threshold-slider');
   const thresholdNumber = panel.querySelector<HTMLInputElement>('.human-threshold-number');
   const previewSlider = panel.querySelector<HTMLInputElement>('.human-preview-slider');
@@ -372,15 +368,17 @@ function installThresholdPanelHandlers(panel: HTMLElement, node: HumanNode, conf
   const jsonButton = panel.querySelector<HTMLButtonElement>('.human-open-json');
 
   const updateLivePreview = (): void => {
-    const threshold = clampNumber(Number(thresholdSlider?.value ?? thresholdNumber?.value ?? config.defaultThreshold), 0, 100);
-    const previewValue = clampNumber(Number(previewSlider?.value ?? readPreviewValue(config)), 0, 100);
+    const source = getSourceOption(sourceSelect?.value ?? getSourceKey(node));
+    const threshold = clampNumber(Number(thresholdSlider?.value ?? thresholdNumber?.value ?? 50), 0, 100);
+    const previewValue = clampNumber(Number(previewSlider?.value ?? readPreviewValue(source)), 0, 100);
     const passed = previewValue > threshold;
 
     if (thresholdSlider && thresholdSlider.value !== String(threshold)) thresholdSlider.value = String(threshold);
     if (thresholdNumber && thresholdNumber.value !== String(threshold)) thresholdNumber.value = String(threshold);
     if (previewSlider && previewSlider.value !== String(previewValue)) previewSlider.value = String(previewValue);
 
-    localStorage.setItem(config.previewStorageKey, String(previewValue));
+    localStorage.setItem(`${PREVIEW_STORAGE_PREFIX}${source.key}`, String(previewValue));
+    panel.querySelector<HTMLElement>('.human-source-key')!.textContent = source.key;
     panel.querySelector<HTMLOutputElement>('.human-threshold-value')!.textContent = String(threshold);
     panel.querySelector<HTMLOutputElement>('.human-preview-value')!.textContent = String(previewValue);
     panel.querySelector<HTMLElement>('.human-formula-value')!.textContent = `${previewValue} > ${threshold}`;
@@ -393,20 +391,28 @@ function installThresholdPanelHandlers(panel: HTMLElement, node: HumanNode, conf
     if (badge) badge.textContent = passed ? 'PASS' : 'FAIL';
     explain?.classList.toggle('pass', passed);
     explain?.classList.toggle('fail', !passed);
-    if (explain) explain.textContent = makeResultText(config, previewValue, threshold, passed);
+    if (explain) explain.textContent = makeResultText(source, previewValue, threshold, passed);
   };
 
+  sourceSelect?.addEventListener('change', () => {
+    const source = getSourceOption(sourceSelect.value);
+    const preview = readPreviewValue(source);
+    if (previewSlider) previewSlider.value = String(preview);
+    updateLivePreview();
+  });
   thresholdSlider?.addEventListener('input', updateLivePreview);
   thresholdNumber?.addEventListener('input', updateLivePreview);
   previewSlider?.addEventListener('input', updateLivePreview);
 
   saveButton?.addEventListener('click', () => {
-    const threshold = clampNumber(Number(panel.querySelector<HTMLInputElement>('.human-threshold-slider')?.value ?? config.defaultThreshold), 0, 100);
+    const sourceKey = sourceSelect?.value ?? 'danger';
+    const threshold = clampNumber(Number(panel.querySelector<HTMLInputElement>('.human-threshold-slider')?.value ?? 50), 0, 100);
     const parametersTextArea = document.querySelector<HTMLTextAreaElement>('#node-parameters');
     const saveNodeButton = document.querySelector<HTMLButtonElement>('#save-node');
     const existing = safeParseJsonObject(parametersTextArea?.value ?? '{}');
+    existing.sourceKey = sourceKey;
     existing.threshold = threshold;
-    node.parameters = { ...(node.parameters ?? {}), threshold };
+    node.parameters = { ...(node.parameters ?? {}), sourceKey, threshold };
     if (parametersTextArea) {
       parametersTextArea.value = JSON.stringify(existing, null, 2);
     }
@@ -422,21 +428,82 @@ function installThresholdPanelHandlers(panel: HTMLElement, node: HumanNode, conf
   });
 }
 
-function makeResultText(config: ThresholdNodeConfig, previewValue: number, threshold: number, passed: boolean): string {
+function isUniversalThresholdNode(node: HumanNode | null): node is HumanNode {
+  return node?.type === 'BlackboardValueAbove';
+}
+
+function getSourceKey(node: HumanNode): string {
+  const sourceKey = node.parameters?.sourceKey;
+  return typeof sourceKey === 'string' && sourceKey.length > 0 ? sourceKey : 'danger';
+}
+
+function getThreshold(node: HumanNode): number {
+  return readNumber(node.parameters?.threshold, 50);
+}
+
+function getSourceOption(sourceKey: string): NumericSourceOption {
+  return getNumericSourceOptions().find((option) => option.key === sourceKey) ?? {
+    key: sourceKey || 'danger',
+    label: sourceKey || 'Danger',
+    labelRu: sourceKey || 'Опасность',
+    description: `Numeric blackboard value ${sourceKey}.`,
+    descriptionRu: `Числовой параметр blackboard ${sourceKey}.`,
+    defaultPreview: 50,
+  };
+}
+
+function getNodeSourceOption(node: HumanNode): NumericSourceOption {
+  return getSourceOption(getSourceKey(node));
+}
+
+function getNumericSourceOptions(): NumericSourceOption[] {
+  const graph = readGraph();
+  const options = [...BUILTIN_NUMERIC_SOURCES];
+  const defaults = graph.blackboardDefaults;
+  if (defaults) {
+    for (const [key, value] of Object.entries(defaults)) {
+      if (typeof value === 'number' && !options.some((option) => option.key === key)) {
+        options.push({
+          key,
+          label: key,
+          labelRu: key,
+          description: `Numeric blackboard value ${key}.`,
+          descriptionRu: `Числовой параметр blackboard ${key}.`,
+          defaultPreview: clampNumber(value, 0, 100),
+        });
+      }
+    }
+  }
+  return options;
+}
+
+function labelForSource(source: NumericSourceOption): string {
+  return currentLanguage === 'ru' ? source.labelRu : source.label;
+}
+
+function makeSourceHelp(source: NumericSourceOption): string {
+  return currentLanguage === 'ru'
+    ? `${source.labelRu}: ${source.descriptionRu} Нода будет читать blackboard.${source.key}.`
+    : `${source.label}: ${source.description} The node reads blackboard.${source.key}.`;
+}
+
+function makeResultHelp(source: NumericSourceOption): string {
+  return currentLanguage === 'ru'
+    ? `PASS значит: ${source.key} выше порога и ветка может продолжиться. FAIL значит: эта проверка останавливает ветку.`
+    : `PASS means ${source.key} is above threshold and the branch can continue. FAIL means this check stops the branch.`;
+}
+
+function makeResultText(source: NumericSourceOption, previewValue: number, threshold: number, passed: boolean): string {
   if (passed) {
     return t(
-      `${previewValue} больше ${threshold}: ветка может продолжиться.`,
-      `${previewValue} is greater than ${threshold}: the branch can continue.`,
+      `${source.key}=${previewValue} больше ${threshold}: ветка может продолжиться.`,
+      `${source.key}=${previewValue} is greater than ${threshold}: the branch can continue.`,
     );
   }
   return t(
-    `${previewValue} не больше ${threshold}: ветка остановится на этом условии.`,
-    `${previewValue} is not greater than ${threshold}: the branch stops at this condition.`,
+    `${source.key}=${previewValue} не больше ${threshold}: ветка остановится на этом условии.`,
+    `${source.key}=${previewValue} is not greater than ${threshold}: the branch stops at this condition.`,
   );
-}
-
-function getThresholdConfig(type: string): ThresholdNodeConfig | null {
-  return type === 'DangerAbove' || type === 'StressAbove' ? THRESHOLD_NODE_CONFIGS[type] : null;
 }
 
 function findNode(nodeId: string): HumanNode | null {
@@ -470,8 +537,8 @@ function readLanguage(): UiLanguage {
   return localStorage.getItem(HUMAN_LANGUAGE_KEY) === 'en' ? 'en' : 'ru';
 }
 
-function readPreviewValue(config: ThresholdNodeConfig): number {
-  return clampNumber(Number(localStorage.getItem(config.previewStorageKey) ?? config.defaultPreview), 0, 100);
+function readPreviewValue(source: NumericSourceOption): number {
+  return clampNumber(Number(localStorage.getItem(`${PREVIEW_STORAGE_PREFIX}${source.key}`) ?? source.defaultPreview), 0, 100);
 }
 
 function readNumber(value: JsonValue | undefined, fallback: number): number {
