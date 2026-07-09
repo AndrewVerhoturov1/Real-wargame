@@ -102,6 +102,7 @@ expectContains(simulationState, 'export interface SimulationState', 'SimulationS
 expectContains(simulationState, 'getSelectedUnits', 'SimulationState не должен быть случайно усечён при правках паузы.');
 expectContains(simulationState, 'beginEditorPointerAction', 'SimulationState должен сохранять editor pointer action API.');
 expectContains(simulationState, 'spawnEditorUnit', 'SimulationState должен сохранять editor spawn unit logic.');
+expectNotContains(simulationState, 'paused: boolean', 'Пауза не должна менять базовый SimulationState contract на этом этапе.');
 
 const pixiApp = readText('src/rendering/PixiApp.ts');
 expectContains(pixiApp, 'PausableSimulationState', 'PixiApp должен читать runtime pause без изменения базового SimulationState.');
