@@ -83,7 +83,7 @@ function buildExportedScene(state: SimulationState): ExportedSceneData {
   return {
     version: 'scene-export-v2',
     exportedAt: new Date().toISOString(),
-    noteRu: 'Это экспорт текущей сцены из браузерного редактора. heightMap хранит высоты -2..4, forestMap подготовлен под слои леса 0/1/2. Чтобы закрепить изменения в проекте, передайте этот файл Codex: он должен разнести map / units / pressureZones по исходным JSON-файлам проекта.',
+    noteRu: 'Это экспорт текущей сцены из браузерного редактора. heightMap хранит высоты -2..4, forestMap подготовлен под слои леса 0/1/2, losHeightMeters хранит физическую высоту объектов для линии видимости. Чтобы закрепить изменения в проекте, передайте этот файл Codex: он должен разнести map / units / pressureZones по исходным JSON-файлам проекта.',
     map: {
       width: state.map.width,
       height: state.map.height,
@@ -100,6 +100,7 @@ function buildExportedScene(state: SimulationState): ExportedSceneData {
         y: roundThree(object.y),
         widthCells: roundThree(object.widthCells),
         heightCells: roundThree(object.heightCells),
+        losHeightMeters: roundOne(object.losHeightMeters),
         rotationDegrees: roundOne(radiansToDegrees(object.rotationRadians)),
         label: object.labels?.en,
         labelRu: object.labels?.ru,
