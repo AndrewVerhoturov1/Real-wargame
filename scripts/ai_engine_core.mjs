@@ -12,17 +12,33 @@ export const KNOWN_NODE_TYPES = new Set([
   'EnemyKnown',
   'UnderFire',
   'BlackboardValueAbove',
+  'FlagCheck',
+  'DistanceCheck',
+  'StableThreshold',
+  'TacticalCheck',
   'CoverNearby',
   'ScoreDanger',
   'ScoreStress',
   'ScoreObedience',
   'ScoreCoverNeed',
   'ScoreCurrentActionInertia',
+  'ParameterScore',
+  'DistanceScore',
+  'DecisionInertia',
+  'RandomChance',
   'FindBestCover',
+  'FindBestObject',
+  'SelectTarget',
+  'WriteMemory',
+  'CopyMemory',
+  'ForbidAction',
   'SetPosture',
   'MoveToCover',
   'ContinueOrder',
   'Observe',
+  'SetAction',
+  'SetMovementMode',
+  'SayMessage',
   'WriteReason',
 ]);
 
@@ -32,22 +48,38 @@ export const LEAF_NODE_TYPES = new Set([
   'EnemyKnown',
   'UnderFire',
   'BlackboardValueAbove',
+  'FlagCheck',
+  'DistanceCheck',
+  'StableThreshold',
+  'TacticalCheck',
   'CoverNearby',
   'ScoreDanger',
   'ScoreStress',
   'ScoreObedience',
   'ScoreCoverNeed',
   'ScoreCurrentActionInertia',
+  'ParameterScore',
+  'DistanceScore',
+  'DecisionInertia',
+  'RandomChance',
   'FindBestCover',
+  'FindBestObject',
+  'SelectTarget',
+  'WriteMemory',
+  'CopyMemory',
+  'ForbidAction',
   'SetPosture',
   'MoveToCover',
   'ContinueOrder',
   'Observe',
+  'SetAction',
+  'SetMovementMode',
+  'SayMessage',
   'WriteReason',
 ]);
 
 export const ENGINE_NAME = 'real-wargame-local-ai-engine';
-export const ENGINE_VERSION = '0.5.0-threshold-above-below';
+export const ENGINE_VERSION = '0.6.0-universal-node-catalog-cooldowns';
 
 export function resolveBundledGraphPath(repoRoot) {
   return path.join(repoRoot, 'src', 'data', 'ai', 'soldier_default_survival_graph.json');
@@ -124,6 +156,7 @@ export function validateGraph(value) {
     }
 
     validateNodeParameters(node.parameters, result, node.id);
+    validateCommonCooldownParameters(node.parameters, result, node.id);
     validateSpecificNodeParameters(node, value.blackboardDefaults, result);
   }
 
@@ -278,8 +311,8 @@ export function createHealthPayload(port) {
     version: ENGINE_VERSION,
     port,
     mode: 'headless-local-engine',
-    scope: 'Stage 4: local headless engine for single-soldier AI graph validation and evaluate-once with a universal above/below threshold condition node.',
-    scopeRu: 'Этап 4: локальный headless engine для проверки AI-графа одиночного солдата и evaluate-once с универсальной пороговой нодой выше/ниже.',
+    scope: 'Stage 4: local headless engine for single-soldier AI graph validation and evaluate-once with universal node catalog and common cooldown parameters.',
+    scopeRu: 'Этап 4: локальный headless engine для проверки AI-графа одиночного солдата и evaluate-once с универсальным набором нод и общими параметрами задержки.',
     textBase: 'en',
     overlayLanguage: 'ru',
     browserDoesHeavyAi: false,
@@ -434,31 +467,69 @@ function validateNodeParameters(parameters, result, nodeId) {
   }
 }
 
-function validateSpecificNodeParameters(node, blackboardDefaults, result) {
-  if (node.type !== 'BlackboardValueAbove') {
+function validateCommonCooldownParameters(parameters, result, nodeId) {
+  if (!isRecord(parameters)) {
     return;
   }
 
+  if (parameters.cooldownSeconds !== undefined && (typeof parameters.cooldownSeconds !== 'number' || !Number.isFinite(parameters.cooldownSeconds) || parameters.cooldownSeconds < 0)) {
+    result.push(errorIssue('COOLDOWN_SECONDS_INVALID', `Node ${nodeId} cooldownSeconds must be a non-negative number.`, `У ноды ${nodeId} cooldownSeconds должен быть неотрицательным числом.`, nodeId));
+  }
+
+  if (parameters.cooldownTiming !== undefined && parameters.cooldownTiming !== 'before' && parameters.cooldownTiming !== 'after') {
+    result.push(errorIssue('COOLDOWN_TIMING_INVALID', `Node ${nodeId} cooldownTiming must be "before" or "after".`, `У ноды ${nodeId} cooldownTiming должен быть "before" или "after".`, nodeId));
+  }
+}
+
+function validateSpecificNodeParameters(node, blackboardDefaults, result) {
   const parameters = isRecord(node.parameters) ? node.parameters : {};
-  if (!isNonEmptyString(parameters.sourceKey)) {
-    result.push(errorIssue('BLACKBOARD_THRESHOLD_SOURCE_MISSING', `Node ${node.id} must have parameters.sourceKey.`, `У ноды ${node.id} должен быть parameters.sourceKey.`, node.id));
-  }
 
-  if (typeof parameters.threshold !== 'number' || !Number.isFinite(parameters.threshold)) {
-    result.push(errorIssue('BLACKBOARD_THRESHOLD_VALUE_MISSING', `Node ${node.id} must have numeric parameters.threshold.`, `У ноды ${node.id} должен быть числовой parameters.threshold.`, node.id));
-  } else if (parameters.threshold < 0 || parameters.threshold > 100) {
-    result.push(warningIssue('BLACKBOARD_THRESHOLD_OUT_OF_RANGE', `Node ${node.id} threshold should normally be 0..100.`, `У ноды ${node.id} порог обычно должен быть 0..100.`, node.id));
-  }
-
-  if (parameters.comparison !== undefined && parameters.comparison !== 'above' && parameters.comparison !== 'below') {
-    result.push(errorIssue('BLACKBOARD_THRESHOLD_COMPARISON_INVALID', `Node ${node.id} parameters.comparison must be "above" or "below".`, `У ноды ${node.id} parameters.comparison должен быть "above" или "below".`, node.id));
-  }
-
-  if (isNonEmptyString(parameters.sourceKey) && isRecord(blackboardDefaults)) {
-    const defaultValue = blackboardDefaults[parameters.sourceKey];
-    if (defaultValue !== undefined && typeof defaultValue !== 'number') {
-      result.push(warningIssue('BLACKBOARD_THRESHOLD_SOURCE_NOT_NUMERIC', `Node ${node.id} sourceKey ${parameters.sourceKey} is not numeric in blackboardDefaults.`, `У ноды ${node.id} sourceKey ${parameters.sourceKey} не является числом в blackboardDefaults.`, node.id));
+  if (node.type === 'BlackboardValueAbove' || node.type === 'StableThreshold' || node.type === 'ParameterScore') {
+    if (!isNonEmptyString(parameters.sourceKey)) {
+      result.push(errorIssue('SOURCE_KEY_MISSING', `Node ${node.id} must have parameters.sourceKey.`, `У ноды ${node.id} должен быть parameters.sourceKey.`, node.id));
     }
+    if (isNonEmptyString(parameters.sourceKey) && isRecord(blackboardDefaults)) {
+      const defaultValue = blackboardDefaults[parameters.sourceKey];
+      if (defaultValue !== undefined && typeof defaultValue !== 'number') {
+        result.push(warningIssue('SOURCE_NOT_NUMERIC', `Node ${node.id} sourceKey ${parameters.sourceKey} is not numeric in blackboardDefaults.`, `У ноды ${node.id} sourceKey ${parameters.sourceKey} не является числом в blackboardDefaults.`, node.id));
+      }
+    }
+  }
+
+  if (node.type === 'BlackboardValueAbove' || node.type === 'DistanceCheck' || node.type === 'ParameterScore') {
+    validateNumericParameter(parameters.threshold, 'threshold', node.id, result);
+    if (parameters.comparison !== undefined && parameters.comparison !== 'above' && parameters.comparison !== 'below') {
+      result.push(errorIssue('COMPARISON_INVALID', `Node ${node.id} parameters.comparison must be "above" or "below".`, `У ноды ${node.id} parameters.comparison должен быть "above" или "below".`, node.id));
+    }
+  }
+
+  if (node.type === 'FlagCheck') {
+    if (!isNonEmptyString(parameters.flagKey)) {
+      result.push(errorIssue('FLAG_KEY_MISSING', `Node ${node.id} must have parameters.flagKey.`, `У ноды ${node.id} должен быть parameters.flagKey.`, node.id));
+    }
+    if (typeof parameters.expected !== 'boolean') {
+      result.push(errorIssue('FLAG_EXPECTED_INVALID', `Node ${node.id} parameters.expected must be boolean.`, `У ноды ${node.id} parameters.expected должен быть boolean.`, node.id));
+    }
+  }
+
+  if (node.type === 'StableThreshold') {
+    validateNumericParameter(parameters.enterThreshold, 'enterThreshold', node.id, result);
+    validateNumericParameter(parameters.exitThreshold, 'exitThreshold', node.id, result);
+  }
+
+  if (node.type === 'SayMessage') {
+    if (!isNonEmptyString(parameters.message) && !isNonEmptyString(parameters.messageRu)) {
+      result.push(errorIssue('SAY_MESSAGE_TEXT_MISSING', `Node ${node.id} must have message or messageRu.`, `У ноды ${node.id} должен быть message или messageRu.`, node.id));
+    }
+    if (parameters.durationSeconds !== undefined && (typeof parameters.durationSeconds !== 'number' || parameters.durationSeconds <= 0)) {
+      result.push(errorIssue('SAY_MESSAGE_DURATION_INVALID', `Node ${node.id} durationSeconds must be a positive number.`, `У ноды ${node.id} durationSeconds должен быть положительным числом.`, node.id));
+    }
+  }
+}
+
+function validateNumericParameter(value, key, nodeId, result) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    result.push(errorIssue('NUMERIC_PARAMETER_MISSING', `Node ${nodeId} must have numeric parameters.${key}.`, `У ноды ${nodeId} должен быть числовой parameters.${key}.`, nodeId));
   }
 }
 
