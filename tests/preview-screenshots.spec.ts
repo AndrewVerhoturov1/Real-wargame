@@ -29,13 +29,6 @@ async function saveScreenshot(page: Page, name: string): Promise<void> {
   });
 }
 
-async function zoomInSeveralSteps(page: Page, steps: number): Promise<void> {
-  for (let index = 0; index < steps; index += 1) {
-    await page.mouse.wheel(0, -600);
-    await page.waitForTimeout(40);
-  }
-}
-
 test('capture Real-Wargame preview screenshots', async ({ page }) => {
   mkdirSync(SCREENSHOT_DIR, { recursive: true });
 
@@ -77,13 +70,6 @@ test('capture Real-Wargame preview screenshots', async ({ page }) => {
 
   await page.locator('.mode-toggle-button').click({ force: true });
   await page.waitForTimeout(700);
+  await expect(page.locator('#hud')).toBeVisible();
   await saveScreenshot(page, '06-editor-mode.png');
-
-  await page.locator('.mode-toggle-button').click({ force: true });
-  await page.waitForTimeout(500);
-  const hillCenter = boardPoint(27, 17);
-  await page.mouse.move(hillCenter.x, hillCenter.y);
-  await zoomInSeveralSteps(page, 12);
-  await page.waitForTimeout(500);
-  await saveScreenshot(page, '07-zoomed-map.png');
 });
