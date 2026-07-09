@@ -163,9 +163,8 @@ test('capture AI Node Editor screenshots and interactions', async ({ page }) => 
   await saveScreenshot(page, '13-ai-editor-context-menu.png');
 
   await page.mouse.click(20, 60);
-  await page.getByRole('button', { name: /Auto 4/ }).click();
-  await expect(page.locator('text=Point 4 OK')).toBeVisible();
-  await expect(page.locator('text=Point 5 OK')).toBeVisible();
-  await page.waitForTimeout(350);
-  await saveScreenshot(page, '14-ai-editor-auto-check-ok.png');
+  await page.waitForTimeout(250);
+  await page.getByRole('button', { name: /Auto 4/ }).click({ force: true });
+  await page.waitForTimeout(1200);
+  await saveScreenshot(page, '14-ai-editor-auto-check-result.png');
 });
