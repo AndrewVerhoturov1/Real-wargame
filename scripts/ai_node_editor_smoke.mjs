@@ -53,11 +53,29 @@ const graph = JSON.parse(readText('src/data/ai/soldier_default_survival_graph.js
 if (graph.id !== 'soldier_default_survival_graph') {
   fail('Bundled graph должен иметь id soldier_default_survival_graph.');
 }
+if (graph.name !== 'Soldier Default Survival Graph') {
+  fail('Bundled graph должен иметь английский базовый name.');
+}
+if (!graph.nameRu) {
+  fail('Bundled graph должен иметь русский overlay nameRu.');
+}
+if (!graph.description || !graph.descriptionRu) {
+  fail('Bundled graph должен иметь description и descriptionRu.');
+}
 
 const nodeIds = new Set(graph.nodes.map((node) => node.id));
 for (const nodeId of ['root', 'soldier_decision', 'critical_survival', 'continue_order', 'observe_area']) {
   if (!nodeIds.has(nodeId)) {
     fail(`В bundled graph нет ожидаемой ноды: ${nodeId}`);
+  }
+}
+
+for (const node of graph.nodes) {
+  if (!node.displayName) {
+    fail(`Нода ${node.id} должна иметь английский displayName.`);
+  }
+  if (!node.displayNameRu) {
+    fail(`Нода ${node.id} должна иметь русский displayNameRu.`);
   }
 }
 
