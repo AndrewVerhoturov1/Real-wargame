@@ -34,7 +34,8 @@ real-wargame-preview
 - headless local AI engine для проверки bundled AI-графа через localhost API;
 - AI Node Editor в отдельной вкладке `/ai-node-editor.html`;
 - authoring в AI Node Editor: добавить/перетащить/связать/изменить ноду, экспорт/импорт JSON;
-- компактный AI Node Editor UI: скрываемые боковые панели, сворачиваемая нижняя консоль, zoom/pan canvas, Fit, контекстное меню и drag-link через порт ноды.
+- компактный AI Node Editor UI: скрываемые боковые панели, сворачиваемая нижняя консоль, zoom/pan canvas, Fit, контекстное меню и drag-link через порт ноды;
+- универсальная пороговая нода `BlackboardValueAbove`: вместо отдельных `DangerAbove`/`StressAbove` выбирает `sourceKey` из списка параметров и сравнивает его с `threshold`.
 
 Главный смысл проекта на этом этапе — не “красивая RTS”, а удобная лаборатория карты, видимости, укрытий и будущего поведения солдат.
 
@@ -79,6 +80,7 @@ Run-AI-Engine.bat
 масштабировать canvas колесом мыши и кнопками + / - / Fit;
 связывать parent → child протягиванием линии из правой точки-порта ноды;
 открывать контекстное меню правым кликом по ноде;
+настраивать универсальную пороговую ноду: выбрать sourceKey и threshold без JSON;
 редактировать displayName/displayNameRu/description/descriptionRu/parameters;
 удалять ноды, кроме root;
 хранить рабочий граф и позиции в localStorage;
@@ -118,55 +120,4 @@ Start here:
 
 ```text
 docs/ai/AGENT_START_HERE.md
-```
-
-Then read:
-
-```text
-AGENTS.md
-docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md
-docs/ai/SKILLS_INDEX.md
-```
-
-If the task asks to run the game locally, open the preview build, capture screenshots, show the game in chat, inspect a GitHub Actions screenshot artifact, or prepare terminal-free launch instructions, read this skill first:
-
-```text
-.agents/skills/real-wargame-local-preview/SKILL.md
-```
-
-## Subprojects
-
-Current active subprojects:
-
-```text
-docs/subprojects/real-wargame-start/
-docs/subprojects/ai-single-unit-editor/
-```
-
-Important subproject files:
-
-```text
-docs/subprojects/real-wargame-start/SUBPROJECT.md
-docs/subprojects/real-wargame-start/subproject.json
-docs/subprojects/real-wargame-start/JOURNAL.md
-docs/subprojects/real-wargame-start/RTS_FOUNDATION_DECISIONS.md
-docs/subprojects/real-wargame-start/test-program.md
-docs/subprojects/ai-single-unit-editor/SUBPROJECT.md
-docs/subprojects/ai-single-unit-editor/subproject.json
-docs/subprojects/ai-single-unit-editor/JOURNAL.md
-docs/subprojects/ai-single-unit-editor/LOCAL_ENGINE_NODE_EDITOR_IMPLEMENTATION_PLAN.md
-```
-
-See `docs/subprojects/README.md` for the subproject system documentation.
-
-## Commands for agents
-
-```text
-python scripts/subproject_context.py --list
-python scripts/subproject_context.py real-wargame-start --brief
-python scripts/subproject_context.py real-wargame-start --opencode
-python scripts/subproject_context.py real-wargame-start --files
-python scripts/subproject_context.py ai-single-unit-editor --brief
-python scripts/subproject_context.py ai-single-unit-editor --opencode
-python scripts/subproject_context.py ai-single-unit-editor --files
 ```
