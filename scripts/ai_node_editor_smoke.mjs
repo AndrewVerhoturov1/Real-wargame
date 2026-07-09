@@ -61,12 +61,22 @@ expectContains(main, 'importGraphFromFileInput', 'Этап 4 должен уме
 expectContains(main, 'localStorage', 'Этап 4 должен сохранять рабочий граф/позиции в браузере.');
 
 const humanUi = readText('src/ai-node-editor/human-node-ui.ts');
+expectContains(humanUi, 'DangerAbove', 'Human UI должен иметь отдельную поддержку DangerAbove.');
+expectContains(humanUi, 'StressAbove', 'Human UI должен иметь отдельную поддержку StressAbove.');
 expectContains(humanUi, 'danger-above', 'Human UI должен иметь отдельную панель для DangerAbove.');
-expectContains(humanUi, 'human-threshold-slider', 'DangerAbove должен иметь ползунок порога.');
+expectContains(humanUi, 'stress-above', 'Human UI должен иметь отдельную панель для StressAbove.');
+expectContains(humanUi, 'human-threshold-slider', 'Threshold-ноды должны иметь ползунок порога.');
 expectContains(humanUi, 'human-danger-preview-slider', 'DangerAbove должен иметь тестовое значение danger.');
+expectContains(humanUi, 'human-stress-preview-slider', 'StressAbove должен иметь тестовое значение stress.');
 expectContains(humanUi, 'developer-json-details', 'JSON должен быть спрятан в Advanced/details.');
 expectContains(humanUi, 'TOOLTIP_DELAY_MS = 2000', 'Подсказки должны появляться после задержки 2 секунды.');
 expectContains(humanUi, 'data-help', 'Интерактивные объекты должны получать человекочитаемые подсказки.');
+expectContains(humanUi, 'sourceHelpRu', 'Подсказка источника должна быть конкретной, не заглушкой.');
+expectContains(humanUi, 'memoryHelpRu', 'Подсказка памяти солдата должна быть конкретной.');
+expectContains(humanUi, 'formulaHelpRu', 'Подсказка формулы должна быть конкретной.');
+expectContains(humanUi, 'resultHelpRu', 'Подсказка результата должна быть конкретной.');
+expectNotContains(humanUi, 'Наведи и подожди 2 секунды', 'Не должно быть заглушки вместо подсказки.');
+expectNotContains(humanUi, 'Hover and wait 2 seconds', 'Не должно быть английской заглушки вместо подсказки.');
 expectContains(humanUi, "type UiLanguage = 'ru' | 'en'", 'Интерфейс должен показывать только выбранный язык, без both.');
 
 const humanCss = readText('src/ai-node-editor/human-node-ui.css');
@@ -138,6 +148,13 @@ function expectContains(content, needle, message) {
     fail(message);
   }
   console.log(`[OK] contains: ${needle}`);
+}
+
+function expectNotContains(content, needle, message) {
+  if (content.includes(needle)) {
+    fail(message);
+  }
+  console.log(`[OK] does not contain: ${needle}`);
 }
 
 function fail(message) {
