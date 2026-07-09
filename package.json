@@ -10,7 +10,8 @@
     "validate:ai-graph": "node scripts/validate_ai_graph.mjs",
     "engine:dev": "node scripts/local_ai_engine.mjs",
     "engine:smoke": "node scripts/local_ai_engine_smoke.mjs",
-    "editor:smoke": "node scripts/ai_node_editor_smoke.mjs"
+    "editor:smoke": "node scripts/ai_node_editor_smoke.mjs",
+    "lab:manager": "node scripts/real_wargame_lab_manager.mjs"
   },
   "dependencies": {
     "pixi.js": "^7.4.3"
