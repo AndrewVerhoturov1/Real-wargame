@@ -18,6 +18,8 @@ import { installPerformanceReportControls } from './ui/PerformanceReportControls
 import { installSceneExportControls } from './ui/SceneExportControls';
 import { installTerrainBrushControls } from './ui/TerrainBrushControls';
 
+const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
+
 const root = document.querySelector<HTMLElement>('#app');
 const debugPanel = document.querySelector<HTMLElement>('#debug-panel');
 const languageToggle = document.querySelector<HTMLButtonElement>('#language-toggle');
@@ -88,22 +90,38 @@ function installAiEditorOpenButton(button: HTMLButtonElement): void {
 
 function installPauseToggle(button: HTMLButtonElement, onChanged: () => void): void {
   button.addEventListener('click', () => {
-    state.paused = !state.paused;
-    updatePauseToggle(button);
-    onChanged();
+    togglePause(button, onChanged);
   });
 
   window.addEventListener('keydown', (event) => {
     if (event.key.toLowerCase() !== 'p') return;
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) return;
-    state.paused = !state.paused;
-    updatePauseToggle(button);
-    onChanged();
+    togglePause(button, onChanged);
   });
+}
+
+function togglePause(button: HTMLButtonElement, onChanged: () => void): void {
+  state.paused = !state.paused;
+  updatePauseToggle(button);
+  syncPauseStateToDebugTrace();
+  onChanged();
 }
 
 function updatePauseToggle(button: HTMLButtonElement): void {
   button.textContent = state.paused ? 'Пауза: вкл' : 'Пауза: выкл';
   button.setAttribute('aria-pressed', String(state.paused));
   button.classList.toggle('hud-toggle-off', !state.paused);
+}
+
+function syncPauseStateToDebugTrace(): void {
+  try {
+    const raw = window.localStorage.getItem(DEBUG_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (parsed.kind !== 'ai-graph-runtime-debug') return;
+    parsed.paused = state.paused;
+    window.localStorage.setItem(DEBUG_STORAGE_KEY, JSON.stringify(parsed));
+  } catch {
+    // Debug state is optional; pause must keep working even if localStorage is unavailable.
+  }
 }
