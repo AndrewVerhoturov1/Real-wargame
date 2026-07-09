@@ -2,29 +2,52 @@
 
 Дата: 2026-07-09  
 Ветка: `real-wargame-preview`  
-Назначение: проверить чистый canvas редактора, универсальные ноды без старых точечных legacy-нод и первый мост с выбранным бойцом на карте.
+Назначение: проверить чистый canvas редактора, универсальные ноды без старых точечных legacy-нод, первый мост с выбранным бойцом на карте, общий запуск и select-поля человеческих панелей.
 
-## Запуск
+## Основной запуск
 
 Запустить двойным кликом:
+
+```text
+Run-Real-Wargame-Lab.bat
+```
+
+Ожидание:
+
+```text
+открывается lab-launch.html;
+открывается вкладка игры http://127.0.0.1:5173/;
+открывается вкладка редактора http://127.0.0.1:5173/ai-node-editor.html;
+окна Vite/local engine/lab manager не торчат отдельными видимыми консолями;
+в игре есть верхнее меню: Редактор ИИ солдат / Новая игра / Выход;
+в редакторе есть верхнее меню: Обновить / Открыть игру / Выход.
+```
+
+Диагностический старый запуск редактора остаётся:
 
 ```text
 Run-AI-Node-Editor.bat
 ```
 
-Откроется:
+## Проверка выхода
+
+В игре или редакторе нажать:
 
 ```text
-http://127.0.0.1:5173/ai-node-editor.html
+Выход
 ```
 
-Для проверки связи с игрой открыть вторую вкладку:
+Ожидание:
 
 ```text
-http://127.0.0.1:5173/
+вкладки игры/редактора получают сигнал закрытия;
+local lab manager вызывает http://127.0.0.1:8799/lab/shutdown;
+процессы Vite и local AI engine гасятся.
 ```
 
-## Ожидание после открытия
+Ограничение: браузер может запретить `window.close()` для вкладок, открытых вручную. Тогда вкладка может остаться, но серверные процессы должны быть остановлены.
+
+## Ожидание после открытия редактора
 
 ```text
 на canvas только одна нода: Старт;
@@ -106,6 +129,42 @@ Point 5 OK / Пункт 5 OK
                    → или Поиск объекта: objectKind = cover
 Продолжать приказ  → Действие: continue_order
 Наблюдать          → Действие: wait или отдельная будущая настройка observe в Действие
+```
+
+## Проверка select-полей: баг мгновенного сброса
+
+Выбрать любую ноду с человеческой панелью и поменять несколько select-полей:
+
+```text
+Проверка флага:
+  flagKey: underFire → hasOrder → enemyVisible
+  expected: true → false → true
+
+Порог расстояния:
+  from: self → cover → self
+  to: cover → enemy → cover
+  comparison: closer → farther → closer
+
+Действие:
+  action: move_to → wait → continue_order
+```
+
+Ожидание:
+
+```text
+select не сбрасывается мгновенно;
+панель не исчезает;
+выбранный пункт остаётся до следующего осознанного действия пользователя;
+после Save parameters выбранные значения попадают в parameters JSON.
+```
+
+Если select снова мгновенно сбрасывается, смотреть:
+
+```text
+src/ai-node-editor/editor-click-guard.ts
+ai-node-editor.html — guard должен грузиться до main.ts
+src/ai-node-editor/main.ts — closeContextMenuIfNeeded / document click handling
+src/ai-node-editor/human-node-ui.ts — MutationObserver и renderHumanInspectorForSelectedNode
 ```
 
 ## Проверка цепочки goal
@@ -315,7 +374,7 @@ cooldownSeconds/cooldownTiming в живом bridge.
 
 ## Что прислать в чат при ошибке
 
-1. Текст из окна `Run-AI-Node-Editor.bat`.
+1. Текст из окна `Run-Real-Wargame-Lab.bat` или `Run-AI-Node-Editor.bat`.
 2. Что написано внизу в `Validation / Engine result`.
-3. Что именно делал: add / drag / pan / zoom / port-link / context-menu / save / export / import.
+3. Что именно делал: add / drag / pan / zoom / port-link / context-menu / save / export / import / select.
 4. Если ошибка после `Validate`, прислать JSON ошибки из нижнего окна.
