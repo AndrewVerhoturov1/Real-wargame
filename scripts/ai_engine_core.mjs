@@ -49,7 +49,7 @@ export const LEAF_NODE_TYPES = new Set([
 ]);
 
 export const ENGINE_NAME = 'real-wargame-local-ai-engine';
-export const ENGINE_VERSION = '0.2.0-stage-2';
+export const ENGINE_VERSION = '0.3.0-english-base-russian-overlay';
 
 export function resolveBundledGraphPath(repoRoot) {
   return path.join(repoRoot, 'src', 'data', 'ai', 'soldier_default_survival_graph.json');
@@ -63,27 +63,27 @@ export function validateGraph(value) {
   const result = [];
 
   if (!isRecord(value)) {
-    return [errorIssue('GRAPH_NOT_OBJECT', 'AI-граф должен быть JSON-объектом.')];
+    return [errorIssue('GRAPH_NOT_OBJECT', 'AI graph must be a JSON object.', 'AI-граф должен быть JSON-объектом.')];
   }
 
   if (value.version !== 1) {
-    result.push(errorIssue('UNSUPPORTED_VERSION', 'Поддерживается только версия AI-графа 1.'));
+    result.push(errorIssue('UNSUPPORTED_VERSION', 'Only AI graph version 1 is supported.', 'Поддерживается только версия AI-графа 1.'));
   }
 
   if (!isNonEmptyString(value.id)) {
-    result.push(errorIssue('MISSING_GRAPH_ID', 'У AI-графа должен быть непустой строковый id.'));
+    result.push(errorIssue('MISSING_GRAPH_ID', 'AI graph must have a non-empty string id.', 'У AI-графа должен быть непустой строковый id.'));
   }
 
   if (!isNonEmptyString(value.rootNodeId)) {
-    result.push(errorIssue('MISSING_ROOT_NODE_ID', 'У AI-графа должен быть rootNodeId.'));
+    result.push(errorIssue('MISSING_ROOT_NODE_ID', 'AI graph must have rootNodeId.', 'У AI-графа должен быть rootNodeId.'));
   }
 
   if (!isRecord(value.blackboardDefaults)) {
-    result.push(errorIssue('BLACKBOARD_DEFAULTS_NOT_OBJECT', 'Поле blackboardDefaults должно быть JSON-объектом.'));
+    result.push(errorIssue('BLACKBOARD_DEFAULTS_NOT_OBJECT', 'blackboardDefaults must be a JSON object.', 'Поле blackboardDefaults должно быть JSON-объектом.'));
   }
 
   if (!Array.isArray(value.nodes)) {
-    result.push(errorIssue('NODES_NOT_ARRAY', 'Поле nodes должно быть массивом нод.'));
+    result.push(errorIssue('NODES_NOT_ARRAY', 'nodes must be an array.', 'Поле nodes должно быть массивом нод.'));
     return result;
   }
 
@@ -92,29 +92,29 @@ export function validateGraph(value) {
 
   for (const [index, node] of value.nodes.entries()) {
     if (!isRecord(node)) {
-      result.push(errorIssue('NODE_NOT_OBJECT', `Нода #${index + 1} должна быть JSON-объектом.`));
+      result.push(errorIssue('NODE_NOT_OBJECT', `Node #${index + 1} must be a JSON object.`, `Нода #${index + 1} должна быть JSON-объектом.`));
       continue;
     }
 
     if (!isNonEmptyString(node.id)) {
-      result.push(errorIssue('NODE_WITHOUT_ID', `Нода #${index + 1} должна иметь непустой строковый id.`));
+      result.push(errorIssue('NODE_WITHOUT_ID', `Node #${index + 1} must have a non-empty string id.`, `Нода #${index + 1} должна иметь непустой строковый id.`));
       continue;
     }
 
     if (nodeById.has(node.id)) {
-      result.push(errorIssue('DUPLICATE_NODE_ID', `Дублируется id ноды: ${node.id}.`, node.id));
+      result.push(errorIssue('DUPLICATE_NODE_ID', `Duplicate node id: ${node.id}.`, `Дублируется id ноды: ${node.id}.`, node.id));
       continue;
     }
 
     nodeById.set(node.id, node);
 
     if (!isNonEmptyString(node.type)) {
-      result.push(errorIssue('NODE_WITHOUT_TYPE', `У ноды ${node.id} должен быть строковый type.`, node.id));
+      result.push(errorIssue('NODE_WITHOUT_TYPE', `Node ${node.id} must have a string type.`, `У ноды ${node.id} должен быть строковый type.`, node.id));
       continue;
     }
 
     if (!KNOWN_NODE_TYPES.has(node.type)) {
-      result.push(errorIssue('UNKNOWN_NODE_TYPE', `У ноды ${node.id} неизвестный type: ${node.type}.`, node.id));
+      result.push(errorIssue('UNKNOWN_NODE_TYPE', `Node ${node.id} has unknown type: ${node.type}.`, `У ноды ${node.id} неизвестный type: ${node.type}.`, node.id));
     }
 
     if (node.type === 'Root') {
@@ -129,16 +129,16 @@ export function validateGraph(value) {
   }
 
   if (rootNodeIds.length > 1) {
-    result.push(warningIssue('MULTIPLE_ROOT_NODES', `В графе несколько нод Root: ${rootNodeIds.join(', ')}. Используется rootNodeId.`));
+    result.push(warningIssue('MULTIPLE_ROOT_NODES', `Graph has multiple Root nodes: ${rootNodeIds.join(', ')}. rootNodeId is used.`, `В графе несколько нод Root: ${rootNodeIds.join(', ')}. Используется rootNodeId.`));
   }
 
   const rootNode = nodeById.get(value.rootNodeId);
   if (isNonEmptyString(value.rootNodeId) && !rootNode) {
-    result.push(errorIssue('ROOT_NODE_NOT_FOUND', `rootNodeId указывает на несуществующую ноду: ${value.rootNodeId}.`));
+    result.push(errorIssue('ROOT_NODE_NOT_FOUND', `rootNodeId points to a missing node: ${value.rootNodeId}.`, `rootNodeId указывает на несуществующую ноду: ${value.rootNodeId}.`));
   }
 
   if (rootNode && rootNode.type !== 'Root') {
-    result.push(errorIssue('ROOT_NODE_WRONG_TYPE', `rootNodeId должен указывать на ноду типа Root, сейчас: ${String(rootNode.type)}.`, value.rootNodeId));
+    result.push(errorIssue('ROOT_NODE_WRONG_TYPE', `rootNodeId must point to a Root node, current type: ${String(rootNode.type)}.`, `rootNodeId должен указывать на ноду типа Root, сейчас: ${String(rootNode.type)}.`, value.rootNodeId));
   }
 
   for (const [nodeId, node] of nodeById) {
@@ -148,7 +148,7 @@ export function validateGraph(value) {
 
     for (const childId of node.children) {
       if (isNonEmptyString(childId) && !nodeById.has(childId)) {
-        result.push(errorIssue('BROKEN_CHILD_LINK', `Нода ${nodeId} ссылается на несуществующего ребёнка: ${childId}.`, nodeId));
+        result.push(errorIssue('BROKEN_CHILD_LINK', `Node ${nodeId} references a missing child: ${childId}.`, `Нода ${nodeId} ссылается на несуществующего ребёнка: ${childId}.`, nodeId));
       }
     }
   }
@@ -173,6 +173,7 @@ export function evaluateSoldierOnce(input) {
     return {
       ok: false,
       validation,
+      error: 'Graph validation failed, soldier decision was not calculated.',
       errorRu: 'Граф не прошёл проверку, решение солдата не рассчитано.',
     };
   }
@@ -199,38 +200,47 @@ export function evaluateSoldierOnce(input) {
   const scores = [
     {
       branchNodeId: 'critical_survival',
+      branchName: 'Critical Survival',
       branchNameRu: 'Критическое выживание',
       score: roundScore(survivalScore),
       vetoed: survivalVeto,
-      ...(survivalVeto ? { vetoReasonRu: 'Опасность и стресс ниже порога реакции выживания.' } : {}),
+      ...(survivalVeto ? {
+        vetoReason: 'Danger and stress are below the survival reaction threshold.',
+        vetoReasonRu: 'Опасность и стресс ниже порога реакции выживания.',
+      } : {}),
       breakdown: [
-        scoreItem('score_danger_for_cover', 'Опасность', danger * 0.8, `danger ${danger} * 0.8`),
-        scoreItem('score_stress_for_cover', 'Стресс', stress * 0.45, `stress ${stress} * 0.45`),
-        scoreItem('score_cover_need', 'Нужда в укрытии', 20, 'базовая ценность укрытия'),
-        scoreItem('find_best_cover', 'Найденное укрытие', coverPosition ? 15 : 0, coverPosition ? 'best_cover_position есть' : 'best_cover_position нет'),
+        scoreItem('score_danger_for_cover', 'Danger', 'Опасность', danger * 0.8, `danger ${danger} * 0.8`, `danger ${danger} * 0.8`),
+        scoreItem('score_stress_for_cover', 'Stress', 'Стресс', stress * 0.45, `stress ${stress} * 0.45`, `stress ${stress} * 0.45`),
+        scoreItem('score_cover_need', 'Cover Need', 'Нужда в укрытии', 20, 'base cover value', 'базовая ценность укрытия'),
+        scoreItem('find_best_cover', 'Found Cover', 'Найденное укрытие', coverPosition ? 15 : 0, coverPosition ? 'best_cover_position is present' : 'best_cover_position is missing', coverPosition ? 'best_cover_position есть' : 'best_cover_position нет'),
       ],
     },
     {
       branchNodeId: 'continue_order',
+      branchName: 'Continue Order',
       branchNameRu: 'Продолжать приказ',
       score: roundScore(continueScore),
       vetoed: continueVeto,
-      ...(continueVeto ? { vetoReasonRu: 'У солдата нет активного приказа.' } : {}),
+      ...(continueVeto ? {
+        vetoReason: 'The soldier has no active order.',
+        vetoReasonRu: 'У солдата нет активного приказа.',
+      } : {}),
       breakdown: [
-        scoreItem('score_obedience', 'Послушание приказу', hasOrder ? 35 : 0, hasOrder ? 'активный приказ есть' : 'активного приказа нет'),
-        scoreItem('score_danger_against_order', 'Опасность против приказа', -danger * 0.7, `danger ${danger} * -0.7`),
-        scoreItem('score_inertia_continue', 'Инерция действия', currentAction === 'continue_order' ? 12 : 0, currentAction === 'continue_order' ? 'уже продолжает приказ' : 'инерции продолжения нет'),
+        scoreItem('score_obedience', 'Obedience To Order', 'Послушание приказу', hasOrder ? 35 : 0, hasOrder ? 'active order is present' : 'active order is missing', hasOrder ? 'активный приказ есть' : 'активного приказа нет'),
+        scoreItem('score_danger_against_order', 'Danger Against Order', 'Опасность против приказа', -danger * 0.7, `danger ${danger} * -0.7`, `danger ${danger} * -0.7`),
+        scoreItem('score_inertia_continue', 'Action Inertia', 'Инерция действия', currentAction === 'continue_order' ? 12 : 0, currentAction === 'continue_order' ? 'already continuing order' : 'no continue-order inertia', currentAction === 'continue_order' ? 'уже продолжает приказ' : 'инерции продолжения нет'),
       ],
     },
     {
       branchNodeId: 'observe_area',
+      branchName: 'Observe',
       branchNameRu: 'Наблюдать',
       score: roundScore(observeScore),
       vetoed: false,
       breakdown: [
-        scoreItem('observe_action', 'Базовое наблюдение', 5, 'действие по умолчанию'),
-        scoreItem('score_danger_against_observe', 'Опасность мешает наблюдению', -danger * 0.1, `danger ${danger} * -0.1`),
-        scoreItem('score_inertia_observe', 'Инерция наблюдения', currentAction === 'observe' ? 8 : 0, currentAction === 'observe' ? 'уже наблюдает' : 'инерции наблюдения нет'),
+        scoreItem('observe_action', 'Base Observe', 'Базовое наблюдение', 5, 'default action', 'действие по умолчанию'),
+        scoreItem('score_danger_against_observe', 'Danger Against Observe', 'Опасность мешает наблюдению', -danger * 0.1, `danger ${danger} * -0.1`, `danger ${danger} * -0.1`),
+        scoreItem('score_inertia_observe', 'Observe Inertia', 'Инерция наблюдения', currentAction === 'observe' ? 8 : 0, currentAction === 'observe' ? 'already observing' : 'no observe inertia', currentAction === 'observe' ? 'уже наблюдает' : 'инерции наблюдения нет'),
       ],
     },
   ];
@@ -238,6 +248,8 @@ export function evaluateSoldierOnce(input) {
   const selectableScores = scores.filter((score) => !score.vetoed);
   const selected = selectableScores.reduce((best, candidate) => candidate.score > best.score ? candidate : best, selectableScores[0]);
   const command = commandForSelectedBranch(selected.branchNodeId, coverPosition);
+  const explanation = buildExplanation(selected.branchNodeId, danger, stress, coverPosition, 'en');
+  const explanationRu = buildExplanation(selected.branchNodeId, danger, stress, coverPosition, 'ru');
 
   return {
     ok: true,
@@ -245,10 +257,12 @@ export function evaluateSoldierOnce(input) {
     unitId,
     graphId: String(graph.id),
     selectedBranchNodeId: selected.branchNodeId,
+    selectedBranchName: selected.branchName,
     selectedBranchNameRu: selected.branchNameRu,
     command,
     scores,
-    explanationRu: buildExplanation(selected.branchNodeId, command, danger, stress, coverPosition),
+    explanation,
+    explanationRu,
   };
 }
 
@@ -259,7 +273,10 @@ export function createHealthPayload(port) {
     version: ENGINE_VERSION,
     port,
     mode: 'headless-local-engine',
-    scopeRu: 'Этап 2: локальный headless engine для проверки AI-графа одиночного солдата.',
+    scope: 'Stage 3: local headless engine for single-soldier AI graph validation and evaluate-once.',
+    scopeRu: 'Этап 3: локальный headless engine для проверки AI-графа одиночного солдата и evaluate-once.',
+    textBase: 'en',
+    overlayLanguage: 'ru',
     browserDoesHeavyAi: false,
     endpoints: [
       'GET /engine/health',
@@ -275,6 +292,7 @@ function commandForSelectedBranch(branchNodeId, coverPosition) {
       return {
         type: 'move_to',
         target: coverPosition,
+        reason: 'Danger is high and cover is available: move to cover.',
         reasonRu: 'Опасность высока, найдено укрытие: двигаться к укрытию.',
       };
     }
@@ -282,6 +300,7 @@ function commandForSelectedBranch(branchNodeId, coverPosition) {
     return {
       type: 'set_posture',
       posture: 'prone',
+      reason: 'Danger is high and no cover is available: go prone.',
       reasonRu: 'Опасность высока, укрытие не найдено: лечь на землю.',
     };
   }
@@ -289,43 +308,55 @@ function commandForSelectedBranch(branchNodeId, coverPosition) {
   if (branchNodeId === 'continue_order') {
     return {
       type: 'continue_order',
+      reason: 'An order exists and risk did not overcome obedience.',
       reasonRu: 'Приказ есть, риск не перебил послушание приказу.',
     };
   }
 
   return {
     type: 'observe',
+    reason: 'No more urgent action is needed: observe the sector.',
     reasonRu: 'Нет более срочного действия: наблюдать сектор.',
   };
 }
 
-function buildExplanation(branchNodeId, command, danger, stress, coverPosition) {
+function buildExplanation(branchNodeId, danger, stress, coverPosition, language) {
   if (branchNodeId === 'critical_survival') {
-    return coverPosition
-      ? `Солдат выбрал укрытие: danger=${danger}, stress=${stress}, точка укрытия есть (${coverPosition.x}, ${coverPosition.y}).`
-      : `Солдат лёг: danger=${danger}, stress=${stress}, подходящего укрытия в blackboard нет.`;
+    if (coverPosition) {
+      return language === 'ru'
+        ? `Солдат выбрал укрытие: danger=${danger}, stress=${stress}, точка укрытия есть (${coverPosition.x}, ${coverPosition.y}).`
+        : `Soldier chose cover: danger=${danger}, stress=${stress}, cover point is available (${coverPosition.x}, ${coverPosition.y}).`;
+    }
+
+    return language === 'ru'
+      ? `Солдат лёг: danger=${danger}, stress=${stress}, подходящего укрытия в blackboard нет.`
+      : `Soldier went prone: danger=${danger}, stress=${stress}, no suitable cover point is in the blackboard.`;
   }
 
   if (branchNodeId === 'continue_order') {
-    return `Солдат продолжает приказ: danger=${danger}, stress=${stress}, ветка приказа получила лучший балл.`;
+    return language === 'ru'
+      ? `Солдат продолжает приказ: danger=${danger}, stress=${stress}, ветка приказа получила лучший балл.`
+      : `Soldier continues the order: danger=${danger}, stress=${stress}, the order branch got the best score.`;
   }
 
-  return `Солдат наблюдает: danger=${danger}, stress=${stress}, срочная реакция не требуется.`;
+  return language === 'ru'
+    ? `Солдат наблюдает: danger=${danger}, stress=${stress}, срочная реакция не требуется.`
+    : `Soldier observes: danger=${danger}, stress=${stress}, no urgent reaction is required.`;
 }
 
 function validateChildrenShape(node, result) {
   if (!Array.isArray(node.children)) {
-    result.push(errorIssue('CHILDREN_NOT_ARRAY', `У ноды ${node.id} поле children должно быть массивом строковых id.`, node.id));
+    result.push(errorIssue('CHILDREN_NOT_ARRAY', `Node ${node.id} children must be an array of string ids.`, `У ноды ${node.id} поле children должно быть массивом строковых id.`, node.id));
     return;
   }
 
   if (LEAF_NODE_TYPES.has(node.type) && node.children.length > 0) {
-    result.push(errorIssue('LEAF_NODE_HAS_CHILDREN', `Нода ${node.id} типа ${node.type} не должна иметь children.`, node.id));
+    result.push(errorIssue('LEAF_NODE_HAS_CHILDREN', `Node ${node.id} of type ${node.type} must not have children.`, `Нода ${node.id} типа ${node.type} не должна иметь children.`, node.id));
   }
 
   for (const childId of node.children) {
     if (!isNonEmptyString(childId)) {
-      result.push(errorIssue('CHILD_ID_NOT_STRING', `У ноды ${node.id} все children должны быть непустыми строками.`, node.id));
+      result.push(errorIssue('CHILD_ID_NOT_STRING', `All children of node ${node.id} must be non-empty strings.`, `У ноды ${node.id} все children должны быть непустыми строками.`, node.id));
     }
   }
 }
@@ -336,65 +367,69 @@ function validateNodeParameters(parameters, result, nodeId) {
   }
 
   if (!isRecord(parameters)) {
-    result.push(errorIssue('PARAMETERS_NOT_OBJECT', `У ноды ${nodeId} поле parameters должно быть объектом.`, nodeId));
+    result.push(errorIssue('PARAMETERS_NOT_OBJECT', `Node ${nodeId} parameters must be an object.`, `У ноды ${nodeId} поле parameters должно быть объектом.`, nodeId));
     return;
   }
 
   for (const [key, value] of Object.entries(parameters)) {
     if (!isNonEmptyString(key)) {
-      result.push(errorIssue('PARAMETER_KEY_EMPTY', `У ноды ${nodeId} найден пустой ключ параметра.`, nodeId));
+      result.push(errorIssue('PARAMETER_KEY_EMPTY', `Node ${nodeId} has an empty parameter key.`, `У ноды ${nodeId} найден пустой ключ параметра.`, nodeId));
     }
 
     if (!isSupportedValue(value)) {
-      result.push(errorIssue('PARAMETER_VALUE_UNSUPPORTED', `У ноды ${nodeId} параметр ${key} имеет неподдерживаемое значение. Разрешены строки, числа, boolean, null и позиция {x,y}.`, nodeId));
+      result.push(errorIssue('PARAMETER_VALUE_UNSUPPORTED', `Node ${nodeId} parameter ${key} has an unsupported value. Allowed: string, number, boolean, null, and position {x,y}.`, `У ноды ${nodeId} параметр ${key} имеет неподдерживаемое значение. Разрешены строки, числа, boolean, null и позиция {x,y}.`, nodeId));
     }
   }
 }
 
 function validateBlackboardDefaults(defaults, result) {
   if (defaults === undefined) {
-    result.push(errorIssue('BLACKBOARD_DEFAULTS_MISSING', 'У AI-графа должно быть поле blackboardDefaults.'));
+    result.push(errorIssue('BLACKBOARD_DEFAULTS_MISSING', 'AI graph must have blackboardDefaults.', 'У AI-графа должно быть поле blackboardDefaults.'));
     return;
   }
 
   if (!isRecord(defaults)) {
-    result.push(errorIssue('BLACKBOARD_DEFAULTS_NOT_OBJECT', 'Поле blackboardDefaults должно быть JSON-объектом.'));
+    result.push(errorIssue('BLACKBOARD_DEFAULTS_NOT_OBJECT', 'blackboardDefaults must be a JSON object.', 'Поле blackboardDefaults должно быть JSON-объектом.'));
     return;
   }
 
   for (const [key, value] of Object.entries(defaults)) {
     if (!isNonEmptyString(key)) {
-      result.push(errorIssue('BLACKBOARD_KEY_EMPTY', 'В blackboardDefaults найден пустой ключ.'));
+      result.push(errorIssue('BLACKBOARD_KEY_EMPTY', 'blackboardDefaults contains an empty key.', 'В blackboardDefaults найден пустой ключ.'));
     }
 
     if (!isSupportedValue(value)) {
-      result.push(errorIssue('BLACKBOARD_VALUE_UNSUPPORTED', `Blackboard-значение ${key} имеет неподдерживаемый формат.`));
+      result.push(errorIssue('BLACKBOARD_VALUE_UNSUPPORTED', `Blackboard value ${key} has an unsupported format.`, `Blackboard-значение ${key} имеет неподдерживаемый формат.`));
     }
   }
 }
 
-function scoreItem(sourceNodeId, labelRu, value, reasonRu) {
+function scoreItem(sourceNodeId, label, labelRu, value, reason, reasonRu) {
   return {
     sourceNodeId,
+    label,
     labelRu,
     value: roundScore(value),
+    reason,
     reasonRu,
   };
 }
 
-function errorIssue(code, messageRu, nodeId) {
+function errorIssue(code, message, messageRu, nodeId) {
   return {
     severity: 'error',
     code,
+    message,
     messageRu,
     ...(nodeId ? { nodeId } : {}),
   };
 }
 
-function warningIssue(code, messageRu, nodeId) {
+function warningIssue(code, message, messageRu, nodeId) {
   return {
     severity: 'warning',
     code,
+    message,
     messageRu,
     ...(nodeId ? { nodeId } : {}),
   };
