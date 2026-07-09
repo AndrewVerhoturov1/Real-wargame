@@ -50,6 +50,32 @@ If the task asks for screenshots, visual QA, or “try it yourself”, do not st
 5. Never claim screenshots were captured until the PNG artifact is downloaded or otherwise inspected.
 6. Never claim a visual issue is fixed until at least one real screenshot run has been completed after the fix, or clearly state that it still needs manual visual verification.
 7. If GitHub Actions is used only as a visual QA harness, close any temporary PR/branch after the needed screenshots are captured, unless the user asks to keep it.
+8. If the user explicitly says screenshots are not needed, do not create a temporary screenshot PR or run screenshot workflows just for routine verification. Use code review, static smoke tests, build/status checks, and clearly say that visual verification was skipped by request.
+
+## Screenshot discipline
+
+Use screenshots only when they materially answer the user's request or when a visual/UI change cannot be trusted without seeing it.
+
+Do **not** spend time triggering screenshot workflows for every ordinary code/data change. For non-visual changes, prefer:
+
+```text
+npm/build/smoke checks;
+engine smoke;
+static editor smoke;
+GitHub code search for removed/renamed node types;
+manual check instructions.
+```
+
+If the user later says screenshots are optional or unnecessary:
+
+```text
+stop new screenshot-trigger work;
+do not open new temporary visual-QA PRs;
+finish/close already-created temporary PRs when safe;
+report that the change is not visually verified after that point.
+```
+
+If screenshots are still required, every screenshot claim must include whether PNGs were actually downloaded/inspected.
 
 ## Read first
 
@@ -77,6 +103,8 @@ src/ai-node-editor/main.ts
 src/ai-node-editor/ai-node-editor.css
 src/ai-node-editor/ai-node-editor-authoring.css
 src/ai-node-editor/ai-node-editor-visual-fix.css
+src/ai-node-editor/human-node-ui.ts
+src/ai-node-editor/human-node-ui.css
 scripts/local_ai_engine.mjs
 scripts/ai_engine_core.mjs
 Run-AI-Node-Editor.bat
@@ -168,6 +196,12 @@ Expected PNGs for tactical board and AI Node Editor may include:
 12-ai-editor-drag-link-created.png
 13-ai-editor-context-menu.png
 14-ai-editor-auto-check-result.png
+15-universal-threshold-danger-interface.png
+16-universal-threshold-tooltip-after-hover.png
+17-universal-threshold-changed.png
+18-universal-threshold-saved.png
+19-existing-stress-uses-universal-threshold.png
+20-existing-stress-universal-threshold-changed.png
 ```
 
 The workflow must open the real Vite app in Chromium with Playwright and upload screenshots from `artifacts/screenshots/`.
@@ -184,10 +218,12 @@ If only a smoke trigger is needed and no real code change is required:
 1. create a temporary branch from `real-wargame-preview`;
 2. add or edit a clearly temporary smoke note under `docs/manual-test/` or update the screenshot test only if that change itself is useful;
 3. open a draft PR into `real-wargame-preview`;
-4. wait for the real screenshot workflow;
-5. download the artifact;
-6. inspect the PNGs;
-7. close the temporary PR without merging unless the user explicitly wants it kept.
+4. if draft PRs do not trigger the desired workflow, mark it ready for review or create a normal temporary PR with a clear “do not merge” body;
+5. wait for the real screenshot workflow;
+6. download the artifact;
+7. inspect the PNGs;
+8. close the temporary PR without merging unless the user explicitly wants it kept;
+9. delete any temporary trigger file that was accidentally committed to `real-wargame-preview`.
 
 Do not leave a smoke PR open without explaining why.
 
@@ -273,6 +309,74 @@ context menu opens from a real node;
 Auto 4-5 produces Point 4 OK and Point 5 OK in a real browser screenshot.
 ```
 
+### 7. Stale AI Node Editor localStorage
+
+The browser may keep an old graph in localStorage even after the repository graph was changed. This can make old nodes or old parameters appear after a correct code update.
+
+Fix sequence:
+
+```text
+manual: press Reset in AI Node Editor;
+Playwright: use page.addInitScript(() => window.localStorage.clear()) before page.goto('/ai-node-editor.html');
+code: if a helper module reads graph storage before main.ts writes it, bootstrap graph storage from src/data/ai/soldier_default_survival_graph.json in ai-node-editor.html before loading the helper module.
+```
+
+Always mention this risk when changing bundled AI graph data or node types.
+
+### 8. Language-dependent UI selectors
+
+The AI Node Editor can show Russian or English labels. Playwright selectors must handle both, especially after the human UI language toggle changes text.
+
+Prefer selectors like:
+
+```ts
+page.getByRole('button', { name: /\+ Add node|\+ Добавить ноду/ })
+page.getByRole('heading', { name: /Soldier AI Node Editor|Редактор ИИ/ })
+```
+
+Do not assume a button remains English after `human-node-ui.ts` applies the selected language.
+
+### 9. Range sliders and hover can be flaky
+
+Hovering directly over `<input type="range">` may be unstable because the browser thumb position and element geometry differ. If testing tooltips, hover a stable wrapper such as `.human-control` that contains the slider.
+
+For changing slider values in Playwright, set the value and dispatch an input event:
+
+```ts
+await page.locator('.human-threshold-slider').evaluate((element) => {
+  const input = element as HTMLInputElement;
+  input.value = '45';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+});
+```
+
+### 10. Human UI helper can read graph storage too early
+
+`human-node-ui.ts` reads graph/node data from localStorage to render human panels. If Playwright clears localStorage before opening the editor, the helper can see an empty graph unless storage is bootstrapped.
+
+Current expected fix: `ai-node-editor.html` should load bundled graph JSON and populate `real-wargame.ai-node-editor.graph.v5` before loading `human-node-ui.ts`, while `main.ts` remains the owner of the real editor state.
+
+### 11. Temporary visual-QA branches and trigger files
+
+It is easy to create too many temporary PRs or accidentally commit a trigger file to `real-wargame-preview` while trying to start a workflow.
+
+Rules:
+
+```text
+create the temporary branch first;
+verify the branch exists before create_file;
+write trigger files only to the temporary branch;
+if a trigger lands in real-wargame-preview by mistake, delete it immediately;
+close old queued/failed temporary PRs after a newer run supersedes them;
+state clearly which PR/run is the active one.
+```
+
+### 12. GitHub connector / CI limitations
+
+The GitHub connector may not expose every local operation. If direct local checkout or internet access is unavailable, use repository files plus GitHub Actions rather than pretending to have run local commands.
+
+If `fetch_commit_workflow_runs` only returns PR-triggered runs, use the PR head commit and the PR workflow run. If direct push runs are not visible through the connector, do not infer success from absence of results.
+
 ## Reporting format
 
 When reporting a local/visual run, include:
@@ -282,9 +386,9 @@ Branch: <branch>
 Run type: local / GitHub Actions / user PC
 Run id or PR: <id/link if available>
 Build: passed / failed / not run / continue-on-error failed
-Screenshot capture: passed / failed
+Screenshot capture: passed / failed / skipped by user request
 Artifact: <name/id if available>
-Screenshots inspected: yes/no
+Screenshots inspected: yes/no/not requested
 What is visible:
 - 01-initial.png: ...
 - 08-ai-editor-initial-compact.png: ...
@@ -294,4 +398,4 @@ Surrogate used: no / yes, and if yes it is not counted as success
 Risks / not checked: ...
 ```
 
-For the user, keep the explanation simple and show the PNGs or artifact link whenever possible.
+For the user, keep the explanation simple and show the PNGs or artifact link whenever possible, unless the user said screenshots are not needed.
