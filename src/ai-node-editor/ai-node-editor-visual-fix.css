@@ -1,0 +1,52 @@
+/* Visual QA fixes after real Playwright screenshots.
+   Keep the editor workspace dominant even when console/json is open. */
+
+.ai-editor-shell.bottom-open {
+  grid-template-rows: 42px minmax(0, 1fr) 96px !important;
+}
+
+.expanded-bottom {
+  grid-template-rows: 24px minmax(0, 1fr) !important;
+  padding: 3px 8px !important;
+}
+
+.bottom-box {
+  padding: 6px 8px !important;
+}
+
+.bottom-box h2 {
+  margin-bottom: 4px !important;
+  font-size: 11px !important;
+}
+
+.bottom-box pre {
+  font-size: 10px !important;
+  line-height: 1.35 !important;
+}
+
+.bottom-tab,
+.bottom-toggle {
+  min-height: 20px !important;
+  padding: 2px 7px !important;
+  font-size: 10px !important;
+}
+
+.graph-help {
+  max-width: 430px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.palette-panel,
+.inspector-panel {
+  scrollbar-width: thin;
+}
+
+.compact-actions .ai-editor-button {
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+
+.compact-status {
+  min-width: 190px !important;
+}
