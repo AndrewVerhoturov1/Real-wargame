@@ -78,6 +78,7 @@ export class HtmlOverlayRenderer {
       }
     }
 
+    this.renderAiSpeechLabels(state, locale, visibleKeys);
     this.renderVisibilityProbeLabel(state, visibleKeys);
 
     for (const [key, label] of this.labels) {
@@ -91,6 +92,36 @@ export class HtmlOverlayRenderer {
   destroy(): void {
     this.container.remove();
     this.labels.clear();
+  }
+
+  private renderAiSpeechLabels(state: SimulationState, locale: Locale, visibleKeys: Set<string>): void {
+    const nowMs = Date.now();
+
+    for (const unit of state.units) {
+      if (unit.behaviorRuntime.aiSpeechUntilMs <= nowMs) {
+        continue;
+      }
+
+      const text = locale === 'ru'
+        ? unit.behaviorRuntime.aiSpeechRu ?? unit.behaviorRuntime.aiSpeech
+        : unit.behaviorRuntime.aiSpeech ?? unit.behaviorRuntime.aiSpeechRu;
+
+      if (!text) {
+        continue;
+      }
+
+      const key = `unit-speech:${unit.id}`;
+      visibleKeys.add(key);
+      const label = this.getLabel(key, 'unit-speech-label');
+      const world = gridToWorld(state.map, unit.position);
+      const screen = this.projector.worldToScreen({
+        x: world.x,
+        y: world.y - 28,
+      });
+
+      updateLabelText(label, text);
+      placeLabel(label, screen.x, screen.y);
+    }
   }
 
   private renderVisibilityProbeLabel(state: SimulationState, visibleKeys: Set<string>): void {
