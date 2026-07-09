@@ -1,10 +1,47 @@
 # Real-wargame
 
-Real-time strategy game project.
+Real-wargame — прототип 2D tactical command game / Soldier Behavior Lab на **Vite + TypeScript + PixiJS**.
 
-Behavior foundation preview work is staged on `real-wargame-preview`.
+Активная работа идёт в ветке:
 
-If you are reading this from `main`, remember that active preview work and the newest agent instructions may be on `real-wargame-preview`.
+```text
+real-wargame-preview
+```
+
+`main` остаётся стабильной базой. Содержательные изменения сначала попадают в `real-wargame-preview`; перенос в `main` делается только после явного GO человека.
+
+## Текущее состояние preview
+
+Этап RTS-заготовки в целом готов. Дальше он считается рабочей основой, которую можно править по ходу разработки поведения солдат.
+
+В preview сейчас есть:
+
+- большая тактическая карта `64×40`, `1 клетка = 10 м`;
+- PixiJS-отрисовка карты, объектов, зон, юнитов и приказов;
+- зум колесом мыши и перетаскивание карты средней кнопкой или `Space + drag`;
+- игровой режим с верхним меню, правыми вкладками и нижней карточкой юнита;
+- режим редактора с вкладками, без длинной правой “простыни”;
+- кисти высот `-2..+4` и леса `0/1/2`;
+- физическая карта высот с кривыми цветными зонами вместо текстовых `+1` на каждой клетке;
+- отдельный слой `Реальный рельеф`, который показывает сглаженную высоту для расчёта видимости;
+- Alt-линия видимости: зелёная часть видна, красная часть закрыта, расстояния в метрах;
+- объекты с физической высотой `losHeightMeters` для линии видимости;
+- знания выбранного юнита: ближние укрытия, дальние укрытия для плана, опасность;
+- экспорт и загрузка JSON сцены;
+- отчёт производительности из браузера;
+- GitHub Actions screenshot smoke через Playwright/Chromium.
+
+Главный смысл проекта на этом этапе — не “красивая RTS”, а удобная лаборатория карты, видимости, укрытий и будущего поведения солдат.
+
+## Пользовательский запуск preview
+
+Для ручной проверки использовать:
+
+```text
+scripts/windows/run-preview.bat
+```
+
+Не требовать от пользователя Git-команд, терминала, checkout, merge или ручного переключения веток.
 
 ## Agent startup
 
@@ -30,11 +67,29 @@ If the task asks to run the game locally, open the preview build, capture screen
 
 ## Subprojects
 
-See `docs/subprojects/README.md` for subproject system documentation.
+Current active subproject:
 
-## Commands
+```text
+docs/subprojects/real-wargame-start/
+```
 
-    python scripts/subproject_context.py --list
-    python scripts/subproject_context.py <id> --brief
-    python scripts/subproject_context.py <id> --opencode
-    python scripts/subproject_context.py <id> --files
+Important subproject files:
+
+```text
+docs/subprojects/real-wargame-start/SUBPROJECT.md
+docs/subprojects/real-wargame-start/subproject.json
+docs/subprojects/real-wargame-start/JOURNAL.md
+docs/subprojects/real-wargame-start/RTS_FOUNDATION_DECISIONS.md
+docs/subprojects/real-wargame-start/test-program.md
+```
+
+See `docs/subprojects/README.md` for the subproject system documentation.
+
+## Commands for agents
+
+```text
+python scripts/subproject_context.py --list
+python scripts/subproject_context.py real-wargame-start --brief
+python scripts/subproject_context.py real-wargame-start --opencode
+python scripts/subproject_context.py real-wargame-start --files
+```
