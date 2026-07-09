@@ -24,9 +24,10 @@ const languageToggle = document.querySelector<HTMLButtonElement>('#language-togg
 const gridToggle = document.querySelector<HTMLButtonElement>('#grid-toggle');
 const visionToggle = document.querySelector<HTMLButtonElement>('#vision-toggle');
 const heightToggle = document.querySelector<HTMLButtonElement>('#height-toggle');
+const pauseToggle = document.querySelector<HTMLButtonElement>('#pause-toggle');
 const aiEditorOpenButton = document.querySelector<HTMLButtonElement>('#ai-editor-open');
 
-if (!root || !debugPanel || !languageToggle || !gridToggle || !visionToggle || !heightToggle || !aiEditorOpenButton) {
+if (!root || !debugPanel || !languageToggle || !gridToggle || !visionToggle || !heightToggle || !pauseToggle || !aiEditorOpenButton) {
   throw new Error('Tactical board root elements are missing.');
 }
 
@@ -54,6 +55,7 @@ installTerrainBrushControls(debugPanel, state);
 installSceneExportControls(state);
 installPerformanceReportControls(() => tacticalBoard.downloadPerformanceReport());
 installAiEditorOpenButton(aiEditorOpenButton);
+installPauseToggle(pauseToggle, () => tacticalBoard.forceRender());
 tacticalBoard.start();
 forceRussianTopControls();
 
@@ -69,6 +71,7 @@ function forceRussianTopControls(): void {
   visionToggle.textContent = 'Обзор: выкл';
   heightToggle.textContent = 'Цифры высоты: выкл';
   aiEditorOpenButton.textContent = 'Редактор ИИ';
+  updatePauseToggle(pauseToggle);
   gridToggle.setAttribute('aria-pressed', 'true');
   visionToggle.setAttribute('aria-pressed', 'false');
   heightToggle.setAttribute('aria-pressed', 'false');
@@ -81,4 +84,26 @@ function installAiEditorOpenButton(button: HTMLButtonElement): void {
   button.addEventListener('click', () => {
     window.open('/ai-node-editor.html', '_blank');
   });
+}
+
+function installPauseToggle(button: HTMLButtonElement, onChanged: () => void): void {
+  button.addEventListener('click', () => {
+    state.paused = !state.paused;
+    updatePauseToggle(button);
+    onChanged();
+  });
+
+  window.addEventListener('keydown', (event) => {
+    if (event.key.toLowerCase() !== 'p') return;
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) return;
+    state.paused = !state.paused;
+    updatePauseToggle(button);
+    onChanged();
+  });
+}
+
+function updatePauseToggle(button: HTMLButtonElement): void {
+  button.textContent = state.paused ? 'Пауза: вкл' : 'Пауза: выкл';
+  button.setAttribute('aria-pressed', String(state.paused));
+  button.classList.toggle('hud-toggle-off', !state.paused);
 }
