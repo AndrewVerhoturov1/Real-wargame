@@ -6,7 +6,7 @@
 
 ## Current focus
 
-Этап 1: data contract для AI-графа одиночного солдата. Уже нужен не визуальный редактор, а устойчивый JSON-договор: типы нод, blackboard, первый `soldier_default_survival_graph.json` и headless validation. Следующие этапы: local engine host, новая вкладка `ai-node-editor.html`, затем подключение Soldier Survival Brain к одному солдату.
+Этап 2: headless local AI engine. Уже есть JSON-договор графа, первый `soldier_default_survival_graph.json`, проверка `validate:ai-graph`, локальный Node.js engine с endpoint-ами health / validate / evaluate-once и батники для ручной проверки. Следующие этапы: новая вкладка `ai-node-editor.html`, статус подключения к engine, затем подключение Soldier Survival Brain к одному солдату.
 
 ## Key decisions
 
@@ -16,6 +16,7 @@
 - Поведение описывается графом нод: flow + conditions + scores + tactical queries + actions + blackboard/debug.
 - Тяжёлые расчёты ИИ выполняет local engine, а браузерная вкладка только редактирует граф, отправляет его на проверку и показывает объяснения.
 - AI Node Editor открывается в новой вкладке/entrypoint, не смешивается с текущим tactical board UI.
+- На этапе 2 local engine ещё не управляет живым солдатом в `SimulationTick`; он проверяет graph validation и один расчёт evaluate-once через localhost API.
 
 ## Read first
 
@@ -23,9 +24,10 @@
 2. `docs/subprojects/ai-single-unit-editor/subproject.json`
 3. `docs/subprojects/ai-single-unit-editor/JOURNAL.md` (если существует)
 4. `docs/subprojects/ai-single-unit-editor/LOCAL_ENGINE_NODE_EDITOR_IMPLEMENTATION_PLAN.md`
-5. `python scripts/subproject_context.py ai-single-unit-editor --brief`
-6. `docs/subprojects/real-wargame-start/ROADMAP_SOLDIER_BEHAVIOR_LAB.md`
-7. `docs/subprojects/real-wargame-start/RTS_FOUNDATION_DECISIONS.md`
+5. `docs/manual-test/AI_ENGINE_STAGE_2.md`
+6. `python scripts/subproject_context.py ai-single-unit-editor --brief`
+7. `docs/subprojects/real-wargame-start/ROADMAP_SOLDIER_BEHAVIOR_LAB.md`
+8. `docs/subprojects/real-wargame-start/RTS_FOUNDATION_DECISIONS.md`
 
 ## Current data-contract files
 
@@ -35,6 +37,15 @@
 - `src/core/ai/AiGraphValidation.ts`
 - `src/data/ai/soldier_default_survival_graph.json`
 - `scripts/validate_ai_graph.mjs`
+
+## Current local-engine files
+
+- `scripts/ai_engine_core.mjs`
+- `scripts/local_ai_engine.mjs`
+- `scripts/local_ai_engine_smoke.mjs`
+- `Run-AI-Engine.bat`
+- `Run-AI-Engine-Smoke.bat`
+- `docs/manual-test/AI_ENGINE_STAGE_2.md`
 
 ## Boundaries
 
@@ -47,11 +58,13 @@
 
 ## Testing
 
-На этапе data contract основная проверка:
+На этапе 2 основная проверка:
 
 ```text
+Run-AI-Engine-Smoke.bat
+npm run engine:smoke
 npm run validate:ai-graph
 npm run build
 ```
 
-`validate:ai-graph` проверяет bundled JSON-граф без браузера. `build` проверяет TypeScript-контракт и существующую Vite-сборку.
+`Run-AI-Engine-Smoke.bat` запускает local engine, проверяет `/engine/health`, `/ai/graph/validate`, `/ai/graph/evaluate-once` и сохраняет JSON-отчёты в `artifacts/ai-engine/`.
