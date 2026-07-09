@@ -3,7 +3,7 @@
   "title": "AI Single-Unit Editor — Node-Based Constructor",
   "status": "draft",
   "goal": "Создать node-based редактор ИИ одиночного юнита, привязанный к существующей RTS wrapper (Real-wargame), где поведение солдата собирается из нод, но тяжёлые расчёты выполняет локальный движок, а браузерная вкладка только редактирует и показывает объяснения.",
-  "current_focus": "Этап 2: headless local AI engine. Зафиксированы TypeScript data contract, bundled Soldier Survival Graph, локальный Node.js engine с endpoint-ами /engine/health, /ai/graph/validate, /ai/graph/evaluate-once, smoke-скрипт и батники для ручной проверки. Следующие этапы: новая вкладка ai-node-editor.html и подключение к живому солдату.",
+  "current_focus": "Этап 3: visible AI Node Editor. Есть отдельный ai-node-editor.html, палитра нод, видимый граф bundled Soldier Survival Graph, инспектор, engine status, validation/evaluate-once через local engine, кнопка Редактор ИИ в тактической карте и батник Run-AI-Node-Editor.bat. Следующие этапы: authoring/перетаскивание/сохранение JSON и подключение к живому солдату.",
   "key_decisions": [
     "Node editor не является самостоятельным generic framework; он привязан к data contract с RTS wrapper.",
     "Первая версия — только одиночный юнит (single-unit); squad-level AI отложен.",
@@ -12,19 +12,23 @@
     "Тяжёлые расчёты ИИ должны выполняться не в браузерной вкладке, а в локальном движке: сначала Node.js/TypeScript local engine host, затем worker_threads, позже Rust/Tauri sidecar только при доказанной необходимости.",
     "AI Node Editor открывается в новой вкладке/отдельном entrypoint, не смешивается с текущей tactical board UI.",
     "Браузерный редактор отвечает за граф, палитру, инспектор, импорт/экспорт и показ объяснений; local engine отвечает за AI tick, сенсоры, поиск укрытий, Utility AI scoring, инерцию решений и validation/evaluate-once.",
-    "Этап 2 local engine пока headless: он проверяет bundled graph и считает evaluate-once для тестового blackboard, но ещё не управляет живым SimulationTick."
+    "Этап 3 редактора пока visible/read-only для bundled graph: можно выбрать ноду, увидеть инспектор, вызвать validation/evaluate-once через engine, но ещё нельзя сохранять новые ноды и управлять SimulationTick."
   ],
   "must_read_first": [
     "docs/subprojects/ai-single-unit-editor/SUBPROJECT.md",
     "docs/subprojects/ai-single-unit-editor/subproject.json",
     "docs/subprojects/ai-single-unit-editor/JOURNAL.md",
     "docs/subprojects/ai-single-unit-editor/LOCAL_ENGINE_NODE_EDITOR_IMPLEMENTATION_PLAN.md",
+    "docs/manual-test/AI_NODE_EDITOR_STAGE_3.md",
     "docs/manual-test/AI_ENGINE_STAGE_2.md",
     "docs/subprojects/real-wargame-start/SUBPROJECT.md",
     "docs/subprojects/real-wargame-start/ROADMAP_SOLDIER_BEHAVIOR_LAB.md",
     "docs/subprojects/real-wargame-start/RTS_FOUNDATION_DECISIONS.md"
   ],
   "main_files": [
+    "ai-node-editor.html",
+    "src/ai-node-editor/main.ts",
+    "src/ai-node-editor/ai-node-editor.css",
     "src/core/ai/AiGraph.ts",
     "src/core/ai/AiNodeTypes.ts",
     "src/core/ai/AiBlackboard.ts",
@@ -34,9 +38,15 @@
     "scripts/validate_ai_graph.mjs",
     "scripts/local_ai_engine.mjs",
     "scripts/local_ai_engine_smoke.mjs",
+    "scripts/ai_node_editor_smoke.mjs",
+    "Run-AI-Node-Editor.bat",
     "Run-AI-Engine.bat",
     "Run-AI-Engine-Smoke.bat",
     "package.json",
+    "index.html",
+    "src/main.ts",
+    "src/ui-layout.css",
+    "docs/manual-test/AI_NODE_EDITOR_STAGE_3.md",
     "docs/manual-test/AI_ENGINE_STAGE_2.md",
     "src/core/behavior/BehaviorModel.ts",
     "src/core/units/UnitModel.ts",
@@ -49,7 +59,6 @@
     "src/data/units/test_units.json"
   ],
   "planned_files": [
-    "ai-node-editor.html",
     "src/core/ai/AiGraphRunner.ts",
     "src/core/ai/SoldierDecision.ts",
     "src/core/ai/SoldierActions.ts",
@@ -61,7 +70,6 @@
     "src/local-engine/EngineProtocol.ts",
     "src/local-engine/workers/SoldierAiWorker.ts",
     "src/local-engine/workers/TacticalQueryWorker.ts",
-    "src/ai-node-editor/main.ts",
     "src/ai-node-editor/NodePalette.ts",
     "src/ai-node-editor/GraphCanvas.ts",
     "src/ai-node-editor/NodeInspector.ts",
@@ -72,9 +80,12 @@
   "test_files": [
     "scripts/validate_ai_graph.mjs",
     "scripts/local_ai_engine_smoke.mjs",
+    "scripts/ai_node_editor_smoke.mjs",
+    "Run-AI-Node-Editor.bat",
     "Run-AI-Engine-Smoke.bat"
   ],
   "manual_docs": [
+    "docs/manual-test/AI_NODE_EDITOR_STAGE_3.md",
     "docs/manual-test/AI_ENGINE_STAGE_2.md",
     "docs/subprojects/ai-single-unit-editor/LOCAL_ENGINE_NODE_EDITOR_IMPLEMENTATION_PLAN.md",
     "docs/subprojects/real-wargame-start/ROADMAP_SOLDIER_BEHAVIOR_LAB.md",
@@ -88,6 +99,7 @@
     "Large unrelated reports or telemetry dumps"
   ],
   "commands": [
+    "npm run editor:smoke",
     "npm run engine:smoke",
     "npm run engine:dev",
     "npm run validate:ai-graph",
@@ -101,7 +113,8 @@
     "2026-07-09: subproject scaffold created from _template with ai-single-unit-editor id",
     "2026-07-09: local engine + new-tab AI Node Editor implementation plan added; heavy AI calculations must run in a local engine, not in the browser tab",
     "2026-07-09: data contract layer added: AiGraph/AiNodeTypes/AiBlackboard/AiGraphValidation, soldier_default_survival_graph.json, validate:ai-graph script",
-    "2026-07-09: stage 2 headless local AI engine added: local_ai_engine.mjs, local_ai_engine_smoke.mjs, ai_engine_core.mjs, engine npm scripts, Run-AI-Engine*.bat, and manual test guide"
+    "2026-07-09: stage 2 headless local AI engine added: local_ai_engine.mjs, local_ai_engine_smoke.mjs, ai_engine_core.mjs, engine npm scripts, Run-AI-Engine*.bat, and manual test guide",
+    "2026-07-09: stage 3 visible AI Node Editor added: ai-node-editor.html, src/ai-node-editor/main.ts/css, editor smoke, Run-AI-Node-Editor.bat, tactical map button, manual test guide"
   ],
   "context_sources": [
     "docs/subprojects/real-wargame-start/",
@@ -119,15 +132,16 @@
     "Не ломать экспорт/загрузку JSON сцены и существующий редактор карт."
   ],
   "suggested_verification": [
+    "Run-AI-Node-Editor.bat — пользовательская проверка видимого редактора, engine status, validation/evaluate-once",
+    "npm run editor:smoke — статическая проверка entrypoint/editor files",
     "Run-AI-Engine-Smoke.bat — пользовательская проверка health/validate/evaluate-once без терминала",
     "npm run engine:smoke — автоматическая проверка local AI engine",
     "npm run validate:ai-graph — bundled soldier_default_survival_graph.json должен пройти headless validation",
-    "npm run build — TypeScript data contract должен компилироваться вместе с проектом",
+    "npm run build — TypeScript data contract и editor entrypoint должны компилироваться вместе с проектом",
     "python scripts/subproject_context.py --list — ai-single-unit-editor должен быть в списке",
     "python scripts/subproject_context.py ai-single-unit-editor --brief — поля goal, current_focus, must_read_first, main_files, commands",
     "python scripts/subproject_context.py ai-single-unit-editor --opencode — task memory, safety rules, suggested verification",
-    "python scripts/subproject_context.py ai-single-unit-editor --files — main_files, planned_files, test_files, manual_docs",
-    "После реализации следующих этапов: AI Node Editor открывается в новой вкладке, показывает статус local engine и не считает тяжёлый AI в браузере"
+    "python scripts/subproject_context.py ai-single-unit-editor --files — main_files, planned_files, test_files, manual_docs"
   ],
   "zworker": {
     "boundaries": [
