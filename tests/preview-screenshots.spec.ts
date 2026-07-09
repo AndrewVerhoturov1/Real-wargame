@@ -120,7 +120,7 @@ test('capture AI Node Editor screenshots and interactions', async ({ page }) => 
 
   await expect(page.getByRole('heading', { name: /Soldier AI Node Editor/ })).toBeVisible();
   await expect(page.locator('.graph-canvas')).toBeVisible();
-  await expect(page.locator('.graph-node')).toHaveCountGreaterThan(3);
+  await expect(page.locator('.graph-node').nth(3)).toBeVisible();
   await page.waitForTimeout(500);
   await saveScreenshot(page, '08-ai-editor-initial-compact.png');
 
@@ -162,7 +162,7 @@ test('capture AI Node Editor screenshots and interactions', async ({ page }) => 
   await page.waitForTimeout(250);
   await saveScreenshot(page, '13-ai-editor-context-menu.png');
 
-  await page.keyboard.press('Escape');
+  await page.mouse.click(20, 60);
   await page.getByRole('button', { name: /Auto 4/ }).click();
   await expect(page.locator('text=Point 4 OK')).toBeVisible();
   await expect(page.locator('text=Point 5 OK')).toBeVisible();
