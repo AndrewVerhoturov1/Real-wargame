@@ -35,7 +35,7 @@ real-wargame-preview
 - AI Node Editor в отдельной вкладке `/ai-node-editor.html`;
 - authoring в AI Node Editor: добавить/перетащить/связать/изменить ноду, экспорт/импорт JSON;
 - компактный AI Node Editor UI: скрываемые боковые панели, сворачиваемая нижняя консоль, zoom/pan canvas, Fit, контекстное меню и drag-link через порт ноды;
-- универсальная пороговая нода `BlackboardValueAbove`: вместо отдельных `DangerAbove`/`StressAbove` выбирает `sourceKey` из списка параметров и сравнивает его с `threshold`.
+- универсальная пороговая нода `BlackboardValueAbove`: вместо отдельных `DangerAbove`/`StressAbove` выбирает `sourceKey`, режим `comparison` (`above`/`below`) и `threshold`.
 
 Главный смысл проекта на этом этапе — не “красивая RTS”, а удобная лаборатория карты, видимости, укрытий и будущего поведения солдат.
 
@@ -80,7 +80,7 @@ Run-AI-Engine.bat
 масштабировать canvas колесом мыши и кнопками + / - / Fit;
 связывать parent → child протягиванием линии из правой точки-порта ноды;
 открывать контекстное меню правым кликом по ноде;
-настраивать универсальную пороговую ноду: выбрать sourceKey и threshold без JSON;
+настраивать универсальную пороговую ноду без JSON: выбрать sourceKey, режим «параметр выше порога» / «параметр ниже порога» и threshold;
 редактировать displayName/displayNameRu/description/descriptionRu/parameters;
 удалять ноды, кроме root;
 хранить рабочий граф и позиции в localStorage;
