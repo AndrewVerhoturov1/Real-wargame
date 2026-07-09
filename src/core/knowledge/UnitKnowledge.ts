@@ -1,16 +1,29 @@
 import { distance, type GridPosition } from '../geometry';
-import { getCell, type MapObject, type MapObjectKind, type TacticalMap } from '../map/MapModel';
+import { type MapObject, type MapObjectKind, type TacticalMap } from '../map/MapModel';
 import type { PressureZone } from '../pressure/PressureZone';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
 import { computeLineOfSight } from '../visibility/LineOfSight';
 
 const NEAR_COVER_METERS = 35;
-const PLAN_COVER_METERS = 130;
-const MAX_COVER_ROWS = 8;
+const PLAN_COVER_METERS = 500;
+const MAX_COVER_ROWS = 10;
 const MAX_DANGER_ROWS = 6;
+const FAR_FOREST_BUCKET_CELLS = 5;
 
-const COVER_KINDS = new Set<MapObjectKind>(['tree', 'rock', 'structure', 'cover', 'ditch', 'crates', 'fence', 'logs']);
+const COVER_KINDS = new Set<MapObjectKind>([
+  'tree',
+  'rock',
+  'structure',
+  'cover',
+  'ditch',
+  'crates',
+  'fence',
+  'post',
+  'logs',
+  'well',
+  'bridge',
+]);
 
 export interface KnowledgeCover {
   id: string;
@@ -109,7 +122,7 @@ function buildObjectCovers(map: TacticalMap, unit: UnitModel): KnowledgeCover[] 
 
 function buildForestCovers(map: TacticalMap, unit: UnitModel): KnowledgeCover[] {
   const covers: KnowledgeCover[] = [];
-  const usedBuckets = new Set<string>();
+  const usedFarBuckets = new Set<string>();
 
   for (const cell of map.cells) {
     if (cell.forest === 0) {
@@ -123,18 +136,21 @@ function buildForestCovers(map: TacticalMap, unit: UnitModel): KnowledgeCover[] 
       continue;
     }
 
-    const bucket = `${Math.floor(cell.x / 2)}:${Math.floor(cell.y / 2)}:${cell.forest}`;
-    if (usedBuckets.has(bucket)) {
-      continue;
+    const isNear = distanceMeters <= NEAR_COVER_METERS;
+    if (!isNear) {
+      const bucket = `${Math.floor(cell.x / FAR_FOREST_BUCKET_CELLS)}:${Math.floor(cell.y / FAR_FOREST_BUCKET_CELLS)}:${cell.forest}`;
+      if (usedFarBuckets.has(bucket)) {
+        continue;
+      }
+      usedFarBuckets.add(bucket);
     }
 
     const lineOfSight = computeLineOfSight(map, unit, { x, y });
-    const visibleNow = !lineOfSight.blocked || distanceMeters <= NEAR_COVER_METERS;
-    if (!visibleNow && distanceMeters > NEAR_COVER_METERS) {
+    const visibleNow = !lineOfSight.blocked || isNear;
+    if (!visibleNow && !isNear) {
       continue;
     }
 
-    usedBuckets.add(bucket);
     covers.push({
       id: `forest-${cell.x}-${cell.y}`,
       labelRu: cell.forest === 2 ? 'густой лес' : 'редкий лес',
@@ -142,10 +158,10 @@ function buildForestCovers(map: TacticalMap, unit: UnitModel): KnowledgeCover[] 
       x,
       y,
       distanceMeters,
-      quality: Math.max(20, Math.min(85, (cell.forest === 2 ? 70 : 48) - distanceMeters * 0.18)),
+      quality: Math.max(20, Math.min(85, (cell.forest === 2 ? 70 : 48) - distanceMeters * 0.06)),
       sourceRu: visibleNow ? 'вижу сам' : 'рядом / по памяти',
       visibleNow,
-      currentCover: distanceMeters <= NEAR_COVER_METERS,
+      currentCover: isNear,
     });
   }
 
@@ -210,15 +226,15 @@ function coverQualityForObject(object: MapObject, distanceMeters: number): numbe
     ditch: 82,
     logs: 76,
     rock: 72,
-    crates: 64,
+    crates: 68,
     fence: 58,
     tree: 50,
-    post: 30,
-    well: 25,
-    bridge: 20,
+    post: 54,
+    well: 44,
+    bridge: 38,
   };
 
-  return Math.max(5, Math.min(100, Math.round((base[object.kind] ?? 35) - distanceMeters * 0.18)));
+  return Math.max(5, Math.min(100, Math.round((base[object.kind] ?? 35) - distanceMeters * 0.08)));
 }
 
 function formatObjectKind(kind: MapObjectKind): string {
@@ -228,11 +244,11 @@ function formatObjectKind(kind: MapObjectKind): string {
     structure: 'дом',
     cover: 'укрытие',
     ditch: 'канава',
-    crates: 'ящики',
+    crates: 'ящики / бочки',
     fence: 'забор',
-    post: 'пост',
+    post: 'пост / бочки',
     logs: 'брёвна',
-    well: 'колодец',
+    well: 'колодец / круглый объект',
     bridge: 'мост',
   };
   return names[kind] ?? kind;
