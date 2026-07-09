@@ -12,6 +12,7 @@ const requiredFiles = [
   'src/ai-node-editor/ai-node-editor.css',
   'src/ai-node-editor/ai-node-editor-authoring.css',
   'src/ai-node-editor/human-node-ui.css',
+  'src/ai-game-bridge.css',
   'src/core/ai/AiGameBridge.ts',
   'src/data/ai/soldier_default_survival_graph.json',
   'scripts/local_ai_engine.mjs',
@@ -43,6 +44,7 @@ expectNotContains(main, 'FindBestCover', 'Редактор не должен с�
 const appMain = readText('src/main.ts');
 expectContains(appMain, 'installAiGameBridge', 'Игра должна подключать мост AI-графа к SimulationState.');
 expectContains(appMain, 'installAiGameBridge(state)', 'Мост должен запускаться после создания state.');
+expectContains(appMain, './ai-game-bridge.css', 'Игра должна подключать стили реплик бойца.');
 
 const gameBridge = readText('src/core/ai/AiGameBridge.ts');
 expectContains(gameBridge, 'GRAPH_STORAGE_KEY', 'Мост должен читать тот же graph storage v6, что редактор.');
@@ -72,8 +74,8 @@ const htmlOverlay = readText('src/rendering/HtmlOverlayRenderer.ts');
 expectContains(htmlOverlay, 'renderAiSpeechLabels', 'HTML overlay должен рисовать реплики над бойцами.');
 expectContains(htmlOverlay, 'unit-speech-label', 'HTML overlay должен иметь класс реплики бойца.');
 
-const styles = readText('src/styles.css');
-expectContains(styles, '.unit-speech-label', 'CSS должен оформлять реплику бойца над юнитом.');
+const speechCss = readText('src/ai-game-bridge.css');
+expectContains(speechCss, '.unit-speech-label', 'CSS должен оформлять реплику бойца над юнитом.');
 
 const nodeTypes = readText('src/core/ai/AiNodeTypes.ts');
 for (const needle of [
