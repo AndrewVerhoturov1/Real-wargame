@@ -12,12 +12,16 @@ const requiredFiles = [
   'src/ai-node-editor/main.ts',
   'src/ai-node-editor/human-node-ui.ts',
   'src/ai-node-editor/editor-click-guard.ts',
+  'src/ai-node-editor/runtime-debug-overlay.ts',
+  'src/ai-node-editor/runtime-debug-overlay.css',
   'src/ai-node-editor/ai-node-editor.css',
   'src/ai-node-editor/ai-node-editor-authoring.css',
   'src/ai-node-editor/human-node-ui.css',
   'src/ai-game-bridge.css',
   'src/shared/AppShellMenu.ts',
   'src/shared/app-shell-menu.css',
+  'src/core/simulation/SimulationState.ts',
+  'src/rendering/PixiApp.ts',
   'src/core/ai/AiGameBridge.ts',
   'src/core/ai/AiGraphRunner.ts',
   'src/data/ai/soldier_default_survival_graph.json',
@@ -37,12 +41,31 @@ const html = readText('ai-node-editor.html');
 expectContains(html, '/src/ai-node-editor/editor-click-guard.ts', 'HTML должен подключать select/click guard до main.ts.');
 expectContains(html, '/src/ai-node-editor/main.ts', 'HTML должен подключать AI Node Editor entrypoint.');
 expectContains(html, '/src/ai-node-editor/human-node-ui.ts', 'HTML должен подключать human node UI layer.');
+expectContains(html, '/src/ai-node-editor/runtime-debug-overlay.ts', 'HTML должен подключать runtime debug overlay.');
+expectContains(html, '/src/ai-node-editor/runtime-debug-overlay.css', 'HTML должен подключать стили runtime debug overlay.');
 expectContains(html, 'real-wargame.ai-node-editor.graph.v6', 'HTML должен bootstrap-ить новый чистый graph storage v6.');
 expectNotContains(html, 'graph.v5', 'Старый graph storage v5 не должен поднимать старый грязный canvas.');
 
 const guard = readText('src/ai-node-editor/editor-click-guard.ts');
 for (const needle of ['.human-node-panel', '.inspector-panel', '.app-shell-menu', 'select', 'input', 'textarea']) {
   expectContains(guard, needle, `Select guard должен защищать: ${needle}`);
+}
+
+const runtimeDebug = readText('src/ai-node-editor/runtime-debug-overlay.ts');
+for (const needle of [
+  'real-wargame.ai-node-editor.debug.v1',
+  'ai-graph-runtime-debug',
+  'runtime-debug-winner',
+  'runtime-debug-score',
+  'runtime-debug-pass',
+  'runtime-debug-fail',
+  'Победила',
+  'След ИИ',
+]) expectContains(runtimeDebug, needle, `Runtime debug overlay должен содержать: ${needle}`);
+
+const runtimeDebugCss = readText('src/ai-node-editor/runtime-debug-overlay.css');
+for (const needle of ['ai-runtime-debug-panel', 'runtime-debug-winner', 'runtime-debug-score', 'runtime-debug-badge']) {
+  expectContains(runtimeDebugCss, needle, `Runtime debug CSS должен содержать: ${needle}`);
 }
 
 const labLaunchHtml = readText('lab-launch.html');
@@ -61,12 +84,27 @@ for (const legacy of ['DangerAbove', 'StressAbove', 'ScoreDanger', 'FindBestCove
   expectNotContains(main, legacy, `Редактор не должен держать legacy ${legacy}.`);
 }
 
+const indexHtml = readText('index.html');
+expectContains(indexHtml, 'pause-toggle', 'HUD должен иметь кнопку паузы.');
+
 const appMain = readText('src/main.ts');
 expectContains(appMain, 'installAiGameBridge', 'Игра должна подключать мост AI-графа к SimulationState.');
 expectContains(appMain, 'installAiGameBridge(state)', 'Мост должен запускаться после создания state.');
 expectContains(appMain, './ai-game-bridge.css', 'Игра должна подключать стили реплик бойца.');
 expectContains(appMain, 'installAppShellMenu', 'Игра должна подключать общее верхнее меню.');
 expectContains(appMain, "mode: 'game'", 'Игра должна использовать game-режим общего меню.');
+expectContains(appMain, 'pause-toggle', 'Игра должна подключать кнопку паузы.');
+expectContains(appMain, 'state.paused = !state.paused', 'Кнопка паузы должна менять state.paused.');
+expectContains(appMain, 'syncPauseStateToDebugTrace', 'Пауза должна обновлять debug trace для редактора.');
+
+const simulationState = readText('src/core/simulation/SimulationState.ts');
+expectContains(simulationState, 'paused: boolean', 'SimulationState должен иметь флаг paused.');
+expectContains(simulationState, 'paused: false', 'Начальное состояние должно быть не на паузе.');
+
+const pixiApp = readText('src/rendering/PixiApp.ts');
+expectContains(pixiApp, 'if (!this.state.paused)', 'PixiApp должен останавливать tickSimulation на паузе.');
+expectContains(pixiApp, 'forceRender', 'PixiApp должен уметь принудительно обновлять HUD после паузы.');
+expectContains(pixiApp, 'Пауза', 'Debug panel должен показывать статус паузы.');
 
 const shellMenu = readText('src/shared/AppShellMenu.ts');
 for (const needle of [
@@ -117,6 +155,9 @@ expectContains(gameBridge, 'createTacticalHost', 'Мост должен дава
 expectContains(gameBridge, 'applyGraphEffects', 'Мост должен применять effects runner-а к UnitModel.');
 expectContains(gameBridge, 'buildBlackboardForUnit', 'Мост должен собирать blackboard из состояния игры.');
 expectContains(gameBridge, 'real-wargame.ai-node-editor.graph.v6', 'Мост должен брать граф из localStorage v6.');
+expectContains(gameBridge, 'real-wargame.ai-node-editor.debug.v1', 'Мост должен писать runtime debug trace для редактора.');
+expectContains(gameBridge, 'publishRuntimeDebugTrace', 'Мост должен публиковать последний след решения GraphRunner.');
+expectContains(gameBridge, 'state.paused', 'Мост не должен пересчитывать AI во время паузы.');
 expectNotContains(gameBridge, 'case \'ParameterScore\'', 'Score-ноды не должны быть заглушками внутри bridge.');
 expectNotContains(gameBridge, 'is accepted by the game bridge but not used', 'Bridge больше не должен говорить, что score-ноды только допустимы.');
 
