@@ -92,22 +92,13 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     descriptionRu: 'Проверяет, находится ли солдат под текущим огневым давлением.',
     canHaveChildren: false,
   },
-  DangerAbove: {
-    type: 'DangerAbove',
+  BlackboardValueAbove: {
+    type: 'BlackboardValueAbove',
     category: 'condition',
-    label: 'Danger Above Threshold',
-    description: 'Compares current danger with a threshold.',
-    labelRu: 'Опасность выше порога',
-    descriptionRu: 'Сравнивает текущую опасность с порогом.',
-    canHaveChildren: false,
-  },
-  StressAbove: {
-    type: 'StressAbove',
-    category: 'condition',
-    label: 'Stress Above Threshold',
-    description: 'Compares current stress with a threshold.',
-    labelRu: 'Стресс выше порога',
-    descriptionRu: 'Сравнивает стресс солдата с порогом.',
+    label: 'Blackboard Value Above Threshold',
+    description: 'Compares one selected numeric soldier-memory value with a threshold.',
+    labelRu: 'Параметр выше порога',
+    descriptionRu: 'Сравнивает выбранный числовой параметр памяти солдата с порогом.',
     canHaveChildren: false,
   },
   CoverNearby: {
