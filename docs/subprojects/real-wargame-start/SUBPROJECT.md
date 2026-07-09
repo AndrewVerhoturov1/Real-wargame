@@ -1,53 +1,123 @@
-# 2D Tactical Command Game — Project Start
+# 2D Tactical Command Game — RTS Foundation / Soldier Behavior Lab
 
 ## Goal
 
-Запустить проект **2D Tactical Command Game** (PixiJS + TypeScript + Vite) согласно мастер-документу. Первый интегрированный видимый результат — **Tactical Board Prototype v0.1**: тактическая карта 20×20, камера, тестовые подразделения, выделение, приказы движения, линии приказов и debug overlay.
+Собрать рабочую основу **2D Tactical Command Game / Soldier Behavior Lab** на PixiJS + TypeScript + Vite: карта, юниты, редактор, высоты, лес, укрытия, видимость, базовый интерфейс и удобная проверка через preview. Главный фокус проекта — будущие “мозги солдат”, а не стратегический ИИ командира.
 
 ## Current focus
 
-Интегрировать и проверить Tactical Board Prototype v0.1:
-- Vite + TypeScript + PixiJS runtime;
-- карта-сетка 20×20, размер клетки 32 px;
-- zoom колесом мыши и pan средней кнопкой либо Space + drag;
-- 2–5 тестовых подразделений;
-- выделение левой кнопкой;
-- приказ движения правой кнопкой;
-- линия приказа и прямолинейное движение;
-- debug overlay координат, выбранного подразделения, цели и zoom.
+Этап RTS-заготовки в целом готов и считается рабочей базой для следующих задач. Дальше правки интерфейса, карты, видимости и редактора можно делать по ходу разработки поведения солдат.
+
+Текущее состояние preview:
+
+- карта `64×40`, `1 клетка = 10 м`, `cellSize = 24`;
+- игровой режим с верхней панелью, правыми вкладками и фиксированной нижней карточкой юнита;
+- отдельный режим редактора с вкладками: инструмент, карта, создание, выбранное, сцена;
+- редактор умеет создавать/двигать/масштабировать/вращать предметы, создавать юниты и зоны, рисовать высоты и лес;
+- экспорт и загрузка JSON сцены через браузер;
+- отчёт производительности из браузера;
+- высоты `-2..+4` отображаются цветными кривыми зонами, а не текстовыми `+1` на каждой клетке;
+- лес — отдельный слой `0/1/2`: нет леса, редкий лес, густой лес;
+- Alt-линия видимости показывает зелёную видимую часть, красную закрытую часть, расстояния в метрах и причину преграды;
+- расчёт видимости использует сглаженный реальный рельеф, лес и физическую высоту объектов;
+- слой `Реальный рельеф` показывает фактическую сглаженную высоту и кэшируется отдельно от мыши/подсветки;
+- знания выбранного юнита разделены на ближние укрытия, дальние укрытия для плана и опасность.
 
 ## Key decisions
 
-- **Практический первый шаг**: Tactical Board Prototype v0.1 идёт перед Map Workshop, чтобы проверить базовый командный цикл.
-- **Стек**: PixiJS + TypeScript + Vite + JSON; более тяжёлые технологии добавляются только по необходимости.
-- **Архитектура**: PixiJS отвечает за rendering/input, core хранит карту, юниты, приказы и simulation tick; core не импортирует PixiJS.
-- **Data-first**: тестовая карта и подразделения загружаются из JSON.
-- **Граница v0.1**: без боя, врагов, AI, pathfinding, line of sight, укрытий, редактора карты, сервера и БД.
+- **RTS-заготовка готова как основа**: это не финальная игра, а рабочий стенд для карты, редактора, видимости, укрытий и будущего поведения солдат.
+- **Стек**: PixiJS + TypeScript + Vite + JSON. Godot к этому репозиторию не относится.
+- **Архитектура**: PixiJS отвечает за rendering/input, `core` хранит карту, юниты, приказы, видимость, сенсоры и simulation tick. `core` не должен импортировать PixiJS.
+- **Data-first**: карта, юниты и зоны хранятся в JSON; браузерный редактор экспортирует JSON сцены, но не пишет напрямую в исходные файлы проекта.
+- **Масштаб карты**: текущий базовый масштаб — 1 клетка = 10 м. Все важные расстояния в интерфейсе показывать в метрах, а не в клетках.
+- **Высоты**: уровни `-2, -1, 0, +1, +2, +3, +4`; визуально показывать кривыми цветными зонами/линиями, не россыпью чисел на клетках. Цифры высот — только как отладочный переключатель.
+- **Реальный рельеф**: линии высот являются визуальной картой, а расчёт видимости использует сглаженный слой высоты. Линии высот не должны работать как вертикальные стены.
+- **Производительность рельефа**: слой `Реальный рельеф` должен быть отдельным кэшированным слоем, не пересобираться от движения мыши и Alt-линии.
+- **Лес**: лес — слой карты с вариантами `0/1/2`. В знаниях юнита ближний лес показывать подробнее, дальний лес — компактными ориентирами.
+- **Укрытия**: ближние укрытия нужны для текущего использования, дальние укрытия — для планирования. Списки и подписи должны показывать метры.
+- **Физическая высота объектов**: предметы имеют `losHeightMeters`. Дом, дерево, камень, бочки/ящики, брёвна, забор и т.п. могут закрывать видимость только с учётом своей высоты и высоты рельефа.
+- **Alt-линия видимости**: зелёный участок — видно, красный — закрыто, подпись — HTML-плашка с расстоянием в метрах и причиной преграды.
+- **Интерфейс**: игровой режим и редактор не должны быть одной длинной правой простынёй. Игровой режим — как стратегия: карта + верхняя панель + правая вкладочная панель + нижняя карточка юнита. Редактор — как редактор: вкладки и инструменты.
+- **Вид по умолчанию**: `antialias: true`, view cones выключены, цифры высот выключены, сетка может переключаться.
+- **Пользовательская проверка**: пользователю давать `scripts/windows/run-preview.bat` и понятный GO/NO-GO, не просить Git/терминал.
 
 ## Read first
 
-1. `docs/subprojects/real-wargame-start/CODEX_HANDOFF_TAC_BOARD_V0_1.md`
-2. `docs/subprojects/real-wargame-start/SUBPROJECT.md`
-3. `docs/subprojects/real-wargame-start/subproject.json`
-4. `docs/subprojects/real-wargame-start/JOURNAL.md`
-5. `Inbox/MASTER_PROJECT_S_2D_TACTICAL_COMMAND_GAME.md` — книга проекта, когда нужен более широкий продуктовый контекст
+1. `docs/subprojects/real-wargame-start/SUBPROJECT.md`
+2. `docs/subprojects/real-wargame-start/subproject.json`
+3. `docs/subprojects/real-wargame-start/JOURNAL.md`
+4. `docs/subprojects/real-wargame-start/RTS_FOUNDATION_DECISIONS.md`
+5. `docs/subprojects/real-wargame-start/test-program.md`
+6. `Inbox/MASTER_PROJECT_S_2D_TACTICAL_COMMAND_GAME.md` — книга проекта, когда нужен более широкий продуктовый контекст
+
+Если задача про запуск, скриншоты, визуальную проверку или preview `.bat`, сначала читать:
+
+```text
+.agents/skills/real-wargame-local-preview/SKILL.md
+```
+
+## Main files
+
+- `src/main.ts`
+- `src/core/map/MapModel.ts`
+- `src/core/simulation/SimulationState.ts`
+- `src/core/simulation/SimulationTick.ts`
+- `src/core/visibility/LineOfSight.ts`
+- `src/core/terrain/SmoothTerrain.ts`
+- `src/core/knowledge/UnitKnowledge.ts`
+- `src/input/BoardInputController.ts`
+- `src/input/CameraController.ts`
+- `src/rendering/PixiApp.ts`
+- `src/rendering/PixiMapRenderer.ts`
+- `src/rendering/PixiOverlayRenderer.ts`
+- `src/rendering/PixiUnitRenderer.ts`
+- `src/rendering/HtmlOverlayRenderer.ts`
+- `src/rendering/terrainStyle.ts`
+- `src/ui/EditorControls.ts`
+- `src/ui/GameHudControls.ts`
+- `src/ui/SceneExport.ts`
+- `src/ui/SceneExportControls.ts`
+- `src/ui/PerformanceReportControls.ts`
+- `src/data/maps/test_map.json`
+- `src/data/units/test_units.json`
+- `src/ui-layout.css`
+- `src/styles.css`
+- `tests/preview-screenshots.spec.ts`
 
 ## Boundaries
 
-- Читать только файлы, относящиеся к текущей задаче и подпроекту.
-- Не менять `docs/ai/`, `AGENTS.md` или другие подпроекты без явной необходимости.
-- В v0.1 не добавлять бой, врагов, подавление, мораль, AI, GOAP, HTN, Utility AI, pathfinding, line of sight, баллистику, артиллерию, связь, редактор карты, сервер, БД или сложный UI-фреймворк.
-- Сохранять разделение core/rendering/input/data; core не должен импортировать PixiJS.
+- Работать в `real-wargame-preview`. `main` не менять и не мержить без явного GO пользователя.
+- Не просить пользователя выполнять Git/терминал/ветки руками.
+- Не откатывать сглаживание/кэш рельефа и не возвращать `antialias: false` как постоянное решение.
+- Не ломать экспорт/загрузку JSON сцены.
+- Не смешивать эту RTS-заготовку с финальной системой боя. Бой, баллистика, полноценный pathfinding, связь, мораль и сложный ИИ — следующие этапы.
+- Сохранять разделение core/rendering/input/data; `core` не должен импортировать PixiJS.
 
 ## Testing
 
-Repository-level checks:
-- changed-file scope matches the tactical-board runtime and this subproject memory;
-- `AGENTS.md`, `docs/ai/**` and `docs/subprojects/github-collaboration/**` remain unchanged;
-- JSON and TypeScript paths are present at the documented repo-relative locations.
+Основная ручная проверка для пользователя:
 
-Needs local verification:
-- run `npm install` and `npm run build`;
-- run `npm run dev` and open the browser;
-- select each counter, issue a right-click move order, verify movement/order line/debug HUD;
-- verify wheel zoom and middle-mouse or Space + left-drag pan.
+```text
+scripts/windows/run-preview.bat
+```
+
+Проверять:
+
+- игра открывается без ручных команд;
+- карта выглядит как физическая карта, без россыпи `+1` по умолчанию;
+- зум и перетаскивание карты работают;
+- игровой интерфейс не превращается в длинную правую простыню;
+- редактор открывается отдельным режимом и остаётся во вкладках;
+- кисти высот/леса работают;
+- JSON сцены скачивается и загружается обратно;
+- Alt-линия видимости показывает метры и причину преграды;
+- с высоты можно видеть поверх низких предметов, если их физическая высота не перекрывает луч;
+- ближние/дальние укрытия и опасность показываются во вкладке `Слои`.
+
+Автоматическая визуальная проверка:
+
+- `.github/workflows/preview-screenshots.yml`
+- `tests/preview-screenshots.spec.ts`
+- artifact: `real-wargame-preview-screenshots`
+
+Честно различать GitHub Actions screenshot check и локальную проверку на ПК пользователя.
