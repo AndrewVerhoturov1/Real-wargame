@@ -124,7 +124,7 @@ test('capture AI Node Editor screenshots and interactions', async ({ page }) => 
   await page.waitForTimeout(500);
   await saveScreenshot(page, '08-ai-editor-initial-compact.png');
 
-  await page.getByRole('button', { name: '+ Add node' }).click();
+  await page.getByRole('button', { name: /\+ Add node|\+ Добавить ноду/ }).click();
   await expect(page.locator('.palette-panel')).toBeVisible();
   await page.waitForTimeout(250);
   await saveScreenshot(page, '09-ai-editor-palette-open.png');
