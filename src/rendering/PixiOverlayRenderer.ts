@@ -165,18 +165,16 @@ function drawVisibilityProbe(container: Container, state: SimulationState): void
 
   container.addChild(graphics);
 
-  const text = new Text({
-    text: result.blocked
-      ? `До курсора: ${Math.round(result.totalDistanceMeters)} м\nВидно: ${Math.round(result.visibleDistanceMeters)} м\nПреграда: ${result.blockerReasonRu}`
-      : `До курсора: ${Math.round(result.totalDistanceMeters)} м\nПрямая видимость есть`,
-    style: {
-      fill: 0xfff2a8,
-      fontFamily: 'Arial, Helvetica, sans-serif',
-      fontSize: 12,
-      fontWeight: '700',
-      stroke: 0x10160f,
-      strokeThickness: 3,
-    },
+  const label = result.blocked
+    ? `До курсора: ${Math.round(result.totalDistanceMeters)} м\nВидно: ${Math.round(result.visibleDistanceMeters)} м\nПреграда: ${result.blockerReasonRu}`
+    : `До курсора: ${Math.round(result.totalDistanceMeters)} м\nПрямая видимость есть`;
+  const text = new Text(label, {
+    fill: 0xfff2a8,
+    fontFamily: 'Arial, Helvetica, sans-serif',
+    fontSize: 12,
+    fontWeight: '700',
+    stroke: 0x10160f,
+    strokeThickness: 3,
   });
   text.position.set(target.x * cellSize + 10, target.y * cellSize + 10);
   container.addChild(text);
