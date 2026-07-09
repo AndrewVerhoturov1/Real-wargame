@@ -100,7 +100,7 @@ function buildExportedScene(state: SimulationState): ExportedSceneData {
         y: roundThree(object.y),
         widthCells: roundThree(object.widthCells),
         heightCells: roundThree(object.heightCells),
-        losHeightMeters: roundOne(object.losHeightMeters),
+        losHeightMeters: roundOne(object.losHeightMeters ?? 1),
         rotationDegrees: roundOne(radiansToDegrees(object.rotationRadians)),
         label: object.labels?.en,
         labelRu: object.labels?.ru,
