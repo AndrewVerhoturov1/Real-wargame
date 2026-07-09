@@ -6,6 +6,7 @@ import type { UnitModel } from '../units/UnitModel';
 const ELEVATION_STEP_METERS = 2;
 const SAMPLE_STEP_CELLS = 0.12;
 const TERRAIN_BLOCK_MARGIN_METERS = 0.95;
+const OBJECT_BLOCK_MARGIN_METERS = 0.15;
 
 export interface LineOfSightProbeResult {
   origin: GridPosition;
@@ -49,14 +50,22 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
     };
     const currentDistanceMeters = totalDistanceMeters * factor;
     const cell = getCell(map, Math.floor(sample.x), Math.floor(sample.y));
+    const lineHeight = lerp(originEye, targetEye, factor);
 
     if (!cell) {
       return blockedResult(origin, target, totalDistanceMeters, currentDistanceMeters, sample, 'край карты');
     }
 
-    const objectBlocker = findObjectBlocker(map.objects, sample, origin);
+    const objectBlocker = findObjectBlocker(map, sample, origin, lineHeight);
     if (objectBlocker) {
-      return blockedResult(origin, target, totalDistanceMeters, currentDistanceMeters, sample, formatObjectBlocker(objectBlocker));
+      return blockedResult(
+        origin,
+        target,
+        totalDistanceMeters,
+        currentDistanceMeters,
+        sample,
+        `${formatObjectBlocker(objectBlocker)} / высота ${objectBlocker.losHeightMeters} м`,
+      );
     }
 
     if (cell.forest > 0) {
@@ -78,7 +87,6 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
 
     const smoothHeightLevel = sampleSmoothHeightLevel(map, sample.x, sample.y);
     const groundHeight = smoothHeightLevel * ELEVATION_STEP_METERS;
-    const lineHeight = lerp(originEye, targetEye, factor);
     const isNearOrigin = currentDistanceMeters < map.metersPerCell * 0.7;
     const isNearTarget = totalDistanceMeters - currentDistanceMeters < map.metersPerCell * 0.7;
 
@@ -124,8 +132,13 @@ function blockedResult(
   };
 }
 
-function findObjectBlocker(objects: MapObject[], sample: GridPosition, origin: GridPosition): MapObject | null {
-  for (const object of objects) {
+function findObjectBlocker(
+  map: TacticalMap,
+  sample: GridPosition,
+  origin: GridPosition,
+  lineHeightMeters: number,
+): MapObject | null {
+  for (const object of map.objects) {
     if (!blocksLineOfSight(object)) {
       continue;
     }
@@ -137,7 +150,14 @@ function findObjectBlocker(objects: MapObject[], sample: GridPosition, origin: G
     const halfWidth = Math.max(0.35, object.widthCells / 2);
     const halfHeight = Math.max(0.35, object.heightCells / 2);
 
-    if (Math.abs(sample.x - object.x) <= halfWidth && Math.abs(sample.y - object.y) <= halfHeight) {
+    if (Math.abs(sample.x - object.x) > halfWidth || Math.abs(sample.y - object.y) > halfHeight) {
+      continue;
+    }
+
+    const objectGround = sampleSmoothHeightLevel(map, object.x, object.y) * ELEVATION_STEP_METERS;
+    const objectTop = objectGround + object.losHeightMeters;
+
+    if (objectTop + OBJECT_BLOCK_MARGIN_METERS >= lineHeightMeters) {
       return object;
     }
   }
@@ -146,6 +166,10 @@ function findObjectBlocker(objects: MapObject[], sample: GridPosition, origin: G
 }
 
 function blocksLineOfSight(object: MapObject): boolean {
+  if (object.losHeightMeters <= 0.05) {
+    return false;
+  }
+
   switch (object.kind) {
     case 'structure':
     case 'rock':
