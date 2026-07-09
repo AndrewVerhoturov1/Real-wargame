@@ -118,7 +118,7 @@ test('capture AI Node Editor screenshots and interactions', async ({ page }) => 
   await page.addInitScript(() => window.localStorage.clear());
   await page.goto('/ai-node-editor.html');
 
-  await expect(page.getByRole('heading', { name: /Soldier AI Node Editor/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Soldier AI Node Editor|Редактор ИИ/ })).toBeVisible();
   await expect(page.locator('.graph-canvas')).toBeVisible();
   await expect(page.locator('.graph-node').nth(3)).toBeVisible();
   await page.waitForTimeout(500);
@@ -130,9 +130,37 @@ test('capture AI Node Editor screenshots and interactions', async ({ page }) => 
   await saveScreenshot(page, '09-ai-editor-palette-open.png');
 
   await page.getByRole('button', { name: /Danger Above Threshold/ }).click();
-  await page.waitForTimeout(350);
+  await page.waitForTimeout(500);
   await expect(page.locator('.graph-node.selected')).toBeVisible();
+  await expect(page.locator('.human-node-panel.danger-above')).toBeVisible();
+  await expect(page.locator('.human-threshold-slider')).toBeVisible();
+  await expect(page.locator('.developer-json-details')).not.toHaveAttribute('open', '');
   await saveScreenshot(page, '10-ai-editor-node-added.png');
+  await saveScreenshot(page, '15-danger-node-human-interface.png');
+
+  await page.locator('.human-threshold-slider').hover();
+  await page.waitForTimeout(2200);
+  await expect(page.locator('.human-tooltip')).toBeVisible();
+  await saveScreenshot(page, '16-danger-node-tooltip-after-hover.png');
+
+  await page.locator('.human-threshold-slider').evaluate((element) => {
+    const input = element as HTMLInputElement;
+    input.value = '45';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.locator('.human-danger-preview-slider').evaluate((element) => {
+    const input = element as HTMLInputElement;
+    input.value = '85';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(page.locator('.danger-result.pass')).toBeVisible();
+  await page.waitForTimeout(250);
+  await saveScreenshot(page, '17-danger-node-threshold-changed.png');
+
+  await page.getByRole('button', { name: /Save threshold|Сохранить порог/ }).click();
+  await page.waitForTimeout(450);
+  await expect(page.locator('.human-node-panel.danger-above')).toBeVisible();
+  await saveScreenshot(page, '18-danger-node-saved.png');
 
   await page.getByRole('button', { name: 'Fit' }).click();
   await page.waitForTimeout(250);
