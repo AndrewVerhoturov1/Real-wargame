@@ -1,5 +1,5 @@
 .ai-editor-shell {
-  grid-template-rows: 82px minmax(0, 1fr) 150px;
+  grid-template-rows: 82px minmax(0, 1fr) 150px !important;
 }
 
 .ai-editor-title h1 span {
@@ -26,7 +26,7 @@
 }
 
 .graph-workspace {
-  overflow: auto;
+  overflow: auto !important;
 }
 
 .graph-workspace::after {
@@ -37,12 +37,12 @@
 }
 
 .graph-svg {
-  width: 1680px;
-  height: 1160px;
+  width: 1680px !important;
+  height: 1160px !important;
 }
 
 .graph-node {
-  width: 220px;
+  width: 220px !important;
   user-select: none;
   touch-action: none;
 }
