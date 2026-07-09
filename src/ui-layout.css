@@ -15,6 +15,12 @@
   border-color: rgba(255, 242, 168, 0.42);
 }
 
+.real-relief-toggle[aria-pressed="true"] {
+  color: #121612;
+  background: #d9b85c;
+  border-color: #fff2a8;
+}
+
 .floating-editor-button,
 #vision-toggle {
   display: none !important;
@@ -230,9 +236,40 @@ input[type="checkbox"] {
   white-space: nowrap;
 }
 
+.compact-knowledge-row.near-cover-row {
+  border-color: rgba(255, 242, 168, 0.26);
+  background: rgba(255, 242, 168, 0.09);
+}
+
+.compact-knowledge-row.plan-cover-row {
+  border-color: rgba(255, 242, 168, 0.12);
+  background: rgba(255, 242, 168, 0.045);
+}
+
 .compact-knowledge-row.danger-row {
   border-color: rgba(255, 78, 61, 0.22);
   background: rgba(255, 78, 61, 0.07);
+}
+
+.los-probe-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: 260px;
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 242, 168, 0.32);
+  border-radius: 8px;
+  color: #fff2a8;
+  background: rgba(10, 13, 9, 0.9);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.38);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-shadow: 0 1px 2px #000;
+  white-space: pre-line;
+  pointer-events: none;
+  translate: 0 0;
 }
 
 body.editor-mode .floating-editor-button {
