@@ -1,5 +1,5 @@
 import { distance, type GridPosition } from '../geometry';
-import { getCell, type MapObject, type TacticalMap } from '../map/MapModel';
+import { getCell, type MapObject, type MapObjectKind, type TacticalMap } from '../map/MapModel';
 import { sampleSmoothHeightLevel } from '../terrain/SmoothTerrain';
 import type { UnitModel } from '../units/UnitModel';
 
@@ -64,7 +64,7 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
         totalDistanceMeters,
         currentDistanceMeters,
         sample,
-        `${formatObjectBlocker(objectBlocker)} / высота ${objectBlocker.losHeightMeters} м`,
+        `${formatObjectBlocker(objectBlocker)} / высота ${getObjectHeightMeters(objectBlocker)} м`,
       );
     }
 
@@ -155,7 +155,7 @@ function findObjectBlocker(
     }
 
     const objectGround = sampleSmoothHeightLevel(map, object.x, object.y) * ELEVATION_STEP_METERS;
-    const objectTop = objectGround + object.losHeightMeters;
+    const objectTop = objectGround + getObjectHeightMeters(object);
 
     if (objectTop + OBJECT_BLOCK_MARGIN_METERS >= lineHeightMeters) {
       return object;
@@ -166,7 +166,7 @@ function findObjectBlocker(
 }
 
 function blocksLineOfSight(object: MapObject): boolean {
-  if (object.losHeightMeters <= 0.05) {
+  if (getObjectHeightMeters(object) <= 0.05) {
     return false;
   }
 
@@ -185,6 +185,40 @@ function blocksLineOfSight(object: MapObject): boolean {
     case 'bridge':
     default:
       return false;
+  }
+}
+
+function getObjectHeightMeters(object: MapObject): number {
+  if (typeof object.losHeightMeters === 'number' && Number.isFinite(object.losHeightMeters)) {
+    return object.losHeightMeters;
+  }
+
+  return fallbackObjectHeightMeters(object.kind);
+}
+
+function fallbackObjectHeightMeters(kind: MapObjectKind): number {
+  switch (kind) {
+    case 'tree':
+      return 6;
+    case 'structure':
+      return 5;
+    case 'post':
+      return 1.35;
+    case 'crates':
+      return 1.25;
+    case 'rock':
+    case 'fence':
+      return 1.2;
+    case 'cover':
+    case 'well':
+      return 1.1;
+    case 'logs':
+      return 0.8;
+    case 'bridge':
+      return 0.8;
+    case 'ditch':
+    default:
+      return 0.2;
   }
 }
 
