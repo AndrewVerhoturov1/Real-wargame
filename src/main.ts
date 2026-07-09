@@ -20,8 +20,9 @@ const languageToggle = document.querySelector<HTMLButtonElement>('#language-togg
 const gridToggle = document.querySelector<HTMLButtonElement>('#grid-toggle');
 const visionToggle = document.querySelector<HTMLButtonElement>('#vision-toggle');
 const heightToggle = document.querySelector<HTMLButtonElement>('#height-toggle');
+const aiEditorOpenButton = document.querySelector<HTMLButtonElement>('#ai-editor-open');
 
-if (!root || !debugPanel || !languageToggle || !gridToggle || !visionToggle || !heightToggle) {
+if (!root || !debugPanel || !languageToggle || !gridToggle || !visionToggle || !heightToggle || !aiEditorOpenButton) {
   throw new Error('Tactical board root elements are missing.');
 }
 
@@ -45,6 +46,7 @@ installEditorControls(debugPanel, state);
 installTerrainBrushControls(debugPanel, state);
 installSceneExportControls(state);
 installPerformanceReportControls(() => tacticalBoard.downloadPerformanceReport());
+installAiEditorOpenButton(aiEditorOpenButton);
 tacticalBoard.start();
 forceRussianTopControls();
 
@@ -58,10 +60,17 @@ function forceRussianTopControls(): void {
   gridToggle.textContent = 'Сетка: вкл';
   visionToggle.textContent = 'Обзор: выкл';
   heightToggle.textContent = 'Цифры высоты: выкл';
+  aiEditorOpenButton.textContent = 'Редактор ИИ';
   gridToggle.setAttribute('aria-pressed', 'true');
   visionToggle.setAttribute('aria-pressed', 'false');
   heightToggle.setAttribute('aria-pressed', 'false');
   gridToggle.classList.remove('hud-toggle-off');
   visionToggle.classList.add('hud-toggle-off');
   heightToggle.classList.add('hud-toggle-off');
+}
+
+function installAiEditorOpenButton(button: HTMLButtonElement): void {
+  button.addEventListener('click', () => {
+    window.open('/ai-node-editor.html', '_blank', 'noopener,noreferrer');
+  });
 }
