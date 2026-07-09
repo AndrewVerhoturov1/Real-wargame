@@ -40,6 +40,8 @@ const state = createInitialState(
   unitsData as UnitData[],
   pressureZoneData as PressureZoneData[],
 );
+type PausableRuntimeState = typeof state & { paused?: boolean };
+
 const tacticalBoard = new PixiTacticalBoardApp(
   root,
   debugPanel,
@@ -101,16 +103,25 @@ function installPauseToggle(button: HTMLButtonElement, onChanged: () => void): v
 }
 
 function togglePause(button: HTMLButtonElement, onChanged: () => void): void {
-  state.paused = !state.paused;
+  setPaused(!getPaused());
   updatePauseToggle(button);
   syncPauseStateToDebugTrace();
   onChanged();
 }
 
+function getPaused(): boolean {
+  return Boolean((state as PausableRuntimeState).paused);
+}
+
+function setPaused(value: boolean): void {
+  (state as PausableRuntimeState).paused = value;
+}
+
 function updatePauseToggle(button: HTMLButtonElement): void {
-  button.textContent = state.paused ? 'Пауза: вкл' : 'Пауза: выкл';
-  button.setAttribute('aria-pressed', String(state.paused));
-  button.classList.toggle('hud-toggle-off', !state.paused);
+  const paused = getPaused();
+  button.textContent = paused ? 'Пауза: вкл' : 'Пауза: выкл';
+  button.setAttribute('aria-pressed', String(paused));
+  button.classList.toggle('hud-toggle-off', !paused);
 }
 
 function syncPauseStateToDebugTrace(): void {
@@ -119,7 +130,7 @@ function syncPauseStateToDebugTrace(): void {
     if (!raw) return;
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     if (parsed.kind !== 'ai-graph-runtime-debug') return;
-    parsed.paused = state.paused;
+    parsed.paused = getPaused();
     window.localStorage.setItem(DEBUG_STORAGE_KEY, JSON.stringify(parsed));
   } catch {
     // Debug state is optional; pause must keep working even if localStorage is unavailable.
