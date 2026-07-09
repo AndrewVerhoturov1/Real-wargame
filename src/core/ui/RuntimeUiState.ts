@@ -5,6 +5,10 @@ export interface KnowledgeOverlayRuntimeState {
   active: boolean;
 }
 
+export interface RealReliefOverlayRuntimeState {
+  active: boolean;
+}
+
 export interface VisibilityProbeRuntimeState {
   active: boolean;
   target: GridPosition | null;
@@ -12,6 +16,7 @@ export interface VisibilityProbeRuntimeState {
 
 interface RuntimeUiState {
   knowledgeOverlay: KnowledgeOverlayRuntimeState;
+  realReliefOverlay: RealReliefOverlayRuntimeState;
   visibilityProbe: VisibilityProbeRuntimeState;
 }
 
@@ -23,6 +28,16 @@ export function getKnowledgeOverlayState(state: SimulationState): KnowledgeOverl
 
 export function setKnowledgeOverlayActive(state: SimulationState, active: boolean): void {
   getRuntimeUiState(state).knowledgeOverlay.active = active;
+}
+
+export function getRealReliefOverlayState(state: SimulationState): RealReliefOverlayRuntimeState {
+  return getRuntimeUiState(state).realReliefOverlay;
+}
+
+export function toggleRealReliefOverlay(state: SimulationState): boolean {
+  const overlay = getRuntimeUiState(state).realReliefOverlay;
+  overlay.active = !overlay.active;
+  return overlay.active;
 }
 
 export function getVisibilityProbeState(state: SimulationState): VisibilityProbeRuntimeState {
@@ -41,6 +56,9 @@ function getRuntimeUiState(state: SimulationState): RuntimeUiState {
   if (!runtime) {
     runtime = {
       knowledgeOverlay: {
+        active: false,
+      },
+      realReliefOverlay: {
         active: false,
       },
       visibilityProbe: {
