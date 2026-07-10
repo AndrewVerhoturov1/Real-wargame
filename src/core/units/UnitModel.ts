@@ -32,6 +32,7 @@ export interface UnitData {
   behaviorProfile?: BehaviorProfileId;
   behavior?: Partial<BehaviorSettings>;
   soldier?: SoldierParameterOverrides;
+  runtime?: Partial<Pick<UnitBehaviorRuntime, 'stress' | 'suppression' | 'ammo' | 'weaponReady' | 'posture'>>;
 }
 
 export interface UnitModel {
@@ -59,6 +60,11 @@ export function normalizeUnits(data: UnitData[]): UnitModel[] {
   return data.map((unit) => {
     const fallbackLabel = unit.label ?? unit.id;
     const behaviorProfile = normalizeBehaviorProfileId(unit.behaviorProfile);
+    const behaviorRuntime = createBehaviorRuntime();
+
+    if (unit.runtime) {
+      Object.assign(behaviorRuntime, unit.runtime);
+    }
 
     return {
       id: unit.id,
@@ -72,7 +78,7 @@ export function normalizeUnits(data: UnitData[]): UnitModel[] {
         x: unit.x + 0.5,
         y: unit.y + 0.5,
       },
-      speedCellsPerSecond: unit.speedCellsPerSecond ?? 2.2,
+      speedCellsPerSecond: unit.speedCellsPerSecond ?? 0.5,
       order: null,
       heldItem: unit.heldItem ?? defaultHeldItemForUnitType(unit.type),
       facingRadians: degreesToRadians(unit.facingDegrees ?? 0),
@@ -80,7 +86,7 @@ export function normalizeUnits(data: UnitData[]): UnitModel[] {
       viewRangeCells: unit.viewRangeCells ?? 7,
       behaviorProfile,
       behaviorSettings: createBehaviorSettings(behaviorProfile, unit.behavior),
-      behaviorRuntime: createBehaviorRuntime(),
+      behaviorRuntime,
       soldier: createSoldierParameters(behaviorProfile, unit.soldier),
     };
   });
