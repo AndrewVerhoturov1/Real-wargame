@@ -55,7 +55,7 @@ test.afterAll(() => {
   aiEngineProcess = null;
 });
 
-test('simulation workspace, tactical layers and cover selection', async ({ page }) => {
+test('keeps information details open during live simulation updates and captures tactical layers', async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await page.goto('/');
   const canvas = page.locator('canvas');
@@ -66,7 +66,26 @@ test('simulation workspace, tactical layers and cover selection', async ({ page 
   await expect(page.locator('body')).toHaveClass(/workspace-simulation/);
   await selectFixtureSoldier(page, canvas);
   await page.waitForTimeout(700);
+
+  const sidebarBox = await page.locator('.simulation-sidebar').boundingBox();
+  expect((sidebarBox?.y ?? 0) + (sidebarBox?.height ?? 0)).toBeGreaterThan(880);
+
+  const skillsDetails = page.locator('.workspace-details').filter({ hasText: 'Навыки' });
+  await skillsDetails.locator('summary').click();
+  await expect(skillsDetails).toHaveAttribute('open', '');
+  const destination = await worldPoint(canvas, 22, 14);
+  await page.mouse.click(destination.x, destination.y, { button: 'right' });
+  await page.waitForTimeout(1500);
+  await expect(skillsDetails).toHaveAttribute('open', '');
+  await page.getByRole('button', { name: 'Сбросить бойца' }).click();
+
   await saveScreenshot(page, '01-simulation-info.png');
+
+  await page.locator('.workspace-display-menu > summary').click();
+  await page.locator('#height-toggle').click();
+  await expect(page.locator('.map-height-label').first()).toHaveText(/[+-]\d+\.\d/);
+  await page.locator('#height-toggle').click();
+  await page.locator('.workspace-display-menu > summary').click();
 
   await page.locator('[data-action="collapse"]').click();
   await expect(page.locator('body')).toHaveClass(/sidebar-collapsed/);
@@ -98,7 +117,7 @@ test('simulation workspace, tactical layers and cover selection', async ({ page 
   await saveScreenshot(page, '06-simulation-memory-layer.png');
 });
 
-test('editing workspace, scene palette and threat handles', async ({ page }) => {
+test('editing workspace, full-height palette and top utility menu', async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await page.goto('/');
   const canvas = page.locator('canvas');
@@ -109,6 +128,19 @@ test('editing workspace, scene palette and threat handles', async ({ page }) => 
   await expect(page.locator('.simulation-unit-bar')).toBeHidden();
   await expect(page.locator('.game-editor-workbench')).toBeVisible();
   await page.waitForTimeout(500);
+
+  const editorBodyBox = await page.locator('.game-editor-body').boundingBox();
+  expect(editorBodyBox?.height ?? 0).toBeGreaterThan(400);
+  await expect(page.locator('[data-action="editor-place"]')).toBeVisible();
+  await expect(page.locator('[data-action="editor-place"]')).toContainText('Поставить');
+
+  await page.locator('.workspace-file-menu > summary').click();
+  await expect(page.getByRole('button', { name: 'Сохранить сцену' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Загрузить сцену' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Отчёт производительности' })).toBeVisible();
+  await expect(page.locator('.game-editor-body').getByText('Сохранение / загрузка')).toHaveCount(0);
+  await page.locator('.workspace-file-menu > summary').click();
+
   await saveScreenshot(page, '07-editor-object-palette.png');
 
   await page.locator('.game-editor-tabs').getByRole('button', { name: 'Угроза', exact: true }).click();
@@ -116,6 +148,7 @@ test('editing workspace, scene palette and threat handles', async ({ page }) => 
   await page.mouse.click(threat.x, threat.y);
   await expect(page.locator('.game-editor-selected-summary')).toContainText('editor_zone_1');
   await page.waitForTimeout(500);
+  await expect(page.locator('[data-action="editor-place"]')).toContainText('угрозу');
   await saveScreenshot(page, '08-editor-threat-tools.png');
 
   await page.locator('.game-editor-tabs').getByRole('button', { name: 'Рельеф', exact: true }).click();
