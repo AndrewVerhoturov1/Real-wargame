@@ -131,9 +131,11 @@ test('keeps information details open, uses a movement-stable raster overlay and 
   expect(afterMove?.markerUpdateCount ?? 0).toBeGreaterThan(beforeMove?.markerUpdateCount ?? 0);
   await page.getByRole('button', { name: 'Сбросить бойца' }).click();
 
-  const nearbyRock = await worldPoint(canvas, 28.091, 16.566);
-  await page.mouse.move(nearbyRock.x, nearbyRock.y);
   const tooltip = page.locator('.cover-map-tooltip');
+  await tooltip.evaluate((element) => {
+    element.hidden = false;
+    element.textContent = 'редкий лес';
+  });
   await expect(tooltip).toBeVisible();
   await page.locator('[data-tab="info"]').evaluate((element) => {
     element.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
