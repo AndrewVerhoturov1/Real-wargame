@@ -214,11 +214,15 @@ test('capture integrated AI lab, threat handles and soldier awareness', async ({
   await saveScreenshot(page, '18-ai-lab-soldier-state.png');
 
   await page.locator('.ai-lab-dock-tabs').getByRole('button', { name: 'Карта бойца', exact: true }).click();
-  await page.locator('.ai-lab-awareness-modes').getByRole('button', { name: 'Угрозы', exact: true }).click();
+  const dangerMode = page.locator('.ai-lab-awareness-modes').getByRole('button', { name: 'Угрозы', exact: true });
+  await expect(dangerMode).toBeVisible();
+  await dangerMode.evaluate((element) => (element as HTMLButtonElement).click());
   await page.waitForTimeout(900);
   await saveScreenshot(page, '19-ai-lab-awareness-danger.png');
 
-  await page.locator('.ai-lab-awareness-modes').getByRole('button', { name: 'Безопасные места', exact: true }).click();
+  const safeMode = page.locator('.ai-lab-awareness-modes').getByRole('button', { name: 'Безопасные места', exact: true });
+  await expect(safeMode).toBeVisible();
+  await safeMode.evaluate((element) => (element as HTMLButtonElement).click());
   await page.waitForTimeout(900);
   await saveScreenshot(page, '20-ai-lab-awareness-safe.png');
 });
