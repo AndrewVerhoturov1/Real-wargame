@@ -80,7 +80,10 @@ export function syncSoldierThreatMemory(
       continue;
     }
 
-    if (Math.abs(confidence - memory.confidence) > 0.01 || Math.abs(uncertaintyCells - memory.uncertaintyCells) > 0.001) {
+    if (
+      Math.round(confidence) !== Math.round(memory.confidence)
+      || Math.round(uncertaintyCells * 10) !== Math.round(memory.uncertaintyCells * 10)
+    ) {
       changed = true;
     }
     nextThreats.push({
@@ -179,7 +182,33 @@ function isUnitAffectedByZone(unit: UnitModel, zone: SimulationState['pressureZo
 }
 
 function threatChanged(left: KnownThreatMemory, right: KnownThreatMemory): boolean {
-  return JSON.stringify(left) !== JSON.stringify(right);
+  return JSON.stringify(threatRevisionFingerprint(left)) !== JSON.stringify(threatRevisionFingerprint(right));
+}
+
+function threatRevisionFingerprint(memory: KnownThreatMemory): Record<string, unknown> {
+  return {
+    id: memory.id,
+    labelRu: memory.labelRu,
+    mode: memory.mode,
+    x: memory.x,
+    y: memory.y,
+    radiusCells: memory.radiusCells,
+    widthCells: memory.widthCells,
+    heightCells: memory.heightCells,
+    rotationDegrees: memory.rotationDegrees,
+    strength: memory.strength,
+    suppression: memory.suppression,
+    stressPerSecond: memory.stressPerSecond,
+    directionDegrees: memory.directionDegrees,
+    arcDegrees: memory.arcDegrees,
+    rangeCells: memory.rangeCells,
+    minRangeCells: memory.minRangeCells,
+    falloffPercent: memory.falloffPercent,
+    confidence: Math.round(memory.confidence),
+    uncertaintyCells: Math.round(memory.uncertaintyCells * 10) / 10,
+    source: memory.source,
+    visibleNow: memory.visibleNow,
+  };
 }
 
 function angularDifference(left: number, right: number): number {
