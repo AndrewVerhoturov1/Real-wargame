@@ -2,6 +2,7 @@ import { clampPercent, POSTURE_MOVE_MULTIPLIER } from '../behavior/BehaviorModel
 import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap } from '../map/MapModel';
 import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
+import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
 import type { SimulationState } from './SimulationState';
 
@@ -12,10 +13,12 @@ const UNIT_MIN_CENTER_DISTANCE_CELLS = UNIT_COLLISION_RADIUS_CELLS * 2;
 const COLLISION_PASSES = 3;
 
 export function tickSimulation(state: SimulationState, deltaSeconds: number): void {
+  const scaledDeltaSeconds = deltaSeconds * getAiTestTimeScale(state);
+
   for (const unit of state.units) {
-    updateMetrics(unit, state, deltaSeconds);
+    updateMetrics(unit, state, scaledDeltaSeconds);
     updateStateLabels(unit);
-    moveUnit(unit, deltaSeconds);
+    moveUnit(unit, scaledDeltaSeconds);
   }
 
   resolveUnitCollisions(state);
