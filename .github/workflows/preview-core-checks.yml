@@ -34,6 +34,12 @@ jobs:
         continue-on-error: true
         run: npm run lab:smoke
 
+      - name: Unified game editor smoke
+        id: game_editor
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run game-editor:smoke
+
       - name: AI node editor smoke
         id: editor
         if: steps.install.outcome == 'success'
@@ -76,6 +82,7 @@ jobs:
         env:
           INSTALL_OUTCOME: ${{ steps.install.outcome }}
           LAB_OUTCOME: ${{ steps.lab.outcome }}
+          GAME_EDITOR_OUTCOME: ${{ steps.game_editor.outcome }}
           EDITOR_OUTCOME: ${{ steps.editor.outcome }}
           ENGINE_OUTCOME: ${{ steps.engine.outcome }}
           GRAPH_OUTCOME: ${{ steps.graph.outcome }}
@@ -85,6 +92,7 @@ jobs:
             const outcomes = {
               install: process.env.INSTALL_OUTCOME,
               lab: process.env.LAB_OUTCOME,
+              game_editor: process.env.GAME_EDITOR_OUTCOME,
               editor: process.env.EDITOR_OUTCOME,
               engine: process.env.ENGINE_OUTCOME,
               graph: process.env.GRAPH_OUTCOME,
@@ -118,6 +126,7 @@ jobs:
           always() && (
             steps.install.outcome != 'success' ||
             steps.lab.outcome != 'success' ||
+            steps.game_editor.outcome != 'success' ||
             steps.editor.outcome != 'success' ||
             steps.engine.outcome != 'success' ||
             steps.graph.outcome != 'success' ||
