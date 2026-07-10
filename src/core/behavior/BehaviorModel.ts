@@ -53,6 +53,9 @@ export interface UnitBehaviorRuntime {
   danger: number;
   rawDanger: number;
   stress: number;
+  suppression: number;
+  ammo: number;
+  weaponReady: boolean;
   currentAction: string;
   reason: string;
   lastEvent: string | null;
@@ -291,6 +294,9 @@ export function createBehaviorRuntime(): UnitBehaviorRuntime {
     danger: 0,
     rawDanger: 0,
     stress: 0,
+    suppression: 0,
+    ammo: 30,
+    weaponReady: true,
     currentAction: 'waiting',
     reason: 'No order has been issued yet.',
     lastEvent: null,
