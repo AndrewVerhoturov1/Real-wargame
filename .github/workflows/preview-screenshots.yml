@@ -55,7 +55,10 @@ jobs:
 
       - name: Capture screenshots with system Chrome
         id: capture
-        run: npx playwright test tests/preview-screenshots.spec.ts --project=chromium --reporter=line
+        shell: bash
+        run: |
+          set -o pipefail
+          npx playwright test tests/preview-screenshots.spec.ts --project=chromium --reporter=line 2>&1 | tee playwright-screenshots.log
 
       - name: Upload screenshots
         if: ${{ always() }}
@@ -65,6 +68,15 @@ jobs:
           path: artifacts/screenshots/
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Upload Playwright log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-wargame-preview-playwright-log
+          path: playwright-screenshots.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Publish screenshot status
         if: ${{ always() }}
