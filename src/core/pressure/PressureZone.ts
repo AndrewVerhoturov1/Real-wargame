@@ -2,6 +2,7 @@ import { distance, type GridPosition } from '../geometry';
 
 export type PressureZoneType = 'open_area_pressure' | 'unknown_risk' | 'debug';
 export type PressureZoneShape = 'circle' | 'rect';
+export type PressureZoneMode = 'area' | 'directional_fire';
 
 export interface PressureZoneData {
   id: string;
@@ -9,13 +10,23 @@ export interface PressureZoneData {
   labelRu?: string;
   type: PressureZoneType;
   shape: PressureZoneShape;
+  mode?: PressureZoneMode;
   x: number;
   y: number;
   radiusCells?: number;
   widthCells?: number;
   heightCells?: number;
   strength: number;
+  suppression?: number;
   stressPerSecond: number;
+  directionDegrees?: number;
+  arcDegrees?: number;
+  rangeCells?: number;
+  minRangeCells?: number;
+  falloffPercent?: number;
+  enabled?: boolean;
+  sourceVisible?: boolean;
+  sourceKnown?: boolean;
   reason: string;
   reasonRu?: string;
 }
@@ -28,13 +39,23 @@ export interface PressureZone {
   };
   type: PressureZoneType;
   shape: PressureZoneShape;
+  mode: PressureZoneMode;
   x: number;
   y: number;
   radiusCells: number;
   widthCells: number;
   heightCells: number;
   strength: number;
+  suppression: number;
   stressPerSecond: number;
+  directionDegrees: number;
+  arcDegrees: number;
+  rangeCells: number;
+  minRangeCells: number;
+  falloffPercent: number;
+  enabled: boolean;
+  sourceVisible: boolean;
+  sourceKnown: boolean;
   reasons: {
     en: string;
     ru: string;
@@ -57,13 +78,23 @@ export function normalizePressureZones(data: PressureZoneData[]): PressureZone[]
     },
     type: zone.type,
     shape: zone.shape,
+    mode: zone.mode ?? 'area',
     x: zone.x,
     y: zone.y,
     radiusCells: zone.radiusCells ?? 0,
     widthCells: zone.widthCells ?? 0,
     heightCells: zone.heightCells ?? 0,
     strength: clampPercent(zone.strength),
+    suppression: clampPercent(zone.suppression ?? zone.strength),
     stressPerSecond: Math.max(0, zone.stressPerSecond),
+    directionDegrees: normalizeDegrees(zone.directionDegrees ?? 0),
+    arcDegrees: clamp(zone.arcDegrees ?? 45, 1, 360),
+    rangeCells: Math.max(0.5, zone.rangeCells ?? Math.max(zone.radiusCells ?? 0, 8)),
+    minRangeCells: Math.max(0, zone.minRangeCells ?? 0),
+    falloffPercent: clampPercent(zone.falloffPercent ?? 50),
+    enabled: zone.enabled ?? true,
+    sourceVisible: zone.sourceVisible ?? true,
+    sourceKnown: zone.sourceKnown ?? true,
     reasons: {
       en: zone.reason,
       ru: zone.reasonRu ?? zone.reason,
@@ -78,7 +109,7 @@ export function getPressureReportAtPosition(
   let strongest: PressureReport | null = null;
 
   for (const zone of zones) {
-    if (!isPositionInsidePressureZone(position, zone)) {
+    if (!zone.enabled || zone.mode !== 'area' || !isPositionInsidePressureZone(position, zone)) {
       continue;
     }
 
@@ -97,7 +128,7 @@ export function getPressureReportAtPosition(
   return strongest;
 }
 
-function isPositionInsidePressureZone(position: GridPosition, zone: PressureZone): boolean {
+export function isPositionInsidePressureZone(position: GridPosition, zone: PressureZone): boolean {
   if (zone.shape === 'circle') {
     return distance(position, { x: zone.x, y: zone.y }) <= zone.radiusCells;
   }
@@ -113,6 +144,15 @@ function isPositionInsidePressureZone(position: GridPosition, zone: PressureZone
   );
 }
 
+export function normalizeDegrees(value: number): number {
+  const normalized = value % 360;
+  return normalized < 0 ? normalized + 360 : normalized;
+}
+
 function clampPercent(value: number): number {
-  return Math.max(0, Math.min(100, value));
+  return clamp(value, 0, 100);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
