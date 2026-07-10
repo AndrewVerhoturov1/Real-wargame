@@ -1,0 +1,41 @@
+name: Preview Core Checks
+
+on:
+  push:
+    branches:
+      - real-wargame-preview
+  workflow_dispatch:
+
+jobs:
+  core-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: AI test lab smoke
+        run: npm run lab:smoke
+
+      - name: AI node editor smoke
+        run: npm run editor:smoke
+
+      - name: Local AI engine smoke
+        run: npm run engine:smoke
+
+      - name: Validate bundled AI graph
+        run: npm run validate:ai-graph
+
+      - name: Production build
+        run: npm run build
