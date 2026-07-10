@@ -14,6 +14,7 @@ import { createInitialState } from './core/simulation/SimulationState';
 import { initializeAiTestLabRuntime } from './core/testing/AiTestLabRuntime';
 import type { UnitData } from './core/units/UnitModel';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
+import { installAppShellMenu } from './shared/AppShellMenu';
 import { installGameEditorWorkbench } from './ui/GameEditorWorkbench';
 import { installPerformanceReportControls } from './ui/PerformanceReportControls';
 import { installSceneExportControls } from './ui/SceneExportControls';
@@ -33,6 +34,8 @@ const aiEditorOpenButton = document.querySelector<HTMLButtonElement>('#ai-editor
 if (!root || !debugPanel || !languageToggle || !gridToggle || !visionToggle || !heightToggle || !pauseToggle || !aiEditorOpenButton) {
   throw new Error('Tactical board root elements are missing.');
 }
+
+installAppShellMenu({ mode: 'game' });
 
 const state = createInitialState(
   mapData as TacticalMapData,
