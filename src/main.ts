@@ -1,6 +1,7 @@
 import './styles.css';
 import './ai-game-bridge.css';
 import './ai-test-lab.css';
+import './game-editor.css';
 import './shared/app-shell-menu.css';
 import './ui-layout.css';
 import mapData from './data/maps/test_map.json';
@@ -15,11 +16,10 @@ import type { UnitData } from './core/units/UnitModel';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
 import { installAppShellMenu } from './shared/AppShellMenu';
 import { installAiTestLabControls } from './ui/AiTestLabControls';
-import { installEditorControls } from './ui/EditorControls';
+import { installGameEditorWorkbench } from './ui/GameEditorWorkbench';
 import { installGameHudControls } from './ui/GameHudControls';
 import { installPerformanceReportControls } from './ui/PerformanceReportControls';
 import { installSceneExportControls } from './ui/SceneExportControls';
-import { installTerrainBrushControls } from './ui/TerrainBrushControls';
 
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 
@@ -58,8 +58,7 @@ const tacticalBoard = new PixiTacticalBoardApp(
 const aiGameBridge = installAiGameBridge(state);
 
 installGameHudControls(state);
-installEditorControls(debugPanel, state);
-installTerrainBrushControls(debugPanel, state);
+installGameEditorWorkbench(debugPanel, state, () => tacticalBoard.forceRender());
 installSceneExportControls(state);
 installPerformanceReportControls(() => tacticalBoard.downloadPerformanceReport());
 installAiEditorOpenButton(aiEditorOpenButton);
