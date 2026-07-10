@@ -238,29 +238,68 @@ function threatFactorAtPosition(position: GridPosition, threat: KnownThreatMemor
 }
 
 function buildCacheKey(state: SimulationState, unit: UnitModel): string {
-  const objectKey = state.map.objects.map((object) => [
-    object.id,
-    object.x.toFixed(2),
-    object.y.toFixed(2),
-    object.widthCells.toFixed(2),
-    object.heightCells.toFixed(2),
-    object.rotationRadians.toFixed(2),
-    object.coverProtection ?? '',
-    object.coverReliability ?? '',
-    object.concealment ?? '',
-  ].join(':')).join('|');
-  const terrainKey = state.map.cells.map((cell) => `${cell.height},${cell.forest},${cell.terrain}`).join(';');
+  // Awareness values are calculated per cell. Sub-cell movement should not invalidate
+  // the complete map report, otherwise a moving soldier rebuilds it every frame/tick.
+  const unitCellX = Math.floor(unit.position.x);
+  const unitCellY = Math.floor(unit.position.y);
+  const orderCellX = unit.order ? Math.floor(unit.order.target.x) : '';
+  const orderCellY = unit.order ? Math.floor(unit.order.target.y) : '';
+
   return [
     unit.id,
     unit.tacticalKnowledge.revision,
     unit.behaviorRuntime.posture,
-    unit.position.x.toFixed(2),
-    unit.position.y.toFixed(2),
-    unit.order?.target.x.toFixed(2) ?? '',
-    unit.order?.target.y.toFixed(2) ?? '',
-    objectKey,
-    terrainKey,
+    unitCellX,
+    unitCellY,
+    orderCellX,
+    orderCellY,
+    state.map.cellSize,
+    buildMapHash(state),
   ].join('#');
+}
+
+function buildMapHash(state: SimulationState): string {
+  // A compact numeric fingerprint detects editor changes without allocating the
+  // enormous terrain/object strings that previously caused frequent GC pauses.
+  let hash = 2166136261;
+  hash = hashNumber(hash, state.map.width);
+  hash = hashNumber(hash, state.map.height);
+  hash = hashNumber(hash, Math.round(state.map.cellSize * 100));
+
+  for (const cell of state.map.cells) {
+    hash = hashNumber(hash, cell.height + 2);
+    hash = hashNumber(hash, cell.forest);
+    hash = hashString(hash, cell.terrain);
+  }
+
+  for (const object of state.map.objects) {
+    hash = hashString(hash, object.id);
+    hash = hashString(hash, object.kind);
+    hash = hashNumber(hash, Math.round(object.x * 100));
+    hash = hashNumber(hash, Math.round(object.y * 100));
+    hash = hashNumber(hash, Math.round(object.widthCells * 100));
+    hash = hashNumber(hash, Math.round(object.heightCells * 100));
+    hash = hashNumber(hash, Math.round(object.rotationRadians * 1000));
+    hash = hashNumber(hash, Math.round((object.coverProtection ?? -1) * 10));
+    hash = hashNumber(hash, Math.round((object.coverReliability ?? -1) * 10));
+    hash = hashNumber(hash, Math.round((object.concealment ?? -1) * 10));
+  }
+
+  return (hash >>> 0).toString(36);
+}
+
+function hashNumber(hash: number, value: number): number {
+  hash ^= value | 0;
+  return Math.imul(hash, 16777619);
+}
+
+function hashString(hash: number, value: string): number {
+  let next = hash;
+  for (let index = 0; index < value.length; index += 1) {
+    next ^= value.charCodeAt(index);
+    next = Math.imul(next, 16777619);
+  }
+  return next;
 }
 
 function reliefLocalProtection(state: SimulationState, position: GridPosition, posture: UnitPosture): number {
