@@ -9,7 +9,7 @@ let aiEngineProcess: ChildProcessWithoutNullStreams | null = null;
 
 const BOARD_ORIGIN = { x: 72, y: 72 };
 const CELL_SIZE = 24;
-const AI_LAB_TOP_OFFSET = 112;
+const AI_LAB_TOP_OFFSET = 128;
 
 function boardPoint(cellX: number, cellY: number): { x: number; y: number } {
   return { x: BOARD_ORIGIN.x + (cellX + 0.5) * CELL_SIZE, y: BOARD_ORIGIN.y + (cellY + 0.5) * CELL_SIZE };
