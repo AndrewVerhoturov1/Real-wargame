@@ -1,35 +1,21 @@
 import fs from 'node:fs';
 
-// One-time exact patch. The workflow removes this file after a successful commit.
-const replacements = [
-  {
-    file: 'src/ai-node-editor/main.ts',
-    from: "if (!root) throw new Error('AI node editor root is missing.');\n\ninstallAppShellMenu({ mode: 'editor' });",
-    to: "if (!root) throw new Error('AI node editor root is missing.');\nconst editorRoot = root;\n\ninstallAppShellMenu({ mode: 'editor' });",
-  },
-  {
-    file: 'src/ai-node-editor/main.ts',
-    from: '  root.innerHTML = `',
-    to: '  editorRoot.innerHTML = `',
-  },
-  {
-    file: 'src/ui/GameHudControls.ts',
-    from: "bestCover.exists ? formatMeters(bestCover.distanceCells * state.map.metersPerCell) : 'нет'",
-    to: "bestCover.exists ? formatMeters((bestCover.distanceCells ?? 0) * state.map.metersPerCell) : 'нет'",
-  },
-  {
-    file: 'src/ui/GameHudControls.ts',
-    from: "threat.exists ? formatMeters(threat.distanceCells * state.map.metersPerCell) : 'нет'",
-    to: "threat.exists ? formatMeters((threat.distanceCells ?? 0) * state.map.metersPerCell) : 'нет'",
-  },
-];
+const file = 'src/ai-node-editor/main.ts';
+let source = fs.readFileSync(file, 'utf8').replaceAll('\r\n', '\n');
 
-for (const replacement of replacements) {
-  const source = fs.readFileSync(replacement.file, 'utf8');
-  const occurrences = source.split(replacement.from).length - 1;
-  if (occurrences !== 1) {
-    throw new Error(`${replacement.file}: expected exactly one occurrence, found ${occurrences}: ${replacement.from}`);
-  }
-  fs.writeFileSync(replacement.file, source.replace(replacement.from, replacement.to), 'utf8');
-  console.log(`patched ${replacement.file}`);
+const guard = "if (!root) throw new Error('AI node editor root is missing.');";
+if (!source.includes(guard)) {
+  throw new Error(`${file}: root guard not found`);
 }
+if (!source.includes('const editorRoot = root;')) {
+  source = source.replace(guard, `${guard}\nconst editorRoot = root;`);
+}
+
+const renderTarget = '  root.innerHTML = `';
+if (!source.includes(renderTarget) && !source.includes('  editorRoot.innerHTML = `')) {
+  throw new Error(`${file}: render target not found`);
+}
+source = source.replace(renderTarget, '  editorRoot.innerHTML = `');
+
+fs.writeFileSync(file, source, 'utf8');
+console.log(`patched ${file}`);
