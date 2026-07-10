@@ -8,3 +8,13 @@ body.workspace-simulation #hud {
 body.workspace-editor #hud {
   display: block !important;
 }
+
+body.workspace-editor .game-editor-field:not(.checkbox) {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+
+body.workspace-editor .game-editor-field input,
+body.workspace-editor .game-editor-field select {
+  width: 100%;
+}
