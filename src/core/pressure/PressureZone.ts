@@ -4,6 +4,19 @@ export type PressureZoneType = 'open_area_pressure' | 'unknown_risk' | 'debug';
 export type PressureZoneShape = 'circle' | 'rect';
 export type PressureZoneMode = 'area' | 'directional_fire';
 
+export interface DirectionalThreatSettings {
+  mode: PressureZoneMode;
+  suppression: number;
+  directionDegrees: number;
+  arcDegrees: number;
+  rangeCells: number;
+  minRangeCells: number;
+  falloffPercent: number;
+  enabled: boolean;
+  sourceVisible: boolean;
+  sourceKnown: boolean;
+}
+
 export interface PressureZoneData {
   id: string;
   label: string;
@@ -39,23 +52,23 @@ export interface PressureZone {
   };
   type: PressureZoneType;
   shape: PressureZoneShape;
-  mode: PressureZoneMode;
+  mode?: PressureZoneMode;
   x: number;
   y: number;
   radiusCells: number;
   widthCells: number;
   heightCells: number;
   strength: number;
-  suppression: number;
+  suppression?: number;
   stressPerSecond: number;
-  directionDegrees: number;
-  arcDegrees: number;
-  rangeCells: number;
-  minRangeCells: number;
-  falloffPercent: number;
-  enabled: boolean;
-  sourceVisible: boolean;
-  sourceKnown: boolean;
+  directionDegrees?: number;
+  arcDegrees?: number;
+  rangeCells?: number;
+  minRangeCells?: number;
+  falloffPercent?: number;
+  enabled?: boolean;
+  sourceVisible?: boolean;
+  sourceKnown?: boolean;
   reasons: {
     en: string;
     ru: string;
@@ -70,36 +83,55 @@ export interface PressureReport {
 }
 
 export function normalizePressureZones(data: PressureZoneData[]): PressureZone[] {
-  return data.map((zone) => ({
-    id: zone.id,
-    labels: {
-      en: zone.label,
-      ru: zone.labelRu ?? zone.label,
-    },
-    type: zone.type,
-    shape: zone.shape,
+  return data.map((zone) => {
+    const settings = resolvePressureZoneSettings(zone);
+    return {
+      id: zone.id,
+      labels: {
+        en: zone.label,
+        ru: zone.labelRu ?? zone.label,
+      },
+      type: zone.type,
+      shape: zone.shape,
+      mode: settings.mode,
+      x: zone.x,
+      y: zone.y,
+      radiusCells: zone.radiusCells ?? 0,
+      widthCells: zone.widthCells ?? 0,
+      heightCells: zone.heightCells ?? 0,
+      strength: clampPercent(zone.strength),
+      suppression: settings.suppression,
+      stressPerSecond: Math.max(0, zone.stressPerSecond),
+      directionDegrees: settings.directionDegrees,
+      arcDegrees: settings.arcDegrees,
+      rangeCells: settings.rangeCells,
+      minRangeCells: settings.minRangeCells,
+      falloffPercent: settings.falloffPercent,
+      enabled: settings.enabled,
+      sourceVisible: settings.sourceVisible,
+      sourceKnown: settings.sourceKnown,
+      reasons: {
+        en: zone.reason,
+        ru: zone.reasonRu ?? zone.reason,
+      },
+    };
+  });
+}
+
+export function resolvePressureZoneSettings(zone: PressureZoneData | PressureZone): DirectionalThreatSettings {
+  const radiusCells = zone.radiusCells ?? 0;
+  return {
     mode: zone.mode ?? 'area',
-    x: zone.x,
-    y: zone.y,
-    radiusCells: zone.radiusCells ?? 0,
-    widthCells: zone.widthCells ?? 0,
-    heightCells: zone.heightCells ?? 0,
-    strength: clampPercent(zone.strength),
     suppression: clampPercent(zone.suppression ?? zone.strength),
-    stressPerSecond: Math.max(0, zone.stressPerSecond),
     directionDegrees: normalizeDegrees(zone.directionDegrees ?? 0),
     arcDegrees: clamp(zone.arcDegrees ?? 45, 1, 360),
-    rangeCells: Math.max(0.5, zone.rangeCells ?? Math.max(zone.radiusCells ?? 0, 8)),
+    rangeCells: Math.max(0.5, zone.rangeCells ?? Math.max(radiusCells, 8)),
     minRangeCells: Math.max(0, zone.minRangeCells ?? 0),
     falloffPercent: clampPercent(zone.falloffPercent ?? 50),
     enabled: zone.enabled ?? true,
     sourceVisible: zone.sourceVisible ?? true,
     sourceKnown: zone.sourceKnown ?? true,
-    reasons: {
-      en: zone.reason,
-      ru: zone.reasonRu ?? zone.reason,
-    },
-  }));
+  };
 }
 
 export function getPressureReportAtPosition(
@@ -109,9 +141,8 @@ export function getPressureReportAtPosition(
   let strongest: PressureReport | null = null;
 
   for (const zone of zones) {
-    if (!zone.enabled || zone.mode !== 'area' || !isPositionInsidePressureZone(position, zone)) {
-      continue;
-    }
+    const settings = resolvePressureZoneSettings(zone);
+    if (!settings.enabled || settings.mode !== 'area' || !isPositionInsidePressureZone(position, zone)) continue;
 
     const report: PressureReport = {
       zone,
@@ -120,9 +151,7 @@ export function getPressureReportAtPosition(
       reason: zone.reasons.en,
     };
 
-    if (!strongest || report.rawPressure > strongest.rawPressure) {
-      strongest = report;
-    }
+    if (!strongest || report.rawPressure > strongest.rawPressure) strongest = report;
   }
 
   return strongest;
@@ -135,7 +164,6 @@ export function isPositionInsidePressureZone(position: GridPosition, zone: Press
 
   const halfWidth = zone.widthCells / 2;
   const halfHeight = zone.heightCells / 2;
-
   return (
     position.x >= zone.x - halfWidth &&
     position.x <= zone.x + halfWidth &&
