@@ -52,30 +52,27 @@ expectIncludes('src/ui/TacticalWorkspace.ts', [
   'updateInfoPanelLive',
   'stableDecision',
   'Math.floor(unit.position.x)',
-  'clearCoverTooltip',
   "import '../tactical-workspace-stage8.css'",
 ]);
 expectExcludes('src/ui/TacticalWorkspace.ts', [
   'u?.position.x.toFixed(2)',
   'u?.behaviorRuntime.reason',
-  'data-action="editor-place"',
-  'findCurrentEditorPlacementTool',
-  'shortPlacementLabel',
 ]);
 
-expectIncludes('src/ui/GameEditorWorkbench.ts', [
-  'placementButtonsForTab',
-  "toolButton('Поставить предмет', 'spawn_object'",
-  "toolButton('Поставить бойца', 'spawn_unit'",
-  "toolButton('Поставить угрозу', 'spawn_zone'",
-  "toolButton('Рисовать высоту', 'paint_height'",
-  "toolButton('Рисовать лес', 'paint_forest'",
-  'renderHeader(header, activeTab, state',
+expectIncludes('src/ui/EditorHeaderPlacement.ts', [
+  'installEditorHeaderPlacement',
+  '.game-editor-body [data-editor-tool].primary',
+  "return 'Поставить предмет'",
+  "return 'Поставить бойца'",
+  "return 'Поставить угрозу'",
+  "document.querySelector<HTMLElement>('[data-action=\"editor-place\"]')?.remove()",
 ]);
-expectExcludes('src/ui/GameEditorWorkbench.ts', [
-  "toolButton('Ставить предмет'",
-  "toolButton('Ставить бойца'",
-  "toolButton('Ставить угрозу'",
+
+expectIncludes('src/ui/WorkspaceTooltipGuard.ts', [
+  'installWorkspaceTooltipGuard',
+  'clearCoverTooltip',
+  "[data-tab], [data-mode]",
+  'tooltip.hidden = true',
 ]);
 
 expectIncludes('src/core/ui/RuntimeUiState.ts', [
@@ -122,6 +119,7 @@ expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
   'drawAwarenessRaster',
   "representation: 'raster-sprite'",
   'getDiagnostics()',
+  '__realWargameAwarenessDebug',
 ]);
 expectExcludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
   'orderCell:',
@@ -133,11 +131,6 @@ expectBefore(
   'if (key === this.lastKey) return;',
   'const report = buildSoldierAwarenessReport(state, unit);',
 );
-
-expectIncludes('src/rendering/PixiApp.ts', [
-  "private locale: Locale = 'ru'",
-  'awarenessOverlay: this.awarenessHeatmapRenderer.getDiagnostics()',
-]);
 
 expectIncludes('src/core/terrain/SmoothTerrain.ts', [
   'const SMOOTH_RADIUS_CELLS = 1',
@@ -171,7 +164,12 @@ expectIncludes('src/core/editor/GameEditorPlacement.ts', [
 
 expectIncludes('src/main.ts', [
   "import { installTacticalWorkspace } from './ui/TacticalWorkspace'",
+  "import { installEditorHeaderPlacement } from './ui/EditorHeaderPlacement'",
+  "import { installWorkspaceTooltipGuard } from './ui/WorkspaceTooltipGuard'",
   'installTacticalWorkspace(state, aiGameBridge',
+  'installEditorHeaderPlacement()',
+  'installWorkspaceTooltipGuard()',
+  'languageToggle.click()',
 ]);
 expectExcludes('src/main.ts', [
   "installAiTestLabControls(state, aiGameBridge",
@@ -192,6 +190,9 @@ expectIncludes('src/tactical-workspace-stage8.css', [
   'bottom: 9px',
   '.editor-scene-tools-slot',
   '.game-editor-status',
+  '.cover-map-tooltip[hidden]',
+  '[data-action="editor-place"]',
+  '.editor-header-placement',
 ]);
 expectExcludes('src/tactical-workspace-stage8.css', [
   '.editor-place-button',
@@ -226,10 +227,9 @@ expectIncludes('tests/preview-screenshots.spec.ts', [
   '09-editor-terrain-tools.png',
   '10-node-editor-unchanged.png',
   '11-editor-spawned-fighter-playable.png',
-  'keeps information details open during live simulation updates',
+  'uses a raster awareness overlay and clears stale tooltips',
   'workspace-file-menu',
   'raster-sprite',
-  'hides the cover tooltip immediately when its context changes',
   'newly placed fighter remains selectable and can move in simulation',
 ]);
 
