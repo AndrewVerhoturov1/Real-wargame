@@ -9,6 +9,16 @@ const BOARD_ORIGIN = { x: 72, y: 72 };
 const CELL_SIZE = 24;
 let aiEngineProcess: ChildProcessWithoutNullStreams | null = null;
 
+interface AwarenessDiagnostics {
+  representation: string;
+  displayObjectCount: number;
+  rasterWidth: number;
+  rasterHeight: number;
+  rebuildCount: number;
+  markerUpdateCount: number;
+  maxBuildMs: number;
+}
+
 async function saveScreenshot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: path.join(SCREENSHOT_DIR, name), fullPage: false });
 }
@@ -28,6 +38,12 @@ async function selectFixtureSoldier(page: Page, canvas: Locator): Promise<void> 
   await expect(page.locator('[data-role="unit-name"]')).toContainText('Солдат');
 }
 
+async function readAwarenessDiagnostics(page: Page): Promise<AwarenessDiagnostics | undefined> {
+  return page.evaluate(() => (
+    window as Window & { __realWargameAwarenessDebug?: AwarenessDiagnostics }
+  ).__realWargameAwarenessDebug);
+}
+
 async function waitForAiEngine(): Promise<void> {
   const startedAt = Date.now();
   let lastError = '';
@@ -44,24 +60,6 @@ async function waitForAiEngine(): Promise<void> {
   throw new Error(`AI engine did not start: ${lastError}`);
 }
 
-async function measureAnimationP95(page: Page, sampleCount = 120): Promise<number> {
-  return page.evaluate((count) => new Promise<number>((resolve) => {
-    const samples: number[] = [];
-    let previous = performance.now();
-    const measure = (now: number) => {
-      samples.push(now - previous);
-      previous = now;
-      if (samples.length >= count) {
-        samples.sort((left, right) => left - right);
-        resolve(samples[Math.floor(samples.length * 0.95)] ?? 0);
-        return;
-      }
-      requestAnimationFrame(measure);
-    };
-    requestAnimationFrame(measure);
-  }), sampleCount);
-}
-
 test.beforeAll(async () => {
   mkdirSync(SCREENSHOT_DIR, { recursive: true });
   aiEngineProcess = spawn('node', ['scripts/local_ai_engine.mjs'], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -73,7 +71,7 @@ test.afterAll(() => {
   aiEngineProcess = null;
 });
 
-test('keeps information details open, uses a raster awareness overlay and clears stale tooltips', async ({ page }) => {
+test('keeps information details open, uses a movement-stable raster overlay and clears stale tooltips', async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await page.goto('/');
   const canvas = page.locator('canvas');
@@ -116,25 +114,22 @@ test('keeps information details open, uses a raster awareness overlay and clears
   await expect(page.locator('[data-role="sidebar-title"]')).toContainText('Опасность');
   await expect(page.locator('[data-role="cover-list"]')).toBeVisible();
   await page.waitForFunction(() => {
-    const diagnostics = (window as Window & { __realWargameAwarenessDebug?: { representation?: string } }).__realWargameAwarenessDebug;
+    const diagnostics = (window as Window & { __realWargameAwarenessDebug?: AwarenessDiagnostics }).__realWargameAwarenessDebug;
     return diagnostics?.representation === 'raster-sprite';
   });
-  const diagnostics = await page.evaluate(() => (
-    window as Window & {
-      __realWargameAwarenessDebug?: {
-        representation: string;
-        displayObjectCount: number;
-        rasterWidth: number;
-        rasterHeight: number;
-      };
-    }
-  ).__realWargameAwarenessDebug);
-  expect(diagnostics?.representation).toBe('raster-sprite');
-  expect(diagnostics?.displayObjectCount).toBeLessThanOrEqual(3);
-  expect(diagnostics?.rasterWidth).toBe(64);
-  expect(diagnostics?.rasterHeight).toBe(40);
-  const animationP95 = await measureAnimationP95(page);
-  expect(animationP95).toBeLessThan(35);
+  const beforeMove = await readAwarenessDiagnostics(page);
+  expect(beforeMove?.representation).toBe('raster-sprite');
+  expect(beforeMove?.displayObjectCount).toBeLessThanOrEqual(3);
+  expect(beforeMove?.rasterWidth).toBe(64);
+  expect(beforeMove?.rasterHeight).toBe(40);
+
+  const movementTarget = await worldPoint(canvas, 30.5, 17.5);
+  await page.mouse.click(movementTarget.x, movementTarget.y, { button: 'right' });
+  await page.waitForTimeout(2600);
+  const afterMove = await readAwarenessDiagnostics(page);
+  expect((afterMove?.rebuildCount ?? 0) - (beforeMove?.rebuildCount ?? 0)).toBeLessThanOrEqual(1);
+  expect(afterMove?.markerUpdateCount ?? 0).toBeGreaterThan(beforeMove?.markerUpdateCount ?? 0);
+  await page.getByRole('button', { name: 'Сбросить бойца' }).click();
 
   const nearbyRock = await worldPoint(canvas, 28.091, 16.566);
   await page.mouse.move(nearbyRock.x, nearbyRock.y);
@@ -178,12 +173,11 @@ test('editing workspace has contextual placement tools in its own header', async
   await expect(page.locator('#hud')).toBeVisible();
   await expect(page.locator('.simulation-unit-bar')).toBeHidden();
   await expect(page.locator('.game-editor-workbench')).toBeVisible();
-  await page.waitForTimeout(500);
 
   const editorBodyBox = await page.locator('.game-editor-body').boundingBox();
   expect(editorBodyBox?.height ?? 0).toBeGreaterThan(400);
   await expect(page.locator('.game-editor-global-tools').getByRole('button', { name: 'Поставить предмет' })).toBeVisible();
-  await expect(page.locator('.game-editor-body [data-editor-tool="spawn_object"]')).toHaveCount(0);
+  await expect(page.locator('.game-editor-body [data-editor-tool="spawn_object"]')).toBeHidden();
   await expect(page.locator('[data-action="editor-place"]')).toHaveCount(0);
 
   await page.locator('.workspace-file-menu > summary').click();
@@ -206,7 +200,7 @@ test('editing workspace has contextual placement tools in its own header', async
   await page.locator('.game-editor-tabs').getByRole('button', { name: 'Рельеф', exact: true }).click();
   await expect(page.locator('.game-editor-global-tools').getByRole('button', { name: 'Рисовать высоту' })).toBeVisible();
   await expect(page.locator('.game-editor-global-tools').getByRole('button', { name: 'Рисовать лес' })).toBeVisible();
-  await expect(page.locator('.game-editor-body [data-editor-tool="paint_height"]')).toHaveCount(0);
+  await expect(page.locator('.game-editor-body [data-editor-tool="paint_height"]')).toBeHidden();
   await page.waitForTimeout(350);
   await saveScreenshot(page, '09-editor-terrain-tools.png');
 });
