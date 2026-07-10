@@ -9,9 +9,7 @@ const failures = [];
 function expectIncludes(relativePath, snippets) {
   const content = read(relativePath);
   for (const snippet of snippets) {
-    if (!content.includes(snippet)) {
-      failures.push(`${relativePath}: missing ${JSON.stringify(snippet)}`);
-    }
+    if (!content.includes(snippet)) failures.push(`${relativePath}: missing ${JSON.stringify(snippet)}`);
   }
 }
 
@@ -53,15 +51,16 @@ expectIncludes('src/ui/AiTestLabControls.ts', [
   'Один расчёт ИИ',
   'Рассчитать и выполнить',
   'Сбросить бойца',
-  '×10',
+  'AI_TEST_TIME_SCALES',
 ]);
 expectIncludes('src/core/testing/AiTestLabRuntime.ts', [
+  'AI_TEST_TIME_SCALES = [0.25, 0.5, 1, 2, 4, 10] as const',
   'getAiTestTimeScale',
   'setAiTestTimeScale',
   'resetSelectedUnitForTest',
   'resetAiTestScene',
 ]);
-expectIncludes('src/rendering/PixiApp.ts', ['getAiTestTimeScale']);
+expectIncludes('src/core/simulation/SimulationTick.ts', ['getAiTestTimeScale']);
 expectIncludes('src/rendering/PixiOverlayRenderer.ts', ['directional_fire', 'arcDegrees']);
 expectIncludes('src/ui/SceneExport.ts', ['scene-export-v3', 'coverProtection', 'directionDegrees', 'soldier:']);
 
