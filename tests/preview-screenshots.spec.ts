@@ -9,9 +9,17 @@ let aiEngineProcess: ChildProcessWithoutNullStreams | null = null;
 
 const BOARD_ORIGIN = { x: 72, y: 72 };
 const CELL_SIZE = 24;
+const AI_LAB_TOP_OFFSET = 112;
 
 function boardPoint(cellX: number, cellY: number): { x: number; y: number } {
   return { x: BOARD_ORIGIN.x + (cellX + 0.5) * CELL_SIZE, y: BOARD_ORIGIN.y + (cellY + 0.5) * CELL_SIZE };
+}
+
+function labWorldPoint(gridX: number, gridY: number): { x: number; y: number } {
+  return {
+    x: BOARD_ORIGIN.x + gridX * CELL_SIZE,
+    y: AI_LAB_TOP_OFFSET + BOARD_ORIGIN.y + gridY * CELL_SIZE,
+  };
 }
 
 async function saveScreenshot(page: Page, name: string): Promise<void> {
@@ -154,4 +162,50 @@ test('capture AI Node Editor clean canvas and universal node interactions', asyn
   await page.getByRole('button', { name: /Auto 4/ }).click({ force: true });
   await page.waitForTimeout(1200);
   await saveScreenshot(page, '14-clean-canvas-auto-check-result.png');
+});
+
+test('capture integrated AI lab, threat handles and soldier awareness', async ({ page }) => {
+  await page.setViewportSize(VIEWPORT);
+  await page.goto('/');
+  await expect(page.locator('canvas')).toBeVisible();
+  await page.getByRole('button', { name: 'Полигон ИИ', exact: true }).click();
+  await expect(page.locator('.ai-lab-dock')).toBeVisible();
+  await expect(page.locator('.ai-lab-bottom-bar')).toBeVisible();
+  await expect(page.locator('body')).toHaveClass(/ai-lab-open/);
+  await page.waitForTimeout(500);
+  await saveScreenshot(page, '15-ai-lab-integrated-layout.png');
+
+  await page.locator('.ai-lab-dock-tabs').getByRole('button', { name: 'Угроза', exact: true }).click();
+  const threatSource = labWorldPoint(34.044, 16.823);
+  await page.mouse.click(threatSource.x, threatSource.y);
+  await expect(page.locator('.ai-lab-dock-body')).toContainText('Геометрия');
+  await page.waitForTimeout(500);
+  await saveScreenshot(page, '16-ai-lab-threat-handles.png');
+
+  const rangeHandle = labWorldPoint(20.05, 17.31);
+  const extendedRange = labWorldPoint(16.5, 18.2);
+  await page.mouse.move(rangeHandle.x, rangeHandle.y);
+  await page.mouse.down();
+  await page.mouse.move(extendedRange.x, extendedRange.y, { steps: 12 });
+  await page.mouse.up();
+  await page.waitForTimeout(500);
+  await saveScreenshot(page, '17-ai-lab-threat-reshaped.png');
+
+  await page.locator('.ai-lab-dock-tabs').getByRole('button', { name: 'Боец', exact: true }).click();
+  const soldier = labWorldPoint(27.574, 17.589);
+  await page.mouse.click(soldier.x, soldier.y);
+  await expect(page.locator('.ai-lab-dock-body')).toContainText('Постоянные характеристики');
+  await expect(page.locator('.ai-lab-dock-body')).toContainText('Начальное состояние');
+  await expect(page.locator('.ai-lab-dock-body')).toContainText('Текущее состояние — изменяется игрой');
+  await page.waitForTimeout(500);
+  await saveScreenshot(page, '18-ai-lab-soldier-state.png');
+
+  await page.locator('.ai-lab-dock-tabs').getByRole('button', { name: 'Карта бойца', exact: true }).click();
+  await page.locator('.ai-lab-awareness-modes').getByRole('button', { name: 'Угрозы', exact: true }).click();
+  await page.waitForTimeout(900);
+  await saveScreenshot(page, '19-ai-lab-awareness-danger.png');
+
+  await page.locator('.ai-lab-awareness-modes').getByRole('button', { name: 'Безопасные места', exact: true }).click();
+  await page.waitForTimeout(900);
+  await saveScreenshot(page, '20-ai-lab-awareness-safe.png');
 });
