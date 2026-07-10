@@ -1,15 +1,17 @@
 import {
   createBehaviorSettings,
   createSoldierParameters,
+  createUnitInitialState,
   type BehaviorProfileId,
   type SoldierCondition,
   type SoldierTraits,
+  type UnitInitialState,
   type UnitPosture,
 } from '../core/behavior/BehaviorModel';
-import { findBestCoverForThreat } from '../core/cover/CoverEvaluation';
-import { resolveObjectCoverProperties, type CoverPosture, type MapObject } from '../core/map/MapModel';
-import { resolvePressureZoneSettings, type PressureZone, type PressureZoneMode } from '../core/pressure/PressureZone';
-import { evaluateThreatsAtPosition } from '../core/pressure/ThreatEvaluation';
+import { evaluateSmallArmsCover } from '../core/cover/SmallArmsCoverEvaluation';
+import { buildSoldierAwarenessReport, type SoldierAwarenessMode } from '../core/knowledge/SoldierAwarenessGrid';
+import { resolveObjectCoverProperties, type CoverPosture } from '../core/map/MapModel';
+import { resolvePressureZoneSettings, type PressureZoneMode, type PressureZoneShape } from '../core/pressure/PressureZone';
 import {
   getSelectedMapObject,
   getSelectedPressureZone,
@@ -18,21 +20,29 @@ import {
 } from '../core/simulation/SimulationState';
 import { tickSimulation } from '../core/simulation/SimulationTick';
 import {
+  getAiLabRuntime,
+  setAiLabOpen,
+  setAiLabPanel,
+  setAiLabTool,
+  setAwarenessMode,
+  type AiLabPanel,
+  type AiLabTool,
+} from '../core/testing/AiLabRuntime';
+import {
   AI_TEST_TIME_SCALES,
   getAiTestPaused,
   getAiTestTimeScale,
   refreshAiTestLabSceneSnapshot,
-  rememberSelectedUnitForTest,
   resetAiTestScene,
-  resetSelectedUnitForTest,
   setAiTestPaused,
   setAiTestTimeScale,
 } from '../core/testing/AiTestLabRuntime';
-import type { AiGameBridgeHandle } from '../core/ai/AiGameBridge';
 import {
-  setAiTestLabSelectionTarget,
-  type AiTestLabSelectionTarget,
-} from '../core/testing/AiTestLabSelection';
+  applyInitialStateToRuntime,
+  copyRuntimeToInitialState,
+  type UnitModel,
+} from '../core/units/UnitModel';
+import type { AiGameBridgeHandle } from '../core/ai/AiGameBridge';
 
 const PROFILE_OPTIONS: Array<[BehaviorProfileId, string]> = [
   ['green', 'Новобранец'],
@@ -41,484 +51,540 @@ const PROFILE_OPTIONS: Array<[BehaviorProfileId, string]> = [
   ['cautious', 'Осторожный'],
   ['reckless', 'Безрассудный'],
 ];
-
 const POSTURE_OPTIONS: Array<[UnitPosture, string]> = [
   ['standing', 'Стоя'],
   ['crouched', 'Пригнувшись'],
   ['prone', 'Лёжа'],
 ];
-
 const TRAIT_FIELDS: Array<[keyof SoldierTraits, string]> = [
   ['resilience', 'Стойкость'],
   ['caution', 'Осторожность'],
   ['decisiveness', 'Решительность'],
   ['discipline', 'Дисциплина'],
   ['initiative', 'Инициатива'],
-  ['tactics', 'Тактика'],
+  ['tactics', 'Тактическая подготовка'],
   ['weaponSkill', 'Владение оружием'],
 ];
-
-const CONDITION_FIELDS: Array<[keyof SoldierCondition, string]> = [
-  ['fatigue', 'Усталость'],
-  ['morale', 'Мораль'],
-  ['confusion', 'Замешательство'],
-  ['health', 'Здоровье'],
+const PERMANENT_CONDITION_FIELDS: Array<[keyof SoldierCondition, string]> = [
   ['attention', 'Внимание'],
   ['view', 'Зрение'],
   ['intuition', 'Интуиция'],
-  ['speed', 'Физическая скорость'],
+  ['speed', 'Физическая подготовка'],
   ['stealth', 'Скрытность'],
 ];
-
-type LabTab = 'fighter' | 'threat' | 'cover' | 'test';
-
-function selectionTargetForTab(tab: LabTab): AiTestLabSelectionTarget {
-  if (tab === 'fighter') return 'fighter';
-  if (tab === 'threat') return 'threat';
-  if (tab === 'cover') return 'cover';
-  return null;
-}
+const INITIAL_FIELDS: Array<[keyof Pick<UnitInitialState, 'stress' | 'suppression' | 'ammo' | 'fatigue' | 'morale' | 'confusion' | 'health'>, string, number]> = [
+  ['stress', 'Начальный стресс', 100],
+  ['suppression', 'Начальное подавление', 100],
+  ['ammo', 'Начальные патроны', 999],
+  ['fatigue', 'Начальная усталость', 100],
+  ['morale', 'Начальная мораль', 100],
+  ['confusion', 'Начальное замешательство', 100],
+  ['health', 'Начальное здоровье', 100],
+];
+const AWARENESS_MODES: Array<[SoldierAwarenessMode, string]> = [
+  ['off', 'Скрыть'],
+  ['all', 'Всё'],
+  ['danger', 'Угрозы'],
+  ['cover', 'Защита'],
+  ['safe', 'Безопасные места'],
+  ['uncertainty', 'Неопределённость'],
+  ['objective', 'Объективная карта'],
+];
 
 export function installAiTestLabControls(
   state: SimulationState,
   aiBridge: AiGameBridgeHandle,
   onChanged: () => void,
 ): void {
-  const root = document.createElement('details');
-  root.className = 'ai-test-lab';
-  root.open = false;
-
-  const summary = document.createElement('summary');
-  summary.textContent = 'Полигон ИИ';
-
-  const tabRow = document.createElement('div');
-  tabRow.className = 'ai-test-lab-tabs';
-  const body = document.createElement('div');
-  body.className = 'ai-test-lab-body';
+  const runtime = getAiLabRuntime(state);
+  const topHost = document.querySelector<HTMLElement>('.top-command-bar') ?? document.body;
+  const topTools = document.createElement('div');
+  topTools.className = 'ai-lab-top-tools';
+  const dock = document.createElement('aside');
+  dock.className = 'ai-lab-dock';
+  const dockTabs = document.createElement('div');
+  dockTabs.className = 'ai-lab-dock-tabs';
+  const dockBody = document.createElement('div');
+  dockBody.className = 'ai-lab-dock-body';
   const diagnostics = document.createElement('pre');
-  diagnostics.className = 'ai-test-lab-diagnostics';
-
-  let activeTab: LabTab = 'fighter';
+  diagnostics.className = 'ai-lab-diagnostics';
+  const bottomBar = document.createElement('div');
+  bottomBar.className = 'ai-lab-bottom-bar';
   let selectionKey = '';
-  let statusMessage = 'Выберите бойца, угрозу или укрытие на карте.';
+  let renderKey = '';
 
-  setAiTestLabSelectionTarget(state, null);
-  root.addEventListener('toggle', () => {
-    setAiTestLabSelectionTarget(state, root.open ? selectionTargetForTab(activeTab) : null);
-  });
-
-  const render = () => {
-    body.replaceChildren();
-    if (activeTab === 'fighter') renderFighterTab(body, state, onChanged);
-    if (activeTab === 'threat') renderThreatTab(body, state, onChanged);
-    if (activeTab === 'cover') renderCoverTab(body, state, onChanged);
-    if (activeTab === 'test') {
-      renderTestTab(body, state, aiBridge, onChanged, () => statusMessage, (value) => {
-        statusMessage = value;
-        updateDiagnostics(diagnostics, state, statusMessage);
-      });
-    }
+  const updateOpenState = () => {
+    document.body.classList.toggle('ai-lab-open', runtime.open);
+    dock.hidden = !runtime.open;
+    bottomBar.hidden = !runtime.open;
+    topTools.classList.toggle('open', runtime.open);
   };
 
-  for (const [id, label] of [
-    ['fighter', 'Боец'],
-    ['threat', 'Угроза'],
-    ['cover', 'Укрытие'],
-    ['test', 'Испытание'],
-  ] as Array<[LabTab, string]>) {
-    const button = createButton(label);
-    button.addEventListener('click', () => {
-      activeTab = id;
-      setAiTestLabSelectionTarget(state, root.open ? selectionTargetForTab(activeTab) : null);
-      for (const item of tabRow.querySelectorAll('button')) item.classList.remove('active');
-      button.classList.add('active');
-      render();
-    });
-    if (id === activeTab) button.classList.add('active');
-    tabRow.appendChild(button);
-  }
+  const renderTopTools = () => {
+    topTools.replaceChildren();
+    const toggle = button(runtime.open ? 'Закрыть полигон' : 'Полигон ИИ', () => {
+      setAiLabOpen(state, !runtime.open);
+      updateOpenState();
+      renderAll();
+      onChanged();
+    }, runtime.open ? 'active primary' : 'primary');
+    toggle.classList.add('ai-lab-toggle');
+    topTools.append(toggle);
 
-  root.append(summary, tabRow, body, diagnostics);
-  document.body.appendChild(root);
-  render();
-  updateDiagnostics(diagnostics, state, statusMessage);
+    if (!runtime.open) return;
+    const tools: Array<[AiLabTool, string, string]> = [
+      ['select', 'Выбрать', 'Выбор и перетаскивание объектов'],
+      ['place_fighter', 'Разместить бойца', 'Курсор размещения бойца'],
+      ['place_threat', 'Разместить угрозу', 'Курсор размещения угрозы'],
+      ['place_cover', 'Разместить укрытие', 'Курсор размещения укрытия'],
+      ['delete', 'Удалить', 'Удаление щелчком'],
+    ];
+    for (const [tool, label, title] of tools) {
+      const item = button(label, () => {
+        setAiLabTool(state, tool);
+        renderAll();
+      }, runtime.tool === tool ? 'active' : '');
+      item.title = title;
+      item.dataset.labTool = tool;
+      topTools.append(item);
+    }
+    const knowledge = button('Карта бойца', () => {
+      setAiLabPanel(state, 'awareness');
+      setAwarenessMode(state, runtime.awarenessMode === 'off' ? 'all' : 'off');
+      renderAll();
+    }, runtime.awarenessMode !== 'off' ? 'active knowledge' : 'knowledge');
+    topTools.append(knowledge);
+  };
 
-  window.setInterval(() => {
-    const nextSelectionKey = [
-      state.selectedUnitId ?? '',
-      state.editor.selectedZoneId ?? '',
-      state.editor.selectedObjectId ?? '',
-    ].join('|');
-
-    if (nextSelectionKey !== selectionKey) {
-      selectionKey = nextSelectionKey;
-      rememberSelectedUnitForTest(state);
-      render();
+  const renderDock = () => {
+    dockTabs.replaceChildren();
+    for (const [panel, label] of [
+      ['fighter', 'Боец'],
+      ['threat', 'Угроза'],
+      ['cover', 'Укрытие'],
+      ['awareness', 'Карта бойца'],
+    ] as Array<[AiLabPanel, string]>) {
+      dockTabs.append(button(label, () => {
+        setAiLabPanel(state, panel);
+        renderAll();
+      }, runtime.activePanel === panel ? 'active' : ''));
     }
 
-    updateDiagnostics(diagnostics, state, statusMessage);
+    dockBody.replaceChildren();
+    if (runtime.activePanel === 'fighter') renderFighterPanel(dockBody, state, onChanged, renderAll);
+    if (runtime.activePanel === 'threat') renderThreatPanel(dockBody, state, onChanged, renderAll);
+    if (runtime.activePanel === 'cover') renderCoverPanel(dockBody, state, onChanged, renderAll);
+    if (runtime.activePanel === 'awareness') renderAwarenessPanel(dockBody, state, renderAll);
+    updateDiagnostics(diagnostics, state);
+  };
+
+  const renderBottom = () => {
+    bottomBar.replaceChildren();
+    const pause = button(getAiTestPaused(state) ? 'Продолжить' : 'Пауза', () => {
+      setAiTestPaused(state, !getAiTestPaused(state));
+      renderAll();
+      onChanged();
+    }, getAiTestPaused(state) ? 'active' : '');
+    bottomBar.append(pause);
+    bottomBar.append(button('Один шаг', () => {
+      tickSimulation(state, 0.1);
+      onChanged();
+      updateDiagnostics(diagnostics, state);
+    }));
+    bottomBar.append(button('Один расчёт ИИ', () => {
+      aiBridge.evaluateNow();
+      onChanged();
+      updateDiagnostics(diagnostics, state);
+    }));
+    bottomBar.append(button('Рассчитать и выполнить', () => {
+      aiBridge.tickNow();
+      onChanged();
+      updateDiagnostics(diagnostics, state);
+    }, 'primary'));
+    bottomBar.append(button('Сбросить бойца', () => {
+      const unit = getSelectedUnit(state);
+      if (unit) applyInitialStateToRuntime(unit);
+      onChanged();
+      updateDiagnostics(diagnostics, state);
+    }));
+    bottomBar.append(button('Сбросить сцену', () => {
+      resetAiTestScene(state);
+      renderAll();
+      onChanged();
+    }));
+
+    const speed = document.createElement('div');
+    speed.className = 'ai-lab-speed-row';
+    for (const scale of AI_TEST_TIME_SCALES) {
+      speed.append(button(`×${scale}`, () => {
+        setAiTestTimeScale(state, scale);
+        renderAll();
+      }, getAiTestTimeScale(state) === scale ? 'active' : ''));
+    }
+    bottomBar.append(speed);
+    const status = document.createElement('span');
+    status.className = 'ai-lab-status-line';
+    status.textContent = runtime.status;
+    bottomBar.append(status);
+  };
+
+  const renderAll = () => {
+    renderTopTools();
+    renderDock();
+    renderBottom();
+    updateOpenState();
+  };
+
+  const dockHeader = document.createElement('header');
+  dockHeader.innerHTML = '<div><strong>Полигон ИИ</strong><span>Личное восприятие бойца</span></div>';
+  dockHeader.append(button('×', () => {
+    setAiLabOpen(state, false);
+    updateOpenState();
+    renderAll();
+  }, 'icon'));
+  dock.append(dockHeader, dockTabs, dockBody, diagnostics);
+  topHost.append(topTools);
+  document.body.append(dock, bottomBar);
+  updateOpenState();
+  renderAll();
+
+  window.setInterval(() => {
+    const unit = getSelectedUnit(state);
+    const nextSelectionKey = `${state.selectedUnitId ?? ''}|${state.editor.selectedZoneId ?? ''}|${state.editor.selectedObjectId ?? ''}`;
+    const nextRenderKey = `${nextSelectionKey}|${runtime.open}|${runtime.activePanel}|${runtime.tool}|${runtime.awarenessMode}`;
+    if (nextSelectionKey !== selectionKey) {
+      selectionKey = nextSelectionKey;
+      if (state.editor.selectedZoneId) runtime.activePanel = 'threat';
+      else if (state.editor.selectedObjectId) runtime.activePanel = 'cover';
+      else if (state.selectedUnitId) runtime.activePanel = 'fighter';
+    }
+    if (nextRenderKey !== renderKey && !isEditingControl()) {
+      renderKey = nextRenderKey;
+      renderAll();
+    }
+    if (runtime.open) updateDiagnostics(diagnostics, state);
+    if (unit && runtime.activePanel === 'awareness' && runtime.awarenessMode !== 'off') {
+      unit.tacticalKnowledge.revision += 0;
+    }
   }, 250);
 }
 
-function renderFighterTab(container: HTMLElement, state: SimulationState, onChanged: () => void): void {
+function renderFighterPanel(
+  target: HTMLElement,
+  state: SimulationState,
+  onChanged: () => void,
+  rerender: () => void,
+): void {
   const unit = getSelectedUnit(state);
-  if (!unit) {
-    container.append(createHint('Выберите бойца на карте. В редакторе карты бойца можно перетащить в нужную точку.'));
-    return;
-  }
+  target.append(heading('Боец', 'Сначала выберите бойца на карте или нажмите «Разместить бойца».'));
+  if (!unit) return;
 
-  rememberSelectedUnitForTest(state);
-  container.append(createTitle(`${unit.labels.ru} — ${unit.id}`));
-
-  container.append(createTextControl('Имя', unit.labels.ru, (value) => {
+  target.append(textControl('Имя', unit.labels.ru, (value) => {
     unit.labels.ru = value || unit.id;
     unit.labels.en = value || unit.id;
     onChanged();
   }));
-
-  container.append(createSelectControl('Профиль', PROFILE_OPTIONS, unit.behaviorProfile, (value) => {
-    unit.behaviorProfile = value;
-    unit.behaviorSettings = createBehaviorSettings(value);
-    unit.soldier = createSoldierParameters(value);
+  target.append(sectionTitle('Постоянные характеристики'));
+  target.append(selectControl('Профиль', PROFILE_OPTIONS, unit.behaviorProfile, (profile) => {
+    const soldier = createSoldierParameters(profile);
+    unit.behaviorProfile = profile;
+    unit.behaviorSettings = createBehaviorSettings(profile);
+    unit.soldier = soldier;
+    unit.initialState = createUnitInitialState(soldier);
+    applyInitialStateToRuntime(unit);
     onChanged();
+    rerender();
   }));
-
-  container.append(createNumberControl('Скорость, клеток/с', unit.speedCellsPerSecond, 0.1, 1.5, 0.05, (value) => {
+  target.append(numberControl('Базовая скорость, клеток/с', unit.speedCellsPerSecond, 0.05, 1.5, 0.05, (value) => {
     unit.speedCellsPerSecond = value;
     onChanged();
   }));
-  container.append(createHint(`При масштабе карты это ${(unit.speedCellsPerSecond * state.map.metersPerCell).toFixed(1)} м/с.`));
-  container.append(createNumberControl('Дальность обзора, клеток', unit.viewRangeCells, 1, 50, 0.5, (value) => {
+  target.append(hint(`Текущая базовая скорость: ${(unit.speedCellsPerSecond * state.map.metersPerCell).toFixed(1)} м/с. Поза, усталость и состояние могут её уменьшать.`));
+  target.append(numberControl('Дальность обзора, клеток', unit.viewRangeCells, 1, 60, 0.5, (value) => {
     unit.viewRangeCells = value;
     onChanged();
   }));
-  container.append(createNumberControl('Угол обзора, градусов', radiansToDegrees(unit.viewAngleRadians), 1, 360, 1, (value) => {
+  target.append(numberControl('Угол обзора, °', radiansToDegrees(unit.viewAngleRadians), 1, 360, 1, (value) => {
     unit.viewAngleRadians = degreesToRadians(value);
     onChanged();
   }));
-  container.append(createSelectControl('Поза', POSTURE_OPTIONS, unit.behaviorRuntime.posture, (value) => {
-    unit.behaviorRuntime.previousPosture = unit.behaviorRuntime.posture;
-    unit.behaviorRuntime.posture = value;
-    onChanged();
-  }));
-
-  container.append(createGroupTitle('Текущее состояние'));
-  container.append(createNumberControl('Стресс', unit.behaviorRuntime.stress, 0, 100, 1, (value) => {
-    unit.behaviorRuntime.stress = value;
-  }));
-  container.append(createNumberControl('Подавление', unit.behaviorRuntime.suppression, 0, 100, 1, (value) => {
-    unit.behaviorRuntime.suppression = value;
-  }));
-  container.append(createNumberControl('Патроны', unit.behaviorRuntime.ammo, 0, 999, 1, (value) => {
-    unit.behaviorRuntime.ammo = Math.round(value);
-  }));
-  container.append(createCheckboxControl('Оружие готово', unit.behaviorRuntime.weaponReady, (value) => {
-    unit.behaviorRuntime.weaponReady = value;
-  }));
-
-  container.append(createGroupTitle('Черты'));
   for (const [key, label] of TRAIT_FIELDS) {
-    container.append(createNumberControl(label, unit.soldier.traits[key], 0, 100, 1, (value) => {
+    target.append(numberControl(label, unit.soldier.traits[key], 0, 100, 1, (value) => {
       unit.soldier.traits[key] = value;
+      onChanged();
+    }));
+  }
+  for (const [key, label] of PERMANENT_CONDITION_FIELDS) {
+    target.append(numberControl(label, unit.soldier.condition[key], 0, 100, 1, (value) => {
+      unit.soldier.condition[key] = value;
+      onChanged();
     }));
   }
 
-  container.append(createGroupTitle('Состояние бойца'));
-  for (const [key, label] of CONDITION_FIELDS) {
-    container.append(createNumberControl(label, unit.soldier.condition[key], 0, 100, 1, (value) => {
-      unit.soldier.condition[key] = value;
+  target.append(sectionTitle('Начальное состояние'));
+  target.append(hint('Эти значения применяются при сбросе бойца. Во время испытания игра их не переписывает.'));
+  target.append(selectControl('Начальная поза', POSTURE_OPTIONS, unit.initialState.posture, (value) => {
+    unit.initialState.posture = value;
+  }));
+  for (const [key, label, max] of INITIAL_FIELDS) {
+    target.append(numberControl(label, unit.initialState[key], 0, max, 1, (value) => {
+      (unit.initialState[key] as number) = key === 'ammo' ? Math.round(value) : value;
     }));
   }
+  target.append(checkboxControl('Оружие готово в начале', unit.initialState.weaponReady, (value) => {
+    unit.initialState.weaponReady = value;
+  }));
+  const initialButtons = rowButtons();
+  initialButtons.append(
+    button('Применить начальное сейчас', () => {
+      applyInitialStateToRuntime(unit);
+      onChanged();
+      rerender();
+    }, 'primary'),
+    button('Скопировать текущее в начальное', () => {
+      copyRuntimeToInitialState(unit);
+      onChanged();
+      rerender();
+    }),
+  );
+  target.append(initialButtons);
+
+  target.append(sectionTitle('Текущее состояние — изменяется игрой'));
+  target.append(readonlyGrid([
+    ['Поза', postureLabel(unit.behaviorRuntime.posture)],
+    ['Стресс', round(unit.behaviorRuntime.stress)],
+    ['Подавление', round(unit.behaviorRuntime.suppression)],
+    ['Усталость', round(unit.soldier.condition.fatigue)],
+    ['Мораль', round(unit.soldier.condition.morale)],
+    ['Замешательство', round(unit.soldier.condition.confusion)],
+    ['Здоровье', round(unit.soldier.condition.health)],
+    ['Патроны', Math.round(unit.behaviorRuntime.ammo)],
+    ['Оружие', unit.behaviorRuntime.weaponReady ? 'готово' : 'не готово'],
+    ['Действие', unit.behaviorRuntime.currentAction],
+  ]));
 }
 
-function renderThreatTab(container: HTMLElement, state: SimulationState, onChanged: () => void): void {
+function renderThreatPanel(
+  target: HTMLElement,
+  state: SimulationState,
+  onChanged: () => void,
+  rerender: () => void,
+): void {
   const zone = getSelectedPressureZone(state);
-  if (!zone) {
-    container.append(createHint('Щёлкните по сектору или его источнику прямо на карте. Редактор карты включать не нужно.'));
-    return;
-  }
-
+  target.append(heading('Угроза', 'Выберите сектор на карте. После выбора появятся ручки направления, дальности, ширины и мёртвой зоны.'));
+  if (!zone) return;
   const settings = resolvePressureZoneSettings(zone);
-  applyResolvedThreatDefaults(zone, settings);
-  container.append(createTitle(`${zone.labels.ru} — ${zone.id}`));
-  container.append(createSelectControl<PressureZoneMode>('Тип угрозы', [
-    ['area', 'Область опасности'],
+
+  target.append(textControl('Название', zone.labels.ru, (value) => {
+    zone.labels.ru = value || zone.id;
+    zone.labels.en = value || zone.id;
+    onChanged();
+  }));
+  target.append(selectControl<PressureZoneMode>('Тип', [
     ['directional_fire', 'Направленный огонь'],
+    ['area', 'Область опасности'],
   ], settings.mode, (value) => {
     zone.mode = value;
     onChanged();
+    rerender();
   }));
-  container.append(createCheckboxControl('Включена', settings.enabled, (value) => {
-    zone.enabled = value;
-    onChanged();
-  }));
-  container.append(createNumberControl('Опасность, 0–100', zone.strength, 0, 100, 1, (value) => {
-    zone.strength = value;
-    onChanged();
-  }));
-  container.append(createNumberControl('Подавление, 0–100', settings.suppression, 0, 100, 1, (value) => {
-    zone.suppression = value;
-    onChanged();
-  }));
-  container.append(createNumberControl('Стресс в секунду', zone.stressPerSecond, 0, 100, 1, (value) => {
-    zone.stressPerSecond = value;
-    onChanged();
-  }));
-  container.append(createNumberControl('Направление, градусов', settings.directionDegrees, 0, 359, 1, (value) => {
-    zone.directionDegrees = value;
-    onChanged();
-  }));
-  container.append(createNumberControl('Угол сектора, градусов', settings.arcDegrees, 1, 360, 1, (value) => {
-    zone.arcDegrees = value;
-    onChanged();
-  }));
-  container.append(createNumberControl('Дальность, клеток', settings.rangeCells, 0.5, 100, 0.5, (value) => {
-    zone.rangeCells = value;
-    onChanged();
-  }));
-  container.append(createNumberControl('Ближняя граница, клеток', settings.minRangeCells, 0, 100, 0.5, (value) => {
-    zone.minRangeCells = value;
-    onChanged();
-  }));
-  container.append(createNumberControl('Падение силы к краю, %', settings.falloffPercent, 0, 100, 1, (value) => {
-    zone.falloffPercent = value;
-    onChanged();
-  }));
-  container.append(createCheckboxControl('Источник виден бойцу', settings.sourceVisible, (value) => {
-    zone.sourceVisible = value;
-  }));
-  container.append(createCheckboxControl('Источник известен бойцу', settings.sourceKnown, (value) => {
-    zone.sourceKnown = value;
-  }));
+  if (settings.mode === 'area') {
+    target.append(selectControl<PressureZoneShape>('Форма', [['circle', 'Круг'], ['rect', 'Прямоугольник']], zone.shape, (value) => {
+      zone.shape = value;
+      onChanged();
+      rerender();
+    }));
+  }
+  target.append(checkboxControl('Включена', settings.enabled, (value) => { zone.enabled = value; onChanged(); }));
+  target.append(numberControl('Опасность, 0–100', zone.strength, 0, 100, 1, (value) => { zone.strength = value; onChanged(); }));
+  target.append(numberControl('Подавление, 0–100', settings.suppression, 0, 100, 1, (value) => { zone.suppression = value; onChanged(); }));
+  target.append(numberControl('Стресс в секунду', zone.stressPerSecond, 0, 100, 1, (value) => { zone.stressPerSecond = value; onChanged(); }));
+
+  target.append(sectionTitle('Геометрия — можно менять ручками на карте'));
+  if (settings.mode === 'directional_fire') {
+    target.append(numberControl('Направление, °', settings.directionDegrees, 0, 359, 1, (value) => { zone.directionDegrees = value; onChanged(); }));
+    target.append(numberControl('Ширина сектора, °', settings.arcDegrees, 2, 360, 1, (value) => { zone.arcDegrees = value; onChanged(); }));
+    target.append(numberControl('Дальность, клеток', settings.rangeCells, 0.5, 100, 0.25, (value) => { zone.rangeCells = value; onChanged(); }));
+    target.append(numberControl('Мёртвая зона, клеток', settings.minRangeCells, 0, 99, 0.25, (value) => { zone.minRangeCells = Math.min(value, (zone.rangeCells ?? 1) - 0.25); onChanged(); }));
+  } else if (zone.shape === 'circle') {
+    target.append(numberControl('Радиус, клеток', zone.radiusCells, 0.5, 60, 0.25, (value) => { zone.radiusCells = value; onChanged(); }));
+  } else {
+    target.append(numberControl('Ширина, клеток', zone.widthCells, 0.5, 80, 0.25, (value) => { zone.widthCells = value; onChanged(); }));
+    target.append(numberControl('Длина, клеток', zone.heightCells, 0.5, 80, 0.25, (value) => { zone.heightCells = value; onChanged(); }));
+    target.append(numberControl('Поворот, °', zone.rotationDegrees ?? 0, 0, 359, 1, (value) => { zone.rotationDegrees = value; onChanged(); }));
+  }
+
+  target.append(sectionTitle('Знание бойца об угрозе'));
+  target.append(checkboxControl('Источник виден', settings.sourceVisible, (value) => { zone.sourceVisible = value; onChanged(); }));
+  target.append(checkboxControl('Источник известен', settings.sourceKnown, (value) => { zone.sourceKnown = value; onChanged(); }));
+  target.append(numberControl('Уверенность, %', zone.knowledgeConfidence ?? 100, 0, 100, 1, (value) => { zone.knowledgeConfidence = value; onChanged(); }));
+  target.append(numberControl('Неточность положения, клеток', zone.uncertaintyCells ?? 0.15, 0, 12, 0.1, (value) => { zone.uncertaintyCells = value; onChanged(); }));
+  target.append(hint('Это объективная заготовка угрозы. Каждый боец хранит собственную копию знания, которая со временем теряет уверенность и становится менее точной.'));
 }
 
-function renderCoverTab(container: HTMLElement, state: SimulationState, onChanged: () => void): void {
+function renderCoverPanel(
+  target: HTMLElement,
+  state: SimulationState,
+  onChanged: () => void,
+  rerender: () => void,
+): void {
   const object = getSelectedMapObject(state);
+  target.append(heading('Укрытие', 'Выберите предмет. Лес и складки рельефа учитываются автоматически и не требуют отдельного объекта.'));
   if (!object) {
-    container.append(createHint('Щёлкните по предмету прямо на карте. Угроза и боец останутся выбранными для проверки направления защиты.'));
+    target.append(hint('Сила защиты показывает, насколько хорошо материал останавливает стрелковое оружие. Надёжность показывает вероятность, что геометрия действительно закроет бойца.'));
     return;
   }
-
   const properties = resolveObjectCoverProperties(object);
-  applyResolvedCoverDefaults(object, properties);
-  container.append(createTitle(`${object.labels?.ru ?? object.kind} — ${object.id}`));
-  container.append(createHint('У укрытия нет навсегда заданной стороны: она определяется выбранной угрозой. Красная стрелка показывает направление огня, зелёная стрелка на карте показывает защищённую сторону.'));
-  container.append(createNumberControl('Физическая защита, 0–100', properties.coverProtection, 0, 100, 1, (value) => {
-    object.coverProtection = value;
-    onChanged();
-  }));
-  container.append(createNumberControl('Маскировка, 0–100', properties.concealment, 0, 100, 1, (value) => {
-    object.concealment = value;
-    onChanged();
-  }));
-  container.append(createCheckboxControl('Простреливаемое', properties.penetrable, (value) => {
-    object.penetrable = value;
-    onChanged();
-  }));
-  container.append(createSelectControl<CoverPosture>('Какую позу закрывает', POSTURE_OPTIONS, properties.coverPosture, (value) => {
-    object.coverPosture = value;
-    onChanged();
-  }));
-  container.append(createNumberControl('Физическая высота, м', object.losHeightMeters ?? 1, 0, 20, 0.1, (value) => {
-    object.losHeightMeters = value;
-    onChanged();
-  }));
-}
-
-function renderTestTab(
-  container: HTMLElement,
-  state: SimulationState,
-  aiBridge: AiGameBridgeHandle,
-  onChanged: () => void,
-  getStatus: () => string,
-  setStatus: (value: string) => void,
-): void {
-  container.append(createTitle('Управление испытанием'));
-
-  const speedRow = document.createElement('div');
-  speedRow.className = 'ai-test-lab-speed-row';
-  for (const scale of AI_TEST_TIME_SCALES) {
-    const button = createButton(`×${scale}`);
-    button.classList.toggle('active', getAiTestTimeScale(state) === scale);
-    button.addEventListener('click', () => {
-      setAiTestTimeScale(state, scale);
-      setStatus(`Скорость симуляции: ×${scale}`);
-      renderTestTabAgain(container, state, aiBridge, onChanged, getStatus, setStatus);
-    });
-    speedRow.appendChild(button);
-  }
-  container.append(speedRow);
-
-  const pauseButton = createButton(getAiTestPaused(state) ? 'Продолжить' : 'Пауза');
-  pauseButton.addEventListener('click', () => {
-    setAiTestPaused(state, !getAiTestPaused(state));
-    setStatus(getAiTestPaused(state) ? 'Симуляция остановлена.' : 'Симуляция продолжена.');
-    onChanged();
-    renderTestTabAgain(container, state, aiBridge, onChanged, getStatus, setStatus);
-  });
-
-  const evaluateButton = createButton('Один расчёт ИИ');
-  evaluateButton.addEventListener('click', () => {
-    const result = aiBridge.evaluateNow();
-    setStatus(result ? `Предварительное решение: ${result.explanationRu ?? result.explanation}` : 'Выберите бойца.');
-    onChanged();
-  });
-
-  const applyButton = createButton('Рассчитать и выполнить');
-  applyButton.addEventListener('click', () => {
-    const result = aiBridge.tickNow();
-    setStatus(result ? `Решение применено: ${result.explanationRu ?? result.explanation}` : 'Выберите бойца.');
-    onChanged();
-  });
-
-  const stepButton = createButton('Один шаг симуляции');
-  stepButton.addEventListener('click', () => {
-    tickSimulation(state, 0.1);
-    setStatus(`Выполнен шаг 0,1 с при скорости ×${getAiTestTimeScale(state)}.`);
-    onChanged();
-  });
-
-  const resetUnitButton = createButton('Сбросить бойца');
-  resetUnitButton.addEventListener('click', () => {
-    setStatus(resetSelectedUnitForTest(state) ? 'Выбранный боец возвращён в исходное состояние.' : 'Выберите бойца.');
-    onChanged();
-  });
-
-  const resetSceneButton = createButton('Сбросить всю сцену');
-  resetSceneButton.addEventListener('click', () => {
-    resetAiTestScene(state);
-    setStatus('Сцена возвращена к исходному состоянию запуска.');
-    onChanged();
-  });
-
-  const setBaselineButton = createButton('Запомнить сцену как исходную');
-  setBaselineButton.addEventListener('click', () => {
-    refreshAiTestLabSceneSnapshot(state);
-    setStatus('Текущее состояние сцены сохранено как точка сброса.');
-  });
-
-  container.append(
-    pauseButton,
-    evaluateButton,
-    applyButton,
-    stepButton,
-    resetUnitButton,
-    resetSceneButton,
-    setBaselineButton,
-    createHint(getStatus()),
-  );
-}
-
-function renderTestTabAgain(
-  container: HTMLElement,
-  state: SimulationState,
-  aiBridge: AiGameBridgeHandle,
-  onChanged: () => void,
-  getStatus: () => string,
-  setStatus: (value: string) => void,
-): void {
-  container.replaceChildren();
-  renderTestTab(container, state, aiBridge, onChanged, getStatus, setStatus);
-}
-
-function updateDiagnostics(target: HTMLElement, state: SimulationState, status: string): void {
-  const unit = getSelectedUnit(state);
-  if (!unit) {
-    target.textContent = `Статус: ${status}\nБоец не выбран.`;
-    return;
-  }
-
-  const threats = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
-  const cover = findBestCoverForThreat(
-    state.map,
-    unit.position,
-    threats.targetPosition,
-    unit.behaviorRuntime.posture,
-  );
-  const strongest = threats.strongest;
-  const lines = [
-    `Статус: ${status}`,
-    `Боец: ${unit.labels.ru}`,
-    `Скорость: ${(unit.speedCellsPerSecond * state.map.metersPerCell).toFixed(1)} м/с | время ×${getAiTestTimeScale(state)}`,
-    `Опасность: ${threats.danger} | подавление: ${threats.suppression} | стресс: ${Math.round(unit.behaviorRuntime.stress)}`,
-    `Патроны: ${unit.behaviorRuntime.ammo} | оружие: ${unit.behaviorRuntime.weaponReady ? 'готово' : 'не готово'}`,
-    strongest
-      ? `Главная угроза: ${strongest.zone.labels.ru}, ${Math.round(strongest.distanceCells * state.map.metersPerCell)} м, защита ${strongest.coverProtection}`
-      : 'Главная угроза: нет',
-    cover.position
-      ? `Лучшее укрытие: ${cover.object?.labels?.ru ?? cover.object?.kind ?? 'объект'}, ${Math.round(cover.distanceCells * state.map.metersPerCell)} м, защита ${cover.protection}`
-      : 'Лучшее укрытие: нет',
-    `Последнее решение: ${unit.behaviorRuntime.aiGraphReason}`,
-  ];
-  target.textContent = lines.join('\n');
-}
-
-function applyResolvedThreatDefaults(zone: PressureZone, settings: ReturnType<typeof resolvePressureZoneSettings>): void {
-  zone.mode ??= settings.mode;
-  zone.suppression ??= settings.suppression;
-  zone.directionDegrees ??= settings.directionDegrees;
-  zone.arcDegrees ??= settings.arcDegrees;
-  zone.rangeCells ??= settings.rangeCells;
-  zone.minRangeCells ??= settings.minRangeCells;
-  zone.falloffPercent ??= settings.falloffPercent;
-  zone.enabled ??= settings.enabled;
-  zone.sourceVisible ??= settings.sourceVisible;
-  zone.sourceKnown ??= settings.sourceKnown;
-}
-
-function applyResolvedCoverDefaults(object: MapObject, properties: ReturnType<typeof resolveObjectCoverProperties>): void {
   object.coverProtection ??= properties.coverProtection;
+  object.coverReliability ??= properties.coverReliability;
   object.concealment ??= properties.concealment;
   object.penetrable ??= properties.penetrable;
   object.coverPosture ??= properties.coverPosture;
+  const expected = Math.round(properties.coverProtection * properties.coverReliability / 100);
+
+  target.append(textControl('Название', object.labels?.ru ?? object.kind, (value) => {
+    object.labels = { en: value || object.kind, ru: value || object.kind };
+    onChanged();
+  }));
+  target.append(sectionTitle('Стрелковое оружие'));
+  target.append(numberControl('Сила защиты, %', properties.coverProtection, 0, 100, 1, (value) => { object.coverProtection = value; onChanged(); rerender(); }));
+  target.append(numberControl('Надёжность защиты, %', properties.coverReliability, 0, 100, 1, (value) => { object.coverReliability = value; onChanged(); rerender(); }));
+  target.append(readonlyGrid([
+    ['Ожидаемая защита', `${expected}% до поправки на угол и позу`],
+  ]));
+  target.append(numberControl('Маскировка, %', properties.concealment, 0, 100, 1, (value) => { object.concealment = value; onChanged(); }));
+  target.append(checkboxControl('Простреливаемое', properties.penetrable, (value) => { object.penetrable = value; onChanged(); }));
+  target.append(selectControl<CoverPosture>('Какую позу закрывает', POSTURE_OPTIONS, properties.coverPosture, (value) => { object.coverPosture = value; onChanged(); }));
+  target.append(numberControl('Физическая высота, м', object.losHeightMeters ?? 1, 0, 20, 0.1, (value) => { object.losHeightMeters = value; onChanged(); }));
+  target.append(hint('Окончательный расчёт зависит от направления огня, размера предмета, положения бойца и его позы. Красная стрелка показывает огонь, зелёная — защищённую сторону.'));
+
+  const unit = getSelectedUnit(state);
+  const threat = getSelectedPressureZone(state);
+  if (unit && threat) {
+    const result = evaluateSmallArmsCover(state.map, { x: threat.x, y: threat.y }, unit.position, unit.behaviorRuntime.posture);
+    target.append(sectionTitle('Проверка выбранной ситуации'));
+    target.append(readonlyGrid([
+      ['Сила', `${result.strength}%`],
+      ['Надёжность', `${result.reliability}%`],
+      ['Ожидаемая защита', `${result.expectedProtection}%`],
+      ['Источник', result.sourceRu],
+      ['Маскировка', `${result.concealment}%`],
+    ]));
+  }
 }
 
-function createTitle(text: string): HTMLElement {
-  const title = document.createElement('h3');
-  title.textContent = text;
-  return title;
+function renderAwarenessPanel(target: HTMLElement, state: SimulationState, rerender: () => void): void {
+  const unit = getSelectedUnit(state);
+  target.append(heading('Карта бойца', 'Это не объективная карта мира, а то, что знает и предполагает выбранный солдат.'));
+  if (!unit) return;
+  const runtime = getAiLabRuntime(state);
+  const modes = document.createElement('div');
+  modes.className = 'ai-lab-awareness-modes';
+  for (const [mode, label] of AWARENESS_MODES) {
+    modes.append(button(label, () => {
+      setAwarenessMode(state, mode);
+      rerender();
+    }, runtime.awarenessMode === mode ? 'active' : ''));
+  }
+  target.append(modes);
+
+  const report = buildSoldierAwarenessReport(state, unit);
+  const best = report.bestSafePositions[0];
+  target.append(readonlyGrid([
+    ['Опасность здесь', `${report.currentPosition.danger}/100`],
+    ['Ожидаемая защита здесь', `${report.currentPosition.expectedProtection}/100`],
+    ['Безопасность здесь', `${report.currentPosition.safety}/100`],
+    ['Опасность маршрута', `${report.routeDanger}/100`],
+    ['Уверенность в угрозе', `${report.threatConfidence}%`],
+    ['Лучшая позиция', best ? `${best.score.toFixed(0)} баллов, ${Math.round(best.distanceCells * state.map.metersPerCell)} м` : 'не найдена'],
+  ]));
+  target.append(sectionTitle('Известные угрозы этого бойца'));
+  if (unit.tacticalKnowledge.threats.length === 0) {
+    target.append(hint('Пока боец не знает ни об одной угрозе. Запустите симуляцию или сделайте источник видимым/известным.'));
+  } else {
+    for (const threat of unit.tacticalKnowledge.threats.slice(0, 8)) {
+      target.append(readonlyGrid([
+        [threat.labelRu, `${Math.round(threat.confidence)}% уверенности`],
+        ['Источник знания', threatSourceLabel(threat.source)],
+        ['Неточность', `${threat.uncertaintyCells.toFixed(1)} клетки`],
+      ], 'compact'));
+    }
+  }
+  target.append(sectionTitle('Условные цвета'));
+  target.append(legend());
 }
 
-function createGroupTitle(text: string): HTMLElement {
-  const title = document.createElement('div');
-  title.className = 'ai-test-lab-group-title';
-  title.textContent = text;
-  return title;
+function updateDiagnostics(target: HTMLElement, state: SimulationState): void {
+  const runtime = getAiLabRuntime(state);
+  const unit = getSelectedUnit(state);
+  if (!unit) {
+    target.textContent = `Статус: ${runtime.status}\nБоец не выбран.`;
+    return;
+  }
+  const report = buildSoldierAwarenessReport(state, unit);
+  const best = report.bestSafePositions[0];
+  target.textContent = [
+    `Статус: ${runtime.status}`,
+    `Боец: ${unit.labels.ru}`,
+    `Опасность ${report.currentPosition.danger} · защита ${report.currentPosition.expectedProtection} · безопасность ${report.currentPosition.safety}`,
+    `Стресс ${round(unit.behaviorRuntime.stress)} · подавление ${round(unit.behaviorRuntime.suppression)} · мораль ${round(unit.soldier.condition.morale)}`,
+    `Знаний об угрозах: ${unit.tacticalKnowledge.threats.length} · уверенность ${report.threatConfidence}%`,
+    best ? `Лучшее безопасное место: ${Math.round(best.distanceCells * state.map.metersPerCell)} м, оценка ${best.score.toFixed(0)}` : 'Лучшее безопасное место: нет',
+    `Последнее решение ИИ: ${unit.behaviorRuntime.aiGraphReason}`,
+  ].join('\n');
 }
 
-function createHint(text: string): HTMLElement {
-  const hint = document.createElement('div');
-  hint.className = 'ai-test-lab-hint';
-  hint.textContent = text;
-  return hint;
+function heading(title: string, hintText: string): HTMLElement {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'ai-lab-heading';
+  const h = document.createElement('h2');
+  h.textContent = title;
+  wrapper.append(h, hint(hintText));
+  return wrapper;
 }
 
-function createButton(text: string): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.textContent = text;
-  return button;
+function sectionTitle(text: string): HTMLElement {
+  const item = document.createElement('h3');
+  item.className = 'ai-lab-section-title';
+  item.textContent = text;
+  return item;
 }
 
-function createTextControl(label: string, value: string, onChange: (value: string) => void): HTMLElement {
+function hint(text: string): HTMLElement {
+  const item = document.createElement('p');
+  item.className = 'ai-lab-hint';
+  item.textContent = text;
+  return item;
+}
+
+function button(text: string, action: () => void, className = ''): HTMLButtonElement {
+  const item = document.createElement('button');
+  item.type = 'button';
+  item.textContent = text;
+  item.className = className;
+  item.addEventListener('click', action);
+  return item;
+}
+
+function textControl(label: string, value: string, action: (value: string) => void): HTMLElement {
   const input = document.createElement('input');
   input.type = 'text';
   input.value = value;
-  input.addEventListener('change', () => onChange(input.value.trim()));
-  return wrapControl(label, input);
+  input.addEventListener('change', () => action(input.value.trim()));
+  return control(label, input);
 }
 
-function createNumberControl(
+function numberControl(
   label: string,
   value: number,
   min: number,
   max: number,
   step: number,
-  onChange: (value: number) => void,
+  action: (value: number) => void,
 ): HTMLElement {
   const input = document.createElement('input');
   input.type = 'number';
-  input.value = String(round(value, step));
+  input.value = String(Number(value.toFixed(step < 1 ? 2 : 0)));
   input.min = String(min);
   input.max = String(max);
   input.step = String(step);
@@ -526,55 +592,115 @@ function createNumberControl(
     const parsed = Number(input.value);
     const next = Math.max(min, Math.min(max, Number.isFinite(parsed) ? parsed : value));
     input.value = String(next);
-    onChange(next);
+    action(next);
   });
-  return wrapControl(label, input);
+  return control(label, input);
 }
 
-function createCheckboxControl(label: string, value: boolean, onChange: (value: boolean) => void): HTMLElement {
+function checkboxControl(label: string, value: boolean, action: (value: boolean) => void): HTMLElement {
   const input = document.createElement('input');
   input.type = 'checkbox';
   input.checked = value;
-  input.addEventListener('change', () => onChange(input.checked));
-  return wrapControl(label, input);
+  input.addEventListener('change', () => action(input.checked));
+  return control(label, input);
 }
 
-function createSelectControl<T extends string>(
+function selectControl<T extends string>(
   label: string,
   options: Array<[T, string]>,
   value: T,
-  onChange: (value: T) => void,
+  action: (value: T) => void,
 ): HTMLElement {
   const select = document.createElement('select');
   for (const [optionValue, optionLabel] of options) {
     const option = document.createElement('option');
     option.value = optionValue;
     option.textContent = optionLabel;
-    select.appendChild(option);
+    select.append(option);
   }
   select.value = value;
-  select.addEventListener('change', () => onChange(select.value as T));
-  return wrapControl(label, select);
+  select.addEventListener('change', () => action(select.value as T));
+  return control(label, select);
 }
 
-function wrapControl(label: string, control: HTMLElement): HTMLElement {
+function control(label: string, input: HTMLElement): HTMLElement {
   const wrapper = document.createElement('label');
-  wrapper.className = 'ai-test-lab-control';
+  wrapper.className = 'ai-lab-control';
   const text = document.createElement('span');
   text.textContent = label;
-  wrapper.append(text, control);
+  wrapper.append(text, input);
   return wrapper;
 }
 
-function round(value: number, step: number): number {
-  const digits = step < 1 ? 2 : 0;
-  return Number(value.toFixed(digits));
+function readonlyGrid(rows: Array<[string, string | number]>, className = ''): HTMLElement {
+  const grid = document.createElement('div');
+  grid.className = `ai-lab-readonly-grid ${className}`.trim();
+  for (const [label, value] of rows) {
+    const row = document.createElement('div');
+    const name = document.createElement('span');
+    name.textContent = label;
+    const result = document.createElement('b');
+    result.textContent = String(value);
+    row.append(name, result);
+    grid.append(row);
+  }
+  return grid;
 }
 
-function radiansToDegrees(radians: number): number {
-  return (radians * 180) / Math.PI;
+function rowButtons(): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'ai-lab-button-row';
+  return row;
 }
 
-function degreesToRadians(degrees: number): number {
-  return (degrees * Math.PI) / 180;
+function legend(): HTMLElement {
+  const root = document.createElement('div');
+  root.className = 'ai-lab-legend';
+  for (const [className, label] of [
+    ['danger-high', 'Красный — высокая известная опасность'],
+    ['danger-medium', 'Оранжевый — средняя опасность'],
+    ['uncertain', 'Жёлтый — неточная или устаревающая угроза'],
+    ['safe', 'Зелёный — безопасная позиция'],
+    ['concealment', 'Голубой — хорошая маскировка'],
+  ]) {
+    const row = document.createElement('div');
+    const swatch = document.createElement('i');
+    swatch.className = className;
+    const text = document.createElement('span');
+    text.textContent = label;
+    row.append(swatch, text);
+    root.append(row);
+  }
+  return root;
+}
+
+function postureLabel(value: UnitPosture): string {
+  if (value === 'crouched') return 'пригнувшись';
+  if (value === 'prone') return 'лёжа';
+  return 'стоя';
+}
+
+function threatSourceLabel(source: UnitModel['tacticalKnowledge']['threats'][number]['source']): string {
+  if (source === 'seen') return 'видел сам';
+  if (source === 'heard') return 'услышал';
+  if (source === 'fire_pressure') return 'почувствовал огонь';
+  return 'получил сообщение';
+}
+
+function isEditingControl(): boolean {
+  return document.activeElement instanceof HTMLInputElement
+    || document.activeElement instanceof HTMLSelectElement
+    || document.activeElement instanceof HTMLTextAreaElement;
+}
+
+function round(value: number): number {
+  return Math.round(value);
+}
+
+function radiansToDegrees(value: number): number {
+  return value * 180 / Math.PI;
+}
+
+function degreesToRadians(value: number): number {
+  return value * Math.PI / 180;
 }
