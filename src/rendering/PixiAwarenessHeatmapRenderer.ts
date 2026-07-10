@@ -20,19 +20,19 @@ export class PixiAwarenessHeatmapRenderer {
     if (state.editor.enabled || awarenessMode === 'off' || !unit) {
       if (this.lastKey !== 'hidden') {
         this.lastKey = 'hidden';
-        this.container.removeChildren();
+        clearContainer(this.container);
       }
       return;
     }
 
     // Do not build the expensive full-map report on every animation frame.
-    // The heatmap is cell-based, so movement inside one cell does not need a redraw.
+    // Orders change often, but they do not change the heatmap cells themselves.
     const key = buildAwarenessRenderKey(state, unit, awarenessMode);
     if (key === this.lastKey) return;
 
     const report = buildSoldierAwarenessReport(state, unit);
     this.lastKey = key;
-    this.container.removeChildren();
+    clearContainer(this.container);
 
     const graphics = new Graphics();
     const size = state.map.cellSize;
@@ -69,9 +69,6 @@ export function buildAwarenessRenderKey(
 ): string {
   const unitCellX = Math.floor(unit.position.x);
   const unitCellY = Math.floor(unit.position.y);
-  const orderCell = unit.order
-    ? `${Math.floor(unit.order.target.x)}:${Math.floor(unit.order.target.y)}`
-    : 'none';
 
   return [
     `mode:${mode}`,
@@ -80,10 +77,13 @@ export function buildAwarenessRenderKey(
     `cellSize:${state.map.cellSize}`,
     `unit:${unit.id}`,
     `unitCell:${unitCellX}:${unitCellY}`,
-    `orderCell:${orderCell}`,
     `posture:${unit.behaviorRuntime.posture}`,
     `knowledge:${unit.tacticalKnowledge.revision}`,
   ].join(';');
+}
+
+function clearContainer(container: Container): void {
+  for (const child of container.removeChildren()) child.destroy({ children: true });
 }
 
 function getMapIdentity(map: object): number {
