@@ -112,14 +112,21 @@ export class PixiOverlayRenderer {
   }
 
   private renderKnowledgeLayerIfNeeded(state: SimulationState): void {
-    const nextKey = getKnowledgeLayerKey(state);
+    const visible = isKnowledgeLayerVisible(state);
+    const nextKey = visible
+      ? getKnowledgeLayerKey(state)
+      : `knowledge:hidden;editor:${state.editor.enabled ? '1' : '0'};mode:${getSimulationLayerState(state).mode}`;
     if (nextKey === this.lastKnowledgeKey) return;
 
     this.lastKnowledgeKey = nextKey;
     destroyContainerChildren(this.knowledgeContainer);
-    drawKnowledgeOverlay(this.knowledgeContainer, state);
-    drawThreatMemoryOverlay(this.knowledgeContainer, state);
-    drawCoverKnowledgeOverlay(this.knowledgeContainer, state);
+
+    if (visible) {
+      drawKnowledgeOverlay(this.knowledgeContainer, state);
+      drawThreatMemoryOverlay(this.knowledgeContainer, state);
+      drawCoverKnowledgeOverlay(this.knowledgeContainer, state);
+    }
+
     this.diagnostics.knowledgeRebuildCount += 1;
     this.publishDiagnostics();
   }
@@ -180,6 +187,13 @@ export class PixiOverlayRenderer {
     this.diagnostics.interactionObjectCount = this.interactionContainer.children.length;
     (window as OverlayDebugWindow).__realWargameOverlayDebug = { ...this.diagnostics };
   }
+}
+
+function isKnowledgeLayerVisible(state: SimulationState): boolean {
+  if (getKnowledgeOverlayState(state).active) return true;
+  if (state.editor.enabled) return false;
+  const mode = getSimulationLayerState(state).mode;
+  return mode === 'danger' || mode === 'memory';
 }
 
 function destroyContainerChildren(container: Container): void {
@@ -588,5 +602,5 @@ function drawZoneHandles(graphics: Graphics, zone: PressureZone, cellSize: numbe
 }
 
 function degreesToRadians(degrees: number): number {
-  return (degrees * Math.PI) / 180;
+  return degrees * Math.PI / 180;
 }
