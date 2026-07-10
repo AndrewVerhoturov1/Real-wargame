@@ -15,16 +15,16 @@ import type { UnitModel } from '../units/UnitModel';
 export interface BestCoverSensor {
   exists: boolean;
   quality: number;
-  distanceCells: number | null;
-  distanceMeters: number | null;
+  distanceCells: number;
+  distanceMeters: number;
   direction: string;
   position: GridPosition | null;
 }
 
 export interface KnownThreatSensor {
   exists: boolean;
-  distanceCells: number | null;
-  distanceMeters: number | null;
+  distanceCells: number;
+  distanceMeters: number;
   confidence: number;
   label: string;
 }
@@ -81,15 +81,15 @@ export function buildEnvironmentSensorReport(state: SimulationState, unit: UnitM
     bestCoverNearby: {
       exists: Boolean(bestCover.position),
       quality: bestCover.protection,
-      distanceCells: bestCover.position ? roundOne(bestCover.distanceCells) : null,
-      distanceMeters: bestCover.position ? Math.round(bestCover.distanceCells * state.map.metersPerCell) : null,
+      distanceCells: bestCover.position ? roundOne(bestCover.distanceCells) : 0,
+      distanceMeters: bestCover.position ? Math.round(bestCover.distanceCells * state.map.metersPerCell) : 0,
       direction: bestCover.position ? getDirectionLabel(unit.position, bestCover.position) : 'нет',
       position: bestCover.position,
     },
     knownThreat: {
       exists: threatKnown,
-      distanceCells: strongest ? roundOne(strongest.distanceCells) : null,
-      distanceMeters: strongest ? Math.round(strongest.distanceCells * state.map.metersPerCell) : null,
+      distanceCells: strongest ? roundOne(strongest.distanceCells) : 0,
+      distanceMeters: strongest ? Math.round(strongest.distanceCells * state.map.metersPerCell) : 0,
       confidence: threatKnown ? Math.max(strongest?.danger ?? 0, strongest?.suppression ?? 0) : 0,
       label: threatKnown ? strongest?.zone.labels.ru ?? 'угроза' : 'нет',
     },
