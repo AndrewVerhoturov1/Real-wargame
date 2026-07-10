@@ -49,14 +49,11 @@ jobs:
       - name: Install Playwright test runner for this workflow
         run: npm install --no-save @playwright/test
 
-      - name: Install Chromium for Playwright
-        run: npx playwright install --with-deps chromium
-
       - name: Check production build without blocking screenshots
         continue-on-error: true
         run: npm run build
 
-      - name: Capture screenshots
+      - name: Capture screenshots with system Chrome
         id: capture
         run: npx playwright test tests/preview-screenshots.spec.ts --project=chromium --reporter=line
 
