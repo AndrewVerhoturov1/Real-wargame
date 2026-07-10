@@ -47,19 +47,21 @@
   font-size: 12px;
 }
 
-body.workspace-simulation .editor-place-button {
-  display: none;
+/* The old proxy button in the application bar must never duplicate the real editor tool. */
+[data-action="editor-place"] {
+  display: none !important;
 }
 
-body.workspace-editor .editor-place-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+/* Author CSS uses display:grid for the tooltip, so explicitly restore hidden semantics. */
+.cover-map-tooltip[hidden] {
+  display: none !important;
 }
 
-body.workspace-editor .editor-place-button:disabled {
-  opacity: 0.45;
-  cursor: default;
+body.workspace-editor #hud .editor-header-placement {
+  color: #121612;
+  border-color: #fff2a8;
+  background: #fff2a8;
+  font-weight: 800;
 }
 
 /* The lower unit bar occupies only the map area, so the right information panel can use the full height. */
