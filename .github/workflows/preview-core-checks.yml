@@ -25,9 +25,18 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply_ai_lab_visual_fixes.mjs')
+          lines = path.read_text(encoding='utf-8').splitlines()
+          for index, line in enumerate(lines):
+              if 'const nextRenderKey = \\`' in line:
+                  lines[index] = "'    const nextRenderKey = `${nextSelectionKey}|${runtime.open}|${runtime.activePanel}|${runtime.tool}|${runtime.awarenessMode}`;',"
+          path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
           node scripts/apply_ai_lab_visual_fixes.mjs 2>&1 | tee visual-fix.log
           rm scripts/apply_ai_lab_visual_fixes.mjs .github/workflows/apply-ai-lab-visual-fixes.yml
-          git show HEAD^:.github/workflows/preview-core-checks.yml > .github/workflows/preview-core-checks.yml
+          git show f90f3ff08c4f26bf60c282f93b5d88490178a4b3:.github/workflows/preview-core-checks.yml > .github/workflows/preview-core-checks.yml
 
       - name: Upload visual fix diagnostics
         if: ${{ always() && hashFiles('visual-fix.log') != '' }}
