@@ -47,6 +47,17 @@ expectIncludes('src/ui/TacticalWorkspace.ts', [
   'Один расчёт ИИ',
   'Рассчитать и выполнить',
   'setAiTestPaused(state, true)',
+  'data-action="editor-place"',
+  'workspace-file-menu',
+  'data-live="${key}"',
+  'updateInfoPanelLive',
+  'stableDecision',
+  'Math.floor(unit.position.x)',
+  "import '../tactical-workspace-stage8.css'",
+]);
+expectExcludes('src/ui/TacticalWorkspace.ts', [
+  'u?.position.x.toFixed(2)',
+  'u?.behaviorRuntime.reason',
 ]);
 
 expectIncludes('src/core/ui/RuntimeUiState.ts', [
@@ -66,6 +77,13 @@ expectIncludes('src/core/knowledge/SimulationCoverSelection.ts', [
 expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
   "'stealth'",
   'postureConcealmentBonus',
+  'buildBaseReport',
+  'buildRouteKey',
+  'Orders affect only route danger',
+]);
+expectExcludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
+  'const orderCellX',
+  'const orderCellY',
 ]);
 
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
@@ -74,13 +92,27 @@ expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
   'buildAwarenessRenderKey',
   'unitCell:',
   'knowledge:',
-  'Do not build the expensive full-map report on every animation frame.',
+  'Orders change often, but they do not change the heatmap cells themselves.',
+]);
+expectExcludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
+  'orderCell:',
 ]);
 expectBefore(
   'src/rendering/PixiAwarenessHeatmapRenderer.ts',
   'if (key === this.lastKey) return;',
   'const report = buildSoldierAwarenessReport(state, unit);',
 );
+
+expectIncludes('src/core/terrain/SmoothTerrain.ts', [
+  'const SMOOTH_RADIUS_CELLS = 1',
+  'const HEIGHT_WEIGHT_CENTER = 5',
+  'const HEIGHT_WEIGHT_NEAR = 2',
+]);
+expectIncludes('src/rendering/HtmlOverlayRenderer.ts', [
+  'sampleSmoothHeightLevel',
+  'formatSmoothHeight',
+  'MIN_VISIBLE_SMOOTH_HEIGHT',
+]);
 
 expectIncludes('src/rendering/PixiOverlayRenderer.ts', [
   'getSimulationLayerState',
@@ -112,6 +144,22 @@ expectIncludes('src/tactical-workspace.css', [
   'body.workspace-simulation.sidebar-open #app',
   '.cover-map-tooltip',
 ]);
+expectIncludes('src/tactical-workspace-stage8.css', [
+  '.workspace-file-menu',
+  'body.workspace-simulation .simulation-sidebar',
+  'bottom: 9px',
+  '.editor-scene-tools-slot',
+  '.game-editor-status',
+]);
+
+expectIncludes('src/ui/SceneExportControls.ts', [
+  "workspaceFileAction = 'save'",
+  "workspaceFileAction = 'load'",
+  "workspaceFileInput = 'scene'",
+]);
+expectIncludes('src/ui/PerformanceReportControls.ts', [
+  "workspaceFileAction = 'performance'",
+]);
 
 expectIncludes('tests/preview-screenshots.spec.ts', [
   '01-simulation-info.png',
@@ -124,6 +172,8 @@ expectIncludes('tests/preview-screenshots.spec.ts', [
   '08-editor-threat-tools.png',
   '09-editor-terrain-tools.png',
   '10-node-editor-unchanged.png',
+  'keeps information details open during live simulation updates',
+  'workspace-file-menu',
 ]);
 
 if (failures.length > 0) {
