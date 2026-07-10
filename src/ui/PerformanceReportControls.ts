@@ -16,7 +16,8 @@ export function installPerformanceReportControls(downloadReport: () => void): vo
 
   const button = document.createElement('button');
   button.type = 'button';
-  button.textContent = 'Скачать отчёт производительности';
+  button.textContent = 'Отчёт производительности';
+  button.dataset.workspaceFileAction = 'performance';
   button.style.pointerEvents = 'auto';
   button.style.cursor = 'pointer';
   button.addEventListener('click', downloadReport);
