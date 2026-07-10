@@ -1,7 +1,7 @@
-import { clampPercent } from '../behavior/BehaviorModel';
+import { clampPercent, POSTURE_MOVE_MULTIPLIER } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap } from '../map/MapModel';
-import { getPressureReportAtPosition } from '../pressure/PressureZone';
+import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
 import type { UnitModel } from '../units/UnitModel';
 import type { SimulationState } from './SimulationState';
 
@@ -22,17 +22,18 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
 }
 
 function updateMetrics(unit: UnitModel, state: SimulationState, deltaSeconds: number): void {
-  const report = getPressureReportAtPosition(unit.position, state.pressureZones);
+  const report = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
 
-  unit.behaviorRuntime.rawDanger = report?.rawPressure ?? 0;
-  unit.behaviorRuntime.danger = Math.round(unit.behaviorRuntime.rawDanger);
+  unit.behaviorRuntime.rawDanger = report.danger;
+  unit.behaviorRuntime.danger = report.danger;
+  unit.behaviorRuntime.suppression = report.suppression;
 
-  if (report) {
+  if (report.strongest) {
     unit.behaviorRuntime.stress = clampPercent(
       unit.behaviorRuntime.stress + report.stressPerSecond * unit.behaviorSettings.fear * deltaSeconds,
     );
-    unit.behaviorRuntime.lastEvent = `pressure:${report.zone.id}`;
-    unit.behaviorRuntime.reason = `inside pressure zone ${report.zone.id}`;
+    unit.behaviorRuntime.lastEvent = `pressure:${report.strongest.zone.id}`;
+    unit.behaviorRuntime.reason = `under threat from ${report.strongest.zone.id}`;
     return;
   }
 
@@ -54,12 +55,12 @@ function updateStateLabels(unit: UnitModel): void {
 }
 
 function moveUnit(unit: UnitModel, deltaSeconds: number): void {
-  if (!unit.order) {
-    return;
-  }
+  if (!unit.order) return;
 
   const remainingDistance = getDistance(unit.position, unit.order.target);
-  const stepDistance = unit.speedCellsPerSecond * deltaSeconds;
+  const postureMultiplier = POSTURE_MOVE_MULTIPLIER[unit.behaviorRuntime.posture];
+  const conditionMultiplier = Math.max(0.35, unit.soldier.condition.speed / 100);
+  const stepDistance = unit.speedCellsPerSecond * postureMultiplier * conditionMultiplier * deltaSeconds;
   unit.position = moveToPoint(unit.position, unit.order.target, stepDistance);
 
   if (remainingDistance <= stepDistance + ORDER_COMPLETION_EPSILON_CELLS) {
@@ -93,9 +94,7 @@ function separateUnits(
   const dy = right.position.y - left.position.y;
   const distance = Math.hypot(dx, dy);
 
-  if (distance >= UNIT_MIN_CENTER_DISTANCE_CELLS) {
-    return;
-  }
+  if (distance >= UNIT_MIN_CENTER_DISTANCE_CELLS) return;
 
   const safeDistance = distance > 0.0001 ? distance : 0.0001;
   const fallbackAngle = (leftIndex + rightIndex) * 2.399963229728653;
@@ -114,9 +113,7 @@ function separateUnits(
 }
 
 function setState(unit: UnitModel, nextState: UnitModel['behaviorRuntime']['state'], reason: string): void {
-  if (unit.behaviorRuntime.state === nextState) {
-    return;
-  }
+  if (unit.behaviorRuntime.state === nextState) return;
 
   unit.behaviorRuntime.previousState = unit.behaviorRuntime.state;
   unit.behaviorRuntime.state = nextState;
@@ -132,9 +129,7 @@ function moveToPoint(current: GridPosition, target: GridPosition, maxDistance: n
   const dy = target.y - current.y;
   const length = Math.hypot(dx, dy);
 
-  if (length === 0 || length <= maxDistance) {
-    return { ...target };
-  }
+  if (length === 0 || length <= maxDistance) return { ...target };
 
   return {
     x: current.x + (dx / length) * maxDistance,
