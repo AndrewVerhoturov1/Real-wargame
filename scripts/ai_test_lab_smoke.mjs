@@ -52,6 +52,29 @@ expectIncludes('src/ui/AiTestLabControls.ts', [
   'Рассчитать и выполнить',
   'Сбросить бойца',
   'AI_TEST_TIME_SCALES',
+  'setAiTestLabSelectionTarget',
+  'Щёлкните по сектору или его источнику',
+  'Зелёная стрелка на карте показывает защищённую сторону',
+]);
+expectIncludes('src/core/testing/AiTestLabSelection.ts', [
+  "export type AiTestLabSelectionTarget = 'fighter' | 'threat' | 'cover' | null",
+  'setAiTestLabSelectionTarget',
+  'selectAiTestLabTargetAtPosition',
+  'isInsideDirectionalThreat',
+]);
+expectIncludes('src/input/BoardInputController.ts', [
+  'getAiTestLabSelectionTarget',
+  'selectAiTestLabTargetAtPosition',
+]);
+expectIncludes('src/rendering/PixiCoverDirectionRenderer.ts', [
+  'ЗАЩИЩЁННАЯ СТОРОНА',
+  'НАПРАВЛЕНИЕ ОГНЯ',
+  'selectedObjectId',
+  'selectedZoneId',
+]);
+expectIncludes('src/rendering/PixiApp.ts', [
+  'PixiCoverDirectionRenderer',
+  'coverDirectionRenderer.render(this.state)',
 ]);
 expectIncludes('src/core/testing/AiTestLabRuntime.ts', [
   'AI_TEST_TIME_SCALES = [0.25, 0.5, 1, 2, 4, 10] as const',
