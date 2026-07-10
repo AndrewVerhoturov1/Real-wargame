@@ -1,9 +1,11 @@
 import { clampPercent, type UnitPosture } from '../behavior/BehaviorModel';
+import { findBestCoverForThreat } from '../cover/CoverEvaluation';
 import { distance, type GridPosition } from '../geometry';
-import { clampGridPositionToMap, type MapObject, type TacticalMap } from '../map/MapModel';
+import { clampGridPositionToMap, type TacticalMap } from '../map/MapModel';
 import { createMoveOrder } from '../orders/MoveOrder';
-import { getPressureReportAtPosition } from '../pressure/PressureZone';
+import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
 import type { SimulationState } from '../simulation/SimulationState';
+import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
 import type { AiBlackboardValue } from './AiBlackboard';
 import type { AiGraph, AiNode } from './AiGraph';
@@ -19,44 +21,50 @@ import bundledGraph from '../../data/ai/soldier_default_survival_graph.json';
 const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 const AI_GRAPH_TICK_INTERVAL_MS = 600;
+const AI_GRAPH_POLL_INTERVAL_MS = 60;
 const COVER_SEARCH_RADIUS_CELLS = 5;
 
 type PausableSimulationState = SimulationState & { paused?: boolean };
+type AiGraphRuntime = UnitModel['behaviorRuntime'] & { aiGraphMemory?: AiGraphRunnerBlackboard };
 
 export interface AiGameBridgeHandle {
   destroy(): void;
-  tickNow(): void;
+  tickNow(): AiGraphRunnerResult | null;
+  evaluateNow(): AiGraphRunnerResult | null;
 }
 
-interface NearestCoverResult {
-  object: MapObject | null;
-  position: GridPosition | null;
-  distanceCells: number;
+interface TickOptions {
+  force: boolean;
+  applyEffects: boolean;
 }
 
 export function installAiGameBridge(state: SimulationState): AiGameBridgeHandle {
-  const handle = window.setInterval(() => tickAiGameBridge(state), AI_GRAPH_TICK_INTERVAL_MS);
+  const handle = window.setInterval(() => {
+    tickAiGameBridge(state);
+  }, AI_GRAPH_POLL_INTERVAL_MS);
 
   return {
     destroy: () => window.clearInterval(handle),
-    tickNow: () => tickAiGameBridge(state),
+    tickNow: () => tickAiGameBridge(state, Date.now(), { force: true, applyEffects: true }),
+    evaluateNow: () => tickAiGameBridge(state, Date.now(), { force: true, applyEffects: false }),
   };
 }
 
-export function tickAiGameBridge(state: SimulationState, nowMs = Date.now()): void {
+export function tickAiGameBridge(
+  state: SimulationState,
+  nowMs = Date.now(),
+  options: TickOptions = { force: false, applyEffects: true },
+): AiGraphRunnerResult | null {
   const unit = state.selectedUnitId
     ? state.units.find((candidate) => candidate.id === state.selectedUnitId)
     : undefined;
 
-  if (!unit || state.editor.enabled || isPaused(state)) {
-    return;
-  }
+  if (!unit) return null;
+  if (!options.force && (state.editor.enabled || isPaused(state))) return null;
 
-  if (nowMs - unit.behaviorRuntime.aiGraphLastTickMs < AI_GRAPH_TICK_INTERVAL_MS) {
-    return;
-  }
+  const scaledInterval = AI_GRAPH_TICK_INTERVAL_MS / getAiTestTimeScale(state);
+  if (!options.force && nowMs - unit.behaviorRuntime.aiGraphLastTickMs < scaledInterval) return null;
 
-  unit.behaviorRuntime.aiGraphLastTickMs = nowMs;
   const graph = readRuntimeGraph();
   const result = runAiGraph({
     graph,
@@ -67,54 +75,71 @@ export function tickAiGameBridge(state: SimulationState, nowMs = Date.now()): vo
     tacticalHost: createTacticalHost(state, unit),
   });
 
-  publishRuntimeDebugTrace(state, unit, graph, result, nowMs);
+  publishRuntimeDebugTrace(state, unit, graph, result, nowMs, !options.applyEffects);
+
+  if (!options.applyEffects) {
+    return result;
+  }
+
+  unit.behaviorRuntime.aiGraphLastTickMs = nowMs;
   unit.behaviorRuntime.aiNodeCooldowns = { ...result.cooldowns };
   applyGraphEffects(state, unit, result.effects, result.blackboard, nowMs);
   unit.behaviorRuntime.aiGraphReason = result.explanationRu ?? result.explanation;
   unit.behaviorRuntime.reason = result.explanationRu ?? result.explanation;
   unit.behaviorRuntime.lastEvent = result.ok ? 'ai_graph_runner_tick' : 'ai_graph_runner_no_branch';
+  return result;
 }
 
 export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel): AiGraphRunnerBlackboard {
-  const pressure = getPressureReportAtPosition(unit.position, state.pressureZones);
-  const nearestCover = findNearestCover(state.map, unit.position);
-  const distanceToCover = nearestCover.distanceCells * state.map.metersPerCell;
-  const hasOrder = Boolean(unit.order);
-  const enemyVisible = Boolean(pressure && pressure.rawPressure > 0);
-  const underFire = unit.behaviorRuntime.danger > 0 || Boolean(pressure);
+  const threats = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
+  const threatPosition = threats.targetPosition;
+  const bestCover = findBestCoverForThreat(
+    state.map,
+    unit.position,
+    threatPosition,
+    unit.behaviorRuntime.posture,
+    COVER_SEARCH_RADIUS_CELLS,
+  );
+  const distanceToCover = bestCover.distanceCells * state.map.metersPerCell;
+  const strongest = threats.strongest;
+  const threatDistance = strongest ? strongest.distanceCells * state.map.metersPerCell : 9999;
+  const underFire = threats.danger > 0 || threats.suppression > 0;
 
   return {
     ...(isRecord(bundledGraph.blackboardDefaults) ? normalizeBlackboard(bundledGraph.blackboardDefaults) : {}),
     ...getAiGraphMemory(unit),
-    danger: clampPercent(Math.round(unit.behaviorRuntime.danger)),
+    danger: clampPercent(threats.danger),
     stress: clampPercent(Math.round(unit.behaviorRuntime.stress)),
-    suppression: clampPercent(Math.round(pressure?.rawPressure ?? unit.behaviorRuntime.rawDanger ?? 0)),
+    suppression: clampPercent(threats.suppression),
     fatigue: clampPercent(Math.round(unit.soldier.condition.fatigue)),
     morale: clampPercent(Math.round(unit.soldier.condition.morale)),
     health: clampPercent(Math.round(unit.soldier.condition.health)),
-    ammo: 30,
+    ammo: Math.max(0, Math.round(unit.behaviorRuntime.ammo)),
     distanceToCover: Number.isFinite(distanceToCover) ? Math.round(distanceToCover) : 9999,
-    enemyVisible,
-    enemyKnown: enemyVisible,
+    enemyVisible: threats.enemyVisible,
+    enemyKnown: threats.enemyKnown,
     underFire,
-    hasOrder,
-    isInCover: nearestCover.distanceCells <= 0.9,
-    weaponReady: true,
+    hasOrder: Boolean(unit.order),
+    isInCover: (strongest?.coverProtection ?? 0) > 0,
+    weaponReady: unit.behaviorRuntime.weaponReady && unit.behaviorRuntime.ammo > 0,
+    directionToThreat: strongest?.directionFromUnitDegrees ?? -1,
+    threatDistance: Math.round(threatDistance),
+    threatAngle: strongest?.zone.arcDegrees ?? 0,
+    coverProtection: strongest?.coverProtection ?? 0,
+    bestCoverQuality: Math.max(0, Math.round(bestCover.score)),
     current_action: unit.behaviorRuntime.currentAction,
     self_position: unit.position,
     order_target_position: unit.order?.target ?? null,
-    retreat_position: makeRetreatPoint(state.map, unit.position),
-    best_cover_position: nearestCover.position,
-    current_target: null,
-    remembered_enemy_position: null,
+    retreat_position: makeRetreatPoint(state.map, unit.position, threatPosition),
+    best_cover_position: bestCover.position,
+    current_target: threats.enemyVisible ? threatPosition : null,
+    remembered_enemy_position: threats.enemyKnown ? threatPosition : null,
   };
 }
 
 function getAiGraphMemory(unit: UnitModel): AiGraphRunnerBlackboard {
-  const runtime = unit.behaviorRuntime as typeof unit.behaviorRuntime & { aiGraphMemory?: AiGraphRunnerBlackboard };
-  if (!runtime.aiGraphMemory) {
-    runtime.aiGraphMemory = {};
-  }
+  const runtime = unit.behaviorRuntime as AiGraphRuntime;
+  if (!runtime.aiGraphMemory) runtime.aiGraphMemory = {};
   return runtime.aiGraphMemory;
 }
 
@@ -123,8 +148,14 @@ function createTacticalHost(state: SimulationState, unit: UnitModel): AiGraphTac
     resolveDistanceMeters: (fromKey, toKey, blackboard) => resolveDistanceMeters(state, unit, blackboard, fromKey, toKey),
     findBestObject: (objectKind, _criteria, searchRadiusMeters) => {
       if (objectKind !== 'cover') return null;
-      const radiusCells = searchRadiusMeters / state.map.metersPerCell;
-      return findNearestCover(state.map, unit.position, radiusCells).position;
+      const threats = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
+      return findBestCoverForThreat(
+        state.map,
+        unit.position,
+        threats.targetPosition,
+        unit.behaviorRuntime.posture,
+        searchRadiusMeters / state.map.metersPerCell,
+      ).position;
     },
     tacticalCheck: (checkKind, blackboard) => evaluateTacticalCheck(state, unit, blackboard, checkKind),
   };
@@ -184,24 +215,18 @@ function applyAction(
 ): void {
   if (effect.action === 'move_to') {
     const target = readPosition(blackboard[effect.targetKey ?? 'best_cover_position']);
-    if (target) {
-      unit.order = createMoveOrder(clampGridPositionToMap(state.map, target));
-      unit.behaviorRuntime.currentAction = 'move_to';
-      unit.behaviorRuntime.reason = effect.reasonRu ?? effect.reason;
-      unit.behaviorRuntime.lastEvent = 'ai_graph_move_to';
-    }
-    return;
-  }
-
-  if (effect.action === 'continue_order') {
-    unit.behaviorRuntime.currentAction = 'continue_order';
-    unit.behaviorRuntime.reason = effect.reasonRu ?? effect.reason;
-    unit.behaviorRuntime.lastEvent = 'ai_graph_continue_order';
-    return;
-  }
-
-  if (effect.action === 'wait') {
+    if (target) unit.order = createMoveOrder(clampGridPositionToMap(state.map, target));
+  } else if (effect.action === 'retreat') {
+    const target = readPosition(blackboard.retreat_position);
+    if (target) unit.order = createMoveOrder(clampGridPositionToMap(state.map, target));
+  } else if (effect.action === 'wait') {
     unit.order = null;
+  } else if (effect.action === 'reload') {
+    unit.behaviorRuntime.ammo = 30;
+    unit.behaviorRuntime.weaponReady = true;
+  } else if (effect.action === 'fire' || effect.action === 'suppress') {
+    unit.behaviorRuntime.ammo = Math.max(0, unit.behaviorRuntime.ammo - 1);
+    unit.behaviorRuntime.weaponReady = unit.behaviorRuntime.ammo > 0;
   }
 
   unit.behaviorRuntime.currentAction = effect.action;
@@ -227,6 +252,7 @@ function publishRuntimeDebugTrace(
   graph: AiGraph,
   result: AiGraphRunnerResult,
   nowMs: number,
+  previewOnly: boolean,
 ): void {
   try {
     const payload = {
@@ -243,6 +269,7 @@ function publishRuntimeDebugTrace(
       selectedBranchNameRu: result.selectedBranchNameRu,
       ok: result.ok,
       paused: isPaused(state),
+      previewOnly,
       nowMs,
       explanation: result.explanation,
       explanationRu: result.explanationRu,
@@ -264,25 +291,13 @@ function evaluateTacticalCheck(
   checkKind: string,
 ): boolean {
   if (checkKind === 'cover_exists') {
-    return Boolean(findNearestCover(state.map, unit.position).position);
+    const threats = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
+    return Boolean(findBestCoverForThreat(state.map, unit.position, threats.targetPosition, unit.behaviorRuntime.posture).position);
   }
-
-  if (checkKind === 'ammo_available') {
-    return readNumber(blackboard.ammo, 0) > 0;
-  }
-
-  if (checkKind === 'can_execute_order') {
-    return Boolean(unit.order);
-  }
-
-  if (checkKind === 'line_of_sight' || checkKind === 'line_of_fire') {
-    return readBoolean(blackboard.enemyVisible, false);
-  }
-
-  if (checkKind === 'path_exists') {
-    return true;
-  }
-
+  if (checkKind === 'ammo_available') return readNumber(blackboard.ammo, 0) > 0;
+  if (checkKind === 'can_execute_order') return Boolean(unit.order);
+  if (checkKind === 'line_of_sight' || checkKind === 'line_of_fire') return readBoolean(blackboard.enemyVisible, false);
+  if (checkKind === 'path_exists') return true;
   return false;
 }
 
@@ -295,10 +310,7 @@ function resolveDistanceMeters(
 ): number {
   const from = resolvePoint(state, unit, blackboard, fromKey);
   const to = resolvePoint(state, unit, blackboard, toKey);
-  if (!from || !to) {
-    return 9999;
-  }
-
+  if (!from || !to) return 9999;
   return distance(from, to) * state.map.metersPerCell;
 }
 
@@ -308,50 +320,26 @@ function resolvePoint(
   blackboard: AiGraphRunnerBlackboard,
   key: string,
 ): GridPosition | null {
+  const threats = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
   if (key === 'self') return unit.position;
-  if (key === 'cover') return findNearestCover(state.map, unit.position).position;
+  if (key === 'cover') return findBestCoverForThreat(state.map, unit.position, threats.targetPosition, unit.behaviorRuntime.posture).position;
   if (key === 'orderPoint' || key === 'orderTarget') return unit.order?.target ?? null;
   if (key === 'currentTarget') return readPosition(blackboard.current_target);
   if (key === 'enemy') return readPosition(blackboard.remembered_enemy_position) ?? readPosition(blackboard.current_target);
-  if (key === 'retreatPoint') return makeRetreatPoint(state.map, unit.position);
+  if (key === 'retreatPoint') return makeRetreatPoint(state.map, unit.position, threats.targetPosition);
   return readPosition(blackboard[key]);
 }
 
-function findNearestCover(map: TacticalMap, position: GridPosition, radiusCells = COVER_SEARCH_RADIUS_CELLS): NearestCoverResult {
-  let bestObject: MapObject | null = null;
-  let bestPosition: GridPosition | null = null;
-  let bestDistance = Number.POSITIVE_INFINITY;
+function makeRetreatPoint(map: TacticalMap, position: GridPosition, threatPosition: GridPosition | null): GridPosition {
+  if (!threatPosition) return clampGridPositionToMap(map, { x: position.x - 2, y: position.y });
 
-  for (const object of map.objects) {
-    if (!isCoverLikeObject(object)) {
-      continue;
-    }
-
-    const objectPosition = {
-      x: object.x + object.widthCells / 2,
-      y: object.y + object.heightCells / 2,
-    };
-    const currentDistance = distance(position, objectPosition);
-    if (currentDistance < bestDistance && currentDistance <= radiusCells) {
-      bestDistance = currentDistance;
-      bestObject = object;
-      bestPosition = objectPosition;
-    }
-  }
-
-  return {
-    object: bestObject,
-    position: bestPosition,
-    distanceCells: Number.isFinite(bestDistance) ? bestDistance : 9999,
-  };
-}
-
-function isCoverLikeObject(object: MapObject): boolean {
-  return ['cover', 'rock', 'structure', 'ditch', 'crates', 'fence', 'logs', 'tree'].includes(object.kind);
-}
-
-function makeRetreatPoint(map: TacticalMap, position: GridPosition): GridPosition {
-  return clampGridPositionToMap(map, { x: position.x - 2, y: position.y });
+  const dx = position.x - threatPosition.x;
+  const dy = position.y - threatPosition.y;
+  const length = Math.hypot(dx, dy) || 1;
+  return clampGridPositionToMap(map, {
+    x: position.x + (dx / length) * 2,
+    y: position.y + (dy / length) * 2,
+  });
 }
 
 function readRuntimeGraph(): AiGraph {
@@ -369,9 +357,7 @@ function readLocalStorageGraph(): string | null {
 }
 
 function normalizeRuntimeGraph(value: unknown): AiGraph {
-  if (!isRecord(value) || !Array.isArray(value.nodes)) {
-    return normalizeRuntimeGraph(bundledGraph);
-  }
+  if (!isRecord(value) || !Array.isArray(value.nodes)) return normalizeRuntimeGraph(bundledGraph);
 
   const nodes: AiNode[] = value.nodes
     .filter(isRecord)
@@ -402,9 +388,7 @@ function normalizeRuntimeGraph(value: unknown): AiGraph {
 function normalizeBlackboard(value: Record<string, unknown>): AiGraphRunnerBlackboard {
   const result: AiGraphRunnerBlackboard = {};
   for (const [key, item] of Object.entries(value)) {
-    if (isGraphValue(item)) {
-      result[key] = item;
-    }
+    if (isGraphValue(item)) result[key] = item;
   }
   return result;
 }
@@ -418,10 +402,7 @@ function safeJsonParse(value: string): unknown {
 }
 
 function readPosition(value: AiBlackboardValue | undefined): GridPosition | null {
-  if (!isRecord(value) || typeof value.x !== 'number' || typeof value.y !== 'number') {
-    return null;
-  }
-
+  if (!isRecord(value) || typeof value.x !== 'number' || typeof value.y !== 'number') return null;
   return { x: value.x, y: value.y };
 }
 
