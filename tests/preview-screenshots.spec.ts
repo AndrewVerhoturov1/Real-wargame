@@ -152,8 +152,9 @@ test('editing workspace, full-height palette and top utility menu', async ({ pag
   await saveScreenshot(page, '08-editor-threat-tools.png');
 
   await page.locator('.game-editor-tabs').getByRole('button', { name: 'Рельеф', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Рисовать высоту' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Рисовать лес' })).toBeVisible();
+  const editorBody = page.locator('.game-editor-body');
+  await expect(editorBody.getByRole('button', { name: 'Рисовать высоту', exact: true })).toBeVisible();
+  await expect(editorBody.getByRole('button', { name: 'Рисовать лес', exact: true })).toBeVisible();
   await page.waitForTimeout(350);
   await saveScreenshot(page, '09-editor-terrain-tools.png');
 });
