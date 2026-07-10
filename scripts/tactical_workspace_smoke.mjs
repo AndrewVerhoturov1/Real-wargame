@@ -58,10 +58,11 @@ expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
   'buildAwarenessField', 'buildBestSafePositions', 'buildRouteKey',
   'Movement does not invalidate the expensive map field',
   'buildAwarenessKnowledgeKey', 'KNOWLEDGE_CONFIDENCE_BUCKET', 'KNOWLEDGE_UNCERTAINTY_BUCKET',
-  'getCachedCover', 'coverCacheByMap',
+  'evaluateAwarenessFieldCell', 'estimateLocalProtection', 'evaluateRouteDangerFromField',
 ]);
 expectExcludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
   'const orderCellX', 'const orderCellY', 'unit.tacticalKnowledge.revision',
+  'evaluateSmallArmsCover', 'getCachedCover', 'coverCacheByMap',
 ]);
 
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
