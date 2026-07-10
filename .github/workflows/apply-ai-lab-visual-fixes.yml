@@ -1,6 +1,7 @@
 name: Apply AI lab visual fixes
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - real-wargame-preview
