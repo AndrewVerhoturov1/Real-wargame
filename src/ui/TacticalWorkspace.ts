@@ -1,3 +1,4 @@
+import '../tactical-workspace-stage8.css';
 import type { AiGameBridgeHandle } from '../core/ai/AiGameBridge';
 import type { UnitPosture } from '../core/behavior/BehaviorModel';
 import { buildSoldierAwarenessReport } from '../core/knowledge/SoldierAwarenessGrid';
@@ -6,6 +7,7 @@ import { buildUnitKnowledgeReport } from '../core/knowledge/UnitKnowledge';
 import { getCell, resolveObjectCoverProperties } from '../core/map/MapModel';
 import { getSelectedUnit, issueMoveOrderToSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { tickSimulation } from '../core/simulation/SimulationTick';
+import { sampleSmoothHeightLevel } from '../core/terrain/SmoothTerrain';
 import {
   AI_TEST_TIME_SCALES,
   getAiTestPaused,
@@ -29,6 +31,14 @@ import { exitLab } from '../shared/AppShellMenu';
 export type TacticalWorkspaceMode = 'simulation' | 'editor';
 type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory';
 
+type StableDecision = {
+  signature: string;
+  decision: string;
+  reason: string;
+  postureReason: string;
+  stateReason: string;
+};
+
 const TABS: Array<[SimulationTab, string]> = [
   ['info', 'Инфо'], ['danger', 'Опасность'], ['stealth', 'Скрытность'], ['memory', 'Память'],
 ];
@@ -38,6 +48,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   let tab: SimulationTab = 'info';
   let collapsed = false;
   let lastSidebarKey = '';
+  const stableDecisions = new Map<string, StableDecision>();
 
   const shell = document.createElement('div');
   shell.className = 'tactical-workspace-shell';
@@ -48,7 +59,9 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
         <button data-mode="simulation">Симуляция</button><button data-mode="editor">Редактирование</button>
       </div>
       <div class="workspace-top-actions">
+        <button class="editor-place-button primary" data-action="editor-place" title="Включить постановку для открытой вкладки редактора">Поставить</button>
         <button data-action="ai-editor">Редактор ИИ</button><button data-action="new-game">Новая игра</button>
+        <details class="workspace-file-menu"><summary>Файл</summary><div class="workspace-file-panel" data-role="file-tools"></div></details>
         <details class="workspace-display-menu"><summary>Вид</summary><div class="workspace-display-panel" data-role="display"></div></details>
         <button class="danger" data-action="exit">Выход</button>
       </div>
@@ -86,6 +99,9 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   const sidebarTitle = q<HTMLElement>('[data-role="sidebar-title"]');
   const tooltip = q<HTMLElement>('[data-role="cover-tooltip"]');
   const display = q<HTMLElement>('[data-role="display"]');
+  const fileTools = q<HTMLElement>('[data-role="file-tools"]');
+  const editorPlace = q<HTMLButtonElement>('[data-action="editor-place"]');
+
   moveExistingButton('#grid-toggle', display);
   moveExistingButton('#height-toggle', display);
   moveExistingButton('#language-toggle', display);
@@ -97,11 +113,17 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
     onChanged();
   });
   display.append(relief);
+  moveWorkspaceFileTools(fileTools);
 
   q<HTMLButtonElement>('[data-action="ai-editor"]').onclick = () => window.open('/ai-node-editor.html', '_blank');
   q<HTMLButtonElement>('[data-action="new-game"]').onclick = () => window.location.reload();
   q<HTMLButtonElement>('[data-action="exit"]').onclick = exitLab;
   q<HTMLButtonElement>('[data-action="collapse"]').onclick = () => { collapsed = !collapsed; syncLayout(); onChanged(); };
+  editorPlace.onclick = () => {
+    const placementTool = findCurrentEditorPlacementTool();
+    placementTool?.click();
+    updateEditorPlaceButton();
+  };
   for (const modeButton of shell.querySelectorAll<HTMLButtonElement>('[data-mode]')) modeButton.onclick = () => setMode(modeButton.dataset.mode as TacticalWorkspaceMode);
   for (const tabButton of shell.querySelectorAll<HTMLButtonElement>('[data-tab]')) tabButton.onclick = () => {
     tab = tabButton.dataset.tab as SimulationTab;
@@ -114,19 +136,20 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
     const unit = getSelectedUnit(state);
     if (!unit) return;
     setManualPosture(unit, postureButton.dataset.posture as UnitPosture, postureButton.textContent ?? 'поза');
-    update(true); onChanged();
+    update(false); onChanged();
   };
   for (const speedButton of shell.querySelectorAll<HTMLButtonElement>('[data-speed]')) speedButton.onclick = () => {
     setAiTestTimeScale(state, Number(speedButton.dataset.speed)); updateBottom();
   };
   q<HTMLButtonElement>('[data-action="pause"]').onclick = () => { setAiTestPaused(state, !getAiTestPaused(state)); updateBottom(); onChanged(); };
-  q<HTMLButtonElement>('[data-action="step"]').onclick = () => { tickSimulation(state, 0.1); update(true); onChanged(); };
-  q<HTMLButtonElement>('[data-action="evaluate"]').onclick = () => { aiBridge.evaluateNow(); update(true); onChanged(); };
-  q<HTMLButtonElement>('[data-action="execute"]').onclick = () => { aiBridge.tickNow(); update(true); onChanged(); };
-  q<HTMLButtonElement>('[data-action="clear-order"]').onclick = () => { const unit = getSelectedUnit(state); if (unit) unit.order = null; update(true); onChanged(); };
+  q<HTMLButtonElement>('[data-action="step"]').onclick = () => { tickSimulation(state, 0.1); update(false); onChanged(); };
+  q<HTMLButtonElement>('[data-action="evaluate"]').onclick = () => { aiBridge.evaluateNow(); update(false); onChanged(); };
+  q<HTMLButtonElement>('[data-action="execute"]').onclick = () => { aiBridge.tickNow(); update(false); onChanged(); };
+  q<HTMLButtonElement>('[data-action="clear-order"]').onclick = () => { const unit = getSelectedUnit(state); if (unit) unit.order = null; update(false); onChanged(); };
   q<HTMLButtonElement>('[data-action="reset-unit"]').onclick = () => {
     const reset = resetSelectedUnitForTest(state); const unit = getSelectedUnit(state); if (!reset && unit) applyInitialStateToRuntime(unit);
-    update(true); onChanged();
+    stableDecisions.delete(unit?.id ?? '');
+    update(false); onChanged();
   };
 
   function setMode(next: TacticalWorkspaceMode): void {
@@ -157,15 +180,19 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
     document.body.classList.toggle('editor-mode', mode === 'editor');
     document.body.classList.toggle('sidebar-open', mode === 'simulation' && !collapsed);
     document.body.classList.toggle('sidebar-collapsed', mode === 'simulation' && collapsed);
-    sidebar.hidden = mode !== 'simulation'; bottom.hidden = mode !== 'simulation';
+    sidebar.hidden = mode !== 'simulation';
+    bottom.hidden = mode !== 'simulation';
     q<HTMLButtonElement>('[data-action="collapse"]').textContent = collapsed ? '›' : '‹';
     for (const item of shell.querySelectorAll<HTMLButtonElement>('[data-mode]')) item.classList.toggle('active', item.dataset.mode === mode);
+    updateEditorPlaceButton();
     window.requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
   }
 
   function update(force = false): void {
     if (force) lastSidebarKey = '';
-    updateBottom(); renderSidebar();
+    updateBottom();
+    renderSidebar();
+    updateEditorPlaceButton();
     for (const item of shell.querySelectorAll<HTMLButtonElement>('[data-tab]')) item.classList.toggle('active', item.dataset.tab === tab);
   }
 
@@ -181,22 +208,41 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
     q('[data-role="action"]').textContent = `Действие: ${unit ? actionLabel(unit.behaviorRuntime.currentAction) : '—'}`;
     q('[data-role="order"]').textContent = `Приказ: ${unit ? orderLabel(state, unit) : '—'}`;
     for (const item of shell.querySelectorAll<HTMLButtonElement>('[data-posture]')) { item.disabled = !unit; item.classList.toggle('active', item.dataset.posture === unit?.behaviorRuntime.posture); }
-    const pause = q<HTMLButtonElement>('[data-action="pause"]'); pause.textContent = getAiTestPaused(state) ? 'Продолжить' : 'Пауза'; pause.classList.toggle('active', getAiTestPaused(state));
+    const pause = q<HTMLButtonElement>('[data-action="pause"]');
+    pause.textContent = getAiTestPaused(state) ? 'Продолжить' : 'Пауза';
+    pause.classList.toggle('active', getAiTestPaused(state));
     for (const item of shell.querySelectorAll<HTMLButtonElement>('[data-speed]')) item.classList.toggle('active', Number(item.dataset.speed) === getAiTestTimeScale(state));
   }
 
   function renderSidebar(): void {
     if (mode !== 'simulation') return;
-    const key = sidebarKey(state, tab);
-    if (key === lastSidebarKey) return;
-    lastSidebarKey = key;
-    sidebarTitle.textContent = ({ info:'Информация о бойце', danger:'Опасность и укрытия', stealth:'Скрытность', memory:'Память бойца' })[tab];
     const unit = getSelectedUnit(state);
-    if (!unit) { sidebarBody.innerHTML = empty('Выберите бойца на карте. Левая кнопка выбирает, правая отдаёт приказ движения.'); return; }
-    if (tab === 'info') sidebarBody.innerHTML = infoPanel(state, unit);
-    if (tab === 'danger') renderDanger(sidebarBody, state, unit, onChanged, () => { lastSidebarKey=''; renderSidebar(); });
-    if (tab === 'stealth') renderStealth(sidebarBody, state, unit, onChanged);
-    if (tab === 'memory') sidebarBody.innerHTML = memoryPanel(state, unit);
+    const key = sidebarKey(state, tab);
+    if (key !== lastSidebarKey) {
+      const scrollTop = sidebarBody.scrollTop;
+      lastSidebarKey = key;
+      sidebarTitle.textContent = ({ info:'Информация о бойце', danger:'Опасность и укрытия', stealth:'Скрытность', memory:'Память бойца' })[tab];
+      if (!unit) {
+        sidebarBody.innerHTML = empty('Выберите бойца на карте. Левая кнопка выбирает, правая отдаёт приказ движения.');
+      } else if (tab === 'info') {
+        sidebarBody.innerHTML = infoPanel();
+      } else if (tab === 'danger') {
+        renderDanger(sidebarBody, state, unit, onChanged, () => { lastSidebarKey=''; renderSidebar(); });
+      } else if (tab === 'stealth') {
+        renderStealth(sidebarBody, state, unit, onChanged);
+      } else {
+        sidebarBody.innerHTML = memoryPanel(state, unit);
+      }
+      sidebarBody.scrollTop = scrollTop;
+    }
+    if (unit && tab === 'info') updateInfoPanelLive(sidebarBody, state, unit, stableDecisions);
+  }
+
+  function updateEditorPlaceButton(): void {
+    const placementTool = mode === 'editor' ? findCurrentEditorPlacementTool() : null;
+    editorPlace.disabled = !placementTool;
+    editorPlace.textContent = placementTool ? shortPlacementLabel(placementTool.textContent ?? 'Поставить') : 'Поставить';
+    editorPlace.classList.toggle('active', Boolean(placementTool?.classList.contains('active')));
   }
 
   const attachTooltip = () => {
@@ -210,10 +256,9 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
       tooltip.style.left = `${Math.min(window.innerWidth - 300, event.clientX + 18)}px`;
       tooltip.style.top = `${Math.min(window.innerHeight - 150, event.clientY + 18)}px`;
       tooltip.innerHTML = `<strong>${esc(cover.labelRu)}</strong><span>Расстояние: ${Math.round(cover.distanceMeters)} м</span><span>Качество: ${Math.round(cover.quality)}/100</span><span>${esc(cover.sourceRu)}</span>`;
-      lastSidebarKey = '';
     });
     canvas.addEventListener('pointerleave', () => { tooltip.hidden = true; setHoveredSimulationCover(state, null); });
-    canvas.addEventListener('pointerdown', () => { tooltip.hidden = true; window.setTimeout(() => update(true), 0); });
+    canvas.addEventListener('pointerdown', () => { tooltip.hidden = true; window.setTimeout(() => update(false), 0); });
   };
 
   setSimulationLayerMode(state, tab);
@@ -221,17 +266,67 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   window.setInterval(() => update(false), 300);
 }
 
-function infoPanel(state: SimulationState, unit: UnitModel): string {
+function infoPanel(): string {
+  return `${heading('Инфо','Оверлей на карту не накладывается.')}${liveGrid([
+    ['Положение','position'], ['Высота','height'], ['Местность','terrain'], ['Поза','posture'], ['Действие','action'], ['Приказ','order'],
+  ])}${liveMetrics([
+    ['Здоровье','health'],['Боевой дух','morale'],['Усталость','fatigue'],['Стресс','stress'],['Подавление','suppression'],['Патроны','ammo'],
+  ])}
+  ${liveDetails('Текущее состояние',[['Состояние','state'],['Готовность оружия','weaponReady'],['Замешательство','confusion'],['Последнее событие','lastEvent']],true)}
+  ${liveDetails('Навыки',[['Стойкость','resilience'],['Осторожность','caution'],['Решительность','decisiveness'],['Дисциплина','discipline'],['Инициатива','initiative'],['Тактика','tactics'],['Владение оружием','weaponSkill']])}
+  ${liveDetails('Чувства и физические данные',[['Внимание','attention'],['Зрение','view'],['Интуиция','intuition'],['Физическая подготовка','speed'],['Личная скрытность','stealth'],['Дальность обзора','viewRange']])}
+  ${liveDetails('Последнее решение ИИ',[['Решение','aiDecision'],['Причина','aiReason'],['Почему поза','postureReason'],['Почему состояние','stateReason']],true)}`;
+}
+
+function updateInfoPanelLive(target: HTMLElement, state: SimulationState, unit: UnitModel, decisions: Map<string, StableDecision>): void {
   const cell = getCell(state.map, Math.floor(unit.position.x), Math.floor(unit.position.y));
-  const r = unit.behaviorRuntime, c = unit.soldier.condition, t = unit.soldier.traits;
-  return `${heading('Инфо','Оверлей на карту не накладывается.')}${grid([
-    ['Положение',`${unit.position.x.toFixed(1)}, ${unit.position.y.toFixed(1)}`], ['Высота',cell ? elevation(cell.height) : 'вне карты'],
-    ['Местность',cell ? terrain(cell.terrain,cell.forest) : 'вне карты'], ['Поза',postureLabel(r.posture)], ['Действие',actionLabel(r.currentAction)], ['Приказ',orderLabel(state,unit)],
-  ])}${metrics([['Здоровье',c.health],['Боевой дух',c.morale],['Усталость',c.fatigue],['Стресс',r.stress],['Подавление',r.suppression],['Патроны',Math.min(100,r.ammo)]])}
-  ${details('Текущее состояние',[['Состояние',r.state],['Готовность оружия',r.weaponReady?'готово':'не готово'],['Замешательство',pct(c.confusion)],['Последнее событие',r.lastEvent??'нет']],true)}
-  ${details('Навыки',[['Стойкость',pct(t.resilience)],['Осторожность',pct(t.caution)],['Решительность',pct(t.decisiveness)],['Дисциплина',pct(t.discipline)],['Инициатива',pct(t.initiative)],['Тактика',pct(t.tactics)],['Владение оружием',pct(t.weaponSkill)]])}
-  ${details('Чувства и физические данные',[['Внимание',pct(c.attention)],['Зрение',pct(c.view)],['Интуиция',pct(c.intuition)],['Физическая подготовка',pct(c.speed)],['Личная скрытность',pct(c.stealth)],['Дальность обзора',`${Math.round(unit.viewRangeCells*state.map.metersPerCell)} м`]])}
-  ${details('Последнее решение ИИ',[['Решение',r.aiGraphReason||r.reason||'ещё не рассчитывалось'],['Причина',r.reason||'нет'],['Почему поза',r.postureChangedBecause||'нет'],['Почему состояние',r.stateChangedBecause||'нет']],true)}`;
+  const r = unit.behaviorRuntime;
+  const c = unit.soldier.condition;
+  const t = unit.soldier.traits;
+  const decision = stableDecision(unit, decisions);
+  const smoothHeight = sampleSmoothHeightLevel(state.map, unit.position.x, unit.position.y);
+  const values: Record<string, string> = {
+    position: `${unit.position.x.toFixed(1)}, ${unit.position.y.toFixed(1)}`,
+    height: cell ? elevation(smoothHeight) : 'вне карты',
+    terrain: cell ? terrain(cell.terrain, cell.forest) : 'вне карты',
+    posture: postureLabel(r.posture),
+    action: actionLabel(r.currentAction),
+    order: orderLabel(state, unit),
+    state: r.state,
+    weaponReady: r.weaponReady ? 'готово' : 'не готово',
+    confusion: pct(c.confusion),
+    lastEvent: r.lastEvent ?? 'нет',
+    resilience: pct(t.resilience), caution: pct(t.caution), decisiveness: pct(t.decisiveness), discipline: pct(t.discipline),
+    initiative: pct(t.initiative), tactics: pct(t.tactics), weaponSkill: pct(t.weaponSkill),
+    attention: pct(c.attention), view: pct(c.view), intuition: pct(c.intuition), speed: pct(c.speed), stealth: pct(c.stealth),
+    viewRange: `${Math.round(unit.viewRangeCells * state.map.metersPerCell)} м`,
+    aiDecision: decision.decision,
+    aiReason: decision.reason,
+    postureReason: decision.postureReason,
+    stateReason: decision.stateReason,
+  };
+  for (const [key, value] of Object.entries(values)) setLiveText(target, key, value);
+  const metrics: Record<string, number> = {
+    health: c.health, morale: c.morale, fatigue: c.fatigue, stress: r.stress, suppression: r.suppression, ammo: Math.min(100, r.ammo),
+  };
+  for (const [key, value] of Object.entries(metrics)) setLiveMetric(target, key, value);
+}
+
+function stableDecision(unit: UnitModel, decisions: Map<string, StableDecision>): StableDecision {
+  const runtime = unit.behaviorRuntime;
+  const order = unit.order ? `${unit.order.target.x.toFixed(1)}:${unit.order.target.y.toFixed(1)}` : 'none';
+  const signature = [runtime.currentAction, runtime.state, runtime.posture, runtime.lastEvent ?? '', order].join('|');
+  const existing = decisions.get(unit.id);
+  if (existing?.signature === signature) return existing;
+  const next: StableDecision = {
+    signature,
+    decision: runtime.aiGraphReason || runtime.reason || 'ещё не рассчитывалось',
+    reason: runtime.reason || 'нет',
+    postureReason: runtime.postureChangedBecause || 'нет',
+    stateReason: runtime.stateChangedBecause || 'нет',
+  };
+  decisions.set(unit.id, next);
+  return next;
 }
 
 function renderDanger(target: HTMLElement, state: SimulationState, unit: UnitModel, onChanged: () => void, rerender: () => void): void {
@@ -265,11 +360,65 @@ function memoryPanel(state: SimulationState, unit: UnitModel): string {
   return `${heading('Память бойца','Субъективная картина мира выбранного солдата, а не объективная карта.')}${grid([['Известная область',`${Math.round(report.knownAreaMeters)} м`],['Угроз в памяти',String(unit.tacticalKnowledge.threats.length)],['Известных укрытий',String(report.nearbyCovers.length+report.planCovers.length)],['Версия знаний',String(unit.tacticalKnowledge.revision)]])}<section class="workspace-panel-section"><h3>Опасности и противник</h3>${threats}</section><section class="workspace-panel-section"><h3>Известные предметы и укрытия</h3>${covers}</section>`;
 }
 
-function sidebarKey(state: SimulationState, tab: SimulationTab): string { const u=getSelectedUnit(state),l=getSimulationLayerState(state); return [tab,u?.id??'',u?.position.x.toFixed(2)??'',u?.position.y.toFixed(2)??'',u?.behaviorRuntime.posture??'',Math.round(u?.behaviorRuntime.stress??0),Math.round(u?.behaviorRuntime.suppression??0),u?.behaviorRuntime.currentAction??'',u?.behaviorRuntime.reason??'',u?.tacticalKnowledge.revision??0,l.selectedCoverId??'',l.hoveredCoverId??'',state.map.objects.length,state.pressureZones.length].join('|'); }
+function sidebarKey(state: SimulationState, tab: SimulationTab): string {
+  const unit = getSelectedUnit(state);
+  if (!unit) return `${tab}|none`;
+  if (tab === 'info') return `${tab}|${unit.id}`;
+  const layer = getSimulationLayerState(state);
+  const position = `${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`;
+  const order = unit.order ? `${Math.floor(unit.order.target.x)}:${Math.floor(unit.order.target.y)}` : 'none';
+  const common = [tab, unit.id, position, order, unit.behaviorRuntime.posture, unit.tacticalKnowledge.revision, state.map.objects.length, state.pressureZones.length];
+  if (tab === 'danger') common.push(layer.selectedCoverId ?? '');
+  if (tab === 'memory') common.push(Math.floor(state.simulationTimeSeconds).toString());
+  return common.join('|');
+}
+
+function findCurrentEditorPlacementTool(): HTMLButtonElement | null {
+  return document.querySelector<HTMLButtonElement>('.game-editor-body [data-editor-tool].primary');
+}
+
+function shortPlacementLabel(label: string): string {
+  if (label.includes('предмет')) return 'Поставить предмет';
+  if (label.includes('бойца')) return 'Поставить бойца';
+  if (label.includes('угрозу')) return 'Поставить угрозу';
+  if (label.includes('высоту')) return 'Рисовать высоту';
+  if (label.includes('лес')) return 'Рисовать лес';
+  return 'Поставить';
+}
+
+function moveWorkspaceFileTools(target: HTMLElement): void {
+  const actions = document.querySelectorAll<HTMLElement>('[data-workspace-file-action]');
+  for (const action of actions) target.append(action);
+  const fileInput = document.querySelector<HTMLElement>('[data-workspace-file-input]');
+  if (fileInput) target.append(fileInput);
+  const slot = document.querySelector<HTMLElement>('.editor-scene-tools-slot');
+  if (slot) {
+    slot.replaceChildren();
+    slot.hidden = true;
+  }
+  if (!target.children.length) target.innerHTML = empty('Служебные команды не найдены.');
+}
+
+function setLiveText(target: HTMLElement, key: string, value: string): void {
+  const element = target.querySelector<HTMLElement>(`[data-live="${key}"]`);
+  if (element && element.textContent !== value) element.textContent = value;
+}
+
+function setLiveMetric(target: HTMLElement, key: string, value: number): void {
+  const row = target.querySelector<HTMLElement>(`[data-metric="${key}"]`);
+  if (!row) return;
+  const normalized = Math.max(0, Math.min(100, Math.round(value)));
+  const bar = row.querySelector<HTMLElement>('i');
+  const label = row.querySelector<HTMLElement>('b');
+  if (bar && bar.style.width !== `${normalized}%`) bar.style.width = `${normalized}%`;
+  if (label && label.textContent !== String(normalized)) label.textContent = String(normalized);
+}
+
 function heading(title:string,text:string):string{return `<div class="workspace-panel-heading"><h2>${esc(title)}</h2><p>${esc(text)}</p></div>`;}
 function grid(rows:Array<[string,string]>):string{return `<div class="workspace-info-grid">${rows.map(([a,b])=>`<div><span>${esc(a)}</span><b>${esc(b)}</b></div>`).join('')}</div>`;}
-function metrics(rows:Array<[string,number]>):string{return `<section class="workspace-metrics">${rows.map(([a,b])=>{const v=Math.max(0,Math.min(100,Math.round(b)));return `<div class="workspace-metric-row"><span>${esc(a)}</span><div><i style="width:${v}%"></i></div><b>${v}</b></div>`;}).join('')}</section>`;}
-function details(title:string,rows:Array<[string,string]>,open=false):string{return `<details class="workspace-details" ${open?'open':''}><summary>${esc(title)}</summary>${grid(rows)}</details>`;}
+function liveGrid(rows:Array<[string,string]>):string{return `<div class="workspace-info-grid">${rows.map(([label,key])=>`<div><span>${esc(label)}</span><b data-live="${key}">—</b></div>`).join('')}</div>`;}
+function liveMetrics(rows:Array<[string,string]>):string{return `<section class="workspace-metrics">${rows.map(([label,key])=>`<div class="workspace-metric-row" data-metric="${key}"><span>${esc(label)}</span><div><i style="width:0%"></i></div><b>0</b></div>`).join('')}</section>`;}
+function liveDetails(title:string,rows:Array<[string,string]>,open=false):string{return `<details class="workspace-details" ${open?'open':''}><summary>${esc(title)}</summary>${liveGrid(rows)}</details>`;}
 function legend(rows:Array<[string,string]>):string{return `<div class="workspace-legend">${rows.map(([a,b])=>`<span><i class="${a}"></i>${esc(b)}</span>`).join('')}</div>`;}
 function empty(text:string):string{return `<div class="workspace-empty-state">${esc(text)}</div>`;}
 function button(text:string,className=''):HTMLButtonElement{const b=document.createElement('button');b.type='button';b.className=className;b.textContent=text;return b;}
@@ -280,7 +429,7 @@ function postureLabel(x:UnitPosture):string{return x==='crouched'?'пригну�
 function profileLabel(x:string):string{return ({green:'новобранец',regular:'обычный',veteran:'ветеран',cautious:'осторожный',reckless:'безрассудный'} as Record<string,string>)[x]??x;}
 function actionLabel(x:string):string{return ({waiting:'ожидает',observing:'наблюдает',moving:'движется',move_to:'идёт к позиции',retreat:'отходит',fire:'ведёт огонь',suppress:'подавляет',reload:'перезаряжается',wait:'ожидает'} as Record<string,string>)[x]??x;}
 function terrain(x:string,forest:number):string{if(forest===2)return 'густой лес';if(forest===1)return 'редкий лес';return ({field:'открытое поле',forest:'лесная почва',road:'дорога',swamp:'болото',rough:'пересечённая местность',water:'вода'} as Record<string,string>)[x]??x;}
-function elevation(x:number):string{return `${x>0?'+':''}${x} · ${({[-2]:'глубокая низина',[-1]:'низина',0:'ровно',1:'подъём',2:'холм',3:'высота',4:'гребень'} as Record<number,string>)[x]??'уровень'}`;}
+function elevation(x:number):string{const rounded=Math.round(x*10)/10;const normalized=Math.abs(rounded)<0.05?0:rounded;const level=Math.max(-2,Math.min(4,Math.round(normalized)));return `${normalized>0?'+':''}${normalized.toFixed(1)} · ${({[-2]:'глубокая низина',[-1]:'низина',0:'ровно',1:'подъём',2:'холм',3:'высота',4:'гребень'} as Record<number,string>)[level]??'уровень'}`;}
 function pct(x:number):string{return `${Math.max(0,Math.min(100,Math.round(x)))} / 100`;}
 function direction(x:number):string{const a=((x%360)+360)%360;return ['восток','юго-восток','юг','юго-запад','запад','северо-запад','север','северо-восток'][Math.round(a/45)%8];}
 function sourceLabel(x:string):string{return ({seen:'увидел сам',reported:'получил доклад',heard:'услышал',fire_pressure:'почувствовал воздействие огня'} as Record<string,string>)[x]??x;}
