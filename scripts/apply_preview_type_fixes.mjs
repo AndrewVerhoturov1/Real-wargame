@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 
+// One-time exact patch. The workflow removes this file after a successful commit.
 const replacements = [
   {
     file: 'src/ai-node-editor/main.ts',
