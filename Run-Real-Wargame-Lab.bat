@@ -6,6 +6,7 @@ cd /d "%SCRIPT_DIR%"
 set "APP_PORT=5173"
 set "ENGINE_PORT=8787"
 set "LAB_MANAGER_PORT=8799"
+rem Legacy lab-launch.html is intentionally not opened: this launcher goes straight to the tactical game.
 
 where npm >nul 2>nul
 if %errorlevel% neq 0 (
