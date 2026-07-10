@@ -1,7 +1,7 @@
 import { Container, Graphics } from 'pixi.js';
 import { buildUnitKnowledgeReport } from '../core/knowledge/UnitKnowledge';
 import { gridToCellCenter } from '../core/map/MapModel';
-import type { PressureZone } from '../core/pressure/PressureZone';
+import { resolvePressureZoneSettings, type PressureZone } from '../core/pressure/PressureZone';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { hasHeightVariation, sampleSmoothHeightLevel } from '../core/terrain/SmoothTerrain';
 import {
@@ -32,10 +32,7 @@ export class PixiOverlayRenderer {
 
   private renderZoneLayerIfNeeded(state: SimulationState, showPressureZones: boolean): void {
     const nextKey = getZoneLayerKey(state, showPressureZones);
-
-    if (nextKey === this.lastZoneKey) {
-      return;
-    }
+    if (nextKey === this.lastZoneKey) return;
 
     this.lastZoneKey = nextKey;
     this.zoneContainer.cacheAsBitmap = false;
@@ -49,18 +46,13 @@ export class PixiOverlayRenderer {
 
   private renderRealReliefLayerIfNeeded(state: SimulationState): void {
     const nextKey = getRealReliefLayerKey(state);
-
-    if (nextKey === this.lastRealReliefKey) {
-      return;
-    }
+    if (nextKey === this.lastRealReliefKey) return;
 
     this.lastRealReliefKey = nextKey;
     this.realReliefContainer.cacheAsBitmap = false;
     this.realReliefContainer.removeChildren();
 
-    if (!getRealReliefOverlayState(state).active || !hasHeightVariation(state.map)) {
-      return;
-    }
+    if (!getRealReliefOverlayState(state).active || !hasHeightVariation(state.map)) return;
 
     drawRealReliefOverlay(this.realReliefContainer, state);
     this.realReliefContainer.cacheAsBitmap = true;
@@ -68,10 +60,7 @@ export class PixiOverlayRenderer {
 
   private renderDynamicLayerIfNeeded(state: SimulationState, showGrid: boolean): void {
     const nextKey = getDynamicLayerKey(state, showGrid);
-
-    if (nextKey === this.lastDynamicKey) {
-      return;
-    }
+    if (nextKey === this.lastDynamicKey) return;
 
     this.lastDynamicKey = nextKey;
     this.dynamicContainer.removeChildren();
@@ -91,7 +80,6 @@ export class PixiOverlayRenderer {
         map.cellSize,
         map.cellSize,
       );
-
       this.dynamicContainer.addChild(graphics);
     }
 
@@ -107,7 +95,6 @@ export class PixiOverlayRenderer {
       graphics.beginFill(0xfff2a8, 0.08);
       graphics.drawRect(minX, minY, maxX - minX, maxY - minY);
       graphics.endFill();
-
       this.dynamicContainer.addChild(graphics);
     }
   }
@@ -123,10 +110,7 @@ function drawRealReliefOverlay(container: Container, state: SimulationState): vo
       const level = sampleSmoothHeightLevel(map, x + 0.5, y + 0.5);
       const color = reliefColor(level);
       const alpha = Math.min(0.34, Math.abs(level) * 0.12 + 0.07);
-
-      if (Math.abs(level) < 0.08) {
-        continue;
-      }
+      if (Math.abs(level) < 0.08) continue;
 
       graphics.beginFill(color, alpha);
       graphics.drawRect(x * cellSize, y * cellSize, cellSize + 0.5, cellSize + 0.5);
@@ -140,10 +124,7 @@ function drawRealReliefOverlay(container: Container, state: SimulationState): vo
 function drawKnowledgeOverlay(container: Container, state: SimulationState): void {
   const overlay = getKnowledgeOverlayState(state);
   const unit = getSelectedUnit(state);
-
-  if (!overlay.active || !unit) {
-    return;
-  }
+  if (!overlay.active || !unit) return;
 
   const report = buildUnitKnowledgeReport(state, unit);
   const graphics = new Graphics();
@@ -185,10 +166,7 @@ function drawKnowledgeOverlay(container: Container, state: SimulationState): voi
 function drawVisibilityProbe(container: Container, state: SimulationState): void {
   const probe = getVisibilityProbeState(state);
   const unit = getSelectedUnit(state);
-
-  if (!probe.active || !probe.target || !unit) {
-    return;
-  }
+  if (!probe.active || !probe.target || !unit) return;
 
   const result = computeLineOfSight(state.map, unit, probe.target);
   const cellSize = state.map.cellSize;
@@ -205,7 +183,6 @@ function drawVisibilityProbe(container: Container, state: SimulationState): void
     graphics.lineStyle(3, 0xff3535, 0.95);
     graphics.moveTo(result.blockedAt.x * cellSize, result.blockedAt.y * cellSize);
     graphics.lineTo(target.x * cellSize, target.y * cellSize);
-
     graphics.lineStyle(2, 0xff3535, 1);
     graphics.drawCircle(result.blockedAt.x * cellSize, result.blockedAt.y * cellSize, 6);
     graphics.moveTo(result.blockedAt.x * cellSize - 7, result.blockedAt.y * cellSize - 7);
@@ -218,51 +195,44 @@ function drawVisibilityProbe(container: Container, state: SimulationState): void
 }
 
 function reliefColor(level: number): number {
-  if (level < -1.25) {
-    return 0x315c74;
-  }
-  if (level < -0.25) {
-    return 0x4b7275;
-  }
-  if (level < 0.75) {
-    return 0x8a8d5a;
-  }
-  if (level < 1.75) {
-    return 0xb6a44c;
-  }
-  if (level < 2.75) {
-    return 0xd2a24a;
-  }
+  if (level < -1.25) return 0x315c74;
+  if (level < -0.25) return 0x4b7275;
+  if (level < 0.75) return 0x8a8d5a;
+  if (level < 1.75) return 0xb6a44c;
+  if (level < 2.75) return 0xd2a24a;
   return 0xf0c262;
 }
 
 function getZoneLayerKey(state: SimulationState, showPressureZones: boolean): string {
-  if (!showPressureZones) {
-    return 'zones:hidden';
-  }
+  if (!showPressureZones) return 'zones:hidden';
 
   return [
     `cell:${state.map.cellSize}`,
     `selected:${state.editor.selectedZoneId ?? 'none'}`,
-    `zones:${state.pressureZones.map((zone) => [
-      zone.id,
-      zone.shape,
-      zone.x.toFixed(3),
-      zone.y.toFixed(3),
-      zone.radiusCells.toFixed(3),
-      zone.widthCells.toFixed(3),
-      zone.heightCells.toFixed(3),
-      zone.strength.toFixed(1),
-    ].join(':')).join('|')}`,
+    `zones:${state.pressureZones.map((zone) => {
+      const settings = resolvePressureZoneSettings(zone);
+      return [
+        zone.id,
+        zone.shape,
+        settings.mode,
+        zone.x.toFixed(3),
+        zone.y.toFixed(3),
+        zone.radiusCells.toFixed(3),
+        zone.widthCells.toFixed(3),
+        zone.heightCells.toFixed(3),
+        zone.strength.toFixed(1),
+        settings.directionDegrees.toFixed(1),
+        settings.arcDegrees.toFixed(1),
+        settings.rangeCells.toFixed(2),
+        settings.enabled ? '1' : '0',
+      ].join(':');
+    }).join('|')}`,
   ].join(';');
 }
 
 function getRealReliefLayerKey(state: SimulationState): string {
   const active = getRealReliefOverlayState(state).active ? '1' : '0';
-
-  if (!active) {
-    return 'relief:hidden';
-  }
+  if (!active) return 'relief:hidden';
 
   return [
     'relief:cached',
@@ -307,37 +277,86 @@ function drawPressureZones(
   selectedZoneId: string | null,
 ): void {
   for (const zone of zones) {
+    const settings = resolvePressureZoneSettings(zone);
     const graphics = new Graphics();
-    const alpha = Math.max(0.08, Math.min(0.28, zone.strength / 350));
     const isSelected = zone.id === selectedZoneId;
 
-    graphics.lineStyle(isSelected ? 4 : 2, isSelected ? 0xfff2a8 : 0xb6633c, isSelected ? 0.95 : 0.75);
-    graphics.beginFill(0xb6633c, alpha);
-
-    if (zone.shape === 'circle') {
-      graphics.drawCircle(zone.x * cellSize, zone.y * cellSize, zone.radiusCells * cellSize);
+    if (settings.mode === 'directional_fire') {
+      drawDirectionalThreat(graphics, zone, cellSize, isSelected);
     } else {
-      graphics.drawRect(
-        (zone.x - zone.widthCells / 2) * cellSize,
-        (zone.y - zone.heightCells / 2) * cellSize,
-        zone.widthCells * cellSize,
-        zone.heightCells * cellSize,
-      );
-    }
-
-    graphics.endFill();
-
-    if (isSelected) {
-      drawZoneHandles(graphics, zone, cellSize);
+      drawAreaThreat(graphics, zone, cellSize, isSelected);
     }
 
     container.addChild(graphics);
   }
 }
 
+function drawAreaThreat(graphics: Graphics, zone: PressureZone, cellSize: number, isSelected: boolean): void {
+  const alpha = Math.max(0.08, Math.min(0.28, zone.strength / 350));
+  graphics.lineStyle(isSelected ? 4 : 2, isSelected ? 0xfff2a8 : 0xb6633c, isSelected ? 0.95 : 0.75);
+  graphics.beginFill(0xb6633c, alpha);
+
+  if (zone.shape === 'circle') {
+    graphics.drawCircle(zone.x * cellSize, zone.y * cellSize, zone.radiusCells * cellSize);
+  } else {
+    graphics.drawRect(
+      (zone.x - zone.widthCells / 2) * cellSize,
+      (zone.y - zone.heightCells / 2) * cellSize,
+      zone.widthCells * cellSize,
+      zone.heightCells * cellSize,
+    );
+  }
+
+  graphics.endFill();
+  if (isSelected) drawZoneHandles(graphics, zone, cellSize);
+}
+
+function drawDirectionalThreat(graphics: Graphics, zone: PressureZone, cellSize: number, isSelected: boolean): void {
+  const settings = resolvePressureZoneSettings(zone);
+  const centerX = zone.x * cellSize;
+  const centerY = zone.y * cellSize;
+  const radius = settings.rangeCells * cellSize;
+  const direction = degreesToRadians(settings.directionDegrees);
+  const halfArc = degreesToRadians(settings.arcDegrees / 2);
+  const start = direction - halfArc;
+  const end = direction + halfArc;
+  const activeAlpha = settings.enabled ? 1 : 0.28;
+  const color = settings.enabled ? 0xd33f32 : 0x777777;
+  const fillAlpha = Math.max(0.06, Math.min(0.3, zone.strength / 300)) * activeAlpha;
+
+  graphics.lineStyle(isSelected ? 4 : 2, isSelected ? 0xfff2a8 : color, 0.9 * activeAlpha);
+  graphics.beginFill(color, fillAlpha);
+  graphics.moveTo(centerX, centerY);
+  graphics.arc(centerX, centerY, radius, start, end);
+  graphics.lineTo(centerX, centerY);
+  graphics.endFill();
+
+  const endX = centerX + Math.cos(direction) * radius;
+  const endY = centerY + Math.sin(direction) * radius;
+  graphics.lineStyle(isSelected ? 4 : 3, isSelected ? 0xfff2a8 : 0xff765f, 0.95 * activeAlpha);
+  graphics.moveTo(centerX, centerY);
+  graphics.lineTo(endX, endY);
+  drawArrowHead(graphics, endX, endY, direction, isSelected ? 12 : 9);
+
+  graphics.beginFill(isSelected ? 0xfff2a8 : 0xff765f, activeAlpha);
+  graphics.drawCircle(centerX, centerY, isSelected ? 7 : 5);
+  graphics.endFill();
+
+  if (settings.minRangeCells > 0) {
+    graphics.lineStyle(1, color, 0.65 * activeAlpha);
+    graphics.drawCircle(centerX, centerY, settings.minRangeCells * cellSize);
+  }
+}
+
+function drawArrowHead(graphics: Graphics, x: number, y: number, angle: number, size: number): void {
+  graphics.moveTo(x, y);
+  graphics.lineTo(x - Math.cos(angle - Math.PI / 6) * size, y - Math.sin(angle - Math.PI / 6) * size);
+  graphics.moveTo(x, y);
+  graphics.lineTo(x - Math.cos(angle + Math.PI / 6) * size, y - Math.sin(angle + Math.PI / 6) * size);
+}
+
 function drawZoneHandles(graphics: Graphics, zone: PressureZone, cellSize: number): void {
   const handleSize = 8;
-
   graphics.beginFill(0xfff2a8, 1);
 
   if (zone.shape === 'circle') {
@@ -372,4 +391,8 @@ function drawZoneHandles(graphics: Graphics, zone: PressureZone, cellSize: numbe
   }
 
   graphics.endFill();
+}
+
+function degreesToRadians(degrees: number): number {
+  return (degrees * Math.PI) / 180;
 }
