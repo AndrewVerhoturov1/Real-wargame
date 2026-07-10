@@ -25,7 +25,10 @@ const AI_GRAPH_POLL_INTERVAL_MS = 60;
 const COVER_SEARCH_RADIUS_CELLS = 5;
 
 type PausableSimulationState = SimulationState & { paused?: boolean };
-type AiGraphRuntime = UnitModel['behaviorRuntime'] & { aiGraphMemory?: AiGraphRunnerBlackboard };
+type AiGraphRuntime = UnitModel['behaviorRuntime'] & {
+  aiGraphMemory?: AiGraphRunnerBlackboard;
+  aiGraphSimulationTimeMs?: number;
+};
 
 export interface AiGameBridgeHandle {
   destroy(): void;
@@ -65,22 +68,25 @@ export function tickAiGameBridge(
   const scaledInterval = AI_GRAPH_TICK_INTERVAL_MS / getAiTestTimeScale(state);
   if (!options.force && nowMs - unit.behaviorRuntime.aiGraphLastTickMs < scaledInterval) return null;
 
+  const runtime = unit.behaviorRuntime as AiGraphRuntime;
+  const simulationNowMs = options.applyEffects
+    ? (runtime.aiGraphSimulationTimeMs ?? 0) + AI_GRAPH_TICK_INTERVAL_MS
+    : runtime.aiGraphSimulationTimeMs ?? 0;
   const graph = readRuntimeGraph();
   const result = runAiGraph({
     graph,
     unitId: unit.id,
     blackboard: buildBlackboardForUnit(state, unit),
     cooldowns: unit.behaviorRuntime.aiNodeCooldowns,
-    nowMs,
+    nowMs: simulationNowMs,
     tacticalHost: createTacticalHost(state, unit),
   });
 
-  publishRuntimeDebugTrace(state, unit, graph, result, nowMs, !options.applyEffects);
+  publishRuntimeDebugTrace(state, unit, graph, result, nowMs, simulationNowMs, !options.applyEffects);
 
-  if (!options.applyEffects) {
-    return result;
-  }
+  if (!options.applyEffects) return result;
 
+  runtime.aiGraphSimulationTimeMs = simulationNowMs;
   unit.behaviorRuntime.aiGraphLastTickMs = nowMs;
   unit.behaviorRuntime.aiNodeCooldowns = { ...result.cooldowns };
   applyGraphEffects(state, unit, result.effects, result.blackboard, nowMs);
@@ -252,6 +258,7 @@ function publishRuntimeDebugTrace(
   graph: AiGraph,
   result: AiGraphRunnerResult,
   nowMs: number,
+  simulationNowMs: number,
   previewOnly: boolean,
 ): void {
   try {
@@ -271,6 +278,7 @@ function publishRuntimeDebugTrace(
       paused: isPaused(state),
       previewOnly,
       nowMs,
+      simulationNowMs,
       explanation: result.explanation,
       explanationRu: result.explanationRu,
       trace: result.trace,
