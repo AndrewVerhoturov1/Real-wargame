@@ -2,6 +2,7 @@ import type { SoldierAwarenessMode } from '../knowledge/SoldierAwarenessGrid';
 import { selectUnit, type SimulationState } from '../simulation/SimulationState';
 
 export type AiLabTool = 'select' | 'place_fighter' | 'place_threat' | 'place_cover' | 'delete';
+export type AiLabPanel = 'fighter' | 'threat' | 'cover' | 'awareness';
 export type AiLabThreatHandle =
   | 'move'
   | 'direction'
@@ -25,6 +26,7 @@ export interface AiLabDragState {
 export interface AiLabRuntime {
   open: boolean;
   tool: AiLabTool;
+  activePanel: AiLabPanel;
   awarenessMode: SoldierAwarenessMode;
   repeatPlacement: boolean;
   hoveredHandle: AiLabThreatHandle | null;
@@ -40,6 +42,7 @@ export function getAiLabRuntime(state: SimulationState): AiLabRuntime {
     runtime = {
       open: false,
       tool: 'select',
+      activePanel: 'fighter',
       awarenessMode: 'off',
       repeatPlacement: true,
       hoveredHandle: null,
@@ -65,12 +68,22 @@ export function setAiLabTool(state: SimulationState, tool: AiLabTool): void {
   runtime.tool = tool;
   runtime.drag = null;
   runtime.hoveredHandle = null;
+  if (tool === 'place_fighter') runtime.activePanel = 'fighter';
+  if (tool === 'place_threat') runtime.activePanel = 'threat';
+  if (tool === 'place_cover') runtime.activePanel = 'cover';
   runtime.status = toolStatus(tool);
+}
+
+export function setAiLabPanel(state: SimulationState, panel: AiLabPanel): void {
+  const runtime = getAiLabRuntime(state);
+  runtime.activePanel = panel;
+  if (panel === 'awareness' && runtime.awarenessMode === 'off') runtime.awarenessMode = 'all';
 }
 
 export function setAwarenessMode(state: SimulationState, mode: SoldierAwarenessMode): void {
   const runtime = getAiLabRuntime(state);
   runtime.awarenessMode = mode;
+  runtime.activePanel = 'awareness';
   runtime.status = mode === 'off' ? 'Карта бойца скрыта.' : `Карта бойца: ${awarenessLabel(mode)}.`;
 }
 
@@ -81,7 +94,7 @@ export function setAiLabStatus(state: SimulationState, status: string): void {
 export function duplicateSelectedLabEntity(state: SimulationState): boolean {
   const runtime = getAiLabRuntime(state);
   const unit = state.selectedUnitId ? state.units.find((item) => item.id === state.selectedUnitId) : undefined;
-  if (unit) {
+  if (unit && runtime.activePanel === 'fighter') {
     const index = state.editor.nextUnitIndex++;
     const clone = deepClone(unit);
     clone.id = `editor_unit_${index}`;
@@ -98,7 +111,7 @@ export function duplicateSelectedLabEntity(state: SimulationState): boolean {
   const zone = state.editor.selectedZoneId
     ? state.pressureZones.find((item) => item.id === state.editor.selectedZoneId)
     : undefined;
-  if (zone) {
+  if (zone && runtime.activePanel === 'threat') {
     const index = state.editor.nextZoneIndex++;
     const clone = deepClone(zone);
     clone.id = `editor_zone_${index}`;
@@ -114,7 +127,7 @@ export function duplicateSelectedLabEntity(state: SimulationState): boolean {
   const object = state.editor.selectedObjectId
     ? state.map.objects.find((item) => item.id === state.editor.selectedObjectId)
     : undefined;
-  if (object) {
+  if (object && runtime.activePanel === 'cover') {
     const index = state.editor.nextObjectIndex++;
     const clone = deepClone(object);
     clone.id = `editor_object_${index}`;
@@ -127,7 +140,7 @@ export function duplicateSelectedLabEntity(state: SimulationState): boolean {
     return true;
   }
 
-  runtime.status = 'Сначала выберите бойца, угрозу или укрытие.';
+  runtime.status = 'Сначала выберите нужную вкладку и объект.';
   return false;
 }
 
