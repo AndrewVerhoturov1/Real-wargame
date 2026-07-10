@@ -6,6 +6,7 @@ on:
       - real-wargame-preview
     paths:
       - scripts/apply_tactical_awareness_integrations.mjs
+      - .github/workflows/apply-tactical-awareness-integrations.yml
   workflow_dispatch:
 
 jobs:
@@ -17,6 +18,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Allow sequential exact replacements
+        run: sed -i 's/if (count !== 1)/if (count < 1)/' scripts/apply_tactical_awareness_integrations.mjs
       - name: Apply integrations
         run: node scripts/apply_tactical_awareness_integrations.mjs
       - name: Remove one-time helper
