@@ -19,7 +19,8 @@ export function installSceneExportControls(state: SimulationState): void {
 
   const downloadButton = document.createElement('button');
   downloadButton.type = 'button';
-  downloadButton.textContent = 'Скачать JSON сцены';
+  downloadButton.textContent = 'Сохранить сцену';
+  downloadButton.dataset.workspaceFileAction = 'save';
   downloadButton.style.pointerEvents = 'auto';
   downloadButton.style.cursor = 'pointer';
   downloadButton.addEventListener('click', () => {
@@ -29,6 +30,7 @@ export function installSceneExportControls(state: SimulationState): void {
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
   fileInput.accept = 'application/json,.json';
+  fileInput.dataset.workspaceFileInput = 'scene';
   fileInput.style.display = 'none';
   fileInput.addEventListener('change', () => {
     const file = fileInput.files?.[0];
@@ -47,7 +49,8 @@ export function installSceneExportControls(state: SimulationState): void {
 
   const loadButton = document.createElement('button');
   loadButton.type = 'button';
-  loadButton.textContent = 'Загрузить JSON сцены';
+  loadButton.textContent = 'Загрузить сцену';
+  loadButton.dataset.workspaceFileAction = 'load';
   loadButton.style.pointerEvents = 'auto';
   loadButton.style.cursor = 'pointer';
   loadButton.addEventListener('click', () => {
