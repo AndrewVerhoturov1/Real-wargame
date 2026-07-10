@@ -52,6 +52,15 @@
   display: none !important;
 }
 
+/* The real placement controls are mirrored in the editor header; hide their body copies. */
+body.workspace-editor .game-editor-body [data-editor-tool="spawn_object"],
+body.workspace-editor .game-editor-body [data-editor-tool="spawn_unit"],
+body.workspace-editor .game-editor-body [data-editor-tool="spawn_zone"],
+body.workspace-editor .game-editor-body [data-editor-tool="paint_height"],
+body.workspace-editor .game-editor-body [data-editor-tool="paint_forest"] {
+  display: none !important;
+}
+
 /* Author CSS uses display:grid for the tooltip, so explicitly restore hidden semantics. */
 .cover-map-tooltip[hidden] {
   display: none !important;
