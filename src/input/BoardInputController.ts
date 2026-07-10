@@ -39,12 +39,21 @@ import type { CameraController } from './CameraController';
 
 const DRAG_SELECT_THRESHOLD_CELLS = 0.18;
 
+interface PointerMoveSnapshot {
+  clientX: number;
+  clientY: number;
+  pointerId: number;
+  altKey: boolean;
+}
+
 export class BoardInputController {
   private leftPointerId: number | null = null;
   private leftStartGrid: GridPosition | null = null;
   private isDragSelecting = false;
   private lastPointerGrid: GridPosition | null = null;
   private altProbeActive = false;
+  private pendingPointerMove: PointerMoveSnapshot | null = null;
+  private pointerMoveFrameId: number | null = null;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -72,6 +81,7 @@ export class BoardInputController {
     this.canvas.removeEventListener('pointerleave', this.handlePointerLeave);
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('keyup', this.handleKeyUp);
+    this.cancelPendingPointerMove();
   }
 
   private readonly handleContextMenu = (event: MouseEvent): void => {
@@ -177,6 +187,27 @@ export class BoardInputController {
   };
 
   private readonly handlePointerMove = (event: PointerEvent): void => {
+    this.pendingPointerMove = {
+      clientX: event.clientX,
+      clientY: event.clientY,
+      pointerId: event.pointerId,
+      altKey: event.altKey,
+    };
+
+    if (this.pointerMoveFrameId === null) {
+      this.pointerMoveFrameId = window.requestAnimationFrame(this.flushPointerMove);
+    }
+  };
+
+  private readonly flushPointerMove = (): void => {
+    this.pointerMoveFrameId = null;
+    const event = this.pendingPointerMove;
+    this.pendingPointerMove = null;
+    if (!event) return;
+    this.processPointerMove(event);
+  };
+
+  private processPointerMove(event: PointerMoveSnapshot): void {
     const world = this.camera.screenToWorld(event);
     const grid = worldToGrid(this.state.map, world);
     this.lastPointerGrid = grid;
@@ -224,9 +255,10 @@ export class BoardInputController {
     }
 
     if (this.isDragSelecting) updateSelectionBox(this.state, grid);
-  };
+  }
 
   private readonly handlePointerUp = (event: PointerEvent): void => {
+    this.cancelPendingPointerMove();
     if (this.leftPointerId !== event.pointerId || !this.leftStartGrid) return;
 
     const world = this.camera.screenToWorld(event);
@@ -279,6 +311,7 @@ export class BoardInputController {
   };
 
   private readonly handlePointerCancel = (event: PointerEvent): void => {
+    this.cancelPendingPointerMove();
     if (this.leftPointerId === event.pointerId) {
       clearSelectionBox(this.state);
       cancelEditorPointerAction(this.state);
@@ -289,6 +322,7 @@ export class BoardInputController {
   };
 
   private readonly handlePointerLeave = (): void => {
+    this.cancelPendingPointerMove();
     this.lastPointerGrid = null;
     setMouseGridPosition(this.state, null);
     hoverSimulationCoverAtPosition(this.state, null);
@@ -296,7 +330,7 @@ export class BoardInputController {
     this.updateCursor();
   };
 
-  private updateAltProbe(event: PointerEvent, grid: GridPosition): void {
+  private updateAltProbe(event: { altKey: boolean }, grid: GridPosition): void {
     const active = !this.state.editor.enabled
       && !getAiLabRuntime(this.state).open
       && (event.altKey || this.altProbeActive);
@@ -314,6 +348,14 @@ export class BoardInputController {
     this.leftPointerId = null;
     this.leftStartGrid = null;
     this.isDragSelecting = false;
+  }
+
+  private cancelPendingPointerMove(): void {
+    if (this.pointerMoveFrameId !== null) {
+      window.cancelAnimationFrame(this.pointerMoveFrameId);
+      this.pointerMoveFrameId = null;
+    }
+    this.pendingPointerMove = null;
   }
 }
 
