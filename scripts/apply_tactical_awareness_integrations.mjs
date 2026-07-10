@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 
+// One-time deterministic integration patch. The workflow deletes this file after success.
 function replaceOnce(file, from, to) {
   const source = fs.readFileSync(file, 'utf8');
   const count = source.split(from).length - 1;
@@ -309,11 +310,11 @@ replaceOnce('src/core/ai/AiGameBridge.ts',
 
 replaceOnce('src/ui/SceneExport.ts', `version: 'scene-export-v3'`, `version: 'scene-export-v4'`);
 replaceOnce('src/ui/SceneExport.ts',
-`      coverProtection: roundOne(cover.coverProtection),
-      concealment: roundOne(cover.concealment),`,
-`      coverProtection: roundOne(cover.coverProtection),
-      coverReliability: roundOne(cover.coverReliability),
-      concealment: roundOne(cover.concealment),`);
+`          coverProtection: roundOne(cover.coverProtection),
+          concealment: roundOne(cover.concealment),`,
+`          coverProtection: roundOne(cover.coverProtection),
+          coverReliability: roundOne(cover.coverReliability),
+          concealment: roundOne(cover.concealment),`);
 replaceOnce('src/ui/SceneExport.ts',
 `        heightCells: roundThree(zone.heightCells),
         strength: roundOne(zone.strength),`,
