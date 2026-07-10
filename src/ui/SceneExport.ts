@@ -1,4 +1,8 @@
-import { normalizeMap, type TacticalMapData } from '../core/map/MapModel';
+import {
+  normalizeMap,
+  resolveObjectCoverProperties,
+  type TacticalMapData,
+} from '../core/map/MapModel';
 import {
   normalizePressureZones,
   resolvePressureZoneSettings,
@@ -99,22 +103,25 @@ function buildExportedScene(state: SimulationState): ExportedSceneData {
       defaultHeight: state.map.defaultHeight,
       heightMap: buildHeightMap(state),
       forestMap: buildForestMap(state),
-      objects: state.map.objects.map((object) => ({
-        id: object.id,
-        kind: object.kind,
-        x: roundThree(object.x),
-        y: roundThree(object.y),
-        widthCells: roundThree(object.widthCells),
-        heightCells: roundThree(object.heightCells),
-        losHeightMeters: roundOne(object.losHeightMeters ?? 1),
-        coverProtection: roundOne(object.coverProtection ?? 0),
-        concealment: roundOne(object.concealment ?? 0),
-        penetrable: object.penetrable,
-        coverPosture: object.coverPosture,
-        rotationDegrees: roundOne(radiansToDegrees(object.rotationRadians)),
-        label: object.labels?.en,
-        labelRu: object.labels?.ru,
-      })),
+      objects: state.map.objects.map((object) => {
+        const cover = resolveObjectCoverProperties(object);
+        return {
+          id: object.id,
+          kind: object.kind,
+          x: roundThree(object.x),
+          y: roundThree(object.y),
+          widthCells: roundThree(object.widthCells),
+          heightCells: roundThree(object.heightCells),
+          losHeightMeters: roundOne(object.losHeightMeters ?? 1),
+          coverProtection: roundOne(cover.coverProtection),
+          concealment: roundOne(cover.concealment),
+          penetrable: cover.penetrable,
+          coverPosture: cover.coverPosture,
+          rotationDegrees: roundOne(radiansToDegrees(object.rotationRadians)),
+          label: object.labels?.en,
+          labelRu: object.labels?.ru,
+        };
+      }),
     },
     units: state.units.map(exportUnit),
     pressureZones: state.pressureZones.map((zone) => {
