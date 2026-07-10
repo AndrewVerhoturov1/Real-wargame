@@ -20,20 +20,16 @@ interface AwarenessDiagnostics {
 }
 
 async function saveScreenshot(page: Page, name: string): Promise<void> {
-  const target = path.join(SCREENSHOT_DIR, name);
+  const session = await page.context().newCDPSession(page);
   try {
-    await page.screenshot({ path: target, fullPage: false, timeout: 15_000 });
-  } catch {
-    const session = await page.context().newCDPSession(page);
-    try {
-      const result = await session.send('Page.captureScreenshot', {
-        format: 'png',
-        captureBeyondViewport: false,
-      });
-      writeFileSync(target, Buffer.from(result.data, 'base64'));
-    } finally {
-      await session.detach();
-    }
+    const result = await session.send('Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: false,
+      fromSurface: true,
+    });
+    writeFileSync(path.join(SCREENSHOT_DIR, name), Buffer.from(result.data, 'base64'));
+  } finally {
+    await session.detach();
   }
 }
 
