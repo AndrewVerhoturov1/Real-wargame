@@ -1,6 +1,7 @@
 import type { WorldPosition } from '../core/geometry';
 import { gridToWorld } from '../core/map/MapModel';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
+import { sampleSmoothHeightLevel } from '../core/terrain/SmoothTerrain';
 import { getVisibilityProbeState } from '../core/ui/RuntimeUiState';
 import { computeLineOfSight } from '../core/visibility/LineOfSight';
 import type { Locale } from '../i18n';
@@ -8,6 +9,8 @@ import type { Locale } from '../i18n';
 export interface ScreenProjector {
   worldToScreen(world: WorldPosition): WorldPosition;
 }
+
+const MIN_VISIBLE_SMOOTH_HEIGHT = 0.35;
 
 export class HtmlOverlayRenderer {
   private readonly container = document.createElement('div');
@@ -26,7 +29,8 @@ export class HtmlOverlayRenderer {
 
     if (showHeightLabels) {
       for (const cell of state.map.cells) {
-        if (cell.height === 0) continue;
+        const smoothHeight = sampleSmoothHeightLevel(state.map, cell.x + 0.5, cell.y + 0.5);
+        if (Math.abs(smoothHeight) < MIN_VISIBLE_SMOOTH_HEIGHT) continue;
 
         const key = `height:${cell.x}:${cell.y}`;
         visibleKeys.add(key);
@@ -36,7 +40,7 @@ export class HtmlOverlayRenderer {
           y: cell.y * state.map.cellSize + 4,
         });
 
-        updateLabelText(label, cell.height > 0 ? `+${cell.height}` : `${cell.height}`);
+        updateLabelText(label, formatSmoothHeight(smoothHeight));
         placeLabel(label, screen.x, screen.y);
       }
     }
@@ -153,6 +157,12 @@ export class HtmlOverlayRenderer {
     this.labels.set(key, label);
     return label;
   }
+}
+
+function formatSmoothHeight(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  const normalized = Math.abs(rounded) < 0.05 ? 0 : rounded;
+  return `${normalized > 0 ? '+' : ''}${normalized.toFixed(1)}`;
 }
 
 function updateLabelText(label: HTMLElement, text: string): void {
