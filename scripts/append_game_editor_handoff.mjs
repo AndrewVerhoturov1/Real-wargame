@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 
+// Triggered after the append workflow exists on the preview branch.
 const path = 'docs/subprojects/ai-single-unit-editor/HANDOFF.md';
 let content = fs.readFileSync(path, 'utf8');
 const marker = '## Единый игровой редактор сцены Stage 6';
