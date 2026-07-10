@@ -21,14 +21,12 @@ export class HtmlOverlayRenderer {
   render(state: SimulationState, locale: Locale, showHeightLabels = false): void {
     const visibleKeys = new Set<string>();
     const selectedIds = new Set(state.selectedUnitIds);
-    const showObjectLabels = state.editor.layers.objects && !state.editor.enabled;
+    const showObjectLabels = state.editor.layers.objects && state.editor.enabled;
     const showUnitLabels = state.editor.layers.units && !state.editor.enabled;
 
     if (showHeightLabels) {
       for (const cell of state.map.cells) {
-        if (cell.height === 0) {
-          continue;
-        }
+        if (cell.height === 0) continue;
 
         const key = `height:${cell.x}:${cell.y}`;
         visibleKeys.add(key);
@@ -45,9 +43,7 @@ export class HtmlOverlayRenderer {
 
     if (showObjectLabels) {
       for (const object of state.map.objects) {
-        if (!object.labels) {
-          continue;
-        }
+        if (!object.labels) continue;
 
         const key = `object:${object.id}`;
         visibleKeys.add(key);
@@ -98,17 +94,13 @@ export class HtmlOverlayRenderer {
     const nowMs = Date.now();
 
     for (const unit of state.units) {
-      if (unit.behaviorRuntime.aiSpeechUntilMs <= nowMs) {
-        continue;
-      }
+      if (unit.behaviorRuntime.aiSpeechUntilMs <= nowMs) continue;
 
       const text = locale === 'ru'
         ? unit.behaviorRuntime.aiSpeechRu ?? unit.behaviorRuntime.aiSpeech
         : unit.behaviorRuntime.aiSpeech ?? unit.behaviorRuntime.aiSpeechRu;
 
-      if (!text) {
-        continue;
-      }
+      if (!text) continue;
 
       const key = `unit-speech:${unit.id}`;
       visibleKeys.add(key);
@@ -128,9 +120,7 @@ export class HtmlOverlayRenderer {
     const probe = getVisibilityProbeState(state);
     const unit = getSelectedUnit(state);
 
-    if (!probe.active || !probe.target || !unit) {
-      return;
-    }
+    if (!probe.active || !probe.target || !unit) return;
 
     const key = 'line-of-sight:label';
     visibleKeys.add(key);
@@ -166,17 +156,12 @@ export class HtmlOverlayRenderer {
 }
 
 function updateLabelText(label: HTMLElement, text: string): void {
-  if (label.textContent !== text) {
-    label.textContent = text;
-  }
+  if (label.textContent !== text) label.textContent = text;
 }
 
 function placeLabel(label: HTMLElement, x: number, y: number): void {
   const nextTransform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
-
-  if (label.style.transform !== nextTransform) {
-    label.style.transform = nextTransform;
-  }
+  if (label.style.transform !== nextTransform) label.style.transform = nextTransform;
 }
 
 function getProbeLabelPosition(root: HTMLElement, x: number, y: number): WorldPosition {
