@@ -7,7 +7,7 @@
     "side": "player",
     "x": 27.074,
     "y": 17.089,
-    "speedCellsPerSecond": 2.3,
+    "speedCellsPerSecond": 0.5,
     "heldItem": "short_item",
     "facingDegrees": -16.2,
     "viewAngleDegrees": 118,
