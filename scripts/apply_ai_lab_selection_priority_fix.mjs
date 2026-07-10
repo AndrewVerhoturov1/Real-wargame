@@ -3,7 +3,15 @@ import fs from 'node:fs';
 const file = 'src/core/testing/AiLabInteraction.ts';
 let source = fs.readFileSync(file, 'utf8');
 
-function replaceOnce(from, to) {
+function replaceFirst(from, to) {
+  const index = source.indexOf(from);
+  if (index < 0) {
+    throw new Error(`Expected a match: ${from.slice(0, 120)}`);
+  }
+  source = `${source.slice(0, index)}${to}${source.slice(index + from.length)}`;
+}
+
+function replaceExactlyOnce(from, to) {
   const count = source.split(from).length - 1;
   if (count !== 1) {
     throw new Error(`Expected exactly one match, found ${count}: ${from.slice(0, 120)}`);
@@ -11,7 +19,7 @@ function replaceOnce(from, to) {
   source = source.replace(from, to);
 }
 
-replaceOnce(
+replaceFirst(
   `  const selectedZone = getSelectedZone(state);`,
   `  if (runtime.activePanel === 'fighter') {
     const preferredUnit = findUnitAtGridPosition(state.units, grid, 0.52);
@@ -53,7 +61,7 @@ replaceOnce(
   const selectedZone = getSelectedZone(state);`,
 );
 
-replaceOnce(
+replaceExactlyOnce(
   `    const selectedZone = getSelectedZone(state);
     runtime.hoveredHandle = selectedZone ? findThreatHandleAtPosition(selectedZone, grid) : null;`,
   `    const selectedZone = getSelectedZone(state);
