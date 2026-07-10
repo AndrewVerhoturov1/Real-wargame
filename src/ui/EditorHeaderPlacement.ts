@@ -15,14 +15,15 @@ const TOOLS_BY_TAB: Record<string, HeaderPlacementTool[]> = {
 };
 
 export function installEditorHeaderPlacement(): () => void {
-  const workbench = document.querySelector<HTMLElement>('.game-editor-workbench');
-  if (!workbench) return () => undefined;
-
   let lastTab = 'Предмет';
+
   const sync = (): void => {
     document.querySelectorAll<HTMLElement>('[data-action="editor-place"]').forEach((item) => item.remove());
-    const toolbar = workbench.querySelector<HTMLElement>('.game-editor-global-tools');
-    if (!toolbar) return;
+    if (!document.body.classList.contains('workspace-editor')) return;
+
+    const workbench = document.querySelector<HTMLElement>('.game-editor-workbench');
+    const toolbar = workbench?.querySelector<HTMLElement>('.game-editor-global-tools');
+    if (!workbench || !toolbar) return;
 
     const activeTab = workbench.querySelector<HTMLButtonElement>('.game-editor-tabs button.active');
     const activeLabel = (activeTab?.textContent ?? '').trim();
@@ -55,23 +56,23 @@ export function installEditorHeaderPlacement(): () => void {
     syncActiveState(workbench, toolbar);
   };
 
-  const handleTabClick = (event: Event): void => {
-    const button = event.target instanceof Element
-      ? event.target.closest<HTMLButtonElement>('.game-editor-tabs button')
-      : null;
-    if (!button) return;
-    const label = (button.textContent ?? '').trim();
-    if (TOOLS_BY_TAB[label]) lastTab = label;
-    window.setTimeout(sync, 0);
+  const handleContextClick = (event: Event): void => {
+    const target = event.target instanceof Element ? event.target : null;
+    const tabButton = target?.closest<HTMLButtonElement>('.game-editor-tabs button');
+    if (tabButton) {
+      const label = (tabButton.textContent ?? '').trim();
+      if (TOOLS_BY_TAB[label]) lastTab = label;
+    }
+    if (tabButton || target?.closest('[data-mode="editor"]')) window.setTimeout(sync, 0);
   };
 
-  workbench.addEventListener('click', handleTabClick, true);
-  const interval = window.setInterval(sync, 100);
+  document.addEventListener('click', handleContextClick, true);
+  const interval = window.setInterval(sync, 500);
   sync();
 
   return () => {
     window.clearInterval(interval);
-    workbench.removeEventListener('click', handleTabClick, true);
+    document.removeEventListener('click', handleContextClick, true);
   };
 }
 
