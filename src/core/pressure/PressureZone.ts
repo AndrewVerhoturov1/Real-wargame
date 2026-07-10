@@ -3,6 +3,7 @@ import { distance, type GridPosition } from '../geometry';
 export type PressureZoneType = 'open_area_pressure' | 'unknown_risk' | 'debug';
 export type PressureZoneShape = 'circle' | 'rect';
 export type PressureZoneMode = 'area' | 'directional_fire';
+export type ThreatKnowledgeSource = 'objective' | 'seen' | 'heard' | 'reported' | 'fire_pressure';
 
 export interface DirectionalThreatSettings {
   mode: PressureZoneMode;
@@ -29,6 +30,7 @@ export interface PressureZoneData {
   radiusCells?: number;
   widthCells?: number;
   heightCells?: number;
+  rotationDegrees?: number;
   strength: number;
   suppression?: number;
   stressPerSecond: number;
@@ -40,6 +42,9 @@ export interface PressureZoneData {
   enabled?: boolean;
   sourceVisible?: boolean;
   sourceKnown?: boolean;
+  knowledgeConfidence?: number;
+  uncertaintyCells?: number;
+  knowledgeSource?: ThreatKnowledgeSource;
   reason: string;
   reasonRu?: string;
 }
@@ -58,6 +63,7 @@ export interface PressureZone {
   radiusCells: number;
   widthCells: number;
   heightCells: number;
+  rotationDegrees?: number;
   strength: number;
   suppression?: number;
   stressPerSecond: number;
@@ -69,6 +75,9 @@ export interface PressureZone {
   enabled?: boolean;
   sourceVisible?: boolean;
   sourceKnown?: boolean;
+  knowledgeConfidence?: number;
+  uncertaintyCells?: number;
+  knowledgeSource?: ThreatKnowledgeSource;
   reasons: {
     en: string;
     ru: string;
@@ -96,9 +105,10 @@ export function normalizePressureZones(data: PressureZoneData[]): PressureZone[]
       mode: settings.mode,
       x: zone.x,
       y: zone.y,
-      radiusCells: zone.radiusCells ?? 0,
-      widthCells: zone.widthCells ?? 0,
-      heightCells: zone.heightCells ?? 0,
+      radiusCells: Math.max(0, zone.radiusCells ?? 0),
+      widthCells: Math.max(0, zone.widthCells ?? 0),
+      heightCells: Math.max(0, zone.heightCells ?? 0),
+      rotationDegrees: normalizeDegrees(zone.rotationDegrees ?? 0),
       strength: clampPercent(zone.strength),
       suppression: settings.suppression,
       stressPerSecond: Math.max(0, zone.stressPerSecond),
@@ -110,6 +120,9 @@ export function normalizePressureZones(data: PressureZoneData[]): PressureZone[]
       enabled: settings.enabled,
       sourceVisible: settings.sourceVisible,
       sourceKnown: settings.sourceKnown,
+      knowledgeConfidence: clampPercent(zone.knowledgeConfidence ?? (settings.sourceVisible ? 100 : settings.sourceKnown ? 75 : 45)),
+      uncertaintyCells: Math.max(0, zone.uncertaintyCells ?? (settings.sourceVisible ? 0.15 : 1.5)),
+      knowledgeSource: zone.knowledgeSource ?? (settings.sourceVisible ? 'seen' : settings.sourceKnown ? 'reported' : 'fire_pressure'),
       reasons: {
         en: zone.reason,
         ru: zone.reasonRu ?? zone.reason,
@@ -162,14 +175,12 @@ export function isPositionInsidePressureZone(position: GridPosition, zone: Press
     return distance(position, { x: zone.x, y: zone.y }) <= zone.radiusCells;
   }
 
-  const halfWidth = zone.widthCells / 2;
-  const halfHeight = zone.heightCells / 2;
-  return (
-    position.x >= zone.x - halfWidth &&
-    position.x <= zone.x + halfWidth &&
-    position.y >= zone.y - halfHeight &&
-    position.y <= zone.y + halfHeight
-  );
+  const rotation = -degreesToRadians(zone.rotationDegrees ?? 0);
+  const dx = position.x - zone.x;
+  const dy = position.y - zone.y;
+  const localX = dx * Math.cos(rotation) - dy * Math.sin(rotation);
+  const localY = dx * Math.sin(rotation) + dy * Math.cos(rotation);
+  return Math.abs(localX) <= zone.widthCells / 2 && Math.abs(localY) <= zone.heightCells / 2;
 }
 
 export function normalizeDegrees(value: number): number {
@@ -183,4 +194,8 @@ function clampPercent(value: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function degreesToRadians(value: number): number {
+  return value * Math.PI / 180;
 }
