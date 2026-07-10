@@ -69,27 +69,41 @@ installAiTestLabControls(state, aiGameBridge, () => {
   tacticalBoard.forceRender();
 });
 tacticalBoard.start();
-forceRussianTopControls();
+forceRussianTopControls(
+  languageToggle,
+  gridToggle,
+  visionToggle,
+  heightToggle,
+  pauseToggle,
+  aiEditorOpenButton,
+);
 
 window.addEventListener('beforeunload', () => {
   aiGameBridge.destroy();
   tacticalBoard.destroy();
 });
 
-function forceRussianTopControls(): void {
+function forceRussianTopControls(
+  languageButton: HTMLButtonElement,
+  gridButton: HTMLButtonElement,
+  visionButton: HTMLButtonElement,
+  heightButton: HTMLButtonElement,
+  pauseButton: HTMLButtonElement,
+  aiEditorButton: HTMLButtonElement,
+): void {
   document.documentElement.lang = 'ru';
-  languageToggle.textContent = 'Русский';
-  gridToggle.textContent = 'Сетка: вкл';
-  visionToggle.textContent = 'Обзор: выкл';
-  heightToggle.textContent = 'Цифры высоты: выкл';
-  aiEditorOpenButton.textContent = 'Редактор ИИ';
-  updatePauseToggle(pauseToggle);
-  gridToggle.setAttribute('aria-pressed', 'true');
-  visionToggle.setAttribute('aria-pressed', 'false');
-  heightToggle.setAttribute('aria-pressed', 'false');
-  gridToggle.classList.remove('hud-toggle-off');
-  visionToggle.classList.add('hud-toggle-off');
-  heightToggle.classList.add('hud-toggle-off');
+  languageButton.textContent = 'Русский';
+  gridButton.textContent = 'Сетка: вкл';
+  visionButton.textContent = 'Обзор: выкл';
+  heightButton.textContent = 'Цифры высоты: выкл';
+  aiEditorButton.textContent = 'Редактор ИИ';
+  updatePauseToggle(pauseButton);
+  gridButton.setAttribute('aria-pressed', 'true');
+  visionButton.setAttribute('aria-pressed', 'false');
+  heightButton.setAttribute('aria-pressed', 'false');
+  gridButton.classList.remove('hud-toggle-off');
+  visionButton.classList.add('hud-toggle-off');
+  heightButton.classList.add('hud-toggle-off');
 }
 
 function installAiEditorOpenButton(button: HTMLButtonElement): void {
