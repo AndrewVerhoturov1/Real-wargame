@@ -2,6 +2,12 @@ import { Container, Graphics, Text } from 'pixi.js';
 import { buildSoldierAwarenessReport, type SoldierAwarenessCell } from '../core/knowledge/SoldierAwarenessGrid';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { getSimulationLayerState } from '../core/ui/RuntimeUiState';
+import type { UnitModel } from '../core/units/UnitModel';
+
+type VisibleAwarenessMode = 'danger' | 'stealth';
+
+const mapIdentity = new WeakMap<object, number>();
+let nextMapIdentity = 1;
 
 export class PixiAwarenessHeatmapRenderer {
   readonly container = new Container();
@@ -19,9 +25,12 @@ export class PixiAwarenessHeatmapRenderer {
       return;
     }
 
-    const report = buildSoldierAwarenessReport(state, unit);
-    const key = `${report.cacheKey}:${awarenessMode}:${state.map.cellSize}`;
+    // Do not build the expensive full-map report on every animation frame.
+    // The heatmap is cell-based, so movement inside one cell does not need a redraw.
+    const key = buildAwarenessRenderKey(state, unit, awarenessMode);
     if (key === this.lastKey) return;
+
+    const report = buildSoldierAwarenessReport(state, unit);
     this.lastKey = key;
     this.container.removeChildren();
 
@@ -53,10 +62,43 @@ export class PixiAwarenessHeatmapRenderer {
   }
 }
 
+export function buildAwarenessRenderKey(
+  state: SimulationState,
+  unit: UnitModel,
+  mode: VisibleAwarenessMode,
+): string {
+  const unitCellX = Math.floor(unit.position.x);
+  const unitCellY = Math.floor(unit.position.y);
+  const orderCell = unit.order
+    ? `${Math.floor(unit.order.target.x)}:${Math.floor(unit.order.target.y)}`
+    : 'none';
+
+  return [
+    `mode:${mode}`,
+    `map:${getMapIdentity(state.map)}`,
+    `size:${state.map.width}x${state.map.height}`,
+    `cellSize:${state.map.cellSize}`,
+    `unit:${unit.id}`,
+    `unitCell:${unitCellX}:${unitCellY}`,
+    `orderCell:${orderCell}`,
+    `posture:${unit.behaviorRuntime.posture}`,
+    `knowledge:${unit.tacticalKnowledge.revision}`,
+  ].join(';');
+}
+
+function getMapIdentity(map: object): number {
+  const existing = mapIdentity.get(map);
+  if (existing !== undefined) return existing;
+  const identity = nextMapIdentity;
+  nextMapIdentity += 1;
+  mapIdentity.set(map, identity);
+  return identity;
+}
+
 function drawCell(
   graphics: Graphics,
   cell: SoldierAwarenessCell,
-  mode: 'off' | 'danger' | 'stealth',
+  mode: VisibleAwarenessMode,
   cellSize: number,
 ): void {
   const metric = metricForMode(cell, mode);
@@ -68,11 +110,10 @@ function drawCell(
 
 function metricForMode(
   cell: SoldierAwarenessCell,
-  mode: 'off' | 'danger' | 'stealth',
+  mode: VisibleAwarenessMode,
 ): { value: number; color: number; alpha: number } {
   if (mode === 'danger') return { value: cell.danger, color: dangerColor(cell.danger), alpha: alpha(cell.danger) };
-  if (mode === 'stealth') return { value: cell.concealment, color: stealthColor(cell.concealment), alpha: alpha(cell.concealment) };
-  return { value: 0, color: 0x000000, alpha: 0 };
+  return { value: cell.concealment, color: stealthColor(cell.concealment), alpha: alpha(cell.concealment) };
 }
 
 function dangerColor(value: number): number {
@@ -92,11 +133,6 @@ function alpha(value: number): number {
   return Math.min(0.55, 0.08 + value / 100 * 0.46);
 }
 
-function modeLabel(mode: 'off' | 'danger' | 'stealth'): string {
-  const labels = {
-    off: 'выключен',
-    danger: 'опасность',
-    stealth: 'скрытность',
-  } as const;
-  return labels[mode];
+function modeLabel(mode: VisibleAwarenessMode): string {
+  return mode === 'danger' ? 'опасность' : 'скрытность';
 }
