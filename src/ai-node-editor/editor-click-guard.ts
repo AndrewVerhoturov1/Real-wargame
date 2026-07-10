@@ -18,7 +18,11 @@ document.addEventListener = ((
   listener: EventListenerOrEventListenerObject | null,
   options?: boolean | AddEventListenerOptions,
 ): void => {
-  if (type !== 'click' || listener === null) {
+  if (listener === null) {
+    return;
+  }
+
+  if (type !== 'click') {
     originalAddEventListener(type, listener, options);
     return;
   }
