@@ -2,19 +2,56 @@ import {
   createBehaviorRuntime,
   createBehaviorSettings,
   createSoldierParameters,
+  createUnitInitialState,
   normalizeBehaviorProfileId,
   type BehaviorProfileId,
   type BehaviorSettings,
   type SoldierParameterOverrides,
   type SoldierParameters,
   type UnitBehaviorRuntime,
+  type UnitInitialState,
 } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
+import { createEmptyTacticalKnowledge, normalizeTacticalKnowledge } from '../knowledge/SoldierThreatMemory';
 import type { MoveOrder } from '../orders/MoveOrder';
+import type { PressureZoneMode } from '../pressure/PressureZone';
 
 export type UnitSide = 'player';
 export type UnitType = 'infantry_squad' | 'scout_team' | 'support_team';
 export type UnitHeldItem = 'long_item' | 'support_item' | 'short_item';
+export type ThreatMemorySource = 'seen' | 'heard' | 'reported' | 'fire_pressure';
+
+export interface KnownThreatMemory {
+  id: string;
+  labelRu: string;
+  mode: PressureZoneMode;
+  x: number;
+  y: number;
+  radiusCells: number;
+  widthCells: number;
+  heightCells: number;
+  rotationDegrees: number;
+  strength: number;
+  suppression: number;
+  stressPerSecond: number;
+  directionDegrees: number;
+  arcDegrees: number;
+  rangeCells: number;
+  minRangeCells: number;
+  falloffPercent: number;
+  confidence: number;
+  uncertaintyCells: number;
+  source: ThreatMemorySource;
+  visibleNow: boolean;
+  lastSeenSeconds: number;
+  lastUpdatedSeconds: number;
+}
+
+export interface UnitTacticalKnowledge {
+  threats: KnownThreatMemory[];
+  revision: number;
+  lastUpdatedSeconds: number;
+}
 
 export interface UnitData {
   id: string;
@@ -32,6 +69,8 @@ export interface UnitData {
   behaviorProfile?: BehaviorProfileId;
   behavior?: Partial<BehaviorSettings>;
   soldier?: SoldierParameterOverrides;
+  initialState?: Partial<UnitInitialState>;
+  tacticalKnowledge?: Partial<UnitTacticalKnowledge>;
   runtime?: Partial<Pick<UnitBehaviorRuntime, 'stress' | 'suppression' | 'ammo' | 'weaponReady' | 'posture'>>;
 }
 
@@ -54,19 +93,30 @@ export interface UnitModel {
   behaviorSettings: BehaviorSettings;
   behaviorRuntime: UnitBehaviorRuntime;
   soldier: SoldierParameters;
+  initialState: UnitInitialState;
+  tacticalKnowledge: UnitTacticalKnowledge;
 }
 
 export function normalizeUnits(data: UnitData[]): UnitModel[] {
   return data.map((unit) => {
     const fallbackLabel = unit.label ?? unit.id;
     const behaviorProfile = normalizeBehaviorProfileId(unit.behaviorProfile);
-    const behaviorRuntime = createBehaviorRuntime();
+    const soldier = createSoldierParameters(behaviorProfile, unit.soldier);
+    const legacyInitial = {
+      posture: unit.runtime?.posture,
+      stress: unit.runtime?.stress,
+      suppression: unit.runtime?.suppression,
+      ammo: unit.runtime?.ammo,
+      weaponReady: unit.runtime?.weaponReady,
+      fatigue: unit.soldier?.condition?.fatigue,
+      morale: unit.soldier?.condition?.morale,
+      confusion: unit.soldier?.condition?.confusion,
+      health: unit.soldier?.condition?.health,
+    };
+    const initialState = createUnitInitialState(soldier, compactUndefined({ ...legacyInitial, ...unit.initialState }));
+    const behaviorRuntime = createBehaviorRuntime(initialState);
 
-    if (unit.runtime) {
-      Object.assign(behaviorRuntime, unit.runtime);
-    }
-
-    return {
+    const model: UnitModel = {
       id: unit.id,
       labels: {
         en: fallbackLabel,
@@ -87,8 +137,50 @@ export function normalizeUnits(data: UnitData[]): UnitModel[] {
       behaviorProfile,
       behaviorSettings: createBehaviorSettings(behaviorProfile, unit.behavior),
       behaviorRuntime,
-      soldier: createSoldierParameters(behaviorProfile, unit.soldier),
+      soldier,
+      initialState,
+      tacticalKnowledge: unit.tacticalKnowledge
+        ? normalizeTacticalKnowledge(unit.tacticalKnowledge)
+        : createEmptyTacticalKnowledge(),
     };
+    applyInitialStateToRuntime(model);
+    return model;
+  });
+}
+
+export function applyInitialStateToRuntime(unit: UnitModel): void {
+  const initial = unit.initialState;
+  unit.behaviorRuntime.previousPosture = initial.posture;
+  unit.behaviorRuntime.posture = initial.posture;
+  unit.behaviorRuntime.stress = initial.stress;
+  unit.behaviorRuntime.suppression = initial.suppression;
+  unit.behaviorRuntime.ammo = initial.ammo;
+  unit.behaviorRuntime.weaponReady = initial.weaponReady;
+  unit.behaviorRuntime.danger = 0;
+  unit.behaviorRuntime.rawDanger = 0;
+  unit.behaviorRuntime.state = 'idle';
+  unit.behaviorRuntime.previousState = 'idle';
+  unit.behaviorRuntime.currentAction = 'waiting';
+  unit.behaviorRuntime.reason = 'Initial state applied.';
+  unit.behaviorRuntime.lastEvent = 'initial_state_applied';
+  unit.behaviorRuntime.aiNodeCooldowns = {};
+  unit.soldier.condition.fatigue = initial.fatigue;
+  unit.soldier.condition.morale = initial.morale;
+  unit.soldier.condition.confusion = initial.confusion;
+  unit.soldier.condition.health = initial.health;
+}
+
+export function copyRuntimeToInitialState(unit: UnitModel): void {
+  unit.initialState = createUnitInitialState(unit.soldier, {
+    posture: unit.behaviorRuntime.posture,
+    stress: unit.behaviorRuntime.stress,
+    suppression: unit.behaviorRuntime.suppression,
+    ammo: unit.behaviorRuntime.ammo,
+    weaponReady: unit.behaviorRuntime.weaponReady,
+    fatigue: unit.soldier.condition.fatigue,
+    morale: unit.soldier.condition.morale,
+    confusion: unit.soldier.condition.confusion,
+    health: unit.soldier.condition.health,
   });
 }
 
@@ -99,29 +191,25 @@ export function findUnitAtGridPosition(
 ): UnitModel | undefined {
   for (let index = units.length - 1; index >= 0; index -= 1) {
     const unit = units[index];
-    const distance = Math.hypot(
+    const pointDistance = Math.hypot(
       unit.position.x - gridPosition.x,
       unit.position.y - gridPosition.y,
     );
 
-    if (distance <= radiusCells) {
-      return unit;
-    }
+    if (pointDistance <= radiusCells) return unit;
   }
 
   return undefined;
 }
 
 function defaultHeldItemForUnitType(type: UnitType): UnitHeldItem {
-  if (type === 'support_team') {
-    return 'support_item';
-  }
-
-  if (type === 'scout_team') {
-    return 'short_item';
-  }
-
+  if (type === 'support_team') return 'support_item';
+  if (type === 'scout_team') return 'short_item';
   return 'long_item';
+}
+
+function compactUndefined<T extends Record<string, unknown>>(value: T): Partial<T> {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as Partial<T>;
 }
 
 function degreesToRadians(degrees: number): number {
