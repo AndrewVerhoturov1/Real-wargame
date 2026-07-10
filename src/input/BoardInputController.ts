@@ -15,6 +15,10 @@ import {
   updateSelectionBox,
   type SimulationState,
 } from '../core/simulation/SimulationState';
+import {
+  getAiTestLabSelectionTarget,
+  selectAiTestLabTargetAtPosition,
+} from '../core/testing/AiTestLabSelection';
 import { setVisibilityProbe } from '../core/ui/RuntimeUiState';
 import { findUnitAtGridPosition } from '../core/units/UnitModel';
 import type { CameraController } from './CameraController';
@@ -137,6 +141,10 @@ export class BoardInputController {
       return;
     }
 
+    if (getAiTestLabSelectionTarget(this.state)) {
+      return;
+    }
+
     if (!this.isDragSelecting && distance(this.leftStartGrid, grid) >= DRAG_SELECT_THRESHOLD_CELLS) {
       this.isDragSelecting = true;
       startSelectionBox(this.state, this.leftStartGrid);
@@ -161,6 +169,13 @@ export class BoardInputController {
       if (!isTerrainPaintTool(String(this.state.editor.tool))) {
         finishEditorPointerAction(this.state, grid);
       }
+      this.clearLeftPointer(event.pointerId);
+      return;
+    }
+
+    const labSelectionTarget = getAiTestLabSelectionTarget(this.state);
+    if (!this.isDragSelecting && labSelectionTarget) {
+      selectAiTestLabTargetAtPosition(this.state, grid);
       this.clearLeftPointer(event.pointerId);
       return;
     }

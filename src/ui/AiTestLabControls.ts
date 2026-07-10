@@ -29,6 +29,10 @@ import {
   setAiTestTimeScale,
 } from '../core/testing/AiTestLabRuntime';
 import type { AiGameBridgeHandle } from '../core/ai/AiGameBridge';
+import {
+  setAiTestLabSelectionTarget,
+  type AiTestLabSelectionTarget,
+} from '../core/testing/AiTestLabSelection';
 
 const PROFILE_OPTIONS: Array<[BehaviorProfileId, string]> = [
   ['green', 'Новобранец'],
@@ -68,6 +72,13 @@ const CONDITION_FIELDS: Array<[keyof SoldierCondition, string]> = [
 
 type LabTab = 'fighter' | 'threat' | 'cover' | 'test';
 
+function selectionTargetForTab(tab: LabTab): AiTestLabSelectionTarget {
+  if (tab === 'fighter') return 'fighter';
+  if (tab === 'threat') return 'threat';
+  if (tab === 'cover') return 'cover';
+  return null;
+}
+
 export function installAiTestLabControls(
   state: SimulationState,
   aiBridge: AiGameBridgeHandle,
@@ -91,6 +102,11 @@ export function installAiTestLabControls(
   let selectionKey = '';
   let statusMessage = 'Выберите бойца, угрозу или укрытие на карте.';
 
+  setAiTestLabSelectionTarget(state, null);
+  root.addEventListener('toggle', () => {
+    setAiTestLabSelectionTarget(state, root.open ? selectionTargetForTab(activeTab) : null);
+  });
+
   const render = () => {
     body.replaceChildren();
     if (activeTab === 'fighter') renderFighterTab(body, state, onChanged);
@@ -113,6 +129,7 @@ export function installAiTestLabControls(
     const button = createButton(label);
     button.addEventListener('click', () => {
       activeTab = id;
+      setAiTestLabSelectionTarget(state, root.open ? selectionTargetForTab(activeTab) : null);
       for (const item of tabRow.querySelectorAll('button')) item.classList.remove('active');
       button.classList.add('active');
       render();
@@ -217,7 +234,7 @@ function renderFighterTab(container: HTMLElement, state: SimulationState, onChan
 function renderThreatTab(container: HTMLElement, state: SimulationState, onChanged: () => void): void {
   const zone = getSelectedPressureZone(state);
   if (!zone) {
-    container.append(createHint('Выберите зону опасности в редакторе карты. Обычную зону можно превратить в направленный огонь.'));
+    container.append(createHint('Щёлкните по сектору или его источнику прямо на карте. Редактор карты включать не нужно.'));
     return;
   }
 
@@ -278,13 +295,14 @@ function renderThreatTab(container: HTMLElement, state: SimulationState, onChang
 function renderCoverTab(container: HTMLElement, state: SimulationState, onChanged: () => void): void {
   const object = getSelectedMapObject(state);
   if (!object) {
-    container.append(createHint('Выберите предмет на карте. Защита действует только когда предмет находится между угрозой и бойцом.'));
+    container.append(createHint('Щёлкните по предмету прямо на карте. Угроза и боец останутся выбранными для проверки направления защиты.'));
     return;
   }
 
   const properties = resolveObjectCoverProperties(object);
   applyResolvedCoverDefaults(object, properties);
   container.append(createTitle(`${object.labels?.ru ?? object.kind} — ${object.id}`));
+  container.append(createHint('У укрытия нет навсегда заданной стороны: она определяется выбранной угрозой. Красная стрелка показывает направление огня, зелёная стрелка на карте показывает защищённую сторону.'));
   container.append(createNumberControl('Физическая защита, 0–100', properties.coverProtection, 0, 100, 1, (value) => {
     object.coverProtection = value;
     onChanged();
