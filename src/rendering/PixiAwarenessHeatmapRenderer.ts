@@ -77,12 +77,12 @@ export class PixiAwarenessHeatmapRenderer {
     const markerChanged = markerKey !== this.lastMarkerKey;
     if (!rasterChanged && !markerChanged) return;
 
+    const startedAt = rasterChanged ? performance.now() : 0;
     const report = buildSoldierAwarenessReport(state, unit);
     this.ensureRaster(state.map.width, state.map.height, state.map.cellSize);
     if (!this.rasterContext || !this.rasterTexture) return;
 
     if (rasterChanged) {
-      const startedAt = performance.now();
       drawAwarenessRaster(
         this.rasterContext,
         report.cells,
