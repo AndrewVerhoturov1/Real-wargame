@@ -3,6 +3,7 @@ import type { GridPosition, WorldPosition } from '../geometry';
 export type TerrainKind = 'field' | 'forest' | 'road' | 'swamp' | 'rough' | 'water';
 export type ElevationLevel = -2 | -1 | 0 | 1 | 2 | 3 | 4;
 export type ForestLayerKind = 0 | 1 | 2;
+export type CoverPosture = 'standing' | 'crouched' | 'prone';
 
 export const ELEVATION_LEVELS = [-2, -1, 0, 1, 2, 3, 4] as const;
 
@@ -18,6 +19,13 @@ export type MapObjectKind =
   | 'logs'
   | 'well'
   | 'bridge';
+
+export interface CoverProperties {
+  coverProtection: number;
+  concealment: number;
+  penetrable: boolean;
+  coverPosture: CoverPosture;
+}
 
 export interface MapCellData {
   x: number;
@@ -55,6 +63,10 @@ export interface MapObjectData {
   widthCells?: number;
   heightCells?: number;
   losHeightMeters?: number;
+  coverProtection?: number;
+  concealment?: number;
+  penetrable?: boolean;
+  coverPosture?: CoverPosture;
   label?: string;
   labelRu?: string;
 }
@@ -91,6 +103,10 @@ export interface MapObject {
   widthCells: number;
   heightCells: number;
   losHeightMeters?: number;
+  coverProtection?: number;
+  concealment?: number;
+  penetrable?: boolean;
+  coverPosture?: CoverPosture;
   labels: {
     en: string;
     ru: string;
@@ -176,51 +192,30 @@ export function normalizeMap(data: TacticalMapData): TacticalMap {
 export function normalizeElevationLevel(value: number | undefined): ElevationLevel {
   const rounded = Number.isFinite(value) ? Math.round(value as number) : 0;
 
-  if (rounded <= -2) {
-    return -2;
-  }
-
-  if (rounded >= 4) {
-    return 4;
-  }
-
+  if (rounded <= -2) return -2;
+  if (rounded >= 4) return 4;
   return rounded as ElevationLevel;
 }
 
 export function normalizeForestLayer(value: number | undefined): ForestLayerKind {
   const rounded = Number.isFinite(value) ? Math.round(value as number) : 0;
 
-  if (rounded <= 0) {
-    return 0;
-  }
-
-  if (rounded >= 2) {
-    return 2;
-  }
-
+  if (rounded <= 0) return 0;
+  if (rounded >= 2) return 2;
   return 1;
 }
 
 export function getCell(map: TacticalMap, x: number, y: number): MapCell | undefined {
-  if (x < 0 || y < 0 || x >= map.width || y >= map.height) {
-    return undefined;
-  }
-
+  if (x < 0 || y < 0 || x >= map.width || y >= map.height) return undefined;
   return map.cells[y * map.width + x];
 }
 
 export function worldToGrid(map: TacticalMap, world: WorldPosition): GridPosition {
-  return {
-    x: world.x / map.cellSize,
-    y: world.y / map.cellSize,
-  };
+  return { x: world.x / map.cellSize, y: world.y / map.cellSize };
 }
 
 export function gridToWorld(map: TacticalMap, grid: GridPosition): WorldPosition {
-  return {
-    x: grid.x * map.cellSize,
-    y: grid.y * map.cellSize,
-  };
+  return { x: grid.x * map.cellSize, y: grid.y * map.cellSize };
 }
 
 export function gridToCellLabel(map: TacticalMap, grid: GridPosition): string {
@@ -231,11 +226,7 @@ export function gridToCellLabel(map: TacticalMap, grid: GridPosition): string {
 export function gridToCellCenter(map: TacticalMap, grid: GridPosition): GridPosition {
   const cellX = clamp(Math.floor(grid.x), 0, map.width - 1);
   const cellY = clamp(Math.floor(grid.y), 0, map.height - 1);
-
-  return {
-    x: cellX + 0.5,
-    y: cellY + 0.5,
-  };
+  return { x: cellX + 0.5, y: cellY + 0.5 };
 }
 
 export function clampGridPositionToMap(map: TacticalMap, grid: GridPosition): GridPosition {
@@ -245,9 +236,47 @@ export function clampGridPositionToMap(map: TacticalMap, grid: GridPosition): Gr
   };
 }
 
+export function getDefaultObjectCoverProperties(kind: MapObjectKind): CoverProperties {
+  switch (kind) {
+    case 'structure':
+      return { coverProtection: 92, concealment: 95, penetrable: false, coverPosture: 'standing' };
+    case 'cover':
+      return { coverProtection: 88, concealment: 70, penetrable: false, coverPosture: 'crouched' };
+    case 'ditch':
+      return { coverProtection: 82, concealment: 65, penetrable: false, coverPosture: 'prone' };
+    case 'logs':
+      return { coverProtection: 76, concealment: 45, penetrable: false, coverPosture: 'crouched' };
+    case 'rock':
+      return { coverProtection: 72, concealment: 40, penetrable: false, coverPosture: 'crouched' };
+    case 'crates':
+      return { coverProtection: 58, concealment: 55, penetrable: true, coverPosture: 'crouched' };
+    case 'fence':
+      return { coverProtection: 35, concealment: 70, penetrable: true, coverPosture: 'crouched' };
+    case 'tree':
+      return { coverProtection: 42, concealment: 55, penetrable: true, coverPosture: 'standing' };
+    case 'post':
+      return { coverProtection: 45, concealment: 35, penetrable: true, coverPosture: 'crouched' };
+    case 'well':
+      return { coverProtection: 62, concealment: 45, penetrable: false, coverPosture: 'crouched' };
+    case 'bridge':
+      return { coverProtection: 20, concealment: 10, penetrable: true, coverPosture: 'prone' };
+  }
+}
+
+export function resolveObjectCoverProperties(object: MapObject): CoverProperties {
+  const defaults = getDefaultObjectCoverProperties(object.kind);
+  return {
+    coverProtection: clampPercent(object.coverProtection ?? defaults.coverProtection),
+    concealment: clampPercent(object.concealment ?? defaults.concealment),
+    penetrable: object.penetrable ?? defaults.penetrable,
+    coverPosture: object.coverPosture ?? defaults.coverPosture,
+  };
+}
+
 function normalizeMapObjects(objects: MapObjectData[]): MapObject[] {
   return objects.map((object) => {
     const defaultSize = getDefaultObjectSize(object.kind);
+    const cover = getDefaultObjectCoverProperties(object.kind);
 
     return {
       id: object.id,
@@ -258,11 +287,12 @@ function normalizeMapObjects(objects: MapObjectData[]): MapObject[] {
       widthCells: object.widthCells ?? defaultSize.widthCells,
       heightCells: object.heightCells ?? defaultSize.heightCells,
       losHeightMeters: normalizeObjectHeightMeters(object.losHeightMeters ?? defaultSize.losHeightMeters),
+      coverProtection: clampPercent(object.coverProtection ?? cover.coverProtection),
+      concealment: clampPercent(object.concealment ?? cover.concealment),
+      penetrable: object.penetrable ?? cover.penetrable,
+      coverPosture: object.coverPosture ?? cover.coverPosture,
       labels: object.label
-        ? {
-            en: object.label,
-            ru: object.labelRu ?? object.label,
-          }
+        ? { en: object.label, ru: object.labelRu ?? object.label }
         : null,
     };
   });
@@ -270,26 +300,16 @@ function normalizeMapObjects(objects: MapObjectData[]): MapObject[] {
 
 function getDefaultObjectSize(kind: MapObjectKind): { widthCells: number; heightCells: number; losHeightMeters: number } {
   switch (kind) {
-    case 'tree':
-      return { widthCells: 0.75, heightCells: 0.75, losHeightMeters: 6 };
-    case 'rock':
-      return { widthCells: 0.45, heightCells: 0.35, losHeightMeters: 1.2 };
-    case 'crates':
-      return { widthCells: 0.75, heightCells: 0.65, losHeightMeters: 1.25 };
-    case 'post':
-      return { widthCells: 0.55, heightCells: 0.55, losHeightMeters: 1.35 };
-    case 'logs':
-      return { widthCells: 1.25, heightCells: 0.45, losHeightMeters: 0.8 };
-    case 'well':
-      return { widthCells: 0.7, heightCells: 0.7, losHeightMeters: 1.1 };
-    case 'cover':
-      return { widthCells: 2.5, heightCells: 0.45, losHeightMeters: 1.1 };
-    case 'ditch':
-      return { widthCells: 4.5, heightCells: 0.55, losHeightMeters: 0.2 };
-    case 'fence':
-      return { widthCells: 4, heightCells: 0.25, losHeightMeters: 1.2 };
-    case 'bridge':
-      return { widthCells: 2.6, heightCells: 1.1, losHeightMeters: 0.8 };
+    case 'tree': return { widthCells: 0.75, heightCells: 0.75, losHeightMeters: 6 };
+    case 'rock': return { widthCells: 0.45, heightCells: 0.35, losHeightMeters: 1.2 };
+    case 'crates': return { widthCells: 0.75, heightCells: 0.65, losHeightMeters: 1.25 };
+    case 'post': return { widthCells: 0.55, heightCells: 0.55, losHeightMeters: 1.35 };
+    case 'logs': return { widthCells: 1.25, heightCells: 0.45, losHeightMeters: 0.8 };
+    case 'well': return { widthCells: 0.7, heightCells: 0.7, losHeightMeters: 1.1 };
+    case 'cover': return { widthCells: 2.5, heightCells: 0.45, losHeightMeters: 1.1 };
+    case 'ditch': return { widthCells: 4.5, heightCells: 0.55, losHeightMeters: 0.2 };
+    case 'fence': return { widthCells: 4, heightCells: 0.25, losHeightMeters: 1.2 };
+    case 'bridge': return { widthCells: 2.6, heightCells: 1.1, losHeightMeters: 0.8 };
     case 'structure':
     default:
       return { widthCells: 2, heightCells: 1.5, losHeightMeters: 5 };
@@ -297,10 +317,7 @@ function getDefaultObjectSize(kind: MapObjectKind): { widthCells: number; height
 }
 
 function normalizeObjectHeightMeters(value: number): number {
-  if (!Number.isFinite(value)) {
-    return 1;
-  }
-
+  if (!Number.isFinite(value)) return 1;
   return Math.max(0, Math.min(20, Math.round(value * 10) / 10));
 }
 
@@ -314,6 +331,10 @@ function cellKey(x: number, y: number): string {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function clampPercent(value: number): number {
+  return clamp(Math.round(value), 0, 100);
 }
 
 function degreesToRadians(degrees: number): number {
