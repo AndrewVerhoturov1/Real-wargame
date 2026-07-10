@@ -512,7 +512,7 @@ function wrapField(label: string, control: HTMLElement): HTMLElement {
   return wrapper;
 }
 
-function collapsibleNumbers<T extends Record<string, number>>(
+function collapsibleNumbers<T extends object>(
   title: string,
   fields: Array<[keyof T, string]>,
   record: T,
@@ -524,7 +524,10 @@ function collapsibleNumbers<T extends Record<string, number>>(
   const content = document.createElement('div');
   content.className = 'game-editor-details-body';
   for (const [key, label] of fields) {
-    content.append(numberField(label, record[key], 0, 100, 1, (value) => { record[key] = value; }));
+    const current = Number(record[key]);
+    content.append(numberField(label, current, 0, 100, 1, (value) => {
+      (record as unknown as Record<keyof T, number>)[key] = value;
+    }));
   }
   details.append(summary, content);
   return details;
