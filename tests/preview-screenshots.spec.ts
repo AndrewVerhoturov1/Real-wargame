@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const SCREENSHOT_DIR = path.join('artifacts', 'screenshots');
@@ -9,8 +9,28 @@ const BOARD_ORIGIN = { x: 72, y: 72 };
 const CELL_SIZE = 24;
 let aiEngineProcess: ChildProcessWithoutNullStreams | null = null;
 
+interface AwarenessDiagnostics {
+  representation: string;
+  displayObjectCount: number;
+  rasterWidth: number;
+  rasterHeight: number;
+  rebuildCount: number;
+  markerUpdateCount: number;
+  maxBuildMs: number;
+}
+
 async function saveScreenshot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: path.join(SCREENSHOT_DIR, name), fullPage: false });
+  const session = await page.context().newCDPSession(page);
+  try {
+    const result = await session.send('Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: false,
+      fromSurface: true,
+    });
+    writeFileSync(path.join(SCREENSHOT_DIR, name), Buffer.from(result.data, 'base64'));
+  } finally {
+    await session.detach();
+  }
 }
 
 async function worldPoint(canvas: Locator, gridX: number, gridY: number): Promise<{ x: number; y: number }> {
@@ -26,6 +46,12 @@ async function selectFixtureSoldier(page: Page, canvas: Locator): Promise<void> 
   const soldier = await worldPoint(canvas, 27.574, 17.589);
   await page.mouse.click(soldier.x, soldier.y);
   await expect(page.locator('[data-role="unit-name"]')).toContainText('Солдат');
+}
+
+async function readAwarenessDiagnostics(page: Page): Promise<AwarenessDiagnostics | undefined> {
+  return page.evaluate(() => (
+    window as Window & { __realWargameAwarenessDebug?: AwarenessDiagnostics }
+  ).__realWargameAwarenessDebug);
 }
 
 async function waitForAiEngine(): Promise<void> {
@@ -55,7 +81,7 @@ test.afterAll(() => {
   aiEngineProcess = null;
 });
 
-test('keeps information details open during live simulation updates and captures tactical layers', async ({ page }) => {
+test('keeps information details open, uses a movement-stable raster overlay and clears stale tooltips', async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await page.goto('/');
   const canvas = page.locator('canvas');
@@ -65,6 +91,7 @@ test('keeps information details open during live simulation updates and captures
   await expect(page.locator('.simulation-unit-bar')).toBeVisible();
   await expect(page.locator('body')).toHaveClass(/workspace-simulation/);
   await selectFixtureSoldier(page, canvas);
+  await expect(page.locator('.unit-label').filter({ hasText: 'Солдат' })).toBeVisible();
   await page.waitForTimeout(700);
 
   const sidebarBox = await page.locator('.simulation-sidebar').boundingBox();
@@ -96,6 +123,38 @@ test('keeps information details open during live simulation updates and captures
   await page.locator('[data-tab="danger"]').click();
   await expect(page.locator('[data-role="sidebar-title"]')).toContainText('Опасность');
   await expect(page.locator('[data-role="cover-list"]')).toBeVisible();
+  await page.waitForFunction(() => {
+    const diagnostics = (window as Window & { __realWargameAwarenessDebug?: AwarenessDiagnostics }).__realWargameAwarenessDebug;
+    return diagnostics?.representation === 'raster-sprite';
+  });
+  const beforeMove = await readAwarenessDiagnostics(page);
+  expect(beforeMove?.representation).toBe('raster-sprite');
+  expect(beforeMove?.displayObjectCount).toBeLessThanOrEqual(3);
+  expect(beforeMove?.rasterWidth).toBe(64);
+  expect(beforeMove?.rasterHeight).toBe(40);
+  expect(beforeMove?.maxBuildMs ?? Number.POSITIVE_INFINITY).toBeLessThan(250);
+
+  const movementTarget = await worldPoint(canvas, 30.5, 17.5);
+  await page.mouse.click(movementTarget.x, movementTarget.y, { button: 'right' });
+  await page.waitForTimeout(2600);
+  const afterMove = await readAwarenessDiagnostics(page);
+  expect((afterMove?.rebuildCount ?? 0) - (beforeMove?.rebuildCount ?? 0)).toBeLessThanOrEqual(1);
+  expect(afterMove?.markerUpdateCount ?? 0).toBeGreaterThan(beforeMove?.markerUpdateCount ?? 0);
+  await page.getByRole('button', { name: 'Сбросить бойца' }).click();
+
+  const tooltip = page.locator('.cover-map-tooltip');
+  await tooltip.evaluate((element) => {
+    element.hidden = false;
+    element.textContent = 'редкий лес';
+  });
+  await expect(tooltip).toBeVisible();
+  await page.locator('[data-tab="info"]').evaluate((element) => {
+    element.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    (element as HTMLButtonElement).click();
+  });
+  await expect(tooltip).toBeHidden();
+
+  await page.locator('[data-tab="danger"]').click();
   await page.waitForTimeout(900);
   await saveScreenshot(page, '03-simulation-danger-layer.png');
 
@@ -117,7 +176,7 @@ test('keeps information details open during live simulation updates and captures
   await saveScreenshot(page, '06-simulation-memory-layer.png');
 });
 
-test('editing workspace, full-height palette and top utility menu', async ({ page }) => {
+test('editing workspace has contextual placement tools in its own header', async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await page.goto('/');
   const canvas = page.locator('canvas');
@@ -127,12 +186,12 @@ test('editing workspace, full-height palette and top utility menu', async ({ pag
   await expect(page.locator('#hud')).toBeVisible();
   await expect(page.locator('.simulation-unit-bar')).toBeHidden();
   await expect(page.locator('.game-editor-workbench')).toBeVisible();
-  await page.waitForTimeout(500);
 
   const editorBodyBox = await page.locator('.game-editor-body').boundingBox();
   expect(editorBodyBox?.height ?? 0).toBeGreaterThan(400);
-  await expect(page.locator('[data-action="editor-place"]')).toBeVisible();
-  await expect(page.locator('[data-action="editor-place"]')).toContainText('Поставить');
+  await expect(page.locator('.game-editor-global-tools').getByRole('button', { name: 'Поставить предмет' })).toBeVisible();
+  await expect(page.locator('.game-editor-body [data-editor-tool="spawn_object"]')).toBeHidden();
+  await expect(page.locator('[data-action="editor-place"]')).toHaveCount(0);
 
   await page.locator('.workspace-file-menu > summary').click();
   await expect(page.getByRole('button', { name: 'Сохранить сцену' })).toBeVisible();
@@ -144,19 +203,49 @@ test('editing workspace, full-height palette and top utility menu', async ({ pag
   await saveScreenshot(page, '07-editor-object-palette.png');
 
   await page.locator('.game-editor-tabs').getByRole('button', { name: 'Угроза', exact: true }).click();
+  await expect(page.locator('.game-editor-global-tools').getByRole('button', { name: 'Поставить угрозу' })).toBeVisible();
   const threat = await worldPoint(canvas, 34.044, 16.823);
   await page.mouse.click(threat.x, threat.y);
   await expect(page.locator('.game-editor-selected-summary')).toContainText('editor_zone_1');
   await page.waitForTimeout(500);
-  await expect(page.locator('[data-action="editor-place"]')).toContainText('угрозу');
   await saveScreenshot(page, '08-editor-threat-tools.png');
 
   await page.locator('.game-editor-tabs').getByRole('button', { name: 'Рельеф', exact: true }).click();
-  const editorBody = page.locator('.game-editor-body');
-  await expect(editorBody.getByRole('button', { name: 'Рисовать высоту', exact: true })).toBeVisible();
-  await expect(editorBody.getByRole('button', { name: 'Рисовать лес', exact: true })).toBeVisible();
+  await expect(page.locator('.game-editor-global-tools').getByRole('button', { name: 'Рисовать высоту' })).toBeVisible();
+  await expect(page.locator('.game-editor-global-tools').getByRole('button', { name: 'Рисовать лес' })).toBeVisible();
+  await expect(page.locator('.game-editor-body [data-editor-tool="paint_height"]')).toBeHidden();
   await page.waitForTimeout(350);
   await saveScreenshot(page, '09-editor-terrain-tools.png');
+});
+
+test('newly placed fighter remains selectable and can move in simulation', async ({ page }) => {
+  await page.setViewportSize(VIEWPORT);
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  await page.locator('[data-mode="editor"]').click();
+  await page.locator('.game-editor-tabs').getByRole('button', { name: 'Боец', exact: true }).click();
+  const placeButton = page.locator('.game-editor-global-tools').getByRole('button', { name: 'Поставить бойца' });
+  await expect(placeButton).toBeVisible();
+  await placeButton.click();
+
+  const spawnPoint = await worldPoint(canvas, 12, 12);
+  await page.mouse.click(spawnPoint.x, spawnPoint.y);
+  await expect(page.locator('.game-editor-selected-summary')).toContainText('editor_unit_1');
+
+  await page.locator('[data-mode="simulation"]').click();
+  await expect(page.locator('[data-role="unit-name"]')).toContainText('Боец');
+  const position = page.locator('[data-live="position"]');
+  await expect(position).not.toHaveText('—');
+  const initialPosition = await position.textContent();
+
+  const target = await worldPoint(canvas, 15, 12);
+  await page.mouse.click(target.x, target.y, { button: 'right' });
+  await page.getByRole('button', { name: 'Продолжить' }).click();
+  await expect.poll(async () => position.textContent(), { timeout: 5000 }).not.toBe(initialPosition);
+  await saveScreenshot(page, '11-editor-spawned-fighter-playable.png');
+
+  await page.getByRole('button', { name: 'Сбросить бойца' }).click();
+  await expect(position).toHaveText(initialPosition ?? '');
 });
 
 test('AI Node Editor remains unchanged and independent', async ({ page }) => {

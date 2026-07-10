@@ -6,6 +6,7 @@ cd /d "%SCRIPT_DIR%"
 set "APP_PORT=5173"
 set "ENGINE_PORT=8787"
 set "LAB_MANAGER_PORT=8799"
+rem Legacy lab-launch.html is intentionally not opened: this launcher goes straight to the tactical game.
 
 where npm >nul 2>nul
 if %errorlevel% neq 0 (
@@ -63,12 +64,12 @@ if !WAIT_APP! GEQ 35 (
     pause
     exit /b 1
 )
->nul 2>nul powershell -NoProfile -Command "try { Invoke-WebRequest -Uri 'http://127.0.0.1:%APP_PORT%/lab-launch.html' -UseBasicParsing -TimeoutSec 2; exit 0 } catch { exit 1 }"
+>nul 2>nul powershell -NoProfile -Command "try { Invoke-WebRequest -Uri 'http://127.0.0.1:%APP_PORT%/' -UseBasicParsing -TimeoutSec 2; exit 0 } catch { exit 1 }"
 if !errorlevel! equ 0 goto :openbrowser
 >nul 2>nul timeout /t 1 /nobreak
 set /a WAIT_APP+=1
 goto :waitapploop
 
 :openbrowser
-start "" "http://127.0.0.1:%APP_PORT%/lab-launch.html"
+start "" "http://127.0.0.1:%APP_PORT%/"
 exit /b 0

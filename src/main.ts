@@ -16,10 +16,12 @@ import { initializeAiTestLabRuntime } from './core/testing/AiTestLabRuntime';
 import type { UnitData } from './core/units/UnitModel';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
 import { installAppShellMenu } from './shared/AppShellMenu';
+import { installEditorHeaderPlacement } from './ui/EditorHeaderPlacement';
 import { installGameEditorWorkbench } from './ui/GameEditorWorkbench';
 import { installPerformanceReportControls } from './ui/PerformanceReportControls';
 import { installSceneExportControls } from './ui/SceneExportControls';
 import { installTacticalWorkspace } from './ui/TacticalWorkspace';
+import { installWorkspaceTooltipGuard } from './ui/WorkspaceTooltipGuard';
 
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 
@@ -63,7 +65,11 @@ installPerformanceReportControls(() => tacticalBoard.downloadPerformanceReport()
 installAiEditorOpenButton(aiEditorOpenButton);
 installPauseToggle(pauseToggle, () => tacticalBoard.forceRender());
 installTacticalWorkspace(state, aiGameBridge, () => tacticalBoard.forceRender());
+const destroyEditorHeaderPlacement = installEditorHeaderPlacement();
+const destroyWorkspaceTooltipGuard = installWorkspaceTooltipGuard();
 tacticalBoard.start();
+// Pixi starts with the legacy English locale; switch once after its listener is installed.
+languageToggle.click();
 forceRussianTopControls(
   languageToggle,
   gridToggle,
@@ -74,6 +80,8 @@ forceRussianTopControls(
 );
 
 window.addEventListener('beforeunload', () => {
+  destroyWorkspaceTooltipGuard();
+  destroyEditorHeaderPlacement();
   aiGameBridge.destroy();
   tacticalBoard.destroy();
 });

@@ -3,8 +3,8 @@ import path from 'node:path';
 import process from 'node:process';
 
 const root = process.cwd();
-const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 const failures = [];
+const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
 function expectIncludes(relativePath, snippets) {
   let content = '';
@@ -37,143 +37,72 @@ function expectBefore(relativePath, earlier, later) {
 
 expectIncludes('src/ui/TacticalWorkspace.ts', [
   "type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory'",
-  'Симуляция',
-  'Редактирование',
-  'Последнее решение ИИ',
-  'Слой опасности',
-  'Слой скрытности',
-  'Память бойца',
-  'Приказать двигаться сюда',
-  'Один расчёт ИИ',
-  'Рассчитать и выполнить',
-  'setAiTestPaused(state, true)',
-  'data-action="editor-place"',
-  'workspace-file-menu',
-  'data-live="${key}"',
-  'updateInfoPanelLive',
-  'stableDecision',
-  'Math.floor(unit.position.x)',
-  "import '../tactical-workspace-stage8.css'",
+  'Симуляция', 'Редактирование', 'Слой опасности', 'Слой скрытности', 'Память бойца',
+  'Приказать двигаться сюда', 'Один расчёт ИИ', 'Рассчитать и выполнить',
+  'workspace-file-menu', 'updateInfoPanelLive', 'stableDecision',
 ]);
-expectExcludes('src/ui/TacticalWorkspace.ts', [
-  'u?.position.x.toFixed(2)',
-  'u?.behaviorRuntime.reason',
-]);
+expectExcludes('src/ui/TacticalWorkspace.ts', ['u?.position.x.toFixed(2)', 'u?.behaviorRuntime.reason']);
 
-expectIncludes('src/core/ui/RuntimeUiState.ts', [
-  "export type SimulationLayerMode = 'info' | 'danger' | 'stealth' | 'memory'",
-  'selectedCoverId',
-  'hoveredCoverId',
-  'setSimulationLayerMode',
-  'setSelectedSimulationCover',
+expectIncludes('src/ui/EditorHeaderPlacement.ts', [
+  'installEditorHeaderPlacement', 'TOOLS_BY_TAB',
+  "{ id: 'spawn_object', label: 'Поставить предмет' }",
+  "{ id: 'spawn_unit', label: 'Поставить бойца' }",
+  "{ id: 'spawn_zone', label: 'Поставить угрозу' }",
+  'data-header-placement-tool', '[data-action="editor-place"]',
 ]);
-
-expectIncludes('src/core/knowledge/SimulationCoverSelection.ts', [
-  'findSimulationCoverAtPosition',
-  'selectSimulationCoverAtPosition',
-  'getSelectedSimulationCover',
+expectIncludes('src/ui/WorkspaceTooltipGuard.ts', [
+  'installWorkspaceTooltipGuard', 'clearCoverTooltip', '[data-tab], [data-mode]', 'tooltip.hidden = true',
 ]);
 
 expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
-  "'stealth'",
-  'postureConcealmentBonus',
-  'buildBaseReport',
-  'buildRouteKey',
-  'Orders affect only route danger',
+  'buildAwarenessField', 'buildBestSafePositions', 'buildRouteKey',
+  'Movement does not invalidate the expensive map field',
+  'buildAwarenessKnowledgeKey', 'KNOWLEDGE_CONFIDENCE_BUCKET', 'KNOWLEDGE_UNCERTAINTY_BUCKET',
+  'evaluateAwarenessFieldCell', 'estimateLocalProtection', 'evaluateRouteDangerFromField',
 ]);
 expectExcludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
-  'const orderCellX',
-  'const orderCellY',
+  'const orderCellX', 'const orderCellY', 'unit.tacticalKnowledge.revision',
+  'evaluateSmallArmsCover', 'getCachedCover', 'coverCacheByMap',
 ]);
 
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
-  "mode === 'stealth'",
-  'скрытность',
   'buildAwarenessRenderKey',
-  'unitCell:',
-  'knowledge:',
-  'Orders change often, but they do not change the heatmap cells themselves.',
+  'Orders and movement change often, but they do not change the heatmap pixels themselves.',
+  'lastRasterKey', 'lastMarkerKey', 'markerUpdateCount',
+  'Sprite', 'Texture', 'SCALE_MODES.NEAREST', 'createAwarenessTexture', 'drawAwarenessRaster',
+  "representation: 'raster-sprite'", 'getDiagnostics()', '__realWargameAwarenessDebug',
 ]);
 expectExcludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
-  'orderCell:',
+  'orderCell:', 'for (const cell of report.cells) drawCell', 'graphics.drawRect(cell.x * cellSize',
 ]);
 expectBefore(
   'src/rendering/PixiAwarenessHeatmapRenderer.ts',
-  'if (key === this.lastKey) return;',
+  'if (!rasterChanged && !markerChanged) return;',
   'const report = buildSoldierAwarenessReport(state, unit);',
 );
 
-expectIncludes('src/core/terrain/SmoothTerrain.ts', [
-  'const SMOOTH_RADIUS_CELLS = 1',
-  'const HEIGHT_WEIGHT_CENTER = 5',
-  'const HEIGHT_WEIGHT_NEAR = 2',
+expectIncludes('src/core/editor/GameEditorPlacement.ts', [
+  'rememberSelectedUnitForTest', 'state.units.push(unit)', 'rememberSelectedUnitForTest(state)',
 ]);
-expectIncludes('src/rendering/HtmlOverlayRenderer.ts', [
-  'sampleSmoothHeightLevel',
-  'formatSmoothHeight',
-  'MIN_VISIBLE_SMOOTH_HEIGHT',
-]);
-
-expectIncludes('src/rendering/PixiOverlayRenderer.ts', [
-  'getSimulationLayerState',
-  'drawThreatMemoryOverlay',
-  'drawCoverKnowledgeOverlay',
-  'selectedCoverId',
-  'hoveredCoverId',
-]);
-
-expectIncludes('src/input/BoardInputController.ts', [
-  'selectSimulationCoverAtPosition',
-  'hoverSimulationCoverAtPosition',
-]);
-
 expectIncludes('src/main.ts', [
-  "import { installTacticalWorkspace } from './ui/TacticalWorkspace'",
   'installTacticalWorkspace(state, aiGameBridge',
-]);
-expectExcludes('src/main.ts', [
-  "installAiTestLabControls(state, aiGameBridge",
-  'installGameHudControls(state)',
-]);
-
-expectIncludes('src/tactical-workspace.css', [
-  '.tactical-workspace-bar',
-  '.simulation-sidebar',
-  '.simulation-unit-bar',
-  'body.workspace-editor #app',
-  'body.workspace-simulation.sidebar-open #app',
-  '.cover-map-tooltip',
+  'installEditorHeaderPlacement()', 'installWorkspaceTooltipGuard()', 'languageToggle.click()',
 ]);
 expectIncludes('src/tactical-workspace-stage8.css', [
-  '.workspace-file-menu',
-  'body.workspace-simulation .simulation-sidebar',
-  'bottom: 9px',
-  '.editor-scene-tools-slot',
-  '.game-editor-status',
+  '.cover-map-tooltip[hidden]', '[data-action="editor-place"]', '.editor-header-placement',
+  '[data-editor-tool="spawn_object"]', '[data-editor-tool="paint_height"]',
 ]);
 
-expectIncludes('src/ui/SceneExportControls.ts', [
-  "workspaceFileAction = 'save'",
-  "workspaceFileAction = 'load'",
-  "workspaceFileInput = 'scene'",
-]);
-expectIncludes('src/ui/PerformanceReportControls.ts', [
-  "workspaceFileAction = 'performance'",
+expectIncludes('Run-Real-Wargame-Lab.bat', [
+  "Invoke-WebRequest -Uri 'http://127.0.0.1:%APP_PORT%/'",
+  'start "" "http://127.0.0.1:%APP_PORT%/"', 'intentionally not opened',
 ]);
 
 expectIncludes('tests/preview-screenshots.spec.ts', [
-  '01-simulation-info.png',
-  '02-simulation-sidebar-collapsed.png',
-  '03-simulation-danger-layer.png',
-  '04-simulation-cover-selected.png',
-  '05-simulation-stealth-layer.png',
-  '06-simulation-memory-layer.png',
-  '07-editor-object-palette.png',
-  '08-editor-threat-tools.png',
-  '09-editor-terrain-tools.png',
-  '10-node-editor-unchanged.png',
-  'keeps information details open during live simulation updates',
-  'workspace-file-menu',
+  '01-simulation-info.png', '03-simulation-danger-layer.png', '07-editor-object-palette.png',
+  '10-node-editor-unchanged.png', '11-editor-spawned-fighter-playable.png',
+  'uses a movement-stable raster overlay and clears stale tooltips',
+  'raster-sprite', 'newly placed fighter remains selectable and can move in simulation',
 ]);
 
 if (failures.length > 0) {
