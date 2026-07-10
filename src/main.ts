@@ -16,6 +16,7 @@ import { initializeAiTestLabRuntime } from './core/testing/AiTestLabRuntime';
 import type { UnitData } from './core/units/UnitModel';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
 import { installAppShellMenu } from './shared/AppShellMenu';
+import { installEditorHeaderPlacement } from './ui/EditorHeaderPlacement';
 import { installGameEditorWorkbench } from './ui/GameEditorWorkbench';
 import { installPerformanceReportControls } from './ui/PerformanceReportControls';
 import { installSceneExportControls } from './ui/SceneExportControls';
@@ -63,7 +64,10 @@ installPerformanceReportControls(() => tacticalBoard.downloadPerformanceReport()
 installAiEditorOpenButton(aiEditorOpenButton);
 installPauseToggle(pauseToggle, () => tacticalBoard.forceRender());
 installTacticalWorkspace(state, aiGameBridge, () => tacticalBoard.forceRender());
+const destroyEditorHeaderPlacement = installEditorHeaderPlacement();
 tacticalBoard.start();
+// Pixi starts with the legacy English locale; switch once after its listener is installed.
+languageToggle.click();
 forceRussianTopControls(
   languageToggle,
   gridToggle,
@@ -74,6 +78,7 @@ forceRussianTopControls(
 );
 
 window.addEventListener('beforeunload', () => {
+  destroyEditorHeaderPlacement();
   aiGameBridge.destroy();
   tacticalBoard.destroy();
 });
