@@ -166,6 +166,8 @@ function awarenessLabel(mode: SoldierAwarenessMode): string {
     danger: 'угрозы',
     cover: 'защита',
     safe: 'безопасные позиции',
+    stealth: 'скрытность',
+    memory: 'память бойца',
     uncertainty: 'неопределённость',
     objective: 'объективная карта',
   };
