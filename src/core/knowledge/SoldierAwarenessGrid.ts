@@ -51,7 +51,10 @@ interface CachedAwareness {
 }
 
 const cache = new WeakMap<UnitModel, CachedAwareness>();
+const mapHashCache = new WeakMap<SimulationState['map'], { key: string; hash: string }>();
 const MAX_SAFE_POSITIONS = 8;
+export const KNOWLEDGE_CONFIDENCE_BUCKET = 5;
+export const KNOWLEDGE_UNCERTAINTY_BUCKET = 0.5;
 
 export function buildSoldierAwarenessReport(
   state: SimulationState,
@@ -260,14 +263,14 @@ function threatFactorAtPosition(position: GridPosition, threat: KnownThreatMemor
 }
 
 function buildCacheKey(state: SimulationState, unit: UnitModel): string {
-  // The expensive cell field depends on the soldier cell, posture, knowledge and map.
+  // The expensive cell field depends on the soldier cell, posture, awareness-relevant knowledge and map.
   // Orders affect only route danger and must not rebuild all 2,560 awareness cells.
   const unitCellX = Math.floor(unit.position.x);
   const unitCellY = Math.floor(unit.position.y);
 
   return [
     unit.id,
-    unit.tacticalKnowledge.revision,
+    buildAwarenessKnowledgeKey(unit),
     unit.behaviorRuntime.posture,
     unitCellX,
     unitCellY,
@@ -277,18 +280,48 @@ function buildCacheKey(state: SimulationState, unit: UnitModel): string {
 }
 
 function buildRouteKey(unit: UnitModel): string {
-  if (!unit.order) return `none:${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`;
-  return [
-    Math.floor(unit.position.x),
-    Math.floor(unit.position.y),
-    Math.floor(unit.order.target.x),
-    Math.floor(unit.order.target.y),
-    unit.behaviorRuntime.posture,
-    unit.tacticalKnowledge.revision,
-  ].join(':');
+  const position = `${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`;
+  const target = unit.order
+    ? `${Math.floor(unit.order.target.x)}:${Math.floor(unit.order.target.y)}`
+    : 'none';
+  return [position, target, unit.behaviorRuntime.posture, buildAwarenessKnowledgeKey(unit)].join(':');
+}
+
+export function buildAwarenessKnowledgeKey(unit: UnitModel): string {
+  return unit.tacticalKnowledge.threats.map((threat) => [
+    threat.id,
+    threat.mode,
+    quantize(threat.x, 0.05),
+    quantize(threat.y, 0.05),
+    quantize(threat.radiusCells, 0.1),
+    quantize(threat.widthCells, 0.1),
+    quantize(threat.heightCells, 0.1),
+    quantize(threat.rotationDegrees, 1),
+    quantize(threat.strength, 1),
+    quantize(threat.suppression, 1),
+    quantize(threat.directionDegrees, 1),
+    quantize(threat.arcDegrees, 1),
+    quantize(threat.rangeCells, 0.1),
+    quantize(threat.minRangeCells, 0.1),
+    quantize(threat.falloffPercent, 1),
+    quantize(threat.confidence, KNOWLEDGE_CONFIDENCE_BUCKET),
+    quantize(threat.uncertaintyCells, KNOWLEDGE_UNCERTAINTY_BUCKET),
+    threat.source,
+    threat.visibleNow ? '1' : '0',
+  ].join(':')).join('|');
 }
 
 function buildMapHash(state: SimulationState): string {
+  const fingerprint = [
+    state.map.width,
+    state.map.height,
+    state.map.cellSize,
+    state.map.cells.length,
+    state.map.objects.length,
+  ].join(':');
+  const cached = mapHashCache.get(state.map);
+  if (cached?.key === fingerprint) return cached.hash;
+
   // A compact numeric fingerprint detects editor changes without allocating the
   // enormous terrain/object strings that previously caused frequent GC pauses.
   let hash = 2166136261;
@@ -315,7 +348,13 @@ function buildMapHash(state: SimulationState): string {
     hash = hashNumber(hash, Math.round((object.concealment ?? -1) * 10));
   }
 
-  return (hash >>> 0).toString(36);
+  const result = (hash >>> 0).toString(36);
+  mapHashCache.set(state.map, { key: fingerprint, hash: result });
+  return result;
+}
+
+function quantize(value: number, bucket: number): number {
+  return Math.round(value / bucket) * bucket;
 }
 
 function hashNumber(hash: number, value: number): number {
