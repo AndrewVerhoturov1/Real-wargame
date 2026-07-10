@@ -16,6 +16,7 @@ const NODE_HEIGHT = 88;
 
 const root = document.querySelector<HTMLElement>('#ai-node-editor-root');
 if (!root) throw new Error('AI node editor root is missing.');
+const editorRoot = root;
 
 installAppShellMenu({ mode: 'editor' });
 
@@ -104,7 +105,7 @@ function render(): void {
     uiState.bottomOpen ? 'bottom-open' : 'bottom-closed',
   ].join(' ');
 
-  root.innerHTML = `
+  editorRoot.innerHTML = `
     <section class="${shellClasses}">
       <header class="ai-editor-topbar compact-topbar">
         <div class="ai-editor-title compact-title"><h1>Soldier AI Node Editor <span>Редактор ИИ</span></h1></div>
