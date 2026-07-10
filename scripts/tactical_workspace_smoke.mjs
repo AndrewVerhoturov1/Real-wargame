@@ -26,6 +26,15 @@ function expectExcludes(relativePath, snippets) {
   }
 }
 
+function expectBefore(relativePath, earlier, later) {
+  const content = read(relativePath);
+  const earlierIndex = content.indexOf(earlier);
+  const laterIndex = content.indexOf(later);
+  if (earlierIndex < 0 || laterIndex < 0 || earlierIndex >= laterIndex) {
+    failures.push(`${relativePath}: expected ${JSON.stringify(earlier)} before ${JSON.stringify(later)}`);
+  }
+}
+
 expectIncludes('src/ui/TacticalWorkspace.ts', [
   "type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory'",
   'Симуляция',
@@ -62,7 +71,16 @@ expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
   "mode === 'stealth'",
   'скрытность',
+  'buildAwarenessRenderKey',
+  'unitCell:',
+  'knowledge:',
+  'Do not build the expensive full-map report on every animation frame.',
 ]);
+expectBefore(
+  'src/rendering/PixiAwarenessHeatmapRenderer.ts',
+  'if (key === this.lastKey) return;',
+  'const report = buildSoldierAwarenessReport(state, unit);',
+);
 
 expectIncludes('src/rendering/PixiOverlayRenderer.ts', [
   'getSimulationLayerState',
