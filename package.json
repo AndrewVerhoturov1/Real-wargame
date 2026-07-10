@@ -12,6 +12,7 @@
     "engine:smoke": "node scripts/local_ai_engine_smoke.mjs",
     "editor:smoke": "node scripts/ai_node_editor_smoke.mjs",
     "lab:smoke": "node scripts/ai_test_lab_smoke.mjs",
+    "game-editor:smoke": "node scripts/game_editor_smoke.mjs",
     "lab:manager": "node scripts/real_wargame_lab_manager.mjs"
   },
   "dependencies": {
