@@ -29,7 +29,11 @@ import {
   getAiTestLabSelectionTarget,
   selectAiTestLabTargetAtPosition,
 } from '../core/testing/AiTestLabSelection';
-import { setVisibilityProbe } from '../core/ui/RuntimeUiState';
+import {
+  hoverSimulationCoverAtPosition,
+  selectSimulationCoverAtPosition,
+} from '../core/knowledge/SimulationCoverSelection';
+import { getSimulationLayerState, setVisibilityProbe } from '../core/ui/RuntimeUiState';
 import { findUnitAtGridPosition } from '../core/units/UnitModel';
 import type { CameraController } from './CameraController';
 
@@ -83,7 +87,24 @@ export class BoardInputController {
       return;
     }
 
-    if (!getAiLabRuntime(this.state).open || isTextInput(event.target)) return;
+    if (isTextInput(event.target)) return;
+
+    if (this.state.editor.enabled) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        cancelEditorPointerAction(this.state);
+        cancelAiLabPointerAction(this.state);
+        this.state.editor.tool = 'select';
+        this.state.editor.lastMessage = 'Действие отменено. Инструмент: выбор.';
+        this.updateCursor();
+      } else if (event.key === 'Delete') {
+        event.preventDefault();
+        deleteSelectedEditorTargets(this.state);
+      }
+      return;
+    }
+
+    if (!getAiLabRuntime(this.state).open) return;
 
     if (event.key === 'Escape') {
       event.preventDefault();
@@ -133,11 +154,16 @@ export class BoardInputController {
 
       if (this.state.editor.enabled) {
         event.preventDefault();
+        if (beginAiLabPointerAction(this.state, grid)) {
+          this.updateCursor();
+          return;
+        }
         if (isTerrainPaintTool(String(this.state.editor.tool))) {
           paintEditorTerrainAt(this.state, grid);
         } else if (!placeConfiguredEditorEntity(this.state, grid)) {
           beginEditorPointerAction(this.state, grid);
         }
+        this.updateCursor();
       }
       return;
     }
@@ -157,13 +183,29 @@ export class BoardInputController {
     setMouseGridPosition(this.state, grid);
     this.updateAltProbe(event, grid);
 
+    if (!this.state.editor.enabled && getSimulationLayerState(this.state).mode !== 'info') {
+      hoverSimulationCoverAtPosition(this.state, grid);
+    }
+
     if (!this.state.editor.enabled && getAiLabRuntime(this.state).open) {
       updateAiLabPointerAction(this.state, grid);
       this.updateCursor();
       return;
     }
 
-    if (this.leftPointerId !== event.pointerId || !this.leftStartGrid) return;
+    if (this.state.editor.enabled && getAiLabRuntime(this.state).drag?.kind === 'threat') {
+      updateAiLabPointerAction(this.state, grid);
+      this.updateCursor();
+      return;
+    }
+
+    if (this.leftPointerId !== event.pointerId || !this.leftStartGrid) {
+      if (this.state.editor.enabled) {
+        updateAiLabPointerAction(this.state, grid);
+        this.updateCursor();
+      }
+      return;
+    }
 
     if (this.state.editor.enabled) {
       if (isTerrainPaintTool(String(this.state.editor.tool))) {
@@ -200,10 +242,13 @@ export class BoardInputController {
     }
 
     if (this.state.editor.enabled) {
-      if (!isTerrainPaintTool(String(this.state.editor.tool)) && !isSpawnTool(String(this.state.editor.tool))) {
+      if (getAiLabRuntime(this.state).drag?.kind === 'threat') {
+        finishAiLabPointerAction(this.state, grid);
+      } else if (!isTerrainPaintTool(String(this.state.editor.tool)) && !isSpawnTool(String(this.state.editor.tool))) {
         finishEditorPointerAction(this.state, grid);
       }
       this.clearLeftPointer(event.pointerId);
+      this.updateCursor();
       return;
     }
 
@@ -220,7 +265,14 @@ export class BoardInputController {
       clearSelectionBox(this.state);
     } else {
       const unit = findUnitAtGridPosition(this.state.units, grid);
-      selectUnit(this.state, unit?.id ?? null);
+      if (unit) {
+        selectUnit(this.state, unit.id);
+      } else if (getSimulationLayerState(this.state).mode !== 'info') {
+        const cover = selectSimulationCoverAtPosition(this.state, grid);
+        if (!cover) selectUnit(this.state, null);
+      } else {
+        selectUnit(this.state, null);
+      }
     }
 
     this.clearLeftPointer(event.pointerId);
@@ -239,6 +291,7 @@ export class BoardInputController {
   private readonly handlePointerLeave = (): void => {
     this.lastPointerGrid = null;
     setMouseGridPosition(this.state, null);
+    hoverSimulationCoverAtPosition(this.state, null);
     setVisibilityProbe(this.state, false, null);
     this.updateCursor();
   };
