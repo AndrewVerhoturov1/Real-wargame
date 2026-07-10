@@ -1,216 +1,304 @@
-# Handoff — AI Single-Unit Editor
+# Handoff — AI Single-Unit Editor + AI Test Lab
 
-Дата: 2026-07-09  
+Дата: 2026-07-10  
 Ветка: `real-wargame-preview`  
-Главное правило: `main` не трогать без явного GO человека.
+Главное правило: `main` не трогать без явного GO пользователя.
 
-## Что нужно понять сразу
+## Что это за подпроект
 
-Это подпроект для игры Real-wargame: редактор ИИ одиночного солдата через универсальные ноды.
-
-Текущий рабочий результат после GraphRunner-перехода:
+Подпроект соединяет два инструмента:
 
 ```text
-игра запускается;
-редактор нод запускается;
-редактор и игра связаны через localStorage v6;
-выбранный боец на карте исполняет граф через отдельный AiGraphRunner;
-AiGameBridge больше не является главным исполнителем графа — он только адаптер игра↔runner;
-UtilitySelector v1 реально оценивает дочерние ActionBranch по score-ноды;
-ParameterScore, DistanceScore, DecisionInertia, RandomChance, StableThreshold и ForbidAction участвуют в выборе/отсечении веток;
-GraphRunner возвращает effects, scores, trace, explanation, blackboard и cooldowns;
-bridge применяет effects к выбранному бойцу: move_to, posture, movement_mode, speech, reason, memory;
-local engine evaluate-once использует тот же смысл GraphRunner v1, а не старый поиск первой action-like ноды;
-общий тихий запуск игры + редактора + local engine остаётся через Run-Real-Wargame-Lab.bat;
-общее меню игра↔редактор↔выход остаётся прежним.
+AI Node Editor — где собирается поведение бойца из универсальных нод;
+AI Test Lab — игровая испытательная сцена, где вручную задаются боец, угрозы и укрытия.
 ```
 
-Пользователь ранее подтвердил: связка редактор↔игра работает. Последний UI-баг с мгновенным сбросом `select` исправлен через `src/ai-node-editor/editor-click-guard.ts`; этот guard не удалять без замены архитектуры document-click handling.
-
-## Как продолжать работу
-
-Перед любой правкой читать:
+Главная схема:
 
 ```text
-docs/subprojects/ai-single-unit-editor/HANDOFF.md
-docs/subprojects/ai-single-unit-editor/SUBPROJECT.md
-docs/subprojects/ai-single-unit-editor/subproject.json
-docs/subprojects/ai-single-unit-editor/JOURNAL.md
-docs/manual-test/AI_NODE_EDITOR_STAGE_4.md
+AI Node Editor
+  → graph в localStorage v6
+  → AiGameBridge строит blackboard из реальной сцены
+  → AiGraphRunner выбирает ветку и возвращает effects / scores / trace
+  → AiGameBridge применяет effects к выбранному бойцу
+  → редактор нод показывает последний trace
 ```
 
-Для быстрого машинного контекста:
+## Основной запуск
 
-```text
-python scripts/subproject_context.py ai-single-unit-editor --brief
-python scripts/subproject_context.py ai-single-unit-editor --opencode
-python scripts/subproject_context.py ai-single-unit-editor --files
-```
-
-## Основной пользовательский запуск
+Запускать двойным кликом:
 
 ```text
 Run-Real-Wargame-Lab.bat
 ```
 
-Он поднимает Vite, local AI engine и скрытый lab manager, затем открывает `lab-launch.html`, игру и AI Node Editor.
+Ожидаемые вкладки:
+
+```text
+http://127.0.0.1:5173/
+http://127.0.0.1:5173/ai-node-editor.html
+```
 
 Служебные порты:
 
 ```text
-5173 — Vite app/game/editor;
+5173 — Vite;
 8787 — local AI engine;
-8799 — lab manager: /lab/health, /lab/open, /lab/shutdown.
+8799 — lab manager.
 ```
 
-## Текущий graph storage
-
-Используется только новый storage:
+## Что готово сейчас
 
 ```text
-real-wargame.ai-node-editor.graph.v6
-real-wargame.ai-node-editor.positions.v6
-real-wargame.ai-node-editor.ui.v6
+редактор универсальных AI-нод;
+GraphRunner + UtilitySelector v1;
+подсветка последнего решения;
+пауза;
+общий тихий запуск;
+редактор карты;
+редактор выбранного бойца;
+направленные источники огня;
+настраиваемая защита укрытий;
+предварительный расчёт AI без применения;
+ручное применение одного решения;
+сброс бойца и сцены;
+скорость времени до ×10;
+экспорт/импорт испытательной сцены v3.
 ```
 
-Старые `graph.v5` и ниже не поднимать.
-
-Bundled graph:
+## Главные новые файлы Stage 5
 
 ```text
-src/data/ai/soldier_default_survival_graph.json
+src/core/cover/CoverEvaluation.ts
+src/core/pressure/ThreatEvaluation.ts
+src/core/testing/AiTestLabRuntime.ts
+src/ui/AiTestLabControls.ts
+src/ai-test-lab.css
+src/ai-node-editor/ai-test-lab-node-options.ts
+scripts/ai_test_lab_smoke.mjs
+docs/manual-test/AI_TEST_LAB_STAGE_5.md
+docs/subprojects/ai-single-unit-editor/AI_TEST_LAB_DESIGN.md
+docs/subprojects/ai-single-unit-editor/AI_TEST_LAB_IMPLEMENTATION_PLAN.md
+.github/workflows/preview-core-checks.yml
 ```
 
-Он должен начинаться с одной ноды:
+## Скорость бойца
+
+Старая скорость около 2.2–2.3 клетки/с означала примерно 22–23 м/с при масштабе 10 м/клетка.
+
+Теперь:
 
 ```text
-root / Root / Старт
-children: []
+скорость по умолчанию: 0.5 клетки/с;
+при 10 м/клетка: около 5 м/с;
+поза и физическое состояние дополнительно меняют фактическую скорость.
 ```
 
-Старого дерева survival/continue/observe быть не должно.
-
-## Универсальные ноды
-
-В палитре оставить простой универсальный набор:
+Файлы:
 
 ```text
-Числовой порог / BlackboardValueAbove
-Проверка флага / FlagCheck
-Порог расстояния / DistanceCheck
-Тактическая проверка / TacticalCheck
-Оценка параметра / ParameterScore
-Оценка расстояния / DistanceScore
-Поиск объекта / FindBestObject
-Выбор цели / SelectTarget
-Запись памяти / WriteMemory
-Копия памяти / CopyMemory
-Действие / SetAction
-Режим движения / SetMovementMode
-Поза / SetPosture
-Реплика бойца / SayMessage
-Стабильный порог / StableThreshold
-Запрет действия / ForbidAction
-Объяснение / WriteReason
+src/core/units/UnitModel.ts
+src/data/units/test_units.json
+src/core/simulation/SimulationTick.ts
 ```
 
-Не возвращать legacy-ноды, если их уже покрывают универсальные:
+## Панель «Полигон ИИ»
+
+В игре слева сверху находится сворачиваемая панель:
 
 ```text
-HasOrder → FlagCheck: hasOrder=true
-EnemyVisible → FlagCheck: enemyVisible=true
-EnemyKnown → FlagCheck: enemyKnown=true
-UnderFire → FlagCheck: underFire=true
-CoverNearby → TacticalCheck: cover_exists=true или FindBestObject: cover
-FindBestCover → FindBestObject: objectKind=cover
-MoveToCover → SetAction: move_to + targetKey=best_cover_position
-ContinueOrder → SetAction: continue_order
-Observe → SetAction: wait или будущий отдельный mode/action
-DangerAbove / StressAbove → BlackboardValueAbove + sourceKey
+Полигон ИИ
 ```
 
-## GraphRunner v1
-
-Ключевой файл:
+Вкладки:
 
 ```text
-src/core/ai/AiGraphRunner.ts
+Боец
+Угроза
+Укрытие
+Испытание
 ```
 
-Он сейчас:
+### Боец
+
+Можно менять:
 
 ```text
-не импортирует PixiJS;
-не импортирует SimulationState;
-не читает localStorage/window/document;
-получает graph + unitId + blackboard + cooldowns + nowMs + tacticalHost;
-исполняет Root / Sequence / Selector / UtilitySelector / ActionBranch;
-возвращает effects вместо прямого изменения бойца;
-возвращает scores, trace, explanation, blackboard и cooldowns;
-умеет выбирать лучшую ветку UtilitySelector по score;
-умеет отсекать ветку через ForbidAction;
-умеет StableThreshold через memory-key stable:<nodeId>;
-учитывает cooldownSeconds/cooldownTiming.
+имя;
+профиль: green / regular / veteran / cautious / reckless;
+скорость;
+дальность и угол обзора;
+позу;
+стресс;
+подавление;
+патроны;
+готовность оружия;
+стойкость;
+осторожность;
+решительность;
+дисциплину;
+инициативу;
+тактику;
+владение оружием;
+усталость;
+мораль;
+замешательство;
+здоровье;
+внимание;
+зрение;
+интуицию;
+физическую скорость;
+скрытность.
 ```
 
-Смысл разделения:
+Runtime-поля бойца:
 
 ```text
-GraphRunner думает и возвращает результат;
-AiGameBridge применяет результат к текущей игре;
-local engine использует тот же смысл evaluate-once для headless проверки.
+danger
+rawDanger
+stress
+suppression
+ammo
+weaponReady
+posture
+currentAction
+aiNodeCooldowns
 ```
 
-## UtilitySelector v1
+## Угрозы
 
-Теперь `UtilitySelector` не просто пробует детей как обычный Selector. Он:
+Старые зоны не удалены. Есть два режима:
 
 ```text
-берёт дочерние ActionBranch;
-прогоняет условия и tactical/query/memory ноды внутри ветки;
-собирает score breakdown от score-нод;
-помечает veto, если ForbidAction запрещает действие ветки;
-выбирает проходящую не-veto ветку с максимальным score;
-при равенстве фактически остаётся порядок детей как стабильный tie-break.
+area — обычная круглая/прямоугольная область;
+directional_fire — источник направленного огня.
 ```
 
-Поддержанные score/decision-ноды v1:
+Параметры направленного огня:
 
 ```text
-ParameterScore — добавляет/вычитает значение blackboard-параметра * weight;
-DistanceScore — даёт баллы от дистанции до цели/укрытия;
-DecisionInertia — добавляет bonus, если current_action совпадает с action;
-RandomChance — даёт детерминированную pseudo-random добавку probability-roll;
-StableThreshold — включает/держит условие по enter/exit threshold;
-ForbidAction — veto для ветки, если она пытается выполнить запрещённое action.
+strength;
+suppression;
+stressPerSecond;
+directionDegrees;
+arcDegrees;
+rangeCells;
+minRangeCells;
+falloffPercent;
+enabled;
+sourceVisible;
+sourceKnown.
 ```
 
-Ограничение: это ещё не финальная Utility AI система всей игры. Это v1 для выбранного бойца и проверки node-graph контракта.
-
-## AI Game Bridge
-
-Ключевой файл:
+Расчёт учитывает:
 
 ```text
-src/core/ai/AiGameBridge.ts
+попал ли боец в сектор;
+расстояние до источника;
+падение силы к краю дальности;
+позу бойца;
+укрытие между источником и бойцом;
+несколько угроз одновременно.
 ```
 
-Он сейчас:
+Несколько вкладов складываются с ограничением 100 для danger и suppression.
+
+Ключевые файлы:
 
 ```text
-берёт выбранного бойца из SimulationState;
-не работает в editor.enabled;
-читает graph из localStorage v6;
-строит blackboard из реальной игры;
-создаёт tacticalHost callbacks для runner;
-вызывает runAiGraph(...);
-примерно раз в 0.6 секунды;
-применяет effects runner-а к UnitModel/behaviorRuntime;
-записывает aiGraphReason/reason/lastEvent;
-хранит runtime memory динамически на behaviorRuntime для WriteMemory/StableThreshold.
+src/core/pressure/PressureZone.ts
+src/core/pressure/ThreatEvaluation.ts
 ```
 
-Blackboard содержит примерно:
+Начальная тестовая зона:
+
+```text
+src/data/pressure_zones/test_pressure_zones.json
+```
+
+Она настроена как сектор пулемётного огня.
+
+## Укрытия
+
+У предметов карты есть свойства:
+
+```text
+coverProtection 0–100;
+concealment 0–100;
+penetrable;
+coverPosture: standing / crouched / prone;
+losHeightMeters.
+```
+
+Если поля отсутствуют в старом JSON, используются значения по типу предмета.
+
+Важно:
+
+```text
+предмет защищает только тогда, когда находится между угрозой и бойцом;
+простреливаемость уменьшает фактическую защиту;
+поза бойца должна подходить высоте укрытия;
+точка для движения выбирается за предметом относительно источника огня.
+```
+
+Ключевые файлы:
+
+```text
+src/core/map/MapModel.ts
+src/core/cover/CoverEvaluation.ts
+```
+
+## Управление испытанием
+
+Кнопки:
+
+```text
+Пауза / Продолжить
+Один расчёт ИИ
+Рассчитать и выполнить
+Один шаг симуляции
+Сбросить бойца
+Сбросить всю сцену
+Запомнить сцену как исходную
+```
+
+Режимы времени:
+
+```text
+×0.25
+×0.5
+×1
+×2
+×4
+×10
+```
+
+Скорость времени влияет на:
+
+```text
+движение;
+накопление/восстановление стресса;
+частоту решений GraphRunner;
+внутреннее время cooldown нод.
+```
+
+`Один расчёт ИИ`:
+
+```text
+обновляет trace;
+показывает победившую ветку;
+не применяет effects;
+не меняет cooldowns;
+не двигает бойца.
+```
+
+`Рассчитать и выполнить` применяет effects.
+
+## Blackboard игры
+
+`AiGameBridge` больше не подставляет постоянные `ammo=30` и `weaponReady=true`.
+
+Текущие реальные значения:
 
 ```text
 danger
@@ -227,6 +315,11 @@ underFire
 hasOrder
 isInCover
 weaponReady
+directionToThreat
+threatDistance
+threatAngle
+coverProtection
+bestCoverQuality
 current_action
 self_position
 order_target_position
@@ -236,109 +329,137 @@ current_target
 remembered_enemy_position
 ```
 
-Живое применение effects сейчас поддерживает:
+Новые числовые входы добавлены в человеческие списки редактора нод:
 
 ```text
-set_action: move_to / wait / continue_order / другие action-метки;
-set_posture: stand / crouch / prone;
-set_movement_mode;
-say_message;
-write_reason;
-write_memory.
+threatDistance
+directionToThreat
+threatAngle
+coverProtection
+bestCoverQuality
 ```
 
-## Local engine
+## GraphRunner
 
-Ключевые файлы:
+Ключевой файл:
 
 ```text
-scripts/ai_engine_core.mjs
-scripts/local_ai_engine.mjs
-scripts/local_ai_engine_smoke.mjs
+src/core/ai/AiGraphRunner.ts
 ```
 
-`evaluate-once` теперь не ищет первую action-like ноду. Он прогоняет GraphRunner-подобную headless-логику:
+Он остаётся чистым core-модулем и не должен импортировать:
 
 ```text
-чистый root-only graph → valid=true, command.type=none;
-тестовый UtilitySelector graph → выбирается лучшая ветка по score;
-scores/breakdown/effects/trace возвращаются в JSON.
+PixiJS
+DOM
+window
+document
+localStorage
+SimulationState
 ```
 
-`engine:smoke` больше не должен ждать старую ветку `critical_survival`.
-
-## Как быстро проверить текущую фичу руками
-
-1. Запустить:
+`AiGameBridge`:
 
 ```text
-Run-Real-Wargame-Lab.bat
+строит blackboard;
+передаёт tacticalHost;
+вызывает runner;
+применяет effects;
+публикует debug trace.
 ```
 
-2. В редакторе собрать простой граф:
+## Storage
 
 ```text
-Старт
-  → Лучший выбор
-      → Вариант действия: лечь под огнём
-          → Проверка флага: underFire=true
-          → Оценка параметра: danger positive weight=1
-          → Реплика бойца: Под огнём!
-          → Поза: prone
-      → Вариант действия: продолжать приказ
-          → Проверка флага: hasOrder=true
-          → Оценка параметра: morale positive weight=1
-          → Действие: continue_order
+real-wargame.ai-node-editor.graph.v6
+real-wargame.ai-node-editor.positions.v6
+real-wargame.ai-node-editor.ui.v6
+real-wargame.ai-node-editor.debug.v1
 ```
 
-3. Нажать `Save parameters` у каждой ноды.
-4. Открыть игру, выбрать бойца под давлением/огнём.
-5. Ожидание:
+Старые версии storage не возвращать.
+
+## Сохранение сцены
+
+Текущий формат:
 
 ```text
-над бойцом появляется фраза;
-поза меняется на prone;
-если есть конкурирующие ветки — UtilitySelector выбирает ветку с большим score;
-граф не сбрасывается;
-select в панели ноды можно выбирать без мгновенного отката.
+scene-export-v3
 ```
 
-## Проверки перед заявлением “готово”
-
-Минимум для кодовой правки:
+Сохраняет:
 
 ```text
+карту и рельеф;
+предметы и свойства укрытий;
+бойцов и индивидуальные характеристики;
+стресс, подавление, патроны, готовность оружия и позу;
+обычные и направленные угрозы.
+```
+
+Старые сцены без новых полей должны загружаться со значениями по умолчанию.
+
+## Проверки
+
+Машинные команды:
+
+```text
+npm run lab:smoke
 npm run editor:smoke
+npm run engine:smoke
 npm run validate:ai-graph
 npm run build
 ```
 
-Для engine:
+Workflow без скриншотов:
 
 ```text
-npm run engine:smoke
+.github/workflows/preview-core-checks.yml
 ```
 
-Для ручной проверки:
+Он публикует статусы:
 
 ```text
-Run-Real-Wargame-Lab.bat
-docs/manual-test/AI_NODE_EDITOR_STAGE_4.md
+preview-core/install
+preview-core/lab
+preview-core/editor
+preview-core/engine
+preview-core/graph
+preview-core/build
+preview-core-checks
 ```
 
-Если задача про визуал или UI, не утверждать “проверил глазами”, пока реально не открыт браузер или не просмотрены PNG из Playwright/GitHub Actions artifact. В текущей GraphRunner-задаче скриншоты специально не делались.
+Ручная проверка:
+
+```text
+docs/manual-test/AI_TEST_LAB_STAGE_5.md
+```
+
+Не говорить, что визуально всё проверено, пока настоящий Vite-браузер не был открыт и интерфейс не проверен вручную. В этой работе скриншоты не требовались.
+
+## Ограничения текущего этапа
+
+```text
+GraphRunner по-прежнему исполняется только для выбранного бойца;
+направленный огонь — управляемая модель угрозы, а не настоящая баллистика;
+нет пуль, урона, ранений и полноценного вражеского AI;
+проверка укрытия использует приближённую геометрию отрезка;
+нет расчёта вместимости укрытия;
+нет истории нескольких AI-решений, хранится последний trace;
+local engine и TypeScript runner всё ещё имеют частично дублированный смысл.
+```
 
 ## Что делать дальше
 
-Ближайшие разумные задачи:
+Приоритет после ручной проверки Stage 5:
 
 ```text
-1. Сделать визуальный debug: какая нода прошла/провалилась, какая ветка победила и почему.
-2. Сделать сохранение простых параметров сразу или явную подсветку “не сохранено”.
-3. Расширить TacticalQueries: укрытия, линия огня, путь, враг, приказ.
-4. Вынести headless JS GraphRunner local engine ближе к одному источнику правды с TS runner, если появится сборка shared JS.
-5. Подключить не только выбранного бойца, а controlled subset юнитов, но не сразу весь бой.
-6. Сделать удобную панель scores/breakdown в редакторе.
+1. Исправить найденные в браузере ошибки интерфейса полигона.
+2. Добавить готовые JSON-сценарии: слабый огонь, два укрытия, два источника, приказ против опасности.
+3. Сделать историю последних N решений и пошаговый повтор trace.
+4. Добавить точное занятие позиции за укрытием и вместимость.
+5. Подключить controlled subset бойцов только после стабилизации одиночного теста.
+6. Позже сблизить headless JS runner и TypeScript GraphRunner в один источник логики.
 ```
 
 ## Чего не делать
@@ -346,9 +467,9 @@ docs/manual-test/AI_NODE_EDITOR_STAGE_4.md
 ```text
 не трогать main без явного GO;
 не возвращать legacy-ноды;
-не делать сразу squad AI;
-не переносить тяжёлые расчёты в браузерный кадр;
-не переписывать всю RTS основу;
+не превращать тестовый источник огня сразу в полную баллистику;
+не запускать AI для всей армии до проверки одного бойца;
 не смешивать Pixi rendering с core AI contract;
-не утверждать успешную визуальную проверку без реального visual evidence.
+не удалять editor-click-guard без замены обработки кликов;
+не утверждать, что build/smoke/browser прошли, если они реально не прошли.
 ```
