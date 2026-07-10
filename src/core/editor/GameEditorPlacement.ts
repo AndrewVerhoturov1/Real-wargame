@@ -2,6 +2,7 @@ import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap, type MapObject } from '../map/MapModel';
 import { normalizePressureZones } from '../pressure/PressureZone';
 import { selectUnit, type SimulationState } from '../simulation/SimulationState';
+import { rememberSelectedUnitForTest } from '../testing/AiTestLabRuntime';
 import { normalizeUnits } from '../units/UnitModel';
 import { getGameEditorDrafts, syncLegacyEditorFields } from './GameEditorDrafts';
 
@@ -81,6 +82,7 @@ export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: Gri
     state.editor.selectedObjectId = null;
     state.editor.selectedZoneId = null;
     selectUnit(state, id);
+    rememberSelectedUnitForTest(state);
     state.editor.lastMessage = `Создан боец «${unit.labels.ru}» с профилем ${unit.behaviorProfile}.`;
     return true;
   }
