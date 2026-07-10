@@ -14,6 +14,7 @@ export interface AwarenessOverlayDiagnostics {
   representation: 'raster-sprite';
   visible: boolean;
   rebuildCount: number;
+  markerUpdateCount: number;
   lastBuildMs: number;
   maxBuildMs: number;
   displayObjectCount: number;
@@ -39,12 +40,14 @@ export class PixiAwarenessHeatmapRenderer {
     stroke: 0x111510,
     strokeThickness: 4,
   });
-  private lastKey = '';
+  private lastRasterKey = '';
+  private lastMarkerKey = '';
   private rasterCanvas: HTMLCanvasElement | null = null;
   private rasterContext: CanvasRenderingContext2D | null = null;
   private rasterTexture: Texture | null = null;
   private rasterSprite: Sprite | null = null;
   private rebuildCount = 0;
+  private markerUpdateCount = 0;
   private lastBuildMs = 0;
   private maxBuildMs = 0;
 
@@ -59,36 +62,47 @@ export class PixiAwarenessHeatmapRenderer {
     const unit = state.selectedUnitId ? state.units.find((item) => item.id === state.selectedUnitId) : undefined;
     if (state.editor.enabled || awarenessMode === 'off' || !unit) {
       this.container.visible = false;
-      this.lastKey = 'hidden';
+      this.lastRasterKey = 'hidden';
+      this.lastMarkerKey = 'hidden';
       this.publishDiagnostics();
       return;
     }
 
     this.container.visible = true;
     // Do not build the expensive full-map report on every animation frame.
-    // Orders change often, but they do not change the heatmap cells themselves.
-    const key = buildAwarenessRenderKey(state, unit, awarenessMode);
-    if (key === this.lastKey) return;
+    // Orders and movement change often, but they do not change the heatmap pixels themselves.
+    const rasterKey = buildAwarenessRenderKey(state, unit, awarenessMode);
+    const markerKey = `${rasterKey};unitCell:${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`;
+    const rasterChanged = rasterKey !== this.lastRasterKey;
+    const markerChanged = markerKey !== this.lastMarkerKey;
+    if (!rasterChanged && !markerChanged) return;
 
-    const startedAt = performance.now();
     const report = buildSoldierAwarenessReport(state, unit);
     this.ensureRaster(state.map.width, state.map.height, state.map.cellSize);
     if (!this.rasterContext || !this.rasterTexture) return;
 
-    drawAwarenessRaster(
-      this.rasterContext,
-      report.cells,
-      awarenessMode,
-      state.map.width,
-      state.map.height,
-    );
-    this.rasterTexture.baseTexture.update();
-    this.drawSafePositionMarkers(report.bestSafePositions, awarenessMode, state.map.cellSize);
-    this.title.text = `СЛОЙ БОЙЦА: ${modeLabel(awarenessMode)}`;
-    this.lastKey = key;
-    this.rebuildCount += 1;
-    this.lastBuildMs = performance.now() - startedAt;
-    this.maxBuildMs = Math.max(this.maxBuildMs, this.lastBuildMs);
+    if (rasterChanged) {
+      const startedAt = performance.now();
+      drawAwarenessRaster(
+        this.rasterContext,
+        report.cells,
+        awarenessMode,
+        state.map.width,
+        state.map.height,
+      );
+      this.rasterTexture.baseTexture.update();
+      this.title.text = `СЛОЙ БОЙЦА: ${modeLabel(awarenessMode)}`;
+      this.lastRasterKey = rasterKey;
+      this.rebuildCount += 1;
+      this.lastBuildMs = performance.now() - startedAt;
+      this.maxBuildMs = Math.max(this.maxBuildMs, this.lastBuildMs);
+    }
+
+    if (markerChanged) {
+      this.drawSafePositionMarkers(report.bestSafePositions, awarenessMode, state.map.cellSize);
+      this.lastMarkerKey = markerKey;
+      this.markerUpdateCount += 1;
+    }
     this.publishDiagnostics();
   }
 
@@ -97,6 +111,7 @@ export class PixiAwarenessHeatmapRenderer {
       representation: 'raster-sprite',
       visible: this.container.visible,
       rebuildCount: this.rebuildCount,
+      markerUpdateCount: this.markerUpdateCount,
       lastBuildMs: roundMs(this.lastBuildMs),
       maxBuildMs: roundMs(this.maxBuildMs),
       displayObjectCount: this.container.children.length,
@@ -111,8 +126,9 @@ export class PixiAwarenessHeatmapRenderer {
       || this.rasterCanvas.height !== height;
 
     if (needsNewRaster) {
-      this.rasterTexture?.destroy(true);
       this.container.removeChildren();
+      this.rasterSprite?.destroy();
+      this.rasterTexture?.destroy(true);
       this.rasterCanvas = document.createElement('canvas');
       this.rasterCanvas.width = width;
       this.rasterCanvas.height = height;
@@ -153,16 +169,12 @@ export function buildAwarenessRenderKey(
   unit: UnitModel,
   mode: VisibleAwarenessMode,
 ): string {
-  const unitCellX = Math.floor(unit.position.x);
-  const unitCellY = Math.floor(unit.position.y);
-
   return [
     `mode:${mode}`,
     `map:${getMapIdentity(state.map)}`,
     `size:${state.map.width}x${state.map.height}`,
     `cellSize:${state.map.cellSize}`,
     `unit:${unit.id}`,
-    `unitCell:${unitCellX}:${unitCellY}`,
     `posture:${unit.behaviorRuntime.posture}`,
     `knowledge:${buildAwarenessKnowledgeKey(unit)}`,
   ].join(';');
