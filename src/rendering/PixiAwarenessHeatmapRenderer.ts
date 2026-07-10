@@ -69,7 +69,10 @@ function metricForMode(
 ): { value: number; color: number; alpha: number } {
   if (mode === 'danger') return { value: cell.danger, color: dangerColor(cell.danger), alpha: alpha(cell.danger) };
   if (mode === 'cover') return { value: cell.expectedProtection, color: 0x42d87a, alpha: alpha(cell.expectedProtection) };
-  if (mode === 'safe') return { value: cell.safety, color: 0x67f18f, alpha: alpha(cell.safety) };
+  if (mode === 'safe') {
+    const value = safeHighlightValue(cell.safety);
+    return { value, color: 0x67f18f, alpha: alpha(value) };
+  }
   if (mode === 'uncertainty') return { value: cell.uncertainty, color: 0xffd55f, alpha: alpha(cell.uncertainty) };
   if (mode === 'objective') {
     const value = Math.max(cell.expectedProtection, cell.concealment);
@@ -77,8 +80,13 @@ function metricForMode(
   }
 
   if (cell.danger >= 28) return { value: cell.danger, color: dangerColor(cell.danger), alpha: alpha(cell.danger) };
-  if (cell.safety >= 35) return { value: cell.safety, color: 0x55df83, alpha: alpha(cell.safety) };
+  const safeValue = safeHighlightValue(cell.safety);
+  if (safeValue > 2) return { value: safeValue, color: 0x55df83, alpha: alpha(safeValue) };
   return { value: cell.uncertainty, color: 0xffd55f, alpha: alpha(cell.uncertainty) * 0.75 };
+}
+
+function safeHighlightValue(safety: number): number {
+  return Math.max(0, Math.min(100, (safety - 45) * 1.8));
 }
 
 function dangerColor(value: number): number {
