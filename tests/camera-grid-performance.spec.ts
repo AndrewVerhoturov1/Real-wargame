@@ -4,6 +4,8 @@ import path from 'node:path';
 
 const SCREENSHOT_DIR = path.join('artifacts', 'screenshots');
 const VIEWPORT = { width: 1440, height: 900 };
+const BOARD_ORIGIN = { x: 72, y: 72 };
+const CELL_SIZE = 24;
 
 interface CameraDiagnostics {
   x: number;
@@ -21,6 +23,16 @@ interface OverlayDiagnostics {
   interactionObjectCount: number;
 }
 
+interface CoverCacheDiagnostics {
+  buildCount: number;
+  hitCount: number;
+  coverCount: number;
+}
+
+interface MapQualityDiagnostics {
+  cacheAsBitmap: boolean;
+}
+
 test.beforeAll(() => {
   mkdirSync(SCREENSHOT_DIR, { recursive: true });
 });
@@ -35,6 +47,18 @@ async function readOverlayDiagnostics(page: Page): Promise<OverlayDiagnostics | 
   return page.evaluate(() => (
     window as Window & { __realWargameOverlayDebug?: OverlayDiagnostics }
   ).__realWargameOverlayDebug);
+}
+
+async function readCoverCacheDiagnostics(page: Page): Promise<CoverCacheDiagnostics | undefined> {
+  return page.evaluate(() => (
+    window as Window & { __realWargameCoverCacheDebug?: CoverCacheDiagnostics }
+  ).__realWargameCoverCacheDebug);
+}
+
+async function readMapQualityDiagnostics(page: Page): Promise<MapQualityDiagnostics | undefined> {
+  return page.evaluate(() => (
+    window as Window & { __realWargameMapQualityDebug?: MapQualityDiagnostics }
+  ).__realWargameMapQualityDebug);
 }
 
 async function saveScreenshot(page: Page, name: string): Promise<void> {
@@ -57,6 +81,15 @@ async function canvasCenter(canvas: Locator): Promise<{ x: number; y: number }> 
   return {
     x: box.x + box.width * 0.5,
     y: box.y + box.height * 0.5,
+  };
+}
+
+async function worldPoint(canvas: Locator, gridX: number, gridY: number): Promise<{ x: number; y: number }> {
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error('Canvas bounds unavailable.');
+  return {
+    x: box.x + BOARD_ORIGIN.x + gridX * CELL_SIZE,
+    y: box.y + BOARD_ORIGIN.y + gridY * CELL_SIZE,
   };
 }
 
@@ -123,4 +156,41 @@ test('camera supports WASD/arrows and input bursts do not rebuild expensive grid
   expect(afterWheelBurst?.zoom).not.toBe(beforeWheelBurst?.zoom);
 
   await saveScreenshot(page, '12-camera-keyboard-grid-performance.png');
+});
+
+test('danger-layer pointer movement reuses cover analysis and map stays at native quality', async ({ page }) => {
+  await page.setViewportSize(VIEWPORT);
+  await page.goto('/');
+  const canvas = page.locator('canvas');
+  await expect(canvas).toBeVisible();
+
+  const soldier = await worldPoint(canvas, 27.574, 17.589);
+  await page.mouse.click(soldier.x, soldier.y);
+  await expect(page.locator('[data-role="unit-name"]')).toContainText('Солдат');
+  await page.locator('[data-tab="danger"]').click();
+  await page.waitForFunction(() => Boolean(
+    (window as Window & { __realWargameCoverCacheDebug?: CoverCacheDiagnostics }).__realWargameCoverCacheDebug,
+  ));
+
+  const quality = await readMapQualityDiagnostics(page);
+  expect(quality?.cacheAsBitmap).toBe(false);
+  const before = await readCoverCacheDiagnostics(page);
+  expect(before).toBeDefined();
+
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error('Canvas bounds unavailable.');
+  await page.mouse.move(box.x + 250, box.y + 250);
+  await page.mouse.move(box.x + 850, box.y + 520, { steps: 80 });
+  await page.waitForTimeout(250);
+
+  const after = await readCoverCacheDiagnostics(page);
+  expect((after?.buildCount ?? 0) - (before?.buildCount ?? 0)).toBeLessThanOrEqual(1);
+  expect(after?.hitCount ?? 0).toBeGreaterThan(before?.hitCount ?? 0);
+
+  const center = await canvasCenter(canvas);
+  await page.mouse.wheel(0, -900);
+  await page.waitForTimeout(200);
+  const qualityAfterZoom = await readMapQualityDiagnostics(page);
+  expect(qualityAfterZoom?.cacheAsBitmap).toBe(false);
+  await saveScreenshot(page, '13-native-map-quality-danger.png');
 });
