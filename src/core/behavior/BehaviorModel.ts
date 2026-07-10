@@ -40,6 +40,18 @@ export interface SoldierParameters {
   condition: SoldierCondition;
 }
 
+export interface UnitInitialState {
+  posture: UnitPosture;
+  stress: number;
+  suppression: number;
+  ammo: number;
+  weaponReady: boolean;
+  fatigue: number;
+  morale: number;
+  confusion: number;
+  health: number;
+}
+
 export interface SoldierParameterOverrides {
   traits?: Partial<SoldierTraits>;
   condition?: Partial<SoldierCondition>;
@@ -285,18 +297,35 @@ export function createSoldierParameters(
   };
 }
 
-export function createBehaviorRuntime(): UnitBehaviorRuntime {
+export function createUnitInitialState(
+  soldier: SoldierParameters,
+  overrides: Partial<UnitInitialState> = {},
+): UnitInitialState {
+  return {
+    posture: overrides.posture ?? 'standing',
+    stress: clampPercent(overrides.stress ?? 0),
+    suppression: clampPercent(overrides.suppression ?? 0),
+    ammo: Math.max(0, Math.round(overrides.ammo ?? 30)),
+    weaponReady: overrides.weaponReady ?? true,
+    fatigue: clampPercent(overrides.fatigue ?? soldier.condition.fatigue),
+    morale: clampPercent(overrides.morale ?? soldier.condition.morale),
+    confusion: clampPercent(overrides.confusion ?? soldier.condition.confusion),
+    health: clampPercent(overrides.health ?? soldier.condition.health),
+  };
+}
+
+export function createBehaviorRuntime(initialState?: Partial<UnitInitialState>): UnitBehaviorRuntime {
   return {
     state: 'idle',
     previousState: 'idle',
-    posture: 'standing',
-    previousPosture: 'standing',
+    posture: initialState?.posture ?? 'standing',
+    previousPosture: initialState?.posture ?? 'standing',
     danger: 0,
     rawDanger: 0,
-    stress: 0,
-    suppression: 0,
-    ammo: 30,
-    weaponReady: true,
+    stress: clampPercent(initialState?.stress ?? 0),
+    suppression: clampPercent(initialState?.suppression ?? 0),
+    ammo: Math.max(0, Math.round(initialState?.ammo ?? 30)),
+    weaponReady: initialState?.weaponReady ?? true,
     currentAction: 'waiting',
     reason: 'No order has been issued yet.',
     lastEvent: null,
