@@ -6,6 +6,8 @@ import type { UnitModel } from '../units/UnitModel';
 import {
   isPositionInsidePressureZone,
   normalizeDegrees,
+  resolvePressureZoneSettings,
+  type DirectionalThreatSettings,
   type PressureZone,
 } from './PressureZone';
 
@@ -36,7 +38,6 @@ export function evaluateThreatsAtPosition(
   zones: PressureZone[],
 ): ThreatEvaluationReport {
   const contributions = zones
-    .filter((zone) => zone.enabled)
     .map((zone) => evaluateZone(map, unit, zone))
     .filter((item): item is ThreatContribution => item !== null);
 
@@ -51,42 +52,49 @@ export function evaluateThreatsAtPosition(
     stressPerSecond,
     strongest,
     contributions,
-    enemyVisible: contributions.some((item) => item.zone.sourceVisible),
-    enemyKnown: contributions.some((item) => item.zone.sourceKnown || item.zone.sourceVisible),
+    enemyVisible: contributions.some((item) => resolvePressureZoneSettings(item.zone).sourceVisible),
+    enemyKnown: contributions.some((item) => {
+      const settings = resolvePressureZoneSettings(item.zone);
+      return settings.sourceKnown || settings.sourceVisible;
+    }),
     targetPosition: strongest ? { x: strongest.zone.x, y: strongest.zone.y } : null,
   };
 }
 
 export function isInsideDirectionalThreat(position: GridPosition, zone: PressureZone): boolean {
-  if (zone.mode !== 'directional_fire') return false;
+  const settings = resolvePressureZoneSettings(zone);
+  if (settings.mode !== 'directional_fire') return false;
 
   const dx = position.x - zone.x;
   const dy = position.y - zone.y;
   const distanceCells = Math.hypot(dx, dy);
-  if (distanceCells < zone.minRangeCells || distanceCells > zone.rangeCells) return false;
+  if (distanceCells < settings.minRangeCells || distanceCells > settings.rangeCells) return false;
 
   const bearing = normalizeDegrees((Math.atan2(dy, dx) * 180) / Math.PI);
-  const difference = angularDifferenceDegrees(bearing, zone.directionDegrees);
-  return difference <= zone.arcDegrees / 2;
+  const difference = angularDifferenceDegrees(bearing, settings.directionDegrees);
+  return difference <= settings.arcDegrees / 2;
 }
 
 function evaluateZone(map: TacticalMap, unit: UnitModel, zone: PressureZone): ThreatContribution | null {
+  const settings = resolvePressureZoneSettings(zone);
+  if (!settings.enabled) return null;
+
   const source = { x: zone.x, y: zone.y };
   const distanceCells = distance(source, unit.position);
-  const active = zone.mode === 'directional_fire'
+  const active = settings.mode === 'directional_fire'
     ? isInsideDirectionalThreat(unit.position, zone)
     : isPositionInsidePressureZone(unit.position, zone);
 
   if (!active) return null;
 
-  const rangeFactor = zone.mode === 'directional_fire'
-    ? directionalRangeFactor(distanceCells, zone)
+  const rangeFactor = settings.mode === 'directional_fire'
+    ? directionalRangeFactor(distanceCells, settings)
     : 1;
   const exposure = POSTURE_EXPOSURE_MULTIPLIER[unit.behaviorRuntime.posture];
   const cover = evaluateCoverBetween(map, source, unit.position, unit.behaviorRuntime.posture);
   const coverMultiplier = 1 - cover.protection / 100;
   const danger = clampPercent(zone.strength * rangeFactor * exposure * coverMultiplier);
-  const suppression = clampPercent(zone.suppression * rangeFactor * Math.max(0.35, exposure) * coverMultiplier);
+  const suppression = clampPercent(settings.suppression * rangeFactor * Math.max(0.35, exposure) * coverMultiplier);
   const stressPerSecond = Math.max(0, zone.stressPerSecond * rangeFactor * coverMultiplier);
   const directionFromUnitDegrees = normalizeDegrees((Math.atan2(zone.y - unit.position.y, zone.x - unit.position.x) * 180) / Math.PI);
 
@@ -101,10 +109,10 @@ function evaluateZone(map: TacticalMap, unit: UnitModel, zone: PressureZone): Th
   };
 }
 
-function directionalRangeFactor(distanceCells: number, zone: PressureZone): number {
-  const usableRange = Math.max(0.001, zone.rangeCells - zone.minRangeCells);
-  const progress = Math.max(0, Math.min(1, (distanceCells - zone.minRangeCells) / usableRange));
-  return Math.max(0, 1 - progress * (zone.falloffPercent / 100));
+function directionalRangeFactor(distanceCells: number, settings: DirectionalThreatSettings): number {
+  const usableRange = Math.max(0.001, settings.rangeCells - settings.minRangeCells);
+  const progress = Math.max(0, Math.min(1, (distanceCells - settings.minRangeCells) / usableRange));
+  return Math.max(0, 1 - progress * (settings.falloffPercent / 100));
 }
 
 function angularDifferenceDegrees(left: number, right: number): number {
