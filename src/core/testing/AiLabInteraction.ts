@@ -41,6 +41,43 @@ export function beginAiLabPointerAction(state: SimulationState, rawGrid: GridPos
     return true;
   }
 
+  if (runtime.activePanel === 'fighter') {
+    const preferredUnit = findUnitAtGridPosition(state.units, grid, 0.52);
+    if (preferredUnit) {
+      selectUnit(state, preferredUnit.id);
+      state.editor.selectedObjectId = null;
+      state.editor.selectedZoneId = null;
+      runtime.drag = {
+        kind: 'unit',
+        id: preferredUnit.id,
+        handle: 'move',
+        startGrid: grid,
+        snapshot: { x: preferredUnit.position.x, y: preferredUnit.position.y },
+      };
+      setAiLabPanel(state, 'fighter');
+      setAiLabStatus(state, `Выбран боец: ${preferredUnit.labels.ru}. Его можно перетащить.`);
+      return true;
+    }
+  }
+
+  if (runtime.activePanel === 'cover') {
+    const preferredObject = findObjectAtPosition(state.map.objects, grid);
+    if (preferredObject) {
+      state.editor.selectedObjectId = preferredObject.id;
+      state.editor.selectedZoneId = null;
+      runtime.drag = {
+        kind: 'object',
+        id: preferredObject.id,
+        handle: 'move',
+        startGrid: grid,
+        snapshot: { x: preferredObject.x, y: preferredObject.y },
+      };
+      setAiLabPanel(state, 'cover');
+      setAiLabStatus(state, `Выбрано укрытие: ${preferredObject.labels?.ru ?? preferredObject.kind}. Его можно перетащить.`);
+      return true;
+    }
+  }
+
   const selectedZone = getSelectedZone(state);
   if (selectedZone) {
     const handle = findThreatHandleAtPosition(selectedZone, grid);
@@ -106,7 +143,9 @@ export function updateAiLabPointerAction(state: SimulationState, rawGrid: GridPo
   const grid = clampGridPositionToMap(state.map, rawGrid);
   if (!runtime.drag) {
     const selectedZone = getSelectedZone(state);
-    runtime.hoveredHandle = selectedZone ? findThreatHandleAtPosition(selectedZone, grid) : null;
+    runtime.hoveredHandle = runtime.activePanel === 'threat' && selectedZone
+      ? findThreatHandleAtPosition(selectedZone, grid)
+      : null;
     return true;
   }
 
