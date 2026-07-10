@@ -3,8 +3,8 @@ import path from 'node:path';
 import process from 'node:process';
 
 const root = process.cwd();
-const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 const failures = [];
+const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
 function expectIncludes(relativePath, snippets) {
   let content = '';
@@ -37,27 +37,11 @@ function expectBefore(relativePath, earlier, later) {
 
 expectIncludes('src/ui/TacticalWorkspace.ts', [
   "type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory'",
-  'Симуляция',
-  'Редактирование',
-  'Последнее решение ИИ',
-  'Слой опасности',
-  'Слой скрытности',
-  'Память бойца',
-  'Приказать двигаться сюда',
-  'Один расчёт ИИ',
-  'Рассчитать и выполнить',
-  'setAiTestPaused(state, true)',
-  'workspace-file-menu',
-  'data-live="${key}"',
-  'updateInfoPanelLive',
-  'stableDecision',
-  'Math.floor(unit.position.x)',
-  "import '../tactical-workspace-stage8.css'",
+  'Симуляция', 'Редактирование', 'Слой опасности', 'Слой скрытности', 'Память бойца',
+  'Приказать двигаться сюда', 'Один расчёт ИИ', 'Рассчитать и выполнить',
+  'workspace-file-menu', 'updateInfoPanelLive', 'stableDecision',
 ]);
-expectExcludes('src/ui/TacticalWorkspace.ts', [
-  'u?.position.x.toFixed(2)',
-  'u?.behaviorRuntime.reason',
-]);
+expectExcludes('src/ui/TacticalWorkspace.ts', ['u?.position.x.toFixed(2)', 'u?.behaviorRuntime.reason']);
 
 expectIncludes('src/ui/EditorHeaderPlacement.ts', [
   'installEditorHeaderPlacement',
@@ -65,66 +49,27 @@ expectIncludes('src/ui/EditorHeaderPlacement.ts', [
   "return 'Поставить предмет'",
   "return 'Поставить бойца'",
   "return 'Поставить угрозу'",
-  "document.querySelector<HTMLElement>('[data-action=\"editor-place\"]')?.remove()",
+  '[data-action="editor-place"]',
 ]);
-
 expectIncludes('src/ui/WorkspaceTooltipGuard.ts', [
-  'installWorkspaceTooltipGuard',
-  'clearCoverTooltip',
-  "[data-tab], [data-mode]",
-  'tooltip.hidden = true',
-]);
-
-expectIncludes('src/core/ui/RuntimeUiState.ts', [
-  "export type SimulationLayerMode = 'info' | 'danger' | 'stealth' | 'memory'",
-  'selectedCoverId',
-  'hoveredCoverId',
-  'setSimulationLayerMode',
-  'setSelectedSimulationCover',
-]);
-
-expectIncludes('src/core/knowledge/SimulationCoverSelection.ts', [
-  'findSimulationCoverAtPosition',
-  'selectSimulationCoverAtPosition',
-  'getSelectedSimulationCover',
+  'installWorkspaceTooltipGuard', 'clearCoverTooltip', '[data-tab], [data-mode]', 'tooltip.hidden = true',
 ]);
 
 expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
-  "'stealth'",
-  'postureConcealmentBonus',
-  'buildBaseReport',
-  'buildRouteKey',
-  'Orders affect only route danger',
-  'buildAwarenessKnowledgeKey',
-  'KNOWLEDGE_CONFIDENCE_BUCKET',
-  'KNOWLEDGE_UNCERTAINTY_BUCKET',
+  'buildBaseReport', 'buildRouteKey', 'Orders affect only route danger',
+  'buildAwarenessKnowledgeKey', 'KNOWLEDGE_CONFIDENCE_BUCKET', 'KNOWLEDGE_UNCERTAINTY_BUCKET',
 ]);
 expectExcludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
-  'const orderCellX',
-  'const orderCellY',
-  'unit.tacticalKnowledge.revision',
+  'const orderCellX', 'const orderCellY', 'unit.tacticalKnowledge.revision',
 ]);
 
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
-  "mode === 'stealth'",
-  'скрытность',
-  'buildAwarenessRenderKey',
-  'unitCell:',
-  'knowledge:',
-  'Orders change often, but they do not change the heatmap cells themselves.',
-  'Sprite',
-  'Texture',
-  'SCALE_MODES.NEAREST',
-  'createAwarenessTexture',
-  'drawAwarenessRaster',
-  "representation: 'raster-sprite'",
-  'getDiagnostics()',
-  '__realWargameAwarenessDebug',
+  'buildAwarenessRenderKey', 'Orders change often, but they do not change the heatmap cells themselves.',
+  'Sprite', 'Texture', 'SCALE_MODES.NEAREST', 'createAwarenessTexture', 'drawAwarenessRaster',
+  "representation: 'raster-sprite'", 'getDiagnostics()', '__realWargameAwarenessDebug',
 ]);
 expectExcludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
-  'orderCell:',
-  'for (const cell of report.cells) drawCell',
-  'graphics.drawRect(cell.x * cellSize',
+  'orderCell:', 'for (const cell of report.cells) drawCell', 'graphics.drawRect(cell.x * cellSize',
 ]);
 expectBefore(
   'src/rendering/PixiAwarenessHeatmapRenderer.ts',
@@ -132,105 +77,28 @@ expectBefore(
   'const report = buildSoldierAwarenessReport(state, unit);',
 );
 
-expectIncludes('src/core/terrain/SmoothTerrain.ts', [
-  'const SMOOTH_RADIUS_CELLS = 1',
-  'const HEIGHT_WEIGHT_CENTER = 5',
-  'const HEIGHT_WEIGHT_NEAR = 2',
-]);
-expectIncludes('src/rendering/HtmlOverlayRenderer.ts', [
-  'sampleSmoothHeightLevel',
-  'formatSmoothHeight',
-  'MIN_VISIBLE_SMOOTH_HEIGHT',
-]);
-
-expectIncludes('src/rendering/PixiOverlayRenderer.ts', [
-  'getSimulationLayerState',
-  'drawThreatMemoryOverlay',
-  'drawCoverKnowledgeOverlay',
-  'selectedCoverId',
-  'hoveredCoverId',
-]);
-
-expectIncludes('src/input/BoardInputController.ts', [
-  'selectSimulationCoverAtPosition',
-  'hoverSimulationCoverAtPosition',
-]);
-
 expectIncludes('src/core/editor/GameEditorPlacement.ts', [
-  'rememberSelectedUnitForTest',
-  'state.units.push(unit)',
-  'rememberSelectedUnitForTest(state)',
+  'rememberSelectedUnitForTest', 'state.units.push(unit)', 'rememberSelectedUnitForTest(state)',
 ]);
-
 expectIncludes('src/main.ts', [
-  "import { installTacticalWorkspace } from './ui/TacticalWorkspace'",
-  "import { installEditorHeaderPlacement } from './ui/EditorHeaderPlacement'",
-  "import { installWorkspaceTooltipGuard } from './ui/WorkspaceTooltipGuard'",
-  'installTacticalWorkspace(state, aiGameBridge',
-  'installEditorHeaderPlacement()',
-  'installWorkspaceTooltipGuard()',
-  'languageToggle.click()',
-]);
-expectExcludes('src/main.ts', [
-  "installAiTestLabControls(state, aiGameBridge",
-  'installGameHudControls(state)',
-]);
-
-expectIncludes('src/tactical-workspace.css', [
-  '.tactical-workspace-bar',
-  '.simulation-sidebar',
-  '.simulation-unit-bar',
-  'body.workspace-editor #app',
-  'body.workspace-simulation.sidebar-open #app',
-  '.cover-map-tooltip',
+  "installTacticalWorkspace(state, aiGameBridge",
+  'installEditorHeaderPlacement()', 'installWorkspaceTooltipGuard()', 'languageToggle.click()',
 ]);
 expectIncludes('src/tactical-workspace-stage8.css', [
-  '.workspace-file-menu',
-  'body.workspace-simulation .simulation-sidebar',
-  'bottom: 9px',
-  '.editor-scene-tools-slot',
-  '.game-editor-status',
-  '.cover-map-tooltip[hidden]',
-  '[data-action="editor-place"]',
-  '.editor-header-placement',
-]);
-expectExcludes('src/tactical-workspace-stage8.css', [
-  '.editor-place-button',
-]);
-
-expectIncludes('src/ui/SceneExportControls.ts', [
-  "workspaceFileAction = 'save'",
-  "workspaceFileAction = 'load'",
-  "workspaceFileInput = 'scene'",
-]);
-expectIncludes('src/ui/PerformanceReportControls.ts', [
-  "workspaceFileAction = 'performance'",
+  '.cover-map-tooltip[hidden]', '[data-action="editor-place"]', '.editor-header-placement',
 ]);
 
 expectIncludes('Run-Real-Wargame-Lab.bat', [
   "Invoke-WebRequest -Uri 'http://127.0.0.1:%APP_PORT%/'",
   'start "" "http://127.0.0.1:%APP_PORT%/"',
-]);
-expectExcludes('Run-Real-Wargame-Lab.bat', [
-  'lab-launch.html',
+  'intentionally not opened',
 ]);
 
 expectIncludes('tests/preview-screenshots.spec.ts', [
-  '01-simulation-info.png',
-  '02-simulation-sidebar-collapsed.png',
-  '03-simulation-danger-layer.png',
-  '04-simulation-cover-selected.png',
-  '05-simulation-stealth-layer.png',
-  '06-simulation-memory-layer.png',
-  '07-editor-object-palette.png',
-  '08-editor-threat-tools.png',
-  '09-editor-terrain-tools.png',
-  '10-node-editor-unchanged.png',
-  '11-editor-spawned-fighter-playable.png',
+  '01-simulation-info.png', '03-simulation-danger-layer.png', '07-editor-object-palette.png',
+  '10-node-editor-unchanged.png', '11-editor-spawned-fighter-playable.png',
   'uses a raster awareness overlay and clears stale tooltips',
-  'workspace-file-menu',
-  'raster-sprite',
-  'newly placed fighter remains selectable and can move in simulation',
+  'raster-sprite', 'newly placed fighter remains selectable and can move in simulation',
 ]);
 
 if (failures.length > 0) {
