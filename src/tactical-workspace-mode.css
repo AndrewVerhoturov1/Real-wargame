@@ -1,0 +1,10 @@
+/* Mode guards live separately so legacy panel display rules cannot override the workspace state. */
+body.workspace-editor .simulation-sidebar,
+body.workspace-editor .simulation-unit-bar,
+body.workspace-simulation #hud {
+  display: none !important;
+}
+
+body.workspace-editor #hud {
+  display: block !important;
+}
