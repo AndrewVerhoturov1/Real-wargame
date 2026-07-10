@@ -22,10 +22,20 @@ jobs:
       - name: Apply pending AI lab visual fixes
         id: visual_fix
         if: ${{ hashFiles('scripts/apply_ai_lab_visual_fixes.mjs') != '' }}
+        shell: bash
         run: |
-          node scripts/apply_ai_lab_visual_fixes.mjs
+          set -o pipefail
+          node scripts/apply_ai_lab_visual_fixes.mjs 2>&1 | tee visual-fix.log
           rm scripts/apply_ai_lab_visual_fixes.mjs .github/workflows/apply-ai-lab-visual-fixes.yml
           git show HEAD^:.github/workflows/preview-core-checks.yml > .github/workflows/preview-core-checks.yml
+
+      - name: Upload visual fix diagnostics
+        if: ${{ always() && hashFiles('visual-fix.log') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-lab-visual-fix-log
+          path: visual-fix.log
+          retention-days: 2
 
       - name: Publish AI lab visual fixes
         if: steps.visual_fix.outcome == 'success'
