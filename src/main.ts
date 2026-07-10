@@ -58,16 +58,22 @@ const tacticalBoard = new PixiTacticalBoardApp(
   state,
 );
 const aiGameBridge = installAiGameBridge(state);
+const forceRenderAtNativeMapQuality = () => {
+  tacticalBoard.forceRender();
+  enforceNativeMapQuality(tacticalBoard);
+};
 
-installGameEditorWorkbench(debugPanel, state, () => tacticalBoard.forceRender());
+installGameEditorWorkbench(debugPanel, state, forceRenderAtNativeMapQuality);
 installSceneExportControls(state);
 installPerformanceReportControls(() => tacticalBoard.downloadPerformanceReport());
 installAiEditorOpenButton(aiEditorOpenButton);
-installPauseToggle(pauseToggle, () => tacticalBoard.forceRender());
-installTacticalWorkspace(state, aiGameBridge, () => tacticalBoard.forceRender());
+installPauseToggle(pauseToggle, forceRenderAtNativeMapQuality);
+installTacticalWorkspace(state, aiGameBridge, forceRenderAtNativeMapQuality);
 const destroyEditorHeaderPlacement = installEditorHeaderPlacement();
 const destroyWorkspaceTooltipGuard = installWorkspaceTooltipGuard();
 tacticalBoard.start();
+enforceNativeMapQuality(tacticalBoard);
+gridToggle.addEventListener('click', scheduleNativeMapQuality);
 // Pixi starts with the legacy English locale; switch once after its listener is installed.
 languageToggle.click();
 forceRussianTopControls(
@@ -80,11 +86,27 @@ forceRussianTopControls(
 );
 
 window.addEventListener('beforeunload', () => {
+  gridToggle.removeEventListener('click', scheduleNativeMapQuality);
   destroyWorkspaceTooltipGuard();
   destroyEditorHeaderPlacement();
   aiGameBridge.destroy();
   tacticalBoard.destroy();
 });
+
+function scheduleNativeMapQuality(): void {
+  window.requestAnimationFrame(() => enforceNativeMapQuality(tacticalBoard));
+}
+
+function enforceNativeMapQuality(board: PixiTacticalBoardApp): void {
+  const internals = board as unknown as {
+    mapRenderer?: { container?: { cacheAsBitmap: boolean } };
+  };
+  const mapContainer = internals.mapRenderer?.container;
+  if (mapContainer) mapContainer.cacheAsBitmap = false;
+  (window as Window & { __realWargameMapQualityDebug?: { cacheAsBitmap: boolean } }).__realWargameMapQualityDebug = {
+    cacheAsBitmap: mapContainer?.cacheAsBitmap ?? false,
+  };
+}
 
 function forceRussianTopControls(
   languageButton: HTMLButtonElement,
