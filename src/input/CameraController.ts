@@ -36,6 +36,8 @@ export class CameraController {
   private pendingWheelDelta = 0;
   private pendingWheelAnchor: ClientPosition | null = null;
   private wheelFrameId: number | null = null;
+  private keyboardFrameId: number | null = null;
+  private lastKeyboardFrameMs: number | null = null;
   private readonly pressedPanKeys = new Set<string>();
   private readonly diagnostics: CameraDiagnostics = {
     x: 0,
@@ -219,6 +221,7 @@ export class CameraController {
     }
 
     this.pressedPanKeys.add(event.code);
+    this.ensureKeyboardPanFrame();
     event.preventDefault();
   };
 
@@ -243,6 +246,22 @@ export class CameraController {
     this.isPanning = false;
     this.lastPointerPosition = null;
     this.pendingPointerPosition = null;
+    this.stopKeyboardPanFrame();
+  };
+
+  private readonly handleKeyboardPanFrame = (timestampMs: number): void => {
+    if (this.pressedPanKeys.size === 0) {
+      this.keyboardFrameId = null;
+      this.lastKeyboardFrameMs = null;
+      return;
+    }
+
+    const deltaSeconds = this.lastKeyboardFrameMs === null
+      ? 1 / 60
+      : (timestampMs - this.lastKeyboardFrameMs) / 1000;
+    this.lastKeyboardFrameMs = timestampMs;
+    this.update(deltaSeconds);
+    this.keyboardFrameId = window.requestAnimationFrame(this.handleKeyboardPanFrame);
   };
 
   private screenPointToWorld(clientX: number, clientY: number, rect: DOMRect): WorldPosition {
@@ -270,6 +289,20 @@ export class CameraController {
     this.flushPointerPan();
   }
 
+  private ensureKeyboardPanFrame(): void {
+    if (this.keyboardFrameId !== null) return;
+    this.lastKeyboardFrameMs = null;
+    this.keyboardFrameId = window.requestAnimationFrame(this.handleKeyboardPanFrame);
+  }
+
+  private stopKeyboardPanFrame(): void {
+    if (this.keyboardFrameId !== null) {
+      window.cancelAnimationFrame(this.keyboardFrameId);
+      this.keyboardFrameId = null;
+    }
+    this.lastKeyboardFrameMs = null;
+  }
+
   private cancelScheduledInput(): void {
     if (this.pointerPanFrameId !== null) {
       window.cancelAnimationFrame(this.pointerPanFrameId);
@@ -279,6 +312,7 @@ export class CameraController {
       window.cancelAnimationFrame(this.wheelFrameId);
       this.wheelFrameId = null;
     }
+    this.stopKeyboardPanFrame();
   }
 
   private publishDiagnostics(): void {
