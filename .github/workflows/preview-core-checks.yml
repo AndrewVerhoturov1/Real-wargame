@@ -35,8 +35,6 @@ jobs:
           path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
           PY
           node scripts/apply_ai_lab_visual_fixes.mjs 2>&1 | tee visual-fix.log
-          rm scripts/apply_ai_lab_visual_fixes.mjs .github/workflows/apply-ai-lab-visual-fixes.yml
-          git show f90f3ff08c4f26bf60c282f93b5d88490178a4b3:.github/workflows/preview-core-checks.yml > .github/workflows/preview-core-checks.yml
 
       - name: Upload visual fix diagnostics
         if: ${{ always() && hashFiles('visual-fix.log') != '' }}
@@ -51,7 +49,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add src/ui/AiTestLabControls.ts src/ai-test-lab.css
           git commit -m "fix: keep AI lab tools out of the main toolbar"
           git push origin HEAD:real-wargame-preview
 
