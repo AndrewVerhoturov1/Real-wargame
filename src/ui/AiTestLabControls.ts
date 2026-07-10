@@ -97,7 +97,13 @@ export function installAiTestLabControls(
   onChanged: () => void,
 ): void {
   const runtime = getAiLabRuntime(state);
-  const topHost = document.querySelector<HTMLElement>('.top-command-bar') ?? document.body;
+  const controlsHost = document.querySelector<HTMLElement>('.top-command-controls');
+  const launcher = button('Полигон ИИ', () => {
+    setAiLabOpen(state, !runtime.open);
+    updateOpenState();
+    renderAll();
+    onChanged();
+  }, 'primary ai-lab-toggle');
   const topTools = document.createElement('div');
   topTools.className = 'ai-lab-top-tools';
   const dock = document.createElement('aside');
@@ -117,20 +123,15 @@ export function installAiTestLabControls(
     document.body.classList.toggle('ai-lab-open', runtime.open);
     dock.hidden = !runtime.open;
     bottomBar.hidden = !runtime.open;
+    topTools.hidden = !runtime.open;
     topTools.classList.toggle('open', runtime.open);
   };
 
   const renderTopTools = () => {
     topTools.replaceChildren();
-    const toggle = button(runtime.open ? 'Закрыть полигон' : 'Полигон ИИ', () => {
-      setAiLabOpen(state, !runtime.open);
-      updateOpenState();
-      renderAll();
-      onChanged();
-    }, runtime.open ? 'active primary' : 'primary');
-    toggle.classList.add('ai-lab-toggle');
-    topTools.append(toggle);
-
+    launcher.textContent = runtime.open ? 'Закрыть полигон' : 'Полигон ИИ';
+    launcher.classList.toggle('active', runtime.open);
+    launcher.setAttribute('aria-pressed', String(runtime.open));
     if (!runtime.open) return;
     const tools: Array<[AiLabTool, string, string]> = [
       ['select', 'Выбрать', 'Выбор и перетаскивание объектов'],
@@ -243,15 +244,16 @@ export function installAiTestLabControls(
     renderAll();
   }, 'icon'));
   dock.append(dockHeader, dockTabs, dockBody, diagnostics);
-  topHost.append(topTools);
-  document.body.append(dock, bottomBar);
+  if (controlsHost) controlsHost.append(launcher);
+  else document.body.append(launcher);
+  document.body.append(topTools, dock, bottomBar);
   updateOpenState();
   renderAll();
 
   window.setInterval(() => {
     const unit = getSelectedUnit(state);
     const nextSelectionKey = `${state.selectedUnitId ?? ''}|${state.editor.selectedZoneId ?? ''}|${state.editor.selectedObjectId ?? ''}`;
-    const nextRenderKey = `${nextSelectionKey}|${runtime.open}|${runtime.activePanel}|${runtime.tool}|${runtime.awarenessMode}`;
+    const nextRenderKey = buildLabRenderKey(state, runtime, nextSelectionKey);
     if (nextSelectionKey !== selectionKey) {
       selectionKey = nextSelectionKey;
       if (state.editor.selectedZoneId) runtime.activePanel = 'threat';
@@ -685,6 +687,43 @@ function threatSourceLabel(source: UnitModel['tacticalKnowledge']['threats'][num
   if (source === 'heard') return 'услышал';
   if (source === 'fire_pressure') return 'почувствовал огонь';
   return 'получил сообщение';
+}
+
+function buildLabRenderKey(
+  state: SimulationState,
+  runtime: ReturnType<typeof getAiLabRuntime>,
+  selectionKey: string,
+): string {
+  const unit = getSelectedUnit(state);
+  const zone = getSelectedPressureZone(state);
+  const object = getSelectedMapObject(state);
+  return [
+    selectionKey,
+    runtime.open,
+    runtime.activePanel,
+    runtime.tool,
+    runtime.awarenessMode,
+    unit?.behaviorRuntime.posture ?? '',
+    unit?.behaviorRuntime.stress.toFixed(1) ?? '',
+    unit?.behaviorRuntime.suppression.toFixed(1) ?? '',
+    unit?.soldier.condition.fatigue.toFixed(1) ?? '',
+    unit?.soldier.condition.morale.toFixed(1) ?? '',
+    unit?.behaviorRuntime.ammo ?? '',
+    unit?.tacticalKnowledge.revision ?? '',
+    zone?.x.toFixed(2) ?? '',
+    zone?.y.toFixed(2) ?? '',
+    zone?.directionDegrees?.toFixed(1) ?? '',
+    zone?.arcDegrees?.toFixed(1) ?? '',
+    zone?.rangeCells?.toFixed(2) ?? '',
+    zone?.minRangeCells?.toFixed(2) ?? '',
+    zone?.radiusCells.toFixed(2) ?? '',
+    zone?.widthCells.toFixed(2) ?? '',
+    zone?.heightCells.toFixed(2) ?? '',
+    zone?.rotationDegrees?.toFixed(1) ?? '',
+    object?.coverProtection ?? '',
+    object?.coverReliability ?? '',
+    object?.concealment ?? '',
+  ].join('|');
 }
 
 function isEditingControl(): boolean {
