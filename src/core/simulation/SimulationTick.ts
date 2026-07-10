@@ -1,6 +1,7 @@
 import { clampPercent, POSTURE_MOVE_MULTIPLIER } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap } from '../map/MapModel';
+import { syncSoldierThreatMemory } from '../knowledge/SoldierThreatMemory';
 import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
 import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
@@ -14,9 +15,11 @@ const COLLISION_PASSES = 3;
 
 export function tickSimulation(state: SimulationState, deltaSeconds: number): void {
   const scaledDeltaSeconds = deltaSeconds * getAiTestTimeScale(state);
+  state.simulationTimeSeconds += scaledDeltaSeconds;
 
   for (const unit of state.units) {
     updateMetrics(unit, state, scaledDeltaSeconds);
+    syncSoldierThreatMemory(state, unit, scaledDeltaSeconds);
     updateStateLabels(unit);
     moveUnit(unit, scaledDeltaSeconds);
   }

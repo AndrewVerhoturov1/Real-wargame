@@ -1,6 +1,7 @@
 import { clampPercent, type UnitPosture } from '../behavior/BehaviorModel';
 import { findBestCoverForThreat } from '../cover/CoverEvaluation';
 import { distance, type GridPosition } from '../geometry';
+import { buildSoldierAwarenessReport } from '../knowledge/SoldierAwarenessGrid';
 import { clampGridPositionToMap, type TacticalMap } from '../map/MapModel';
 import { createMoveOrder } from '../orders/MoveOrder';
 import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
@@ -110,6 +111,8 @@ export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel):
   const strongest = threats.strongest;
   const threatDistance = strongest ? strongest.distanceCells * state.map.metersPerCell : 9999;
   const underFire = threats.danger > 0 || threats.suppression > 0;
+  const awareness = buildSoldierAwarenessReport(state, unit);
+  const bestSafe = awareness.bestSafePositions[0];
 
   return {
     ...(isRecord(bundledGraph.blackboardDefaults) ? normalizeBlackboard(bundledGraph.blackboardDefaults) : {}),
@@ -133,11 +136,17 @@ export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel):
     threatAngle: strongest?.zone.arcDegrees ?? 0,
     coverProtection: strongest?.coverProtection ?? 0,
     bestCoverQuality: Math.max(0, Math.round(bestCover.score)),
+    currentPositionDanger: awareness.currentPosition.danger,
+    currentExpectedProtection: awareness.currentPosition.expectedProtection,
+    bestSafePositionScore: Math.max(0, Math.round(bestSafe?.score ?? 0)),
+    distanceToBestSafePosition: Math.round((bestSafe?.distanceCells ?? 9999) * state.map.metersPerCell),
+    routeDanger: awareness.routeDanger,
+    threatConfidence: awareness.threatConfidence,
     current_action: unit.behaviorRuntime.currentAction,
     self_position: unit.position,
     order_target_position: unit.order?.target ?? null,
     retreat_position: makeRetreatPoint(state.map, unit.position, threatPosition),
-    best_cover_position: bestCover.position,
+    best_cover_position: bestSafe?.position ?? bestCover.position,
     current_target: threats.enemyVisible ? threatPosition : null,
     remembered_enemy_position: threats.enemyKnown ? threatPosition : null,
   };

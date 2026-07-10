@@ -27,6 +27,7 @@ export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: Gri
       heightCells: draft.heightCells,
       losHeightMeters: draft.losHeightMeters,
       coverProtection: draft.coverProtection,
+      coverReliability: draft.coverReliability,
       concealment: draft.concealment,
       penetrable: draft.penetrable,
       coverPosture: draft.coverPosture,
@@ -63,12 +64,16 @@ export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: Gri
         traits: { ...draft.traits },
         condition: { ...draft.condition },
       },
-      runtime: {
+      initialState: {
         posture: draft.posture,
         stress: draft.stress,
         suppression: draft.suppression,
         ammo: Math.round(draft.ammo),
         weaponReady: draft.weaponReady,
+        fatigue: draft.condition.fatigue,
+        morale: draft.condition.morale,
+        confusion: draft.condition.confusion,
+        health: draft.condition.health,
       },
     }])[0];
     state.units.push(unit);
@@ -95,6 +100,7 @@ export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: Gri
     radiusCells: draft.radiusCells,
     widthCells: draft.widthCells,
     heightCells: draft.heightCells,
+    rotationDegrees: draft.rotationDegrees,
     strength: draft.strength,
     suppression: draft.suppression,
     stressPerSecond: draft.stressPerSecond,
@@ -106,6 +112,8 @@ export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: Gri
     enabled: draft.enabled,
     sourceVisible: draft.sourceVisible,
     sourceKnown: draft.sourceKnown,
+    knowledgeConfidence: draft.knowledgeConfidence,
+    uncertaintyCells: draft.uncertaintyCells,
     reason: 'Editor-created threat source.',
     reasonRu: 'Источник угрозы создан в игровом редакторе.',
   }])[0];

@@ -1,4 +1,5 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
+import { evaluateSmallArmsCover } from './SmallArmsCoverEvaluation';
 import { distance, type GridPosition } from '../geometry';
 import {
   clampGridPositionToMap,
@@ -26,35 +27,13 @@ export function evaluateCoverBetween(
   unitPosition: GridPosition,
   posture: UnitPosture,
 ): CoverProtectionResult {
-  let best: CoverProtectionResult = {
-    object: null,
-    protection: 0,
-    concealment: 0,
-    blocksThreat: false,
+  const result = evaluateSmallArmsCover(map, threatPosition, unitPosition, posture);
+  return {
+    object: result.object,
+    protection: result.expectedProtection,
+    concealment: result.concealment,
+    blocksThreat: result.expectedProtection > 0,
   };
-
-  for (const object of map.objects) {
-    const properties = resolveObjectCoverProperties(object);
-    if (!postureFitsCover(posture, properties.coverPosture)) continue;
-
-    const center = objectCenter(object);
-    const segment = distanceToSegment(center, threatPosition, unitPosition);
-    const hitRadius = Math.max(0.3, Math.min(object.widthCells, object.heightCells) * 0.7);
-
-    if (segment.t <= 0.05 || segment.t >= 0.97 || segment.distance > hitRadius) continue;
-
-    const protection = clampPercent(properties.coverProtection * (properties.penetrable ? 0.55 : 1));
-    if (protection <= best.protection) continue;
-
-    best = {
-      object,
-      protection,
-      concealment: properties.concealment,
-      blocksThreat: protection > 0,
-    };
-  }
-
-  return best;
 }
 
 export function findBestCoverForThreat(

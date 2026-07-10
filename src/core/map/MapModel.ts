@@ -22,6 +22,7 @@ export type MapObjectKind =
 
 export interface CoverProperties {
   coverProtection: number;
+  coverReliability: number;
   concealment: number;
   penetrable: boolean;
   coverPosture: CoverPosture;
@@ -64,6 +65,7 @@ export interface MapObjectData {
   heightCells?: number;
   losHeightMeters?: number;
   coverProtection?: number;
+  coverReliability?: number;
   concealment?: number;
   penetrable?: boolean;
   coverPosture?: CoverPosture;
@@ -104,6 +106,7 @@ export interface MapObject {
   heightCells: number;
   losHeightMeters?: number;
   coverProtection?: number;
+  coverReliability?: number;
   concealment?: number;
   penetrable?: boolean;
   coverPosture?: CoverPosture;
@@ -238,28 +241,17 @@ export function clampGridPositionToMap(map: TacticalMap, grid: GridPosition): Gr
 
 export function getDefaultObjectCoverProperties(kind: MapObjectKind): CoverProperties {
   switch (kind) {
-    case 'structure':
-      return { coverProtection: 92, concealment: 95, penetrable: false, coverPosture: 'standing' };
-    case 'cover':
-      return { coverProtection: 88, concealment: 70, penetrable: false, coverPosture: 'crouched' };
-    case 'ditch':
-      return { coverProtection: 82, concealment: 65, penetrable: false, coverPosture: 'prone' };
-    case 'logs':
-      return { coverProtection: 76, concealment: 45, penetrable: false, coverPosture: 'crouched' };
-    case 'rock':
-      return { coverProtection: 72, concealment: 40, penetrable: false, coverPosture: 'crouched' };
-    case 'crates':
-      return { coverProtection: 58, concealment: 55, penetrable: true, coverPosture: 'crouched' };
-    case 'fence':
-      return { coverProtection: 35, concealment: 70, penetrable: true, coverPosture: 'crouched' };
-    case 'tree':
-      return { coverProtection: 42, concealment: 55, penetrable: true, coverPosture: 'standing' };
-    case 'post':
-      return { coverProtection: 45, concealment: 35, penetrable: true, coverPosture: 'crouched' };
-    case 'well':
-      return { coverProtection: 62, concealment: 45, penetrable: false, coverPosture: 'crouched' };
-    case 'bridge':
-      return { coverProtection: 20, concealment: 10, penetrable: true, coverPosture: 'prone' };
+    case 'structure': return { coverProtection: 92, coverReliability: 96, concealment: 95, penetrable: false, coverPosture: 'standing' };
+    case 'cover': return { coverProtection: 88, coverReliability: 90, concealment: 70, penetrable: false, coverPosture: 'crouched' };
+    case 'ditch': return { coverProtection: 82, coverReliability: 86, concealment: 65, penetrable: false, coverPosture: 'prone' };
+    case 'logs': return { coverProtection: 76, coverReliability: 72, concealment: 45, penetrable: false, coverPosture: 'crouched' };
+    case 'rock': return { coverProtection: 72, coverReliability: 68, concealment: 40, penetrable: false, coverPosture: 'crouched' };
+    case 'crates': return { coverProtection: 58, coverReliability: 62, concealment: 55, penetrable: true, coverPosture: 'crouched' };
+    case 'fence': return { coverProtection: 35, coverReliability: 46, concealment: 70, penetrable: true, coverPosture: 'crouched' };
+    case 'tree': return { coverProtection: 42, coverReliability: 34, concealment: 55, penetrable: true, coverPosture: 'standing' };
+    case 'post': return { coverProtection: 45, coverReliability: 38, concealment: 35, penetrable: true, coverPosture: 'crouched' };
+    case 'well': return { coverProtection: 62, coverReliability: 64, concealment: 45, penetrable: false, coverPosture: 'crouched' };
+    case 'bridge': return { coverProtection: 20, coverReliability: 28, concealment: 10, penetrable: true, coverPosture: 'prone' };
   }
 }
 
@@ -267,6 +259,7 @@ export function resolveObjectCoverProperties(object: MapObject): CoverProperties
   const defaults = getDefaultObjectCoverProperties(object.kind);
   return {
     coverProtection: clampPercent(object.coverProtection ?? defaults.coverProtection),
+    coverReliability: clampPercent(object.coverReliability ?? defaults.coverReliability),
     concealment: clampPercent(object.concealment ?? defaults.concealment),
     penetrable: object.penetrable ?? defaults.penetrable,
     coverPosture: object.coverPosture ?? defaults.coverPosture,
@@ -288,6 +281,7 @@ function normalizeMapObjects(objects: MapObjectData[]): MapObject[] {
       heightCells: object.heightCells ?? defaultSize.heightCells,
       losHeightMeters: normalizeObjectHeightMeters(object.losHeightMeters ?? defaultSize.losHeightMeters),
       coverProtection: clampPercent(object.coverProtection ?? cover.coverProtection),
+      coverReliability: clampPercent(object.coverReliability ?? cover.coverReliability),
       concealment: clampPercent(object.concealment ?? cover.concealment),
       penetrable: object.penetrable ?? cover.penetrable,
       coverPosture: object.coverPosture ?? cover.coverPosture,

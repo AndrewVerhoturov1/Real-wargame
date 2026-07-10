@@ -91,7 +91,7 @@ function normalizeImportedScene(value: unknown): {
 
 function buildExportedScene(state: SimulationState): ExportedSceneData {
   return {
-    version: 'scene-export-v3',
+    version: 'scene-export-v4',
     exportedAt: new Date().toISOString(),
     noteRu: 'Экспорт полигона ИИ. Сохраняет характеристики бойцов, их испытательное состояние, направленные угрозы и свойства укрытий. Старые сцены без этих полей загружаются со стандартными значениями.',
     map: {
@@ -114,6 +114,7 @@ function buildExportedScene(state: SimulationState): ExportedSceneData {
           heightCells: roundThree(object.heightCells),
           losHeightMeters: roundOne(object.losHeightMeters ?? 1),
           coverProtection: roundOne(cover.coverProtection),
+          coverReliability: roundOne(cover.coverReliability),
           concealment: roundOne(cover.concealment),
           penetrable: cover.penetrable,
           coverPosture: cover.coverPosture,
@@ -138,6 +139,7 @@ function buildExportedScene(state: SimulationState): ExportedSceneData {
         radiusCells: roundThree(zone.radiusCells),
         widthCells: roundThree(zone.widthCells),
         heightCells: roundThree(zone.heightCells),
+        rotationDegrees: roundOne(zone.rotationDegrees ?? 0),
         strength: roundOne(zone.strength),
         suppression: roundOne(settings.suppression),
         stressPerSecond: roundOne(zone.stressPerSecond),
@@ -149,6 +151,9 @@ function buildExportedScene(state: SimulationState): ExportedSceneData {
         enabled: settings.enabled,
         sourceVisible: settings.sourceVisible,
         sourceKnown: settings.sourceKnown,
+        knowledgeConfidence: roundOne(zone.knowledgeConfidence ?? 100),
+        uncertaintyCells: roundThree(zone.uncertaintyCells ?? 0.15),
+        knowledgeSource: zone.knowledgeSource,
         reason: zone.reasons.en,
         reasonRu: zone.reasons.ru,
       };
@@ -200,6 +205,8 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
       traits: { ...unit.soldier.traits },
       condition: { ...unit.soldier.condition },
     },
+    initialState: { ...unit.initialState },
+    tacticalKnowledge: JSON.parse(JSON.stringify(unit.tacticalKnowledge)),
     runtime: {
       stress: roundOne(unit.behaviorRuntime.stress),
       suppression: roundOne(unit.behaviorRuntime.suppression),

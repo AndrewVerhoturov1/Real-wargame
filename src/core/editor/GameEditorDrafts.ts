@@ -24,6 +24,7 @@ export interface ObjectCreationDraft {
   rotationDegrees: number;
   losHeightMeters: number;
   coverProtection: number;
+  coverReliability: number;
   concealment: number;
   penetrable: boolean;
   coverPosture: CoverPosture;
@@ -54,6 +55,7 @@ export interface ThreatCreationDraft {
   radiusCells: number;
   widthCells: number;
   heightCells: number;
+  rotationDegrees: number;
   strength: number;
   suppression: number;
   stressPerSecond: number;
@@ -65,6 +67,8 @@ export interface ThreatCreationDraft {
   enabled: boolean;
   sourceVisible: boolean;
   sourceKnown: boolean;
+  knowledgeConfidence: number;
+  uncertaintyCells: number;
 }
 
 export interface TerrainCreationDraft {
@@ -116,6 +120,7 @@ export function resetObjectDraftForKind(draft: ObjectCreationDraft, kind: MapObj
     heightCells: size.heightCells,
     losHeightMeters: size.losHeightMeters,
     coverProtection: cover.coverProtection,
+    coverReliability: cover.coverReliability,
     concealment: cover.concealment,
     penetrable: cover.penetrable,
     coverPosture: cover.coverPosture,
@@ -187,6 +192,7 @@ function createDefaultDrafts(): GameEditorDrafts {
       radiusCells: 3,
       widthCells: 5,
       heightCells: 3,
+      rotationDegrees: 0,
       strength: 70,
       suppression: 85,
       stressPerSecond: 18,
@@ -198,6 +204,8 @@ function createDefaultDrafts(): GameEditorDrafts {
       enabled: true,
       sourceVisible: true,
       sourceKnown: true,
+      knowledgeConfidence: 100,
+      uncertaintyCells: 0.15,
     },
     terrain: {
       brushShape: 'circle',

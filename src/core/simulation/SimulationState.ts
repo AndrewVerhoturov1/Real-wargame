@@ -104,6 +104,7 @@ export interface SimulationState {
   selectedUnitIds: string[];
   mouseGridPosition: GridPosition | null;
   selectionBox: SelectionBox | null;
+  simulationTimeSeconds: number;
   editor: EditorState;
 }
 
@@ -120,6 +121,7 @@ export function createInitialState(
     selectedUnitIds: [],
     mouseGridPosition: null,
     selectionBox: null,
+    simulationTimeSeconds: 0,
     editor: {
       enabled: false,
       panelOpen: false,

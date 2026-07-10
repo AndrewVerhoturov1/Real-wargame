@@ -1,5 +1,5 @@
 import { POSTURE_EXPOSURE_MULTIPLIER } from '../behavior/BehaviorModel';
-import { evaluateCoverBetween } from '../cover/CoverEvaluation';
+import { evaluateSmallArmsCover } from '../cover/SmallArmsCoverEvaluation';
 import { distance, type GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
 import type { UnitModel } from '../units/UnitModel';
@@ -19,6 +19,7 @@ export interface ThreatContribution {
   distanceCells: number;
   directionFromUnitDegrees: number;
   coverProtection: number;
+  expectedProtection: number;
 }
 
 export interface ThreatEvaluationReport {
@@ -91,8 +92,8 @@ function evaluateZone(map: TacticalMap, unit: UnitModel, zone: PressureZone): Th
     ? directionalRangeFactor(distanceCells, settings)
     : 1;
   const exposure = POSTURE_EXPOSURE_MULTIPLIER[unit.behaviorRuntime.posture];
-  const cover = evaluateCoverBetween(map, source, unit.position, unit.behaviorRuntime.posture);
-  const coverMultiplier = 1 - cover.protection / 100;
+  const cover = evaluateSmallArmsCover(map, source, unit.position, unit.behaviorRuntime.posture);
+  const coverMultiplier = 1 - cover.expectedProtection / 100;
   const danger = clampPercent(zone.strength * rangeFactor * exposure * coverMultiplier);
   const suppression = clampPercent(settings.suppression * rangeFactor * Math.max(0.35, exposure) * coverMultiplier);
   const stressPerSecond = Math.max(0, zone.stressPerSecond * rangeFactor * coverMultiplier);
@@ -105,7 +106,8 @@ function evaluateZone(map: TacticalMap, unit: UnitModel, zone: PressureZone): Th
     stressPerSecond,
     distanceCells,
     directionFromUnitDegrees,
-    coverProtection: cover.protection,
+    coverProtection: cover.expectedProtection,
+    expectedProtection: cover.expectedProtection,
   };
 }
 
