@@ -61,7 +61,7 @@ expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
 
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
   "mode === 'stealth'",
-  "скрытность",
+  'скрытность',
 ]);
 
 expectIncludes('src/rendering/PixiOverlayRenderer.ts', [
@@ -74,7 +74,7 @@ expectIncludes('src/rendering/PixiOverlayRenderer.ts', [
 
 expectIncludes('src/input/BoardInputController.ts', [
   'selectSimulationCoverAtPosition',
-  'setHoveredSimulationCover',
+  'hoverSimulationCoverAtPosition',
 ]);
 
 expectIncludes('src/main.ts', [
