@@ -56,7 +56,19 @@ jobs:
         id: build
         if: steps.install.outcome == 'success'
         continue-on-error: true
-        run: npm run build
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee build.log
+
+      - name: Upload build log
+        if: always() && steps.install.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-core-build-log
+          path: build.log
+          if-no-files-found: ignore
+          retention-days: 3
 
       - name: Publish commit statuses
         if: always()
