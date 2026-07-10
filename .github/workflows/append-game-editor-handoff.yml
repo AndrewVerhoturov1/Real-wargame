@@ -1,0 +1,33 @@
+name: Append Game Editor Handoff
+
+on:
+  push:
+    branches:
+      - real-wargame-preview
+    paths:
+      - scripts/append_game_editor_handoff.mjs
+
+jobs:
+  append:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Append handoff and clean helpers
+        run: |
+          node scripts/append_game_editor_handoff.mjs
+          rm scripts/append_game_editor_handoff.mjs .github/workflows/append-game-editor-handoff.yml
+          git diff --check
+
+      - name: Commit documentation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/subprojects/ai-single-unit-editor/HANDOFF.md scripts/append_game_editor_handoff.mjs .github/workflows/append-game-editor-handoff.yml
+          git commit -m "docs: add unified game editor to handoff"
+          git push origin HEAD:real-wargame-preview
