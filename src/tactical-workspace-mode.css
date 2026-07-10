@@ -10,11 +10,11 @@ body.workspace-editor #hud {
 }
 
 body.workspace-editor .game-editor-field:not(.checkbox) {
-  grid-template-columns: 1fr;
-  align-items: stretch;
+  grid-template-columns: minmax(92px, 0.65fr) minmax(0, 1.35fr);
 }
 
 body.workspace-editor .game-editor-field input,
 body.workspace-editor .game-editor-field select {
   width: 100%;
+  min-width: 0;
 }
