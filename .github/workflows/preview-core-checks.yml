@@ -11,30 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write
+      contents: read
       statuses: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Apply pending AI lab selection priority fix
-        id: apply_priority_fix
-        shell: bash
-        run: |
-          if [ ! -f scripts/apply_ai_lab_selection_priority_fix.mjs ]; then
-            echo "applied=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          node scripts/apply_ai_lab_selection_priority_fix.mjs
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/core/testing/AiLabInteraction.ts
-          git rm scripts/apply_ai_lab_selection_priority_fix.mjs
-          git commit -m "fix: respect AI lab active selection panel"
-          git push origin HEAD:real-wargame-preview
-          echo "applied=true" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
