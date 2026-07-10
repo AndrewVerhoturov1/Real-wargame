@@ -6,6 +6,7 @@ import {
   beginEditorPointerAction,
   cancelEditorPointerAction,
   clearSelectionBox,
+  deleteSelectedEditorTargets,
   finishEditorPointerAction,
   issueMoveOrderToSelectedUnit,
   selectUnit,
@@ -16,6 +17,14 @@ import {
   updateSelectionBox,
   type SimulationState,
 } from '../core/simulation/SimulationState';
+import {
+  beginAiLabPointerAction,
+  cancelAiLabPointerAction,
+  finishAiLabPointerAction,
+  resolveAiLabCursor,
+  updateAiLabPointerAction,
+} from '../core/testing/AiLabInteraction';
+import { duplicateSelectedLabEntity, getAiLabRuntime } from '../core/testing/AiLabRuntime';
 import {
   getAiTestLabSelectionTarget,
   selectAiTestLabTargetAtPosition,
@@ -66,9 +75,33 @@ export class BoardInputController {
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (event.key !== 'Alt') return;
-    this.altProbeActive = true;
-    if (!this.state.editor.enabled) setVisibilityProbe(this.state, true, this.lastPointerGrid);
+    if (event.key === 'Alt') {
+      this.altProbeActive = true;
+      if (!this.state.editor.enabled && !getAiLabRuntime(this.state).open) {
+        setVisibilityProbe(this.state, true, this.lastPointerGrid);
+      }
+      return;
+    }
+
+    if (!getAiLabRuntime(this.state).open || isTextInput(event.target)) return;
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelAiLabPointerAction(this.state);
+      this.updateCursor();
+      return;
+    }
+
+    if (event.key === 'Delete') {
+      event.preventDefault();
+      deleteSelectedEditorTargets(this.state);
+      return;
+    }
+
+    if (event.ctrlKey && event.key.toLowerCase() === 'd') {
+      event.preventDefault();
+      duplicateSelectedLabEntity(this.state);
+    }
   };
 
   private readonly handleKeyUp = (event: KeyboardEvent): void => {
@@ -91,6 +124,13 @@ export class BoardInputController {
       this.isDragSelecting = false;
       this.canvas.setPointerCapture(event.pointerId);
 
+      if (!this.state.editor.enabled && getAiLabRuntime(this.state).open) {
+        event.preventDefault();
+        beginAiLabPointerAction(this.state, grid);
+        this.updateCursor();
+        return;
+      }
+
       if (this.state.editor.enabled) {
         event.preventDefault();
         if (isTerrainPaintTool(String(this.state.editor.tool))) {
@@ -104,7 +144,9 @@ export class BoardInputController {
 
     if (event.button === 2) {
       event.preventDefault();
-      if (!this.state.editor.enabled) issueMoveOrderToSelectedUnit(this.state, grid);
+      if (!this.state.editor.enabled && !getAiLabRuntime(this.state).open) {
+        issueMoveOrderToSelectedUnit(this.state, grid);
+      }
     }
   };
 
@@ -114,6 +156,12 @@ export class BoardInputController {
     this.lastPointerGrid = grid;
     setMouseGridPosition(this.state, grid);
     this.updateAltProbe(event, grid);
+
+    if (!this.state.editor.enabled && getAiLabRuntime(this.state).open) {
+      updateAiLabPointerAction(this.state, grid);
+      this.updateCursor();
+      return;
+    }
 
     if (this.leftPointerId !== event.pointerId || !this.leftStartGrid) return;
 
@@ -143,6 +191,13 @@ export class BoardInputController {
     const grid = worldToGrid(this.state.map, world);
     this.lastPointerGrid = grid;
     this.updateAltProbe(event, grid);
+
+    if (!this.state.editor.enabled && getAiLabRuntime(this.state).open) {
+      finishAiLabPointerAction(this.state, grid);
+      this.clearLeftPointer(event.pointerId);
+      this.updateCursor();
+      return;
+    }
 
     if (this.state.editor.enabled) {
       if (!isTerrainPaintTool(String(this.state.editor.tool)) && !isSpawnTool(String(this.state.editor.tool))) {
@@ -175,7 +230,9 @@ export class BoardInputController {
     if (this.leftPointerId === event.pointerId) {
       clearSelectionBox(this.state);
       cancelEditorPointerAction(this.state);
+      cancelAiLabPointerAction(this.state);
       this.clearLeftPointer(event.pointerId);
+      this.updateCursor();
     }
   };
 
@@ -183,11 +240,20 @@ export class BoardInputController {
     this.lastPointerGrid = null;
     setMouseGridPosition(this.state, null);
     setVisibilityProbe(this.state, false, null);
+    this.updateCursor();
   };
 
   private updateAltProbe(event: PointerEvent, grid: GridPosition): void {
-    const active = !this.state.editor.enabled && (event.altKey || this.altProbeActive);
+    const active = !this.state.editor.enabled
+      && !getAiLabRuntime(this.state).open
+      && (event.altKey || this.altProbeActive);
     setVisibilityProbe(this.state, active, active ? grid : null);
+  }
+
+  private updateCursor(): void {
+    const cursor = resolveAiLabCursor(this.state);
+    this.canvas.style.cursor = cursor;
+    document.body.classList.toggle('cursor-crosshair-threat', getAiLabRuntime(this.state).open && getAiLabRuntime(this.state).tool === 'place_threat');
   }
 
   private clearLeftPointer(pointerId: number): void {
@@ -200,4 +266,10 @@ export class BoardInputController {
 
 function isSpawnTool(tool: string): boolean {
   return tool === 'spawn_object' || tool === 'spawn_unit' || tool === 'spawn_zone';
+}
+
+function isTextInput(target: EventTarget | null): boolean {
+  return target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement
+    || target instanceof HTMLSelectElement;
 }
