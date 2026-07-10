@@ -14,6 +14,7 @@ import { findUnitAtGridPosition } from '../units/UnitModel';
 import {
   clearAiLabSelection,
   getAiLabRuntime,
+  setAiLabPanel,
   setAiLabStatus,
   setAiLabTool,
   type AiLabDragState,
@@ -62,6 +63,7 @@ export function beginAiLabPointerAction(state: SimulationState, rawGrid: GridPos
       startGrid: grid,
       snapshot: { x: unit.position.x, y: unit.position.y },
     };
+    setAiLabPanel(state, 'fighter');
     setAiLabStatus(state, `Выбран боец: ${unit.labels.ru}. Его можно перетащить.`);
     return true;
   }
@@ -71,6 +73,7 @@ export function beginAiLabPointerAction(state: SimulationState, rawGrid: GridPos
     state.editor.selectedZoneId = zone.id;
     state.editor.selectedObjectId = null;
     runtime.drag = createThreatDrag(zone, 'move', grid);
+    setAiLabPanel(state, 'threat');
     setAiLabStatus(state, `Выбрана угроза: ${zone.labels.ru}. Потяните источник или ручку.`);
     return true;
   }
@@ -79,6 +82,7 @@ export function beginAiLabPointerAction(state: SimulationState, rawGrid: GridPos
   if (object) {
     state.editor.selectedObjectId = object.id;
     state.editor.selectedZoneId = null;
+    setAiLabPanel(state, 'cover');
     runtime.drag = {
       kind: 'object',
       id: object.id,

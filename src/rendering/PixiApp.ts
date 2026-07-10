@@ -8,10 +8,12 @@ import { BoardInputController } from '../input/BoardInputController';
 import { CameraController } from '../input/CameraController';
 import { formatDegrees, nextLocale, UI_COPY, type Locale } from '../i18n';
 import { HtmlOverlayRenderer } from './HtmlOverlayRenderer';
+import { PixiAwarenessHeatmapRenderer } from './PixiAwarenessHeatmapRenderer';
 import { PixiCoverDirectionRenderer } from './PixiCoverDirectionRenderer';
 import { PixiMapRenderer } from './PixiMapRenderer';
 import { PixiOrderRenderer } from './PixiOrderRenderer';
 import { PixiOverlayRenderer } from './PixiOverlayRenderer';
+import { PixiThreatEditorRenderer } from './PixiThreatEditorRenderer';
 import { PixiUnitRenderer } from './PixiUnitRenderer';
 import { PixiViewConeRenderer } from './PixiViewConeRenderer';
 
@@ -24,10 +26,12 @@ export class PixiTacticalBoardApp {
   private readonly app: Application;
   private readonly worldContainer = new Container();
   private readonly mapRenderer = new PixiMapRenderer();
+  private readonly awarenessHeatmapRenderer = new PixiAwarenessHeatmapRenderer();
   private readonly viewConeRenderer = new PixiViewConeRenderer();
   private readonly orderRenderer = new PixiOrderRenderer();
   private readonly overlayRenderer = new PixiOverlayRenderer();
   private readonly coverDirectionRenderer = new PixiCoverDirectionRenderer();
+  private readonly threatEditorRenderer = new PixiThreatEditorRenderer();
   private readonly unitRenderer = new PixiUnitRenderer();
   private readonly camera: CameraController;
   private readonly boardInput: BoardInputController;
@@ -71,10 +75,12 @@ export class PixiTacticalBoardApp {
     this.app.stage.addChild(this.worldContainer);
     this.worldContainer.addChild(
       this.mapRenderer.container,
+      this.awarenessHeatmapRenderer.container,
       this.viewConeRenderer.container,
       this.orderRenderer.container,
       this.overlayRenderer.container,
       this.coverDirectionRenderer.container,
+      this.threatEditorRenderer.container,
       this.unitRenderer.container,
     );
 
@@ -164,9 +170,11 @@ export class PixiTacticalBoardApp {
       this.viewConeRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
     }
 
+    this.awarenessHeatmapRenderer.render(this.state);
     this.orderRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
     this.overlayRenderer.render(this.state, this.showGrid, this.state.editor.layers.pressureZones);
     this.coverDirectionRenderer.render(this.state);
+    this.threatEditorRenderer.render(this.state);
     this.unitRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
     this.htmlOverlayRenderer.render(this.state, this.locale, this.showHeightLabels);
     this.updateDebugPanelIfNeeded(false);
