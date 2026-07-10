@@ -54,7 +54,7 @@ expectIncludes('src/ui/AiTestLabControls.ts', [
   'AI_TEST_TIME_SCALES',
   'setAiTestLabSelectionTarget',
   'Щёлкните по сектору или его источнику',
-  'Зелёная стрелка на карте показывает защищённую сторону',
+  'зелёная стрелка на карте показывает защищённую сторону',
 ]);
 expectIncludes('src/core/testing/AiTestLabSelection.ts', [
   "export type AiTestLabSelectionTarget = 'fighter' | 'threat' | 'cover' | null",
@@ -69,8 +69,8 @@ expectIncludes('src/input/BoardInputController.ts', [
 expectIncludes('src/rendering/PixiCoverDirectionRenderer.ts', [
   'ЗАЩИЩЁННАЯ СТОРОНА',
   'НАПРАВЛЕНИЕ ОГНЯ',
-  'selectedObjectId',
-  'selectedZoneId',
+  'getSelectedMapObject',
+  'getSelectedPressureZone',
 ]);
 expectIncludes('src/rendering/PixiApp.ts', [
   'PixiCoverDirectionRenderer',
