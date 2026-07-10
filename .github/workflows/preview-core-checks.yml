@@ -12,6 +12,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      statuses: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -23,19 +24,83 @@ jobs:
           cache: npm
 
       - name: Install dependencies
+        id: install
+        continue-on-error: true
         run: npm ci
 
       - name: AI test lab smoke
+        id: lab
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
         run: npm run lab:smoke
 
       - name: AI node editor smoke
+        id: editor
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
         run: npm run editor:smoke
 
       - name: Local AI engine smoke
+        id: engine
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
         run: npm run engine:smoke
 
       - name: Validate bundled AI graph
+        id: graph
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
         run: npm run validate:ai-graph
 
       - name: Production build
+        id: build
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
         run: npm run build
+
+      - name: Publish commit status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          LAB_OUTCOME: ${{ steps.lab.outcome }}
+          EDITOR_OUTCOME: ${{ steps.editor.outcome }}
+          ENGINE_OUTCOME: ${{ steps.engine.outcome }}
+          GRAPH_OUTCOME: ${{ steps.graph.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+        with:
+          script: |
+            const outcomes = {
+              install: process.env.INSTALL_OUTCOME,
+              lab: process.env.LAB_OUTCOME,
+              editor: process.env.EDITOR_OUTCOME,
+              engine: process.env.ENGINE_OUTCOME,
+              graph: process.env.GRAPH_OUTCOME,
+              build: process.env.BUILD_OUTCOME,
+            };
+            const passed = Object.values(outcomes).every((value) => value === 'success');
+            const description = Object.entries(outcomes)
+              .map(([key, value]) => `${key}:${value}`)
+              .join(' ')
+              .slice(0, 140);
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: passed ? 'success' : 'failure',
+              context: 'preview-core-checks',
+              description,
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - name: Fail workflow when a check failed
+        if: >-
+          always() && (
+            steps.install.outcome != 'success' ||
+            steps.lab.outcome != 'success' ||
+            steps.editor.outcome != 'success' ||
+            steps.engine.outcome != 'success' ||
+            steps.graph.outcome != 'success' ||
+            steps.build.outcome != 'success'
+          )
+        run: exit 1
