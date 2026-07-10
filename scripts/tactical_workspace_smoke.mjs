@@ -44,11 +44,8 @@ expectIncludes('src/ui/TacticalWorkspace.ts', [
 expectExcludes('src/ui/TacticalWorkspace.ts', ['u?.position.x.toFixed(2)', 'u?.behaviorRuntime.reason']);
 
 expectIncludes('src/ui/EditorHeaderPlacement.ts', [
-  'installEditorHeaderPlacement',
-  '.game-editor-body [data-editor-tool].primary',
-  "return 'Поставить предмет'",
-  "return 'Поставить бойца'",
-  "return 'Поставить угрозу'",
+  'installEditorHeaderPlacement', '.game-editor-body [data-editor-tool].primary',
+  "return 'Поставить предмет'", "return 'Поставить бойца'", "return 'Поставить угрозу'",
   '[data-action="editor-place"]',
 ]);
 expectIncludes('src/ui/WorkspaceTooltipGuard.ts', [
@@ -56,15 +53,19 @@ expectIncludes('src/ui/WorkspaceTooltipGuard.ts', [
 ]);
 
 expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
-  'buildBaseReport', 'buildRouteKey', 'Orders affect only route danger',
+  'buildAwarenessField', 'buildBestSafePositions', 'buildRouteKey',
+  'Movement does not invalidate the expensive map field',
   'buildAwarenessKnowledgeKey', 'KNOWLEDGE_CONFIDENCE_BUCKET', 'KNOWLEDGE_UNCERTAINTY_BUCKET',
+  'getCachedCover', 'coverCacheByMap',
 ]);
 expectExcludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
   'const orderCellX', 'const orderCellY', 'unit.tacticalKnowledge.revision',
 ]);
 
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
-  'buildAwarenessRenderKey', 'Orders change often, but they do not change the heatmap cells themselves.',
+  'buildAwarenessRenderKey',
+  'Orders and movement change often, but they do not change the heatmap pixels themselves.',
+  'lastRasterKey', 'lastMarkerKey', 'markerUpdateCount',
   'Sprite', 'Texture', 'SCALE_MODES.NEAREST', 'createAwarenessTexture', 'drawAwarenessRaster',
   "representation: 'raster-sprite'", 'getDiagnostics()', '__realWargameAwarenessDebug',
 ]);
@@ -73,7 +74,7 @@ expectExcludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
 ]);
 expectBefore(
   'src/rendering/PixiAwarenessHeatmapRenderer.ts',
-  'if (key === this.lastKey) return;',
+  'if (!rasterChanged && !markerChanged) return;',
   'const report = buildSoldierAwarenessReport(state, unit);',
 );
 
@@ -81,7 +82,7 @@ expectIncludes('src/core/editor/GameEditorPlacement.ts', [
   'rememberSelectedUnitForTest', 'state.units.push(unit)', 'rememberSelectedUnitForTest(state)',
 ]);
 expectIncludes('src/main.ts', [
-  "installTacticalWorkspace(state, aiGameBridge",
+  'installTacticalWorkspace(state, aiGameBridge',
   'installEditorHeaderPlacement()', 'installWorkspaceTooltipGuard()', 'languageToggle.click()',
 ]);
 expectIncludes('src/tactical-workspace-stage8.css', [
@@ -90,8 +91,7 @@ expectIncludes('src/tactical-workspace-stage8.css', [
 
 expectIncludes('Run-Real-Wargame-Lab.bat', [
   "Invoke-WebRequest -Uri 'http://127.0.0.1:%APP_PORT%/'",
-  'start "" "http://127.0.0.1:%APP_PORT%/"',
-  'intentionally not opened',
+  'start "" "http://127.0.0.1:%APP_PORT%/"', 'intentionally not opened',
 ]);
 
 expectIncludes('tests/preview-screenshots.spec.ts', [
