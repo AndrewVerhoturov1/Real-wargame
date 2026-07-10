@@ -43,6 +43,8 @@ export class PixiTacticalBoardApp {
   private showViewCones = false;
   private showHeightLabels = false;
   private lastMapRenderKey = '';
+  private lastMapRenderWasEditor = false;
+  private mapRenderInvalidated = true;
   private lastDebugPanelUpdateMs = 0;
 
   constructor(
@@ -61,6 +63,10 @@ export class PixiTacticalBoardApp {
       resizeTo: this.root,
     });
     this.app.ticker.maxFPS = TARGET_MAX_FPS;
+    this.app.stage.eventMode = 'none';
+    this.app.stage.interactiveChildren = false;
+    this.worldContainer.eventMode = 'none';
+    this.worldContainer.interactiveChildren = false;
 
     const canvas = this.app.view as HTMLCanvasElement;
     canvas.setAttribute('aria-label', 'Tactical board prototype canvas');
@@ -121,12 +127,14 @@ export class PixiTacticalBoardApp {
     this.heightToggle.removeEventListener('click', this.handleHeightToggle);
     this.camera.destroy();
     this.boardInput.destroy();
+    this.overlayRenderer.destroy();
     this.htmlOverlayRenderer.destroy();
     this.fixedScaleLabel.remove();
     this.app.destroy(true);
   }
 
   forceRender(): void {
+    this.mapRenderInvalidated = true;
     this.renderFrame();
     this.updateDebugPanelIfNeeded(true);
   }
@@ -137,8 +145,10 @@ export class PixiTacticalBoardApp {
       antialias: true,
       backgroundAlpha: 1,
       maxFPS: TARGET_MAX_FPS,
-      mapRender: 'batched Pixi Graphics terrain + physical-map elevation bands + forest texture layer, grid, objects, zones',
-      zoomMode: 'stable wheel-scaled step without animation',
+      mapRender: 'single cached bitmap in simulation; editable batched Pixi Graphics terrain + raster relief/forest + grid/objects in editor',
+      zoomMode: 'requestAnimationFrame-coalesced wheel input anchored under the pointer',
+      keyboardPan: 'continuous WASD and arrow-key camera movement synchronized to animation frames',
+      pointerMode: 'pointer movement coalesced to one state update per animation frame',
       grid: this.showGrid,
       viewCones: this.showViewCones,
       heightLabels: this.showHeightLabels,
@@ -182,19 +192,34 @@ export class PixiTacticalBoardApp {
   }
 
   private renderEditableMapLayerIfNeeded(force: boolean): void {
-    const nextKey = this.getMapRenderKey();
+    const editorEnabled = this.state.editor.enabled;
 
-    if (!force && nextKey === this.lastMapRenderKey) {
+    // In simulation the map is immutable between explicit UI/state changes. Avoid rebuilding a
+    // 2,560-cell fingerprint on every frame; editor mode still checks continuously while painting.
+    if (!force && !this.mapRenderInvalidated && !editorEnabled && !this.lastMapRenderWasEditor) {
+      return;
+    }
+
+    const nextKey = this.getMapRenderKey();
+    this.lastMapRenderWasEditor = editorEnabled;
+
+    if (!force && !this.mapRenderInvalidated && nextKey === this.lastMapRenderKey) {
       return;
     }
 
     this.lastMapRenderKey = nextKey;
+    this.mapRenderInvalidated = false;
+    this.mapRenderer.container.cacheAsBitmap = false;
     this.mapRenderer.render(
       this.state.map,
       this.showGrid,
       this.state.editor.selectedObjectId,
       this.state.editor.layers.objects,
     );
+
+    // The whole map, grid and map objects are static during simulation. One texture is much
+    // cheaper to scale and translate than the original collection of vector Graphics objects.
+    this.mapRenderer.container.cacheAsBitmap = !editorEnabled;
   }
 
   private getMapRenderKey(): string {
@@ -213,6 +238,7 @@ export class PixiTacticalBoardApp {
       : 'objects-hidden';
 
     return [
+      `editor:${this.state.editor.enabled ? '1' : '0'}`,
       `grid:${this.showGrid ? '1' : '0'}`,
       `objects:${this.state.editor.layers.objects ? '1' : '0'}`,
       `selected:${this.state.editor.selectedObjectId ?? 'none'}`,
@@ -236,6 +262,7 @@ export class PixiTacticalBoardApp {
 
   private readonly handleGridToggle = (): void => {
     this.showGrid = !this.showGrid;
+    this.mapRenderInvalidated = true;
     this.renderEditableMapLayerIfNeeded(true);
     this.updateDisplayToggles();
     this.renderFrame();

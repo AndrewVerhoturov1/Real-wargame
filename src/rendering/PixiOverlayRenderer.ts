@@ -13,23 +13,74 @@ import {
 import type { KnownThreatMemory } from '../core/units/UnitModel';
 import { computeLineOfSight } from '../core/visibility/LineOfSight';
 
+interface OverlayDiagnostics {
+  knowledgeRebuildCount: number;
+  probeRebuildCount: number;
+  interactionUpdateCount: number;
+  interactionObjectCount: number;
+}
+
+type OverlayDebugWindow = Window & {
+  __realWargameOverlayDebug?: OverlayDiagnostics;
+};
+
 export class PixiOverlayRenderer {
   readonly container = new Container();
   private readonly zoneContainer = new Container();
   private readonly realReliefContainer = new Container();
-  private readonly dynamicContainer = new Container();
+  private readonly knowledgeContainer = new Container();
+  private readonly probeContainer = new Container();
+  private readonly interactionContainer = new Container();
+  private readonly hoverCellGraphics = new Graphics();
+  private readonly selectionBoxGraphics = new Graphics();
   private lastZoneKey = '';
   private lastRealReliefKey = '';
-  private lastDynamicKey = '';
+  private lastKnowledgeKey = '';
+  private lastProbeKey = '';
+  private lastInteractionKey = '';
+  private readonly diagnostics: OverlayDiagnostics = {
+    knowledgeRebuildCount: 0,
+    probeRebuildCount: 0,
+    interactionUpdateCount: 0,
+    interactionObjectCount: 2,
+  };
 
   constructor() {
-    this.container.addChild(this.zoneContainer, this.realReliefContainer, this.dynamicContainer);
+    for (const container of [
+      this.container,
+      this.zoneContainer,
+      this.realReliefContainer,
+      this.knowledgeContainer,
+      this.probeContainer,
+      this.interactionContainer,
+    ]) {
+      container.eventMode = 'none';
+      container.interactiveChildren = false;
+    }
+
+    this.hoverCellGraphics.eventMode = 'none';
+    this.selectionBoxGraphics.eventMode = 'none';
+    this.interactionContainer.addChild(this.hoverCellGraphics, this.selectionBoxGraphics);
+    this.container.addChild(
+      this.zoneContainer,
+      this.realReliefContainer,
+      this.knowledgeContainer,
+      this.probeContainer,
+      this.interactionContainer,
+    );
+    this.publishDiagnostics();
   }
 
   render(state: SimulationState, showGrid = true, showPressureZones = true): void {
     this.renderZoneLayerIfNeeded(state, showPressureZones && state.editor.enabled);
     this.renderRealReliefLayerIfNeeded(state);
-    this.renderDynamicLayerIfNeeded(state, showGrid);
+    this.renderKnowledgeLayerIfNeeded(state);
+    this.renderProbeLayerIfNeeded(state);
+    this.renderInteractionLayerIfNeeded(state, showGrid);
+  }
+
+  destroy(): void {
+    delete (window as OverlayDebugWindow).__realWargameOverlayDebug;
   }
 
   private renderZoneLayerIfNeeded(state: SimulationState, showPressureZones: boolean): void {
@@ -38,7 +89,7 @@ export class PixiOverlayRenderer {
 
     this.lastZoneKey = nextKey;
     this.zoneContainer.cacheAsBitmap = false;
-    this.zoneContainer.removeChildren();
+    destroyContainerChildren(this.zoneContainer);
 
     if (showPressureZones) {
       drawPressureZones(this.zoneContainer, state.pressureZones, state.map.cellSize, state.editor.selectedZoneId);
@@ -52,7 +103,7 @@ export class PixiOverlayRenderer {
 
     this.lastRealReliefKey = nextKey;
     this.realReliefContainer.cacheAsBitmap = false;
-    this.realReliefContainer.removeChildren();
+    destroyContainerChildren(this.realReliefContainer);
 
     if (!getRealReliefOverlayState(state).active || !hasHeightVariation(state.map)) return;
 
@@ -60,31 +111,59 @@ export class PixiOverlayRenderer {
     this.realReliefContainer.cacheAsBitmap = true;
   }
 
-  private renderDynamicLayerIfNeeded(state: SimulationState, showGrid: boolean): void {
-    const nextKey = getDynamicLayerKey(state, showGrid);
-    if (nextKey === this.lastDynamicKey) return;
+  private renderKnowledgeLayerIfNeeded(state: SimulationState): void {
+    const visible = isKnowledgeLayerVisible(state);
+    const nextKey = visible
+      ? getKnowledgeLayerKey(state)
+      : `knowledge:hidden;editor:${state.editor.enabled ? '1' : '0'};mode:${getSimulationLayerState(state).mode}`;
+    if (nextKey === this.lastKnowledgeKey) return;
 
-    this.lastDynamicKey = nextKey;
-    this.dynamicContainer.removeChildren();
+    this.lastKnowledgeKey = nextKey;
+    destroyContainerChildren(this.knowledgeContainer);
 
-    drawKnowledgeOverlay(this.dynamicContainer, state);
-    drawThreatMemoryOverlay(this.dynamicContainer, state);
-    drawCoverKnowledgeOverlay(this.dynamicContainer, state);
-    drawVisibilityProbe(this.dynamicContainer, state);
+    if (visible) {
+      drawKnowledgeOverlay(this.knowledgeContainer, state);
+      drawThreatMemoryOverlay(this.knowledgeContainer, state);
+      drawCoverKnowledgeOverlay(this.knowledgeContainer, state);
+    }
+
+    this.diagnostics.knowledgeRebuildCount += 1;
+    this.publishDiagnostics();
+  }
+
+  private renderProbeLayerIfNeeded(state: SimulationState): void {
+    const nextKey = getProbeLayerKey(state);
+    if (nextKey === this.lastProbeKey) return;
+
+    this.lastProbeKey = nextKey;
+    destroyContainerChildren(this.probeContainer);
+    drawVisibilityProbe(this.probeContainer, state);
+    this.diagnostics.probeRebuildCount += 1;
+    this.publishDiagnostics();
+  }
+
+  private renderInteractionLayerIfNeeded(state: SimulationState, showGrid: boolean): void {
+    const nextKey = getInteractionLayerKey(state, showGrid);
+    if (nextKey === this.lastInteractionKey) return;
+
+    this.lastInteractionKey = nextKey;
+    this.hoverCellGraphics.clear();
+    this.selectionBoxGraphics.clear();
 
     if (showGrid && state.mouseGridPosition) {
       const { map } = state;
-      const cell = gridToCellCenter(map, state.mouseGridPosition);
-      const graphics = new Graphics();
+      const cell = gridToCellCenter(map, {
+        x: Math.floor(state.mouseGridPosition.x),
+        y: Math.floor(state.mouseGridPosition.y),
+      });
 
-      graphics.lineStyle(2, 0xfff2a8, 0.5);
-      graphics.drawRect(
+      this.hoverCellGraphics.lineStyle(2, 0xfff2a8, 0.5);
+      this.hoverCellGraphics.drawRect(
         (cell.x - 0.5) * map.cellSize,
         (cell.y - 0.5) * map.cellSize,
         map.cellSize,
         map.cellSize,
       );
-      this.dynamicContainer.addChild(graphics);
     }
 
     if (state.selectionBox) {
@@ -93,14 +172,33 @@ export class PixiOverlayRenderer {
       const minY = Math.min(state.selectionBox.start.y, state.selectionBox.current.y) * map.cellSize;
       const maxX = Math.max(state.selectionBox.start.x, state.selectionBox.current.x) * map.cellSize;
       const maxY = Math.max(state.selectionBox.start.y, state.selectionBox.current.y) * map.cellSize;
-      const graphics = new Graphics();
 
-      graphics.lineStyle(2, 0xfff2a8, 0.9);
-      graphics.beginFill(0xfff2a8, 0.08);
-      graphics.drawRect(minX, minY, maxX - minX, maxY - minY);
-      graphics.endFill();
-      this.dynamicContainer.addChild(graphics);
+      this.selectionBoxGraphics.lineStyle(2, 0xfff2a8, 0.9);
+      this.selectionBoxGraphics.beginFill(0xfff2a8, 0.08);
+      this.selectionBoxGraphics.drawRect(minX, minY, maxX - minX, maxY - minY);
+      this.selectionBoxGraphics.endFill();
     }
+
+    this.diagnostics.interactionUpdateCount += 1;
+    this.publishDiagnostics();
+  }
+
+  private publishDiagnostics(): void {
+    this.diagnostics.interactionObjectCount = this.interactionContainer.children.length;
+    (window as OverlayDebugWindow).__realWargameOverlayDebug = { ...this.diagnostics };
+  }
+}
+
+function isKnowledgeLayerVisible(state: SimulationState): boolean {
+  if (getKnowledgeOverlayState(state).active) return true;
+  if (state.editor.enabled) return false;
+  const mode = getSimulationLayerState(state).mode;
+  return mode === 'danger' || mode === 'memory';
+}
+
+function destroyContainerChildren(container: Container): void {
+  for (const child of container.removeChildren()) {
+    child.destroy();
   }
 }
 
@@ -321,36 +419,62 @@ function getRealReliefLayerKey(state: SimulationState): string {
   ].join(';');
 }
 
-function getDynamicLayerKey(state: SimulationState, showGrid: boolean): string {
-  const mouse = state.mouseGridPosition
-    ? `${state.mouseGridPosition.x.toFixed(2)}:${state.mouseGridPosition.y.toFixed(2)}`
-    : 'none';
-  const box = state.selectionBox
-    ? `${state.selectionBox.start.x.toFixed(2)}:${state.selectionBox.start.y.toFixed(2)}:${state.selectionBox.current.x.toFixed(2)}:${state.selectionBox.current.y.toFixed(2)}`
-    : 'none';
+function getKnowledgeLayerKey(state: SimulationState): string {
   const knowledgeOverlay = getKnowledgeOverlayState(state).active ? '1' : '0';
-  const probe = getVisibilityProbeState(state);
-  const probeKey = probe.active && probe.target
-    ? `${probe.target.x.toFixed(2)}:${probe.target.y.toFixed(2)}`
-    : 'off';
   const selectedUnit = getSelectedUnit(state);
   const layer = getSimulationLayerState(state);
-  const objectKey = state.map.objects.map((object) => `${object.id}:${object.x.toFixed(2)}:${object.y.toFixed(2)}:${object.widthCells.toFixed(2)}:${object.heightCells.toFixed(2)}`).join('|');
+  const objectKey = state.map.objects
+    .map((object) => `${object.id}:${object.x.toFixed(2)}:${object.y.toFixed(2)}:${object.widthCells.toFixed(2)}:${object.heightCells.toFixed(2)}`)
+    .join('|');
 
   return [
-    `grid:${showGrid ? '1' : '0'}`,
-    `mouse:${mouse}`,
-    `box:${box}`,
+    `editor:${state.editor.enabled ? '1' : '0'}`,
     `cell:${state.map.cellSize}`,
     `selectedUnit:${selectedUnit?.id ?? 'none'}`,
+    `unitPosition:${selectedUnit ? `${selectedUnit.position.x.toFixed(2)}:${selectedUnit.position.y.toFixed(2)}` : 'none'}`,
+    `viewRange:${selectedUnit?.viewRangeCells.toFixed(2) ?? 'none'}`,
     `knowledge:${knowledgeOverlay}`,
-    `probe:${probeKey}`,
     `layer:${layer.mode}`,
     `selectedCover:${layer.selectedCoverId ?? ''}`,
     `hoveredCover:${layer.hoveredCoverId ?? ''}`,
     `knowledgeRevision:${selectedUnit?.tacticalKnowledge.revision ?? 0}`,
     `objects:${objectKey}`,
     `zones:${state.pressureZones.length}`,
+  ].join(';');
+}
+
+function getProbeLayerKey(state: SimulationState): string {
+  const probe = getVisibilityProbeState(state);
+  if (!probe.active || !probe.target) return 'probe:off';
+
+  const selectedUnit = getSelectedUnit(state);
+  const objectKey = state.map.objects
+    .map((object) => `${object.id}:${object.x.toFixed(2)}:${object.y.toFixed(2)}:${object.widthCells.toFixed(2)}:${object.heightCells.toFixed(2)}:${object.rotationRadians.toFixed(2)}`)
+    .join('|');
+
+  return [
+    `probe:${probe.target.x.toFixed(2)}:${probe.target.y.toFixed(2)}`,
+    `unit:${selectedUnit?.id ?? 'none'}`,
+    `unitPosition:${selectedUnit ? `${selectedUnit.position.x.toFixed(2)}:${selectedUnit.position.y.toFixed(2)}` : 'none'}`,
+    `cell:${state.map.cellSize}`,
+    `terrain:${state.map.cells.map((cell) => `${cell.height}:${cell.forest}`).join(',')}`,
+    `objects:${objectKey}`,
+  ].join(';');
+}
+
+function getInteractionLayerKey(state: SimulationState, showGrid: boolean): string {
+  const mouse = showGrid && state.mouseGridPosition
+    ? `${Math.floor(state.mouseGridPosition.x)}:${Math.floor(state.mouseGridPosition.y)}`
+    : 'none';
+  const box = state.selectionBox
+    ? `${state.selectionBox.start.x.toFixed(2)}:${state.selectionBox.start.y.toFixed(2)}:${state.selectionBox.current.x.toFixed(2)}:${state.selectionBox.current.y.toFixed(2)}`
+    : 'none';
+
+  return [
+    `grid:${showGrid ? '1' : '0'}`,
+    `mouseCell:${mouse}`,
+    `box:${box}`,
+    `cell:${state.map.cellSize}`,
   ].join(';');
 }
 
@@ -478,5 +602,5 @@ function drawZoneHandles(graphics: Graphics, zone: PressureZone, cellSize: numbe
 }
 
 function degreesToRadians(degrees: number): number {
-  return (degrees * Math.PI) / 180;
+  return degrees * Math.PI / 180;
 }
