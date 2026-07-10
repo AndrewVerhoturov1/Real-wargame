@@ -1,5 +1,6 @@
 import './styles.css';
 import './ai-game-bridge.css';
+import './ai-test-lab.css';
 import './shared/app-shell-menu.css';
 import './ui-layout.css';
 import mapData from './data/maps/test_map.json';
@@ -9,9 +10,11 @@ import { installAiGameBridge } from './core/ai/AiGameBridge';
 import type { TacticalMapData } from './core/map/MapModel';
 import type { PressureZoneData } from './core/pressure/PressureZone';
 import { createInitialState } from './core/simulation/SimulationState';
+import { initializeAiTestLabRuntime } from './core/testing/AiTestLabRuntime';
 import type { UnitData } from './core/units/UnitModel';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
 import { installAppShellMenu } from './shared/AppShellMenu';
+import { installAiTestLabControls } from './ui/AiTestLabControls';
 import { installEditorControls } from './ui/EditorControls';
 import { installGameHudControls } from './ui/GameHudControls';
 import { installPerformanceReportControls } from './ui/PerformanceReportControls';
@@ -40,6 +43,7 @@ const state = createInitialState(
   unitsData as UnitData[],
   pressureZoneData as PressureZoneData[],
 );
+initializeAiTestLabRuntime(state);
 type PausableRuntimeState = typeof state & { paused?: boolean };
 
 const tacticalBoard = new PixiTacticalBoardApp(
@@ -60,6 +64,10 @@ installSceneExportControls(state);
 installPerformanceReportControls(() => tacticalBoard.downloadPerformanceReport());
 installAiEditorOpenButton(aiEditorOpenButton);
 installPauseToggle(pauseToggle, () => tacticalBoard.forceRender());
+installAiTestLabControls(state, aiGameBridge, () => {
+  updatePauseToggle(pauseToggle);
+  tacticalBoard.forceRender();
+});
 tacticalBoard.start();
 forceRussianTopControls();
 
