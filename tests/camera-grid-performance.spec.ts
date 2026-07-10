@@ -111,17 +111,20 @@ test('camera supports WASD/arrows and input bursts do not rebuild expensive grid
   expect(initialCamera).toBeDefined();
 
   await page.keyboard.down('d');
-  await page.waitForTimeout(240);
+  await expect.poll(async () => {
+    const current = await readCameraDiagnostics(page);
+    return (current?.x ?? 0) - (initialCamera?.x ?? 0);
+  }, { timeout: 2000 }).toBeGreaterThan(20);
   await page.keyboard.up('d');
   const afterD = await readCameraDiagnostics(page);
-  expect((afterD?.x ?? 0) - (initialCamera?.x ?? 0)).toBeGreaterThan(20);
   expect((afterD?.keyboardPanFrameCount ?? 0) - (initialCamera?.keyboardPanFrameCount ?? 0)).toBeGreaterThan(1);
 
   await page.keyboard.down('ArrowUp');
-  await page.waitForTimeout(220);
+  await expect.poll(async () => {
+    const current = await readCameraDiagnostics(page);
+    return (afterD?.y ?? 0) - (current?.y ?? 0);
+  }, { timeout: 2000 }).toBeGreaterThan(15);
   await page.keyboard.up('ArrowUp');
-  const afterArrow = await readCameraDiagnostics(page);
-  expect((afterD?.y ?? 0) - (afterArrow?.y ?? 0)).toBeGreaterThan(15);
 
   const center = await canvasCenter(canvas);
   await page.mouse.move(center.x, center.y);
@@ -187,7 +190,6 @@ test('danger-layer pointer movement reuses cover analysis and map stays at nativ
   expect((after?.buildCount ?? 0) - (before?.buildCount ?? 0)).toBeLessThanOrEqual(1);
   expect(after?.hitCount ?? 0).toBeGreaterThan(before?.hitCount ?? 0);
 
-  const center = await canvasCenter(canvas);
   await page.mouse.wheel(0, -900);
   await page.waitForTimeout(200);
   const qualityAfterZoom = await readMapQualityDiagnostics(page);
