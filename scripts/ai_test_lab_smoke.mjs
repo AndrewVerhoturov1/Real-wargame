@@ -71,6 +71,7 @@ expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
   'buildSoldierAwarenessReport',
   'bestSafePositions',
   'routeDanger',
+  "'stealth'",
 ]);
 expectIncludes('src/core/testing/AiLabRuntime.ts', [
   "export type AiLabTool = 'select' | 'place_fighter' | 'place_threat' | 'place_cover' | 'delete'",
@@ -90,22 +91,26 @@ expectIncludes('src/core/testing/AiLabInteraction.ts', [
   "'min_range'",
   "'radius'",
   "'rect_rotate'",
+  'state.editor.enabled',
 ]);
 expectIncludes('src/input/BoardInputController.ts', [
   'getAiLabRuntime',
   'beginAiLabPointerAction',
   'resolveAiLabCursor',
+  'selectSimulationCoverAtPosition',
 ]);
 expectIncludes('src/rendering/PixiThreatEditorRenderer.ts', [
   'НАПРАВЛЕНИЕ',
   'ДАЛЬНОСТЬ',
   'ШИРИНА СЕКТОРА',
   'МЁРТВАЯ ЗОНА',
+  'state.editor.enabled || runtime.open',
 ]);
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
   'buildSoldierAwarenessReport',
   'bestSafePositions',
   'awarenessMode',
+  "mode === 'stealth'",
 ]);
 expectIncludes('src/rendering/PixiApp.ts', [
   'PixiThreatEditorRenderer',
@@ -172,13 +177,24 @@ expectIncludes('src/ui/SceneExport.ts', [
   'initialState',
   'tacticalKnowledge',
 ]);
+expectIncludes('src/ui/TacticalWorkspace.ts', [
+  'Симуляция',
+  'Редактирование',
+  'Слой опасности',
+  'Слой скрытности',
+  'Память бойца',
+]);
 expectIncludes('tests/preview-screenshots.spec.ts', [
-  '15-ai-lab-integrated-layout.png',
-  '16-ai-lab-threat-handles.png',
-  '17-ai-lab-threat-reshaped.png',
-  '18-ai-lab-soldier-state.png',
-  '19-ai-lab-awareness-danger.png',
-  '20-ai-lab-awareness-safe.png',
+  '01-simulation-info.png',
+  '02-simulation-sidebar-collapsed.png',
+  '03-simulation-danger-layer.png',
+  '04-simulation-cover-selected.png',
+  '05-simulation-stealth-layer.png',
+  '06-simulation-memory-layer.png',
+  '07-editor-object-palette.png',
+  '08-editor-threat-tools.png',
+  '09-editor-terrain-tools.png',
+  '10-node-editor-unchanged.png',
 ]);
 
 if (failures.length > 0) {
