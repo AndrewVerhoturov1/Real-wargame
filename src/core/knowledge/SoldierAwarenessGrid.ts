@@ -1,7 +1,7 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
-import { evaluateSmallArmsCover } from '../cover/SmallArmsCoverEvaluation';
+import { evaluateSmallArmsCover, type SmallArmsCoverResult } from '../cover/SmallArmsCoverEvaluation';
 import { distance, type GridPosition } from '../geometry';
-import { getCell } from '../map/MapModel';
+import { getCell, type TacticalMap } from '../map/MapModel';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { KnownThreatMemory, UnitModel } from '../units/UnitModel';
 
@@ -41,74 +41,102 @@ export interface SoldierAwarenessReport {
   threatConfidence: number;
 }
 
-type AwarenessBaseReport = Omit<SoldierAwarenessReport, 'routeDanger'>;
+interface AwarenessField {
+  unitId: string;
+  cacheKey: string;
+  cells: SoldierAwarenessCell[];
+  threatConfidence: number;
+}
 
 interface CachedAwareness {
   key: string;
-  baseReport: AwarenessBaseReport;
+  mapHash: string;
+  field: AwarenessField;
+  positionKey: string;
+  currentPosition: SoldierAwarenessCell;
+  bestSafePositions: SoldierSafePosition[];
   routeKey: string;
   routeDanger: number;
 }
 
+interface CoverCache {
+  mapHash: string;
+  values: Map<string, SmallArmsCoverResult>;
+}
+
 const cache = new WeakMap<UnitModel, CachedAwareness>();
-const mapHashCache = new WeakMap<SimulationState['map'], { key: string; hash: string }>();
+const coverCacheByMap = new WeakMap<TacticalMap, CoverCache>();
 const MAX_SAFE_POSITIONS = 8;
-export const KNOWLEDGE_CONFIDENCE_BUCKET = 5;
-export const KNOWLEDGE_UNCERTAINTY_BUCKET = 0.5;
+const SAFE_SEARCH_RADIUS_CELLS = 12;
+export const KNOWLEDGE_CONFIDENCE_BUCKET = 10;
+export const KNOWLEDGE_UNCERTAINTY_BUCKET = 1;
 
 export function buildSoldierAwarenessReport(
   state: SimulationState,
   unit: UnitModel,
 ): SoldierAwarenessReport {
-  const key = buildCacheKey(state, unit);
+  const mapHash = buildMapHash(state);
+  const key = buildCacheKey(state, unit, mapHash);
   let cached = cache.get(unit);
 
   if (!cached || cached.key !== key) {
+    const field = buildAwarenessField(state, unit, key, mapHash);
     cached = {
       key,
-      baseReport: buildBaseReport(state, unit, key),
+      mapHash,
+      field,
+      positionKey: '',
+      currentPosition: field.cells[0] ?? emptyAwarenessCell(unit.position),
+      bestSafePositions: [],
       routeKey: '',
       routeDanger: 0,
     };
     cache.set(unit, cached);
   }
 
+  const positionKey = `${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`;
+  if (cached.positionKey !== positionKey) {
+    cached.positionKey = positionKey;
+    cached.currentPosition = awarenessCellAt(state.map, cached.field.cells, unit.position)
+      ?? evaluateAwarenessCell(state, unit, unit.position, unit.behaviorRuntime.posture, cached.mapHash);
+    cached.bestSafePositions = buildBestSafePositions(state.map, cached.field.cells, unit.position);
+  }
+
   const routeKey = buildRouteKey(unit);
   if (routeKey !== cached.routeKey) {
     cached.routeKey = routeKey;
     cached.routeDanger = unit.order
-      ? evaluateRouteDanger(state, unit, unit.position, unit.order.target)
-      : cached.baseReport.currentPosition.danger;
+      ? evaluateRouteDangerWithMapHash(state, unit, unit.position, unit.order.target, cached.mapHash)
+      : cached.currentPosition.danger;
   }
 
   return {
-    ...cached.baseReport,
+    ...cached.field,
+    currentPosition: cached.currentPosition,
+    bestSafePositions: cached.bestSafePositions,
     routeDanger: cached.routeDanger,
   };
 }
 
-function buildBaseReport(state: SimulationState, unit: UnitModel, key: string): AwarenessBaseReport {
+function buildAwarenessField(
+  state: SimulationState,
+  unit: UnitModel,
+  key: string,
+  mapHash: string,
+): AwarenessField {
   const cells: SoldierAwarenessCell[] = [];
   for (let y = 0; y < state.map.height; y += 1) {
     for (let x = 0; x < state.map.width; x += 1) {
-      cells.push(evaluateAwarenessCell(state, unit, { x: x + 0.5, y: y + 0.5 }, unit.behaviorRuntime.posture));
+      cells.push(evaluateAwarenessCell(
+        state,
+        unit,
+        { x: x + 0.5, y: y + 0.5 },
+        unit.behaviorRuntime.posture,
+        mapHash,
+      ));
     }
   }
 
-  const currentPosition = evaluateAwarenessCell(state, unit, unit.position, unit.behaviorRuntime.posture);
-  const bestSafePositions = cells
-    .map((cell) => ({
-      position: { x: cell.x + 0.5, y: cell.y + 0.5 },
-      score: cell.safety - distance(unit.position, { x: cell.x + 0.5, y: cell.y + 0.5 }) * 1.8,
-      danger: cell.danger,
-      expectedProtection: cell.expectedProtection,
-      concealment: cell.concealment,
-      distanceCells: distance(unit.position, { x: cell.x + 0.5, y: cell.y + 0.5 }),
-      sourceRu: cell.sourceRu,
-    }))
-    .filter((item) => item.distanceCells <= 12 && item.score > 18)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, MAX_SAFE_POSITIONS);
   const threatConfidence = unit.tacticalKnowledge.threats.length > 0
     ? Math.round(Math.max(...unit.tacticalKnowledge.threats.map((threat) => threat.confidence)))
     : 0;
@@ -117,10 +145,45 @@ function buildBaseReport(state: SimulationState, unit: UnitModel, key: string): 
     unitId: unit.id,
     cacheKey: key,
     cells,
-    bestSafePositions,
-    currentPosition,
     threatConfidence,
   };
+}
+
+function buildBestSafePositions(
+  map: TacticalMap,
+  cells: SoldierAwarenessCell[],
+  unitPosition: GridPosition,
+): SoldierSafePosition[] {
+  const minX = Math.max(0, Math.floor(unitPosition.x - SAFE_SEARCH_RADIUS_CELLS));
+  const maxX = Math.min(map.width - 1, Math.ceil(unitPosition.x + SAFE_SEARCH_RADIUS_CELLS));
+  const minY = Math.max(0, Math.floor(unitPosition.y - SAFE_SEARCH_RADIUS_CELLS));
+  const maxY = Math.min(map.height - 1, Math.ceil(unitPosition.y + SAFE_SEARCH_RADIUS_CELLS));
+  const candidates: SoldierSafePosition[] = [];
+
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      const cell = cells[y * map.width + x];
+      if (!cell) continue;
+      const position = { x: x + 0.5, y: y + 0.5 };
+      const distanceCells = distance(unitPosition, position);
+      if (distanceCells > SAFE_SEARCH_RADIUS_CELLS) continue;
+      const score = cell.safety - distanceCells * 1.8;
+      if (score <= 18) continue;
+      candidates.push({
+        position,
+        score,
+        danger: cell.danger,
+        expectedProtection: cell.expectedProtection,
+        concealment: cell.concealment,
+        distanceCells,
+        sourceRu: cell.sourceRu,
+      });
+    }
+  }
+
+  return candidates
+    .sort((left, right) => right.score - left.score)
+    .slice(0, MAX_SAFE_POSITIONS);
 }
 
 export function evaluateRouteDanger(
@@ -129,13 +192,23 @@ export function evaluateRouteDanger(
   start: GridPosition,
   end: GridPosition,
 ): number {
+  return evaluateRouteDangerWithMapHash(state, unit, start, end, buildMapHash(state));
+}
+
+function evaluateRouteDangerWithMapHash(
+  state: SimulationState,
+  unit: UnitModel,
+  start: GridPosition,
+  end: GridPosition,
+  mapHash: string,
+): number {
   const length = distance(start, end);
   const samples = Math.max(2, Math.ceil(length * 2));
   let total = 0;
   for (let index = 0; index <= samples; index += 1) {
     const t = index / samples;
     const point = { x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t };
-    total += evaluateAwarenessCell(state, unit, point, unit.behaviorRuntime.posture).danger;
+    total += evaluateAwarenessCell(state, unit, point, unit.behaviorRuntime.posture, mapHash).danger;
   }
   return Math.round(total / (samples + 1));
 }
@@ -145,6 +218,7 @@ function evaluateAwarenessCell(
   unit: UnitModel,
   position: GridPosition,
   posture: UnitPosture,
+  mapHash: string,
 ): SoldierAwarenessCell {
   const cell = getCell(state.map, Math.floor(position.x), Math.floor(position.y));
   let remainingSafe = 1;
@@ -167,7 +241,7 @@ function evaluateAwarenessCell(
     if (factor <= 0) continue;
 
     const confidenceFactor = threat.confidence / 100;
-    const cover = evaluateSmallArmsCover(state.map, { x: threat.x, y: threat.y }, position, posture);
+    const cover = getCachedCover(state.map, mapHash, threat, position, posture);
     const uncovered = 1 - cover.expectedProtection / 100;
     const danger = clampPercent(threat.strength * factor * confidenceFactor * uncovered);
     const suppression = clampPercent(threat.suppression * factor * confidenceFactor * uncovered);
@@ -231,6 +305,34 @@ function evaluateAwarenessCell(
   };
 }
 
+function getCachedCover(
+  map: TacticalMap,
+  mapHash: string,
+  threat: KnownThreatMemory,
+  position: GridPosition,
+  posture: UnitPosture,
+): SmallArmsCoverResult {
+  let cacheForMap = coverCacheByMap.get(map);
+  if (!cacheForMap || cacheForMap.mapHash !== mapHash) {
+    cacheForMap = { mapHash, values: new Map() };
+    coverCacheByMap.set(map, cacheForMap);
+  }
+
+  const key = [
+    threat.id,
+    quantize(threat.x, 0.05),
+    quantize(threat.y, 0.05),
+    Math.floor(position.x),
+    Math.floor(position.y),
+    posture,
+  ].join(':');
+  const cached = cacheForMap.values.get(key);
+  if (cached) return cached;
+  const result = evaluateSmallArmsCover(map, { x: threat.x, y: threat.y }, position, posture);
+  cacheForMap.values.set(key, result);
+  return result;
+}
+
 function threatFactorAtPosition(position: GridPosition, threat: KnownThreatMemory): number {
   const dx = position.x - threat.x;
   const dy = position.y - threat.y;
@@ -262,20 +364,15 @@ function threatFactorAtPosition(position: GridPosition, threat: KnownThreatMemor
     : 0;
 }
 
-function buildCacheKey(state: SimulationState, unit: UnitModel): string {
-  // The expensive cell field depends on the soldier cell, posture, awareness-relevant knowledge and map.
-  // Orders affect only route danger and must not rebuild all 2,560 awareness cells.
-  const unitCellX = Math.floor(unit.position.x);
-  const unitCellY = Math.floor(unit.position.y);
-
+function buildCacheKey(state: SimulationState, unit: UnitModel, mapHash: string): string {
+  // Movement does not invalidate the expensive map field. Only posture, map and
+  // awareness-relevant knowledge do; current position and route are updated separately.
   return [
     unit.id,
     buildAwarenessKnowledgeKey(unit),
     unit.behaviorRuntime.posture,
-    unitCellX,
-    unitCellY,
     state.map.cellSize,
-    buildMapHash(state),
+    mapHash,
   ].join('#');
 }
 
@@ -312,18 +409,6 @@ export function buildAwarenessKnowledgeKey(unit: UnitModel): string {
 }
 
 function buildMapHash(state: SimulationState): string {
-  const fingerprint = [
-    state.map.width,
-    state.map.height,
-    state.map.cellSize,
-    state.map.cells.length,
-    state.map.objects.length,
-  ].join(':');
-  const cached = mapHashCache.get(state.map);
-  if (cached?.key === fingerprint) return cached.hash;
-
-  // A compact numeric fingerprint detects editor changes without allocating the
-  // enormous terrain/object strings that previously caused frequent GC pauses.
   let hash = 2166136261;
   hash = hashNumber(hash, state.map.width);
   hash = hashNumber(hash, state.map.height);
@@ -348,9 +433,26 @@ function buildMapHash(state: SimulationState): string {
     hash = hashNumber(hash, Math.round((object.concealment ?? -1) * 10));
   }
 
-  const result = (hash >>> 0).toString(36);
-  mapHashCache.set(state.map, { key: fingerprint, hash: result });
-  return result;
+  return (hash >>> 0).toString(36);
+}
+
+function awarenessCellAt(
+  map: TacticalMap,
+  cells: SoldierAwarenessCell[],
+  position: GridPosition,
+): SoldierAwarenessCell | undefined {
+  const x = Math.floor(position.x);
+  const y = Math.floor(position.y);
+  if (x < 0 || y < 0 || x >= map.width || y >= map.height) return undefined;
+  return cells[y * map.width + x];
+}
+
+function emptyAwarenessCell(position: GridPosition): SoldierAwarenessCell {
+  return {
+    x: Math.floor(position.x), y: Math.floor(position.y), danger: 0, suppression: 0,
+    expectedProtection: 0, coverReliability: 0, concealment: 0, uncertainty: 0,
+    safety: 100, confidence: 0, sourceRu: 'нет данных',
+  };
 }
 
 function quantize(value: number, bucket: number): number {
