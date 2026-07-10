@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 
+// Triggered after the workflow exists on the preview branch.
 const file = 'src/ui/GameEditorWorkbench.ts';
 let source = fs.readFileSync(file, 'utf8');
 const replacements = [
