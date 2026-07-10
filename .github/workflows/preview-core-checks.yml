@@ -58,7 +58,7 @@ jobs:
         continue-on-error: true
         run: npm run build
 
-      - name: Publish commit status
+      - name: Publish commit statuses
         if: always()
         uses: actions/github-script@v7
         env:
@@ -78,19 +78,27 @@ jobs:
               graph: process.env.GRAPH_OUTCOME,
               build: process.env.BUILD_OUTCOME,
             };
+            const targetUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            for (const [name, value] of Object.entries(outcomes)) {
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: context.sha,
+                state: value === 'success' ? 'success' : 'failure',
+                context: `preview-core/${name}`,
+                description: `${name}: ${value}`,
+                target_url: targetUrl,
+              });
+            }
             const passed = Object.values(outcomes).every((value) => value === 'success');
-            const description = Object.entries(outcomes)
-              .map(([key, value]) => `${key}:${value}`)
-              .join(' ')
-              .slice(0, 140);
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: context.sha,
               state: passed ? 'success' : 'failure',
               context: 'preview-core-checks',
-              description,
-              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              description: Object.entries(outcomes).map(([key, value]) => `${key}:${value}`).join(' ').slice(0, 140),
+              target_url: targetUrl,
             });
 
       - name: Fail workflow when a check failed
