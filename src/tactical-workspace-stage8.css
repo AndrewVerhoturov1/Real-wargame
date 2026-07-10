@@ -1,0 +1,141 @@
+/* Stage 8 usability and performance follow-up for the unified tactical workspace. */
+.workspace-file-menu {
+  position: relative;
+}
+
+.workspace-file-menu > summary {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 7px 11px;
+  border: 1px solid rgba(255, 240, 161, 0.24);
+  border-radius: 10px;
+  color: var(--workspace-text);
+  background: var(--workspace-soft);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+}
+
+.workspace-file-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.workspace-file-panel {
+  position: absolute;
+  z-index: 90;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 260px;
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid var(--workspace-line);
+  border-radius: 12px;
+  background: var(--workspace-panel);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+.workspace-file-panel > button {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 12px;
+}
+
+body.workspace-simulation .editor-place-button {
+  display: none;
+}
+
+body.workspace-editor .editor-place-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+body.workspace-editor .editor-place-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The lower unit bar occupies only the map area, so the right information panel can use the full height. */
+body.workspace-simulation .simulation-sidebar {
+  bottom: 9px;
+}
+
+body.workspace-editor #hud {
+  overflow: clip;
+}
+
+body.workspace-editor #hud .game-editor-workbench {
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  padding: 10px;
+  gap: 8px;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+body.workspace-editor #hud .game-editor-header,
+body.workspace-editor #hud .game-editor-body,
+body.workspace-editor #hud .game-editor-status {
+  box-sizing: border-box;
+}
+
+body.workspace-editor #hud .game-editor-body {
+  min-height: 0;
+  padding: 11px;
+  gap: 9px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+body.workspace-editor #hud .game-editor-field {
+  grid-template-columns: minmax(0, 1fr) minmax(112px, 0.9fr);
+  gap: 10px;
+  padding: 6px 8px;
+}
+
+body.workspace-editor #hud .game-editor-button-row,
+body.workspace-editor #hud .game-editor-global-tools {
+  gap: 7px;
+}
+
+body.workspace-editor #hud .game-editor-status {
+  min-height: 42px;
+  max-height: 52px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: center;
+  overflow: hidden;
+  padding: 7px 9px;
+}
+
+body.workspace-editor #hud .game-editor-status em {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Save/load/performance actions now live in the top File menu. */
+body.workspace-editor .editor-scene-tools-slot,
+body.workspace-simulation .editor-scene-tools-slot {
+  display: none !important;
+}
+
+@media (max-width: 1220px) {
+  .workspace-top-actions {
+    gap: 4px;
+  }
+
+  .workspace-top-actions > button,
+  .workspace-file-menu > summary,
+  .workspace-display-menu > summary {
+    padding-inline: 8px;
+    font-size: 11px;
+  }
+}
