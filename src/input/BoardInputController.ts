@@ -1,4 +1,5 @@
 import { distance, type GridPosition } from '../core/geometry';
+import { placeConfiguredEditorEntity } from '../core/editor/GameEditorPlacement';
 import { paintEditorTerrainAt, isTerrainPaintTool } from '../core/map/MapPaint';
 import { worldToGrid } from '../core/map/MapModel';
 import {
@@ -65,29 +66,19 @@ export class BoardInputController {
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (event.key !== 'Alt') {
-      return;
-    }
-
+    if (event.key !== 'Alt') return;
     this.altProbeActive = true;
-    if (!this.state.editor.enabled) {
-      setVisibilityProbe(this.state, true, this.lastPointerGrid);
-    }
+    if (!this.state.editor.enabled) setVisibilityProbe(this.state, true, this.lastPointerGrid);
   };
 
   private readonly handleKeyUp = (event: KeyboardEvent): void => {
-    if (event.key !== 'Alt') {
-      return;
-    }
-
+    if (event.key !== 'Alt') return;
     this.altProbeActive = false;
     setVisibilityProbe(this.state, false, null);
   };
 
   private readonly handlePointerDown = (event: PointerEvent): void => {
-    if (this.camera.isPanGesture(event)) {
-      return;
-    }
+    if (this.camera.isPanGesture(event)) return;
 
     const world = this.camera.screenToWorld(event);
     const grid = worldToGrid(this.state.map, world);
@@ -104,20 +95,16 @@ export class BoardInputController {
         event.preventDefault();
         if (isTerrainPaintTool(String(this.state.editor.tool))) {
           paintEditorTerrainAt(this.state, grid);
-        } else {
+        } else if (!placeConfiguredEditorEntity(this.state, grid)) {
           beginEditorPointerAction(this.state, grid);
         }
       }
-
       return;
     }
 
     if (event.button === 2) {
       event.preventDefault();
-
-      if (!this.state.editor.enabled) {
-        issueMoveOrderToSelectedUnit(this.state, grid);
-      }
+      if (!this.state.editor.enabled) issueMoveOrderToSelectedUnit(this.state, grid);
     }
   };
 
@@ -128,37 +115,29 @@ export class BoardInputController {
     setMouseGridPosition(this.state, grid);
     this.updateAltProbe(event, grid);
 
-    if (this.leftPointerId !== event.pointerId || !this.leftStartGrid) {
-      return;
-    }
+    if (this.leftPointerId !== event.pointerId || !this.leftStartGrid) return;
 
     if (this.state.editor.enabled) {
       if (isTerrainPaintTool(String(this.state.editor.tool))) {
         paintEditorTerrainAt(this.state, grid);
-      } else {
+      } else if (!isSpawnTool(String(this.state.editor.tool))) {
         updateEditorPointerAction(this.state, grid);
       }
       return;
     }
 
-    if (getAiTestLabSelectionTarget(this.state)) {
-      return;
-    }
+    if (getAiTestLabSelectionTarget(this.state)) return;
 
     if (!this.isDragSelecting && distance(this.leftStartGrid, grid) >= DRAG_SELECT_THRESHOLD_CELLS) {
       this.isDragSelecting = true;
       startSelectionBox(this.state, this.leftStartGrid);
     }
 
-    if (this.isDragSelecting) {
-      updateSelectionBox(this.state, grid);
-    }
+    if (this.isDragSelecting) updateSelectionBox(this.state, grid);
   };
 
   private readonly handlePointerUp = (event: PointerEvent): void => {
-    if (this.leftPointerId !== event.pointerId || !this.leftStartGrid) {
-      return;
-    }
+    if (this.leftPointerId !== event.pointerId || !this.leftStartGrid) return;
 
     const world = this.camera.screenToWorld(event);
     const grid = worldToGrid(this.state.map, world);
@@ -166,7 +145,7 @@ export class BoardInputController {
     this.updateAltProbe(event, grid);
 
     if (this.state.editor.enabled) {
-      if (!isTerrainPaintTool(String(this.state.editor.tool))) {
+      if (!isTerrainPaintTool(String(this.state.editor.tool)) && !isSpawnTool(String(this.state.editor.tool))) {
         finishEditorPointerAction(this.state, grid);
       }
       this.clearLeftPointer(event.pointerId);
@@ -212,12 +191,13 @@ export class BoardInputController {
   }
 
   private clearLeftPointer(pointerId: number): void {
-    if (this.canvas.hasPointerCapture(pointerId)) {
-      this.canvas.releasePointerCapture(pointerId);
-    }
-
+    if (this.canvas.hasPointerCapture(pointerId)) this.canvas.releasePointerCapture(pointerId);
     this.leftPointerId = null;
     this.leftStartGrid = null;
     this.isDragSelecting = false;
   }
+}
+
+function isSpawnTool(tool: string): boolean {
+  return tool === 'spawn_object' || tool === 'spawn_unit' || tool === 'spawn_zone';
 }
