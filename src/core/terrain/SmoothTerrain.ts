@@ -1,8 +1,10 @@
 import { getCell, type TacticalMap } from '../map/MapModel';
 
-const SMOOTH_RADIUS_CELLS = 2;
-const HEIGHT_WEIGHT_CENTER = 6;
-const HEIGHT_WEIGHT_NEAR = 3;
+// This kernel is also used by the painted terrain texture. Keeping one kernel means
+// line of sight, relief overlays, height readouts and the visible landscape agree.
+const SMOOTH_RADIUS_CELLS = 1;
+const HEIGHT_WEIGHT_CENTER = 5;
+const HEIGHT_WEIGHT_NEAR = 2;
 const HEIGHT_WEIGHT_FAR = 1;
 
 interface CachedSmoothGrid {
