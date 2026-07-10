@@ -19,12 +19,13 @@ export class PixiThreatEditorRenderer {
     const zone = state.editor.selectedZoneId
       ? state.pressureZones.find((item) => item.id === state.editor.selectedZoneId)
       : undefined;
-    const key = zone && runtime.open ? buildKey(zone, state.map.cellSize, runtime.hoveredHandle, runtime.drag?.handle ?? null) : 'hidden';
+    const visible = Boolean(zone) && (state.editor.enabled || runtime.open);
+    const key = visible && zone ? buildKey(zone, state.map.cellSize, runtime.hoveredHandle, runtime.drag?.handle ?? null) : 'hidden';
     if (key === this.lastKey) return;
 
     this.lastKey = key;
     this.container.removeChildren();
-    if (!runtime.open || !zone) return;
+    if (!visible || !zone) return;
 
     const graphics = new Graphics();
     const labels: Text[] = [];
@@ -80,90 +81,33 @@ export class PixiThreatEditorRenderer {
   }
 }
 
-function drawGuide(
-  graphics: Graphics,
-  start: { x: number; y: number },
-  end: { x: number; y: number },
-  cellSize: number,
-  color: number,
-): void {
+function drawGuide(graphics: Graphics, start: { x: number; y: number }, end: { x: number; y: number }, cellSize: number, color: number): void {
   graphics.lineStyle(2, color, 0.82);
   graphics.moveTo(start.x * cellSize, start.y * cellSize);
   graphics.lineTo(end.x * cellSize, end.y * cellSize);
 }
 
-function drawHandle(
-  graphics: Graphics,
-  point: { x: number; y: number },
-  cellSize: number,
-  handle: AiLabThreatHandle,
-  runtime: ReturnType<typeof getAiLabRuntime>,
-  color: number,
-): void {
+function drawHandle(graphics: Graphics, point: { x: number; y: number }, cellSize: number, handle: AiLabThreatHandle, runtime: ReturnType<typeof getAiLabRuntime>, color: number): void {
   const active = runtime.hoveredHandle === handle || runtime.drag?.handle === handle;
   const radius = active ? 9 : 7;
   graphics.lineStyle(active ? 3 : 2, active ? ACTIVE_COLOR : 0x171b15, 1);
   graphics.beginFill(active ? ACTIVE_COLOR : color, 0.98);
-  if (handle === 'arc_left' || handle === 'arc_right') {
-    graphics.drawRect(point.x * cellSize - radius, point.y * cellSize - radius, radius * 2, radius * 2);
-  } else {
-    graphics.drawCircle(point.x * cellSize, point.y * cellSize, radius);
-  }
+  if (handle === 'arc_left' || handle === 'arc_right') graphics.drawRect(point.x * cellSize - radius, point.y * cellSize - radius, radius * 2, radius * 2);
+  else graphics.drawCircle(point.x * cellSize, point.y * cellSize, radius);
   graphics.endFill();
 }
 
 function label(text: string, point: { x: number; y: number }, cellSize: number, color: number, dy: number): Text {
-  const item = new Text(text, {
-    fontFamily: 'Arial, sans-serif',
-    fontSize: 10,
-    fontWeight: '700',
-    fill: color,
-    stroke: 0x111510,
-    strokeThickness: 4,
-  });
+  const item = new Text(text, { fontFamily: 'Arial, sans-serif', fontSize: 10, fontWeight: '700', fill: color, stroke: 0x111510, strokeThickness: 4 });
   item.anchor.set(0.5, 0.5);
   item.position.set(point.x * cellSize, point.y * cellSize + dy);
   return item;
 }
 
-function buildKey(
-  zone: PressureZone,
-  cellSize: number,
-  hovered: AiLabThreatHandle | null,
-  dragged: string | null,
-): string {
+function buildKey(zone: PressureZone, cellSize: number, hovered: AiLabThreatHandle | null, dragged: string | null): string {
   const settings = resolvePressureZoneSettings(zone);
-  return [
-    zone.id,
-    cellSize,
-    zone.x.toFixed(3),
-    zone.y.toFixed(3),
-    zone.shape,
-    settings.mode,
-    zone.radiusCells.toFixed(3),
-    zone.widthCells.toFixed(3),
-    zone.heightCells.toFixed(3),
-    (zone.rotationDegrees ?? 0).toFixed(2),
-    settings.directionDegrees.toFixed(2),
-    settings.arcDegrees.toFixed(2),
-    settings.rangeCells.toFixed(3),
-    settings.minRangeCells.toFixed(3),
-    hovered ?? '',
-    dragged ?? '',
-  ].join(':');
+  return [zone.id, cellSize, zone.x.toFixed(3), zone.y.toFixed(3), zone.shape, settings.mode, zone.radiusCells.toFixed(3), zone.widthCells.toFixed(3), zone.heightCells.toFixed(3), (zone.rotationDegrees ?? 0).toFixed(2), settings.directionDegrees.toFixed(2), settings.arcDegrees.toFixed(2), settings.rangeCells.toFixed(3), settings.minRangeCells.toFixed(3), hovered ?? '', dragged ?? ''].join(':');
 }
-
-function ray(center: { x: number; y: number }, angle: number, length: number): { x: number; y: number } {
-  return { x: center.x + Math.cos(angle) * length, y: center.y + Math.sin(angle) * length };
-}
-
-function local(center: { x: number; y: number }, x: number, y: number, rotation: number): { x: number; y: number } {
-  return {
-    x: center.x + x * Math.cos(rotation) - y * Math.sin(rotation),
-    y: center.y + x * Math.sin(rotation) + y * Math.cos(rotation),
-  };
-}
-
-function radians(degrees: number): number {
-  return degrees * Math.PI / 180;
-}
+function ray(center: { x: number; y: number }, angle: number, length: number): { x: number; y: number } { return { x: center.x + Math.cos(angle) * length, y: center.y + Math.sin(angle) * length }; }
+function local(center: { x: number; y: number }, x: number, y: number, rotation: number): { x: number; y: number } { return { x: center.x + x * Math.cos(rotation) - y * Math.sin(rotation), y: center.y + x * Math.sin(rotation) + y * Math.cos(rotation) }; }
+function radians(degrees: number): number { return degrees * Math.PI / 180; }
