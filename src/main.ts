@@ -2,8 +2,9 @@ import './styles.css';
 import './ai-game-bridge.css';
 import './ai-test-lab.css';
 import './game-editor.css';
-import './shared/app-shell-menu.css';
 import './ui-layout.css';
+import './tactical-workspace.css';
+import './tactical-workspace-mode.css';
 import mapData from './data/maps/test_map.json';
 import pressureZoneData from './data/pressure_zones/test_pressure_zones.json';
 import unitsData from './data/units/test_units.json';
@@ -15,11 +16,10 @@ import { initializeAiTestLabRuntime } from './core/testing/AiTestLabRuntime';
 import type { UnitData } from './core/units/UnitModel';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
 import { installAppShellMenu } from './shared/AppShellMenu';
-import { installAiTestLabControls } from './ui/AiTestLabControls';
 import { installGameEditorWorkbench } from './ui/GameEditorWorkbench';
-import { installGameHudControls } from './ui/GameHudControls';
 import { installPerformanceReportControls } from './ui/PerformanceReportControls';
 import { installSceneExportControls } from './ui/SceneExportControls';
+import { installTacticalWorkspace } from './ui/TacticalWorkspace';
 
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 
@@ -57,16 +57,12 @@ const tacticalBoard = new PixiTacticalBoardApp(
 );
 const aiGameBridge = installAiGameBridge(state);
 
-installGameHudControls(state);
 installGameEditorWorkbench(debugPanel, state, () => tacticalBoard.forceRender());
 installSceneExportControls(state);
 installPerformanceReportControls(() => tacticalBoard.downloadPerformanceReport());
 installAiEditorOpenButton(aiEditorOpenButton);
 installPauseToggle(pauseToggle, () => tacticalBoard.forceRender());
-installAiTestLabControls(state, aiGameBridge, () => {
-  updatePauseToggle(pauseToggle);
-  tacticalBoard.forceRender();
-});
+installTacticalWorkspace(state, aiGameBridge, () => tacticalBoard.forceRender());
 tacticalBoard.start();
 forceRussianTopControls(
   languageToggle,

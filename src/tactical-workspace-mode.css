@@ -1,0 +1,20 @@
+/* Mode guards live separately so legacy panel display rules cannot override the workspace state. */
+body.workspace-editor .simulation-sidebar,
+body.workspace-editor .simulation-unit-bar,
+body.workspace-simulation #hud {
+  display: none !important;
+}
+
+body.workspace-editor #hud {
+  display: block !important;
+}
+
+body.workspace-editor .game-editor-field:not(.checkbox) {
+  grid-template-columns: minmax(92px, 0.65fr) minmax(0, 1.35fr);
+}
+
+body.workspace-editor .game-editor-field input,
+body.workspace-editor .game-editor-field select {
+  width: 100%;
+  min-width: 0;
+}

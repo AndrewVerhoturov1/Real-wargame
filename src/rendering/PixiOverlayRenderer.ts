@@ -1,5 +1,5 @@
 import { Container, Graphics } from 'pixi.js';
-import { buildUnitKnowledgeReport } from '../core/knowledge/UnitKnowledge';
+import { buildUnitKnowledgeReport, type KnowledgeCover } from '../core/knowledge/UnitKnowledge';
 import { gridToCellCenter } from '../core/map/MapModel';
 import { resolvePressureZoneSettings, type PressureZone } from '../core/pressure/PressureZone';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
@@ -7,8 +7,10 @@ import { hasHeightVariation, sampleSmoothHeightLevel } from '../core/terrain/Smo
 import {
   getKnowledgeOverlayState,
   getRealReliefOverlayState,
+  getSimulationLayerState,
   getVisibilityProbeState,
 } from '../core/ui/RuntimeUiState';
+import type { KnownThreatMemory } from '../core/units/UnitModel';
 import { computeLineOfSight } from '../core/visibility/LineOfSight';
 
 export class PixiOverlayRenderer {
@@ -25,7 +27,7 @@ export class PixiOverlayRenderer {
   }
 
   render(state: SimulationState, showGrid = true, showPressureZones = true): void {
-    this.renderZoneLayerIfNeeded(state, showPressureZones);
+    this.renderZoneLayerIfNeeded(state, showPressureZones && state.editor.enabled);
     this.renderRealReliefLayerIfNeeded(state);
     this.renderDynamicLayerIfNeeded(state, showGrid);
   }
@@ -66,6 +68,8 @@ export class PixiOverlayRenderer {
     this.dynamicContainer.removeChildren();
 
     drawKnowledgeOverlay(this.dynamicContainer, state);
+    drawThreatMemoryOverlay(this.dynamicContainer, state);
+    drawCoverKnowledgeOverlay(this.dynamicContainer, state);
     drawVisibilityProbe(this.dynamicContainer, state);
 
     if (showGrid && state.mouseGridPosition) {
@@ -135,32 +139,106 @@ function drawKnowledgeOverlay(container: Container, state: SimulationState): voi
   graphics.drawCircle(unit.position.x * cellSize, unit.position.y * cellSize, unit.viewRangeCells * cellSize);
   graphics.endFill();
 
-  for (const cover of report.planCovers) {
-    graphics.lineStyle(2, 0xfff2a8, 0.75);
-    graphics.beginFill(0xfff2a8, 0.12);
-    graphics.drawCircle(cover.x * cellSize, cover.y * cellSize, 6);
-    graphics.endFill();
-  }
-
-  for (const cover of report.nearbyCovers) {
-    graphics.lineStyle(2, 0xfff2a8, 0.95);
-    graphics.beginFill(0xfff2a8, 0.24);
-    graphics.drawRoundedRect(cover.x * cellSize - 7, cover.y * cellSize - 7, 14, 14, 2);
-    graphics.endFill();
-  }
-
-  for (const danger of report.dangers) {
-    graphics.lineStyle(2, 0xff4e3d, 0.9);
-    graphics.beginFill(0xff4e3d, 0.12);
-    graphics.drawCircle(danger.x * cellSize, danger.y * cellSize, 10);
-    graphics.endFill();
-    graphics.moveTo(danger.x * cellSize - 7, danger.y * cellSize - 7);
-    graphics.lineTo(danger.x * cellSize + 7, danger.y * cellSize + 7);
-    graphics.moveTo(danger.x * cellSize + 7, danger.y * cellSize - 7);
-    graphics.lineTo(danger.x * cellSize - 7, danger.y * cellSize + 7);
-  }
+  for (const cover of report.planCovers) drawCoverMarker(graphics, cover, cellSize, false, false);
+  for (const cover of report.nearbyCovers) drawCoverMarker(graphics, cover, cellSize, true, false);
 
   container.addChild(graphics);
+}
+
+export function drawThreatMemoryOverlay(container: Container, state: SimulationState): void {
+  const layer = getSimulationLayerState(state);
+  const unit = getSelectedUnit(state);
+  if (state.editor.enabled || !unit || (layer.mode !== 'danger' && layer.mode !== 'memory')) return;
+
+  const graphics = new Graphics();
+  const cellSize = state.map.cellSize;
+  for (const threat of unit.tacticalKnowledge.threats) drawRememberedThreat(graphics, threat, cellSize, layer.mode === 'memory');
+  container.addChild(graphics);
+}
+
+export function drawCoverKnowledgeOverlay(container: Container, state: SimulationState): void {
+  const layer = getSimulationLayerState(state);
+  const unit = getSelectedUnit(state);
+  if (state.editor.enabled || !unit || (layer.mode !== 'danger' && layer.mode !== 'memory')) return;
+
+  const report = buildUnitKnowledgeReport(state, unit);
+  const graphics = new Graphics();
+  const cellSize = state.map.cellSize;
+  const covers = [...report.planCovers, ...report.nearbyCovers];
+  for (const cover of covers) {
+    const selected = cover.id === layer.selectedCoverId;
+    const hovered = cover.id === layer.hoveredCoverId;
+    drawCoverMarker(graphics, cover, cellSize, cover.currentCover, selected || hovered);
+    if (selected && unit.tacticalKnowledge.threats[0]) {
+      const threat = unit.tacticalKnowledge.threats[0];
+      graphics.lineStyle(2, 0x9ff29c, 0.75);
+      graphics.moveTo(cover.x * cellSize, cover.y * cellSize);
+      graphics.lineTo(threat.x * cellSize, threat.y * cellSize);
+    }
+  }
+  container.addChild(graphics);
+}
+
+function drawCoverMarker(
+  graphics: Graphics,
+  cover: KnowledgeCover,
+  cellSize: number,
+  nearby: boolean,
+  emphasized: boolean,
+): void {
+  const x = cover.x * cellSize;
+  const y = cover.y * cellSize;
+  const color = emphasized ? 0xffffff : nearby ? 0xfff2a8 : 0xe8d985;
+  const radius = emphasized ? 10 : nearby ? 7 : 5;
+  graphics.lineStyle(emphasized ? 4 : 2, color, emphasized ? 1 : 0.86);
+  graphics.beginFill(nearby ? 0x8acb76 : 0xfff2a8, emphasized ? 0.38 : nearby ? 0.18 : 0.12);
+  if (nearby) graphics.drawRoundedRect(x - radius, y - radius, radius * 2, radius * 2, 3);
+  else graphics.drawCircle(x, y, radius);
+  graphics.endFill();
+}
+
+function drawRememberedThreat(graphics: Graphics, threat: KnownThreatMemory, cellSize: number, memoryMode: boolean): void {
+  const confidenceAlpha = Math.max(0.18, Math.min(0.9, threat.confidence / 100));
+  const sourceX = threat.x * cellSize;
+  const sourceY = threat.y * cellSize;
+  const dangerColor = threat.visibleNow ? 0xff4e3d : 0xf09a55;
+  const uncertaintyRadius = Math.max(0.18, threat.uncertaintyCells) * cellSize;
+
+  graphics.lineStyle(threat.visibleNow ? 3 : 2, dangerColor, confidenceAlpha);
+  graphics.beginFill(dangerColor, memoryMode ? 0.08 : 0.12);
+  graphics.drawCircle(sourceX, sourceY, uncertaintyRadius);
+  graphics.endFill();
+
+  if (threat.mode === 'directional_fire') {
+    const direction = degreesToRadians(threat.directionDegrees);
+    const halfArc = degreesToRadians(threat.arcDegrees / 2);
+    const radius = threat.rangeCells * cellSize;
+    graphics.lineStyle(2, dangerColor, confidenceAlpha * 0.8);
+    graphics.beginFill(dangerColor, memoryMode ? 0.035 : 0.075);
+    graphics.moveTo(sourceX, sourceY);
+    graphics.arc(sourceX, sourceY, radius, direction - halfArc, direction + halfArc);
+    graphics.lineTo(sourceX, sourceY);
+    graphics.endFill();
+    graphics.moveTo(sourceX, sourceY);
+    graphics.lineTo(sourceX + Math.cos(direction) * radius, sourceY + Math.sin(direction) * radius);
+  } else if (threat.radiusCells > 0) {
+    graphics.lineStyle(2, dangerColor, confidenceAlpha * 0.7);
+    graphics.drawCircle(sourceX, sourceY, threat.radiusCells * cellSize);
+  } else {
+    graphics.lineStyle(2, dangerColor, confidenceAlpha * 0.7);
+    graphics.drawRect(
+      (threat.x - threat.widthCells / 2) * cellSize,
+      (threat.y - threat.heightCells / 2) * cellSize,
+      threat.widthCells * cellSize,
+      threat.heightCells * cellSize,
+    );
+  }
+
+  graphics.lineStyle(2, dangerColor, confidenceAlpha);
+  graphics.moveTo(sourceX - 6, sourceY - 6);
+  graphics.lineTo(sourceX + 6, sourceY + 6);
+  graphics.moveTo(sourceX + 6, sourceY - 6);
+  graphics.lineTo(sourceX - 6, sourceY + 6);
 }
 
 function drawVisibilityProbe(container: Container, state: SimulationState): void {
@@ -255,17 +333,23 @@ function getDynamicLayerKey(state: SimulationState, showGrid: boolean): string {
   const probeKey = probe.active && probe.target
     ? `${probe.target.x.toFixed(2)}:${probe.target.y.toFixed(2)}`
     : 'off';
-  const selectedUnit = state.selectedUnitId ?? 'none';
+  const selectedUnit = getSelectedUnit(state);
+  const layer = getSimulationLayerState(state);
+  const objectKey = state.map.objects.map((object) => `${object.id}:${object.x.toFixed(2)}:${object.y.toFixed(2)}:${object.widthCells.toFixed(2)}:${object.heightCells.toFixed(2)}`).join('|');
 
   return [
     `grid:${showGrid ? '1' : '0'}`,
     `mouse:${mouse}`,
     `box:${box}`,
     `cell:${state.map.cellSize}`,
-    `selectedUnit:${selectedUnit}`,
+    `selectedUnit:${selectedUnit?.id ?? 'none'}`,
     `knowledge:${knowledgeOverlay}`,
     `probe:${probeKey}`,
-    `objects:${state.map.objects.length}`,
+    `layer:${layer.mode}`,
+    `selectedCover:${layer.selectedCoverId ?? ''}`,
+    `hoveredCover:${layer.hoveredCoverId ?? ''}`,
+    `knowledgeRevision:${selectedUnit?.tacticalKnowledge.revision ?? 0}`,
+    `objects:${objectKey}`,
     `zones:${state.pressureZones.length}`,
   ].join(';');
 }

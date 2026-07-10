@@ -1,16 +1,17 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import { buildSoldierAwarenessReport, type SoldierAwarenessCell } from '../core/knowledge/SoldierAwarenessGrid';
 import type { SimulationState } from '../core/simulation/SimulationState';
-import { getAiLabRuntime } from '../core/testing/AiLabRuntime';
+import { getSimulationLayerState } from '../core/ui/RuntimeUiState';
 
 export class PixiAwarenessHeatmapRenderer {
   readonly container = new Container();
   private lastKey = '';
 
   render(state: SimulationState): void {
-    const runtime = getAiLabRuntime(state);
+    const simulationLayer = getSimulationLayerState(state);
+    const awarenessMode = simulationLayer.mode === 'danger' ? 'danger' : simulationLayer.mode === 'stealth' ? 'stealth' : 'off';
     const unit = state.selectedUnitId ? state.units.find((item) => item.id === state.selectedUnitId) : undefined;
-    if (!runtime.open || runtime.awarenessMode === 'off' || !unit) {
+    if (state.editor.enabled || awarenessMode === 'off' || !unit) {
       if (this.lastKey !== 'hidden') {
         this.lastKey = 'hidden';
         this.container.removeChildren();
@@ -19,25 +20,27 @@ export class PixiAwarenessHeatmapRenderer {
     }
 
     const report = buildSoldierAwarenessReport(state, unit);
-    const key = `${report.cacheKey}:${runtime.awarenessMode}:${state.map.cellSize}`;
+    const key = `${report.cacheKey}:${awarenessMode}:${state.map.cellSize}`;
     if (key === this.lastKey) return;
     this.lastKey = key;
     this.container.removeChildren();
 
     const graphics = new Graphics();
     const size = state.map.cellSize;
-    for (const cell of report.cells) drawCell(graphics, cell, runtime.awarenessMode, size);
+    for (const cell of report.cells) drawCell(graphics, cell, awarenessMode, size);
 
-    for (const [index, best] of report.bestSafePositions.slice(0, 5).entries()) {
-      const x = best.position.x * size;
-      const y = best.position.y * size;
-      graphics.lineStyle(index === 0 ? 4 : 2, 0xefff9a, 0.95);
-      graphics.beginFill(0x4ce78a, index === 0 ? 0.45 : 0.2);
-      graphics.drawCircle(x, y, index === 0 ? 12 : 8);
-      graphics.endFill();
+    if (awarenessMode === 'danger') {
+      for (const [index, best] of report.bestSafePositions.slice(0, 5).entries()) {
+        const x = best.position.x * size;
+        const y = best.position.y * size;
+        graphics.lineStyle(index === 0 ? 4 : 2, 0xefff9a, 0.95);
+        graphics.beginFill(0x4ce78a, index === 0 ? 0.45 : 0.2);
+        graphics.drawCircle(x, y, index === 0 ? 12 : 8);
+        graphics.endFill();
+      }
     }
 
-    const title = new Text(`КАРТА БОЙЦА: ${modeLabel(runtime.awarenessMode)}`, {
+    const title = new Text(`СЛОЙ БОЙЦА: ${modeLabel(awarenessMode)}`, {
       fontFamily: 'Arial, sans-serif',
       fontSize: 12,
       fontWeight: '700',
@@ -53,7 +56,7 @@ export class PixiAwarenessHeatmapRenderer {
 function drawCell(
   graphics: Graphics,
   cell: SoldierAwarenessCell,
-  mode: ReturnType<typeof getAiLabRuntime>['awarenessMode'],
+  mode: 'off' | 'danger' | 'stealth',
   cellSize: number,
 ): void {
   const metric = metricForMode(cell, mode);
@@ -65,28 +68,11 @@ function drawCell(
 
 function metricForMode(
   cell: SoldierAwarenessCell,
-  mode: ReturnType<typeof getAiLabRuntime>['awarenessMode'],
+  mode: 'off' | 'danger' | 'stealth',
 ): { value: number; color: number; alpha: number } {
   if (mode === 'danger') return { value: cell.danger, color: dangerColor(cell.danger), alpha: alpha(cell.danger) };
-  if (mode === 'cover') return { value: cell.expectedProtection, color: 0x42d87a, alpha: alpha(cell.expectedProtection) };
-  if (mode === 'safe') {
-    const value = safeHighlightValue(cell.safety);
-    return { value, color: 0x67f18f, alpha: alpha(value) };
-  }
-  if (mode === 'uncertainty') return { value: cell.uncertainty, color: 0xffd55f, alpha: alpha(cell.uncertainty) };
-  if (mode === 'objective') {
-    const value = Math.max(cell.expectedProtection, cell.concealment);
-    return { value, color: cell.expectedProtection >= cell.concealment ? 0x47c97a : 0x4cb6e8, alpha: alpha(value) };
-  }
-
-  if (cell.danger >= 28) return { value: cell.danger, color: dangerColor(cell.danger), alpha: alpha(cell.danger) };
-  const safeValue = safeHighlightValue(cell.safety);
-  if (safeValue > 2) return { value: safeValue, color: 0x55df83, alpha: alpha(safeValue) };
-  return { value: cell.uncertainty, color: 0xffd55f, alpha: alpha(cell.uncertainty) * 0.75 };
-}
-
-function safeHighlightValue(safety: number): number {
-  return Math.max(0, Math.min(100, (safety - 45) * 1.8));
+  if (mode === 'stealth') return { value: cell.concealment, color: stealthColor(cell.concealment), alpha: alpha(cell.concealment) };
+  return { value: 0, color: 0x000000, alpha: 0 };
 }
 
 function dangerColor(value: number): number {
@@ -95,19 +81,22 @@ function dangerColor(value: number): number {
   return 0xf2c84b;
 }
 
+function stealthColor(value: number): number {
+  if (value >= 75) return 0x1c6b45;
+  if (value >= 50) return 0x3da85f;
+  if (value >= 25) return 0xd7b94b;
+  return 0xd97732;
+}
+
 function alpha(value: number): number {
   return Math.min(0.55, 0.08 + value / 100 * 0.46);
 }
 
-function modeLabel(mode: ReturnType<typeof getAiLabRuntime>['awarenessMode']): string {
+function modeLabel(mode: 'off' | 'danger' | 'stealth'): string {
   const labels = {
-    off: 'выключена',
-    all: 'угрозы и безопасные места',
+    off: 'выключен',
     danger: 'опасность',
-    cover: 'защита',
-    safe: 'безопасные позиции',
-    uncertainty: 'неопределённость знаний',
-    objective: 'объективные свойства местности',
+    stealth: 'скрытность',
   } as const;
   return labels[mode];
 }

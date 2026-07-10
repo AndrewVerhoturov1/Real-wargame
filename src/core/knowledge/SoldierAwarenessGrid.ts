@@ -5,7 +5,7 @@ import { getCell } from '../map/MapModel';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { KnownThreatMemory, UnitModel } from '../units/UnitModel';
 
-export type SoldierAwarenessMode = 'off' | 'all' | 'danger' | 'cover' | 'safe' | 'uncertainty' | 'objective';
+export type SoldierAwarenessMode = 'off' | 'all' | 'danger' | 'cover' | 'safe' | 'stealth' | 'memory' | 'uncertainty' | 'objective';
 
 export interface SoldierAwarenessCell {
   x: number;
@@ -127,7 +127,15 @@ function evaluateAwarenessCell(
   let confidenceTotal = 0;
   let confidenceWeight = 0;
   let uncertainty = 0;
-  let strongestCover = { expectedProtection: 0, reliability: 0, concealment: forestConcealment(cell?.forest ?? 0), sourceRu: 'открытая местность' };
+  const terrainConcealment = forestConcealment(cell?.forest ?? 0);
+  let strongestCover = {
+    expectedProtection: 0,
+    reliability: 0,
+    concealment: terrainConcealment,
+    sourceRu: terrainConcealment > 0 ? 'лес' : 'открытая местность',
+  };
+  let bestConcealment = terrainConcealment;
+  let bestConcealmentSource = strongestCover.sourceRu;
 
   for (const threat of unit.tacticalKnowledge.threats) {
     const factor = threatFactorAtPosition(position, threat);
@@ -148,19 +156,23 @@ function evaluateAwarenessCell(
       strongestCover = {
         expectedProtection: cover.expectedProtection,
         reliability: cover.reliability,
-        concealment: Math.max(cover.concealment, forestConcealment(cell?.forest ?? 0)),
+        concealment: Math.max(cover.concealment, terrainConcealment),
         sourceRu: cover.sourceRu,
       };
+    }
+    if (cover.concealment > bestConcealment) {
+      bestConcealment = cover.concealment;
+      bestConcealmentSource = cover.sourceRu;
     }
   }
 
   if (unit.tacticalKnowledge.threats.length === 0) {
-    const fallbackConcealment = forestConcealment(cell?.forest ?? 0);
+    const reliefProtection = reliefLocalProtection(state, position, posture);
     strongestCover = {
-      expectedProtection: reliefLocalProtection(state, position, posture),
-      reliability: reliefLocalProtection(state, position, posture),
-      concealment: fallbackConcealment,
-      sourceRu: fallbackConcealment > 0 ? 'лес' : 'нет известной угрозы',
+      expectedProtection: reliefProtection,
+      reliability: reliefProtection,
+      concealment: terrainConcealment,
+      sourceRu: terrainConcealment > 0 ? 'лес' : reliefProtection > 0 ? 'складка местности' : 'нет известной угрозы',
     };
   }
 
@@ -168,9 +180,11 @@ function evaluateAwarenessCell(
   const suppression = clampPercent(100 * (1 - remainingUnsuppressed));
   const confidence = confidenceWeight > 0 ? clampPercent(confidenceTotal / confidenceWeight) : 0;
   const terrainPenalty = terrainMovementPenalty(cell?.terrain ?? 'field');
+  const concealment = clampPercent(Math.max(strongestCover.concealment, bestConcealment) + postureConcealmentBonus(posture));
+  const sourceRu = bestConcealment > strongestCover.concealment ? bestConcealmentSource : strongestCover.sourceRu;
   const safety = clampPercent(
     strongestCover.expectedProtection * 0.62
-      + strongestCover.concealment * 0.18
+      + concealment * 0.18
       + (100 - danger) * 0.45
       - suppression * 0.18
       - uncertainty * 0.08
@@ -184,11 +198,11 @@ function evaluateAwarenessCell(
     suppression,
     expectedProtection: strongestCover.expectedProtection,
     coverReliability: strongestCover.reliability,
-    concealment: strongestCover.concealment,
+    concealment,
     uncertainty,
     safety,
     confidence,
-    sourceRu: strongestCover.sourceRu,
+    sourceRu,
   };
 }
 
@@ -209,7 +223,9 @@ function threatFactorAtPosition(position: GridPosition, threat: KnownThreatMemor
   }
 
   if (threat.radiusCells > 0) {
-    return range <= threat.radiusCells + uncertaintyBonus ? Math.max(0.2, 1 - range / Math.max(1, threat.radiusCells + uncertaintyBonus) * 0.35) : 0;
+    return range <= threat.radiusCells + uncertaintyBonus
+      ? Math.max(0.2, 1 - range / Math.max(1, threat.radiusCells + uncertaintyBonus) * 0.35)
+      : 0;
   }
 
   const rotation = -(threat.rotationDegrees ?? 0) * Math.PI / 180;
@@ -231,8 +247,9 @@ function buildCacheKey(state: SimulationState, unit: UnitModel): string {
     object.rotationRadians.toFixed(2),
     object.coverProtection ?? '',
     object.coverReliability ?? '',
+    object.concealment ?? '',
   ].join(':')).join('|');
-  const terrainKey = state.map.cells.map((cell) => `${cell.height},${cell.forest}`).join(';');
+  const terrainKey = state.map.cells.map((cell) => `${cell.height},${cell.forest},${cell.terrain}`).join(';');
   return [
     unit.id,
     unit.tacticalKnowledge.revision,
@@ -262,6 +279,12 @@ function reliefLocalProtection(state: SimulationState, position: GridPosition, p
 
 function forestConcealment(forest: number): number {
   return forest === 2 ? 82 : forest === 1 ? 52 : 0;
+}
+
+function postureConcealmentBonus(posture: UnitPosture): number {
+  if (posture === 'prone') return 18;
+  if (posture === 'crouched') return 8;
+  return 0;
 }
 
 function terrainMovementPenalty(terrain: string): number {
