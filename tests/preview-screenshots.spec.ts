@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const SCREENSHOT_DIR = path.join('artifacts', 'screenshots');
@@ -20,7 +20,21 @@ interface AwarenessDiagnostics {
 }
 
 async function saveScreenshot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: path.join(SCREENSHOT_DIR, name), fullPage: false });
+  const target = path.join(SCREENSHOT_DIR, name);
+  try {
+    await page.screenshot({ path: target, fullPage: false, timeout: 15_000 });
+  } catch {
+    const session = await page.context().newCDPSession(page);
+    try {
+      const result = await session.send('Page.captureScreenshot', {
+        format: 'png',
+        captureBeyondViewport: false,
+      });
+      writeFileSync(target, Buffer.from(result.data, 'base64'));
+    } finally {
+      await session.detach();
+    }
+  }
 }
 
 async function worldPoint(canvas: Locator, gridX: number, gridY: number): Promise<{ x: number; y: number }> {
@@ -122,6 +136,7 @@ test('keeps information details open, uses a movement-stable raster overlay and 
   expect(beforeMove?.displayObjectCount).toBeLessThanOrEqual(3);
   expect(beforeMove?.rasterWidth).toBe(64);
   expect(beforeMove?.rasterHeight).toBe(40);
+  expect(beforeMove?.maxBuildMs ?? Number.POSITIVE_INFINITY).toBeLessThan(250);
 
   const movementTarget = await worldPoint(canvas, 30.5, 17.5);
   await page.mouse.click(movementTarget.x, movementTarget.y, { button: 'right' });
