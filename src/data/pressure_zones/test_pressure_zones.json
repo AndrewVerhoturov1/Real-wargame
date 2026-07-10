@@ -1,18 +1,28 @@
 [
   {
     "id": "editor_zone_1",
-    "label": "editor_zone_1",
-    "labelRu": "Зона 1",
+    "label": "Machine gun fire",
+    "labelRu": "Пулемётный огонь",
     "type": "debug",
     "shape": "circle",
+    "mode": "directional_fire",
     "x": 34.044,
     "y": 16.823,
     "radiusCells": 3,
     "widthCells": 0,
     "heightCells": 0,
-    "strength": 50,
-    "stressPerSecond": 15,
-    "reason": "Editor zone",
-    "reasonRu": "Зона редактора"
+    "strength": 70,
+    "suppression": 88,
+    "stressPerSecond": 18,
+    "directionDegrees": 178,
+    "arcDegrees": 55,
+    "rangeCells": 14,
+    "minRangeCells": 0,
+    "falloffPercent": 35,
+    "enabled": true,
+    "sourceVisible": true,
+    "sourceKnown": true,
+    "reason": "Directional machine gun fire",
+    "reasonRu": "Направленный пулемётный огонь"
   }
 ]
