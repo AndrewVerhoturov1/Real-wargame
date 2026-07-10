@@ -22,6 +22,7 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
+        channel: process.env.CI ? 'chrome' : undefined,
         launchOptions: {
           args: [
             '--use-gl=swiftshader',
