@@ -234,6 +234,8 @@ export function installAiTestLabControls(
     renderDock();
     renderBottom();
     updateOpenState();
+    const currentSelectionKey = `${state.selectedUnitId ?? ''}|${state.editor.selectedZoneId ?? ''}|${state.editor.selectedObjectId ?? ''}`;
+    renderKey = buildLabRenderKey(state, runtime, currentSelectionKey);
   };
 
   const dockHeader = document.createElement('header');
@@ -251,7 +253,6 @@ export function installAiTestLabControls(
   renderAll();
 
   window.setInterval(() => {
-    const unit = getSelectedUnit(state);
     const nextSelectionKey = `${state.selectedUnitId ?? ''}|${state.editor.selectedZoneId ?? ''}|${state.editor.selectedObjectId ?? ''}`;
     const nextRenderKey = buildLabRenderKey(state, runtime, nextSelectionKey);
     if (nextSelectionKey !== selectionKey) {
@@ -264,9 +265,9 @@ export function installAiTestLabControls(
       renderKey = nextRenderKey;
       renderAll();
     }
-    if (runtime.open) updateDiagnostics(diagnostics, state);
-    if (unit && runtime.activePanel === 'awareness' && runtime.awarenessMode !== 'off') {
-      unit.tacticalKnowledge.revision += 0;
+    if (runtime.open) {
+      updateDiagnostics(diagnostics, state);
+      updateLiveFighterState(dockBody, state);
     }
   }, 250);
 }
@@ -363,7 +364,7 @@ function renderFighterPanel(
     ['Патроны', Math.round(unit.behaviorRuntime.ammo)],
     ['Оружие', unit.behaviorRuntime.weaponReady ? 'готово' : 'не готово'],
     ['Действие', unit.behaviorRuntime.currentAction],
-  ]));
+  ], 'ai-lab-current-state'));
 }
 
 function renderThreatPanel(
@@ -536,6 +537,27 @@ function updateDiagnostics(target: HTMLElement, state: SimulationState): void {
   ].join('\n');
 }
 
+function updateLiveFighterState(target: HTMLElement, state: SimulationState): void {
+  const unit = getSelectedUnit(state);
+  const outputs = target.querySelectorAll<HTMLElement>('.ai-lab-current-state b');
+  if (!unit || outputs.length === 0) return;
+  const values = [
+    postureLabel(unit.behaviorRuntime.posture),
+    String(round(unit.behaviorRuntime.stress)),
+    String(round(unit.behaviorRuntime.suppression)),
+    String(round(unit.soldier.condition.fatigue)),
+    String(round(unit.soldier.condition.morale)),
+    String(round(unit.soldier.condition.confusion)),
+    String(round(unit.soldier.condition.health)),
+    String(Math.round(unit.behaviorRuntime.ammo)),
+    unit.behaviorRuntime.weaponReady ? 'готово' : 'не готово',
+    unit.behaviorRuntime.currentAction,
+  ];
+  outputs.forEach((output, index) => {
+    if (values[index] !== undefined) output.textContent = values[index];
+  });
+}
+
 function heading(title: string, hintText: string): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.className = 'ai-lab-heading';
@@ -694,7 +716,6 @@ function buildLabRenderKey(
   runtime: ReturnType<typeof getAiLabRuntime>,
   selectionKey: string,
 ): string {
-  const unit = getSelectedUnit(state);
   const zone = getSelectedPressureZone(state);
   const object = getSelectedMapObject(state);
   return [
@@ -703,13 +724,6 @@ function buildLabRenderKey(
     runtime.activePanel,
     runtime.tool,
     runtime.awarenessMode,
-    unit?.behaviorRuntime.posture ?? '',
-    unit?.behaviorRuntime.stress.toFixed(1) ?? '',
-    unit?.behaviorRuntime.suppression.toFixed(1) ?? '',
-    unit?.soldier.condition.fatigue.toFixed(1) ?? '',
-    unit?.soldier.condition.morale.toFixed(1) ?? '',
-    unit?.behaviorRuntime.ammo ?? '',
-    unit?.tacticalKnowledge.revision ?? '',
     zone?.x.toFixed(2) ?? '',
     zone?.y.toFixed(2) ?? '',
     zone?.directionDegrees?.toFixed(1) ?? '',

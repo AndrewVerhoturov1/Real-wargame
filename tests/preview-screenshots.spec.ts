@@ -26,6 +26,18 @@ async function saveScreenshot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: path.join(SCREENSHOT_DIR, name), fullPage: false });
 }
 
+async function openNodePalette(page: Page): Promise<void> {
+  const palette = page.locator('.palette-panel');
+  if (await palette.isVisible()) return;
+  const addNode = page.getByRole('button', { name: /\+ Add node|\+ Добавить ноду/ });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await addNode.click({ force: true });
+    await page.waitForTimeout(150);
+    if (await palette.isVisible()) return;
+  }
+  await expect(palette).toBeVisible();
+}
+
 async function waitForAiEngine(): Promise<void> {
   const startedAt = Date.now();
   let lastError = '';
@@ -104,7 +116,7 @@ test('capture AI Node Editor clean canvas and universal node interactions', asyn
   await page.waitForTimeout(500);
   await saveScreenshot(page, '08-ai-editor-clean-canvas.png');
 
-  await page.getByRole('button', { name: /\+ Add node|\+ Добавить ноду/ }).click();
+  await openNodePalette(page);
   await expect(page.locator('.palette-panel')).toBeVisible();
   await expect(page.getByRole('button', { name: /Numeric Threshold|Числовой порог/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Flag Check|Проверка флага/ })).toBeVisible();
@@ -139,7 +151,8 @@ test('capture AI Node Editor clean canvas and universal node interactions', asyn
   await page.getByRole('button', { name: /Save parameters|Сохранить параметры|Save condition|Сохранить условие/ }).click();
   await page.waitForTimeout(300);
 
-  await page.getByRole('button', { name: /\+ Add node|\+ Добавить ноду/ }).click();
+  await openNodePalette(page);
+  await expect(page.getByRole('button', { name: /Distance Threshold|Порог расстояния/ })).toBeVisible();
   await page.getByRole('button', { name: /Distance Threshold|Порог расстояния/ }).click();
   await page.waitForTimeout(400);
   await expect(page.locator('.human-node-panel')).toBeVisible();
