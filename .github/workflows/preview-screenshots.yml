@@ -1,26 +1,27 @@
-name: Preview screenshots
+name: Camera and grid verification
 
 on:
-  workflow_dispatch:
   push:
     branches:
-      - real-wargame-preview
-  pull_request:
-    branches:
-      - real-wargame-preview
+      - verify/camera-grid-20260711
 
 permissions:
-  contents: read
+  contents: write
   statuses: write
 
 jobs:
-  screenshots:
-    name: Capture preview screenshots
+  verify:
+    name: Verify camera and grid performance
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
-      - name: Publish pending screenshot status
+      - name: Remember source commit
+        id: source
+        shell: bash
+        run: echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish pending verification status
         uses: actions/github-script@v7
         with:
           script: |
@@ -29,13 +30,15 @@ jobs:
               repo: context.repo.repo,
               sha: context.sha,
               state: 'pending',
-              context: 'preview-screenshots',
-              description: 'Playwright screenshots are running',
+              context: 'camera-grid-verification',
+              description: 'Smoke, build and Chrome checks are running',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
 
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: verify/camera-grid-20260711
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -46,52 +49,77 @@ jobs:
       - name: Install project dependencies
         run: npm ci
 
-      - name: Install Playwright test runner for this workflow
+      - name: Install Playwright test runner
         run: npm install --no-save @playwright/test
 
-      - name: Check production build without blocking screenshots
+      - name: Run required smoke checks and production build
+        id: checks
         continue-on-error: true
-        run: npm run build
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            npm run workspace:smoke
+            npm run lab:smoke
+            npm run game-editor:smoke
+            npm run editor:smoke
+            npm run engine:smoke
+            npm run validate:ai-graph
+            npm run build
+          } 2>&1 | tee required-checks.log
 
-      - name: Capture screenshots with system Chrome
-        id: capture
+      - name: Run full Chrome scenarios and capture PNG
+        id: browser
+        continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
           npx playwright test tests/preview-screenshots.spec.ts tests/camera-grid-performance.spec.ts --project=chromium --reporter=line 2>&1 | tee playwright-screenshots.log
 
-      - name: Upload screenshots
+      - name: Save verification results in branch
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: real-wargame-preview-screenshots
-          path: artifacts/screenshots/
-          if-no-files-found: warn
-          retention-days: 14
+        shell: bash
+        env:
+          CHECKS_OUTCOME: ${{ steps.checks.outcome }}
+          BROWSER_OUTCOME: ${{ steps.browser.outcome }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          mkdir -p verification-results/screenshots
+          cp required-checks.log verification-results/required-checks.log 2>/dev/null || true
+          cp playwright-screenshots.log verification-results/playwright-screenshots.log 2>/dev/null || true
+          cp artifacts/screenshots/*.png verification-results/screenshots/ 2>/dev/null || true
+          cat > verification-results/SUMMARY.txt <<EOF
+          source_sha=${SOURCE_SHA}
+          required_checks=${CHECKS_OUTCOME}
+          browser_checks=${BROWSER_OUTCOME}
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add verification-results
+          git commit -m "chore: store camera grid verification results" || true
+          git push origin HEAD:verify/camera-grid-20260711
 
-      - name: Upload Playwright log
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: real-wargame-preview-playwright-log
-          path: playwright-screenshots.log
-          if-no-files-found: warn
-          retention-days: 7
-
-      - name: Publish screenshot status
+      - name: Publish final verification status
         if: ${{ always() }}
         uses: actions/github-script@v7
         env:
-          CAPTURE_OUTCOME: ${{ steps.capture.outcome }}
+          CHECKS_OUTCOME: ${{ steps.checks.outcome }}
+          BROWSER_OUTCOME: ${{ steps.browser.outcome }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
         with:
           script: |
-            const success = process.env.CAPTURE_OUTCOME === 'success';
+            const success = process.env.CHECKS_OUTCOME === 'success'
+              && process.env.BROWSER_OUTCOME === 'success';
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              sha: context.sha,
+              sha: process.env.SOURCE_SHA,
               state: success ? 'success' : 'failure',
-              context: 'preview-screenshots',
-              description: `Playwright screenshots: ${process.env.CAPTURE_OUTCOME}`,
+              context: 'camera-grid-verification',
+              description: `smoke/build=${process.env.CHECKS_OUTCOME}; chrome=${process.env.BROWSER_OUTCOME}`,
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
+
+      - name: Fail job when verification failed
+        if: ${{ always() && (steps.checks.outcome != 'success' || steps.browser.outcome != 'success') }}
+        run: exit 1
