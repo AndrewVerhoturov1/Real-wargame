@@ -41,9 +41,13 @@ export interface SoldierAwarenessReport {
   threatConfidence: number;
 }
 
+type AwarenessBaseReport = Omit<SoldierAwarenessReport, 'routeDanger'>;
+
 interface CachedAwareness {
   key: string;
-  report: SoldierAwarenessReport;
+  baseReport: AwarenessBaseReport;
+  routeKey: string;
+  routeDanger: number;
 }
 
 const cache = new WeakMap<UnitModel, CachedAwareness>();
@@ -54,9 +58,33 @@ export function buildSoldierAwarenessReport(
   unit: UnitModel,
 ): SoldierAwarenessReport {
   const key = buildCacheKey(state, unit);
-  const cached = cache.get(unit);
-  if (cached?.key === key) return cached.report;
+  let cached = cache.get(unit);
 
+  if (!cached || cached.key !== key) {
+    cached = {
+      key,
+      baseReport: buildBaseReport(state, unit, key),
+      routeKey: '',
+      routeDanger: 0,
+    };
+    cache.set(unit, cached);
+  }
+
+  const routeKey = buildRouteKey(unit);
+  if (routeKey !== cached.routeKey) {
+    cached.routeKey = routeKey;
+    cached.routeDanger = unit.order
+      ? evaluateRouteDanger(state, unit, unit.position, unit.order.target)
+      : cached.baseReport.currentPosition.danger;
+  }
+
+  return {
+    ...cached.baseReport,
+    routeDanger: cached.routeDanger,
+  };
+}
+
+function buildBaseReport(state: SimulationState, unit: UnitModel, key: string): AwarenessBaseReport {
   const cells: SoldierAwarenessCell[] = [];
   for (let y = 0; y < state.map.height; y += 1) {
     for (let x = 0; x < state.map.width; x += 1) {
@@ -78,24 +106,18 @@ export function buildSoldierAwarenessReport(
     .filter((item) => item.distanceCells <= 12 && item.score > 18)
     .sort((left, right) => right.score - left.score)
     .slice(0, MAX_SAFE_POSITIONS);
-  const routeDanger = unit.order
-    ? evaluateRouteDanger(state, unit, unit.position, unit.order.target)
-    : currentPosition.danger;
   const threatConfidence = unit.tacticalKnowledge.threats.length > 0
     ? Math.round(Math.max(...unit.tacticalKnowledge.threats.map((threat) => threat.confidence)))
     : 0;
 
-  const report: SoldierAwarenessReport = {
+  return {
     unitId: unit.id,
     cacheKey: key,
     cells,
     bestSafePositions,
     currentPosition,
-    routeDanger,
     threatConfidence,
   };
-  cache.set(unit, { key, report });
-  return report;
 }
 
 export function evaluateRouteDanger(
@@ -238,12 +260,10 @@ function threatFactorAtPosition(position: GridPosition, threat: KnownThreatMemor
 }
 
 function buildCacheKey(state: SimulationState, unit: UnitModel): string {
-  // Awareness values are calculated per cell. Sub-cell movement should not invalidate
-  // the complete map report, otherwise a moving soldier rebuilds it every frame/tick.
+  // The expensive cell field depends on the soldier cell, posture, knowledge and map.
+  // Orders affect only route danger and must not rebuild all 2,560 awareness cells.
   const unitCellX = Math.floor(unit.position.x);
   const unitCellY = Math.floor(unit.position.y);
-  const orderCellX = unit.order ? Math.floor(unit.order.target.x) : '';
-  const orderCellY = unit.order ? Math.floor(unit.order.target.y) : '';
 
   return [
     unit.id,
@@ -251,11 +271,21 @@ function buildCacheKey(state: SimulationState, unit: UnitModel): string {
     unit.behaviorRuntime.posture,
     unitCellX,
     unitCellY,
-    orderCellX,
-    orderCellY,
     state.map.cellSize,
     buildMapHash(state),
   ].join('#');
+}
+
+function buildRouteKey(unit: UnitModel): string {
+  if (!unit.order) return `none:${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`;
+  return [
+    Math.floor(unit.position.x),
+    Math.floor(unit.position.y),
+    Math.floor(unit.order.target.x),
+    Math.floor(unit.order.target.y),
+    unit.behaviorRuntime.posture,
+    unit.tacticalKnowledge.revision,
+  ].join(':');
 }
 
 function buildMapHash(state: SimulationState): string {
