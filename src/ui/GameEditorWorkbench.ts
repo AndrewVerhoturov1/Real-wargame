@@ -95,6 +95,9 @@ export function installGameEditorWorkbench(
   body.className = 'game-editor-body';
   const status = document.createElement('div');
   status.className = 'game-editor-status';
+  const sceneToolsSlot = document.createElement('div');
+  sceneToolsSlot.className = 'editor-scene-tools-slot';
+  sceneToolsSlot.hidden = true;
   let activeTab: WorkbenchTab = 'object';
   let lastSelectionKey = '';
 
@@ -107,15 +110,19 @@ export function installGameEditorWorkbench(
       render();
     });
     body.replaceChildren();
+    if (activeTab !== 'scene') {
+      sceneToolsSlot.hidden = true;
+      root.appendChild(sceneToolsSlot);
+    }
     if (activeTab === 'object') renderObjectPanel(body, state, drafts, onChanged, render);
     if (activeTab === 'unit') renderUnitPanel(body, state, drafts, onChanged, render);
     if (activeTab === 'threat') renderThreatPanel(body, state, drafts, onChanged, render);
     if (activeTab === 'terrain') renderTerrainPanel(body, state, drafts, onChanged, render);
-    if (activeTab === 'scene') renderScenePanel(body, state, onChanged, render);
+    if (activeTab === 'scene') renderScenePanel(body, state, onChanged, render, sceneToolsSlot);
     renderStatus(status, state);
   };
 
-  root.append(header, tabRow, body, status);
+  root.append(header, tabRow, body, status, sceneToolsSlot);
   const section = document.createElement('section');
   section.className = 'hud-section editor-section game-editor-section';
   section.append(root);
@@ -364,6 +371,7 @@ function renderScenePanel(
   state: SimulationState,
   onChanged: () => void,
   rerender: () => void,
+  sceneToolsSlot: HTMLElement,
 ): void {
   const layers = document.createElement('div');
   layers.className = 'game-editor-layer-grid';
@@ -372,12 +380,11 @@ function renderScenePanel(
     checkboxField('Показывать бойцов', state.editor.layers.units, (value) => { state.editor.layers.units = value; onChanged(); }),
     checkboxField('Показывать угрозы', state.editor.layers.pressureZones, (value) => { state.editor.layers.pressureZones = value; onChanged(); }),
   );
-  const slot = document.createElement('div');
-  slot.className = 'editor-scene-tools-slot';
+  sceneToolsSlot.hidden = false;
   target.append(
     panelHeading('Сцена', 'Видимость слоёв, сохранение, загрузка и очистка всей испытательной сцены.'),
     layers,
-    slot,
+    sceneToolsSlot,
     actionButton('Очистить предметы, бойцов и угрозы', () => {
       if (!window.confirm('Полностью очистить сцену? Высоты и лес останутся.')) return;
       clearEditorScene(state);
