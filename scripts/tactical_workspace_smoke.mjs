@@ -44,9 +44,11 @@ expectIncludes('src/ui/TacticalWorkspace.ts', [
 expectExcludes('src/ui/TacticalWorkspace.ts', ['u?.position.x.toFixed(2)', 'u?.behaviorRuntime.reason']);
 
 expectIncludes('src/ui/EditorHeaderPlacement.ts', [
-  'installEditorHeaderPlacement', '.game-editor-body [data-editor-tool].primary',
-  "return 'Поставить предмет'", "return 'Поставить бойца'", "return 'Поставить угрозу'",
-  '[data-action="editor-place"]',
+  'installEditorHeaderPlacement', 'TOOLS_BY_TAB',
+  "{ id: 'spawn_object', label: 'Поставить предмет' }",
+  "{ id: 'spawn_unit', label: 'Поставить бойца' }",
+  "{ id: 'spawn_zone', label: 'Поставить угрозу' }",
+  'data-header-placement-tool', '[data-action="editor-place"]',
 ]);
 expectIncludes('src/ui/WorkspaceTooltipGuard.ts', [
   'installWorkspaceTooltipGuard', 'clearCoverTooltip', '[data-tab], [data-mode]', 'tooltip.hidden = true',
@@ -87,6 +89,7 @@ expectIncludes('src/main.ts', [
 ]);
 expectIncludes('src/tactical-workspace-stage8.css', [
   '.cover-map-tooltip[hidden]', '[data-action="editor-place"]', '.editor-header-placement',
+  '[data-editor-tool="spawn_object"]', '[data-editor-tool="paint_height"]',
 ]);
 
 expectIncludes('Run-Real-Wargame-Lab.bat', [
@@ -97,7 +100,7 @@ expectIncludes('Run-Real-Wargame-Lab.bat', [
 expectIncludes('tests/preview-screenshots.spec.ts', [
   '01-simulation-info.png', '03-simulation-danger-layer.png', '07-editor-object-palette.png',
   '10-node-editor-unchanged.png', '11-editor-spawned-fighter-playable.png',
-  'uses a raster awareness overlay and clears stale tooltips',
+  'uses a movement-stable raster overlay and clears stale tooltips',
   'raster-sprite', 'newly placed fighter remains selectable and can move in simulation',
 ]);
 
