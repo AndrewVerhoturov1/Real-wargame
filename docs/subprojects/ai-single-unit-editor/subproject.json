@@ -1,47 +1,41 @@
 {
   "id": "ai-single-unit-editor",
   "title": "AI Single-Unit Editor — Stateful Tactical Awareness Lab",
-  "status": "stateful_movement_v1",
-  "goal": "Создать понятную человеку лабораторию поведения одиночного бойца в RTS-основе Real-wargame: Utility AI выбирает действие, состоянийный runtime исполняет длительные шаги, а решения используют субъективную тактическую осведомлённость и территориальный контекст.",
-  "current_focus": "Stateful AI Movement v1 внедрён и проверен: MoveToBlackboardPosition замораживает цель Blackboard, один раз создаёт token-owned MoveOrder, физически движется через SimulationTick, возвращает running между тиками, завершает последовательность по прибытии и безопасно отменяется без удаления нового приказа игрока. Следующий этап — Reactive Abort + Route Status v1 и затем pathfinding.",
+  "status": "reactive_route_status_v1_feature_branch",
+  "goal": "Создать понятную человеку лабораторию поведения одиночного бойца: Utility AI выбирает действие, stateful runtime исполняет длительные шаги, а route status измеряет прогресс и немедленно реагирует на значимые изменения.",
+  "current_focus": "Reactive Abort + Route Status v1 реализован во временной ветке feature/ai-reactive-route-status-v1. Система измеряет реальное уменьшение расстояния, различает moving/stalled/blocked/arrived, реагирует на приказ игрока, потерю цели и исчезновение приказа, корректно исключает время паузы и показывает русскую диагностику. Это не pathfinding. В preview этап не переносился.",
+  "integration_state": {
+    "working_branch": "feature/ai-reactive-route-status-v1",
+    "base_branch": "real-wargame-preview",
+    "base_sha": "9698f23e88e91ab36bb6b4581b0df656a0054ee7",
+    "preview_updated": false,
+    "main_updated": false,
+    "rule": "Не переносить в real-wargame-preview или main без новой прямой команды пользователя."
+  },
   "key_decisions": [
-    "Первая версия ограничена одним выбранным бойцом; squad-level AI отложен.",
-    "Игровая часть имеет ровно два режима: Симуляция и Редактирование.",
-    "Редактор ставит симуляцию на паузу.",
-    "AiGraphRunner.ts остаётся чистым мгновенным Utility AI evaluator без PixiJS, DOM, localStorage или SimulationState.",
-    "AiGraphRuntime.ts является отдельным чистым слоем длительного исполнения поверх существующего GraphRunner.",
-    "Runtime-specific movement effects проверяются на границе AiStatefulMoveGameBridge и не добавляются в мгновенный GraphRunner.",
-    "Execution state хранится отдельно от Blackboard и содержит только serializable-данные.",
-    "SequenceWithMemory продолжает активный шаг между тиками.",
-    "Wait использует waiting; MoveToBlackboardPosition является первой реальной action-нодой со статусом running.",
-    "Цель движения замораживается в момент start и не пересчитывается каждый тик.",
+    "Первая версия ограничена одним выбранным бойцом; army scheduler отложен.",
+    "AiGraphRunner остаётся чистым мгновенным Utility AI evaluator.",
+    "AiGraphRuntime отвечает за lifecycle и token-owned cleanup длительных действий.",
     "SimulationTick остаётся единственным кодом, который изменяет координаты бойца.",
-    "AI MoveOrder получает ownerToken; очистка удаляет только приказ с совпадающим token.",
-    "Приказ правого клика без ownership-полей считается пользовательским.",
-    "Новый приказ игрока имеет приоритет и не удаляется устаревшей отменой ИИ.",
-    "Очистка движения не должна скрывать следующий шаг SequenceWithMemory.",
-    "MoveToBlackboardPosition зарегистрирована в едином каталоге AiNodeTypes и проходит общий валидатор.",
-    "Новая нода из палитры сразу сохраняет targetKey, acceptanceRadiusCells и timeoutSeconds.",
-    "AiGameBridge.ts и AiStatefulMoveGameBridge.ts являются адаптерами между runtime, SimulationState, tactical awareness и effects.",
-    "Awareness субъективна и строится из знаний бойца.",
-    "Территориальная безопасность является фоновым контекстом и не заменяет реальную опасность.",
-    "Линия фронта не раскрывает врагов и не запрещает движение.",
-    "Front overlay использует пять фиксированных HTML-элементов без поклеточного Pixi-рендера.",
-    "Границы фронта пока runtime-only и не входят в scene-export-v3.",
-    "Legacy-ноды не возвращать, если смысл выражается универсальными нодами.",
-    "Основной запуск — Run-Real-Wargame-Lab.bat без терминала.",
-    "main не трогать без явного GO пользователя."
+    "AiRouteStatus.ts является чистым serializable-трекером прогресса без DOM, PixiJS, localStorage и SimulationState.",
+    "Route blocked означает измеренное отсутствие прогресса, а не найденное геометрическое препятствие.",
+    "Полный runtime форсируется только при player_override, order_missing, target_lost или blocked.",
+    "Blocked и target_lost передают explicit cancel; player_override и order_missing используют обычный немедленный runtime update.",
+    "Route tracker никогда не удаляет MoveOrder напрямую.",
+    "Очистка удаляет только приказ с совпадающим ownerToken.",
+    "Пауза читается через AiTestLabRuntime.getAiTestPaused и исключается из активного времени маршрута.",
+    "Debug route-only update проверяет unitId.",
+    "Graph version остаётся 1; localStorage graph key остаётся v6.",
+    "Русский интерфейс является видимым по умолчанию.",
+    "main и real-wargame-preview не изменять без явного указания."
   ],
   "must_read_first": [
-    "docs/subprojects/ai-single-unit-editor/HANDOFF.md",
-    "docs/subprojects/ai-single-unit-editor/STATEFUL_RUNTIME_V1.md",
+    "docs/subprojects/ai-single-unit-editor/REACTIVE_ROUTE_STATUS_V1.md",
+    "docs/subprojects/ai-single-unit-editor/journal/2026-07-12-reactive-route-status-v1.md",
+    "docs/superpowers/specs/2026-07-12-ai-reactive-route-status-v1-design.md",
+    "docs/superpowers/plans/2026-07-12-ai-reactive-route-status-v1.md",
     "docs/subprojects/ai-single-unit-editor/STATEFUL_MOVEMENT_V1.md",
-    "docs/subprojects/ai-single-unit-editor/SUBPROJECT.md",
-    "docs/subprojects/ai-single-unit-editor/subproject.json",
-    "docs/subprojects/ai-single-unit-editor/JOURNAL.md",
-    "docs/subprojects/ai-single-unit-editor/journal/2026-07-12-stateful-movement-v1.md",
-    "docs/superpowers/specs/2026-07-12-ai-running-move-v1-design.md",
-    "docs/superpowers/plans/2026-07-12-ai-running-move-v1.md",
+    "docs/subprojects/ai-single-unit-editor/STATEFUL_RUNTIME_V1.md",
     "ideas/AI_BEHAVIOR_NODE_SYSTEM_FEATURES.md",
     "ideas/FRONT_LINE_INFLUENCE_ON_SINGLE_SOLDIER_AI.md",
     "docs/ai/AGENT_START_HERE.md",
@@ -50,41 +44,21 @@
     ".agents/skills/real-wargame-local-preview/SKILL.md"
   ],
   "main_files": [
-    "src/main.ts",
-    "src/core/ai/AiGraphRunner.ts",
+    "src/core/ai/AiRouteStatus.ts",
+    "src/core/ai/AiStatefulMoveGameBridge.ts",
     "src/core/ai/AiGraphRuntime.ts",
     "src/core/ai/AiGameBridge.ts",
-    "src/core/ai/AiStatefulMoveGameBridge.ts",
-    "src/core/ai/AiGraph.ts",
-    "src/core/ai/AiNodeTypes.ts",
-    "src/core/ai/AiBlackboard.ts",
-    "src/core/ai/AiGraphValidation.ts",
+    "src/core/testing/AiTestLabRuntime.ts",
     "src/core/orders/MoveOrder.ts",
     "src/core/simulation/SimulationTick.ts",
     "src/ai-node-editor/stateful-node-ui.ts",
     "src/ai-node-editor/stateful-move-debug.ts",
-    "src/ai-node-editor/runtime-debug-overlay.ts",
-    "scripts/ai_graph_runtime_smoke.ts",
+    "scripts/ai_route_status_smoke.ts",
+    "scripts/ai_route_status_smoke.mjs",
     "scripts/ai_stateful_move_bridge_smoke.ts",
-    "tests/ai-running-runtime.spec.ts",
     "tests/ai-running-move.spec.ts",
-    "src/core/front/FrontZoneState.ts",
-    "src/ui/FrontZoneControls.ts",
-    "tests/front-zones.spec.ts",
-    "ideas/AI_BEHAVIOR_NODE_SYSTEM_FEATURES.md",
-    "ideas/FRONT_LINE_INFLUENCE_ON_SINGLE_SOLDIER_AI.md",
-    "Run-Real-Wargame-Lab.bat",
-    "package.json"
-  ],
-  "planned_files": [
-    "src/core/ai/ReactiveConditionRuntime.ts",
-    "src/core/ai/RouteStatus.ts",
-    "src/core/pathfinding/GridPathfinder.ts",
-    "src/core/ai/ActionChannelOwnership.ts",
-    "src/core/ai/TacticalQueries.ts",
-    "src/core/cover/CoverOccupancy.ts",
-    "src/core/knowledge/SoldierKnowledgeSharing.ts",
-    "src/core/ai/DecisionHistory.ts"
+    "package.json",
+    ".github/workflows/preview-core-checks.yml"
   ],
   "stateful_runtime": {
     "implemented_statuses": [
@@ -94,43 +68,60 @@
       "waiting",
       "cancelled"
     ],
-    "implemented_lifecycle": [
-      "start",
-      "update",
-      "complete",
-      "cancel"
-    ],
     "implemented_nodes": [
       "SequenceWithMemory",
       "Wait",
       "MoveToBlackboardPosition"
     ],
-    "runtime_storage": "selected unit behaviorRuntime.aiGraphExecutionState",
     "movement_contract": {
       "target_is_frozen_on_start": true,
       "begin_move_is_emitted_once": true,
       "simulation_tick_moves_unit": true,
       "owned_cleanup_uses_token": true,
-      "legacy_player_order_is_inferred": true,
       "player_replacement_is_preserved": true,
-      "following_sequence_action_is_preserved": true,
-      "new_node_defaults_are_persisted": true,
-      "diagnostics": [
-        "targetKey",
-        "targetPosition",
-        "distanceRemainingCells",
-        "actionToken"
-      ]
+      "following_sequence_action_is_preserved": true
+    }
+  },
+  "route_status": {
+    "implemented": true,
+    "pathfinding_implemented": false,
+    "runtime_storage": "selected unit behaviorRuntime.aiRouteStatusState",
+    "statuses": [
+      "idle",
+      "moving",
+      "stalled",
+      "blocked",
+      "arrived",
+      "player_override",
+      "target_lost",
+      "order_missing",
+      "cancelled"
+    ],
+    "default_settings": {
+      "stuckTimeoutSeconds": 2.5,
+      "minimumProgressCells": 0.05,
+      "abortOnTargetLost": true
     },
-    "limitations": [
-      "Movement is straight-line and does not use pathfinding yet.",
-      "Blocked-route status is not implemented yet.",
-      "Cover identity and reservation are not implemented yet.",
-      "Reactive condition aborts and event subscriptions are not implemented yet.",
-      "Nested stateful sequences and multiple independent duration chains are not implemented yet.",
-      "Execution state is not stored in scene JSON.",
-      "Automatic execution still runs only for the selected soldier."
-    ]
+    "blackboard_keys": [
+      "active_move_route_status",
+      "active_move_no_progress_ms",
+      "active_move_last_distance",
+      "active_move_abort_code",
+      "active_move_abort_reason"
+    ],
+    "debug_fields": [
+      "routeStatus",
+      "routeNoProgressMs",
+      "routeAbortCode",
+      "routeAbortReasonRu"
+    ],
+    "reactive_mapping": {
+      "blocked": "force runtime with explicit cancel",
+      "target_lost": "force runtime with explicit cancel",
+      "player_override": "force normal runtime update",
+      "order_missing": "force normal runtime update"
+    },
+    "pause_contract": "Paused wall-clock time shifts startedAtMs and lastProgressAtMs, so it is excluded after resume."
   },
   "territory_blackboard": {
     "implemented_runtime_keys": [
@@ -140,19 +131,8 @@
       "territoryNeutral",
       "territoryEnemy"
     ],
-    "base_safety": {
-      "friendly": 80,
-      "neutral": 50,
-      "enemy": 20
-    },
-    "recommended_next_keys": [
-      "distanceToFriendlyTerritory",
-      "distanceToEnemyTerritory",
-      "directionToFriendlyTerritory",
-      "movingDeeperIntoEnemyTerritory"
-    ],
     "limitations": [
-      "Human-friendly blackboard selectors are not yet fully synchronized with territory keys.",
+      "Human-friendly selectors are not yet fully synchronized with territory keys.",
       "Front boundaries are not stored in scene-export-v3.",
       "Front does not move automatically."
     ]
@@ -160,8 +140,9 @@
   "commands": [
     "Run-Real-Wargame-Lab.bat",
     "Run-AI-Node-Editor.bat",
-    "npm run runtime:smoke",
+    "npm run route-status:smoke",
     "npm run move-bridge:smoke",
+    "npm run runtime:smoke",
     "npm run workspace:smoke",
     "npm run lab:smoke",
     "npm run game-editor:smoke",
@@ -171,36 +152,29 @@
     "npm run build"
   ],
   "important_sessions": [
-    "2026-07-09: graph data contract, local engine, AI Node Editor, universal nodes, GraphRunner and UtilitySelector created.",
-    "2026-07-10: unified scene editor, tactical awareness and Tactical Workspace implemented and verified.",
-    "2026-07-11: minimal front context merged into real-wargame-preview through PR #50.",
-    "2026-07-11: Stateful AI Runtime v1 implemented with SequenceWithMemory, Wait, lifecycle and cancellation contract.",
-    "2026-07-12: Stateful AI Movement v1 implemented with MoveToBlackboardPosition, frozen target, running lifecycle, token-owned MoveOrder and player-order protection.",
-    "2026-07-12: application commit e5b5e6f0f964ebc7d25e023a92c4e0d9c01b6735 passed core, policy and screenshot workflows; Playwright 15/15 and 21 PNG; 27-ai-running-move-node.png inspected."
+    "2026-07-09: graph data contract, GraphRunner and UtilitySelector created.",
+    "2026-07-10: tactical awareness and unified simulation/editor workspace implemented.",
+    "2026-07-11: front context and Stateful AI Runtime v1 implemented.",
+    "2026-07-12: Stateful AI Movement v1 implemented in real-wargame-preview.",
+    "2026-07-12: Reactive Abort + Route Status v1 implemented only in feature/ai-reactive-route-status-v1 with pure progress tracker, reactive bridge, Russian controls, diagnostics and pause-safe timing."
   ],
   "safety_rules": [
-    "Не переписывать всю RTS-симуляцию.",
-    "Не возвращать отдельный установленный AI Test Lab UI.",
-    "Не смешивать simulation input с editor input.",
-    "Не запускать graph для всей армии до стабилизации одного бойца.",
-    "Не возвращать legacy-ноды.",
-    "Не пересчитывать awareness каждый кадр.",
-    "Не считать объективный мир известным бойцу.",
-    "Не приравнивать territorySafety к current danger.",
-    "Не превращать фронт в постоянно пересчитываемую карту влияния.",
-    "Не рисовать фронт тысячами клеток.",
-    "Не использовать editor-scene-tools-slot для постоянной панели фронта.",
-    "Не менять наблюдаемый DOM из MutationObserver бесконечным циклом.",
-    "Не добавлять длительное действие без корректной очистки при cancel.",
-    "Не очищать MoveOrder без проверки ownerToken.",
-    "Не скрывать следующий effect последовательности поздней очисткой движения.",
-    "Не считать прямолинейное движение готовым pathfinding.",
-    "Не утверждать визуальную проверку без реального браузера и просмотра PNG.",
+    "Не утверждать, что route blocked является pathfinding.",
+    "Не удалять MoveOrder из route tracker.",
+    "Не очищать приказ без проверки ownerToken.",
+    "Не засчитывать время паузы как отсутствие прогресса.",
+    "Не форсировать полный runtime на каждом bridge poll.",
+    "Не обновлять debug payload другого unitId.",
+    "Не менять graph version 1 и localStorage v6 без миграции.",
+    "Не запускать автоматический граф всей армии до стабилизации одного бойца.",
+    "Не утверждать визуальную проверку без реального браузера и открытия PNG.",
+    "Не переносить временную ветку в preview без новой прямой команды пользователя.",
     "Не менять main без явного GO пользователя."
   ],
   "suggested_verification": [
-    "npm run runtime:smoke",
+    "npm run route-status:smoke",
     "npm run move-bridge:smoke",
+    "npm run runtime:smoke",
     "npm run workspace:smoke",
     "npm run lab:smoke",
     "npm run game-editor:smoke",
@@ -209,26 +183,31 @@
     "npm run validate:ai-graph",
     "npm run build",
     "tests/ai-running-move.spec.ts",
-    "tests/ai-running-runtime.spec.ts",
     ".agents/skills/real-wargame-local-preview/SKILL.md"
   ],
-  "last_verified_app_commit": "e5b5e6f0f964ebc7d25e023a92c4e0d9c01b6735",
-  "last_verified_runs": {
-    "core": 29167100028,
-    "policy": 29167100027,
-    "screenshots": 29167100023,
-    "playwright": "15/15 passed",
-    "png_count": 21,
-    "png_inspected": true,
-    "key_png": "27-ai-running-move-node.png"
-  },
+  "verified_application_commit_before_docs": "d487781cf81bb6c2f8178c2295c34e602c9b9b92",
+  "verified_application_core_run": 29169687959,
+  "browser_evidence": [
+    "27-ai-running-move-node.png",
+    "28-ai-route-blocked.png"
+  ],
+  "limitations": [
+    "Movement is straight-line and does not use pathfinding.",
+    "Movement physics is not obstacle-aware.",
+    "Route blocked is inferred from no progress, not a named obstacle.",
+    "No waypoints or replanning.",
+    "No cover identity or reservation.",
+    "No full reactive reevaluation of every branch condition.",
+    "Route state is not stored in scene JSON.",
+    "Automatic execution remains limited to the selected soldier."
+  ],
   "next_recommended_slice": [
-    "Add Reactive Abort + Route Status v1.",
-    "Introduce a real pathfinder and blocked-route state.",
-    "Cancel or rebuild movement when cover disappears, route is blocked or threat changes critically.",
-    "Add cover identity and reservation after route behavior is stable.",
-    "Then register territory keys in human selectors and use them as Utility AI score modifiers.",
-    "Scale automatic execution beyond the selected soldier only after these contracts are stable."
+    "Define a grid movement-obstacle contract.",
+    "Implement Grid Pathfinding v1 with A*.",
+    "Follow waypoint routes through the existing MoveOrder/route-status contract.",
+    "Add route replanning after pathfinding is stable.",
+    "Add cover identity and reservation after route replanning.",
+    "Scale scheduling beyond the selected soldier only after these contracts are stable."
   ],
   "zworker": {
     "boundaries": [
