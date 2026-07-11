@@ -8,6 +8,7 @@ import {
   makeValidationResult,
   resolveBundledGraphPath,
 } from './ai_engine_core.mjs';
+import { hasStatefulPreviewNodes, prepareGraphForInstantPreview } from './ai_engine_stateful_preview.mjs';
 
 const DEFAULT_PORT = 8787;
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -51,18 +52,30 @@ async function routeRequest(request, response) {
   }
 
   if (method === 'GET' && url.pathname === '/engine/health') {
-    writeJson(response, 200, createHealthPayload(port));
+    writeJson(response, 200, {
+      ...createHealthPayload(port),
+      statefulRuntime: 'live-game-bridge',
+      statefulPreview: 'execution-boundary-only',
+      statefulPreviewRu: 'Evaluate один раз показывает границу длительного поведения; реальный прогресс идёт в живом game bridge.',
+    });
     return;
   }
 
   if (method === 'POST' && url.pathname === '/ai/graph/validate') {
     const body = await readJsonBody(request);
-    const graph = body.graph ?? loadJsonFile(bundledGraphPath);
+    const sourceGraph = body.graph ?? loadJsonFile(bundledGraphPath);
+    const statefulPreview = hasStatefulPreviewNodes(sourceGraph);
+    const graph = prepareGraphForInstantPreview(sourceGraph);
     const validation = makeValidationResult(graph);
     writeJson(response, validation.valid ? 200 : 422, {
       ok: validation.valid,
-      graphId: typeof graph.id === 'string' ? graph.id : null,
+      graphId: typeof sourceGraph.id === 'string' ? sourceGraph.id : null,
       validation,
+      statefulPreview,
+      ...(statefulPreview ? {
+        runtimeNote: 'Stateful nodes are validated as instant preview boundaries. Live progress is executed by AiGraphRuntime.',
+        runtimeNoteRu: 'Состоянийные ноды проверены как границы preview. Реальный прогресс выполняет AiGraphRuntime.',
+      } : {}),
     });
     return;
   }
@@ -70,11 +83,21 @@ async function routeRequest(request, response) {
   if (method === 'POST' && url.pathname === '/ai/graph/evaluate-once') {
     const body = await readJsonBody(request);
     const bundledGraph = loadJsonFile(bundledGraphPath);
+    const sourceGraph = body.graph ?? bundledGraph;
+    const statefulPreview = hasStatefulPreviewNodes(sourceGraph);
     const result = evaluateSoldierOnce({
       ...body,
-      bundledGraph,
+      graph: prepareGraphForInstantPreview(sourceGraph),
+      bundledGraph: prepareGraphForInstantPreview(bundledGraph),
     });
-    writeJson(response, result.ok ? 200 : 422, result);
+    writeJson(response, result.ok ? 200 : 422, {
+      ...result,
+      statefulPreview,
+      ...(statefulPreview ? {
+        runtimeNote: 'Evaluate once stops at the duration boundary. Open the game to observe Running or Waiting progress.',
+        runtimeNoteRu: 'Evaluate один раз останавливается на границе длительного поведения. Прогресс «Выполняется/Ожидает» виден в игре.',
+      } : {}),
+    });
     return;
   }
 
@@ -90,26 +113,15 @@ async function readJsonBody(request) {
 
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > MAX_BODY_BYTES) {
-      throw new Error('Request body is too large.');
-    }
+    if (size > MAX_BODY_BYTES) throw new Error('Request body is too large.');
     chunks.push(chunk);
   }
 
-  if (chunks.length === 0) {
-    return {};
-  }
-
+  if (chunks.length === 0) return {};
   const text = Buffer.concat(chunks).toString('utf8').trim();
-  if (text.length === 0) {
-    return {};
-  }
-
+  if (text.length === 0) return {};
   const parsed = JSON.parse(text);
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error('JSON body must be an object.');
-  }
-
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('JSON body must be an object.');
   return parsed;
 }
 
@@ -134,17 +146,10 @@ function readPort() {
   const argPort = argPortIndex >= 0 ? process.argv[argPortIndex + 1] : undefined;
   const rawPort = argPort ?? process.env.AI_ENGINE_PORT;
   const parsed = Number(rawPort ?? DEFAULT_PORT);
-
-  if (!Number.isInteger(parsed) || parsed < 1024 || parsed > 65535) {
-    return DEFAULT_PORT;
-  }
-
-  return parsed;
+  return Number.isInteger(parsed) && parsed >= 1024 && parsed <= 65535 ? parsed : DEFAULT_PORT;
 }
 
 function shutdown() {
   console.log('\n[AI ENGINE] shutting down...');
-  server.close(() => {
-    process.exit(0);
-  });
+  server.close(() => process.exit(0));
 }
