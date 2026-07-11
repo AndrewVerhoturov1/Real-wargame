@@ -29,25 +29,34 @@ function renderMoveDetails(): void {
   const signature = payload
     ? `${payload.nowMs}:${payload.targetKey ?? ''}:${payload.targetPosition?.x ?? ''}:${payload.targetPosition?.y ?? ''}:${payload.distanceRemainingCells ?? ''}`
     : 'empty';
-  const existing = panel.querySelector<HTMLElement>('.stateful-move-debug-details');
-  if (signature === lastSignature && existing) return;
+  const existingRows = Array.from(panel.querySelectorAll<HTMLElement>('.stateful-move-debug-row'));
+  if (signature === lastSignature && existingRows.length > 0) return;
 
-  existing?.remove();
+  existingRows.forEach((row) => row.remove());
   lastSignature = signature;
   if (!payload?.targetKey || !payload.targetPosition) return;
 
   const list = panel.querySelector<HTMLDListElement>('dl');
   if (!list) return;
-  const fragment = document.createElement('div');
-  fragment.className = 'stateful-move-debug-details';
-  fragment.innerHTML = `
-    <div><dt>Цель из памяти</dt><dd>${escapeHtml(payload.targetKey)}</dd></div>
-    <div><dt>Координаты цели</dt><dd>${formatCoordinate(payload.targetPosition.x)}; ${formatCoordinate(payload.targetPosition.y)}</dd></div>
-    ${typeof payload.distanceRemainingCells === 'number'
-      ? `<div><dt>Осталось</dt><dd>${payload.distanceRemainingCells.toFixed(1)} клетки</dd></div>`
-      : ''}
-  `;
-  list.appendChild(fragment);
+  list.appendChild(makeRow('Цель из памяти', payload.targetKey));
+  list.appendChild(makeRow(
+    'Координаты цели',
+    `${formatCoordinate(payload.targetPosition.x)}; ${formatCoordinate(payload.targetPosition.y)}`,
+  ));
+  if (typeof payload.distanceRemainingCells === 'number') {
+    list.appendChild(makeRow('Осталось', `${payload.distanceRemainingCells.toFixed(1)} клетки`));
+  }
+}
+
+function makeRow(label: string, value: string): HTMLDivElement {
+  const row = document.createElement('div');
+  row.className = 'stateful-move-debug-row';
+  const term = document.createElement('dt');
+  term.textContent = label;
+  const description = document.createElement('dd');
+  description.textContent = value;
+  row.append(term, description);
+  return row;
 }
 
 interface MoveDebugPayload {
@@ -88,13 +97,4 @@ function readPosition(value: unknown): { x: number; y: number } | null {
 
 function formatCoordinate(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
 }
