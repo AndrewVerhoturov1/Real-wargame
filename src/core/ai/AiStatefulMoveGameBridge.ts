@@ -6,7 +6,6 @@ import { getAiTestPaused } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
 import type { AiBlackboardValue } from './AiBlackboard';
 import {
-  buildBlackboardForUnit,
   tickAiGameBridge,
   type AiGameBridgeHandle,
 } from './AiGameBridge';
@@ -32,10 +31,17 @@ const DEFAULT_ROUTE_SETTINGS: AiRouteStatusSettings = {
   abortOnTargetLost: true,
 };
 
+interface RouteSettingsCache {
+  readonly ownerToken: string;
+  readonly activeNodeId: string;
+  readonly settings: AiRouteStatusSettings;
+}
+
 type AiMoveRuntime = UnitModel['behaviorRuntime'] & {
   aiGraphMemory?: Record<string, AiBlackboardValue>;
   aiGraphExecutionState?: AiGraphExecutionState;
   aiRouteStatusState?: AiRouteStatusState;
+  aiRouteSettingsCache?: RouteSettingsCache;
 };
 
 export interface TickOptions {
@@ -143,7 +149,6 @@ export function updateSelectedRouteStatus(
   const activeOrderSource = order
     ? order.source ?? (order.ownerToken ? 'ai' : 'player')
     : null;
-  const blackboard = buildBlackboardForUnit(state, unit);
   const routeResult = updateAiRouteStatus({
     nowMs,
     position: unit.position,
@@ -152,9 +157,9 @@ export function updateSelectedRouteStatus(
     ownerToken: activeMove.ownerToken,
     activeOrderSource,
     activeOrderToken: order?.ownerToken ?? null,
-    targetAvailable: isGridPosition(blackboard[activeMove.targetKey]),
+    targetAvailable: isGridPosition(runtime.aiGraphMemory?.[activeMove.targetKey]),
     paused: state.editor.enabled || getAiTestPaused(state),
-    settings: readRouteSettings(activeMove.activeNodeId),
+    settings: readRouteSettings(runtime, activeMove),
     previousState: runtime.aiRouteStatusState,
   });
 
@@ -220,7 +225,27 @@ function readActiveMoveSnapshot(state: AiGraphExecutionState | undefined): Activ
   };
 }
 
-function readRouteSettings(activeNodeId: string): AiRouteStatusSettings {
+function readRouteSettings(
+  runtime: AiMoveRuntime,
+  activeMove: ActiveMoveSnapshot,
+): AiRouteStatusSettings {
+  const cached = runtime.aiRouteSettingsCache;
+  if (cached
+    && cached.ownerToken === activeMove.ownerToken
+    && cached.activeNodeId === activeMove.activeNodeId) {
+    return cached.settings;
+  }
+
+  const settings = loadRouteSettings(activeMove.activeNodeId);
+  runtime.aiRouteSettingsCache = {
+    ownerToken: activeMove.ownerToken,
+    activeNodeId: activeMove.activeNodeId,
+    settings,
+  };
+  return settings;
+}
+
+function loadRouteSettings(activeNodeId: string): AiRouteStatusSettings {
   if (typeof window === 'undefined') return DEFAULT_ROUTE_SETTINGS;
   try {
     const raw = window.localStorage.getItem(GRAPH_STORAGE_KEY);
