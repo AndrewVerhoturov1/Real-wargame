@@ -69,11 +69,13 @@ export function installFrontZoneControls(state: SimulationState, onChanged: () =
       return;
     }
 
-    const camera = (window as FrontZoneWindow).__realWargameCameraDebug ?? { x: 72, y: 72, zoom: 1 };
+    // Camera diagnostics expose the inverse camera offset, while CSS needs the actual
+    // world-container transform used by PixiJS. Negate x/y to keep boundaries on cell edges.
+    const camera = (window as FrontZoneWindow).__realWargameCameraDebug ?? { x: -72, y: -72, zoom: 1 };
     const zoom = Number.isFinite(camera.zoom) && camera.zoom > 0 ? camera.zoom : 1;
     const cellPixels = state.map.cellSize * zoom;
-    const mapLeft = camera.x;
-    const mapTop = camera.y;
+    const mapLeft = -camera.x;
+    const mapTop = -camera.y;
     const mapHeight = state.map.height * cellPixels;
     const friendlyWidth = front.friendlyBoundaryX * cellPixels;
     const neutralWidth = (front.enemyBoundaryX - front.friendlyBoundaryX) * cellPixels;
