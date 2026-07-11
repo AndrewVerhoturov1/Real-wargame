@@ -1,5 +1,6 @@
 name: One-time Web Chat Branch Sync
 
+# Temporary workflow: it removes itself after successfully rebuilding the isolated branch.
 on:
   push:
     branches:
