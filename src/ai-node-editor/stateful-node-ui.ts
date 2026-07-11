@@ -26,7 +26,7 @@ function enhanceSelectedStatefulNode(): void {
   }
 
   const node = readGraphNode(nodeId);
-  if (!node || (node.type !== 'Wait' && node.type !== 'SequenceWithMemory')) {
+  if (!node || !['Wait', 'SequenceWithMemory', 'MoveToBlackboardPosition'].includes(String(node.type))) {
     existing?.remove();
     return;
   }
@@ -46,7 +46,7 @@ function enhanceSelectedStatefulNode(): void {
       <h4>Последовательность с памятью</h4>
       <p>Запускает шаги по порядку и продолжает с активного шага на следующем тике ИИ. Никаких кодовых параметров для неё не требуется.</p>
     `;
-  } else {
+  } else if (node.type === 'Wait') {
     const duration = readWholeSeconds(node.parameters?.durationSeconds, 2);
     const timeout = readWholeSeconds(node.parameters?.timeoutSeconds, 0);
     section.innerHTML = `
@@ -61,6 +61,31 @@ function enhanceSelectedStatefulNode(): void {
         <input id="stateful-wait-timeout" class="human-field" data-param-key="timeoutSeconds" data-kind="number" type="number" min="0" step="1" value="${timeout}" />
       </label>
     `;
+  } else {
+    const targetKey = readTargetKey(node.parameters?.targetKey);
+    const radius = readNonNegative(node.parameters?.acceptanceRadiusCells, 0.2);
+    const timeout = readNonNegative(node.parameters?.timeoutSeconds, 15);
+    section.innerHTML = `
+      <h4>Длительное движение</h4>
+      <p>Боец один раз запоминает цель, движется к ней несколько тиков ИИ и не меняет её до завершения или отмены.</p>
+      <label class="human-control wide" data-help="Позиция берётся из выбранной ячейки памяти в момент старта и затем замораживается.">
+        <span>Цель из памяти</span>
+        <select id="stateful-move-target" class="stateful-move-field" data-param-key="targetKey">
+          ${targetOption('best_cover_position', 'Лучшая точка укрытия', targetKey)}
+          ${targetOption('order_target_position', 'Точка приказа', targetKey)}
+          ${targetOption('retreat_position', 'Точка отхода', targetKey)}
+        </select>
+      </label>
+      <label class="human-control wide" data-help="Нода считается завершённой, когда до цели осталось не больше этого расстояния.">
+        <span>Радиус достижения, клеток</span>
+        <input id="stateful-move-radius" class="stateful-move-field" data-param-key="acceptanceRadiusCells" type="number" min="0" step="0.05" value="${radius}" />
+      </label>
+      <label class="human-control wide" data-help="0 — без ограничения. После тайм-аута нода провалится и очистит только собственный приказ ИИ.">
+        <span>Максимальное время, секунд</span>
+        <input id="stateful-move-timeout" class="stateful-move-field" data-param-key="timeoutSeconds" type="number" min="0" step="0.5" value="${timeout}" />
+      </label>
+      <p class="stateful-move-safety-note">Новый приказ игрока имеет приоритет и не будет удалён устаревшей отменой ИИ.</p>
+    `;
   }
 
   const cooldown = humanPanel.querySelector('.human-links');
@@ -68,6 +93,29 @@ function enhanceSelectedStatefulNode(): void {
   if (cooldown) humanPanel.insertBefore(section, cooldown);
   else if (actions) humanPanel.insertBefore(section, actions);
   else humanPanel.appendChild(section);
+
+  if (node.type === 'MoveToBlackboardPosition') installMoveParameterSync(section);
+}
+
+function installMoveParameterSync(section: HTMLElement): void {
+  const sync = (): void => {
+    const parametersArea = document.querySelector<HTMLTextAreaElement>('#node-parameters');
+    if (!parametersArea) return;
+    const parameters = readParameters(parametersArea.value);
+    parameters.targetKey = document.querySelector<HTMLSelectElement>('#stateful-move-target')?.value ?? 'best_cover_position';
+    parameters.acceptanceRadiusCells = readInputNumber('#stateful-move-radius', 0.2);
+    parameters.timeoutSeconds = readInputNumber('#stateful-move-timeout', 15);
+    parametersArea.value = JSON.stringify(parameters, null, 2);
+  };
+
+  section.querySelectorAll<HTMLInputElement | HTMLSelectElement>('.stateful-move-field')
+    .forEach((field) => field.addEventListener('input', sync));
+  document.querySelector<HTMLButtonElement>('.human-save-node')?.addEventListener('click', sync, { capture: true });
+  sync();
+}
+
+function targetOption(value: string, label: string, selected: string): string {
+  return `<option value="${value}" ${value === selected ? 'selected' : ''}>${label} · ${value}</option>`;
 }
 
 function readGraphNode(nodeId: string): { type?: string; parameters?: Record<string, unknown> } | null {
@@ -81,6 +129,32 @@ function readGraphNode(nodeId: string): { type?: string; parameters?: Record<str
   }
 }
 
+function readParameters(value: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function readInputNumber(selector: string, fallback: number): number {
+  const value = Number(document.querySelector<HTMLInputElement>(selector)?.value ?? fallback);
+  return Number.isFinite(value) ? Math.max(0, value) : fallback;
+}
+
+function readTargetKey(value: unknown): string {
+  return value === 'order_target_position' || value === 'retreat_position'
+    ? value
+    : 'best_cover_position';
+}
+
 function readWholeSeconds(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.round(value)) : fallback;
+}
+
+function readNonNegative(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : fallback;
 }
