@@ -16,6 +16,7 @@
     "workspace:smoke": "node scripts/tactical_workspace_smoke.mjs",
     "dictionary:smoke": "node scripts/ai_dictionary_smoke.mjs",
     "runtime:smoke": "node scripts/ai_graph_runtime_smoke.mjs",
+    "move-bridge:smoke": "node scripts/ai_stateful_move_bridge_smoke.mjs",
     "lab:manager": "node scripts/real_wargame_lab_manager.mjs"
   },
   "dependencies": {
