@@ -32,7 +32,7 @@ on:
       - .github/workflows/agent-docs-integrity.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   agent-docs-integrity:
@@ -40,11 +40,8 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: Checkout isolated branch
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: feature/web-chat-repository-v1
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -61,23 +58,8 @@ jobs:
       - name: Regenerate agent documentation
         run: npm run docs:generate
 
-      - name: Commit generated files when stale
-        shell: bash
-        run: |
-          set -euo pipefail
-          git add \
-            docs/ai/CURRENT_STATE.md \
-            docs/subprojects/index.json \
-            docs/subprojects/INDEX.md \
-            docs/subprojects/*/STATUS.md
-          if git diff --cached --quiet; then
-            echo "Generated files are already current."
-          else
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git commit -m "docs: refresh generated agent status"
-            git push origin HEAD:feature/web-chat-repository-v1
-          fi
+      - name: Verify generated files are committed
+        run: git diff --exit-code
 
       - name: Check repository context integrity
         run: npm run docs:check
