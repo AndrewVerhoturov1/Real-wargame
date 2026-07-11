@@ -3,21 +3,25 @@
   "title": "AI Single-Unit Editor — Stateful Tactical Awareness Lab",
   "status": "active",
   "goal": "Создать понятную человеку лабораторию поведения одиночного бойца в RTS-основе Real-wargame: Utility AI выбирает действие, состоянийный runtime исполняет длительные шаги, а решения используют субъективную тактическую осведомлённость и территориальный контекст.",
-  "current_focus": "Stateful AI Movement v1 внедрён: MoveToBlackboardPosition замораживает цель Blackboard, один раз создаёт token-owned MoveOrder, возвращает running между тиками, завершает последовательность по прибытии и безопасно отменяется без удаления нового приказа игрока. Следующий этап — реактивная отмена и настоящий статус маршрута/pathfinding.",
+  "current_focus": "Stateful AI Movement v1 внедрён и проверен: MoveToBlackboardPosition замораживает цель Blackboard, один раз создаёт token-owned MoveOrder, физически движется через SimulationTick, возвращает running между тиками, завершает последовательность по прибытии и безопасно отменяется без удаления нового приказа игрока. Следующий этап — Reactive Abort + Route Status v1 и затем pathfinding.",
   "key_decisions": [
     "Первая версия ограничена одним выбранным бойцом; squad-level AI отложен.",
     "Игровая часть имеет ровно два режима: Симуляция и Редактирование.",
     "Редактор ставит симуляцию на паузу.",
     "AiGraphRunner.ts остаётся чистым мгновенным Utility AI evaluator без PixiJS, DOM, localStorage или SimulationState.",
     "AiGraphRuntime.ts является отдельным чистым слоем длительного исполнения поверх существующего GraphRunner.",
+    "Runtime-specific movement effects проверяются на границе AiStatefulMoveGameBridge и не добавляются в мгновенный GraphRunner.",
     "Execution state хранится отдельно от Blackboard и содержит только serializable-данные.",
     "SequenceWithMemory продолжает активный шаг между тиками.",
     "Wait использует waiting; MoveToBlackboardPosition является первой реальной action-нодой со статусом running.",
     "Цель движения замораживается в момент start и не пересчитывается каждый тик.",
     "SimulationTick остаётся единственным кодом, который изменяет координаты бойца.",
     "AI MoveOrder получает ownerToken; очистка удаляет только приказ с совпадающим token.",
+    "Приказ правого клика без ownership-полей считается пользовательским.",
     "Новый приказ игрока имеет приоритет и не удаляется устаревшей отменой ИИ.",
+    "Очистка движения не должна скрывать следующий шаг SequenceWithMemory.",
     "MoveToBlackboardPosition зарегистрирована в едином каталоге AiNodeTypes и проходит общий валидатор.",
+    "Новая нода из палитры сразу сохраняет targetKey, acceptanceRadiusCells и timeoutSeconds.",
     "AiGameBridge.ts и AiStatefulMoveGameBridge.ts являются адаптерами между runtime, SimulationState, tactical awareness и effects.",
     "Awareness субъективна и строится из знаний бойца.",
     "Территориальная безопасность является фоновым контекстом и не заменяет реальную опасность.",
@@ -110,7 +114,10 @@
       "begin_move_is_emitted_once": true,
       "simulation_tick_moves_unit": true,
       "owned_cleanup_uses_token": true,
+      "legacy_player_order_is_inferred": true,
       "player_replacement_is_preserved": true,
+      "following_sequence_action_is_preserved": true,
+      "new_node_defaults_are_persisted": true,
       "diagnostics": [
         "targetKey",
         "targetPosition",
@@ -172,7 +179,7 @@
     "2026-07-11: minimal front context merged into real-wargame-preview through PR #50.",
     "2026-07-11: Stateful AI Runtime v1 implemented with SequenceWithMemory, Wait, lifecycle and cancellation contract.",
     "2026-07-12: Stateful AI Movement v1 implemented with MoveToBlackboardPosition, frozen target, running lifecycle, token-owned MoveOrder and player-order protection.",
-    "2026-07-12: code commit 7a8cea65fdc8c20201596dfb098e2671285e0ecc passed core, policy and screenshot workflows; Playwright 14/14 and 21 PNG; 27-ai-running-move-node.png inspected."
+    "2026-07-12: application commit e5b5e6f0f964ebc7d25e023a92c4e0d9c01b6735 passed core, policy and screenshot workflows; Playwright 15/15 and 21 PNG; 27-ai-running-move-node.png inspected."
   ],
   "safety_rules": [
     "Не переписывать всю RTS-симуляцию.",
@@ -189,6 +196,7 @@
     "Не менять наблюдаемый DOM из MutationObserver бесконечным циклом.",
     "Не добавлять длительное действие без корректной очистки при cancel.",
     "Не очищать MoveOrder без проверки ownerToken.",
+    "Не скрывать следующий effect последовательности поздней очисткой движения.",
     "Не считать прямолинейное движение готовым pathfinding.",
     "Не утверждать визуальную проверку без реального браузера и просмотра PNG.",
     "Не менять main без явного GO пользователя."
@@ -207,12 +215,12 @@
     "tests/ai-running-runtime.spec.ts",
     ".agents/skills/real-wargame-local-preview/SKILL.md"
   ],
-  "last_verified_app_commit": "7a8cea65fdc8c20201596dfb098e2671285e0ecc",
+  "last_verified_app_commit": "e5b5e6f0f964ebc7d25e023a92c4e0d9c01b6735",
   "last_verified_runs": {
-    "core": 29166810608,
-    "policy": 29166810601,
-    "screenshots": 29166810600,
-    "playwright": "14/14 passed",
+    "core": 29167100028,
+    "policy": 29167100027,
+    "screenshots": 29167100023,
+    "playwright": "15/15 passed",
     "png_count": 21,
     "png_inspected": true,
     "key_png": "27-ai-running-move-node.png"
@@ -236,5 +244,5 @@
   "updated_at": "2026-07-12",
   "next_step": "Реализовать Reactive Abort + Route Status v1: реактивно отменять или перестраивать движение при новом приказе, исчезновении укрытия, блокировке маршрута или критическом изменении угрозы; затем добавить настоящий grid pathfinder.",
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-  "last_verified_commit": "7a8cea65fdc8c20201596dfb098e2671285e0ecc"
+  "last_verified_commit": "e5b5e6f0f964ebc7d25e023a92c4e0d9c01b6735"
 }
