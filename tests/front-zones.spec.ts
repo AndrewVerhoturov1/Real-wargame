@@ -86,6 +86,15 @@ test('front zones are editable, toggleable and expose territory safety to the se
     return `${diagnostics?.friendlyBoundaryX}:${diagnostics?.enemyBoundaryX}`;
   }).toBe('18:44');
 
+  const canvasBox = await canvas.boundingBox();
+  const friendlyLineBox = await page.locator('[data-front-zone-line="friendly"]').boundingBox();
+  const enemyLineBox = await page.locator('[data-front-zone-line="enemy"]').boundingBox();
+  if (!canvasBox || !friendlyLineBox || !enemyLineBox) throw new Error('Front boundary geometry unavailable.');
+  const expectedFriendlyX = canvasBox.x + BOARD_ORIGIN.x + 18 * CELL_SIZE - friendlyLineBox.width / 2;
+  const expectedEnemyX = canvasBox.x + BOARD_ORIGIN.x + 44 * CELL_SIZE - enemyLineBox.width / 2;
+  expect(Math.abs(friendlyLineBox.x - expectedFriendlyX)).toBeLessThan(3);
+  expect(Math.abs(enemyLineBox.x - expectedEnemyX)).toBeLessThan(3);
+
   await page.locator('[data-mode="simulation"]').click();
   const soldier = await worldPoint(canvas, 27.574, 17.589);
   await page.mouse.click(soldier.x, soldier.y);
