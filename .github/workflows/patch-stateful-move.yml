@@ -1,0 +1,107 @@
+name: Patch stateful move integration
+
+on:
+  push:
+    branches:
+      - feature/ai-running-move-v1
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/ai-running-move-v1
+          fetch-depth: 0
+
+      - name: Apply exact source patches
+        shell: python
+        run: |
+          from pathlib import Path
+
+          runtime_path = Path('src/core/ai/AiGraphRuntime.ts')
+          runtime = runtime_path.read_text(encoding='utf-8')
+          runtime = runtime.replace(
+              '  const move = resumableState.activeData;\n',
+              '  const move = resumableState.activeData as AiGraphMoveExecutionData;\n',
+              1,
+          )
+          runtime = runtime.replace(
+              """  if (activeToken !== move.actionToken) {
+              if (activeSource === 'player' || activeToken === null) {
+                const reason = 'The player replaced the active AI move order.';
+                const reasonRu = 'Приказ игрока заменил активное движение ИИ.';
+                accumulator.effects.push(clearMoveEffect(move.actionToken, reason, reasonRu));
+                lifecycle.push(lifecycleEvent('cancel', child, input.nowMs, reason, reasonRu));
+                accumulator.trace.push(traceItem(child, 'cancelled', reason, reasonRu));
+                return result(input, branch, accumulator, lifecycle, 'cancelled', reason, reasonRu, {
+                  ...details,
+                  cancellationReason: reason,
+                  cancellationReasonRu: reasonRu,
+                });
+              }
+
+              const reason = 'Another AI movement replaced the active move order.';
+              """,
+              """  if (activeToken !== move.actionToken) {
+              if (activeSource === 'player') {
+                const reason = 'The player replaced the active AI move order.';
+                const reasonRu = 'Приказ игрока заменил активное движение ИИ.';
+                accumulator.effects.push(clearMoveEffect(move.actionToken, reason, reasonRu));
+                lifecycle.push(lifecycleEvent('cancel', child, input.nowMs, reason, reasonRu));
+                accumulator.trace.push(traceItem(child, 'cancelled', reason, reasonRu));
+                return result(input, branch, accumulator, lifecycle, 'cancelled', reason, reasonRu, {
+                  ...details,
+                  cancellationReason: reason,
+                  cancellationReasonRu: reasonRu,
+                });
+              }
+
+              if (activeToken === null) {
+                const reason = 'The owned AI move order disappeared before arrival.';
+                const reasonRu = 'Собственный приказ движения ИИ исчез до достижения цели.';
+                accumulator.effects.push(clearMoveEffect(move.actionToken, reason, reasonRu));
+                lifecycle.push(lifecycleEvent('complete', child, input.nowMs, reason, reasonRu));
+                accumulator.trace.push(traceItem(child, 'fail', reason, reasonRu));
+                return result(input, branch, accumulator, lifecycle, 'failure', reason, reasonRu, details);
+              }
+
+              const reason = 'Another AI movement replaced the active move order.';
+              """,
+              1,
+          )
+          runtime_path.write_text(runtime, encoding='utf-8')
+
+          main_path = Path('src/main.ts')
+          main = main_path.read_text(encoding='utf-8')
+          main = main.replace(
+              "import { installAiStatefulMoveGameBridge } from './core/ai/AiStatefulMoveGameBridge';",
+              "import { installAiStatefulMoveGameBridge as installAiGameBridge } from './core/ai/AiStatefulMoveGameBridge';",
+              1,
+          )
+          main = main.replace(
+              'const aiGameBridge = installAiStatefulMoveGameBridge(state);',
+              'const aiGameBridge = installAiGameBridge(state);',
+              1,
+          )
+          main_path.write_text(main, encoding='utf-8')
+
+      - name: Commit feature patch
+        shell: bash
+        run: |
+          set -e
+          if git diff --quiet; then
+            echo "No patch needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/core/ai/AiGraphRuntime.ts src/main.ts
+          git commit -m "fix: finalize stateful move integration"
+          git push origin HEAD:feature/ai-running-move-v1
