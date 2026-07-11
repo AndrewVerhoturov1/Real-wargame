@@ -77,7 +77,7 @@ export function applyOwnedMoveEffects(state: SimulationState, result: AiGraphRun
   const unit = state.units.find((candidate) => candidate.id === result.unitId);
   if (!unit) return;
 
-  for (const rawEffect of result.effects) {
+  for (const [index, rawEffect] of result.effects.entries()) {
     const effect = readAiGraphRuntimeMoveEffect(rawEffect);
     if (!effect) continue;
 
@@ -94,9 +94,11 @@ export function applyOwnedMoveEffects(state: SimulationState, result: AiGraphRun
 
     if (unit.order?.ownerToken === effect.ownerToken) {
       unit.order = null;
-      unit.behaviorRuntime.currentAction = 'observe';
-      unit.behaviorRuntime.reason = effect.reasonRu ?? effect.reason;
-      unit.behaviorRuntime.lastEvent = 'ai_graph_owned_move_cleared';
+      if (!hasLaterNonMoveEffect(result, index)) {
+        unit.behaviorRuntime.currentAction = 'observe';
+        unit.behaviorRuntime.reason = effect.reasonRu ?? effect.reason;
+        unit.behaviorRuntime.lastEvent = 'ai_graph_owned_move_cleared';
+      }
       continue;
     }
 
@@ -106,6 +108,13 @@ export function applyOwnedMoveEffects(state: SimulationState, result: AiGraphRun
       unit.behaviorRuntime.lastEvent = 'ai_graph_owned_move_cleanup_skipped';
     }
   }
+}
+
+function hasLaterNonMoveEffect(result: AiGraphRuntimeResult, currentIndex: number): boolean {
+  for (let index = currentIndex + 1; index < result.effects.length; index += 1) {
+    if (!readAiGraphRuntimeMoveEffect(result.effects[index])) return true;
+  }
+  return false;
 }
 
 function publishMoveDebugDetails(result: AiGraphRuntimeResult): void {
