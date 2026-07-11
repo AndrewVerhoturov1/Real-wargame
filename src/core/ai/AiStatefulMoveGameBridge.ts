@@ -14,6 +14,7 @@ import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
 
 const AI_GRAPH_POLL_INTERVAL_MS = 60;
+const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 
 type AiMoveRuntime = UnitModel['behaviorRuntime'] & {
   aiGraphMemory?: Record<string, AiBlackboardValue>;
@@ -51,6 +52,7 @@ export function tickStatefulMoveBridge(
   const result = tickAiGameBridge(state, nowMs, options);
   if (result && options.applyEffects) applyOwnedMoveEffects(state, result);
   syncSelectedMoveOrderMemory(state);
+  if (result) publishMoveDebugDetails(result);
   return result;
 }
 
@@ -103,5 +105,21 @@ export function applyOwnedMoveEffects(state: SimulationState, result: AiGraphRun
       unit.behaviorRuntime.reason = 'Новый приказ сохранён; устаревшая очистка движения ИИ пропущена.';
       unit.behaviorRuntime.lastEvent = 'ai_graph_owned_move_cleanup_skipped';
     }
+  }
+}
+
+function publishMoveDebugDetails(result: AiGraphRuntimeResult): void {
+  try {
+    const raw = window.localStorage.getItem(DEBUG_STORAGE_KEY);
+    if (!raw) return;
+    const payload = JSON.parse(raw) as Record<string, unknown>;
+    if (payload.kind !== 'ai-graph-runtime-debug' || payload.unitId !== result.unitId) return;
+    payload.targetKey = result.targetKey;
+    payload.targetPosition = result.targetPosition;
+    payload.distanceRemainingCells = result.distanceRemainingCells;
+    payload.actionToken = result.actionToken;
+    window.localStorage.setItem(DEBUG_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Movement diagnostics are optional and must never interrupt simulation.
   }
 }
