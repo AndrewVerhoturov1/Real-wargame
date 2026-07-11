@@ -75,7 +75,15 @@
 - [x] Add Playwright game/editor dictionary interaction and screenshots.
 - [x] Add Playwright custom-memory, diagnostics and decision-history coverage.
 - [x] Verify the first dictionary release on `real-wargame-preview` with full build and real-browser screenshots.
-- [ ] Verify the authoring-workbench completion branch with full build and real-browser screenshots.
-- [ ] Transfer the verified completion commit to `real-wargame-preview`.
+- [x] Verify the authoring-workbench completion branch with full build and real-browser screenshots.
+- [x] Transfer the verified completion commit to `real-wargame-preview` through PR #52.
+
+## Verified delivery
+
+- First dictionary slice: PR #51, preview commit `e7e3e60f3abbf2a114093e0e8089f71dab25242e`.
+- Authoring-workbench completion: PR #52, preview commit `4b22aac8be619a0837d75670210286fe920dedad`.
+- Completion branch verification: production build and all core smoke checks passed; Playwright reported `12 passed (6.0m)`.
+- Fresh screenshots `21` through `25` were downloaded and inspected.
+- `main` was not modified.
 
 Temporary GitHub branches may remain when the connected GitHub interface does not provide branch deletion. This is reported as cleanup debt rather than hidden or falsely marked complete.
