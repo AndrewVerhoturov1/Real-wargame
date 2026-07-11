@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "name": "Real-Wargame",
+    "repository": "AndrewVerhoturov1/Real-wargame",
+    "workingBranch": "real-wargame-preview",
+    "stableBranch": "main",
+    "canonicalLauncher": "Run-Real-Wargame-Lab.bat",
+    "defaultUserLanguage": "ru",
+    "canonicalDevelopmentLanguage": "en"
+  },
+  "stack": {
+    "runtime": "browser-and-local-node",
+    "viteMajor": 5,
+    "typescriptMajor": 5,
+    "pixiJsMajor": 7
+  },
+  "activeSubprojects": [
+    "ai-single-unit-editor"
+  ],
+  "delivery": {
+    "preferred": "direct-push-to-preview",
+    "target": "real-wargame-preview",
+    "fallback": "pull-request-to-preview",
+    "mainRequiresExplicitUserGo": true,
+    "autoMergeAllowed": false
+  },
+  "agentEntryPoints": [
+    "AGENTS.md",
+    "docs/ai/WEB_CHAT_START.md",
+    "docs/subprojects/index.json"
+  ],
+  "defaultSkills": {
+    "localPreview": ".agents/skills/real-wargame-local-preview/SKILL.md",
+    "pixiJs": ".agents/skills/real-wargame-pixijs/SKILL.md",
+    "aiRuntime": ".agents/skills/real-wargame-ai-runtime/SKILL.md"
+  },
+  "updatedAt": "2026-07-12"
+}

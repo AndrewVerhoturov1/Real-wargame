@@ -17,7 +17,11 @@
     "dictionary:smoke": "node scripts/ai_dictionary_smoke.mjs",
     "runtime:smoke": "node scripts/ai_graph_runtime_smoke.mjs",
     "move-bridge:smoke": "node scripts/ai_stateful_move_bridge_smoke.mjs",
-    "lab:manager": "node scripts/real_wargame_lab_manager.mjs"
+    "lab:manager": "node scripts/real_wargame_lab_manager.mjs",
+    "docs:generate": "node scripts/generate_agent_docs.mjs",
+    "docs:check": "node scripts/check_agent_docs.mjs",
+    "docs:smoke": "node scripts/agent_docs_smoke.mjs",
+    "docs:sync": "npm run docs:generate && npm run docs:check"
   },
   "dependencies": {
     "pixi.js": "^7.4.3"

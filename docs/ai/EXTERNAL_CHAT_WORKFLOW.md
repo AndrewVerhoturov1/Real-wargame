@@ -1,111 +1,101 @@
-# Workflow внешнего web-chat
+# External GitHub-Aware Web Chat Workflow
 
-Внешний web-chat с GitHub-интеграцией может быть основным удалённым исполнителем, но он должен работать по строгим правилам.
+The binding short contract is `AGENTS.md`. Start with `docs/ai/WEB_CHAT_START.md` and the active generated `STATUS.md`.
 
-## Перед началом
+## Before work
 
-1. Прочитать `AGENTS.md`.
-2. Прочитать task-pack, issue или Q-задачу.
-3. Понять разрешённый scope.
-4. Проверить, какие файлы можно менять, а какие нельзя.
-5. Если задача связана с PixiJS/canvas/graphics/scene/assets/SVG/events/performance/migration-v8 — прочитать `docs/ai/PIXIJS_SKILLS_INDEX.md` и `.agents/skills/pixijs/SKILL.md`, затем только релевантные PixiJS skills.
-6. Не начинать "широкую уборку" без отдельного разрешения.
+1. Read the minimal route, not the whole repository.
+2. Resolve the exact active subproject from `docs/subprojects/index.json`.
+3. Read the relevant project skill.
+4. Confirm the allowed scope and checks.
+5. Inspect the exact branch/ref instead of assuming GitHub code search is complete.
 
-## Рабочий порядок
+## Delivery selection
 
-1. Создать отдельную ветку для задачи.
-2. Внести только нужные изменения.
-3. Не менять `main` напрямую.
-4. Не включать auto-merge.
-5. Открыть Pull Request.
-6. В PR написать понятный отчёт.
-7. Если есть замечания, доработать тот же PR.
-8. Не мержить PR самостоятельно.
+### Preferred: direct preview delivery
 
-## Что писать в Pull Request
-
-PR должен содержать:
-
-- что сделано;
-- зачем сделано;
-- какие файлы изменены;
-- как человеку проверить результат;
-- какие проверки запускались;
-- что не проверялось;
-- риски;
-- нужна ли локальная проверка человеком.
-
-## Честность проверок
-
-Если внешний web-chat не запускал локальные команды, он должен написать:
+Use when the task is bounded, write access exists and no explicit isolation was requested:
 
 ```text
-Локальные проверки не запускались: нет доступа к локальной среде.
+commit/push directly to real-wargame-preview
 ```
 
-Если он не видел результат глазами, он должен написать:
+### Fallback: Pull Request into preview
+
+Use when direct push is unavailable, conflicts exist, review isolation is important or CI must run on a task branch:
 
 ```text
-Визуальная локальная проверка не выполнялась.
+temporary branch
+→ PR into real-wargame-preview
 ```
 
-## Ограничения
+After the result reaches preview, close the temporary PR/branch unless a documented reason requires it to remain open.
 
-Внешний web-chat не должен:
+### Explicit isolated branch
 
-- менять `main` напрямую;
-- мержить PR;
-- включать auto-merge;
-- добавлять секреты;
-- публиковать приватный контекст;
-- делать большие изменения вне задачи;
-- удалять файлы без явного разрешения;
-- переписывать архитектуру без отдельного задания.
-
-## Хороший task-pack для внешнего web-chat
-
-Хорошая задача должна содержать:
-
-- цель;
-- контекст;
-- список файлов для чтения или навигационных документов;
-- разрешённые файлы;
-- запрещённые файлы;
-- требования;
-- критерии готовности;
-- ожидаемый формат PR/отчёта.
-
-Если этого нет, внешний web-chat должен ограничиться осторожным черновиком или попросить уточнение.
-
-## Если задача пришла в Q-режиме
-
-Q-режим означает, что внешний web-chat имеет GitHub-доступ и не должен возвращать ZIP.
-
-В этом случае нужно:
-
-1. Прочитать `AGENTS.md` и указанные документы навигации.
-2. Создать отдельную ветку.
-3. Выполнить ограниченную задачу.
-4. Открыть Pull Request.
-5. Ответить Codex отчётом:
-   - repository;
-   - branch;
-   - PR number/link;
-   - changed files;
-   - checks run;
-   - not checked;
-   - risks;
-   - human verification steps;
-   - questions, if any.
-
-Нельзя мержить PR самостоятельно, нельзя включать auto-merge и нельзя писать в `main` напрямую.
-
-Если PR создать нельзя, нужно написать:
+When the user says not to transfer yet:
 
 ```text
-PR not created: <причина>
+keep commits on the requested feature branch
 ```
 
-и не выдавать задачу за завершённую.
+Do not merge or retarget it. Report `transfer_path: isolated branch only`.
 
-Полные правила R/Q: `docs/ai/ZWORKER_MODES.md`. Короткий шаблон Q-задачи: `docs/ai/TASK_PACK_Q_TEMPLATE.md`.
+## Implementation discipline
+
+- Change only the requested scope.
+- Follow project-local skills before generic framework guidance.
+- Real-Wargame uses PixiJS 7.
+- Use TDD for behavior changes.
+- Update canonical JSON and regenerate status pages for current-state documentation changes.
+- Do not make unrelated cleanup changes.
+
+## Verification honesty
+
+Use exact wording:
+
+```text
+GitHub Actions browser verification completed.
+```
+
+or:
+
+```text
+Local agent checkout verification completed with ...
+```
+
+or:
+
+```text
+Local verification was not available.
+```
+
+Do not call GitHub Actions a run on the user's PC.
+
+Do not call visual work successful until fresh PNGs from the same commit are inspected.
+
+## Required report
+
+```text
+repository: AndrewVerhoturov1/Real-wargame
+branch: ...
+commit/pr: ...
+transfer_path: direct push / PR fallback / isolated branch only / not changed
+changed_files: ...
+checks_run: ...
+not_checked: ...
+manual_checks_needed: ...
+risks: ...
+main_touched: no / explicit approved change
+```
+
+## Prohibited
+
+- Direct write or merge to `main` without `MAIN_GO_APPROVED_BY_USER: yes`.
+- Auto-merge.
+- Publishing secrets, `.env`, keys or private data.
+- Claiming tests or visual inspection that did not happen.
+- Deleting files or rewriting architecture outside the task.
+- Returning only a text answer when the user requested repository implementation and write access is available.
+
+R/Q/X details remain in `docs/ai/ZWORKER_MODES.md`.

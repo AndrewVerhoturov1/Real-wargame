@@ -1,40 +1,45 @@
 {
   "id": "github-collaboration",
   "title": "GitHub Collaboration",
-  "status": "draft",
-  "goal": "Создать и поддерживать понятную систему совместной разработки через GitHub, где человек принимает решения, а агенты безопасно работают через ветки, Pull Request и ограниченные задачи.",
-  "current_focus": "Довести Q-режим до рабочего v1 рядом с R/manual zworker процессом: внешний GitHub-capable исполнитель работает через ветку/PR/report, Codex проверяет, человек решает. Добавить X-режим (r-init) как preview-интеграционный workflow. Route X — отдельный механизм доставки, используемый r-init, но не идентичный ему.",
+  "status": "maintenance",
+  "updated_at": "2026-07-12",
+  "goal": "Создать и поддерживать понятную систему совместной разработки через GitHub, где человек принимает решения, а агенты безопасно работают через preview, ограниченные задачи и честные проверки.",
+  "current_focus": "Основной workflow работает. Подпроект переведён в режим поддержки: активные документы должны использовать прямой push в real-wargame-preview как предпочтительный путь и PR в preview как fallback.",
+  "next_step": "Поддерживать единый контракт во всех agent-facing документах и развивать автоматическую проверку их целостности без расширения процесса разработки игры.",
+  "canonical_launcher": "Run-Real-Wargame-Lab.bat",
+  "last_verified_commit": "f0bc53566be4451e9dd9fb8aa5df6a7027de759b",
   "key_decisions": [
-    "Публичный контракт: одна задача -> одна ветка -> один Pull Request.",
     "main не является рабочей веткой для содержательных изменений.",
     "Человек не обязан вручную работать с ветками, merge, rebase и конфликтами.",
     "Codex выступает техническим контролёром и объяснителем.",
     "OpenCode используется как руки Codex для ограниченной рутины.",
-    "Внешний web-chat работает через GitHub и возвращает результат через PR.",
+    "Внешний GitHub-aware web-chat предпочтительно доставляет результат прямым push в real-wargame-preview.",
+    "Если прямой push невозможен, используется временная ветка и PR только в real-wargame-preview.",
     "Ручной zworker работает только по опубликованному контексту и возвращает ZIP с answer.md.",
     "R-режим сохраняется как полный ручной zworker-запрос с raw-ссылками и ZIP-ответом.",
-    "Q-режим — v1: короткая GitHub-aware постановка, отдельная ветка, PR и отчёт для Codex.",
-    "Q-режим не допускает прямую запись в main, auto-merge или merge без человека.",
-    "Q-режим требует проверки на практике после первого реального внешнего исполнителя с GitHub-доступом.",
-    "X-режим — preview-интеграционный workflow (r-init). Route X — отдельный механизм доставки, не идентичный r-init."
+    "Q-режим — короткая GitHub-aware постановка с доставкой в preview и отчётом для Codex.",
+    "X/r-init — preview-интеграционный workflow с launcher, чеклистом и GO/NO-GO.",
+    "Нельзя мержить или менять main без явного решения человека."
   ],
   "must_read_first": [
-    "docs/subprojects/github-collaboration/SUBPROJECT.md",
-    "docs/subprojects/github-collaboration/subproject.json",
-    "docs/subprojects/github-collaboration/JOURNAL.md",
+    "docs/subprojects/github-collaboration/STATUS.md",
+    "docs/ai/WEB_CHAT_START.md",
     "AGENTS.md",
-    "docs/ai/WORKFLOW_OVERVIEW.md",
+    "docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md",
     "docs/ai/ZWORKER_MODES.md",
-    "docs/ai/TASK_PACK_Q_TEMPLATE.md",
-    "docs/ai/ROLES.md",
-    "docs/ai/POST_PR_CONSOLIDATION.md"
+    "docs/ai/PR_REVIEW_CHECKLIST.md",
+    "docs/ai/R_INIT_WORKFLOW.md"
   ],
   "main_files": [
     "AGENTS.md",
     ".gitignore",
     ".github/pull_request_template.md",
+    ".github/workflows/preview-policy.yml",
+    ".github/workflows/agent-docs-integrity.yml",
+    "docs/ai/repo-context.json",
+    "docs/ai/WEB_CHAT_START.md",
+    "docs/ai/CURRENT_STATE.md",
     "docs/ai/WORKFLOW_OVERVIEW.md",
-    "docs/ai/ROLES.md",
     "docs/ai/EXTERNAL_CHAT_WORKFLOW.md",
     "docs/ai/CODEX_CONTROLLER_WORKFLOW.md",
     "docs/ai/OPENCODE_HANDS_WORKFLOW.md",
@@ -45,11 +50,17 @@
     "docs/ai/ZWORKER_MODES.md",
     "docs/ai/POST_PR_CONSOLIDATION.md",
     "docs/ai/R_INIT_WORKFLOW.md",
+    "docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md",
     "docs/subprojects/github-collaboration/SUBPROJECT.md",
     "docs/subprojects/github-collaboration/subproject.json",
-    "docs/subprojects/github-collaboration/JOURNAL.md"
+    "scripts/agent_docs_lib.mjs",
+    "scripts/generate_agent_docs.mjs",
+    "scripts/check_agent_docs.mjs"
   ],
-  "test_files": [],
+  "test_files": [
+    "scripts/agent_docs_smoke.mjs",
+    ".github/workflows/agent-docs-integrity.yml"
+  ],
   "manual_docs": [
     "docs/ai/HUMAN_WORKFLOW.md",
     "docs/ai/TASK_PACK_TEMPLATE.md",
@@ -66,115 +77,56 @@
     "Large unrelated reports or telemetry dumps"
   ],
   "commands": [
+    "npm run docs:generate",
+    "npm run docs:check",
+    "npm run docs:smoke",
     "python scripts/subproject_context.py github-collaboration --brief",
     "python scripts/subproject_context.py github-collaboration --opencode",
     "python scripts/subproject_context.py github-collaboration --files"
   ],
   "important_sessions": [
-    "ZWORKER-20260706-054026-github-subproject-workflow-agentsmd-agentsmd-bra",
-    "ZWORKER-20260706-060528-v1-q-zworker-github-pr-zip-answermd-repo-relativ"
-  ],
-  "context_sources": [
-    "https://raw.githubusercontent.com/AndrewVerhoturov1/Real-wargame/zworker-context/q-mode-docs-20260706/AGENTS.md",
-    "https://raw.githubusercontent.com/AndrewVerhoturov1/Real-wargame/zworker-context/q-mode-docs-20260706/.github/pull_request_template.md",
-    "https://raw.githubusercontent.com/AndrewVerhoturov1/Real-wargame/zworker-context/q-mode-docs-20260706/docs/ai/CODEX_CONTROLLER_WORKFLOW.md",
-    "https://raw.githubusercontent.com/AndrewVerhoturov1/Real-wargame/zworker-context/q-mode-docs-20260706/docs/ai/EXTERNAL_CHAT_WORKFLOW.md",
-    "https://raw.githubusercontent.com/AndrewVerhoturov1/Real-wargame/zworker-context/q-mode-docs-20260706/docs/ai/PR_REVIEW_CHECKLIST.md",
-    "https://raw.githubusercontent.com/AndrewVerhoturov1/Real-wargame/zworker-context/q-mode-docs-20260706/docs/ai/TASK_PACK_TEMPLATE.md",
-    "https://raw.githubusercontent.com/AndrewVerhoturov1/Real-wargame/zworker-context/q-mode-docs-20260706/docs/ai/WORKFLOW_OVERVIEW.md",
-    "https://raw.githubusercontent.com/AndrewVerhoturov1/Real-wargame/zworker-context/q-mode-docs-20260706/docs/ai/ZWORKER_MODES.md",
-    "https://raw.githubusercontent.com/AndrewVerhoturov1/Real-wargame/zworker-context/q-mode-docs-20260706/docs/subprojects/github-collaboration/SUBPROJECT.md",
-    "https://raw.githubusercontent.com/AndrewVerhoturov1/Real-wargame/zworker-context/q-mode-docs-20260706/docs/subprojects/github-collaboration/subproject.json",
-    "https://raw.githubusercontent.com/AndrewVerhoturov1/Real-wargame/zworker-context/q-mode-docs-20260706/docs/subprojects/github-collaboration/JOURNAL.md"
+    "2026-07-06: R, Q and X collaboration documents introduced.",
+    "2026-07-11: preview policy and direct-push-to-preview preference automated.",
+    "2026-07-12: canonical machine-readable repository context and documentation integrity system introduced on a separate feature branch."
   ],
   "safety_rules": [
     "Не менять main напрямую для содержательных изменений.",
-    "Одна задача -> одна ветка -> один Pull Request.",
     "Не мержить PR без явного разрешения человека.",
-    "Не включать auto-merge без явного разрешения человека.",
+    "Не включать auto-merge.",
     "Не публиковать secrets, токены, ключи, .env или приватные данные.",
     "Для внешнего web-chat и zworker передавать только минимальный публичный контекст.",
     "Не утверждать, что локальные проверки запускались, если они не запускались.",
     "Не использовать Q-режим, если у внешнего исполнителя нет GitHub-доступа или задача требует фиксированного ZIP-результата.",
-    "В Q-режиме внешний исполнитель должен создать отдельную ветку и PR, а затем вернуть Codex отчёт.",
-    "Q-режим остаётся v1 и требует проверки на практике.",
-    "X-режим (r-init) требует явного GO человека перед merge. Route X — механизм доставки, не идентичный r-init.",
-    "В r-init preview к PR прикладывается .bat-лаунчер и чеклист ручного тестирования."
+    "Не считать PR обязательным, если исполнитель может безопасно доставить ограниченный результат прямым push в real-wargame-preview.",
+    "Не оставлять временную ветку или QA PR без явной причины."
   ],
   "suggested_verification": [
-    "python scripts/subproject_context.py github-collaboration --brief",
-    "python scripts/subproject_context.py github-collaboration --opencode",
-    "Проверить, что AGENTS.md сохранил исходный Subproject Workflow",
-    "Проверить, что docs/ai/ZWORKER_MODES.md сохраняет R-режим и описывает Q как branch + PR + report",
-    "Проверить, что docs/ai/TASK_PACK_Q_TEMPLATE.md короткий и операционный",
-    "Проверить, что PR_REVIEW_CHECKLIST.md содержит Q-mode проверки",
-    "Проверить, что docs/ai/R_INIT_WORKFLOW.md содержит preview-ветка, .bat-лаунчер, чеклист, GO/NO-GO, merge-handoff и статусы компонентов",
-    "Проверить, что docs/ai/ZWORKER_MODES.md описывает X-режим (r-init) как третий режим"
+    "npm run docs:smoke",
+    "npm run docs:generate",
+    "npm run docs:check",
+    "Проверить, что все активные документы называют real-wargame-preview рабочей веткой.",
+    "Проверить, что direct push в preview указан как предпочтительный путь, а PR в preview — как fallback.",
+    "Проверить, что main требует MAIN_GO_APPROVED_BY_USER: yes.",
+    "Проверить, что generated files не имеют ручных расхождений с JSON."
   ],
   "zworker": {
     "boundaries": [
       "Use only publicly readable source links and explicitly provided context.",
       "Return ZIP with answer.md at root and repo-relative files.",
-      "Do not claim local git, test, or runtime state.",
-      "Do not invent CI, CODEOWNERS, issue templates, GitHub Actions, or extra security patterns in v1."
+      "Do not claim local git, test, or runtime state."
     ],
     "expected_answer_format": "ZIP with answer.md at root and repo-relative files",
     "r_mode": {
-      "purpose": "Full manual zworker mode without GitHub write access.",
-      "input": "Explicit raw links, rules, allowed files, forbidden files, and ZIP requirement.",
-      "output": "ZIP with answer.md at root and repo-relative files.",
-      "status": "preserved"
+      "status": "preserved",
+      "purpose": "Full manual zworker mode without GitHub write access."
     },
     "q_mode": {
-      "status": "v1 draft, needs real-world verification",
-      "purpose": "Short GitHub-aware external task mode for executors that can read the repo, create a branch, and open a PR.",
-      "codex_prepares": [
-        "project name",
-        "repository owner/repo",
-        "subproject id or none",
-        "expected size",
-        "read-first rules/navigation",
-        "goal",
-        "allowed changes",
-        "forbidden changes",
-        "requirements",
-        "output format for Codex"
-      ],
-      "external_executor_returns": [
-        "repository",
-        "branch",
-        "PR number/link",
-        "changed files",
-        "checks run",
-        "not checked",
-        "risks",
-        "human verification steps",
-        "questions if any"
-      ],
-      "codex_verifies": [
-        "PR exists and uses a separate branch",
-        "diff matches allowed/forbidden scope",
-        "no secrets or .env files",
-        "no direct main write or auto-merge",
-        "checks are honestly reported",
-        "human receives a simple recommendation"
-      ]
+      "status": "active workflow",
+      "purpose": "Short GitHub-aware task mode with direct preview delivery or PR fallback."
     },
     "x_mode": {
-      "status": "v1 draft, added alongside R and Q. Route X is a separate delivery mechanism, not identical to r-init.",
-      "purpose": "Preview-integration workflow (r-init): preview branch, .bat launcher, human test checklist, GO/NO-GO, merge-handoff. Route X is a separate delivery mechanism used by r-init.",
-      "codex_creates": [
-        "preview branch with prefix preview/ or r-init/",
-        "Pull Request with [r-init] or [preview] label",
-        ".bat launcher for terminal-free testing",
-        "human test checklist with expected results",
-        "merge-handoff template"
-      ],
-      "human_does": [
-        "double-click .bat to launch",
-        "walk through the checklist",
-        "say GO (merge) or NO-GO (rework)"
-      ]
+      "status": "active workflow",
+      "purpose": "Preview integration with terminal-free launcher, human checklist and GO/NO-GO."
     }
   }
 }

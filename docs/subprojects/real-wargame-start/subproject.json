@@ -1,9 +1,14 @@
 {
   "id": "real-wargame-start",
   "title": "2D Tactical Command Game — RTS Foundation / Soldier Behavior Lab",
-  "status": "active",
+  "status": "maintenance",
+  "updated_at": "2026-07-12",
   "goal": "Собрать рабочую основу 2D Tactical Command Game / Soldier Behavior Lab на PixiJS + TypeScript + Vite: карта, юниты, редактор, высоты, лес, укрытия, видимость, базовый интерфейс и удобная проверка через preview. Главный фокус — будущие мозги солдат, а не стратегический ИИ командира.",
-  "current_focus": "Этап RTS-заготовки в целом готов и считается рабочей базой. Дальше карту, интерфейс, редактор, видимость и укрытия править по ходу разработки поведения солдат.",
+  "current_focus": "RTS-заготовка завершена как рабочая основа и поддерживается по мере необходимости. Активная разработка перенесена в подпроект ai-single-unit-editor.",
+  "next_step": "Исправлять карту, интерфейс, редактор, видимость и укрытия только когда это требуется активным вертикальным срезом поведения солдата.",
+  "canonical_launcher": "Run-Real-Wargame-Lab.bat",
+  "superseded_by": "ai-single-unit-editor",
+  "last_verified_commit": "f0bc53566be4451e9dd9fb8aa5df6a7027de759b",
   "key_decisions": [
     "RTS-заготовка готова как рабочая основа: это не финальная игра, а стенд для карты, редактора, видимости, укрытий и будущего поведения солдат.",
     "Стек: PixiJS + TypeScript + Vite + JSON; Godot к этому репозиторию не относится.",
@@ -19,14 +24,14 @@
     "Alt-линия видимости показывает зелёный видимый участок, красный закрытый участок, HTML-подпись, расстояние в метрах и причину преграды.",
     "Игровой режим и редактор разделены: игра — верхняя панель, правая вкладочная панель, нижняя карточка юнита; редактор — вкладки и инструменты.",
     "По умолчанию antialias true, view cones off, height numbers off; не возвращать antialias false как постоянное решение.",
-    "Пользовательская проверка идёт через scripts/windows/run-preview.bat и GO/NO-GO, без просьб выполнять Git/терминал руками."
+    "Основной пользовательский запуск — Run-Real-Wargame-Lab.bat без просьб выполнять Git или терминал."
   ],
   "must_read_first": [
+    "docs/subprojects/real-wargame-start/STATUS.md",
     "docs/subprojects/real-wargame-start/SUBPROJECT.md",
-    "docs/subprojects/real-wargame-start/subproject.json",
-    "docs/subprojects/real-wargame-start/JOURNAL.md",
     "docs/subprojects/real-wargame-start/RTS_FOUNDATION_DECISIONS.md",
     "docs/subprojects/real-wargame-start/test-program.md",
+    "docs/architecture/OVERVIEW.md",
     "Inbox/MASTER_PROJECT_S_2D_TACTICAL_COMMAND_GAME.md"
   ],
   "main_files": [
@@ -80,7 +85,7 @@
     "Large unrelated reports or telemetry dumps"
   ],
   "commands": [
-    "scripts/windows/run-preview.bat",
+    "Run-Real-Wargame-Lab.bat",
     "npm install",
     "npm run build",
     "npm run dev",
@@ -89,7 +94,8 @@
     "python scripts/subproject_context.py real-wargame-start --files"
   ],
   "important_sessions": [
-    "2026-07-08..2026-07-09: RTS foundation, editor, physical-map relief, forest layer, object cover, Alt line of sight, UI tabs and preview checks on real-wargame-preview"
+    "2026-07-08..2026-07-09: RTS foundation, editor, physical-map relief, forest layer, object cover, Alt line of sight, UI tabs and preview checks on real-wargame-preview",
+    "2026-07-10: tactical awareness and Tactical Workspace became the active continuation in ai-single-unit-editor."
   ],
   "context_sources": [
     "codex/patch-pack-subproject-context",
@@ -106,7 +112,7 @@
     "Не утверждать, что локальная сборка или браузерная проверка выполнена, если она не запускалась."
   ],
   "suggested_verification": [
-    "scripts/windows/run-preview.bat — пользовательская проверка без терминала",
+    "Run-Real-Wargame-Lab.bat — пользовательская проверка без терминала",
     "Открыть карту, проверить зум, pan, выбор солдата и правый клик для приказа",
     "Проверить игровой интерфейс: верхняя панель, правая вкладочная панель, нижняя карточка юнита",
     "Проверить редактор: режим редактора, вкладки, кисти высот/леса, предметы, юниты, зоны",

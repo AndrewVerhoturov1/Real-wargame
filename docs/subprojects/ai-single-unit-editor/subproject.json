@@ -1,7 +1,7 @@
 {
   "id": "ai-single-unit-editor",
   "title": "AI Single-Unit Editor — Stateful Tactical Awareness Lab",
-  "status": "stateful_movement_v1",
+  "status": "active",
   "goal": "Создать понятную человеку лабораторию поведения одиночного бойца в RTS-основе Real-wargame: Utility AI выбирает действие, состоянийный runtime исполняет длительные шаги, а решения используют субъективную тактическую осведомлённость и территориальный контекст.",
   "current_focus": "Stateful AI Movement v1 внедрён: MoveToBlackboardPosition замораживает цель Blackboard, один раз создаёт token-owned MoveOrder, возвращает running между тиками, завершает последовательность по прибытии и безопасно отменяется без удаления нового приказа игрока. Следующий этап — реактивная отмена и настоящий статус маршрута/pathfinding.",
   "key_decisions": [
@@ -29,6 +29,9 @@
     "main не трогать без явного GO пользователя."
   ],
   "must_read_first": [
+    "docs/subprojects/ai-single-unit-editor/STATUS.md",
+    "docs/ai/WEB_CHAT_START.md",
+    ".agents/skills/real-wargame-ai-runtime/SKILL.md",
     "docs/subprojects/ai-single-unit-editor/HANDOFF.md",
     "docs/subprojects/ai-single-unit-editor/STATEFUL_RUNTIME_V1.md",
     "docs/subprojects/ai-single-unit-editor/STATEFUL_MOVEMENT_V1.md",
@@ -229,5 +232,9 @@
       "Do not claim local git, test, build, browser, or runtime state."
     ],
     "expected_answer_format": "ZIP with answer.md at root and repo-relative files"
-  }
+  },
+  "updated_at": "2026-07-12",
+  "next_step": "Реализовать Reactive Abort + Route Status v1: реактивно отменять или перестраивать движение при новом приказе, исчезновении укрытия, блокировке маршрута или критическом изменении угрозы; затем добавить настоящий grid pathfinder.",
+  "canonical_launcher": "Run-Real-Wargame-Lab.bat",
+  "last_verified_commit": "7a8cea65fdc8c20201596dfb098e2671285e0ecc"
 }

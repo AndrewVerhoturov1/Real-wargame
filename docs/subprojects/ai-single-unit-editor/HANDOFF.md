@@ -1,517 +1,97 @@
-# HANDOFF — Real-wargame / ИИ отдельного солдата / линия фронта
+# HANDOFF — AI Single-Unit Runtime
 
-Дата актуализации: 2026-07-11  
-Репозиторий: `AndrewVerhoturov1/Real-wargame`  
-Рабочая ветка: `real-wargame-preview`  
-Последний полностью проверенный commit приложения: `627a77ca4f98241ec863809d7e83f26bc1ba5b0c`  
-Последний commit идеи о влиянии фронта перед синхронизацией документации: `95180837830719f8bd83bd0bf935260fd22f6eb3`
+Updated: 2026-07-12  
+Repository: `AndrewVerhoturov1/Real-wargame`  
+Normal working branch: `real-wargame-preview`  
+Current isolated implementation: draft PR `#54` / `feature/ai-running-move-v1`
 
-**Главное правило: `main` не трогать без прямого GO пользователя.**
+## Purpose
 
----
-
-## 1. Назначение этого документа
-
-Этот HANDOFF должен позволить новому чату сразу продолжить работу без восстановления контекста по переписке.
-
-Текущий подпроект объединяет:
-
-- Tactical Workspace тактической карты;
-- редактор сцены;
-- AI Node Editor;
-- GraphRunner + UtilitySelector;
-- субъективные знания и карту опасности отдельного солдата;
-- минимальную систему линии фронта как контекст для ИИ.
-
----
-
-## 2. Что прочитать в начале
-
-Обязательно:
-
-1. `docs/ai/AGENT_START_HERE.md`
-2. `AGENTS.md`
-3. `docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md`
-4. `docs/subprojects/ai-single-unit-editor/HANDOFF.md`
-5. `docs/subprojects/ai-single-unit-editor/SUBPROJECT.md`
-6. `docs/subprojects/ai-single-unit-editor/subproject.json`
-7. `docs/subprojects/ai-single-unit-editor/JOURNAL.md`
-
-Для запуска, браузерной проверки и скриншотов:
-
-8. `.agents/skills/real-wargame-local-preview/SKILL.md`
-
-Для текущей темы линии фронта:
-
-9. `ideas/FRONT_LINE_INFLUENCE_ON_SINGLE_SOLDIER_AI.md`
-10. `docs/superpowers/plans/2026-07-11-simple-front-zones.md`
-11. `tests/front-zones.spec.ts`
-
-Если задача касается PixiJS, canvas, событий карты или производительности:
-
-12. `docs/ai/PIXIJS_SKILLS_INDEX.md`
-13. `.agents/skills/pixijs/SKILL.md`
-
----
-
-## 3. Как работать с пользователем
-
-Пользователь не программист.
-
-Нужно:
-
-- писать простым русским;
-- самостоятельно работать с Git, ветками и проверками;
-- не просить пользователя вводить команды в терминале;
-- давать готовые `.bat`, ссылки и понятный список ручной проверки;
-- расшифровывать русский текст, случайно набранный в английской раскладке;
-- не повторять вопросы, на которые пользователь уже ответил;
-- не объявлять успех без свежих проверок;
-- не заявлять визуальную проверку без открытия PNG;
-- для большой задачи сначала кратко сообщать план;
-- доводить согласованную цель до законченного проверяемого состояния.
-
-Пользователь ожидает прямую работу в `real-wargame-preview`.
-
----
-
-## 4. Правила GitHub
-
-### Рабочая ветка
-
-Все изменения по умолчанию идут в:
+This file contains only the immediate continuation context. Canonical current status is generated from:
 
 ```text
-real-wargame-preview
+docs/subprojects/ai-single-unit-editor/subproject.json
+docs/subprojects/ai-single-unit-editor/STATUS.md
 ```
 
-Без прямого GO запрещено:
+Do not use older handoff text as the source of current project state.
 
-- писать в `main`;
-- открывать PR в `main`;
-- переносить preview в `main`;
-- считать молчание разрешением на merge.
+## Verified baseline
 
-### Предпочтительная доставка
+Stateful AI Runtime v1 is present in the preview baseline:
+
+- `AiGraphRunner` remains the pure immediate Utility evaluator;
+- `AiGraphRuntime` stores serializable execution state across ticks;
+- lifecycle supports `start / update / complete / cancel`;
+- `SequenceWithMemory` resumes the active child;
+- `Wait` is the first resumable duration node;
+- selected-soldier runtime state and live Russian diagnostics work;
+- legacy immediate graphs remain compatible.
+
+Last fully verified application commit recorded for this baseline:
 
 ```text
-изменения
-→ commit в real-wargame-preview
-→ машинные проверки
-→ браузерная проверка для UI
-→ отчёт пользователю
+1dcf0a15d59cc8f4fe9d4c8435474c4612a63b6f
 ```
 
-Когда прямой commit невозможен:
-
-```text
-временная ветка
-→ PR только в real-wargame-preview
-→ проверки
-→ merge в preview
-→ закрытие временной ветки
-```
-
-### Итоговый отчёт
-
-Указывать:
-
-- branch;
-- commit или PR;
-- checks_run;
-- manual_checks_needed;
-- risks;
-- remote_preview_commit;
-- затрагивался ли `main`.
-
----
-
-## 5. Репозиторий и технологии
-
-`Real-wargame` — прототип 2D tactical command game и лаборатория поведения отдельного бойца.
-
-Технологии:
-
-- Vite;
-- TypeScript;
-- PixiJS 7;
-- HTML/CSS;
-- Node.js;
-- JSON-сцены;
-- Playwright;
-- GitHub Actions.
-
-Это не Godot.
-
-Архитектурное разделение:
-
-```text
-core       — данные и расчёты;
-rendering  — отображение;
-input      — пользовательские действия;
-ui         — настройка и диагностика.
-```
-
-Core AI не должен импортировать PixiJS или DOM.
-
-Тяжёлые расчёты и построение карт нельзя выполнять каждый кадр без необходимости.
-
----
-
-## 6. Основной запуск
-
-Для пользователя:
-
-```text
-Run-Real-Wargame-Lab.bat
-```
-
-Он запускает:
-
-- Vite;
-- local AI engine;
-- lab manager;
-- тактическую игру;
-- AI Node Editor.
-
-Адреса:
-
-```text
-http://127.0.0.1:5173/
-http://127.0.0.1:5173/ai-node-editor.html
-http://127.0.0.1:5173/lab-launch.html
-```
-
-Пользователь не должен запускать npm-команды вручную.
-
----
-
-## 7. Текущее состояние Tactical Workspace
-
-На стороне игры ровно два режима:
-
-- `Симуляция`;
-- `Редактирование`.
-
-### Симуляция
-
-Есть:
-
-- правая панель `Инфо / Опасность / Скрытность / Память`;
-- нижняя карточка выбранного бойца;
-- движение и приказы;
-- субъективные слои знаний;
-- известные укрытия;
-- карта опасности;
-- карта скрытности;
-- личная память угроз.
-
-### Редактирование
-
-Есть единый редактор сцены со вкладками:
-
-- `Предмет`;
-- `Боец`;
-- `Угроза`;
-- `Рельеф`;
-- `Сцена`.
-
-Редактор ставит симуляцию на паузу.
-
-Не возвращать отдельный установленный интерфейс AI Test Lab и старые параллельные панели.
-
----
-
-## 8. AI Node Editor и GraphRunner
-
-AI Node Editor:
-
-- открывается отдельной вкладкой;
-- использует graph v6;
-- позволяет добавлять, удалять, двигать и соединять ноды;
-- сохраняет рабочий граф в localStorage;
-- поддерживает export/import JSON;
-- показывает runtime trace выбранного бойца.
-
-Основные компоненты:
-
-```text
-src/core/ai/AiGraph.ts
-src/core/ai/AiNodeTypes.ts
-src/core/ai/AiBlackboard.ts
-src/core/ai/AiGraphValidation.ts
-src/core/ai/AiGraphRunner.ts
-src/core/ai/AiGameBridge.ts
-src/data/ai/soldier_default_survival_graph.json
-```
-
-`AiGraphRunner.ts` должен оставаться чистым от DOM, PixiJS, localStorage и `SimulationState`.
-
-`AiGameBridge.ts`:
-
-- строит blackboard выбранного бойца;
-- запускает GraphRunner;
-- применяет effects;
-- пишет объяснение и trace.
-
-GraphRunner пока запускается только для выбранного бойца.
-
-Готовое разумное поведение зависит от собранного графа. Наличие входов blackboard само по себе не создаёт тактику.
-
----
-
-## 9. Тактическая осведомлённость бойца
-
-Уже работают:
-
-- индивидуальная память угроз;
-- confidence и uncertainty;
-- awareness grid;
-- текущая опасность;
-- ожидаемая защита;
-- безопасные позиции;
-- опасность маршрута;
-- уверенность в сведениях;
-- оценка укрытий с учётом направления угрозы;
-- влияние предметов, леса и рельефа.
-
-Основные blackboard-входы:
-
-```text
-danger
-stress
-suppression
-fatigue
-morale
-health
-ammo
-distanceToCover
-enemyVisible
-enemyKnown
-underFire
-hasOrder
-isInCover
-weaponReady
-directionToThreat
-threatDistance
-threatAngle
-coverProtection
-bestCoverQuality
-currentPositionDanger
-currentExpectedProtection
-bestSafePositionScore
-distanceToBestSafePosition
-routeDanger
-threatConfidence
-current_action
-self_position
-order_target_position
-retreat_position
-best_cover_position
-current_target
-remembered_enemy_position
-```
-
-Осведомлённость является субъективной. Не использовать полную информацию мира как автоматическое знание солдата.
-
----
-
-## 10. Реализованная минимальная линия фронта
-
-В `real-wargame-preview` внедрена упрощённая модель:
-
-```text
-слева   — своя территория;
-центр   — серая зона;
-справа  — территория противника.
-```
-
-Между областями находятся две вертикальные границы X.
-
-### Управление
-
-- Видимость переключается в главном меню `Вид`.
-- Кнопка: `Линия фронта: вкл/выкл`.
-- Ползунки находятся в `Редактирование → Сцена`.
-- Границы нельзя пересечь.
-- Между ними сохраняется минимум одна клетка серой зоны.
-
-### Параметры для ИИ
-
-В память blackboard каждого бойца записываются:
-
-```text
-territorySafety
-territoryKind
-territoryFriendly
-territoryNeutral
-territoryEnemy
-```
-
-Значения первой версии:
-
-```text
-своя территория       80/100;
-серая зона            50/100;
-вражеская территория  20/100.
-```
-
-`buildBlackboardForUnit()` добавляет `aiGraphMemory` перед запуском GraphRunner, поэтому эти runtime-значения попадают в исполняемый blackboard.
-
-### Отображение и производительность
-
-Используются пять постоянных HTML-элементов:
-
-- три полупрозрачные полосы;
-- две линии.
-
-Нет:
-
-- поклеточного Pixi-рендера;
-- постоянной перестройки карты;
-- автоматического движения фронта;
-- захвата точек;
-- снабжения;
-- окружения;
-- изогнутых границ.
-
-Основные файлы:
-
-```text
-src/core/front/FrontZoneState.ts
-src/ui/FrontZoneControls.ts
-src/front-zones.css
-tests/front-zones.spec.ts
-```
-
-Подключение находится в `src/main.ts`.
-
-### Важное ограничение
-
-Границы пока хранятся как runtime-состояние через `WeakMap`.
-
-Они:
-
-- не входят в `scene-export-v3`;
-- не сохраняются в JSON сцены;
-- после полной перезагрузки возвращаются к значениям по умолчанию.
-
-### Второе важное ограничение
-
-Runtime-ключи территории уже доступны GraphRunner через память, но их ещё нужно удобно зарегистрировать в человеко-понятном каталоге/селекторе blackboard AI Node Editor.
-
-До этого их можно использовать через ручные параметры JSON нод, но следующий чат не должен утверждать, что удобные русские селекторы уже полностью готовы.
-
----
-
-## 11. Как линия фронта должна влиять на ИИ
-
-Полная концепция:
-
-```text
-ideas/FRONT_LINE_INFLUENCE_ON_SINGLE_SOLDIER_AI.md
-```
-
-Главное правило:
-
-> Линия фронта задаёт стратегический контекст и фоновое ожидание безопасности, но не заменяет реальную опасность, видимость и память солдата.
-
-Разделять:
-
-```text
-currentDanger    — известная непосредственная опасность;
-territorySafety  — фоновая безопасность контролируемого района.
-```
-
-Рекомендуемые первые воздействия:
-
-1. осторожность движения;
-2. склонность искать укрытие;
-3. частота наблюдения и остановок;
-4. склонность отходить в сторону своей территории.
-
-Позже полезны дополнительные параметры:
-
-```text
-distanceToFriendlyTerritory
-distanceToEnemyTerritory
-movingDeeperIntoEnemyTerritory
-directionToFriendlyTerritory
-```
-
-Для текущей вертикальной схемы они считаются очень дёшево по X.
-
-Не делать:
-
-- автоматическое обнаружение врагов;
-- мгновенную потерю морали при пересечении линии;
-- запрет движения;
-- автоматический отход только из-за вражеской территории;
-- подмену реального слоя опасности.
-
----
-
-## 12. Последняя проверенная реализация
-
-PR:
-
-```text
-#50 Add simple editable front zones
-```
-
-Merge в:
-
-```text
-real-wargame-preview
-```
-
-Проверенный merge commit:
-
-```text
-627a77ca4f98241ec863809d7e83f26bc1ba5b0c
-```
-
-Post-merge GitHub Actions:
+Recorded verification:
 
 ```text
 Preview Core Checks: success
+Preview Policy: success
 Preview screenshots: success
-Playwright: 7/7 passed
-PNG: 14
-PNG inspected: yes
+Playwright: 13/13
+PNG: 20
+inspected: 26-ai-running-waiting-node.png
 ```
 
-Run IDs:
+## Active next slice
+
+Draft PR `#54` implements the first real multi-tick action:
 
 ```text
-core:        29152364956
-screenshots: 29152364936
+MoveToBlackboardPosition
 ```
 
-Ключевой снимок:
+Required behavior:
+
+- freeze the Blackboard target when the action starts;
+- emit movement start only once;
+- return `running` across ticks without duplicating orders;
+- identify AI-owned movement with an execution token;
+- complete when the unit arrives;
+- fail safely when target/route is invalid;
+- cancel and clean only state owned by that execution;
+- never delete a newer replacement order from the player or commander;
+- expose Russian authoring controls and live diagnostics;
+- preserve old graph behavior.
+
+PR `#54` is not part of `real-wargame-preview` until separately reviewed and transferred.
+
+## Read now for that task
+
+1. `docs/subprojects/ai-single-unit-editor/STATUS.md`
+2. `.agents/skills/real-wargame-ai-runtime/SKILL.md`
+3. `docs/superpowers/specs/2026-07-11-ai-running-runtime-v1-design.md`
+4. `docs/superpowers/plans/2026-07-11-ai-running-runtime-v1.md`
+5. PR `#54` diff and its focused tests
+6. `.agents/skills/real-wargame-local-preview/SKILL.md` before browser verification
+
+## Core boundaries
+
+- `AiGraphRunner.ts` does not import PixiJS, DOM, localStorage or `SimulationState`.
+- `AiGraphRuntime.ts` owns resumable lifecycle, not game rendering or input.
+- `AiGameBridge.ts` adapts pure AI to the selected live soldier.
+- Execution state is separate from Blackboard.
+- Soldier knowledge remains subjective.
+- Territory safety is context, not enemy detection or current danger.
+- Automatic AI execution remains limited to the selected soldier.
+- No squad-level AI or army-wide runtime yet.
+
+## Required checks for MoveToBlackboardPosition
 
 ```text
-14-simple-front-zones-editor.png
-```
-
-Тест проверяет:
-
-- три зоны;
-- две линии;
-- видимость;
-- оба ползунка;
-- точное совпадение линии с границей клетки;
-- территорию выбранного солдата;
-- безопасность `50/100` в серой зоне;
-- отсутствие регрессии высоты редактора.
-
----
-
-## 13. Команды проверок
-
-Машинные проверки:
-
-```text
+npm run runtime:smoke
 npm run workspace:smoke
 npm run lab:smoke
 npm run game-editor:smoke
@@ -521,104 +101,20 @@ npm run validate:ai-graph
 npm run build
 ```
 
-Для UI обязательны:
+Browser verification must demonstrate:
 
-- настоящий браузер;
-- Playwright;
-- PNG;
-- открытие и визуальный осмотр ключевых кадров;
-- сверка SHA артефактов с проверяемым commit.
+- movement begins once;
+- the node remains visibly `running` across ticks;
+- the unit reaches the frozen target;
+- complete/cancel clears only AI-owned movement;
+- a replacement player order survives cancellation;
+- fresh PNG belongs to the exact tested commit and is inspected.
 
-Следовать:
+## Do not do during continuation
 
-```text
-.agents/skills/real-wargame-local-preview/SKILL.md
-```
-
----
-
-## 14. Известные ограничения подпроекта
-
-- Нет полноценного enemy AI.
-- Нет настоящей баллистики и повреждений.
-- Нет обмена знаниями между бойцами.
-- Нет вместимости укрытий.
-- Нет распределения нескольких солдат по укрытиям.
-- GraphRunner работает только для выбранного бойца.
-- Нет масштабирования awareness на сотни бойцов.
-- Часть JS local engine и TS GraphRunner дублирует смысл.
-- Готовое поведение зависит от графа.
-- Территория пока не сохраняется в scene JSON.
-- Фронт не меняется автоматически.
-- Нет удобных готовых нод/селекторов для всех территориальных параметров.
-- Нет расчёта правильного направления отхода к своим.
-
----
-
-## 15. Наиболее логичный следующий этап
-
-Рекомендуемый следующий вертикальный срез:
-
-### Этап A — сделать территориальные входы удобными
-
-1. Добавить территориальные параметры в каталог blackboard и русские селекторы:
-   - `territorySafety`;
-   - `territoryFriendly`;
-   - `territoryNeutral`;
-   - `territoryEnemy`.
-2. Добавить дешёвые производные:
-   - расстояние до своей территории;
-   - направление к своим;
-   - движение глубже во вражескую территорию.
-3. Добавить smoke-тесты каталога и GraphRunner.
-
-### Этап B — один реальный сценарий поведения
-
-Собрать тестовый граф:
-
-```text
-если подавлен
-и находится не на своей территории
-→ повысить оценку отхода к своим;
-иначе если серая или вражеская территория
-→ повысить оценку осторожного движения и наблюдения;
-иначе
-→ обычное выполнение приказа.
-```
-
-Территория должна быть только модификатором Utility AI, а не жёстким автоматическим приказом.
-
-### Этап C — сохранение
-
-После стабилизации поведения добавить границы в scene export/import с обратной совместимостью.
-
----
-
-## 16. Опасные места
-
-Не делать без отдельного согласования:
-
-- не превращать фронт в постоянно пересчитываемое поле влияния;
-- не рисовать тысячи отдельных клеток;
-- не обновлять DOM внутри `MutationObserver`, который наблюдает этот же DOM;
-- не использовать знак camera diagnostics без проверки системы координат;
-- не добавлять панель в `.editor-scene-tools-slot`: Tactical Workspace очищает и скрывает этот служебный слот;
-- не уменьшать рабочую высоту редактора отдельной постоянной панелью;
-- не менять `main`;
-- не объявлять готовым влияние фронта на поведение, пока не создан и не проверен граф.
-
----
-
-## 17. Краткий статус для нового чата
-
-```text
-Система отображения фронта внедрена и проверена.
-Три зоны и два ползунка работают.
-Видимость задаётся в меню Вид.
-Боец получает тип территории и safety 80/50/20.
-Линия пока не сохраняется и сама не движется.
-Поведение GraphRunner пока не перестроено под территорию.
-Следующая задача — удобные blackboard-входы + один реальный Utility AI сценарий.
-Работать только в real-wargame-preview.
-main не трогать без GO.
-```
+- do not merge or write to `main`;
+- do not claim PR `#54` is already in preview;
+- do not replace Runtime with logic inside the Bridge;
+- do not clear movement by action type alone;
+- do not add squad AI, pathfinding rewrite or cover reservation to this slice;
+- do not declare visual success from source inspection or workflow status alone.

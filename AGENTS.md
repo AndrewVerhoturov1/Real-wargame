@@ -1,387 +1,209 @@
-# Agents
+# Real-Wargame Agent Contract
 
-This project uses OpenCode with subproject-based memory system.
+This file is the canonical short contract for Codex, OpenCode and GitHub-aware web chats.
 
-## Fast start for agents
-
-Read this short entry first:
+## 1. Project facts
 
 ```text
-docs/ai/AGENT_START_HERE.md
+repository: AndrewVerhoturov1/Real-wargame
+working branch: real-wargame-preview
+stable branch: main
+canonical launcher: Run-Real-Wargame-Lab.bat
+stack: Vite + TypeScript + PixiJS 7
 ```
 
-Then use the skill index to choose only relevant skills:
+This is not a Godot project.
+
+Machine-readable repository state:
+
+```text
+docs/ai/repo-context.json
+```
+
+## 2. Minimal start
+
+Read in this order:
+
+1. `AGENTS.md`;
+2. `docs/ai/repo-context.json`;
+3. `docs/subprojects/index.json`;
+4. `docs/subprojects/<active-id>/STATUS.md`;
+5. the relevant skill from `docs/ai/SKILLS_INDEX.md`.
+
+Detailed web-chat route:
+
+```text
+docs/ai/WEB_CHAT_START.md
+```
+
+Task-to-file route:
+
+```text
+docs/ai/TASK_ROUTER.md
+```
+
+Do not read every skill, journal, plan, report or historical handoff by default.
+
+## 3. Branch policy
+
+Default completed work goes to:
+
+```text
+real-wargame-preview
+```
+
+Preferred delivery for a GitHub-aware external chat:
+
+```text
+direct commit/push to real-wargame-preview
+```
+
+Fallback when direct push is impossible, conflicted or deliberately isolated:
+
+```text
+temporary task branch
+→ Pull Request into real-wargame-preview
+→ transfer result
+→ close temporary branch
+```
+
+If the user explicitly requests an isolated branch and says not to transfer yet, keep all work on that branch and report `transfer_path: isolated branch only`.
+
+Never:
+
+- write to `main` without explicit human GO;
+- open or retarget a PR to `main` without documented `MAIN_GO_APPROVED_BY_USER: yes`;
+- merge without explicit human GO;
+- enable auto-merge;
+- leave a temporary branch or QA PR open without an explicit reason.
+
+## 4. Development and language
+
+Canonical development language is English for:
+
+- file names;
+- TypeScript identifiers, types, functions and interfaces;
+- serialized data keys;
+- technical comments;
+- canonical labels/descriptions;
+- test names and commit messages.
+
+Every human-facing feature must have a complete Russian version. Russian is the default interface language. Use the established English base + `*Ru` overlay contract where applicable.
+
+The user must not need to edit code, JSON, technical keys or run terminal commands for normal use.
+
+Full language rules:
+
+```text
+docs/ai/DEVELOPMENT_LANGUAGE_RULES.md
+```
+
+## 5. Skill routing
+
+### Visual launch, screenshots or Playwright
+
+```text
+.agents/skills/real-wargame-local-preview/SKILL.md
+```
+
+### PixiJS, canvas, renderers, camera, pointer events or performance
+
+```text
+.agents/skills/real-wargame-pixijs/SKILL.md
+```
+
+Real-Wargame uses PixiJS 7. Do not copy PixiJS 8 APIs into the project without an explicit migration task.
+
+### Soldier AI, Blackboard, Utility, stateful Runtime, Bridge or node editor
+
+```text
+.agents/skills/real-wargame-ai-runtime/SKILL.md
+```
+
+General index:
 
 ```text
 docs/ai/SKILLS_INDEX.md
 ```
 
-## Subproject Workflow
+## 6. Architecture boundaries
 
-1. Read `docs/subprojects/<id>/SUBPROJECT.md`, `docs/subprojects/<id>/subproject.json`, and `docs/subprojects/<id>/JOURNAL.md` (if exists).
-2. Run `python scripts/subproject_context.py <id> --brief` or `--opencode`.
-3. Start from `Current focus` and `Must read first`.
-4. Expand into main files, tests, or reports only when the task requires them.
-
-## Commands
-
-    python scripts/subproject_context.py --list
-    python scripts/subproject_context.py <id> --brief
-    python scripts/subproject_context.py <id> --opencode
-    python scripts/subproject_context.py <id> --files
-
-## Local launch / visual preview skill
-
-If the task asks to run Real-Wargame locally, open the preview build, capture screenshots, show the game in chat, inspect a GitHub Actions screenshot artifact, or prepare terminal-free launch instructions, read this skill first:
+Read:
 
 ```text
-.agents/skills/real-wargame-local-preview/SKILL.md
+docs/architecture/OVERVIEW.md
+docs/architecture/MODULE_MAP.md
 ```
 
-This project is Vite + TypeScript + PixiJS. Do not assume Godot.
+Hard boundaries:
 
----
+- core simulation and AI do not import PixiJS;
+- `AiGraphRunner` is a pure immediate evaluator;
+- `AiGraphRuntime` owns resumable execution state;
+- `AiGameBridge` adapts pure AI to the live game;
+- renderers display state and do not become the source of truth;
+- subjective soldier knowledge must not reveal the objective world;
+- heavy awareness, relief or overlay work must not be recomputed every frame without evidence and design.
 
-# Система совместной разработки через GitHub
+## 7. Current-status documentation
 
-Этот раздел — центральный контракт работы для человека, Codex, OpenCode, внешнего web-chat, ручного zworker и GitHub.
-
-Главный публичный контракт репозитория:
+Edit current state only in:
 
 ```text
-одна задача -> прямой коммит/пуш в permanent preview-ветку (или PR, если прямой пуш невозможен) -> проверка -> решение человека
+docs/ai/repo-context.json
+docs/subprojects/<id>/subproject.json
 ```
 
-`main` считается стабильной базовой веткой. `main` не является рабочей веткой для содержательных изменений. В неё не надо вносить крупные или смысловые правки напрямую.
-
-## Зачем нужен этот контракт
-
-Пользователь не обязан уверенно работать с Git, ветками, checkout, merge, rebase и конфликтами. Агенты должны брать техническую часть на себя и объяснять человеку происходящее простым языком.
-
-Цель системы — чтобы человек мог говорить обычными фразами:
+Then run:
 
 ```text
-Проверь PR #12.
-Объясни, что изменилось.
-Запусти локально.
-Составь замечания.
-Прими, я разрешаю.
-Верни всё на main.
+npm run docs:sync
 ```
 
-## Роли
+Files marked `GENERATED FILE` must not be edited manually.
 
-### Человек
+## 8. Verification honesty
 
-Человек принимает финальное решение.
+Never claim a check that was not run.
 
-Он:
+A GitHub Actions run is not a local run on the user's PC.
 
-- ставит задачу обычными словами;
-- смотрит результат;
-- говорит “годится”, “доработать”, “отклонить”, “принять”;
-- не обязан руками управлять ветками и Pull Request.
+A visual check is complete only after:
 
-Человек не должен быть вынужден разруливать Git вручную, если это может сделать Codex/OpenCode.
+- the real Vite application ran in a real browser;
+- fresh PNG files were created after the change;
+- artifact commit SHA matches the reported commit;
+- changed/key PNG files were opened and inspected.
 
-### Codex
+For non-visual changes use the focused smoke checks and production build required by the task route.
 
-Codex — технический контролёр и прораб.
+## 9. External-work references
 
-Codex:
-
-- готовит задачи для внешнего web-chat;
-- выбирает режим внешней работы: полный R или короткий Q;
-- проверяет Pull Request;
-- читает diff и объясняет его человеку;
-- запускает доступные локальные проверки, если находится в локальной среде;
-- помогает человеку посмотреть результат;
-- составляет замечания;
-- обновляет правила и документацию системы;
-- использует OpenCode для дешёвых рутинных действий;
-- не мержит PR без явного разрешения человека.
-
-### OpenCode
-
-OpenCode — руки Codex для ограниченных технических поручений.
-
-OpenCode можно поручать:
-
-- поиск файлов;
-- чтение структуры;
-- простые замены;
-- запуск команд;
-- сбор логов;
-- проверку изменённых файлов;
-- мелкие патчи;
-- обновление документации.
-
-OpenCode не должен самостоятельно принимать архитектурные решения, менять `main`, мержить PR или выполнять большие переписывания без контроля Codex.
-
-### Внешний web-chat с GitHub-интеграцией
-
-Внешний web-chat может быть основным удалённым исполнителем, если у него есть GitHub-интеграция.
-
-**Обязательное чтение перед началом работы:**
-- `docs/ai/AGENT_START_HERE.md` — короткий вход;
-- `AGENTS.md` (этот файл);
-- `docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md` — обязательный контракт для любого внешнего GitHub-aware исполнителя;
-- `docs/ai/SKILLS_INDEX.md` — общий индекс skills.
-
-Он:
-
-- читает репозиторий и инструкции;
-- коммитит/пушит готовый результат напрямую в permanent `real-wargame-preview` (не `main`);
-- если прямой пуш в preview невозможен — создаёт временную ветку + PR в `real-wargame-preview`;
-- пишет отчёт о том, что изменил и что проверил;
-- дорабатывает по замечаниям (прямым пушем или через тот же PR).
-
-Он не должен менять `main` напрямую, сам мержить PR, включать auto-merge или притворяться, что выполнил локальные проверки, если он их не выполнял.
-
-### GitHub
-
-GitHub — общая точка правды.
-
-В GitHub хранятся:
-
-- код и документы;
-- история изменений;
-- ветки;
-- Pull Request;
-- обсуждения;
-- публичный контекст для внешнего web-chat и zworker.
-
-### Локальный ПК человека
-
-Локальный ПК — место живой проверки. Даже если PR выглядит правильно, человек может захотеть открыть результат у себя. Codex должен помогать с этим и не перекладывать Git-команды на человека.
-
-### Ручной zworker
-
-Ручной zworker — внешний помощник без прав на репозиторий и без знания локального состояния.
-
-zworker:
-
-- работает только по опубликованным публичным raw-ссылкам и явно переданному контексту;
-- возвращает ZIP с `answer.md` в корне и repo-relative файлами;
-- не утверждает, что запускал локальные команды, тесты или Git;
-- полезен для больших черновиков, ревью, стратегий, документов, task-pack и безопасной подготовки контекста.
-
-## Режимы внешней работы: R, Q и X
-
-В системе есть три разных режима внешней работы. Нельзя смешивать их в одном запросе.
-
-### R — полный ручной zworker-запрос
-
-R используется, когда внешний исполнитель работает без GitHub-доступа к репозиторию.
-
-В R Codex/человек вручную даёт:
-
-- ссылки на все нужные публичные raw-файлы;
-- правила;
-- ограничения;
-- список разрешённых файлов;
-- ожидаемый ZIP-формат.
-
-Результат R:
+Detailed contracts remain here when the task specifically concerns the collaboration system:
 
 ```text
-ZIP archive
-answer.md в корне
-repo-relative файлы внутри ZIP
+docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md
+docs/ai/ZWORKER_MODES.md
+docs/ai/R_INIT_WORKFLOW.md
+docs/ai/PR_REVIEW_CHECKLIST.md
 ```
 
-R-режим сохраняется без ухудшения. Он нужен для ручного zworker, независимого ревью и задач, где важен фиксированный входной контекст.
+R is the manual no-GitHub ZIP route. Q is the GitHub-aware preview-delivery route. X/r-init is the human preview and GO/NO-GO route. Do not mix their output contracts.
 
-### Q — короткий GitHub-aware запрос
+## 10. Required report
 
-Q используется только когда внешний web-chat имеет GitHub-доступ и может сам читать репозиторий и пушить в него.
-
-В Q Codex даёт короткую постановку:
-
-- название проекта;
-- репозиторий `owner/repo`;
-- подпроект, если есть;
-- ожидаемый объём работ;
-- ссылки/пути только на правила и навигацию;
-- цель;
-- что можно менять;
-- что нельзя менять;
-- формат отчёта для Codex.
-
-Результат Q:
+Every implementation report includes:
 
 ```text
-прямой коммит/пуш в `real-wargame-preview`
-(или PR, если прямой пуш невозможен)
-краткий отчёт для Codex
+branch: ...
+commit/pr: ...
+transfer_path: direct push / PR fallback / isolated branch only / not changed
+changed_files: ...
+checks_run: ...
+not_checked: ...
+manual_checks_needed: ...
+risks: ...
+main_touched: no / explicit approved change
 ```
 
-В Q нельзя:
-
-- писать прямо в `main`;
-- включать auto-merge;
-- мержить без человека;
-- возвращать результат только текстом без изменений в preview, если задача предполагает изменения;
-- утверждать, что локальные проверки запускались, если они не запускались.
-
-Q-режим остаётся v1 и требует проверки на практике. Подробно: `docs/ai/ZWORKER_MODES.md` и `docs/ai/TASK_PACK_Q_TEMPLATE.md`.
-
-### X — preview-интеграционный режим (r-init)
-
-R-init — preview-интеграционный режим внешней работы: изменения сначала выкладываются в preview-ветку для ручного тестирования человеком, и только после явного GO попадают в `main`. Route X — отдельный механизм браузерной/GitHub-доставки, который r-init может использовать как транспорт; r-init и Route X не идентичны.
-
-R-init нужен, когда изменение нельзя принять «вслепую»: его нужно запустить, посмотреть, пощупать — и только потом сказать GO или NO-GO.
-
-Ключевые элементы r-init:
-
-- preview-ветка `real-wargame-preview` с изменениями;
-- `.bat`-лаунчер для терминал-фри запуска;
-- чеклист ручного тестирования для человека;
-- GO / NO-GO — явное решение человека;
-- merge-handoff шаблон с фиксацией статусов компонентов.
-
-Подробно: `docs/ai/R_INIT_WORKFLOW.md`.
-
-## Branch + PR policy
-
-1. Одна задача = ветка = результат в preview. Прямой коммит/пуш в `real-wargame-preview` — основной способ. PR используется как fallback, если прямой пуш невозможен.
-2. `main` не используется как рабочая ветка для содержательных изменений.
-3. Крупные, смысловые и рискованные правки идут через Pull Request.
-4. PR должен решать одну понятную задачу.
-5. PR должен содержать отчёт: что сделано, как проверять, что не проверялось, какие риски.
-6. PR не мержится без явного разрешения человека.
-7. Если задача требует локальной проверки, это должно быть прямо написано в PR.
-8. Если проверки не запускались, это нужно честно указать.
-9. Для Q-режима внешний исполнитель должен вернуть Codex ссылку/номер коммита или PR, ветку, список изменённых файлов и статус проверок.
-10. После успешного переноса результата в целевую preview-ветку (`real-wargame-preview`) временная task-ветка должна быть закрыта/удалена, чтобы не накапливались старые task-ветки.
-11. Перед закрытием ветки обязательные шаги: проверить наличие изменений в preview; убедиться в отсутствии нерешённых конфликтов; закрыть/удалить временную ветку; закрыть временный PR если больше не нужен; в отчёте указать какая ветка использовалась, как результат попал в preview, закрыта ли ветка, а если нет — почему.
-12. Исключения: ветка может остаться открытой только если работа не завершена, есть конфликт, пользователь просил оставить ветку, PR нужен как место обсуждения, или перенос в preview не подтверждён. В таком случае отчёт обязан содержать фразу по смыслу «Временная ветка оставлена открытой, потому что ...».
-
-## Безопасная публикация контекста
-
-Для внешнего web-chat и zworker публикуйте только минимальный нужный контекст:
-
-- публичные raw-ссылки или repo-relative пути на нужные файлы;
-- краткое описание задачи;
-- список разрешённых файлов;
-- список запрещённых файлов;
-- ожидаемый формат ответа.
-
-Нельзя публиковать:
-
-- токены;
-- пароли;
-- приватные ключи;
-- `.env`;
-- личные данные;
-- приватные пути и локальные секреты;
-- непроверенные дампы, если в них могут быть секреты.
-
-## Документы системы
-
-Основные документы находятся в `docs/ai/`:
-
-- `docs/ai/AGENT_START_HERE.md` — короткий вход для агентов;
-- `docs/ai/SKILLS_INDEX.md` — общий индекс skills;
-- `docs/ai/WORKFLOW_OVERVIEW.md` — обзор всей схемы;
-- `docs/ai/ROLES.md` — роли участников;
-- `docs/ai/EXTERNAL_CHAT_WORKFLOW.md` — как работает внешний web-chat;
-- `docs/ai/CODEX_CONTROLLER_WORKFLOW.md` — как Codex проверяет и управляет;
-- `docs/ai/OPENCODE_HANDS_WORKFLOW.md` — как использовать OpenCode;
-- `docs/ai/HUMAN_WORKFLOW.md` — простая инструкция для человека;
-- `docs/ai/TASK_PACK_TEMPLATE.md` — общий шаблон задания;
-- `docs/ai/TASK_PACK_Q_TEMPLATE.md` — короткий шаблон Q-задачи для GitHub-capable внешнего исполнителя;
-- `docs/ai/PR_REVIEW_CHECKLIST.md` — чеклист проверки PR;
-- `docs/ai/POST_PR_CONSOLIDATION.md` — слой консолидации после PR: сборка diff, рисков, статуса проверок и инструкция по доработке/принятию;
-- `docs/ai/ZWORKER_MODES.md` — различие полного режима R, короткого GitHub-aware режима Q и preview-режима X;
-- `docs/ai/R_INIT_WORKFLOW.md` — r-init preview-интеграционный workflow: preview-ветка, .bat-лаунчер, чеклист, GO/NO-GO, merge-handoff.
-
-## Preview-процесс: real-wargame-preview
-
-Этот проект использует двухпапочную схему preview:
-
-- `Real-wargame` — основная папка, всегда `main`.
-- `Real-wargame-preview` — preview-папка, ветка `real-wargame-preview`.
-
-**Обязательное правило:** Результат каждой задачи сначала попадает в `real-wargame-preview`. Пользователь тестирует в preview-папке. `main` не меняется без явного разрешения пользователя. Временные ветки не являются конечным результатом.
-
-**Правило синхронизации:** После внешнего push/PR в `real-wargame-preview` Codex/OpenCode обязан обновить локальную preview-папку (`Real-wargame-preview`) из `origin/real-wargame-preview` до начала локальной проверки. GitHub push не обновляет ПК пользователя автоматически. Без локальной синхронизации результат нельзя считать готовым к тестированию.
-
-Отчёт по задаче должен содержать инструкцию: как запустить preview, что проверять, какой результат ожидать.
-
-Если задача требует локального запуска, живой проверки, скриншотов или показа игры в чате, сначала прочитать:
-
-```text
-.agents/skills/real-wargame-local-preview/SKILL.md
-```
-
-Внешние GitHub-aware исполнители обязаны прочитать `docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md` перед началом работы.
-
-Подробно: `docs/workflow/LOCAL_TWO_FOLDER_WORKFLOW.md`, `docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md`, `docs/subprojects/real-wargame-start/WORKFLOW.md`.
-
-Подпроект этой системы:
-
-- `docs/subprojects/github-collaboration/SUBPROJECT.md`
-- `docs/subprojects/github-collaboration/subproject.json`
-- `docs/subprojects/github-collaboration/JOURNAL.md`
-
-## PixiJS skills
-
-Репозиторий содержит официальный набор PixiJS skills в `.agents/skills/`.
-
-**Правило работы с PixiJS задачами:**
-
-1. Прочитать `docs/ai/SKILLS_INDEX.md` — общий индекс skills проекта.
-2. Прочитать `docs/ai/PIXIJS_SKILLS_INDEX.md` — навигационную карту PixiJS.
-3. Прочитать `.agents/skills/pixijs/SKILL.md` — точка входа PixiJS.
-4. Выбрать и прочитать только релевантные дополнительные skills (по таблице из индекса).
-5. Не читать все skills подряд без необходимости.
-
-Подробнее: `docs/ai/PIXIJS_SKILLS_INDEX.md`.
-
-## Как начинать работу агенту
-
-1. Прочитать короткий вход:
-
-   ```text
-   docs/ai/AGENT_START_HERE.md
-   ```
-
-2. Прочитать этот `AGENTS.md`.
-3. Прочитать общий индекс skills:
-
-   ```text
-   docs/ai/SKILLS_INDEX.md
-   ```
-
-4. Если задача относится к системе GitHub-сотрудничества, прочитать:
-
-   ```text
-   docs/subprojects/github-collaboration/SUBPROJECT.md
-   docs/subprojects/github-collaboration/subproject.json
-   docs/subprojects/github-collaboration/JOURNAL.md
-   docs/ai/WORKFLOW_OVERVIEW.md
-   docs/ai/ROLES.md
-   docs/ai/POST_PR_CONSOLIDATION.md
-   docs/ai/ZWORKER_MODES.md
-   ```
-
-5. Если задача относится к PixiJS/canvas/graphics/scene/assets/SVG/events/performance/migration-v8, прочитать:
-
-   ```text
-   docs/ai/PIXIJS_SKILLS_INDEX.md
-   .agents/skills/pixijs/SKILL.md
-   <релевантные PixiJS skills по таблице>
-   ```
-
-6. Если задача относится к локальному запуску, preview-запуску, скриншотам, показу игры в чате, GitHub Actions artifact или терминал-фри запуску для пользователя, прочитать:
-
-   ```text
-   .agents/skills/real-wargame-local-preview/SKILL.md
-   ```
-
-7. Уточнить роль: внешний исполнитель, Codex-контролёр, OpenCode-руки или zworker-черновик.
-8. Уточнить режим: R, Q или X.
-9. Не читать весь репозиторий без необходимости.
-10. Работать маленькими ограниченными шагами.
-11. В отчёте честно писать, что проверялось и что не проверялось.
+Explain the result to the user in simple Russian. Do not ask the user to manage Git or terminal commands when the agent can do it.

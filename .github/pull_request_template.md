@@ -1,43 +1,84 @@
-## PR Description
+## Delivery
 
-> **Note:** The default delivery method for external GitHub-aware chats is a **direct commit/push to `real-wargame-preview`**. PRs are the **fallback** when direct push is not possible.
+> Preferred GitHub-aware delivery is a direct commit/push to `real-wargame-preview`. Use this PR template for fallback review, CI isolation or an explicitly isolated branch.
 
-### Required docs read
-- [ ] I have read `AGENTS.md`
-- [ ] I have read `docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md`
-- [ ] I have read the relevant navigation documents
-
-### Base branch
 - **Base branch:** `real-wargame-preview` / `main` (delete one)
-
-> **Note:** The default target is `real-wargame-preview`. Targeting `main` requires explicit user GO documented below.
-
-- [ ] This PR targets `real-wargame-preview`
-- [ ] This PR targets `main` (if checked, user `MAIN_GO_APPROVED_BY_USER` must be `yes` below)
+- **Head branch:**
+- **Transfer path:** `PR fallback` / `isolated branch only` / other
+- **Why a PR or isolated branch is used:**
 
 If targeting `main`:
+
 - `MAIN_GO_APPROVED_BY_USER`: yes / no
-- Why not preview: \<explanation\>
+- Why preview is not the target:
 
-### Task branch
-- **Task branch name:**
-- **Transfer path:** how did the result get into the target branch? (PR merge / direct push / local merge / etc.)
+## Required context read
 
-### Checks
-- [ ] Checks were run (list below)
-- [ ] Checks were NOT run (explain why)
+- [ ] `AGENTS.md`
+- [ ] `docs/ai/WEB_CHAT_START.md`
+- [ ] Active subproject `STATUS.md`
+- [ ] Relevant project skill
 
-**Checks run:**
-- \<check name\>: passed / failed / not run
+## Summary
 
-### Manual checks needed (for human reviewer)
-- \<item\>
+- What changed:
+- Why:
+- Explicitly out of scope:
 
-### Branch cleanup
-- [ ] Temporary task branch has been closed/deleted
-- [ ] Temporary task branch remains open
+## Changed files
 
-If left open, reason: «Временная ветка оставлена открытой, потому что ...»
+- `path`
 
-### Risks
-- \<risk or "none known"\>
+## Checks
+
+- [ ] Focused checks were run and listed below.
+- [ ] Production build was run when applicable.
+- [ ] Checks were not run; reason is documented.
+
+```text
+check: passed / failed / not run
+```
+
+For agent documentation changes:
+
+- [ ] `npm run docs:smoke`
+- [ ] `npm run docs:generate`
+- [ ] generated output has no diff
+- [ ] `npm run docs:check`
+
+For visual changes:
+
+- [ ] Real browser run completed.
+- [ ] Fresh PNG artifact belongs to this commit.
+- [ ] Changed/key PNGs were opened and inspected.
+- [ ] The report distinguishes GitHub Actions from the user's PC.
+
+## Human verification
+
+- What the user should open:
+- Steps:
+- Expected result:
+
+## Risks and not checked
+
+- Risks:
+- Not checked:
+
+## Branch cleanup
+
+- [ ] This branch must remain isolated because the user has not requested transfer yet.
+- [ ] Temporary branch/PR will be closed after transfer or artifact inspection.
+- [ ] Temporary branch remains open for another reason.
+
+If left open, reason:
+
+```text
+Временная ветка оставлена открытой, потому что ...
+```
+
+## Safety
+
+- [ ] `main` was not changed without explicit GO.
+- [ ] Auto-merge is disabled.
+- [ ] No secrets, `.env`, keys or private data were added.
+- [ ] Reported checks and visual inspection actually happened.
