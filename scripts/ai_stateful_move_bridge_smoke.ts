@@ -6,12 +6,13 @@ import type { AiGraph } from '../src/core/ai/AiGraph';
 import {
   applyOwnedMoveEffects,
   syncSelectedMoveOrderMemory,
+  updateSelectedRouteStatus,
 } from '../src/core/ai/AiStatefulMoveGameBridge';
-import type { AiGraphRuntimeResult } from '../src/core/ai/AiGraphRuntime';
+import type { AiGraphExecutionState, AiGraphRuntimeResult } from '../src/core/ai/AiGraphRuntime';
 import { validateAiGraph } from '../src/core/ai/AiGraphValidation';
 import type { TacticalMapData } from '../src/core/map/MapModel';
 import { createMoveOrder } from '../src/core/orders/MoveOrder';
-import { createInitialState } from '../src/core/simulation/SimulationState';
+import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
 import { tickSimulation } from '../src/core/simulation/SimulationTick';
 import type { UnitData, UnitModel } from '../src/core/units/UnitModel';
 
@@ -48,15 +49,8 @@ const movementGraph: AiGraph = {
 const validation = validateAiGraph(movementGraph);
 assert.equal(validation.valid, true, JSON.stringify(validation.issues));
 
-const state = createInitialState(
-  mapData as TacticalMapData,
-  unitsData as UnitData[],
-  [],
-);
-const unit = state.units[0];
-assert.ok(unit, 'test map must contain at least one soldier');
-state.selectedUnitId = unit.id;
-state.selectedUnitIds = [unit.id];
+const state = createSelectedState();
+const unit = selectedUnit(state);
 
 const aiToken = 'soldier:move:100';
 const aiTarget = { x: 7, y: 4 };
@@ -135,7 +129,135 @@ assert.equal(unit.behaviorRuntime.currentAction, 'posture:prone', 'move cleanup 
 assert.equal(unit.behaviorRuntime.reason, 'Лечь после движения.');
 assert.equal(unit.behaviorRuntime.lastEvent, 'ai_graph_set_posture');
 
-console.log('AI stateful move bridge smoke passed: catalog validation, physical movement, owned start, memory sync, legacy player-order inference, player replacement protection, matching cleanup, sequence continuation.');
+verifyNormalProgressAndBlocking();
+verifyPlayerOverrideStatus();
+verifyTargetLostStatus();
+verifyOwnedOrderMissingStatus();
+
+console.log('AI stateful move bridge smoke passed: catalog validation, physical movement, ownership safety, route progress, blocked route, player override, target loss, missing order.');
+
+function verifyNormalProgressAndBlocking(): void {
+  const routeState = createSelectedState();
+  const routeUnit = selectedUnit(routeState);
+  const token = 'route-progress-token';
+  const target = { x: routeUnit.position.x + 10, y: routeUnit.position.y };
+  routeUnit.order = createMoveOrder(target, { source: 'ai', ownerToken: token });
+  setMoveExecutionState(routeUnit, token, target, 'best_cover_position');
+
+  const start = updateSelectedRouteStatus(routeState, 0);
+  assert.ok(start);
+  assert.equal(start.status, 'moving');
+  assert.equal(readAiMemory(routeUnit).active_move_route_status, 'moving');
+
+  tickSimulation(routeState, 0.5);
+  const progress = updateSelectedRouteStatus(routeState, 600);
+  assert.ok(progress);
+  assert.equal(progress.status, 'moving');
+  assert.equal(progress.noProgressMs, 0);
+
+  const blocked = updateSelectedRouteStatus(routeState, 3200);
+  assert.ok(blocked);
+  assert.equal(blocked.status, 'blocked');
+  assert.equal(blocked.shouldCancelRuntime, true);
+  assert.equal(readAiMemory(routeUnit).active_move_abort_code, 'route_blocked');
+  assert.match(String(readAiMemory(routeUnit).active_move_abort_reason), /не продвигается/i);
+}
+
+function verifyPlayerOverrideStatus(): void {
+  const routeState = createSelectedState();
+  const routeUnit = selectedUnit(routeState);
+  const token = 'player-override-token';
+  const target = { x: routeUnit.position.x + 5, y: routeUnit.position.y };
+  setMoveExecutionState(routeUnit, token, target, 'best_cover_position');
+  routeUnit.order = createMoveOrder({ x: target.x + 2, y: target.y + 1 });
+
+  const result = updateSelectedRouteStatus(routeState, 100);
+  assert.ok(result);
+  assert.equal(result.status, 'player_override');
+  assert.equal(result.shouldForceRuntimeTick, true);
+  assert.equal(result.shouldCancelRuntime, false);
+  assert.equal(readAiMemory(routeUnit).active_move_route_status, 'player_override');
+}
+
+function verifyTargetLostStatus(): void {
+  const routeState = createSelectedState();
+  const routeUnit = selectedUnit(routeState);
+  const token = 'target-lost-token';
+  const target = { x: routeUnit.position.x + 5, y: routeUnit.position.y };
+  routeUnit.order = createMoveOrder(target, { source: 'ai', ownerToken: token });
+  setMoveExecutionState(routeUnit, token, target, 'missing_route_target');
+
+  const result = updateSelectedRouteStatus(routeState, 100);
+  assert.ok(result);
+  assert.equal(result.status, 'target_lost');
+  assert.equal(result.shouldCancelRuntime, true);
+  assert.match(result.abortReasonRu ?? '', /исчезла/i);
+}
+
+function verifyOwnedOrderMissingStatus(): void {
+  const routeState = createSelectedState();
+  const routeUnit = selectedUnit(routeState);
+  const token = 'missing-order-token';
+  const target = { x: routeUnit.position.x + 5, y: routeUnit.position.y };
+  routeUnit.order = null;
+  setMoveExecutionState(routeUnit, token, target, 'best_cover_position');
+
+  const result = updateSelectedRouteStatus(routeState, 100);
+  assert.ok(result);
+  assert.equal(result.status, 'order_missing');
+  assert.equal(result.shouldForceRuntimeTick, true);
+  assert.equal(result.shouldCancelRuntime, false);
+}
+
+function createSelectedState(): SimulationState {
+  const next = createInitialState(
+    mapData as TacticalMapData,
+    unitsData as UnitData[],
+    [],
+  );
+  const unit = next.units[0];
+  assert.ok(unit, 'test map must contain at least one soldier');
+  next.selectedUnitId = unit.id;
+  next.selectedUnitIds = [unit.id];
+  return next;
+}
+
+function selectedUnit(state: SimulationState): UnitModel {
+  const unit = state.units.find((candidate) => candidate.id === state.selectedUnitId);
+  assert.ok(unit);
+  return unit;
+}
+
+function setMoveExecutionState(
+  unit: UnitModel,
+  ownerToken: string,
+  target: { x: number; y: number },
+  targetKey: string,
+): void {
+  const runtime = unit.behaviorRuntime as UnitModel['behaviorRuntime'] & {
+    aiGraphExecutionState?: AiGraphExecutionState;
+  };
+  runtime.aiGraphExecutionState = {
+    version: 1,
+    graphId: 'route_bridge_graph',
+    unitId: unit.id,
+    branchNodeId: 'branch',
+    sequenceNodeId: 'sequence',
+    childIndex: 0,
+    activeNodeId: 'move',
+    activeNodeStartedAtMs: 0,
+    lastUpdatedAtMs: 0,
+    status: 'running',
+    activeData: {
+      kind: 'move_to_blackboard_position',
+      targetKey,
+      target,
+      acceptanceRadiusCells: 0.2,
+      timeoutMs: 15000,
+      actionToken: ownerToken,
+    },
+  };
+}
 
 function runtimeResult(unitId: string, effects: readonly unknown[]): AiGraphRuntimeResult {
   return {
