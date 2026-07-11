@@ -65,6 +65,9 @@ function enhanceSelectedStatefulNode(): void {
     const targetKey = readTargetKey(node.parameters?.targetKey);
     const radius = readNonNegative(node.parameters?.acceptanceRadiusCells, 0.2);
     const timeout = readNonNegative(node.parameters?.timeoutSeconds, 15);
+    const stuckTimeout = readNonNegative(node.parameters?.stuckTimeoutSeconds, 2.5);
+    const minimumProgress = readNonNegative(node.parameters?.minimumProgressCells, 0.05);
+    const abortOnTargetLost = readBoolean(node.parameters?.abortOnTargetLost, true);
     section.innerHTML = `
       <h4>Длительное движение</h4>
       <p>Боец один раз запоминает цель, движется к ней несколько тиков ИИ и не меняет её до завершения или отмены.</p>
@@ -84,7 +87,19 @@ function enhanceSelectedStatefulNode(): void {
         <span>Максимальное время, секунд</span>
         <input id="stateful-move-timeout" class="stateful-move-field" data-param-key="timeoutSeconds" type="number" min="0" step="0.5" value="${timeout}" />
       </label>
-      <p class="stateful-move-safety-note">Новый приказ игрока имеет приоритет и не будет удалён устаревшей отменой ИИ.</p>
+      <label class="human-control wide" data-help="Если расстояние до цели не уменьшается дольше этого времени, маршрут считается заблокированным. 0 — отключить проверку.">
+        <span>Считать маршрут заблокированным через, секунд</span>
+        <input id="stateful-move-stuck-timeout" class="stateful-move-field" data-param-key="stuckTimeoutSeconds" type="number" min="0" step="0.5" value="${stuckTimeout}" />
+      </label>
+      <label class="human-control wide" data-help="Насколько должно уменьшиться расстояние, чтобы это считалось настоящим продвижением.">
+        <span>Минимальный заметный прогресс, клеток</span>
+        <input id="stateful-move-minimum-progress" class="stateful-move-field" data-param-key="minimumProgressCells" type="number" min="0" step="0.01" value="${minimumProgress}" />
+      </label>
+      <label class="human-control wide" data-help="Если выбранная точка исчезла из памяти бойца, текущее движение будет немедленно отменено.">
+        <span>Отменять, если цель исчезла</span>
+        <input id="stateful-move-abort-target-lost" class="stateful-move-field" data-param-key="abortOnTargetLost" type="checkbox" ${abortOnTargetLost ? 'checked' : ''} />
+      </label>
+      <p class="stateful-move-safety-note">Новый приказ игрока имеет приоритет. Застревание и исчезновение цели отменяют только собственный приказ ИИ.</p>
     `;
   }
 
@@ -107,6 +122,9 @@ function installMoveParameterSync(section: HTMLElement, persistDefaults: boolean
     parameters.targetKey = document.querySelector<HTMLSelectElement>('#stateful-move-target')?.value ?? 'best_cover_position';
     parameters.acceptanceRadiusCells = readInputNumber('#stateful-move-radius', 0.2);
     parameters.timeoutSeconds = readInputNumber('#stateful-move-timeout', 15);
+    parameters.stuckTimeoutSeconds = readInputNumber('#stateful-move-stuck-timeout', 2.5);
+    parameters.minimumProgressCells = readInputNumber('#stateful-move-minimum-progress', 0.05);
+    parameters.abortOnTargetLost = document.querySelector<HTMLInputElement>('#stateful-move-abort-target-lost')?.checked ?? true;
     parametersArea.value = JSON.stringify(parameters, null, 2);
   };
 
@@ -126,7 +144,10 @@ function needsMoveDefaults(parameters: Record<string, unknown> | undefined): boo
   return !parameters
     || !Object.prototype.hasOwnProperty.call(parameters, 'targetKey')
     || !Object.prototype.hasOwnProperty.call(parameters, 'acceptanceRadiusCells')
-    || !Object.prototype.hasOwnProperty.call(parameters, 'timeoutSeconds');
+    || !Object.prototype.hasOwnProperty.call(parameters, 'timeoutSeconds')
+    || !Object.prototype.hasOwnProperty.call(parameters, 'stuckTimeoutSeconds')
+    || !Object.prototype.hasOwnProperty.call(parameters, 'minimumProgressCells')
+    || !Object.prototype.hasOwnProperty.call(parameters, 'abortOnTargetLost');
 }
 
 function targetOption(value: string, label: string, selected: string): string {
@@ -172,4 +193,8 @@ function readWholeSeconds(value: unknown, fallback: number): number {
 
 function readNonNegative(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : fallback;
+}
+
+function readBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
 }
