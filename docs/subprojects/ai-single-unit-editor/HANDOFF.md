@@ -20,23 +20,26 @@ Stateful AI Movement v1 is implemented in `real-wargame-preview`.
 Implemented behavior:
 
 - `AiGraphRunner` remains the pure immediate Utility evaluator;
+- runtime-specific movement effects are handled at the `AiStatefulMoveGameBridge` boundary rather than added to the immediate Runner;
 - `AiGraphRuntime` stores serializable execution state across ticks;
 - lifecycle supports `start / update / complete / cancel`;
-- `SequenceWithMemory` resumes the active child;
+- `SequenceWithMemory` resumes the active child and movement cleanup does not hide its following effect;
 - `Wait` uses `waiting`;
 - `MoveToBlackboardPosition` is the first real `running` action;
 - the target position is frozen when movement starts;
 - `begin_move` is emitted once rather than every tick;
 - `SimulationTick` remains the only layer that changes unit coordinates;
 - AI movement creates a token-owned `MoveOrder`;
+- a right-click order without ownership fields is treated as a player order;
 - cleanup removes only the order with the matching owner token;
 - a newer player order survives stale AI cancellation;
+- a newly added movement node immediately persists `targetKey`, `acceptanceRadiusCells` and `timeoutSeconds`;
 - Russian authoring controls and live movement diagnostics are available.
 
 Last verified application commit:
 
 ```text
-7a8cea65fdc8c20201596dfb098e2671285e0ecc
+e5b5e6f0f964ebc7d25e023a92c4e0d9c01b6735
 ```
 
 Recorded verification:
@@ -45,7 +48,7 @@ Recorded verification:
 Preview Core Checks: success
 Preview Policy: success
 Preview screenshots: success
-Playwright: 14/14
+Playwright: 15/15
 PNG: 21
 inspected: 27-ai-running-move-node.png
 ```
@@ -73,7 +76,7 @@ It should add:
 - reaction when movement is blocked;
 - reaction to a critical change in known threat;
 - clear cancellation reasons in runtime trace and Russian diagnostics;
-- tests proving cleanup still preserves replacement orders.
+- tests proving cleanup still preserves replacement orders and following sequence effects.
 
 After that, introduce a real grid pathfinder. Do not call straight-line movement pathfinding.
 
