@@ -201,11 +201,12 @@ function getSelectedUnit(state: SimulationState): UnitModel | undefined {
 }
 
 function readActiveMoveSnapshot(state: AiGraphExecutionState | undefined): ActiveMoveSnapshot | null {
+  const activeNodeId = state?.activeNodeId;
   const data = state?.activeData;
-  if (data?.kind !== 'move_to_blackboard_position') return null;
-  if (!state.activeNodeId || !data.targetKey || !data.actionToken || !isGridPosition(data.target)) return null;
+  if (!activeNodeId || data?.kind !== 'move_to_blackboard_position') return null;
+  if (!data.targetKey || !data.actionToken || !isGridPosition(data.target)) return null;
   return {
-    activeNodeId: state.activeNodeId,
+    activeNodeId,
     targetKey: data.targetKey,
     target: { ...data.target },
     acceptanceRadiusCells: finiteNonNegative(data.acceptanceRadiusCells, 0.2),
