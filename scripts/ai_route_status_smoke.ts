@@ -192,9 +192,26 @@ const paused = updateAiRouteStatus({
   settings,
   previousState: progress.state,
 });
-assert.equal(paused.state.lastProgressAtMs, progress.state.lastProgressAtMs);
-assert.equal(paused.state.lastCheckedAtMs, progress.state.lastCheckedAtMs);
+assert.equal(paused.state.lastProgressAtMs, 8000);
+assert.equal(paused.state.lastCheckedAtMs, 8000);
 assert.equal(paused.noProgressMs, 0);
 assert.equal(paused.shouldCancelRuntime, false);
 
-console.log('AI route status smoke passed: start, progress, stall, block, player override, target loss, missing order, arrival, pause.');
+const resumedAfterPause = updateAiRouteStatus({
+  nowMs: 8100,
+  position: { x: 1, y: 0 },
+  target,
+  acceptanceRadiusCells: 0.2,
+  ownerToken,
+  activeOrderSource: 'ai',
+  activeOrderToken: ownerToken,
+  targetAvailable: true,
+  paused: false,
+  settings,
+  previousState: paused.state,
+});
+assert.equal(resumedAfterPause.status, 'stalled');
+assert.equal(resumedAfterPause.noProgressMs, 100);
+assert.equal(resumedAfterPause.shouldCancelRuntime, false);
+
+console.log('AI route status smoke passed: start, progress, stall, block, player override, target loss, missing order, arrival, pause, resume.');
