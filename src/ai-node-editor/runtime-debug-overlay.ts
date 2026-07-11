@@ -2,7 +2,8 @@ const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 const REFRESH_INTERVAL_MS = 700;
 const STALE_AFTER_MS = 10000;
 
-type TraceStatus = 'pass' | 'fail' | 'skip' | 'select' | 'veto';
+type TraceStatus = 'pass' | 'fail' | 'skip' | 'select' | 'veto' | 'running' | 'waiting' | 'complete' | 'cancelled';
+type RuntimeStatus = 'success' | 'failure' | 'running' | 'waiting' | 'cancelled';
 
 interface RuntimeTraceItem {
   readonly nodeId: string;
@@ -42,6 +43,13 @@ interface RuntimeDebugPayload {
   readonly selectedBranchName: string;
   readonly selectedBranchNameRu?: string;
   readonly ok: boolean;
+  readonly status?: RuntimeStatus;
+  readonly activeNodeId?: string;
+  readonly activeNodeName?: string;
+  readonly activeNodeNameRu?: string;
+  readonly elapsedMs?: number;
+  readonly cancellationReason?: string;
+  readonly cancellationReasonRu?: string;
   readonly paused: boolean;
   readonly nowMs: number;
   readonly explanation: string;
@@ -79,7 +87,9 @@ function scheduleApply(force = false): void {
 
 function applyRuntimeDebugOverlay(): void {
   const payload = readDebugPayload();
-  const signature = payload ? `${payload.unitId}:${payload.nowMs}:${payload.selectedBranchNodeId}:${payload.trace.length}:${payload.scores.length}:${payload.paused ? 'paused' : 'live'}` : 'empty';
+  const signature = payload
+    ? `${payload.unitId}:${payload.nowMs}:${payload.selectedBranchNodeId}:${payload.activeNodeId ?? 'none'}:${payload.status ?? 'instant'}:${payload.trace.length}:${payload.scores.length}:${payload.paused ? 'paused' : 'live'}`
+    : 'empty';
   const hasGraphNodes = document.querySelector('.graph-node[data-node-id]') !== null;
   if (!hasGraphNodes) return;
   if (signature === lastAppliedSignature && document.querySelector('.ai-runtime-debug-panel')) return;
@@ -145,6 +155,14 @@ function buildNodeDebugMap(payload: RuntimeDebugPayload): Map<string, NodeDebugS
   winner.labels.unshift('Победила');
   winner.reasons.push(payload.explanationRu ?? payload.explanation);
 
+  if (payload.activeNodeId) {
+    const active = ensure(payload.activeNodeId);
+    const activeStatus = payload.status === 'waiting' ? 'waiting' : payload.status === 'cancelled' ? 'cancelled' : 'running';
+    active.classes.add(`runtime-debug-${activeStatus}`);
+    active.labels.unshift(activeStatus === 'waiting' ? 'Ожидает' : activeStatus === 'cancelled' ? 'Отменена' : 'Выполняется');
+    if (typeof payload.elapsedMs === 'number') active.labels.push(formatElapsed(payload.elapsedMs));
+  }
+
   return new Map(Array.from(result.entries()).map(([nodeId, value]) => [
     nodeId,
     {
@@ -174,6 +192,13 @@ function renderDebugPanel(payload: RuntimeDebugPayload | null): void {
   const scoreRows = payload.scores.length > 0
     ? payload.scores.map((score) => `<li class="${score.branchNodeId === payload.selectedBranchNodeId ? 'winner' : ''} ${score.vetoed ? 'veto' : ''}"><b>${escapeHtml(score.branchNameRu ?? score.branchName)}</b><span>${score.vetoed ? 'запрещена' : `${roundScore(score.score)} очков`}</span></li>`).join('')
     : '<li><b>Очков нет</b><span>нет UtilitySelector или score-нод</span></li>';
+  const status = payload.status ?? (payload.ok ? 'success' : 'failure');
+  const activeNode = payload.activeNodeNameRu ?? payload.activeNodeName;
+  const activeRows = activeNode
+    ? `<div><dt>Активная нода</dt><dd>${escapeHtml(activeNode)}</dd></div>${typeof payload.elapsedMs === 'number' ? `<div><dt>Выполняется</dt><dd>${escapeHtml(formatElapsed(payload.elapsedMs))}</dd></div>` : ''}`
+    : '';
+  const cancellation = payload.cancellationReasonRu ?? payload.cancellationReason;
+  const cancellationRow = cancellation ? `<div><dt>Причина отмены</dt><dd>${escapeHtml(cancellation)}</dd></div>` : '';
 
   panel.innerHTML = `
     <h3>След ИИ ${payload.paused ? '· пауза' : ''}</h3>
@@ -181,6 +206,9 @@ function renderDebugPanel(payload: RuntimeDebugPayload | null): void {
     <dl>
       <div><dt>Боец</dt><dd>${escapeHtml(payload.unitLabel ?? payload.unitId)}</dd></div>
       <div><dt>Победила</dt><dd>${escapeHtml(payload.selectedBranchNameRu ?? payload.selectedBranchName)}</dd></div>
+      <div><dt>Состояние</dt><dd class="runtime-status ${escapeHtml(status)}">${escapeHtml(runtimeStatusLabel(status))}</dd></div>
+      ${activeRows}
+      ${cancellationRow}
       <div><dt>Итог</dt><dd>${escapeHtml(payload.explanationRu ?? payload.explanation)}</dd></div>
     </dl>
     <ul>${scoreRows}</ul>
@@ -197,6 +225,10 @@ function removeExistingNodeDebug(): void {
       'runtime-debug-skip',
       'runtime-debug-select',
       'runtime-debug-veto',
+      'runtime-debug-running',
+      'runtime-debug-waiting',
+      'runtime-debug-complete',
+      'runtime-debug-cancelled',
       'runtime-debug-score',
       'runtime-debug-branch',
       'runtime-debug-winner',
@@ -211,6 +243,7 @@ function readDebugPayload(): RuntimeDebugPayload | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<RuntimeDebugPayload>;
     if (parsed.kind !== 'ai-graph-runtime-debug' || parsed.version !== 1 || typeof parsed.unitId !== 'string') return null;
+    const status = isRuntimeStatus(parsed.status) ? parsed.status : undefined;
     return {
       version: 1,
       kind: 'ai-graph-runtime-debug',
@@ -221,6 +254,13 @@ function readDebugPayload(): RuntimeDebugPayload | null {
       selectedBranchName: String(parsed.selectedBranchName ?? parsed.selectedBranchNodeId ?? ''),
       selectedBranchNameRu: typeof parsed.selectedBranchNameRu === 'string' ? parsed.selectedBranchNameRu : undefined,
       ok: Boolean(parsed.ok),
+      status,
+      activeNodeId: typeof parsed.activeNodeId === 'string' ? parsed.activeNodeId : undefined,
+      activeNodeName: typeof parsed.activeNodeName === 'string' ? parsed.activeNodeName : undefined,
+      activeNodeNameRu: typeof parsed.activeNodeNameRu === 'string' ? parsed.activeNodeNameRu : undefined,
+      elapsedMs: typeof parsed.elapsedMs === 'number' ? parsed.elapsedMs : undefined,
+      cancellationReason: typeof parsed.cancellationReason === 'string' ? parsed.cancellationReason : undefined,
+      cancellationReasonRu: typeof parsed.cancellationReasonRu === 'string' ? parsed.cancellationReasonRu : undefined,
       paused: Boolean(parsed.paused),
       nowMs: typeof parsed.nowMs === 'number' ? parsed.nowMs : 0,
       explanation: String(parsed.explanation ?? ''),
@@ -238,7 +278,7 @@ function isTraceItem(value: unknown): value is RuntimeTraceItem {
   if (!isRecord(value)) return false;
   return typeof value.nodeId === 'string'
     && typeof value.nodeType === 'string'
-    && ['pass', 'fail', 'skip', 'select', 'veto'].includes(String(value.status))
+    && ['pass', 'fail', 'skip', 'select', 'veto', 'running', 'waiting', 'complete', 'cancelled'].includes(String(value.status))
     && typeof value.reason === 'string';
 }
 
@@ -250,12 +290,32 @@ function isBranchScore(value: unknown): value is RuntimeBranchScore {
     && Array.isArray(value.breakdown);
 }
 
+function isRuntimeStatus(value: unknown): value is RuntimeStatus {
+  return ['success', 'failure', 'running', 'waiting', 'cancelled'].includes(String(value));
+}
+
 function statusLabel(status: TraceStatus): string {
   if (status === 'pass') return 'прошла';
   if (status === 'fail') return 'провал';
   if (status === 'skip') return 'пауза/cooldown';
   if (status === 'select') return 'выбрана';
-  return 'запрет';
+  if (status === 'veto') return 'запрет';
+  if (status === 'running') return 'выполняется';
+  if (status === 'waiting') return 'ожидает';
+  if (status === 'complete') return 'завершена';
+  return 'отменена';
+}
+
+function runtimeStatusLabel(status: RuntimeStatus): string {
+  if (status === 'success') return 'Успешно завершено';
+  if (status === 'failure') return 'Провал';
+  if (status === 'running') return 'Выполняется';
+  if (status === 'waiting') return 'Ожидает';
+  return 'Отменено';
+}
+
+function formatElapsed(milliseconds: number): string {
+  return `${Math.max(0, milliseconds / 1000).toFixed(1)} сек.`;
 }
 
 function unique(values: string[]): string[] {
