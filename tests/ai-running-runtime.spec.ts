@@ -89,9 +89,19 @@ test('shows a waiting node, duration details, and Russian live diagnostics', asy
   await waitNode.click();
   const authoring = page.locator('.stateful-node-human-panel');
   await expect(authoring).toContainText('Длительное ожидание');
-  await expect(authoring.getByLabel('Длительность, секунд')).toHaveValue('2');
+  const durationField = authoring.getByLabel('Длительность, секунд');
+  await expect(durationField).toHaveValue('2');
   await expect(authoring.getByLabel('Тайм-аут, секунд')).toHaveValue('0');
   await expect(authoring).toBeInViewport();
+
+  await durationField.fill('4');
+  await page.locator('.human-node-panel').getByRole('button', { name: 'Сохранить параметры' }).click();
+  await expect(page.locator('.stateful-node-human-panel').getByLabel('Длительность, секунд')).toHaveValue('4');
+  const savedDuration = await page.evaluate(() => {
+    const graph = JSON.parse(localStorage.getItem('real-wargame.ai-node-editor.graph.v6') ?? '{}');
+    return graph.nodes.find((node: { id: string }) => node.id === 'wait')?.parameters?.durationSeconds;
+  });
+  expect(savedDuration).toBe(4);
 
   await page.screenshot({ path: path.join(SCREENSHOT_DIR, '26-ai-running-waiting-node.png') });
 });
