@@ -272,7 +272,13 @@ function setMoveExecutionState(
 ): void {
   const runtime = unit.behaviorRuntime as UnitModel['behaviorRuntime'] & {
     aiGraphExecutionState?: AiGraphExecutionState;
+    aiGraphMemory?: Record<string, AiBlackboardValue>;
   };
+  const memory = runtime.aiGraphMemory ?? {};
+  runtime.aiGraphMemory = memory;
+  if (targetKey === 'missing_route_target') delete memory[targetKey];
+  else memory[targetKey] = { ...target };
+
   runtime.aiGraphExecutionState = {
     version: 1,
     graphId: 'route_bridge_graph',
