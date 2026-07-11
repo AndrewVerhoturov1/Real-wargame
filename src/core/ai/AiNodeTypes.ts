@@ -38,6 +38,15 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     descriptionRu: 'Выполняет дочерние ноды по порядку, пока одна из них не провалится.',
     canHaveChildren: true,
   },
+  SequenceWithMemory: {
+    type: 'SequenceWithMemory',
+    category: 'flow',
+    label: 'Step Chain with Memory',
+    description: 'Runs child nodes in order and remembers the active step between AI ticks.',
+    labelRu: 'Последовательность с памятью',
+    descriptionRu: 'Выполняет дочерние ноды по порядку и помнит активный шаг между тиками ИИ.',
+    canHaveChildren: true,
+  },
   Selector: {
     type: 'Selector',
     category: 'flow',
@@ -199,6 +208,15 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     labelRu: 'Действие',
     descriptionRu: 'Выдаёт выбранное действие: двигаться, стрелять, перезарядиться, отступить, ждать, подавлять или продолжать приказ.',
     canHaveChildren: true,
+  },
+  Wait: {
+    type: 'Wait',
+    category: 'action',
+    label: 'Wait',
+    description: 'Waits for a configured duration while preserving progress between AI ticks.',
+    labelRu: 'Ждать',
+    descriptionRu: 'Ждёт заданное время и сохраняет прогресс между тиками ИИ.',
+    canHaveChildren: false,
   },
   SetMovementMode: {
     type: 'SetMovementMode',
