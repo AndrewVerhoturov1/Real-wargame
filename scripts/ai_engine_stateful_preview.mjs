@@ -1,13 +1,16 @@
+const STATEFUL_PREVIEW_NODE_TYPES = new Set([
+  'SequenceWithMemory',
+  'Wait',
+  'MoveToBlackboardPosition',
+]);
+
 export function prepareGraphForInstantPreview(value) {
   if (!isRecord(value) || !Array.isArray(value.nodes)) return value;
   return {
     ...value,
     nodes: value.nodes.map((node) => {
       if (!isRecord(node)) return node;
-      if (node.type === 'SequenceWithMemory') {
-        return { ...node, type: 'ActionBranch', children: [] };
-      }
-      if (node.type === 'Wait') {
+      if (STATEFUL_PREVIEW_NODE_TYPES.has(node.type)) {
         return { ...node, type: 'ActionBranch', children: [] };
       }
       return node;
@@ -18,7 +21,7 @@ export function prepareGraphForInstantPreview(value) {
 export function hasStatefulPreviewNodes(value) {
   return isRecord(value)
     && Array.isArray(value.nodes)
-    && value.nodes.some((node) => isRecord(node) && (node.type === 'SequenceWithMemory' || node.type === 'Wait'));
+    && value.nodes.some((node) => isRecord(node) && STATEFUL_PREVIEW_NODE_TYPES.has(node.type));
 }
 
 function isRecord(value) {
