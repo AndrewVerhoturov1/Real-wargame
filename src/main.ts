@@ -5,6 +5,7 @@ import './game-editor.css';
 import './ui-layout.css';
 import './tactical-workspace.css';
 import './tactical-workspace-mode.css';
+import './front-zones.css';
 import mapData from './data/maps/test_map.json';
 import pressureZoneData from './data/pressure_zones/test_pressure_zones.json';
 import unitsData from './data/units/test_units.json';
@@ -17,6 +18,7 @@ import type { UnitData } from './core/units/UnitModel';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
 import { installAppShellMenu } from './shared/AppShellMenu';
 import { installEditorHeaderPlacement } from './ui/EditorHeaderPlacement';
+import { installFrontZoneControls } from './ui/FrontZoneControls';
 import { installGameEditorWorkbench } from './ui/GameEditorWorkbench';
 import { installPerformanceReportControls } from './ui/PerformanceReportControls';
 import { installSceneExportControls } from './ui/SceneExportControls';
@@ -65,6 +67,7 @@ installPerformanceReportControls(() => tacticalBoard.downloadPerformanceReport()
 installAiEditorOpenButton(aiEditorOpenButton);
 installPauseToggle(pauseToggle, () => tacticalBoard.forceRender());
 installTacticalWorkspace(state, aiGameBridge, () => tacticalBoard.forceRender());
+const destroyFrontZoneControls = installFrontZoneControls(state, () => tacticalBoard.forceRender());
 const destroyEditorHeaderPlacement = installEditorHeaderPlacement();
 const destroyWorkspaceTooltipGuard = installWorkspaceTooltipGuard();
 tacticalBoard.start();
@@ -80,6 +83,7 @@ forceRussianTopControls(
 );
 
 window.addEventListener('beforeunload', () => {
+  destroyFrontZoneControls();
   destroyWorkspaceTooltipGuard();
   destroyEditorHeaderPlacement();
   aiGameBridge.destroy();
