@@ -113,8 +113,6 @@ export function installFrontZoneControls(state: SimulationState, onChanged: () =
         editorBody.appendChild(editorPanel.root);
       }
       editorPanel.root.hidden = false;
-      editorPanel.syncInputs();
-      editorPanel.updateStatus();
       return;
     }
 
@@ -137,6 +135,7 @@ export function installFrontZoneControls(state: SimulationState, onChanged: () =
 
   const syncAiTimer = window.setInterval(() => {
     syncTerritoryToAiMemory(state);
+    editorPanel.syncInputs();
     editorPanel.updateStatus();
     publishDiagnostics(state);
   }, AI_SYNC_INTERVAL_MS);
@@ -144,6 +143,8 @@ export function installFrontZoneControls(state: SimulationState, onChanged: () =
   syncVisibilityButton();
   syncEditorPanelPlacement();
   syncTerritoryToAiMemory(state);
+  editorPanel.syncInputs();
+  editorPanel.updateStatus();
   updateOverlay(true);
   animationFrameId = window.requestAnimationFrame(animate);
 
