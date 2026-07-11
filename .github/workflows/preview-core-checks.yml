@@ -254,11 +254,6 @@ jobs:
           await writeFile(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
           NODE
 
-      - name: Restore permanent workflows
-        run: |
-          git checkout origin/real-wargame-preview -- .github/workflows/preview-core-checks.yml
-          rm -f .github/workflows/web-chat-branch-sync.yml
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -275,10 +270,11 @@ jobs:
           npm run docs:check
           npm run build
 
-      - name: Commit synchronized isolated branch
+      - name: Commit synchronized non-workflow files
         shell: bash
         run: |
           set -euo pipefail
+          rm -f .github/workflows/agent-docs-integrity.yml
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
