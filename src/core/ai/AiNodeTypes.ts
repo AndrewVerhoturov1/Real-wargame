@@ -218,6 +218,15 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     descriptionRu: 'Ждёт заданное время и сохраняет прогресс между тиками ИИ.',
     canHaveChildren: false,
   },
+  MoveToBlackboardPosition: {
+    type: 'MoveToBlackboardPosition',
+    category: 'action',
+    label: 'Move to Memory Position',
+    description: 'Moves toward a saved Blackboard position across multiple AI ticks and completes on arrival.',
+    labelRu: 'Двигаться к позиции из памяти',
+    descriptionRu: 'Движется к сохранённой позиции Blackboard несколько тиков ИИ и завершается после прибытия.',
+    canHaveChildren: false,
+  },
   SetMovementMode: {
     type: 'SetMovementMode',
     category: 'action',
