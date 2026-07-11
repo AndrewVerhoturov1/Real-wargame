@@ -47,18 +47,18 @@ function enhanceSelectedStatefulNode(): void {
       <p>Запускает шаги по порядку и продолжает с активного шага на следующем тике ИИ. Никаких кодовых параметров для неё не требуется.</p>
     `;
   } else {
-    const duration = readNonNegative(node.parameters?.durationSeconds, 2);
-    const timeout = readNonNegative(node.parameters?.timeoutSeconds, 0);
+    const duration = readWholeSeconds(node.parameters?.durationSeconds, 2);
+    const timeout = readWholeSeconds(node.parameters?.timeoutSeconds, 0);
     section.innerHTML = `
       <h4>Длительное ожидание</h4>
       <p>Боец остаётся на этой ноде между тиками ИИ. Нода подсвечивается синим, пока ожидание не закончится.</p>
       <label class="human-control wide" data-help="Через сколько секунд ожидание считается успешно завершённым.">
         <span>Длительность, секунд</span>
-        <input id="stateful-wait-duration" class="human-field" data-param-key="durationSeconds" data-kind="number" type="number" min="0" step="0.1" value="${duration}" />
+        <input id="stateful-wait-duration" class="human-field" data-param-key="durationSeconds" data-kind="number" type="number" min="0" step="1" value="${duration}" />
       </label>
       <label class="human-control wide" data-help="0 — без тайм-аута. Если тайм-аут меньше длительности, ожидание завершится провалом.">
         <span>Тайм-аут, секунд</span>
-        <input id="stateful-wait-timeout" class="human-field" data-param-key="timeoutSeconds" data-kind="number" type="number" min="0" step="0.1" value="${timeout}" />
+        <input id="stateful-wait-timeout" class="human-field" data-param-key="timeoutSeconds" data-kind="number" type="number" min="0" step="1" value="${timeout}" />
       </label>
     `;
   }
@@ -81,6 +81,6 @@ function readGraphNode(nodeId: string): { type?: string; parameters?: Record<str
   }
 }
 
-function readNonNegative(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : fallback;
+function readWholeSeconds(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.round(value)) : fallback;
 }
