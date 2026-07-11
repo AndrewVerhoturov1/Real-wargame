@@ -2,6 +2,7 @@ import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap } from '../map/MapModel';
 import { createMoveOrder } from '../orders/MoveOrder';
 import type { SimulationState } from '../simulation/SimulationState';
+import { getAiTestPaused } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
 import type { AiBlackboardValue } from './AiBlackboard';
 import {
@@ -37,7 +38,7 @@ type AiMoveRuntime = UnitModel['behaviorRuntime'] & {
   aiRouteStatusState?: AiRouteStatusState;
 };
 
-interface TickOptions {
+export interface TickOptions {
   readonly force: boolean;
   readonly applyEffects: boolean;
   readonly cancel?: AiGraphCancellationRequest;
@@ -68,28 +69,33 @@ export function installAiStatefulMoveGameBridge(state: SimulationState): AiGameB
   };
 }
 
+export function buildReactiveRouteTickOptions(routeResult: AiRouteStatusResult): TickOptions {
+  return {
+    force: true,
+    applyEffects: true,
+    cancel: routeResult.shouldCancelRuntime
+      ? {
+          reason: routeResult.abortReason ?? 'AI movement route cancelled.',
+          reasonRu: routeResult.abortReasonRu ?? 'Маршрут движения ИИ отменён.',
+        }
+      : undefined,
+  };
+}
+
 export function tickStatefulMoveBridge(
   state: SimulationState,
   nowMs = Date.now(),
   options: TickOptions = { force: false, applyEffects: true },
 ): AiGraphRuntimeResult | null {
   syncSelectedMoveOrderMemory(state);
+  const selectedUnitId = state.selectedUnitId;
 
   let routeResult: AiRouteStatusResult | null = null;
   let runtimeOptions = options;
   if (options.applyEffects && !options.cancel) {
     routeResult = updateSelectedRouteStatus(state, nowMs);
     if (routeResult?.shouldForceRuntimeTick) {
-      runtimeOptions = {
-        force: true,
-        applyEffects: true,
-        cancel: routeResult.shouldCancelRuntime
-          ? {
-              reason: routeResult.abortReason ?? 'AI movement route cancelled.',
-              reasonRu: routeResult.abortReasonRu ?? 'Маршрут движения ИИ отменён.',
-            }
-          : undefined,
-      };
+      runtimeOptions = buildReactiveRouteTickOptions(routeResult);
     }
   }
 
@@ -103,7 +109,7 @@ export function tickStatefulMoveBridge(
   }
 
   if (result) publishMoveDebugDetails(result, routeResult);
-  else if (routeResult) publishRouteDebugDetails(routeResult);
+  else if (routeResult && selectedUnitId) publishRouteDebugDetails(routeResult, selectedUnitId);
   return result;
 }
 
@@ -147,7 +153,7 @@ export function updateSelectedRouteStatus(
     activeOrderSource,
     activeOrderToken: order?.ownerToken ?? null,
     targetAvailable: isGridPosition(blackboard[activeMove.targetKey]),
-    paused: state.editor.enabled || isPaused(state),
+    paused: state.editor.enabled || getAiTestPaused(state),
     settings: readRouteSettings(activeMove.activeNodeId),
     previousState: runtime.aiRouteStatusState,
   });
@@ -267,8 +273,11 @@ function publishMoveDebugDetails(
   });
 }
 
-function publishRouteDebugDetails(result: AiRouteStatusResult): void {
-  updateDebugPayload((payload) => writeRouteDebugFields(payload, result));
+function publishRouteDebugDetails(result: AiRouteStatusResult, unitId: string): void {
+  updateDebugPayload((payload) => {
+    if (payload.unitId !== unitId) return;
+    writeRouteDebugFields(payload, result);
+  });
 }
 
 function writeRouteDebugFields(
@@ -294,10 +303,6 @@ function updateDebugPayload(update: (payload: Record<string, unknown>) => void):
   } catch {
     // Route diagnostics are optional and must never interrupt simulation.
   }
-}
-
-function isPaused(state: SimulationState): boolean {
-  return (state as SimulationState & { paused?: boolean }).paused === true;
 }
 
 function isGridPosition(value: unknown): value is GridPosition {
