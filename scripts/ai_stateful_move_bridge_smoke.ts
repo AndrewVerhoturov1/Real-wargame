@@ -85,8 +85,11 @@ assert.equal(memory.active_move_source, 'ai');
 assert.equal(memory.active_move_owner_token, aiToken);
 assert.deepEqual(memory.active_move_target, aiTarget);
 
-unit.order = createMoveOrder({ x: 12, y: 8 }, { source: 'player' });
+unit.order = createMoveOrder({ x: 12, y: 8 });
 const playerOrder = unit.order;
+syncSelectedMoveOrderMemory(state);
+assert.equal(memory.active_move_source, 'player', 'legacy right-click orders without a token must be treated as player orders');
+assert.equal(memory.active_move_owner_token, null);
 applyOwnedMoveEffects(state, runtimeResult(unit.id, [{
   type: 'clear_move',
   ownerToken: aiToken,
@@ -95,7 +98,7 @@ applyOwnedMoveEffects(state, runtimeResult(unit.id, [{
 }]));
 
 assert.equal(unit.order, playerOrder, 'stale AI cleanup must preserve the replacement player order');
-assert.equal(unit.order?.source, 'player');
+assert.equal(unit.order?.ownerToken, undefined);
 assert.deepEqual(unit.order?.target, { x: 12, y: 8 });
 assert.equal(unit.behaviorRuntime.lastEvent, 'ai_graph_owned_move_cleanup_skipped');
 
@@ -132,7 +135,7 @@ assert.equal(unit.behaviorRuntime.currentAction, 'posture:prone', 'move cleanup 
 assert.equal(unit.behaviorRuntime.reason, 'Лечь после движения.');
 assert.equal(unit.behaviorRuntime.lastEvent, 'ai_graph_set_posture');
 
-console.log('AI stateful move bridge smoke passed: catalog validation, physical movement, owned start, memory sync, player replacement protection, matching cleanup, sequence continuation.');
+console.log('AI stateful move bridge smoke passed: catalog validation, physical movement, owned start, memory sync, legacy player-order inference, player replacement protection, matching cleanup, sequence continuation.');
 
 function runtimeResult(unitId: string, effects: readonly unknown[]): AiGraphRuntimeResult {
   return {
