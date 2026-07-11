@@ -31,84 +31,54 @@ function enhanceSelectedStatefulNode(): void {
     return;
   }
 
-  if (existing?.dataset.nodeId === nodeId && existing.dataset.nodeType === node.type) return;
+  const humanPanel = document.querySelector<HTMLElement>('.human-node-panel');
+  if (!humanPanel) return;
+  if (existing?.dataset.nodeId === nodeId && existing.dataset.nodeType === node.type && humanPanel.contains(existing)) return;
   existing?.remove();
 
-  const parametersArea = document.querySelector<HTMLTextAreaElement>('#node-parameters');
-  const saveButton = document.querySelector<HTMLButtonElement>('#save-node');
-  const inspector = saveButton?.closest<HTMLElement>('.inspector-card');
-  if (!parametersArea || !saveButton || !inspector) return;
-
-  const panel = document.createElement('section');
-  panel.className = 'stateful-node-human-panel';
-  panel.dataset.nodeId = nodeId;
-  panel.dataset.nodeType = node.type;
+  const section = document.createElement('section');
+  section.className = 'stateful-node-human-panel';
+  section.dataset.nodeId = nodeId;
+  section.dataset.nodeType = node.type;
 
   if (node.type === 'SequenceWithMemory') {
-    panel.innerHTML = `
+    section.innerHTML = `
       <h4>Последовательность с памятью</h4>
       <p>Запускает шаги по порядку и продолжает с активного шага на следующем тике ИИ. Никаких кодовых параметров для неё не требуется.</p>
     `;
-    inspector.insertBefore(panel, saveButton);
-    return;
+  } else {
+    const duration = readNonNegative(node.parameters?.durationSeconds, 2);
+    const timeout = readNonNegative(node.parameters?.timeoutSeconds, 0);
+    section.innerHTML = `
+      <h4>Длительное ожидание</h4>
+      <p>Боец остаётся на этой ноде между тиками ИИ. Нода подсвечивается синим, пока ожидание не закончится.</p>
+      <label class="human-control wide" data-help="Через сколько секунд ожидание считается успешно завершённым.">
+        <span>Длительность, секунд</span>
+        <input id="stateful-wait-duration" class="human-field" data-param-key="durationSeconds" data-kind="number" type="number" min="0" step="0.1" value="${duration}" />
+      </label>
+      <label class="human-control wide" data-help="0 — без тайм-аута. Если тайм-аут меньше длительности, ожидание завершится провалом.">
+        <span>Тайм-аут, секунд</span>
+        <input id="stateful-wait-timeout" class="human-field" data-param-key="timeoutSeconds" data-kind="number" type="number" min="0" step="0.1" value="${timeout}" />
+      </label>
+    `;
   }
 
-  const parameters = readParameters(parametersArea.value);
-  const duration = readNonNegative(parameters.durationSeconds, 2);
-  const timeout = readNonNegative(parameters.timeoutSeconds, 0);
-  parameters.durationSeconds = duration;
-  parameters.timeoutSeconds = timeout;
-  parametersArea.value = JSON.stringify(parameters, null, 2);
-
-  panel.innerHTML = `
-    <h4>Длительное ожидание</h4>
-    <p>Боец остаётся на этой ноде между тиками ИИ. Нода подсвечивается синим, пока ожидание не закончится.</p>
-    <label class="inspector-field">
-      Длительность, секунд
-      <input id="stateful-wait-duration" type="number" min="0" step="0.1" value="${duration}" />
-      <small>Через сколько секунд нода считается успешно завершённой.</small>
-    </label>
-    <label class="inspector-field">
-      Тайм-аут, секунд
-      <input id="stateful-wait-timeout" type="number" min="0" step="0.1" value="${timeout}" />
-      <small>0 — без тайм-аута. Если тайм-аут меньше длительности, ожидание завершится провалом.</small>
-    </label>
-  `;
-  inspector.insertBefore(panel, saveButton);
-
-  const sync = (): void => {
-    const next = readParameters(parametersArea.value);
-    next.durationSeconds = readInput('#stateful-wait-duration', 2);
-    next.timeoutSeconds = readInput('#stateful-wait-timeout', 0);
-    parametersArea.value = JSON.stringify(next, null, 2);
-  };
-  panel.querySelectorAll('input').forEach((input) => input.addEventListener('input', sync));
-  saveButton.addEventListener('click', sync, { capture: true, once: true });
+  const cooldown = humanPanel.querySelector('.human-links');
+  const actions = humanPanel.querySelector('.human-actions');
+  if (cooldown) humanPanel.insertBefore(section, cooldown);
+  else if (actions) humanPanel.insertBefore(section, actions);
+  else humanPanel.appendChild(section);
 }
 
-function readGraphNode(nodeId: string): { type?: string } | null {
+function readGraphNode(nodeId: string): { type?: string; parameters?: Record<string, unknown> } | null {
   try {
     const raw = window.localStorage.getItem(GRAPH_STORAGE_KEY);
     if (!raw) return null;
-    const graph = JSON.parse(raw) as { nodes?: Array<{ id?: string; type?: string }> };
+    const graph = JSON.parse(raw) as { nodes?: Array<{ id?: string; type?: string; parameters?: Record<string, unknown> }> };
     return graph.nodes?.find((node) => node.id === nodeId) ?? null;
   } catch {
     return null;
   }
-}
-
-function readParameters(value: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(value);
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
-  } catch {
-    return {};
-  }
-}
-
-function readInput(selector: string, fallback: number): number {
-  const value = Number(document.querySelector<HTMLInputElement>(selector)?.value ?? fallback);
-  return Number.isFinite(value) ? Math.max(0, value) : fallback;
 }
 
 function readNonNegative(value: unknown, fallback: number): number {
