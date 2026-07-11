@@ -36,10 +36,10 @@ const AI_SYNC_INTERVAL_MS = 100;
 export function installFrontZoneControls(state: SimulationState, onChanged: () => void): () => void {
   const host = document.querySelector<HTMLElement>('#app');
   const displayMenu = document.querySelector<HTMLElement>('[data-role="display"]');
-  const editorWorkbench = document.querySelector<HTMLElement>('.game-editor-workbench');
+  const editorSceneSlot = document.querySelector<HTMLElement>('.editor-scene-tools-slot');
 
-  if (!host || !displayMenu || !editorWorkbench) {
-    throw new Error('Front zone controls require the tactical map, display menu and editor workbench.');
+  if (!host || !displayMenu || !editorSceneSlot) {
+    throw new Error('Front zone controls require the tactical map, display menu and scene editor slot.');
   }
 
   host.classList.add('front-zone-host');
@@ -98,7 +98,7 @@ export function installFrontZoneControls(state: SimulationState, onChanged: () =
   };
 
   const editorPanel = createEditorPanel(state, onChanged, () => updateOverlay(true));
-  editorWorkbench.appendChild(editorPanel.root);
+  editorSceneSlot.appendChild(editorPanel.root);
 
   const animate = (): void => {
     updateOverlay(false);
