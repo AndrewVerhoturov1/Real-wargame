@@ -29,7 +29,8 @@ try {
   assert(health.ok === true, 'health.ok должен быть true');
   assert(health.browserDoesHeavyAi === false, 'browserDoesHeavyAi должен быть false');
   assert(String(health.version).includes('graph-runner'), 'engine должен заявлять GraphRunner версию');
-  console.log('[OK] /engine/health отвечает, GraphRunner заявлен, тяжёлый ИИ не браузерный.');
+  assert(health.statefulRuntime === 'live-game-bridge', 'health должен указывать живой stateful runtime в game bridge');
+  console.log('[OK] /engine/health отвечает, GraphRunner и stateful runtime заявлены, тяжёлый ИИ не браузерный.');
 
   const validation = await requestJson('POST', '/ai/graph/validate', {});
   writeArtifact('02-validation.json', validation);
@@ -74,6 +75,24 @@ try {
   assert(utilityEvaluation.scores[0].breakdown.length > 0, 'ветка должна иметь score breakdown');
   console.log('[OK] UtilitySelector выбрал лучшую ветку по score-ноды и выдал move_to.');
 
+  const statefulGraph = createStatefulSmokeGraph();
+  const statefulValidation = await requestJson('POST', '/ai/graph/validate', { graph: statefulGraph });
+  writeArtifact('05-stateful-validation.json', statefulValidation);
+  assert(statefulValidation.ok === true, 'stateful graph должен пройти validation');
+  assert(statefulValidation.statefulPreview === true, 'validation должен пометить stateful preview');
+  assert(String(statefulValidation.runtimeNoteRu).includes('AiGraphRuntime'), 'validation должен объяснить живое исполнение');
+
+  const statefulEvaluation = await requestJson('POST', '/ai/graph/evaluate-once', {
+    unitId: 'manual_soldier_stateful',
+    graph: statefulGraph,
+    blackboard: { danger: 80 },
+  });
+  writeArtifact('06-stateful-evaluate-once.json', statefulEvaluation);
+  assert(statefulEvaluation.ok === true, 'stateful evaluate-once должен вернуть ok=true');
+  assert(statefulEvaluation.statefulPreview === true, 'evaluate-once должен пометить границу stateful preview');
+  assert(String(statefulEvaluation.runtimeNoteRu).includes('Выполняется/Ожидает'), 'evaluate-once должен честно направить в живой runtime');
+  console.log('[OK] stateful graph валидируется, а evaluate-once честно останавливается на границе длительного поведения.');
+
   console.log('');
   console.log('[GOTOVO] Local AI engine smoke passed.');
   console.log(`[INFO] JSON-otchety zapisany v: ${artifactDir}`);
@@ -93,15 +112,7 @@ function createUtilitySmokeGraph() {
     name: 'Utility Selector Smoke Graph',
     nameRu: 'Проверочный граф UtilitySelector',
     rootNodeId: 'root',
-    blackboardDefaults: {
-      danger: 0,
-      morale: 60,
-      underFire: false,
-      hasOrder: false,
-      current_action: 'wait',
-      best_cover_position: null,
-      self_position: { x: 0, y: 0 },
-    },
+    blackboardDefaults: { danger: 0, morale: 60, underFire: false, hasOrder: false, current_action: 'wait', best_cover_position: null, self_position: { x: 0, y: 0 } },
     nodes: [
       node('root', 'Root', ['utility'], 'Start', 'Старт'),
       node('utility', 'UtilitySelector', ['branch_cover', 'branch_order'], 'Best choice', 'Лучший выбор'),
@@ -118,6 +129,24 @@ function createUtilitySmokeGraph() {
   };
 }
 
+function createStatefulSmokeGraph() {
+  return {
+    version: 1,
+    id: 'stateful_engine_smoke_graph',
+    name: 'Stateful Engine Smoke Graph',
+    nameRu: 'Проверочный состоянийный граф',
+    rootNodeId: 'root',
+    blackboardDefaults: { danger: 0 },
+    nodes: [
+      node('root', 'Root', ['utility'], 'Start', 'Старт'),
+      node('utility', 'UtilitySelector', ['branch'], 'Best choice', 'Лучший выбор'),
+      node('branch', 'ActionBranch', ['sequence'], 'Take cover', 'Занять укрытие'),
+      node('sequence', 'SequenceWithMemory', ['wait'], 'Cover sequence', 'Последовательность укрытия'),
+      node('wait', 'Wait', [], 'Check surroundings', 'Осмотреться', { durationSeconds: 2, timeoutSeconds: 0 }),
+    ],
+  };
+}
+
 function node(id, type, children, displayName, displayNameRu, parameters = {}) {
   return { id, type, displayName, displayNameRu, children, parameters };
 }
@@ -125,7 +154,6 @@ function node(id, type, children, displayName, displayNameRu, parameters = {}) {
 async function waitForHealth() {
   const startedAt = Date.now();
   let lastError = null;
-
   while (Date.now() - startedAt < 15000) {
     try {
       await requestJson('GET', '/engine/health');
@@ -135,7 +163,6 @@ async function waitForHealth() {
       await sleep(400);
     }
   }
-
   throw new Error(`Engine не ответил за 15 секунд. Последняя ошибка: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
 }
 
@@ -160,20 +187,15 @@ function requestJson(method, pathname, payload) {
           reject(new Error(`Не удалось прочитать JSON от ${pathname}: ${text}`));
           return;
         }
-
         if ((response.statusCode ?? 500) >= 400) {
           reject(new Error(`HTTP ${response.statusCode} от ${pathname}: ${text}`));
           return;
         }
-
         resolve(json);
       });
     });
-
     request.on('error', reject);
-    if (body) {
-      request.write(body);
-    }
+    if (body) request.write(body);
     request.end();
   });
 }
@@ -183,9 +205,7 @@ function writeArtifact(fileName, value) {
 }
 
 function assert(condition, message) {
-  if (!condition) {
-    throw new Error(message);
-  }
+  if (!condition) throw new Error(message);
 }
 
 function sleep(ms) {
