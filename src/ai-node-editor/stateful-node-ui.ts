@@ -94,10 +94,12 @@ function enhanceSelectedStatefulNode(): void {
   else if (actions) humanPanel.insertBefore(section, actions);
   else humanPanel.appendChild(section);
 
-  if (node.type === 'MoveToBlackboardPosition') installMoveParameterSync(section);
+  if (node.type === 'MoveToBlackboardPosition') {
+    installMoveParameterSync(section, needsMoveDefaults(node.parameters));
+  }
 }
 
-function installMoveParameterSync(section: HTMLElement): void {
+function installMoveParameterSync(section: HTMLElement, persistDefaults: boolean): void {
   const sync = (): void => {
     const parametersArea = document.querySelector<HTMLTextAreaElement>('#node-parameters');
     if (!parametersArea) return;
@@ -112,6 +114,19 @@ function installMoveParameterSync(section: HTMLElement): void {
     .forEach((field) => field.addEventListener('input', sync));
   document.querySelector<HTMLButtonElement>('.human-save-node')?.addEventListener('click', sync, { capture: true });
   sync();
+
+  if (persistDefaults) {
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLButtonElement>('#save-node')?.click();
+    });
+  }
+}
+
+function needsMoveDefaults(parameters: Record<string, unknown> | undefined): boolean {
+  return !parameters
+    || !Object.prototype.hasOwnProperty.call(parameters, 'targetKey')
+    || !Object.prototype.hasOwnProperty.call(parameters, 'acceptanceRadiusCells')
+    || !Object.prototype.hasOwnProperty.call(parameters, 'timeoutSeconds');
 }
 
 function targetOption(value: string, label: string, selected: string): string {
