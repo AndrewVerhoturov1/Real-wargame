@@ -24,7 +24,7 @@ Generated from canonical repository and subproject metadata.
 
 - **ID:** `ai-single-unit-editor`
 - **Updated:** 2026-07-12
-- **Current focus:** Stateful AI Movement v1 внедрён: MoveToBlackboardPosition замораживает цель Blackboard, один раз создаёт token-owned MoveOrder, возвращает running между тиками, завершает последовательность по прибытии и безопасно отменяется без удаления нового приказа игрока. Следующий этап — реактивная отмена и настоящий статус маршрута/pathfinding.
+- **Current focus:** Stateful AI Movement v1 внедрён и проверен: MoveToBlackboardPosition замораживает цель Blackboard, один раз создаёт token-owned MoveOrder, физически движется через SimulationTick, возвращает running между тиками, завершает последовательность по прибытии и безопасно отменяется без удаления нового приказа игрока. Следующий этап — Reactive Abort + Route Status v1 и затем pathfinding.
 - **Next step:** Реализовать Reactive Abort + Route Status v1: реактивно отменять или перестраивать движение при новом приказе, исчезновении укрытия, блокировке маршрута или критическом изменении угрозы; затем добавить настоящий grid pathfinder.
-- **Last verified commit:** `7a8cea65fdc8c20201596dfb098e2671285e0ecc`
+- **Last verified commit:** `e5b5e6f0f964ebc7d25e023a92c4e0d9c01b6735`
 - **Status:** [generated status](../subprojects/ai-single-unit-editor/STATUS.md)
