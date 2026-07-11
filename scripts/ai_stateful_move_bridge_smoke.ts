@@ -12,6 +12,7 @@ import { validateAiGraph } from '../src/core/ai/AiGraphValidation';
 import type { TacticalMapData } from '../src/core/map/MapModel';
 import { createMoveOrder } from '../src/core/orders/MoveOrder';
 import { createInitialState } from '../src/core/simulation/SimulationState';
+import { tickSimulation } from '../src/core/simulation/SimulationTick';
 import type { UnitData, UnitModel } from '../src/core/units/UnitModel';
 
 const movementGraph: AiGraph = {
@@ -58,10 +59,11 @@ state.selectedUnitId = unit.id;
 state.selectedUnitIds = [unit.id];
 
 const aiToken = 'soldier:move:100';
+const aiTarget = { x: 7, y: 4 };
 applyOwnedMoveEffects(state, runtimeResult(unit.id, [{
   type: 'begin_move',
   ownerToken: aiToken,
-  targetPosition: { x: 7, y: 4 },
+  targetPosition: aiTarget,
   targetKey: 'best_cover_position',
   reason: 'Move started.',
   reasonRu: 'Движение начато.',
@@ -69,13 +71,19 @@ applyOwnedMoveEffects(state, runtimeResult(unit.id, [{
 
 assert.equal(unit.order?.source, 'ai');
 assert.equal(unit.order?.ownerToken, aiToken);
-assert.deepEqual(unit.order?.target, { x: 7, y: 4 });
+assert.deepEqual(unit.order?.target, aiTarget);
+
+const distanceBeforeTick = distanceTo(unit.position, aiTarget);
+tickSimulation(state, 0.5);
+const distanceAfterTick = distanceTo(unit.position, aiTarget);
+assert.ok(distanceAfterTick < distanceBeforeTick, 'SimulationTick must physically advance an AI-owned order');
+assert.equal(unit.order?.ownerToken, aiToken, 'movement integration must preserve AI order ownership');
 
 syncSelectedMoveOrderMemory(state);
 const memory = readAiMemory(unit);
 assert.equal(memory.active_move_source, 'ai');
 assert.equal(memory.active_move_owner_token, aiToken);
-assert.deepEqual(memory.active_move_target, { x: 7, y: 4 });
+assert.deepEqual(memory.active_move_target, aiTarget);
 
 unit.order = createMoveOrder({ x: 12, y: 8 }, { source: 'player' });
 const playerOrder = unit.order;
@@ -101,7 +109,30 @@ applyOwnedMoveEffects(state, runtimeResult(unit.id, [{
 assert.equal(unit.order, null, 'matching AI cleanup must remove its own order');
 assert.equal(unit.behaviorRuntime.lastEvent, 'ai_graph_owned_move_cleared');
 
-console.log('AI stateful move bridge smoke passed: catalog validation, owned start, memory sync, player replacement protection, matching cleanup.');
+unit.order = createMoveOrder({ x: 5, y: 5 }, { source: 'ai', ownerToken: aiToken });
+unit.behaviorRuntime.currentAction = 'posture:prone';
+unit.behaviorRuntime.reason = 'Лечь после движения.';
+unit.behaviorRuntime.lastEvent = 'ai_graph_set_posture';
+applyOwnedMoveEffects(state, runtimeResult(unit.id, [
+  {
+    type: 'clear_move',
+    ownerToken: aiToken,
+    reason: 'Move completed before the next sequence step.',
+    reasonRu: 'Движение завершено перед следующим шагом последовательности.',
+  },
+  {
+    type: 'set_posture',
+    posture: 'prone',
+    reason: 'Go prone after arrival.',
+    reasonRu: 'Лечь после прибытия.',
+  },
+]));
+assert.equal(unit.order, null, 'completion cleanup must still remove the matching AI order');
+assert.equal(unit.behaviorRuntime.currentAction, 'posture:prone', 'move cleanup must not hide the following sequence action');
+assert.equal(unit.behaviorRuntime.reason, 'Лечь после движения.');
+assert.equal(unit.behaviorRuntime.lastEvent, 'ai_graph_set_posture');
+
+console.log('AI stateful move bridge smoke passed: catalog validation, physical movement, owned start, memory sync, player replacement protection, matching cleanup, sequence continuation.');
 
 function runtimeResult(unitId: string, effects: readonly unknown[]): AiGraphRuntimeResult {
   return {
@@ -129,4 +160,8 @@ function readAiMemory(unit: UnitModel): Record<string, AiBlackboardValue> {
   };
   assert.ok(runtime.aiGraphMemory);
   return runtime.aiGraphMemory;
+}
+
+function distanceTo(from: { x: number; y: number }, to: { x: number; y: number }): number {
+  return Math.hypot(to.x - from.x, to.y - from.y);
 }
