@@ -73,6 +73,12 @@ jobs:
         continue-on-error: true
         run: npm run runtime:smoke
 
+      - name: Stateful AI movement bridge smoke
+        id: move_bridge
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run move-bridge:smoke
+
       - name: Production build
         id: build
         if: steps.install.outcome == 'success'
@@ -103,6 +109,7 @@ jobs:
           ENGINE_OUTCOME: ${{ steps.engine.outcome }}
           GRAPH_OUTCOME: ${{ steps.graph.outcome }}
           RUNTIME_OUTCOME: ${{ steps.runtime.outcome }}
+          MOVE_BRIDGE_OUTCOME: ${{ steps.move_bridge.outcome }}
           BUILD_OUTCOME: ${{ steps.build.outcome }}
         with:
           script: |
@@ -115,6 +122,7 @@ jobs:
               engine: process.env.ENGINE_OUTCOME,
               graph: process.env.GRAPH_OUTCOME,
               runtime: process.env.RUNTIME_OUTCOME,
+              move_bridge: process.env.MOVE_BRIDGE_OUTCOME,
               build: process.env.BUILD_OUTCOME,
             };
             const targetUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
@@ -151,6 +159,7 @@ jobs:
             steps.engine.outcome != 'success' ||
             steps.graph.outcome != 'success' ||
             steps.runtime.outcome != 'success' ||
+            steps.move_bridge.outcome != 'success' ||
             steps.build.outcome != 'success'
           )
         run: exit 1
