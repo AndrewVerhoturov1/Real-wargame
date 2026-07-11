@@ -2,8 +2,7 @@
 
 Updated: 2026-07-12  
 Repository: `AndrewVerhoturov1/Real-wargame`  
-Normal working branch: `real-wargame-preview`  
-Current isolated implementation: draft PR `#54` / `feature/ai-running-move-v1`
+Working branch: `real-wargame-preview`
 
 ## Purpose
 
@@ -14,24 +13,30 @@ docs/subprojects/ai-single-unit-editor/subproject.json
 docs/subprojects/ai-single-unit-editor/STATUS.md
 ```
 
-Do not use older handoff text as the source of current project state.
-
 ## Verified baseline
 
-Stateful AI Runtime v1 is present in the preview baseline:
+Stateful AI Movement v1 is implemented in `real-wargame-preview`.
+
+Implemented behavior:
 
 - `AiGraphRunner` remains the pure immediate Utility evaluator;
 - `AiGraphRuntime` stores serializable execution state across ticks;
 - lifecycle supports `start / update / complete / cancel`;
 - `SequenceWithMemory` resumes the active child;
-- `Wait` is the first resumable duration node;
-- selected-soldier runtime state and live Russian diagnostics work;
-- legacy immediate graphs remain compatible.
+- `Wait` uses `waiting`;
+- `MoveToBlackboardPosition` is the first real `running` action;
+- the target position is frozen when movement starts;
+- `begin_move` is emitted once rather than every tick;
+- `SimulationTick` remains the only layer that changes unit coordinates;
+- AI movement creates a token-owned `MoveOrder`;
+- cleanup removes only the order with the matching owner token;
+- a newer player order survives stale AI cancellation;
+- Russian authoring controls and live movement diagnostics are available.
 
-Last fully verified application commit recorded for this baseline:
+Last verified application commit:
 
 ```text
-1dcf0a15d59cc8f4fe9d4c8435474c4612a63b6f
+7a8cea65fdc8c20201596dfb098e2671285e0ecc
 ```
 
 Recorded verification:
@@ -40,58 +45,67 @@ Recorded verification:
 Preview Core Checks: success
 Preview Policy: success
 Preview screenshots: success
-Playwright: 13/13
-PNG: 20
-inspected: 26-ai-running-waiting-node.png
+Playwright: 14/14
+PNG: 21
+inspected: 27-ai-running-move-node.png
+```
+
+Detailed completed-stage record:
+
+```text
+docs/subprojects/ai-single-unit-editor/STATEFUL_MOVEMENT_V1.md
+docs/subprojects/ai-single-unit-editor/journal/2026-07-12-stateful-movement-v1.md
 ```
 
 ## Active next slice
 
-Draft PR `#54` implements the first real multi-tick action:
+The next bounded vertical slice is:
 
 ```text
-MoveToBlackboardPosition
+Reactive Abort + Route Status v1
 ```
 
-Required behavior:
+It should add:
 
-- freeze the Blackboard target when the action starts;
-- emit movement start only once;
-- return `running` across ticks without duplicating orders;
-- identify AI-owned movement with an execution token;
-- complete when the unit arrives;
-- fail safely when target/route is invalid;
-- cancel and clean only state owned by that execution;
-- never delete a newer replacement order from the player or commander;
-- expose Russian authoring controls and live diagnostics;
-- preserve old graph behavior.
+- explicit route state such as active, arrived, blocked and invalid;
+- reactive cancellation or rebuild after a new player/commander order;
+- reaction when the target cover disappears or becomes unusable;
+- reaction when movement is blocked;
+- reaction to a critical change in known threat;
+- clear cancellation reasons in runtime trace and Russian diagnostics;
+- tests proving cleanup still preserves replacement orders.
 
-PR `#54` is not part of `real-wargame-preview` until separately reviewed and transferred.
+After that, introduce a real grid pathfinder. Do not call straight-line movement pathfinding.
 
-## Read now for that task
+## Read now
 
 1. `docs/subprojects/ai-single-unit-editor/STATUS.md`
 2. `.agents/skills/real-wargame-ai-runtime/SKILL.md`
-3. `docs/superpowers/specs/2026-07-11-ai-running-runtime-v1-design.md`
-4. `docs/superpowers/plans/2026-07-11-ai-running-runtime-v1.md`
-5. PR `#54` diff and its focused tests
-6. `.agents/skills/real-wargame-local-preview/SKILL.md` before browser verification
+3. `docs/subprojects/ai-single-unit-editor/STATEFUL_MOVEMENT_V1.md`
+4. `src/core/ai/AiGraphRuntime.ts`
+5. `src/core/ai/AiStatefulMoveGameBridge.ts`
+6. `src/core/orders/MoveOrder.ts`
+7. `scripts/ai_graph_runtime_smoke.ts`
+8. `scripts/ai_stateful_move_bridge_smoke.ts`
+9. `tests/ai-running-move.spec.ts`
+10. `.agents/skills/real-wargame-local-preview/SKILL.md` before browser verification
 
-## Core boundaries
+## Stable boundaries
 
 - `AiGraphRunner.ts` does not import PixiJS, DOM, localStorage or `SimulationState`.
-- `AiGraphRuntime.ts` owns resumable lifecycle, not game rendering or input.
-- `AiGameBridge.ts` adapts pure AI to the selected live soldier.
+- `AiGraphRuntime.ts` owns resumable lifecycle, not rendering or input.
+- `AiGameBridge.ts` and `AiStatefulMoveGameBridge.ts` adapt pure AI to the live game.
 - Execution state is separate from Blackboard.
+- Movement cleanup requires matching ownership token.
 - Soldier knowledge remains subjective.
 - Territory safety is context, not enemy detection or current danger.
 - Automatic AI execution remains limited to the selected soldier.
-- No squad-level AI or army-wide runtime yet.
 
-## Required checks for MoveToBlackboardPosition
+## Required checks for the next slice
 
 ```text
 npm run runtime:smoke
+npm run move-bridge:smoke
 npm run workspace:smoke
 npm run lab:smoke
 npm run game-editor:smoke
@@ -101,20 +115,13 @@ npm run validate:ai-graph
 npm run build
 ```
 
-Browser verification must demonstrate:
+User-visible runtime changes also require a fresh real-browser scenario, matching commit SHA and inspected PNG.
 
-- movement begins once;
-- the node remains visibly `running` across ticks;
-- the unit reaches the frozen target;
-- complete/cancel clears only AI-owned movement;
-- a replacement player order survives cancellation;
-- fresh PNG belongs to the exact tested commit and is inspected.
+## Do not do
 
-## Do not do during continuation
-
-- do not merge or write to `main`;
-- do not claim PR `#54` is already in preview;
-- do not replace Runtime with logic inside the Bridge;
+- do not change or merge to `main` without explicit human GO;
+- do not move lifecycle logic into rendering or UI;
 - do not clear movement by action type alone;
-- do not add squad AI, pathfinding rewrite or cover reservation to this slice;
-- do not declare visual success from source inspection or workflow status alone.
+- do not treat straight-line movement as completed pathfinding;
+- do not add squad AI, cover reservation and full pathfinding in one slice;
+- do not declare visual success from code or workflow status alone.
