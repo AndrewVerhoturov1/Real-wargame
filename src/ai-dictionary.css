@@ -1,0 +1,54 @@
+.ai-dictionary-open { overflow: hidden; }
+.ai-dictionary-root { position:fixed; inset:0; z-index:12000; font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:#edf4f2; }
+.ai-dictionary-root[hidden] { display:none; }
+.ai-dictionary-backdrop { position:absolute; inset:0; background:rgba(4,10,12,.82); backdrop-filter:blur(5px); }
+.ai-dictionary-dialog { position:absolute; inset:clamp(18px,3vh,34px) clamp(18px,3vw,52px); display:grid; grid-template-rows:auto auto auto minmax(0,1fr) auto; min-width:0; min-height:0; overflow:hidden; border:1px solid rgba(174,211,199,.24); border-radius:18px; background:linear-gradient(145deg,rgba(15,30,33,.99),rgba(8,18,21,.99)); box-shadow:0 26px 90px rgba(0,0,0,.58); }
+.ai-dictionary-header,.ai-dictionary-toolbar,.ai-dictionary-footer { display:flex; align-items:center; gap:14px; padding:14px 18px; border-bottom:1px solid rgba(174,211,199,.13); }
+.ai-dictionary-header { justify-content:space-between; }
+.ai-dictionary-header h2 { margin:2px 0 0; font-size:clamp(20px,2vw,30px); letter-spacing:-.02em; }
+.ai-dictionary-header p,.ai-dictionary-header span,.ai-dictionary-footer { margin:0; color:#a9bbb7; }
+.ai-dictionary-header [data-kicker] { display:block; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.13em; }
+.ai-dictionary-header-actions,.ai-dictionary-node-actions>div { display:flex; flex-wrap:wrap; gap:8px; }
+.ai-dictionary-root button,.ai-dictionary-root input,.ai-dictionary-root select { font:inherit; border:1px solid rgba(175,210,200,.23); border-radius:9px; color:#edf4f2; background:rgba(31,54,57,.72); }
+.ai-dictionary-root button { min-height:36px; padding:7px 11px; cursor:pointer; }
+.ai-dictionary-root button:hover:not(:disabled),.ai-dictionary-root button:focus-visible { border-color:rgba(118,218,179,.72); background:rgba(44,78,72,.92); outline:none; }
+.ai-dictionary-root button:disabled { cursor:not-allowed; opacity:.45; }
+.ai-dictionary-toolbar { align-items:end; }
+.ai-dictionary-toolbar label { display:grid; gap:5px; min-width:180px; color:#b7c8c4; font-size:12px; font-weight:700; }
+.ai-dictionary-toolbar .ai-dictionary-search { flex:1; min-width:260px; }
+.ai-dictionary-toolbar input,.ai-dictionary-toolbar select { min-height:38px; padding:7px 10px; }
+.ai-dictionary-categories { display:flex; gap:7px; padding:10px 18px; overflow-x:auto; border-bottom:1px solid rgba(174,211,199,.13); scrollbar-width:thin; }
+.ai-dictionary-categories button { flex:0 0 auto; min-height:32px; padding:5px 10px; color:#b5c7c3; }
+.ai-dictionary-categories button.active { color:#effff8; border-color:rgba(100,219,174,.8); background:rgba(54,112,91,.72); }
+.ai-dictionary-layout { display:grid; grid-template-columns:minmax(340px,.9fr) minmax(420px,1.1fr); min-height:0; }
+.ai-dictionary-list,.ai-dictionary-detail { min-height:0; overflow:auto; padding:14px; }
+.ai-dictionary-list { display:grid; align-content:start; gap:8px; border-right:1px solid rgba(174,211,199,.13); }
+.ai-dictionary-card { display:grid; grid-template-columns:22px minmax(0,1fr) minmax(92px,auto); align-items:center; gap:10px; width:100%; padding:10px 12px!important; text-align:left; }
+.ai-dictionary-card.selected { border-color:rgba(100,219,174,.86); background:linear-gradient(90deg,rgba(45,99,80,.7),rgba(31,54,57,.82)); }
+.ai-dictionary-card-copy { display:grid; min-width:0; }
+.ai-dictionary-card-copy strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ai-dictionary-card-copy small { color:#7f9893; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+.ai-dictionary-card>b { color:#d9ffe9; text-align:right; }
+.ai-dictionary-readiness { font-size:13px; font-weight:800; }
+.readiness-ready{color:#72ddb0}.readiness-simplified{color:#f0c36c}.readiness-hidden{color:#7ec9ff}.readiness-planned{color:#aab2b0}.readiness-deprecated{color:#ff8f8f}.readiness-debug{color:#c39bff}
+.ai-dictionary-detail { display:grid; align-content:start; gap:14px; padding:clamp(18px,2.3vw,30px); }
+.ai-dictionary-detail header { display:grid; gap:6px; }
+.ai-dictionary-detail h3,.ai-dictionary-detail h4,.ai-dictionary-detail p { margin:0; }
+.ai-dictionary-detail h3 { font-size:clamp(22px,2vw,30px); }
+.ai-dictionary-detail code { width:max-content; max-width:100%; overflow-wrap:anywhere; color:#8fb7ad; }
+.ai-dictionary-current-value,.ai-dictionary-why,.ai-dictionary-node-actions,.ai-dictionary-detail dl { border:1px solid rgba(174,211,199,.15); border-radius:12px; background:rgba(20,38,41,.68); }
+.ai-dictionary-current-value { display:flex; align-items:baseline; justify-content:space-between; gap:16px; padding:13px 15px; }
+.ai-dictionary-current-value span { color:#a8bcb7; }
+.ai-dictionary-current-value strong { font-size:22px; color:#d7ffea; }
+.ai-dictionary-detail dl { display:grid; gap:0; margin:0; overflow:hidden; }
+.ai-dictionary-detail dl>div { display:grid; grid-template-columns:minmax(125px,.36fr) minmax(0,1fr); gap:12px; padding:9px 12px; border-bottom:1px solid rgba(174,211,199,.09); }
+.ai-dictionary-detail dl>div:last-child { border-bottom:0; }
+.ai-dictionary-detail dt { color:#91aaa4; }
+.ai-dictionary-detail dd { margin:0; }
+.ai-dictionary-why,.ai-dictionary-node-actions { display:grid; gap:8px; padding:14px; }
+.ai-dictionary-node-actions button { background:rgba(52,103,85,.72); }
+.ai-dictionary-footer { justify-content:space-between; border-top:1px solid rgba(174,211,199,.13); border-bottom:0; font-size:12px; }
+.ai-dictionary-toast { position:absolute; right:24px; bottom:58px; max-width:min(420px,calc(100% - 48px)); padding:11px 14px; border:1px solid rgba(104,223,177,.6); border-radius:10px; background:rgba(25,72,56,.97); box-shadow:0 12px 36px rgba(0,0,0,.45); }
+.ai-dictionary-open-button:not(.ai-editor-button) { position:fixed; right:18px; top:18px; z-index:1100; }
+.workspace-top-actions .ai-dictionary-open-button { position:static; }
+@media (max-width:900px){.ai-dictionary-dialog{inset:8px;border-radius:12px}.ai-dictionary-toolbar{align-items:stretch;flex-wrap:wrap}.ai-dictionary-toolbar label,.ai-dictionary-toolbar .ai-dictionary-search{min-width:min(100%,220px);flex:1 1 220px}.ai-dictionary-layout{grid-template-columns:1fr;grid-template-rows:minmax(220px,.8fr) minmax(300px,1.2fr)}.ai-dictionary-list{border-right:0;border-bottom:1px solid rgba(174,211,199,.13)}.ai-dictionary-footer{display:none}}
