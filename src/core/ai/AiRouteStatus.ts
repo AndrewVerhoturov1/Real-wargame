@@ -88,7 +88,20 @@ export function updateAiRouteStatus(input: AiRouteStatusInput): AiRouteStatusRes
   const remaining = distance(input.position, input.target);
 
   if (input.paused) {
-    return makeResult(previous, Math.max(0, previous.lastCheckedAtMs - previous.lastProgressAtMs), remaining, false, false);
+    const pausedForMs = Math.max(0, input.nowMs - previous.lastCheckedAtMs);
+    const state: AiRouteStatusState = {
+      ...previous,
+      startedAtMs: previous.startedAtMs + pausedForMs,
+      lastCheckedAtMs: input.nowMs,
+      lastProgressAtMs: previous.lastProgressAtMs + pausedForMs,
+    };
+    return makeResult(
+      state,
+      Math.max(0, state.lastCheckedAtMs - state.lastProgressAtMs),
+      remaining,
+      false,
+      false,
+    );
   }
 
   if (remaining <= Math.max(0, finiteOr(input.acceptanceRadiusCells, 0))) {
@@ -256,6 +269,7 @@ function isReusableState(
     && Number.isFinite(value.target.y)
     && value.target.x === target.x
     && value.target.y === target.y
+    && Number.isFinite(value.startedAtMs)
     && Number.isFinite(value.lastCheckedAtMs)
     && Number.isFinite(value.lastProgressAtMs)
     && Number.isFinite(value.lastDistanceCells);
