@@ -73,6 +73,7 @@ test('front zones are editable, toggleable and expose territory safety to the se
   await expect(page.locator('[data-front-zone-band="enemy"]')).toBeVisible();
 
   await page.locator('[data-mode="editor"]').click();
+  await page.locator('.game-editor-tabs').getByRole('button', { name: 'Сцена', exact: true }).click();
   const friendlySlider = page.locator('[data-front-zone-boundary="friendly"]');
   const enemySlider = page.locator('[data-front-zone-boundary="enemy"]');
   await expect(friendlySlider).toBeVisible();
@@ -104,5 +105,6 @@ test('front zones are editable, toggleable and expose territory safety to the se
   await expect(overlay).toBeVisible();
 
   await page.locator('[data-mode="editor"]').click();
+  await expect(friendlySlider).toBeVisible();
   await saveScreenshot(page, '14-simple-front-zones-editor.png');
 });
