@@ -4,11 +4,68 @@ import path from 'node:path';
 
 const SCREENSHOT_DIR = path.join('artifacts', 'screenshots');
 
+const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
+const POSITION_STORAGE_KEY = 'real-wargame.ai-node-editor.positions.v6';
+const UI_STORAGE_KEY = 'real-wargame.ai-node-editor.ui.v6';
+
+const russianEditorUi = {
+  paletteOpen: false,
+  inspectorOpen: true,
+  bottomOpen: false,
+  bottomTab: 'console',
+  zoom: 1,
+  panX: 0,
+  panY: 0,
+  languageMode: 'ru',
+  nodeDetailMode: 'compact',
+  linkSourceNodeId: null,
+};
+
 test.beforeAll(() => mkdirSync(SCREENSHOT_DIR, { recursive: true }));
+
+test('new movement node persists safe defaults immediately', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.addInitScript(({ graphKey, positionKey, uiKey, ui }) => {
+    localStorage.setItem(graphKey, JSON.stringify({
+      version: 1,
+      id: 'new_move_node_defaults_graph',
+      name: 'New Move Node Defaults Graph',
+      nameRu: 'Граф проверки новой ноды движения',
+      rootNodeId: 'root',
+      blackboardDefaults: {},
+      nodes: [
+        { id: 'root', type: 'Root', displayName: 'Start', displayNameRu: 'Старт', children: [], parameters: {} },
+      ],
+    }));
+    localStorage.setItem(positionKey, JSON.stringify({ root: { x: 70, y: 150 } }));
+    localStorage.setItem(uiKey, JSON.stringify(ui));
+  }, {
+    graphKey: GRAPH_STORAGE_KEY,
+    positionKey: POSITION_STORAGE_KEY,
+    uiKey: UI_STORAGE_KEY,
+    ui: russianEditorUi,
+  });
+
+  await page.goto('/ai-node-editor.html');
+  await page.getByRole('button', { name: /Добавить ноду/ }).click();
+  await page.locator('button[data-palette-type="MoveToBlackboardPosition"]').click();
+
+  const createdNode = page.locator('.graph-node.selected[data-node-id^="movetoblackboardposition_"]');
+  await expect(createdNode).toBeVisible();
+  const savedParameters = await page.evaluate((graphKey) => {
+    const graph = JSON.parse(localStorage.getItem(graphKey) ?? '{}');
+    return graph.nodes.find((node: { type: string }) => node.type === 'MoveToBlackboardPosition')?.parameters;
+  }, GRAPH_STORAGE_KEY);
+  expect(savedParameters).toMatchObject({
+    targetKey: 'best_cover_position',
+    acceptanceRadiusCells: 0.2,
+    timeoutSeconds: 15,
+  });
+});
 
 test('shows running movement, remaining distance, and Russian authoring controls', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.addInitScript(() => {
+  await page.addInitScript(({ graphKey, positionKey, uiKey, ui }) => {
     const graph = {
       version: 1,
       id: 'stateful_move_browser_graph',
@@ -35,26 +92,15 @@ test('shows running movement, remaining distance, and Russian authoring controls
         },
       ],
     };
-    localStorage.setItem('real-wargame.ai-node-editor.graph.v6', JSON.stringify(graph));
-    localStorage.setItem('real-wargame.ai-node-editor.positions.v6', JSON.stringify({
+    localStorage.setItem(graphKey, JSON.stringify(graph));
+    localStorage.setItem(positionKey, JSON.stringify({
       root: { x: 70, y: 150 },
       utility: { x: 300, y: 150 },
       branch: { x: 530, y: 150 },
       sequence: { x: 760, y: 150 },
       move: { x: 520, y: 390 },
     }));
-    localStorage.setItem('real-wargame.ai-node-editor.ui.v6', JSON.stringify({
-      paletteOpen: false,
-      inspectorOpen: true,
-      bottomOpen: false,
-      bottomTab: 'console',
-      zoom: 1,
-      panX: 0,
-      panY: 0,
-      languageMode: 'ru',
-      nodeDetailMode: 'compact',
-      linkSourceNodeId: null,
-    }));
+    localStorage.setItem(uiKey, JSON.stringify(ui));
     localStorage.setItem('real-wargame.ai-node-editor.debug.v1', JSON.stringify({
       version: 1,
       kind: 'ai-graph-runtime-debug',
@@ -86,6 +132,11 @@ test('shows running movement, remaining distance, and Russian authoring controls
       blackboard: {},
       lifecycle: [{ phase: 'update', nodeId: 'move', nodeType: 'MoveToBlackboardPosition', atMs: 3200, reason: 'Move is active.', reasonRu: 'Движение продолжается.' }],
     }));
+  }, {
+    graphKey: GRAPH_STORAGE_KEY,
+    positionKey: POSITION_STORAGE_KEY,
+    uiKey: UI_STORAGE_KEY,
+    ui: russianEditorUi,
   });
 
   await page.goto('/ai-node-editor.html');
@@ -128,10 +179,10 @@ test('shows running movement, remaining distance, and Russian authoring controls
   await expect(page.locator('.stateful-node-human-panel').getByLabel('Радиус достижения, клеток')).toHaveValue('0.35');
   await expect(page.locator('.stateful-node-human-panel').getByLabel('Максимальное время, секунд')).toHaveValue('20');
 
-  const saved = await page.evaluate(() => {
-    const graph = JSON.parse(localStorage.getItem('real-wargame.ai-node-editor.graph.v6') ?? '{}');
+  const saved = await page.evaluate((graphKey) => {
+    const graph = JSON.parse(localStorage.getItem(graphKey) ?? '{}');
     return graph.nodes.find((node: { id: string }) => node.id === 'move')?.parameters;
-  });
+  }, GRAPH_STORAGE_KEY);
   expect(saved).toMatchObject({
     targetKey: 'best_cover_position',
     acceptanceRadiusCells: 0.35,
