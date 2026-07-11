@@ -17,12 +17,22 @@ function scheduleEnhance(): void {
 }
 
 function enhanceSelectedStatefulNode(): void {
-  document.querySelector('.stateful-node-human-panel')?.remove();
+  const existing = document.querySelector<HTMLElement>('.stateful-node-human-panel');
   const selected = document.querySelector<HTMLElement>('.graph-node.selected[data-node-id], .graph-node.is-selected[data-node-id]');
   const nodeId = selected?.dataset.nodeId;
-  if (!nodeId) return;
+  if (!nodeId) {
+    existing?.remove();
+    return;
+  }
+
   const node = readGraphNode(nodeId);
-  if (!node || (node.type !== 'Wait' && node.type !== 'SequenceWithMemory')) return;
+  if (!node || (node.type !== 'Wait' && node.type !== 'SequenceWithMemory')) {
+    existing?.remove();
+    return;
+  }
+
+  if (existing?.dataset.nodeId === nodeId && existing.dataset.nodeType === node.type) return;
+  existing?.remove();
 
   const parametersArea = document.querySelector<HTMLTextAreaElement>('#node-parameters');
   const saveButton = document.querySelector<HTMLButtonElement>('#save-node');
@@ -31,6 +41,8 @@ function enhanceSelectedStatefulNode(): void {
 
   const panel = document.createElement('section');
   panel.className = 'stateful-node-human-panel';
+  panel.dataset.nodeId = nodeId;
+  panel.dataset.nodeType = node.type;
 
   if (node.type === 'SequenceWithMemory') {
     panel.innerHTML = `
