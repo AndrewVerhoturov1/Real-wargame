@@ -58,6 +58,30 @@
   line-height: 1.35;
 }
 
+.ai-runtime-debug-panel .runtime-status {
+  font-weight: 800;
+}
+
+.ai-runtime-debug-panel .runtime-status.running {
+  color: #ffe16e;
+}
+
+.ai-runtime-debug-panel .runtime-status.waiting {
+  color: #79c7ff;
+}
+
+.ai-runtime-debug-panel .runtime-status.success {
+  color: #8fca72;
+}
+
+.ai-runtime-debug-panel .runtime-status.failure {
+  color: #ff7460;
+}
+
+.ai-runtime-debug-panel .runtime-status.cancelled {
+  color: #ffad66;
+}
+
 .ai-runtime-debug-panel ul {
   display: grid;
   gap: 6px;
@@ -91,7 +115,8 @@
   opacity: 0.58;
 }
 
-.graph-node.runtime-debug-pass {
+.graph-node.runtime-debug-pass,
+.graph-node.runtime-debug-complete {
   border-color: rgba(143, 202, 114, 0.88);
   box-shadow: 0 0 0 2px rgba(143, 202, 114, 0.18), 0 18px 30px rgba(0, 0, 0, 0.30);
 }
@@ -104,6 +129,21 @@
 .graph-node.runtime-debug-skip {
   border-color: rgba(190, 190, 190, 0.62);
   box-shadow: 0 0 0 2px rgba(190, 190, 190, 0.12), 0 18px 30px rgba(0, 0, 0, 0.30);
+}
+
+.graph-node.runtime-debug-running {
+  border-color: rgba(255, 225, 110, 0.95);
+  box-shadow: 0 0 0 3px rgba(255, 225, 110, 0.24), 0 0 26px rgba(255, 225, 110, 0.18), 0 18px 30px rgba(0, 0, 0, 0.34);
+}
+
+.graph-node.runtime-debug-waiting {
+  border-color: rgba(121, 199, 255, 0.95);
+  box-shadow: 0 0 0 3px rgba(121, 199, 255, 0.24), 0 0 26px rgba(121, 199, 255, 0.18), 0 18px 30px rgba(0, 0, 0, 0.34);
+}
+
+.graph-node.runtime-debug-cancelled {
+  border-color: rgba(255, 173, 102, 0.95);
+  box-shadow: 0 0 0 3px rgba(255, 173, 102, 0.24), 0 0 26px rgba(255, 173, 102, 0.16), 0 18px 30px rgba(0, 0, 0, 0.34);
 }
 
 .graph-node.runtime-debug-score {
@@ -139,4 +179,16 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.graph-node.runtime-debug-waiting .runtime-debug-badge {
+  background: #79c7ff;
+}
+
+.graph-node.runtime-debug-running .runtime-debug-badge {
+  background: #ffe16e;
+}
+
+.graph-node.runtime-debug-cancelled .runtime-debug-badge {
+  background: #ffad66;
 }
