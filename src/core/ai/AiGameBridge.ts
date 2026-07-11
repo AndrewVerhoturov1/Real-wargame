@@ -11,12 +11,16 @@ import type { UnitModel } from '../units/UnitModel';
 import type { AiBlackboardValue } from './AiBlackboard';
 import type { AiGraph, AiNode } from './AiGraph';
 import {
-  runAiGraph,
   type AiGraphEffect,
   type AiGraphRunnerBlackboard,
-  type AiGraphRunnerResult,
   type AiGraphTacticalHost,
 } from './AiGraphRunner';
+import {
+  runAiGraphRuntime,
+  type AiGraphCancellationRequest,
+  type AiGraphExecutionState,
+  type AiGraphRuntimeResult,
+} from './AiGraphRuntime';
 import bundledGraph from '../../data/ai/soldier_default_survival_graph.json';
 
 const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
@@ -26,20 +30,23 @@ const AI_GRAPH_POLL_INTERVAL_MS = 60;
 const COVER_SEARCH_RADIUS_CELLS = 5;
 
 type PausableSimulationState = SimulationState & { paused?: boolean };
-type AiGraphRuntime = UnitModel['behaviorRuntime'] & {
+type AiUnitGraphRuntime = UnitModel['behaviorRuntime'] & {
   aiGraphMemory?: AiGraphRunnerBlackboard;
   aiGraphSimulationTimeMs?: number;
+  aiGraphExecutionState?: AiGraphExecutionState;
 };
 
 export interface AiGameBridgeHandle {
   destroy(): void;
-  tickNow(): AiGraphRunnerResult | null;
-  evaluateNow(): AiGraphRunnerResult | null;
+  tickNow(): AiGraphRuntimeResult | null;
+  evaluateNow(): AiGraphRuntimeResult | null;
+  cancelNow(reason: string, reasonRu?: string): AiGraphRuntimeResult | null;
 }
 
 interface TickOptions {
   force: boolean;
   applyEffects: boolean;
+  cancel?: AiGraphCancellationRequest;
 }
 
 export function installAiGameBridge(state: SimulationState): AiGameBridgeHandle {
@@ -51,6 +58,11 @@ export function installAiGameBridge(state: SimulationState): AiGameBridgeHandle 
     destroy: () => window.clearInterval(handle),
     tickNow: () => tickAiGameBridge(state, Date.now(), { force: true, applyEffects: true }),
     evaluateNow: () => tickAiGameBridge(state, Date.now(), { force: true, applyEffects: false }),
+    cancelNow: (reason, reasonRu) => tickAiGameBridge(state, Date.now(), {
+      force: true,
+      applyEffects: true,
+      cancel: { reason, reasonRu },
+    }),
   };
 }
 
@@ -58,7 +70,7 @@ export function tickAiGameBridge(
   state: SimulationState,
   nowMs = Date.now(),
   options: TickOptions = { force: false, applyEffects: true },
-): AiGraphRunnerResult | null {
+): AiGraphRuntimeResult | null {
   const unit = state.selectedUnitId
     ? state.units.find((candidate) => candidate.id === state.selectedUnitId)
     : undefined;
@@ -69,18 +81,20 @@ export function tickAiGameBridge(
   const scaledInterval = AI_GRAPH_TICK_INTERVAL_MS / getAiTestTimeScale(state);
   if (!options.force && nowMs - unit.behaviorRuntime.aiGraphLastTickMs < scaledInterval) return null;
 
-  const runtime = unit.behaviorRuntime as AiGraphRuntime;
+  const runtime = unit.behaviorRuntime as AiUnitGraphRuntime;
   const simulationNowMs = options.applyEffects
     ? (runtime.aiGraphSimulationTimeMs ?? 0) + AI_GRAPH_TICK_INTERVAL_MS
     : runtime.aiGraphSimulationTimeMs ?? 0;
   const graph = readRuntimeGraph();
-  const result = runAiGraph({
+  const result = runAiGraphRuntime({
     graph,
     unitId: unit.id,
     blackboard: buildBlackboardForUnit(state, unit),
     cooldowns: unit.behaviorRuntime.aiNodeCooldowns,
     nowMs: simulationNowMs,
     tacticalHost: createTacticalHost(state, unit),
+    executionState: runtime.aiGraphExecutionState,
+    cancel: options.cancel,
   });
 
   publishRuntimeDebugTrace(state, unit, graph, result, nowMs, simulationNowMs, !options.applyEffects);
@@ -88,12 +102,13 @@ export function tickAiGameBridge(
   if (!options.applyEffects) return result;
 
   runtime.aiGraphSimulationTimeMs = simulationNowMs;
+  runtime.aiGraphExecutionState = result.executionState;
   unit.behaviorRuntime.aiGraphLastTickMs = nowMs;
   unit.behaviorRuntime.aiNodeCooldowns = { ...result.cooldowns };
   applyGraphEffects(state, unit, result.effects, result.blackboard, nowMs);
   unit.behaviorRuntime.aiGraphReason = result.explanationRu ?? result.explanation;
   unit.behaviorRuntime.reason = result.explanationRu ?? result.explanation;
-  unit.behaviorRuntime.lastEvent = result.ok ? 'ai_graph_runner_tick' : 'ai_graph_runner_no_branch';
+  unit.behaviorRuntime.lastEvent = `ai_graph_runtime_${result.status}`;
   return result;
 }
 
@@ -153,7 +168,7 @@ export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel):
 }
 
 function getAiGraphMemory(unit: UnitModel): AiGraphRunnerBlackboard {
-  const runtime = unit.behaviorRuntime as AiGraphRuntime;
+  const runtime = unit.behaviorRuntime as AiUnitGraphRuntime;
   if (!runtime.aiGraphMemory) runtime.aiGraphMemory = {};
   return runtime.aiGraphMemory;
 }
@@ -265,7 +280,7 @@ function publishRuntimeDebugTrace(
   state: SimulationState,
   unit: UnitModel,
   graph: AiGraph,
-  result: AiGraphRunnerResult,
+  result: AiGraphRuntimeResult,
   nowMs: number,
   simulationNowMs: number,
   previewOnly: boolean,
@@ -284,6 +299,14 @@ function publishRuntimeDebugTrace(
       selectedBranchName: result.selectedBranchName,
       selectedBranchNameRu: result.selectedBranchNameRu,
       ok: result.ok,
+      status: result.status,
+      activeNodeId: result.activeNodeId,
+      activeNodeName: result.activeNodeName,
+      activeNodeNameRu: result.activeNodeNameRu,
+      elapsedMs: result.elapsedMs,
+      lifecycle: result.lifecycle,
+      cancellationReason: result.cancellationReason,
+      cancellationReasonRu: result.cancellationReasonRu,
       paused: isPaused(state),
       previewOnly,
       nowMs,
