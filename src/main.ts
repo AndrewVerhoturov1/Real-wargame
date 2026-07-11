@@ -7,6 +7,7 @@ import './tactical-workspace.css';
 import './tactical-workspace-mode.css';
 import './front-zones.css';
 import './ai-dictionary.css';
+import './ai-dictionary-compat.css';
 import mapData from './data/maps/test_map.json';
 import pressureZoneData from './data/pressure_zones/test_pressure_zones.json';
 import unitsData from './data/units/test_units.json';
