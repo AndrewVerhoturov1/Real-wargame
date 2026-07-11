@@ -60,6 +60,9 @@ test('new movement node persists safe defaults immediately', async ({ page }) =>
     targetKey: 'best_cover_position',
     acceptanceRadiusCells: 0.2,
     timeoutSeconds: 15,
+    stuckTimeoutSeconds: 2.5,
+    minimumProgressCells: 0.05,
+    abortOnTargetLost: true,
   });
 });
 
@@ -169,15 +172,27 @@ test('shows running movement, remaining distance, and Russian authoring controls
   await expect(authoring.getByLabel('Цель из памяти')).toHaveValue('best_cover_position');
   const radiusField = authoring.getByLabel('Радиус достижения, клеток');
   const timeoutField = authoring.getByLabel('Максимальное время, секунд');
+  const stuckField = authoring.getByLabel('Считать маршрут заблокированным через, секунд');
+  const progressField = authoring.getByLabel('Минимальный заметный прогресс, клеток');
+  const targetLostField = authoring.getByLabel('Отменять, если цель исчезла');
   await expect(radiusField).toHaveValue('0.2');
   await expect(timeoutField).toHaveValue('15');
+  await expect(stuckField).toHaveValue('2.5');
+  await expect(progressField).toHaveValue('0.05');
+  await expect(targetLostField).toBeChecked();
   await expect(authoring).toBeInViewport();
 
   await radiusField.fill('0.35');
   await timeoutField.fill('20');
+  await stuckField.fill('3.5');
+  await progressField.fill('0.1');
+  await targetLostField.uncheck();
   await page.locator('.human-node-panel').getByRole('button', { name: 'Сохранить параметры' }).click();
   await expect(page.locator('.stateful-node-human-panel').getByLabel('Радиус достижения, клеток')).toHaveValue('0.35');
   await expect(page.locator('.stateful-node-human-panel').getByLabel('Максимальное время, секунд')).toHaveValue('20');
+  await expect(page.locator('.stateful-node-human-panel').getByLabel('Считать маршрут заблокированным через, секунд')).toHaveValue('3.5');
+  await expect(page.locator('.stateful-node-human-panel').getByLabel('Минимальный заметный прогресс, клеток')).toHaveValue('0.1');
+  await expect(page.locator('.stateful-node-human-panel').getByLabel('Отменять, если цель исчезла')).not.toBeChecked();
 
   const saved = await page.evaluate((graphKey) => {
     const graph = JSON.parse(localStorage.getItem(graphKey) ?? '{}');
@@ -187,6 +202,9 @@ test('shows running movement, remaining distance, and Russian authoring controls
     targetKey: 'best_cover_position',
     acceptanceRadiusCells: 0.35,
     timeoutSeconds: 20,
+    stuckTimeoutSeconds: 3.5,
+    minimumProgressCells: 0.1,
+    abortOnTargetLost: false,
   });
 
   await page.screenshot({ path: path.join(SCREENSHOT_DIR, '27-ai-running-move-node.png') });
