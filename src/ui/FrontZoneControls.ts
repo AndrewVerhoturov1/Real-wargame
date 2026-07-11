@@ -36,10 +36,11 @@ const AI_SYNC_INTERVAL_MS = 100;
 export function installFrontZoneControls(state: SimulationState, onChanged: () => void): () => void {
   const host = document.querySelector<HTMLElement>('#app');
   const displayMenu = document.querySelector<HTMLElement>('[data-role="display"]');
-  const editorSceneSlot = document.querySelector<HTMLElement>('.editor-scene-tools-slot');
+  const editorWorkbench = document.querySelector<HTMLElement>('.game-editor-workbench');
+  const editorBody = document.querySelector<HTMLElement>('.game-editor-body');
 
-  if (!host || !displayMenu || !editorSceneSlot) {
-    throw new Error('Front zone controls require the tactical map, display menu and scene editor slot.');
+  if (!host || !displayMenu || !editorWorkbench || !editorBody) {
+    throw new Error('Front zone controls require the tactical map, display menu and scene editor body.');
   }
 
   host.classList.add('front-zone-host');
@@ -100,7 +101,34 @@ export function installFrontZoneControls(state: SimulationState, onChanged: () =
   };
 
   const editorPanel = createEditorPanel(state, onChanged, () => updateOverlay(true));
-  editorSceneSlot.appendChild(editorPanel.root);
+
+  const syncEditorPanelPlacement = (): void => {
+    const sceneButton = Array.from(
+      editorWorkbench.querySelectorAll<HTMLButtonElement>('.game-editor-tabs button'),
+    ).find((button) => button.textContent?.trim() === 'Сцена');
+    const sceneActive = sceneButton?.classList.contains('active') ?? false;
+
+    if (sceneActive) {
+      if (editorPanel.root.parentElement !== editorBody) {
+        editorBody.appendChild(editorPanel.root);
+      }
+      editorPanel.root.hidden = false;
+      editorPanel.syncInputs();
+      editorPanel.updateStatus();
+      return;
+    }
+
+    editorPanel.root.hidden = true;
+    editorPanel.root.remove();
+  };
+
+  const editorObserver = new MutationObserver(syncEditorPanelPlacement);
+  editorObserver.observe(editorWorkbench, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class'],
+  });
 
   const animate = (): void => {
     updateOverlay(false);
@@ -114,7 +142,7 @@ export function installFrontZoneControls(state: SimulationState, onChanged: () =
   }, AI_SYNC_INTERVAL_MS);
 
   syncVisibilityButton();
-  editorPanel.syncInputs();
+  syncEditorPanelPlacement();
   syncTerritoryToAiMemory(state);
   updateOverlay(true);
   animationFrameId = window.requestAnimationFrame(animate);
@@ -122,6 +150,7 @@ export function installFrontZoneControls(state: SimulationState, onChanged: () =
   return () => {
     window.cancelAnimationFrame(animationFrameId);
     window.clearInterval(syncAiTimer);
+    editorObserver.disconnect();
     overlay.root.remove();
     visibilityButton.remove();
     editorPanel.root.remove();
