@@ -81,7 +81,8 @@ export function createAiRouteStatusState(input: AiRouteStatusStartInput): AiRout
 
 export function updateAiRouteStatus(input: AiRouteStatusInput): AiRouteStatusResult {
   const settings = normalizeSettings(input.settings);
-  const previous = isReusableState(input.previousState, input.ownerToken, input.target)
+  const hasReusableState = isReusableState(input.previousState, input.ownerToken, input.target);
+  const previous = hasReusableState
     ? input.previousState
     : createAiRouteStatusState(input);
   const remaining = distance(input.position, input.target);
@@ -132,6 +133,10 @@ export function updateAiRouteStatus(input: AiRouteStatusInput): AiRouteStatusRes
       'Цель движения исчезла из памяти бойца.',
       true,
     );
+  }
+
+  if (!hasReusableState) {
+    return makeResult(previous, 0, remaining, false, false);
   }
 
   const progressCells = previous.lastDistanceCells - remaining;
