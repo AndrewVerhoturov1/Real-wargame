@@ -97,6 +97,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
+      - name: Upload runtime source snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-runtime-source
+          path: src/core/ai/AiGraphRuntime.ts
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Publish commit statuses
         if: always()
         uses: actions/github-script@v7
