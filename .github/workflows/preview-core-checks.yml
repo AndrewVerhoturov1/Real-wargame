@@ -79,6 +79,12 @@ jobs:
         continue-on-error: true
         run: npm run move-bridge:smoke
 
+      - name: Reactive route status smoke
+        id: route_status
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run route-status:smoke
+
       - name: Production build
         id: build
         if: steps.install.outcome == 'success'
@@ -110,6 +116,7 @@ jobs:
           GRAPH_OUTCOME: ${{ steps.graph.outcome }}
           RUNTIME_OUTCOME: ${{ steps.runtime.outcome }}
           MOVE_BRIDGE_OUTCOME: ${{ steps.move_bridge.outcome }}
+          ROUTE_STATUS_OUTCOME: ${{ steps.route_status.outcome }}
           BUILD_OUTCOME: ${{ steps.build.outcome }}
         with:
           script: |
@@ -123,6 +130,7 @@ jobs:
               graph: process.env.GRAPH_OUTCOME,
               runtime: process.env.RUNTIME_OUTCOME,
               move_bridge: process.env.MOVE_BRIDGE_OUTCOME,
+              route_status: process.env.ROUTE_STATUS_OUTCOME,
               build: process.env.BUILD_OUTCOME,
             };
             const targetUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
@@ -160,6 +168,7 @@ jobs:
             steps.graph.outcome != 'success' ||
             steps.runtime.outcome != 'success' ||
             steps.move_bridge.outcome != 'success' ||
+            steps.route_status.outcome != 'success' ||
             steps.build.outcome != 'success'
           )
         run: exit 1
