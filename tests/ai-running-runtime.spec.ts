@@ -25,6 +25,25 @@ test('shows a waiting node, duration details, and Russian live diagnostics', asy
       ],
     };
     localStorage.setItem('real-wargame.ai-node-editor.graph.v6', JSON.stringify(graph));
+    localStorage.setItem('real-wargame.ai-node-editor.positions.v6', JSON.stringify({
+      root: { x: 70, y: 150 },
+      utility: { x: 300, y: 150 },
+      branch: { x: 530, y: 150 },
+      sequence: { x: 760, y: 150 },
+      wait: { x: 530, y: 370 },
+    }));
+    localStorage.setItem('real-wargame.ai-node-editor.ui.v6', JSON.stringify({
+      paletteOpen: false,
+      inspectorOpen: true,
+      bottomOpen: false,
+      bottomTab: 'console',
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+      languageMode: 'ru',
+      nodeDetailMode: 'compact',
+      linkSourceNodeId: null,
+    }));
     localStorage.setItem('real-wargame.ai-node-editor.debug.v1', JSON.stringify({
       version: 1,
       kind: 'ai-graph-runtime-debug',
@@ -72,6 +91,7 @@ test('shows a waiting node, duration details, and Russian live diagnostics', asy
   await expect(authoring).toContainText('Длительное ожидание');
   await expect(authoring.getByLabel('Длительность, секунд')).toHaveValue('2');
   await expect(authoring.getByLabel('Тайм-аут, секунд')).toHaveValue('0');
+  await expect(authoring).toBeInViewport();
 
   await page.screenshot({ path: path.join(SCREENSHOT_DIR, '26-ai-running-waiting-node.png') });
 });
