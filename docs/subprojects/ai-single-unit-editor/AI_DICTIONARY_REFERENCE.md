@@ -63,6 +63,56 @@ The in-game and node-editor panels are generated from that source. Do not mainta
 4. The new node is inserted next to the selected node and linked as its child.
 5. Human selectors for numeric and boolean inputs are enhanced from the same catalog.
 
+## AI Authoring Workbench
+
+The **Инструменты ИИ** button in the node editor opens three human-facing tools. They use Russian by default and retain an English switch.
+
+### Custom memory wizard
+
+The **Своя память** tab creates safe graph-memory slots without asking the user to enter JSON or technical keys.
+
+- The user gives the memory a Russian name and may also provide an English name.
+- Supported first-version types are `number`, `boolean` and `text`.
+- The technical key is generated automatically as `user_memory_N`.
+- The default value is written into `blackboardDefaults`.
+- Numeric memories can create a configured threshold or score node.
+- Boolean memories can create a configured flag-check node.
+- The new memory appears in compatible node selectors immediately.
+- A memory cannot be deleted while graph nodes still reference it.
+
+### Human graph diagnostics
+
+The **Проверка графа** tab checks the saved graph and explains problems in ordinary language.
+
+It reports:
+
+- unknown AI Dictionary keys;
+- recognized old aliases;
+- manually entered memory that should be replaced by the wizard;
+- `path_exists`, which is currently a placeholder and always succeeds;
+- simplified line-of-sight and line-of-fire checks;
+- simplified action executors;
+- object searches that are not yet connected to the tactical host;
+- target-selection rules that do not yet perform full multi-target ranking.
+
+Clicking a diagnostic closes the workbench and selects the related graph node.
+
+### Decision history
+
+The **История решений** tab keeps up to 20 recent AI calculations in browser storage.
+
+Each entry includes:
+
+- soldier name;
+- selected branch;
+- human explanation;
+- leading branch scores and VETO status;
+- a collapsible list of blackboard values with translated dictionary labels.
+
+This is a local authoring aid, not a permanent campaign save or army-wide telemetry database.
+
 ## Performance rule
 
 The dictionary panel may rebuild its list after a search, filter or language change. Live simulation updates must update existing value elements instead of rebuilding the entire dialog every frame.
+
+Decision history is capped at 20 entries. The workbench polls only the small existing debug payload and does not recalculate the awareness map.

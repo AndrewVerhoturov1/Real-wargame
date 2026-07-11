@@ -9,6 +9,7 @@ const catalog = [read('src/core/ai/AiConceptCatalog.ts'), read('src/core/ai/AiCo
 const panel = read('src/ui/AiDictionaryPanel.ts');
 const game = read('src/ui/AiDictionaryGameIntegration.ts');
 const editor = read('src/ai-node-editor/AiDictionaryEditorIntegration.ts');
+const workbench = read('src/ai-node-editor/AiDictionaryWorkbench.ts');
 const gameEntry = read('src/main.ts');
 const editorHtml = read('ai-node-editor.html');
 const languageRules = read('docs/ai/DEVELOPMENT_LANGUAGE_RULES.md');
@@ -48,10 +49,16 @@ assert.match(game, /real-wargame\.ai-dictionary\.snapshot\.v1/, 'game integratio
 assert.match(editor, /ai-graph-runtime-debug/, 'editor dictionary must read live debug data');
 assert.match(editor, /real-wargame\.ai-node-editor\.graph\.v6/, 'editor integration must update the real graph');
 assert.match(editor, /location\.reload/, 'editor must visibly refresh after adding a node');
+assert.match(workbench, /custom-memory/, 'workbench must provide custom memory');
+assert.match(workbench, /analyzeGraph/, 'workbench must provide human graph diagnostics');
+assert.match(workbench, /decision-history/, 'workbench must store recent decisions');
+assert.match(workbench, /DEFAULT|language === 'ru'|return 'ru'/, 'workbench must remain Russian-first');
 
 assert.match(gameEntry, /installAiDictionaryGameIntegration/, 'game entry must install dictionary');
 assert.match(editorHtml, /AiDictionaryEditorIntegration\.ts/, 'AI editor must install dictionary');
 assert.match(editorHtml, /ai-dictionary\.css/, 'AI editor must load dictionary styles');
+assert.match(editorHtml, /AiDictionaryWorkbench\.ts/, 'AI editor must load the authoring workbench');
+assert.match(editorHtml, /ai-dictionary-workbench\.css/, 'AI editor must load workbench styles');
 
 assert.match(languageRules, /English/, 'development language rule must state English');
 assert.match(languageRules, /Russian/, 'development language rule must require Russian translation');
