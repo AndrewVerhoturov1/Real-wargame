@@ -11,7 +11,7 @@ import './ai-dictionary-compat.css';
 import mapData from './data/maps/test_map.json';
 import pressureZoneData from './data/pressure_zones/test_pressure_zones.json';
 import unitsData from './data/units/test_units.json';
-import { installAiStatefulMoveGameBridge } from './core/ai/AiStatefulMoveGameBridge';
+import { installAiStatefulMoveGameBridge as installAiGameBridge } from './core/ai/AiStatefulMoveGameBridge';
 import type { TacticalMapData } from './core/map/MapModel';
 import type { PressureZoneData } from './core/pressure/PressureZone';
 import { createInitialState } from './core/simulation/SimulationState';
@@ -62,7 +62,7 @@ const tacticalBoard = new PixiTacticalBoardApp(
   heightToggle,
   state,
 );
-const aiGameBridge = installAiStatefulMoveGameBridge(state);
+const aiGameBridge = installAiGameBridge(state);
 const forceRenderAtNativeMapQuality = () => {
   tacticalBoard.forceRender();
   enforceNativeMapQuality(tacticalBoard);

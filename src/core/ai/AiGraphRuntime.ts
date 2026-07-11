@@ -433,7 +433,7 @@ function executeMove(
     );
   }
 
-  const move = resumableState.activeData;
+  const move = resumableState.activeData as AiGraphMoveExecutionData;
   const elapsedMs = Math.max(0, input.nowMs - resumableState.activeNodeStartedAtMs);
   const remaining = distance(selfPosition, move.target);
   const details: RuntimeDetails = {
@@ -457,7 +457,7 @@ function executeMove(
   const activeSource = readNullableString(accumulator.blackboard.active_move_source);
   const activeToken = readNullableString(accumulator.blackboard.active_move_owner_token);
   if (activeToken !== move.actionToken) {
-    if (activeSource === 'player' || activeToken === null) {
+    if (activeSource === 'player') {
       const reason = 'The player replaced the active AI move order.';
       const reasonRu = 'Приказ игрока заменил активное движение ИИ.';
       accumulator.effects.push(clearMoveEffect(move.actionToken, reason, reasonRu));
@@ -468,6 +468,15 @@ function executeMove(
         cancellationReason: reason,
         cancellationReasonRu: reasonRu,
       });
+    }
+
+    if (activeToken === null) {
+      const reason = 'The owned AI move order disappeared before arrival.';
+      const reasonRu = 'Собственный приказ движения ИИ исчез до достижения цели.';
+      accumulator.effects.push(clearMoveEffect(move.actionToken, reason, reasonRu));
+      lifecycle.push(lifecycleEvent('complete', child, input.nowMs, reason, reasonRu));
+      accumulator.trace.push(traceItem(child, 'fail', reason, reasonRu));
+      return result(input, branch, accumulator, lifecycle, 'failure', reason, reasonRu, details);
     }
 
     const reason = 'Another AI movement replaced the active move order.';
