@@ -45,13 +45,28 @@ if (!root || !debugPanel || !languageToggle || !gridToggle || !visionToggle || !
 
 installAppShellMenu({ mode: 'game' });
 
-const state = createInitialState(mapData as TacticalMapData, unitsData as UnitData[], pressureZoneData as PressureZoneData[]);
+const state = createInitialState(
+  mapData as TacticalMapData,
+  unitsData as UnitData[],
+  pressureZoneData as PressureZoneData[],
+);
 initializeAiTestLabRuntime(state);
 type PausableRuntimeState = typeof state & { paused?: boolean };
 
-const tacticalBoard = new PixiTacticalBoardApp(root, debugPanel, languageToggle, gridToggle, visionToggle, heightToggle, state);
+const tacticalBoard = new PixiTacticalBoardApp(
+  root,
+  debugPanel,
+  languageToggle,
+  gridToggle,
+  visionToggle,
+  heightToggle,
+  state,
+);
 const aiGameBridge = installAiGameBridge(state);
-const forceRenderAtNativeMapQuality = () => { tacticalBoard.forceRender(); enforceNativeMapQuality(tacticalBoard); };
+const forceRenderAtNativeMapQuality = () => {
+  tacticalBoard.forceRender();
+  enforceNativeMapQuality(tacticalBoard);
+};
 
 installGameEditorWorkbench(debugPanel, state, forceRenderAtNativeMapQuality);
 installSceneExportControls(state);
@@ -68,7 +83,14 @@ enforceNativeMapQuality(tacticalBoard);
 gridToggle.addEventListener('click', scheduleNativeMapQuality);
 // Pixi starts with the legacy English locale; switch once after its listener is installed.
 languageToggle.click();
-forceRussianTopControls(languageToggle, gridToggle, visionToggle, heightToggle, pauseToggle, aiEditorOpenButton);
+forceRussianTopControls(
+  languageToggle,
+  gridToggle,
+  visionToggle,
+  heightToggle,
+  pauseToggle,
+  aiEditorOpenButton,
+);
 
 window.addEventListener('beforeunload', () => {
   gridToggle.removeEventListener('click', scheduleNativeMapQuality);
@@ -80,15 +102,29 @@ window.addEventListener('beforeunload', () => {
   tacticalBoard.destroy();
 });
 
-function scheduleNativeMapQuality(): void { window.requestAnimationFrame(() => enforceNativeMapQuality(tacticalBoard)); }
-function enforceNativeMapQuality(board: PixiTacticalBoardApp): void {
-  const internals = board as unknown as { mapRenderer?: { container?: { cacheAsBitmap: boolean } } };
-  const mapContainer = internals.mapRenderer?.container;
-  if (mapContainer) mapContainer.cacheAsBitmap = false;
-  (window as Window & { __realWargameMapQualityDebug?: { cacheAsBitmap: boolean } }).__realWargameMapQualityDebug = { cacheAsBitmap: mapContainer?.cacheAsBitmap ?? false };
+function scheduleNativeMapQuality(): void {
+  window.requestAnimationFrame(() => enforceNativeMapQuality(tacticalBoard));
 }
 
-function forceRussianTopControls(languageButton: HTMLButtonElement, gridButton: HTMLButtonElement, visionButton: HTMLButtonElement, heightButton: HTMLButtonElement, pauseButton: HTMLButtonElement, aiEditorButton: HTMLButtonElement): void {
+function enforceNativeMapQuality(board: PixiTacticalBoardApp): void {
+  const internals = board as unknown as {
+    mapRenderer?: { container?: { cacheAsBitmap: boolean } };
+  };
+  const mapContainer = internals.mapRenderer?.container;
+  if (mapContainer) mapContainer.cacheAsBitmap = false;
+  (window as Window & { __realWargameMapQualityDebug?: { cacheAsBitmap: boolean } }).__realWargameMapQualityDebug = {
+    cacheAsBitmap: mapContainer?.cacheAsBitmap ?? false,
+  };
+}
+
+function forceRussianTopControls(
+  languageButton: HTMLButtonElement,
+  gridButton: HTMLButtonElement,
+  visionButton: HTMLButtonElement,
+  heightButton: HTMLButtonElement,
+  pauseButton: HTMLButtonElement,
+  aiEditorButton: HTMLButtonElement,
+): void {
   document.documentElement.lang = 'ru';
   languageButton.textContent = 'Русский';
   gridButton.textContent = 'Сетка: вкл';
@@ -104,24 +140,46 @@ function forceRussianTopControls(languageButton: HTMLButtonElement, gridButton: 
   heightButton.classList.add('hud-toggle-off');
 }
 
-function installAiEditorOpenButton(button: HTMLButtonElement): void { button.addEventListener('click', () => { window.open('/ai-node-editor.html', '_blank'); }); }
+function installAiEditorOpenButton(button: HTMLButtonElement): void {
+  button.addEventListener('click', () => {
+    window.open('/ai-node-editor.html', '_blank');
+  });
+}
+
 function installPauseToggle(button: HTMLButtonElement, onChanged: () => void): void {
-  button.addEventListener('click', () => { togglePause(button, onChanged); });
+  button.addEventListener('click', () => {
+    togglePause(button, onChanged);
+  });
+
   window.addEventListener('keydown', (event) => {
     if (event.key.toLowerCase() !== 'p') return;
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) return;
     togglePause(button, onChanged);
   });
 }
-function togglePause(button: HTMLButtonElement, onChanged: () => void): void { setPaused(!getPaused()); updatePauseToggle(button); syncPauseStateToDebugTrace(); onChanged(); }
-function getPaused(): boolean { return Boolean((state as PausableRuntimeState).paused); }
-function setPaused(value: boolean): void { (state as PausableRuntimeState).paused = value; }
+
+function togglePause(button: HTMLButtonElement, onChanged: () => void): void {
+  setPaused(!getPaused());
+  updatePauseToggle(button);
+  syncPauseStateToDebugTrace();
+  onChanged();
+}
+
+function getPaused(): boolean {
+  return Boolean((state as PausableRuntimeState).paused);
+}
+
+function setPaused(value: boolean): void {
+  (state as PausableRuntimeState).paused = value;
+}
+
 function updatePauseToggle(button: HTMLButtonElement): void {
   const paused = getPaused();
   button.textContent = paused ? 'Пауза: вкл' : 'Пауза: выкл';
   button.setAttribute('aria-pressed', String(paused));
   button.classList.toggle('hud-toggle-off', !paused);
 }
+
 function syncPauseStateToDebugTrace(): void {
   try {
     const raw = window.localStorage.getItem(DEBUG_STORAGE_KEY);
