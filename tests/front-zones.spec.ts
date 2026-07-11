@@ -73,6 +73,7 @@ test('front zones are editable, toggleable and expose territory safety to the se
   await expect(page.locator('[data-front-zone-band="enemy"]')).toBeVisible();
 
   await page.locator('[data-mode="editor"]').click();
+  await expect(page.locator('body')).toHaveClass(/workspace-editor/);
   await page.locator('.game-editor-tabs').getByRole('button', { name: 'Сцена', exact: true }).click();
   const friendlySlider = page.locator('[data-front-zone-boundary="friendly"]');
   const enemySlider = page.locator('[data-front-zone-boundary="enemy"]');
@@ -104,7 +105,8 @@ test('front zones are editable, toggleable and expose territory safety to the se
     return `${diagnostics?.selectedUnitTerritory}:${diagnostics?.selectedUnitSafety}`;
   }).toBe('neutral:50');
 
-  await page.locator('.workspace-display-menu summary').click();
+  const displayMenuSummary = page.locator('.workspace-display-menu summary');
+  await displayMenuSummary.click();
   const visibilityButton = page.locator('[data-front-zone-visibility]');
   await expect(visibilityButton).toContainText('Линия фронта: вкл');
   await visibilityButton.click();
@@ -112,6 +114,7 @@ test('front zones are editable, toggleable and expose territory safety to the se
   await expect(visibilityButton).toContainText('Линия фронта: выкл');
   await visibilityButton.click();
   await expect(overlay).toBeVisible();
+  await displayMenuSummary.click();
 
   await page.locator('[data-mode="editor"]').click();
   await expect(friendlySlider).toBeVisible();
