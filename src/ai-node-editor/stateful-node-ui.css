@@ -1,0 +1,28 @@
+.stateful-node-human-panel {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 11px;
+  border: 1px solid rgba(121, 199, 255, 0.34);
+  border-radius: 12px;
+  background: rgba(121, 199, 255, 0.07);
+}
+
+.stateful-node-human-panel h4 {
+  margin: 0;
+  color: #9fd7ff;
+  font-size: 13px;
+}
+
+.stateful-node-human-panel p,
+.stateful-node-human-panel small {
+  margin: 0;
+  color: #c7d4dc;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.stateful-node-human-panel .inspector-field {
+  display: grid;
+  gap: 5px;
+}
