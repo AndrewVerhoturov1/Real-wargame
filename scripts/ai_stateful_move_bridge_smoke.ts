@@ -5,6 +5,7 @@ import type { AiBlackboardValue } from '../src/core/ai/AiBlackboard';
 import type { AiGraph } from '../src/core/ai/AiGraph';
 import {
   applyOwnedMoveEffects,
+  buildReactiveRouteTickOptions,
   syncSelectedMoveOrderMemory,
   updateSelectedRouteStatus,
 } from '../src/core/ai/AiStatefulMoveGameBridge';
@@ -14,6 +15,7 @@ import type { TacticalMapData } from '../src/core/map/MapModel';
 import { createMoveOrder } from '../src/core/orders/MoveOrder';
 import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
 import { tickSimulation } from '../src/core/simulation/SimulationTick';
+import { setAiTestPaused } from '../src/core/testing/AiTestLabRuntime';
 import type { UnitData, UnitModel } from '../src/core/units/UnitModel';
 
 const movementGraph: AiGraph = {
@@ -133,8 +135,9 @@ verifyNormalProgressAndBlocking();
 verifyPlayerOverrideStatus();
 verifyTargetLostStatus();
 verifyOwnedOrderMissingStatus();
+verifyRealPauseDoesNotBlockRoute();
 
-console.log('AI stateful move bridge smoke passed: catalog validation, physical movement, ownership safety, route progress, blocked route, player override, target loss, missing order.');
+console.log('AI stateful move bridge smoke passed: ownership safety, route progress, reactive tick mapping, pause exclusion, blocked route, player override, target loss, missing order.');
 
 function verifyNormalProgressAndBlocking(): void {
   const routeState = createSelectedState();
@@ -161,6 +164,11 @@ function verifyNormalProgressAndBlocking(): void {
   assert.equal(blocked.shouldCancelRuntime, true);
   assert.equal(readAiMemory(routeUnit).active_move_abort_code, 'route_blocked');
   assert.match(String(readAiMemory(routeUnit).active_move_abort_reason), /не продвигается/i);
+
+  const tickOptions = buildReactiveRouteTickOptions(blocked);
+  assert.equal(tickOptions.force, true);
+  assert.equal(tickOptions.applyEffects, true);
+  assert.match(tickOptions.cancel?.reasonRu ?? '', /не продвигается/i);
 }
 
 function verifyPlayerOverrideStatus(): void {
@@ -177,6 +185,7 @@ function verifyPlayerOverrideStatus(): void {
   assert.equal(result.shouldForceRuntimeTick, true);
   assert.equal(result.shouldCancelRuntime, false);
   assert.equal(readAiMemory(routeUnit).active_move_route_status, 'player_override');
+  assert.equal(buildReactiveRouteTickOptions(result).cancel, undefined);
 }
 
 function verifyTargetLostStatus(): void {
@@ -192,6 +201,7 @@ function verifyTargetLostStatus(): void {
   assert.equal(result.status, 'target_lost');
   assert.equal(result.shouldCancelRuntime, true);
   assert.match(result.abortReasonRu ?? '', /исчезла/i);
+  assert.match(buildReactiveRouteTickOptions(result).cancel?.reasonRu ?? '', /исчезла/i);
 }
 
 function verifyOwnedOrderMissingStatus(): void {
@@ -207,6 +217,32 @@ function verifyOwnedOrderMissingStatus(): void {
   assert.equal(result.status, 'order_missing');
   assert.equal(result.shouldForceRuntimeTick, true);
   assert.equal(result.shouldCancelRuntime, false);
+  assert.equal(buildReactiveRouteTickOptions(result).cancel, undefined);
+}
+
+function verifyRealPauseDoesNotBlockRoute(): void {
+  const routeState = createSelectedState();
+  const routeUnit = selectedUnit(routeState);
+  const token = 'pause-route-token';
+  const target = { x: routeUnit.position.x + 8, y: routeUnit.position.y };
+  routeUnit.order = createMoveOrder(target, { source: 'ai', ownerToken: token });
+  setMoveExecutionState(routeUnit, token, target, 'best_cover_position');
+
+  const started = updateSelectedRouteStatus(routeState, 0);
+  assert.ok(started);
+  setAiTestPaused(routeState, true);
+  const paused = updateSelectedRouteStatus(routeState, 5000);
+  assert.ok(paused);
+  assert.equal(paused.status, 'moving');
+  assert.equal(paused.noProgressMs, 0);
+  assert.equal(paused.shouldCancelRuntime, false);
+
+  setAiTestPaused(routeState, false);
+  const resumed = updateSelectedRouteStatus(routeState, 5100);
+  assert.ok(resumed);
+  assert.equal(resumed.status, 'stalled');
+  assert.equal(resumed.noProgressMs, 100);
+  assert.equal(resumed.shouldCancelRuntime, false);
 }
 
 function createSelectedState(): SimulationState {
