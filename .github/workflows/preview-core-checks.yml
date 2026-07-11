@@ -67,6 +67,12 @@ jobs:
         continue-on-error: true
         run: npm run validate:ai-graph
 
+      - name: Stateful AI runtime smoke
+        id: runtime
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run runtime:smoke
+
       - name: Production build
         id: build
         if: steps.install.outcome == 'success'
@@ -96,6 +102,7 @@ jobs:
           EDITOR_OUTCOME: ${{ steps.editor.outcome }}
           ENGINE_OUTCOME: ${{ steps.engine.outcome }}
           GRAPH_OUTCOME: ${{ steps.graph.outcome }}
+          RUNTIME_OUTCOME: ${{ steps.runtime.outcome }}
           BUILD_OUTCOME: ${{ steps.build.outcome }}
         with:
           script: |
@@ -107,6 +114,7 @@ jobs:
               editor: process.env.EDITOR_OUTCOME,
               engine: process.env.ENGINE_OUTCOME,
               graph: process.env.GRAPH_OUTCOME,
+              runtime: process.env.RUNTIME_OUTCOME,
               build: process.env.BUILD_OUTCOME,
             };
             const targetUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
@@ -142,6 +150,7 @@ jobs:
             steps.editor.outcome != 'success' ||
             steps.engine.outcome != 'success' ||
             steps.graph.outcome != 'success' ||
+            steps.runtime.outcome != 'success' ||
             steps.build.outcome != 'success'
           )
         run: exit 1
