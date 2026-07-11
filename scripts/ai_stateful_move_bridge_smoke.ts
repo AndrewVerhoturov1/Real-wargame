@@ -2,15 +2,50 @@ import assert from 'node:assert/strict';
 import mapData from '../src/data/maps/test_map.json';
 import unitsData from '../src/data/units/test_units.json';
 import type { AiBlackboardValue } from '../src/core/ai/AiBlackboard';
+import type { AiGraph } from '../src/core/ai/AiGraph';
 import {
   applyOwnedMoveEffects,
   syncSelectedMoveOrderMemory,
 } from '../src/core/ai/AiStatefulMoveGameBridge';
 import type { AiGraphRuntimeResult } from '../src/core/ai/AiGraphRuntime';
+import { validateAiGraph } from '../src/core/ai/AiGraphValidation';
 import type { TacticalMapData } from '../src/core/map/MapModel';
 import { createMoveOrder } from '../src/core/orders/MoveOrder';
 import { createInitialState } from '../src/core/simulation/SimulationState';
 import type { UnitData, UnitModel } from '../src/core/units/UnitModel';
+
+const movementGraph: AiGraph = {
+  version: 1,
+  id: 'move_validation_graph',
+  name: 'Move validation graph',
+  nameRu: 'Проверочный граф движения',
+  rootNodeId: 'root',
+  blackboardDefaults: {
+    self_position: { x: 1, y: 1 },
+    best_cover_position: { x: 7, y: 4 },
+  },
+  nodes: [
+    { id: 'root', type: 'Root', children: ['sequence'] },
+    {
+      id: 'sequence',
+      type: 'SequenceWithMemory',
+      children: ['move'],
+    },
+    {
+      id: 'move',
+      type: 'MoveToBlackboardPosition',
+      children: [],
+      parameters: {
+        targetKey: 'best_cover_position',
+        acceptanceRadiusCells: 0.2,
+        timeoutSeconds: 15,
+      },
+    },
+  ],
+};
+
+const validation = validateAiGraph(movementGraph);
+assert.equal(validation.valid, true, JSON.stringify(validation.issues));
 
 const state = createInitialState(
   mapData as TacticalMapData,
@@ -66,7 +101,7 @@ applyOwnedMoveEffects(state, runtimeResult(unit.id, [{
 assert.equal(unit.order, null, 'matching AI cleanup must remove its own order');
 assert.equal(unit.behaviorRuntime.lastEvent, 'ai_graph_owned_move_cleared');
 
-console.log('AI stateful move bridge smoke passed: owned start, memory sync, player replacement protection, matching cleanup.');
+console.log('AI stateful move bridge smoke passed: catalog validation, owned start, memory sync, player replacement protection, matching cleanup.');
 
 function runtimeResult(unitId: string, effects: readonly unknown[]): AiGraphRuntimeResult {
   return {
