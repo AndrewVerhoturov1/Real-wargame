@@ -15,6 +15,7 @@
     "game-editor:smoke": "node scripts/game_editor_smoke.mjs",
     "workspace:smoke": "node scripts/tactical_workspace_smoke.mjs",
     "dictionary:smoke": "node scripts/ai_dictionary_smoke.mjs",
+    "runtime:smoke": "node scripts/ai_graph_runtime_smoke.mjs",
     "lab:manager": "node scripts/real_wargame_lab_manager.mjs"
   },
   "dependencies": {
