@@ -1,0 +1,77 @@
+.ai-dictionary-header > div:last-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-dictionary-toolbar > label:first-child {
+  flex: 1 1 320px;
+  min-width: 260px;
+}
+
+.ai-dictionary-root [data-categories] {
+  display: flex;
+  gap: 7px;
+  padding: 10px 18px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(174, 211, 199, 0.13);
+  scrollbar-width: thin;
+}
+
+.ai-dictionary-root [data-categories] button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 5px 10px;
+  color: #b5c7c3;
+}
+
+.ai-dictionary-root [data-categories] button.active {
+  color: #effff8;
+  border-color: rgba(100, 219, 174, 0.8);
+  background: rgba(54, 112, 91, 0.72);
+}
+
+.ai-dictionary-dialog > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 18px;
+  border-top: 1px solid rgba(174, 211, 199, 0.13);
+  color: #a9bbb7;
+  font-size: 12px;
+}
+
+.ai-dictionary-root [data-toast] {
+  position: absolute;
+  right: 24px;
+  bottom: 58px;
+  max-width: min(420px, calc(100% - 48px));
+  padding: 11px 14px;
+  border: 1px solid rgba(104, 223, 177, 0.6);
+  border-radius: 10px;
+  background: rgba(25, 72, 56, 0.97);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+}
+
+.ai-dictionary-card > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+}
+
+.ai-dictionary-card > span:nth-child(2) strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-dictionary-card > span:nth-child(2) small {
+  color: #7f9893;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@media (max-width: 900px) {
+  .ai-dictionary-dialog > footer {
+    display: none;
+  }
+}
