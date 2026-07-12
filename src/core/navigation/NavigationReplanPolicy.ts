@@ -4,6 +4,7 @@ export type NavigationReplanReason = 'blocked' | 'profile_changed' | 'danger_cha
 
 export interface NavigationReplanOrderSnapshot {
   readonly routeRevision?: number;
+  readonly navigationProfileId?: string;
   readonly navigationProfileRevision?: number;
   readonly knowledgeRevision?: number;
   readonly lastReplanAtSeconds?: number;
@@ -30,14 +31,17 @@ export interface NavigationReplanEvaluation {
 
 export function evaluateNavigationReplan(input: NavigationReplanEvaluationInput): NavigationReplanEvaluation {
   const rules = input.profile.replanRules;
+  const previousProfileId = input.order.navigationProfileId ?? input.profile.id;
   const previousProfileRevision = input.order.navigationProfileRevision ?? input.currentProfileRevision;
   const previousKnowledgeRevision = input.order.knowledgeRevision ?? input.currentKnowledgeRevision;
   const elapsed = input.nowSeconds - (input.order.lastReplanAtSeconds ?? Number.NEGATIVE_INFINITY);
+  const profileChanged = previousProfileId !== input.profile.id
+    || previousProfileRevision !== input.currentProfileRevision;
 
   let reason: Exclude<NavigationReplanReason, null> | null = null;
   if (input.blocked && rules.replanOnBlocked) {
     reason = 'blocked';
-  } else if (previousProfileRevision !== input.currentProfileRevision && rules.replanOnProfileChange) {
+  } else if (profileChanged && rules.replanOnProfileChange) {
     reason = 'profile_changed';
   } else if (
     input.currentKnowledgeRevision - previousKnowledgeRevision >= rules.minimumDangerRevisionInterval
