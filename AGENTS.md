@@ -104,6 +104,7 @@ docs/ai/DEVELOPMENT_LANGUAGE_RULES.md
 
 ```text
 .agents/skills/real-wargame-local-preview/SKILL.md
+docs/workflow/VISUAL_QA_APPROVAL_POLICY.md
 ```
 
 ### PixiJS, canvas, renderers, camera, pointer events or performance
@@ -168,6 +169,30 @@ Never claim a check that was not run.
 
 A GitHub Actions run is not a local run on the user's PC.
 
+### Visual QA approval gate
+
+For user-visible changes, visual QA is **required to be prepared**, but it is **not run automatically**.
+
+Before asking the user, the agent must:
+
+- finish the implementation;
+- prepare or update the relevant Playwright scenario;
+- define the key PNG files and what each should prove;
+- run the focused smoke checks and production build that do not require a browser;
+- report the remaining visual risks.
+
+Then ask exactly once:
+
+```text
+Визуальная проверка подготовлена. Запустить её сейчас?
+```
+
+Do not start the real browser, Playwright screenshot workflow or local visual run until the user explicitly approves it.
+
+An earlier explicit instruction such as `проверь визуально`, `сделай скриншоты`, `запусти браузерную проверку` or an equivalent clear request already counts as approval. Do not ask again.
+
+If the user declines or does not approve, the change may still be delivered unless the task explicitly makes visual QA a release gate. Report it as implemented but not visually verified.
+
 A visual check is complete only after:
 
 - the real Vite application ran in a real browser;
@@ -176,6 +201,12 @@ A visual check is complete only after:
 - changed/key PNG files were opened and inspected.
 
 For non-visual changes use the focused smoke checks and production build required by the task route.
+
+The canonical detailed policy is:
+
+```text
+docs/workflow/VISUAL_QA_APPROVAL_POLICY.md
+```
 
 ## 9. External-work references
 
@@ -200,6 +231,9 @@ commit/pr: ...
 transfer_path: direct push / PR fallback / isolated branch only / not changed
 changed_files: ...
 checks_run: ...
+visual_qa_prepared: yes / no / not applicable
+visual_qa_approval: approved / declined / pending / not applicable
+visual_qa_run: passed / failed / not run / not applicable
 not_checked: ...
 manual_checks_needed: ...
 risks: ...
