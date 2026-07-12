@@ -3,7 +3,8 @@ import type { GridPosition } from '../src/core/geometry';
 import { normalizeMap, type MapObject, type TacticalMapData } from '../src/core/map/MapModel';
 import { createMoveOrder } from '../src/core/orders/MoveOrder';
 import { planMoveOrder } from '../src/core/orders/MoveOrderPlanning';
-import { createInitialState, issueMoveOrderToSelectedUnit } from '../src/core/simulation/SimulationState';
+import { issueRoutedMoveOrderToSelectedUnits } from '../src/core/orders/RoutedMoveOrders';
+import { createInitialState } from '../src/core/simulation/SimulationState';
 import { tickSimulation } from '../src/core/simulation/SimulationTick';
 import type { UnitData, UnitModel } from '../src/core/units/UnitModel';
 
@@ -63,7 +64,7 @@ function verifyWaypointFollowingAndFinalCompletion(): void {
 function verifyLegacyDirectMoveCompatibility(): void {
   const state = createTestState(makeEmptyMap());
   const unit = selectedUnit(state);
-  const target = { x: 3.5, y: 1.5 };
+  const target = { x: 3.5, y: 3.5 };
   unit.order = createMoveOrder(target);
   assert.equal(unit.order.waypoints, undefined);
 
@@ -75,7 +76,7 @@ function verifyLegacyDirectMoveCompatibility(): void {
 function verifyPlayerOrderUsesSharedPlanner(): void {
   const state = createTestState(makeWallMap(false));
   const unit = selectedUnit(state);
-  issueMoveOrderToSelectedUnit(state, { x: 7.5, y: 3.5 });
+  issueRoutedMoveOrderToSelectedUnits(state, { x: 7.5, y: 3.5 });
   assert.ok(unit.order);
   assert.equal(unit.order?.source, 'player');
   assert.ok((unit.order?.routeCells?.length ?? 0) > 2);
