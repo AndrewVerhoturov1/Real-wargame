@@ -1,5 +1,17 @@
 import type { GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
+import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
+import {
+  createRouteCostFieldCache,
+  getRouteCostFields,
+  type RouteCostFieldCache,
+  type RouteCostFields,
+  type TacticalRouteContext,
+} from '../navigation/RouteCostField';
+import {
+  getBuiltInNavigationProfile,
+  type NavigationProfile,
+} from '../navigation/NavigationProfiles';
 import {
   buildNavigationGrid,
   gridPositionToNavigationCell,
@@ -11,10 +23,23 @@ import {
 
 export type GridPathFailureCode = 'start_blocked' | 'goal_unreachable' | 'no_route' | 'search_limit';
 
+export interface GridPathCostBreakdown {
+  readonly terrainCost: number;
+  readonly slopeCost: number;
+  readonly dangerCost: number;
+  readonly exposureCost: number;
+  readonly coverAdjustment: number;
+  readonly enemyDistanceCost: number;
+  readonly territoryCost: number;
+}
+
 export interface GridPathOptions {
   readonly maxVisitedCells?: number;
   readonly nearestGoalRadiusCells?: number;
   readonly allowGoalAdjustment?: boolean;
+  readonly navigationProfile?: NavigationProfile;
+  readonly tacticalContext?: TacticalRouteContext;
+  readonly costFieldCache?: RouteCostFieldCache;
 }
 
 export interface GridPathSuccess {
@@ -25,7 +50,17 @@ export interface GridPathSuccess {
   readonly cells: ReadonlyArray<{ x: number; y: number }>;
   readonly waypoints: readonly GridPosition[];
   readonly cost: number;
+  readonly totalCost: number;
+  readonly distanceMeters: number;
+  readonly baselineDistanceMeters: number;
+  readonly detourRatio: number;
+  readonly detourLimited: boolean;
   readonly visitedCells: number;
+  readonly profileId: string;
+  readonly profileRevision: number;
+  readonly costBreakdown: GridPathCostBreakdown;
+  readonly routeReason: string;
+  readonly routeReasonRu: string;
   readonly reason: string;
   readonly reasonRu: string;
 }
@@ -47,9 +82,26 @@ interface OpenNode {
   readonly h: number;
 }
 
+interface SearchSuccess {
+  readonly ok: true;
+  readonly cells: Array<{ x: number; y: number }>;
+  readonly cost: number;
+  readonly visitedCells: number;
+}
+
+interface SearchFailure {
+  readonly ok: false;
+  readonly code: 'no_route' | 'search_limit';
+  readonly visitedCells: number;
+  readonly reason: string;
+  readonly reasonRu: string;
+}
+
+type SearchResult = SearchSuccess | SearchFailure;
+
 const CARDINAL_COST = 1;
 const DIAGONAL_COST = Math.SQRT2;
-const MINIMUM_TERRAIN_COST = 0.8;
+const MINIMUM_STEP_COST = 0.05;
 const DEFAULT_NEAREST_GOAL_RADIUS = 6;
 const DIRECTIONS: ReadonlyArray<readonly [number, number, number]> = [
   [1, 0, CARDINAL_COST],
@@ -62,6 +114,9 @@ const DIRECTIONS: ReadonlyArray<readonly [number, number, number]> = [
   [1, -1, DIAGONAL_COST],
 ];
 
+const sharedCostFieldCache = createRouteCostFieldCache();
+const baselineCache = new WeakMap<TacticalMap, Map<string, SearchSuccess>>();
+
 export function findGridPath(
   map: TacticalMap,
   start: GridPosition,
@@ -69,6 +124,9 @@ export function findGridPath(
   options: GridPathOptions = {},
 ): GridPathResult {
   const grid = buildNavigationGrid(map);
+  const profile = options.navigationProfile ?? getBuiltInNavigationProfile('normal');
+  const costCache = options.costFieldCache ?? sharedCostFieldCache;
+  const fields = getRouteCostFields(map, profile, options.tacticalContext, costCache);
   const startCell = gridPositionToNavigationCell(map, start);
   if (!isNavigationCellPassable(grid, startCell.x, startCell.y)) {
     return failure(
@@ -82,7 +140,8 @@ export function findGridPath(
 
   const requestedGoalCell = gridPositionToNavigationCell(map, requestedGoal);
   const requestedGoalPassable = isNavigationCellPassable(grid, requestedGoalCell.x, requestedGoalCell.y);
-  if (!requestedGoalPassable && options.allowGoalAdjustment === false) {
+  const allowGoalAdjustment = options.allowGoalAdjustment ?? profile.allowGoalAdjustment;
+  if (!requestedGoalPassable && allowGoalAdjustment === false) {
     return failure(
       'goal_unreachable',
       requestedGoal,
@@ -114,44 +173,114 @@ export function findGridPath(
   const resolvedGoal = goalAdjusted
     ? navigationCellCenter(resolvedGoalCell.x, resolvedGoalCell.y)
     : clampPositionInsideCell(requestedGoal, resolvedGoalCell.x, resolvedGoalCell.y);
-  const search = runAStar(
-    grid,
-    startCell,
-    resolvedGoalCell,
-    Math.max(1, Math.floor(options.maxVisitedCells ?? grid.width * grid.height)),
-  );
+  const maxVisitedCells = Math.max(1, Math.floor(options.maxVisitedCells ?? grid.width * grid.height));
+  const tacticalSearch = runAStar(grid, fields, startCell, resolvedGoalCell, maxVisitedCells);
 
-  if (!search.ok) {
-    return failure(search.code, requestedGoal, search.visitedCells, search.reason, search.reasonRu);
+  if (!tacticalSearch.ok) {
+    return failure(tacticalSearch.code, requestedGoal, tacticalSearch.visitedCells, tacticalSearch.reason, tacticalSearch.reasonRu);
   }
 
-  const waypoints = simplifyPathToWaypoints(search.cells, resolvedGoal);
+  const baseline = getBaselineSearch(map, grid, costCache, startCell, resolvedGoalCell, maxVisitedCells);
+  const tacticalDistanceCells = pathDistanceCells(tacticalSearch.cells);
+  const baselineDistanceCells = baseline.ok ? pathDistanceCells(baseline.cells) : tacticalDistanceCells;
+  const rawDetourRatio = baselineDistanceCells > 0 ? tacticalDistanceCells / baselineDistanceCells : 1;
+  const maximumDetourRatio = Math.max(1, profile.maximumDetourRatio);
+  const detourLimited = baseline.ok && rawDetourRatio > maximumDetourRatio + 1e-9;
+  const selectedSearch = detourLimited ? baseline : tacticalSearch;
+  if (!selectedSearch.ok) {
+    return failure(selectedSearch.code, requestedGoal, selectedSearch.visitedCells, selectedSearch.reason, selectedSearch.reasonRu);
+  }
+
+  const selectedDistanceCells = pathDistanceCells(selectedSearch.cells);
+  const selectedDetourRatio = baselineDistanceCells > 0 ? selectedDistanceCells / baselineDistanceCells : 1;
+  const costBreakdown = calculatePathCostBreakdown(selectedSearch.cells, fields);
+  const totalCost = sumBreakdown(costBreakdown);
+  if (profile.maximumRouteCost !== null && totalCost > profile.maximumRouteCost) {
+    return failure(
+      'no_route',
+      requestedGoal,
+      tacticalSearch.visitedCells + (baseline.ok ? baseline.visitedCells : 0),
+      `The route exceeds the profile maximum cost (${profile.maximumRouteCost}).`,
+      `Стоимость маршрута превышает предел профиля (${profile.maximumRouteCost}).`,
+    );
+  }
+
+  const routeReason = buildRouteReason(goalAdjusted, detourLimited, profile, costBreakdown, false);
+  const routeReasonRu = buildRouteReason(goalAdjusted, detourLimited, profile, costBreakdown, true);
+  const waypoints = simplifyPathToWaypoints(selectedSearch.cells, resolvedGoal);
   return {
     ok: true,
     requestedGoal: { ...requestedGoal },
     resolvedGoal,
     goalAdjusted,
-    cells: search.cells,
+    cells: selectedSearch.cells,
     waypoints,
-    cost: round(search.cost, 6),
-    visitedCells: search.visitedCells,
-    reason: goalAdjusted
-      ? 'The requested goal was blocked, so the route ends at the nearest passable cell.'
-      : 'A passable grid route was found.',
-    reasonRu: goalAdjusted
-      ? 'Запрошенная цель непроходима; маршрут перенесён в ближайшую доступную клетку.'
-      : 'Проходимый маршрут построен.',
+    cost: round(totalCost, 6),
+    totalCost: round(totalCost, 6),
+    distanceMeters: round(selectedDistanceCells * map.metersPerCell, 3),
+    baselineDistanceMeters: round(baselineDistanceCells * map.metersPerCell, 3),
+    detourRatio: round(selectedDetourRatio, 6),
+    detourLimited,
+    visitedCells: tacticalSearch.visitedCells + (baseline.ok ? baseline.visitedCells : 0),
+    profileId: profile.id,
+    profileRevision: profile.revision,
+    costBreakdown: roundBreakdown(costBreakdown),
+    routeReason,
+    routeReasonRu,
+    reason: routeReason,
+    reasonRu: routeReasonRu,
   };
+}
+
+function getBaselineSearch(
+  map: TacticalMap,
+  grid: NavigationGrid,
+  costCache: RouteCostFieldCache,
+  start: { x: number; y: number },
+  goal: { x: number; y: number },
+  maxVisitedCells: number,
+): SearchResult {
+  const revisions = getMapRevisionSnapshot(map);
+  const key = [
+    revisions.terrain,
+    revisions.height,
+    revisions.forest,
+    revisions.objects,
+    start.x,
+    start.y,
+    goal.x,
+    goal.y,
+    maxVisitedCells,
+  ].join(':');
+  let mapCache = baselineCache.get(map);
+  if (!mapCache) {
+    mapCache = new Map();
+    baselineCache.set(map, mapCache);
+  }
+  const existing = mapCache.get(key);
+  if (existing) return existing;
+
+  const direct = getBuiltInNavigationProfile('direct');
+  const fields = getRouteCostFields(map, direct, undefined, costCache);
+  const result = runAStar(grid, fields, start, goal, maxVisitedCells);
+  if (result.ok) {
+    mapCache.set(key, result);
+    while (mapCache.size > 32) {
+      const oldest = mapCache.keys().next().value as string | undefined;
+      if (!oldest) break;
+      mapCache.delete(oldest);
+    }
+  }
+  return result;
 }
 
 function runAStar(
   grid: NavigationGrid,
+  fields: RouteCostFields,
   start: { x: number; y: number },
   goal: { x: number; y: number },
   maxVisitedCells: number,
-):
-  | { ok: true; cells: Array<{ x: number; y: number }>; cost: number; visitedCells: number }
-  | { ok: false; code: 'no_route' | 'search_limit'; visitedCells: number; reason: string; reasonRu: string } {
+): SearchResult {
   const cellCount = grid.width * grid.height;
   const startIndex = indexOf(grid, start.x, start.y);
   const goalIndex = indexOf(grid, goal.x, goal.y);
@@ -195,8 +324,7 @@ function runAStar(
 
     const currentX = current.index % grid.width;
     const currentY = Math.floor(current.index / grid.width);
-    const currentCell = navigationCellAt(grid, currentX, currentY);
-    if (!currentCell) continue;
+    if (!navigationCellAt(grid, currentX, currentY)) continue;
 
     for (const [dx, dy, stepLength] of DIRECTIONS) {
       const nextX = currentX + dx;
@@ -215,10 +343,10 @@ function runAStar(
 
       const nextIndex = indexOf(grid, nextX, nextY);
       if (closed[nextIndex]) continue;
-      const nextCell = navigationCellAt(grid, nextX, nextY);
-      if (!nextCell) continue;
-      const slopeCost = Math.abs(nextCell.height - currentCell.height) * 0.15;
-      const stepCost = stepLength * ((currentCell.movementCost + nextCell.movementCost) / 2 + slopeCost);
+      const currentCost = fields.totalCost[current.index];
+      const nextCost = fields.totalCost[nextIndex];
+      if (!Number.isFinite(currentCost) || !Number.isFinite(nextCost)) continue;
+      const stepCost = stepLength * Math.max(MINIMUM_STEP_COST, (currentCost + nextCost) / 2);
       const tentativeG = gScore[current.index] + stepCost;
       if (tentativeG + 1e-9 >= gScore[nextIndex]) continue;
 
@@ -236,6 +364,104 @@ function runAStar(
     reason: 'No passable route connects the start and goal.',
     reasonRu: 'Между стартом и целью нет проходимого маршрута.',
   };
+}
+
+function calculatePathCostBreakdown(
+  cells: ReadonlyArray<{ x: number; y: number }>,
+  fields: RouteCostFields,
+): GridPathCostBreakdown {
+  const breakdown: GridPathCostBreakdown = {
+    terrainCost: 0,
+    slopeCost: 0,
+    dangerCost: 0,
+    exposureCost: 0,
+    coverAdjustment: 0,
+    enemyDistanceCost: 0,
+    territoryCost: 0,
+  };
+  for (let index = 1; index < cells.length; index += 1) {
+    const previous = cells[index - 1];
+    const current = cells[index];
+    const previousIndex = previous.y * fields.width + previous.x;
+    const currentIndex = current.y * fields.width + current.x;
+    const stepLength = previous.x !== current.x && previous.y !== current.y ? DIAGONAL_COST : CARDINAL_COST;
+    addAverage(breakdown, 'terrainCost', fields.terrainCost, previousIndex, currentIndex, stepLength);
+    addAverage(breakdown, 'slopeCost', fields.slopeCost, previousIndex, currentIndex, stepLength);
+    addAverage(breakdown, 'dangerCost', fields.dangerCost, previousIndex, currentIndex, stepLength);
+    addAverage(breakdown, 'exposureCost', fields.exposureCost, previousIndex, currentIndex, stepLength);
+    addAverage(breakdown, 'coverAdjustment', fields.coverAdjustment, previousIndex, currentIndex, stepLength);
+    addAverage(breakdown, 'enemyDistanceCost', fields.enemyDistanceCost, previousIndex, currentIndex, stepLength);
+    addAverage(breakdown, 'territoryCost', fields.territoryCost, previousIndex, currentIndex, stepLength);
+  }
+  return breakdown;
+}
+
+function addAverage(
+  target: GridPathCostBreakdown,
+  key: keyof GridPathCostBreakdown,
+  values: Float32Array,
+  leftIndex: number,
+  rightIndex: number,
+  multiplier: number,
+): void {
+  (target as Record<keyof GridPathCostBreakdown, number>)[key] += multiplier * (values[leftIndex] + values[rightIndex]) / 2;
+}
+
+function sumBreakdown(value: GridPathCostBreakdown): number {
+  return Math.max(0, value.terrainCost
+    + value.slopeCost
+    + value.dangerCost
+    + value.exposureCost
+    + value.coverAdjustment
+    + value.enemyDistanceCost
+    + value.territoryCost);
+}
+
+function roundBreakdown(value: GridPathCostBreakdown): GridPathCostBreakdown {
+  return {
+    terrainCost: round(value.terrainCost, 6),
+    slopeCost: round(value.slopeCost, 6),
+    dangerCost: round(value.dangerCost, 6),
+    exposureCost: round(value.exposureCost, 6),
+    coverAdjustment: round(value.coverAdjustment, 6),
+    enemyDistanceCost: round(value.enemyDistanceCost, 6),
+    territoryCost: round(value.territoryCost, 6),
+  };
+}
+
+function buildRouteReason(
+  goalAdjusted: boolean,
+  detourLimited: boolean,
+  profile: NavigationProfile,
+  breakdown: GridPathCostBreakdown,
+  russian: boolean,
+): string {
+  if (detourLimited) {
+    return russian
+      ? 'Предпочтительный тактический маршрут оказался длиннее разрешённого обхода; выбран кратчайший проходимый маршрут.'
+      : 'The preferred tactical route exceeded the allowed detour; the shortest passable route was selected.';
+  }
+  if (goalAdjusted) {
+    return russian
+      ? 'Запрошенная цель непроходима; маршрут перенесён в ближайшую доступную клетку.'
+      : 'The requested goal was blocked, so the route ends at the nearest passable cell.';
+  }
+  const weighted: Array<[number, string, string]> = [
+    [Math.max(0, breakdown.dangerCost), 'known danger avoidance', 'избегание известной опасности'],
+    [Math.max(0, breakdown.exposureCost), 'exposure avoidance', 'избегание просматриваемых мест'],
+    [Math.max(0, -breakdown.coverAdjustment), 'cover preference', 'предпочтение укрытий'],
+    [Math.max(0, breakdown.slopeCost), 'slope cost', 'штраф за уклон'],
+  ];
+  weighted.sort((left, right) => right[0] - left[0]);
+  const strongest = weighted[0];
+  if (strongest && strongest[0] > 0.001) {
+    return russian
+      ? `Маршрут построен профилем «${profile.nameRu}»; главная причина: ${strongest[2]}.`
+      : `Route built with the ${profile.nameEn} profile; strongest reason: ${strongest[1]}.`;
+  }
+  return russian
+    ? `Проходимый маршрут построен профилем «${profile.nameRu}».`
+    : `A passable route was built with the ${profile.nameEn} profile.`;
 }
 
 function findNearestPassableGoal(
@@ -301,10 +527,20 @@ function reconstructPath(
   return reverse;
 }
 
+function pathDistanceCells(cells: ReadonlyArray<{ x: number; y: number }>): number {
+  let distance = 0;
+  for (let index = 1; index < cells.length; index += 1) {
+    const previous = cells[index - 1];
+    const current = cells[index];
+    distance += previous.x !== current.x && previous.y !== current.y ? DIAGONAL_COST : CARDINAL_COST;
+  }
+  return distance;
+}
+
 function heuristic(x: number, y: number, goalX: number, goalY: number): number {
   const dx = Math.abs(goalX - x);
   const dy = Math.abs(goalY - y);
-  return MINIMUM_TERRAIN_COST * (Math.max(dx, dy) + (DIAGONAL_COST - 1) * Math.min(dx, dy));
+  return MINIMUM_STEP_COST * (Math.max(dx, dy) + (DIAGONAL_COST - 1) * Math.min(dx, dy));
 }
 
 function indexOf(grid: NavigationGrid, x: number, y: number): number {
