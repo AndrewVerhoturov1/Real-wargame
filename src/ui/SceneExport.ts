@@ -92,9 +92,9 @@ export function normalizeImportedScene(value: unknown): {
 
 export function buildExportedScene(state: SimulationState): ExportedSceneData {
   return {
-    version: 'scene-export-v7-perception-attention-ai-runtime-2m-grid',
+    version: 'scene-export-v8-view-memory-heatmap-ai-runtime-2m-grid',
     exportedAt: new Date().toISOString(),
-    noteRu: 'Экспорт полигона ИИ с профилями обзора и внимания, навигационными профилями и активным runtime. Старые сцены без новых блоков получают безопасные значения по умолчанию; сцены 10 м преобразуются в текущую сетку при загрузке.',
+    noteRu: 'Экспорт полигона ИИ со слоем «Обзор и память», метрическими настройками зрения, навигационными профилями и активным runtime. Старые сцены без новых блоков получают безопасные значения по умолчанию; сцены 10 м преобразуются в текущую сетку при загрузке.',
     map: {
       width: state.map.width,
       height: state.map.height,
@@ -211,6 +211,7 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
       profiles: Object.fromEntries(
         Object.entries(unit.attentionSettings.profiles).map(([mode, profile]) => [mode, { ...profile }]),
       ),
+      vision: { ...unit.attentionSettings.vision },
     },
     initialState: { ...unit.initialState },
     tacticalKnowledge: JSON.parse(JSON.stringify(unit.tacticalKnowledge)),
