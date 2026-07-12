@@ -24,6 +24,7 @@ async function main(): Promise<void> {
   verifyStorageRoundTrip();
   verifySelectedPlayerProfileResolution();
   verifyMapIdentityIsolation();
+  verifyProfileSwitchInvalidatesField();
   verifyHoverAndTextureCounters();
   await verifyRendererBoundary();
   console.log('Navigation overlay contract smoke passed: storage, map identity, typed-array hover, texture counters and renderer/A* separation.');
@@ -67,6 +68,32 @@ function verifyMapIdentityIsolation(): void {
   const diagnostics = getRouteCostFieldDiagnostics(cache);
   assert.equal(diagnostics.staticCostBuildCount, 2);
   assert.equal(diagnostics.dynamicCostBuildCount, 2);
+}
+
+function verifyProfileSwitchInvalidatesField(): void {
+  const registry = createDefaultNavigationProfileRegistry();
+  const cache = createRouteCostFieldCache();
+  const map = normalizeMap(makeMap([{ x: 1, y: 1, terrain: 'field', forest: 1 }]));
+
+  const fastProfile = registry.getProfile('fast');
+  const stealthProfile = registry.getProfile('stealth');
+  assert.equal(fastProfile.revision, stealthProfile.revision, 'built-in profiles share the same base revision');
+
+  const fastFields = getRouteCostFields(map, fastProfile, undefined, cache);
+  const stealthFields = getRouteCostFields(map, stealthProfile, undefined, cache);
+
+  assert.notEqual(fastFields, stealthFields, 'fast and stealth fields must differ despite same profile revision');
+  assert.notEqual(fastFields.cacheKey, stealthFields.cacheKey, 'fast and stealth must produce different cache keys');
+
+  const cellX = 1;
+  const cellY = 1;
+  const fastCell = readRouteCostCell(fastFields, cellX, cellY, cache);
+  const stealthCell = readRouteCostCell(stealthFields, cellX, cellY, cache);
+  assert.ok(fastCell && stealthCell);
+  assert.notEqual(fastCell.terrainCost, stealthCell.terrainCost, 'fast and stealth must have different terrain costs for the same cell');
+
+  const diagnostics = getRouteCostFieldDiagnostics(cache);
+  assert.equal(diagnostics.staticCostBuildCount, 2, 'switching between fast and stealth must rebuild both static fields');
 }
 
 function verifyHoverAndTextureCounters(): void {
