@@ -21,12 +21,14 @@ export function installAttentionProfileControls(
   let activeMode: AttentionMode = 'march';
   let scheduled = false;
 
-  const render = () => {
+  const render = (force = false) => {
     scheduled = false;
     const activeTab = document.querySelector<HTMLButtonElement>('.game-editor-tabs button.active');
     const body = document.querySelector<HTMLElement>('.game-editor-body');
     if (!body || activeTab?.textContent?.trim() !== 'Боец') return;
-    body.querySelector('[data-attention-profile-controls]')?.remove();
+    const existing = body.querySelector<HTMLElement>('[data-attention-profile-controls]');
+    if (existing && !force) return;
+    existing?.remove();
 
     const draft = getGameEditorDrafts(state).unit;
     const profile = draft.attention.profiles[activeMode];
@@ -46,7 +48,7 @@ export function installAttentionProfileControls(
       }),
       selectField('Редактируемый режим', ATTENTION_MODES.map((mode) => [mode, MODE_LABELS[mode]]), activeMode, (mode) => {
         activeMode = mode;
-        render();
+        render(true);
       }),
       profileGrid(profile, activeMode, () => {
         if (activeMode === 'observe') draft.viewAngleDegrees = profile.directAngleDegrees;
@@ -58,7 +60,7 @@ export function installAttentionProfileControls(
           if (!selected) return;
           draft.attention = cloneAttentionSettings(selected.attentionSettings);
           draft.viewAngleDegrees = draft.attention.profiles.observe.directAngleDegrees;
-          render();
+          render(true);
         }),
         actionButton('Применить к выбранному', () => {
           const selected = getSelectedUnit(state);
@@ -68,13 +70,13 @@ export function installAttentionProfileControls(
           selected.viewAngleRadians = degreesToRadians(selected.attentionSettings.profiles.observe.directAngleDegrees);
           state.editor.lastMessage = `Профили внимания применены к бойцу: ${selected.id}`;
           onChanged();
-          render();
+          render(true);
         }, 'primary'),
         actionButton('Сбросить профили', () => {
           resetUnitAttentionDraft(draft);
           activeMode = 'march';
           onChanged();
-          render();
+          render(true);
         }, 'danger'),
       ]),
       selectedSummary(state),
@@ -86,7 +88,7 @@ export function installAttentionProfileControls(
   const scheduleRender = () => {
     if (scheduled) return;
     scheduled = true;
-    window.requestAnimationFrame(render);
+    window.requestAnimationFrame(() => render(false));
   };
   const observer = new MutationObserver(scheduleRender);
   observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
