@@ -10,8 +10,9 @@ import {
   subscribeNavigationProfileRegistry,
 } from '../core/navigation/NavigationProfileStorage';
 
-const graphRoot = document.querySelector<HTMLElement>('#ai-node-editor-root');
-if (!graphRoot) throw new Error('AI node editor root is missing for navigation profile editor.');
+const graphRootElement = document.querySelector<HTMLElement>('#ai-node-editor-root');
+if (!graphRootElement) throw new Error('AI node editor root is missing for navigation profile editor.');
+const graphRoot: HTMLElement = graphRootElement;
 
 type EditorTab = 'graph' | 'blackboard' | 'profiles' | 'diagnostics';
 type NumericPath =
@@ -402,11 +403,11 @@ function getDraftPath(path: string): unknown {
 }
 
 function setDraftPath(path: string, value: unknown): void {
-  const clone = structuredClone(draft) as Record<string, unknown>;
+  const clone = structuredClone(draft) as unknown as Record<string, unknown>;
   const parts = path.split('.');
   let target = clone;
   for (const part of parts.slice(0, -1)) target = target[part] as Record<string, unknown>;
-  target[parts.at(-1)!] = value;
+  target[parts[parts.length - 1]] = value;
   draft = clone as unknown as NavigationProfile;
 }
 

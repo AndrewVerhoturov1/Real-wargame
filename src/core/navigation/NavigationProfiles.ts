@@ -443,9 +443,9 @@ function migrateRegistryData(value: unknown): Partial<NavigationProfileRegistryD
 }
 
 function normalizeProfile(value: Partial<NavigationProfile>, fallback: NavigationProfile): NavigationProfile {
-  const terrain = isRecord(value.terrainCosts) ? value.terrainCosts : {};
-  const territory = isRecord(value.territoryWeights) ? value.territoryWeights : {};
-  const replan = isRecord(value.replanRules) ? value.replanRules : {};
+  const terrain = (isRecord(value.terrainCosts) ? value.terrainCosts : {}) as unknown as Record<string, unknown>;
+  const territory = (isRecord(value.territoryWeights) ? value.territoryWeights : {}) as unknown as Record<string, unknown>;
+  const replan = (isRecord(value.replanRules) ? value.replanRules : {}) as unknown as Record<string, unknown>;
   const id = cleanText(value.id, fallback.id);
   return {
     id,

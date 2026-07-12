@@ -186,10 +186,7 @@ export function findGridPath(
   const rawDetourRatio = baselineDistanceCells > 0 ? tacticalDistanceCells / baselineDistanceCells : 1;
   const maximumDetourRatio = Math.max(1, profile.maximumDetourRatio);
   const detourLimited = baseline.ok && rawDetourRatio > maximumDetourRatio + 1e-9;
-  const selectedSearch = detourLimited ? baseline : tacticalSearch;
-  if (!selectedSearch.ok) {
-    return failure(selectedSearch.code, requestedGoal, selectedSearch.visitedCells, selectedSearch.reason, selectedSearch.reasonRu);
-  }
+  const selectedSearch: SearchSuccess = detourLimited && baseline.ok ? baseline : tacticalSearch;
 
   const selectedDistanceCells = pathDistanceCells(selectedSearch.cells);
   const selectedDetourRatio = baselineDistanceCells > 0 ? selectedDistanceCells / baselineDistanceCells : 1;

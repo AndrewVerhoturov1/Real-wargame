@@ -10,6 +10,7 @@ let nextMapIdentity = 1;
 
 
 
+
 export interface TacticalRouteKnownThreat {
   readonly id: string;
   readonly x: number;
@@ -358,14 +359,13 @@ function resolveTerrainKey(
   if (bridge) return 'bridge';
   if (ditch) return 'ditch';
   if (forest >= 2) return 'denseForest';
-  if (forest >= 1 || terrain === 'forest') return 'sparseForest';
+  if (forest >= 1) return 'sparseForest';
   switch (terrain) {
     case 'road': return 'road';
     case 'rough': return 'rough';
     case 'swamp': return 'swamp';
     case 'field':
     case 'water':
-    case 'forest':
     default: return 'field';
   }
 }
