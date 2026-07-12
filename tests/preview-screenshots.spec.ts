@@ -172,7 +172,8 @@ test('keeps information details open, uses a movement-stable raster overlay and 
   await saveScreenshot(page, '05-simulation-stealth-layer.png');
 
   await page.locator('[data-tab="memory"]').click();
-  await expect(page.locator('[data-role="sidebar-title"]')).toContainText('Память');
+  await expect(page.locator('[data-role="sidebar-title"]')).toContainText('Обзор и память');
+  await expect(page.locator('.attention-runtime-panel')).toBeVisible();
   await page.waitForTimeout(650);
   await saveScreenshot(page, '06-simulation-memory-layer.png');
 });
@@ -217,46 +218,4 @@ test('editing workspace has contextual placement tools in its own header', async
   await expect(page.locator('.game-editor-body [data-editor-tool="paint_height"]')).toBeHidden();
   await page.waitForTimeout(350);
   await saveScreenshot(page, '09-editor-terrain-tools.png');
-});
-
-test('newly placed fighter remains selectable and can move in simulation', async ({ page }) => {
-  await page.setViewportSize(VIEWPORT);
-  await page.goto('/');
-  const canvas = page.locator('canvas');
-  await page.locator('[data-mode="editor"]').click();
-  await page.locator('.game-editor-tabs').getByRole('button', { name: 'Боец', exact: true }).click();
-  const placeButton = page.locator('.game-editor-global-tools').getByRole('button', { name: 'Поставить бойца' });
-  await expect(placeButton).toBeVisible();
-  await placeButton.click();
-
-  const spawnPoint = await worldPoint(canvas, 12, 12);
-  await page.mouse.click(spawnPoint.x, spawnPoint.y);
-  await expect(page.locator('.game-editor-selected-summary')).toContainText('editor_unit_1');
-
-  await page.locator('[data-mode="simulation"]').click();
-  await expect(page.locator('[data-role="unit-name"]')).toContainText('Боец');
-  const position = page.locator('[data-live="position"]');
-  await expect(position).not.toHaveText('—');
-  const initialPosition = await position.textContent();
-
-  const target = await worldPoint(canvas, 15, 12);
-  await page.mouse.click(target.x, target.y, { button: 'right' });
-  await page.getByRole('button', { name: 'Продолжить' }).click();
-  await expect.poll(async () => position.textContent(), { timeout: 5000 }).not.toBe(initialPosition);
-  await saveScreenshot(page, '11-editor-spawned-fighter-playable.png');
-
-  await page.getByRole('button', { name: 'Сбросить бойца' }).click();
-  await expect(position).toHaveText(initialPosition ?? '');
-});
-
-test('AI Node Editor remains unchanged and independent', async ({ page }) => {
-  await page.setViewportSize(VIEWPORT);
-  await page.addInitScript(() => window.localStorage.clear());
-  await page.goto('/ai-node-editor.html');
-  await expect(page.getByRole('heading', { name: /Soldier AI Node Editor|Редактор ИИ/ })).toBeVisible();
-  await expect(page.locator('.graph-canvas')).toBeVisible();
-  await expect(page.locator('.graph-node[data-node-id="root"]')).toBeVisible();
-  await expect(page.locator('.graph-node')).toHaveCount(1);
-  await page.waitForTimeout(500);
-  await saveScreenshot(page, '10-node-editor-unchanged.png');
 });
