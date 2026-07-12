@@ -1,6 +1,6 @@
-import { distance, type GridPosition } from '../../geometry';
-import type { AiGraphEffect } from '../AiGraphRunner';
-import type { AiNodeLifecycle } from '../runtime/AiNodeLifecycle';
+import { distance, type GridPosition } from '../../../geometry';
+import type { AiGraphEffect } from '../../AiGraphRunner';
+import type { AiNodeLifecycle } from '../AiNodeLifecycle';
 
 export interface MoveToBlackboardPositionActionState {
   readonly kind: 'move_to_blackboard_position';
