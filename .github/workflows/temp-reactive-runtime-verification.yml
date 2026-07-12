@@ -29,34 +29,42 @@ jobs:
         run: |
           set -o pipefail
           node scripts/apply_reactive_runtime_core_patch.mjs 2>&1 | tee reactive-core-patch.log
-      - name: Upload reactive core patch log
+      - name: Reactive runtime smoke
+        id: reactive
+        if: steps.patch.conclusion == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run reactive-runtime:smoke 2>&1 | tee reactive-runtime.log
+      - name: Upload reactive logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: reactive-core-patch-log
-          path: reactive-core-patch.log
+          name: reactive-runtime-diagnostic
+          path: |
+            reactive-core-patch.log
+            reactive-runtime.log
           if-no-files-found: error
           retention-days: 3
-      - if: steps.patch.conclusion == 'success'
-        run: npm run reactive-runtime:smoke
-      - if: steps.patch.conclusion == 'success'
+      - if: steps.reactive.conclusion == 'success'
         run: npm run blackboard-observer:smoke
-      - if: steps.patch.conclusion == 'success'
+      - if: steps.reactive.conclusion == 'success'
         run: npm run event-queue:smoke
-      - if: steps.patch.conclusion == 'success'
+      - if: steps.reactive.conclusion == 'success'
         run: npm run runtime-session:smoke
-      - if: steps.patch.conclusion == 'success'
+      - if: steps.reactive.conclusion == 'success'
         run: npm run composite:smoke
-      - if: steps.patch.conclusion == 'success'
+      - if: steps.reactive.conclusion == 'success'
         run: npm run runtime:smoke
-      - if: steps.patch.conclusion == 'success'
+      - if: steps.reactive.conclusion == 'success'
         run: npm run route-status:smoke
-      - if: steps.patch.conclusion == 'success'
+      - if: steps.reactive.conclusion == 'success'
         run: npm run move-bridge:smoke
-      - if: steps.patch.conclusion == 'success'
+      - if: steps.reactive.conclusion == 'success'
         run: npm run build
       - name: Commit verified reactive runtime core
-        if: steps.patch.conclusion == 'success'
+        if: steps.reactive.conclusion == 'success'
         uses: actions/github-script@v7
         with:
           script: |
@@ -87,6 +95,6 @@ jobs:
                 content: fs.readFileSync(path).toString('base64'),
               });
             }
-      - name: Fail when patch failed
-        if: steps.patch.conclusion != 'success'
+      - name: Fail when reactive smoke failed
+        if: steps.reactive.conclusion != 'success'
         run: exit 1
