@@ -11,6 +11,10 @@ export interface RealReliefOverlayRuntimeState {
   active: boolean;
 }
 
+export interface CommandPlanRouteOverlayRuntimeState {
+  active: boolean;
+}
+
 export interface VisibilityProbeRuntimeState {
   active: boolean;
   target: GridPosition | null;
@@ -25,6 +29,7 @@ export interface SimulationLayerRuntimeState {
 interface RuntimeUiState {
   knowledgeOverlay: KnowledgeOverlayRuntimeState;
   realReliefOverlay: RealReliefOverlayRuntimeState;
+  commandPlanRouteOverlay: CommandPlanRouteOverlayRuntimeState;
   visibilityProbe: VisibilityProbeRuntimeState;
   simulationLayer: SimulationLayerRuntimeState;
 }
@@ -47,6 +52,20 @@ export function toggleRealReliefOverlay(state: SimulationState): boolean {
   const overlay = getRuntimeUiState(state).realReliefOverlay;
   overlay.active = !overlay.active;
   return overlay.active;
+}
+
+export function getCommandPlanRouteOverlayState(state: SimulationState): CommandPlanRouteOverlayRuntimeState {
+  return getRuntimeUiState(state).commandPlanRouteOverlay;
+}
+
+export function toggleCommandPlanRouteOverlay(state: SimulationState): boolean {
+  const overlay = getRuntimeUiState(state).commandPlanRouteOverlay;
+  overlay.active = !overlay.active;
+  return overlay.active;
+}
+
+export function setCommandPlanRouteOverlayActive(state: SimulationState, active: boolean): void {
+  getRuntimeUiState(state).commandPlanRouteOverlay.active = active;
 }
 
 export function getVisibilityProbeState(state: SimulationState): VisibilityProbeRuntimeState {
@@ -87,6 +106,7 @@ function getRuntimeUiState(state: SimulationState): RuntimeUiState {
     runtime = {
       knowledgeOverlay: { active: false },
       realReliefOverlay: { active: false },
+      commandPlanRouteOverlay: { active: true },
       visibilityProbe: { active: false, target: null },
       simulationLayer: {
         mode: 'info',
