@@ -4,7 +4,7 @@ import { normalizePressureZones } from '../pressure/PressureZone';
 import { selectUnit, type SimulationState } from '../simulation/SimulationState';
 import { rememberSelectedUnitForTest } from '../testing/AiTestLabRuntime';
 import { normalizeUnits } from '../units/UnitModel';
-import { getGameEditorDrafts, syncLegacyEditorFields } from './GameEditorDrafts';
+import { cloneAttentionSettings, getGameEditorDrafts, syncLegacyEditorFields } from './GameEditorDrafts';
 
 export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: GridPosition): boolean {
   const tool = String(state.editor.tool);
@@ -58,9 +58,10 @@ export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: Gri
       speedCellsPerSecond: draft.speedCellsPerSecond,
       heldItem: draft.heldItem,
       facingDegrees: draft.facingDegrees,
-      viewAngleDegrees: draft.viewAngleDegrees,
+      viewAngleDegrees: draft.attention.profiles.observe.directAngleDegrees,
       viewRangeCells: draft.viewRangeCells,
       behaviorProfile: draft.profile,
+      attention: cloneAttentionSettings(draft.attention),
       soldier: {
         traits: { ...draft.traits },
         condition: { ...draft.condition },

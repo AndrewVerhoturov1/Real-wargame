@@ -1,0 +1,189 @@
+.attention-profile-controls {
+  margin-top: 12px;
+  border: 1px solid rgba(128, 166, 132, 0.3);
+  border-radius: 8px;
+  background: rgba(19, 28, 22, 0.72);
+}
+
+.attention-profile-controls > summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-weight: 700;
+  color: #e7f1df;
+}
+
+.attention-profile-body {
+  display: grid;
+  gap: 10px;
+  padding: 0 12px 12px;
+}
+
+.attention-profile-hint,
+.attention-profile-note,
+.attention-empty {
+  margin: 0;
+  color: #aebcae;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.attention-profile-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.attention-profile-field {
+  grid-template-columns: minmax(0, 1fr) minmax(86px, 108px);
+}
+
+.attention-profile-field > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.attention-profile-grid .attention-profile-note {
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(89, 128, 101, 0.12);
+}
+
+.attention-runtime-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  background: rgba(13, 19, 16, 0.96);
+}
+
+.attention-runtime-panel[hidden] {
+  display: none;
+}
+
+.attention-runtime-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.attention-runtime-header div {
+  display: grid;
+  gap: 3px;
+}
+
+.attention-runtime-header strong {
+  color: #f4e39a;
+}
+
+.attention-runtime-header span {
+  color: #9fb0a1;
+  font-size: 12px;
+}
+
+.attention-runtime-header button {
+  min-width: 30px;
+  padding: 3px 8px;
+}
+
+.attention-runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.attention-runtime-grid > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(119, 155, 129, 0.2);
+  border-radius: 6px;
+  background: rgba(76, 104, 83, 0.1);
+}
+
+.attention-runtime-grid span {
+  color: #9fb0a1;
+  font-size: 11px;
+}
+
+.attention-runtime-grid strong {
+  overflow: hidden;
+  color: #e8efe4;
+  text-overflow: ellipsis;
+}
+
+.attention-runtime-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  color: #ccd8ca;
+  font-size: 12px;
+}
+
+.attention-explanation,
+.attention-contact-list {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(119, 155, 129, 0.2);
+}
+
+.attention-explanation h3,
+.attention-contact-list h3 {
+  margin: 0 0 8px;
+  color: #d8e3d4;
+  font-size: 13px;
+}
+
+.attention-explanation ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  color: #aebcae;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.attention-contact-list {
+  display: grid;
+  gap: 7px;
+}
+
+.attention-contact-card {
+  display: grid;
+  width: 100%;
+  gap: 3px;
+  padding: 8px 9px;
+  text-align: left;
+  border: 1px solid rgba(215, 150, 92, 0.25);
+  background: rgba(117, 74, 46, 0.13);
+}
+
+.attention-contact-card.selected {
+  border-color: rgba(255, 230, 140, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(255, 230, 140, 0.35);
+}
+
+.attention-contact-card strong {
+  color: #f1d399;
+}
+
+.attention-contact-card span {
+  color: #d7dfd4;
+  font-size: 11px;
+}
+
+.attention-contact-card em {
+  color: #9da99b;
+  font-size: 10px;
+  font-style: normal;
+}
+
+@media (max-width: 900px) {
+  .attention-runtime-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,8 +1,6 @@
-import { distance } from '../geometry';
 import { resolvePressureZoneSettings } from '../pressure/PressureZone';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { KnownThreatMemory, UnitModel, UnitTacticalKnowledge } from '../units/UnitModel';
-import { computeLineOfSight } from '../visibility/LineOfSight';
 
 const CONFIDENCE_DECAY_PER_SECOND = 0.55;
 const UNCERTAINTY_GROWTH_METERS_PER_SECOND = 0.12;
@@ -40,35 +38,58 @@ export function syncSoldierThreatMemory(
   const existing = new Map(unit.tacticalKnowledge.threats.map((memory) => [memory.id, memory]));
   let changed = false;
 
-  for (const zone of state.pressureZones) {
-    const settings = resolvePressureZoneSettings(zone);
-    if (!settings.enabled) continue;
+  for (const contact of unit.perceptionKnowledge.contacts) {
+    const zoneId = contact.stimulusId.startsWith('threat:') ? contact.stimulusId.slice('threat:'.length) : null;
+    if (!zoneId) continue;
+    const zone = state.pressureZones.find((candidate) => candidate.id === zoneId);
+    if (!zone) continue;
 
-    const source = { x: zone.x, y: zone.y };
-    const distanceCells = distance(unit.position, source);
-    const sight = computeLineOfSight(state.map, unit, source);
-    const visibleNow = settings.sourceVisible
-      && distanceCells <= unit.viewRangeCells
-      && !sight.blocked;
-    const sensedNow = visibleNow || settings.sourceKnown || isUnitAffectedByZone(unit, zone);
-    if (!sensedNow) continue;
-
-    const baseConfidence = visibleNow
-      ? 100
-      : Math.max(15, Math.min(95, zone.knowledgeConfidence ?? Math.max(zone.strength, settings.suppression)));
-    const uncertaintyCells = visibleNow
-      ? metersToCells(state, 1.5)
-      : Math.max(metersToCells(state, 4), zone.uncertaintyCells ?? metersToCells(state, 15));
-    const sourceKind: KnownThreatMemory['source'] = visibleNow
+    const confidenceCap = contact.stage === 'cue' || contact.stage === 'suspicion'
+      ? 49
+      : contact.stage === 'contact'
+        ? 69
+        : 100;
+    const confidence = Math.min(confidenceCap, Math.max(4, contact.confidence));
+    const visibleNow = (contact.stage === 'identified' || contact.stage === 'confirmed') && contact.visibleNow;
+    const source: KnownThreatMemory['source'] = contact.source === 'visual'
       ? 'seen'
-      : settings.sourceKnown
-        ? 'reported'
-        : 'fire_pressure';
-    const next = buildKnownThreat(zone, baseConfidence, uncertaintyCells, sourceKind, now, visibleNow);
+      : contact.source === 'sound'
+        ? 'heard'
+        : contact.source;
+    const next = buildKnownThreat(
+      zone,
+      confidence,
+      Math.max(contact.uncertaintyCells, visibleNow ? metersToCells(state, 1.5) : metersToCells(state, 4)),
+      source,
+      now,
+      visibleNow,
+      contact.lastKnownPosition.x,
+      contact.lastKnownPosition.y,
+    );
     const previous = existing.get(zone.id);
-
     if (!previous || threatChanged(previous, next)) changed = true;
     existing.set(zone.id, next);
+  }
+
+  for (const zone of state.pressureZones) {
+    const settings = resolvePressureZoneSettings(zone);
+    if (!settings.enabled || !isUnitAffectedByZone(unit, zone)) continue;
+    if (existing.has(zone.id)) continue;
+
+    const uncertaintyCells = Math.max(metersToCells(state, 15), zone.uncertaintyCells ?? 0);
+    const confidence = Math.max(15, Math.min(45, Math.max(zone.strength, settings.suppression) * 0.55));
+    const estimatedPosition = estimatePressureSource(unit, zone, uncertaintyCells);
+    existing.set(zone.id, buildKnownThreat(
+      zone,
+      confidence,
+      uncertaintyCells,
+      'fire_pressure',
+      now,
+      false,
+      estimatedPosition.x,
+      estimatedPosition.y,
+    ));
+    changed = true;
   }
 
   const nextThreats: KnownThreatMemory[] = [];
@@ -114,14 +135,16 @@ function buildKnownThreat(
   source: KnownThreatMemory['source'],
   now: number,
   visibleNow: boolean,
+  x = zone.x,
+  y = zone.y,
 ): KnownThreatMemory {
   const settings = resolvePressureZoneSettings(zone);
   return {
     id: zone.id,
     labelRu: zone.labels.ru,
     mode: settings.mode,
-    x: zone.x,
-    y: zone.y,
+    x,
+    y,
     radiusCells: zone.radiusCells,
     widthCells: zone.widthCells,
     heightCells: zone.heightCells,
@@ -140,6 +163,23 @@ function buildKnownThreat(
     visibleNow,
     lastSeenSeconds: visibleNow ? now : -1,
     lastUpdatedSeconds: now,
+  };
+}
+
+function estimatePressureSource(
+  unit: UnitModel,
+  zone: SimulationState['pressureZones'][number],
+  uncertaintyCells: number,
+): { x: number; y: number } {
+  const dx = zone.x - unit.position.x;
+  const dy = zone.y - unit.position.y;
+  const length = Math.max(0.001, Math.hypot(dx, dy));
+  const deterministicOffset = ((hashString(`${unit.id}:${zone.id}`) % 2001) / 1000 - 1) * uncertaintyCells * 0.45;
+  const perpendicularX = -dy / length;
+  const perpendicularY = dx / length;
+  return {
+    x: zone.x + perpendicularX * deterministicOffset,
+    y: zone.y + perpendicularY * deterministicOffset,
   };
 }
 
@@ -197,8 +237,8 @@ function threatRevisionFingerprint(memory: KnownThreatMemory): Record<string, un
     id: memory.id,
     labelRu: memory.labelRu,
     mode: memory.mode,
-    x: memory.x,
-    y: memory.y,
+    x: Math.round(memory.x * 10) / 10,
+    y: Math.round(memory.y * 10) / 10,
     radiusCells: memory.radiusCells,
     widthCells: memory.widthCells,
     heightCells: memory.heightCells,
@@ -220,6 +260,15 @@ function threatRevisionFingerprint(memory: KnownThreatMemory): Record<string, un
 
 function metersToCells(state: SimulationState, meters: number): number {
   return meters / Math.max(0.001, state.map.metersPerCell);
+}
+
+function hashString(value: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }
 
 function angularDifference(left: number, right: number): number {

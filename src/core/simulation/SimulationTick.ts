@@ -6,6 +6,7 @@ import { clampGridPositionToMap } from '../map/MapModel';
 import { ensureNavigationRouteCurrent } from '../navigation/NavigationRouteReplanner';
 import type { MoveOrder } from '../orders/MoveOrder';
 import { updatePlayerCommandStatus } from '../orders/PlayerCommand';
+import { tickSelectedSoldierPerception } from '../perception/PerceptionSystem';
 import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
 import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
@@ -23,8 +24,13 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
 
   for (const unit of state.units) {
     updateMetrics(unit, state, scaledDeltaSeconds);
-    syncSoldierThreatMemory(state, unit, scaledDeltaSeconds);
     updateStateLabels(unit);
+  }
+
+  tickSelectedSoldierPerception(state, scaledDeltaSeconds);
+
+  for (const unit of state.units) {
+    syncSoldierThreatMemory(state, unit, scaledDeltaSeconds);
     moveUnit(unit, state, scaledDeltaSeconds);
   }
 

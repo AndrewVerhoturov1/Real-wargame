@@ -83,6 +83,7 @@ function collectNodes(nodesValue: unknown, issues: AiGraphValidationIssue[]): Ma
     validateNodeType(nodeValue, issues, id);
     validateNodeChildrenShape(nodeValue, issues, id);
     validateNodeParameters(nodeValue.parameters, issues, id);
+    validateKnownNodeParameters(nodeValue, issues, id);
 
     if (nodeValue.type === 'Root') {
       rootNodeIds.push(id);
@@ -179,6 +180,24 @@ function validateNodeParameters(parametersValue: unknown, issues: AiGraphValidat
 
     if (!isSupportedValue(value)) {
       issues.push(errorIssue('PARAMETER_VALUE_UNSUPPORTED', `Node ${nodeId} parameter ${key} has an unsupported value. Allowed: string, number, boolean, null, and position {x,y}.`, `У ноды ${nodeId} параметр ${key} имеет неподдерживаемое значение. Разрешены строки, числа, boolean, null и позиция {x,y}.`, nodeId));
+    }
+  }
+}
+
+function validateKnownNodeParameters(node: UnknownRecord, issues: AiGraphValidationIssue[], nodeId: string): void {
+  const parameters = isRecord(node.parameters) ? node.parameters : {};
+  if (node.type === 'SetAttentionMode') {
+    const mode = parameters.mode;
+    if (mode !== 'march' && mode !== 'observe' && mode !== 'search' && mode !== 'engage') {
+      issues.push(errorIssue('ATTENTION_MODE_INVALID', `Node ${nodeId} must use march, observe, search, or engage.`, `Нода ${nodeId} должна использовать режим march, observe, search или engage.`, nodeId));
+    }
+  }
+  if (node.type === 'SetSearchSector') {
+    if (typeof parameters.centerDegrees !== 'number' || !Number.isFinite(parameters.centerDegrees)) {
+      issues.push(errorIssue('SEARCH_CENTER_INVALID', `Node ${nodeId} must have numeric centerDegrees.`, `У ноды ${nodeId} должен быть числовой centerDegrees.`, nodeId));
+    }
+    if (typeof parameters.arcDegrees !== 'number' || parameters.arcDegrees < 1 || parameters.arcDegrees > 360) {
+      issues.push(errorIssue('SEARCH_ARC_INVALID', `Node ${nodeId} arcDegrees must be from 1 to 360.`, `У ноды ${nodeId} arcDegrees должен быть от 1 до 360.`, nodeId));
     }
   }
 }

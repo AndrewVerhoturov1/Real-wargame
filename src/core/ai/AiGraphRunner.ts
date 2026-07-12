@@ -25,6 +25,24 @@ export type AiGraphEffect =
       readonly reasonRu?: string;
     }
   | {
+      readonly type: 'set_attention_mode';
+      readonly mode: 'march' | 'observe' | 'search' | 'engage';
+      readonly reason: string;
+      readonly reasonRu?: string;
+    }
+  | {
+      readonly type: 'set_search_sector';
+      readonly centerDegrees: number;
+      readonly arcDegrees: number;
+      readonly reason: string;
+      readonly reasonRu?: string;
+    }
+  | {
+      readonly type: 'clear_attention_override';
+      readonly reason: string;
+      readonly reasonRu?: string;
+    }
+  | {
       readonly type: 'say_message';
       readonly message: string;
       readonly messageRu?: string;
@@ -423,6 +441,37 @@ function executeNodeOwnLogic(context: ExecutionContext, node: AiNode): boolean {
         mode: readString(parameters.mode, 'careful'),
         reason: `AI graph movement mode: ${readString(parameters.mode, 'careful')}.`,
         reasonRu: `AI-граф выбрал режим движения: ${readString(parameters.mode, 'careful')}.`,
+      });
+      return true;
+    case 'SetAttentionMode': {
+      const rawMode = readString(parameters.mode, 'observe');
+      const mode = rawMode === 'march' || rawMode === 'search' || rawMode === 'engage' ? rawMode : 'observe';
+      context.effects.push({
+        type: 'set_attention_mode',
+        mode,
+        reason: readString(parameters.reason, `AI graph attention mode: ${mode}.`),
+        reasonRu: readOptionalString(parameters.reasonRu) ?? `AI-граф выбрал режим внимания: ${mode}.`,
+      });
+      return true;
+    }
+    case 'SetSearchSector': {
+      const rawCenter = readNumber(parameters.centerDegrees, 0);
+      const centerDegrees = ((rawCenter % 360) + 360) % 360;
+      const arcDegrees = clampNumber(readNumber(parameters.arcDegrees, 120), 1, 360);
+      context.effects.push({
+        type: 'set_search_sector',
+        centerDegrees,
+        arcDegrees,
+        reason: readString(parameters.reason, 'AI graph selected a search sector.'),
+        reasonRu: readOptionalString(parameters.reasonRu) ?? 'AI-граф задал сектор поиска.',
+      });
+      return true;
+    }
+    case 'ClearAttentionOverride':
+      context.effects.push({
+        type: 'clear_attention_override',
+        reason: readString(parameters.reason, 'AI graph returned attention to automatic control.'),
+        reasonRu: readOptionalString(parameters.reasonRu) ?? 'AI-граф вернул автоматическое управление вниманием.',
       });
       return true;
     case 'SayMessage':
