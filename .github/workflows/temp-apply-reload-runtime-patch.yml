@@ -29,13 +29,34 @@ jobs:
 
       - run: npm ci
       - run: node scripts/apply_reload_runtime_patch.mjs
+
+      - name: TypeScript build diagnostics
+        id: build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee reload-build.log
+
+      - name: Show compiler errors
+        if: steps.build.outcome != 'success'
+        shell: bash
+        run: |
+          echo '=== TypeScript compiler errors ==='
+          grep -n -A 3 -B 2 'error TS' reload-build.log || tail -n 120 reload-build.log
+          exit 1
+
       - run: npm run lifecycle:smoke
+        if: steps.build.outcome == 'success'
       - run: npm run runtime:smoke
+        if: steps.build.outcome == 'success'
       - run: npm run runtime-session:smoke
+        if: steps.build.outcome == 'success'
       - run: npm run move-bridge:smoke
-      - run: npm run build
+        if: steps.build.outcome == 'success'
 
       - name: Commit patch when needed
+        if: steps.build.outcome == 'success'
         shell: bash
         run: |
           if git diff --quiet; then
