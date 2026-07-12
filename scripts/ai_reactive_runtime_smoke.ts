@@ -36,6 +36,7 @@ const graph: AiGraph = {
       displayNameRu: 'Реактивное движение',
       parameters: {
         observePrecedingConditions: true,
+        abortPolicy: 'abort_self',
         abortReason: 'Movement condition changed.',
         abortReasonRu: 'Условие движения изменилось.',
       },
