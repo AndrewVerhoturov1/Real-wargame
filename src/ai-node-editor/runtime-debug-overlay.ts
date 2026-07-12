@@ -4,6 +4,7 @@ const STALE_AFTER_MS = 10000;
 
 type TraceStatus = 'pass' | 'fail' | 'skip' | 'select' | 'veto' | 'running' | 'waiting' | 'complete' | 'cancelled';
 type RuntimeStatus = 'success' | 'failure' | 'running' | 'waiting' | 'cancelled';
+type ActiveVisualStatus = 'running' | 'waiting' | 'cancelled' | 'fail' | 'complete';
 
 interface RuntimeTraceItem {
   readonly nodeId: string;
@@ -157,9 +158,9 @@ function buildNodeDebugMap(payload: RuntimeDebugPayload): Map<string, NodeDebugS
 
   if (payload.activeNodeId) {
     const active = ensure(payload.activeNodeId);
-    const activeStatus = payload.status === 'waiting' ? 'waiting' : payload.status === 'cancelled' ? 'cancelled' : 'running';
+    const activeStatus = activeVisualStatus(payload.status);
     active.classes.add(`runtime-debug-${activeStatus}`);
-    active.labels.unshift(activeStatus === 'waiting' ? 'Ожидает' : activeStatus === 'cancelled' ? 'Отменена' : 'Выполняется');
+    active.labels.unshift(activeStatusLabel(activeStatus));
     if (typeof payload.elapsedMs === 'number') active.labels.push(formatElapsed(payload.elapsedMs));
   }
 
@@ -195,7 +196,7 @@ function renderDebugPanel(payload: RuntimeDebugPayload | null): void {
   const status = payload.status ?? (payload.ok ? 'success' : 'failure');
   const activeNode = payload.activeNodeNameRu ?? payload.activeNodeName;
   const activeRows = activeNode
-    ? `<div><dt>Активная нода</dt><dd>${escapeHtml(activeNode)}</dd></div>${typeof payload.elapsedMs === 'number' ? `<div><dt>Выполняется</dt><dd>${escapeHtml(formatElapsed(payload.elapsedMs))}</dd></div>` : ''}`
+    ? `<div><dt>Активная нода</dt><dd>${escapeHtml(activeNode)}</dd></div>${typeof payload.elapsedMs === 'number' ? `<div><dt>${escapeHtml(elapsedLabel(status))}</dt><dd>${escapeHtml(formatElapsed(payload.elapsedMs))}</dd></div>` : ''}`
     : '';
   const cancellation = payload.cancellationReasonRu ?? payload.cancellationReason;
   const cancellationRow = cancellation ? `<div><dt>Причина отмены</dt><dd>${escapeHtml(cancellation)}</dd></div>` : '';
@@ -292,6 +293,30 @@ function isBranchScore(value: unknown): value is RuntimeBranchScore {
 
 function isRuntimeStatus(value: unknown): value is RuntimeStatus {
   return ['success', 'failure', 'running', 'waiting', 'cancelled'].includes(String(value));
+}
+
+function activeVisualStatus(status: RuntimeStatus | undefined): ActiveVisualStatus {
+  if (status === 'waiting') return 'waiting';
+  if (status === 'cancelled') return 'cancelled';
+  if (status === 'failure') return 'fail';
+  if (status === 'success') return 'complete';
+  return 'running';
+}
+
+function activeStatusLabel(status: ActiveVisualStatus): string {
+  if (status === 'waiting') return 'Ожидает';
+  if (status === 'cancelled') return 'Отменена';
+  if (status === 'fail') return 'Провал';
+  if (status === 'complete') return 'Завершена';
+  return 'Выполняется';
+}
+
+function elapsedLabel(status: RuntimeStatus): string {
+  if (status === 'failure') return 'До провала';
+  if (status === 'success') return 'Завершено за';
+  if (status === 'cancelled') return 'До отмены';
+  if (status === 'waiting') return 'Ожидает уже';
+  return 'Выполняется';
 }
 
 function statusLabel(status: TraceStatus): string {
