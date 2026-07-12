@@ -8,6 +8,11 @@ import {
   type AiGraphRunnerResult,
   type AiGraphTraceItem,
 } from './AiGraphRunner';
+import {
+  runAiCompositeGraphRuntime,
+  shouldUseCompositeGraphRuntime,
+} from './runtime/AiCompositeGraphRuntime';
+import type { AiCompositeFrame } from './runtime/AiCompositeRuntime';
 import { DEFAULT_AI_ACTION_REGISTRY } from './runtime/AiDefaultActionRegistry';
 import {
   runAiActionLifecycle,
@@ -43,6 +48,7 @@ export interface AiGraphExecutionState {
   readonly lastUpdatedAtMs: number;
   readonly status: 'running' | 'waiting';
   readonly activeData?: AiGraphExecutionData;
+  readonly frames?: readonly AiCompositeFrame[];
 }
 
 export interface AiGraphLifecycleEvent {
@@ -159,6 +165,9 @@ export function readAiGraphRuntimeMoveEffect(effect: AiGraphEffect): AiGraphRunt
 }
 
 export function runAiGraphRuntime(input: AiGraphRuntimeInput): AiGraphRuntimeResult {
+  if (shouldUseCompositeGraphRuntime(input.graph, input.executionState)) {
+    return runAiCompositeGraphRuntime(input);
+  }
   const nodes = new Map(input.graph.nodes.map((node) => [node.id, node]));
 
   if (input.executionState) {
