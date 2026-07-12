@@ -73,7 +73,10 @@ export function buildAiRuntimeSceneSnapshot(
   routeStatus: AiRouteStatusState | null | undefined,
 ): AiRuntimeSceneSnapshotV1 | undefined {
   if (!session) return undefined;
-  const activeOrder = isAiOwnedOrder(order) ? serializeMoveOrder(order) : undefined;
+  const activeOwnerToken = readActiveMoveOwnerToken(session);
+  const activeOrder = activeOwnerToken && isAiOwnedOrder(order) && order.ownerToken === activeOwnerToken
+    ? serializeMoveOrder(order)
+    : undefined;
   const compatibleRouteStatus = activeOrder?.ownerToken
     && routeStatus?.ownerToken === activeOrder.ownerToken
     ? cloneRouteStatus(routeStatus)
@@ -133,6 +136,12 @@ export function normalizeAiRuntimeSceneSnapshot(
     && activeOrder.source === 'ai'
     && typeof activeOrder.ownerToken === 'string'
     && (!activeOwnerToken || activeOrder.ownerToken === activeOwnerToken);
+  if (activeOwnerToken && !hasCompatibleOrder) {
+    return resetResult(
+      'Active movement runtime has no matching owned order.',
+      'Runtime сброшен: у активного движения нет подходящего собственного приказа ИИ.',
+    );
+  }
   const restoredOrder = hasCompatibleOrder ? activeOrder : undefined;
   const routeStatus = restoredOrder?.ownerToken
     ? normalizeRouteStatus(value.routeStatus, restoredOrder.ownerToken)
