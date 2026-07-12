@@ -1,0 +1,47 @@
+name: Navigation Profiles Core
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+  workflow_dispatch:
+
+jobs:
+  navigation-profiles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Navigation profiles smoke
+        run: npm run navigation-profiles:smoke
+
+      - name: Grid pathfinding regression
+        run: npm run pathfinding:smoke
+
+      - name: Routed movement regression
+        run: npm run routed-move:smoke
+
+      - name: Stateful movement bridge regression
+        run: npm run move-bridge:smoke
+
+      - name: Command plan route regression
+        run: npm run command-plan-route:smoke
+
+      - name: Production build
+        run: npm run build
+
+      - name: Documentation check
+        run: npm run docs:check
