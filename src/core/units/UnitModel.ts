@@ -1,4 +1,5 @@
 import type { UnitPlanState } from '../ai/UnitPlan';
+import { initializeSimulationAiEventFacts } from '../ai/events/SimulationAiEvents';
 import {
   normalizeAiRuntimeSceneSnapshot,
   restoreMoveOrder,
@@ -161,6 +162,7 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
     };
     applyInitialStateToRuntime(model);
     restoreAiRuntimeSnapshot(model, unit.runtime?.aiRuntime);
+    initializeSimulationAiEventFacts(model);
     return model;
   });
 }
@@ -207,6 +209,7 @@ export function applyInitialStateToRuntime(unit: UnitModel): void {
   unit.behaviorRuntime.aiNodeCooldowns = {};
   unit.behaviorRuntime.aiRuntimeSession = null;
   unit.behaviorRuntime.aiRouteStatusState = null;
+  unit.behaviorRuntime.aiSimulationEventFacts = null;
   unit.soldier.condition.fatigue = initial.fatigue;
   unit.soldier.condition.morale = initial.morale;
   unit.soldier.condition.confusion = initial.confusion;
