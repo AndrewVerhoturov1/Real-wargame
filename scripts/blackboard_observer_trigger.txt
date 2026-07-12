@@ -1,1 +1,1 @@
-Temporary trigger for Blackboard observer integration diagnostic log. Remove after final green run.
+Temporary trigger for clean Blackboard observer integration checks. Remove after final green run.
