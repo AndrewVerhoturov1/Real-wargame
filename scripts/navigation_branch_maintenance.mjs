@@ -50,11 +50,12 @@ for (const target of replacements) {
   const original = await readFile(target.path, 'utf8');
   let updated = original;
   for (const [before, after] of target.edits) {
-    if (updated.includes(after)) continue;
-    if (!updated.includes(before)) {
-      throw new Error(`Expected maintenance pattern was not found in ${target.path}: ${before.slice(0, 120)}`);
+    if (updated.includes(before)) {
+      updated = updated.replaceAll(before, after);
+      continue;
     }
-    updated = updated.replaceAll(before, after);
+    if (updated.includes(after)) continue;
+    throw new Error(`Expected maintenance pattern was not found in ${target.path}: ${before.slice(0, 120)}`);
   }
   if (updated !== original) {
     await writeFile(target.path, updated, 'utf8');
