@@ -40,7 +40,6 @@ interface RouteSettingsCache {
 type AiMoveRuntime = UnitModel['behaviorRuntime'] & {
   aiGraphMemory?: Record<string, AiBlackboardValue>;
   aiGraphExecutionState?: AiGraphExecutionState;
-  aiRouteStatusState?: AiRouteStatusState;
   aiRouteSettingsCache?: RouteSettingsCache;
 };
 
@@ -159,7 +158,7 @@ export function updateSelectedRouteStatus(
     targetAvailable: isGridPosition(memory[activeMove.targetKey]),
     paused: state.editor.enabled || getAiTestPaused(state),
     settings: readRouteSettings(runtime, activeMove),
-    previousState: runtime.aiRouteStatusState,
+    previousState: runtime.aiRouteStatusState ?? undefined,
   });
 
   runtime.aiRouteStatusState = routeResult.state;
@@ -178,6 +177,7 @@ export function applyOwnedMoveEffects(state: SimulationState, result: AiGraphRun
     if (!effect) continue;
 
     if (effect.type === 'begin_move') {
+      runtime.aiRouteStatusState = null;
       const planned = planMoveOrder(state.map, unit.position, effect.targetPosition, {
         source: 'ai',
         ownerToken: effect.ownerToken,
@@ -202,6 +202,7 @@ export function applyOwnedMoveEffects(state: SimulationState, result: AiGraphRun
 
     if (unit.order?.ownerToken === effect.ownerToken) {
       unit.order = null;
+      runtime.aiRouteStatusState = null;
       if (!hasLaterNonMoveEffect(result, index)) {
         unit.behaviorRuntime.currentAction = 'observe';
         unit.behaviorRuntime.reason = effect.reasonRu ?? effect.reason;
