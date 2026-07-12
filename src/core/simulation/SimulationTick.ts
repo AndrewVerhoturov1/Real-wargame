@@ -1,4 +1,5 @@
 import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
+import { publishSimulationAiEvents } from '../ai/events/SimulationAiEvents';
 import { clampPercent, POSTURE_MOVE_MULTIPLIER } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import { syncSoldierThreatMemory } from '../knowledge/SoldierThreatMemory';
@@ -28,6 +29,11 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
     syncSoldierThreatMemory(state, unit, scaledDeltaSeconds);
     updateStateLabels(unit);
     moveUnit(unit, state, scaledDeltaSeconds);
+    publishSimulationAiEvents(
+      unit,
+      unit.behaviorRuntime.aiRuntimeSession?.simulationTimeMs
+        ?? Math.max(0, Math.round(state.simulationTimeSeconds * 1000)),
+    );
   }
 
   resolveUnitCollisions(state);
