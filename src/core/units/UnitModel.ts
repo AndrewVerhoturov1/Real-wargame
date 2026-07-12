@@ -104,6 +104,7 @@ export interface UnitModel {
   initialState: UnitInitialState;
   tacticalKnowledge: UnitTacticalKnowledge;
   unitRoleNavigationProfileId?: string | null;
+  playerNavigationProfileId?: string | null;
   navigationMovementMode?: NavigationMovementMode | null;
   activeNavigationProfileId?: string;
   activeNavigationProfileSource?: NavigationProfileSource;
@@ -159,6 +160,7 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
         ? normalizeTacticalKnowledge(unit.tacticalKnowledge, scale)
         : createEmptyTacticalKnowledge(),
       unitRoleNavigationProfileId: unit.navigationProfileId ?? null,
+      playerNavigationProfileId: initialNavigationProfile,
       navigationMovementMode: unit.navigationMovementMode ?? null,
       activeNavigationProfileId: initialNavigationProfile,
       activeNavigationProfileSource: unit.navigationProfileId ? 'unitRole' : 'default',
