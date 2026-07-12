@@ -16,6 +16,7 @@ export function resolveUnitNavigationProfile(
     debugOverrideProfileId: readNavigationProfileDebugOverride(),
     playerCommandProfileId: command?.navigationProfileId,
     playerCommandMode: command?.movementMode,
+    selectedPlayerProfileId: unit.playerNavigationProfileId,
     behaviorMovementMode: unit.navigationMovementMode,
     unitRoleProfileId: defaultProfileForUnitRole(unit),
   });

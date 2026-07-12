@@ -7,6 +7,7 @@ import {
 export type NavigationProfileSource =
   | 'debugOverride'
   | 'playerCommand'
+  | 'playerSelection'
   | 'behaviorMode'
   | 'unitRole'
   | 'default';
@@ -15,6 +16,7 @@ export interface NavigationProfileResolutionInput {
   readonly debugOverrideProfileId?: string | null;
   readonly playerCommandProfileId?: string | null;
   readonly playerCommandMode?: NavigationMovementMode | string | null;
+  readonly selectedPlayerProfileId?: string | null;
   readonly behaviorMovementMode?: NavigationMovementMode | string | null;
   readonly unitRoleProfileId?: string | null;
 }
@@ -33,6 +35,7 @@ export function resolveActiveNavigationProfile(
     [input.debugOverrideProfileId, 'debugOverride'],
     [input.playerCommandProfileId, 'playerCommand'],
     [input.playerCommandMode, 'playerCommand'],
+    [input.selectedPlayerProfileId, 'playerSelection'],
     [input.behaviorMovementMode, 'behaviorMode'],
     [input.unitRoleProfileId, 'unitRole'],
     ['normal', 'default'],

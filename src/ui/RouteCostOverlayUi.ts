@@ -124,6 +124,7 @@ function sourceLabel(source: string): string {
   return ({
     debugOverride: 'диагностика',
     playerCommand: 'приказ игрока',
+    playerSelection: 'выбор игрока',
     behaviorMode: 'режим ИИ',
     unitRole: 'роль бойца',
     default: 'по умолчанию',

@@ -67,9 +67,11 @@ expectContains(playerCommand, 'updatePlayerCommandNavigationProfile', 'Player co
 
 const resolver = read('src/core/navigation/NavigationProfileResolver.ts');
 expectContains(resolver, 'playerCommandProfileId', 'The resolver must accept an exact player command profile ID.');
+expectContains(resolver, 'selectedPlayerProfileId', 'The resolver must accept the profile selected in the game UI.');
 
 const runtime = read('src/core/navigation/NavigationRuntime.ts');
 expectContains(runtime, 'playerCommandProfileId: command?.navigationProfileId', 'Runtime resolution must pass the exact command profile ID.');
+expectContains(runtime, 'selectedPlayerProfileId: unit.playerNavigationProfileId', 'Runtime resolution must pass the profile selected in the game UI.');
 
 const routedOrders = read('src/core/orders/RoutedMoveOrders.ts');
 expectContains(routedOrders, 'unit.playerNavigationProfileId', 'New player movement commands must use the profile selected in the game.');

@@ -16,21 +16,22 @@ import type { SimulationState } from '../core/simulation/SimulationState';
 import type { UnitModel } from '../core/units/UnitModel';
 
 const RASTER_PIXELS_PER_CELL = 4;
+const ROUTE_TEXT_RESOLUTION = Math.max(2, Math.min(4, window.devicePixelRatio * 2));
 const TOOLTIP_STYLE = new TextStyle({
   fontFamily: 'Arial, sans-serif',
-  fontSize: 12,
+  fontSize: 8,
   fill: 0xf4f7ee,
   stroke: 0x101510,
-  strokeThickness: 4,
+  strokeThickness: 2,
   lineJoin: 'round',
 });
 const LEGEND_STYLE = new TextStyle({
   fontFamily: 'Arial, sans-serif',
-  fontSize: 12,
+  fontSize: 8,
   fontWeight: '700',
   fill: 0xffffff,
   stroke: 0x111510,
-  strokeThickness: 4,
+  strokeThickness: 2,
   lineJoin: 'round',
 });
 
@@ -82,6 +83,8 @@ export class PixiRouteCostOverlayRenderer {
     this.container.eventMode = 'none';
     this.container.interactiveChildren = false;
     this.container.visible = false;
+    this.legend.resolution = ROUTE_TEXT_RESOLUTION;
+    this.tooltip.resolution = ROUTE_TEXT_RESOLUTION;
     this.legend.position.set(8, 34);
     this.tooltip.visible = false;
   }

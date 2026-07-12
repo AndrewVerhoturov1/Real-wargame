@@ -4,6 +4,7 @@ import { normalizeMap, type TacticalMapData } from '../src/core/map/MapModel';
 import {
   createDefaultNavigationProfileRegistry,
 } from '../src/core/navigation/NavigationProfiles';
+import { resolveActiveNavigationProfile } from '../src/core/navigation/NavigationProfileResolver';
 import {
   loadNavigationProfileRegistry,
   NAVIGATION_PROFILE_STORAGE_KEY,
@@ -21,10 +22,22 @@ void main();
 
 async function main(): Promise<void> {
   verifyStorageRoundTrip();
+  verifySelectedPlayerProfileResolution();
   verifyMapIdentityIsolation();
   verifyHoverAndTextureCounters();
   await verifyRendererBoundary();
   console.log('Navigation overlay contract smoke passed: storage, map identity, typed-array hover, texture counters and renderer/A* separation.');
+}
+
+function verifySelectedPlayerProfileResolution(): void {
+  const registry = createDefaultNavigationProfileRegistry();
+  const resolved = resolveActiveNavigationProfile(registry, {
+    selectedPlayerProfileId: 'stealth',
+    behaviorMovementMode: 'cautious',
+    unitRoleProfileId: 'cautious',
+  });
+  assert.equal(resolved.profileId, 'stealth');
+  assert.equal(resolved.source, 'playerSelection');
 }
 
 function verifyStorageRoundTrip(): void {
@@ -81,6 +94,10 @@ async function verifyRendererBoundary(): Promise<void> {
   const source = await readFile('src/rendering/PixiRouteCostOverlayRenderer.ts', 'utf8');
   assert.doesNotMatch(source, /GridPathfinder|findGridPath|runAStar/, 'renderer must not import or start A*');
   assert.match(source, /representation: 'two-raster-sprites'/);
+  assert.match(source, /fontSize: 8/);
+  assert.match(source, /strokeThickness: 2/);
+  assert.match(source, /this\.legend\.resolution = ROUTE_TEXT_RESOLUTION/);
+  assert.match(source, /this\.tooltip\.resolution = ROUTE_TEXT_RESOLUTION/);
   assert.match(source, /this\.container\.visible = false/);
   assert.match(source, /if \(!overlay\.active[\s\S]*this\.container\.visible = false[\s\S]*return;/);
   assert.doesNotMatch(
