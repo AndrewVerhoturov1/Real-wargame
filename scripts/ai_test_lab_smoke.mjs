@@ -15,6 +15,7 @@ function expectIncludes(relativePath, snippets) {
 
 expectIncludes('src/core/units/UnitModel.ts', [
   'speedCellsPerSecond ?? 0.5',
+  'sourceToRuntimeCellScale',
   'initialState: UnitInitialState',
   'tacticalKnowledge: UnitTacticalKnowledge',
   'applyInitialStateToRuntime',
@@ -29,6 +30,7 @@ expectIncludes('src/core/behavior/BehaviorModel.ts', [
 ]);
 expectIncludes('src/core/pressure/PressureZone.ts', [
   "export type PressureZoneMode = 'area' | 'directional_fire'",
+  'sourceToRuntimeCellScale',
   'directionDegrees',
   'arcDegrees',
   'rangeCells',
@@ -44,11 +46,18 @@ expectIncludes('src/core/pressure/ThreatEvaluation.ts', [
   'expectedProtection',
 ]);
 expectIncludes('src/core/map/MapModel.ts', [
+  'runtimeMetersPerCell',
+  'sourceToRuntimeCellScale',
   'coverProtection',
   'coverReliability',
   'concealment',
   'penetrable',
   'coverPosture',
+]);
+expectIncludes('src/core/simulation/ResolutionAwareScene.ts', [
+  'DEFAULT_RUNTIME_METERS_PER_CELL = 2',
+  'createResolutionAwareInitialState',
+  'replaceSceneAtRuntimeResolution',
 ]);
 expectIncludes('src/core/cover/CoverEvaluation.ts', [
   'findBestCoverForThreat',
@@ -63,12 +72,14 @@ expectIncludes('src/core/cover/SmallArmsCoverEvaluation.ts', [
 expectIncludes('src/core/knowledge/SoldierThreatMemory.ts', [
   'KnownThreatMemory',
   'syncSoldierThreatMemory',
+  'UNCERTAINTY_GROWTH_METERS_PER_SECOND',
   'confidence',
   'uncertaintyCells',
 ]);
 expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
   'SoldierAwarenessMode',
   'buildSoldierAwarenessReport',
+  'SAFE_SEARCH_RADIUS_METERS',
   'bestSafePositions',
   'routeDanger',
   "'stealth'",
@@ -171,7 +182,8 @@ expectIncludes('src/core/simulation/SimulationTick.ts', [
   'syncSoldierThreatMemory',
 ]);
 expectIncludes('src/ui/SceneExport.ts', [
-  'scene-export-v4',
+  'scene-export-v5-2m-grid',
+  'replaceSceneAtRuntimeResolution',
   'coverReliability',
   'directionDegrees',
   'initialState',
