@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
+import { SOLDIER_BLACKBOARD_SCHEMA } from '../src/core/ai/AiBlackboard';
+import { buildBlackboardForUnit } from '../src/core/ai/AiGameBridge';
 import type { AiGraph } from '../src/core/ai/AiGraph';
 import type { AiGraphRuntimeResult } from '../src/core/ai/AiGraphRuntime';
 import {
   createDirectPlayerMovePlan,
   updateUnitPlanFromRuntime,
 } from '../src/core/ai/UnitPlan';
-import { normalizeMap, type TacticalMapData } from '../src/core/map/MapModel';
+import type { TacticalMapData } from '../src/core/map/MapModel';
 import { createMoveOrder } from '../src/core/orders/MoveOrder';
 import {
   createPlayerMoveCommand,
@@ -17,9 +19,10 @@ import { buildCommandPlanRouteOverlaySnapshot } from '../src/rendering/CommandPl
 verifyPlayerCommandIdentityAndRevision();
 verifyDirectFallbackPlan();
 verifyRuntimePlanStages();
+verifyPlayerCommandBlackboard();
 verifyOverlaySnapshotIsBounded();
 
-console.log('Command/plan/route smoke passed: command identity, fallback plan, graph stages, bounded overlay snapshot.');
+console.log('Command/plan/route smoke passed: command identity, fallback plan, graph stages, Blackboard, bounded selected overlay.');
 
 function verifyPlayerCommandIdentityAndRevision(): void {
   const target = { x: 8.5, y: 4.5 };
@@ -108,6 +111,41 @@ function verifyRuntimePlanStages(): void {
   assert.equal(unchanged?.revision, first?.revision, 'structurally identical runtime result must not churn overlay revision');
 }
 
+function verifyPlayerCommandBlackboard(): void {
+  const state = createInitialState(makeMap(), [{
+    id: 'unit-a',
+    label: 'Unit A',
+    labelRu: 'Боец А',
+    type: 'infantry_squad',
+    side: 'player',
+    x: 1,
+    y: 2,
+  }], []);
+  const unit = state.units[0];
+  unit.playerCommand = createPlayerMoveCommand(unit.id, { x: 8.5, y: 2.5 }, null, 1000);
+  const blackboard = buildBlackboardForUnit(state, unit);
+
+  assert.equal(blackboard.player_command_active, true);
+  assert.equal(blackboard.player_command_type, 'move_to_position');
+  assert.equal(blackboard.player_command_status, 'active');
+  assert.deepEqual(blackboard.player_command_target_position, { x: 8.5, y: 2.5 });
+  assert.equal(blackboard.player_command_revision, unit.playerCommand.revision);
+
+  const schemaByKey = new Map(SOLDIER_BLACKBOARD_SCHEMA.map((entry) => [entry.key, entry]));
+  for (const key of [
+    'player_command_active',
+    'player_command_type',
+    'player_command_status',
+    'player_command_target_position',
+    'player_command_revision',
+  ]) {
+    const entry = schemaByKey.get(key);
+    assert.ok(entry, `Blackboard schema must expose ${key}`);
+    assert.ok(entry?.labelRu.trim(), `${key} must have a Russian label`);
+    assert.ok(entry?.descriptionRu.trim(), `${key} must have a Russian description`);
+  }
+}
+
 function verifyOverlaySnapshotIsBounded(): void {
   const state = createInitialState(makeMap(), [{
     id: 'unit-a',
@@ -137,6 +175,11 @@ function verifyOverlaySnapshotIsBounded(): void {
   assert.deepEqual(snapshot.routePoints, [unit.position, { x: 5.5, y: 3.5 }, { x: 7.5, y: 2.5 }]);
   assert.ok(snapshot.key.length < 500, `overlay key must stay bounded, got ${snapshot.key.length}`);
   assert.doesNotMatch(snapshot.key, /999:999/, 'overlay key must not serialize route cells');
+
+  const unselected = buildCommandPlanRouteOverlaySnapshot(state.map, unit, false);
+  assert.ok(unselected.command, 'unselected unit may retain a faint player-command marker');
+  assert.equal(unselected.planStages.length, 0, 'unselected unit must not render detailed AI plan stages');
+  assert.equal(unselected.routePoints.length, 0, 'unselected unit must not render its detailed waypoint route');
 }
 
 function makeMap(): TacticalMapData {
