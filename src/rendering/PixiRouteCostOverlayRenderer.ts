@@ -76,6 +76,7 @@ export class PixiRouteCostOverlayRenderer {
   private lastStaticTextureKey = '';
   private lastDynamicTextureKey = '';
   private lastHoverKey = '';
+  private lastRenderedProfileId: string | null = null;
   private staticTextureBuildCount = 0;
   private dynamicTextureBuildCount = 0;
 
@@ -100,6 +101,11 @@ export class PixiRouteCostOverlayRenderer {
     }
 
     const resolved = resolveUnitNavigationProfile(unit);
+    if (this.lastRenderedProfileId !== resolved.profileId) {
+      this.lastStaticTextureKey = '';
+      this.lastDynamicTextureKey = '';
+      this.lastRenderedProfileId = resolved.profileId;
+    }
     const tacticalContext = buildUnitTacticalRouteContext(unit);
     const fields = getRouteCostFields(state.map, resolved.profile, tacticalContext, this.cache);
     this.ensureRaster(state.map.width, state.map.height, state.map.cellSize);
