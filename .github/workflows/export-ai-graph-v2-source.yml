@@ -1,0 +1,21 @@
+name: Export AI Graph v2 source
+
+on:
+  push:
+    branches:
+      - feat/ai-graph-v2-contracts-subgraphs-2026-07-13
+  workflow_dispatch:
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create source archive
+        run: zip -r source-snapshot.zip . -x '.git/*' 'node_modules/*' 'dist/*'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-graph-v2-source-${{ github.sha }}
+          path: source-snapshot.zip
+          retention-days: 1
