@@ -1,1 +1,1 @@
-Temporary trigger for Blackboard observer session and compact bridge verification. Remove after final green run.
+Temporary trigger for Blackboard observer integration diagnostic log. Remove after final green run.
