@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import type { AiGraphExecutionState, AiGraphRuntimeResult } from '../src/core/ai/AiGraphRuntime';
 import { pushAiEvent } from '../src/core/ai/events/AiEventQueue';
+import { registerAiBlackboardObserver } from '../src/core/ai/events/AiBlackboardObserver';
 import {
   applyRuntimeResultToSession,
   createAiRuntimeSession,
@@ -77,14 +78,20 @@ assert.equal(migrated.simulationTimeMs, 1200);
 assert.equal(migrated.executionState?.activeNodeId, 'move');
 assert.deepEqual(migrated.blackboardMemory.best_cover_position, { x: 7, y: 4 });
 
-const queued = pushAiEvent(first.eventQueue, {
+const observerRegistration = registerAiBlackboardObserver(first.observerRegistry, {
+  observerId: 'danger-watch',
+  key: 'danger',
+  kind: 'key_changed',
+}, { danger: 10 });
+const firstWithObserver = { ...first, observerRegistry: observerRegistration.registry };
+const queued = pushAiEvent(firstWithObserver.eventQueue, {
   id: 'order-1',
   type: 'order_received',
   timestampMs: 1300,
   priority: 100,
   payload: { orderId: 'order-1' },
 });
-const sessionWithEvent = { ...first, eventQueue: queued.queue };
+const sessionWithEvent = { ...firstWithObserver, eventQueue: queued.queue };
 const activeResult = runtimeResult('running', executionState);
 const updated = applyRuntimeResultToSession(sessionWithEvent, activeResult, 1800);
 assert.equal(updated.status, 'active');
@@ -92,6 +99,7 @@ assert.equal(updated.simulationTimeMs, 1800);
 assert.equal(updated.executionState?.lastUpdatedAtMs, 1200);
 assert.equal(updated.eventQueue.events[0]?.type, 'order_received');
 assert.equal(updated.eventQueue.nextSequence, 1);
+assert.equal(updated.observerRegistry.observers['danger-watch']?.definition.key, 'danger');
 
 const terminalResult = runtimeResult('cancelled');
 const terminal = applyRuntimeResultToSession(updated, terminalResult, 1800);
@@ -112,6 +120,7 @@ const oldSessionWithoutQueue = normalizeAiRuntimeSession({
 }, { graphId: 'graph_a', unitId: 'soldier_a' });
 assert.equal(oldSessionWithoutQueue.session.eventQueue.events.length, 0);
 assert.equal(oldSessionWithoutQueue.session.eventQueue.maxSize, 64);
+assert.equal(Object.keys(oldSessionWithoutQueue.session.observerRegistry.observers).length, 0);
 
 console.log('AI runtime session smoke passed: isolation, invalid-version reset, legacy migration and active/terminal transitions.');
 
