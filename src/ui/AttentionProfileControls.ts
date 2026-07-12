@@ -186,15 +186,16 @@ function numberField(
   onChange: (value: number) => void,
 ): HTMLElement {
   const input = document.createElement('input');
+  const format = (candidate: number) => formatStepNumber(candidate, step);
   input.type = 'number';
-  input.value = String(Math.round(value / step) * step);
+  input.value = format(Math.round(value / step) * step);
   input.min = String(min);
   input.max = String(max);
   input.step = String(step);
   input.addEventListener('change', () => {
     const parsed = Number(input.value);
     const next = Math.max(min, Math.min(max, Number.isFinite(parsed) ? parsed : value));
-    input.value = String(next);
+    input.value = format(next);
     onChange(next);
   });
   return wrapField(label, input);
@@ -241,6 +242,12 @@ function buttonRow(buttons: HTMLButtonElement[]): HTMLElement {
   row.className = 'game-editor-button-row';
   row.append(...buttons);
   return row;
+}
+
+function formatStepNumber(value: number, step: number): string {
+  const decimalPart = String(step).split('.')[1] ?? '';
+  const precision = Math.min(4, decimalPart.length);
+  return Number(value.toFixed(precision)).toString();
 }
 
 function degreesToRadians(value: number): number {
