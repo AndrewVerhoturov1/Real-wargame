@@ -23,6 +23,7 @@ import { installAdaptiveGridLod } from './rendering/AdaptiveGridLodInstaller';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
 import { installAppShellMenu } from './shared/AppShellMenu';
 import { installAiDictionaryGameIntegration } from './ui/AiDictionaryGameIntegration';
+import { installAttentionProfileControls } from './ui/AttentionProfileControls';
 import { installCommandPlanRouteUi } from './ui/CommandPlanRouteUi';
 import { installRouteCostOverlayUi } from './ui/RouteCostOverlayUi';
 import { installEditorHeaderPlacement } from './ui/EditorHeaderPlacement';
@@ -74,6 +75,7 @@ const forceRenderAtNativeMapQuality = () => {
 };
 
 installGameEditorWorkbench(debugPanel, state, forceRenderAtNativeMapQuality);
+const destroyAttentionProfileControls = installAttentionProfileControls(state, forceRenderAtNativeMapQuality);
 installSceneExportControls(state);
 installPerformanceReportControls(() => tacticalBoard.downloadPerformanceReport());
 installAiEditorOpenButton(aiEditorOpenButton);
@@ -109,6 +111,7 @@ window.addEventListener('beforeunload', () => {
   destroyFrontZoneControls();
   destroyWorkspaceTooltipGuard();
   destroyEditorHeaderPlacement();
+  destroyAttentionProfileControls();
   aiGameBridge.destroy();
   tacticalBoard.destroy();
 });
