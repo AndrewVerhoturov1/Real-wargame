@@ -13,6 +13,7 @@ import {
   type AiRuntimeSessionSnapshotV1,
 } from '../src/core/ai/runtime/AiRuntimeSession';
 import type { MoveOrder } from '../src/core/orders/MoveOrder';
+import { normalizeUnits, type UnitData } from '../src/core/units/UnitModel';
 
 const waitGraph = graphWithAction('snapshot_wait_graph', {
   id: 'wait',
@@ -44,6 +45,7 @@ verifyWaitRoundTrip();
 verifyReloadRoundTrip();
 verifyMoveRoundTrip();
 verifyLegacyAndInvalidSnapshots();
+verifyUnitModelRestorePath();
 
 console.log('AI runtime snapshot smoke passed: Wait, Move, Reload, legacy scene and invalid graph/version safety.');
 
@@ -195,6 +197,68 @@ function verifyMoveRoundTrip(): void {
   assert.equal(resumed.status, 'running');
   assert.equal(resumed.lifecycle[0]?.phase, 'update');
   assert.deepEqual(resumed.effects, [], 'restored Move must not emit begin_move again');
+}
+
+function verifyUnitModelRestorePath(): void {
+  const unitId = 'unit_model_restore';
+  const target = { x: 6, y: 3 };
+  const started = runAiGraphRuntime({
+    graph: moveGraph,
+    unitId,
+    blackboard: {
+      best_cover_position: target,
+      self_position: { x: 1, y: 1 },
+      active_move_source: null,
+      active_move_owner_token: null,
+      active_move_target: null,
+    },
+    cooldowns: {},
+    nowMs: 0,
+  });
+  const session = applyRuntimeResultToSession(
+    createAiRuntimeSession({ graphId: moveGraph.id, unitId }),
+    started,
+    0,
+  );
+  const activeData = session.executionState?.activeData;
+  if (activeData?.kind !== 'move_to_blackboard_position') throw new Error('Unit restore move state missing.');
+  const order: MoveOrder = {
+    type: 'move',
+    target,
+    requestedTarget: target,
+    issuedAtMs: 123,
+    source: 'ai',
+    ownerToken: activeData.actionToken,
+    waypoints: [{ x: 2, y: 1 }, target],
+    waypointIndex: 1,
+    routeCells: [{ x: 1, y: 1 }, { x: 2, y: 1 }, { x: 6, y: 3 }],
+    routeCellIndex: 1,
+    routeStatus: 'following',
+    routeRevision: 2,
+  };
+  const snapshot = buildAiRuntimeSceneSnapshot(
+    session,
+    order,
+    createAiRouteStatusState({ nowMs: 100, position: { x: 2, y: 1 }, target, ownerToken: activeData.actionToken }),
+  );
+  assert.ok(snapshot);
+  const unitData: UnitData = {
+    id: unitId,
+    label: 'Restored soldier',
+    labelRu: 'Восстановленный боец',
+    type: 'infantry_squad',
+    side: 'player',
+    x: 1,
+    y: 1,
+    runtime: { aiRuntime: JSON.parse(JSON.stringify(snapshot)) },
+  };
+  const [unit] = normalizeUnits([unitData]);
+  assert.ok(unit);
+  assert.equal(unit.behaviorRuntime.aiRuntimeSession?.executionState?.activeNodeId, 'move');
+  assert.equal(unit.behaviorRuntime.aiRouteStatusState?.ownerToken, activeData.actionToken);
+  assert.equal(unit.order?.ownerToken, activeData.actionToken);
+  assert.equal(unit.order?.routeCellIndex, 1);
+  assert.equal(unit.behaviorRuntime.lastEvent, 'ai_runtime_scene_restored');
 }
 
 function verifyLegacyAndInvalidSnapshots(): void {
