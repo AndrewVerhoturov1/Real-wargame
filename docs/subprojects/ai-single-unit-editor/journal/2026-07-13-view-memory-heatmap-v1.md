@@ -102,8 +102,20 @@ No transfer to `real-wargame-preview` or `main` was performed.
 - full enemy combat units, commander contact sharing, optics, detailed night and weather are outside this version;
 - no change has been made to `real-wargame-preview` or `main`.
 
-## Preview branch movement after verification
+## Final synchronized verification
 
-After the exact-SHA visual run, `real-wargame-preview` advanced by two commits from merge base `bbf3d08cde1063fcbde8070793c7df6f50d23a59`. The changed files are `src/core/navigation/NavigationRuntime.ts`, `scripts/navigation_profiles_smoke.ts` and `scripts/ui_compact_route_controls_smoke.ts`.
+Current preview navigation changes were merged into the temporary branch as `d9f0c1ca7bc649de46eba473fd6784ab1c93237b`. Full expanded validation run `29209735946` succeeded on that synchronized tree.
 
-They do not overlap the heatmap implementation files, but they were not present in visual SHA `923fdde44d15d447b01178ce1430e2c68f11a215`. Therefore the temporary branch remains intentionally unsynchronized for this handoff. Before any future transfer, current preview must be merged into the temporary branch and the affected regression/browser checks rerun.
+The final system-Chrome run `29209822972` then succeeded on exact SHA `c0e790553f6d048f8bf8391260c833ae258b78cd`: `20/20 passed` in `10.5 minutes`, with 29 PNG files. The same key views were reopened manually and remained readable after synchronization.
+
+Final artifact digests:
+
+```text
+screenshots ZIP: sha256:604f405f7de1ec8b2c1d57dc563ef65fd5d5bcc94b478d13ef676fd7ce91df46
+Playwright ZIP:  sha256:1b7231d65ad8edf9340d46c26e908b4df78d957907b5bc8c21758540b09ba8b5
+raw log:        sha256:97ef4cd304a446fd414a1a3dcbcb6b99bd340bf7cb0b15805ecc02fef769b777
+```
+
+After this run, `real-wargame-preview` advanced by one documentation-only commit adding `ideas/GOOD_POSITIONS_AND_AMBUSH_SITES.md`. No game, UI, runtime or test code changed, so the exact-SHA browser result remains valid for the implementation. That document should be pulled before a future transfer.
+
+No transfer to `real-wargame-preview` or `main` was performed.
