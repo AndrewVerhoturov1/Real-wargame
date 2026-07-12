@@ -26,7 +26,14 @@ export function issueRoutedMoveOrderToSelectedUnits(
           x: target.x + unit.position.x - center.x,
           y: target.y + unit.position.y - center.y,
         });
-    const command = createPlayerMoveCommand(unit.id, requestedTarget, unit.playerCommand);
+    const command = createPlayerMoveCommand(
+      unit.id,
+      requestedTarget,
+      unit.playerCommand,
+      Date.now(),
+      'normal',
+      unit.playerNavigationProfileId ?? 'normal',
+    );
     unit.playerCommand = command;
     const resolvedNavigation = resolveUnitNavigationProfile(unit, command);
     const planned = planMoveOrder(state.map, unit.position, requestedTarget, {
