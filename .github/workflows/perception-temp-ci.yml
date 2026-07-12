@@ -25,6 +25,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run perception:smoke
+      - run: npm run attention-ai-nodes:smoke
       - run: npm run build
       - run: npm run runtime:smoke
       - run: npm run workspace:smoke
