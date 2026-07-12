@@ -23,7 +23,7 @@ const movementGraph: AiGraph = {
   rootNodeId: 'root',
   blackboardDefaults: {
     self_position: { x: 1, y: 1 },
-    best_cover_position: { x: 7, y: 4 },
+    best_cover_position: { x: 7.5, y: 4.5 },
   },
   nodes: [
     { id: 'root', type: 'Root', children: ['sequence'] },
@@ -55,7 +55,7 @@ state.selectedUnitId = unit.id;
 state.selectedUnitIds = [unit.id];
 
 const aiToken = 'soldier:move:100';
-const aiTarget = { x: 7, y: 4 };
+const aiTarget = { x: 7.5, y: 4.5 };
 applyOwnedMoveEffects(state, runtimeResult(unit.id, [{
   type: 'begin_move',
   ownerToken: aiToken,
