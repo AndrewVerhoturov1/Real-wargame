@@ -21,6 +21,15 @@ interface OverlayDiagnostics {
   probeRebuildCount: number;
   interactionUpdateCount: number;
   interactionObjectCount: number;
+  fullMapFingerprintScanCount: number;
+}
+
+interface UnitRendererDiagnostics {
+  viewCount: number;
+  creationCount: number;
+  removalCount: number;
+  updateCount: number;
+  geometryRebuildCount: number;
 }
 
 interface CoverCacheDiagnostics {
@@ -47,6 +56,12 @@ async function readOverlayDiagnostics(page: Page): Promise<OverlayDiagnostics | 
   return page.evaluate(() => (
     window as Window & { __realWargameOverlayDebug?: OverlayDiagnostics }
   ).__realWargameOverlayDebug);
+}
+
+async function readUnitRendererDiagnostics(page: Page): Promise<UnitRendererDiagnostics | undefined> {
+  return page.evaluate(() => (
+    window as Window & { __realWargameUnitRendererDebug?: UnitRendererDiagnostics }
+  ).__realWargameUnitRendererDebug);
 }
 
 async function readCoverCacheDiagnostics(page: Page): Promise<CoverCacheDiagnostics | undefined> {
@@ -103,12 +118,19 @@ test('camera supports WASD/arrows and input bursts do not rebuild expensive grid
     const debugWindow = window as Window & {
       __realWargameCameraDebug?: CameraDiagnostics;
       __realWargameOverlayDebug?: OverlayDiagnostics;
+      __realWargameUnitRendererDebug?: UnitRendererDiagnostics;
     };
-    return Boolean(debugWindow.__realWargameCameraDebug && debugWindow.__realWargameOverlayDebug);
+    return Boolean(
+      debugWindow.__realWargameCameraDebug
+      && debugWindow.__realWargameOverlayDebug
+      && debugWindow.__realWargameUnitRendererDebug,
+    );
   });
 
   const initialCamera = await readCameraDiagnostics(page);
+  const initialUnits = await readUnitRendererDiagnostics(page);
   expect(initialCamera).toBeDefined();
+  expect(initialUnits?.viewCount ?? 0).toBeGreaterThan(0);
 
   await page.keyboard.down('d');
   await expect.poll(async () => {
@@ -130,16 +152,22 @@ test('camera supports WASD/arrows and input bursts do not rebuild expensive grid
   await page.mouse.move(center.x, center.y);
   await page.waitForTimeout(60);
   const beforePointerBurst = await readOverlayDiagnostics(page);
+  const beforePointerUnits = await readUnitRendererDiagnostics(page);
   expect(beforePointerBurst).toBeDefined();
 
   await page.mouse.move(center.x + 8, center.y + 8, { steps: 80 });
   await page.waitForTimeout(120);
   const afterPointerBurst = await readOverlayDiagnostics(page);
+  const afterPointerUnits = await readUnitRendererDiagnostics(page);
   expect((afterPointerBurst?.knowledgeRebuildCount ?? 0) - (beforePointerBurst?.knowledgeRebuildCount ?? 0)).toBe(0);
   expect(afterPointerBurst?.interactionObjectCount ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(2);
   expect((afterPointerBurst?.interactionUpdateCount ?? 0) - (beforePointerBurst?.interactionUpdateCount ?? 0)).toBeLessThan(20);
+  expect(afterPointerBurst?.fullMapFingerprintScanCount).toBe(0);
+  expect(afterPointerUnits?.creationCount).toBe(beforePointerUnits?.creationCount);
+  expect(afterPointerUnits?.removalCount).toBe(beforePointerUnits?.removalCount);
 
   const beforeWheelBurst = await readCameraDiagnostics(page);
+  const beforeWheelUnits = await readUnitRendererDiagnostics(page);
   await canvas.evaluate((element, point) => {
     for (let index = 0; index < 30; index += 1) {
       element.dispatchEvent(new WheelEvent('wheel', {
@@ -154,9 +182,12 @@ test('camera supports WASD/arrows and input bursts do not rebuild expensive grid
   }, center);
   await page.waitForTimeout(100);
   const afterWheelBurst = await readCameraDiagnostics(page);
+  const afterWheelUnits = await readUnitRendererDiagnostics(page);
   expect((afterWheelBurst?.wheelEventCount ?? 0) - (beforeWheelBurst?.wheelEventCount ?? 0)).toBe(30);
   expect((afterWheelBurst?.wheelApplyCount ?? 0) - (beforeWheelBurst?.wheelApplyCount ?? 0)).toBeLessThanOrEqual(2);
   expect(afterWheelBurst?.zoom).not.toBe(beforeWheelBurst?.zoom);
+  expect(afterWheelUnits?.creationCount).toBe(beforeWheelUnits?.creationCount);
+  expect(afterWheelUnits?.removalCount).toBe(beforeWheelUnits?.removalCount);
 
   await saveScreenshot(page, '12-camera-keyboard-grid-performance.png');
 });
