@@ -149,12 +149,14 @@ function markObjectCells(
   mark: (index: number) => void,
   includeBodyRadius: boolean,
 ): void {
+  const centerX = object.x + 0.5;
+  const centerY = object.y + 0.5;
   const radius = Math.hypot(object.widthCells, object.heightCells) / 2
     + (includeBodyRadius ? INFANTRY_NAVIGATION_RADIUS_CELLS : 0);
-  const minX = clamp(Math.floor(object.x - radius - 1), 0, map.width - 1);
-  const maxX = clamp(Math.floor(object.x + radius + 1), 0, map.width - 1);
-  const minY = clamp(Math.floor(object.y - radius - 1), 0, map.height - 1);
-  const maxY = clamp(Math.floor(object.y + radius + 1), 0, map.height - 1);
+  const minX = clamp(Math.floor(centerX - radius - 1), 0, map.width - 1);
+  const maxX = clamp(Math.floor(centerX + radius + 1), 0, map.width - 1);
+  const minY = clamp(Math.floor(centerY - radius - 1), 0, map.height - 1);
+  const maxY = clamp(Math.floor(centerY + radius + 1), 0, map.height - 1);
 
   for (let y = minY; y <= maxY; y += 1) {
     for (let x = minX; x <= maxX; x += 1) {
@@ -181,8 +183,10 @@ function objectOccupiesCell(
 }
 
 function pointInsideRotatedObject(x: number, y: number, object: MapObject): boolean {
-  const dx = x - object.x;
-  const dy = y - object.y;
+  const objectCenterX = object.x + 0.5;
+  const objectCenterY = object.y + 0.5;
+  const dx = x - objectCenterX;
+  const dy = y - objectCenterY;
   const cosine = Math.cos(-object.rotationRadians);
   const sine = Math.sin(-object.rotationRadians);
   const localX = dx * cosine - dy * sine;
