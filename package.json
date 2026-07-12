@@ -16,6 +16,7 @@
     "workspace:smoke": "node scripts/tactical_workspace_smoke.mjs",
     "dictionary:smoke": "node scripts/ai_dictionary_smoke.mjs",
     "runtime:smoke": "node scripts/ai_graph_runtime_smoke.mjs",
+    "runtime-session:smoke": "node scripts/ai_runtime_session_smoke.mjs",
     "move-bridge:smoke": "node scripts/ai_stateful_move_bridge_smoke.mjs",
     "route-status:smoke": "node scripts/ai_route_status_smoke.mjs",
     "pathfinding:smoke": "node scripts/grid_pathfinding_smoke.mjs",
