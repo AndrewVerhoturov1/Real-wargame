@@ -82,7 +82,7 @@ function collectNodes(nodesValue: unknown, issues: AiGraphValidationIssue[]): Ma
     nodeById.set(id, nodeValue);
     validateNodeType(nodeValue, issues, id);
     validateNodeChildrenShape(nodeValue, issues, id);
-    validateNodeParameters(nodeValue.parameters, issues, id);
+    validateNodeParameters(nodeValue.type, nodeValue.parameters, issues, id);
 
     if (nodeValue.type === 'Root') {
       rootNodeIds.push(id);
@@ -162,7 +162,7 @@ function validateNodeLinks(nodeById: Map<string, UnknownRecord>, issues: AiGraph
   }
 }
 
-function validateNodeParameters(parametersValue: unknown, issues: AiGraphValidationIssue[], nodeId: string): void {
+function validateNodeParameters(nodeType: unknown, parametersValue: unknown, issues: AiGraphValidationIssue[], nodeId: string): void {
   if (parametersValue === undefined) {
     return;
   }
@@ -180,6 +180,33 @@ function validateNodeParameters(parametersValue: unknown, issues: AiGraphValidat
     if (!isSupportedValue(value)) {
       issues.push(errorIssue('PARAMETER_VALUE_UNSUPPORTED', `Node ${nodeId} parameter ${key} has an unsupported value. Allowed: string, number, boolean, null, and position {x,y}.`, `У ноды ${nodeId} параметр ${key} имеет неподдерживаемое значение. Разрешены строки, числа, boolean, null и позиция {x,y}.`, nodeId));
     }
+  }
+
+  if (nodeType === 'Reload') validateReloadParameters(parametersValue, issues, nodeId);
+}
+
+function validateReloadParameters(parameters: UnknownRecord, issues: AiGraphValidationIssue[], nodeId: string): void {
+  validateNonNegativeNumberParameter(parameters, 'durationSeconds', false, 'RELOAD_DURATION_INVALID', 'Reload durationSeconds must be a non-negative number.', 'У ноды «Перезарядить» длительность должна быть неотрицательным числом.', issues, nodeId);
+  validateNonNegativeNumberParameter(parameters, 'targetAmmo', true, 'RELOAD_TARGET_AMMO_INVALID', 'Reload targetAmmo must be a non-negative integer.', 'У ноды «Перезарядить» число патронов после завершения должно быть неотрицательным целым числом.', issues, nodeId);
+  const failIfNoWeapon = parameters.failIfNoWeapon;
+  if (typeof failIfNoWeapon !== 'boolean') {
+    issues.push(errorIssue('RELOAD_WEAPON_FLAG_INVALID', 'Reload failIfNoWeapon must be boolean.', 'У ноды «Перезарядить» параметр «Провалить, если нет оружия» должен быть да/нет.', nodeId));
+  }
+}
+
+function validateNonNegativeNumberParameter(
+  parameters: UnknownRecord,
+  key: string,
+  requireInteger: boolean,
+  code: string,
+  message: string,
+  messageRu: string,
+  issues: AiGraphValidationIssue[],
+  nodeId: string,
+): void {
+  const value = parameters[key];
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || (requireInteger && !Number.isInteger(value))) {
+    issues.push(errorIssue(code, message, messageRu, nodeId));
   }
 }
 
