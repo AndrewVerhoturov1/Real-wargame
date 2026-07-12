@@ -1,1 +1,1 @@
-Temporary trigger for Blackboard observer verification. Remove after final green run.
+Temporary trigger for Blackboard observer diagnostic rerun. Remove after final green run.
