@@ -1,6 +1,7 @@
 import { Application, Container } from 'pixi.js';
 import { PerformanceMonitor } from '../core/debug/PerformanceMonitor';
 import { getCell, gridToCellLabel, type MapCell } from '../core/map/MapModel';
+import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { tickSimulation } from '../core/simulation/SimulationTick';
 import type { UnitModel } from '../core/units/UnitModel';
@@ -43,7 +44,6 @@ export class PixiTacticalBoardApp {
   private showViewCones = false;
   private showHeightLabels = false;
   private lastMapRenderKey = '';
-  private lastMapRenderWasEditor = false;
   private mapRenderInvalidated = true;
   private lastDebugPanelUpdateMs = 0;
 
@@ -145,7 +145,7 @@ export class PixiTacticalBoardApp {
       antialias: true,
       backgroundAlpha: 1,
       maxFPS: TARGET_MAX_FPS,
-      mapRender: 'single cached bitmap in simulation; editable batched Pixi Graphics terrain + raster relief/forest + grid/objects in editor',
+      mapRender: 'revision-driven map rebuilds; editable batched Pixi Graphics terrain + raster relief/forest + grid/objects',
       zoomMode: 'requestAnimationFrame-coalesced wheel input anchored under the pointer',
       keyboardPan: 'continuous WASD and arrow-key camera movement synchronized to animation frames',
       pointerMode: 'pointer movement coalesced to one state update per animation frame',
@@ -188,20 +188,11 @@ export class PixiTacticalBoardApp {
     this.unitRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
     this.htmlOverlayRenderer.render(this.state, this.locale, this.showHeightLabels);
     this.updateDebugPanelIfNeeded(false);
-    this.performanceMonitor.recordFrame(this.state, this.camera.zoom, performance.now() - renderStartedAt);
+    this.performanceMonitor.recordFrame(this.state, this.camera.zoom, performance.now() - renderStartedAt, this.showGrid);
   }
 
   private renderEditableMapLayerIfNeeded(force: boolean): void {
-    const editorEnabled = this.state.editor.enabled;
-
-    // In simulation the map is immutable between explicit UI/state changes. Avoid rebuilding a
-    // 2,560-cell fingerprint on every frame; editor mode still checks continuously while painting.
-    if (!force && !this.mapRenderInvalidated && !editorEnabled && !this.lastMapRenderWasEditor) {
-      return;
-    }
-
     const nextKey = this.getMapRenderKey();
-    this.lastMapRenderWasEditor = editorEnabled;
 
     if (!force && !this.mapRenderInvalidated && nextKey === this.lastMapRenderKey) {
       return;
@@ -219,38 +210,22 @@ export class PixiTacticalBoardApp {
 
     // The whole map, grid and map objects are static during simulation. One texture is much
     // cheaper to scale and translate than the original collection of vector Graphics objects.
-    this.mapRenderer.container.cacheAsBitmap = !editorEnabled;
+    this.mapRenderer.container.cacheAsBitmap = !this.state.editor.enabled;
   }
 
   private getMapRenderKey(): string {
-    const objectKey = this.state.editor.layers.objects
-      ? this.state.map.objects
-          .map((object) => [
-            object.id,
-            object.kind,
-            roundForRenderKey(object.x),
-            roundForRenderKey(object.y),
-            roundForRenderKey(object.widthCells),
-            roundForRenderKey(object.heightCells),
-            roundForRenderKey(object.rotationRadians),
-          ].join(':'))
-          .join('|')
-      : 'objects-hidden';
-
+    const revisions = getMapRevisionSnapshot(this.state.map);
     return [
       `editor:${this.state.editor.enabled ? '1' : '0'}`,
       `grid:${this.showGrid ? '1' : '0'}`,
       `objects:${this.state.editor.layers.objects ? '1' : '0'}`,
       `selected:${this.state.editor.selectedObjectId ?? 'none'}`,
-      `cells:${this.getTerrainLayerRenderKey()}`,
-      objectKey,
+      `cellSize:${this.state.map.cellSize}`,
+      `terrainRevision:${revisions.terrain}`,
+      `heightRevision:${revisions.height}`,
+      `forestRevision:${revisions.forest}`,
+      `objectsRevision:${revisions.objects}`,
     ].join(';');
-  }
-
-  private getTerrainLayerRenderKey(): string {
-    return this.state.map.cells
-      .map((cell) => `${cell.terrain}:${cell.height}:${cell.forest}`)
-      .join('|');
   }
 
   private readonly handleLanguageToggle = (): void => {
@@ -541,8 +516,4 @@ function buildTimestampForFileName(): string {
     .replaceAll('.', '-')
     .replace('T', '_')
     .replace('Z', '');
-}
-
-function roundForRenderKey(value: number): string {
-  return value.toFixed(3);
 }
