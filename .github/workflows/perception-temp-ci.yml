@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feat/perception-attention-v1-temp
+  pull_request:
+    branches:
+      - validation/perception-attention-v1-base
   workflow_dispatch:
 
 permissions:
