@@ -73,6 +73,12 @@ jobs:
         continue-on-error: true
         run: npm run runtime:smoke
 
+      - name: AI runtime session smoke
+        id: runtime_session
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run runtime-session:smoke
+
       - name: Stateful AI movement bridge smoke
         id: move_bridge
         if: steps.install.outcome == 'success'
@@ -181,6 +187,7 @@ jobs:
           ENGINE_OUTCOME: ${{ steps.engine.outcome }}
           GRAPH_OUTCOME: ${{ steps.graph.outcome }}
           RUNTIME_OUTCOME: ${{ steps.runtime.outcome }}
+          RUNTIME_SESSION_OUTCOME: ${{ steps.runtime_session.outcome }}
           MOVE_BRIDGE_OUTCOME: ${{ steps.move_bridge.outcome }}
           ROUTE_STATUS_OUTCOME: ${{ steps.route_status.outcome }}
           PATHFINDING_OUTCOME: ${{ steps.pathfinding.outcome }}
@@ -204,6 +211,7 @@ jobs:
               engine: process.env.ENGINE_OUTCOME,
               graph: process.env.GRAPH_OUTCOME,
               runtime: process.env.RUNTIME_OUTCOME,
+              runtime_session: process.env.RUNTIME_SESSION_OUTCOME,
               move_bridge: process.env.MOVE_BRIDGE_OUTCOME,
               route_status: process.env.ROUTE_STATUS_OUTCOME,
               pathfinding: process.env.PATHFINDING_OUTCOME,
@@ -239,6 +247,4 @@ jobs:
               description: Object.entries(outcomes).map(([key, value]) => `${key}:${value}`).join(' ').slice(0, 140),
               target_url: targetUrl,
             });
-            if (!passed) {
-              core.setFailed(`One or more core checks failed: ${JSON.stringify(outcomes)}`);
-            }
+            if (!passed) core.setFailed(`One or more core checks failed: ${JSON.stringify(outcomes)}`);
