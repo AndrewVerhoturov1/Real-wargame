@@ -121,6 +121,12 @@ jobs:
         continue-on-error: true
         run: npm run map-resolution:smoke
 
+      - name: Map grid LOD smoke
+        id: map_grid_lod
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run map-grid-lod:smoke
+
       - name: Smooth terrain cache smoke
         id: smooth_terrain
         if: steps.install.outcome == 'success'
@@ -181,6 +187,7 @@ jobs:
           ROUTED_MOVE_OUTCOME: ${{ steps.routed_move.outcome }}
           MAP_REVISION_OUTCOME: ${{ steps.map_revision.outcome }}
           MAP_RESOLUTION_OUTCOME: ${{ steps.map_resolution.outcome }}
+          MAP_GRID_LOD_OUTCOME: ${{ steps.map_grid_lod.outcome }}
           SMOOTH_TERRAIN_OUTCOME: ${{ steps.smooth_terrain.outcome }}
           SPATIAL_INDEX_OUTCOME: ${{ steps.spatial_index.outcome }}
           VISIBILITY_PROBE_OUTCOME: ${{ steps.visibility_probe.outcome }}
@@ -203,6 +210,7 @@ jobs:
               routed_move: process.env.ROUTED_MOVE_OUTCOME,
               map_revision: process.env.MAP_REVISION_OUTCOME,
               map_resolution: process.env.MAP_RESOLUTION_OUTCOME,
+              map_grid_lod: process.env.MAP_GRID_LOD_OUTCOME,
               smooth_terrain: process.env.SMOOTH_TERRAIN_OUTCOME,
               spatial_index: process.env.SPATIAL_INDEX_OUTCOME,
               visibility_probe: process.env.VISIBILITY_PROBE_OUTCOME,
