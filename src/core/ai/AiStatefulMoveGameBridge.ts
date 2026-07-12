@@ -5,6 +5,7 @@ import type { SimulationState } from '../simulation/SimulationState';
 import { getAiTestPaused } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
 import type { AiBlackboardValue } from './AiBlackboard';
+import { publishSimulationAiEvents } from './events/SimulationAiEvents';
 import {
   tickAiGameBridge,
   type AiGameBridgeHandle,
@@ -99,6 +100,14 @@ export function tickStatefulMoveBridge(
   let runtimeOptions = options;
   if (options.applyEffects && !options.cancel) {
     routeResult = updateSelectedRouteStatus(state, nowMs);
+    const unitBeforeRuntime = getSelectedUnit(state);
+    if (routeResult && unitBeforeRuntime) {
+      publishSimulationAiEvents(
+        unitBeforeRuntime,
+        unitBeforeRuntime.behaviorRuntime.aiRuntimeSession?.simulationTimeMs
+          ?? Math.max(0, Math.round(state.simulationTimeSeconds * 1000)),
+      );
+    }
     if (routeResult?.shouldForceRuntimeTick) runtimeOptions = buildReactiveRouteTickOptions(routeResult);
   }
 
@@ -111,6 +120,14 @@ export function tickStatefulMoveBridge(
     if (afterEffects) routeResult = afterEffects;
   }
 
+  const unitAfterRuntime = getSelectedUnit(state);
+  if (options.applyEffects && unitAfterRuntime) {
+    publishSimulationAiEvents(
+      unitAfterRuntime,
+      unitAfterRuntime.behaviorRuntime.aiRuntimeSession?.simulationTimeMs
+        ?? Math.max(0, Math.round(state.simulationTimeSeconds * 1000)),
+    );
+  }
   if (result) publishMoveDebugDetails(state, result, routeResult);
   else if (routeResult && selectedUnitId) publishRouteDebugDetails(state, routeResult, selectedUnitId);
   return result;
