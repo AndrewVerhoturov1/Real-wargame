@@ -1,0 +1,41 @@
+name: Temporary Editor Smoke Diagnostic
+
+on:
+  push:
+    branches:
+      - planning/complete-stateful-runtime-events-2026-07-12
+  pull_request:
+    branches:
+      - real-wargame-preview
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: planning/complete-stateful-runtime-events-2026-07-12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - name: Run editor smoke and capture log
+        id: editor
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run editor:smoke 2>&1 | tee editor-smoke.log
+      - name: Upload editor smoke log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-smoke-diagnostic
+          path: editor-smoke.log
+          if-no-files-found: error
+          retention-days: 3
+      - name: Fail when editor smoke failed
+        if: steps.editor.outcome != 'success'
+        run: exit 1
