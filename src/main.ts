@@ -8,6 +8,7 @@ import './tactical-workspace-mode.css';
 import './front-zones.css';
 import './ai-dictionary.css';
 import './ai-dictionary-compat.css';
+import './command-plan-route-overlay.css';
 import mapData from './data/maps/test_map.json';
 import pressureZoneData from './data/pressure_zones/test_pressure_zones.json';
 import unitsData from './data/units/test_units.json';
@@ -20,6 +21,8 @@ import type { UnitData } from './core/units/UnitModel';
 import { installAdaptiveGridLod } from './rendering/AdaptiveGridLodInstaller';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
 import { installAppShellMenu } from './shared/AppShellMenu';
+import { installAiDictionaryGameIntegration } from './ui/AiDictionaryGameIntegration';
+import { installCommandPlanRouteUi } from './ui/CommandPlanRouteUi';
 import { installEditorHeaderPlacement } from './ui/EditorHeaderPlacement';
 import { installFrontZoneControls } from './ui/FrontZoneControls';
 import { installGameEditorWorkbench } from './ui/GameEditorWorkbench';
@@ -27,7 +30,6 @@ import { installPerformanceReportControls } from './ui/PerformanceReportControls
 import { installSceneExportControls } from './ui/SceneExportControls';
 import { installTacticalWorkspace } from './ui/TacticalWorkspace';
 import { installWorkspaceTooltipGuard } from './ui/WorkspaceTooltipGuard';
-import { installAiDictionaryGameIntegration } from './ui/AiDictionaryGameIntegration';
 
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 
@@ -75,6 +77,7 @@ installPerformanceReportControls(() => tacticalBoard.downloadPerformanceReport()
 installAiEditorOpenButton(aiEditorOpenButton);
 installPauseToggle(pauseToggle, forceRenderAtNativeMapQuality);
 installTacticalWorkspace(state, aiGameBridge, forceRenderAtNativeMapQuality);
+const destroyCommandPlanRouteUi = installCommandPlanRouteUi(state, forceRenderAtNativeMapQuality);
 const destroyAiDictionary = installAiDictionaryGameIntegration(state, forceRenderAtNativeMapQuality);
 const destroyFrontZoneControls = installFrontZoneControls(state, forceRenderAtNativeMapQuality);
 const destroyEditorHeaderPlacement = installEditorHeaderPlacement();
@@ -97,6 +100,7 @@ forceRussianTopControls(
 window.addEventListener('beforeunload', () => {
   gridToggle.removeEventListener('click', scheduleNativeMapQuality);
   destroyAdaptiveGridLod();
+  destroyCommandPlanRouteUi();
   destroyAiDictionary();
   destroyFrontZoneControls();
   destroyWorkspaceTooltipGuard();
