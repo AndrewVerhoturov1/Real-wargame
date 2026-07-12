@@ -35,10 +35,11 @@ export function buildCommandPlanRouteOverlaySnapshot(
   unit: UnitModel,
   selected: boolean,
 ): CommandPlanRouteOverlaySnapshot {
-  const command = isPlayerCommandOutstanding(unit.playerCommand)
+  const playerCommand = unit.playerCommand;
+  const command = playerCommand && isPlayerCommandOutstanding(playerCommand)
     ? {
-        target: { ...unit.playerCommand.target },
-        status: unit.playerCommand.status as 'active' | 'blocked',
+        target: { ...playerCommand.target },
+        status: playerCommand.status as 'active' | 'blocked',
       }
     : null;
   const planStages = selected
