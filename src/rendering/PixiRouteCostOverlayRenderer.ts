@@ -82,7 +82,7 @@ export class PixiRouteCostOverlayRenderer {
     this.container.eventMode = 'none';
     this.container.interactiveChildren = false;
     this.container.visible = false;
-    this.legend.position.set(8, 8);
+    this.legend.position.set(8, 34);
     this.tooltip.visible = false;
   }
 
