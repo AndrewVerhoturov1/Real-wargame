@@ -2,7 +2,7 @@
 
 ## Branch boundary
 
-Work was completed only on:
+Implementation was developed and visually verified on:
 
 ```text
 tmp/ui-compact-route-controls-20260712
@@ -14,7 +14,13 @@ Starting preview commit:
 61d3b04f886a4f206677617a0ebb23ec7d689e7f
 ```
 
-Draft PR #65 is an isolated `DO NOT MERGE` CI and visual-QA channel. Neither `real-wargame-preview` nor `main` was modified.
+The temporary branch was transferred through PR #65 after the user explicitly authorized the merge. The branch-only visual-QA workflow was removed before transfer. `main` was not modified.
+
+Preview merge commit:
+
+```text
+f99c0b810b06cd326063f94e688004635c3b2466
+```
 
 ## Implemented
 
@@ -37,37 +43,28 @@ Draft PR #65 is an isolated `DO NOT MERGE` CI and visual-QA channel. Neither `re
 
 ## Automated verification
 
-Verified product commit:
+Final transfer-branch head after removing the temporary workflow:
 
 ```text
-93268bb6a89db8a2508f2d8576d955c0b15fe89f
+0a3b77bf1d3fe26598c5de430a1021404ab125dc
 ```
 
 Successful runs on that exact SHA:
 
-- Compact Route Controls Core: `29197827160`;
-- Preview Core Checks: `29197827195`;
-- Navigation Profiles Core: `29197827184`;
-- Command Plan Route Core: `29197827209`;
-- Agent Docs Integrity: `29197827158`;
-- Preview Policy: `29197827154`;
-- Temporary Compact UI Visual QA: `29197827165`.
+- Compact Route Controls Core: `29198411948`;
+- Preview Core Checks: `29198411921`;
+- Navigation Profiles Core: `29198411929`;
+- Command Plan Route Core: `29198411949`;
+- Agent Docs Integrity: `29198411928`;
+- Preview Policy: `29198415192`.
 
-The focused browser scenario reported `3/3 passed` using system Chrome.
-
-Canonical generated documentation and the subproject journal were then synchronized in commit:
-
-```text
-31f47383b2281fc51f0edefa7e785b37c8ba68ad
-```
-
-The final documentation-only head must repeat all checks and the approved screenshot scenario before the temporary PR is closed.
+The verified branch was merged into `real-wargame-preview` as `f99c0b810b06cd326063f94e688004635c3b2466`.
 
 ## Visual inspection
 
-The workflow and both artifacts identify the exact product head SHA `93268bb6a89db8a2508f2d8576d955c0b15fe89f`.
+The last exact-SHA approved browser run before transfer was `29198043701`.
 
-All six PNGs were downloaded and opened:
+The focused scenario reported `3/3 passed` using system Chrome. All six PNGs were downloaded and opened:
 
 1. `01-game-compact-route-controls.png` — compact card, in-game profile selector and readable controls.
 2. `02-game-cost-overlay-quick-toggle.png` — quick toggle enabled, raster overlay visible, legend clear of front labels.
@@ -78,6 +75,6 @@ All six PNGs were downloaded and opened:
 
 ## Known limits
 
-- This work is not transferred to `real-wargame-preview`.
-- The branch-only workflow `.github/workflows/tmp-ui-compact-visual-qa.yml` must be removed before a later transfer.
 - Navigation v1 still has the previously documented zero-valued contracts for enemy-observation exposure, exact known enemy distance and territory route cost.
+- Movement-profile state remains in localStorage/JSON and is not yet embedded into scene JSON.
+- Group path reservation, flow fields and shared formation corridors are not implemented.
