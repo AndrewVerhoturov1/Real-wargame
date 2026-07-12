@@ -12,26 +12,27 @@ verifyWallGapRoute();
 verifyNoCornerCutting();
 verifyTerrainCosts();
 verifyBlockedGoalAdjustment();
+verifyExactBlockedGoalFailure();
 verifyEnclosedGoalFailure();
 verifyDeterminism();
 verifyPerformanceBound();
 
-console.log('Grid pathfinding smoke passed: occupancy, terrain, A*, goal adjustment, failure, determinism, performance.');
+console.log('Grid pathfinding smoke passed: canonical object geometry, terrain, A*, exact goals, failure, determinism, performance.');
 
 function verifyRotatedObjectOccupancy(): void {
   const map = normalizeMap(makeMap(9, 9, {
     objects: [{
       id: 'rotated_wall',
       kind: 'structure',
-      x: 4.5,
-      y: 4.5,
+      x: 4,
+      y: 4,
       widthCells: 4,
       heightCells: 0.6,
       rotationDegrees: 45,
     }],
   }));
   const grid = buildNavigationGrid(map);
-  assert.equal(isNavigationCellPassable(grid, 4, 4), false, 'object center must block movement');
+  assert.equal(isNavigationCellPassable(grid, 4, 4), false, 'object center cell must block movement');
   assert.equal(isNavigationCellPassable(grid, 3, 3), false, 'rotated footprint must block its diagonal span');
   assert.equal(isNavigationCellPassable(grid, 2, 4), true, 'rotation must not block the whole axis-aligned bounding box');
 }
@@ -44,8 +45,8 @@ function verifyWaterAndBridge(): void {
     objects: [{
       id: 'bridge',
       kind: 'bridge',
-      x: 3.5,
-      y: 3.5,
+      x: 3,
+      y: 3,
       widthCells: 1,
       heightCells: 1.2,
       rotationDegrees: 0,
@@ -100,8 +101,8 @@ function verifyBlockedGoalAdjustment(): void {
     objects: [{
       id: 'goal_house',
       kind: 'structure',
-      x: 6.5,
-      y: 6.5,
+      x: 6,
+      y: 6,
       widthCells: 1,
       heightCells: 1,
     }],
@@ -113,6 +114,30 @@ function verifyBlockedGoalAdjustment(): void {
   assert.equal(result.goalAdjusted, true);
   assert.notDeepEqual(result.resolvedGoal, requested);
   assert.match(result.reasonRu, /ближай/i);
+}
+
+function verifyExactBlockedGoalFailure(): void {
+  const map = normalizeMap(makeMap(8, 8, {
+    objects: [{
+      id: 'exact_goal_house',
+      kind: 'structure',
+      x: 6,
+      y: 6,
+      widthCells: 1,
+      heightCells: 1,
+    }],
+  }));
+  const result = findGridPath(
+    map,
+    { x: 1.5, y: 1.5 },
+    { x: 6.5, y: 6.5 },
+    { allowGoalAdjustment: false },
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.code, 'goal_unreachable');
+    assert.match(result.reasonRu, /точн/i);
+  }
 }
 
 function verifyEnclosedGoalFailure(): void {
