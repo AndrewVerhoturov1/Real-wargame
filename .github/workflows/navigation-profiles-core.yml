@@ -117,16 +117,3 @@ jobs:
             docs-check.log
           if-no-files-found: ignore
           retention-days: 5
-
-      - name: Pack source snapshot
-        if: always()
-        shell: bash
-        run: tar -czf /tmp/navigation-profiles-source.tar.gz --exclude=.git --exclude=node_modules --exclude='*.log' --exclude='.tmp-*' .
-
-      - name: Upload source snapshot
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: navigation-profiles-source
-          path: /tmp/navigation-profiles-source.tar.gz
-          retention-days: 2
