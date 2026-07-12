@@ -1,9 +1,8 @@
 import type { WorldPosition } from '../core/geometry';
 import { gridToWorld } from '../core/map/MapModel';
-import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
+import type { SimulationState } from '../core/simulation/SimulationState';
 import { sampleSmoothHeightLevel } from '../core/terrain/SmoothTerrain';
-import { getVisibilityProbeState } from '../core/ui/RuntimeUiState';
-import { computeLineOfSight } from '../core/visibility/LineOfSight';
+import { getVisibilityProbeResult } from '../core/visibility/VisibilityProbeService';
 import type { Locale } from '../i18n';
 
 export interface ScreenProjector {
@@ -121,18 +120,15 @@ export class HtmlOverlayRenderer {
   }
 
   private renderVisibilityProbeLabel(state: SimulationState, visibleKeys: Set<string>): void {
-    const probe = getVisibilityProbeState(state);
-    const unit = getSelectedUnit(state);
-
-    if (!probe.active || !probe.target || !unit) return;
+    const result = getVisibilityProbeResult(state);
+    if (!result) return;
 
     const key = 'line-of-sight:label';
     visibleKeys.add(key);
-    const result = computeLineOfSight(state.map, unit, probe.target);
     const label = this.getLabel(key, 'los-probe-label');
     const screen = this.projector.worldToScreen({
-      x: probe.target.x * state.map.cellSize,
-      y: probe.target.y * state.map.cellSize,
+      x: result.target.x * state.map.cellSize,
+      y: result.target.y * state.map.cellSize,
     });
     const text = result.blocked
       ? `До курсора: ${Math.round(result.totalDistanceMeters)} м\nВидно: ${Math.round(result.visibleDistanceMeters)} м\nПреграда: ${result.blockerReasonRu}`
