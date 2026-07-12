@@ -3,7 +3,7 @@
 **Date:** 2026-07-12  
 **Implementation branch:** `feat/perception-attention-v1-current-temp`  
 **Preview base:** `ca3f2e71327f184ce2aaccbd3749ebd6da93944c`  
-**Transfer to preview:** not performed
+**Transfer to preview:** PR #70 merged as `5deb899673c7b6e57b9089ecf890699f6d617a9a`
 
 ## Delivered
 
@@ -84,6 +84,12 @@ The browser loop caught and fixed issues that ordinary smoke tests did not revea
 - friendly attention-node controls were moved outside the hidden technical JSON card;
 - browser error tracking now ignores only the known missing favicon while preserving all other HTTP and console failures.
 
+## Transfer to preview
+
+PR #70 merged the verified implementation into `real-wargame-preview` as `5deb899673c7b6e57b9089ecf890699f6d617a9a`. The branch was `behind_by: 0` before merge, so the current compact route controls, navigation profiles and editor changes were preserved.
+
+Fresh PR checks on `a560b9b92593ce2c2b280d364431bba7d3c4aec4` passed Preview Core, Navigation Profiles Core, Compact Route Controls Core, Command Plan Route Core, Preview Policy and Agent Docs Integrity before the merge. `main` was not changed.
+
 ## Honest v1 limits
 
 - perception is calculated only for the selected soldier;
@@ -92,4 +98,4 @@ The browser loop caught and fixed issues that ordinary smoke tests did not revea
 - no commander contact-sharing chain exists yet;
 - no complete enemy-unit combat side, optics, detailed night or weather model was added;
 - no change was made to `main`;
-- implementation was not transferred into `real-wargame-preview`.
+- implementation is now canonical in `real-wargame-preview`; `main` was not changed.
