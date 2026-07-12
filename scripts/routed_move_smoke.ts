@@ -92,6 +92,7 @@ function verifyPlayerOrderUsesSharedPlanner(): void {
 
 function verifyBlockedPlayerCommandRemainsVisible(): void {
   const state = createTestState(makeWallMap(true));
+  state.map.objects.push(blockerAt(4.5, 3.5, 'initial_gap_blocker'));
   const unit = selectedUnit(state);
   issueRoutedMoveOrderToSelectedUnits(state, { x: 7.5, y: 3.5 });
 
@@ -217,5 +218,5 @@ function blockerAt(centerX: number, centerY: number, id: string): MapObject {
 }
 
 function distance(left: GridPosition, right: GridPosition): number {
-  return Math.hypot(right.x - left.x, right.y - left.y);
+  return Math.hypot(right.position?.x ?? right.x, right.position?.y ?? right.y);
 }
