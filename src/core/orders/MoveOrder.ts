@@ -1,4 +1,7 @@
 import type { GridPosition } from '../geometry';
+import type { NavigationProfileSource } from '../navigation/NavigationProfileResolver';
+import type { NavigationMovementMode } from '../navigation/NavigationProfiles';
+import type { GridPathCostBreakdown } from '../pathfinding/GridPathfinder';
 
 export type MoveOrderSource = 'player' | 'ai';
 export type MoveOrderRouteStatus = 'planned' | 'following' | 'replanned';
@@ -20,9 +23,23 @@ export interface MoveOrderOptions {
   readonly routeStatus?: MoveOrderRouteStatus;
   readonly routeRevision?: number;
   readonly pathCost?: number;
+  readonly pathDistanceMeters?: number;
+  readonly baselineDistanceMeters?: number;
+  readonly detourRatio?: number;
+  readonly detourLimited?: boolean;
+  readonly pathCostBreakdown?: GridPathCostBreakdown;
   readonly pathVisitedCells?: number;
   readonly pathReason?: string;
   readonly pathReasonRu?: string;
+  readonly movementMode?: NavigationMovementMode;
+  readonly navigationProfileId?: string;
+  readonly navigationProfileRevision?: number;
+  readonly navigationProfileSource?: NavigationProfileSource;
+  readonly knowledgeRevision?: number;
+  readonly replanCount?: number;
+  readonly lastReplanAtSeconds?: number;
+  readonly lastReplanReason?: string;
+  readonly lastReplanReasonRu?: string;
 }
 
 export interface MoveOrder {
@@ -40,9 +57,23 @@ export interface MoveOrder {
   routeStatus?: MoveOrderRouteStatus;
   routeRevision?: number;
   pathCost?: number;
+  pathDistanceMeters?: number;
+  baselineDistanceMeters?: number;
+  detourRatio?: number;
+  detourLimited?: boolean;
+  pathCostBreakdown?: GridPathCostBreakdown;
   pathVisitedCells?: number;
   pathReason?: string;
   pathReasonRu?: string;
+  movementMode?: NavigationMovementMode;
+  navigationProfileId?: string;
+  navigationProfileRevision?: number;
+  navigationProfileSource?: NavigationProfileSource;
+  knowledgeRevision?: number;
+  replanCount?: number;
+  lastReplanAtSeconds?: number;
+  lastReplanReason?: string;
+  lastReplanReasonRu?: string;
 }
 
 export function createMoveOrder(target: GridPosition, options: MoveOrderOptions = {}): MoveOrder {
@@ -61,8 +92,22 @@ export function createMoveOrder(target: GridPosition, options: MoveOrderOptions 
     routeStatus: options.routeStatus,
     routeRevision: options.routeRevision,
     pathCost: options.pathCost,
+    pathDistanceMeters: options.pathDistanceMeters,
+    baselineDistanceMeters: options.baselineDistanceMeters,
+    detourRatio: options.detourRatio,
+    detourLimited: options.detourLimited,
+    pathCostBreakdown: options.pathCostBreakdown ? { ...options.pathCostBreakdown } : undefined,
     pathVisitedCells: options.pathVisitedCells,
     pathReason: options.pathReason,
     pathReasonRu: options.pathReasonRu,
+    movementMode: options.movementMode,
+    navigationProfileId: options.navigationProfileId,
+    navigationProfileRevision: options.navigationProfileRevision,
+    navigationProfileSource: options.navigationProfileSource,
+    knowledgeRevision: options.knowledgeRevision,
+    replanCount: options.replanCount,
+    lastReplanAtSeconds: options.lastReplanAtSeconds,
+    lastReplanReason: options.lastReplanReason,
+    lastReplanReasonRu: options.lastReplanReasonRu,
   };
 }
