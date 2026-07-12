@@ -1,1 +1,1 @@
-Temporary trigger for reactive runtime smoke diagnostic rerun. Remove after the final green run.
+Temporary trigger for reactive runtime observer regression diagnostics. Remove after the final green run.
