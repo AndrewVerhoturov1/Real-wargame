@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - real-wargame-preview
+      - tmp/navigation-profiles-route-cost-20260712
   pull_request:
     branches:
       - real-wargame-preview
