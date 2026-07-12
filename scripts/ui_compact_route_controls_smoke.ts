@@ -77,7 +77,7 @@ expectContains(routedOrders, 'unit.playerNavigationProfileId', 'New player movem
 const overlayModel = read('src/rendering/CommandPlanRouteOverlayModel.ts');
 expectContains(overlayModel, "unit.plan?.status === 'active'", 'Only active plans may expose blue plan targets.');
 
-const workspaceCss = read('src/tactical-workspace.css');
+const workspaceCss = read('src/tactical-workspace-compact-route.css');
 expectContains(workspaceCss, '.unit-route-details-panel', 'Compact route details need an above-bar popover.');
 expectContains(workspaceCss, '.unit-bar-route-controls', 'Compact profile/cost controls need dedicated layout styles.');
 

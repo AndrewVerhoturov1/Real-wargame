@@ -1,9 +1,7 @@
 import './ai-node-editor.css';
 import './ai-node-editor-authoring.css';
-import '../shared/app-shell-menu.css';
 import graphData from '../data/ai/soldier_default_survival_graph.json';
 import { AI_NODE_TYPE_DEFINITIONS, type AiNodeCategory } from '../core/ai/AiNodeTypes';
-import { installAppShellMenu } from '../shared/AppShellMenu';
 
 const ENGINE_BASE_URL = 'http://127.0.0.1:8787';
 const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
@@ -18,7 +16,6 @@ const root = document.querySelector<HTMLElement>('#ai-node-editor-root');
 if (!root) throw new Error('AI node editor root is missing.');
 const editorRoot = root;
 
-installAppShellMenu({ mode: 'editor' });
 
 type JsonPrimitive = string | number | boolean | null;
 type JsonPosition = { x: number; y: number };
@@ -113,7 +110,6 @@ function render(): void {
           <div id="engine-status" class="engine-status compact-status ${engineOnline ? 'online' : 'offline'}"><i class="engine-status-dot" aria-hidden="true"></i><span>${escapeHtml(lastHealthText)}</span></div>
           <button id="toggle-palette" class="ai-editor-button" type="button">+ Add node</button>
           <button id="toggle-inspector" class="ai-editor-button" type="button">Inspector</button>
-          <button id="run-check-45" class="ai-editor-button primary" type="button">Auto 4–5</button>
           <button id="validate-graph" class="ai-editor-button" type="button">Validate</button>
           <button id="evaluate-once" class="ai-editor-button" type="button">Evaluate</button>
           <button id="export-graph" class="ai-editor-button" type="button">Export</button>
@@ -276,7 +272,6 @@ function installEventHandlers(): void {
   document.querySelector<HTMLButtonElement>('#toggle-bottom')?.addEventListener('click', toggleBottomPanel);
   document.querySelector<HTMLButtonElement>('#bottom-tab-console')?.addEventListener('click', () => setBottomTab('console'));
   document.querySelector<HTMLButtonElement>('#bottom-tab-json')?.addEventListener('click', () => setBottomTab('json'));
-  document.querySelector<HTMLButtonElement>('#run-check-45')?.addEventListener('click', () => { void runSimpleCheck45(); });
   document.querySelector<HTMLButtonElement>('#validate-graph')?.addEventListener('click', () => { void validateGraphThroughEngine(); });
   document.querySelector<HTMLButtonElement>('#evaluate-once')?.addEventListener('click', () => { void evaluateOnceThroughEngine(); });
   document.querySelector<HTMLButtonElement>('#save-node')?.addEventListener('click', saveSelectedNodeFromInspector);
@@ -458,7 +453,6 @@ function exportGraphJson(): void { const blob = new Blob([JSON.stringify(editorG
 function importGraphFromFileInput(event: Event): void { const file = (event.target as HTMLInputElement).files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { editorGraph = normalizeGraph(JSON.parse(String(reader.result))); ensurePositionsForGraph(); selectedNodeId = ensureSelectedNodeId(editorGraph.rootNodeId); saveGraph(); savePositions(); validationText = `Imported ${file.name}`; render(); } catch (error) { validationText = `Import error: ${error instanceof Error ? error.message : String(error)}`; render(); } }; reader.readAsText(file, 'utf-8'); }
 
 async function refreshEngineStatus(): Promise<void> { try { const health = await fetchJson<EngineHealthPayload>(`${ENGINE_BASE_URL}/engine/health`); engineOnline = Boolean(health.ok); lastHealthText = engineOnline ? `engine online · text=${health.textBase ?? 'en'} · overlay=${health.overlayLanguage ?? 'ru'}` : 'engine responded with error'; } catch { engineOnline = false; lastHealthText = 'engine offline: run Run-AI-Node-Editor.bat'; } render(); }
-async function runSimpleCheck45(): Promise<void> { await refreshEngineStatus(); await validateGraphThroughEngine(); await evaluateOnceThroughEngine(); const ok4 = engineOnline ? 'Пункт 4 OK: local engine online.' : 'Пункт 4 FAIL: local engine offline.'; const ok5 = evaluationText.includes('ok') || evaluationText.includes('valid') || evaluationText.includes('валид') ? 'Пункт 5 OK: evaluate-once ответил.' : 'Пункт 5 FAIL: evaluate-once не ответил.'; validationText = `${ok4}\n${ok5}\n\n${validationText}`; uiState.bottomOpen = true; uiState.bottomTab = 'console'; render(); }
 async function validateGraphThroughEngine(): Promise<void> { try { const payload = await fetchJson<EngineValidationPayload>(`${ENGINE_BASE_URL}/ai/graph/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editorGraph) }); validationText = JSON.stringify(payload, null, 2); } catch (error) { validationText = `Validate failed: ${error instanceof Error ? error.message : String(error)}`; } uiState.bottomOpen = true; uiState.bottomTab = 'console'; render(); }
 async function evaluateOnceThroughEngine(): Promise<void> { const request: EngineEvaluateRequest = { graph: editorGraph, unitId: 'soldier_editor_preview', blackboard: editorGraph.blackboardDefaults, hasOrder: false }; try { const payload = await fetchJson<EngineEvaluationPayload>(`${ENGINE_BASE_URL}/ai/graph/evaluate-once`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) }); evaluationText = JSON.stringify(payload, null, 2); } catch (error) { evaluationText = `Evaluate failed: ${error instanceof Error ? error.message : String(error)}`; } render(); }
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> { const response = await fetch(url, init); if (!response.ok) throw new Error(`${response.status} ${response.statusText}`); return await response.json() as T; }

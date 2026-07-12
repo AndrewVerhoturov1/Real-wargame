@@ -9,12 +9,13 @@ import {
   saveNavigationProfileRegistry,
   subscribeNavigationProfileRegistry,
 } from '../core/navigation/NavigationProfileStorage';
+import { exitLab, openGameTab } from '../shared/AppShellMenu';
 
 const graphRootElement = document.querySelector<HTMLElement>('#ai-node-editor-root');
 if (!graphRootElement) throw new Error('AI node editor root is missing for navigation profile editor.');
 const graphRoot: HTMLElement = graphRootElement;
 
-type EditorTab = 'graph' | 'blackboard' | 'profiles' | 'diagnostics';
+type EditorTab = 'graph' | 'blackboard' | 'profiles';
 type NumericPath =
   | `terrainCosts.${keyof NavigationProfile['terrainCosts']}`
   | 'slopeWeight'
@@ -95,10 +96,17 @@ const navigation = document.createElement('nav');
 navigation.className = 'navigation-profile-tabs';
 navigation.setAttribute('aria-label', 'Разделы редактора ИИ');
 navigation.innerHTML = `
-  <button type="button" data-navigation-tab="graph">Граф поведения</button>
-  <button type="button" data-navigation-tab="blackboard">Чёрная доска</button>
-  <button type="button" data-navigation-tab="profiles">Профили движения</button>
-  <button type="button" data-navigation-tab="diagnostics">Диагностика</button>
+  <div class="navigation-profile-main-tabs">
+    <button type="button" data-navigation-tab="graph">Граф поведения</button>
+    <button type="button" data-navigation-tab="profiles">Профили движения</button>
+    <button type="button" data-navigation-tab="blackboard">Данные бойца</button>
+  </div>
+  <div class="navigation-profile-global-actions" data-editor-global-actions></div>
+  <div class="navigation-profile-app-actions">
+    <button type="button" data-editor-action="refresh">Обновить</button>
+    <button type="button" data-editor-action="open-game">Открыть игру</button>
+    <button type="button" data-editor-action="exit" class="danger">Выход</button>
+  </div>
 `;
 const panel = document.createElement('section');
 panel.className = 'navigation-profile-workbench';
@@ -107,11 +115,17 @@ graphRoot.before(navigation);
 graphRoot.after(panel);
 
 navigation.addEventListener('click', (event) => {
-  const button = event.target instanceof Element
-    ? event.target.closest<HTMLButtonElement>('[data-navigation-tab]')
-    : null;
-  if (!button) return;
-  showTab(button.dataset.navigationTab as EditorTab);
+  const target = event.target instanceof Element ? event.target : null;
+  const tabButton = target?.closest<HTMLButtonElement>('[data-navigation-tab]');
+  if (tabButton) {
+    showTab(tabButton.dataset.navigationTab as EditorTab);
+    return;
+  }
+  const actionButton = target?.closest<HTMLButtonElement>('[data-editor-action]');
+  if (!actionButton) return;
+  if (actionButton.dataset.editorAction === 'refresh') window.location.reload();
+  else if (actionButton.dataset.editorAction === 'open-game') openGameTab();
+  else if (actionButton.dataset.editorAction === 'exit') void exitLab();
 });
 
 subscribeNavigationProfileRegistry((nextRegistry) => {
@@ -134,7 +148,6 @@ function showTab(tab: EditorTab): void {
   });
   if (tab === 'profiles') renderProfiles();
   else if (tab === 'blackboard') renderBlackboard();
-  else if (tab === 'diagnostics') renderDiagnostics();
 }
 
 function renderProfiles(): void {
@@ -336,22 +349,9 @@ function renderBlackboard(): void {
   try { defaults = raw ? (JSON.parse(raw) as { blackboardDefaults?: unknown }).blackboardDefaults ?? {} : {}; } catch { defaults = {}; }
   panel.innerHTML = `
     <section class="navigation-profile-placeholder">
-      <h2>Чёрная доска</h2>
-      <p>Постоянные профили маршрута здесь не хранятся. Ниже показаны текущие исходные значения памяти графа.</p>
+      <h2>Данные бойца</h2>
+      <p>Исходные значения памяти, которыми пользуется граф поведения. Профили маршрута хранятся отдельно.</p>
       <pre>${escapeHtml(JSON.stringify(defaults, null, 2))}</pre>
-    </section>`;
-}
-
-function renderDiagnostics(): void {
-  panel.innerHTML = `
-    <section class="navigation-profile-placeholder">
-      <h2>Диагностика маршрута</h2>
-      <p>В игре выбери бойца и включи «Стоимость маршрута». Слой показывает базовую или итоговую цену клетки, а жёлтый приказ, синий план и зелёный маршрут остаются поверх.</p>
-      <div class="navigation-profile-diagnostic-cards">
-        <article><strong>Реализовано честно</strong><span>местность, лес, мосты, канавы, уклон, проходимость, известные бойцу угрозы, маскировка леса и канав.</span></article>
-        <article><strong>Подготовлено архитектурно</strong><span>субъективная видимость противнику, точная известная дистанция до врага и стоимость линии фронта. Пока они явно показываются как недоступные.</span></article>
-        <article><strong>Производительность</strong><span>два растровых слоя, typed arrays, ревизионные кеши; движение курсора читает одну готовую клетку и не запускает A*.</span></article>
-      </div>
     </section>`;
 }
 
@@ -383,7 +383,7 @@ function textField(path: string, label: string, value: string): string {
 }
 
 function textArea(path: string, label: string, value: string): string {
-  return `<label><span>${label}</span><textarea data-profile-text="${path}" rows="3">${escapeHtml(value)}</textarea></label>`;
+  return `<label><span>${label}</span><textarea data-profile-text="${path}" rows="2">${escapeHtml(value)}</textarea></label>`;
 }
 
 function resetDraftField(path: string): void {
