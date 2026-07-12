@@ -18,6 +18,7 @@ on:
       - scripts/check_agent_docs.mjs
       - .github/pull_request_template.md
       - .github/workflows/agent-docs-integrity.yml
+      - .github/workflows/preview-policy.yml
       - .github/workflows/preview-screenshots.yml
   pull_request:
     paths:
@@ -35,6 +36,7 @@ on:
       - scripts/check_agent_docs.mjs
       - .github/pull_request_template.md
       - .github/workflows/agent-docs-integrity.yml
+      - .github/workflows/preview-policy.yml
       - .github/workflows/preview-screenshots.yml
 
 permissions:
