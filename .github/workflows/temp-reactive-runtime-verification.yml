@@ -37,6 +37,14 @@ jobs:
         run: |
           set -o pipefail
           npm run reactive-runtime:smoke 2>&1 | tee reactive-runtime.log
+      - name: Blackboard observer regression
+        id: observer
+        if: steps.reactive.conclusion == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run blackboard-observer:smoke 2>&1 | tee reactive-observer.log
       - name: Upload reactive logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -45,26 +53,25 @@ jobs:
           path: |
             reactive-core-patch.log
             reactive-runtime.log
+            reactive-observer.log
           if-no-files-found: error
           retention-days: 3
-      - if: steps.reactive.conclusion == 'success'
-        run: npm run blackboard-observer:smoke
-      - if: steps.reactive.conclusion == 'success'
+      - if: steps.observer.conclusion == 'success'
         run: npm run event-queue:smoke
-      - if: steps.reactive.conclusion == 'success'
+      - if: steps.observer.conclusion == 'success'
         run: npm run runtime-session:smoke
-      - if: steps.reactive.conclusion == 'success'
+      - if: steps.observer.conclusion == 'success'
         run: npm run composite:smoke
-      - if: steps.reactive.conclusion == 'success'
+      - if: steps.observer.conclusion == 'success'
         run: npm run runtime:smoke
-      - if: steps.reactive.conclusion == 'success'
+      - if: steps.observer.conclusion == 'success'
         run: npm run route-status:smoke
-      - if: steps.reactive.conclusion == 'success'
+      - if: steps.observer.conclusion == 'success'
         run: npm run move-bridge:smoke
-      - if: steps.reactive.conclusion == 'success'
+      - if: steps.observer.conclusion == 'success'
         run: npm run build
       - name: Commit verified reactive runtime core
-        if: steps.reactive.conclusion == 'success'
+        if: steps.observer.conclusion == 'success'
         uses: actions/github-script@v7
         with:
           script: |
@@ -95,6 +102,6 @@ jobs:
                 content: fs.readFileSync(path).toString('base64'),
               });
             }
-      - name: Fail when reactive smoke failed
-        if: steps.reactive.conclusion != 'success'
+      - name: Fail when reactive checks failed
+        if: steps.observer.conclusion != 'success'
         run: exit 1
