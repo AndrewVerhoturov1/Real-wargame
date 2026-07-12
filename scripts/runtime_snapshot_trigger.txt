@@ -1,1 +1,0 @@
-Temporary trigger for permanent runtime snapshot and scene integration checks. Remove after the final green run.
