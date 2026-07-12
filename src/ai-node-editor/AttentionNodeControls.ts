@@ -20,12 +20,16 @@ function scheduleRender(): void {
 function renderFriendlyControls(): void {
   scheduled = false;
   const textarea = document.querySelector<HTMLTextAreaElement>('#node-parameters');
-  const inspector = textarea?.closest<HTMLElement>('.compact-inspector-card');
+  const inspector = textarea?.closest<HTMLElement>('.inspector-panel');
   if (!textarea || !inspector) return;
-  if (inspector.querySelector('[data-attention-node-controls]')) return;
 
   const type = readSelectedNodeType();
   if (type !== 'SetAttentionMode' && type !== 'SetSearchSector' && type !== 'ClearAttentionOverride') return;
+
+  const humanPanel = inspector.querySelector<HTMLElement>('.human-node-panel');
+  humanPanel?.classList.add('human-hidden-original');
+  if (inspector.querySelector('[data-attention-node-controls]')) return;
+
   const parameters = parseParameters(textarea.value);
   const root = document.createElement('section');
   root.dataset.attentionNodeControls = 'true';
@@ -70,7 +74,10 @@ function renderFriendlyControls(): void {
     }));
   }
 
-  textarea.closest('details')?.before(root);
+  const summaryCard = inspector.querySelector<HTMLElement>('.inspector-card');
+  if (humanPanel) humanPanel.insertAdjacentElement('afterend', root);
+  else if (summaryCard) summaryCard.insertAdjacentElement('afterend', root);
+  else inspector.prepend(root);
 }
 
 function readSelectedNodeType(): string {
