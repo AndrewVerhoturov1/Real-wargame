@@ -101,3 +101,9 @@ No transfer to `real-wargame-preview` or `main` was performed.
 - exceptionally large future maps may require a background incremental builder;
 - full enemy combat units, commander contact sharing, optics, detailed night and weather are outside this version;
 - no change has been made to `real-wargame-preview` or `main`.
+
+## Preview branch movement after verification
+
+After the exact-SHA visual run, `real-wargame-preview` advanced by two commits from merge base `bbf3d08cde1063fcbde8070793c7df6f50d23a59`. The changed files are `src/core/navigation/NavigationRuntime.ts`, `scripts/navigation_profiles_smoke.ts` and `scripts/ui_compact_route_controls_smoke.ts`.
+
+They do not overlap the heatmap implementation files, but they were not present in visual SHA `923fdde44d15d447b01178ce1430e2c68f11a215`. Therefore the temporary branch remains intentionally unsynchronized for this handoff. Before any future transfer, current preview must be merged into the temporary branch and the affected regression/browser checks rerun.
