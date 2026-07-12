@@ -1,107 +1,107 @@
-# AI Single-Unit Editor — Tactical Awareness and Front Context Lab
+# AI Single-Unit Editor — Stateful Tactical Awareness Lab
+
+This file describes stable purpose, architecture and boundaries. Current implementation status belongs in:
+
+```text
+docs/subprojects/ai-single-unit-editor/STATUS.md
+docs/subprojects/ai-single-unit-editor/subproject.json
+```
+
+Immediate continuation context, when needed, belongs in `HANDOFF.md`.
 
 ## Goal
 
-Создать понятную лабораторию поведения отдельного бойца в существующей RTS-основе Real-wargame.
+Create a human-understandable laboratory for the behavior of one selected soldier inside the existing Real-Wargame tactical foundation.
 
-Пользователь должен иметь возможность:
+The user should be able to:
 
-- собирать поведение из универсальных AI-нод;
-- проверять граф через local engine и GraphRunner;
-- запускать граф для выбранного бойца на реальной карте;
-- настраивать бойца, угрозы, укрытия, лес и рельеф;
-- видеть субъективную память и карту опасности бойца;
-- передавать тактические и территориальные параметры в Utility AI;
-- понимать причину решения.
+- assemble behavior from reusable AI nodes;
+- understand Blackboard concepts in normal Russian language;
+- inspect Utility scores, chosen branches and explanations;
+- execute the graph for a real selected soldier on the tactical map;
+- see subjective threat memory, danger, concealment and known cover;
+- use territorial context without turning it into omniscient enemy detection;
+- observe multi-tick actions through explicit runtime state;
+- configure normal behavior without editing JSON or source code.
 
-Служебный data contract использует английские ключи. Русский интерфейс хранится в overlay-полях `*Ru`.
+Canonical code/data names are English. Human-facing Russian overlays are complete and Russian opens by default.
 
-## Current focus
-
-Текущий этап:
-
-```text
-single-unit tactical awareness
-+ Tactical Workspace
-+ minimal front context v1
-```
-
-Вертикальный срез:
+## Architectural flow
 
 ```text
 AI Node Editor
-→ graph v6
-→ AiGameBridge
-→ blackboard выбранного бойца
-→ субъективная awareness map
-→ территориальный контекст
-→ AiGraphRunner + UtilitySelector
-→ effects / score / trace / explanation.
+→ graph data contract
+→ Blackboard built for selected soldier
+→ AiGraphRunner immediate evaluation
+→ AiGraphRuntime resumable lifecycle
+→ AiGameBridge game adapter
+→ SimulationState effects
+→ runtime trace and human explanation
 ```
 
-## Current state
+## Main components
 
-Работает:
-
-- Tactical Workspace с режимами `Симуляция` и `Редактирование`;
-- единый GameEditorWorkbench;
-- AI Node Editor;
-- local engine;
-- GraphRunner + UtilitySelector v1;
-- runtime trace;
-- индивидуальная память угроз;
-- awareness grid;
-- опасность, скрытность и известные укрытия;
-- один общий запуск `Run-Real-Wargame-Lab.bat`;
-- минимальная линия фронта из трёх вертикальных зон;
-- управление двумя X-границами во вкладке `Сцена`;
-- переключатель видимости в меню `Вид`;
-- передача территориальных runtime-параметров в blackboard.
-
-## Key decisions
-
-- Первая версия ограничена одним выбранным бойцом.
-- Node Editor не является отвязанным generic framework.
-- Tactical Workspace имеет ровно два режима.
-- Редактор всегда ставит симуляцию на паузу.
-- `AiGraphRunner.ts` не импортирует PixiJS, DOM, localStorage или `SimulationState`.
-- `AiGameBridge.ts` является адаптером.
-- Awareness субъективна и не раскрывает объективный мир.
-- Маскировка, защита и надёжность укрытия различаются.
-- Awareness grid не пересчитывается каждый кадр.
-- Линия фронта является стратегическим контекстом, а не датчиком противника.
-- Территория влияет на Utility AI как модификатор, но не должна жёстко отменять приказ.
-- Визуализация фронта не использует поклеточный Pixi-рендер.
-- `main` не менять без прямого GO пользователя.
-
-## Read first
-
-1. `docs/subprojects/ai-single-unit-editor/HANDOFF.md`
-2. `docs/subprojects/ai-single-unit-editor/SUBPROJECT.md`
-3. `docs/subprojects/ai-single-unit-editor/subproject.json`
-4. `docs/subprojects/ai-single-unit-editor/JOURNAL.md`
-5. `ideas/FRONT_LINE_INFLUENCE_ON_SINGLE_SOLDIER_AI.md`
-6. `docs/ai/AGENT_START_HERE.md`
-7. `AGENTS.md`
-8. `docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md`
-9. `.agents/skills/real-wargame-local-preview/SKILL.md`
-10. `docs/manual-test/TACTICAL_WORKSPACE_STAGE_7.md`
-11. `docs/manual-test/AI_NODE_EDITOR_STAGE_4.md`
-12. `docs/manual-test/GAME_EDITOR_WORKBENCH_STAGE_6.md`
-
-## Architecture
-
-### AI
+### Graph contract
 
 ```text
 src/core/ai/AiGraph.ts
 src/core/ai/AiNodeTypes.ts
 src/core/ai/AiBlackboard.ts
 src/core/ai/AiGraphValidation.ts
-src/core/ai/AiGraphRunner.ts
-src/core/ai/AiGameBridge.ts
-src/data/ai/soldier_default_survival_graph.json
 ```
+
+The graph and Blackboard use serializable, headless data.
+
+### Immediate evaluation
+
+```text
+src/core/ai/AiGraphRunner.ts
+```
+
+`AiGraphRunner` evaluates conditions and Utility branches and returns effects, scores, trace, explanation and cooldown changes.
+
+It remains independent of PixiJS, DOM, localStorage and `SimulationState`.
+
+### Stateful execution
+
+```text
+src/core/ai/AiGraphRuntime.ts
+```
+
+`AiGraphRuntime` adds serializable multi-tick execution state and explicit lifecycle:
+
+```text
+start → update → complete
+               ↘ cancel
+```
+
+Execution state is separate from Blackboard. A duration/running node must define ownership and safe cleanup before it is connected to live behavior.
+
+### Game adapter
+
+```text
+src/core/ai/AiGameBridge.ts
+```
+
+The Bridge:
+
+- builds the current selected-soldier Blackboard;
+- invokes Runner and Runtime;
+- stores execution state in the soldier behavior runtime;
+- applies returned effects to the live game;
+- writes runtime trace and explanation for diagnostics.
+
+The Bridge is allowed to know `SimulationState`; the pure Runner and Runtime are not.
+
+### Human authoring and diagnostics
+
+```text
+ai-node-editor.html
+src/ai-node-editor/
+src/data/ai/
+```
+
+The editor provides reusable nodes, human parameter panels, validation, import/export and live runtime trace. Normal use must not require manual JSON.
 
 ### Tactical awareness
 
@@ -109,188 +109,81 @@ src/data/ai/soldier_default_survival_graph.json
 src/core/knowledge/SoldierThreatMemory.ts
 src/core/knowledge/SoldierAwarenessGrid.ts
 src/core/cover/SmallArmsCoverEvaluation.ts
-src/core/pressure/PressureZone.ts
-src/core/pressure/ThreatEvaluation.ts
+src/core/pressure/
+src/rendering/PixiAwarenessHeatmapRenderer.ts
 ```
 
-### Tactical Workspace and editor
+Awareness is subjective. It is built from what the soldier has sensed or remembered, not from unrestricted world state.
 
-```text
-src/ui/TacticalWorkspace.ts
-src/ui/GameEditorWorkbench.ts
-src/core/editor/GameEditorDrafts.ts
-src/core/editor/GameEditorPlacement.ts
-src/input/BoardInputController.ts
-```
-
-### Front context
+### Territorial context
 
 ```text
 src/core/front/FrontZoneState.ts
 src/ui/FrontZoneControls.ts
 src/front-zones.css
-tests/front-zones.spec.ts
-ideas/FRONT_LINE_INFLUENCE_ON_SINGLE_SOLDIER_AI.md
 ```
 
-### Local launch
+The simple front model provides friendly, neutral and enemy territory as strategic background context. It does not reveal enemies, block movement or replace immediate danger.
 
-```text
-Run-Real-Wargame-Lab.bat
-lab-launch.html
-scripts/real_wargame_lab_manager.mjs
-src/shared/AppShellMenu.ts
-```
+## Stable decisions
 
-## Current awareness blackboard
+- Begin with one selected soldier; squad-level AI comes later.
+- The game has exactly two user modes: Simulation and Editing.
+- Editing pauses normal simulation.
+- Legacy one-off nodes do not return when reusable nodes express the same meaning.
+- Heavy awareness calculations are cached and invalidated; they do not run every frame.
+- Persistent interface controls are updated in place rather than recreated on each live-state change.
+- A running action cleans only resources and orders it owns.
+- A newer player/commander order always survives cleanup of an older AI action.
+- Front visualization uses a small fixed overlay, not per-cell rendering.
+- Scene export compatibility must not be broken silently.
+- `main` is never changed without explicit human GO.
 
-Основные тактические входы:
+## Data responsibilities
 
-```text
-danger
-stress
-suppression
-fatigue
-morale
-health
-ammo
-distanceToCover
-enemyVisible
-enemyKnown
-underFire
-hasOrder
-isInCover
-weaponReady
-directionToThreat
-threatDistance
-threatAngle
-coverProtection
-bestCoverQuality
-currentPositionDanger
-currentExpectedProtection
-bestSafePositionScore
-distanceToBestSafePosition
-routeDanger
-threatConfidence
-current_action
-self_position
-order_target_position
-retreat_position
-best_cover_position
-current_target
-remembered_enemy_position
-```
+### Permanent soldier data
 
-Территориальные runtime-входы:
+Traits, equipment and stable identity.
 
-```text
-territorySafety
-territoryKind
-territoryFriendly
-territoryNeutral
-territoryEnemy
-```
+### Initial/reset state
 
-Значения безопасности первой версии:
+Scenario starting condition used by reset and editor workflows.
 
-```text
-friendly  80
-neutral   50
-enemy     20
-```
+### Live runtime state
 
-Эти ключи попадают в исполняемый blackboard через `aiGraphMemory`.
+Current health, stress, suppression, posture, action, movement and AI execution state.
 
-Ограничение: человеко-понятный каталог/селекторы AI Node Editor ещё не полностью синхронизированы с новыми территориальными ключами.
+### Blackboard
 
-## Front context v1
+A decision input assembled for the current evaluation. It may contain sensed values, remembered values, current order context and tactical/territorial derived values.
 
-Схема:
+### Execution state
 
-```text
-своя территория | серая зона | вражеская территория
-```
-
-- две вертикальные X-границы;
-- редактирование во вкладке `Сцена`;
-- переключение слоя через `Вид`;
-- линии следуют за камерой и масштабом;
-- используется пять HTML-элементов;
-- нет автоматического движения фронта.
-
-Runtime-состояние хранится в `WeakMap`, поэтому пока не входит в `scene-export-v3`.
-
-## Storage
-
-```text
-real-wargame.ai-node-editor.graph.v6
-real-wargame.ai-node-editor.positions.v6
-real-wargame.ai-node-editor.ui.v6
-real-wargame.ai-node-editor.debug.v1
-```
-
-Старые версии storage не возвращать.
-
-## Scene format
-
-```text
-scene-export-v3
-```
-
-Фронтовые границы пока не сохраняются в JSON сцены.
-
-## Important runtime rules
-
-- GraphRunner автоматически работает только для выбранного бойца.
-- Во время паузы и редактора bridge не выполняет обычный tick.
-- Awareness map кэшируется.
-- Территориальная безопасность не заменяет реальную опасность.
-- Своя территория не раскрывает врагов.
-- Вражеская территория не означает автоматический контакт.
-- Постоянные UI-элементы не должны пересоздаваться из-за каждого изменения состояния.
-- Не использовать `.editor-scene-tools-slot` для постоянной панели фронта.
-- `MutationObserver` не должен менять наблюдаемый DOM в бесконечном цикле.
+Temporary serializable lifecycle state for the active multi-tick graph step. It is not a general memory store.
 
 ## Boundaries
 
-- Не переписывать RTS-симуляцию.
-- Не делать squad-level AI до стабилизации одного бойца.
-- Не запускать graph для всей армии.
-- Не возвращать legacy-ноды.
-- Не пересчитывать awareness каждый кадр.
-- Не считать объективный мир известным.
-- Не смешивать core AI с PixiJS.
-- Не ломать scene export/import.
-- Не превращать фронт в постоянно пересчитываемую карту влияния.
-- Не рисовать фронт тысячами клеток.
-- Не менять `main` без GO.
+Do not:
 
-## Known limitations
+- rewrite the complete RTS simulation for an AI-node feature;
+- run the graph for the whole army before one-soldier behavior is stable;
+- treat the objective world as automatically known;
+- couple Runner/Runtime to PixiJS or DOM;
+- recompute awareness every frame;
+- make territory safety identical to current danger;
+- turn the front into a continuously recalculated influence map in the simple version;
+- introduce a duration/running action without cancel cleanup and ownership tests;
+- delete a replacement player order during AI cleanup;
+- claim a planned mechanic is implemented;
+- claim browser/visual verification without fresh inspected evidence.
 
-- Нет полноценного enemy AI.
-- Нет баллистики и повреждений.
-- Нет обмена знаниями.
-- Нет истории N решений.
-- Нет вместимости укрытий.
-- Нет масштабирования awareness на сотни бойцов.
-- Готовое поведение зависит от graph.
-- Территория не сохраняется в scene JSON.
-- Линия не движется автоматически.
-- Нет расчёта направления и расстояния до своей территории.
-- Территориальные ключи ещё не полностью представлены в удобных селекторах редактора нод.
-- Нет готового проверенного графа, который реально меняет поведение от территории.
+## Verification families
 
-## Testing
-
-Основной запуск:
+Core and AI changes use focused combinations of:
 
 ```text
-Run-Real-Wargame-Lab.bat
-```
-
-Машинные проверки:
-
-```text
+npm run runtime:smoke
+npm run dictionary:smoke
 npm run workspace:smoke
 npm run lab:smoke
 npm run game-editor:smoke
@@ -300,33 +193,15 @@ npm run validate:ai-graph
 npm run build
 ```
 
-Последний полностью проверенный app commit:
+User-visible changes also use the real-browser workflow from:
 
 ```text
-627a77ca4f98241ec863809d7e83f26bc1ba5b0c
+.agents/skills/real-wargame-local-preview/SKILL.md
 ```
 
-Проверка:
+Task-specific routes are in:
 
 ```text
-core run 29152364956 — success;
-screenshot run 29152364936 — success;
-Playwright 7/7;
-14 PNG;
-ключевой front-zone PNG просмотрен.
+.agents/skills/real-wargame-ai-runtime/SKILL.md
+docs/ai/TASK_ROUTER.md
 ```
-
-## Next suggested work
-
-1. Добавить территориальные ключи в каталог и русские селекторы AI Node Editor.
-2. Добавить:
-   - `distanceToFriendlyTerritory`;
-   - `directionToFriendlyTerritory`;
-   - `movingDeeperIntoEnemyTerritory`.
-3. Собрать один тестовый Utility AI граф:
-   - осторожность в серой/вражеской зоне;
-   - повышенный приоритет укрытия;
-   - отход к своим при подавлении.
-4. Проверить поведение в браузере и runtime trace.
-5. После стабилизации добавить границы в scene export/import.
-6. Только затем рассматривать автоматическое редкое движение фронта.

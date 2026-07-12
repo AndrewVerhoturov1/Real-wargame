@@ -1,138 +1,129 @@
-# Обзор совместной разработки через GitHub
+# GitHub Collaboration Overview
 
-Этот документ объясняет общий порядок работы простым языком. Он не привязан к конкретному продукту, жанру, движку или технологии.
+This document explains the collaboration system in plain language. The short binding contract is `AGENTS.md`; machine-readable policy is in `docs/ai/repo-context.json`.
 
-## Зачем нужна система
+## Roles
 
-Когда над репозиторием работают человек, Codex, OpenCode и внешний web-chat, легко получить хаос: кто-то меняет не ту ветку, кто-то делает слишком большой кусок, кто-то не проверяет результат, а человек не понимает, что принимать.
+### Human
 
-Поэтому вводится простой контракт:
+The human defines the goal, tests the result when needed and makes the final GO/NO-GO decision. The human is not expected to manage Git, terminals, branches, merge conflicts or CI details.
+
+### GitHub-aware web chat
+
+The web chat can read repository context, implement a bounded task, deliver it to preview or an explicitly requested isolated branch, inspect checks and report honestly.
+
+### Codex
+
+Codex acts as controller and reviewer: it prepares tasks, verifies diffs and checks, explains risks and helps the human test the result.
+
+### OpenCode
+
+OpenCode handles bounded routine work such as search, commands, logs, focused edits and documentation updates under Codex control.
+
+### Manual zworker
+
+A manual zworker has no repository state. It receives explicit public files and returns a ZIP with `answer.md` and repo-relative files.
+
+## Branches
 
 ```text
-одна задача -> одна ветка -> один Pull Request -> проверка -> решение человека
+main                  stable branch; explicit human GO required
+real-wargame-preview  normal working and human-test branch
+feature/*             isolated or temporary work when requested/needed
 ```
 
-## Что такое `main`
+## Normal GitHub-aware delivery
 
-`main` — это стабильная базовая ветка. Она должна оставаться понятной и рабочей.
-
-`main` не используется как рабочее место для содержательных изменений. Если нужно сделать задачу, для неё создаётся отдельная ветка и Pull Request.
-
-## Что такое ветка простыми словами
-
-Ветка — это черновик изменений.
-
-Пример:
+Preferred route:
 
 ```text
-main                         стабильная база
-external/update-docs          черновик внешнего web-chat
-codex/review-pr-12            черновик Codex
-opencode/rename-field         маленькая техническая правка
+bounded task
+→ direct commit/push to real-wargame-preview
+→ automated checks
+→ human-facing report
 ```
 
-Пока ветка не принята, она не портит `main`.
+Fallback route:
 
-## Что такое Pull Request простыми словами
+```text
+temporary task branch
+→ Pull Request into real-wargame-preview
+→ automated checks and review
+→ transfer result to preview
+→ close temporary branch and PR
+```
 
-Pull Request — это предложение принять изменения из черновика в стабильную базу.
+Explicit isolation route:
 
-Он должен отвечать на вопросы:
+```text
+user says not to transfer yet
+→ keep work on the named feature branch
+→ run branch/PR checks without merge
+→ report transfer_path: isolated branch only
+```
 
-- что сделано;
-- зачем сделано;
-- какие файлы изменены;
-- как проверить;
-- что не проверялось;
-- какие есть риски.
+## Modes
 
-## Главный цикл
+### R
 
-1. Человек или Codex формулирует задачу.
-2. Исполнитель создаёт отдельную ветку.
-3. Исполнитель делает ограниченные изменения.
-4. Исполнитель открывает Pull Request.
-5. Codex проверяет изменения и объясняет человеку.
-6. Человек решает: принять, доработать, отклонить или отложить.
-7. Только после явного разрешения изменения могут попасть в `main`.
+Manual external worker without GitHub write access. Input is explicit public context; output is a ZIP with `answer.md`.
 
-## Где место внешнего web-chat
+### Q
 
-Внешний web-chat может делать работу через GitHub-интеграцию. Но он должен работать в ветке и возвращать результат через Pull Request.
+GitHub-aware bounded implementation. Output is a commit in `real-wargame-preview`, or a PR into preview when direct delivery is impossible. It is not a ZIP workflow.
 
-Он не должен сам мержить результат и не должен включать auto-merge.
+### X / r-init
 
-## Где место Codex
+Human preview workflow for changes that must be launched and tested before acceptance. It includes a terminal-free launcher, a human checklist and explicit GO/NO-GO.
 
-Codex — прораб и проверяющий. Он помогает человеку не заниматься Git вручную.
+Route X may be used as a delivery mechanism, but it is not identical to the complete r-init process.
 
-Codex может:
+## Required checks
 
-- подготовить задачу для внешнего web-chat;
-- выбрать режим R, Q или X;
-- проверить Pull Request;
-- объяснить diff простыми словами;
-- запустить доступные проверки;
-- составить замечания;
-- принять PR только после прямого разрешения человека.
+Every report states:
 
-## Где место OpenCode
+- what changed;
+- exact branch and commit/PR;
+- how the result was delivered;
+- checks that actually ran;
+- checks that did not run;
+- human verification still needed;
+- known risks;
+- whether `main` was touched.
 
-OpenCode — руки для простых поручений. Он помогает Codex выполнять рутину: искать, заменять, запускать команды, собирать логи, обновлять документы.
+For visual work, a green workflow is insufficient until fresh PNG artifacts from the same commit are opened and inspected.
 
-OpenCode не должен сам выбирать направление работы или принимать PR.
+## Documentation state
 
-## Где место ручного zworker
+Current status is stored only in:
 
-Ручной zworker полезен, когда нужен внешний сильный черновик без доступа к локальной машине и без GitHub-записи.
+```text
+docs/ai/repo-context.json
+docs/subprojects/<id>/subproject.json
+```
 
-Ему дают публичные raw-ссылки и строгий scope. Он возвращает ZIP с `answer.md` и файлами по repo-relative путям. Потом Codex/OpenCode решают, применять ли результат.
+Generated status pages are refreshed with:
 
-## Режимы внешнего запроса: R, Q и X
+```text
+npm run docs:sync
+```
 
-В этой системе есть два разных способа обращаться к внешнему исполнителю.
+## Safety
 
-**R** — полный ручной запрос. В нём Codex или человек вручную даёт все ссылки, правила, ограничения и требует вернуть ZIP с `answer.md`. Это удобно, когда у внешнего исполнителя нет доступа к GitHub или нужен независимый архивный результат.
+Never:
 
-**Q** — короткий запрос для внешнего web-chat с GitHub-доступом. В нём Codex указывает проект, репозиторий, подпроект, ожидаемый объём работ, ссылки только на правила/навигацию и формат ответа. Внешний исполнитель сам читает репозиторий, создаёт ветку и PR, а Codex потом проверяет PR.
+- write or merge to `main` without explicit human GO;
+- enable auto-merge;
+- publish secrets or private data;
+- claim checks that did not run;
+- leave temporary branches or visual-QA PRs open without an explicit reason;
+- ask the human to perform Git or terminal work that an agent can safely perform.
 
-Q-режим не отменяет контроль Codex и решение человека. В Q нельзя писать прямо в `main`, включать auto-merge или мержить без человека.
+Detailed references:
 
-Подробно: `docs/ai/ZWORKER_MODES.md`. Короткий шаблон: `docs/ai/TASK_PACK_Q_TEMPLATE.md`.
-
-## Что такое r-init (Route X)
-
-**X (r-init)** — preview-интеграционный режим. Он нужен, когда изменение нельзя принять «вслепую»: нужно дать человеку запустить проект, посмотреть и пощупать результат, и только потом принять решение.
-
-Как работает r-init:
-
-1. Codex выкладывает изменения в preview-ветку и preview-PR.
-2. К PR прикладывается `.bat`-лаунчер для запуска одним кликом.
-3. Codex даёт человеку чеклист ручного тестирования.
-4. Человек тестирует и говорит GO или NO-GO.
-5. После GO Codex выполняет merge и фиксирует статусы компонентов.
-
-Подробно: `docs/ai/R_INIT_WORKFLOW.md`.
-
-## Что делать, если что-то сломалось
-
-1. Не паниковать.
-2. Не мержить подозрительный PR.
-3. Попросить Codex объяснить, что изменилось.
-4. Попросить Codex вернуть локальную папку на `main`.
-5. Составить замечания и вернуть PR на доработку.
-
-## Двухпапочная схема preview
-
-Проект использует **две отдельные папки**:
-
-- `Real-wargame` — основная папка, всегда `main`.
-- `Real-wargame-preview` — preview-папка, ветка `real-wargame-preview`.
-
-Изменения сначала попадают в preview-ветку. Пользователь тестирует в preview-папке. `main` меняется только после явного GO.
-
-Подробно: `docs/workflow/LOCAL_TWO_FOLDER_WORKFLOW.md`.
-
-## Главное правило для человека
-
-Человек не обязан вручную разбираться с ветками. Он принимает смысловые решения, а техническую работу с Git должны выполнять помощники.
+```text
+docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md
+docs/ai/ZWORKER_MODES.md
+docs/ai/R_INIT_WORKFLOW.md
+docs/ai/PR_REVIEW_CHECKLIST.md
+```

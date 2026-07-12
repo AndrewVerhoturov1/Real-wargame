@@ -1,0 +1,67 @@
+name: Agent Docs Integrity
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - AGENTS.md
+      - README.md
+      - package.json
+      - docs/ai/**
+      - docs/architecture/**
+      - docs/subprojects/**
+      - .agents/skills/**
+      - scripts/agent_docs_*.mjs
+      - scripts/generate_agent_docs.mjs
+      - scripts/check_agent_docs.mjs
+      - .github/pull_request_template.md
+      - .github/workflows/agent-docs-integrity.yml
+  pull_request:
+    paths:
+      - AGENTS.md
+      - README.md
+      - package.json
+      - docs/ai/**
+      - docs/architecture/**
+      - docs/subprojects/**
+      - .agents/skills/**
+      - scripts/agent_docs_*.mjs
+      - scripts/generate_agent_docs.mjs
+      - scripts/check_agent_docs.mjs
+      - .github/pull_request_template.md
+      - .github/workflows/agent-docs-integrity.yml
+
+permissions:
+  contents: read
+
+jobs:
+  agent-docs-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout exact source head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run generator smoke tests
+        run: npm run docs:smoke
+
+      - name: Regenerate agent documentation
+        run: npm run docs:generate
+
+      - name: Verify generated files are committed
+        run: git diff --exit-code
+
+      - name: Check repository context integrity
+        run: npm run docs:check

@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "workingBranch": "real-wargame-preview",
+  "canonicalLauncher": "Run-Real-Wargame-Lab.bat",
+  "activeSubprojects": [
+    "ai-single-unit-editor"
+  ],
+  "generatedFrom": [
+    "docs/ai/repo-context.json",
+    "docs/subprojects/*/subproject.json"
+  ],
+  "subprojects": [
+    {
+      "id": "ai-single-unit-editor",
+      "title": "AI Single-Unit Editor — Stateful Tactical Awareness Lab",
+      "status": "active",
+      "updated_at": "2026-07-12",
+      "goal": "Создать понятную человеку лабораторию поведения одиночного бойца в RTS-основе Real-wargame: Utility AI выбирает действие, состоянийный runtime исполняет длительные шаги, а решения используют субъективную тактическую осведомлённость и территориальный контекст.",
+      "current_focus": "Stateful AI Movement v1 внедрён и проверен: MoveToBlackboardPosition замораживает цель Blackboard, один раз создаёт token-owned MoveOrder, физически движется через SimulationTick, возвращает running между тиками, завершает последовательность по прибытии и безопасно отменяется без удаления нового приказа игрока. Следующий этап — Reactive Abort + Route Status v1 и затем pathfinding.",
+      "next_step": "Реализовать Reactive Abort + Route Status v1: реактивно отменять или перестраивать движение при новом приказе, исчезновении укрытия, блокировке маршрута или критическом изменении угрозы; затем добавить настоящий grid pathfinder.",
+      "canonical_launcher": "Run-Real-Wargame-Lab.bat",
+      "last_verified_commit": "e5b5e6f0f964ebc7d25e023a92c4e0d9c01b6735",
+      "superseded_by": null,
+      "status_path": "docs/subprojects/ai-single-unit-editor/STATUS.md",
+      "metadata_path": "docs/subprojects/ai-single-unit-editor/subproject.json"
+    },
+    {
+      "id": "real-wargame-start",
+      "title": "2D Tactical Command Game — RTS Foundation / Soldier Behavior Lab",
+      "status": "maintenance",
+      "updated_at": "2026-07-12",
+      "goal": "Собрать рабочую основу 2D Tactical Command Game / Soldier Behavior Lab на PixiJS + TypeScript + Vite: карта, юниты, редактор, высоты, лес, укрытия, видимость, базовый интерфейс и удобная проверка через preview. Главный фокус — будущие мозги солдат, а не стратегический ИИ командира.",
+      "current_focus": "RTS-заготовка завершена как рабочая основа и поддерживается по мере необходимости. Активная разработка перенесена в подпроект ai-single-unit-editor.",
+      "next_step": "Исправлять карту, интерфейс, редактор, видимость и укрытия только когда это требуется активным вертикальным срезом поведения солдата.",
+      "canonical_launcher": "Run-Real-Wargame-Lab.bat",
+      "last_verified_commit": "f0bc53566be4451e9dd9fb8aa5df6a7027de759b",
+      "superseded_by": "ai-single-unit-editor",
+      "status_path": "docs/subprojects/real-wargame-start/STATUS.md",
+      "metadata_path": "docs/subprojects/real-wargame-start/subproject.json"
+    },
+    {
+      "id": "github-collaboration",
+      "title": "GitHub Collaboration",
+      "status": "maintenance",
+      "updated_at": "2026-07-12",
+      "goal": "Создать и поддерживать понятную систему совместной разработки через GitHub, где человек принимает решения, а агенты безопасно работают через preview, ограниченные задачи и честные проверки.",
+      "current_focus": "Основной workflow работает. Подпроект переведён в режим поддержки: активные документы должны использовать прямой push в real-wargame-preview как предпочтительный путь и PR в preview как fallback.",
+      "next_step": "Поддерживать единый контракт во всех agent-facing документах и развивать автоматическую проверку их целостности без расширения процесса разработки игры.",
+      "canonical_launcher": "Run-Real-Wargame-Lab.bat",
+      "last_verified_commit": "f0bc53566be4451e9dd9fb8aa5df6a7027de759b",
+      "superseded_by": null,
+      "status_path": "docs/subprojects/github-collaboration/STATUS.md",
+      "metadata_path": "docs/subprojects/github-collaboration/subproject.json"
+    },
+    {
+      "id": "repo-migration",
+      "title": "Repo Migration",
+      "status": "historical",
+      "updated_at": "2026-07-12",
+      "goal": "Сохранить историю первоначальной подготовки Real-wargame к работе с локальными и глобальными агентскими инструментами.",
+      "current_focus": "Миграция завершена и больше не является рабочим подпроектом. Актуальная навигация находится в docs/ai/repo-context.json и docs/subprojects/index.json.",
+      "next_step": "Не развивать этот подпроект. Обращаться к нему только для исторического контекста первоначальной настройки.",
+      "canonical_launcher": "Run-Real-Wargame-Lab.bat",
+      "last_verified_commit": "f0bc53566be4451e9dd9fb8aa5df6a7027de759b",
+      "superseded_by": "github-collaboration",
+      "status_path": "docs/subprojects/repo-migration/STATUS.md",
+      "metadata_path": "docs/subprojects/repo-migration/subproject.json"
+    }
+  ]
+}

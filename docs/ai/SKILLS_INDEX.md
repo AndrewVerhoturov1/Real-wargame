@@ -1,86 +1,55 @@
 # Skills Index
 
-Общий индекс skills проекта `Real-wargame`.
+Project skill router for `Real-wargame`. Read only the skills required by the current task.
 
-Цель файла — дать внешнему чату и Codex быстрый маршрут: какой skill читать под конкретную задачу. Не нужно читать все skills подряд.
+## Start route
 
-## Главное правило
+1. Read `docs/ai/WEB_CHAT_START.md`.
+2. Read the active subproject `STATUS.md`.
+3. Choose a skill from the table below.
+4. Read narrower references only when the project skill routes to them.
 
-Если задача явно подходит под skill, сначала прочитать соответствующий `SKILL.md`, потом уже менять код/документы.
+## Project skills
 
-## Проектные skills
-
-| Skill | Путь | Когда читать |
+| Skill | Path | Read when |
 |---|---|---|
-| Real-Wargame local preview | `.agents/skills/real-wargame-local-preview/SKILL.md` | Локальный запуск, preview, скриншоты, GitHub Actions artifact, Playwright, “покажи игру”, терминал-фри запуск для пользователя. |
-| PixiJS router | `.agents/skills/pixijs/SKILL.md` | Любая задача по PixiJS, canvas, 2D-графике, сцене, объектам, интерактивности, рендеру. |
+| Real-Wargame local preview | `.agents/skills/real-wargame-local-preview/SKILL.md` | Local launch, terminal-free preview, GitHub Actions screenshots, Playwright, visual QA, artifacts or showing the real game in chat. |
+| Real-Wargame PixiJS 7 guard | `.agents/skills/real-wargame-pixijs/SKILL.md` | Any PixiJS, canvas, renderer, camera, pointer event, visual layer or rendering-performance task. Read before general PixiJS skills. |
+| Real-Wargame AI Runtime | `.agents/skills/real-wargame-ai-runtime/SKILL.md` | Soldier AI graph, Utility scoring, Blackboard, Runtime, lifecycle, cancellation, Bridge, AI Dictionary, node authoring or live trace. |
 
-## PixiJS skills
+## Common routes
 
-Для PixiJS не выбирать skill наугад. Сначала открыть навигационный индекс:
-
-```text
-docs/ai/PIXIJS_SKILLS_INDEX.md
-```
-
-Затем читать:
-
-```text
-.agents/skills/pixijs/SKILL.md
-```
-
-и только после этого релевантные узкие PixiJS skills.
-
-Частые маршруты:
-
-| Ситуация | Читать |
+| User task | Skills |
 |---|---|
-| Новая PixiJS-логика приложения | `pixijs`, `pixijs-application`, при необходимости `pixijs-core-concepts` |
-| Карта, заливки, линии, зоны, формы | `pixijs`, `pixijs-scene-graphics` |
-| Юниты, спрайты, маркеры | `pixijs`, `pixijs-scene-sprite` или `pixijs-scene-graphics` |
-| Клики, drag, колесо мыши, выбор юнита | `pixijs`, `pixijs-events` |
-| Производительность/FPS/много объектов | `pixijs`, `pixijs-performance` |
-| Миграция v7/v8 или ошибка API PixiJS | `pixijs`, `pixijs-migration-v8` |
+| Run or show the game | `real-wargame-local-preview` |
+| Change map/unit/overlay visual | `real-wargame-pixijs`, then local preview for visual verification |
+| Diagnose FPS or overlay stalls | `real-wargame-pixijs`, then the narrow Pixi performance reference |
+| Change GraphRunner or Utility score | `real-wargame-ai-runtime` |
+| Add a multi-tick action | `real-wargame-ai-runtime`, then local preview for visible runtime behavior |
+| Change AI Node Editor controls | `real-wargame-ai-runtime`, local preview |
+| Change documentation/navigation | no domain skill; use canonical JSON and `npm run docs:sync` |
 
-## Local preview / screenshots
+## General PixiJS skills
 
-Если задача звучит так:
+The installed general collection is oriented around PixiJS 8. Real-Wargame currently uses PixiJS 7.4.x.
 
-```text
-запусти локально
-покажи игру
-сделай скриншоты
-проверь preview
-скачай artifact
-проверь GitHub Actions screenshots
-```
-
-читать:
+For any PixiJS task:
 
 ```text
-.agents/skills/real-wargame-local-preview/SKILL.md
+real-wargame-pixijs
+→ docs/ai/PIXIJS_SKILLS_INDEX.md
+→ only the relevant general skill
 ```
 
-Этот skill описывает два маршрута:
+Do not copy v8 API into the project unless the task explicitly approves a major migration.
 
-1. локальный запуск на ПК пользователя через `.bat`;
-2. удалённая браузерная проверка через GitHub Actions + Playwright + artifact.
+## Required honesty
 
-## Обязательные правила вокруг skills
+- A GitHub Actions browser run is not a local run on the user's PC.
+- A green workflow is not proof of good visuals until fresh PNGs are inspected.
+- Do not claim a skill was followed unless its required checks were actually performed.
+- Do not read all `.agents/skills/` by default.
 
-- Не читать все `.agents/skills/` подряд.
-- Не использовать Godot-команды: проект Vite + TypeScript + PixiJS.
-- Не утверждать, что был локальный запуск, если был только GitHub Actions run.
-- Не утверждать, что screenshots корректные, пока PNG не скачаны и не осмотрены.
-- Все изменения сначала доставлять в `real-wargame-preview`, не в `main`.
+## Search limitation
 
-## Если skill не найден поиском
-
-GitHub code search может не сразу находить новые файлы в preview-ветке. Если `search` ничего не нашёл, читать файл прямым путём через branch/ref:
-
-```text
-ref: real-wargame-preview
-path: .agents/skills/real-wargame-local-preview/SKILL.md
-```
-
-То же правило относится к этому индексу и новым документам в `docs/ai/`.
+GitHub code search may not immediately index new files on a non-default branch. When the exact path is known, fetch it directly with the explicit ref.

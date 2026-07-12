@@ -1,75 +1,99 @@
-# Шаблон Q-задачи
+# Q-Mode GitHub Task Template
 
-Этот шаблон нужен для короткой постановки внешнему исполнителю с GitHub-доступом.
-
-Q-задача не требует ZIP. Результат Q — отдельная ветка, Pull Request и короткий отчёт для Codex.
+Use Q only for a GitHub-aware executor. Q does not return a ZIP.
 
 ```md
 # Q-mode GitHub task
 
-Project: <название проекта>
-Repository: <owner/repo>
-Subproject: <id подпроекта или none>
+Project: Real-Wargame
+Repository: AndrewVerhoturov1/Real-wargame
+Subproject: <id or none>
 Expected size: <small | medium | large | planning-only>
+Delivery: <direct-preview | pr-fallback | isolated-branch>
 
 ## Read first
 
 - AGENTS.md
-- docs/ai/WORKFLOW_OVERVIEW.md
-- docs/ai/ZWORKER_MODES.md
-- docs/ai/TASK_PACK_Q_TEMPLATE.md
-- docs/subprojects/<id>/SUBPROJECT.md
-- docs/subprojects/<id>/subproject.json
-- docs/subprojects/<id>/JOURNAL.md
-
-Если задача связана с PixiJS/canvas/2D-графикой/assets/SVG/events/performance/migration-v8 — дополнительно:
-
-- docs/ai/PIXIJS_SKILLS_INDEX.md
-- .agents/skills/pixijs/SKILL.md
-- <релевантные PixiJS skills по таблице из PIXIJS_SKILLS_INDEX.md>
+- docs/ai/WEB_CHAT_START.md
+- docs/ai/repo-context.json
+- docs/subprojects/index.json
+- docs/subprojects/<id>/STATUS.md
+- <relevant project skill>
 
 ## Goal
 
-<Коротко: что нужно сделать.>
+<One clear result.>
 
 ## Allowed changes
 
-<Файлы/каталоги, которые можно менять.>
+- <files/directories>
 
 ## Forbidden changes
 
-<Файлы/каталоги/типы изменений, которые нельзя делать.>
+- main
+- <other files or behaviors>
 
 ## Requirements
 
-- <Требование 1>
-- <Требование 2>
-- <Требование 3>
+- <requirement 1>
+- <requirement 2>
 
 ## Acceptance criteria
 
-- <Как понять, что задача выполнена.>
-- <Что должно быть видно в PR.>
+- <observable or testable result>
+- <required checks>
 
-## Output for Codex
+## Output for Codex/human
 
-Create a separate branch and Pull Request. Then reply with:
+Reply with:
 
 - repository;
 - branch;
-- PR number/link;
+- commit SHA;
+- PR number/link only if PR fallback was used;
+- transfer_path;
 - changed files;
 - checks run;
 - not checked;
 - risks;
 - human verification steps;
-- questions, if any.
+- main_touched.
 
-Do not merge. Do not enable auto-merge. Do not push directly to main. Do not claim local checks were run unless they were actually run.
+Do not merge. Do not enable auto-merge. Do not write to main without explicit human GO. Do not claim checks that did not run.
 ```
 
-## Когда использовать
+## Delivery values
 
-Использовать только если внешний исполнитель реально имеет GitHub-доступ и может открыть PR.
+### `direct-preview`
 
-Если PR создать нельзя, это не Q-результат. Тогда нужно прямо написать причину и вернуться к R-режиму или ручному применению через Codex.
+Preferred normal route:
+
+```text
+commit/push directly to real-wargame-preview
+```
+
+### `pr-fallback`
+
+Use only when direct preview delivery is impossible or deliberate review isolation is needed:
+
+```text
+temporary branch → PR into real-wargame-preview
+```
+
+### `isolated-branch`
+
+Use when the user explicitly says not to transfer yet. Keep changes on the named branch and report:
+
+```text
+transfer_path: isolated branch only
+```
+
+## Not a Q result
+
+If repository delivery was required but no commit or PR was created, report:
+
+```text
+Result not delivered: <reason>
+```
+
+Do not silently replace Q with a ZIP. Use R only when the task explicitly requires the manual no-GitHub route.

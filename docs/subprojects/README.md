@@ -1,39 +1,103 @@
-# Подпроекты
+# Subprojects
 
-Подпроект — это компактная карта одной длительной задачи. Она хранит только устойчивую цель, текущий фокус, границы чтения, ключевые файлы, проверки и важные сессии. Подпроект не заменяет исходный код, issue tracker или полный отчёт.
+A subproject is a bounded map of one long-running area of work.
 
-## Экономичный порядок чтения
+## Start here
 
-Для начала читайте только:
+For a human-readable list:
 
-1. `docs/subprojects/<id>/SUBPROJECT.md`
-2. `docs/subprojects/<id>/subproject.json`
-3. вывод одной подходящей команды:
+```text
+docs/subprojects/INDEX.md
+```
 
-       python scripts/subproject_context.py <id> --brief
-       python scripts/subproject_context.py <id> --opencode
+For a GitHub-aware agent or script:
 
-Не открывайте без причины весь репозиторий, каталоги raw telemetry, `_zworker_requests`, `_zworker_inbox`, `_opencode_reports`, старые отчёты и все перечисленные тесты сразу. Расширяйте контекст только по текущей задаче и по разделам `Must read first`, `Main files`, `Do not read by default`.
+```text
+docs/subprojects/index.json
+```
 
-## Команды
+These files are generated from every `docs/subprojects/<id>/subproject.json`.
 
-    python scripts/subproject_context.py --list
-    python scripts/subproject_context.py <id> --brief
-    python scripts/subproject_context.py <id> --opencode
-    python scripts/subproject_context.py <id> --files
+## Current-state rule
 
-## Формат
+The canonical current state of a subproject is:
 
-* `SUBPROJECT.md` — короткая human-readable память.
-* `subproject.json` — структурированный источник для CLI.
-* `test-program.md` — программа тестирования подпроекта (в каталоге подпроекта).
-* `_template/` — минимальный шаблон для нового подпроекта.
+```text
+docs/subprojects/<id>/subproject.json
+```
 
-## Draft skills
+The convenient generated view is:
 
-Следующие skills являются черновыми и должны загружаться только по явной необходимости:
+```text
+docs/subprojects/<id>/STATUS.md
+```
 
-* `subproject-bootstrap` — начать работу с минимального контекста подпроекта;
-* `subproject-doc-delta` — обновить только изменившуюся память подпроекта;
-* `subproject-context-script` — изменить CLI, JSON-контракт или его тесты;
-* `subproject-create` — создать новый подпроект из `_template`.
+Do not manually edit `STATUS.md`.
+
+## Stable and historical files
+
+```text
+SUBPROJECT.md   stable goal, architecture and boundaries
+HANDOFF.md      only the latest incomplete-session delta when needed
+JOURNAL.md      historical index and significant events
+journal/        detailed historical entries
+STATUS.md       generated current state
+subproject.json canonical machine-readable state
+```
+
+A new agent normally reads `STATUS.md` first. It opens `SUBPROJECT.md` for stable architecture, `HANDOFF.md` only for immediate continuation, and journals only when historical reasoning is required.
+
+## Allowed statuses
+
+```text
+active
+maintenance
+planned
+paused
+completed
+superseded
+historical
+```
+
+The repository-wide active IDs are declared in:
+
+```text
+docs/ai/repo-context.json
+```
+
+## Commands
+
+```text
+npm run docs:generate
+npm run docs:check
+npm run docs:smoke
+npm run docs:sync
+
+python scripts/subproject_context.py --list
+python scripts/subproject_context.py <id> --brief
+python scripts/subproject_context.py <id> --opencode
+python scripts/subproject_context.py <id> --files
+```
+
+The Python commands remain useful locally. Web chats should use the committed static indexes instead of assuming they can run Python.
+
+## Updating a subproject
+
+1. Edit `subproject.json`.
+2. Update stable `SUBPROJECT.md` only when architecture or boundaries changed.
+3. Add a journal entry only for a significant event.
+4. Run `npm run docs:sync`.
+5. Commit JSON and all generated files together.
+
+## Reading economy
+
+Do not open by default:
+
+- all journal entries;
+- raw telemetry;
+- `_zworker_requests` and `_zworker_inbox`;
+- `_opencode_reports`;
+- every test listed by the subproject;
+- all skills.
+
+Expand context only from the active `STATUS.md`, direct code dependencies and the task router.
