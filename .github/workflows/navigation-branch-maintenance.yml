@@ -14,7 +14,7 @@ jobs:
   apply:
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'tmp/navigation-profiles-route-cost-20260712'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     permissions:
       contents: write
     steps:
@@ -24,11 +24,22 @@ jobs:
           ref: tmp/navigation-profiles-route-cost-20260712
           fetch-depth: 0
 
-      - name: Apply idempotent maintenance
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply idempotent source and documentation maintenance
         shell: bash
         run: |
           node scripts/navigation_branch_maintenance.mjs
           node scripts/navigation_compile_fixes.mjs
+          node scripts/navigation_docs_finalize.mjs
+          npm run docs:sync
 
       - name: Commit maintenance changes
         shell: bash
@@ -50,6 +61,13 @@ jobs:
             src/core/ai/AiStatefulMoveGameBridge.ts \
             src/core/simulation/SimulationTick.ts \
             src/main.ts \
-            src/rendering/PixiApp.ts
-          git commit -m 'fix: complete navigation profile runtime integration'
+            src/rendering/PixiApp.ts \
+            docs/ai/CURRENT_STATE.md \
+            docs/subprojects/index.json \
+            docs/subprojects/INDEX.md \
+            docs/subprojects/ai-single-unit-editor/subproject.json \
+            docs/subprojects/ai-single-unit-editor/STATUS.md \
+            docs/subprojects/ai-single-unit-editor/HANDOFF.md \
+            docs/subprojects/ai-single-unit-editor/JOURNAL.md
+          git commit -m 'docs: synchronize navigation profile subproject state'
           git push origin HEAD:tmp/navigation-profiles-route-cost-20260712
