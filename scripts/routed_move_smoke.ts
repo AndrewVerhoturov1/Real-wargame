@@ -218,5 +218,5 @@ function blockerAt(centerX: number, centerY: number, id: string): MapObject {
 }
 
 function distance(left: GridPosition, right: GridPosition): number {
-  return Math.hypot(right.position?.x ?? right.x, right.position?.y ?? right.y);
+  return Math.hypot(right.x - left.x, right.y - left.y);
 }
