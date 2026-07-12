@@ -21,6 +21,7 @@
     "pathfinding:smoke": "node scripts/grid_pathfinding_smoke.mjs",
     "routed-move:smoke": "node scripts/routed_move_smoke.mjs",
     "lab:manager": "node scripts/real_wargame_lab_manager.mjs",
+    "visual-qa-policy:smoke": "node scripts/visual_qa_policy_smoke.mjs",
     "docs:generate": "node scripts/generate_agent_docs.mjs",
     "docs:check": "node scripts/check_agent_docs.mjs",
     "docs:smoke": "node scripts/agent_docs_smoke.mjs",
