@@ -148,6 +148,9 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
     const initialNavigationProfile = unit.navigationProfileId ?? 'normal';
     const facingRadians = degreesToRadians(unit.facingDegrees ?? 0);
     const attentionSettings = createAttentionSettings(unit.attention);
+    const importedPerceptionKnowledge = unit.perceptionKnowledge
+      ? scalePerceptionKnowledge(normalizePerceptionKnowledge(unit.perceptionKnowledge), scale)
+      : createEmptyPerceptionKnowledge();
 
     const model: UnitModel = {
       id: unit.id,
@@ -179,20 +182,18 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
       tacticalKnowledge: unit.tacticalKnowledge
         ? normalizeTacticalKnowledge(unit.tacticalKnowledge, scale)
         : createEmptyTacticalKnowledge(),
-      perceptionKnowledge: unit.perceptionKnowledge
-        ? scalePerceptionKnowledge(normalizePerceptionKnowledge(unit.perceptionKnowledge), scale)
-        : createEmptyPerceptionKnowledge(),
+      perceptionKnowledge: importedPerceptionKnowledge,
       unitRoleNavigationProfileId: unit.navigationProfileId ?? null,
       navigationMovementMode: unit.navigationMovementMode ?? null,
       activeNavigationProfileId: initialNavigationProfile,
       activeNavigationProfileSource: unit.navigationProfileId ? 'unitRole' : 'default',
     };
-    applyInitialStateToRuntime(model);
+    applyInitialStateToRuntime(model, false);
     return model;
   });
 }
 
-export function applyInitialStateToRuntime(unit: UnitModel): void {
+export function applyInitialStateToRuntime(unit: UnitModel, clearPerceptionKnowledge = true): void {
   const initial = unit.initialState;
   unit.behaviorRuntime.previousPosture = initial.posture;
   unit.behaviorRuntime.posture = initial.posture;
@@ -213,7 +214,7 @@ export function applyInitialStateToRuntime(unit: UnitModel): void {
   unit.soldier.condition.confusion = initial.confusion;
   unit.soldier.condition.health = initial.health;
   unit.attentionRuntime = createAttentionRuntime(unit.attentionSettings, unit.facingRadians);
-  unit.perceptionKnowledge = createEmptyPerceptionKnowledge();
+  if (clearPerceptionKnowledge) unit.perceptionKnowledge = createEmptyPerceptionKnowledge();
 }
 
 export function copyRuntimeToInitialState(unit: UnitModel): void {
