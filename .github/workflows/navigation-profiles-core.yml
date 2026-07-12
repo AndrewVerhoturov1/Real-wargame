@@ -26,22 +26,59 @@ jobs:
         run: npm ci
 
       - name: Navigation profiles smoke
-        run: npm run navigation-profiles:smoke
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run navigation-profiles:smoke 2>&1 | tee navigation-profiles.log
 
       - name: Grid pathfinding regression
-        run: npm run pathfinding:smoke
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run pathfinding:smoke 2>&1 | tee grid-pathfinding.log
 
       - name: Routed movement regression
-        run: npm run routed-move:smoke
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run routed-move:smoke 2>&1 | tee routed-move.log
 
       - name: Stateful movement bridge regression
-        run: npm run move-bridge:smoke
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run move-bridge:smoke 2>&1 | tee move-bridge.log
 
       - name: Command plan route regression
-        run: npm run command-plan-route:smoke
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run command-plan-route:smoke 2>&1 | tee command-plan-route.log
 
       - name: Production build
-        run: npm run build
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee build.log
 
       - name: Documentation check
-        run: npm run docs:check
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run docs:check 2>&1 | tee docs-check.log
+
+      - name: Upload focused logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navigation-profiles-core-logs
+          path: |
+            navigation-profiles.log
+            grid-pathfinding.log
+            routed-move.log
+            move-bridge.log
+            command-plan-route.log
+            build.log
+            docs-check.log
+          if-no-files-found: ignore
+          retention-days: 5
