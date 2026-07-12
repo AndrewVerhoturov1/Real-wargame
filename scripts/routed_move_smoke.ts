@@ -37,10 +37,11 @@ function verifyPlannerCreatesRoutedOrder(): void {
 function verifyWaypointFollowingAndFinalCompletion(): void {
   const state = createTestState(makeWallMap(false));
   const unit = selectedUnit(state);
-  const requestedTarget = { x: 7.5, y: 3.5 };
+  const requestedTarget = { x: 7.5, y: 1.5 };
   const planned = planMoveOrder(state.map, unit.position, requestedTarget, { source: 'player' });
   assert.equal(planned.ok, true);
   if (!planned.ok) return;
+  assert.ok(planned.path.waypoints.length >= 2, 'bent route must contain an intermediate waypoint');
   unit.order = planned.order;
 
   const firstWaypointIndex = unit.order.waypointIndex ?? 0;
