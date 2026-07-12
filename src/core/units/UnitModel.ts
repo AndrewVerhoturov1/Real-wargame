@@ -18,6 +18,18 @@ import type { NavigationProfileSource } from '../navigation/NavigationProfileRes
 import type { NavigationMovementMode } from '../navigation/NavigationProfiles';
 import type { MoveOrder } from '../orders/MoveOrder';
 import type { PlayerCommand } from '../orders/PlayerCommand';
+import {
+  createAttentionRuntime,
+  createAttentionSettings,
+  type AttentionRuntimeState,
+  type UnitAttentionSettings,
+  type UnitAttentionSettingsInput,
+} from '../perception/AttentionModel';
+import {
+  createEmptyPerceptionKnowledge,
+  normalizePerceptionKnowledge,
+  type UnitPerceptionKnowledge,
+} from '../perception/PerceptionContact';
 import type { PressureZoneMode } from '../pressure/PressureZone';
 
 export type UnitSide = 'player';
@@ -73,8 +85,10 @@ export interface UnitData {
   behaviorProfile?: BehaviorProfileId;
   behavior?: Partial<BehaviorSettings>;
   soldier?: SoldierParameterOverrides;
+  attention?: UnitAttentionSettingsInput;
   initialState?: Partial<UnitInitialState>;
   tacticalKnowledge?: Partial<UnitTacticalKnowledge>;
+  perceptionKnowledge?: Partial<UnitPerceptionKnowledge>;
   runtime?: Partial<Pick<UnitBehaviorRuntime, 'stress' | 'suppression' | 'ammo' | 'weaponReady' | 'posture'>>;
   navigationProfileId?: string;
   navigationMovementMode?: NavigationMovementMode;
@@ -101,8 +115,11 @@ export interface UnitModel {
   behaviorSettings: BehaviorSettings;
   behaviorRuntime: UnitBehaviorRuntime;
   soldier: SoldierParameters;
+  attentionSettings: UnitAttentionSettings;
+  attentionRuntime: AttentionRuntimeState;
   initialState: UnitInitialState;
   tacticalKnowledge: UnitTacticalKnowledge;
+  perceptionKnowledge: UnitPerceptionKnowledge;
   unitRoleNavigationProfileId?: string | null;
   navigationMovementMode?: NavigationMovementMode | null;
   activeNavigationProfileId?: string;
@@ -129,6 +146,8 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
     const initialState = createUnitInitialState(soldier, compactUndefined({ ...legacyInitial, ...unit.initialState }));
     const behaviorRuntime = createBehaviorRuntime(initialState);
     const initialNavigationProfile = unit.navigationProfileId ?? 'normal';
+    const facingRadians = degreesToRadians(unit.facingDegrees ?? 0);
+    const attentionSettings = createAttentionSettings(unit.attention);
 
     const model: UnitModel = {
       id: unit.id,
@@ -147,17 +166,22 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
       plan: null,
       order: null,
       heldItem: unit.heldItem ?? defaultHeldItemForUnitType(unit.type),
-      facingRadians: degreesToRadians(unit.facingDegrees ?? 0),
-      viewAngleRadians: degreesToRadians(unit.viewAngleDegrees ?? 90),
+      facingRadians,
+      viewAngleRadians: degreesToRadians(unit.viewAngleDegrees ?? attentionSettings.profiles.observe.directAngleDegrees),
       viewRangeCells: Math.max(0, (unit.viewRangeCells ?? 7) * scale),
       behaviorProfile,
       behaviorSettings: createBehaviorSettings(behaviorProfile, unit.behavior),
       behaviorRuntime,
       soldier,
+      attentionSettings,
+      attentionRuntime: createAttentionRuntime(attentionSettings, facingRadians),
       initialState,
       tacticalKnowledge: unit.tacticalKnowledge
         ? normalizeTacticalKnowledge(unit.tacticalKnowledge, scale)
         : createEmptyTacticalKnowledge(),
+      perceptionKnowledge: unit.perceptionKnowledge
+        ? scalePerceptionKnowledge(normalizePerceptionKnowledge(unit.perceptionKnowledge), scale)
+        : createEmptyPerceptionKnowledge(),
       unitRoleNavigationProfileId: unit.navigationProfileId ?? null,
       navigationMovementMode: unit.navigationMovementMode ?? null,
       activeNavigationProfileId: initialNavigationProfile,
@@ -188,6 +212,8 @@ export function applyInitialStateToRuntime(unit: UnitModel): void {
   unit.soldier.condition.morale = initial.morale;
   unit.soldier.condition.confusion = initial.confusion;
   unit.soldier.condition.health = initial.health;
+  unit.attentionRuntime = createAttentionRuntime(unit.attentionSettings, unit.facingRadians);
+  unit.perceptionKnowledge = createEmptyPerceptionKnowledge();
 }
 
 export function copyRuntimeToInitialState(unit: UnitModel): void {
@@ -220,6 +246,21 @@ export function findUnitAtGridPosition(
   }
 
   return undefined;
+}
+
+function scalePerceptionKnowledge(knowledge: UnitPerceptionKnowledge, scale: number): UnitPerceptionKnowledge {
+  if (scale === 1) return knowledge;
+  return {
+    ...knowledge,
+    contacts: knowledge.contacts.map((contact) => ({
+      ...contact,
+      lastKnownPosition: {
+        x: contact.lastKnownPosition.x * scale,
+        y: contact.lastKnownPosition.y * scale,
+      },
+      uncertaintyCells: contact.uncertaintyCells * scale,
+    })),
+  };
 }
 
 function defaultHeldItemForUnitType(type: UnitType): UnitHeldItem {
