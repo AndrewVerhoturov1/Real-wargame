@@ -91,7 +91,11 @@ export interface PressureReport {
   reason: string;
 }
 
-export function normalizePressureZones(data: PressureZoneData[]): PressureZone[] {
+export function normalizePressureZones(
+  data: PressureZoneData[],
+  sourceToRuntimeCellScale = 1,
+): PressureZone[] {
+  const scale = normalizeScale(sourceToRuntimeCellScale);
   return data.map((zone) => {
     const settings = resolvePressureZoneSettings(zone);
     return {
@@ -103,25 +107,25 @@ export function normalizePressureZones(data: PressureZoneData[]): PressureZone[]
       type: zone.type,
       shape: zone.shape,
       mode: settings.mode,
-      x: zone.x,
-      y: zone.y,
-      radiusCells: Math.max(0, zone.radiusCells ?? 0),
-      widthCells: Math.max(0, zone.widthCells ?? 0),
-      heightCells: Math.max(0, zone.heightCells ?? 0),
+      x: zone.x * scale,
+      y: zone.y * scale,
+      radiusCells: Math.max(0, zone.radiusCells ?? 0) * scale,
+      widthCells: Math.max(0, zone.widthCells ?? 0) * scale,
+      heightCells: Math.max(0, zone.heightCells ?? 0) * scale,
       rotationDegrees: normalizeDegrees(zone.rotationDegrees ?? 0),
       strength: clampPercent(zone.strength),
       suppression: settings.suppression,
       stressPerSecond: Math.max(0, zone.stressPerSecond),
       directionDegrees: settings.directionDegrees,
       arcDegrees: settings.arcDegrees,
-      rangeCells: settings.rangeCells,
-      minRangeCells: settings.minRangeCells,
+      rangeCells: settings.rangeCells * scale,
+      minRangeCells: settings.minRangeCells * scale,
       falloffPercent: settings.falloffPercent,
       enabled: settings.enabled,
       sourceVisible: settings.sourceVisible,
       sourceKnown: settings.sourceKnown,
       knowledgeConfidence: clampPercent(zone.knowledgeConfidence ?? (settings.sourceVisible ? 100 : settings.sourceKnown ? 75 : 45)),
-      uncertaintyCells: Math.max(0, zone.uncertaintyCells ?? (settings.sourceVisible ? 0.15 : 1.5)),
+      uncertaintyCells: Math.max(0, zone.uncertaintyCells ?? (settings.sourceVisible ? 0.15 : 1.5)) * scale,
       knowledgeSource: zone.knowledgeSource ?? (settings.sourceVisible ? 'seen' : settings.sourceKnown ? 'reported' : 'fire_pressure'),
       reasons: {
         en: zone.reason,
@@ -186,6 +190,10 @@ export function isPositionInsidePressureZone(position: GridPosition, zone: Press
 export function normalizeDegrees(value: number): number {
   const normalized = value % 360;
   return normalized < 0 ? normalized + 360 : normalized;
+}
+
+function normalizeScale(value: number): number {
+  return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
 function clampPercent(value: number): number {
