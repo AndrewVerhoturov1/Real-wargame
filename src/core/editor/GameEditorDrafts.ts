@@ -19,7 +19,6 @@ export type EditorBrushShape = 'circle' | 'square';
 export interface ObjectCreationDraft {
   name: string;
   kind: MapObjectKind;
-  metersPerCell: number;
   widthCells: number;
   heightCells: number;
   rotationDegrees: number;
@@ -88,18 +87,18 @@ export interface GameEditorDrafts {
 
 const draftsByState = new WeakMap<SimulationState, GameEditorDrafts>();
 
-const OBJECT_SIZE_PRESETS_METERS: Record<MapObjectKind, { widthMeters: number; heightMeters: number; losHeightMeters: number }> = {
-  tree: { widthMeters: 7.5, heightMeters: 7.5, losHeightMeters: 6 },
-  rock: { widthMeters: 4.5, heightMeters: 3.5, losHeightMeters: 1.2 },
-  structure: { widthMeters: 20, heightMeters: 15, losHeightMeters: 5 },
-  cover: { widthMeters: 25, heightMeters: 4.5, losHeightMeters: 1.1 },
-  ditch: { widthMeters: 45, heightMeters: 5.5, losHeightMeters: 0.2 },
-  crates: { widthMeters: 7.5, heightMeters: 6.5, losHeightMeters: 1.25 },
-  fence: { widthMeters: 40, heightMeters: 2.5, losHeightMeters: 1.2 },
-  post: { widthMeters: 5.5, heightMeters: 5.5, losHeightMeters: 1.35 },
-  logs: { widthMeters: 12.5, heightMeters: 4.5, losHeightMeters: 0.8 },
-  well: { widthMeters: 7, heightMeters: 7, losHeightMeters: 1.1 },
-  bridge: { widthMeters: 26, heightMeters: 11, losHeightMeters: 0.8 },
+const OBJECT_SIZE_PRESETS: Record<MapObjectKind, { widthCells: number; heightCells: number; losHeightMeters: number }> = {
+  tree: { widthCells: 0.75, heightCells: 0.75, losHeightMeters: 6 },
+  rock: { widthCells: 0.45, heightCells: 0.35, losHeightMeters: 1.2 },
+  structure: { widthCells: 2, heightCells: 1.5, losHeightMeters: 5 },
+  cover: { widthCells: 2.5, heightCells: 0.45, losHeightMeters: 1.1 },
+  ditch: { widthCells: 4.5, heightCells: 0.55, losHeightMeters: 0.2 },
+  crates: { widthCells: 0.75, heightCells: 0.65, losHeightMeters: 1.25 },
+  fence: { widthCells: 4, heightCells: 0.25, losHeightMeters: 1.2 },
+  post: { widthCells: 0.55, heightCells: 0.55, losHeightMeters: 1.35 },
+  logs: { widthCells: 1.25, heightCells: 0.45, losHeightMeters: 0.8 },
+  well: { widthCells: 0.7, heightCells: 0.7, losHeightMeters: 1.1 },
+  bridge: { widthCells: 2.6, heightCells: 1.1, losHeightMeters: 0.8 },
 };
 
 export function getGameEditorDrafts(state: SimulationState): GameEditorDrafts {
@@ -112,14 +111,13 @@ export function getGameEditorDrafts(state: SimulationState): GameEditorDrafts {
 }
 
 export function resetObjectDraftForKind(draft: ObjectCreationDraft, kind: MapObjectKind): void {
-  const size = OBJECT_SIZE_PRESETS_METERS[kind];
+  const size = OBJECT_SIZE_PRESETS[kind];
   const cover = getDefaultObjectCoverProperties(kind);
-  const metersPerCell = Math.max(0.001, draft.metersPerCell || 10);
   Object.assign(draft, {
     kind,
     name: objectNameForKind(kind),
-    widthCells: size.widthMeters / metersPerCell,
-    heightCells: size.heightMeters / metersPerCell,
+    widthCells: size.widthCells,
+    heightCells: size.heightCells,
     losHeightMeters: size.losHeightMeters,
     coverProtection: cover.coverProtection,
     coverReliability: cover.coverReliability,
@@ -164,7 +162,7 @@ export function syncLegacyEditorFields(state: SimulationState): void {
 
 function createDefaultDrafts(state: SimulationState): GameEditorDrafts {
   const metersPerCell = Math.max(0.001, state.map.metersPerCell);
-  const object = { metersPerCell } as ObjectCreationDraft;
+  const object = {} as ObjectCreationDraft;
   resetObjectDraftForKind(object, 'cover');
   object.rotationDegrees = 0;
 
