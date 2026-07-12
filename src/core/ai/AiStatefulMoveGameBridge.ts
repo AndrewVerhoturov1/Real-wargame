@@ -115,7 +115,7 @@ export function tickStatefulMoveBridge(
   }
 
   if (result) publishMoveDebugDetails(state, result, routeResult);
-  else if (routeResult && selectedUnitId) publishRouteDebugDetails(routeResult, selectedUnitId);
+  else if (routeResult && selectedUnitId) publishRouteDebugDetails(state, routeResult, selectedUnitId);
   return result;
 }
 
@@ -182,6 +182,7 @@ export function applyOwnedMoveEffects(state: SimulationState, result: AiGraphRun
       const planned = planMoveOrder(state.map, unit.position, effect.targetPosition, {
         source: 'ai',
         ownerToken: effect.ownerToken,
+        allowGoalAdjustment: false,
       });
       if (!planned.ok) {
         unit.order = null;
@@ -243,9 +244,11 @@ function readRouteSettings(
   activeMove: ActiveMoveSnapshot,
 ): AiRouteStatusSettings {
   const cached = runtime.aiRouteSettingsCache;
-  if (cached
+  if (
+    cached
     && cached.ownerToken === activeMove.ownerToken
-    && cached.activeNodeId === activeMove.activeNodeId) {
+    && cached.activeNodeId === activeMove.activeNodeId
+  ) {
     return cached.settings;
   }
 
@@ -341,10 +344,17 @@ function publishMoveDebugDetails(
   });
 }
 
-function publishRouteDebugDetails(result: AiRouteStatusResult, unitId: string): void {
+function publishRouteDebugDetails(
+  state: SimulationState,
+  result: AiRouteStatusResult,
+  unitId: string,
+): void {
+  const unit = state.units.find((candidate) => candidate.id === unitId);
+  const memory = (unit?.behaviorRuntime as AiMoveRuntime | undefined)?.aiGraphMemory;
   updateDebugPayload((payload) => {
     if (payload.unitId !== unitId) return;
     writeRouteDebugFields(payload, result);
+    writePathDebugFields(payload, memory);
   });
 }
 
