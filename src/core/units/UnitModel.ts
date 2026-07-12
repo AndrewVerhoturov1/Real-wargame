@@ -103,10 +103,10 @@ export interface UnitModel {
   soldier: SoldierParameters;
   initialState: UnitInitialState;
   tacticalKnowledge: UnitTacticalKnowledge;
-  unitRoleNavigationProfileId: string | null;
-  navigationMovementMode: NavigationMovementMode | null;
-  activeNavigationProfileId: string;
-  activeNavigationProfileSource: NavigationProfileSource;
+  unitRoleNavigationProfileId?: string | null;
+  navigationMovementMode?: NavigationMovementMode | null;
+  activeNavigationProfileId?: string;
+  activeNavigationProfileSource?: NavigationProfileSource;
 }
 
 export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): UnitModel[] {

@@ -9,7 +9,7 @@ export interface PlayerCommand {
   readonly unitId: string;
   readonly type: PlayerCommandType;
   readonly target: GridPosition;
-  readonly movementMode: NavigationMovementMode;
+  readonly movementMode?: NavigationMovementMode;
   readonly status: PlayerCommandStatus;
   readonly revision: number;
   readonly issuedAtMs: number;
