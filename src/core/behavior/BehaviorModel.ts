@@ -1,3 +1,5 @@
+import type { AiRuntimeSessionSnapshotV1 } from '../ai/runtime/AiRuntimeSession';
+
 export type UnitState = 'idle' | 'moving' | 'observing' | 'taking_cover' | 'stressed';
 export type UnitPosture = 'standing' | 'crouched' | 'prone';
 export type BehaviorProfileId = 'green' | 'regular' | 'veteran' | 'cautious' | 'reckless';
@@ -79,6 +81,7 @@ export interface UnitBehaviorRuntime {
   aiGraphReason: string;
   aiGraphLastTickMs: number;
   aiNodeCooldowns: Record<string, number>;
+  aiRuntimeSession: AiRuntimeSessionSnapshotV1 | null;
 }
 
 export const DEFAULT_BEHAVIOR_PROFILE: BehaviorProfileId = 'regular';
@@ -337,6 +340,7 @@ export function createBehaviorRuntime(initialState?: Partial<UnitInitialState>):
     aiGraphReason: 'AI graph is not connected yet.',
     aiGraphLastTickMs: 0,
     aiNodeCooldowns: {},
+    aiRuntimeSession: null,
   };
 }
 
