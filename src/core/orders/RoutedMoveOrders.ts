@@ -1,0 +1,59 @@
+import type { GridPosition } from '../geometry';
+import { clampGridPositionToMap } from '../map/MapModel';
+import type { SimulationState } from '../simulation/SimulationState';
+import type { UnitModel } from '../units/UnitModel';
+import { planMoveOrder } from './MoveOrderPlanning';
+
+export function issueRoutedMoveOrderToSelectedUnits(
+  state: SimulationState,
+  rawTarget: GridPosition,
+): void {
+  const selectedIds = new Set(state.selectedUnitIds);
+  const selectedUnits = state.units.filter((unit) => selectedIds.has(unit.id));
+  if (selectedUnits.length === 0) return;
+
+  const target = clampGridPositionToMap(state.map, rawTarget);
+  const center = selectionCenter(selectedUnits);
+
+  for (const unit of selectedUnits) {
+    const requestedTarget = selectedUnits.length === 1
+      ? target
+      : clampGridPositionToMap(state.map, {
+          x: target.x + unit.position.x - center.x,
+          y: target.y + unit.position.y - center.y,
+        });
+    const planned = planMoveOrder(state.map, unit.position, requestedTarget, { source: 'player' });
+
+    if (!planned.ok) {
+      unit.order = null;
+      unit.behaviorRuntime.currentAction = 'observe';
+      unit.behaviorRuntime.lastEvent = 'move_route_unavailable';
+      unit.behaviorRuntime.reason = `Маршрут недоступен: ${planned.reasonRu}`;
+      continue;
+    }
+
+    unit.order = planned.order;
+    unit.behaviorRuntime.currentAction = 'move';
+    unit.behaviorRuntime.lastEvent = 'move_order_received';
+    unit.behaviorRuntime.reason = planned.path.reasonRu;
+    setUnitDirection(unit, planned.order.waypoints?.[0] ?? planned.order.target);
+  }
+}
+
+function selectionCenter(units: readonly UnitModel[]): GridPosition {
+  const total = units.reduce((sum, unit) => ({
+    x: sum.x + unit.position.x,
+    y: sum.y + unit.position.y,
+  }), { x: 0, y: 0 });
+  return {
+    x: total.x / units.length,
+    y: total.y / units.length,
+  };
+}
+
+function setUnitDirection(unit: UnitModel, target: GridPosition): void {
+  const dx = target.x - unit.position.x;
+  const dy = target.y - unit.position.y;
+  if (Math.abs(dx) < 0.0001 && Math.abs(dy) < 0.0001) return;
+  unit.facingRadians = Math.atan2(dy, dx);
+}
