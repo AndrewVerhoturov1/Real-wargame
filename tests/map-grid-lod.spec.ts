@@ -1,4 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+
+const SCREENSHOT_DIR = path.join('artifacts', 'screenshots');
 
 interface GridLodDiagnostics {
   majorVisible: boolean;
@@ -14,6 +18,21 @@ async function readGridDiagnostics(page: Page): Promise<GridLodDiagnostics | und
   return page.evaluate(() => (
     window as Window & { __realWargameGridDebug?: GridLodDiagnostics }
   ).__realWargameGridDebug);
+}
+
+async function saveScreenshot(page: Page, name: string): Promise<void> {
+  mkdirSync(SCREENSHOT_DIR, { recursive: true });
+  const session = await page.context().newCDPSession(page);
+  try {
+    const result = await session.send('Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: false,
+      fromSurface: true,
+    });
+    writeFileSync(path.join(SCREENSHOT_DIR, name), Buffer.from(result.data, 'base64'));
+  } finally {
+    await session.detach();
+  }
 }
 
 test('2m grid uses 10m overview lines and reveals fine cells only after zoom', async ({ page }) => {
@@ -44,6 +63,7 @@ test('2m grid uses 10m overview lines and reveals fine cells only after zoom', a
   expect(zoomed?.sourceGridVisible).toBe(true);
   expect(zoomed?.majorOverlayVisible).toBe(false);
   expect(zoomed?.minorAlpha ?? 0).toBeGreaterThan(0.5);
+  await saveScreenshot(page, '15-map-grid-lod-zoomed.png');
 
   await page.locator('#grid-toggle').click();
   await expect.poll(async () => {
