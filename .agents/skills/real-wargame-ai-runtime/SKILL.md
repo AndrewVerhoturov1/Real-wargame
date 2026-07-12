@@ -1,6 +1,6 @@
 ---
 name: real-wargame-ai-runtime
-description: "Read first for Real-Wargame Soldier AI graph, Utility scoring, Blackboard, stateful Runtime, movement lifecycle, cancellation, AiGameBridge, node editor runtime diagnostics or AI Dictionary work."
+description: "Read first for Real-Wargame Soldier AI graph, Utility scoring, Blackboard, stateful Runtime, reactive route status, grid pathfinding, MoveOrder lifecycle, cancellation, AiGameBridge, node editor runtime diagnostics or AI Dictionary work."
 license: MIT
 ---
 
@@ -14,14 +14,13 @@ Use this skill for the active single-soldier AI vertical slice. It routes work w
 
 1. `docs/ai/WEB_CHAT_START.md`.
 2. `docs/subprojects/ai-single-unit-editor/STATUS.md`.
-3. `docs/architecture/OVERVIEW.md`.
-4. The exact AI module and focused test involved.
-5. `HANDOFF.md` only when the task continues the immediately previous implementation session.
-6. Historical journal and plans only when a decision cannot be understood from current code and status.
+3. `docs/subprojects/ai-single-unit-editor/REACTIVE_ROUTE_STATUS_V1.md` for movement cancellation/progress work.
+4. `docs/subprojects/ai-single-unit-editor/GRID_PATHFINDING_V1.md` for passability, A*, waypoints or replanning.
+5. `docs/architecture/OVERVIEW.md`.
+6. The exact module and focused test involved.
+7. Historical journal/plans only when current code and status are insufficient.
 
 ## Current baseline
-
-Stateful AI Movement v1 is implemented and verified in the preview baseline.
 
 Implemented resumable nodes:
 
@@ -31,168 +30,188 @@ Wait
 MoveToBlackboardPosition
 ```
 
-`MoveToBlackboardPosition` freezes its Blackboard target on start, emits one `begin_move`, returns `running` across ticks, completes on arrival and cleans only its token-owned `MoveOrder`. A newer player order must survive cancellation of the older AI action.
+`MoveToBlackboardPosition` freezes its Blackboard target, emits one `begin_move`, returns `running`, completes on arrival and cleans only its token-owned order.
 
-The next bounded slice is `Reactive Abort + Route Status v1`, followed by a real grid pathfinder. Straight-line movement must not be described as completed pathfinding.
+Reactive Route Status v1 is implemented:
+
+```text
+moving
+stalled
+blocked
+arrived
+player_override
+target_lost
+order_missing
+```
+
+Grid Pathfinding v1 is implemented for player and AI movement:
+
+- deterministic eight-direction A*;
+- no diagonal corner cutting;
+- real terrain and rotated object footprints;
+- shared routed `MoveOrder` planning;
+- waypoint following and final-only completion;
+- short lookahead route invalidation and replanning;
+- exact AI goals, nearest-passable player goals;
+- Russian path diagnostics.
+
+Do not describe this as flow fields, formation pathfinding, dynamic reservation or tactical exposure-aware routing.
 
 ## Core roles
 
 ### `AiGraphRunner.ts`
 
-Pure immediate evaluation:
-
-- traverses the graph;
-- evaluates conditions and scores;
-- chooses a branch;
-- returns effects, trace, explanation and cooldown information.
-
-It must not import PixiJS, DOM, `localStorage` or `SimulationState`.
+Pure immediate Utility AI evaluation. It must not import PixiJS, DOM, localStorage or `SimulationState`.
 
 ### `AiGraphRuntime.ts`
 
-Pure resumable execution:
+Pure resumable execution. It owns serializable state and `start / update / complete / cancel`. Execution state is not Blackboard memory.
 
-- stores serializable execution state;
-- owns `start / update / complete / cancel` lifecycle;
-- resumes `SequenceWithMemory`;
-- supports `Wait` with status `waiting`;
-- supports `MoveToBlackboardPosition` with status `running`;
-- freezes movement target and ownership data inside execution state;
-- returns lifecycle/effects without directly moving the soldier.
+### `AiRouteStatus.ts`
 
-Execution state is not the Blackboard. Do not mix temporary lifecycle ownership into permanent or sensed AI values.
+Pure route-progress observation. It measures progress and produces reactive status/cancellation requests. It does not remove orders or know the game scene.
+
+### `GridNavigation.ts`
+
+Pure navigation-grid construction from `TacticalMap`.
+
+Canonical geometry rule:
+
+```text
+MapObject center = object.x + 0.5, object.y + 0.5
+```
+
+Do not introduce a second coordinate interpretation.
+
+### `GridPathfinder.ts`
+
+Pure deterministic A*. No DOM, PixiJS, AI runtime or simulation imports.
+
+### `MoveOrderPlanning.ts`
+
+Shared path-to-order adapter. Player and AI must not maintain separate route systems.
+
+### `SimulationTick.ts`
+
+The only coordinate integrator. It follows waypoints, checks the short route lookahead and replans only on invalidation. Never run A* every frame.
 
 ### `AiGameBridge.ts`
 
-General game adapter:
-
-- builds the selected soldier Blackboard;
-- invokes Runner/Runtime;
-- applies normal effects to `SimulationState`;
-- stores trace and explanation;
-- persists execution state in the selected unit runtime.
+General selected-unit game adapter: builds Blackboard, invokes Runner/Runtime, applies normal effects and stores trace/state.
 
 ### `AiStatefulMoveGameBridge.ts`
 
-Movement-specific adapter:
+Movement adapter:
 
-- converts runtime `begin_move` into the existing `MoveOrder` contract;
-- assigns and checks an action owner token;
-- lets `SimulationTick` remain the only position integrator;
-- reports arrival, missing order, replacement order and cancellation back to Runtime;
-- removes movement only when ownership proves it belongs to the active execution.
+- converts `begin_move` to a token-owned routed order;
+- requires exact passable targets for AI actions;
+- publishes route/path memory and diagnostics;
+- wakes Runtime on significant route events;
+- never deletes movement without ownership proof.
 
-The bridges may know the game. Runner and Runtime must remain pure.
+## Ownership and cancellation
 
-## Running-action contract
+A running action must define target, owner token, lifecycle, cleanup and player-order precedence.
 
-A multi-tick action must define:
+Never clear an order because its type resembles the AI action. Clear only when `ownerToken` proves ownership.
 
-```text
-start
-update
-complete
-failure
-cancel
-```
+- Player replacement survives stale AI cancellation.
+- `blocked` and `target_lost` request explicit cancellation.
+- `player_override` and `order_missing` force a normal immediate Runtime update.
+- Pause wall-clock time is excluded from route blocking.
 
-It must also define ownership:
+## Pathfinding rules
 
-- which target was frozen at start;
-- which order or route belongs to this action;
-- which token identifies owned state;
-- what is removed on completion or cancellation;
-- how a newer player or commander order is protected.
+### Goal policy
 
-Never clear an order only because its type resembles the AI action. Clear it only when ownership proves it belongs to that execution instance.
+- Player click on a blocked cell may resolve to the nearest passable cell.
+- AI action must reach the exact target cell; blocked exact target becomes `unreachable`.
+- Never let an AI action report success at an adjacent adjusted cell unless its graph explicitly requested that position.
 
-## Reactive abort and route status
+### Performance
 
-The next runtime work should introduce explicit route/action observations, for example:
+- A* only on order creation or route invalidation.
+- Simulation checks only the next six route cells.
+- The 60 ms reactive poll performs no A* and no awareness rebuild.
+- Navigation grid currently rebuilds per plan/replan; cache only after profiling and a map-revision contract.
 
-```text
-active
-arrived
-blocked
-invalid
-replaced
-cancelled
-```
+### Current movement limits
 
-Reactive cancellation or rebuild may be triggered by:
-
-- a new player or commander order;
-- disappearance or invalidation of target cover;
-- a blocked route;
-- critical change in known threat;
-- missing token-owned order;
-- timeout.
-
-Cancellation reasons must be visible in trace and Russian diagnostics. Do not add full pathfinding, cover reservation and squad behavior in the same slice.
+- no flow fields;
+- no formation corridor planning;
+- no unit route reservations;
+- no moving-obstacle prediction;
+- no cover reservation;
+- no threat/concealment route cost yet;
+- automatic graph only for selected soldier.
 
 ## Blackboard and knowledge
 
-- Blackboard keys use canonical English names.
-- Human selectors and descriptions require complete Russian overlays.
-- Soldier knowledge is subjective.
-- Objective world state is not automatically known.
-- `territorySafety` is background context, not current danger.
-- New keys should be registered in the canonical AI catalog rather than entered as invisible free-form strings in normal UI.
+Canonical English keys, full Russian overlays. Soldier knowledge remains subjective. Route/path runtime memory may describe the soldier's own action without revealing unknown enemies.
+
+Path memory keys:
+
+```text
+active_move_path_status
+active_move_path_waypoint_count
+active_move_path_waypoint_index
+active_move_path_requested_target
+active_move_path_resolved_target
+active_move_path_reason
+```
 
 ## Node editor rules
 
 - Normal authoring must not require JSON.
-- Keep storage migrations explicit.
-- Do not resurrect legacy nodes when universal nodes express the same behavior.
-- Persistent controls must not be destroyed and recreated by every live trace update.
-- Runtime highlighting must represent actual Runner/Runtime trace, not a simulated animation.
-- Running movement diagnostics should expose target key, frozen position, remaining distance and owner token in a human-readable form.
+- Do not resurrect legacy nodes when universal nodes express the behavior.
+- Persistent controls must not be recreated by every live trace update.
+- Highlighting must represent actual Runner/Runtime trace.
+- Route/path diagnostics must show status, waypoint progress, requested/resolved target and Russian reason.
 
 ## Task routes
 
 | Task | Primary files | Focused checks |
 |---|---|---|
-| Utility score or branch choice | `AiGraphRunner.ts`, Blackboard, graph fixture | runtime smoke, graph validation, build |
-| Wait or stateful sequence | `AiGraphRuntime.ts`, runtime smoke | runtime smoke, browser runtime test, build |
-| Running movement | Runtime, `AiStatefulMoveGameBridge.ts`, `MoveOrder.ts`, `SimulationTick.ts` | runtime smoke, move-bridge smoke, movement Playwright scenario, build |
-| Cancellation or replacement order | Runtime lifecycle, movement bridge, ownership token tests | runtime smoke, move-bridge smoke, explicit replacement-order test |
-| Route status or reactive abort | Runtime, movement bridge, route observation contract | RED focused tests, both AI smokes, browser trace scenario, build |
-| New Blackboard key | Blackboard, Bridge builder, AI catalog, editor selector | dictionary smoke, runtime smoke, editor browser test |
-| Node authoring UI | node editor human UI and validation | editor smoke, fresh PNG, build |
-| Runtime diagnostics | Bridge trace storage, runtime/movement overlays | browser scenario with inspected waiting/running/cancel state |
+| Utility choice | Runner, Blackboard, graph fixture | runtime smoke, graph validation, build |
+| Stateful node | Runtime | runtime smoke, browser runtime test, build |
+| Route progress/cancellation | `AiRouteStatus.ts`, movement bridge | route-status smoke, move-bridge smoke, browser trace |
+| Passability/A* | `GridNavigation.ts`, `GridPathfinder.ts` | pathfinding smoke, build |
+| Waypoints/replan | MoveOrder planning, SimulationTick | routed-move smoke, move-bridge smoke, build |
+| Player right click | `RoutedMoveOrders.ts`, input controller | routed-move smoke, workspace/browser scenario |
+| Runtime diagnostics | bridge debug storage, editor overlay | browser scenario and opened exact-SHA PNG |
 
 ## TDD requirement
 
-For behavior changes:
-
-1. write a focused failing smoke/unit test;
-2. run it and confirm the expected RED failure;
-3. implement the smallest behavior;
-4. run the focused test;
-5. run relevant existing AI smoke checks;
-6. run production build;
-7. for user-visible behavior, run a fresh real-browser scenario.
+1. Write focused failing test.
+2. Confirm expected RED and old checks green.
+3. Implement smallest behavior.
+4. Run focused test.
+5. Run relevant existing AI/path smoke checks.
+6. Run production build.
+7. For visible behavior, run real-browser scenario and inspect PNG.
 
 ## Minimum verification
 
-For runtime or movement logic:
-
 ```text
 npm run runtime:smoke
+npm run route-status:smoke
+npm run pathfinding:smoke
+npm run routed-move:smoke
 npm run move-bridge:smoke
 npm run validate:ai-graph
 npm run build
+npm run docs:check
 ```
 
-Add the relevant wider smoke and Playwright scenario based on the changed integration surface.
+Add the relevant Playwright scenario for user-visible changes.
 
 ## Minimum report
 
 State:
 
-- graph/runtime behavior changed;
+- runtime/path behavior changed;
 - ownership and cancellation rules;
-- exact tests run;
-- whether a real browser was used;
-- whether PNGs were inspected;
-- remaining single-soldier, route and pathfinding limitations.
+- exact tests and SHA;
+- real-browser result and PNG inspection;
+- remaining pathfinding/selected-soldier limits;
+- preview/main branch state.
