@@ -5,6 +5,9 @@ import { buildSoldierAwarenessReport } from '../knowledge/SoldierAwarenessGrid';
 import { clampGridPositionToMap, type TacticalMap } from '../map/MapModel';
 import { createMoveOrder } from '../orders/MoveOrder';
 import { isPlayerCommandOutstanding } from '../orders/PlayerCommand';
+import { radiansToDegrees } from '../perception/AttentionModel';
+import { getBestPerceptionContact } from '../perception/PerceptionSystem';
+import { emitPerceptionSound } from '../perception/PerceptionSound';
 import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
 import type { SimulationState } from '../simulation/SimulationState';
 import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
@@ -117,7 +120,8 @@ export function tickAiGameBridge(
 
 export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel): AiGraphRunnerBlackboard {
   const threats = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
-  const threatPosition = threats.targetPosition;
+  const bestContact = getBestPerceptionContact(unit);
+  const threatPosition = bestContact?.lastKnownPosition ?? threats.targetPosition;
   const bestCover = findBestCoverForThreat(
     state.map,
     unit.position,
@@ -127,11 +131,15 @@ export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel):
   );
   const distanceToCover = bestCover.distanceCells * state.map.metersPerCell;
   const strongest = threats.strongest;
-  const threatDistance = strongest ? strongest.distanceCells * state.map.metersPerCell : 9999;
+  const threatDistance = threatPosition
+    ? distance(unit.position, threatPosition) * state.map.metersPerCell
+    : 9999;
   const underFire = threats.danger > 0 || threats.suppression > 0;
   const awareness = buildSoldierAwarenessReport(state, unit);
   const bestSafe = awareness.bestSafePositions[0];
   const command = unit.playerCommand;
+  const contactVisible = Boolean(bestContact?.visibleNow);
+  const contactKnown = Boolean(bestContact || threats.enemyKnown);
 
   return {
     ...(isRecord(bundledGraph.blackboardDefaults) ? normalizeBlackboard(bundledGraph.blackboardDefaults) : {}),
@@ -144,13 +152,15 @@ export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel):
     health: clampPercent(Math.round(unit.soldier.condition.health)),
     ammo: Math.max(0, Math.round(unit.behaviorRuntime.ammo)),
     distanceToCover: Number.isFinite(distanceToCover) ? Math.round(distanceToCover) : 9999,
-    enemyVisible: threats.enemyVisible,
-    enemyKnown: threats.enemyKnown,
+    enemyVisible: contactVisible,
+    enemyKnown: contactKnown,
     underFire,
     hasOrder: Boolean(unit.order),
     isInCover: (strongest?.coverProtection ?? 0) > 0,
     weaponReady: unit.behaviorRuntime.weaponReady && unit.behaviorRuntime.ammo > 0,
-    directionToThreat: strongest?.directionFromUnitDegrees ?? -1,
+    directionToThreat: threatPosition
+      ? normalizeDegrees(radiansToDegrees(Math.atan2(threatPosition.y - unit.position.y, threatPosition.x - unit.position.x)))
+      : -1,
     threatDistance: Math.round(threatDistance),
     threatAngle: strongest?.zone.arcDegrees ?? 0,
     coverProtection: strongest?.coverProtection ?? 0,
@@ -160,7 +170,14 @@ export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel):
     bestSafePositionScore: Math.max(0, Math.round(bestSafe?.score ?? 0)),
     distanceToBestSafePosition: Math.round((bestSafe?.distanceCells ?? 9999) * state.map.metersPerCell),
     routeDanger: awareness.routeDanger,
-    threatConfidence: awareness.threatConfidence,
+    threatConfidence: Math.round(bestContact?.confidence ?? awareness.threatConfidence),
+    attention_mode: unit.attentionRuntime.mode,
+    attention_focus_direction: normalizeDegrees(radiansToDegrees(unit.attentionRuntime.focusDirectionRadians)),
+    best_contact_stage: bestContact?.stage ?? 'none',
+    best_contact_confidence: Math.round(bestContact?.confidence ?? 0),
+    best_contact_uncertainty: bestContact?.uncertaintyCells ?? 0,
+    contact_visible_now: contactVisible,
+    suspected_enemy_position: bestContact ? { ...bestContact.lastKnownPosition } : null,
     current_action: unit.behaviorRuntime.currentAction,
     self_position: unit.position,
     order_target_position: unit.order?.target ?? null,
@@ -171,8 +188,10 @@ export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel):
     player_command_revision: command?.revision ?? 0,
     retreat_position: makeRetreatPoint(state.map, unit.position, threatPosition),
     best_cover_position: bestSafe?.position ?? bestCover.position,
-    current_target: threats.enemyVisible ? threatPosition : null,
-    remembered_enemy_position: threats.enemyKnown ? threatPosition : null,
+    current_target: contactVisible && bestContact ? { ...bestContact.lastKnownPosition } : null,
+    remembered_enemy_position: contactKnown && threatPosition ? { ...threatPosition } : null,
+    visible_enemy_id: contactVisible ? bestContact?.stimulusId ?? null : null,
+    known_enemy_position: contactKnown && threatPosition ? { ...threatPosition } : null,
   };
 }
 
@@ -220,7 +239,7 @@ function applyGraphEffects(
     }
 
     if (effect.type === 'set_action') {
-      applyAction(state, unit, effect, blackboard);
+      applyAction(state, unit, effect, blackboard, nowMs);
       continue;
     }
 
@@ -251,6 +270,7 @@ function applyAction(
   unit: UnitModel,
   effect: Extract<AiGraphEffect, { type: 'set_action' }>,
   blackboard: AiGraphRunnerBlackboard,
+  nowMs: number,
 ): void {
   if (effect.action === 'move_to') {
     const target = readPosition(blackboard[effect.targetKey ?? 'best_cover_position']);
@@ -266,6 +286,16 @@ function applyAction(
   } else if (effect.action === 'fire' || effect.action === 'suppress') {
     unit.behaviorRuntime.ammo = Math.max(0, unit.behaviorRuntime.ammo - 1);
     unit.behaviorRuntime.weaponReady = unit.behaviorRuntime.ammo > 0;
+    emitPerceptionSound(state, {
+      id: `${effect.action}:${unit.id}:${nowMs}:${unit.behaviorRuntime.ammo}`,
+      kind: effect.action === 'suppress' ? 'automatic_fire' : 'rifle_shot',
+      sourceId: unit.id,
+      labelRu: effect.action === 'suppress' ? 'Автоматическая стрельба' : 'Одиночный выстрел',
+      position: { ...unit.position },
+      loudness: 1,
+      createdSeconds: state.simulationTimeSeconds,
+      durationSeconds: effect.action === 'suppress' ? 1.2 : 0.7,
+    });
   }
 
   unit.behaviorRuntime.currentAction = effect.action;
@@ -474,6 +504,11 @@ function isGraphValue(value: unknown): value is AiBlackboardValue {
 
 function isPaused(state: SimulationState): boolean {
   return Boolean((state as PausableSimulationState).paused);
+}
+
+function normalizeDegrees(value: number): number {
+  const normalized = Math.round(value) % 360;
+  return normalized < 0 ? normalized + 360 : normalized;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
