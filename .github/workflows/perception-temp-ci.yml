@@ -1,0 +1,28 @@
+name: Perception temp CI
+
+on:
+  push:
+    branches:
+      - feat/perception-attention-v1-temp
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run runtime:smoke
+      - run: npm run workspace:smoke
+      - run: npm run game-editor:smoke
+      - run: npm run visibility-probe:smoke
