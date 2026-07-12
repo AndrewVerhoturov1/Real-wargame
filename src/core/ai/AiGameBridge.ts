@@ -5,7 +5,8 @@ import { buildSoldierAwarenessReport } from '../knowledge/SoldierAwarenessGrid';
 import { clampGridPositionToMap, type TacticalMap } from '../map/MapModel';
 import { createMoveOrder } from '../orders/MoveOrder';
 import { isPlayerCommandOutstanding } from '../orders/PlayerCommand';
-import { radiansToDegrees } from '../perception/AttentionModel';
+import { clearAttentionOverride, setAttentionMode, setFocusTarget, setSearchSector } from '../perception/AttentionController';
+import { degreesToRadians, radiansToDegrees } from '../perception/AttentionModel';
 import { getBestPerceptionContact } from '../perception/PerceptionSystem';
 import { emitPerceptionSound } from '../perception/PerceptionSound';
 import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
@@ -175,7 +176,7 @@ export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel):
     attention_focus_direction: normalizeDegrees(radiansToDegrees(unit.attentionRuntime.focusDirectionRadians)),
     best_contact_stage: bestContact?.stage ?? 'none',
     best_contact_confidence: Math.round(bestContact?.confidence ?? 0),
-    best_contact_uncertainty: bestContact?.uncertaintyCells ?? 0,
+    best_contact_uncertainty: Math.round((bestContact?.uncertaintyCells ?? 0) * state.map.metersPerCell),
     contact_visible_now: contactVisible,
     suspected_enemy_position: bestContact ? { ...bestContact.lastKnownPosition } : null,
     current_action: unit.behaviorRuntime.currentAction,
@@ -243,6 +244,27 @@ function applyGraphEffects(
       continue;
     }
 
+    if (effect.type === 'set_attention_mode') {
+      setAttentionMode(unit, effect.mode, 'ai');
+      unit.behaviorRuntime.reason = effect.reasonRu ?? effect.reason;
+      unit.behaviorRuntime.lastEvent = 'ai_graph_set_attention_mode';
+      continue;
+    }
+
+    if (effect.type === 'set_search_sector') {
+      setSearchSector(unit, degreesToRadians(effect.centerDegrees), degreesToRadians(effect.arcDegrees), 'ai');
+      unit.behaviorRuntime.reason = effect.reasonRu ?? effect.reason;
+      unit.behaviorRuntime.lastEvent = 'ai_graph_set_search_sector';
+      continue;
+    }
+
+    if (effect.type === 'clear_attention_override') {
+      clearAttentionOverride(unit);
+      unit.behaviorRuntime.reason = effect.reasonRu ?? effect.reason;
+      unit.behaviorRuntime.lastEvent = 'ai_graph_clear_attention_override';
+      continue;
+    }
+
     if (effect.type === 'set_movement_mode') {
       unit.behaviorRuntime.currentAction = `movement_mode:${effect.mode}`;
       unit.behaviorRuntime.reason = effect.reasonRu ?? effect.reason;
@@ -296,6 +318,11 @@ function applyAction(
       createdSeconds: state.simulationTimeSeconds,
       durationSeconds: effect.action === 'suppress' ? 1.2 : 0.7,
     });
+    const focusTarget = readPosition(blackboard.current_target) ?? readPosition(blackboard.remembered_enemy_position);
+    if (focusTarget) {
+      setFocusTarget(unit, 'current_target', Math.atan2(focusTarget.y - unit.position.y, focusTarget.x - unit.position.x));
+      setAttentionMode(unit, 'engage', 'automatic');
+    }
   }
 
   unit.behaviorRuntime.currentAction = effect.action;
