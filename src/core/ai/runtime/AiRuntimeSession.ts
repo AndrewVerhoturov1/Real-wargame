@@ -3,6 +3,10 @@ import type {
   AiGraphExecutionState,
   AiGraphRuntimeResult,
 } from '../AiGraphRuntime';
+import {
+  cloneCompositeFrames,
+  normalizeCompositeFrames,
+} from './AiCompositeRuntime';
 
 export type AiRuntimeSessionStatus = 'idle' | 'active' | 'terminal';
 export type AiRuntimeTerminalStatus = 'success' | 'failure' | 'cancelled';
@@ -218,7 +222,12 @@ function normalizeExecutionState(value: unknown): AiGraphExecutionState | undefi
     || !['running', 'waiting'].includes(String(value.status))) {
     return undefined;
   }
-  return cloneExecutionState(value as unknown as AiGraphExecutionState);
+  const frames = value.frames === undefined ? undefined : normalizeCompositeFrames(value.frames);
+  if (value.frames !== undefined && !frames) return undefined;
+  return cloneExecutionState({
+    ...(value as unknown as AiGraphExecutionState),
+    frames,
+  });
 }
 
 function cloneExecutionState(value: AiGraphExecutionState | undefined): AiGraphExecutionState | undefined {
@@ -231,6 +240,7 @@ function cloneExecutionState(value: AiGraphExecutionState | undefined): AiGraphE
           target: { ...value.activeData.target },
         }
       : undefined,
+    frames: value.frames === undefined ? undefined : cloneCompositeFrames(value.frames),
   };
 }
 
