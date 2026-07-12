@@ -28,6 +28,7 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - run: node scripts/apply_composite_type_fix.mjs
       - run: node scripts/apply_reload_runtime_patch.mjs
 
       - name: TypeScript build diagnostics
@@ -77,5 +78,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/core/ai/AiGraphRuntime.ts src/core/ai/runtime/AiCompositeGraphRuntime.ts src/core/ai/runtime/AiRuntimeSession.ts src/core/ai/AiGameBridge.ts
-          git commit -m "feat(ai): integrate duration-based reload runtime"
+          git commit -m "feat(ai): integrate composite and reload runtime"
           git push origin HEAD:planning/complete-stateful-runtime-events-2026-07-12
