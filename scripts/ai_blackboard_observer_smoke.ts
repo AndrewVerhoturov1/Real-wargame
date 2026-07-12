@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import mapData from '../src/data/maps/test_map.json';
+import unitsData from '../src/data/units/test_units.json';
 import {
   createAiBlackboardObserverRegistry,
   evaluateAiBlackboardObservers,
@@ -9,12 +11,18 @@ import {
   type AiBlackboardObserverRegistrySnapshotV1,
 } from '../src/core/ai/events/AiBlackboardObserver';
 import type { AiGraphRunnerBlackboard } from '../src/core/ai/AiGraphRunner';
+import { buildObservedBlackboardForUnit, pollAiBlackboardObservers } from '../src/core/ai/AiGameBridge';
+import { createAiRuntimeSession } from '../src/core/ai/runtime/AiRuntimeSession';
+import type { TacticalMapData } from '../src/core/map/MapModel';
+import { createInitialState } from '../src/core/simulation/SimulationState';
+import type { UnitData } from '../src/core/units/UnitModel';
 
 verifySpecificKeyAndNoRepeat();
 verifyPositionValueEquality();
 verifyThresholdCrossingAndHysteresis();
 verifyBooleanNullAndMissing();
 verifyScopeAndSnapshotRoundTrip();
+verifyCompactBridgePolling();
 
 console.log('AI Blackboard observer smoke passed: subscriptions, quiet equality, positions, thresholds, hysteresis, missing/null, scopes, metrics and snapshots.');
 
@@ -134,6 +142,47 @@ function verifyBooleanNullAndMissing(): void {
 
   const missingAfterNull = evaluateAiBlackboardObservers(keyRegistry, {}, 300);
   assert.equal(missingAfterNull.events.length, 1, 'missing must be distinct from explicit null');
+}
+
+function verifyCompactBridgePolling(): void {
+  const state = createInitialState(
+    mapData as TacticalMapData,
+    unitsData as UnitData[],
+    [],
+  );
+  const unit = state.units[0];
+  assert.ok(unit);
+  state.selectedUnitId = unit.id;
+  state.selectedUnitIds = [unit.id];
+
+  let session = createAiRuntimeSession({ graphId: 'observer_bridge_graph', unitId: unit.id });
+  const compactBaseline = buildObservedBlackboardForUnit(state, unit, ['danger'], session.blackboardMemory);
+  assert.deepEqual(Object.keys(compactBaseline), ['danger']);
+  const registration = registerAiBlackboardObserver(session.observerRegistry, {
+    observerId: 'bridge-danger',
+    key: 'danger',
+    kind: 'key_changed',
+    scopeNodeId: 'reactive-branch',
+  }, compactBaseline);
+  session = { ...session, observerRegistry: registration.registry };
+  unit.behaviorRuntime.aiRuntimeSession = session;
+
+  unit.behaviorRuntime.danger = 80;
+  const changed = pollAiBlackboardObservers(state, unit);
+  assert.equal(changed.events, 1);
+  assert.equal(changed.checks, 1);
+  assert.equal(unit.behaviorRuntime.aiRuntimeSession?.eventQueue.events.length, 1);
+  assert.equal(unit.behaviorRuntime.aiRuntimeSession?.eventQueue.events[0]?.type, 'blackboard_observer_changed');
+  assert.equal(unit.behaviorRuntime.aiRuntimeSession?.observerRegistry.wakeRevision, 1);
+
+  for (let index = 0; index < 100; index += 1) {
+    const quiet = pollAiBlackboardObservers(state, unit);
+    assert.equal(quiet.events, 0);
+    assert.equal(quiet.checks, 1);
+  }
+  assert.equal(unit.behaviorRuntime.aiRuntimeSession?.eventQueue.events.length, 1);
+  assert.equal(unit.behaviorRuntime.aiRuntimeSession?.observerRegistry.observerChecks, 102);
+  assert.equal(unit.behaviorRuntime.aiRuntimeSession?.observerRegistry.observerEvents, 1);
 }
 
 function verifyScopeAndSnapshotRoundTrip(): void {
