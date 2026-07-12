@@ -1,6 +1,6 @@
 import type { GridPosition } from '../geometry';
-import { clampGridPositionToMap } from '../map/MapModel';
-import { createMoveOrder } from '../orders/MoveOrder';
+import type { MoveOrder } from '../orders/MoveOrder';
+import { planMoveOrder } from '../orders/MoveOrderPlanning';
 import type { SimulationState } from '../simulation/SimulationState';
 import { getAiTestPaused } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
@@ -114,7 +114,7 @@ export function tickStatefulMoveBridge(
     if (afterEffects) routeResult = afterEffects;
   }
 
-  if (result) publishMoveDebugDetails(result, routeResult);
+  if (result) publishMoveDebugDetails(state, result, routeResult);
   else if (routeResult && selectedUnitId) publishRouteDebugDetails(routeResult, selectedUnitId);
   return result;
 }
@@ -132,6 +132,7 @@ export function syncSelectedMoveOrderMemory(state: SimulationState): void {
     : null;
   memory.active_move_owner_token = order?.ownerToken ?? null;
   memory.active_move_target = order ? { ...order.target } : null;
+  if (order) publishPathOrderMemory(runtime, order);
 }
 
 export function updateSelectedRouteStatus(
@@ -171,19 +172,31 @@ export function updateSelectedRouteStatus(
 export function applyOwnedMoveEffects(state: SimulationState, result: AiGraphRuntimeResult): void {
   const unit = state.units.find((candidate) => candidate.id === result.unitId);
   if (!unit) return;
+  const runtime = unit.behaviorRuntime as AiMoveRuntime;
 
   for (const [index, rawEffect] of result.effects.entries()) {
     const effect = readAiGraphRuntimeMoveEffect(rawEffect);
     if (!effect) continue;
 
     if (effect.type === 'begin_move') {
-      unit.order = createMoveOrder(
-        clampGridPositionToMap(state.map, effect.targetPosition),
-        { source: 'ai', ownerToken: effect.ownerToken },
-      );
+      const planned = planMoveOrder(state.map, unit.position, effect.targetPosition, {
+        source: 'ai',
+        ownerToken: effect.ownerToken,
+      });
+      if (!planned.ok) {
+        unit.order = null;
+        unit.behaviorRuntime.currentAction = 'observe';
+        unit.behaviorRuntime.reason = `Маршрут недоступен: ${planned.reasonRu}`;
+        unit.behaviorRuntime.lastEvent = 'ai_graph_move_route_unavailable';
+        publishPathFailureMemory(runtime, planned.reasonRu, effect.targetPosition);
+        continue;
+      }
+
+      unit.order = planned.order;
       unit.behaviorRuntime.currentAction = 'move';
-      unit.behaviorRuntime.reason = effect.reasonRu ?? effect.reason;
+      unit.behaviorRuntime.reason = planned.path.reasonRu;
       unit.behaviorRuntime.lastEvent = 'ai_graph_owned_move_started';
+      publishPathOrderMemory(runtime, planned.order);
       continue;
     }
 
@@ -277,6 +290,32 @@ function publishRouteMemory(runtime: AiMoveRuntime, result: AiRouteStatusResult)
   memory.active_move_abort_reason = result.abortReasonRu ?? result.abortReason ?? null;
 }
 
+function publishPathOrderMemory(runtime: AiMoveRuntime, order: MoveOrder): void {
+  const memory = runtime.aiGraphMemory ?? {};
+  runtime.aiGraphMemory = memory;
+  memory.active_move_path_status = order.routeStatus ?? 'direct';
+  memory.active_move_path_waypoint_count = order.waypoints?.length ?? 0;
+  memory.active_move_path_waypoint_index = order.waypointIndex ?? 0;
+  memory.active_move_path_requested_target = order.requestedTarget ? { ...order.requestedTarget } : { ...order.target };
+  memory.active_move_path_resolved_target = { ...order.target };
+  memory.active_move_path_reason = order.pathReasonRu ?? order.pathReason ?? null;
+}
+
+function publishPathFailureMemory(
+  runtime: AiMoveRuntime,
+  reasonRu: string,
+  requestedTarget: GridPosition,
+): void {
+  const memory = runtime.aiGraphMemory ?? {};
+  runtime.aiGraphMemory = memory;
+  memory.active_move_path_status = 'unreachable';
+  memory.active_move_path_waypoint_count = 0;
+  memory.active_move_path_waypoint_index = 0;
+  memory.active_move_path_requested_target = { ...requestedTarget };
+  memory.active_move_path_resolved_target = null;
+  memory.active_move_path_reason = reasonRu;
+}
+
 function hasLaterNonMoveEffect(result: AiGraphRuntimeResult, currentIndex: number): boolean {
   for (let index = currentIndex + 1; index < result.effects.length; index += 1) {
     if (!readAiGraphRuntimeMoveEffect(result.effects[index])) return true;
@@ -285,9 +324,12 @@ function hasLaterNonMoveEffect(result: AiGraphRuntimeResult, currentIndex: numbe
 }
 
 function publishMoveDebugDetails(
+  state: SimulationState,
   result: AiGraphRuntimeResult,
   routeResult: AiRouteStatusResult | null,
 ): void {
+  const unit = state.units.find((candidate) => candidate.id === result.unitId);
+  const memory = (unit?.behaviorRuntime as AiMoveRuntime | undefined)?.aiGraphMemory;
   updateDebugPayload((payload) => {
     if (payload.unitId !== result.unitId) return;
     payload.targetKey = result.targetKey;
@@ -295,6 +337,7 @@ function publishMoveDebugDetails(
     payload.distanceRemainingCells = result.distanceRemainingCells;
     payload.actionToken = result.actionToken;
     writeRouteDebugFields(payload, routeResult);
+    writePathDebugFields(payload, memory);
   });
 }
 
@@ -314,6 +357,19 @@ function writeRouteDebugFields(
   payload.routeNoProgressMs = result.noProgressMs;
   payload.routeAbortCode = result.abortCode;
   payload.routeAbortReasonRu = result.abortReasonRu;
+}
+
+function writePathDebugFields(
+  payload: Record<string, unknown>,
+  memory: Record<string, AiBlackboardValue> | undefined,
+): void {
+  if (!memory) return;
+  payload.pathStatus = memory.active_move_path_status;
+  payload.pathWaypointCount = memory.active_move_path_waypoint_count;
+  payload.pathWaypointIndex = memory.active_move_path_waypoint_index;
+  payload.pathRequestedTarget = memory.active_move_path_requested_target;
+  payload.pathResolvedTarget = memory.active_move_path_resolved_target;
+  payload.pathReasonRu = memory.active_move_path_reason;
 }
 
 function updateDebugPayload(update: (payload: Record<string, unknown>) => void): void {
