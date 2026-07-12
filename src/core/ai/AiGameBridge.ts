@@ -22,6 +22,12 @@ import {
   type AiGraphExecutionState,
   type AiGraphRuntimeResult,
 } from './AiGraphRuntime';
+import {
+  applyRuntimeResultToSession,
+  migrateLegacyAiRuntimeSession,
+  normalizeAiRuntimeSession,
+  type AiRuntimeSessionSnapshotV1,
+} from './runtime/AiRuntimeSession';
 import { updateUnitPlanFromRuntime } from './UnitPlan';
 import bundledGraph from '../../data/ai/soldier_default_survival_graph.json';
 
@@ -32,7 +38,7 @@ const AI_GRAPH_POLL_INTERVAL_MS = 60;
 const COVER_SEARCH_RADIUS_CELLS = 5;
 
 type PausableSimulationState = SimulationState & { paused?: boolean };
-type AiUnitGraphRuntime = UnitModel['behaviorRuntime'] & {
+type LegacyAiUnitGraphRuntime = UnitModel['behaviorRuntime'] & {
   aiGraphMemory?: AiGraphRunnerBlackboard;
   aiGraphSimulationTimeMs?: number;
   aiGraphExecutionState?: AiGraphExecutionState;
@@ -83,31 +89,31 @@ export function tickAiGameBridge(
   const scaledInterval = AI_GRAPH_TICK_INTERVAL_MS / getAiTestTimeScale(state);
   if (!options.force && nowMs - unit.behaviorRuntime.aiGraphLastTickMs < scaledInterval) return null;
 
-  const runtime = unit.behaviorRuntime as AiUnitGraphRuntime;
-  const simulationNowMs = options.applyEffects
-    ? (runtime.aiGraphSimulationTimeMs ?? 0) + AI_GRAPH_TICK_INTERVAL_MS
-    : runtime.aiGraphSimulationTimeMs ?? 0;
   const graph = readRuntimeGraph();
+  const session = ensureRuntimeSession(unit, graph.id);
+  const simulationNowMs = options.applyEffects
+    ? session.simulationTimeMs + AI_GRAPH_TICK_INTERVAL_MS
+    : session.simulationTimeMs;
   const result = runAiGraphRuntime({
     graph,
     unitId: unit.id,
-    blackboard: buildBlackboardForUnit(state, unit),
-    cooldowns: unit.behaviorRuntime.aiNodeCooldowns,
+    blackboard: buildBlackboardForUnit(state, unit, session.blackboardMemory),
+    cooldowns: session.cooldowns,
     nowMs: simulationNowMs,
     tacticalHost: createTacticalHost(state, unit),
-    executionState: runtime.aiGraphExecutionState,
+    executionState: session.executionState,
     cancel: options.cancel,
   });
 
-  publishRuntimeDebugTrace(state, unit, graph, result, nowMs, simulationNowMs, !options.applyEffects);
+  publishRuntimeDebugTrace(state, unit, graph, result, nowMs, simulationNowMs, !options.applyEffects, session.status);
 
   if (!options.applyEffects) return result;
 
-  runtime.aiGraphSimulationTimeMs = simulationNowMs;
-  runtime.aiGraphExecutionState = result.executionState;
+  const nextSession = applyRuntimeResultToSession(session, result, simulationNowMs);
+  unit.behaviorRuntime.aiRuntimeSession = nextSession;
   unit.behaviorRuntime.aiGraphLastTickMs = nowMs;
-  unit.behaviorRuntime.aiNodeCooldowns = { ...result.cooldowns };
-  applyGraphEffects(state, unit, result.effects, result.blackboard, nowMs);
+  unit.behaviorRuntime.aiNodeCooldowns = { ...nextSession.cooldowns };
+  applyGraphEffects(state, unit, result.effects, result.blackboard, nowMs, nextSession.blackboardMemory);
   unit.plan = updateUnitPlanFromRuntime(unit.plan, graph, result);
   unit.behaviorRuntime.aiGraphReason = result.explanationRu ?? result.explanation;
   unit.behaviorRuntime.reason = result.explanationRu ?? result.explanation;
@@ -115,7 +121,11 @@ export function tickAiGameBridge(
   return result;
 }
 
-export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel): AiGraphRunnerBlackboard {
+export function buildBlackboardForUnit(
+  state: SimulationState,
+  unit: UnitModel,
+  runtimeMemory: AiGraphRunnerBlackboard = readCurrentRuntimeMemory(unit),
+): AiGraphRunnerBlackboard {
   const threats = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
   const threatPosition = threats.targetPosition;
   const bestCover = findBestCoverForThreat(
@@ -135,7 +145,7 @@ export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel):
 
   return {
     ...(isRecord(bundledGraph.blackboardDefaults) ? normalizeBlackboard(bundledGraph.blackboardDefaults) : {}),
-    ...getAiGraphMemory(unit),
+    ...runtimeMemory,
     danger: clampPercent(threats.danger),
     stress: clampPercent(Math.round(unit.behaviorRuntime.stress)),
     suppression: clampPercent(threats.suppression),
@@ -176,10 +186,34 @@ export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel):
   };
 }
 
-function getAiGraphMemory(unit: UnitModel): AiGraphRunnerBlackboard {
-  const runtime = unit.behaviorRuntime as AiUnitGraphRuntime;
-  if (!runtime.aiGraphMemory) runtime.aiGraphMemory = {};
-  return runtime.aiGraphMemory;
+export function ensureRuntimeSession(unit: UnitModel, graphId: string): AiRuntimeSessionSnapshotV1 {
+  const runtime = unit.behaviorRuntime as LegacyAiUnitGraphRuntime;
+  if (runtime.aiRuntimeSession) {
+    const normalized = normalizeAiRuntimeSession(runtime.aiRuntimeSession, { graphId, unitId: unit.id });
+    runtime.aiRuntimeSession = normalized.session;
+    if (normalized.resetReasonRu) {
+      runtime.aiGraphReason = normalized.resetReasonRu;
+      runtime.reason = normalized.resetReasonRu;
+      runtime.lastEvent = 'ai_runtime_session_reset';
+    }
+    return normalized.session;
+  }
+
+  const migrated = migrateLegacyAiRuntimeSession({
+    graphId,
+    unitId: unit.id,
+    aiGraphSimulationTimeMs: runtime.aiGraphSimulationTimeMs,
+    aiGraphExecutionState: runtime.aiGraphExecutionState,
+    aiGraphMemory: runtime.aiGraphMemory,
+    aiNodeCooldowns: runtime.aiNodeCooldowns,
+  });
+  runtime.aiRuntimeSession = migrated;
+  return migrated;
+}
+
+function readCurrentRuntimeMemory(unit: UnitModel): AiGraphRunnerBlackboard {
+  const runtime = unit.behaviorRuntime as LegacyAiUnitGraphRuntime;
+  return runtime.aiRuntimeSession?.blackboardMemory ?? runtime.aiGraphMemory ?? {};
 }
 
 function createTacticalHost(state: SimulationState, unit: UnitModel): AiGraphTacticalHost {
@@ -206,10 +240,11 @@ function applyGraphEffects(
   effects: readonly AiGraphEffect[],
   blackboard: AiGraphRunnerBlackboard,
   nowMs: number,
+  runtimeMemory: AiGraphRunnerBlackboard,
 ): void {
   for (const effect of effects) {
     if (effect.type === 'write_memory') {
-      getAiGraphMemory(unit)[effect.key] = effect.value;
+      runtimeMemory[effect.key] = effect.value;
       continue;
     }
 
@@ -293,6 +328,7 @@ function publishRuntimeDebugTrace(
   nowMs: number,
   simulationNowMs: number,
   previewOnly: boolean,
+  runtimeSessionStatus: AiRuntimeSessionSnapshotV1['status'],
 ): void {
   try {
     const payload = {
@@ -309,6 +345,7 @@ function publishRuntimeDebugTrace(
       selectedBranchNameRu: result.selectedBranchNameRu,
       ok: result.ok,
       status: result.status,
+      runtimeSessionStatus,
       activeNodeId: result.activeNodeId,
       activeNodeName: result.activeNodeName,
       activeNodeNameRu: result.activeNodeNameRu,
