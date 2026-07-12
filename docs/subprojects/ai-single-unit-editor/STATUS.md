@@ -6,7 +6,7 @@
 - **Updated:** 2026-07-12
 - **Working branch:** `real-wargame-preview`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
-- **Last verified commit:** `a818afa65b8cc0086c3360d27002b023e6848650`
+- **Last verified commit:** `1477d378d0c2c11fb3b50ab3e846a69f43ae41af`
 
 ## Goal
 
@@ -14,11 +14,11 @@
 
 ## Current focus
 
-На временной ветке реализуется Navigation Profiles v1: редактируемый реестр профилей, единый выбор активного профиля, профильный A*, ограничение обхода, субъективная известная опасность, контролируемое перестроение и независимый кешированный слой стоимости маршрута. Результат ещё не переносился в real-wargame-preview; визуальная проверка не запускалась.
+Navigation Profiles and Route Cost v1 перенесены в real-wargame-preview: доступны редактируемые профили движения, единый выбор активного профиля, профильный A*, ограничение обхода, субъективная известная опасность, контролируемое перестроение и независимый кешированный слой стоимости маршрута. Автоматические не-визуальные проверки пройдены; визуальная проверка ещё не запускалась.
 
 ## Next step
 
-Завершить не-визуальные проверки точного SHA, подготовить отдельный Playwright-сценарий и после разрешения пользователя провести визуальную проверку с осмотром PNG. Перенос в real-wargame-preview возможен только по отдельной явной команде пользователя.
+Провести ручную проверку профилей, маршрутов, слоя стоимости и перестроения при смене профиля. Отдельный Playwright-сценарий запускать только после явного разрешения пользователя; затем продолжить по плану Soldier Perception and Attention v1.
 
 ## Read first
 
@@ -33,6 +33,8 @@
 - `docs/subprojects/ai-single-unit-editor/GRID_PATHFINDING_V1.md`
 - `docs/superpowers/specs/2026-07-12-navigation-profiles-route-cost-design.md`
 - `docs/superpowers/plans/2026-07-12-navigation-profiles-route-cost.md`
+- `docs/superpowers/specs/2026-07-12-soldier-perception-attention-design.md`
+- `docs/superpowers/plans/2026-07-12-soldier-perception-attention-v1.md`
 - `AGENTS.md`
 
 ## Main files
@@ -60,6 +62,7 @@
 ## Suggested verification
 
 - `npm run navigation-profiles:smoke`
+- `npm run navigation-profile-switch:smoke`
 - `npm run navigation-overlay:smoke`
 - `npm run pathfinding:smoke`
 - `npm run routed-move:smoke`
@@ -83,4 +86,4 @@
 - Перестроение сохраняет playerCommandId и AI ownerToken; устаревшая очистка ИИ не удаляет приказ игрока.
 - Профили маршрута не хранятся внутри конкретного behavior graph и не превращаются в числовые ноды.
 - Не утверждать визуальную проверку без запуска браузера и открытия PNG точного SHA.
-- Не менять main и не переносить результат в real-wargame-preview без отдельного явного GO пользователя.
+- Не менять main без отдельного явного GO пользователя.
