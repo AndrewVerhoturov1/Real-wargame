@@ -218,6 +218,15 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     descriptionRu: 'Ждёт заданное время и сохраняет прогресс между тиками ИИ.',
     canHaveChildren: false,
   },
+  Reload: {
+    type: 'Reload',
+    category: 'action',
+    label: 'Reload',
+    description: 'Reloads over simulation time and changes ammunition only after successful completion.',
+    labelRu: 'Перезарядить',
+    descriptionRu: 'Перезаряжается во времени симуляции и меняет число патронов только после успешного завершения.',
+    canHaveChildren: false,
+  },
   MoveToBlackboardPosition: {
     type: 'MoveToBlackboardPosition',
     category: 'action',
