@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import type { AiGraphExecutionState, AiGraphRuntimeResult } from '../src/core/ai/AiGraphRuntime';
+import { pushAiEvent } from '../src/core/ai/events/AiEventQueue';
 import {
   applyRuntimeResultToSession,
   createAiRuntimeSession,
@@ -76,11 +77,21 @@ assert.equal(migrated.simulationTimeMs, 1200);
 assert.equal(migrated.executionState?.activeNodeId, 'move');
 assert.deepEqual(migrated.blackboardMemory.best_cover_position, { x: 7, y: 4 });
 
+const queued = pushAiEvent(first.eventQueue, {
+  id: 'order-1',
+  type: 'order_received',
+  timestampMs: 1300,
+  priority: 100,
+  payload: { orderId: 'order-1' },
+});
+const sessionWithEvent = { ...first, eventQueue: queued.queue };
 const activeResult = runtimeResult('running', executionState);
-const updated = applyRuntimeResultToSession(first, activeResult, 1800);
+const updated = applyRuntimeResultToSession(sessionWithEvent, activeResult, 1800);
 assert.equal(updated.status, 'active');
 assert.equal(updated.simulationTimeMs, 1800);
 assert.equal(updated.executionState?.lastUpdatedAtMs, 1200);
+assert.equal(updated.eventQueue.events[0]?.type, 'order_received');
+assert.equal(updated.eventQueue.nextSequence, 1);
 
 const terminalResult = runtimeResult('cancelled');
 const terminal = applyRuntimeResultToSession(updated, terminalResult, 1800);
@@ -88,6 +99,19 @@ assert.equal(terminal.status, 'terminal');
 assert.equal(terminal.executionState, undefined);
 assert.equal(terminal.lastTerminal?.status, 'cancelled');
 assert.match(terminal.lastTerminal?.reasonRu ?? '', /отмен/i);
+assert.equal(terminal.eventQueue.events.length, 1);
+
+const oldSessionWithoutQueue = normalizeAiRuntimeSession({
+  version: 1,
+  graphId: 'graph_a',
+  unitId: 'soldier_a',
+  simulationTimeMs: 0,
+  status: 'idle',
+  blackboardMemory: {},
+  cooldowns: {},
+}, { graphId: 'graph_a', unitId: 'soldier_a' });
+assert.equal(oldSessionWithoutQueue.session.eventQueue.events.length, 0);
+assert.equal(oldSessionWithoutQueue.session.eventQueue.maxSize, 64);
 
 console.log('AI runtime session smoke passed: isolation, invalid-version reset, legacy migration and active/terminal transitions.');
 
