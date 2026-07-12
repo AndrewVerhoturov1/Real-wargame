@@ -10,6 +10,9 @@ const ENDPOINT_RELIEF_GRACE_METERS = 7;
 const OBJECT_ORIGIN_IGNORE_METERS = 1.25;
 const TERRAIN_BLOCK_MARGIN_METERS = 0.95;
 const OBJECT_BLOCK_MARGIN_METERS = 0.15;
+const MIN_VISUAL_TRANSMISSION = 0.04;
+const SPARSE_FOREST_LOSS_PER_METER = 0.035;
+const DENSE_FOREST_LOSS_PER_METER = 0.075;
 
 export interface LineOfSightProbeResult {
   origin: GridPosition;
@@ -19,6 +22,10 @@ export interface LineOfSightProbeResult {
   blocked: boolean;
   blockedAt: GridPosition | null;
   blockerReasonRu: string;
+  visualTransmission: number;
+  partialObscuration: boolean;
+  accumulatedForestMeters: number;
+  obscurationReasonRu: string;
 }
 
 export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: GridPosition): LineOfSightProbeResult {
@@ -35,6 +42,10 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
       blocked: false,
       blockedAt: null,
       blockerReasonRu: 'видимость не проверялась: точка рядом с юнитом',
+      visualTransmission: 1,
+      partialObscuration: false,
+      accumulatedForestMeters: 0,
+      obscurationReasonRu: 'препятствий нет',
     };
   }
 
@@ -48,7 +59,9 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
   const originEye = originGround + eyeHeightForPosture(unit.behaviorRuntime.posture);
   const targetEye = targetGround + 1.4;
   const steps = Math.max(2, Math.ceil(totalDistanceMeters / SAMPLE_STEP_METERS));
-  let forestMeters = 0;
+  let accumulatedForestMeters = 0;
+  let visualTransmission = 1;
+  let strongestForestKind = 0;
 
   for (let step = 1; step <= steps; step += 1) {
     const factor = step / steps;
@@ -61,7 +74,17 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
     const lineHeight = lerp(originEye, targetEye, factor);
 
     if (!cell) {
-      return blockedResult(origin, target, totalDistanceMeters, currentDistanceMeters, sample, 'край карты');
+      return blockedResult(
+        origin,
+        target,
+        totalDistanceMeters,
+        currentDistanceMeters,
+        sample,
+        'край карты',
+        0,
+        accumulatedForestMeters,
+        forestReason(strongestForestKind, accumulatedForestMeters),
+      );
     }
 
     const objectBlocker = findObjectBlocker(objectCandidates, map, sample, origin, lineHeight);
@@ -73,25 +96,31 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
         currentDistanceMeters,
         sample,
         `${formatObjectBlocker(objectBlocker)} / высота ${getObjectHeightMeters(objectBlocker)} м`,
+        0,
+        accumulatedForestMeters,
+        forestReason(strongestForestKind, accumulatedForestMeters),
       );
     }
 
     const stepMeters = totalDistanceMeters / steps;
     if (cell.forest > 0) {
-      forestMeters += stepMeters;
-      const forestLimit = cell.forest === 2 ? 18 : 34;
-      if (forestMeters >= forestLimit) {
+      accumulatedForestMeters += stepMeters;
+      strongestForestKind = Math.max(strongestForestKind, cell.forest);
+      const lossPerMeter = cell.forest === 2 ? DENSE_FOREST_LOSS_PER_METER : SPARSE_FOREST_LOSS_PER_METER;
+      visualTransmission *= Math.exp(-lossPerMeter * stepMeters);
+      if (visualTransmission <= MIN_VISUAL_TRANSMISSION) {
         return blockedResult(
           origin,
           target,
           totalDistanceMeters,
           currentDistanceMeters,
           sample,
-          cell.forest === 2 ? 'густой лес' : 'редкий лес',
+          cell.forest === 2 ? 'густой лес почти полностью закрыл обзор' : 'лес почти полностью закрыл обзор',
+          visualTransmission,
+          accumulatedForestMeters,
+          forestReason(strongestForestKind, accumulatedForestMeters),
         );
       }
-    } else {
-      forestMeters = Math.max(0, forestMeters - stepMeters * 0.4);
     }
 
     const smoothHeightLevel = sampleSmoothHeightLevel(map, sample.x, sample.y);
@@ -107,10 +136,14 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
         currentDistanceMeters,
         sample,
         `плавный склон / рельеф ${formatSigned(smoothHeightLevel)}`,
+        0,
+        accumulatedForestMeters,
+        forestReason(strongestForestKind, accumulatedForestMeters),
       );
     }
   }
 
+  const partialObscuration = visualTransmission < 0.995;
   return {
     origin,
     target,
@@ -118,7 +151,11 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
     visibleDistanceMeters: totalDistanceMeters,
     blocked: false,
     blockedAt: null,
-    blockerReasonRu: 'прямая видимость есть',
+    blockerReasonRu: partialObscuration ? 'прямая видимость есть, но обзор частично ухудшен' : 'прямая видимость есть',
+    visualTransmission,
+    partialObscuration,
+    accumulatedForestMeters,
+    obscurationReasonRu: forestReason(strongestForestKind, accumulatedForestMeters),
   };
 }
 
@@ -129,6 +166,9 @@ function blockedResult(
   visibleDistanceMeters: number,
   blockedAt: GridPosition,
   reason: string,
+  visualTransmission: number,
+  accumulatedForestMeters: number,
+  obscurationReasonRu: string,
 ): LineOfSightProbeResult {
   return {
     origin,
@@ -138,7 +178,17 @@ function blockedResult(
     blocked: true,
     blockedAt,
     blockerReasonRu: reason,
+    visualTransmission: Math.max(0, Math.min(1, visualTransmission)),
+    partialObscuration: accumulatedForestMeters > 0 || visualTransmission > 0,
+    accumulatedForestMeters,
+    obscurationReasonRu,
   };
+}
+
+function forestReason(kind: number, meters: number): string {
+  if (meters <= 0 || kind <= 0) return 'препятствий растительностью нет';
+  const label = kind === 2 ? 'густой лес' : 'редкий лес';
+  return `${label}: пройдено около ${Math.round(meters)} м растительности`;
 }
 
 function findObjectBlocker(
