@@ -86,7 +86,7 @@ test('shows editable attention profiles in the real game editor', async ({ page 
   await expect(controls).toContainText('Обзор и внимание');
   await expect(controls).toContainText('Косвенное внимание');
   await expect(controls).toContainText('Стандартный сектор поиска');
-  await controls.scrollIntoViewIfNeeded();
+  await controls.evaluate((element) => element.scrollIntoView({ block: 'start' }));
   await page.waitForTimeout(250);
   await saveScreenshot(page, 'perception-attention-profile-editor.png');
   expect(browserErrors).toEqual([]);
