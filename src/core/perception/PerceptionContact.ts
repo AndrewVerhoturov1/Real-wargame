@@ -18,6 +18,7 @@ export interface PerceptionContactMemory {
   lastObservedSeconds: number;
   lastUpdatedSeconds: number;
   evidencePerSecond: number;
+  detectionVariance: number;
   explanationRu: string[];
 }
 
@@ -33,6 +34,7 @@ export interface VisualContactInput {
   labelRu: string;
   position: GridPosition;
   evidencePerSecond: number;
+  detectionVariance?: number;
   deltaSeconds: number;
   nowSeconds: number;
   source?: PerceptionContactSource;
@@ -81,6 +83,19 @@ export function normalizePerceptionKnowledge(value?: Partial<UnitPerceptionKnowl
   };
 }
 
+export function createStableDetectionVariance(
+  observerId: string,
+  stimulusId: string,
+  variancePercent: number,
+  episode = 0,
+): number {
+  const percent = clamp(number(variancePercent, 0), 0, 25) / 100;
+  if (percent <= 0) return 1;
+  const hash = hashString(`${observerId}:${stimulusId}:${episode}`);
+  const signed01 = (hash % 20001) / 10000 - 1;
+  return clamp(1 + signed01 * percent, 1 - percent, 1 + percent);
+}
+
 export function getContactStageForEvidence(evidence: number): PerceptionContactStage {
   if (evidence >= CONTACT_STAGE_THRESHOLDS.confirmed) return 'confirmed';
   if (evidence >= CONTACT_STAGE_THRESHOLDS.identified) return 'identified';
@@ -104,7 +119,10 @@ export function advanceVisualContact(
   previous: PerceptionContactMemory | null,
   input: VisualContactInput,
 ): PerceptionContactMemory {
-  const evidence = clamp((previous?.evidence ?? 0) + Math.max(0, input.evidencePerSecond) * Math.max(0, input.deltaSeconds), 0, 200);
+  const detectionVariance = previous?.detectionVariance
+    ?? clamp(number(input.detectionVariance, 1), 0.5, 1.5);
+  const evidencePerSecond = Math.max(0, input.evidencePerSecond) * detectionVariance;
+  const evidence = clamp((previous?.evidence ?? 0) + evidencePerSecond * Math.max(0, input.deltaSeconds), 0, 200);
   const stage = getContactStageForEvidence(evidence);
   const confidence = clamp(evidence / 1.5, 0, 100);
   const uncertaintyCells = Math.max(0.25, 6 - evidence / 35);
@@ -123,7 +141,8 @@ export function advanceVisualContact(
     observedNow: contactStageRank(stage) >= contactStageRank('contact'),
     lastObservedSeconds: input.nowSeconds,
     lastUpdatedSeconds: input.nowSeconds,
-    evidencePerSecond: Math.max(0, input.evidencePerSecond),
+    evidencePerSecond,
+    detectionVariance,
     explanationRu: [...(input.explanationRu ?? [])],
   };
 }
@@ -154,6 +173,7 @@ export function advanceReportedContact(
     lastObservedSeconds: previous?.lastObservedSeconds ?? -1,
     lastUpdatedSeconds: input.nowSeconds,
     evidencePerSecond: 0,
+    detectionVariance: previous?.detectionVariance ?? 1,
     explanationRu: [...(input.explanationRu ?? [])],
   };
 }
@@ -219,6 +239,7 @@ function normalizeContact(value: Partial<PerceptionContactMemory>): PerceptionCo
     lastObservedSeconds: number(value.lastObservedSeconds, -1),
     lastUpdatedSeconds: Math.max(0, number(value.lastUpdatedSeconds, 0)),
     evidencePerSecond: Math.max(0, number(value.evidencePerSecond, 0)),
+    detectionVariance: clamp(number(value.detectionVariance, 1), 0.5, 1.5),
     explanationRu: Array.isArray(value.explanationRu) ? value.explanationRu.map(String) : [],
   };
 }
@@ -250,7 +271,17 @@ function contactFingerprint(contact: PerceptionContactMemory): string {
     y: Math.round(contact.lastKnownPosition.y * 10),
     visibleNow: contact.visibleNow,
     observedNow: contact.observedNow,
+    detectionVariance: Math.round(contact.detectionVariance * 1000),
   });
+}
+
+function hashString(value: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }
 
 function finiteNonNegative(value: unknown, fallback: number): number {
