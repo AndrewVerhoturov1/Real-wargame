@@ -1,0 +1,46 @@
+name: Temporary Reload Runtime Patch
+
+on:
+  push:
+    branches:
+      - planning/complete-stateful-runtime-events-2026-07-12
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: planning/complete-stateful-runtime-events-2026-07-12
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - run: npm ci
+      - run: node scripts/apply_reload_runtime_patch.mjs
+      - run: npm run lifecycle:smoke
+      - run: npm run runtime:smoke
+      - run: npm run runtime-session:smoke
+      - run: npm run move-bridge:smoke
+      - run: npm run build
+
+      - name: Commit patch when needed
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Patch already applied."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/core/ai/AiGraphRuntime.ts src/core/ai/runtime/AiCompositeGraphRuntime.ts src/core/ai/runtime/AiRuntimeSession.ts src/core/ai/AiGameBridge.ts
+          git commit -m "feat(ai): integrate duration-based reload runtime"
+          git push origin HEAD:planning/complete-stateful-runtime-events-2026-07-12
