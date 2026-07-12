@@ -43,16 +43,6 @@ const replacements = [
       ],
     ],
   },
-  {
-    path: '.github/workflows/navigation-profiles-core.yml',
-    edits: [
-      [
-        "run: tar -czf navigation-profiles-source.tar.gz --exclude=.git --exclude=node_modules --exclude='*.log' --exclude='.tmp-*' .",
-        "run: tar -czf /tmp/navigation-profiles-source.tar.gz --exclude=.git --exclude=node_modules --exclude='*.log' --exclude='.tmp-*' .",
-      ],
-      ['path: navigation-profiles-source.tar.gz', 'path: /tmp/navigation-profiles-source.tar.gz'],
-    ],
-  },
 ];
 
 let changedFiles = 0;
