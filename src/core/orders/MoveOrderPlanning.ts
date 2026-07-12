@@ -17,6 +17,7 @@ export interface PlanMoveOrderOptions {
   readonly ownerToken?: string;
   readonly routeStatus?: MoveOrderRouteStatus;
   readonly routeRevision?: number;
+  readonly allowGoalAdjustment?: boolean;
 }
 
 export interface PlannedMoveOrder {
@@ -41,7 +42,9 @@ export function planMoveOrder(
   requestedTarget: GridPosition,
   options: PlanMoveOrderOptions = {},
 ): MoveOrderPlanResult {
-  const path = findGridPath(map, start, requestedTarget);
+  const path = findGridPath(map, start, requestedTarget, {
+    allowGoalAdjustment: options.allowGoalAdjustment,
+  });
   if (!path.ok) {
     return {
       ok: false,
