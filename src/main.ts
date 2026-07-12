@@ -14,7 +14,7 @@ import unitsData from './data/units/test_units.json';
 import { installAiStatefulMoveGameBridge as installAiGameBridge } from './core/ai/AiStatefulMoveGameBridge';
 import type { TacticalMapData } from './core/map/MapModel';
 import type { PressureZoneData } from './core/pressure/PressureZone';
-import { createInitialState } from './core/simulation/SimulationState';
+import { createResolutionAwareInitialState } from './core/simulation/ResolutionAwareScene';
 import { initializeAiTestLabRuntime } from './core/testing/AiTestLabRuntime';
 import type { UnitData } from './core/units/UnitModel';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
@@ -45,7 +45,7 @@ if (!root || !debugPanel || !languageToggle || !gridToggle || !visionToggle || !
 
 installAppShellMenu({ mode: 'game' });
 
-const state = createInitialState(
+const state = createResolutionAwareInitialState(
   mapData as TacticalMapData,
   unitsData as UnitData[],
   pressureZoneData as PressureZoneData[],
