@@ -1,16 +1,19 @@
 import type { GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
+import type { NavigationProfileSource } from '../navigation/NavigationProfileResolver';
+import type { NavigationMovementMode, NavigationProfile } from '../navigation/NavigationProfiles';
+import type { TacticalRouteContext } from '../navigation/RouteCostField';
+import {
+  findGridPath,
+  type GridPathFailure,
+  type GridPathSuccess,
+} from '../pathfinding/GridPathfinder';
 import {
   createMoveOrder,
   type MoveOrder,
   type MoveOrderRouteStatus,
   type MoveOrderSource,
 } from './MoveOrder';
-import {
-  findGridPath,
-  type GridPathFailure,
-  type GridPathSuccess,
-} from '../pathfinding/GridPathfinder';
 
 export interface PlanMoveOrderOptions {
   readonly source?: MoveOrderSource;
@@ -19,6 +22,14 @@ export interface PlanMoveOrderOptions {
   readonly routeStatus?: MoveOrderRouteStatus;
   readonly routeRevision?: number;
   readonly allowGoalAdjustment?: boolean;
+  readonly navigationProfile?: NavigationProfile;
+  readonly navigationProfileSource?: NavigationProfileSource;
+  readonly movementMode?: NavigationMovementMode;
+  readonly tacticalContext?: TacticalRouteContext;
+  readonly replanCount?: number;
+  readonly lastReplanAtSeconds?: number;
+  readonly lastReplanReason?: string;
+  readonly lastReplanReasonRu?: string;
 }
 
 export interface PlannedMoveOrder {
@@ -45,6 +56,8 @@ export function planMoveOrder(
 ): MoveOrderPlanResult {
   const path = findGridPath(map, start, requestedTarget, {
     allowGoalAdjustment: options.allowGoalAdjustment,
+    navigationProfile: options.navigationProfile,
+    tacticalContext: options.tacticalContext,
   });
   if (!path.ok) {
     return {
@@ -67,10 +80,24 @@ export function planMoveOrder(
     routeCellIndex: 0,
     routeStatus: options.routeStatus ?? 'planned',
     routeRevision: options.routeRevision ?? 1,
-    pathCost: path.cost,
+    pathCost: path.totalCost,
+    pathDistanceMeters: path.distanceMeters,
+    baselineDistanceMeters: path.baselineDistanceMeters,
+    detourRatio: path.detourRatio,
+    detourLimited: path.detourLimited,
+    pathCostBreakdown: path.costBreakdown,
     pathVisitedCells: path.visitedCells,
-    pathReason: path.reason,
-    pathReasonRu: path.reasonRu,
+    pathReason: path.routeReason,
+    pathReasonRu: path.routeReasonRu,
+    movementMode: options.movementMode,
+    navigationProfileId: path.profileId,
+    navigationProfileRevision: path.profileRevision,
+    navigationProfileSource: options.navigationProfileSource,
+    knowledgeRevision: options.tacticalContext?.knowledgeRevision ?? 0,
+    replanCount: options.replanCount ?? 0,
+    lastReplanAtSeconds: options.lastReplanAtSeconds,
+    lastReplanReason: options.lastReplanReason,
+    lastReplanReasonRu: options.lastReplanReasonRu,
   });
 
   return { ok: true, order, path };
