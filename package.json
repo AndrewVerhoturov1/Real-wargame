@@ -18,6 +18,7 @@
     "runtime:smoke": "node scripts/ai_graph_runtime_smoke.mjs",
     "runtime-session:smoke": "node scripts/ai_runtime_session_smoke.mjs",
     "lifecycle:smoke": "node scripts/ai_action_lifecycle_smoke.mjs",
+    "composite:smoke": "node scripts/ai_composite_runtime_smoke.mjs",
     "move-bridge:smoke": "node scripts/ai_stateful_move_bridge_smoke.mjs",
     "route-status:smoke": "node scripts/ai_route_status_smoke.mjs",
     "pathfinding:smoke": "node scripts/grid_pathfinding_smoke.mjs",
