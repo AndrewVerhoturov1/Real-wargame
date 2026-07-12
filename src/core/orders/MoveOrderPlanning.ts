@@ -15,6 +15,7 @@ import {
 export interface PlanMoveOrderOptions {
   readonly source?: MoveOrderSource;
   readonly ownerToken?: string;
+  readonly playerCommandId?: string;
   readonly routeStatus?: MoveOrderRouteStatus;
   readonly routeRevision?: number;
   readonly allowGoalAdjustment?: boolean;
@@ -58,6 +59,7 @@ export function planMoveOrder(
   const order = createMoveOrder(path.resolvedGoal, {
     source: options.source,
     ownerToken: options.ownerToken,
+    playerCommandId: options.playerCommandId,
     requestedTarget: path.requestedGoal,
     waypoints: path.waypoints,
     waypointIndex: 0,
