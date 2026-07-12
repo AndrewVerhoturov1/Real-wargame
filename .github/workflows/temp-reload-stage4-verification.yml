@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - planning/complete-stateful-runtime-events-2026-07-12
+  pull_request:
+    branches:
+      - real-wargame-preview
 
 permissions:
   contents: write
