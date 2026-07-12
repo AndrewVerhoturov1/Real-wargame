@@ -1,5 +1,11 @@
 import type { AiGraphRunnerBlackboard } from '../AiGraphRunner';
 import {
+  cloneAiBlackboardObserverRegistry,
+  createAiBlackboardObserverRegistry,
+  normalizeAiBlackboardObserverRegistry,
+  type AiBlackboardObserverRegistrySnapshotV1,
+} from '../events/AiBlackboardObserver';
+import {
   cloneAiEventQueueSnapshot,
   createAiEventQueue,
   normalizeAiEventQueueSnapshot,
@@ -35,6 +41,7 @@ export interface AiRuntimeSessionSnapshotV1 {
   readonly blackboardMemory: AiGraphRunnerBlackboard;
   readonly cooldowns: Record<string, number>;
   readonly eventQueue: AiEventQueueSnapshotV1;
+  readonly observerRegistry: AiBlackboardObserverRegistrySnapshotV1;
   readonly lastTerminal?: AiRuntimeTerminalRecord;
 }
 
@@ -46,6 +53,7 @@ export interface CreateAiRuntimeSessionInput {
   readonly blackboardMemory?: AiGraphRunnerBlackboard;
   readonly cooldowns?: Record<string, number>;
   readonly eventQueue?: AiEventQueueSnapshotV1;
+  readonly observerRegistry?: AiBlackboardObserverRegistrySnapshotV1;
   readonly lastTerminal?: AiRuntimeTerminalRecord;
 }
 
@@ -81,6 +89,9 @@ export function createAiRuntimeSession(input: CreateAiRuntimeSessionInput): AiRu
     eventQueue: input.eventQueue
       ? cloneAiEventQueueSnapshot(input.eventQueue)
       : createAiEventQueue(),
+    observerRegistry: input.observerRegistry
+      ? cloneAiBlackboardObserverRegistry(input.observerRegistry)
+      : createAiBlackboardObserverRegistry(),
     lastTerminal: cloneTerminal(input.lastTerminal),
   };
 }
@@ -133,6 +144,7 @@ export function normalizeAiRuntimeSession(
       blackboardMemory: normalizeBlackboard(value.blackboardMemory),
       cooldowns: normalizeCooldowns(value.cooldowns),
       eventQueue: normalizeAiEventQueueSnapshot(value.eventQueue),
+      observerRegistry: normalizeAiBlackboardObserverRegistry(value.observerRegistry),
       lastTerminal: cloneTerminal(lastTerminal),
     },
   };
@@ -147,6 +159,7 @@ export function migrateLegacyAiRuntimeSession(input: LegacyAiRuntimeFields): AiR
     blackboardMemory: input.aiGraphMemory ?? input.blackboardMemory,
     cooldowns: input.aiNodeCooldowns ?? input.cooldowns,
     eventQueue: input.eventQueue,
+    observerRegistry: input.observerRegistry,
     lastTerminal: input.lastTerminal,
   });
 }
@@ -172,6 +185,7 @@ export function applyRuntimeResultToSession(
     blackboardMemory: cloneBlackboard(current.blackboardMemory),
     cooldowns: cloneCooldowns(result.cooldowns),
     eventQueue: cloneAiEventQueueSnapshot(current.eventQueue),
+    observerRegistry: cloneAiBlackboardObserverRegistry(current.observerRegistry),
     lastTerminal: terminalStatus
       ? {
           status: terminalStatus,
@@ -185,7 +199,7 @@ export function applyRuntimeResultToSession(
 
 export function resetAiRuntimeSession(
   current: AiRuntimeSessionSnapshotV1,
-  options: { readonly keepMemory?: boolean; readonly keepCooldowns?: boolean; readonly keepEvents?: boolean } = {},
+  options: { readonly keepMemory?: boolean; readonly keepCooldowns?: boolean; readonly keepEvents?: boolean; readonly keepObservers?: boolean } = {},
 ): AiRuntimeSessionSnapshotV1 {
   return createAiRuntimeSession({
     graphId: current.graphId,
@@ -194,6 +208,9 @@ export function resetAiRuntimeSession(
     blackboardMemory: options.keepMemory === false ? {} : current.blackboardMemory,
     cooldowns: options.keepCooldowns ? current.cooldowns : {},
     eventQueue: options.keepEvents ? current.eventQueue : createAiEventQueue(current.eventQueue.maxSize),
+    observerRegistry: options.keepObservers
+      ? current.observerRegistry
+      : createAiBlackboardObserverRegistry(),
   });
 }
 
@@ -208,6 +225,7 @@ export function cloneAiRuntimeSession(value: AiRuntimeSessionSnapshotV1): AiRunt
     blackboardMemory: cloneBlackboard(value.blackboardMemory),
     cooldowns: cloneCooldowns(value.cooldowns),
     eventQueue: cloneAiEventQueueSnapshot(value.eventQueue),
+    observerRegistry: cloneAiBlackboardObserverRegistry(value.observerRegistry),
     lastTerminal: cloneTerminal(value.lastTerminal),
   };
 }
