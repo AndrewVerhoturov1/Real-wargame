@@ -19,6 +19,7 @@ export type EditorBrushShape = 'circle' | 'square';
 export interface ObjectCreationDraft {
   name: string;
   kind: MapObjectKind;
+  metersPerCell: number;
   widthCells: number;
   heightCells: number;
   rotationDegrees: number;
@@ -87,37 +88,38 @@ export interface GameEditorDrafts {
 
 const draftsByState = new WeakMap<SimulationState, GameEditorDrafts>();
 
-const OBJECT_SIZE_PRESETS: Record<MapObjectKind, { widthCells: number; heightCells: number; losHeightMeters: number }> = {
-  tree: { widthCells: 0.75, heightCells: 0.75, losHeightMeters: 6 },
-  rock: { widthCells: 0.45, heightCells: 0.35, losHeightMeters: 1.2 },
-  structure: { widthCells: 2, heightCells: 1.5, losHeightMeters: 5 },
-  cover: { widthCells: 2.5, heightCells: 0.45, losHeightMeters: 1.1 },
-  ditch: { widthCells: 4.5, heightCells: 0.55, losHeightMeters: 0.2 },
-  crates: { widthCells: 0.75, heightCells: 0.65, losHeightMeters: 1.25 },
-  fence: { widthCells: 4, heightCells: 0.25, losHeightMeters: 1.2 },
-  post: { widthCells: 0.55, heightCells: 0.55, losHeightMeters: 1.35 },
-  logs: { widthCells: 1.25, heightCells: 0.45, losHeightMeters: 0.8 },
-  well: { widthCells: 0.7, heightCells: 0.7, losHeightMeters: 1.1 },
-  bridge: { widthCells: 2.6, heightCells: 1.1, losHeightMeters: 0.8 },
+const OBJECT_SIZE_PRESETS_METERS: Record<MapObjectKind, { widthMeters: number; heightMeters: number; losHeightMeters: number }> = {
+  tree: { widthMeters: 7.5, heightMeters: 7.5, losHeightMeters: 6 },
+  rock: { widthMeters: 4.5, heightMeters: 3.5, losHeightMeters: 1.2 },
+  structure: { widthMeters: 20, heightMeters: 15, losHeightMeters: 5 },
+  cover: { widthMeters: 25, heightMeters: 4.5, losHeightMeters: 1.1 },
+  ditch: { widthMeters: 45, heightMeters: 5.5, losHeightMeters: 0.2 },
+  crates: { widthMeters: 7.5, heightMeters: 6.5, losHeightMeters: 1.25 },
+  fence: { widthMeters: 40, heightMeters: 2.5, losHeightMeters: 1.2 },
+  post: { widthMeters: 5.5, heightMeters: 5.5, losHeightMeters: 1.35 },
+  logs: { widthMeters: 12.5, heightMeters: 4.5, losHeightMeters: 0.8 },
+  well: { widthMeters: 7, heightMeters: 7, losHeightMeters: 1.1 },
+  bridge: { widthMeters: 26, heightMeters: 11, losHeightMeters: 0.8 },
 };
 
 export function getGameEditorDrafts(state: SimulationState): GameEditorDrafts {
   let drafts = draftsByState.get(state);
   if (!drafts) {
-    drafts = createDefaultDrafts();
+    drafts = createDefaultDrafts(state);
     draftsByState.set(state, drafts);
   }
   return drafts;
 }
 
 export function resetObjectDraftForKind(draft: ObjectCreationDraft, kind: MapObjectKind): void {
-  const size = OBJECT_SIZE_PRESETS[kind];
+  const size = OBJECT_SIZE_PRESETS_METERS[kind];
   const cover = getDefaultObjectCoverProperties(kind);
+  const metersPerCell = Math.max(0.001, draft.metersPerCell || 10);
   Object.assign(draft, {
     kind,
     name: objectNameForKind(kind),
-    widthCells: size.widthCells,
-    heightCells: size.heightCells,
+    widthCells: size.widthMeters / metersPerCell,
+    heightCells: size.heightMeters / metersPerCell,
     losHeightMeters: size.losHeightMeters,
     coverProtection: cover.coverProtection,
     coverReliability: cover.coverReliability,
@@ -160,8 +162,9 @@ export function syncLegacyEditorFields(state: SimulationState): void {
   editor.forestBrushKind = drafts.terrain.forestBrushKind;
 }
 
-function createDefaultDrafts(): GameEditorDrafts {
-  const object = {} as ObjectCreationDraft;
+function createDefaultDrafts(state: SimulationState): GameEditorDrafts {
+  const metersPerCell = Math.max(0.001, state.map.metersPerCell);
+  const object = { metersPerCell } as ObjectCreationDraft;
   resetObjectDraftForKind(object, 'cover');
   object.rotationDegrees = 0;
 
@@ -173,10 +176,10 @@ function createDefaultDrafts(): GameEditorDrafts {
       type: 'infantry_squad',
       heldItem: 'long_item',
       profile: 'regular',
-      speedCellsPerSecond: 0.5,
+      speedCellsPerSecond: 5 / metersPerCell,
       facingDegrees: 0,
       viewAngleDegrees: 90,
-      viewRangeCells: 7,
+      viewRangeCells: 70 / metersPerCell,
       posture: 'standing',
       stress: 0,
       suppression: 0,
@@ -189,27 +192,27 @@ function createDefaultDrafts(): GameEditorDrafts {
       name: 'Источник угрозы',
       shape: 'circle',
       mode: 'directional_fire',
-      radiusCells: 3,
-      widthCells: 5,
-      heightCells: 3,
+      radiusCells: 30 / metersPerCell,
+      widthCells: 50 / metersPerCell,
+      heightCells: 30 / metersPerCell,
       rotationDegrees: 0,
       strength: 70,
       suppression: 85,
       stressPerSecond: 18,
       directionDegrees: 0,
       arcDegrees: 50,
-      rangeCells: 14,
+      rangeCells: 140 / metersPerCell,
       minRangeCells: 0,
       falloffPercent: 40,
       enabled: true,
       sourceVisible: true,
       sourceKnown: true,
       knowledgeConfidence: 100,
-      uncertaintyCells: 0.15,
+      uncertaintyCells: 1.5 / metersPerCell,
     },
     terrain: {
       brushShape: 'circle',
-      brushSizeCells: 3,
+      brushSizeCells: 30 / metersPerCell,
       heightBrushLevel: 2,
       forestBrushKind: 1,
     },
