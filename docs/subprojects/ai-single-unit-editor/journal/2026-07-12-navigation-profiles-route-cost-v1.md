@@ -1,21 +1,36 @@
 # 2026-07-12 — Navigation Profiles and Route Cost v1
 
-## Branch boundary
+## Development history
 
-Implementation branch:
+The feature was implemented and verified first on the isolated branch:
 
 ```text
 tmp/navigation-profiles-route-cost-20260712
 ```
 
-Base branch and exact starting commit:
+Starting preview commit:
 
 ```text
-real-wargame-preview
 dc46706ade1af4c60ab6e2ca82f8b83c95f1da27
 ```
 
-Neither `main` nor `real-wargame-preview` was modified. A draft PR was used only as an isolated non-visual CI channel and must not be merged.
+Verified isolated source head:
+
+```text
+3a4a185999f287ebdafd600a88d11d7b4760af27
+```
+
+## Transfer to preview
+
+By explicit user instruction, PR #63 was reopened and merged into `real-wargame-preview`.
+
+Preview merge commit:
+
+```text
+1477d378d0c2c11fb3b50ab3e846a69f43ae41af
+```
+
+The two newer preview commits contained only the Soldier Perception and Attention design and implementation-plan documents, so both bodies of work were preserved. `main` was not modified.
 
 ## Implemented vertical slice
 
@@ -37,7 +52,7 @@ Neither `main` nor `real-wargame-preview` was modified. A draft PR was used only
 
 ## Test-driven evidence
 
-The first focused workflow run failed at the new navigation-profile smoke because the new modules did not yet exist. After implementation and targeted corrections, focused non-visual run `29193785588` passed:
+Final isolated-branch checks passed:
 
 ```text
 navigation-profiles:smoke
@@ -51,11 +66,13 @@ move-bridge:smoke
 command-plan-route:smoke
 map-revision:smoke
 production build
+docs:check
+Preview Core Checks
+Agent Docs Integrity
+Preview Policy
 ```
 
-The only failure in that run was expected stale generated documentation after changing `subproject.json`; source, tests and production build were green.
-
-Performance contract evidence from smoke tests:
+Performance contract evidence:
 
 - two hover reads increase `hoverReadCount` by two;
 - hover does not increase `staticCostBuildCount` or `dynamicCostBuildCount`;
@@ -71,4 +88,4 @@ Performance contract evidence from smoke tests:
 - Version 1 chooses the shortest passable baseline when the preferred route exceeds the detour limit; it does not yet run a multi-objective compromise search.
 - Player movement commands default to `normal`; the game provides a diagnostic profile override and the runtime supports semantic movement modes.
 - Profile persistence currently uses localStorage and JSON rather than scene JSON.
-- Visual QA is prepared but not run, and no screenshots have been inspected for this branch.
+- Visual QA is prepared but has not been run after the preview merge.
