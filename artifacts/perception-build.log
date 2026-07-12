@@ -1,0 +1,6 @@
+
+> real-wargame@0.1.0 build
+> tsc && vite build
+
+src/ai-node-editor/AttentionNodeControls.ts(175,7): error TS2451: Cannot redeclare block-scoped variable 'observer'.
+src/ai-node-editor/runtime-debug-overlay.ts(72,7): error TS2451: Cannot redeclare block-scoped variable 'observer'.
