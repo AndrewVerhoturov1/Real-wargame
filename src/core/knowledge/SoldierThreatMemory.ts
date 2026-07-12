@@ -5,7 +5,8 @@ import type { KnownThreatMemory, UnitModel, UnitTacticalKnowledge } from '../uni
 import { computeLineOfSight } from '../visibility/LineOfSight';
 
 const CONFIDENCE_DECAY_PER_SECOND = 0.55;
-const UNCERTAINTY_GROWTH_PER_SECOND = 0.012;
+const UNCERTAINTY_GROWTH_METERS_PER_SECOND = 0.12;
+const MAX_UNCERTAINTY_METERS = 120;
 const MIN_MEMORY_CONFIDENCE = 4;
 
 export function createEmptyTacticalKnowledge(): UnitTacticalKnowledge {
@@ -16,10 +17,14 @@ export function createEmptyTacticalKnowledge(): UnitTacticalKnowledge {
   };
 }
 
-export function normalizeTacticalKnowledge(value?: Partial<UnitTacticalKnowledge>): UnitTacticalKnowledge {
+export function normalizeTacticalKnowledge(
+  value?: Partial<UnitTacticalKnowledge>,
+  sourceToRuntimeCellScale = 1,
+): UnitTacticalKnowledge {
+  const scale = normalizeScale(sourceToRuntimeCellScale);
   return {
     threats: Array.isArray(value?.threats)
-      ? value.threats.map((item) => normalizeKnownThreat(item))
+      ? value.threats.map((item) => normalizeKnownThreat(item, scale))
       : [],
     revision: Number.isFinite(value?.revision) ? Math.max(0, Math.round(value?.revision ?? 0)) : 0,
     lastUpdatedSeconds: Number.isFinite(value?.lastUpdatedSeconds) ? Math.max(0, value?.lastUpdatedSeconds ?? 0) : 0,
@@ -52,8 +57,8 @@ export function syncSoldierThreatMemory(
       ? 100
       : Math.max(15, Math.min(95, zone.knowledgeConfidence ?? Math.max(zone.strength, settings.suppression)));
     const uncertaintyCells = visibleNow
-      ? 0.15
-      : Math.max(0.4, zone.uncertaintyCells ?? 1.5);
+      ? metersToCells(state, 1.5)
+      : Math.max(metersToCells(state, 4), zone.uncertaintyCells ?? metersToCells(state, 15));
     const sourceKind: KnownThreatMemory['source'] = visibleNow
       ? 'seen'
       : settings.sourceKnown
@@ -67,6 +72,8 @@ export function syncSoldierThreatMemory(
   }
 
   const nextThreats: KnownThreatMemory[] = [];
+  const uncertaintyGrowthCells = metersToCells(state, UNCERTAINTY_GROWTH_METERS_PER_SECOND) * deltaSeconds;
+  const maxUncertaintyCells = metersToCells(state, MAX_UNCERTAINTY_METERS);
   for (const memory of existing.values()) {
     if (memory.lastSeenSeconds === now || memory.lastUpdatedSeconds === now) {
       nextThreats.push(memory);
@@ -74,7 +81,7 @@ export function syncSoldierThreatMemory(
     }
 
     const confidence = Math.max(0, memory.confidence - CONFIDENCE_DECAY_PER_SECOND * deltaSeconds);
-    const uncertaintyCells = Math.min(12, memory.uncertaintyCells + UNCERTAINTY_GROWTH_PER_SECOND * deltaSeconds);
+    const uncertaintyCells = Math.min(maxUncertaintyCells, memory.uncertaintyCells + uncertaintyGrowthCells);
     if (confidence < MIN_MEMORY_CONFIDENCE) {
       changed = true;
       continue;
@@ -136,27 +143,27 @@ function buildKnownThreat(
   };
 }
 
-function normalizeKnownThreat(value: Partial<KnownThreatMemory>): KnownThreatMemory {
+function normalizeKnownThreat(value: Partial<KnownThreatMemory>, scale: number): KnownThreatMemory {
   return {
     id: String(value.id ?? 'unknown-threat'),
     labelRu: String(value.labelRu ?? 'Неизвестная угроза'),
     mode: value.mode === 'directional_fire' ? 'directional_fire' : 'area',
-    x: number(value.x, 0),
-    y: number(value.y, 0),
-    radiusCells: Math.max(0, number(value.radiusCells, 0)),
-    widthCells: Math.max(0, number(value.widthCells, 0)),
-    heightCells: Math.max(0, number(value.heightCells, 0)),
+    x: number(value.x, 0) * scale,
+    y: number(value.y, 0) * scale,
+    radiusCells: Math.max(0, number(value.radiusCells, 0) * scale),
+    widthCells: Math.max(0, number(value.widthCells, 0) * scale),
+    heightCells: Math.max(0, number(value.heightCells, 0) * scale),
     rotationDegrees: number(value.rotationDegrees, 0),
     strength: percent(value.strength),
     suppression: percent(value.suppression),
     stressPerSecond: Math.max(0, number(value.stressPerSecond, 0)),
     directionDegrees: normalizeDegrees(number(value.directionDegrees, 0)),
     arcDegrees: Math.max(1, Math.min(360, number(value.arcDegrees, 45))),
-    rangeCells: Math.max(0.5, number(value.rangeCells, 8)),
-    minRangeCells: Math.max(0, number(value.minRangeCells, 0)),
+    rangeCells: Math.max(0.5 * scale, number(value.rangeCells, 8) * scale),
+    minRangeCells: Math.max(0, number(value.minRangeCells, 0) * scale),
     falloffPercent: percent(value.falloffPercent),
     confidence: percent(value.confidence),
-    uncertaintyCells: Math.max(0, number(value.uncertaintyCells, 1.5)),
+    uncertaintyCells: Math.max(0, number(value.uncertaintyCells, 1.5) * scale),
     source: value.source === 'seen' || value.source === 'reported' || value.source === 'heard' || value.source === 'fire_pressure'
       ? value.source
       : 'reported',
@@ -211,6 +218,10 @@ function threatRevisionFingerprint(memory: KnownThreatMemory): Record<string, un
   };
 }
 
+function metersToCells(state: SimulationState, meters: number): number {
+  return meters / Math.max(0.001, state.map.metersPerCell);
+}
+
 function angularDifference(left: number, right: number): number {
   const difference = Math.abs(normalizeDegrees(left) - normalizeDegrees(right));
   return Math.min(difference, 360 - difference);
@@ -219,6 +230,10 @@ function angularDifference(left: number, right: number): number {
 function normalizeDegrees(value: number): number {
   const result = value % 360;
   return result < 0 ? result + 360 : result;
+}
+
+function normalizeScale(value: number): number {
+  return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
 function percent(value: unknown): number {
