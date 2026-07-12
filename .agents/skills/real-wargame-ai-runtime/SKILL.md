@@ -17,8 +17,9 @@ Use this skill for the active single-soldier AI vertical slice. It routes work w
 3. `docs/subprojects/ai-single-unit-editor/REACTIVE_ROUTE_STATUS_V1.md` for movement cancellation/progress work.
 4. `docs/subprojects/ai-single-unit-editor/GRID_PATHFINDING_V1.md` for passability, A*, waypoints or replanning.
 5. `docs/architecture/OVERVIEW.md`.
-6. The exact module and focused test involved.
-7. Historical journal/plans only when current code and status are insufficient.
+6. `docs/workflow/VISUAL_QA_APPROVAL_POLICY.md` for visible behavior.
+7. The exact module and focused test involved.
+8. Historical journal/plans only when current code and status are insufficient.
 
 ## Current baseline
 
@@ -173,12 +174,12 @@ active_move_path_reason
 | Task | Primary files | Focused checks |
 |---|---|---|
 | Utility choice | Runner, Blackboard, graph fixture | runtime smoke, graph validation, build |
-| Stateful node | Runtime | runtime smoke, browser runtime test, build |
-| Route progress/cancellation | `AiRouteStatus.ts`, movement bridge | route-status smoke, move-bridge smoke, browser trace |
+| Stateful node | Runtime | runtime smoke, prepared browser runtime scenario, build |
+| Route progress/cancellation | `AiRouteStatus.ts`, movement bridge | route-status smoke, move-bridge smoke, prepared browser trace |
 | Passability/A* | `GridNavigation.ts`, `GridPathfinder.ts` | pathfinding smoke, build |
 | Waypoints/replan | MoveOrder planning, SimulationTick | routed-move smoke, move-bridge smoke, build |
-| Player right click | `RoutedMoveOrders.ts`, input controller | routed-move smoke, workspace/browser scenario |
-| Runtime diagnostics | bridge debug storage, editor overlay | browser scenario and opened exact-SHA PNG |
+| Player right click | `RoutedMoveOrders.ts`, input controller | routed-move smoke, prepared workspace/browser scenario |
+| Runtime diagnostics | bridge debug storage, editor overlay | prepared browser scenario; exact-SHA PNG only after approval |
 
 ## TDD requirement
 
@@ -188,7 +189,9 @@ active_move_path_reason
 4. Run focused test.
 5. Run relevant existing AI/path smoke checks.
 6. Run production build.
-7. For visible behavior, run real-browser scenario and inspect PNG.
+7. For visible behavior, prepare/update the real-browser scenario and expected PNG list.
+8. Ask `Визуальная проверка подготовлена. Запустить её сейчас?`
+9. Run and inspect PNG only after explicit user approval. A prior explicit request already counts.
 
 ## Minimum verification
 
@@ -203,7 +206,7 @@ npm run build
 npm run docs:check
 ```
 
-Add the relevant Playwright scenario for user-visible changes.
+Prepare the relevant Playwright scenario for user-visible changes. Do not execute it without approval.
 
 ## Minimum report
 
@@ -211,7 +214,10 @@ State:
 
 - runtime/path behavior changed;
 - ownership and cancellation rules;
-- exact tests and SHA;
-- real-browser result and PNG inspection;
+- exact focused tests and implementation SHA;
+- `visual_qa_prepared`;
+- `visual_qa_approval`;
+- `visual_qa_run`;
+- browser/PNG evidence only when actually approved and executed;
 - remaining pathfinding/selected-soldier limits;
 - preview/main branch state.
