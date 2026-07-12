@@ -147,6 +147,7 @@ export function cloneAttentionSettings(settings: UnitAttentionSettings): UnitAtt
     profiles: Object.fromEntries(
       Object.entries(settings.profiles).map(([mode, profile]) => [mode, { ...profile }]),
     ),
+    vision: { ...settings.vision },
   });
 }
 
