@@ -4,15 +4,17 @@
   "status": "active",
   "updated_at": "2026-07-12",
   "goal": "Создать понятную человеку лабораторию поведения одиночного бойца: Utility AI выбирает решение, stateful runtime исполняет длительные действия, общий A* ведёт бойца по карте, а постоянные профили маршрута позволяют без кода настраивать стоимость местности и честно известные бойцу тактические факторы.",
-  "current_focus": "На временной ветке реализуется Navigation Profiles v1: редактируемый реестр профилей, единый выбор активного профиля, профильный A*, ограничение обхода, субъективная известная опасность, контролируемое перестроение и независимый кешированный слой стоимости маршрута. Результат ещё не переносился в real-wargame-preview; визуальная проверка не запускалась.",
-  "next_step": "Завершить не-визуальные проверки точного SHA, подготовить отдельный Playwright-сценарий и после разрешения пользователя провести визуальную проверку с осмотром PNG. Перенос в real-wargame-preview возможен только по отдельной явной команде пользователя.",
+  "current_focus": "Navigation Profiles and Route Cost v1 перенесены в real-wargame-preview: доступны редактируемые профили движения, единый выбор активного профиля, профильный A*, ограничение обхода, субъективная известная опасность, контролируемое перестроение и независимый кешированный слой стоимости маршрута. Автоматические не-визуальные проверки пройдены; визуальная проверка ещё не запускалась.",
+  "next_step": "Провести ручную проверку профилей, маршрутов, слоя стоимости и перестроения при смене профиля. Отдельный Playwright-сценарий запускать только после явного разрешения пользователя; затем продолжить по плану Soldier Perception and Attention v1.",
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-  "last_verified_commit": "a818afa65b8cc0086c3360d27002b023e6848650",
+  "last_verified_commit": "1477d378d0c2c11fb3b50ab3e846a69f43ae41af",
   "last_verified_runs": {
-    "navigation_profiles_core": "29193785588: all source, profile, overlay, pathfinding, routed movement, runtime, route-status, AI bridge, command-plan-route, map-revision and production-build checks passed; generated docs were synchronized afterward",
-    "preview_core": "29193785600: recorded for the same exact source SHA",
-    "policy": "29193785576: success",
-    "docs_integrity": "pending final generated-doc commit verification",
+    "navigation_profiles_core": "29194248197: focused navigation profiles, route cost, pathfinding, runtime, build and documentation checks passed on the verified source branch",
+    "preview_core": "29194248254: all preview core checks passed on the verified source branch",
+    "command_plan_route": "29194248230: success",
+    "policy": "29194248233: success",
+    "docs_integrity": "29194248226: success",
+    "merge_pr": "PR #63 merged into real-wargame-preview as 1477d378d0c2c11fb3b50ab3e846a69f43ae41af",
     "visual_qa": "prepared_not_run_by_user_policy",
     "playwright": "not_run",
     "png_count": 0,
@@ -30,6 +32,8 @@
     "docs/subprojects/ai-single-unit-editor/GRID_PATHFINDING_V1.md",
     "docs/superpowers/specs/2026-07-12-navigation-profiles-route-cost-design.md",
     "docs/superpowers/plans/2026-07-12-navigation-profiles-route-cost.md",
+    "docs/superpowers/specs/2026-07-12-soldier-perception-attention-design.md",
+    "docs/superpowers/plans/2026-07-12-soldier-perception-attention-v1.md",
     "AGENTS.md"
   ],
   "main_files": [
@@ -55,6 +59,7 @@
   ],
   "test_files": [
     "scripts/navigation_profiles_smoke.ts",
+    "scripts/navigation_replan_profile_switch_smoke.ts",
     "scripts/navigation_overlay_contract_smoke.ts",
     "scripts/grid_pathfinding_smoke.ts",
     "scripts/routed_move_smoke.ts",
@@ -74,6 +79,7 @@
   ],
   "suggested_verification": [
     "npm run navigation-profiles:smoke",
+    "npm run navigation-profile-switch:smoke",
     "npm run navigation-overlay:smoke",
     "npm run pathfinding:smoke",
     "npm run routed-move:smoke",
@@ -96,7 +102,7 @@
     "Перестроение сохраняет playerCommandId и AI ownerToken; устаревшая очистка ИИ не удаляет приказ игрока.",
     "Профили маршрута не хранятся внутри конкретного behavior graph и не превращаются в числовые ноды.",
     "Не утверждать визуальную проверку без запуска браузера и открытия PNG точного SHA.",
-    "Не менять main и не переносить результат в real-wargame-preview без отдельного явного GO пользователя."
+    "Не менять main без отдельного явного GO пользователя."
   ],
   "known_limits": [
     "Версия 1 честно использует известную бойцу опасность и маскировку леса/канав; субъективная видимость противнику, точная известная дистанция до врага и территория пока представлены расширяемыми контрактами с нулевым вкладом.",
@@ -105,6 +111,6 @@
     "Не все behavior-ноды ещё имеют отдельный семантический selector movementMode; числовые веса всё равно берутся только из общего реестра.",
     "Состояние профилей хранится в localStorage и JSON, но ещё не встроено в scene JSON.",
     "Нет резервирования клеток между бойцами, flow field или группового коридора.",
-    "Визуальная проверка не выполнена до явного разрешения пользователя."
+    "Визуальная проверка после переноса в preview ещё не выполнена."
   ]
 }
