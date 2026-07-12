@@ -26,7 +26,10 @@
   text-overflow: ellipsis;
 }
 
-.unit-bar-current {
+.simulation-unit-bar .unit-bar-current {
+  grid-area: auto;
+  min-width: 0 !important;
+  max-width: none !important;
   display: grid;
   gap: 1px;
   margin-top: 4px;
