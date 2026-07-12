@@ -1,1 +1,1 @@
-Approved by the user for visual verification after synchronizing current preview into the temporary branch.
+Approved by the user for exact-SHA system-Chrome verification after synchronizing current real-wargame-preview into the temporary branch.
