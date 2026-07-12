@@ -1,0 +1,1 @@
+Temporary trigger for runtime snapshot scene contract verification. Remove after the verified test is committed.
