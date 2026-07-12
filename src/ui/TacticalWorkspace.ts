@@ -5,6 +5,8 @@ import { buildSoldierAwarenessReport } from '../core/knowledge/SoldierAwarenessG
 import { getSelectedSimulationCover, getSimulationCovers, hoverSimulationCoverAtPosition } from '../core/knowledge/SimulationCoverSelection';
 import { buildUnitKnowledgeReport } from '../core/knowledge/UnitKnowledge';
 import { getCell, resolveObjectCoverProperties } from '../core/map/MapModel';
+import { getNavigationProfileRegistry, subscribeNavigationProfileRegistry } from '../core/navigation/NavigationProfileStorage';
+import { isPlayerCommandOutstanding, updatePlayerCommandNavigationProfile } from '../core/orders/PlayerCommand';
 import { getSelectedUnit, issueMoveOrderToSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { tickSimulation } from '../core/simulation/SimulationTick';
 import { sampleSmoothHeightLevel } from '../core/terrain/SmoothTerrain';
@@ -72,9 +74,27 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
       <div class="simulation-sidebar-body" data-role="sidebar-body"></div>
     </aside>
     <section class="simulation-unit-bar">
-      <div class="unit-bar-identity"><strong data-role="unit-name">Боец не выбран</strong><span data-role="unit-meta">Левый клик по солдату — выбрать</span></div>
+      <div class="unit-bar-identity">
+        <strong data-role="unit-name">Боец не выбран</strong>
+        <span data-role="unit-meta">Левый клик по солдату — выбрать</span>
+        <div class="unit-bar-current"><span data-role="action">Действие: —</span><span data-role="order">Приказ: —</span></div>
+      </div>
       <div class="unit-bar-stats">${['health:Здоровье','morale:Дух','fatigue:Усталость','stress:Стресс','suppression:Подавление','ammo:Патроны'].map((item) => { const [id,label]=item.split(':'); return `<div class="unit-bar-stat"><span>${label}</span><b data-stat="${id}">—</b></div>`; }).join('')}</div>
-      <div class="unit-bar-current"><span data-role="action">Действие: —</span><span data-role="order">Приказ: —</span></div>
+      <div class="unit-bar-route-controls">
+        <label class="unit-route-profile"><span>Профиль маршрута</span><select data-action="unit-navigation-profile" aria-label="Профиль движения выбранного бойца"></select></label>
+        <button type="button" data-action="route-cost-quick-toggle" aria-pressed="false">Карта стоимости: выкл</button>
+        <details class="unit-route-details">
+          <summary data-role="route-summary">Маршрут: —</summary>
+          <div class="unit-route-details-panel">
+            <span data-role="route-details-command">Приказ: —</span>
+            <span data-role="route-details-plan">План: —</span>
+            <span data-role="route-details-route">Маршрут: —</span>
+            <span data-role="route-details-profile">Профиль: —</span>
+            <span data-role="route-details-cost">Цена: —</span>
+            <span data-role="route-details-reason">Причина: —</span>
+          </div>
+        </details>
+      </div>
       <div class="unit-bar-command-group posture-group">
         <button data-posture="standing">Стоять</button><button data-posture="crouched">Пригнуться</button><button data-posture="prone">Лечь</button>
       </div>
@@ -101,6 +121,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   const display = q<HTMLElement>('[data-role="display"]');
   const fileTools = q<HTMLElement>('[data-role="file-tools"]');
   const editorPlace = q<HTMLButtonElement>('[data-action="editor-place"]');
+  const navigationProfile = q<HTMLSelectElement>('[data-action="unit-navigation-profile"]');
 
   moveExistingButton('#grid-toggle', display);
   moveExistingButton('#height-toggle', display);
@@ -114,6 +135,36 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   });
   display.append(relief);
   moveWorkspaceFileTools(fileTools);
+
+  const refreshNavigationProfiles = () => {
+    const registry = getNavigationProfileRegistry();
+    const previous = navigationProfile.value;
+    navigationProfile.innerHTML = registry.listProfiles()
+      .map((profile) => `<option value="${esc(profile.id)}">${esc(profile.nameRu)}</option>`)
+      .join('');
+    const unit = getSelectedUnit(state);
+    const requested = unit?.playerNavigationProfileId ?? previous ?? 'normal';
+    navigationProfile.value = registry.hasProfile(requested) ? requested : 'normal';
+  };
+  refreshNavigationProfiles();
+  subscribeNavigationProfileRegistry(() => {
+    refreshNavigationProfiles();
+    updateBottom();
+    onChanged();
+  });
+
+  navigationProfile.addEventListener('change', () => {
+    const unit = getSelectedUnit(state);
+    if (!unit) return;
+    const registry = getNavigationProfileRegistry();
+    const profileId = registry.hasProfile(navigationProfile.value) ? navigationProfile.value : 'normal';
+    unit.playerNavigationProfileId = profileId;
+    if (isPlayerCommandOutstanding(unit.playerCommand)) {
+      unit.playerCommand = updatePlayerCommandNavigationProfile(unit.playerCommand!, profileId);
+    }
+    updateBottom();
+    onChanged();
+  });
 
   q<HTMLButtonElement>('[data-action="ai-editor"]').onclick = () => window.open('/ai-node-editor.html', '_blank');
   q<HTMLButtonElement>('[data-action="new-game"]').onclick = () => window.location.reload();
@@ -207,6 +258,14 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
     for (const item of shell.querySelectorAll<HTMLElement>('[data-stat]')) item.textContent = values[item.dataset.stat ?? ''] ?? '—';
     q('[data-role="action"]').textContent = `Действие: ${unit ? actionLabel(unit.behaviorRuntime.currentAction) : '—'}`;
     q('[data-role="order"]').textContent = `Приказ: ${unit ? orderLabel(state, unit) : '—'}`;
+    navigationProfile.disabled = !unit;
+    if (unit) {
+      const registry = getNavigationProfileRegistry();
+      const requested = unit.playerNavigationProfileId ?? 'normal';
+      const normalized = registry.hasProfile(requested) ? requested : 'normal';
+      if (unit.playerNavigationProfileId !== normalized) unit.playerNavigationProfileId = normalized;
+      if (navigationProfile.value !== normalized) navigationProfile.value = normalized;
+    }
     for (const item of shell.querySelectorAll<HTMLButtonElement>('[data-posture]')) { item.disabled = !unit; item.classList.toggle('active', item.dataset.posture === unit?.behaviorRuntime.posture); }
     const pause = q<HTMLButtonElement>('[data-action="pause"]');
     pause.textContent = getAiTestPaused(state) ? 'Продолжить' : 'Пауза';
