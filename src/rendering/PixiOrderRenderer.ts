@@ -11,6 +11,7 @@ const COMMAND_COLOR = 0xffd85a;
 const PLAN_COLOR = 0x62aaff;
 const ROUTE_COLOR = 0x66e38a;
 const FAILURE_COLOR = 0xff755f;
+const OVERLAY_OFF_CLASS = 'command-plan-route-overlay-off';
 const LABEL_STYLE = new TextStyle({
   fontFamily: 'Arial, sans-serif',
   fontSize: 12,
@@ -48,10 +49,11 @@ export class PixiOrderRenderer {
     map: TacticalMap,
     units: readonly UnitModel[],
     selectedUnitIds: readonly string[],
-    active = true,
+    active?: boolean,
   ): void {
-    this.container.visible = active;
-    if (!active) return;
+    const visible = active ?? isOverlayEnabled();
+    this.container.visible = visible;
+    if (!visible) return;
 
     const selectedIds = new Set(selectedUnitIds);
     const visibleIds = new Set<string>();
@@ -284,4 +286,8 @@ function drawDashedLine(
     graphics.moveTo(fromX + directionX * start, fromY + directionY * start);
     graphics.lineTo(fromX + directionX * end, fromY + directionY * end);
   }
+}
+
+function isOverlayEnabled(): boolean {
+  return typeof document === 'undefined' || !document.body.classList.contains(OVERLAY_OFF_CLASS);
 }
