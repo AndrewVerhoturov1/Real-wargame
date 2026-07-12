@@ -40,8 +40,56 @@ expectIncludes('src/ui/TacticalWorkspace.ts', [
   'Симуляция', 'Редактирование', 'Слой опасности', 'Слой скрытности', 'Обзор и память',
   'Приказать двигаться сюда', 'Один расчёт ИИ', 'Рассчитать и выполнить',
   'workspace-file-menu', 'updateInfoPanelLive', 'stableDecision',
+  'data-action="turn-unit"', 'Повернуть',
+  'data-action="unit-attention-mode"', 'Автоматически', 'Наблюдение', 'Поиск', 'Стрельба',
+  'setAttentionMode', 'clearAttentionOverride',
 ]);
 expectExcludes('src/ui/TacticalWorkspace.ts', ['u?.position.x.toFixed(2)', 'u?.behaviorRuntime.reason']);
+
+expectIncludes('src/core/ui/RuntimeUiState.ts', [
+  'UnitCommandToolRuntimeState', 'turnToolActive', 'routeFacingDraft',
+  'setTurnToolActive', 'setRouteFacingDraft', 'consumeTurnTool',
+]);
+expectIncludes('src/input/BoardInputController.ts', [
+  'rightPointerId', 'rightStartGrid', 'setRouteFacingDraft',
+  'getUnitCommandToolState', 'faceSelectedUnitsToward',
+  'issueRoutedMoveOrderToSelectedUnits(this.state, this.rightStartGrid, finalFacingRadians)',
+  "this.canvas.style.cursor = 'crosshair'",
+]);
+expectIncludes('src/core/orders/PlayerCommand.ts', ['finalFacingRadians']);
+expectIncludes('src/core/orders/MoveOrder.ts', ['finalFacingRadians']);
+expectIncludes('src/core/orders/MoveOrderPlanning.ts', ['finalFacingRadians: options.finalFacingRadians']);
+expectIncludes('src/core/orders/RoutedMoveOrders.ts', ['finalFacingRadians?: number', 'finalFacingRadians,']);
+expectIncludes('src/core/simulation/SimulationTick.ts', [
+  'applyFinalFacing', 'order.finalFacingRadians', 'unit.facingRadians = order.finalFacingRadians',
+]);
+expectIncludes('src/rendering/CommandPlanRouteOverlayModel.ts', ['finalFacingRadians']);
+expectIncludes('src/rendering/PixiOrderRenderer.ts', ['drawFacingArrow', 'finalFacingRadians']);
+
+expectIncludes('src/rendering/PixiVisibilityHeatmapRenderer.ts', [
+  'UNSEEN_OVERLAY_COLOR', 'UNSEEN_OVERLAY_ALPHA', 'cachedFieldCount',
+  'image.data[pixel + 3] = Math.round(UNSEEN_OVERLAY_ALPHA * 255)',
+  'const image = context.createImageData(mapWidth, mapHeight)',
+]);
+expectIncludes('src/ui/AttentionRuntimePanel.ts', [
+  'attention-compact-legend', 'Хорошо видно', 'Средне', 'Слабо', 'Не видно',
+  'Текущий контакт', 'Последнее место', 'Подозрение', 'Звук',
+  "metric('Полей в кеше', String(fieldDiagnostics.cachedFieldCount))",
+  'Повторных использований с запуска',
+]);
+expectIncludes('src/perception-attention.css', [
+  '.attention-compact-legend', '.attention-legend-gradient', '.attention-legend-marker',
+]);
+expectIncludes('src/core/visibility/SelectedUnitVisibilityField.ts', [
+  'cachedFieldCount', 'cachedFieldCount: runtime.field ? 1 : 0',
+]);
+
+expectIncludes('src/rendering/PixiOverlayRenderer.ts', [
+  'STABLE_DIRECTIONAL_FIRE_COLOR', 'CURRENT_CONTACT_MARKER_COLOR',
+]);
+expectExcludes('src/rendering/PixiOverlayRenderer.ts', [
+  'const dangerColor = threat.visibleNow ? 0xff4e3d : 0xf09a55;',
+]);
 
 expectIncludes('src/ui/EditorHeaderPlacement.ts', [
   'installEditorHeaderPlacement', 'TOOLS_BY_TAB',

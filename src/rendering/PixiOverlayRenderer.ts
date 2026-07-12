@@ -10,8 +10,12 @@ import {
   getRealReliefOverlayState,
   getSimulationLayerState,
   getVisibilityProbeState,
+  getUnitCommandToolState,
 } from '../core/ui/RuntimeUiState';
 import type { KnownThreatMemory } from '../core/units/UnitModel';
+
+const STABLE_DIRECTIONAL_FIRE_COLOR = 0xf05a47;
+const CURRENT_CONTACT_MARKER_COLOR = 0xfff0b0;
 import { getVisibilityProbeResult } from '../core/visibility/VisibilityProbeService';
 
 interface OverlayDiagnostics {
@@ -35,6 +39,7 @@ export class PixiOverlayRenderer {
   private readonly interactionContainer = new Container();
   private readonly hoverCellGraphics = new Graphics();
   private readonly selectionBoxGraphics = new Graphics();
+  private readonly commandDraftGraphics = new Graphics();
   private lastZoneKey = '';
   private lastRealReliefKey = '';
   private lastKnowledgeKey = '';
@@ -63,7 +68,8 @@ export class PixiOverlayRenderer {
 
     this.hoverCellGraphics.eventMode = 'none';
     this.selectionBoxGraphics.eventMode = 'none';
-    this.interactionContainer.addChild(this.hoverCellGraphics, this.selectionBoxGraphics);
+    this.commandDraftGraphics.eventMode = 'none';
+    this.interactionContainer.addChild(this.hoverCellGraphics, this.selectionBoxGraphics, this.commandDraftGraphics);
     this.container.addChild(
       this.zoneContainer,
       this.realReliefContainer,
@@ -152,6 +158,7 @@ export class PixiOverlayRenderer {
     this.lastInteractionKey = nextKey;
     this.hoverCellGraphics.clear();
     this.selectionBoxGraphics.clear();
+    this.commandDraftGraphics.clear();
 
     if (showGrid && state.mouseGridPosition) {
       const { map } = state;
@@ -167,6 +174,22 @@ export class PixiOverlayRenderer {
         map.cellSize,
         map.cellSize,
       );
+    }
+
+    const commandTool = getUnitCommandToolState(state);
+    if (commandTool.routeFacingDraft) {
+      const draft = commandTool.routeFacingDraft;
+      const startX = draft.target.x * state.map.cellSize;
+      const startY = draft.target.y * state.map.cellSize;
+      const endX = draft.pointer.x * state.map.cellSize;
+      const endY = draft.pointer.y * state.map.cellSize;
+      this.commandDraftGraphics.lineStyle(3, 0xffd85a, 0.95);
+      this.commandDraftGraphics.drawCircle(startX, startY, 8);
+      if (draft.finalFacingRadians !== null) {
+        this.commandDraftGraphics.moveTo(startX, startY);
+        this.commandDraftGraphics.lineTo(endX, endY);
+        drawArrowHead(this.commandDraftGraphics, endX, endY, draft.finalFacingRadians, 9);
+      }
     }
 
     if (state.selectionBox) {
@@ -300,7 +323,7 @@ function drawRememberedThreat(graphics: Graphics, threat: KnownThreatMemory, cel
   const confidenceAlpha = Math.max(0.18, Math.min(0.9, threat.confidence / 100));
   const sourceX = threat.x * cellSize;
   const sourceY = threat.y * cellSize;
-  const dangerColor = threat.visibleNow ? 0xff4e3d : 0xf09a55;
+  const dangerColor = threat.mode === 'directional_fire' ? STABLE_DIRECTIONAL_FIRE_COLOR : 0xf09a55;
   const uncertaintyRadius = Math.max(0.18, threat.uncertaintyCells) * cellSize;
 
   graphics.lineStyle(threat.visibleNow ? 3 : 2, dangerColor, confidenceAlpha);
@@ -338,6 +361,11 @@ function drawRememberedThreat(graphics: Graphics, threat: KnownThreatMemory, cel
   graphics.lineTo(sourceX + 6, sourceY + 6);
   graphics.moveTo(sourceX + 6, sourceY - 6);
   graphics.lineTo(sourceX - 6, sourceY + 6);
+  if (threat.visibleNow) {
+    graphics.beginFill(CURRENT_CONTACT_MARKER_COLOR, 0.95);
+    graphics.drawCircle(sourceX, sourceY, 3);
+    graphics.endFill();
+  }
 }
 
 function drawVisibilityProbe(container: Container, state: SimulationState): void {
@@ -464,6 +492,10 @@ function getInteractionLayerKey(state: SimulationState, showGrid: boolean): stri
   const mouse = showGrid && state.mouseGridPosition
     ? `${Math.floor(state.mouseGridPosition.x)}:${Math.floor(state.mouseGridPosition.y)}`
     : 'none';
+  const draft = getUnitCommandToolState(state).routeFacingDraft;
+  const draftKey = draft
+    ? `${draft.target.x.toFixed(2)}:${draft.target.y.toFixed(2)}:${draft.pointer.x.toFixed(2)}:${draft.pointer.y.toFixed(2)}:${draft.finalFacingRadians?.toFixed(4) ?? 'none'}`
+    : 'none';
   const box = state.selectionBox
     ? `${state.selectionBox.start.x.toFixed(2)}:${state.selectionBox.start.y.toFixed(2)}:${state.selectionBox.current.x.toFixed(2)}:${state.selectionBox.current.y.toFixed(2)}`
     : 'none';
@@ -472,6 +504,7 @@ function getInteractionLayerKey(state: SimulationState, showGrid: boolean): stri
     `grid:${showGrid ? '1' : '0'}`,
     `mouseCell:${mouse}`,
     `box:${box}`,
+    `draft:${draftKey}`,
     `cell:${state.map.cellSize}`,
   ].join(';');
 }

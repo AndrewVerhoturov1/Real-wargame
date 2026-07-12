@@ -11,6 +11,7 @@ export interface PlayerCommand {
   readonly target: GridPosition;
   readonly movementMode?: NavigationMovementMode;
   readonly navigationProfileId?: string;
+  readonly finalFacingRadians?: number;
   readonly status: PlayerCommandStatus;
   readonly revision: number;
   readonly issuedAtMs: number;
@@ -25,6 +26,7 @@ export function createPlayerMoveCommand(
   nowMs = Date.now(),
   movementMode: NavigationMovementMode = 'normal',
   navigationProfileId: string | null = null,
+  finalFacingRadians: number | null = null,
 ): PlayerCommand {
   const revision = (previous?.revision ?? 0) + 1;
   return {
@@ -34,6 +36,7 @@ export function createPlayerMoveCommand(
     target: { ...target },
     movementMode,
     navigationProfileId: normalizeNavigationProfileId(navigationProfileId),
+    finalFacingRadians: normalizeOptionalRadians(finalFacingRadians),
     status: 'active',
     revision,
     issuedAtMs: nowMs,
@@ -84,6 +87,13 @@ export function updatePlayerCommandNavigationProfile(
 
 export function isPlayerCommandOutstanding(command: PlayerCommand | null): boolean {
   return command?.status === 'active' || command?.status === 'blocked';
+}
+
+function normalizeOptionalRadians(value: number | null | undefined): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  const full = Math.PI * 2;
+  const normalized = value % full;
+  return normalized < 0 ? normalized + full : normalized;
 }
 
 function normalizeNavigationProfileId(value: string | null | undefined): string {

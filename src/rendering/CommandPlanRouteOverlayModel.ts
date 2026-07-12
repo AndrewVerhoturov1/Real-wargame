@@ -7,6 +7,7 @@ import type { UnitModel } from '../core/units/UnitModel';
 export interface CommandOverlaySnapshot {
   readonly target: GridPosition;
   readonly status: 'active' | 'blocked';
+  readonly finalFacingRadians: number | null;
 }
 
 export interface PlanStageOverlaySnapshot {
@@ -40,6 +41,7 @@ export function buildCommandPlanRouteOverlaySnapshot(
     ? {
         target: { ...playerCommand.target },
         status: playerCommand.status as 'active' | 'blocked',
+        finalFacingRadians: playerCommand.finalFacingRadians ?? null,
       }
     : null;
   const activePlan = selected && unit.plan?.status === 'active' ? unit.plan : null;
@@ -57,7 +59,7 @@ export function buildCommandPlanRouteOverlaySnapshot(
     `s:${selected ? 1 : 0}`,
     `p:${pointKey(unit.position)}`,
     `m:${map.cellSize}`,
-    `c:${unit.playerCommand?.revision ?? 0}:${unit.playerCommand?.status ?? 'none'}:${command ? pointKey(command.target) : '-'}`,
+    `c:${unit.playerCommand?.revision ?? 0}:${unit.playerCommand?.status ?? 'none'}:${command ? pointKey(command.target) : '-'}:${command?.finalFacingRadians?.toFixed(4) ?? '-'}`,
     `plan:${unit.plan?.revision ?? 0}:${unit.plan?.status ?? 'none'}`,
     `order:${unit.order?.issuedAtMs ?? 0}:${unit.order?.routeRevision ?? 0}:${currentWaypointIndex}:${waypointCount}:${unit.order ? pointKey(unit.order.target) : '-'}`,
   ].join('|');

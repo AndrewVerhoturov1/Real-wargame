@@ -171,6 +171,10 @@ function drawCommand(
   graphics.moveTo(to.x, to.y - 13);
   graphics.lineTo(to.x, to.y + 13);
 
+  if (command.finalFacingRadians !== null) {
+    drawFacingArrow(graphics, to.x, to.y, command.finalFacingRadians, snapshot.selected ? 24 : 18, COMMAND_COLOR, alpha);
+  }
+
   if (command.status === 'blocked') {
     graphics.lineStyle(3, FAILURE_COLOR, 0.95);
     graphics.moveTo(to.x - 7, to.y - 7);
@@ -325,6 +329,27 @@ function stageAlpha(stage: PlanStageOverlaySnapshot): number {
   if (stage.status === 'pending') return 0.58;
   if (stage.status === 'failed' || stage.status === 'cancelled') return 0.92;
   return 1;
+}
+
+function drawFacingArrow(
+  graphics: Graphics,
+  x: number,
+  y: number,
+  finalFacingRadians: number,
+  length: number,
+  color: number,
+  alpha: number,
+): void {
+  const endX = x + Math.cos(finalFacingRadians) * length;
+  const endY = y + Math.sin(finalFacingRadians) * length;
+  graphics.lineStyle(3, color, alpha);
+  graphics.moveTo(x, y);
+  graphics.lineTo(endX, endY);
+  const size = 7;
+  graphics.moveTo(endX, endY);
+  graphics.lineTo(endX - Math.cos(finalFacingRadians - Math.PI / 6) * size, endY - Math.sin(finalFacingRadians - Math.PI / 6) * size);
+  graphics.moveTo(endX, endY);
+  graphics.lineTo(endX - Math.cos(finalFacingRadians + Math.PI / 6) * size, endY - Math.sin(finalFacingRadians + Math.PI / 6) * size);
 }
 
 function drawDashedLine(

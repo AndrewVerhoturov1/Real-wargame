@@ -44,6 +44,7 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
       ?? 'normal',
     navigationProfile: resolved.profile,
     navigationProfileSource: resolved.source,
+    finalFacingRadians: order.finalFacingRadians,
     tacticalContext,
     replanCount: (order.replanCount ?? 0) + 1,
     lastReplanAtSeconds: state.simulationTimeSeconds,

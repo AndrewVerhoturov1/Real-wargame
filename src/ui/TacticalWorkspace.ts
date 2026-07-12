@@ -2,6 +2,8 @@ import '../tactical-workspace-stage8.css';
 import type { AiGameBridgeHandle } from '../core/ai/AiGameBridge';
 import type { UnitPosture } from '../core/behavior/BehaviorModel';
 import { buildSoldierAwarenessReport } from '../core/knowledge/SoldierAwarenessGrid';
+import { clearAttentionOverride, setAttentionMode, setSearchSector } from '../core/perception/AttentionController';
+import { degreesToRadians, type AttentionMode } from '../core/perception/AttentionModel';
 import { getSelectedSimulationCover, getSimulationCovers, hoverSimulationCoverAtPosition } from '../core/knowledge/SimulationCoverSelection';
 import { buildUnitKnowledgeReport } from '../core/knowledge/UnitKnowledge';
 import { getCell, resolveObjectCoverProperties } from '../core/map/MapModel';
@@ -21,9 +23,11 @@ import {
 import {
   getRealReliefOverlayState,
   getSimulationLayerState,
+  getUnitCommandToolState,
   setHoveredSimulationCover,
   setSelectedSimulationCover,
   setSimulationLayerMode,
+  setTurnToolActive,
   toggleRealReliefOverlay,
   type SimulationLayerMode,
 } from '../core/ui/RuntimeUiState';
@@ -82,6 +86,8 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
       <div class="unit-bar-stats">${['health:Здоровье','morale:Дух','fatigue:Усталость','stress:Стресс','suppression:Подавление','ammo:Патроны'].map((item) => { const [id,label]=item.split(':'); return `<div class="unit-bar-stat"><span>${label}</span><b data-stat="${id}">—</b></div>`; }).join('')}</div>
       <div class="unit-bar-route-controls">
         <label class="unit-route-profile"><span>Профиль маршрута</span><select data-action="unit-navigation-profile" aria-label="Профиль движения выбранного бойца"></select></label>
+        <label class="unit-attention-mode"><span>Внимание</span><select data-action="unit-attention-mode" aria-label="Режим внимания выбранного бойца"><option value="automatic">Автоматически</option><option value="march">Марш</option><option value="observe">Наблюдение</option><option value="search">Поиск</option><option value="engage">Стрельба</option></select></label>
+        <button type="button" data-action="turn-unit" aria-pressed="false">Повернуть</button>
         <button type="button" data-action="route-cost-quick-toggle" aria-pressed="false">Карта стоимости: выкл</button>
         <details class="unit-route-details">
           <summary data-role="route-summary">Маршрут: —</summary>
@@ -122,6 +128,8 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   const fileTools = q<HTMLElement>('[data-role="file-tools"]');
   const editorPlace = q<HTMLButtonElement>('[data-action="editor-place"]');
   const navigationProfile = q<HTMLSelectElement>('[data-action="unit-navigation-profile"]');
+  const attentionModeSelect = q<HTMLSelectElement>('[data-action="unit-attention-mode"]');
+  const turnUnitButton = q<HTMLButtonElement>('[data-action="turn-unit"]');
 
   moveExistingButton('#grid-toggle', display);
   moveExistingButton('#height-toggle', display);
@@ -149,6 +157,35 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   refreshNavigationProfiles();
   subscribeNavigationProfileRegistry(() => {
     refreshNavigationProfiles();
+    updateBottom();
+    onChanged();
+  });
+
+  attentionModeSelect.addEventListener('change', () => {
+    const unit = getSelectedUnit(state);
+    if (!unit) return;
+    const requested = attentionModeSelect.value;
+    if (requested === 'automatic') {
+      clearAttentionOverride(unit);
+    } else if (requested === 'search') {
+      setSearchSector(
+        unit,
+        unit.facingRadians,
+        degreesToRadians(unit.attentionSettings.profiles.search.defaultSearchArcDegrees),
+        'player',
+      );
+    } else {
+      setAttentionMode(unit, requested as AttentionMode, 'player');
+    }
+    updateBottom();
+    onChanged();
+  });
+
+  turnUnitButton.addEventListener('click', () => {
+    if (!getSelectedUnit(state)) return;
+    const next = !getUnitCommandToolState(state).turnToolActive;
+    setTurnToolActive(state, next);
+    window.dispatchEvent(new CustomEvent('real-wargame:unit-command-tool-changed'));
     updateBottom();
     onChanged();
   });
@@ -259,7 +296,16 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
     q('[data-role="action"]').textContent = `Действие: ${unit ? actionLabel(unit.behaviorRuntime.currentAction) : '—'}`;
     q('[data-role="order"]').textContent = `Приказ: ${unit ? orderLabel(state, unit) : '—'}`;
     navigationProfile.disabled = !unit;
+    attentionModeSelect.disabled = !unit;
+    turnUnitButton.disabled = !unit;
+    const commandTool = getUnitCommandToolState(state);
+    turnUnitButton.classList.toggle('active', commandTool.turnToolActive);
+    turnUnitButton.setAttribute('aria-pressed', String(commandTool.turnToolActive));
+    turnUnitButton.textContent = commandTool.turnToolActive ? 'Укажите направление' : 'Повернуть';
     if (unit) {
+      attentionModeSelect.value = unit.attentionRuntime.modeSource === 'automatic'
+        ? 'automatic'
+        : unit.attentionRuntime.mode;
       const registry = getNavigationProfileRegistry();
       const requested = unit.playerNavigationProfileId ?? 'normal';
       const normalized = registry.hasProfile(requested) ? requested : 'normal';

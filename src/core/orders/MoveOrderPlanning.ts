@@ -25,6 +25,7 @@ export interface PlanMoveOrderOptions {
   readonly navigationProfile?: NavigationProfile;
   readonly navigationProfileSource?: NavigationProfileSource;
   readonly movementMode?: NavigationMovementMode;
+  readonly finalFacingRadians?: number;
   readonly tacticalContext?: TacticalRouteContext;
   readonly replanCount?: number;
   readonly lastReplanAtSeconds?: number;
@@ -93,6 +94,7 @@ export function planMoveOrder(
     navigationProfileId: path.profileId,
     navigationProfileRevision: path.profileRevision,
     navigationProfileSource: options.navigationProfileSource,
+    finalFacingRadians: options.finalFacingRadians,
     knowledgeRevision: options.tacticalContext?.knowledgeRevision ?? 0,
     replanCount: options.replanCount ?? 0,
     lastReplanAtSeconds: options.lastReplanAtSeconds,

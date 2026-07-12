@@ -2,6 +2,9 @@ import { Container, Graphics, SCALE_MODES, Sprite, Texture } from 'pixi.js';
 import type { PerceptionContactMemory } from '../core/perception/PerceptionContact';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { getAttentionOverlayState } from '../core/ui/RuntimeUiState';
+const UNSEEN_OVERLAY_COLOR = 0x101820;
+const UNSEEN_OVERLAY_ALPHA = 0.52;
+
 import {
   getSelectedUnitVisibilityField,
   getVisibilityFieldDiagnostics,
@@ -20,6 +23,7 @@ export interface ViewMemoryOverlayDiagnostics {
   fieldCacheHitCount: number;
   rasterWidth: number;
   rasterHeight: number;
+  cachedFieldCount: number;
 }
 
 type ViewMemoryDebugWindow = Window & {
@@ -60,11 +64,11 @@ export class PixiVisibilityHeatmapRenderer {
     this.container.visible = true;
     const field = overlay.showCurrentView ? getSelectedUnitVisibilityField(state) : null;
     if (field && field.revision !== this.lastFieldRevision) {
-      this.ensureRaster(field.width, field.height);
+      this.ensureRaster(state.map.width, state.map.height);
       if (this.rasterContext && this.rasterTexture && this.rasterSprite) {
-        drawVisibilityRaster(this.rasterContext, field);
+        drawVisibilityRaster(this.rasterContext, field, state.map.width, state.map.height);
         this.rasterTexture.baseTexture.update();
-        this.rasterSprite.position.set(field.minCellX * state.map.cellSize, field.minCellY * state.map.cellSize);
+        this.rasterSprite.position.set(0, 0);
         this.rasterSprite.scale.set(state.map.cellSize, state.map.cellSize);
         this.rasterSprite.visible = true;
         this.lastFieldRevision = field.revision;
@@ -114,6 +118,7 @@ export class PixiVisibilityHeatmapRenderer {
       fieldCacheHitCount: fieldDiagnostics?.cacheHitCount ?? 0,
       rasterWidth: this.rasterCanvas?.width ?? 0,
       rasterHeight: this.rasterCanvas?.height ?? 0,
+      cachedFieldCount: fieldDiagnostics?.cachedFieldCount ?? 0,
     };
   }
 
@@ -164,17 +169,33 @@ export class PixiVisibilityHeatmapRenderer {
 export function drawVisibilityRaster(
   context: CanvasRenderingContext2D,
   field: SelectedUnitVisibilityField,
+  mapWidth = field.width,
+  mapHeight = field.height,
 ): void {
-  const image = context.createImageData(field.width, field.height);
+  const image = context.createImageData(mapWidth, mapHeight);
+  const unseenRed = (UNSEEN_OVERLAY_COLOR >> 16) & 0xff;
+  const unseenGreen = (UNSEEN_OVERLAY_COLOR >> 8) & 0xff;
+  const unseenBlue = UNSEEN_OVERLAY_COLOR & 0xff;
+  for (let pixel = 0; pixel < image.data.length; pixel += 4) {
+    image.data[pixel] = unseenRed;
+    image.data[pixel + 1] = unseenGreen;
+    image.data[pixel + 2] = unseenBlue;
+    image.data[pixel + 3] = Math.round(UNSEEN_OVERLAY_ALPHA * 255);
+  }
   for (let index = 0; index < field.quality.length; index += 1) {
+    const localX = index % field.width;
+    const localY = Math.floor(index / field.width);
+    const mapX = field.minCellX + localX;
+    const mapY = field.minCellY + localY;
+    if (mapX < 0 || mapY < 0 || mapX >= mapWidth || mapY >= mapHeight) continue;
     const quality = field.quality[index] / 255;
     if (quality <= 0.01) continue;
     const color = heatmapColor(quality);
-    const pixel = index * 4;
+    const pixel = (mapY * mapWidth + mapX) * 4;
     image.data[pixel] = (color >> 16) & 0xff;
     image.data[pixel + 1] = (color >> 8) & 0xff;
     image.data[pixel + 2] = color & 0xff;
-    image.data[pixel + 3] = Math.round((0.08 + quality * 0.48) * 255);
+    image.data[pixel + 3] = Math.round((0.12 + quality * 0.48) * 255);
   }
   context.putImageData(image, 0, 0);
 }

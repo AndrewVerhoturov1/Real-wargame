@@ -195,7 +195,7 @@ export function resolveAiLabCursor(state: SimulationState): string {
     if (state.editor.tool === 'spawn_zone' || String(state.editor.tool).startsWith('paint_')) return 'crosshair';
     return 'default';
   }
-  if (!runtime.open) return 'crosshair';
+  if (!runtime.open) return 'default';
   if (runtime.tool === 'place_fighter') return 'copy';
   if (runtime.tool === 'place_threat') return 'crosshair';
   if (runtime.tool === 'place_cover') return 'cell';

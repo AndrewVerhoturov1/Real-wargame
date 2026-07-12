@@ -112,6 +112,10 @@ export function installAttentionRuntimePanel(
         <div><strong>Обзор и память</strong><span>Текущая видимость и субъективные знания выбранного бойца</span></div>
         <button type="button" data-close-attention title="Выключить слой и вернуться к списку старых знаний">×</button>
       </header>
+      <div class="attention-compact-legend" aria-label="Легенда обзора и памяти">
+        <div class="attention-legend-row"><span>Обзор</span><i class="attention-legend-gradient"></i><small>Хорошо видно · Средне · Слабо · Не видно</small></div>
+        <div class="attention-legend-row attention-legend-markers"><span>Память</span><b class="attention-legend-marker current"></b><small>Текущий контакт</small><b class="attention-legend-marker memory"></b><small>Последнее место</small><b class="attention-legend-marker suspicion"></b><small>Подозрение</small><b class="attention-legend-marker sound"></b><small>Звук</small></div>
+      </div>
       <div class="attention-runtime-grid">
         ${metric('Режим внимания', MODE_LABELS[unit.attentionRuntime.mode])}
         ${metric('Источник режима', modeSourceLabel(unit.attentionRuntime.modeSource))}
@@ -122,7 +126,8 @@ export function installAttentionRuntimePanel(
         ${metric('Неточность', best ? `±${Math.round(best.uncertaintyCells * state.map.metersPerCell)} м` : '—')}
         ${metric('Накопление', best ? `${best.evidencePerSecond.toFixed(1)}/с` : '—')}
         ${metric('Перестроения карты', String(fieldDiagnostics.rebuildCount))}
-        ${metric('Попадания в кеш', String(fieldDiagnostics.cacheHitCount))}
+        ${metric('Полей в кеше', String(fieldDiagnostics.cachedFieldCount))}
+        ${metric('Повторных использований с запуска', String(fieldDiagnostics.cacheHitCount))}
         ${metric('Причина обновления', fieldDiagnostics.lastBuildReason)}
         ${metric('Обработано шагов', String(fieldDiagnostics.processedCellCount))}
       </div>

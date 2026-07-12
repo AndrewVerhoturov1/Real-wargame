@@ -4,10 +4,10 @@
   "status": "active",
   "updated_at": "2026-07-13",
   "goal": "Создать понятную человеку лабораторию поведения одиночного бойца: Utility AI выбирает решение, stateful runtime исполняет длительные действия, общий A* ведёт бойца по карте, постоянные профили маршрута задают стоимость местности, а гибридная система обзора и внимания формирует субъективные визуальные и звуковые контакты без всезнания ИИ.",
-  "current_focus": "Слой «Обзор и память» полностью реализован и проверен во временной ветке feat/view-memory-heatmap-temp. Физическое вращение фокуса заменено стабильным вероятностным распределением внимания; текущий обзор показывается поклеточной тепловой картой с рельефом, предметами, лесом и падением качества по расстоянию; старые знания остаются метками; обнаружение накапливается во времени с небольшой стабильной случайностью. Поле кешируется, хранится в Uint8Array и выводится одним PixiJS-спрайтом. Актуальные навигационные изменения preview синхронизированы и повторно проверены. В real-wargame-preview реализация не переносилась; preview позже получила только один новый документ ideas/GOOD_POSITIONS_AND_AMBUSH_SITES.md без изменений кода.",
-  "next_step": "Показать пользователю временную ветку feat/view-memory-heatmap-temp для ручной проверки. Перед будущим переносом подтянуть последний docs-only коммит preview и повторить обычный transfer CI; системный Chrome требуется заново только если при синхронизации изменится код или интерфейс. Переносить только по отдельной явной команде, main не менять без отдельного GO.",
+  "current_focus": "Завершён пакет доработок слоя «Обзор и память» и управления выбранным бойцом: невидимая местность затемняется одной растровой текстурой, добавлена компактная легенда, кеш явно показывает хранение только одного текущего поля, пулемётная угроза больше не меняет основной цвет при обновлении контакта, режим внимания можно выбирать вручную, одноразовый инструмент «Повернуть» задаёт направление правым кликом, а протягивание правой кнопкой у конечной точки маршрута задаёт направление после прибытия.",
+  "next_step": "Провести пользовательскую проверку доработок в real-wargame-preview. После подтверждения развивать восприятие нескольких бойцов и обмен субъективными контактами по командной цепочке; main не менять без отдельного явного GO пользователя.",
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-  "last_verified_commit": "c0e790553f6d048f8bf8391260c833ae258b78cd",
+  "last_verified_commit": "4bd7b3a4f52c1654c8e1440799e6a91059b55402",
   "last_verified_runs": {
     "current_preview_base": "ca3f2e71327f184ce2aaccbd3749ebd6da93944c",
     "perception_core": "29201062853: success on a560b9b92593ce2c2b280d364431bba7d3c4aec4; build, perception, performance, attention nodes, runtime, workspace, game editor, LOS, dictionary, lab and docs checks passed",
@@ -38,9 +38,14 @@
     "view_memory_visual": "29209822972: exact-SHA system-Chrome Playwright success on c0e790553f6d048f8bf8391260c833ae258b78cd",
     "playwright_raw_log_digest": "sha256:97ef4cd304a446fd414a1a3dcbcb6b99bd340bf7cb0b15805ecc02fef769b777",
     "performance_budget": "first field build <= 120 ms on CI test map 180x120; hidden layer zero builds; idle cache reuse; moving rebuild throttle; one byte per cell",
-    "view_memory_preview_transfer": "not performed; implementation remains only in feat/view-memory-heatmap-temp",
+    "view_memory_preview_transfer": "PR #80 merged into real-wargame-preview as 0b21861a84ebfbe386b5621f5e02e5ded718c9d3",
     "view_memory_preview_base": "d6f754856f3b5d05b3f466a7316ceb2db701dc2d",
-    "view_memory_preview_drift": "current preview is 1 docs-only commit ahead: ideas/GOOD_POSITIONS_AND_AMBUSH_SITES.md; no runtime, UI or test code differs"
+    "view_memory_preview_drift": "current preview is 1 docs-only commit ahead: ideas/GOOD_POSITIONS_AND_AMBUSH_SITES.md; no runtime, UI or test code differs",
+    "visibility_controls_core": "29213161725: workspace, routed movement, view-memory cache contract and production build succeeded on 4bd7b3a4f52c1654c8e1440799e6a91059b55402",
+    "visibility_controls_visual": "29213161725: system-Chrome Playwright 3/3 succeeded on 4bd7b3a4f52c1654c8e1440799e6a91059b55402",
+    "visibility_controls_screenshots_digest": "sha256:7d07602c62f418db6eb26b0882433ccb5f64cdf0e878c7ccc4f48b7af9e9ba3f",
+    "visibility_controls_playwright_log_digest": "sha256:9e013bcc12baefa9c26fde782443f15516238f4ae739751f8553178598aa622e",
+    "visibility_field_cache_policy": "one current SelectedUnitVisibilityField per SimulationState; cacheHitCount is cumulative reuse diagnostics, not retained history"
   },
   "must_read_first": [
     "docs/subprojects/ai-single-unit-editor/VIEW_AND_MEMORY_HEATMAP_V1.md",
@@ -152,7 +157,8 @@
     "docs/subprojects/ai-single-unit-editor/journal/2026-07-12-perception-attention-v1.md",
     "docs/subprojects/ai-single-unit-editor/VIEW_AND_MEMORY_HEATMAP_V1.md",
     "docs/superpowers/plans/2026-07-13-view-memory-heatmap.md",
-    "docs/subprojects/ai-single-unit-editor/journal/2026-07-13-view-memory-heatmap-v1.md"
+    "docs/subprojects/ai-single-unit-editor/journal/2026-07-13-view-memory-heatmap-v1.md",
+    "docs/subprojects/ai-single-unit-editor/journal/2026-07-13-visibility-controls-facing.md"
   ],
   "suggested_verification": [
     "npm run view-memory-heatmap:smoke",
