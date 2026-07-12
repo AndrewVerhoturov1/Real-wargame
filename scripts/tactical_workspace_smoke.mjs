@@ -37,7 +37,7 @@ function expectBefore(relativePath, earlier, later) {
 
 expectIncludes('src/ui/TacticalWorkspace.ts', [
   "type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory'",
-  'Симуляция', 'Редактирование', 'Слой опасности', 'Слой скрытности', 'Память бойца',
+  'Симуляция', 'Редактирование', 'Слой опасности', 'Слой скрытности', 'Обзор и память',
   'Приказать двигаться сюда', 'Один расчёт ИИ', 'Рассчитать и выполнить',
   'workspace-file-menu', 'updateInfoPanelLive', 'stableDecision',
 ]);
