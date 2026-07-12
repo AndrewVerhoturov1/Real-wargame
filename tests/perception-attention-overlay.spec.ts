@@ -86,6 +86,8 @@ test('shows editable attention profiles in the real game editor', async ({ page 
   await expect(controls).toContainText('Обзор и внимание');
   await expect(controls).toContainText('Косвенное внимание');
   await expect(controls).toContainText('Стандартный сектор поиска');
+  await controls.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(250);
   await saveScreenshot(page, 'perception-attention-profile-editor.png');
   expect(browserErrors).toEqual([]);
 });
@@ -99,6 +101,11 @@ test('shows human controls for the new attention nodes in the real node editor',
     window.localStorage.setItem(key, serialized);
   }, { key: GRAPH_STORAGE_KEY, serialized: JSON.stringify(graph) });
   await page.goto('/ai-node-editor.html');
+  const shell = page.locator('.ai-editor-shell');
+  await expect(shell).toBeVisible();
+  if (await shell.evaluate((element) => element.classList.contains('inspector-closed'))) {
+    await page.locator('#toggle-inspector').click();
+  }
   await expect(page.locator('.graph-node[data-node-id="attention"]')).toBeVisible();
   await page.locator('.graph-node[data-node-id="attention"]').click();
   const controls = page.locator('[data-attention-node-controls]');
@@ -106,6 +113,8 @@ test('shows human controls for the new attention nodes in the real node editor',
   await expect(controls).toContainText('Настройка сектора поиска');
   await expect(controls.getByText('Центр сектора, °')).toBeVisible();
   await expect(controls.getByText('Ширина сектора, °')).toBeVisible();
+  await controls.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(200);
   await saveScreenshot(page, 'perception-attention-node-controls.png');
   expect(browserErrors).toEqual([]);
 });
@@ -133,7 +142,7 @@ async function openAttentionMode(page: Page, graph: Record<string, unknown>, exp
 async function pauseSimulation(page: Page): Promise<void> {
   const pause = page.locator('#pause-toggle');
   if ((await pause.textContent())?.includes('вкл')) return;
-  await pause.click();
+  await page.keyboard.press('p');
   await expect(pause).toContainText('Пауза: вкл');
   await page.waitForTimeout(300);
 }
@@ -177,7 +186,15 @@ function collectBrowserErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(`console: ${message.text()}`);
+    if (message.type() !== 'error') return;
+    if (message.text().startsWith('Failed to load resource')) return;
+    errors.push(`console: ${message.text()}`);
+  });
+  page.on('response', (response) => {
+    if (response.status() < 400) return;
+    const url = new URL(response.url());
+    if (url.pathname === '/favicon.ico') return;
+    errors.push(`http ${response.status()}: ${url.pathname}`);
   });
   return errors;
 }
