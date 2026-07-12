@@ -63,11 +63,11 @@ The runtime snapshot and runtime scene contracts now expect `scene-export-v8-vie
 
 A later full regression reached `lab:smoke` and exposed both its remaining v7 text contract and a UI integration risk: Tactical Workspace still owned a separate memory tab while the new panel initially appended another tab. The final design reuses the existing `memory` tab, renames it to `Обзор и память`, keeps the old subjective memory map layer, and opens the current-view heatmap and contact controls in that same tab.
 
-The full suite then exposed one remaining static `workspace:smoke` contract after the UI merge. A dedicated short diagnostic run is used to report the exact stale snippet before applying the final correction; functional runtime, navigation, map and visibility checks already pass before that point.
+A dedicated workspace diagnostic then identified that an earlier one-line Playwright edit had accidentally replaced `tests/preview-screenshots.spec.ts` with a partial copy. The unchanged node-editor and newly placed fighter scenarios were restored from current preview, while the intended `Обзор и память` title assertion was retained.
 
 ## Pending before handoff
 
-- expanded full preview-core regression after the final workspace contract correction;
+- final expanded preview-core regression on the restored test suite;
 - real system-Chrome Playwright run;
 - manual inspection of key screenshots;
 - final exact commit/run identifiers in canonical metadata.
