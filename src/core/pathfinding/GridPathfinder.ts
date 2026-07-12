@@ -14,6 +14,7 @@ export type GridPathFailureCode = 'start_blocked' | 'goal_unreachable' | 'no_rou
 export interface GridPathOptions {
   readonly maxVisitedCells?: number;
   readonly nearestGoalRadiusCells?: number;
+  readonly allowGoalAdjustment?: boolean;
 }
 
 export interface GridPathSuccess {
@@ -70,13 +71,28 @@ export function findGridPath(
   const grid = buildNavigationGrid(map);
   const startCell = gridPositionToNavigationCell(map, start);
   if (!isNavigationCellPassable(grid, startCell.x, startCell.y)) {
-    return failure('start_blocked', requestedGoal, 0,
+    return failure(
+      'start_blocked',
+      requestedGoal,
+      0,
       'The route start cell is blocked.',
-      'Стартовая клетка маршрута непроходима.');
+      'Стартовая клетка маршрута непроходима.',
+    );
   }
 
   const requestedGoalCell = gridPositionToNavigationCell(map, requestedGoal);
-  const resolvedGoalCell = isNavigationCellPassable(grid, requestedGoalCell.x, requestedGoalCell.y)
+  const requestedGoalPassable = isNavigationCellPassable(grid, requestedGoalCell.x, requestedGoalCell.y);
+  if (!requestedGoalPassable && options.allowGoalAdjustment === false) {
+    return failure(
+      'goal_unreachable',
+      requestedGoal,
+      0,
+      'The exact requested goal cell is blocked.',
+      'Точная клетка цели непроходима.',
+    );
+  }
+
+  const resolvedGoalCell = requestedGoalPassable
     ? requestedGoalCell
     : findNearestPassableGoal(
         grid,
@@ -85,9 +101,13 @@ export function findGridPath(
       );
 
   if (!resolvedGoalCell) {
-    return failure('goal_unreachable', requestedGoal, 0,
+    return failure(
+      'goal_unreachable',
+      requestedGoal,
+      0,
       'No passable cell is available near the requested goal.',
-      'Рядом с запрошенной целью нет доступной клетки.');
+      'Рядом с запрошенной целью нет доступной клетки.',
+    );
   }
 
   const goalAdjusted = resolvedGoalCell.x !== requestedGoalCell.x || resolvedGoalCell.y !== requestedGoalCell.y;
@@ -182,9 +202,14 @@ function runAStar(
       const nextX = currentX + dx;
       const nextY = currentY + dy;
       if (!isNavigationCellPassable(grid, nextX, nextY)) continue;
-      if (dx !== 0 && dy !== 0
-        && (!isNavigationCellPassable(grid, currentX + dx, currentY)
-          || !isNavigationCellPassable(grid, currentX, currentY + dy))) {
+      if (
+        dx !== 0
+        && dy !== 0
+        && (
+          !isNavigationCellPassable(grid, currentX + dx, currentY)
+          || !isNavigationCellPassable(grid, currentX, currentY + dy)
+        )
+      ) {
         continue;
       }
 
@@ -248,7 +273,10 @@ function simplifyPathToWaypoints(
       Math.sign(current.x - previous.x),
       Math.sign(current.y - previous.y),
     ];
-    if (previousDirection && (direction[0] !== previousDirection[0] || direction[1] !== previousDirection[1])) {
+    if (
+      previousDirection
+      && (direction[0] !== previousDirection[0] || direction[1] !== previousDirection[1])
+    ) {
       waypoints.push(navigationCellCenter(previous.x, previous.y));
     }
     previousDirection = direction;
