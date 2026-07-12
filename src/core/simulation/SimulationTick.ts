@@ -1,13 +1,16 @@
 import { clampPercent, POSTURE_MOVE_MULTIPLIER } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
-import { clampGridPositionToMap } from '../map/MapModel';
 import { syncSoldierThreatMemory } from '../knowledge/SoldierThreatMemory';
+import { clampGridPositionToMap } from '../map/MapModel';
+import { planMoveOrder } from '../orders/MoveOrderPlanning';
+import { isMapCellPassable } from '../pathfinding/GridNavigation';
 import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
 import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
 import type { SimulationState } from './SimulationState';
 
 const ORDER_COMPLETION_EPSILON_CELLS = 0.02;
+const ROUTE_LOOKAHEAD_CELLS = 6;
 const UNIT_VISUAL_BODY_RADIUS_CELLS = 0.42;
 const UNIT_COLLISION_RADIUS_CELLS = UNIT_VISUAL_BODY_RADIUS_CELLS / 3;
 const UNIT_MIN_CENTER_DISTANCE_CELLS = UNIT_COLLISION_RADIUS_CELLS * 2;
@@ -21,7 +24,7 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
     updateMetrics(unit, state, scaledDeltaSeconds);
     syncSoldierThreatMemory(state, unit, scaledDeltaSeconds);
     updateStateLabels(unit);
-    moveUnit(unit, scaledDeltaSeconds);
+    moveUnit(unit, state, scaledDeltaSeconds);
   }
 
   resolveUnitCollisions(state);
@@ -60,23 +63,86 @@ function updateStateLabels(unit: UnitModel): void {
   setState(unit, unit.behaviorRuntime.state === 'idle' ? 'idle' : 'observing', 'no active move order');
 }
 
-function moveUnit(unit: UnitModel, deltaSeconds: number): void {
-  if (!unit.order) return;
+function moveUnit(unit: UnitModel, state: SimulationState, deltaSeconds: number): void {
+  if (!unit.order || deltaSeconds <= 0) return;
+  if (!ensureRoutePassable(unit, state)) return;
+  const order = unit.order;
+  if (!order) return;
 
-  const remainingDistance = getDistance(unit.position, unit.order.target);
+  const waypointIndex = order.waypointIndex ?? 0;
+  const movementTarget = order.waypoints?.[waypointIndex] ?? order.target;
+  const remainingDistance = getDistance(unit.position, movementTarget);
   const postureMultiplier = POSTURE_MOVE_MULTIPLIER[unit.behaviorRuntime.posture];
   const conditionMultiplier = Math.max(0.35, unit.soldier.condition.speed / 100);
   const stepDistance = unit.speedCellsPerSecond * postureMultiplier * conditionMultiplier * deltaSeconds;
-  unit.position = moveToPoint(unit.position, unit.order.target, stepDistance);
+  unit.position = moveToPoint(unit.position, movementTarget, stepDistance);
 
-  if (remainingDistance <= stepDistance + ORDER_COMPLETION_EPSILON_CELLS) {
-    unit.position = { ...unit.order.target };
-    unit.order = null;
-    setState(unit, 'observing', 'target reached');
-    unit.behaviorRuntime.currentAction = 'observe';
-    unit.behaviorRuntime.reason = 'target reached';
-    unit.behaviorRuntime.lastEvent = 'move_done';
+  if (remainingDistance > stepDistance + ORDER_COMPLETION_EPSILON_CELLS) return;
+  unit.position = { ...movementTarget };
+
+  const waypoints = order.waypoints;
+  if (waypoints && waypointIndex < waypoints.length - 1) {
+    order.waypointIndex = waypointIndex + 1;
+    if (order.routeStatus === 'planned') order.routeStatus = 'following';
+    unit.behaviorRuntime.lastEvent = 'move_waypoint_reached';
+    unit.behaviorRuntime.reason = `Точка маршрута ${order.waypointIndex + 1} из ${waypoints.length}.`;
+    return;
   }
+
+  unit.position = { ...order.target };
+  unit.order = null;
+  setState(unit, 'observing', 'target reached');
+  unit.behaviorRuntime.currentAction = 'observe';
+  unit.behaviorRuntime.reason = 'target reached';
+  unit.behaviorRuntime.lastEvent = 'move_done';
+}
+
+function ensureRoutePassable(unit: UnitModel, state: SimulationState): boolean {
+  const order = unit.order;
+  const routeCells = order?.routeCells;
+  const requestedTarget = order?.requestedTarget;
+  if (!order || !routeCells || routeCells.length === 0 || !requestedTarget) return true;
+
+  const currentCell = {
+    x: Math.floor(unit.position.x),
+    y: Math.floor(unit.position.y),
+  };
+  const previousIndex = Math.max(0, order.routeCellIndex ?? 0);
+  const matchingIndex = routeCells.findIndex((cell, index) => (
+    index >= previousIndex && cell.x === currentCell.x && cell.y === currentCell.y
+  ));
+  if (matchingIndex >= 0) order.routeCellIndex = matchingIndex;
+
+  const startIndex = Math.min(routeCells.length - 1, (order.routeCellIndex ?? previousIndex) + 1);
+  const endIndex = Math.min(routeCells.length - 1, startIndex + ROUTE_LOOKAHEAD_CELLS - 1);
+  let blocked = false;
+  for (let index = startIndex; index <= endIndex; index += 1) {
+    const cell = routeCells[index];
+    if (isMapCellPassable(state.map, cell.x, cell.y)) continue;
+    blocked = true;
+    break;
+  }
+  if (!blocked) return true;
+
+  const replanned = planMoveOrder(state.map, unit.position, requestedTarget, {
+    source: order.source,
+    ownerToken: order.ownerToken,
+    routeStatus: 'replanned',
+    routeRevision: (order.routeRevision ?? 1) + 1,
+  });
+  if (!replanned.ok) {
+    unit.order = null;
+    setState(unit, 'observing', 'route unavailable');
+    unit.behaviorRuntime.currentAction = 'observe';
+    unit.behaviorRuntime.lastEvent = 'move_route_unavailable';
+    unit.behaviorRuntime.reason = `Маршрут недоступен: ${replanned.reasonRu}`;
+    return false;
+  }
+
+  unit.order = replanned.order;
+  unit.behaviorRuntime.lastEvent = 'move_route_replanned';
+  unit.behaviorRuntime.reason = `Маршрут перестроен: ${replanned.path.reasonRu}`;
+  return true;
 }
 
 function resolveUnitCollisions(state: SimulationState): void {
