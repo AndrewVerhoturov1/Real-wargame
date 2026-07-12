@@ -18,6 +18,23 @@ jobs:
           node-version: lts/*
           cache: npm
       - run: npm ci
-      - run: npm run blackboard-observer:smoke
+      - name: Blackboard observer smoke
+        id: observer
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run blackboard-observer:smoke 2>&1 | tee blackboard-observer.log
+      - name: Upload observer smoke log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blackboard-observer-log
+          path: blackboard-observer.log
+          if-no-files-found: error
+          retention-days: 3
       - run: npm run event-queue:smoke
       - run: npm run build
+      - name: Fail when observer smoke failed
+        if: steps.observer.outcome != 'success'
+        run: exit 1
