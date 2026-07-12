@@ -1,9 +1,9 @@
 name: Temporary Reload Runtime Patch
 
 on:
-  push:
+  pull_request:
     branches:
-      - planning/complete-stateful-runtime-events-2026-07-12
+      - real-wargame-preview
   workflow_dispatch:
 
 permissions:
