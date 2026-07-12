@@ -157,7 +157,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
-      - name: Publish commit statuses
+      - name: Publish commit statuses and fail on real check errors
         if: always()
         uses: actions/github-script@v7
         env:
@@ -223,38 +223,6 @@ jobs:
               description: Object.entries(outcomes).map(([key, value]) => `${key}:${value}`).join(' ').slice(0, 140),
               target_url: targetUrl,
             });
-
-      - name: Fail workflow when a check failed
-        if: always()
-        shell: bash
-        env:
-          INSTALL_OUTCOME: ${{ steps.install.outcome }}
-          WORKSPACE_OUTCOME: ${{ steps.workspace.outcome }}
-          LAB_OUTCOME: ${{ steps.lab.outcome }}
-          GAME_EDITOR_OUTCOME: ${{ steps.game_editor.outcome }}
-          EDITOR_OUTCOME: ${{ steps.editor.outcome }}
-          ENGINE_OUTCOME: ${{ steps.engine.outcome }}
-          GRAPH_OUTCOME: ${{ steps.graph.outcome }}
-          RUNTIME_OUTCOME: ${{ steps.runtime.outcome }}
-          MOVE_BRIDGE_OUTCOME: ${{ steps.move_bridge.outcome }}
-          ROUTE_STATUS_OUTCOME: ${{ steps.route_status.outcome }}
-          PATHFINDING_OUTCOME: ${{ steps.pathfinding.outcome }}
-          ROUTED_MOVE_OUTCOME: ${{ steps.routed_move.outcome }}
-          MAP_REVISION_OUTCOME: ${{ steps.map_revision.outcome }}
-          SMOOTH_TERRAIN_OUTCOME: ${{ steps.smooth_terrain.outcome }}
-          SPATIAL_INDEX_OUTCOME: ${{ steps.spatial_index.outcome }}
-          VISIBILITY_PROBE_OUTCOME: ${{ steps.visibility_probe.outcome }}
-          AWARENESS_FIELD_OUTCOME: ${{ steps.awareness_field.outcome }}
-          BUILD_OUTCOME: ${{ steps.build.outcome }}
-        run: |
-          for value in \
-            "$INSTALL_OUTCOME" "$WORKSPACE_OUTCOME" "$LAB_OUTCOME" "$GAME_EDITOR_OUTCOME" \
-            "$EDITOR_OUTCOME" "$ENGINE_OUTCOME" "$GRAPH_OUTCOME" "$RUNTIME_OUTCOME" \
-            "$MOVE_BRIDGE_OUTCOME" "$ROUTE_STATUS_OUTCOME" "$PATHFINDING_OUTCOME" "$ROUTED_MOVE_OUTCOME" \
-            "$MAP_REVISION_OUTCOME" "$SMOOTH_TERRAIN_OUTCOME" "$SPATIAL_INDEX_OUTCOME" \
-            "$VISIBILITY_PROBE_OUTCOME" "$AWARENESS_FIELD_OUTCOME" "$BUILD_OUTCOME"; do
-            if [ "$value" != "success" ]; then
-              echo "Core check outcome was not success: $value"
-              exit 1
-            fi
-          done
+            if (!passed) {
+              core.setFailed(`One or more core checks failed: ${JSON.stringify(outcomes)}`);
+            }
