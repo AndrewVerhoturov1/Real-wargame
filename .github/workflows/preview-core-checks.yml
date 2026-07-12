@@ -225,25 +225,36 @@ jobs:
             });
 
       - name: Fail workflow when a check failed
-        if: >-
-          always() && (
-            steps.install.outcome != 'success' ||
-            steps.workspace.outcome != 'success' ||
-            steps.lab.outcome != 'success' ||
-            steps.game_editor.outcome != 'success' ||
-            steps.editor.outcome != 'success' ||
-            steps.engine.outcome != 'success' ||
-            steps.graph.outcome != 'success' ||
-            steps.runtime.outcome != 'success' ||
-            steps.move_bridge.outcome != 'success' ||
-            steps.route_status.outcome != 'success' ||
-            steps.pathfinding.outcome != 'success' ||
-            steps.routed_move.outcome != 'success' ||
-            steps.map_revision.outcome != 'success' ||
-            steps.smooth_terrain.outcome != 'success' ||
-            steps.spatial_index.outcome != 'success' ||
-            steps.visibility_probe.outcome != 'success' ||
-            steps.awareness_field.outcome != 'success' ||
-            steps.build.outcome != 'success'
-          )
-        run: exit 1
+        if: always()
+        shell: bash
+        env:
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          WORKSPACE_OUTCOME: ${{ steps.workspace.outcome }}
+          LAB_OUTCOME: ${{ steps.lab.outcome }}
+          GAME_EDITOR_OUTCOME: ${{ steps.game_editor.outcome }}
+          EDITOR_OUTCOME: ${{ steps.editor.outcome }}
+          ENGINE_OUTCOME: ${{ steps.engine.outcome }}
+          GRAPH_OUTCOME: ${{ steps.graph.outcome }}
+          RUNTIME_OUTCOME: ${{ steps.runtime.outcome }}
+          MOVE_BRIDGE_OUTCOME: ${{ steps.move_bridge.outcome }}
+          ROUTE_STATUS_OUTCOME: ${{ steps.route_status.outcome }}
+          PATHFINDING_OUTCOME: ${{ steps.pathfinding.outcome }}
+          ROUTED_MOVE_OUTCOME: ${{ steps.routed_move.outcome }}
+          MAP_REVISION_OUTCOME: ${{ steps.map_revision.outcome }}
+          SMOOTH_TERRAIN_OUTCOME: ${{ steps.smooth_terrain.outcome }}
+          SPATIAL_INDEX_OUTCOME: ${{ steps.spatial_index.outcome }}
+          VISIBILITY_PROBE_OUTCOME: ${{ steps.visibility_probe.outcome }}
+          AWARENESS_FIELD_OUTCOME: ${{ steps.awareness_field.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+        run: |
+          for value in \
+            "$INSTALL_OUTCOME" "$WORKSPACE_OUTCOME" "$LAB_OUTCOME" "$GAME_EDITOR_OUTCOME" \
+            "$EDITOR_OUTCOME" "$ENGINE_OUTCOME" "$GRAPH_OUTCOME" "$RUNTIME_OUTCOME" \
+            "$MOVE_BRIDGE_OUTCOME" "$ROUTE_STATUS_OUTCOME" "$PATHFINDING_OUTCOME" "$ROUTED_MOVE_OUTCOME" \
+            "$MAP_REVISION_OUTCOME" "$SMOOTH_TERRAIN_OUTCOME" "$SPATIAL_INDEX_OUTCOME" \
+            "$VISIBILITY_PROBE_OUTCOME" "$AWARENESS_FIELD_OUTCOME" "$BUILD_OUTCOME"; do
+            if [ "$value" != "success" ]; then
+              echo "Core check outcome was not success: $value"
+              exit 1
+            fi
+          done
