@@ -67,8 +67,8 @@ test('shows following grid path and Russian movement controls', async ({ page })
     pathWaypointCount: 4,
     pathWaypointIndex: 1,
     pathRequestedTarget: { x: 18.5, y: 12.5 },
-    pathResolvedTarget: { x: 17.5, y: 12.5 },
-    pathReasonRu: 'Запрошенная цель непроходима; маршрут перенесён в ближайшую доступную клетку.',
+    pathResolvedTarget: { x: 18.5, y: 12.5 },
+    pathReasonRu: 'Проходимый маршрут построен к точной клетке цели ИИ.',
   });
 
   const moveNode = page.locator('.graph-node[data-node-id="move"]');
@@ -85,8 +85,11 @@ test('shows following grid path and Russian movement controls', async ({ page })
   await expect(panel).toContainText('Запрошенная цель');
   await expect(panel).toContainText('18.5; 12.5');
   await expect(panel).toContainText('Доступная цель');
-  await expect(panel).toContainText('17.5; 12.5');
+  await expect(panel).toContainText('18.5; 12.5');
   await expect(panel).toContainText('Причина пути');
+  await expect(panel).toContainText('Проходимый маршрут построен к точной клетке цели ИИ.');
+
+  await page.screenshot({ path: path.join(SCREENSHOT_DIR, '29-ai-path-following.png'), fullPage: true });
 
   await moveNode.click();
   const authoring = page.locator('.stateful-node-human-panel');
@@ -108,7 +111,6 @@ test('shows following grid path and Russian movement controls', async ({ page })
   expect(saved).toMatchObject({ stuckTimeoutSeconds: 3.5, minimumProgressCells: 0.1, abortOnTargetLost: false });
 
   await page.screenshot({ path: path.join(SCREENSHOT_DIR, '27-ai-running-move-node.png'), fullPage: true });
-  await page.screenshot({ path: path.join(SCREENSHOT_DIR, '29-ai-path-following.png'), fullPage: true });
 });
 
 test('shows blocked route with Russian cancellation reason', async ({ page }) => {
@@ -118,6 +120,7 @@ test('shows blocked route with Russian cancellation reason', async ({ page }) =>
     routeNoProgressMs: 2800,
     routeAbortCode: 'route_blocked',
     routeAbortReasonRu: 'Маршрут заблокирован: боец не продвигается 2,8 сек.',
+    cancellationReasonRu: 'Маршрут заблокирован: боец не продвигается 2,8 сек.',
     pathStatus: 'replanned',
     pathWaypointCount: 5,
     pathWaypointIndex: 2,
@@ -126,6 +129,9 @@ test('shows blocked route with Russian cancellation reason', async ({ page }) =>
     pathReasonRu: 'Маршрут был перестроен после изменения проходимости.',
   });
 
+  const moveNode = page.locator('.graph-node[data-node-id="move"]');
+  await expect(moveNode).toHaveClass(/runtime-debug-cancelled/);
+  await expect(moveNode).toContainText('Отменена');
   const panel = page.locator('.ai-runtime-debug-panel');
   await expect(panel).toContainText('Заблокирован');
   await expect(panel).toContainText('2.8 сек.');
@@ -144,16 +150,31 @@ test('shows unreachable path without fake waypoints', async ({ page }) => {
     pathWaypointCount: 0,
     pathWaypointIndex: 0,
     pathRequestedTarget: { x: 18.5, y: 12.5 },
-    pathReasonRu: 'Между стартом и целью нет проходимого маршрута.',
+    pathReasonRu: 'Между стартом и точной целью ИИ нет проходимого маршрута.',
+    explanationRu: 'Движение провалилось: точная цель ИИ недоступна.',
+    trace: [{
+      nodeId: 'move',
+      nodeType: 'MoveToBlackboardPosition',
+      status: 'fail',
+      reason: 'The exact AI goal is unreachable.',
+      reasonRu: 'Точная цель ИИ недоступна.',
+    }],
   });
 
+  const moveNode = page.locator('.graph-node[data-node-id="move"]');
+  await expect(moveNode).toHaveClass(/runtime-debug-fail/);
+  await expect(moveNode).not.toHaveClass(/runtime-debug-running/);
+  await expect(moveNode).toContainText('Провал');
   const panel = page.locator('.ai-runtime-debug-panel');
+  await expect(panel).toContainText('Состояние');
+  await expect(panel).toContainText('Провал');
+  await expect(panel).toContainText('До провала');
   await expect(panel).toContainText('Путь');
   await expect(panel).toContainText('Недоступен');
   await expect(panel).toContainText('Точек маршрута');
   await expect(panel).toContainText('0');
   await expect(panel).toContainText('Причина пути');
-  await expect(panel).toContainText('Между стартом и целью нет проходимого маршрута.');
+  await expect(panel).toContainText('Между стартом и точной целью ИИ нет проходимого маршрута.');
   await expect(panel).not.toContainText('Доступная цель');
   await page.screenshot({ path: path.join(SCREENSHOT_DIR, '30-ai-path-unreachable.png'), fullPage: true });
 });
