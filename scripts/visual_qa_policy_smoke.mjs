@@ -6,8 +6,8 @@ const fail = (message) => {
   process.exitCode = 1;
 };
 
-const workflow = read('.github/workflows/preview-screenshots.yml');
-const triggerBlock = workflow.split('\npermissions:')[0];
+const screenshotWorkflow = read('.github/workflows/preview-screenshots.yml');
+const triggerBlock = screenshotWorkflow.split('\npermissions:')[0];
 
 if (!/\n\s*workflow_dispatch:\s*(?:\n|$)/.test(triggerBlock)) {
   fail('preview-screenshots.yml must keep workflow_dispatch');
@@ -18,11 +18,19 @@ if (/\n\s*push:\s*(?:\n|$)/.test(triggerBlock)) {
 if (/\n\s*pull_request:\s*(?:\n|$)/.test(triggerBlock)) {
   fail('preview-screenshots.yml must not run automatically on pull_request');
 }
-if (!workflow.includes('npx playwright test')) {
+if (!screenshotWorkflow.includes('npx playwright test')) {
   fail('manual screenshot workflow lost the Playwright command');
 }
-if (!workflow.includes('real-wargame-preview-screenshots')) {
+if (!screenshotWorkflow.includes('real-wargame-preview-screenshots')) {
   fail('manual screenshot workflow lost the screenshot artifact');
+}
+
+const previewPolicyWorkflow = read('.github/workflows/preview-policy.yml');
+if (/^\s{2}visual-qa-screenshots:/m.test(previewPolicyWorkflow)) {
+  fail('preview-policy.yml must not contain an automatic visual QA job');
+}
+if (/npx playwright|playwright install|Upload screenshots/.test(previewPolicyWorkflow)) {
+  fail('preview-policy.yml must not execute browser or screenshot commands');
 }
 
 const requiredFiles = [
