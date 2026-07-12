@@ -1,0 +1,26 @@
+name: Temporary Reload Stage 4 Verification
+
+on:
+  push:
+    branches:
+      - planning/complete-stateful-runtime-events-2026-07-12
+  pull_request:
+    branches:
+      - real-wargame-preview
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - run: npm run reload:smoke
+      - run: npm run editor:smoke
+      - run: npm run validate:ai-graph
+      - run: npm run lab:smoke
+      - run: npm run build
