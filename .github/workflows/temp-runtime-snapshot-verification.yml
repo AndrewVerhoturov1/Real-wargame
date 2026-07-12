@@ -8,12 +8,8 @@ on:
     branches:
       - real-wargame-preview
 
-permissions:
-  contents: write
-
 jobs:
   verify:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -25,33 +21,11 @@ jobs:
           node-version: lts/*
           cache: npm
       - run: npm ci
-      - run: node scripts/apply_runtime_snapshot_scene_contract_patch.mjs
       - run: npm run runtime-snapshot:smoke
+      - run: npm run runtime-scene:smoke
       - run: npm run runtime:smoke
       - run: npm run reload:smoke
       - run: npm run move-bridge:smoke
       - run: npm run map-resolution:smoke
       - run: npm run game-editor:smoke
       - run: npm run build
-      - name: Commit verified scene snapshot contracts
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('node:fs');
-            const branch = 'planning/complete-stateful-runtime-events-2026-07-12';
-            const path = 'scripts/ai_runtime_snapshot_smoke.ts';
-            const current = await github.rest.repos.getContent({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              path,
-              ref: branch,
-            });
-            await github.rest.repos.createOrUpdateFileContents({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              path,
-              branch,
-              message: 'test(ai): verify scene export snapshot restore and graph mismatch cleanup',
-              sha: current.data.sha,
-              content: fs.readFileSync(path).toString('base64'),
-            });
