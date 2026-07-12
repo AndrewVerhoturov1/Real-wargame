@@ -232,9 +232,10 @@ for (const needle of ['RELOAD_DURATION_INVALID', 'RELOAD_TARGET_AMMO_INVALID', '
   expectContains(validationSource, needle, `Валидация Reload должна содержать: ${needle}`);
 }
 
-for (const needle of ['begin_reload', 'complete_reload', 'cancel_reload']) {
+for (const needle of ['begin_reload', 'complete_reload']) {
   expectContains(gameBridge, needle, `Игровой мост Reload должен обрабатывать: ${needle}`);
 }
+expectContains(gameBridge, 'ai_graph_reload_cancelled', 'Игровой мост Reload должен явно фиксировать отмену перезарядки.');
 
 const engineCore = readText('scripts/ai_engine_core.mjs');
 for (const needle of ['GraphRunner', 'UtilitySelector', 'ParameterScore', 'DistanceScore', 'DecisionInertia', 'RandomChance', 'StableThreshold', 'ForbidAction', 'score', 'breakdown']) {
