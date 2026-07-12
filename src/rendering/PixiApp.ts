@@ -12,6 +12,7 @@ import { HtmlOverlayRenderer } from './HtmlOverlayRenderer';
 import { PixiAwarenessHeatmapRenderer } from './PixiAwarenessHeatmapRenderer';
 import { PixiCoverDirectionRenderer } from './PixiCoverDirectionRenderer';
 import { PixiMapRenderer } from './PixiMapRenderer';
+import { PixiRouteCostOverlayRenderer } from './PixiRouteCostOverlayRenderer';
 import { PixiOrderRenderer } from './PixiOrderRenderer';
 import { PixiOverlayRenderer } from './PixiOverlayRenderer';
 import { PixiThreatEditorRenderer } from './PixiThreatEditorRenderer';
@@ -27,6 +28,7 @@ export class PixiTacticalBoardApp {
   private readonly app: Application;
   private readonly worldContainer = new Container();
   private readonly mapRenderer = new PixiMapRenderer();
+  private readonly routeCostOverlayRenderer = new PixiRouteCostOverlayRenderer();
   private readonly awarenessHeatmapRenderer = new PixiAwarenessHeatmapRenderer();
   private readonly viewConeRenderer = new PixiViewConeRenderer();
   private readonly orderRenderer = new PixiOrderRenderer();
@@ -81,6 +83,7 @@ export class PixiTacticalBoardApp {
     this.app.stage.addChild(this.worldContainer);
     this.worldContainer.addChild(
       this.mapRenderer.container,
+      this.routeCostOverlayRenderer.container,
       this.awarenessHeatmapRenderer.container,
       this.viewConeRenderer.container,
       this.orderRenderer.container,
@@ -128,6 +131,7 @@ export class PixiTacticalBoardApp {
     this.camera.destroy();
     this.boardInput.destroy();
     this.overlayRenderer.destroy();
+    this.routeCostOverlayRenderer.destroy();
     this.htmlOverlayRenderer.destroy();
     this.fixedScaleLabel.remove();
     this.app.destroy(true);
@@ -181,6 +185,7 @@ export class PixiTacticalBoardApp {
     }
 
     this.awarenessHeatmapRenderer.render(this.state);
+    this.routeCostOverlayRenderer.render(this.state);
     this.orderRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
     this.overlayRenderer.render(this.state, this.showGrid, this.state.editor.layers.pressureZones);
     this.coverDirectionRenderer.render(this.state);

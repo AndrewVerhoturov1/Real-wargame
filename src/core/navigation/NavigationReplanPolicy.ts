@@ -51,6 +51,7 @@ export function evaluateNavigationReplan(input: NavigationReplanEvaluationInput)
   const improvementRatio = calculateImprovement(input.order.pathCost, input.candidateCost);
   const shouldReplace = shouldSearch && input.candidateCost !== undefined && (
     reason === 'blocked'
+    || reason === 'profile_changed'
     || improvementRatio !== null && improvementRatio + 1e-9 >= rules.minimumCostImprovement
   );
 

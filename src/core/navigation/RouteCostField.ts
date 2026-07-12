@@ -6,29 +6,6 @@ import type { NavigationProfile, NavigationTerrainCostKey } from './NavigationPr
 const mapIdentityByMap = new WeakMap<TacticalMap, number>();
 let nextMapIdentity = 1;
 
-const mapIdentityByMap = new WeakMap<TacticalMap, number>();
-let nextMapIdentity = 1;
-
-const mapIdentityByMap = new WeakMap<TacticalMap, number>();
-let nextMapIdentity = 1;
-
-const mapIdentityByMap = new WeakMap<TacticalMap, number>();
-let nextMapIdentity = 1;
-
-const mapIdentityByMap = new WeakMap<TacticalMap, number>();
-let nextMapIdentity = 1;
-
-const mapIdentityByMap = new WeakMap<TacticalMap, number>();
-let nextMapIdentity = 1;
-
-const mapIdentityByMap = new WeakMap<TacticalMap, number>();
-let nextMapIdentity = 1;
-
-const mapIdentityByMap = new WeakMap<TacticalMap, number>();
-let nextMapIdentity = 1;
-
-const mapIdentityByMap = new WeakMap<TacticalMap, number>();
-let nextMapIdentity = 1;
 
 export interface TacticalRouteKnownThreat {
   readonly id: string;
@@ -470,78 +447,6 @@ function evaluateKnownThreatAt(threat: TacticalRouteKnownThreat, x: number, y: n
   const distance = Math.hypot(dx, dy);
   if (distance > radius) return 0;
   return confidence * intensity * Math.max(0.15, 1 - distance / radius);
-}
-
-function getMapIdentity(map: TacticalMap): number {
-  const existing = mapIdentityByMap.get(map);
-  if (existing !== undefined) return existing;
-  const identity = nextMapIdentity;
-  nextMapIdentity += 1;
-  mapIdentityByMap.set(map, identity);
-  return identity;
-}
-
-function getMapIdentity(map: TacticalMap): number {
-  const existing = mapIdentityByMap.get(map);
-  if (existing !== undefined) return existing;
-  const identity = nextMapIdentity;
-  nextMapIdentity += 1;
-  mapIdentityByMap.set(map, identity);
-  return identity;
-}
-
-function getMapIdentity(map: TacticalMap): number {
-  const existing = mapIdentityByMap.get(map);
-  if (existing !== undefined) return existing;
-  const identity = nextMapIdentity;
-  nextMapIdentity += 1;
-  mapIdentityByMap.set(map, identity);
-  return identity;
-}
-
-function getMapIdentity(map: TacticalMap): number {
-  const existing = mapIdentityByMap.get(map);
-  if (existing !== undefined) return existing;
-  const identity = nextMapIdentity;
-  nextMapIdentity += 1;
-  mapIdentityByMap.set(map, identity);
-  return identity;
-}
-
-function getMapIdentity(map: TacticalMap): number {
-  const existing = mapIdentityByMap.get(map);
-  if (existing !== undefined) return existing;
-  const identity = nextMapIdentity;
-  nextMapIdentity += 1;
-  mapIdentityByMap.set(map, identity);
-  return identity;
-}
-
-function getMapIdentity(map: TacticalMap): number {
-  const existing = mapIdentityByMap.get(map);
-  if (existing !== undefined) return existing;
-  const identity = nextMapIdentity;
-  nextMapIdentity += 1;
-  mapIdentityByMap.set(map, identity);
-  return identity;
-}
-
-function getMapIdentity(map: TacticalMap): number {
-  const existing = mapIdentityByMap.get(map);
-  if (existing !== undefined) return existing;
-  const identity = nextMapIdentity;
-  nextMapIdentity += 1;
-  mapIdentityByMap.set(map, identity);
-  return identity;
-}
-
-function getMapIdentity(map: TacticalMap): number {
-  const existing = mapIdentityByMap.get(map);
-  if (existing !== undefined) return existing;
-  const identity = nextMapIdentity;
-  nextMapIdentity += 1;
-  mapIdentityByMap.set(map, identity);
-  return identity;
 }
 
 function getMapIdentity(map: TacticalMap): number {

@@ -1,4 +1,5 @@
 import type { GridPosition } from '../geometry';
+import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../navigation/NavigationRuntime';
 import type { MoveOrder } from '../orders/MoveOrder';
 import { planMoveOrder } from '../orders/MoveOrderPlanning';
 import type { SimulationState } from '../simulation/SimulationState';
@@ -179,10 +180,15 @@ export function applyOwnedMoveEffects(state: SimulationState, result: AiGraphRun
     if (!effect) continue;
 
     if (effect.type === 'begin_move') {
+      const resolvedNavigation = resolveUnitNavigationProfile(unit, null);
       const planned = planMoveOrder(state.map, unit.position, effect.targetPosition, {
         source: 'ai',
         ownerToken: effect.ownerToken,
         allowGoalAdjustment: false,
+        movementMode: unit.navigationMovementMode ?? 'normal',
+        navigationProfile: resolvedNavigation.profile,
+        navigationProfileSource: resolvedNavigation.source,
+        tacticalContext: buildUnitTacticalRouteContext(unit),
       });
       if (!planned.ok) {
         unit.order = null;
