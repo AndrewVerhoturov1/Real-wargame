@@ -71,19 +71,25 @@ applyOwnedMoveEffects(state, runtimeResult(unit.id, [{
 
 assert.equal(unit.order?.source, 'ai');
 assert.equal(unit.order?.ownerToken, aiToken);
-assert.deepEqual(unit.order?.target, aiTarget);
+assert.deepEqual(unit.order?.requestedTarget, aiTarget);
+assert.ok((unit.order?.routeCells?.length ?? 0) > 1, 'AI movement must receive a grid route');
+assert.equal(unit.order?.routeStatus, 'planned');
 
-const distanceBeforeTick = distanceTo(unit.position, aiTarget);
+const distanceBeforeTick = distanceTo(unit.position, unit.order?.target ?? aiTarget);
 tickSimulation(state, 0.5);
-const distanceAfterTick = distanceTo(unit.position, aiTarget);
-assert.ok(distanceAfterTick < distanceBeforeTick, 'SimulationTick must physically advance an AI-owned order');
+const distanceAfterTick = distanceTo(unit.position, unit.order?.target ?? aiTarget);
+assert.ok(distanceAfterTick < distanceBeforeTick, 'SimulationTick must physically advance an AI-owned routed order');
 assert.equal(unit.order?.ownerToken, aiToken, 'movement integration must preserve AI order ownership');
 
 syncSelectedMoveOrderMemory(state);
 const memory = readAiMemory(unit);
 assert.equal(memory.active_move_source, 'ai');
 assert.equal(memory.active_move_owner_token, aiToken);
-assert.deepEqual(memory.active_move_target, aiTarget);
+assert.deepEqual(memory.active_move_target, unit.order?.target);
+assert.equal(memory.active_move_path_status, unit.order?.routeStatus);
+assert.equal(memory.active_move_path_waypoint_count, unit.order?.waypoints?.length);
+assert.deepEqual(memory.active_move_path_requested_target, aiTarget);
+assert.deepEqual(memory.active_move_path_resolved_target, unit.order?.target);
 
 unit.order = createMoveOrder({ x: 12, y: 8 });
 const playerOrder = unit.order;
@@ -135,7 +141,48 @@ assert.equal(unit.behaviorRuntime.currentAction, 'posture:prone', 'move cleanup 
 assert.equal(unit.behaviorRuntime.reason, 'Лечь после движения.');
 assert.equal(unit.behaviorRuntime.lastEvent, 'ai_graph_set_posture');
 
-console.log('AI stateful move bridge smoke passed: catalog validation, physical movement, owned start, memory sync, legacy player-order inference, player replacement protection, matching cleanup, sequence continuation.');
+verifyUnreachableAiRoute();
+
+console.log('AI stateful move bridge smoke passed: routed AI start, path memory, physical movement, ownership protection, matching cleanup, sequence continuation, unreachable failure.');
+
+function verifyUnreachableAiRoute(): void {
+  const blockedState = createInitialState(
+    mapData as TacticalMapData,
+    unitsData as UnitData[],
+    [],
+  );
+  const blockedUnit = blockedState.units[0];
+  assert.ok(blockedUnit);
+  blockedState.selectedUnitId = blockedUnit.id;
+  blockedState.selectedUnitIds = [blockedUnit.id];
+  blockedState.map.objects.push({
+    id: 'start_blocker',
+    kind: 'structure',
+    x: blockedUnit.position.x,
+    y: blockedUnit.position.y,
+    rotationRadians: 0,
+    widthCells: 1,
+    heightCells: 1,
+    labels: null,
+  });
+
+  applyOwnedMoveEffects(blockedState, runtimeResult(blockedUnit.id, [{
+    type: 'begin_move',
+    ownerToken: 'blocked-token',
+    targetPosition: { x: blockedUnit.position.x + 4, y: blockedUnit.position.y },
+    targetKey: 'best_cover_position',
+    reason: 'Blocked move.',
+    reasonRu: 'Заблокированное движение.',
+  }]));
+
+  assert.equal(blockedUnit.order, null);
+  assert.equal(blockedUnit.behaviorRuntime.lastEvent, 'ai_graph_move_route_unavailable');
+  assert.match(blockedUnit.behaviorRuntime.reason, /маршрут/i);
+  const blockedMemory = readAiMemory(blockedUnit);
+  assert.equal(blockedMemory.active_move_path_status, 'unreachable');
+  assert.equal(blockedMemory.active_move_path_waypoint_count, 0);
+  assert.match(String(blockedMemory.active_move_path_reason), /старт|клетк/i);
+}
 
 function runtimeResult(unitId: string, effects: readonly unknown[]): AiGraphRuntimeResult {
   return {
