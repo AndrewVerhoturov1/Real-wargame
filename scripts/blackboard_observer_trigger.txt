@@ -1,1 +1,0 @@
-Temporary trigger for clean Blackboard observer failure capture. Remove after final green run.
