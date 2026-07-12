@@ -11,6 +11,7 @@ const COMMAND_COLOR = 0xffd85a;
 const PLAN_COLOR = 0x62aaff;
 const ROUTE_COLOR = 0x66e38a;
 const FAILURE_COLOR = 0xff755f;
+const PLAN_LANE_OFFSET_PX = 8;
 const OVERLAY_OFF_CLASS = 'command-plan-route-overlay-off';
 const LABEL_STYLE = new TextStyle({
   fontFamily: 'Arial, sans-serif',
@@ -29,6 +30,13 @@ interface UnitOverlayView {
   readonly routeGraphics: Graphics;
   readonly activeStageLabel: Text;
   key: string;
+}
+
+interface OffsetLine {
+  readonly fromX: number;
+  readonly fromY: number;
+  readonly toX: number;
+  readonly toY: number;
 }
 
 export interface OrderRendererDiagnostics {
@@ -184,8 +192,13 @@ function drawPlan(
   let previous = gridToWorld(map, snapshot.unitPosition);
   for (const stage of spatialStages) {
     const target = gridToWorld(map, stage.target!);
-    drawDashedLine(graphics, previous.x, previous.y, target.x, target.y, 8, 5, PLAN_COLOR, 2, stageAlpha(stage));
-    drawPlanMarker(graphics, target.x, target.y, stage);
+    const lane = offsetLine(previous.x, previous.y, target.x, target.y, PLAN_LANE_OFFSET_PX);
+    drawDashedLine(graphics, lane.fromX, lane.fromY, lane.toX, lane.toY, 8, 5, PLAN_COLOR, 2, stageAlpha(stage));
+
+    graphics.lineStyle(1, PLAN_COLOR, stageAlpha(stage) * 0.5);
+    graphics.moveTo(lane.toX, lane.toY);
+    graphics.lineTo(target.x, target.y);
+    drawPlanMarker(graphics, lane.toX, lane.toY, stage);
     previous = target;
   }
 }
@@ -198,7 +211,12 @@ function drawPlanMarker(graphics: Graphics, x: number, y: number, stage: PlanSta
 
   graphics.lineStyle(active ? 3 : 2, failed ? FAILURE_COLOR : PLAN_COLOR, alpha);
   graphics.beginFill(0x14243a, active ? 0.88 : 0.62);
-  graphics.drawCircle(x, y, radius);
+  graphics.drawPolygon([
+    x, y - radius,
+    x + radius, y,
+    x, y + radius,
+    x - radius, y,
+  ]);
   graphics.endFill();
 
   if (stage.status === 'completed') {
@@ -246,11 +264,60 @@ function updateActiveStageLabel(
     return;
   }
 
-  const stage = snapshot.planStages[Math.max(0, Math.min(snapshot.planStages.length - 1, snapshot.activeStageIndex))];
+  const activeIndex = Math.max(0, Math.min(snapshot.planStages.length - 1, snapshot.activeStageIndex));
+  const stage = snapshot.planStages[activeIndex];
   label.text = stage.labelRu;
   label.visible = true;
-  const anchor = gridToWorld(map, stage.target ?? snapshot.unitPosition);
+  const anchor = resolvePlanStageAnchor(map, snapshot, activeIndex);
   label.position.set(anchor.x, anchor.y - 13);
+}
+
+function resolvePlanStageAnchor(
+  map: TacticalMap,
+  snapshot: CommandPlanRouteOverlaySnapshot,
+  stageIndex: number,
+): { x: number; y: number } {
+  let previous = gridToWorld(map, snapshot.unitPosition);
+  for (let index = 0; index <= stageIndex; index += 1) {
+    const targetPosition = snapshot.planStages[index]?.target;
+    if (!targetPosition) continue;
+    const target = gridToWorld(map, targetPosition);
+    if (index === stageIndex) {
+      const lane = offsetLine(previous.x, previous.y, target.x, target.y, PLAN_LANE_OFFSET_PX);
+      return { x: lane.toX, y: lane.toY };
+    }
+    previous = target;
+  }
+  return { x: previous.x + PLAN_LANE_OFFSET_PX, y: previous.y };
+}
+
+function offsetLine(
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  offset: number,
+): OffsetLine {
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  const length = Math.hypot(dx, dy);
+  if (length <= 0.001) {
+    return {
+      fromX: fromX + offset,
+      fromY,
+      toX: toX + offset,
+      toY,
+    };
+  }
+
+  const normalX = -dy / length;
+  const normalY = dx / length;
+  return {
+    fromX: fromX + normalX * offset,
+    fromY: fromY + normalY * offset,
+    toX: toX + normalX * offset,
+    toY: toY + normalY * offset,
+  };
 }
 
 function stageAlpha(stage: PlanStageOverlaySnapshot): number {
