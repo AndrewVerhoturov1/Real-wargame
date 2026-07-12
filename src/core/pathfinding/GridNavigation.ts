@@ -98,6 +98,21 @@ export function isMapObjectMovementBlocking(kind: MapObjectKind): boolean {
   return true;
 }
 
+export function isMapCellPassable(map: TacticalMap, x: number, y: number): boolean {
+  if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= map.width || y >= map.height) {
+    return false;
+  }
+
+  const cell = map.cells[y * map.width + x];
+  if (!cell) return false;
+  const bridge = map.objects.some((object) => object.kind === 'bridge' && objectOccupiesCell(object, x, y, false));
+  if (cell.terrain === 'water' && !bridge) return false;
+  return !map.objects.some((object) => (
+    isMapObjectMovementBlocking(object.kind)
+    && objectOccupiesCell(object, x, y, true)
+  ));
+}
+
 export function isNavigationCellPassable(grid: NavigationGrid, x: number, y: number): boolean {
   return navigationCellAt(grid, x, y)?.passable === true;
 }
@@ -140,20 +155,29 @@ function markObjectCells(
   const maxX = clamp(Math.floor(object.x + radius + 1), 0, map.width - 1);
   const minY = clamp(Math.floor(object.y - radius - 1), 0, map.height - 1);
   const maxY = clamp(Math.floor(object.y + radius + 1), 0, map.height - 1);
-  const samples = includeBodyRadius ? BODY_SAMPLES : BODY_SAMPLES.slice(0, 1);
 
   for (let y = minY; y <= maxY; y += 1) {
     for (let x = minX; x <= maxX; x += 1) {
-      const centerX = x + 0.5;
-      const centerY = y + 0.5;
-      if (!samples.some(([offsetX, offsetY]) => pointInsideRotatedObject(
-        centerX + offsetX,
-        centerY + offsetY,
-        object,
-      ))) continue;
+      if (!objectOccupiesCell(object, x, y, includeBodyRadius)) continue;
       mark(y * map.width + x);
     }
   }
+}
+
+function objectOccupiesCell(
+  object: MapObject,
+  cellX: number,
+  cellY: number,
+  includeBodyRadius: boolean,
+): boolean {
+  const centerX = cellX + 0.5;
+  const centerY = cellY + 0.5;
+  const samples = includeBodyRadius ? BODY_SAMPLES : BODY_SAMPLES.slice(0, 1);
+  return samples.some(([offsetX, offsetY]) => pointInsideRotatedObject(
+    centerX + offsetX,
+    centerY + offsetY,
+    object,
+  ));
 }
 
 function pointInsideRotatedObject(x: number, y: number, object: MapObject): boolean {
