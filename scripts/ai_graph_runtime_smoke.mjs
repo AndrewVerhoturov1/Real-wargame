@@ -29,6 +29,7 @@ try {
   });
 
   await import(`${pathToFileURL(entryFile).href}?run=${Date.now()}`);
+  await import(`./ai_composite_runtime_smoke.mjs?run=${Date.now()}`);
 } finally {
   await rm(outDir, { recursive: true, force: true });
 }
