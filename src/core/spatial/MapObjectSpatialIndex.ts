@@ -55,7 +55,12 @@ export class MapObjectSpatialIndex {
     this.forEachBucket(bounds, (bucket) => {
       for (const object of bucket) candidates.add(object);
     }, false);
-    return this.sortCandidates(candidates);
+
+    const filtered = new Set<MapObject>();
+    for (const object of candidates) {
+      if (boundsOverlap(getMapObjectBounds(object), bounds)) filtered.add(object);
+    }
+    return this.sortCandidates(filtered);
   }
 
   queryCircle(center: GridPosition, radiusCells: number): MapObject[] {
@@ -160,6 +165,13 @@ export function getMapObjectBounds(object: MapObject): MapObjectBounds {
     maxX: centerX + extentX,
     maxY: centerY + extentY,
   };
+}
+
+function boundsOverlap(left: MapObjectBounds, right: MapObjectBounds): boolean {
+  return left.maxX >= right.minX
+    && left.minX <= right.maxX
+    && left.maxY >= right.minY
+    && left.minY <= right.maxY;
 }
 
 function instrumentQueries(
