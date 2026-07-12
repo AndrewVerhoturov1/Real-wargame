@@ -5,7 +5,9 @@ import path from 'node:path';
 const SCREENSHOT_DIR = path.join('artifacts', 'screenshots');
 const VIEWPORT = { width: 1440, height: 900 };
 const BOARD_ORIGIN = { x: 72, y: 72 };
-const CELL_SIZE = 24;
+const LEGACY_CELL_SIZE = 24;
+const RUNTIME_CELL_SIZE = 4.8;
+const SOURCE_TO_RUNTIME_SCALE = 5;
 
 interface FrontZoneDiagnostics {
   visible: boolean;
@@ -33,12 +35,12 @@ async function saveScreenshot(page: Page, name: string): Promise<void> {
   }
 }
 
-async function worldPoint(canvas: Locator, gridX: number, gridY: number): Promise<{ x: number; y: number }> {
+async function worldPoint(canvas: Locator, sourceGridX: number, sourceGridY: number): Promise<{ x: number; y: number }> {
   const box = await canvas.boundingBox();
   if (!box) throw new Error('Canvas bounds unavailable.');
   return {
-    x: box.x + BOARD_ORIGIN.x + gridX * CELL_SIZE,
-    y: box.y + BOARD_ORIGIN.y + gridY * CELL_SIZE,
+    x: box.x + BOARD_ORIGIN.x + sourceGridX * LEGACY_CELL_SIZE,
+    y: box.y + BOARD_ORIGIN.y + sourceGridY * LEGACY_CELL_SIZE,
   };
 }
 
@@ -80,19 +82,21 @@ test('front zones are editable, toggleable and expose territory safety to the se
   await expect(friendlySlider).toBeVisible();
   await expect(enemySlider).toBeVisible();
 
-  await setRangeValue(friendlySlider, 18);
-  await setRangeValue(enemySlider, 44);
+  const friendlyBoundary = 18 * SOURCE_TO_RUNTIME_SCALE;
+  const enemyBoundary = 44 * SOURCE_TO_RUNTIME_SCALE;
+  await setRangeValue(friendlySlider, friendlyBoundary);
+  await setRangeValue(enemySlider, enemyBoundary);
   await expect.poll(async () => {
     const diagnostics = await readDiagnostics(page);
     return `${diagnostics?.friendlyBoundaryX}:${diagnostics?.enemyBoundaryX}`;
-  }).toBe('18:44');
+  }).toBe(`${friendlyBoundary}:${enemyBoundary}`);
 
   const canvasBox = await canvas.boundingBox();
   const friendlyLineBox = await page.locator('[data-front-zone-line="friendly"]').boundingBox();
   const enemyLineBox = await page.locator('[data-front-zone-line="enemy"]').boundingBox();
   if (!canvasBox || !friendlyLineBox || !enemyLineBox) throw new Error('Front boundary geometry unavailable.');
-  const expectedFriendlyX = canvasBox.x + BOARD_ORIGIN.x + 18 * CELL_SIZE - friendlyLineBox.width / 2;
-  const expectedEnemyX = canvasBox.x + BOARD_ORIGIN.x + 44 * CELL_SIZE - enemyLineBox.width / 2;
+  const expectedFriendlyX = canvasBox.x + BOARD_ORIGIN.x + friendlyBoundary * RUNTIME_CELL_SIZE - friendlyLineBox.width / 2;
+  const expectedEnemyX = canvasBox.x + BOARD_ORIGIN.x + enemyBoundary * RUNTIME_CELL_SIZE - enemyLineBox.width / 2;
   expect(Math.abs(friendlyLineBox.x - expectedFriendlyX)).toBeLessThan(3);
   expect(Math.abs(enemyLineBox.x - expectedEnemyX)).toBeLessThan(3);
 
