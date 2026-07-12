@@ -1,3 +1,4 @@
+import type { UnitPlanState } from '../ai/UnitPlan';
 import {
   createBehaviorRuntime,
   createBehaviorSettings,
@@ -14,6 +15,7 @@ import {
 import type { GridPosition } from '../geometry';
 import { createEmptyTacticalKnowledge, normalizeTacticalKnowledge } from '../knowledge/SoldierThreatMemory';
 import type { MoveOrder } from '../orders/MoveOrder';
+import type { PlayerCommand } from '../orders/PlayerCommand';
 import type { PressureZoneMode } from '../pressure/PressureZone';
 
 export type UnitSide = 'player';
@@ -84,6 +86,8 @@ export interface UnitModel {
   side: UnitSide;
   position: GridPosition;
   speedCellsPerSecond: number;
+  playerCommand: PlayerCommand | null;
+  plan: UnitPlanState | null;
   order: MoveOrder | null;
   heldItem: UnitHeldItem;
   facingRadians: number;
@@ -130,6 +134,8 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
         y: (unit.y + 0.5) * scale,
       },
       speedCellsPerSecond: Math.max(0, (unit.speedCellsPerSecond ?? 0.5) * scale),
+      playerCommand: null,
+      plan: null,
       order: null,
       heldItem: unit.heldItem ?? defaultHeldItemForUnitType(unit.type),
       facingRadians: degreesToRadians(unit.facingDegrees ?? 0),

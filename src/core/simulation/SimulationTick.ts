@@ -1,8 +1,11 @@
+import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import { clampPercent, POSTURE_MOVE_MULTIPLIER } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import { syncSoldierThreatMemory } from '../knowledge/SoldierThreatMemory';
 import { clampGridPositionToMap } from '../map/MapModel';
+import type { MoveOrder } from '../orders/MoveOrder';
 import { planMoveOrder } from '../orders/MoveOrderPlanning';
+import { updatePlayerCommandStatus } from '../orders/PlayerCommand';
 import { isMapCellPassable } from '../pathfinding/GridNavigation';
 import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
 import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
@@ -91,6 +94,7 @@ function moveUnit(unit: UnitModel, state: SimulationState, deltaSeconds: number)
 
   unit.position = { ...order.target };
   unit.order = null;
+  completeLinkedPlayerCommand(unit, order);
   setState(unit, 'observing', 'target reached');
   unit.behaviorRuntime.currentAction = 'observe';
   unit.behaviorRuntime.reason = 'target reached';
@@ -127,11 +131,13 @@ function ensureRoutePassable(unit: UnitModel, state: SimulationState): boolean {
   const replanned = planMoveOrder(state.map, unit.position, requestedTarget, {
     source: order.source,
     ownerToken: order.ownerToken,
+    playerCommandId: order.playerCommandId,
     routeStatus: 'replanned',
     routeRevision: (order.routeRevision ?? 1) + 1,
   });
   if (!replanned.ok) {
     unit.order = null;
+    blockLinkedPlayerCommand(unit, order, replanned.reason, replanned.reasonRu);
     setState(unit, 'observing', 'route unavailable');
     unit.behaviorRuntime.currentAction = 'observe';
     unit.behaviorRuntime.lastEvent = 'move_route_unavailable';
@@ -143,6 +149,39 @@ function ensureRoutePassable(unit: UnitModel, state: SimulationState): boolean {
   unit.behaviorRuntime.lastEvent = 'move_route_replanned';
   unit.behaviorRuntime.reason = `Маршрут перестроен: ${replanned.path.reasonRu}`;
   return true;
+}
+
+function completeLinkedPlayerCommand(unit: UnitModel, order: MoveOrder): void {
+  const command = unit.playerCommand;
+  if (!order.playerCommandId || command?.id !== order.playerCommandId) return;
+  unit.playerCommand = updatePlayerCommandStatus(
+    command,
+    'completed',
+    'Player movement command completed.',
+    'Приказ движения выполнен.',
+  );
+  if (unit.plan?.source === 'player_fallback' && unit.plan.commandId === command.id) {
+    unit.plan = createDirectPlayerMovePlan(unit.plan, unit.playerCommand, order.target);
+  }
+}
+
+function blockLinkedPlayerCommand(
+  unit: UnitModel,
+  order: MoveOrder,
+  reason: string,
+  reasonRu: string,
+): void {
+  const command = unit.playerCommand;
+  if (!order.playerCommandId || command?.id !== order.playerCommandId) return;
+  unit.playerCommand = updatePlayerCommandStatus(
+    command,
+    'blocked',
+    `Player movement command is blocked: ${reason}`,
+    `Приказ движения заблокирован: ${reasonRu}`,
+  );
+  if (unit.plan?.source === 'player_fallback' && unit.plan.commandId === command.id) {
+    unit.plan = createDirectPlayerMovePlan(unit.plan, unit.playerCommand, order.target);
+  }
 }
 
 function resolveUnitCollisions(state: SimulationState): void {

@@ -1,0 +1,48 @@
+.simulation-unit-bar .unit-bar-current {
+  min-width: 310px;
+  max-width: 520px;
+  display: grid;
+  gap: 3px;
+}
+
+.simulation-unit-bar .unit-bar-current [data-role="order"][hidden] {
+  display: none !important;
+}
+
+.command-plan-route-status {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.command-plan-route-status-player-command {
+  color: #ffd85a;
+}
+
+.command-plan-route-status-unit-plan {
+  color: #73b4ff;
+}
+
+.command-plan-route-status-unit-route {
+  color: #78e69a;
+}
+
+.workspace-display-panel [data-action="command-plan-route-overlay"] {
+  width: 100%;
+  text-align: left;
+}
+
+.workspace-display-panel [data-action="command-plan-route-overlay"].active {
+  border-color: rgba(255, 216, 90, 0.72);
+  box-shadow: inset 3px 0 0 #ffd85a;
+}
+
+@media (max-width: 1220px) {
+  .simulation-unit-bar .unit-bar-current {
+    min-width: 240px;
+    max-width: 360px;
+  }
+}
