@@ -6,6 +6,8 @@ import {
   createDefaultNavigationProfileRegistry,
 } from '../src/core/navigation/NavigationProfiles';
 import { resolveActiveNavigationProfile } from '../src/core/navigation/NavigationProfileResolver';
+import { resolveUnitNavigationProfile } from '../src/core/navigation/NavigationRuntime';
+import { createPlayerMoveCommand, updatePlayerCommandStatus } from '../src/core/orders/PlayerCommand';
 import {
   createRouteCostFieldCache,
   getRouteCostFieldDiagnostics,
@@ -14,10 +16,12 @@ import {
 } from '../src/core/navigation/RouteCostField';
 import { evaluateNavigationReplan } from '../src/core/navigation/NavigationReplanPolicy';
 import { findGridPath } from '../src/core/pathfinding/GridPathfinder';
+import { normalizeUnits } from '../src/core/units/UnitModel';
 
 verifyBuiltInRegistry();
 verifyCustomProfilesAndMigration();
 verifyResolverPriority();
+verifyCompletedPlayerCommandDoesNotOverrideSelectedProfile();
 verifyProfileSpecificRoutes();
 verifyKnownDangerAndDetourLimit();
 verifyCostFieldCacheAndHoverReads();
@@ -84,6 +88,24 @@ function verifyResolverPriority(): void {
     behaviorMovementMode: 'retreat',
   }).profileId, 'retreat');
   assert.equal(resolveActiveNavigationProfile(registry, {}).profileId, 'normal');
+}
+
+function verifyCompletedPlayerCommandDoesNotOverrideSelectedProfile(): void {
+  const [unit] = normalizeUnits([{
+    id: 'profile-switch-unit',
+    type: 'infantry_squad',
+    side: 'player',
+    x: 0,
+    y: 0,
+    navigationProfileId: 'cautious',
+  }]);
+  unit.playerNavigationProfileId = 'stealth';
+  const command = createPlayerMoveCommand(unit.id, { x: 4, y: 4 }, null, 1, 'cautious', 'cautious');
+  unit.playerCommand = updatePlayerCommandStatus(command, 'completed', 'Reached the destination.');
+
+  const resolved = resolveUnitNavigationProfile(unit);
+  assert.equal(resolved.profileId, 'stealth', 'a completed command must not override the selected overlay profile');
+  assert.equal(resolved.source, 'playerSelection');
 }
 
 function verifyProfileSpecificRoutes(): void {

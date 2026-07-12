@@ -70,7 +70,8 @@ expectContains(resolver, 'playerCommandProfileId', 'The resolver must accept an 
 expectContains(resolver, 'selectedPlayerProfileId', 'The resolver must accept the profile selected in the game UI.');
 
 const runtime = read('src/core/navigation/NavigationRuntime.ts');
-expectContains(runtime, 'playerCommandProfileId: command?.navigationProfileId', 'Runtime resolution must pass the exact command profile ID.');
+expectContains(runtime, 'isPlayerCommandOutstanding(command)', 'Runtime resolution must only prioritize an outstanding player command.');
+expectContains(runtime, 'playerCommandProfileId: activeCommand?.navigationProfileId', 'Runtime resolution must pass the exact active command profile ID.');
 expectContains(runtime, 'selectedPlayerProfileId: unit.playerNavigationProfileId', 'Runtime resolution must pass the profile selected in the game UI.');
 
 const routedOrders = read('src/core/orders/RoutedMoveOrders.ts');
