@@ -7,6 +7,7 @@ import { clampGridPositionToMap } from '../map/MapModel';
 import { ensureNavigationRouteCurrent } from '../navigation/NavigationRouteReplanner';
 import type { MoveOrder } from '../orders/MoveOrder';
 import { updatePlayerCommandStatus } from '../orders/PlayerCommand';
+import { updateAttentionController } from '../perception/AttentionController';
 import { tickSelectedSoldierPerception } from '../perception/PerceptionSystem';
 import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
 import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
@@ -103,12 +104,21 @@ function moveUnit(unit: UnitModel, state: SimulationState, deltaSeconds: number)
   }
 
   unit.position = { ...order.target };
+  applyFinalFacing(unit, order);
   unit.order = null;
   completeLinkedPlayerCommand(unit, order);
   setState(unit, 'observing', 'target reached');
   unit.behaviorRuntime.currentAction = 'observe';
   unit.behaviorRuntime.reason = 'target reached';
   unit.behaviorRuntime.lastEvent = 'move_done';
+}
+
+function applyFinalFacing(unit: UnitModel, order: MoveOrder): void {
+  if (typeof order.finalFacingRadians !== 'number' || !Number.isFinite(order.finalFacingRadians)) return;
+  unit.facingRadians = order.finalFacingRadians;
+  if (unit.attentionRuntime.mode === 'search') unit.attentionRuntime.searchCenterRadians = order.finalFacingRadians;
+  updateAttentionController(unit, 0);
+  unit.behaviorRuntime.lastEvent = 'move_final_facing_applied';
 }
 
 function ensureRoutePassable(unit: UnitModel, state: SimulationState): boolean {

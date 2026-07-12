@@ -20,6 +20,17 @@ export interface VisibilityProbeRuntimeState {
   target: GridPosition | null;
 }
 
+export interface RouteFacingDraft {
+  target: GridPosition;
+  pointer: GridPosition;
+  finalFacingRadians: number | null;
+}
+
+export interface UnitCommandToolRuntimeState {
+  turnToolActive: boolean;
+  routeFacingDraft: RouteFacingDraft | null;
+}
+
 export interface AttentionOverlayRuntimeState {
   active: boolean;
   showCurrentView: boolean;
@@ -42,6 +53,7 @@ interface RuntimeUiState {
   realReliefOverlay: RealReliefOverlayRuntimeState;
   commandPlanRouteOverlay: CommandPlanRouteOverlayRuntimeState;
   visibilityProbe: VisibilityProbeRuntimeState;
+  unitCommandTool: UnitCommandToolRuntimeState;
   attentionOverlay: AttentionOverlayRuntimeState;
   simulationLayer: SimulationLayerRuntimeState;
 }
@@ -88,6 +100,33 @@ export function setVisibilityProbe(state: SimulationState, active: boolean, targ
   const probe = getRuntimeUiState(state).visibilityProbe;
   probe.active = active;
   probe.target = active ? target : null;
+}
+
+export function getUnitCommandToolState(state: SimulationState): UnitCommandToolRuntimeState {
+  return getRuntimeUiState(state).unitCommandTool;
+}
+
+export function setTurnToolActive(state: SimulationState, active: boolean): void {
+  const tool = getRuntimeUiState(state).unitCommandTool;
+  tool.turnToolActive = active;
+  if (active) tool.routeFacingDraft = null;
+}
+
+export function consumeTurnTool(state: SimulationState): boolean {
+  const tool = getRuntimeUiState(state).unitCommandTool;
+  const active = tool.turnToolActive;
+  tool.turnToolActive = false;
+  return active;
+}
+
+export function setRouteFacingDraft(state: SimulationState, draft: RouteFacingDraft | null): void {
+  getRuntimeUiState(state).unitCommandTool.routeFacingDraft = draft
+    ? {
+        target: { ...draft.target },
+        pointer: { ...draft.pointer },
+        finalFacingRadians: draft.finalFacingRadians,
+      }
+    : null;
 }
 
 export function getAttentionOverlayState(state: SimulationState): AttentionOverlayRuntimeState {
@@ -158,6 +197,7 @@ function getRuntimeUiState(state: SimulationState): RuntimeUiState {
       realReliefOverlay: { active: false },
       commandPlanRouteOverlay: { active: true },
       visibilityProbe: { active: false, target: null },
+      unitCommandTool: { turnToolActive: false, routeFacingDraft: null },
       attentionOverlay: {
         active: false,
         showCurrentView: true,

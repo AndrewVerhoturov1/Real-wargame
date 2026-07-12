@@ -50,10 +50,10 @@
   grid-area: route;
   position: relative;
   display: grid;
-  grid-template-columns: minmax(112px, 1fr) auto;
+  grid-template-columns: minmax(108px, 1fr) minmax(96px, 0.8fr) auto auto;
   grid-template-areas:
-    "profile cost"
-    "details details";
+    "profile attention turn cost"
+    "details details details details";
   gap: 3px 5px;
   align-items: end;
   min-width: 0;
@@ -68,7 +68,17 @@
   font-size: 8px;
 }
 
-.unit-route-profile select {
+.unit-attention-mode {
+  grid-area: attention;
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  color: var(--workspace-muted);
+  font-size: 8px;
+}
+
+.unit-route-profile select,
+.unit-attention-mode select {
   min-width: 0;
   height: 25px;
   padding: 3px 6px;
@@ -78,6 +88,22 @@
   background: rgba(255, 242, 168, 0.06);
   font-size: 9px;
   font-weight: 700;
+}
+
+.unit-bar-route-controls [data-action="turn-unit"] {
+  grid-area: turn;
+  min-height: 25px;
+  padding: 3px 7px;
+  border-radius: 7px;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.unit-bar-route-controls [data-action="turn-unit"].active {
+  color: #141910;
+  border-color: #f4d66f;
+  background: #f4d66f;
 }
 
 .unit-bar-route-controls [data-action="route-cost-quick-toggle"] {

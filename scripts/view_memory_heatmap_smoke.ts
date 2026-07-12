@@ -101,6 +101,7 @@ assert.equal(getVisibilityFieldDiagnostics(state).rebuildCount, 1);
 const cached = getSelectedUnitVisibilityField(state);
 assert.equal(cached, first, 'unchanged observer and map must reuse the same field');
 assert.ok(getVisibilityFieldDiagnostics(state).cacheHitCount >= 1);
+assert.equal(getVisibilityFieldDiagnostics(state).cachedFieldCount, 1, 'only the latest field may be retained');
 
 const clearAhead = sampleSelectedUnitVisibilityField(first, 17, 15);
 const behindHouse = sampleSelectedUnitVisibilityField(first, 25, 15);

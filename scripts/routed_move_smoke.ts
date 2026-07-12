@@ -12,6 +12,7 @@ verifyPlannerCreatesRoutedOrder();
 verifyWaypointFollowingAndFinalCompletion();
 verifyLegacyDirectMoveCompatibility();
 verifyPlayerOrderUsesSharedPlanner();
+verifyFinalFacingAppliedAfterMovement();
 verifyBlockedPlayerCommandRemainsVisible();
 verifyRouteReplansAroundNewObstacle();
 verifyImpossibleReplanStopsMovement();
@@ -88,6 +89,19 @@ function verifyPlayerOrderUsesSharedPlanner(): void {
   assert.equal(unit.order?.routeStatus, 'planned');
   assert.equal(unit.plan?.source, 'player_fallback');
   assert.equal(unit.plan?.commandId, unit.playerCommand?.id);
+}
+
+function verifyFinalFacingAppliedAfterMovement(): void {
+  const state = createTestState(makeEmptyMap());
+  const unit = selectedUnit(state);
+  const finalFacingRadians = Math.PI * 0.75;
+  issueRoutedMoveOrderToSelectedUnits(state, { x: 5.5, y: 3.5 }, finalFacingRadians);
+  assert.equal(unit.playerCommand?.finalFacingRadians, finalFacingRadians);
+  assert.equal(unit.order?.finalFacingRadians, finalFacingRadians);
+  for (let step = 0; step < 500 && unit.order; step += 1) tickSimulation(state, 0.05);
+  assert.equal(unit.order, null);
+  assert.ok(Math.abs(unit.facingRadians - finalFacingRadians) < 0.0001, 'final facing must be applied at destination');
+  assert.equal(unit.playerCommand?.status, 'completed');
 }
 
 function verifyBlockedPlayerCommandRemainsVisible(): void {

@@ -42,6 +42,7 @@ export interface VisibilityFieldDiagnostics {
   lastBuildDurationMs: number;
   lastKey: string;
   fieldRevision: number;
+  cachedFieldCount: number;
 }
 
 interface VisibilityFieldRuntime {
@@ -93,7 +94,8 @@ export function getSelectedUnitVisibilityField(state: SimulationState): Selected
 }
 
 export function getVisibilityFieldDiagnostics(state: SimulationState): VisibilityFieldDiagnostics {
-  return { ...getRuntime(state).diagnostics };
+  const runtime = getRuntime(state);
+  return { ...runtime.diagnostics, cachedFieldCount: runtime.field ? 1 : 0 };
 }
 
 export function invalidateSelectedUnitVisibilityField(state: SimulationState, reason = 'manual'): void {
@@ -327,6 +329,7 @@ function getRuntime(state: SimulationState): VisibilityFieldRuntime {
         lastBuildDurationMs: 0,
         lastKey: '',
         fieldRevision: 0,
+        cachedFieldCount: 0,
       },
       lastObserverPosition: null,
     };

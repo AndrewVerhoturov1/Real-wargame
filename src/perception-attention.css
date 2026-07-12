@@ -212,3 +212,60 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.attention-compact-legend {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 7px 8px;
+  border: 1px solid rgba(108, 158, 169, 0.24);
+  border-radius: 7px;
+  background: rgba(9, 15, 17, 0.72);
+  color: #b8c6bd;
+  font-size: 10px;
+}
+
+.attention-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.attention-legend-row > span {
+  flex: 0 0 46px;
+  color: #e6ecd9;
+  font-weight: 700;
+}
+
+.attention-legend-row small {
+  color: #9fb0a1;
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+.attention-legend-gradient {
+  width: 74px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ffe88a 0%, #69d7a2 35%, #4aa9b8 62%, #315a78 78%, rgba(16, 24, 32, 0.92) 100%);
+}
+
+.attention-legend-markers {
+  flex-wrap: wrap;
+}
+
+.attention-legend-marker {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.attention-legend-marker.current { color: #ff664f; background: currentColor; }
+.attention-legend-marker.memory { color: #f2aa62; }
+.attention-legend-marker.suspicion { color: #f0cf6a; border-radius: 50%; }
+.attention-legend-marker.sound { color: #8ec6ff; border-radius: 50%; border-style: dashed; }

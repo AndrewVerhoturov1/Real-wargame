@@ -33,11 +33,21 @@ import {
   hoverSimulationCoverAtPosition,
   selectSimulationCoverAtPosition,
 } from '../core/knowledge/SimulationCoverSelection';
-import { getSimulationLayerState, setVisibilityProbe } from '../core/ui/RuntimeUiState';
+import {
+  consumeTurnTool,
+  getSimulationLayerState,
+  getUnitCommandToolState,
+  setRouteFacingDraft,
+  setTurnToolActive,
+  setVisibilityProbe,
+} from '../core/ui/RuntimeUiState';
+import { faceSelectedUnitsToward, facingRadiansFromPoints } from '../core/orders/UnitFacingCommands';
 import { findUnitAtGridPosition } from '../core/units/UnitModel';
 import type { CameraController } from './CameraController';
 
 const DRAG_SELECT_THRESHOLD_CELLS = 0.18;
+const RIGHT_DRAG_FACING_THRESHOLD_CELLS = 0.35;
+const COMMAND_TOOL_CHANGED_EVENT = 'real-wargame:unit-command-tool-changed';
 
 interface PointerMoveSnapshot {
   clientX: number;
@@ -49,6 +59,9 @@ interface PointerMoveSnapshot {
 export class BoardInputController {
   private leftPointerId: number | null = null;
   private leftStartGrid: GridPosition | null = null;
+  private rightPointerId: number | null = null;
+  private rightStartGrid: GridPosition | null = null;
+  private rightCurrentGrid: GridPosition | null = null;
   private isDragSelecting = false;
   private lastPointerGrid: GridPosition | null = null;
   private altProbeActive = false;
@@ -70,6 +83,7 @@ export class BoardInputController {
     this.canvas.addEventListener('pointerleave', this.handlePointerLeave);
     window.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('keyup', this.handleKeyUp);
+    window.addEventListener(COMMAND_TOOL_CHANGED_EVENT, this.handleCommandToolChanged);
   }
 
   destroy(): void {
@@ -81,7 +95,9 @@ export class BoardInputController {
     this.canvas.removeEventListener('pointerleave', this.handlePointerLeave);
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('keyup', this.handleKeyUp);
+    window.removeEventListener(COMMAND_TOOL_CHANGED_EVENT, this.handleCommandToolChanged);
     this.cancelPendingPointerMove();
+    this.clearRightPointer();
   }
 
   private readonly handleContextMenu = (event: MouseEvent): void => {
@@ -98,6 +114,15 @@ export class BoardInputController {
     }
 
     if (isTextInput(event.target)) return;
+
+    if (!this.state.editor.enabled && !getAiLabRuntime(this.state).open && event.key === 'Escape') {
+      event.preventDefault();
+      setTurnToolActive(this.state, false);
+      setRouteFacingDraft(this.state, null);
+      this.clearRightPointer();
+      this.updateCursor();
+      return;
+    }
 
     if (this.state.editor.enabled) {
       if (event.key === 'Escape') {
@@ -181,7 +206,23 @@ export class BoardInputController {
     if (event.button === 2) {
       event.preventDefault();
       if (!this.state.editor.enabled && !getAiLabRuntime(this.state).open) {
-        issueRoutedMoveOrderToSelectedUnits(this.state, grid);
+        if (getUnitCommandToolState(this.state).turnToolActive) {
+          faceSelectedUnitsToward(this.state, grid);
+          consumeTurnTool(this.state);
+          setRouteFacingDraft(this.state, null);
+          window.dispatchEvent(new CustomEvent(COMMAND_TOOL_CHANGED_EVENT));
+          this.updateCursor();
+          return;
+        }
+        this.rightPointerId = event.pointerId;
+        this.rightStartGrid = grid;
+        this.rightCurrentGrid = grid;
+        this.canvas.setPointerCapture(event.pointerId);
+        setRouteFacingDraft(this.state, {
+          target: grid,
+          pointer: grid,
+          finalFacingRadians: null,
+        });
       }
     }
   };
@@ -216,6 +257,19 @@ export class BoardInputController {
 
     if (!this.state.editor.enabled && getSimulationLayerState(this.state).mode !== 'info') {
       hoverSimulationCoverAtPosition(this.state, grid);
+    }
+
+    if (this.rightPointerId === event.pointerId && this.rightStartGrid) {
+      this.rightCurrentGrid = grid;
+      const finalFacingRadians = distance(this.rightStartGrid, grid) >= RIGHT_DRAG_FACING_THRESHOLD_CELLS
+        ? facingRadiansFromPoints(this.rightStartGrid, grid)
+        : null;
+      setRouteFacingDraft(this.state, {
+        target: this.rightStartGrid,
+        pointer: grid,
+        finalFacingRadians,
+      });
+      return;
     }
 
     if (!this.state.editor.enabled && getAiLabRuntime(this.state).open) {
@@ -259,6 +313,16 @@ export class BoardInputController {
 
   private readonly handlePointerUp = (event: PointerEvent): void => {
     this.cancelPendingPointerMove();
+    if (event.button === 2 && this.rightPointerId === event.pointerId && this.rightStartGrid) {
+      const world = this.camera.screenToWorld(event);
+      const grid = worldToGrid(this.state.map, world);
+      const finalFacingRadians = distance(this.rightStartGrid, grid) >= RIGHT_DRAG_FACING_THRESHOLD_CELLS
+        ? facingRadiansFromPoints(this.rightStartGrid, grid) ?? undefined
+        : undefined;
+      issueRoutedMoveOrderToSelectedUnits(this.state, this.rightStartGrid, finalFacingRadians);
+      this.clearRightPointer();
+      return;
+    }
     if (this.leftPointerId !== event.pointerId || !this.leftStartGrid) return;
 
     const world = this.camera.screenToWorld(event);
@@ -312,6 +376,7 @@ export class BoardInputController {
 
   private readonly handlePointerCancel = (event: PointerEvent): void => {
     this.cancelPendingPointerMove();
+    if (this.rightPointerId === event.pointerId) this.clearRightPointer();
     if (this.leftPointerId === event.pointerId) {
       clearSelectionBox(this.state);
       cancelEditorPointerAction(this.state);
@@ -327,6 +392,7 @@ export class BoardInputController {
     setMouseGridPosition(this.state, null);
     hoverSimulationCoverAtPosition(this.state, null);
     setVisibilityProbe(this.state, false, null);
+    this.clearRightPointer();
     this.updateCursor();
   };
 
@@ -338,8 +404,12 @@ export class BoardInputController {
   }
 
   private updateCursor(): void {
-    const cursor = resolveAiLabCursor(this.state);
-    this.canvas.style.cursor = cursor;
+    if (getUnitCommandToolState(this.state).turnToolActive) {
+      this.canvas.style.cursor = 'crosshair';
+    } else {
+      const cursor = resolveAiLabCursor(this.state);
+      this.canvas.style.cursor = cursor;
+    }
     document.body.classList.toggle('cursor-crosshair-threat', getAiLabRuntime(this.state).open && getAiLabRuntime(this.state).tool === 'place_threat');
   }
 
@@ -356,6 +426,20 @@ export class BoardInputController {
       this.pointerMoveFrameId = null;
     }
     this.pendingPointerMove = null;
+  }
+
+  private readonly handleCommandToolChanged = (): void => {
+    this.updateCursor();
+  };
+
+  private clearRightPointer(): void {
+    if (this.rightPointerId !== null && this.canvas.hasPointerCapture(this.rightPointerId)) {
+      this.canvas.releasePointerCapture(this.rightPointerId);
+    }
+    this.rightPointerId = null;
+    this.rightStartGrid = null;
+    this.rightCurrentGrid = null;
+    setRouteFacingDraft(this.state, null);
   }
 }
 

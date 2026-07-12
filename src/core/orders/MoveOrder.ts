@@ -35,6 +35,7 @@ export interface MoveOrderOptions {
   readonly navigationProfileId?: string;
   readonly navigationProfileRevision?: number;
   readonly navigationProfileSource?: NavigationProfileSource;
+  readonly finalFacingRadians?: number;
   readonly knowledgeRevision?: number;
   readonly replanCount?: number;
   readonly lastReplanAtSeconds?: number;
@@ -69,6 +70,7 @@ export interface MoveOrder {
   navigationProfileId?: string;
   navigationProfileRevision?: number;
   navigationProfileSource?: NavigationProfileSource;
+  finalFacingRadians?: number;
   knowledgeRevision?: number;
   replanCount?: number;
   lastReplanAtSeconds?: number;
@@ -104,6 +106,7 @@ export function createMoveOrder(target: GridPosition, options: MoveOrderOptions 
     navigationProfileId: options.navigationProfileId,
     navigationProfileRevision: options.navigationProfileRevision,
     navigationProfileSource: options.navigationProfileSource,
+    finalFacingRadians: options.finalFacingRadians,
     knowledgeRevision: options.knowledgeRevision,
     replanCount: options.replanCount,
     lastReplanAtSeconds: options.lastReplanAtSeconds,

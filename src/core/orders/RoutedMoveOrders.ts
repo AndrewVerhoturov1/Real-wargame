@@ -11,6 +11,7 @@ import { createPlayerMoveCommand, updatePlayerCommandStatus } from './PlayerComm
 export function issueRoutedMoveOrderToSelectedUnits(
   state: SimulationState,
   rawTarget: GridPosition,
+  finalFacingRadians?: number,
 ): void {
   const selectedIds = new Set(state.selectedUnitIds);
   const selectedUnits = state.units.filter((unit) => selectedIds.has(unit.id));
@@ -33,6 +34,7 @@ export function issueRoutedMoveOrderToSelectedUnits(
       Date.now(),
       'normal',
       unit.playerNavigationProfileId ?? 'normal',
+      finalFacingRadians ?? null,
     );
     unit.playerCommand = command;
     const resolvedNavigation = resolveUnitNavigationProfile(unit, command);
@@ -42,6 +44,7 @@ export function issueRoutedMoveOrderToSelectedUnits(
       movementMode: command.movementMode,
       navigationProfile: resolvedNavigation.profile,
       navigationProfileSource: resolvedNavigation.source,
+      finalFacingRadians,
       tacticalContext: buildUnitTacticalRouteContext(unit),
     });
 
