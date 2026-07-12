@@ -25,7 +25,10 @@ jobs:
           fetch-depth: 0
 
       - name: Apply idempotent maintenance
-        run: node scripts/navigation_branch_maintenance.mjs
+        shell: bash
+        run: |
+          node scripts/navigation_branch_maintenance.mjs
+          node scripts/navigation_compile_fixes.mjs
 
       - name: Commit maintenance changes
         shell: bash
@@ -37,14 +40,16 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
+            src/ai-node-editor/NavigationProfileEditor.ts \
             src/core/pathfinding/GridPathfinder.ts \
             src/core/orders/PlayerCommand.ts \
             src/core/units/UnitModel.ts \
+            src/core/navigation/NavigationProfiles.ts \
             src/core/navigation/RouteCostField.ts \
             src/core/navigation/NavigationReplanPolicy.ts \
             src/core/ai/AiStatefulMoveGameBridge.ts \
             src/core/simulation/SimulationTick.ts \
             src/main.ts \
             src/rendering/PixiApp.ts
-          git commit -m 'feat: integrate navigation profiles into runtime and overlay'
+          git commit -m 'fix: complete navigation profile runtime integration'
           git push origin HEAD:tmp/navigation-profiles-route-cost-20260712
