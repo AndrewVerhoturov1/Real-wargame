@@ -17,12 +17,15 @@ import {
   readRouteCostCell,
 } from '../src/core/navigation/RouteCostField';
 
-verifyStorageRoundTrip();
-verifyMapIdentityIsolation();
-verifyHoverAndTextureCounters();
-await verifyRendererBoundary();
+void main();
 
-console.log('Navigation overlay contract smoke passed: storage, map identity, typed-array hover, texture counters and renderer/A* separation.');
+async function main(): Promise<void> {
+  verifyStorageRoundTrip();
+  verifyMapIdentityIsolation();
+  verifyHoverAndTextureCounters();
+  await verifyRendererBoundary();
+  console.log('Navigation overlay contract smoke passed: storage, map identity, typed-array hover, texture counters and renderer/A* separation.');
+}
 
 function verifyStorageRoundTrip(): void {
   const values = new Map<string, string>();
