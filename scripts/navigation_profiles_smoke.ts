@@ -158,7 +158,10 @@ function verifyKnownDangerAndDetourLimit(): void {
   assert.equal(retreat.ok, true);
   if (!direct.ok || !retreat.ok) return;
   assert.ok(retreat.cells.some((cell) => Math.abs(cell.y - 4) >= 2), 'retreat should avoid a known threat');
-  assert.ok(retreat.costBreakdown.dangerCost > 0);
+  assert.ok(
+    minimumDistanceToPoint(retreat.cells, 7.5, 4.5) > minimumDistanceToPoint(direct.cells, 7.5, 4.5) + 1,
+    'retreat should keep more separation from the known threat than direct movement',
+  );
 
   const limitedProfile = {
     ...registry.getProfile('retreat'),
@@ -255,6 +258,10 @@ function verifyReplanPolicy(): void {
     currentKnowledgeRevision: 8,
     candidateCost: 96,
   }).shouldReplace, false, 'hysteresis must reject small improvements');
+}
+
+function minimumDistanceToPoint(cells: ReadonlyArray<{ x: number; y: number }>, x: number, y: number): number {
+  return cells.reduce((minimum, cell) => Math.min(minimum, Math.hypot(cell.x + 0.5 - x, cell.y + 0.5 - y)), Number.POSITIVE_INFINITY);
 }
 
 function makeMap(width: number, height: number, cells: TacticalMapData['cells']): TacticalMapData {
