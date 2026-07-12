@@ -1,7 +1,25 @@
 export {};
 
 const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
+const MOVE_DEFAULTS = {
+  targetKey: 'best_cover_position',
+  acceptanceRadiusCells: 0.2,
+  timeoutSeconds: 15,
+  stuckTimeoutSeconds: 2.5,
+  minimumProgressCells: 0.05,
+  abortOnTargetLost: true,
+} as const;
 let scheduled = false;
+
+// The palette creates a node synchronously in its click handler. Persist the
+// movement defaults in the microtask immediately after that handler finishes,
+// before browser automation or another UI action can read the graph.
+document.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  if (!target.closest('button[data-palette-type="MoveToBlackboardPosition"]')) return;
+  window.queueMicrotask(() => persistNewMoveNodeDefaults());
+}, true);
 
 const observer = new MutationObserver(() => scheduleEnhance());
 observer.observe(document.body, { childList: true, subtree: true });
@@ -110,34 +128,93 @@ function enhanceSelectedStatefulNode(): void {
   else humanPanel.appendChild(section);
 
   if (node.type === 'MoveToBlackboardPosition') {
-    installMoveParameterSync(section, needsMoveDefaults(node.parameters));
+    installMoveParameterSync(section, nodeId, needsMoveDefaults(node.parameters));
   }
 }
 
-function installMoveParameterSync(section: HTMLElement, persistDefaults: boolean): void {
-  const sync = (): void => {
+function installMoveParameterSync(section: HTMLElement, nodeId: string, persistDefaults: boolean): void {
+  const sync = (): Record<string, unknown> | null => {
     const parametersArea = document.querySelector<HTMLTextAreaElement>('#node-parameters');
-    if (!parametersArea) return;
+    if (!parametersArea) return null;
     const parameters = readParameters(parametersArea.value);
-    parameters.targetKey = document.querySelector<HTMLSelectElement>('#stateful-move-target')?.value ?? 'best_cover_position';
-    parameters.acceptanceRadiusCells = readInputNumber('#stateful-move-radius', 0.2);
-    parameters.timeoutSeconds = readInputNumber('#stateful-move-timeout', 15);
-    parameters.stuckTimeoutSeconds = readInputNumber('#stateful-move-stuck-timeout', 2.5);
-    parameters.minimumProgressCells = readInputNumber('#stateful-move-minimum-progress', 0.05);
-    parameters.abortOnTargetLost = document.querySelector<HTMLInputElement>('#stateful-move-abort-target-lost')?.checked ?? true;
+    parameters.targetKey = document.querySelector<HTMLSelectElement>('#stateful-move-target')?.value ?? MOVE_DEFAULTS.targetKey;
+    parameters.acceptanceRadiusCells = readInputNumber('#stateful-move-radius', MOVE_DEFAULTS.acceptanceRadiusCells);
+    parameters.timeoutSeconds = readInputNumber('#stateful-move-timeout', MOVE_DEFAULTS.timeoutSeconds);
+    parameters.stuckTimeoutSeconds = readInputNumber('#stateful-move-stuck-timeout', MOVE_DEFAULTS.stuckTimeoutSeconds);
+    parameters.minimumProgressCells = readInputNumber('#stateful-move-minimum-progress', MOVE_DEFAULTS.minimumProgressCells);
+    parameters.abortOnTargetLost = document.querySelector<HTMLInputElement>('#stateful-move-abort-target-lost')?.checked ?? MOVE_DEFAULTS.abortOnTargetLost;
     parametersArea.value = JSON.stringify(parameters, null, 2);
+    return parameters;
   };
 
   section.querySelectorAll<HTMLInputElement | HTMLSelectElement>('.stateful-move-field')
     .forEach((field) => field.addEventListener('input', sync));
   document.querySelector<HTMLButtonElement>('.human-save-node')?.addEventListener('click', sync, { capture: true });
-  sync();
+  const parameters = sync();
 
-  if (persistDefaults) {
-    window.requestAnimationFrame(() => {
-      document.querySelector<HTMLButtonElement>('#save-node')?.click();
-    });
+  if (persistDefaults && parameters) {
+    persistMoveNodeParameters(nodeId, parameters);
+    // Keep the editor's in-memory graph synchronized as well. This is now
+    // synchronous; no requestAnimationFrame race is involved.
+    document.querySelector<HTMLButtonElement>('#save-node')?.click();
   }
+}
+
+function persistNewMoveNodeDefaults(): void {
+  try {
+    const raw = window.localStorage.getItem(GRAPH_STORAGE_KEY);
+    if (!raw) return;
+    const graph = JSON.parse(raw) as {
+      nodes?: Array<{ id?: string; type?: string; parameters?: Record<string, unknown> }>;
+    };
+    if (!Array.isArray(graph.nodes)) return;
+    const selectedId = document.querySelector<HTMLElement>('.graph-node.selected[data-node-id], .graph-node.is-selected[data-node-id]')?.dataset.nodeId;
+    const node = (selectedId
+      ? graph.nodes.find((candidate) => candidate.id === selectedId)
+      : undefined)
+      ?? [...graph.nodes].reverse().find((candidate) => (
+        candidate.type === 'MoveToBlackboardPosition' && needsMoveDefaults(candidate.parameters)
+      ));
+    if (!node || node.type !== 'MoveToBlackboardPosition') return;
+    const parameters = withMoveDefaults(node.parameters);
+    node.parameters = parameters;
+    window.localStorage.setItem(GRAPH_STORAGE_KEY, JSON.stringify(graph));
+
+    const parametersArea = document.querySelector<HTMLTextAreaElement>('#node-parameters');
+    if (selectedId === node.id && parametersArea) {
+      parametersArea.value = JSON.stringify(parameters, null, 2);
+    }
+  } catch {
+    // Default persistence is best-effort and must not break the editor.
+  }
+}
+
+function persistMoveNodeParameters(nodeId: string, parameters: Record<string, unknown>): void {
+  try {
+    const raw = window.localStorage.getItem(GRAPH_STORAGE_KEY);
+    if (!raw) return;
+    const graph = JSON.parse(raw) as {
+      nodes?: Array<{ id?: string; parameters?: Record<string, unknown> }>;
+    };
+    const node = graph.nodes?.find((candidate) => candidate.id === nodeId);
+    if (!node) return;
+    node.parameters = { ...parameters };
+    window.localStorage.setItem(GRAPH_STORAGE_KEY, JSON.stringify(graph));
+  } catch {
+    // The normal editor save path remains available if storage is malformed.
+  }
+}
+
+function withMoveDefaults(parameters: Record<string, unknown> | undefined): Record<string, unknown> {
+  return {
+    ...(parameters ?? {}),
+    targetKey: readTargetKey(parameters?.targetKey),
+    acceptanceRadiusCells: readNonNegative(parameters?.acceptanceRadiusCells, MOVE_DEFAULTS.acceptanceRadiusCells),
+    timeoutSeconds: readNonNegative(parameters?.timeoutSeconds, MOVE_DEFAULTS.timeoutSeconds),
+    stuckTimeoutSeconds: readNonNegative(parameters?.stuckTimeoutSeconds, MOVE_DEFAULTS.stuckTimeoutSeconds),
+    minimumProgressCells: readNonNegative(parameters?.minimumProgressCells, MOVE_DEFAULTS.minimumProgressCells),
+    abortOnTargetLost: readBoolean(parameters?.abortOnTargetLost, MOVE_DEFAULTS.abortOnTargetLost),
+  };
 }
 
 function needsMoveDefaults(parameters: Record<string, unknown> | undefined): boolean {
@@ -184,7 +261,7 @@ function readInputNumber(selector: string, fallback: number): number {
 function readTargetKey(value: unknown): string {
   return value === 'order_target_position' || value === 'retreat_position'
     ? value
-    : 'best_cover_position';
+    : MOVE_DEFAULTS.targetKey;
 }
 
 function readWholeSeconds(value: unknown, fallback: number): number {
