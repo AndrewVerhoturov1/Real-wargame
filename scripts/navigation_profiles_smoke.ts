@@ -22,6 +22,7 @@ verifyBuiltInRegistry();
 verifyCustomProfilesAndMigration();
 verifyResolverPriority();
 verifyCompletedPlayerCommandDoesNotOverrideSelectedProfile();
+verifyPersistedDebugOverrideDoesNotOverrideSelectedProfile();
 verifyProfileSpecificRoutes();
 verifyKnownDangerAndDetourLimit();
 verifyCostFieldCacheAndHoverReads();
@@ -106,6 +107,37 @@ function verifyCompletedPlayerCommandDoesNotOverrideSelectedProfile(): void {
   const resolved = resolveUnitNavigationProfile(unit);
   assert.equal(resolved.profileId, 'stealth', 'a completed command must not override the selected overlay profile');
   assert.equal(resolved.source, 'playerSelection');
+}
+
+function verifyPersistedDebugOverrideDoesNotOverrideSelectedProfile(): void {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      addEventListener: () => undefined,
+      localStorage: {
+        getItem: (key: string) => key === 'real-wargame.navigation-profile.debug.v1' ? 'cautious' : null,
+      },
+    },
+  });
+
+  try {
+    const [unit] = normalizeUnits([{
+      id: 'initial-profile-unit',
+      type: 'infantry_squad',
+      side: 'player',
+      x: 0,
+      y: 0,
+    }]);
+    unit.playerNavigationProfileId = 'stealth';
+
+    const resolved = resolveUnitNavigationProfile(unit);
+    assert.equal(resolved.profileId, 'stealth', 'a persisted legacy debug override must not override the selected overlay profile');
+    assert.equal(resolved.source, 'playerSelection');
+  } finally {
+    if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow);
+    else delete (globalThis as { window?: unknown }).window;
+  }
 }
 
 function verifyProfileSpecificRoutes(): void {
