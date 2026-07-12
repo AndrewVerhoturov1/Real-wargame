@@ -1,5 +1,6 @@
 import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap } from '../map/MapModel';
+import { getPressureReportAtPosition } from '../pressure/PressureZone';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
 import { planMoveOrder } from './MoveOrderPlanning';
@@ -33,11 +34,31 @@ export function issueRoutedMoveOrderToSelectedUnits(
     }
 
     unit.order = planned.order;
-    unit.behaviorRuntime.currentAction = 'move';
+    applyPressurePreview(state, unit, planned.order.target);
     unit.behaviorRuntime.lastEvent = 'move_order_received';
-    unit.behaviorRuntime.reason = planned.path.reasonRu;
     setUnitDirection(unit, planned.order.waypoints?.[0] ?? planned.order.target);
   }
+}
+
+function applyPressurePreview(
+  state: SimulationState,
+  unit: UnitModel,
+  target: GridPosition,
+): void {
+  const report = getPressureReportAtPosition(target, state.pressureZones);
+  unit.behaviorRuntime.state = 'moving';
+  unit.behaviorRuntime.posture = 'standing';
+  unit.behaviorRuntime.currentAction = 'move';
+
+  if (!report) {
+    unit.behaviorRuntime.danger = 0;
+    unit.behaviorRuntime.reason = 'move_target_clear';
+    return;
+  }
+
+  unit.behaviorRuntime.rawDanger = report.rawPressure;
+  unit.behaviorRuntime.danger = Math.round(report.rawPressure);
+  unit.behaviorRuntime.reason = `move_target_pressure:${report.zone.id}`;
 }
 
 function selectionCenter(units: readonly UnitModel[]): GridPosition {
