@@ -23,6 +23,7 @@ import {
   getPerceptionDiagnostics,
   publishPerceptionDiagnostics,
 } from './PerceptionDiagnostics';
+import { getActivePerceptionSounds, soundBaseRangeMeters } from './PerceptionSound';
 import { buildPerceptionStimuli } from './PerceptionStimulus';
 import { evaluateVisualSignal } from './VisualSignal';
 
@@ -117,6 +118,7 @@ export function tickSelectedSoldierPerception(state: SimulationState, deltaSecon
     diagnostics.contactUpdateCount += 1;
   }
 
+  processSoundEvents(state, unit, updatedContacts);
   decayContacts(state, unit, updatedContacts, deltaSeconds);
   scheduleNextChecks(unit, now, due);
   const best = getBestPerceptionContact(unit);
@@ -131,6 +133,81 @@ export function getBestPerceptionContact(unit: UnitModel): PerceptionContactMemo
     || right.confidence - left.confidence
     || right.lastUpdatedSeconds - left.lastUpdatedSeconds
   ))[0] ?? null;
+}
+
+function processSoundEvents(
+  state: SimulationState,
+  unit: UnitModel,
+  updatedContacts: Set<string>,
+): void {
+  const now = state.simulationTimeSeconds;
+  const modeFactor = unit.attentionRuntime.mode === 'march'
+    ? 1
+    : unit.attentionRuntime.mode === 'observe'
+      ? 0.9
+      : unit.attentionRuntime.mode === 'search'
+        ? 0.65
+        : 0.45;
+  const intuitionFactor = 0.55 + unit.soldier.condition.intuition / 180;
+  const suppressionLocalizationPenalty = 1 + unit.behaviorRuntime.suppression / 80;
+
+  for (const event of getActivePerceptionSounds(state)) {
+    if (event.sourceId === unit.id) continue;
+    const distanceMeters = distance(unit.position, event.position) * state.map.metersPerCell;
+    const baseRange = soundBaseRangeMeters(event.kind) * Math.max(0.1, event.loudness);
+    if (distanceMeters > baseRange) continue;
+    const rangeFactor = Math.max(0, 1 - distanceMeters / baseRange);
+    const confidence = Math.min(70, 18 + 58 * rangeFactor * modeFactor * intuitionFactor);
+    if (confidence < 10) continue;
+
+    const uncertaintyMeters = Math.max(8, (12 + distanceMeters * 0.18) * suppressionLocalizationPenalty);
+    const uncertaintyCells = uncertaintyMeters / Math.max(0.001, state.map.metersPerCell);
+    const position = estimateSoundPosition(unit, event.id, event.position, uncertaintyCells);
+    const stimulusId = event.sourceId ?? `sound:${event.id}`;
+    const contactId = event.sourceId ? contactIdForStimulus(stimulusId) : `perception:sound:${event.id}`;
+    const previous = unit.perceptionKnowledge.contacts.find((item) => item.id === contactId) ?? null;
+    const contact = advanceReportedContact(previous, {
+      id: contactId,
+      stimulusId,
+      labelRu: event.labelRu ?? soundLabelRu(event.kind),
+      position,
+      confidence,
+      uncertaintyCells,
+      nowSeconds: now,
+      source: 'sound',
+      explanationRu: [
+        `Звук услышан на расстоянии около ${Math.round(distanceMeters)} м.`,
+        `Направление приблизительное, неточность не меньше ${Math.round(uncertaintyMeters)} м.`,
+      ],
+    });
+    upsertPerceptionContact(unit.perceptionKnowledge, contact);
+    updatedContacts.add(contactId);
+  }
+}
+
+function estimateSoundPosition(
+  unit: UnitModel,
+  eventId: string,
+  source: { x: number; y: number },
+  uncertaintyCells: number,
+): { x: number; y: number } {
+  const dx = source.x - unit.position.x;
+  const dy = source.y - unit.position.y;
+  const length = Math.max(0.001, Math.hypot(dx, dy));
+  const seed = hashString(`${unit.id}:${eventId}`);
+  const side = ((seed % 2001) / 1000 - 1) * uncertaintyCells * 0.55;
+  const radial = (((Math.floor(seed / 2001) % 2001) / 1000) - 1) * uncertaintyCells * 0.35;
+  return {
+    x: source.x + (-dy / length) * side + (dx / length) * radial,
+    y: source.y + (dx / length) * side + (dy / length) * radial,
+  };
+}
+
+function soundLabelRu(kind: 'rifle_shot' | 'automatic_fire' | 'explosion' | 'movement'): string {
+  if (kind === 'automatic_fire') return 'Слышна автоматическая стрельба';
+  if (kind === 'explosion') return 'Слышен взрыв';
+  if (kind === 'movement') return 'Слышно движение';
+  return 'Слышен выстрел';
 }
 
 function resolveDueZones(unit: UnitModel, now: number): Record<AttentionZone, boolean> {
@@ -195,4 +272,13 @@ function decayContacts(
 
 function contactIdForStimulus(stimulusId: string): string {
   return `perception:${stimulusId}`;
+}
+
+function hashString(value: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }
