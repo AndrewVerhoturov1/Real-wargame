@@ -29,6 +29,7 @@ import {
   type AiRuntimeSessionSnapshotV1,
 } from './runtime/AiRuntimeSession';
 import { readAiGraphRuntimeReloadEffect } from './runtime/actions/ReloadAction';
+import { publishSimulationAiEvents } from './events/SimulationAiEvents';
 import { updateUnitPlanFromRuntime } from './UnitPlan';
 import bundledGraph from '../../data/ai/soldier_default_survival_graph.json';
 
@@ -91,7 +92,11 @@ export function tickAiGameBridge(
   if (!options.force && nowMs - unit.behaviorRuntime.aiGraphLastTickMs < scaledInterval) return null;
 
   const graph = readRuntimeGraph();
-  const session = ensureRuntimeSession(unit, graph.id);
+  let session = ensureRuntimeSession(unit, graph.id);
+  if (options.applyEffects) {
+    publishSimulationAiEvents(unit, session.simulationTimeMs);
+    session = unit.behaviorRuntime.aiRuntimeSession ?? session;
+  }
   const simulationNowMs = options.applyEffects
     ? session.simulationTimeMs + AI_GRAPH_TICK_INTERVAL_MS
     : session.simulationTimeMs;
@@ -119,6 +124,7 @@ export function tickAiGameBridge(
   unit.behaviorRuntime.aiGraphReason = result.explanationRu ?? result.explanation;
   unit.behaviorRuntime.reason = result.explanationRu ?? result.explanation;
   unit.behaviorRuntime.lastEvent = `ai_graph_runtime_${result.status}`;
+  publishSimulationAiEvents(unit, nextSession.simulationTimeMs);
   return result;
 }
 
