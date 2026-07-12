@@ -1,3 +1,5 @@
+export {};
+
 type JsonParameters = Record<string, string | number | boolean | null | { x: number; y: number }>;
 
 const MODE_OPTIONS = [
