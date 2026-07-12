@@ -40,6 +40,7 @@
     "perception-performance:smoke": "node scripts/perception_performance_smoke.mjs",
     "perception-variance:smoke": "node scripts/perception_variance_smoke.mjs",
     "view-memory-heatmap:smoke": "node scripts/view_memory_heatmap_smoke.mjs",
+    "view-memory-heatmap-performance:smoke": "node scripts/view_memory_heatmap_performance_smoke.mjs",
     "map-revision:smoke": "node scripts/map_revision_smoke.mjs",
     "map-resolution:smoke": "node scripts/map_resolution_migration_smoke.mjs",
     "map-grid-lod:smoke": "node scripts/map_grid_lod_smoke.mjs",
