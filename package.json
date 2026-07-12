@@ -21,6 +21,7 @@
     "pathfinding:smoke": "node scripts/grid_pathfinding_smoke.mjs",
     "routed-move:smoke": "node scripts/routed_move_smoke.mjs",
     "map-revision:smoke": "node scripts/map_revision_smoke.mjs",
+    "smooth-terrain:smoke": "node scripts/smooth_terrain_cache_smoke.mjs",
     "lab:manager": "node scripts/real_wargame_lab_manager.mjs",
     "docs:generate": "node scripts/generate_agent_docs.mjs",
     "docs:check": "node scripts/check_agent_docs.mjs",
