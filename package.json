@@ -21,6 +21,7 @@
     "pathfinding:smoke": "node scripts/grid_pathfinding_smoke.mjs",
     "routed-move:smoke": "node scripts/routed_move_smoke.mjs",
     "map-revision:smoke": "node scripts/map_revision_smoke.mjs",
+    "map-resolution:smoke": "node scripts/map_resolution_migration_smoke.mjs",
     "smooth-terrain:smoke": "node scripts/smooth_terrain_cache_smoke.mjs",
     "spatial-index:smoke": "node scripts/map_object_spatial_index_smoke.mjs",
     "visibility-probe:smoke": "node scripts/visibility_probe_cache_smoke.mjs",
