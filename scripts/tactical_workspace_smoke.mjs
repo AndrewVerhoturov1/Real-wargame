@@ -69,9 +69,7 @@ expectIncludes('src/rendering/PixiOrderRenderer.ts', ['drawFacingArrow', 'finalF
 expectIncludes('src/rendering/PixiVisibilityHeatmapRenderer.ts', [
   'UNSEEN_OVERLAY_COLOR', 'UNSEEN_OVERLAY_ALPHA', 'cachedFieldCount',
   'image.data[pixel + 3] = Math.round(UNSEEN_OVERLAY_ALPHA * 255)',
-]);
-expectExcludes('src/rendering/PixiVisibilityHeatmapRenderer.ts', [
-  'if (quality <= 0.01) continue;',
+  'const image = context.createImageData(mapWidth, mapHeight)',
 ]);
 expectIncludes('src/ui/AttentionRuntimePanel.ts', [
   'attention-compact-legend', 'Хорошо видно', 'Средне', 'Слабо', 'Не видно',
