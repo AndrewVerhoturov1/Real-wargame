@@ -1,9 +1,11 @@
+import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap } from '../map/MapModel';
 import { getPressureReportAtPosition } from '../pressure/PressureZone';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
 import { planMoveOrder } from './MoveOrderPlanning';
+import { createPlayerMoveCommand, updatePlayerCommandStatus } from './PlayerCommand';
 
 export function issueRoutedMoveOrderToSelectedUnits(
   state: SimulationState,
@@ -23,10 +25,22 @@ export function issueRoutedMoveOrderToSelectedUnits(
           x: target.x + unit.position.x - center.x,
           y: target.y + unit.position.y - center.y,
         });
-    const planned = planMoveOrder(state.map, unit.position, requestedTarget, { source: 'player' });
+    const command = createPlayerMoveCommand(unit.id, requestedTarget, unit.playerCommand);
+    unit.playerCommand = command;
+    const planned = planMoveOrder(state.map, unit.position, requestedTarget, {
+      source: 'player',
+      playerCommandId: command.id,
+    });
 
     if (!planned.ok) {
       unit.order = null;
+      unit.playerCommand = updatePlayerCommandStatus(
+        command,
+        'blocked',
+        `Player movement command is blocked: ${planned.reason}`,
+        `Приказ движения заблокирован: ${planned.reasonRu}`,
+      );
+      unit.plan = createDirectPlayerMovePlan(unit.plan, unit.playerCommand, requestedTarget);
       unit.behaviorRuntime.currentAction = 'observe';
       unit.behaviorRuntime.lastEvent = 'move_route_unavailable';
       unit.behaviorRuntime.reason = `Маршрут недоступен: ${planned.reasonRu}`;
@@ -34,6 +48,7 @@ export function issueRoutedMoveOrderToSelectedUnits(
     }
 
     unit.order = planned.order;
+    unit.plan = createDirectPlayerMovePlan(unit.plan, command, planned.order.target);
     applyPressurePreview(state, unit, planned.order.target);
     unit.behaviorRuntime.lastEvent = 'move_order_received';
     setUnitDirection(unit, planned.order.waypoints?.[0] ?? planned.order.target);
