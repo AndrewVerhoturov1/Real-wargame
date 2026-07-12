@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-13  
 **Implementation branch:** `feat/view-memory-heatmap-temp`  
-**Preview transfer:** not performed
+**Transfer by this workstream:** not performed
 
 ## Delivered in the temporary branch
 
@@ -119,3 +119,28 @@ raw log:        sha256:97ef4cd304a446fd414a1a3dcbcb6b99bd340bf7cb0b15805ecc02fef
 After this run, `real-wargame-preview` advanced by one documentation-only commit adding `ideas/GOOD_POSITIONS_AND_AMBUSH_SITES.md`. No game, UI, runtime or test code changed, so the exact-SHA browser result remains valid for the implementation. That document should be pulled before a future transfer.
 
 No transfer to `real-wargame-preview` or `main` was performed.
+
+## Final exact-SHA verification after cache-test correction
+
+A synchronized system-Chrome run `29209946327` first reported `19/20`: the old browser assertion counted two raster rebuilds after movement instead of at most one. Investigation showed that movement itself kept the awareness field stable, while live threat confidence and uncertainty crossed a legitimate quantization boundary during the same 2.6-second interval. The test was therefore mixing two independent causes.
+
+The correction did not raise the limit or disable caching checks. `awareness-field:smoke` now proves deterministically that movement preserves both the awareness field cache key and the raster render key, while a real knowledge change invalidates them. The browser scenario continues to verify one raster sprite, bounded display-object count, actual marker movement and stable UI.
+
+Verification evidence:
+
+- full expanded validation run `29210607097`: success;
+- focused browser reproduction run `29210481011`: the formerly unstable scenario passed `3/3` repetitions;
+- exact system-Chrome run `29210611840` on SHA `d254e471ed789790123302e466ac8fd3dd5c3e11`: `20/20 passed` in `10.6 minutes`;
+- 29 PNG files produced and key screens reopened manually.
+
+Final artifact digests:
+
+```text
+screenshots ZIP: sha256:80842bc74ae0947fb74672a68de5ee65003dd1b43344982ae462dbcb7daa96ea
+Playwright ZIP:  sha256:423f0cb603563c431cc7290fee0cf7e19d4083412c2d22548615c5a8f0496982
+raw log:        sha256:65243b16d311e8cd1f4483f0dea9ca9d43ae7c83cc6ae8fbd8c59a4062704f76
+```
+
+Manual inspection confirmed readable march/engage/search heatmaps, no rotating focus ray, one unified `Обзор и память` tab, no panel overlap, readable profile and node controls, preserved legacy node-editor layout and a selectable moving newly placed fighter.
+
+Repository-state note: no merge from `feat/view-memory-heatmap-temp` to `real-wargame-preview` or `main` was performed by this workstream. During verification, `real-wargame-preview` changed externally and now contains matching heatmap implementation files. Any future action must compare both branch trees first instead of assuming that preview still lacks the feature.
