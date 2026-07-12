@@ -52,6 +52,10 @@ assert.equal(first.quality.byteLength, first.width * first.height, 'quality fiel
 const initialDiagnostics = getVisibilityFieldDiagnostics(state);
 assert.equal(initialDiagnostics.rebuildCount, 1);
 assert.ok(initialDiagnostics.processedCellCount > 0);
+assert.ok(
+  initialDiagnostics.lastBuildDurationMs <= 120,
+  `180×120 heatmap build must stay within 120 ms on CI, got ${initialDiagnostics.lastBuildDurationMs.toFixed(2)} ms`,
+);
 
 for (let index = 0; index < 300; index += 1) {
   state.simulationTimeSeconds += 1 / 60;
@@ -71,4 +75,11 @@ const movingDiagnostics = getVisibilityFieldDiagnostics(state);
 assert.ok(movingDiagnostics.rebuildCount <= 7, `moving field must be throttled, got ${movingDiagnostics.rebuildCount}`);
 assert.equal(getPerceptionDiagnostics(state).losCalculationCount, 0, 'field builder must remain independent from exact perception LOS');
 
-console.log('View and memory heatmap performance smoke passed: hidden zero-work, compact storage, idle cache and moving throttle.');
+console.log(JSON.stringify({
+  initialBuildMs: initialDiagnostics.lastBuildDurationMs,
+  processedCellSteps: initialDiagnostics.processedCellCount,
+  rayCount: initialDiagnostics.rayCount,
+  idleCacheHits: idleDiagnostics.cacheHitCount,
+  movingRebuildCount: movingDiagnostics.rebuildCount,
+}));
+console.log('View and memory heatmap performance smoke passed: hidden zero-work, compact storage, timed build, idle cache and moving throttle.');
