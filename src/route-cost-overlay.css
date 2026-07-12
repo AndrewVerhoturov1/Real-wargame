@@ -1,0 +1,59 @@
+.route-cost-controls {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(142, 168, 139, 0.22);
+}
+
+.route-cost-controls > button,
+.route-cost-controls label,
+.route-cost-controls select {
+  width: 100%;
+}
+
+.route-cost-controls label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: #c8d8c4;
+}
+
+.route-cost-controls select {
+  min-height: 30px;
+  border: 1px solid rgba(154, 184, 147, 0.34);
+  border-radius: 4px;
+  background: #172019;
+  color: #eef5e9;
+  padding: 4px 6px;
+}
+
+.workspace-display-panel [data-action="route-cost-overlay"] {
+  text-align: left;
+}
+
+.workspace-display-panel [data-action="route-cost-overlay"].active {
+  border-color: rgba(238, 132, 50, 0.8);
+  box-shadow: inset 3px 0 0 #ee8432;
+}
+
+.route-cost-status {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.route-cost-status-navigation-profile {
+  color: #f3d86d;
+}
+
+.route-cost-status-route-cost {
+  color: #f2a15d;
+}
+
+.route-cost-status-route-reason {
+  color: #b9d8b8;
+}

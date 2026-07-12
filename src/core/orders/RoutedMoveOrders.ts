@@ -1,6 +1,7 @@
 import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap } from '../map/MapModel';
+import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../navigation/NavigationRuntime';
 import { getPressureReportAtPosition } from '../pressure/PressureZone';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
@@ -27,9 +28,14 @@ export function issueRoutedMoveOrderToSelectedUnits(
         });
     const command = createPlayerMoveCommand(unit.id, requestedTarget, unit.playerCommand);
     unit.playerCommand = command;
+    const resolvedNavigation = resolveUnitNavigationProfile(unit, command);
     const planned = planMoveOrder(state.map, unit.position, requestedTarget, {
       source: 'player',
       playerCommandId: command.id,
+      movementMode: command.movementMode,
+      navigationProfile: resolvedNavigation.profile,
+      navigationProfileSource: resolvedNavigation.source,
+      tacticalContext: buildUnitTacticalRouteContext(unit),
     });
 
     if (!planned.ok) {

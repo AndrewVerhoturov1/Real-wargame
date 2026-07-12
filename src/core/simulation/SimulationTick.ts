@@ -3,17 +3,15 @@ import { clampPercent, POSTURE_MOVE_MULTIPLIER } from '../behavior/BehaviorModel
 import type { GridPosition } from '../geometry';
 import { syncSoldierThreatMemory } from '../knowledge/SoldierThreatMemory';
 import { clampGridPositionToMap } from '../map/MapModel';
+import { ensureNavigationRouteCurrent } from '../navigation/NavigationRouteReplanner';
 import type { MoveOrder } from '../orders/MoveOrder';
-import { planMoveOrder } from '../orders/MoveOrderPlanning';
 import { updatePlayerCommandStatus } from '../orders/PlayerCommand';
-import { isMapCellPassable } from '../pathfinding/GridNavigation';
 import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
 import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
 import type { SimulationState } from './SimulationState';
 
 const ORDER_COMPLETION_EPSILON_CELLS = 0.02;
-const ROUTE_LOOKAHEAD_CELLS = 6;
 const UNIT_VISUAL_BODY_RADIUS_CELLS = 0.42;
 const UNIT_COLLISION_RADIUS_CELLS = UNIT_VISUAL_BODY_RADIUS_CELLS / 3;
 const UNIT_MIN_CENTER_DISTANCE_CELLS = UNIT_COLLISION_RADIUS_CELLS * 2;
@@ -102,53 +100,7 @@ function moveUnit(unit: UnitModel, state: SimulationState, deltaSeconds: number)
 }
 
 function ensureRoutePassable(unit: UnitModel, state: SimulationState): boolean {
-  const order = unit.order;
-  const routeCells = order?.routeCells;
-  const requestedTarget = order?.requestedTarget;
-  if (!order || !routeCells || routeCells.length === 0 || !requestedTarget) return true;
-
-  const currentCell = {
-    x: Math.floor(unit.position.x),
-    y: Math.floor(unit.position.y),
-  };
-  const previousIndex = Math.max(0, order.routeCellIndex ?? 0);
-  const matchingIndex = routeCells.findIndex((cell, index) => (
-    index >= previousIndex && cell.x === currentCell.x && cell.y === currentCell.y
-  ));
-  if (matchingIndex >= 0) order.routeCellIndex = matchingIndex;
-
-  const startIndex = Math.min(routeCells.length - 1, (order.routeCellIndex ?? previousIndex) + 1);
-  const endIndex = Math.min(routeCells.length - 1, startIndex + ROUTE_LOOKAHEAD_CELLS - 1);
-  let blocked = false;
-  for (let index = startIndex; index <= endIndex; index += 1) {
-    const cell = routeCells[index];
-    if (isMapCellPassable(state.map, cell.x, cell.y)) continue;
-    blocked = true;
-    break;
-  }
-  if (!blocked) return true;
-
-  const replanned = planMoveOrder(state.map, unit.position, requestedTarget, {
-    source: order.source,
-    ownerToken: order.ownerToken,
-    playerCommandId: order.playerCommandId,
-    routeStatus: 'replanned',
-    routeRevision: (order.routeRevision ?? 1) + 1,
-  });
-  if (!replanned.ok) {
-    unit.order = null;
-    blockLinkedPlayerCommand(unit, order, replanned.reason, replanned.reasonRu);
-    setState(unit, 'observing', 'route unavailable');
-    unit.behaviorRuntime.currentAction = 'observe';
-    unit.behaviorRuntime.lastEvent = 'move_route_unavailable';
-    unit.behaviorRuntime.reason = `Маршрут недоступен: ${replanned.reasonRu}`;
-    return false;
-  }
-
-  unit.order = replanned.order;
-  unit.behaviorRuntime.lastEvent = 'move_route_replanned';
-  unit.behaviorRuntime.reason = `Маршрут перестроен: ${replanned.path.reasonRu}`;
-  return true;
+  return ensureNavigationRouteCurrent(unit, state);
 }
 
 function completeLinkedPlayerCommand(unit: UnitModel, order: MoveOrder): void {

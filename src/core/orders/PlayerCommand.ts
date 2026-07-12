@@ -1,4 +1,5 @@
 import type { GridPosition } from '../geometry';
+import type { NavigationMovementMode } from '../navigation/NavigationProfiles';
 
 export type PlayerCommandType = 'move_to_position';
 export type PlayerCommandStatus = 'active' | 'completed' | 'blocked' | 'cancelled';
@@ -8,6 +9,7 @@ export interface PlayerCommand {
   readonly unitId: string;
   readonly type: PlayerCommandType;
   readonly target: GridPosition;
+  readonly movementMode?: NavigationMovementMode;
   readonly status: PlayerCommandStatus;
   readonly revision: number;
   readonly issuedAtMs: number;
@@ -20,6 +22,7 @@ export function createPlayerMoveCommand(
   target: GridPosition,
   previous: PlayerCommand | null = null,
   nowMs = Date.now(),
+  movementMode: NavigationMovementMode = 'normal',
 ): PlayerCommand {
   const revision = (previous?.revision ?? 0) + 1;
   return {
@@ -27,6 +30,7 @@ export function createPlayerMoveCommand(
     unitId,
     type: 'move_to_position',
     target: { ...target },
+    movementMode,
     status: 'active',
     revision,
     issuedAtMs: nowMs,

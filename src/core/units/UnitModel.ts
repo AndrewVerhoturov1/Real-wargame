@@ -14,6 +14,8 @@ import {
 } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import { createEmptyTacticalKnowledge, normalizeTacticalKnowledge } from '../knowledge/SoldierThreatMemory';
+import type { NavigationProfileSource } from '../navigation/NavigationProfileResolver';
+import type { NavigationMovementMode } from '../navigation/NavigationProfiles';
 import type { MoveOrder } from '../orders/MoveOrder';
 import type { PlayerCommand } from '../orders/PlayerCommand';
 import type { PressureZoneMode } from '../pressure/PressureZone';
@@ -74,6 +76,8 @@ export interface UnitData {
   initialState?: Partial<UnitInitialState>;
   tacticalKnowledge?: Partial<UnitTacticalKnowledge>;
   runtime?: Partial<Pick<UnitBehaviorRuntime, 'stress' | 'suppression' | 'ammo' | 'weaponReady' | 'posture'>>;
+  navigationProfileId?: string;
+  navigationMovementMode?: NavigationMovementMode;
 }
 
 export interface UnitModel {
@@ -99,6 +103,10 @@ export interface UnitModel {
   soldier: SoldierParameters;
   initialState: UnitInitialState;
   tacticalKnowledge: UnitTacticalKnowledge;
+  unitRoleNavigationProfileId?: string | null;
+  navigationMovementMode?: NavigationMovementMode | null;
+  activeNavigationProfileId?: string;
+  activeNavigationProfileSource?: NavigationProfileSource;
 }
 
 export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): UnitModel[] {
@@ -120,6 +128,7 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
     };
     const initialState = createUnitInitialState(soldier, compactUndefined({ ...legacyInitial, ...unit.initialState }));
     const behaviorRuntime = createBehaviorRuntime(initialState);
+    const initialNavigationProfile = unit.navigationProfileId ?? 'normal';
 
     const model: UnitModel = {
       id: unit.id,
@@ -149,6 +158,10 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
       tacticalKnowledge: unit.tacticalKnowledge
         ? normalizeTacticalKnowledge(unit.tacticalKnowledge, scale)
         : createEmptyTacticalKnowledge(),
+      unitRoleNavigationProfileId: unit.navigationProfileId ?? null,
+      navigationMovementMode: unit.navigationMovementMode ?? null,
+      activeNavigationProfileId: initialNavigationProfile,
+      activeNavigationProfileSource: unit.navigationProfileId ? 'unitRole' : 'default',
     };
     applyInitialStateToRuntime(model);
     return model;
