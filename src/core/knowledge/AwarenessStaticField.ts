@@ -1,6 +1,6 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
-import { getCell, resolveObjectCoverProperties, type TacticalMap } from '../map/MapModel';
+import { getCell, resolveObjectCoverProperties, type MapObject, type TacticalMap } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
 import { getMapObjectSpatialIndex } from '../spatial/MapObjectSpatialIndex';
 
@@ -67,8 +67,9 @@ export function getAwarenessStaticField(map: TacticalMap, posture: UnitPosture):
       const index = y * map.width + x;
       const position = { x: x + 0.5, y: y + 0.5 };
       const cell = getCell(map, x, y);
-      const local = estimateLocalProtection(map, position, posture, spatialIndex.queryCircle(position, 0.75));
-      candidateChecks += spatialIndex.queryCircle(position, 0.75).length;
+      const candidates = spatialIndex.queryCircle(position, 0.75);
+      const local = estimateLocalProtection(map, position, posture, candidates);
+      candidateChecks += candidates.length;
       expectedProtection[index] = local.expectedProtection;
       reliability[index] = local.reliability;
       concealment[index] = local.concealment;
@@ -98,10 +99,7 @@ export function getAwarenessStaticField(map: TacticalMap, posture: UnitPosture):
   return field;
 }
 
-export function getAwarenessStaticCell(
-  field: AwarenessStaticField,
-  position: GridPosition,
-): AwarenessStaticCell {
+export function getAwarenessStaticCell(field: AwarenessStaticField, position: GridPosition): AwarenessStaticCell {
   const x = clampInt(Math.floor(position.x), 0, field.width - 1);
   const y = clampInt(Math.floor(position.y), 0, field.height - 1);
   const index = y * field.width + x;
@@ -119,9 +117,7 @@ export function getAwarenessStaticFieldDiagnostics(
   posture: UnitPosture,
 ): AwarenessStaticFieldDiagnostics {
   const existing = cache.get(map)?.get(posture);
-  if (!existing) {
-    return { buildCount: 0, cacheHitCount: 0, lastBuildMs: 0, lastCandidateChecks: 0, key: '' };
-  }
+  if (!existing) return { buildCount: 0, cacheHitCount: 0, lastBuildMs: 0, lastCandidateChecks: 0, key: '' };
   return { ...existing.diagnostics };
 }
 
@@ -142,7 +138,7 @@ function estimateLocalProtection(
   map: TacticalMap,
   position: GridPosition,
   posture: UnitPosture,
-  candidates: TacticalMap['objects'],
+  candidates: MapObject[],
 ): { expectedProtection: number; reliability: number; concealment: number; sourceRu: string } {
   const cell = getCell(map, Math.floor(position.x), Math.floor(position.y));
   const terrainConcealment = forestConcealment(cell?.forest ?? 0);
