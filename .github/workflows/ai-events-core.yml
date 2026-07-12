@@ -24,6 +24,8 @@ jobs:
         run: npm run event-queue:smoke
       - name: Simulation event transitions
         run: npm run simulation-events:smoke
+      - name: Blackboard observers
+        run: npm run blackboard-observer:smoke
       - name: Runtime session integration
         run: npm run runtime-session:smoke
       - name: Runtime snapshot integration
