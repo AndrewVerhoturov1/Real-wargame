@@ -24,7 +24,7 @@ Generated from canonical repository and subproject metadata.
 
 - **ID:** `ai-single-unit-editor`
 - **Updated:** 2026-07-12
-- **Current focus:** На изолированной ветке tmp/ui-compact-route-controls-20260712 завершён интерфейсный срез Compact Route Controls: нижняя карточка бойца стала компактной, профиль маршрута и карта стоимости доступны прямо в игре, завершённый план очищает синюю цель, а редактор ИИ использует одно верхнее меню без пустой полосы, вкладки Диагностика и устаревшего Auto 4–5.
-- **Next step:** Дождаться ручной проверки пользователя на временной ветке. Не переносить изменения в real-wargame-preview до отдельной явной команды; при переносе удалить временный branch-only workflow визуальной проверки и повторно проверить итоговый preview SHA.
-- **Last verified commit:** `93268bb6a89db8a2508f2d8576d955c0b15fe89f`
+- **Current focus:** Compact Route Controls перенесён в real-wargame-preview: нижняя карточка бойца стала компактной, профиль маршрута и карта стоимости доступны прямо в игре, завершённый план очищает синюю цель, а редактор ИИ использует одно верхнее меню без пустой полосы, вкладки Диагностика и устаревшего Auto 4–5.
+- **Next step:** Провести пользовательскую проверку результата в real-wargame-preview. После подтверждения продолжить по плану Soldier Perception and Attention v1; main не менять без отдельного явного GO пользователя.
+- **Last verified commit:** `f99c0b810b06cd326063f94e688004635c3b2466`
 - **Status:** [generated status](../subprojects/ai-single-unit-editor/STATUS.md)
