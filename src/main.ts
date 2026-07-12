@@ -17,6 +17,7 @@ import type { PressureZoneData } from './core/pressure/PressureZone';
 import { createResolutionAwareInitialState } from './core/simulation/ResolutionAwareScene';
 import { initializeAiTestLabRuntime } from './core/testing/AiTestLabRuntime';
 import type { UnitData } from './core/units/UnitModel';
+import { installAdaptiveGridLod } from './rendering/AdaptiveGridLodInstaller';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
 import { installAppShellMenu } from './shared/AppShellMenu';
 import { installEditorHeaderPlacement } from './ui/EditorHeaderPlacement';
@@ -79,6 +80,7 @@ const destroyFrontZoneControls = installFrontZoneControls(state, forceRenderAtNa
 const destroyEditorHeaderPlacement = installEditorHeaderPlacement();
 const destroyWorkspaceTooltipGuard = installWorkspaceTooltipGuard();
 tacticalBoard.start();
+const destroyAdaptiveGridLod = installAdaptiveGridLod(tacticalBoard, state, gridToggle);
 enforceNativeMapQuality(tacticalBoard);
 gridToggle.addEventListener('click', scheduleNativeMapQuality);
 // Pixi starts with the legacy English locale; switch once after its listener is installed.
@@ -94,6 +96,7 @@ forceRussianTopControls(
 
 window.addEventListener('beforeunload', () => {
   gridToggle.removeEventListener('click', scheduleNativeMapQuality);
+  destroyAdaptiveGridLod();
   destroyAiDictionary();
   destroyFrontZoneControls();
   destroyWorkspaceTooltipGuard();
