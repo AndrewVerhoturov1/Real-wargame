@@ -7,6 +7,7 @@ const mapIdentityByMap = new WeakMap<TacticalMap, number>();
 let nextMapIdentity = 1;
 
 
+
 export interface TacticalRouteKnownThreat {
   readonly id: string;
   readonly x: number;
