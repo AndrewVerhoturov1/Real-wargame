@@ -1,0 +1,38 @@
+name: Command Plan Route Core
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+  workflow_dispatch:
+
+jobs:
+  command-plan-route:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Command plan route smoke
+        run: npm run command-plan-route:smoke
+
+      - name: Routed movement regression
+        run: npm run routed-move:smoke
+
+      - name: Stateful runtime regression
+        run: npm run runtime:smoke
+
+      - name: Production build
+        run: npm run build
