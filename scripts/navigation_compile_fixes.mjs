@@ -13,6 +13,9 @@ await edit('src/ai-node-editor/NavigationProfileEditor.ts', (source) => {
   updated = replaceExact(updated,
     'target[parts.at(-1)!] = value;',
     'target[parts[parts.length - 1]] = value;');
+  updated = replaceExact(updated,
+    "function slugify(value: string): string {\n  return value.trim().toLowerCase().replace(/[^a-zа-яё0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'custom';\n}",
+    "function slugify(value: string): string {\n  const transliteration: Record<string, string> = {\n    а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'yo', ж: 'zh', з: 'z', и: 'i', й: 'y',\n    к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f',\n    х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya',\n  };\n  const latin = value.trim().toLowerCase().split('').map((character) => transliteration[character] ?? character).join('');\n  return latin.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || `custom_${Date.now().toString(36)}`;\n}");
   return updated;
 });
 
