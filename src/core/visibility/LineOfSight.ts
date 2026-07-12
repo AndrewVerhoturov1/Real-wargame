@@ -5,7 +5,9 @@ import { sampleSmoothHeightLevel } from '../terrain/SmoothTerrain';
 import type { UnitModel } from '../units/UnitModel';
 
 const ELEVATION_STEP_METERS = 2;
-const SAMPLE_STEP_CELLS = 0.12;
+const SAMPLE_STEP_METERS = 1.2;
+const ENDPOINT_RELIEF_GRACE_METERS = 7;
+const OBJECT_ORIGIN_IGNORE_METERS = 1.25;
 const TERRAIN_BLOCK_MARGIN_METERS = 0.95;
 const OBJECT_BLOCK_MARGIN_METERS = 0.15;
 
@@ -24,7 +26,7 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
   const totalDistanceCells = distance(origin, target);
   const totalDistanceMeters = totalDistanceCells * map.metersPerCell;
 
-  if (totalDistanceCells <= 0.01) {
+  if (totalDistanceMeters <= 0.02) {
     return {
       origin,
       target,
@@ -36,12 +38,16 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
     };
   }
 
-  const objectCandidates = getMapObjectSpatialIndex(map).querySegment(origin, target, 1);
+  const objectCandidates = getMapObjectSpatialIndex(map).querySegment(
+    origin,
+    target,
+    Math.max(0.5, 2 / map.metersPerCell),
+  );
   const originGround = sampleSmoothHeightLevel(map, origin.x, origin.y) * ELEVATION_STEP_METERS;
   const targetGround = sampleSmoothHeightLevel(map, target.x, target.y) * ELEVATION_STEP_METERS;
   const originEye = originGround + eyeHeightForPosture(unit.behaviorRuntime.posture);
   const targetEye = targetGround + 1.4;
-  const steps = Math.max(2, Math.ceil(totalDistanceCells / SAMPLE_STEP_CELLS));
+  const steps = Math.max(2, Math.ceil(totalDistanceMeters / SAMPLE_STEP_METERS));
   let forestMeters = 0;
 
   for (let step = 1; step <= steps; step += 1) {
@@ -70,8 +76,9 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
       );
     }
 
+    const stepMeters = totalDistanceMeters / steps;
     if (cell.forest > 0) {
-      forestMeters += map.metersPerCell / Math.max(1, steps / totalDistanceCells);
+      forestMeters += stepMeters;
       const forestLimit = cell.forest === 2 ? 18 : 34;
       if (forestMeters >= forestLimit) {
         return blockedResult(
@@ -84,13 +91,13 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
         );
       }
     } else {
-      forestMeters = Math.max(0, forestMeters - map.metersPerCell * 0.4);
+      forestMeters = Math.max(0, forestMeters - stepMeters * 0.4);
     }
 
     const smoothHeightLevel = sampleSmoothHeightLevel(map, sample.x, sample.y);
     const groundHeight = smoothHeightLevel * ELEVATION_STEP_METERS;
-    const isNearOrigin = currentDistanceMeters < map.metersPerCell * 0.7;
-    const isNearTarget = totalDistanceMeters - currentDistanceMeters < map.metersPerCell * 0.7;
+    const isNearOrigin = currentDistanceMeters < ENDPOINT_RELIEF_GRACE_METERS;
+    const isNearTarget = totalDistanceMeters - currentDistanceMeters < ENDPOINT_RELIEF_GRACE_METERS;
 
     if (!isNearOrigin && !isNearTarget && groundHeight > lineHeight + TERRAIN_BLOCK_MARGIN_METERS) {
       return blockedResult(
@@ -143,10 +150,10 @@ function findObjectBlocker(
 ): MapObject | null {
   for (const object of candidates) {
     if (!blocksLineOfSight(object)) continue;
-    if (distance(origin, { x: object.x, y: object.y }) < 0.65) continue;
-
     const centerX = object.x + 0.5;
     const centerY = object.y + 0.5;
+    if (distance(origin, { x: centerX, y: centerY }) * map.metersPerCell < OBJECT_ORIGIN_IGNORE_METERS) continue;
+
     const dx = sample.x - centerX;
     const dy = sample.y - centerY;
     const cos = Math.cos(-object.rotationRadians);
