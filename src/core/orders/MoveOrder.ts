@@ -11,6 +11,7 @@ export interface MoveOrderRouteCell {
 export interface MoveOrderOptions {
   readonly source?: MoveOrderSource;
   readonly ownerToken?: string;
+  readonly playerCommandId?: string;
   readonly requestedTarget?: GridPosition;
   readonly waypoints?: readonly GridPosition[];
   readonly waypointIndex?: number;
@@ -30,6 +31,7 @@ export interface MoveOrder {
   issuedAtMs: number;
   source?: MoveOrderSource;
   ownerToken?: string;
+  playerCommandId?: string;
   requestedTarget?: GridPosition;
   waypoints?: GridPosition[];
   waypointIndex?: number;
@@ -50,6 +52,7 @@ export function createMoveOrder(target: GridPosition, options: MoveOrderOptions 
     issuedAtMs: Date.now(),
     source: options.source,
     ownerToken: options.ownerToken,
+    playerCommandId: options.playerCommandId,
     requestedTarget: options.requestedTarget ? { ...options.requestedTarget } : undefined,
     waypoints: options.waypoints?.map((point) => ({ ...point })),
     waypointIndex: options.waypointIndex,
