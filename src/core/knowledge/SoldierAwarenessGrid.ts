@@ -64,7 +64,11 @@ interface CachedAwareness {
 
 const cache = new WeakMap<UnitModel, CachedAwareness>();
 const MAX_SAFE_POSITIONS = 8;
-const SAFE_SEARCH_RADIUS_CELLS = 12;
+const SAFE_SEARCH_RADIUS_METERS = 120;
+const SAFE_DISTANCE_PENALTY_PER_METER = 0.18;
+const ROUTE_SAMPLE_STEP_METERS = 5;
+const UNCERTAINTY_SCORE_PER_METER = 0.5;
+const DIRECTIONAL_UNCERTAINTY_ARC_DEGREES_PER_METER = 1;
 export const KNOWLEDGE_CONFIDENCE_BUCKET = 10;
 export const KNOWLEDGE_UNCERTAINTY_BUCKET = 1;
 
@@ -148,10 +152,11 @@ function buildBestSafePositions(
   cells: SoldierAwarenessCell[],
   unitPosition: GridPosition,
 ): SoldierSafePosition[] {
-  const minX = Math.max(0, Math.floor(unitPosition.x - SAFE_SEARCH_RADIUS_CELLS));
-  const maxX = Math.min(map.width - 1, Math.ceil(unitPosition.x + SAFE_SEARCH_RADIUS_CELLS));
-  const minY = Math.max(0, Math.floor(unitPosition.y - SAFE_SEARCH_RADIUS_CELLS));
-  const maxY = Math.min(map.height - 1, Math.ceil(unitPosition.y + SAFE_SEARCH_RADIUS_CELLS));
+  const searchRadiusCells = SAFE_SEARCH_RADIUS_METERS / Math.max(0.001, map.metersPerCell);
+  const minX = Math.max(0, Math.floor(unitPosition.x - searchRadiusCells));
+  const maxX = Math.min(map.width - 1, Math.ceil(unitPosition.x + searchRadiusCells));
+  const minY = Math.max(0, Math.floor(unitPosition.y - searchRadiusCells));
+  const maxY = Math.min(map.height - 1, Math.ceil(unitPosition.y + searchRadiusCells));
   const candidates: SoldierSafePosition[] = [];
 
   for (let y = minY; y <= maxY; y += 1) {
@@ -160,8 +165,9 @@ function buildBestSafePositions(
       if (!cell) continue;
       const position = { x: x + 0.5, y: y + 0.5 };
       const distanceCells = distance(unitPosition, position);
-      if (distanceCells > SAFE_SEARCH_RADIUS_CELLS) continue;
-      const score = cell.safety - distanceCells * 1.8;
+      const distanceMeters = distanceCells * map.metersPerCell;
+      if (distanceMeters > SAFE_SEARCH_RADIUS_METERS) continue;
+      const score = cell.safety - distanceMeters * SAFE_DISTANCE_PENALTY_PER_METER;
       if (score <= 18) continue;
       candidates.push({
         position,
@@ -187,8 +193,8 @@ export function evaluateRouteDanger(
   end: GridPosition,
 ): number {
   const staticField = getAwarenessStaticField(state.map, unit.behaviorRuntime.posture);
-  const length = distance(start, end);
-  const samples = Math.max(2, Math.ceil(length * 2));
+  const lengthMeters = distance(start, end) * state.map.metersPerCell;
+  const samples = Math.max(2, Math.ceil(lengthMeters / ROUTE_SAMPLE_STEP_METERS));
   let total = 0;
   for (let index = 0; index <= samples; index += 1) {
     const t = index / samples;
@@ -204,8 +210,8 @@ function evaluateRouteDangerFromField(
   start: GridPosition,
   end: GridPosition,
 ): number {
-  const length = distance(start, end);
-  const samples = Math.max(2, Math.ceil(length * 2));
+  const lengthMeters = distance(start, end) * map.metersPerCell;
+  const samples = Math.max(2, Math.ceil(lengthMeters / ROUTE_SAMPLE_STEP_METERS));
   let total = 0;
   for (let index = 0; index <= samples; index += 1) {
     const t = index / samples;
@@ -228,7 +234,7 @@ function evaluateAwarenessFieldCell(
   let uncertainty = 0;
 
   for (const threat of unit.tacticalKnowledge.threats) {
-    const factor = threatFactorAtPosition(position, threat);
+    const factor = threatFactorAtPosition(position, threat, staticField.metersPerCell);
     if (factor <= 0) continue;
     const confidenceFactor = threat.confidence / 100;
     const uncovered = 1 - local.expectedProtection / 100;
@@ -238,7 +244,11 @@ function evaluateAwarenessFieldCell(
     remainingUnsuppressed *= 1 - suppression / 100;
     confidenceTotal += threat.confidence * factor;
     confidenceWeight += factor;
-    uncertainty = Math.max(uncertainty, clampPercent((100 - threat.confidence) + threat.uncertaintyCells * 5));
+    const uncertaintyMeters = threat.uncertaintyCells * staticField.metersPerCell;
+    uncertainty = Math.max(
+      uncertainty,
+      clampPercent((100 - threat.confidence) + uncertaintyMeters * UNCERTAINTY_SCORE_PER_METER),
+    );
   }
 
   const danger = clampPercent(100 * (1 - remainingSafe));
@@ -272,7 +282,11 @@ function evaluateAwarenessFieldCell(
   };
 }
 
-function threatFactorAtPosition(position: GridPosition, threat: KnownThreatMemory): number {
+function threatFactorAtPosition(
+  position: GridPosition,
+  threat: KnownThreatMemory,
+  metersPerCell: number,
+): number {
   const dx = position.x - threat.x;
   const dy = position.y - threat.y;
   const range = Math.hypot(dx, dy);
@@ -282,7 +296,11 @@ function threatFactorAtPosition(position: GridPosition, threat: KnownThreatMemor
     if (range < Math.max(0, threat.minRangeCells - uncertaintyBonus)) return 0;
     if (range > threat.rangeCells + uncertaintyBonus) return 0;
     const bearing = normalizeDegrees(Math.atan2(dy, dx) * 180 / Math.PI);
-    const allowedArc = Math.min(360, threat.arcDegrees + uncertaintyBonus * 10);
+    const uncertaintyMeters = uncertaintyBonus * metersPerCell;
+    const allowedArc = Math.min(
+      360,
+      threat.arcDegrees + uncertaintyMeters * DIRECTIONAL_UNCERTAINTY_ARC_DEGREES_PER_METER,
+    );
     if (angularDifference(bearing, threat.directionDegrees) > allowedArc / 2) return 0;
     const progress = Math.max(0, Math.min(1, (range - threat.minRangeCells) / Math.max(0.001, threat.rangeCells - threat.minRangeCells)));
     return Math.max(0.05, 1 - progress * threat.falloffPercent / 100);
