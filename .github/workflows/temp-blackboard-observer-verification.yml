@@ -24,7 +24,21 @@ jobs:
       - run: npm ci
       - run: node scripts/apply_blackboard_observer_integration_patch.mjs
       - run: node scripts/apply_blackboard_observer_bridge_smoke_patch.mjs
-      - run: npm run blackboard-observer:smoke
+      - name: Blackboard observer smoke
+        id: observer
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run blackboard-observer:smoke 2>&1 | tee blackboard-observer.log
+      - name: Upload observer smoke log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blackboard-observer-integration-log
+          path: blackboard-observer.log
+          if-no-files-found: error
+          retention-days: 3
       - run: npm run event-queue:smoke
       - run: npm run runtime-session:smoke
       - run: npm run runtime-snapshot:smoke
@@ -33,6 +47,7 @@ jobs:
       - run: npm run runtime:smoke
       - run: npm run build
       - name: Commit verified Blackboard observer integration
+        if: steps.observer.conclusion == 'success'
         uses: actions/github-script@v7
         with:
           script: |
@@ -60,3 +75,6 @@ jobs:
                 content: fs.readFileSync(path).toString('base64'),
               });
             }
+      - name: Fail when observer smoke failed
+        if: steps.observer.conclusion != 'success'
+        run: exit 1
