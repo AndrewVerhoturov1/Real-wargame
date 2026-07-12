@@ -1,1 +1,1 @@
-Temporary trigger for reactive runtime core patch diagnostic rerun. Remove after the final green run.
+Temporary trigger for reactive runtime test run after successful core patch. Remove after the final green run.
