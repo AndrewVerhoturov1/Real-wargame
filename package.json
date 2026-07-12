@@ -18,6 +18,7 @@
     "runtime:smoke": "node scripts/ai_graph_runtime_smoke.mjs",
     "runtime-session:smoke": "node scripts/ai_runtime_session_smoke.mjs",
     "runtime-snapshot:smoke": "node scripts/ai_runtime_snapshot_smoke.mjs",
+    "runtime-scene:smoke": "node scripts/ai_runtime_scene_integration_smoke.mjs",
     "lifecycle:smoke": "node scripts/ai_action_lifecycle_smoke.mjs",
     "composite:smoke": "node scripts/ai_composite_runtime_smoke.mjs",
     "reload:smoke": "node scripts/ai_reload_runtime_smoke.mjs",
