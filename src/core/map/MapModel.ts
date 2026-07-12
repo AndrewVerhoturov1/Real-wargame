@@ -126,7 +126,7 @@ export interface TacticalMap {
   height: number;
   cellSize: number;
   metersPerCell: number;
-  /** Scale applied to coordinates from the source JSON. Native-resolution maps use 1. */
+  /** Scale applied to source coordinates. Native-resolution maps use 1. */
   sourceToRuntimeCellScale: number;
   defaultTerrain: TerrainKind;
   defaultHeight: ElevationLevel;
@@ -277,18 +277,20 @@ export function resolveObjectCoverProperties(object: MapObject): CoverProperties
   };
 }
 
-function normalizeMapObjects(objects: MapObjectData[], scale: number): MapObject[] {
+function normalizeMapObjects(objects: MapObjectData[], coordinateScale: number): MapObject[] {
   return objects.map((object) => {
     const defaultSize = getDefaultObjectSize(object.kind);
     const cover = getDefaultObjectCoverProperties(object.kind);
     return {
       id: object.id,
       kind: object.kind,
-      x: scaleSourceCellAnchor(object.x, scale),
-      y: scaleSourceCellAnchor(object.y, scale),
+      x: scaleSourceCellAnchor(object.x, coordinateScale),
+      y: scaleSourceCellAnchor(object.y, coordinateScale),
       rotationRadians: degreesToRadians(object.rotationDegrees ?? 0),
-      widthCells: Math.max(0.05, (object.widthCells ?? defaultSize.widthCells) * scale),
-      heightCells: Math.max(0.05, (object.heightCells ?? defaultSize.heightCells) * scale),
+      // Object dimensions are intentionally reinterpreted in the finer grid. This is the
+      // realism gain: a 2.5-cell cover becomes 5 metres, not the legacy 25 metres.
+      widthCells: Math.max(0.05, object.widthCells ?? defaultSize.widthCells),
+      heightCells: Math.max(0.05, object.heightCells ?? defaultSize.heightCells),
       losHeightMeters: normalizeObjectHeightMeters(object.losHeightMeters ?? defaultSize.losHeightMeters),
       coverProtection: clampPercent(object.coverProtection ?? cover.coverProtection),
       coverReliability: clampPercent(object.coverReliability ?? cover.coverReliability),
