@@ -13,6 +13,7 @@ export type NavigationProfileSource =
 
 export interface NavigationProfileResolutionInput {
   readonly debugOverrideProfileId?: string | null;
+  readonly playerCommandProfileId?: string | null;
   readonly playerCommandMode?: NavigationMovementMode | string | null;
   readonly behaviorMovementMode?: NavigationMovementMode | string | null;
   readonly unitRoleProfileId?: string | null;
@@ -30,6 +31,7 @@ export function resolveActiveNavigationProfile(
 ): ResolvedNavigationProfile {
   const candidates: ReadonlyArray<readonly [string | null | undefined, NavigationProfileSource]> = [
     [input.debugOverrideProfileId, 'debugOverride'],
+    [input.playerCommandProfileId, 'playerCommand'],
     [input.playerCommandMode, 'playerCommand'],
     [input.behaviorMovementMode, 'behaviorMode'],
     [input.unitRoleProfileId, 'unitRole'],
