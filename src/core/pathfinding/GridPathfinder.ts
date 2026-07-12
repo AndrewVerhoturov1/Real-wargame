@@ -199,7 +199,7 @@ export function findGridPath(
     return failure(
       'no_route',
       requestedGoal,
-      tacticalSearch.visitedCells + (baseline.ok ? baseline.visitedCells : 0),
+      tacticalSearch.visitedCells,
       `The route exceeds the profile maximum cost (${profile.maximumRouteCost}).`,
       `Стоимость маршрута превышает предел профиля (${profile.maximumRouteCost}).`,
     );
@@ -221,7 +221,7 @@ export function findGridPath(
     baselineDistanceMeters: round(baselineDistanceCells * map.metersPerCell, 3),
     detourRatio: round(selectedDetourRatio, 6),
     detourLimited,
-    visitedCells: tacticalSearch.visitedCells + (baseline.ok ? baseline.visitedCells : 0),
+    visitedCells: tacticalSearch.visitedCells,
     profileId: profile.id,
     profileRevision: profile.revision,
     costBreakdown: roundBreakdown(costBreakdown),
