@@ -34,13 +34,12 @@ export function installAttentionRuntimePanel(
   const sidebarBody = document.querySelector<HTMLElement>('.simulation-sidebar-body');
   const nav = document.querySelector<HTMLElement>('.simulation-tabs');
   const display = document.querySelector<HTMLElement>('[data-role="display"]');
-  if (!sidebar || !sidebarBody || !nav || !display) return () => undefined;
+  const memoryTab = nav?.querySelector<HTMLButtonElement>('[data-tab="memory"]') ?? null;
+  if (!sidebar || !sidebarBody || !nav || !display || !memoryTab) return () => undefined;
 
-  const tabButton = document.createElement('button');
-  tabButton.type = 'button';
-  tabButton.dataset.attentionTab = 'true';
-  tabButton.textContent = 'Обзор и память';
-  nav.append(tabButton);
+  const originalTabText = memoryTab.textContent ?? 'Память';
+  memoryTab.dataset.attentionTab = 'true';
+  memoryTab.textContent = 'Обзор и память';
 
   const panel = document.createElement('section');
   panel.className = 'attention-runtime-panel';
@@ -56,17 +55,21 @@ export function installAttentionRuntimePanel(
     panelOpen = active;
     panel.hidden = !active;
     sidebarBody.hidden = active;
-    tabButton.classList.toggle('active', active);
-    if (active) setAttentionOverlayActive(state, true);
+    memoryTab.classList.toggle('active', active);
+    setAttentionOverlayActive(state, active);
     syncDisplayToggle();
     render();
     onChanged();
   };
 
-  tabButton.addEventListener('click', () => setPanelOpen(!panelOpen));
-  for (const normalTab of nav.querySelectorAll<HTMLButtonElement>('[data-tab]')) {
-    normalTab.addEventListener('click', () => setPanelOpen(false));
-  }
+  const onMemoryTabClick = () => setPanelOpen(true);
+  memoryTab.addEventListener('click', onMemoryTabClick);
+  const otherTabs = [...nav.querySelectorAll<HTMLButtonElement>('[data-tab]')]
+    .filter((button) => button !== memoryTab);
+  const closePanel = () => {
+    if (panelOpen) setPanelOpen(false);
+  };
+  for (const normalTab of otherTabs) normalTab.addEventListener('click', closePanel);
 
   displayToggle.addEventListener('click', () => {
     const overlay = getAttentionOverlayState(state);
@@ -107,7 +110,7 @@ export function installAttentionRuntimePanel(
     panel.innerHTML = `
       <header class="attention-runtime-header">
         <div><strong>Обзор и память</strong><span>Текущая видимость и субъективные знания выбранного бойца</span></div>
-        <button type="button" data-close-attention>×</button>
+        <button type="button" data-close-attention title="Выключить слой и вернуться к списку старых знаний">×</button>
       </header>
       <div class="attention-runtime-grid">
         ${metric('Режим внимания', MODE_LABELS[unit.attentionRuntime.mode])}
@@ -151,7 +154,10 @@ export function installAttentionRuntimePanel(
   const interval = window.setInterval(render, 250);
   return () => {
     window.clearInterval(interval);
-    tabButton.remove();
+    memoryTab.removeEventListener('click', onMemoryTabClick);
+    for (const normalTab of otherTabs) normalTab.removeEventListener('click', closePanel);
+    delete memoryTab.dataset.attentionTab;
+    memoryTab.textContent = originalTabText;
     displayToggle.remove();
     panel.remove();
     sidebarBody.hidden = false;
