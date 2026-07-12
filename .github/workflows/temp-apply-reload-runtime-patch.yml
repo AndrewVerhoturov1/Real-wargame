@@ -38,13 +38,24 @@ jobs:
           set -o pipefail
           npm run build 2>&1 | tee reload-build.log
 
-      - name: Show compiler errors
+      - name: Prepare compiler error artifact
         if: steps.build.outcome != 'success'
         shell: bash
         run: |
-          echo '=== TypeScript compiler errors ==='
-          grep -n -A 3 -B 2 'error TS' reload-build.log || tail -n 120 reload-build.log
-          exit 1
+          grep -n -A 4 -B 2 'error TS' reload-build.log > reload-build-errors.txt || tail -n 160 reload-build.log > reload-build-errors.txt
+          cat reload-build-errors.txt
+
+      - name: Upload compiler errors
+        if: steps.build.outcome != 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: reload-build-errors
+          path: reload-build-errors.txt
+          retention-days: 3
+
+      - name: Fail on compiler errors
+        if: steps.build.outcome != 'success'
+        run: exit 1
 
       - run: npm run lifecycle:smoke
         if: steps.build.outcome == 'success'
