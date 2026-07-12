@@ -17,6 +17,10 @@ interface VisibilityProbeCache {
   diagnostics: VisibilityProbeDiagnostics;
 }
 
+type VisibilityProbeDebugWindow = Window & {
+  __realWargameVisibilityProbeDebug?: VisibilityProbeDiagnostics;
+};
+
 const cacheByState = new WeakMap<SimulationState, VisibilityProbeCache>();
 const diagnosticsByState = new WeakMap<SimulationState, VisibilityProbeDiagnostics>();
 
@@ -42,6 +46,7 @@ export function getVisibilityProbeResult(state: SimulationState): LineOfSightPro
   if (cached?.key === key) {
     cached.diagnostics.cacheHitCount += 1;
     cached.diagnostics.lastKey = key;
+    publishDiagnostics(cached.diagnostics);
     return cached.result;
   }
 
@@ -59,6 +64,7 @@ export function getVisibilityProbeResult(state: SimulationState): LineOfSightPro
   diagnostics.lastKey = key;
   diagnosticsByState.set(state, diagnostics);
   cacheByState.set(state, { key, result, diagnostics });
+  publishDiagnostics(diagnostics);
   return result;
 }
 
@@ -77,4 +83,9 @@ export function getVisibilityProbeDiagnostics(state: SimulationState): Visibilit
 
 export function clearVisibilityProbeCache(state: SimulationState): void {
   cacheByState.delete(state);
+}
+
+function publishDiagnostics(diagnostics: VisibilityProbeDiagnostics): void {
+  if (typeof window === 'undefined') return;
+  (window as VisibilityProbeDebugWindow).__realWargameVisibilityProbeDebug = { ...diagnostics };
 }
