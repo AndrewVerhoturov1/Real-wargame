@@ -4,10 +4,24 @@
   "status": "active",
   "updated_at": "2026-07-12",
   "goal": "Создать понятную человеку лабораторию поведения одиночного бойца: Utility AI выбирает решение, stateful runtime исполняет длительные действия, а общий маршрутный слой безопасно ведёт бойца по карте.",
-  "current_focus": "Reactive Route Status v1 и Grid Pathfinding v1 реализованы в feature/ai-grid-pathfinding-v1: выбранный боец измеряет прогресс, реагирует на отмену и потерю цели, игрок и ИИ используют общий детерминированный A*, MoveOrder следует waypoint-точкам и перестраивает путь при изменении проходимости.",
-  "next_step": "Завершить exact-SHA browser/PNG и docs-integrity проверку, затем fast-forward перенести проверенный head в real-wargame-preview; после интеграции следующий отдельный срез — резервирование пути/укрытий или тактическая стоимость маршрута.",
+  "current_focus": "Reactive Route Status v1 и Grid Pathfinding v1 реализованы и проверены: выбранный боец измеряет прогресс и причины отмены, игрок и ИИ используют общий детерминированный A*, MoveOrder следует waypoint-точкам, перестраивает путь при изменении проходимости и честно сообщает blocked/unreachable без фиктивного успеха.",
+  "next_step": "Следующий отдельный вертикальный срез — либо тактическая стоимость пути по субъективно известной угрозе и скрытности, либо резервирование клеток/укрытий между бойцами; не объединять оба направления в одну задачу.",
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-  "last_verified_commit": "5743263ad8df466181517358b532b011658da6f5",
+  "last_verified_commit": "0a4d418130e68e91ee82a2e53f1fe6e02959a6b2",
+  "last_verified_runs": {
+    "core": 29179943687,
+    "policy": 29179943681,
+    "screenshots": 29179943651,
+    "docs_integrity": 29179943658,
+    "playwright": "17/17 passed",
+    "png_count": 24,
+    "inspected_png": [
+      "27-ai-running-move-node.png",
+      "28-ai-route-blocked.png",
+      "29-ai-path-following.png",
+      "30-ai-path-unreachable.png"
+    ]
+  },
   "must_read_first": [
     "docs/ai/WEB_CHAT_START.md",
     ".agents/skills/real-wargame-ai-runtime/SKILL.md",
@@ -35,6 +49,7 @@
     "src/input/BoardInputController.ts",
     "src/ai-node-editor/stateful-node-ui.ts",
     "src/ai-node-editor/stateful-move-debug.ts",
+    "src/ai-node-editor/runtime-debug-overlay.ts",
     "tests/ai-running-move.spec.ts"
   ],
   "test_files": [
