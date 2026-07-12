@@ -1,1 +1,1 @@
-Temporary trigger for reactive runtime observer regression diagnostics. Remove after the final green run.
+Temporary trigger for ReactiveSequence UI, validation and diagnostics verification. Remove after the final green run.
