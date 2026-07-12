@@ -6,6 +6,7 @@ import type { SimulationState } from '../simulation/SimulationState';
 import { getAiTestPaused } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
 import type { AiBlackboardValue } from './AiBlackboard';
+import { publishSimulationAiEvents } from './events/SimulationAiEvents';
 import {
   tickAiGameBridge,
   type AiGameBridgeHandle,
@@ -41,7 +42,6 @@ interface RouteSettingsCache {
 type AiMoveRuntime = UnitModel['behaviorRuntime'] & {
   aiGraphMemory?: Record<string, AiBlackboardValue>;
   aiGraphExecutionState?: AiGraphExecutionState;
-  aiRouteStatusState?: AiRouteStatusState;
   aiRouteSettingsCache?: RouteSettingsCache;
 };
 
@@ -101,9 +101,15 @@ export function tickStatefulMoveBridge(
   let runtimeOptions = options;
   if (options.applyEffects && !options.cancel) {
     routeResult = updateSelectedRouteStatus(state, nowMs);
-    if (routeResult?.shouldForceRuntimeTick) {
-      runtimeOptions = buildReactiveRouteTickOptions(routeResult);
+    const unitBeforeRuntime = getSelectedUnit(state);
+    if (routeResult && unitBeforeRuntime) {
+      publishSimulationAiEvents(
+        unitBeforeRuntime,
+        unitBeforeRuntime.behaviorRuntime.aiRuntimeSession?.simulationTimeMs
+          ?? Math.max(0, Math.round(state.simulationTimeSeconds * 1000)),
+      );
     }
+    if (routeResult?.shouldForceRuntimeTick) runtimeOptions = buildReactiveRouteTickOptions(routeResult);
   }
 
   const result = tickAiGameBridge(state, nowMs, runtimeOptions);
@@ -115,6 +121,14 @@ export function tickStatefulMoveBridge(
     if (afterEffects) routeResult = afterEffects;
   }
 
+  const unitAfterRuntime = getSelectedUnit(state);
+  if (options.applyEffects && unitAfterRuntime) {
+    publishSimulationAiEvents(
+      unitAfterRuntime,
+      unitAfterRuntime.behaviorRuntime.aiRuntimeSession?.simulationTimeMs
+        ?? Math.max(0, Math.round(state.simulationTimeSeconds * 1000)),
+    );
+  }
   if (result) publishMoveDebugDetails(state, result, routeResult);
   else if (routeResult && selectedUnitId) publishRouteDebugDetails(state, routeResult, selectedUnitId);
   return result;
@@ -125,15 +139,14 @@ export function syncSelectedMoveOrderMemory(state: SimulationState): void {
   if (!unit) return;
 
   const runtime = unit.behaviorRuntime as AiMoveRuntime;
-  const memory = runtime.aiGraphMemory ?? {};
-  runtime.aiGraphMemory = memory;
+  const memory = getRuntimeMemory(runtime);
   const order = unit.order;
   memory.active_move_source = order
     ? order.source ?? (order.ownerToken ? 'ai' : 'player')
     : null;
   memory.active_move_owner_token = order?.ownerToken ?? null;
   memory.active_move_target = order ? { ...order.target } : null;
-  if (order) publishPathOrderMemory(runtime, order);
+  if (order) publishPathOrderMemory(memory, order);
 }
 
 export function updateSelectedRouteStatus(
@@ -144,7 +157,8 @@ export function updateSelectedRouteStatus(
   if (!unit) return null;
 
   const runtime = unit.behaviorRuntime as AiMoveRuntime;
-  const activeMove = readActiveMoveSnapshot(runtime.aiGraphExecutionState);
+  const memory = getRuntimeMemory(runtime);
+  const activeMove = readActiveMoveSnapshot(getExecutionState(runtime));
   if (!activeMove) return null;
 
   const order = unit.order;
@@ -159,14 +173,14 @@ export function updateSelectedRouteStatus(
     ownerToken: activeMove.ownerToken,
     activeOrderSource,
     activeOrderToken: order?.ownerToken ?? null,
-    targetAvailable: isGridPosition(runtime.aiGraphMemory?.[activeMove.targetKey]),
+    targetAvailable: isGridPosition(memory[activeMove.targetKey]),
     paused: state.editor.enabled || getAiTestPaused(state),
     settings: readRouteSettings(runtime, activeMove),
-    previousState: runtime.aiRouteStatusState,
+    previousState: runtime.aiRouteStatusState ?? undefined,
   });
 
   runtime.aiRouteStatusState = routeResult.state;
-  publishRouteMemory(runtime, routeResult);
+  publishRouteMemory(memory, routeResult);
   return routeResult;
 }
 
@@ -174,12 +188,14 @@ export function applyOwnedMoveEffects(state: SimulationState, result: AiGraphRun
   const unit = state.units.find((candidate) => candidate.id === result.unitId);
   if (!unit) return;
   const runtime = unit.behaviorRuntime as AiMoveRuntime;
+  const memory = getRuntimeMemory(runtime);
 
   for (const [index, rawEffect] of result.effects.entries()) {
     const effect = readAiGraphRuntimeMoveEffect(rawEffect);
     if (!effect) continue;
 
     if (effect.type === 'begin_move') {
+      runtime.aiRouteStatusState = null;
       const resolvedNavigation = resolveUnitNavigationProfile(unit, null);
       const planned = planMoveOrder(state.map, unit.position, effect.targetPosition, {
         source: 'ai',
@@ -195,7 +211,7 @@ export function applyOwnedMoveEffects(state: SimulationState, result: AiGraphRun
         unit.behaviorRuntime.currentAction = 'observe';
         unit.behaviorRuntime.reason = `Маршрут недоступен: ${planned.reasonRu}`;
         unit.behaviorRuntime.lastEvent = 'ai_graph_move_route_unavailable';
-        publishPathFailureMemory(runtime, planned.reasonRu, effect.targetPosition);
+        publishPathFailureMemory(memory, planned.reasonRu, effect.targetPosition);
         continue;
       }
 
@@ -203,12 +219,13 @@ export function applyOwnedMoveEffects(state: SimulationState, result: AiGraphRun
       unit.behaviorRuntime.currentAction = 'move';
       unit.behaviorRuntime.reason = planned.path.reasonRu;
       unit.behaviorRuntime.lastEvent = 'ai_graph_owned_move_started';
-      publishPathOrderMemory(runtime, planned.order);
+      publishPathOrderMemory(memory, planned.order);
       continue;
     }
 
     if (unit.order?.ownerToken === effect.ownerToken) {
       unit.order = null;
+      runtime.aiRouteStatusState = null;
       if (!hasLaterNonMoveEffect(result, index)) {
         unit.behaviorRuntime.currentAction = 'observe';
         unit.behaviorRuntime.reason = effect.reasonRu ?? effect.reason;
@@ -231,6 +248,17 @@ function getSelectedUnit(state: SimulationState): UnitModel | undefined {
     : undefined;
 }
 
+function getRuntimeMemory(runtime: AiMoveRuntime): Record<string, AiBlackboardValue> {
+  if (runtime.aiRuntimeSession) return runtime.aiRuntimeSession.blackboardMemory;
+  const memory = runtime.aiGraphMemory ?? {};
+  runtime.aiGraphMemory = memory;
+  return memory;
+}
+
+function getExecutionState(runtime: AiMoveRuntime): AiGraphExecutionState | undefined {
+  return runtime.aiRuntimeSession?.executionState ?? runtime.aiGraphExecutionState;
+}
+
 function readActiveMoveSnapshot(state: AiGraphExecutionState | undefined): ActiveMoveSnapshot | null {
   const activeNodeId = state?.activeNodeId;
   const data = state?.activeData;
@@ -245,16 +273,9 @@ function readActiveMoveSnapshot(state: AiGraphExecutionState | undefined): Activ
   };
 }
 
-function readRouteSettings(
-  runtime: AiMoveRuntime,
-  activeMove: ActiveMoveSnapshot,
-): AiRouteStatusSettings {
+function readRouteSettings(runtime: AiMoveRuntime, activeMove: ActiveMoveSnapshot): AiRouteStatusSettings {
   const cached = runtime.aiRouteSettingsCache;
-  if (
-    cached
-    && cached.ownerToken === activeMove.ownerToken
-    && cached.activeNodeId === activeMove.activeNodeId
-  ) {
+  if (cached && cached.ownerToken === activeMove.ownerToken && cached.activeNodeId === activeMove.activeNodeId) {
     return cached.settings;
   }
 
@@ -272,26 +293,20 @@ function loadRouteSettings(activeNodeId: string): AiRouteStatusSettings {
   try {
     const raw = window.localStorage.getItem(GRAPH_STORAGE_KEY);
     if (!raw) return DEFAULT_ROUTE_SETTINGS;
-    const graph = JSON.parse(raw) as {
-      nodes?: Array<{ id?: unknown; parameters?: Record<string, unknown> }>;
-    };
+    const graph = JSON.parse(raw) as { nodes?: Array<{ id?: unknown; parameters?: Record<string, unknown> }> };
     const node = graph.nodes?.find((candidate) => candidate.id === activeNodeId);
     const parameters = node?.parameters;
     return {
       stuckTimeoutMs: finiteNonNegative(parameters?.stuckTimeoutSeconds, 2.5) * 1000,
       minimumProgressCells: finiteNonNegative(parameters?.minimumProgressCells, 0.05),
-      abortOnTargetLost: typeof parameters?.abortOnTargetLost === 'boolean'
-        ? parameters.abortOnTargetLost
-        : true,
+      abortOnTargetLost: typeof parameters?.abortOnTargetLost === 'boolean' ? parameters.abortOnTargetLost : true,
     };
   } catch {
     return DEFAULT_ROUTE_SETTINGS;
   }
 }
 
-function publishRouteMemory(runtime: AiMoveRuntime, result: AiRouteStatusResult): void {
-  const memory = runtime.aiGraphMemory ?? {};
-  runtime.aiGraphMemory = memory;
+function publishRouteMemory(memory: Record<string, AiBlackboardValue>, result: AiRouteStatusResult): void {
   memory.active_move_route_status = result.status;
   memory.active_move_no_progress_ms = result.noProgressMs;
   memory.active_move_last_distance = result.distanceRemainingCells;
@@ -299,9 +314,7 @@ function publishRouteMemory(runtime: AiMoveRuntime, result: AiRouteStatusResult)
   memory.active_move_abort_reason = result.abortReasonRu ?? result.abortReason ?? null;
 }
 
-function publishPathOrderMemory(runtime: AiMoveRuntime, order: MoveOrder): void {
-  const memory = runtime.aiGraphMemory ?? {};
-  runtime.aiGraphMemory = memory;
+function publishPathOrderMemory(memory: Record<string, AiBlackboardValue>, order: MoveOrder): void {
   memory.active_move_path_status = order.routeStatus ?? 'direct';
   memory.active_move_path_waypoint_count = order.waypoints?.length ?? 0;
   memory.active_move_path_waypoint_index = order.waypointIndex ?? 0;
@@ -311,12 +324,10 @@ function publishPathOrderMemory(runtime: AiMoveRuntime, order: MoveOrder): void 
 }
 
 function publishPathFailureMemory(
-  runtime: AiMoveRuntime,
+  memory: Record<string, AiBlackboardValue>,
   reasonRu: string,
   requestedTarget: GridPosition,
 ): void {
-  const memory = runtime.aiGraphMemory ?? {};
-  runtime.aiGraphMemory = memory;
   memory.active_move_path_status = 'unreachable';
   memory.active_move_path_waypoint_count = 0;
   memory.active_move_path_waypoint_index = 0;
@@ -338,7 +349,7 @@ function publishMoveDebugDetails(
   routeResult: AiRouteStatusResult | null,
 ): void {
   const unit = state.units.find((candidate) => candidate.id === result.unitId);
-  const memory = (unit?.behaviorRuntime as AiMoveRuntime | undefined)?.aiGraphMemory;
+  const memory = unit ? getRuntimeMemory(unit.behaviorRuntime as AiMoveRuntime) : undefined;
   updateDebugPayload((payload) => {
     if (payload.unitId !== result.unitId) return;
     payload.targetKey = result.targetKey;
@@ -356,7 +367,7 @@ function publishRouteDebugDetails(
   unitId: string,
 ): void {
   const unit = state.units.find((candidate) => candidate.id === unitId);
-  const memory = (unit?.behaviorRuntime as AiMoveRuntime | undefined)?.aiGraphMemory;
+  const memory = unit ? getRuntimeMemory(unit.behaviorRuntime as AiMoveRuntime) : undefined;
   updateDebugPayload((payload) => {
     if (payload.unitId !== unitId) return;
     writeRouteDebugFields(payload, result);
@@ -364,10 +375,7 @@ function publishRouteDebugDetails(
   });
 }
 
-function writeRouteDebugFields(
-  payload: Record<string, unknown>,
-  result: AiRouteStatusResult | null,
-): void {
+function writeRouteDebugFields(payload: Record<string, unknown>, result: AiRouteStatusResult | null): void {
   if (!result) return;
   payload.routeStatus = result.status;
   payload.routeNoProgressMs = result.noProgressMs;
@@ -414,7 +422,5 @@ function isGridPosition(value: unknown): value is GridPosition {
 }
 
 function finiteNonNegative(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value)
-    ? Math.max(0, value)
-    : fallback;
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : fallback;
 }

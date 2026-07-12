@@ -12,9 +12,16 @@ export interface AiBlackboardSchemaEntry {
   readonly labelRu: string;
   readonly descriptionRu: string;
   readonly defaultValue: AiBlackboardValue;
+  readonly minimum?: number;
+  readonly maximum?: number;
+  readonly integer?: boolean;
 }
 
 export type AiBlackboardDefaults = Record<string, AiBlackboardValue>;
+
+export type AiBlackboardNormalizedValue =
+  | { readonly state: 'missing' }
+  | { readonly state: 'value'; readonly value: AiBlackboardValue };
 
 export const SOLDIER_BLACKBOARD_SCHEMA = [
   {
@@ -25,6 +32,8 @@ export const SOLDIER_BLACKBOARD_SCHEMA = [
     labelRu: 'Опасность',
     descriptionRu: 'Текущая оценка опасности для солдата от 0 до 100.',
     defaultValue: 0,
+    minimum: 0,
+    maximum: 100,
   },
   {
     key: 'stress',
@@ -34,6 +43,8 @@ export const SOLDIER_BLACKBOARD_SCHEMA = [
     labelRu: 'Стресс',
     descriptionRu: 'Текущий стресс солдата от 0 до 100.',
     defaultValue: 0,
+    minimum: 0,
+    maximum: 100,
   },
   {
     key: 'visible_enemy_id',
@@ -169,6 +180,8 @@ export const SOLDIER_BLACKBOARD_SCHEMA = [
     labelRu: 'Версия приказа игрока',
     descriptionRu: 'Возрастающая версия для определения изменения приказа игрока.',
     defaultValue: 0,
+    minimum: 0,
+    integer: true,
   },
   {
     key: 'current_action',
@@ -190,17 +203,74 @@ export const SOLDIER_BLACKBOARD_SCHEMA = [
   },
 ] as const satisfies readonly AiBlackboardSchemaEntry[];
 
+const SOLDIER_BLACKBOARD_SCHEMA_BY_KEY = new Map<string, AiBlackboardSchemaEntry>(
+  SOLDIER_BLACKBOARD_SCHEMA.map((entry) => [entry.key, entry]),
+);
+
 export function createDefaultSoldierBlackboard(): AiBlackboardDefaults {
   return Object.fromEntries(
-    SOLDIER_BLACKBOARD_SCHEMA.map((entry) => [entry.key, entry.defaultValue]),
+    SOLDIER_BLACKBOARD_SCHEMA.map((entry) => [entry.key, cloneBlackboardValue(entry.defaultValue)]),
   );
 }
 
-export function isGridPositionValue(value: AiBlackboardValue): value is GridPosition {
+export function getSoldierBlackboardSchemaEntry(key: string): AiBlackboardSchemaEntry | undefined {
+  return SOLDIER_BLACKBOARD_SCHEMA_BY_KEY.get(key);
+}
+
+export function normalizeAiBlackboardValue(
+  key: string,
+  value: unknown,
+  present = true,
+): AiBlackboardNormalizedValue {
+  if (!present) return { state: 'missing' };
+  if (value === null) return { state: 'value', value: null };
+
+  const schema = getSoldierBlackboardSchemaEntry(key);
+  if (schema?.valueKind === 'number') {
+    if (!isFiniteNumber(value)) return { state: 'missing' };
+    let normalized = value;
+    if (schema.minimum !== undefined) normalized = Math.max(schema.minimum, normalized);
+    if (schema.maximum !== undefined) normalized = Math.min(schema.maximum, normalized);
+    if (schema.integer) normalized = Math.round(normalized);
+    return { state: 'value', value: normalized };
+  }
+  if (schema?.valueKind === 'boolean') {
+    return typeof value === 'boolean'
+      ? { state: 'value', value }
+      : { state: 'missing' };
+  }
+  if (schema && ['position', 'nullablePosition'].includes(schema.valueKind)) {
+    return isGridPositionValue(value)
+      ? { state: 'value', value: { x: value.x, y: value.y } }
+      : { state: 'missing' };
+  }
+  if (schema && ['string', 'unitId', 'nullableUnitId', 'action'].includes(schema.valueKind)) {
+    return typeof value === 'string'
+      ? { state: 'value', value }
+      : { state: 'missing' };
+  }
+
+  if (typeof value === 'string' || typeof value === 'boolean') return { state: 'value', value };
+  if (isFiniteNumber(value)) return { state: 'value', value };
+  if (isGridPositionValue(value)) return { state: 'value', value: { x: value.x, y: value.y } };
+  return { state: 'missing' };
+}
+
+export function isGridPositionValue(value: unknown): value is GridPosition {
   return typeof value === 'object'
     && value !== null
     && 'x' in value
     && 'y' in value
     && typeof value.x === 'number'
-    && typeof value.y === 'number';
+    && Number.isFinite(value.x)
+    && typeof value.y === 'number'
+    && Number.isFinite(value.y);
+}
+
+function cloneBlackboardValue(value: AiBlackboardValue): AiBlackboardValue {
+  return isGridPositionValue(value) ? { ...value } : value;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
 }

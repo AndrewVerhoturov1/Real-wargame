@@ -34,6 +34,18 @@ interface RuntimeBranchScore {
   readonly vetoReasonRu?: string;
 }
 
+interface RuntimeReactiveAbort {
+  readonly eventType: string;
+  readonly observerId?: string;
+  readonly abortSourceNodeId: string;
+  readonly oldBranchNodeId: string;
+  readonly activeChildNodeId: string;
+  readonly cleanupOutcome: 'pending' | 'completed';
+  readonly newBranchNodeId?: string;
+  readonly reason: string;
+  readonly reasonRu: string;
+}
+
 interface RuntimeDebugPayload {
   readonly version: 1;
   readonly kind: 'ai-graph-runtime-debug';
@@ -58,6 +70,10 @@ interface RuntimeDebugPayload {
   readonly trace: readonly RuntimeTraceItem[];
   readonly scores: readonly RuntimeBranchScore[];
   readonly effects: readonly unknown[];
+  readonly consumedEventIds?: readonly string[];
+  readonly reactiveAbort?: RuntimeReactiveAbort;
+  readonly observerChecks?: number;
+  readonly observerEvents?: number;
 }
 
 interface NodeDebugState {
@@ -89,7 +105,7 @@ function scheduleApply(force = false): void {
 function applyRuntimeDebugOverlay(): void {
   const payload = readDebugPayload();
   const signature = payload
-    ? `${payload.unitId}:${payload.nowMs}:${payload.selectedBranchNodeId}:${payload.activeNodeId ?? 'none'}:${payload.status ?? 'instant'}:${payload.trace.length}:${payload.scores.length}:${payload.paused ? 'paused' : 'live'}`
+    ? `${payload.unitId}:${payload.nowMs}:${payload.selectedBranchNodeId}:${payload.activeNodeId ?? 'none'}:${payload.status ?? 'instant'}:${payload.trace.length}:${payload.scores.length}:${payload.reactiveAbort?.eventType ?? 'no-abort'}:${payload.paused ? 'paused' : 'live'}`
     : 'empty';
   const hasGraphNodes = document.querySelector('.graph-node[data-node-id]') !== null;
   if (!hasGraphNodes) return;
@@ -151,6 +167,21 @@ function buildNodeDebugMap(payload: RuntimeDebugPayload): Map<string, NodeDebugS
     }
   }
 
+  if (payload.reactiveAbort) {
+    const source = ensure(payload.reactiveAbort.abortSourceNodeId);
+    source.classes.add('runtime-debug-fail');
+    source.labels.unshift('Условие изменилось');
+    source.reasons.push(payload.reactiveAbort.reasonRu);
+    const oldBranch = ensure(payload.reactiveAbort.oldBranchNodeId);
+    oldBranch.classes.add('runtime-debug-cancelled');
+    oldBranch.labels.push('Прервана');
+    if (payload.reactiveAbort.newBranchNodeId) {
+      const nextBranch = ensure(payload.reactiveAbort.newBranchNodeId);
+      nextBranch.classes.add('runtime-debug-winner');
+      nextBranch.labels.unshift('Новая ветвь');
+    }
+  }
+
   const winner = ensure(payload.selectedBranchNodeId);
   winner.classes.add('runtime-debug-winner');
   winner.labels.unshift('Победила');
@@ -200,6 +231,13 @@ function renderDebugPanel(payload: RuntimeDebugPayload | null): void {
     : '';
   const cancellation = payload.cancellationReasonRu ?? payload.cancellationReason;
   const cancellationRow = cancellation ? `<div><dt>Причина отмены</dt><dd>${escapeHtml(cancellation)}</dd></div>` : '';
+  const reactiveRows = payload.reactiveAbort
+    ? `<div><dt>Событие</dt><dd>${escapeHtml(payload.reactiveAbort.eventType)}</dd></div>
+       <div><dt>Наблюдатель</dt><dd>${escapeHtml(payload.reactiveAbort.observerId ?? 'маршрут')}</dd></div>
+       <div><dt>Прервать текущую ветвь</dt><dd>${escapeHtml(payload.reactiveAbort.reasonRu)}</dd></div>
+       <div><dt>Cleanup</dt><dd>${escapeHtml(payload.reactiveAbort.cleanupOutcome === 'completed' ? 'выполнен' : 'ожидает')}</dd></div>
+       <div><dt>Новая ветвь</dt><dd>${escapeHtml(payload.reactiveAbort.newBranchNodeId ?? 'нет')}</dd></div>`
+    : '';
 
   panel.innerHTML = `
     <h3>След ИИ ${payload.paused ? '· пауза' : ''}</h3>
@@ -210,6 +248,7 @@ function renderDebugPanel(payload: RuntimeDebugPayload | null): void {
       <div><dt>Состояние</dt><dd class="runtime-status ${escapeHtml(status)}">${escapeHtml(runtimeStatusLabel(status))}</dd></div>
       ${activeRows}
       ${cancellationRow}
+      ${reactiveRows}
       <div><dt>Итог</dt><dd>${escapeHtml(payload.explanationRu ?? payload.explanation)}</dd></div>
     </dl>
     <ul>${scoreRows}</ul>
@@ -269,10 +308,38 @@ function readDebugPayload(): RuntimeDebugPayload | null {
       trace: Array.isArray(parsed.trace) ? parsed.trace.filter(isTraceItem) : [],
       scores: Array.isArray(parsed.scores) ? parsed.scores.filter(isBranchScore) : [],
       effects: Array.isArray(parsed.effects) ? parsed.effects : [],
+      consumedEventIds: Array.isArray(parsed.consumedEventIds)
+        ? parsed.consumedEventIds.filter((value): value is string => typeof value === 'string')
+        : undefined,
+      reactiveAbort: normalizeReactiveAbort(parsed.reactiveAbort),
+      observerChecks: typeof parsed.observerChecks === 'number' ? parsed.observerChecks : undefined,
+      observerEvents: typeof parsed.observerEvents === 'number' ? parsed.observerEvents : undefined,
     };
   } catch {
     return null;
   }
+}
+
+function normalizeReactiveAbort(value: unknown): RuntimeReactiveAbort | undefined {
+  if (!isRecord(value)
+    || typeof value.eventType !== 'string'
+    || typeof value.abortSourceNodeId !== 'string'
+    || typeof value.oldBranchNodeId !== 'string'
+    || typeof value.activeChildNodeId !== 'string'
+    || !['pending', 'completed'].includes(String(value.cleanupOutcome))
+    || typeof value.reason !== 'string'
+    || typeof value.reasonRu !== 'string') return undefined;
+  return {
+    eventType: value.eventType,
+    observerId: typeof value.observerId === 'string' ? value.observerId : undefined,
+    abortSourceNodeId: value.abortSourceNodeId,
+    oldBranchNodeId: value.oldBranchNodeId,
+    activeChildNodeId: value.activeChildNodeId,
+    cleanupOutcome: value.cleanupOutcome as 'pending' | 'completed',
+    newBranchNodeId: typeof value.newBranchNodeId === 'string' ? value.newBranchNodeId : undefined,
+    reason: value.reason,
+    reasonRu: value.reasonRu,
+  };
 }
 
 function isTraceItem(value: unknown): value is RuntimeTraceItem {

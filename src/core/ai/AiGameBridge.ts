@@ -14,6 +14,11 @@ import type { SimulationState } from '../simulation/SimulationState';
 import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
 import type { AiBlackboardValue } from './AiBlackboard';
+import {
+  evaluateAiBlackboardObservers,
+  listObservedBlackboardKeys,
+} from './events/AiBlackboardObserver';
+import { pushAiEvent } from './events/AiEventQueue';
 import type { AiGraph, AiNode } from './AiGraph';
 import {
   type AiGraphEffect,
@@ -26,6 +31,15 @@ import {
   type AiGraphExecutionState,
   type AiGraphRuntimeResult,
 } from './AiGraphRuntime';
+import {
+  applyRuntimeResultToSession,
+  migrateLegacyAiRuntimeSession,
+  normalizeAiRuntimeSession,
+  type AiRuntimeSessionSnapshotV1,
+} from './runtime/AiRuntimeSession';
+import { readAiGraphRuntimeReloadEffect } from './runtime/actions/ReloadAction';
+import { publishSimulationAiEvents } from './events/SimulationAiEvents';
+import { isReactiveExecutionState } from './events/AiReactiveRuntime';
 import { updateUnitPlanFromRuntime } from './UnitPlan';
 import bundledGraph from '../../data/ai/soldier_default_survival_graph.json';
 
@@ -36,7 +50,7 @@ const AI_GRAPH_POLL_INTERVAL_MS = 60;
 const COVER_SEARCH_RADIUS_CELLS = 5;
 
 type PausableSimulationState = SimulationState & { paused?: boolean };
-type AiUnitGraphRuntime = UnitModel['behaviorRuntime'] & {
+type LegacyAiUnitGraphRuntime = UnitModel['behaviorRuntime'] & {
   aiGraphMemory?: AiGraphRunnerBlackboard;
   aiGraphSimulationTimeMs?: number;
   aiGraphExecutionState?: AiGraphExecutionState;
@@ -84,42 +98,99 @@ export function tickAiGameBridge(
   if (!unit) return null;
   if (!options.force && (state.editor.enabled || isPaused(state))) return null;
 
+  const observerPoll = options.applyEffects
+    ? pollAiBlackboardObservers(state, unit)
+    : { events: 0, checks: 0 };
   const scaledInterval = AI_GRAPH_TICK_INTERVAL_MS / getAiTestTimeScale(state);
-  if (!options.force && nowMs - unit.behaviorRuntime.aiGraphLastTickMs < scaledInterval) return null;
+  const cadenceReady = nowMs - unit.behaviorRuntime.aiGraphLastTickMs >= scaledInterval;
+  if (!options.force && !cadenceReady && observerPoll.events === 0) return null;
 
-  const runtime = unit.behaviorRuntime as AiUnitGraphRuntime;
-  const simulationNowMs = options.applyEffects
-    ? (runtime.aiGraphSimulationTimeMs ?? 0) + AI_GRAPH_TICK_INTERVAL_MS
-    : runtime.aiGraphSimulationTimeMs ?? 0;
   const graph = readRuntimeGraph();
+  let session = ensureRuntimeSession(unit, graph.id);
+  if (options.applyEffects) {
+    publishSimulationAiEvents(unit, session.simulationTimeMs);
+    session = unit.behaviorRuntime.aiRuntimeSession ?? session;
+  }
+  const observerWakeOnly = !options.force && !cadenceReady && observerPoll.events > 0;
+  const simulationNowMs = options.applyEffects && !observerWakeOnly
+    ? session.simulationTimeMs + AI_GRAPH_TICK_INTERVAL_MS
+    : session.simulationTimeMs;
+  const runtimeCancel = isReactiveExecutionState(session.executionState)
+    ? undefined
+    : options.cancel;
   const result = runAiGraphRuntime({
     graph,
     unitId: unit.id,
-    blackboard: buildBlackboardForUnit(state, unit),
-    cooldowns: unit.behaviorRuntime.aiNodeCooldowns,
+    blackboard: buildBlackboardForUnit(state, unit, session.blackboardMemory),
+    cooldowns: session.cooldowns,
     nowMs: simulationNowMs,
     tacticalHost: createTacticalHost(state, unit),
-    executionState: runtime.aiGraphExecutionState,
-    cancel: options.cancel,
+    executionState: session.executionState,
+    cancel: runtimeCancel,
+    events: session.eventQueue.events,
   });
 
-  publishRuntimeDebugTrace(state, unit, graph, result, nowMs, simulationNowMs, !options.applyEffects);
+  publishRuntimeDebugTrace(state, unit, graph, result, nowMs, simulationNowMs, !options.applyEffects, session.status);
 
   if (!options.applyEffects) return result;
 
-  runtime.aiGraphSimulationTimeMs = simulationNowMs;
-  runtime.aiGraphExecutionState = result.executionState;
+  const nextSession = applyRuntimeResultToSession(session, result, simulationNowMs);
+  unit.behaviorRuntime.aiRuntimeSession = nextSession;
   unit.behaviorRuntime.aiGraphLastTickMs = nowMs;
-  unit.behaviorRuntime.aiNodeCooldowns = { ...result.cooldowns };
-  applyGraphEffects(state, unit, result.effects, result.blackboard, nowMs);
+  unit.behaviorRuntime.aiNodeCooldowns = { ...nextSession.cooldowns };
+  applyGraphEffects(state, unit, result.effects, result.blackboard, nowMs, nextSession.blackboardMemory);
   unit.plan = updateUnitPlanFromRuntime(unit.plan, graph, result);
   unit.behaviorRuntime.aiGraphReason = result.explanationRu ?? result.explanation;
   unit.behaviorRuntime.reason = result.explanationRu ?? result.explanation;
   unit.behaviorRuntime.lastEvent = `ai_graph_runtime_${result.status}`;
+  publishSimulationAiEvents(unit, nextSession.simulationTimeMs);
   return result;
 }
 
-export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel): AiGraphRunnerBlackboard {
+export function pollAiBlackboardObservers(
+  state: SimulationState,
+  unit: UnitModel,
+): { readonly events: number; readonly checks: number } {
+  const session = unit.behaviorRuntime.aiRuntimeSession;
+  if (!session) return { events: 0, checks: 0 };
+  const keys = listObservedBlackboardKeys(session.observerRegistry);
+  if (keys.length === 0) return { events: 0, checks: 0 };
+  const compactBlackboard = buildObservedBlackboardForUnit(state, unit, keys, session.blackboardMemory);
+  const evaluated = evaluateAiBlackboardObservers(
+    session.observerRegistry,
+    compactBlackboard,
+    session.simulationTimeMs,
+  );
+  let queue = session.eventQueue;
+  for (const event of evaluated.events) queue = pushAiEvent(queue, event, session.simulationTimeMs).queue;
+  unit.behaviorRuntime.aiRuntimeSession = {
+    ...session,
+    eventQueue: queue,
+    observerRegistry: evaluated.registry,
+  };
+  return { events: evaluated.events.length, checks: evaluated.checks };
+}
+
+export function buildObservedBlackboardForUnit(
+  state: SimulationState,
+  unit: UnitModel,
+  keys: readonly string[],
+  runtimeMemory: AiGraphRunnerBlackboard = readCurrentRuntimeMemory(unit),
+): AiGraphRunnerBlackboard {
+  const result: AiGraphRunnerBlackboard = {};
+  const command = unit.playerCommand;
+  for (const key of keys) {
+    const value = readCompactObservedValue(state, unit, command, runtimeMemory, key);
+    if (value !== undefined) result[key] = cloneObservedValue(value);
+  }
+  return result;
+}
+
+export function buildBlackboardForUnit(
+  state: SimulationState,
+  unit: UnitModel,
+  runtimeMemory: AiGraphRunnerBlackboard = readCurrentRuntimeMemory(unit),
+): AiGraphRunnerBlackboard {
   const threats = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
   const bestContact = getBestPerceptionContact(unit);
   const threatPosition = bestContact?.lastKnownPosition ?? threats.targetPosition;
@@ -144,7 +215,7 @@ export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel):
 
   return {
     ...(isRecord(bundledGraph.blackboardDefaults) ? normalizeBlackboard(bundledGraph.blackboardDefaults) : {}),
-    ...getAiGraphMemory(unit),
+    ...runtimeMemory,
     danger: clampPercent(threats.danger),
     stress: clampPercent(Math.round(unit.behaviorRuntime.stress)),
     suppression: clampPercent(threats.suppression),
@@ -196,10 +267,80 @@ export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel):
   };
 }
 
-function getAiGraphMemory(unit: UnitModel): AiGraphRunnerBlackboard {
-  const runtime = unit.behaviorRuntime as AiUnitGraphRuntime;
-  if (!runtime.aiGraphMemory) runtime.aiGraphMemory = {};
-  return runtime.aiGraphMemory;
+export function ensureRuntimeSession(unit: UnitModel, graphId: string): AiRuntimeSessionSnapshotV1 {
+  const runtime = unit.behaviorRuntime as LegacyAiUnitGraphRuntime;
+  if (runtime.aiRuntimeSession) {
+    const previousSession = runtime.aiRuntimeSession;
+    const activeData = previousSession.executionState?.activeData;
+    const ownedMoveToken = activeData?.kind === 'move_to_blackboard_position'
+      ? activeData.actionToken
+      : undefined;
+    const normalized = normalizeAiRuntimeSession(previousSession, { graphId, unitId: unit.id });
+    runtime.aiRuntimeSession = normalized.session;
+    if (normalized.resetReasonRu) {
+      if (ownedMoveToken && unit.order?.source === 'ai' && unit.order.ownerToken === ownedMoveToken) {
+        unit.order = null;
+      }
+      unit.behaviorRuntime.aiRouteStatusState = null;
+      runtime.aiGraphReason = normalized.resetReasonRu;
+      runtime.reason = normalized.resetReasonRu;
+      runtime.lastEvent = 'ai_runtime_session_reset';
+    }
+    return normalized.session;
+  }
+
+  const migrated = migrateLegacyAiRuntimeSession({
+    graphId,
+    unitId: unit.id,
+    aiGraphSimulationTimeMs: runtime.aiGraphSimulationTimeMs,
+    aiGraphExecutionState: runtime.aiGraphExecutionState,
+    aiGraphMemory: runtime.aiGraphMemory,
+    aiNodeCooldowns: runtime.aiNodeCooldowns,
+  });
+  runtime.aiRuntimeSession = migrated;
+  return migrated;
+}
+
+function readCompactObservedValue(
+  _state: SimulationState,
+  unit: UnitModel,
+  command: UnitModel['playerCommand'],
+  memory: AiGraphRunnerBlackboard,
+  key: string,
+): AiBlackboardValue | undefined {
+  switch (key) {
+    case 'danger': return clampPercent(unit.behaviorRuntime.danger);
+    case 'stress': return clampPercent(Math.round(unit.behaviorRuntime.stress));
+    case 'suppression': return clampPercent(unit.behaviorRuntime.suppression);
+    case 'fatigue': return clampPercent(Math.round(unit.soldier.condition.fatigue));
+    case 'morale': return clampPercent(Math.round(unit.soldier.condition.morale));
+    case 'health': return clampPercent(Math.round(unit.soldier.condition.health));
+    case 'ammo': return Math.max(0, Math.round(unit.behaviorRuntime.ammo));
+    case 'weaponReady': return unit.behaviorRuntime.weaponReady && unit.behaviorRuntime.ammo > 0;
+    case 'underFire': return unit.behaviorRuntime.danger > 0 || unit.behaviorRuntime.suppression > 0;
+    case 'hasOrder': return Boolean(unit.order);
+    case 'current_action': return unit.behaviorRuntime.currentAction;
+    case 'self_position': return { ...unit.position };
+    case 'order_target_position': return unit.order ? { ...unit.order.target } : null;
+    case 'player_command_active': return isPlayerCommandOutstanding(command);
+    case 'player_command_type': return command?.type ?? 'none';
+    case 'player_command_status': return command?.status ?? 'none';
+    case 'player_command_target_position': return command ? { ...command.target } : null;
+    case 'player_command_revision': return command?.revision ?? 0;
+    case 'active_move_source': return unit.order ? unit.order.source ?? (unit.order.ownerToken ? 'ai' : 'player') : null;
+    case 'active_move_owner_token': return unit.order?.ownerToken ?? null;
+    case 'active_move_target': return unit.order ? { ...unit.order.target } : null;
+    default: return Object.prototype.hasOwnProperty.call(memory, key) ? memory[key] : undefined;
+  }
+}
+
+function cloneObservedValue(value: AiBlackboardValue): AiBlackboardValue {
+  return typeof value === 'object' && value !== null ? { ...value } : value;
+}
+
+function readCurrentRuntimeMemory(unit: UnitModel): AiGraphRunnerBlackboard {
+  const runtime = unit.behaviorRuntime as LegacyAiUnitGraphRuntime;
+  return runtime.aiRuntimeSession?.blackboardMemory ?? runtime.aiGraphMemory ?? {};
 }
 
 function createTacticalHost(state: SimulationState, unit: UnitModel): AiGraphTacticalHost {
@@ -226,10 +367,33 @@ function applyGraphEffects(
   effects: readonly AiGraphEffect[],
   blackboard: AiGraphRunnerBlackboard,
   nowMs: number,
+  runtimeMemory: AiGraphRunnerBlackboard,
 ): void {
   for (const effect of effects) {
+    const reloadEffect = readAiGraphRuntimeReloadEffect(effect);
+    if (reloadEffect) {
+      if (reloadEffect.type === 'begin_reload') {
+        unit.behaviorRuntime.weaponReady = false;
+        unit.behaviorRuntime.currentAction = 'reload';
+        unit.behaviorRuntime.reason = reloadEffect.reasonRu ?? reloadEffect.reason;
+        unit.behaviorRuntime.lastEvent = 'ai_graph_reload_started';
+      } else if (reloadEffect.type === 'complete_reload') {
+        unit.behaviorRuntime.ammo = reloadEffect.targetAmmo;
+        unit.behaviorRuntime.weaponReady = reloadEffect.targetAmmo > 0;
+        unit.behaviorRuntime.currentAction = 'reload_complete';
+        unit.behaviorRuntime.reason = reloadEffect.reasonRu ?? reloadEffect.reason;
+        unit.behaviorRuntime.lastEvent = 'ai_graph_reload_completed';
+      } else {
+        unit.behaviorRuntime.weaponReady = unit.behaviorRuntime.ammo > 0;
+        unit.behaviorRuntime.currentAction = 'observe';
+        unit.behaviorRuntime.reason = reloadEffect.reasonRu ?? reloadEffect.reason;
+        unit.behaviorRuntime.lastEvent = 'ai_graph_reload_cancelled';
+      }
+      continue;
+    }
+
     if (effect.type === 'write_memory') {
-      getAiGraphMemory(unit)[effect.key] = effect.value;
+      runtimeMemory[effect.key] = effect.value;
       continue;
     }
 
@@ -350,6 +514,7 @@ function publishRuntimeDebugTrace(
   nowMs: number,
   simulationNowMs: number,
   previewOnly: boolean,
+  runtimeSessionStatus: AiRuntimeSessionSnapshotV1['status'],
 ): void {
   try {
     const payload = {
@@ -366,6 +531,7 @@ function publishRuntimeDebugTrace(
       selectedBranchNameRu: result.selectedBranchNameRu,
       ok: result.ok,
       status: result.status,
+      runtimeSessionStatus,
       activeNodeId: result.activeNodeId,
       activeNodeName: result.activeNodeName,
       activeNodeNameRu: result.activeNodeNameRu,
@@ -382,6 +548,10 @@ function publishRuntimeDebugTrace(
       trace: result.trace,
       scores: result.scores,
       effects: result.effects,
+      consumedEventIds: result.consumedEventIds,
+      reactiveAbort: result.reactiveAbort,
+      observerChecks: unit.behaviorRuntime.aiRuntimeSession?.observerRegistry.observerChecks ?? 0,
+      observerEvents: unit.behaviorRuntime.aiRuntimeSession?.observerRegistry.observerEvents ?? 0,
       blackboard: result.blackboard,
     };
     window.localStorage.setItem(DEBUG_STORAGE_KEY, JSON.stringify(payload));

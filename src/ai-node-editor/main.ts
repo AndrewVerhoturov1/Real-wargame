@@ -394,6 +394,10 @@ function createDefaultParameters(type: string): JsonObject {
     case 'ForbidAction': return { ...common, action: 'fire', durationSeconds: 5, reasonRu: 'Нельзя стрелять сейчас.' };
     case 'SetPosture': return { ...common, posture: 'prone' };
     case 'SetAction': return { ...common, action: 'move_to', targetKey: 'best_cover_position' };
+    case 'ReactiveSequence': return { ...common, observePrecedingConditions: true, abortPolicy: 'abort_self', abortReason: 'Condition changed.', abortReasonRu: 'Условие изменилось.' };
+    case 'Wait': return { ...common, durationSeconds: 2, timeoutSeconds: 0 };
+    case 'Reload': return { ...common, durationSeconds: 3, targetAmmo: 30, failIfNoWeapon: true };
+    case 'MoveToBlackboardPosition': return { ...common, targetKey: 'best_cover_position', acceptanceRadiusCells: 0.2, timeoutSeconds: 15, stuckTimeoutSeconds: 2.5, minimumProgressCells: 0.05, abortOnTargetLost: true };
     case 'SetMovementMode': return { ...common, mode: 'careful' };
     case 'SetAttentionMode': return { ...common, mode: 'observe', reasonRu: 'Переключить режим внимания.' };
     case 'SetSearchSector': return { ...common, centerDegrees: 0, arcDegrees: 120, reasonRu: 'Осмотреть указанный сектор.' };

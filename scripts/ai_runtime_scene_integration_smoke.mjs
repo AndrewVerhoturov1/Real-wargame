@@ -4,32 +4,24 @@ import { pathToFileURL } from 'node:url';
 import { build } from 'vite';
 
 const repoRoot = process.cwd();
-const outDir = path.join(repoRoot, '.tmp-ai-graph-runtime-smoke');
-const entryFile = path.join(outDir, 'ai-graph-runtime-smoke.mjs');
+const outDir = path.join(repoRoot, '.tmp-ai-runtime-scene-integration-smoke');
+const entryFile = path.join(outDir, 'ai-runtime-scene-integration-smoke.mjs');
 
 await rm(outDir, { recursive: true, force: true });
-
 try {
   await build({
     root: repoRoot,
     logLevel: 'warn',
     build: {
-      ssr: path.join(repoRoot, 'scripts', 'ai_graph_runtime_smoke.ts'),
+      ssr: path.join(repoRoot, 'scripts', 'ai_runtime_scene_integration_smoke.ts'),
       outDir,
       emptyOutDir: true,
       minify: false,
       sourcemap: false,
-      rollupOptions: {
-        output: {
-          entryFileNames: 'ai-graph-runtime-smoke.mjs',
-          format: 'es',
-        },
-      },
+      rollupOptions: { output: { entryFileNames: 'ai-runtime-scene-integration-smoke.mjs', format: 'es' } },
     },
   });
-
   await import(`${pathToFileURL(entryFile).href}?run=${Date.now()}`);
-  await import(`./ai_composite_runtime_smoke.mjs?run=${Date.now()}`);
 } finally {
   await rm(outDir, { recursive: true, force: true });
 }

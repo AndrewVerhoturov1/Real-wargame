@@ -47,6 +47,15 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     descriptionRu: 'Выполняет дочерние ноды по порядку и помнит активный шаг между тиками ИИ.',
     canHaveChildren: true,
   },
+  ReactiveSequence: {
+    type: 'ReactiveSequence',
+    category: 'flow',
+    label: 'Reactive Sequence',
+    description: 'Runs children in order and interrupts the active branch when an observed preceding condition changes and becomes false.',
+    labelRu: 'Реактивная последовательность',
+    descriptionRu: 'Выполняет шаги по порядку и прерывает текущую ветвь, если наблюдаемое предыдущее условие изменилось и перестало выполняться.',
+    canHaveChildren: true,
+  },
   Selector: {
     type: 'Selector',
     category: 'flow',
@@ -216,6 +225,15 @@ export const AI_NODE_TYPE_DEFINITIONS = {
     description: 'Waits for a configured duration while preserving progress between AI ticks.',
     labelRu: 'Ждать',
     descriptionRu: 'Ждёт заданное время и сохраняет прогресс между тиками ИИ.',
+    canHaveChildren: false,
+  },
+  Reload: {
+    type: 'Reload',
+    category: 'action',
+    label: 'Reload',
+    description: 'Reloads over simulation time and changes ammunition only after successful completion.',
+    labelRu: 'Перезарядить',
+    descriptionRu: 'Перезаряжается во времени симуляции и меняет число патронов только после успешного завершения.',
     canHaveChildren: false,
   },
   MoveToBlackboardPosition: {

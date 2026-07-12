@@ -373,6 +373,7 @@ function executeNodeOwnLogic(context: ExecutionContext, node: AiNode): boolean {
   switch (node.type) {
     case 'Root':
     case 'Sequence':
+    case 'ReactiveSequence':
     case 'Selector':
     case 'UtilitySelector':
     case 'ActionBranch':

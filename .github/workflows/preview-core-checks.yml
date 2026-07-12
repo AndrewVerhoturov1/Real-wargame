@@ -73,6 +73,48 @@ jobs:
         continue-on-error: true
         run: npm run runtime:smoke
 
+      - name: AI runtime session smoke
+        id: runtime_session
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run runtime-session:smoke
+
+      - name: AI runtime snapshot smoke
+        id: runtime_snapshot
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run runtime-snapshot:smoke
+
+      - name: AI runtime scene integration smoke
+        id: runtime_scene
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run runtime-scene:smoke
+
+      - name: AI event queue smoke
+        id: event_queue
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run event-queue:smoke
+
+      - name: AI action lifecycle smoke
+        id: lifecycle
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run lifecycle:smoke
+
+      - name: AI composite runtime smoke
+        id: composite
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run composite:smoke
+
+      - name: AI reload runtime smoke
+        id: reload
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run reload:smoke
+
       - name: Stateful AI movement bridge smoke
         id: move_bridge
         if: steps.install.outcome == 'success'
@@ -181,6 +223,13 @@ jobs:
           ENGINE_OUTCOME: ${{ steps.engine.outcome }}
           GRAPH_OUTCOME: ${{ steps.graph.outcome }}
           RUNTIME_OUTCOME: ${{ steps.runtime.outcome }}
+          RUNTIME_SESSION_OUTCOME: ${{ steps.runtime_session.outcome }}
+          RUNTIME_SNAPSHOT_OUTCOME: ${{ steps.runtime_snapshot.outcome }}
+          RUNTIME_SCENE_OUTCOME: ${{ steps.runtime_scene.outcome }}
+          EVENT_QUEUE_OUTCOME: ${{ steps.event_queue.outcome }}
+          LIFECYCLE_OUTCOME: ${{ steps.lifecycle.outcome }}
+          COMPOSITE_OUTCOME: ${{ steps.composite.outcome }}
+          RELOAD_OUTCOME: ${{ steps.reload.outcome }}
           MOVE_BRIDGE_OUTCOME: ${{ steps.move_bridge.outcome }}
           ROUTE_STATUS_OUTCOME: ${{ steps.route_status.outcome }}
           PATHFINDING_OUTCOME: ${{ steps.pathfinding.outcome }}
@@ -204,6 +253,13 @@ jobs:
               engine: process.env.ENGINE_OUTCOME,
               graph: process.env.GRAPH_OUTCOME,
               runtime: process.env.RUNTIME_OUTCOME,
+              runtime_session: process.env.RUNTIME_SESSION_OUTCOME,
+              runtime_snapshot: process.env.RUNTIME_SNAPSHOT_OUTCOME,
+              runtime_scene: process.env.RUNTIME_SCENE_OUTCOME,
+              event_queue: process.env.EVENT_QUEUE_OUTCOME,
+              lifecycle: process.env.LIFECYCLE_OUTCOME,
+              composite: process.env.COMPOSITE_OUTCOME,
+              reload: process.env.RELOAD_OUTCOME,
               move_bridge: process.env.MOVE_BRIDGE_OUTCOME,
               route_status: process.env.ROUTE_STATUS_OUTCOME,
               pathfinding: process.env.PATHFINDING_OUTCOME,
@@ -239,6 +295,4 @@ jobs:
               description: Object.entries(outcomes).map(([key, value]) => `${key}:${value}`).join(' ').slice(0, 140),
               target_url: targetUrl,
             });
-            if (!passed) {
-              core.setFailed(`One or more core checks failed: ${JSON.stringify(outcomes)}`);
-            }
+            if (!passed) core.setFailed(`One or more core checks failed: ${JSON.stringify(outcomes)}`);

@@ -28,6 +28,7 @@ export function validateAiGraph(graph: unknown): AiGraphValidationResult {
   const nodeById = collectNodes(graph.nodes, issues);
   validateRoot(graph.rootNodeId, nodeById, issues);
   validateNodeLinks(nodeById, issues);
+  validateReactiveSequences(nodeById, issues);
   validateBlackboardDefaults(graph.blackboardDefaults, issues);
 
   return {
@@ -82,7 +83,7 @@ function collectNodes(nodesValue: unknown, issues: AiGraphValidationIssue[]): Ma
     nodeById.set(id, nodeValue);
     validateNodeType(nodeValue, issues, id);
     validateNodeChildrenShape(nodeValue, issues, id);
-    validateNodeParameters(nodeValue.parameters, issues, id);
+    validateNodeParameters(nodeValue.type, nodeValue.parameters, issues, id);
     validateKnownNodeParameters(nodeValue, issues, id);
 
     if (nodeValue.type === 'Root') {
@@ -163,8 +164,11 @@ function validateNodeLinks(nodeById: Map<string, UnknownRecord>, issues: AiGraph
   }
 }
 
-function validateNodeParameters(parametersValue: unknown, issues: AiGraphValidationIssue[], nodeId: string): void {
+function validateNodeParameters(nodeType: unknown, parametersValue: unknown, issues: AiGraphValidationIssue[], nodeId: string): void {
   if (parametersValue === undefined) {
+    if (nodeType === 'ReactiveSequence') {
+      issues.push(errorIssue('REACTIVE_PARAMETERS_MISSING', 'ReactiveSequence must define its observer and abort policy parameters.', 'У ноды «Реактивная последовательность» должны быть параметры наблюдателя и политики прерывания.', nodeId));
+    }
     return;
   }
 
@@ -181,6 +185,83 @@ function validateNodeParameters(parametersValue: unknown, issues: AiGraphValidat
     if (!isSupportedValue(value)) {
       issues.push(errorIssue('PARAMETER_VALUE_UNSUPPORTED', `Node ${nodeId} parameter ${key} has an unsupported value. Allowed: string, number, boolean, null, and position {x,y}.`, `У ноды ${nodeId} параметр ${key} имеет неподдерживаемое значение. Разрешены строки, числа, boolean, null и позиция {x,y}.`, nodeId));
     }
+  }
+
+  if (nodeType === 'Reload') validateReloadParameters(parametersValue, issues, nodeId);
+  if (nodeType === 'ReactiveSequence') validateReactiveSequenceParameters(parametersValue, issues, nodeId);
+}
+
+const REACTIVE_CONDITION_TYPES = new Set([
+  'FlagCheck',
+  'BlackboardValueAbove',
+  'StableThreshold',
+  'DistanceCheck',
+  'TacticalCheck',
+]);
+
+function validateReactiveSequences(
+  nodeById: Map<string, UnknownRecord>,
+  issues: AiGraphValidationIssue[],
+): void {
+  for (const [nodeId, node] of nodeById) {
+    if (node.type !== 'ReactiveSequence') continue;
+    const children = Array.isArray(node.children)
+      ? node.children.filter(isNonEmptyString)
+      : [];
+    if (children.length < 2) {
+      issues.push(errorIssue('REACTIVE_CHILDREN_TOO_FEW', 'ReactiveSequence needs at least one observed condition followed by an action or composite child.', 'У ноды «Реактивная последовательность» должно быть минимум одно наблюдаемое условие, а после него действие или составная нода.', nodeId));
+      continue;
+    }
+    for (const conditionId of children.slice(0, -1)) {
+      const condition = nodeById.get(conditionId);
+      if (!condition || !REACTIVE_CONDITION_TYPES.has(String(condition.type))) {
+        issues.push(errorIssue('REACTIVE_PRECEDING_CHILD_NOT_CONDITION', `ReactiveSequence child ${conditionId} before the active branch must be a supported condition.`, `Ребёнок ${conditionId} перед активной ветвью реактивной последовательности должен быть поддерживаемым условием.`, nodeId));
+      }
+    }
+  }
+}
+
+function validateReactiveSequenceParameters(
+  parameters: UnknownRecord,
+  issues: AiGraphValidationIssue[],
+  nodeId: string,
+): void {
+  if (typeof parameters.observePrecedingConditions !== 'boolean') {
+    issues.push(errorIssue('REACTIVE_OBSERVER_FLAG_INVALID', 'ReactiveSequence observePrecedingConditions must be boolean.', 'У реактивной последовательности параметр «Наблюдать предыдущие условия» должен быть да/нет.', nodeId));
+  }
+  if (parameters.abortPolicy !== 'abort_self') {
+    issues.push(errorIssue('REACTIVE_ABORT_POLICY_UNSUPPORTED', 'ReactiveSequence v1 supports only abortPolicy=abort_self.', 'Реактивная последовательность v1 поддерживает только политику «Прервать текущую ветвь».', nodeId));
+  }
+  for (const key of ['abortReason', 'abortReasonRu']) {
+    const value = parameters[key];
+    if (value !== undefined && typeof value !== 'string') {
+      issues.push(errorIssue('REACTIVE_ABORT_REASON_INVALID', `ReactiveSequence ${key} must be a string.`, `У реактивной последовательности параметр ${key} должен быть строкой.`, nodeId));
+    }
+  }
+}
+
+function validateReloadParameters(parameters: UnknownRecord, issues: AiGraphValidationIssue[], nodeId: string): void {
+  validateNonNegativeNumberParameter(parameters, 'durationSeconds', false, 'RELOAD_DURATION_INVALID', 'Reload durationSeconds must be a non-negative number.', 'У ноды «Перезарядить» длительность должна быть неотрицательным числом.', issues, nodeId);
+  validateNonNegativeNumberParameter(parameters, 'targetAmmo', true, 'RELOAD_TARGET_AMMO_INVALID', 'Reload targetAmmo must be a non-negative integer.', 'У ноды «Перезарядить» число патронов после завершения должно быть неотрицательным целым числом.', issues, nodeId);
+  const failIfNoWeapon = parameters.failIfNoWeapon;
+  if (typeof failIfNoWeapon !== 'boolean') {
+    issues.push(errorIssue('RELOAD_WEAPON_FLAG_INVALID', 'Reload failIfNoWeapon must be boolean.', 'У ноды «Перезарядить» параметр «Провалить, если нет оружия» должен быть да/нет.', nodeId));
+  }
+}
+
+function validateNonNegativeNumberParameter(
+  parameters: UnknownRecord,
+  key: string,
+  requireInteger: boolean,
+  code: string,
+  message: string,
+  messageRu: string,
+  issues: AiGraphValidationIssue[],
+  nodeId: string,
+): void {
+  const value = parameters[key];
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || (requireInteger && !Number.isInteger(value))) {
+    issues.push(errorIssue(code, message, messageRu, nodeId));
   }
 }
 

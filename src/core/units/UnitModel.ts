@@ -1,4 +1,10 @@
 import type { UnitPlanState } from '../ai/UnitPlan';
+import { initializeSimulationAiEventFacts } from '../ai/events/SimulationAiEvents';
+import {
+  normalizeAiRuntimeSceneSnapshot,
+  restoreMoveOrder,
+  type AiRuntimeSceneSnapshotV1,
+} from '../ai/runtime/AiRuntimeSnapshot';
 import {
   createBehaviorRuntime,
   createBehaviorSettings,
@@ -69,6 +75,10 @@ export interface UnitTacticalKnowledge {
   lastUpdatedSeconds: number;
 }
 
+export interface UnitRuntimeData extends Partial<Pick<UnitBehaviorRuntime, 'stress' | 'suppression' | 'ammo' | 'weaponReady' | 'posture'>> {
+  aiRuntime?: AiRuntimeSceneSnapshotV1;
+}
+
 export interface UnitData {
   id: string;
   label?: string;
@@ -89,7 +99,7 @@ export interface UnitData {
   initialState?: Partial<UnitInitialState>;
   tacticalKnowledge?: Partial<UnitTacticalKnowledge>;
   perceptionKnowledge?: Partial<UnitPerceptionKnowledge>;
-  runtime?: Partial<Pick<UnitBehaviorRuntime, 'stress' | 'suppression' | 'ammo' | 'weaponReady' | 'posture'>>;
+  runtime?: UnitRuntimeData;
   navigationProfileId?: string;
   navigationMovementMode?: NavigationMovementMode;
 }
@@ -191,8 +201,34 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
       activeNavigationProfileSource: unit.navigationProfileId ? 'unitRole' : 'default',
     };
     applyInitialStateToRuntime(model, false);
+    restoreAiRuntimeSnapshot(model, unit.runtime?.aiRuntime);
+    initializeSimulationAiEventFacts(model);
     return model;
   });
+}
+
+function restoreAiRuntimeSnapshot(unit: UnitModel, value: unknown): void {
+  if (value === undefined) return;
+  const normalized = normalizeAiRuntimeSceneSnapshot(value, { unitId: unit.id });
+  if (!normalized.snapshot) {
+    unit.behaviorRuntime.aiRuntimeSession = null;
+    unit.behaviorRuntime.aiRouteStatusState = null;
+    unit.order = null;
+    unit.behaviorRuntime.aiGraphReason = normalized.messageRu;
+    unit.behaviorRuntime.reason = normalized.messageRu;
+    unit.behaviorRuntime.lastEvent = 'ai_runtime_scene_reset';
+    return;
+  }
+
+  unit.behaviorRuntime.aiRuntimeSession = normalized.snapshot.session;
+  unit.behaviorRuntime.aiNodeCooldowns = { ...normalized.snapshot.session.cooldowns };
+  unit.behaviorRuntime.aiRouteStatusState = normalized.snapshot.routeStatus ?? null;
+  unit.order = normalized.snapshot.activeOrder
+    ? restoreMoveOrder(normalized.snapshot.activeOrder)
+    : null;
+  unit.behaviorRuntime.aiGraphReason = normalized.messageRu;
+  unit.behaviorRuntime.reason = normalized.messageRu;
+  unit.behaviorRuntime.lastEvent = 'ai_runtime_scene_restored';
 }
 
 export function applyInitialStateToRuntime(unit: UnitModel, clearPerceptionKnowledge = true): void {
@@ -211,6 +247,9 @@ export function applyInitialStateToRuntime(unit: UnitModel, clearPerceptionKnowl
   unit.behaviorRuntime.reason = 'Initial state applied.';
   unit.behaviorRuntime.lastEvent = 'initial_state_applied';
   unit.behaviorRuntime.aiNodeCooldowns = {};
+  unit.behaviorRuntime.aiRuntimeSession = null;
+  unit.behaviorRuntime.aiRouteStatusState = null;
+  unit.behaviorRuntime.aiSimulationEventFacts = null;
   unit.soldier.condition.fatigue = initial.fatigue;
   unit.soldier.condition.morale = initial.morale;
   unit.soldier.condition.confusion = initial.confusion;
