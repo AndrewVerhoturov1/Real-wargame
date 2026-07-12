@@ -1,1 +1,1 @@
-Temporary trigger for ReactiveSequence UI, validation and diagnostics verification. Remove after the final green run.
+Temporary trigger for ReactiveSequence UI patch diagnostic rerun. Remove after the final green run.
