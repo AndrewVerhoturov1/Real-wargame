@@ -70,9 +70,13 @@ export function installAdaptiveGridLod(
       const useSourceGrid = lod.majorSpacingCells === 1 || lod.minorVisible;
       if (sourceGrid) {
         sourceGrid.visible = showGrid && useSourceGrid;
-        sourceGrid.alpha = lod.majorSpacingCells === 1 ? 1 : Math.max(0.25, lod.minorAlpha);
+        sourceGrid.alpha = lod.majorSpacingCells === 1 ? 1 : lod.minorAlpha;
       }
-      majorGrid.visible = lod.majorVisible && lod.majorSpacingCells > 1 && !lod.minorVisible;
+      // Keep the strong 10 m grid while the 2 m grid fades in. Once fine cells are fully
+      // readable, the original source grid already contains its own stronger 10 m lines.
+      majorGrid.visible = lod.majorVisible
+        && lod.majorSpacingCells > 1
+        && lod.minorAlpha < 0.95;
     }
 
     (window as GridDebugWindow).__realWargameGridDebug = {
