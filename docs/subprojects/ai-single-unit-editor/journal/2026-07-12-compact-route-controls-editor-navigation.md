@@ -55,9 +55,17 @@ Successful runs on that exact SHA:
 
 The focused browser scenario reported `3/3 passed` using system Chrome.
 
+Canonical generated documentation and the subproject journal were then synchronized in commit:
+
+```text
+31f47383b2281fc51f0edefa7e785b37c8ba68ad
+```
+
+The final documentation-only head must repeat all checks and the approved screenshot scenario before the temporary PR is closed.
+
 ## Visual inspection
 
-The workflow and both artifacts identify the exact head SHA `93268bb6a89db8a2508f2d8576d955c0b15fe89f`.
+The workflow and both artifacts identify the exact product head SHA `93268bb6a89db8a2508f2d8576d955c0b15fe89f`.
 
 All six PNGs were downloaded and opened:
 
