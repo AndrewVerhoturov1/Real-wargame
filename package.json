@@ -22,6 +22,7 @@
     "event-queue:smoke": "node scripts/ai_event_queue_smoke.mjs",
     "simulation-events:smoke": "node scripts/ai_simulation_events_smoke.mjs",
     "blackboard-observer:smoke": "node scripts/ai_blackboard_observer_smoke.mjs",
+    "reactive-runtime:smoke": "node scripts/ai_reactive_runtime_smoke.mjs",
     "lifecycle:smoke": "node scripts/ai_action_lifecycle_smoke.mjs",
     "composite:smoke": "node scripts/ai_composite_runtime_smoke.mjs",
     "reload:smoke": "node scripts/ai_reload_runtime_smoke.mjs",
