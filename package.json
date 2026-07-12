@@ -24,6 +24,7 @@
     "navigation-profiles:smoke": "node scripts/navigation_profiles_smoke.mjs",
     "navigation-profile-switch:smoke": "node scripts/navigation_replan_profile_switch_smoke.mjs",
     "navigation-overlay:smoke": "node scripts/navigation_overlay_contract_smoke.mjs",
+    "perception:smoke": "node scripts/perception_system_smoke.mjs",
     "map-revision:smoke": "node scripts/map_revision_smoke.mjs",
     "map-resolution:smoke": "node scripts/map_resolution_migration_smoke.mjs",
     "map-grid-lod:smoke": "node scripts/map_grid_lod_smoke.mjs",
