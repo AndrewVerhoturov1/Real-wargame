@@ -97,7 +97,8 @@ export interface UnitModel {
   tacticalKnowledge: UnitTacticalKnowledge;
 }
 
-export function normalizeUnits(data: UnitData[]): UnitModel[] {
+export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): UnitModel[] {
+  const scale = normalizeScale(sourceToRuntimeCellScale);
   return data.map((unit) => {
     const fallbackLabel = unit.label ?? unit.id;
     const behaviorProfile = normalizeBehaviorProfileId(unit.behaviorProfile);
@@ -125,22 +126,22 @@ export function normalizeUnits(data: UnitData[]): UnitModel[] {
       type: unit.type,
       side: unit.side,
       position: {
-        x: unit.x + 0.5,
-        y: unit.y + 0.5,
+        x: (unit.x + 0.5) * scale,
+        y: (unit.y + 0.5) * scale,
       },
-      speedCellsPerSecond: unit.speedCellsPerSecond ?? 0.5,
+      speedCellsPerSecond: Math.max(0, (unit.speedCellsPerSecond ?? 0.5) * scale),
       order: null,
       heldItem: unit.heldItem ?? defaultHeldItemForUnitType(unit.type),
       facingRadians: degreesToRadians(unit.facingDegrees ?? 0),
       viewAngleRadians: degreesToRadians(unit.viewAngleDegrees ?? 90),
-      viewRangeCells: unit.viewRangeCells ?? 7,
+      viewRangeCells: Math.max(0, (unit.viewRangeCells ?? 7) * scale),
       behaviorProfile,
       behaviorSettings: createBehaviorSettings(behaviorProfile, unit.behavior),
       behaviorRuntime,
       soldier,
       initialState,
       tacticalKnowledge: unit.tacticalKnowledge
-        ? normalizeTacticalKnowledge(unit.tacticalKnowledge)
+        ? normalizeTacticalKnowledge(unit.tacticalKnowledge, scale)
         : createEmptyTacticalKnowledge(),
     };
     applyInitialStateToRuntime(model);
@@ -206,6 +207,10 @@ function defaultHeldItemForUnitType(type: UnitType): UnitHeldItem {
   if (type === 'support_team') return 'support_item';
   if (type === 'scout_team') return 'short_item';
   return 'long_item';
+}
+
+function normalizeScale(value: number): number {
+  return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
 function compactUndefined<T extends Record<string, unknown>>(value: T): Partial<T> {
