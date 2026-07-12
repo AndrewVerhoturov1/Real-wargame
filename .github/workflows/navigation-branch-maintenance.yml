@@ -36,6 +36,15 @@ jobs:
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/core/pathfinding/GridPathfinder.ts src/core/orders/PlayerCommand.ts src/core/units/UnitModel.ts src/core/navigation/RouteCostField.ts
-          git commit -m 'fix: preserve navigation compatibility and cache isolation'
+          git add \
+            src/core/pathfinding/GridPathfinder.ts \
+            src/core/orders/PlayerCommand.ts \
+            src/core/units/UnitModel.ts \
+            src/core/navigation/RouteCostField.ts \
+            src/core/navigation/NavigationReplanPolicy.ts \
+            src/core/ai/AiStatefulMoveGameBridge.ts \
+            src/core/simulation/SimulationTick.ts \
+            src/main.ts \
+            src/rendering/PixiApp.ts
+          git commit -m 'feat: integrate navigation profiles into runtime and overlay'
           git push origin HEAD:tmp/navigation-profiles-route-cost-20260712
