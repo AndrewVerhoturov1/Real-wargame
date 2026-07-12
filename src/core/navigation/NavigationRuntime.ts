@@ -50,6 +50,7 @@ export function buildUnitTacticalRouteContext(unit: UnitModel): TacticalRouteCon
 }
 
 function defaultProfileForUnitRole(unit: UnitModel): string {
+  if (unit.unitRoleNavigationProfileId) return unit.unitRoleNavigationProfileId;
   if (unit.type === 'scout_team') return 'stealth';
   if (unit.type === 'support_team') return 'cautious';
   return 'normal';
