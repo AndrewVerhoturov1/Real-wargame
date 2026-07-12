@@ -1,3 +1,4 @@
+import { buildAiRuntimeSceneSnapshot } from '../core/ai/runtime/AiRuntimeSnapshot';
 import {
   resolveObjectCoverProperties,
   type TacticalMapData,
@@ -50,7 +51,14 @@ export async function loadSceneJsonFromFile(state: SimulationState, file: File):
   state.editor.nextUnitIndex = nextIndex(scene.units, 'editor_unit_');
   state.editor.nextZoneIndex = nextIndex(scene.pressureZones, 'editor_zone_');
   refreshAiTestLabSceneSnapshot(state);
-  state.editor.lastMessage = `JSON сцены загружен в сетку ${state.map.metersPerCell} м: карта ${state.map.width}×${state.map.height}, юнитов ${state.units.length}, зон ${state.pressureZones.length}.`;
+  const restoredRuntimeCount = state.units.filter((unit) => unit.behaviorRuntime.lastEvent === 'ai_runtime_scene_restored').length;
+  const resetRuntimeCount = state.units.filter((unit) => unit.behaviorRuntime.lastEvent === 'ai_runtime_scene_reset').length;
+  const runtimeMessage = restoredRuntimeCount > 0
+    ? ` Runtime восстановлен у бойцов: ${restoredRuntimeCount}.`
+    : resetRuntimeCount > 0
+      ? ` Runtime сброшен у бойцов: ${resetRuntimeCount}.`
+      : ' Старый формат сцены загружен без активного действия ИИ.';
+  state.editor.lastMessage = `JSON сцены загружен в сетку ${state.map.metersPerCell} м: карта ${state.map.width}×${state.map.height}, юнитов ${state.units.length}, зон ${state.pressureZones.length}.${runtimeMessage}`;
 }
 
 export function downloadCurrentSceneJson(state: SimulationState): void {
@@ -67,7 +75,7 @@ export function downloadCurrentSceneJson(state: SimulationState): void {
   state.editor.lastMessage = `JSON испытательной сцены скачан: ${state.map.metersPerCell} м/клетка.`;
 }
 
-function normalizeImportedScene(value: unknown): {
+export function normalizeImportedScene(value: unknown): {
   map: TacticalMapData;
   units: UnitData[];
   pressureZones: PressureZoneData[];
@@ -82,9 +90,9 @@ function normalizeImportedScene(value: unknown): {
   };
 }
 
-function buildExportedScene(state: SimulationState): ExportedSceneData {
+export function buildExportedScene(state: SimulationState): ExportedSceneData {
   return {
-    version: 'scene-export-v5-2m-grid',
+    version: 'scene-export-v6-ai-runtime-2m-grid',
     exportedAt: new Date().toISOString(),
     noteRu: 'Экспорт полигона ИИ в текущем разрешении карты. Сцены 10 м автоматически преобразуются в 2 м при загрузке; новые сцены сохраняются нативно без повторного масштабирования.',
     map: {
@@ -206,6 +214,11 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
       ammo: Math.round(unit.behaviorRuntime.ammo),
       weaponReady: unit.behaviorRuntime.weaponReady,
       posture: unit.behaviorRuntime.posture,
+      aiRuntime: buildAiRuntimeSceneSnapshot(
+        unit.behaviorRuntime.aiRuntimeSession,
+        unit.order,
+        unit.behaviorRuntime.aiRouteStatusState,
+      ),
     },
   };
 }
