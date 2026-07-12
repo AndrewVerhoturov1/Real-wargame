@@ -65,12 +65,34 @@ A later full regression reached `lab:smoke` and exposed both its remaining v7 te
 
 A dedicated workspace diagnostic then identified that an earlier one-line Playwright edit had accidentally replaced `tests/preview-screenshots.spec.ts` with a partial copy. The unchanged node-editor and newly placed fighter scenarios were restored from current preview, while the intended `Обзор и память` title assertion was retained.
 
-## Pending before handoff
+## Final verification
 
-- final expanded preview-core regression on the restored test suite;
-- real system-Chrome Playwright run;
-- manual inspection of key screenshots;
-- final exact commit/run identifiers in canonical metadata.
+Full expanded validation run `29208942691` succeeded after all compatibility corrections. It covered the new heatmap, performance and variance tests plus runtime sessions/snapshots/scenes, events, movement, routes, navigation profiles, map revisions and caches, workspace, game editor, dictionary, lab, production build and generated documentation.
+
+Exact system-Chrome run `29209032782` succeeded on SHA `923fdde44d15d447b01178ce1430e2c68f11a215`. Playwright result: `20/20 passed` in `10.6 minutes`; 29 PNG files were produced.
+
+Manually inspected:
+
+- `view-memory-heatmap-march.png`;
+- `view-memory-heatmap-engage.png`;
+- `view-memory-heatmap-search.png`;
+- `view-memory-profile-editor.png`;
+- `view-memory-node-controls.png`;
+- `06-simulation-memory-layer.png`;
+- `10-node-editor-unchanged.png`;
+- `11-editor-spawned-fighter-playable.png`.
+
+The inspected result has a readable cell heatmap, no moving focus ray, one unified `Обзор и память` tab, readable editor controls, preserved node editor layout and a playable newly placed fighter. Automated browser assertions also proved that cursor and camera movement do not rebuild the field or upload a new texture.
+
+Artifact digests:
+
+```text
+screenshots ZIP: sha256:8c95e130d0e78bedd65a6a3d3bcc8106d830fd0d10f29dfba8757f5ff3f93310
+Playwright ZIP:  sha256:aea297c9140b5985451653293a4a66985a467882aef80f3763dd8f29b80b41a5
+raw log:        sha256:a42647a2d7c8f384e260aecfd321c28865710d104448ccb26b961f3be2117782
+```
+
+No transfer to `real-wargame-preview` or `main` was performed.
 
 ## Honest v1 limits
 
