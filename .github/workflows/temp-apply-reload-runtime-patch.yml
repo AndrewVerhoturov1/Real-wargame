@@ -1,4 +1,4 @@
-name: Temporary Reload Runtime Patch
+name: Temporary Composite Runtime Patch
 
 on:
   pull_request:
@@ -25,7 +25,6 @@ jobs:
 
       - run: npm ci
       - run: node scripts/apply_composite_type_fix.mjs
-      - run: node scripts/apply_reload_runtime_patch.mjs
       - run: npm run build
       - run: npm run lifecycle:smoke
       - run: npm run runtime:smoke
@@ -37,8 +36,6 @@ jobs:
         with:
           name: verified-runtime-patched-sources
           path: |
-            src/core/ai/AiGraphRuntime.ts
-            src/core/ai/AiGameBridge.ts
             src/core/ai/runtime/AiCompositeGraphRuntime.ts
             src/core/ai/runtime/AiRuntimeSession.ts
           retention-days: 3
