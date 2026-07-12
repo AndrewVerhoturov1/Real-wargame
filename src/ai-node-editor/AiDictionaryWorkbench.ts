@@ -140,17 +140,16 @@ function scheduleEnhance(): void {
 }
 
 function installWorkbenchButton(): void {
-  const actions = document.querySelector('.ai-editor-actions');
+  const actions = document.querySelector<HTMLElement>('[data-editor-global-actions]');
   if (!actions || actions.querySelector('[data-action="ai-dictionary-workbench"]')) return;
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'ai-editor-button';
+  button.className = 'navigation-profile-global-button';
   button.dataset.action = 'ai-dictionary-workbench';
   button.textContent = 'Инструменты ИИ';
   button.title = 'Пользовательская память, проверка графа и история решений';
   button.addEventListener('click', () => openWorkbench('memory'));
-  const dictionaryButton = actions.querySelector('[data-action="ai-dictionary"]');
-  actions.insertBefore(button, dictionaryButton?.nextSibling ?? actions.firstChild);
+  actions.append(button);
 }
 
 function openWorkbench(tab: WorkbenchTab): void {

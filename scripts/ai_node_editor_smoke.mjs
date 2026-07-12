@@ -75,8 +75,15 @@ expectContains(labLaunchHtml, 'openEditorTab', 'Общий запуск долж
 
 const main = readText('src/ai-node-editor/main.ts');
 expectContains(main, 'real-wargame.ai-node-editor.graph.v6', 'Редактор должен использовать новый graph storage v6.');
-expectContains(main, 'installAppShellMenu', 'Редактор должен подключать общее верхнее меню.');
-expectContains(main, "mode: 'editor'", 'Редактор должен использовать editor-режим общего меню.');
+expectNotContains(main, 'installAppShellMenu', 'Редактор больше не должен устанавливать второе верхнее меню.');
+expectNotContains(main, "mode: 'editor'", 'Редактор не должен использовать отдельный editor-режим старого shell menu.');
+expectNotContains(main, 'run-check-45', 'Устаревшая кнопка Auto 4–5 должна быть полностью удалена.');
+expectNotContains(main, 'runSimpleCheck45', 'Устаревший обработчик Auto 4–5 должен быть полностью удалён.');
+const profileEditor = readText('src/ai-node-editor/NavigationProfileEditor.ts');
+for (const needle of ['Данные бойца', 'data-editor-global-actions', 'data-editor-action="refresh"', 'data-editor-action="open-game"', 'data-editor-action="exit"']) {
+  expectContains(profileEditor, needle, `Единое меню редактора должно содержать: ${needle}`);
+}
+expectNotContains(profileEditor, 'data-navigation-tab="diagnostics"', 'Отдельная вкладка Диагностика должна быть удалена.');
 expectContains(main, 'addNodeFromPalette', 'Редактор должен уметь добавлять ноды из палитры.');
 expectContains(main, 'startConnectionDrag', 'Связи должны создаваться протягиванием из порта.');
 expectContains(main, 'createDefaultParameters', 'Новые ноды должны получать человекочитаемые параметры по умолчанию.');

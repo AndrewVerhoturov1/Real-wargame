@@ -42,14 +42,13 @@ export function buildCommandPlanRouteOverlaySnapshot(
         status: playerCommand.status as 'active' | 'blocked',
       }
     : null;
-  const planStages = selected
-    ? (unit.plan?.stages ?? []).map((stage) => ({
-        id: stage.id,
-        labelRu: stage.labelRu,
-        status: stage.status,
-        target: stage.target ? { ...stage.target } : null,
-      }))
-    : [];
+  const activePlan = selected && unit.plan?.status === 'active' ? unit.plan : null;
+  const planStages = (activePlan?.stages ?? []).map((stage) => ({
+    id: stage.id,
+    labelRu: stage.labelRu,
+    status: stage.status,
+    target: stage.target ? { ...stage.target } : null,
+  }));
   const routePoints = selected ? remainingRoutePoints(unit) : [];
   const currentWaypointIndex = unit.order?.waypointIndex ?? 0;
   const waypointCount = unit.order?.waypoints?.length ?? (unit.order ? 1 : 0);
@@ -69,8 +68,8 @@ export function buildCommandPlanRouteOverlaySnapshot(
     selected,
     unitPosition: { ...unit.position },
     command,
-    planLabelRu: selected ? unit.plan?.branchLabelRu ?? null : null,
-    activeStageIndex: selected ? unit.plan?.activeStageIndex ?? 0 : 0,
+    planLabelRu: activePlan?.branchLabelRu ?? null,
+    activeStageIndex: activePlan?.activeStageIndex ?? 0,
     planStages,
     routePoints,
     currentWaypointIndex,

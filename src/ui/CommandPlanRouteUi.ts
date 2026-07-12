@@ -17,8 +17,11 @@ export function installCommandPlanRouteUi(
   onChanged: () => void,
 ): () => void {
   const displayPanel = document.querySelector<HTMLElement>('.workspace-display-panel');
-  const currentBlock = document.querySelector<HTMLElement>('.simulation-unit-bar .unit-bar-current');
   const clearButton = document.querySelector<HTMLButtonElement>('[data-action="clear-order"]');
+  const summary = document.querySelector<HTMLElement>('[data-role="route-summary"]');
+  const command = document.querySelector<HTMLElement>('[data-role="route-details-command"]');
+  const plan = document.querySelector<HTMLElement>('[data-role="route-details-plan"]');
+  const route = document.querySelector<HTMLElement>('[data-role="route-details-route"]');
 
   const toggle = document.createElement('button');
   toggle.type = 'button';
@@ -31,22 +34,13 @@ export function installCommandPlanRouteUi(
   });
   displayPanel?.append(toggle);
 
-  const command = createStatusLine('player-command');
-  const plan = createStatusLine('unit-plan');
-  const route = createStatusLine('unit-route');
-  if (currentBlock) {
-    const legacyOrder = currentBlock.querySelector<HTMLElement>('[data-role="order"]');
-    if (legacyOrder) legacyOrder.hidden = true;
-    currentBlock.append(command, plan, route);
-  }
-
   if (clearButton) {
     clearButton.textContent = 'Отменить приказ';
     clearButton.onclick = () => {
       const unit = getSelectedUnit(state);
       if (!unit) return;
       cancelSelectedPlayerCommand(unit);
-      updateStatus(command, plan, route, unit, state);
+      updateStatus(summary, command, plan, route, unit, state);
       onChanged();
     };
   }
@@ -58,7 +52,7 @@ export function installCommandPlanRouteUi(
     const requestedTarget = unit?.order?.target;
     if (!requestedTarget) return;
     issueRoutedMoveOrderToSelectedUnits(state, requestedTarget);
-    updateStatus(command, plan, route, getSelectedUnit(state), state);
+    updateStatus(summary, command, plan, route, getSelectedUnit(state), state);
     onChanged();
   };
   document.addEventListener('click', handleLegacyPlayerMove);
@@ -66,39 +60,31 @@ export function installCommandPlanRouteUi(
   const initialActive = getCommandPlanRouteOverlayState(state).active;
   applyOverlayVisibility(initialActive);
   updateToggle(toggle, initialActive);
-  updateStatus(command, plan, route, getSelectedUnit(state), state);
+  updateStatus(summary, command, plan, route, getSelectedUnit(state), state);
 
   const interval = window.setInterval(() => {
-    updateStatus(command, plan, route, getSelectedUnit(state), state);
+    updateStatus(summary, command, plan, route, getSelectedUnit(state), state);
   }, UPDATE_INTERVAL_MS);
 
   return () => {
     window.clearInterval(interval);
     document.removeEventListener('click', handleLegacyPlayerMove);
     toggle.remove();
-    command.remove();
-    plan.remove();
-    route.remove();
   };
 }
 
-function createStatusLine(role: string): HTMLSpanElement {
-  const element = document.createElement('span');
-  element.dataset.role = role;
-  element.className = `command-plan-route-status command-plan-route-status-${role}`;
-  return element;
-}
-
 function updateStatus(
-  commandElement: HTMLElement,
-  planElement: HTMLElement,
-  routeElement: HTMLElement,
+  summaryElement: HTMLElement | null,
+  commandElement: HTMLElement | null,
+  planElement: HTMLElement | null,
+  routeElement: HTMLElement | null,
   unit: UnitModel | undefined,
   state: SimulationState,
 ): void {
   setText(commandElement, `Приказ: ${formatCommand(unit, state)}`);
   setText(planElement, `План: ${formatPlan(unit)}`);
   setText(routeElement, `Маршрут: ${formatRoute(unit)}`);
+  setText(summaryElement, formatRouteSummary(unit));
 }
 
 function formatCommand(unit: UnitModel | undefined, state: SimulationState): string {
@@ -132,6 +118,15 @@ function formatRoute(unit: UnitModel | undefined): string {
   const waypointIndex = Math.min(waypointCount, (order.waypointIndex ?? 0) + 1);
   const status = ({ planned: 'построен', following: 'выполняется', replanned: 'перестроен' } as const)[order.routeStatus ?? 'following'];
   return `${status} · точка ${waypointIndex}/${waypointCount}`;
+}
+
+function formatRouteSummary(unit: UnitModel | undefined): string {
+  if (!unit) return 'Маршрут: боец не выбран';
+  if (unit.order) return `Маршрут: ${formatRoute(unit)}`;
+  if (unit.playerCommand?.status === 'completed') return 'Маршрут завершён';
+  if (unit.playerCommand?.status === 'blocked') return 'Маршрут заблокирован';
+  if (unit.playerCommand?.status === 'cancelled') return 'Маршрут отменён';
+  return 'Маршрут: нет активного пути';
 }
 
 function cancelSelectedPlayerCommand(unit: UnitModel): void {
@@ -168,6 +163,6 @@ function updateToggle(button: HTMLButtonElement, active: boolean): void {
   button.setAttribute('aria-pressed', String(active));
 }
 
-function setText(element: HTMLElement, value: string): void {
-  if (element.textContent !== value) element.textContent = value;
+function setText(element: HTMLElement | null, value: string): void {
+  if (element && element.textContent !== value) element.textContent = value;
 }

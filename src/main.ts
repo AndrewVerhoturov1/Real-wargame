@@ -5,6 +5,7 @@ import './game-editor.css';
 import './ui-layout.css';
 import './tactical-workspace.css';
 import './tactical-workspace-mode.css';
+import './tactical-workspace-compact-route.css';
 import './front-zones.css';
 import './ai-dictionary.css';
 import './ai-dictionary-compat.css';

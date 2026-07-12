@@ -11,18 +11,21 @@ import type { TacticalMapData } from '../src/core/map/MapModel';
 import { createMoveOrder } from '../src/core/orders/MoveOrder';
 import {
   createPlayerMoveCommand,
+  updatePlayerCommandNavigationProfile,
   updatePlayerCommandStatus,
 } from '../src/core/orders/PlayerCommand';
 import { createInitialState } from '../src/core/simulation/SimulationState';
 import { buildCommandPlanRouteOverlaySnapshot } from '../src/rendering/CommandPlanRouteOverlayModel';
 
 verifyPlayerCommandIdentityAndRevision();
+verifyExactProfileUpdatePreservesCommand();
 verifyDirectFallbackPlan();
 verifyRuntimePlanStages();
 verifyPlayerCommandBlackboard();
 verifyOverlaySnapshotIsBounded();
+verifyTerminalPlanTargetsAreCleared();
 
-console.log('Command/plan/route smoke passed: command identity, fallback plan, graph stages, Blackboard, bounded selected overlay.');
+console.log('Command/plan/route smoke passed: command identity, exact profile update, fallback plan, graph stages, Blackboard, bounded overlay and terminal target cleanup.');
 
 function verifyPlayerCommandIdentityAndRevision(): void {
   const target = { x: 8.5, y: 4.5 };
@@ -32,11 +35,25 @@ function verifyPlayerCommandIdentityAndRevision(): void {
 
   assert.equal(first.type, 'move_to_position');
   assert.equal(first.status, 'active');
+  assert.equal(first.navigationProfileId, 'normal');
   assert.equal(second.revision, first.revision + 1);
   assert.notEqual(second.id, first.id);
   assert.equal(blocked.id, first.id);
   assert.equal(blocked.revision, first.revision + 1);
   assert.deepEqual(blocked.target, target);
+}
+
+function verifyExactProfileUpdatePreservesCommand(): void {
+  const target = { x: 8.5, y: 4.5 };
+  const command = createPlayerMoveCommand('unit-a', target, null, 1000, 'normal', 'custom_scout');
+  const changed = updatePlayerCommandNavigationProfile(command, 'retreat');
+
+  assert.equal(command.navigationProfileId, 'custom_scout');
+  assert.equal(changed.navigationProfileId, 'retreat');
+  assert.equal(changed.id, command.id, 'profile change must preserve player command identity');
+  assert.deepEqual(changed.target, command.target, 'profile change must preserve the requested target');
+  assert.equal(changed.status, command.status);
+  assert.equal(changed.revision, command.revision + 1);
 }
 
 function verifyDirectFallbackPlan(): void {
@@ -180,6 +197,35 @@ function verifyOverlaySnapshotIsBounded(): void {
   assert.ok(unselected.command, 'unselected unit may retain a faint player-command marker');
   assert.equal(unselected.planStages.length, 0, 'unselected unit must not render detailed AI plan stages');
   assert.equal(unselected.routePoints.length, 0, 'unselected unit must not render its detailed waypoint route');
+}
+
+function verifyTerminalPlanTargetsAreCleared(): void {
+  const state = createInitialState(makeMap(), [{
+    id: 'unit-a',
+    label: 'Unit A',
+    labelRu: 'Боец А',
+    type: 'infantry_squad',
+    side: 'player',
+    x: 1,
+    y: 2,
+  }], []);
+  const unit = state.units[0];
+  const command = createPlayerMoveCommand(unit.id, { x: 4.5, y: 2.5 }, null, 1000);
+  unit.playerCommand = updatePlayerCommandStatus(command, 'completed', 'Target reached.', 'Цель достигнута.');
+  unit.plan = {
+    ...createDirectPlayerMovePlan(null, unit.playerCommand, { x: 4.5, y: 2.5 }),
+    status: 'completed',
+    stages: [{
+      ...createDirectPlayerMovePlan(null, unit.playerCommand, { x: 4.5, y: 2.5 }).stages[0],
+      status: 'completed',
+    }],
+  };
+
+  const snapshot = buildCommandPlanRouteOverlaySnapshot(state.map, unit, true);
+  assert.equal(snapshot.command, null, 'completed command must not render a target marker');
+  assert.equal(snapshot.planLabelRu, null, 'completed plan must not keep a blue label');
+  assert.equal(snapshot.planStages.length, 0, 'completed plan must not keep a blue target stage');
+  assert.equal(snapshot.routePoints.length, 0, 'completed route must not expose green route points');
 }
 
 function makeMap(): TacticalMapData {

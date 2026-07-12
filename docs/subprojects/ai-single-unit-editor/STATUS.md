@@ -6,7 +6,7 @@
 - **Updated:** 2026-07-12
 - **Working branch:** `real-wargame-preview`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
-- **Last verified commit:** `1477d378d0c2c11fb3b50ab3e846a69f43ae41af`
+- **Last verified commit:** `93268bb6a89db8a2508f2d8576d955c0b15fe89f`
 
 ## Goal
 
@@ -14,11 +14,11 @@
 
 ## Current focus
 
-Navigation Profiles and Route Cost v1 перенесены в real-wargame-preview: доступны редактируемые профили движения, единый выбор активного профиля, профильный A*, ограничение обхода, субъективная известная опасность, контролируемое перестроение и независимый кешированный слой стоимости маршрута. Автоматические не-визуальные проверки пройдены; визуальная проверка ещё не запускалась.
+На изолированной ветке tmp/ui-compact-route-controls-20260712 завершён интерфейсный срез Compact Route Controls: нижняя карточка бойца стала компактной, профиль маршрута и карта стоимости доступны прямо в игре, завершённый план очищает синюю цель, а редактор ИИ использует одно верхнее меню без пустой полосы, вкладки Диагностика и устаревшего Auto 4–5.
 
 ## Next step
 
-Провести ручную проверку профилей, маршрутов, слоя стоимости и перестроения при смене профиля. Отдельный Playwright-сценарий запускать только после явного разрешения пользователя; затем продолжить по плану Soldier Perception and Attention v1.
+Дождаться ручной проверки пользователя на временной ветке. Не переносить изменения в real-wargame-preview до отдельной явной команды; при переносе удалить временный branch-only workflow визуальной проверки и повторно проверить итоговый preview SHA.
 
 ## Read first
 
@@ -31,8 +31,8 @@ Navigation Profiles and Route Cost v1 перенесены в real-wargame-previ
 - `docs/subprojects/ai-single-unit-editor/ROUTE_COST_OVERLAY_V1.md`
 - `docs/subprojects/ai-single-unit-editor/REACTIVE_ROUTE_STATUS_V1.md`
 - `docs/subprojects/ai-single-unit-editor/GRID_PATHFINDING_V1.md`
-- `docs/superpowers/specs/2026-07-12-navigation-profiles-route-cost-design.md`
-- `docs/superpowers/plans/2026-07-12-navigation-profiles-route-cost.md`
+- `docs/superpowers/specs/2026-07-12-compact-route-controls-editor-navigation-design.md`
+- `docs/superpowers/plans/2026-07-12-compact-route-controls-editor-navigation.md`
 - `docs/superpowers/specs/2026-07-12-soldier-perception-attention-design.md`
 - `docs/superpowers/plans/2026-07-12-soldier-perception-attention-v1.md`
 - `AGENTS.md`
@@ -55,12 +55,20 @@ Navigation Profiles and Route Cost v1 перенесены в real-wargame-previ
 - `src/core/orders/RoutedMoveOrders.ts`
 - `src/core/ai/AiStatefulMoveGameBridge.ts`
 - `src/core/simulation/SimulationTick.ts`
+- `src/rendering/CommandPlanRouteOverlayModel.ts`
 - `src/rendering/PixiRouteCostOverlayRenderer.ts`
+- `src/ui/TacticalWorkspace.ts`
+- `src/ui/CommandPlanRouteUi.ts`
 - `src/ui/RouteCostOverlayUi.ts`
 - `src/ai-node-editor/NavigationProfileEditor.ts`
+- `src/ai-node-editor/AiDictionaryEditorIntegration.ts`
+- `src/ai-node-editor/AiDictionaryWorkbench.ts`
+- `src/tactical-workspace-compact-route.css`
+- `src/ai-node-editor/navigation-profile-editor.css`
 
 ## Suggested verification
 
+- `npm run ui-compact-route-controls:smoke`
 - `npm run navigation-profiles:smoke`
 - `npm run navigation-profile-switch:smoke`
 - `npm run navigation-overlay:smoke`
@@ -73,17 +81,17 @@ Navigation Profiles and Route Cost v1 перенесены в real-wargame-previ
 - `npm run map-revision:smoke`
 - `npm run build`
 - `npm run docs:check`
-- `tests/navigation-profiles-route-cost.spec.ts — только после явного разрешения пользователя`
+- `npx playwright test tests/ui-compact-route-controls.spec.ts --project=chromium — только после явного разрешения пользователя`
 
 ## Safety rules
 
 - SimulationTick остаётся единственным кодом, который изменяет координаты бойца.
-- A* выполняется только при создании приказа или разрешённом перестроении; renderer не импортирует GridPathfinder.
+- A* выполняется только при создании приказа или разрешённом перестроении; renderer и UI не импортируют GridPathfinder.
 - Динамическая стоимость использует только UnitTacticalKnowledge выбранного бойца и не выдаёт скрытое объективное знание за известное.
 - Непроходимость отделена от числовой цены; никакой вес не делает воду без моста или блокирующий объект проходимыми.
 - Движение курсора читает готовый typed-array и не увеличивает staticCostBuildCount или dynamicCostBuildCount.
 - Выключение слоя использует container.visible=false и не уничтожает кеши, canvas, texture или sprite.
-- Перестроение сохраняет playerCommandId и AI ownerToken; устаревшая очистка ИИ не удаляет приказ игрока.
+- Перестроение сохраняет playerCommandId и AI ownerToken; смена профиля игрока изменяет существующую команду без подмены её владельца.
 - Профили маршрута не хранятся внутри конкретного behavior graph и не превращаются в числовые ноды.
-- Не утверждать визуальную проверку без запуска браузера и открытия PNG точного SHA.
-- Не менять main без отдельного явного GO пользователя.
+- Не утверждать визуальную проверку без запуска браузера, совпадения SHA и открытия всех ключевых PNG.
+- Не менять main и не переносить временную ветку в real-wargame-preview без отдельного явного GO пользователя.

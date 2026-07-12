@@ -27,7 +27,18 @@ window.addEventListener('storage',(event)=>{if(event.key===DEBUG_STORAGE_KEY||ev
 scheduleEnhancement();window.setTimeout(applyPendingNodeRequest,300);
 
 function scheduleEnhancement():void {if(enhancementScheduled)return;enhancementScheduled=true;window.requestAnimationFrame(()=>{enhancementScheduled=false;installOpenButton();enhanceHumanNodeSelectors();});}
-function installOpenButton():void {const actions=document.querySelector('.ai-editor-actions');if(!actions||actions.querySelector('[data-action="ai-dictionary"]'))return;const button=document.createElement('button');button.type='button';button.className='ai-editor-button';button.dataset.action='ai-dictionary';button.textContent='Словарь ИИ';button.title='Открыть интерактивный словарь значений, проверок и действий ИИ';button.addEventListener('click',()=>panel.open());actions.insertBefore(button,actions.querySelector('#toggle-palette')??actions.firstChild);}
+function installOpenButton():void {
+  const actions=document.querySelector<HTMLElement>('[data-editor-global-actions]');
+  if(!actions||actions.querySelector('[data-action="ai-dictionary"]'))return;
+  const button=document.createElement('button');
+  button.type='button';
+  button.className='navigation-profile-global-button';
+  button.dataset.action='ai-dictionary';
+  button.textContent='Словарь ИИ';
+  button.title='Открыть интерактивный словарь значений, проверок и действий ИИ';
+  button.addEventListener('click',()=>panel.open());
+  actions.append(button);
+}
 function enhanceHumanNodeSelectors():void {populateConceptSelect('sourceKey',['BlackboardValueAbove','ParameterScore','StableThreshold','RandomChance']);populateConceptSelect('modifierKey',['RandomChance']);populateConceptSelect('flagKey',['FlagCheck']);}
 function populateConceptSelect(parameterKey:string,nodeTypes:readonly string[]):void {const select=document.querySelector<HTMLSelectElement>(`.human-node-panel select[data-param-key="${parameterKey}"]`);if(!select||select.dataset.aiDictionaryEnhanced==='yes')return;const selected=select.value;const concepts=uniqueConcepts(nodeTypes.flatMap((nodeType)=>getAiConceptsForNodeType(nodeType))).filter((concept)=>parameterKey==='flagKey'?concept.valueType==='boolean':['percent','number','meters','degrees'].includes(concept.valueType??''));if(!concepts.length)return;select.innerHTML=concepts.map((concept)=>`<option value="${escapeHtml(concept.key)}">${escapeHtml(concept.labelRu)} · ${escapeHtml(concept.key)}</option>`).join('');if(concepts.some((concept)=>concept.key===selected))select.value=selected;select.dataset.aiDictionaryEnhanced='yes';select.closest('label')?.setAttribute('data-help','Список создан из единого Словаря ИИ. Русский перевод показан первым, английское техническое имя остаётся видимым для точности.');}
 
