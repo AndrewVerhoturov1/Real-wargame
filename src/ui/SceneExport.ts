@@ -1,16 +1,15 @@
 import {
-  normalizeMap,
   resolveObjectCoverProperties,
   type TacticalMapData,
 } from '../core/map/MapModel';
 import {
-  normalizePressureZones,
   resolvePressureZoneSettings,
   type PressureZoneData,
 } from '../core/pressure/PressureZone';
+import { replaceSceneAtRuntimeResolution } from '../core/simulation/ResolutionAwareScene';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { refreshAiTestLabSceneSnapshot } from '../core/testing/AiTestLabRuntime';
-import { normalizeUnits, type UnitData, type UnitModel } from '../core/units/UnitModel';
+import type { UnitData, UnitModel } from '../core/units/UnitModel';
 
 export interface ExportedSceneData {
   version: string;
@@ -42,13 +41,7 @@ export async function loadSceneJsonFromFile(state: SimulationState, file: File):
   }
 
   const scene = normalizeImportedScene(parsed);
-
-  state.map = normalizeMap(scene.map);
-  state.units = normalizeUnits(scene.units);
-  state.pressureZones = normalizePressureZones(scene.pressureZones);
-  state.selectedUnitId = null;
-  state.selectedUnitIds = [];
-  state.selectionBox = null;
+  replaceSceneAtRuntimeResolution(state, scene.map, scene.units, scene.pressureZones);
   state.editor.selectedObjectId = null;
   state.editor.selectedZoneId = null;
   state.editor.drag = null;
@@ -57,7 +50,7 @@ export async function loadSceneJsonFromFile(state: SimulationState, file: File):
   state.editor.nextUnitIndex = nextIndex(scene.units, 'editor_unit_');
   state.editor.nextZoneIndex = nextIndex(scene.pressureZones, 'editor_zone_');
   refreshAiTestLabSceneSnapshot(state);
-  state.editor.lastMessage = `JSON сцены загружен: карта ${state.map.width}×${state.map.height}, юнитов ${state.units.length}, зон ${state.pressureZones.length}.`;
+  state.editor.lastMessage = `JSON сцены загружен в сетку ${state.map.metersPerCell} м: карта ${state.map.width}×${state.map.height}, юнитов ${state.units.length}, зон ${state.pressureZones.length}.`;
 }
 
 export function downloadCurrentSceneJson(state: SimulationState): void {
@@ -71,7 +64,7 @@ export function downloadCurrentSceneJson(state: SimulationState): void {
   link.download = `real-wargame-scene-${buildTimestampForFileName()}.json`;
   link.click();
   URL.revokeObjectURL(url);
-  state.editor.lastMessage = 'JSON испытательной сцены скачан.';
+  state.editor.lastMessage = `JSON испытательной сцены скачан: ${state.map.metersPerCell} м/клетка.`;
 }
 
 function normalizeImportedScene(value: unknown): {
@@ -91,9 +84,9 @@ function normalizeImportedScene(value: unknown): {
 
 function buildExportedScene(state: SimulationState): ExportedSceneData {
   return {
-    version: 'scene-export-v4',
+    version: 'scene-export-v5-2m-grid',
     exportedAt: new Date().toISOString(),
-    noteRu: 'Экспорт полигона ИИ. Сохраняет характеристики бойцов, их испытательное состояние, направленные угрозы и свойства укрытий. Старые сцены без этих полей загружаются со стандартными значениями.',
+    noteRu: 'Экспорт полигона ИИ в текущем разрешении карты. Сцены 10 м автоматически преобразуются в 2 м при загрузке; новые сцены сохраняются нативно без повторного масштабирования.',
     map: {
       width: state.map.width,
       height: state.map.height,

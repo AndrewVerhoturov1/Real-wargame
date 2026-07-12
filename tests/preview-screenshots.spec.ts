@@ -86,6 +86,7 @@ test('keeps information details open, uses a movement-stable raster overlay and 
   await page.goto('/');
   const canvas = page.locator('canvas');
   await expect(canvas).toBeVisible();
+  await expect(page.locator('.map-scale-fixed-label')).toContainText('1 клетка = 2 м');
   await expect(page.locator('.tactical-workspace-bar')).toBeVisible();
   await expect(page.locator('.simulation-sidebar')).toBeVisible();
   await expect(page.locator('.simulation-unit-bar')).toBeVisible();
@@ -130,8 +131,8 @@ test('keeps information details open, uses a movement-stable raster overlay and 
   const beforeMove = await readAwarenessDiagnostics(page);
   expect(beforeMove?.representation).toBe('raster-sprite');
   expect(beforeMove?.displayObjectCount).toBeLessThanOrEqual(3);
-  expect(beforeMove?.rasterWidth).toBe(64);
-  expect(beforeMove?.rasterHeight).toBe(40);
+  expect(beforeMove?.rasterWidth).toBe(320);
+  expect(beforeMove?.rasterHeight).toBe(200);
   expect(beforeMove?.maxBuildMs ?? Number.POSITIVE_INFINITY).toBeLessThan(250);
 
   const movementTarget = await worldPoint(canvas, 30.5, 17.5);

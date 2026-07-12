@@ -78,6 +78,11 @@ export interface TacticalMapData {
   height: number;
   cellSize: number;
   metersPerCell?: number;
+  /**
+   * Optional runtime resolution. Source coordinates remain in `metersPerCell`, while
+   * normalization expands them into this finer grid without changing physical/map pixel size.
+   */
+  runtimeMetersPerCell?: number;
   defaultTerrain?: TerrainKind;
   defaultHeight?: number;
   heightMap?: number[][];
@@ -121,6 +126,8 @@ export interface TacticalMap {
   height: number;
   cellSize: number;
   metersPerCell: number;
+  /** Scale applied to source coordinates. Native-resolution maps use 1. */
+  sourceToRuntimeCellScale: number;
   defaultTerrain: TerrainKind;
   defaultHeight: ElevationLevel;
   cells: MapCell[];
@@ -130,6 +137,11 @@ export interface TacticalMap {
 export function normalizeMap(data: TacticalMapData): TacticalMap {
   const defaultTerrain = data.defaultTerrain ?? 'field';
   const defaultHeight = normalizeElevationLevel(data.defaultHeight);
+  const sourceMetersPerCell = normalizeMetersPerCell(data.metersPerCell, 10);
+  const runtimeMetersPerCell = normalizeMetersPerCell(data.runtimeMetersPerCell, sourceMetersPerCell);
+  const sourceToRuntimeCellScale = normalizeResolutionScale(sourceMetersPerCell / runtimeMetersPerCell);
+  const runtimeWidth = Math.max(1, Math.round(data.width * sourceToRuntimeCellScale));
+  const runtimeHeight = Math.max(1, Math.round(data.height * sourceToRuntimeCellScale));
   const overrides = new Map<string, MapCellData>();
 
   for (const rect of data.cellRects ?? []) {
@@ -158,43 +170,41 @@ export function normalizeMap(data: TacticalMapData): TacticalMap {
     }
   }
 
-  for (const cell of data.cells ?? []) {
-    overrides.set(cellKey(cell.x, cell.y), cell);
-  }
+  for (const cell of data.cells ?? []) overrides.set(cellKey(cell.x, cell.y), cell);
 
-  const cells: MapCell[] = [];
-
-  for (let y = 0; y < data.height; y += 1) {
-    for (let x = 0; x < data.width; x += 1) {
-      const override = overrides.get(cellKey(x, y));
-      const heightFromMap = readMatrixValue(data.heightMap, x, y);
-      const forestFromMap = readMatrixValue(data.forestMap, x, y);
-
-      cells.push({
+  const cells: MapCell[] = new Array(runtimeWidth * runtimeHeight);
+  for (let y = 0; y < runtimeHeight; y += 1) {
+    const sourceY = clamp(Math.floor(y / sourceToRuntimeCellScale), 0, data.height - 1);
+    for (let x = 0; x < runtimeWidth; x += 1) {
+      const sourceX = clamp(Math.floor(x / sourceToRuntimeCellScale), 0, data.width - 1);
+      const override = overrides.get(cellKey(sourceX, sourceY));
+      const heightFromMap = readMatrixValue(data.heightMap, sourceX, sourceY);
+      const forestFromMap = readMatrixValue(data.forestMap, sourceX, sourceY);
+      cells[y * runtimeWidth + x] = {
         x,
         y,
         terrain: override?.terrain ?? defaultTerrain,
         height: normalizeElevationLevel(override?.height ?? heightFromMap ?? defaultHeight),
         forest: normalizeForestLayer(override?.forest ?? forestFromMap ?? 0),
-      });
+      };
     }
   }
 
   return {
-    width: data.width,
-    height: data.height,
-    cellSize: data.cellSize,
-    metersPerCell: data.metersPerCell ?? 10,
+    width: runtimeWidth,
+    height: runtimeHeight,
+    cellSize: data.cellSize / sourceToRuntimeCellScale,
+    metersPerCell: runtimeMetersPerCell,
+    sourceToRuntimeCellScale,
     defaultTerrain,
     defaultHeight,
     cells,
-    objects: normalizeMapObjects(data.objects ?? []),
+    objects: normalizeMapObjects(data.objects ?? [], sourceToRuntimeCellScale),
   };
 }
 
 export function normalizeElevationLevel(value: number | undefined): ElevationLevel {
   const rounded = Number.isFinite(value) ? Math.round(value as number) : 0;
-
   if (rounded <= -2) return -2;
   if (rounded >= 4) return 4;
   return rounded as ElevationLevel;
@@ -202,7 +212,6 @@ export function normalizeElevationLevel(value: number | undefined): ElevationLev
 
 export function normalizeForestLayer(value: number | undefined): ForestLayerKind {
   const rounded = Number.isFinite(value) ? Math.round(value as number) : 0;
-
   if (rounded <= 0) return 0;
   if (rounded >= 2) return 2;
   return 1;
@@ -223,7 +232,9 @@ export function gridToWorld(map: TacticalMap, grid: GridPosition): WorldPosition
 
 export function gridToCellLabel(map: TacticalMap, grid: GridPosition): string {
   const cell = gridToCellCenter(map, grid);
-  return `${Math.floor(cell.x)}, ${Math.floor(cell.y)} (${map.metersPerCell} м/клетка)`;
+  const metersX = Math.floor(cell.x * map.metersPerCell);
+  const metersY = Math.floor(cell.y * map.metersPerCell);
+  return `${metersX} м, ${metersY} м (${map.metersPerCell} м/клетка)`;
 }
 
 export function gridToCellCenter(map: TacticalMap, grid: GridPosition): GridPosition {
@@ -266,30 +277,33 @@ export function resolveObjectCoverProperties(object: MapObject): CoverProperties
   };
 }
 
-function normalizeMapObjects(objects: MapObjectData[]): MapObject[] {
+function normalizeMapObjects(objects: MapObjectData[], coordinateScale: number): MapObject[] {
   return objects.map((object) => {
     const defaultSize = getDefaultObjectSize(object.kind);
     const cover = getDefaultObjectCoverProperties(object.kind);
-
     return {
       id: object.id,
       kind: object.kind,
-      x: object.x,
-      y: object.y,
+      x: scaleSourceCellAnchor(object.x, coordinateScale),
+      y: scaleSourceCellAnchor(object.y, coordinateScale),
       rotationRadians: degreesToRadians(object.rotationDegrees ?? 0),
-      widthCells: object.widthCells ?? defaultSize.widthCells,
-      heightCells: object.heightCells ?? defaultSize.heightCells,
+      // Object dimensions are intentionally reinterpreted in the finer grid. This is the
+      // realism gain: a 2.5-cell cover becomes 5 metres, not the legacy 25 metres.
+      widthCells: Math.max(0.05, object.widthCells ?? defaultSize.widthCells),
+      heightCells: Math.max(0.05, object.heightCells ?? defaultSize.heightCells),
       losHeightMeters: normalizeObjectHeightMeters(object.losHeightMeters ?? defaultSize.losHeightMeters),
       coverProtection: clampPercent(object.coverProtection ?? cover.coverProtection),
       coverReliability: clampPercent(object.coverReliability ?? cover.coverReliability),
       concealment: clampPercent(object.concealment ?? cover.concealment),
       penetrable: object.penetrable ?? cover.penetrable,
       coverPosture: object.coverPosture ?? cover.coverPosture,
-      labels: object.label
-        ? { en: object.label, ru: object.labelRu ?? object.label }
-        : null,
+      labels: object.label ? { en: object.label, ru: object.labelRu ?? object.label } : null,
     };
   });
+}
+
+export function scaleSourceCellAnchor(value: number, scale: number): number {
+  return (value + 0.5) * scale - 0.5;
 }
 
 function getDefaultObjectSize(kind: MapObjectKind): { widthCells: number; heightCells: number; losHeightMeters: number } {
@@ -305,14 +319,24 @@ function getDefaultObjectSize(kind: MapObjectKind): { widthCells: number; height
     case 'fence': return { widthCells: 4, heightCells: 0.25, losHeightMeters: 1.2 };
     case 'bridge': return { widthCells: 2.6, heightCells: 1.1, losHeightMeters: 0.8 };
     case 'structure':
-    default:
-      return { widthCells: 2, heightCells: 1.5, losHeightMeters: 5 };
+    default: return { widthCells: 2, heightCells: 1.5, losHeightMeters: 5 };
   }
 }
 
 function normalizeObjectHeightMeters(value: number): number {
   if (!Number.isFinite(value)) return 1;
   return Math.max(0, Math.min(20, Math.round(value * 10) / 10));
+}
+
+function normalizeMetersPerCell(value: number | undefined, fallback: number): number {
+  if (!Number.isFinite(value) || (value as number) <= 0) return fallback;
+  return Math.max(0.25, Math.min(100, value as number));
+}
+
+function normalizeResolutionScale(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 1;
+  const rounded = Math.round(value);
+  return Math.abs(value - rounded) < 0.0001 ? Math.max(1, rounded) : Math.max(0.1, value);
 }
 
 function readMatrixValue(matrix: number[][] | undefined, x: number, y: number): number | undefined {

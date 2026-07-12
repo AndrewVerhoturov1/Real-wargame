@@ -14,9 +14,10 @@ import unitsData from './data/units/test_units.json';
 import { installAiStatefulMoveGameBridge as installAiGameBridge } from './core/ai/AiStatefulMoveGameBridge';
 import type { TacticalMapData } from './core/map/MapModel';
 import type { PressureZoneData } from './core/pressure/PressureZone';
-import { createInitialState } from './core/simulation/SimulationState';
+import { createResolutionAwareInitialState } from './core/simulation/ResolutionAwareScene';
 import { initializeAiTestLabRuntime } from './core/testing/AiTestLabRuntime';
 import type { UnitData } from './core/units/UnitModel';
+import { installAdaptiveGridLod } from './rendering/AdaptiveGridLodInstaller';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
 import { installAppShellMenu } from './shared/AppShellMenu';
 import { installEditorHeaderPlacement } from './ui/EditorHeaderPlacement';
@@ -45,7 +46,7 @@ if (!root || !debugPanel || !languageToggle || !gridToggle || !visionToggle || !
 
 installAppShellMenu({ mode: 'game' });
 
-const state = createInitialState(
+const state = createResolutionAwareInitialState(
   mapData as TacticalMapData,
   unitsData as UnitData[],
   pressureZoneData as PressureZoneData[],
@@ -79,6 +80,7 @@ const destroyFrontZoneControls = installFrontZoneControls(state, forceRenderAtNa
 const destroyEditorHeaderPlacement = installEditorHeaderPlacement();
 const destroyWorkspaceTooltipGuard = installWorkspaceTooltipGuard();
 tacticalBoard.start();
+const destroyAdaptiveGridLod = installAdaptiveGridLod(tacticalBoard, state, gridToggle);
 enforceNativeMapQuality(tacticalBoard);
 gridToggle.addEventListener('click', scheduleNativeMapQuality);
 // Pixi starts with the legacy English locale; switch once after its listener is installed.
@@ -94,6 +96,7 @@ forceRussianTopControls(
 
 window.addEventListener('beforeunload', () => {
   gridToggle.removeEventListener('click', scheduleNativeMapQuality);
+  destroyAdaptiveGridLod();
   destroyAiDictionary();
   destroyFrontZoneControls();
   destroyWorkspaceTooltipGuard();

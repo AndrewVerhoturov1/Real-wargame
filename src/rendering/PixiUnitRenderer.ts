@@ -5,133 +5,238 @@ import type { UnitModel } from '../core/units/UnitModel';
 const UNIT_RADIUS_CELL_FRACTION = 0.16;
 const MIN_UNIT_RADIUS_PX = 3.5;
 
+interface UnitView {
+  container: Container;
+  stress: Graphics;
+  body: Graphics;
+  weapon: Graphics;
+  posture: Graphics;
+  selection: Graphics;
+  bodyKey: string;
+  weaponKey: string;
+  radius: number;
+}
+
+export interface UnitRendererDiagnostics {
+  viewCount: number;
+  creationCount: number;
+  removalCount: number;
+  updateCount: number;
+  geometryRebuildCount: number;
+}
+
+type UnitRendererDebugWindow = Window & {
+  __realWargameUnitRendererDebug?: UnitRendererDiagnostics;
+};
+
 export class PixiUnitRenderer {
   readonly container = new Container();
+  private readonly views = new Map<string, UnitView>();
+  private readonly diagnostics: UnitRendererDiagnostics = {
+    viewCount: 0,
+    creationCount: 0,
+    removalCount: 0,
+    updateCount: 0,
+    geometryRebuildCount: 0,
+  };
+
+  constructor() {
+    this.container.eventMode = 'none';
+    this.container.interactiveChildren = false;
+    this.publishDiagnostics();
+  }
 
   render(map: TacticalMap, units: UnitModel[], selectedUnitIds: string[]): void {
-    this.container.removeChildren();
     const selectedIds = new Set(selectedUnitIds);
+    const visibleIds = new Set<string>();
+    const unitRadius = getUnitRadius(map);
 
-    for (const unit of units) {
-      const position = gridToWorld(map, unit.position);
-      const isSelected = selectedIds.has(unit.id);
-      const graphics = new Graphics();
-      const unitRadius = getUnitRadius(map);
-
-      drawStressHalo(graphics, position.x, position.y, unit, unitRadius);
-      drawUnitBody(graphics, position.x, position.y, unit, unitRadius);
-      drawFrontMarker(graphics, position.x, position.y, unit.facingRadians, unit.heldItem, unitRadius);
-      drawPostureMarker(graphics, position.x, position.y, unit, unitRadius);
-
-      if (isSelected) {
-        const selectionRadius = unitRadius + 5;
-        graphics.lineStyle(2, 0xfff2a8, 0.96);
-        graphics.drawRoundedRect(
-          position.x - selectionRadius,
-          position.y - selectionRadius,
-          selectionRadius * 2,
-          selectionRadius * 2,
-          4,
-        );
+    for (const [index, unit] of units.entries()) {
+      visibleIds.add(unit.id);
+      let view = this.views.get(unit.id);
+      if (!view) {
+        view = createUnitView();
+        this.views.set(unit.id, view);
+        this.container.addChild(view.container);
+        this.diagnostics.creationCount += 1;
       }
 
-      this.container.addChild(graphics);
+      if (this.container.getChildIndex(view.container) !== index) {
+        this.container.setChildIndex(view.container, Math.min(index, this.container.children.length - 1));
+      }
+      updateUnitView(view, map, unit, selectedIds.has(unit.id), unitRadius, this.diagnostics);
+      this.diagnostics.updateCount += 1;
     }
+
+    for (const [unitId, view] of this.views) {
+      if (visibleIds.has(unitId)) continue;
+      this.views.delete(unitId);
+      this.container.removeChild(view.container);
+      view.container.destroy({ children: true });
+      this.diagnostics.removalCount += 1;
+    }
+
+    this.publishDiagnostics();
+  }
+
+  destroy(): void {
+    for (const view of this.views.values()) view.container.destroy({ children: true });
+    this.views.clear();
+    this.container.removeChildren();
+    delete (window as UnitRendererDebugWindow).__realWargameUnitRendererDebug;
+  }
+
+  private publishDiagnostics(): void {
+    this.diagnostics.viewCount = this.views.size;
+    (window as UnitRendererDebugWindow).__realWargameUnitRendererDebug = { ...this.diagnostics };
   }
 }
 
-function drawUnitBody(graphics: Graphics, x: number, y: number, unit: UnitModel, unitRadius: number): void {
-  const fill = getUnitFill(unit);
+function createUnitView(): UnitView {
+  const container = new Container();
+  const stress = new Graphics();
+  const body = new Graphics();
+  const weapon = new Graphics();
+  const posture = new Graphics();
+  const selection = new Graphics();
 
+  container.eventMode = 'none';
+  container.interactiveChildren = false;
+  for (const graphics of [stress, body, weapon, posture, selection]) graphics.eventMode = 'none';
+  container.addChild(stress, body, weapon, posture, selection);
+
+  return {
+    container,
+    stress,
+    body,
+    weapon,
+    posture,
+    selection,
+    bodyKey: '',
+    weaponKey: '',
+    radius: 0,
+  };
+}
+
+function updateUnitView(
+  view: UnitView,
+  map: TacticalMap,
+  unit: UnitModel,
+  selected: boolean,
+  unitRadius: number,
+  diagnostics: UnitRendererDiagnostics,
+): void {
+  const position = gridToWorld(map, unit.position);
+  view.container.position.set(position.x, position.y);
+
+  const bodyKey = [
+    unitRadius.toFixed(3),
+    unit.type,
+    unit.behaviorRuntime.state,
+    unit.behaviorRuntime.posture,
+  ].join(':');
+  if (bodyKey !== view.bodyKey) {
+    view.bodyKey = bodyKey;
+    view.radius = unitRadius;
+    redrawBody(view.body, unit, unitRadius);
+    redrawPosture(view.posture, unit, unitRadius);
+    redrawStress(view.stress, unitRadius);
+    redrawSelection(view.selection, unitRadius);
+    diagnostics.geometryRebuildCount += 4;
+  }
+
+  const weaponKey = `${unitRadius.toFixed(3)}:${unit.heldItem}`;
+  if (weaponKey !== view.weaponKey) {
+    view.weaponKey = weaponKey;
+    redrawWeapon(view.weapon, unit.heldItem, unitRadius);
+    diagnostics.geometryRebuildCount += 1;
+  }
+
+  view.weapon.rotation = unit.facingRadians;
+  view.selection.visible = selected;
+  view.stress.visible = unit.behaviorRuntime.stress > 0;
+  view.stress.alpha = Math.min(0.7, Math.max(0.12, unit.behaviorRuntime.stress / 160));
+}
+
+function redrawBody(graphics: Graphics, unit: UnitModel, unitRadius: number): void {
+  graphics.clear();
+  const fill = getUnitFill(unit);
   graphics.lineStyle(1.5, 0x111111, 0.9);
 
   if (unit.behaviorRuntime.posture === 'prone') {
     graphics.beginFill(fill, 1);
-    graphics.drawRoundedRect(x - unitRadius * 1.5, y - unitRadius * 0.45, unitRadius * 3, unitRadius * 0.9, 4);
+    graphics.drawRoundedRect(-unitRadius * 1.5, -unitRadius * 0.45, unitRadius * 3, unitRadius * 0.9, 4);
     graphics.endFill();
     return;
   }
 
   const radius = unit.behaviorRuntime.posture === 'crouched' ? unitRadius * 0.75 : unitRadius;
   graphics.beginFill(fill, 1);
-  graphics.drawCircle(x, y, radius);
+  graphics.drawCircle(0, 0, radius);
   graphics.endFill();
 }
 
-function drawPostureMarker(graphics: Graphics, x: number, y: number, unit: UnitModel, unitRadius: number): void {
-  if (unit.behaviorRuntime.posture === 'standing') {
-    return;
-  }
+function redrawPosture(graphics: Graphics, unit: UnitModel, unitRadius: number): void {
+  graphics.clear();
+  if (unit.behaviorRuntime.posture === 'standing') return;
 
   graphics.lineStyle(1.5, 0xf6edcf, 0.9);
-
   if (unit.behaviorRuntime.posture === 'crouched') {
-    graphics.moveTo(x - unitRadius * 0.8, y + unitRadius * 1.25);
-    graphics.lineTo(x + unitRadius * 0.8, y + unitRadius * 1.25);
+    graphics.moveTo(-unitRadius * 0.8, unitRadius * 1.25);
+    graphics.lineTo(unitRadius * 0.8, unitRadius * 1.25);
     return;
   }
 
-  graphics.moveTo(x - unitRadius, y + unitRadius * 1.15);
-  graphics.lineTo(x + unitRadius, y + unitRadius * 1.15);
-  graphics.moveTo(x - unitRadius * 0.8, y + unitRadius * 1.55);
-  graphics.lineTo(x + unitRadius * 0.8, y + unitRadius * 1.55);
+  graphics.moveTo(-unitRadius, unitRadius * 1.15);
+  graphics.lineTo(unitRadius, unitRadius * 1.15);
+  graphics.moveTo(-unitRadius * 0.8, unitRadius * 1.55);
+  graphics.lineTo(unitRadius * 0.8, unitRadius * 1.55);
 }
 
-function drawStressHalo(graphics: Graphics, x: number, y: number, unit: UnitModel, unitRadius: number): void {
-  if (unit.behaviorRuntime.stress <= 0) {
-    return;
-  }
+function redrawStress(graphics: Graphics, unitRadius: number): void {
+  graphics.clear();
+  graphics.lineStyle(1.5, 0xb6633c, 1);
+  graphics.drawCircle(0, 0, unitRadius + 5);
+}
 
-  const alpha = Math.min(0.7, Math.max(0.12, unit.behaviorRuntime.stress / 160));
-  graphics.lineStyle(1.5, 0xb6633c, alpha);
-  graphics.drawCircle(x, y, unitRadius + 5);
+function redrawSelection(graphics: Graphics, unitRadius: number): void {
+  graphics.clear();
+  const selectionRadius = unitRadius + 5;
+  graphics.lineStyle(2, 0xfff2a8, 0.96);
+  graphics.drawRoundedRect(
+    -selectionRadius,
+    -selectionRadius,
+    selectionRadius * 2,
+    selectionRadius * 2,
+    4,
+  );
+}
+
+function redrawWeapon(graphics: Graphics, itemKind: UnitModel['heldItem'], unitRadius: number): void {
+  graphics.clear();
+  const startX = unitRadius * 0.6;
+  const length = itemKind === 'support_item'
+    ? unitRadius * 2.2
+    : itemKind === 'short_item'
+      ? unitRadius * 1.4
+      : unitRadius * 1.8;
+  const endX = startX + length;
+
+  graphics.lineStyle(itemKind === 'support_item' ? 3 : 2, 0x1a1710, 1);
+  graphics.moveTo(startX, 0);
+  graphics.lineTo(endX, 0);
+
+  graphics.lineStyle(1.5, 0xd2c09a, 0.95);
+  graphics.moveTo(startX, -unitRadius * 0.5);
+  graphics.lineTo(startX, unitRadius * 0.5);
 }
 
 function getUnitFill(unit: UnitModel): number {
-  if (unit.behaviorRuntime.state === 'stressed') {
-    return 0x743635;
-  }
-
-  if (unit.behaviorRuntime.state === 'taking_cover') {
-    return 0x8a6b39;
-  }
-
-  if (unit.type === 'support_team') {
-    return 0x394a6d;
-  }
-
-  if (unit.type === 'scout_team') {
-    return 0x4c6742;
-  }
-
+  if (unit.behaviorRuntime.state === 'stressed') return 0x743635;
+  if (unit.behaviorRuntime.state === 'taking_cover') return 0x8a6b39;
+  if (unit.type === 'support_team') return 0x394a6d;
+  if (unit.type === 'scout_team') return 0x4c6742;
   return 0x485f35;
-}
-
-function drawFrontMarker(
-  graphics: Graphics,
-  x: number,
-  y: number,
-  facingRadians: number,
-  itemKind: UnitModel['heldItem'],
-  unitRadius: number,
-): void {
-  const forwardX = Math.cos(facingRadians);
-  const forwardY = Math.sin(facingRadians);
-  const sideX = Math.cos(facingRadians + Math.PI / 2);
-  const sideY = Math.sin(facingRadians + Math.PI / 2);
-  const startX = x + forwardX * (unitRadius * 0.6);
-  const startY = y + forwardY * (unitRadius * 0.6);
-  const length = itemKind === 'support_item' ? unitRadius * 2.2 : itemKind === 'short_item' ? unitRadius * 1.4 : unitRadius * 1.8;
-  const endX = startX + forwardX * length;
-  const endY = startY + forwardY * length;
-
-  graphics.lineStyle(itemKind === 'support_item' ? 3 : 2, 0x1a1710, 1);
-  graphics.moveTo(startX, startY);
-  graphics.lineTo(endX, endY);
-
-  graphics.lineStyle(1.5, 0xd2c09a, 0.95);
-  graphics.moveTo(startX - sideX * unitRadius * 0.5, startY - sideY * unitRadius * 0.5);
-  graphics.lineTo(startX + sideX * unitRadius * 0.5, startY + sideY * unitRadius * 0.5);
 }
 
 function getUnitRadius(map: TacticalMap): number {

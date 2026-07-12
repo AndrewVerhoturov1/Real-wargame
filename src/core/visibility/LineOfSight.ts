@@ -1,10 +1,13 @@
 import { distance, type GridPosition } from '../geometry';
 import { getCell, type MapObject, type MapObjectKind, type TacticalMap } from '../map/MapModel';
+import { getMapObjectSpatialIndex } from '../spatial/MapObjectSpatialIndex';
 import { sampleSmoothHeightLevel } from '../terrain/SmoothTerrain';
 import type { UnitModel } from '../units/UnitModel';
 
 const ELEVATION_STEP_METERS = 2;
-const SAMPLE_STEP_CELLS = 0.12;
+const SAMPLE_STEP_METERS = 1.2;
+const ENDPOINT_RELIEF_GRACE_METERS = 7;
+const OBJECT_ORIGIN_IGNORE_METERS = 1.25;
 const TERRAIN_BLOCK_MARGIN_METERS = 0.95;
 const OBJECT_BLOCK_MARGIN_METERS = 0.15;
 
@@ -23,7 +26,7 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
   const totalDistanceCells = distance(origin, target);
   const totalDistanceMeters = totalDistanceCells * map.metersPerCell;
 
-  if (totalDistanceCells <= 0.01) {
+  if (totalDistanceMeters <= 0.02) {
     return {
       origin,
       target,
@@ -35,11 +38,16 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
     };
   }
 
+  const objectCandidates = getMapObjectSpatialIndex(map).querySegment(
+    origin,
+    target,
+    Math.max(0.5, 2 / map.metersPerCell),
+  );
   const originGround = sampleSmoothHeightLevel(map, origin.x, origin.y) * ELEVATION_STEP_METERS;
   const targetGround = sampleSmoothHeightLevel(map, target.x, target.y) * ELEVATION_STEP_METERS;
   const originEye = originGround + eyeHeightForPosture(unit.behaviorRuntime.posture);
   const targetEye = targetGround + 1.4;
-  const steps = Math.max(2, Math.ceil(totalDistanceCells / SAMPLE_STEP_CELLS));
+  const steps = Math.max(2, Math.ceil(totalDistanceMeters / SAMPLE_STEP_METERS));
   let forestMeters = 0;
 
   for (let step = 1; step <= steps; step += 1) {
@@ -56,7 +64,7 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
       return blockedResult(origin, target, totalDistanceMeters, currentDistanceMeters, sample, 'край карты');
     }
 
-    const objectBlocker = findObjectBlocker(map, sample, origin, lineHeight);
+    const objectBlocker = findObjectBlocker(objectCandidates, map, sample, origin, lineHeight);
     if (objectBlocker) {
       return blockedResult(
         origin,
@@ -68,8 +76,9 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
       );
     }
 
+    const stepMeters = totalDistanceMeters / steps;
     if (cell.forest > 0) {
-      forestMeters += map.metersPerCell / Math.max(1, steps / totalDistanceCells);
+      forestMeters += stepMeters;
       const forestLimit = cell.forest === 2 ? 18 : 34;
       if (forestMeters >= forestLimit) {
         return blockedResult(
@@ -82,13 +91,13 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
         );
       }
     } else {
-      forestMeters = Math.max(0, forestMeters - map.metersPerCell * 0.4);
+      forestMeters = Math.max(0, forestMeters - stepMeters * 0.4);
     }
 
     const smoothHeightLevel = sampleSmoothHeightLevel(map, sample.x, sample.y);
     const groundHeight = smoothHeightLevel * ELEVATION_STEP_METERS;
-    const isNearOrigin = currentDistanceMeters < map.metersPerCell * 0.7;
-    const isNearTarget = totalDistanceMeters - currentDistanceMeters < map.metersPerCell * 0.7;
+    const isNearOrigin = currentDistanceMeters < ENDPOINT_RELIEF_GRACE_METERS;
+    const isNearTarget = totalDistanceMeters - currentDistanceMeters < ENDPOINT_RELIEF_GRACE_METERS;
 
     if (!isNearOrigin && !isNearTarget && groundHeight > lineHeight + TERRAIN_BLOCK_MARGIN_METERS) {
       return blockedResult(
@@ -133,42 +142,40 @@ function blockedResult(
 }
 
 function findObjectBlocker(
+  candidates: MapObject[],
   map: TacticalMap,
   sample: GridPosition,
   origin: GridPosition,
   lineHeightMeters: number,
 ): MapObject | null {
-  for (const object of map.objects) {
-    if (!blocksLineOfSight(object)) {
-      continue;
-    }
+  for (const object of candidates) {
+    if (!blocksLineOfSight(object)) continue;
+    const centerX = object.x + 0.5;
+    const centerY = object.y + 0.5;
+    if (distance(origin, { x: centerX, y: centerY }) * map.metersPerCell < OBJECT_ORIGIN_IGNORE_METERS) continue;
 
-    if (distance(origin, { x: object.x, y: object.y }) < 0.65) {
-      continue;
-    }
-
+    const dx = sample.x - centerX;
+    const dy = sample.y - centerY;
+    const cos = Math.cos(-object.rotationRadians);
+    const sin = Math.sin(-object.rotationRadians);
+    const localX = dx * cos - dy * sin;
+    const localY = dx * sin + dy * cos;
     const halfWidth = Math.max(0.35, object.widthCells / 2);
     const halfHeight = Math.max(0.35, object.heightCells / 2);
 
-    if (Math.abs(sample.x - object.x) > halfWidth || Math.abs(sample.y - object.y) > halfHeight) {
-      continue;
-    }
+    if (Math.abs(localX) > halfWidth || Math.abs(localY) > halfHeight) continue;
 
-    const objectGround = sampleSmoothHeightLevel(map, object.x, object.y) * ELEVATION_STEP_METERS;
+    const objectGround = sampleSmoothHeightLevel(map, centerX, centerY) * ELEVATION_STEP_METERS;
     const objectTop = objectGround + getObjectHeightMeters(object);
 
-    if (objectTop + OBJECT_BLOCK_MARGIN_METERS >= lineHeightMeters) {
-      return object;
-    }
+    if (objectTop + OBJECT_BLOCK_MARGIN_METERS >= lineHeightMeters) return object;
   }
 
   return null;
 }
 
 function blocksLineOfSight(object: MapObject): boolean {
-  if (getObjectHeightMeters(object) <= 0.05) {
-    return false;
-  }
+  if (getObjectHeightMeters(object) <= 0.05) return false;
 
   switch (object.kind) {
     case 'structure':
@@ -192,75 +199,50 @@ function getObjectHeightMeters(object: MapObject): number {
   if (typeof object.losHeightMeters === 'number' && Number.isFinite(object.losHeightMeters)) {
     return object.losHeightMeters;
   }
-
   return fallbackObjectHeightMeters(object.kind);
 }
 
 function fallbackObjectHeightMeters(kind: MapObjectKind): number {
   switch (kind) {
-    case 'tree':
-      return 6;
-    case 'structure':
-      return 5;
-    case 'post':
-      return 1.35;
-    case 'crates':
-      return 1.25;
+    case 'tree': return 6;
+    case 'structure': return 5;
+    case 'post': return 1.35;
+    case 'crates': return 1.25;
     case 'rock':
-    case 'fence':
-      return 1.2;
+    case 'fence': return 1.2;
     case 'cover':
-    case 'well':
-      return 1.1;
+    case 'well': return 1.1;
     case 'logs':
-      return 0.8;
-    case 'bridge':
-      return 0.8;
+    case 'bridge': return 0.8;
     case 'ditch':
-    default:
-      return 0.2;
+    default: return 0.2;
   }
 }
 
 function formatObjectBlocker(object: MapObject): string {
   const label = object.labels?.ru;
-  if (label) {
-    return label;
-  }
+  if (label) return label;
 
   switch (object.kind) {
-    case 'structure':
-      return 'строение';
-    case 'rock':
-      return 'камень';
-    case 'cover':
-      return 'укрытие';
-    case 'crates':
-      return 'ящики / бочки';
-    case 'logs':
-      return 'брёвна';
-    case 'fence':
-      return 'забор';
-    case 'tree':
-      return 'дерево';
-    case 'post':
-      return 'пост / бочки';
-    case 'well':
-      return 'колодец / круглый объект';
-    default:
-      return object.kind;
+    case 'structure': return 'строение';
+    case 'rock': return 'камень';
+    case 'cover': return 'укрытие';
+    case 'crates': return 'ящики / бочки';
+    case 'logs': return 'брёвна';
+    case 'fence': return 'забор';
+    case 'tree': return 'дерево';
+    case 'post': return 'пост / бочки';
+    case 'well': return 'колодец / круглый объект';
+    default: return object.kind;
   }
 }
 
 function eyeHeightForPosture(posture: UnitModel['behaviorRuntime']['posture']): number {
   switch (posture) {
-    case 'prone':
-      return 0.35;
-    case 'crouched':
-      return 1.1;
+    case 'prone': return 0.35;
+    case 'crouched': return 1.1;
     case 'standing':
-    default:
-      return 1.7;
+    default: return 1.7;
   }
 }
 

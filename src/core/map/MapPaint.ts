@@ -1,9 +1,19 @@
 import { distance, type GridPosition } from '../geometry';
-import { getCell, normalizeElevationLevel, normalizeForestLayer, type TacticalMap } from './MapModel';
 import type { SimulationState } from '../simulation/SimulationState';
+import { getCell, normalizeElevationLevel, normalizeForestLayer, type TacticalMap } from './MapModel';
+import {
+  fullMapRegion,
+  markMapCellsDirty,
+  type MapDirtyRegion,
+} from './MapRuntimeState';
 
 export type TerrainPaintTool = 'paint_height' | 'paint_forest';
 export type TerrainBrushShape = 'circle' | 'square';
+
+interface PaintResult {
+  changed: number;
+  region: MapDirtyRegion | null;
+}
 
 export function isTerrainPaintTool(tool: string): tool is TerrainPaintTool {
   return tool === 'paint_height' || tool === 'paint_forest';
@@ -22,29 +32,49 @@ export function paintEditorTerrainAt(state: SimulationState, grid: GridPosition)
 
   const radius = Math.max(0, (editor.brushSizeCells ?? 1) / 2);
   const shape = editor.brushShape ?? 'circle';
-  const changed = tool === 'paint_height'
+  const result = tool === 'paint_height'
     ? paintHeight(state.map, grid, editor.heightBrushLevel ?? 1, radius, shape)
     : paintForest(state.map, grid, editor.forestBrushKind ?? 1, radius, shape);
 
+  if (result.region) {
+    markMapCellsDirty(state.map, tool === 'paint_height' ? 'height' : 'forest', result.region);
+  }
+
   if (tool === 'paint_height') {
-    state.editor.lastMessage = changed > 0
-      ? `Высота: покрашено клеток ${changed}, уровень ${formatHeight(editor.heightBrushLevel ?? 1)}, кисть ${formatShape(shape)}.`
-      : 'Высота: кисть не попала на карту.';
+    state.editor.lastMessage = result.changed > 0
+      ? `Высота: покрашено клеток ${result.changed}, уровень ${formatHeight(editor.heightBrushLevel ?? 1)}, кисть ${formatShape(shape)}.`
+      : 'Высота: кисть не изменила карту.';
   } else {
-    state.editor.lastMessage = changed > 0
-      ? `Лес: покрашено клеток ${changed}, слой ${formatForest(editor.forestBrushKind ?? 1)}, кисть ${formatShape(shape)}.`
-      : 'Лес: кисть не попала на карту.';
+    state.editor.lastMessage = result.changed > 0
+      ? `Лес: покрашено клеток ${result.changed}, слой ${formatForest(editor.forestBrushKind ?? 1)}, кисть ${formatShape(shape)}.`
+      : 'Лес: кисть не изменила карту.';
   }
 }
 
 export function clearHeightLayer(state: SimulationState): void {
-  for (const cell of state.map.cells) cell.height = 0;
-  state.editor.lastMessage = 'Слой высот очищен: все клетки стали 0.';
+  let changed = false;
+  for (const cell of state.map.cells) {
+    if (cell.height === 0) continue;
+    cell.height = 0;
+    changed = true;
+  }
+  if (changed) markMapCellsDirty(state.map, 'height', fullMapRegion(state.map));
+  state.editor.lastMessage = changed
+    ? 'Слой высот очищен: все клетки стали 0.'
+    : 'Слой высот уже был пуст.';
 }
 
 export function clearForestLayer(state: SimulationState): void {
-  for (const cell of state.map.cells) cell.forest = 0;
-  state.editor.lastMessage = 'Слой леса очищен: везде нет леса.';
+  let changed = false;
+  for (const cell of state.map.cells) {
+    if (cell.forest === 0) continue;
+    cell.forest = 0;
+    changed = true;
+  }
+  if (changed) markMapCellsDirty(state.map, 'forest', fullMapRegion(state.map));
+  state.editor.lastMessage = changed
+    ? 'Слой леса очищен: везде нет леса.'
+    : 'Слой леса уже был пуст.';
 }
 
 function paintHeight(
@@ -53,16 +83,14 @@ function paintHeight(
   level: number,
   radius: number,
   shape: TerrainBrushShape,
-): number {
+): PaintResult {
   const normalized = normalizeElevationLevel(level);
-  let changed = 0;
-  forEachBrushCell(map, center, radius, shape, (x, y) => {
+  return collectPaintChanges(map, center, radius, shape, (x, y) => {
     const cell = getCell(map, x, y);
-    if (!cell || cell.height === normalized) return;
+    if (!cell || cell.height === normalized) return false;
     cell.height = normalized;
-    changed += 1;
+    return true;
   });
-  return changed;
 }
 
 function paintForest(
@@ -71,16 +99,41 @@ function paintForest(
   kind: number,
   radius: number,
   shape: TerrainBrushShape,
-): number {
+): PaintResult {
   const normalized = normalizeForestLayer(kind);
-  let changed = 0;
-  forEachBrushCell(map, center, radius, shape, (x, y) => {
+  return collectPaintChanges(map, center, radius, shape, (x, y) => {
     const cell = getCell(map, x, y);
-    if (!cell || cell.forest === normalized) return;
+    if (!cell || cell.forest === normalized) return false;
     cell.forest = normalized;
-    changed += 1;
+    return true;
   });
-  return changed;
+}
+
+function collectPaintChanges(
+  map: TacticalMap,
+  center: GridPosition,
+  radius: number,
+  shape: TerrainBrushShape,
+  changeCell: (x: number, y: number) => boolean,
+): PaintResult {
+  let changed = 0;
+  let region: MapDirtyRegion | null = null;
+  forEachBrushCell(map, center, radius, shape, (x, y) => {
+    if (!changeCell(x, y)) return;
+    changed += 1;
+    region = includeCell(region, x, y);
+  });
+  return { changed, region };
+}
+
+function includeCell(region: MapDirtyRegion | null, x: number, y: number): MapDirtyRegion {
+  if (!region) return { minX: x, minY: y, maxX: x, maxY: y };
+  return {
+    minX: Math.min(region.minX, x),
+    minY: Math.min(region.minY, y),
+    maxX: Math.max(region.maxX, x),
+    maxY: Math.max(region.maxY, y),
+  };
 }
 
 function forEachBrushCell(
@@ -99,7 +152,9 @@ function forEachBrushCell(
   const maxY = Math.min(map.height - 1, Math.ceil(center.y + safeRadius));
 
   if (safeRadius <= 0.55) {
-    callback(centerX, centerY);
+    if (centerX >= 0 && centerY >= 0 && centerX < map.width && centerY < map.height) {
+      callback(centerX, centerY);
+    }
     return;
   }
 

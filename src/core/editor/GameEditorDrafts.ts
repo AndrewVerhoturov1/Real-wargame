@@ -104,7 +104,7 @@ const OBJECT_SIZE_PRESETS: Record<MapObjectKind, { widthCells: number; heightCel
 export function getGameEditorDrafts(state: SimulationState): GameEditorDrafts {
   let drafts = draftsByState.get(state);
   if (!drafts) {
-    drafts = createDefaultDrafts();
+    drafts = createDefaultDrafts(state);
     draftsByState.set(state, drafts);
   }
   return drafts;
@@ -160,7 +160,8 @@ export function syncLegacyEditorFields(state: SimulationState): void {
   editor.forestBrushKind = drafts.terrain.forestBrushKind;
 }
 
-function createDefaultDrafts(): GameEditorDrafts {
+function createDefaultDrafts(state: SimulationState): GameEditorDrafts {
+  const metersPerCell = Math.max(0.001, state.map.metersPerCell);
   const object = {} as ObjectCreationDraft;
   resetObjectDraftForKind(object, 'cover');
   object.rotationDegrees = 0;
@@ -173,10 +174,10 @@ function createDefaultDrafts(): GameEditorDrafts {
       type: 'infantry_squad',
       heldItem: 'long_item',
       profile: 'regular',
-      speedCellsPerSecond: 0.5,
+      speedCellsPerSecond: 5 / metersPerCell,
       facingDegrees: 0,
       viewAngleDegrees: 90,
-      viewRangeCells: 7,
+      viewRangeCells: 70 / metersPerCell,
       posture: 'standing',
       stress: 0,
       suppression: 0,
@@ -189,27 +190,27 @@ function createDefaultDrafts(): GameEditorDrafts {
       name: 'Источник угрозы',
       shape: 'circle',
       mode: 'directional_fire',
-      radiusCells: 3,
-      widthCells: 5,
-      heightCells: 3,
+      radiusCells: 30 / metersPerCell,
+      widthCells: 50 / metersPerCell,
+      heightCells: 30 / metersPerCell,
       rotationDegrees: 0,
       strength: 70,
       suppression: 85,
       stressPerSecond: 18,
       directionDegrees: 0,
       arcDegrees: 50,
-      rangeCells: 14,
+      rangeCells: 140 / metersPerCell,
       minRangeCells: 0,
       falloffPercent: 40,
       enabled: true,
       sourceVisible: true,
       sourceKnown: true,
       knowledgeConfidence: 100,
-      uncertaintyCells: 0.15,
+      uncertaintyCells: 1.5 / metersPerCell,
     },
     terrain: {
       brushShape: 'circle',
-      brushSizeCells: 3,
+      brushSizeCells: 30 / metersPerCell,
       heightBrushLevel: 2,
       forestBrushKind: 1,
     },

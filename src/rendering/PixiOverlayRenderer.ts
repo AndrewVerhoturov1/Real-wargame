@@ -1,6 +1,7 @@
 import { Container, Graphics } from 'pixi.js';
 import { buildUnitKnowledgeReport, type KnowledgeCover } from '../core/knowledge/UnitKnowledge';
 import { gridToCellCenter } from '../core/map/MapModel';
+import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
 import { resolvePressureZoneSettings, type PressureZone } from '../core/pressure/PressureZone';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { hasHeightVariation, sampleSmoothHeightLevel } from '../core/terrain/SmoothTerrain';
@@ -11,13 +12,14 @@ import {
   getVisibilityProbeState,
 } from '../core/ui/RuntimeUiState';
 import type { KnownThreatMemory } from '../core/units/UnitModel';
-import { computeLineOfSight } from '../core/visibility/LineOfSight';
+import { getVisibilityProbeResult } from '../core/visibility/VisibilityProbeService';
 
 interface OverlayDiagnostics {
   knowledgeRebuildCount: number;
   probeRebuildCount: number;
   interactionUpdateCount: number;
   interactionObjectCount: number;
+  fullMapFingerprintScanCount: number;
 }
 
 type OverlayDebugWindow = Window & {
@@ -43,6 +45,7 @@ export class PixiOverlayRenderer {
     probeRebuildCount: 0,
     interactionUpdateCount: 0,
     interactionObjectCount: 2,
+    fullMapFingerprintScanCount: 0,
   };
 
   constructor() {
@@ -197,9 +200,7 @@ function isKnowledgeLayerVisible(state: SimulationState): boolean {
 }
 
 function destroyContainerChildren(container: Container): void {
-  for (const child of container.removeChildren()) {
-    child.destroy();
-  }
+  for (const child of container.removeChildren()) child.destroy();
 }
 
 function drawRealReliefOverlay(container: Container, state: SimulationState): void {
@@ -340,11 +341,9 @@ function drawRememberedThreat(graphics: Graphics, threat: KnownThreatMemory, cel
 }
 
 function drawVisibilityProbe(container: Container, state: SimulationState): void {
-  const probe = getVisibilityProbeState(state);
-  const unit = getSelectedUnit(state);
-  if (!probe.active || !probe.target || !unit) return;
+  const result = getVisibilityProbeResult(state);
+  if (!result) return;
 
-  const result = computeLineOfSight(state.map, unit, probe.target);
   const cellSize = state.map.cellSize;
   const graphics = new Graphics();
   const origin = result.origin;
@@ -409,13 +408,14 @@ function getZoneLayerKey(state: SimulationState, showPressureZones: boolean): st
 function getRealReliefLayerKey(state: SimulationState): string {
   const active = getRealReliefOverlayState(state).active ? '1' : '0';
   if (!active) return 'relief:hidden';
+  const revisions = getMapRevisionSnapshot(state.map);
 
   return [
     'relief:cached',
     `active:${active}`,
     `size:${state.map.width}x${state.map.height}`,
     `cell:${state.map.cellSize}`,
-    `height:${state.map.cells.map((cell) => cell.height).join(',')}`,
+    `heightRevision:${revisions.height}`,
   ].join(';');
 }
 
@@ -423,9 +423,7 @@ function getKnowledgeLayerKey(state: SimulationState): string {
   const knowledgeOverlay = getKnowledgeOverlayState(state).active ? '1' : '0';
   const selectedUnit = getSelectedUnit(state);
   const layer = getSimulationLayerState(state);
-  const objectKey = state.map.objects
-    .map((object) => `${object.id}:${object.x.toFixed(2)}:${object.y.toFixed(2)}:${object.widthCells.toFixed(2)}:${object.heightCells.toFixed(2)}`)
-    .join('|');
+  const revisions = getMapRevisionSnapshot(state.map);
 
   return [
     `editor:${state.editor.enabled ? '1' : '0'}`,
@@ -438,7 +436,7 @@ function getKnowledgeLayerKey(state: SimulationState): string {
     `selectedCover:${layer.selectedCoverId ?? ''}`,
     `hoveredCover:${layer.hoveredCoverId ?? ''}`,
     `knowledgeRevision:${selectedUnit?.tacticalKnowledge.revision ?? 0}`,
-    `objects:${objectKey}`,
+    `objectsRevision:${revisions.objects}`,
     `zones:${state.pressureZones.length}`,
   ].join(';');
 }
@@ -448,17 +446,17 @@ function getProbeLayerKey(state: SimulationState): string {
   if (!probe.active || !probe.target) return 'probe:off';
 
   const selectedUnit = getSelectedUnit(state);
-  const objectKey = state.map.objects
-    .map((object) => `${object.id}:${object.x.toFixed(2)}:${object.y.toFixed(2)}:${object.widthCells.toFixed(2)}:${object.heightCells.toFixed(2)}:${object.rotationRadians.toFixed(2)}`)
-    .join('|');
+  const revisions = getMapRevisionSnapshot(state.map);
 
   return [
     `probe:${probe.target.x.toFixed(2)}:${probe.target.y.toFixed(2)}`,
     `unit:${selectedUnit?.id ?? 'none'}`,
     `unitPosition:${selectedUnit ? `${selectedUnit.position.x.toFixed(2)}:${selectedUnit.position.y.toFixed(2)}` : 'none'}`,
+    `posture:${selectedUnit?.behaviorRuntime.posture ?? 'none'}`,
     `cell:${state.map.cellSize}`,
-    `terrain:${state.map.cells.map((cell) => `${cell.height}:${cell.forest}`).join(',')}`,
-    `objects:${objectKey}`,
+    `heightRevision:${revisions.height}`,
+    `forestRevision:${revisions.forest}`,
+    `objectsRevision:${revisions.objects}`,
   ].join(';');
 }
 
@@ -489,11 +487,8 @@ function drawPressureZones(
     const graphics = new Graphics();
     const isSelected = zone.id === selectedZoneId;
 
-    if (settings.mode === 'directional_fire') {
-      drawDirectionalThreat(graphics, zone, cellSize, isSelected);
-    } else {
-      drawAreaThreat(graphics, zone, cellSize, isSelected);
-    }
+    if (settings.mode === 'directional_fire') drawDirectionalThreat(graphics, zone, cellSize, isSelected);
+    else drawAreaThreat(graphics, zone, cellSize, isSelected);
 
     container.addChild(graphics);
   }
