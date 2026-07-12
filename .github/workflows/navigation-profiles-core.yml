@@ -31,6 +31,12 @@ jobs:
           set -o pipefail
           npm run navigation-profiles:smoke 2>&1 | tee navigation-profiles.log
 
+      - name: Navigation profile switch smoke
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run navigation-profile-switch:smoke 2>&1 | tee navigation-profile-switch.log
+
       - name: Navigation overlay contract smoke
         shell: bash
         run: |
@@ -98,6 +104,7 @@ jobs:
           name: navigation-profiles-core-logs
           path: |
             navigation-profiles.log
+            navigation-profile-switch.log
             navigation-overlay.log
             grid-pathfinding.log
             routed-move.log
