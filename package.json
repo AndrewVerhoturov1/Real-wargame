@@ -19,6 +19,7 @@
     "move-bridge:smoke": "node scripts/ai_stateful_move_bridge_smoke.mjs",
     "route-status:smoke": "node scripts/ai_route_status_smoke.mjs",
     "pathfinding:smoke": "node scripts/grid_pathfinding_smoke.mjs",
+    "routed-move:smoke": "node scripts/routed_move_smoke.mjs",
     "lab:manager": "node scripts/real_wargame_lab_manager.mjs",
     "docs:generate": "node scripts/generate_agent_docs.mjs",
     "docs:check": "node scripts/check_agent_docs.mjs",
