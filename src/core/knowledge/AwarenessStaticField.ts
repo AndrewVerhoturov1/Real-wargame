@@ -8,6 +8,7 @@ export interface AwarenessStaticField {
   key: string;
   width: number;
   height: number;
+  metersPerCell: number;
   expectedProtection: Uint8Array;
   reliability: Uint8Array;
   concealment: Uint8Array;
@@ -82,6 +83,7 @@ export function getAwarenessStaticField(map: TacticalMap, posture: UnitPosture):
     key,
     width: map.width,
     height: map.height,
+    metersPerCell: map.metersPerCell,
     expectedProtection,
     reliability,
     concealment,
@@ -126,6 +128,7 @@ function buildStaticFieldKey(map: TacticalMap, posture: UnitPosture): string {
   return [
     map.width,
     map.height,
+    map.metersPerCell,
     posture,
     revisions.terrain,
     revisions.height,
