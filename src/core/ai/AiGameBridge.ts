@@ -4,6 +4,7 @@ import { distance, type GridPosition } from '../geometry';
 import { buildSoldierAwarenessReport } from '../knowledge/SoldierAwarenessGrid';
 import { clampGridPositionToMap, type TacticalMap } from '../map/MapModel';
 import { createMoveOrder } from '../orders/MoveOrder';
+import { isPlayerCommandOutstanding } from '../orders/PlayerCommand';
 import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
 import type { SimulationState } from '../simulation/SimulationState';
 import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
@@ -21,6 +22,7 @@ import {
   type AiGraphExecutionState,
   type AiGraphRuntimeResult,
 } from './AiGraphRuntime';
+import { updateUnitPlanFromRuntime } from './UnitPlan';
 import bundledGraph from '../../data/ai/soldier_default_survival_graph.json';
 
 const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
@@ -106,6 +108,7 @@ export function tickAiGameBridge(
   unit.behaviorRuntime.aiGraphLastTickMs = nowMs;
   unit.behaviorRuntime.aiNodeCooldowns = { ...result.cooldowns };
   applyGraphEffects(state, unit, result.effects, result.blackboard, nowMs);
+  unit.plan = updateUnitPlanFromRuntime(unit.plan, graph, result);
   unit.behaviorRuntime.aiGraphReason = result.explanationRu ?? result.explanation;
   unit.behaviorRuntime.reason = result.explanationRu ?? result.explanation;
   unit.behaviorRuntime.lastEvent = `ai_graph_runtime_${result.status}`;
@@ -128,6 +131,7 @@ export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel):
   const underFire = threats.danger > 0 || threats.suppression > 0;
   const awareness = buildSoldierAwarenessReport(state, unit);
   const bestSafe = awareness.bestSafePositions[0];
+  const command = unit.playerCommand;
 
   return {
     ...(isRecord(bundledGraph.blackboardDefaults) ? normalizeBlackboard(bundledGraph.blackboardDefaults) : {}),
@@ -160,6 +164,11 @@ export function buildBlackboardForUnit(state: SimulationState, unit: UnitModel):
     current_action: unit.behaviorRuntime.currentAction,
     self_position: unit.position,
     order_target_position: unit.order?.target ?? null,
+    player_command_active: isPlayerCommandOutstanding(command),
+    player_command_type: command?.type ?? 'none',
+    player_command_status: command?.status ?? 'none',
+    player_command_target_position: command ? { ...command.target } : null,
+    player_command_revision: command?.revision ?? 0,
     retreat_position: makeRetreatPoint(state.map, unit.position, threatPosition),
     best_cover_position: bestSafe?.position ?? bestCover.position,
     current_target: threats.enemyVisible ? threatPosition : null,
@@ -364,6 +373,7 @@ function resolvePoint(
   if (key === 'self') return unit.position;
   if (key === 'cover') return findBestCoverForThreat(state.map, unit.position, threats.targetPosition, unit.behaviorRuntime.posture).position;
   if (key === 'orderPoint' || key === 'orderTarget') return unit.order?.target ?? null;
+  if (key === 'playerCommandTarget') return unit.playerCommand?.target ?? null;
   if (key === 'currentTarget') return readPosition(blackboard.current_target);
   if (key === 'enemy') return readPosition(blackboard.remembered_enemy_position) ?? readPosition(blackboard.current_target);
   if (key === 'retreatPoint') return makeRetreatPoint(state.map, unit.position, threats.targetPosition);
