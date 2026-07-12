@@ -31,7 +31,8 @@ Examples that require special caution:
 3. `docs/architecture/OVERVIEW.md`.
 4. The existing renderer/input module that owns the behavior.
 5. This skill.
-6. Only then the relevant general PixiJS skill as conceptual reference.
+6. `docs/workflow/VISUAL_QA_APPROVAL_POLICY.md` for visible work.
+7. Only then the relevant general PixiJS skill as conceptual reference.
 
 For a real v7/v8 API question, verify against PixiJS 7 documentation or the existing code pattern. Do not silently modernize the project.
 
@@ -58,13 +59,15 @@ For a real v7/v8 API question, verify against PixiJS 7 documentation or the exis
 
 ## Performance investigation order
 
-1. Reproduce in the real application.
+1. Reproduce through focused code/runtime evidence when possible.
 2. Identify which layer changes when the stall occurs.
 3. Check object counts, container rebuilds, texture creation, DOM replacement and cache invalidation.
 4. Read the narrow renderer and its data source.
 5. Make the smallest change.
 6. Run build and focused smoke checks.
-7. Capture a fresh real-browser scenario and inspect the result.
+7. Prepare a fresh real-browser scenario and expected PNG list.
+8. Ask the user whether to execute visual QA.
+9. Run and inspect it only after explicit approval.
 
 ## Required verification
 
@@ -75,14 +78,32 @@ npm run build
 relevant smoke test
 ```
 
-For visible rendering, camera or input changes:
+For visible rendering, camera or input changes, prepare:
 
 ```text
 npm run build
+relevant focused smoke test
 relevant Playwright scenario
+expected fresh PNG list
+```
+
+Then ask:
+
+```text
+Визуальная проверка подготовлена. Запустить её сейчас?
+```
+
+Only after explicit approval run:
+
+```text
+real browser scenario
 fresh PNG artifact
 artifact SHA match
 manual PNG inspection
 ```
 
-Use `.agents/skills/real-wargame-local-preview/SKILL.md` for the visual workflow.
+A prior explicit visual-verification request already counts as approval.
+
+If approval is declined, report the change as implemented but not visually verified.
+
+Use `.agents/skills/real-wargame-local-preview/SKILL.md` for the execution workflow.
