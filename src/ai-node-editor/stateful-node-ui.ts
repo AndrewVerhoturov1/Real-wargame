@@ -9,6 +9,11 @@ const MOVE_DEFAULTS = {
   minimumProgressCells: 0.05,
   abortOnTargetLost: true,
 } as const;
+const RELOAD_DEFAULTS = {
+  durationSeconds: 3,
+  targetAmmo: 30,
+  failIfNoWeapon: true,
+} as const;
 let scheduled = false;
 
 // The palette creates a node synchronously in its click handler. Persist the
@@ -44,7 +49,7 @@ function enhanceSelectedStatefulNode(): void {
   }
 
   const node = readGraphNode(nodeId);
-  if (!node || !['Wait', 'SequenceWithMemory', 'MoveToBlackboardPosition'].includes(String(node.type))) {
+  if (!node || !['Wait', 'Reload', 'SequenceWithMemory', 'ReactiveSequence', 'MoveToBlackboardPosition'].includes(String(node.type))) {
     existing?.remove();
     return;
   }
@@ -59,7 +64,31 @@ function enhanceSelectedStatefulNode(): void {
   section.dataset.nodeId = nodeId;
   section.dataset.nodeType = node.type;
 
-  if (node.type === 'SequenceWithMemory') {
+  if (node.type === 'ReactiveSequence') {
+    const observePrecedingConditions = readBoolean(node.parameters?.observePrecedingConditions, true);
+    const abortReasonRu = typeof node.parameters?.abortReasonRu === 'string'
+      ? node.parameters.abortReasonRu
+      : 'Условие изменилось.';
+    section.innerHTML = `
+      <h4>Реактивная последовательность</h4>
+      <p>Первые дети должны быть условиями, последний ребёнок — выполняемой ветвью. Наблюдатель проверяет только изменившиеся ключи памяти и не пересчитывает весь граф.</p>
+      <label class="human-control wide" data-help="Следить за ключами Blackboard, от которых зависят предыдущие условия.">
+        <span>Наблюдатель · предыдущие условия</span>
+        <input id="reactive-observe-preceding" class="reactive-sequence-field" type="checkbox" ${observePrecedingConditions ? 'checked' : ''} />
+      </label>
+      <label class="human-control wide" data-help="В первой версии доступна безопасная политика: отменить только активного ребёнка этой последовательности.">
+        <span>Политика прерывания</span>
+        <select id="reactive-abort-policy" class="reactive-sequence-field">
+          <option value="abort_self" selected>Прервать текущую ветвь · abort_self</option>
+        </select>
+      </label>
+      <label class="human-control wide" data-help="Русская причина будет показана в плане бойца и следе ИИ.">
+        <span>Причина прерывания</span>
+        <input id="reactive-abort-reason-ru" class="reactive-sequence-field" type="text" value="${escapeAttribute(abortReasonRu)}" />
+      </label>
+      <p class="stateful-move-safety-note">Порядок: событие → проверка условия → отмена активного действия → cleanup → следующая ветвь Selector. Приказ игрока не очищается чужим token.</p>
+    `;
+  } else if (node.type === 'SequenceWithMemory') {
     section.innerHTML = `
       <h4>Последовательность с памятью</h4>
       <p>Запускает шаги по порядку и продолжает с активного шага на следующем тике ИИ. Никаких кодовых параметров для неё не требуется.</p>
@@ -78,6 +107,27 @@ function enhanceSelectedStatefulNode(): void {
         <span>Тайм-аут, секунд</span>
         <input id="stateful-wait-timeout" class="human-field" data-param-key="timeoutSeconds" data-kind="number" type="number" min="0" step="1" value="${timeout}" />
       </label>
+    `;
+  } else if (node.type === 'Reload') {
+    const duration = readNonNegative(node.parameters?.durationSeconds, RELOAD_DEFAULTS.durationSeconds);
+    const targetAmmo = Math.round(readNonNegative(node.parameters?.targetAmmo, RELOAD_DEFAULTS.targetAmmo));
+    const failIfNoWeapon = readBoolean(node.parameters?.failIfNoWeapon, RELOAD_DEFAULTS.failIfNoWeapon);
+    section.innerHTML = `
+      <h4>Длительная перезарядка</h4>
+      <p>Патроны меняются только после успешного завершения. Отмена посередине не выдаёт полный магазин.</p>
+      <label class="human-control wide" data-help="Сколько секунд боец остаётся занят перезарядкой. Время идёт по времени симуляции.">
+        <span>Длительность, секунд</span>
+        <input id="stateful-reload-duration" class="stateful-reload-field" data-param-key="durationSeconds" type="number" min="0" step="0.5" value="${duration}" />
+      </label>
+      <label class="human-control wide" data-help="Сколько патронов будет установлено только после полного завершения перезарядки.">
+        <span>Патронов после завершения</span>
+        <input id="stateful-reload-target-ammo" class="stateful-reload-field" data-param-key="targetAmmo" type="number" min="0" step="1" value="${targetAmmo}" />
+      </label>
+      <label class="human-control wide" data-help="При включении нода провалится, если у бойца нет пригодного оружия.">
+        <span>Провалить, если нет оружия</span>
+        <input id="stateful-reload-require-weapon" class="stateful-reload-field" data-param-key="failIfNoWeapon" type="checkbox" ${failIfNoWeapon ? 'checked' : ''} />
+      </label>
+      <p class="stateful-move-safety-note">При отмене сохраняется исходное число патронов. Полный магазин выдаётся только событием complete_reload.</p>
     `;
   } else {
     const targetKey = readTargetKey(node.parameters?.targetKey);
@@ -129,7 +179,28 @@ function enhanceSelectedStatefulNode(): void {
 
   if (node.type === 'MoveToBlackboardPosition') {
     installMoveParameterSync(section, nodeId, needsMoveDefaults(node.parameters));
+  } else if (node.type === 'Reload') {
+    installReloadParameterSync(section);
+  } else if (node.type === 'ReactiveSequence') {
+    installReactiveSequenceParameterSync(section);
   }
+}
+
+function installReactiveSequenceParameterSync(section: HTMLElement): void {
+  const sync = (): void => {
+    const parametersArea = document.querySelector<HTMLTextAreaElement>('#node-parameters');
+    if (!parametersArea) return;
+    const parameters = readParameters(parametersArea.value);
+    parameters.observePrecedingConditions = document.querySelector<HTMLInputElement>('#reactive-observe-preceding')?.checked ?? true;
+    parameters.abortPolicy = document.querySelector<HTMLSelectElement>('#reactive-abort-policy')?.value ?? 'abort_self';
+    parameters.abortReason = 'Condition changed.';
+    parameters.abortReasonRu = document.querySelector<HTMLInputElement>('#reactive-abort-reason-ru')?.value.trim() || 'Условие изменилось.';
+    parametersArea.value = JSON.stringify(parameters, null, 2);
+  };
+  section.querySelectorAll<HTMLInputElement | HTMLSelectElement>('.reactive-sequence-field')
+    .forEach((field) => field.addEventListener('input', sync));
+  document.querySelector<HTMLButtonElement>('.human-save-node')?.addEventListener('click', sync, { capture: true });
+  sync();
 }
 
 function installMoveParameterSync(section: HTMLElement, nodeId: string, persistDefaults: boolean): void {
@@ -158,6 +229,23 @@ function installMoveParameterSync(section: HTMLElement, nodeId: string, persistD
     // synchronous; no requestAnimationFrame race is involved.
     document.querySelector<HTMLButtonElement>('#save-node')?.click();
   }
+}
+
+function installReloadParameterSync(section: HTMLElement): void {
+  const sync = (): void => {
+    const parametersArea = document.querySelector<HTMLTextAreaElement>('#node-parameters');
+    if (!parametersArea) return;
+    const parameters = readParameters(parametersArea.value);
+    parameters.durationSeconds = readInputNumber('#stateful-reload-duration', RELOAD_DEFAULTS.durationSeconds);
+    parameters.targetAmmo = Math.round(readInputNumber('#stateful-reload-target-ammo', RELOAD_DEFAULTS.targetAmmo));
+    parameters.failIfNoWeapon = document.querySelector<HTMLInputElement>('#stateful-reload-require-weapon')?.checked ?? RELOAD_DEFAULTS.failIfNoWeapon;
+    parametersArea.value = JSON.stringify(parameters, null, 2);
+  };
+
+  section.querySelectorAll<HTMLInputElement>('.stateful-reload-field')
+    .forEach((field) => field.addEventListener('input', sync));
+  document.querySelector<HTMLButtonElement>('.human-save-node')?.addEventListener('click', sync, { capture: true });
+  sync();
 }
 
 function persistNewMoveNodeDefaults(): void {
@@ -240,6 +328,14 @@ function readGraphNode(nodeId: string): { type?: string; parameters?: Record<str
   } catch {
     return null;
   }
+}
+
+function escapeAttribute(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('\"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
 }
 
 function readParameters(value: string): Record<string, unknown> {

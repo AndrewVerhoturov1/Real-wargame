@@ -1,7 +1,7 @@
 import type { GridPosition } from '../geometry';
 import type { PlayerCommand } from '../orders/PlayerCommand';
 import { isGridPositionValue } from './AiBlackboard';
-import type { AiGraph, AiNode } from './AiGraph';
+import type { AiGraph, AiNode, AiNodeId } from './AiGraph';
 import type { AiGraphRuntimeResult } from './AiGraphRuntime';
 
 export type UnitPlanSource = 'player_fallback' | 'ai_graph';
@@ -15,6 +15,17 @@ export interface UnitPlanStage {
   readonly labelRu: string;
   readonly status: UnitPlanStageStatus;
   readonly target: GridPosition | null;
+}
+
+export interface UnitPlanReactiveAbortState {
+  readonly eventType: string;
+  readonly observerId?: string;
+  readonly abortSourceNodeId: AiNodeId;
+  readonly activeChildNodeId: AiNodeId;
+  readonly cleanupOutcome: 'pending' | 'completed';
+  readonly newBranchNodeId?: AiNodeId;
+  readonly reason: string;
+  readonly reasonRu: string;
 }
 
 export interface UnitPlanState {
@@ -31,6 +42,7 @@ export interface UnitPlanState {
   readonly reasonRu: string;
   readonly revision: number;
   readonly structuralKey: string;
+  readonly lastReactiveAbort?: UnitPlanReactiveAbortState;
 }
 
 export function createDirectPlayerMovePlan(
@@ -118,6 +130,18 @@ export function updateUnitPlanFromRuntime(
     reasonRu: result.explanationRu ?? result.explanation,
     revision: nextRevision(previous, structuralKey),
     structuralKey,
+    lastReactiveAbort: result.reactiveAbort
+      ? {
+          eventType: result.reactiveAbort.eventType,
+          observerId: result.reactiveAbort.observerId,
+          abortSourceNodeId: result.reactiveAbort.abortSourceNodeId,
+          activeChildNodeId: result.reactiveAbort.activeChildNodeId,
+          cleanupOutcome: result.reactiveAbort.cleanupOutcome,
+          newBranchNodeId: result.reactiveAbort.newBranchNodeId,
+          reason: result.reactiveAbort.reason,
+          reasonRu: result.reactiveAbort.reasonRu,
+        }
+      : previous?.lastReactiveAbort,
   };
 }
 
@@ -129,12 +153,12 @@ function resolveSequence(
   const runtimeSequenceId = result.executionState?.sequenceNodeId;
   if (runtimeSequenceId) {
     const runtimeSequence = nodes.get(runtimeSequenceId);
-    if (runtimeSequence?.type === 'SequenceWithMemory') return runtimeSequence;
+    if (runtimeSequence?.type === 'SequenceWithMemory' || runtimeSequence?.type === 'ReactiveSequence') return runtimeSequence;
   }
 
   for (const childId of branch.children ?? []) {
     const child = nodes.get(childId);
-    if (child?.type === 'SequenceWithMemory') return child;
+    if (child?.type === 'SequenceWithMemory' || child?.type === 'ReactiveSequence') return child;
   }
   return undefined;
 }
