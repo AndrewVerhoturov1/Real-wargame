@@ -6,7 +6,7 @@
 - **Updated:** 2026-07-12
 - **Working branch:** `real-wargame-preview`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
-- **Last verified commit:** `5743263ad8df466181517358b532b011658da6f5`
+- **Last verified commit:** `0a4d418130e68e91ee82a2e53f1fe6e02959a6b2`
 
 ## Goal
 
@@ -14,11 +14,11 @@
 
 ## Current focus
 
-Reactive Route Status v1 и Grid Pathfinding v1 реализованы в feature/ai-grid-pathfinding-v1: выбранный боец измеряет прогресс, реагирует на отмену и потерю цели, игрок и ИИ используют общий детерминированный A*, MoveOrder следует waypoint-точкам и перестраивает путь при изменении проходимости.
+Reactive Route Status v1 и Grid Pathfinding v1 реализованы и проверены: выбранный боец измеряет прогресс и причины отмены, игрок и ИИ используют общий детерминированный A*, MoveOrder следует waypoint-точкам, перестраивает путь при изменении проходимости и честно сообщает blocked/unreachable без фиктивного успеха.
 
 ## Next step
 
-Завершить exact-SHA browser/PNG и docs-integrity проверку, затем fast-forward перенести проверенный head в real-wargame-preview; после интеграции следующий отдельный срез — резервирование пути/укрытий или тактическая стоимость маршрута.
+Следующий отдельный вертикальный срез — либо тактическая стоимость пути по субъективно известной угрозе и скрытности, либо резервирование клеток/укрытий между бойцами; не объединять оба направления в одну задачу.
 
 ## Read first
 
@@ -49,6 +49,7 @@ Reactive Route Status v1 и Grid Pathfinding v1 реализованы в featur
 - `src/input/BoardInputController.ts`
 - `src/ai-node-editor/stateful-node-ui.ts`
 - `src/ai-node-editor/stateful-move-debug.ts`
+- `src/ai-node-editor/runtime-debug-overlay.ts`
 - `tests/ai-running-move.spec.ts`
 
 ## Suggested verification
