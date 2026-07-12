@@ -11,6 +11,7 @@ import './ai-dictionary.css';
 import './ai-dictionary-compat.css';
 import './command-plan-route-overlay.css';
 import './route-cost-overlay.css';
+import './perception-attention.css';
 import mapData from './data/maps/test_map.json';
 import pressureZoneData from './data/pressure_zones/test_pressure_zones.json';
 import unitsData from './data/units/test_units.json';
@@ -21,9 +22,12 @@ import { createResolutionAwareInitialState } from './core/simulation/ResolutionA
 import { initializeAiTestLabRuntime } from './core/testing/AiTestLabRuntime';
 import type { UnitData } from './core/units/UnitModel';
 import { installAdaptiveGridLod } from './rendering/AdaptiveGridLodInstaller';
+import { installAttentionOverlayRenderer } from './rendering/AttentionOverlayInstaller';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
 import { installAppShellMenu } from './shared/AppShellMenu';
 import { installAiDictionaryGameIntegration } from './ui/AiDictionaryGameIntegration';
+import { installAttentionProfileControls } from './ui/AttentionProfileControls';
+import { installAttentionRuntimePanel } from './ui/AttentionRuntimePanel';
 import { installCommandPlanRouteUi } from './ui/CommandPlanRouteUi';
 import { installRouteCostOverlayUi } from './ui/RouteCostOverlayUi';
 import { installEditorHeaderPlacement } from './ui/EditorHeaderPlacement';
@@ -75,11 +79,14 @@ const forceRenderAtNativeMapQuality = () => {
 };
 
 installGameEditorWorkbench(debugPanel, state, forceRenderAtNativeMapQuality);
+const destroyAttentionProfileControls = installAttentionProfileControls(state, forceRenderAtNativeMapQuality);
 installSceneExportControls(state);
 installPerformanceReportControls(() => tacticalBoard.downloadPerformanceReport());
 installAiEditorOpenButton(aiEditorOpenButton);
 installPauseToggle(pauseToggle, forceRenderAtNativeMapQuality);
 installTacticalWorkspace(state, aiGameBridge, forceRenderAtNativeMapQuality);
+const destroyAttentionRuntimePanel = installAttentionRuntimePanel(state, forceRenderAtNativeMapQuality);
+const destroyAttentionOverlayRenderer = installAttentionOverlayRenderer(tacticalBoard, state);
 const destroyCommandPlanRouteUi = installCommandPlanRouteUi(state, forceRenderAtNativeMapQuality);
 const destroyRouteCostOverlayUi = installRouteCostOverlayUi(state, forceRenderAtNativeMapQuality);
 const destroyAiDictionary = installAiDictionaryGameIntegration(state, forceRenderAtNativeMapQuality);
@@ -110,6 +117,9 @@ window.addEventListener('beforeunload', () => {
   destroyFrontZoneControls();
   destroyWorkspaceTooltipGuard();
   destroyEditorHeaderPlacement();
+  destroyAttentionRuntimePanel();
+  destroyAttentionOverlayRenderer();
+  destroyAttentionProfileControls();
   aiGameBridge.destroy();
   tacticalBoard.destroy();
 });

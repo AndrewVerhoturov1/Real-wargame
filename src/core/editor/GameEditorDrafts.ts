@@ -10,6 +10,7 @@ import {
   type CoverPosture,
   type MapObjectKind,
 } from '../map/MapModel';
+import { createAttentionSettings, type UnitAttentionSettings } from '../perception/AttentionModel';
 import type { PressureZoneMode, PressureZoneShape } from '../pressure/PressureZone';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitHeldItem, UnitType } from '../units/UnitModel';
@@ -39,6 +40,7 @@ export interface UnitCreationDraft {
   facingDegrees: number;
   viewAngleDegrees: number;
   viewRangeCells: number;
+  attention: UnitAttentionSettings;
   posture: UnitPosture;
   stress: number;
   suppression: number;
@@ -134,6 +136,20 @@ export function resetUnitDraftForProfile(draft: UnitCreationDraft, profile: Beha
   draft.condition = { ...soldier.condition };
 }
 
+export function resetUnitAttentionDraft(draft: UnitCreationDraft): void {
+  draft.attention = createAttentionSettings();
+  draft.viewAngleDegrees = draft.attention.profiles.observe.directAngleDegrees;
+}
+
+export function cloneAttentionSettings(settings: UnitAttentionSettings): UnitAttentionSettings {
+  return createAttentionSettings({
+    defaultMode: settings.defaultMode,
+    profiles: Object.fromEntries(
+      Object.entries(settings.profiles).map(([mode, profile]) => [mode, { ...profile }]),
+    ),
+  });
+}
+
 export function syncLegacyEditorFields(state: SimulationState): void {
   const drafts = getGameEditorDrafts(state);
   const editor = state.editor as typeof state.editor & {
@@ -167,6 +183,7 @@ function createDefaultDrafts(state: SimulationState): GameEditorDrafts {
   object.rotationDegrees = 0;
 
   const soldier = createSoldierParameters('regular');
+  const attention = createAttentionSettings();
   return {
     object,
     unit: {
@@ -176,8 +193,9 @@ function createDefaultDrafts(state: SimulationState): GameEditorDrafts {
       profile: 'regular',
       speedCellsPerSecond: 5 / metersPerCell,
       facingDegrees: 0,
-      viewAngleDegrees: 90,
+      viewAngleDegrees: attention.profiles.observe.directAngleDegrees,
       viewRangeCells: 70 / metersPerCell,
+      attention,
       posture: 'standing',
       stress: 0,
       suppression: 0,

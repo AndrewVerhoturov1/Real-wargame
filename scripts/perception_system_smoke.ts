@@ -1,0 +1,208 @@
+import assert from 'node:assert/strict';
+import type { TacticalMapData } from '../src/core/map/MapModel';
+import { getCell } from '../src/core/map/MapModel';
+import { setAttentionMode, setSearchSector, updateAttentionController } from '../src/core/perception/AttentionController';
+import {
+  CONTACT_STAGE_THRESHOLDS,
+  advanceVisualContact,
+  createEmptyPerceptionKnowledge,
+  decayUnobservedContact,
+  upsertPerceptionContact,
+} from '../src/core/perception/PerceptionContact';
+import { emitPerceptionSound } from '../src/core/perception/PerceptionSound';
+import {
+  getBestPerceptionContact,
+  getPerceptionDiagnostics,
+  tickSelectedSoldierPerception,
+} from '../src/core/perception/PerceptionSystem';
+import type { PressureZoneData } from '../src/core/pressure/PressureZone';
+import { createInitialState, selectUnit } from '../src/core/simulation/SimulationState';
+import type { UnitData } from '../src/core/units/UnitModel';
+import { computeLineOfSight } from '../src/core/visibility/LineOfSight';
+
+const baseMap: TacticalMapData = {
+  width: 60,
+  height: 40,
+  cellSize: 16,
+  metersPerCell: 2,
+  defaultTerrain: 'field',
+  defaultHeight: 0,
+  objects: [],
+};
+
+const observerData: UnitData = {
+  id: 'observer',
+  label: 'Observer',
+  labelRu: 'Наблюдатель',
+  type: 'scout_team',
+  side: 'player',
+  x: 8,
+  y: 18,
+  facingDegrees: 0,
+  viewRangeCells: 30,
+  behaviorProfile: 'regular',
+};
+
+const frontZone = threat('front', 25, 18.5);
+const sideZone = threat('side', 8.5, 31);
+const state = createInitialState(baseMap, [observerData], [frontZone, sideZone]);
+selectUnit(state, 'observer');
+const observer = state.units[0];
+
+assert.equal(observer.attentionSettings.defaultMode, 'observe');
+assert.ok(observer.attentionSettings.profiles.march.peripheralWeight > observer.attentionSettings.profiles.engage.peripheralWeight);
+
+setAttentionMode(observer, 'march', 'player');
+runPerception(state, 2.5);
+const frontMarch = observer.perceptionKnowledge.contacts.find((contact) => contact.stimulusId === 'threat:front');
+const sideMarch = observer.perceptionKnowledge.contacts.find((contact) => contact.stimulusId === 'threat:side');
+assert.ok(frontMarch, 'front source must create a contact on march');
+assert.ok(sideMarch, 'side source must create a peripheral contact on march');
+assert.ok(frontMarch.evidence > sideMarch.evidence, 'front evidence must exceed side evidence');
+const marchSideEvidence = sideMarch.evidence;
+
+observer.perceptionKnowledge = createEmptyPerceptionKnowledge();
+observer.attentionRuntime.nextFocusCheckSeconds = 0;
+observer.attentionRuntime.nextDirectCheckSeconds = 0;
+observer.attentionRuntime.nextPeripheralCheckSeconds = 0;
+setAttentionMode(observer, 'engage', 'player');
+runPerception(state, 2.5);
+const sideEngage = observer.perceptionKnowledge.contacts.find((contact) => contact.stimulusId === 'threat:side');
+assert.ok(!sideEngage || sideEngage.evidence < marchSideEvidence * 0.55, 'engage peripheral evidence must be much weaker than march');
+
+setSearchSector(observer, 0, Math.PI, 'player');
+const startDirection = observer.attentionRuntime.focusDirectionRadians;
+updateAttentionController(observer, 1);
+assert.notEqual(observer.attentionRuntime.focusDirectionRadians, startDirection, 'search mode must sweep focus through the sector');
+
+const evidenceContact = advanceVisualContact(null, {
+  id: 'contact:test',
+  stimulusId: 'test',
+  labelRu: 'Проверочная цель',
+  position: { x: 12, y: 12 },
+  evidencePerSecond: 60,
+  deltaSeconds: 2,
+  nowSeconds: 2,
+});
+assert.equal(evidenceContact.stage, 'identified');
+assert.ok(evidenceContact.evidence >= CONTACT_STAGE_THRESHOLDS.identified);
+const decayed = decayUnobservedContact(evidenceContact, { deltaSeconds: 5, nowSeconds: 7, metersPerCell: 2 });
+assert.ok(decayed);
+assert.ok(decayed.confidence < evidenceContact.confidence);
+assert.ok(decayed.uncertaintyCells > evidenceContact.uncertaintyCells);
+const knowledge = createEmptyPerceptionKnowledge();
+upsertPerceptionContact(knowledge, evidenceContact);
+upsertPerceptionContact(knowledge, { ...evidenceContact, confidence: 90 });
+assert.equal(knowledge.contacts.length, 1);
+assert.ok(knowledge.revision >= 1);
+
+const forestMap = createInitialState({ ...baseMap, width: 48, height: 12 }, [{ ...observerData, x: 2, y: 5 }]);
+for (let x = 7; x <= 11; x += 1) {
+  const cell = getCell(forestMap.map, x, 5);
+  assert.ok(cell);
+  cell.forest = 1;
+}
+const forestObserver = forestMap.units[0];
+const partial = computeLineOfSight(forestMap.map, forestObserver, { x: 16.5, y: 5.5 });
+assert.equal(partial.blocked, false);
+assert.equal(partial.partialObscuration, true);
+assert.ok(partial.visualTransmission > 0.04 && partial.visualTransmission < 1);
+
+for (let x = 7; x <= 34; x += 1) {
+  const cell = getCell(forestMap.map, x, 5);
+  assert.ok(cell);
+  cell.forest = 2;
+}
+const dense = computeLineOfSight(forestMap.map, forestObserver, { x: 39.5, y: 5.5 });
+assert.equal(dense.blocked, true);
+assert.ok(dense.visualTransmission <= 0.04);
+
+const soundState = createInitialState(baseMap, [observerData]);
+selectUnit(soundState, 'observer');
+emitPerceptionSound(soundState, {
+  id: 'shot-behind',
+  kind: 'rifle_shot',
+  sourceId: 'enemy-shooter',
+  labelRu: 'Выстрел с тыла',
+  position: { x: 1, y: 18.5 },
+  loudness: 1,
+  createdSeconds: 0,
+  durationSeconds: 2,
+});
+soundState.simulationTimeSeconds = 0.1;
+tickSelectedSoldierPerception(soundState, 0.1);
+const soundContact = getBestPerceptionContact(soundState.units[0]);
+assert.ok(soundContact);
+assert.equal(soundContact.source, 'sound');
+assert.equal(soundContact.visibleNow, false);
+assert.ok(soundContact.uncertaintyCells * soundState.map.metersPerCell >= 8);
+
+const imported = createInitialState(baseMap, [{
+  ...observerData,
+  perceptionKnowledge: {
+    contacts: [{
+      id: 'saved-contact',
+      stimulusId: 'saved-source',
+      labelRu: 'Сохранённый контакт',
+      stage: 'suspicion',
+      source: 'reported',
+      evidence: 55,
+      confidence: 40,
+      uncertaintyCells: 4,
+      lastKnownPosition: { x: 14, y: 12 },
+      visibleNow: false,
+      observedNow: false,
+      lastObservedSeconds: -1,
+      lastUpdatedSeconds: 3,
+      evidencePerSecond: 0,
+      explanationRu: [],
+    }],
+    revision: 2,
+    lastUpdatedSeconds: 3,
+  },
+}]);
+assert.equal(imported.units[0].perceptionKnowledge.contacts.length, 1, 'scene import must preserve saved perception memory');
+
+const noSelection = createInitialState(baseMap, [observerData], [frontZone]);
+noSelection.simulationTimeSeconds = 1;
+tickSelectedSoldierPerception(noSelection, 0.1);
+assert.equal(getPerceptionDiagnostics(noSelection).losCalculationCount, 0, 'no selected soldier must do no LOS work');
+
+console.log('Perception system smoke passed: hybrid attention, transmission, contacts, sound and import behavior.');
+
+function runPerception(simulation: ReturnType<typeof createInitialState>, seconds: number): void {
+  const step = 0.1;
+  for (let elapsed = 0; elapsed < seconds; elapsed += step) {
+    simulation.simulationTimeSeconds += step;
+    tickSelectedSoldierPerception(simulation, step);
+  }
+}
+
+function threat(id: string, x: number, y: number): PressureZoneData {
+  return {
+    id,
+    label: id,
+    labelRu: `Источник ${id}`,
+    type: 'debug',
+    shape: 'circle',
+    mode: 'directional_fire',
+    x,
+    y,
+    radiusCells: 2,
+    widthCells: 2,
+    heightCells: 2,
+    strength: 0,
+    suppression: 0,
+    stressPerSecond: 0,
+    directionDegrees: 180,
+    arcDegrees: 60,
+    rangeCells: 30,
+    enabled: true,
+    sourceVisible: true,
+    sourceKnown: false,
+    knowledgeConfidence: 0,
+    uncertaintyCells: 6,
+    reason: 'Perception smoke source.',
+    reasonRu: 'Источник для проверки восприятия.',
+  };
+}

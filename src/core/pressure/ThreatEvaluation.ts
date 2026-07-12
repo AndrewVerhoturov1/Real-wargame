@@ -2,6 +2,7 @@ import { POSTURE_EXPOSURE_MULTIPLIER } from '../behavior/BehaviorModel';
 import { evaluateSmallArmsCover } from '../cover/SmallArmsCoverEvaluation';
 import { distance, type GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
+import { getBestPerceptionContact } from '../perception/PerceptionSystem';
 import type { UnitModel } from '../units/UnitModel';
 import {
   isPositionInsidePressureZone,
@@ -46,6 +47,13 @@ export function evaluateThreatsAtPosition(
   const danger = clampPercent(contributions.reduce((sum, item) => sum + item.danger, 0));
   const suppression = clampPercent(contributions.reduce((sum, item) => sum + item.suppression, 0));
   const stressPerSecond = contributions.reduce((sum, item) => sum + item.stressPerSecond, 0);
+  const bestContact = getBestPerceptionContact(unit);
+  const rememberedThreat = unit.tacticalKnowledge.threats[0];
+  const targetPosition = bestContact
+    ? { ...bestContact.lastKnownPosition }
+    : rememberedThreat
+      ? { x: rememberedThreat.x, y: rememberedThreat.y }
+      : null;
 
   return {
     danger,
@@ -53,12 +61,9 @@ export function evaluateThreatsAtPosition(
     stressPerSecond,
     strongest,
     contributions,
-    enemyVisible: contributions.some((item) => resolvePressureZoneSettings(item.zone).sourceVisible),
-    enemyKnown: contributions.some((item) => {
-      const settings = resolvePressureZoneSettings(item.zone);
-      return settings.sourceKnown || settings.sourceVisible;
-    }),
-    targetPosition: strongest ? { x: strongest.zone.x, y: strongest.zone.y } : null,
+    enemyVisible: Boolean(bestContact?.visibleNow),
+    enemyKnown: Boolean(bestContact || rememberedThreat),
+    targetPosition,
   };
 }
 

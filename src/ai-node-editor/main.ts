@@ -395,6 +395,9 @@ function createDefaultParameters(type: string): JsonObject {
     case 'SetPosture': return { ...common, posture: 'prone' };
     case 'SetAction': return { ...common, action: 'move_to', targetKey: 'best_cover_position' };
     case 'SetMovementMode': return { ...common, mode: 'careful' };
+    case 'SetAttentionMode': return { ...common, mode: 'observe', reasonRu: 'Переключить режим внимания.' };
+    case 'SetSearchSector': return { ...common, centerDegrees: 0, arcDegrees: 120, reasonRu: 'Осмотреть указанный сектор.' };
+    case 'ClearAttentionOverride': return common;
     case 'SayMessage': return { ...common, message: 'Under fire!', messageRu: 'Под огнём!', durationSeconds: 2 };
     case 'WriteReason': return { ...common, reason: 'Chosen by graph.', reasonRu: 'Выбрано графом.' };
     default: return common;

@@ -1,0 +1,44 @@
+.attention-node-controls {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 12px;
+  border: 1px solid rgba(126, 194, 255, 0.32);
+  border-radius: 10px;
+  background: rgba(24, 45, 62, 0.68);
+}
+
+.attention-node-controls h4,
+.attention-node-controls p {
+  margin: 0;
+}
+
+.attention-node-controls h4 {
+  color: #dff1ff;
+  font-size: 13px;
+}
+
+.attention-node-controls p {
+  color: #afc2d0;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.attention-node-field {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(110px, 1fr);
+  align-items: center;
+  gap: 10px;
+  color: #d5e0e8;
+  font-size: 12px;
+}
+
+.attention-node-field input,
+.attention-node-field select {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 7px;
+  background: #111b22;
+  color: #f4f8fa;
+}

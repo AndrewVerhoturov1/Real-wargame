@@ -24,7 +24,7 @@ Generated from canonical repository and subproject metadata.
 
 - **ID:** `ai-single-unit-editor`
 - **Updated:** 2026-07-12
-- **Current focus:** Compact Route Controls перенесён в real-wargame-preview: нижняя карточка бойца стала компактной, профиль маршрута и карта стоимости доступны прямо в игре, завершённый план очищает синюю цель, а редактор ИИ использует одно верхнее меню без пустой полосы, вкладки Диагностика и устаревшего Auto 4–5.
-- **Next step:** Провести пользовательскую проверку результата в real-wargame-preview. После подтверждения продолжить по плану Soldier Perception and Attention v1; main не менять без отдельного явного GO пользователя.
-- **Last verified commit:** `f99c0b810b06cd326063f94e688004635c3b2466`
+- **Current focus:** Soldier Perception and Attention v1 реализован и проверен во временной ветке feat/perception-attention-v1-current-temp поверх актуального real-wargame-preview. Добавлены режимы Марш/Наблюдение/Поиск цели/Стрельба, плавное поле внимания, постепенное ослабление обзора лесом, накопление и старение контактов, примерный слух, Blackboard и ноды управления вниманием, редактор профилей и отдельный PixiJS-слой. В real-wargame-preview реализация пока не перенесена.
+- **Next step:** Показать результат пользователю во временной ветке. После явного подтверждения перенести feat/perception-attention-v1-current-temp в real-wargame-preview, повторить проверки на точном merge SHA и только затем продолжать расширение восприятия на всех бойцов; main не менять без отдельного явного GO пользователя.
+- **Last verified commit:** `09209675b692e4d5b83666a272104ee4f452ebf2`
 - **Status:** [generated status](../subprojects/ai-single-unit-editor/STATUS.md)
