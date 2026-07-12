@@ -1,4 +1,5 @@
 import { createDirectPlayerMovePlan } from '../core/ai/UnitPlan';
+import { issueRoutedMoveOrderToSelectedUnits } from '../core/orders/RoutedMoveOrders';
 import { updatePlayerCommandStatus } from '../core/orders/PlayerCommand';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import {
@@ -9,6 +10,7 @@ import type { UnitModel } from '../core/units/UnitModel';
 
 const UPDATE_INTERVAL_MS = 300;
 const OVERLAY_OFF_CLASS = 'command-plan-route-overlay-off';
+const LEGACY_PLAYER_MOVE_SELECTOR = '.selected-cover-card button, .stealth-position-card button';
 
 export function installCommandPlanRouteUi(
   state: SimulationState,
@@ -49,6 +51,18 @@ export function installCommandPlanRouteUi(
     };
   }
 
+  const handleLegacyPlayerMove = (event: MouseEvent): void => {
+    const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('button') : null;
+    if (!target?.matches(LEGACY_PLAYER_MOVE_SELECTOR)) return;
+    const unit = getSelectedUnit(state);
+    const requestedTarget = unit?.order?.target;
+    if (!requestedTarget) return;
+    issueRoutedMoveOrderToSelectedUnits(state, requestedTarget);
+    updateStatus(command, plan, route, getSelectedUnit(state), state);
+    onChanged();
+  };
+  document.addEventListener('click', handleLegacyPlayerMove);
+
   const initialActive = getCommandPlanRouteOverlayState(state).active;
   applyOverlayVisibility(initialActive);
   updateToggle(toggle, initialActive);
@@ -60,6 +74,7 @@ export function installCommandPlanRouteUi(
 
   return () => {
     window.clearInterval(interval);
+    document.removeEventListener('click', handleLegacyPlayerMove);
     toggle.remove();
     command.remove();
     plan.remove();
