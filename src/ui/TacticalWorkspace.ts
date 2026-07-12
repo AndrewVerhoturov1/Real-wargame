@@ -42,7 +42,7 @@ type StableDecision = {
 };
 
 const TABS: Array<[SimulationTab, string]> = [
-  ['info', 'Инфо'], ['danger', 'Опасность'], ['stealth', 'Скрытность'], ['memory', 'Память'],
+  ['info', 'Инфо'], ['danger', 'Опасность'], ['stealth', 'Скрытность'], ['memory', 'Обзор и память'],
 ];
 
 export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGameBridgeHandle, onChanged: () => void): void {
@@ -280,7 +280,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
     if (key !== lastSidebarKey) {
       const scrollTop = sidebarBody.scrollTop;
       lastSidebarKey = key;
-      sidebarTitle.textContent = ({ info:'Информация о бойце', danger:'Опасность и укрытия', stealth:'Скрытность', memory:'Память бойца' })[tab];
+      sidebarTitle.textContent = ({ info:'Информация о бойце', danger:'Опасность и укрытия', stealth:'Скрытность', memory:'Обзор и память' })[tab];
       if (!unit) {
         sidebarBody.innerHTML = empty('Выберите бойца на карте. Левая кнопка выбирает, правая отдаёт приказ движения.');
       } else if (tab === 'info') {
@@ -358,7 +358,7 @@ function updateInfoPanelLive(target: HTMLElement, state: SimulationState, unit: 
     resilience: pct(t.resilience), caution: pct(t.caution), decisiveness: pct(t.decisiveness), discipline: pct(t.discipline),
     initiative: pct(t.initiative), tactics: pct(t.tactics), weaponSkill: pct(t.weaponSkill),
     attention: pct(c.attention), view: pct(c.view), intuition: pct(c.intuition), speed: pct(c.speed), stealth: pct(c.stealth),
-    viewRange: `${Math.round(unit.viewRangeCells * state.map.metersPerCell)} м`,
+    viewRange: `${Math.round(unit.attentionSettings.vision.maximumVisualRangeMeters)} м`,
     aiDecision: decision.decision,
     aiReason: decision.reason,
     postureReason: decision.postureReason,
@@ -416,7 +416,7 @@ function memoryPanel(state: SimulationState, unit: UnitModel): string {
   const report=buildUnitKnowledgeReport(state,unit);
   const threats=unit.tacticalKnowledge.threats.map((x)=>`<div class="memory-card"><strong>${esc(x.labelRu)}</strong><span>${x.visibleNow?'видит сейчас':`обновлено ${Math.max(0,state.simulationTimeSeconds-x.lastUpdatedSeconds).toFixed(1)} с назад`}</span><b>уверенность ${Math.round(x.confidence)}%</b><em>неточность ±${x.uncertaintyCells.toFixed(1)} клетки · ${sourceLabel(x.source)}</em></div>`).join('')||empty('Солдат пока не знает ни об одной угрозе.');
   const covers=[...report.nearbyCovers,...report.planCovers].slice(0,16).map((x)=>`<div class="memory-card"><strong>${esc(x.labelRu)}</strong><span>${Math.round(x.distanceMeters)} м</span><b>${Math.round(x.quality)}/100</b><em>${esc(x.sourceRu)}</em></div>`).join('')||empty('Известных предметов и укрытий пока нет.');
-  return `${heading('Память бойца','Субъективная картина мира выбранного солдата, а не объективная карта.')}${grid([['Известная область',`${Math.round(report.knownAreaMeters)} м`],['Угроз в памяти',String(unit.tacticalKnowledge.threats.length)],['Известных укрытий',String(report.nearbyCovers.length+report.planCovers.length)],['Версия знаний',String(unit.tacticalKnowledge.revision)]])}<section class="workspace-panel-section"><h3>Опасности и противник</h3>${threats}</section><section class="workspace-panel-section"><h3>Известные предметы и укрытия</h3>${covers}</section>`;
+  return `${heading('Обзор и память','Текущая видимость показывается тепловой картой, а старые знания остаются субъективными метками бойца.')}${grid([['Известная область',`${Math.round(report.knownAreaMeters)} м`],['Угроз в памяти',String(unit.tacticalKnowledge.threats.length)],['Известных укрытий',String(report.nearbyCovers.length+report.planCovers.length)],['Версия знаний',String(unit.tacticalKnowledge.revision)]])}<section class="workspace-panel-section"><h3>Опасности и противник</h3>${threats}</section><section class="workspace-panel-section"><h3>Известные предметы и укрытия</h3>${covers}</section>`;
 }
 
 function sidebarKey(state: SimulationState, tab: SimulationTab): string {

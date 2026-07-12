@@ -182,7 +182,7 @@ expectIncludes('src/core/simulation/SimulationTick.ts', [
   'syncSoldierThreatMemory',
 ]);
 expectIncludes('src/ui/SceneExport.ts', [
-  'scene-export-v7-perception-attention-ai-runtime-2m-grid',
+  'scene-export-v8-view-memory-heatmap-ai-runtime-2m-grid',
   'replaceSceneAtRuntimeResolution',
   'coverReliability',
   'directionDegrees',
@@ -194,7 +194,7 @@ expectIncludes('src/ui/TacticalWorkspace.ts', [
   'Редактирование',
   'Слой опасности',
   'Слой скрытности',
-  'Память бойца',
+  'Обзор и память',
 ]);
 expectIncludes('tests/preview-screenshots.spec.ts', [
   '01-simulation-info.png',
