@@ -10,6 +10,11 @@ import type { SimulationState } from '../simulation/SimulationState';
 import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
 import type { AiBlackboardValue } from './AiBlackboard';
+import {
+  evaluateAiBlackboardObservers,
+  listObservedBlackboardKeys,
+} from './events/AiBlackboardObserver';
+import { pushAiEvent } from './events/AiEventQueue';
 import type { AiGraph, AiNode } from './AiGraph';
 import {
   type AiGraphEffect,
@@ -88,8 +93,12 @@ export function tickAiGameBridge(
   if (!unit) return null;
   if (!options.force && (state.editor.enabled || isPaused(state))) return null;
 
+  const observerPoll = options.applyEffects
+    ? pollAiBlackboardObservers(state, unit)
+    : { events: 0, checks: 0 };
   const scaledInterval = AI_GRAPH_TICK_INTERVAL_MS / getAiTestTimeScale(state);
-  if (!options.force && nowMs - unit.behaviorRuntime.aiGraphLastTickMs < scaledInterval) return null;
+  const cadenceReady = nowMs - unit.behaviorRuntime.aiGraphLastTickMs >= scaledInterval;
+  if (!options.force && !cadenceReady && observerPoll.events === 0) return null;
 
   const graph = readRuntimeGraph();
   let session = ensureRuntimeSession(unit, graph.id);
@@ -97,7 +106,8 @@ export function tickAiGameBridge(
     publishSimulationAiEvents(unit, session.simulationTimeMs);
     session = unit.behaviorRuntime.aiRuntimeSession ?? session;
   }
-  const simulationNowMs = options.applyEffects
+  const observerWakeOnly = !options.force && !cadenceReady && observerPoll.events > 0;
+  const simulationNowMs = options.applyEffects && !observerWakeOnly
     ? session.simulationTimeMs + AI_GRAPH_TICK_INTERVAL_MS
     : session.simulationTimeMs;
   const result = runAiGraphRuntime({
@@ -125,6 +135,45 @@ export function tickAiGameBridge(
   unit.behaviorRuntime.reason = result.explanationRu ?? result.explanation;
   unit.behaviorRuntime.lastEvent = `ai_graph_runtime_${result.status}`;
   publishSimulationAiEvents(unit, nextSession.simulationTimeMs);
+  return result;
+}
+
+export function pollAiBlackboardObservers(
+  state: SimulationState,
+  unit: UnitModel,
+): { readonly events: number; readonly checks: number } {
+  const session = unit.behaviorRuntime.aiRuntimeSession;
+  if (!session) return { events: 0, checks: 0 };
+  const keys = listObservedBlackboardKeys(session.observerRegistry);
+  if (keys.length === 0) return { events: 0, checks: 0 };
+  const compactBlackboard = buildObservedBlackboardForUnit(state, unit, keys, session.blackboardMemory);
+  const evaluated = evaluateAiBlackboardObservers(
+    session.observerRegistry,
+    compactBlackboard,
+    session.simulationTimeMs,
+  );
+  let queue = session.eventQueue;
+  for (const event of evaluated.events) queue = pushAiEvent(queue, event, session.simulationTimeMs).queue;
+  unit.behaviorRuntime.aiRuntimeSession = {
+    ...session,
+    eventQueue: queue,
+    observerRegistry: evaluated.registry,
+  };
+  return { events: evaluated.events.length, checks: evaluated.checks };
+}
+
+export function buildObservedBlackboardForUnit(
+  state: SimulationState,
+  unit: UnitModel,
+  keys: readonly string[],
+  runtimeMemory: AiGraphRunnerBlackboard = readCurrentRuntimeMemory(unit),
+): AiGraphRunnerBlackboard {
+  const result: AiGraphRunnerBlackboard = {};
+  const command = unit.playerCommand;
+  for (const key of keys) {
+    const value = readCompactObservedValue(state, unit, command, runtimeMemory, key);
+    if (value !== undefined) result[key] = cloneObservedValue(value);
+  }
   return result;
 }
 
@@ -225,6 +274,43 @@ export function ensureRuntimeSession(unit: UnitModel, graphId: string): AiRuntim
   });
   runtime.aiRuntimeSession = migrated;
   return migrated;
+}
+
+function readCompactObservedValue(
+  _state: SimulationState,
+  unit: UnitModel,
+  command: UnitModel['playerCommand'],
+  memory: AiGraphRunnerBlackboard,
+  key: string,
+): AiBlackboardValue | undefined {
+  switch (key) {
+    case 'danger': return clampPercent(unit.behaviorRuntime.danger);
+    case 'stress': return clampPercent(Math.round(unit.behaviorRuntime.stress));
+    case 'suppression': return clampPercent(unit.behaviorRuntime.suppression);
+    case 'fatigue': return clampPercent(Math.round(unit.soldier.condition.fatigue));
+    case 'morale': return clampPercent(Math.round(unit.soldier.condition.morale));
+    case 'health': return clampPercent(Math.round(unit.soldier.condition.health));
+    case 'ammo': return Math.max(0, Math.round(unit.behaviorRuntime.ammo));
+    case 'weaponReady': return unit.behaviorRuntime.weaponReady && unit.behaviorRuntime.ammo > 0;
+    case 'underFire': return unit.behaviorRuntime.danger > 0 || unit.behaviorRuntime.suppression > 0;
+    case 'hasOrder': return Boolean(unit.order);
+    case 'current_action': return unit.behaviorRuntime.currentAction;
+    case 'self_position': return { ...unit.position };
+    case 'order_target_position': return unit.order ? { ...unit.order.target } : null;
+    case 'player_command_active': return isPlayerCommandOutstanding(command);
+    case 'player_command_type': return command?.type ?? 'none';
+    case 'player_command_status': return command?.status ?? 'none';
+    case 'player_command_target_position': return command ? { ...command.target } : null;
+    case 'player_command_revision': return command?.revision ?? 0;
+    case 'active_move_source': return unit.order ? unit.order.source ?? (unit.order.ownerToken ? 'ai' : 'player') : null;
+    case 'active_move_owner_token': return unit.order?.ownerToken ?? null;
+    case 'active_move_target': return unit.order ? { ...unit.order.target } : null;
+    default: return Object.prototype.hasOwnProperty.call(memory, key) ? memory[key] : undefined;
+  }
+}
+
+function cloneObservedValue(value: AiBlackboardValue): AiBlackboardValue {
+  return typeof value === 'object' && value !== null ? { ...value } : value;
 }
 
 function readCurrentRuntimeMemory(unit: UnitModel): AiGraphRunnerBlackboard {
