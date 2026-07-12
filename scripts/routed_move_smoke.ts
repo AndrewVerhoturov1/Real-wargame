@@ -12,10 +12,11 @@ verifyPlannerCreatesRoutedOrder();
 verifyWaypointFollowingAndFinalCompletion();
 verifyLegacyDirectMoveCompatibility();
 verifyPlayerOrderUsesSharedPlanner();
+verifyBlockedPlayerCommandRemainsVisible();
 verifyRouteReplansAroundNewObstacle();
 verifyImpossibleReplanStopsMovement();
 
-console.log('Routed movement smoke passed: planning, waypoints, completion, legacy compatibility, player orders, replan, failure.');
+console.log('Routed movement smoke passed: planning, waypoints, command linkage, completion, blocked intent, replan, failure.');
 
 function verifyPlannerCreatesRoutedOrder(): void {
   const map = normalizeMap(makeWallMap(false));
@@ -78,21 +79,38 @@ function verifyPlayerOrderUsesSharedPlanner(): void {
   const state = createTestState(makeWallMap(false));
   const unit = selectedUnit(state);
   issueRoutedMoveOrderToSelectedUnits(state, { x: 7.5, y: 3.5 });
+  assert.ok(unit.playerCommand);
+  assert.equal(unit.playerCommand?.status, 'active');
   assert.ok(unit.order);
   assert.equal(unit.order?.source, 'player');
+  assert.equal(unit.order?.playerCommandId, unit.playerCommand?.id);
   assert.ok((unit.order?.routeCells?.length ?? 0) > 2);
   assert.equal(unit.order?.routeStatus, 'planned');
+  assert.equal(unit.plan?.source, 'player_fallback');
+  assert.equal(unit.plan?.commandId, unit.playerCommand?.id);
+}
+
+function verifyBlockedPlayerCommandRemainsVisible(): void {
+  const state = createTestState(makeWallMap(true));
+  const unit = selectedUnit(state);
+  issueRoutedMoveOrderToSelectedUnits(state, { x: 7.5, y: 3.5 });
+
+  assert.equal(unit.order, null);
+  assert.ok(unit.playerCommand, 'failed path planning must keep the requested player intent');
+  assert.equal(unit.playerCommand?.status, 'blocked');
+  assert.equal(unit.plan?.status, 'failed');
+  assert.deepEqual(unit.playerCommand?.target, { x: 7.5, y: 3.5 });
 }
 
 function verifyRouteReplansAroundNewObstacle(): void {
   const state = createTestState(makeWallMap(false));
   const unit = selectedUnit(state);
   const requestedTarget = { x: 7.5, y: 3.5 };
-  const planned = planMoveOrder(state.map, unit.position, requestedTarget, { source: 'player' });
-  assert.equal(planned.ok, true);
-  if (!planned.ok) return;
-  unit.order = planned.order;
-  assert.ok(planned.path.cells.some((cell) => cell.x === 4 && cell.y === 3));
+  issueRoutedMoveOrderToSelectedUnits(state, requestedTarget);
+  assert.ok(unit.order);
+  const commandId = unit.playerCommand?.id;
+  assert.ok(commandId);
+  assert.ok((unit.order?.routeCells ?? []).some((cell) => cell.x === 4 && cell.y === 3));
 
   state.map.objects.push(blockerAt(4.5, 3.5, 'new_gap_blocker'));
   tickSimulation(state, 0.05);
@@ -100,12 +118,18 @@ function verifyRouteReplansAroundNewObstacle(): void {
   assert.ok(unit.order, 'an alternate route around the wall edge must keep the order active');
   assert.equal(unit.order?.routeStatus, 'replanned');
   assert.equal(unit.order?.routeRevision, 2);
+  assert.equal(unit.order?.playerCommandId, commandId, 'replanning must retain exact player command identity');
+  assert.equal(unit.playerCommand?.id, commandId);
+  assert.equal(unit.playerCommand?.status, 'active');
   assert.equal(unit.behaviorRuntime.lastEvent, 'move_route_replanned');
   assert.ok(!(unit.order?.routeCells ?? []).some((cell) => cell.x === 4 && cell.y === 3));
 
   for (let step = 0; step < 1200 && unit.order; step += 1) tickSimulation(state, 0.05);
   assert.equal(unit.order, null);
   assert.ok(distance(unit.position, requestedTarget) < 0.03);
+  assert.equal(unit.playerCommand?.id, commandId);
+  assert.equal(unit.playerCommand?.status, 'completed');
+  assert.equal(unit.plan?.status, 'completed');
 }
 
 function verifyImpossibleReplanStopsMovement(): void {
@@ -123,6 +147,7 @@ function verifyImpossibleReplanStopsMovement(): void {
   assert.equal(unit.order, null, 'movement must stop when the only passage is closed and no replan exists');
   assert.equal(unit.behaviorRuntime.lastEvent, 'move_route_unavailable');
   assert.match(unit.behaviorRuntime.reason, /маршрут|путь/i);
+  assert.equal(unit.playerCommand, null, 'autonomous AI route failure must not invent a player command');
 }
 
 function createTestState(mapData: TacticalMapData) {
