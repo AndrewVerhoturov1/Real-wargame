@@ -48,7 +48,7 @@ const second = createAiRuntimeSession({
 first.blackboardMemory.remembered_enemy_position = { x: 99, y: 99 };
 first.cooldowns.move = 9999;
 if (first.executionState?.activeData?.kind === 'move_to_blackboard_position') {
-  first.executionState.activeData.target.x = 88;
+  (first.executionState.activeData.target as { x: number; y: number }).x = 88;
 }
 assert.deepEqual(second.blackboardMemory.remembered_enemy_position, { x: 3, y: 2 });
 assert.equal(second.cooldowns.move, 2000);
