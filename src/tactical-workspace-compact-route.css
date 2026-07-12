@@ -1,15 +1,15 @@
 :root {
-  --workspace-bottom: 112px;
+  --workspace-bottom: 104px;
 }
 
 .simulation-unit-bar {
-  min-height: 96px;
-  grid-template-columns: minmax(150px, 0.72fr) minmax(330px, 1.45fr) minmax(250px, 0.95fr);
+  min-height: 88px;
+  grid-template-columns: minmax(145px, 0.65fr) minmax(500px, 2.2fr) minmax(210px, 0.9fr);
   grid-template-areas:
     "identity stats route"
     "posture controls speed";
-  gap: 6px 10px;
-  padding: 7px 9px;
+  gap: 5px 9px;
+  padding: 6px 8px;
 }
 
 .unit-bar-identity {
@@ -32,10 +32,10 @@
   max-width: none !important;
   display: grid;
   gap: 1px;
-  margin-top: 4px;
+  margin-top: 3px;
   color: var(--workspace-muted);
   font-size: 9px;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .unit-bar-stats {
@@ -43,18 +43,18 @@
 }
 
 .unit-bar-stat {
-  padding: 4px 5px;
+  padding: 3px 5px;
 }
 
 .unit-bar-route-controls {
   grid-area: route;
   position: relative;
   display: grid;
-  grid-template-columns: minmax(128px, 1fr) auto;
+  grid-template-columns: minmax(112px, 1fr) auto;
   grid-template-areas:
     "profile cost"
     "details details";
-  gap: 4px 6px;
+  gap: 3px 5px;
   align-items: end;
   min-width: 0;
 }
@@ -62,31 +62,31 @@
 .unit-route-profile {
   grid-area: profile;
   display: grid;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
   color: var(--workspace-muted);
-  font-size: 9px;
+  font-size: 8px;
 }
 
 .unit-route-profile select {
   min-width: 0;
-  height: 28px;
-  padding: 4px 7px;
+  height: 25px;
+  padding: 3px 6px;
   border: 1px solid rgba(255, 240, 161, 0.24);
-  border-radius: 8px;
+  border-radius: 7px;
   color: var(--workspace-text);
   background: rgba(255, 242, 168, 0.06);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
 }
 
 .unit-bar-route-controls [data-action="route-cost-quick-toggle"] {
   grid-area: cost;
-  min-height: 28px;
-  padding: 4px 7px;
-  border-radius: 8px;
+  min-height: 25px;
+  padding: 3px 6px;
+  border-radius: 7px;
   white-space: nowrap;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
 }
 
@@ -103,9 +103,9 @@
 }
 
 .unit-route-details > summary {
-  min-height: 25px;
+  min-height: 22px;
   display: block;
-  padding: 5px 26px 5px 8px;
+  padding: 4px 24px 4px 7px;
   border: 1px solid rgba(255, 240, 161, 0.16);
   border-radius: 7px;
   color: var(--workspace-text);
@@ -114,7 +114,7 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
 }
 
@@ -163,14 +163,21 @@
   color: #b9d8b8;
 }
 
+.unit-bar-command-group,
+.unit-bar-speed-group {
+  flex-wrap: nowrap;
+}
+
 .unit-bar-command-group button,
 .unit-bar-speed-group button,
 .compact {
-  min-height: 27px;
-  padding: 4px 7px;
+  min-height: 25px;
+  padding: 3px 6px;
+  font-size: 9px;
+  white-space: nowrap;
 }
 
-@media (max-width: 1120px) {
+@media (max-width: 1220px) {
   :root { --workspace-bottom: 148px; }
   .simulation-unit-bar {
     grid-template-columns: minmax(145px, 0.8fr) minmax(320px, 1.5fr);
@@ -180,6 +187,8 @@
       "posture controls"
       "speed speed";
   }
+  .unit-bar-command-group,
+  .unit-bar-speed-group { flex-wrap: wrap; }
   .unit-bar-speed-group { justify-content: flex-start; }
 }
 
