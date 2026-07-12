@@ -96,7 +96,7 @@ upsertPerceptionContact(knowledge, { ...evidenceContact, confidence: 90 });
 assert.equal(knowledge.contacts.length, 1);
 assert.ok(knowledge.revision >= 1);
 
-const forestMap = createInitialState({ ...baseMap, width: 30, height: 12 }, [{ ...observerData, x: 2, y: 5 }]);
+const forestMap = createInitialState({ ...baseMap, width: 48, height: 12 }, [{ ...observerData, x: 2, y: 5 }]);
 for (let x = 7; x <= 11; x += 1) {
   const cell = getCell(forestMap.map, x, 5);
   assert.ok(cell);
@@ -108,12 +108,12 @@ assert.equal(partial.blocked, false);
 assert.equal(partial.partialObscuration, true);
 assert.ok(partial.visualTransmission > 0.04 && partial.visualTransmission < 1);
 
-for (let x = 7; x <= 20; x += 1) {
+for (let x = 7; x <= 34; x += 1) {
   const cell = getCell(forestMap.map, x, 5);
   assert.ok(cell);
   cell.forest = 2;
 }
-const dense = computeLineOfSight(forestMap.map, forestObserver, { x: 25.5, y: 5.5 });
+const dense = computeLineOfSight(forestMap.map, forestObserver, { x: 39.5, y: 5.5 });
 assert.equal(dense.blocked, true);
 assert.ok(dense.visualTransmission <= 0.04);
 
