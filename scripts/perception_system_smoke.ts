@@ -73,7 +73,7 @@ assert.ok(!sideEngage || sideEngage.evidence < marchSideEvidence * 0.55, 'engage
 setSearchSector(observer, 0, Math.PI, 'player');
 const startDirection = observer.attentionRuntime.focusDirectionRadians;
 updateAttentionController(observer, 1);
-assert.notEqual(observer.attentionRuntime.focusDirectionRadians, startDirection, 'search mode must sweep focus through the sector');
+assert.equal(observer.attentionRuntime.focusDirectionRadians, startDirection, 'search mode must use stable probabilistic coverage without physical sweep');
 
 const evidenceContact = advanceVisualContact(null, {
   id: 'contact:test',
@@ -168,7 +168,7 @@ noSelection.simulationTimeSeconds = 1;
 tickSelectedSoldierPerception(noSelection, 0.1);
 assert.equal(getPerceptionDiagnostics(noSelection).losCalculationCount, 0, 'no selected soldier must do no LOS work');
 
-console.log('Perception system smoke passed: hybrid attention, transmission, contacts, sound and import behavior.');
+console.log('Perception system smoke passed: stable attention, transmission, contacts, sound and import behavior.');
 
 function runPerception(simulation: ReturnType<typeof createInitialState>, seconds: number): void {
   const step = 0.1;
@@ -191,6 +191,7 @@ function threat(id: string, x: number, y: number): PressureZoneData {
     radiusCells: 2,
     widthCells: 2,
     heightCells: 2,
+    rotationDegrees: 0,
     strength: 0,
     suppression: 0,
     stressPerSecond: 0,
