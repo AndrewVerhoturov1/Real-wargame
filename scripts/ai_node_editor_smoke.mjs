@@ -11,6 +11,7 @@ const requiredFiles = [
   'Run-Real-Wargame-Lab.bat',
   'src/ai-node-editor/main.ts',
   'src/ai-node-editor/human-node-ui.ts',
+  'src/ai-node-editor/stateful-node-ui.ts',
   'src/ai-node-editor/editor-click-guard.ts',
   'src/ai-node-editor/runtime-debug-overlay.ts',
   'src/ai-node-editor/runtime-debug-overlay.css',
@@ -41,6 +42,7 @@ const html = readText('ai-node-editor.html');
 expectContains(html, '/src/ai-node-editor/editor-click-guard.ts', 'HTML должен подключать select/click guard до main.ts.');
 expectContains(html, '/src/ai-node-editor/main.ts', 'HTML должен подключать AI Node Editor entrypoint.');
 expectContains(html, '/src/ai-node-editor/human-node-ui.ts', 'HTML должен подключать human node UI layer.');
+expectContains(html, '/src/ai-node-editor/stateful-node-ui.ts', 'HTML должен подключать stateful node UI layer.');
 expectContains(html, '/src/ai-node-editor/runtime-debug-overlay.ts', 'HTML должен подключать runtime debug overlay.');
 expectContains(html, '/src/ai-node-editor/runtime-debug-overlay.css', 'HTML должен подключать стили runtime debug overlay.');
 expectContains(html, 'real-wargame.ai-node-editor.graph.v6', 'HTML должен bootstrap-ить новый чистый graph storage v6.');
@@ -80,6 +82,9 @@ expectContains(main, "mode: 'editor'", 'Редактор должен испол
 expectContains(main, 'addNodeFromPalette', 'Редактор должен уметь добавлять ноды из палитры.');
 expectContains(main, 'startConnectionDrag', 'Связи должны создаваться протягиванием из порта.');
 expectContains(main, 'createDefaultParameters', 'Новые ноды должны получать человекочитаемые параметры по умолчанию.');
+for (const needle of ["case 'Reload'", 'durationSeconds: 3', 'targetAmmo: 30', 'failIfNoWeapon: true']) {
+  expectContains(main, needle, `Новая нода Reload должна получать параметр по умолчанию: ${needle}`);
+}
 for (const legacy of ['DangerAbove', 'StressAbove', 'ScoreDanger', 'FindBestCover']) {
   expectNotContains(main, legacy, `Редактор не должен держать legacy ${legacy}.`);
 }
@@ -188,6 +193,7 @@ for (const needle of [
   'Write Memory', 'Запись памяти',
   'Copy Memory', 'Копия памяти',
   'Action', 'Действие',
+  'Reload', 'Перезарядить',
   'Movement Mode', 'Режим движения',
   'Say Message', 'Реплика бойца',
   'Stable Threshold', 'Стабильный порог',
@@ -208,6 +214,27 @@ expectContains(humanUi, 'fieldSelect(\'from\'', 'Порог расстояния
 expectContains(humanUi, 'fieldSelect(\'to\'', 'Порог расстояния должен выбирать to из списка.');
 expectContains(humanUi, 'SayMessage', 'Human UI должен иметь панель реплики бойца.');
 expectContains(humanUi, 'TOOLTIP_DELAY_MS = 2000', 'Подсказки должны появляться после задержки 2 секунды.');
+
+const statefulUi = readText('src/ai-node-editor/stateful-node-ui.ts');
+for (const needle of [
+  "node.type === 'Reload'",
+  'Длительная перезарядка',
+  'Длительность, секунд',
+  'Патронов после завершения',
+  'Провалить, если нет оружия',
+  'stateful-reload-duration',
+  'stateful-reload-target-ammo',
+  'stateful-reload-require-weapon',
+]) expectContains(statefulUi, needle, `Reload human UI должен содержать: ${needle}`);
+
+const validationSource = readText('src/core/ai/AiGraphValidation.ts');
+for (const needle of ['RELOAD_DURATION_INVALID', 'RELOAD_TARGET_AMMO_INVALID', 'RELOAD_WEAPON_FLAG_INVALID']) {
+  expectContains(validationSource, needle, `Валидация Reload должна содержать: ${needle}`);
+}
+
+for (const needle of ['begin_reload', 'complete_reload', 'cancel_reload']) {
+  expectContains(gameBridge, needle, `Игровой мост Reload должен обрабатывать: ${needle}`);
+}
 
 const engineCore = readText('scripts/ai_engine_core.mjs');
 for (const needle of ['GraphRunner', 'UtilitySelector', 'ParameterScore', 'DistanceScore', 'DecisionInertia', 'RandomChance', 'StableThreshold', 'ForbidAction', 'score', 'breakdown']) {
