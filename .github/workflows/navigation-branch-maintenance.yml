@@ -1,0 +1,41 @@
+name: Navigation Branch Maintenance
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+    types:
+      - opened
+      - synchronize
+      - reopened
+  workflow_dispatch:
+
+jobs:
+  apply:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'tmp/navigation-profiles-route-cost-20260712'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout temporary branch
+        uses: actions/checkout@v4
+        with:
+          ref: tmp/navigation-profiles-route-cost-20260712
+          fetch-depth: 0
+
+      - name: Apply idempotent maintenance
+        run: node scripts/navigation_branch_maintenance.mjs
+
+      - name: Commit maintenance changes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No maintenance changes required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/core/pathfinding/GridPathfinder.ts src/core/orders/PlayerCommand.ts src/core/units/UnitModel.ts src/core/navigation/RouteCostField.ts .github/workflows/navigation-profiles-core.yml
+          git commit -m 'fix: preserve navigation compatibility and cache isolation'
+          git push origin HEAD:tmp/navigation-profiles-route-cost-20260712
