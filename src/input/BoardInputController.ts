@@ -2,13 +2,13 @@ import { distance, type GridPosition } from '../core/geometry';
 import { placeConfiguredEditorEntity } from '../core/editor/GameEditorPlacement';
 import { paintEditorTerrainAt, isTerrainPaintTool } from '../core/map/MapPaint';
 import { worldToGrid } from '../core/map/MapModel';
+import { issueRoutedMoveOrderToSelectedUnits } from '../core/orders/RoutedMoveOrders';
 import {
   beginEditorPointerAction,
   cancelEditorPointerAction,
   clearSelectionBox,
   deleteSelectedEditorTargets,
   finishEditorPointerAction,
-  issueMoveOrderToSelectedUnit,
   selectUnit,
   selectUnitsInBox,
   setMouseGridPosition,
@@ -181,7 +181,7 @@ export class BoardInputController {
     if (event.button === 2) {
       event.preventDefault();
       if (!this.state.editor.enabled && !getAiLabRuntime(this.state).open) {
-        issueMoveOrderToSelectedUnit(this.state, grid);
+        issueRoutedMoveOrderToSelectedUnits(this.state, grid);
       }
     }
   };
