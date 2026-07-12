@@ -51,7 +51,7 @@ expectIncludes('src/core/ui/RuntimeUiState.ts', [
   'setTurnToolActive', 'setRouteFacingDraft', 'consumeTurnTool',
 ]);
 expectIncludes('src/input/BoardInputController.ts', [
-  'rightPointerId', 'rightStartGrid', 'routeFacingDraft',
+  'rightPointerId', 'rightStartGrid', 'setRouteFacingDraft',
   'getUnitCommandToolState', 'faceSelectedUnitsToward',
   'issueRoutedMoveOrderToSelectedUnits(this.state, this.rightStartGrid, finalFacingRadians)',
   "this.canvas.style.cursor = 'crosshair'",
