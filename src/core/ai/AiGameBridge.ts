@@ -28,6 +28,7 @@ import {
   normalizeAiRuntimeSession,
   type AiRuntimeSessionSnapshotV1,
 } from './runtime/AiRuntimeSession';
+import { readAiGraphRuntimeReloadEffect } from './runtime/actions/ReloadAction';
 import { updateUnitPlanFromRuntime } from './UnitPlan';
 import bundledGraph from '../../data/ai/soldier_default_survival_graph.json';
 
@@ -243,6 +244,28 @@ function applyGraphEffects(
   runtimeMemory: AiGraphRunnerBlackboard,
 ): void {
   for (const effect of effects) {
+    const reloadEffect = readAiGraphRuntimeReloadEffect(effect);
+    if (reloadEffect) {
+      if (reloadEffect.type === 'begin_reload') {
+        unit.behaviorRuntime.weaponReady = false;
+        unit.behaviorRuntime.currentAction = 'reload';
+        unit.behaviorRuntime.reason = reloadEffect.reasonRu ?? reloadEffect.reason;
+        unit.behaviorRuntime.lastEvent = 'ai_graph_reload_started';
+      } else if (reloadEffect.type === 'complete_reload') {
+        unit.behaviorRuntime.ammo = reloadEffect.targetAmmo;
+        unit.behaviorRuntime.weaponReady = reloadEffect.targetAmmo > 0;
+        unit.behaviorRuntime.currentAction = 'reload_complete';
+        unit.behaviorRuntime.reason = reloadEffect.reasonRu ?? reloadEffect.reason;
+        unit.behaviorRuntime.lastEvent = 'ai_graph_reload_completed';
+      } else {
+        unit.behaviorRuntime.weaponReady = unit.behaviorRuntime.ammo > 0;
+        unit.behaviorRuntime.currentAction = 'observe';
+        unit.behaviorRuntime.reason = reloadEffect.reasonRu ?? reloadEffect.reason;
+        unit.behaviorRuntime.lastEvent = 'ai_graph_reload_cancelled';
+      }
+      continue;
+    }
+
     if (effect.type === 'write_memory') {
       runtimeMemory[effect.key] = effect.value;
       continue;

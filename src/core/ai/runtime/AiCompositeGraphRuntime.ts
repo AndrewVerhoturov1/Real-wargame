@@ -32,6 +32,7 @@ import {
   isMoveToBlackboardPositionActionState,
   type MoveToBlackboardPositionActionState,
 } from './actions/MoveToBlackboardPositionAction';
+import { isReloadActionState } from './actions/ReloadAction';
 import { createLegacyWaitActionState } from './actions/WaitAction';
 
 interface RuntimeAccumulator {
@@ -79,6 +80,7 @@ export function shouldUseCompositeGraphRuntime(
   }
 
   for (const node of graph.nodes) {
+    if (node.type === 'Reload') return true;
     if (node.type === 'Selector' && hasStatefulDescendant(nodes, node.id, true)) return true;
     if (node.type === 'Sequence' && hasStatefulDescendant(nodes, node.id, true)) return true;
     if (node.type === 'SequenceWithMemory') {
@@ -124,7 +126,7 @@ export function runAiCompositeGraphRuntime(input: AiGraphRuntimeInput): AiGraphR
 
     const environment = makeEnvironment(input, validation.branch, nodes);
     if (input.cancel) {
-      const cancelled = cancelActiveAction(environment, validation.activeNode, validation.frames, input.executionState);
+      const cancelled = cancelActiveAction(environment, validation.activeNode, input.executionState);
       return resultFromOutcome(environment, cancelled);
     }
 
@@ -305,7 +307,6 @@ function resumeActiveAction(
 function cancelActiveAction(
   environment: RuntimeEnvironment,
   node: AiNode,
-  frames: readonly AiCompositeFrame[],
   executionState: AiGraphExecutionState,
 ): ExecutionOutcome {
   const lifecycle = DEFAULT_AI_ACTION_REGISTRY.get(String(node.type));
@@ -674,12 +675,14 @@ function actionContext(environment: RuntimeEnvironment, node: AiNode, startedAtM
 function resolveActionState(node: AiNode, state: AiGraphExecutionState): unknown | undefined {
   if (node.type === 'Wait') return createLegacyWaitActionState(node.parameters);
   if (node.type === 'MoveToBlackboardPosition' && isMoveToBlackboardPositionActionState(state.activeData)) return state.activeData;
+  if (node.type === 'Reload' && isReloadActionState(state.activeData)) return state.activeData;
   return state.activeData;
 }
 
 function toExecutionData(value: unknown): AiGraphExecutionData | undefined {
-  if (!isMoveToBlackboardPositionActionState(value)) return undefined;
-  return { ...value, target: { ...value.target } };
+  if (isMoveToBlackboardPositionActionState(value)) return { ...value, target: { ...value.target } };
+  if (isReloadActionState(value)) return { ...value };
+  return undefined;
 }
 
 function legacyFrameFields(frames: readonly AiCompositeFrame[], activeNodeId: AiNodeId): { sequenceNodeId: AiNodeId; childIndex: number } {
@@ -750,15 +753,15 @@ function wrapInstant(value: AiGraphRunnerResult, status: 'success' | 'failure'):
   return { ...value, status, trace: runtimeTrace(value.trace), lifecycle: [] };
 }
 
-function success(reason: string, reasonRu: string): ExecutionOutcome {
+function success(reason: string, reasonRu: string): Extract<ExecutionOutcome, { kind: 'success' }> {
   return { kind: 'success', reason, reasonRu };
 }
 
-function failure(reason: string, reasonRu: string): ExecutionOutcome {
+function failure(reason: string, reasonRu: string): Extract<ExecutionOutcome, { kind: 'failure' }> {
   return { kind: 'failure', reason, reasonRu };
 }
 
-function cancelled(reason: string, reasonRu: string, details?: ActionDetails): ExecutionOutcome {
+function cancelled(reason: string, reasonRu: string, details?: ActionDetails): Extract<ExecutionOutcome, { kind: 'cancelled' }> {
   return { kind: 'cancelled', reason, reasonRu, details };
 }
 

@@ -7,6 +7,7 @@ import {
   cloneCompositeFrames,
   normalizeCompositeFrames,
 } from './AiCompositeRuntime';
+import { isReloadActionState } from './actions/ReloadAction';
 
 export type AiRuntimeSessionStatus = 'idle' | 'active' | 'terminal';
 export type AiRuntimeTerminalStatus = 'success' | 'failure' | 'cancelled';
@@ -222,7 +223,7 @@ function normalizeExecutionState(value: unknown): AiGraphExecutionState | undefi
     || !['running', 'waiting'].includes(String(value.status))) {
     return undefined;
   }
-  const frames = value.frames === undefined ? undefined : normalizeCompositeFrames(value.frames);
+  const frames = value.frames === undefined ? undefined : normalizeCompositeFrames(value.frames) ?? undefined;
   if (value.frames !== undefined && !frames) return undefined;
   return cloneExecutionState({
     ...(value as unknown as AiGraphExecutionState),
@@ -239,7 +240,9 @@ function cloneExecutionState(value: AiGraphExecutionState | undefined): AiGraphE
           ...value.activeData,
           target: { ...value.activeData.target },
         }
-      : undefined,
+      : isReloadActionState(value.activeData)
+        ? { ...value.activeData }
+        : undefined,
     frames: value.frames === undefined ? undefined : cloneCompositeFrames(value.frames),
   };
 }

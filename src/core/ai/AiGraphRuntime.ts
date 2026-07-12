@@ -25,6 +25,10 @@ import {
   type MoveToBlackboardPositionActionState,
 } from './runtime/actions/MoveToBlackboardPositionAction';
 import {
+  isReloadActionState,
+  type ReloadActionState,
+} from './runtime/actions/ReloadAction';
+import {
   createLegacyWaitActionState,
   type WaitActionState,
 } from './runtime/actions/WaitAction';
@@ -34,7 +38,7 @@ export type AiGraphLifecyclePhase = 'start' | 'update' | 'complete' | 'cancel';
 export type AiGraphRuntimeTraceStatus = AiGraphTraceItem['status'] | 'running' | 'waiting' | 'complete' | 'cancelled';
 
 export type AiGraphMoveExecutionData = MoveToBlackboardPositionActionState;
-export type AiGraphExecutionData = AiGraphMoveExecutionData;
+export type AiGraphExecutionData = AiGraphMoveExecutionData | ReloadActionState;
 
 export interface AiGraphExecutionState {
   readonly version: 1;
@@ -545,11 +549,14 @@ function resolveActionState(node: AiNode, state: AiGraphExecutionState): unknown
   if (node.type === 'MoveToBlackboardPosition' && isMoveToBlackboardPositionActionState(state.activeData)) {
     return state.activeData;
   }
+  if (node.type === 'Reload' && isReloadActionState(state.activeData)) return state.activeData;
   return state.activeData;
 }
 
 function toExecutionData(value: unknown): AiGraphExecutionData | undefined {
-  return isMoveToBlackboardPositionActionState(value) ? cloneMoveData(value) : undefined;
+  if (isMoveToBlackboardPositionActionState(value)) return cloneMoveData(value);
+  if (isReloadActionState(value)) return { ...value };
+  return undefined;
 }
 
 function runtimeDetailsFromTick(
