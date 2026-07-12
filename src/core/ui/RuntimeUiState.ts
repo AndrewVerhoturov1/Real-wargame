@@ -20,6 +20,12 @@ export interface VisibilityProbeRuntimeState {
   target: GridPosition | null;
 }
 
+export interface AttentionOverlayRuntimeState {
+  active: boolean;
+  showVisibilityFan: boolean;
+  selectedContactId: string | null;
+}
+
 export interface SimulationLayerRuntimeState {
   mode: SimulationLayerMode;
   selectedCoverId: string | null;
@@ -31,6 +37,7 @@ interface RuntimeUiState {
   realReliefOverlay: RealReliefOverlayRuntimeState;
   commandPlanRouteOverlay: CommandPlanRouteOverlayRuntimeState;
   visibilityProbe: VisibilityProbeRuntimeState;
+  attentionOverlay: AttentionOverlayRuntimeState;
   simulationLayer: SimulationLayerRuntimeState;
 }
 
@@ -78,6 +85,28 @@ export function setVisibilityProbe(state: SimulationState, active: boolean, targ
   probe.target = active ? target : null;
 }
 
+export function getAttentionOverlayState(state: SimulationState): AttentionOverlayRuntimeState {
+  return getRuntimeUiState(state).attentionOverlay;
+}
+
+export function setAttentionOverlayActive(state: SimulationState, active: boolean): void {
+  getRuntimeUiState(state).attentionOverlay.active = active;
+}
+
+export function toggleAttentionOverlay(state: SimulationState): boolean {
+  const overlay = getRuntimeUiState(state).attentionOverlay;
+  overlay.active = !overlay.active;
+  return overlay.active;
+}
+
+export function setAttentionVisibilityFan(state: SimulationState, active: boolean): void {
+  getRuntimeUiState(state).attentionOverlay.showVisibilityFan = active;
+}
+
+export function setSelectedAttentionContact(state: SimulationState, contactId: string | null): void {
+  getRuntimeUiState(state).attentionOverlay.selectedContactId = contactId;
+}
+
 export function getSimulationLayerState(state: SimulationState): SimulationLayerRuntimeState {
   return getRuntimeUiState(state).simulationLayer;
 }
@@ -108,6 +137,7 @@ function getRuntimeUiState(state: SimulationState): RuntimeUiState {
       realReliefOverlay: { active: false },
       commandPlanRouteOverlay: { active: true },
       visibilityProbe: { active: false, target: null },
+      attentionOverlay: { active: false, showVisibilityFan: false, selectedContactId: null },
       simulationLayer: {
         mode: 'info',
         selectedCoverId: null,
