@@ -14,6 +14,7 @@ export function resolveUnitNavigationProfile(
   const registry = getNavigationProfileRegistry();
   const resolved = resolveActiveNavigationProfile(registry, {
     debugOverrideProfileId: readNavigationProfileDebugOverride(),
+    playerCommandProfileId: command?.navigationProfileId,
     playerCommandMode: command?.movementMode,
     behaviorMovementMode: unit.navigationMovementMode,
     unitRoleProfileId: defaultProfileForUnitRole(unit),
