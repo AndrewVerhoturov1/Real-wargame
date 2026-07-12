@@ -1,86 +1,102 @@
-# Map and Overlay Performance Foundation Design
+# 2 m Map Grid and Overlay Performance Design
 
 ## Status
 
-Approved by the user on 2026-07-12. Work must stay on `perf/map-overlay-foundation-2026-07-12` until an explicit transfer request. `real-wargame-preview` and `main` must not be changed.
+Implemented on the isolated branch `perf/map-overlay-foundation-2026-07-12`.
+
+The user explicitly required that this work must **not** be transferred to `real-wargame-preview` yet. `main` and `real-wargame-preview` remain untouched. Draft PR #59 exists only to run GitHub Actions and must not be merged without a new explicit user instruction.
 
 ## Goal
 
-Remove the current overlay and editor stalls without reducing visual quality, while preparing the current 10-metre grid architecture for a later 2-metre grid migration.
+Replace the 10×10 m gameplay grid with a 2×2 m grid so one cell can represent the local space of one soldier, while keeping the battlefield at 640×400 m and preventing the 25× cell-count increase from reintroducing overlay/editor stalls.
 
-## Scope
+## Final scale decision
 
-This slice keeps `metersPerCell = 10`, current map dimensions, current rendering scale, current PixiJS 7 version and existing user-visible behaviour.
+- Global terrain, height and forest grid: **2 m per cell**.
+- Runtime map: **320×200 cells** instead of 64×40.
+- Physical map size: still **640×400 m**.
+- Pixel size of the whole map: unchanged.
+- Unit positions: continuous floating-point coordinates; soldiers are not snapped to cell centres.
+- Units, threat zones, view ranges, movement speed and uncertainty: converted so their real values in metres remain unchanged.
+- Object coordinates: converted so objects remain in the same world location.
+- Object dimensions: deliberately **not multiplied by five**. Their old cell counts are reinterpreted in the 2 m grid. This turns previously oversized objects into plausible local geometry, for example:
+  - tree 0.75 cell → 1.5 m;
+  - rock 0.45×0.35 → 0.9×0.7 m;
+  - crates 0.75×0.65 → 1.5×1.3 m;
+  - cover 2.5×0.45 → 5×0.9 m;
+  - small structure 2×1.5 → 4×3 m.
 
-The implementation covers:
+A 1 m global grid remains rejected for now because it would produce 256,000 cells, four times more than the selected 2 m design and 100 times more than the original map.
 
-1. explicit map revisions instead of full-map string fingerprints;
-2. bounded dirty regions for terrain, height, forest and objects;
-3. constant-time smooth-height cache validation;
-4. shared line-of-sight probe caching;
-5. spatial indexing for map-object queries;
-6. awareness-field reuse of indexed static protection;
-7. long-lived overlay and unit display objects where safe;
-8. visible-area culling for HTML map labels;
-9. expanded performance diagnostics and regression tests;
-10. chunk-ready data boundaries without changing the current map scale.
+## Compatibility model
 
-Web Workers and a full chunk-texture renderer are deliberately deferred until profiling proves that the main-thread work remaining after these changes still requires them. The architecture introduced here must allow those additions without another data-model rewrite.
+Legacy JSON maps remain compact and valid. `TacticalMapData.runtimeMetersPerCell` allows a 10 m source map to expand to a finer runtime grid.
 
-## Architecture
+For a 10→2 m migration:
 
-### Map change tracking
+- width and height are multiplied by five;
+- `cellSize` is divided by five;
+- terrain/height/forest values are expanded over the corresponding 5×5 runtime cells;
+- unit positions, speed and view range are converted by the coordinate scale;
+- threat geometry and tactical-memory ranges are converted by the coordinate scale;
+- object positions are converted, but object dimensions retain their numeric cell counts to gain realistic physical sizes.
 
-`TacticalMap` owns monotonic revision counters for terrain, height, forest, objects and combined visuals. Mutation helpers are the only supported way to change authoritative map layers. Each helper increments only the relevant revisions and records a dirty rectangle.
+New scene exports are native 2 m scenes. Old 10 m scene exports are automatically migrated when loaded.
 
-Renderers and caches compare revision numbers. They must never build a cache key by mapping every cell or every object on every frame.
+## Performance architecture
 
-### Dirty regions
+### Map revisions and dirty regions
 
-Dirty rectangles are merged per layer. Consumers may take and clear the accumulated region after updating their own cache. Height changes expand by one cell because the smoothing kernel samples neighbouring cells.
+Map layers have monotonic revisions for terrain, height, forest, objects and combined visuals. Cache keys compare revisions instead of serialising all cells and objects every frame.
 
-### Smooth terrain
+Height and forest painting records bounded dirty rectangles. Object mutations are observed and increment the object revision automatically.
 
-The smoothed height field is stored as a flat `Float32Array`. Cache validation compares the map identity and `heightRevision`. A full rebuild remains available for map loading; incremental updates rebuild only the dirty region plus the smoothing border.
+### Smooth terrain cache
 
-### Spatial index
+The smooth-height grid is cached by height revision. Repeated reads are constant-time cache hits. A local height edit updates only the dirty region plus the smoothing border; a full rebuild remains available for map loading or lost history.
 
-A uniform object index divides the map into fixed-size logical buckets. Static and moved objects are registered by their rotated bounds. Point, rectangle, circle and segment queries return candidate objects. Callers still perform exact geometry checks.
+### Spatial object index
 
-### Visibility probe
+A uniform bucket index provides point, rectangle, circle and segment candidate queries. Conservative rotated bounds prevent missed blockers; exact caller checks prevent false hits.
 
-A shared service caches the latest probe result by unit position/posture, target, and terrain/forest/object revisions. Pixi and HTML renderers consume the same result. Object blocker checks query the spatial index instead of iterating over every map object for every ray sample.
+### Shared visibility probe
 
-### Awareness
+Pixi and HTML overlays consume one cached line-of-sight result. The result invalidates only when the selected unit, posture, target or relevant map revision changes. Sight sampling is specified in metres, not cells.
 
-Static protection and concealment are cached separately from threat-dependent values. Static cells are invalidated by terrain, height, forest and object revisions. Dynamic threat fields are invalidated by tactical-knowledge revisions. Typed arrays store numeric fields; human-readable explanations are resolved only for selected or inspected cells.
+### Awareness fields
+
+Static terrain/forest/object protection is cached separately from changing tactical threats. Typed arrays store the static numeric field. Search radius, route sampling, uncertainty growth and distance penalties are expressed in metres.
 
 ### Rendering lifecycle
 
-Static and semi-static renderers reuse their containers and display objects. Dynamic pointer/selection graphics remain fixed objects. Unit views are stored by unit id and updated in place. Disabled layers become invisible rather than being destroyed when safe.
+Unit display objects are stored by id and updated in place. Pointer movement and camera zoom do not recreate them. Overlay keys no longer scan the full map. HTML labels are restricted to visible bounds, hidden below a zoom threshold where appropriate and reused rather than recreated.
 
-### HTML overlay
+## Implemented regression checks
 
-Only cells and labels intersecting current visible world bounds are considered. Height labels are hidden below a zoom threshold and capped to prevent large DOM counts. Existing labels are reused.
+- map revision and dirty-region smoke test;
+- 10→2 m resolution migration smoke test;
+- incremental smooth-terrain cache smoke test;
+- spatial-index query/invalidation smoke test;
+- shared visibility-probe cache smoke test;
+- static awareness-field cache smoke test;
+- Playwright assertions for zero full-map overlay fingerprints during input bursts;
+- Playwright assertions that pointer and wheel bursts do not create or remove unit views;
+- production TypeScript/Vite build;
+- existing editor, AI runtime, pathfinding and workspace smoke suites.
 
-## Performance acceptance criteria
+## Acceptance criteria
 
-1. Pointer movement does not scan every map cell or object.
-2. Camera movement and zoom do not invalidate terrain, relief, awareness or visibility calculations.
-3. A single height edit invalidates only the affected height region and smoothing border.
-4. One visibility-probe state change produces at most one line-of-sight calculation consumed by both renderers.
-5. Unit rendering does not recreate every unit display object each frame.
-6. Existing visual screenshots remain materially unchanged.
-7. Current Playwright performance tests pass and gain revision/full-scan assertions.
-8. Production TypeScript build passes.
+1. The main game reports 2 m per cell and uses a 320×200 runtime map.
+2. Physical battlefield dimensions remain 640×400 m.
+3. A soldier keeps the same real position, metres-per-second speed and view distance after migration.
+4. Threat zones and remembered threats keep their real-world ranges.
+5. Object footprints become realistically smaller instead of retaining legacy 10 m-cell dimensions.
+6. Pointer movement and camera movement perform no full-map cache fingerprint scans.
+7. Unit display objects are persistent across ordinary frames.
+8. Current JSON scenes remain loadable and new scenes export at native 2 m resolution.
+9. Core CI and production build pass on the isolated branch.
+10. Browser screenshots and interaction tests must be inspected before any transfer to preview.
 
-## Compatibility
+## Deferred work
 
-Existing JSON maps remain valid. Runtime revision, dirty and index state is created during `normalizeMap` and is not serialized. No PixiJS 8 APIs or new runtime dependencies are introduced.
-
-## Risks and mitigations
-
-- Direct mutation outside helpers could skip invalidation. Add development assertions, focused smoke tests and route all known editor mutations through helpers.
-- Spatial-index bounds for rotated objects can omit candidates. Register conservative axis-aligned rotated bounds and keep exact tests at the caller.
-- Incremental smoothing can create seams. Expand updates by the full smoothing radius and compare against full rebuilds in tests.
-- Caches can return stale data after loading. Map normalization starts all revisions at one and creates fresh runtime state.
+A 1 m global grid, Web Worker awareness calculations and a full chunk-texture terrain renderer remain optional follow-ups. They should only be added if profiling of the completed 2 m implementation proves they are necessary.
