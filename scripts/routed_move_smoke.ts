@@ -178,12 +178,12 @@ function makeWallMap(sealedEdges: boolean): TacticalMapData {
   };
 }
 
-function blockerAt(x: number, y: number, id: string): MapObject {
+function blockerAt(centerX: number, centerY: number, id: string): MapObject {
   return {
     id,
     kind: 'structure',
-    x,
-    y,
+    x: centerX - 0.5,
+    y: centerY - 0.5,
     rotationRadians: 0,
     widthCells: 0.9,
     heightCells: 0.9,
