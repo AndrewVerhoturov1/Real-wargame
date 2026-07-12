@@ -1,8 +1,13 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
 import { distance, type GridPosition } from '../geometry';
-import { getCell, resolveObjectCoverProperties, type TacticalMap } from '../map/MapModel';
+import type { TacticalMap } from '../map/MapModel';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { KnownThreatMemory, UnitModel } from '../units/UnitModel';
+import {
+  getAwarenessStaticCell,
+  getAwarenessStaticField,
+  type AwarenessStaticField,
+} from './AwarenessStaticField';
 
 export type SoldierAwarenessMode = 'off' | 'all' | 'danger' | 'cover' | 'safe' | 'stealth' | 'memory' | 'uncertainty' | 'objective';
 
@@ -57,13 +62,6 @@ interface CachedAwareness {
   routeDanger: number;
 }
 
-interface LocalProtection {
-  expectedProtection: number;
-  reliability: number;
-  concealment: number;
-  sourceRu: string;
-}
-
 const cache = new WeakMap<UnitModel, CachedAwareness>();
 const MAX_SAFE_POSITIONS = 8;
 const SAFE_SEARCH_RADIUS_CELLS = 12;
@@ -74,12 +72,12 @@ export function buildSoldierAwarenessReport(
   state: SimulationState,
   unit: UnitModel,
 ): SoldierAwarenessReport {
-  const mapHash = buildMapHash(state);
-  const key = buildCacheKey(state, unit, mapHash);
+  const staticField = getAwarenessStaticField(state.map, unit.behaviorRuntime.posture);
+  const key = buildCacheKey(state, unit, staticField.key);
   let cached = cache.get(unit);
 
   if (!cached || cached.key !== key) {
-    const field = buildAwarenessField(state, unit, key);
+    const field = buildAwarenessField(state, unit, key, staticField);
     cached = {
       key,
       field,
@@ -120,15 +118,15 @@ function buildAwarenessField(
   state: SimulationState,
   unit: UnitModel,
   key: string,
+  staticField: AwarenessStaticField,
 ): AwarenessField {
   const cells: SoldierAwarenessCell[] = new Array(state.map.width * state.map.height);
   for (let y = 0; y < state.map.height; y += 1) {
     for (let x = 0; x < state.map.width; x += 1) {
       cells[y * state.map.width + x] = evaluateAwarenessFieldCell(
-        state,
         unit,
         { x: x + 0.5, y: y + 0.5 },
-        unit.behaviorRuntime.posture,
+        staticField,
       );
     }
   }
@@ -188,13 +186,14 @@ export function evaluateRouteDanger(
   start: GridPosition,
   end: GridPosition,
 ): number {
+  const staticField = getAwarenessStaticField(state.map, unit.behaviorRuntime.posture);
   const length = distance(start, end);
   const samples = Math.max(2, Math.ceil(length * 2));
   let total = 0;
   for (let index = 0; index <= samples; index += 1) {
     const t = index / samples;
     const point = { x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t };
-    total += evaluateAwarenessFieldCell(state, unit, point, unit.behaviorRuntime.posture).danger;
+    total += evaluateAwarenessFieldCell(unit, point, staticField).danger;
   }
   return Math.round(total / (samples + 1));
 }
@@ -217,13 +216,11 @@ function evaluateRouteDangerFromField(
 }
 
 function evaluateAwarenessFieldCell(
-  state: SimulationState,
   unit: UnitModel,
   position: GridPosition,
-  posture: UnitPosture,
+  staticField: AwarenessStaticField,
 ): SoldierAwarenessCell {
-  const cell = getCell(state.map, Math.floor(position.x), Math.floor(position.y));
-  const local = estimateLocalProtection(state.map, position, posture);
+  const local = getAwarenessStaticCell(staticField, position);
   let remainingSafe = 1;
   let remainingUnsuppressed = 1;
   let confidenceTotal = 0;
@@ -247,14 +244,13 @@ function evaluateAwarenessFieldCell(
   const danger = clampPercent(100 * (1 - remainingSafe));
   const suppression = clampPercent(100 * (1 - remainingUnsuppressed));
   const confidence = confidenceWeight > 0 ? clampPercent(confidenceTotal / confidenceWeight) : 0;
-  const terrainPenalty = terrainMovementPenalty(cell?.terrain ?? 'field');
   const safety = clampPercent(
     local.expectedProtection * 0.62
       + local.concealment * 0.18
       + (100 - danger) * 0.45
       - suppression * 0.18
       - uncertainty * 0.08
-      - terrainPenalty,
+      - local.terrainPenalty,
   );
 
   return {
@@ -268,64 +264,12 @@ function evaluateAwarenessFieldCell(
     uncertainty,
     safety,
     confidence,
-    sourceRu: unit.tacticalKnowledge.threats.length > 0 ? local.sourceRu : local.sourceRu === 'открытая местность' ? 'нет известной угрозы' : local.sourceRu,
+    sourceRu: unit.tacticalKnowledge.threats.length > 0
+      ? local.sourceRu
+      : local.sourceRu === 'открытая местность'
+        ? 'нет известной угрозы'
+        : local.sourceRu,
   };
-}
-
-function estimateLocalProtection(map: TacticalMap, position: GridPosition, posture: UnitPosture): LocalProtection {
-  const cell = getCell(map, Math.floor(position.x), Math.floor(position.y));
-  const terrainConcealment = forestConcealment(cell?.forest ?? 0);
-  const reliefProtection = reliefLocalProtection(map, position, posture);
-  let result: LocalProtection = {
-    expectedProtection: reliefProtection,
-    reliability: reliefProtection,
-    concealment: clampPercent(terrainConcealment + postureConcealmentBonus(posture)),
-    sourceRu: terrainConcealment > 0 ? 'лес' : reliefProtection > 0 ? 'складка местности' : 'открытая местность',
-  };
-
-  for (const object of map.objects) {
-    if (!isNearObject(position, object.x, object.y, object.widthCells, object.heightCells, object.rotationRadians)) continue;
-    const cover = resolveObjectCoverProperties(object);
-    const postureFactor = coverPostureFactor(posture, cover.coverPosture);
-    const protection = clampPercent(cover.coverProtection * postureFactor);
-    const reliability = clampPercent(cover.coverReliability * postureFactor);
-    const concealment = clampPercent(Math.max(result.concealment, cover.concealment + postureConcealmentBonus(posture)));
-    if (protection > result.expectedProtection || concealment > result.concealment) {
-      result = {
-        expectedProtection: Math.max(result.expectedProtection, protection),
-        reliability: Math.max(result.reliability, reliability),
-        concealment,
-        sourceRu: object.labels?.ru ?? object.kind,
-      };
-    }
-  }
-  return result;
-}
-
-function isNearObject(
-  position: GridPosition,
-  objectX: number,
-  objectY: number,
-  width: number,
-  height: number,
-  rotation: number,
-): boolean {
-  const centerX = objectX + width / 2;
-  const centerY = objectY + height / 2;
-  const dx = position.x - centerX;
-  const dy = position.y - centerY;
-  const cos = Math.cos(-rotation);
-  const sin = Math.sin(-rotation);
-  const localX = dx * cos - dy * sin;
-  const localY = dx * sin + dy * cos;
-  const margin = 0.65;
-  return Math.abs(localX) <= width / 2 + margin && Math.abs(localY) <= height / 2 + margin;
-}
-
-function coverPostureFactor(posture: UnitPosture, coverPosture: UnitPosture): number {
-  if (coverPosture === 'standing') return 1;
-  if (coverPosture === 'crouched') return posture === 'standing' ? 0.45 : 1;
-  return posture === 'prone' ? 1 : posture === 'crouched' ? 0.55 : 0.25;
 }
 
 function threatFactorAtPosition(position: GridPosition, threat: KnownThreatMemory): number {
@@ -359,7 +303,7 @@ function threatFactorAtPosition(position: GridPosition, threat: KnownThreatMemor
     : 0;
 }
 
-function buildCacheKey(state: SimulationState, unit: UnitModel, mapHash: string): string {
+function buildCacheKey(state: SimulationState, unit: UnitModel, staticFieldKey: string): string {
   // Movement does not invalidate the expensive map field. Only posture, map and
   // awareness-relevant knowledge do; current position and route are updated separately.
   return [
@@ -367,7 +311,7 @@ function buildCacheKey(state: SimulationState, unit: UnitModel, mapHash: string)
     buildAwarenessKnowledgeKey(unit),
     unit.behaviorRuntime.posture,
     state.map.cellSize,
-    mapHash,
+    staticFieldKey,
   ].join('#');
 }
 
@@ -403,34 +347,6 @@ export function buildAwarenessKnowledgeKey(unit: UnitModel): string {
   ].join(':')).join('|');
 }
 
-function buildMapHash(state: SimulationState): string {
-  let hash = 2166136261;
-  hash = hashNumber(hash, state.map.width);
-  hash = hashNumber(hash, state.map.height);
-  hash = hashNumber(hash, Math.round(state.map.cellSize * 100));
-
-  for (const cell of state.map.cells) {
-    hash = hashNumber(hash, cell.height + 2);
-    hash = hashNumber(hash, cell.forest);
-    hash = hashString(hash, cell.terrain);
-  }
-
-  for (const object of state.map.objects) {
-    hash = hashString(hash, object.id);
-    hash = hashString(hash, object.kind);
-    hash = hashNumber(hash, Math.round(object.x * 100));
-    hash = hashNumber(hash, Math.round(object.y * 100));
-    hash = hashNumber(hash, Math.round(object.widthCells * 100));
-    hash = hashNumber(hash, Math.round(object.heightCells * 100));
-    hash = hashNumber(hash, Math.round(object.rotationRadians * 1000));
-    hash = hashNumber(hash, Math.round((object.coverProtection ?? -1) * 10));
-    hash = hashNumber(hash, Math.round((object.coverReliability ?? -1) * 10));
-    hash = hashNumber(hash, Math.round((object.concealment ?? -1) * 10));
-  }
-
-  return (hash >>> 0).toString(36);
-}
-
 function awarenessCellAt(
   map: TacticalMap,
   cells: SoldierAwarenessCell[],
@@ -452,51 +368,6 @@ function emptyAwarenessCell(position: GridPosition): SoldierAwarenessCell {
 
 function quantize(value: number, bucket: number): number {
   return Math.round(value / bucket) * bucket;
-}
-
-function hashNumber(hash: number, value: number): number {
-  hash ^= value | 0;
-  return Math.imul(hash, 16777619);
-}
-
-function hashString(hash: number, value: string): number {
-  let next = hash;
-  for (let index = 0; index < value.length; index += 1) {
-    next ^= value.charCodeAt(index);
-    next = Math.imul(next, 16777619);
-  }
-  return next;
-}
-
-function reliefLocalProtection(map: TacticalMap, position: GridPosition, posture: UnitPosture): number {
-  const center = getCell(map, Math.floor(position.x), Math.floor(position.y));
-  if (!center) return 0;
-  const neighbors = [
-    getCell(map, center.x - 1, center.y),
-    getCell(map, center.x + 1, center.y),
-    getCell(map, center.x, center.y - 1),
-    getCell(map, center.x, center.y + 1),
-  ].filter(Boolean);
-  const rise = Math.max(0, ...neighbors.map((neighbor) => (neighbor?.height ?? center.height) - center.height));
-  const postureBonus = posture === 'prone' ? 18 : posture === 'crouched' ? 9 : 0;
-  return clampPercent(rise * 22 + postureBonus);
-}
-
-function forestConcealment(forest: number): number {
-  return forest === 2 ? 82 : forest === 1 ? 52 : 0;
-}
-
-function postureConcealmentBonus(posture: UnitPosture): number {
-  if (posture === 'prone') return 18;
-  if (posture === 'crouched') return 8;
-  return 0;
-}
-
-function terrainMovementPenalty(terrain: string): number {
-  if (terrain === 'water') return 35;
-  if (terrain === 'swamp') return 18;
-  if (terrain === 'rough') return 7;
-  return 0;
 }
 
 function normalizeDegrees(value: number): number {
