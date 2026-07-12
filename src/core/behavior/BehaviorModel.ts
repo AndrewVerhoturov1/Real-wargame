@@ -1,3 +1,4 @@
+import type { AiRouteStatusState } from '../ai/AiRouteStatus';
 import type { AiRuntimeSessionSnapshotV1 } from '../ai/runtime/AiRuntimeSession';
 
 export type UnitState = 'idle' | 'moving' | 'observing' | 'taking_cover' | 'stressed';
@@ -82,6 +83,7 @@ export interface UnitBehaviorRuntime {
   aiGraphLastTickMs: number;
   aiNodeCooldowns: Record<string, number>;
   aiRuntimeSession: AiRuntimeSessionSnapshotV1 | null;
+  aiRouteStatusState: AiRouteStatusState | null;
 }
 
 export const DEFAULT_BEHAVIOR_PROFILE: BehaviorProfileId = 'regular';
@@ -341,6 +343,7 @@ export function createBehaviorRuntime(initialState?: Partial<UnitInitialState>):
     aiGraphLastTickMs: 0,
     aiNodeCooldowns: {},
     aiRuntimeSession: null,
+    aiRouteStatusState: null,
   };
 }
 
