@@ -104,12 +104,13 @@ assert.equal(getCell(map, 10, 0)?.terrain, 'field');
 const object = map.objects[0];
 assert.equal(object.x, 7);
 assert.equal(object.y, 2);
-assert.equal(object.widthCells, 10);
-assert.equal(object.heightCells, 5);
+assert.equal(object.widthCells, 2);
+assert.equal(object.heightCells, 1);
 assert.equal((object.x + 0.5) * map.cellSize, (1 + 0.5) * 24);
 assert.equal((object.y + 0.5) * map.cellSize, (0 + 0.5) * 24);
-assert.equal(object.widthCells * map.cellSize, 2 * 24);
-assert.equal(object.heightCells * map.cellSize, 1 * 24);
+assert.equal(object.widthCells * map.metersPerCell, 4, 'legacy cell count becomes a realistic 4m cover length');
+assert.equal(object.heightCells * map.metersPerCell, 2, 'legacy cell count becomes a realistic 2m cover depth');
+assert.ok(object.widthCells * map.cellSize < 2 * 24, 'object visual footprint must shrink instead of preserving a legacy 25m-scale shape');
 
 const unit = state.units[0];
 assert.equal(unit.position.x, 7.5);
@@ -149,4 +150,4 @@ assert.equal(nativeTwoMeterState.map.width, 20);
 assert.equal(nativeTwoMeterState.map.height, 10);
 assert.equal(nativeTwoMeterState.map.sourceToRuntimeCellScale, 1);
 
-console.log('Map resolution migration smoke passed: 10m source expands to 2m runtime with physical and pixel geometry preserved.');
+console.log('Map resolution migration smoke passed: 10m source expands to 2m; positions and gameplay ranges stay physical while object footprints become realistic.');
