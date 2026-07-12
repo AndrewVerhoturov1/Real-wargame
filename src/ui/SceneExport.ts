@@ -82,11 +82,11 @@ function normalizeImportedScene(value: unknown): {
   };
 }
 
-function buildExportedScene(state: SimulationState): ExportedSceneData {
+export function buildExportedScene(state: SimulationState): ExportedSceneData {
   return {
-    version: 'scene-export-v5-2m-grid',
+    version: 'scene-export-v6-perception-attention',
     exportedAt: new Date().toISOString(),
-    noteRu: 'Экспорт полигона ИИ в текущем разрешении карты. Сцены 10 м автоматически преобразуются в 2 м при загрузке; новые сцены сохраняются нативно без повторного масштабирования.',
+    noteRu: 'Экспорт полигона ИИ с профилями обзора и внимания. Старые сцены без блока attention получают безопасные значения по умолчанию.',
     map: {
       width: state.map.width,
       height: state.map.height,
@@ -190,7 +190,7 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
     speedCellsPerSecond: roundThree(unit.speedCellsPerSecond),
     heldItem: unit.heldItem,
     facingDegrees: roundOne(radiansToDegrees(unit.facingRadians)),
-    viewAngleDegrees: roundOne(radiansToDegrees(unit.viewAngleRadians)),
+    viewAngleDegrees: roundOne(unit.attentionSettings.profiles.observe.directAngleDegrees),
     viewRangeCells: roundThree(unit.viewRangeCells),
     behaviorProfile: unit.behaviorProfile,
     behavior: { ...unit.behaviorSettings },
@@ -198,8 +198,17 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
       traits: { ...unit.soldier.traits },
       condition: { ...unit.soldier.condition },
     },
+    attention: {
+      defaultMode: unit.attentionSettings.defaultMode,
+      profiles: Object.fromEntries(
+        Object.entries(unit.attentionSettings.profiles).map(([mode, profile]) => [mode, { ...profile }]),
+      ),
+    },
     initialState: { ...unit.initialState },
     tacticalKnowledge: JSON.parse(JSON.stringify(unit.tacticalKnowledge)),
+    perceptionKnowledge: JSON.parse(JSON.stringify(unit.perceptionKnowledge)),
+    navigationProfileId: unit.unitRoleNavigationProfileId ?? undefined,
+    navigationMovementMode: unit.navigationMovementMode ?? undefined,
     runtime: {
       stress: roundOne(unit.behaviorRuntime.stress),
       suppression: roundOne(unit.behaviorRuntime.suppression),
