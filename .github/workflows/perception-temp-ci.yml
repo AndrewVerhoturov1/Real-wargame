@@ -31,6 +31,9 @@ jobs:
       - run: npm run workspace:smoke
       - run: npm run game-editor:smoke
       - run: npm run visibility-probe:smoke
+      - run: npm run dictionary:smoke
+      - run: npm run lab:smoke
+      - run: npm run docs:check
       - name: Publish connector-visible status
         if: always()
         uses: actions/github-script@v7
