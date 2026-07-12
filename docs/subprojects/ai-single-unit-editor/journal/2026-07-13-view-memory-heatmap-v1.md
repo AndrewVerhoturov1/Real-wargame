@@ -55,9 +55,15 @@ npm run docs:check
 
 The performance smoke includes an explicit CI budget of at most `120 ms` for the first field build on a `180×120` test map, plus idle cache and movement-throttle assertions.
 
+## Regression finding and correction
+
+Expanded regression run `29208268840` passed the new heatmap, perception, runtime and runtime-session checks, then stopped at `runtime-snapshot:smoke`. Root-cause inspection showed that runtime restore itself was not broken: the smoke test still pinned the old scene-export v7 identifier after the intentional move to v8.
+
+The test contract now expects `scene-export-v8-view-memory-heatmap-ai-runtime-2m-grid` and additionally verifies that `maximumVisualRangeMeters` and `distanceFalloffStartMeters` survive the scene export/import path. No runtime implementation was weakened or bypassed.
+
 ## Pending before handoff
 
-- expanded full preview-core regression;
+- expanded full preview-core regression after the corrected v8 contract;
 - real system-Chrome Playwright run;
 - manual inspection of key screenshots;
 - final exact commit/run identifiers in canonical metadata.
