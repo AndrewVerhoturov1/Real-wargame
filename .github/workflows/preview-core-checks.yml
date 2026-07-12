@@ -85,6 +85,12 @@ jobs:
         continue-on-error: true
         run: npm run lifecycle:smoke
 
+      - name: AI composite runtime smoke
+        id: composite
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run composite:smoke
+
       - name: Stateful AI movement bridge smoke
         id: move_bridge
         if: steps.install.outcome == 'success'
@@ -195,6 +201,7 @@ jobs:
           RUNTIME_OUTCOME: ${{ steps.runtime.outcome }}
           RUNTIME_SESSION_OUTCOME: ${{ steps.runtime_session.outcome }}
           LIFECYCLE_OUTCOME: ${{ steps.lifecycle.outcome }}
+          COMPOSITE_OUTCOME: ${{ steps.composite.outcome }}
           MOVE_BRIDGE_OUTCOME: ${{ steps.move_bridge.outcome }}
           ROUTE_STATUS_OUTCOME: ${{ steps.route_status.outcome }}
           PATHFINDING_OUTCOME: ${{ steps.pathfinding.outcome }}
@@ -220,6 +227,7 @@ jobs:
               runtime: process.env.RUNTIME_OUTCOME,
               runtime_session: process.env.RUNTIME_SESSION_OUTCOME,
               lifecycle: process.env.LIFECYCLE_OUTCOME,
+              composite: process.env.COMPOSITE_OUTCOME,
               move_bridge: process.env.MOVE_BRIDGE_OUTCOME,
               route_status: process.env.ROUTE_STATUS_OUTCOME,
               pathfinding: process.env.PATHFINDING_OUTCOME,
