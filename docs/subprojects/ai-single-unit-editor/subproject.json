@@ -4,18 +4,19 @@
   "status": "active",
   "updated_at": "2026-07-12",
   "goal": "Создать понятную человеку лабораторию поведения одиночного бойца: Utility AI выбирает решение, stateful runtime исполняет длительные действия, общий A* ведёт бойца по карте, а постоянные профили маршрута позволяют без кода настраивать стоимость местности и честно известные бойцу тактические факторы.",
-  "current_focus": "На изолированной ветке tmp/ui-compact-route-controls-20260712 завершён интерфейсный срез Compact Route Controls: нижняя карточка бойца стала компактной, профиль маршрута и карта стоимости доступны прямо в игре, завершённый план очищает синюю цель, а редактор ИИ использует одно верхнее меню без пустой полосы, вкладки Диагностика и устаревшего Auto 4–5.",
-  "next_step": "Дождаться ручной проверки пользователя на временной ветке. Не переносить изменения в real-wargame-preview до отдельной явной команды; при переносе удалить временный branch-only workflow визуальной проверки и повторно проверить итоговый preview SHA.",
+  "current_focus": "Compact Route Controls перенесён в real-wargame-preview: нижняя карточка бойца стала компактной, профиль маршрута и карта стоимости доступны прямо в игре, завершённый план очищает синюю цель, а редактор ИИ использует одно верхнее меню без пустой полосы, вкладки Диагностика и устаревшего Auto 4–5.",
+  "next_step": "Провести пользовательскую проверку результата в real-wargame-preview. После подтверждения продолжить по плану Soldier Perception and Attention v1; main не менять без отдельного явного GO пользователя.",
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-  "last_verified_commit": "93268bb6a89db8a2508f2d8576d955c0b15fe89f",
+  "last_verified_commit": "f99c0b810b06cd326063f94e688004635c3b2466",
   "last_verified_runs": {
-    "compact_route_controls_core": "29197827160: editor, workspace, route, navigation, build, docs and focused compact UI contracts passed",
-    "preview_core": "29197827195: success on the exact temporary-branch SHA",
-    "navigation_profiles_core": "29197827184: success",
-    "command_plan_route": "29197827209: success",
-    "policy": "29197827154: success",
-    "docs_integrity": "29197827158: success",
-    "visual_qa": "29197827165: approved exact-SHA system-Chrome Playwright run succeeded",
+    "compact_route_controls_core": "29198411948: success on the final transfer branch head after temporary workflow removal",
+    "preview_core": "29198411921: success on the final transfer branch head",
+    "navigation_profiles_core": "29198411929: success",
+    "command_plan_route": "29198411949: success",
+    "policy": "29198415192: success",
+    "docs_integrity": "29198411928: success",
+    "preview_merge": "PR #65 merged into real-wargame-preview as f99c0b810b06cd326063f94e688004635c3b2466",
+    "visual_qa": "29198043701: exact-SHA system-Chrome Playwright run succeeded before transfer",
     "playwright": "3/3 passed",
     "png_count": 6,
     "inspected_png": [
@@ -120,14 +121,13 @@
     "Перестроение сохраняет playerCommandId и AI ownerToken; смена профиля игрока изменяет существующую команду без подмены её владельца.",
     "Профили маршрута не хранятся внутри конкретного behavior graph и не превращаются в числовые ноды.",
     "Не утверждать визуальную проверку без запуска браузера, совпадения SHA и открытия всех ключевых PNG.",
-    "Не менять main и не переносить временную ветку в real-wargame-preview без отдельного явного GO пользователя."
+    "Не менять main без отдельного явного GO пользователя."
   ],
   "known_limits": [
     "Версия 1 честно использует известную бойцу опасность и маскировку леса/канав; субъективная видимость противнику, точная известная дистанция до врага и территория пока представлены расширяемыми контрактами с нулевым вкладом.",
     "При превышении maximumDetourRatio версия 1 выбирает кешированный кратчайший проходимый baseline, а не выполняет отдельный многоцелевой поиск компромиссного пути.",
     "Не все behavior-ноды ещё имеют отдельный семантический selector movementMode; числовые веса всё равно берутся только из общего реестра.",
     "Состояние профилей хранится в localStorage и JSON, но ещё не встроено в scene JSON.",
-    "Нет резервирования клеток между бойцами, flow field или группового коридора.",
-    "Временный workflow tmp-ui-compact-visual-qa.yml предназначен только для этой изолированной ветки и должен быть удалён перед переносом в preview."
+    "Нет резервирования клеток между бойцами, flow field или группового коридора."
   ]
 }
