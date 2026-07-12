@@ -27,11 +27,7 @@ const movementGraph: AiGraph = {
   },
   nodes: [
     { id: 'root', type: 'Root', children: ['sequence'] },
-    {
-      id: 'sequence',
-      type: 'SequenceWithMemory',
-      children: ['move'],
-    },
+    { id: 'sequence', type: 'SequenceWithMemory', children: ['move'] },
     {
       id: 'move',
       type: 'MoveToBlackboardPosition',
@@ -72,6 +68,7 @@ applyOwnedMoveEffects(state, runtimeResult(unit.id, [{
 assert.equal(unit.order?.source, 'ai');
 assert.equal(unit.order?.ownerToken, aiToken);
 assert.deepEqual(unit.order?.requestedTarget, aiTarget);
+assert.deepEqual(unit.order?.target, aiTarget, 'AI movement must keep its exact requested target');
 assert.ok((unit.order?.routeCells?.length ?? 0) > 1, 'AI movement must receive a grid route');
 assert.equal(unit.order?.routeStatus, 'planned');
 
@@ -141,25 +138,20 @@ assert.equal(unit.behaviorRuntime.currentAction, 'posture:prone', 'move cleanup 
 assert.equal(unit.behaviorRuntime.reason, 'Лечь после движения.');
 assert.equal(unit.behaviorRuntime.lastEvent, 'ai_graph_set_posture');
 
-verifyUnreachableAiRoute();
+verifyUnreachableAiStart();
+verifyBlockedExactAiGoal();
 
-console.log('AI stateful move bridge smoke passed: routed AI start, path memory, physical movement, ownership protection, matching cleanup, sequence continuation, unreachable failure.');
+console.log('AI stateful move bridge smoke passed: exact routed AI target, path memory, movement, ownership, cleanup, unreachable start and blocked exact goal.');
 
-function verifyUnreachableAiRoute(): void {
-  const blockedState = createInitialState(
-    mapData as TacticalMapData,
-    unitsData as UnitData[],
-    [],
-  );
+function verifyUnreachableAiStart(): void {
+  const blockedState = createState();
   const blockedUnit = blockedState.units[0];
   assert.ok(blockedUnit);
-  blockedState.selectedUnitId = blockedUnit.id;
-  blockedState.selectedUnitIds = [blockedUnit.id];
   blockedState.map.objects.push({
     id: 'start_blocker',
     kind: 'structure',
-    x: blockedUnit.position.x,
-    y: blockedUnit.position.y,
+    x: Math.floor(blockedUnit.position.x),
+    y: Math.floor(blockedUnit.position.y),
     rotationRadians: 0,
     widthCells: 1,
     heightCells: 1,
@@ -175,13 +167,60 @@ function verifyUnreachableAiRoute(): void {
     reasonRu: 'Заблокированное движение.',
   }]));
 
-  assert.equal(blockedUnit.order, null);
-  assert.equal(blockedUnit.behaviorRuntime.lastEvent, 'ai_graph_move_route_unavailable');
-  assert.match(blockedUnit.behaviorRuntime.reason, /маршрут/i);
-  const blockedMemory = readAiMemory(blockedUnit);
+  assertUnreachable(blockedUnit, /старт|клетк/i);
+}
+
+function verifyBlockedExactAiGoal(): void {
+  const blockedState = createState();
+  const blockedUnit = blockedState.units[0];
+  assert.ok(blockedUnit);
+  const target = { x: blockedUnit.position.x + 4, y: blockedUnit.position.y };
+  blockedState.map.objects.push({
+    id: 'goal_blocker',
+    kind: 'structure',
+    x: Math.floor(target.x),
+    y: Math.floor(target.y),
+    rotationRadians: 0,
+    widthCells: 1,
+    heightCells: 1,
+    labels: null,
+  });
+
+  applyOwnedMoveEffects(blockedState, runtimeResult(blockedUnit.id, [{
+    type: 'begin_move',
+    ownerToken: 'exact-goal-token',
+    targetPosition: target,
+    targetKey: 'best_cover_position',
+    reason: 'Exact goal move.',
+    reasonRu: 'Движение к точной цели.',
+  }]));
+
+  assertUnreachable(blockedUnit, /точн|непроходим/i);
+  assert.deepEqual(readAiMemory(blockedUnit).active_move_path_requested_target, target);
+  assert.equal(readAiMemory(blockedUnit).active_move_path_resolved_target, null);
+}
+
+function createState() {
+  const next = createInitialState(
+    mapData as TacticalMapData,
+    unitsData as UnitData[],
+    [],
+  );
+  const firstUnit = next.units[0];
+  assert.ok(firstUnit);
+  next.selectedUnitId = firstUnit.id;
+  next.selectedUnitIds = [firstUnit.id];
+  return next;
+}
+
+function assertUnreachable(unitModel: UnitModel, reasonPattern: RegExp): void {
+  assert.equal(unitModel.order, null);
+  assert.equal(unitModel.behaviorRuntime.lastEvent, 'ai_graph_move_route_unavailable');
+  assert.match(unitModel.behaviorRuntime.reason, /маршрут/i);
+  const blockedMemory = readAiMemory(unitModel);
   assert.equal(blockedMemory.active_move_path_status, 'unreachable');
   assert.equal(blockedMemory.active_move_path_waypoint_count, 0);
-  assert.match(String(blockedMemory.active_move_path_reason), /старт|клетк/i);
+  assert.match(String(blockedMemory.active_move_path_reason), reasonPattern);
 }
 
 function runtimeResult(unitId: string, effects: readonly unknown[]): AiGraphRuntimeResult {
@@ -204,8 +243,8 @@ function runtimeResult(unitId: string, effects: readonly unknown[]): AiGraphRunt
   } as unknown as AiGraphRuntimeResult;
 }
 
-function readAiMemory(unit: UnitModel): Record<string, AiBlackboardValue> {
-  const runtime = unit.behaviorRuntime as UnitModel['behaviorRuntime'] & {
+function readAiMemory(unitModel: UnitModel): Record<string, AiBlackboardValue> {
+  const runtime = unitModel.behaviorRuntime as UnitModel['behaviorRuntime'] & {
     aiGraphMemory?: Record<string, AiBlackboardValue>;
   };
   assert.ok(runtime.aiGraphMemory);
