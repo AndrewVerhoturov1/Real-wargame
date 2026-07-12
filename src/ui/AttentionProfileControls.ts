@@ -4,6 +4,7 @@ import {
   createAttentionRuntime,
   type AttentionMode,
   type AttentionModeProfile,
+  type UnitVisionSettings,
 } from '../core/perception/AttentionModel';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 
@@ -38,14 +39,15 @@ export function installAttentionProfileControls(
     root.open = true;
 
     const summary = document.createElement('summary');
-    summary.textContent = 'Обзор и внимание';
+    summary.textContent = 'Обзор и память';
     const content = document.createElement('div');
     content.className = 'game-editor-details-body attention-profile-body';
     content.append(
-      hint('Режимы задают постоянные настройки. Ноды ИИ только выбирают режим или сектор поиска.'),
+      hint('Профили задают вероятностное распределение внимания без физического вращения головы. Ноды ИИ выбирают режим или неподвижный сектор поиска.'),
       selectField('Режим по умолчанию', ATTENTION_MODES.map((mode) => [mode, MODE_LABELS[mode]]), draft.attention.defaultMode, (mode) => {
         draft.attention.defaultMode = mode;
       }),
+      visionGrid(draft.attention.vision, onChanged),
       selectField('Редактируемый режим', ATTENTION_MODES.map((mode) => [mode, MODE_LABELS[mode]]), activeMode, (mode) => {
         activeMode = mode;
         render(true);
@@ -55,7 +57,7 @@ export function installAttentionProfileControls(
         onChanged();
       }),
       buttonRow([
-        actionButton('Взять внимание выбранного', () => {
+        actionButton('Взять настройки выбранного', () => {
           const selected = getSelectedUnit(state);
           if (!selected) return;
           draft.attention = cloneAttentionSettings(selected.attentionSettings);
@@ -68,7 +70,7 @@ export function installAttentionProfileControls(
           selected.attentionSettings = cloneAttentionSettings(draft.attention);
           selected.attentionRuntime = createAttentionRuntime(selected.attentionSettings, selected.facingRadians);
           selected.viewAngleRadians = degreesToRadians(selected.attentionSettings.profiles.observe.directAngleDegrees);
-          state.editor.lastMessage = `Профили внимания применены к бойцу: ${selected.id}`;
+          state.editor.lastMessage = `Профили обзора и памяти применены к бойцу: ${selected.id}`;
           onChanged();
           render(true);
         }, 'primary'),
@@ -96,6 +98,35 @@ export function installAttentionProfileControls(
   return () => observer.disconnect();
 }
 
+function visionGrid(vision: UnitVisionSettings, onChanged: () => void): HTMLElement {
+  const grid = document.createElement('div');
+  grid.className = 'attention-profile-grid attention-vision-grid';
+  grid.append(
+    numberField('Максимальная дальность, м', vision.maximumVisualRangeMeters, 20, 2000, 10, (value) => {
+      vision.maximumVisualRangeMeters = value;
+      vision.distanceFalloffStartMeters = Math.min(vision.distanceFalloffStartMeters, value - 1);
+      onChanged();
+    }),
+    numberField('Падение качества начинается, м', vision.distanceFalloffStartMeters, 0, Math.max(1, vision.maximumVisualRangeMeters - 1), 5, (value) => {
+      vision.distanceFalloffStartMeters = value;
+      onChanged();
+    }),
+    numberField('Крутизна падения', vision.distanceFalloffExponent, 0.25, 6, 0.05, (value) => {
+      vision.distanceFalloffExponent = value;
+      onChanged();
+    }),
+    numberField('Случайность обнаружения, ±%', vision.detectionVariancePercent, 0, 25, 1, (value) => {
+      vision.detectionVariancePercent = value;
+      onChanged();
+    }),
+  );
+  const note = document.createElement('p');
+  note.className = 'attention-profile-note';
+  note.textContent = 'Дальность описывает качество наблюдения клетки. Цели обнаруживаются со временем с учётом позы, движения, маскировки и небольшой стабильной случайности.';
+  grid.append(note);
+  return grid;
+}
+
 function profileGrid(
   profile: AttentionModeProfile,
   mode: AttentionMode,
@@ -120,12 +151,8 @@ function profileGrid(
       profile.directWeight = value / 100;
       onChanged();
     }),
-    numberField('Косвенное внимание, %', profile.peripheralWeight * 100, 0, 100, 1, (value) => {
+    numberField('Боковое и заднее внимание, %', profile.peripheralWeight * 100, 0, 100, 1, (value) => {
       profile.peripheralWeight = value / 100;
-      onChanged();
-    }),
-    numberField('Скорость осмотра, °/с', profile.scanSpeedDegreesPerSecond, 0, 360, 1, (value) => {
-      profile.scanSpeedDegreesPerSecond = value;
       onChanged();
     }),
     numberField('Проверка фокуса, с', profile.focusCheckIntervalSeconds, 0.05, 5, 0.05, (value) => {
@@ -152,12 +179,12 @@ function profileGrid(
   const note = document.createElement('p');
   note.className = 'attention-profile-note';
   note.textContent = mode === 'march'
-    ? 'На марше косвенное внимание действует по кругу, но хуже распознаёт неподвижные цели.'
+    ? 'На марше боец смотрит по ходу движения. По сторонам остаётся только более слабое вероятностное внимание.'
     : mode === 'engage'
-      ? 'При стрельбе фокус удерживается на цели, а фланги контролируются значительно хуже.'
+      ? 'При стрельбе внимание удерживается на цели, а фланги и тыл контролируются значительно хуже.'
       : mode === 'search'
-        ? 'Поиск проводит узкий фокус по назначенному сектору.'
-        : 'Наблюдение спокойно сканирует широкий передний сектор.';
+        ? 'Поиск усиливает неподвижный назначенный сектор без видимого движения луча.'
+        : 'Наблюдение использует стабильное широкое распределение внимания без качания головы.';
   grid.append(note);
   return grid;
 }
