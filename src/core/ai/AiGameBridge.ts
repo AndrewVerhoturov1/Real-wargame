@@ -190,9 +190,18 @@ export function buildBlackboardForUnit(
 export function ensureRuntimeSession(unit: UnitModel, graphId: string): AiRuntimeSessionSnapshotV1 {
   const runtime = unit.behaviorRuntime as LegacyAiUnitGraphRuntime;
   if (runtime.aiRuntimeSession) {
-    const normalized = normalizeAiRuntimeSession(runtime.aiRuntimeSession, { graphId, unitId: unit.id });
+    const previousSession = runtime.aiRuntimeSession;
+    const activeData = previousSession.executionState?.activeData;
+    const ownedMoveToken = activeData?.kind === 'move_to_blackboard_position'
+      ? activeData.actionToken
+      : undefined;
+    const normalized = normalizeAiRuntimeSession(previousSession, { graphId, unitId: unit.id });
     runtime.aiRuntimeSession = normalized.session;
     if (normalized.resetReasonRu) {
+      if (ownedMoveToken && unit.order?.source === 'ai' && unit.order.ownerToken === ownedMoveToken) {
+        unit.order = null;
+      }
+      unit.behaviorRuntime.aiRouteStatusState = null;
       runtime.aiGraphReason = normalized.resetReasonRu;
       runtime.reason = normalized.resetReasonRu;
       runtime.lastEvent = 'ai_runtime_session_reset';
