@@ -51,6 +51,16 @@ test('2m grid uses 10m overview lines and reveals fine cells only after zoom', a
   expect(initial?.sourceGridVisible).toBe(false);
   expect(initial?.majorOverlayVisible).toBe(true);
 
+  // Switching workspace mode rebuilds the static map layer. The newly created source grid
+  // must immediately inherit the current LOD instead of flashing the dense 2 m grid.
+  await page.locator('[data-mode="editor"]').click();
+  await expect(page.locator('body')).toHaveClass(/workspace-editor/);
+  await expect.poll(async () => {
+    const diagnostics = await readGridDiagnostics(page);
+    return `${diagnostics?.sourceGridVisible}:${diagnostics?.majorOverlayVisible}`;
+  }).toBe('false:true');
+  await page.locator('[data-mode="simulation"]').click();
+
   const box = await canvas.boundingBox();
   if (!box) throw new Error('Canvas bounds unavailable.');
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
