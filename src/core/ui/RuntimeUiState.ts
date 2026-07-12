@@ -22,6 +22,11 @@ export interface VisibilityProbeRuntimeState {
 
 export interface AttentionOverlayRuntimeState {
   active: boolean;
+  showCurrentView: boolean;
+  showMemoryMarkers: boolean;
+  showCurrentContacts: boolean;
+  showUncertainty: boolean;
+  /** Legacy compatibility flag. The rotating diagnostic fan is no longer rendered. */
   showVisibilityFan: boolean;
   selectedContactId: string | null;
 }
@@ -99,6 +104,22 @@ export function toggleAttentionOverlay(state: SimulationState): boolean {
   return overlay.active;
 }
 
+export function setAttentionCurrentView(state: SimulationState, active: boolean): void {
+  getRuntimeUiState(state).attentionOverlay.showCurrentView = active;
+}
+
+export function setAttentionMemoryMarkers(state: SimulationState, active: boolean): void {
+  getRuntimeUiState(state).attentionOverlay.showMemoryMarkers = active;
+}
+
+export function setAttentionCurrentContacts(state: SimulationState, active: boolean): void {
+  getRuntimeUiState(state).attentionOverlay.showCurrentContacts = active;
+}
+
+export function setAttentionUncertainty(state: SimulationState, active: boolean): void {
+  getRuntimeUiState(state).attentionOverlay.showUncertainty = active;
+}
+
 export function setAttentionVisibilityFan(state: SimulationState, active: boolean): void {
   getRuntimeUiState(state).attentionOverlay.showVisibilityFan = active;
 }
@@ -137,7 +158,15 @@ function getRuntimeUiState(state: SimulationState): RuntimeUiState {
       realReliefOverlay: { active: false },
       commandPlanRouteOverlay: { active: true },
       visibilityProbe: { active: false, target: null },
-      attentionOverlay: { active: false, showVisibilityFan: false, selectedContactId: null },
+      attentionOverlay: {
+        active: false,
+        showCurrentView: true,
+        showMemoryMarkers: true,
+        showCurrentContacts: true,
+        showUncertainty: true,
+        showVisibilityFan: false,
+        selectedContactId: null,
+      },
       simulationLayer: {
         mode: 'info',
         selectedCoverId: null,

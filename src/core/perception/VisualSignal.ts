@@ -1,5 +1,6 @@
 import type { UnitModel } from '../units/UnitModel';
 import type { LineOfSightProbeResult } from '../visibility/LineOfSight';
+import { calculateDistanceVisibilityFactor } from '../visibility/VisibilityQuality';
 import type { AttentionSample } from './AttentionModel';
 import type { PerceptionStimulus } from './PerceptionStimulus';
 
@@ -56,8 +57,17 @@ export function evaluateVisualSignal(input: VisualSignalInput): VisualSignalResu
     };
   }
 
-  const distanceRatio = input.distanceMeters / Math.max(1, input.nominalRangeMeters);
-  const distanceMultiplier = 1 / (1 + distanceRatio * distanceRatio);
+  const distanceMultiplier = calculateDistanceVisibilityFactor(
+    input.distanceMeters,
+    observer.attentionSettings.vision,
+  );
+  if (distanceMultiplier <= 0) {
+    return {
+      evidencePerSecond: 0,
+      factors: [],
+      explanationRu: [`Источник находится за практической дальностью обзора ${Math.round(observer.attentionSettings.vision.maximumVisualRangeMeters)} м.`],
+    };
+  }
   const concealmentMultiplier = Math.max(0.08, 1 - stimulus.concealment / 100);
   const lateralMultiplier = 1 + Math.max(0, Math.min(1, stimulus.lateralMotion)) * 0.25;
   const observerMultiplier = clamp(

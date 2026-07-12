@@ -14,6 +14,7 @@ import {
   advanceReportedContact,
   advanceVisualContact,
   contactStageRank,
+  createStableDetectionVariance,
   decayUnobservedContact,
   type PerceptionContactMemory,
   upsertPerceptionContact,
@@ -44,7 +45,10 @@ export function tickSelectedSoldierPerception(state: SimulationState, deltaSecon
   const due = resolveDueZones(unit, now);
   const updatedContacts = new Set<string>();
   const stimuli = buildPerceptionStimuli(state);
-  const broadPhaseCells = Math.max(1, unit.viewRangeCells * 1.75);
+  const broadPhaseCells = Math.max(
+    1,
+    unit.attentionSettings.vision.maximumVisualRangeMeters / Math.max(0.001, state.map.metersPerCell),
+  );
   const profile = effectiveProfile(unit);
 
   for (const stimulus of stimuli) {
@@ -97,21 +101,30 @@ export function tickSelectedSoldierPerception(state: SimulationState, deltaSecon
       attention,
       lineOfSight,
       distanceMeters: distanceCells * state.map.metersPerCell,
-      nominalRangeMeters: Math.max(1, unit.viewRangeCells * state.map.metersPerCell),
+      nominalRangeMeters: unit.attentionSettings.vision.maximumVisualRangeMeters,
     });
     if (visualSignal.evidencePerSecond <= 0) continue;
 
     const contactId = contactIdForStimulus(stimulus.id);
     const previous = unit.perceptionKnowledge.contacts.find((item) => item.id === contactId) ?? null;
+    const detectionVariance = previous?.detectionVariance ?? createStableDetectionVariance(
+      unit.id,
+      stimulus.id,
+      unit.attentionSettings.vision.detectionVariancePercent,
+    );
     const contact = advanceVisualContact(previous, {
       id: contactId,
       stimulusId: stimulus.id,
       labelRu: stimulus.labelRu,
       position: stimulus.position,
       evidencePerSecond: visualSignal.evidencePerSecond,
+      detectionVariance,
       deltaSeconds: intervalForZone(profile, attention.zone),
       nowSeconds: now,
-      explanationRu: visualSignal.explanationRu,
+      explanationRu: [
+        ...visualSignal.explanationRu,
+        `Небольшая стабильная вариативность обнаружения: ×${detectionVariance.toFixed(2).replace('.', ',')}.`,
+      ],
     });
     upsertPerceptionContact(unit.perceptionKnowledge, contact);
     updatedContacts.add(contactId);

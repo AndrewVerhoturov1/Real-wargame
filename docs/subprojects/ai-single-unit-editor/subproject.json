@@ -2,37 +2,49 @@
   "id": "ai-single-unit-editor",
   "title": "AI Single-Unit Editor — Stateful Tactical Awareness Lab",
   "status": "active",
-  "updated_at": "2026-07-12",
+  "updated_at": "2026-07-13",
   "goal": "Создать понятную человеку лабораторию поведения одиночного бойца: Utility AI выбирает решение, stateful runtime исполняет длительные действия, общий A* ведёт бойца по карте, постоянные профили маршрута задают стоимость местности, а гибридная система обзора и внимания формирует субъективные визуальные и звуковые контакты без всезнания ИИ.",
-  "current_focus": "Soldier Perception and Attention v1 перенесён в real-wargame-preview через PR #70. В актуальной preview-ветке доступны режимы Марш/Наблюдение/Поиск цели/Стрельба, плавное поле внимания, постепенное ослабление обзора лесом, накопление и старение субъективных контактов, примерный слух, Blackboard и ноды управления вниманием, редактор профилей и отдельный PixiJS-слой. Свежие изменения компактной карточки бойца, маршрутов и редактора сохранены.",
-  "next_step": "Провести пользовательскую проверку результата в real-wargame-preview. После подтверждения планировать следующий этап: восприятие всех бойцов, обмен контактами по командной цепочке и полноценные вражеские юниты; main не менять без отдельного явного GO пользователя.",
+  "current_focus": "Слой «Обзор и память» полностью реализован и проверен во временной ветке feat/view-memory-heatmap-temp. Физическое вращение фокуса заменено стабильным вероятностным распределением внимания; текущий обзор показывается поклеточной тепловой картой с рельефом, предметами, лесом и падением качества по расстоянию; старые знания остаются метками; обнаружение накапливается во времени с небольшой стабильной случайностью. Поле кешируется, хранится в Uint8Array и выводится одним PixiJS-спрайтом. Актуальные навигационные изменения preview синхронизированы и повторно проверены. В real-wargame-preview реализация не переносилась; preview позже получила только один новый документ ideas/GOOD_POSITIONS_AND_AMBUSH_SITES.md без изменений кода.",
+  "next_step": "Показать пользователю временную ветку feat/view-memory-heatmap-temp для ручной проверки. Перед будущим переносом подтянуть последний docs-only коммит preview и повторить обычный transfer CI; системный Chrome требуется заново только если при синхронизации изменится код или интерфейс. Переносить только по отдельной явной команде, main не менять без отдельного GO.",
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-  "last_verified_commit": "5deb899673c7b6e57b9089ecf890699f6d617a9a",
+  "last_verified_commit": "c0e790553f6d048f8bf8391260c833ae258b78cd",
   "last_verified_runs": {
     "current_preview_base": "ca3f2e71327f184ce2aaccbd3749ebd6da93944c",
     "perception_core": "29201062853: success on a560b9b92593ce2c2b280d364431bba7d3c4aec4; build, perception, performance, attention nodes, runtime, workspace, game editor, LOS, dictionary, lab and docs checks passed",
     "policy": "29203543069: success",
     "docs_integrity": "29203543082: success",
-    "visual_qa": "29200793922: exact-SHA system-Chrome Playwright run succeeded on 09209675b692e4d5b83666a272104ee4f452ebf2",
-    "playwright": "3/3 passed",
-    "png_count": 5,
-    "screenshots_artifact_digest": "sha256:fa341383109f2028c80dbf96de116447189b5ff05b17113d008c3b476dd35b7e",
-    "playwright_log_digest": "sha256:005becff57996330a2948ecd1d129d1c35e71799aaaa7f5215c5a5da2099e981",
+    "visual_qa": "29209822972: exact-SHA system-Chrome Playwright 20/20 succeeded on c0e790553f6d048f8bf8391260c833ae258b78cd",
+    "playwright": "20/20 passed in 10.5 minutes",
+    "png_count": 29,
+    "screenshots_artifact_digest": "sha256:604f405f7de1ec8b2c1d57dc563ef65fd5d5bcc94b478d13ef676fd7ce91df46",
+    "playwright_log_digest": "sha256:1b7231d65ad8edf9340d46c26e908b4df78d957907b5bc8c21758540b09ba8b5",
     "inspected_png": [
-      "perception-attention-march.png",
-      "perception-attention-engage.png",
-      "perception-attention-search.png",
-      "perception-attention-profile-editor.png",
-      "perception-attention-node-controls.png"
+      "view-memory-heatmap-march.png",
+      "view-memory-heatmap-engage.png",
+      "view-memory-heatmap-search.png",
+      "view-memory-profile-editor.png",
+      "view-memory-node-controls.png",
+      "06-simulation-memory-layer.png",
+      "10-node-editor-unchanged.png",
+      "11-editor-spawned-fighter-playable.png"
     ],
     "preview_transfer": "completed via PR #70 as 5deb899673c7b6e57b9089ecf890699f6d617a9a",
     "preview_pr_core": "29203543094: Preview Core Checks success on PR #70 head",
     "navigation_profiles_core": "29203543098: success",
     "compact_route_controls_core": "29203543076: success",
     "command_plan_route_core": "29203543097: success",
-    "preview_merge": "PR #70 merged into real-wargame-preview as 5deb899673c7b6e57b9089ecf890699f6d617a9a"
+    "preview_merge": "PR #70 merged into real-wargame-preview as 5deb899673c7b6e57b9089ecf890699f6d617a9a",
+    "view_memory_core": "29209735946: full expanded regression success on synchronized feature merge d9f0c1ca7bc649de46eba473fd6784ab1c93237b",
+    "view_memory_visual": "29209822972: exact-SHA system-Chrome Playwright success on c0e790553f6d048f8bf8391260c833ae258b78cd",
+    "playwright_raw_log_digest": "sha256:97ef4cd304a446fd414a1a3dcbcb6b99bd340bf7cb0b15805ecc02fef769b777",
+    "performance_budget": "first field build <= 120 ms on CI test map 180x120; hidden layer zero builds; idle cache reuse; moving rebuild throttle; one byte per cell",
+    "view_memory_preview_transfer": "not performed; implementation remains only in feat/view-memory-heatmap-temp",
+    "view_memory_preview_base": "d6f754856f3b5d05b3f466a7316ceb2db701dc2d",
+    "view_memory_preview_drift": "current preview is 1 docs-only commit ahead: ideas/GOOD_POSITIONS_AND_AMBUSH_SITES.md; no runtime, UI or test code differs"
   },
   "must_read_first": [
+    "docs/subprojects/ai-single-unit-editor/VIEW_AND_MEMORY_HEATMAP_V1.md",
+    "docs/superpowers/plans/2026-07-13-view-memory-heatmap.md",
     "docs/ai/WEB_CHAT_START.md",
     ".agents/skills/real-wargame-ai-runtime/SKILL.md",
     ".agents/skills/real-wargame-local-preview/SKILL.md",
@@ -101,7 +113,11 @@
     "src/ui/TacticalWorkspace.ts",
     "src/ui/CommandPlanRouteUi.ts",
     "src/ui/RouteCostOverlayUi.ts",
-    "src/ai-node-editor/NavigationProfileEditor.ts"
+    "src/ai-node-editor/NavigationProfileEditor.ts",
+    "src/core/visibility/VisibilityQuality.ts",
+    "src/core/visibility/VisibilityStaticGrid.ts",
+    "src/core/visibility/SelectedUnitVisibilityField.ts",
+    "src/rendering/PixiVisibilityHeatmapRenderer.ts"
   ],
   "test_files": [
     "scripts/perception_system_smoke.ts",
@@ -119,7 +135,10 @@
     "scripts/command_plan_route_smoke.ts",
     "scripts/ui_compact_route_controls_smoke.ts",
     "tests/navigation-profiles-route-cost.spec.ts",
-    "tests/ui-compact-route-controls.spec.ts"
+    "tests/ui-compact-route-controls.spec.ts",
+    "scripts/view_memory_heatmap_smoke.ts",
+    "scripts/view_memory_heatmap_performance_smoke.ts",
+    "scripts/perception_variance_smoke.ts"
   ],
   "manual_docs": [
     "docs/subprojects/ai-single-unit-editor/PERCEPTION_ATTENTION_V1.md",
@@ -130,9 +149,15 @@
     "docs/subprojects/ai-single-unit-editor/GRID_PATHFINDING_V1.md",
     "docs/subprojects/ai-single-unit-editor/journal/2026-07-12-navigation-profiles-route-cost-v1.md",
     "docs/subprojects/ai-single-unit-editor/journal/2026-07-12-compact-route-controls-editor-navigation.md",
-    "docs/subprojects/ai-single-unit-editor/journal/2026-07-12-perception-attention-v1.md"
+    "docs/subprojects/ai-single-unit-editor/journal/2026-07-12-perception-attention-v1.md",
+    "docs/subprojects/ai-single-unit-editor/VIEW_AND_MEMORY_HEATMAP_V1.md",
+    "docs/superpowers/plans/2026-07-13-view-memory-heatmap.md",
+    "docs/subprojects/ai-single-unit-editor/journal/2026-07-13-view-memory-heatmap-v1.md"
   ],
   "suggested_verification": [
+    "npm run view-memory-heatmap:smoke",
+    "npm run view-memory-heatmap-performance:smoke",
+    "npm run perception-variance:smoke",
     "npm run perception:smoke",
     "npm run perception-performance:smoke",
     "npm run attention-ai-nodes:smoke",
@@ -170,7 +195,13 @@
     "Движение курсора читает готовые данные и не увеличивает rebuildCount оверлея внимания или счётчики полей стоимости.",
     "Не утверждать визуальную проверку без запуска браузера, совпадения SHA и открытия всех ключевых PNG.",
     "Perception v1 теперь является канонической частью real-wargame-preview; новые ветки восприятия перед merge должны синхронизироваться с актуальной preview.",
-    "Не менять main без отдельного явного GO пользователя."
+    "Не менять main без отдельного явного GO пользователя.",
+    "Тепловая карта описывает возможность наблюдать клетку и никогда не раскрывает скрытое содержимое клетки.",
+    "Скрытый слой, движение камеры и движение курсора не запускают построение поля видимости.",
+    "Историческая информация хранится только метками контактов; старая тепловая карта не становится памятью местности.",
+    "Поле выбранного бойца хранится в Uint8Array и выводится одним растровым Sprite, а не объектом на каждую клетку.",
+    "Случайность обнаружения детерминирована контактом, ограничена профилем и не зависит от FPS.",
+    "Не переносить feat/view-memory-heatmap-temp в real-wargame-preview без отдельной команды пользователя."
   ],
   "known_limits": [
     "Perception v1 рассчитывает зрение и слух только выбранного бойца, а не всех юнитов армии.",
@@ -179,6 +210,8 @@
     "Командная передача контактов, бинокли, приборы техники, ночь и подробная погода не реализованы.",
     "При превышении maximumDetourRatio навигация версии 1 выбирает кешированный кратчайший проходимый baseline, а не отдельный многоцелевой поиск компромиссного пути.",
     "Не все behavior-ноды ещё имеют отдельный семантический selector movementMode; числовые веса маршрута всё равно берутся только из общего реестра.",
-    "Нет резервирования клеток между бойцами, flow field или группового коридора."
+    "Нет резервирования клеток между бойцами, flow field или группового коридора.",
+    "View and Memory Heatmap v1 рассчитывается только для выбранного бойца.",
+    "Поле строится синхронно, но кешируется, квантируется и ограничивается по частоте; для карт значительно крупнее текущих может понадобиться фоновая пошаговая задача."
   ]
 }

@@ -10,11 +10,18 @@ const CELL_SIZE = 24;
 const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
 let aiEngineProcess: ChildProcessWithoutNullStreams | null = null;
 
-interface AttentionOverlayDiagnostics {
-  rebuildCount: number;
+interface ViewMemoryOverlayDiagnostics {
+  representation: 'raster-sprite';
+  visible: boolean;
+  textureUploadCount: number;
+  markerUpdateCount: number;
   markerCount: number;
-  visibilityFanRayCount: number;
-  lastKey: string;
+  displayObjectCount: number;
+  fieldRevision: number;
+  fieldRebuildCount: number;
+  fieldCacheHitCount: number;
+  rasterWidth: number;
+  rasterHeight: number;
 }
 
 test.beforeAll(async () => {
@@ -28,26 +35,30 @@ test.afterAll(() => {
   aiEngineProcess = null;
 });
 
-test('shows clearly different march, engage and search attention overlays without cursor-driven rebuilds', async ({ page }) => {
+test('shows stable march, engage and search heatmaps without cursor or camera rebuilds', async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   const browserErrors = collectBrowserErrors(page);
 
-  await openAttentionMode(page, modeGraph('march'), 'Марш');
+  await openViewMemoryMode(page, modeGraph('march'), 'Марш');
   await expect(page.locator('.attention-contact-card').first()).toBeVisible();
+  await expect(page.locator('.attention-runtime-panel')).not.toContainText('Ход сканирования');
+  await expect(page.locator('.attention-runtime-panel')).not.toContainText('проверочные лучи');
   await pauseSimulation(page);
-  await saveScreenshot(page, 'perception-attention-march.png');
-  const marchKey = (await readAttentionDiagnostics(page))?.lastKey ?? '';
-  expect(marchKey).toContain(':march:');
+  await saveScreenshot(page, 'view-memory-heatmap-march.png');
+  const march = await readViewMemoryDiagnostics(page);
+  expect(march?.representation).toBe('raster-sprite');
+  expect(march?.displayObjectCount ?? 99).toBeLessThanOrEqual(2);
+  expect(march?.rasterWidth ?? 0).toBeGreaterThan(0);
+  expect(march?.rasterHeight ?? 0).toBeGreaterThan(0);
 
-  await openAttentionMode(page, modeGraph('engage'), 'Стрельба');
+  await openViewMemoryMode(page, modeGraph('engage'), 'Стрельба');
   await pauseSimulation(page);
-  await saveScreenshot(page, 'perception-attention-engage.png');
-  const engageDiagnostics = await readAttentionDiagnostics(page);
-  expect(engageDiagnostics?.lastKey).toContain(':engage:');
-  expect(engageDiagnostics?.lastKey).not.toBe(marchKey);
+  await saveScreenshot(page, 'view-memory-heatmap-engage.png');
+  const engage = await readViewMemoryDiagnostics(page);
+  expect(engage?.fieldRevision ?? 0).toBeGreaterThan(0);
 
   const canvas = page.locator('canvas');
-  const beforePointer = await readAttentionDiagnostics(page);
+  const beforePointer = await readViewMemoryDiagnostics(page);
   const box = await canvas.boundingBox();
   if (!box) throw new Error('Canvas bounds unavailable.');
   for (let index = 0; index < 24; index += 1) {
@@ -57,23 +68,33 @@ test('shows clearly different march, engage and search attention overlays withou
     );
   }
   await page.waitForTimeout(250);
-  const afterPointer = await readAttentionDiagnostics(page);
-  expect(afterPointer?.rebuildCount).toBe(beforePointer?.rebuildCount);
+  const afterPointer = await readViewMemoryDiagnostics(page);
+  expect(afterPointer?.fieldRebuildCount).toBe(beforePointer?.fieldRebuildCount);
+  expect(afterPointer?.textureUploadCount).toBe(beforePointer?.textureUploadCount);
 
-  await openAttentionMode(page, searchGraph(45, 120), 'Поиск цели');
-  await expect(page.locator('.attention-runtime-panel')).toContainText('Ход сканирования');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, -500);
+  await page.waitForTimeout(250);
+  const afterCamera = await readViewMemoryDiagnostics(page);
+  expect(afterCamera?.fieldRebuildCount).toBe(afterPointer?.fieldRebuildCount);
+  expect(afterCamera?.textureUploadCount).toBe(afterPointer?.textureUploadCount);
+
+  await openViewMemoryMode(page, searchGraph(45, 120), 'Поиск цели');
+  const panel = page.locator('.attention-runtime-panel');
+  await expect(panel).toContainText('Текущий обзор');
+  await expect(panel).toContainText('Метки памяти');
+  await expect(panel).toContainText('Области неопределённости');
   await page.waitForTimeout(900);
   await pauseSimulation(page);
-  await saveScreenshot(page, 'perception-attention-search.png');
-  const searchDiagnostics = await readAttentionDiagnostics(page);
-  expect(searchDiagnostics?.lastKey).toContain(':search:');
-  expect(searchDiagnostics?.lastKey).not.toBe(engageDiagnostics?.lastKey);
-  expect(searchDiagnostics?.markerCount ?? 0).toBeGreaterThan(0);
+  await saveScreenshot(page, 'view-memory-heatmap-search.png');
+  const search = await readViewMemoryDiagnostics(page);
+  expect(search?.markerCount ?? 0).toBeGreaterThan(0);
+  expect(search?.textureUploadCount ?? 0).toBeGreaterThan(0);
 
   expect(browserErrors).toEqual([]);
 });
 
-test('shows editable attention profiles in the real game editor', async ({ page }) => {
+test('shows editable view and memory profiles in the real game editor', async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   const browserErrors = collectBrowserErrors(page);
   await page.addInitScript(() => window.localStorage.clear());
@@ -83,16 +104,18 @@ test('shows editable attention profiles in the real game editor', async ({ page 
   await page.locator('.game-editor-tabs').getByRole('button', { name: 'Боец', exact: true }).click();
   const controls = page.locator('[data-attention-profile-controls]');
   await expect(controls).toBeVisible();
-  await expect(controls).toContainText('Обзор и внимание');
-  await expect(controls).toContainText('Косвенное внимание');
-  await expect(controls).toContainText('Стандартный сектор поиска');
+  await expect(controls).toContainText('Обзор и память');
+  await expect(controls).toContainText('Максимальная дальность');
+  await expect(controls).toContainText('Боковое и заднее внимание');
+  await expect(controls).toContainText('Случайность обнаружения');
+  await expect(controls).not.toContainText('Скорость осмотра');
   await controls.evaluate((element) => element.scrollIntoView({ block: 'start' }));
   await page.waitForTimeout(250);
-  await saveScreenshot(page, 'perception-attention-profile-editor.png');
+  await saveScreenshot(page, 'view-memory-profile-editor.png');
   expect(browserErrors).toEqual([]);
 });
 
-test('shows human controls for the new attention nodes in the real node editor', async ({ page }) => {
+test('keeps human controls for stable search sectors in the real node editor', async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   const browserErrors = collectBrowserErrors(page);
   const graph = searchGraph(90, 120);
@@ -115,11 +138,11 @@ test('shows human controls for the new attention nodes in the real node editor',
   await expect(controls.getByText('Ширина сектора, °')).toBeVisible();
   await controls.scrollIntoViewIfNeeded();
   await page.waitForTimeout(200);
-  await saveScreenshot(page, 'perception-attention-node-controls.png');
+  await saveScreenshot(page, 'view-memory-node-controls.png');
   expect(browserErrors).toEqual([]);
 });
 
-async function openAttentionMode(page: Page, graph: Record<string, unknown>, expectedModeRu: string): Promise<void> {
+async function openViewMemoryMode(page: Page, graph: Record<string, unknown>, expectedModeRu: string): Promise<void> {
   await page.goto('/');
   await page.evaluate(({ key, serialized }) => {
     window.localStorage.setItem(key, serialized);
@@ -131,10 +154,17 @@ async function openAttentionMode(page: Page, graph: Record<string, unknown>, exp
   await page.locator('[data-attention-tab]').click();
   const panel = page.locator('.attention-runtime-panel');
   await expect(panel).toBeVisible();
+  await expect(panel).toContainText('Обзор и память');
   await expect.poll(async () => panel.textContent(), { timeout: 8_000 }).toContain(expectedModeRu);
   await page.waitForFunction(() => {
-    const diagnostics = (window as Window & { __realWargameAttentionOverlayDebug?: AttentionOverlayDiagnostics }).__realWargameAttentionOverlayDebug;
-    return Boolean(diagnostics && diagnostics.rebuildCount > 0 && diagnostics.lastKey.includes('attention:v1'));
+    const diagnostics = (window as Window & { __realWargameViewMemoryDebug?: ViewMemoryOverlayDiagnostics }).__realWargameViewMemoryDebug;
+    return Boolean(
+      diagnostics
+      && diagnostics.visible
+      && diagnostics.representation === 'raster-sprite'
+      && diagnostics.fieldRebuildCount > 0
+      && diagnostics.textureUploadCount > 0,
+    );
   });
   await page.waitForTimeout(450);
 }
@@ -162,10 +192,10 @@ async function worldPoint(canvas: Locator, gridX: number, gridY: number): Promis
   };
 }
 
-async function readAttentionDiagnostics(page: Page): Promise<AttentionOverlayDiagnostics | undefined> {
+async function readViewMemoryDiagnostics(page: Page): Promise<ViewMemoryOverlayDiagnostics | undefined> {
   return page.evaluate(() => (
-    window as Window & { __realWargameAttentionOverlayDebug?: AttentionOverlayDiagnostics }
-  ).__realWargameAttentionOverlayDebug);
+    window as Window & { __realWargameViewMemoryDebug?: ViewMemoryOverlayDiagnostics }
+  ).__realWargameViewMemoryDebug);
 }
 
 async function saveScreenshot(page: Page, name: string): Promise<void> {

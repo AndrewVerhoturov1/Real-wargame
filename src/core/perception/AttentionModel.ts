@@ -8,6 +8,7 @@ export interface AttentionModeProfile {
   focusWeight: number;
   directWeight: number;
   peripheralWeight: number;
+  /** Legacy import field. Physical sweep is no longer simulated. */
   scanSpeedDegreesPerSecond: number;
   focusCheckIntervalSeconds: number;
   directCheckIntervalSeconds: number;
@@ -16,14 +17,23 @@ export interface AttentionModeProfile {
   defaultSearchArcDegrees: number;
 }
 
+export interface UnitVisionSettings {
+  maximumVisualRangeMeters: number;
+  distanceFalloffStartMeters: number;
+  distanceFalloffExponent: number;
+  detectionVariancePercent: number;
+}
+
 export interface UnitAttentionSettings {
   defaultMode: AttentionMode;
   profiles: Record<AttentionMode, AttentionModeProfile>;
+  vision: UnitVisionSettings;
 }
 
 export interface UnitAttentionSettingsInput {
   defaultMode?: AttentionMode;
   profiles?: Partial<Record<AttentionMode, Partial<AttentionModeProfile>>>;
+  vision?: Partial<UnitVisionSettings>;
 }
 
 export interface AttentionRuntimeState {
@@ -33,6 +43,7 @@ export interface AttentionRuntimeState {
   focusTargetId: string | null;
   searchCenterRadians: number;
   searchArcRadians: number;
+  /** Legacy scene fields retained for compatibility; they are inert. */
   scanDirection: -1 | 1;
   scanProgress01: number;
   nextFocusCheckSeconds: number;
@@ -49,6 +60,13 @@ export interface AttentionSample {
 
 export const ATTENTION_MODES: readonly AttentionMode[] = ['march', 'observe', 'search', 'engage'];
 
+export const DEFAULT_VISION_SETTINGS: Readonly<UnitVisionSettings> = {
+  maximumVisualRangeMeters: 600,
+  distanceFalloffStartMeters: 80,
+  distanceFalloffExponent: 1.6,
+  detectionVariancePercent: 10,
+};
+
 export const DEFAULT_ATTENTION_PROFILES: Readonly<Record<AttentionMode, AttentionModeProfile>> = {
   march: {
     focusAngleDegrees: 50,
@@ -56,7 +74,7 @@ export const DEFAULT_ATTENTION_PROFILES: Readonly<Record<AttentionMode, Attentio
     focusWeight: 1,
     directWeight: 0.58,
     peripheralWeight: 0.24,
-    scanSpeedDegreesPerSecond: 55,
+    scanSpeedDegreesPerSecond: 0,
     focusCheckIntervalSeconds: 0.2,
     directCheckIntervalSeconds: 0.34,
     peripheralCheckIntervalSeconds: 0.75,
@@ -69,7 +87,7 @@ export const DEFAULT_ATTENTION_PROFILES: Readonly<Record<AttentionMode, Attentio
     focusWeight: 1,
     directWeight: 0.66,
     peripheralWeight: 0.16,
-    scanSpeedDegreesPerSecond: 38,
+    scanSpeedDegreesPerSecond: 0,
     focusCheckIntervalSeconds: 0.2,
     directCheckIntervalSeconds: 0.34,
     peripheralCheckIntervalSeconds: 0.9,
@@ -82,7 +100,7 @@ export const DEFAULT_ATTENTION_PROFILES: Readonly<Record<AttentionMode, Attentio
     focusWeight: 1,
     directWeight: 0.52,
     peripheralWeight: 0.08,
-    scanSpeedDegreesPerSecond: 26,
+    scanSpeedDegreesPerSecond: 0,
     focusCheckIntervalSeconds: 0.16,
     directCheckIntervalSeconds: 0.3,
     peripheralCheckIntervalSeconds: 1.1,
@@ -113,8 +131,12 @@ export function createAttentionSettings(input: UnitAttentionSettingsInput = {}):
       ...(input.profiles?.[mode] ?? {}),
     }),
   ])) as Record<AttentionMode, AttentionModeProfile>;
+  const vision = normalizeVisionSettings({
+    ...DEFAULT_VISION_SETTINGS,
+    ...(input.vision ?? {}),
+  });
 
-  return { defaultMode, profiles };
+  return { defaultMode, profiles, vision };
 }
 
 export function createAttentionRuntime(
@@ -147,12 +169,22 @@ export function normalizeAttentionProfile(value: AttentionModeProfile): Attentio
     focusWeight: clampFinite(value.focusWeight, 0, 2, 1),
     directWeight: clampFinite(value.directWeight, 0, 2, 0.6),
     peripheralWeight: clampFinite(value.peripheralWeight, 0, 1, 0.1),
-    scanSpeedDegreesPerSecond: clampFinite(value.scanSpeedDegreesPerSecond, 0, 360, 30),
+    scanSpeedDegreesPerSecond: 0,
     focusCheckIntervalSeconds: clampFinite(value.focusCheckIntervalSeconds, 0.05, 5, 0.2),
     directCheckIntervalSeconds: clampFinite(value.directCheckIntervalSeconds, 0.05, 5, 0.35),
     peripheralCheckIntervalSeconds: clampFinite(value.peripheralCheckIntervalSeconds, 0.05, 10, 1),
     rearCheckIntervalSeconds: clampFinite(value.rearCheckIntervalSeconds, 0.25, 60, 5),
     defaultSearchArcDegrees: clampFinite(value.defaultSearchArcDegrees, 1, 360, 120),
+  };
+}
+
+export function normalizeVisionSettings(value: UnitVisionSettings): UnitVisionSettings {
+  const maximumVisualRangeMeters = clampFinite(value.maximumVisualRangeMeters, 20, 2000, 600);
+  return {
+    maximumVisualRangeMeters,
+    distanceFalloffStartMeters: clampFinite(value.distanceFalloffStartMeters, 0, maximumVisualRangeMeters - 1, 80),
+    distanceFalloffExponent: clampFinite(value.distanceFalloffExponent, 0.25, 6, 1.6),
+    detectionVariancePercent: clampFinite(value.detectionVariancePercent, 0, 25, 10),
   };
 }
 
