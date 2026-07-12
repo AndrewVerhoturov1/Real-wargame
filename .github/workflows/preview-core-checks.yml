@@ -79,6 +79,18 @@ jobs:
         continue-on-error: true
         run: npm run runtime-session:smoke
 
+      - name: AI runtime snapshot smoke
+        id: runtime_snapshot
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run runtime-snapshot:smoke
+
+      - name: AI runtime scene integration smoke
+        id: runtime_scene
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run runtime-scene:smoke
+
       - name: AI action lifecycle smoke
         id: lifecycle
         if: steps.install.outcome == 'success'
@@ -206,6 +218,8 @@ jobs:
           GRAPH_OUTCOME: ${{ steps.graph.outcome }}
           RUNTIME_OUTCOME: ${{ steps.runtime.outcome }}
           RUNTIME_SESSION_OUTCOME: ${{ steps.runtime_session.outcome }}
+          RUNTIME_SNAPSHOT_OUTCOME: ${{ steps.runtime_snapshot.outcome }}
+          RUNTIME_SCENE_OUTCOME: ${{ steps.runtime_scene.outcome }}
           LIFECYCLE_OUTCOME: ${{ steps.lifecycle.outcome }}
           COMPOSITE_OUTCOME: ${{ steps.composite.outcome }}
           RELOAD_OUTCOME: ${{ steps.reload.outcome }}
@@ -233,6 +247,8 @@ jobs:
               graph: process.env.GRAPH_OUTCOME,
               runtime: process.env.RUNTIME_OUTCOME,
               runtime_session: process.env.RUNTIME_SESSION_OUTCOME,
+              runtime_snapshot: process.env.RUNTIME_SNAPSHOT_OUTCOME,
+              runtime_scene: process.env.RUNTIME_SCENE_OUTCOME,
               lifecycle: process.env.LIFECYCLE_OUTCOME,
               composite: process.env.COMPOSITE_OUTCOME,
               reload: process.env.RELOAD_OUTCOME,
