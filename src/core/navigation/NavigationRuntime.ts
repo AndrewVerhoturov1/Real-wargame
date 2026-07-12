@@ -1,10 +1,7 @@
-import type { PlayerCommand } from '../orders/PlayerCommand';
+import { isPlayerCommandOutstanding, type PlayerCommand } from '../orders/PlayerCommand';
 import type { UnitModel } from '../units/UnitModel';
 import { resolveActiveNavigationProfile, type ResolvedNavigationProfile } from './NavigationProfileResolver';
-import {
-  getNavigationProfileRegistry,
-  readNavigationProfileDebugOverride,
-} from './NavigationProfileStorage';
+import { getNavigationProfileRegistry } from './NavigationProfileStorage';
 import type { TacticalRouteContext } from './RouteCostField';
 
 export function resolveUnitNavigationProfile(
@@ -12,10 +9,10 @@ export function resolveUnitNavigationProfile(
   command: PlayerCommand | null = unit.playerCommand,
 ): ResolvedNavigationProfile {
   const registry = getNavigationProfileRegistry();
+  const activeCommand = isPlayerCommandOutstanding(command) ? command : null;
   const resolved = resolveActiveNavigationProfile(registry, {
-    debugOverrideProfileId: readNavigationProfileDebugOverride(),
-    playerCommandProfileId: command?.navigationProfileId,
-    playerCommandMode: command?.movementMode,
+    playerCommandProfileId: activeCommand?.navigationProfileId,
+    playerCommandMode: activeCommand?.movementMode,
     selectedPlayerProfileId: unit.playerNavigationProfileId,
     behaviorMovementMode: unit.navigationMovementMode,
     unitRoleProfileId: defaultProfileForUnitRole(unit),
