@@ -1,1 +1,1 @@
-Trigger exact Graph v2 transfer builder after valid workflow update.
+Trigger Graph v2 code/docs publish without workflow mutations.
