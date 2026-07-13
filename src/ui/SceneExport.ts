@@ -92,9 +92,9 @@ export function normalizeImportedScene(value: unknown): {
 
 export function buildExportedScene(state: SimulationState): ExportedSceneData {
   return {
-    version: 'scene-export-v8-view-memory-heatmap-ai-runtime-2m-grid',
+    version: 'scene-export-v9-minimal-target-visibility-ai-runtime-2m-grid',
     exportedAt: new Date().toISOString(),
-    noteRu: 'Экспорт полигона ИИ со слоем «Обзор и память», метрическими настройками зрения, навигационными профилями и активным runtime. Старые сцены без новых блоков получают безопасные значения по умолчанию; сцены 10 м преобразуются в текущую сетку при загрузке.',
+    noteRu: 'Экспорт полигона ИИ со слоем «Обзор и память», типом видимой цели у источников угроз, метрическими настройками зрения, навигационными профилями и активным runtime. Старые сцены без новых полей получают безопасные значения по умолчанию; сцены 10 м преобразуются в текущую сетку при загрузке.',
     map: {
       width: state.map.width,
       height: state.map.height,
@@ -152,6 +152,7 @@ export function buildExportedScene(state: SimulationState): ExportedSceneData {
         enabled: settings.enabled,
         sourceVisible: settings.sourceVisible,
         sourceKnown: settings.sourceKnown,
+        sourceTargetType: zone.sourceTargetType,
         knowledgeConfidence: roundOne(zone.knowledgeConfidence ?? 100),
         uncertaintyCells: roundThree(zone.uncertaintyCells ?? 0.15),
         knowledgeSource: zone.knowledgeSource,

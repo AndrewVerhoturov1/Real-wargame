@@ -1,4 +1,5 @@
 import { distance, type GridPosition } from '../geometry';
+import type { PerceptionTargetType } from '../perception/PerceptionTargetProfile';
 
 export type PressureZoneType = 'open_area_pressure' | 'unknown_risk' | 'debug';
 export type PressureZoneShape = 'circle' | 'rect';
@@ -42,6 +43,7 @@ export interface PressureZoneData {
   enabled?: boolean;
   sourceVisible?: boolean;
   sourceKnown?: boolean;
+  sourceTargetType?: PerceptionTargetType;
   knowledgeConfidence?: number;
   uncertaintyCells?: number;
   knowledgeSource?: ThreatKnowledgeSource;
@@ -75,6 +77,7 @@ export interface PressureZone {
   enabled?: boolean;
   sourceVisible?: boolean;
   sourceKnown?: boolean;
+  sourceTargetType?: PerceptionTargetType;
   knowledgeConfidence?: number;
   uncertaintyCells?: number;
   knowledgeSource?: ThreatKnowledgeSource;
@@ -124,6 +127,7 @@ export function normalizePressureZones(
       enabled: settings.enabled,
       sourceVisible: settings.sourceVisible,
       sourceKnown: settings.sourceKnown,
+      sourceTargetType: zone.sourceTargetType ?? 'soldier',
       knowledgeConfidence: clampPercent(zone.knowledgeConfidence ?? (settings.sourceVisible ? 100 : settings.sourceKnown ? 75 : 45)),
       uncertaintyCells: Math.max(0, zone.uncertaintyCells ?? (settings.sourceVisible ? 0.15 : 1.5)) * scale,
       knowledgeSource: zone.knowledgeSource ?? (settings.sourceVisible ? 'seen' : settings.sourceKnown ? 'reported' : 'fire_pressure'),

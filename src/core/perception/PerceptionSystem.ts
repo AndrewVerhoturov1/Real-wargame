@@ -88,7 +88,12 @@ export function tickSelectedSoldierPerception(state: SimulationState, deltaSecon
       continue;
     }
 
-    const lineOfSight = computeLineOfSight(state.map, unit, stimulus.position);
+    const lineOfSight = computeLineOfSight(
+      state.map,
+      unit,
+      stimulus.position,
+      stimulus.targetHeightMeters,
+    );
     diagnostics.losCalculationCount += 1;
     if (lineOfSight.blocked) continue;
 
