@@ -1,355 +1,48 @@
-import { AI_NODE_TYPE_DEFINITIONS, isAiNodeType } from './AiNodeTypes';
+import type { AiBlackboardSchemaEntry } from './AiBlackboard';
+import type { AiGraphV2 } from './AiGraph';
+import { DEFAULT_AI_NODE_CONTRACT_REGISTRY } from './contracts/AiNodeContractRegistry';
+import type { AiNodeContract, AiParameterDefinition } from './contracts/AiNodeContract';
+import { DEFAULT_AI_SUBGRAPH_REGISTRY } from './contracts/AiSubgraphRegistry';
+import type { AiPortDefinition } from './contracts/AiPortTypes';
+import { areAiPortKindsCompatible, inferAiPortValueKind, isAiInputBinding, isAiOutputBinding, type AiPortValueKind } from './contracts/AiPortTypes';
 
-export type AiGraphValidationSeverity = 'error' | 'warning';
+export type AiGraphValidationSeverity='error'|'warning'|'info';
+export interface AiGraphValidationIssue {readonly severity:AiGraphValidationSeverity;readonly code:string;readonly message:string;readonly messageRu:string;readonly nodeId?:string;readonly parameterName?:string;readonly portName?:string;readonly fix?:string;readonly fixRu?:string;}
+export interface AiGraphValidationResult {readonly valid:boolean;readonly issues:readonly AiGraphValidationIssue[];}
+export interface AiGraphValidationContext {readonly subgraphs?:ReadonlyMap<string,AiGraphV2>|Readonly<Record<string,AiGraphV2>>;}
+type UnknownRecord=Record<string,unknown>;
 
-export interface AiGraphValidationIssue {
-  readonly severity: AiGraphValidationSeverity;
-  readonly code: string;
-  readonly message: string;
-  readonly messageRu: string;
-  readonly nodeId?: string;
+export function validateAiGraph(graph:unknown,context:AiGraphValidationContext={}):AiGraphValidationResult{
+ const issues:AiGraphValidationIssue[]=[];if(!isRecord(graph))return invalid('GRAPH_NOT_OBJECT','AI graph must be a JSON object.','AI-граф должен быть JSON-объектом.');
+ if(graph.version!==1&&graph.version!==2)issues.push(error('UNSUPPORTED_VERSION','Only AI graph version 1 or 2 is supported.','Поддерживается только версия AI-графа 1 или 2.'));
+ validateHeader(graph,issues);const nodes=collectNodes(graph.nodes,graph.version===2,issues);validateRoot(graph.rootNodeId,nodes,issues);validateLinks(nodes,issues);validateChildPolicies(nodes,issues);validateReactive(nodes,issues);validateReachability(graph.rootNodeId,nodes,issues);validateCycles(nodes,issues);validateDefaults(graph.blackboardDefaults,issues);
+ if(graph.version===2){const schema=validateSchema(graph.blackboardSchema,graph.blackboardDefaults,issues);validateBindings(nodes,schema,issues);validateUnusedOutputs(nodes,issues);validateSubgraphs(graph,nodes,context,issues);}else issues.push(info('GRAPH_V1_LEGACY_FORMAT','Graph v1 is supported through compatibility migration.','Graph v1 поддерживается через совместимую миграцию.'));
+ return{valid:!issues.some(x=>x.severity==='error'),issues};
 }
-
-export interface AiGraphValidationResult {
-  readonly valid: boolean;
-  readonly issues: readonly AiGraphValidationIssue[];
-}
-
-type UnknownRecord = Record<string, unknown>;
-
-export function validateAiGraph(graph: unknown): AiGraphValidationResult {
-  const issues: AiGraphValidationIssue[] = [];
-
-  if (!isRecord(graph)) {
-    return invalidResult('GRAPH_NOT_OBJECT', 'AI graph must be a JSON object.', 'AI-граф должен быть JSON-объектом.');
-  }
-
-  validateGraphHeader(graph, issues);
-  const nodeById = collectNodes(graph.nodes, issues);
-  validateRoot(graph.rootNodeId, nodeById, issues);
-  validateNodeLinks(nodeById, issues);
-  validateReactiveSequences(nodeById, issues);
-  validateBlackboardDefaults(graph.blackboardDefaults, issues);
-
-  return {
-    valid: !issues.some((issue) => issue.severity === 'error'),
-    issues,
-  };
-}
-
-function validateGraphHeader(graph: UnknownRecord, issues: AiGraphValidationIssue[]): void {
-  if (graph.version !== 1) {
-    issues.push(errorIssue('UNSUPPORTED_VERSION', 'Only AI graph version 1 is supported.', 'Поддерживается только версия AI-графа 1.'));
-  }
-
-  if (!isNonEmptyString(graph.id)) {
-    issues.push(errorIssue('MISSING_GRAPH_ID', 'AI graph must have a non-empty string id.', 'У AI-графа должен быть непустой строковый id.'));
-  }
-
-  if (!isNonEmptyString(graph.rootNodeId)) {
-    issues.push(errorIssue('MISSING_ROOT_NODE_ID', 'AI graph must have rootNodeId.', 'У AI-графа должен быть rootNodeId.'));
-  }
-
-  if (!Array.isArray(graph.nodes)) {
-    issues.push(errorIssue('NODES_NOT_ARRAY', 'nodes must be an array.', 'Поле nodes должно быть массивом нод.'));
-  }
-}
-
-function collectNodes(nodesValue: unknown, issues: AiGraphValidationIssue[]): Map<string, UnknownRecord> {
-  const nodeById = new Map<string, UnknownRecord>();
-  const rootNodeIds: string[] = [];
-
-  if (!Array.isArray(nodesValue)) {
-    return nodeById;
-  }
-
-  for (const [index, nodeValue] of nodesValue.entries()) {
-    if (!isRecord(nodeValue)) {
-      issues.push(errorIssue('NODE_NOT_OBJECT', `Node #${index + 1} must be a JSON object.`, `Нода #${index + 1} должна быть JSON-объектом.`));
-      continue;
-    }
-
-    const id = nodeValue.id;
-    if (!isNonEmptyString(id)) {
-      issues.push(errorIssue('NODE_WITHOUT_ID', `Node #${index + 1} must have a non-empty string id.`, `Нода #${index + 1} должна иметь непустой строковый id.`));
-      continue;
-    }
-
-    if (nodeById.has(id)) {
-      issues.push(errorIssue('DUPLICATE_NODE_ID', `Duplicate node id: ${id}.`, `Дублируется id ноды: ${id}.`, id));
-      continue;
-    }
-
-    nodeById.set(id, nodeValue);
-    validateNodeType(nodeValue, issues, id);
-    validateNodeChildrenShape(nodeValue, issues, id);
-    validateNodeParameters(nodeValue.type, nodeValue.parameters, issues, id);
-    validateKnownNodeParameters(nodeValue, issues, id);
-
-    if (nodeValue.type === 'Root') {
-      rootNodeIds.push(id);
-    }
-  }
-
-  if (rootNodeIds.length > 1) {
-    issues.push(warningIssue('MULTIPLE_ROOT_NODES', `Graph has multiple Root nodes: ${rootNodeIds.join(', ')}. rootNodeId is used.`, `В графе несколько нод Root: ${rootNodeIds.join(', ')}. Используется rootNodeId.`));
-  }
-
-  return nodeById;
-}
-
-function validateRoot(rootNodeIdValue: unknown, nodeById: Map<string, UnknownRecord>, issues: AiGraphValidationIssue[]): void {
-  if (!isNonEmptyString(rootNodeIdValue)) {
-    return;
-  }
-
-  const rootNode = nodeById.get(rootNodeIdValue);
-  if (!rootNode) {
-    issues.push(errorIssue('ROOT_NODE_NOT_FOUND', `rootNodeId points to a missing node: ${rootNodeIdValue}.`, `rootNodeId указывает на несуществующую ноду: ${rootNodeIdValue}.`));
-    return;
-  }
-
-  if (rootNode.type !== 'Root') {
-    issues.push(errorIssue('ROOT_NODE_WRONG_TYPE', `rootNodeId must point to a Root node, current type: ${String(rootNode.type)}.`, `rootNodeId должен указывать на ноду типа Root, сейчас: ${String(rootNode.type)}.`, rootNodeIdValue));
-  }
-}
-
-function validateNodeType(node: UnknownRecord, issues: AiGraphValidationIssue[], nodeId: string): void {
-  if (!isNonEmptyString(node.type)) {
-    issues.push(errorIssue('NODE_WITHOUT_TYPE', `Node ${nodeId} must have a string type.`, `У ноды ${nodeId} должен быть строковый type.`, nodeId));
-    return;
-  }
-
-  if (!isAiNodeType(node.type)) {
-    issues.push(errorIssue('UNKNOWN_NODE_TYPE', `Node ${nodeId} has unknown type: ${node.type}.`, `У ноды ${nodeId} неизвестный type: ${node.type}.`, nodeId));
-  }
-}
-
-function validateNodeChildrenShape(node: UnknownRecord, issues: AiGraphValidationIssue[], nodeId: string): void {
-  const children = node.children;
-
-  if (children === undefined) {
-    return;
-  }
-
-  if (!Array.isArray(children)) {
-    issues.push(errorIssue('CHILDREN_NOT_ARRAY', `Node ${nodeId} children must be an array of string ids.`, `У ноды ${nodeId} поле children должно быть массивом строковых id.`, nodeId));
-    return;
-  }
-
-  for (const childId of children) {
-    if (!isNonEmptyString(childId)) {
-      issues.push(errorIssue('CHILD_ID_NOT_STRING', `All children of node ${nodeId} must be non-empty strings.`, `У ноды ${nodeId} все children должны быть непустыми строками.`, nodeId));
-    }
-  }
-
-  if (isNonEmptyString(node.type) && isAiNodeType(node.type) && !AI_NODE_TYPE_DEFINITIONS[node.type].canHaveChildren && children.length > 0) {
-    issues.push(errorIssue('LEAF_NODE_HAS_CHILDREN', `Node ${nodeId} of type ${node.type} must not have children.`, `Нода ${nodeId} типа ${node.type} не должна иметь children.`, nodeId));
-  }
-}
-
-function validateNodeLinks(nodeById: Map<string, UnknownRecord>, issues: AiGraphValidationIssue[]): void {
-  for (const [nodeId, node] of nodeById) {
-    const children = node.children;
-
-    if (!Array.isArray(children)) {
-      continue;
-    }
-
-    for (const childId of children) {
-      if (isNonEmptyString(childId) && !nodeById.has(childId)) {
-        issues.push(errorIssue('BROKEN_CHILD_LINK', `Node ${nodeId} references a missing child: ${childId}.`, `Нода ${nodeId} ссылается на несуществующего ребёнка: ${childId}.`, nodeId));
-      }
-    }
-  }
-}
-
-function validateNodeParameters(nodeType: unknown, parametersValue: unknown, issues: AiGraphValidationIssue[], nodeId: string): void {
-  if (parametersValue === undefined) {
-    if (nodeType === 'ReactiveSequence') {
-      issues.push(errorIssue('REACTIVE_PARAMETERS_MISSING', 'ReactiveSequence must define its observer and abort policy parameters.', 'У ноды «Реактивная последовательность» должны быть параметры наблюдателя и политики прерывания.', nodeId));
-    }
-    return;
-  }
-
-  if (!isRecord(parametersValue)) {
-    issues.push(errorIssue('PARAMETERS_NOT_OBJECT', `Node ${nodeId} parameters must be an object.`, `У ноды ${nodeId} поле parameters должно быть объектом.`, nodeId));
-    return;
-  }
-
-  for (const [key, value] of Object.entries(parametersValue)) {
-    if (!isNonEmptyString(key)) {
-      issues.push(errorIssue('PARAMETER_KEY_EMPTY', `Node ${nodeId} has an empty parameter key.`, `У ноды ${nodeId} найден пустой ключ параметра.`, nodeId));
-    }
-
-    if (!isSupportedValue(value)) {
-      issues.push(errorIssue('PARAMETER_VALUE_UNSUPPORTED', `Node ${nodeId} parameter ${key} has an unsupported value. Allowed: string, number, boolean, null, and position {x,y}.`, `У ноды ${nodeId} параметр ${key} имеет неподдерживаемое значение. Разрешены строки, числа, boolean, null и позиция {x,y}.`, nodeId));
-    }
-  }
-
-  if (nodeType === 'Reload') validateReloadParameters(parametersValue, issues, nodeId);
-  if (nodeType === 'ReactiveSequence') validateReactiveSequenceParameters(parametersValue, issues, nodeId);
-}
-
-const REACTIVE_CONDITION_TYPES = new Set([
-  'FlagCheck',
-  'BlackboardValueAbove',
-  'StableThreshold',
-  'DistanceCheck',
-  'TacticalCheck',
-]);
-
-function validateReactiveSequences(
-  nodeById: Map<string, UnknownRecord>,
-  issues: AiGraphValidationIssue[],
-): void {
-  for (const [nodeId, node] of nodeById) {
-    if (node.type !== 'ReactiveSequence') continue;
-    const children = Array.isArray(node.children)
-      ? node.children.filter(isNonEmptyString)
-      : [];
-    if (children.length < 2) {
-      issues.push(errorIssue('REACTIVE_CHILDREN_TOO_FEW', 'ReactiveSequence needs at least one observed condition followed by an action or composite child.', 'У ноды «Реактивная последовательность» должно быть минимум одно наблюдаемое условие, а после него действие или составная нода.', nodeId));
-      continue;
-    }
-    for (const conditionId of children.slice(0, -1)) {
-      const condition = nodeById.get(conditionId);
-      if (!condition || !REACTIVE_CONDITION_TYPES.has(String(condition.type))) {
-        issues.push(errorIssue('REACTIVE_PRECEDING_CHILD_NOT_CONDITION', `ReactiveSequence child ${conditionId} before the active branch must be a supported condition.`, `Ребёнок ${conditionId} перед активной ветвью реактивной последовательности должен быть поддерживаемым условием.`, nodeId));
-      }
-    }
-  }
-}
-
-function validateReactiveSequenceParameters(
-  parameters: UnknownRecord,
-  issues: AiGraphValidationIssue[],
-  nodeId: string,
-): void {
-  if (typeof parameters.observePrecedingConditions !== 'boolean') {
-    issues.push(errorIssue('REACTIVE_OBSERVER_FLAG_INVALID', 'ReactiveSequence observePrecedingConditions must be boolean.', 'У реактивной последовательности параметр «Наблюдать предыдущие условия» должен быть да/нет.', nodeId));
-  }
-  if (parameters.abortPolicy !== 'abort_self') {
-    issues.push(errorIssue('REACTIVE_ABORT_POLICY_UNSUPPORTED', 'ReactiveSequence v1 supports only abortPolicy=abort_self.', 'Реактивная последовательность v1 поддерживает только политику «Прервать текущую ветвь».', nodeId));
-  }
-  for (const key of ['abortReason', 'abortReasonRu']) {
-    const value = parameters[key];
-    if (value !== undefined && typeof value !== 'string') {
-      issues.push(errorIssue('REACTIVE_ABORT_REASON_INVALID', `ReactiveSequence ${key} must be a string.`, `У реактивной последовательности параметр ${key} должен быть строкой.`, nodeId));
-    }
-  }
-}
-
-function validateReloadParameters(parameters: UnknownRecord, issues: AiGraphValidationIssue[], nodeId: string): void {
-  validateNonNegativeNumberParameter(parameters, 'durationSeconds', false, 'RELOAD_DURATION_INVALID', 'Reload durationSeconds must be a non-negative number.', 'У ноды «Перезарядить» длительность должна быть неотрицательным числом.', issues, nodeId);
-  validateNonNegativeNumberParameter(parameters, 'targetAmmo', true, 'RELOAD_TARGET_AMMO_INVALID', 'Reload targetAmmo must be a non-negative integer.', 'У ноды «Перезарядить» число патронов после завершения должно быть неотрицательным целым числом.', issues, nodeId);
-  const failIfNoWeapon = parameters.failIfNoWeapon;
-  if (typeof failIfNoWeapon !== 'boolean') {
-    issues.push(errorIssue('RELOAD_WEAPON_FLAG_INVALID', 'Reload failIfNoWeapon must be boolean.', 'У ноды «Перезарядить» параметр «Провалить, если нет оружия» должен быть да/нет.', nodeId));
-  }
-}
-
-function validateNonNegativeNumberParameter(
-  parameters: UnknownRecord,
-  key: string,
-  requireInteger: boolean,
-  code: string,
-  message: string,
-  messageRu: string,
-  issues: AiGraphValidationIssue[],
-  nodeId: string,
-): void {
-  const value = parameters[key];
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || (requireInteger && !Number.isInteger(value))) {
-    issues.push(errorIssue(code, message, messageRu, nodeId));
-  }
-}
-
-function validateKnownNodeParameters(node: UnknownRecord, issues: AiGraphValidationIssue[], nodeId: string): void {
-  const parameters = isRecord(node.parameters) ? node.parameters : {};
-  if (node.type === 'SetAttentionMode') {
-    const mode = parameters.mode;
-    if (mode !== 'march' && mode !== 'observe' && mode !== 'search' && mode !== 'engage') {
-      issues.push(errorIssue('ATTENTION_MODE_INVALID', `Node ${nodeId} must use march, observe, search, or engage.`, `Нода ${nodeId} должна использовать режим march, observe, search или engage.`, nodeId));
-    }
-  }
-  if (node.type === 'SetSearchSector') {
-    if (typeof parameters.centerDegrees !== 'number' || !Number.isFinite(parameters.centerDegrees)) {
-      issues.push(errorIssue('SEARCH_CENTER_INVALID', `Node ${nodeId} must have numeric centerDegrees.`, `У ноды ${nodeId} должен быть числовой centerDegrees.`, nodeId));
-    }
-    if (typeof parameters.arcDegrees !== 'number' || parameters.arcDegrees < 1 || parameters.arcDegrees > 360) {
-      issues.push(errorIssue('SEARCH_ARC_INVALID', `Node ${nodeId} arcDegrees must be from 1 to 360.`, `У ноды ${nodeId} arcDegrees должен быть от 1 до 360.`, nodeId));
-    }
-  }
-}
-
-function validateBlackboardDefaults(defaultsValue: unknown, issues: AiGraphValidationIssue[]): void {
-  if (defaultsValue === undefined) {
-    issues.push(errorIssue('BLACKBOARD_DEFAULTS_MISSING', 'AI graph must have blackboardDefaults.', 'У AI-графа должно быть поле blackboardDefaults.'));
-    return;
-  }
-
-  if (!isRecord(defaultsValue)) {
-    issues.push(errorIssue('BLACKBOARD_DEFAULTS_NOT_OBJECT', 'blackboardDefaults must be a JSON object.', 'Поле blackboardDefaults должно быть JSON-объектом.'));
-    return;
-  }
-
-  for (const [key, value] of Object.entries(defaultsValue)) {
-    if (!isNonEmptyString(key)) {
-      issues.push(errorIssue('BLACKBOARD_KEY_EMPTY', 'blackboardDefaults contains an empty key.', 'В blackboardDefaults найден пустой ключ.'));
-    }
-
-    if (!isSupportedValue(value)) {
-      issues.push(errorIssue('BLACKBOARD_VALUE_UNSUPPORTED', `Blackboard value ${key} has an unsupported format.`, `Blackboard-значение ${key} имеет неподдерживаемый формат.`));
-    }
-  }
-}
-
-function isSupportedValue(value: unknown): boolean {
-  return value === null
-    || typeof value === 'string'
-    || typeof value === 'number'
-    || typeof value === 'boolean'
-    || isPositionRecord(value);
-}
-
-function isPositionRecord(value: unknown): boolean {
-  return isRecord(value)
-    && typeof value.x === 'number'
-    && typeof value.y === 'number';
-}
-
-function invalidResult(code: string, message: string, messageRu: string): AiGraphValidationResult {
-  return {
-    valid: false,
-    issues: [errorIssue(code, message, messageRu)],
-  };
-}
-
-function errorIssue(code: string, message: string, messageRu: string, nodeId?: string): AiGraphValidationIssue {
-  return {
-    severity: 'error',
-    code,
-    message,
-    messageRu,
-    ...(nodeId ? { nodeId } : {}),
-  };
-}
-
-function warningIssue(code: string, message: string, messageRu: string, nodeId?: string): AiGraphValidationIssue {
-  return {
-    severity: 'warning',
-    code,
-    message,
-    messageRu,
-    ...(nodeId ? { nodeId } : {}),
-  };
-}
-
-function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
-}
+function validateHeader(g:UnknownRecord,issues:AiGraphValidationIssue[]):void{if(!isNonEmptyString(g.id))issues.push(error('MISSING_GRAPH_ID','AI graph must have a non-empty string id.','У AI-графа должен быть непустой строковый id.'));if(!isNonEmptyString(g.rootNodeId))issues.push(error('MISSING_ROOT_NODE_ID','AI graph must have rootNodeId.','У AI-графа должен быть rootNodeId.'));if(!Array.isArray(g.nodes))issues.push(error('NODES_NOT_ARRAY','nodes must be an array.','Поле nodes должно быть массивом нод.'));if(g.version===2&&!Array.isArray(g.subgraphRefs))issues.push(error('SUBGRAPH_REFS_NOT_ARRAY','Graph v2 subgraphRefs must be an array.','У Graph v2 поле subgraphRefs должно быть массивом.'));}
+function collectNodes(value:unknown,strict:boolean,issues:AiGraphValidationIssue[]):Map<string,UnknownRecord>{const map=new Map<string,UnknownRecord>();const roots:string[]=[];if(!Array.isArray(value))return map;for(const[index,node]of value.entries()){if(!isRecord(node)){issues.push(error('NODE_NOT_OBJECT',`Node #${index+1} must be an object.`,`Нода #${index+1} должна быть объектом.`));continue;}if(!isNonEmptyString(node.id)){issues.push(error('NODE_WITHOUT_ID',`Node #${index+1} must have id.`,`Нода #${index+1} должна иметь id.`));continue;}if(map.has(node.id)){issues.push(error('DUPLICATE_NODE_ID',`Duplicate node id: ${node.id}.`,`Дублируется id ноды: ${node.id}.`,node.id));continue;}map.set(node.id,node);const contract=validateNodeType(node,issues,node.id);validateChildrenShape(node,contract,issues,node.id);validateParameters(node,contract,strict,issues,node.id);validateKnownNodeParameters(node,issues,node.id);if(node.type==='Root')roots.push(node.id);}if(roots.length===0)issues.push(error('ROOT_NODE_MISSING','Graph must contain one Root node.','В графе должна быть одна нода Root.'));if(roots.length>1)issues.push(warning('MULTIPLE_ROOT_NODES',`Graph has multiple Root nodes: ${roots.join(', ')}.`,`В графе несколько Root: ${roots.join(', ')}.`));return map;}
+function validateNodeType(node:UnknownRecord,issues:AiGraphValidationIssue[],id:string):AiNodeContract|undefined{if(!isNonEmptyString(node.type)){issues.push(error('NODE_WITHOUT_TYPE',`Node ${id} must have type.`,`У ноды ${id} должен быть type.`,id));return;}const c=DEFAULT_AI_NODE_CONTRACT_REGISTRY.get(node.type);if(!c)issues.push(error('UNKNOWN_NODE_TYPE',`Node ${id} has unknown type ${node.type}.`,`У ноды ${id} неизвестный type: ${node.type}.`,id));return c;}
+function validateChildrenShape(node:UnknownRecord,c:AiNodeContract|undefined,issues:AiGraphValidationIssue[],id:string):void{if(node.children===undefined)return;if(!Array.isArray(node.children)){issues.push(error('CHILDREN_NOT_ARRAY',`Node ${id} children must be array.`,`У ноды ${id} children должно быть массивом.`,id));return;}for(const child of node.children)if(!isNonEmptyString(child))issues.push(error('CHILD_ID_NOT_STRING',`Node ${id} child id invalid.`,`У ноды ${id} неверный id ребёнка.`,id));if(c?.childPolicy==='none'&&node.children.length>0)issues.push(error('LEAF_NODE_HAS_CHILDREN',`Node ${id} must not have children.`,`Нода ${id} не должна иметь дочерние ноды.`,id));}
+function validateParameters(node:UnknownRecord,c:AiNodeContract|undefined,strict:boolean,issues:AiGraphValidationIssue[],id:string):void{const params=node.parameters;if(params!==undefined&&!isRecord(params)){issues.push(error('PARAMETERS_NOT_OBJECT',`Node ${id} parameters must be object.`,`У ноды ${id} parameters должно быть объектом.`,id));return;}const p=isRecord(params)?params:{};for(const[key,v]of Object.entries(p)){if(!isSupported(v))issues.push(error('PARAMETER_VALUE_UNSUPPORTED',`Node ${id} parameter ${key} unsupported.`,`У ноды ${id} параметр ${key} имеет неподдерживаемое значение.`,id,key));}if(strict&&c){for(const def of c.parameters){const v=p[def.id];if(v===undefined&&def.required)issues.push(error('REQUIRED_PARAMETER_MISSING',`Node ${id} missing ${def.id}.`,`У ноды ${id} отсутствует обязательный параметр «${def.labelRu}».`,id,def.id));if(v!==undefined)validateParameterValue(v,def,issues,id);}for(const key of Object.keys(p))if(!c.parameters.some(d=>d.id===key))issues.push(info('UNKNOWN_PARAMETER_PRESERVED',`Parameter ${key} preserved.`,`Незарегистрированный параметр ${key} сохранён.`,id));}if(node.type==='Reload')validateReload(p,issues,id);if(node.type==='ReactiveSequence')validateReactiveParameters(p,issues,id);}
+function validateParameterValue(v:unknown,d:AiParameterDefinition,issues:AiGraphValidationIssue[],id:string):void{if(v===null){if(!d.nullable)issues.push(error('PARAMETER_NULL_NOT_ALLOWED',`Parameter ${d.id} cannot be null.`,`Параметр «${d.labelRu}» не может быть пустым.`,id,d.id));return;}let good=true;if(d.kind==='number')good=typeof v==='number'&&Number.isFinite(v);else if(d.kind==='boolean')good=typeof v==='boolean';else if(d.kind==='position')good=isPosition(v);else good=typeof v==='string';if(!good){issues.push(error('PARAMETER_TYPE_INVALID',`Parameter ${d.id} expects ${d.kind}.`,`Параметр «${d.labelRu}» имеет неправильный тип.`,id,d.id));return;}if(d.kind==='number'&&typeof v==='number'&&((d.minimum!==undefined&&v<d.minimum)||(d.maximum!==undefined&&v>d.maximum)||(d.integer&&!Number.isInteger(v))))issues.push(error('PARAMETER_OUT_OF_RANGE',`Parameter ${d.id} is outside range.`,`Параметр «${d.labelRu}» выходит за допустимый диапазон.`,id,d.id));if(d.kind==='enum'&&typeof v==='string'&&!d.options?.some(o=>o.value===v))issues.push(error('ENUM_VALUE_UNKNOWN',`Unknown option ${v}.`,`Недопустимое значение параметра «${d.labelRu}».`,id,d.id));}
+function validateRoot(root:unknown,map:Map<string,UnknownRecord>,issues:AiGraphValidationIssue[]):void{if(!isNonEmptyString(root))return;const node=map.get(root);if(!node)issues.push(error('ROOT_NODE_NOT_FOUND',`Missing root ${root}.`,`Корневая нода ${root} отсутствует.`));else if(node.type!=='Root')issues.push(error('ROOT_NODE_WRONG_TYPE','rootNodeId must point to Root.','rootNodeId должен указывать на Root.',root));}
+function validateLinks(map:Map<string,UnknownRecord>,issues:AiGraphValidationIssue[]):void{for(const[id,node]of map)if(Array.isArray(node.children))for(const child of node.children)if(isNonEmptyString(child)&&!map.has(child))issues.push(error('BROKEN_CHILD_LINK',`Node ${id} references missing child ${child}.`,`Нода ${id} ссылается на отсутствующего ребёнка ${child}.`,id));}
+function validateChildPolicies(map:Map<string,UnknownRecord>,issues:AiGraphValidationIssue[]):void{for(const[id,node]of map){if(!isNonEmptyString(node.type))continue;const c=DEFAULT_AI_NODE_CONTRACT_REGISTRY.get(node.type);const count=Array.isArray(node.children)?node.children.filter(isNonEmptyString).length:0;if(c?.childPolicy==='one'&&count!==1)issues.push(error('CHILD_COUNT_INVALID',`Node ${id} needs exactly one child.`,`Ноде ${id} нужен ровно один дочерний шаг.`,id));}}
+const CONDITIONS=new Set(['FlagCheck','BlackboardValueAbove','StableThreshold','DistanceCheck','TacticalCheck']);
+function validateReactive(map:Map<string,UnknownRecord>,issues:AiGraphValidationIssue[]):void{for(const[id,node]of map){if(node.type!=='ReactiveSequence')continue;const children=Array.isArray(node.children)?node.children.filter(isNonEmptyString):[];if(children.length<2){issues.push(error('REACTIVE_CHILDREN_TOO_FEW','ReactiveSequence needs condition and action.','У реактивной последовательности должно быть условие и действие.',id));continue;}for(const childId of children.slice(0,-1)){const child=map.get(childId);if(!child||!CONDITIONS.has(String(child.type)))issues.push(error('REACTIVE_PRECEDING_CHILD_NOT_CONDITION',`Child ${childId} must be condition.`,`Ребёнок ${childId} должен быть условием.`,id));}}}
+function validateReachability(root:unknown,map:Map<string,UnknownRecord>,issues:AiGraphValidationIssue[]):void{if(!isNonEmptyString(root)||!map.has(root))return;const seen=new Set<string>();const visit=(id:string)=>{if(seen.has(id))return;seen.add(id);const n=map.get(id);if(Array.isArray(n?.children))for(const c of n.children)if(isNonEmptyString(c))visit(c);};visit(root);for(const id of map.keys())if(!seen.has(id))issues.push(warning('UNREACHABLE_NODE',`Node ${id} is unreachable.`,`Нода ${id} недостижима.`,id));}
+function validateCycles(map:Map<string,UnknownRecord>,issues:AiGraphValidationIssue[]):void{const active=new Set<string>(),done=new Set<string>(),reported=new Set<string>();const visit=(id:string)=>{if(active.has(id)){if(!reported.has(id)){reported.add(id);issues.push(error('FORBIDDEN_GRAPH_CYCLE',`Forbidden cycle through ${id}.`,`Запрещённый цикл через ноду ${id}.`,id));}return;}if(done.has(id))return;active.add(id);const n=map.get(id);if(Array.isArray(n?.children))for(const c of n.children)if(isNonEmptyString(c))visit(c);active.delete(id);done.add(id);};for(const id of map.keys())visit(id);}
+function validateDefaults(v:unknown,issues:AiGraphValidationIssue[]):void{if(!isRecord(v)){issues.push(error('BLACKBOARD_DEFAULTS_NOT_OBJECT','blackboardDefaults must be object.','blackboardDefaults должно быть объектом.'));return;}for(const[k,x]of Object.entries(v))if(!isSupported(x))issues.push(error('BLACKBOARD_VALUE_UNSUPPORTED',`Unsupported Blackboard ${k}.`,`Неподдерживаемое значение Blackboard ${k}.`));}
+function validateSchema(v:unknown,defaults:unknown,issues:AiGraphValidationIssue[]):Map<string,AiPortValueKind>{const r=new Map<string,AiPortValueKind>();if(!Array.isArray(v)){issues.push(error('BLACKBOARD_SCHEMA_NOT_ARRAY','blackboardSchema must be array.','blackboardSchema должно быть массивом.'));return r;}for(const[index,e]of v.entries()){if(!isRecord(e)||!isNonEmptyString(e.key)||!isNonEmptyString(e.valueKind)){issues.push(error('BLACKBOARD_SCHEMA_ENTRY_INVALID',`Schema entry #${index+1} invalid.`,`Запись схемы #${index+1} неверна.`));continue;}r.set(e.key,blackboardKind(e as unknown as AiBlackboardSchemaEntry));}if(isRecord(defaults))for(const[k,x]of Object.entries(defaults))if(!r.has(k)){const inferred=inferAiPortValueKind(x);if(inferred)r.set(k,inferred);issues.push(warning('BLACKBOARD_SCHEMA_KEY_MISSING',`No schema for ${k}.`,`Для ключа ${k} нет записи схемы.`));}return r;}
+function validateBindings(map:Map<string,UnknownRecord>,schema:ReadonlyMap<string,AiPortValueKind>,issues:AiGraphValidationIssue[]):void{for(const[id,node]of map){if(!isNonEmptyString(node.type))continue;const ports=resolveNodePorts(node);const bindings=isRecord(node.inputBindings)?node.inputBindings:{};for(const input of ports.inputs)if(input.required&&bindings[input.id]===undefined)issues.push(error('REQUIRED_INPUT_MISSING',`Missing required input ${input.id}.`,`Не задан обязательный вход «${input.labelRu}».`,id,undefined,input.id));for(const[portId,raw]of Object.entries(bindings)){const input=ports.inputs.find(x=>x.id===portId);if(!input){issues.push(error('UNKNOWN_INPUT_PORT',`Unknown input ${portId}.`,`Неизвестный вход ${portId}.`,id,undefined,portId));continue;}if(!isAiInputBinding(raw)){issues.push(error('INPUT_BINDING_INVALID',`Invalid binding ${portId}.`,`Неверная привязка входа ${portId}.`,id,undefined,portId));continue;}let kind:AiPortValueKind|undefined;if(raw.source==='literal')kind=inferAiPortValueKind(raw.value);else if(raw.source==='blackboard'){kind=schema.get(raw.key);if(!kind)issues.push(error('BLACKBOARD_BINDING_UNKNOWN_KEY',`Unknown key ${raw.key}.`,`Неизвестный ключ Blackboard ${raw.key}.`,id,undefined,portId));}else if(raw.source==='node'){const source=map.get(raw.nodeId);const out=source?resolveNodePorts(source).outputs.find(x=>x.id===raw.port):undefined;if(!out)issues.push(error('PORT_SOURCE_OUTPUT_MISSING',`Missing output ${raw.nodeId}.${raw.port}.`,`Нет выхода ${raw.nodeId}.${raw.port}.`,id,undefined,portId));else kind=out.kind;}else kind=input.kind;if(kind&&!areAiPortKindsCompatible(kind,input.kind))issues.push(error('INCOMPATIBLE_PORT_TYPES',`Cannot pass ${kind} into ${input.kind}.`,`Нельзя передать «${portKindRu(kind)}» во вход «${portKindRu(input.kind)}».`,id,undefined,portId));}if(node.outputBindings!==undefined){if(!isRecord(node.outputBindings))issues.push(error('OUTPUT_BINDINGS_NOT_OBJECT','outputBindings must be object.','outputBindings должно быть объектом.',id));else for(const[portId,b]of Object.entries(node.outputBindings)){if(!ports.outputs.some(x=>x.id===portId))issues.push(error('UNKNOWN_OUTPUT_PORT',`Unknown output ${portId}.`,`Неизвестный выход ${portId}.`,id,undefined,portId));else if(!isAiOutputBinding(b))issues.push(error('OUTPUT_BINDING_INVALID',`Invalid output binding ${portId}.`,`Неверная привязка выхода ${portId}.`,id,undefined,portId));}}}}
+function validateUnusedOutputs(map:Map<string,UnknownRecord>,issues:AiGraphValidationIssue[]):void{const used=new Set<string>();for(const node of map.values())if(isRecord(node.inputBindings))for(const b of Object.values(node.inputBindings))if(isAiInputBinding(b)&&b.source==='node')used.add(`${b.nodeId}:${b.port}`);for(const[id,node]of map){const bound=isRecord(node.outputBindings)?new Set(Object.keys(node.outputBindings)):new Set<string>();for(const out of resolveNodePorts(node).outputs)if(!used.has(`${id}:${out.id}`)&&!bound.has(out.id))issues.push(warning('UNUSED_OUTPUT',`Output ${id}.${out.id} unused.`,`Выход «${out.labelRu}» ноды ${id} не используется.`,id));}}
+function resolveNodePorts(node:UnknownRecord):{readonly inputs:readonly AiPortDefinition[];readonly outputs:readonly AiPortDefinition[]}{if(node.type==='Subgraph'&&isRecord(node.parameters)&&isNonEmptyString(node.parameters.subgraphId)){const definition=DEFAULT_AI_SUBGRAPH_REGISTRY.get(node.parameters.subgraphId);if(definition)return{inputs:definition.inputs,outputs:definition.outputs};}if(!isNonEmptyString(node.type))return{inputs:[],outputs:[]};const contract=DEFAULT_AI_NODE_CONTRACT_REGISTRY.get(node.type);return{inputs:contract?.inputs??[],outputs:contract?.outputs??[]};}
+function validateSubgraphs(g:UnknownRecord,map:Map<string,UnknownRecord>,context:AiGraphValidationContext,issues:AiGraphValidationIssue[]):void{const refs=Array.isArray(g.subgraphRefs)?g.subgraphRefs.filter(isNonEmptyString):[];const registry=context.subgraphs instanceof Map?new Map(context.subgraphs):new Map(Object.entries(context.subgraphs??{}));for(const[id,node]of map){if(node.type!=='Subgraph')continue;const p=isRecord(node.parameters)?node.parameters:{};const sid=p.subgraphId;if(!isNonEmptyString(sid))continue;if(sid===g.id)issues.push(error('RECURSIVE_SUBGRAPH_REFERENCE','Graph references itself.','Граф ссылается сам на себя.',id));if(!refs.includes(sid))issues.push(warning('SUBGRAPH_REF_NOT_DECLARED',`Subgraph ${sid} not declared.`,`Подграф ${sid} не указан в subgraphRefs.`,id));if(registry.size&& !registry.has(sid))issues.push(error('SUBGRAPH_NOT_FOUND',`Subgraph ${sid} not found.`,`Подграф ${sid} не зарегистрирован.`,id));}}
+function validateReactiveParameters(p:UnknownRecord,issues:AiGraphValidationIssue[],id:string):void{if(typeof p.observePrecedingConditions!=='boolean')issues.push(error('REACTIVE_OBSERVER_FLAG_INVALID','observePrecedingConditions must be boolean.','Параметр наблюдения должен быть да/нет.',id));if(p.abortPolicy!=='abort_self')issues.push(error('REACTIVE_ABORT_POLICY_UNSUPPORTED','Only abort_self supported.','Поддерживается только abort_self.',id));}
+function validateReload(p:UnknownRecord,issues:AiGraphValidationIssue[],id:string):void{if(typeof p.durationSeconds!=='number'||p.durationSeconds<0)issues.push(error('RELOAD_DURATION_INVALID','Reload duration invalid.','Длительность перезарядки неверна.',id));if(typeof p.targetAmmo!=='number'||p.targetAmmo<0||!Number.isInteger(p.targetAmmo))issues.push(error('RELOAD_TARGET_AMMO_INVALID','Target ammo invalid.','Число патронов неверно.',id));if(typeof p.failIfNoWeapon!=='boolean')issues.push(error('RELOAD_WEAPON_FLAG_INVALID','Weapon flag invalid.','Флаг оружия должен быть да/нет.',id));}
+function validateKnownNodeParameters(n:UnknownRecord,issues:AiGraphValidationIssue[],id:string):void{const p=isRecord(n.parameters)?n.parameters:{};if(n.type==='SetAttentionMode'&&!['march','observe','search','engage'].includes(String(p.mode)))issues.push(error('ATTENTION_MODE_INVALID','Invalid attention mode.','Недопустимый режим внимания.',id));if(n.type==='SetSearchSector'){if(typeof p.centerDegrees!=='number'||!Number.isFinite(p.centerDegrees))issues.push(error('SEARCH_CENTER_INVALID','Invalid centerDegrees.','Неверное центральное направление.',id));if(typeof p.arcDegrees!=='number'||p.arcDegrees<1||p.arcDegrees>360)issues.push(error('SEARCH_ARC_INVALID','Invalid arcDegrees.','Ширина сектора должна быть 1–360.',id));}}
+function blackboardKind(e:AiBlackboardSchemaEntry):AiPortValueKind{if(e.valueKind==='number')return'number';if(e.valueKind==='boolean')return'boolean';if(e.valueKind==='position'||e.valueKind==='nullablePosition')return'position';if(e.valueKind==='unitId'||e.valueKind==='nullableUnitId')return'unitId';return'string';}
+function portKindRu(k:AiPortValueKind):string{return({number:'Число',boolean:'Да/нет',string:'Текст',position:'Позиция',unitId:'Боец',objectId:'Объект',slotId:'Место',event:'Событие',plan:'План',route:'Маршрут'} as Record<AiPortValueKind,string>)[k];}
+function isSupported(v:unknown):boolean{return v===null||typeof v==='string'||typeof v==='boolean'||(typeof v==='number'&&Number.isFinite(v))||isPosition(v);}function isPosition(v:unknown):boolean{return isRecord(v)&&typeof v.x==='number'&&Number.isFinite(v.x)&&typeof v.y==='number'&&Number.isFinite(v.y);}function isRecord(v:unknown):v is UnknownRecord{return typeof v==='object'&&v!==null&&!Array.isArray(v);}function isNonEmptyString(v:unknown):v is string{return typeof v==='string'&&v.trim().length>0;}
+function invalid(code:string,message:string,messageRu:string):AiGraphValidationResult{return{valid:false,issues:[error(code,message,messageRu)]};}
+function error(code:string,message:string,messageRu:string,nodeId?:string,parameterName?:string,portName?:string,fix?:string,fixRu?:string):AiGraphValidationIssue{return{severity:'error',code,message,messageRu,nodeId,parameterName,portName,fix,fixRu};}function warning(code:string,message:string,messageRu:string,nodeId?:string):AiGraphValidationIssue{return{severity:'warning',code,message,messageRu,nodeId};}function info(code:string,message:string,messageRu:string,nodeId?:string):AiGraphValidationIssue{return{severity:'info',code,message,messageRu,nodeId};}

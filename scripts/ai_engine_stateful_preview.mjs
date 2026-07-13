@@ -2,6 +2,12 @@ const STATEFUL_PREVIEW_NODE_TYPES = new Set([
   'SequenceWithMemory',
   'Wait',
   'MoveToBlackboardPosition',
+  'Reload',
+  'WaitForEvent',
+  'Timeout',
+  'Retry',
+  'ReactiveSequence',
+  'Subgraph',
 ]);
 
 export function prepareGraphForInstantPreview(value) {

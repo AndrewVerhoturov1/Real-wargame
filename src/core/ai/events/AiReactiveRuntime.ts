@@ -320,6 +320,7 @@ function eventKeys(type: string): string[] {
     case 'ammo_empty': return ['ammo'];
     case 'weapon_ready_changed': return ['weaponReady'];
     case 'suppression_threshold_crossed': return ['suppression', 'underFire'];
+    case 'shot_nearby': return ['underFire', 'danger', 'remembered_enemy_position', 'estimated_threat_position'];
     case 'move_completed': return ['active_move_source', 'active_move_owner_token', 'active_move_target', 'order_target_position'];
     case 'route_blocked': return ['active_move_path_status'];
     case 'target_lost': return ['best_cover_position', 'order_target_position', 'active_move_target'];

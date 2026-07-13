@@ -1,5 +1,6 @@
 import type { AiNode } from '../AiGraph';
 import type { AiGraphEffect, AiGraphRunnerBlackboard } from '../AiGraphRunner';
+import type { AiEvent } from '../events/AiEvent';
 
 export type AiActionExecutionStatus = 'running' | 'waiting' | 'success' | 'failure' | 'cancelled';
 export type AiActionOutcome = 'success' | 'failure' | 'cancelled';
@@ -15,6 +16,7 @@ export interface AiActionRuntimeContext {
   readonly nowMs: number;
   readonly startedAtMs: number;
   readonly blackboard: AiGraphRunnerBlackboard;
+  readonly events?: readonly AiEvent[];
 }
 
 export interface AiActionTickResult<TState> {

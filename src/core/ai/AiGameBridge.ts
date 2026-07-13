@@ -535,6 +535,10 @@ function publishRuntimeDebugTrace(
       activeNodeId: result.activeNodeId,
       activeNodeName: result.activeNodeName,
       activeNodeNameRu: result.activeNodeNameRu,
+      activeSubgraphId: result.activeSubgraphId,
+      activeSubgraphName: result.activeSubgraphName,
+      activeSubgraphNameRu: result.activeSubgraphNameRu,
+      activeSubgraphPath: result.activeSubgraphPath,
       elapsedMs: result.elapsedMs,
       lifecycle: result.lifecycle,
       cancellationReason: result.cancellationReason,
@@ -553,11 +557,40 @@ function publishRuntimeDebugTrace(
       observerChecks: unit.behaviorRuntime.aiRuntimeSession?.observerRegistry.observerChecks ?? 0,
       observerEvents: unit.behaviorRuntime.aiRuntimeSession?.observerRegistry.observerEvents ?? 0,
       blackboard: result.blackboard,
+      ...runtimeMemoryScopeDebug(unit.behaviorRuntime.aiRuntimeSession, result),
     };
     window.localStorage.setItem(DEBUG_STORAGE_KEY, JSON.stringify(payload));
   } catch {
     // Debug overlay is optional. If localStorage is blocked or full, gameplay must continue.
   }
+}
+
+function runtimeMemoryScopeDebug(
+  session: AiRuntimeSessionSnapshotV1 | null | undefined,
+  result: AiGraphRuntimeResult,
+): {
+  readonly memoryScopeKeys: Record<string, readonly string[]>;
+  readonly memoryScopeKeyCounts: Record<string, number>;
+} {
+  const scopes = session?.memoryScopes;
+  const activeData = result.executionState?.activeData;
+  const subgraphLocal = activeData && activeData.kind === 'subgraph'
+    ? { [activeData.subgraphId]: Object.keys(activeData.localBlackboard).sort() }
+    : Object.fromEntries(Object.entries(scopes?.subgraphLocalMemory ?? {}).map(([ownerId, values]) => [ownerId, Object.keys(values).sort()]));
+  const nodeLocal = Object.fromEntries(Object.entries(scopes?.nodeLocalState ?? {}).map(([ownerId, values]) => [ownerId, Object.keys(values).sort()]));
+  const memoryScopeKeys = {
+    persistentSoldierMemory: Object.keys(scopes?.persistentSoldierMemory ?? {}).sort(),
+    runtimeSessionMemory: Object.keys(scopes?.runtimeSessionMemory ?? {}).sort(),
+    activeStateMemory: result.executionState
+      ? ['activeNodeId', 'activeNodeStartedAtMs', 'lastUpdatedAtMs', 'status']
+      : Object.keys(scopes?.activeStateMemory ?? {}).sort(),
+    subgraphLocalMemory: Object.entries(subgraphLocal).flatMap(([ownerId, keys]) => keys.map((key) => `${ownerId}.${key}`)),
+    nodeLocalState: Object.entries(nodeLocal).flatMap(([ownerId, keys]) => keys.map((key) => `${ownerId}.${key}`)),
+  } satisfies Record<string, readonly string[]>;
+  return {
+    memoryScopeKeys,
+    memoryScopeKeyCounts: Object.fromEntries(Object.entries(memoryScopeKeys).map(([scope, keys]) => [scope, keys.length])),
+  };
 }
 
 function evaluateTacticalCheck(
