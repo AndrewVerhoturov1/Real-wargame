@@ -43,7 +43,7 @@ import { isReactiveExecutionState } from './events/AiReactiveRuntime';
 import { updateUnitPlanFromRuntime } from './UnitPlan';
 import { updateAiStateRuntime } from './state/AiStateRuntime';
 import { cancelAiPlan, applyAiPlanStepExecution, evaluateAiPlanAbort, evaluateAiPlanReplan, startCurrentAiPlanStep } from './state/AiPlanRuntime';
-import { buildAiPlanConditionValues, buildAiPlanStepGraph, deriveAiStateTriggers, isAiPlanAllowedInState, selectAiPlanForState } from './state/AiStatePlanPipeline';
+import { buildAiPlanConditionValues, buildAiPlanStepGraph, deriveAiStateTriggers, isAiPlanAllowedInState, readAiExecutionOwnerToken, selectAiPlanForState } from './state/AiStatePlanPipeline';
 import { DEFAULT_AI_STATE_MACHINE } from './state/AiStateMachine';
 import type { AiPlan } from './state/AiPlan';
 import bundledGraph from '../../data/ai/soldier_default_survival_graph.json';
@@ -419,10 +419,7 @@ export function ensureRuntimeSession(unit: UnitModel, graphId: string): AiRuntim
   const runtime = unit.behaviorRuntime as LegacyAiUnitGraphRuntime;
   if (runtime.aiRuntimeSession) {
     const previousSession = runtime.aiRuntimeSession;
-    const activeData = previousSession.executionState?.activeData;
-    const ownedMoveToken = activeData?.kind === 'move_to_blackboard_position'
-      ? activeData.actionToken
-      : undefined;
+    const ownedMoveToken = readAiExecutionOwnerToken(previousSession.executionState);
     const normalized = normalizeAiRuntimeSession(previousSession, { graphId, unitId: unit.id });
     runtime.aiRuntimeSession = normalized.session;
     if (normalized.resetReasonRu) {

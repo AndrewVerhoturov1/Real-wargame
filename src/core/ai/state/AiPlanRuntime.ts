@@ -171,7 +171,7 @@ export function normalizeAiPlan(value: unknown): AiPlan | undefined {
   const steps = value.steps.map(normalizeStep);
   if (steps.some((step) => !step)) return undefined;
   const currentStepIndex = Number.isInteger(value.currentStepIndex)
-    ? Math.max(0, Math.min(steps.length, Number(value.currentStepIndex)))
+    ? Math.max(0, Math.min(Math.max(0, steps.length - 1), Number(value.currentStepIndex)))
     : 0;
   return {
     id: value.id,
