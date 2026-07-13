@@ -1,0 +1,35 @@
+name: Temporary AI state-plan precheck fixes
+
+on:
+  push:
+    branches:
+      - feat/ai-state-plan-v1-temp-2026-07-14
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[state-plan-precheck-fixed]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: node scripts/apply_ai_state_plan_precheck_fixes.mjs
+      - name: Commit precheck fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src
+          if git diff --cached --quiet; then
+            echo "No precheck changes to commit."
+            exit 0
+          fi
+          git commit -m "fix(ai): harden restored state-plan runtime [state-plan-precheck-fixed]"
+          git push origin HEAD:feat/ai-state-plan-v1-temp-2026-07-14
