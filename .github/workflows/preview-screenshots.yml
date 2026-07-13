@@ -1,6 +1,6 @@
 name: Preview screenshots
 
-run-name: Manual preview screenshots · ${{ github.ref_name }}
+run-name: Approved Graph v2 screenshots · ${{ github.ref_name }}
 
 on:
   workflow_dispatch:
@@ -14,27 +14,44 @@ permissions:
 
 jobs:
   screenshots:
-    name: Capture preview screenshots
+    name: Capture Graph v2 screenshots
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
+      - name: Wait for the clean final branch head
+        run: sleep 25
+
+      - name: Checkout final feature branch head
+        uses: actions/checkout@v4
+        with:
+          ref: feat/ai-graph-v2-contracts-subgraphs-2026-07-13
+
+      - name: Record exact tested commit
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          echo "sha=${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
+          mkdir -p artifacts/screenshots
+          printf 'tested_commit=%s\nworkflow_trigger_commit=%s\n' "$SOURCE_SHA" "$GITHUB_SHA" > artifacts/screenshots/visual-qa-metadata.txt
+
       - name: Publish pending screenshot status
         uses: actions/github-script@v7
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
         with:
           script: |
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              sha: context.sha,
+              sha: process.env.SOURCE_SHA,
               state: 'pending',
               context: 'preview-screenshots',
-              description: 'Approved manual Playwright screenshots are running',
+              description: 'Approved Graph v2 Playwright screenshots are running',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -48,42 +65,43 @@ jobs:
       - name: Install Playwright test runner for this workflow
         run: npm install --no-save @playwright/test
 
-      - name: Validate AI dictionary contract
-        run: npm run dictionary:smoke
+      - name: Validate Graph v2 contracts and editor
+        run: |
+          npm run graph-v2:smoke
+          npm run node-contract-ui:smoke
+          npm run editor:smoke
+          npm run build
 
-      - name: Check production build without blocking screenshots
-        continue-on-error: true
-        run: npm run build
-
-      - name: Capture screenshots with system Chrome
+      - name: Capture Graph v2 screenshots with system Chrome
         id: capture
         shell: bash
         run: |
           set -o pipefail
-          npx playwright test tests/ai-graph-v2-editor.spec.ts tests/perception-attention-overlay.spec.ts tests/preview-screenshots.spec.ts tests/camera-grid-performance.spec.ts tests/front-zones.spec.ts tests/ai-dictionary.spec.ts tests/ai-dictionary-workbench.spec.ts tests/ai-running-runtime.spec.ts tests/ai-running-move.spec.ts --project=chromium --reporter=line 2>&1 | tee playwright-screenshots.log
+          npx playwright test tests/ai-graph-v2-editor.spec.ts --project=chromium --reporter=line 2>&1 | tee playwright-screenshots.log
 
-      - name: Upload screenshots
+      - name: Upload screenshots and exact-SHA metadata
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: real-wargame-preview-screenshots
+          name: real-wargame-graph-v2-screenshots
           path: artifacts/screenshots/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
 
       - name: Upload Playwright log
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: real-wargame-preview-playwright-log
+          name: real-wargame-graph-v2-playwright-log
           path: playwright-screenshots.log
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Publish screenshot status
+      - name: Publish screenshot status on tested commit
         if: ${{ always() }}
         uses: actions/github-script@v7
         env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
           CAPTURE_OUTCOME: ${{ steps.capture.outcome }}
         with:
           script: |
@@ -91,9 +109,9 @@ jobs:
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              sha: context.sha,
+              sha: process.env.SOURCE_SHA,
               state: success ? 'success' : 'failure',
               context: 'preview-screenshots',
-              description: `Manual Playwright screenshots: ${process.env.CAPTURE_OUTCOME}`,
+              description: `Approved Graph v2 Playwright: ${process.env.CAPTURE_OUTCOME}`,
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
