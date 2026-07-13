@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { getPortKind, renderContractParameters, renderNodePorts } from '../src/ai-node-editor/node-contract-ui';
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -19,5 +20,15 @@ assert(getPortKind('Subgraph', 'input', 'cover_position', takeCoverNode.paramete
 const parameters = renderContractParameters(takeCoverNode, escape);
 assert(!parameters.includes('data-contract-param="subgraphId"'), 'dedicated subgraph selector must not be duplicated by a text parameter');
 assert(parameters.includes('data-contract-param="cancelPolicy"'), 'remaining contract parameters must still render');
+
+const editorSource = readFileSync(new URL('../src/ai-node-editor/main.ts', import.meta.url), 'utf8');
+assert(
+  editorSource.includes("button.addEventListener('mousedown', beginTypedConnection)"),
+  'typed output ports must keep a mouse-event fallback so real Chrome always enters drag-highlight mode',
+);
+assert(
+  editorSource.includes("if (connectionState || event.button !== 0) return"),
+  'typed connection fallback must guard duplicate pointerdown/mousedown delivery and non-primary buttons',
+);
 
 console.log('AI node contract UI smoke passed: dynamic subgraph ports and non-duplicated parameters.');

@@ -337,9 +337,16 @@ function installEventHandlers(): void {
     element.addEventListener('contextmenu', (event) => { event.preventDefault(); if (element.dataset.nodeId) { selectedNodeId = element.dataset.nodeId; contextMenuState = { nodeId: element.dataset.nodeId, x: event.clientX, y: event.clientY }; render(); } });
   });
   document.querySelectorAll<HTMLButtonElement>('[data-port-kind="out"]').forEach((button) => button.addEventListener('pointerdown', (event) => { if (button.dataset.nodeId) startConnectionDrag(event, button.dataset.nodeId, 'flow'); }));
-  document.querySelectorAll<HTMLButtonElement>('[data-typed-port-kind="output"]').forEach((button) => button.addEventListener('pointerdown', (event) => {
-    if (button.dataset.nodeId && button.dataset.portId && button.dataset.valueKind) startConnectionDrag(event, button.dataset.nodeId, 'data', button.dataset.portId, button.dataset.valueKind as AiPortValueKind);
-  }));
+  document.querySelectorAll<HTMLButtonElement>('[data-typed-port-kind="output"]').forEach((button) => {
+    const beginTypedConnection = (event: PointerEvent | MouseEvent): void => {
+      if (connectionState || event.button !== 0) return;
+      if (button.dataset.nodeId && button.dataset.portId && button.dataset.valueKind) {
+        startConnectionDrag(event, button.dataset.nodeId, 'data', button.dataset.portId, button.dataset.valueKind as AiPortValueKind);
+      }
+    };
+    button.addEventListener('pointerdown', beginTypedConnection);
+    button.addEventListener('mousedown', beginTypedConnection);
+  });
   document.querySelectorAll<HTMLButtonElement>('[data-validation-node-id]').forEach((button) => button.addEventListener('click', () => { if (button.dataset.validationNodeId) selectNode(button.dataset.validationNodeId); }));
   document.querySelectorAll<HTMLButtonElement>('[data-palette-type]').forEach((button) => button.addEventListener('click', () => { if (button.dataset.paletteType) addNodeFromPalette(button.dataset.paletteType); }));
   document.querySelectorAll<HTMLButtonElement>('[data-unlink-child]').forEach((button) => button.addEventListener('click', () => { if (button.dataset.unlinkChild) unlinkChild(selectedNodeId, button.dataset.unlinkChild); }));
@@ -380,7 +387,7 @@ function updateNodePosition(nodeId: string): void {
   if (element) { element.style.left = `${position.x}px`; element.style.top = `${position.y}px`; }
 }
 
-function startConnectionDrag(event: PointerEvent, sourceNodeId: string, mode: 'flow' | 'data', sourcePortId?: string, sourceKind?: AiPortValueKind): void {
+function startConnectionDrag(event: PointerEvent | MouseEvent, sourceNodeId: string, mode: 'flow' | 'data', sourcePortId?: string, sourceKind?: AiPortValueKind): void {
   event.preventDefault();
   event.stopPropagation();
   const world = screenToWorld(event.clientX, event.clientY);
