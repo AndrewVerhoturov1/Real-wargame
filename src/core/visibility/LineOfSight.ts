@@ -28,7 +28,12 @@ export interface LineOfSightProbeResult {
   obscurationReasonRu: string;
 }
 
-export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: GridPosition): LineOfSightProbeResult {
+export function computeLineOfSight(
+  map: TacticalMap,
+  unit: UnitModel,
+  target: GridPosition,
+  targetHeightMeters = 1.4,
+): LineOfSightProbeResult {
   const origin = unit.position;
   const totalDistanceCells = distance(origin, target);
   const totalDistanceMeters = totalDistanceCells * map.metersPerCell;
@@ -57,7 +62,7 @@ export function computeLineOfSight(map: TacticalMap, unit: UnitModel, target: Gr
   const originGround = sampleSmoothHeightLevel(map, origin.x, origin.y) * ELEVATION_STEP_METERS;
   const targetGround = sampleSmoothHeightLevel(map, target.x, target.y) * ELEVATION_STEP_METERS;
   const originEye = originGround + eyeHeightForPosture(unit.behaviorRuntime.posture);
-  const targetEye = targetGround + 1.4;
+  const targetEye = targetGround + normalizeTargetHeightMeters(targetHeightMeters);
   const steps = Math.max(2, Math.ceil(totalDistanceMeters / SAMPLE_STEP_METERS));
   let accumulatedForestMeters = 0;
   let visualTransmission = 1;
@@ -294,6 +299,10 @@ function eyeHeightForPosture(posture: UnitModel['behaviorRuntime']['posture']): 
     case 'standing':
     default: return 1.7;
   }
+}
+
+function normalizeTargetHeightMeters(value: number): number {
+  return Number.isFinite(value) ? Math.max(0.05, value) : 1.4;
 }
 
 function formatSigned(value: number): string {
