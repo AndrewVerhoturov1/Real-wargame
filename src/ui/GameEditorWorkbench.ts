@@ -499,10 +499,15 @@ function selectField<T extends string | number>(
     select.appendChild(option);
   }
   select.value = String(value);
-  select.addEventListener('change', () => {
+  let committedValue = select.value;
+  const commitSelection = () => {
+    if (select.value === committedValue) return;
+    committedValue = select.value;
     const matched = options.find(([candidate]) => String(candidate) === select.value)?.[0];
     if (matched !== undefined) onChange(matched);
-  });
+  };
+  select.addEventListener('input', commitSelection);
+  select.addEventListener('change', commitSelection);
   return wrapField(label, select);
 }
 
