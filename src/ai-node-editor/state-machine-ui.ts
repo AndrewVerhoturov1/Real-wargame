@@ -88,11 +88,13 @@ function updatePanel(force: boolean): void {
   }
   const panelRecreated = !refs || !refs.panel.isConnected;
   if (panelRecreated) refs = createPanel(workspace);
+  const currentRefs = refs;
+  if (!currentRefs) return;
   const payload = readStatePlanPayload();
   const signature = JSON.stringify(payload ?? null);
   if (!force && !panelRecreated && signature === lastSignature) return;
   lastSignature = signature;
-  render(refs, payload);
+  render(currentRefs, payload);
 }
 
 function createPanel(workspace: HTMLElement): PanelRefs {
