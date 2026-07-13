@@ -6,12 +6,8 @@ on:
       - real-wargame-preview
     types: [synchronize]
 
-permissions:
-  contents: write
-  pull-requests: read
-
 jobs:
-  apply-final-patch:
+  export-source:
     if: github.event.pull_request.head.ref == 'feat/ai-graph-v2-finalize-2026-07-13'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -20,38 +16,10 @@ jobs:
         with:
           ref: feat/ai-graph-v2-finalize-2026-07-13
           fetch-depth: 0
-      - name: Reconstruct, verify, and apply final patch
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "3523b933f33cb6bb5dde612e20bc641900c98eda7a225a79b8622a72b0ec6d39  .github/graph-v2-final-patch/part06a0" | sha256sum -c -
-          echo "1e56c8acfa5b118326858f514532772cda5b1015f508f4c93d22ab071e30c9a8  .github/graph-v2-final-patch/part06b" | sha256sum -c -
-          echo "05d15d1257b84f1e33d6ce4f9f8c9e19a00a0fb3203af15e44231d16e3a35a18  .github/graph-v2-final-patch/part06c" | sha256sum -c -
-          cat \
-            .github/graph-v2-final-patch/part00 \
-            .github/graph-v2-final-patch/part01 \
-            .github/graph-v2-final-patch/part02 \
-            .github/graph-v2-final-patch/part03 \
-            .github/graph-v2-final-patch/part04 \
-            .github/graph-v2-final-patch/part05 \
-            .github/graph-v2-final-patch/part06a0 \
-            > /tmp/graph-v2-final.b64
-          cat \
-            .github/graph-v2-final-patch/part06b \
-            .github/graph-v2-final-patch/part06c \
-            | xxd -r -p >> /tmp/graph-v2-final.b64
-          cat .github/graph-v2-final-patch/part07 >> /tmp/graph-v2-final.b64
-          base64 -d /tmp/graph-v2-final.b64 > /tmp/graph-v2-final.patch.gz
-          echo "e4edc6ac36676f2dfc0abc4c6db90790c9e28c36d756586d9679dba274a4f2c5  /tmp/graph-v2-final.patch.gz" | sha256sum -c -
-          gzip -dc /tmp/graph-v2-final.patch.gz > /tmp/graph-v2-final.patch
-          echo "82120162245834228d2ffcffcf176e15ceb4e135d849e53a85e7059304fb97b9  /tmp/graph-v2-final.patch" | sha256sum -c -
-          git show b667c203882b21630f221c22c5bc72f4f2bb4db9:.github/workflows/export-ai-graph-v2-finalize-source.yml > .github/workflows/export-ai-graph-v2-finalize-source.yml
-          git apply --check --verbose /tmp/graph-v2-final.patch
-          git apply /tmp/graph-v2-final.patch
-          rm -rf .github/graph-v2-final-patch
-          rm -f .github/workflows/apply-graph-v2-finalize.yml
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -A
-          git commit -m "feat(ai): finalize Graph v2 typed contracts and subgraphs"
-          git push origin HEAD:feat/ai-graph-v2-finalize-2026-07-13
+      - name: Create complete branch archive
+        run: zip -r graph-v2-branch-source.zip . -x '.git/*' 'node_modules/*' 'dist/*'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: graph-v2-branch-source-${{ github.event.pull_request.head.sha }}
+          path: graph-v2-branch-source.zip
+          retention-days: 1
