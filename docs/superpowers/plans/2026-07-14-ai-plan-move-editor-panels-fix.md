@@ -81,4 +81,4 @@ The one-time executor completed editor smoke, lab smoke, movement smoke, state-p
 
 - [ ] **Step 5: Inspect exact-head browser QA and PNGs**
 
-Run the branch visual workflow on the owner-authored final candidate, verify workflow/artifact/tested SHA equality, inspect the tactical movement frames plus both editor panel states at 1440×900, and only then remove temporary executors and declare the branch ready.
+One-time executors and the diagnostic probe were removed in cleanup commit `b1d0e0fa21c71e8253b27d115b81a0725440fd18`. This owner-authored documentation commit starts the final exact-head CI and system-Chrome run. Verify workflow/artifact/tested SHA equality, inspect the tactical movement frames plus both editor panel states at 1440×900, then remove the remaining temporary screenshot workflow and declare the branch ready.
