@@ -1,0 +1,47 @@
+name: Directional Terrain Core
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+  workflow_dispatch:
+
+jobs:
+  directional-terrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Directional terrain smoke
+        run: npm run directional-terrain:smoke
+
+      - name: Navigation profile regression
+        run: npm run navigation-profiles:smoke
+
+      - name: Grid pathfinding regression
+        run: npm run pathfinding:smoke
+
+      - name: Navigation overlay regression
+        run: npm run navigation-overlay:smoke
+
+      - name: Map revision regression
+        run: npm run map-revision:smoke
+
+      - name: Production build
+        run: npm run build
+
+      - name: Documentation check
+        run: npm run docs:check
