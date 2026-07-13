@@ -10,22 +10,28 @@ import {
 
 const TAB_ID = 'directionalTerrain';
 const navigation = document.querySelector<HTMLElement>('.navigation-profile-tabs');
-const mainTabs = navigation?.querySelector<HTMLElement>('.navigation-profile-main-tabs');
-const panel = document.querySelector<HTMLElement>('.navigation-profile-workbench');
+const mainTabs = navigation?.querySelector<HTMLElement>('.navigation-profile-main-tabs') ?? null;
+const workbench = document.querySelector<HTMLElement>('.navigation-profile-workbench');
 
-if (navigation && mainTabs && panel) {
+if (navigation && mainTabs && workbench) installDirectionalTerrainEditor(navigation, mainTabs, workbench);
+
+function installDirectionalTerrainEditor(
+  navigationElement: HTMLElement,
+  mainTabsElement: HTMLElement,
+  panelElement: HTMLElement,
+): void {
   const button = document.createElement('button');
   button.type = 'button';
   button.dataset.navigationTab = TAB_ID;
   button.textContent = 'Направленный рельеф';
-  mainTabs.append(button);
+  mainTabsElement.append(button);
 
   let registry = getNavigationProfileRegistry();
   let selectedProfileId = registry.hasProfile('stealth') ? 'stealth' : 'normal';
   let draft = cloneWeights(registry.getProfile(selectedProfileId).directionalTerrain);
   let active = false;
 
-  navigation.addEventListener('click', (event) => {
+  navigationElement.addEventListener('click', (event) => {
     const target = event.target instanceof Element
       ? event.target.closest<HTMLButtonElement>('[data-navigation-tab]')
       : null;
@@ -42,8 +48,8 @@ if (navigation && mainTabs && panel) {
 
   function render(): void {
     const profile = registry.getProfile(selectedProfileId);
-    panel.hidden = false;
-    panel.innerHTML = `
+    panelElement.hidden = false;
+    panelElement.innerHTML = `
       <div class="navigation-profile-layout">
         <aside class="navigation-profile-list-panel">
           <div class="navigation-profile-list-heading">
@@ -82,40 +88,47 @@ if (navigation && mainTabs && panel) {
           </section>
           <section class="navigation-profile-placeholder">
             <h3>Как это работает</h3>
-            <p>Сначала рельеф карты рассчитывается один раз и хранится в числовых массивах. При изменении знаний бойца пересчитывается только субъективная направленная цена. Камера, курсор и отрисовка не запускают анализ заново.</p>
+            <p>Рельеф карты рассчитывается один раз и хранится в числовых массивах. При изменении знаний бойца пересчитывается только субъективная направленная цена. Камера, курсор и отрисовка не запускают анализ заново.</p>
           </section>
         </main>
       </div>
     `;
 
-    panel.querySelectorAll<HTMLButtonElement>('[data-directional-profile]').forEach((profileButtonElement) => {
+    panelElement.querySelectorAll<HTMLButtonElement>('[data-directional-profile]').forEach((profileButtonElement) => {
       profileButtonElement.addEventListener('click', () => {
         selectedProfileId = profileButtonElement.dataset.directionalProfile ?? 'normal';
         draft = cloneWeights(registry.getProfile(selectedProfileId).directionalTerrain);
         render();
       });
     });
-    panel.querySelectorAll<HTMLInputElement>('[data-directional-field]').forEach((input) => {
-      input.addEventListener('input', () => {
-        const key = input.dataset.directionalField as keyof NavigationDirectionalTerrainWeights | undefined;
-        if (!key) return;
-        const minimum = Number(input.min);
-        const maximum = Number(input.max);
-        const value = Number(input.value);
-        draft[key] = Number.isFinite(value) ? Math.max(minimum, Math.min(maximum, value)) : minimum;
-        panel.querySelector<HTMLElement>(`[data-directional-value="${key}"]`)!.textContent = draft[key].toFixed(2);
-      });
+    panelElement.querySelectorAll<HTMLInputElement>('[data-directional-field]').forEach((input) => {
+      input.addEventListener('input', () => handleFieldInput(input));
     });
-    panel.querySelector<HTMLButtonElement>('[data-directional-action="cancel"]')?.addEventListener('click', () => {
+    panelElement.querySelector<HTMLButtonElement>('[data-directional-action="cancel"]')?.addEventListener('click', () => {
       draft = cloneWeights(registry.getProfile(selectedProfileId).directionalTerrain);
       render();
     });
-    panel.querySelector<HTMLButtonElement>('[data-directional-action="save"]')?.addEventListener('click', () => {
+    panelElement.querySelector<HTMLButtonElement>('[data-directional-action="save"]')?.addEventListener('click', () => {
       registry.updateProfile(selectedProfileId, { directionalTerrain: cloneWeights(draft) });
       saveNavigationProfileRegistry(registry);
       draft = cloneWeights(registry.getProfile(selectedProfileId).directionalTerrain);
       render();
     });
+  }
+
+  function handleFieldInput(input: HTMLInputElement): void {
+    const key = input.dataset.directionalField as keyof NavigationDirectionalTerrainWeights | undefined;
+    if (!key) return;
+    const minimum = Number(input.min);
+    const maximum = Number(input.max);
+    const numericValue = Number(input.value);
+    const value = Number.isFinite(numericValue) ? Math.max(minimum, Math.min(maximum, numericValue)) : minimum;
+    draft[key] = value;
+    panelElement.querySelectorAll<HTMLInputElement>(`[data-directional-field="${key}"]`).forEach((peer) => {
+      if (peer !== input) peer.value = String(value);
+    });
+    const valueElement = panelElement.querySelector<HTMLElement>(`[data-directional-value="${key}"]`);
+    if (valueElement) valueElement.textContent = value.toFixed(2);
   }
 
   function profileButton(profile: NavigationProfile): string {
