@@ -124,7 +124,6 @@ function updateFacingAlongRoute(unit: UnitModel, movementTarget: GridPosition): 
   if (difference < 0.0001) return;
   unit.facingRadians = heading;
   updateAttentionController(unit, 0);
-  unit.behaviorRuntime.lastEvent = 'move_facing_updated';
 }
 
 function applyFinalFacing(unit: UnitModel, order: MoveOrder): void {
