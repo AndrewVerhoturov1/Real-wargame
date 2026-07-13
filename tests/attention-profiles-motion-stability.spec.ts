@@ -82,20 +82,31 @@ test('keeps the selected-unit bar inside its plaque at desktop and narrow widths
     const result = await bar.evaluate((element) => {
       const rect = element.getBoundingClientRect();
       const children = [...element.children].filter((child): child is HTMLElement => child instanceof HTMLElement && getComputedStyle(child).display !== 'none');
-      const offenders = children.filter((child) => {
+      const offenders = children.flatMap((child) => {
         const childRect = child.getBoundingClientRect();
-        return childRect.left < rect.left - 1 || childRect.right > rect.right + 1 || childRect.top < rect.top - 1 || childRect.bottom > rect.bottom + 1;
-      }).map((child) => child.className);
+        const deltas = {
+          left: rect.left - childRect.left,
+          right: childRect.right - rect.right,
+          top: rect.top - childRect.top,
+          bottom: childRect.bottom - rect.bottom,
+        };
+        const outside = deltas.left > 1 || deltas.right > 1 || deltas.top > 1 || deltas.bottom > 1;
+        if (!outside) return [];
+        const style = getComputedStyle(child);
+        return [{ className: child.className, deltas, rect: { x: childRect.x, y: childRect.y, width: childRect.width, height: childRect.height }, display: style.display, gridArea: style.gridArea, alignSelf: style.alignSelf }];
+      });
       return {
+        viewport: { width: innerWidth, height: innerHeight },
+        barRect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
         offenders,
         horizontalOverflow: element.scrollWidth - element.clientWidth,
         verticalOverflow: element.scrollHeight - element.clientHeight,
       };
     });
-    expect(result.offenders).toEqual([]);
-    expect(result.horizontalOverflow).toBeLessThanOrEqual(1);
-    expect(result.verticalOverflow).toBeLessThanOrEqual(1);
     await saveScreenshot(page, `attention-fix-compact-unit-bar-${viewport.width}.png`);
+    expect(result.offenders, JSON.stringify(result, null, 2)).toEqual([]);
+    expect(result.horizontalOverflow, JSON.stringify(result, null, 2)).toBeLessThanOrEqual(1);
+    expect(result.verticalOverflow, JSON.stringify(result, null, 2)).toBeLessThanOrEqual(1);
   }
   expect(errors).toEqual([]);
 });
