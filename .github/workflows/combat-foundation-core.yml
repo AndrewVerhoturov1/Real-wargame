@@ -7,11 +7,20 @@ on:
     paths:
       - 'src/core/combat/**'
       - 'src/core/perception/**'
+      - 'src/core/visibility/**'
       - 'src/core/simulation/**'
       - 'src/core/units/**'
       - 'src/core/ai/AiGameBridge.ts'
       - 'src/rendering/PixiUnitRenderer.ts'
+      - 'src/rendering/PixiCombatEffectsRenderer.ts'
+      - 'src/rendering/CombatEffectsInstaller.ts'
+      - 'src/ui/CombatControls.ts'
+      - 'src/ui/CombatAudio.ts'
+      - 'src/main.ts'
       - 'scripts/combat_foundation_smoke.*'
+      - 'scripts/perception_system_smoke.ts'
+      - 'scripts/tactical_workspace_smoke.mjs'
+      - 'tests/combat-foundation-visual.spec.ts'
       - 'package.json'
       - '.github/workflows/combat-foundation-core.yml'
   workflow_dispatch:
@@ -58,6 +67,9 @@ jobs:
       - name: Existing reload smoke
         shell: bash
         run: set -o pipefail; npm run reload:smoke 2>&1 | tail -n 120
+      - name: Workspace presentation smoke
+        shell: bash
+        run: set -o pipefail; npm run workspace:smoke 2>&1 | tail -n 120
       - name: Production build
         shell: bash
         run: set -o pipefail; npm run build 2>&1 | tail -n 160
