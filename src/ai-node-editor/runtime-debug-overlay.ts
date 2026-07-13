@@ -1,4 +1,5 @@
 import './state-machine-ui';
+import { ensureAiDebugPanelCard } from './debug-panel-dock';
 
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 const REFRESH_INTERVAL_MS = 700;
@@ -214,16 +215,21 @@ function buildNodeDebugMap(payload: RuntimeDebugPayload): Map<string, NodeDebugS
 }
 
 function renderDebugPanel(payload: RuntimeDebugPayload | null): void {
-  document.querySelector('.ai-runtime-debug-panel')?.remove();
   const workspace = document.querySelector<HTMLElement>('#graph-workspace');
   if (!workspace) return;
+  const { content } = ensureAiDebugPanelCard(workspace, {
+    id: 'runtime-trace',
+    title: 'След ИИ',
+    subtitle: 'Последний расчёт выбранного бойца',
+  });
+  content.replaceChildren();
 
   const panel = document.createElement('section');
   panel.className = 'ai-runtime-debug-panel';
 
   if (!payload) {
-    panel.innerHTML = '<h3>След ИИ</h3><p>Пока нет живого решения. Открой игру, выбери бойца и дождись одного тика ИИ.</p>';
-    workspace.appendChild(panel);
+    panel.innerHTML = '<p>Пока нет живого решения. Открой игру, выбери бойца и дождись одного тика ИИ.</p>';
+    content.appendChild(panel);
     return;
   }
 
@@ -254,8 +260,7 @@ function renderDebugPanel(payload: RuntimeDebugPayload | null): void {
     : '';
 
   panel.innerHTML = `
-    <h3>След ИИ ${payload.paused ? '· пауза' : ''}</h3>
-    <p class="${stale ? 'stale' : ''}">${escapeHtml(stale ? 'Показан старый последний расчёт.' : 'Показан последний расчёт выбранного бойца.')}</p>
+    <p class="${stale ? 'stale' : ''}">${escapeHtml(payload.paused ? 'Расчёт ИИ приостановлен.' : stale ? 'Показан старый последний расчёт.' : 'Показан последний расчёт выбранного бойца.')}</p>
     <dl>
       <div><dt>Боец</dt><dd>${escapeHtml(payload.unitLabel ?? payload.unitId)}</dd></div>
       <div><dt>Победила</dt><dd>${escapeHtml(payload.selectedBranchNameRu ?? payload.selectedBranchName)}</dd></div>
@@ -269,7 +274,7 @@ function renderDebugPanel(payload: RuntimeDebugPayload | null): void {
     </dl>
     <ul>${scoreRows}</ul>
   `;
-  workspace.appendChild(panel);
+  content.appendChild(panel);
 }
 
 function removeExistingNodeDebug(): void {

@@ -1,4 +1,5 @@
 import './state-machine-ui.css';
+import { ensureAiDebugPanelCard } from './debug-panel-dock';
 
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 const REFRESH_INTERVAL_MS = 500;
@@ -98,10 +99,17 @@ function updatePanel(force: boolean): void {
 }
 
 function createPanel(workspace: HTMLElement): PanelRefs {
+  const { content } = ensureAiDebugPanelCard(workspace, {
+    id: 'state-plan',
+    title: 'Состояние и план',
+    subtitle: 'State → Utility → Plan → Подграф',
+    defaultOpen: true,
+  });
+  content.replaceChildren();
   const panel = document.createElement('section');
   panel.className = 'ai-state-plan-panel';
   panel.innerHTML = `
-    <header><div><h3>Состояние и план</h3><span>State → Utility → Plan → Подграф</span></div><span class="state-plan-live">живые данные</span></header>
+    <header><span>State → Utility → Plan → Подграф</span><span class="state-plan-live">живые данные</span></header>
     <dl class="state-plan-grid">
       <div><dt>Состояние</dt><dd data-state-plan="state">—</dd></div>
       <div><dt>Родитель</dt><dd data-state-plan="parent">—</dd></div>
@@ -121,7 +129,7 @@ function createPanel(workspace: HTMLElement): PanelRefs {
       <button type="button" data-state-plan-action="open-subgraph">Показать активный подграф</button>
       <details><summary>Техническая диагностика</summary><pre data-state-plan="technical">—</pre></details>
     </div>`;
-  workspace.appendChild(panel);
+  content.appendChild(panel);
   const required = <T extends Element>(selector: string): T => {
     const element = panel.querySelector<T>(selector);
     if (!element) throw new Error(`State-plan panel element missing: ${selector}`);
