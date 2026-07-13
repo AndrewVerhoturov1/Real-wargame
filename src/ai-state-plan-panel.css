@@ -58,7 +58,7 @@
   position: absolute;
   z-index: 131;
   left: 0;
-  bottom: calc(100% + 9px);
+  bottom: calc(100% + 10px);
   width: min(520px, calc(100vw - 30px));
   max-height: min(560px, calc(100vh - 130px));
   overflow: auto;
