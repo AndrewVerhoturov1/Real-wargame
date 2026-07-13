@@ -99,12 +99,20 @@ test('visually verifies two hostile sides, personal contact and stateful rifle f
     await pauseButton.click();
   }
   await expect(pauseButton).toHaveText('Пауза');
+
+  const fastSpeed = page.locator('[data-speed="10"]');
+  await fastSpeed.click();
+  await expect(fastSpeed).toHaveClass(/active/);
   await page.waitForTimeout(500);
   await saveScreenshot(page, '21-combat-simulation-running.png');
 
   const fireButton = page.locator('[data-action="fire-contact"]');
   await expect(fireButton).toBeEnabled({ timeout: 30_000 });
   await expect(fireButton).toHaveAttribute('title', /Личный контакт:/);
+
+  const normalSpeed = page.locator('[data-speed="1"]');
+  await normalSpeed.click();
+  await expect(normalSpeed).toHaveClass(/active/);
   await page.waitForTimeout(350);
   await saveScreenshot(page, '22-combat-contact-ready.png');
 
