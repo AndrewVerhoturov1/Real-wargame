@@ -19,7 +19,7 @@
       "current_focus": "Finish and validate the first State → Utility → Plan → Subgraph vertical slice on the temporary branch without mixing in the parallel shooting implementation.",
       "next_step": "Complete the full required regression and docs checks, remove temporary patch/validation infrastructure, close validation PR #94 without merging, then ask for explicit visual-QA approval. Do not transfer to preview without a separate user command.",
       "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-      "last_verified_commit": "pending-final-validation-on-feat-ai-state-plan-v1-temp-2026-07-14",
+      "last_verified_commit": "58ea1b5755ef3162f1778a937d49d33a0430d450",
       "superseded_by": null,
       "status_path": "docs/subprojects/ai-single-unit-editor/STATUS.md",
       "metadata_path": "docs/subprojects/ai-single-unit-editor/subproject.json"

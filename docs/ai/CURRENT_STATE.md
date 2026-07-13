@@ -26,5 +26,5 @@ Generated from canonical repository and subproject metadata.
 - **Updated:** 2026-07-14
 - **Current focus:** Finish and validate the first State → Utility → Plan → Subgraph vertical slice on the temporary branch without mixing in the parallel shooting implementation.
 - **Next step:** Complete the full required regression and docs checks, remove temporary patch/validation infrastructure, close validation PR #94 without merging, then ask for explicit visual-QA approval. Do not transfer to preview without a separate user command.
-- **Last verified commit:** `pending-final-validation-on-feat-ai-state-plan-v1-temp-2026-07-14`
+- **Last verified commit:** `58ea1b5755ef3162f1778a937d49d33a0430d450`
 - **Status:** [generated status](../subprojects/ai-single-unit-editor/STATUS.md)

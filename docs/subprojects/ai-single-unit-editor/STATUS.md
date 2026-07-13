@@ -6,7 +6,7 @@
 - **Updated:** 2026-07-14
 - **Working branch:** `real-wargame-preview`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
-- **Last verified commit:** `pending-final-validation-on-feat-ai-state-plan-v1-temp-2026-07-14`
+- **Last verified commit:** `58ea1b5755ef3162f1778a937d49d33a0430d450`
 
 ## Goal
 
