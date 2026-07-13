@@ -4,7 +4,7 @@
 
 **Goal:** Keep a state-plan movement order active until arrival and replace overlapping AI diagnostics with two compact mutually exclusive collapsible panels.
 
-**Architecture:** Route monitoring must resolve target availability in the same Blackboard scope that owns the active movement action, including nested subgraph-local memory. Editor diagnostics will share one absolute dock; each diagnostic surface remains independently rendered but mounts inside a reusable `<details>` card, and opening one card closes the other.
+**Architecture:** Route monitoring must resolve target availability in the same Blackboard scope that owns the active movement action, including nested subgraph-local memory. Editor diagnostics share one absolute dock; each diagnostic surface remains independently rendered but mounts inside a reusable `<details>` card, and opening one card closes the other.
 
 **Tech Stack:** TypeScript, Vite, existing smoke scripts, Playwright, DOM/CSS, GitHub Actions.
 
@@ -30,27 +30,25 @@
 - Consumes: `AiGraphExecutionState`, `AiSubgraphExecutionState.localBlackboard`, `MoveToBlackboardPositionActionState.targetKey`.
 - Produces: route status input whose `targetAvailable` value is resolved from the active action's actual Blackboard scope.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
-Create a nested subgraph execution state where `destination` exists only in `AiSubgraphExecutionState.localBlackboard`, while session-level memory intentionally has no `destination`. Call `updateSelectedRouteStatus` and assert that the route remains `moving`, `shouldCancelRuntime` is false, and `abortCode` is undefined.
+Created a nested subgraph execution state where `destination` exists only in `AiSubgraphExecutionState.localBlackboard`, while session-level memory intentionally has no `destination`. The test calls `updateSelectedRouteStatus` and requires the route to remain `moving` without cancellation.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
-Run: `npm run move-bridge:smoke`
-Expected: FAIL because the current bridge reads `destination` only from session-level memory and reports `target_lost`.
+The focused CI log failed with `actual: target_lost`, `expected: moving`, confirming that the bridge incorrectly read only session-level memory.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
-Extend the active-move snapshot traversal to carry the current Blackboard scope. When descending through `activeData.kind === 'subgraph'`, replace the scope with `activeData.localBlackboard`; when reaching `move_to_blackboard_position`, evaluate `targetAvailable` against that scope. Pass this boolean to `updateAiRouteStatus`.
+The active-move snapshot traversal now carries the current Blackboard scope. Descending through a subgraph switches to `activeData.localBlackboard`, and target availability is evaluated in the scope that owns the action.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
-Run: `npm run move-bridge:smoke && npm run state-plan-scenario:smoke && npm run build`
-Expected: PASS.
+The one-time executor completed `move-bridge:smoke`, `state-plan-scenario:smoke`, and the production build before creating commit `426cd63e5d8bd3594ad6a00881dfbd18fe9e20de`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
-Commit message: `fix: preserve nested plan movement targets`
+Commit: `fix: preserve nested plan movement targets`.
 
 ### Task 2: Put diagnostics in one collapsible dock
 
@@ -58,33 +56,29 @@ Commit message: `fix: preserve nested plan movement targets`
 - Create: `src/ai-node-editor/debug-panel-dock.ts`
 - Create: `src/ai-node-editor/debug-panel-dock.css`
 - Modify: `src/ai-node-editor/state-machine-ui.ts`
-- Modify: `src/ai-node-editor/state-machine-ui.css`
 - Modify: `src/ai-node-editor/runtime-debug-overlay.ts`
-- Modify: `src/ai-node-editor/runtime-debug-overlay.css`
 - Modify: `tests/ai-state-plan-visual.spec.ts`
 
 **Interfaces:**
 - Produces: `ensureAiDebugPanelCard(workspace, options)` returning a stable `<details>` element and scrollable content host.
 - Behavior: only one diagnostics card may be open at once; open card identity persists in localStorage.
 
-- [ ] **Step 1: Write the failing browser assertions**
+- [x] **Step 1: Write the failing browser assertions**
 
-Assert that the editor contains two summary buttons named `Состояние и план` and `След ИИ`, that opening the second closes the first, and that the expanded content rectangles do not overlap.
+The editor scenario requires two summary buttons named `Состояние и план` and `След ИИ`, automatic sibling collapse, one expanded card, separated rectangles, and two dedicated screenshots.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
-Run the approved exact-branch Playwright scenario through the branch visual-QA workflow.
-Expected: FAIL because both panels are independent absolutely positioned sections.
+Approved system-Chrome run `29288286749` failed at `.ai-debug-panel-dock` not found on exact SHA `f6004a3ee3b3512c1dee30993ab38c24bd01aa03`, proving the old independent panels did not satisfy the requirement.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
-Mount both panels in a shared right-side dock using stable `<details>` cards. Keep state/plan open by default when no saved choice exists. Close sibling cards on `toggle`. Remove absolute positioning from the panel bodies and make each expanded body scroll inside the dock.
+Both diagnostics now mount in a shared right-side dock using stable `<details>` cards. State/plan opens by default, opening one card closes the other, and expanded content scrolls inside the dock rather than covering the second panel.
 
-- [ ] **Step 4: Run focused and full verification**
+- [x] **Step 4: Run focused verification before browser QA**
 
-Run: `npm run editor:smoke && npm run lab:smoke && npm run build`, then approved Playwright visual QA.
-Expected: all checks pass; screenshots show one expanded diagnostics panel at a time and no covered graph controls.
+The one-time executor completed editor smoke, lab smoke, movement smoke, state-plan scenario smoke, and the production build before creating commit `f0bf614d5c373cc5fa81fa263e8de4e7ef74998c`.
 
-- [ ] **Step 5: Inspect PNGs and commit**
+- [ ] **Step 5: Inspect exact-head browser QA and PNGs**
 
-Inspect movement and editor diagnostics frames at 1440×900, verify tested SHA equals workflow/artifact SHA, then commit message: `fix: dock collapsible AI diagnostics`.
+Run the branch visual workflow on the owner-authored final candidate, verify workflow/artifact/tested SHA equality, inspect the tactical movement frames plus both editor panel states at 1440×900, and only then remove temporary executors and declare the branch ready.
