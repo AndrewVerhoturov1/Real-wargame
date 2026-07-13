@@ -1,16 +1,10 @@
 name: Combat Foundation Visual QA
 
-# User-approved visual verification for the isolated combat-foundation branch.
-# Final run after documenting the corrected blue/red placement and combat screenshots.
+# Manual-only workflow. Run it only after the user explicitly approves visual verification
+# for the exact temporary-branch commit under review.
 run-name: Approved combat visual QA · ${{ github.sha }}
 
 on:
-  push:
-    branches:
-      - tmp/combat-foundation-v1-20260713
-    paths:
-      - 'tests/combat-foundation-visual.spec.ts'
-      - '.github/workflows/combat-foundation-visual-qa.yml'
   workflow_dispatch:
 
 permissions:
