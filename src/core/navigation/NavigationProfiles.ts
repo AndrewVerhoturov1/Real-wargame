@@ -1,4 +1,4 @@
-export const NAVIGATION_PROFILE_FORMAT_VERSION = 1 as const;
+export const NAVIGATION_PROFILE_FORMAT_VERSION = 2 as const;
 
 export const BUILT_IN_NAVIGATION_PROFILE_IDS = [
   'normal',
@@ -40,6 +40,15 @@ export interface NavigationTerritoryWeights {
   enemy: number;
 }
 
+export interface NavigationDirectionalTerrainWeights {
+  forwardSlopePenalty: number;
+  reverseSlopePreference: number;
+  crestPenalty: number;
+  silhouettePenalty: number;
+  valleyPreference: number;
+  criticalSectorMultiplier: number;
+}
+
 export interface NavigationReplanRules {
   replanOnBlocked: boolean;
   replanOnProfileChange: boolean;
@@ -62,6 +71,7 @@ export interface NavigationProfile {
   coverWeight: number;
   enemyDistanceWeight: number;
   territoryWeights: NavigationTerritoryWeights;
+  directionalTerrain: NavigationDirectionalTerrainWeights;
   maximumDetourRatio: number;
   maximumRouteCost: number | null;
   allowGoalAdjustment: boolean;
@@ -87,6 +97,15 @@ const BASE_TERRAIN_COSTS: NavigationTerrainCosts = {
   ditch: 1.2,
 };
 
+const BASE_DIRECTIONAL_TERRAIN: NavigationDirectionalTerrainWeights = {
+  forwardSlopePenalty: 0.25,
+  reverseSlopePreference: 0.08,
+  crestPenalty: 0.2,
+  silhouettePenalty: 0.15,
+  valleyPreference: 0.05,
+  criticalSectorMultiplier: 0.35,
+};
+
 const BASE_REPLAN_RULES: NavigationReplanRules = {
   replanOnBlocked: true,
   replanOnProfileChange: true,
@@ -101,6 +120,7 @@ const BUILT_IN_PROFILES: ReadonlyArray<NavigationProfile> = [
     slopeWeight: 0.15,
     dangerWeight: 0.45,
     coverWeight: 0.08,
+    directionalTerrain: { ...BASE_DIRECTIONAL_TERRAIN },
     maximumDetourRatio: 1.3,
   }),
   profile('fast', 'Fast', 'Быстрый', 'Prioritizes a short, quick route.', 'Предпочитает короткий и быстрый путь.', {
@@ -115,6 +135,14 @@ const BUILT_IN_PROFILES: ReadonlyArray<NavigationProfile> = [
     slopeWeight: 0.2,
     dangerWeight: 0.18,
     coverWeight: 0,
+    directionalTerrain: {
+      forwardSlopePenalty: 0.08,
+      reverseSlopePreference: 0.02,
+      crestPenalty: 0.12,
+      silhouettePenalty: 0.08,
+      valleyPreference: 0,
+      criticalSectorMultiplier: 0.15,
+    },
     maximumDetourRatio: 1.08,
     replanRules: { ...BASE_REPLAN_RULES, minimumCostImprovement: 0.2, replanCooldownSeconds: 1.5 },
   }),
@@ -132,6 +160,14 @@ const BUILT_IN_PROFILES: ReadonlyArray<NavigationProfile> = [
     dangerWeight: 1.35,
     exposureWeight: 1.6,
     coverWeight: 0.42,
+    directionalTerrain: {
+      forwardSlopePenalty: 1.15,
+      reverseSlopePreference: 0.55,
+      crestPenalty: 1.1,
+      silhouettePenalty: 0.9,
+      valleyPreference: 0.35,
+      criticalSectorMultiplier: 0.65,
+    },
     maximumDetourRatio: 1.6,
   }),
   profile('attack', 'Attack', 'Атака', 'Advances decisively while still considering known danger and cover.', 'Продвигается решительно, но учитывает известную опасность и укрытия.', {
@@ -149,6 +185,14 @@ const BUILT_IN_PROFILES: ReadonlyArray<NavigationProfile> = [
     exposureWeight: 0.7,
     coverWeight: 0.16,
     enemyDistanceWeight: -0.08,
+    directionalTerrain: {
+      forwardSlopePenalty: 0.45,
+      reverseSlopePreference: 0.18,
+      crestPenalty: 0.45,
+      silhouettePenalty: 0.35,
+      valleyPreference: 0.12,
+      criticalSectorMultiplier: 0.35,
+    },
     maximumDetourRatio: 1.25,
   }),
   profile('cautious', 'Cautious', 'Осторожный', 'Prefers safer and better covered approaches.', 'Предпочитает более безопасные и укрытые подходы.', {
@@ -165,6 +209,14 @@ const BUILT_IN_PROFILES: ReadonlyArray<NavigationProfile> = [
     dangerWeight: 1.65,
     exposureWeight: 1.45,
     coverWeight: 0.32,
+    directionalTerrain: {
+      forwardSlopePenalty: 0.85,
+      reverseSlopePreference: 0.4,
+      crestPenalty: 0.8,
+      silhouettePenalty: 0.65,
+      valleyPreference: 0.25,
+      criticalSectorMultiplier: 0.55,
+    },
     maximumDetourRatio: 1.5,
   }),
   profile('retreat', 'Retreat', 'Отступление', 'Strongly avoids known danger while keeping the escape route bounded.', 'Сильно избегает известной опасности, но ограничивает длину отхода.', {
@@ -182,6 +234,14 @@ const BUILT_IN_PROFILES: ReadonlyArray<NavigationProfile> = [
     exposureWeight: 1.8,
     coverWeight: 0.26,
     enemyDistanceWeight: 0.4,
+    directionalTerrain: {
+      forwardSlopePenalty: 1.4,
+      reverseSlopePreference: 0.65,
+      crestPenalty: 1.15,
+      silhouettePenalty: 0.9,
+      valleyPreference: 0.4,
+      criticalSectorMultiplier: 0.8,
+    },
     maximumDetourRatio: 1.45,
     replanRules: { ...BASE_REPLAN_RULES, minimumCostImprovement: 0.12, minimumDangerRevisionInterval: 1 },
   }),
@@ -200,6 +260,14 @@ const BUILT_IN_PROFILES: ReadonlyArray<NavigationProfile> = [
     exposureWeight: 0,
     coverWeight: 0,
     enemyDistanceWeight: 0,
+    directionalTerrain: {
+      forwardSlopePenalty: 0,
+      reverseSlopePreference: 0,
+      crestPenalty: 0,
+      silhouettePenalty: 0,
+      valleyPreference: 0,
+      criticalSectorMultiplier: 0,
+    },
     maximumDetourRatio: 1,
     replanRules: { ...BASE_REPLAN_RULES, replanOnDangerChange: false, minimumCostImprovement: 0 },
   }),
@@ -273,6 +341,7 @@ export class NavigationProfileRegistry {
       revision: current.revision + 1,
       terrainCosts: changes.terrainCosts ?? current.terrainCosts,
       territoryWeights: changes.territoryWeights ?? current.territoryWeights,
+      directionalTerrain: changes.directionalTerrain ?? current.directionalTerrain,
       replanRules: changes.replanRules ?? current.replanRules,
     }, current);
     this.profiles.set(id, updated);
@@ -387,6 +456,7 @@ function profile(
     coverWeight: overrides.coverWeight ?? 0,
     enemyDistanceWeight: overrides.enemyDistanceWeight ?? 0,
     territoryWeights: overrides.territoryWeights ?? { friendly: 0, neutral: 0, enemy: 0 },
+    directionalTerrain: overrides.directionalTerrain ?? { ...BASE_DIRECTIONAL_TERRAIN },
     maximumDetourRatio: overrides.maximumDetourRatio ?? 1.3,
     maximumRouteCost: overrides.maximumRouteCost ?? null,
     allowGoalAdjustment: overrides.allowGoalAdjustment ?? true,
@@ -445,6 +515,7 @@ function migrateRegistryData(value: unknown): Partial<NavigationProfileRegistryD
 function normalizeProfile(value: Partial<NavigationProfile>, fallback: NavigationProfile): NavigationProfile {
   const terrain = (isRecord(value.terrainCosts) ? value.terrainCosts : {}) as unknown as Record<string, unknown>;
   const territory = (isRecord(value.territoryWeights) ? value.territoryWeights : {}) as unknown as Record<string, unknown>;
+  const directional = (isRecord(value.directionalTerrain) ? value.directionalTerrain : {}) as unknown as Record<string, unknown>;
   const replan = (isRecord(value.replanRules) ? value.replanRules : {}) as unknown as Record<string, unknown>;
   const id = cleanText(value.id, fallback.id);
   return {
@@ -473,6 +544,14 @@ function normalizeProfile(value: Partial<NavigationProfile>, fallback: Navigatio
       neutral: boundedNumber(territory.neutral, fallback.territoryWeights.neutral, -10, 10),
       enemy: boundedNumber(territory.enemy, fallback.territoryWeights.enemy, -10, 10),
     },
+    directionalTerrain: {
+      forwardSlopePenalty: boundedNumber(directional.forwardSlopePenalty, fallback.directionalTerrain.forwardSlopePenalty, 0, 10),
+      reverseSlopePreference: boundedNumber(directional.reverseSlopePreference, fallback.directionalTerrain.reverseSlopePreference, 0, 10),
+      crestPenalty: boundedNumber(directional.crestPenalty, fallback.directionalTerrain.crestPenalty, 0, 10),
+      silhouettePenalty: boundedNumber(directional.silhouettePenalty, fallback.directionalTerrain.silhouettePenalty, 0, 10),
+      valleyPreference: boundedNumber(directional.valleyPreference, fallback.directionalTerrain.valleyPreference, 0, 10),
+      criticalSectorMultiplier: boundedNumber(directional.criticalSectorMultiplier, fallback.directionalTerrain.criticalSectorMultiplier, 0, 5),
+    },
     maximumDetourRatio: boundedNumber(value.maximumDetourRatio, fallback.maximumDetourRatio, 1, 5),
     maximumRouteCost: value.maximumRouteCost === null
       ? null
@@ -496,6 +575,7 @@ function cloneProfile(value: NavigationProfile): NavigationProfile {
     ...value,
     terrainCosts: { ...value.terrainCosts },
     territoryWeights: { ...value.territoryWeights },
+    directionalTerrain: { ...value.directionalTerrain },
     replanRules: { ...value.replanRules },
   };
 }
