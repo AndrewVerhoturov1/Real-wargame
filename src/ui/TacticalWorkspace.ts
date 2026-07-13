@@ -2,7 +2,8 @@ import '../tactical-workspace-stage8.css';
 import type { AiGameBridgeHandle } from '../core/ai/AiGameBridge';
 import type { UnitPosture } from '../core/behavior/BehaviorModel';
 import { getCombatRuntime } from '../core/combat/CombatDamage';
-import { getFireAction } from '../core/combat/FireAction';
+import { getFireAction, requestFireAction } from '../core/combat/FireAction';
+import { getBestPerceptionContact } from '../core/perception/PerceptionSystem';
 import { getWeaponRuntime } from '../core/combat/WeaponModel';
 import { buildSoldierAwarenessReport } from '../core/knowledge/SoldierAwarenessGrid';
 import { clearAttentionOverride, setAttentionMode, setSearchSector } from '../core/perception/AttentionController';
@@ -114,7 +115,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
       <div class="unit-bar-command-group simulation-controls">
         <button class="primary" data-action="pause">Пауза</button><button data-action="step">Один шаг</button>
         <button data-action="evaluate">Один расчёт ИИ</button><button class="primary" data-action="execute">Рассчитать и выполнить</button>
-        <button data-action="clear-order">Очистить приказ</button><button data-action="reset-unit">Сбросить бойца</button>
+        <button class="primary" data-action="fire-contact">Огонь по контакту</button><button data-action="clear-order">Очистить приказ</button><button data-action="reset-unit">Сбросить бойца</button>
       </div>
       <div class="unit-bar-speed-group">${AI_TEST_TIME_SCALES.map((scale) => `<button data-speed="${scale}">×${scale}</button>`).join('')}</div>
     </section>
@@ -139,6 +140,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   const attentionProfileSelect = q<HTMLSelectElement>('[data-action="unit-attention-profile"]');
   const attentionModeSelect = q<HTMLSelectElement>('[data-action="unit-attention-mode"]');
   const turnUnitButton = q<HTMLButtonElement>('[data-action="turn-unit"]');
+  const fireContactButton = q<HTMLButtonElement>('[data-action="fire-contact"]');
   editorUnitSide.value = state.editor.unitSide;
   editorUnitSide.addEventListener('change', () => {
     state.editor.unitSide = (editorUnitSide.value === 'red' ? 'red' : 'blue') as UnitSide;
@@ -271,6 +273,18 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   q<HTMLButtonElement>('[data-action="step"]').onclick = () => { tickSimulation(state, 0.1); update(false); onChanged(); };
   q<HTMLButtonElement>('[data-action="evaluate"]').onclick = () => { aiBridge.evaluateNow(); update(false); onChanged(); };
   q<HTMLButtonElement>('[data-action="execute"]').onclick = () => { aiBridge.tickNow(); update(false); onChanged(); };
+  fireContactButton.onclick = () => {
+    const unit = getSelectedUnit(state);
+    const contact = unit ? getBestPerceptionContact(unit) : null;
+    if (!unit || !contact || !requestFireAction(state, unit, contact.id)) {
+      if (unit) {
+        unit.behaviorRuntime.reason = contact ? unit.behaviorRuntime.reason : 'Нет личного контакта для стрельбы.';
+        unit.behaviorRuntime.lastEvent = contact ? unit.behaviorRuntime.lastEvent : 'combat_fire_request_missing_contact';
+      }
+    }
+    update(false);
+    onChanged();
+  };
   q<HTMLButtonElement>('[data-action="clear-order"]').onclick = () => { const unit = getSelectedUnit(state); if (unit) unit.order = null; update(false); onChanged(); };
   q<HTMLButtonElement>('[data-action="reset-unit"]').onclick = () => {
     const reset = resetSelectedUnitForTest(state); const unit = getSelectedUnit(state); if (!reset && unit) applyInitialStateToRuntime(unit);
@@ -343,6 +357,11 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
     attentionProfileSelect.disabled = !unit;
     attentionModeSelect.disabled = !unit;
     turnUnitButton.disabled = !unit;
+    const bestFireContact = unit ? getBestPerceptionContact(unit) : null;
+    fireContactButton.disabled = !unit || !bestFireContact?.visibleNow || Boolean(getFireAction(unit));
+    fireContactButton.title = bestFireContact
+      ? `Личный контакт: ${bestFireContact.labelRu} · уверенность ${Math.round(bestFireContact.confidence)}%`
+      : 'Сначала боец должен сам обнаружить противника.';
     const commandTool = getUnitCommandToolState(state);
     turnUnitButton.classList.toggle('active', commandTool.turnToolActive);
     turnUnitButton.setAttribute('aria-pressed', String(commandTool.turnToolActive));
