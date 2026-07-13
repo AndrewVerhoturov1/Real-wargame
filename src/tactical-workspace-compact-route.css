@@ -83,10 +83,10 @@
 .unit-bar-command-group button, .unit-bar-speed-group button, .compact { box-sizing: border-box; min-width: 0; min-height: 22px; height: 22px; padding: 2px 4px; font-size: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 @media (max-width: 1180px) and (min-width: 861px) {
-  :root { --workspace-bottom: 150px; }
+  :root { --workspace-bottom: 154px; }
   .simulation-unit-bar {
-    min-height: 140px;
-    max-height: 150px;
+    min-height: 144px;
+    max-height: 154px;
     grid-template-columns: minmax(95px, .55fr) minmax(220px, 1.55fr) minmax(150px, .8fr);
     grid-template-areas:
       "identity stats stats"
