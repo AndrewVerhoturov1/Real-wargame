@@ -151,4 +151,31 @@ import { getFireAction, requestFireAction } from '../core/combat/FireAction';`,
   },
 ]);
 
-console.log(JSON.stringify({ perceptionChanged, unitModelChanged, damageChanged, decisionChanged, aiBridgeChanged, workspaceChanged }));
+const smokeChanged = await patch('scripts/combat_foundation_smoke.ts', [
+  {
+    label: 'remove direct fire tick import',
+    from: `import {
+  getFireAction,
+  requestFireAction,
+  tickFireAction,
+} from '../src/core/combat/FireAction';`,
+    to: `import {
+  getFireAction,
+  requestFireAction,
+} from '../src/core/combat/FireAction';`,
+  },
+  {
+    label: 'simulation tick import',
+    from: `import { createInitialState } from '../src/core/simulation/SimulationState';`,
+    to: `import { createInitialState } from '../src/core/simulation/SimulationState';
+import { tickSimulation } from '../src/core/simulation/SimulationTick';`,
+  },
+  {
+    label: 'stateful fire real simulation loop',
+    from: `    state.simulationTimeSeconds += 0.05;
+    tickFireAction(state, blue, 0.05);`,
+    to: `    tickSimulation(state, 0.05);`,
+  },
+]);
+
+console.log(JSON.stringify({ perceptionChanged, unitModelChanged, damageChanged, decisionChanged, aiBridgeChanged, workspaceChanged, smokeChanged }));
