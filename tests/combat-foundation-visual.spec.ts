@@ -37,10 +37,14 @@ async function clickUnit(page: Page, canvas: Locator, position: { x: number; y: 
   await page.mouse.click(point.x, point.y);
 }
 
+function sideSelect(page: Page): Locator {
+  return page.locator('.game-editor-body .game-editor-field').filter({ hasText: 'Сторона' }).locator('select');
+}
+
 async function placeUnit(page: Page, canvas: Locator, side: 'blue' | 'red', position: { x: number; y: number }, expectedId: string): Promise<void> {
-  const sideSelect = page.locator('.game-editor-body').getByLabel('Сторона', { exact: true });
-  await sideSelect.selectOption(side);
-  await expect(sideSelect).toHaveValue(side);
+  const selector = sideSelect(page);
+  await selector.selectOption(side);
+  await expect(selector).toHaveValue(side);
   const placeButton = page.locator('.game-editor-global-tools').getByRole('button', { name: 'Поставить бойца' });
   await expect(placeButton).toBeVisible();
   await placeButton.click();
@@ -77,7 +81,7 @@ test('visually verifies two hostile sides, personal contact and stateful rifle f
   await page.locator('[data-mode="editor"]').click();
   await expect(page.locator('body')).toHaveClass(/workspace-editor/);
   await page.locator('.game-editor-tabs').getByRole('button', { name: 'Боец', exact: true }).click();
-  await expect(page.locator('.game-editor-body').getByLabel('Сторона', { exact: true })).toBeVisible();
+  await expect(sideSelect(page)).toBeVisible();
   await expect(page.locator('[data-action="editor-unit-side"]')).toHaveCount(0);
   await placeUnit(page, canvas, 'blue', BLUE_SPAWN, 'editor_unit_1');
   await placeUnit(page, canvas, 'red', RED_SPAWN, 'editor_unit_2');
