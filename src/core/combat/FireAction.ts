@@ -7,6 +7,7 @@ import { traceProjectile, hasFriendlyUnitBeforeDistance, type BallisticRayResult
 import { evaluateFireRequest, getAimPoint, getMuzzlePoint } from './CombatDecision';
 import { applyUnitHit, getCombatAimMultiplier, isUnitCombatCapable } from './CombatDamage';
 import { drainDueCombatEvents, queueCombatEvent } from './CombatEvents';
+import { isFireAllowed } from './CombatRules';
 import { normalizeDirection, type BallisticDirection3, type BallisticPoint3 } from './UnitHitShapes';
 import {
   getWeaponDefinition,
@@ -48,6 +49,11 @@ const actionByUnit = new WeakMap<UnitModel, FireActionState>();
 const lastShotByUnit = new WeakMap<UnitModel, LastShotResult>();
 
 export function requestFireAction(state: SimulationState, unit: UnitModel, contactId: string): boolean {
+  if (!isFireAllowed(state)) {
+    unit.behaviorRuntime.reason = 'Стрельба запрещена общим переключателем.';
+    unit.behaviorRuntime.lastEvent = 'combat_fire_permission_denied';
+    return false;
+  }
   if (actionByUnit.has(unit) || !isUnitCombatCapable(unit)) return false;
   const decision = evaluateFireRequest(state, unit, contactId);
   if (!decision.allowed) {
@@ -100,6 +106,10 @@ export function tickFireAction(state: SimulationState, unit: UnitModel, deltaSec
   recoverWeapon(unit, deltaSeconds);
   const action = actionByUnit.get(unit);
   if (!action || deltaSeconds <= 0) return;
+  if (!isFireAllowed(state) && action.phase !== 'recovering') {
+    cancelFireAction(unit, 'Fire permission was disabled.', 'Стрельба запрещена до выстрела.');
+    return;
+  }
   if (!isUnitCombatCapable(unit)) {
     cancelFireAction(unit, 'Shooter is no longer combat capable.', 'Боец больше не способен вести огонь.');
     return;
