@@ -1,0 +1,50 @@
+name: Apply Graph v2 editor layout fix
+
+on:
+  push:
+    branches:
+      - feat/ai-graph-v2-contracts-subgraphs-2026-07-13
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: contains(github.event.head_commit.message, 'apply Graph v2 editor layout fix')
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Apply verified layout regression fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --index scripts/graph-v2-editor-layout-fix.patch
+          rm scripts/graph-v2-editor-layout-fix.patch
+          git checkout HEAD -- .github/workflows
+
+      - name: Verify editor layout fix
+        run: |
+          npm ci
+          npm run node-contract-ui:smoke
+          npm run editor:smoke
+          npm run build
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git add -A
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(editor): preserve graph workspace below Graph v2 banner'
+          git push origin HEAD:feat/ai-graph-v2-contracts-subgraphs-2026-07-13
