@@ -12,6 +12,10 @@ import {
   readRouteCostCell,
 } from '../src/core/navigation/RouteCostField';
 import {
+  getDirectionalTerrainPositionQueryDiagnostics,
+  queryDirectionalTerrainPositions,
+} from '../src/core/terrain/DirectionalTerrainPositionQuery';
+import {
   getDirectionalTerrainStaticGrid,
   sampleDirectionalSlope,
 } from '../src/core/terrain/DirectionalTerrainStaticGrid';
@@ -19,13 +23,17 @@ import {
   buildThreatDirectionField,
   threatSectorBearingRadians,
 } from '../src/core/terrain/ThreatDirectionField';
+import { evaluateTerrainVisibilityRay } from '../src/core/visibility/VisibilityRaycast';
+import { getVisibilityStaticGrid } from '../src/core/visibility/VisibilityStaticGrid';
 
 verifyStaticSlopeDirectionAndCache();
 verifyThreatSectorsAndUncertainty();
 verifyProfileMigration();
 verifyDirectionalRouteCostsAndCacheSeparation();
+verifyExactTerrainVisibility();
+verifyLocalTacticalPositionQuery();
 
-console.log('Directional terrain smoke passed: cached terrain derivatives, eight-sector subjective threats, profile migration and route-cost integration.');
+console.log('Directional terrain smoke passed: cached derivatives, eight-sector subjective threats, exact visibility, local position queries, profile migration and route-cost integration.');
 
 function verifyStaticSlopeDirectionAndCache(): void {
   const flat = normalizeMap(makeMap(7, 5, () => 2));
@@ -113,6 +121,63 @@ function verifyDirectionalRouteCostsAndCacheSeparation(): void {
   diagnostics = getRouteCostFieldDiagnostics(cache);
   assert.equal(diagnostics.staticCostBuildCount, staticBuildsBeforeKnowledgeChange, 'knowledge changes must not rebuild static terrain costs');
   assert.equal(diagnostics.dynamicCostBuildCount, dynamicBuildsBeforeKnowledgeChange + 1, 'knowledge changes must rebuild the dynamic directional field once');
+}
+
+function verifyExactTerrainVisibility(): void {
+  const flat = normalizeMap(makeMap(7, 3, () => 0));
+  const flatResult = evaluateTerrainVisibilityRay(
+    getVisibilityStaticGrid(flat),
+    { x: 0.5, y: 1.5 },
+    { x: 6.5, y: 1.5 },
+    1.6,
+    1.7,
+    flat.metersPerCell,
+  );
+  assert.equal(flatResult.visible, true, 'flat terrain must preserve direct visibility');
+
+  const ridge = normalizeMap(makeMap(7, 3, (x) => x === 3 ? 4 : 0));
+  const ridgeResult = evaluateTerrainVisibilityRay(
+    getVisibilityStaticGrid(ridge),
+    { x: 0.5, y: 1.5 },
+    { x: 6.5, y: 1.5 },
+    1.6,
+    1.7,
+    ridge.metersPerCell,
+  );
+  assert.equal(ridgeResult.visible, false, 'a high intermediate ridge must block the exact ray');
+  assert.equal(ridgeResult.blockedBy, 'terrain');
+  assert.ok(ridgeResult.occlusionDepthMeters > 1);
+}
+
+function verifyLocalTacticalPositionQuery(): void {
+  const map = normalizeMap(makeMap(13, 7, (x) => [0, 0, 1, 2, 3, 4, 5, 4, 3, 2, 1, 0, 0][x]));
+  const registry = createDefaultNavigationProfileRegistry();
+  const options = {
+    unitId: 'position-query-soldier',
+    origin: { x: 6.5, y: 3.5 },
+    posture: 'crouched' as const,
+    threats: [threat('east-observer', 12.5, 3.5, 100, 0.25)],
+    knowledgeRevision: 4,
+    profile: registry.getProfile('stealth'),
+    radiusCells: 6,
+    roughCandidateLimit: 20,
+    exactCandidateLimit: 8,
+  };
+  const first = queryDirectionalTerrainPositions(map, options);
+  const diagnosticsAfterFirst = getDirectionalTerrainPositionQueryDiagnostics(map);
+  assert.ok(first.bestReverseSlopePosition, 'query should find a reverse-slope candidate');
+  assert.ok((first.bestReverseSlopePosition?.position.x ?? 99) < 6.5, 'eastern threat should prefer the western reverse slope');
+  assert.ok(first.bestHiddenRetreatPosition);
+  assert.ok(first.exactCandidateCount <= 8);
+  assert.ok(diagnosticsAfterFirst.exactRayCount <= 9, 'one current ray plus at most eight exact candidate rays are allowed');
+  assert.ok(diagnosticsAfterFirst.roughCellCount < map.width * map.height, 'local query must not scan the whole map on this scenario');
+
+  const second = queryDirectionalTerrainPositions(map, options);
+  const diagnosticsAfterSecond = getDirectionalTerrainPositionQueryDiagnostics(map);
+  assert.equal(second, first, 'same revisions and quantized origin must reuse the report object');
+  assert.equal(diagnosticsAfterSecond.buildCount, diagnosticsAfterFirst.buildCount);
+  assert.equal(diagnosticsAfterSecond.exactRayCount, diagnosticsAfterFirst.exactRayCount, 'cache hits must not cast new exact rays');
+  assert.equal(diagnosticsAfterSecond.cacheHitCount, diagnosticsAfterFirst.cacheHitCount + 1);
 }
 
 function threat(id: string, x: number, y: number, confidence: number, uncertaintyCells: number) {
