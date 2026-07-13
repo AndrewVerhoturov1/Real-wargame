@@ -12,14 +12,14 @@
   "subprojects": [
     {
       "id": "ai-single-unit-editor",
-      "title": "AI Single-Unit Editor — Stateful Tactical Awareness Lab",
+      "title": "AI Single-Unit Editor — Stateful Tactical Awareness, Hierarchical States and Plans",
       "status": "active",
-      "updated_at": "2026-07-13",
+      "updated_at": "2026-07-14",
       "goal": "Создать понятную человеку лабораторию поведения одиночного бойца: Utility AI выбирает решение, stateful runtime исполняет длительные действия, общий A* ведёт бойца по карте, постоянные профили маршрута задают стоимость местности, а гибридная система обзора и внимания формирует субъективные визуальные и звуковые контакты без всезнания ИИ.",
-      "current_focus": "Graph v2 собран в чистое transfer-дерево `transfer/ai-graph-v2-preview-2026-07-13` поверх актуального `real-wargame-preview` `db80f36edaf018c6a45dfeb7cc0f7caaed00bdb5`: единый реестр 36 контрактов, типизированные порты, строгая проверка, миграция Graph v1, пять областей памяти, WaitForEvent/Timeout/Retry, четыре сохраняемых подграфа и русский интерфейс без обязательного JSON. Обязательная локальная Chromium-проверка выявила и исправила два дефекта: выбор подграфа теперь сохраняется из русской панели, а навигационная цепочка не дублирует название.",
-      "next_step": "Опубликовать чистую ветку `transfer/ai-graph-v2-preview-2026-07-13`, открыть PR в `real-wargame-preview` и выполнить SHA-привязанную системную Chrome-проверку. После зелёных CI и осмотра свежих PNG ветка готова к переносу; `main` не менять.",
+      "current_focus": "Finish and validate the first State → Utility → Plan → Subgraph vertical slice on the temporary branch without mixing in the parallel shooting implementation.",
+      "next_step": "Complete the full required regression and docs checks, remove temporary patch/validation infrastructure, close validation PR #94 without merging, then ask for explicit visual-QA approval. Do not transfer to preview without a separate user command.",
       "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-      "last_verified_commit": "02a43f233d1618b7b8b2331869d34e9b12bbec9e",
+      "last_verified_commit": "pending-final-validation-on-feat-ai-state-plan-v1-temp-2026-07-14",
       "superseded_by": null,
       "status_path": "docs/subprojects/ai-single-unit-editor/STATUS.md",
       "metadata_path": "docs/subprojects/ai-single-unit-editor/subproject.json"

@@ -1,12 +1,12 @@
 <!-- GENERATED FILE. Edit docs/subprojects/ai-single-unit-editor/subproject.json, then run npm run docs:generate. -->
-# AI Single-Unit Editor — Stateful Tactical Awareness Lab — Current Status
+# AI Single-Unit Editor — Stateful Tactical Awareness, Hierarchical States and Plans — Current Status
 
 - **ID:** `ai-single-unit-editor`
 - **Status:** `active`
-- **Updated:** 2026-07-13
+- **Updated:** 2026-07-14
 - **Working branch:** `real-wargame-preview`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
-- **Last verified commit:** `02a43f233d1618b7b8b2331869d34e9b12bbec9e`
+- **Last verified commit:** `pending-final-validation-on-feat-ai-state-plan-v1-temp-2026-07-14`
 
 ## Goal
 
@@ -14,14 +14,16 @@
 
 ## Current focus
 
-Graph v2 собран в чистое transfer-дерево `transfer/ai-graph-v2-preview-2026-07-13` поверх актуального `real-wargame-preview` `db80f36edaf018c6a45dfeb7cc0f7caaed00bdb5`: единый реестр 36 контрактов, типизированные порты, строгая проверка, миграция Graph v1, пять областей памяти, WaitForEvent/Timeout/Retry, четыре сохраняемых подграфа и русский интерфейс без обязательного JSON. Обязательная локальная Chromium-проверка выявила и исправила два дефекта: выбор подграфа теперь сохраняется из русской панели, а навигационная цепочка не дублирует название.
+Finish and validate the first State → Utility → Plan → Subgraph vertical slice on the temporary branch without mixing in the parallel shooting implementation.
 
 ## Next step
 
-Опубликовать чистую ветку `transfer/ai-graph-v2-preview-2026-07-13`, открыть PR в `real-wargame-preview` и выполнить SHA-привязанную системную Chrome-проверку. После зелёных CI и осмотра свежих PNG ветка готова к переносу; `main` не менять.
+Complete the full required regression and docs checks, remove temporary patch/validation infrastructure, close validation PR #94 without merging, then ask for explicit visual-QA approval. Do not transfer to preview without a separate user command.
 
 ## Read first
 
+- `docs/subprojects/ai-single-unit-editor/HIERARCHICAL_STATES_AND_PLANS_V1.md`
+- `docs/superpowers/plans/2026-07-14-ai-state-plan-v1.md`
 - `docs/subprojects/ai-single-unit-editor/VIEW_AND_MEMORY_HEATMAP_V1.md`
 - `docs/superpowers/plans/2026-07-13-view-memory-heatmap.md`
 - `docs/ai/WEB_CHAT_START.md`
@@ -112,9 +114,20 @@ Graph v2 собран в чистое transfer-дерево `transfer/ai-graph-v
 - `src/core/ai/runtime/AiSubgraphRuntime.ts`
 - `src/ai-node-editor/node-contract-ui.ts`
 - `src/ai-node-editor/subgraph-ui.ts`
+- `src/core/ai/state/AiStateMachine.ts`
+- `src/core/ai/state/AiStateRuntime.ts`
+- `src/core/ai/state/AiPlan.ts`
+- `src/core/ai/state/AiPlanRuntime.ts`
+- `src/core/ai/state/AiStatePlanPipeline.ts`
+- `src/ui/AiStatePlanPanel.ts`
+- `src/ai-node-editor/state-machine-ui.ts`
+- `src/testing/AiStatePlanVisualQaHarness.ts`
 
 ## Suggested verification
 
+- `npm run state-machine:smoke`
+- `npm run plan-runtime:smoke`
+- `npm run state-plan-scenario:smoke`
 - `npm run threat-display-stability:smoke`
 - `npm run movement-facing:smoke`
 - `npm run attention-profiles:smoke`
@@ -174,3 +187,9 @@ Graph v2 собран в чистое transfer-дерево `transfer/ai-graph-v
 - Поле выбранного бойца хранится в Uint8Array и выводится одним растровым Sprite, а не объектом на каждую клетку.
 - Случайность обнаружения детерминирована контактом, ограничена профилем и не зависит от FPS.
 - Не переносить feat/view-memory-heatmap-temp в real-wargame-preview без отдельной команды пользователя.
+- Only one AiPlan may be active for the soldier in this vertical slice.
+- An emergency state transition must cancel an incompatible plan before replacement selection.
+- Plan steps reuse Graph v2 subgraphs and the existing action owner token; never create a second movement runtime.
+- A restored running plan step must continue update without repeating start or cleanup.
+- Do not mix the parallel shooting implementation into this temporary branch.
+- Do not transfer this branch to real-wargame-preview without an explicit user command.
