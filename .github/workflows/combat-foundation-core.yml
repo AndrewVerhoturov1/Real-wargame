@@ -1,0 +1,35 @@
+name: Combat Foundation Core
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - 'src/core/combat/**'
+      - 'src/core/perception/**'
+      - 'src/core/simulation/**'
+      - 'src/core/units/**'
+      - 'src/core/ai/AiGameBridge.ts'
+      - 'scripts/combat_foundation_smoke.*'
+      - 'package.json'
+      - '.github/workflows/combat-foundation-core.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  combat-foundation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run combat-foundation:smoke
+      - run: npm run perception:smoke
+      - run: npm run runtime:smoke
+      - run: npm run reload:smoke
+      - run: npm run build
