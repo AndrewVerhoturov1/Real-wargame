@@ -18,6 +18,17 @@ export function installCombatControls(
   button.dataset.action = 'toggle-fire-permission';
   controls.prepend(button);
 
+  const manualFireButton = controls.querySelector<HTMLButtonElement>('[data-action="fire-contact"]');
+  const syncManualFireButton = (allowed = isFireAllowed(state)) => {
+    if (!manualFireButton || allowed) return;
+    const contactTitle = manualFireButton.title.replace(/^Стрельба запрещена\.\s*/, '');
+    const nextTitle = contactTitle.startsWith('Личный контакт:')
+      ? `Стрельба запрещена. ${contactTitle}`
+      : 'Стрельба запрещена общим переключателем. Сначала боец должен сам обнаружить противника.';
+    if (!manualFireButton.disabled) manualFireButton.disabled = true;
+    if (manualFireButton.title !== nextTitle) manualFireButton.title = nextTitle;
+  };
+
   const update = () => {
     const allowed = isFireAllowed(state);
     button.textContent = allowed ? 'Стрельба: разрешена' : 'Стрельба: запрещена';
@@ -29,16 +40,6 @@ export function installCombatControls(
     syncManualFireButton(allowed);
   };
 
-  const syncManualFireButton = (allowed = isFireAllowed(state)) => {
-    const manual = controls.querySelector<HTMLButtonElement>('[data-action="fire-contact"]');
-    if (!manual || allowed) return;
-    const contactTitle = manual.title.replace(/^Стрельба запрещена\.\s*/, '');
-    manual.disabled = true;
-    manual.title = contactTitle.startsWith('Личный контакт:')
-      ? `Стрельба запрещена. ${contactTitle}`
-      : 'Стрельба запрещена общим переключателем. Сначала боец должен сам обнаружить противника.';
-  };
-
   const onClick = () => {
     void unlockCombatAudio();
     setFireAllowed(state, !isFireAllowed(state));
@@ -46,12 +47,21 @@ export function installCombatControls(
     onChanged();
   };
 
+  const manualButtonObserver = manualFireButton
+    ? new MutationObserver(() => syncManualFireButton())
+    : null;
+  if (manualFireButton) {
+    manualButtonObserver?.observe(manualFireButton, {
+      attributes: true,
+      attributeFilter: ['disabled', 'title'],
+    });
+  }
+
   button.addEventListener('click', onClick);
-  const syncTimer = window.setInterval(update, 120);
   update();
 
   return () => {
-    window.clearInterval(syncTimer);
+    manualButtonObserver?.disconnect();
     button.removeEventListener('click', onClick);
     button.remove();
   };
