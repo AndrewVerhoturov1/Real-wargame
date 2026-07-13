@@ -54,14 +54,15 @@ export function installRouteCostOverlayUi(
   displayPanel?.append(controls);
 
   const overlay = getRouteCostOverlayState(state);
-  mode.value = overlay.mode;
+  mode.value = overlay.mode === 'directionalTerrain' ? 'finalCost' : overlay.mode;
   updateToggle(menuToggle, overlay.active, 'Стоимость маршрута');
   if (quickToggle) updateToggle(quickToggle, overlay.active, 'Карта стоимости');
   updateStatus(profileStatus, routeCostStatus, routeReasonStatus, getSelectedUnit(state));
 
   const interval = window.setInterval(() => {
     const current = getRouteCostOverlayState(state);
-    if (mode.value !== current.mode) mode.value = current.mode;
+    const visibleMode = current.mode === 'directionalTerrain' ? 'finalCost' : current.mode;
+    if (mode.value !== visibleMode) mode.value = visibleMode;
     updateToggle(menuToggle, current.active, 'Стоимость маршрута');
     if (quickToggle) updateToggle(quickToggle, current.active, 'Карта стоимости');
     updateStatus(profileStatus, routeCostStatus, routeReasonStatus, getSelectedUnit(state));
@@ -106,9 +107,13 @@ function updateStatus(
   const detour = order.detourRatio === undefined
     ? '—'
     : `${Math.round(Math.max(0, order.detourRatio - 1) * 100)}%${order.detourLimited ? ' · ограничен' : ''}`;
+  const directionalCost = order.pathCostBreakdown?.directionalTerrainCost;
+  const directionalSummary = directionalCost === undefined
+    ? ''
+    : ` · учёт рельефа: ${formatSignedNumber(directionalCost)}`;
   setText(
     costElement,
-    `Цена: ${formatNumber(order.pathCost)} · длина: ${formatMeters(order.pathDistanceMeters)} · обход: +${detour} · перестроений: ${order.replanCount ?? 0}`,
+    `Цена: ${formatNumber(order.pathCost)} · длина: ${formatMeters(order.pathDistanceMeters)} · обход: +${detour}${directionalSummary} · перестроений: ${order.replanCount ?? 0}`,
   );
   setText(reasonElement, `Причина: ${order.pathReasonRu ?? 'нет диагностической сводки'}`);
 }
@@ -133,6 +138,11 @@ function sourceLabel(source: string): string {
 
 function formatNumber(value: number | undefined): string {
   return value === undefined ? '—' : value.toFixed(1).replace('.', ',');
+}
+
+function formatSignedNumber(value: number): string {
+  const prefix = value > 0.0005 ? '+' : '';
+  return `${prefix}${value.toFixed(1).replace('.', ',')}`;
 }
 
 function formatMeters(value: number | undefined): string {

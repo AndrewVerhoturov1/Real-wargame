@@ -104,17 +104,23 @@ expectIncludes('src/ui/WorkspaceTooltipGuard.ts', [
 
 expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
   'buildAwarenessField', 'buildBestSafePositions', 'buildRouteKey',
-  'Movement does not invalidate the expensive map field',
+  'getDirectionalTacticalField', 'readDirectionalTacticalCell',
+  'readDirectionalProtectionForBearing', 'readDirectionalExposureForBearing',
   'buildAwarenessKnowledgeKey', 'KNOWLEDGE_CONFIDENCE_BUCKET', 'KNOWLEDGE_UNCERTAINTY_BUCKET',
   'evaluateAwarenessFieldCell', 'getAwarenessStaticField', 'evaluateRouteDangerFromField',
+  'reverseSlopeQuality', 'terrainConcealment', 'silhouetteRisk',
 ]);
 expectExcludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
-  'const orderCellX', 'const orderCellY', 'unit.tacticalKnowledge.revision',
+  'const orderCellX', 'const orderCellY',
   'evaluateSmallArmsCover', 'getCachedCover', 'coverCacheByMap', 'buildMapHash',
 ]);
 expectIncludes('src/core/knowledge/AwarenessStaticField.ts', [
   'getAwarenessStaticField', 'estimateLocalProtection', 'Uint8Array',
   'getMapObjectSpatialIndex', 'getMapRevisionSnapshot',
+]);
+expectIncludes('src/core/terrain/DirectionalTacticalField.ts', [
+  'sectorProtection', 'sectorExposure', 'terrainProtection', 'terrainConcealment',
+  'ORIGIN_BUCKET_CELLS', 'getDirectionalTacticalFieldDiagnostics',
 ]);
 
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [

@@ -17,6 +17,10 @@ import {
   markRouteCostTextureUploaded,
   readRouteCostCell,
 } from '../src/core/navigation/RouteCostField';
+import {
+  getDirectionalTacticalField,
+  getDirectionalTacticalFieldDiagnostics,
+} from '../src/core/terrain/DirectionalTacticalField';
 
 void main();
 
@@ -26,8 +30,9 @@ async function main(): Promise<void> {
   verifyMapIdentityIsolation();
   verifyProfileSwitchInvalidatesField();
   verifyHoverAndTextureCounters();
+  verifySharedDirectionalFieldMovementBucket();
   await verifyRendererBoundary();
-  console.log('Navigation overlay contract smoke passed: storage, map identity, typed-array hover, texture counters and renderer/A* separation.');
+  console.log('Navigation overlay contract smoke passed: storage, map identity, typed-array hover, movement-stable shared terrain cache, hidden directional diagnostics, texture counters and renderer/A* separation.');
 }
 
 function verifySelectedPlayerProfileResolution(): void {
@@ -90,7 +95,7 @@ function verifyProfileSwitchInvalidatesField(): void {
   const fastCell = readRouteCostCell(fastFields, cellX, cellY, cache);
   const stealthCell = readRouteCostCell(stealthFields, cellX, cellY, cache);
   assert.ok(fastCell && stealthCell);
-  assert.notEqual(fastCell.terrainCost, stealthCell.terrainCost, 'fast and stealth must have different terrain costs for the same cell');
+  assert.notEqual(fastCell?.terrainCost, stealthCell?.terrainCost, 'fast and stealth must have different terrain costs for the same cell');
 
   const diagnostics = getRouteCostFieldDiagnostics(cache);
   assert.equal(diagnostics.staticCostBuildCount, 2, 'switching between fast and stealth must rebuild both static fields');
@@ -102,9 +107,26 @@ function verifyHoverAndTextureCounters(): void {
   const map = normalizeMap(makeMap([]));
   const fields = getRouteCostFields(map, registry.getProfile('stealth'), {
     unitId: 'unit-1',
+    originX: 1.5,
+    originY: 1.5,
     knowledgeRevision: 3,
-    knownThreats: [],
+    knownThreats: [{
+      id: 'east-threat',
+      x: 5.5,
+      y: 1.5,
+      radiusCells: 1,
+      widthCells: 0,
+      heightCells: 0,
+      rotationDegrees: 0,
+      mode: 'area',
+      strength: 100,
+      suppression: 80,
+      confidence: 90,
+      uncertaintyCells: 0.5,
+    }],
   }, cache);
+  assert.equal(fields.availability.directionalTerrain, true);
+  assert.equal(fields.threatSectorWeights.length, 8);
   const before = getRouteCostFieldDiagnostics(cache);
   readRouteCostCell(fields, 1, 1, cache);
   readRouteCostCell(fields, 2, 1, cache);
@@ -117,10 +139,58 @@ function verifyHoverAndTextureCounters(): void {
   assert.equal(after.dynamicCostBuildCount, before.dynamicCostBuildCount, 'hover must not rebuild dynamic cost');
 }
 
+function verifySharedDirectionalFieldMovementBucket(): void {
+  const map = normalizeMap(makeMap([]));
+  const threat = {
+    id: 'stable-east-threat',
+    x: 5.5,
+    y: 1.5,
+    strength: 100,
+    suppression: 80,
+    confidence: 90,
+    uncertaintyCells: 0.5,
+  };
+  const first = getDirectionalTacticalField(map, {
+    unitId: 'stable-unit',
+    originX: 1.1,
+    originY: 1.1,
+    knowledgeRevision: 1,
+    threats: [threat],
+  });
+  const afterFirst = getDirectionalTacticalFieldDiagnostics(map);
+  const sameBucket = getDirectionalTacticalField(map, {
+    unitId: 'stable-unit',
+    originX: 1.4,
+    originY: 1.4,
+    knowledgeRevision: 999,
+    threats: [threat],
+  });
+  const afterSameBucket = getDirectionalTacticalFieldDiagnostics(map);
+  assert.equal(sameBucket, first, 'small movement and metadata-only knowledge revisions must reuse the shared full-map field');
+  assert.equal(afterSameBucket.buildCount, afterFirst.buildCount);
+  assert.equal(afterSameBucket.cacheHitCount, afterFirst.cacheHitCount + 1);
+
+  getDirectionalTacticalField(map, {
+    unitId: 'stable-unit',
+    originX: 2.1,
+    originY: 1.1,
+    knowledgeRevision: 1000,
+    threats: [threat],
+  });
+  const afterNextBucket = getDirectionalTacticalFieldDiagnostics(map);
+  assert.equal(afterNextBucket.buildCount, afterFirst.buildCount + 1, 'crossing a whole-cell origin bucket must build exactly one new field');
+}
+
 async function verifyRendererBoundary(): Promise<void> {
   const source = await readFile('src/rendering/PixiRouteCostOverlayRenderer.ts', 'utf8');
+  const uiSource = await readFile('src/ui/RouteCostOverlayUi.ts', 'utf8');
   assert.doesNotMatch(source, /GridPathfinder|findGridPath|runAStar/, 'renderer must not import or start A*');
   assert.match(source, /representation: 'two-raster-sprites'/);
+  assert.match(source, /directionalTerrainColor/);
+  assert.match(source, /dynamicTextureKey = `\$\{fields\.cacheKey\}:\$\{dynamicMode\}`/);
+  assert.match(source, /Направленный рельеф/);
+  assert.doesNotMatch(uiSource, /option value="directionalTerrain"/, 'standalone directional terrain must stay an internal diagnostic, not a normal player layer');
+  assert.match(uiSource, /учёт рельефа/);
   assert.match(source, /fontSize: 8/);
   assert.match(source, /strokeThickness: 2/);
   assert.match(source, /this\.legend\.resolution = ROUTE_TEXT_RESOLUTION/);

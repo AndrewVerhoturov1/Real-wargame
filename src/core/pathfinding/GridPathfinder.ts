@@ -28,6 +28,7 @@ export interface GridPathCostBreakdown {
   readonly slopeCost: number;
   readonly dangerCost: number;
   readonly exposureCost: number;
+  readonly directionalTerrainCost: number;
   readonly coverAdjustment: number;
   readonly enemyDistanceCost: number;
   readonly territoryCost: number;
@@ -372,6 +373,7 @@ function calculatePathCostBreakdown(
     slopeCost: 0,
     dangerCost: 0,
     exposureCost: 0,
+    directionalTerrainCost: 0,
     coverAdjustment: 0,
     enemyDistanceCost: 0,
     territoryCost: 0,
@@ -386,6 +388,7 @@ function calculatePathCostBreakdown(
     addAverage(breakdown, 'slopeCost', fields.slopeCost, previousIndex, currentIndex, stepLength);
     addAverage(breakdown, 'dangerCost', fields.dangerCost, previousIndex, currentIndex, stepLength);
     addAverage(breakdown, 'exposureCost', fields.exposureCost, previousIndex, currentIndex, stepLength);
+    addAverage(breakdown, 'directionalTerrainCost', fields.directionalTerrainCost, previousIndex, currentIndex, stepLength);
     addAverage(breakdown, 'coverAdjustment', fields.coverAdjustment, previousIndex, currentIndex, stepLength);
     addAverage(breakdown, 'enemyDistanceCost', fields.enemyDistanceCost, previousIndex, currentIndex, stepLength);
     addAverage(breakdown, 'territoryCost', fields.territoryCost, previousIndex, currentIndex, stepLength);
@@ -409,6 +412,7 @@ function sumBreakdown(value: GridPathCostBreakdown): number {
     + value.slopeCost
     + value.dangerCost
     + value.exposureCost
+    + value.directionalTerrainCost
     + value.coverAdjustment
     + value.enemyDistanceCost
     + value.territoryCost);
@@ -420,6 +424,7 @@ function roundBreakdown(value: GridPathCostBreakdown): GridPathCostBreakdown {
     slopeCost: round(value.slopeCost, 6),
     dangerCost: round(value.dangerCost, 6),
     exposureCost: round(value.exposureCost, 6),
+    directionalTerrainCost: round(value.directionalTerrainCost, 6),
     coverAdjustment: round(value.coverAdjustment, 6),
     enemyDistanceCost: round(value.enemyDistanceCost, 6),
     territoryCost: round(value.territoryCost, 6),
@@ -446,6 +451,7 @@ function buildRouteReason(
   const weighted: Array<[number, string, string]> = [
     [Math.max(0, breakdown.dangerCost), 'known danger avoidance', 'избегание известной опасности'],
     [Math.max(0, breakdown.exposureCost), 'exposure avoidance', 'избегание просматриваемых мест'],
+    [Math.max(0, breakdown.directionalTerrainCost), 'directional terrain protection', 'использование обратных склонов и укрытия рельефом'],
     [Math.max(0, -breakdown.coverAdjustment), 'cover preference', 'предпочтение укрытий'],
     [Math.max(0, breakdown.slopeCost), 'slope cost', 'штраф за уклон'],
   ];
@@ -589,32 +595,34 @@ class BinaryHeap {
     if (this.values.length === 0) return undefined;
     const first = this.values[0];
     const last = this.values.pop();
-    if (this.values.length > 0 && last) {
+    if (last && this.values.length > 0) {
       this.values[0] = last;
       this.sinkDown(0);
     }
     return first;
   }
 
-  private bubbleUp(index: number): void {
+  private bubbleUp(startIndex: number): void {
+    let index = startIndex;
     while (index > 0) {
-      const parentIndex = Math.floor((index - 1) / 2);
-      if (compareNodes(this.values[parentIndex], this.values[index]) <= 0) break;
-      [this.values[parentIndex], this.values[index]] = [this.values[index], this.values[parentIndex]];
-      index = parentIndex;
+      const parent = Math.floor((index - 1) / 2);
+      if (compareNodes(this.values[parent], this.values[index]) <= 0) break;
+      [this.values[parent], this.values[index]] = [this.values[index], this.values[parent]];
+      index = parent;
     }
   }
 
-  private sinkDown(index: number): void {
+  private sinkDown(startIndex: number): void {
+    let index = startIndex;
     while (true) {
       const left = index * 2 + 1;
       const right = left + 1;
-      let best = index;
-      if (left < this.values.length && compareNodes(this.values[left], this.values[best]) < 0) best = left;
-      if (right < this.values.length && compareNodes(this.values[right], this.values[best]) < 0) best = right;
-      if (best === index) break;
-      [this.values[index], this.values[best]] = [this.values[best], this.values[index]];
-      index = best;
+      let smallest = index;
+      if (left < this.values.length && compareNodes(this.values[left], this.values[smallest]) < 0) smallest = left;
+      if (right < this.values.length && compareNodes(this.values[right], this.values[smallest]) < 0) smallest = right;
+      if (smallest === index) break;
+      [this.values[index], this.values[smallest]] = [this.values[smallest], this.values[index]];
+      index = smallest;
     }
   }
 }

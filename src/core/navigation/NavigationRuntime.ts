@@ -25,6 +25,8 @@ export function resolveUnitNavigationProfile(
 export function buildUnitTacticalRouteContext(unit: UnitModel): TacticalRouteContext {
   return {
     unitId: unit.id,
+    originX: unit.position.x,
+    originY: unit.position.y,
     knowledgeRevision: unit.tacticalKnowledge.revision,
     knownThreats: unit.tacticalKnowledge.threats.map((threat) => ({
       id: threat.id,

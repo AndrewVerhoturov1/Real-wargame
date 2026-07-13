@@ -2,6 +2,14 @@ import type { UnitPosture } from '../behavior/BehaviorModel';
 import { distance, type GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
 import type { SimulationState } from '../simulation/SimulationState';
+import {
+  getDirectionalTacticalField,
+  readDirectionalExposureForBearing,
+  readDirectionalProtectionForBearing,
+  readDirectionalTacticalCell,
+  type DirectionalTacticalField,
+  type DirectionalTacticalCell,
+} from '../terrain/DirectionalTacticalField';
 import type { KnownThreatMemory, UnitModel } from '../units/UnitModel';
 import {
   getAwarenessStaticCell,
@@ -22,6 +30,14 @@ export interface SoldierAwarenessCell {
   uncertainty: number;
   safety: number;
   confidence: number;
+  terrainProtection: number;
+  terrainConcealment: number;
+  reverseSlopeQuality: number;
+  forwardSlopeRisk: number;
+  crestRisk: number;
+  silhouetteRisk: number;
+  valleyProtection: number;
+  flankExposure: number;
   sourceRu: string;
 }
 
@@ -77,11 +93,18 @@ export function buildSoldierAwarenessReport(
   unit: UnitModel,
 ): SoldierAwarenessReport {
   const staticField = getAwarenessStaticField(state.map, unit.behaviorRuntime.posture);
-  const key = buildCacheKey(state, unit, staticField.key);
+  const directionalField = getDirectionalTacticalField(state.map, {
+    unitId: unit.id,
+    originX: unit.position.x,
+    originY: unit.position.y,
+    knowledgeRevision: unit.tacticalKnowledge.revision,
+    threats: unit.tacticalKnowledge.threats,
+  });
+  const key = buildCacheKey(state, unit, staticField.key, directionalField.key);
   let cached = cache.get(unit);
 
   if (!cached || cached.key !== key) {
-    const field = buildAwarenessField(state, unit, key, staticField);
+    const field = buildAwarenessField(state, unit, key, staticField, directionalField);
     cached = {
       key,
       field,
@@ -123,6 +146,7 @@ function buildAwarenessField(
   unit: UnitModel,
   key: string,
   staticField: AwarenessStaticField,
+  directionalField: DirectionalTacticalField,
 ): AwarenessField {
   const cells: SoldierAwarenessCell[] = new Array(state.map.width * state.map.height);
   for (let y = 0; y < state.map.height; y += 1) {
@@ -131,6 +155,7 @@ function buildAwarenessField(
         unit,
         { x: x + 0.5, y: y + 0.5 },
         staticField,
+        directionalField,
       );
     }
   }
@@ -193,13 +218,20 @@ export function evaluateRouteDanger(
   end: GridPosition,
 ): number {
   const staticField = getAwarenessStaticField(state.map, unit.behaviorRuntime.posture);
+  const directionalField = getDirectionalTacticalField(state.map, {
+    unitId: unit.id,
+    originX: unit.position.x,
+    originY: unit.position.y,
+    knowledgeRevision: unit.tacticalKnowledge.revision,
+    threats: unit.tacticalKnowledge.threats,
+  });
   const lengthMeters = distance(start, end) * state.map.metersPerCell;
   const samples = Math.max(2, Math.ceil(lengthMeters / ROUTE_SAMPLE_STEP_METERS));
   let total = 0;
   for (let index = 0; index <= samples; index += 1) {
     const t = index / samples;
     const point = { x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t };
-    total += evaluateAwarenessFieldCell(unit, point, staticField).danger;
+    total += evaluateAwarenessFieldCell(unit, point, staticField, directionalField).danger;
   }
   return Math.round(total / (samples + 1));
 }
@@ -225,8 +257,20 @@ function evaluateAwarenessFieldCell(
   unit: UnitModel,
   position: GridPosition,
   staticField: AwarenessStaticField,
+  directionalField: DirectionalTacticalField,
 ): SoldierAwarenessCell {
   const local = getAwarenessStaticCell(staticField, position);
+  const directional = readDirectionalTacticalCell(
+    directionalField,
+    Math.floor(position.x),
+    Math.floor(position.y),
+  ) ?? emptyDirectionalCell();
+  const expectedProtection = combinePercent(local.expectedProtection, directional.terrainProtection);
+  const concealment = combinePercent(local.concealment, directional.terrainConcealment);
+  const coverReliability = clampPercent(Math.max(
+    local.reliability,
+    directional.terrainProtection * 0.82,
+  ));
   let remainingSafe = 1;
   let remainingUnsuppressed = 1;
   let confidenceTotal = 0;
@@ -237,9 +281,29 @@ function evaluateAwarenessFieldCell(
     const factor = threatFactorAtPosition(position, threat, staticField.metersPerCell);
     if (factor <= 0) continue;
     const confidenceFactor = threat.confidence / 100;
-    const uncovered = 1 - local.expectedProtection / 100;
-    const danger = clampPercent(threat.strength * factor * confidenceFactor * uncovered);
-    const suppression = clampPercent(threat.suppression * factor * confidenceFactor * uncovered);
+    const bearingToThreat = Math.atan2(threat.y - position.y, threat.x - position.x);
+    const terrainProtection = readDirectionalProtectionForBearing(
+      directionalField,
+      position.x,
+      position.y,
+      bearingToThreat,
+    );
+    const terrainExposure = readDirectionalExposureForBearing(
+      directionalField,
+      position.x,
+      position.y,
+      bearingToThreat,
+    );
+    const applicableTerrainProtection = threat.mode === 'directional_fire'
+      ? terrainProtection
+      : terrainProtection * 0.35;
+    const threatProtection = combinePercent(local.expectedProtection, applicableTerrainProtection);
+    const uncovered = 1 - threatProtection / 100;
+    const exposureFactor = threat.mode === 'directional_fire'
+      ? 0.72 + terrainExposure / 100 * 0.28
+      : 1;
+    const danger = clampPercent(threat.strength * factor * confidenceFactor * uncovered * exposureFactor);
+    const suppression = clampPercent(threat.suppression * factor * confidenceFactor * uncovered * exposureFactor);
     remainingSafe *= 1 - danger / 100;
     remainingUnsuppressed *= 1 - suppression / 100;
     confidenceTotal += threat.confidence * factor;
@@ -255,12 +319,15 @@ function evaluateAwarenessFieldCell(
   const suppression = clampPercent(100 * (1 - remainingUnsuppressed));
   const confidence = confidenceWeight > 0 ? clampPercent(confidenceTotal / confidenceWeight) : 0;
   const safety = clampPercent(
-    local.expectedProtection * 0.62
-      + local.concealment * 0.18
+    expectedProtection * 0.58
+      + concealment * 0.24
       + (100 - danger) * 0.45
-      - suppression * 0.18
+      - suppression * 0.16
       - uncertainty * 0.08
-      - local.terrainPenalty,
+      - local.terrainPenalty
+      - directional.forwardSlopeRisk * 0.10
+      - directional.silhouetteRisk * 0.15
+      - directional.flankExposure * 0.08,
   );
 
   return {
@@ -268,17 +335,21 @@ function evaluateAwarenessFieldCell(
     y: Math.floor(position.y),
     danger,
     suppression,
-    expectedProtection: local.expectedProtection,
-    coverReliability: local.reliability,
-    concealment: local.concealment,
+    expectedProtection,
+    coverReliability,
+    concealment,
     uncertainty,
     safety,
     confidence,
-    sourceRu: unit.tacticalKnowledge.threats.length > 0
-      ? local.sourceRu
-      : local.sourceRu === 'открытая местность'
-        ? 'нет известной угрозы'
-        : local.sourceRu,
+    terrainProtection: directional.terrainProtection,
+    terrainConcealment: directional.terrainConcealment,
+    reverseSlopeQuality: directional.reverseSlopeProtection,
+    forwardSlopeRisk: directional.forwardSlopeRisk,
+    crestRisk: directional.crestRisk,
+    silhouetteRisk: directional.silhouetteRisk,
+    valleyProtection: directional.valleyProtection,
+    flankExposure: directional.flankExposure,
+    sourceRu: awarenessSourceRu(unit, local.sourceRu, directional),
   };
 }
 
@@ -321,15 +392,19 @@ function threatFactorAtPosition(
     : 0;
 }
 
-function buildCacheKey(state: SimulationState, unit: UnitModel, staticFieldKey: string): string {
-  // Movement does not invalidate the expensive map field. Only posture, map and
-  // awareness-relevant knowledge do; current position and route are updated separately.
+function buildCacheKey(
+  state: SimulationState,
+  unit: UnitModel,
+  staticFieldKey: string,
+  directionalFieldKey: string,
+): string {
   return [
     unit.id,
     buildAwarenessKnowledgeKey(unit),
     unit.behaviorRuntime.posture,
     state.map.cellSize,
     staticFieldKey,
+    directionalFieldKey,
   ].join('#');
 }
 
@@ -376,11 +451,66 @@ function awarenessCellAt(
   return cells[y * map.width + x];
 }
 
+function awarenessSourceRu(
+  unit: UnitModel,
+  localSourceRu: string,
+  directional: DirectionalTacticalCell,
+): string {
+  if (unit.tacticalKnowledge.threats.length === 0) {
+    return localSourceRu === 'открытая местность' ? 'нет известной угрозы' : localSourceRu;
+  }
+  const terrainMeaningful = directional.terrainProtection >= 15
+    || directional.terrainConcealment >= 15
+    || directional.silhouetteRisk >= 35;
+  if (!terrainMeaningful) return localSourceRu;
+  if (localSourceRu === 'открытая местность') return directional.sourceRu;
+  if (localSourceRu === directional.sourceRu) return localSourceRu;
+  return `${localSourceRu} + ${directional.sourceRu}`;
+}
+
+function combinePercent(base: number, addition: number): number {
+  const base01 = clampPercent(base) / 100;
+  const addition01 = clampPercent(addition) / 100;
+  return clampPercent((1 - (1 - base01) * (1 - addition01)) * 100);
+}
+
+function emptyDirectionalCell(): DirectionalTacticalCell {
+  return {
+    primarySlope: 0,
+    forwardSlopeRisk: 0,
+    reverseSlopeProtection: 0,
+    crestRisk: 0,
+    valleyProtection: 0,
+    silhouetteRisk: 0,
+    primaryThreatExposure: 0,
+    flankExposure: 0,
+    terrainProtection: 0,
+    terrainConcealment: 0,
+    sourceRu: 'открытый склон',
+  };
+}
+
 function emptyAwarenessCell(position: GridPosition): SoldierAwarenessCell {
   return {
-    x: Math.floor(position.x), y: Math.floor(position.y), danger: 0, suppression: 0,
-    expectedProtection: 0, coverReliability: 0, concealment: 0, uncertainty: 0,
-    safety: 100, confidence: 0, sourceRu: 'нет данных',
+    x: Math.floor(position.x),
+    y: Math.floor(position.y),
+    danger: 0,
+    suppression: 0,
+    expectedProtection: 0,
+    coverReliability: 0,
+    concealment: 0,
+    uncertainty: 0,
+    safety: 100,
+    confidence: 0,
+    terrainProtection: 0,
+    terrainConcealment: 0,
+    reverseSlopeQuality: 0,
+    forwardSlopeRisk: 0,
+    crestRisk: 0,
+    silhouetteRisk: 0,
+    valleyProtection: 0,
+    flankExposure: 0,
+    sourceRu: 'нет данных',
   };
 }
 

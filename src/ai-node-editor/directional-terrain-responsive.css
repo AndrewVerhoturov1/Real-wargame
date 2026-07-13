@@ -1,0 +1,33 @@
+@media (max-width: 1600px) {
+  .navigation-profile-tabs {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .navigation-profile-main-tabs {
+    grid-column: 1;
+    grid-row: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+  }
+
+  .navigation-profile-app-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .navigation-profile-global-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    order: 0;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .navigation-profile-tabs + #ai-node-editor-root .ai-editor-shell,
+  .navigation-profile-workbench {
+    height: calc(100vh - 90px);
+  }
+}
