@@ -41,7 +41,6 @@ export function installRouteCostOverlayUi(
   mode.innerHTML = `
     <option value="baseTerrain">Базовая местность</option>
     <option value="finalCost">Итоговая стоимость</option>
-    <option value="directionalTerrain">Направленный рельеф</option>
   `;
   mode.addEventListener('change', () => {
     setRouteCostOverlayMode(state, mode.value as RouteCostOverlayMode);
@@ -55,14 +54,15 @@ export function installRouteCostOverlayUi(
   displayPanel?.append(controls);
 
   const overlay = getRouteCostOverlayState(state);
-  mode.value = overlay.mode;
+  mode.value = overlay.mode === 'directionalTerrain' ? 'finalCost' : overlay.mode;
   updateToggle(menuToggle, overlay.active, 'Стоимость маршрута');
   if (quickToggle) updateToggle(quickToggle, overlay.active, 'Карта стоимости');
   updateStatus(profileStatus, routeCostStatus, routeReasonStatus, getSelectedUnit(state));
 
   const interval = window.setInterval(() => {
     const current = getRouteCostOverlayState(state);
-    if (mode.value !== current.mode) mode.value = current.mode;
+    const visibleMode = current.mode === 'directionalTerrain' ? 'finalCost' : current.mode;
+    if (mode.value !== visibleMode) mode.value = visibleMode;
     updateToggle(menuToggle, current.active, 'Стоимость маршрута');
     if (quickToggle) updateToggle(quickToggle, current.active, 'Карта стоимости');
     updateStatus(profileStatus, routeCostStatus, routeReasonStatus, getSelectedUnit(state));
@@ -110,7 +110,7 @@ function updateStatus(
   const directionalCost = order.pathCostBreakdown?.directionalTerrainCost;
   const directionalSummary = directionalCost === undefined
     ? ''
-    : ` · направленный рельеф: ${formatSignedNumber(directionalCost)}`;
+    : ` · учёт рельефа: ${formatSignedNumber(directionalCost)}`;
   setText(
     costElement,
     `Цена: ${formatNumber(order.pathCost)} · длина: ${formatMeters(order.pathDistanceMeters)} · обход: +${detour}${directionalSummary} · перестроений: ${order.replanCount ?? 0}`,
