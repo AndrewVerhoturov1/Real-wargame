@@ -38,7 +38,8 @@ import {
 } from '../perception/PerceptionContact';
 import type { PressureZoneMode } from '../pressure/PressureZone';
 
-export type UnitSide = 'player';
+export type UnitSide = 'blue' | 'red';
+export type UnitSideInput = UnitSide | 'player';
 export type UnitType = 'infantry_squad' | 'scout_team' | 'support_team';
 export type UnitHeldItem = 'long_item' | 'support_item' | 'short_item';
 export type ThreatMemorySource = 'seen' | 'heard' | 'reported' | 'fire_pressure';
@@ -84,7 +85,7 @@ export interface UnitData {
   label?: string;
   labelRu?: string;
   type: UnitType;
-  side: UnitSide;
+  side: UnitSideInput;
   x: number;
   y: number;
   speedCellsPerSecond?: number;
@@ -172,7 +173,7 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
         ru: unit.labelRu ?? fallbackLabel,
       },
       type: unit.type,
-      side: unit.side,
+      side: normalizeUnitSide(unit.side),
       position: {
         x: (unit.x + 0.5) * scale,
         y: (unit.y + 0.5) * scale,
@@ -291,6 +292,10 @@ export function findUnitAtGridPosition(
   }
 
   return undefined;
+}
+
+export function normalizeUnitSide(value: UnitSideInput | string | undefined): UnitSide {
+  return value === 'red' ? 'red' : 'blue';
 }
 
 function scalePerceptionKnowledge(knowledge: UnitPerceptionKnowledge, scale: number): UnitPerceptionKnowledge {
