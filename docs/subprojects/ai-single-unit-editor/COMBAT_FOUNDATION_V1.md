@@ -1,13 +1,14 @@
 # Combat Foundation v1
 
-Updated: 2026-07-13  
-Branch: `tmp/combat-foundation-v1-20260713`  
-Base: `real-wargame-preview`  
-Draft PR: `#93`
+Updated: 2026-07-14  
+Status: integrated into `real-wargame-preview`  
+Source branch: `tmp/combat-foundation-v1-20260713`  
+Merged PR: `#93`  
+Integration commit: `16013c69fc16f655c16fff3c9081d3bfc5c81f09`
 
 ## Purpose
 
-This temporary branch builds the smallest complete rifle firefight loop without bypassing subjective perception or the stateful AI runtime.
+Combat Foundation v1 provides the smallest complete rifle-fire loop without bypassing subjective perception or the stateful AI runtime.
 
 ## Implemented foundation
 
@@ -48,25 +49,25 @@ The unified editor smoke also requires the active placement code to use `draft.s
 
 ## Approved visual QA
 
-The user explicitly approved browser verification. The branch now contains a dedicated Chromium workflow and Playwright scenario that:
+The user explicitly approved browser verification. The dedicated Chromium workflow and Playwright scenario:
 
-- creates one friendly and one hostile fighter through the visible editor form;
-- verifies the resulting selected-unit metadata reports `Свои` and `Противник`;
-- confirms distinct blue and red map markers;
-- waits for an observer-specific identified contact;
-- confirms «Огонь по контакту» becomes available;
-- records the stateful aiming phase;
-- verifies one real cartridge is consumed;
-- selects the target and verifies the resulting combat-capability state;
-- rejects page exceptions and non-benign HTTP resource failures;
-- saves six inspected PNG screenshots from the exact tested commit.
+- create one friendly and one hostile fighter through the visible editor form;
+- verify the resulting selected-unit metadata reports `Свои` and `Противник`;
+- confirm distinct blue and red map markers;
+- wait for an observer-specific identified contact;
+- confirm «Огонь по контакту» becomes available;
+- record the stateful aiming phase;
+- verify one real cartridge is consumed;
+- select the target and verify the resulting combat-capability state;
+- reject page exceptions and non-benign HTTP resource failures;
+- save six inspected PNG screenshots from the exact tested commit.
 
 Visual QA found and fixed two real integration defects:
 
 1. the visible side selector was disconnected from the active placement path, which hard-coded every new fighter as `player`/blue;
 2. friendly and hostile unit markers were too similar at the normal map scale.
 
-The latest `Combat Foundation Visual QA` check on PR `#93` is the source of truth for the exact verified SHA and screenshot artifact.
+PR `#93` and its `Combat Foundation Visual QA` artifacts preserve the exact pre-merge verification evidence.
 
 ## Deliberate v1 limits
 
@@ -80,9 +81,9 @@ The latest `Combat Foundation Visual QA` check on PR `#93` is the source of trut
 - the general AI graph runtime is still the selected-soldier laboratory; every unit perceives independently and can execute a requested fire action, but autonomous group combat planning is future work;
 - suppression from real near-miss and impact events is the next combat layer; legacy pressure zones remain the current suppression source.
 
-## Transfer boundary
+## Integration boundary
 
-Do not merge or transfer this work to `real-wargame-preview` without a separate explicit user command. Do not modify `main`.
+Combat Foundation v1 is part of `real-wargame-preview`. Further combat development must branch from the current preview branch. `main` remains untouched unless the user gives a separate explicit command.
 
 ## Required verification
 
