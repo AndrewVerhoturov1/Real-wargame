@@ -61,7 +61,15 @@
 .unit-route-details-panel span { display: block; overflow-wrap: anywhere; color: var(--workspace-muted); font-size: 10px; line-height: 1.25; }
 
 .unit-bar-command-group, .unit-bar-speed-group { min-width: 0; flex-wrap: nowrap; overflow: hidden; }
-.simulation-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; }
+.simulation-controls {
+  grid-area: controls;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 3px;
+  align-self: center;
+  min-height: 0;
+  max-height: 22px;
+}
 .unit-bar-command-group button, .unit-bar-speed-group button, .compact { box-sizing: border-box; min-width: 0; min-height: 22px; height: 22px; padding: 2px 4px; font-size: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .unit-bar-speed-group { justify-content: flex-end; }
 
