@@ -1,0 +1,36 @@
+name: TEMP clean AI fix executors
+
+on:
+  push:
+    branches:
+      - fix/ai-plan-move-editor-panels-temp-2026-07-14
+    paths:
+      - .github/workflows/ai-plan-fix-cleanup-temp.yml
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/ai-plan-move-editor-panels-temp-2026-07-14
+          fetch-depth: 0
+      - name: Remove one-time executors and diagnostic probe
+        run: |
+          rm -f \
+            .github/workflows/ai-plan-move-scope-fix-temp.yml \
+            .github/workflows/ai-plan-panels-fix-executor-temp.yml \
+            .github/workflows/ai-plan-panels-test-adjust-temp.yml \
+            .github/workflows/ai-debug-dock-diagnostic-temp.yml \
+            .github/workflows/ai-plan-fix-cleanup-temp.yml \
+            tests/ai-debug-dock-diagnostic.spec.ts
+      - name: Commit cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: remove temporary AI fix executors"
+          git push origin HEAD:fix/ai-plan-move-editor-panels-temp-2026-07-14
