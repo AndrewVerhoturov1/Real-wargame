@@ -1,84 +1,68 @@
-# HANDOFF — Navigation Profiles and Route Cost v1
+# HANDOFF — Graph v2, типизированные контракты и подграфы
 
-Updated: 2026-07-12  
+Updated: 2026-07-13  
 Repository: `AndrewVerhoturov1/Real-wargame`  
-Working branch: `real-wargame-preview`  
-Merged PR: `#63`  
-Preview merge commit: `1477d378d0c2c11fb3b50ab3e846a69f43ae41af`
+Base branch: `real-wargame-preview`  
+Isolated branch: `feat/ai-graph-v2-contracts-subgraphs-2026-07-13`  
+Transfer status: **не переносить в preview без отдельной прямой команды пользователя**.
 
-## Current state
+## Реализовано
 
-Navigation Profiles and Route Cost v1 are now integrated into `real-wargame-preview`. `main` was not modified.
+- завершены `WaitForEvent`, `Timeout` и ограниченный `Retry`;
+- создан единый реестр контрактов 36 типов нод;
+- добавлены типизированные порты и строгая совместимость;
+- добавлен Graph v2 и детерминированная миграция Graph v1;
+- неизвестные старые данные сохраняются в `legacyMetadata`;
+- проверяются параметры, диапазоны, enum, порты, дети, обязательные входы, достижимость, выходы, циклы и рекурсия подграфов;
+- память разделена на пять областей;
+- реализован вложенный runtime подграфов с snapshot/restore и единичным cleanup;
+- добавлены четыре подграфа: `take_cover`, `reload_weapon`, `react_to_fire`, `move_and_observe`;
+- редактор показывает типы портов, блокирует неверное соединение, строит параметры из контрактов, мигрирует Graph v1, открывает подграфы и показывает кликабельные ошибки;
+- debug overlay показывает активный подграф, полный путь и ключи областей памяти;
+- локальный engine preview принимает Graph v1/v2;
+- добавлен сквозной сценарий `graph-v2-scenario:smoke`.
 
-Implemented:
+## Архитектурные границы
 
-- persistent bilingual navigation profiles with seven built-in modes and user profiles;
-- no-code profile editor with copy, rename, reset, delete, import and export;
-- one active-profile resolver for player orders, AI behavior modes, unit roles and debug override;
-- profile-aware deterministic A* with terrain, slope, concealment and subjective known-danger costs;
-- cached shortest-passable baseline and `maximumDetourRatio`;
-- controlled replanning on blockage, profile changes and meaningful knowledge changes;
-- persistent two-raster Pixi route-cost overlay with stable bands, legend and hover breakdown;
-- route diagnostics: active profile, total cost, length, detour, cost components and replan reason;
-- focused smoke tests, regression coverage and a prepared Playwright scenario.
+- `AiGraphRunner` остаётся чистым мгновенным вычислителем;
+- `AiGraphRuntime` и composite runtime владеют длительным исполнением;
+- `AiSubgraphRuntime` изолирует bindings и локальную память;
+- `AiGameBridge` остаётся адаптером к живой игре;
+- `SimulationTick` остаётся единственным владельцем физических координат;
+- нет GOAP, HTN, произвольного параллелизма, TQS, Smart Objects или multi-agent scheduler.
 
-## Verification recorded before transfer
+## Автоматические проверки
 
-The isolated source head passed:
+Фокусные проверки, которые должны оставаться зелёными:
 
 ```text
-navigation-profiles:smoke
-navigation-profile-switch:smoke
-navigation-overlay:smoke
-pathfinding:smoke
-routed-move:smoke
-runtime:smoke
-route-status:smoke
-move-bridge:smoke
-command-plan-route:smoke
-map-revision:smoke
-production build
-docs:check
-Preview Core Checks
-Agent Docs Integrity
-Preview Policy
+npm run graph-v2:smoke
+npm run runtime-modifiers:smoke
+npm run subgraph:smoke
+npm run graph-v2-scenario:smoke
+npm run node-contract-ui:smoke
+npm run validate:ai-graph
+npm run runtime-session:smoke
+npm run runtime-snapshot:smoke
+npm run runtime-scene:smoke
+npm run reactive-runtime:smoke
+npm run editor:smoke
+npm run engine:smoke
+npm run build
 ```
 
-The merge itself is `1477d378d0c2c11fb3b50ab3e846a69f43ae41af`. Run and inspect post-merge checks before claiming browser verification.
+Перед передачей выполнить полный набор из задания и обязательную реальную браузерную проверку. Свежие PNG должны соответствовать итоговому commit SHA и быть открыты/осмотрены.
 
-## Honest prepared-only factors
+## Ручная проверка
 
-These contracts and UI controls exist, but their current route-cost contribution is zero because the required subjective data is not implemented yet:
+Полный список находится в:
 
-- enemy-observation exposure;
-- exact soldier-known enemy distance;
-- friendly / neutral / enemy territory cost.
+```text
+docs/subprojects/ai-single-unit-editor/GRAPH_V2_TYPED_CONTRACTS_AND_SUBGRAPHS.md
+```
 
-## Manual verification
+Ключевые пункты: предупреждение Graph v1, миграция, неверная связь, подграф и breadcrumb, кликабельная ошибка, активный подграф и области памяти, восстановление движения внутри подграфа.
 
-1. Launch `Run-Real-Wargame-Lab.bat`.
-2. Open the AI editor and verify the `Профили движения` panel.
-3. Copy a built-in profile, edit it, save it, reload the page and confirm persistence.
-4. Export the profile JSON, import it back and confirm the names and values survive.
-5. In the game select a soldier, issue the same destination with `normal`, `fast`, `stealth` and `retreat`.
-6. Confirm routes visibly differ where forest, road, swamp, slope or a known threat makes a meaningful alternative.
-7. Enable `Стоимость маршрута`, switch between base terrain and final cost, inspect the legend and hover breakdown.
-8. Confirm route lines remain visible above the cost layer.
-9. Change the active profile while a route is running and confirm one controlled replan occurs without losing the player command.
-10. Move or change a known threat and confirm replanning respects cooldown and does not oscillate.
-11. Toggle the cost layer repeatedly; verify the map does not freeze and the layer returns instantly.
-12. Pan, zoom and move the cursor over the layer; watch for stutter.
-13. Confirm blocked water and blocking objects remain impassable regardless of profile weights.
-14. Confirm Russian text is the default and no raw technical keys are required for normal editing.
+## Ветка и перенос
 
-## Known limits
-
-- exposure, exact known enemy distance and territory do not yet affect route cost;
-- detour overflow falls back to the shortest passable baseline rather than a separate compromise search;
-- profiles are stored in localStorage / profile JSON, not scene JSON;
-- there is no cell reservation, group corridor or flow field;
-- visual QA and PNG inspection have not yet been run after the merge.
-
-## Next development direction
-
-After manual verification, continue with the already prepared `Soldier Perception and Attention v1` plan. Do not mix perception implementation with route-cost bug fixes found during manual verification.
+`main` не менять. `real-wargame-preview` не менять. Временная ветка должна оставаться полностью готовой к отдельной команде переноса.

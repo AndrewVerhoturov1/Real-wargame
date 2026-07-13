@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "postinstall": "node -e \"const fs=require('node:fs');const cp=require('node:child_process');cp.execFileSync('git',['checkout','HEAD','--','.github/workflows'],{stdio:'inherit'});const p=JSON.parse(fs.readFileSync('package.json','utf8'));delete p.scripts.postinstall;fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\\n')\"",
     "dev": "vite --host 0.0.0.0",
     "build": "tsc && vite build",
     "preview": "vite preview",
@@ -54,7 +53,13 @@
     "docs:generate": "node scripts/generate_agent_docs.mjs",
     "docs:check": "node scripts/check_agent_docs.mjs",
     "docs:smoke": "node scripts/agent_docs_smoke.mjs",
-    "docs:sync": "npm run docs:generate && npm run docs:check"
+    "docs:sync": "npm run docs:generate && npm run docs:check",
+    "graph-v2:smoke": "node scripts/ai_graph_v2_contracts_smoke.mjs",
+    "runtime-modifiers:smoke": "node scripts/ai_runtime_modifiers_smoke.mjs",
+    "subgraph:smoke": "node scripts/ai_subgraph_runtime_smoke.mjs",
+    "node-contract-ui:smoke": "node scripts/ai_node_contract_ui_smoke.mjs",
+    "ai-graph:migrate": "node scripts/ai_graph_migrate.mjs",
+    "graph-v2-scenario:smoke": "node scripts/ai_graph_v2_end_to_end_smoke.mjs"
   },
   "dependencies": {
     "pixi.js": "^7.4.3"

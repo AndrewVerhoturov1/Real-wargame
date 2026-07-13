@@ -93,6 +93,14 @@ try {
   assert(String(statefulEvaluation.runtimeNoteRu).includes('Выполняется/Ожидает'), 'evaluate-once должен честно направить в живой runtime');
   console.log('[OK] stateful graph валидируется, а evaluate-once честно останавливается на границе длительного поведения.');
 
+
+  const graphV2 = { ...createStatefulSmokeGraph(), version: 2, blackboardSchema: [{ key: 'danger', kind: 'number', required: false }], subgraphRefs: [] };
+  const graphV2Validation = await requestJson('POST', '/ai/graph/validate', { graph: graphV2 });
+  writeArtifact('07-graph-v2-validation.json', graphV2Validation);
+  assert(graphV2Validation.ok === true, 'Graph v2 должен проходить проверку локального движка');
+  assert(graphV2Validation.validation.valid === true, 'Graph v2 validation.valid должен быть true');
+  console.log('[OK] local engine принимает Graph v2 для preview/evaluate границы.');
+
   console.log('');
   console.log('[GOTOVO] Local AI engine smoke passed.');
   console.log(`[INFO] JSON-otchety zapisany v: ${artifactDir}`);

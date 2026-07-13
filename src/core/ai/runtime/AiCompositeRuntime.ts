@@ -5,7 +5,9 @@ export type AiCompositeFrame =
   | AiReactiveSequenceFrame
   | AiSelectorFrame
   | AiUtilityExecutionFrame
-  | AiActionBranchFrame;
+  | AiActionBranchFrame
+  | AiTimeoutFrame
+  | AiRetryFrame;
 
 export interface AiSequenceFrame {
   readonly kind: 'sequence';
@@ -38,6 +40,21 @@ export interface AiActionBranchFrame {
   readonly childIndex: number;
 }
 
+
+export interface AiTimeoutFrame {
+  readonly kind: 'timeout';
+  readonly nodeId: AiNodeId;
+  readonly childIndex: 0;
+  readonly startedAtMs: number;
+}
+
+export interface AiRetryFrame {
+  readonly kind: 'retry';
+  readonly nodeId: AiNodeId;
+  readonly childIndex: 0;
+  readonly attempt: number;
+}
+
 export function createCompositeFrame(
   node: AiNode,
   childIndex = 0,
@@ -55,6 +72,12 @@ export function createCompositeFrame(
   }
   if (node.type === 'ActionBranch') {
     return { kind: 'action_branch', nodeId: node.id, childIndex };
+  }
+  if (node.type === 'Timeout') {
+    return { kind: 'timeout', nodeId: node.id, childIndex: 0, startedAtMs: 0 };
+  }
+  if (node.type === 'Retry') {
+    return { kind: 'retry', nodeId: node.id, childIndex: 0, attempt: 1 };
   }
   if (node.type === 'UtilitySelector' && selectedBranchNodeId) {
     return {
@@ -79,6 +102,17 @@ export function isAiCompositeFrame(value: unknown): value is AiCompositeFrame {
     || value.kind === 'action_branch') {
     return Number.isInteger(value.childIndex) && Number(value.childIndex) >= 0;
   }
+  if (value.kind === 'timeout') {
+    return value.childIndex === 0
+      && typeof value.startedAtMs === 'number'
+      && Number.isFinite(value.startedAtMs)
+      && value.startedAtMs >= 0;
+  }
+  if (value.kind === 'retry') {
+    return value.childIndex === 0
+      && Number.isInteger(value.attempt)
+      && Number(value.attempt) >= 1;
+  }
   return value.kind === 'utility_execution'
     && typeof value.selectedBranchNodeId === 'string'
     && Number.isInteger(value.selectedScoreRevision)
@@ -95,7 +129,7 @@ export function frameChildIndex(frame: AiCompositeFrame): number | null {
 }
 
 export function withFrameChildIndex(frame: AiCompositeFrame, childIndex: number): AiCompositeFrame {
-  if (frame.kind === 'utility_execution') return frame;
+  if (frame.kind === 'utility_execution' || frame.kind === 'timeout' || frame.kind === 'retry') return frame;
   return { ...frame, childIndex: Math.max(0, Math.floor(childIndex)) };
 }
 

@@ -39,6 +39,17 @@ import {
 } from './actions/MoveToBlackboardPositionAction';
 import { isReloadActionState } from './actions/ReloadAction';
 import { createLegacyWaitActionState } from './actions/WaitAction';
+import { isWaitForEventActionState } from './actions/WaitForEventAction';
+import { DEFAULT_AI_SUBGRAPH_REGISTRY } from '../contracts/AiSubgraphRegistry';
+import {
+  applyAiSubgraphOutputs,
+  cloneAiSubgraphExecutionState,
+  createAiSubgraphBlackboard,
+  isAiSubgraphExecutionState,
+  prefixAiSubgraphTracePath,
+  refreshAiSubgraphRuntimeInputs,
+  type AiSubgraphExecutionState,
+} from './AiSubgraphRuntime';
 
 interface RuntimeAccumulator {
   blackboard: AiGraphRunnerBlackboard;
@@ -69,6 +80,10 @@ interface ActionDetails {
   readonly targetPosition?: GridPosition;
   readonly distanceRemainingCells?: number;
   readonly actionToken?: string;
+  readonly activeSubgraphId?: string;
+  readonly activeSubgraphName?: string;
+  readonly activeSubgraphNameRu?: string;
+  readonly subgraphPath?: string;
 }
 
 export function shouldUseCompositeGraphRuntime(
@@ -87,7 +102,7 @@ export function shouldUseCompositeGraphRuntime(
   }
 
   for (const node of graph.nodes) {
-    if (node.type === 'Reload' || node.type === 'ReactiveSequence') return true;
+    if (node.type === 'Reload' || node.type === 'WaitForEvent' || node.type === 'ReactiveSequence' || node.type === 'Timeout' || node.type === 'Retry' || node.type === 'Subgraph') return true;
     if (node.type === 'Selector' && hasStatefulDescendant(nodes, node.id, true)) return true;
     if (node.type === 'Sequence' && hasStatefulDescendant(nodes, node.id, true)) return true;
     if (node.type === 'SequenceWithMemory') {
@@ -97,7 +112,8 @@ export function shouldUseCompositeGraphRuntime(
           || child?.type === 'Selector'
           || child?.type === 'Sequence'
           || child?.type === 'ReactiveSequence'
-          || child?.type === 'UtilitySelector';
+          || child?.type === 'UtilitySelector'
+          || child?.type === 'Subgraph';
       });
       if (hasNestedComposite) return true;
     }
@@ -136,6 +152,28 @@ export function runAiCompositeGraphRuntime(input: AiGraphRuntimeInput): AiGraphR
     if (input.cancel) {
       const cancelled = cancelActiveAction(environment, validation.activeNode, input.executionState);
       return resultFromOutcome(environment, cancelled);
+    }
+
+    const expiredTimeout = findExpiredTimeoutFrame(input, validation.frames, nodes);
+    if (expiredTimeout) {
+      const cancelledChild = cancelActiveAction(
+        environment,
+        validation.activeNode,
+        input.executionState,
+        {
+          reason: `Timeout ${expiredTimeout.node.id} expired.`,
+          reasonRu: `Нода «${nodeNameRu(expiredTimeout.node)}» превысила максимальное время.`,
+        },
+      );
+      if (cancelledChild.kind === 'failure') return resultFromOutcome(environment, cancelledChild);
+      const reason = `Timeout ${expiredTimeout.node.id} expired after ${expiredTimeout.elapsedMs} ms.`;
+      const reasonRu = `Нода «${nodeNameRu(expiredTimeout.node)}» завершилась по тайм-ауту через ${expiredTimeout.elapsedMs} мс.`;
+      environment.accumulator.trace.push(traceItem(expiredTimeout.node, 'fail', reason, reasonRu));
+      environment.lifecycle.push(lifecycleEvent('complete', expiredTimeout.node, input.nowMs, reason, reasonRu));
+      return resultFromOutcome(
+        environment,
+        settle(environment, failure(reason, reasonRu), validation.frames.slice(0, expiredTimeout.frameIndex)),
+      );
     }
 
     const reactive = evaluateAiReactiveAbort({
@@ -221,11 +259,14 @@ function enterNode(
   const node = environment.nodes.get(nodeId);
   if (!node) return failure(`Runtime node ${nodeId} is missing.`, `Нода runtime ${nodeId} отсутствует.`);
 
+  if (node.type === 'Subgraph') return startSubgraph(environment, node, frames);
   const actionLifecycle = DEFAULT_AI_ACTION_REGISTRY.get(String(node.type));
   if (actionLifecycle) return startAction(environment, node, frames, actionLifecycle);
 
   if (node.type === 'UtilitySelector') return enterUtility(environment, node, frames);
   if (node.type === 'Selector') return enterSelector(environment, node, frames, 0);
+  if (node.type === 'Timeout') return enterTimeout(environment, node, frames);
+  if (node.type === 'Retry') return enterRetry(environment, node, frames, 1);
   if (node.type === 'ReactiveSequence') return enterSequence(environment, node, frames, 0, 'reactive_sequence');
   if (node.type === 'SequenceWithMemory' || node.type === 'Sequence' || node.type === 'Root') {
     return enterSequence(environment, node, frames, 0, 'sequence');
@@ -245,6 +286,56 @@ function enterNode(
   return instant.ok
     ? settle(environment, success(`Node ${node.id} completed.`, `Нода «${nodeNameRu(node)}» завершена.`), frames)
     : settle(environment, failure(`Node ${node.id} failed.`, `Нода «${nodeNameRu(node)}» провалилась.`), frames);
+}
+
+function enterTimeout(
+  environment: RuntimeEnvironment,
+  node: AiNode,
+  frames: readonly AiCompositeFrame[],
+): ExecutionOutcome {
+  const childId = node.children?.[0];
+  if (!childId || (node.children?.length ?? 0) !== 1) {
+    return failure(
+      `Timeout ${node.id} requires exactly one child.`,
+      `Ноде «${nodeNameRu(node)}» нужен ровно один дочерний шаг.`,
+    );
+  }
+  const frame: AiCompositeFrame = {
+    kind: 'timeout',
+    nodeId: node.id,
+    childIndex: 0,
+    startedAtMs: environment.input.nowMs,
+  };
+  environment.accumulator.trace.push(traceItem(
+    node,
+    'running',
+    `Timeout ${node.id} started.`,
+    `Ограничение времени «${nodeNameRu(node)}» запущено.`,
+  ));
+  return enterNode(environment, childId, [...frames, frame]);
+}
+
+function enterRetry(
+  environment: RuntimeEnvironment,
+  node: AiNode,
+  frames: readonly AiCompositeFrame[],
+  attempt: number,
+): ExecutionOutcome {
+  const childId = node.children?.[0];
+  if (!childId || (node.children?.length ?? 0) !== 1) {
+    return failure(
+      `Retry ${node.id} requires exactly one child.`,
+      `Ноде «${nodeNameRu(node)}» нужен ровно один дочерний шаг.`,
+    );
+  }
+  const frame: AiCompositeFrame = { kind: 'retry', nodeId: node.id, childIndex: 0, attempt };
+  environment.accumulator.trace.push(traceItem(
+    node,
+    'running',
+    `Retry ${node.id} attempt ${attempt} started.`,
+    `Нода «${nodeNameRu(node)}»: начата попытка ${attempt}.`,
+  ));
+  return enterNode(environment, childId, [...frames, frame]);
 }
 
 function enterSequence(
@@ -328,12 +419,123 @@ function startAction(
   return handleActionTick(environment, node, frames, environment.input.nowMs, tick, false);
 }
 
+function startSubgraph(
+  environment: RuntimeEnvironment,
+  node: AiNode,
+  frames: readonly AiCompositeFrame[],
+): ExecutionOutcome {
+  const subgraphId = readSubgraphId(node);
+  const definition = subgraphId ? DEFAULT_AI_SUBGRAPH_REGISTRY.get(subgraphId) : undefined;
+  if (!definition) return failure(
+    `Subgraph node ${node.id} references an unknown subgraph.`,
+    `Нода «${nodeNameRu(node)}» ссылается на неизвестный подграф.`,
+  );
+  const localBlackboard = createAiSubgraphBlackboard(definition, node, environment.accumulator.blackboard);
+  return executeSubgraph(environment, node, frames, {
+    kind: 'subgraph',
+    subgraphId: definition.id,
+    startedAtMs: environment.input.nowMs,
+    localBlackboard,
+  });
+}
+
+function executeSubgraph(
+  environment: RuntimeEnvironment,
+  node: AiNode,
+  frames: readonly AiCompositeFrame[],
+  state: AiSubgraphExecutionState,
+  cancellation?: { readonly reason: string; readonly reasonRu?: string },
+): ExecutionOutcome {
+  const definition = DEFAULT_AI_SUBGRAPH_REGISTRY.get(state.subgraphId);
+  if (!definition) return failure(
+    `Subgraph ${state.subgraphId} is not registered.`,
+    `Подграф ${state.subgraphId} не зарегистрирован.`,
+  );
+  const nested = runAiCompositeGraphRuntime({
+    graph: definition.graph,
+    unitId: environment.input.unitId,
+    blackboard: refreshAiSubgraphRuntimeInputs(state, environment.accumulator.blackboard),
+    cooldowns: environment.accumulator.cooldowns,
+    nowMs: environment.input.nowMs,
+    tacticalHost: environment.input.tacticalHost,
+    events: environment.input.events,
+    executionState: state.nestedExecutionState,
+    cancel: cancellation,
+  });
+  absorbSubgraphResult(environment, definition.id, nested);
+  const details: ActionDetails = {
+    targetKey: nested.targetKey,
+    targetPosition: nested.targetPosition,
+    distanceRemainingCells: nested.distanceRemainingCells,
+    actionToken: nested.actionToken,
+    activeSubgraphId: definition.id,
+    activeSubgraphName: definition.name,
+    activeSubgraphNameRu: definition.nameRu,
+    subgraphPath: `${environment.input.graph.id} / ${definition.id}`,
+  };
+  if (nested.status === 'running' || nested.status === 'waiting') {
+    environment.accumulator.trace.push(traceItem(
+      node,
+      nested.status,
+      `Subgraph ${definition.id} is active.`,
+      `Подграф «${definition.nameRu}» выполняется.`,
+      `${environment.input.graph.id} / ${definition.id}`,
+    ));
+    return {
+      kind: 'active', status: nested.status, node, startedAtMs: state.startedAtMs,
+      state: {
+        kind: 'subgraph', subgraphId: definition.id, startedAtMs: state.startedAtMs,
+        localBlackboard: cloneBlackboard(nested.blackboard), nestedExecutionState: nested.executionState,
+      } satisfies AiSubgraphExecutionState,
+      frames: cloneCompositeFrames(frames),
+      reason: nested.explanation, reasonRu: nested.explanationRu ?? nested.explanation, details,
+    };
+  }
+  if (nested.status === 'cancelled') {
+    environment.accumulator.trace.push(traceItem(node, 'cancelled', nested.explanation, nested.explanationRu, `${environment.input.graph.id} / ${definition.id}`));
+    return cancelled(nested.explanation, nested.explanationRu ?? nested.explanation, details);
+  }
+  if (nested.status === 'success') {
+    environment.accumulator.blackboard = applyAiSubgraphOutputs(
+      definition, node, nested.blackboard, environment.accumulator.blackboard,
+    );
+    environment.accumulator.trace.push(traceItem(node, 'complete', `Subgraph ${definition.id} completed.`, `Подграф «${definition.nameRu}» завершён.`, `${environment.input.graph.id} / ${definition.id}`));
+    return settle(environment, success(nested.explanation, nested.explanationRu ?? nested.explanation), frames);
+  }
+  environment.accumulator.trace.push(traceItem(node, 'fail', nested.explanation, nested.explanationRu, `${environment.input.graph.id} / ${definition.id}`));
+  return settle(environment, failure(nested.explanation, nested.explanationRu ?? nested.explanation), frames);
+}
+
+function absorbSubgraphResult(
+  environment: RuntimeEnvironment,
+  subgraphId: string,
+  nested: AiGraphRuntimeResult,
+): void {
+  environment.accumulator.cooldowns = { ...nested.cooldowns };
+  environment.accumulator.effects.push(...nested.effects);
+  environment.accumulator.scores = [...environment.accumulator.scores, ...nested.scores];
+  environment.accumulator.trace.push(...nested.trace.map((item) => ({
+    ...item,
+    path: prefixAiSubgraphTracePath(environment.input.graph.id, subgraphId, item.nodeId, item.path),
+  })));
+  environment.lifecycle.push(...nested.lifecycle);
+  for (const eventId of nested.consumedEventIds ?? []) {
+    if (!environment.consumedEventIds.includes(eventId)) environment.consumedEventIds.push(eventId);
+  }
+}
+
 function resumeActiveAction(
   environment: RuntimeEnvironment,
   node: AiNode,
   frames: readonly AiCompositeFrame[],
   executionState: AiGraphExecutionState,
 ): ExecutionOutcome {
+  if (node.type === 'Subgraph') {
+    if (!isAiSubgraphExecutionState(executionState.activeData)) {
+      return failure('Active subgraph state is invalid.', 'Состояние активного подграфа недействительно.');
+    }
+    return executeSubgraph(environment, node, frames, executionState.activeData);
+  }
   const lifecycle = DEFAULT_AI_ACTION_REGISTRY.get(String(node.type));
   if (!lifecycle) return failure('Active action is not registered.', 'Активное действие не зарегистрировано.');
   const actionState = resolveActionState(node, executionState);
@@ -350,6 +552,15 @@ function cancelActiveAction(
   executionState: AiGraphExecutionState,
   requestedCancellation?: { readonly reason: string; readonly reasonRu?: string },
 ): ExecutionOutcome {
+  if (node.type === 'Subgraph') {
+    if (!isAiSubgraphExecutionState(executionState.activeData)) {
+      return failure('Active subgraph cannot be cancelled safely.', 'Активный подграф нельзя безопасно отменить.');
+    }
+    const cancellation = requestedCancellation
+      ?? environment.input.cancel
+      ?? { reason: 'AI subgraph cancelled.', reasonRu: 'Подграф ИИ отменён.' };
+    return executeSubgraph(environment, node, executionState.frames ?? [], executionState.activeData, cancellation);
+  }
   const lifecycle = DEFAULT_AI_ACTION_REGISTRY.get(String(node.type));
   const actionState = resolveActionState(node, executionState);
   if (!lifecycle || actionState === undefined) return failure('Active action cannot be cancelled safely.', 'Активное действие нельзя безопасно отменить.');
@@ -375,6 +586,9 @@ function handleActionTick(
   resumed: boolean,
 ): ExecutionOutcome {
   const phase = resumed ? 'update' : 'start';
+  for (const eventId of readConsumedEventIds(tick)) {
+    if (!environment.consumedEventIds.includes(eventId)) environment.consumedEventIds.push(eventId);
+  }
   if (tick.status === 'running' || tick.status === 'waiting') {
     environment.lifecycle.push(lifecycleEvent(phase, node, environment.input.nowMs, tick.reason, tick.reasonRu));
     environment.accumulator.trace.push(traceItem(node, tick.status, tick.reason, tick.reasonRu));
@@ -419,6 +633,52 @@ function settle(
     if (!parent) return failure(`Composite frame ${frame.nodeId} is stale.`, `Кадр составной ноды ${frame.nodeId} устарел.`);
 
     if (frame.kind === 'utility_execution') {
+      frames = parentFrames;
+      continue;
+    }
+
+    if (frame.kind === 'timeout') {
+      const status = outcome.kind === 'success' ? 'complete' : 'fail';
+      const reason = outcome.kind === 'success'
+        ? `Timeout ${parent.id} child completed in time.`
+        : `Timeout ${parent.id} child failed.`;
+      const reasonRu = outcome.kind === 'success'
+        ? `Дочерний шаг ноды «${nodeNameRu(parent)}» завершился вовремя.`
+        : `Дочерний шаг ноды «${nodeNameRu(parent)}» провалился.`;
+      environment.accumulator.trace.push(traceItem(parent, status, reason, reasonRu));
+      frames = parentFrames;
+      continue;
+    }
+
+    if (frame.kind === 'retry') {
+      if (outcome.kind === 'failure') {
+        const maxAttempts = readPositiveInteger(parent.parameters?.maxAttempts, 1);
+        if (frame.attempt < maxAttempts) {
+          const nextAttempt = frame.attempt + 1;
+          environment.accumulator.trace.push(traceItem(
+            parent,
+            'running',
+            `Retry ${parent.id} starts attempt ${nextAttempt} of ${maxAttempts}.`,
+            `Нода «${nodeNameRu(parent)}» запускает попытку ${nextAttempt} из ${maxAttempts}.`,
+          ));
+          return enterNode(environment, parent.children?.[0] ?? '', [
+            ...parentFrames,
+            { ...frame, attempt: nextAttempt },
+          ]);
+        }
+        const reason = `Retry ${parent.id} exhausted ${maxAttempts} attempt(s).`;
+        const reasonRu = `Нода «${nodeNameRu(parent)}» исчерпала попытки: ${maxAttempts}.`;
+        environment.accumulator.trace.push(traceItem(parent, 'fail', reason, reasonRu));
+        outcome = failure(reason, reasonRu);
+        frames = parentFrames;
+        continue;
+      }
+      environment.accumulator.trace.push(traceItem(
+        parent,
+        'complete',
+        `Retry ${parent.id} succeeded on attempt ${frame.attempt}.`,
+        `Нода «${nodeNameRu(parent)}» завершилась успешно с попытки ${frame.attempt}.`,
+      ));
       frames = parentFrames;
       continue;
     }
@@ -566,6 +826,12 @@ function validateCompositeState(
       return { valid: false, branch, activeNode, frames, reason: `Frame child index is invalid for ${frame.nodeId}.`, reasonRu: `Номер шага кадра ${frame.nodeId} недействителен.` };
     }
   }
+  if (activeNode.type === 'Subgraph') {
+    if (!isAiSubgraphExecutionState(state.activeData) || !DEFAULT_AI_SUBGRAPH_REGISTRY.has(state.activeData.subgraphId)) {
+      return { valid: false, branch, activeNode, frames, reason: 'Active subgraph state is invalid.', reasonRu: 'Состояние активного подграфа недействительно.' };
+    }
+    return { valid: true, branch, activeNode, frames };
+  }
   const lifecycle = DEFAULT_AI_ACTION_REGISTRY.get(String(activeNode.type));
   const actionState = resolveActionState(activeNode, state);
   if (!lifecycle || actionState === undefined || (lifecycle.validateState && !lifecycle.validateState(actionState))) {
@@ -577,6 +843,20 @@ function validateCompositeState(
 function cleanupState(input: AiGraphRuntimeInput, activeNode: AiNode | undefined): readonly AiGraphEffect[] {
   const state = input.executionState;
   if (!state || !activeNode) return [];
+  if (activeNode.type === 'Subgraph' && isAiSubgraphExecutionState(state.activeData)) {
+    const definition = DEFAULT_AI_SUBGRAPH_REGISTRY.get(state.activeData.subgraphId);
+    if (!definition) return [];
+    try {
+      const nested = runAiCompositeGraphRuntime({
+        graph: definition.graph, unitId: input.unitId,
+        blackboard: refreshAiSubgraphRuntimeInputs(state.activeData, input.blackboard),
+        cooldowns: input.cooldowns, nowMs: input.nowMs, tacticalHost: input.tacticalHost,
+        events: input.events, executionState: state.activeData.nestedExecutionState,
+        cancel: { reason: 'Invalid parent state cleanup.', reasonRu: 'Очистка повреждённого состояния родителя.' },
+      });
+      return nested.effects;
+    } catch { return []; }
+  }
   const lifecycle = DEFAULT_AI_ACTION_REGISTRY.get(String(activeNode.type));
   const actionState = resolveActionState(activeNode, state);
   if (!lifecycle || actionState === undefined) return [];
@@ -650,8 +930,8 @@ function findStatefulEntry(nodes: Map<AiNodeId, AiNode>, startId: AiNodeId): AiN
     visited.add(id);
     const node = nodes.get(id);
     if (!node) return undefined;
-    if (DEFAULT_AI_ACTION_REGISTRY.has(String(node.type))) return node;
-    if ((node.type === 'SequenceWithMemory' || node.type === 'Sequence' || node.type === 'ReactiveSequence' || node.type === 'Selector' || node.type === 'UtilitySelector')
+    if (node.type === 'Subgraph' || DEFAULT_AI_ACTION_REGISTRY.has(String(node.type))) return node;
+    if ((node.type === 'SequenceWithMemory' || node.type === 'Sequence' || node.type === 'ReactiveSequence' || node.type === 'Selector' || node.type === 'UtilitySelector' || node.type === 'Timeout' || node.type === 'Retry')
       && hasStatefulDescendant(nodes, node.id, false)) return node;
     for (const childId of node.children ?? []) {
       const found = visit(childId);
@@ -669,7 +949,7 @@ function hasStatefulDescendant(nodes: Map<AiNodeId, AiNode>, startId: AiNodeId, 
     visited.add(id);
     const node = nodes.get(id);
     if (!node) return false;
-    if ((!root || !excludeRoot) && DEFAULT_AI_ACTION_REGISTRY.has(String(node.type))) return true;
+    if ((!root || !excludeRoot) && (node.type === 'Subgraph' || DEFAULT_AI_ACTION_REGISTRY.has(String(node.type)))) return true;
     return (node.children ?? []).some((childId) => visit(childId, false));
   };
   return visit(startId, true);
@@ -683,6 +963,9 @@ function planningGraph(graph: AiGraph): AiGraph {
         || node.type === 'Sequence'
         || node.type === 'ReactiveSequence'
         || node.type === 'Selector'
+        || node.type === 'Timeout'
+        || node.type === 'Retry'
+        || node.type === 'Subgraph'
         || DEFAULT_AI_ACTION_REGISTRY.has(String(node.type))
         ? { ...node, type: 'ActionBranch', children: [] }
         : node
@@ -724,6 +1007,7 @@ function actionContext(environment: RuntimeEnvironment, node: AiNode, startedAtM
     nowMs: environment.input.nowMs,
     startedAtMs,
     blackboard: environment.accumulator.blackboard,
+    events: environment.input.events ?? [],
   };
 }
 
@@ -731,12 +1015,15 @@ function resolveActionState(node: AiNode, state: AiGraphExecutionState): unknown
   if (node.type === 'Wait') return createLegacyWaitActionState(node.parameters);
   if (node.type === 'MoveToBlackboardPosition' && isMoveToBlackboardPositionActionState(state.activeData)) return state.activeData;
   if (node.type === 'Reload' && isReloadActionState(state.activeData)) return state.activeData;
+  if (node.type === 'WaitForEvent' && isWaitForEventActionState(state.activeData)) return state.activeData;
   return state.activeData;
 }
 
 function toExecutionData(value: unknown): AiGraphExecutionData | undefined {
   if (isMoveToBlackboardPositionActionState(value)) return { ...value, target: { ...value.target } };
   if (isReloadActionState(value)) return { ...value };
+  if (isWaitForEventActionState(value)) return { ...value };
+  if (isAiSubgraphExecutionState(value)) return cloneAiSubgraphExecutionState(value);
   return undefined;
 }
 
@@ -746,6 +1033,40 @@ function legacyFrameFields(frames: readonly AiCompositeFrame[], activeNodeId: Ai
     if (frame.kind !== 'utility_execution') return { sequenceNodeId: frame.nodeId, childIndex: frame.childIndex };
   }
   return { sequenceNodeId: activeNodeId, childIndex: 0 };
+}
+
+function readConsumedEventIds(tick: AiActionTickResult<unknown>): string[] {
+  const value = tick.details?.consumedEventIds;
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function findExpiredTimeoutFrame(
+  input: AiGraphRuntimeInput,
+  frames: readonly AiCompositeFrame[],
+  nodes: ReadonlyMap<AiNodeId, AiNode>,
+): { readonly frameIndex: number; readonly node: AiNode; readonly elapsedMs: number } | undefined {
+  for (let index = frames.length - 1; index >= 0; index -= 1) {
+    const frame = frames[index];
+    if (frame.kind !== 'timeout') continue;
+    const node = nodes.get(frame.nodeId);
+    if (!node) continue;
+    const timeoutMs = Math.round(readNonNegativeNumber(node.parameters?.timeoutSeconds, 0) * 1000);
+    const elapsedMs = Math.max(0, input.nowMs - frame.startedAtMs);
+    if (timeoutMs > 0 && elapsedMs >= timeoutMs) return { frameIndex: index, node, elapsedMs };
+  }
+  return undefined;
+}
+
+function readPositiveInteger(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(1, Math.floor(value))
+    : fallback;
+}
+
+function readNonNegativeNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, value)
+    : fallback;
 }
 
 function detailsFromTick(tick: AiActionTickResult<unknown>): ActionDetails {
@@ -759,6 +1080,16 @@ function detailsFromTick(tick: AiActionTickResult<unknown>): ActionDetails {
 }
 
 function detailsFromState(state: AiGraphExecutionState, blackboard: AiGraphRunnerBlackboard): ActionDetails {
+  if (isAiSubgraphExecutionState(state.activeData)) {
+    const nested = state.activeData.nestedExecutionState;
+    const nestedData = nested ? detailsFromState(nested, state.activeData.localBlackboard) : {};
+    const definition = DEFAULT_AI_SUBGRAPH_REGISTRY.get(state.activeData.subgraphId);
+    return {
+      ...nestedData, activeSubgraphId: state.activeData.subgraphId,
+      activeSubgraphName: definition?.name, activeSubgraphNameRu: definition?.nameRu,
+      subgraphPath: `${state.graphId} / ${state.activeData.subgraphId}`,
+    };
+  }
   if (!isMoveToBlackboardPositionActionState(state.activeData)) return {};
   const self = readPosition(blackboard.self_position);
   return {
@@ -835,8 +1166,14 @@ function traceItem(
   status: AiGraphRuntimeTraceItem['status'],
   reason: string,
   reasonRu?: string,
+  path?: string,
 ): AiGraphRuntimeTraceItem {
-  return { nodeId: node.id, nodeType: String(node.type), status, reason, reasonRu };
+  return { nodeId: node.id, nodeType: String(node.type), status, reason, reasonRu, path };
+}
+
+function readSubgraphId(node: AiNode): string | undefined {
+  const value = node.parameters?.subgraphId;
+  return typeof value === 'string' && value.trim() ? value : undefined;
 }
 
 function runtimeTrace(trace: readonly AiGraphTraceItem[]): AiGraphRuntimeTraceItem[] {

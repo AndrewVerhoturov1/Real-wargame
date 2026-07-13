@@ -535,6 +535,10 @@ function publishRuntimeDebugTrace(
       activeNodeId: result.activeNodeId,
       activeNodeName: result.activeNodeName,
       activeNodeNameRu: result.activeNodeNameRu,
+      activeSubgraphId: result.activeSubgraphId,
+      activeSubgraphName: result.activeSubgraphName,
+      activeSubgraphNameRu: result.activeSubgraphNameRu,
+      subgraphPath: result.subgraphPath,
       elapsedMs: result.elapsedMs,
       lifecycle: result.lifecycle,
       cancellationReason: result.cancellationReason,
@@ -553,6 +557,7 @@ function publishRuntimeDebugTrace(
       observerChecks: unit.behaviorRuntime.aiRuntimeSession?.observerRegistry.observerChecks ?? 0,
       observerEvents: unit.behaviorRuntime.aiRuntimeSession?.observerRegistry.observerEvents ?? 0,
       blackboard: result.blackboard,
+      memoryScopes: unit.behaviorRuntime.aiRuntimeSession?.memoryScopes,
     };
     window.localStorage.setItem(DEBUG_STORAGE_KEY, JSON.stringify(payload));
   } catch {
@@ -647,18 +652,24 @@ function normalizeRuntimeGraph(value: unknown): AiGraph {
       descriptionRu: typeof node.descriptionRu === 'string' ? node.descriptionRu : undefined,
       children: Array.isArray(node.children) ? node.children.filter((child): child is string => typeof child === 'string') : [],
       parameters: isRecord(node.parameters) ? normalizeBlackboard(node.parameters) : {},
+      inputBindings: isRecord(node.inputBindings) ? node.inputBindings as AiNode['inputBindings'] : undefined,
+      outputBindings: isRecord(node.outputBindings) ? node.outputBindings as AiNode['outputBindings'] : undefined,
+      legacyMetadata: isRecord(node.legacyMetadata) ? node.legacyMetadata : undefined,
     }));
 
   return {
-    version: 1,
+    version: value.version === 2 ? 2 : 1,
     id: readString(value.id, 'soldier_runtime_graph'),
     name: readString(value.name, 'Soldier Runtime Graph'),
     nameRu: typeof value.nameRu === 'string' ? value.nameRu : undefined,
     description: typeof value.description === 'string' ? value.description : undefined,
     descriptionRu: typeof value.descriptionRu === 'string' ? value.descriptionRu : undefined,
     rootNodeId: readString(value.rootNodeId, nodes[0]?.id ?? 'root'),
+    blackboardSchema: Array.isArray(value.blackboardSchema) ? value.blackboardSchema as AiGraph['blackboardSchema'] : undefined,
     blackboardDefaults: isRecord(value.blackboardDefaults) ? normalizeBlackboard(value.blackboardDefaults) : {},
     nodes,
+    subgraphRefs: Array.isArray(value.subgraphRefs) ? value.subgraphRefs.filter((item): item is string => typeof item === 'string') : undefined,
+    legacyMetadata: isRecord(value.legacyMetadata) ? value.legacyMetadata : undefined,
   };
 }
 

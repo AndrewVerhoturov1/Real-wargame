@@ -52,6 +52,19 @@ src/core/ai/AiGraphValidation.ts
 
 The graph and Blackboard use serializable, headless data.
 
+
+### Typed Graph v2 and reusable subgraphs
+
+```text
+src/core/ai/contracts/
+src/core/ai/runtime/AiSubgraphRuntime.ts
+src/data/ai/subgraphs/
+```
+
+Graph v2 adds one shared node-contract registry, typed data ports, strict validation, deterministic Graph v1 migration, explicit memory scopes and isolated reusable subgraphs. Flow links still define execution order; typed ports carry values. Old Graph v1 data loads through migration and unknown fields are preserved in `legacyMetadata`.
+
+The first reusable behaviors are `take_cover`, `reload_weapon`, `react_to_fire` and `move_and_observe`. Active nested runtime state, local memory and full trace paths are serializable.
+
 ### Immediate evaluation
 
 ```text
@@ -182,6 +195,11 @@ Do not:
 Core and AI changes use focused combinations of:
 
 ```text
+npm run graph-v2:smoke
+npm run runtime-modifiers:smoke
+npm run subgraph:smoke
+npm run graph-v2-scenario:smoke
+npm run node-contract-ui:smoke
 npm run runtime:smoke
 npm run dictionary:smoke
 npm run workspace:smoke

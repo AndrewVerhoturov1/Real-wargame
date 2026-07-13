@@ -1,0 +1,85 @@
+{
+  "version": 2,
+  "id": "move_and_observe",
+  "name": "Move and Observe",
+  "nameRu": "Двигаться и наблюдать",
+  "rootNodeId": "root",
+  "blackboardSchema": [
+    {
+      "key": "destination_position",
+      "valueKind": "nullablePosition",
+      "label": "Destination",
+      "description": "Movement destination supplied by the parent graph.",
+      "labelRu": "Точка назначения",
+      "descriptionRu": "Точка движения, переданная родительским графом.",
+      "defaultValue": null
+    },
+    {
+      "key": "self_position",
+      "valueKind": "position",
+      "label": "Self position",
+      "description": "Current soldier position.",
+      "labelRu": "Позиция бойца",
+      "descriptionRu": "Текущая позиция бойца.",
+      "defaultValue": {
+        "x": 0,
+        "y": 0
+      }
+    }
+  ],
+  "blackboardDefaults": {
+    "destination_position": null,
+    "self_position": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "subgraphRefs": [],
+  "nodes": [
+    {
+      "id": "root",
+      "type": "Root",
+      "children": [
+        "sequence"
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "sequence",
+      "type": "SequenceWithMemory",
+      "children": [
+        "observe",
+        "move"
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "observe",
+      "type": "SetAttentionMode",
+      "children": [],
+      "parameters": {
+        "mode": "observe",
+        "reasonRu": "Наблюдать во время движения."
+      }
+    },
+    {
+      "id": "move",
+      "type": "MoveToBlackboardPosition",
+      "children": [],
+      "parameters": {
+        "targetKey": "destination_position",
+        "acceptanceRadiusCells": 0.2,
+        "timeoutSeconds": 20,
+        "stuckTimeoutSeconds": 2.5,
+        "minimumProgressCells": 0.05,
+        "abortOnTargetLost": true
+      },
+      "inputBindings": {
+        "target": {
+          "source": "blackboard",
+          "key": "destination_position"
+        }
+      }
+    }
+  ]
+}

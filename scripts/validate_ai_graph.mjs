@@ -1,26 +1,12 @@
+import { rm } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { loadJsonFile, makeValidationResult, resolveBundledGraphPath } from './ai_engine_core.mjs';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, '..');
-const defaultGraphPath = resolveBundledGraphPath(repoRoot);
-const graphPath = process.argv[2] ? path.resolve(process.argv[2]) : defaultGraphPath;
-
-const graph = loadJsonFile(graphPath);
-const validation = makeValidationResult(graph);
-const errors = validation.issues.filter((issue) => issue.severity === 'error');
-
-if (validation.issues.length > 0) {
-  for (const issue of validation.issues) {
-    const location = issue.nodeId ? ` node=${issue.nodeId}` : '';
-    console.log(`[${issue.severity}] ${issue.code}${location}: ${issue.messageRu}`);
-  }
-}
-
-if (errors.length > 0) {
-  console.error(`AI graph validation failed: ${errors.length} error(s).`);
-  process.exit(1);
-}
-
-console.log(`AI graph validation OK: ${graphPath}`);
+import { pathToFileURL } from 'node:url';
+import { build } from 'vite';
+const repoRoot = process.cwd();
+const outDir = path.join(repoRoot, '.tmp-validate-ai-graph');
+const entryFile = path.join(outDir, 'validate-ai-graph.mjs');
+await rm(outDir, { recursive: true, force: true });
+try {
+  await build({ root: repoRoot, logLevel: 'warn', build: { ssr: path.join(repoRoot, 'scripts', 'validate_ai_graph.ts'), outDir, emptyOutDir: true, minify: false, sourcemap: false, rollupOptions: { output: { entryFileNames: 'validate-ai-graph.mjs', format: 'es' } } } });
+  await import(`${pathToFileURL(entryFile).href}?run=${Date.now()}`);
+} finally { await rm(outDir, { recursive: true, force: true }); }

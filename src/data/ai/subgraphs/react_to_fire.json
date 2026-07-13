@@ -1,0 +1,67 @@
+{
+  "version": 2,
+  "id": "react_to_fire",
+  "name": "React to Fire",
+  "nameRu": "Реагировать на обстрел",
+  "rootNodeId": "root",
+  "blackboardSchema": [
+    {
+      "key": "best_cover_position",
+      "valueKind": "nullablePosition",
+      "label": "Best cover position",
+      "description": "Cover destination supplied by the parent graph.",
+      "labelRu": "Лучшая точка укрытия",
+      "descriptionRu": "Точка укрытия, переданная родительским графом.",
+      "defaultValue": null
+    }
+  ],
+  "blackboardDefaults": {
+    "best_cover_position": null
+  },
+  "subgraphRefs": [
+    "take_cover"
+  ],
+  "nodes": [
+    {
+      "id": "root",
+      "type": "Root",
+      "children": [
+        "sequence"
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "sequence",
+      "type": "SequenceWithMemory",
+      "children": [
+        "lower_posture",
+        "take_cover_call"
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "lower_posture",
+      "type": "SetPosture",
+      "children": [],
+      "parameters": {
+        "posture": "crouch"
+      }
+    },
+    {
+      "id": "take_cover_call",
+      "type": "Subgraph",
+      "displayNameRu": "Занять укрытие",
+      "children": [],
+      "parameters": {
+        "subgraphId": "take_cover",
+        "cancelPolicy": "cancel_child"
+      },
+      "inputBindings": {
+        "cover_position": {
+          "source": "blackboard",
+          "key": "best_cover_position"
+        }
+      }
+    }
+  ]
+}

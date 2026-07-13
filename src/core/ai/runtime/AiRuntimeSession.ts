@@ -22,6 +22,15 @@ import {
   normalizeCompositeFrames,
 } from './AiCompositeRuntime';
 import { isReloadActionState } from './actions/ReloadAction';
+import { isWaitForEventActionState } from './actions/WaitForEventAction';
+import { cloneAiSubgraphExecutionState, isAiSubgraphExecutionState } from './AiSubgraphRuntime';
+import {
+  cloneAiMemoryScopes,
+  createAiMemoryScopes,
+  normalizeAiMemoryScopes,
+  resetAiMemoryScope,
+  type AiMemoryScopesSnapshotV1,
+} from '../contracts/AiMemoryScopes';
 
 export type AiRuntimeSessionStatus = 'idle' | 'active' | 'terminal';
 export type AiRuntimeTerminalStatus = 'success' | 'failure' | 'cancelled';
@@ -41,6 +50,7 @@ export interface AiRuntimeSessionSnapshotV1 {
   readonly status: AiRuntimeSessionStatus;
   readonly executionState?: AiGraphExecutionState;
   readonly blackboardMemory: AiGraphRunnerBlackboard;
+  readonly memoryScopes: AiMemoryScopesSnapshotV1;
   readonly cooldowns: Record<string, number>;
   readonly eventQueue: AiEventQueueSnapshotV1;
   readonly observerRegistry: AiBlackboardObserverRegistrySnapshotV1;
@@ -53,6 +63,7 @@ export interface CreateAiRuntimeSessionInput {
   readonly simulationTimeMs?: number;
   readonly executionState?: AiGraphExecutionState;
   readonly blackboardMemory?: AiGraphRunnerBlackboard;
+  readonly memoryScopes?: AiMemoryScopesSnapshotV1;
   readonly cooldowns?: Record<string, number>;
   readonly eventQueue?: AiEventQueueSnapshotV1;
   readonly observerRegistry?: AiBlackboardObserverRegistrySnapshotV1;
@@ -79,6 +90,12 @@ export interface LegacyAiRuntimeFields extends CreateAiRuntimeSessionInput {
 
 export function createAiRuntimeSession(input: CreateAiRuntimeSessionInput): AiRuntimeSessionSnapshotV1 {
   const executionState = cloneExecutionState(input.executionState);
+  const inputMemory = cloneBlackboard(
+    input.blackboardMemory ?? input.memoryScopes?.runtimeSessionMemory ?? {},
+  );
+  const memoryScopes = input.memoryScopes
+    ? cloneAiMemoryScopes(input.memoryScopes)
+    : createAiMemoryScopes({ runtimeSessionMemory: inputMemory });
   return {
     version: 1,
     graphId: input.graphId,
@@ -86,7 +103,11 @@ export function createAiRuntimeSession(input: CreateAiRuntimeSessionInput): AiRu
     simulationTimeMs: finiteNonNegative(input.simulationTimeMs, 0),
     status: executionState ? 'active' : input.lastTerminal ? 'terminal' : 'idle',
     executionState,
-    blackboardMemory: cloneBlackboard(input.blackboardMemory ?? {}),
+    blackboardMemory: inputMemory,
+    memoryScopes: {
+      ...memoryScopes,
+      runtimeSessionMemory: cloneBlackboard(inputMemory),
+    },
     cooldowns: cloneCooldowns(input.cooldowns ?? {}),
     eventQueue: input.eventQueue
       ? cloneAiEventQueueSnapshot(input.eventQueue)
@@ -135,6 +156,8 @@ export function normalizeAiRuntimeSession(
       ? 'terminal'
       : 'idle';
 
+  const blackboardMemory = normalizeBlackboard(value.blackboardMemory);
+  const memoryScopes = normalizeAiMemoryScopes(value.memoryScopes, blackboardMemory);
   return {
     session: {
       version: 1,
@@ -143,7 +166,11 @@ export function normalizeAiRuntimeSession(
       simulationTimeMs: finiteNonNegative(value.simulationTimeMs, 0),
       status,
       executionState,
-      blackboardMemory: normalizeBlackboard(value.blackboardMemory),
+      blackboardMemory,
+      memoryScopes: {
+        ...memoryScopes,
+        runtimeSessionMemory: cloneBlackboard(blackboardMemory),
+      },
       cooldowns: normalizeCooldowns(value.cooldowns),
       eventQueue: normalizeAiEventQueueSnapshot(value.eventQueue),
       observerRegistry: normalizeAiBlackboardObserverRegistry(value.observerRegistry),
@@ -159,6 +186,7 @@ export function migrateLegacyAiRuntimeSession(input: LegacyAiRuntimeFields): AiR
     simulationTimeMs: input.aiGraphSimulationTimeMs ?? input.simulationTimeMs,
     executionState: input.aiGraphExecutionState ?? input.executionState,
     blackboardMemory: input.aiGraphMemory ?? input.blackboardMemory,
+    memoryScopes: input.memoryScopes,
     cooldowns: input.aiNodeCooldowns ?? input.cooldowns,
     eventQueue: input.eventQueue,
     observerRegistry: input.observerRegistry,
@@ -191,6 +219,18 @@ export function applyRuntimeResultToSession(
         : 'idle',
     executionState,
     blackboardMemory: cloneBlackboard(current.blackboardMemory),
+    memoryScopes: executionState
+      ? {
+          ...cloneAiMemoryScopes(current.memoryScopes),
+          runtimeSessionMemory: cloneBlackboard(current.blackboardMemory),
+        }
+      : resetAiMemoryScope(
+          resetAiMemoryScope({
+            ...cloneAiMemoryScopes(current.memoryScopes),
+            runtimeSessionMemory: cloneBlackboard(current.blackboardMemory),
+          }, 'activeStateMemory'),
+          'nodeLocalState',
+        ),
     cooldowns: cloneCooldowns(result.cooldowns),
     eventQueue,
     observerRegistry,
@@ -214,6 +254,10 @@ export function resetAiRuntimeSession(
     unitId: current.unitId,
     simulationTimeMs: current.simulationTimeMs,
     blackboardMemory: options.keepMemory === false ? {} : current.blackboardMemory,
+    memoryScopes: createAiMemoryScopes({
+      persistentSoldierMemory: current.memoryScopes.persistentSoldierMemory,
+      runtimeSessionMemory: options.keepMemory === false ? {} : current.memoryScopes.runtimeSessionMemory,
+    }),
     cooldowns: options.keepCooldowns ? current.cooldowns : {},
     eventQueue: options.keepEvents ? current.eventQueue : createAiEventQueue(current.eventQueue.maxSize),
     observerRegistry: options.keepObservers
@@ -231,6 +275,7 @@ export function cloneAiRuntimeSession(value: AiRuntimeSessionSnapshotV1): AiRunt
     status: value.status,
     executionState: cloneExecutionState(value.executionState),
     blackboardMemory: cloneBlackboard(value.blackboardMemory),
+    memoryScopes: cloneAiMemoryScopes(value.memoryScopes),
     cooldowns: cloneCooldowns(value.cooldowns),
     eventQueue: cloneAiEventQueueSnapshot(value.eventQueue),
     observerRegistry: cloneAiBlackboardObserverRegistry(value.observerRegistry),
@@ -284,7 +329,11 @@ function cloneExecutionState(value: AiGraphExecutionState | undefined): AiGraphE
         }
       : isReloadActionState(value.activeData)
         ? { ...value.activeData }
-        : undefined,
+        : isWaitForEventActionState(value.activeData)
+          ? { ...value.activeData }
+          : isAiSubgraphExecutionState(value.activeData)
+            ? cloneAiSubgraphExecutionState(value.activeData)
+            : undefined,
     frames: value.frames === undefined ? undefined : cloneCompositeFrames(value.frames),
   };
 }

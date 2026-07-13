@@ -4,8 +4,8 @@
   "status": "active",
   "updated_at": "2026-07-13",
   "goal": "Создать понятную человеку лабораторию поведения одиночного бойца: Utility AI выбирает решение, stateful runtime исполняет длительные действия, общий A* ведёт бойца по карте, постоянные профили маршрута задают стоимость местности, а гибридная система обзора и внимания формирует субъективные визуальные и звуковые контакты без всезнания ИИ.",
-  "current_focus": "Завершён пакет доработок слоя «Обзор и память» и управления выбранным бойцом: невидимая местность затемняется одной растровой текстурой, добавлена компактная легенда, кеш явно показывает хранение только одного текущего поля, пулемётная угроза больше не меняет основной цвет при обновлении контакта, режим внимания можно выбирать вручную, одноразовый инструмент «Повернуть» задаёт направление правым кликом, а протягивание правой кнопкой у конечной точки маршрута задаёт направление после прибытия.",
-  "next_step": "Провести пользовательскую проверку доработок в real-wargame-preview. После подтверждения развивать восприятие нескольких бойцов и обмен субъективными контактами по командной цепочке; main не менять без отдельного явного GO пользователя.",
+  "current_focus": "View and Memory Heatmap v1 и управление направлением бойца сохранены из актуальной preview-базы. Поверх них в изолированной ветке реализован этап 3 Graph v2: единый реестр контрактов, типизированные порты, строгая проверка, безопасная миграция v1, области памяти, четыре сохраняемых подграфа и русский интерфейс редактора. Идёт повторная полная и обязательная визуальная проверка на актуальной базе; real-wargame-preview не изменена.",
+  "next_step": "Завершить полный набор smoke/build и обязательную browser/PNG-проверку итогового commit SHA. После отчёта ждать отдельной прямой команды пользователя на перенос в real-wargame-preview.",
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
   "last_verified_commit": "4bd7b3a4f52c1654c8e1440799e6a91059b55402",
   "last_verified_runs": {
@@ -122,7 +122,16 @@
     "src/core/visibility/VisibilityQuality.ts",
     "src/core/visibility/VisibilityStaticGrid.ts",
     "src/core/visibility/SelectedUnitVisibilityField.ts",
-    "src/rendering/PixiVisibilityHeatmapRenderer.ts"
+    "src/rendering/PixiVisibilityHeatmapRenderer.ts",
+    "src/core/ai/contracts/AiPortTypes.ts",
+    "src/core/ai/contracts/AiNodeContract.ts",
+    "src/core/ai/contracts/AiNodeContractRegistry.ts",
+    "src/core/ai/contracts/AiGraphMigration.ts",
+    "src/core/ai/contracts/AiMemoryScopes.ts",
+    "src/core/ai/contracts/AiSubgraphRegistry.ts",
+    "src/core/ai/runtime/AiSubgraphRuntime.ts",
+    "src/ai-node-editor/node-contract-ui.ts",
+    "src/ai-node-editor/subgraph-ui.ts"
   ],
   "test_files": [
     "scripts/perception_system_smoke.ts",
@@ -143,7 +152,12 @@
     "tests/ui-compact-route-controls.spec.ts",
     "scripts/view_memory_heatmap_smoke.ts",
     "scripts/view_memory_heatmap_performance_smoke.ts",
-    "scripts/perception_variance_smoke.ts"
+    "scripts/perception_variance_smoke.ts",
+    "scripts/ai_graph_v2_contracts_smoke.ts",
+    "scripts/ai_runtime_modifiers_smoke.ts",
+    "scripts/ai_subgraph_runtime_smoke.ts",
+    "scripts/ai_graph_v2_end_to_end_smoke.ts",
+    "scripts/ai_node_contract_ui_smoke.ts"
   ],
   "manual_docs": [
     "docs/subprojects/ai-single-unit-editor/PERCEPTION_ATTENTION_V1.md",
@@ -158,7 +172,8 @@
     "docs/subprojects/ai-single-unit-editor/VIEW_AND_MEMORY_HEATMAP_V1.md",
     "docs/superpowers/plans/2026-07-13-view-memory-heatmap.md",
     "docs/subprojects/ai-single-unit-editor/journal/2026-07-13-view-memory-heatmap-v1.md",
-    "docs/subprojects/ai-single-unit-editor/journal/2026-07-13-visibility-controls-facing.md"
+    "docs/subprojects/ai-single-unit-editor/journal/2026-07-13-visibility-controls-facing.md",
+    "docs/subprojects/ai-single-unit-editor/GRAPH_V2_TYPED_CONTRACTS_AND_SUBGRAPHS.md"
   ],
   "suggested_verification": [
     "npm run view-memory-heatmap:smoke",
@@ -185,7 +200,12 @@
     "npm run lab:smoke",
     "npm run build",
     "npm run docs:check",
-    "npx playwright test tests/perception-attention-overlay.spec.ts --project=chromium — только после явного разрешения пользователя"
+    "npx playwright test tests/perception-attention-overlay.spec.ts --project=chromium — только после явного разрешения пользователя",
+    "npm run graph-v2:smoke",
+    "npm run runtime-modifiers:smoke",
+    "npm run subgraph:smoke",
+    "npm run graph-v2-scenario:smoke",
+    "npm run node-contract-ui:smoke"
   ],
   "safety_rules": [
     "SimulationTick остаётся единственным кодом, который изменяет координаты бойца.",
@@ -207,7 +227,10 @@
     "Историческая информация хранится только метками контактов; старая тепловая карта не становится памятью местности.",
     "Поле выбранного бойца хранится в Uint8Array и выводится одним растровым Sprite, а не объектом на каждую клетку.",
     "Случайность обнаружения детерминирована контактом, ограничена профилем и не зависит от FPS.",
-    "Не переносить feat/view-memory-heatmap-temp в real-wargame-preview без отдельной команды пользователя."
+    "Не переносить feat/view-memory-heatmap-temp в real-wargame-preview без отдельной команды пользователя.",
+    "Graph v1 мигрируется только через детерминированную миграцию; неизвестные поля сохраняются в legacyMetadata.",
+    "Локальная память подграфа изменяет родителя только через явный output binding.",
+    "Рекурсивные подграфы запрещены; отмена родителя выполняет cleanup активного подграфа ровно один раз."
   ],
   "known_limits": [
     "Perception v1 рассчитывает зрение и слух только выбранного бойца, а не всех юнитов армии.",
@@ -218,6 +241,7 @@
     "Не все behavior-ноды ещё имеют отдельный семантический selector movementMode; числовые веса маршрута всё равно берутся только из общего реестра.",
     "Нет резервирования клеток между бойцами, flow field или группового коридора.",
     "View and Memory Heatmap v1 рассчитывается только для выбранного бойца.",
-    "Поле строится синхронно, но кешируется, квантируется и ограничивается по частоте; для карт значительно крупнее текущих может понадобиться фоновая пошаговая задача."
+    "Поле строится синхронно, но кешируется, квантируется и ограничивается по частоте; для карт значительно крупнее текущих может понадобиться фоновая пошаговая задача.",
+    "Graph v2 вводит статические подграфы; произвольный параллелизм, GOAP, HTN, TQS, Smart Objects и multi-agent scheduler остаются будущими этапами."
   ]
 }

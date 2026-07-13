@@ -1,0 +1,9 @@
+{
+  "version": 2, "id": "reload_weapon", "name": "Reload Weapon", "nameRu": "Перезарядить оружие", "rootNodeId": "root",
+  "blackboardSchema": [], "blackboardDefaults": {}, "subgraphRefs": [],
+  "nodes": [
+    { "id": "root", "type": "Root", "children": ["sequence"], "parameters": {} },
+    { "id": "sequence", "type": "SequenceWithMemory", "children": ["reload"], "parameters": {} },
+    { "id": "reload", "type": "Reload", "displayNameRu": "Перезарядить", "children": [], "parameters": { "durationSeconds": 3, "targetAmmo": 30, "failIfNoWeapon": true } }
+  ]
+}

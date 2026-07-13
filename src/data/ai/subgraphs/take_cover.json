@@ -1,0 +1,76 @@
+{
+  "version": 2,
+  "id": "take_cover",
+  "name": "Take Cover",
+  "nameRu": "Занять укрытие",
+  "rootNodeId": "root",
+  "blackboardSchema": [
+    {
+      "key": "best_cover_position",
+      "valueKind": "nullablePosition",
+      "label": "Best cover position",
+      "description": "Cover destination supplied by the parent graph.",
+      "labelRu": "Лучшая точка укрытия",
+      "descriptionRu": "Точка укрытия, переданная родительским графом.",
+      "defaultValue": null
+    },
+    {
+      "key": "self_position",
+      "valueKind": "position",
+      "label": "Self position",
+      "description": "Current soldier position.",
+      "labelRu": "Позиция бойца",
+      "descriptionRu": "Текущая позиция бойца.",
+      "defaultValue": {
+        "x": 0,
+        "y": 0
+      }
+    }
+  ],
+  "blackboardDefaults": {
+    "best_cover_position": null,
+    "self_position": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "subgraphRefs": [],
+  "nodes": [
+    {
+      "id": "root",
+      "type": "Root",
+      "children": [
+        "sequence"
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "sequence",
+      "type": "SequenceWithMemory",
+      "children": [
+        "move_to_cover"
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "move_to_cover",
+      "type": "MoveToBlackboardPosition",
+      "displayNameRu": "Двигаться к укрытию",
+      "children": [],
+      "parameters": {
+        "targetKey": "best_cover_position",
+        "acceptanceRadiusCells": 0.2,
+        "timeoutSeconds": 15,
+        "stuckTimeoutSeconds": 2.5,
+        "minimumProgressCells": 0.05,
+        "abortOnTargetLost": true
+      },
+      "inputBindings": {
+        "target": {
+          "source": "blackboard",
+          "key": "best_cover_position"
+        }
+      }
+    }
+  ]
+}

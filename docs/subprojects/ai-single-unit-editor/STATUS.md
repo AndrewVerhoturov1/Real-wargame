@@ -14,11 +14,11 @@
 
 ## Current focus
 
-Завершён пакет доработок слоя «Обзор и память» и управления выбранным бойцом: невидимая местность затемняется одной растровой текстурой, добавлена компактная легенда, кеш явно показывает хранение только одного текущего поля, пулемётная угроза больше не меняет основной цвет при обновлении контакта, режим внимания можно выбирать вручную, одноразовый инструмент «Повернуть» задаёт направление правым кликом, а протягивание правой кнопкой у конечной точки маршрута задаёт направление после прибытия.
+View and Memory Heatmap v1 и управление направлением бойца сохранены из актуальной preview-базы. Поверх них в изолированной ветке реализован этап 3 Graph v2: единый реестр контрактов, типизированные порты, строгая проверка, безопасная миграция v1, области памяти, четыре сохраняемых подграфа и русский интерфейс редактора. Идёт повторная полная и обязательная визуальная проверка на актуальной базе; real-wargame-preview не изменена.
 
 ## Next step
 
-Провести пользовательскую проверку доработок в real-wargame-preview. После подтверждения развивать восприятие нескольких бойцов и обмен субъективными контактами по командной цепочке; main не менять без отдельного явного GO пользователя.
+Завершить полный набор smoke/build и обязательную browser/PNG-проверку итогового commit SHA. После отчёта ждать отдельной прямой команды пользователя на перенос в real-wargame-preview.
 
 ## Read first
 
@@ -98,6 +98,15 @@
 - `src/core/visibility/VisibilityStaticGrid.ts`
 - `src/core/visibility/SelectedUnitVisibilityField.ts`
 - `src/rendering/PixiVisibilityHeatmapRenderer.ts`
+- `src/core/ai/contracts/AiPortTypes.ts`
+- `src/core/ai/contracts/AiNodeContract.ts`
+- `src/core/ai/contracts/AiNodeContractRegistry.ts`
+- `src/core/ai/contracts/AiGraphMigration.ts`
+- `src/core/ai/contracts/AiMemoryScopes.ts`
+- `src/core/ai/contracts/AiSubgraphRegistry.ts`
+- `src/core/ai/runtime/AiSubgraphRuntime.ts`
+- `src/ai-node-editor/node-contract-ui.ts`
+- `src/ai-node-editor/subgraph-ui.ts`
 
 ## Suggested verification
 
@@ -126,6 +135,11 @@
 - `npm run build`
 - `npm run docs:check`
 - `npx playwright test tests/perception-attention-overlay.spec.ts --project=chromium — только после явного разрешения пользователя`
+- `npm run graph-v2:smoke`
+- `npm run runtime-modifiers:smoke`
+- `npm run subgraph:smoke`
+- `npm run graph-v2-scenario:smoke`
+- `npm run node-contract-ui:smoke`
 
 ## Safety rules
 
@@ -149,3 +163,6 @@
 - Поле выбранного бойца хранится в Uint8Array и выводится одним растровым Sprite, а не объектом на каждую клетку.
 - Случайность обнаружения детерминирована контактом, ограничена профилем и не зависит от FPS.
 - Не переносить feat/view-memory-heatmap-temp в real-wargame-preview без отдельной команды пользователя.
+- Graph v1 мигрируется только через детерминированную миграцию; неизвестные поля сохраняются в legacyMetadata.
+- Локальная память подграфа изменяет родителя только через явный output binding.
+- Рекурсивные подграфы запрещены; отмена родителя выполняет cleanup активного подграфа ровно один раз.

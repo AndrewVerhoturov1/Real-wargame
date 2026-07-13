@@ -12,6 +12,7 @@ interface RuntimeTraceItem {
   readonly status: TraceStatus;
   readonly reason: string;
   readonly reasonRu?: string;
+  readonly path?: string;
 }
 
 interface RuntimeScoreBreakdownItem {
@@ -60,6 +61,10 @@ interface RuntimeDebugPayload {
   readonly activeNodeId?: string;
   readonly activeNodeName?: string;
   readonly activeNodeNameRu?: string;
+  readonly activeSubgraphId?: string;
+  readonly activeSubgraphName?: string;
+  readonly activeSubgraphNameRu?: string;
+  readonly subgraphPath?: string;
   readonly elapsedMs?: number;
   readonly cancellationReason?: string;
   readonly cancellationReasonRu?: string;
@@ -74,6 +79,7 @@ interface RuntimeDebugPayload {
   readonly reactiveAbort?: RuntimeReactiveAbort;
   readonly observerChecks?: number;
   readonly observerEvents?: number;
+  readonly memoryScopes?: Record<string, unknown>;
 }
 
 interface NodeDebugState {
@@ -105,7 +111,7 @@ function scheduleApply(force = false): void {
 function applyRuntimeDebugOverlay(): void {
   const payload = readDebugPayload();
   const signature = payload
-    ? `${payload.unitId}:${payload.nowMs}:${payload.selectedBranchNodeId}:${payload.activeNodeId ?? 'none'}:${payload.status ?? 'instant'}:${payload.trace.length}:${payload.scores.length}:${payload.reactiveAbort?.eventType ?? 'no-abort'}:${payload.paused ? 'paused' : 'live'}`
+    ? `${payload.unitId}:${payload.nowMs}:${payload.selectedBranchNodeId}:${payload.activeNodeId ?? 'none'}:${payload.activeSubgraphId ?? 'no-subgraph'}:${payload.status ?? 'instant'}:${payload.trace.length}:${payload.scores.length}:${payload.reactiveAbort?.eventType ?? 'no-abort'}:${payload.paused ? 'paused' : 'live'}`
     : 'empty';
   const hasGraphNodes = document.querySelector('.graph-node[data-node-id]') !== null;
   if (!hasGraphNodes) return;
@@ -149,7 +155,7 @@ function buildNodeDebugMap(payload: RuntimeDebugPayload): Map<string, NodeDebugS
     const node = ensure(item.nodeId);
     node.classes.add(`runtime-debug-${item.status}`);
     node.labels.push(statusLabel(item.status));
-    node.reasons.push(item.reasonRu ?? item.reason);
+    node.reasons.push(`${item.path ? `${item.path}: ` : ''}${item.reasonRu ?? item.reason}`);
   }
 
   for (const score of payload.scores) {
@@ -229,6 +235,11 @@ function renderDebugPanel(payload: RuntimeDebugPayload | null): void {
   const activeRows = activeNode
     ? `<div><dt>Активная нода</dt><dd>${escapeHtml(activeNode)}</dd></div>${typeof payload.elapsedMs === 'number' ? `<div><dt>${escapeHtml(elapsedLabel(status))}</dt><dd>${escapeHtml(formatElapsed(payload.elapsedMs))}</dd></div>` : ''}`
     : '';
+  const activeSubgraph = payload.activeSubgraphNameRu ?? payload.activeSubgraphName ?? payload.activeSubgraphId;
+  const subgraphRows = activeSubgraph
+    ? `<div><dt>Активный подграф</dt><dd>${escapeHtml(activeSubgraph)}</dd></div>${payload.subgraphPath ? `<div><dt>Путь выполнения</dt><dd>${escapeHtml(payload.subgraphPath)}</dd></div>` : ''}`
+    : '';
+  const memoryRows = renderMemoryScopes(payload.memoryScopes);
   const cancellation = payload.cancellationReasonRu ?? payload.cancellationReason;
   const cancellationRow = cancellation ? `<div><dt>Причина отмены</dt><dd>${escapeHtml(cancellation)}</dd></div>` : '';
   const reactiveRows = payload.reactiveAbort
@@ -247,13 +258,38 @@ function renderDebugPanel(payload: RuntimeDebugPayload | null): void {
       <div><dt>Победила</dt><dd>${escapeHtml(payload.selectedBranchNameRu ?? payload.selectedBranchName)}</dd></div>
       <div><dt>Состояние</dt><dd class="runtime-status ${escapeHtml(status)}">${escapeHtml(runtimeStatusLabel(status))}</dd></div>
       ${activeRows}
+      ${subgraphRows}
       ${cancellationRow}
       ${reactiveRows}
       <div><dt>Итог</dt><dd>${escapeHtml(payload.explanationRu ?? payload.explanation)}</dd></div>
     </dl>
     <ul>${scoreRows}</ul>
+    <details class="runtime-memory-scopes"><summary>Области памяти</summary>${memoryRows}</details>
   `;
   workspace.appendChild(panel);
+}
+
+function renderMemoryScopes(scopes: Record<string, unknown> | undefined): string {
+  if (!scopes) return '<p>Нет данных об областях памяти.</p>';
+  const labels: Record<string, string> = {
+    persistentSoldierMemory: 'Постоянная память бойца',
+    runtimeSessionMemory: 'Память runtime session',
+    activeStateMemory: 'Память активного состояния',
+    subgraphLocalMemory: 'Локальная память подграфа',
+    nodeLocalState: 'Локальное состояние ноды',
+  };
+  const rows = Object.entries(scopes).flatMap(([scope, raw]) => {
+    if (!isRecord(raw)) return [];
+    if (scope === 'subgraphLocalMemory' || scope === 'nodeLocalState') {
+      return Object.entries(raw).map(([owner, owned]) => {
+        const keys = isRecord(owned) ? Object.keys(owned) : [];
+        return `<li><b>${escapeHtml(labels[scope] ?? scope)} · ${escapeHtml(owner)}</b><span>${escapeHtml(keys.length > 0 ? keys.join(', ') : 'пусто')}</span></li>`;
+      });
+    }
+    const keys = Object.keys(raw);
+    return [`<li><b>${escapeHtml(labels[scope] ?? scope)}</b><span>${escapeHtml(keys.length > 0 ? keys.join(', ') : 'пусто')}</span></li>`];
+  });
+  return `<ul>${rows.join('')}</ul>`;
 }
 
 function removeExistingNodeDebug(): void {
@@ -298,6 +334,10 @@ function readDebugPayload(): RuntimeDebugPayload | null {
       activeNodeId: typeof parsed.activeNodeId === 'string' ? parsed.activeNodeId : undefined,
       activeNodeName: typeof parsed.activeNodeName === 'string' ? parsed.activeNodeName : undefined,
       activeNodeNameRu: typeof parsed.activeNodeNameRu === 'string' ? parsed.activeNodeNameRu : undefined,
+      activeSubgraphId: typeof parsed.activeSubgraphId === 'string' ? parsed.activeSubgraphId : undefined,
+      activeSubgraphName: typeof parsed.activeSubgraphName === 'string' ? parsed.activeSubgraphName : undefined,
+      activeSubgraphNameRu: typeof parsed.activeSubgraphNameRu === 'string' ? parsed.activeSubgraphNameRu : undefined,
+      subgraphPath: typeof parsed.subgraphPath === 'string' ? parsed.subgraphPath : undefined,
       elapsedMs: typeof parsed.elapsedMs === 'number' ? parsed.elapsedMs : undefined,
       cancellationReason: typeof parsed.cancellationReason === 'string' ? parsed.cancellationReason : undefined,
       cancellationReasonRu: typeof parsed.cancellationReasonRu === 'string' ? parsed.cancellationReasonRu : undefined,
@@ -314,6 +354,7 @@ function readDebugPayload(): RuntimeDebugPayload | null {
       reactiveAbort: normalizeReactiveAbort(parsed.reactiveAbort),
       observerChecks: typeof parsed.observerChecks === 'number' ? parsed.observerChecks : undefined,
       observerEvents: typeof parsed.observerEvents === 'number' ? parsed.observerEvents : undefined,
+      memoryScopes: isRecord(parsed.memoryScopes) ? parsed.memoryScopes : undefined,
     };
   } catch {
     return null;

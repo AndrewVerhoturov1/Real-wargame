@@ -2,11 +2,21 @@ import './ai-node-editor.css';
 import './ai-node-editor-authoring.css';
 import graphData from '../data/ai/soldier_default_survival_graph.json';
 import { AI_NODE_TYPE_DEFINITIONS, type AiNodeCategory } from '../core/ai/AiNodeTypes';
+import type { AiBlackboardSchemaEntry, AiBlackboardValue } from '../core/ai/AiBlackboard';
+import type { AiInputBinding, AiOutputBinding, AiPortValueKind } from '../core/ai/contracts/AiPortTypes';
+import { migrateAiGraphToV2 } from '../core/ai/contracts/AiGraphMigration';
+import { validateAiGraph, type AiGraphValidationIssue } from '../core/ai/AiGraphValidation';
+import {
+  canConnectPorts, createContractDefaultParameters, describeNodeRu, explainPortConnectionRu,
+  getPortKind, readContractParameters, renderContractParameters, renderNodePorts,
+} from './node-contract-ui';
+import { cloneSubgraphGraph, getSubgraphChoice, renderGraphBreadcrumb, renderSubgraphSelect } from './subgraph-ui';
 
 const ENGINE_BASE_URL = 'http://127.0.0.1:8787';
 const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
 const POSITION_STORAGE_KEY = 'real-wargame.ai-node-editor.positions.v6';
 const UI_STORAGE_KEY = 'real-wargame.ai-node-editor.ui.v6';
+const SUBGRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.subgraphs.v2';
 const CANVAS_WIDTH = 2600;
 const CANVAS_HEIGHT = 1700;
 const NODE_WIDTH = 210;
@@ -17,9 +27,7 @@ if (!root) throw new Error('AI node editor root is missing.');
 const editorRoot = root;
 
 
-type JsonPrimitive = string | number | boolean | null;
-type JsonPosition = { x: number; y: number };
-type JsonValue = JsonPrimitive | JsonPosition;
+type JsonValue = AiBlackboardValue;
 type JsonObject = Record<string, JsonValue>;
 type BottomTab = 'console' | 'json';
 type LanguageMode = 'ru' | 'en' | 'both';
@@ -34,25 +42,32 @@ interface EditableAiNode {
   descriptionRu?: string;
   children: string[];
   parameters: JsonObject;
+  inputBindings?: Record<string, AiInputBinding>;
+  outputBindings?: Record<string, AiOutputBinding>;
+  legacyMetadata?: Record<string, unknown>;
 }
 
 interface EditableAiGraph {
-  version: 1;
+  version: 1 | 2;
   id: string;
   name: string;
   nameRu?: string;
   description?: string;
   descriptionRu?: string;
   rootNodeId: string;
+  blackboardSchema?: AiBlackboardSchemaEntry[];
   blackboardDefaults: JsonObject;
   nodes: EditableAiNode[];
+  subgraphRefs?: string[];
+  legacyMetadata?: Record<string, unknown>;
 }
 
 interface NodePosition { x: number; y: number }
 interface DragState { nodeId: string; offsetX: number; offsetY: number; moved: boolean }
 interface PanState { startClientX: number; startClientY: number; startPanX: number; startPanY: number }
-interface ConnectionState { sourceNodeId: string; currentX: number; currentY: number }
+interface ConnectionState { sourceNodeId: string; sourcePortId?: string; sourceKind?: AiPortValueKind; mode: 'flow' | 'data'; currentX: number; currentY: number }
 interface ContextMenuState { nodeId: string; x: number; y: number }
+interface GraphNavigationEntry { graph: EditableAiGraph; positions: Record<string, NodePosition>; selectedNodeId: string; labelRu: string }
 interface EditorUiState {
   paletteOpen: boolean;
   inspectorOpen: boolean;
@@ -87,6 +102,8 @@ let dragState: DragState | null = null;
 let panState: PanState | null = null;
 let connectionState: ConnectionState | null = null;
 let contextMenuState: ContextMenuState | null = null;
+let validationIssues: AiGraphValidationIssue[] = [];
+let graphNavigation: GraphNavigationEntry[] = [];
 
 ensurePositionsForGraph();
 render();
@@ -110,7 +127,8 @@ function render(): void {
           <div id="engine-status" class="engine-status compact-status ${engineOnline ? 'online' : 'offline'}"><i class="engine-status-dot" aria-hidden="true"></i><span>${escapeHtml(lastHealthText)}</span></div>
           <button id="toggle-palette" class="ai-editor-button" type="button">+ Add node</button>
           <button id="toggle-inspector" class="ai-editor-button" type="button">Inspector</button>
-          <button id="validate-graph" class="ai-editor-button" type="button">Validate</button>
+          <button id="validate-graph" class="ai-editor-button" type="button">Проверить граф</button>
+          <button id="migrate-graph" class="ai-editor-button primary" type="button">Проверить и обновить формат графа</button>
           <button id="evaluate-once" class="ai-editor-button" type="button">Evaluate</button>
           <button id="export-graph" class="ai-editor-button" type="button">Export</button>
           <button id="import-graph" class="ai-editor-button" type="button">Import</button>
@@ -118,6 +136,7 @@ function render(): void {
           <input id="import-graph-file" type="file" accept="application/json,.json" hidden />
         </div>
       </header>
+      ${renderGraphVersionBanner()}
       <main class="ai-editor-main compact-main">
         ${renderPalettePanel()}
         ${renderWorkspace()}
@@ -137,7 +156,7 @@ function renderPalettePanel(): string {
   }
 
   const definitions = Object.values(AI_NODE_TYPE_DEFINITIONS);
-  const categories: AiNodeCategory[] = ['flow', 'condition', 'score', 'query', 'action', 'memory', 'debug'];
+  const categories: AiNodeCategory[] = ['flow', 'condition', 'score', 'query', 'action', 'memory', 'subgraph', 'debug'];
   return `
     <aside class="ai-editor-panel palette-panel" aria-label="Node palette">
       <div class="panel-title compact-panel-title"><h2>Palette</h2><button id="close-palette" class="mini-button" type="button">Hide</button></div>
@@ -158,13 +177,15 @@ function renderWorkspace(): string {
   return `
     <section id="graph-workspace" class="graph-workspace graph-viewport" aria-label="Soldier behavior graph">
       <div class="graph-toolbar">
+        ${graphNavigation.length > 0 ? '<button id="back-to-parent-graph" class="graph-tool-button" type="button">← К родительскому графу</button>' : ''}
+        ${renderGraphBreadcrumb(['Главный граф', ...graphNavigation.map((entry) => entry.labelRu), ...(graphNavigation.length > 0 ? [editorGraph.nameRu ?? editorGraph.name] : [])], escapeHtml)}
         <button id="zoom-out" class="graph-tool-button" type="button">−</button>
         <button id="zoom-reset" class="graph-tool-button" type="button">${Math.round(uiState.zoom * 100)}%</button>
         <button id="zoom-in" class="graph-tool-button" type="button">+</button>
         <button id="fit-graph" class="graph-tool-button" type="button">Fit</button>
         <button id="detail-toggle" class="graph-tool-button" type="button">${uiState.nodeDetailMode === 'compact' ? 'Compact' : 'Detailed'}</button>
         <button id="language-toggle-editor" class="graph-tool-button" type="button">${uiState.languageMode.toUpperCase()}</button>
-        <span class="graph-help">Wheel = zoom · drag empty field = pan · drag right port → node = link</span>
+        <span class="graph-help">Колесо — масштаб · пустое поле — перемещение · круглый порт — поток · подписанный порт — типизированные данные</span>
       </div>
       <div class="graph-canvas" style="width:${CANVAS_WIDTH}px; height:${CANVAS_HEIGHT}px; transform: translate(${uiState.panX}px, ${uiState.panY}px) scale(${uiState.zoom});">
         ${renderEdges()}${renderGraphNodes()}
@@ -185,8 +206,10 @@ function renderGraphNodes(): string {
         <button class="node-port out" data-port-kind="out" data-node-id="${escapeHtml(node.id)}" title="Drag to another node"></button>
         <span class="node-type-chip">${escapeHtml(category)} / ${escapeHtml(node.type)}</span>
         <h3>${escapeHtml(getNodeTitle(node))}</h3>
-        <p class="node-secondary">${escapeHtml(getNodeSubtitle(node))}</p>
+        <p class="node-secondary">${escapeHtml(describeNodeRu(node))}</p>
         ${detailHtml}
+        ${renderNodePorts(node, escapeHtml)}
+        ${node.type === 'Subgraph' ? '<p class="subgraph-open-hint">Двойной клик — открыть подграф</p>' : ''}
         <div class="node-port-row"><span>id</span><b>${escapeHtml(node.id)}</b></div>
       </article>
     `;
@@ -205,10 +228,25 @@ function renderEdgePaths(): string {
       const child = editorGraph.nodes.find((candidate) => candidate.id === childId);
       if (!child) continue;
       const to = getNodePosition(child.id);
-      paths.push(`<path class="edge-path" d="${makeEdgePath(from.x + NODE_WIDTH, from.y + NODE_HEIGHT / 2, to.x, to.y + NODE_HEIGHT / 2)}" />`);
+      paths.push(`<path class="edge-path flow-edge" d="${makeEdgePath(from.x + NODE_WIDTH, from.y + NODE_HEIGHT / 2, to.x, to.y + NODE_HEIGHT / 2)}" />`);
     }
+    paths.push(...renderDataBindingPaths(node));
   }
   return paths.join('');
+}
+
+function renderDataBindingPaths(targetNode: EditableAiNode): string[] {
+  const to = getNodePosition(targetNode.id);
+  return Object.entries(targetNode.inputBindings ?? {}).flatMap(([targetPortId, binding], index) => {
+    if (binding.source !== 'node') return [];
+    const sourceNode = editorGraph.nodes.find((candidate) => candidate.id === binding.nodeId);
+    if (!sourceNode) return [];
+    const outputKind = getPortKind(sourceNode.type, 'output', binding.port, sourceNode.parameters);
+    const inputKind = getPortKind(targetNode.type, 'input', targetPortId, targetNode.parameters);
+    const from = getNodePosition(sourceNode.id);
+    const offset = 58 + index * 10;
+    return [`<path class="edge-path data-edge ${escapeHtml(outputKind ?? inputKind ?? 'unknown')}" data-edge-source="${escapeHtml(sourceNode.id)}" data-edge-target="${escapeHtml(targetNode.id)}" d="${makeEdgePath(from.x + NODE_WIDTH, from.y + offset, to.x, to.y + offset)}" />`];
+  });
 }
 
 function renderConnectionPreview(): string {
@@ -236,7 +274,8 @@ function renderInspector(node: EditableAiNode): string {
       <label class="inspector-field">EN displayName<input id="node-display-name" value="${escapeAttribute(node.displayName)}" /></label>
       <label class="inspector-field">RU displayNameRu<input id="node-display-name-ru" value="${escapeAttribute(node.displayNameRu)}" /></label>
       <details><summary>Descriptions</summary><label class="inspector-field">EN description<textarea id="node-description" rows="3">${escapeHtml(node.description ?? '')}</textarea></label><label class="inspector-field">RU descriptionRu<textarea id="node-description-ru" rows="3">${escapeHtml(node.descriptionRu ?? '')}</textarea></label></details>
-      <details open><summary>parameters JSON</summary><label class="inspector-field">parameters<textarea id="node-parameters" rows="6">${escapeHtml(JSON.stringify(node.parameters, null, 2))}</textarea></label></details>
+      <section class="contract-parameter-panel"><h4>Параметры по контракту</h4>${node.type === 'Subgraph' ? renderSubgraphSelect(String(node.parameters.subgraphId ?? 'take_cover'), escapeHtml) : ''}${renderContractParameters(node, escapeHtml)}</section>
+      <details><summary>Технический JSON (для диагностики)</summary><label class="inspector-field">parameters<textarea id="node-parameters" rows="6">${escapeHtml(JSON.stringify(node.parameters, null, 2))}</textarea></label></details>
       <button id="save-node" class="ai-editor-button primary" type="button">Save node</button>
     </section>
     <section class="inspector-card compact-inspector-card"><h3>Links</h3><p class="toolbar-note">Main way: drag the small right dot of a node to another node.</p><label class="inspector-field">Fallback child<select id="link-target-select">${linkOptions}</select></label><button id="link-selected-node" class="ai-editor-button" type="button">Link selected → child</button><div class="child-link-list">${childRows}</div></section>
@@ -250,7 +289,7 @@ function renderBottomPanel(): string {
   if (!uiState.bottomOpen) return `<footer class="ai-editor-bottom collapsed-bottom"><button id="toggle-bottom" class="bottom-toggle" type="button">▲ Console / JSON</button><span>${escapeHtml(shorten(validationText, 160))}</span></footer>`;
   const consoleActive = uiState.bottomTab === 'console' ? 'active' : '';
   const jsonActive = uiState.bottomTab === 'json' ? 'active' : '';
-  return `<footer class="ai-editor-bottom expanded-bottom"><div class="bottom-tabs"><button id="bottom-tab-console" class="bottom-tab ${consoleActive}" type="button">Console</button><button id="bottom-tab-json" class="bottom-tab ${jsonActive}" type="button">Graph JSON</button><button id="toggle-bottom" class="bottom-tab" type="button">▼ Hide</button></div><section class="bottom-box ${uiState.bottomTab === 'console' ? '' : 'hidden'}"><h2>Validation / Engine result</h2><pre>${escapeHtml(validationText)}</pre></section><section class="bottom-box ${uiState.bottomTab === 'json' ? '' : 'hidden'}"><h2>Graph JSON preview</h2><pre>${escapeHtml(JSON.stringify(editorGraph, null, 2))}</pre></section></footer>`;
+  return `<footer class="ai-editor-bottom expanded-bottom"><div class="bottom-tabs"><button id="bottom-tab-console" class="bottom-tab ${consoleActive}" type="button">Console</button><button id="bottom-tab-json" class="bottom-tab ${jsonActive}" type="button">Graph JSON</button><button id="toggle-bottom" class="bottom-tab" type="button">▼ Hide</button></div><section class="bottom-box ${uiState.bottomTab === 'console' ? '' : 'hidden'}"><h2>Ошибки и предупреждения графа</h2>${renderValidationIssues()}<pre>${escapeHtml(validationText)}</pre></section><section class="bottom-box ${uiState.bottomTab === 'json' ? '' : 'hidden'}"><h2>Graph JSON preview</h2><pre>${escapeHtml(JSON.stringify(editorGraph, null, 2))}</pre></section></footer>`;
 }
 
 function renderContextMenu(): string {
@@ -272,7 +311,10 @@ function installEventHandlers(): void {
   document.querySelector<HTMLButtonElement>('#toggle-bottom')?.addEventListener('click', toggleBottomPanel);
   document.querySelector<HTMLButtonElement>('#bottom-tab-console')?.addEventListener('click', () => setBottomTab('console'));
   document.querySelector<HTMLButtonElement>('#bottom-tab-json')?.addEventListener('click', () => setBottomTab('json'));
-  document.querySelector<HTMLButtonElement>('#validate-graph')?.addEventListener('click', () => { void validateGraphThroughEngine(); });
+  document.querySelector<HTMLButtonElement>('#validate-graph')?.addEventListener('click', validateGraphLocally);
+  document.querySelector<HTMLButtonElement>('#migrate-graph')?.addEventListener('click', migrateCurrentGraph);
+  document.querySelector<HTMLButtonElement>('#migrate-graph-banner')?.addEventListener('click', migrateCurrentGraph);
+  document.querySelector<HTMLButtonElement>('#back-to-parent-graph')?.addEventListener('click', closeCurrentSubgraph);
   document.querySelector<HTMLButtonElement>('#evaluate-once')?.addEventListener('click', () => { void evaluateOnceThroughEngine(); });
   document.querySelector<HTMLButtonElement>('#save-node')?.addEventListener('click', saveSelectedNodeFromInspector);
   document.querySelector<HTMLButtonElement>('#link-selected-node')?.addEventListener('click', linkSelectedNodeToChosenChild);
@@ -291,9 +333,14 @@ function installEventHandlers(): void {
   document.querySelectorAll<HTMLElement>('[data-node-id].graph-node').forEach((element) => {
     element.addEventListener('pointerdown', (event) => { if (!isPortEvent(event)) startDrag(event, element.dataset.nodeId ?? ''); });
     element.addEventListener('click', () => { if (!dragState?.moved && element.dataset.nodeId) selectNode(element.dataset.nodeId); });
+    element.addEventListener('dblclick', () => { if (element.dataset.nodeId) openSubgraphNode(element.dataset.nodeId); });
     element.addEventListener('contextmenu', (event) => { event.preventDefault(); if (element.dataset.nodeId) { selectedNodeId = element.dataset.nodeId; contextMenuState = { nodeId: element.dataset.nodeId, x: event.clientX, y: event.clientY }; render(); } });
   });
-  document.querySelectorAll<HTMLButtonElement>('[data-port-kind="out"]').forEach((button) => button.addEventListener('pointerdown', (event) => { if (button.dataset.nodeId) startConnectionDrag(event, button.dataset.nodeId); }));
+  document.querySelectorAll<HTMLButtonElement>('[data-port-kind="out"]').forEach((button) => button.addEventListener('pointerdown', (event) => { if (button.dataset.nodeId) startConnectionDrag(event, button.dataset.nodeId, 'flow'); }));
+  document.querySelectorAll<HTMLButtonElement>('[data-typed-port-kind="output"]').forEach((button) => button.addEventListener('pointerdown', (event) => {
+    if (button.dataset.nodeId && button.dataset.portId && button.dataset.valueKind) startConnectionDrag(event, button.dataset.nodeId, 'data', button.dataset.portId, button.dataset.valueKind as AiPortValueKind);
+  }));
+  document.querySelectorAll<HTMLButtonElement>('[data-validation-node-id]').forEach((button) => button.addEventListener('click', () => { if (button.dataset.validationNodeId) selectNode(button.dataset.validationNodeId); }));
   document.querySelectorAll<HTMLButtonElement>('[data-palette-type]').forEach((button) => button.addEventListener('click', () => { if (button.dataset.paletteType) addNodeFromPalette(button.dataset.paletteType); }));
   document.querySelectorAll<HTMLButtonElement>('[data-unlink-child]').forEach((button) => button.addEventListener('click', () => { if (button.dataset.unlinkChild) unlinkChild(selectedNodeId, button.dataset.unlinkChild); }));
   document.querySelectorAll<HTMLButtonElement>('[data-menu-action]').forEach((button) => button.addEventListener('click', () => handleContextMenuAction(button.dataset.menuAction ?? '')));
@@ -333,17 +380,44 @@ function updateNodePosition(nodeId: string): void {
   if (element) { element.style.left = `${position.x}px`; element.style.top = `${position.y}px`; }
 }
 
-function startConnectionDrag(event: PointerEvent, sourceNodeId: string): void {
+function startConnectionDrag(event: PointerEvent, sourceNodeId: string, mode: 'flow' | 'data', sourcePortId?: string, sourceKind?: AiPortValueKind): void {
   event.preventDefault();
   event.stopPropagation();
   const world = screenToWorld(event.clientX, event.clientY);
-  connectionState = { sourceNodeId, currentX: world.x, currentY: world.y };
+  connectionState = { sourceNodeId, sourcePortId, sourceKind, mode, currentX: world.x, currentY: world.y };
+  updateTypedPortHighlights();
   window.addEventListener('pointermove', onConnectionMove);
   window.addEventListener('pointerup', onConnectionEnd, { once: true });
 }
 
 function onConnectionMove(event: PointerEvent): void { if (connectionState) { const world = screenToWorld(event.clientX, event.clientY); connectionState.currentX = world.x; connectionState.currentY = world.y; updateSvgPaths(); } }
-function onConnectionEnd(event: PointerEvent): void { window.removeEventListener('pointermove', onConnectionMove); const target = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null; const targetNodeId = target?.closest<HTMLElement>('.graph-node')?.dataset.nodeId; const sourceNodeId = connectionState?.sourceNodeId; connectionState = null; if (sourceNodeId && targetNodeId) addLink(sourceNodeId, targetNodeId); else render(); }
+function onConnectionEnd(event: PointerEvent): void {
+  window.removeEventListener('pointermove', onConnectionMove);
+  const target = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null;
+  const state = connectionState;
+  connectionState = null;
+  clearTypedPortHighlights();
+  if (!state) return render();
+  if (state.mode === 'flow') {
+    const targetNodeId = target?.closest<HTMLElement>('.graph-node')?.dataset.nodeId;
+    if (targetNodeId) addLink(state.sourceNodeId, targetNodeId); else render();
+    return;
+  }
+  const input = target?.closest<HTMLButtonElement>('[data-typed-port-kind="input"]');
+  const targetNodeId = input?.dataset.nodeId;
+  const targetPortId = input?.dataset.portId;
+  const inputKind = input?.dataset.valueKind as AiPortValueKind | undefined;
+  if (!targetNodeId || !targetPortId || !state.sourcePortId || !state.sourceKind || !inputKind) return render();
+  if (!canConnectPorts(state.sourceKind, inputKind)) {
+    validationText = explainPortConnectionRu(state.sourceKind, inputKind);
+    uiState.bottomOpen = true; uiState.bottomTab = 'console'; render(); return;
+  }
+  const targetNode = editorGraph.nodes.find((node) => node.id === targetNodeId);
+  if (!targetNode) return render();
+  targetNode.inputBindings = { ...(targetNode.inputBindings ?? {}), [targetPortId]: { source: 'node', nodeId: state.sourceNodeId, port: state.sourcePortId } };
+  validationText = `Соединено: ${state.sourceKind} → ${inputKind}.`;
+  saveGraph(); render();
+}
 
 function startPanIfEmpty(event: PointerEvent): void { if (event.button !== 0 && event.button !== 1) return; const target = event.target as HTMLElement; if (target.closest('.graph-node') || target.closest('button') || target.closest('.graph-toolbar')) return; event.preventDefault(); panState = { startClientX: event.clientX, startClientY: event.clientY, startPanX: uiState.panX, startPanY: uiState.panY }; window.addEventListener('pointermove', onPanMove); window.addEventListener('pointerup', onPanEnd, { once: true }); }
 function onPanMove(event: PointerEvent): void { if (!panState) return; uiState.panX = panState.startPanX + event.clientX - panState.startClientX; uiState.panY = panState.startPanY + event.clientY - panState.startClientY; applyCanvasTransform(); }
@@ -375,38 +449,7 @@ function addNodeFromPalette(type: string): void {
   saveGraph(); savePositions(); render();
 }
 
-function createDefaultParameters(type: string): JsonObject {
-  const common = { cooldownSeconds: 0, cooldownTiming: 'after' };
-  switch (type) {
-    case 'BlackboardValueAbove': return { ...common, sourceKey: 'danger', comparison: 'above', threshold: 60 };
-    case 'FlagCheck': return { ...common, flagKey: 'underFire', expected: true };
-    case 'DistanceCheck': return { ...common, from: 'self', to: 'cover', comparison: 'closer', thresholdMeters: 30 };
-    case 'StableThreshold': return { ...common, sourceKey: 'danger', enterThreshold: 70, exitThreshold: 45, stateKey: 'danger_stable' };
-    case 'TacticalCheck': return { ...common, checkKind: 'cover_exists', expected: true };
-    case 'ParameterScore': return { ...common, sourceKey: 'danger', direction: 'positive', weight: 1 };
-    case 'DistanceScore': return { ...common, targetKind: 'cover', preference: 'closer', idealMeters: 25, weight: 1 };
-    case 'DecisionInertia': return { ...common, action: 'move_to', bonus: 20, minimumSeconds: 3 };
-    case 'RandomChance': return { ...common, probabilityPercent: 50, sourceKey: 'morale' };
-    case 'FindBestObject': return { ...common, objectKind: 'cover', criteria: 'safer', searchRadiusMeters: 50, writeTo: 'best_cover_position' };
-    case 'SelectTarget': return { ...common, rule: 'nearest', writeTo: 'current_target' };
-    case 'WriteMemory': return { ...common, writeTo: 'current_goal', value: 'take_cover' };
-    case 'CopyMemory': return { ...common, fromKey: 'best_cover_position', toKey: 'move_target' };
-    case 'ForbidAction': return { ...common, action: 'fire', durationSeconds: 5, reasonRu: 'Нельзя стрелять сейчас.' };
-    case 'SetPosture': return { ...common, posture: 'prone' };
-    case 'SetAction': return { ...common, action: 'move_to', targetKey: 'best_cover_position' };
-    case 'ReactiveSequence': return { ...common, observePrecedingConditions: true, abortPolicy: 'abort_self', abortReason: 'Condition changed.', abortReasonRu: 'Условие изменилось.' };
-    case 'Wait': return { ...common, durationSeconds: 2, timeoutSeconds: 0 };
-    case 'Reload': return { ...common, durationSeconds: 3, targetAmmo: 30, failIfNoWeapon: true };
-    case 'MoveToBlackboardPosition': return { ...common, targetKey: 'best_cover_position', acceptanceRadiusCells: 0.2, timeoutSeconds: 15, stuckTimeoutSeconds: 2.5, minimumProgressCells: 0.05, abortOnTargetLost: true };
-    case 'SetMovementMode': return { ...common, mode: 'careful' };
-    case 'SetAttentionMode': return { ...common, mode: 'observe', reasonRu: 'Переключить режим внимания.' };
-    case 'SetSearchSector': return { ...common, centerDegrees: 0, arcDegrees: 120, reasonRu: 'Осмотреть указанный сектор.' };
-    case 'ClearAttentionOverride': return common;
-    case 'SayMessage': return { ...common, message: 'Under fire!', messageRu: 'Под огнём!', durationSeconds: 2 };
-    case 'WriteReason': return { ...common, reason: 'Chosen by graph.', reasonRu: 'Выбрано графом.' };
-    default: return common;
-  }
-}
+function createDefaultParameters(type: string): JsonObject { return createContractDefaultParameters(type); }
 
 function makeUniqueNodeId(type: string): string { const base = type.replace(/[^a-zA-Z0-9]+/g, '_').toLowerCase(); let index = 1; let id = `${base}_${index}`; const used = new Set(editorGraph.nodes.map((node) => node.id)); while (used.has(id)) { index += 1; id = `${base}_${index}`; } return id; }
 function addLink(parentId: string, childId: string): void { if (parentId === childId) { render(); return; } const parent = editorGraph.nodes.find((node) => node.id === parentId); if (!parent) return; if (!parent.children.includes(childId)) parent.children.push(childId); selectedNodeId = childId; uiState.inspectorOpen = true; saveGraph(); render(); }
@@ -446,7 +489,8 @@ function saveSelectedNodeFromInspector(): void {
     node.displayNameRu = nextDisplayRu || node.displayNameRu;
     node.description = nextDescription;
     node.descriptionRu = nextDescriptionRu;
-    node.parameters = parsed as JsonObject;
+    node.parameters = { ...(parsed as JsonObject), ...readContractParameters(document, node) };
+    if (node.type === 'Subgraph') node.parameters.subgraphId = document.querySelector<HTMLSelectElement>('#subgraph-choice')?.value ?? node.parameters.subgraphId ?? 'take_cover';
     saveGraph(); validationText = `Node saved: ${node.id}`; render();
   } catch (error) {
     validationText = `Parameters JSON error: ${error instanceof Error ? error.message : String(error)}`;
@@ -482,13 +526,86 @@ function isPortEvent(event: PointerEvent): boolean { return Boolean((event.targe
 function loadStoredGraph(): EditableAiGraph | null { try { const raw = localStorage.getItem(GRAPH_STORAGE_KEY); return raw ? normalizeGraph(JSON.parse(raw)) : null; } catch { return null; } }
 function loadStoredPositions(): Record<string, NodePosition> { try { const raw = localStorage.getItem(POSITION_STORAGE_KEY); const parsed = raw ? JSON.parse(raw) : {}; return isRecord(parsed) ? parsed as Record<string, NodePosition> : { ...initialNodePositions }; } catch { return { ...initialNodePositions }; } }
 function loadStoredUiState(): EditorUiState { try { const parsed = JSON.parse(localStorage.getItem(UI_STORAGE_KEY) ?? '{}'); return { paletteOpen: parsed.paletteOpen ?? false, inspectorOpen: parsed.inspectorOpen ?? true, bottomOpen: parsed.bottomOpen ?? false, bottomTab: parsed.bottomTab === 'json' ? 'json' : 'console', zoom: typeof parsed.zoom === 'number' ? parsed.zoom : 1, panX: typeof parsed.panX === 'number' ? parsed.panX : 0, panY: typeof parsed.panY === 'number' ? parsed.panY : 0, languageMode: parsed.languageMode === 'en' || parsed.languageMode === 'both' ? parsed.languageMode : 'ru', nodeDetailMode: parsed.nodeDetailMode === 'detailed' ? 'detailed' : 'compact', linkSourceNodeId: typeof parsed.linkSourceNodeId === 'string' ? parsed.linkSourceNodeId : null }; } catch { return { paletteOpen: false, inspectorOpen: true, bottomOpen: false, bottomTab: 'console', zoom: 1, panX: 0, panY: 0, languageMode: 'ru', nodeDetailMode: 'compact', linkSourceNodeId: null }; } }
-function saveGraph(): void { localStorage.setItem(GRAPH_STORAGE_KEY, JSON.stringify(editorGraph)); }
+function saveGraph(): void {
+  if (graphNavigation.length > 0) saveStoredSubgraph(editorGraph.id, editorGraph);
+  else localStorage.setItem(GRAPH_STORAGE_KEY, JSON.stringify(editorGraph));
+}
 function savePositions(): void { localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(nodePositions)); }
 function saveUiState(): void { localStorage.setItem(UI_STORAGE_KEY, JSON.stringify(uiState)); }
 function ensurePositionsForGraph(): void { for (const node of editorGraph.nodes) if (!nodePositions[node.id]) nodePositions[node.id] = initialNodePositions[node.id] ?? { x: 140 + editorGraph.nodes.indexOf(node) * 240, y: 140 }; }
 
-function normalizeGraph(value: unknown): EditableAiGraph { const raw = value as Partial<EditableAiGraph>; const nodes = Array.isArray(raw.nodes) ? raw.nodes.map(normalizeNode) : []; if (nodes.length === 0) nodes.push({ id: 'root', type: 'Root', displayName: 'Start', displayNameRu: 'Старт', description: '', descriptionRu: '', children: [], parameters: {} }); return { version: 1, id: String(raw.id ?? 'soldier_graph'), name: String(raw.name ?? 'Soldier Graph'), nameRu: typeof raw.nameRu === 'string' ? raw.nameRu : 'Граф солдата', description: typeof raw.description === 'string' ? raw.description : '', descriptionRu: typeof raw.descriptionRu === 'string' ? raw.descriptionRu : '', rootNodeId: String(raw.rootNodeId ?? nodes[0].id), blackboardDefaults: isRecord(raw.blackboardDefaults) ? raw.blackboardDefaults as JsonObject : {}, nodes }; }
-function normalizeNode(value: unknown): EditableAiNode { const raw = value as Partial<EditableAiNode>; const definition = AI_NODE_TYPE_DEFINITIONS[String(raw.type ?? 'Root') as keyof typeof AI_NODE_TYPE_DEFINITIONS]; return { id: String(raw.id ?? makeUniqueNodeId(String(raw.type ?? 'Root'))), type: String(raw.type ?? 'Root'), displayName: String(raw.displayName ?? definition?.label ?? raw.type ?? 'Node'), displayNameRu: String(raw.displayNameRu ?? definition?.labelRu ?? raw.type ?? 'Нода'), description: typeof raw.description === 'string' ? raw.description : definition?.description ?? '', descriptionRu: typeof raw.descriptionRu === 'string' ? raw.descriptionRu : definition?.descriptionRu ?? '', children: Array.isArray(raw.children) ? raw.children.filter((child): child is string => typeof child === 'string') : [], parameters: isRecord(raw.parameters) ? raw.parameters as JsonObject : {} }; }
+function normalizeGraph(value: unknown): EditableAiGraph { const raw = value as Partial<EditableAiGraph>; const nodes = Array.isArray(raw.nodes) ? raw.nodes.map(normalizeNode) : []; if (nodes.length === 0) nodes.push({ id: 'root', type: 'Root', displayName: 'Start', displayNameRu: 'Старт', description: '', descriptionRu: '', children: [], parameters: {} }); return { version: raw.version === 2 ? 2 : 1, id: String(raw.id ?? 'soldier_graph'), name: String(raw.name ?? 'Soldier Graph'), nameRu: typeof raw.nameRu === 'string' ? raw.nameRu : 'Граф солдата', description: typeof raw.description === 'string' ? raw.description : '', descriptionRu: typeof raw.descriptionRu === 'string' ? raw.descriptionRu : '', rootNodeId: String(raw.rootNodeId ?? nodes[0].id), blackboardSchema: Array.isArray(raw.blackboardSchema) ? JSON.parse(JSON.stringify(raw.blackboardSchema)) as AiBlackboardSchemaEntry[] : undefined, blackboardDefaults: isRecord(raw.blackboardDefaults) ? raw.blackboardDefaults as JsonObject : {}, nodes, subgraphRefs: Array.isArray(raw.subgraphRefs) ? raw.subgraphRefs.filter((item): item is string => typeof item === 'string') : undefined, legacyMetadata: isRecord(raw.legacyMetadata) ? raw.legacyMetadata : undefined }; }
+function normalizeNode(value: unknown): EditableAiNode { const raw = value as Partial<EditableAiNode>; const definition = AI_NODE_TYPE_DEFINITIONS[String(raw.type ?? 'Root') as keyof typeof AI_NODE_TYPE_DEFINITIONS]; return { id: String(raw.id ?? makeUniqueNodeId(String(raw.type ?? 'Root'))), type: String(raw.type ?? 'Root'), displayName: String(raw.displayName ?? definition?.label ?? raw.type ?? 'Node'), displayNameRu: String(raw.displayNameRu ?? definition?.labelRu ?? raw.type ?? 'Нода'), description: typeof raw.description === 'string' ? raw.description : definition?.description ?? '', descriptionRu: typeof raw.descriptionRu === 'string' ? raw.descriptionRu : definition?.descriptionRu ?? '', children: Array.isArray(raw.children) ? raw.children.filter((child): child is string => typeof child === 'string') : [], parameters: isRecord(raw.parameters) ? raw.parameters as JsonObject : createDefaultParameters(String(raw.type ?? 'Root')), inputBindings: isRecord(raw.inputBindings) ? raw.inputBindings as Record<string, AiInputBinding> : undefined, outputBindings: isRecord(raw.outputBindings) ? raw.outputBindings as Record<string, AiOutputBinding> : undefined, legacyMetadata: isRecord(raw.legacyMetadata) ? raw.legacyMetadata : undefined }; }
+
+function renderGraphVersionBanner(): string {
+  return editorGraph.version === 1
+    ? '<aside class="graph-version-warning"><strong>Этот граф использует старый формат Graph v1.</strong><span>Он продолжит работать, но типизированные порты доступны после безопасной миграции.</span><button id="migrate-graph-banner" type="button">Проверить и обновить формат графа</button></aside>'
+    : '<aside class="graph-version-ok"><strong>Graph v2</strong><span>Типы портов и параметры проверяются автоматически.</span></aside>';
+}
+
+function renderValidationIssues(): string {
+  if (validationIssues.length === 0) return '<p class="validation-empty">Ошибок пока нет. Нажмите «Проверить граф».</p>';
+  return `<div class="graph-validation-list">${validationIssues.map((issue) => `<button class="validation-issue ${issue.severity}" type="button" ${issue.nodeId ? `data-validation-node-id="${escapeHtml(issue.nodeId)}"` : 'disabled'}><b>${issue.severity.toUpperCase()} · ${escapeHtml(issue.code)}</b><span>${escapeHtml(issue.messageRu)}</span>${issue.fixRu ? `<em>${escapeHtml(issue.fixRu)}</em>` : ''}</button>`).join('')}</div>`;
+}
+
+function validateGraphLocally(): void {
+  const result = validateAiGraph(editorGraph);
+  validationIssues = [...result.issues];
+  validationText = result.valid ? `Граф прошёл проверку. Сообщений: ${result.issues.length}.` : `Граф невалиден. Ошибок: ${result.issues.filter((issue) => issue.severity === 'error').length}.`;
+  uiState.bottomOpen = true; uiState.bottomTab = 'console'; render();
+}
+
+function migrateCurrentGraph(): void {
+  const migration = migrateAiGraphToV2(editorGraph);
+  if (!migration.ok) {
+    validationIssues = migration.issues.map((issue) => ({ ...issue, fix: undefined, parameterName: issue.parameterName })) as AiGraphValidationIssue[];
+    validationText = migration.issues.map((issue) => issue.messageRu).join('\n');
+    uiState.bottomOpen = true; uiState.bottomTab = 'console'; render(); return;
+  }
+  const validation = validateAiGraph(migration.graph);
+  validationIssues = [...validation.issues];
+  if (!validation.valid) {
+    validationText = 'Миграция подготовлена, но Graph v2 не сохранён из-за ошибок проверки.';
+    uiState.bottomOpen = true; uiState.bottomTab = 'console'; render(); return;
+  }
+  editorGraph = normalizeGraph(migration.graph);
+  validationText = migration.migrated ? 'Graph v1 безопасно обновлён до Graph v2. Неизвестные старые поля сохранены в legacyMetadata.' : 'Graph v2 уже актуален.';
+  saveGraph(); render();
+}
+
+function openSubgraphNode(nodeId: string): void {
+  const node = editorGraph.nodes.find((candidate) => candidate.id === nodeId);
+  if (node?.type !== 'Subgraph') return;
+  const subgraphId = String(node.parameters.subgraphId ?? '');
+  const stored = loadStoredSubgraphs()[subgraphId];
+  const registered = cloneSubgraphGraph(subgraphId);
+  const graph = stored ? normalizeGraph(stored) : registered ? normalizeGraph(registered) : undefined;
+  if (!graph) { validationText = `Подграф ${subgraphId} не найден.`; render(); return; }
+  graphNavigation.push({ graph: editorGraph, positions: { ...nodePositions }, selectedNodeId, labelRu: getSubgraphChoice(subgraphId)?.nameRu ?? subgraphId });
+  editorGraph = graph; nodePositions = {}; selectedNodeId = graph.rootNodeId; ensurePositionsForGraph(); saveUiState(); render();
+}
+
+function closeCurrentSubgraph(): void {
+  const parent = graphNavigation.pop();
+  if (!parent) return;
+  saveStoredSubgraph(editorGraph.id, editorGraph);
+  editorGraph = parent.graph; nodePositions = parent.positions; selectedNodeId = parent.selectedNodeId; render();
+}
+
+function loadStoredSubgraphs(): Record<string, EditableAiGraph> {
+  try { const value = JSON.parse(localStorage.getItem(SUBGRAPH_STORAGE_KEY) ?? '{}'); return isRecord(value) ? value as Record<string, EditableAiGraph> : {}; } catch { return {}; }
+}
+function saveStoredSubgraph(id: string, graph: EditableAiGraph): void { const all = loadStoredSubgraphs(); all[id] = graph; localStorage.setItem(SUBGRAPH_STORAGE_KEY, JSON.stringify(all)); }
+
+function updateTypedPortHighlights(): void {
+  if (connectionState?.mode !== 'data' || !connectionState.sourceKind) return;
+  document.querySelectorAll<HTMLElement>('[data-typed-port-kind="input"]').forEach((port) => {
+    const kind = port.dataset.valueKind as AiPortValueKind | undefined;
+    port.classList.toggle('compatible', Boolean(kind && canConnectPorts(connectionState!.sourceKind!, kind)));
+    port.classList.toggle('incompatible', Boolean(kind && !canConnectPorts(connectionState!.sourceKind!, kind)));
+  });
+}
+function clearTypedPortHighlights(): void { document.querySelectorAll<HTMLElement>('.typed-port.compatible, .typed-port.incompatible').forEach((port) => port.classList.remove('compatible', 'incompatible')); }
 
 function escapeHtml(value: string): string { return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;'); }
 function escapeAttribute(value: string): string { return escapeHtml(value); }
