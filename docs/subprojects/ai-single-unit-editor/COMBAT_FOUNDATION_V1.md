@@ -23,8 +23,8 @@ This temporary branch builds the smallest complete rifle firefight loop without 
 - manual «Огонь по контакту» control available only for a personally identified hostile contact;
 - rifle shot sound fed back into subjective perception;
 - friendly-fire corridor check before an AI shot;
-- blue/red and incapacitated/dead unit presentation;
-- editor selector for placing friendly or hostile units;
+- high-contrast blue/red and incapacitated/dead unit presentation;
+- one fighter-side selector inside the visible editor draft, used by the active placement path;
 - compact selected-unit diagnostics for side, weapon ammunition, capability and fire phase;
 - weapon and wound/capability state exported and restored with the scene;
 - identified contacts remain stable between scheduled perception checks, so timed aiming is not cancelled by perception cadence.
@@ -43,6 +43,30 @@ The combat smoke verifies:
 - deterministic hit consequences;
 - weapon and wound state surviving scene export/import;
 - the complete stateful fire action progressing through the real `SimulationTick`.
+
+The unified editor smoke also requires the active placement code to use `draft.side` and rejects the former hard-coded `player` side.
+
+## Approved visual QA
+
+The user explicitly approved browser verification. The branch now contains a dedicated Chromium workflow and Playwright scenario that:
+
+- creates one friendly and one hostile fighter through the visible editor form;
+- verifies the resulting selected-unit metadata reports `Свои` and `Противник`;
+- confirms distinct blue and red map markers;
+- waits for an observer-specific identified contact;
+- confirms «Огонь по контакту» becomes available;
+- records the stateful aiming phase;
+- verifies one real cartridge is consumed;
+- selects the target and verifies the resulting combat-capability state;
+- rejects page exceptions and non-benign HTTP resource failures;
+- saves six inspected PNG screenshots from the exact tested commit.
+
+Visual QA found and fixed two real integration defects:
+
+1. the visible side selector was disconnected from the active placement path, which hard-coded every new fighter as `player`/blue;
+2. friendly and hostile unit markers were too similar at the normal map scale.
+
+The latest `Combat Foundation Visual QA` check on PR `#93` is the source of truth for the exact verified SHA and screenshot artifact.
 
 ## Deliberate v1 limits
 
@@ -63,6 +87,7 @@ Do not merge or transfer this work to `real-wargame-preview` without a separate 
 ## Required verification
 
 - `npm run combat-foundation:smoke`
+- `npm run game-editor:smoke`
 - `npm run perception:smoke`
 - `npm run runtime:smoke`
 - `npm run reload:smoke`
@@ -70,5 +95,4 @@ Do not merge or transfer this work to `real-wargame-preview` without a separate 
 - `npm run workspace:smoke`
 - `npm run build`
 - `npm run docs:check`
-
-Visual QA has not been claimed. It requires a real browser run, matching commit SHA and inspected screenshots after explicit user permission.
+- `Combat Foundation Visual QA` GitHub Actions check with inspected screenshots
