@@ -1,7 +1,4 @@
 import { clampPercent, type UnitPosture } from '../behavior/BehaviorModel';
-import { findBestDirectFireContact } from '../combat/CombatDecision';
-import { requestFireAction } from '../combat/FireAction';
-import { clearWeaponRuntime } from '../combat/WeaponModel';
 import { findBestCoverForThreat } from '../cover/CoverEvaluation';
 import { distance, type GridPosition } from '../geometry';
 import { buildSoldierAwarenessReport } from '../knowledge/SoldierAwarenessGrid';
@@ -11,6 +8,7 @@ import { isPlayerCommandOutstanding } from '../orders/PlayerCommand';
 import { clearAttentionOverride, setAttentionMode, setFocusTarget, setSearchSector } from '../perception/AttentionController';
 import { degreesToRadians, radiansToDegrees } from '../perception/AttentionModel';
 import { getBestPerceptionContact } from '../perception/PerceptionSystem';
+import { emitPerceptionSound } from '../perception/PerceptionSound';
 import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
 import type { SimulationState } from '../simulation/SimulationState';
 import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
@@ -382,7 +380,6 @@ function applyGraphEffects(
       } else if (reloadEffect.type === 'complete_reload') {
         unit.behaviorRuntime.ammo = reloadEffect.targetAmmo;
         unit.behaviorRuntime.weaponReady = reloadEffect.targetAmmo > 0;
-        clearWeaponRuntime(unit);
         unit.behaviorRuntime.currentAction = 'reload_complete';
         unit.behaviorRuntime.reason = reloadEffect.reasonRu ?? reloadEffect.reason;
         unit.behaviorRuntime.lastEvent = 'ai_graph_reload_completed';
@@ -459,7 +456,7 @@ function applyAction(
   unit: UnitModel,
   effect: Extract<AiGraphEffect, { type: 'set_action' }>,
   blackboard: AiGraphRunnerBlackboard,
-  _nowMs: number,
+  nowMs: number,
 ): void {
   if (effect.action === 'move_to') {
     const target = readPosition(blackboard[effect.targetKey ?? 'best_cover_position']);
@@ -472,19 +469,24 @@ function applyAction(
   } else if (effect.action === 'reload') {
     unit.behaviorRuntime.ammo = 30;
     unit.behaviorRuntime.weaponReady = true;
-    clearWeaponRuntime(unit);
-  } else if (effect.action === 'fire') {
-    const contact = findBestDirectFireContact(state, unit);
-    if (contact) requestFireAction(state, unit, contact.id);
-    else {
-      unit.behaviorRuntime.reason = 'Нет личного контакта для стрельбы.';
-      unit.behaviorRuntime.lastEvent = 'combat_fire_request_missing_contact';
+  } else if (effect.action === 'fire' || effect.action === 'suppress') {
+    unit.behaviorRuntime.ammo = Math.max(0, unit.behaviorRuntime.ammo - 1);
+    unit.behaviorRuntime.weaponReady = unit.behaviorRuntime.ammo > 0;
+    emitPerceptionSound(state, {
+      id: `${effect.action}:${unit.id}:${nowMs}:${unit.behaviorRuntime.ammo}`,
+      kind: effect.action === 'suppress' ? 'automatic_fire' : 'rifle_shot',
+      sourceId: unit.id,
+      labelRu: effect.action === 'suppress' ? 'Автоматическая стрельба' : 'Одиночный выстрел',
+      position: { ...unit.position },
+      loudness: 1,
+      createdSeconds: state.simulationTimeSeconds,
+      durationSeconds: effect.action === 'suppress' ? 1.2 : 0.7,
+    });
+    const focusTarget = readPosition(blackboard.current_target) ?? readPosition(blackboard.remembered_enemy_position);
+    if (focusTarget) {
+      setFocusTarget(unit, 'current_target', Math.atan2(focusTarget.y - unit.position.y, focusTarget.x - unit.position.x));
+      setAttentionMode(unit, 'engage', 'automatic');
     }
-    return;
-  } else if (effect.action === 'suppress') {
-    unit.behaviorRuntime.reason = 'Подавляющий огонь будет добавлен после одиночной винтовочной стрельбы.';
-    unit.behaviorRuntime.lastEvent = 'combat_suppression_not_available_v1';
-    return;
   }
 
   unit.behaviorRuntime.currentAction = effect.action;

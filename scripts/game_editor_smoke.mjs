@@ -29,8 +29,6 @@ expectIncludes('src/core/editor/GameEditorDrafts.ts', [
   'weaponReady',
   'directionDegrees',
   'brushShape',
-  'side: UnitSide',
-  'state.editor.unitSide = drafts.unit.side',
   'resetObjectDraftForKind',
   'resetUnitDraftForProfile',
 ]);
@@ -42,20 +40,13 @@ expectIncludes('src/core/editor/GameEditorPlacement.ts', [
   'normalizeUnits',
   'normalizePressureZones',
   'coverProtection: draft.coverProtection',
-  'side: draft.side',
   'soldier:',
   'directionDegrees: draft.directionDegrees',
-]);
-expectExcludes('src/core/editor/GameEditorPlacement.ts', [
-  "side: 'player'",
 ]);
 
 expectIncludes('src/ui/GameEditorWorkbench.ts', [
   "type WorkbenchTab = 'object' | 'unit' | 'threat' | 'terrain' | 'scene'",
   'Настрой шаблон → поставь на карту → выбери и исправь',
-  "selectField('Сторона'",
-  'draft.side = value',
-  'unit.side = draft.side',
   'Ставить предмет',
   'Ставить бойца',
   'Ставить угрозу',

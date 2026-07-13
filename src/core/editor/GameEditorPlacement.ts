@@ -52,7 +52,7 @@ export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: Gri
       label: draft.name || id,
       labelRu: draft.name || id,
       type: draft.type,
-      side: draft.side,
+      side: 'player',
       x: grid.x - 0.5,
       y: grid.y - 0.5,
       speedCellsPerSecond: draft.speedCellsPerSecond,
@@ -84,7 +84,7 @@ export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: Gri
     state.editor.selectedZoneId = null;
     selectUnit(state, id);
     rememberSelectedUnitForTest(state);
-    state.editor.lastMessage = `Создан боец «${unit.labels.ru}» · ${unit.side === 'red' ? 'Противник' : 'Свои'} · профиль ${unit.behaviorProfile}.`;
+    state.editor.lastMessage = `Создан боец «${unit.labels.ru}» с профилем ${unit.behaviorProfile}.`;
     return true;
   }
 

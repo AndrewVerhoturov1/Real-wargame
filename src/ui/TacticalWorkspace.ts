@@ -1,10 +1,6 @@
 import '../tactical-workspace-stage8.css';
 import type { AiGameBridgeHandle } from '../core/ai/AiGameBridge';
 import type { UnitPosture } from '../core/behavior/BehaviorModel';
-import { getCombatRuntime } from '../core/combat/CombatDamage';
-import { findBestDirectFireContact } from '../core/combat/CombatDecision';
-import { getFireAction, requestFireAction } from '../core/combat/FireAction';
-import { getWeaponRuntime } from '../core/combat/WeaponModel';
 import { buildSoldierAwarenessReport } from '../core/knowledge/SoldierAwarenessGrid';
 import { clearAttentionOverride, setAttentionMode, setSearchSector } from '../core/perception/AttentionController';
 import { applyAttentionProfileToUnit } from '../core/perception/AttentionProfiles';
@@ -114,7 +110,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
       <div class="unit-bar-command-group simulation-controls">
         <button class="primary" data-action="pause">Пауза</button><button data-action="step">Один шаг</button>
         <button data-action="evaluate">Один расчёт ИИ</button><button class="primary" data-action="execute">Рассчитать и выполнить</button>
-        <button class="primary" data-action="fire-contact">Огонь по контакту</button><button data-action="clear-order">Очистить приказ</button><button data-action="reset-unit">Сбросить бойца</button>
+        <button data-action="clear-order">Очистить приказ</button><button data-action="reset-unit">Сбросить бойца</button>
       </div>
       <div class="unit-bar-speed-group">${AI_TEST_TIME_SCALES.map((scale) => `<button data-speed="${scale}">×${scale}</button>`).join('')}</div>
     </section>
@@ -138,7 +134,6 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   const attentionProfileSelect = q<HTMLSelectElement>('[data-action="unit-attention-profile"]');
   const attentionModeSelect = q<HTMLSelectElement>('[data-action="unit-attention-mode"]');
   const turnUnitButton = q<HTMLButtonElement>('[data-action="turn-unit"]');
-  const fireContactButton = q<HTMLButtonElement>('[data-action="fire-contact"]');
 
   moveExistingButton('#grid-toggle', display);
   moveExistingButton('#height-toggle', display);
@@ -265,18 +260,6 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   q<HTMLButtonElement>('[data-action="step"]').onclick = () => { tickSimulation(state, 0.1); update(false); onChanged(); };
   q<HTMLButtonElement>('[data-action="evaluate"]').onclick = () => { aiBridge.evaluateNow(); update(false); onChanged(); };
   q<HTMLButtonElement>('[data-action="execute"]').onclick = () => { aiBridge.tickNow(); update(false); onChanged(); };
-  fireContactButton.onclick = () => {
-    const unit = getSelectedUnit(state);
-    const contact = unit ? findBestDirectFireContact(state, unit) : null;
-    if (!unit || !contact || !requestFireAction(state, unit, contact.id)) {
-      if (unit) {
-        unit.behaviorRuntime.reason = contact ? unit.behaviorRuntime.reason : 'Нет личного контакта для стрельбы.';
-        unit.behaviorRuntime.lastEvent = contact ? unit.behaviorRuntime.lastEvent : 'combat_fire_request_missing_contact';
-      }
-    }
-    update(false);
-    onChanged();
-  };
   q<HTMLButtonElement>('[data-action="clear-order"]').onclick = () => { const unit = getSelectedUnit(state); if (unit) unit.order = null; update(false); onChanged(); };
   q<HTMLButtonElement>('[data-action="reset-unit"]').onclick = () => {
     const reset = resetSelectedUnitForTest(state); const unit = getSelectedUnit(state); if (!reset && unit) applyInitialStateToRuntime(unit);
@@ -331,28 +314,18 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   function updateBottom(): void {
     const unit = getSelectedUnit(state);
     q('[data-role="unit-name"]').textContent = unit?.labels.ru ?? 'Боец не выбран';
-    const combat = unit ? getCombatRuntime(unit) : null;
-    const weapon = unit ? getWeaponRuntime(unit) : null;
-    const fireAction = unit ? getFireAction(unit) : null;
-    q('[data-role="unit-meta"]').textContent = unit
-      ? `${unit.id} · ${unit.side === 'red' ? 'Противник' : 'Свои'} · ${postureLabel(unit.behaviorRuntime.posture)} · ${profileLabel(unit.behaviorProfile)} · ${combatCapabilityLabel(combat!.capability)}`
-      : 'Левый клик по солдату — выбрать';
+    q('[data-role="unit-meta"]').textContent = unit ? `${unit.id} · ${postureLabel(unit.behaviorRuntime.posture)} · ${profileLabel(unit.behaviorProfile)}` : 'Левый клик по солдату — выбрать';
     const values: Record<string, string> = unit ? {
       health: pct(unit.soldier.condition.health), morale: pct(unit.soldier.condition.morale), fatigue: pct(unit.soldier.condition.fatigue),
-      stress: pct(unit.behaviorRuntime.stress), suppression: pct(unit.behaviorRuntime.suppression), ammo: `${weapon!.roundsLoaded}+${weapon!.roundsReserve}`,
+      stress: pct(unit.behaviorRuntime.stress), suppression: pct(unit.behaviorRuntime.suppression), ammo: String(Math.round(unit.behaviorRuntime.ammo)),
     } : { health:'—', morale:'—', fatigue:'—', stress:'—', suppression:'—', ammo:'—' };
     for (const item of shell.querySelectorAll<HTMLElement>('[data-stat]')) item.textContent = values[item.dataset.stat ?? ''] ?? '—';
-    q('[data-role="action"]').textContent = `Действие: ${unit ? actionLabel(unit.behaviorRuntime.currentAction) : '—'}${fireAction ? ` · стрельба: ${firePhaseLabel(fireAction.phase)}` : ''}`;
+    q('[data-role="action"]').textContent = `Действие: ${unit ? actionLabel(unit.behaviorRuntime.currentAction) : '—'}`;
     q('[data-role="order"]').textContent = `Приказ: ${unit ? orderLabel(state, unit) : '—'}`;
     navigationProfile.disabled = !unit;
     attentionProfileSelect.disabled = !unit;
     attentionModeSelect.disabled = !unit;
     turnUnitButton.disabled = !unit;
-    const bestFireContact = unit ? findBestDirectFireContact(state, unit) : null;
-    fireContactButton.disabled = !unit || !bestFireContact?.visibleNow || Boolean(getFireAction(unit));
-    fireContactButton.title = bestFireContact
-      ? `Личный контакт: ${bestFireContact.labelRu} · уверенность ${Math.round(bestFireContact.confidence)}%`
-      : 'Сначала боец должен сам обнаружить противника.';
     const commandTool = getUnitCommandToolState(state);
     turnUnitButton.classList.toggle('active', commandTool.turnToolActive);
     turnUnitButton.setAttribute('aria-pressed', String(commandTool.turnToolActive));
@@ -427,26 +400,6 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   setSimulationLayerMode(state, tab);
   syncLayout(); update(true); attachTooltip();
   window.setInterval(() => update(false), 300);
-}
-
-function combatCapabilityLabel(value: ReturnType<typeof getCombatRuntime>['capability']): string {
-  if (value === 'wounded') return 'ранен';
-  if (value === 'severely_wounded') return 'тяжело ранен';
-  if (value === 'incapacitated') return 'выведен из строя';
-  if (value === 'dead') return 'погиб';
-  return 'боеспособен';
-}
-
-function firePhaseLabel(value: NonNullable<ReturnType<typeof getFireAction>>['phase']): string {
-  if (value === 'acquire_target') return 'выбор цели';
-  if (value === 'turning') return 'поворот';
-  if (value === 'readying_weapon') return 'подготовка оружия';
-  if (value === 'aiming') return 'наведение';
-  if (value === 'final_safety_check') return 'проверка линии огня';
-  if (value === 'firing') return 'выстрел';
-  if (value === 'recovering') return 'восстановление';
-  if (value === 'cancelled') return 'отменено';
-  return 'не удалось';
 }
 
 function infoPanel(): string {

@@ -1,7 +1,5 @@
-import { isUnitCombatCapable } from '../combat/CombatDamage';
 import { distance } from '../geometry';
 import { getSelectedUnit, type SimulationState } from '../simulation/SimulationState';
-import { areUnitsHostile } from '../units/SideRelations';
 import type { UnitModel } from '../units/UnitModel';
 import { computeLineOfSight } from '../visibility/LineOfSight';
 import { updateAttentionController } from './AttentionController';
@@ -25,7 +23,6 @@ import {
   getMutablePerceptionDiagnostics,
   getPerceptionDiagnostics,
   publishPerceptionDiagnostics,
-  type MutablePerceptionDiagnostics,
 } from './PerceptionDiagnostics';
 import { getActivePerceptionSounds, soundBaseRangeMeters } from './PerceptionSound';
 import { buildPerceptionStimuli } from './PerceptionStimulus';
@@ -38,47 +35,16 @@ export function tickSelectedSoldierPerception(state: SimulationState, deltaSecon
   const diagnostics = getMutablePerceptionDiagnostics(state);
   diagnostics.tickCount += 1;
   diagnostics.lastObserverId = unit?.id ?? null;
-  if (!unit || deltaSeconds <= 0 || !isUnitCombatCapable(unit)) {
+  if (!unit || deltaSeconds <= 0) {
     publishPerceptionDiagnostics(state);
     return;
   }
-  tickUnitPerception(state, unit, deltaSeconds, diagnostics);
-  diagnostics.bestContactId = getBestPerceptionContact(unit)?.id ?? null;
-  publishPerceptionDiagnostics(state);
-}
 
-export function tickAllUnitPerception(state: SimulationState, deltaSeconds: number): void {
-  if (deltaSeconds <= 0) return;
-  const selected = getSelectedUnit(state);
-  const diagnostics = selected ? getMutablePerceptionDiagnostics(state) : null;
-  if (diagnostics) {
-    diagnostics.tickCount += 1;
-    diagnostics.lastObserverId = selected?.id ?? null;
-  }
-
-  for (const unit of state.units) {
-    if (!isUnitCombatCapable(unit)) continue;
-    tickUnitPerception(state, unit, deltaSeconds, unit.id === selected?.id ? diagnostics : null);
-  }
-
-  if (diagnostics) {
-    diagnostics.bestContactId = selected ? getBestPerceptionContact(selected)?.id ?? null : null;
-    publishPerceptionDiagnostics(state);
-  }
-}
-
-export function tickUnitPerception(
-  state: SimulationState,
-  unit: UnitModel,
-  deltaSeconds: number,
-  diagnostics: MutablePerceptionDiagnostics | null = null,
-): void {
-  if (deltaSeconds <= 0 || !isUnitCombatCapable(unit)) return;
   updateAttentionController(unit, deltaSeconds);
   const now = state.simulationTimeSeconds;
   const due = resolveDueZones(unit, now);
   const updatedContacts = new Set<string>();
-  const stimuli = buildPerceptionStimuli(state, unit);
+  const stimuli = buildPerceptionStimuli(state);
   const broadPhaseCells = Math.max(
     1,
     unit.attentionSettings.vision.maximumVisualRangeMeters / Math.max(0.001, state.map.metersPerCell),
@@ -88,7 +54,7 @@ export function tickUnitPerception(
   for (const stimulus of stimuli) {
     const distanceCells = distance(unit.position, stimulus.position);
     if (distanceCells > broadPhaseCells) continue;
-    if (diagnostics) diagnostics.candidateCount += 1;
+    diagnostics.candidateCount += 1;
 
     if (stimulus.knownSource) {
       const contactId = contactIdForStimulus(stimulus.id);
@@ -96,7 +62,6 @@ export function tickUnitPerception(
       const reported = advanceReportedContact(previous, {
         id: contactId,
         stimulusId: stimulus.id,
-        sourceUnitId: stimulus.sourceUnitId,
         labelRu: stimulus.labelRu,
         position: stimulus.position,
         confidence: 75,
@@ -119,11 +84,7 @@ export function tickUnitPerception(
     );
     const attention = sampleAttentionWeight(profile, angleDifferenceDegrees);
     if (!due[attention.zone]) {
-      if (diagnostics) diagnostics.skippedNotDueCount += 1;
-      const existingContactId = contactIdForStimulus(stimulus.id);
-      if (unit.perceptionKnowledge.contacts.some((item) => item.id === existingContactId)) {
-        updatedContacts.add(existingContactId);
-      }
+      diagnostics.skippedNotDueCount += 1;
       continue;
     }
 
@@ -133,7 +94,7 @@ export function tickUnitPerception(
       stimulus.position,
       stimulus.targetHeightMeters,
     );
-    if (diagnostics) diagnostics.losCalculationCount += 1;
+    diagnostics.losCalculationCount += 1;
     if (lineOfSight.blocked) continue;
 
     if (attention.zone === 'peripheral') {
@@ -159,7 +120,6 @@ export function tickUnitPerception(
     const contact = advanceVisualContact(previous, {
       id: contactId,
       stimulusId: stimulus.id,
-      sourceUnitId: stimulus.sourceUnitId,
       labelRu: stimulus.labelRu,
       position: stimulus.position,
       evidencePerSecond: visualSignal.evidencePerSecond,
@@ -173,13 +133,16 @@ export function tickUnitPerception(
     });
     upsertPerceptionContact(unit.perceptionKnowledge, contact);
     updatedContacts.add(contactId);
-    if (diagnostics) diagnostics.contactUpdateCount += 1;
+    diagnostics.contactUpdateCount += 1;
   }
 
   processSoundEvents(state, unit, updatedContacts);
   decayContacts(state, unit, updatedContacts, deltaSeconds);
   scheduleNextChecks(unit, now, due);
+  const best = getBestPerceptionContact(unit);
+  diagnostics.bestContactId = best?.id ?? null;
   unit.perceptionKnowledge.lastUpdatedSeconds = now;
+  publishPerceptionDiagnostics(state);
 }
 
 export function getBestPerceptionContact(unit: UnitModel): PerceptionContactMemory | null {
@@ -208,8 +171,6 @@ function processSoundEvents(
 
   for (const event of getActivePerceptionSounds(state)) {
     if (event.sourceId === unit.id) continue;
-    const sourceUnit = event.sourceId ? state.units.find((candidate) => candidate.id === event.sourceId) : null;
-    if (sourceUnit && !areUnitsHostile(unit, sourceUnit)) continue;
     const distanceMeters = distance(unit.position, event.position) * state.map.metersPerCell;
     const baseRange = soundBaseRangeMeters(event.kind) * Math.max(0.1, event.loudness);
     if (distanceMeters > baseRange) continue;
@@ -220,13 +181,12 @@ function processSoundEvents(
     const uncertaintyMeters = Math.max(8, (12 + distanceMeters * 0.18) * suppressionLocalizationPenalty);
     const uncertaintyCells = uncertaintyMeters / Math.max(0.001, state.map.metersPerCell);
     const position = estimateSoundPosition(unit, event.id, event.position, uncertaintyCells);
-    const stimulusId = event.sourceId ? `unit:${event.sourceId}` : `sound:${event.id}`;
+    const stimulusId = event.sourceId ?? `sound:${event.id}`;
     const contactId = event.sourceId ? contactIdForStimulus(stimulusId) : `perception:sound:${event.id}`;
     const previous = unit.perceptionKnowledge.contacts.find((item) => item.id === contactId) ?? null;
     const contact = advanceReportedContact(previous, {
       id: contactId,
       stimulusId,
-      sourceUnitId: event.sourceId,
       labelRu: event.labelRu ?? soundLabelRu(event.kind),
       position,
       confidence,

@@ -1,8 +1,6 @@
 import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import { publishSimulationAiEvents } from '../ai/events/SimulationAiEvents';
 import { clampPercent, POSTURE_MOVE_MULTIPLIER } from '../behavior/BehaviorModel';
-import { getCombatMovementMultiplier, getCombatRuntime, isUnitCombatCapable } from '../combat/CombatDamage';
-import { getFireAction, tickAllFireActions } from '../combat/FireAction';
 import type { GridPosition } from '../geometry';
 import { syncSoldierThreatMemory } from '../knowledge/SoldierThreatMemory';
 import { clampGridPositionToMap } from '../map/MapModel';
@@ -11,7 +9,7 @@ import type { MoveOrder } from '../orders/MoveOrder';
 import { updatePlayerCommandStatus } from '../orders/PlayerCommand';
 import { updateAttentionController } from '../perception/AttentionController';
 import { normalizeRadians } from '../perception/AttentionModel';
-import { tickAllUnitPerception } from '../perception/PerceptionSystem';
+import { tickSelectedSoldierPerception } from '../perception/PerceptionSystem';
 import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
 import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
@@ -32,8 +30,7 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
     updateStateLabels(unit);
   }
 
-  tickAllUnitPerception(state, scaledDeltaSeconds);
-  tickAllFireActions(state, scaledDeltaSeconds);
+  tickSelectedSoldierPerception(state, scaledDeltaSeconds);
 
   for (const unit of state.units) {
     syncSoldierThreatMemory(state, unit, scaledDeltaSeconds);
@@ -67,23 +64,10 @@ function updateMetrics(unit: UnitModel, state: SimulationState, deltaSeconds: nu
   unit.behaviorRuntime.stress = clampPercent(
     unit.behaviorRuntime.stress - unit.behaviorSettings.stressRecoveryPerSecond * deltaSeconds,
   );
-  if (!getFireAction(unit) && isUnitCombatCapable(unit)) {
-    unit.behaviorRuntime.reason = unit.order ? 'moving outside pressure zone' : 'outside pressure zone';
-  }
+  unit.behaviorRuntime.reason = unit.order ? 'moving outside pressure zone' : 'outside pressure zone';
 }
 
 function updateStateLabels(unit: UnitModel): void {
-  if (!isUnitCombatCapable(unit)) {
-    unit.order = null;
-    unit.behaviorRuntime.currentAction = getCombatRuntime(unit).capability;
-    setState(unit, 'stressed', 'unit is out of combat');
-    return;
-  }
-  if (getFireAction(unit)) {
-    setState(unit, 'observing', 'active fire action');
-    return;
-  }
-
   unit.behaviorRuntime.currentAction = unit.order ? 'move' : 'observe';
 
   if (unit.order) {
@@ -95,7 +79,7 @@ function updateStateLabels(unit: UnitModel): void {
 }
 
 function moveUnit(unit: UnitModel, state: SimulationState, deltaSeconds: number): void {
-  if (!unit.order || deltaSeconds <= 0 || !isUnitCombatCapable(unit) || getFireAction(unit)) return;
+  if (!unit.order || deltaSeconds <= 0) return;
   if (!ensureRoutePassable(unit, state)) return;
   const order = unit.order;
   if (!order) return;
@@ -105,8 +89,7 @@ function moveUnit(unit: UnitModel, state: SimulationState, deltaSeconds: number)
   const remainingDistance = getDistance(unit.position, movementTarget);
   const postureMultiplier = POSTURE_MOVE_MULTIPLIER[unit.behaviorRuntime.posture];
   const conditionMultiplier = Math.max(0.35, unit.soldier.condition.speed / 100);
-  const woundMultiplier = getCombatMovementMultiplier(unit);
-  const stepDistance = unit.speedCellsPerSecond * postureMultiplier * conditionMultiplier * woundMultiplier * deltaSeconds;
+  const stepDistance = unit.speedCellsPerSecond * postureMultiplier * conditionMultiplier * deltaSeconds;
   updateFacingAlongRoute(unit, movementTarget);
   unit.position = moveToPoint(unit.position, movementTarget, stepDistance);
 

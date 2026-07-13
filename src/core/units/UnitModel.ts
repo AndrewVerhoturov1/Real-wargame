@@ -18,8 +18,6 @@ import {
   type UnitBehaviorRuntime,
   type UnitInitialState,
 } from '../behavior/BehaviorModel';
-import { clearCombatRuntime, replaceCombatRuntime, type CombatRuntimeState } from '../combat/CombatDamage';
-import { clearWeaponRuntime, replaceWeaponRuntime, type WeaponRuntimeState } from '../combat/WeaponModel';
 import type { GridPosition } from '../geometry';
 import { createEmptyTacticalKnowledge, normalizeTacticalKnowledge } from '../knowledge/SoldierThreatMemory';
 import type { NavigationProfileSource } from '../navigation/NavigationProfileResolver';
@@ -40,8 +38,7 @@ import {
 } from '../perception/PerceptionContact';
 import type { PressureZoneMode } from '../pressure/PressureZone';
 
-export type UnitSide = 'blue' | 'red';
-export type UnitSideInput = UnitSide | 'player';
+export type UnitSide = 'player';
 export type UnitType = 'infantry_squad' | 'scout_team' | 'support_team';
 export type UnitHeldItem = 'long_item' | 'support_item' | 'short_item';
 export type ThreatMemorySource = 'seen' | 'heard' | 'reported' | 'fire_pressure';
@@ -79,8 +76,6 @@ export interface UnitTacticalKnowledge {
 }
 
 export interface UnitRuntimeData extends Partial<Pick<UnitBehaviorRuntime, 'stress' | 'suppression' | 'ammo' | 'weaponReady' | 'posture'>> {
-  weapon?: WeaponRuntimeState;
-  combat?: CombatRuntimeState;
   aiRuntime?: AiRuntimeSceneSnapshotV1;
 }
 
@@ -89,7 +84,7 @@ export interface UnitData {
   label?: string;
   labelRu?: string;
   type: UnitType;
-  side: UnitSideInput;
+  side: UnitSide;
   x: number;
   y: number;
   speedCellsPerSecond?: number;
@@ -177,7 +172,7 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
         ru: unit.labelRu ?? fallbackLabel,
       },
       type: unit.type,
-      side: normalizeUnitSide(unit.side),
+      side: unit.side,
       position: {
         x: (unit.x + 0.5) * scale,
         y: (unit.y + 0.5) * scale,
@@ -209,9 +204,7 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
       activeNavigationProfileSource: unit.navigationProfileId ? 'unitRole' : 'default',
     };
     applyInitialStateToRuntime(model, false);
-    if (unit.runtime?.weapon) replaceWeaponRuntime(model, unit.runtime.weapon);
     restoreAiRuntimeSnapshot(model, unit.runtime?.aiRuntime);
-    if (unit.runtime?.combat) replaceCombatRuntime(model, unit.runtime.combat);
     initializeSimulationAiEventFacts(model);
     return model;
   });
@@ -242,8 +235,6 @@ function restoreAiRuntimeSnapshot(unit: UnitModel, value: unknown): void {
 }
 
 export function applyInitialStateToRuntime(unit: UnitModel, clearPerceptionKnowledge = true): void {
-  clearWeaponRuntime(unit);
-  clearCombatRuntime(unit);
   const initial = unit.initialState;
   unit.behaviorRuntime.previousPosture = initial.posture;
   unit.behaviorRuntime.posture = initial.posture;
@@ -300,10 +291,6 @@ export function findUnitAtGridPosition(
   }
 
   return undefined;
-}
-
-export function normalizeUnitSide(value: UnitSideInput | string | undefined): UnitSide {
-  return value === 'red' ? 'red' : 'blue';
 }
 
 function scalePerceptionKnowledge(knowledge: UnitPerceptionKnowledge, scale: number): UnitPerceptionKnowledge {
