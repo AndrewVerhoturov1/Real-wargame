@@ -1,0 +1,35 @@
+name: Temporary AI state-plan validation fixes
+
+on:
+  push:
+    branches:
+      - feat/ai-state-plan-v1-temp-2026-07-14
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[state-plan-validation-fixed]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: node scripts/apply_ai_state_plan_validation_fixes.mjs
+      - name: Commit validation fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src scripts/ai_runtime_snapshot_smoke.ts
+          if git diff --cached --quiet; then
+            echo "No validation fixes to commit."
+            exit 0
+          fi
+          git commit -m "fix(ai): resolve state-plan validation failures [state-plan-validation-fixed]"
+          git push origin HEAD:feat/ai-state-plan-v1-temp-2026-07-14
