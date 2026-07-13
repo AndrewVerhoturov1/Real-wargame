@@ -2,15 +2,13 @@ import type { TacticalMap } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
 import { buildNavigationGrid } from '../pathfinding/GridNavigation';
 import {
+  getDirectionalTacticalField,
+  type DirectionalTacticalField,
+} from '../terrain/DirectionalTacticalField';
+import {
   getDirectionalTerrainStaticGrid,
-  sampleDirectionalSlope,
   type DirectionalTerrainStaticGrid,
 } from '../terrain/DirectionalTerrainStaticGrid';
-import {
-  buildThreatDirectionField,
-  threatSectorBearingRadians,
-  type ThreatDirectionField,
-} from '../terrain/ThreatDirectionField';
 import type { NavigationProfile, NavigationTerrainCostKey } from './NavigationProfiles';
 
 const mapIdentityByMap = new WeakMap<TacticalMap, number>();
@@ -370,10 +368,20 @@ function buildDynamicField(
   const territoryCost = new Float32Array(count);
   const knownThreats = tacticalContext?.knownThreats ?? [];
   const hasOrigin = Number.isFinite(tacticalContext?.originX) && Number.isFinite(tacticalContext?.originY);
-  const threatField = hasOrigin
-    ? buildThreatDirectionField(tacticalContext?.originX ?? 0, tacticalContext?.originY ?? 0, knownThreats)
-    : emptyThreatDirectionField();
-  const directionalAvailable = threatField.totalWeight > 1e-6 && hasDirectionalTerrainWeights(profile);
+  const tacticalField = hasOrigin
+    ? getDirectionalTacticalField(map, {
+      unitId: tacticalContext?.unitId ?? 'route',
+      originX: tacticalContext?.originX ?? 0,
+      originY: tacticalContext?.originY ?? 0,
+      knowledgeRevision: tacticalContext?.knowledgeRevision ?? 0,
+      threats: knownThreats,
+    })
+    : null;
+  const directionalAvailable = Boolean(
+    tacticalField
+    && tacticalField.threatField.totalWeight > 1e-6
+    && hasDirectionalTerrainWeights(profile),
+  );
 
   cache.diagnostics.dynamicCostBuildCount += 1;
   cache.diagnostics.fullMapScanCount += 1;
@@ -392,16 +400,9 @@ function buildDynamicField(
           dangerCost[index] = profile.dangerWeight * Math.min(4, knownDanger);
         }
 
-        if (directionalAvailable) {
-          const evaluated = evaluateDirectionalTerrainAt(
-            staticField.directionalTerrain,
-            profile,
-            threatField,
-            x,
-            y,
-          );
-          directionalTerrainCost[index] = evaluated.cost;
-          directionalSlope[index] = evaluated.primarySlope;
+        if (directionalAvailable && tacticalField) {
+          directionalTerrainCost[index] = evaluateDirectionalTacticalCost(tacticalField, profile, index);
+          directionalSlope[index] = tacticalField.primarySlope[index] ?? 0;
         }
       }
     }
@@ -415,8 +416,8 @@ function buildDynamicField(
     directionalSlope,
     enemyDistanceCost,
     territoryCost,
-    primaryThreatSector: threatField.primarySector,
-    threatSectorWeights: threatField.normalizedSectorWeights,
+    primaryThreatSector: tacticalField?.threatField.primarySector ?? -1,
+    threatSectorWeights: tacticalField?.threatField.normalizedSectorWeights ?? new Float32Array(8),
     availability: {
       danger: Boolean(tacticalContext),
       exposure: false,
@@ -428,55 +429,27 @@ function buildDynamicField(
   };
 }
 
-function evaluateDirectionalTerrainAt(
-  terrain: DirectionalTerrainStaticGrid,
+function evaluateDirectionalTacticalCost(
+  field: DirectionalTacticalField,
   profile: NavigationProfile,
-  threatField: ThreatDirectionField,
-  x: number,
-  y: number,
-): { cost: number; primarySlope: number } {
-  const index = y * terrain.width + x;
-  const crest = terrain.crestStrength[index] / 255;
-  const valley = terrain.valleyStrength[index] / 255;
-  const silhouette = terrain.silhouettePotential[index] / 255;
+  index: number,
+): number {
   const weights = profile.directionalTerrain;
-  let weightedCost = 0;
-  let criticalCost = 0;
-  let primarySlope = 0;
-
-  for (let sector = 0; sector < threatField.normalizedSectorWeights.length; sector += 1) {
-    const sectorWeight = threatField.normalizedSectorWeights[sector];
-    if (sectorWeight <= 1e-6) continue;
-    const slope = sampleDirectionalSlope(terrain, x, y, threatSectorBearingRadians(sector));
-    if (sector === threatField.primarySector) primarySlope = slope;
-    const forward = Math.max(0, slope);
-    const reverse = Math.max(0, -slope);
-    const sectorCost = forward * weights.forwardSlopePenalty
-      - reverse * weights.reverseSlopePreference
-      + crest * weights.crestPenalty
-      + silhouette * weights.silhouettePenalty
-      - valley * weights.valleyPreference;
-    weightedCost += sectorCost * sectorWeight;
-    const significance = Math.min(1, sectorWeight * 4);
-    criticalCost = Math.max(criticalCost, Math.max(0, sectorCost) * significance);
-  }
-
-  return {
-    cost: Math.max(-0.95, weightedCost + criticalCost * weights.criticalSectorMultiplier),
-    primarySlope,
-  };
-}
-
-function emptyThreatDirectionField(): ThreatDirectionField {
-  return {
-    sectorWeights: new Float32Array(8),
-    normalizedSectorWeights: new Float32Array(8),
-    totalWeight: 0,
-    primarySector: -1,
-    primaryBearingRadians: 0,
-    strongestSectorShare: 0,
-    contributingThreatCount: 0,
-  };
+  const forward = (field.forwardSlopeRisk[index] ?? 0) / 100;
+  const reverse = (field.reverseSlopeProtection[index] ?? 0) / 100;
+  const crest = (field.crestRisk[index] ?? 0) / 100;
+  const silhouette = (field.silhouetteRisk[index] ?? 0) / 100;
+  const valley = (field.valleyProtection[index] ?? 0) / 100;
+  const criticalExposure = Math.max(
+    (field.primaryThreatExposure[index] ?? 0) / 100,
+    (field.flankExposure[index] ?? 0) / 100,
+  );
+  const base = forward * weights.forwardSlopePenalty
+    - reverse * weights.reverseSlopePreference
+    + crest * weights.crestPenalty
+    + silhouette * weights.silhouettePenalty
+    - valley * weights.valleyPreference;
+  return Math.max(-0.95, base + Math.max(0, base) * criticalExposure * weights.criticalSectorMultiplier);
 }
 
 function hasDirectionalTerrainWeights(profile: NavigationProfile): boolean {
