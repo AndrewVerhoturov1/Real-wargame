@@ -84,7 +84,7 @@ export function installAiStatePlanVisualQaHarness(
       const unit = state.units[0];
       const session = unit?.behaviorRuntime.aiRuntimeSession;
       return activeScenario && unit && session
-        ? snapshotFromSession(activeScenario, session, unit.behaviorRuntime.lastEvent)
+        ? snapshotFromSession(activeScenario, session, unit.behaviorRuntime.lastEvent ?? '')
         : null;
     },
   };
