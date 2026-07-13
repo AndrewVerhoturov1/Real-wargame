@@ -1,1 +1,1 @@
-Trigger exact Graph v2 transfer builder after workflow baseline fix.
+Trigger exact Graph v2 transfer builder after valid workflow update.
