@@ -1,0 +1,103 @@
+name: AI plan panels visual QA (temporary branch)
+
+run-name: AI plan panels visual QA · ${{ github.ref_name }}
+
+on:
+  push:
+    branches:
+      - fix/ai-plan-move-editor-panels-temp-2026-07-14
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  visual-qa:
+    name: Capture AI plan panel screenshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Publish pending visual QA status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'pending',
+              context: 'ai-plan-panels-visual-qa',
+              description: 'Approved AI plan panel Playwright run is in progress',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - name: Checkout exact pushed commit
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Install Playwright test runner
+        run: npm install --no-save @playwright/test
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Capture AI state-plan screenshots with system Chrome
+        id: capture
+        shell: bash
+        run: |
+          set -o pipefail
+          npx playwright test tests/ai-state-plan-visual.spec.ts --project=chromium --reporter=line 2>&1 | tee playwright-ai-plan-panels.log
+
+      - name: Record tested commit
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          mkdir -p artifacts/visual-qa-metadata
+          printf '%s\n' '${{ github.sha }}' > artifacts/visual-qa-metadata/tested-sha.txt
+
+      - name: Upload screenshots
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-plan-panels-screenshots
+          path: artifacts/screenshots/ai-state-plan-v1/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Playwright log and metadata
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-plan-panels-playwright-log
+          path: |
+            playwright-ai-plan-panels.log
+            artifacts/visual-qa-metadata/tested-sha.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Publish visual QA status
+        if: ${{ always() }}
+        uses: actions/github-script@v7
+        env:
+          CAPTURE_OUTCOME: ${{ steps.capture.outcome }}
+        with:
+          script: |
+            const success = process.env.CAPTURE_OUTCOME === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: success ? 'success' : 'failure',
+              context: 'ai-plan-panels-visual-qa',
+              description: `AI plan panel Playwright: ${process.env.CAPTURE_OUTCOME}`,
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
