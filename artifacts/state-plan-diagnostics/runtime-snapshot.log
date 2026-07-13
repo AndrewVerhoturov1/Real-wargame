@@ -1,5 +1,0 @@
-
-> real-wargame@0.1.0 runtime-snapshot:smoke
-> node scripts/ai_runtime_snapshot_smoke.mjs
-
-AI runtime snapshot smoke passed: Wait, Move, Reload, legacy scene and invalid graph/version safety.
