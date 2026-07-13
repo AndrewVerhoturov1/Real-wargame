@@ -72,7 +72,6 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
       </div>
       <div class="workspace-top-actions">
         <button class="editor-place-button primary" data-action="editor-place" title="Включить постановку для открытой вкладки редактора">Поставить</button>
-        <label class="editor-unit-side-control"><span>Сторона бойца</span><select data-action="editor-unit-side"><option value="blue">Свои</option><option value="red">Противник</option></select></label>
         <button data-action="ai-editor">Редактор ИИ</button><button data-action="new-game">Новая игра</button>
         <details class="workspace-file-menu"><summary>Файл</summary><div class="workspace-file-panel" data-role="file-tools"></div></details>
         <details class="workspace-display-menu"><summary>Вид</summary><div class="workspace-display-panel" data-role="display"></div></details>
@@ -135,18 +134,11 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   const display = q<HTMLElement>('[data-role="display"]');
   const fileTools = q<HTMLElement>('[data-role="file-tools"]');
   const editorPlace = q<HTMLButtonElement>('[data-action="editor-place"]');
-  const editorUnitSide = q<HTMLSelectElement>('[data-action="editor-unit-side"]');
   const navigationProfile = q<HTMLSelectElement>('[data-action="unit-navigation-profile"]');
   const attentionProfileSelect = q<HTMLSelectElement>('[data-action="unit-attention-profile"]');
   const attentionModeSelect = q<HTMLSelectElement>('[data-action="unit-attention-mode"]');
   const turnUnitButton = q<HTMLButtonElement>('[data-action="turn-unit"]');
   const fireContactButton = q<HTMLButtonElement>('[data-action="fire-contact"]');
-  editorUnitSide.value = state.editor.unitSide;
-  editorUnitSide.addEventListener('change', () => {
-    state.editor.unitSide = (editorUnitSide.value === 'red' ? 'red' : 'blue') as UnitSide;
-    state.editor.lastMessage = state.editor.unitSide === 'red' ? 'Новые бойцы будут противниками.' : 'Новые бойцы будут своими.';
-    onChanged();
-  });
 
   moveExistingButton('#grid-toggle', display);
   moveExistingButton('#height-toggle', display);
@@ -322,7 +314,6 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
     document.body.classList.toggle('sidebar-collapsed', mode === 'simulation' && collapsed);
     sidebar.hidden = mode !== 'simulation';
     bottom.hidden = mode !== 'simulation';
-    editorUnitSide.closest<HTMLElement>('.editor-unit-side-control')!.hidden = mode !== 'editor';
     q<HTMLButtonElement>('[data-action="collapse"]').textContent = collapsed ? '›' : '‹';
     for (const item of shell.querySelectorAll<HTMLButtonElement>('[data-mode]')) item.classList.toggle('active', item.dataset.mode === mode);
     updateEditorPlaceButton();
