@@ -84,9 +84,10 @@ test('visually verifies two hostile sides, personal contact and stateful rifle f
   await expect(page.locator('[data-stat="ammo"]')).toHaveText(/\d+\+\d+/);
 
   const pauseButton = page.locator('[data-action="pause"]');
-  if (await pauseButton.getAttribute('class').then((value) => value?.includes('active'))) {
+  if ((await pauseButton.textContent())?.trim() === 'Продолжить') {
     await pauseButton.click();
   }
+  await expect(pauseButton).toHaveText('Пауза');
 
   const fireButton = page.locator('[data-action="fire-contact"]');
   await expect(fireButton).toBeEnabled({ timeout: 30_000 });
