@@ -78,9 +78,17 @@ export interface DirectionalTerrainPositionQueryDiagnostics {
   readonly cachedReportCount: number;
 }
 
+interface MutableDirectionalTerrainPositionQueryDiagnostics {
+  buildCount: number;
+  cacheHitCount: number;
+  roughCellCount: number;
+  exactRayCount: number;
+  rayProcessedCellCount: number;
+}
+
 interface RuntimeCache {
   readonly reports: Map<string, DirectionalTerrainPositionReport>;
-  readonly diagnostics: Omit<DirectionalTerrainPositionQueryDiagnostics, 'cachedReportCount'>;
+  readonly diagnostics: MutableDirectionalTerrainPositionQueryDiagnostics;
 }
 
 interface RoughCandidate {
@@ -489,7 +497,7 @@ function getRuntime(map: TacticalMap): RuntimeCache {
 }
 
 function positiveInteger(value: number | undefined, fallback: number, min: number, max: number): number {
-  const numeric = Number.isFinite(value) ? Math.round(value ?? fallback) : fallback;
+  const numeric = typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : fallback;
   return clamp(numeric, min, max);
 }
 
