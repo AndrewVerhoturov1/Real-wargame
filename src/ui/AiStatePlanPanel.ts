@@ -48,9 +48,11 @@ export function bindTacticalStatePlanPanel(root: HTMLElement): TacticalStatePlan
     replan: required<HTMLUListElement>(panel, '[data-state-plan-list="replan"]'),
     technical: required<HTMLElement>(panel, '[data-state-plan="technical"]'),
   };
+  let updateSequence = 0;
 
   return {
     update(unit): void {
+      const sequence = ++updateSequence;
       const session = unit?.behaviorRuntime.aiRuntimeSession;
       if (!unit || !session) {
         panel.classList.add('empty');
@@ -106,6 +108,12 @@ export function bindTacticalStatePlanPanel(root: HTMLElement): TacticalStatePlan
         subgraphId: step?.subgraphId,
         replacesPlanId: activePlan?.replacesPlanId,
       }, null, 2));
+
+      window.requestAnimationFrame(() => {
+        if (sequence !== updateSequence || !panel.isConnected) return;
+        const sidebarState = root.querySelector<HTMLElement>('[data-live="state"]');
+        if (sidebarState) setText(sidebarState, definition.labelRu);
+      });
     },
   };
 }
