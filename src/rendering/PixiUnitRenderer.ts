@@ -2,8 +2,8 @@ import { Container, Graphics } from 'pixi.js';
 import { gridToWorld, type TacticalMap } from '../core/map/MapModel';
 import type { UnitModel } from '../core/units/UnitModel';
 
-const UNIT_RADIUS_CELL_FRACTION = 0.16;
-const MIN_UNIT_RADIUS_PX = 3.5;
+const UNIT_RADIUS_CELL_FRACTION = 0.18;
+const MIN_UNIT_RADIUS_PX = 4.5;
 
 interface UnitView {
   container: Container;
@@ -163,7 +163,8 @@ function updateUnitView(
 function redrawBody(graphics: Graphics, unit: UnitModel, unitRadius: number): void {
   graphics.clear();
   const fill = getUnitFill(unit);
-  graphics.lineStyle(1.5, 0x111111, 0.9);
+  const border = unit.side === 'red' ? 0x5a1018 : 0x102f5c;
+  graphics.lineStyle(2, border, 1);
 
   if (unit.behaviorRuntime.posture === 'prone') {
     graphics.beginFill(fill, 1);
@@ -236,15 +237,15 @@ function redrawWeapon(graphics: Graphics, itemKind: UnitModel['heldItem'], unitR
 function getUnitFill(unit: UnitModel): number {
   if (unit.behaviorRuntime.currentAction === 'dead') return 0x2d2d2d;
   if (unit.behaviorRuntime.currentAction === 'incapacitated') return 0x555555;
-  if (unit.behaviorRuntime.state === 'stressed') return unit.side === 'red' ? 0x743635 : 0x35486f;
+  if (unit.behaviorRuntime.state === 'stressed') return unit.side === 'red' ? 0xb73d48 : 0x356db7;
   if (unit.side === 'red') {
-    if (unit.type === 'support_team') return 0x8d3f45;
-    if (unit.type === 'scout_team') return 0x9a5a42;
-    return 0x874239;
+    if (unit.type === 'support_team') return 0xe04f5b;
+    if (unit.type === 'scout_team') return 0xef7650;
+    return 0xd94b45;
   }
-  if (unit.type === 'support_team') return 0x394a6d;
-  if (unit.type === 'scout_team') return 0x4b6590;
-  return 0x3e5f8d;
+  if (unit.type === 'support_team') return 0x4b7fd0;
+  if (unit.type === 'scout_team') return 0x70a9f5;
+  return 0x4f8fe5;
 }
 
 function getUnitRadius(map: TacticalMap): number {
