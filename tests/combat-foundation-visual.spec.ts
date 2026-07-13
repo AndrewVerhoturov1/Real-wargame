@@ -44,7 +44,8 @@ function sideSelect(page: Page): Locator {
 async function placeUnit(page: Page, canvas: Locator, side: 'blue' | 'red', position: { x: number; y: number }, expectedId: string): Promise<void> {
   const selector = sideSelect(page);
   await selector.selectOption(side);
-  await expect(selector).toHaveValue(side);
+  await selector.dispatchEvent('change');
+  await expect(sideSelect(page)).toHaveValue(side);
   const placeButton = page.locator('.game-editor-global-tools').getByRole('button', { name: 'Поставить бойца' });
   await expect(placeButton).toBeVisible();
   await placeButton.click();
