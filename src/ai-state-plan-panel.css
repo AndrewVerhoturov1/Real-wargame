@@ -1,8 +1,14 @@
 .unit-state-plan {
   position: relative;
+  z-index: 1;
+  grid-area: stateplan;
   min-width: 0;
-  max-width: 260px;
+  max-width: none;
   align-self: stretch;
+}
+
+.unit-state-plan[open] {
+  z-index: 130;
 }
 
 .unit-state-plan > summary {
@@ -50,7 +56,7 @@
 
 .unit-state-plan-popover {
   position: absolute;
-  z-index: 110;
+  z-index: 131;
   left: 0;
   bottom: calc(100% + 9px);
   width: min(520px, calc(100vw - 30px));
@@ -158,10 +164,6 @@
 }
 
 @media (max-width: 1150px) {
-  .unit-state-plan {
-    max-width: 210px;
-  }
-
   .unit-state-plan-columns {
     grid-template-columns: 1fr;
   }
