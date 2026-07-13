@@ -76,9 +76,8 @@ test('shows Graph v2 migration, Russian subgraph controls, errors, and breadcrum
   await saveScreenshot(page, 'graph-v2-migration-and-errors.png');
 
   await page.locator('.graph-node.selected').dblclick();
-  const breadcrumb = page.locator('.graph-breadcrumb');
-  await expect(breadcrumb).toContainText('Главный граф');
-  await expect(breadcrumb).toContainText('Двигаться и наблюдать');
+  const breadcrumb = page.locator('.graph-breadcrumb span');
+  await expect(breadcrumb).toHaveText('Главный граф → Двигаться и наблюдать');
   await expect(page.getByRole('button', { name: '← К родительскому графу' })).toBeVisible();
   await saveScreenshot(page, 'graph-v2-subgraph-breadcrumb.png');
 
