@@ -41,6 +41,7 @@ export class PixiOverlayRenderer {
   private readonly knowledgeContainer = new Container();
   private readonly threatGeometryContainer = new Container();
   private readonly threatMarkerGraphics = new Graphics();
+  private readonly threatGeometryGraphics = new Graphics();
   private readonly probeContainer = new Container();
   private readonly interactionContainer = new Container();
   private readonly hoverCellGraphics = new Graphics();
@@ -82,6 +83,8 @@ export class PixiOverlayRenderer {
     this.selectionBoxGraphics.eventMode = 'none';
     this.commandDraftGraphics.eventMode = 'none';
     this.threatMarkerGraphics.eventMode = 'none';
+    this.threatGeometryGraphics.eventMode = 'none';
+    this.threatGeometryContainer.addChild(this.threatGeometryGraphics);
     this.interactionContainer.addChild(this.hoverCellGraphics, this.selectionBoxGraphics, this.commandDraftGraphics);
     this.container.addChild(
       this.zoneContainer,
@@ -162,8 +165,12 @@ export class PixiOverlayRenderer {
     const geometryKey = visible ? buildThreatGeometryKey(threats, state.map.cellSize) : 'threats:hidden';
     if (geometryKey !== this.lastThreatGeometryKey) {
       this.lastThreatGeometryKey = geometryKey;
-      destroyContainerChildren(this.threatGeometryContainer);
-      if (visible) drawThreatMemoryGeometry(this.threatGeometryContainer, state);
+      this.threatGeometryGraphics.clear();
+      if (visible) {
+        const layer = getSimulationLayerState(state);
+        const cellSize = state.map.cellSize;
+        for (const threat of threats) drawRememberedThreat(this.threatGeometryGraphics, threat, cellSize, layer.mode === 'memory');
+      }
       this.diagnostics.threatGeometryRebuildCount += 1;
       this.diagnostics.threatGeometryObjectCount = this.threatGeometryContainer.children.length;
     }

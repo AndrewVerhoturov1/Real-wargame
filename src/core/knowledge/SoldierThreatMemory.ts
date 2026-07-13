@@ -254,7 +254,6 @@ function threatRevisionFingerprint(memory: KnownThreatMemory): Record<string, un
     confidence: Math.round(memory.confidence),
     uncertaintyCells: Math.round(memory.uncertaintyCells * 10) / 10,
     source: memory.source,
-    visibleNow: memory.visibleNow,
   };
 }
 
