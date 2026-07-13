@@ -6,8 +6,8 @@ const SCREENSHOT_DIR = path.join('artifacts', 'screenshots');
 const VIEWPORT = { width: 1440, height: 900 };
 const BOARD_ORIGIN = { x: 72, y: 72 };
 const CELL_SIZE = 24;
-const BLUE_FIXTURE = { x: 27.574, y: 17.589 };
-const RED_SPAWN = { x: 31, y: 17.589 };
+const BLUE_SPAWN = { x: 10, y: 8 };
+const RED_SPAWN = { x: 14, y: 8 };
 
 async function saveScreenshot(page: Page, name: string): Promise<void> {
   const session = await page.context().newCDPSession(page);
@@ -35,6 +35,17 @@ async function worldPoint(canvas: Locator, gridX: number, gridY: number): Promis
 async function clickUnit(page: Page, canvas: Locator, position: { x: number; y: number }): Promise<void> {
   const point = await worldPoint(canvas, position.x, position.y);
   await page.mouse.click(point.x, point.y);
+}
+
+async function placeUnit(page: Page, canvas: Locator, side: 'blue' | 'red', position: { x: number; y: number }, expectedId: string): Promise<void> {
+  await page.locator('[data-action="editor-unit-side"]').selectOption(side);
+  await expect(page.locator('[data-action="editor-unit-side"]')).toHaveValue(side);
+  const placeButton = page.locator('.game-editor-global-tools').getByRole('button', { name: 'Поставить бойца' });
+  await expect(placeButton).toBeVisible();
+  await placeButton.click();
+  const point = await worldPoint(canvas, position.x, position.y);
+  await page.mouse.click(point.x, point.y);
+  await expect(page.locator('.game-editor-selected-summary')).toContainText(expectedId);
 }
 
 async function waitForFireActionToFinish(page: Page): Promise<void> {
@@ -65,53 +76,55 @@ test('visually verifies two hostile sides, personal contact and stateful rifle f
   await page.locator('[data-mode="editor"]').click();
   await expect(page.locator('body')).toHaveClass(/workspace-editor/);
   await page.locator('.game-editor-tabs').getByRole('button', { name: 'Боец', exact: true }).click();
-  await page.locator('[data-action="editor-unit-side"]').selectOption('red');
-  await expect(page.locator('[data-action="editor-unit-side"]')).toHaveValue('red');
-
-  const placeButton = page.locator('.game-editor-global-tools').getByRole('button', { name: 'Поставить бойца' });
-  await expect(placeButton).toBeVisible();
-  await placeButton.click();
-  const redPoint = await worldPoint(canvas, RED_SPAWN.x, RED_SPAWN.y);
-  await page.mouse.click(redPoint.x, redPoint.y);
-  await expect(page.locator('.game-editor-selected-summary')).toContainText('editor_unit_1');
+  await placeUnit(page, canvas, 'blue', BLUE_SPAWN, 'editor_unit_1');
+  await placeUnit(page, canvas, 'red', RED_SPAWN, 'editor_unit_2');
   await page.waitForTimeout(350);
   await saveScreenshot(page, '20-combat-editor-two-sides.png');
 
   await page.locator('[data-mode="simulation"]').click();
   await expect(page.locator('body')).toHaveClass(/workspace-simulation/);
-  await clickUnit(page, canvas, BLUE_FIXTURE);
+  await clickUnit(page, canvas, BLUE_SPAWN);
   await expect(page.locator('[data-role="unit-meta"]')).toContainText('Свои');
   await expect(page.locator('[data-stat="ammo"]')).toHaveText(/\d+\+\d+/);
+
+  const turnButton = page.locator('[data-action="turn-unit"]');
+  await turnButton.click();
+  await expect(turnButton).toHaveText('Куда?');
+  const redPoint = await worldPoint(canvas, RED_SPAWN.x, RED_SPAWN.y);
+  await page.mouse.click(redPoint.x, redPoint.y, { button: 'right' });
+  await expect(turnButton).toHaveText('Повернуть');
 
   const pauseButton = page.locator('[data-action="pause"]');
   if ((await pauseButton.textContent())?.trim() === 'Продолжить') {
     await pauseButton.click();
   }
   await expect(pauseButton).toHaveText('Пауза');
+  await page.waitForTimeout(500);
+  await saveScreenshot(page, '21-combat-simulation-running.png');
 
   const fireButton = page.locator('[data-action="fire-contact"]');
   await expect(fireButton).toBeEnabled({ timeout: 30_000 });
   await expect(fireButton).toHaveAttribute('title', /Личный контакт:/);
   await page.waitForTimeout(350);
-  await saveScreenshot(page, '21-combat-contact-ready.png');
+  await saveScreenshot(page, '22-combat-contact-ready.png');
 
   const ammoBefore = await page.locator('[data-stat="ammo"]').textContent();
   await fireButton.click();
   await expect(page.locator('[data-role="action"]')).toContainText(/стрельба: (поворот|подготовка оружия|наведение|проверка линии огня)/, { timeout: 8_000 });
   await page.waitForTimeout(250);
-  await saveScreenshot(page, '22-combat-stateful-aiming.png');
+  await saveScreenshot(page, '23-combat-stateful-aiming.png');
 
   await expect.poll(async () => page.locator('[data-stat="ammo"]').textContent(), { timeout: 20_000 })
     .not.toBe(ammoBefore);
   await waitForFireActionToFinish(page);
   await page.waitForTimeout(350);
-  await saveScreenshot(page, '23-combat-shot-complete.png');
+  await saveScreenshot(page, '24-combat-shot-complete.png');
 
   await clickUnit(page, canvas, RED_SPAWN);
   await expect(page.locator('[data-role="unit-meta"]')).toContainText('Противник');
   await expect(page.locator('[data-role="unit-meta"]')).toContainText(/боеспособен|ранен|тяжело ранен|выведен из строя|погиб/);
   await page.waitForTimeout(350);
-  await saveScreenshot(page, '24-combat-target-outcome.png');
+  await saveScreenshot(page, '25-combat-target-outcome.png');
 
   expect(pageErrors, `Browser errors: ${pageErrors.join(' | ')}`).toEqual([]);
 });
