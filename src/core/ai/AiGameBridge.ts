@@ -10,7 +10,6 @@ import { isPlayerCommandOutstanding } from '../orders/PlayerCommand';
 import { clearAttentionOverride, setAttentionMode, setFocusTarget, setSearchSector } from '../perception/AttentionController';
 import { degreesToRadians, radiansToDegrees } from '../perception/AttentionModel';
 import { getBestPerceptionContact } from '../perception/PerceptionSystem';
-import { emitPerceptionSound } from '../perception/PerceptionSound';
 import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
 import type { SimulationState } from '../simulation/SimulationState';
 import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
@@ -459,7 +458,7 @@ function applyAction(
   unit: UnitModel,
   effect: Extract<AiGraphEffect, { type: 'set_action' }>,
   blackboard: AiGraphRunnerBlackboard,
-  nowMs: number,
+  _nowMs: number,
 ): void {
   if (effect.action === 'move_to') {
     const target = readPosition(blackboard[effect.targetKey ?? 'best_cover_position']);
