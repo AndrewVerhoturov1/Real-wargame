@@ -1,0 +1,113 @@
+name: TEMP AI plan panels fix executor
+
+on:
+  push:
+    branches:
+      - fix/ai-plan-move-editor-panels-temp-2026-07-14
+    paths:
+      - .github/workflows/ai-plan-panels-fix-executor-temp.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/ai-plan-move-editor-panels-temp-2026-07-14
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Mount both diagnostics in the shared dock
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          state_path = Path('src/ai-node-editor/state-machine-ui.ts')
+          state = state_path.read_text(encoding='utf-8')
+          state_replacements = [
+              (
+                  "import './state-machine-ui.css';\n",
+                  "import './state-machine-ui.css';\nimport { ensureAiDebugPanelCard } from './debug-panel-dock';\n",
+              ),
+              (
+                  "function createPanel(workspace: HTMLElement): PanelRefs {\n  const panel = document.createElement('section');\n  panel.className = 'ai-state-plan-panel';\n  panel.innerHTML = `\n    <header><div><h3>Состояние и план</h3><span>State → Utility → Plan → Подграф</span></div><span class=\"state-plan-live\">живые данные</span></header>",
+                  "function createPanel(workspace: HTMLElement): PanelRefs {\n  const { content } = ensureAiDebugPanelCard(workspace, {\n    id: 'state-plan',\n    title: 'Состояние и план',\n    subtitle: 'State → Utility → Plan → Подграф',\n    defaultOpen: true,\n  });\n  content.replaceChildren();\n  const panel = document.createElement('section');\n  panel.className = 'ai-state-plan-panel';\n  panel.innerHTML = `\n    <header><span>State → Utility → Plan → Подграф</span><span class=\"state-plan-live\">живые данные</span></header>",
+              ),
+              (
+                  "  workspace.appendChild(panel);\n  const required = <T extends Element>(selector: string): T => {",
+                  "  content.appendChild(panel);\n  const required = <T extends Element>(selector: string): T => {",
+              ),
+          ]
+          for old, new in state_replacements:
+              if new in state:
+                  continue
+              if old not in state:
+                  raise SystemExit(f'State panel source fragment not found:\n{old}')
+              state = state.replace(old, new, 1)
+          state_path.write_text(state, encoding='utf-8')
+
+          runtime_path = Path('src/ai-node-editor/runtime-debug-overlay.ts')
+          runtime = runtime_path.read_text(encoding='utf-8')
+          runtime_replacements = [
+              (
+                  "import './state-machine-ui';\n",
+                  "import './state-machine-ui';\nimport { ensureAiDebugPanelCard } from './debug-panel-dock';\n",
+              ),
+              (
+                  "function renderDebugPanel(payload: RuntimeDebugPayload | null): void {\n  document.querySelector('.ai-runtime-debug-panel')?.remove();\n  const workspace = document.querySelector<HTMLElement>('#graph-workspace');\n  if (!workspace) return;\n\n  const panel = document.createElement('section');",
+                  "function renderDebugPanel(payload: RuntimeDebugPayload | null): void {\n  const workspace = document.querySelector<HTMLElement>('#graph-workspace');\n  if (!workspace) return;\n  const { content } = ensureAiDebugPanelCard(workspace, {\n    id: 'runtime-trace',\n    title: 'След ИИ',\n    subtitle: 'Последний расчёт выбранного бойца',\n  });\n  content.replaceChildren();\n\n  const panel = document.createElement('section');",
+              ),
+              (
+                  "    panel.innerHTML = '<h3>След ИИ</h3><p>Пока нет живого решения. Открой игру, выбери бойца и дождись одного тика ИИ.</p>';\n    workspace.appendChild(panel);",
+                  "    panel.innerHTML = '<p>Пока нет живого решения. Открой игру, выбери бойца и дождись одного тика ИИ.</p>';\n    content.appendChild(panel);",
+              ),
+              (
+                  "  panel.innerHTML = `\n    <h3>След ИИ ${payload.paused ? '· пауза' : ''}</h3>\n    <p class=\"${stale ? 'stale' : ''}\">${escapeHtml(stale ? 'Показан старый последний расчёт.' : 'Показан последний расчёт выбранного бойца.')}</p>",
+                  "  panel.innerHTML = `\n    <p class=\"${stale ? 'stale' : ''}\">${escapeHtml(payload.paused ? 'Расчёт ИИ приостановлен.' : stale ? 'Показан старый последний расчёт.' : 'Показан последний расчёт выбранного бойца.')}</p>",
+              ),
+              (
+                  "  workspace.appendChild(panel);\n}\n\nfunction removeExistingNodeDebug(): void {",
+                  "  content.appendChild(panel);\n}\n\nfunction removeExistingNodeDebug(): void {",
+              ),
+          ]
+          for old, new in runtime_replacements:
+              if new in runtime:
+                  continue
+              if old not in runtime:
+                  raise SystemExit(f'Runtime panel source fragment not found:\n{old}')
+              runtime = runtime.replace(old, new, 1)
+          runtime_path.write_text(runtime, encoding='utf-8')
+          PY
+
+      - name: Verify editor, lab, movement and build
+        run: |
+          npm run editor:smoke
+          npm run lab:smoke
+          npm run move-bridge:smoke
+          npm run state-plan-scenario:smoke
+          npm run build
+
+      - name: Commit verified panel fix
+        run: |
+          if git diff --quiet -- src/ai-node-editor/state-machine-ui.ts src/ai-node-editor/runtime-debug-overlay.ts; then
+            echo "Panel fix already applied."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/ai-node-editor/state-machine-ui.ts src/ai-node-editor/runtime-debug-overlay.ts
+          git commit -m "fix: dock collapsible AI diagnostics"
+          git push origin HEAD:fix/ai-plan-move-editor-panels-temp-2026-07-14
