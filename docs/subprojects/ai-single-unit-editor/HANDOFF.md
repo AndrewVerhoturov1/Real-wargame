@@ -100,13 +100,15 @@ The old `directionalTerrain` renderer mode remains available only as an internal
 
 ## Automated verification
 
-Final exact verified branch SHA:
+The application implementation was verified on commit:
 
 ```text
 f2e2bd5a15fa4e98856fbb1a1f57997e659e68a3
 ```
 
-All pull-request workflows passed on that SHA:
+Later commits only update this handoff/documentation. Always read the current head from draft PR #88 and require all pull-request workflows to be green before any transfer.
+
+Required workflows:
 
 ```text
 Directional Terrain Core
@@ -140,7 +142,7 @@ The `Directional Terrain Core` workflow uses `set -o pipefail` for every piped c
 
 ## Visual verification
 
-System Chrome run `29240167647` verified the exact final SHA through the real Vite application. Production build and Playwright passed.
+System Chrome run `29240167647` verified the application implementation through the real Vite application. Production build and Playwright passed.
 
 Inspected screenshots:
 
