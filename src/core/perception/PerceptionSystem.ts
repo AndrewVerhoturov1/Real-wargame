@@ -3,7 +3,7 @@ import { distance } from '../geometry';
 import { getSelectedUnit, type SimulationState } from '../simulation/SimulationState';
 import { areUnitsHostile } from '../units/SideRelations';
 import type { UnitModel } from '../units/UnitModel';
-import { computeLineOfSight } from '../visibility/LineOfSight';
+import { evaluatePointVisibility } from '../visibility/PointVisibility';
 import { updateAttentionController } from './AttentionController';
 import {
   normalizeSignedDegrees,
@@ -32,6 +32,12 @@ import { buildPerceptionStimuli } from './PerceptionStimulus';
 import { evaluateVisualSignal } from './VisualSignal';
 
 export { getPerceptionDiagnostics } from './PerceptionDiagnostics';
+
+const REAR_SECTOR_START_DEGREES = 135;
+
+interface DueAttentionChecks extends Record<AttentionZone, boolean> {
+  rear: boolean;
+}
 
 export function tickSelectedSoldierPerception(state: SimulationState, deltaSeconds: number): void {
   const unit = getSelectedUnit(state);
@@ -118,7 +124,9 @@ export function tickUnitPerception(
       radiansToDegrees(bearingRadians - unit.attentionRuntime.focusDirectionRadians),
     );
     const attention = sampleAttentionWeight(profile, angleDifferenceDegrees);
-    if (!due[attention.zone]) {
+    const rearSector = Math.abs(angleDifferenceDegrees) >= REAR_SECTOR_START_DEGREES;
+    const checkDue = rearSector ? due.rear : due[attention.zone];
+    if (!checkDue) {
       if (diagnostics) diagnostics.skippedNotDueCount += 1;
       const existingContactId = contactIdForStimulus(stimulus.id);
       if (unit.perceptionKnowledge.contacts.some((item) => item.id === existingContactId)) {
@@ -127,25 +135,22 @@ export function tickUnitPerception(
       continue;
     }
 
-    const lineOfSight = computeLineOfSight(
-      state.map,
-      unit,
-      stimulus.position,
-      stimulus.targetHeightMeters,
-    );
-    if (diagnostics) diagnostics.losCalculationCount += 1;
-    if (lineOfSight.blocked) continue;
-
     if (attention.zone === 'peripheral') {
       attention.weight *= 1 + Math.min(0.25, unit.soldier.condition.intuition / 400);
     }
+    const visibility = evaluatePointVisibility(
+      state,
+      unit,
+      stimulus.position,
+      stimulus.targetHeightMeters,
+      attention,
+    );
+    if (diagnostics) diagnostics.losCalculationCount += 1;
     const visualSignal = evaluateVisualSignal({
       observer: unit,
       stimulus,
       attention,
-      lineOfSight,
-      distanceMeters: distanceCells * state.map.metersPerCell,
-      nominalRangeMeters: unit.attentionSettings.vision.maximumVisualRangeMeters,
+      visibility,
     });
     if (visualSignal.evidencePerSecond <= 0) continue;
 
@@ -164,12 +169,13 @@ export function tickUnitPerception(
       position: stimulus.position,
       evidencePerSecond: visualSignal.evidencePerSecond,
       detectionVariance,
-      deltaSeconds: intervalForZone(profile, attention.zone),
+      deltaSeconds: rearSector ? profile.rearCheckIntervalSeconds : intervalForZone(profile, attention.zone),
       nowSeconds: now,
       explanationRu: [
         ...visualSignal.explanationRu,
+        rearSector ? `Тыл проверяется раз в ${profile.rearCheckIntervalSeconds.toFixed(1).replace('.', ',')} с.` : '',
         `Небольшая стабильная вариативность обнаружения: ×${detectionVariance.toFixed(2).replace('.', ',')}.`,
-      ],
+      ].filter(Boolean),
     });
     upsertPerceptionContact(unit.perceptionKnowledge, contact);
     updatedContacts.add(contactId);
@@ -268,23 +274,25 @@ function soundLabelRu(kind: 'rifle_shot' | 'automatic_fire' | 'explosion' | 'mov
   return 'Слышен выстрел';
 }
 
-function resolveDueZones(unit: UnitModel, now: number): Record<AttentionZone, boolean> {
+function resolveDueZones(unit: UnitModel, now: number): DueAttentionChecks {
   return {
     focus: now >= unit.attentionRuntime.nextFocusCheckSeconds,
     direct: now >= unit.attentionRuntime.nextDirectCheckSeconds,
     peripheral: now >= unit.attentionRuntime.nextPeripheralCheckSeconds,
+    rear: now >= unit.attentionRuntime.nextRearCheckSeconds,
   };
 }
 
 function scheduleNextChecks(
   unit: UnitModel,
   now: number,
-  due: Record<AttentionZone, boolean>,
+  due: DueAttentionChecks,
 ): void {
   const profile = unit.attentionSettings.profiles[unit.attentionRuntime.mode];
   if (due.focus) unit.attentionRuntime.nextFocusCheckSeconds = now + profile.focusCheckIntervalSeconds;
   if (due.direct) unit.attentionRuntime.nextDirectCheckSeconds = now + profile.directCheckIntervalSeconds;
   if (due.peripheral) unit.attentionRuntime.nextPeripheralCheckSeconds = now + profile.peripheralCheckIntervalSeconds;
+  if (due.rear) unit.attentionRuntime.nextRearCheckSeconds = now + profile.rearCheckIntervalSeconds;
 }
 
 function intervalForZone(profile: AttentionModeProfile, zone: AttentionZone): number {
