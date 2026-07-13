@@ -148,11 +148,10 @@ export function createTakeCoverPlan(input: CreatePlanInput): AiPlan {
     reasonsRu: input.reasonsRu ?? [suppressionReasonRu, 'Рядом найдено укрытие.', 'Путь доступен.'],
     abortConditions: [
       condition('cover_missing', 'best_cover_position', 'falsy', undefined, 'The cover position is no longer available.', 'Укрытие стало недоступно.'),
-      condition('route_blocked', 'active_move_path_status', 'eq', 'blocked', 'The route to cover is blocked.', 'Маршрут к укрытию заблокирован.'),
+      condition('route_blocked', 'active_move_route_status', 'eq', 'blocked', 'The route to cover is blocked.', 'Маршрут к укрытию заблокирован.'),
     ],
     replanConditions: [
       condition('cover_changed', 'best_cover_position_revision', 'neq', 0, 'A safer cover position was found.', 'Найдено более безопасное укрытие.'),
-      condition('suppression_changed', 'suppression_band', 'neq', input.createdForState, 'Suppression changed significantly.', 'Подавление заметно изменилось.'),
     ],
     replacesPlanId: input.replacesPlanId,
     context: cloneContext(input.context),

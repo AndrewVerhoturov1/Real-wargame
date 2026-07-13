@@ -260,8 +260,9 @@ function getExecutionState(runtime: AiMoveRuntime): AiGraphExecutionState | unde
 }
 
 function readActiveMoveSnapshot(state: AiGraphExecutionState | undefined): ActiveMoveSnapshot | null {
-  const activeNodeId = state?.activeNodeId;
   const data = state?.activeData;
+  if (data?.kind === 'subgraph') return readActiveMoveSnapshot(data.nestedExecutionState);
+  const activeNodeId = state?.activeNodeId;
   if (!activeNodeId || data?.kind !== 'move_to_blackboard_position') return null;
   if (!data.targetKey || !data.actionToken || !isGridPosition(data.target)) return null;
   return {

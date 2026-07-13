@@ -41,6 +41,11 @@ import { readAiGraphRuntimeReloadEffect } from './runtime/actions/ReloadAction';
 import { publishSimulationAiEvents } from './events/SimulationAiEvents';
 import { isReactiveExecutionState } from './events/AiReactiveRuntime';
 import { updateUnitPlanFromRuntime } from './UnitPlan';
+import { updateAiStateRuntime } from './state/AiStateRuntime';
+import { cancelAiPlan, applyAiPlanStepExecution, evaluateAiPlanAbort, evaluateAiPlanReplan, startCurrentAiPlanStep } from './state/AiPlanRuntime';
+import { buildAiPlanConditionValues, buildAiPlanStepGraph, deriveAiStateTriggers, isAiPlanAllowedInState, selectAiPlanForState } from './state/AiStatePlanPipeline';
+import { DEFAULT_AI_STATE_MACHINE } from './state/AiStateMachine';
+import type { AiPlan } from './state/AiPlan';
 import bundledGraph from '../../data/ai/soldier_default_survival_graph.json';
 
 const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
@@ -115,35 +120,177 @@ export function tickAiGameBridge(
   const simulationNowMs = options.applyEffects && !observerWakeOnly
     ? session.simulationTimeMs + AI_GRAPH_TICK_INTERVAL_MS
     : session.simulationTimeMs;
-  const runtimeCancel = isReactiveExecutionState(session.executionState)
-    ? undefined
-    : options.cancel;
-  const result = runAiGraphRuntime({
-    graph,
-    unitId: unit.id,
-    blackboard: buildBlackboardForUnit(state, unit, session.blackboardMemory),
-    cooldowns: session.cooldowns,
+  const blackboard = buildBlackboardForUnit(state, unit, session.blackboardMemory);
+  const stateUpdate = updateAiStateRuntime(session.stateRuntime, {
     nowMs: simulationNowMs,
-    tacticalHost: createTacticalHost(state, unit),
-    executionState: session.executionState,
-    cancel: runtimeCancel,
-    events: session.eventQueue.events,
+    triggers: deriveAiStateTriggers(session.stateRuntime.activeStateId, blackboard, session.eventQueue.events),
+    values: blackboard,
+    suppression: readNumber(blackboard.suppression, unit.behaviorRuntime.suppression),
   });
+  session = { ...session, stateRuntime: stateUpdate.runtime };
+
+  let activePlan = session.activePlan;
+  let cancellationResult: AiGraphRuntimeResult | null = null;
+  let cancellation: { reason: string; reasonRu: string; replanning: boolean } | null = null;
+  if (activePlan) {
+    const conditionValues = buildAiPlanConditionValues(blackboard, activePlan);
+    if (options.cancel) {
+      cancellation = {
+        reason: options.cancel.reason,
+        reasonRu: options.cancel.reasonRu ?? options.cancel.reason,
+        replanning: false,
+      };
+    } else if (stateUpdate.transition && !isAiPlanAllowedInState(activePlan, stateUpdate.runtime.activeStateId)) {
+      cancellation = {
+        reason: 'The state transition invalidated the active plan.',
+        reasonRu: `Переход в состояние «${DEFAULT_AI_STATE_MACHINE.states[stateUpdate.runtime.activeStateId].labelRu}» отменил прежний план.`,
+        replanning: false,
+      };
+    } else {
+      const abort = evaluateAiPlanAbort(activePlan, conditionValues);
+      const replan = activePlan.currentStepIndex === 0 ? evaluateAiPlanReplan(activePlan, conditionValues) : { matched: false };
+      if (abort.matched) cancellation = { reason: abort.reason ?? 'Plan abort condition matched.', reasonRu: abort.reasonRu ?? 'Сработало условие отмены плана.', replanning: false };
+      else if (replan.matched) cancellation = { reason: replan.reason ?? 'Plan requires replanning.', reasonRu: replan.reasonRu ?? 'План требует перестроения.', replanning: true };
+    }
+  }
+
+  if (activePlan && cancellation) {
+    if (session.executionState) {
+      const activeStepGraph = buildAiPlanStepGraph(activePlan);
+      cancellationResult = runAiGraphRuntime({
+        graph: activeStepGraph ? { ...activeStepGraph, id: graph.id } : graph,
+        unitId: unit.id,
+        blackboard,
+        cooldowns: session.cooldowns,
+        nowMs: simulationNowMs,
+        tacticalHost: createTacticalHost(state, unit),
+        executionState: session.executionState,
+        cancel: { reason: cancellation.reason, reasonRu: cancellation.reasonRu },
+        events: session.eventQueue.events,
+      });
+      session = applyRuntimeResultToSession(session, cancellationResult, simulationNowMs);
+    }
+    const cancelled = cancelAiPlan(activePlan, cancellation.reason, cancellation.reasonRu, cancellation.replanning ? 'replanning' : 'cancelled');
+    session = {
+      ...session,
+      stateRuntime: stateUpdate.runtime,
+      activePlan: undefined,
+      planHistory: appendPlanHistory(session.planHistory, cancelled.plan),
+    };
+    activePlan = undefined;
+  }
+
+  if (!activePlan && !options.cancel) {
+    const selection = selectAiPlanForState({
+      unitId: unit.id,
+      stateId: session.stateRuntime.activeStateId,
+      nowMs: simulationNowMs,
+      sequence: session.planSequence + 1,
+      blackboard,
+      replacesPlanId: session.planHistory.at(-1)?.status === 'replanning' ? session.planHistory.at(-1)?.id : undefined,
+    });
+    if (selection.plan) {
+      activePlan = selection.plan;
+      session = { ...session, activePlan, planSequence: session.planSequence + 1 };
+    }
+  }
+
+  let result: AiGraphRuntimeResult;
+  if (options.cancel && !activePlan) {
+    result = cancellationResult ?? runAiGraphRuntime({
+      graph,
+      unitId: unit.id,
+      blackboard,
+      cooldowns: session.cooldowns,
+      nowMs: simulationNowMs,
+      tacticalHost: createTacticalHost(state, unit),
+      executionState: session.executionState,
+      cancel: options.cancel,
+      events: session.eventQueue.events,
+    });
+  } else if (activePlan) {
+    const started = startCurrentAiPlanStep(activePlan);
+    activePlan = started.plan;
+    const planStepGraph = buildAiPlanStepGraph(activePlan);
+    if (!planStepGraph) throw new Error('Active AI plan has no executable current step.');
+    const planResult = runAiGraphRuntime({
+      graph: { ...planStepGraph, id: graph.id },
+      unitId: unit.id,
+      blackboard,
+      cooldowns: session.cooldowns,
+      nowMs: simulationNowMs,
+      tacticalHost: createTacticalHost(state, unit),
+      executionState: session.executionState,
+      events: session.eventQueue.events,
+    });
+    const planUpdate = applyAiPlanStepExecution(
+      activePlan,
+      planResult.status,
+      planResult.explanation,
+      planResult.explanationRu,
+    );
+    let nextActivePlan: AiPlan | undefined = planUpdate.plan;
+    let nextPlanHistory = session.planHistory;
+    let nextPlanSequence = session.planSequence;
+    if (planUpdate.plan.status === 'replanning') {
+      nextPlanHistory = appendPlanHistory(nextPlanHistory, planUpdate.plan);
+      const replacement = selectAiPlanForState({
+        unitId: unit.id,
+        stateId: session.stateRuntime.activeStateId,
+        nowMs: simulationNowMs,
+        sequence: nextPlanSequence + 1,
+        blackboard,
+        replacesPlanId: planUpdate.plan.id,
+      });
+      nextActivePlan = replacement.plan;
+      if (replacement.plan) nextPlanSequence += 1;
+    } else if (planUpdate.terminal) {
+      nextPlanHistory = appendPlanHistory(nextPlanHistory, planUpdate.plan);
+      nextActivePlan = undefined;
+    }
+    session = {
+      ...applyRuntimeResultToSession(session, planResult, simulationNowMs),
+      stateRuntime: stateUpdate.runtime,
+      activePlan: nextActivePlan,
+      planHistory: nextPlanHistory,
+      planSequence: nextPlanSequence,
+    };
+    result = cancellationResult ? mergeRuntimeResults(cancellationResult, planResult) : planResult;
+  } else {
+    const runtimeCancel = isReactiveExecutionState(session.executionState) ? undefined : options.cancel;
+    result = runAiGraphRuntime({
+      graph,
+      unitId: unit.id,
+      blackboard,
+      cooldowns: session.cooldowns,
+      nowMs: simulationNowMs,
+      tacticalHost: createTacticalHost(state, unit),
+      executionState: session.executionState,
+      cancel: runtimeCancel,
+      events: session.eventQueue.events,
+    });
+    session = {
+      ...applyRuntimeResultToSession(session, result, simulationNowMs),
+      stateRuntime: stateUpdate.runtime,
+      activePlan: undefined,
+    };
+  }
 
   publishRuntimeDebugTrace(state, unit, graph, result, nowMs, simulationNowMs, !options.applyEffects, session.status);
-
   if (!options.applyEffects) return result;
 
-  const nextSession = applyRuntimeResultToSession(session, result, simulationNowMs);
-  unit.behaviorRuntime.aiRuntimeSession = nextSession;
+  unit.behaviorRuntime.aiRuntimeSession = session;
   unit.behaviorRuntime.aiGraphLastTickMs = nowMs;
-  unit.behaviorRuntime.aiNodeCooldowns = { ...nextSession.cooldowns };
-  applyGraphEffects(state, unit, result.effects, result.blackboard, nowMs, nextSession.blackboardMemory);
+  unit.behaviorRuntime.aiNodeCooldowns = { ...session.cooldowns };
+  applyGraphEffects(state, unit, result.effects, result.blackboard, nowMs, session.blackboardMemory);
   unit.plan = updateUnitPlanFromRuntime(unit.plan, graph, result);
-  unit.behaviorRuntime.aiGraphReason = result.explanationRu ?? result.explanation;
-  unit.behaviorRuntime.reason = result.explanationRu ?? result.explanation;
-  unit.behaviorRuntime.lastEvent = `ai_graph_runtime_${result.status}`;
-  publishSimulationAiEvents(unit, nextSession.simulationTimeMs);
+  unit.behaviorRuntime.aiGraphReason = session.activePlan?.goalRu ?? result.explanationRu ?? result.explanation;
+  unit.behaviorRuntime.reason = session.activePlan?.goalRu ?? result.explanationRu ?? result.explanation;
+  unit.behaviorRuntime.lastEvent = stateUpdate.transition
+    ? `ai_state_${stateUpdate.transition.from}_to_${stateUpdate.transition.to}`
+    : `ai_graph_runtime_${result.status}`;
+  publishStatePlanDebug(unit, session);
+  publishSimulationAiEvents(unit, session.simulationTimeMs);
   return result;
 }
 
@@ -562,6 +709,73 @@ function publishRuntimeDebugTrace(
     window.localStorage.setItem(DEBUG_STORAGE_KEY, JSON.stringify(payload));
   } catch {
     // Debug overlay is optional. If localStorage is blocked or full, gameplay must continue.
+  }
+}
+
+function appendPlanHistory(history: readonly AiPlan[], plan: AiPlan): readonly AiPlan[] {
+  return [...history, plan].slice(-12);
+}
+
+function mergeRuntimeResults(cancelled: AiGraphRuntimeResult, current: AiGraphRuntimeResult): AiGraphRuntimeResult {
+  return {
+    ...current,
+    effects: [...cancelled.effects, ...current.effects],
+    trace: [...cancelled.trace, ...current.trace],
+    lifecycle: [...cancelled.lifecycle, ...current.lifecycle],
+    cancellationReason: cancelled.cancellationReason,
+    cancellationReasonRu: cancelled.cancellationReasonRu,
+  };
+}
+
+function publishStatePlanDebug(unit: UnitModel, session: AiRuntimeSessionSnapshotV1): void {
+  try {
+    const raw = window.localStorage.getItem(DEBUG_STORAGE_KEY);
+    if (!raw) return;
+    const payload = JSON.parse(raw) as Record<string, unknown>;
+    const stateDefinition = DEFAULT_AI_STATE_MACHINE.states[session.stateRuntime.activeStateId];
+    const parentId = stateDefinition.parentStateId;
+    const activePlan = session.activePlan;
+    const currentStep = activePlan?.steps[activePlan.currentStepIndex];
+    const previousPlan = session.planHistory.at(-1);
+    payload.statePlan = {
+      stateId: session.stateRuntime.activeStateId,
+      stateLabelRu: stateDefinition.labelRu,
+      parentStateId: parentId,
+      parentStateLabelRu: parentId ? DEFAULT_AI_STATE_MACHINE.states[parentId].labelRu : undefined,
+      previousStateId: session.stateRuntime.previousStateId,
+      previousStateLabelRu: session.stateRuntime.previousStateId
+        ? DEFAULT_AI_STATE_MACHINE.states[session.stateRuntime.previousStateId].labelRu
+        : undefined,
+      transitionReasonRu: session.stateRuntime.lastTransition?.reasonRu,
+      transitionTrigger: session.stateRuntime.lastTransition?.trigger,
+      transitionAtMs: session.stateRuntime.lastTransition?.atMs,
+      allowedUtilityBranches: stateDefinition.allowedUtilityBranches ?? [],
+      activePlan: activePlan ? {
+        id: activePlan.id,
+        kind: activePlan.kind,
+        goalRu: activePlan.goalRu,
+        status: activePlan.status,
+        currentStepId: currentStep?.id,
+        currentStepLabelRu: currentStep?.labelRu,
+        currentStepIndex: activePlan.currentStepIndex,
+        stepCount: activePlan.steps.length,
+        reasonsRu: activePlan.reasonsRu,
+        abortConditionsRu: activePlan.abortConditions.map((item) => item.labelRu),
+        replanConditionsRu: activePlan.replanConditions.map((item) => item.labelRu),
+        activeSubgraphId: currentStep?.subgraphId,
+        replacesPlanId: activePlan.replacesPlanId,
+      } : undefined,
+      previousPlan: previousPlan ? {
+        id: previousPlan.id,
+        goalRu: previousPlan.goalRu,
+        status: previousPlan.status,
+        cancellationReasonRu: previousPlan.cancellationReasonRu,
+      } : undefined,
+      planSequence: session.planSequence,
+    };
+    window.localStorage.setItem(DEBUG_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // State/plan diagnostics are optional and must never interrupt gameplay.
   }
 }
 

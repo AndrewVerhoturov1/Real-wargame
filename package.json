@@ -64,7 +64,10 @@
     "node-contract-ui:smoke": "node scripts/ai_node_contract_ui_smoke.mjs",
     "graph-v2-scenario:smoke": "node scripts/ai_graph_v2_scenario_smoke.mjs",
     "runtime-debug-v2:smoke": "node scripts/ai_runtime_debug_graph_v2_smoke.mjs",
-    "graph-v2-cli:smoke": "node scripts/ai_graph_cli_v2_smoke.mjs"
+    "graph-v2-cli:smoke": "node scripts/ai_graph_cli_v2_smoke.mjs",
+    "state-machine:smoke": "node scripts/ai_state_machine_smoke.mjs",
+    "plan-runtime:smoke": "node scripts/ai_plan_runtime_smoke.mjs",
+    "state-plan-scenario:smoke": "node scripts/ai_state_plan_scenario_smoke.mjs"
   },
   "dependencies": {
     "pixi.js": "^7.4.3"

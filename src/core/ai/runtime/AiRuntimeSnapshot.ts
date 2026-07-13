@@ -11,6 +11,7 @@ import {
   normalizeAiRuntimeSession,
   type AiRuntimeSessionSnapshotV1,
 } from './AiRuntimeSession';
+import { readAiExecutionOwnerToken } from '../state/AiStatePlanPipeline';
 
 export interface SerializedMoveOrder {
   readonly type: 'move';
@@ -264,8 +265,7 @@ function cloneRouteStatus(value: AiRouteStatusState): AiRouteStatusState {
 }
 
 function readActiveMoveOwnerToken(session: AiRuntimeSessionSnapshotV1): string | undefined {
-  const data = session.executionState?.activeData;
-  return data?.kind === 'move_to_blackboard_position' ? data.actionToken : undefined;
+  return readAiExecutionOwnerToken(session.executionState);
 }
 
 function isAiOwnedOrder(order: MoveOrder | null | undefined): order is MoveOrder {

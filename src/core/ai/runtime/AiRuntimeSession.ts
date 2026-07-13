@@ -30,6 +30,9 @@ import {
   normalizeAiMemoryScopes,
   type AiMemoryScopesSnapshotV1,
 } from '../contracts/AiMemoryScopes';
+import { cloneAiStateRuntime, createAiStateRuntime, normalizeAiStateRuntime, type AiStateRuntimeSnapshotV1 } from '../state/AiStateRuntime';
+import { cloneAiPlan, type AiPlan } from '../state/AiPlan';
+import { normalizeAiPlan } from '../state/AiPlanRuntime';
 
 export type AiRuntimeSessionStatus = 'idle' | 'active' | 'terminal';
 export type AiRuntimeTerminalStatus = 'success' | 'failure' | 'cancelled';
@@ -53,6 +56,10 @@ export interface AiRuntimeSessionSnapshotV1 {
   readonly eventQueue: AiEventQueueSnapshotV1;
   readonly observerRegistry: AiBlackboardObserverRegistrySnapshotV1;
   readonly memoryScopes: AiMemoryScopesSnapshotV1;
+  readonly stateRuntime: AiStateRuntimeSnapshotV1;
+  readonly activePlan?: AiPlan;
+  readonly planHistory: readonly AiPlan[];
+  readonly planSequence: number;
   readonly lastTerminal?: AiRuntimeTerminalRecord;
 }
 
@@ -66,6 +73,10 @@ export interface CreateAiRuntimeSessionInput {
   readonly eventQueue?: AiEventQueueSnapshotV1;
   readonly observerRegistry?: AiBlackboardObserverRegistrySnapshotV1;
   readonly memoryScopes?: AiMemoryScopesSnapshotV1;
+  readonly stateRuntime?: AiStateRuntimeSnapshotV1;
+  readonly activePlan?: AiPlan;
+  readonly planHistory?: readonly AiPlan[];
+  readonly planSequence?: number;
   readonly lastTerminal?: AiRuntimeTerminalRecord;
 }
 
@@ -107,6 +118,10 @@ export function createAiRuntimeSession(input: CreateAiRuntimeSessionInput): AiRu
     memoryScopes: input.memoryScopes
       ? cloneAiMemoryScopes(input.memoryScopes)
       : createAiMemoryScopes({ runtimeSessionMemory: input.blackboardMemory ?? {} }),
+    stateRuntime: input.stateRuntime ? cloneAiStateRuntime(input.stateRuntime) : createAiStateRuntime({ enteredAtMs: input.simulationTimeMs }),
+    activePlan: input.activePlan ? cloneAiPlan(input.activePlan) : undefined,
+    planHistory: (input.planHistory ?? []).slice(-12).map(cloneAiPlan),
+    planSequence: Math.max(0, Math.floor(finiteNonNegative(input.planSequence, 0))),
     lastTerminal: cloneTerminal(input.lastTerminal),
   };
 }
@@ -161,6 +176,10 @@ export function normalizeAiRuntimeSession(
       eventQueue: normalizeAiEventQueueSnapshot(value.eventQueue),
       observerRegistry: normalizeAiBlackboardObserverRegistry(value.observerRegistry),
       memoryScopes: normalizeAiMemoryScopes(value.memoryScopes, normalizeBlackboard(value.blackboardMemory)),
+      stateRuntime: normalizeAiStateRuntime(value.stateRuntime),
+      activePlan: normalizeAiPlan(value.activePlan),
+      planHistory: normalizePlanHistory(value.planHistory),
+      planSequence: Math.max(0, Math.floor(finiteNonNegative(value.planSequence, 0))),
       lastTerminal: cloneTerminal(lastTerminal),
     },
   };
@@ -177,6 +196,10 @@ export function migrateLegacyAiRuntimeSession(input: LegacyAiRuntimeFields): AiR
     eventQueue: input.eventQueue,
     observerRegistry: input.observerRegistry,
     memoryScopes: input.memoryScopes,
+    stateRuntime: input.stateRuntime,
+    activePlan: input.activePlan,
+    planHistory: input.planHistory,
+    planSequence: input.planSequence,
     lastTerminal: input.lastTerminal,
   });
 }
@@ -212,6 +235,10 @@ export function applyRuntimeResultToSession(
     memoryScopes: executionState
       ? cloneAiMemoryScopes(current.memoryScopes)
       : { ...cloneAiMemoryScopes(current.memoryScopes), activeStateMemory: {}, nodeLocalState: {} },
+    stateRuntime: cloneAiStateRuntime(current.stateRuntime),
+    activePlan: current.activePlan ? cloneAiPlan(current.activePlan) : undefined,
+    planHistory: current.planHistory.map(cloneAiPlan),
+    planSequence: current.planSequence,
     lastTerminal: terminalStatus
       ? {
           status: terminalStatus,
@@ -257,8 +284,17 @@ export function cloneAiRuntimeSession(value: AiRuntimeSessionSnapshotV1): AiRunt
     eventQueue: cloneAiEventQueueSnapshot(value.eventQueue),
     observerRegistry: cloneAiBlackboardObserverRegistry(value.observerRegistry),
     memoryScopes: cloneAiMemoryScopes(value.memoryScopes),
+    stateRuntime: cloneAiStateRuntime(value.stateRuntime),
+    activePlan: value.activePlan ? cloneAiPlan(value.activePlan) : undefined,
+    planHistory: value.planHistory.map(cloneAiPlan),
+    planSequence: value.planSequence,
     lastTerminal: cloneTerminal(value.lastTerminal),
   };
+}
+
+function normalizePlanHistory(value: unknown): AiPlan[] {
+  if (!Array.isArray(value)) return [];
+  return value.map(normalizeAiPlan).filter((item): item is AiPlan => Boolean(item)).slice(-12);
 }
 
 function resetResult(
