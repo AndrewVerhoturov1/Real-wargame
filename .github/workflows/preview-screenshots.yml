@@ -1,12 +1,9 @@
 name: Preview screenshots
 
-run-name: Approved Graph v2 screenshots · ${{ github.ref_name }}
+run-name: Manual Graph v2 screenshots · ${{ github.ref_name }}
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feat/ai-graph-v2-contracts-subgraphs-2026-07-13
 
 permissions:
   contents: read
@@ -19,13 +16,8 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: Wait for the clean final branch head
-        run: sleep 25
-
-      - name: Checkout final feature branch head
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: feat/ai-graph-v2-contracts-subgraphs-2026-07-13
 
       - name: Record exact tested commit
         id: source
