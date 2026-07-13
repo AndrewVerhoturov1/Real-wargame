@@ -10,6 +10,7 @@ on:
       - 'src/core/simulation/**'
       - 'src/core/units/**'
       - 'src/core/ai/AiGameBridge.ts'
+      - 'src/rendering/PixiUnitRenderer.ts'
       - 'scripts/combat_foundation_smoke.*'
       - 'package.json'
       - '.github/workflows/combat-foundation-core.yml'
@@ -28,8 +29,18 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run combat-foundation:smoke
-      - run: npm run perception:smoke
-      - run: npm run runtime:smoke
-      - run: npm run reload:smoke
-      - run: npm run build
+      - name: Combat foundation smoke
+        shell: bash
+        run: set -o pipefail; npm run combat-foundation:smoke 2>&1 | tail -n 120
+      - name: Existing perception smoke
+        shell: bash
+        run: set -o pipefail; npm run perception:smoke 2>&1 | tail -n 120
+      - name: Existing runtime smoke
+        shell: bash
+        run: set -o pipefail; npm run runtime:smoke 2>&1 | tail -n 120
+      - name: Existing reload smoke
+        shell: bash
+        run: set -o pipefail; npm run reload:smoke 2>&1 | tail -n 120
+      - name: Production build
+        shell: bash
+        run: set -o pipefail; npm run build 2>&1 | tail -n 160
