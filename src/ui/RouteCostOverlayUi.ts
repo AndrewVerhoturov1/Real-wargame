@@ -41,6 +41,7 @@ export function installRouteCostOverlayUi(
   mode.innerHTML = `
     <option value="baseTerrain">Базовая местность</option>
     <option value="finalCost">Итоговая стоимость</option>
+    <option value="directionalTerrain">Направленный рельеф</option>
   `;
   mode.addEventListener('change', () => {
     setRouteCostOverlayMode(state, mode.value as RouteCostOverlayMode);
