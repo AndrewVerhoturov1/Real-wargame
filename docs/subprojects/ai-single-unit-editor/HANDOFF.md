@@ -100,6 +100,26 @@ The old `directionalTerrain` renderer mode remains available only as an internal
 
 ## Automated verification
 
+Final exact verified branch SHA:
+
+```text
+f2e2bd5a15fa4e98856fbb1a1f57997e659e68a3
+```
+
+All pull-request workflows passed on that SHA:
+
+```text
+Directional Terrain Core
+Navigation Profiles Core
+Command Plan Route Core
+AI Events Core
+Compact Route Controls Core
+Preview Core Checks
+Agent Docs Integrity
+Preview Policy
+Directional Terrain Visual QA
+```
+
 The focused tests cover:
 
 - flat, ramp, hill, crest and valley geometry;
@@ -116,11 +136,13 @@ The focused tests cover:
 - bounded tactical-position search;
 - raster renderer and hidden-diagnostic UI contracts.
 
-The `Directional Terrain Core` workflow now uses `set -o pipefail` for every piped check, so a failed command can no longer be hidden by `tee`.
+The `Directional Terrain Core` workflow uses `set -o pipefail` for every piped check, so a failed command can no longer be hidden by `tee`.
 
 ## Visual verification
 
-The real Vite application and system Chrome verify the existing layers rather than a standalone terrain layer:
+System Chrome run `29240167647` verified the exact final SHA through the real Vite application. Production build and Playwright passed.
+
+Inspected screenshots:
 
 ```text
 directional-terrain-enriched-danger.png
@@ -128,7 +150,7 @@ directional-terrain-enriched-stealth.png
 directional-terrain-profile-editor.png
 ```
 
-The inspected stealth screenshot shows terrain-enriched explanations such as `складка местности + ложбина`. The normal route-cost selector contains only two modes and does not expose `Направленный рельеф`.
+The stealth screenshot shows terrain-enriched explanations such as `складка местности + ложбина`. The normal route-cost selector contains only two modes and does not expose `Направленный рельеф`. No panel overflow, toolbar overlap or raster-object growth was found.
 
 ## Honest limits
 
