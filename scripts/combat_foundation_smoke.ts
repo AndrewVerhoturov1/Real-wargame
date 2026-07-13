@@ -159,17 +159,19 @@ function verifyDamage(): void {
 
 function verifyStatefulFire(): void {
   const state = makeState();
-  for (let index = 0; index < 100; index += 1) {
-    state.simulationTimeSeconds += 0.1;
-    tickAllUnitPerception(state, 0.1);
-  }
   const blue = state.units[0];
   const red = state.units[1];
-  const contact = blue.perceptionKnowledge.contacts.find((item) => item.sourceUnitId === red.id);
-  assert.ok(contact);
+  let contact = blue.perceptionKnowledge.contacts.find((item) => item.sourceUnitId === red.id);
+  for (let index = 0; index < 400 && !contact?.visibleNow; index += 1) {
+    state.simulationTimeSeconds += 0.1;
+    tickAllUnitPerception(state, 0.1);
+    contact = blue.perceptionKnowledge.contacts.find((item) => item.sourceUnitId === red.id);
+  }
+  assert.ok(contact, 'stateful fire requires a real subjective contact');
+  assert.equal(contact.visibleNow, true, `contact must be visually identified before direct fire; stage=${contact.stage}, evidence=${contact.evidence.toFixed(1)}`);
   assert.equal(requestFireAction(state, blue, contact.id), true);
   const phases = new Set<string>();
-  for (let index = 0; index < 100 && getFireAction(blue); index += 1) {
+  for (let index = 0; index < 120 && getFireAction(blue); index += 1) {
     phases.add(getFireAction(blue)?.phase ?? 'none');
     state.simulationTimeSeconds += 0.05;
     tickFireAction(state, blue, 0.05);
