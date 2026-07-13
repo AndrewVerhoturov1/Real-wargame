@@ -1,0 +1,126 @@
+.ai-debug-panel-dock {
+  position: absolute;
+  z-index: 32;
+  top: 56px;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: min(430px, calc(100% - 24px));
+  min-height: 0;
+  pointer-events: none;
+}
+
+.ai-debug-panel-card {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid rgba(111, 190, 255, 0.3);
+  border-radius: 12px;
+  color: #eaf4ff;
+  background: rgba(13, 24, 34, 0.95);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.36);
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.ai-debug-panel-card[open] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 160px;
+}
+
+.ai-debug-panel-summary {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 28px;
+  align-items: center;
+  min-height: 40px;
+  padding: 7px 38px 7px 11px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  background: rgba(72, 143, 191, 0.13);
+}
+
+.ai-debug-panel-summary::-webkit-details-marker {
+  display: none;
+}
+
+.ai-debug-panel-summary strong {
+  overflow: hidden;
+  color: #f4f8fb;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-debug-panel-summary span {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: #98aec0;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-debug-panel-summary i {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid #b9d9f2;
+  border-bottom: 2px solid #b9d9f2;
+  transform: translateY(-70%) rotate(45deg);
+  transition: transform 120ms ease;
+}
+
+.ai-debug-panel-card[open] > .ai-debug-panel-summary i {
+  transform: translateY(-30%) rotate(225deg);
+}
+
+.ai-debug-panel-content {
+  display: none;
+  min-height: 0;
+  overflow: auto;
+}
+
+.ai-debug-panel-card[open] > .ai-debug-panel-content {
+  display: block;
+}
+
+.ai-debug-panel-content > .ai-state-plan-panel,
+.ai-debug-panel-content > .ai-runtime-debug-panel {
+  position: static !important;
+  inset: auto !important;
+  width: auto !important;
+  max-height: none !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.ai-debug-panel-content > .ai-state-plan-panel {
+  padding: 11px !important;
+  background: rgba(13, 24, 34, 0.94) !important;
+}
+
+.ai-debug-panel-content > .ai-runtime-debug-panel {
+  padding: 11px !important;
+  background: rgba(17, 21, 15, 0.94) !important;
+}
+
+@media (max-width: 1000px) {
+  .ai-debug-panel-dock {
+    right: 10px;
+    bottom: 10px;
+    width: min(360px, calc(100% - 20px));
+  }
+}
