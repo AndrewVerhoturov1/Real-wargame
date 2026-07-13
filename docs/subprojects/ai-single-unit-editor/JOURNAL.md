@@ -80,3 +80,12 @@ First CI evidence confirmed all three new checks plus Graph v2, runtime, runtime
 
 Visual QA is prepared but not executed. No PNG is considered approved until the user authorizes a real system-Chromium run and the resulting images are inspected.
 
+
+
+## 2026-07-14 — state-plan v1 mandatory validation completed
+
+- Verified SHA: `62379286b0704a49dc258aaba379a8dd404ff9f5`.
+- Validation run: `29280697374`.
+- All required core, runtime, scene, events, navigation, attention, perception, editor, docs and production-build checks passed.
+- Visual QA remains prepared but intentionally not run without explicit user approval.
+- Preview and main remain untouched.

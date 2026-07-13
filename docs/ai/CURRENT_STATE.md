@@ -24,7 +24,7 @@ Generated from canonical repository and subproject metadata.
 
 - **ID:** `ai-single-unit-editor`
 - **Updated:** 2026-07-14
-- **Current focus:** Finish and validate the first State → Utility → Plan → Subgraph vertical slice on the temporary branch without mixing in the parallel shooting implementation.
-- **Next step:** Complete the full required regression and docs checks, remove temporary patch/validation infrastructure, close validation PR #94 without merging, then ask for explicit visual-QA approval. Do not transfer to preview without a separate user command.
-- **Last verified commit:** `58ea1b5755ef3162f1778a937d49d33a0430d450`
+- **Current focus:** The first State → Utility → Plan → Subgraph vertical slice is implemented and its mandatory automated regression is green. Browser visual QA is prepared and awaits explicit user approval.
+- **Next step:** After explicit approval, run the prepared system-Chromium visual QA and inspect the five PNGs. Keep the work on the temporary branch until the user separately commands transfer to real-wargame-preview.
+- **Last verified commit:** `62379286b0704a49dc258aaba379a8dd404ff9f5`
 - **Status:** [generated status](../subprojects/ai-single-unit-editor/STATUS.md)

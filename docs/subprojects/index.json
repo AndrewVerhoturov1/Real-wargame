@@ -16,10 +16,10 @@
       "status": "active",
       "updated_at": "2026-07-14",
       "goal": "Создать понятную человеку лабораторию поведения одиночного бойца: Utility AI выбирает решение, stateful runtime исполняет длительные действия, общий A* ведёт бойца по карте, постоянные профили маршрута задают стоимость местности, а гибридная система обзора и внимания формирует субъективные визуальные и звуковые контакты без всезнания ИИ.",
-      "current_focus": "Finish and validate the first State → Utility → Plan → Subgraph vertical slice on the temporary branch without mixing in the parallel shooting implementation.",
-      "next_step": "Complete the full required regression and docs checks, remove temporary patch/validation infrastructure, close validation PR #94 without merging, then ask for explicit visual-QA approval. Do not transfer to preview without a separate user command.",
+      "current_focus": "The first State → Utility → Plan → Subgraph vertical slice is implemented and its mandatory automated regression is green. Browser visual QA is prepared and awaits explicit user approval.",
+      "next_step": "After explicit approval, run the prepared system-Chromium visual QA and inspect the five PNGs. Keep the work on the temporary branch until the user separately commands transfer to real-wargame-preview.",
       "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-      "last_verified_commit": "58ea1b5755ef3162f1778a937d49d33a0430d450",
+      "last_verified_commit": "62379286b0704a49dc258aaba379a8dd404ff9f5",
       "superseded_by": null,
       "status_path": "docs/subprojects/ai-single-unit-editor/STATUS.md",
       "metadata_path": "docs/subprojects/ai-single-unit-editor/subproject.json"
