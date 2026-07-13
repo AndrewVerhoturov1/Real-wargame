@@ -34,6 +34,7 @@ import {
   type SimulationLayerMode,
 } from '../core/ui/RuntimeUiState';
 import { applyInitialStateToRuntime, type UnitModel } from '../core/units/UnitModel';
+import { bindTacticalStatePlanPanel, renderTacticalStatePlanPanelMarkup } from './AiStatePlanPanel';
 import { exitLab } from '../shared/AppShellMenu';
 
 export type TacticalWorkspaceMode = 'simulation' | 'editor';
@@ -85,6 +86,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
         <span data-role="unit-meta">Левый клик по солдату — выбрать</span>
         <div class="unit-bar-current"><span data-role="action">Действие: —</span><span data-role="order">Приказ: —</span></div>
       </div>
+      ${renderTacticalStatePlanPanelMarkup()}
       <div class="unit-bar-stats">${['health:Здоровье','morale:Дух','fatigue:Усталость','stress:Стресс','suppression:Подавление','ammo:Патроны'].map((item) => { const [id,label]=item.split(':'); return `<div class="unit-bar-stat"><span>${label}</span><b data-stat="${id}">—</b></div>`; }).join('')}</div>
       <div class="unit-bar-route-controls">
         <label class="unit-route-profile"><span>Маршрут</span><select data-action="unit-navigation-profile" aria-label="Профиль движения выбранного бойца"></select></label>
@@ -134,6 +136,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   const attentionProfileSelect = q<HTMLSelectElement>('[data-action="unit-attention-profile"]');
   const attentionModeSelect = q<HTMLSelectElement>('[data-action="unit-attention-mode"]');
   const turnUnitButton = q<HTMLButtonElement>('[data-action="turn-unit"]');
+  const statePlanPanel = bindTacticalStatePlanPanel(shell);
 
   moveExistingButton('#grid-toggle', display);
   moveExistingButton('#height-toggle', display);
@@ -313,6 +316,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
 
   function updateBottom(): void {
     const unit = getSelectedUnit(state);
+    statePlanPanel.update(unit);
     q('[data-role="unit-name"]').textContent = unit?.labels.ru ?? 'Боец не выбран';
     q('[data-role="unit-meta"]').textContent = unit ? `${unit.id} · ${postureLabel(unit.behaviorRuntime.posture)} · ${profileLabel(unit.behaviorProfile)}` : 'Левый клик по солдату — выбрать';
     const values: Record<string, string> = unit ? {

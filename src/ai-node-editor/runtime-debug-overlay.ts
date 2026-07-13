@@ -1,3 +1,5 @@
+import './state-machine-ui';
+
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 const REFRESH_INTERVAL_MS = 700;
 const STALE_AFTER_MS = 10000;

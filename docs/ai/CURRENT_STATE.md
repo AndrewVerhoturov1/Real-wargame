@@ -20,11 +20,11 @@ Generated from canonical repository and subproject metadata.
 - Changing `main` requires explicit human GO: **yes**.
 - Auto-merge allowed: **no**.
 
-## Active subproject: AI Single-Unit Editor — Stateful Tactical Awareness Lab
+## Active subproject: AI Single-Unit Editor — Stateful Tactical Awareness, Hierarchical States and Plans
 
 - **ID:** `ai-single-unit-editor`
-- **Updated:** 2026-07-13
-- **Current focus:** Graph v2 собран в чистое transfer-дерево `transfer/ai-graph-v2-preview-2026-07-13` поверх актуального `real-wargame-preview` `db80f36edaf018c6a45dfeb7cc0f7caaed00bdb5`: единый реестр 36 контрактов, типизированные порты, строгая проверка, миграция Graph v1, пять областей памяти, WaitForEvent/Timeout/Retry, четыре сохраняемых подграфа и русский интерфейс без обязательного JSON. Обязательная локальная Chromium-проверка выявила и исправила два дефекта: выбор подграфа теперь сохраняется из русской панели, а навигационная цепочка не дублирует название.
-- **Next step:** Опубликовать чистую ветку `transfer/ai-graph-v2-preview-2026-07-13`, открыть PR в `real-wargame-preview` и выполнить SHA-привязанную системную Chrome-проверку. После зелёных CI и осмотра свежих PNG ветка готова к переносу; `main` не менять.
-- **Last verified commit:** `02a43f233d1618b7b8b2331869d34e9b12bbec9e`
+- **Updated:** 2026-07-14
+- **Current focus:** The first State → Utility → Plan → Subgraph vertical slice is implemented and its mandatory automated regression is green. Browser visual QA is prepared and awaits explicit user approval.
+- **Next step:** After explicit approval, run the prepared system-Chromium visual QA and inspect the five PNGs. Keep the work on the temporary branch until the user separately commands transfer to real-wargame-preview.
+- **Last verified commit:** `62379286b0704a49dc258aaba379a8dd404ff9f5`
 - **Status:** [generated status](../subprojects/ai-single-unit-editor/STATUS.md)

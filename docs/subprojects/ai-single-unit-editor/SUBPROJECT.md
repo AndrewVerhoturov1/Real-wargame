@@ -221,3 +221,37 @@ src/core/ai/runtime/AiSubgraphRuntime.ts
 ```
 
 The user configures contracts and subgraphs through the Russian editor UI. Normal use never requires editing graph JSON. Subgraph input/output bindings are explicit, local memory is isolated, active nested runtime is serializable, and cancellation performs cleanup exactly once.
+
+## Hierarchical states and explicit plans v1
+
+The one-soldier runtime now has a persistent decision layer above Graph v2:
+
+```text
+AiStateRuntime
+→ allowed Utility branches
+→ AiPlan
+→ current Graph v2 subgraph
+→ existing Action Runtime
+```
+
+The first leaf states are `Idle`, `FollowingOrder`, `Contact` and `Suppressed`, grouped under `Normal` and `Combat`. The first plans are `FollowMoveOrder` and `TakeCover`.
+
+Stable rules:
+
+- a state limits which plans may compete;
+- a valid active plan is not recreated every tick;
+- an emergency state transition cancels an incompatible plan before a replacement is selected;
+- plan steps execute registered subgraphs rather than owning a second movement implementation;
+- nested subgraph movement remains visible to route monitoring, snapshot and owner-token cleanup;
+- a restored running step continues with `update` and does not repeat `start`;
+- Russian state, transition, plan and step explanations are visible in the tactical workspace and node editor;
+- the compact UI is persistent and updates values in place.
+
+Detailed explanation:
+
+```text
+docs/subprojects/ai-single-unit-editor/HIERARCHICAL_STATES_AND_PLANS_V1.md
+```
+
+This slice deliberately excludes shooting, morale, wounded/retreat/panic states, tactical queries and parallel plans. Shooting work should integrate through the same State → Utility → Plan → Subgraph contract rather than creating an independent competing runtime.
+

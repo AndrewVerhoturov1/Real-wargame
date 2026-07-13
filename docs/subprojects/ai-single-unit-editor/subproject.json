@@ -1,13 +1,13 @@
 {
   "id": "ai-single-unit-editor",
-  "title": "AI Single-Unit Editor — Stateful Tactical Awareness Lab",
+  "title": "AI Single-Unit Editor — Stateful Tactical Awareness, Hierarchical States and Plans",
   "status": "active",
-  "updated_at": "2026-07-13",
+  "updated_at": "2026-07-14",
   "goal": "Создать понятную человеку лабораторию поведения одиночного бойца: Utility AI выбирает решение, stateful runtime исполняет длительные действия, общий A* ведёт бойца по карте, постоянные профили маршрута задают стоимость местности, а гибридная система обзора и внимания формирует субъективные визуальные и звуковые контакты без всезнания ИИ.",
-  "current_focus": "Graph v2 собран в чистое transfer-дерево `transfer/ai-graph-v2-preview-2026-07-13` поверх актуального `real-wargame-preview` `db80f36edaf018c6a45dfeb7cc0f7caaed00bdb5`: единый реестр 36 контрактов, типизированные порты, строгая проверка, миграция Graph v1, пять областей памяти, WaitForEvent/Timeout/Retry, четыре сохраняемых подграфа и русский интерфейс без обязательного JSON. Обязательная локальная Chromium-проверка выявила и исправила два дефекта: выбор подграфа теперь сохраняется из русской панели, а навигационная цепочка не дублирует название.",
-  "next_step": "Опубликовать чистую ветку `transfer/ai-graph-v2-preview-2026-07-13`, открыть PR в `real-wargame-preview` и выполнить SHA-привязанную системную Chrome-проверку. После зелёных CI и осмотра свежих PNG ветка готова к переносу; `main` не менять.",
+  "current_focus": "The first State → Utility → Plan → Subgraph vertical slice is implemented and its mandatory automated regression is green. Browser visual QA is prepared and awaits explicit user approval.",
+  "next_step": "After explicit approval, run the prepared system-Chromium visual QA and inspect the five PNGs. Keep the work on the temporary branch until the user separately commands transfer to real-wargame-preview.",
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-  "last_verified_commit": "02a43f233d1618b7b8b2331869d34e9b12bbec9e",
+  "last_verified_commit": "62379286b0704a49dc258aaba379a8dd404ff9f5",
   "last_verified_runs": {
     "current_preview_base": "ca3f2e71327f184ce2aaccbd3749ebd6da93944c",
     "perception_core": "29201062853: success on a560b9b92593ce2c2b280d364431bba7d3c4aec4; build, perception, performance, attention nodes, runtime, workspace, game editor, LOS, dictionary, lab and docs checks passed",
@@ -60,9 +60,51 @@
       "graph-v2-subgraph-russian-panel.png",
       "graph-v2-migration-and-errors.png",
       "graph-v2-subgraph-breadcrumb.png"
-    ]
+    ],
+    "hierarchical_states_and_plans_v1": {
+      "date": "2026-07-14",
+      "branch": "feat/ai-state-plan-v1-temp-2026-07-14",
+      "base_preview_sha": "cc907ca0f48caed418cd76b0f878c8b18fbe71c7",
+      "verified_sha": "62379286b0704a49dc258aaba379a8dd404ff9f5",
+      "validation_run": "29280697374",
+      "status": "core_validated_visual_pending",
+      "confirmed": [
+        "state-machine:smoke",
+        "plan-runtime:smoke",
+        "state-plan-scenario:smoke",
+        "graph-v2:smoke",
+        "runtime:smoke",
+        "runtime-session:smoke",
+        "runtime-snapshot:smoke",
+        "runtime-scene:smoke",
+        "runtime-modifiers:smoke",
+        "subgraph:smoke",
+        "graph-v2-scenario:smoke",
+        "event-queue:smoke",
+        "simulation-events:smoke",
+        "reactive-runtime:smoke",
+        "composite:smoke",
+        "routed-move:smoke",
+        "navigation-profiles:smoke",
+        "navigation-profile-switch:smoke",
+        "attention-ai-nodes:smoke",
+        "perception:smoke",
+        "blackboard-observer:smoke",
+        "workspace:smoke",
+        "editor:smoke",
+        "runtime-debug-v2:smoke",
+        "docs:sync",
+        "build",
+        "Agent Docs Integrity",
+        "Preview Policy"
+      ],
+      "visual_qa_prepared": true,
+      "visual_qa_run": false
+    }
   },
   "must_read_first": [
+    "docs/subprojects/ai-single-unit-editor/HIERARCHICAL_STATES_AND_PLANS_V1.md",
+    "docs/superpowers/plans/2026-07-14-ai-state-plan-v1.md",
     "docs/subprojects/ai-single-unit-editor/VIEW_AND_MEMORY_HEATMAP_V1.md",
     "docs/superpowers/plans/2026-07-13-view-memory-heatmap.md",
     "docs/ai/WEB_CHAT_START.md",
@@ -151,7 +193,15 @@
     "src/core/ai/contracts/AiSubgraphRegistry.ts",
     "src/core/ai/runtime/AiSubgraphRuntime.ts",
     "src/ai-node-editor/node-contract-ui.ts",
-    "src/ai-node-editor/subgraph-ui.ts"
+    "src/ai-node-editor/subgraph-ui.ts",
+    "src/core/ai/state/AiStateMachine.ts",
+    "src/core/ai/state/AiStateRuntime.ts",
+    "src/core/ai/state/AiPlan.ts",
+    "src/core/ai/state/AiPlanRuntime.ts",
+    "src/core/ai/state/AiStatePlanPipeline.ts",
+    "src/ui/AiStatePlanPanel.ts",
+    "src/ai-node-editor/state-machine-ui.ts",
+    "src/testing/AiStatePlanVisualQaHarness.ts"
   ],
   "test_files": [
     "scripts/perception_system_smoke.ts",
@@ -184,7 +234,11 @@
     "scripts/ai_graph_v2_scenario_smoke.ts",
     "scripts/ai_node_contract_ui_smoke.ts",
     "scripts/ai_runtime_debug_graph_v2_smoke.mjs",
-    "scripts/ai_graph_cli_v2_smoke.mjs"
+    "scripts/ai_graph_cli_v2_smoke.mjs",
+    "scripts/ai_state_machine_smoke.ts",
+    "scripts/ai_plan_runtime_smoke.ts",
+    "scripts/ai_state_plan_scenario_smoke.ts",
+    "tests/ai-state-plan-visual.spec.ts"
   ],
   "manual_docs": [
     "docs/subprojects/ai-single-unit-editor/PERCEPTION_ATTENTION_V1.md",
@@ -201,9 +255,14 @@
     "docs/subprojects/ai-single-unit-editor/journal/2026-07-13-view-memory-heatmap-v1.md",
     "docs/subprojects/ai-single-unit-editor/journal/2026-07-13-visibility-controls-facing.md",
     "docs/subprojects/ai-single-unit-editor/journal/2026-07-13-attention-profiles-motion-flicker.md",
-    "docs/subprojects/ai-single-unit-editor/GRAPH_V2_TYPED_CONTRACTS_AND_SUBGRAPHS.md"
+    "docs/subprojects/ai-single-unit-editor/GRAPH_V2_TYPED_CONTRACTS_AND_SUBGRAPHS.md",
+    "docs/subprojects/ai-single-unit-editor/HIERARCHICAL_STATES_AND_PLANS_V1.md",
+    "docs/superpowers/plans/2026-07-14-ai-state-plan-v1.md"
   ],
   "suggested_verification": [
+    "npm run state-machine:smoke",
+    "npm run plan-runtime:smoke",
+    "npm run state-plan-scenario:smoke",
     "npm run threat-display-stability:smoke",
     "npm run movement-facing:smoke",
     "npm run attention-profiles:smoke",
@@ -261,7 +320,13 @@
     "Историческая информация хранится только метками контактов; старая тепловая карта не становится памятью местности.",
     "Поле выбранного бойца хранится в Uint8Array и выводится одним растровым Sprite, а не объектом на каждую клетку.",
     "Случайность обнаружения детерминирована контактом, ограничена профилем и не зависит от FPS.",
-    "Не переносить feat/view-memory-heatmap-temp в real-wargame-preview без отдельной команды пользователя."
+    "Не переносить feat/view-memory-heatmap-temp в real-wargame-preview без отдельной команды пользователя.",
+    "Only one AiPlan may be active for the soldier in this vertical slice.",
+    "An emergency state transition must cancel an incompatible plan before replacement selection.",
+    "Plan steps reuse Graph v2 subgraphs and the existing action owner token; never create a second movement runtime.",
+    "A restored running plan step must continue update without repeating start or cleanup.",
+    "Do not mix the parallel shooting implementation into this temporary branch.",
+    "Do not transfer this branch to real-wargame-preview without an explicit user command."
   ],
   "known_limits": [
     "Perception v1 рассчитывает зрение и слух только выбранного бойца, а не всех юнитов армии.",
@@ -272,6 +337,10 @@
     "Не все behavior-ноды ещё имеют отдельный семантический selector movementMode; числовые веса маршрута всё равно берутся только из общего реестра.",
     "Нет резервирования клеток между бойцами, flow field или группового коридора.",
     "View and Memory Heatmap v1 рассчитывается только для выбранного бойца.",
-    "Поле строится синхронно, но кешируется, квантируется и ограничивается по частоте; для карт значительно крупнее текущих может понадобиться фоновая пошаговая задача."
+    "Поле строится синхронно, но кешируется, квантируется и ограничивается по частоте; для карт значительно крупнее текущих может понадобиться фоновая пошаговая задача.",
+    "State-plan v1 intentionally contains only Idle, FollowingOrder, Contact and Suppressed.",
+    "State-plan v1 intentionally contains only FollowMoveOrder and TakeCover.",
+    "Shooting, morale, wounded/retreat/panic states, tactical queries and parallel plans are not implemented in this slice.",
+    "The visual scenario is prepared but Chromium and the five PNGs are not run without explicit approval."
   ]
 }

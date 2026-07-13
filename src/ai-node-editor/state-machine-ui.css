@@ -1,0 +1,168 @@
+.ai-state-plan-panel {
+  position: absolute;
+  z-index: 28;
+  right: 12px;
+  bottom: 12px;
+  width: min(430px, calc(100% - 24px));
+  max-height: min(520px, calc(100% - 92px));
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid rgba(111, 190, 255, 0.34);
+  border-radius: 14px;
+  color: #eaf4ff;
+  background: rgba(13, 24, 34, 0.94);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(10px);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.ai-state-plan-panel > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ai-state-plan-panel h3,
+.ai-state-plan-panel h4 {
+  margin: 0;
+}
+
+.ai-state-plan-panel header span {
+  color: #98aec0;
+}
+
+.ai-state-plan-panel .state-plan-live {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #9fe8b8;
+  background: rgba(66, 180, 105, 0.14);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.ai-state-plan-panel.empty .state-plan-live {
+  color: #b8c1c8;
+  background: rgba(150, 160, 170, 0.12);
+}
+
+.state-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+
+.state-plan-grid > div {
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.state-plan-grid > .wide {
+  grid-column: 1 / -1;
+}
+
+.state-plan-grid dt {
+  color: #91a8ba;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.state-plan-grid dd {
+  min-width: 0;
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  color: #ffffff;
+  font-weight: 650;
+}
+
+.state-plan-lists {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.state-plan-lists section {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.13);
+}
+
+.state-plan-lists h4 {
+  margin-bottom: 5px;
+  color: #b9d9f2;
+  font-size: 11px;
+}
+
+.state-plan-lists ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 15px;
+}
+
+.state-plan-lists li {
+  overflow-wrap: anywhere;
+  color: #dbe7ef;
+}
+
+.state-plan-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.state-plan-actions > button,
+.state-plan-actions summary {
+  min-height: 30px;
+  box-sizing: border-box;
+  padding: 6px 9px;
+  border: 1px solid rgba(111, 190, 255, 0.28);
+  border-radius: 8px;
+  color: #eaf4ff;
+  background: rgba(72, 143, 191, 0.14);
+  cursor: pointer;
+}
+
+.state-plan-actions > button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.state-plan-actions details {
+  min-width: 0;
+  flex: 1;
+}
+
+.state-plan-actions pre {
+  max-height: 170px;
+  overflow: auto;
+  margin: 6px 0 0;
+  padding: 7px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.25);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+}
+
+@media (max-width: 1000px) {
+  .ai-state-plan-panel {
+    width: min(360px, calc(100% - 20px));
+  }
+
+  .state-plan-lists {
+    grid-template-columns: 1fr;
+  }
+}
