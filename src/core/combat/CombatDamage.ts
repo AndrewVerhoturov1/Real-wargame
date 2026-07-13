@@ -37,6 +37,19 @@ export function getCombatRuntime(unit: UnitModel): CombatRuntimeState {
   return runtime;
 }
 
+export function replaceCombatRuntime(unit: UnitModel, value: Partial<CombatRuntimeState> | null | undefined): void {
+  const capability = normalizeCapability(value?.capability, unit.soldier.condition.health);
+  const lastHit = normalizeLastHit(value?.lastHit, capability, unit.soldier.condition.health);
+  runtimeByUnit.set(unit, { capability, lastHit });
+  if (capability === 'dead') unit.soldier.condition.health = 0;
+  if (capability === 'incapacitated' || capability === 'dead') {
+    unit.order = null;
+    unit.playerCommand = null;
+    unit.behaviorRuntime.weaponReady = false;
+    unit.behaviorRuntime.currentAction = capability;
+  }
+}
+
 export function isUnitCombatCapable(unit: UnitModel): boolean {
   const capability = getCombatRuntime(unit).capability;
   return capability !== 'incapacitated' && capability !== 'dead';
@@ -102,6 +115,30 @@ export function getCombatAimMultiplier(unit: UnitModel): number {
 
 export function clearCombatRuntime(unit: UnitModel): void {
   runtimeByUnit.delete(unit);
+}
+
+function normalizeCapability(value: unknown, health: number): CombatCapability {
+  if (value === 'wounded' || value === 'severely_wounded' || value === 'incapacitated' || value === 'dead') return value;
+  return health <= 0 ? 'dead' : 'effective';
+}
+
+function normalizeLastHit(
+  value: UnitHitRecord | null | undefined,
+  capability: CombatCapability,
+  healthAfter: number,
+): UnitHitRecord | null {
+  if (!value || typeof value.shotId !== 'string' || !isHitZone(value.zone)) return null;
+  return {
+    shotId: value.shotId,
+    zone: value.zone,
+    energyJoules: Math.max(0, Number.isFinite(value.energyJoules) ? value.energyJoules : 0),
+    capability,
+    healthAfter: Math.max(0, Math.round(Number.isFinite(value.healthAfter) ? value.healthAfter : healthAfter)),
+  };
+}
+
+function isHitZone(value: unknown): value is HitZone {
+  return value === 'head' || value === 'torso' || value === 'limbs';
 }
 
 function resolveCapability(
