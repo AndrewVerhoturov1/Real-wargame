@@ -27,7 +27,7 @@ async function main(): Promise<void> {
   verifyProfileSwitchInvalidatesField();
   verifyHoverAndTextureCounters();
   await verifyRendererBoundary();
-  console.log('Navigation overlay contract smoke passed: storage, map identity, typed-array hover, directional raster mode, texture counters and renderer/A* separation.');
+  console.log('Navigation overlay contract smoke passed: storage, map identity, typed-array hover, hidden directional diagnostics, texture counters and renderer/A* separation.');
 }
 
 function verifySelectedPlayerProfileResolution(): void {
@@ -142,7 +142,8 @@ async function verifyRendererBoundary(): Promise<void> {
   assert.match(source, /directionalTerrainColor/);
   assert.match(source, /dynamicTextureKey = `\$\{fields\.cacheKey\}:\$\{dynamicMode\}`/);
   assert.match(source, /Направленный рельеф/);
-  assert.match(uiSource, /option value="directionalTerrain"/);
+  assert.doesNotMatch(uiSource, /option value="directionalTerrain"/, 'standalone directional terrain must stay an internal diagnostic, not a normal player layer');
+  assert.match(uiSource, /учёт рельефа/);
   assert.match(source, /fontSize: 8/);
   assert.match(source, /strokeThickness: 2/);
   assert.match(source, /this\.legend\.resolution = ROUTE_TEXT_RESOLUTION/);
