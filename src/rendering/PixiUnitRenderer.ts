@@ -132,7 +132,9 @@ function updateUnitView(
   const bodyKey = [
     unitRadius.toFixed(3),
     unit.type,
+    unit.side,
     unit.behaviorRuntime.state,
+    unit.behaviorRuntime.currentAction,
     unit.behaviorRuntime.posture,
   ].join(':');
   if (bodyKey !== view.bodyKey) {
@@ -232,11 +234,17 @@ function redrawWeapon(graphics: Graphics, itemKind: UnitModel['heldItem'], unitR
 }
 
 function getUnitFill(unit: UnitModel): number {
-  if (unit.behaviorRuntime.state === 'stressed') return 0x743635;
-  if (unit.behaviorRuntime.state === 'taking_cover') return 0x8a6b39;
+  if (unit.behaviorRuntime.currentAction === 'dead') return 0x2d2d2d;
+  if (unit.behaviorRuntime.currentAction === 'incapacitated') return 0x555555;
+  if (unit.behaviorRuntime.state === 'stressed') return unit.side === 'red' ? 0x743635 : 0x35486f;
+  if (unit.side === 'red') {
+    if (unit.type === 'support_team') return 0x8d3f45;
+    if (unit.type === 'scout_team') return 0x9a5a42;
+    return 0x874239;
+  }
   if (unit.type === 'support_team') return 0x394a6d;
-  if (unit.type === 'scout_team') return 0x4c6742;
-  return 0x485f35;
+  if (unit.type === 'scout_team') return 0x4b6590;
+  return 0x3e5f8d;
 }
 
 function getUnitRadius(map: TacticalMap): number {
