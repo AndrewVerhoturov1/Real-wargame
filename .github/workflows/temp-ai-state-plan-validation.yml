@@ -79,7 +79,7 @@ jobs:
       - run: npm run navigation-profile-switch:smoke
       - run: npm run attention-ai-nodes:smoke
       - run: npm run perception:smoke
-      - run: npm run observer-runtime:smoke
+      - run: npm run blackboard-observer:smoke
       - run: npm run workspace:smoke
       - run: npm run editor:smoke
       - run: npm run runtime-debug-v2:smoke
