@@ -20,45 +20,35 @@ jobs:
         with:
           ref: feat/ai-graph-v2-finalize-2026-07-13
           fetch-depth: 0
-      - name: Reconstruct exact transferred bytes
+      - name: Decode each replacement fragment separately
         shell: bash
         run: |
           set +e
-          cat \
-            .github/graph-v2-final-patch/part00 \
-            .github/graph-v2-final-patch/part01 \
-            .github/graph-v2-final-patch/part02 \
-            .github/graph-v2-final-patch/part03 \
-            .github/graph-v2-final-patch/part04 \
-            .github/graph-v2-final-patch/part05 \
-            > /tmp/graph-v2-final.b64
-          echo "prefix_status=$?" > /tmp/graph-v2-final-status.txt
-          cat \
-            .github/graph-v2-final-patch/part06a \
-            .github/graph-v2-final-patch/part06b \
-            .github/graph-v2-final-patch/part06c \
-            | xxd -r -p >> /tmp/graph-v2-final.b64
-          echo "hex_status=$?" >> /tmp/graph-v2-final-status.txt
-          cat .github/graph-v2-final-patch/part07 >> /tmp/graph-v2-final.b64
-          echo "suffix_status=$?" >> /tmp/graph-v2-final-status.txt
-          base64 -d /tmp/graph-v2-final.b64 > /tmp/graph-v2-final.patch.gz
-          echo "base64_status=$?" >> /tmp/graph-v2-final-status.txt
-          gzip -dc /tmp/graph-v2-final.patch.gz > /tmp/graph-v2-final.patch
-          echo "gzip_status=$?" >> /tmp/graph-v2-final-status.txt
-          wc -c /tmp/graph-v2-final.b64 /tmp/graph-v2-final.patch.gz /tmp/graph-v2-final.patch > /tmp/graph-v2-final-sizes.txt 2>&1
-          sha256sum /tmp/graph-v2-final.b64 /tmp/graph-v2-final.patch.gz /tmp/graph-v2-final.patch > /tmp/graph-v2-final-sha.txt 2>&1
+          for suffix in a b c; do
+            source_file=".github/graph-v2-final-patch/part06${suffix}"
+            cp "${source_file}" "/tmp/part06${suffix}.hex"
+            wc -c "${source_file}" >> /tmp/fragment-sizes.txt
+            sha256sum "${source_file}" >> /tmp/fragment-sha.txt
+            xxd -r -p "${source_file}" > "/tmp/part06${suffix}.decoded"
+            echo "part06${suffix}_status=$?" >> /tmp/fragment-status.txt
+            wc -c "/tmp/part06${suffix}.decoded" >> /tmp/fragment-sizes.txt
+            sha256sum "/tmp/part06${suffix}.decoded" >> /tmp/fragment-sha.txt
+          done
           exit 0
-      - name: Upload exact reconstructed files
+      - name: Upload fragment diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: graph-v2-exact-reconstruction-${{ github.event.pull_request.head.sha }}
+          name: graph-v2-fragment-diagnostics-${{ github.event.pull_request.head.sha }}
           path: |
-            /tmp/graph-v2-final.b64
-            /tmp/graph-v2-final.patch.gz
-            /tmp/graph-v2-final.patch
-            /tmp/graph-v2-final-status.txt
-            /tmp/graph-v2-final-sizes.txt
-            /tmp/graph-v2-final-sha.txt
+            /tmp/part06a.hex
+            /tmp/part06b.hex
+            /tmp/part06c.hex
+            /tmp/part06a.decoded
+            /tmp/part06b.decoded
+            /tmp/part06c.decoded
+            /tmp/fragment-status.txt
+            /tmp/fragment-sizes.txt
+            /tmp/fragment-sha.txt
           if-no-files-found: warn
           retention-days: 1
