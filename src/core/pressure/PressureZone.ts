@@ -77,7 +77,7 @@ export interface PressureZone {
   enabled?: boolean;
   sourceVisible?: boolean;
   sourceKnown?: boolean;
-  sourceTargetType: PerceptionTargetType;
+  sourceTargetType?: PerceptionTargetType;
   knowledgeConfidence?: number;
   uncertaintyCells?: number;
   knowledgeSource?: ThreatKnowledgeSource;
