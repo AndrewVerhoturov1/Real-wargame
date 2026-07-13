@@ -105,6 +105,10 @@ const graphNavigation: GraphNavigationEntry[] = [];
 ensurePositionsForGraph();
 render();
 void refreshEngineStatus();
+window.addEventListener('real-wargame:open-ai-subgraph', (event) => {
+  const subgraphId = (event as CustomEvent<{ subgraphId?: string }>).detail?.subgraphId;
+  if (subgraphId) openSubgraphById(subgraphId);
+});
 
 function render(): void {
   ensurePositionsForGraph();
@@ -316,6 +320,10 @@ function openSelectedSubgraph(nodeId: string): void {
   const node = editorGraph.nodes.find((candidate) => candidate.id === nodeId);
   if (!node || node.type !== 'Subgraph') return;
   const subgraphId = typeof node.parameters.subgraphId === 'string' ? node.parameters.subgraphId : 'take_cover';
+  openSubgraphById(subgraphId);
+}
+
+function openSubgraphById(subgraphId: string): void {
   const graph = getSubgraphGraph(subgraphId);
   const choice = getSubgraphChoice(subgraphId);
   if (!graph || !choice) return;
@@ -324,7 +332,7 @@ function openSelectedSubgraph(nodeId: string): void {
   nodePositions = {};
   selectedNodeId = editorGraph.rootNodeId;
   ensurePositionsForGraph();
-  validationText = `Открыт подграф «${choice.labelRu}». Изменения не перезаписывают родительский граф.`;
+  validationText = `Открыт активный подграф «${choice.labelRu}». Изменения не перезаписывают родительский граф.`;
   render();
 }
 

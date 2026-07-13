@@ -255,6 +255,7 @@ export function tickAiGameBridge(
       planHistory: nextPlanHistory,
       planSequence: nextPlanSequence,
     };
+    if (nextActivePlan && session.status !== 'active') session = { ...session, status: 'active', lastTerminal: undefined };
     result = cancellationResult ? mergeRuntimeResults(cancellationResult, planResult) : planResult;
   } else {
     const runtimeCancel = isReactiveExecutionState(session.executionState) ? undefined : options.cancel;
