@@ -26,6 +26,17 @@ export function installCombatControls(
     button.title = allowed
       ? 'Бойцы могут открывать огонь по своим подтверждённым контактам.'
       : 'Бойцы обнаруживают противника, но новые выстрелы запрещены.';
+    syncManualFireButton(allowed);
+  };
+
+  const syncManualFireButton = (allowed = isFireAllowed(state)) => {
+    const manual = controls.querySelector<HTMLButtonElement>('[data-action="fire-contact"]');
+    if (!manual || allowed) return;
+    const contactTitle = manual.title.replace(/^Стрельба запрещена\.\s*/, '');
+    manual.disabled = true;
+    manual.title = contactTitle.startsWith('Личный контакт:')
+      ? `Стрельба запрещена. ${contactTitle}`
+      : 'Стрельба запрещена общим переключателем. Сначала боец должен сам обнаружить противника.';
   };
 
   const onClick = () => {
@@ -36,9 +47,11 @@ export function installCombatControls(
   };
 
   button.addEventListener('click', onClick);
+  const syncTimer = window.setInterval(update, 120);
   update();
 
   return () => {
+    window.clearInterval(syncTimer);
     button.removeEventListener('click', onClick);
     button.remove();
   };
