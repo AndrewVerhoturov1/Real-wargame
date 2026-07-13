@@ -1,3 +1,4 @@
+import { getGameEditorDrafts } from '../editor/GameEditorDrafts';
 import { distance, type GridPosition } from '../geometry';
 import {
   clampGridPositionToMap,
@@ -15,7 +16,7 @@ import {
   type PressureZoneData,
   type PressureZoneShape,
 } from '../pressure/PressureZone';
-import { findUnitAtGridPosition, normalizeUnits, type UnitData, type UnitModel, type UnitType } from '../units/UnitModel';
+import { findUnitAtGridPosition, normalizeUnits, type UnitData, type UnitModel, type UnitSide, type UnitType } from '../units/UnitModel';
 
 export interface SelectionBox {
   start: GridPosition;
@@ -77,6 +78,7 @@ export interface EditorState {
   tool: EditorTool;
   objectKind: MapObjectKind;
   unitType: UnitType;
+  unitSide: UnitSide;
   zoneShape: PressureZoneShape;
   zoneRadiusCells: number;
   zoneWidthCells: number;
@@ -128,6 +130,7 @@ export function createInitialState(
       tool: 'select',
       objectKind: 'tree',
       unitType: 'infantry_squad',
+      unitSide: 'blue',
       zoneShape: 'circle',
       zoneRadiusCells: 3,
       zoneWidthCells: 5,
@@ -755,16 +758,35 @@ function spawnEditorUnit(state: SimulationState, grid: GridPosition): void {
 
   const index = state.editor.nextUnitIndex;
   const id = `editor_unit_${index}`;
+  const draft = getGameEditorDrafts(state).unit;
+  const label = draft.name.trim() || `Юнит ${index}`;
   const [unit] = normalizeUnits([
     {
       id,
-      label: id,
-      labelRu: `Юнит ${index}`,
-      type: state.editor.unitType,
-      side: 'player',
+      label,
+      labelRu: label,
+      type: draft.type,
+      side: draft.side,
       x: Math.max(0, Math.floor(grid.x)),
       y: Math.max(0, Math.floor(grid.y)),
-      behaviorProfile: 'regular',
+      speedCellsPerSecond: draft.speedCellsPerSecond,
+      heldItem: draft.heldItem,
+      facingDegrees: draft.facingDegrees,
+      viewAngleDegrees: draft.viewAngleDegrees,
+      viewRangeCells: draft.viewRangeCells,
+      behaviorProfile: draft.profile,
+      soldier: {
+        traits: { ...draft.traits },
+        condition: { ...draft.condition },
+      },
+      attention: draft.attention,
+      initialState: {
+        posture: draft.posture,
+        stress: draft.stress,
+        suppression: draft.suppression,
+        ammo: Math.round(draft.ammo),
+        weaponReady: draft.weaponReady,
+      },
     },
   ]);
 
@@ -775,7 +797,7 @@ function spawnEditorUnit(state: SimulationState, grid: GridPosition): void {
   state.editor.selectedZoneId = null;
   state.editor.drag = null;
   selectUnit(state, id);
-  state.editor.lastMessage = `Создан юнит: ${id}`;
+  state.editor.lastMessage = `Создан боец: ${label} · ${draft.side === 'red' ? 'Противник' : 'Свои'}`;
 }
 
 function spawnEditorZone(state: SimulationState, grid: GridPosition): void {
