@@ -4,8 +4,8 @@
   "status": "active",
   "updated_at": "2026-07-13",
   "goal": "Создать понятную человеку лабораторию поведения одиночного бойца: Utility AI выбирает решение, stateful runtime исполняет длительные действия, общий A* ведёт бойца по карте, постоянные профили маршрута задают стоимость местности, а гибридная система обзора и внимания формирует субъективные визуальные и звуковые контакты без всезнания ИИ.",
-  "current_focus": "Завершён пакет стабилизации отображения угроз и управления вниманием: геометрия пулемётной угрозы отделена от текущей метки подтверждения и больше не пересоздаётся при visibleNow, подпись «Пулемёт» имеет переход к тактической памяти, боец поворачивается по каждому отрезку маршрута, добавлен сохраняемый реестр именованных профилей внимания с редактором, а нижняя карточка собрана в адаптивную компактную сетку без переполнения.",
-  "next_step": "Провести пользовательскую проверку в real-wargame-preview. После подтверждения развивать восприятие нескольких бойцов и обмен субъективными контактами по командной цепочке; main не менять без отдельного явного GO пользователя.",
+  "current_focus": "Graph v2 собран в чистой transfer-ветке transfer/ai-graph-v2-preview-ready-2026-07-13 поверх актуальной real-wargame-preview: единый реестр контрактов, типизированные порты, строгая проверка, автоматическая миграция Graph v1, пять областей памяти, WaitForEvent/Timeout/Retry, четыре сохраняемых подграфа и русский интерфейс настройки без JSON. Выбор подграфа, политика отмены и реальные входы/выходы видны прямо в панели «Человеческий интерфейс ноды». Локально пройдены все новые и старые smoke-проверки и production build на базе preview 7735cb07028d2855c3a85869cdd0531c9a55ed7e.",
+  "next_step": "Запустить SHA-привязанную системную Chromium-проверку clean transfer PR и осмотреть свежие PNG. После зелёного результата PR подготовлен к слиянию в real-wargame-preview по прямой команде пользователя; main не менять.",
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
   "last_verified_commit": "02a43f233d1618b7b8b2331869d34e9b12bbec9e",
   "last_verified_runs": {
@@ -52,7 +52,8 @@
     "attention_profiles_motion_playwright_log_digest": "sha256:a0d1af29e7ec4e4f83cb351bcb257fc2cf49d9236fa342514123eb656be14632",
     "threat_display_policy": "stable geometry key excludes volatile visibleNow; confirmation markers update independently; live contacts and tactical memory are deduplicated by threat id",
     "movement_facing_policy": "unit faces the active route waypoint before each movement step; explicit final facing overrides the last segment at completion",
-    "attention_profile_policy": "built-in and custom profiles persist in localStorage; concrete settings remain in scene export for backward compatibility"
+    "attention_profile_policy": "built-in and custom profiles persist in localStorage; concrete settings remain in scene export for backward compatibility",
+    "graph_v2_transfer_local": "current preview base 7735cb07028d2855c3a85869cdd0531c9a55ed7e; Graph v2, runtime, editor, navigation, attention, directional terrain, perception, heatmap, docs and production build passed locally on the clean transfer tree"
   },
   "must_read_first": [
     "docs/subprojects/ai-single-unit-editor/VIEW_AND_MEMORY_HEATMAP_V1.md",
@@ -71,7 +72,8 @@
     "docs/superpowers/plans/2026-07-12-soldier-perception-attention-v1.md",
     "docs/superpowers/specs/2026-07-12-compact-route-controls-editor-navigation-design.md",
     "docs/superpowers/plans/2026-07-12-compact-route-controls-editor-navigation.md",
-    "AGENTS.md"
+    "AGENTS.md",
+    "docs/subprojects/ai-single-unit-editor/GRAPH_V2_TYPED_CONTRACTS_AND_SUBGRAPHS.md"
   ],
   "main_files": [
     "src/core/perception/AttentionModel.ts",
@@ -133,7 +135,16 @@
     "src/core/knowledge/ThreatDisplayModel.ts",
     "src/core/perception/AttentionProfiles.ts",
     "src/core/perception/AttentionProfileStorage.ts",
-    "src/ai-node-editor/AttentionProfileEditorPanel.ts"
+    "src/ai-node-editor/AttentionProfileEditorPanel.ts",
+    "src/core/ai/contracts/AiPortTypes.ts",
+    "src/core/ai/contracts/AiNodeContract.ts",
+    "src/core/ai/contracts/AiNodeContractRegistry.ts",
+    "src/core/ai/contracts/AiGraphMigration.ts",
+    "src/core/ai/contracts/AiMemoryScopes.ts",
+    "src/core/ai/contracts/AiSubgraphRegistry.ts",
+    "src/core/ai/runtime/AiSubgraphRuntime.ts",
+    "src/ai-node-editor/node-contract-ui.ts",
+    "src/ai-node-editor/subgraph-ui.ts"
   ],
   "test_files": [
     "scripts/perception_system_smoke.ts",
@@ -159,7 +170,14 @@
     "scripts/movement_facing_smoke.ts",
     "scripts/attention_profiles_smoke.ts",
     "scripts/bottom_panel_layout_contract_smoke.mjs",
-    "tests/attention-profiles-motion-stability.spec.ts"
+    "tests/attention-profiles-motion-stability.spec.ts",
+    "scripts/ai_graph_v2_contracts_smoke.ts",
+    "scripts/ai_runtime_modifiers_smoke.ts",
+    "scripts/ai_subgraph_runtime_smoke.ts",
+    "scripts/ai_graph_v2_scenario_smoke.ts",
+    "scripts/ai_node_contract_ui_smoke.ts",
+    "scripts/ai_runtime_debug_graph_v2_smoke.mjs",
+    "scripts/ai_graph_cli_v2_smoke.mjs"
   ],
   "manual_docs": [
     "docs/subprojects/ai-single-unit-editor/PERCEPTION_ATTENTION_V1.md",
@@ -175,7 +193,8 @@
     "docs/superpowers/plans/2026-07-13-view-memory-heatmap.md",
     "docs/subprojects/ai-single-unit-editor/journal/2026-07-13-view-memory-heatmap-v1.md",
     "docs/subprojects/ai-single-unit-editor/journal/2026-07-13-visibility-controls-facing.md",
-    "docs/subprojects/ai-single-unit-editor/journal/2026-07-13-attention-profiles-motion-flicker.md"
+    "docs/subprojects/ai-single-unit-editor/journal/2026-07-13-attention-profiles-motion-flicker.md",
+    "docs/subprojects/ai-single-unit-editor/GRAPH_V2_TYPED_CONTRACTS_AND_SUBGRAPHS.md"
   ],
   "suggested_verification": [
     "npm run threat-display-stability:smoke",
@@ -206,7 +225,14 @@
     "npm run lab:smoke",
     "npm run build",
     "npm run docs:check",
-    "npx playwright test tests/perception-attention-overlay.spec.ts --project=chromium — только после явного разрешения пользователя"
+    "npx playwright test tests/perception-attention-overlay.spec.ts --project=chromium — только после явного разрешения пользователя",
+    "npm run graph-v2:smoke",
+    "npm run runtime-modifiers:smoke",
+    "npm run subgraph:smoke",
+    "npm run graph-v2-scenario:smoke",
+    "npm run node-contract-ui:smoke",
+    "npm run runtime-debug-v2:smoke",
+    "npm run graph-v2-cli:smoke"
   ],
   "safety_rules": [
     "SimulationTick остаётся единственным кодом, который изменяет координаты бойца.",

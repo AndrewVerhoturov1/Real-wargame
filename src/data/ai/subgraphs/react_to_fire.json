@@ -1,0 +1,65 @@
+{
+  "version": 2,
+  "id": "subgraph_react_to_fire",
+  "name": "React to Fire",
+  "nameRu": "Реагировать на обстрел",
+  "rootNodeId": "root",
+  "blackboardSchema": [],
+  "blackboardDefaults": {},
+  "subgraphRefs": [
+    "take_cover"
+  ],
+  "nodes": [
+    {
+      "id": "root",
+      "type": "Root",
+      "children": [
+        "branch"
+      ]
+    },
+    {
+      "id": "branch",
+      "type": "ActionBranch",
+      "children": [
+        "sequence"
+      ]
+    },
+    {
+      "id": "sequence",
+      "type": "SequenceWithMemory",
+      "children": [
+        "crouch",
+        "take_cover"
+      ]
+    },
+    {
+      "id": "crouch",
+      "type": "SetPosture",
+      "children": [],
+      "parameters": {
+        "posture": "crouched"
+      }
+    },
+    {
+      "id": "take_cover",
+      "type": "Subgraph",
+      "children": [],
+      "parameters": {
+        "subgraphId": "take_cover",
+        "cancelPolicy": "cancel_child"
+      },
+      "inputBindings": {
+        "cover_position": {
+          "source": "subgraphInput",
+          "port": "cover_position"
+        }
+      },
+      "outputBindings": {
+        "reached_position": {
+          "target": "subgraphOutput",
+          "port": "reached_position"
+        }
+      }
+    }
+  ]
+}

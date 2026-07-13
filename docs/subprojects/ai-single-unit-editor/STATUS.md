@@ -14,11 +14,11 @@
 
 ## Current focus
 
-Завершён пакет стабилизации отображения угроз и управления вниманием: геометрия пулемётной угрозы отделена от текущей метки подтверждения и больше не пересоздаётся при visibleNow, подпись «Пулемёт» имеет переход к тактической памяти, боец поворачивается по каждому отрезку маршрута, добавлен сохраняемый реестр именованных профилей внимания с редактором, а нижняя карточка собрана в адаптивную компактную сетку без переполнения.
+Graph v2 собран в чистой transfer-ветке transfer/ai-graph-v2-preview-ready-2026-07-13 поверх актуальной real-wargame-preview: единый реестр контрактов, типизированные порты, строгая проверка, автоматическая миграция Graph v1, пять областей памяти, WaitForEvent/Timeout/Retry, четыре сохраняемых подграфа и русский интерфейс настройки без JSON. Выбор подграфа, политика отмены и реальные входы/выходы видны прямо в панели «Человеческий интерфейс ноды». Локально пройдены все новые и старые smoke-проверки и production build на базе preview 7735cb07028d2855c3a85869cdd0531c9a55ed7e.
 
 ## Next step
 
-Провести пользовательскую проверку в real-wargame-preview. После подтверждения развивать восприятие нескольких бойцов и обмен субъективными контактами по командной цепочке; main не менять без отдельного явного GO пользователя.
+Запустить SHA-привязанную системную Chromium-проверку clean transfer PR и осмотреть свежие PNG. После зелёного результата PR подготовлен к слиянию в real-wargame-preview по прямой команде пользователя; main не менять.
 
 ## Read first
 
@@ -39,6 +39,7 @@
 - `docs/superpowers/specs/2026-07-12-compact-route-controls-editor-navigation-design.md`
 - `docs/superpowers/plans/2026-07-12-compact-route-controls-editor-navigation.md`
 - `AGENTS.md`
+- `docs/subprojects/ai-single-unit-editor/GRAPH_V2_TYPED_CONTRACTS_AND_SUBGRAPHS.md`
 
 ## Main files
 
@@ -102,6 +103,15 @@
 - `src/core/perception/AttentionProfiles.ts`
 - `src/core/perception/AttentionProfileStorage.ts`
 - `src/ai-node-editor/AttentionProfileEditorPanel.ts`
+- `src/core/ai/contracts/AiPortTypes.ts`
+- `src/core/ai/contracts/AiNodeContract.ts`
+- `src/core/ai/contracts/AiNodeContractRegistry.ts`
+- `src/core/ai/contracts/AiGraphMigration.ts`
+- `src/core/ai/contracts/AiMemoryScopes.ts`
+- `src/core/ai/contracts/AiSubgraphRegistry.ts`
+- `src/core/ai/runtime/AiSubgraphRuntime.ts`
+- `src/ai-node-editor/node-contract-ui.ts`
+- `src/ai-node-editor/subgraph-ui.ts`
 
 ## Suggested verification
 
@@ -134,6 +144,13 @@
 - `npm run build`
 - `npm run docs:check`
 - `npx playwright test tests/perception-attention-overlay.spec.ts --project=chromium — только после явного разрешения пользователя`
+- `npm run graph-v2:smoke`
+- `npm run runtime-modifiers:smoke`
+- `npm run subgraph:smoke`
+- `npm run graph-v2-scenario:smoke`
+- `npm run node-contract-ui:smoke`
+- `npm run runtime-debug-v2:smoke`
+- `npm run graph-v2-cli:smoke`
 
 ## Safety rules
 

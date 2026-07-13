@@ -35,13 +35,18 @@ import {
   createLegacyWaitActionState,
   type WaitActionState,
 } from './runtime/actions/WaitAction';
+import {
+  isWaitForEventActionState,
+  type WaitForEventActionState,
+} from './runtime/actions/WaitForEventAction';
+import type { AiSubgraphExecutionState } from './runtime/AiSubgraphRuntime';
 
 export type AiGraphExecutionStatus = 'success' | 'failure' | 'running' | 'waiting' | 'cancelled';
 export type AiGraphLifecyclePhase = 'start' | 'update' | 'complete' | 'cancel';
 export type AiGraphRuntimeTraceStatus = AiGraphTraceItem['status'] | 'running' | 'waiting' | 'complete' | 'cancelled';
 
 export type AiGraphMoveExecutionData = MoveToBlackboardPositionActionState;
-export type AiGraphExecutionData = AiGraphMoveExecutionData | ReloadActionState;
+export type AiGraphExecutionData = AiGraphMoveExecutionData | ReloadActionState | WaitForEventActionState | AiSubgraphExecutionState;
 
 export interface AiGraphExecutionState {
   readonly version: 1;
@@ -74,6 +79,7 @@ export interface AiGraphCancellationRequest {
 
 export interface AiGraphRuntimeTraceItem extends Omit<AiGraphTraceItem, 'status'> {
   readonly status: AiGraphRuntimeTraceStatus;
+  readonly path?: string;
 }
 
 export interface AiGraphRuntimeInput extends AiGraphRunnerInput {
@@ -100,6 +106,10 @@ export type AiGraphRuntimeResult = Omit<AiGraphRunnerResult, 'trace'> & {
   readonly consumedEventIds?: readonly string[];
   readonly reactiveAbort?: AiReactiveAbortTrace;
   readonly reactiveObserverDefinitions?: readonly AiBlackboardObserverDefinition[];
+  readonly activeSubgraphId?: string;
+  readonly activeSubgraphName?: string;
+  readonly activeSubgraphNameRu?: string;
+  readonly activeSubgraphPath?: string;
 };
 
 export interface AiGraphRuntimeBeginMoveEffect {

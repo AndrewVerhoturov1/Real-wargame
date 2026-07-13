@@ -1,4 +1,4 @@
-export {};
+import { getSubgraphChoice, listSubgraphChoices } from './subgraph-ui';
 
 const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
 const MOVE_DEFAULTS = {
@@ -49,7 +49,7 @@ function enhanceSelectedStatefulNode(): void {
   }
 
   const node = readGraphNode(nodeId);
-  if (!node || !['Wait', 'Reload', 'SequenceWithMemory', 'ReactiveSequence', 'MoveToBlackboardPosition'].includes(String(node.type))) {
+  if (!node || !['Wait', 'Reload', 'SequenceWithMemory', 'ReactiveSequence', 'MoveToBlackboardPosition', 'Subgraph'].includes(String(node.type))) {
     existing?.remove();
     return;
   }
@@ -64,7 +64,37 @@ function enhanceSelectedStatefulNode(): void {
   section.dataset.nodeId = nodeId;
   section.dataset.nodeType = node.type;
 
-  if (node.type === 'ReactiveSequence') {
+  if (node.type === 'Subgraph') {
+    const subgraphId = typeof node.parameters?.subgraphId === 'string' ? node.parameters.subgraphId : 'take_cover';
+    const selectedSubgraph = getSubgraphChoice(subgraphId) ?? listSubgraphChoices()[0];
+    const inputSummary = selectedSubgraph?.inputs.length
+      ? selectedSubgraph.inputs.map((port) => `<li><b>${escapeAttribute(port.labelRu)}</b> · ${port.kind}${port.required ? ' · обязательно' : ''}</li>`).join('')
+      : '<li>Входы не требуются.</li>';
+    const outputSummary = selectedSubgraph?.outputs.length
+      ? selectedSubgraph.outputs.map((port) => `<li><b>${escapeAttribute(port.labelRu)}</b> · ${port.kind}</li>`).join('')
+      : '<li>Выходов нет.</li>';
+    section.innerHTML = `
+      <h4>Переиспользуемый подграф</h4>
+      <p>Выберите готовый блок поведения. Его внутренняя память изолирована, а данные передаются только через показанные входы и выходы.</p>
+      <label class="human-control wide" data-help="Подграф можно открыть двойным кликом по карточке ноды.">
+        <span>Шаблон поведения</span>
+        <select id="stateful-subgraph-id" class="stateful-subgraph-field">
+          ${listSubgraphChoices().map((choice) => `<option value="${escapeAttribute(choice.id)}" ${choice.id === selectedSubgraph?.id ? 'selected' : ''}>${escapeAttribute(choice.labelRu)} · ${escapeAttribute(choice.id)}</option>`).join('')}
+        </select>
+      </label>
+      <div class="stateful-subgraph-contract">
+        <strong>Входы подграфа</strong><ul>${inputSummary}</ul>
+        <strong>Выходы подграфа</strong><ul>${outputSummary}</ul>
+      </div>
+      <label class="human-control wide" data-help="При отмене родителя активное действие внутри подграфа будет безопасно отменено и очищено один раз.">
+        <span>Политика отмены</span>
+        <select id="stateful-subgraph-cancel-policy" class="stateful-subgraph-field">
+          <option value="cancel_child" selected>Отменить активный дочерний граф</option>
+        </select>
+      </label>
+      <p class="stateful-move-safety-note">${escapeAttribute(selectedSubgraph?.descriptionRu ?? 'Переиспользуемый блок поведения.')}</p>
+    `;
+  } else if (node.type === 'ReactiveSequence') {
     const observePrecedingConditions = readBoolean(node.parameters?.observePrecedingConditions, true);
     const abortReasonRu = typeof node.parameters?.abortReasonRu === 'string'
       ? node.parameters.abortReasonRu
@@ -183,7 +213,28 @@ function enhanceSelectedStatefulNode(): void {
     installReloadParameterSync(section);
   } else if (node.type === 'ReactiveSequence') {
     installReactiveSequenceParameterSync(section);
+  } else if (node.type === 'Subgraph') {
+    installSubgraphParameterSync(section);
   }
+}
+
+function installSubgraphParameterSync(section: HTMLElement): void {
+  const sync = (): void => {
+    const parametersArea = document.querySelector<HTMLTextAreaElement>('#node-parameters');
+    if (!parametersArea) return;
+    const parameters = readParameters(parametersArea.value);
+    parameters.subgraphId = document.querySelector<HTMLSelectElement>('#stateful-subgraph-id')?.value ?? 'take_cover';
+    parameters.cancelPolicy = document.querySelector<HTMLSelectElement>('#stateful-subgraph-cancel-policy')?.value ?? 'cancel_child';
+    parametersArea.value = JSON.stringify(parameters, null, 2);
+  };
+  section.querySelectorAll<HTMLSelectElement>('.stateful-subgraph-field').forEach((field) => {
+    field.addEventListener('change', () => {
+      sync();
+      document.querySelector<HTMLButtonElement>('#save-node')?.click();
+    });
+  });
+  document.querySelector<HTMLButtonElement>('.human-save-node')?.addEventListener('click', sync, { capture: true });
+  sync();
 }
 
 function installReactiveSequenceParameterSync(section: HTMLElement): void {

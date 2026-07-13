@@ -2,13 +2,13 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 export const KNOWN_NODE_TYPES = new Set([
-  'Root', 'UtilitySelector', 'Sequence', 'Selector', 'ActionBranch',
+  'Root', 'UtilitySelector', 'Sequence', 'SequenceWithMemory', 'ReactiveSequence', 'Selector', 'ActionBranch',
   'BlackboardValueAbove', 'FlagCheck', 'DistanceCheck', 'StableThreshold', 'TacticalCheck',
   'ParameterScore', 'DistanceScore', 'DecisionInertia', 'RandomChance',
   'FindBestObject', 'SelectTarget',
   'WriteMemory', 'CopyMemory', 'ForbidAction',
-  'SetPosture', 'SetAction', 'SetMovementMode', 'SayMessage',
-  'WriteReason',
+  'SetPosture', 'SetAction', 'SetMovementMode', 'SetAttentionMode', 'SetSearchSector', 'ClearAttentionOverride', 'SayMessage',
+  'WriteReason', 'Wait', 'Reload', 'MoveToBlackboardPosition', 'WaitForEvent', 'Timeout', 'Retry', 'Subgraph',
 ]);
 
 // Universal nodes are chainable: a condition can gate SayMessage, SetPosture, SetAction, etc.
@@ -26,7 +26,7 @@ const MOVEMENT_MODE_VALUES = new Set(['fast', 'careful', 'crawl', 'bounds', 'for
 const TARGET_RULE_VALUES = new Set(['nearest', 'most_dangerous', 'shooting_at_us', 'order_target', 'best_line_of_fire']);
 
 export const ENGINE_NAME = 'real-wargame-local-ai-engine';
-export const ENGINE_VERSION = '0.8.0-graph-runner-utility-selector';
+export const ENGINE_VERSION = '0.9.0-graph-runner-v2-compatible';
 
 export function resolveBundledGraphPath(repoRoot) {
   return path.join(repoRoot, 'src', 'data', 'ai', 'soldier_default_survival_graph.json');
@@ -39,7 +39,9 @@ export function loadJsonFile(filePath) {
 export function validateGraph(value) {
   const result = [];
   if (!isRecord(value)) return [errorIssue('GRAPH_NOT_OBJECT', 'AI graph must be a JSON object.', 'AI-граф должен быть JSON-объектом.')];
-  if (value.version !== 1) result.push(errorIssue('UNSUPPORTED_VERSION', 'Only AI graph version 1 is supported.', 'Поддерживается только версия AI-графа 1.'));
+  if (value.version !== 1 && value.version !== 2) result.push(errorIssue('UNSUPPORTED_VERSION', 'Only AI graph version 1 or 2 is supported.', 'Поддерживается только версия AI-графа 1 или 2.'));
+  if (value.version === 2 && !Array.isArray(value.blackboardSchema)) result.push(errorIssue('BLACKBOARD_SCHEMA_NOT_ARRAY', 'Graph v2 blackboardSchema must be an array.', 'У Graph v2 blackboardSchema должно быть массивом.'));
+  if (value.version === 2 && !Array.isArray(value.subgraphRefs)) result.push(errorIssue('SUBGRAPH_REFS_NOT_ARRAY', 'Graph v2 subgraphRefs must be an array.', 'У Graph v2 subgraphRefs должно быть массивом.'));
   if (!isNonEmptyString(value.id)) result.push(errorIssue('MISSING_GRAPH_ID', 'AI graph must have a non-empty string id.', 'У AI-графа должен быть непустой строковый id.'));
   if (!isNonEmptyString(value.rootNodeId)) result.push(errorIssue('MISSING_ROOT_NODE_ID', 'AI graph must have rootNodeId.', 'У AI-графа должен быть rootNodeId.'));
   if (!isRecord(value.blackboardDefaults)) result.push(errorIssue('BLACKBOARD_DEFAULTS_NOT_OBJECT', 'blackboardDefaults must be a JSON object.', 'Поле blackboardDefaults должно быть JSON-объектом.'));
@@ -136,8 +138,8 @@ export function createHealthPayload(port) {
     version: ENGINE_VERSION,
     port,
     mode: 'headless-local-engine',
-    scope: 'GraphRunner v1: validates clean graphs and evaluates UtilitySelector branches with score nodes before live bridge execution.',
-    scopeRu: 'GraphRunner v1: проверяет чистые графы и оценивает ветки UtilitySelector через score-ноды перед живым исполнением в bridge.',
+    scope: 'GraphRunner v1/v2: validates clean graphs and evaluates immediate UtilitySelector branches before live bridge execution.',
+    scopeRu: 'GraphRunner v1/v2: проверяет графы и оценивает мгновенные ветки UtilitySelector перед живым исполнением в bridge.',
     textBase: 'en',
     overlayLanguage: 'ru',
     browserDoesHeavyAi: false,

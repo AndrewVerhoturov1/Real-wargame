@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "id": "subgraph_reload_weapon",
+  "name": "Reload Weapon",
+  "nameRu": "Перезарядить оружие",
+  "rootNodeId": "root",
+  "blackboardSchema": [],
+  "blackboardDefaults": {},
+  "subgraphRefs": [],
+  "nodes": [
+    {
+      "id": "root",
+      "type": "Root",
+      "children": [
+        "branch"
+      ]
+    },
+    {
+      "id": "branch",
+      "type": "ActionBranch",
+      "children": [
+        "reload"
+      ]
+    },
+    {
+      "id": "reload",
+      "type": "Reload",
+      "children": [],
+      "parameters": {
+        "durationSeconds": 3,
+        "targetAmmo": 30,
+        "failIfNoWeapon": true
+      }
+    }
+  ]
+}

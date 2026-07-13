@@ -22,6 +22,14 @@ import {
   normalizeCompositeFrames,
 } from './AiCompositeRuntime';
 import { isReloadActionState } from './actions/ReloadAction';
+import { isWaitForEventActionState } from './actions/WaitForEventAction';
+import { cloneAiSubgraphExecutionState, isAiSubgraphExecutionState } from './AiSubgraphRuntime';
+import {
+  cloneAiMemoryScopes,
+  createAiMemoryScopes,
+  normalizeAiMemoryScopes,
+  type AiMemoryScopesSnapshotV1,
+} from '../contracts/AiMemoryScopes';
 
 export type AiRuntimeSessionStatus = 'idle' | 'active' | 'terminal';
 export type AiRuntimeTerminalStatus = 'success' | 'failure' | 'cancelled';
@@ -44,6 +52,7 @@ export interface AiRuntimeSessionSnapshotV1 {
   readonly cooldowns: Record<string, number>;
   readonly eventQueue: AiEventQueueSnapshotV1;
   readonly observerRegistry: AiBlackboardObserverRegistrySnapshotV1;
+  readonly memoryScopes: AiMemoryScopesSnapshotV1;
   readonly lastTerminal?: AiRuntimeTerminalRecord;
 }
 
@@ -56,6 +65,7 @@ export interface CreateAiRuntimeSessionInput {
   readonly cooldowns?: Record<string, number>;
   readonly eventQueue?: AiEventQueueSnapshotV1;
   readonly observerRegistry?: AiBlackboardObserverRegistrySnapshotV1;
+  readonly memoryScopes?: AiMemoryScopesSnapshotV1;
   readonly lastTerminal?: AiRuntimeTerminalRecord;
 }
 
@@ -94,6 +104,9 @@ export function createAiRuntimeSession(input: CreateAiRuntimeSessionInput): AiRu
     observerRegistry: input.observerRegistry
       ? cloneAiBlackboardObserverRegistry(input.observerRegistry)
       : createAiBlackboardObserverRegistry(),
+    memoryScopes: input.memoryScopes
+      ? cloneAiMemoryScopes(input.memoryScopes)
+      : createAiMemoryScopes({ runtimeSessionMemory: input.blackboardMemory ?? {} }),
     lastTerminal: cloneTerminal(input.lastTerminal),
   };
 }
@@ -147,6 +160,7 @@ export function normalizeAiRuntimeSession(
       cooldowns: normalizeCooldowns(value.cooldowns),
       eventQueue: normalizeAiEventQueueSnapshot(value.eventQueue),
       observerRegistry: normalizeAiBlackboardObserverRegistry(value.observerRegistry),
+      memoryScopes: normalizeAiMemoryScopes(value.memoryScopes, normalizeBlackboard(value.blackboardMemory)),
       lastTerminal: cloneTerminal(lastTerminal),
     },
   };
@@ -162,6 +176,7 @@ export function migrateLegacyAiRuntimeSession(input: LegacyAiRuntimeFields): AiR
     cooldowns: input.aiNodeCooldowns ?? input.cooldowns,
     eventQueue: input.eventQueue,
     observerRegistry: input.observerRegistry,
+    memoryScopes: input.memoryScopes,
     lastTerminal: input.lastTerminal,
   });
 }
@@ -194,6 +209,9 @@ export function applyRuntimeResultToSession(
     cooldowns: cloneCooldowns(result.cooldowns),
     eventQueue,
     observerRegistry,
+    memoryScopes: executionState
+      ? cloneAiMemoryScopes(current.memoryScopes)
+      : { ...cloneAiMemoryScopes(current.memoryScopes), activeStateMemory: {}, nodeLocalState: {} },
     lastTerminal: terminalStatus
       ? {
           status: terminalStatus,
@@ -219,6 +237,10 @@ export function resetAiRuntimeSession(
     observerRegistry: options.keepObservers
       ? current.observerRegistry
       : createAiBlackboardObserverRegistry(),
+    memoryScopes: createAiMemoryScopes({
+      persistentSoldierMemory: current.memoryScopes.persistentSoldierMemory,
+      runtimeSessionMemory: options.keepMemory === false ? {} : current.memoryScopes.runtimeSessionMemory,
+    }),
   });
 }
 
@@ -234,6 +256,7 @@ export function cloneAiRuntimeSession(value: AiRuntimeSessionSnapshotV1): AiRunt
     cooldowns: cloneCooldowns(value.cooldowns),
     eventQueue: cloneAiEventQueueSnapshot(value.eventQueue),
     observerRegistry: cloneAiBlackboardObserverRegistry(value.observerRegistry),
+    memoryScopes: cloneAiMemoryScopes(value.memoryScopes),
     lastTerminal: cloneTerminal(value.lastTerminal),
   };
 }
@@ -284,7 +307,11 @@ function cloneExecutionState(value: AiGraphExecutionState | undefined): AiGraphE
         }
       : isReloadActionState(value.activeData)
         ? { ...value.activeData }
-        : undefined,
+        : isWaitForEventActionState(value.activeData)
+          ? { ...value.activeData }
+          : isAiSubgraphExecutionState(value.activeData)
+            ? cloneAiSubgraphExecutionState(value.activeData)
+            : undefined,
     frames: value.frames === undefined ? undefined : cloneCompositeFrames(value.frames),
   };
 }
