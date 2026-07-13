@@ -1,0 +1,43 @@
+name: Combat Foundation Finalize Patch
+
+on:
+  push:
+    branches:
+      - tmp/combat-foundation-v1-20260713
+    paths:
+      - 'scripts/apply_combat_finalization_patch.mjs'
+      - '.github/workflows/combat-foundation-finalize-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp/combat-foundation-v1-20260713
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/apply_combat_finalization_patch.mjs
+      - name: Commit final source fixes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'Patch already applied.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            src/core/perception/PerceptionSystem.ts \
+            src/core/units/UnitModel.ts \
+            src/core/combat/CombatDamage.ts \
+            src/core/combat/CombatDecision.ts \
+            src/core/ai/AiGameBridge.ts \
+            src/ui/TacticalWorkspace.ts
+          git commit -m 'fix: stabilize stateful fire across perception ticks'
+          git push origin HEAD:tmp/combat-foundation-v1-20260713
