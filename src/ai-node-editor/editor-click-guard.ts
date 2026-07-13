@@ -4,6 +4,7 @@ const EDITOR_CONTROL_SELECTOR = [
   '.human-node-panel',
   '.inspector-panel',
   '.developer-json-details',
+  '.ai-debug-panel-dock',
   '.app-shell-menu',
   'select',
   'input',
