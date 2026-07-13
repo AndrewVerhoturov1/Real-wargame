@@ -1,10 +1,19 @@
 name: Combat Foundation Visual QA
 
-# Manual-only workflow. Run it only after the user explicitly approves visual verification
-# for the exact temporary-branch commit under review.
+# User-approved visual verification for this isolated temporary combat branch.
+# The branch-specific push trigger exists only to launch the approved exact-SHA run.
 run-name: Approved combat visual QA · ${{ github.sha }}
 
 on:
+  push:
+    branches:
+      - tmp/combat-perception-fire-feedback-20260714
+    paths:
+      - '.github/workflows/combat-foundation-visual-qa.yml'
+      - 'tests/combat-foundation-visual.spec.ts'
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
   workflow_dispatch:
 
 permissions:
