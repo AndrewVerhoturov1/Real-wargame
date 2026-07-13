@@ -1,59 +1,238 @@
-# HANDOFF — Graph v2 typed contracts and subgraphs
+# HANDOFF — иерархические состояния и планы ИИ v1
 
-Updated: 2026-07-13
-Repository: `AndrewVerhoturov1/Real-wargame`
-Base branch: `real-wargame-preview`
-Transfer branch: `transfer/ai-graph-v2-preview-2026-07-13`
-Prepared base SHA: `db80f36edaf018c6a45dfeb7cc0f7caaed00bdb5`
+## Рабочая точка
 
-## Transfer boundary
+- Репозиторий: `AndrewVerhoturov1/Real-wargame`
+- База: `real-wargame-preview`
+- Точный SHA базы: `cc907ca0f48caed418cd76b0f878c8b18fbe71c7`
+- Временная ветка: `feat/ai-state-plan-v1-temp-2026-07-14`
+- Validation-only PR: `#94` в отдельную ветку `validation/ai-state-plan-v1-base-2026-07-14`
+- PR №94 не предназначен для слияния.
+- `real-wargame-preview` и `main` не изменялись.
 
-- The clean transfer tree is based directly on the current preview SHA above.
-- `main` must not be modified.
-- Merge into `real-wargame-preview` only after the transfer PR has green CI and an exact-SHA system-Chrome run with inspected PNGs.
-- If preview moves before merge, rebuild the transfer branch on the new preview head and repeat focused core/build/visual checks.
+Параллельно разрабатывается система стрельбы. Этот этап не добавляет стрельбу, оружие, боеприпасы или результат попадания. Он создаёт общий контракт, через который будущая стрельба сможет добавлять события, Utility-ветви и планы без второго независимого runtime.
 
-## Implemented
+## Цель этапа
 
-- one contract registry for runtime and editor metadata;
-- 36 registered node types;
-- typed parameters, ranges, enums and ports;
-- deterministic Graph v1 → Graph v2 migration with `legacyMetadata` preservation;
-- strict error/warning/info validation;
-- five isolated memory scopes;
-- `WaitForEvent`, `Timeout` and bounded `Retry`;
-- four static subgraphs with explicit input/output bindings;
-- active subgraph snapshot/restore without repeated `start`;
-- visible Russian subgraph selector, cancellation policy and real ports inside the human node panel;
-- incompatible-link prevention with a Russian reason;
-- clickable validation issues and subgraph breadcrumbs;
-- active subgraph path and memory scopes in runtime debug;
-- local engine and CLI compatibility with Graph v1/v2;
-- automatic `shot_nearby → take_cover → restore → move_and_observe` scenario.
+Первый законченный вертикальный срез:
 
-## Visual fixes found before transfer
+```text
+Общее состояние бойца
+→ ограничивает допустимые Utility-ветви
 
-1. The visible selector originally changed only the textarea while the old inspector selector overwrote it. Saving now prioritizes `#stateful-subgraph-id`, and `move_and_observe` remains in the graph and local storage.
-2. The breadcrumb originally repeated the selected subgraph name. It now shows one clean path: `Главный граф → Двигаться и наблюдать`.
+Utility AI
+→ выбирает лучший допустимый план
 
-## Verification completed locally
+AiPlan
+→ удерживает цель и последовательность шагов
 
-- full Graph v2/runtime/events/navigation/attention/perception/editor/docs regression passed;
-- production build passed;
-- system Chromium executed the exact production editor bundle;
-- inspected PNGs:
-  - `graph-v2-subgraph-russian-panel.png`;
-  - `graph-v2-migration-and-errors.png`;
-  - `graph-v2-subgraph-breadcrumb.png`.
+Graph v2 / подграф
+→ исполняет текущий шаг
 
-## Remaining transfer gate
+Action Runtime
+→ владеет реальным движением и cleanup
+```
 
-- publish `transfer/ai-graph-v2-preview-2026-07-13`;
-- open a PR to `real-wargame-preview`;
-- run the manual exact-SHA screenshot workflow, which now includes `tests/ai-graph-v2-editor.spec.ts`;
-- download and inspect the new screenshot and Playwright-log artifacts;
-- merge only after those checks are green.
+## Реализовано
 
-## Manual verification after transfer
+### Состояния
 
-See `GRAPH_V2_TYPED_CONTRACTS_AND_SUBGRAPHS.md`, section «Что проверить вручную после переноса».
+```text
+Normal / Обычное состояние
+├─ Idle / Ожидание
+└─ FollowingOrder / Выполнение приказа
+
+Combat / Бой
+├─ Contact / Контакт
+└─ Suppressed / Подавлен
+```
+
+Основные файлы:
+
+```text
+src/core/ai/state/AiStateMachine.ts
+src/core/ai/state/AiStateRuntime.ts
+```
+
+Есть:
+
+- детерминированные приоритеты переходов;
+- wildcard-переход `* → Suppressed`;
+- минимальное время состояния;
+- устойчивый порог выхода из подавления;
+- сохранение общего родителя при переходе между дочерними состояниями;
+- trace с причиной, trigger и временем симуляции;
+- normalize/clone для старых и новых сцен.
+
+### Планы
+
+Основные файлы:
+
+```text
+src/core/ai/state/AiPlan.ts
+src/core/ai/state/AiPlanRuntime.ts
+src/core/ai/state/AiStatePlanPipeline.ts
+```
+
+Реализованы:
+
+- `FollowMoveOrder`;
+- `TakeCover`;
+- один запуск шага;
+- последовательное прохождение шагов;
+- `retry`, `fail_plan`, `replan`;
+- корректная отмена;
+- новый `plan.id` и `replacesPlanId` при замене;
+- восстановление шага со статусом `running` без повторного `start`.
+
+### Связка с Graph v2 и движением
+
+Изменены:
+
+```text
+src/core/ai/AiGameBridge.ts
+src/core/ai/AiStatefulMoveGameBridge.ts
+src/core/ai/runtime/AiRuntimeSession.ts
+src/core/ai/runtime/AiRuntimeSnapshot.ts
+```
+
+Важное:
+
+- активный план хранится внутри сериализуемого runtime-сеанса;
+- состояние ограничивает допустимые планы;
+- валидный план не пересоздаётся каждый тик;
+- недопустимый план отменяется до выбора следующего;
+- шаг плана вызывается через существующий зарегистрированный подграф;
+- вложенное движение видят контроль маршрута и snapshot;
+- старый cleanup выполняется до запуска нового движения;
+- второй независимый runtime движения не добавлен.
+
+### Интерфейс
+
+Добавлены:
+
+```text
+src/ui/AiStatePlanPanel.ts
+src/ai-state-plan-panel.css
+src/ai-node-editor/state-machine-ui.ts
+src/ai-node-editor/state-machine-ui.css
+```
+
+Изменены:
+
+```text
+src/ui/TacticalWorkspace.ts
+src/ai-node-editor/runtime-debug-overlay.ts
+src/ai-node-editor/main.ts
+```
+
+Пользователь видит по-русски:
+
+- текущее, родительское и предыдущее состояние;
+- причину перехода;
+- активный и предыдущий план;
+- статус и текущий шаг;
+- причины выбора;
+- условия отмены и перестроения;
+- технические id только в раскрываемой диагностике;
+- кнопку «Показать активный подграф» в редакторе.
+
+Панели создаются один раз и обновляют только значения, а не весь DOM на каждом тике.
+
+## Новые автоматические проверки
+
+```text
+npm run state-machine:smoke
+npm run plan-runtime:smoke
+npm run state-plan-scenario:smoke
+```
+
+Сквозной сценарий проверяет:
+
+1. `Idle → FollowingOrder`;
+2. создание `FollowMoveOrder`;
+3. запуск `move_and_observe`;
+4. `enemy_spotted` и переход в `Contact`;
+5. один cancel и один cleanup старого движения;
+6. создание `TakeCover`;
+7. `Contact → Suppressed` без второго движения;
+8. сохранение во время движения;
+9. восстановление того же plan/step без повторного start;
+10. достижение укрытия и завершение плана;
+11. устойчивый `Suppressed → Contact`.
+
+На первой CI-проверке уже подтверждены:
+
+- новые три smoke-сценария;
+- `graph-v2:smoke`;
+- `runtime:smoke`;
+- `runtime-session:smoke`;
+- `workspace:smoke`;
+- `editor:smoke`;
+- `runtime-debug-v2:smoke`;
+- политика веток и Agent Docs Integrity.
+
+Найденные CI-ошибки были совместимыми: `Array.at` при старом target, неиспользуемый параметр и устаревшее ожидание версии экспорта v8 вместо текущей v9. Исправления внесены; полный повторный прогон ещё должен закончиться перед финальным отчётом.
+
+## Визуальная проверка
+
+Подготовлены:
+
+```text
+src/testing/AiStatePlanVisualQaHarness.ts
+tests/ai-state-plan-visual.spec.ts
+```
+
+Тестовый режим активируется только URL-параметром:
+
+```text
+?visualQa=ai-state-plan
+```
+
+Обычная игра его не использует.
+
+Запланированные PNG:
+
+```text
+state-following-order.png
+state-contact-take-cover.png
+state-suppressed.png
+plan-restored-after-load.png
+state-plan-node-editor.png
+```
+
+Chromium пока не запускался. Для запуска требуется отдельное разрешение пользователя согласно `.agents/skills/real-wargame-local-preview/SKILL.md`.
+
+## Документация
+
+Главное объяснение:
+
+```text
+docs/subprojects/ai-single-unit-editor/HIERARCHICAL_STATES_AND_PLANS_V1.md
+```
+
+План реализации:
+
+```text
+docs/superpowers/plans/2026-07-14-ai-state-plan-v1.md
+```
+
+## Следующие действия
+
+1. Завершить полный validation-прогон всех обязательных smoke-команд и production build.
+2. Исправлять только подтверждённые ошибки.
+3. Запустить `npm run docs:sync` и `npm run docs:check`.
+4. Удалить временные patch-скрипты и validation workflow из итогового diff.
+5. Закрыть validation PR №94 без слияния.
+6. Спросить пользователя, проводить ли подготовленную браузерную визуальную проверку.
+7. Не переносить изменения в `real-wargame-preview` без отдельной прямой команды.
+
+## Запрещено при продолжении
+
+- не переносить эту ветку в preview автоматически;
+- не трогать `main`;
+- не смешивать сюда реализацию стрельбы;
+- не создавать второй активный план или второй runtime движения;
+- не запускать повторный `start` восстановленного шага;
+- не выполнять cleanup нового приказа старым ownerToken;
+- не утверждать, что PNG проверены, пока Chromium реально не запущен и изображения лично не осмотрены.
