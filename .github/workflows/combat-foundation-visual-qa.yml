@@ -1,0 +1,97 @@
+name: Combat Foundation Visual QA
+
+run-name: Approved combat visual QA · ${{ github.sha }}
+
+on:
+  push:
+    branches:
+      - tmp/combat-foundation-v1-20260713
+    paths:
+      - 'tests/combat-foundation-visual.spec.ts'
+      - '.github/workflows/combat-foundation-visual-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  visual-qa:
+    name: Capture combat foundation screenshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Publish pending status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'pending',
+              context: 'combat-foundation-visual-qa',
+              description: 'Approved Chromium combat visual QA is running',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - name: Checkout exact tested commit
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Install Playwright runner
+        run: npm install --no-save @playwright/test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Capture combat screenshots with system Chrome
+        id: capture
+        shell: bash
+        run: |
+          set -o pipefail
+          npx playwright test tests/combat-foundation-visual.spec.ts --project=chromium --reporter=line 2>&1 | tee combat-foundation-visual.log
+
+      - name: Upload combat screenshots
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-foundation-visual-screenshots
+          path: artifacts/screenshots/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload visual QA log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-foundation-visual-log
+          path: combat-foundation-visual.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Publish final status
+        if: ${{ always() }}
+        uses: actions/github-script@v7
+        env:
+          CAPTURE_OUTCOME: ${{ steps.capture.outcome }}
+        with:
+          script: |
+            const success = process.env.CAPTURE_OUTCOME === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: success ? 'success' : 'failure',
+              context: 'combat-foundation-visual-qa',
+              description: `Approved Chromium combat visual QA: ${process.env.CAPTURE_OUTCOME}`,
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
