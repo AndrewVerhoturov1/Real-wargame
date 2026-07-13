@@ -72,6 +72,7 @@ test('visually verifies two hostile sides, personal contact and stateful rifle f
   await page.setViewportSize(VIEWPORT);
   await page.addInitScript(() => window.localStorage.clear());
   await page.goto('/');
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/favicon.svg');
 
   const canvas = page.locator('canvas');
   await expect(canvas).toBeVisible();
