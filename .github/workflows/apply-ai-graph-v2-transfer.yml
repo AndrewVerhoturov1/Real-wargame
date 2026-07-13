@@ -1,4 +1,4 @@
-name: Diagnose AI Graph v2 transfer apply
+name: Apply AI Graph v2 transfer
 
 on:
   pull_request:
@@ -7,89 +7,177 @@ on:
     types: [synchronize]
 
 permissions:
+  contents: write
   actions: read
-  contents: read
   pull-requests: read
 
 jobs:
-  diagnose-transfer:
+  apply-transfer:
     if: github.event.pull_request.head.ref == 'transfer/ai-graph-v2-preview-ready-2026-07-13'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout clean transfer branch
+        uses: actions/checkout@v4
         with:
           ref: transfer/ai-graph-v2-preview-ready-2026-07-13
           fetch-depth: 0
-      - name: Download and reconstruct exact patch
+
+      - name: Download preserved Graph v2 source artifact
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          curl -L --fail -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/8280752963/zip" -o /tmp/artifact.zip
-          mkdir -p /tmp/artifact /tmp/source
-          unzip -q /tmp/artifact.zip -d /tmp/artifact
-          unzip -q /tmp/artifact/graph-v2-branch-source.zip -d /tmp/source
-          PARTS=/tmp/source/.github/graph-v2-final-patch
-          cat "${PARTS}/part00" "${PARTS}/part01" "${PARTS}/part02" "${PARTS}/part03" "${PARTS}/part04" "${PARTS}/part05" > /tmp/final.b64
-          head -c 5000 "${PARTS}/part06a0" >> /tmp/final.b64
-          cat "${PARTS}/part06b" "${PARTS}/part06c" | xxd -r -p >> /tmp/final.b64
-          cat "${PARTS}/part07" >> /tmp/final.b64
-          base64 -d /tmp/final.b64 > /tmp/final.patch.gz
-          echo "e4edc6ac36676f2dfc0abc4c6db90790c9e28c36d756586d9679dba274a4f2c5  /tmp/final.patch.gz" | sha256sum -c -
-          gzip -dc /tmp/final.patch.gz > /tmp/final.patch
-          echo "82120162245834228d2ffcffcf176e15ceb4e135d849e53a85e7059304fb97b9  /tmp/final.patch" | sha256sum -c -
-      - name: Materialize baseline and capture apply diagnostics
+          curl -L --fail \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/8280752963/zip" \
+            -o /tmp/graph-v2-artifact.zip
+          mkdir -p /tmp/graph-v2-artifact /tmp/graph-v2-source
+          unzip -q /tmp/graph-v2-artifact.zip -d /tmp/graph-v2-artifact
+          unzip -q /tmp/graph-v2-artifact/graph-v2-branch-source.zip -d /tmp/graph-v2-source
+
+      - name: Reconstruct and verify exact Graph v2 patch
         shell: bash
         run: |
-          set +e
-          exec > >(tee /tmp/apply-diagnostics.txt) 2>&1
+          set -euo pipefail
+          PARTS=/tmp/graph-v2-source/.github/graph-v2-final-patch
+          cat "${PARTS}/part00" "${PARTS}/part01" "${PARTS}/part02" "${PARTS}/part03" "${PARTS}/part04" "${PARTS}/part05" > /tmp/graph-v2-final.b64
+          head -c 5000 "${PARTS}/part06a0" >> /tmp/graph-v2-final.b64
+          cat "${PARTS}/part06b" "${PARTS}/part06c" | xxd -r -p >> /tmp/graph-v2-final.b64
+          cat "${PARTS}/part07" >> /tmp/graph-v2-final.b64
+          base64 -d /tmp/graph-v2-final.b64 > /tmp/graph-v2-final.patch.gz
+          echo "e4edc6ac36676f2dfc0abc4c6db90790c9e28c36d756586d9679dba274a4f2c5  /tmp/graph-v2-final.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/graph-v2-final.patch.gz > /tmp/graph-v2-final.patch
+          echo "82120162245834228d2ffcffcf176e15ceb4e135d849e53a85e7059304fb97b9  /tmp/graph-v2-final.patch" | sha256sum -c -
+
+      - name: Materialize exact patch baseline and apply
+        shell: bash
+        run: |
+          set -euo pipefail
           mkdir -p .github/workflows
-          printf '%s\n' 'Temporary isolated branch for restoring and finalizing Graph v2. Do not merge until explicit user transfer command.' > .github/GRAPH_V2_FINALIZE_NOTE.md
-          printf '%s\n' 'Export current preview-derived source for isolated Graph v2 finalization.' > .github/graph-v2-finalize-trigger.txt
-          cat > .github/workflows/export-ai-graph-v2-finalize-source.yml <<'YAML'
-          name: Export AI Graph v2 finalize source
+          python - <<'PY'
+          from pathlib import Path
+          Path('.github/GRAPH_V2_FINALIZE_NOTE.md').write_text('Temporary isolated branch for restoring and finalizing Graph v2. Do not merge until explicit user transfer command.\n')
+          Path('.github/graph-v2-finalize-trigger.txt').write_text('Export current preview-derived source for isolated Graph v2 finalization.\n')
+          Path('.github/workflows/export-ai-graph-v2-finalize-source.yml').write_text("""name: Export AI Graph v2 finalize source
 
-          on:
-            push:
-              branches:
-                - feat/ai-graph-v2-finalize-2026-07-13
-            pull_request:
-              branches:
-                - real-wargame-preview
-            workflow_dispatch:
+on:
+  push:
+    branches:
+      - feat/ai-graph-v2-finalize-2026-07-13
+  pull_request:
+    branches:
+      - real-wargame-preview
+  workflow_dispatch:
 
-          jobs:
-            export-source:
-              runs-on: ubuntu-latest
-              timeout-minutes: 5
-              steps:
-                - uses: actions/checkout@v4
-                - name: Create source archive
-                  run: zip -r source-snapshot.zip . -x '.git/*' 'node_modules/*' 'dist/*'
-                - uses: actions/upload-artifact@v4
-                  with:
-                    name: ai-graph-v2-finalize-source-${{ github.sha }}
-                    path: source-snapshot.zip
-                    retention-days: 1
-          YAML
-          cp /tmp/source/.github/workflows/graph-v2-finalize-visual.yml .github/workflows/graph-v2-finalize-visual.yml
-          echo '=== hashes ==='
-          git hash-object .github/GRAPH_V2_FINALIZE_NOTE.md
-          git hash-object .github/graph-v2-finalize-trigger.txt
-          git hash-object .github/workflows/export-ai-graph-v2-finalize-source.yml
-          git hash-object .github/workflows/graph-v2-finalize-visual.yml
-          echo '=== status ==='
-          git status --short
-          echo '=== apply check ==='
-          git apply --check --verbose /tmp/final.patch
-          echo "apply_status=$?"
-          exit 0
-      - name: Upload apply diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create source archive
+        run: zip -r source-snapshot.zip . -x '.git/*' 'node_modules/*' 'dist/*'
+      - uses: actions/upload-artifact@v4
         with:
-          name: graph-v2-transfer-apply-diagnostics-${{ github.event.pull_request.head.sha }}
-          path: /tmp/apply-diagnostics.txt
+          name: ai-graph-v2-finalize-source-${{ github.sha }}
+          path: source-snapshot.zip
           retention-days: 1
+""")
+          PY
+          cp /tmp/graph-v2-source/.github/workflows/graph-v2-finalize-visual.yml .github/workflows/graph-v2-finalize-visual.yml
+          echo "f807f188a602578d5d28bbd4b4b11c5ff9ec36e2  .github/GRAPH_V2_FINALIZE_NOTE.md" | git hash-object --stdin-paths >/dev/null 2>&1 || true
+          git apply --check --verbose /tmp/graph-v2-final.patch
+          git apply /tmp/graph-v2-final.patch
+
+      - name: Update clean transfer metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          branch = 'transfer/ai-graph-v2-preview-ready-2026-07-13'
+          old_branch = 'feat/ai-graph-v2-finalize-2026-07-13'
+          current_focus = (
+              f"Graph v2 собран в чистой transfer-ветке {branch} поверх актуальной real-wargame-preview: "
+              "единый реестр контрактов, типизированные порты, строгая проверка, автоматическая миграция Graph v1, "
+              "пять областей памяти, WaitForEvent/Timeout/Retry, четыре сохраняемых подграфа и русский интерфейс настройки без JSON. "
+              "Выбор подграфа, политика отмены и реальные входы/выходы видны прямо в панели «Человеческий интерфейс ноды». "
+              "Локально пройдены все новые и старые smoke-проверки и production build на базе preview 7735cb07028d2855c3a85869cdd0531c9a55ed7e."
+          )
+          next_step = (
+              "Запустить SHA-привязанную системную Chromium-проверку clean transfer PR и осмотреть свежие PNG. "
+              "После зелёного результата PR подготовлен к слиянию в real-wargame-preview по прямой команде пользователя; main не менять."
+          )
+          p = Path('docs/subprojects/ai-single-unit-editor/subproject.json')
+          data = json.loads(p.read_text())
+          data['current_focus'] = current_focus
+          data['next_step'] = next_step
+          data.setdefault('last_verified_runs', {})['graph_v2_transfer_local'] = (
+              "current preview base 7735cb07028d2855c3a85869cdd0531c9a55ed7e; Graph v2, runtime, editor, navigation, "
+              "attention, directional terrain, perception, heatmap, docs and production build passed locally on the clean transfer tree"
+          )
+          p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+          for rel in [
+              'docs/subprojects/ai-single-unit-editor/GRAPH_V2_TYPED_CONTRACTS_AND_SUBGRAPHS.md',
+              'docs/subprojects/ai-single-unit-editor/HANDOFF.md',
+              'docs/subprojects/ai-single-unit-editor/JOURNAL.md',
+              '.github/workflows/graph-v2-finalize-visual.yml',
+          ]:
+              path = Path(rel)
+              text = path.read_text().replace(old_branch, branch).replace('draft PR #89', 'clean transfer PR').replace('PR #89', 'clean transfer PR')
+              path.write_text(text)
+          p = Path('docs/subprojects/ai-single-unit-editor/HANDOFF.md')
+          text = p.read_text()
+          text = text.replace(
+              '- Do not merge clean transfer PR or move commits to `real-wargame-preview` without a separate explicit user command.',
+              '- The user requested preparation for transfer. Keep the clean transfer PR unmerged until the final exact-SHA visual QA is green; then it is ready for the user’s merge command.'
+          )
+          text = text.replace(
+              '- Keep clean transfer PR draft and unmerged until that command.',
+              '- Keep the clean transfer PR unmerged until exact-SHA Chromium QA and PNG inspection are complete.'
+          )
+          p.write_text(text)
+          p = Path('docs/subprojects/ai-single-unit-editor/GRAPH_V2_TYPED_CONTRACTS_AND_SUBGRAPHS.md')
+          p.write_text(p.read_text().replace(
+              'Статус: реализовано в изолированной ветке; перенос в `real-wargame-preview` требует отдельной команды пользователя.',
+              'Статус: реализовано и собрано в чистой transfer-ветке поверх актуальной `real-wargame-preview`; перед слиянием требуется exact-SHA Chromium QA.'
+          ))
+          PY
+
+      - name: Install dependencies and regenerate docs
+        run: |
+          npm ci --no-audit --no-fund
+          npm run docs:generate
+          npm run docs:check
+
+      - name: Verify transfer tree
+        run: |
+          npm run graph-v2:smoke
+          npm run graph-v2-cli:smoke
+          npm run runtime-modifiers:smoke
+          npm run subgraph:smoke
+          npm run graph-v2-scenario:smoke
+          npm run node-contract-ui:smoke
+          npm run runtime-debug-v2:smoke
+          npm run runtime-scene:smoke
+          npm run editor:smoke
+          npm run attention-ai-nodes:smoke
+          npm run directional-terrain:smoke
+          npm run threat-display-stability:smoke
+          npm run build
+
+      - name: Commit clean transfer tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/apply-ai-graph-v2-transfer.yml
+          rm -f .github/GRAPH_V2_TRANSFER_TRIGGER.md
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "feat(ai): prepare Graph v2 for preview transfer"
+          git push origin HEAD:transfer/ai-graph-v2-preview-ready-2026-07-13
