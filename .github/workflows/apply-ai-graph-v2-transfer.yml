@@ -57,38 +57,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .github/workflows
-          python - <<'PY'
-          from pathlib import Path
-          Path('.github/GRAPH_V2_FINALIZE_NOTE.md').write_text('Temporary isolated branch for restoring and finalizing Graph v2. Do not merge until explicit user transfer command.\n')
-          Path('.github/graph-v2-finalize-trigger.txt').write_text('Export current preview-derived source for isolated Graph v2 finalization.\n')
-          Path('.github/workflows/export-ai-graph-v2-finalize-source.yml').write_text("""name: Export AI Graph v2 finalize source
-
-on:
-  push:
-    branches:
-      - feat/ai-graph-v2-finalize-2026-07-13
-  pull_request:
-    branches:
-      - real-wargame-preview
-  workflow_dispatch:
-
-jobs:
-  export-source:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - name: Create source archive
-        run: zip -r source-snapshot.zip . -x '.git/*' 'node_modules/*' 'dist/*'
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ai-graph-v2-finalize-source-${{ github.sha }}
-          path: source-snapshot.zip
-          retention-days: 1
-""")
-          PY
-          cp /tmp/graph-v2-source/.github/workflows/graph-v2-finalize-visual.yml .github/workflows/graph-v2-finalize-visual.yml
-          echo "f807f188a602578d5d28bbd4b4b11c5ff9ec36e2  .github/GRAPH_V2_FINALIZE_NOTE.md" | git hash-object --stdin-paths >/dev/null 2>&1 || true
+          git show b667c203882b21630f221c22c5bc72f4f2bb4db9:.github/GRAPH_V2_FINALIZE_NOTE.md > .github/GRAPH_V2_FINALIZE_NOTE.md
+          git show b667c203882b21630f221c22c5bc72f4f2bb4db9:.github/graph-v2-finalize-trigger.txt > .github/graph-v2-finalize-trigger.txt
+          git show b667c203882b21630f221c22c5bc72f4f2bb4db9:.github/workflows/export-ai-graph-v2-finalize-source.yml > .github/workflows/export-ai-graph-v2-finalize-source.yml
+          git show b667c203882b21630f221c22c5bc72f4f2bb4db9:.github/workflows/graph-v2-finalize-visual.yml > .github/workflows/graph-v2-finalize-visual.yml
+          test "$(git hash-object .github/GRAPH_V2_FINALIZE_NOTE.md)" = "f807f188a602578d5d28bbd4b4b11c5ff9ec36e2"
+          test "$(git hash-object .github/graph-v2-finalize-trigger.txt)" = "56a24e4094f9c604db3714c9133095de53e5d333"
+          test "$(git hash-object .github/workflows/export-ai-graph-v2-finalize-source.yml)" = "6785738f45fa76298adb844d507547e943023c9a"
+          test "$(git hash-object .github/workflows/graph-v2-finalize-visual.yml)" = "f62fd41cc9775fe63bd63bfbadbba70bdf48c51e"
           git apply --check --verbose /tmp/graph-v2-final.patch
           git apply /tmp/graph-v2-final.patch
 
