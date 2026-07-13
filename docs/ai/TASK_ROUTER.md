@@ -18,7 +18,8 @@ Use this table after reading `docs/ai/WEB_CHAT_START.md`. Read only the row that
 | Local launch, screenshot or visual verification | relevant subproject | `real-wargame-local-preview` | launcher, workflow, Playwright config and scenario | real browser, fresh artifact, SHA match, PNG inspection |
 | GitHub workflow or branch policy | `github-collaboration` | GitHub plugin skill | required rules, workflow, PR template | workflow syntax, policy run, docs check |
 | Agent documentation or navigation | `github-collaboration` | none | canonical JSON, generator and checker | `docs:smoke`, `docs:generate`, clean diff, `docs:check` |
-| Product concept, commander AI or future mechanics | no code subproject unless implementation starts | none | relevant chapter routes in master project book and `ideas/` | planning review; no code claim |
+| Product philosophy, publisher pitch or checking a mechanic against the game vision | no code subproject unless implementation starts | none | `docs/product/CORE_GAME_PRINCIPLES.md` first, then relevant master-book chapter and `ideas/` | planning review; no code claim |
+| Product concept, commander AI or future mechanics | no code subproject unless implementation starts | none | `docs/product/CORE_GAME_PRINCIPLES.md`, relevant chapter routes in master project book and `ideas/` | planning review; no code claim |
 
 ## Expansion rule
 
