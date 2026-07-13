@@ -26,3 +26,5 @@
   display: grid;
   gap: 5px;
 }
+.stateful-subgraph-contract{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;padding:9px;border:1px solid rgba(91,163,255,.28);border-radius:8px;background:rgba(20,32,48,.72)}
+.stateful-subgraph-contract strong{color:#cfe5ff}.stateful-subgraph-contract ul{margin:2px 0 0;padding-left:18px;font-size:12px}.stateful-subgraph-contract li{margin:3px 0}

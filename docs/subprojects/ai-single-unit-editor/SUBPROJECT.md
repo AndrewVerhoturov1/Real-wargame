@@ -205,3 +205,19 @@ Task-specific routes are in:
 .agents/skills/real-wargame-ai-runtime/SKILL.md
 docs/ai/TASK_ROUTER.md
 ```
+
+## Graph v2 typed contracts and reusable subgraphs
+
+The editor and runtime share one node contract registry. Graph v1 loads through deterministic in-memory migration, while Graph v2 adds typed ports, strict validation, explicit memory scopes and reusable subgraphs.
+
+```text
+src/core/ai/contracts/AiPortTypes.ts
+src/core/ai/contracts/AiNodeContract.ts
+src/core/ai/contracts/AiNodeContractRegistry.ts
+src/core/ai/contracts/AiGraphMigration.ts
+src/core/ai/contracts/AiMemoryScopes.ts
+src/core/ai/contracts/AiSubgraphRegistry.ts
+src/core/ai/runtime/AiSubgraphRuntime.ts
+```
+
+The user configures contracts and subgraphs through the Russian editor UI. Normal use never requires editing graph JSON. Subgraph input/output bindings are explicit, local memory is isolated, active nested runtime is serializable, and cancellation performs cleanup exactly once.

@@ -93,6 +93,13 @@ try {
   assert(String(statefulEvaluation.runtimeNoteRu).includes('Выполняется/Ожидает'), 'evaluate-once должен честно направить в живой runtime');
   console.log('[OK] stateful graph валидируется, а evaluate-once честно останавливается на границе длительного поведения.');
 
+  const graphV2Validation = await requestJson('POST', '/ai/graph/validate', { graph: createGraphV2SmokeGraph() });
+  writeArtifact('07-graph-v2-validation.json', graphV2Validation);
+  assert(graphV2Validation.ok === true, 'Graph v2 должен пройти local engine validation');
+  assert(graphV2Validation.validation.valid === true, 'Graph v2 validation.valid должен быть true');
+  assert(graphV2Validation.statefulPreview === true, 'Subgraph должен считаться границей stateful preview');
+  console.log('[OK] Local engine принимает Graph v2 и честно помечает подграф как stateful boundary.');
+
   console.log('');
   console.log('[GOTOVO] Local AI engine smoke passed.');
   console.log(`[INFO] JSON-otchety zapisany v: ${artifactDir}`);
@@ -125,6 +132,24 @@ function createUtilitySmokeGraph() {
       node('has_order', 'FlagCheck', [], 'Has order?', 'Есть приказ?', { flagKey: 'hasOrder', expected: true }),
       node('score_morale', 'ParameterScore', [], 'Morale score', 'Оценка морали', { sourceKey: 'morale', direction: 'positive', weight: 1 }),
       node('continue_order', 'SetAction', [], 'Continue order', 'Продолжать приказ', { action: 'continue_order', targetKey: 'order_target_position' }),
+    ],
+  };
+}
+
+function createGraphV2SmokeGraph() {
+  return {
+    version: 2,
+    id: 'graph_v2_engine_smoke',
+    name: 'Graph v2 engine smoke',
+    nameRu: 'Проверка Graph v2 в движке',
+    rootNodeId: 'root',
+    blackboardSchema: [],
+    blackboardDefaults: {},
+    subgraphRefs: ['take_cover'],
+    nodes: [
+      node('root', 'Root', ['branch'], 'Start', 'Старт'),
+      node('branch', 'ActionBranch', ['subgraph'], 'Branch', 'Ветвь'),
+      { ...node('subgraph', 'Subgraph', [], 'Take cover', 'Занять укрытие', { subgraphId: 'take_cover', cancelPolicy: 'cancel_child' }), inputBindings: { cover_position: { source: 'literal', value: { x: 2, y: 2 } } } },
     ],
   };
 }

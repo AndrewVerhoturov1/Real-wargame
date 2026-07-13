@@ -60,6 +60,12 @@ interface RuntimeDebugPayload {
   readonly activeNodeId?: string;
   readonly activeNodeName?: string;
   readonly activeNodeNameRu?: string;
+  readonly activeSubgraphId?: string;
+  readonly activeSubgraphName?: string;
+  readonly activeSubgraphNameRu?: string;
+  readonly activeSubgraphPath?: string;
+  readonly memoryScopeKeys?: Readonly<Record<string, readonly string[]>>;
+  readonly memoryScopeKeyCounts?: Readonly<Record<string, number>>;
   readonly elapsedMs?: number;
   readonly cancellationReason?: string;
   readonly cancellationReasonRu?: string;
@@ -229,6 +235,12 @@ function renderDebugPanel(payload: RuntimeDebugPayload | null): void {
   const activeRows = activeNode
     ? `<div><dt>Активная нода</dt><dd>${escapeHtml(activeNode)}</dd></div>${typeof payload.elapsedMs === 'number' ? `<div><dt>${escapeHtml(elapsedLabel(status))}</dt><dd>${escapeHtml(formatElapsed(payload.elapsedMs))}</dd></div>` : ''}`
     : '';
+  const activeSubgraph = payload.activeSubgraphNameRu ?? payload.activeSubgraphName;
+  const subgraphRows = activeSubgraph
+    ? `<div><dt>Активный подграф</dt><dd>${escapeHtml(activeSubgraph)}</dd></div>
+       <div><dt>Путь выполнения</dt><dd>${escapeHtml(payload.activeSubgraphPath ?? payload.activeSubgraphId ?? '')}</dd></div>`
+    : '';
+  const memoryRows = renderMemoryScopeRows(payload);
   const cancellation = payload.cancellationReasonRu ?? payload.cancellationReason;
   const cancellationRow = cancellation ? `<div><dt>Причина отмены</dt><dd>${escapeHtml(cancellation)}</dd></div>` : '';
   const reactiveRows = payload.reactiveAbort
@@ -247,6 +259,8 @@ function renderDebugPanel(payload: RuntimeDebugPayload | null): void {
       <div><dt>Победила</dt><dd>${escapeHtml(payload.selectedBranchNameRu ?? payload.selectedBranchName)}</dd></div>
       <div><dt>Состояние</dt><dd class="runtime-status ${escapeHtml(status)}">${escapeHtml(runtimeStatusLabel(status))}</dd></div>
       ${activeRows}
+      ${subgraphRows}
+      ${memoryRows}
       ${cancellationRow}
       ${reactiveRows}
       <div><dt>Итог</dt><dd>${escapeHtml(payload.explanationRu ?? payload.explanation)}</dd></div>
@@ -298,6 +312,12 @@ function readDebugPayload(): RuntimeDebugPayload | null {
       activeNodeId: typeof parsed.activeNodeId === 'string' ? parsed.activeNodeId : undefined,
       activeNodeName: typeof parsed.activeNodeName === 'string' ? parsed.activeNodeName : undefined,
       activeNodeNameRu: typeof parsed.activeNodeNameRu === 'string' ? parsed.activeNodeNameRu : undefined,
+      activeSubgraphId: typeof parsed.activeSubgraphId === 'string' ? parsed.activeSubgraphId : undefined,
+      activeSubgraphName: typeof parsed.activeSubgraphName === 'string' ? parsed.activeSubgraphName : undefined,
+      activeSubgraphNameRu: typeof parsed.activeSubgraphNameRu === 'string' ? parsed.activeSubgraphNameRu : undefined,
+      activeSubgraphPath: typeof parsed.activeSubgraphPath === 'string' ? parsed.activeSubgraphPath : undefined,
+      memoryScopeKeys: normalizeMemoryScopeKeys(parsed.memoryScopeKeys),
+      memoryScopeKeyCounts: normalizeMemoryScopeCounts(parsed.memoryScopeKeyCounts),
       elapsedMs: typeof parsed.elapsedMs === 'number' ? parsed.elapsedMs : undefined,
       cancellationReason: typeof parsed.cancellationReason === 'string' ? parsed.cancellationReason : undefined,
       cancellationReasonRu: typeof parsed.cancellationReasonRu === 'string' ? parsed.cancellationReasonRu : undefined,
@@ -318,6 +338,41 @@ function readDebugPayload(): RuntimeDebugPayload | null {
   } catch {
     return null;
   }
+}
+
+const MEMORY_SCOPE_LABELS_RU: Readonly<Record<string, string>> = {
+  persistentSoldierMemory: 'Постоянная память бойца',
+  runtimeSessionMemory: 'Память runtime session',
+  activeStateMemory: 'Память активного состояния',
+  subgraphLocalMemory: 'Локальная память подграфа',
+  nodeLocalState: 'Локальное состояние ноды',
+};
+
+function renderMemoryScopeRows(payload: RuntimeDebugPayload): string {
+  const keys = payload.memoryScopeKeys ?? {};
+  const counts = payload.memoryScopeKeyCounts ?? {};
+  return Object.entries(MEMORY_SCOPE_LABELS_RU).map(([scope, label]) => {
+    const scopeKeys = keys[scope] ?? [];
+    const count = counts[scope] ?? scopeKeys.length;
+    const detail = scopeKeys.length > 0 ? ` · ${scopeKeys.join(', ')}` : '';
+    return `<div><dt>${escapeHtml(label)}</dt><dd>${count}${escapeHtml(detail)}</dd></div>`;
+  }).join('');
+}
+
+function normalizeMemoryScopeKeys(value: unknown): Readonly<Record<string, readonly string[]>> | undefined {
+  if (!isRecord(value)) return undefined;
+  const result: Record<string, readonly string[]> = {};
+  for (const [scope, keys] of Object.entries(value)) {
+    if (Array.isArray(keys)) result[scope] = keys.filter((key): key is string => typeof key === 'string');
+  }
+  return result;
+}
+
+function normalizeMemoryScopeCounts(value: unknown): Readonly<Record<string, number>> | undefined {
+  if (!isRecord(value)) return undefined;
+  const result: Record<string, number> = {};
+  for (const [scope, count] of Object.entries(value)) if (typeof count === 'number' && Number.isFinite(count)) result[scope] = count;
+  return result;
 }
 
 function normalizeReactiveAbort(value: unknown): RuntimeReactiveAbort | undefined {

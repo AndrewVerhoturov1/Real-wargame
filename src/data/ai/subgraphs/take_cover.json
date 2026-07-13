@@ -1,0 +1,46 @@
+{
+  "version": 2,
+  "id": "subgraph_take_cover",
+  "name": "Take Cover",
+  "nameRu": "Занять укрытие",
+  "rootNodeId": "root",
+  "blackboardSchema": [],
+  "blackboardDefaults": {},
+  "subgraphRefs": [],
+  "nodes": [
+    {
+      "id": "root",
+      "type": "Root",
+      "children": [
+        "branch"
+      ]
+    },
+    {
+      "id": "branch",
+      "type": "ActionBranch",
+      "children": [
+        "sequence"
+      ]
+    },
+    {
+      "id": "sequence",
+      "type": "SequenceWithMemory",
+      "children": [
+        "move_to_cover"
+      ]
+    },
+    {
+      "id": "move_to_cover",
+      "type": "MoveToBlackboardPosition",
+      "children": [],
+      "parameters": {
+        "targetKey": "cover_position",
+        "acceptanceRadiusCells": 0.2,
+        "timeoutSeconds": 15,
+        "stuckTimeoutSeconds": 2.5,
+        "minimumProgressCells": 0.05,
+        "abortOnTargetLost": true
+      }
+    }
+  ]
+}

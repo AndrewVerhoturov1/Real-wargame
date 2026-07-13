@@ -1,0 +1,55 @@
+{
+  "version": 2,
+  "id": "subgraph_move_and_observe",
+  "name": "Move and Observe",
+  "nameRu": "Двигаться и наблюдать",
+  "rootNodeId": "root",
+  "blackboardSchema": [],
+  "blackboardDefaults": {},
+  "subgraphRefs": [],
+  "nodes": [
+    {
+      "id": "root",
+      "type": "Root",
+      "children": [
+        "branch"
+      ]
+    },
+    {
+      "id": "branch",
+      "type": "ActionBranch",
+      "children": [
+        "sequence"
+      ]
+    },
+    {
+      "id": "sequence",
+      "type": "SequenceWithMemory",
+      "children": [
+        "observe",
+        "move"
+      ]
+    },
+    {
+      "id": "observe",
+      "type": "SetAttentionMode",
+      "children": [],
+      "parameters": {
+        "mode": "observe"
+      }
+    },
+    {
+      "id": "move",
+      "type": "MoveToBlackboardPosition",
+      "children": [],
+      "parameters": {
+        "targetKey": "destination",
+        "acceptanceRadiusCells": 0.2,
+        "timeoutSeconds": 20,
+        "stuckTimeoutSeconds": 2.5,
+        "minimumProgressCells": 0.05,
+        "abortOnTargetLost": true
+      }
+    }
+  ]
+}
