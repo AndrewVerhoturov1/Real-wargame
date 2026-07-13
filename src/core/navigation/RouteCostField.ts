@@ -1,25 +1,20 @@
 import type { TacticalMap } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
 import { buildNavigationGrid } from '../pathfinding/GridNavigation';
+import {
+  getDirectionalTerrainStaticGrid,
+  sampleDirectionalSlope,
+  type DirectionalTerrainStaticGrid,
+} from '../terrain/DirectionalTerrainStaticGrid';
+import {
+  buildThreatDirectionField,
+  threatSectorBearingRadians,
+  type ThreatDirectionField,
+} from '../terrain/ThreatDirectionField';
 import type { NavigationProfile, NavigationTerrainCostKey } from './NavigationProfiles';
 
 const mapIdentityByMap = new WeakMap<TacticalMap, number>();
 let nextMapIdentity = 1;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 export interface TacticalRouteKnownThreat {
   readonly id: string;
@@ -43,6 +38,8 @@ export interface TacticalRouteKnownThreat {
 
 export interface TacticalRouteContext {
   readonly unitId: string;
+  readonly originX?: number;
+  readonly originY?: number;
   readonly knowledgeRevision: number;
   readonly knownThreats: readonly TacticalRouteKnownThreat[];
   readonly exposureRevision?: number;
@@ -52,6 +49,7 @@ export interface TacticalRouteContext {
 export interface RouteCostAvailability {
   readonly danger: boolean;
   readonly exposure: boolean;
+  readonly directionalTerrain: boolean;
   readonly cover: boolean;
   readonly enemyDistance: boolean;
   readonly territory: boolean;
@@ -74,6 +72,11 @@ export interface RouteCostCellBreakdown {
   readonly slopeCost: number;
   readonly dangerCost: number;
   readonly exposureCost: number;
+  readonly directionalTerrainCost: number;
+  readonly directionalSlope: number;
+  readonly crestStrength: number;
+  readonly valleyStrength: number;
+  readonly silhouettePotential: number;
   readonly coverAdjustment: number;
   readonly enemyDistanceCost: number;
   readonly territoryCost: number;
@@ -90,14 +93,19 @@ interface StaticRouteCostField {
   readonly terrainCost: Float32Array;
   readonly slopeCost: Float32Array;
   readonly coverAdjustment: Float32Array;
+  readonly directionalTerrain: DirectionalTerrainStaticGrid;
 }
 
 interface DynamicRouteCostField {
   readonly key: string;
   readonly dangerCost: Float32Array;
   readonly exposureCost: Float32Array;
+  readonly directionalTerrainCost: Float32Array;
+  readonly directionalSlope: Float32Array;
   readonly enemyDistanceCost: Float32Array;
   readonly territoryCost: Float32Array;
+  readonly primaryThreatSector: number;
+  readonly threatSectorWeights: Float32Array;
   readonly availability: RouteCostAvailability;
 }
 
@@ -113,6 +121,13 @@ export interface RouteCostFields {
   readonly slopeCost: Float32Array;
   readonly dangerCost: Float32Array;
   readonly exposureCost: Float32Array;
+  readonly directionalTerrainCost: Float32Array;
+  readonly directionalSlope: Float32Array;
+  readonly crestStrength: Uint8Array;
+  readonly valleyStrength: Uint8Array;
+  readonly silhouettePotential: Uint8Array;
+  readonly primaryThreatSector: number;
+  readonly threatSectorWeights: Float32Array;
   readonly coverAdjustment: Float32Array;
   readonly enemyDistanceCost: Float32Array;
   readonly territoryCost: Float32Array;
@@ -182,13 +197,15 @@ export function getRouteCostFields(
   const dynamicKey = [
     staticKey,
     tacticalContext?.unitId ?? 'none',
+    quantizedCoordinate(tacticalContext?.originX),
+    quantizedCoordinate(tacticalContext?.originY),
     knowledgeRevision,
     tacticalContext?.exposureRevision ?? 0,
     tacticalContext?.territoryRevision ?? 0,
   ].join(':');
   let dynamicField = cache.dynamicFields.get(dynamicKey);
   if (!dynamicField) {
-    dynamicField = buildDynamicField(map, profile, tacticalContext, dynamicKey, cache);
+    dynamicField = buildDynamicField(map, profile, tacticalContext, staticField, dynamicKey, cache);
     cache.dynamicFields.set(dynamicKey, dynamicField);
     trimCache(cache.dynamicFields, 12);
   }
@@ -208,6 +225,7 @@ export function getRouteCostFields(
       + staticField.slopeCost[index]
       + dynamicField.dangerCost[index]
       + dynamicField.exposureCost[index]
+      + dynamicField.directionalTerrainCost[index]
       + staticField.coverAdjustment[index]
       + dynamicField.enemyDistanceCost[index]
       + dynamicField.territoryCost[index]);
@@ -225,6 +243,13 @@ export function getRouteCostFields(
     slopeCost: staticField.slopeCost,
     dangerCost: dynamicField.dangerCost,
     exposureCost: dynamicField.exposureCost,
+    directionalTerrainCost: dynamicField.directionalTerrainCost,
+    directionalSlope: dynamicField.directionalSlope,
+    crestStrength: staticField.directionalTerrain.crestStrength,
+    valleyStrength: staticField.directionalTerrain.valleyStrength,
+    silhouettePotential: staticField.directionalTerrain.silhouettePotential,
+    primaryThreatSector: dynamicField.primaryThreatSector,
+    threatSectorWeights: dynamicField.threatSectorWeights,
     coverAdjustment: staticField.coverAdjustment,
     enemyDistanceCost: dynamicField.enemyDistanceCost,
     territoryCost: dynamicField.territoryCost,
@@ -257,6 +282,11 @@ export function readRouteCostCell(
     slopeCost: fields.slopeCost[index],
     dangerCost: fields.dangerCost[index],
     exposureCost: fields.exposureCost[index],
+    directionalTerrainCost: fields.directionalTerrainCost[index],
+    directionalSlope: fields.directionalSlope[index],
+    crestStrength: fields.crestStrength[index] / 255,
+    valleyStrength: fields.valleyStrength[index] / 255,
+    silhouettePotential: fields.silhouettePotential[index] / 255,
     coverAdjustment: fields.coverAdjustment[index],
     enemyDistanceCost: fields.enemyDistanceCost[index],
     territoryCost: fields.territoryCost[index],
@@ -286,6 +316,7 @@ function buildStaticField(
   cache: RouteCostFieldCache,
 ): StaticRouteCostField {
   const grid = buildNavigationGrid(map);
+  const directionalTerrain = getDirectionalTerrainStaticGrid(map);
   const count = map.width * map.height;
   const passable = new Uint8Array(count);
   const terrainKeys = new Array<NavigationTerrainCostKey>(count);
@@ -309,37 +340,69 @@ function buildStaticField(
     coverAdjustment[index] = navigation.passable ? -profile.coverWeight * concealment : 0;
   }
 
-  return { key, width: map.width, height: map.height, passable, terrainKeys, terrainCost, slopeCost, coverAdjustment };
+  return {
+    key,
+    width: map.width,
+    height: map.height,
+    passable,
+    terrainKeys,
+    terrainCost,
+    slopeCost,
+    coverAdjustment,
+    directionalTerrain,
+  };
 }
 
 function buildDynamicField(
   map: TacticalMap,
   profile: NavigationProfile,
   tacticalContext: TacticalRouteContext | undefined,
+  staticField: StaticRouteCostField,
   key: string,
   cache: RouteCostFieldCache,
 ): DynamicRouteCostField {
   const count = map.width * map.height;
   const dangerCost = new Float32Array(count);
   const exposureCost = new Float32Array(count);
+  const directionalTerrainCost = new Float32Array(count);
+  const directionalSlope = new Float32Array(count);
   const enemyDistanceCost = new Float32Array(count);
   const territoryCost = new Float32Array(count);
   const knownThreats = tacticalContext?.knownThreats ?? [];
+  const hasOrigin = Number.isFinite(tacticalContext?.originX) && Number.isFinite(tacticalContext?.originY);
+  const threatField = hasOrigin
+    ? buildThreatDirectionField(tacticalContext?.originX ?? 0, tacticalContext?.originY ?? 0, knownThreats)
+    : emptyThreatDirectionField();
+  const directionalAvailable = threatField.totalWeight > 1e-6 && hasDirectionalTerrainWeights(profile);
 
   cache.diagnostics.dynamicCostBuildCount += 1;
   cache.diagnostics.fullMapScanCount += 1;
 
-  if (knownThreats.length > 0 && profile.dangerWeight > 0) {
+  if ((knownThreats.length > 0 && profile.dangerWeight > 0) || directionalAvailable) {
     for (let y = 0; y < map.height; y += 1) {
       for (let x = 0; x < map.width; x += 1) {
         const index = y * map.width + x;
+        if (!staticField.passable[index]) continue;
         const centerX = x + 0.5;
         const centerY = y + 0.5;
-        let knownDanger = 0;
-        for (const threat of knownThreats) {
-          knownDanger += evaluateKnownThreatAt(threat, centerX, centerY);
+
+        if (knownThreats.length > 0 && profile.dangerWeight > 0) {
+          let knownDanger = 0;
+          for (const threat of knownThreats) knownDanger += evaluateKnownThreatAt(threat, centerX, centerY);
+          dangerCost[index] = profile.dangerWeight * Math.min(4, knownDanger);
         }
-        dangerCost[index] = profile.dangerWeight * Math.min(4, knownDanger);
+
+        if (directionalAvailable) {
+          const evaluated = evaluateDirectionalTerrainAt(
+            staticField.directionalTerrain,
+            profile,
+            threatField,
+            x,
+            y,
+          );
+          directionalTerrainCost[index] = evaluated.cost;
+          directionalSlope[index] = evaluated.primarySlope;
+        }
       }
     }
   }
@@ -348,16 +411,81 @@ function buildDynamicField(
     key,
     dangerCost,
     exposureCost,
+    directionalTerrainCost,
+    directionalSlope,
     enemyDistanceCost,
     territoryCost,
+    primaryThreatSector: threatField.primarySector,
+    threatSectorWeights: threatField.normalizedSectorWeights,
     availability: {
       danger: Boolean(tacticalContext),
       exposure: false,
+      directionalTerrain: directionalAvailable,
       cover: true,
       enemyDistance: false,
       territory: false,
     },
   };
+}
+
+function evaluateDirectionalTerrainAt(
+  terrain: DirectionalTerrainStaticGrid,
+  profile: NavigationProfile,
+  threatField: ThreatDirectionField,
+  x: number,
+  y: number,
+): { cost: number; primarySlope: number } {
+  const index = y * terrain.width + x;
+  const crest = terrain.crestStrength[index] / 255;
+  const valley = terrain.valleyStrength[index] / 255;
+  const silhouette = terrain.silhouettePotential[index] / 255;
+  const weights = profile.directionalTerrain;
+  let weightedCost = 0;
+  let criticalCost = 0;
+  let primarySlope = 0;
+
+  for (let sector = 0; sector < threatField.normalizedSectorWeights.length; sector += 1) {
+    const sectorWeight = threatField.normalizedSectorWeights[sector];
+    if (sectorWeight <= 1e-6) continue;
+    const slope = sampleDirectionalSlope(terrain, x, y, threatSectorBearingRadians(sector));
+    if (sector === threatField.primarySector) primarySlope = slope;
+    const forward = Math.max(0, slope);
+    const reverse = Math.max(0, -slope);
+    const sectorCost = forward * weights.forwardSlopePenalty
+      - reverse * weights.reverseSlopePreference
+      + crest * weights.crestPenalty
+      + silhouette * weights.silhouettePenalty
+      - valley * weights.valleyPreference;
+    weightedCost += sectorCost * sectorWeight;
+    const significance = Math.min(1, sectorWeight * 4);
+    criticalCost = Math.max(criticalCost, Math.max(0, sectorCost) * significance);
+  }
+
+  return {
+    cost: Math.max(-0.95, weightedCost + criticalCost * weights.criticalSectorMultiplier),
+    primarySlope,
+  };
+}
+
+function emptyThreatDirectionField(): ThreatDirectionField {
+  return {
+    sectorWeights: new Float32Array(8),
+    normalizedSectorWeights: new Float32Array(8),
+    totalWeight: 0,
+    primarySector: -1,
+    primaryBearingRadians: 0,
+    strongestSectorShare: 0,
+    contributingThreatCount: 0,
+  };
+}
+
+function hasDirectionalTerrainWeights(profile: NavigationProfile): boolean {
+  const value = profile.directionalTerrain;
+  return value.forwardSlopePenalty > 0
+    || value.reverseSlopePreference > 0
+    || value.crestPenalty > 0
+    || value.silhouettePenalty > 0
+    || value.valleyPreference > 0;
 }
 
 function resolveTerrainKey(
@@ -460,6 +588,10 @@ function evaluateKnownThreatAt(threat: TacticalRouteKnownThreat, x: number, y: n
   const distance = Math.hypot(dx, dy);
   if (distance > radius) return 0;
   return confidence * intensity * Math.max(0.15, 1 - distance / radius);
+}
+
+function quantizedCoordinate(value: number | undefined): string {
+  return Number.isFinite(value) ? (Math.round((value ?? 0) * 4) / 4).toFixed(2) : 'none';
 }
 
 function getMapIdentity(map: TacticalMap): number {
