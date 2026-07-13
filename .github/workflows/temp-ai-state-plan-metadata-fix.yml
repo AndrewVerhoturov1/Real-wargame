@@ -1,0 +1,44 @@
+name: Temporary AI state-plan metadata fix
+
+on:
+  push:
+    branches:
+      - feat/ai-state-plan-v1-temp-2026-07-14
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[state-plan-metadata-fixed]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Fix canonical metadata and regenerate docs
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile } from 'node:fs/promises';
+          const path = 'docs/subprojects/ai-single-unit-editor/subproject.json';
+          const data = JSON.parse(await readFile(path, 'utf8'));
+          data.last_verified_commit = '58ea1b5755ef3162f1778a937d49d33a0430d450';
+          await writeFile(path, `${JSON.stringify(data, null, 2)}\n`);
+          NODE
+          npm run docs:generate
+      - name: Commit metadata and generated docs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs
+          if git diff --cached --quiet; then
+            echo "Metadata already synchronized."
+            exit 0
+          fi
+          git commit -m "docs: fix and synchronize state-plan metadata [state-plan-metadata-fixed]"
+          git push origin HEAD:feat/ai-state-plan-v1-temp-2026-07-14
