@@ -4,7 +4,7 @@
 
 **Goal:** Keep a state-plan movement order active until arrival and replace overlapping AI diagnostics with two compact mutually exclusive collapsible panels.
 
-**Architecture:** Route monitoring must resolve target availability in the same Blackboard scope that owns the active movement action, including nested subgraph-local memory. Editor diagnostics share one absolute dock; each diagnostic surface remains independently rendered but mounts inside a reusable `<details>` card, and opening one card closes the other.
+**Architecture:** Route monitoring resolves target availability in the Blackboard scope that owns the active movement action, including nested subgraph-local memory. Editor diagnostics share one absolute dock; each diagnostic surface mounts inside a reusable `<details>` card, and opening one card closes the other. The editor itself is Graph v2-only: old stored/imported values are converted at the load boundary and Graph v1 is never shown as a user mode.
 
 **Tech Stack:** TypeScript, Vite, existing smoke scripts, Playwright, DOM/CSS, GitHub Actions.
 
@@ -20,65 +20,35 @@
 
 ### Task 1: Preserve nested movement targets
 
-**Files:**
-- Create: `scripts/ai_plan_move_scope_smoke.ts`
-- Create: `scripts/ai_plan_move_scope_smoke.mjs`
-- Modify: `package.json`
-- Modify: `src/core/ai/AiStatefulMoveGameBridge.ts`
-
-**Interfaces:**
-- Consumes: `AiGraphExecutionState`, `AiSubgraphExecutionState.localBlackboard`, `MoveToBlackboardPositionActionState.targetKey`.
-- Produces: route status input whose `targetAvailable` value is resolved from the active action's actual Blackboard scope.
-
-- [x] **Step 1: Write the failing test**
-
-Created a nested subgraph execution state where `destination` exists only in `AiSubgraphExecutionState.localBlackboard`, while session-level memory intentionally has no `destination`. The test calls `updateSelectedRouteStatus` and requires the route to remain `moving` without cancellation.
-
-- [x] **Step 2: Run test to verify it fails**
-
-The focused CI log failed with `actual: target_lost`, `expected: moving`, confirming that the bridge incorrectly read only session-level memory.
-
-- [x] **Step 3: Write minimal implementation**
-
-The active-move snapshot traversal now carries the current Blackboard scope. Descending through a subgraph switches to `activeData.localBlackboard`, and target availability is evaluated in the scope that owns the action.
-
-- [x] **Step 4: Run test to verify it passes**
-
-The one-time executor completed `move-bridge:smoke`, `state-plan-scenario:smoke`, and the production build before creating commit `426cd63e5d8bd3594ad6a00881dfbd18fe9e20de`.
-
-- [x] **Step 5: Commit**
-
-Commit: `fix: preserve nested plan movement targets`.
+- [x] Added a nested subgraph regression where `destination` exists only in `AiSubgraphExecutionState.localBlackboard`.
+- [x] Confirmed the old code returned `target_lost` instead of `moving`.
+- [x] Carried the active Blackboard scope through nested subgraph traversal.
+- [x] Passed `move-bridge:smoke`, `state-plan-scenario:smoke`, and production build.
+- [x] Implementation commit: `426cd63e5d8bd3594ad6a00881dfbd18fe9e20de`.
 
 ### Task 2: Put diagnostics in one collapsible dock
 
-**Files:**
-- Create: `src/ai-node-editor/debug-panel-dock.ts`
-- Create: `src/ai-node-editor/debug-panel-dock.css`
-- Modify: `src/ai-node-editor/state-machine-ui.ts`
-- Modify: `src/ai-node-editor/runtime-debug-overlay.ts`
-- Modify: `tests/ai-state-plan-visual.spec.ts`
+- [x] Added browser assertions for `Состояние и план` and `След ИИ` cards.
+- [x] Confirmed the old independent panels failed the shared-dock requirement.
+- [x] Added `ensureAiDebugPanelCard`, mutual collapse, remembered open card, and internal scrolling.
+- [x] Passed editor, lab, movement, state-plan, and build checks before browser QA.
+- [x] Implementation commit: `f0bf614d5c373cc5fa81fa263e8de4e7ef74998c`.
 
-**Interfaces:**
-- Produces: `ensureAiDebugPanelCard(workspace, options)` returning a stable `<details>` element and scrollable content host.
-- Behavior: only one diagnostics card may be open at once; open card identity persists in localStorage.
+### Task 3: Remove Graph v1 from the editor
 
-- [x] **Step 1: Write the failing browser assertions**
+- [x] Added `ai_node_editor_v2_only_smoke.mjs`; it initially failed because the bundled graph was version 1.
+- [x] Removed the Graph version badge, migration button, Graph v1 warning, and `migrateGraphFromUi`.
+- [x] Changed `EditableAiGraph.version` to the literal `2`.
+- [x] Converted the bundled starter graph to Graph v2 with schema and subgraph references.
+- [x] Stored and imported old data is converted automatically by `migrateAiGraphToV2`; Graph v1 is not exposed in the interface.
+- [x] Updated the node-contract UI regression to require absence of Graph v1 controls.
+- [x] Passed editor, Graph v2 contracts, node-contract UI, movement, state-plan, and production build checks.
+- [x] Implementation and temporary-executor cleanup commit: `2a8f4bcbe3f29aea6cf55ad01f64a56357972722`.
 
-The editor scenario requires two summary buttons named `Состояние и план` and `След ИИ`, automatic sibling collapse, one expanded card, separated rectangles, and two dedicated screenshots.
+### Task 4: Final exact-head visual QA
 
-- [x] **Step 2: Run test to verify it fails**
-
-Approved system-Chrome run `29288286749` failed at `.ai-debug-panel-dock` not found on exact SHA `f6004a3ee3b3512c1dee30993ab38c24bd01aa03`, proving the old independent panels did not satisfy the requirement.
-
-- [x] **Step 3: Write minimal implementation**
-
-Both diagnostics now mount in a shared right-side dock using stable `<details>` cards. State/plan opens by default, opening one card closes the other, and expanded content scrolls inside the dock rather than covering the second panel.
-
-- [x] **Step 4: Run focused verification before browser QA**
-
-The one-time executor completed editor smoke, lab smoke, movement smoke, state-plan scenario smoke, and the production build before creating commit `f0bf614d5c373cc5fa81fa263e8de4e7ef74998c`.
-
-- [ ] **Step 5: Inspect exact-head browser QA and PNGs**
-
-One-time executors and the diagnostic probe were removed in cleanup commit `b1d0e0fa21c71e8253b27d115b81a0725440fd18`. This owner-authored documentation commit starts the final exact-head CI and system-Chrome run. Verify workflow/artifact/tested SHA equality, inspect the tactical movement frames plus both editor panel states at 1440×900, then remove the remaining temporary screenshot workflow and declare the branch ready.
+- [ ] Run the temporary branch Playwright workflow on this owner-authored commit.
+- [ ] Verify workflow head SHA, artifact head SHA, and `tested-sha.txt` are identical.
+- [ ] Inspect the tactical movement/state frames and both editor diagnostics states at 1440×900.
+- [ ] Confirm there is no Graph v1 warning/button and the graph workspace has normal height.
+- [ ] Keep the branch separate from `real-wargame-preview` until explicit transfer approval.
