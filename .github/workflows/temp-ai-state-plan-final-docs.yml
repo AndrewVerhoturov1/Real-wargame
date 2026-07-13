@@ -1,3 +1,4 @@
+# Separate push registers and triggers this temporary documentation workflow.
 name: Temporary AI state-plan final docs
 
 on:
