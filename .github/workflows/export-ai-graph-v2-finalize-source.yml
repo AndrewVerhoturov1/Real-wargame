@@ -23,7 +23,7 @@ jobs:
       - name: Reconstruct exact transferred bytes
         shell: bash
         run: |
-          set -u
+          set +e
           cat \
             .github/graph-v2-final-patch/part00 \
             .github/graph-v2-final-patch/part01 \
@@ -32,17 +32,24 @@ jobs:
             .github/graph-v2-final-patch/part04 \
             .github/graph-v2-final-patch/part05 \
             > /tmp/graph-v2-final.b64
+          echo "prefix_status=$?" > /tmp/graph-v2-final-status.txt
           cat \
             .github/graph-v2-final-patch/part06a \
             .github/graph-v2-final-patch/part06b \
             .github/graph-v2-final-patch/part06c \
             | xxd -r -p >> /tmp/graph-v2-final.b64
+          echo "hex_status=$?" >> /tmp/graph-v2-final-status.txt
           cat .github/graph-v2-final-patch/part07 >> /tmp/graph-v2-final.b64
-          base64 -d /tmp/graph-v2-final.b64 > /tmp/graph-v2-final.patch.gz || true
-          gzip -dc /tmp/graph-v2-final.patch.gz > /tmp/graph-v2-final.patch || true
-          wc -c /tmp/graph-v2-final.b64 /tmp/graph-v2-final.patch.gz /tmp/graph-v2-final.patch | tee /tmp/graph-v2-final-sizes.txt
-          sha256sum /tmp/graph-v2-final.b64 /tmp/graph-v2-final.patch.gz /tmp/graph-v2-final.patch | tee /tmp/graph-v2-final-sha.txt
+          echo "suffix_status=$?" >> /tmp/graph-v2-final-status.txt
+          base64 -d /tmp/graph-v2-final.b64 > /tmp/graph-v2-final.patch.gz
+          echo "base64_status=$?" >> /tmp/graph-v2-final-status.txt
+          gzip -dc /tmp/graph-v2-final.patch.gz > /tmp/graph-v2-final.patch
+          echo "gzip_status=$?" >> /tmp/graph-v2-final-status.txt
+          wc -c /tmp/graph-v2-final.b64 /tmp/graph-v2-final.patch.gz /tmp/graph-v2-final.patch > /tmp/graph-v2-final-sizes.txt 2>&1
+          sha256sum /tmp/graph-v2-final.b64 /tmp/graph-v2-final.patch.gz /tmp/graph-v2-final.patch > /tmp/graph-v2-final-sha.txt 2>&1
+          exit 0
       - name: Upload exact reconstructed files
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: graph-v2-exact-reconstruction-${{ github.event.pull_request.head.sha }}
@@ -50,6 +57,8 @@ jobs:
             /tmp/graph-v2-final.b64
             /tmp/graph-v2-final.patch.gz
             /tmp/graph-v2-final.patch
+            /tmp/graph-v2-final-status.txt
             /tmp/graph-v2-final-sizes.txt
             /tmp/graph-v2-final-sha.txt
+          if-no-files-found: warn
           retention-days: 1
