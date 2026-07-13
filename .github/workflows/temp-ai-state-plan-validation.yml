@@ -1,15 +1,45 @@
 name: Temporary AI state-plan validation
 
 on:
+  push:
+    branches:
+      - feat/ai-state-plan-v1-temp-2026-07-14
   pull_request:
     branches:
       - validation/ai-state-plan-v1-base-2026-07-14
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
+  docs-sync:
+    if: ${{ github.event_name == 'push' && !contains(github.event.head_commit.message, '[state-plan-docs-synced]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/ai-state-plan-v1-temp-2026-07-14
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run docs:sync
+      - name: Commit synchronized documentation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs
+          if git diff --cached --quiet; then
+            echo "Documentation already synchronized."
+            exit 0
+          fi
+          git commit -m "docs: synchronize state-plan documentation [state-plan-docs-synced]"
+          git push origin HEAD:feat/ai-state-plan-v1-temp-2026-07-14
+
   state-plan-core:
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,22 +54,18 @@ jobs:
       - run: npm run graph-v2:smoke
       - run: npm run runtime:smoke
       - run: npm run runtime-session:smoke
-      - name: Runtime snapshot smoke
-        run: |
-          set +e
-          npm run runtime-snapshot:smoke > runtime-snapshot.log 2>&1
-          status=$?
-          cat runtime-snapshot.log
-          exit $status
+      - run: npm run runtime-snapshot:smoke
+      - run: npm run runtime-scene:smoke
+      - run: npm run runtime-modifiers:smoke
       - run: npm run subgraph:smoke
-      - if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: state-plan-core-logs
-          path: runtime-snapshot.log
-          if-no-files-found: warn
+      - run: npm run graph-v2-scenario:smoke
+      - run: npm run event-queue:smoke
+      - run: npm run simulation-events:smoke
+      - run: npm run reactive-runtime:smoke
+      - run: npm run composite:smoke
 
-  state-plan-build-ui:
+  state-plan-tactical:
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,19 +74,25 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm run routed-move:smoke
+      - run: npm run navigation-profiles:smoke
+      - run: npm run navigation-profile-switch:smoke
+      - run: npm run attention-ai-nodes:smoke
+      - run: npm run perception:smoke
+      - run: npm run observer-runtime:smoke
       - run: npm run workspace:smoke
       - run: npm run editor:smoke
       - run: npm run runtime-debug-v2:smoke
-      - name: Production build
-        run: |
-          set +e
-          npm run build > build.log 2>&1
-          status=$?
-          cat build.log
-          exit $status
-      - if: always()
-        uses: actions/upload-artifact@v4
+
+  state-plan-docs-build:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          name: state-plan-build-log
-          path: build.log
-          if-no-files-found: error
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run docs:check
+      - run: npm run build
