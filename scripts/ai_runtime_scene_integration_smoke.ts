@@ -97,7 +97,7 @@ function verifySceneExportRoundTrip(): void {
   assert.equal(restored.behaviorRuntime.aiRuntimeSession?.executionState?.activeNodeId, 'wait');
   assert.equal(restored.behaviorRuntime.lastEvent, 'ai_runtime_scene_restored');
   assert.equal(restored.attentionSettings.vision.maximumVisualRangeMeters, unit.attentionSettings.vision.maximumVisualRangeMeters);
-  assert.equal(restored.attentionSettings.vision.distanceFallStartMeters, unit.attentionSettings.vision.distanceFalloffStartMeters);
+  assert.equal(restored.attentionSettings.vision.distanceFalloffStartMeters, unit.attentionSettings.vision.distanceFalloffStartMeters);
 
   const resumed = runAiGraphRuntime({
     graph: waitGraph,
