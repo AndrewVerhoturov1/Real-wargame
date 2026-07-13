@@ -62,6 +62,7 @@ function verifySides(): void {
   const state = makeState();
   const blue = state.units[0];
   const red = state.units[1];
+  assert.deepEqual(state.units.map((unit) => unit.side), ['blue', 'red']);
   assert.equal(getSideRelation(blue.side, blue.side), 'friendly');
   assert.equal(getSideRelation(blue.side, red.side), 'hostile');
   assert.equal(areUnitsHostile(blue, red), true);
