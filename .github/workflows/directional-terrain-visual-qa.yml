@@ -7,7 +7,10 @@ on:
     paths:
       - '.github/workflows/directional-terrain-visual-qa.yml'
       - 'tests/directional-terrain-visual.spec.ts'
+      - 'scripts/directional_terrain_smoke.ts'
+      - 'scripts/navigation_overlay_contract_smoke.ts'
       - 'src/**'
+      - 'docs/subprojects/ai-single-unit-editor/**'
       - 'ai-node-editor.html'
       - 'index.html'
       - 'playwright.config.ts'
