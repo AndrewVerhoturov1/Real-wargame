@@ -1,5 +1,6 @@
 name: Combat Foundation Visual QA
 
+# User-approved visual verification for the isolated combat-foundation branch.
 run-name: Approved combat visual QA · ${{ github.sha }}
 
 on:
