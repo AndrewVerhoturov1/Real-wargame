@@ -1,0 +1,26 @@
+name: Graph v2 Finalize Verification
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - name: Export current source
+        run: zip -r source-snapshot.zip . -x '.git/*' 'node_modules/*' 'dist/*'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-graph-v2-finalize-source-${{ github.sha }}
+          path: source-snapshot.zip
+          retention-days: 1
