@@ -37,7 +37,7 @@ import {
   toggleRealReliefOverlay,
   type SimulationLayerMode,
 } from '../core/ui/RuntimeUiState';
-import { applyInitialStateToRuntime, type UnitModel, type UnitSide } from '../core/units/UnitModel';
+import { applyInitialStateToRuntime, type UnitModel } from '../core/units/UnitModel';
 import { exitLab } from '../shared/AppShellMenu';
 
 export type TacticalWorkspaceMode = 'simulation' | 'editor';
