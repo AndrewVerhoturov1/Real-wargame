@@ -38,6 +38,7 @@ jobs:
             src/core/combat/CombatDamage.ts \
             src/core/combat/CombatDecision.ts \
             src/core/ai/AiGameBridge.ts \
-            src/ui/TacticalWorkspace.ts
+            src/ui/TacticalWorkspace.ts \
+            scripts/combat_foundation_smoke.ts
           git commit -m 'fix: stabilize stateful fire across perception ticks'
           git push origin HEAD:tmp/combat-foundation-v1-20260713
