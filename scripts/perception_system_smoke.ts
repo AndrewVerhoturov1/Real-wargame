@@ -10,6 +10,8 @@ import {
   upsertPerceptionContact,
 } from '../src/core/perception/PerceptionContact';
 import { emitPerceptionSound } from '../src/core/perception/PerceptionSound';
+import { buildPerceptionStimuli } from '../src/core/perception/PerceptionStimulus';
+import type { PerceptionTargetType } from '../src/core/perception/PerceptionTargetProfile';
 import {
   getBestPerceptionContact,
   getPerceptionDiagnostics,
@@ -117,6 +119,41 @@ const dense = computeLineOfSight(forestMap.map, forestObserver, { x: 39.5, y: 5.
 assert.equal(dense.blocked, true);
 assert.ok(dense.visualTransmission <= 0.04);
 
+const typedTargetState = createInitialState(baseMap, [observerData], [
+  threat('sniper-target', 25, 18.5, 'sniper'),
+  threat('tank-target', 28, 18.5, 'tank'),
+]);
+const typedStimuli = buildPerceptionStimuli(typedTargetState);
+const sniperStimulus = typedStimuli.find((stimulus) => stimulus.id === 'threat:sniper-target');
+const tankStimulus = typedStimuli.find((stimulus) => stimulus.id === 'threat:tank-target');
+assert.ok(sniperStimulus && tankStimulus, 'typed threat sources must build perception stimuli');
+assert.equal(sniperStimulus.targetType, 'sniper');
+assert.equal(tankStimulus.targetType, 'tank');
+assert.ok(tankStimulus.baseSize > sniperStimulus.baseSize * 2, 'tank visual size must greatly exceed sniper visual size');
+assert.ok(tankStimulus.targetHeightMeters > sniperStimulus.targetHeightMeters, 'tank target height must exceed sniper target height');
+
+const heightMap = createInitialState({
+  ...baseMap,
+  width: 24,
+  height: 12,
+  objects: [{
+    id: 'low-cover',
+    kind: 'cover',
+    x: 10,
+    y: 5,
+    widthCells: 1,
+    heightCells: 1,
+    losHeightMeters: 1.2,
+    label: 'Low cover',
+    labelRu: 'Низкое укрытие',
+  }],
+}, [{ ...observerData, x: 2, y: 5 }]);
+const heightObserver = heightMap.units[0];
+const proneHeightLos = computeLineOfSight(heightMap.map, heightObserver, { x: 18.5, y: 5.5 }, 0.35);
+const tankHeightLos = computeLineOfSight(heightMap.map, heightObserver, { x: 18.5, y: 5.5 }, 3.2);
+assert.equal(proneHeightLos.blocked, true, 'low cover must hide a prone-height target');
+assert.equal(tankHeightLos.blocked, false, 'the same low cover must not hide a tank-height target');
+
 const soundState = createInitialState(baseMap, [observerData]);
 selectUnit(soundState, 'observer');
 emitPerceptionSound(soundState, {
@@ -168,7 +205,7 @@ noSelection.simulationTimeSeconds = 1;
 tickSelectedSoldierPerception(noSelection, 0.1);
 assert.equal(getPerceptionDiagnostics(noSelection).losCalculationCount, 0, 'no selected soldier must do no LOS work');
 
-console.log('Perception system smoke passed: stable attention, transmission, contacts, sound and import behavior.');
+console.log('Perception system smoke passed: stable attention, target types, target height, transmission, contacts, sound and import behavior.');
 
 function runPerception(simulation: ReturnType<typeof createInitialState>, seconds: number): void {
   const step = 0.1;
@@ -178,7 +215,12 @@ function runPerception(simulation: ReturnType<typeof createInitialState>, second
   }
 }
 
-function threat(id: string, x: number, y: number): PressureZoneData {
+function threat(
+  id: string,
+  x: number,
+  y: number,
+  sourceTargetType: PerceptionTargetType = 'soldier',
+): PressureZoneData {
   return {
     id,
     label: id,
@@ -201,6 +243,7 @@ function threat(id: string, x: number, y: number): PressureZoneData {
     enabled: true,
     sourceVisible: true,
     sourceKnown: false,
+    sourceTargetType,
     knowledgeConfidence: 0,
     uncertaintyCells: 6,
     reason: 'Perception smoke source.',
