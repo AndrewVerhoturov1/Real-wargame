@@ -9,3 +9,4 @@ const next = source.replace(
 if (next === source) throw new Error('Visual QA harness nullability patch target was not found.');
 await writeFile(path, next);
 console.log('AI state/plan visual QA harness nullability fixed.');
+// Separate push ensures the already-registered temporary workflow runs.
