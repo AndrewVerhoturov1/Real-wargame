@@ -24,8 +24,20 @@ jobs:
       - run: npm run graph-v2:smoke
       - run: npm run runtime:smoke
       - run: npm run runtime-session:smoke
-      - run: npm run runtime-snapshot:smoke
+      - name: Runtime snapshot smoke
+        run: |
+          set +e
+          npm run runtime-snapshot:smoke > runtime-snapshot.log 2>&1
+          status=$?
+          cat runtime-snapshot.log
+          exit $status
       - run: npm run subgraph:smoke
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: state-plan-core-logs
+          path: runtime-snapshot.log
+          if-no-files-found: warn
 
   state-plan-build-ui:
     runs-on: ubuntu-latest
@@ -39,4 +51,16 @@ jobs:
       - run: npm run workspace:smoke
       - run: npm run editor:smoke
       - run: npm run runtime-debug-v2:smoke
-      - run: npm run build
+      - name: Production build
+        run: |
+          set +e
+          npm run build > build.log 2>&1
+          status=$?
+          cat build.log
+          exit $status
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: state-plan-build-log
+          path: build.log
+          if-no-files-found: error
