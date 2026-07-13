@@ -3,7 +3,9 @@ name: AI state-plan visual QA (temporary branch)
 run-name: AI state-plan visual QA · ${{ github.ref_name }}
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - feat/ai-state-plan-v1-temp-2026-07-14
 
 permissions:
   contents: read
