@@ -96,6 +96,7 @@ export interface UnitData {
   behavior?: Partial<BehaviorSettings>;
   soldier?: SoldierParameterOverrides;
   attention?: UnitAttentionSettingsInput;
+  attentionProfileId?: string;
   initialState?: Partial<UnitInitialState>;
   tacticalKnowledge?: Partial<UnitTacticalKnowledge>;
   perceptionKnowledge?: Partial<UnitPerceptionKnowledge>;
@@ -127,6 +128,7 @@ export interface UnitModel {
   soldier: SoldierParameters;
   attentionSettings: UnitAttentionSettings;
   attentionRuntime: AttentionRuntimeState;
+  playerAttentionProfileId?: string | null;
   initialState: UnitInitialState;
   tacticalKnowledge: UnitTacticalKnowledge;
   perceptionKnowledge: UnitPerceptionKnowledge;
@@ -189,6 +191,7 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
       soldier,
       attentionSettings,
       attentionRuntime: createAttentionRuntime(attentionSettings, facingRadians),
+      playerAttentionProfileId: unit.attentionProfileId ?? null,
       initialState,
       tacticalKnowledge: unit.tacticalKnowledge
         ? normalizeTacticalKnowledge(unit.tacticalKnowledge, scale)

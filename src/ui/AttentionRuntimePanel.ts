@@ -1,3 +1,4 @@
+import { buildThreatDisplayEntries } from '../core/knowledge/ThreatDisplayModel';
 import { getBestPerceptionContact } from '../core/perception/PerceptionSystem';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import {
@@ -98,9 +99,10 @@ export function installAttentionRuntimePanel(
     const explanation = best?.explanationRu.length
       ? best.explanationRu.map((line) => `<li>${escapeHtml(line)}</li>`).join('')
       : '<li>Боец пока не накопил достаточно признаков.</li>';
-    const contacts = unit.perceptionKnowledge.contacts.length
-      ? unit.perceptionKnowledge.contacts.map((contact) => `
-        <button type="button" class="attention-contact-card ${contact.id === overlay.selectedContactId ? 'selected' : ''}" data-contact-id="${escapeHtml(contact.id)}">
+    const displayEntries = buildThreatDisplayEntries(unit);
+    const contacts = displayEntries.length
+      ? displayEntries.map((contact) => `
+        <button type="button" class="attention-contact-card ${contact.id === overlay.selectedContactId ? 'selected' : ''} ${contact.current ? 'current' : 'memory'}" data-contact-id="${escapeHtml(contact.id)}">
           <strong>${escapeHtml(contact.labelRu)}</strong>
           <span>${STAGE_LABELS[contact.stage]} · уверенность ${Math.round(contact.confidence)}%</span>
           <em>неточность ±${Math.round(contact.uncertaintyCells * state.map.metersPerCell)} м · ${sourceLabel(contact.source)}</em>
@@ -195,8 +197,9 @@ function modeSourceLabel(source: 'automatic' | 'ai' | 'player'): string {
   return 'автоматически';
 }
 
-function sourceLabel(source: 'visual' | 'sound' | 'reported' | 'fire_pressure'): string {
-  if (source === 'sound') return 'по звуку';
+function sourceLabel(source: string): string {
+  if (source === 'sound' || source === 'heard') return 'по звуку';
+  if (source === 'seen') return 'зрительно';
   if (source === 'reported') return 'по докладу';
   if (source === 'fire_pressure') return 'по обстрелу';
   return 'зрительно';

@@ -1,4 +1,5 @@
 import { Container, Graphics } from 'pixi.js';
+import { buildThreatGeometryKey, buildThreatMarkerKey } from '../core/knowledge/ThreatDisplayModel';
 import { buildUnitKnowledgeReport, type KnowledgeCover } from '../core/knowledge/UnitKnowledge';
 import { gridToCellCenter } from '../core/map/MapModel';
 import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
@@ -24,6 +25,9 @@ interface OverlayDiagnostics {
   interactionUpdateCount: number;
   interactionObjectCount: number;
   fullMapFingerprintScanCount: number;
+  threatGeometryRebuildCount: number;
+  threatMarkerUpdateCount: number;
+  threatGeometryObjectCount: number;
 }
 
 type OverlayDebugWindow = Window & {
@@ -35,6 +39,8 @@ export class PixiOverlayRenderer {
   private readonly zoneContainer = new Container();
   private readonly realReliefContainer = new Container();
   private readonly knowledgeContainer = new Container();
+  private readonly threatGeometryContainer = new Container();
+  private readonly threatMarkerGraphics = new Graphics();
   private readonly probeContainer = new Container();
   private readonly interactionContainer = new Container();
   private readonly hoverCellGraphics = new Graphics();
@@ -43,6 +49,8 @@ export class PixiOverlayRenderer {
   private lastZoneKey = '';
   private lastRealReliefKey = '';
   private lastKnowledgeKey = '';
+  private lastThreatGeometryKey = '';
+  private lastThreatMarkerKey = '';
   private lastProbeKey = '';
   private lastInteractionKey = '';
   private readonly diagnostics: OverlayDiagnostics = {
@@ -51,6 +59,9 @@ export class PixiOverlayRenderer {
     interactionUpdateCount: 0,
     interactionObjectCount: 2,
     fullMapFingerprintScanCount: 0,
+    threatGeometryRebuildCount: 0,
+    threatMarkerUpdateCount: 0,
+    threatGeometryObjectCount: 0,
   };
 
   constructor() {
@@ -59,6 +70,7 @@ export class PixiOverlayRenderer {
       this.zoneContainer,
       this.realReliefContainer,
       this.knowledgeContainer,
+      this.threatGeometryContainer,
       this.probeContainer,
       this.interactionContainer,
     ]) {
@@ -69,11 +81,14 @@ export class PixiOverlayRenderer {
     this.hoverCellGraphics.eventMode = 'none';
     this.selectionBoxGraphics.eventMode = 'none';
     this.commandDraftGraphics.eventMode = 'none';
+    this.threatMarkerGraphics.eventMode = 'none';
     this.interactionContainer.addChild(this.hoverCellGraphics, this.selectionBoxGraphics, this.commandDraftGraphics);
     this.container.addChild(
       this.zoneContainer,
       this.realReliefContainer,
       this.knowledgeContainer,
+      this.threatGeometryContainer,
+      this.threatMarkerGraphics,
       this.probeContainer,
       this.interactionContainer,
     );
@@ -84,6 +99,7 @@ export class PixiOverlayRenderer {
     this.renderZoneLayerIfNeeded(state, showPressureZones && state.editor.enabled);
     this.renderRealReliefLayerIfNeeded(state);
     this.renderKnowledgeLayerIfNeeded(state);
+    this.renderThreatLayersIfNeeded(state);
     this.renderProbeLayerIfNeeded(state);
     this.renderInteractionLayerIfNeeded(state, showGrid);
   }
@@ -132,11 +148,32 @@ export class PixiOverlayRenderer {
 
     if (visible) {
       drawKnowledgeOverlay(this.knowledgeContainer, state);
-      drawThreatMemoryOverlay(this.knowledgeContainer, state);
       drawCoverKnowledgeOverlay(this.knowledgeContainer, state);
     }
 
     this.diagnostics.knowledgeRebuildCount += 1;
+    this.publishDiagnostics();
+  }
+
+  private renderThreatLayersIfNeeded(state: SimulationState): void {
+    const unit = getSelectedUnit(state);
+    const visible = isThreatLayerVisible(state) && Boolean(unit);
+    const threats = visible && unit ? unit.tacticalKnowledge.threats : [];
+    const geometryKey = visible ? buildThreatGeometryKey(threats, state.map.cellSize) : 'threats:hidden';
+    if (geometryKey !== this.lastThreatGeometryKey) {
+      this.lastThreatGeometryKey = geometryKey;
+      destroyContainerChildren(this.threatGeometryContainer);
+      if (visible) drawThreatMemoryGeometry(this.threatGeometryContainer, state);
+      this.diagnostics.threatGeometryRebuildCount += 1;
+      this.diagnostics.threatGeometryObjectCount = this.threatGeometryContainer.children.length;
+    }
+    const markerKey = visible ? buildThreatMarkerKey(threats, state.map.cellSize) : 'markers:hidden';
+    if (markerKey !== this.lastThreatMarkerKey) {
+      this.lastThreatMarkerKey = markerKey;
+      this.threatMarkerGraphics.clear();
+      if (visible) drawCurrentThreatMarkers(this.threatMarkerGraphics, threats, state.map.cellSize);
+      this.diagnostics.threatMarkerUpdateCount += 1;
+    }
     this.publishDiagnostics();
   }
 
@@ -222,6 +259,12 @@ function isKnowledgeLayerVisible(state: SimulationState): boolean {
   return mode === 'danger' || mode === 'memory';
 }
 
+function isThreatLayerVisible(state: SimulationState): boolean {
+  if (state.editor.enabled) return false;
+  const mode = getSimulationLayerState(state).mode;
+  return mode === 'danger' || mode === 'memory';
+}
+
 function destroyContainerChildren(container: Container): void {
   for (const child of container.removeChildren()) child.destroy();
 }
@@ -268,14 +311,32 @@ function drawKnowledgeOverlay(container: Container, state: SimulationState): voi
 }
 
 export function drawThreatMemoryOverlay(container: Container, state: SimulationState): void {
+  drawThreatMemoryGeometry(container, state);
+  const unit = getSelectedUnit(state);
+  if (!unit || !isThreatLayerVisible(state)) return;
+  const markers = new Graphics();
+  drawCurrentThreatMarkers(markers, unit.tacticalKnowledge.threats, state.map.cellSize);
+  container.addChild(markers);
+}
+
+function drawThreatMemoryGeometry(container: Container, state: SimulationState): void {
   const layer = getSimulationLayerState(state);
   const unit = getSelectedUnit(state);
-  if (state.editor.enabled || !unit || (layer.mode !== 'danger' && layer.mode !== 'memory')) return;
-
+  if (!unit || !isThreatLayerVisible(state)) return;
   const graphics = new Graphics();
   const cellSize = state.map.cellSize;
   for (const threat of unit.tacticalKnowledge.threats) drawRememberedThreat(graphics, threat, cellSize, layer.mode === 'memory');
   container.addChild(graphics);
+}
+
+function drawCurrentThreatMarkers(graphics: Graphics, threats: KnownThreatMemory[], cellSize: number): void {
+  for (const threat of threats) {
+    if (!threat.visibleNow) continue;
+    graphics.lineStyle(2, CURRENT_CONTACT_MARKER_COLOR, 1);
+    graphics.beginFill(CURRENT_CONTACT_MARKER_COLOR, 0.82);
+    graphics.drawCircle(threat.x * cellSize, threat.y * cellSize, 4);
+    graphics.endFill();
+  }
 }
 
 export function drawCoverKnowledgeOverlay(container: Container, state: SimulationState): void {
@@ -326,7 +387,7 @@ function drawRememberedThreat(graphics: Graphics, threat: KnownThreatMemory, cel
   const dangerColor = threat.mode === 'directional_fire' ? STABLE_DIRECTIONAL_FIRE_COLOR : 0xf09a55;
   const uncertaintyRadius = Math.max(0.18, threat.uncertaintyCells) * cellSize;
 
-  graphics.lineStyle(threat.visibleNow ? 3 : 2, dangerColor, confidenceAlpha);
+  graphics.lineStyle(2, dangerColor, confidenceAlpha);
   graphics.beginFill(dangerColor, memoryMode ? 0.08 : 0.12);
   graphics.drawCircle(sourceX, sourceY, uncertaintyRadius);
   graphics.endFill();
@@ -361,11 +422,6 @@ function drawRememberedThreat(graphics: Graphics, threat: KnownThreatMemory, cel
   graphics.lineTo(sourceX + 6, sourceY + 6);
   graphics.moveTo(sourceX + 6, sourceY - 6);
   graphics.lineTo(sourceX - 6, sourceY + 6);
-  if (threat.visibleNow) {
-    graphics.beginFill(CURRENT_CONTACT_MARKER_COLOR, 0.95);
-    graphics.drawCircle(sourceX, sourceY, 3);
-    graphics.endFill();
-  }
 }
 
 function drawVisibilityProbe(container: Container, state: SimulationState): void {
