@@ -52,6 +52,7 @@ async function placeUnit(page: Page, canvas: Locator, side: 'blue' | 'red', posi
   const point = await worldPoint(canvas, position.x, position.y);
   await page.mouse.click(point.x, point.y);
   await expect(page.locator('.game-editor-selected-summary')).toContainText(expectedId);
+  if (side === 'red') await expect(page.locator('.game-editor-status')).toContainText('Противник');
 }
 
 async function waitForFireActionToFinish(page: Page): Promise<void> {
