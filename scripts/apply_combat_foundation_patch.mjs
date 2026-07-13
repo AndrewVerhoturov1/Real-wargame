@@ -4,8 +4,11 @@ async function patch(path, replacements) {
   let content = await readFile(path, 'utf8');
   let changed = false;
   for (const { from, to, label } of replacements) {
-    if (content.includes(to)) continue;
-    if (!content.includes(from)) throw new Error(`Missing patch anchor for ${label} in ${path}`);
+    if (to && content.includes(to)) continue;
+    if (!content.includes(from)) {
+      if (!to) continue;
+      throw new Error(`Missing patch anchor for ${label} in ${path}`);
+    }
     content = content.replace(from, to);
     changed = true;
   }
@@ -81,6 +84,15 @@ const aiBridgeChanged = await patch('src/core/ai/AiGameBridge.ts', [
   }
 
   unit.behaviorRuntime.currentAction = effect.action;`,
+  },
+  {
+    label: 'unused wall-clock argument',
+    from: `  nowMs: number,
+): void {
+  if (effect.action === 'move_to') {`,
+    to: `  _nowMs: number,
+): void {
+  if (effect.action === 'move_to') {`,
   },
 ]);
 
