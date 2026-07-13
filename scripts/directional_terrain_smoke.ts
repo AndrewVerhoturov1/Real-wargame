@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { buildSoldierAwarenessReport } from '../src/core/knowledge/SoldierAwarenessGrid';
 import { normalizeMap, type TacticalMapData } from '../src/core/map/MapModel';
 import {
   NAVIGATION_PROFILE_FORMAT_VERSION,
@@ -11,6 +12,12 @@ import {
   getRouteCostFields,
   readRouteCostCell,
 } from '../src/core/navigation/RouteCostField';
+import { createInitialState } from '../src/core/simulation/SimulationState';
+import {
+  getDirectionalTacticalField,
+  getDirectionalTacticalFieldDiagnostics,
+  readDirectionalTacticalCell,
+} from '../src/core/terrain/DirectionalTacticalField';
 import {
   getDirectionalTerrainPositionQueryDiagnostics,
   queryDirectionalTerrainPositions,
@@ -29,11 +36,13 @@ import { getVisibilityStaticGrid } from '../src/core/visibility/VisibilityStatic
 verifyStaticSlopeDirectionAndCache();
 verifyThreatSectorsAndUncertainty();
 verifyProfileMigration();
+verifySharedDirectionalTacticalField();
+verifyAwarenessLayersUseDirectionalTerrain();
 verifyDirectionalRouteCostsAndCacheSeparation();
 verifyExactTerrainVisibility();
 verifyLocalTacticalPositionQuery();
 
-console.log('Directional terrain smoke passed: cached derivatives, eight-sector subjective threats, exact visibility, local position queries, profile migration and route-cost integration.');
+console.log('Directional terrain smoke passed: shared directional terrain enriches awareness, concealment, cover, safety and route costs while preserving cached derivatives, exact visibility and local position queries.');
 
 function verifyStaticSlopeDirectionAndCache(): void {
   const flat = normalizeMap(makeMap(7, 5, () => 2));
@@ -85,6 +94,70 @@ function verifyProfileMigration(): void {
   assert.ok(profile.directionalTerrain.reverseSlopePreference >= 0);
   assert.equal(migrated.formatVersion, 2);
   assert.equal(createDefaultNavigationProfileRegistry().getProfile('direct').directionalTerrain.forwardSlopePenalty, 0);
+}
+
+function verifySharedDirectionalTacticalField(): void {
+  const map = normalizeMap(makeMap(9, 5, (x) => [0, 1, 2, 3, 4, 3, 2, 1, 0][x]));
+  const options = {
+    unitId: 'shared-field-soldier',
+    originX: 4.5,
+    originY: 2.5,
+    knowledgeRevision: 1,
+    threats: [directionalThreat('east-threat', 12.5, 2.5)],
+  };
+  const first = getDirectionalTacticalField(map, options);
+  const west = readDirectionalTacticalCell(first, 2, 2);
+  const east = readDirectionalTacticalCell(first, 6, 2);
+  assert.ok(west && east);
+  if (!west || !east) return;
+  assert.ok(west.reverseSlopeProtection > east.reverseSlopeProtection + 25, 'reverse side must gain directional protection');
+  assert.ok(west.terrainConcealment > east.terrainConcealment + 20, 'reverse side must gain terrain concealment');
+  assert.ok(east.forwardSlopeRisk > west.forwardSlopeRisk + 25, 'forward side must gain exposure risk');
+  assert.ok(east.silhouetteRisk >= west.silhouetteRisk, 'forward/crest side must not hide silhouette risk');
+
+  const diagnosticsAfterFirst = getDirectionalTacticalFieldDiagnostics(map);
+  const second = getDirectionalTacticalField(map, options);
+  const diagnosticsAfterSecond = getDirectionalTacticalFieldDiagnostics(map);
+  assert.equal(second, first, 'identical map and knowledge revisions must reuse the shared field object');
+  assert.equal(diagnosticsAfterSecond.buildCount, diagnosticsAfterFirst.buildCount);
+  assert.equal(diagnosticsAfterSecond.cacheHitCount, diagnosticsAfterFirst.cacheHitCount + 1);
+}
+
+function verifyAwarenessLayersUseDirectionalTerrain(): void {
+  const state = createInitialState(makeMap(9, 5, (x) => [0, 1, 2, 3, 4, 3, 2, 1, 0][x]), [{
+    id: 'awareness-soldier',
+    labelRu: 'Солдат',
+    type: 'scout_team',
+    side: 'player',
+    x: 4,
+    y: 2,
+  }]);
+  const unit = state.units[0];
+  unit.tacticalKnowledge.threats = [directionalThreat('east-threat', 12.5, 2.5)];
+  unit.tacticalKnowledge.revision = 7;
+
+  const report = buildSoldierAwarenessReport(state, unit);
+  const west = report.cells[2 * state.map.width + 2];
+  const east = report.cells[2 * state.map.width + 6];
+  assert.ok(west.concealment > east.concealment + 15, 'existing stealth layer must include reverse-slope concealment');
+  assert.ok(west.expectedProtection > east.expectedProtection + 15, 'existing cover layer must include directional terrain protection');
+  assert.ok(west.danger < east.danger - 10, 'existing danger layer must reduce direct-fire danger behind the reverse slope');
+  assert.ok(west.safety > east.safety + 10, 'existing safe-position layer must prefer the reverse slope');
+  assert.ok(west.reverseSlopeQuality > east.reverseSlopeQuality + 20);
+  assert.match(west.sourceRu, /обратн|склон|рельеф/i, 'cell explanation must name terrain contribution');
+
+  const diagnosticsBeforeRoute = getDirectionalTacticalFieldDiagnostics(state.map);
+  const cache = createRouteCostFieldCache();
+  getRouteCostFields(state.map, createDefaultNavigationProfileRegistry().getProfile('stealth'), {
+    unitId: unit.id,
+    originX: unit.position.x,
+    originY: unit.position.y,
+    knowledgeRevision: unit.tacticalKnowledge.revision,
+    knownThreats: unit.tacticalKnowledge.threats,
+  }, cache);
+  const diagnosticsAfterRoute = getDirectionalTacticalFieldDiagnostics(state.map);
+  assert.equal(diagnosticsAfterRoute.buildCount, diagnosticsBeforeRoute.buildCount, 'route and awareness layers must share one directional field build');
+  assert.ok(diagnosticsAfterRoute.cacheHitCount > diagnosticsBeforeRoute.cacheHitCount, 'route must reuse the awareness directional field cache');
 }
 
 function verifyDirectionalRouteCostsAndCacheSeparation(): void {
@@ -194,6 +267,34 @@ function threat(id: string, x: number, y: number, confidence: number, uncertaint
     suppression: 80,
     confidence,
     uncertaintyCells,
+  };
+}
+
+function directionalThreat(id: string, x: number, y: number) {
+  return {
+    id,
+    labelRu: 'Пулемёт',
+    x,
+    y,
+    radiusCells: 0,
+    widthCells: 0,
+    heightCells: 0,
+    rotationDegrees: 0,
+    mode: 'directional_fire' as const,
+    strength: 100,
+    suppression: 80,
+    stressPerSecond: 20,
+    directionDegrees: 180,
+    arcDegrees: 360,
+    rangeCells: 30,
+    minRangeCells: 0,
+    falloffPercent: 0,
+    confidence: 100,
+    uncertaintyCells: 0,
+    source: 'seen' as const,
+    visibleNow: true,
+    lastSeenSeconds: 0,
+    lastUpdatedSeconds: 0,
   };
 }
 
