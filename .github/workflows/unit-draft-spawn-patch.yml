@@ -1,0 +1,33 @@
+name: Unit Draft Spawn Patch
+
+on:
+  push:
+    branches:
+      - tmp/combat-foundation-v1-20260713
+    paths:
+      - 'scripts/apply_unit_draft_spawn_patch.mjs'
+      - '.github/workflows/unit-draft-spawn-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp/combat-foundation-v1-20260713
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/apply_unit_draft_spawn_patch.mjs
+      - name: Commit draft-backed spawning
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/core/simulation/SimulationState.ts
+          git commit -m 'fix: spawn fighters from the complete editor draft'
+          git push origin HEAD:tmp/combat-foundation-v1-20260713
