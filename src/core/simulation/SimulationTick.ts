@@ -8,6 +8,7 @@ import { ensureNavigationRouteCurrent } from '../navigation/NavigationRouteRepla
 import type { MoveOrder } from '../orders/MoveOrder';
 import { updatePlayerCommandStatus } from '../orders/PlayerCommand';
 import { updateAttentionController } from '../perception/AttentionController';
+import { normalizeRadians } from '../perception/AttentionModel';
 import { tickSelectedSoldierPerception } from '../perception/PerceptionSystem';
 import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
 import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
@@ -89,6 +90,7 @@ function moveUnit(unit: UnitModel, state: SimulationState, deltaSeconds: number)
   const postureMultiplier = POSTURE_MOVE_MULTIPLIER[unit.behaviorRuntime.posture];
   const conditionMultiplier = Math.max(0.35, unit.soldier.condition.speed / 100);
   const stepDistance = unit.speedCellsPerSecond * postureMultiplier * conditionMultiplier * deltaSeconds;
+  updateFacingAlongRoute(unit, movementTarget);
   unit.position = moveToPoint(unit.position, movementTarget, stepDistance);
 
   if (remainingDistance > stepDistance + ORDER_COMPLETION_EPSILON_CELLS) return;
@@ -111,6 +113,17 @@ function moveUnit(unit: UnitModel, state: SimulationState, deltaSeconds: number)
   unit.behaviorRuntime.currentAction = 'observe';
   unit.behaviorRuntime.reason = 'target reached';
   unit.behaviorRuntime.lastEvent = 'move_done';
+}
+
+function updateFacingAlongRoute(unit: UnitModel, movementTarget: GridPosition): void {
+  const dx = movementTarget.x - unit.position.x;
+  const dy = movementTarget.y - unit.position.y;
+  if (Math.hypot(dx, dy) < 0.0001) return;
+  const heading = normalizeRadians(Math.atan2(dy, dx));
+  const difference = Math.abs(Math.atan2(Math.sin(heading - unit.facingRadians), Math.cos(heading - unit.facingRadians)));
+  if (difference < 0.0001) return;
+  unit.facingRadians = heading;
+  updateAttentionController(unit, 0);
 }
 
 function applyFinalFacing(unit: UnitModel, order: MoveOrder): void {

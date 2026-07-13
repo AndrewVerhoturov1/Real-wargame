@@ -1,231 +1,112 @@
 :root {
-  --workspace-bottom: 104px;
+  --workspace-bottom: 108px;
 }
 
 .simulation-unit-bar {
-  min-height: 88px;
-  grid-template-columns: minmax(145px, 0.65fr) minmax(500px, 2.2fr) minmax(210px, 0.9fr);
+  box-sizing: border-box;
+  min-height: 94px;
+  max-height: 108px;
+  grid-template-columns: minmax(130px, 0.55fr) minmax(390px, 1.7fr) minmax(360px, 1.35fr);
   grid-template-areas:
     "identity stats route"
     "posture controls speed";
-  gap: 5px 9px;
-  padding: 6px 8px;
-}
-
-.unit-bar-identity {
-  align-self: stretch;
-  align-content: center;
-  min-width: 0;
-}
-
-.unit-bar-identity strong,
-.unit-bar-identity span,
-.unit-bar-current span {
+  gap: 4px 8px;
+  padding: 5px 7px;
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
-.simulation-unit-bar .unit-bar-current {
-  grid-area: auto;
-  min-width: 0 !important;
-  max-width: none !important;
-  display: grid;
-  gap: 1px;
-  margin-top: 3px;
-  color: var(--workspace-muted);
-  font-size: 9px;
-  line-height: 1.2;
-}
-
-.unit-bar-stats {
-  align-self: center;
-}
-
-.unit-bar-stat {
-  padding: 3px 5px;
-}
+.simulation-unit-bar > * { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.unit-bar-identity { align-self: stretch; align-content: center; min-width: 0; overflow: hidden; }
+.unit-bar-identity strong, .unit-bar-identity span, .unit-bar-current span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.simulation-unit-bar .unit-bar-current { min-width: 0 !important; display: grid; gap: 1px; margin-top: 2px; color: var(--workspace-muted); font-size: 8px; line-height: 1.1; }
+.unit-bar-stats { align-self: center; min-width: 0; }
+.unit-bar-stat { min-width: 0; padding: 2px 4px; overflow: hidden; }
+.unit-bar-stat span, .unit-bar-stat b { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 .unit-bar-route-controls {
   grid-area: route;
-  position: relative;
   display: grid;
-  grid-template-columns: minmax(108px, 1fr) minmax(96px, 0.8fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, .78fr);
   grid-template-areas:
-    "profile attention turn cost"
-    "details details details details";
-  gap: 3px 5px;
+    "routeprofile attentionprofile attentionmode"
+    "turn cost details";
+  gap: 2px 4px;
   align-items: end;
   min-width: 0;
-}
-
-.unit-route-profile {
-  grid-area: profile;
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-  color: var(--workspace-muted);
-  font-size: 8px;
-}
-
-.unit-attention-mode {
-  grid-area: attention;
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-  color: var(--workspace-muted);
-  font-size: 8px;
-}
-
-.unit-route-profile select,
-.unit-attention-mode select {
-  min-width: 0;
-  height: 25px;
-  padding: 3px 6px;
-  border: 1px solid rgba(255, 240, 161, 0.24);
-  border-radius: 7px;
-  color: var(--workspace-text);
-  background: rgba(255, 242, 168, 0.06);
-  font-size: 9px;
-  font-weight: 700;
-}
-
-.unit-bar-route-controls [data-action="turn-unit"] {
-  grid-area: turn;
-  min-height: 25px;
-  padding: 3px 7px;
-  border-radius: 7px;
-  white-space: nowrap;
-  font-size: 9px;
-  font-weight: 800;
-}
-
-.unit-bar-route-controls [data-action="turn-unit"].active {
-  color: #141910;
-  border-color: #f4d66f;
-  background: #f4d66f;
-}
-
-.unit-bar-route-controls [data-action="route-cost-quick-toggle"] {
-  grid-area: cost;
-  min-height: 25px;
-  padding: 3px 6px;
-  border-radius: 7px;
-  white-space: nowrap;
-  font-size: 9px;
-  font-weight: 800;
-}
-
-.unit-bar-route-controls [data-action="route-cost-quick-toggle"].active {
-  color: #141910;
-  border-color: var(--workspace-accent);
-  background: var(--workspace-accent);
-}
-
-.unit-route-details {
-  grid-area: details;
-  position: relative;
-  min-width: 0;
-}
-
-.unit-route-details > summary {
-  min-height: 22px;
-  display: block;
-  padding: 4px 24px 4px 7px;
-  border: 1px solid rgba(255, 240, 161, 0.16);
-  border-radius: 7px;
-  color: var(--workspace-text);
-  background: rgba(255, 242, 168, 0.045);
-  cursor: pointer;
+  max-width: 100%;
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 9px;
-  font-weight: 700;
+  box-sizing: border-box;
 }
-
-.unit-route-details > summary::marker {
-  color: var(--workspace-accent);
+.unit-route-profile { grid-area: routeprofile; }
+.unit-attention-profile { grid-area: attentionprofile; }
+.unit-attention-mode { grid-area: attentionmode; }
+.unit-route-profile, .unit-attention-profile, .unit-attention-mode { display: grid; gap: 1px; min-width: 0; color: var(--workspace-muted); font-size: 7px; overflow: hidden; }
+.unit-route-profile span, .unit-attention-profile span, .unit-attention-mode span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.unit-route-profile select, .unit-attention-profile select, .unit-attention-mode select {
+  box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; height: 21px; padding: 1px 4px;
+  border: 1px solid rgba(255, 240, 161, 0.24); border-radius: 6px; color: var(--workspace-text);
+  background: rgba(255, 242, 168, 0.06); font-size: 8px; font-weight: 700; overflow: hidden; text-overflow: ellipsis;
 }
+.unit-bar-route-controls [data-action="turn-unit"] { grid-area: turn; }
+.unit-bar-route-controls [data-action="route-cost-quick-toggle"] { grid-area: cost; }
+.unit-bar-route-controls [data-action="turn-unit"], .unit-bar-route-controls [data-action="route-cost-quick-toggle"] {
+  box-sizing: border-box; min-width: 0; width: 100%; min-height: 21px; height: 21px; padding: 1px 4px;
+  border-radius: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 8px; font-weight: 800;
+}
+.unit-bar-route-controls [data-action="turn-unit"].active, .unit-bar-route-controls [data-action="route-cost-quick-toggle"].active { color: #141910; border-color: var(--workspace-accent); background: var(--workspace-accent); }
+.unit-route-details { grid-area: details; position: relative; min-width: 0; max-width: 100%; overflow: hidden; }
+.unit-route-details > summary { box-sizing: border-box; min-height: 21px; height: 21px; display: block; padding: 3px 18px 3px 5px; border: 1px solid rgba(255,240,161,.16); border-radius: 6px; color: var(--workspace-text); background: rgba(255,242,168,.045); cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 8px; font-weight: 700; }
+.unit-route-details-panel { position: fixed; z-index: 125; right: 18px; bottom: calc(var(--workspace-bottom) + 8px); width: min(520px, calc(100vw - 36px)); display: grid; gap: 4px; padding: 8px 9px; border: 1px solid rgba(255,240,161,.28); border-radius: 10px; color: var(--workspace-text); background: rgba(10,14,9,.98); box-shadow: 0 14px 32px rgba(0,0,0,.52); }
+.unit-route-details:not([open]) .unit-route-details-panel { display: none; }
+.unit-route-details-panel span { display: block; overflow-wrap: anywhere; color: var(--workspace-muted); font-size: 10px; line-height: 1.25; }
 
-.unit-route-details-panel {
-  position: absolute;
-  z-index: 125;
-  right: 0;
-  bottom: calc(100% + 8px);
-  width: min(560px, calc(100vw - 32px));
+.unit-bar-command-group, .unit-bar-speed-group { min-width: 0; flex-wrap: nowrap; overflow: hidden; }
+.simulation-controls {
+  grid-area: controls;
   display: grid;
-  gap: 5px;
-  padding: 10px 11px;
-  border: 1px solid rgba(255, 240, 161, 0.28);
-  border-radius: 11px;
-  color: var(--workspace-text);
-  background: rgba(10, 14, 9, 0.98);
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.52);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 3px;
+  align-self: center;
+  min-height: 0;
+  max-height: 22px;
 }
-
-.unit-route-details:not([open]) .unit-route-details-panel {
-  display: none;
-}
-
-.unit-route-details-panel span {
-  display: block;
-  overflow-wrap: anywhere;
-  color: var(--workspace-muted);
-  font-size: 11px;
-  line-height: 1.35;
-}
-
-.unit-route-details-panel [data-role="route-details-command"],
-.unit-route-details-panel [data-role="route-details-profile"] {
-  color: #f3d86d;
-}
-
-.unit-route-details-panel [data-role="route-details-cost"] {
-  color: #f2a15d;
-}
-
-.unit-route-details-panel [data-role="route-details-reason"] {
-  color: #b9d8b8;
-}
-
-.unit-bar-command-group,
 .unit-bar-speed-group {
-  flex-wrap: nowrap;
+  grid-area: speed;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 3px;
+  align-self: center;
+  justify-content: stretch;
+  min-height: 0;
+  max-height: 22px;
 }
+.unit-bar-command-group button, .unit-bar-speed-group button, .compact { box-sizing: border-box; min-width: 0; min-height: 22px; height: 22px; padding: 2px 4px; font-size: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.unit-bar-command-group button,
-.unit-bar-speed-group button,
-.compact {
-  min-height: 25px;
-  padding: 3px 6px;
-  font-size: 9px;
-  white-space: nowrap;
-}
-
-@media (max-width: 1220px) {
-  :root { --workspace-bottom: 148px; }
+@media (max-width: 1180px) and (min-width: 861px) {
+  :root { --workspace-bottom: 154px; }
   .simulation-unit-bar {
-    grid-template-columns: minmax(145px, 0.8fr) minmax(320px, 1.5fr);
+    min-height: 144px;
+    max-height: 154px;
+    grid-template-columns: minmax(95px, .55fr) minmax(220px, 1.55fr) minmax(150px, .8fr);
     grid-template-areas:
-      "identity stats"
-      "route route"
-      "posture controls"
-      "speed speed";
+      "identity stats stats"
+      "route route route"
+      "posture controls speed";
+    overflow: hidden;
   }
-  .unit-bar-command-group,
-  .unit-bar-speed-group { flex-wrap: wrap; }
-  .unit-bar-speed-group { justify-content: flex-start; }
+  .unit-bar-route-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
-@media (max-width: 820px) {
-  :root { --workspace-bottom: 194px; }
+@media (max-width: 860px) {
+  :root { --workspace-bottom: 200px; }
   .simulation-unit-bar {
-    right: 8px;
-    left: 8px;
-    overflow: visible;
+    left: 6px;
+    right: 6px;
+    min-height: 186px;
+    max-height: 200px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "identity" "stats" "route" "posture" "controls" "speed";
+    overflow: hidden;
   }
-  .unit-bar-route-controls {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
+  .unit-bar-stats { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }

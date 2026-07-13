@@ -416,3 +416,9 @@
   .navigation-profile-tabs + #ai-node-editor-root .ai-editor-shell,
   .navigation-profile-workbench { height: calc(100vh - 90px); }
 }
+
+
+.navigation-profile-mode-select { display: grid; grid-template-columns: minmax(160px, .45fr) minmax(180px, .55fr); gap: 12px; align-items: center; margin: 0 0 14px; padding: 12px; border: 1px solid var(--navigation-profile-line); border-radius: 12px; background: rgba(255,255,255,.025); }
+.navigation-profile-mode-select span { color: var(--navigation-profile-muted); font-weight: 700; }
+.navigation-profile-mode-select select { min-width: 0; }
+.attention-profile-editor-layout .navigation-profile-field-control input[type="range"] { min-width: 0; }

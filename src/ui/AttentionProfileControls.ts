@@ -68,6 +68,7 @@ export function installAttentionProfileControls(
           const selected = getSelectedUnit(state);
           if (!selected) return;
           selected.attentionSettings = cloneAttentionSettings(draft.attention);
+          selected.playerAttentionProfileId = null;
           selected.attentionRuntime = createAttentionRuntime(selected.attentionSettings, selected.facingRadians);
           selected.viewAngleRadians = degreesToRadians(selected.attentionSettings.profiles.observe.directAngleDegrees);
           state.editor.lastMessage = `Профили обзора и памяти применены к бойцу: ${selected.id}`;

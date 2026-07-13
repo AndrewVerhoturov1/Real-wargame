@@ -206,6 +206,7 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
       traits: { ...unit.soldier.traits },
       condition: { ...unit.soldier.condition },
     },
+    attentionProfileId: unit.playerAttentionProfileId ?? undefined,
     attention: {
       defaultMode: unit.attentionSettings.defaultMode,
       profiles: Object.fromEntries(
