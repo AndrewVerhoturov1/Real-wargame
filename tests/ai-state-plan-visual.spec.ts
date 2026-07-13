@@ -50,6 +50,46 @@ async function openStatePlanPanel(page: Page): Promise<void> {
   await expect(details).toHaveAttribute('open', '');
 }
 
+async function expectStatePlanPopoverVisibleAboveBar(page: Page): Promise<void> {
+  const geometry = await page.evaluate(() => {
+    const bar = document.querySelector<HTMLElement>('.simulation-unit-bar');
+    const panel = document.querySelector<HTMLElement>('[data-role="state-plan-panel"]');
+    const popover = document.querySelector<HTMLElement>('.unit-state-plan-popover');
+    if (!bar || !panel || !popover) throw new Error('State-plan layout elements are unavailable.');
+    const barRect = bar.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const popoverRect = popover.getBoundingClientRect();
+    const points = [
+      [popoverRect.left + 12, popoverRect.top + 12],
+      [popoverRect.left + popoverRect.width / 2, popoverRect.top + 12],
+      [popoverRect.right - 12, popoverRect.top + 12],
+    ] as const;
+    return {
+      barOverflow: getComputedStyle(bar).overflow,
+      barTop: barRect.top,
+      barLeft: barRect.left,
+      barRight: barRect.right,
+      panelLeft: panelRect.left,
+      panelRight: panelRect.right,
+      panelWidth: panelRect.width,
+      popoverBottom: popoverRect.bottom,
+      popoverHeight: popoverRect.height,
+      topPointsVisible: points.map(([x, y]) => {
+        const hit = document.elementFromPoint(x, y);
+        return Boolean(hit && popover.contains(hit));
+      }),
+    };
+  });
+
+  expect.soft(geometry.barOverflow, 'Open state-plan popover must not be clipped by the compact unit bar.').not.toBe('hidden');
+  expect.soft(geometry.panelWidth, 'State-plan summary must have usable width inside the unit bar.').toBeGreaterThan(150);
+  expect.soft(geometry.panelLeft).toBeGreaterThanOrEqual(geometry.barLeft);
+  expect.soft(geometry.panelRight).toBeLessThanOrEqual(geometry.barRight);
+  expect.soft(geometry.popoverHeight, 'Expanded state-plan details must be fully laid out.').toBeGreaterThan(220);
+  expect.soft(geometry.popoverBottom, 'Expanded details must open above the unit bar.').toBeLessThanOrEqual(geometry.barTop - 4);
+  expect.soft(geometry.topPointsVisible, 'The top of the expanded details must be visible, not clipped by an ancestor.').toEqual([true, true, true]);
+}
+
 test.beforeAll(() => mkdirSync(SCREENSHOT_DIR, { recursive: true }));
 
 test('captures state and plan transitions in the tactical workspace', async ({ page }) => {
@@ -71,6 +111,8 @@ test('captures state and plan transitions in the tactical workspace', async ({ p
   await expect(panel).toContainText('Выполнение приказа');
   await expect(panel).toContainText('Выполнить приказ движения');
   await expect(panel).toContainText('Двигаться и наблюдать');
+  await expect(page.locator('[data-live="state"]')).toHaveText('Выполнение приказа');
+  await expectStatePlanPopoverVisibleAboveBar(page);
   await saveScreenshot(page, 'state-following-order.png');
 
   const contact = await setScenario(page, 'contact-take-cover');
@@ -86,6 +128,7 @@ test('captures state and plan transitions in the tactical workspace', async ({ p
   await expect(panel).toContainText('Занять укрытие');
   await expect(panel).toContainText('Предыдущий план');
   await expect(panel).toContainText('Отменён');
+  await expect(page.locator('[data-live="state"]')).toHaveText('Контакт');
   await saveScreenshot(page, 'state-contact-take-cover.png');
 
   const suppressed = await setScenario(page, 'suppressed');
@@ -99,6 +142,7 @@ test('captures state and plan transitions in the tactical workspace', async ({ p
   await expect(panel).toContainText('Подавление достигло критического порога');
   await expect(panel).toContainText('Обычный приказ временно не допускается состоянием');
   await expect(panel.locator('[data-state-plan="plan"]')).toHaveText('Занять укрытие');
+  await expect(page.locator('[data-live="state"]')).toHaveText('Подавлен');
   await saveScreenshot(page, 'state-suppressed.png');
 
   const restored = await setScenario(page, 'restored');
@@ -180,5 +224,8 @@ test('shows state, plan, and active subgraph in the node editor', async ({ page 
   await openSubgraph.click();
   await expect(page.locator('.graph-breadcrumb')).toContainText('Занять укрытие');
   await expect(page.getByRole('button', { name: '← К родительскому графу' })).toBeVisible();
+  await expect(panel, 'State and plan details must survive the editor re-render caused by subgraph navigation.').toContainText('Контакт');
+  await expect(panel).toContainText('Занять укрытие');
+  await expect(panel.locator('[data-state-plan="step"]')).toContainText('Движение к укрытию');
   await saveScreenshot(page, 'state-plan-node-editor.png');
 });
