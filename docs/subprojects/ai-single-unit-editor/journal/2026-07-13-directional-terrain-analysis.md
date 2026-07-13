@@ -1,46 +1,75 @@
-# Directional Terrain Analysis — 2026-07-13
+# Directional Terrain Enrichment — 2026-07-13
 
 ## Branch boundary
 
 Implemented on `tmp/directional-terrain-analysis-20260713` from `real-wargame-preview`. Draft PR #88 is intentionally not merged. `main` and `real-wargame-preview` remain unchanged.
 
+## Product correction
+
+The initial implementation exposed `Направленный рельеф` as a third route-cost map mode. User feedback clarified that directional terrain must enrich existing tactical maps rather than become another normal player layer.
+
+The normal route-cost selector now exposes only:
+
+- base terrain;
+- final route cost.
+
+The directional renderer mode remains internal for diagnostics and tests.
+
 ## Delivered
 
 - cached typed-array terrain derivatives based on the shared visibility height grid;
-- eight-sector subjective threat directions with confidence and uncertainty attenuation;
-- versioned navigation-profile weights for forward/reverse slopes, crests, silhouette risk, valleys and critical sectors;
-- directional terrain as a separate route-cost channel consumed by the existing deterministic A*;
-- route diagnostics and a third two-raster overlay mode named `Направленный рельеф`;
-- no-code directional-terrain profile controls;
+- eight-sector subjective threat directions using only the selected soldier's knowledge;
+- shared `DirectionalTacticalField` with per-sector protection/exposure and final terrain protection/concealment;
+- danger reduction behind reverse slopes for direct-fire threats;
+- forward-slope, crest, silhouette and flank penalties in the existing danger/safety calculations;
+- reverse-slope, terrain-fold and valley contributions in the existing stealth and cover calculations;
+- terrain-enriched explanations in existing cells and best-position cards;
+- existing safe-position ranking using the enriched danger, cover and concealment values;
+- the same shared field consumed by route cost and deterministic A*;
+- no-code profile controls for directional-terrain weights;
 - reusable exact terrain/object/forest visibility raycast;
-- cached bounded local queries for reverse-slope, subcrest and hidden-retreat positions;
-- focused smoke, migration, cache, pathfinding, renderer-contract and production-build coverage;
-- prepared Playwright visual scenarios for the game layer and editor panel.
+- bounded local queries for reverse-slope, subcrest and hidden-retreat positions.
 
 ## Performance decisions
 
-- static derivatives rebuild only on map revision;
-- subjective route fields rebuild only on knowledge/profile/map/origin-bucket changes;
-- tactical-position search is local and selected-unit scoped;
-- only top candidates receive exact raycasts;
-- a maximum of three strongest known threat observers participate in exact candidate checks;
-- hover reads ready arrays and does not rebuild;
-- rendering remains two raster sprites rather than per-cell display objects.
+- static geometry rebuilds only on map revision;
+- the full-map subjective field is shared by awareness and route systems;
+- the cache key uses actual quantized threat content, not a metadata-only knowledge revision;
+- origin is bucketed by a whole map cell, so small movement does not rebuild the field;
+- all full-map tactical values remain typed arrays;
+- awareness rendering remains one raster sprite;
+- route rendering remains two persistent raster sprites;
+- exact visibility is limited to rough-filtered local candidates and at most three strongest known threats.
 
-## Knowledge boundary
+## Test infrastructure correction
 
-Only the selected soldier's tactical knowledge is used. The system does not inspect hidden objective enemy positions. Directional route cost and exact local visibility remain separate from unrestricted world state.
+The first red TDD run revealed that the dedicated workflow piped commands through `tee` without `set -o pipefail`, allowing a failed smoke command to look successful. Every piped step in `Directional Terrain Core` now enables `pipefail`.
 
-## Verification state
+Focused tests now prove:
 
-Pull-request checks passed on implementation commits, including the dedicated Directional Terrain Core workflow, route/profile regressions, production TypeScript build, documentation integrity and preview policy. Final exact-SHA checks must be read again after documentation commits before any completion claim.
+- reverse slopes increase concealment and protection;
+- reverse slopes reduce danger and improve safety;
+- forward slopes raise exposure and route cost;
+- awareness and route systems reuse one shared directional field;
+- metadata-only knowledge revisions and movement inside one origin bucket do not rebuild the full map;
+- crossing a bucket creates exactly one new field;
+- direct-route profile can disable directional cost;
+- exact rays and tactical-position searches remain bounded.
 
-The manual browser workflow contains `tests/directional-terrain-visual.spec.ts`, but it has not yet been dispatched; no PNG inspection is claimed.
+## Visual verification
+
+System-Chrome visual QA now checks existing maps:
+
+- `directional-terrain-enriched-danger.png`;
+- `directional-terrain-enriched-stealth.png`;
+- `directional-terrain-profile-editor.png`.
+
+The inspected screenshots showed no panel overflow or toolbar overlap. The stealth list visibly includes terrain-enriched explanations such as `складка местности + ложбина`. The standalone directional layer is absent from the normal route-cost menu.
 
 ## Deferred
 
-- canonical Blackboard keys and AI authoring nodes for the three tactical positions;
-- exact whole-map LOS exposure cost;
+- canonical Blackboard keys and generic AI nodes for tactical-position query outputs;
+- exact whole-map LOS exposure;
 - edge-transition crest crossing penalty;
 - squad/group reverse-slope behavior;
 - transfer to `real-wargame-preview`.
