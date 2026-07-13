@@ -29,9 +29,26 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Combat foundation smoke
+      - name: Capture combat foundation smoke
         shell: bash
-        run: set -o pipefail; npm run combat-foundation:smoke 2>&1 | tail -n 120
+        run: |
+          set +e
+          npm run combat-foundation:smoke > combat-foundation.log 2>&1
+          echo $? > combat-foundation.exit
+          tail -n 120 combat-foundation.log
+          exit 0
+      - name: Upload combat foundation log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-foundation-log
+          path: |
+            combat-foundation.log
+            combat-foundation.exit
+          if-no-files-found: error
+      - name: Require combat foundation smoke success
+        shell: bash
+        run: test "$(cat combat-foundation.exit)" = "0"
       - name: Existing perception smoke
         shell: bash
         run: set -o pipefail; npm run perception:smoke 2>&1 | tail -n 120
