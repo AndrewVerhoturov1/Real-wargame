@@ -181,13 +181,14 @@ export function tickAiGameBridge(
   }
 
   if (!activePlan && !options.cancel) {
+    const previousPlan = session.planHistory[session.planHistory.length - 1];
     const selection = selectAiPlanForState({
       unitId: unit.id,
       stateId: session.stateRuntime.activeStateId,
       nowMs: simulationNowMs,
       sequence: session.planSequence + 1,
       blackboard,
-      replacesPlanId: session.planHistory.at(-1)?.status === 'replanning' ? session.planHistory.at(-1)?.id : undefined,
+      replacesPlanId: previousPlan?.status === 'replanning' ? previousPlan.id : undefined,
     });
     if (selection.plan) {
       activePlan = selection.plan;
@@ -290,7 +291,7 @@ export function tickAiGameBridge(
   unit.behaviorRuntime.lastEvent = stateUpdate.transition
     ? `ai_state_${stateUpdate.transition.from}_to_${stateUpdate.transition.to}`
     : `ai_graph_runtime_${result.status}`;
-  publishStatePlanDebug(unit, session);
+  publishStatePlanDebug(session);
   publishSimulationAiEvents(unit, session.simulationTimeMs);
   return result;
 }
@@ -725,7 +726,7 @@ function mergeRuntimeResults(cancelled: AiGraphRuntimeResult, current: AiGraphRu
   };
 }
 
-function publishStatePlanDebug(unit: UnitModel, session: AiRuntimeSessionSnapshotV1): void {
+function publishStatePlanDebug(session: AiRuntimeSessionSnapshotV1): void {
   try {
     const raw = window.localStorage.getItem(DEBUG_STORAGE_KEY);
     if (!raw) return;
@@ -734,7 +735,7 @@ function publishStatePlanDebug(unit: UnitModel, session: AiRuntimeSessionSnapsho
     const parentId = stateDefinition.parentStateId;
     const activePlan = session.activePlan;
     const currentStep = activePlan?.steps[activePlan.currentStepIndex];
-    const previousPlan = session.planHistory.at(-1);
+    const previousPlan = session.planHistory[session.planHistory.length - 1];
     payload.statePlan = {
       stateId: session.stateRuntime.activeStateId,
       stateLabelRu: stateDefinition.labelRu,
