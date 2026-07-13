@@ -83,9 +83,9 @@
 .unit-bar-command-group button, .unit-bar-speed-group button, .compact { box-sizing: border-box; min-width: 0; min-height: 22px; height: 22px; padding: 2px 4px; font-size: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 @media (max-width: 1180px) {
-  :root { --workspace-bottom: 150px; }
+  :root { --workspace-bottom: 154px; }
   .simulation-unit-bar {
-    min-height: 136px; max-height: 150px;
+    min-height: 140px; max-height: 154px;
     grid-template-columns: minmax(130px, .65fr) minmax(0, 1.7fr);
     grid-template-areas: "identity stats" "route route" "posture controls" "speed speed";
     overflow: hidden;
