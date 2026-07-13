@@ -82,19 +82,31 @@
 }
 .unit-bar-command-group button, .unit-bar-speed-group button, .compact { box-sizing: border-box; min-width: 0; min-height: 22px; height: 22px; padding: 2px 4px; font-size: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-@media (max-width: 1180px) {
-  :root { --workspace-bottom: 154px; }
+@media (max-width: 1180px) and (min-width: 861px) {
+  :root { --workspace-bottom: 126px; }
   .simulation-unit-bar {
-    min-height: 140px; max-height: 154px;
-    grid-template-columns: minmax(130px, .65fr) minmax(0, 1.7fr);
-    grid-template-areas: "identity stats" "route route" "posture controls" "speed speed";
+    min-height: 112px;
+    max-height: 126px;
+    grid-template-columns: minmax(95px, .55fr) minmax(220px, 1.55fr) minmax(150px, .8fr);
+    grid-template-areas:
+      "identity stats stats"
+      "route route route"
+      "posture controls speed";
     overflow: hidden;
   }
   .unit-bar-route-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 860px) {
-  :root { --workspace-bottom: 184px; }
-  .simulation-unit-bar { left: 6px; right: 6px; min-height: 170px; max-height: 184px; grid-template-columns: minmax(0, 1fr); grid-template-areas: "identity" "stats" "route" "posture" "controls" "speed"; overflow: hidden; }
+  :root { --workspace-bottom: 200px; }
+  .simulation-unit-bar {
+    left: 6px;
+    right: 6px;
+    min-height: 186px;
+    max-height: 200px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "identity" "stats" "route" "posture" "controls" "speed";
+    overflow: hidden;
+  }
   .unit-bar-stats { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
