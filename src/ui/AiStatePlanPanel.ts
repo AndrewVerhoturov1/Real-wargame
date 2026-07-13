@@ -18,6 +18,7 @@ export function renderTacticalStatePlanPanelMarkup(): string {
         <div><dt>План</dt><dd data-state-plan="plan">—</dd></div>
         <div><dt>Статус</dt><dd data-state-plan="plan-status">—</dd></div>
         <div class="wide"><dt>Текущий шаг</dt><dd data-state-plan="step">—</dd></div>
+        <div class="wide"><dt>Предыдущий план</dt><dd data-state-plan="previous-plan">—</dd></div>
       </dl>
       <div class="unit-state-plan-columns">
         <section><h4>Почему выбран</h4><ul data-state-plan-list="reasons"></ul></section>
@@ -41,6 +42,7 @@ export function bindTacticalStatePlanPanel(root: HTMLElement): TacticalStatePlan
     plan: required<HTMLElement>(panel, '[data-state-plan="plan"]'),
     planStatus: required<HTMLElement>(panel, '[data-state-plan="plan-status"]'),
     step: required<HTMLElement>(panel, '[data-state-plan="step"]'),
+    previousPlan: required<HTMLElement>(panel, '[data-state-plan="previous-plan"]'),
     reasons: required<HTMLUListElement>(panel, '[data-state-plan-list="reasons"]'),
     abort: required<HTMLUListElement>(panel, '[data-state-plan-list="abort"]'),
     replan: required<HTMLUListElement>(panel, '[data-state-plan-list="replan"]'),
@@ -61,6 +63,7 @@ export function bindTacticalStatePlanPanel(root: HTMLElement): TacticalStatePlan
         setText(fields.plan, '—');
         setText(fields.planStatus, '—');
         setText(fields.step, '—');
+        setText(fields.previousPlan, '—');
         updateList(fields.reasons, []);
         updateList(fields.abort, []);
         updateList(fields.replan, []);
@@ -74,6 +77,7 @@ export function bindTacticalStatePlanPanel(root: HTMLElement): TacticalStatePlan
       const parentId = definition.parentStateId;
       const activePlan = session.activePlan;
       const step = activePlan?.steps[activePlan.currentStepIndex];
+      const previousPlan = session.planHistory[session.planHistory.length - 1];
       setText(fields.summaryState, `Состояние: ${definition.labelRu}`);
       setText(fields.summaryPlan, `План: ${activePlan?.goalRu ?? 'нет'}`);
       setText(fields.state, definition.labelRu);
@@ -84,6 +88,9 @@ export function bindTacticalStatePlanPanel(root: HTMLElement): TacticalStatePlan
       setText(fields.planStatus, activePlan ? planStatusLabel(activePlan.status) : '—');
       setText(fields.step, activePlan
         ? `${step?.labelRu ?? step?.id ?? 'Шаг'} · ${Math.min(activePlan.currentStepIndex + 1, activePlan.steps.length)} из ${activePlan.steps.length}`
+        : '—');
+      setText(fields.previousPlan, previousPlan
+        ? `${previousPlan.goalRu} · ${planStatusLabel(previousPlan.status)}${previousPlan.cancellationReasonRu ? ` · ${previousPlan.cancellationReasonRu}` : ''}`
         : '—');
       updateList(fields.reasons, activePlan?.reasonsRu ?? []);
       updateList(fields.abort, activePlan?.abortConditions.map((item) => item.labelRu) ?? []);

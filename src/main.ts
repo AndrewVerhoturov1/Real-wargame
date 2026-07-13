@@ -37,6 +37,7 @@ import { installPerformanceReportControls } from './ui/PerformanceReportControls
 import { installSceneExportControls } from './ui/SceneExportControls';
 import { installTacticalWorkspace } from './ui/TacticalWorkspace';
 import { installWorkspaceTooltipGuard } from './ui/WorkspaceTooltipGuard';
+import { installAiStatePlanVisualQaHarness } from './testing/AiStatePlanVisualQaHarness';
 
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 
@@ -85,6 +86,7 @@ installPerformanceReportControls(() => tacticalBoard.downloadPerformanceReport()
 installAiEditorOpenButton(aiEditorOpenButton);
 installPauseToggle(pauseToggle, forceRenderAtNativeMapQuality);
 installTacticalWorkspace(state, aiGameBridge, forceRenderAtNativeMapQuality);
+installAiStatePlanVisualQaHarness(state, forceRenderAtNativeMapQuality);
 const destroyAttentionRuntimePanel = installAttentionRuntimePanel(state, forceRenderAtNativeMapQuality);
 const destroyAttentionOverlayRenderer = installAttentionOverlayRenderer(tacticalBoard, state);
 const destroyCommandPlanRouteUi = installCommandPlanRouteUi(state, forceRenderAtNativeMapQuality);
