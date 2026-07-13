@@ -18,6 +18,8 @@ import {
   type UnitBehaviorRuntime,
   type UnitInitialState,
 } from '../behavior/BehaviorModel';
+import { clearCombatRuntime, replaceCombatRuntime, type CombatRuntimeState } from '../combat/CombatDamage';
+import { clearWeaponRuntime, replaceWeaponRuntime, type WeaponRuntimeState } from '../combat/WeaponModel';
 import type { GridPosition } from '../geometry';
 import { createEmptyTacticalKnowledge, normalizeTacticalKnowledge } from '../knowledge/SoldierThreatMemory';
 import type { NavigationProfileSource } from '../navigation/NavigationProfileResolver';
@@ -77,6 +79,8 @@ export interface UnitTacticalKnowledge {
 }
 
 export interface UnitRuntimeData extends Partial<Pick<UnitBehaviorRuntime, 'stress' | 'suppression' | 'ammo' | 'weaponReady' | 'posture'>> {
+  weapon?: WeaponRuntimeState;
+  combat?: CombatRuntimeState;
   aiRuntime?: AiRuntimeSceneSnapshotV1;
 }
 
@@ -205,6 +209,8 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
       activeNavigationProfileSource: unit.navigationProfileId ? 'unitRole' : 'default',
     };
     applyInitialStateToRuntime(model, false);
+    if (unit.runtime?.weapon) replaceWeaponRuntime(model, unit.runtime.weapon);
+    if (unit.runtime?.combat) replaceCombatRuntime(model, unit.runtime.combat);
     restoreAiRuntimeSnapshot(model, unit.runtime?.aiRuntime);
     initializeSimulationAiEventFacts(model);
     return model;
@@ -236,6 +242,8 @@ function restoreAiRuntimeSnapshot(unit: UnitModel, value: unknown): void {
 }
 
 export function applyInitialStateToRuntime(unit: UnitModel, clearPerceptionKnowledge = true): void {
+  clearWeaponRuntime(unit);
+  clearCombatRuntime(unit);
   const initial = unit.initialState;
   unit.behaviorRuntime.previousPosture = initial.posture;
   unit.behaviorRuntime.posture = initial.posture;
