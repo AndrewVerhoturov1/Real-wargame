@@ -58,7 +58,7 @@ test('shows Graph v2 migration, Russian subgraph controls, errors, and breadcrum
   await subgraphSelect.selectOption('move_and_observe');
   await expect(page.locator('#stateful-subgraph-id')).toHaveValue('move_and_observe');
   await expect(page.locator('.stateful-node-human-panel')).toContainText('Точка назначения');
-  await expect(page.locator('.stateful-node-human-panel')).toContainText('Движение завершено');
+  await expect(page.locator('.stateful-node-human-panel')).toContainText('Достигнутая позиция');
 
   const panelBox = await page.locator('.stateful-node-human-panel').boundingBox();
   expect(panelBox).not.toBeNull();
