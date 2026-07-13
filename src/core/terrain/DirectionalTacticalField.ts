@@ -13,13 +13,13 @@ import {
 const SECTOR_COUNT = 8;
 const SECTOR_RADIANS = Math.PI / 4;
 const CACHE_LIMIT = 12;
-const ORIGIN_BUCKET = 0.25;
+const ORIGIN_BUCKET_CELLS = 1;
 
 export interface DirectionalTacticalFieldOptions {
   readonly unitId: string;
   readonly originX: number;
   readonly originY: number;
-  readonly knowledgeRevision: number;
+  readonly knowledgeRevision?: number;
   readonly threats: readonly DirectionalThreatSource[];
 }
 
@@ -312,9 +312,8 @@ function buildKey(mapVisualRevision: number, options: DirectionalTacticalFieldOp
   return [
     mapVisualRevision,
     options.unitId,
-    quantize(options.originX, ORIGIN_BUCKET),
-    quantize(options.originY, ORIGIN_BUCKET),
-    options.knowledgeRevision,
+    quantize(options.originX, ORIGIN_BUCKET_CELLS),
+    quantize(options.originY, ORIGIN_BUCKET_CELLS),
     options.threats.map((threat) => [
       threat.id,
       quantize(threat.x, 0.05),
