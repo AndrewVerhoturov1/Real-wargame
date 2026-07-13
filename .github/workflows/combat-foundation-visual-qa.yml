@@ -1,7 +1,7 @@
 name: Combat Foundation Visual QA
 
 # User-approved visual verification for the isolated combat-foundation branch.
-# This run verifies that the visible fighter draft is the source used by spawning.
+# This run verifies the corrected active editor placement path for blue/red fighters.
 run-name: Approved combat visual QA · ${{ github.sha }}
 
 on:
