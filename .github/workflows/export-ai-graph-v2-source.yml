@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feat/ai-graph-v2-contracts-subgraphs-2026-07-13
+  pull_request:
+    branches:
+      - real-wargame-preview
   workflow_dispatch:
 
 jobs:
