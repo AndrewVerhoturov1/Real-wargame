@@ -1,7 +1,10 @@
 import { Container, SCALE_MODES, Sprite, Text, TextStyle, Texture } from 'pixi.js';
 import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../core/navigation/NavigationRuntime';
-import { getRouteCostOverlayState } from '../core/navigation/RouteCostOverlayState';
+import {
+  getRouteCostOverlayState,
+  type RouteCostOverlayMode,
+} from '../core/navigation/RouteCostOverlayState';
 import {
   createRouteCostFieldCache,
   getRouteCostFieldDiagnostics,
@@ -38,7 +41,7 @@ const LEGEND_STYLE = new TextStyle({
 export interface RouteCostOverlayDiagnostics {
   readonly representation: 'two-raster-sprites';
   readonly visible: boolean;
-  readonly mode: 'baseTerrain' | 'finalCost';
+  readonly mode: RouteCostOverlayMode;
   readonly staticCostBuildCount: number;
   readonly dynamicCostBuildCount: number;
   readonly textureUploadCount: number;
@@ -123,7 +126,8 @@ export class PixiRouteCostOverlayRenderer {
       fields.profileId,
       fields.profileRevision,
     ].join(':');
-    const dynamicTextureKey = fields.cacheKey;
+    const dynamicMode = overlay.mode === 'directionalTerrain' ? 'directionalTerrain' : 'finalCost';
+    const dynamicTextureKey = `${fields.cacheKey}:${dynamicMode}`;
 
     if (staticTextureKey !== this.lastStaticTextureKey) {
       drawRouteCostRaster(this.staticContext, fields, 'baseTerrain');
@@ -133,7 +137,7 @@ export class PixiRouteCostOverlayRenderer {
       this.staticTextureBuildCount += 1;
     }
     if (dynamicTextureKey !== this.lastDynamicTextureKey) {
-      drawRouteCostRaster(this.dynamicContext, fields, 'finalCost');
+      drawRouteCostRaster(this.dynamicContext, fields, dynamicMode);
       this.dynamicTexture.baseTexture.update();
       markRouteCostTextureUploaded(this.cache);
       this.lastDynamicTextureKey = dynamicTextureKey;
@@ -142,19 +146,17 @@ export class PixiRouteCostOverlayRenderer {
 
     this.container.visible = true;
     if (this.staticSprite) this.staticSprite.visible = overlay.mode === 'baseTerrain';
-    if (this.dynamicSprite) this.dynamicSprite.visible = overlay.mode === 'finalCost';
-    this.legend.text = overlay.mode === 'baseTerrain'
-      ? `СТОИМОСТЬ МАРШРУТА · БАЗОВАЯ МЕСТНОСТЬ\nПрофиль: ${resolved.profile.nameRu}\n■ выгодно  ■ нормально  ■ дорого  ■ крайне дорого  ▧ непроходимо`
-      : `СТОИМОСТЬ МАРШРУТА · ИТОГОВАЯ ЦЕНА\nПрофиль: ${resolved.profile.nameRu}\n■ выгодно  ■ нормально  ■ дорого  ■ крайне дорого  ▧ непроходимо`;
+    if (this.dynamicSprite) this.dynamicSprite.visible = overlay.mode !== 'baseTerrain';
+    this.legend.text = legendText(overlay.mode, resolved.profile.nameRu, fields.availability.directionalTerrain);
 
     this.fields = fields;
     this.profile = resolved.profile;
     this.selectedUnitId = unit.id;
-    this.updateHover(state);
+    this.updateHover(state, overlay.mode);
     this.publishDiagnostics(overlay.mode);
   }
 
-  getDiagnostics(mode: 'baseTerrain' | 'finalCost' = 'finalCost'): RouteCostOverlayDiagnostics {
+  getDiagnostics(mode: RouteCostOverlayMode = 'finalCost'): RouteCostOverlayDiagnostics {
     const diagnostics = getRouteCostFieldDiagnostics(this.cache);
     return {
       representation: 'two-raster-sprites',
@@ -227,7 +229,7 @@ export class PixiRouteCostOverlayRenderer {
     this.dynamicSprite?.scale.set(scale, scale);
   }
 
-  private updateHover(state: SimulationState): void {
+  private updateHover(state: SimulationState, mode: RouteCostOverlayMode): void {
     const pointer = state.mouseGridPosition;
     const fields = this.fields;
     const profile = this.profile;
@@ -238,7 +240,7 @@ export class PixiRouteCostOverlayRenderer {
     }
     const x = Math.floor(pointer.x);
     const y = Math.floor(pointer.y);
-    const hoverKey = `${fields.cacheKey}:${x}:${y}`;
+    const hoverKey = `${fields.cacheKey}:${mode}:${x}:${y}`;
     if (hoverKey === this.lastHoverKey) return;
     this.lastHoverKey = hoverKey;
 
@@ -248,14 +250,14 @@ export class PixiRouteCostOverlayRenderer {
       return;
     }
     this.tooltip.visible = true;
-    this.tooltip.text = formatTooltip(profile, cell);
+    this.tooltip.text = formatTooltip(profile, cell, mode);
     this.tooltip.position.set(
       (x + 1.08) * state.map.cellSize,
       Math.max(0, y - 0.15) * state.map.cellSize,
     );
   }
 
-  private publishDiagnostics(mode: 'baseTerrain' | 'finalCost'): void {
+  private publishDiagnostics(mode: RouteCostOverlayMode): void {
     (window as RouteCostDebugWindow).__realWargameRouteCostDebug = this.getDiagnostics(mode);
   }
 }
@@ -263,7 +265,7 @@ export class PixiRouteCostOverlayRenderer {
 export function drawRouteCostRaster(
   context: CanvasRenderingContext2D,
   fields: RouteCostFields,
-  mode: 'baseTerrain' | 'finalCost',
+  mode: RouteCostOverlayMode,
 ): void {
   const width = fields.width * RASTER_PIXELS_PER_CELL;
   const height = fields.height * RASTER_PIXELS_PER_CELL;
@@ -276,7 +278,11 @@ export function drawRouteCostRaster(
       const value = mode === 'baseTerrain'
         ? fields.terrainCost[cellIndex] + fields.slopeCost[cellIndex] + fields.coverAdjustment[cellIndex]
         : fields.totalCost[cellIndex];
-      const color = passable ? costColor(value) : [30, 34, 32, 210] as const;
+      const color = !passable
+        ? [30, 34, 32, 210] as const
+        : mode === 'directionalTerrain'
+          ? directionalTerrainColor(fields, cellIndex)
+          : costColor(value);
       for (let py = 0; py < RASTER_PIXELS_PER_CELL; py += 1) {
         for (let px = 0; px < RASTER_PIXELS_PER_CELL; px += 1) {
           const outputX = x * RASTER_PIXELS_PER_CELL + px;
@@ -308,9 +314,53 @@ function costColor(value: number): readonly [number, number, number, number] {
   return [220, 55, 48, 135];
 }
 
-function formatTooltip(profile: NavigationProfile, cell: RouteCostCellBreakdown): string {
+function directionalTerrainColor(fields: RouteCostFields, index: number): readonly [number, number, number, number] {
+  if (!fields.availability.directionalTerrain) return [105, 112, 116, 75];
+  const slope = fields.directionalSlope[index];
+  const crest = fields.crestStrength[index] / 255;
+  const valley = fields.valleyStrength[index] / 255;
+  const silhouette = fields.silhouettePotential[index] / 255;
+  if (crest >= 0.55 || silhouette >= 0.72) return [244, 207, 54, 150];
+  if (slope >= 0.55) return [220, 55, 48, 145];
+  if (slope >= 0.18) return [239, 133, 47, 130];
+  if (slope <= -0.55) return [32, 72, 176, 150];
+  if (slope <= -0.18) return [54, 126, 224, 132];
+  if (valley >= 0.45) return [121, 66, 186, 115];
+  return [111, 122, 128, 72];
+}
+
+function legendText(mode: RouteCostOverlayMode, profileName: string, directionalAvailable: boolean): string {
+  if (mode === 'baseTerrain') {
+    return `СТОИМОСТЬ МАРШРУТА · БАЗОВАЯ МЕСТНОСТЬ\nПрофиль: ${profileName}\n■ выгодно  ■ нормально  ■ дорого  ■ крайне дорого  ▧ непроходимо`;
+  }
+  if (mode === 'directionalTerrain') {
+    const state = directionalAvailable ? '' : '\nНет известных направлений угрозы';
+    return `НАПРАВЛЕННЫЙ РЕЛЬЕФ\nПрофиль: ${profileName}\n■ прямой  ■ частично прямой  ■ обратный  ■ глубокий обратный  ■ гребень  ■ ложбина${state}`;
+  }
+  return `СТОИМОСТЬ МАРШРУТА · ИТОГОВАЯ ЦЕНА\nПрофиль: ${profileName}\n■ выгодно  ■ нормально  ■ дорого  ■ крайне дорого  ▧ непроходимо`;
+}
+
+function formatTooltip(
+  profile: NavigationProfile,
+  cell: RouteCostCellBreakdown,
+  mode: RouteCostOverlayMode,
+): string {
   if (!cell.passable) {
     return `Профиль: ${profile.nameRu}\nНепроходимая клетка`;
+  }
+  if (mode === 'directionalTerrain') {
+    return [
+      `Профиль: ${profile.nameRu}`,
+      `Тип склона: ${directionalSlopeLabel(cell.directionalSlope)}`,
+      `Направленная цена: ${signed(cell.directionalTerrainCost)}`,
+      `Гребень: ${percent(cell.crestStrength)}`,
+      `Ложбина: ${percent(cell.valleyStrength)}`,
+      `Риск силуэта: ${percent(cell.silhouettePotential)}`,
+      '',
+      cell.availability.directionalTerrain
+        ? 'Источник: личные известные направления угрозы бойца'
+        : 'Нет известных направлений угрозы',
+    ].join('\n');
   }
   const lines = [
     `Профиль: ${profile.nameRu}`,
@@ -320,11 +370,27 @@ function formatTooltip(profile: NavigationProfile, cell: RouteCostCellBreakdown)
     `Уклон: ${signed(cell.slopeCost)}`,
     cell.availability.danger ? `Известная опасность: ${signed(cell.dangerCost)}` : 'Опасность: нет известных данных',
     cell.availability.exposure ? `Видимость противнику: ${signed(cell.exposureCost)}` : 'Видимость противнику: данные недоступны',
+    cell.availability.directionalTerrain
+      ? `Направленный рельеф: ${signed(cell.directionalTerrainCost)} · ${directionalSlopeLabel(cell.directionalSlope)}`
+      : 'Направленный рельеф: нет известных направлений угрозы',
     `Укрытие / маскировка: ${signed(cell.coverAdjustment)}`,
     cell.availability.enemyDistance ? `Близость противника: ${signed(cell.enemyDistanceCost)}` : 'Близость противника: данные недоступны',
     cell.availability.territory ? `Территория: ${signed(cell.territoryCost)}` : 'Территория: данные недоступны',
   ];
   return lines.join('\n');
+}
+
+function directionalSlopeLabel(value: number): string {
+  const magnitude = Math.round(Math.abs(value) * 100);
+  if (value >= 0.55) return `прямой ${magnitude}%`;
+  if (value >= 0.18) return `преимущественно прямой ${magnitude}%`;
+  if (value <= -0.55) return `обратный ${magnitude}%`;
+  if (value <= -0.18) return `преимущественно обратный ${magnitude}%`;
+  return 'боковой или ровный';
+}
+
+function percent(value: number): string {
+  return `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`;
 }
 
 function terrainLabel(key: string): string {
