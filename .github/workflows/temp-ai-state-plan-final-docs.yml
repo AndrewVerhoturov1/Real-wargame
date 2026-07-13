@@ -1,0 +1,110 @@
+name: Temporary AI state-plan final docs
+
+on:
+  push:
+    branches:
+      - feat/ai-state-plan-v1-temp-2026-07-14
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: ${{ !contains(github.event.head_commit.message, '[state-plan-final-docs]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Record successful core validation
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile } from 'node:fs/promises';
+
+          const verifiedSha = '62379286b0704a49dc258aaba379a8dd404ff9f5';
+          const validationRun = '29280697374';
+          const jsonPath = 'docs/subprojects/ai-single-unit-editor/subproject.json';
+          const data = JSON.parse(await readFile(jsonPath, 'utf8'));
+          data.last_verified_commit = verifiedSha;
+          data.current_focus = 'The first State → Utility → Plan → Subgraph vertical slice is implemented and its mandatory automated regression is green. Browser visual QA is prepared and awaits explicit user approval.';
+          data.next_step = 'After explicit approval, run the prepared system-Chromium visual QA and inspect the five PNGs. Keep the work on the temporary branch until the user separately commands transfer to real-wargame-preview.';
+          data.last_verified_runs.hierarchical_states_and_plans_v1 = {
+            date: '2026-07-14',
+            branch: 'feat/ai-state-plan-v1-temp-2026-07-14',
+            base_preview_sha: 'cc907ca0f48caed418cd76b0f878c8b18fbe71c7',
+            verified_sha: verifiedSha,
+            validation_run: validationRun,
+            status: 'core_validated_visual_pending',
+            confirmed: [
+              'state-machine:smoke',
+              'plan-runtime:smoke',
+              'state-plan-scenario:smoke',
+              'graph-v2:smoke',
+              'runtime:smoke',
+              'runtime-session:smoke',
+              'runtime-snapshot:smoke',
+              'runtime-scene:smoke',
+              'runtime-modifiers:smoke',
+              'subgraph:smoke',
+              'graph-v2-scenario:smoke',
+              'event-queue:smoke',
+              'simulation-events:smoke',
+              'reactive-runtime:smoke',
+              'composite:smoke',
+              'routed-move:smoke',
+              'navigation-profiles:smoke',
+              'navigation-profile-switch:smoke',
+              'attention-ai-nodes:smoke',
+              'perception:smoke',
+              'blackboard-observer:smoke',
+              'workspace:smoke',
+              'editor:smoke',
+              'runtime-debug-v2:smoke',
+              'docs:sync',
+              'build',
+              'Agent Docs Integrity',
+              'Preview Policy'
+            ],
+            visual_qa_prepared: true,
+            visual_qa_run: false
+          };
+          await writeFile(jsonPath, `${JSON.stringify(data, null, 2)}\n`);
+
+          const handoffPath = 'docs/subprojects/ai-single-unit-editor/HANDOFF.md';
+          let handoff = await readFile(handoffPath, 'utf8');
+          handoff = handoff.replace(
+            /На первой CI-проверке уже подтверждены:[\s\S]*?Исправления внесены; полный повторный прогон ещё должен закончиться перед финальным отчётом\./,
+            `Полный обязательный автоматический прогон завершён успешно на SHA \`${verifiedSha}\`, validation run \`${validationRun}\`.\n\nПодтверждены новые проверки состояний и планов, Graph v2, runtime/session/snapshot/scene/modifiers, подграфы, события, reactive/composite runtime, маршруты и профили, внимание, восприятие, observer runtime, workspace, редактор, runtime-debug v2, \`docs:sync\`, production build, Agent Docs Integrity и Preview Policy.\n\nНайденные по ходу проверки совместимые ошибки — \`Array.at\` при старом target, неиспользуемый параметр и устаревшие ожидания версии экспорта v8 вместо текущей v9 — исправлены и повторно проверены.`
+          );
+          handoff = handoff.replace(
+            /## Следующие действия[\s\S]*?## Запрещено при продолжении/,
+            `## Следующие действия\n\n1. Получить отдельное разрешение пользователя на браузерную визуальную проверку.\n2. Запустить подготовленный system-Chromium сценарий на точном SHA и лично осмотреть пять PNG.\n3. Не переносить изменения в \`real-wargame-preview\` без отдельной прямой команды пользователя.\n4. Перед будущим переносом проверить дрейф preview, потому что параллельно разрабатывается система стрельбы.\n\n## Запрещено при продолжении`
+          );
+          await writeFile(handoffPath, handoff);
+
+          const journalPath = 'docs/subprojects/ai-single-unit-editor/JOURNAL.md';
+          let journal = await readFile(journalPath, 'utf8');
+          const marker = '## 2026-07-14 — state-plan v1 mandatory validation completed';
+          if (!journal.includes(marker)) {
+            journal += `\n\n${marker}\n\n- Verified SHA: \`${verifiedSha}\`.\n- Validation run: \`${validationRun}\`.\n- All required core, runtime, scene, events, navigation, attention, perception, editor, docs and production-build checks passed.\n- Visual QA remains prepared but intentionally not run without explicit user approval.\n- Preview and main remain untouched.\n`;
+          }
+          await writeFile(journalPath, journal);
+          NODE
+          npm run docs:generate
+          npm run docs:check
+      - name: Commit final validation documentation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs
+          if git diff --cached --quiet; then
+            echo "Final documentation already current."
+            exit 0
+          fi
+          git commit -m "docs: record successful state-plan validation [state-plan-final-docs]"
+          git push origin HEAD:feat/ai-state-plan-v1-temp-2026-07-14
