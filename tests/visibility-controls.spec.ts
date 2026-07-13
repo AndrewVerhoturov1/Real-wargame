@@ -70,7 +70,7 @@ test('manually changes attention mode and performs a one-shot turn command', asy
   const turn = page.locator('[data-action="turn-unit"]');
   await turn.click();
   await expect(turn).toHaveClass(/active/);
-  await expect(turn).toContainText('Укажите направление');
+  await expect(turn).toContainText('Куда?');
   await expect.poll(async () => canvas.evaluate((element) => getComputedStyle(element).cursor)).toBe('crosshair');
 
   const target = await worldPoint(canvas, 35.5, 12.5);
