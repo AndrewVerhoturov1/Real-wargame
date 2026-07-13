@@ -16,3 +16,16 @@ document.addEventListener('change', (event) => {
   );
   if (contractSubgraph) contractSubgraph.value = selectedSubgraphId;
 }, true);
+
+function normalizeBreadcrumbLabels(): void {
+  const breadcrumb = document.querySelector<HTMLElement>('.graph-breadcrumb span');
+  if (!breadcrumb) return;
+  const labels = (breadcrumb.textContent ?? '').split(' → ').map((label) => label.trim()).filter(Boolean);
+  const uniqueAdjacent = labels.filter((label, index) => index === 0 || label !== labels[index - 1]);
+  const normalized = uniqueAdjacent.join(' → ');
+  if (normalized && breadcrumb.textContent !== normalized) breadcrumb.textContent = normalized;
+}
+
+const breadcrumbObserver = new MutationObserver(() => normalizeBreadcrumbLabels());
+breadcrumbObserver.observe(document.body, { childList: true, subtree: true });
+normalizeBreadcrumbLabels();
