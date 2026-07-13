@@ -26,27 +26,46 @@ jobs:
         run: npm ci
 
       - name: Directional terrain smoke
-        run: npm run directional-terrain:smoke 2>&1 | tee directional-terrain.log
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run directional-terrain:smoke 2>&1 | tee directional-terrain.log
 
       - name: Navigation profile regression
-        run: npm run navigation-profiles:smoke 2>&1 | tee navigation-profiles.log
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run navigation-profiles:smoke 2>&1 | tee navigation-profiles.log
 
       - name: Grid pathfinding regression
-        run: npm run pathfinding:smoke 2>&1 | tee pathfinding.log
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run pathfinding:smoke 2>&1 | tee pathfinding.log
 
       - name: Navigation overlay regression
-        run: npm run navigation-overlay:smoke 2>&1 | tee navigation-overlay.log
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run navigation-overlay:smoke 2>&1 | tee navigation-overlay.log
 
       - name: Map revision regression
-        run: npm run map-revision:smoke 2>&1 | tee map-revision.log
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run map-revision:smoke 2>&1 | tee map-revision.log
 
       - name: Production build
+        shell: bash
         run: |
           set -o pipefail
           npm run build 2>&1 | tee build.log
 
       - name: Documentation check
-        run: npm run docs:check 2>&1 | tee docs-check.log
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run docs:check 2>&1 | tee docs-check.log
 
       - name: Upload verification logs
         if: always()
