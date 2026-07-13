@@ -1,6 +1,9 @@
 import '../tactical-workspace-stage8.css';
 import type { AiGameBridgeHandle } from '../core/ai/AiGameBridge';
 import type { UnitPosture } from '../core/behavior/BehaviorModel';
+import { getCombatRuntime } from '../core/combat/CombatDamage';
+import { getFireAction } from '../core/combat/FireAction';
+import { getWeaponRuntime } from '../core/combat/WeaponModel';
 import { buildSoldierAwarenessReport } from '../core/knowledge/SoldierAwarenessGrid';
 import { clearAttentionOverride, setAttentionMode, setSearchSector } from '../core/perception/AttentionController';
 import { applyAttentionProfileToUnit } from '../core/perception/AttentionProfiles';
@@ -33,7 +36,7 @@ import {
   toggleRealReliefOverlay,
   type SimulationLayerMode,
 } from '../core/ui/RuntimeUiState';
-import { applyInitialStateToRuntime, type UnitModel } from '../core/units/UnitModel';
+import { applyInitialStateToRuntime, type UnitModel, type UnitSide } from '../core/units/UnitModel';
 import { exitLab } from '../shared/AppShellMenu';
 
 export type TacticalWorkspaceMode = 'simulation' | 'editor';
@@ -68,6 +71,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
       </div>
       <div class="workspace-top-actions">
         <button class="editor-place-button primary" data-action="editor-place" title="Включить постановку для открытой вкладки редактора">Поставить</button>
+        <label class="editor-unit-side-control"><span>Сторона бойца</span><select data-action="editor-unit-side"><option value="blue">Свои</option><option value="red">Противник</option></select></label>
         <button data-action="ai-editor">Редактор ИИ</button><button data-action="new-game">Новая игра</button>
         <details class="workspace-file-menu"><summary>Файл</summary><div class="workspace-file-panel" data-role="file-tools"></div></details>
         <details class="workspace-display-menu"><summary>Вид</summary><div class="workspace-display-panel" data-role="display"></div></details>
@@ -130,10 +134,17 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   const display = q<HTMLElement>('[data-role="display"]');
   const fileTools = q<HTMLElement>('[data-role="file-tools"]');
   const editorPlace = q<HTMLButtonElement>('[data-action="editor-place"]');
+  const editorUnitSide = q<HTMLSelectElement>('[data-action="editor-unit-side"]');
   const navigationProfile = q<HTMLSelectElement>('[data-action="unit-navigation-profile"]');
   const attentionProfileSelect = q<HTMLSelectElement>('[data-action="unit-attention-profile"]');
   const attentionModeSelect = q<HTMLSelectElement>('[data-action="unit-attention-mode"]');
   const turnUnitButton = q<HTMLButtonElement>('[data-action="turn-unit"]');
+  editorUnitSide.value = state.editor.unitSide;
+  editorUnitSide.addEventListener('change', () => {
+    state.editor.unitSide = (editorUnitSide.value === 'red' ? 'red' : 'blue') as UnitSide;
+    state.editor.lastMessage = state.editor.unitSide === 'red' ? 'Новые бойцы будут противниками.' : 'Новые бойцы будут своими.';
+    onChanged();
+  });
 
   moveExistingButton('#grid-toggle', display);
   moveExistingButton('#height-toggle', display);
@@ -297,6 +308,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
     document.body.classList.toggle('sidebar-collapsed', mode === 'simulation' && collapsed);
     sidebar.hidden = mode !== 'simulation';
     bottom.hidden = mode !== 'simulation';
+    editorUnitSide.closest<HTMLElement>('.editor-unit-side-control')!.hidden = mode !== 'editor';
     q<HTMLButtonElement>('[data-action="collapse"]').textContent = collapsed ? '›' : '‹';
     for (const item of shell.querySelectorAll<HTMLButtonElement>('[data-mode]')) item.classList.toggle('active', item.dataset.mode === mode);
     updateEditorPlaceButton();
@@ -314,13 +326,18 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   function updateBottom(): void {
     const unit = getSelectedUnit(state);
     q('[data-role="unit-name"]').textContent = unit?.labels.ru ?? 'Боец не выбран';
-    q('[data-role="unit-meta"]').textContent = unit ? `${unit.id} · ${postureLabel(unit.behaviorRuntime.posture)} · ${profileLabel(unit.behaviorProfile)}` : 'Левый клик по солдату — выбрать';
+    const combat = unit ? getCombatRuntime(unit) : null;
+    const weapon = unit ? getWeaponRuntime(unit) : null;
+    const fireAction = unit ? getFireAction(unit) : null;
+    q('[data-role="unit-meta"]').textContent = unit
+      ? `${unit.id} · ${unit.side === 'red' ? 'Противник' : 'Свои'} · ${postureLabel(unit.behaviorRuntime.posture)} · ${profileLabel(unit.behaviorProfile)} · ${combatCapabilityLabel(combat!.capability)}`
+      : 'Левый клик по солдату — выбрать';
     const values: Record<string, string> = unit ? {
       health: pct(unit.soldier.condition.health), morale: pct(unit.soldier.condition.morale), fatigue: pct(unit.soldier.condition.fatigue),
-      stress: pct(unit.behaviorRuntime.stress), suppression: pct(unit.behaviorRuntime.suppression), ammo: String(Math.round(unit.behaviorRuntime.ammo)),
+      stress: pct(unit.behaviorRuntime.stress), suppression: pct(unit.behaviorRuntime.suppression), ammo: `${weapon!.roundsLoaded}+${weapon!.roundsReserve}`,
     } : { health:'—', morale:'—', fatigue:'—', stress:'—', suppression:'—', ammo:'—' };
     for (const item of shell.querySelectorAll<HTMLElement>('[data-stat]')) item.textContent = values[item.dataset.stat ?? ''] ?? '—';
-    q('[data-role="action"]').textContent = `Действие: ${unit ? actionLabel(unit.behaviorRuntime.currentAction) : '—'}`;
+    q('[data-role="action"]').textContent = `Действие: ${unit ? actionLabel(unit.behaviorRuntime.currentAction) : '—'}${fireAction ? ` · стрельба: ${firePhaseLabel(fireAction.phase)}` : ''}`;
     q('[data-role="order"]').textContent = `Приказ: ${unit ? orderLabel(state, unit) : '—'}`;
     navigationProfile.disabled = !unit;
     attentionProfileSelect.disabled = !unit;
@@ -400,6 +417,26 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   setSimulationLayerMode(state, tab);
   syncLayout(); update(true); attachTooltip();
   window.setInterval(() => update(false), 300);
+}
+
+function combatCapabilityLabel(value: ReturnType<typeof getCombatRuntime>['capability']): string {
+  if (value === 'wounded') return 'ранен';
+  if (value === 'severely_wounded') return 'тяжело ранен';
+  if (value === 'incapacitated') return 'выведен из строя';
+  if (value === 'dead') return 'погиб';
+  return 'боеспособен';
+}
+
+function firePhaseLabel(value: NonNullable<ReturnType<typeof getFireAction>>['phase']): string {
+  if (value === 'acquire_target') return 'выбор цели';
+  if (value === 'turning') return 'поворот';
+  if (value === 'readying_weapon') return 'подготовка оружия';
+  if (value === 'aiming') return 'наведение';
+  if (value === 'final_safety_check') return 'проверка линии огня';
+  if (value === 'firing') return 'выстрел';
+  if (value === 'recovering') return 'восстановление';
+  if (value === 'cancelled') return 'отменено';
+  return 'не удалось';
 }
 
 function infoPanel(): string {

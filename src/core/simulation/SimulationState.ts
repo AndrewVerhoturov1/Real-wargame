@@ -15,7 +15,7 @@ import {
   type PressureZoneData,
   type PressureZoneShape,
 } from '../pressure/PressureZone';
-import { findUnitAtGridPosition, normalizeUnits, type UnitData, type UnitModel, type UnitType } from '../units/UnitModel';
+import { findUnitAtGridPosition, normalizeUnits, type UnitData, type UnitModel, type UnitSide, type UnitType } from '../units/UnitModel';
 
 export interface SelectionBox {
   start: GridPosition;
@@ -77,6 +77,7 @@ export interface EditorState {
   tool: EditorTool;
   objectKind: MapObjectKind;
   unitType: UnitType;
+  unitSide: UnitSide;
   zoneShape: PressureZoneShape;
   zoneRadiusCells: number;
   zoneWidthCells: number;
@@ -128,6 +129,7 @@ export function createInitialState(
       tool: 'select',
       objectKind: 'tree',
       unitType: 'infantry_squad',
+      unitSide: 'blue',
       zoneShape: 'circle',
       zoneRadiusCells: 3,
       zoneWidthCells: 5,
@@ -761,7 +763,7 @@ function spawnEditorUnit(state: SimulationState, grid: GridPosition): void {
       label: id,
       labelRu: `Юнит ${index}`,
       type: state.editor.unitType,
-      side: 'player',
+      side: state.editor.unitSide,
       x: Math.max(0, Math.floor(grid.x)),
       y: Math.max(0, Math.floor(grid.y)),
       behaviorProfile: 'regular',
