@@ -29,14 +29,17 @@ jobs:
               description: 'Removing Graph v1 editor mode',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
+
       - uses: actions/checkout@v4
         with:
           ref: fix/ai-plan-move-editor-panels-temp-2026-07-14
           fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
       - run: npm ci
 
       - name: Confirm Graph v2-only test is red before implementation
@@ -61,8 +64,7 @@ jobs:
 
           main_path = Path('src/ai-node-editor/main.ts')
           text = main_path.read_text(encoding='utf-8')
-
-          exact = [
+          replacements = [
             ("  version: 1 | 2;", "  version: 2;"),
             ("let editorGraph = loadStoredGraph() ?? normalizeGraph(graphData as unknown);", "let editorGraph = loadStoredGraph() ?? loadEditorGraphV2(graphData as unknown);"),
             ("          <span class=\"graph-version-badge ${editorGraph.version === 2 ? 'v2' : 'v1'}\">Graph v${editorGraph.version}</span>\n          <button id=\"migrate-graph\" class=\"ai-editor-button primary\" type=\"button\">Проверить и обновить формат графа</button>\n", ""),
@@ -74,7 +76,7 @@ jobs:
             ("validationText = `Imported ${file.name}`;", "validationText = `Импортирован ${file.name} · Graph v2`;"),
             ("version:raw.version===2?2:1", "version:2"),
           ]
-          for old, new in exact:
+          for old, new in replacements:
             if old not in text:
               raise SystemExit(f'Expected main.ts fragment not found:\n{old}')
             text = text.replace(old, new, 1)
@@ -145,13 +147,28 @@ jobs:
           rm -rf .tmp-migrate-editor-graph .tmp-migrate-editor-graph.ts
 
       - name: Verify Graph v2-only editor and regressions
+        shell: bash
         run: |
-          npm run editor:smoke
-          npm run graph-v2:smoke
-          npm run node-contract-ui:smoke
-          npm run move-bridge:smoke
-          npm run state-plan-scenario:smoke
-          npm run build
+          set -o pipefail
+          {
+            npm run editor:smoke
+            npm run graph-v2:smoke
+            npm run node-contract-ui:smoke
+            npm run move-bridge:smoke
+            npm run state-plan-scenario:smoke
+            npm run build
+          } 2>&1 | tee graph-v2-only-verify.log
+
+      - name: Upload executor diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-editor-v2-only-executor-logs
+          path: |
+            graph-v2-only-red.log
+            graph-v2-only-verify.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Commit verified Graph v2-only editor
         run: |
