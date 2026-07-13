@@ -182,7 +182,7 @@ expectIncludes('src/core/simulation/SimulationTick.ts', [
   'syncSoldierThreatMemory',
 ]);
 expectIncludes('src/ui/SceneExport.ts', [
-  'scene-export-v8-view-memory-heatmap-ai-runtime-2m-grid',
+  'scene-export-v9-minimal-target-visibility-ai-runtime-2m-grid',
   'replaceSceneAtRuntimeResolution',
   'coverReliability',
   'directionDegrees',
