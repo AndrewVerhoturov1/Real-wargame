@@ -1,0 +1,42 @@
+name: Temporary AI state-plan validation
+
+on:
+  pull_request:
+    branches:
+      - validation/ai-state-plan-v1-base-2026-07-14
+
+permissions:
+  contents: read
+
+jobs:
+  state-plan-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run state-machine:smoke
+      - run: npm run plan-runtime:smoke
+      - run: npm run state-plan-scenario:smoke
+      - run: npm run graph-v2:smoke
+      - run: npm run runtime:smoke
+      - run: npm run runtime-session:smoke
+      - run: npm run runtime-snapshot:smoke
+      - run: npm run subgraph:smoke
+
+  state-plan-build-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run workspace:smoke
+      - run: npm run editor:smoke
+      - run: npm run runtime-debug-v2:smoke
+      - run: npm run build
