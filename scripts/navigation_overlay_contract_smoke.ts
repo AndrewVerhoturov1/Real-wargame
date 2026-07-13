@@ -17,6 +17,10 @@ import {
   markRouteCostTextureUploaded,
   readRouteCostCell,
 } from '../src/core/navigation/RouteCostField';
+import {
+  getDirectionalTacticalField,
+  getDirectionalTacticalFieldDiagnostics,
+} from '../src/core/terrain/DirectionalTacticalField';
 
 void main();
 
@@ -26,8 +30,9 @@ async function main(): Promise<void> {
   verifyMapIdentityIsolation();
   verifyProfileSwitchInvalidatesField();
   verifyHoverAndTextureCounters();
+  verifySharedDirectionalFieldMovementBucket();
   await verifyRendererBoundary();
-  console.log('Navigation overlay contract smoke passed: storage, map identity, typed-array hover, hidden directional diagnostics, texture counters and renderer/A* separation.');
+  console.log('Navigation overlay contract smoke passed: storage, map identity, typed-array hover, movement-stable shared terrain cache, hidden directional diagnostics, texture counters and renderer/A* separation.');
 }
 
 function verifySelectedPlayerProfileResolution(): void {
@@ -132,6 +137,48 @@ function verifyHoverAndTextureCounters(): void {
   assert.equal(after.textureUploadCount - before.textureUploadCount, 2);
   assert.equal(after.staticCostBuildCount, before.staticCostBuildCount, 'hover must not rebuild static cost');
   assert.equal(after.dynamicCostBuildCount, before.dynamicCostBuildCount, 'hover must not rebuild dynamic cost');
+}
+
+function verifySharedDirectionalFieldMovementBucket(): void {
+  const map = normalizeMap(makeMap([]));
+  const threat = {
+    id: 'stable-east-threat',
+    x: 5.5,
+    y: 1.5,
+    strength: 100,
+    suppression: 80,
+    confidence: 90,
+    uncertaintyCells: 0.5,
+  };
+  const first = getDirectionalTacticalField(map, {
+    unitId: 'stable-unit',
+    originX: 1.1,
+    originY: 1.1,
+    knowledgeRevision: 1,
+    threats: [threat],
+  });
+  const afterFirst = getDirectionalTacticalFieldDiagnostics(map);
+  const sameBucket = getDirectionalTacticalField(map, {
+    unitId: 'stable-unit',
+    originX: 1.4,
+    originY: 1.4,
+    knowledgeRevision: 999,
+    threats: [threat],
+  });
+  const afterSameBucket = getDirectionalTacticalFieldDiagnostics(map);
+  assert.equal(sameBucket, first, 'small movement and metadata-only knowledge revisions must reuse the shared full-map field');
+  assert.equal(afterSameBucket.buildCount, afterFirst.buildCount);
+  assert.equal(afterSameBucket.cacheHitCount, afterFirst.cacheHitCount + 1);
+
+  getDirectionalTacticalField(map, {
+    unitId: 'stable-unit',
+    originX: 2.1,
+    originY: 1.1,
+    knowledgeRevision: 1000,
+    threats: [threat],
+  });
+  const afterNextBucket = getDirectionalTacticalFieldDiagnostics(map);
+  assert.equal(afterNextBucket.buildCount, afterFirst.buildCount + 1, 'crossing a whole-cell origin bucket must build exactly one new field');
 }
 
 async function verifyRendererBoundary(): Promise<void> {
