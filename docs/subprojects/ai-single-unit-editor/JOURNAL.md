@@ -49,3 +49,34 @@
 - **2026-07-13**: Completed View and Memory Heatmap v1 on isolated branch `feat/view-memory-heatmap-temp`. Replaced physical attention sweep with stable probabilistic coverage, added meter-based cell visibility, deterministic time-based detection variance, cached one-byte field storage and one-sprite rendering. Full regression and exact-SHA system-Chrome Playwright 20/20 passed; key PNGs were inspected. Preview and main remain untouched. See `journal/2026-07-13-view-memory-heatmap-v1.md`.
 - **2026-07-13**: Implemented Graph v2 typed contracts and reusable subgraphs on isolated branch `feat/ai-graph-v2-finalize-2026-07-13`. Added shared node contracts, deterministic v1 migration, strict typed validation, five memory scopes, bounded runtime modifiers, four isolated subgraphs, snapshot/restore, Russian editor controls, breadcrumbs, clickable errors, debug scope display and a full `shot_nearby → take_cover → move_and_observe` scenario. Transfer to preview remains blocked until a separate explicit user command.
 - **2026-07-13**: Rebuilt Graph v2 as clean transfer branch `transfer/ai-graph-v2-preview-2026-07-13` on preview `db80f36edaf018c6a45dfeb7cc0f7caaed00bdb5`. Repeated the full regression/build set and mandatory system-Chromium visual QA. The visual run found and fixed persisted subgraph selection and duplicate breadcrumb defects; three fresh PNGs were opened and inspected. The manual screenshot workflow now includes the Graph v2 editor scenario.
+
+## 2026-07-14 — hierarchical states and explicit plans v1
+
+Base: `real-wargame-preview` `cc907ca0f48caed418cd76b0f878c8b18fbe71c7`  
+Temporary branch: `feat/ai-state-plan-v1-temp-2026-07-14`  
+Validation-only PR: `#94` to `validation/ai-state-plan-v1-base-2026-07-14`
+
+Implemented:
+
+- hierarchical `Normal/Combat` state paths with four leaf states;
+- deterministic transition priority, wildcard suppression and hysteresis;
+- explicit serializable `AiPlan` and `AiPlanRuntime`;
+- `FollowMoveOrder` and `TakeCover` plans;
+- state-gated plan selection and non-per-tick Utility reevaluation;
+- Graph v2 plan-step delegation to existing subgraphs;
+- nested movement owner-token discovery for route monitoring and scene snapshots;
+- cancellation-before-replacement ordering;
+- runtime session save/restore of state, plan, step, attempts and plan history;
+- compact Russian tactical and node-editor diagnostics;
+- deterministic browser visual-QA harness and five requested screenshot names.
+
+New automated checks:
+
+- `state-machine:smoke`;
+- `plan-runtime:smoke`;
+- `state-plan-scenario:smoke`.
+
+First CI evidence confirmed all three new checks plus Graph v2, runtime, runtime session, workspace, editor and runtime-debug smoke checks. A stale scene-export version assertion and TypeScript target compatibility issues were found and corrected. Full regression and production build are rerun before completion.
+
+Visual QA is prepared but not executed. No PNG is considered approved until the user authorizes a real system-Chromium run and the resulting images are inspected.
+
