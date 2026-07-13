@@ -4,7 +4,6 @@ import { applyUnitHit, getCombatRuntime, isUnitCombatCapable } from '../src/core
 import {
   getFireAction,
   requestFireAction,
-  tickFireAction,
 } from '../src/core/combat/FireAction';
 import { getUnitHitShapes, intersectRayWithUnitHitShapes } from '../src/core/combat/UnitHitShapes';
 import {
@@ -15,6 +14,7 @@ import {
 } from '../src/core/combat/WeaponModel';
 import { tickAllUnitPerception } from '../src/core/perception/PerceptionSystem';
 import { createInitialState } from '../src/core/simulation/SimulationState';
+import { tickSimulation } from '../src/core/simulation/SimulationTick';
 import { areUnitsHostile, getSideRelation } from '../src/core/units/SideRelations';
 import { buildExportedScene, normalizeImportedScene } from '../src/ui/SceneExport';
 
@@ -303,8 +303,7 @@ function verifyStatefulFire(): void {
   const phases = new Set<string>();
   for (let index = 0; index < 120 && getFireAction(blue); index += 1) {
     phases.add(getFireAction(blue)?.phase ?? 'none');
-    state.simulationTimeSeconds += 0.05;
-    tickFireAction(state, blue, 0.05);
+    tickSimulation(state, 0.05);
   }
   assert.ok(phases.has('turning') || phases.has('readying_weapon'));
   assert.ok(phases.has('aiming'));
