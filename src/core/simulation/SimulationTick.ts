@@ -2,6 +2,7 @@ import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import { publishSimulationAiEvents } from '../ai/events/SimulationAiEvents';
 import { clampPercent, POSTURE_MOVE_MULTIPLIER } from '../behavior/BehaviorModel';
 import { getCombatMovementMultiplier, getCombatRuntime, isUnitCombatCapable } from '../combat/CombatDamage';
+import { tickAutomaticCombatEngagements } from '../combat/CombatEngagement';
 import { getFireAction, tickAllFireActions } from '../combat/FireAction';
 import type { GridPosition } from '../geometry';
 import { syncSoldierThreatMemory } from '../knowledge/SoldierThreatMemory';
@@ -33,6 +34,7 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
   }
 
   tickAllUnitPerception(state, scaledDeltaSeconds);
+  tickAutomaticCombatEngagements(state);
   tickAllFireActions(state, scaledDeltaSeconds);
 
   for (const unit of state.units) {
