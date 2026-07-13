@@ -1,0 +1,40 @@
+diff --git a/scripts/ai_node_contract_ui_smoke.ts b/scripts/ai_node_contract_ui_smoke.ts
+index 0394363..7b02d7a 100644
+--- a/scripts/ai_node_contract_ui_smoke.ts
++++ b/scripts/ai_node_contract_ui_smoke.ts
+@@ -31,6 +31,16 @@ assert(
+   'typed connection fallback must guard duplicate pointerdown/mousedown delivery and non-primary buttons',
+ );
+ 
++const authoringCss = readFileSync(new URL('../src/ai-node-editor/ai-node-editor-authoring.css', import.meta.url), 'utf8');
++assert(
++  authoringCss.includes('grid-template-rows: 42px auto minmax(0, 1fr) 26px'),
++  'Graph v2 version banner must have its own grid row so the graph workspace keeps the available height',
++);
++assert(
++  authoringCss.includes('grid-template-rows: 42px auto minmax(0, 1fr) 170px'),
++  'open bottom diagnostics must preserve the dedicated Graph v2 banner row',
++);
++
+ console.log('AI node contract UI smoke passed: dynamic subgraph ports and non-duplicated parameters.');
+diff --git a/src/ai-node-editor/ai-node-editor-authoring.css b/src/ai-node-editor/ai-node-editor-authoring.css
+index 7dfaa11..9d1fa13 100644
+--- a/src/ai-node-editor/ai-node-editor-authoring.css
++++ b/src/ai-node-editor/ai-node-editor-authoring.css
+@@ -5,14 +5,14 @@
+ 
+ .ai-editor-shell {
+   display: grid;
+-  grid-template-rows: 42px minmax(0, 1fr) 26px !important;
++  grid-template-rows: 42px auto minmax(0, 1fr) 26px !important;
+   width: 100vw;
+   height: 100vh;
+   overflow: hidden;
+ }
+ 
+ .ai-editor-shell.bottom-open {
+-  grid-template-rows: 42px minmax(0, 1fr) 170px !important;
++  grid-template-rows: 42px auto minmax(0, 1fr) 170px !important;
+ }
+ 
+ .compact-topbar {
