@@ -10,6 +10,8 @@ export interface PerceptionDiagnostics {
   lastObserverId: string | null;
 }
 
+export type MutablePerceptionDiagnostics = PerceptionDiagnostics;
+
 type PerceptionDebugWindow = Window & {
   __realWargamePerceptionDebug?: PerceptionDiagnostics;
 };
