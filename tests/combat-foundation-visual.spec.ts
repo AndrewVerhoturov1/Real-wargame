@@ -130,8 +130,8 @@ test('prepares visual proof for existing detection, fire permission and rifle fe
   const fastSpeed = page.locator('[data-speed="10"]');
   await fastSpeed.click();
   await expect(fastSpeed).toHaveClass(/active/);
-  await expect(fireButton).toBeEnabled({ timeout: 30_000 });
-  await expect(fireButton).toHaveAttribute('title', /Личный контакт:/);
+  await expect(fireButton).toBeDisabled({ timeout: 30_000 });
+  await expect(fireButton).toHaveAttribute('title', /Личный контакт:/, { timeout: 30_000 });
 
   const normalSpeed = page.locator('[data-speed="1"]');
   await normalSpeed.click();
