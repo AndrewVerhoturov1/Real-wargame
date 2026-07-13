@@ -66,7 +66,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run docs:sync
+      - run: npm run docs:generate
       - name: Commit synchronized documentation
         run: |
           git config user.name "github-actions[bot]"
@@ -78,5 +78,5 @@ jobs:
             git commit -m "docs: synchronize state-plan documentation [state-plan-docs-synced]"
             git push origin HEAD:feat/ai-state-plan-v1-temp-2026-07-14
           fi
-      - run: npm run docs:check
+      - run: npm run docs:sync
       - run: npm run build
