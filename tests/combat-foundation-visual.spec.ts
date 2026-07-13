@@ -8,6 +8,7 @@ const BOARD_ORIGIN = { x: 72, y: 72 };
 const CELL_SIZE = 24;
 const BLUE_SPAWN = { x: 10, y: 8 };
 const RED_SPAWN = { x: 14, y: 8 };
+const AWAY_POINT = { x: 6, y: 8 };
 
 async function saveScreenshot(page: Page, name: string): Promise<void> {
   const session = await page.context().newCDPSession(page);
@@ -37,6 +38,15 @@ async function clickUnit(page: Page, canvas: Locator, position: { x: number; y: 
   await page.mouse.click(point.x, point.y);
 }
 
+async function turnSelectedUnit(page: Page, canvas: Locator, target: { x: number; y: number }): Promise<void> {
+  const turnButton = page.locator('[data-action="turn-unit"]');
+  await turnButton.click();
+  await expect(turnButton).toHaveText('Куда?');
+  const point = await worldPoint(canvas, target.x, target.y);
+  await page.mouse.click(point.x, point.y, { button: 'right' });
+  await expect(turnButton).toHaveText('Повернуть');
+}
+
 function sideSelect(page: Page): Locator {
   return page.locator('.game-editor-body .game-editor-field').filter({ hasText: 'Сторона' }).locator('select');
 }
@@ -53,17 +63,11 @@ async function placeUnit(page: Page, canvas: Locator, side: 'blue' | 'red', posi
   if (side === 'red') await expect(page.locator('.game-editor-status')).toContainText('Противник');
 }
 
-async function waitForFireActionToFinish(page: Page): Promise<void> {
-  const action = page.locator('[data-role="action"]');
-  await expect.poll(async () => action.textContent(), { timeout: 20_000 })
-    .not.toContain('стрельба:');
-}
-
 test.beforeAll(() => {
   mkdirSync(SCREENSHOT_DIR, { recursive: true });
 });
 
-test('visually verifies two hostile sides, personal contact and stateful rifle fire', async ({ page }) => {
+test('prepares visual proof for existing detection, fire permission and rifle feedback', async ({ page }) => {
   const pageErrors: string[] = [];
   const httpErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -102,59 +106,59 @@ test('visually verifies two hostile sides, personal contact and stateful rifle f
 
   await page.locator('[data-mode="simulation"]').click();
   await expect(page.locator('body')).toHaveClass(/workspace-simulation/);
+  const firePermission = page.locator('[data-action="toggle-fire-permission"]');
+  await expect(firePermission).toBeVisible();
+  await expect(firePermission).toHaveText('Стрельба: запрещена');
+  await expect(firePermission).toHaveAttribute('aria-pressed', 'false');
 
-  await clickUnit(page, canvas, RED_SPAWN);
-  await expect(page.locator('[data-role="unit-meta"]')).toContainText('Противник');
   await clickUnit(page, canvas, BLUE_SPAWN);
   await expect(page.locator('[data-role="unit-meta"]')).toContainText('Свои');
-  await expect(page.locator('[data-stat="ammo"]')).toHaveText(/\d+\+\d+/);
-
-  const turnButton = page.locator('[data-action="turn-unit"]');
-  await turnButton.click();
-  await expect(turnButton).toHaveText('Куда?');
-  const redPoint = await worldPoint(canvas, RED_SPAWN.x, RED_SPAWN.y);
-  await page.mouse.click(redPoint.x, redPoint.y, { button: 'right' });
-  await expect(turnButton).toHaveText('Повернуть');
+  await turnSelectedUnit(page, canvas, AWAY_POINT);
 
   const pauseButton = page.locator('[data-action="pause"]');
-  if ((await pauseButton.textContent())?.trim() === 'Продолжить') {
-    await pauseButton.click();
-  }
+  if ((await pauseButton.textContent())?.trim() === 'Продолжить') await pauseButton.click();
   await expect(pauseButton).toHaveText('Пауза');
 
+  const fireButton = page.locator('[data-action="fire-contact"]');
+  const ammoBeforeContact = await page.locator('[data-stat="ammo"]').textContent();
+  await page.waitForTimeout(1200);
+  await expect(fireButton).toBeDisabled();
+  await expect(page.locator('[data-stat="ammo"]')).toHaveText(ammoBeforeContact ?? '');
+  await saveScreenshot(page, '21-combat-rear-not-identified.png');
+
+  await turnSelectedUnit(page, canvas, RED_SPAWN);
   const fastSpeed = page.locator('[data-speed="10"]');
   await fastSpeed.click();
   await expect(fastSpeed).toHaveClass(/active/);
-  await page.waitForTimeout(500);
-  await saveScreenshot(page, '21-combat-simulation-running.png');
-
-  const fireButton = page.locator('[data-action="fire-contact"]');
   await expect(fireButton).toBeEnabled({ timeout: 30_000 });
   await expect(fireButton).toHaveAttribute('title', /Личный контакт:/);
 
   const normalSpeed = page.locator('[data-speed="1"]');
   await normalSpeed.click();
   await expect(normalSpeed).toHaveClass(/active/);
-  await page.waitForTimeout(350);
-  await saveScreenshot(page, '22-combat-contact-ready.png');
+  const ammoWhileForbidden = await page.locator('[data-stat="ammo"]').textContent();
+  await page.waitForTimeout(700);
+  await expect(page.locator('[data-stat="ammo"]')).toHaveText(ammoWhileForbidden ?? '');
+  await saveScreenshot(page, '22-combat-contact-fire-forbidden.png');
 
-  const ammoBefore = await page.locator('[data-stat="ammo"]').textContent();
-  await fireButton.click();
+  await firePermission.click();
+  await expect(firePermission).toHaveText('Стрельба: разрешена');
+  await expect(firePermission).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-role="action"]')).toContainText(/стрельба: (поворот|подготовка оружия|наведение|проверка линии огня)/, { timeout: 8_000 });
-  await page.waitForTimeout(250);
-  await saveScreenshot(page, '23-combat-stateful-aiming.png');
+  await page.waitForTimeout(180);
+  await saveScreenshot(page, '23-combat-fire-enabled-aiming.png');
 
   await expect.poll(async () => page.locator('[data-stat="ammo"]').textContent(), { timeout: 20_000 })
-    .not.toBe(ammoBefore);
-  await waitForFireActionToFinish(page);
-  await page.waitForTimeout(350);
-  await saveScreenshot(page, '24-combat-shot-complete.png');
+    .not.toBe(ammoWhileForbidden);
+  await saveScreenshot(page, '24-combat-tracer-impact.png');
+  await page.waitForTimeout(450);
+  await saveScreenshot(page, '25-combat-shot-feedback-complete.png');
 
   await clickUnit(page, canvas, RED_SPAWN);
   await expect(page.locator('[data-role="unit-meta"]')).toContainText('Противник');
   await expect(page.locator('[data-role="unit-meta"]')).toContainText(/боеспособен|ранен|тяжело ранен|выведен из строя|погиб/);
-  await page.waitForTimeout(350);
-  await saveScreenshot(page, '25-combat-target-outcome.png');
+  await page.waitForTimeout(250);
+  await saveScreenshot(page, '26-combat-target-outcome.png');
 
   expect(pageErrors, `Browser errors: ${pageErrors.join(' | ')}`).toEqual([]);
   expect(httpErrors, `HTTP errors: ${httpErrors.join(' | ')}`).toEqual([]);
