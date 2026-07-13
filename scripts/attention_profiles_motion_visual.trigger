@@ -1,1 +1,1 @@
-Run system-Chrome QA for threat stability, movement facing, attention profiles, and compact bottom layout.
+Run full system-Chrome QA after the final compact unit-bar layout fix.
