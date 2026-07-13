@@ -1,10 +1,17 @@
 import assert from 'node:assert/strict';
 import { hasFriendlyUnitBeforeDistance, traceProjectile } from '../src/core/combat/BallisticRaycast';
-import { applyUnitHit, getCombatRuntime, isUnitCombatCapable } from '../src/core/combat/CombatDamage';
+import {
+  applyUnitHit,
+  getCombatRuntime,
+  isUnitCombatCapable,
+  replaceCombatRuntime,
+} from '../src/core/combat/CombatDamage';
+import { getCombatEventHistory } from '../src/core/combat/CombatEvents';
 import {
   getFireAction,
   requestFireAction,
 } from '../src/core/combat/FireAction';
+import { isFireAllowed, setFireAllowed } from '../src/core/combat/CombatRules';
 import { getUnitHitShapes, intersectRayWithUnitHitShapes } from '../src/core/combat/UnitHitShapes';
 import {
   DEFAULT_RIFLE_ID,
@@ -16,6 +23,7 @@ import { tickAllUnitPerception } from '../src/core/perception/PerceptionSystem';
 import { createInitialState } from '../src/core/simulation/SimulationState';
 import { tickSimulation } from '../src/core/simulation/SimulationTick';
 import { areUnitsHostile, getSideRelation } from '../src/core/units/SideRelations';
+import type { UnitModel } from '../src/core/units/UnitModel';
 import { buildExportedScene, normalizeImportedScene } from '../src/ui/SceneExport';
 
 function makeState() {
@@ -287,6 +295,34 @@ function verifyCombatPersistence(): void {
   assert.equal(restoredCombat.lastHit?.zone, 'limbs');
 }
 
+function verifyFirePermissionAndContinuedFire(): void {
+  const state = makeState();
+  const blue = state.units[0];
+  const red = state.units[1];
+  installIdentifiedContact(blue, red, state.simulationTimeSeconds);
+
+  assert.equal(isFireAllowed(state), false, 'fire permission must be disabled by default');
+  assert.equal(requestFireAction(state, blue, blue.perceptionKnowledge.contacts[0].id), false, 'manual fire must be denied while permission is disabled');
+  assert.equal(getWeaponRuntime(blue).roundsLoaded, 5);
+
+  setFireAllowed(state, true);
+  assert.equal(isFireAllowed(state), true);
+  for (let index = 0; index < 500 && getWeaponRuntime(blue).roundsLoaded > 3; index += 1) {
+    restoreTargetForContinuedFire(red);
+    tickSimulation(state, 0.05);
+    restoreTargetForContinuedFire(red);
+  }
+  assert.ok(getWeaponRuntime(blue).roundsLoaded <= 3, 'enabled engagement must complete more than one single-shot cycle');
+
+  setFireAllowed(state, false);
+  const roundsAfterDisable = getWeaponRuntime(blue).roundsLoaded;
+  for (let index = 0; index < 100; index += 1) {
+    restoreTargetForContinuedFire(red);
+    tickSimulation(state, 0.05);
+  }
+  assert.equal(getWeaponRuntime(blue).roundsLoaded, roundsAfterDisable, 'disabling permission must prevent another shot');
+}
+
 function verifyStatefulFire(): void {
   const state = makeState();
   const blue = state.units[0];
@@ -299,6 +335,7 @@ function verifyStatefulFire(): void {
   }
   assert.ok(contact, 'stateful fire requires a real subjective contact');
   assert.equal(contact.visibleNow, true, `contact must be visually identified before direct fire; stage=${contact.stage}, evidence=${contact.evidence.toFixed(1)}`);
+  setFireAllowed(state, true);
   assert.equal(requestFireAction(state, blue, contact.id), true);
   const phases = new Set<string>();
   for (let index = 0; index < 120 && getFireAction(blue); index += 1) {
@@ -310,6 +347,49 @@ function verifyStatefulFire(): void {
   assert.ok(phases.has('firing'));
   assert.ok(getWeaponRuntime(blue).roundsLoaded < 5, 'round must be consumed only by the real firing phase');
   assert.ok(getCombatRuntime(red).lastHit || getFireAction(blue) === null, 'fire action must resolve without hanging');
+
+  const history = getCombatEventHistory(state);
+  const fired = history.find((event) => event.kind === 'shot_fired');
+  assert.ok(fired && fired.kind === 'shot_fired', 'real fire must record an origin for presentation');
+  const impact = history.find((event) => event.kind === 'projectile_impact' && event.shotId === fired.shotId);
+  assert.ok(impact && impact.kind === 'projectile_impact', 'real fire must record a matching impact for tracer presentation');
+  for (const value of [
+    fired.origin.xMetres,
+    fired.origin.yMetres,
+    impact.impactPoint.xMetres,
+    impact.impactPoint.yMetres,
+  ]) assert.ok(Number.isFinite(value), 'shot presentation coordinates must be finite');
+}
+
+function installIdentifiedContact(observer: UnitModel, target: UnitModel, nowSeconds: number): void {
+  observer.perceptionKnowledge.contacts = [{
+    id: `perception:unit:${target.id}`,
+    stimulusId: `unit:${target.id}`,
+    sourceUnitId: target.id,
+    labelRu: target.labels.ru,
+    stage: 'confirmed',
+    source: 'visual',
+    evidence: 180,
+    confidence: 100,
+    uncertaintyCells: 0.25,
+    lastKnownPosition: { ...target.position },
+    visibleNow: true,
+    observedNow: true,
+    lastObservedSeconds: nowSeconds,
+    lastUpdatedSeconds: nowSeconds,
+    evidencePerSecond: 100,
+    detectionVariance: 1,
+    explanationRu: ['Проверочный подтверждённый личный контакт.'],
+  }];
+  observer.perceptionKnowledge.revision += 1;
+}
+
+function restoreTargetForContinuedFire(target: UnitModel): void {
+  if (isUnitCombatCapable(target)) return;
+  target.soldier.condition.health = 100;
+  replaceCombatRuntime(target, { capability: 'effective', lastHit: null });
+  target.behaviorRuntime.currentAction = 'observe';
+  target.behaviorRuntime.weaponReady = true;
 }
 
 verifySides();
@@ -321,6 +401,7 @@ verifyObjectBlocksBeforeTarget();
 verifyFriendlyFireCorridor();
 verifyDamage();
 verifyCombatPersistence();
+verifyFirePermissionAndContinuedFire();
 verifyStatefulFire();
 
 console.log('Combat foundation smoke passed.');
