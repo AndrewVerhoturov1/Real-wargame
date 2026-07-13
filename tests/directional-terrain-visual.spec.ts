@@ -7,14 +7,13 @@ const VIEWPORT = { width: 1440, height: 900 };
 const BOARD_ORIGIN = { x: 72, y: 72 };
 const CELL_SIZE = 24;
 
-interface RouteCostDiagnostics {
+interface AwarenessDiagnostics {
   representation: string;
-  visible: boolean;
-  mode: string;
-  dynamicTextureBuildCount: number;
   displayObjectCount: number;
-  activeProfileId: string | null;
-  selectedUnitId: string | null;
+  rasterWidth: number;
+  rasterHeight: number;
+  rebuildCount: number;
+  maxBuildMs: number;
 }
 
 async function saveScreenshot(page: Page, name: string): Promise<void> {
@@ -42,7 +41,7 @@ async function worldPoint(canvas: Locator, gridX: number, gridY: number): Promis
 
 test.beforeAll(() => mkdirSync(SCREENSHOT_DIR, { recursive: true }));
 
-test('shows the directional terrain raster without growing display objects', async ({ page }) => {
+test('enriches the existing danger and stealth rasters instead of adding a player-facing terrain layer', async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await page.goto('/');
   const canvas = page.locator('canvas');
@@ -53,26 +52,35 @@ test('shows the directional terrain raster without growing display objects', asy
   await expect(page.locator('[data-role="unit-name"]')).toContainText('Солдат');
 
   await page.locator('.workspace-display-menu > summary').click();
-  const mode = page.locator('[data-action="route-cost-mode"]');
-  await expect(mode).toBeVisible();
-  await mode.selectOption('directionalTerrain');
-  await page.locator('[data-action="route-cost-overlay"]').click();
+  const routeMode = page.locator('[data-action="route-cost-mode"]');
+  await expect(routeMode).toBeVisible();
+  await expect(routeMode.locator('option')).toHaveCount(2);
+  await expect(routeMode.locator('option[value="directionalTerrain"]')).toHaveCount(0);
+  await page.locator('.workspace-display-menu > summary').click();
 
+  await page.locator('[data-tab="danger"]').click();
+  await expect(page.locator('[data-role="sidebar-title"]')).toContainText('Опасность');
   await page.waitForFunction(() => {
-    const diagnostics = (window as Window & { __realWargameRouteCostDebug?: RouteCostDiagnostics }).__realWargameRouteCostDebug;
-    return diagnostics?.visible === true && diagnostics.mode === 'directionalTerrain';
+    const diagnostics = (window as Window & { __realWargameAwarenessDebug?: AwarenessDiagnostics }).__realWargameAwarenessDebug;
+    return diagnostics?.representation === 'raster-sprite' && diagnostics.rebuildCount > 0;
   });
-  const diagnostics = await page.evaluate(() => (
-    window as Window & { __realWargameRouteCostDebug?: RouteCostDiagnostics }
-  ).__realWargameRouteCostDebug);
-  expect(diagnostics?.representation).toBe('two-raster-sprites');
-  expect(diagnostics?.displayObjectCount ?? 99).toBeLessThanOrEqual(4);
-  expect(diagnostics?.dynamicTextureBuildCount ?? 0).toBeGreaterThan(0);
-  expect(diagnostics?.activeProfileId).toBeTruthy();
-  expect(diagnostics?.selectedUnitId).toBeTruthy();
-
+  const dangerDiagnostics = await page.evaluate(() => (
+    window as Window & { __realWargameAwarenessDebug?: AwarenessDiagnostics }
+  ).__realWargameAwarenessDebug);
+  expect(dangerDiagnostics?.displayObjectCount ?? 99).toBeLessThanOrEqual(3);
+  expect(dangerDiagnostics?.maxBuildMs ?? Number.POSITIVE_INFINITY).toBeLessThan(250);
   await page.waitForTimeout(500);
-  await saveScreenshot(page, 'directional-terrain-layer.png');
+  await saveScreenshot(page, 'directional-terrain-enriched-danger.png');
+
+  await page.locator('[data-tab="stealth"]').click();
+  await expect(page.locator('[data-role="sidebar-title"]')).toContainText('Скрытность');
+  await page.waitForTimeout(600);
+  const stealthDiagnostics = await page.evaluate(() => (
+    window as Window & { __realWargameAwarenessDebug?: AwarenessDiagnostics }
+  ).__realWargameAwarenessDebug);
+  expect(stealthDiagnostics?.representation).toBe('raster-sprite');
+  expect(stealthDiagnostics?.displayObjectCount ?? 99).toBeLessThanOrEqual(3);
+  await saveScreenshot(page, 'directional-terrain-enriched-stealth.png');
 });
 
 test('opens the no-code directional terrain profile editor', async ({ page }) => {
