@@ -226,11 +226,8 @@ test('shows state, plan, and active subgraph in the node editor', async ({ page 
     }));
   });
   await page.goto('/ai-node-editor.html');
-  const versionBadge = page.locator('.graph-version-badge');
-  if (await versionBadge.getAttribute('class').then((value) => value?.includes('v1') ?? false)) {
-    await page.locator('#migrate-graph').click();
-    await expect(versionBadge).toContainText('Graph v2');
-  }
+  await expect(page.locator('#migrate-graph')).toHaveCount(0);
+  await expect(page.locator('.graph-v1-warning')).toHaveCount(0);
 
   const dock = page.locator('.ai-debug-panel-dock');
   const stateCard = page.locator('[data-ai-debug-panel="state-plan"]');

@@ -45,7 +45,7 @@ interface EditableAiNode {
 }
 
 interface EditableAiGraph {
-  version: 1 | 2;
+  version: 2;
   id: string;
   name: string;
   nameRu?: string;
@@ -87,7 +87,7 @@ const initialNodePositions: Record<string, NodePosition> = {
   root: { x: 90, y: 140 },
 };
 
-let editorGraph = loadStoredGraph() ?? normalizeGraph(graphData as unknown);
+let editorGraph = loadStoredGraph() ?? loadEditorGraphV2(graphData as unknown);
 let nodePositions = loadStoredPositions();
 let uiState = loadStoredUiState();
 let selectedNodeId = ensureSelectedNodeId(editorGraph.rootNodeId);
@@ -128,8 +128,6 @@ function render(): void {
           <div id="engine-status" class="engine-status compact-status ${engineOnline ? 'online' : 'offline'}"><i class="engine-status-dot" aria-hidden="true"></i><span>${escapeHtml(lastHealthText)}</span></div>
           <button id="toggle-palette" class="ai-editor-button" type="button">+ Add node</button>
           <button id="toggle-inspector" class="ai-editor-button" type="button">Inspector</button>
-          <span class="graph-version-badge ${editorGraph.version === 2 ? 'v2' : 'v1'}">Graph v${editorGraph.version}</span>
-          <button id="migrate-graph" class="ai-editor-button primary" type="button">Проверить и обновить формат графа</button>
           <button id="validate-graph" class="ai-editor-button" type="button">Проверить</button>
           <button id="evaluate-once" class="ai-editor-button" type="button">Evaluate</button>
           <button id="export-graph" class="ai-editor-button" type="button">Export</button>
@@ -138,7 +136,6 @@ function render(): void {
           <input id="import-graph-file" type="file" accept="application/json,.json" hidden />
         </div>
       </header>
-      ${editorGraph.version === 1 ? '<div class="graph-v1-warning">Этот граф использует старый формат Graph v1. Нажмите «Проверить и обновить формат графа» — исходные данные будут сохранены.</div>' : ''}
       <main class="ai-editor-main compact-main">
         ${renderPalettePanel()}
         ${renderWorkspace()}
@@ -290,32 +287,6 @@ function validateGraphLocally(): void {
   render();
 }
 
-function migrateGraphFromUi(): void {
-  const migration = migrateAiGraphToV2(editorGraph);
-  if (!migration.ok) {
-    lastValidationIssues = migration.issues.map((issue) => ({ ...issue }));
-    validationText = migration.issues.map((issue) => issue.messageRu).join('\n');
-    uiState.bottomOpen = true;
-    render();
-    return;
-  }
-  const migrated = normalizeGraph(migration.graph);
-  const validation = validateAiGraph(migration.graph);
-  lastValidationIssues = [...validation.issues];
-  if (!validation.valid) {
-    validationText = 'Миграция подготовлена, но Graph v2 содержит ошибки. Старый граф не перезаписан.';
-    uiState.bottomOpen = true;
-    render();
-    return;
-  }
-  editorGraph = migrated;
-  selectedNodeId = ensureSelectedNodeId(editorGraph.rootNodeId);
-  saveGraph();
-  validationText = migration.migrated ? 'Graph v1 успешно обновлён до Graph v2. Неизвестные старые данные сохранены в legacyMetadata.' : 'Graph v2 уже актуален и прошёл проверку.';
-  uiState.bottomOpen = true;
-  render();
-}
-
 function openSelectedSubgraph(nodeId: string): void {
   const node = editorGraph.nodes.find((candidate) => candidate.id === nodeId);
   if (!node || node.type !== 'Subgraph') return;
@@ -328,7 +299,7 @@ function openSubgraphById(subgraphId: string): void {
   const choice = getSubgraphChoice(subgraphId);
   if (!graph || !choice) return;
   graphNavigation.push({ graph: normalizeGraph(JSON.parse(JSON.stringify(editorGraph))), positions: JSON.parse(JSON.stringify(nodePositions)) as Record<string, NodePosition>, selectedNodeId, labelRu: choice.labelRu });
-  editorGraph = normalizeGraph(graph);
+  editorGraph = loadEditorGraphV2(graph);
   nodePositions = {};
   selectedNodeId = editorGraph.rootNodeId;
   ensurePositionsForGraph();
@@ -402,7 +373,6 @@ function installEventHandlers(): void {
   document.querySelector<HTMLButtonElement>('#toggle-bottom')?.addEventListener('click', toggleBottomPanel);
   document.querySelector<HTMLButtonElement>('#bottom-tab-console')?.addEventListener('click', () => setBottomTab('console'));
   document.querySelector<HTMLButtonElement>('#bottom-tab-json')?.addEventListener('click', () => setBottomTab('json'));
-  document.querySelector<HTMLButtonElement>('#migrate-graph')?.addEventListener('click', migrateGraphFromUi);
   document.querySelector<HTMLButtonElement>('#validate-graph')?.addEventListener('click', validateGraphLocally);
   document.querySelector<HTMLButtonElement>('#evaluate-once')?.addEventListener('click', () => { void evaluateOnceThroughEngine(); });
   document.querySelector<HTMLButtonElement>('#save-node')?.addEventListener('click', saveSelectedNodeFromInspector);
@@ -579,9 +549,9 @@ function saveSelectedNodeFromInspector(): void {
 }
 
 function deleteSelectedNode(): void { if (selectedNodeId === editorGraph.rootNodeId) return; const deleting = selectedNodeId; editorGraph.nodes = editorGraph.nodes.filter((node) => node.id !== deleting); for (const node of editorGraph.nodes) node.children = node.children.filter((child) => child !== deleting); delete nodePositions[deleting]; selectedNodeId = ensureSelectedNodeId(editorGraph.rootNodeId); saveGraph(); savePositions(); render(); }
-function resetGraphToBundled(): void { editorGraph = normalizeGraph(graphData as unknown); nodePositions = { ...initialNodePositions }; selectedNodeId = editorGraph.rootNodeId; saveGraph(); savePositions(); validationText = 'Canvas очищен: только Старт.'; render(); }
+function resetGraphToBundled(): void { editorGraph = loadEditorGraphV2(graphData as unknown); nodePositions = { ...initialNodePositions }; selectedNodeId = editorGraph.rootNodeId; saveGraph(); savePositions(); validationText = 'Canvas очищен: только Старт.'; render(); }
 function exportGraphJson(): void { const blob = new Blob([JSON.stringify(editorGraph, null, 2)], { type: 'application/json;charset=utf-8' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `${editorGraph.id || 'ai-graph'}.json`; link.click(); URL.revokeObjectURL(url); }
-function importGraphFromFileInput(event: Event): void { const file = (event.target as HTMLInputElement).files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { editorGraph = normalizeGraph(JSON.parse(String(reader.result))); ensurePositionsForGraph(); selectedNodeId = ensureSelectedNodeId(editorGraph.rootNodeId); saveGraph(); savePositions(); validationText = `Imported ${file.name}`; render(); } catch (error) { validationText = `Import error: ${error instanceof Error ? error.message : String(error)}`; render(); } }; reader.readAsText(file, 'utf-8'); }
+function importGraphFromFileInput(event: Event): void { const file = (event.target as HTMLInputElement).files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { editorGraph = loadEditorGraphV2(JSON.parse(String(reader.result))); ensurePositionsForGraph(); selectedNodeId = ensureSelectedNodeId(editorGraph.rootNodeId); saveGraph(); savePositions(); validationText = `Импортирован ${file.name} · Graph v2`; render(); } catch (error) { validationText = `Import error: ${error instanceof Error ? error.message : String(error)}`; render(); } }; reader.readAsText(file, 'utf-8'); }
 
 async function refreshEngineStatus(): Promise<void> { try { const health = await fetchJson<EngineHealthPayload>(`${ENGINE_BASE_URL}/engine/health`); engineOnline = Boolean(health.ok); lastHealthText = engineOnline ? `engine online · text=${health.textBase ?? 'en'} · overlay=${health.overlayLanguage ?? 'ru'}` : 'engine responded with error'; } catch { engineOnline = false; lastHealthText = 'engine offline: run Run-AI-Node-Editor.bat'; } render(); }
 async function validateGraphThroughEngine(): Promise<void> { validateGraphLocally(); }
@@ -603,7 +573,8 @@ function getNodeSubtitle(node: EditableAiNode): string { const definition = AI_N
 function getNodeVisibleDescription(node: EditableAiNode): string { if (uiState.languageMode === 'en') return node.description ?? ''; if (uiState.languageMode === 'both') return `${node.descriptionRu ?? ''}\n${node.description ?? ''}`.trim(); return node.descriptionRu ?? node.description ?? ''; }
 function isPortEvent(event: PointerEvent): boolean { return Boolean((event.target as HTMLElement).closest('.node-port')); }
 
-function loadStoredGraph(): EditableAiGraph | null { try { const raw = localStorage.getItem(GRAPH_STORAGE_KEY); return raw ? normalizeGraph(JSON.parse(raw)) : null; } catch { return null; } }
+function loadStoredGraph(): EditableAiGraph | null { try { const raw = localStorage.getItem(GRAPH_STORAGE_KEY); if (!raw) return null; const graph = loadEditorGraphV2(JSON.parse(raw)); localStorage.setItem(GRAPH_STORAGE_KEY, JSON.stringify(graph)); return graph; } catch { return null; } }
+function loadEditorGraphV2(value: unknown): EditableAiGraph { const migration = migrateAiGraphToV2(value); if (!migration.ok) throw new Error(migration.issues.map((issue) => issue.messageRu).join(' ')); return normalizeGraph(migration.graph); }
 function loadStoredPositions(): Record<string, NodePosition> { try { const raw = localStorage.getItem(POSITION_STORAGE_KEY); const parsed = raw ? JSON.parse(raw) : {}; return isRecord(parsed) ? parsed as Record<string, NodePosition> : { ...initialNodePositions }; } catch { return { ...initialNodePositions }; } }
 function loadStoredUiState(): EditorUiState { try { const parsed = JSON.parse(localStorage.getItem(UI_STORAGE_KEY) ?? '{}'); return { paletteOpen: parsed.paletteOpen ?? false, inspectorOpen: parsed.inspectorOpen ?? true, bottomOpen: parsed.bottomOpen ?? false, bottomTab: parsed.bottomTab === 'json' ? 'json' : 'console', zoom: typeof parsed.zoom === 'number' ? parsed.zoom : 1, panX: typeof parsed.panX === 'number' ? parsed.panX : 0, panY: typeof parsed.panY === 'number' ? parsed.panY : 0, languageMode: parsed.languageMode === 'en' || parsed.languageMode === 'both' ? parsed.languageMode : 'ru', nodeDetailMode: parsed.nodeDetailMode === 'detailed' ? 'detailed' : 'compact', linkSourceNodeId: typeof parsed.linkSourceNodeId === 'string' ? parsed.linkSourceNodeId : null }; } catch { return { paletteOpen: false, inspectorOpen: true, bottomOpen: false, bottomTab: 'console', zoom: 1, panX: 0, panY: 0, languageMode: 'ru', nodeDetailMode: 'compact', linkSourceNodeId: null }; } }
 function saveGraph(): void { if(graphNavigation.length===0)localStorage.setItem(GRAPH_STORAGE_KEY, JSON.stringify(editorGraph)); }
@@ -611,7 +582,7 @@ function savePositions(): void { localStorage.setItem(POSITION_STORAGE_KEY, JSON
 function saveUiState(): void { localStorage.setItem(UI_STORAGE_KEY, JSON.stringify(uiState)); }
 function ensurePositionsForGraph(): void { for (const node of editorGraph.nodes) if (!nodePositions[node.id]) nodePositions[node.id] = initialNodePositions[node.id] ?? { x: 140 + editorGraph.nodes.indexOf(node) * 240, y: 140 }; }
 
-function normalizeGraph(value: unknown): EditableAiGraph { const raw=value as Partial<EditableAiGraph>;const nodes=Array.isArray(raw.nodes)?raw.nodes.map(normalizeNode):[];if(nodes.length===0)nodes.push({id:'root',type:'Root',displayName:'Start',displayNameRu:'Старт',description:'',descriptionRu:'',children:[],parameters:{},inputBindings:{},outputBindings:{}});return{version:raw.version===2?2:1,id:String(raw.id??'soldier_graph'),name:String(raw.name??'Soldier Graph'),nameRu:typeof raw.nameRu==='string'?raw.nameRu:'Граф солдата',description:typeof raw.description==='string'?raw.description:'',descriptionRu:typeof raw.descriptionRu==='string'?raw.descriptionRu:'',rootNodeId:String(raw.rootNodeId??nodes[0].id),blackboardDefaults:isRecord(raw.blackboardDefaults)?raw.blackboardDefaults as JsonObject:{},blackboardSchema:Array.isArray(raw.blackboardSchema)?raw.blackboardSchema:[],subgraphRefs:Array.isArray(raw.subgraphRefs)?raw.subgraphRefs.filter((item):item is string=>typeof item==='string'):[],legacyMetadata:isRecord(raw.legacyMetadata)?raw.legacyMetadata:undefined,nodes};}
+function normalizeGraph(value: unknown): EditableAiGraph { const raw=value as Partial<EditableAiGraph>;const nodes=Array.isArray(raw.nodes)?raw.nodes.map(normalizeNode):[];if(nodes.length===0)nodes.push({id:'root',type:'Root',displayName:'Start',displayNameRu:'Старт',description:'',descriptionRu:'',children:[],parameters:{},inputBindings:{},outputBindings:{}});return{version:2,id:String(raw.id??'soldier_graph'),name:String(raw.name??'Soldier Graph'),nameRu:typeof raw.nameRu==='string'?raw.nameRu:'Граф солдата',description:typeof raw.description==='string'?raw.description:'',descriptionRu:typeof raw.descriptionRu==='string'?raw.descriptionRu:'',rootNodeId:String(raw.rootNodeId??nodes[0].id),blackboardDefaults:isRecord(raw.blackboardDefaults)?raw.blackboardDefaults as JsonObject:{},blackboardSchema:Array.isArray(raw.blackboardSchema)?raw.blackboardSchema:[],subgraphRefs:Array.isArray(raw.subgraphRefs)?raw.subgraphRefs.filter((item):item is string=>typeof item==='string'):[],legacyMetadata:isRecord(raw.legacyMetadata)?raw.legacyMetadata:undefined,nodes};}
 function normalizeNode(value:unknown):EditableAiNode{const raw=value as Partial<EditableAiNode>;const definition=AI_NODE_TYPE_DEFINITIONS[String(raw.type??'Root') as keyof typeof AI_NODE_TYPE_DEFINITIONS];return{id:String(raw.id??makeUniqueNodeId(String(raw.type??'Root'))),type:String(raw.type??'Root'),displayName:String(raw.displayName??definition?.label??raw.type??'Node'),displayNameRu:String(raw.displayNameRu??definition?.labelRu??raw.type??'Нода'),description:typeof raw.description==='string'?raw.description:definition?.description??'',descriptionRu:typeof raw.descriptionRu==='string'?raw.descriptionRu:definition?.descriptionRu??'',children:Array.isArray(raw.children)?raw.children.filter((child):child is string=>typeof child==='string'):[],parameters:isRecord(raw.parameters)?raw.parameters as JsonObject:{},inputBindings:isRecord(raw.inputBindings)?raw.inputBindings as Record<string,AiInputBinding>:{},outputBindings:isRecord(raw.outputBindings)?raw.outputBindings as Record<string,AiOutputBinding>:{}};}
 
 function escapeHtml(value: string): string { return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;'); }

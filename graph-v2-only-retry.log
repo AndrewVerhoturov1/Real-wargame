@@ -1,0 +1,320 @@
+
+> real-wargame@0.1.0 editor:smoke
+> node scripts/ai_node_editor_smoke.mjs && node scripts/ai_node_editor_v2_only_smoke.mjs
+
+[OK] file exists: ai-node-editor.html
+[OK] file exists: lab-launch.html
+[OK] file exists: Run-Real-Wargame-Lab.bat
+[OK] file exists: src/ai-node-editor/main.ts
+[OK] file exists: src/ai-node-editor/human-node-ui.ts
+[OK] file exists: src/ai-node-editor/stateful-node-ui.ts
+[OK] file exists: src/ai-node-editor/editor-click-guard.ts
+[OK] file exists: src/ai-node-editor/runtime-debug-overlay.ts
+[OK] file exists: src/ai-node-editor/runtime-debug-overlay.css
+[OK] file exists: src/ai-node-editor/ai-node-editor.css
+[OK] file exists: src/ai-node-editor/ai-node-editor-authoring.css
+[OK] file exists: src/ai-node-editor/human-node-ui.css
+[OK] file exists: src/ai-game-bridge.css
+[OK] file exists: src/shared/AppShellMenu.ts
+[OK] file exists: src/shared/app-shell-menu.css
+[OK] file exists: src/core/simulation/SimulationState.ts
+[OK] file exists: src/rendering/PixiApp.ts
+[OK] file exists: src/core/ai/AiGameBridge.ts
+[OK] file exists: src/core/ai/AiGraphRunner.ts
+[OK] file exists: src/data/ai/soldier_default_survival_graph.json
+[OK] file exists: scripts/ai_engine_core.mjs
+[OK] file exists: scripts/local_ai_engine.mjs
+[OK] file exists: scripts/real_wargame_lab_manager.mjs
+[OK] file exists: Run-AI-Node-Editor.bat
+[OK] contains: /src/ai-node-editor/editor-click-guard.ts
+[OK] contains: /src/ai-node-editor/main.ts
+[OK] contains: /src/ai-node-editor/human-node-ui.ts
+[OK] contains: /src/ai-node-editor/stateful-node-ui.ts
+[OK] contains: /src/ai-node-editor/runtime-debug-overlay.ts
+[OK] contains: /src/ai-node-editor/runtime-debug-overlay.css
+[OK] contains: real-wargame.ai-node-editor.graph.v6
+[OK] does not contain: graph.v5
+[OK] contains: .human-node-panel
+[OK] contains: .inspector-panel
+[OK] contains: .app-shell-menu
+[OK] contains: select
+[OK] contains: input
+[OK] contains: textarea
+[OK] contains: real-wargame.ai-node-editor.debug.v1
+[OK] contains: ai-graph-runtime-debug
+[OK] contains: runtime-debug-winner
+[OK] contains: runtime-debug-score
+[OK] contains: runtime-debug-pass
+[OK] contains: runtime-debug-fail
+[OK] contains: Победила
+[OK] contains: След ИИ
+[OK] contains: ai-runtime-debug-panel
+[OK] contains: runtime-debug-winner
+[OK] contains: runtime-debug-score
+[OK] contains: runtime-debug-badge
+[OK] contains: /src/shared/AppShellMenu.ts
+[OK] contains: openGameTab
+[OK] contains: openEditorTab
+[OK] contains: real-wargame.ai-node-editor.graph.v6
+[OK] does not contain: installAppShellMenu
+[OK] does not contain: mode: 'editor'
+[OK] does not contain: run-check-45
+[OK] does not contain: runSimpleCheck45
+[OK] contains: Данные бойца
+[OK] contains: data-editor-global-actions
+[OK] contains: data-editor-action="refresh"
+[OK] contains: data-editor-action="open-game"
+[OK] contains: data-editor-action="exit"
+[OK] does not contain: data-navigation-tab="diagnostics"
+[OK] contains: addNodeFromPalette
+[OK] contains: startConnectionDrag
+[OK] contains: createDefaultParameters
+[OK] contains: createContractDefaultParameters
+[OK] contains: renderContractParameterFields
+[OK] contains: readContractParameterFields
+[OK] contains: type:'Reload'
+[OK] contains: requiredParameter('durationSeconds'
+[OK] contains: requiredParameter('targetAmmo'
+[OK] contains: requiredParameter('failIfNoWeapon'
+[OK] does not contain: DangerAbove
+[OK] does not contain: StressAbove
+[OK] does not contain: ScoreDanger
+[OK] does not contain: FindBestCover
+[OK] contains: pause-toggle
+[OK] contains: installAiGameBridge
+[OK] contains: installAiGameBridge(state)
+[OK] contains: ./ai-game-bridge.css
+[OK] contains: installAppShellMenu
+[OK] contains: mode: 'game'
+[OK] contains: pause-toggle
+[OK] contains: setPaused(!getPaused())
+[OK] contains: PausableRuntimeState
+[OK] contains: syncPauseStateToDebugTrace
+[OK] contains: export interface SimulationState
+[OK] contains: getSelectedUnits
+[OK] contains: beginEditorPointerAction
+[OK] contains: spawnEditorUnit
+[OK] does not contain: paused: boolean
+[OK] contains: PausableSimulationState
+[OK] contains: if (!this.getPaused())
+[OK] contains: forceRender
+[OK] contains: Пауза
+[OK] contains: Редактор ИИ солдат
+[OK] contains: Новая игра
+[OK] contains: Выход
+[OK] contains: Обновить
+[OK] contains: Открыть игру
+[OK] contains: openEditorTab
+[OK] contains: openGameTab
+[OK] contains: requestLabShutdown
+[OK] contains: BroadcastChannel
+[OK] contains: real-wargame.lab.close-tabs
+[OK] contains: http://127.0.0.1:8799/lab/shutdown
+[OK] contains: LAB_MANAGER_PORT = 8799
+[OK] contains: startChildProcess
+[OK] contains: npm run dev
+[OK] contains: npm run engine:dev
+[OK] contains: /lab/health
+[OK] contains: /lab/shutdown
+[OK] contains: killPorts
+[OK] contains: 5173
+[OK] contains: 8787
+[OK] contains: real_wargame_lab_manager.mjs
+[OK] contains: WindowStyle Hidden
+[OK] contains: lab-launch.html
+[OK] contains: runAiGraph
+[OK] contains: executeUtilitySelector
+[OK] contains: evaluateBranch
+[OK] contains: ParameterScore
+[OK] contains: DistanceScore
+[OK] contains: DecisionInertia
+[OK] contains: RandomChance
+[OK] contains: StableThreshold
+[OK] contains: ForbidAction
+[OK] contains: AiGraphEffect
+[OK] contains: ScoreBreakdownItem
+[OK] does not contain: SimulationState
+[OK] does not contain: pixi.js
+[OK] does not contain: localStorage
+[OK] contains: runAiGraph
+[OK] contains: createTacticalHost
+[OK] contains: applyGraphEffects
+[OK] contains: buildBlackboardForUnit
+[OK] contains: real-wargame.ai-node-editor.graph.v6
+[OK] contains: real-wargame.ai-node-editor.debug.v1
+[OK] contains: publishRuntimeDebugTrace
+[OK] contains: isPaused(state)
+[OK] does not contain: case 'ParameterScore'
+[OK] does not contain: is accepted by the game bridge but not used
+[OK] contains: aiSpeech
+[OK] contains: aiGraphReason
+[OK] contains: aiGraphLastTickMs
+[OK] contains: renderAiSpeechLabels
+[OK] contains: unit-speech-label
+[OK] contains: Numeric Threshold
+[OK] contains: Числовой порог
+[OK] contains: Flag Check
+[OK] contains: Проверка флага
+[OK] contains: Distance Threshold
+[OK] contains: Порог расстояния
+[OK] contains: Tactical Check
+[OK] contains: Тактическая проверка
+[OK] contains: Parameter Score
+[OK] contains: Оценка параметра
+[OK] contains: Distance Score
+[OK] contains: Оценка расстояния
+[OK] contains: Find Object
+[OK] contains: Поиск объекта
+[OK] contains: Target Choice
+[OK] contains: Выбор цели
+[OK] contains: Write Memory
+[OK] contains: Запись памяти
+[OK] contains: Copy Memory
+[OK] contains: Копия памяти
+[OK] contains: Action
+[OK] contains: Действие
+[OK] contains: Reload
+[OK] contains: Перезарядить
+[OK] contains: Reactive Sequence
+[OK] contains: Реактивная последовательность
+[OK] contains: Movement Mode
+[OK] contains: Режим движения
+[OK] contains: Say Message
+[OK] contains: Реплика бойца
+[OK] contains: Stable Threshold
+[OK] contains: Стабильный порог
+[OK] contains: Forbid Action
+[OK] contains: Запрет действия
+[OK] does not contain: HasOrder:
+[OK] does not contain: EnemyVisible:
+[OK] does not contain: EnemyKnown:
+[OK] does not contain: UnderFire:
+[OK] does not contain: CoverNearby:
+[OK] does not contain: ScoreDanger:
+[OK] does not contain: ScoreStress:
+[OK] does not contain: ScoreObedience:
+[OK] does not contain: ScoreCoverNeed:
+[OK] does not contain: ScoreCurrentActionInertia:
+[OK] does not contain: FindBestCover:
+[OK] does not contain: MoveToCover:
+[OK] does not contain: ContinueOrder:
+[OK] does not contain: Observe:
+[OK] does not contain: DangerAbove:
+[OK] does not contain: StressAbove:
+[OK] contains: COMMON_COOLDOWN_FIELDS
+[OK] contains: cooldownSeconds
+[OK] contains: cooldownTiming
+[OK] contains: fieldSelect('from'
+[OK] contains: fieldSelect('to'
+[OK] contains: SayMessage
+[OK] contains: TOOLTIP_DELAY_MS = 2000
+[OK] contains: node.type === 'ReactiveSequence'
+[OK] contains: Реактивная последовательность
+[OK] contains: Наблюдатель · предыдущие условия
+[OK] contains: Прервать текущую ветвь
+[OK] contains: Условие изменилось
+[OK] contains: reactive-observe-preceding
+[OK] contains: reactive-abort-policy
+[OK] contains: reactive-abort-reason-ru
+[OK] contains: node.type === 'Reload'
+[OK] contains: Длительная перезарядка
+[OK] contains: Длительность, секунд
+[OK] contains: Патронов после завершения
+[OK] contains: Провалить, если нет оружия
+[OK] contains: stateful-reload-duration
+[OK] contains: stateful-reload-target-ammo
+[OK] contains: stateful-reload-require-weapon
+[OK] contains: REACTIVE_CHILDREN_TOO_FEW
+[OK] contains: REACTIVE_PRECEDING_CHILD_NOT_CONDITION
+[OK] contains: REACTIVE_OBSERVER_FLAG_INVALID
+[OK] contains: REACTIVE_ABORT_POLICY_UNSUPPORTED
+[OK] contains: RELOAD_DURATION_INVALID
+[OK] contains: RELOAD_TARGET_AMMO_INVALID
+[OK] contains: RELOAD_WEAPON_FLAG_INVALID
+[OK] contains: begin_reload
+[OK] contains: complete_reload
+[OK] contains: ai_graph_reload_cancelled
+[OK] contains: RuntimeReactiveAbort
+[OK] contains: Наблюдатель
+[OK] contains: Прервать текущую ветвь
+[OK] contains: Cleanup
+[OK] contains: Новая ветвь
+[OK] contains: reactiveAbort: result.reactiveAbort
+[OK] contains: GraphRunner
+[OK] contains: UtilitySelector
+[OK] contains: ParameterScore
+[OK] contains: DistanceScore
+[OK] contains: DecisionInertia
+[OK] contains: RandomChance
+[OK] contains: StableThreshold
+[OK] contains: ForbidAction
+[OK] contains: score
+[OK] contains: breakdown
+[OK] does not contain: 'HasOrder'
+[OK] does not contain: 'EnemyVisible'
+[OK] does not contain: 'EnemyKnown'
+[OK] does not contain: 'UnderFire'
+[OK] does not contain: 'CoverNearby'
+[OK] does not contain: 'ScoreDanger'
+[OK] does not contain: 'ScoreStress'
+[OK] does not contain: 'FindBestCover'
+[OK] does not contain: 'MoveToCover'
+[OK] does not contain: 'ContinueOrder'
+[OK] does not contain: 'Observe'
+[OK] contains: createUtilitySmokeGraph
+[OK] contains: branch_cover
+[OK] contains: command.type === 'none'
+[OK] does not contain: critical_survival
+[OK] does not contain: "type": "HasOrder"
+[OK] does not contain: "type": "EnemyVisible"
+[OK] does not contain: "type": "EnemyKnown"
+[OK] does not contain: "type": "UnderFire"
+[OK] does not contain: "type": "CoverNearby"
+[OK] does not contain: "type": "ScoreDanger"
+[OK] does not contain: "type": "ScoreStress"
+[OK] does not contain: "type": "FindBestCover"
+[OK] does not contain: "type": "MoveToCover"
+[OK] does not contain: "type": "ContinueOrder"
+[OK] does not contain: "type": "Observe"
+[OK] does not contain: "type": "BlackboardValueAbove"
+[GOTOVO] AI Node Editor static smoke passed.
+AI node editor Graph v2-only smoke passed.
+
+> real-wargame@0.1.0 graph-v2:smoke
+> node scripts/ai_graph_v2_contracts_smoke.mjs
+
+AI Graph v2 contracts smoke passed: 36 contracts, migration, validation and memory scopes.
+
+> real-wargame@0.1.0 node-contract-ui:smoke
+> node scripts/ai_node_contract_ui_smoke.mjs
+
+AI node contract UI smoke passed: typed ports, contract parameters, Graph v2-only editor, errors, and visible Russian subgraph controls.
+
+> real-wargame@0.1.0 move-bridge:smoke
+> node scripts/ai_stateful_move_bridge_smoke.mjs && node scripts/ai_plan_move_scope_smoke.mjs
+
+AI stateful move bridge smoke passed: exact routed AI target, path memory, movement, ownership, cleanup, unreachable start and blocked exact goal.
+AI plan move scope smoke passed: nested destination remains available to route monitoring.
+
+> real-wargame@0.1.0 state-plan-scenario:smoke
+> node scripts/ai_state_plan_scenario_smoke.mjs
+
+AI state/plan scenario smoke passed: Idle, order, contact cancel, cover replacement, suppression, snapshot restore, no repeated start, completion and stable exit.
+
+> real-wargame@0.1.0 build
+> tsc && vite build
+
+[36mvite v5.4.21 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 629 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[32mindex.html                 [39m[1m[2m    1.76 kB[22m[1m[22m[2m │ gzip:   0.92 kB[22m
+[2mdist/[22m[2massets/[22m[35mindex-88H5Q_Ca.css  [39m[1m[2m   61.07 kB[22m[1m[22m[2m │ gzip:  12.01 kB[22m
+[2mdist/[22m[2massets/[22m[36mindex-Bm14Vsgg.js   [39m[1m[33m1,060.42 kB[39m[22m[2m │ gzip: 320.77 kB[22m
+[33m
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[32m✓ built in 2.77s[39m
