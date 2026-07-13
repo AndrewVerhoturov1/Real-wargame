@@ -6,7 +6,7 @@
 - **Updated:** 2026-07-13
 - **Working branch:** `real-wargame-preview`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
-- **Last verified commit:** `4bd7b3a4f52c1654c8e1440799e6a91059b55402`
+- **Last verified commit:** `02a43f233d1618b7b8b2331869d34e9b12bbec9e`
 
 ## Goal
 
@@ -14,11 +14,11 @@
 
 ## Current focus
 
-Завершён пакет доработок слоя «Обзор и память» и управления выбранным бойцом: невидимая местность затемняется одной растровой текстурой, добавлена компактная легенда, кеш явно показывает хранение только одного текущего поля, пулемётная угроза больше не меняет основной цвет при обновлении контакта, режим внимания можно выбирать вручную, одноразовый инструмент «Повернуть» задаёт направление правым кликом, а протягивание правой кнопкой у конечной точки маршрута задаёт направление после прибытия.
+Завершён пакет стабилизации отображения угроз и управления вниманием: геометрия пулемётной угрозы отделена от текущей метки подтверждения и больше не пересоздаётся при visibleNow, подпись «Пулемёт» имеет переход к тактической памяти, боец поворачивается по каждому отрезку маршрута, добавлен сохраняемый реестр именованных профилей внимания с редактором, а нижняя карточка собрана в адаптивную компактную сетку без переполнения.
 
 ## Next step
 
-Провести пользовательскую проверку доработок в real-wargame-preview. После подтверждения развивать восприятие нескольких бойцов и обмен субъективными контактами по командной цепочке; main не менять без отдельного явного GO пользователя.
+Провести пользовательскую проверку в real-wargame-preview. После подтверждения развивать восприятие нескольких бойцов и обмен субъективными контактами по командной цепочке; main не менять без отдельного явного GO пользователя.
 
 ## Read first
 
@@ -98,9 +98,17 @@
 - `src/core/visibility/VisibilityStaticGrid.ts`
 - `src/core/visibility/SelectedUnitVisibilityField.ts`
 - `src/rendering/PixiVisibilityHeatmapRenderer.ts`
+- `src/core/knowledge/ThreatDisplayModel.ts`
+- `src/core/perception/AttentionProfiles.ts`
+- `src/core/perception/AttentionProfileStorage.ts`
+- `src/ai-node-editor/AttentionProfileEditorPanel.ts`
 
 ## Suggested verification
 
+- `npm run threat-display-stability:smoke`
+- `npm run movement-facing:smoke`
+- `npm run attention-profiles:smoke`
+- `node scripts/bottom_panel_layout_contract_smoke.mjs`
 - `npm run view-memory-heatmap:smoke`
 - `npm run view-memory-heatmap-performance:smoke`
 - `npm run perception-variance:smoke`
