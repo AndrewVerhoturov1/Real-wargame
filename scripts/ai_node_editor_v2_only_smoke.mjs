@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const main = readFileSync('src/ai-node-editor/main.ts', 'utf8');
+const clickGuard = readFileSync('src/ai-node-editor/editor-click-guard.ts', 'utf8');
 const bundled = JSON.parse(readFileSync('src/data/ai/soldier_default_survival_graph.json', 'utf8'));
 
 assert.equal(bundled.version, 2, 'Bundled AI editor graph must be Graph v2.');
@@ -21,5 +22,6 @@ for (const forbidden of [
 
 assert.ok(main.includes('migrateAiGraphToV2'), 'Legacy stored/imported data should still be converted automatically at the load boundary.');
 assert.ok(main.includes('version: 2'), 'The editor graph model must always normalize to version 2.');
+assert.ok(clickGuard.includes("'.ai-debug-panel-dock'"), 'Document click guard must not rerender the editor when diagnostics summaries are clicked.');
 
 console.log('AI node editor Graph v2-only smoke passed.');
