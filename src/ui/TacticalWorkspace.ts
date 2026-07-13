@@ -2,8 +2,8 @@ import '../tactical-workspace-stage8.css';
 import type { AiGameBridgeHandle } from '../core/ai/AiGameBridge';
 import type { UnitPosture } from '../core/behavior/BehaviorModel';
 import { getCombatRuntime } from '../core/combat/CombatDamage';
+import { findBestDirectFireContact } from '../core/combat/CombatDecision';
 import { getFireAction, requestFireAction } from '../core/combat/FireAction';
-import { getBestPerceptionContact } from '../core/perception/PerceptionSystem';
 import { getWeaponRuntime } from '../core/combat/WeaponModel';
 import { buildSoldierAwarenessReport } from '../core/knowledge/SoldierAwarenessGrid';
 import { clearAttentionOverride, setAttentionMode, setSearchSector } from '../core/perception/AttentionController';
@@ -275,7 +275,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   q<HTMLButtonElement>('[data-action="execute"]').onclick = () => { aiBridge.tickNow(); update(false); onChanged(); };
   fireContactButton.onclick = () => {
     const unit = getSelectedUnit(state);
-    const contact = unit ? getBestPerceptionContact(unit) : null;
+    const contact = unit ? findBestDirectFireContact(state, unit) : null;
     if (!unit || !contact || !requestFireAction(state, unit, contact.id)) {
       if (unit) {
         unit.behaviorRuntime.reason = contact ? unit.behaviorRuntime.reason : 'Нет личного контакта для стрельбы.';
@@ -357,7 +357,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
     attentionProfileSelect.disabled = !unit;
     attentionModeSelect.disabled = !unit;
     turnUnitButton.disabled = !unit;
-    const bestFireContact = unit ? getBestPerceptionContact(unit) : null;
+    const bestFireContact = unit ? findBestDirectFireContact(state, unit) : null;
     fireContactButton.disabled = !unit || !bestFireContact?.visibleNow || Boolean(getFireAction(unit));
     fireContactButton.title = bestFireContact
       ? `Личный контакт: ${bestFireContact.labelRu} · уверенность ${Math.round(bestFireContact.confidence)}%`

@@ -210,8 +210,8 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
     };
     applyInitialStateToRuntime(model, false);
     if (unit.runtime?.weapon) replaceWeaponRuntime(model, unit.runtime.weapon);
-    if (unit.runtime?.combat) replaceCombatRuntime(model, unit.runtime.combat);
     restoreAiRuntimeSnapshot(model, unit.runtime?.aiRuntime);
+    if (unit.runtime?.combat) replaceCombatRuntime(model, unit.runtime.combat);
     initializeSimulationAiEventFacts(model);
     return model;
   });

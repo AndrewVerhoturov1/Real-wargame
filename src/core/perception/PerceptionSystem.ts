@@ -120,6 +120,10 @@ export function tickUnitPerception(
     const attention = sampleAttentionWeight(profile, angleDifferenceDegrees);
     if (!due[attention.zone]) {
       if (diagnostics) diagnostics.skippedNotDueCount += 1;
+      const existingContactId = contactIdForStimulus(stimulus.id);
+      if (unit.perceptionKnowledge.contacts.some((item) => item.id === existingContactId)) {
+        updatedContacts.add(existingContactId);
+      }
       continue;
     }
 

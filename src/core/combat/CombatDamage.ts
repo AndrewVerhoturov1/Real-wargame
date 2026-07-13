@@ -60,10 +60,13 @@ export function applyUnitHit(unit: UnitModel, input: UnitHitInput): UnitHitResul
   const previousCapability = runtime.capability;
   const energyFactor = Math.max(0.35, Math.min(1.4, input.energyJoules / 3000));
   const roll = deterministicUnit(`${input.shotId}:${unit.id}:${input.zone}`);
-  const capability = resolveCapability(previousCapability, input.zone, roll, energyFactor);
+  let capability = resolveCapability(previousCapability, input.zone, roll, energyFactor);
   const healthLoss = resolveHealthLoss(input.zone, energyFactor, roll);
   unit.soldier.condition.health = Math.max(0, Math.round(unit.soldier.condition.health - healthLoss));
   if (capability === 'dead') unit.soldier.condition.health = 0;
+  if (unit.soldier.condition.health <= 0 && capability !== 'dead' && capability !== 'incapacitated') {
+    capability = 'incapacitated';
+  }
   runtime.capability = capability;
   runtime.lastHit = {
     ...input,

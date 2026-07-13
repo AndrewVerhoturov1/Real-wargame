@@ -1,6 +1,7 @@
 import type { GridPosition } from '../geometry';
-import type { PerceptionContactMemory } from '../perception/PerceptionContact';
+import { contactStageRank, type PerceptionContactMemory } from '../perception/PerceptionContact';
 import type { SimulationState } from '../simulation/SimulationState';
+import { sampleSmoothHeightLevel } from '../terrain/SmoothTerrain';
 import { areUnitsHostile } from '../units/SideRelations';
 import type { UnitModel } from '../units/UnitModel';
 import { isUnitCombatCapable } from './CombatDamage';
@@ -18,6 +19,24 @@ export interface FireDecisionResult {
   reason: string;
   reasonRu: string;
   target: ResolvedFireTarget | null;
+}
+
+export function findBestDirectFireContact(
+  state: SimulationState,
+  shooter: UnitModel,
+): PerceptionContactMemory | null {
+  return shooter.perceptionKnowledge.contacts
+    .filter((contact) => {
+      if (!contact.sourceUnitId || !contact.visibleNow) return false;
+      if (contact.stage !== 'identified' && contact.stage !== 'confirmed') return false;
+      const target = state.units.find((unit) => unit.id === contact.sourceUnitId);
+      return Boolean(target && areUnitsHostile(shooter, target) && isUnitCombatCapable(target));
+    })
+    .sort((left, right) => (
+      contactStageRank(right.stage) - contactStageRank(left.stage)
+      || right.confidence - left.confidence
+      || right.lastUpdatedSeconds - left.lastUpdatedSeconds
+    ))[0] ?? null;
 }
 
 export function evaluateFireRequest(
@@ -87,6 +106,5 @@ function muzzleHeightForPosture(posture: UnitModel['behaviorRuntime']['posture']
 }
 
 function getGroundHeightMetres(state: SimulationState, position: GridPosition): number {
-  const cell = state.map.cells[Math.floor(position.y) * state.map.width + Math.floor(position.x)];
-  return (cell?.height ?? 0) * 2;
+  return sampleSmoothHeightLevel(state.map, position.x, position.y) * 2;
 }

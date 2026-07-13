@@ -1,4 +1,5 @@
 import { clampPercent, type UnitPosture } from '../behavior/BehaviorModel';
+import { findBestDirectFireContact } from '../combat/CombatDecision';
 import { requestFireAction } from '../combat/FireAction';
 import { clearWeaponRuntime } from '../combat/WeaponModel';
 import { findBestCoverForThreat } from '../cover/CoverEvaluation';
@@ -473,7 +474,7 @@ function applyAction(
     unit.behaviorRuntime.weaponReady = true;
     clearWeaponRuntime(unit);
   } else if (effect.action === 'fire') {
-    const contact = getBestPerceptionContact(unit);
+    const contact = findBestDirectFireContact(state, unit);
     if (contact) requestFireAction(state, unit, contact.id);
     else {
       unit.behaviorRuntime.reason = 'Нет личного контакта для стрельбы.';
