@@ -81,7 +81,7 @@ function verifySceneExportRoundTrip(): void {
   );
 
   const exported = buildExportedScene(state);
-  assert.equal(exported.version, 'scene-export-v8-view-memory-heatmap-ai-runtime-2m-grid');
+  assert.equal(exported.version, 'scene-export-v9-minimal-target-visibility-ai-runtime-2m-grid');
   const exportedUnit = exported.units.find((candidate) => candidate.id === unit.id) as {
     attention?: { vision?: { maximumVisualRangeMeters?: number; distanceFalloffStartMeters?: number } };
     runtime?: { aiRuntime?: { version?: number; session?: { graphId?: string } } };
@@ -97,7 +97,7 @@ function verifySceneExportRoundTrip(): void {
   assert.equal(restored.behaviorRuntime.aiRuntimeSession?.executionState?.activeNodeId, 'wait');
   assert.equal(restored.behaviorRuntime.lastEvent, 'ai_runtime_scene_restored');
   assert.equal(restored.attentionSettings.vision.maximumVisualRangeMeters, unit.attentionSettings.vision.maximumVisualRangeMeters);
-  assert.equal(restored.attentionSettings.vision.distanceFalloffStartMeters, unit.attentionSettings.vision.distanceFalloffStartMeters);
+  assert.equal(restored.attentionSettings.vision.distanceFallStartMeters, unit.attentionSettings.vision.distanceFalloffStartMeters);
 
   const resumed = runAiGraphRuntime({
     graph: waitGraph,
