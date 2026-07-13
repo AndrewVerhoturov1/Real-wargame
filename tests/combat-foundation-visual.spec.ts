@@ -50,6 +50,7 @@ async function placeUnit(page: Page, canvas: Locator, side: 'blue' | 'red', posi
   const point = await worldPoint(canvas, position.x, position.y);
   await page.mouse.click(point.x, point.y);
   await expect(page.locator('.game-editor-selected-summary')).toContainText(expectedId);
+  if (side === 'red') await expect(page.locator('.game-editor-status')).toContainText('Противник');
 }
 
 async function waitForFireActionToFinish(page: Page): Promise<void> {
@@ -64,15 +65,26 @@ test.beforeAll(() => {
 
 test('visually verifies two hostile sides, personal contact and stateful rifle fire', async ({ page }) => {
   const pageErrors: string[] = [];
+  const httpErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
   page.on('console', (message) => {
-    if (message.type() === 'error') pageErrors.push(message.text());
+    if (message.type() !== 'error') return;
+    if (message.text().startsWith('Failed to load resource:')) return;
+    pageErrors.push(message.text());
+  });
+  page.on('response', (response) => {
+    if (response.status() < 400) return;
+    const url = new URL(response.url());
+    if (response.status() === 404 && url.pathname === '/favicon.ico') return;
+    httpErrors.push(`${response.status()} ${url.pathname}`);
   });
 
   await page.setViewportSize(VIEWPORT);
   await page.addInitScript(() => window.localStorage.clear());
   await page.goto('/');
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/favicon.svg');
+  const faviconResponse = await page.request.get('/favicon.svg');
+  expect(faviconResponse.status()).toBe(200);
 
   const canvas = page.locator('canvas');
   await expect(canvas).toBeVisible();
@@ -145,4 +157,5 @@ test('visually verifies two hostile sides, personal contact and stateful rifle f
   await saveScreenshot(page, '25-combat-target-outcome.png');
 
   expect(pageErrors, `Browser errors: ${pageErrors.join(' | ')}`).toEqual([]);
+  expect(httpErrors, `HTTP errors: ${httpErrors.join(' | ')}`).toEqual([]);
 });
