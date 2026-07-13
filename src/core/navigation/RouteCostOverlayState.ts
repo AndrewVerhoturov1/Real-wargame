@@ -1,6 +1,6 @@
 import type { SimulationState } from '../simulation/SimulationState';
 
-export type RouteCostOverlayMode = 'baseTerrain' | 'finalCost';
+export type RouteCostOverlayMode = 'baseTerrain' | 'finalCost' | 'directionalTerrain';
 
 export interface RouteCostOverlayRuntimeState {
   active: boolean;
