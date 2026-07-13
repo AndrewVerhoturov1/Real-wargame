@@ -23,11 +23,25 @@ jobs:
       - name: Reconstruct, verify, and apply final patch
         shell: bash
         run: |
-          set -euo pipefail
-          cat .github/graph-v2-final-patch/part* | base64 -d | gzip -d > /tmp/graph-v2-final.patch
-          echo "82120162245834228d2ffcffcf176e15ceb4e135d849e53a85e7059304fb97b9  /tmp/graph-v2-final.patch" | sha256sum -c -
+          set -u
+          exec > >(tee /tmp/graph-v2-patch-diagnostics.txt) 2>&1
+          set +e
+          cat .github/graph-v2-final-patch/part* | base64 -d > /tmp/graph-v2-final.patch.gz
+          BASE64_STATUS=$?
+          gzip -dc /tmp/graph-v2-final.patch.gz > /tmp/graph-v2-final.patch
+          GZIP_STATUS=$?
+          echo "base64_status=${BASE64_STATUS} gzip_status=${GZIP_STATUS}"
+          echo "compressed:" && sha256sum /tmp/graph-v2-final.patch.gz
+          echo "uncompressed:" && sha256sum /tmp/graph-v2-final.patch
+          echo "expected uncompressed: 82120162245834228d2ffcffcf176e15ceb4e135d849e53a85e7059304fb97b9"
           git show b667c203882b21630f221c22c5bc72f4f2bb4db9:.github/workflows/export-ai-graph-v2-finalize-source.yml > .github/workflows/export-ai-graph-v2-finalize-source.yml
-          git apply --check /tmp/graph-v2-final.patch
+          git apply --check --verbose /tmp/graph-v2-final.patch
+          APPLY_CHECK_STATUS=$?
+          echo "apply_check_status=${APPLY_CHECK_STATUS}"
+          if [ "${BASE64_STATUS}" -ne 0 ] || [ "${GZIP_STATUS}" -ne 0 ] || [ "${APPLY_CHECK_STATUS}" -ne 0 ]; then
+            exit 1
+          fi
+          set -e
           git apply /tmp/graph-v2-final.patch
           rm -rf .github/graph-v2-final-patch
           rm -f .github/workflows/apply-graph-v2-finalize.yml
@@ -36,3 +50,13 @@ jobs:
           git add -A
           git commit -m "feat(ai): finalize Graph v2 typed contracts and subgraphs"
           git push origin HEAD:feat/ai-graph-v2-finalize-2026-07-13
+      - name: Upload patch diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: graph-v2-patch-diagnostics-${{ github.event.pull_request.head.sha }}
+          path: |
+            /tmp/graph-v2-patch-diagnostics.txt
+            /tmp/graph-v2-final.patch.gz
+            /tmp/graph-v2-final.patch
+          retention-days: 1
