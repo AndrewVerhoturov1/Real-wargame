@@ -205,25 +205,43 @@ function mergeCombatEvidence(
   const knownThreatId = evidence.sourceUnitId ? `unit:${evidence.sourceUnitId}` : null;
   const known = knownThreatId ? existing.get(knownThreatId) : undefined;
   if (known && evidence.sourceUnitId) {
-    existing.set(known.id, {
-      ...known,
-      strength: Math.max(known.strength, evidence.strength),
-      suppression: Math.max(known.suppression, evidence.suppression),
-      stressPerSecond: Math.max(known.stressPerSecond, evidence.stressPerSecond),
-      directionDegrees: blendDirections(known.directionDegrees, known.confidence, evidence.directionDegrees, evidence.confidence),
-      arcDegrees: Math.max(28, Math.min(known.arcDegrees, evidence.arcDegrees)),
-      rangeCells: Math.max(known.rangeCells, evidence.rangeCells),
-      confidence: Math.min(96, Math.max(known.confidence, evidence.confidence) + Math.min(12, evidence.evidenceCount * 3)),
-      uncertaintyCells: Math.max(0.5, Math.min(known.uncertaintyCells, evidence.uncertaintyCells)),
-      source: known.visibleNow ? known.source : 'fire_pressure',
-      lastUpdatedSeconds: now,
-    });
-    refreshed.add(known.id);
-    return;
-  }
+  const positionConflict = Math.hypot(
+    known.x - evidence.estimatedSourcePosition.x,
+    known.y - evidence.estimatedSourcePosition.y,
+  );
+  const compatiblePosition = positionConflict <= Math.max(known.uncertaintyCells, evidence.uncertaintyCells) * 1.5;
+  const evidencePositionWeight = known.visibleNow
+    ? 0
+    : Math.max(0.08, Math.min(0.35, evidence.confidence / Math.max(1, known.confidence + evidence.confidence) * 0.5));
+  const uncertaintyCells = known.visibleNow
+    ? Math.max(0.5, Math.min(known.uncertaintyCells, evidence.uncertaintyCells))
+    : compatiblePosition
+      ? Math.max(0.5, Math.min(known.uncertaintyCells, evidence.uncertaintyCells) * 0.95)
+      : Math.max(known.uncertaintyCells, evidence.uncertaintyCells, positionConflict * 0.6);
+  existing.set(known.id, {
+    ...known,
+    x: known.x + (evidence.estimatedSourcePosition.x - known.x) * evidencePositionWeight,
+    y: known.y + (evidence.estimatedSourcePosition.y - known.y) * evidencePositionWeight,
+    strength: Math.max(known.strength, evidence.strength),
+    suppression: Math.max(known.suppression, evidence.suppression),
+    stressPerSecond: Math.max(known.stressPerSecond, evidence.stressPerSecond),
+    directionDegrees: blendDirections(known.directionDegrees, known.confidence, evidence.directionDegrees, evidence.confidence),
+    arcDegrees: Math.max(28, Math.min(known.arcDegrees, evidence.arcDegrees)),
+    rangeCells: Math.max(known.rangeCells, evidence.rangeCells),
+    confidence: Math.min(96, Math.max(known.confidence, evidence.confidence) + Math.min(12, evidence.evidenceCount * 3)),
+    uncertaintyCells,
+    source: known.visibleNow ? known.source : 'fire_pressure',
+    lastUpdatedSeconds: now,
+  });
+  refreshed.add(known.id);
+  return;
+}
 
   const bucket = Math.round(normalizeDegrees(evidence.directionDegrees) / UNKNOWN_DIRECTION_BUCKET_DEGREES) % 12;
-  const threatId = `unknown-fire:${bucket}`;
+  const areaBucketSize = Math.max(4, Math.round(evidence.uncertaintyCells));
+const areaBucketX = Math.round(evidence.estimatedSourcePosition.x / areaBucketSize);
+const areaBucketY = Math.round(evidence.estimatedSourcePosition.y / areaBucketSize);
+const threatId = `unknown-fire:${bucket}:${areaBucketX}:${areaBucketY}`;
   const previous = existing.get(threatId);
   if (!previous) {
     existing.set(threatId, {

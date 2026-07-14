@@ -66,6 +66,48 @@ function verifyHiddenMovementDoesNotLeak(): void {
   assert.notDeepEqual({ x: threat.x, y: threat.y }, red.position, 'objective hidden movement must not enter tactical memory');
   assert.equal(threat.visibleNow, false);
   assert.ok(threat.uncertaintyCells > 1);
+
+const incomingDx = blue.position.x - red.position.x;
+const incomingDy = blue.position.y - red.position.y;
+const incomingLength = Math.max(0.001, Math.hypot(incomingDx, incomingDy));
+const incomingDirection = { x: incomingDx / incomingLength, y: incomingDy / incomingLength, z: 0 };
+const impactGrid = {
+  x: blue.position.x + incomingDirection.x * 4,
+  y: blue.position.y + incomingDirection.y * 4,
+};
+const metresPerCell = state.map.metersPerCell;
+applyBallisticCombatEffects(state, {
+  shotId: 'lost-known-shooter-fire',
+  shooterId: red.id,
+  origin: metres(state, red.position, 1.45),
+  direction: incomingDirection,
+  travelledMetres: Math.hypot(impactGrid.x - red.position.x, impactGrid.y - red.position.y) * metresPerCell,
+  impactPoint: {
+    xMetres: impactGrid.x * metresPerCell,
+    yMetres: impactGrid.y * metresPerCell,
+    zMetres: 1.45,
+  },
+  hitType: 'none',
+  muzzleVelocityMetresPerSecond: 865,
+});
+state.simulationTimeSeconds += 0.1;
+syncSoldierThreatMemory(state, blue, 0.1);
+const fireUpdatedThreat = blue.tacticalKnowledge.threats.find((item) => item.id === `unit:${red.id}`);
+assert.ok(fireUpdatedThreat);
+assert.notDeepEqual(
+  { x: fireUpdatedThreat.x, y: fireUpdatedThreat.y },
+  remembered,
+  'subjective incoming-fire evidence should cautiously shift a lost contact area',
+);
+assert.notDeepEqual(
+  { x: fireUpdatedThreat.x, y: fireUpdatedThreat.y },
+  red.position,
+  'incoming-fire evidence must not copy the hidden objective shooter position',
+);
+assert.ok(
+  fireUpdatedThreat.uncertaintyCells >= threat.uncertaintyCells,
+  'conflicting fire evidence must not make a lost contact artificially precise',
+);
 }
 
 function verifyNearMissCreatesSuppression(): void {

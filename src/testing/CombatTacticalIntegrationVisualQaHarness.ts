@@ -233,7 +233,7 @@ function fireNearObserver(
 }
 
 function addWallFixture(state: SimulationState, observer: UnitModel, shooter: UnitModel): void {
-  const centerX = (observer.position.x + shooter.position.x) / 2;
+  const centerX = Math.min(shooter.position.x - 1.5, observer.position.x + 2.5);
   state.map.objects.push({
     id: `${VISUAL_OBJECT_PREFIX}wall`,
     kind: 'structure',
