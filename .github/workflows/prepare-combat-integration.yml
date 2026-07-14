@@ -1,5 +1,5 @@
 name: Prepare Combat Integration
-# Second push intentionally triggers the already-registered workflow.
+# Third push triggers after the service branch is registered by draft PR #99.
 
 on:
   push:
