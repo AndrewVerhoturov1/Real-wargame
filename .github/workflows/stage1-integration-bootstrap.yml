@@ -14,12 +14,28 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Package source checkout
+          fetch-depth: 1
+      - name: Package integration and worker snapshots
         shell: bash
-        run: tar --exclude='.git' -czf "$RUNNER_TEMP/stage1-integration-source.tgz" .
-      - name: Upload source checkout
+        run: |
+          set -euo pipefail
+          export_dir="$RUNNER_TEMP/stage1-snapshots"
+          mkdir -p "$export_dir"
+          tar --exclude='.git' -czf "$export_dir/integration-head.tgz" .
+          for spec in \
+            live-replan:7b2e50ebcd9c0d950ee18523c5a5a009145683be \
+            safe-position:bc62a2fbd7ea445952fc3db8804c7da2ac2254ac \
+            reverse-slope:67c2487da0b75281820d6d885b3db22842a8586b \
+            permanent-ci:5be77b83588c73c07665e53755b2bd27cfdbbb9b
+          do
+            name="${spec%%:*}"
+            sha="${spec##*:}"
+            git fetch --no-tags --depth=1 origin "$sha"
+            git archive --format=tar.gz --output="$export_dir/$name.tgz" "$sha"
+          done
+      - name: Upload source snapshots
         uses: actions/upload-artifact@v4
         with:
-          name: stage1-integration-source
-          path: ${{ runner.temp }}/stage1-integration-source.tgz
+          name: stage1-integration-snapshots
+          path: ${{ runner.temp }}/stage1-snapshots/*.tgz
           if-no-files-found: error
