@@ -1,5 +1,5 @@
 
-added 76 packages, and audited 77 packages in 2s
+added 76 packages, and audited 77 packages in 1s
 
 16 packages are looking for funding
   run `npm fund` for details
@@ -10,4 +10,41 @@ To address all issues (including breaking changes), run:
   npm audit fix --force
 
 Run `npm audit` for details.
-resume RunPlan: expected one match, found 2
+Graph v2 behavior ownership refactor applied.
+
+> real-wargame@0.1.0 graph-v2:smoke
+> node scripts/ai_graph_v2_contracts_smoke.mjs
+
+AI Graph v2 contracts smoke passed: 40 contracts, migration, validation and memory scopes.
+
+> real-wargame@0.1.0 subgraph:smoke
+> node scripts/ai_subgraph_runtime_smoke.mjs
+
+AI subgraph runtime smoke passed: registry, recursion guard, bindings, isolation, restore, cancellation and cleanup.
+
+> real-wargame@0.1.0 state-machine:smoke
+> node scripts/ai_state_machine_smoke.mjs
+
+AI state machine smoke passed: hierarchy, priority, wildcard emergency, minimum duration, hysteresis, trace and restore.
+
+> real-wargame@0.1.0 state-plan-scenario:smoke
+> node scripts/ai_state_plan_scenario_smoke.mjs
+
+AI state/plan scenario smoke passed: Idle, order, contact cancel, cover replacement, suppression, snapshot restore, no repeated start, completion and stable exit.
+
+> real-wargame@0.1.0 move-bridge:smoke
+> node scripts/ai_stateful_move_bridge_smoke.mjs && node scripts/ai_plan_move_scope_smoke.mjs && node scripts/ai_graph_ownership_smoke.mjs
+
+AI stateful move bridge smoke passed: exact routed AI target, path memory, movement, ownership, cleanup, unreachable start and blocked exact goal.
+AI plan move scope smoke passed: nested destination remains available to route monitoring.
+file:///home/runner/work/Real-wargame/Real-wargame/.tmp-ai-graph-ownership-smoke/ai-graph-ownership-smoke.mjs?run=1784007595351:10420
+const storage = new MemoryStorage();
+                ^
+
+ReferenceError: Cannot access 'MemoryStorage' before initialization
+    at file:///home/runner/work/Real-wargame/Real-wargame/.tmp-ai-graph-ownership-smoke/ai-graph-ownership-smoke.mjs?run=1784007595351:10420:17
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async file:///home/runner/work/Real-wargame/Real-wargame/scripts/ai_graph_ownership_smoke.mjs:23:3
+
+Node.js v20.20.2
