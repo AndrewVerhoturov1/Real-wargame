@@ -27,28 +27,43 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Apply refactor
-        run: python3 scripts/refactor_graph_ownership.py
-
-      - name: Run focused code checks
+      - name: Apply refactor and run code checks
+        id: verify
+        continue-on-error: true
+        shell: bash
         run: |
-          npm run graph-v2:smoke
-          npm run subgraph:smoke
-          npm run state-machine:smoke
-          npm run state-plan-scenario:smoke
-          npm run move-bridge:smoke
-          npm run build
+          set -o pipefail
+          {
+            npm ci
+            python3 scripts/refactor_graph_ownership.py
+            npm run graph-v2:smoke
+            npm run subgraph:smoke
+            npm run state-machine:smoke
+            npm run state-plan-scenario:smoke
+            npm run move-bridge:smoke
+            npm run build
+          } 2>&1 | tee graph-ownership-refactor.log
 
       - name: Commit verified result directly to preview
+        if: steps.verify.outcome == 'success'
         run: |
           git checkout HEAD^ -- .github/workflows/preview-core-checks.yml
           rm -f .github/workflows/graph-owned-state-plan-refactor-temp.yml
           rm -f scripts/refactor_graph_ownership.py
+          rm -f graph-ownership-refactor.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "refactor(ai): make Graph v2 sole behavior authority"
           git push origin HEAD:real-wargame-preview
+
+      - name: Record failure diagnostics
+        if: steps.verify.outcome != 'success'
+        run: |
+          mv graph-ownership-refactor.log graph-ownership-refactor-failure.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add graph-ownership-refactor-failure.log
+          git commit -m "chore: record graph ownership refactor failure"
+          git push origin HEAD:real-wargame-preview
+          exit 1
