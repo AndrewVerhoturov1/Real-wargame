@@ -107,7 +107,7 @@ function resetFixture(
   state: SimulationState,
   observer: UnitModel,
   shooter: UnitModel,
-  baselineHeights: readonly number[],
+  baselineHeights: readonly SimulationState['map']['cells'][number]['height'][],
 ): void {
   clearCombatEvents(state);
   clearCombatSuppression(observer);
@@ -261,7 +261,7 @@ function addReverseSlopeFixture(state: SimulationState, observer: UnitModel, sho
   for (let y = minY; y <= maxY; y += 1) {
     for (let x = startX; x <= endX; x += 1) {
       const progress = (x - startX + 1) / Math.max(1, endX - startX + 1);
-      state.map.cells[y * state.map.width + x].height = Math.round(progress * 3);
+      state.map.cells[y * state.map.width + x].height = Math.round(progress * 3) as SimulationState['map']['cells'][number]['height'];
     }
   }
   markMapCellsDirty(state.map, 'height', { minX: startX, minY, maxX: endX, maxY });

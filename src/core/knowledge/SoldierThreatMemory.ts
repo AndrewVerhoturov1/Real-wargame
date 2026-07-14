@@ -88,7 +88,7 @@ export function syncSoldierThreatMemory(
   }
 
   for (const evidence of drainCombatThreatEvidence(unit, now)) {
-    mergeCombatEvidence(state, unit, existing, refreshed, evidence, now);
+    mergeCombatEvidence(existing, refreshed, evidence, now);
   }
   reconcileUnknownThreats(unit, existing, refreshed, now);
 
@@ -197,8 +197,6 @@ function buildRealUnitThreat(
 }
 
 function mergeCombatEvidence(
-  state: SimulationState,
-  observer: UnitModel,
   existing: Map<string, KnownThreatMemory>,
   refreshed: Set<string>,
   evidence: CombatThreatEvidence,
