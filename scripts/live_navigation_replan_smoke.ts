@@ -21,7 +21,7 @@ verifyHysteresisAndCooldownBoundSearches();
 console.log('Live navigation replan smoke passed: real perception drives SimulationTick search, hysteresis, accepted replacement, bounded A*, final facing and strict ownership.');
 
 function verifyAcceptedLiveReplanAndCompletion(): void {
-  const registry = createReplanRegistry('live-accept', 10, 0.05, 1.5);
+  const registry = createReplanRegistry('live-accept', 100, 0.05, 1.5);
   saveNavigationProfileRegistry(registry, null);
   try {
     const state = makeCorridorState();
