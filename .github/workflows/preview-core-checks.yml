@@ -37,6 +37,19 @@ jobs:
             npm ci
             sed -i 's/if count != 1:/if count < 1:/' scripts/refactor_graph_ownership.py
             python3 scripts/refactor_graph_ownership.py
+            python3 - <<'PY'
+          from pathlib import Path
+          import re
+          path = Path('scripts/ai_graph_ownership_smoke.ts')
+          text = path.read_text(encoding='utf-8')
+          match = re.search(r'\nclass MemoryStorage \{.*\n\}\n?$', text, flags=re.S)
+          if not match:
+              raise SystemExit('MemoryStorage test helper not found')
+          block = match.group(0).strip()
+          text = text[:match.start()].rstrip() + '\n'
+          text = text.replace("const GRAPH_STORAGE_KEY", block + "\n\nconst GRAPH_STORAGE_KEY", 1)
+          path.write_text(text, encoding='utf-8')
+          PY
             npm run graph-v2:smoke
             npm run subgraph:smoke
             npm run state-machine:smoke
