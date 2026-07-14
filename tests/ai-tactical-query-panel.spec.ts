@@ -21,6 +21,7 @@ async function saveScreenshot(page: Page, name: string): Promise<void> {
 
 test.beforeAll(() => mkdirSync(SCREENSHOT_DIR, { recursive: true }));
 
+// Diagnostic cards are intentionally collapsed by default, so visual QA opens «След ИИ» explicitly.
 test('shows Russian tactical query candidates, exclusions, scores and winner', async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await page.addInitScript(() => {
