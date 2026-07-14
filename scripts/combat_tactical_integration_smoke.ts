@@ -180,10 +180,11 @@ function verifyRealThreatChangesRouteCostAndReplan(): void {
   const cache = createRouteCostFieldCache();
   const start = { ...blue.position };
   const goal = { x: 14.5, y: 4.5 };
+  const fireSectorCell = { x: 4, y: 4 };
 
   const beforeContext = { unitId: blue.id, originX: blue.position.x, originY: blue.position.y, knowledgeRevision: 0, knownThreats: [] };
   const beforeFields = getRouteCostFields(state.map, profile, beforeContext, cache);
-  const beforeDanger = readRouteCostCell(beforeFields, 7, 4)?.dangerCost ?? 0;
+  const beforeDanger = readRouteCostCell(beforeFields, fireSectorCell.x, fireSectorCell.y)?.dangerCost ?? 0;
   const beforeRoute = findGridPath(state.map, start, goal, { navigationProfile: profile, tacticalContext: beforeContext });
   assert.equal(beforeRoute.ok, true);
 
@@ -197,7 +198,7 @@ function verifyRealThreatChangesRouteCostAndReplan(): void {
     knownThreats: blue.tacticalKnowledge.threats,
   };
   const afterFields = getRouteCostFields(state.map, profile, afterContext, cache);
-  const afterDanger = readRouteCostCell(afterFields, 7, 4)?.dangerCost ?? 0;
+  const afterDanger = readRouteCostCell(afterFields, fireSectorCell.x, fireSectorCell.y)?.dangerCost ?? 0;
   const afterRoute = findGridPath(state.map, start, goal, { navigationProfile: profile, tacticalContext: afterContext });
   assert.equal(afterRoute.ok, true);
   assert.ok(afterDanger > beforeDanger, 'real contact must increase route cost in its fire sector');
