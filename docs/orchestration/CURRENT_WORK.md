@@ -18,9 +18,9 @@ Codex and Q/R/X/W modes are not part of this route.
 
 ```text
 id: stage1-nonvisual-closure-proof-a
-status: awaiting-worker-3-revision
+status: ready-for-integrator
 base_branch: real-wargame-preview
-base_commit: a7e99a955fb4ea2e5d3628119cca29ebccbd832e
+current_preview_commit: 9116c1238e563728d211890859219b537b0dcefb
 active_subproject: ai-single-unit-editor
 ```
 
@@ -35,157 +35,139 @@ Close the remaining non-visual Combat Tactical Integration Stage 1 evidence gaps
 
 Browser/PNG visual QA is outside this campaign and still requires separate explicit user approval.
 
-## Parallel workers
-
-### Worker 1 — live route-replan implementation and proof
-
-Status: `accepted-with-changes`
-
-Delivered draft PR `#110`, branch `agent/live-navigation-replan-tick-20260715`, commit `7b2e50ebcd9c0d950ee18523c5a5a009145683be`.
-
-### Worker 2 — safe-position winner and wall-side proof
-
-Status: `accepted-with-changes`
-
-Delivered draft PR `#109`, branch `agent/safe-position-winner-executor-2`, commit `bc62a2fbd7ea445952fc3db8804c7da2ac2254ac`.
-
-### Worker 3 — reverse-slope comparative combat proof
-
-Status: `changes-required`
-
-Delivered draft PR `#111`, branch `agent/reverse-slope-comparative-stage1`, commit `6e929a73d2290db2a481a905aa029996f4f44acb`.
-
-The implementation package is structurally coherent and existing build/regression jobs pass, but the new `reverse-slope-comparative:smoke` has not been executed. Worker 3 must connect it to an actually executed CI command, run it, correct any runtime failures and return an updated SHA and report.
-
-### Worker 4 — CI contract and regression matrix
-
-Status: `accepted`
-
-Delivered draft PR `#108`, branch `agent/stage1-combat-tactical-ci`, commit `5be77b83588c73c07665e53755b2bd27cfdbbb9b`.
-
-## Received results
-
-### Worker 1 — live route-replan implementation and proof
-
-Decision: `ACCEPT_WITH_CHANGES`
-
-Verified facts:
-
-- PR `#110` is open, draft and targets `real-wargame-preview`;
-- the exact head is `7b2e50ebcd9c0d950ee18523c5a5a009145683be`;
-- seven files change: production replanner/order code, a route-cost evaluator, the live integration smoke and a focused workflow;
-- a real ballistic near miss feeds subjective threat memory and ordinary `tickSimulation` before accepted or rejected live replan decisions;
-- the smoke checks owner token, requested target, movement/profile metadata, player-command linkage, final facing, search/replacement counters and stale lifecycle cleanup;
-- GitHub Actions run `29372179601` succeeded, including the real `combat-tactical-integration:smoke` step and log artifact;
-- the downloaded log confirms the existing tactical integration scenarios and the new live replan scenario passed;
-- Preview Core route, runtime, pathfinding, awareness and production-build steps passed;
-- the red aggregate Preview Core result came from the final status-publishing step, not `lab:smoke`; the worker report's attribution to a baseline lab failure was inaccurate;
-- the current PR is not mergeable after the preview branch advanced from its merge base and must be integrated semantically rather than merged blindly.
-
-Required integration changes:
-
-1. Use one canonical route-cost formula for both the current remaining route and the candidate route. `NavigationRouteCost` currently sums per-cell `fields.totalCost`, which clamps each cell to a minimum, while `MoveOrder.pathCost` comes from `GridPathfinder` component breakdown and applies the final clamp after summation. Negative `coverAdjustment` can therefore make the compared values mathematically inconsistent. Export/reuse the canonical path breakdown evaluator or otherwise prove exact equivalence for terrain, danger, directional terrain and cover adjustments.
-2. Re-run accepted and rejected live replan scenarios after combining Worker 2 and Worker 3, because their awareness/directional terrain changes alter tactical route costs.
-3. Consolidate the focused workflow with the accepted Worker 4 `Combat Foundation Core` gate. Avoid maintaining two permanent workflows that execute the same full tactical integration command unless the duplication is intentional and documented.
-4. Preserve the `replanSearchCount` versus accepted `replanCount` distinction, strict order identity/ownership checks, cooldown gating and current-context hysteresis baseline.
-5. Update/rebase against the then-current preview branch and repeat the focused integration, route, pathfinding, runtime and production-build checks.
-
-### Worker 2 — safe-position winner and wall-side proof
-
-Decision: `ACCEPT_WITH_CHANGES`
-
-Verified facts:
-
-- PR `#109` is open, draft and targets `real-wargame-preview`;
-- four files change, including the production `SoldierAwarenessGrid` implementation and a five-scenario deterministic smoke;
-- the patch fixes side-insensitive wall protection by using threat-relative cover geometry from subjective threat memory;
-- the strict smoke is connected to both awareness and combat tactical runners;
-- the actual `Awareness field cache smoke` step and production build passed on the PR merge commit;
-- neighboring directional terrain, navigation, pathfinding and policy workflows passed;
-- the red aggregate `Preview Core Checks` result is caused only by the existing final status-publishing step.
-
-Required integration changes:
-
-1. Do not double-count relief protection. `evaluateCoverBetween` includes object, forest and relief contributions, while `DirectionalTacticalField.terrainProtection` already models reverse slope, valleys, crest and silhouette. The integrated implementation must separate threat-line object/forest protection from relief already represented by the directional terrain field, or otherwise provide an explicit non-duplicating composition with regression evidence.
-2. Re-run the safe-position smoke after combining Worker 3, because reverse-slope scoring is directly affected by this production change.
-3. Add the exact `scripts/combat_safe_position_winner_smoke.ts` path to the accepted Worker 4 CI filters.
-4. Keep `combat-tactical-integration:smoke` as the canonical Stage 1 entry point. Retain the additional awareness-runner invocation only if duplicate execution is intentional.
-
-### Worker 3 — reverse-slope comparative combat proof
-
-Decision: `CHANGES_REQUIRED`
-
-Verified facts:
-
-- PR `#111` is open, draft and targets `real-wargame-preview`;
-- it adds a standalone comparative fixture, smoke launcher, assertions and npm command without changing production code;
-- the scenario uses perception contact → soldier threat memory → awareness/directional field/route-cost/A* and checks direction reversal, hidden-position non-leakage and cache bounds;
-- existing Directional Terrain Core, Combat Foundation Core, Preview Policy, navigation and production-build jobs passed;
-- none of those jobs invokes `npm run reverse-slope-comparative:smoke`;
-- therefore the new acceptance assertions remain unexecuted and their numeric margins and route assumptions are unverified.
-
-Required worker revision:
-
-1. Connect the scenario to an actually executed core runner, preferably the existing directional-terrain or combat-tactical integration runner.
-2. Ensure the exact new fixture/smoke paths trigger the relevant workflow.
-3. Produce a GitHub Actions run or equivalent real repository run that executes `reverse-slope-comparative:smoke`.
-4. Correct any runtime, cache-count or route-determinism failures without weakening the comparative, reversal and bounded-work contracts to mere existence assertions.
-5. Return the updated branch, exact commit SHA, actual command results, remaining risks and integration notes.
-
-### Worker 4 — CI contract and regression matrix
-
-Decision: `ACCEPT`
-
-Verified against the actual PR, patch, workflow run and downloaded artifact:
-
-- PR `#108` is open, draft and targets `real-wargame-preview`;
-- exactly one file changes: `.github/workflows/combat-foundation-core.yml`;
-- existing combat, perception, runtime, reload, workspace and production-build checks remain;
-- `combat-tactical-integration:smoke` is a normal failure-producing step using `set -o pipefail`;
-- its log is uploaded with `if: always()`;
-- relevant bounded dependency and scenario path filters are added;
-- Playwright and PNG visual QA remain manual-only;
-- GitHub Actions run `29370723538` succeeded, including the new smoke step and artifact upload;
-- the artifact confirms both the tactical integration and source-direction regression scenarios passed;
-- the PR is not merged and `main` was not changed.
-
-Integration note: preserve the accepted gate and add exact filters for separately named scenario files introduced by Workers 1–3.
-
-## Worker delivery rules
-
-Workers may inspect and change any relevant files, add tests and propose architecture corrections. They must not independently combine results into the shared preview branch.
-
-Each result must be reproducible as complete files, an applicable patch, or an isolated branch/PR with an exact commit SHA. Reports must distinguish checks run from checks not run and list risks and integration notes.
-
-Orchestrator decisions use exactly one of:
-
-```text
-ACCEPT
-ACCEPT_WITH_CHANGES
-CHANGES_REQUIRED
-REJECT
-BLOCKED
-```
-
-## Orchestrator decision
+## Worker decisions
 
 ```text
 Worker 1: ACCEPT_WITH_CHANGES
 Worker 2: ACCEPT_WITH_CHANGES
-Worker 3: CHANGES_REQUIRED
+Worker 3: ACCEPT_WITH_CHANGES
 Worker 4: ACCEPT
 ```
 
-No integrator prompt will be issued until Worker 3 returns an executed revision.
+### Worker 1 — live route replan
+
+- Draft PR: `#110`
+- Branch: `agent/live-navigation-replan-tick-20260715`
+- Commit: `7b2e50ebcd9c0d950ee18523c5a5a009145683be`
+- Verified run: `Live Navigation Replan Core` `29372179601`
+
+Accepted evidence:
+
+- real ballistic near miss → subjective tactical memory → ordinary `tickSimulation`;
+- accepted and rejected live replans;
+- preserved owner, target, movement/profile metadata, player-command linkage and final facing;
+- separate search and accepted-replacement counters;
+- cooldown and stale lifecycle ownership checks.
+
+Required integration changes:
+
+1. Use one canonical path-cost calculation for both the active remaining route and candidate route. Do not compare `fields.totalCost` accumulation against a separately calculated `GridPathfinder` component breakdown when negative cover adjustments can make them diverge.
+2. Preserve current-context hysteresis, `replanSearchCount`, accepted `replanCount`, cooldown gating and strict order identity/ownership.
+3. Consolidate the focused workflow into the permanent Worker 4 gate rather than retaining a redundant permanent workflow.
+4. Re-run the live scenario after combining the safe-position and reverse-slope changes.
+
+### Worker 2 — safe-position winner
+
+- Draft PR: `#109`
+- Branch: `agent/safe-position-winner-executor-2`
+- Commit: `bc62a2fbd7ea445952fc3db8804c7da2ac2254ac`
+
+Accepted evidence:
+
+- threat-relative protected wall-side selection;
+- winner change and numerical danger reduction;
+- east/west direction reversal;
+- precise visual contact versus broad unknown-fire sector;
+- deterministic decay, cache reuse and hidden-position non-leakage.
+
+Required integration changes:
+
+1. Do not double-count relief. The existing `evaluateCoverBetween` includes object, forest and relief contributions, while `DirectionalTacticalField.terrainProtection` already models reverse slope, valley, crest and silhouette. Separate line-of-fire object/forest protection from directional relief, or prove another non-duplicating composition.
+2. Keep `combat-tactical-integration:smoke` as the canonical Stage 1 entry point. Avoid duplicate invocation through awareness unless it is intentional.
+3. Add the exact safe-position scenario path to the permanent CI filters.
+4. Re-run the scenario after combining Worker 3.
+
+### Worker 3 — reverse-slope comparative proof
+
+- Draft PR: `#111`
+- Branch: `agent/reverse-slope-comparative-stage1`
+- Final commit: `67c2487da0b75281820d6d885b3db22842a8586b`
+- Verified run: `Directional Terrain Core` `29373919486`
+
+Accepted evidence:
+
+- `reverse-slope-comparative:smoke` was actually executed and passed;
+- equivalent flat and ridge scenes use subjective perception/threat memory;
+- reverse slope changes danger, safety, safe-position winner and actual retreat route;
+- reversing the threat flips position and route preference;
+- hidden objective movement does not leak into tactical memory;
+- cache reuse, dynamic-only invalidation, local-query and exact-ray bounds pass;
+- pathfinding, combat tactical integration, production build and documentation checks pass.
+
+Required integration changes:
+
+1. Preserve the longer deterministic corridor and the comparative route contract that respects `retreat.maximumDetourRatio`.
+2. Execute the acceptance scenario once per CI job. The current PR runs it inside `directional-terrain:smoke` and again as a separate workflow step.
+3. Do not retain the extra combat tactical integration step in Directional Terrain Core when Worker 4 already provides the canonical permanent gate.
+4. Add exact reverse-slope fixture/runner paths to the appropriate permanent workflow filters.
+5. Re-run after the Worker 2 relief-composition fix.
+
+### Worker 4 — permanent CI
+
+- Draft PR: `#108`
+- Branch: `agent/stage1-combat-tactical-ci`
+- Commit: `5be77b83588c73c07665e53755b2bd27cfdbbb9b`
+- Verified run: `Combat Foundation Core` `29370723538`
+
+Accepted evidence:
+
+- `combat-tactical-integration:smoke` is a normal failure-producing step using `set -o pipefail`;
+- log upload uses `if: always()`;
+- existing combat, perception, runtime, reload, workspace and build checks remain;
+- visual QA remains manual-only.
+
+Integration requirement: extend its path filters for the exact accepted live-replan, safe-position and reverse-slope scenario files and their production dependencies.
+
+## Integration contract
+
+One designated integrator must start from the latest `real-wargame-preview`, inspect all four draft PRs and combine them semantically. Draft PRs must not be merged or cherry-picked blindly because their branches diverged and overlap in runners/workflows.
+
+The integrated result must:
+
+- implement the accepted production fixes from Workers 1 and 2;
+- retain all three acceptance scenarios;
+- resolve route-cost equivalence and relief double-counting;
+- use one canonical tactical integration CI gate;
+- avoid redundant permanent workflows and duplicate scenario execution;
+- preserve all existing neighboring checks;
+- update status documentation only after factual verification;
+- remain outside `main` and keep visual QA manual-only.
+
+## Required integrated verification
+
+At minimum run and report the actual results of:
+
+```bash
+npm ci
+npm run combat-tactical-integration:smoke
+npm run reverse-slope-comparative:smoke
+npm run directional-terrain:smoke
+npm run awareness-field:smoke
+npm run navigation-profiles:smoke
+npm run pathfinding:smoke
+npm run navigation-overlay:smoke
+npm run map-revision:smoke
+npm run build
+```
+
+Also run any focused live-replan/routed-movement/runtime commands required by the final dependency graph and the repository documentation checks when status files are changed.
 
 ## Integration
 
-Not started.
-
-The designated integrator must re-read the then-current preview branch and reproduce or apply accepted changes semantically. Draft PRs must not be merged blindly.
+Ready to start. The integrator must return one isolated branch or draft PR with an exact commit SHA, a complete changed-file list, checks actually run, checks not run, risks, conflicts resolved and temporary-branch cleanup recommendations.
 
 ## Final verification
 
-Not started.
+Pending integrated result.
 
-The campaign requires an integrated commit/PR and an honest non-visual verification report. Stage 1 also remains open until separately approved visual QA is completed.
+Stage 1 remains open after non-visual integration until separately approved browser/PNG visual QA is completed.
