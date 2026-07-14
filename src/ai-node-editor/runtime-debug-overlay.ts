@@ -347,6 +347,7 @@ function readDebugPayload(): RuntimeDebugPayload | null {
       explanationRu: typeof parsed.explanationRu === 'string' ? parsed.explanationRu : undefined,
       trace: Array.isArray(parsed.trace) ? parsed.trace.filter(isTraceItem) : [],
       scores: Array.isArray(parsed.scores) ? parsed.scores.filter(isBranchScore) : [],
+      tacticalQueries: normalizeTacticalQueries(parsed.tacticalQueries),
       effects: Array.isArray(parsed.effects) ? parsed.effects : [],
       consumedEventIds: Array.isArray(parsed.consumedEventIds)
         ? parsed.consumedEventIds.filter((value): value is string => typeof value === 'string')
@@ -393,6 +394,47 @@ function normalizeMemoryScopeCounts(value: unknown): Readonly<Record<string, num
   const result: Record<string, number> = {};
   for (const [scope, count] of Object.entries(value)) if (typeof count === 'number' && Number.isFinite(count)) result[scope] = count;
   return result;
+}
+
+function normalizeTacticalQueries(value: unknown): Readonly<Record<string, RuntimeTacticalQuery>> | undefined {
+  if (!isRecord(value)) return undefined;
+  const result: Record<string, RuntimeTacticalQuery> = {};
+  for (const [key, query] of Object.entries(value)) {
+    if (isRuntimeTacticalQuery(query)) result[key] = query;
+  }
+  return result;
+}
+
+function isRuntimeTacticalQuery(value: unknown): value is RuntimeTacticalQuery {
+  if (!isRecord(value) || !isRecord(value.budget) || !Array.isArray(value.candidates)) return false;
+  return typeof value.id === 'string'
+    && typeof value.kind === 'string'
+    && typeof value.status === 'string'
+    && typeof value.budget.maxCandidates === 'number'
+    && typeof value.budget.searchRadiusMeters === 'number'
+    && typeof value.budget.maxCalculationMs === 'number'
+    && value.candidates.every(isRuntimeTacticalCandidate)
+    && typeof value.elapsedMs === 'number'
+    && (value.winnerCandidateId === undefined || typeof value.winnerCandidateId === 'string')
+    && (value.stopReason === undefined || isRuntimeTacticalReason(value.stopReason));
+}
+
+function isRuntimeTacticalCandidate(value: unknown): value is RuntimeTacticalCandidate {
+  if (!isRecord(value) || !isRecord(value.position) || !isRecord(value.source) || !isRecord(value.scoreBreakdown)) return false;
+  return typeof value.id === 'string'
+    && typeof value.position.x === 'number'
+    && typeof value.position.y === 'number'
+    && typeof value.source.label === 'string'
+    && typeof value.source.labelRu === 'string'
+    && typeof value.totalScore === 'number'
+    && typeof value.excluded === 'boolean'
+    && Array.isArray(value.exclusionReasons)
+    && value.exclusionReasons.every(isRuntimeTacticalReason)
+    && Object.values(value.scoreBreakdown).every((score) => typeof score === 'number');
+}
+
+function isRuntimeTacticalReason(value: unknown): value is { readonly reason: string; readonly reasonRu: string } {
+  return isRecord(value) && typeof value.reason === 'string' && typeof value.reasonRu === 'string';
 }
 
 function normalizeReactiveAbort(value: unknown): RuntimeReactiveAbort | undefined {
