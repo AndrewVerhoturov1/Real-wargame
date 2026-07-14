@@ -4,6 +4,9 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, edited, ready_for_review]
 
+permissions:
+  contents: write
+
 jobs:
   check-preview-policy:
     runs-on: ubuntu-latest
@@ -70,3 +73,18 @@ jobs:
           echo "Default target for this repository is: real-wargame-preview"
           echo "Default external delivery is: direct push to preview (PR is fallback)"
           echo "Visual QA execution is manual-only after explicit user approval"
+
+  prepare-combat-integration:
+    if: github.head_ref == 'tmp/prepare-combat-integration-run-20260714'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout integration runner
+        uses: actions/checkout@v4
+        with:
+          ref: tmp/prepare-combat-integration-run-20260714
+          fetch-depth: 0
+
+      - name: Prepare and verify transfer branch
+        shell: bash
+        run: bash scripts/prepare_combat_integration.sh
