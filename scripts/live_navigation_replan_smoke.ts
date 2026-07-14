@@ -272,7 +272,7 @@ function makeCorridorState(): SimulationState {
   const mover = unit(state, 'blue-mover');
   const shooter = unit(state, 'red-shooter');
   mover.position = { x: 2.5, y: 3.5 };
-  shooter.position = { x: 18.5, y: 4.5 };
+  shooter.position = { x: 18.5, y: 4.25 };
   state.selectedUnitId = mover.id;
   state.selectedUnitIds = [mover.id];
   state.editor.enabled = false;
