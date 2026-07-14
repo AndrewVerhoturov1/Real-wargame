@@ -70,6 +70,8 @@ export interface KnownThreatMemory {
   visibleNow: boolean;
   lastSeenSeconds: number;
   lastUpdatedSeconds: number;
+  evidenceCount?: number;
+  lastEvidenceSeconds?: number;
 }
 
 export interface UnitTacticalKnowledge {

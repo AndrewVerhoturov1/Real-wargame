@@ -1,11 +1,12 @@
 import { applyBallisticCombatEffects, clearCombatSuppression, getCombatSuppressionSnapshot } from '../core/combat/CombatSuppression';
-import { clearCombatThreatEvidence } from '../core/combat/CombatThreatEvidence';
+import { clearCombatThreatEvidence, recordCombatThreatEvidence } from '../core/combat/CombatThreatEvidence';
 import { clearCombatEvents, drainDueCombatEvents, queueCombatEvent } from '../core/combat/CombatEvents';
 import { buildSoldierAwarenessReport } from '../core/knowledge/SoldierAwarenessGrid';
 import { syncSoldierThreatMemory } from '../core/knowledge/SoldierThreatMemory';
 import { fullMapRegion, getMapRevisionSnapshot, markMapCellsDirty, markMapObjectsDirty } from '../core/map/MapRuntimeState';
 import { issueRoutedMoveOrderToSelectedUnits } from '../core/orders/RoutedMoveOrders';
 import { advanceVisualContact, upsertPerceptionContact } from '../core/perception/PerceptionContact';
+import { evaluateThreatsAtPosition } from '../core/pressure/ThreatEvaluation';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { setAiTestPaused } from '../core/testing/AiTestLabRuntime';
 import type { UnitModel } from '../core/units/UnitModel';
@@ -20,14 +21,31 @@ import {
   toggleRealReliefOverlay,
 } from '../core/ui/RuntimeUiState';
 
-export type CombatTacticalVisualScenario = 'visual-contact' | 'near-miss' | 'wall-cover' | 'reverse-slope';
+export type CombatTacticalVisualScenario =
+  | 'visual-contact'
+  | 'near-miss'
+  | 'wall-cover'
+  | 'reverse-slope'
+  | 'slice1-contact-danger-zero-suppression'
+  | 'slice1-near-miss-evidence-suppression'
+  | 'slice1-wall-evidence-attenuation'
+  | 'slice1-repeated-unknown-fire-merged'
+  | 'slice1-detected-shooter-alias';
 
 export interface CombatTacticalVisualSnapshot {
   readonly scenario: CombatTacticalVisualScenario;
   readonly suppression: number;
   readonly stress: number;
+  readonly danger: number;
+  readonly tacticalSuppression: number;
   readonly threatIds: readonly string[];
   readonly threatConfidence: number;
+  readonly evidenceCount: number;
+  readonly unknownThreatCount: number;
+  readonly unitThreatCount: number;
+  readonly maxThreatStrength: number;
+  readonly maxThreatSuppression: number;
+  readonly hiddenFactLeakCount: number;
   readonly bestSafePosition: { x: number; y: number } | null;
   readonly routeWaypointCount: number;
   readonly mapVisualRevision: number;
@@ -64,13 +82,25 @@ export function installCombatTacticalIntegrationVisualQaHarness(
       positionFixture(state, observer, shooter);
       configureOverlays(state);
 
-      if (scenario === 'wall-cover') addWallFixture(state, observer, shooter);
+      if (scenario === 'wall-cover' || scenario === 'slice1-wall-evidence-attenuation') {
+        addWallFixture(state, observer, shooter);
+      }
       if (scenario === 'reverse-slope') addReverseSlopeFixture(state, observer, shooter);
 
-      if (scenario === 'visual-contact') installVisualContact(observer, shooter, state.simulationTimeSeconds);
-      else fireNearObserver(state, observer, shooter, scenario);
+      let memorySynced = false;
+      if (scenario === 'visual-contact' || scenario === 'slice1-contact-danger-zero-suppression') {
+        installVisualContact(observer, shooter, state.simulationTimeSeconds);
+      } else if (scenario === 'slice1-repeated-unknown-fire-merged') {
+        installRepeatedUnknownFireEvidence(state, observer, shooter);
+        memorySynced = true;
+      } else if (scenario === 'slice1-detected-shooter-alias') {
+        installDetectedShooterAliasEvidence(state, observer, shooter);
+        memorySynced = true;
+      } else {
+        fireNearObserver(state, observer, shooter, scenario);
+      }
 
-      syncSoldierThreatMemory(state, observer, 0.1);
+      if (!memorySynced) syncSoldierThreatMemory(state, observer, 0.1);
       state.selectedUnitId = observer.id;
       state.selectedUnitIds = [observer.id];
       observer.playerNavigationProfileId = 'retreat';
@@ -83,13 +113,14 @@ export function installCombatTacticalIntegrationVisualQaHarness(
       activeScenario = scenario;
       onChanged();
       window.dispatchEvent(new CustomEvent('real-wargame:combat-tactical-visual-qa-updated'));
-      return buildSnapshot(state, observer, scenario, report);
+      return buildSnapshot(state, observer, shooter, scenario, report);
     },
     getSnapshot(): CombatTacticalVisualSnapshot | null {
       if (!activeScenario) return null;
       const observer = state.units.find((unit) => unit.id === state.selectedUnitId) ?? state.units[0];
-      if (!observer) return null;
-      return buildSnapshot(state, observer, activeScenario, buildSoldierAwarenessReport(state, observer));
+      const shooter = state.units.find((unit) => unit.id !== observer?.id) ?? state.units[1];
+      if (!observer || !shooter) return null;
+      return buildSnapshot(state, observer, shooter, activeScenario, buildSoldierAwarenessReport(state, observer));
     },
   };
 }
@@ -158,7 +189,7 @@ function configureOverlays(state: SimulationState): void {
   if (!getRealReliefOverlayState(state).active) toggleRealReliefOverlay(state);
 }
 
-function installVisualContact(observer: UnitModel, shooter: UnitModel, nowSeconds: number): void {
+function installVisualContact(observer: UnitModel, shooter: UnitModel, nowSeconds: number) {
   const contact = advanceVisualContact(null, {
     id: `perception:unit:${shooter.id}`,
     stimulusId: `unit:${shooter.id}`,
@@ -171,13 +202,95 @@ function installVisualContact(observer: UnitModel, shooter: UnitModel, nowSecond
     source: 'visual',
   });
   upsertPerceptionContact(observer.perceptionKnowledge, contact);
+  return contact;
+}
+
+function installRepeatedUnknownFireEvidence(
+  state: SimulationState,
+  observer: UnitModel,
+  shooter: UnitModel,
+): void {
+  const directionDegrees = incomingDirectionDegrees(observer, shooter);
+  for (let index = 0; index < 3; index += 1) {
+    recordCombatThreatEvidence(observer, {
+      id: `visual-repeat-${index}-${Math.round(state.simulationTimeSeconds * 1000)}`,
+      kind: 'near_miss',
+      sourceUnitId: null,
+      estimatedSourcePosition: {
+        x: shooter.position.x + (index - 1) * 0.35,
+        y: shooter.position.y + (index % 2 === 0 ? 0.25 : -0.2),
+      },
+      directionDegrees: directionDegrees + index - 1,
+      confidence: 50,
+      uncertaintyCells: 5,
+      strength: 58,
+      suppression: 66,
+      stressPerSecond: 8,
+      rangeCells: 70,
+      arcDegrees: 58,
+      createdSeconds: state.simulationTimeSeconds,
+      lastUpdatedSeconds: state.simulationTimeSeconds,
+      evidenceCount: 1,
+    });
+    syncSoldierThreatMemory(state, observer, index === 0 ? 0.1 : 1);
+    state.simulationTimeSeconds += 1;
+  }
+}
+
+function installDetectedShooterAliasEvidence(
+  state: SimulationState,
+  observer: UnitModel,
+  shooter: UnitModel,
+): void {
+  recordCombatThreatEvidence(observer, {
+    id: `visual-alias-${Math.round(state.simulationTimeSeconds * 1000)}`,
+    kind: 'near_miss',
+    sourceUnitId: shooter.id,
+    estimatedSourcePosition: { x: shooter.position.x - 0.45, y: shooter.position.y + 0.3 },
+    directionDegrees: incomingDirectionDegrees(observer, shooter),
+    confidence: 54,
+    uncertaintyCells: 5,
+    strength: 60,
+    suppression: 76,
+    stressPerSecond: 8,
+    rangeCells: 70,
+    arcDegrees: 58,
+    createdSeconds: state.simulationTimeSeconds,
+    lastUpdatedSeconds: state.simulationTimeSeconds,
+    evidenceCount: 1,
+  });
+  syncSoldierThreatMemory(state, observer, 0.1);
+
+  state.simulationTimeSeconds += 1;
+  const contact = installVisualContact(observer, shooter, state.simulationTimeSeconds);
+  syncSoldierThreatMemory(state, observer, 1);
+  contact.visibleNow = false;
+  contact.observedNow = false;
+  shooter.position = {
+    x: clamp(shooter.position.x + 4, 0.5, state.map.width - 0.5),
+    y: clamp(shooter.position.y + 2, 0.5, state.map.height - 0.5),
+  };
+  state.simulationTimeSeconds += 1;
+  syncSoldierThreatMemory(state, observer, 1);
+}
+
+function incomingDirectionDegrees(observer: UnitModel, shooter: UnitModel): number {
+  const result = Math.atan2(
+    observer.position.y - shooter.position.y,
+    observer.position.x - shooter.position.x,
+  ) * 180 / Math.PI;
+  return result < 0 ? result + 360 : result;
 }
 
 function fireNearObserver(
   state: SimulationState,
   observer: UnitModel,
   shooter: UnitModel,
-  scenario: Exclude<CombatTacticalVisualScenario, 'visual-contact'>,
+  scenario: Exclude<CombatTacticalVisualScenario,
+    | 'visual-contact'
+    | 'slice1-contact-danger-zero-suppression'
+    | 'slice1-repeated-unknown-fire-merged'
+    | 'slice1-detected-shooter-alias'>,
 ): void {
   const metresPerCell = state.map.metersPerCell;
   const shotId = `visual-${scenario}-${Math.round(state.simulationTimeSeconds * 1000)}`;
@@ -270,15 +383,36 @@ function addReverseSlopeFixture(state: SimulationState, observer: UnitModel, sho
 function buildSnapshot(
   state: SimulationState,
   observer: UnitModel,
+  shooter: UnitModel,
   scenario: CombatTacticalVisualScenario,
   report: ReturnType<typeof buildSoldierAwarenessReport>,
 ): CombatTacticalVisualSnapshot {
+  const factual = evaluateThreatsAtPosition(state.map, observer, state.pressureZones);
+  const threats = observer.tacticalKnowledge.threats;
+  const unitThreat = threats.find((threat) => threat.id === `unit:${shooter.id}`);
+  const hiddenPositionLeak = scenario === 'slice1-detected-shooter-alias'
+    && unitThreat
+    && Math.abs(unitThreat.x - shooter.position.x) < 0.0001
+    && Math.abs(unitThreat.y - shooter.position.y) < 0.0001
+    ? 1
+    : 0;
+  const hiddenFieldLeak = unitThreat
+    ? ['weapon', 'weaponState', 'currentShooterPosition'].filter((key) => key in unitThreat).length
+    : 0;
   return {
     scenario,
     suppression: getCombatSuppressionSnapshot(observer, state.simulationTimeSeconds).suppression,
     stress: observer.behaviorRuntime.stress,
-    threatIds: observer.tacticalKnowledge.threats.map((threat) => threat.id),
+    danger: factual.danger,
+    tacticalSuppression: factual.suppression,
+    threatIds: threats.map((threat) => threat.id),
     threatConfidence: report.threatConfidence,
+    evidenceCount: threats.reduce((maximum, threat) => Math.max(maximum, threat.evidenceCount ?? 0), 0),
+    unknownThreatCount: threats.filter((threat) => threat.id.startsWith('unknown-fire:')).length,
+    unitThreatCount: threats.filter((threat) => threat.id.startsWith('unit:')).length,
+    maxThreatStrength: threats.reduce((maximum, threat) => Math.max(maximum, threat.strength), 0),
+    maxThreatSuppression: threats.reduce((maximum, threat) => Math.max(maximum, threat.suppression), 0),
+    hiddenFactLeakCount: hiddenPositionLeak + hiddenFieldLeak,
     bestSafePosition: report.bestSafePositions[0]
       ? { ...report.bestSafePositions[0].position }
       : null,

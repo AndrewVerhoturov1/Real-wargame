@@ -64,7 +64,7 @@ function canMerge(left: CombatThreatEvidence, right: CombatThreatEvidence): bool
     left.estimatedSourcePosition.x - right.estimatedSourcePosition.x,
     left.estimatedSourcePosition.y - right.estimatedSourcePosition.y,
   );
-  return distance <= Math.max(left.uncertaintyCells, right.uncertaintyCells) * 1.25;
+  return distance <= left.uncertaintyCells + right.uncertaintyCells;
 }
 
 function mergeEvidence(left: CombatThreatEvidence, right: CombatThreatEvidence): CombatThreatEvidence {

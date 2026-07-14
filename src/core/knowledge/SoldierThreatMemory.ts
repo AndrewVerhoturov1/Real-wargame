@@ -9,7 +9,10 @@ const CONFIDENCE_DECAY_PER_SECOND = 0.55;
 const UNCERTAINTY_GROWTH_METERS_PER_SECOND = 0.12;
 const MAX_UNCERTAINTY_METERS = 120;
 const MIN_MEMORY_CONFIDENCE = 4;
-const UNKNOWN_DIRECTION_BUCKET_DEGREES = 30;
+const EVIDENCE_SUPPRESSION_DECAY_PER_SECOND = 8;
+const EVIDENCE_STRESS_DECAY_PER_SECOND = 1.5;
+const UNKNOWN_MERGE_DIRECTION_DEGREES = 30;
+const UNKNOWN_MERGE_SECONDS = 12;
 const UNKNOWN_RECONCILE_DEGREES = 35;
 const UNKNOWN_RECONCILE_SECONDS = 12;
 
@@ -42,7 +45,7 @@ export function syncSoldierThreatMemory(
 ): void {
   const now = state.simulationTimeSeconds;
   const previousFingerprint = tacticalKnowledgeFingerprint(unit.tacticalKnowledge.threats);
-  const existing = new Map(unit.tacticalKnowledge.threats.map((memory) => [memory.id, memory]));
+  const existing = new Map<string, KnownThreatMemory>(unit.tacticalKnowledge.threats.map((memory) => [memory.id, memory]));
   const refreshed = new Set<string>();
 
   for (const contact of unit.perceptionKnowledge.contacts) {
@@ -101,11 +104,12 @@ export function syncSoldierThreatMemory(
       continue;
     }
 
-    const confidence = Math.max(0, memory.confidence - CONFIDENCE_DECAY_PER_SECOND * Math.max(0, deltaSeconds));
-    const uncertaintyCells = Math.min(maxUncertaintyCells, memory.uncertaintyCells + uncertaintyGrowthCells);
+    const decayed = decayEvidenceState(memory, now);
+    const confidence = Math.max(0, decayed.confidence - CONFIDENCE_DECAY_PER_SECOND * Math.max(0, deltaSeconds));
+    const uncertaintyCells = Math.min(maxUncertaintyCells, decayed.uncertaintyCells + uncertaintyGrowthCells);
     if (confidence < MIN_MEMORY_CONFIDENCE) continue;
     nextThreats.push({
-      ...memory,
+      ...decayed,
       confidence,
       uncertaintyCells,
       lastUpdatedSeconds: now,
@@ -152,6 +156,7 @@ function buildRealUnitThreat(
   previous: KnownThreatMemory | undefined,
   now: number,
 ): KnownThreatMemory {
+  const previousEvidence = previous ? decayEvidenceState(previous, now) : undefined;
   const confidence = Math.min(confidenceCapForStage(contact.stage), Math.max(4, contact.confidence));
   const visibleNow = (contact.stage === 'identified' || contact.stage === 'confirmed') && contact.visibleNow;
   const uncertaintyCells = Math.max(
@@ -168,7 +173,7 @@ function buildRealUnitThreat(
     observer.position.x - contact.lastKnownPosition.x,
   ) * 180 / Math.PI);
   const precisionArc = visibleNow ? 52 : contact.source === 'sound' ? 125 : contact.stage === 'contact' ? 86 : 105;
-  const threat: KnownThreatMemory = {
+  return {
     id: threatId,
     labelRu: contact.labelRu,
     mode: 'directional_fire',
@@ -179,8 +184,8 @@ function buildRealUnitThreat(
     heightCells: 0,
     rotationDegrees: 0,
     strength: Math.min(88, 42 + confidence * 0.46),
-    suppression: Math.min(68, 24 + confidence * 0.42),
-    stressPerSecond: Math.min(14, 2 + confidence * 0.09),
+    suppression: previousEvidence?.suppression ?? 0,
+    stressPerSecond: previousEvidence?.stressPerSecond ?? 0,
     directionDegrees,
     arcDegrees: Math.min(180, precisionArc + uncertaintyCells * state.map.metersPerCell * 0.7),
     rangeCells: Math.max(distanceCells + uncertaintyCells, metersToCells(state, 250)),
@@ -192,8 +197,9 @@ function buildRealUnitThreat(
     visibleNow,
     lastSeenSeconds: visibleNow ? now : previous?.lastSeenSeconds ?? contact.lastObservedSeconds,
     lastUpdatedSeconds: now,
+    evidenceCount: previousEvidence?.evidenceCount ?? 0,
+    lastEvidenceSeconds: previousEvidence?.lastEvidenceSeconds ?? -1,
   };
-  return threat;
 }
 
 function mergeCombatEvidence(
@@ -205,44 +211,42 @@ function mergeCombatEvidence(
   const knownThreatId = evidence.sourceUnitId ? `unit:${evidence.sourceUnitId}` : null;
   const known = knownThreatId ? existing.get(knownThreatId) : undefined;
   if (known && evidence.sourceUnitId) {
-  const positionConflict = Math.hypot(
-    known.x - evidence.estimatedSourcePosition.x,
-    known.y - evidence.estimatedSourcePosition.y,
-  );
-  const compatiblePosition = positionConflict <= Math.max(known.uncertaintyCells, evidence.uncertaintyCells) * 1.5;
-  const evidencePositionWeight = known.visibleNow
-    ? 0
-    : Math.max(0.08, Math.min(0.35, evidence.confidence / Math.max(1, known.confidence + evidence.confidence) * 0.5));
-  const uncertaintyCells = known.visibleNow
-    ? Math.max(0.5, Math.min(known.uncertaintyCells, evidence.uncertaintyCells))
-    : compatiblePosition
-      ? Math.max(0.5, Math.min(known.uncertaintyCells, evidence.uncertaintyCells) * 0.95)
-      : Math.max(known.uncertaintyCells, evidence.uncertaintyCells, positionConflict * 0.6);
-  existing.set(known.id, {
-    ...known,
-    x: known.x + (evidence.estimatedSourcePosition.x - known.x) * evidencePositionWeight,
-    y: known.y + (evidence.estimatedSourcePosition.y - known.y) * evidencePositionWeight,
-    strength: Math.max(known.strength, evidence.strength),
-    suppression: Math.max(known.suppression, evidence.suppression),
-    stressPerSecond: Math.max(known.stressPerSecond, evidence.stressPerSecond),
-    directionDegrees: blendDirections(known.directionDegrees, known.confidence, evidence.directionDegrees, evidence.confidence),
-    arcDegrees: Math.max(28, Math.min(known.arcDegrees, evidence.arcDegrees)),
-    rangeCells: Math.max(known.rangeCells, evidence.rangeCells),
-    confidence: Math.min(96, Math.max(known.confidence, evidence.confidence) + Math.min(12, evidence.evidenceCount * 3)),
-    uncertaintyCells,
-    source: known.visibleNow ? known.source : 'fire_pressure',
-    lastUpdatedSeconds: now,
-  });
-  refreshed.add(known.id);
-  return;
-}
+    const decayed = decayEvidenceState(known, now);
+    const positionConflict = Math.hypot(
+      decayed.x - evidence.estimatedSourcePosition.x,
+      decayed.y - evidence.estimatedSourcePosition.y,
+    );
+    const compatiblePosition = positionConflict <= Math.max(decayed.uncertaintyCells, evidence.uncertaintyCells) * 1.5;
+    const evidencePositionWeight = decayed.visibleNow
+      ? 0
+      : Math.max(0.08, Math.min(0.35, evidence.confidence / Math.max(1, decayed.confidence + evidence.confidence) * 0.5));
+    const uncertaintyCells = decayed.visibleNow
+      ? Math.max(0.5, Math.min(decayed.uncertaintyCells, evidence.uncertaintyCells))
+      : compatiblePosition
+        ? Math.max(0.5, Math.min(decayed.uncertaintyCells, evidence.uncertaintyCells) * 0.95)
+        : Math.max(decayed.uncertaintyCells, evidence.uncertaintyCells, positionConflict * 0.6);
+    existing.set(decayed.id, {
+      ...decayed,
+      x: decayed.x + (evidence.estimatedSourcePosition.x - decayed.x) * evidencePositionWeight,
+      y: decayed.y + (evidence.estimatedSourcePosition.y - decayed.y) * evidencePositionWeight,
+      suppression: Math.max(decayed.suppression, evidence.suppression),
+      stressPerSecond: Math.max(decayed.stressPerSecond, evidence.stressPerSecond),
+      directionDegrees: blendDirections(decayed.directionDegrees, decayed.confidence, evidence.directionDegrees, evidence.confidence),
+      arcDegrees: Math.max(28, Math.min(decayed.arcDegrees, evidence.arcDegrees)),
+      rangeCells: Math.max(decayed.rangeCells, evidence.rangeCells),
+      confidence: Math.min(96, Math.max(decayed.confidence, evidence.confidence) + Math.min(12, evidence.evidenceCount * 3)),
+      uncertaintyCells,
+      source: decayed.visibleNow ? decayed.source : 'fire_pressure',
+      lastUpdatedSeconds: now,
+      evidenceCount: Math.min(9999, (decayed.evidenceCount ?? 0) + evidence.evidenceCount),
+      lastEvidenceSeconds: Math.max(decayed.lastEvidenceSeconds ?? -1, evidence.lastUpdatedSeconds),
+    });
+    refreshed.add(decayed.id);
+    return;
+  }
 
-  const bucket = Math.round(normalizeDegrees(evidence.directionDegrees) / UNKNOWN_DIRECTION_BUCKET_DEGREES) % 12;
-  const areaBucketSize = Math.max(4, Math.round(evidence.uncertaintyCells));
-const areaBucketX = Math.round(evidence.estimatedSourcePosition.x / areaBucketSize);
-const areaBucketY = Math.round(evidence.estimatedSourcePosition.y / areaBucketSize);
-const threatId = `unknown-fire:${bucket}:${areaBucketX}:${areaBucketY}`;
-  const previous = existing.get(threatId);
+  const previous = findCompatibleUnknownThreat(existing, evidence, now);
+  const threatId = previous?.id ?? createUnknownThreatId(existing, evidence);
   if (!previous) {
     existing.set(threatId, {
       id: threatId,
@@ -272,27 +276,73 @@ const threatId = `unknown-fire:${bucket}:${areaBucketX}:${areaBucketY}`;
       visibleNow: false,
       lastSeenSeconds: -1,
       lastUpdatedSeconds: now,
+      evidenceCount: evidence.evidenceCount,
+      lastEvidenceSeconds: evidence.lastUpdatedSeconds,
     });
   } else {
-    const previousWeight = Math.max(1, previous.confidence);
-    const evidenceWeight = Math.max(1, evidence.confidence);
+    const decayed = decayEvidenceState(previous, now);
+    const previousWeight = Math.max(1, decayed.evidenceCount ?? 1);
+    const evidenceWeight = Math.max(1, evidence.evidenceCount);
     const totalWeight = previousWeight + evidenceWeight;
     existing.set(threatId, {
-      ...previous,
-      x: (previous.x * previousWeight + evidence.estimatedSourcePosition.x * evidenceWeight) / totalWeight,
-      y: (previous.y * previousWeight + evidence.estimatedSourcePosition.y * evidenceWeight) / totalWeight,
-      strength: Math.max(previous.strength, evidence.strength),
-      suppression: Math.min(100, Math.max(previous.suppression, evidence.suppression) + Math.min(12, evidence.evidenceCount * 2)),
-      stressPerSecond: Math.max(previous.stressPerSecond, evidence.stressPerSecond),
-      directionDegrees: blendDirections(previous.directionDegrees, previousWeight, evidence.directionDegrees, evidenceWeight),
-      arcDegrees: Math.max(26, Math.min(previous.arcDegrees, evidence.arcDegrees) * 0.96),
-      rangeCells: Math.max(previous.rangeCells, evidence.rangeCells),
-      confidence: Math.min(90, Math.max(previous.confidence, evidence.confidence) + Math.min(16, evidence.evidenceCount * 3)),
-      uncertaintyCells: Math.max(0.5, Math.min(previous.uncertaintyCells, evidence.uncertaintyCells) * 0.95),
+      ...decayed,
+      x: (decayed.x * previousWeight + evidence.estimatedSourcePosition.x * evidenceWeight) / totalWeight,
+      y: (decayed.y * previousWeight + evidence.estimatedSourcePosition.y * evidenceWeight) / totalWeight,
+      strength: Math.min(100, Math.max(decayed.strength, evidence.strength)),
+      suppression: Math.min(100, Math.max(decayed.suppression, evidence.suppression) + Math.min(8, evidence.evidenceCount * 2)),
+      stressPerSecond: Math.max(decayed.stressPerSecond, evidence.stressPerSecond),
+      directionDegrees: blendDirections(decayed.directionDegrees, previousWeight, evidence.directionDegrees, evidenceWeight),
+      arcDegrees: Math.max(26, Math.min(decayed.arcDegrees, evidence.arcDegrees) * 0.96),
+      rangeCells: Math.max(decayed.rangeCells, evidence.rangeCells),
+      confidence: Math.min(90, Math.max(decayed.confidence, evidence.confidence) + Math.min(16, evidence.evidenceCount * 3)),
+      uncertaintyCells: Math.max(0.5, Math.min(decayed.uncertaintyCells, evidence.uncertaintyCells) * 0.95),
       lastUpdatedSeconds: now,
+      evidenceCount: Math.min(9999, previousWeight + evidence.evidenceCount),
+      lastEvidenceSeconds: Math.max(decayed.lastEvidenceSeconds ?? -1, evidence.lastUpdatedSeconds),
     });
   }
   refreshed.add(threatId);
+}
+
+function findCompatibleUnknownThreat(
+  existing: Map<string, KnownThreatMemory>,
+  evidence: CombatThreatEvidence,
+  now: number,
+): KnownThreatMemory | undefined {
+  return [...existing.values()]
+    .filter((candidate) => candidate.id.startsWith('unknown-fire:'))
+    .filter((candidate) => {
+      const lastEvidenceSeconds = candidate.lastEvidenceSeconds ?? candidate.lastUpdatedSeconds;
+      if (now - lastEvidenceSeconds > UNKNOWN_MERGE_SECONDS) return false;
+      if (angularDifference(candidate.directionDegrees, evidence.directionDegrees) > UNKNOWN_MERGE_DIRECTION_DEGREES) return false;
+      const distance = Math.hypot(
+        candidate.x - evidence.estimatedSourcePosition.x,
+        candidate.y - evidence.estimatedSourcePosition.y,
+      );
+      return distance <= candidate.uncertaintyCells + evidence.uncertaintyCells;
+    })
+    .sort((left, right) => unknownCompatibilityScore(left, evidence) - unknownCompatibilityScore(right, evidence))[0];
+}
+
+function unknownCompatibilityScore(memory: KnownThreatMemory, evidence: CombatThreatEvidence): number {
+  const directionScore = angularDifference(memory.directionDegrees, evidence.directionDegrees) / UNKNOWN_MERGE_DIRECTION_DEGREES;
+  const distance = Math.hypot(memory.x - evidence.estimatedSourcePosition.x, memory.y - evidence.estimatedSourcePosition.y);
+  const regionScore = distance / Math.max(0.5, memory.uncertaintyCells + evidence.uncertaintyCells);
+  return directionScore + regionScore;
+}
+
+function createUnknownThreatId(
+  existing: Map<string, KnownThreatMemory>,
+  evidence: CombatThreatEvidence,
+): string {
+  const signature = [
+    Math.round(normalizeDegrees(evidence.directionDegrees) * 10),
+    Math.round(evidence.estimatedSourcePosition.x * 4),
+    Math.round(evidence.estimatedSourcePosition.y * 4),
+    Math.round(evidence.createdSeconds * 10),
+  ].join(':');
+  const base = `unknown-fire:${hashString(signature).toString(36)}`;
+  return existing.has(base) ? `${base}:${hashString(evidence.id).toString(36)}` : base;
 }
 
 function reconcileUnknownThreats(
@@ -301,22 +351,61 @@ function reconcileUnknownThreats(
   refreshed: Set<string>,
   now: number,
 ): void {
-  const knownUnits = [...existing.values()].filter((threat) => threat.id.startsWith('unit:'));
-  if (knownUnits.length === 0) return;
+  const knownUnitIds = [...existing.keys()].filter((id) => id.startsWith('unit:'));
+  if (knownUnitIds.length === 0) return;
   for (const unknown of [...existing.values()]) {
     if (!unknown.id.startsWith('unknown-fire:')) continue;
-    if (now - unknown.lastUpdatedSeconds > UNKNOWN_RECONCILE_SECONDS) continue;
-    const duplicate = knownUnits.some((known) => (
-      angularDifference(known.directionDegrees, unknown.directionDegrees) <= UNKNOWN_RECONCILE_DEGREES
-      || angularDifference(
-        bearingFromObserver(observer, known),
-        bearingFromObserver(observer, unknown),
-      ) <= UNKNOWN_RECONCILE_DEGREES
-    ));
-    if (!duplicate) continue;
+    const unknownEvidenceSeconds = unknown.lastEvidenceSeconds ?? unknown.lastUpdatedSeconds;
+    if (now - unknownEvidenceSeconds > UNKNOWN_RECONCILE_SECONDS) continue;
+    const knownId = knownUnitIds
+      .map((id) => existing.get(id))
+      .filter((candidate): candidate is KnownThreatMemory => candidate !== undefined)
+      .filter((known) => unknownMatchesKnownThreat(observer, known, unknown))
+      .sort((left, right) => Math.hypot(left.x - unknown.x, left.y - unknown.y) - Math.hypot(right.x - unknown.x, right.y - unknown.y))[0]?.id;
+    if (!knownId) continue;
+    const known = existing.get(knownId);
+    if (!known) continue;
+    const decayedKnown = decayEvidenceState(known, now);
+    const decayedUnknown = decayEvidenceState(unknown, now);
+    existing.set(knownId, {
+      ...decayedKnown,
+      suppression: Math.max(decayedKnown.suppression, decayedUnknown.suppression),
+      stressPerSecond: Math.max(decayedKnown.stressPerSecond, decayedUnknown.stressPerSecond),
+      confidence: Math.min(100, Math.max(decayedKnown.confidence, decayedUnknown.confidence) + Math.min(8, (decayedUnknown.evidenceCount ?? 0) * 2)),
+      evidenceCount: Math.min(9999, (decayedKnown.evidenceCount ?? 0) + (decayedUnknown.evidenceCount ?? 0)),
+      lastEvidenceSeconds: Math.max(decayedKnown.lastEvidenceSeconds ?? -1, decayedUnknown.lastEvidenceSeconds ?? -1),
+      lastUpdatedSeconds: now,
+    });
+    refreshed.add(knownId);
     existing.delete(unknown.id);
     refreshed.delete(unknown.id);
   }
+}
+
+function unknownMatchesKnownThreat(
+  observer: UnitModel,
+  known: KnownThreatMemory,
+  unknown: KnownThreatMemory,
+): boolean {
+  const directionCompatible = angularDifference(known.directionDegrees, unknown.directionDegrees) <= UNKNOWN_RECONCILE_DEGREES
+    || angularDifference(
+      bearingFromObserver(observer, known),
+      bearingFromObserver(observer, unknown),
+    ) <= UNKNOWN_RECONCILE_DEGREES;
+  if (!directionCompatible) return false;
+  const distance = Math.hypot(known.x - unknown.x, known.y - unknown.y);
+  return distance <= (known.uncertaintyCells + unknown.uncertaintyCells) * 1.5;
+}
+
+function decayEvidenceState(memory: KnownThreatMemory, now: number): KnownThreatMemory {
+  if ((memory.lastEvidenceSeconds ?? -1) < 0) return memory;
+  const elapsed = Math.max(0, now - memory.lastUpdatedSeconds);
+  if (elapsed <= 0) return memory;
+  return {
+    ...memory,
+    suppression: Math.max(0, memory.suppression - EVIDENCE_SUPPRESSION_DECAY_PER_SECOND * elapsed),
+    stressPerSecond: Math.max(0, memory.stressPerSecond - EVIDENCE_STRESS_DECAY_PER_SECOND * elapsed),
+  };
 }
 
 function buildKnownThreat(
@@ -354,6 +443,8 @@ function buildKnownThreat(
     visibleNow,
     lastSeenSeconds: visibleNow ? now : -1,
     lastUpdatedSeconds: now,
+    evidenceCount: 0,
+    lastEvidenceSeconds: -1,
   };
 }
 
@@ -375,8 +466,21 @@ function estimatePressureSource(
 }
 
 function normalizeKnownThreat(value: Partial<KnownThreatMemory>, scale: number): KnownThreatMemory {
+  const id = String(value.id ?? 'unknown-threat');
+  const source = value.source === 'seen' || value.source === 'reported' || value.source === 'heard' || value.source === 'fire_pressure'
+    ? value.source
+    : 'reported';
+  const lastUpdatedSeconds = Math.max(0, number(value.lastUpdatedSeconds, 0));
+  const explicitEvidenceCount = Number.isFinite(value.evidenceCount) ? Math.max(0, Math.round(value.evidenceCount ?? 0)) : null;
+  const explicitEvidenceSeconds = Number.isFinite(value.lastEvidenceSeconds) ? Math.max(-1, value.lastEvidenceSeconds ?? -1) : null;
+  const legacyUnknownEvidence = id.startsWith('unknown-fire:') && percent(value.suppression) > 0;
+  const evidenceCount = explicitEvidenceCount ?? (legacyUnknownEvidence ? 1 : 0);
+  const lastEvidenceSeconds = explicitEvidenceSeconds ?? (legacyUnknownEvidence ? lastUpdatedSeconds : -1);
+  const legacyUnitWithoutEvidenceFields = id.startsWith('unit:')
+    && explicitEvidenceCount === null
+    && explicitEvidenceSeconds === null;
   return {
-    id: String(value.id ?? 'unknown-threat'),
+    id,
     labelRu: String(value.labelRu ?? 'Неизвестная угроза'),
     mode: value.mode === 'directional_fire' ? 'directional_fire' : 'area',
     x: number(value.x, 0) * scale,
@@ -386,8 +490,8 @@ function normalizeKnownThreat(value: Partial<KnownThreatMemory>, scale: number):
     heightCells: Math.max(0, number(value.heightCells, 0) * scale),
     rotationDegrees: number(value.rotationDegrees, 0),
     strength: percent(value.strength),
-    suppression: percent(value.suppression),
-    stressPerSecond: Math.max(0, number(value.stressPerSecond, 0)),
+    suppression: legacyUnitWithoutEvidenceFields ? 0 : percent(value.suppression),
+    stressPerSecond: legacyUnitWithoutEvidenceFields ? 0 : Math.max(0, number(value.stressPerSecond, 0)),
     directionDegrees: normalizeDegrees(number(value.directionDegrees, 0)),
     arcDegrees: Math.max(1, Math.min(360, number(value.arcDegrees, 45))),
     rangeCells: Math.max(0.5 * scale, number(value.rangeCells, 8) * scale),
@@ -395,12 +499,12 @@ function normalizeKnownThreat(value: Partial<KnownThreatMemory>, scale: number):
     falloffPercent: percent(value.falloffPercent),
     confidence: percent(value.confidence),
     uncertaintyCells: Math.max(0, number(value.uncertaintyCells, 1.5) * scale),
-    source: value.source === 'seen' || value.source === 'reported' || value.source === 'heard' || value.source === 'fire_pressure'
-      ? value.source
-      : 'reported',
+    source,
     visibleNow: Boolean(value.visibleNow),
     lastSeenSeconds: number(value.lastSeenSeconds, -1),
-    lastUpdatedSeconds: Math.max(0, number(value.lastUpdatedSeconds, 0)),
+    lastUpdatedSeconds,
+    evidenceCount,
+    lastEvidenceSeconds,
   };
 }
 
@@ -450,6 +554,8 @@ function threatRevisionFingerprint(memory: KnownThreatMemory): Record<string, un
     uncertaintyCells: quantize(memory.uncertaintyCells, 1),
     source: memory.source,
     visibleNow: memory.visibleNow,
+    evidenceCount: memory.evidenceCount ?? 0,
+    lastEvidenceSeconds: quantize(memory.lastEvidenceSeconds ?? -1, 1),
   };
 }
 
