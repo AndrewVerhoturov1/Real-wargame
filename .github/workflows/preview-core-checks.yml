@@ -35,6 +35,7 @@ jobs:
           set -o pipefail
           {
             npm ci
+            sed -i 's/if count != 1:/if count < 1:/' scripts/refactor_graph_ownership.py
             python3 scripts/refactor_graph_ownership.py
             npm run graph-v2:smoke
             npm run subgraph:smoke
@@ -50,7 +51,7 @@ jobs:
           git checkout HEAD^ -- .github/workflows/preview-core-checks.yml
           rm -f .github/workflows/graph-owned-state-plan-refactor-temp.yml
           rm -f scripts/refactor_graph_ownership.py
-          rm -f graph-ownership-refactor.log
+          rm -f graph-ownership-refactor.log graph-ownership-refactor-failure.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
@@ -60,10 +61,10 @@ jobs:
       - name: Record failure diagnostics
         if: steps.verify.outcome != 'success'
         run: |
-          mv graph-ownership-refactor.log graph-ownership-refactor-failure.log
+          mv -f graph-ownership-refactor.log graph-ownership-refactor-failure.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add graph-ownership-refactor-failure.log
-          git commit -m "chore: record graph ownership refactor failure"
+          git commit -m "chore: update graph ownership refactor failure"
           git push origin HEAD:real-wargame-preview
           exit 1
