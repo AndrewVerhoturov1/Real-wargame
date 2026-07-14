@@ -6,6 +6,7 @@ import { isMapCellPassable } from '../pathfinding/GridNavigation';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
 import { evaluateNavigationReplan } from './NavigationReplanPolicy';
+import { evaluateNavigationRouteCost } from './NavigationRouteCost';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from './NavigationRuntime';
 
 const ROUTE_LOOKAHEAD_CELLS = 6;
@@ -32,6 +33,15 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
 
   const reason = evaluation.reason ?? (blocked ? 'blocked' : 'navigation_changed');
   const reasonRu = evaluation.reasonRu ?? 'Изменились условия построения маршрута.';
+  const replanSearchCount = (order.replanSearchCount ?? 0) + 1;
+  const currentRouteCost = blocked
+    ? order.pathCost
+    : evaluateNavigationRouteCost(
+        state.map,
+        remainingRouteCells(order),
+        resolved.profile,
+        tacticalContext,
+      );
   const replanned = planMoveOrder(state.map, unit.position, requestedTarget, {
     source: order.source,
     ownerToken: order.ownerToken,
@@ -46,22 +56,23 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
     navigationProfileSource: resolved.source,
     finalFacingRadians: order.finalFacingRadians,
     tacticalContext,
+    replanSearchCount,
     replanCount: (order.replanCount ?? 0) + 1,
     lastReplanAtSeconds: state.simulationTimeSeconds,
     lastReplanReason: reason,
     lastReplanReasonRu: reasonRu,
   });
 
-  markReplanRevisionProcessed(
-    order,
-    state.simulationTimeSeconds,
-    resolved.profile.revision,
-    tacticalContext.knowledgeRevision,
-    reason,
-    reasonRu,
-  );
-
   if (!replanned.ok) {
+    markReplanRevisionProcessed(
+      order,
+      state.simulationTimeSeconds,
+      resolved.profile.revision,
+      tacticalContext.knowledgeRevision,
+      replanSearchCount,
+      reason,
+      reasonRu,
+    );
     if (!blocked) {
       unit.behaviorRuntime.lastEvent = 'move_route_replan_rejected';
       unit.behaviorRuntime.reason = 'Новый маршрут не найден; сохранён текущий путь.';
@@ -72,7 +83,10 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
   }
 
   const replacement = evaluateNavigationReplan({
-    order,
+    order: {
+      ...order,
+      pathCost: currentRouteCost,
+    },
     profile: resolved.profile,
     nowSeconds: state.simulationTimeSeconds,
     blocked,
@@ -81,8 +95,23 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
     candidateCost: replanned.order.pathCost,
   });
   if (!replacement.shouldReplace) {
+    markReplanRevisionProcessed(
+      order,
+      state.simulationTimeSeconds,
+      resolved.profile.revision,
+      tacticalContext.knowledgeRevision,
+      replanSearchCount,
+      reason,
+      reasonRu,
+    );
     unit.behaviorRuntime.lastEvent = 'move_route_replan_hysteresis';
     unit.behaviorRuntime.reason = 'Новый маршрут улучшает путь недостаточно; сохранён текущий маршрут.';
+    return true;
+  }
+
+  if (!isSameOwnedOrder(unit.order, order)) {
+    unit.behaviorRuntime.lastEvent = 'move_route_replan_stale';
+    unit.behaviorRuntime.reason = 'Новый более свежий приказ сохранён; устаревшее перестроение маршрута пропущено.';
     return true;
   }
 
@@ -104,6 +133,13 @@ function updateRouteCellIndex(unit: UnitModel, order: MoveOrder): void {
   if (matchingIndex >= 0) order.routeCellIndex = matchingIndex;
 }
 
+function remainingRouteCells(order: MoveOrder): readonly { x: number; y: number }[] {
+  const routeCells = order.routeCells ?? [];
+  if (routeCells.length === 0) return routeCells;
+  const startIndex = Math.max(0, Math.min(routeCells.length - 1, order.routeCellIndex ?? 0));
+  return routeCells.slice(startIndex);
+}
+
 function routeLookaheadBlocked(state: SimulationState, order: MoveOrder): boolean {
   const routeCells = order.routeCells;
   if (!routeCells || routeCells.length === 0) return false;
@@ -122,17 +158,30 @@ function markReplanRevisionProcessed(
   nowSeconds: number,
   profileRevision: number,
   knowledgeRevision: number,
+  replanSearchCount: number,
   reason: string,
   reasonRu: string,
 ): void {
   order.lastReplanAtSeconds = nowSeconds;
   order.navigationProfileRevision = profileRevision;
   order.knowledgeRevision = knowledgeRevision;
+  order.replanSearchCount = replanSearchCount;
   order.lastReplanReason = reason;
   order.lastReplanReasonRu = reasonRu;
 }
 
+function isSameOwnedOrder(current: MoveOrder | null, expected: MoveOrder): boolean {
+  if (current !== expected) return false;
+  return current.ownerToken === expected.ownerToken;
+}
+
 function blockRoute(unit: UnitModel, order: MoveOrder, reason: string, reasonRu: string): void {
+  if (!isSameOwnedOrder(unit.order, order)) {
+    unit.behaviorRuntime.lastEvent = 'move_route_cleanup_skipped';
+    unit.behaviorRuntime.reason = 'Новый более свежий приказ сохранён; устаревшая очистка маршрута пропущена.';
+    return;
+  }
+
   unit.order = null;
   const command = unit.playerCommand;
   if (order.playerCommandId && command?.id === order.playerCommandId) {
