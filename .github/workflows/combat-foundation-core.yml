@@ -5,23 +5,45 @@ on:
     branches:
       - real-wargame-preview
     paths:
+      - 'src/core/behavior/**'
       - 'src/core/combat/**'
+      - 'src/core/cover/**'
+      - 'src/core/knowledge/**'
+      - 'src/core/map/**'
+      - 'src/core/navigation/**'
+      - 'src/core/orders/**'
+      - 'src/core/pathfinding/**'
       - 'src/core/perception/**'
-      - 'src/core/visibility/**'
+      - 'src/core/pressure/**'
       - 'src/core/simulation/**'
+      - 'src/core/terrain/**'
       - 'src/core/units/**'
+      - 'src/core/visibility/**'
+      - 'src/core/geometry.ts'
       - 'src/core/ai/AiGameBridge.ts'
+      - 'src/core/ai/AiRouteStatus.ts'
+      - 'src/core/ai/UnitPlan.ts'
+      - 'src/core/ai/events/SimulationAiEvents.ts'
+      - 'src/core/ai/runtime/**'
+      - 'src/core/ai/state/**'
+      - 'src/core/editor/GameEditorDrafts.ts'
+      - 'src/core/testing/AiTestLabRuntime.ts'
+      - 'src/data/ai/soldier_default_survival_graph.json'
       - 'src/rendering/PixiUnitRenderer.ts'
       - 'src/rendering/PixiCombatEffectsRenderer.ts'
       - 'src/rendering/CombatEffectsInstaller.ts'
       - 'src/ui/CombatControls.ts'
       - 'src/ui/CombatAudio.ts'
+      - 'src/ui/SceneExport.ts'
       - 'src/main.ts'
       - 'scripts/combat_foundation_smoke.*'
+      - 'scripts/combat_tactical_integration_smoke.*'
+      - 'scripts/combat_threat_evidence_source_direction_regression_smoke.ts'
       - 'scripts/perception_system_smoke.ts'
       - 'scripts/tactical_workspace_smoke.mjs'
       - 'tests/combat-foundation-visual.spec.ts'
       - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/combat-foundation-core.yml'
   workflow_dispatch:
 
@@ -73,3 +95,13 @@ jobs:
       - name: Production build
         shell: bash
         run: set -o pipefail; npm run build 2>&1 | tail -n 160
+      - name: Combat tactical integration smoke
+        shell: bash
+        run: set -o pipefail; npm run combat-tactical-integration:smoke 2>&1 | tee combat-tactical-integration.log
+      - name: Upload combat tactical integration log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-tactical-integration-log
+          path: combat-tactical-integration.log
+          if-no-files-found: error
