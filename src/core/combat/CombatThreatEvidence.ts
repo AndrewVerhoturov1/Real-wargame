@@ -57,7 +57,10 @@ export function clearCombatThreatEvidence(unit: UnitModel): void {
 
 function canMerge(left: CombatThreatEvidence, right: CombatThreatEvidence): boolean {
   if (Math.abs(left.lastUpdatedSeconds - right.lastUpdatedSeconds) > MERGE_WINDOW_SECONDS) return false;
-  if (left.sourceUnitId && right.sourceUnitId) return left.sourceUnitId === right.sourceUnitId;
+  if (left.sourceUnitId && right.sourceUnitId) {
+    return left.sourceUnitId === right.sourceUnitId
+      && angularDifference(left.directionDegrees, right.directionDegrees) <= MERGE_DIRECTION_DEGREES;
+  }
   if (left.sourceUnitId || right.sourceUnitId) return false;
   if (angularDifference(left.directionDegrees, right.directionDegrees) > MERGE_DIRECTION_DEGREES) return false;
   const distance = Math.hypot(
