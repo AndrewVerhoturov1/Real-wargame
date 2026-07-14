@@ -19,16 +19,15 @@ jobs:
       - name: Apply review fixes
         shell: bash
         run: |
-          python - <<'PY'
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee combat-review-patch.log
           from pathlib import Path
-          import re
 
           threat_path = Path('src/core/knowledge/SoldierThreatMemory.ts')
           threat = threat_path.read_text(encoding='utf-8')
-          known_pattern = re.compile(
-              r"  if \(known && evidence\.sourceUnitId\) \{\n.*?\n    return;\n  \}\n\n  const bucket",
-              re.DOTALL,
-          )
+          function_start = threat.index('function mergeCombatEvidence(')
+          known_start = threat.index('  if (known && evidence.sourceUnitId) {', function_start)
+          known_end = threat.index('\n\n  const bucket =', known_start)
           known_replacement = '''  if (known && evidence.sourceUnitId) {
             const positionConflict = Math.hypot(
               known.x - evidence.estimatedSourcePosition.x,
@@ -60,33 +59,28 @@ jobs:
             });
             refreshed.add(known.id);
             return;
-          }
+          }'''
+          threat = threat[:known_start] + known_replacement + threat[known_end:]
 
-          const bucket'''
-          threat, known_count = known_pattern.subn(known_replacement, threat, count=1)
-          if known_count != 1:
-              raise SystemExit(f'Known-threat review patch matched {known_count} blocks.')
-
-          unknown_pattern = re.compile(
-              r"  const bucket = Math\.round\(normalizeDegrees\(evidence\.directionDegrees\) / UNKNOWN_DIRECTION_BUCKET_DEGREES\) % 12;\n  const threatId = `unknown-fire:\$\{bucket\}`;"
-          )
-          unknown_replacement = '''  const bucket = Math.round(normalizeDegrees(evidence.directionDegrees) / UNKNOWN_DIRECTION_BUCKET_DEGREES) % 12;
-          const areaBucketSize = Math.max(4, Math.round(evidence.uncertaintyCells));
+          bucket_line = '  const bucket = Math.round(normalizeDegrees(evidence.directionDegrees) / UNKNOWN_DIRECTION_BUCKET_DEGREES) % 12;'
+          bucket_start = threat.index(bucket_line, function_start)
+          threat_id_start = bucket_start + len(bucket_line) + 1
+          threat_id_end = threat.index('\n', threat_id_start)
+          if not threat[threat_id_start:threat_id_end].startswith('  const threatId = `unknown-fire:'):
+              raise SystemExit('Unexpected unknown threat id line: ' + threat[threat_id_start:threat_id_end])
+          threat_id_replacement = '''  const areaBucketSize = Math.max(4, Math.round(evidence.uncertaintyCells));
           const areaBucketX = Math.round(evidence.estimatedSourcePosition.x / areaBucketSize);
           const areaBucketY = Math.round(evidence.estimatedSourcePosition.y / areaBucketSize);
           const threatId = `unknown-fire:${bucket}:${areaBucketX}:${areaBucketY}`;'''
-          threat, unknown_count = unknown_pattern.subn(unknown_replacement, threat, count=1)
-          if unknown_count != 1:
-              raise SystemExit(f'Unknown-threat review patch matched {unknown_count} blocks.')
+          threat = threat[:threat_id_start] + threat_id_replacement + threat[threat_id_end:]
           threat_path.write_text(threat, encoding='utf-8')
 
           smoke_path = Path('scripts/combat_tactical_integration_smoke.ts')
           smoke = smoke_path.read_text(encoding='utf-8')
-          hidden_pattern = re.compile(
-              r"  assert\.equal\(threat\.visibleNow, false\);\n  assert\.ok\(threat\.uncertaintyCells > 1\);\n\}",
-          )
-          hidden_replacement = '''  assert.equal(threat.visibleNow, false);
-          assert.ok(threat.uncertaintyCells > 1);
+          hidden_start = smoke.index('function verifyHiddenMovementDoesNotLeak(): void {')
+          hidden_anchor = '  assert.ok(threat.uncertaintyCells > 1);'
+          insert_at = smoke.index(hidden_anchor, hidden_start) + len(hidden_anchor)
+          hidden_extension = '''
 
           const incomingDx = blue.position.x - red.position.x;
           const incomingDy = blue.position.y - red.position.y;
@@ -128,20 +122,17 @@ jobs:
           assert.ok(
             fireUpdatedThreat.uncertaintyCells >= threat.uncertaintyCells,
             'conflicting fire evidence must not make a lost contact artificially precise',
-          );
-          }'''
-          smoke, hidden_count = hidden_pattern.subn(hidden_replacement, smoke, count=1)
-          if hidden_count != 1:
-              raise SystemExit(f'Hidden-movement smoke patch matched {hidden_count} blocks.')
+          );'''
+          smoke = smoke[:insert_at] + hidden_extension + smoke[insert_at:]
           smoke_path.write_text(smoke, encoding='utf-8')
 
           visual_path = Path('src/testing/CombatTacticalIntegrationVisualQaHarness.ts')
           visual = visual_path.read_text(encoding='utf-8')
           old_wall = '  const centerX = (observer.position.x + shooter.position.x) / 2;'
-          new_wall = '  const centerX = Math.min(shooter.position.x - 1.5, observer.position.x + 2.5);'
           if visual.count(old_wall) != 1:
               raise SystemExit(f'Wall visual-QA patch matched {visual.count(old_wall)} lines.')
-          visual_path.write_text(visual.replace(old_wall, new_wall), encoding='utf-8')
+          visual = visual.replace(old_wall, '  const centerX = Math.min(shooter.position.x - 1.5, observer.position.x + 2.5);')
+          visual_path.write_text(visual, encoding='utf-8')
           PY
           git diff --check
           git config user.name "github-actions[bot]"
@@ -149,6 +140,15 @@ jobs:
           git add src/core/knowledge/SoldierThreatMemory.ts scripts/combat_tactical_integration_smoke.ts src/testing/CombatTacticalIntegrationVisualQaHarness.ts
           git commit -m "fix: refine subjective fire evidence integration"
           git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Upload patch log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-review-patch-log
+          path: combat-review-patch.log
+          if-no-files-found: warn
+          retention-days: 2
 
       - name: Setup Node
         uses: actions/setup-node@v4
