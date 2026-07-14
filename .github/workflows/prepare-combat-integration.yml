@@ -44,13 +44,15 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          cp scripts/recover_combat_integration_duplicate_ui.sh /tmp/recover_combat_integration_duplicate_ui.sh
+          chmod +x /tmp/recover_combat_integration_duplicate_ui.sh
           set +e
           bash scripts/prepare_combat_integration.sh 2>&1 | tee prepare-combat-integration.log
           integration_status=${PIPESTATUS[0]}
           set -e
           if [ "$integration_status" -ne 0 ]; then
             echo 'Known integration recovery path started.' | tee -a prepare-combat-integration.log
-            bash scripts/recover_combat_integration_duplicate_ui.sh 2>&1 | tee -a prepare-combat-integration.log
+            bash /tmp/recover_combat_integration_duplicate_ui.sh 2>&1 | tee -a prepare-combat-integration.log
           fi
 
       - name: Upload integration log
