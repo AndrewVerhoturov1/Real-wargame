@@ -262,8 +262,8 @@ function makeCorridorState(): SimulationState {
     defaultTerrain: 'field',
     defaultHeight: 0,
     objects: [
-      blocker('upper-cap', 6, 0, 12, 2),
-      blocker('middle-wall', 6, 5, 12, 4),
+      ...blockerRectangle('upper-cap', 6, 17, 0, 1),
+      ...blockerRectangle('middle-wall', 6, 17, 5, 8),
     ],
   }, [
     { id: 'blue-mover', label: 'Mover', labelRu: 'Двигающийся', type: 'infantry_squad', side: 'blue', x: 2, y: 3, facingDegrees: 0, viewRangeCells: 0 },
@@ -279,21 +279,28 @@ function makeCorridorState(): SimulationState {
   return state;
 }
 
-function blocker(id: string, x: number, y: number, widthCells: number, heightCells: number) {
-  return {
-    id,
-    kind: 'structure' as const,
-    x,
-    y,
-    widthCells,
-    heightCells,
-    rotationRadians: 0,
-    losHeightMeters: 3,
-    coverProtection: 100,
-    coverReliability: 100,
-    concealment: 0,
-    labels: { en: id, ru: id },
-  };
+function blockerRectangle(id: string, minX: number, maxX: number, minY: number, maxY: number) {
+  const objects = [];
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      const cellId = `${id}:${x}:${y}`;
+      objects.push({
+        id: cellId,
+        kind: 'structure' as const,
+        x,
+        y,
+        widthCells: 1,
+        heightCells: 1,
+        rotationRadians: 0,
+        losHeightMeters: 3,
+        coverProtection: 100,
+        coverReliability: 100,
+        concealment: 0,
+        labels: { en: cellId, ru: cellId },
+      });
+    }
+  }
+  return objects;
 }
 
 function fireNearMiss(state: SimulationState, shooter: UnitModel, shotId: string): void {
