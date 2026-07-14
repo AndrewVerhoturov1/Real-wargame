@@ -40,4 +40,12 @@ jobs:
         run: npm ci
 
       - name: Combat tactical integration smoke
-        run: npm run combat-tactical-integration:smoke
+        run: npm run combat-tactical-integration:smoke 2>&1 | tee live-navigation-replan.log
+
+      - name: Upload smoke log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-navigation-replan-log
+          path: live-navigation-replan.log
+          if-no-files-found: error
