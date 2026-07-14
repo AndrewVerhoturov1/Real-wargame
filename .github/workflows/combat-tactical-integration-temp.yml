@@ -27,7 +27,19 @@ jobs:
         run: npm ci
 
       - name: Combat tactical integration
-        run: npm run combat-tactical-integration:smoke
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run combat-tactical-integration:smoke 2>&1 | tee combat-tactical-integration.log
+
+      - name: Upload dedicated smoke log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-tactical-integration-log
+          path: combat-tactical-integration.log
+          if-no-files-found: warn
+          retention-days: 2
 
       - name: Perception
         run: npm run perception:smoke
