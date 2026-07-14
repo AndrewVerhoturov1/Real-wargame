@@ -4,31 +4,37 @@ import { pathToFileURL } from 'node:url';
 import { build } from 'vite';
 
 const repoRoot = process.cwd();
-const outDir = path.join(repoRoot, '.tmp-awareness-field-cache-smoke');
-const entryFile = path.join(outDir, 'awareness-field-cache-smoke.mjs');
 
-await rm(outDir, { recursive: true, force: true });
+await runSmoke('awareness-field-cache-smoke', 'awareness_field_cache_smoke.ts');
+await runSmoke('combat-safe-position-winner-smoke', 'combat_safe_position_winner_smoke.ts');
 
-try {
-  await build({
-    root: repoRoot,
-    logLevel: 'warn',
-    build: {
-      ssr: path.join(repoRoot, 'scripts', 'awareness_field_cache_smoke.ts'),
-      outDir,
-      emptyOutDir: true,
-      minify: false,
-      sourcemap: false,
-      rollupOptions: {
-        output: {
-          entryFileNames: 'awareness-field-cache-smoke.mjs',
-          format: 'es',
+async function runSmoke(entryName, sourceFile) {
+  const outDir = path.join(repoRoot, `.tmp-${entryName}`);
+  const entryFile = path.join(outDir, `${entryName}.mjs`);
+
+  await rm(outDir, { recursive: true, force: true });
+
+  try {
+    await build({
+      root: repoRoot,
+      logLevel: 'warn',
+      build: {
+        ssr: path.join(repoRoot, 'scripts', sourceFile),
+        outDir,
+        emptyOutDir: true,
+        minify: false,
+        sourcemap: false,
+        rollupOptions: {
+          output: {
+            entryFileNames: `${entryName}.mjs`,
+            format: 'es',
+          },
         },
       },
-    },
-  });
+    });
 
-  await import(`${pathToFileURL(entryFile).href}?run=${Date.now()}`);
-} finally {
-  await rm(outDir, { recursive: true, force: true });
+    await import(`${pathToFileURL(entryFile).href}?run=${Date.now()}`);
+  } finally {
+    await rm(outDir, { recursive: true, force: true });
+  }
 }
