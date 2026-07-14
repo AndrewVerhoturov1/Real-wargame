@@ -1,0 +1,11 @@
+From https://github.com/AndrewVerhoturov1/Real-wargame
+ * branch            real-wargame-preview -> FETCH_HEAD
+ * branch            transfer/combat-perception-fire-feedback-preview-20260714 -> FETCH_HEAD
+ * branch            tmp/combat-perception-fire-feedback-20260714 -> FETCH_HEAD
+Switched to a new branch 'transfer/combat-perception-fire-feedback-preview-20260714'
+branch 'transfer/combat-perception-fire-feedback-preview-20260714' set up to track 'origin/transfer/combat-perception-fire-feedback-preview-20260714'.
+Auto-merging package.json
+Auto-merging src/core/ai/AiGameBridge.ts
+Auto-merging src/main.ts
+Auto-merging src/ui/TacticalWorkspace.ts
+Automatic merge went well; stopped before committing as requested

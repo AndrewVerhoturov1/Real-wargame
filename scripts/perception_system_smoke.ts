@@ -72,6 +72,41 @@ runPerception(state, 2.5);
 const sideEngage = observer.perceptionKnowledge.contacts.find((contact) => contact.stimulusId === 'threat:side');
 assert.ok(!sideEngage || sideEngage.evidence < marchSideEvidence * 0.55, 'engage peripheral evidence must be much weaker than march');
 
+const rearState = createInitialState(
+  baseMap,
+  [{ ...observerData, x: 30, y: 18, facingDegrees: 0 }],
+  [threat('rear', 10, 18.5)],
+);
+selectUnit(rearState, 'observer');
+const rearObserver = rearState.units[0];
+setAttentionMode(rearObserver, 'observe', 'player');
+rearObserver.perceptionKnowledge = createEmptyPerceptionKnowledge();
+rearObserver.attentionRuntime.nextFocusCheckSeconds = 0;
+rearObserver.attentionRuntime.nextDirectCheckSeconds = 0;
+rearObserver.attentionRuntime.nextPeripheralCheckSeconds = 0;
+rearObserver.attentionRuntime.nextRearCheckSeconds = 10;
+rearState.simulationTimeSeconds = 1;
+tickSelectedSoldierPerception(rearState, 0.1);
+assert.equal(
+  rearObserver.perceptionKnowledge.contacts.find((contact) => contact.stimulusId === 'threat:rear'),
+  undefined,
+  'a target in the rear sector must not be visually checked before the existing rear interval is due',
+);
+assert.equal(
+  getPerceptionDiagnostics(rearState).losCalculationCount,
+  0,
+  'rear cadence must reject the target before the expensive line-of-sight calculation',
+);
+rearObserver.attentionRuntime.nextRearCheckSeconds = 0;
+rearState.simulationTimeSeconds = 10;
+tickSelectedSoldierPerception(rearState, 0.1);
+const rearContact = rearObserver.perceptionKnowledge.contacts.find((contact) => contact.stimulusId === 'threat:rear');
+assert.ok(rearContact, 'a due rear check must use the normal visual contact pipeline');
+assert.ok(
+  rearContact.explanationRu.some((line) => line.includes('Качество зоны обзора')),
+  'visual contact diagnostics must expose the existing coloured-zone visibility quality',
+);
+
 setSearchSector(observer, 0, Math.PI, 'player');
 const startDirection = observer.attentionRuntime.focusDirectionRadians;
 updateAttentionController(observer, 1);
@@ -205,7 +240,7 @@ noSelection.simulationTimeSeconds = 1;
 tickSelectedSoldierPerception(noSelection, 0.1);
 assert.equal(getPerceptionDiagnostics(noSelection).losCalculationCount, 0, 'no selected soldier must do no LOS work');
 
-console.log('Perception system smoke passed: stable attention, target types, target height, transmission, contacts, sound and import behavior.');
+console.log('Perception system smoke passed: stable attention, rear cadence, shared visibility quality, target types, target height, transmission, contacts, sound and import behavior.');
 
 function runPerception(simulation: ReturnType<typeof createInitialState>, seconds: number): void {
   const step = 0.1;

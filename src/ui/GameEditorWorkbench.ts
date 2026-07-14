@@ -36,7 +36,7 @@ import {
   selectUnit,
   type SimulationState,
 } from '../core/simulation/SimulationState';
-import type { UnitHeldItem, UnitModel, UnitType } from '../core/units/UnitModel';
+import type { UnitHeldItem, UnitModel, UnitSide, UnitType } from '../core/units/UnitModel';
 
 const OBJECT_KIND_OPTIONS: Array<[MapObjectKind, string]> = [
   ['cover', 'Укрытие'], ['structure', 'Здание'], ['ditch', 'Канава'], ['logs', 'Брёвна'],
@@ -46,6 +46,7 @@ const OBJECT_KIND_OPTIONS: Array<[MapObjectKind, string]> = [
 const UNIT_TYPE_OPTIONS: Array<[UnitType, string]> = [
   ['infantry_squad', 'Пехотинец'], ['scout_team', 'Разведчик'], ['support_team', 'Поддержка'],
 ];
+const UNIT_SIDE_OPTIONS: Array<[UnitSide, string]> = [['blue', 'Свои'], ['red', 'Противник']];
 const HELD_ITEM_OPTIONS: Array<[UnitHeldItem, string]> = [
   ['long_item', 'Винтовка / автомат'], ['support_item', 'Тяжёлое оружие'], ['short_item', 'Короткое оружие'],
 ];
@@ -240,6 +241,11 @@ function renderUnitPanel(
   target.append(
     panelHeading('Новый боец', 'Профиль заполняет характеристики разумными значениями. После этого любое поле можно изменить вручную.'),
     textField('Имя', draft.name, (value) => { draft.name = value; }),
+    selectField('Сторона', UNIT_SIDE_OPTIONS, draft.side, (value) => {
+      draft.side = value;
+      syncLegacyEditorFields(state);
+      rerender();
+    }),
     selectField('Тип', UNIT_TYPE_OPTIONS, draft.type, (value) => { draft.type = value; syncLegacyEditorFields(state); }),
     selectField('Оружие в руках', HELD_ITEM_OPTIONS, draft.heldItem, (value) => { draft.heldItem = value; }),
     selectField('Профиль', PROFILE_OPTIONS, draft.profile, (value) => {
@@ -493,10 +499,15 @@ function selectField<T extends string | number>(
     select.appendChild(option);
   }
   select.value = String(value);
-  select.addEventListener('change', () => {
+  let committedValue = select.value;
+  const commitSelection = () => {
+    if (select.value === committedValue) return;
+    committedValue = select.value;
     const matched = options.find(([candidate]) => String(candidate) === select.value)?.[0];
     if (matched !== undefined) onChange(matched);
-  });
+  };
+  select.addEventListener('input', commitSelection);
+  select.addEventListener('change', commitSelection);
   return wrapField(label, select);
 }
 
@@ -572,6 +583,7 @@ function applyObjectDraft(object: MapObject, draft: GameEditorDrafts['object']):
 function copyUnitToDraft(unit: UnitModel, draft: GameEditorDrafts['unit']): void {
   Object.assign(draft, {
     name: unit.labels.ru,
+    side: unit.side,
     type: unit.type,
     heldItem: unit.heldItem,
     profile: unit.behaviorProfile,
@@ -591,6 +603,7 @@ function copyUnitToDraft(unit: UnitModel, draft: GameEditorDrafts['unit']): void
 
 function applyUnitDraft(unit: UnitModel, draft: GameEditorDrafts['unit']): void {
   unit.labels = { en: draft.name || unit.id, ru: draft.name || unit.id };
+  unit.side = draft.side;
   unit.type = draft.type;
   unit.heldItem = draft.heldItem;
   unit.behaviorProfile = draft.profile;

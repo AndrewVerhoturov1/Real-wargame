@@ -1,4 +1,6 @@
 import { buildAiRuntimeSceneSnapshot } from '../core/ai/runtime/AiRuntimeSnapshot';
+import { getCombatRuntime } from '../core/combat/CombatDamage';
+import { getWeaponRuntime } from '../core/combat/WeaponModel';
 import {
   resolveObjectCoverProperties,
   type TacticalMapData,
@@ -226,6 +228,8 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
       ammo: Math.round(unit.behaviorRuntime.ammo),
       weaponReady: unit.behaviorRuntime.weaponReady,
       posture: unit.behaviorRuntime.posture,
+      weapon: { ...getWeaponRuntime(unit) },
+      combat: JSON.parse(JSON.stringify(getCombatRuntime(unit))),
       aiRuntime: buildAiRuntimeSceneSnapshot(
         unit.behaviorRuntime.aiRuntimeSession,
         unit.order,

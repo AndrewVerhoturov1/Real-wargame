@@ -6,6 +6,7 @@ export type PerceptionContactSource = 'visual' | 'sound' | 'reported' | 'fire_pr
 export interface PerceptionContactMemory {
   id: string;
   stimulusId: string;
+  sourceUnitId: string | null;
   labelRu: string;
   stage: PerceptionContactStage;
   source: PerceptionContactSource;
@@ -31,6 +32,7 @@ export interface UnitPerceptionKnowledge {
 export interface VisualContactInput {
   id: string;
   stimulusId: string;
+  sourceUnitId?: string | null;
   labelRu: string;
   position: GridPosition;
   evidencePerSecond: number;
@@ -44,6 +46,7 @@ export interface VisualContactInput {
 export interface ReportedContactInput {
   id: string;
   stimulusId: string;
+  sourceUnitId?: string | null;
   labelRu: string;
   position: GridPosition;
   confidence: number;
@@ -130,6 +133,7 @@ export function advanceVisualContact(
   return {
     id: input.id,
     stimulusId: input.stimulusId,
+    sourceUnitId: input.sourceUnitId ?? previous?.sourceUnitId ?? null,
     labelRu: input.labelRu,
     stage,
     source: input.source ?? 'visual',
@@ -161,6 +165,7 @@ export function advanceReportedContact(
   return {
     id: input.id,
     stimulusId: input.stimulusId,
+    sourceUnitId: input.sourceUnitId ?? previous?.sourceUnitId ?? null,
     labelRu: input.labelRu,
     stage,
     source: input.source ?? 'reported',
@@ -227,6 +232,7 @@ function normalizeContact(value: Partial<PerceptionContactMemory>): PerceptionCo
   return {
     id: String(value.id ?? value.stimulusId ?? 'unknown-contact'),
     stimulusId: String(value.stimulusId ?? value.id ?? 'unknown-stimulus'),
+    sourceUnitId: typeof value.sourceUnitId === 'string' ? value.sourceUnitId : null,
     labelRu: String(value.labelRu ?? 'Неизвестный контакт'),
     stage,
     source: isContactSource(value.source) ? value.source : 'reported',
@@ -262,6 +268,7 @@ function normalizePosition(value: unknown): GridPosition {
 
 function contactFingerprint(contact: PerceptionContactMemory): string {
   return JSON.stringify({
+    sourceUnitId: contact.sourceUnitId,
     stage: contact.stage,
     source: contact.source,
     evidence: Math.round(contact.evidence * 10),

@@ -1,6 +1,5 @@
 import type { UnitModel } from '../units/UnitModel';
-import type { LineOfSightProbeResult } from '../visibility/LineOfSight';
-import { calculateDistanceVisibilityFactor } from '../visibility/VisibilityQuality';
+import type { PointVisibilityResult } from '../visibility/PointVisibility';
 import type { AttentionSample } from './AttentionModel';
 import type { PerceptionStimulus } from './PerceptionStimulus';
 
@@ -22,9 +21,7 @@ export interface VisualSignalInput {
   observer: UnitModel;
   stimulus: PerceptionStimulus;
   attention: AttentionSample;
-  lineOfSight: LineOfSightProbeResult;
-  distanceMeters: number;
-  nominalRangeMeters: number;
+  visibility: PointVisibilityResult;
 }
 
 const POSTURE_MULTIPLIER = {
@@ -48,26 +45,21 @@ const ACTION_MULTIPLIER = {
 } as const;
 
 export function evaluateVisualSignal(input: VisualSignalInput): VisualSignalResult {
-  const { observer, stimulus, attention, lineOfSight } = input;
-  if (!stimulus.visibleSource || lineOfSight.blocked || lineOfSight.visualTransmission <= 0) {
+  const { observer, stimulus, attention, visibility } = input;
+  const { lineOfSight, quality } = visibility;
+  if (!stimulus.visibleSource || quality.quality01 <= 0) {
     return {
       evidencePerSecond: 0,
       factors: [],
-      explanationRu: [lineOfSight.blocked ? `Обзор перекрыт: ${lineOfSight.blockerReasonRu}.` : 'Источник не создаёт видимый сигнал.'],
+      explanationRu: [
+        ...visibility.explanationRu,
+        lineOfSight.blocked
+          ? `Обзор перекрыт: ${lineOfSight.blockerReasonRu}.`
+          : 'Источник не создаёт достаточный видимый сигнал в существующей зоне обзора.',
+      ],
     };
   }
 
-  const distanceMultiplier = calculateDistanceVisibilityFactor(
-    input.distanceMeters,
-    observer.attentionSettings.vision,
-  );
-  if (distanceMultiplier <= 0) {
-    return {
-      evidencePerSecond: 0,
-      factors: [],
-      explanationRu: [`Источник находится за практической дальностью обзора ${Math.round(observer.attentionSettings.vision.maximumVisualRangeMeters)} м.`],
-    };
-  }
   const concealmentMultiplier = Math.max(0.08, 1 - stimulus.concealment / 100);
   const lateralMultiplier = 1 + Math.max(0, Math.min(1, stimulus.lateralMotion)) * 0.25;
   const observerMultiplier = clamp(
@@ -77,10 +69,6 @@ export function evaluateVisualSignal(input: VisualSignalInput): VisualSignalResu
     0.35,
     1.45,
   );
-  const fatigueMultiplier = 1 - observer.soldier.condition.fatigue * 0.004;
-  const confusionMultiplier = 1 - observer.soldier.condition.confusion * 0.0045;
-  const suppressionMultiplier = 1 - observer.behaviorRuntime.suppression * 0.005;
-  const conditionMultiplier = clamp(fatigueMultiplier * confusionMultiplier * suppressionMultiplier, 0.22, 1);
   const sizeMultiplier = clamp(stimulus.baseSize, 0.25, 3);
 
   const factors: VisualSignalFactor[] = [
@@ -89,12 +77,12 @@ export function evaluateVisualSignal(input: VisualSignalInput): VisualSignalResu
     factor('action', ACTION_MULTIPLIER[stimulus.action], 'Действие цели', actionExplanation(stimulus.action)),
     factor('size', sizeMultiplier, 'Размер сигнала', `Относительный размер сигнала: ×${format(sizeMultiplier)}.`),
     factor('concealment', concealmentMultiplier, 'Маскировка', `Маскировка ${Math.round(stimulus.concealment)} из 100: ×${format(concealmentMultiplier)}.`),
-    factor('distance', distanceMultiplier, 'Дистанция', `Дистанция ${Math.round(input.distanceMeters)} м: ×${format(distanceMultiplier)}.`),
+    factor('distance', quality.distanceFactor, 'Дистанция', `Дистанция ${Math.round(visibility.distanceMeters)} м в существующей зоне обзора: ×${format(quality.distanceFactor)}.`),
     factor('lateral_motion', lateralMultiplier, 'Поперечное движение', `Поперечное движение: ×${format(lateralMultiplier)}.`),
-    factor('attention', attention.weight, 'Направление внимания', `${attentionZoneLabel(attention.zone)}: ×${format(attention.weight)}.`),
+    factor('attention', quality.attentionFactor, 'Направление внимания', `${attentionZoneLabel(attention.zone)}: ×${format(quality.attentionFactor)}.`),
     factor('observer', observerMultiplier, 'Способности наблюдателя', `Зрение и внимание бойца: ×${format(observerMultiplier)}.`),
-    factor('transmission', lineOfSight.visualTransmission, 'Проходимость обзора', `${lineOfSight.obscurationReasonRu}: ×${format(lineOfSight.visualTransmission)}.`),
-    factor('condition', conditionMultiplier, 'Состояние бойца', `Усталость, замешательство и подавление: ×${format(conditionMultiplier)}.`),
+    factor('transmission', quality.transmissionFactor, 'Проходимость обзора', `${lineOfSight.obscurationReasonRu}: ×${format(quality.transmissionFactor)}.`),
+    factor('condition', quality.observerConditionFactor, 'Состояние бойца', `Состояние наблюдателя из существующей зоны обзора: ×${format(quality.observerConditionFactor)}.`),
   ];
 
   const combined = factors.reduce((result, item) => result * item.multiplier, 1);
@@ -102,7 +90,7 @@ export function evaluateVisualSignal(input: VisualSignalInput): VisualSignalResu
   return {
     evidencePerSecond,
     factors,
-    explanationRu: factors.map((item) => item.explanationRu),
+    explanationRu: [...visibility.explanationRu, ...factors.map((item) => item.explanationRu)],
   };
 }
 
