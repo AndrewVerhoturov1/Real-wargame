@@ -305,16 +305,17 @@ function evaluateAwarenessFieldCell(
       position.y,
       bearingToThreat,
     );
-    const applicability = threat.mode === 'directional_fire' ? 1 : 0.35;
-    const applicableTerrainProtection = terrainProtection * applicability;
-    const directionalCover = evaluateCoverBetween(
-      map,
-      { x: threat.x, y: threat.y },
-      position,
-      unit.behaviorRuntime.posture,
-    );
-    const applicableCoverProtection = directionalCover.protection * applicability;
-    const threatProtection = combinePercent(applicableCoverProtection, applicableTerrainProtection);
+    const threatProtection = threat.mode === 'directional_fire'
+      ? combinePercent(
+          evaluateCoverBetween(
+            map,
+            { x: threat.x, y: threat.y },
+            position,
+            unit.behaviorRuntime.posture,
+          ).protection,
+          terrainProtection,
+        )
+      : combinePercent(local.expectedProtection, terrainProtection * 0.35);
     if (threatProtection > expectedProtectionAgainstThreat) {
       expectedProtectionAgainstThreat = threatProtection;
       protectedAgainstThreatId = threat.id;
