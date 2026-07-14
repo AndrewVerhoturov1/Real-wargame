@@ -26,7 +26,6 @@ assert.deepEqual(threatSnapshot(flatContact.threat), threatSnapshot(eastContact.
 
 const flat = evaluateScenario(flatState, profile);
 const east = evaluateScenario(slopeState, profile);
-console.log(JSON.stringify({ scenario: 'reverse-slope-pre-assert', flat: summary(flat), eastThreat: summary(east) }));
 assertReverseSlopeBenefit(flat, east);
 assertIdenticalQueriesHitCache(east);
 assertHiddenObjectiveMovementDoesNotLeak(eastContact, east);
@@ -261,6 +260,8 @@ function summary(result: ScenarioEvaluation) {
     reverseQueryWinner: result.query.bestReverseSlopePosition?.position ?? null,
     route: result.route.cells,
     visitedCells: result.route.visitedCells,
+    detourRatio: result.route.detourRatio,
+    detourLimited: result.route.detourLimited,
     routeDiagnostics: getRouteCostFieldDiagnostics(result.routeCache),
     directionalDiagnostics: getDirectionalTacticalFieldDiagnostics(result.state.map),
     queryDiagnostics: getDirectionalTerrainPositionQueryDiagnostics(result.state.map),
