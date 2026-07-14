@@ -31,6 +31,18 @@ jobs:
           set -o pipefail
           npm run directional-terrain:smoke 2>&1 | tee directional-terrain.log
 
+      - name: Reverse slope comparative acceptance
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run reverse-slope-comparative:smoke 2>&1 | tee reverse-slope-comparative.log
+
+      - name: Combat tactical integration regression
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run combat-tactical-integration:smoke 2>&1 | tee combat-tactical-integration.log
+
       - name: Navigation profile regression
         shell: bash
         run: |
@@ -74,6 +86,8 @@ jobs:
           name: directional-terrain-core-logs
           path: |
             directional-terrain.log
+            reverse-slope-comparative.log
+            combat-tactical-integration.log
             navigation-profiles.log
             pathfinding.log
             navigation-overlay.log
