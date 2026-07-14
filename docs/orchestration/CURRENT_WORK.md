@@ -4,8 +4,6 @@
 
 Chat-only orchestration v1 is active.
 
-The delivery route is:
-
 ```text
 orchestrator
 → parallel ordinary ChatGPT workers
@@ -20,7 +18,7 @@ Codex and Q/R/X/W modes are not part of this route.
 
 ```text
 id: stage1-nonvisual-closure-proof-a
-status: ready-for-workers
+status: workers-in-progress
 base_branch: real-wargame-preview
 base_commit: a7e99a955fb4ea2e5d3628119cca29ebccbd832e
 active_subproject: ai-single-unit-editor
@@ -28,66 +26,14 @@ active_subproject: ai-single-unit-editor
 
 ### Goal
 
-Close the remaining non-visual evidence gaps in Combat Tactical Integration Stage 1:
+Close the remaining non-visual Combat Tactical Integration Stage 1 evidence gaps:
 
-1. prove live active-route replanning through the normal `SimulationTick` flow;
-2. prove that a real subjective threat changes the winning safe-position candidate and selects the protected side of cover;
-3. prove that reverse-slope terrain changes position and route outcomes relative to a flat scene and that reversing the threat direction flips the preferred side;
-4. make `combat-tactical-integration:smoke` a permanent required step of the relevant GitHub Actions workflow.
+1. live active-route replanning through normal `SimulationTick`;
+2. safe-position winner and protected wall-side selection;
+3. comparative reverse-slope position and route outcomes;
+4. permanent CI enforcement of `combat-tactical-integration:smoke`.
 
-Final browser/PNG visual QA remains outside this campaign and still requires separate explicit user approval.
-
-## Confirmed unfinished work
-
-### Live route replan
-
-The production path already calls `ensureNavigationRouteCurrent` from `SimulationTick`, but existing smoke coverage proves route costs and calls `evaluateNavigationReplan` directly. It does not yet prove replacement of the real active order after a real perception or fire event.
-
-Required evidence:
-
-- an active planned order is created through the normal planning path;
-- a real contact or real shot changes subjective tactical knowledge;
-- ordinary simulation ticks trigger route search and accepted replacement;
-- `ownerToken`, requested target, movement/navigation profile, player-command linkage and final facing survive replacement;
-- route revision, replan count, reason and route cells change as expected;
-- cooldown and minimum improvement reject churn and insufficient candidates;
-- A* is not executed every frame.
-
-### Safe-position winner
-
-Current combat integration coverage proves only that safe candidates exist after a threat. It does not compare the winning candidate before and after the event or prove that the winner is on the protected side of a wall.
-
-Required evidence:
-
-- baseline and post-threat winners are compared;
-- the post-threat winner has lower danger than the original position;
-- wall-side protection and threat-relative cover direction are explicit;
-- an uncertain fire sector produces broader/less precise selection than a confirmed visual threat;
-- preference decays when the threat becomes stale.
-
-### Reverse-slope combat proof
-
-Directional terrain unit coverage already proves slope classification and synthetic field values. It does not yet prove the Stage 1 acceptance scenario with equivalent flat/reverse-slope combat scenes and real subjective threat input.
-
-Required evidence:
-
-- equivalent flat and reverse-slope scenes use the same real threat and profile;
-- position score, danger and route outcome differ for the protected side;
-- crest/forward slope does not receive the same benefit;
-- reversing threat direction flips the preferred side;
-- cautious/retreat navigation prefers the protected route;
-- existing cache and bounded-work invariants remain intact.
-
-### Permanent CI
-
-`combat-tactical-integration:smoke` exists in `package.json`, but `Combat Foundation Core` does not run it and does not include its scripts in the workflow path filter.
-
-Required evidence:
-
-- relevant tactical, navigation, knowledge and terrain paths trigger the workflow;
-- the tactical integration smoke is a required failing step, not an informational step;
-- existing combat, perception, runtime and production build checks remain;
-- Playwright and visual QA remain manual-only.
+Browser/PNG visual QA is outside this campaign and still requires separate explicit user approval.
 
 ## Parallel workers
 
@@ -95,31 +41,54 @@ Required evidence:
 
 Status: `ready`
 
-Own the complete live replan slice. Inspect the real planning, order ownership, simulation tick, tactical revision and replanner lifecycle. Implement the smallest coherent production/test changes that prove accepted and rejected replans through ordinary simulation ticks.
+Prove accepted and rejected live replans through ordinary simulation ticks while preserving order ownership, target, profile, command linkage and final facing, without per-frame A* churn.
 
 ### Worker 2 — safe-position winner and wall-side proof
 
 Status: `ready`
 
-Independently strengthen the safe-position contract using real perception/fire input. Prove before/after winner changes, protected-side selection, threat-relative cover direction, uncertainty behavior and decay. Production fixes are allowed when the current model cannot satisfy a defensible test.
+Prove that real subjective threat input changes the winning safe position, selects the protected side of cover, distinguishes precise and uncertain threats and weakens after decay.
 
 ### Worker 3 — reverse-slope comparative combat proof
 
 Status: `ready`
 
-Build a comparative flat-versus-reverse-slope Stage 1 scenario using subjective threat data and real route/position systems. Prove direction reversal, protected route preference and bounded cache behavior. Production fixes are allowed when required by the evidence.
+Compare equivalent flat and reverse-slope scenes using subjective threat input and real route/position systems. Prove direction reversal, protected-route preference and bounded cache work.
 
 ### Worker 4 — CI contract and regression matrix
 
-Status: `ready`
+Status: `accepted`
 
-Add the tactical integration smoke to permanent CI, broaden path filters only as required by its real dependencies and verify workflow failure semantics. Also audit the focused non-visual command matrix expected from the later integrator. Do not make browser visual QA automatic.
+Delivered draft PR `#108`, branch `agent/stage1-combat-tactical-ci`, commit `5be77b83588c73c07665e53755b2bd27cfdbbb9b`.
+
+## Received results
+
+### Worker 4 — CI contract and regression matrix
+
+Decision: `ACCEPT`
+
+Verified against the actual PR, patch, workflow run and downloaded artifact:
+
+- PR `#108` is open, draft, mergeable and targets `real-wargame-preview`;
+- exactly one file changes: `.github/workflows/combat-foundation-core.yml`;
+- existing combat, perception, runtime, reload, workspace and production-build checks remain;
+- `combat-tactical-integration:smoke` is a normal failure-producing step using `set -o pipefail`;
+- its log is uploaded with `if: always()`;
+- relevant bounded dependency and scenario path filters are added;
+- Playwright and PNG visual QA remain manual-only;
+- GitHub Actions run `29370723538` succeeded, including the new smoke step and artifact upload;
+- the artifact confirms both the 17-check tactical integration scenario and the source-direction regression scenario passed;
+- the PR is not merged and `main` was not changed.
+
+A separate `Preview Core Checks` job was red, but all substantive smoke and production-build steps passed; only its final status-publishing step failed. The Worker 4 patch does not modify that workflow.
+
+Integration note: preserve the accepted gate and add exact filters for any separately named scenario files introduced by Workers 1–3, unless those scenarios are connected to the existing wrapper.
 
 ## Worker delivery rules
 
-Workers may inspect and change any relevant files, add tests and propose architecture corrections. They must not make unrelated improvements or independently combine their results into the shared preview branch.
+Workers may inspect and change any relevant files, add tests and propose architecture corrections. They must not independently combine results into the shared preview branch.
 
-Each result must be reproducible as complete files, an applicable patch, or an isolated branch/PR with an exact commit SHA, and must report checks actually run, checks not run, risks and integration notes.
+Each result must be reproducible as complete files, an applicable patch, or an isolated branch/PR with an exact commit SHA. Reports must distinguish checks run from checks not run and list risks and integration notes.
 
 Orchestrator decisions use exactly one of:
 
@@ -131,20 +100,20 @@ REJECT
 BLOCKED
 ```
 
-## Received results
-
-None.
-
 ## Orchestrator decision
 
-Pending worker results.
+Worker 4: `ACCEPT`.
+
+Workers 1–3 remain pending. No integrator prompt will be issued until their results are received and reviewed.
 
 ## Integration
 
-Not started. One designated integrator will re-read the then-current preview branch, combine accepted parts, resolve semantic conflicts, run the available non-visual verification matrix and update project status only after factual integration.
+Not started.
+
+The designated integrator must re-read the then-current preview branch and reproduce or apply accepted changes semantically. PR `#108` must not be merged blindly.
 
 ## Final verification
 
 Not started.
 
-The campaign is not complete until the integrator reports the resulting commit/PR or reproducible package and lists every check actually run. Stage 1 itself also remains open until separately approved visual QA is completed.
+The campaign requires an integrated commit/PR and an honest non-visual verification report. Stage 1 also remains open until separately approved visual QA is completed.
