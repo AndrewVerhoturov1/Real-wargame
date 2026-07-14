@@ -1,0 +1,43 @@
+name: Live Navigation Replan Core
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - '.github/workflows/live-navigation-replan-core.yml'
+      - 'src/core/combat/**'
+      - 'src/core/knowledge/**'
+      - 'src/core/navigation/**'
+      - 'src/core/orders/**'
+      - 'src/core/pathfinding/**'
+      - 'src/core/perception/**'
+      - 'src/core/simulation/**'
+      - 'scripts/combat_tactical_integration_smoke.mjs'
+      - 'scripts/combat_tactical_integration_smoke.ts'
+      - 'scripts/combat_threat_evidence_source_direction_regression_smoke.ts'
+      - 'scripts/live_navigation_replan_smoke.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-navigation-replan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Combat tactical integration smoke
+        run: npm run combat-tactical-integration:smoke
