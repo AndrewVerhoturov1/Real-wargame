@@ -3,10 +3,10 @@
 
 - **ID:** `ai-single-unit-editor`
 - **Status:** `active`
-- **Updated:** 2026-07-14
+- **Updated:** 2026-07-15
 - **Working branch:** `real-wargame-preview`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
-- **Last verified commit:** `d8d9c4e910a2c4246bb56893dd5a3dd081125fa0`
+- **Last verified commit:** `3f01f4ba9b96daa1b8951bdd08f4005a482fee8c`
 
 ## Goal
 
@@ -14,11 +14,11 @@
 
 ## Current focus
 
-Gate 0 кампании Stage 1–2: State/Plan v1, Tactical Query System и код Combat Tactical Integration Stage 1 уже находятся в real-wargame-preview. Stage 1 остаётся открытым до устранения зафиксированных follow-up gaps и отдельной визуальной приёмки.
+Slice 1 кампании Stage 1–2 завершён и перенесён в real-wargame-preview через PR #106: потенциальная опасность отделена от evidence-derived suppression, а память неизвестного огня получила устойчивое объединение, разделение разных направлений и reconciliation с unit:<id>. Stage 1 остаётся открытым до live route replan, усиленных safe-position/reverse-slope доказательств, постоянного CI и отдельной визуальной приёмки.
 
 ## Next step
 
-Выполнять план завершения Stage 1 вертикальными срезами: разделить опасность и подавление, доказать объединение неизвестного огня, живое перестроение маршрута, выбор безопасной стороны стены и обратного склона, закрепить smoke в CI и только после разрешения запустить visual QA. Поведенческие решения последующих срезов собирать и настраивать через Graph v2.
+Продолжить Stage 1 со следующего вертикального среза: доказать живое перестроение активного маршрута через обычный SimulationTick с сохранением ownerToken, цели, профиля и final facing; затем усилить safe-position и reverse-slope проверки, закрепить combat-tactical-integration:smoke в постоянном CI и только после отдельного разрешения запустить подготовленные девять visual QA сцен.
 
 ## Read first
 
