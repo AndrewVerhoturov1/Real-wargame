@@ -24,4 +24,4 @@ assert.ok(main.includes('migrateAiGraphToV2'), 'Legacy stored/imported data shou
 assert.ok(main.includes('version: 2'), 'The editor graph model must always normalize to version 2.');
 assert.ok(clickGuard.includes("'.ai-debug-panel-dock'"), 'Document click guard must not rerender the editor when diagnostics summaries are clicked.');
 
-console.log('AI node editor Graph v2-only smoke passed.');
+console.log('AI node editor Graph v2-only smoke passed: Graph v1 UI is absent, legacy input is converted at the boundary, and diagnostics controls remain interactive.');
