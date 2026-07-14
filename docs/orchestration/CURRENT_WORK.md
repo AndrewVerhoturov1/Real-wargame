@@ -32,7 +32,7 @@ auto_merge_used: no
 active_subproject: ai-single-unit-editor
 ```
 
-`final_preview_sha` is the accepted Stage 1 integration/squash commit. This status update is a separate direct docs-only bookkeeping commit permitted by the repository branch policy.
+`final_preview_sha` is the accepted Stage 1 integration/squash commit. Later status updates are separate direct docs-only bookkeeping commits permitted by the repository branch policy.
 
 ## Goal and result
 
@@ -129,9 +129,20 @@ Additional accepted checks included awareness, navigation profiles, navigation o
 
 ## Cleanup status
 
-Superseded PRs `#108`, `#109`, `#110` and `#111` are to be closed only after this bookkeeping commit is confirmed.
+Superseded PRs `#108`, `#109`, `#110` and `#111` are closed without merge. Each contains a closing comment identifying accepted integration PR `#112`, squash commit `7d1f3b8dc73b413c0644bf4b9e090e5d2d620960` and the subsequent bookkeeping head.
 
-Temporary branches may be deleted only after confirming their accepted content exists in preview and that no other open task uses them. Branch-ref deletion is not available through the connected GitHub tool, so any remaining refs must be removed manually and must not be reported as deleted by this executor.
+The following temporary branch refs were independently confirmed to remain present and require manual deletion because branch-ref deletion is unavailable through the connected GitHub tool:
+
+```text
+agent/live-navigation-replan-tick-20260715
+agent/live-navigation-replan-test-blob-backup
+agent/safe-position-winner-executor-2
+agent/reverse-slope-comparative-stage1
+agent/stage1-combat-tactical-ci
+agent/stage1-nonvisual-integration
+```
+
+Their accepted content is already present in `real-wargame-preview`. Do not delete `real-wargame-preview` or `main`.
 
 ## Final statement
 
