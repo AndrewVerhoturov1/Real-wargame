@@ -18,7 +18,7 @@ Codex and Q/R/X/W modes are not part of this route.
 
 ```text
 id: stage1-nonvisual-closure-proof-a
-status: awaiting-worker-1-and-worker-3-revision
+status: awaiting-worker-3-revision
 base_branch: real-wargame-preview
 base_commit: a7e99a955fb4ea2e5d3628119cca29ebccbd832e
 active_subproject: ai-single-unit-editor
@@ -39,9 +39,9 @@ Browser/PNG visual QA is outside this campaign and still requires separate expli
 
 ### Worker 1 — live route-replan implementation and proof
 
-Status: `ready`
+Status: `accepted-with-changes`
 
-Prove accepted and rejected live replans through ordinary simulation ticks while preserving order ownership, target, profile, command linkage and final facing, without per-frame A* churn.
+Delivered draft PR `#110`, branch `agent/live-navigation-replan-tick-20260715`, commit `7b2e50ebcd9c0d950ee18523c5a5a009145683be`.
 
 ### Worker 2 — safe-position winner and wall-side proof
 
@@ -65,13 +65,38 @@ Delivered draft PR `#108`, branch `agent/stage1-combat-tactical-ci`, commit `5be
 
 ## Received results
 
+### Worker 1 — live route-replan implementation and proof
+
+Decision: `ACCEPT_WITH_CHANGES`
+
+Verified facts:
+
+- PR `#110` is open, draft and targets `real-wargame-preview`;
+- the exact head is `7b2e50ebcd9c0d950ee18523c5a5a009145683be`;
+- seven files change: production replanner/order code, a route-cost evaluator, the live integration smoke and a focused workflow;
+- a real ballistic near miss feeds subjective threat memory and ordinary `tickSimulation` before accepted or rejected live replan decisions;
+- the smoke checks owner token, requested target, movement/profile metadata, player-command linkage, final facing, search/replacement counters and stale lifecycle cleanup;
+- GitHub Actions run `29372179601` succeeded, including the real `combat-tactical-integration:smoke` step and log artifact;
+- the downloaded log confirms the existing tactical integration scenarios and the new live replan scenario passed;
+- Preview Core route, runtime, pathfinding, awareness and production-build steps passed;
+- the red aggregate Preview Core result came from the final status-publishing step, not `lab:smoke`; the worker report's attribution to a baseline lab failure was inaccurate;
+- the current PR is not mergeable after the preview branch advanced from its merge base and must be integrated semantically rather than merged blindly.
+
+Required integration changes:
+
+1. Use one canonical route-cost formula for both the current remaining route and the candidate route. `NavigationRouteCost` currently sums per-cell `fields.totalCost`, which clamps each cell to a minimum, while `MoveOrder.pathCost` comes from `GridPathfinder` component breakdown and applies the final clamp after summation. Negative `coverAdjustment` can therefore make the compared values mathematically inconsistent. Export/reuse the canonical path breakdown evaluator or otherwise prove exact equivalence for terrain, danger, directional terrain and cover adjustments.
+2. Re-run accepted and rejected live replan scenarios after combining Worker 2 and Worker 3, because their awareness/directional terrain changes alter tactical route costs.
+3. Consolidate the focused workflow with the accepted Worker 4 `Combat Foundation Core` gate. Avoid maintaining two permanent workflows that execute the same full tactical integration command unless the duplication is intentional and documented.
+4. Preserve the `replanSearchCount` versus accepted `replanCount` distinction, strict order identity/ownership checks, cooldown gating and current-context hysteresis baseline.
+5. Update/rebase against the then-current preview branch and repeat the focused integration, route, pathfinding, runtime and production-build checks.
+
 ### Worker 2 — safe-position winner and wall-side proof
 
 Decision: `ACCEPT_WITH_CHANGES`
 
 Verified facts:
 
-- PR `#109` is open, draft, mergeable and targets `real-wargame-preview`;
+- PR `#109` is open, draft and targets `real-wargame-preview`;
 - four files change, including the production `SoldierAwarenessGrid` implementation and a five-scenario deterministic smoke;
 - the patch fixes side-insensitive wall protection by using threat-relative cover geometry from subjective threat memory;
 - the strict smoke is connected to both awareness and combat tactical runners;
@@ -92,7 +117,7 @@ Decision: `CHANGES_REQUIRED`
 
 Verified facts:
 
-- PR `#111` is open, draft, mergeable and targets `real-wargame-preview`;
+- PR `#111` is open, draft and targets `real-wargame-preview`;
 - it adds a standalone comparative fixture, smoke launcher, assertions and npm command without changing production code;
 - the scenario uses perception contact → soldier threat memory → awareness/directional field/route-cost/A* and checks direction reversal, hidden-position non-leakage and cache bounds;
 - existing Directional Terrain Core, Combat Foundation Core, Preview Policy, navigation and production-build jobs passed;
@@ -113,7 +138,7 @@ Decision: `ACCEPT`
 
 Verified against the actual PR, patch, workflow run and downloaded artifact:
 
-- PR `#108` is open, draft, mergeable and targets `real-wargame-preview`;
+- PR `#108` is open, draft and targets `real-wargame-preview`;
 - exactly one file changes: `.github/workflows/combat-foundation-core.yml`;
 - existing combat, perception, runtime, reload, workspace and production-build checks remain;
 - `combat-tactical-integration:smoke` is a normal failure-producing step using `set -o pipefail`;
@@ -145,13 +170,13 @@ BLOCKED
 ## Orchestrator decision
 
 ```text
-Worker 1: pending
+Worker 1: ACCEPT_WITH_CHANGES
 Worker 2: ACCEPT_WITH_CHANGES
 Worker 3: CHANGES_REQUIRED
 Worker 4: ACCEPT
 ```
 
-No integrator prompt will be issued until Worker 1 is reviewed and Worker 3 returns an executed revision.
+No integrator prompt will be issued until Worker 3 returns an executed revision.
 
 ## Integration
 
