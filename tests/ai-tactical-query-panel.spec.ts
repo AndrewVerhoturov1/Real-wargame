@@ -77,9 +77,14 @@ test('shows Russian tactical query candidates, exclusions, scores and winner', a
   });
 
   await page.goto('/ai-node-editor.html');
+  const runtimePanel = page.locator('details[data-ai-debug-panel="runtime-trace"]');
+  await expect(runtimePanel.locator('summary')).toContainText('След ИИ');
+  if (!(await runtimePanel.evaluate((element) => (element as HTMLDetailsElement).open))) {
+    await runtimePanel.locator('summary').click();
+  }
   await expect(page.getByText('Тактический запрос', { exact: true })).toBeVisible();
+  await saveScreenshot(page, 'tactical-query-candidates.png');
   await expect(page.getByText(/Победитель/)).toBeVisible();
   await expect(page.getByText(/Причина исключения/)).toBeVisible();
   await expect(page.getByText(/Досрочная остановка/)).toBeVisible();
-  await saveScreenshot(page, 'tactical-query-candidates.png');
 });
