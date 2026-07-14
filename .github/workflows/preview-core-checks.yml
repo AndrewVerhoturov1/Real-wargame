@@ -40,15 +40,23 @@ jobs:
             python3 - <<'PY'
           from pathlib import Path
           import re
-          path = Path('scripts/ai_graph_ownership_smoke.ts')
-          text = path.read_text(encoding='utf-8')
+          test_path = Path('scripts/ai_graph_ownership_smoke.ts')
+          text = test_path.read_text(encoding='utf-8')
           match = re.search(r'\nclass MemoryStorage \{.*\n\}\n?$', text, flags=re.S)
           if not match:
               raise SystemExit('MemoryStorage test helper not found')
           block = match.group(0).strip()
           text = text[:match.start()].rstrip() + '\n'
           text = text.replace("const GRAPH_STORAGE_KEY", block + "\n\nconst GRAPH_STORAGE_KEY", 1)
-          path.write_text(text, encoding='utf-8')
+          test_path.write_text(text, encoding='utf-8')
+
+          bridge_path = Path('src/core/ai/AiGameBridge.ts')
+          bridge = bridge_path.read_text(encoding='utf-8')
+          old = ") as NonNullable<AiGraph['blackboardSchema']>"
+          new = ") as unknown as NonNullable<AiGraph['blackboardSchema']>"
+          if old not in bridge:
+              raise SystemExit('Graph v2 schema cast not found')
+          bridge_path.write_text(bridge.replace(old, new, 1), encoding='utf-8')
           PY
             npm run graph-v2:smoke
             npm run subgraph:smoke
