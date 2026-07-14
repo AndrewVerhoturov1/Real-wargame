@@ -2,6 +2,7 @@ import { getCell, type MapObject } from '../map/MapModel';
 import { sampleSmoothHeightLevel } from '../terrain/SmoothTerrain';
 import type { SimulationState } from '../simulation/SimulationState';
 import { isUnitCombatCapable } from './CombatDamage';
+import { applyBallisticCombatEffects } from './CombatSuppression';
 import {
   intersectRayWithUnitHitShapes,
   normalizeDirection,
@@ -77,8 +78,7 @@ export function traceProjectile(state: SimulationState, input: BallisticRayInput
   const travelledMetres = nearest?.distanceMetres ?? maximumDistanceMetres;
   const impactPoint = pointAlongRay(input.origin, direction, travelledMetres);
   const velocity = Math.max(1, input.muzzleVelocityMetresPerSecond);
-
-  return {
+  const result: BallisticRayResult = {
     shotId: input.shotId,
     hitType: nearest?.type ?? 'none',
     travelledMetres,
@@ -92,6 +92,21 @@ export function traceProjectile(state: SimulationState, input: BallisticRayInput
     hitUnitId: nearest?.unitId,
     hitZone: nearest?.zone,
   };
+
+  applyBallisticCombatEffects(state, {
+    shotId: input.shotId,
+    shooterId: input.shooterId,
+    origin: input.origin,
+    direction,
+    travelledMetres,
+    impactPoint,
+    hitType: result.hitType,
+    hitUnitId: result.hitUnitId,
+    hitObjectId: result.hitObjectId,
+    muzzleVelocityMetresPerSecond: velocity,
+  });
+
+  return result;
 }
 
 export function hasFriendlyUnitBeforeDistance(

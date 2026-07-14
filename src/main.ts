@@ -26,6 +26,8 @@ import { installAttentionOverlayRenderer } from './rendering/AttentionOverlayIns
 import { installCombatEffectsRenderer } from './rendering/CombatEffectsInstaller';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
 import { installAppShellMenu } from './shared/AppShellMenu';
+import { installAiStatePlanVisualQaHarness } from './testing/AiStatePlanVisualQaHarness';
+import { installCombatTacticalIntegrationVisualQaHarness } from './testing/CombatTacticalIntegrationVisualQaHarness';
 import { installAiDictionaryGameIntegration } from './ui/AiDictionaryGameIntegration';
 import { installAttentionProfileControls } from './ui/AttentionProfileControls';
 import { installAttentionRuntimePanel } from './ui/AttentionRuntimePanel';
@@ -39,7 +41,6 @@ import { installPerformanceReportControls } from './ui/PerformanceReportControls
 import { installSceneExportControls } from './ui/SceneExportControls';
 import { installTacticalWorkspace } from './ui/TacticalWorkspace';
 import { installWorkspaceTooltipGuard } from './ui/WorkspaceTooltipGuard';
-import { installAiStatePlanVisualQaHarness } from './testing/AiStatePlanVisualQaHarness';
 
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 
@@ -90,6 +91,7 @@ installPauseToggle(pauseToggle, forceRenderAtNativeMapQuality);
 installTacticalWorkspace(state, aiGameBridge, forceRenderAtNativeMapQuality);
 const destroyCombatControls = installCombatControls(state, forceRenderAtNativeMapQuality);
 installAiStatePlanVisualQaHarness(state, forceRenderAtNativeMapQuality);
+installCombatTacticalIntegrationVisualQaHarness(state, forceRenderAtNativeMapQuality);
 const destroyAttentionRuntimePanel = installAttentionRuntimePanel(state, forceRenderAtNativeMapQuality);
 const destroyAttentionOverlayRenderer = installAttentionOverlayRenderer(tacticalBoard, state);
 const destroyCombatEffectsRenderer = installCombatEffectsRenderer(tacticalBoard, state);
