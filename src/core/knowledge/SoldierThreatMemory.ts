@@ -1,11 +1,17 @@
+import { drainCombatThreatEvidence, type CombatThreatEvidence } from '../combat/CombatThreatEvidence';
+import type { PerceptionContactMemory } from '../perception/PerceptionContact';
 import { resolvePressureZoneSettings } from '../pressure/PressureZone';
 import type { SimulationState } from '../simulation/SimulationState';
+import { areUnitsHostile } from '../units/SideRelations';
 import type { KnownThreatMemory, UnitModel, UnitTacticalKnowledge } from '../units/UnitModel';
 
 const CONFIDENCE_DECAY_PER_SECOND = 0.55;
 const UNCERTAINTY_GROWTH_METERS_PER_SECOND = 0.12;
 const MAX_UNCERTAINTY_METERS = 120;
 const MIN_MEMORY_CONFIDENCE = 4;
+const UNKNOWN_DIRECTION_BUCKET_DEGREES = 30;
+const UNKNOWN_RECONCILE_DEGREES = 35;
+const UNKNOWN_RECONCILE_SECONDS = 12;
 
 export function createEmptyTacticalKnowledge(): UnitTacticalKnowledge {
   return {
@@ -35,46 +41,35 @@ export function syncSoldierThreatMemory(
   deltaSeconds: number,
 ): void {
   const now = state.simulationTimeSeconds;
+  const previousFingerprint = tacticalKnowledgeFingerprint(unit.tacticalKnowledge.threats);
   const existing = new Map(unit.tacticalKnowledge.threats.map((memory) => [memory.id, memory]));
-  let changed = false;
+  const refreshed = new Set<string>();
 
   for (const contact of unit.perceptionKnowledge.contacts) {
     const zoneId = contact.stimulusId.startsWith('threat:') ? contact.stimulusId.slice('threat:'.length) : null;
-    if (!zoneId) continue;
-    const zone = state.pressureZones.find((candidate) => candidate.id === zoneId);
-    if (!zone) continue;
+    if (zoneId) {
+      const zone = state.pressureZones.find((candidate) => candidate.id === zoneId);
+      if (!zone) continue;
+      const next = buildPressureZoneThreat(state, zone, contact, existing.get(zone.id), now);
+      existing.set(zone.id, next);
+      refreshed.add(zone.id);
+      continue;
+    }
 
-    const confidenceCap = contact.stage === 'cue' || contact.stage === 'suspicion'
-      ? 49
-      : contact.stage === 'contact'
-        ? 69
-        : 100;
-    const confidence = Math.min(confidenceCap, Math.max(4, contact.confidence));
-    const visibleNow = (contact.stage === 'identified' || contact.stage === 'confirmed') && contact.visibleNow;
-    const source: KnownThreatMemory['source'] = contact.source === 'visual'
-      ? 'seen'
-      : contact.source === 'sound'
-        ? 'heard'
-        : contact.source;
-    const next = buildKnownThreat(
-      zone,
-      confidence,
-      Math.max(contact.uncertaintyCells, visibleNow ? metersToCells(state, 1.5) : metersToCells(state, 4)),
-      source,
-      now,
-      visibleNow,
-      contact.lastKnownPosition.x,
-      contact.lastKnownPosition.y,
-    );
-    const previous = existing.get(zone.id);
-    if (!previous || threatChanged(previous, next)) changed = true;
-    existing.set(zone.id, next);
+    const sourceUnitId = contact.sourceUnitId
+      ?? (contact.stimulusId.startsWith('unit:') ? contact.stimulusId.slice('unit:'.length) : null);
+    if (!sourceUnitId) continue;
+    const sourceUnit = state.units.find((candidate) => candidate.id === sourceUnitId);
+    if (!sourceUnit || !areUnitsHostile(unit, sourceUnit)) continue;
+    const threatId = `unit:${sourceUnitId}`;
+    const next = buildRealUnitThreat(state, unit, contact, threatId, existing.get(threatId), now);
+    existing.set(threatId, next);
+    refreshed.add(threatId);
   }
 
   for (const zone of state.pressureZones) {
     const settings = resolvePressureZoneSettings(zone);
-    if (!settings.enabled || !isUnitAffectedByZone(unit, zone)) continue;
-    if (existing.has(zone.id)) continue;
+    if (!settings.enabled || !isUnitAffectedByZone(unit, zone) || existing.has(zone.id)) continue;
 
     const uncertaintyCells = Math.max(metersToCells(state, 15), zone.uncertaintyCells ?? 0);
     const confidence = Math.max(15, Math.min(45, Math.max(zone.strength, settings.suppression) * 0.55));
@@ -89,31 +84,26 @@ export function syncSoldierThreatMemory(
       estimatedPosition.x,
       estimatedPosition.y,
     ));
-    changed = true;
+    refreshed.add(zone.id);
   }
 
+  for (const evidence of drainCombatThreatEvidence(unit, now)) {
+    mergeCombatEvidence(state, unit, existing, refreshed, evidence, now);
+  }
+  reconcileUnknownThreats(unit, existing, refreshed, now);
+
   const nextThreats: KnownThreatMemory[] = [];
-  const uncertaintyGrowthCells = metersToCells(state, UNCERTAINTY_GROWTH_METERS_PER_SECOND) * deltaSeconds;
+  const uncertaintyGrowthCells = metersToCells(state, UNCERTAINTY_GROWTH_METERS_PER_SECOND) * Math.max(0, deltaSeconds);
   const maxUncertaintyCells = metersToCells(state, MAX_UNCERTAINTY_METERS);
   for (const memory of existing.values()) {
-    if (memory.lastSeenSeconds === now || memory.lastUpdatedSeconds === now) {
+    if (refreshed.has(memory.id)) {
       nextThreats.push(memory);
       continue;
     }
 
-    const confidence = Math.max(0, memory.confidence - CONFIDENCE_DECAY_PER_SECOND * deltaSeconds);
+    const confidence = Math.max(0, memory.confidence - CONFIDENCE_DECAY_PER_SECOND * Math.max(0, deltaSeconds));
     const uncertaintyCells = Math.min(maxUncertaintyCells, memory.uncertaintyCells + uncertaintyGrowthCells);
-    if (confidence < MIN_MEMORY_CONFIDENCE) {
-      changed = true;
-      continue;
-    }
-
-    if (
-      Math.round(confidence) !== Math.round(memory.confidence)
-      || Math.round(uncertaintyCells * 10) !== Math.round(memory.uncertaintyCells * 10)
-    ) {
-      changed = true;
-    }
+    if (confidence < MIN_MEMORY_CONFIDENCE) continue;
     nextThreats.push({
       ...memory,
       confidence,
@@ -123,9 +113,194 @@ export function syncSoldierThreatMemory(
     });
   }
 
-  unit.tacticalKnowledge.threats = nextThreats.sort((left, right) => right.confidence - left.confidence);
+  nextThreats.sort((left, right) => right.confidence - left.confidence || right.suppression - left.suppression || left.id.localeCompare(right.id));
+  unit.tacticalKnowledge.threats = nextThreats;
   unit.tacticalKnowledge.lastUpdatedSeconds = now;
-  if (changed) unit.tacticalKnowledge.revision += 1;
+  if (previousFingerprint !== tacticalKnowledgeFingerprint(nextThreats)) unit.tacticalKnowledge.revision += 1;
+}
+
+function buildPressureZoneThreat(
+  state: SimulationState,
+  zone: SimulationState['pressureZones'][number],
+  contact: PerceptionContactMemory,
+  previous: KnownThreatMemory | undefined,
+  now: number,
+): KnownThreatMemory {
+  const confidenceCap = confidenceCapForStage(contact.stage);
+  const confidence = Math.min(confidenceCap, Math.max(4, contact.confidence));
+  const visibleNow = (contact.stage === 'identified' || contact.stage === 'confirmed') && contact.visibleNow;
+  const source = sourceForContact(contact);
+  const next = buildKnownThreat(
+    zone,
+    confidence,
+    Math.max(contact.uncertaintyCells, visibleNow ? metersToCells(state, 1.5) : metersToCells(state, 4)),
+    source,
+    now,
+    visibleNow,
+    contact.lastKnownPosition.x,
+    contact.lastKnownPosition.y,
+  );
+  if (!visibleNow && previous) next.lastSeenSeconds = previous.lastSeenSeconds;
+  return next;
+}
+
+function buildRealUnitThreat(
+  state: SimulationState,
+  observer: UnitModel,
+  contact: PerceptionContactMemory,
+  threatId: string,
+  previous: KnownThreatMemory | undefined,
+  now: number,
+): KnownThreatMemory {
+  const confidence = Math.min(confidenceCapForStage(contact.stage), Math.max(4, contact.confidence));
+  const visibleNow = (contact.stage === 'identified' || contact.stage === 'confirmed') && contact.visibleNow;
+  const uncertaintyCells = Math.max(
+    contact.uncertaintyCells,
+    visibleNow ? metersToCells(state, 1.5) : contact.source === 'sound' ? metersToCells(state, 10) : metersToCells(state, 4),
+  );
+  const source = sourceForContact(contact);
+  const distanceCells = Math.hypot(
+    observer.position.x - contact.lastKnownPosition.x,
+    observer.position.y - contact.lastKnownPosition.y,
+  );
+  const directionDegrees = normalizeDegrees(Math.atan2(
+    observer.position.y - contact.lastKnownPosition.y,
+    observer.position.x - contact.lastKnownPosition.x,
+  ) * 180 / Math.PI);
+  const precisionArc = visibleNow ? 52 : contact.source === 'sound' ? 125 : contact.stage === 'contact' ? 86 : 105;
+  const threat: KnownThreatMemory = {
+    id: threatId,
+    labelRu: contact.labelRu,
+    mode: 'directional_fire',
+    x: contact.lastKnownPosition.x,
+    y: contact.lastKnownPosition.y,
+    radiusCells: 0,
+    widthCells: 0,
+    heightCells: 0,
+    rotationDegrees: 0,
+    strength: Math.min(88, 42 + confidence * 0.46),
+    suppression: Math.min(68, 24 + confidence * 0.42),
+    stressPerSecond: Math.min(14, 2 + confidence * 0.09),
+    directionDegrees,
+    arcDegrees: Math.min(180, precisionArc + uncertaintyCells * state.map.metersPerCell * 0.7),
+    rangeCells: Math.max(distanceCells + uncertaintyCells, metersToCells(state, 250)),
+    minRangeCells: 0,
+    falloffPercent: 62,
+    confidence,
+    uncertaintyCells,
+    source,
+    visibleNow,
+    lastSeenSeconds: visibleNow ? now : previous?.lastSeenSeconds ?? contact.lastObservedSeconds,
+    lastUpdatedSeconds: now,
+  };
+  return threat;
+}
+
+function mergeCombatEvidence(
+  state: SimulationState,
+  observer: UnitModel,
+  existing: Map<string, KnownThreatMemory>,
+  refreshed: Set<string>,
+  evidence: CombatThreatEvidence,
+  now: number,
+): void {
+  const knownThreatId = evidence.sourceUnitId ? `unit:${evidence.sourceUnitId}` : null;
+  const known = knownThreatId ? existing.get(knownThreatId) : undefined;
+  if (known && evidence.sourceUnitId) {
+    existing.set(known.id, {
+      ...known,
+      strength: Math.max(known.strength, evidence.strength),
+      suppression: Math.max(known.suppression, evidence.suppression),
+      stressPerSecond: Math.max(known.stressPerSecond, evidence.stressPerSecond),
+      directionDegrees: blendDirections(known.directionDegrees, known.confidence, evidence.directionDegrees, evidence.confidence),
+      arcDegrees: Math.max(28, Math.min(known.arcDegrees, evidence.arcDegrees)),
+      rangeCells: Math.max(known.rangeCells, evidence.rangeCells),
+      confidence: Math.min(96, Math.max(known.confidence, evidence.confidence) + Math.min(12, evidence.evidenceCount * 3)),
+      uncertaintyCells: Math.max(0.5, Math.min(known.uncertaintyCells, evidence.uncertaintyCells)),
+      source: known.visibleNow ? known.source : 'fire_pressure',
+      lastUpdatedSeconds: now,
+    });
+    refreshed.add(known.id);
+    return;
+  }
+
+  const bucket = Math.round(normalizeDegrees(evidence.directionDegrees) / UNKNOWN_DIRECTION_BUCKET_DEGREES) % 12;
+  const threatId = `unknown-fire:${bucket}`;
+  const previous = existing.get(threatId);
+  if (!previous) {
+    existing.set(threatId, {
+      id: threatId,
+      labelRu: evidence.kind === 'wounded'
+        ? 'Неизвестный источник ранившего огня'
+        : evidence.kind === 'near_miss'
+          ? 'Неизвестный источник близкого огня'
+          : 'Неизвестный источник попаданий',
+      mode: 'directional_fire',
+      x: evidence.estimatedSourcePosition.x,
+      y: evidence.estimatedSourcePosition.y,
+      radiusCells: 0,
+      widthCells: 0,
+      heightCells: 0,
+      rotationDegrees: 0,
+      strength: evidence.strength,
+      suppression: evidence.suppression,
+      stressPerSecond: evidence.stressPerSecond,
+      directionDegrees: evidence.directionDegrees,
+      arcDegrees: evidence.arcDegrees,
+      rangeCells: evidence.rangeCells,
+      minRangeCells: 0,
+      falloffPercent: 70,
+      confidence: evidence.confidence,
+      uncertaintyCells: evidence.uncertaintyCells,
+      source: 'fire_pressure',
+      visibleNow: false,
+      lastSeenSeconds: -1,
+      lastUpdatedSeconds: now,
+    });
+  } else {
+    const previousWeight = Math.max(1, previous.confidence);
+    const evidenceWeight = Math.max(1, evidence.confidence);
+    const totalWeight = previousWeight + evidenceWeight;
+    existing.set(threatId, {
+      ...previous,
+      x: (previous.x * previousWeight + evidence.estimatedSourcePosition.x * evidenceWeight) / totalWeight,
+      y: (previous.y * previousWeight + evidence.estimatedSourcePosition.y * evidenceWeight) / totalWeight,
+      strength: Math.max(previous.strength, evidence.strength),
+      suppression: Math.min(100, Math.max(previous.suppression, evidence.suppression) + Math.min(12, evidence.evidenceCount * 2)),
+      stressPerSecond: Math.max(previous.stressPerSecond, evidence.stressPerSecond),
+      directionDegrees: blendDirections(previous.directionDegrees, previousWeight, evidence.directionDegrees, evidenceWeight),
+      arcDegrees: Math.max(26, Math.min(previous.arcDegrees, evidence.arcDegrees) * 0.96),
+      rangeCells: Math.max(previous.rangeCells, evidence.rangeCells),
+      confidence: Math.min(90, Math.max(previous.confidence, evidence.confidence) + Math.min(16, evidence.evidenceCount * 3)),
+      uncertaintyCells: Math.max(0.5, Math.min(previous.uncertaintyCells, evidence.uncertaintyCells) * 0.95),
+      lastUpdatedSeconds: now,
+    });
+  }
+  refreshed.add(threatId);
+}
+
+function reconcileUnknownThreats(
+  observer: UnitModel,
+  existing: Map<string, KnownThreatMemory>,
+  refreshed: Set<string>,
+  now: number,
+): void {
+  const knownUnits = [...existing.values()].filter((threat) => threat.id.startsWith('unit:'));
+  if (knownUnits.length === 0) return;
+  for (const unknown of [...existing.values()]) {
+    if (!unknown.id.startsWith('unknown-fire:')) continue;
+    if (now - unknown.lastUpdatedSeconds > UNKNOWN_RECONCILE_SECONDS) continue;
+    const duplicate = knownUnits.some((known) => (
+      angularDifference(known.directionDegrees, unknown.directionDegrees) <= UNKNOWN_RECONCILE_DEGREES
+      || angularDifference(
+        bearingFromObserver(observer, known),
+        bearingFromObserver(observer, unknown),
+      ) <= UNKNOWN_RECONCILE_DEGREES
+    ));
+    if (!duplicate) continue;
+    existing.delete(unknown.id);
+    refreshed.delete(unknown.id);
+  }
 }
 
 function buildKnownThreat(
@@ -228,8 +403,12 @@ function isUnitAffectedByZone(unit: UnitModel, zone: SimulationState['pressureZo
   return Math.abs(dx) <= zone.widthCells / 2 && Math.abs(dy) <= zone.heightCells / 2;
 }
 
-function threatChanged(left: KnownThreatMemory, right: KnownThreatMemory): boolean {
-  return JSON.stringify(threatRevisionFingerprint(left)) !== JSON.stringify(threatRevisionFingerprint(right));
+function tacticalKnowledgeFingerprint(threats: readonly KnownThreatMemory[]): string {
+  return threats
+    .map(threatRevisionFingerprint)
+    .sort((left, right) => String(left.id).localeCompare(String(right.id)))
+    .map((value) => JSON.stringify(value))
+    .join('|');
 }
 
 function threatRevisionFingerprint(memory: KnownThreatMemory): Record<string, unknown> {
@@ -237,24 +416,51 @@ function threatRevisionFingerprint(memory: KnownThreatMemory): Record<string, un
     id: memory.id,
     labelRu: memory.labelRu,
     mode: memory.mode,
-    x: Math.round(memory.x * 10) / 10,
-    y: Math.round(memory.y * 10) / 10,
-    radiusCells: memory.radiusCells,
-    widthCells: memory.widthCells,
-    heightCells: memory.heightCells,
-    rotationDegrees: memory.rotationDegrees,
-    strength: memory.strength,
-    suppression: memory.suppression,
-    stressPerSecond: memory.stressPerSecond,
-    directionDegrees: memory.directionDegrees,
-    arcDegrees: memory.arcDegrees,
-    rangeCells: memory.rangeCells,
-    minRangeCells: memory.minRangeCells,
-    falloffPercent: memory.falloffPercent,
-    confidence: Math.round(memory.confidence),
-    uncertaintyCells: Math.round(memory.uncertaintyCells * 10) / 10,
+    x: quantize(memory.x, 0.25),
+    y: quantize(memory.y, 0.25),
+    radiusCells: quantize(memory.radiusCells, 0.5),
+    widthCells: quantize(memory.widthCells, 0.5),
+    heightCells: quantize(memory.heightCells, 0.5),
+    rotationDegrees: quantize(memory.rotationDegrees, 5),
+    strength: quantize(memory.strength, 5),
+    suppression: quantize(memory.suppression, 5),
+    stressPerSecond: quantize(memory.stressPerSecond, 2),
+    directionDegrees: quantize(memory.directionDegrees, 10),
+    arcDegrees: quantize(memory.arcDegrees, 10),
+    rangeCells: quantize(memory.rangeCells, 1),
+    minRangeCells: quantize(memory.minRangeCells, 1),
+    falloffPercent: quantize(memory.falloffPercent, 5),
+    confidence: quantize(memory.confidence, 10),
+    uncertaintyCells: quantize(memory.uncertaintyCells, 1),
     source: memory.source,
+    visibleNow: memory.visibleNow,
   };
+}
+
+function sourceForContact(contact: PerceptionContactMemory): KnownThreatMemory['source'] {
+  if (contact.source === 'visual') return 'seen';
+  if (contact.source === 'sound') return 'heard';
+  if (contact.source === 'fire_pressure') return 'fire_pressure';
+  return 'reported';
+}
+
+function confidenceCapForStage(stage: PerceptionContactMemory['stage']): number {
+  if (stage === 'cue' || stage === 'suspicion') return 49;
+  if (stage === 'contact') return 69;
+  return 100;
+}
+
+function bearingFromObserver(observer: UnitModel, threat: KnownThreatMemory): number {
+  return normalizeDegrees(Math.atan2(threat.y - observer.position.y, threat.x - observer.position.x) * 180 / Math.PI);
+}
+
+function blendDirections(left: number, leftWeight: number, right: number, rightWeight: number): number {
+  const leftRadians = left * Math.PI / 180;
+  const rightRadians = right * Math.PI / 180;
+  return normalizeDegrees(Math.atan2(
+    Math.sin(leftRadians) * leftWeight + Math.sin(rightRadians) * rightWeight,
+    Math.cos(leftRadians) * leftWeight + Math.cos(rightRadians) * rightWeight,
+  ) * 180 / Math.PI);
 }
 
 function metersToCells(state: SimulationState, meters: number): number {
@@ -278,6 +484,10 @@ function angularDifference(left: number, right: number): number {
 function normalizeDegrees(value: number): number {
   const result = value % 360;
   return result < 0 ? result + 360 : result;
+}
+
+function quantize(value: number, bucket: number): number {
+  return Math.round(value / bucket) * bucket;
 }
 
 function normalizeScale(value: number): number {
