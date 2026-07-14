@@ -4,6 +4,7 @@ import { clampPercent, POSTURE_MOVE_MULTIPLIER } from '../behavior/BehaviorModel
 import { getCombatMovementMultiplier, getCombatRuntime, isUnitCombatCapable } from '../combat/CombatDamage';
 import { tickAutomaticCombatEngagements } from '../combat/CombatEngagement';
 import { getFireAction, tickAllFireActions } from '../combat/FireAction';
+import { getCombatSuppressionSnapshot } from '../combat/CombatSuppression';
 import type { GridPosition } from '../geometry';
 import { syncSoldierThreatMemory } from '../knowledge/SoldierThreatMemory';
 import { clampGridPositionToMap } from '../map/MapModel';
@@ -52,23 +53,33 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
 
 function updateMetrics(unit: UnitModel, state: SimulationState, deltaSeconds: number): void {
   const report = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
+  const combatPressure = getCombatSuppressionSnapshot(unit, state.simulationTimeSeconds);
 
   unit.behaviorRuntime.rawDanger = report.danger;
-  unit.behaviorRuntime.danger = report.danger;
-  unit.behaviorRuntime.suppression = report.suppression;
+  unit.behaviorRuntime.danger = clampPercent(report.danger + combatPressure.suppression * 0.45);
+  unit.behaviorRuntime.suppression = combinePercent(report.suppression, combatPressure.suppression);
 
-  if (report.strongest) {
+  const strongestId = report.strongest?.zone.id ?? report.strongestKnown?.threat.id ?? null;
+  if (strongestId) {
     unit.behaviorRuntime.stress = clampPercent(
       unit.behaviorRuntime.stress + report.stressPerSecond * unit.behaviorSettings.fear * deltaSeconds,
     );
-    unit.behaviorRuntime.lastEvent = `pressure:${report.strongest.zone.id}`;
-    unit.behaviorRuntime.reason = `under threat from ${report.strongest.zone.id}`;
+    unit.behaviorRuntime.lastEvent = report.strongest
+      ? `pressure:${strongestId}`
+      : `known_threat:${strongestId}`;
+    unit.behaviorRuntime.reason = `under threat from ${strongestId}`;
     return;
   }
 
+  const recoveryFactor = combatPressure.suppression > 0 ? 0.25 : 1;
   unit.behaviorRuntime.stress = clampPercent(
-    unit.behaviorRuntime.stress - unit.behaviorSettings.stressRecoveryPerSecond * deltaSeconds,
+    unit.behaviorRuntime.stress - unit.behaviorSettings.stressRecoveryPerSecond * recoveryFactor * deltaSeconds,
   );
+  if (combatPressure.suppression > 0) {
+    unit.behaviorRuntime.lastEvent = 'combat_suppression_active';
+    unit.behaviorRuntime.reason = 'Боец ещё подавлен недавним огнём.';
+    return;
+  }
   if (!getFireAction(unit) && isUnitCombatCapable(unit)) {
     unit.behaviorRuntime.reason = unit.order ? 'moving outside pressure zone' : 'outside pressure zone';
   }
@@ -235,6 +246,12 @@ function setState(unit: UnitModel, nextState: UnitModel['behaviorRuntime']['stat
   unit.behaviorRuntime.previousState = unit.behaviorRuntime.state;
   unit.behaviorRuntime.state = nextState;
   unit.behaviorRuntime.stateChangedBecause = reason;
+}
+
+function combinePercent(left: number, right: number): number {
+  const left01 = clampPercent(left) / 100;
+  const right01 = clampPercent(right) / 100;
+  return clampPercent((1 - (1 - left01) * (1 - right01)) * 100);
 }
 
 function getDistance(a: GridPosition, b: GridPosition): number {
