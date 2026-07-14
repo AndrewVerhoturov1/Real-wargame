@@ -1,0 +1,68 @@
+name: Tactical Query Bootstrap
+
+on:
+  push:
+    branches:
+      - feat/tactical-query-system-temp-2026-07-14
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-integrate:
+    if: ${{ !contains(github.event.head_commit.message, '[tqs-integrated]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/tactical-query-system-temp-2026-07-14
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Confirm focused test is RED before runner integration
+        shell: bash
+        run: |
+          set +e
+          npm run tactical-query:smoke > tactical-query-red.log 2>&1
+          status=$?
+          set -e
+          cat tactical-query-red.log
+          if [ "$status" -eq 0 ]; then
+            echo "Focused tactical query test unexpectedly passed before runner integration."
+            exit 1
+          fi
+          grep -E "tacticalQueries|CreateCoverCandidates|undefined|not registered|Cannot read" tactical-query-red.log
+      - name: Apply Graph v2 integration
+        run: node scripts/tactical_query_apply_patch.mjs
+      - name: Tactical query core
+        run: npm run tactical-query:smoke
+      - name: Tactical query diagnostics
+        run: npm run tactical-query-ui:smoke
+      - name: Graph v2 contracts
+        run: npm run graph-v2:smoke
+      - name: AI runtime regression
+        run: npm run runtime:smoke
+      - name: Pathfinding regression
+        run: npm run pathfinding:smoke
+      - name: Directional terrain regression
+        run: npm run directional-terrain:smoke
+      - name: Graph validation
+        run: npm run validate:ai-graph
+      - name: Documentation sync
+        run: npm run docs:sync
+      - name: Production build
+        run: npm run build
+      - name: Commit verified integration to the temporary branch
+        shell: bash
+        run: |
+          rm scripts/tactical_query_apply_patch.mjs
+          rm .github/workflows/tactical-query-bootstrap.yml
+          git config user.name "Tactical Query CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: add explicit tactical query cover pipeline [tqs-integrated]"
+          git push origin HEAD:feat/tactical-query-system-temp-2026-07-14
