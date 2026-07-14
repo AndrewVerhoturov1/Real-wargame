@@ -1,4 +1,5 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
+import { evaluateCoverBetween } from '../cover/CoverEvaluation';
 import { distance, type GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
 import type { SimulationState } from '../simulation/SimulationState';
@@ -25,6 +26,8 @@ export interface SoldierAwarenessCell {
   danger: number;
   suppression: number;
   expectedProtection: number;
+  expectedProtectionAgainstThreat: number;
+  protectedAgainstThreatId: string | null;
   coverReliability: number;
   concealment: number;
   uncertainty: number;
@@ -46,6 +49,8 @@ export interface SoldierSafePosition {
   score: number;
   danger: number;
   expectedProtection: number;
+  expectedProtectionAgainstThreat: number;
+  protectedAgainstThreatId: string | null;
   concealment: number;
   distanceCells: number;
   sourceRu: string;
@@ -152,6 +157,7 @@ function buildAwarenessField(
   for (let y = 0; y < state.map.height; y += 1) {
     for (let x = 0; x < state.map.width; x += 1) {
       cells[y * state.map.width + x] = evaluateAwarenessFieldCell(
+        state.map,
         unit,
         { x: x + 0.5, y: y + 0.5 },
         staticField,
@@ -199,6 +205,8 @@ function buildBestSafePositions(
         score,
         danger: cell.danger,
         expectedProtection: cell.expectedProtection,
+        expectedProtectionAgainstThreat: cell.expectedProtectionAgainstThreat,
+        protectedAgainstThreatId: cell.protectedAgainstThreatId,
         concealment: cell.concealment,
         distanceCells,
         sourceRu: cell.sourceRu,
@@ -231,7 +239,7 @@ export function evaluateRouteDanger(
   for (let index = 0; index <= samples; index += 1) {
     const t = index / samples;
     const point = { x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t };
-    total += evaluateAwarenessFieldCell(unit, point, staticField, directionalField).danger;
+    total += evaluateAwarenessFieldCell(state.map, unit, point, staticField, directionalField).danger;
   }
   return Math.round(total / (samples + 1));
 }
@@ -254,6 +262,7 @@ function evaluateRouteDangerFromField(
 }
 
 function evaluateAwarenessFieldCell(
+  map: TacticalMap,
   unit: UnitModel,
   position: GridPosition,
   staticField: AwarenessStaticField,
@@ -276,6 +285,8 @@ function evaluateAwarenessFieldCell(
   let confidenceTotal = 0;
   let confidenceWeight = 0;
   let uncertainty = 0;
+  let expectedProtectionAgainstThreat = 0;
+  let protectedAgainstThreatId: string | null = null;
 
   for (const threat of unit.tacticalKnowledge.threats) {
     const factor = threatFactorAtPosition(position, threat, staticField.metersPerCell);
@@ -294,10 +305,22 @@ function evaluateAwarenessFieldCell(
       position.y,
       bearingToThreat,
     );
-    const applicableTerrainProtection = threat.mode === 'directional_fire'
-      ? terrainProtection
-      : terrainProtection * 0.35;
-    const threatProtection = combinePercent(local.expectedProtection, applicableTerrainProtection);
+    const threatProtection = threat.mode === 'directional_fire'
+      ? combinePercent(
+          evaluateCoverBetween(
+            map,
+            { x: threat.x, y: threat.y },
+            position,
+            unit.behaviorRuntime.posture,
+            { includeRelief: false },
+          ).protection,
+          terrainProtection,
+        )
+      : combinePercent(local.expectedProtection, terrainProtection * 0.35);
+    if (threatProtection > expectedProtectionAgainstThreat) {
+      expectedProtectionAgainstThreat = threatProtection;
+      protectedAgainstThreatId = threat.id;
+    }
     const uncovered = 1 - threatProtection / 100;
     const exposureFactor = threat.mode === 'directional_fire'
       ? 0.72 + terrainExposure / 100 * 0.28
@@ -336,6 +359,8 @@ function evaluateAwarenessFieldCell(
     danger,
     suppression,
     expectedProtection,
+    expectedProtectionAgainstThreat,
+    protectedAgainstThreatId,
     coverReliability,
     concealment,
     uncertainty,
@@ -497,6 +522,8 @@ function emptyAwarenessCell(position: GridPosition): SoldierAwarenessCell {
     danger: 0,
     suppression: 0,
     expectedProtection: 0,
+    expectedProtectionAgainstThreat: 0,
+    protectedAgainstThreatId: null,
     coverReliability: 0,
     concealment: 0,
     uncertainty: 0,

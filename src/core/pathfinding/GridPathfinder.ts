@@ -192,7 +192,7 @@ export function findGridPath(
   const selectedDistanceCells = pathDistanceCells(selectedSearch.cells);
   const selectedDetourRatio = baselineDistanceCells > 0 ? selectedDistanceCells / baselineDistanceCells : 1;
   const costBreakdown = calculatePathCostBreakdown(selectedSearch.cells, fields);
-  const totalCost = sumBreakdown(costBreakdown);
+  const totalCost = evaluateGridPathCost(selectedSearch.cells, fields);
   if (profile.maximumRouteCost !== null && totalCost > profile.maximumRouteCost) {
     return failure(
       'no_route',
@@ -341,10 +341,8 @@ function runAStar(
 
       const nextIndex = indexOf(grid, nextX, nextY);
       if (closed[nextIndex]) continue;
-      const currentCost = fields.totalCost[current.index];
-      const nextCost = fields.totalCost[nextIndex];
-      if (!Number.isFinite(currentCost) || !Number.isFinite(nextCost)) continue;
-      const stepCost = stepLength * Math.max(MINIMUM_STEP_COST, (currentCost + nextCost) / 2);
+      const stepCost = evaluateGridPathStepCost(fields, current.index, nextIndex, stepLength);
+      if (!Number.isFinite(stepCost)) continue;
       const tentativeG = gScore[current.index] + stepCost;
       if (tentativeG + 1e-9 >= gScore[nextIndex]) continue;
 
@@ -362,6 +360,56 @@ function runAStar(
     reason: 'No passable route connects the start and goal.',
     reasonRu: 'Между стартом и целью нет проходимого маршрута.',
   };
+}
+
+export function evaluateGridPathCost(
+  cells: ReadonlyArray<{ x: number; y: number }>,
+  fields: RouteCostFields,
+): number {
+  if (cells.length <= 1) return 0;
+  let totalCost = 0;
+
+  for (let index = 1; index < cells.length; index += 1) {
+    const previous = cells[index - 1];
+    const current = cells[index];
+    if (!isRouteCellInside(fields, previous) || !isRouteCellInside(fields, current)) {
+      return Number.POSITIVE_INFINITY;
+    }
+    const previousIndex = previous.y * fields.width + previous.x;
+    const currentIndex = current.y * fields.width + current.x;
+    const stepLength = previous.x !== current.x && previous.y !== current.y ? DIAGONAL_COST : CARDINAL_COST;
+    const stepCost = evaluateGridPathStepCost(fields, previousIndex, currentIndex, stepLength);
+    if (!Number.isFinite(stepCost)) return Number.POSITIVE_INFINITY;
+    totalCost += stepCost;
+  }
+
+  return totalCost;
+}
+
+function evaluateGridPathStepCost(
+  fields: RouteCostFields,
+  previousIndex: number,
+  currentIndex: number,
+  stepLength: number,
+): number {
+  const previousCost = fields.totalCost[previousIndex];
+  const currentCost = fields.totalCost[currentIndex];
+  if (!Number.isFinite(previousCost) || !Number.isFinite(currentCost)) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return stepLength * Math.max(MINIMUM_STEP_COST, (previousCost + currentCost) / 2);
+}
+
+function isRouteCellInside(
+  fields: RouteCostFields,
+  cell: { x: number; y: number },
+): boolean {
+  return Number.isInteger(cell.x)
+    && Number.isInteger(cell.y)
+    && cell.x >= 0
+    && cell.y >= 0
+    && cell.x < fields.width
+    && cell.y < fields.height;
 }
 
 function calculatePathCostBreakdown(
@@ -405,17 +453,6 @@ function addAverage(
   multiplier: number,
 ): void {
   (target as Record<keyof GridPathCostBreakdown, number>)[key] += multiplier * (values[leftIndex] + values[rightIndex]) / 2;
-}
-
-function sumBreakdown(value: GridPathCostBreakdown): number {
-  return Math.max(0, value.terrainCost
-    + value.slopeCost
-    + value.dangerCost
-    + value.exposureCost
-    + value.directionalTerrainCost
-    + value.coverAdjustment
-    + value.enemyDistanceCost
-    + value.territoryCost);
 }
 
 function roundBreakdown(value: GridPathCostBreakdown): GridPathCostBreakdown {

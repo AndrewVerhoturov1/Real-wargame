@@ -27,6 +27,12 @@ export interface SmallArmsCoverResult {
   contributions: SmallArmsCoverContribution[];
 }
 
+export interface SmallArmsCoverOptions {
+  readonly includeObjects?: boolean;
+  readonly includeForest?: boolean;
+  readonly includeRelief?: boolean;
+}
+
 const ELEVATION_METERS_PER_LEVEL = 2;
 const POSTURE_HEIGHT_METERS: Record<UnitPosture, number> = {
   standing: 1.65,
@@ -39,11 +45,18 @@ export function evaluateSmallArmsCover(
   threatPosition: GridPosition,
   targetPosition: GridPosition,
   posture: UnitPosture,
+  options: SmallArmsCoverOptions = {},
 ): SmallArmsCoverResult {
   const contributions = [
-    ...evaluateObjectCover(map, threatPosition, targetPosition, posture),
-    evaluateForestCover(map, threatPosition, targetPosition),
-    evaluateReliefCover(map, threatPosition, targetPosition, posture),
+    ...(options.includeObjects === false
+      ? []
+      : evaluateObjectCover(map, threatPosition, targetPosition, posture)),
+    options.includeForest === false
+      ? null
+      : evaluateForestCover(map, threatPosition, targetPosition),
+    options.includeRelief === false
+      ? null
+      : evaluateReliefCover(map, threatPosition, targetPosition, posture),
   ].filter((item): item is SmallArmsCoverContribution => item !== null && item.expectedProtection > 0);
 
   const strongest = [...contributions].sort((left, right) => right.expectedProtection - left.expectedProtection)[0] ?? null;
