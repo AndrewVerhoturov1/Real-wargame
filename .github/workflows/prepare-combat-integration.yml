@@ -10,12 +10,27 @@ on:
 
 permissions:
   contents: write
+  statuses: write
 
 jobs:
   integrate:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      - name: Publish pending status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'pending',
+              context: 'combat-integration-preparation',
+              description: 'Preparing combat work on the latest preview base',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
       - name: Checkout runner branch
         uses: actions/checkout@v4
         with:
@@ -23,5 +38,40 @@ jobs:
           fetch-depth: 0
 
       - name: Run prepared integration
+        id: integration
+        continue-on-error: true
         shell: bash
-        run: bash scripts/prepare_combat_integration.sh
+        run: |
+          set -o pipefail
+          bash scripts/prepare_combat_integration.sh 2>&1 | tee prepare-combat-integration.log
+
+      - name: Upload integration log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: prepare-combat-integration-log
+          path: prepare-combat-integration.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Publish final status
+        if: ${{ always() }}
+        uses: actions/github-script@v7
+        env:
+          INTEGRATION_OUTCOME: ${{ steps.integration.outcome }}
+        with:
+          script: |
+            const success = process.env.INTEGRATION_OUTCOME === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: success ? 'success' : 'failure',
+              context: 'combat-integration-preparation',
+              description: `Combat integration preparation: ${process.env.INTEGRATION_OUTCOME}`,
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - name: Require successful integration
+        if: ${{ steps.integration.outcome != 'success' }}
+        run: exit 1
