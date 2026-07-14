@@ -1,6 +1,6 @@
 # Real-Wargame Agent Contract
 
-This file is the canonical short contract for Codex, OpenCode and GitHub-aware web chats.
+This file is the canonical short contract for GitHub-aware web chats, ordinary ChatGPT collaboration, Codex and OpenCode.
 
 ## 1. Project facts
 
@@ -44,15 +44,28 @@ docs/ai/TASK_ROUTER.md
 
 Do not read every skill, journal, plan, report or historical handoff by default.
 
+### Parallel ordinary ChatGPT chats
+
+When the user explicitly wants to coordinate several ordinary ChatGPT chats without Codex, use:
+
+```text
+docs/orchestration/CHAT_WORKFLOW.md
+docs/orchestration/ORCHESTRATOR_PROMPT.md
+docs/orchestration/WORKER_PROMPT.md
+docs/orchestration/INTEGRATOR_PROMPT.md
+```
+
+This chat-only route does not use Q/R/X/W or other letter modes. Workers are free to inspect and change any relevant part of the project in their own result space. During a parallel campaign, one integrator assembles the selected result into the shared `real-wargame-preview` state.
+
 ## 3. Branch policy
 
-Default completed work goes to:
+For a single bounded GitHub-aware implementation chat, default completed work goes to:
 
 ```text
 real-wargame-preview
 ```
 
-Preferred delivery for a GitHub-aware external chat:
+Preferred delivery for that single-chat case:
 
 ```text
 direct commit/push to real-wargame-preview
@@ -66,6 +79,8 @@ temporary task branch
 → transfer result
 → close temporary branch
 ```
+
+For an active parallel chat-only campaign, worker results may be delivered as complete files, patches or isolated branches/PRs. Workers do not independently combine their results in the shared preview; the designated integrator performs the final assembly and delivery.
 
 If the user explicitly requests an isolated branch and says not to transfer yet, keep all work on that branch and report `transfer_path: isolated branch only`.
 
@@ -208,9 +223,15 @@ The canonical detailed policy is:
 docs/workflow/VISUAL_QA_APPROVAL_POLICY.md
 ```
 
-## 9. External-work references
+## 9. Specialized and legacy collaboration references
 
-Detailed contracts remain here when the task specifically concerns the collaboration system:
+The default multi-chat route is:
+
+```text
+docs/orchestration/CHAT_WORKFLOW.md
+```
+
+The following documents remain available only when a task explicitly concerns Codex, the older external-worker process or its compatibility:
 
 ```text
 docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md
@@ -219,7 +240,7 @@ docs/ai/R_INIT_WORKFLOW.md
 docs/ai/PR_REVIEW_CHECKLIST.md
 ```
 
-R is the manual no-GitHub ZIP route. Q is the GitHub-aware preview-delivery route. X/r-init is the human preview and GO/NO-GO route. Do not mix their output contracts.
+R, Q, X/r-init and related letter modes are not part of ordinary chat-only orchestration. Do not route a normal multi-chat request through them unless the user explicitly asks for the legacy workflow.
 
 ## 10. Required report
 
@@ -228,7 +249,7 @@ Every implementation report includes:
 ```text
 branch: ...
 commit/pr: ...
-transfer_path: direct push / PR fallback / isolated branch only / not changed
+transfer_path: direct push / PR fallback / isolated branch only / file package / patch / not changed
 changed_files: ...
 checks_run: ...
 visual_qa_prepared: yes / no / not applicable
