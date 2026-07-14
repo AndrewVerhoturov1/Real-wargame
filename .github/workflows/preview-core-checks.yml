@@ -66,11 +66,9 @@ jobs:
             npm run build
           } 2>&1 | tee graph-ownership-refactor.log
 
-      - name: Commit verified result directly to preview
+      - name: Commit verified code directly to preview
         if: steps.verify.outcome == 'success'
         run: |
-          git checkout HEAD^ -- .github/workflows/preview-core-checks.yml
-          rm -f .github/workflows/graph-owned-state-plan-refactor-temp.yml
           rm -f scripts/refactor_graph_ownership.py
           rm -f graph-ownership-refactor.log graph-ownership-refactor-failure.log
           git config user.name "github-actions[bot]"
