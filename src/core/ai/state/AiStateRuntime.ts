@@ -141,6 +141,46 @@ export function updateAiStateRuntime(
   };
 }
 
+export function setAiStateFromGraph(
+  current: AiStateRuntimeSnapshotV1,
+  targetStateId: AiStateId,
+  nowMs: number,
+  sourceNodeId: string,
+  reason: string,
+  reasonRu: string,
+  machine: AiStateMachineDefinition = DEFAULT_AI_STATE_MACHINE,
+): UpdateAiStateRuntimeResult {
+  const atMs = finiteNonNegative(nowMs, current.enteredAtMs);
+  if (current.activeStateId === targetStateId) return { runtime: cloneAiStateRuntime(current) };
+  const previousPath = current.activePath;
+  const nextPath = getAiStatePath(machine, targetStateId);
+  const sharedPrefixLength = commonPrefixLength(previousPath, nextPath);
+  const transition: AiStateTransitionRecord = {
+    transitionId: `graph:${sourceNodeId}`,
+    from: current.activeStateId,
+    to: targetStateId,
+    trigger: 'manual',
+    reason,
+    reasonRu,
+    atMs,
+    exitedStateIds: previousPath.slice(sharedPrefixLength).reverse(),
+    enteredStateIds: nextPath.slice(sharedPrefixLength),
+  };
+  return {
+    transition,
+    runtime: {
+      version: 1,
+      activeStateId: targetStateId,
+      activePath: nextPath,
+      previousStateId: current.activeStateId,
+      enteredAtMs: atMs,
+      suppressionBelowSinceMs: undefined,
+      lastTransition: transition,
+      trace: [...current.trace, transition].slice(-TRACE_LIMIT),
+    },
+  };
+}
+
 export function normalizeAiStateRuntime(
   value: unknown,
   machine: AiStateMachineDefinition = DEFAULT_AI_STATE_MACHINE,

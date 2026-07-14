@@ -57,6 +57,15 @@ export type AiGraphEffect =
       readonly type: 'write_memory';
       readonly key: string;
       readonly value: AiBlackboardValue;
+    }
+  | {
+      readonly type: 'set_ai_state';
+      readonly stateId: 'Idle' | 'FollowingOrder' | 'Contact' | 'Suppressed';
+      readonly sourceNodeId: string;
+      readonly sourceNodeName: string;
+      readonly sourceNodeNameRu?: string;
+      readonly reason: string;
+      readonly reasonRu?: string;
     };
 
 export interface AiGraphTraceItem {
@@ -382,7 +391,15 @@ function executeNodeOwnLogic(context: ExecutionContext, node: AiNode): boolean {
     case 'DecisionInertia':
     case 'RandomChance':
     case 'ForbidAction':
+    case 'RunPlan':
       return true;
+    case 'AiStateCheck':
+      return readString(context.blackboard.ai_state_id, 'Idle') === normalizeAiStateId(parameters.stateId);
+    case 'ActivePlanCheck': {
+      const expected = readString(parameters.planKind, 'any');
+      const actual = readString(context.blackboard.ai_active_plan_kind, 'none');
+      return expected === 'any' ? actual !== 'none' : actual === expected;
+    }
     case 'FlagCheck':
       return readBoolean(context.blackboard[readString(parameters.flagKey, '')]) === readBoolean(parameters.expected, true);
     case 'BlackboardValueAbove':
@@ -414,6 +431,19 @@ function executeNodeOwnLogic(context: ExecutionContext, node: AiNode): boolean {
       const toKey = readString(parameters.toKey, '');
       if (!fromKey || !toKey) return false;
       writeMemory(context, toKey, normalizeBlackboardValue(context.blackboard[fromKey] ?? null));
+      return true;
+    }
+    case 'SetAiState': {
+      const stateId = normalizeAiStateId(parameters.stateId);
+      context.effects.push({
+        type: 'set_ai_state',
+        stateId,
+        sourceNodeId: node.id,
+        sourceNodeName: nodeName(node),
+        sourceNodeNameRu: nodeNameRu(node),
+        reason: readString(parameters.reason, `State ${stateId} selected by graph.`),
+        reasonRu: readOptionalString(parameters.reasonRu) ?? `Состояние «${stateId}» выбрано графом.`,
+      });
       return true;
     }
     case 'SetPosture':
@@ -790,4 +820,9 @@ function deterministicPercent(seed: string): number {
     hash = Math.imul(hash, 16777619);
   }
   return Math.abs(hash) % 101;
+}
+
+
+function normalizeAiStateId(value: unknown): 'Idle' | 'FollowingOrder' | 'Contact' | 'Suppressed' {
+  return value === 'FollowingOrder' || value === 'Contact' || value === 'Suppressed' ? value : 'Idle';
 }

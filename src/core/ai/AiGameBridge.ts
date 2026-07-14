@@ -39,13 +39,10 @@ import {
 } from './runtime/AiRuntimeSession';
 import { readAiGraphRuntimeReloadEffect } from './runtime/actions/ReloadAction';
 import { publishSimulationAiEvents } from './events/SimulationAiEvents';
-import { isReactiveExecutionState } from './events/AiReactiveRuntime';
 import { updateUnitPlanFromRuntime } from './UnitPlan';
-import { updateAiStateRuntime } from './state/AiStateRuntime';
-import { cancelAiPlan, applyAiPlanStepExecution, evaluateAiPlanAbort, evaluateAiPlanReplan, startCurrentAiPlanStep } from './state/AiPlanRuntime';
-import { buildAiPlanConditionValues, buildAiPlanStepGraph, deriveAiStateTriggers, isAiPlanAllowedInState, readAiExecutionOwnerToken, selectAiPlanForState } from './state/AiStatePlanPipeline';
+import { setAiStateFromGraph } from './state/AiStateRuntime';
+import { readAiExecutionOwnerToken } from './state/AiStatePlanPipeline';
 import { DEFAULT_AI_STATE_MACHINE } from './state/AiStateMachine';
-import type { AiPlan } from './state/AiPlan';
 import bundledGraph from '../../data/ai/soldier_default_survival_graph.json';
 
 const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
@@ -112,6 +109,7 @@ export function tickAiGameBridge(
 
   const graph = readRuntimeGraph();
   let session = ensureRuntimeSession(unit, graph.id);
+  session = clearLegacyAutomaticStatePlan(unit, session);
   if (options.applyEffects) {
     publishSimulationAiEvents(unit, session.simulationTimeMs);
     session = unit.behaviorRuntime.aiRuntimeSession ?? session;
@@ -120,165 +118,25 @@ export function tickAiGameBridge(
   const simulationNowMs = options.applyEffects && !observerWakeOnly
     ? session.simulationTimeMs + AI_GRAPH_TICK_INTERVAL_MS
     : session.simulationTimeMs;
-  const blackboard = buildBlackboardForUnit(state, unit, session.blackboardMemory);
-  const stateUpdate = updateAiStateRuntime(session.stateRuntime, {
+  const previousPlan = readActiveRunPlan(graph, session.executionState);
+  const blackboard = buildGraphControlBlackboard(state, unit, session, graph);
+  const result = runAiGraphRuntime({
+    graph,
+    unitId: unit.id,
+    blackboard,
+    cooldowns: session.cooldowns,
     nowMs: simulationNowMs,
-    triggers: deriveAiStateTriggers(session.stateRuntime.activeStateId, blackboard, session.eventQueue.events),
-    values: blackboard,
-    suppression: readNumber(blackboard.suppression, unit.behaviorRuntime.suppression),
+    tacticalHost: createTacticalHost(state, unit),
+    executionState: session.executionState,
+    cancel: options.cancel,
+    events: session.eventQueue.events,
   });
-  session = { ...session, stateRuntime: stateUpdate.runtime };
-
-  let activePlan = session.activePlan;
-  let cancellationResult: AiGraphRuntimeResult | null = null;
-  let cancellation: { reason: string; reasonRu: string; replanning: boolean } | null = null;
-  if (activePlan) {
-    const conditionValues = buildAiPlanConditionValues(blackboard, activePlan);
-    if (options.cancel) {
-      cancellation = {
-        reason: options.cancel.reason,
-        reasonRu: options.cancel.reasonRu ?? options.cancel.reason,
-        replanning: false,
-      };
-    } else if (stateUpdate.transition && !isAiPlanAllowedInState(activePlan, stateUpdate.runtime.activeStateId)) {
-      cancellation = {
-        reason: 'The state transition invalidated the active plan.',
-        reasonRu: `Переход в состояние «${DEFAULT_AI_STATE_MACHINE.states[stateUpdate.runtime.activeStateId].labelRu}» отменил прежний план.`,
-        replanning: false,
-      };
-    } else {
-      const abort = evaluateAiPlanAbort(activePlan, conditionValues);
-      const replan = activePlan.currentStepIndex === 0 ? evaluateAiPlanReplan(activePlan, conditionValues) : { matched: false };
-      if (abort.matched) cancellation = { reason: abort.reason ?? 'Plan abort condition matched.', reasonRu: abort.reasonRu ?? 'Сработало условие отмены плана.', replanning: false };
-      else if (replan.matched) cancellation = { reason: replan.reason ?? 'Plan requires replanning.', reasonRu: replan.reasonRu ?? 'План требует перестроения.', replanning: true };
-    }
-  }
-
-  if (activePlan && cancellation) {
-    if (session.executionState) {
-      const activeStepGraph = buildAiPlanStepGraph(activePlan);
-      cancellationResult = runAiGraphRuntime({
-        graph: activeStepGraph ? { ...activeStepGraph, id: graph.id } : graph,
-        unitId: unit.id,
-        blackboard,
-        cooldowns: session.cooldowns,
-        nowMs: simulationNowMs,
-        tacticalHost: createTacticalHost(state, unit),
-        executionState: session.executionState,
-        cancel: { reason: cancellation.reason, reasonRu: cancellation.reasonRu },
-        events: session.eventQueue.events,
-      });
-      session = applyRuntimeResultToSession(session, cancellationResult, simulationNowMs);
-    }
-    const cancelled = cancelAiPlan(activePlan, cancellation.reason, cancellation.reasonRu, cancellation.replanning ? 'replanning' : 'cancelled');
-    session = {
-      ...session,
-      stateRuntime: stateUpdate.runtime,
-      activePlan: undefined,
-      planHistory: appendPlanHistory(session.planHistory, cancelled.plan),
-    };
-    activePlan = undefined;
-  }
-
-  if (!activePlan && !options.cancel) {
-    const previousPlan = session.planHistory[session.planHistory.length - 1];
-    const selection = selectAiPlanForState({
-      unitId: unit.id,
-      stateId: session.stateRuntime.activeStateId,
-      nowMs: simulationNowMs,
-      sequence: session.planSequence + 1,
-      blackboard,
-      replacesPlanId: previousPlan?.status === 'replanning' ? previousPlan.id : undefined,
-    });
-    if (selection.plan) {
-      activePlan = selection.plan;
-      session = { ...session, activePlan, planSequence: session.planSequence + 1 };
-    }
-  }
-
-  let result: AiGraphRuntimeResult;
-  if (options.cancel && !activePlan) {
-    result = cancellationResult ?? runAiGraphRuntime({
-      graph,
-      unitId: unit.id,
-      blackboard,
-      cooldowns: session.cooldowns,
-      nowMs: simulationNowMs,
-      tacticalHost: createTacticalHost(state, unit),
-      executionState: session.executionState,
-      cancel: options.cancel,
-      events: session.eventQueue.events,
-    });
-  } else if (activePlan) {
-    const started = startCurrentAiPlanStep(activePlan);
-    activePlan = started.plan;
-    const planStepGraph = buildAiPlanStepGraph(activePlan);
-    if (!planStepGraph) throw new Error('Active AI plan has no executable current step.');
-    const planResult = runAiGraphRuntime({
-      graph: { ...planStepGraph, id: graph.id },
-      unitId: unit.id,
-      blackboard,
-      cooldowns: session.cooldowns,
-      nowMs: simulationNowMs,
-      tacticalHost: createTacticalHost(state, unit),
-      executionState: session.executionState,
-      events: session.eventQueue.events,
-    });
-    const planUpdate = applyAiPlanStepExecution(
-      activePlan,
-      planResult.status,
-      planResult.explanation,
-      planResult.explanationRu,
-    );
-    let nextActivePlan: AiPlan | undefined = planUpdate.plan;
-    let nextPlanHistory = session.planHistory;
-    let nextPlanSequence = session.planSequence;
-    if (planUpdate.plan.status === 'replanning') {
-      nextPlanHistory = appendPlanHistory(nextPlanHistory, planUpdate.plan);
-      const replacement = selectAiPlanForState({
-        unitId: unit.id,
-        stateId: session.stateRuntime.activeStateId,
-        nowMs: simulationNowMs,
-        sequence: nextPlanSequence + 1,
-        blackboard,
-        replacesPlanId: planUpdate.plan.id,
-      });
-      nextActivePlan = replacement.plan;
-      if (replacement.plan) nextPlanSequence += 1;
-    } else if (planUpdate.terminal) {
-      nextPlanHistory = appendPlanHistory(nextPlanHistory, planUpdate.plan);
-      nextActivePlan = undefined;
-    }
-    session = {
-      ...applyRuntimeResultToSession(session, planResult, simulationNowMs),
-      stateRuntime: stateUpdate.runtime,
-      activePlan: nextActivePlan,
-      planHistory: nextPlanHistory,
-      planSequence: nextPlanSequence,
-    };
-    if (nextActivePlan && session.status !== 'active') session = { ...session, status: 'active', lastTerminal: undefined };
-    result = cancellationResult ? mergeRuntimeResults(cancellationResult, planResult) : planResult;
-  } else {
-    const runtimeCancel = isReactiveExecutionState(session.executionState) ? undefined : options.cancel;
-    result = runAiGraphRuntime({
-      graph,
-      unitId: unit.id,
-      blackboard,
-      cooldowns: session.cooldowns,
-      nowMs: simulationNowMs,
-      tacticalHost: createTacticalHost(state, unit),
-      executionState: session.executionState,
-      cancel: runtimeCancel,
-      events: session.eventQueue.events,
-    });
-    session = {
-      ...applyRuntimeResultToSession(session, result, simulationNowMs),
-      stateRuntime: stateUpdate.runtime,
-      activePlan: undefined,
-    };
-  }
+  session = applyRuntimeResultToSession(session, result, simulationNowMs);
+  session = applyGraphStateEffects(session, result.effects, simulationNowMs);
+  session = updateGraphPlanMemory(session, graph, result, previousPlan);
 
   publishRuntimeDebugTrace(state, unit, graph, result, nowMs, simulationNowMs, !options.applyEffects, session.status);
+  publishStatePlanDebug(session, graph, result);
   if (!options.applyEffects) return result;
 
   unit.behaviorRuntime.aiRuntimeSession = session;
@@ -286,14 +144,159 @@ export function tickAiGameBridge(
   unit.behaviorRuntime.aiNodeCooldowns = { ...session.cooldowns };
   applyGraphEffects(state, unit, result.effects, result.blackboard, nowMs, session.blackboardMemory);
   unit.plan = updateUnitPlanFromRuntime(unit.plan, graph, result);
-  unit.behaviorRuntime.aiGraphReason = session.activePlan?.goalRu ?? result.explanationRu ?? result.explanation;
-  unit.behaviorRuntime.reason = session.activePlan?.goalRu ?? result.explanationRu ?? result.explanation;
-  unit.behaviorRuntime.lastEvent = stateUpdate.transition
-    ? `ai_state_${stateUpdate.transition.from}_to_${stateUpdate.transition.to}`
+  unit.behaviorRuntime.aiGraphReason = result.explanationRu ?? result.explanation;
+  unit.behaviorRuntime.reason = result.explanationRu ?? result.explanation;
+  const stateEffect = [...result.effects].reverse().find((effect) => effect.type === 'set_ai_state');
+  unit.behaviorRuntime.lastEvent = stateEffect
+    ? `ai_state_graph_to_${stateEffect.stateId}`
     : `ai_graph_runtime_${result.status}`;
-  publishStatePlanDebug(session);
   publishSimulationAiEvents(unit, session.simulationTimeMs);
   return result;
+}
+
+interface GraphOwnedPlanDescriptor {
+  readonly kind: 'FollowMoveOrder' | 'TakeCover';
+  readonly nodeId: string;
+  readonly nodeName: string;
+  readonly nodeNameRu: string;
+  readonly subgraphId: string;
+}
+
+function clearLegacyAutomaticStatePlan(
+  unit: UnitModel,
+  session: AiRuntimeSessionSnapshotV1,
+): AiRuntimeSessionSnapshotV1 {
+  if (!session.activePlan) return session;
+  const ownerToken = readAiExecutionOwnerToken(session.executionState);
+  if (ownerToken && unit.order?.source === 'ai' && unit.order.ownerToken === ownerToken) unit.order = null;
+  unit.behaviorRuntime.aiRouteStatusState = null;
+  const cancelledLegacyPlan = {
+    ...session.activePlan,
+    status: 'cancelled' as const,
+    cancellationReason: 'Legacy automatic plan disabled because Graph v2 owns all decisions.',
+    cancellationReasonRu: 'Старый автоматический план отключён: теперь все решения принадлежат Graph v2.',
+  };
+  return {
+    ...session,
+    status: 'idle',
+    executionState: undefined,
+    activePlan: undefined,
+    planHistory: [...session.planHistory, cancelledLegacyPlan].slice(-12),
+    blackboardMemory: {
+      ...session.blackboardMemory,
+      ai_active_plan_kind: 'none',
+      ai_active_plan_status: 'none',
+      ai_legacy_plan_cleared: true,
+    },
+  };
+}
+
+function buildGraphControlBlackboard(
+  state: SimulationState,
+  unit: UnitModel,
+  session: AiRuntimeSessionSnapshotV1,
+  graph: AiGraph,
+): AiGraphRunnerBlackboard {
+  const activePlan = readActiveRunPlan(graph, session.executionState);
+  return {
+    ...buildBlackboardForUnit(state, unit, session.blackboardMemory),
+    ai_state_id: session.stateRuntime.activeStateId,
+    ai_previous_state_id: session.stateRuntime.previousStateId ?? 'none',
+    ai_active_plan_kind: activePlan?.kind ?? 'none',
+    ai_active_plan_status: activePlan ? 'active' : 'none',
+    ai_active_plan_source_node_id: activePlan?.nodeId ?? null,
+  };
+}
+
+function applyGraphStateEffects(
+  session: AiRuntimeSessionSnapshotV1,
+  effects: readonly AiGraphEffect[],
+  nowMs: number,
+): AiRuntimeSessionSnapshotV1 {
+  let next = session;
+  for (const effect of effects) {
+    if (effect.type !== 'set_ai_state') continue;
+    const update = setAiStateFromGraph(
+      next.stateRuntime,
+      effect.stateId,
+      nowMs,
+      effect.sourceNodeId,
+      effect.reason,
+      effect.reasonRu ?? effect.reason,
+    );
+    const controlMemory: AiGraphRunnerBlackboard = {
+      ai_state_id: update.runtime.activeStateId,
+      ai_state_source_node_id: effect.sourceNodeId,
+      ai_state_source_node_name: effect.sourceNodeName,
+      ai_state_source_node_name_ru: effect.sourceNodeNameRu ?? effect.sourceNodeName,
+    };
+    next = {
+      ...next,
+      stateRuntime: update.runtime,
+      blackboardMemory: { ...next.blackboardMemory, ...controlMemory },
+      memoryScopes: {
+        ...next.memoryScopes,
+        runtimeSessionMemory: { ...next.memoryScopes.runtimeSessionMemory, ...controlMemory },
+      },
+    };
+  }
+  return next;
+}
+
+function updateGraphPlanMemory(
+  session: AiRuntimeSessionSnapshotV1,
+  graph: AiGraph,
+  result: AiGraphRuntimeResult,
+  previousPlan: GraphOwnedPlanDescriptor | undefined,
+): AiRuntimeSessionSnapshotV1 {
+  const activePlan = readActiveRunPlan(graph, result.executionState);
+  const controlMemory: AiGraphRunnerBlackboard = {};
+  if (activePlan) {
+    controlMemory.ai_active_plan_kind = activePlan.kind;
+    controlMemory.ai_active_plan_status = 'active';
+    controlMemory.ai_active_plan_source_node_id = activePlan.nodeId;
+    controlMemory.ai_active_plan_source_node_name = activePlan.nodeName;
+    controlMemory.ai_active_plan_source_node_name_ru = activePlan.nodeNameRu;
+    const previousNodeId = readString(session.blackboardMemory.ai_active_plan_source_node_id, '');
+    controlMemory.ai_plan_sequence = readNumber(session.blackboardMemory.ai_plan_sequence, 0) + (previousNodeId === activePlan.nodeId ? 0 : 1);
+  } else {
+    controlMemory.ai_active_plan_kind = 'none';
+    controlMemory.ai_active_plan_status = 'none';
+    controlMemory.ai_active_plan_source_node_id = null;
+    controlMemory.ai_active_plan_source_node_name = null;
+    controlMemory.ai_active_plan_source_node_name_ru = null;
+    if (previousPlan) {
+      controlMemory.ai_last_plan_kind = previousPlan.kind;
+      controlMemory.ai_last_plan_status = result.status;
+      controlMemory.ai_last_plan_source_node_id = previousPlan.nodeId;
+      controlMemory.ai_last_plan_reason_ru = result.explanationRu ?? result.explanation;
+    }
+  }
+  return {
+    ...session,
+    blackboardMemory: { ...session.blackboardMemory, ...controlMemory },
+    memoryScopes: {
+      ...session.memoryScopes,
+      runtimeSessionMemory: { ...session.memoryScopes.runtimeSessionMemory, ...controlMemory },
+    },
+  };
+}
+
+function readActiveRunPlan(
+  graph: AiGraph,
+  executionState: AiGraphExecutionState | undefined,
+): GraphOwnedPlanDescriptor | undefined {
+  if (!executionState) return undefined;
+  const node = graph.nodes.find((candidate) => candidate.id === executionState.activeNodeId);
+  if (!node || node.type !== 'RunPlan') return undefined;
+  const kind = node.parameters?.planKind === 'FollowMoveOrder' ? 'FollowMoveOrder' : 'TakeCover';
+  return {
+    kind,
+    nodeId: node.id,
+    nodeName: node.displayName ?? (kind === 'FollowMoveOrder' ? 'Follow move order' : 'Take cover'),
+    nodeNameRu: node.displayNameRu ?? (kind === 'FollowMoveOrder' ? 'Выполнить приказ движения' : 'Занять укрытие'),
+    subgraphId: kind === 'FollowMoveOrder' ? 'move_and_observe' : 'take_cover',
+  };
 }
 
 export function pollAiBlackboardObservers(
@@ -538,6 +541,8 @@ function applyGraphEffects(
       continue;
     }
 
+    if (effect.type === 'set_ai_state') continue;
+
     if (effect.type === 'write_memory') {
       runtimeMemory[effect.key] = effect.value;
       continue;
@@ -711,31 +716,20 @@ function publishRuntimeDebugTrace(
   }
 }
 
-function appendPlanHistory(history: readonly AiPlan[], plan: AiPlan): readonly AiPlan[] {
-  return [...history, plan].slice(-12);
-}
-
-function mergeRuntimeResults(cancelled: AiGraphRuntimeResult, current: AiGraphRuntimeResult): AiGraphRuntimeResult {
-  return {
-    ...current,
-    effects: [...cancelled.effects, ...current.effects],
-    trace: [...cancelled.trace, ...current.trace],
-    lifecycle: [...cancelled.lifecycle, ...current.lifecycle],
-    cancellationReason: cancelled.cancellationReason,
-    cancellationReasonRu: cancelled.cancellationReasonRu,
-  };
-}
-
-function publishStatePlanDebug(session: AiRuntimeSessionSnapshotV1): void {
+function publishStatePlanDebug(
+  session: AiRuntimeSessionSnapshotV1,
+  graph: AiGraph,
+  result: AiGraphRuntimeResult,
+): void {
   try {
     const raw = window.localStorage.getItem(DEBUG_STORAGE_KEY);
     if (!raw) return;
     const payload = JSON.parse(raw) as Record<string, unknown>;
     const stateDefinition = DEFAULT_AI_STATE_MACHINE.states[session.stateRuntime.activeStateId];
     const parentId = stateDefinition.parentStateId;
-    const activePlan = session.activePlan;
-    const currentStep = activePlan?.steps[activePlan.currentStepIndex];
-    const previousPlan = session.planHistory[session.planHistory.length - 1];
+    const activePlan = readActiveRunPlan(graph, session.executionState);
+    const previousPlanKind = readString(session.blackboardMemory.ai_last_plan_kind, '');
+    const previousPlanStatus = readString(session.blackboardMemory.ai_last_plan_status, '');
     payload.statePlan = {
       stateId: session.stateRuntime.activeStateId,
       stateLabelRu: stateDefinition.labelRu,
@@ -748,29 +742,32 @@ function publishStatePlanDebug(session: AiRuntimeSessionSnapshotV1): void {
       transitionReasonRu: session.stateRuntime.lastTransition?.reasonRu,
       transitionTrigger: session.stateRuntime.lastTransition?.trigger,
       transitionAtMs: session.stateRuntime.lastTransition?.atMs,
-      allowedUtilityBranches: stateDefinition.allowedUtilityBranches ?? [],
+      stateSourceNodeId: session.blackboardMemory.ai_state_source_node_id,
+      stateSourceNodeNameRu: session.blackboardMemory.ai_state_source_node_name_ru,
+      allowedUtilityBranches: [],
       activePlan: activePlan ? {
-        id: activePlan.id,
+        id: `graph:${activePlan.nodeId}`,
         kind: activePlan.kind,
-        goalRu: activePlan.goalRu,
-        status: activePlan.status,
-        currentStepId: currentStep?.id,
-        currentStepLabelRu: currentStep?.labelRu,
-        currentStepIndex: activePlan.currentStepIndex,
-        stepCount: activePlan.steps.length,
-        reasonsRu: activePlan.reasonsRu,
-        abortConditionsRu: activePlan.abortConditions.map((item) => item.labelRu),
-        replanConditionsRu: activePlan.replanConditions.map((item) => item.labelRu),
-        activeSubgraphId: currentStep?.subgraphId,
-        replacesPlanId: activePlan.replacesPlanId,
+        goalRu: activePlan.nodeNameRu,
+        status: 'active',
+        currentStepId: result.activeNodeId,
+        currentStepLabelRu: result.activeSubgraphNameRu ?? activePlan.nodeNameRu,
+        currentStepIndex: 0,
+        stepCount: 1,
+        reasonsRu: [`Запущено нодой Graph v2 «${activePlan.nodeNameRu}».`],
+        abortConditionsRu: [],
+        replanConditionsRu: [],
+        activeSubgraphId: result.activeSubgraphId ?? activePlan.subgraphId,
+        sourceNodeId: activePlan.nodeId,
       } : undefined,
-      previousPlan: previousPlan ? {
-        id: previousPlan.id,
-        goalRu: previousPlan.goalRu,
-        status: previousPlan.status,
-        cancellationReasonRu: previousPlan.cancellationReasonRu,
+      previousPlan: previousPlanKind ? {
+        id: `graph:${readString(session.blackboardMemory.ai_last_plan_source_node_id, 'unknown')}`,
+        goalRu: previousPlanKind === 'FollowMoveOrder' ? 'Выполнить приказ движения' : 'Занять укрытие',
+        status: previousPlanStatus || 'success',
+        cancellationReasonRu: session.blackboardMemory.ai_last_plan_reason_ru,
       } : undefined,
-      planSequence: session.planSequence,
+      planSequence: readNumber(session.blackboardMemory.ai_plan_sequence, 0),
+      graphOwnsBehavior: true,
     };
     window.localStorage.setItem(DEBUG_STORAGE_KEY, JSON.stringify(payload));
   } catch {
@@ -893,10 +890,13 @@ function normalizeRuntimeGraph(value: unknown): AiGraph {
       descriptionRu: typeof node.descriptionRu === 'string' ? node.descriptionRu : undefined,
       children: Array.isArray(node.children) ? node.children.filter((child): child is string => typeof child === 'string') : [],
       parameters: isRecord(node.parameters) ? normalizeBlackboard(node.parameters) : {},
+      inputBindings: isRecord(node.inputBindings) ? node.inputBindings as AiNode['inputBindings'] : undefined,
+      outputBindings: isRecord(node.outputBindings) ? node.outputBindings as AiNode['outputBindings'] : undefined,
+      legacyMetadata: isRecord(node.legacyMetadata) ? node.legacyMetadata : undefined,
     }));
 
   return {
-    version: 1,
+    version: 2,
     id: readString(value.id, 'soldier_runtime_graph'),
     name: readString(value.name, 'Soldier Runtime Graph'),
     nameRu: typeof value.nameRu === 'string' ? value.nameRu : undefined,
@@ -904,7 +904,10 @@ function normalizeRuntimeGraph(value: unknown): AiGraph {
     descriptionRu: typeof value.descriptionRu === 'string' ? value.descriptionRu : undefined,
     rootNodeId: readString(value.rootNodeId, nodes[0]?.id ?? 'root'),
     blackboardDefaults: isRecord(value.blackboardDefaults) ? normalizeBlackboard(value.blackboardDefaults) : {},
+    blackboardSchema: (Array.isArray(value.blackboardSchema) ? value.blackboardSchema.filter(isRecord) : []) as unknown as NonNullable<AiGraph['blackboardSchema']>,
     nodes,
+    subgraphRefs: Array.isArray(value.subgraphRefs) ? value.subgraphRefs.filter((item): item is string => typeof item === 'string') : [],
+    legacyMetadata: isRecord(value.legacyMetadata) ? value.legacyMetadata : undefined,
   };
 }
 

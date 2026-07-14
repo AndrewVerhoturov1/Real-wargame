@@ -101,7 +101,7 @@ export function shouldUseCompositeGraphRuntime(
   }
 
   for (const node of graph.nodes) {
-    if (node.type === 'Reload' || node.type === 'WaitForEvent' || node.type === 'Subgraph' || node.type === 'ReactiveSequence' || node.type === 'Timeout' || node.type === 'Retry') return true;
+    if (node.type === 'Reload' || node.type === 'WaitForEvent' || isSubgraphRuntimeNode(node) || node.type === 'ReactiveSequence' || node.type === 'Timeout' || node.type === 'Retry') return true;
     if (node.type === 'Selector' && hasStatefulDescendant(nodes, node.id, true)) return true;
     if (node.type === 'Sequence' && hasStatefulDescendant(nodes, node.id, true)) return true;
     if (node.type === 'SequenceWithMemory') {
@@ -253,7 +253,7 @@ function enterNode(
 
   if (node.type === 'Timeout') return enterTimeout(environment, node, frames);
   if (node.type === 'Retry') return enterRetry(environment, node, frames);
-  if (node.type === 'Subgraph') return startSubgraph(environment, node, frames);
+  if (isSubgraphRuntimeNode(node)) return startSubgraph(environment, node, frames);
 
   const actionLifecycle = DEFAULT_AI_ACTION_REGISTRY.get(String(node.type));
   if (actionLifecycle) return startAction(environment, node, frames, actionLifecycle);
@@ -281,16 +281,42 @@ function enterNode(
     : settle(environment, failure(`Node ${node.id} failed.`, `Нода «${nodeNameRu(node)}» провалилась.`), frames);
 }
 
+function isSubgraphRuntimeNode(node: AiNode): boolean {
+  return node.type === 'Subgraph' || node.type === 'RunPlan';
+}
+
+function resolveSubgraphId(node: AiNode): string {
+  if (node.type !== 'RunPlan') return typeof node.parameters?.subgraphId === 'string' ? node.parameters.subgraphId : '';
+  return node.parameters?.planKind === 'FollowMoveOrder' ? 'move_and_observe' : 'take_cover';
+}
+
+function prepareSubgraphNode(node: AiNode, subgraphId: string): AiNode {
+  if (node.type !== 'RunPlan') return node;
+  const followOrder = node.parameters?.planKind === 'FollowMoveOrder';
+  const inputPort = followOrder ? 'destination' : 'cover_position';
+  const configuredTargetKey = typeof node.parameters?.targetKey === 'string' ? node.parameters.targetKey.trim() : '';
+  const targetKey = configuredTargetKey || (followOrder ? 'order_target_position' : 'best_cover_position');
+  return {
+    ...node,
+    parameters: { ...(node.parameters ?? {}), subgraphId },
+    inputBindings: {
+      ...(node.inputBindings ?? {}),
+      [inputPort]: node.inputBindings?.[inputPort] ?? { source: 'blackboard', key: targetKey },
+    },
+  };
+}
+
 function startSubgraph(
   environment: RuntimeEnvironment,
   node: AiNode,
   frames: readonly AiCompositeFrame[],
 ): ExecutionOutcome {
-  const subgraphId = typeof node.parameters?.subgraphId === 'string' ? node.parameters.subgraphId : '';
+  const subgraphId = resolveSubgraphId(node);
   const definition = DEFAULT_AI_SUBGRAPH_REGISTRY.get(subgraphId);
   if (!definition) return failure(`Unknown AI subgraph ${subgraphId}.`, `Неизвестный подграф ИИ «${subgraphId}».`);
-  const localBlackboard = createSubgraphLocalBlackboard(definition, node, environment.accumulator.blackboard);
-  return executeSubgraph(environment, node, frames, definition, {
+  const executableNode = prepareSubgraphNode(node, subgraphId);
+  const localBlackboard = createSubgraphLocalBlackboard(definition, executableNode, environment.accumulator.blackboard);
+  return executeSubgraph(environment, executableNode, frames, definition, {
     kind: 'subgraph',
     subgraphId,
     startedAtMs: environment.input.nowMs,
@@ -306,7 +332,8 @@ function resumeSubgraph(
 ): ExecutionOutcome {
   const definition = DEFAULT_AI_SUBGRAPH_REGISTRY.get(state.subgraphId);
   if (!definition) return failure(`Unknown AI subgraph ${state.subgraphId}.`, `Неизвестный подграф ИИ «${state.subgraphId}».`);
-  return executeSubgraph(environment, node, frames, definition, {
+  const executableNode = prepareSubgraphNode(node, state.subgraphId);
+  return executeSubgraph(environment, executableNode, frames, definition, {
     ...cloneAiSubgraphExecutionState(state),
     localBlackboard: refreshSubgraphRuntimeValues(environment.accumulator.blackboard, state.localBlackboard),
   });
@@ -548,7 +575,7 @@ function resumeActiveAction(
   frames: readonly AiCompositeFrame[],
   executionState: AiGraphExecutionState,
 ): ExecutionOutcome {
-  if (node.type === 'Subgraph' && isAiSubgraphExecutionState(executionState.activeData)) {
+  if (isSubgraphRuntimeNode(node) && isAiSubgraphExecutionState(executionState.activeData)) {
     return resumeSubgraph(environment, node, frames, executionState.activeData);
   }
   const lifecycle = DEFAULT_AI_ACTION_REGISTRY.get(String(node.type));
@@ -567,7 +594,7 @@ function cancelActiveAction(
   executionState: AiGraphExecutionState,
   requestedCancellation?: { readonly reason: string; readonly reasonRu?: string },
 ): ExecutionOutcome {
-  if (node.type === 'Subgraph' && isAiSubgraphExecutionState(executionState.activeData)) {
+  if (isSubgraphRuntimeNode(node) && isAiSubgraphExecutionState(executionState.activeData)) {
     return cancelSubgraph(environment, node, executionState.activeData, requestedCancellation);
   }
   const lifecycle = DEFAULT_AI_ACTION_REGISTRY.get(String(node.type));
@@ -805,7 +832,7 @@ function validateCompositeState(
       return { valid: false, branch, activeNode, frames, reason: `Frame child index is invalid for ${frame.nodeId}.`, reasonRu: `Номер шага кадра ${frame.nodeId} недействителен.` };
     }
   }
-  if (activeNode.type === 'Subgraph') {
+  if (isSubgraphRuntimeNode(activeNode)) {
     return isAiSubgraphExecutionState(state.activeData)
       ? { valid: true, branch, activeNode, frames }
       : { valid: false, branch, activeNode, frames, reason: 'Active subgraph state is invalid.', reasonRu: 'Состояние активного подграфа недействительно.' };
@@ -821,7 +848,7 @@ function validateCompositeState(
 function cleanupState(input: AiGraphRuntimeInput, activeNode: AiNode | undefined): readonly AiGraphEffect[] {
   const state = input.executionState;
   if (!state || !activeNode) return [];
-  if (activeNode.type === 'Subgraph' && isAiSubgraphExecutionState(state.activeData)) {
+  if (isSubgraphRuntimeNode(activeNode) && isAiSubgraphExecutionState(state.activeData)) {
     const definition = DEFAULT_AI_SUBGRAPH_REGISTRY.get(state.activeData.subgraphId);
     if (!definition || !state.activeData.nestedExecutionState) return [];
     return runAiCompositeGraphRuntime({
@@ -904,7 +931,7 @@ function findStatefulEntry(nodes: Map<AiNodeId, AiNode>, startId: AiNodeId): AiN
     const node = nodes.get(id);
     if (!node) return undefined;
     if (DEFAULT_AI_ACTION_REGISTRY.has(String(node.type))) return node;
-    if ((node.type === 'SequenceWithMemory' || node.type === 'Sequence' || node.type === 'ReactiveSequence' || node.type === 'Selector' || node.type === 'UtilitySelector' || node.type === 'Timeout' || node.type === 'Retry' || node.type === 'Subgraph')
+    if ((node.type === 'SequenceWithMemory' || node.type === 'Sequence' || node.type === 'ReactiveSequence' || node.type === 'Selector' || node.type === 'UtilitySelector' || node.type === 'Timeout' || node.type === 'Retry' || isSubgraphRuntimeNode(node))
       && hasStatefulDescendant(nodes, node.id, false)) return node;
     for (const childId of node.children ?? []) {
       const found = visit(childId);
@@ -922,7 +949,7 @@ function hasStatefulDescendant(nodes: Map<AiNodeId, AiNode>, startId: AiNodeId, 
     visited.add(id);
     const node = nodes.get(id);
     if (!node) return false;
-    if ((!root || !excludeRoot) && (DEFAULT_AI_ACTION_REGISTRY.has(String(node.type)) || node.type === 'Timeout' || node.type === 'Retry' || node.type === 'Subgraph')) return true;
+    if ((!root || !excludeRoot) && (DEFAULT_AI_ACTION_REGISTRY.has(String(node.type)) || node.type === 'Timeout' || node.type === 'Retry' || isSubgraphRuntimeNode(node))) return true;
     return (node.children ?? []).some((childId) => visit(childId, false));
   };
   return visit(startId, true);
@@ -938,7 +965,7 @@ function planningGraph(graph: AiGraph): AiGraph {
         || node.type === 'Selector'
         || node.type === 'Timeout'
         || node.type === 'Retry'
-        || node.type === 'Subgraph'
+        || isSubgraphRuntimeNode(node)
         || DEFAULT_AI_ACTION_REGISTRY.has(String(node.type))
         ? { ...node, type: 'ActionBranch', children: [] }
         : node
