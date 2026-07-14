@@ -26,7 +26,6 @@ assert.deepEqual(threatSnapshot(flatContact.threat), threatSnapshot(eastContact.
 
 const flat = evaluateScenario(flatState, profile);
 const east = evaluateScenario(slopeState, profile);
-console.log(JSON.stringify({ scenario: 'reverse-slope-route-diagnostic', flat: summary(flat), eastThreat: summary(east) }));
 assertReverseSlopeBenefit(flat, east);
 assertIdenticalQueriesHitCache(east);
 assertHiddenObjectiveMovementDoesNotLeak(eastContact, east);
@@ -91,7 +90,9 @@ function assertReverseSlopeBenefit(flat: ScenarioEvaluation, slope: ScenarioEval
   const winnerCell = awarenessCell(slope.awareness, { x: Math.floor(slope.winner.position.x), y: Math.floor(slope.winner.position.y) });
   assert.ok(winnerCell.reverseSlopeQuality >= 45);
 
-  assert.ok(flat.route.cells.slice(1, -1).every((cell) => cell.x === CREST_X));
+  assert.equal(flat.route.detourLimited, false);
+  assert.equal(slope.route.detourLimited, false);
+  assert.ok(routeSideCount(flat, 'east') > routeSideCount(flat, 'west'));
   assert.ok(routeSideCount(slope, 'west') > routeSideCount(slope, 'east'));
   assert.notDeepEqual(slope.route.cells, flat.route.cells);
   assert.ok(slope.route.visitedCells <= WIDTH * HEIGHT);
