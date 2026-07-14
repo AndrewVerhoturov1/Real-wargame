@@ -22,10 +22,10 @@ import {
 import type { KnownThreatMemory, UnitModel } from '../src/core/units/UnitModel';
 
 export const WIDTH = 13;
-export const HEIGHT = 11;
+export const HEIGHT = 17;
 export const CREST_X = 6;
 export const START = { x: 6.5, y: 5.5 } as const;
-export const GOAL = { x: 6.5, y: 10.5 } as const;
+export const GOAL = { x: 6.5, y: 16.5 } as const;
 export const EAST = { x: 12.5, y: 5.5 } as const;
 export const WEST = { x: 0.5, y: 5.5 } as const;
 export const REVERSE = { x: 5, y: 5 } as const;
