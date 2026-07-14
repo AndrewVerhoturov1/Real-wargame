@@ -13,7 +13,7 @@ import {
 import { createAttentionSettings, type UnitAttentionSettings } from '../perception/AttentionModel';
 import type { PressureZoneMode, PressureZoneShape } from '../pressure/PressureZone';
 import type { SimulationState } from '../simulation/SimulationState';
-import type { UnitHeldItem, UnitType } from '../units/UnitModel';
+import type { UnitHeldItem, UnitSide, UnitType } from '../units/UnitModel';
 
 export type EditorBrushShape = 'circle' | 'square';
 
@@ -33,6 +33,7 @@ export interface ObjectCreationDraft {
 
 export interface UnitCreationDraft {
   name: string;
+  side: UnitSide;
   type: UnitType;
   heldItem: UnitHeldItem;
   profile: BehaviorProfileId;
@@ -165,6 +166,7 @@ export function syncLegacyEditorFields(state: SimulationState): void {
   state.editor.objectHeightCells = drafts.object.heightCells;
   state.editor.objectRotationDegrees = drafts.object.rotationDegrees;
   state.editor.unitType = drafts.unit.type;
+  state.editor.unitSide = drafts.unit.side;
   state.editor.zoneShape = drafts.threat.shape;
   state.editor.zoneRadiusCells = drafts.threat.radiusCells;
   state.editor.zoneWidthCells = drafts.threat.widthCells;
@@ -189,6 +191,7 @@ function createDefaultDrafts(state: SimulationState): GameEditorDrafts {
     object,
     unit: {
       name: 'Боец',
+      side: state.editor.unitSide,
       type: 'infantry_squad',
       heldItem: 'long_item',
       profile: 'regular',

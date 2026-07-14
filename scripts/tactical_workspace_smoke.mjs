@@ -145,6 +145,21 @@ expectIncludes('src/core/editor/GameEditorPlacement.ts', [
 expectIncludes('src/main.ts', [
   'installTacticalWorkspace(state, aiGameBridge',
   'installEditorHeaderPlacement()', 'installWorkspaceTooltipGuard()', 'languageToggle.click()',
+  'installCombatControls(state', 'installCombatEffectsRenderer(tacticalBoard, state)',
+]);
+expectIncludes('src/ui/CombatControls.ts', [
+  'installCombatControls', 'Стрельба: запрещена', 'Стрельба: разрешена',
+  'setFireAllowed', 'aria-pressed', 'unlockCombatAudio', '.simulation-controls',
+]);
+expectIncludes('src/ui/CombatAudio.ts', [
+  'unlockCombatAudio', 'playRifleShot', 'AudioContext', 'createOscillator', 'createBufferSource',
+]);
+expectIncludes('src/rendering/PixiCombatEffectsRenderer.ts', [
+  'getCombatEventHistory', 'shot_fired', 'projectile_impact',
+  'drawMuzzleFlash', 'drawTracer', 'drawImpact', 'playRifleShot',
+]);
+expectIncludes('src/rendering/CombatEffectsInstaller.ts', [
+  'installCombatEffectsRenderer', 'worldContainer.addChild', 'app.ticker.add',
 ]);
 expectIncludes('src/tactical-workspace-stage8.css', [
   '.cover-map-tooltip[hidden]', '[data-action="editor-place"]', '.editor-header-placement',
