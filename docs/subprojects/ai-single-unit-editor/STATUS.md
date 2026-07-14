@@ -6,7 +6,7 @@
 - **Updated:** 2026-07-14
 - **Working branch:** `real-wargame-preview`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
-- **Last verified commit:** `62379286b0704a49dc258aaba379a8dd404ff9f5`
+- **Last verified commit:** `d8d9c4e910a2c4246bb56893dd5a3dd081125fa0`
 
 ## Goal
 
@@ -14,14 +14,18 @@
 
 ## Current focus
 
-Tactical Query System cover vertical slice is implemented on an isolated temporary branch: Graph v2 explicitly generates, filters, scores and selects cover positions.
+Gate 0 кампании Stage 1–2: State/Plan v1, Tactical Query System и код Combat Tactical Integration Stage 1 уже находятся в real-wargame-preview. Stage 1 остаётся открытым до устранения зафиксированных follow-up gaps и отдельной визуальной приёмки.
 
 ## Next step
 
-Run the prepared visual QA only after explicit user approval. Do not transfer the temporary branch to real-wargame-preview without a separate command.
+Выполнять план завершения Stage 1 вертикальными срезами: разделить опасность и подавление, доказать объединение неизвестного огня, живое перестроение маршрута, выбор безопасной стороны стены и обратного склона, закрепить smoke в CI и только после разрешения запустить visual QA. Поведенческие решения последующих срезов собирать и настраивать через Graph v2.
 
 ## Read first
 
+- `plans/2026-07-14-combat-tactical-integration-stage1-followup.md`
+- `plans/COMBAT_TACTICAL_INTEGRATION_REMAINING_WORK.md`
+- `docs/subprojects/ai-single-unit-editor/COMBAT_TACTICAL_INTEGRATION_STAGE1.md`
+- `docs/subprojects/ai-single-unit-editor/GRAPH_V2_TYPED_CONTRACTS_AND_SUBGRAPHS.md`
 - `docs/subprojects/ai-single-unit-editor/TACTICAL_QUERY_SYSTEM_COVER_V1.md`
 - `docs/superpowers/plans/2026-07-14-tactical-query-system-cover-v1.md`
 - `docs/subprojects/ai-single-unit-editor/HIERARCHICAL_STATES_AND_PLANS_V1.md`
@@ -43,7 +47,6 @@ Run the prepared visual QA only after explicit user approval. Do not transfer th
 - `docs/superpowers/specs/2026-07-12-compact-route-controls-editor-navigation-design.md`
 - `docs/superpowers/plans/2026-07-12-compact-route-controls-editor-navigation.md`
 - `AGENTS.md`
-- `docs/subprojects/ai-single-unit-editor/GRAPH_V2_TYPED_CONTRACTS_AND_SUBGRAPHS.md`
 
 ## Main files
 
@@ -134,6 +137,8 @@ Run the prepared visual QA only after explicit user approval. Do not transfer th
 - `npm run state-machine:smoke`
 - `npm run plan-runtime:smoke`
 - `npm run state-plan-scenario:smoke`
+- `npm run tactical-query:smoke`
+- `npm run combat-tactical-integration:smoke`
 - `npm run threat-display-stability:smoke`
 - `npm run movement-facing:smoke`
 - `npm run attention-profiles:smoke`
@@ -161,7 +166,9 @@ Run the prepared visual QA only after explicit user approval. Do not transfer th
 - `npm run dictionary:smoke`
 - `npm run lab:smoke`
 - `npm run build`
+- `npm run docs:sync`
 - `npm run docs:check`
+- `npm run docs:smoke`
 - `npx playwright test tests/perception-attention-overlay.spec.ts --project=chromium — только после явного разрешения пользователя`
 - `npm run graph-v2:smoke`
 - `npm run runtime-modifiers:smoke`
@@ -192,10 +199,10 @@ Run the prepared visual QA only after explicit user approval. Do not transfer th
 - Историческая информация хранится только метками контактов; старая тепловая карта не становится памятью местности.
 - Поле выбранного бойца хранится в Uint8Array и выводится одним растровым Sprite, а не объектом на каждую клетку.
 - Случайность обнаружения детерминирована контактом, ограничена профилем и не зависит от FPS.
-- Не переносить feat/view-memory-heatmap-temp в real-wargame-preview без отдельной команды пользователя.
 - Only one AiPlan may be active for the soldier in this vertical slice.
 - An emergency state transition must cancel an incompatible plan before replacement selection.
 - Plan steps reuse Graph v2 subgraphs and the existing action owner token; never create a second movement runtime.
 - A restored running plan step must continue update without repeating start or cleanup.
-- Do not mix the parallel shooting implementation into this temporary branch.
-- Do not transfer this branch to real-wargame-preview without an explicit user command.
+- State/Plan v1 and Tactical Query System are canonical parts of real-wargame-preview; do not describe them as isolated temporary-branch work.
+- Configurable combat policy belongs to Graph v2 node properties and subgraphs; deterministic facts and non-bypassable safety invariants remain in code.
+- Do not mark Combat Tactical Integration Stage 1 complete until every follow-up criterion and the approved visual QA pass.

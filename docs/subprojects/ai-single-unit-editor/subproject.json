@@ -4,10 +4,10 @@
   "status": "active",
   "updated_at": "2026-07-14",
   "goal": "Создать понятную человеку лабораторию поведения одиночного бойца: Utility AI выбирает решение, stateful runtime исполняет длительные действия, общий A* ведёт бойца по карте, постоянные профили маршрута задают стоимость местности, а гибридная система обзора и внимания формирует субъективные визуальные и звуковые контакты без всезнания ИИ.",
-  "current_focus": "Tactical Query System cover vertical slice is implemented on an isolated temporary branch: Graph v2 explicitly generates, filters, scores and selects cover positions.",
-  "next_step": "Run the prepared visual QA only after explicit user approval. Do not transfer the temporary branch to real-wargame-preview without a separate command.",
+  "current_focus": "Gate 0 кампании Stage 1–2: State/Plan v1, Tactical Query System и код Combat Tactical Integration Stage 1 уже находятся в real-wargame-preview. Stage 1 остаётся открытым до устранения зафиксированных follow-up gaps и отдельной визуальной приёмки.",
+  "next_step": "Выполнять план завершения Stage 1 вертикальными срезами: разделить опасность и подавление, доказать объединение неизвестного огня, живое перестроение маршрута, выбор безопасной стороны стены и обратного склона, закрепить smoke в CI и только после разрешения запустить visual QA. Поведенческие решения последующих срезов собирать и настраивать через Graph v2.",
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-  "last_verified_commit": "62379286b0704a49dc258aaba379a8dd404ff9f5",
+  "last_verified_commit": "d8d9c4e910a2c4246bb56893dd5a3dd081125fa0",
   "last_verified_runs": {
     "current_preview_base": "ca3f2e71327f184ce2aaccbd3749ebd6da93944c",
     "perception_core": "29201062853: success on a560b9b92593ce2c2b280d364431bba7d3c4aec4; build, perception, performance, attention nodes, runtime, workspace, game editor, LOS, dictionary, lab and docs checks passed",
@@ -66,8 +66,10 @@
       "branch": "feat/ai-state-plan-v1-temp-2026-07-14",
       "base_preview_sha": "cc907ca0f48caed418cd76b0f878c8b18fbe71c7",
       "verified_sha": "62379286b0704a49dc258aaba379a8dd404ff9f5",
+      "preview_transfer_commit": "0c2b335f933833cfdb8e23eada8aeff89937435d",
+      "audited_at_sha": "d8d9c4e910a2c4246bb56893dd5a3dd081125fa0",
       "validation_run": "29280697374",
-      "status": "core_validated_visual_pending",
+      "status": "present_in_preview",
       "confirmed": [
         "state-machine:smoke",
         "plan-runtime:smoke",
@@ -104,7 +106,9 @@
     "tactical_query_cover_v1": {
       "date": "2026-07-14",
       "branch": "feat/tactical-query-system-temp-2026-07-14",
-      "status": "core_validated_visual_pending",
+      "preview_transfer_commit": "3ae67e8",
+      "audited_at_sha": "d8d9c4e910a2c4246bb56893dd5a3dd081125fa0",
+      "status": "present_in_preview",
       "confirmed": [
         "tactical-query:smoke",
         "tactical-query-ui:smoke",
@@ -118,9 +122,43 @@
       ],
       "visual_qa_prepared": true,
       "visual_qa_run": false
+    },
+    "combat_tactical_integration_stage1": {
+      "date": "2026-07-14",
+      "audited_code_baseline_sha": "d8d9c4e910a2c4246bb56893dd5a3dd081125fa0",
+      "preview_transfer": "PR #102",
+      "preview_transfer_commit": "c885a46d1549632494bddac52ee2583b176a016c",
+      "status": "present_in_preview_followup_open",
+      "confirmed": [
+        "state-machine:smoke",
+        "plan-runtime:smoke",
+        "state-plan-scenario:smoke",
+        "tactical-query:smoke",
+        "combat-tactical-integration:smoke",
+        "docs:sync",
+        "docs:check",
+        "docs:smoke",
+        "build"
+      ],
+      "remaining_followup": [
+        "separate potential danger from evidence-derived suppression",
+        "prove cross-tick unknown-fire evidence merging and later reconciliation with unit contacts",
+        "prove live SimulationTick route replanning with hysteresis and order ownership preservation",
+        "prove safe-position winner changes and selects the protected side of a wall",
+        "prove reverse-slope direction changes position and route preference",
+        "add the Stage 1 smoke to permanent preview-delivery CI",
+        "run and inspect the prepared visual QA only after explicit approval",
+        "mark Stage 1 complete only after all preceding criteria pass"
+      ],
+      "visual_qa_prepared": true,
+      "visual_qa_run": false
     }
   },
   "must_read_first": [
+    "plans/2026-07-14-combat-tactical-integration-stage1-followup.md",
+    "plans/COMBAT_TACTICAL_INTEGRATION_REMAINING_WORK.md",
+    "docs/subprojects/ai-single-unit-editor/COMBAT_TACTICAL_INTEGRATION_STAGE1.md",
+    "docs/subprojects/ai-single-unit-editor/GRAPH_V2_TYPED_CONTRACTS_AND_SUBGRAPHS.md",
     "docs/subprojects/ai-single-unit-editor/TACTICAL_QUERY_SYSTEM_COVER_V1.md",
     "docs/superpowers/plans/2026-07-14-tactical-query-system-cover-v1.md",
     "docs/subprojects/ai-single-unit-editor/HIERARCHICAL_STATES_AND_PLANS_V1.md",
@@ -141,8 +179,7 @@
     "docs/superpowers/plans/2026-07-12-soldier-perception-attention-v1.md",
     "docs/superpowers/specs/2026-07-12-compact-route-controls-editor-navigation-design.md",
     "docs/superpowers/plans/2026-07-12-compact-route-controls-editor-navigation.md",
-    "AGENTS.md",
-    "docs/subprojects/ai-single-unit-editor/GRAPH_V2_TYPED_CONTRACTS_AND_SUBGRAPHS.md"
+    "AGENTS.md"
   ],
   "main_files": [
     "src/core/perception/AttentionModel.ts",
@@ -262,9 +299,14 @@
     "scripts/ai_state_machine_smoke.ts",
     "scripts/ai_plan_runtime_smoke.ts",
     "scripts/ai_state_plan_scenario_smoke.ts",
+    "scripts/tactical_query_system_smoke.ts",
+    "scripts/combat_tactical_integration_smoke.ts",
     "tests/ai-state-plan-visual.spec.ts"
   ],
   "manual_docs": [
+    "docs/subprojects/ai-single-unit-editor/COMBAT_TACTICAL_INTEGRATION_STAGE1.md",
+    "plans/2026-07-14-combat-tactical-integration-stage1-followup.md",
+    "plans/COMBAT_TACTICAL_INTEGRATION_REMAINING_WORK.md",
     "docs/subprojects/ai-single-unit-editor/PERCEPTION_ATTENTION_V1.md",
     "docs/subprojects/ai-single-unit-editor/NAVIGATION_PROFILES_V1.md",
     "docs/subprojects/ai-single-unit-editor/TACTICAL_ROUTE_COST_V1.md",
@@ -287,6 +329,8 @@
     "npm run state-machine:smoke",
     "npm run plan-runtime:smoke",
     "npm run state-plan-scenario:smoke",
+    "npm run tactical-query:smoke",
+    "npm run combat-tactical-integration:smoke",
     "npm run threat-display-stability:smoke",
     "npm run movement-facing:smoke",
     "npm run attention-profiles:smoke",
@@ -314,7 +358,9 @@
     "npm run dictionary:smoke",
     "npm run lab:smoke",
     "npm run build",
+    "npm run docs:sync",
     "npm run docs:check",
+    "npm run docs:smoke",
     "npx playwright test tests/perception-attention-overlay.spec.ts --project=chromium — только после явного разрешения пользователя",
     "npm run graph-v2:smoke",
     "npm run runtime-modifiers:smoke",
@@ -344,13 +390,13 @@
     "Историческая информация хранится только метками контактов; старая тепловая карта не становится памятью местности.",
     "Поле выбранного бойца хранится в Uint8Array и выводится одним растровым Sprite, а не объектом на каждую клетку.",
     "Случайность обнаружения детерминирована контактом, ограничена профилем и не зависит от FPS.",
-    "Не переносить feat/view-memory-heatmap-temp в real-wargame-preview без отдельной команды пользователя.",
     "Only one AiPlan may be active for the soldier in this vertical slice.",
     "An emergency state transition must cancel an incompatible plan before replacement selection.",
     "Plan steps reuse Graph v2 subgraphs and the existing action owner token; never create a second movement runtime.",
     "A restored running plan step must continue update without repeating start or cleanup.",
-    "Do not mix the parallel shooting implementation into this temporary branch.",
-    "Do not transfer this branch to real-wargame-preview without an explicit user command."
+    "State/Plan v1 and Tactical Query System are canonical parts of real-wargame-preview; do not describe them as isolated temporary-branch work.",
+    "Configurable combat policy belongs to Graph v2 node properties and subgraphs; deterministic facts and non-bypassable safety invariants remain in code.",
+    "Do not mark Combat Tactical Integration Stage 1 complete until every follow-up criterion and the approved visual QA pass."
   ],
   "known_limits": [
     "Perception v1 рассчитывает зрение и слух только выбранного бойца, а не всех юнитов армии.",
@@ -364,7 +410,10 @@
     "Поле строится синхронно, но кешируется, квантируется и ограничивается по частоте; для карт значительно крупнее текущих может понадобиться фоновая пошаговая задача.",
     "State-plan v1 intentionally contains only Idle, FollowingOrder, Contact and Suppressed.",
     "State-plan v1 intentionally contains only FollowMoveOrder and TakeCover.",
-    "Shooting, morale, wounded/retreat/panic states, tactical queries and parallel plans are not implemented in this slice.",
-    "The visual scenario is prepared but Chromium and the five PNGs are not run without explicit approval."
+    "Shooting, morale, wounded/retreat/panic states and parallel plans are not implemented in this slice; Tactical Query cover v1 is present but is not yet connected to the full combat behavior cycle.",
+    "An ordinary unit contact still contributes suppression before confirmed fire evidence; danger and factual suppression must be separated.",
+    "Cross-tick unknown-fire merging, live route replanning, safe-position winner changes and reverse-slope direction effects still need stronger end-to-end proof.",
+    "The Combat Tactical Integration Stage 1 smoke is not yet part of the permanent preview-delivery CI workflow.",
+    "The four-scene combat tactical visual scenario is prepared but Chromium and PNG inspection have not run without explicit approval."
   ]
 }

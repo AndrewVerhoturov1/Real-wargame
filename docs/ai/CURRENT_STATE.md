@@ -24,7 +24,7 @@ Generated from canonical repository and subproject metadata.
 
 - **ID:** `ai-single-unit-editor`
 - **Updated:** 2026-07-14
-- **Current focus:** Tactical Query System cover vertical slice is implemented on an isolated temporary branch: Graph v2 explicitly generates, filters, scores and selects cover positions.
-- **Next step:** Run the prepared visual QA only after explicit user approval. Do not transfer the temporary branch to real-wargame-preview without a separate command.
-- **Last verified commit:** `62379286b0704a49dc258aaba379a8dd404ff9f5`
+- **Current focus:** Gate 0 кампании Stage 1–2: State/Plan v1, Tactical Query System и код Combat Tactical Integration Stage 1 уже находятся в real-wargame-preview. Stage 1 остаётся открытым до устранения зафиксированных follow-up gaps и отдельной визуальной приёмки.
+- **Next step:** Выполнять план завершения Stage 1 вертикальными срезами: разделить опасность и подавление, доказать объединение неизвестного огня, живое перестроение маршрута, выбор безопасной стороны стены и обратного склона, закрепить smoke в CI и только после разрешения запустить visual QA. Поведенческие решения последующих срезов собирать и настраивать через Graph v2.
+- **Last verified commit:** `d8d9c4e910a2c4246bb56893dd5a3dd081125fa0`
 - **Status:** [generated status](../subprojects/ai-single-unit-editor/STATUS.md)
