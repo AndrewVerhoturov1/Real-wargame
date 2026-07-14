@@ -1,0 +1,69 @@
+name: Combat Tactical Integration Temp
+
+on:
+  push:
+    branches:
+      - feat/combat-systems-integration-stage1-temp
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Combat tactical integration
+        run: npm run combat-tactical-integration:smoke
+
+      - name: Perception
+        run: npm run perception:smoke
+
+      - name: Combat foundation
+        run: npm run combat-foundation:smoke
+
+      - name: Awareness and threat fields
+        run: npm run awareness-field:smoke
+
+      - name: Directional terrain
+        run: npm run directional-terrain:smoke
+
+      - name: Navigation profiles
+        run: npm run navigation-profiles:smoke
+
+      - name: A star
+        run: npm run pathfinding:smoke
+
+      - name: Routed movement
+        run: npm run routed-move:smoke
+
+      - name: Route replan status
+        run: npm run route-status:smoke
+
+      - name: Scene persistence
+        run: npm run runtime-scene:smoke
+
+      - name: Map revision
+        run: npm run map-revision:smoke
+
+      - name: Existing spatial index
+        run: npm run spatial-index:smoke
+
+      - name: Documentation
+        run: npm run docs:sync
+
+      - name: Production build
+        run: npm run build
