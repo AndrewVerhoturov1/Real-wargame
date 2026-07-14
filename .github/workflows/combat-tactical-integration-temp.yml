@@ -26,6 +26,21 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Production build
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee production-build.log
+
+      - name: Upload production build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-build-log
+          path: production-build.log
+          if-no-files-found: warn
+          retention-days: 2
+
       - name: Combat tactical integration
         shell: bash
         run: |
@@ -76,6 +91,3 @@ jobs:
 
       - name: Documentation
         run: npm run docs:sync
-
-      - name: Production build
-        run: npm run build
