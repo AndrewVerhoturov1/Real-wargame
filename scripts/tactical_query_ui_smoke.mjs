@@ -19,6 +19,14 @@ for (const label of [
 for (const label of ['Тактический запрос', 'Кандидаты', 'Победитель', 'Причина исключения', 'Досрочная остановка']) {
   assert.ok(overlay.includes(label), `Runtime diagnostics must display «${label}».`);
 }
-assert.doesNotMatch(bridge, /findBestCoverForThreat\s*\(/, 'The live AI bridge must not call the opaque cover winner helper.');
+const forbiddenCoverHelperLines = bridge
+  .split('\n')
+  .map((line, index) => ({ line: index + 1, text: line.trim() }))
+  .filter((entry) => /findBestCoverForThreat\s*\(/.test(entry.text));
+assert.deepEqual(
+  forbiddenCoverHelperLines,
+  [],
+  `The live AI bridge must not call the opaque cover winner helper. Found: ${JSON.stringify(forbiddenCoverHelperLines)}`,
+);
 
 console.log('Tactical query UI smoke passed: Russian contracts and candidate diagnostics are published without hidden cover selection.');
