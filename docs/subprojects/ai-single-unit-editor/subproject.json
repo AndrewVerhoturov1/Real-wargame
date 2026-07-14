@@ -9,7 +9,7 @@
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
   "last_verified_commit": "d8d9c4e910a2c4246bb56893dd5a3dd081125fa0",
   "last_verified_runs": {
-    "current_preview_base": "ca3f2e71327f184ce2aaccbd3749ebd6da93944c",
+    "current_preview_base": "d8d9c4e910a2c4246bb56893dd5a3dd081125fa0",
     "perception_core": "29201062853: success on a560b9b92593ce2c2b280d364431bba7d3c4aec4; build, perception, performance, attention nodes, runtime, workspace, game editor, LOS, dictionary, lab and docs checks passed",
     "policy": "29203543069: success",
     "docs_integrity": "29203543082: success",
@@ -40,7 +40,7 @@
     "performance_budget": "first field build <= 120 ms on CI test map 180x120; hidden layer zero builds; idle cache reuse; moving rebuild throttle; one byte per cell",
     "view_memory_preview_transfer": "PR #80 merged into real-wargame-preview as 0b21861a84ebfbe386b5621f5e02e5ded718c9d3",
     "view_memory_preview_base": "d6f754856f3b5d05b3f466a7316ceb2db701dc2d",
-    "view_memory_preview_drift": "current preview is 1 docs-only commit ahead: ideas/GOOD_POSITIONS_AND_AMBUSH_SITES.md; no runtime, UI or test code differs",
+    "view_memory_preview_drift": "historical transfer baseline d6f754856f3b5d05b3f466a7316ceb2db701dc2d; no known view-memory implementation drift is recorded against the Gate 0 audited baseline d8d9c4e910a2c4246bb56893dd5a3dd081125fa0",
     "visibility_controls_core": "29213161725: workspace, routed movement, view-memory cache contract and production build succeeded on 4bd7b3a4f52c1654c8e1440799e6a91059b55402",
     "visibility_controls_visual": "29213161725: system-Chrome Playwright 3/3 succeeded on 4bd7b3a4f52c1654c8e1440799e6a91059b55402",
     "visibility_controls_screenshots_digest": "sha256:7d07602c62f418db6eb26b0882433ccb5f64cdf0e878c7ccc4f48b7af9e9ba3f",
