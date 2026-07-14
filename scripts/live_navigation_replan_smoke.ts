@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { applyOwnedMoveEffects } from '../src/core/ai/AiStatefulMoveGameBridge';
 import type { AiGraphRuntimeResult } from '../src/core/ai/AiGraphRuntime';
 import { createDirectPlayerMovePlan } from '../src/core/ai/UnitPlan';
-import { traceProjectile } from '../src/core/combat/BallisticRaycast';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../src/core/navigation/NavigationRuntime';
 import { evaluateNavigationRouteCost } from '../src/core/navigation/NavigationRouteCost';
 import {
@@ -19,7 +18,7 @@ import type { UnitModel } from '../src/core/units/UnitModel';
 verifyAcceptedLiveReplanAndCompletion();
 verifyHysteresisAndCooldownBoundSearches();
 
-console.log('Live navigation replan smoke passed: real fire drives SimulationTick search, hysteresis, accepted replacement, bounded A*, final facing and strict ownership.');
+console.log('Live navigation replan smoke passed: real perception drives SimulationTick search, hysteresis, accepted replacement, bounded A*, final facing and strict ownership.');
 
 function verifyAcceptedLiveReplanAndCompletion(): void {
   const registry = createReplanRegistry('live-accept', 10, 0.05, 1.5);
@@ -27,7 +26,7 @@ function verifyAcceptedLiveReplanAndCompletion(): void {
   try {
     const state = makeCorridorState();
     const mover = unit(state, 'blue-mover');
-    const shooter = unit(state, 'red-shooter');
+    const hostile = unit(state, 'red-hostile');
     const target = { x: 21.5, y: 3.5 };
     const finalFacingRadians = 1.75;
     const ownerToken = 'live-route-owner:accepted';
@@ -59,16 +58,17 @@ function verifyAcceptedLiveReplanAndCompletion(): void {
     assert.equal(initialOrder.replanCount, 0);
     assert.ok(initialRouteCells.every((cell) => cell.y >= 2 && cell.y <= 4), 'initial route must use the narrow upper corridor');
 
-    const knowledgeRevisionBeforeShot = mover.tacticalKnowledge.revision;
-    fireNearMiss(state, shooter, 'accepted-live-shot');
+    const knowledgeRevisionBeforeContact = mover.tacticalKnowledge.revision;
     tickSimulation(state, 0.1);
 
-    assert.ok(mover.tacticalKnowledge.revision > knowledgeRevisionBeforeShot, 'the real shot must change subjective tacticalKnowledge during SimulationTick');
-    const unknownThreat = mover.tacticalKnowledge.threats.find((threat) => threat.id.startsWith('unknown-fire:'));
-    assert.ok(unknownThreat, 'the unseen real shot must create subjective unknown-fire memory');
-    assert.equal(mover.tacticalKnowledge.threats.some((threat) => threat.id === `unit:${shooter.id}`), false, 'hidden shooter must not become an objective unit threat');
-    assert.ok(unknownThreat.uncertaintyCells >= 4, 'hidden fire memory must remain approximate');
-    assert.notDeepEqual({ x: unknownThreat.x, y: unknownThreat.y }, shooter.position, 'hidden shooter coordinates must not leak into tactical memory');
+    assert.ok(mover.tacticalKnowledge.revision > knowledgeRevisionBeforeContact, 'real perception must change subjective tacticalKnowledge during SimulationTick');
+    const perceivedThreat = threat(mover, hostile.id);
+    assert.equal(perceivedThreat.visibleNow, true, 'the hostile must be acquired by real LOS perception');
+    assert.deepEqual(
+      { x: perceivedThreat.x, y: perceivedThreat.y },
+      hostile.position,
+      'a currently visible contact may use its observed position',
+    );
 
     const replacement = mover.order;
     assert.ok(replacement, 'accepted replan must leave a live move order');
@@ -101,14 +101,20 @@ function verifyAcceptedLiveReplanAndCompletion(): void {
     assert.ok(threatenedOldRouteCost > replacementCost * 1.05, 'candidate must improve the active route under current tactical knowledge');
     assert.ok(replacementCost > initialPathCost, 'candidate may be costlier than the stale pre-threat route, so stale-baseline hysteresis would reject it');
 
+    const rememberedPosition = { x: perceivedThreat.x, y: perceivedThreat.y };
     const acceptedSearchCount = replacement.replanSearchCount;
     const acceptedReplanAt = replacement.lastReplanAtSeconds;
+    mover.viewRangeCells = 0;
+    hostile.position = { x: 22.5, y: 10.5 };
     for (let index = 0; index < 4; index += 1) {
-      fireNearMiss(state, shooter, `accepted-cooldown-shot-${index}`);
       tickSimulation(state, 0.1);
       assert.equal(mover.order?.replanSearchCount, acceptedSearchCount, 'cooldown must prevent a new candidate search on every tick');
       assert.equal(mover.order?.lastReplanAtSeconds, acceptedReplanAt, 'cooldown ticks must not masquerade as route searches');
     }
+    const hiddenThreat = threat(mover, hostile.id);
+    assert.equal(hiddenThreat.visibleNow, false);
+    assert.deepEqual({ x: hiddenThreat.x, y: hiddenThreat.y }, rememberedPosition, 'hidden movement must retain the observer last-known position');
+    assert.notDeepEqual({ x: hiddenThreat.x, y: hiddenThreat.y }, hostile.position, 'hidden objective movement must not leak into tacticalKnowledge');
 
     mover.speedCellsPerSecond = 1000;
     for (let index = 0; index < 16 && mover.order; index += 1) tickSimulation(state, 0.05);
@@ -122,8 +128,7 @@ function verifyAcceptedLiveReplanAndCompletion(): void {
       navigationProfile: registry.getProfile('direct'),
       tacticalContext: buildUnitTacticalRouteContext(mover),
     });
-    assert.equal(newerPlan.ok, true);
-    if (!newerPlan.ok) return;
+    if (!newerPlan.ok) assert.fail(newerPlan.reasonRu);
     mover.order = newerPlan.order;
     const newerForeignOrder = mover.order;
     applyOwnedMoveEffects(state, runtimeResult(mover.id, [{
@@ -146,7 +151,7 @@ function verifyHysteresisAndCooldownBoundSearches(): void {
   try {
     const state = makeCorridorState();
     const mover = unit(state, 'blue-mover');
-    const shooter = unit(state, 'red-shooter');
+    const hostile = unit(state, 'red-hostile');
     const { order } = installPlannedPlayerLinkedOrder(
       state,
       mover,
@@ -159,7 +164,6 @@ function verifyHysteresisAndCooldownBoundSearches(): void {
     const routeRevisionBefore = order.routeRevision;
     const replanCountBefore = order.replanCount;
 
-    fireNearMiss(state, shooter, 'rejected-live-shot');
     tickSimulation(state, 0.1);
 
     assert.equal(mover.order, order, 'hysteresis rejection must retain the same active order');
@@ -170,19 +174,19 @@ function verifyHysteresisAndCooldownBoundSearches(): void {
     assert.equal(order.lastReplanReason, 'danger_changed');
     assert.equal(mover.behaviorRuntime.lastEvent, 'move_route_replan_hysteresis');
     const firstSearchAt = order.lastReplanAtSeconds;
-    const processedKnowledgeRevision = order.knowledgeRevision;
+    const processedKnowledgeRevision = requiredNumber(order.knowledgeRevision, 'processed knowledge revision');
 
     for (let index = 0; index < 5; index += 1) {
-      fireNearMiss(state, shooter, `rejected-cooldown-shot-${index}`);
+      hostile.position = { x: 18.45 - index * 0.05, y: 3.5 + (index % 2) * 0.05 };
       tickSimulation(state, 0.1);
-      assert.ok(mover.tacticalKnowledge.revision > requiredNumber(processedKnowledgeRevision, 'processed knowledge revision'));
+      assert.ok(mover.tacticalKnowledge.revision > processedKnowledgeRevision, 'real observed movement must produce fresh knowledge revisions');
       assert.equal(order.replanSearchCount, 1, 'fresh danger revisions inside cooldown must not launch A* each tick');
       assert.equal(order.lastReplanAtSeconds, firstSearchAt);
       assert.equal(order.routeRevision, routeRevisionBefore);
       assert.equal(order.replanCount, replanCountBefore);
     }
 
-    fireNearMiss(state, shooter, 'rejected-after-cooldown-shot');
+    hostile.position = { x: 18.1, y: 3.6 };
     tickSimulation(state, 1.1);
     assert.equal(order.replanSearchCount, 2, 'a fresh danger revision may search again after cooldown expires');
     assert.equal(order.replanCount, replanCountBefore, 'the second insufficient candidate must still be rejected');
@@ -266,13 +270,15 @@ function makeCorridorState(): SimulationState {
       ...blockerRectangle('middle-wall', 6, 17, 5, 8),
     ],
   }, [
-    { id: 'blue-mover', label: 'Mover', labelRu: 'Двигающийся', type: 'infantry_squad', side: 'blue', x: 2, y: 3, facingDegrees: 0, viewRangeCells: 0 },
-    { id: 'red-shooter', label: 'Shooter', labelRu: 'Стрелок', type: 'infantry_squad', side: 'red', x: 0, y: 4, facingDegrees: 0, viewRangeCells: 0 },
+    { id: 'blue-mover', label: 'Mover', labelRu: 'Двигающийся', type: 'infantry_squad', side: 'blue', x: 2, y: 3, facingDegrees: 0, viewAngleDegrees: 120, viewRangeCells: 30 },
+    { id: 'red-hostile', label: 'Hostile', labelRu: 'Противник', type: 'infantry_squad', side: 'red', x: 18, y: 3, facingDegrees: 180, viewRangeCells: 0 },
   ]);
   const mover = unit(state, 'blue-mover');
-  const shooter = unit(state, 'red-shooter');
+  const hostile = unit(state, 'red-hostile');
   mover.position = { x: 2.5, y: 3.5 };
-  shooter.position = { x: 0.5, y: 4.25 };
+  hostile.position = { x: 18.5, y: 3.5 };
+  mover.behaviorRuntime.weaponReady = false;
+  hostile.behaviorRuntime.weaponReady = false;
   state.selectedUnitId = mover.id;
   state.selectedUnitIds = [mover.id];
   state.editor.enabled = false;
@@ -303,19 +309,10 @@ function blockerRectangle(id: string, minX: number, maxX: number, minY: number, 
   return objects;
 }
 
-function fireNearMiss(state: SimulationState, shooter: UnitModel, shotId: string): void {
-  traceProjectile(state, {
-    shotId,
-    shooterId: shooter.id,
-    origin: {
-      xMetres: shooter.position.x * state.map.metersPerCell,
-      yMetres: shooter.position.y * state.map.metersPerCell,
-      zMetres: 1.45,
-    },
-    direction: { x: 1, y: 0, z: 0 },
-    maximumDistanceMetres: 45,
-    muzzleVelocityMetresPerSecond: 865,
-  });
+function threat(observer: UnitModel, hostileId: string) {
+  const found = observer.tacticalKnowledge.threats.find((item) => item.id === `unit:${hostileId}`);
+  assert.ok(found, 'real perception must create a unit threat');
+  return found;
 }
 
 function runtimeResult(unitId: string, effects: readonly unknown[]): AiGraphRuntimeResult {
