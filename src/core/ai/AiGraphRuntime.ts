@@ -136,6 +136,7 @@ interface RuntimeAccumulator {
   effects: AiGraphEffect[];
   trace: AiGraphRuntimeTraceItem[];
   scores: AiGraphRunnerResult['scores'];
+  tacticalQueries: AiGraphRunnerResult['tacticalQueries'];
 }
 
 interface StateValidation {
@@ -263,6 +264,7 @@ function executeSequence(
     effects: [...(selection?.effects ?? [])],
     trace: runtimeTrace(selection?.trace ?? []),
     scores: selection?.scores ?? [],
+    tacticalQueries: selection?.tacticalQueries ?? {},
   };
   const lifecycle: AiGraphLifecycleEvent[] = [];
   const children = sequence.children ?? [];
@@ -339,6 +341,7 @@ function executeSequence(
     accumulator.effects.push(...instant.effects);
     accumulator.trace.push(...runtimeTrace(instant.trace));
     accumulator.scores = [...accumulator.scores, ...instant.scores];
+    accumulator.tacticalQueries = instant.tacticalQueries;
     if (!instant.ok) {
       return result(
         input,
@@ -797,6 +800,7 @@ function result(
     selectedBranchName: nodeName(branch),
     selectedBranchNameRu: nodeNameRu(branch),
     scores: accumulator.scores,
+    tacticalQueries: accumulator.tacticalQueries,
     effects: accumulator.effects,
     blackboard: accumulator.blackboard,
     cooldowns: accumulator.cooldowns,
@@ -839,6 +843,7 @@ function standalone(
     selectedBranchName: branch ? nodeName(branch) : branchId,
     selectedBranchNameRu: branch ? nodeNameRu(branch) : undefined,
     scores: [],
+    tacticalQueries: {},
     effects: extra.effects ?? [],
     blackboard: cloneBlackboard(input.blackboard),
     cooldowns: { ...(input.cooldowns ?? {}) },

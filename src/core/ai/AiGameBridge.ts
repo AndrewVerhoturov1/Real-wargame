@@ -2,7 +2,7 @@ import { clampPercent, type UnitPosture } from '../behavior/BehaviorModel';
 import { findBestDirectFireContact } from '../combat/CombatDecision';
 import { requestFireAction } from '../combat/FireAction';
 import { clearWeaponRuntime } from '../combat/WeaponModel';
-import { findBestCoverForThreat } from '../cover/CoverEvaluation';
+import { generateCoverTacticalCandidates } from '../cover/CoverTacticalCandidates';
 import { distance, type GridPosition } from '../geometry';
 import { buildSoldierAwarenessReport } from '../knowledge/SoldierAwarenessGrid';
 import { clampGridPositionToMap, type TacticalMap } from '../map/MapModel';
@@ -51,7 +51,6 @@ const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 const AI_GRAPH_TICK_INTERVAL_MS = 600;
 const AI_GRAPH_POLL_INTERVAL_MS = 60;
-const COVER_SEARCH_RADIUS_CELLS = 5;
 
 type PausableSimulationState = SimulationState & { paused?: boolean };
 type LegacyAiUnitGraphRuntime = UnitModel['behaviorRuntime'] & {
@@ -348,14 +347,10 @@ export function buildBlackboardForUnit(
   const threats = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
   const bestContact = getBestPerceptionContact(unit);
   const threatPosition = bestContact?.lastKnownPosition ?? threats.targetPosition;
-  const bestCover = findBestCoverForThreat(
-    state.map,
-    unit.position,
-    threatPosition,
-    unit.behaviorRuntime.posture,
-    COVER_SEARCH_RADIUS_CELLS,
-  );
-  const distanceToCover = bestCover.distanceCells * state.map.metersPerCell;
+  const selectedCover = readPosition(runtimeMemory.best_cover_position);
+  const distanceToCover = selectedCover
+    ? distance(unit.position, selectedCover) * state.map.metersPerCell
+    : 9999;
   const strongest = threats.strongest;
   const threatDistance = threatPosition
     ? distance(unit.position, threatPosition) * state.map.metersPerCell
@@ -390,7 +385,7 @@ export function buildBlackboardForUnit(
     threatDistance: Math.round(threatDistance),
     threatAngle: strongest?.zone.arcDegrees ?? 0,
     coverProtection: strongest?.coverProtection ?? 0,
-    bestCoverQuality: Math.max(0, Math.round(bestCover.score)),
+    bestCoverQuality: Math.max(0, Math.round(readNumber(runtimeMemory.bestCoverQuality, 0))),
     currentPositionDanger: awareness.currentPosition.danger,
     currentExpectedProtection: awareness.currentPosition.expectedProtection,
     bestSafePositionScore: Math.max(0, Math.round(bestSafe?.score ?? 0)),
@@ -413,7 +408,6 @@ export function buildBlackboardForUnit(
     player_command_target_position: command ? { ...command.target } : null,
     player_command_revision: command?.revision ?? 0,
     retreat_position: makeRetreatPoint(state.map, unit.position, threatPosition),
-    best_cover_position: bestSafe?.position ?? bestCover.position,
     current_target: contactVisible && bestContact ? { ...bestContact.lastKnownPosition } : null,
     remembered_enemy_position: contactKnown && threatPosition ? { ...threatPosition } : null,
     visible_enemy_id: contactVisible ? bestContact?.stimulusId ?? null : null,
@@ -497,16 +491,9 @@ function readCurrentRuntimeMemory(unit: UnitModel): AiGraphRunnerBlackboard {
 function createTacticalHost(state: SimulationState, unit: UnitModel): AiGraphTacticalHost {
   return {
     resolveDistanceMeters: (fromKey, toKey, blackboard) => resolveDistanceMeters(state, unit, blackboard, fromKey, toKey),
-    findBestObject: (objectKind, _criteria, searchRadiusMeters) => {
-      if (objectKind !== 'cover') return null;
+    generateCoverCandidates: (request) => {
       const threats = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
-      return findBestCoverForThreat(
-        state.map,
-        unit.position,
-        threats.targetPosition,
-        unit.behaviorRuntime.posture,
-        searchRadiusMeters / state.map.metersPerCell,
-      ).position;
+      return generateCoverTacticalCandidates({ map: state.map, unit, threatPosition: threats.targetPosition, orderTarget: unit.order?.target ?? null, searchRadiusMeters: request.searchRadiusMeters, maxCandidates: request.maxCandidates, maxCalculationMs: request.maxCalculationMs });
     },
     tacticalCheck: (checkKind, blackboard) => evaluateTacticalCheck(state, unit, blackboard, checkKind),
   };
@@ -666,6 +653,7 @@ function publishRuntimeDebugTrace(
   runtimeSessionStatus: AiRuntimeSessionSnapshotV1['status'],
 ): void {
   try {
+    const tacticalQueries = readTacticalQueryDebugSnapshot(unit.id, graph.id, result.tacticalQueries);
     const payload = {
       version: 1,
       kind: 'ai-graph-runtime-debug',
@@ -700,6 +688,7 @@ function publishRuntimeDebugTrace(
       explanationRu: result.explanationRu,
       trace: result.trace,
       scores: result.scores,
+      tacticalQueries,
       effects: result.effects,
       consumedEventIds: result.consumedEventIds,
       reactiveAbort: result.reactiveAbort,
@@ -712,6 +701,11 @@ function publishRuntimeDebugTrace(
   } catch {
     // Debug overlay is optional. If localStorage is blocked or full, gameplay must continue.
   }
+}
+
+function readTacticalQueryDebugSnapshot(unitId: string, graphId: string, current: AiGraphRuntimeResult['tacticalQueries']): AiGraphRuntimeResult['tacticalQueries'] {
+  if (Object.keys(current).length > 0) return current;
+  try { const raw = window.localStorage.getItem(DEBUG_STORAGE_KEY); if (!raw) return {}; const previous = JSON.parse(raw) as { unitId?: unknown; graphId?: unknown; tacticalQueries?: unknown }; if (previous.unitId !== unitId || previous.graphId !== graphId || !previous.tacticalQueries || typeof previous.tacticalQueries !== 'object') return {}; return previous.tacticalQueries as AiGraphRuntimeResult['tacticalQueries']; } catch { return {}; }
 }
 
 function publishStatePlanDebug(
@@ -802,14 +796,13 @@ function runtimeMemoryScopeDebug(
 }
 
 function evaluateTacticalCheck(
-  state: SimulationState,
+  _state: SimulationState,
   unit: UnitModel,
   blackboard: AiGraphRunnerBlackboard,
   checkKind: string,
 ): boolean {
   if (checkKind === 'cover_exists') {
-    const threats = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
-    return Boolean(findBestCoverForThreat(state.map, unit.position, threats.targetPosition, unit.behaviorRuntime.posture).position);
+    return Boolean(readPosition(blackboard.best_cover_position));
   }
   if (checkKind === 'ammo_available') return readNumber(blackboard.ammo, 0) > 0;
   if (checkKind === 'can_execute_order') return Boolean(unit.order);
@@ -839,7 +832,7 @@ function resolvePoint(
 ): GridPosition | null {
   const threats = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
   if (key === 'self') return unit.position;
-  if (key === 'cover') return findBestCoverForThreat(state.map, unit.position, threats.targetPosition, unit.behaviorRuntime.posture).position;
+  if (key === 'cover') return readPosition(blackboard.best_cover_position);
   if (key === 'orderPoint' || key === 'orderTarget') return unit.order?.target ?? null;
   if (key === 'playerCommandTarget') return unit.playerCommand?.target ?? null;
   if (key === 'currentTarget') return readPosition(blackboard.current_target);

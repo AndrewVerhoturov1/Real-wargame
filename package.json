@@ -69,7 +69,9 @@
     "graph-v2-cli:smoke": "node scripts/ai_graph_cli_v2_smoke.mjs",
     "state-machine:smoke": "node scripts/ai_state_machine_smoke.mjs",
     "plan-runtime:smoke": "node scripts/ai_plan_runtime_smoke.mjs",
-    "state-plan-scenario:smoke": "node scripts/ai_state_plan_scenario_smoke.mjs"
+    "state-plan-scenario:smoke": "node scripts/ai_state_plan_scenario_smoke.mjs",
+    "tactical-query:smoke": "node scripts/tactical_query_system_smoke.mjs",
+    "tactical-query-ui:smoke": "node scripts/tactical_query_ui_smoke.mjs"
   },
   "dependencies": {
     "pixi.js": "^7.4.3"

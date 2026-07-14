@@ -1,1 +1,0 @@
-Temporary trigger for preparing Tactical Query System on the latest preview. The preparation workflow removes this file before committing the transfer-ready result.

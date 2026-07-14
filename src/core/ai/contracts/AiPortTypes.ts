@@ -2,7 +2,7 @@ import type { AiBlackboardValue } from '../AiBlackboard';
 
 export type AiPortValueKind =
   | 'number' | 'boolean' | 'string' | 'position' | 'unitId'
-  | 'objectId' | 'slotId' | 'event' | 'plan' | 'route';
+  | 'objectId' | 'slotId' | 'event' | 'plan' | 'route' | 'tacticalQuery';
 
 export interface AiPortDefinition {
   readonly id: string;
