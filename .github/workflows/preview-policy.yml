@@ -17,31 +17,59 @@ jobs:
         shell: bash
         run: |
           set -e
+
+          # This workflow guards PRs targeting main.
+          # Visual QA is deliberately not run here. It is manual-only through
+          # .github/workflows/preview-screenshots.yml after user approval.
+          # The preferred external delivery is direct push to real-wargame-preview, not PRs.
+          # PRs targeting main from task branches are a preview-policy violation without GO.
+
           BASE_BRANCH="${{ github.base_ref }}"
           HEAD_BRANCH="${{ github.head_ref }}"
+
           echo "=== Preview Policy Check ==="
           echo "Base branch: $BASE_BRANCH"
           echo "Head branch: $HEAD_BRANCH"
+          echo ""
+
           DEFAULT_TARGET="real-wargame-preview"
+          echo "Default target branch: $DEFAULT_TARGET"
+          echo "Default external delivery: direct push to $DEFAULT_TARGET (PR is fallback)"
+          echo ""
+
           if [ "$BASE_BRANCH" = "main" ]; then
             if echo "$HEAD_BRANCH" | grep -qE '^(codex/|preview/|r-init/)'; then
               if printf '%s\n' "$PR_BODY" | grep -Eiq 'MAIN_GO_APPROVED_BY_USER:[[:space:]]*yes'; then
+                echo "PASS: PR targets main with explicit MAIN_GO approval."
                 echo "preview_policy=pass" >> $GITHUB_ENV
                 exit 0
               else
+                echo "FAIL: PR targets main from branch '$HEAD_BRANCH'"
+                echo "      without MAIN_GO_APPROVED_BY_USER: yes marker."
+                echo ""
+                echo "Default target is '$DEFAULT_TARGET'."
+                echo "Please retarget this PR to '$DEFAULT_TARGET' or"
+                echo "add 'MAIN_GO_APPROVED_BY_USER: yes' to the PR body"
+                echo "if the user has explicitly approved a main merge."
                 echo "preview_policy=fail" >> $GITHUB_ENV
                 exit 1
               fi
             else
+              echo "PASS: Head branch '$HEAD_BRANCH' does not match codex/*, preview/*, or r-init/* patterns."
               echo "preview_policy=pass" >> $GITHUB_ENV
             fi
           else
+            echo "PASS: Base branch is '$BASE_BRANCH' (expected default is '$DEFAULT_TARGET')."
             echo "preview_policy=pass" >> $GITHUB_ENV
           fi
 
       - name: Print policy result
         shell: bash
-        run: echo "Preview policy result: ${{ env.preview_policy }}"
+        run: |
+          echo "Preview policy result: ${{ env.preview_policy }}"
+          echo "Default target for this repository is: real-wargame-preview"
+          echo "Default external delivery is: direct push to preview (PR is fallback)"
+          echo "Visual QA execution is manual-only after explicit user approval"
 
   prepare-combat-integration:
     if: github.head_ref == 'tmp/prepare-combat-integration-run-20260714'
