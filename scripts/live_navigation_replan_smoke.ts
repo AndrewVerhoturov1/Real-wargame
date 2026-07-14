@@ -62,12 +62,15 @@ function verifyAcceptedLiveReplanAndCompletion(): void {
     tickSimulation(state, 0.1);
 
     assert.ok(mover.tacticalKnowledge.revision > knowledgeRevisionBeforeContact, 'real perception must change subjective tacticalKnowledge during SimulationTick');
+    const perceptionContact = mover.perceptionKnowledge.contacts.find((contact) => contact.sourceUnitId === hostile.id);
+    assert.ok(perceptionContact, 'ordinary perception must create a contact for the hostile');
+    assert.equal(perceptionContact.source, 'visual', 'the contact must originate from real LOS evaluation');
     const perceivedThreat = threat(mover, hostile.id);
-    assert.equal(perceivedThreat.visibleNow, true, 'the hostile must be acquired by real LOS perception');
+    assert.equal(perceivedThreat.source, 'seen', 'visual perception must become a subjective seen threat');
     assert.deepEqual(
       { x: perceivedThreat.x, y: perceivedThreat.y },
       hostile.position,
-      'a currently visible contact may use its observed position',
+      'the subjective visual memory may use the currently observed position',
     );
 
     const replacement = mover.order;
