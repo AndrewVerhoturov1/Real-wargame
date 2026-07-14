@@ -1,11 +1,179 @@
 {
-  "version": 1,
+  "version": 2,
   "id": "soldier_clean_workspace_graph",
   "name": "Soldier Clean Workspace Graph",
   "nameRu": "Чистый рабочий граф солдата",
   "description": "Clean starter graph for building soldier behavior from universal nodes.",
   "descriptionRu": "Чистый стартовый граф для сборки поведения солдата из универсальных нод.",
   "rootNodeId": "root",
+  "blackboardSchema": [
+    {
+      "key": "danger",
+      "valueKind": "number",
+      "label": "Danger",
+      "description": "Current danger score for the soldier from 0 to 100.",
+      "labelRu": "Опасность",
+      "descriptionRu": "Текущая оценка опасности для солдата от 0 до 100.",
+      "defaultValue": 0,
+      "minimum": 0,
+      "maximum": 100
+    },
+    {
+      "key": "stress",
+      "valueKind": "number",
+      "label": "Stress",
+      "description": "Current stress score for the soldier from 0 to 100.",
+      "labelRu": "Стресс",
+      "descriptionRu": "Текущий стресс солдата от 0 до 100.",
+      "defaultValue": 0,
+      "minimum": 0,
+      "maximum": 100
+    },
+    {
+      "key": "suppression",
+      "valueKind": "number",
+      "label": "suppression",
+      "description": "Migrated key suppression.",
+      "labelRu": "suppression",
+      "descriptionRu": "Перенесённый ключ suppression.",
+      "defaultValue": 0
+    },
+    {
+      "key": "fatigue",
+      "valueKind": "number",
+      "label": "fatigue",
+      "description": "Migrated key fatigue.",
+      "labelRu": "fatigue",
+      "descriptionRu": "Перенесённый ключ fatigue.",
+      "defaultValue": 0
+    },
+    {
+      "key": "morale",
+      "valueKind": "number",
+      "label": "morale",
+      "description": "Migrated key morale.",
+      "labelRu": "morale",
+      "descriptionRu": "Перенесённый ключ morale.",
+      "defaultValue": 60
+    },
+    {
+      "key": "health",
+      "valueKind": "number",
+      "label": "health",
+      "description": "Migrated key health.",
+      "labelRu": "health",
+      "descriptionRu": "Перенесённый ключ health.",
+      "defaultValue": 100
+    },
+    {
+      "key": "ammo",
+      "valueKind": "number",
+      "label": "ammo",
+      "description": "Migrated key ammo.",
+      "labelRu": "ammo",
+      "descriptionRu": "Перенесённый ключ ammo.",
+      "defaultValue": 30
+    },
+    {
+      "key": "distanceToCover",
+      "valueKind": "number",
+      "label": "distanceToCover",
+      "description": "Migrated key distanceToCover.",
+      "labelRu": "distanceToCover",
+      "descriptionRu": "Перенесённый ключ distanceToCover.",
+      "defaultValue": 20
+    },
+    {
+      "key": "enemyVisible",
+      "valueKind": "boolean",
+      "label": "enemyVisible",
+      "description": "Migrated key enemyVisible.",
+      "labelRu": "enemyVisible",
+      "descriptionRu": "Перенесённый ключ enemyVisible.",
+      "defaultValue": false
+    },
+    {
+      "key": "enemyKnown",
+      "valueKind": "boolean",
+      "label": "enemyKnown",
+      "description": "Migrated key enemyKnown.",
+      "labelRu": "enemyKnown",
+      "descriptionRu": "Перенесённый ключ enemyKnown.",
+      "defaultValue": false
+    },
+    {
+      "key": "underFire",
+      "valueKind": "boolean",
+      "label": "underFire",
+      "description": "Migrated key underFire.",
+      "labelRu": "underFire",
+      "descriptionRu": "Перенесённый ключ underFire.",
+      "defaultValue": false
+    },
+    {
+      "key": "hasOrder",
+      "valueKind": "boolean",
+      "label": "hasOrder",
+      "description": "Migrated key hasOrder.",
+      "labelRu": "hasOrder",
+      "descriptionRu": "Перенесённый ключ hasOrder.",
+      "defaultValue": false
+    },
+    {
+      "key": "isInCover",
+      "valueKind": "boolean",
+      "label": "isInCover",
+      "description": "Migrated key isInCover.",
+      "labelRu": "isInCover",
+      "descriptionRu": "Перенесённый ключ isInCover.",
+      "defaultValue": false
+    },
+    {
+      "key": "weaponReady",
+      "valueKind": "boolean",
+      "label": "weaponReady",
+      "description": "Migrated key weaponReady.",
+      "labelRu": "weaponReady",
+      "descriptionRu": "Перенесённый ключ weaponReady.",
+      "defaultValue": true
+    },
+    {
+      "key": "current_action",
+      "valueKind": "action",
+      "label": "Current Action",
+      "description": "Last selected action used for decision inertia.",
+      "labelRu": "Текущее действие",
+      "descriptionRu": "Последнее выбранное действие для инерции решений.",
+      "defaultValue": "wait"
+    },
+    {
+      "key": "best_cover_position",
+      "valueKind": "nullablePosition",
+      "label": "Best Cover Position",
+      "description": "Cover point selected by the local engine through a tactical query.",
+      "labelRu": "Лучшая точка укрытия",
+      "descriptionRu": "Точка укрытия, выбранная локальным движком через tactical query.",
+      "defaultValue": null
+    },
+    {
+      "key": "current_target",
+      "valueKind": "string",
+      "label": "current_target",
+      "description": "Migrated key current_target.",
+      "labelRu": "current_target",
+      "descriptionRu": "Перенесённый ключ current_target.",
+      "defaultValue": null
+    },
+    {
+      "key": "remembered_enemy_position",
+      "valueKind": "string",
+      "label": "remembered_enemy_position",
+      "description": "Migrated key remembered_enemy_position.",
+      "labelRu": "remembered_enemy_position",
+      "descriptionRu": "Перенесённый ключ remembered_enemy_position.",
+      "defaultValue": null
+    }
+  ],
   "blackboardDefaults": {
     "danger": 0,
     "stress": 0,
@@ -37,5 +205,6 @@
       "children": [],
       "parameters": {}
     }
-  ]
+  ],
+  "subgraphRefs": []
 }

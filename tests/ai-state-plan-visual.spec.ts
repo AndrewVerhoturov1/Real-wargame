@@ -174,6 +174,21 @@ test('shows state, plan, and active subgraph in the node editor', async ({ page 
     window.localStorage.setItem('real-wargame.ai-node-editor.debug.v1', JSON.stringify({
       kind: 'ai-graph-runtime-debug',
       version: 1,
+      graphId: 'visual-state-plan-graph',
+      unitId: 'visual-soldier',
+      unitLabel: 'Боец',
+      selectedBranchNodeId: 'root',
+      selectedBranchName: 'Root',
+      selectedBranchNameRu: 'Старт',
+      ok: true,
+      status: 'running',
+      paused: false,
+      nowMs: Date.now(),
+      explanation: 'Plan movement is active.',
+      explanationRu: 'План движения выполняется.',
+      trace: [],
+      scores: [],
+      effects: [],
       statePlan: {
         stateId: 'Contact',
         stateLabelRu: 'Контакт',
@@ -211,6 +226,17 @@ test('shows state, plan, and active subgraph in the node editor', async ({ page 
     }));
   });
   await page.goto('/ai-node-editor.html');
+  await expect(page.locator('#migrate-graph')).toHaveCount(0);
+  await expect(page.locator('.graph-v1-warning')).toHaveCount(0);
+
+  const dock = page.locator('.ai-debug-panel-dock');
+  const stateCard = page.locator('[data-ai-debug-panel="state-plan"]');
+  const traceCard = page.locator('[data-ai-debug-panel="runtime-trace"]');
+  await expect(dock).toBeVisible();
+  await expect(stateCard.getByText('Состояние и план', { exact: true })).toBeVisible();
+  await expect(traceCard.getByText('След ИИ', { exact: true })).toBeVisible();
+  await expect(stateCard).toHaveAttribute('open', '');
+  await expect(traceCard).not.toHaveAttribute('open', '');
 
   const panel = page.locator('.ai-state-plan-panel');
   await expect(panel).toBeVisible();
@@ -228,4 +254,24 @@ test('shows state, plan, and active subgraph in the node editor', async ({ page 
   await expect(panel).toContainText('Занять укрытие');
   await expect(panel.locator('[data-state-plan="step"]')).toContainText('Движение к укрытию');
   await saveScreenshot(page, 'state-plan-node-editor.png');
+
+  await traceCard.locator(':scope > summary').click();
+  await expect(traceCard).toHaveAttribute('open', '');
+  await expect(stateCard).not.toHaveAttribute('open', '');
+  await expect(page.locator('.ai-runtime-debug-panel')).toBeVisible();
+  await expect(panel).not.toBeVisible();
+  await expect(page.locator('.ai-runtime-debug-panel')).toContainText('План движения выполняется.');
+
+  const geometry = await page.evaluate(() => {
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('.ai-debug-panel-card'));
+    const openCards = cards.filter((card) => (card as HTMLDetailsElement).open);
+    const rectangles = cards.map((card) => card.getBoundingClientRect());
+    const separated = rectangles.length < 2
+      || rectangles[0].bottom <= rectangles[1].top + 0.5
+      || rectangles[1].bottom <= rectangles[0].top + 0.5;
+    return { openCount: openCards.length, separated };
+  });
+  expect(geometry.openCount, 'Only one AI diagnostics card may be expanded at once.').toBe(1);
+  expect(geometry.separated, 'Collapsed and expanded diagnostics cards must not overlap.').toBe(true);
+  await saveScreenshot(page, 'state-plan-node-editor-trace.png');
 });

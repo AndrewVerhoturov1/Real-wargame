@@ -57,6 +57,7 @@ interface ActiveMoveSnapshot {
   readonly target: GridPosition;
   readonly acceptanceRadiusCells: number;
   readonly ownerToken: string;
+  readonly targetAvailable: boolean;
 }
 
 export function installAiStatefulMoveGameBridge(state: SimulationState): AiGameBridgeHandle {
@@ -158,7 +159,7 @@ export function updateSelectedRouteStatus(
 
   const runtime = unit.behaviorRuntime as AiMoveRuntime;
   const memory = getRuntimeMemory(runtime);
-  const activeMove = readActiveMoveSnapshot(getExecutionState(runtime));
+  const activeMove = readActiveMoveSnapshot(getExecutionState(runtime), memory);
   if (!activeMove) return null;
 
   const order = unit.order;
@@ -173,7 +174,7 @@ export function updateSelectedRouteStatus(
     ownerToken: activeMove.ownerToken,
     activeOrderSource,
     activeOrderToken: order?.ownerToken ?? null,
-    targetAvailable: isGridPosition(memory[activeMove.targetKey]),
+    targetAvailable: activeMove.targetAvailable,
     paused: state.editor.enabled || getAiTestPaused(state),
     settings: readRouteSettings(runtime, activeMove),
     previousState: runtime.aiRouteStatusState ?? undefined,
@@ -259,9 +260,12 @@ function getExecutionState(runtime: AiMoveRuntime): AiGraphExecutionState | unde
   return runtime.aiRuntimeSession?.executionState ?? runtime.aiGraphExecutionState;
 }
 
-function readActiveMoveSnapshot(state: AiGraphExecutionState | undefined): ActiveMoveSnapshot | null {
+function readActiveMoveSnapshot(
+  state: AiGraphExecutionState | undefined,
+  blackboardScope: Readonly<Record<string, AiBlackboardValue>>,
+): ActiveMoveSnapshot | null {
   const data = state?.activeData;
-  if (data?.kind === 'subgraph') return readActiveMoveSnapshot(data.nestedExecutionState);
+  if (data?.kind === 'subgraph') return readActiveMoveSnapshot(data.nestedExecutionState, data.localBlackboard);
   const activeNodeId = state?.activeNodeId;
   if (!activeNodeId || data?.kind !== 'move_to_blackboard_position') return null;
   if (!data.targetKey || !data.actionToken || !isGridPosition(data.target)) return null;
@@ -271,6 +275,7 @@ function readActiveMoveSnapshot(state: AiGraphExecutionState | undefined): Activ
     target: { ...data.target },
     acceptanceRadiusCells: finiteNonNegative(data.acceptanceRadiusCells, 0.2),
     ownerToken: data.actionToken,
+    targetAvailable: isGridPosition(blackboardScope[data.targetKey]),
   };
 }
 
