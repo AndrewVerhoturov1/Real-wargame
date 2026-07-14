@@ -1,5 +1,8 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
-import { evaluateSmallArmsCover } from './SmallArmsCoverEvaluation';
+import {
+  evaluateSmallArmsCover,
+  type SmallArmsCoverOptions,
+} from './SmallArmsCoverEvaluation';
 import { distance, type GridPosition } from '../geometry';
 import {
   clampGridPositionToMap,
@@ -26,8 +29,9 @@ export function evaluateCoverBetween(
   threatPosition: GridPosition,
   unitPosition: GridPosition,
   posture: UnitPosture,
+  options: SmallArmsCoverOptions = {},
 ): CoverProtectionResult {
-  const result = evaluateSmallArmsCover(map, threatPosition, unitPosition, posture);
+  const result = evaluateSmallArmsCover(map, threatPosition, unitPosition, posture, options);
   return {
     object: result.object,
     protection: result.expectedProtection,

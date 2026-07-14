@@ -10,6 +10,11 @@ await runSmoke(
   'combat-threat-evidence-source-direction-regression-smoke',
   'combat_threat_evidence_source_direction_regression_smoke.ts',
 );
+await runSmoke('live-navigation-replan-smoke', 'live_navigation_replan_smoke.ts');
+await runSmoke(
+  'combat-safe-position-winner-smoke',
+  'combat_safe_position_winner_smoke.ts',
+);
 
 async function runSmoke(entryName, sourceFile) {
   const outDir = path.join(repoRoot, `.tmp-${entryName}`);
