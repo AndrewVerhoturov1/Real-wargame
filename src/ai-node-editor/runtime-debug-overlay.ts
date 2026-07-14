@@ -37,6 +37,9 @@ interface RuntimeBranchScore {
   readonly vetoReasonRu?: string;
 }
 
+interface RuntimeTacticalCandidate { readonly id: string; readonly position: { readonly x: number; readonly y: number }; readonly source: { readonly label: string; readonly labelRu: string }; readonly totalScore: number; readonly excluded: boolean; readonly exclusionReasons: readonly { readonly reason: string; readonly reasonRu: string }[]; readonly scoreBreakdown: Readonly<Record<string, number>>; }
+interface RuntimeTacticalQuery { readonly id: string; readonly kind: string; readonly status: string; readonly budget: { readonly maxCandidates: number; readonly searchRadiusMeters: number; readonly maxCalculationMs: number }; readonly candidates: readonly RuntimeTacticalCandidate[]; readonly elapsedMs: number; readonly stopReason?: { readonly reason: string; readonly reasonRu: string }; readonly winnerCandidateId?: string; }
+
 interface RuntimeReactiveAbort {
   readonly eventType: string;
   readonly observerId?: string;
@@ -78,6 +81,7 @@ interface RuntimeDebugPayload {
   readonly explanationRu?: string;
   readonly trace: readonly RuntimeTraceItem[];
   readonly scores: readonly RuntimeBranchScore[];
+  readonly tacticalQueries?: Readonly<Record<string, RuntimeTacticalQuery>>;
   readonly effects: readonly unknown[];
   readonly consumedEventIds?: readonly string[];
   readonly reactiveAbort?: RuntimeReactiveAbort;
@@ -251,6 +255,7 @@ function renderDebugPanel(payload: RuntimeDebugPayload | null): void {
   const memoryRows = renderMemoryScopeRows(payload);
   const cancellation = payload.cancellationReasonRu ?? payload.cancellationReason;
   const cancellationRow = cancellation ? `<div><dt>Причина отмены</dt><dd>${escapeHtml(cancellation)}</dd></div>` : '';
+  const tacticalQueryRows = renderTacticalQueryRows(payload);
   const reactiveRows = payload.reactiveAbort
     ? `<div><dt>Событие</dt><dd>${escapeHtml(payload.reactiveAbort.eventType)}</dd></div>
        <div><dt>Наблюдатель</dt><dd>${escapeHtml(payload.reactiveAbort.observerId ?? 'маршрут')}</dd></div>
@@ -272,10 +277,18 @@ function renderDebugPanel(payload: RuntimeDebugPayload | null): void {
       ${reactiveRows}
       <div><dt>Итог</dt><dd>${escapeHtml(payload.explanationRu ?? payload.explanation)}</dd></div>
     </dl>
+    ${tacticalQueryRows}
     <ul>${scoreRows}</ul>
   `;
   content.appendChild(panel);
 }
+
+function renderTacticalQueryRows(payload: RuntimeDebugPayload): string {
+  const queries = Object.values(payload.tacticalQueries ?? {}); if (queries.length === 0) return '';
+  return queries.map((query) => { const winner = query.candidates.find((candidate) => candidate.id === query.winnerCandidateId); const candidates = query.candidates.map((candidate) => { const role = candidate.id === query.winnerCandidateId ? 'Победитель' : candidate.excluded ? 'Исключён' : 'Допущен'; const exclusion = candidate.exclusionReasons.length > 0 ? '<span><b>Причина исключения:</b> ' + escapeHtml(candidate.exclusionReasons.map((reason) => reason.reasonRu ?? reason.reason).join('; ')) + '</span>' : '<span>Причина исключения: нет</span>'; const breakdown = Object.entries(candidate.scoreBreakdown).map(([key, value]) => escapeHtml(tacticalScoreLabel(key)) + ': ' + roundScore(value)).join(' · '); return '<li class="' + (candidate.excluded ? 'veto' : '') + ' ' + (candidate.id === query.winnerCandidateId ? 'winner' : '') + '"><b>' + escapeHtml(candidate.source.labelRu ?? candidate.source.label) + ' — ' + role + '</b><span>Позиция: ' + roundScore(candidate.position.x) + ', ' + roundScore(candidate.position.y) + ' · Итог: ' + roundScore(candidate.totalScore) + '</span>' + exclusion + '<small>' + breakdown + '</small></li>'; }).join(''); const stop = query.stopReason?.reasonRu ?? query.stopReason?.reason ?? 'нет'; return '<section class="tactical-query-diagnostics"><h4>Тактический запрос</h4><dl><div><dt>Состояние</dt><dd>' + escapeHtml(tacticalQueryStatusLabel(query.status)) + '</dd></div><div><dt>Кандидаты</dt><dd>' + query.candidates.length + ' из ' + query.budget.maxCandidates + '</dd></div><div><dt>Радиус поиска</dt><dd>' + roundScore(query.budget.searchRadiusMeters) + ' м</dd></div><div><dt>Время расчёта</dt><dd>' + roundScore(query.elapsedMs) + ' / ' + roundScore(query.budget.maxCalculationMs) + ' мс</dd></div><div><dt>Победитель</dt><dd>' + escapeHtml(winner?.source.labelRu ?? winner?.source.label ?? 'не выбран') + '</dd></div><div><dt>Досрочная остановка</dt><dd>' + escapeHtml(stop) + '</dd></div></dl><ul>' + candidates + '</ul></section>'; }).join('');
+}
+function tacticalScoreLabel(key: string): string { const labels: Record<string, string> = { protection: 'защита', concealment: 'маскировка', distance: 'расстояние', routeDanger: 'опасность маршрута', slope: 'склон', orderAlignment: 'соответствие приказу' }; return labels[key] ?? key; }
+function tacticalQueryStatusLabel(status: string): string { const labels: Record<string, string> = { generated: 'кандидаты созданы', filtered: 'фильтры применены', scored: 'позиции оценены', selected: 'победитель выбран', stopped: 'запрос остановлен' }; return labels[status] ?? 'неизвестное состояние'; }
 
 function removeExistingNodeDebug(): void {
   document.querySelectorAll<HTMLElement>('.graph-node[data-node-id]').forEach((element) => {
@@ -334,6 +347,7 @@ function readDebugPayload(): RuntimeDebugPayload | null {
       explanationRu: typeof parsed.explanationRu === 'string' ? parsed.explanationRu : undefined,
       trace: Array.isArray(parsed.trace) ? parsed.trace.filter(isTraceItem) : [],
       scores: Array.isArray(parsed.scores) ? parsed.scores.filter(isBranchScore) : [],
+      tacticalQueries: normalizeTacticalQueries(parsed.tacticalQueries),
       effects: Array.isArray(parsed.effects) ? parsed.effects : [],
       consumedEventIds: Array.isArray(parsed.consumedEventIds)
         ? parsed.consumedEventIds.filter((value): value is string => typeof value === 'string')
@@ -380,6 +394,47 @@ function normalizeMemoryScopeCounts(value: unknown): Readonly<Record<string, num
   const result: Record<string, number> = {};
   for (const [scope, count] of Object.entries(value)) if (typeof count === 'number' && Number.isFinite(count)) result[scope] = count;
   return result;
+}
+
+function normalizeTacticalQueries(value: unknown): Readonly<Record<string, RuntimeTacticalQuery>> | undefined {
+  if (!isRecord(value)) return undefined;
+  const result: Record<string, RuntimeTacticalQuery> = {};
+  for (const [key, query] of Object.entries(value)) {
+    if (isRuntimeTacticalQuery(query)) result[key] = query;
+  }
+  return result;
+}
+
+function isRuntimeTacticalQuery(value: unknown): value is RuntimeTacticalQuery {
+  if (!isRecord(value) || !isRecord(value.budget) || !Array.isArray(value.candidates)) return false;
+  return typeof value.id === 'string'
+    && typeof value.kind === 'string'
+    && typeof value.status === 'string'
+    && typeof value.budget.maxCandidates === 'number'
+    && typeof value.budget.searchRadiusMeters === 'number'
+    && typeof value.budget.maxCalculationMs === 'number'
+    && value.candidates.every(isRuntimeTacticalCandidate)
+    && typeof value.elapsedMs === 'number'
+    && (value.winnerCandidateId === undefined || typeof value.winnerCandidateId === 'string')
+    && (value.stopReason === undefined || isRuntimeTacticalReason(value.stopReason));
+}
+
+function isRuntimeTacticalCandidate(value: unknown): value is RuntimeTacticalCandidate {
+  if (!isRecord(value) || !isRecord(value.position) || !isRecord(value.source) || !isRecord(value.scoreBreakdown)) return false;
+  return typeof value.id === 'string'
+    && typeof value.position.x === 'number'
+    && typeof value.position.y === 'number'
+    && typeof value.source.label === 'string'
+    && typeof value.source.labelRu === 'string'
+    && typeof value.totalScore === 'number'
+    && typeof value.excluded === 'boolean'
+    && Array.isArray(value.exclusionReasons)
+    && value.exclusionReasons.every(isRuntimeTacticalReason)
+    && Object.values(value.scoreBreakdown).every((score) => typeof score === 'number');
+}
+
+function isRuntimeTacticalReason(value: unknown): value is { readonly reason: string; readonly reasonRu: string } {
+  return isRecord(value) && typeof value.reason === 'string' && typeof value.reasonRu === 'string';
 }
 
 function normalizeReactiveAbort(value: unknown): RuntimeReactiveAbort | undefined {

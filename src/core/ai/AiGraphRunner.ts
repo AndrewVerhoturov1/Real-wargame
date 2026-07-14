@@ -1,6 +1,7 @@
 import { distance, type GridPosition } from '../geometry';
 import type { AiBlackboardValue } from './AiBlackboard';
 import type { AiBranchScore, AiGraph, AiNode, AiNodeId, ScoreBreakdownItem } from './AiGraph';
+import { cloneTacticalQueries, createTacticalQuery, filterTacticalQuery, scoreTacticalQuery, selectBestTacticalPosition, type TacticalQuery, type TacticalQueryGenerationRequest, type TacticalQueryGenerationResult } from './tactical/TacticalQuery';
 
 export type AiGraphRunnerBlackboard = Record<string, AiBlackboardValue>;
 
@@ -84,6 +85,7 @@ export interface AiGraphTacticalHost {
     searchRadiusMeters: number,
     blackboard: AiGraphRunnerBlackboard,
   ) => AiBlackboardValue | null;
+  readonly generateCoverCandidates?: (request: TacticalQueryGenerationRequest) => TacticalQueryGenerationResult;
   readonly tacticalCheck?: (checkKind: string, blackboard: AiGraphRunnerBlackboard) => boolean;
 }
 
@@ -104,6 +106,7 @@ export interface AiGraphRunnerResult {
   readonly selectedBranchName: string;
   readonly selectedBranchNameRu?: string;
   readonly scores: readonly AiBranchScore[];
+  readonly tacticalQueries: Readonly<Record<string, TacticalQuery>>;
   readonly effects: readonly AiGraphEffect[];
   readonly blackboard: AiGraphRunnerBlackboard;
   readonly cooldowns: Record<string, number>;
@@ -122,6 +125,7 @@ interface ExecutionContext {
   tacticalHost?: AiGraphTacticalHost;
   effects: AiGraphEffect[];
   scores: AiBranchScore[];
+  tacticalQueries: Record<string, TacticalQuery>;
   trace: AiGraphTraceItem[];
   selectedBranch?: AiNode;
 }
@@ -143,6 +147,7 @@ interface BranchResult {
   readonly blackboard: AiGraphRunnerBlackboard;
   readonly cooldowns: Record<string, number>;
   readonly trace: readonly AiGraphTraceItem[];
+  readonly tacticalQueries: Readonly<Record<string, TacticalQuery>>;
   readonly selectedBranch: AiNode;
 }
 
@@ -159,6 +164,7 @@ export function runAiGraph(input: AiGraphRunnerInput): AiGraphRunnerResult {
     tacticalHost: input.tacticalHost,
     effects: [],
     scores: [],
+    tacticalQueries: {},
     trace: [],
   };
 
@@ -250,6 +256,7 @@ function executeUtilitySelector(context: ExecutionContext, node: AiNode, visited
   context.effects.push(...winner.effects);
   context.blackboard = cloneBlackboard(winner.blackboard);
   context.cooldowns = { ...winner.cooldowns };
+  context.tacticalQueries = cloneTacticalQueries(winner.tacticalQueries);
   context.trace.push(...winner.trace);
   context.selectedBranch = winner.selectedBranch;
   armAfterCooldown(context, node);
@@ -284,6 +291,7 @@ function evaluateBranch(parent: ExecutionContext, branchNode: AiNode, visited: S
     cooldowns: { ...parent.cooldowns },
     effects: [],
     scores: [],
+    tacticalQueries: cloneTacticalQueries(parent.tacticalQueries),
     trace: [],
     score: 0,
     breakdown: [],
@@ -312,6 +320,7 @@ function evaluateBranch(parent: ExecutionContext, branchNode: AiNode, visited: S
     blackboard: context.blackboard,
     cooldowns: context.cooldowns,
     trace: context.trace,
+    tacticalQueries: cloneTacticalQueries(context.tacticalQueries),
     selectedBranch: branchNode,
   };
 }
@@ -417,7 +426,12 @@ function executeNodeOwnLogic(context: ExecutionContext, node: AiNode): boolean {
     }
     case 'TacticalCheck':
       return evaluateTacticalCheck(context, parameters) === readBoolean(parameters.expected, true);
+    case 'CreateCoverCandidates': return applyCreateCoverCandidates(context, parameters);
+    case 'FilterTacticalPositions': return applyFilterTacticalPositions(context, parameters);
+    case 'ScoreTacticalPositions': return applyScoreTacticalPositions(context, parameters);
+    case 'SelectBestTacticalPosition': return applySelectBestTacticalPosition(context, parameters);
     case 'FindBestObject':
+      if (readString(parameters.objectKind, 'cover') === 'cover') { pushTrace(context, node, 'fail', 'Legacy cover lookup is disabled. Use the Tactical Query System nodes.', 'Старый скрытый поиск укрытия отключён. Используйте ноды Tactical Query System.'); return false; }
       applyFindBestObject(context, parameters);
       return true;
     case 'SelectTarget':
@@ -631,6 +645,29 @@ function applyStableThreshold(context: ExecutionContext, node: AiNode): boolean 
   return active;
 }
 
+function applyCreateCoverCandidates(context: ExecutionContext, parameters: Record<string, AiBlackboardValue>): boolean {
+  const queryKey = readString(parameters.queryKey, 'cover_query');
+  const budget = { maxCandidates: Math.max(1, Math.floor(readNumber(parameters.maxCandidates, 24))), searchRadiusMeters: Math.max(0, readNumber(parameters.searchRadiusMeters, 50)), maxCalculationMs: Math.max(0, readNumber(parameters.maxCalculationMs, 12)) };
+  const generation = context.tacticalHost?.generateCoverCandidates?.({ unitId: context.unitId, blackboard: context.blackboard, ...budget }) ?? { candidates: [], elapsedMs: 0, stopReason: { code: 'host_unavailable' as const, reason: 'The tactical candidate host is unavailable.', reasonRu: 'Источник тактических кандидатов недоступен.' } };
+  context.tacticalQueries[queryKey] = createTacticalQuery(queryKey, budget, generation);
+  return true;
+}
+function applyFilterTacticalPositions(context: ExecutionContext, parameters: Record<string, AiBlackboardValue>): boolean {
+  const queryKey = readString(parameters.queryKey, 'cover_query'); const query = context.tacticalQueries[queryKey]; if (!query) return false;
+  context.tacticalQueries[queryKey] = filterTacticalQuery(query, { requireOnMap: readBoolean(parameters.requireOnMap, true), requireRoute: readBoolean(parameters.requireRoute, true), minimumDistanceMeters: Math.max(0, readNumber(parameters.minimumDistanceMeters, 0)), maximumDistanceMeters: Math.max(0, readNumber(parameters.maximumDistanceMeters, query.budget.searchRadiusMeters)), requireDirectionalCover: readBoolean(parameters.requireDirectionalCover, true), maxRouteDanger: clampNumber(readNumber(parameters.maxRouteDanger, 100), 0, 100) });
+  return true;
+}
+function applyScoreTacticalPositions(context: ExecutionContext, parameters: Record<string, AiBlackboardValue>): boolean {
+  const queryKey = readString(parameters.queryKey, 'cover_query'); const query = context.tacticalQueries[queryKey]; if (!query) return false;
+  context.tacticalQueries[queryKey] = scoreTacticalQuery(query, { protection: Math.max(0, readNumber(parameters.protectionWeight, 1)), concealment: Math.max(0, readNumber(parameters.concealmentWeight, .35)), distance: Math.max(0, readNumber(parameters.distanceWeight, .4)), routeDanger: Math.max(0, readNumber(parameters.routeDangerWeight, .8)), slope: Math.max(0, readNumber(parameters.slopeWeight, .45)), orderAlignment: Math.max(0, readNumber(parameters.orderAlignmentWeight, .35)) });
+  return true;
+}
+function applySelectBestTacticalPosition(context: ExecutionContext, parameters: Record<string, AiBlackboardValue>): boolean {
+  const queryKey = readString(parameters.queryKey, 'cover_query'); const query = context.tacticalQueries[queryKey]; if (!query) return false;
+  const selection = selectBestTacticalPosition(query); context.tacticalQueries[queryKey] = selection.query; if (!selection.winner) return false;
+  writeMemory(context, readString(parameters.writeTo, 'best_cover_position'), { ...selection.winner.position }); return true;
+}
+
 function applyFindBestObject(context: ExecutionContext, parameters: Record<string, AiBlackboardValue>): void {
   const objectKind = readString(parameters.objectKind, 'cover');
   const criteria = readString(parameters.criteria, 'safer');
@@ -639,7 +676,6 @@ function applyFindBestObject(context: ExecutionContext, parameters: Record<strin
   const found = context.tacticalHost?.findBestObject?.(objectKind, criteria, searchRadiusMeters, context.blackboard) ?? null;
   if (found !== null) {
     writeMemory(context, writeTo, normalizeBlackboardValue(found));
-    if (objectKind === 'cover') writeMemory(context, 'best_cover_position', normalizeBlackboardValue(found));
   }
 }
 
@@ -730,6 +766,7 @@ function makeResult(
     selectedBranchName: selectedNode ? nodeName(selectedNode) : selectedBranchNodeId,
     selectedBranchNameRu: selectedNode ? nodeNameRu(selectedNode) : undefined,
     scores: context.scores,
+    tacticalQueries: cloneTacticalQueries(context.tacticalQueries),
     effects: context.effects,
     blackboard: context.blackboard,
     cooldowns: context.cooldowns,

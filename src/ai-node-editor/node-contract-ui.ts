@@ -76,7 +76,7 @@ export function readContractParameterFields(container: ParentNode, fallback: Rec
 }
 
 function portKindRu(kind: AiPortValueKind): string {
-  return ({ number: 'число', boolean: 'да/нет', string: 'текст', position: 'позиция', unitId: 'боец', objectId: 'объект', slotId: 'место', event: 'событие', plan: 'план', route: 'маршрут' } as const)[kind];
+  return ({ number: 'число', boolean: 'да/нет', string: 'текст', position: 'позиция', unitId: 'боец', objectId: 'объект', slotId: 'место', event: 'событие', plan: 'план', route: 'маршрут', tacticalQuery: 'тактический запрос' } as const)[kind];
 }
 function escapeHtml(value: string): string { return value.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;'); }
 function escapeAttribute(value: string): string { return escapeHtml(value); }

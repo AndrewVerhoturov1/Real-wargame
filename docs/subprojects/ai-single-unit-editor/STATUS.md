@@ -14,14 +14,16 @@
 
 ## Current focus
 
-The first State → Utility → Plan → Subgraph vertical slice is implemented and its mandatory automated regression is green. Browser visual QA is prepared and awaits explicit user approval.
+Tactical Query System cover vertical slice is implemented on an isolated temporary branch: Graph v2 explicitly generates, filters, scores and selects cover positions.
 
 ## Next step
 
-After explicit approval, run the prepared system-Chromium visual QA and inspect the five PNGs. Keep the work on the temporary branch until the user separately commands transfer to real-wargame-preview.
+Run the prepared visual QA only after explicit user approval. Do not transfer the temporary branch to real-wargame-preview without a separate command.
 
 ## Read first
 
+- `docs/subprojects/ai-single-unit-editor/TACTICAL_QUERY_SYSTEM_COVER_V1.md`
+- `docs/superpowers/plans/2026-07-14-tactical-query-system-cover-v1.md`
 - `docs/subprojects/ai-single-unit-editor/HIERARCHICAL_STATES_AND_PLANS_V1.md`
 - `docs/superpowers/plans/2026-07-14-ai-state-plan-v1.md`
 - `docs/subprojects/ai-single-unit-editor/VIEW_AND_MEMORY_HEATMAP_V1.md`
@@ -122,6 +124,10 @@ After explicit approval, run the prepared system-Chromium visual QA and inspect 
 - `src/ui/AiStatePlanPanel.ts`
 - `src/ai-node-editor/state-machine-ui.ts`
 - `src/testing/AiStatePlanVisualQaHarness.ts`
+- `src/core/ai/tactical/TacticalQuery.ts`
+- `src/core/cover/CoverTacticalCandidates.ts`
+- `src/core/ai/AiGraphRuntime.ts`
+- `src/ai-node-editor/runtime-debug-overlay.ts`
 
 ## Suggested verification
 
