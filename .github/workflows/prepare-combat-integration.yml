@@ -1,0 +1,300 @@
+name: Prepare Combat Integration
+
+on:
+  push:
+    branches:
+      - tmp/prepare-combat-integration-run-20260714
+    paths:
+      - '.github/workflows/prepare-combat-integration.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout fresh integration base
+        uses: actions/checkout@v4
+        with:
+          ref: transfer/combat-perception-fire-feedback-preview-20260714
+          fetch-depth: 0
+
+      - name: Merge combat branch and resolve known overlaps
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "real-wargame-integration-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git fetch origin real-wargame-preview tmp/combat-perception-fire-feedback-20260714
+
+          set +e
+          git merge --no-ff --no-commit -X ours origin/tmp/combat-perception-fire-feedback-20260714
+          merge_status=$?
+          set -e
+
+          conflicts="$(git diff --name-only --diff-filter=U || true)"
+          if [[ -n "$conflicts" ]]; then
+            while IFS= read -r file; do
+              case "$file" in
+                package.json|scripts/ai_runtime_scene_integration_smoke.ts|scripts/ai_runtime_snapshot_smoke.ts|src/core/ai/AiGameBridge.ts|src/main.ts|src/ui/TacticalWorkspace.ts)
+                  git checkout --ours -- "$file"
+                  git add "$file"
+                  ;;
+                *)
+                  echo "Unexpected conflict: $file" >&2
+                  exit 1
+                  ;;
+              esac
+            done <<< "$conflicts"
+          elif [[ "$merge_status" -ne 0 ]]; then
+            echo "Merge failed without listed conflicts." >&2
+            exit "$merge_status"
+          fi
+
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          def read(path: str) -> str:
+              return Path(path).read_text(encoding='utf-8')
+
+          def write(path: str, text: str) -> None:
+              Path(path).write_text(text, encoding='utf-8')
+
+          def require_replace(text: str, old: str, new: str, label: str) -> str:
+              if new in text:
+                  return text
+              if old not in text:
+                  raise SystemExit(f'Missing integration anchor: {label}')
+              return text.replace(old, new, 1)
+
+          # package.json: retain all new preview scripts and add the combat smoke command.
+          path = 'package.json'
+          text = read(path)
+          if '"combat-foundation:smoke"' not in text:
+              anchor = '    "directional-terrain:smoke": "node scripts/directional_terrain_smoke.mjs",\n'
+              text = require_replace(
+                  text,
+                  anchor,
+                  anchor + '    "combat-foundation:smoke": "node scripts/combat_foundation_smoke.mjs",\n',
+                  'package combat smoke',
+              )
+          write(path, text)
+
+          # AiGameBridge: preserve the latest state/plan pipeline and route fire into the stateful combat action.
+          path = 'src/core/ai/AiGameBridge.ts'
+          text = read(path)
+          import_anchor = "import { clampPercent, type UnitPosture } from '../behavior/BehaviorModel';\n"
+          combat_imports = (
+              "import { findBestDirectFireContact } from '../combat/CombatDecision';\n"
+              "import { requestFireAction } from '../combat/FireAction';\n"
+              "import { clearWeaponRuntime } from '../combat/WeaponModel';\n"
+          )
+          if "../combat/CombatDecision" not in text:
+              text = require_replace(text, import_anchor, import_anchor + combat_imports, 'AiGameBridge combat imports')
+          text = text.replace("import { emitPerceptionSound } from '../perception/PerceptionSound';\n", '')
+          text = require_replace(
+              text,
+              "        unit.behaviorRuntime.ammo = reloadEffect.targetAmmo;\n        unit.behaviorRuntime.weaponReady = reloadEffect.targetAmmo > 0;\n        unit.behaviorRuntime.currentAction = 'reload_complete';",
+              "        unit.behaviorRuntime.ammo = reloadEffect.targetAmmo;\n        unit.behaviorRuntime.weaponReady = reloadEffect.targetAmmo > 0;\n        clearWeaponRuntime(unit);\n        unit.behaviorRuntime.currentAction = 'reload_complete';",
+              'completed reload weapon sync',
+          )
+          text = re.sub(
+              r"(function applyAction\(\n  state: SimulationState,\n  unit: UnitModel,\n  effect: Extract<AiGraphEffect, \{ type: 'set_action' \}>,\n  blackboard: AiGraphRunnerBlackboard,\n)  nowMs: number,",
+              r"\1  _nowMs: number,",
+              text,
+              count=1,
+          )
+          text = require_replace(
+              text,
+              "  } else if (effect.action === 'reload') {\n    unit.behaviorRuntime.ammo = 30;\n    unit.behaviorRuntime.weaponReady = true;",
+              "  } else if (effect.action === 'reload') {\n    unit.behaviorRuntime.ammo = 30;\n    unit.behaviorRuntime.weaponReady = true;\n    clearWeaponRuntime(unit);",
+              'manual reload weapon sync',
+          )
+          if "combat_suppression_not_available_v1" not in text:
+              pattern = re.compile(
+                  r"  \} else if \(effect\.action === 'fire' \|\| effect\.action === 'suppress'\) \{.*?\n  \}\n\n  unit\.behaviorRuntime\.currentAction = effect\.action;",
+                  re.S,
+              )
+              replacement = """  } else if (effect.action === 'fire') {
+    const contact = findBestDirectFireContact(state, unit);
+    if (contact) requestFireAction(state, unit, contact.id);
+    else {
+      unit.behaviorRuntime.reason = 'Нет личного контакта для стрельбы.';
+      unit.behaviorRuntime.lastEvent = 'combat_fire_request_missing_contact';
+    }
+    return;
+  } else if (effect.action === 'suppress') {
+    unit.behaviorRuntime.reason = 'Подавляющий огонь будет добавлен после одиночной винтовочной стрельбы.';
+    unit.behaviorRuntime.lastEvent = 'combat_suppression_not_available_v1';
+    return;
+  }
+
+  unit.behaviorRuntime.currentAction = effect.action;"""
+              text, count = pattern.subn(replacement, text, count=1)
+              if count != 1:
+                  raise SystemExit('Missing integration anchor: AiGameBridge fire action')
+          write(path, text)
+
+          # Main entrypoint: keep the latest AI state-plan harness and install combat UI/effects beside it.
+          path = 'src/main.ts'
+          text = read(path)
+          text = require_replace(
+              text,
+              "import { installAttentionOverlayRenderer } from './rendering/AttentionOverlayInstaller';\n",
+              "import { installAttentionOverlayRenderer } from './rendering/AttentionOverlayInstaller';\nimport { installCombatEffectsRenderer } from './rendering/CombatEffectsInstaller';\n",
+              'main combat renderer import',
+          )
+          text = require_replace(
+              text,
+              "import { installAttentionRuntimePanel } from './ui/AttentionRuntimePanel';\n",
+              "import { installAttentionRuntimePanel } from './ui/AttentionRuntimePanel';\nimport { installCombatControls } from './ui/CombatControls';\n",
+              'main combat controls import',
+          )
+          text = require_replace(
+              text,
+              "installTacticalWorkspace(state, aiGameBridge, forceRenderAtNativeMapQuality);\ninstallAiStatePlanVisualQaHarness(state, forceRenderAtNativeMapQuality);",
+              "installTacticalWorkspace(state, aiGameBridge, forceRenderAtNativeMapQuality);\nconst destroyCombatControls = installCombatControls(state, forceRenderAtNativeMapQuality);\ninstallAiStatePlanVisualQaHarness(state, forceRenderAtNativeMapQuality);",
+              'main combat controls install',
+          )
+          text = require_replace(
+              text,
+              "const destroyAttentionOverlayRenderer = installAttentionOverlayRenderer(tacticalBoard, state);\n",
+              "const destroyAttentionOverlayRenderer = installAttentionOverlayRenderer(tacticalBoard, state);\nconst destroyCombatEffectsRenderer = installCombatEffectsRenderer(tacticalBoard, state);\n",
+              'main combat renderer install',
+          )
+          text = require_replace(
+              text,
+              "  destroyEditorHeaderPlacement();\n  destroyAttentionRuntimePanel();",
+              "  destroyEditorHeaderPlacement();\n  destroyCombatControls();\n  destroyCombatEffectsRenderer();\n  destroyAttentionRuntimePanel();",
+              'main combat cleanup',
+          )
+          write(path, text)
+
+          # Tactical workspace: preserve the new state-plan panel and add compact combat controls/diagnostics.
+          path = 'src/ui/TacticalWorkspace.ts'
+          text = read(path)
+          behavior_import = "import type { UnitPosture } from '../core/behavior/BehaviorModel';\n"
+          combat_imports = (
+              "import { getCombatRuntime } from '../core/combat/CombatDamage';\n"
+              "import { findBestDirectFireContact } from '../core/combat/CombatDecision';\n"
+              "import { getFireAction, requestFireAction } from '../core/combat/FireAction';\n"
+              "import { getWeaponRuntime } from '../core/combat/WeaponModel';\n"
+          )
+          if "../core/combat/CombatDamage" not in text:
+              text = require_replace(text, behavior_import, behavior_import + combat_imports, 'workspace combat imports')
+          text = require_replace(
+              text,
+              '        <button data-action="clear-order">Очистить приказ</button><button data-action="reset-unit">Сбросить бойца</button>',
+              '        <button class="primary" data-action="fire-contact">Огонь по контакту</button><button data-action="clear-order">Очистить приказ</button><button data-action="reset-unit">Сбросить бойца</button>',
+              'workspace fire button',
+          )
+          text = require_replace(
+              text,
+              "  const turnUnitButton = q<HTMLButtonElement>('[data-action=\"turn-unit\"]');\n  const statePlanPanel = bindTacticalStatePlanPanel(shell);",
+              "  const turnUnitButton = q<HTMLButtonElement>('[data-action=\"turn-unit\"]');\n  const fireContactButton = q<HTMLButtonElement>('[data-action=\"fire-contact\"]');\n  const statePlanPanel = bindTacticalStatePlanPanel(shell);",
+              'workspace fire button binding',
+          )
+          if "combat_fire_request_missing_contact" not in text:
+              text = require_replace(
+                  text,
+                  "  q<HTMLButtonElement>('[data-action=\"execute\"]').onclick = () => { aiBridge.tickNow(); update(false); onChanged(); };\n  q<HTMLButtonElement>('[data-action=\"clear-order\"]').onclick",
+                  "  q<HTMLButtonElement>('[data-action=\"execute\"]').onclick = () => { aiBridge.tickNow(); update(false); onChanged(); };\n  fireContactButton.onclick = () => {\n    const unit = getSelectedUnit(state);\n    const contact = unit ? findBestDirectFireContact(state, unit) : null;\n    if (!unit || !contact || !requestFireAction(state, unit, contact.id)) {\n      if (unit) {\n        unit.behaviorRuntime.reason = contact ? unit.behaviorRuntime.reason : 'Нет личного контакта для стрельбы.';\n        unit.behaviorRuntime.lastEvent = contact ? unit.behaviorRuntime.lastEvent : 'combat_fire_request_missing_contact';\n      }\n    }\n    update(false);\n    onChanged();\n  };\n  q<HTMLButtonElement>('[data-action=\"clear-order\"]').onclick",
+                  'workspace fire handler',
+              )
+          text = require_replace(
+              text,
+              "    statePlanPanel.update(unit);\n    q('[data-role=\"unit-name\"]').textContent = unit?.labels.ru ?? 'Боец не выбран';",
+              "    statePlanPanel.update(unit);\n    const combat = unit ? getCombatRuntime(unit) : null;\n    const weapon = unit ? getWeaponRuntime(unit) : null;\n    const fireAction = unit ? getFireAction(unit) : null;\n    q('[data-role=\"unit-name\"]').textContent = unit?.labels.ru ?? 'Боец не выбран';",
+              'workspace combat runtime data',
+          )
+          text = require_replace(
+              text,
+              "    q('[data-role=\"unit-meta\"]').textContent = unit ? `${unit.id} · ${postureLabel(unit.behaviorRuntime.posture)} · ${profileLabel(unit.behaviorProfile)}` : 'Левый клик по солдату — выбрать';",
+              "    q('[data-role=\"unit-meta\"]').textContent = unit\n      ? `${unit.id} · ${unit.side === 'red' ? 'Противник' : 'Свои'} · ${postureLabel(unit.behaviorRuntime.posture)} · ${profileLabel(unit.behaviorProfile)} · ${combatCapabilityLabel(combat!.capability)}`\n      : 'Левый клик по солдату — выбрать';",
+              'workspace combat metadata',
+          )
+          text = require_replace(
+              text,
+              "      stress: pct(unit.behaviorRuntime.stress), suppression: pct(unit.behaviorRuntime.suppression), ammo: String(Math.round(unit.behaviorRuntime.ammo)),",
+              "      stress: pct(unit.behaviorRuntime.stress), suppression: pct(unit.behaviorRuntime.suppression), ammo: `${weapon!.roundsLoaded}+${weapon!.roundsReserve}`,",
+              'workspace weapon ammo',
+          )
+          text = require_replace(
+              text,
+              "    q('[data-role=\"action\"]').textContent = `Действие: ${unit ? actionLabel(unit.behaviorRuntime.currentAction) : '—'}`;",
+              "    q('[data-role=\"action\"]').textContent = `Действие: ${unit ? actionLabel(unit.behaviorRuntime.currentAction) : '—'}${fireAction ? ` · стрельба: ${firePhaseLabel(fireAction.phase)}` : ''}`;",
+              'workspace fire action label',
+          )
+          text = require_replace(
+              text,
+              "    turnUnitButton.disabled = !unit;\n    const commandTool = getUnitCommandToolState(state);",
+              "    turnUnitButton.disabled = !unit;\n    const bestFireContact = unit ? findBestDirectFireContact(state, unit) : null;\n    fireContactButton.disabled = !unit || !bestFireContact?.visibleNow || Boolean(getFireAction(unit));\n    fireContactButton.title = bestFireContact\n      ? `Личный контакт: ${bestFireContact.labelRu} · уверенность ${Math.round(bestFireContact.confidence)}%`\n      : 'Сначала боец должен сам обнаружить противника.';\n    const commandTool = getUnitCommandToolState(state);",
+              'workspace fire button state',
+          )
+          if 'function combatCapabilityLabel' not in text:
+              helpers = """function combatCapabilityLabel(value: ReturnType<typeof getCombatRuntime>['capability']): string {
+  if (value === 'wounded') return 'ранен';
+  if (value === 'severely_wounded') return 'тяжело ранен';
+  if (value === 'incapacitated') return 'выведен из строя';
+  if (value === 'dead') return 'погиб';
+  return 'боеспособен';
+}
+
+function firePhaseLabel(value: NonNullable<ReturnType<typeof getFireAction>>['phase']): string {
+  if (value === 'acquire_target') return 'выбор цели';
+  if (value === 'turning') return 'поворот';
+  if (value === 'readying_weapon') return 'подготовка оружия';
+  if (value === 'aiming') return 'наведение';
+  if (value === 'final_safety_check') return 'проверка линии огня';
+  if (value === 'firing') return 'выстрел';
+  if (value === 'recovering') return 'восстановление';
+  if (value === 'cancelled') return 'отменено';
+  return 'не удалось';
+}
+
+"""
+              text = require_replace(text, 'function infoPanel(): string {', helpers + 'function infoPanel(): string {', 'workspace combat helpers')
+          write(path, text)
+
+          # The latest preview already expects scene-export v9. Guard against a stale merge resolution.
+          for path in ('scripts/ai_runtime_scene_integration_smoke.ts', 'scripts/ai_runtime_snapshot_smoke.ts'):
+              text = read(path)
+              text = text.replace(
+                  'scene-export-v8-view-memory-heatmap-ai-runtime-2m-grid',
+                  'scene-export-v9-minimal-target-visibility-ai-runtime-2m-grid',
+              )
+              write(path, text)
+          PY
+
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No integration changes produced." >&2
+            exit 1
+          fi
+          git commit -m "Merge combat feedback with latest preview"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify combat and latest AI systems
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run combat-foundation:smoke
+          npm run perception:smoke
+          npm run runtime:smoke
+          npm run reload:smoke
+          npm run workspace:smoke
+          npm run game-editor:smoke
+          npm run state-machine:smoke
+          npm run plan-runtime:smoke
+          npm run state-plan-scenario:smoke
+          npm run build
+          npm run docs:check
+
+      - name: Push prepared integration branch
+        shell: bash
+        run: git push origin HEAD:transfer/combat-perception-fire-feedback-preview-20260714
