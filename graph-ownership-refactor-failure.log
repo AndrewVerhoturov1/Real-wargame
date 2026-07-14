@@ -1,5 +1,5 @@
 
-added 76 packages, and audited 77 packages in 1s
+added 76 packages, and audited 77 packages in 2s
 
 16 packages are looking for funding
   run `npm fund` for details
@@ -37,14 +37,10 @@ AI state/plan scenario smoke passed: Idle, order, contact cancel, cover replacem
 
 AI stateful move bridge smoke passed: exact routed AI target, path memory, movement, ownership, cleanup, unreachable start and blocked exact goal.
 AI plan move scope smoke passed: nested destination remains available to route monitoring.
-file:///home/runner/work/Real-wargame/Real-wargame/.tmp-ai-graph-ownership-smoke/ai-graph-ownership-smoke.mjs?run=1784007595351:10420
-const storage = new MemoryStorage();
-                ^
+AI graph ownership smoke passed: empty graph is inert; state changes and plans start only from explicit Graph v2 nodes.
 
-ReferenceError: Cannot access 'MemoryStorage' before initialization
-    at file:///home/runner/work/Real-wargame/Real-wargame/.tmp-ai-graph-ownership-smoke/ai-graph-ownership-smoke.mjs?run=1784007595351:10420:17
-    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
-    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
-    at async file:///home/runner/work/Real-wargame/Real-wargame/scripts/ai_graph_ownership_smoke.mjs:23:3
+> real-wargame@0.1.0 build
+> tsc && vite build
 
-Node.js v20.20.2
+src/core/ai/AiGameBridge.ts(907,23): error TS2352: Conversion of type 'Record<string, unknown>[]' to type 'readonly AiBlackboardSchemaEntry[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'Record<string, unknown>' is missing the following properties from type 'AiBlackboardSchemaEntry': key, valueKind, label, description, and 3 more.
