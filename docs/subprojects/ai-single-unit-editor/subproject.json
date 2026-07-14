@@ -4,8 +4,8 @@
   "status": "active",
   "updated_at": "2026-07-14",
   "goal": "Создать понятную человеку лабораторию поведения одиночного бойца: Utility AI выбирает решение, stateful runtime исполняет длительные действия, общий A* ведёт бойца по карте, постоянные профили маршрута задают стоимость местности, а гибридная система обзора и внимания формирует субъективные визуальные и звуковые контакты без всезнания ИИ.",
-  "current_focus": "The first State → Utility → Plan → Subgraph vertical slice is implemented and its mandatory automated regression is green. Browser visual QA is prepared and awaits explicit user approval.",
-  "next_step": "After explicit approval, run the prepared system-Chromium visual QA and inspect the five PNGs. Keep the work on the temporary branch until the user separately commands transfer to real-wargame-preview.",
+  "current_focus": "Tactical Query System cover vertical slice is implemented on an isolated temporary branch: Graph v2 explicitly generates, filters, scores and selects cover positions.",
+  "next_step": "Run the prepared visual QA only after explicit user approval. Do not transfer the temporary branch to real-wargame-preview without a separate command.",
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
   "last_verified_commit": "62379286b0704a49dc258aaba379a8dd404ff9f5",
   "last_verified_runs": {
@@ -100,9 +100,29 @@
       ],
       "visual_qa_prepared": true,
       "visual_qa_run": false
+    },
+    "tactical_query_cover_v1": {
+      "date": "2026-07-14",
+      "branch": "feat/tactical-query-system-temp-2026-07-14",
+      "status": "core_validated_visual_pending",
+      "confirmed": [
+        "tactical-query:smoke",
+        "tactical-query-ui:smoke",
+        "graph-v2:smoke",
+        "runtime:smoke",
+        "pathfinding:smoke",
+        "directional-terrain:smoke",
+        "validate:ai-graph",
+        "docs:sync",
+        "build"
+      ],
+      "visual_qa_prepared": true,
+      "visual_qa_run": false
     }
   },
   "must_read_first": [
+    "docs/subprojects/ai-single-unit-editor/TACTICAL_QUERY_SYSTEM_COVER_V1.md",
+    "docs/superpowers/plans/2026-07-14-tactical-query-system-cover-v1.md",
     "docs/subprojects/ai-single-unit-editor/HIERARCHICAL_STATES_AND_PLANS_V1.md",
     "docs/superpowers/plans/2026-07-14-ai-state-plan-v1.md",
     "docs/subprojects/ai-single-unit-editor/VIEW_AND_MEMORY_HEATMAP_V1.md",
@@ -201,7 +221,11 @@
     "src/core/ai/state/AiStatePlanPipeline.ts",
     "src/ui/AiStatePlanPanel.ts",
     "src/ai-node-editor/state-machine-ui.ts",
-    "src/testing/AiStatePlanVisualQaHarness.ts"
+    "src/testing/AiStatePlanVisualQaHarness.ts",
+    "src/core/ai/tactical/TacticalQuery.ts",
+    "src/core/cover/CoverTacticalCandidates.ts",
+    "src/core/ai/AiGraphRuntime.ts",
+    "src/ai-node-editor/runtime-debug-overlay.ts"
   ],
   "test_files": [
     "scripts/perception_system_smoke.ts",

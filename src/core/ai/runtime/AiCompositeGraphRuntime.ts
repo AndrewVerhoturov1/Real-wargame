@@ -56,6 +56,7 @@ interface RuntimeAccumulator {
   effects: AiGraphEffect[];
   trace: AiGraphRuntimeTraceItem[];
   scores: AiGraphRunnerResult['scores'];
+  tacticalQueries: AiGraphRunnerResult['tacticalQueries'];
 }
 
 interface RuntimeEnvironment {
@@ -237,6 +238,7 @@ function makeEnvironment(
       effects: [...(selection?.effects ?? [])],
       trace: runtimeTrace(selection?.trace ?? []),
       scores: selection?.scores ?? [],
+      tacticalQueries: selection?.tacticalQueries ?? {},
     },
     lifecycle: [],
     consumedEventIds: [],
@@ -429,6 +431,7 @@ function mergeSubgraphResult(environment: RuntimeEnvironment, subgraphId: string
   environment.accumulator.effects.push(...nested.effects);
   environment.accumulator.cooldowns = { ...nested.cooldowns };
   environment.accumulator.scores = [...environment.accumulator.scores, ...nested.scores];
+  environment.accumulator.tacticalQueries = { ...environment.accumulator.tacticalQueries, ...nested.tacticalQueries };
   for (const eventId of nested.consumedEventIds ?? []) if (!environment.consumedEventIds.includes(eventId)) environment.consumedEventIds.push(eventId);
   environment.accumulator.trace.push(...nested.trace.map((item) => ({
     ...item,
@@ -738,6 +741,7 @@ function resultFromOutcome(environment: RuntimeEnvironment, outcome: ExecutionOu
     selectedBranchName: nodeName(environment.branch),
     selectedBranchNameRu: nodeNameRu(environment.branch),
     scores: environment.accumulator.scores,
+    tacticalQueries: environment.accumulator.tacticalQueries,
     effects: environment.accumulator.effects,
     blackboard: environment.accumulator.blackboard,
     cooldowns: environment.accumulator.cooldowns,
@@ -865,7 +869,7 @@ function cleanupState(input: AiGraphRuntimeInput, activeNode: AiNode | undefined
       input,
       nodes: new Map(input.graph.nodes.map((node) => [node.id, node])),
       branch: activeNode,
-      accumulator: { blackboard: input.blackboard, cooldowns: { ...(input.cooldowns ?? {}) }, effects: [], trace: [], scores: [] },
+      accumulator: { blackboard: input.blackboard, cooldowns: { ...(input.cooldowns ?? {}) }, effects: [], trace: [], scores: [], tacticalQueries: {} },
       lifecycle: [],
       consumedEventIds: [],
     }, activeNode, state.activeNodeStartedAtMs), actionState, 'failure');
@@ -921,6 +925,7 @@ function applyRunnerResult(accumulator: RuntimeAccumulator, value: AiGraphRunner
   accumulator.effects.push(...value.effects);
   accumulator.trace.push(...runtimeTrace(value.trace));
   accumulator.scores = [...accumulator.scores, ...value.scores];
+  accumulator.tacticalQueries = { ...accumulator.tacticalQueries, ...value.tacticalQueries };
 }
 
 function findStatefulEntry(nodes: Map<AiNodeId, AiNode>, startId: AiNodeId): AiNode | undefined {
@@ -1085,6 +1090,7 @@ function standaloneResult(
     selectedBranchName: branch ? nodeName(branch) : branchId,
     selectedBranchNameRu: branch ? nodeNameRu(branch) : undefined,
     scores: [],
+    tacticalQueries: {},
     effects: extra.effects ?? [],
     blackboard: cloneBlackboard(input.blackboard),
     cooldowns: { ...(input.cooldowns ?? {}) },
