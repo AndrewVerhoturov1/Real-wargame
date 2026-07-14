@@ -1,6 +1,6 @@
 # Web Chat Start
 
-Короткий вход для ChatGPT или другого внешнего web-chat с GitHub-доступом.
+Короткий вход для ChatGPT или другого внешнего web-chat с GitHub-доступом, а также для обычной multi-chat работы без Codex.
 
 ## 1. Facts that must not be guessed
 
@@ -16,7 +16,7 @@
 The machine-readable source is:
 
 ```text
- docs/ai/repo-context.json
+docs/ai/repo-context.json
 ```
 
 ## 2. Minimal reading route
@@ -31,18 +31,34 @@ Read only:
 
 Do not read all journals, plans, screenshots, reports or skills by default.
 
+### Ordinary parallel ChatGPT chats
+
+When the user wants one orchestrator chat, several worker chats and one integrator chat without Codex, read:
+
+```text
+docs/orchestration/CHAT_WORKFLOW.md
+docs/orchestration/ORCHESTRATOR_PROMPT.md
+docs/orchestration/WORKER_PROMPT.md
+docs/orchestration/INTEGRATOR_PROMPT.md
+docs/orchestration/CURRENT_WORK.md
+```
+
+Do not route that workflow through Q/R/X/W or other letter modes. Workers may freely investigate and change relevant files in their own result packages or isolated workspaces. One integrator assembles the selected result into the shared preview.
+
 ## 3. Choosing a subproject
 
 - Soldier AI, node editor, GraphRunner, Runtime, Blackboard, awareness or front context → `ai-single-unit-editor`.
 - Map, camera, terrain, line of sight, objects or the RTS foundation → `real-wargame-start` as maintenance context, then follow the active AI task if the change supports soldier behavior.
-- GitHub delivery, documentation integrity, agent rules or task handoff → `github-collaboration`.
+- GitHub delivery, documentation integrity, agent rules, chat orchestration or task handoff → `github-collaboration`.
 - `repo-migration` is historical and is not a current source of rules.
 
 Use `docs/ai/TASK_ROUTER.md` for the detailed route.
 
 ## 4. Branch and delivery contract
 
-Default delivery:
+### Single implementation chat
+
+For one bounded GitHub-aware task, default delivery is:
 
 ```text
 bounded task
@@ -60,6 +76,16 @@ temporary branch
 → transfer to preview
 → close temporary branch
 ```
+
+### Parallel chat-only campaign
+
+During a multi-chat campaign, worker results may be returned as:
+
+- complete changed files with repository-relative paths;
+- an applicable patch;
+- an isolated branch or PR when the worker has GitHub access.
+
+Workers do not independently assemble the shared preview. The designated integrator compares all selected results against the current repository and performs the final delivery to `real-wargame-preview`.
 
 For the current feature branch or a user-requested isolated task, keep changes on that branch until the user explicitly asks to transfer them.
 
@@ -134,7 +160,7 @@ Do not manually edit files marked `GENERATED FILE`.
 ```text
 branch: ...
 commit/pr: ...
-transfer_path: direct push / PR fallback / isolated branch only / not changed
+transfer_path: direct push / PR fallback / isolated branch only / file package / patch / not changed
 changed_files: ...
 checks_run: ...
 not_checked: ...
