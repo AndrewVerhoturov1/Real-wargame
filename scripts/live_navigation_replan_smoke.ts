@@ -267,12 +267,12 @@ function makeCorridorState(): SimulationState {
     ],
   }, [
     { id: 'blue-mover', label: 'Mover', labelRu: 'Двигающийся', type: 'infantry_squad', side: 'blue', x: 2, y: 3, facingDegrees: 0, viewRangeCells: 0 },
-    { id: 'red-shooter', label: 'Shooter', labelRu: 'Стрелок', type: 'infantry_squad', side: 'red', x: 18, y: 4, facingDegrees: 180, viewRangeCells: 0 },
+    { id: 'red-shooter', label: 'Shooter', labelRu: 'Стрелок', type: 'infantry_squad', side: 'red', x: 0, y: 4, facingDegrees: 0, viewRangeCells: 0 },
   ]);
   const mover = unit(state, 'blue-mover');
   const shooter = unit(state, 'red-shooter');
   mover.position = { x: 2.5, y: 3.5 };
-  shooter.position = { x: 18.5, y: 4.25 };
+  shooter.position = { x: 0.5, y: 4.25 };
   state.selectedUnitId = mover.id;
   state.selectedUnitIds = [mover.id];
   state.editor.enabled = false;
@@ -312,7 +312,7 @@ function fireNearMiss(state: SimulationState, shooter: UnitModel, shotId: string
       yMetres: shooter.position.y * state.map.metersPerCell,
       zMetres: 1.45,
     },
-    direction: { x: -1, y: 0, z: 0 },
+    direction: { x: 1, y: 0, z: 0 },
     maximumDistanceMetres: 45,
     muzzleVelocityMetresPerSecond: 865,
   });
