@@ -40,7 +40,10 @@ jobs:
         run: npm ci
 
       - name: Combat tactical integration smoke
-        run: npm run combat-tactical-integration:smoke 2>&1 | tee live-navigation-replan.log
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run combat-tactical-integration:smoke 2>&1 | tee live-navigation-replan.log
 
       - name: Upload smoke log
         if: always()
