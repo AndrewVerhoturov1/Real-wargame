@@ -172,6 +172,21 @@ function resetUnits(
   hostile.side = 'red';
   observer.position = { ...slots[0], x: Math.floor(slots[0].x) + 0.5 };
   hostile.position = { ...slots[1], x: Math.floor(slots[1].x) + 0.5 };
+
+  // The semantic observer/hostile units are not guaranteed to occupy source
+  // array indexes 0/1. Reassign every auxiliary unit to a dedicated remaining
+  // slot so collision resolution cannot move the supposedly static hostile.
+  let auxiliarySlotIndex = 2;
+  for (const unit of state.units) {
+    if (unit === observer || unit === hostile) continue;
+    const slot = slots[auxiliarySlotIndex % slots.length];
+    auxiliarySlotIndex += 1;
+    unit.position = {
+      x: clamp(Math.floor(slot.x) + 0.5, 0.5, state.map.width - 0.5),
+      y: clamp(slot.y, 0.5, state.map.height - 0.5),
+    };
+  }
+
   observer.facingRadians = 0;
   hostile.facingRadians = Math.PI;
   observer.viewRangeCells = Math.max(state.map.width, state.map.height);
