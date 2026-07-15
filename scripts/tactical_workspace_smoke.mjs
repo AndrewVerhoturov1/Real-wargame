@@ -136,7 +136,10 @@ expectIncludes('src/workers/AwarenessWorldWorker.ts', [
   'buildSoldierAwarenessReport', 'awarenessWorkerTransferables', 'dangerPixels', 'stealthPixels',
 ]);
 expectIncludes('src/core/debug/PerformanceMonitor.ts', [
-  'performance-report-v4', 'getRealWargameBuildIdentity', 'awarenessMovement',
+  'PERFORMANCE_CONTRACT_VERSION', 'getRealWargameBuildIdentity', 'awarenessMovement',
+]);
+expectIncludes('src/core/debug/BuildIdentity.ts', [
+  "PERFORMANCE_CONTRACT_VERSION = 'performance-report-v4'", 'commitSha', 'buildId', 'branch',
 ]);
 
 expectIncludes('src/core/editor/GameEditorPlacement.ts', [
