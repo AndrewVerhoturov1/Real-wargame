@@ -1,62 +1,29 @@
 import type { UnitModel } from '../units/UnitModel';
-
-const POSITION_BUCKET_CELLS = 0.05;
-const SIZE_BUCKET_CELLS = 0.1;
-const ANGLE_BUCKET_DEGREES = 1;
-const VALUE_BUCKET = 1;
-const CONFIDENCE_BUCKET = 10;
-const UNCERTAINTY_BUCKET_CELLS = 1;
-const OBSERVER_RELATIVE_UNIT_PREFIX = 'unit:';
+import {
+  buildCanonicalWorldThreatSet,
+  type CanonicalWorldThreatSetSnapshot,
+} from './CanonicalWorldThreat';
 
 /**
- * Builds the content key for the world danger raster.
- *
- * A visible unit threat's direction/range are observer-relative memory descriptors:
- * SoldierThreatMemory refreshes them from the observer position even while the
- * subjective source remains stationary. They therefore cannot invalidate a
- * position-independent world raster. The source position and all actual danger
- * amplitude/uncertainty inputs remain part of the key, so moving-threat and
- * tactical evidence updates still schedule a new worker result. Visibility remains
- * an explicit input: losing a real contact is legitimate knowledge invalidation,
- * not an own-position raster update. Movement acceptance starts only after the
- * deterministically paused initial final-exact worker refresh has been applied, so
- * baseline work is not misclassified as movement-triggered work. Each additional
- * subjective contact remains its own key entry; the selected-only browser fixture
- * therefore isolates exactly one stationary hostile instead of hiding unrelated
- * knowledge changes. The hidden-movement fixture disables the physical perception
- * broad-phase range after seeding memory, proving that objective motion alone
- * cannot alter this key.
- *
- * Pressure-zone and unknown-fire directions are evidence-authored world geometry,
- * so their direction/range remain explicit key inputs.
+ * Builds the world-raster threat snapshot and its content key from one canonical
+ * representation. Unit contacts are converted from observer-relative memory
+ * descriptors to world-space point sources; evidence-authored directional fire
+ * retains its authored direction, arc and range.
  */
-export function buildPositionIndependentAwarenessKnowledgeKey(unit: UnitModel): string {
-  return unit.tacticalKnowledge.threats.map((threat) => {
-    const observerRelativeUnitThreat = threat.id.startsWith(OBSERVER_RELATIVE_UNIT_PREFIX);
-    return [
-      threat.id,
-      threat.mode,
-      quantize(threat.x, POSITION_BUCKET_CELLS),
-      quantize(threat.y, POSITION_BUCKET_CELLS),
-      quantize(threat.radiusCells, SIZE_BUCKET_CELLS),
-      quantize(threat.widthCells, SIZE_BUCKET_CELLS),
-      quantize(threat.heightCells, SIZE_BUCKET_CELLS),
-      quantize(threat.rotationDegrees, ANGLE_BUCKET_DEGREES),
-      quantize(threat.strength, VALUE_BUCKET),
-      quantize(threat.suppression, VALUE_BUCKET),
-      observerRelativeUnitThreat ? 'observer-direction' : quantize(threat.directionDegrees, ANGLE_BUCKET_DEGREES),
-      quantize(threat.arcDegrees, ANGLE_BUCKET_DEGREES),
-      observerRelativeUnitThreat ? 'observer-range' : quantize(threat.rangeCells, SIZE_BUCKET_CELLS),
-      quantize(threat.minRangeCells, SIZE_BUCKET_CELLS),
-      quantize(threat.falloffPercent, VALUE_BUCKET),
-      quantize(threat.confidence, CONFIDENCE_BUCKET),
-      quantize(threat.uncertaintyCells, UNCERTAINTY_BUCKET_CELLS),
-      threat.source,
-      threat.visibleNow ? '1' : '0',
-    ].join(':');
-  }).join('|');
+export function buildPositionIndependentAwarenessKnowledgeSnapshot(
+  unit: UnitModel,
+  metersPerCell: number,
+): CanonicalWorldThreatSetSnapshot {
+  return buildCanonicalWorldThreatSet(unit.tacticalKnowledge.threats, metersPerCell);
 }
 
-function quantize(value: number, bucket: number): number {
-  return Math.round(value / bucket) * bucket;
+/**
+ * Compatibility key helper. Production renderer code should build the snapshot
+ * once and pass the same snapshot to both the world key and worker payload.
+ */
+export function buildPositionIndependentAwarenessKnowledgeKey(
+  unit: UnitModel,
+  metersPerCell = 1,
+): string {
+  return buildPositionIndependentAwarenessKnowledgeSnapshot(unit, metersPerCell).key;
 }
