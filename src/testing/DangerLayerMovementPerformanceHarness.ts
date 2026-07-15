@@ -114,7 +114,12 @@ function prepareScenario(
       contact.visibleNow = false;
       contact.observedNow = false;
     }
+    // Perception broad phase uses the physical vision contract rather than the
+    // legacy renderer-facing viewRangeCells value. Disable real visual
+    // reacquisition after the initial contact so objective movement cannot
+    // update the selected soldier's subjective memory.
     observer.viewRangeCells = 1;
+    observer.attentionSettings.vision.maximumVisualRangeMeters = 1;
     syncSoldierThreatMemory(state, observer, 0.1);
     routeUnit(state, hostile, {
       x: hostile.position.x - 32,
