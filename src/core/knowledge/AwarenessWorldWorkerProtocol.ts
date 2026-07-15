@@ -1,7 +1,7 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import type { MapObject } from '../map/MapModel';
-import type { KnownThreatMemory } from '../units/UnitModel';
+import type { CanonicalWorldThreatSnapshot } from './CanonicalWorldThreat';
 
 export interface AwarenessWorkerMapSnapshot {
   readonly mapKey: string;
@@ -21,11 +21,16 @@ export interface AwarenessWorkerMapSnapshot {
 export interface AwarenessWorkerBuildSnapshot {
   readonly jobId: number;
   readonly rasterKey: string;
+  readonly canonicalThreatKey: string;
   readonly mapKey: string;
   readonly unitId: string;
   readonly posture: UnitPosture;
-  readonly stableWorldOrigin: GridPosition;
-  readonly threats: KnownThreatMemory[];
+  /**
+   * Required only by the legacy report API for local lookups. Canonical world
+   * threats make every transferred raster byte independent of this position.
+   */
+  readonly compatibilityOrigin: GridPosition;
+  readonly threats: readonly CanonicalWorldThreatSnapshot[];
   readonly knowledgeRevision: number;
   readonly orderTarget: GridPosition | null;
   readonly finalExact: boolean;
@@ -63,9 +68,12 @@ export type AwarenessWorkerResponse =
       readonly type: 'result';
       readonly jobId: number;
       readonly rasterKey: string;
+      readonly canonicalThreatKey: string;
       readonly mapKey: string;
       readonly finalExact: boolean;
       readonly computeMs: number;
+      readonly fieldIdentity: string;
+      readonly rasterDigest: string;
       readonly field: AwarenessWorkerFieldPayload;
       readonly computation: AwarenessWorkerComputationDelta;
     }
@@ -73,6 +81,7 @@ export type AwarenessWorkerResponse =
       readonly type: 'error';
       readonly jobId: number;
       readonly rasterKey: string;
+      readonly canonicalThreatKey: string;
       readonly mapKey: string;
       readonly message: string;
     };
