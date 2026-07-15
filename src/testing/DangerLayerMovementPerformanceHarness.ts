@@ -343,31 +343,31 @@ function installTerrainFixtures(state: SimulationState): void {
 }
 
 function addFixtureWall(state: SimulationState, observer: UnitModel): void {
-  state.map.objects.push({
-    id: WALL_ID,
-    kind: 'structure',
-    // Place the wall east of the observer. The existing browser crossing stop
-    // condition then leaves the final subjective threat well west of the wall.
-    x: observer.position.x + 4,
-    y: observer.position.y - 10,
+  const wallX = Math.floor(observer.position.x + 3.5);
+  const wallStartY = Math.floor(observer.position.y) - 3;
+  state.map.objects.push(...Array.from({ length: 7 }, (_, index) => ({
+    id: `${WALL_ID}-${index}`,
+    kind: 'structure' as const,
+    x: wallX,
+    y: wallStartY + index,
     widthCells: 1,
-    heightCells: 20,
+    heightCells: 1,
     rotationRadians: 0,
-    // Keep object-cover semantics while allowing a standing observer to retain
-    // visual contact as the hostile crosses from one protected side to the other.
+    // Match the accepted segmented wall-side winner geometry while keeping
+    // standing visual contact alive throughout the runtime crossing.
     losHeightMeters: 0.8,
-    coverProtection: 95,
-    coverReliability: 100,
-    concealment: 15,
+    coverProtection: 92,
+    coverReliability: 96,
+    concealment: 10,
     penetrable: false,
-    coverPosture: 'standing',
+    coverPosture: 'standing' as const,
     labels: { en: 'Movement performance wall', ru: 'Стена проверки движения' },
-  });
+  })));
   markMapObjectsDirty(state.map);
 }
 
 function removeFixtureWall(state: SimulationState): void {
-  const next = state.map.objects.filter((object) => object.id !== WALL_ID);
+  const next = state.map.objects.filter((object) => !object.id.startsWith(WALL_ID));
   if (next.length === state.map.objects.length) return;
   state.map.objects.splice(0, state.map.objects.length, ...next);
   markMapObjectsDirty(state.map);
