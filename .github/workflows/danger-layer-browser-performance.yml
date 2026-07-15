@@ -15,6 +15,7 @@ on:
       - 'tests/danger-layer-browser-performance.spec.ts'
       - 'scripts/compare_danger_layer_browser_performance.mjs'
       - 'scripts/danger_layer_performance_smoke.*'
+      - 'scripts/tactical_workspace_smoke.mjs'
       - 'docs/subprojects/ai-single-unit-editor/DANGER_LAYER_PERFORMANCE_CONTRACT.md'
       - 'package.json'
       - 'package-lock.json'
