@@ -5,8 +5,8 @@ import {
   type AwarenessMovementDiagnostics,
 } from '../core/debug/AwarenessMovementDiagnostics';
 import type { GridPosition } from '../core/geometry';
+import { buildPositionIndependentAwarenessKnowledgeKey } from '../core/knowledge/AwarenessWorldKey';
 import {
-  buildAwarenessKnowledgeKey,
   type SoldierAwarenessCell,
   type SoldierSafePosition,
 } from '../core/knowledge/SoldierAwarenessGrid';
@@ -495,7 +495,7 @@ export function buildAwarenessWorldKey(state: SimulationState, unit: UnitModel):
     buildAwarenessMapKey(state.map),
     `unit:${unit.id}`,
     `posture:${unit.behaviorRuntime.posture}`,
-    `knowledge:${buildAwarenessKnowledgeKey(unit)}`,
+    `knowledge:${buildPositionIndependentAwarenessKnowledgeKey(unit)}`,
   ].join(';');
 }
 
