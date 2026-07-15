@@ -23,6 +23,8 @@ const OBSERVER_RELATIVE_UNIT_PREFIX = 'unit:';
  * misclassified as movement-triggered work. Each additional subjective contact
  * remains its own key entry; the selected-only browser fixture therefore isolates
  * exactly one stationary hostile instead of hiding unrelated knowledge changes.
+ * The hidden-movement fixture disables the physical perception broad-phase range
+ * after seeding memory, proving that objective motion alone cannot alter this key.
  *
  * Pressure-zone and unknown-fire directions are evidence-authored world geometry,
  * so their direction/range remain explicit key inputs.
