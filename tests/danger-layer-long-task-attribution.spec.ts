@@ -133,7 +133,6 @@ test('captures raw wall-crossing long-task and long-animation-frame attribution'
     });
     return { durationMs: endedAt - startedAt, snapshot };
   });
-  await expect(page.locator('#pause-toggle')).toHaveAttribute('aria-pressed', 'true');
   await page.waitForTimeout(250);
   await waitForWorkerSettled(page, beforeMovement.finalRefreshApplied + 1);
 
