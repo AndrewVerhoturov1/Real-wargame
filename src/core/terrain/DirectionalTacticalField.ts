@@ -97,8 +97,9 @@ export function getDirectionalTacticalField(
       mapCache.diagnostics.lastKey = key;
     }
     // The expensive arrays are a function of the normalized direction distribution.
-    // Return current amplitude/source metadata without rebuilding those arrays.
-    return existing.threatField === threatField ? existing : { ...existing, threatField };
+    // Refresh current amplitude/source metadata without changing cache object identity.
+    (existing as { threatField: ThreatDirectionField }).threatField = threatField;
+    return existing;
   }
 
   const startedAt = performance.now();
