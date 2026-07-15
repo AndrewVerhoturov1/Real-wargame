@@ -210,24 +210,33 @@ function buildBestSafePositions(
   unitPosition: GridPosition,
 ): SoldierSafePosition[] {
   const searchRadiusCells = SAFE_SEARCH_RADIUS_METERS / Math.max(0.001, map.metersPerCell);
+  const searchRadiusSquared = searchRadiusCells * searchRadiusCells;
   const minX = Math.max(0, Math.floor(unitPosition.x - searchRadiusCells));
   const maxX = Math.min(map.width - 1, Math.ceil(unitPosition.x + searchRadiusCells));
   const minY = Math.max(0, Math.floor(unitPosition.y - searchRadiusCells));
   const maxY = Math.min(map.height - 1, Math.ceil(unitPosition.y + searchRadiusCells));
-  const candidates: SoldierSafePosition[] = [];
+  const best: SoldierSafePosition[] = [];
 
   for (let y = minY; y <= maxY; y += 1) {
+    const positionY = y + 0.5;
+    const dy = positionY - unitPosition.y;
     for (let x = minX; x <= maxX; x += 1) {
       const cell = cells[y * map.width + x];
       if (!cell) continue;
-      const position = { x: x + 0.5, y: y + 0.5 };
-      const distanceCells = distance(unitPosition, position);
+      const positionX = x + 0.5;
+      const dx = positionX - unitPosition.x;
+      const distanceSquared = dx * dx + dy * dy;
+      if (distanceSquared > searchRadiusSquared) continue;
+      const distanceCells = Math.sqrt(distanceSquared);
       const distanceMeters = distanceCells * map.metersPerCell;
-      if (distanceMeters > SAFE_SEARCH_RADIUS_METERS) continue;
       const score = cell.safety - distanceMeters * SAFE_DISTANCE_PENALTY_PER_METER;
       if (score <= 18) continue;
-      candidates.push({
-        position,
+      if (best.length === MAX_SAFE_POSITIONS && score <= best[MAX_SAFE_POSITIONS - 1].score) continue;
+
+      let insertionIndex = 0;
+      while (insertionIndex < best.length && best[insertionIndex].score >= score) insertionIndex += 1;
+      best.splice(insertionIndex, 0, {
+        position: { x: positionX, y: positionY },
         score,
         danger: cell.danger,
         expectedProtection: cell.expectedProtection,
@@ -237,12 +246,11 @@ function buildBestSafePositions(
         distanceCells,
         sourceRu: cell.sourceRu,
       });
+      if (best.length > MAX_SAFE_POSITIONS) best.pop();
     }
   }
 
-  return candidates
-    .sort((left, right) => right.score - left.score)
-    .slice(0, MAX_SAFE_POSITIONS);
+  return best;
 }
 
 export function evaluateRouteDanger(
