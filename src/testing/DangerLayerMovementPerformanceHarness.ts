@@ -119,9 +119,6 @@ function prepareScenario(
   state.selectedUnitIds = [observer.id];
 
   if (scenario === 'selected-only') {
-    // Move toward the stationary visible hostile so observer facing does not
-    // turn the contact invisible. This isolates own-position movement from
-    // legitimate visibility/knowledge invalidation.
     routeUnit(state, observer, {
       x: observer.position.x + 22,
       y: observer.position.y,
@@ -141,10 +138,6 @@ function prepareScenario(
       contact.visibleNow = false;
       contact.observedNow = false;
     }
-    // Perception broad phase uses the physical vision contract rather than the
-    // legacy renderer-facing viewRangeCells value. Disable real visual
-    // reacquisition after the initial contact so objective movement cannot
-    // update the selected soldier's subjective memory.
     observer.viewRangeCells = 1;
     observer.attentionSettings.vision.maximumVisualRangeMeters = 1;
     syncSoldierThreatMemory(state, observer, 0.1);
@@ -173,7 +166,6 @@ function resetUnits(
   const centerY = Math.floor(state.map.height * 0.52) + 0.5;
   const slots = [
     { x: state.map.width * 0.38, y: centerY },
-    // Keep the sole hostile west of the ridge for selected-only contact stability.
     { x: state.map.width * 0.47, y: centerY },
     { x: state.map.width * 0.30, y: centerY - 18 },
     { x: state.map.width * 0.32, y: centerY + 18 },
@@ -184,8 +176,6 @@ function resetUnits(
   for (let index = 0; index < state.units.length; index += 1) {
     const unit = state.units[index];
     const slot = slots[index % slots.length];
-    // Scenario 1 must contain one static subjective hostile only. Scenario 3
-    // still routes all six units, but auxiliary movers remain allies.
     unit.side = 'blue';
     unit.order = null;
     unit.playerCommand = null;
@@ -209,9 +199,6 @@ function resetUnits(
   observer.position = { ...slots[0], x: Math.floor(slots[0].x) + 0.5 };
   hostile.position = { ...slots[1], x: Math.floor(slots[1].x) + 0.5 };
 
-  // The semantic observer/hostile units are not guaranteed to occupy source
-  // array indexes 0/1. Reassign every auxiliary unit to a dedicated remaining
-  // slot so collision resolution cannot move the supposedly static hostile.
   let auxiliarySlotIndex = 2;
   for (const unit of state.units) {
     if (unit === observer || unit === hostile) continue;
@@ -223,8 +210,6 @@ function resetUnits(
     };
   }
 
-  // A route cannot recover from start_blocked. Snap every test unit to the
-  // nearest unique passable navigation cell before issuing production orders.
   const occupiedCells = new Set<string>();
   for (const unit of state.units) {
     unit.position = findNearestPassableFixturePosition(state, unit.position, occupiedCells);
@@ -308,6 +293,18 @@ function routeAllUnits(
         y: unit.position.y + offset.y,
       });
     }
+  }
+
+  const blocked = state.units.filter((unit) => !unit.order);
+  if (blocked.length > 0) {
+    throw new Error(`Movement fixture routed-order failure: ${JSON.stringify(blocked.map((unit) => ({
+      id: unit.id,
+      position: unit.position,
+      commandStatus: unit.playerCommand?.status ?? null,
+      commandReason: unit.playerCommand?.statusReason ?? null,
+      behaviorReason: unit.behaviorRuntime.reason,
+      navigationProfile: unit.playerNavigationProfileId ?? null,
+    })))}`);
   }
 }
 
@@ -467,9 +464,6 @@ function addFixtureWall(state: SimulationState, observer: UnitModel): void {
     widthCells: 1,
     heightCells: 1,
     rotationRadians: 0,
-    // The wall exceeds the local safe radius, while a narrow off-axis passage
-    // allows real routed crossing without turning the winning local cover into
-    // an open-field detour.
     losHeightMeters: 0.8,
     coverProtection: 92,
     coverReliability: 96,
