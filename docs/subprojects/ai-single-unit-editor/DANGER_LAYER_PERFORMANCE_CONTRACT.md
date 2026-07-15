@@ -2,13 +2,13 @@
 
 ## Scope
 
-The soldier danger overlay may rescore subjective tactical knowledge frequently, but it must not repeat threat-relative object/forest geometry or directional terrain geometry when their geometric content is unchanged.
+The soldier danger overlay may rescore subjective tactical knowledge frequently, but it must not repeat threat-relative object/forest geometry, directional terrain geometry, or allocate a new 320 × 200 awareness object graph when geometric content is unchanged.
 
 ## Root cause addressed
 
-The Stage 1 directional-fire integration added threat-relative object and forest protection to every awareness cell. A dynamic awareness cache miss scanned the full map and called `evaluateCoverBetween(..., { includeRelief: false })` for every relevant threat/cell pair. Forest cover then sampled the complete threat-to-cell segment. Confidence, suppression, strength, uncertainty and visibility changes were part of cache keys, so decay and evidence updates could repeat this work.
+The Stage 1 directional-fire integration added threat-relative object and forest protection to every awareness cell. A dynamic awareness cache miss scanned the full map and called `evaluateCoverBetween(..., { includeRelief: false })` for every relevant threat/cell pair. Forest cover then sampled the complete threat-to-cell segment. Confidence, suppression, strength, uncertainty and visibility changes were part of cache keys, so decay and evidence updates could repeat this work and recreate 64,000 awareness cell objects.
 
-## Geometry cache
+## Threat-relative geometry cache
 
 `ThreatRelativeCoverField` owns object/forest-only protection for one subjective threat origin and posture.
 
@@ -41,21 +41,28 @@ This is a documented approximation contract: the radial predecessor follows the 
 
 ## Directional terrain contract
 
-The directional terrain arrays are geometric data. Their cache key includes:
+The expensive directional terrain arrays are keyed by their actual geometric output inputs:
 
 - map visual revision;
-- unit id;
-- unit origin in the established one-cell origin bucket;
-- each subjective threat id and estimated position.
+- primary threat sector;
+- normalized eight-sector threat distribution, quantized by `DIRECTION_WEIGHT_BUCKET`.
 
-The key intentionally excludes raw strength, suppression, confidence, uncertainty, evidence revision and visibility. Those values continue to drive the dynamic awareness danger/suppression/safety formulas. A map geometry change, origin-bucket transition or subjective estimated threat movement rebuilds the directional terrain field; dynamic-only decay and evidence changes do not.
+The cache does not use knowledge revision or raw amplitude values directly. Strength, suppression and confidence changes that leave the normalized directional distribution unchanged reuse the arrays while the returned field receives current threat metadata. A real change in relative directional distribution, subjective bearings or map geometry rebuilds the field because its aggregate terrain output has changed.
+
+## Dynamic awareness rescore
+
+A cold awareness build still creates the canonical `SoldierAwarenessCell[]`. `AwarenessDynamicRescore` then remembers a geometry signature containing static field identity, directional field identity and subjective threat shape/position data.
+
+For dynamic-only changes it lazily prepares compact typed arrays for threat factor, protection and exposure, then mutates the existing cells in place. Strength, suppression, confidence and visibility therefore update danger, suppression, uncertainty, safety and protected-threat metadata without repeating trigonometry, cover lookup, static-cell assembly or 64,000 object allocations.
+
+A posture change, map/static revision, changed directional distribution, changed subjective threat position/shape/range/arc/falloff, or changed uncertainty invalidates this rescore geometry and returns to the full cold path.
 
 ## Semantic boundaries
 
 - The field reads only `UnitTacticalKnowledge` coordinates supplied by the caller; it never reads an objective hidden enemy position.
 - Relief is excluded from `ThreatRelativeCoverField`. `DirectionalTacticalField` remains the sole directional relief contribution in awareness, preventing double counting.
 - Default `evaluateCoverBetween` behavior is unchanged. The geometry fast path applies only to the established `{ includeRelief: false }` object+forest request.
-- `protectedAgainstThreatId` remains selected by dynamic awareness scoring from the concrete subjective threat being evaluated.
+- `protectedAgainstThreatId` remains selected from the concrete subjective threats whose geometric factor reaches each cell.
 - East/west threat reversal, protected wall-side selection, reverse-slope behavior and route danger continue through the same public awareness interfaces.
 
 ## Diagnostics
@@ -64,7 +71,8 @@ Performance report v3 adds a `computation` section containing:
 
 - threat-relative geometry builds, cache hits, full-map scans, object checks, forest map reads, cold build duration, cache size and evictions;
 - directional tactical builds, cache hits, full-map scans and build duration;
-- selected-posture static awareness diagnostics.
+- selected-posture static awareness diagnostics;
+- dynamic awareness geometry builds, rescore count, rescored cell count and last/maximum rescore duration.
 
 ## Deterministic regression
 
@@ -78,4 +86,4 @@ The 320 × 200 contract verifies cold construction, unchanged hits, dynamic-only
 
 ## Browser regression
 
-`Danger Layer Browser Performance` checks out the exact PR base and head SHAs, injects the same paused benchmark harness into both, and performs 30 dynamic-only danger updates with fixed geometry in Chromium. It records performance-report JSON and `PerformanceObserver` long tasks without PNG generation, then enforces cold-build and steady-state acceptance thresholds.
+`Danger Layer Browser Performance` checks out the exact PR base and head SHAs, injects the same paused benchmark harness into both, and performs 30 dynamic-only danger updates with fixed geometry in Chromium. It records performance-report JSON, direct synchronous update durations, continuous browser `requestAnimationFrame` intervals and `PerformanceObserver` long tasks without PNG generation. Cold-build and steady-state thresholds are evaluated separately.
