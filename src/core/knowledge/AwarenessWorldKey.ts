@@ -16,7 +16,9 @@ const OBSERVER_RELATIVE_UNIT_PREFIX = 'unit:';
  * subjective source remains stationary. They therefore cannot invalidate a
  * position-independent world raster. The source position and all actual danger
  * amplitude/uncertainty inputs remain part of the key, so moving-threat and
- * tactical evidence updates still schedule a new worker result.
+ * tactical evidence updates still schedule a new worker result. Visibility remains
+ * an explicit input: losing a real contact is legitimate knowledge invalidation,
+ * not an own-position raster update.
  *
  * Pressure-zone and unknown-fire directions are evidence-authored world geometry,
  * so their direction/range remain explicit key inputs.
