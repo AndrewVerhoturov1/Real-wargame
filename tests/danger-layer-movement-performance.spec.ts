@@ -155,7 +155,7 @@ test('visible hostile movement updates subjective danger through a bounded worke
 
   await stopScenario(page);
   await page.waitForTimeout(250);
-  await waitForWorkerSettled(page);
+  await waitForWorkerSettled(page, beforeMovement.finalRefreshApplied + 1);
   const after = await snapshot(page, false);
   const afterMovement = requireMovement(after);
   expect(afterMovement.lastAppliedRasterKey).toBe(afterMovement.lastRequestedRasterKey);
@@ -205,7 +205,7 @@ test('six moving units remain bounded and apply the final snapshot', async ({ pa
 
   await stopScenario(page);
   await page.waitForTimeout(250);
-  await waitForWorkerSettled(page);
+  await waitForWorkerSettled(page, beforeMovement.finalRefreshApplied + 1);
   const after = await snapshot(page, false);
   const movement = requireMovement(after);
   expect(movement.workerJobsStarted).toBeGreaterThan(beforeMovement.workerJobsStarted);
@@ -285,6 +285,7 @@ test('wall-side crossing cannot apply stale worker output over the final threat 
   await startScenarioPaused(page, 'wall-crossing');
   await waitForWorkerSettled(page);
   const before = await snapshot(page, true);
+  const beforeMovement = requireMovement(before);
   expect(before.bestSafePosition).not.toBeNull();
   expect(before.hostileMoving).toBe(true);
 
@@ -295,7 +296,7 @@ test('wall-side crossing cannot apply stale worker output over the final threat 
   }, undefined, { timeout: 25_000 });
   await stopScenario(page);
   await page.waitForTimeout(250);
-  await waitForWorkerSettled(page);
+  await waitForWorkerSettled(page, beforeMovement.finalRefreshApplied + 1);
   const after = await snapshot(page, true);
   const movement = requireMovement(after);
 
@@ -390,8 +391,8 @@ async function snapshot(page: Page, includeExactAwareness: boolean): Promise<Mov
   }, includeExactAwareness);
 }
 
-async function waitForWorkerSettled(page: Page): Promise<void> {
-  await page.waitForFunction(() => {
+async function waitForWorkerSettled(page: Page, minimumFinalApplied = 1): Promise<void> {
+  await page.waitForFunction((minimumApplied) => {
     const movement = window.__realWargameDangerMovementPerformance
       ?.getSnapshot(false).awarenessMovement as MovementDiagnostics | null | undefined;
     return Boolean(
@@ -399,11 +400,11 @@ async function waitForWorkerSettled(page: Page): Promise<void> {
       && !movement.workerInFlight
       && movement.pendingQueueDepth === 0
       && movement.finalRefreshRequests > 0
-      && movement.finalRefreshApplied >= movement.finalRefreshRequests
+      && movement.finalRefreshApplied >= minimumApplied
       && movement.lastRequestedRasterKey
       && movement.lastAppliedRasterKey === movement.lastRequestedRasterKey,
     );
-  }, undefined, { timeout: 30_000 });
+  }, minimumFinalApplied, { timeout: 30_000 });
 }
 
 async function downloadReport(page: Page): Promise<PerformanceReport> {
