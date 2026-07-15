@@ -72,6 +72,62 @@ function lineOf(sourceFile, node) {
   return sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
 }
 
+function isFunctionLikeScope(node) {
+  return ts.isFunctionDeclaration(node)
+    || ts.isFunctionExpression(node)
+    || ts.isArrowFunction(node)
+    || ts.isMethodDeclaration(node)
+    || ts.isConstructorDeclaration(node)
+    || ts.isGetAccessorDeclaration(node)
+    || ts.isSetAccessorDeclaration(node);
+}
+
+function createsLexicalScope(node) {
+  return ts.isSourceFile(node)
+    || ts.isBlock(node)
+    || ts.isModuleBlock(node)
+    || ts.isCatchClause(node)
+    || isFunctionLikeScope(node);
+}
+
+function registerBindingName(name, value, scope) {
+  if (!scope) return;
+  if (ts.isIdentifier(name)) {
+    scope.bindings.set(name.text, value);
+    return;
+  }
+  for (const element of name.elements) {
+    if (ts.isOmittedExpression(element)) continue;
+    registerBindingName(element.name, value, scope);
+  }
+}
+
+function resolveApplicationBinding(name, scope) {
+  for (let current = scope; current; current = current.parent) {
+    if (current.bindings.has(name)) return current.bindings.get(name);
+  }
+  return null;
+}
+
+function isAwaitedCall(call) {
+  let current = call.parent;
+  while (current && (ts.isParenthesizedExpression(current)
+    || ts.isAsExpression(current)
+    || ts.isNonNullExpression(current))) current = current.parent;
+  return Boolean(current && ts.isAwaitExpression(current));
+}
+
+function hasWebglPreference(call) {
+  const options = call.arguments[0];
+  if (!options || !ts.isObjectLiteralExpression(options)) return false;
+  const preference = options.properties.find((property) => property.name && syntaxName(property.name) === 'preference');
+  if (!preference || !ts.isPropertyAssignment(preference)) return false;
+  const value = preference.initializer;
+  return (ts.isStringLiteral(value) && value.text === 'webgl')
+    || (ts.isArrayLiteralExpression(value)
+      && value.elements.some((element) => ts.isStringLiteral(element) && element.text === 'webgl'));
+}
+
 function inspectPixiV8Baseline() {
   const packageJson = JSON.parse(read('package.json'));
   const dependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
@@ -82,11 +138,10 @@ function inspectPixiV8Baseline() {
     if (isLegacyPixiPackage(dependency)) failures.push(`package.json: legacy/split Pixi package is forbidden: ${dependency}`);
   }
 
-  const totals = { applications: 0, awaitedInit: 0, canvas: 0, webgl: 0, sourceUpdate: 0 };
+  const totals = { applications: 0, canvas: 0, sourceUpdate: 0 };
   for (const relativePath of collectSourceFiles('src')) {
     const sourceFile = ts.createSourceFile(relativePath, read(relativePath), ts.ScriptTarget.Latest, true);
     const applicationAliases = new Set();
-    const applicationVariables = new Set();
     for (const statement of sourceFile.statements) {
       if (!ts.isImportDeclaration(statement) || !statement.importClause
         || !ts.isStringLiteral(statement.moduleSpecifier) || statement.moduleSpecifier.text !== 'pixi.js') continue;
@@ -99,7 +154,45 @@ function inspectPixiV8Baseline() {
       }
     }
 
-    const visit = (node) => {
+    const scopeByNode = new Map();
+    const applicationRecords = [];
+    const trackedConstructions = new Set();
+
+    // Deterministic supported pattern: a PixiJS Application must be assigned directly to
+    // an identifier variable. This intentionally does not claim arbitrary data-flow analysis.
+    const collectBindings = (node, parentScope) => {
+      const scope = createsLexicalScope(node)
+        ? { parent: parentScope, bindings: new Map() }
+        : parentScope;
+      if (createsLexicalScope(node)) scopeByNode.set(node, scope);
+
+      if (isFunctionLikeScope(node)) {
+        for (const parameter of node.parameters) registerBindingName(parameter.name, null, scope);
+      }
+      if (ts.isCatchClause(node) && node.variableDeclaration) {
+        registerBindingName(node.variableDeclaration.name, null, scope);
+      }
+      if (ts.isVariableDeclaration(node)) {
+        let record = null;
+        if (ts.isIdentifier(node.name) && node.initializer && ts.isNewExpression(node.initializer)
+          && applicationAliases.has(node.initializer.expression.getText(sourceFile))) {
+          record = {
+            name: node.name.text,
+            construction: node.initializer,
+            initCalls: [],
+          };
+          applicationRecords.push(record);
+          trackedConstructions.add(node.initializer);
+        }
+        registerBindingName(node.name, record, scope);
+      }
+
+      ts.forEachChild(node, (child) => collectBindings(child, scope));
+    };
+    collectBindings(sourceFile, null);
+
+    const inspect = (node, parentScope) => {
+      const scope = scopeByNode.get(node) ?? parentScope;
       const specifier = moduleSpecifier(node);
       if (specifier && isLegacyPixiPackage(specifier)) {
         failures.push(`${relativePath}:${lineOf(sourceFile, node)}: legacy/split Pixi import is forbidden: ${specifier}`);
@@ -117,13 +210,11 @@ function inspectPixiV8Baseline() {
         }
       }
 
-      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)
-        && node.initializer && ts.isNewExpression(node.initializer)
-        && applicationAliases.has(node.initializer.expression.getText(sourceFile))) {
-        applicationVariables.add(node.name.text);
-      }
       if (ts.isNewExpression(node) && applicationAliases.has(node.expression.getText(sourceFile))) {
         totals.applications += 1;
+        if (!trackedConstructions.has(node)) {
+          failures.push(`${relativePath}:${lineOf(sourceFile, node)}: Application construction must use a direct identifier variable binding`);
+        }
         if ((node.arguments?.length ?? 0) > 0) {
           failures.push(`${relativePath}:${lineOf(sourceFile, node)}: Application must be constructed without synchronous options`);
         }
@@ -141,45 +232,53 @@ function inspectPixiV8Baseline() {
         && member === 'fromBuffer' && node.expression.getText(sourceFile) === 'Texture') {
         failures.push(`${relativePath}:${lineOf(sourceFile, node)}: Texture.fromBuffer is forbidden`);
       }
-      if ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && member === 'view'
-        && syntaxName(node.expression) === 'app') {
-        failures.push(`${relativePath}:${lineOf(sourceFile, node)}: use app.canvas instead of app.view`);
-      }
 
-      if (ts.isAwaitExpression(node) && ts.isCallExpression(node.expression)
-        && syntaxName(node.expression.expression) === 'init') {
-        const receiver = node.expression.expression.expression;
-        if (ts.isIdentifier(receiver) && applicationVariables.has(receiver.text)) {
-          totals.awaitedInit += 1;
-          const options = node.expression.arguments[0];
-          if (options && ts.isObjectLiteralExpression(options)) {
-            const preference = options.properties.find((property) => property.name && syntaxName(property.name) === 'preference');
-            if (preference && ts.isPropertyAssignment(preference)) {
-              const value = preference.initializer;
-              if ((ts.isStringLiteral(value) && value.text === 'webgl')
-                || (ts.isArrayLiteralExpression(value)
-                  && value.elements.some((element) => ts.isStringLiteral(element) && element.text === 'webgl'))) totals.webgl += 1;
-            }
-          }
+      if (ts.isCallExpression(node)
+        && (ts.isPropertyAccessExpression(node.expression) || ts.isElementAccessExpression(node.expression))
+        && syntaxName(node.expression) === 'init') {
+        const receiver = node.expression.expression;
+        if (ts.isIdentifier(receiver)) {
+          const record = resolveApplicationBinding(receiver.text, scope);
+          if (record) record.initCalls.push({ call: node, awaited: isAwaitedCall(node), webgl: hasWebglPreference(node) });
         }
       }
-      if ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && member === 'canvas'
-        && ((ts.isIdentifier(node.expression) && applicationVariables.has(node.expression.text))
-          || syntaxName(node.expression) === 'app')) totals.canvas += 1;
+
+      if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
+        const receiver = node.expression;
+        if (ts.isIdentifier(receiver)) {
+          const record = resolveApplicationBinding(receiver.text, scope);
+          if (record && member === 'view') {
+            failures.push(`${relativePath}:${lineOf(sourceFile, node)}: use ${record.name}.canvas instead of ${record.name}.view`);
+          }
+          if (record && member === 'canvas') totals.canvas += 1;
+        }
+      }
       if (ts.isCallExpression(node) && syntaxName(node.expression) === 'update'
         && (ts.isPropertyAccessExpression(node.expression) || ts.isElementAccessExpression(node.expression))
         && syntaxName(node.expression.expression) === 'source') totals.sourceUpdate += 1;
-      ts.forEachChild(node, visit);
+
+      ts.forEachChild(node, (child) => inspect(child, scope));
     };
-    visit(sourceFile);
+    inspect(sourceFile, null);
+
+    for (const record of applicationRecords) {
+      if (record.initCalls.length === 0) {
+        failures.push(`${relativePath}:${lineOf(sourceFile, record.construction)}: ${record.name} must call awaited init()`);
+        continue;
+      }
+      for (const init of record.initCalls) {
+        if (!init.awaited) {
+          failures.push(`${relativePath}:${lineOf(sourceFile, init.call)}: ${record.name}.init() must be awaited`);
+        }
+        if (!init.webgl) {
+          failures.push(`${relativePath}:${lineOf(sourceFile, init.call)}: ${record.name}.init() must include WebGL preference`);
+        }
+      }
+    }
   }
 
   if (totals.applications === 0) failures.push('src: no PixiJS Application construction found');
-  if (totals.awaitedInit !== totals.applications) {
-    failures.push(`src: every PixiJS Application must use awaited init (${totals.awaitedInit}/${totals.applications})`);
-  }
-  if (totals.canvas === 0) failures.push('src: no app.canvas access found');
-  if (totals.webgl === 0) failures.push('src: Application.init must include WebGL preference');
+  if (totals.canvas === 0) failures.push('src: no tracked Application canvas access found');
   if (totals.sourceUpdate === 0) failures.push('src: no TextureSource update call found for mutable raster data');
 }
 
