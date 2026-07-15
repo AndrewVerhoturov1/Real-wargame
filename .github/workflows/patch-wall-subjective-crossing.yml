@@ -1,0 +1,53 @@
+name: Patch Wall Subjective Crossing
+
+on:
+  push:
+    branches:
+      - agent/danger-layer-moving-units-performance
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test:
+    if: github.event.head_commit.message == 'Trigger wall subjective crossing patch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/danger-layer-moving-units-performance
+      - name: Wait for subjective wall crossing
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tests/danger-layer-movement-performance.spec.ts')
+          text = path.read_text(encoding='utf-8')
+          old = """  await page.waitForFunction(() => {
+    const current = window.__realWargameDangerMovementPerformance?.getSnapshot(false);
+    return Boolean(current && current.hostilePosition.x < current.observerPosition.x - 2);
+  }, undefined, { timeout: 25_000 });
+"""
+          new = """  await page.waitForFunction(() => {
+    const current = window.__realWargameDangerMovementPerformance?.getSnapshot(false);
+    return Boolean(
+      current
+      && current.hostilePosition.x < current.observerPosition.x - 2
+      && current.subjectiveThreatPosition
+      && current.subjectiveThreatPosition.x < current.observerPosition.x - 2,
+    );
+  }, undefined, { timeout: 35_000 });
+"""
+          if old not in text:
+              raise SystemExit('Expected wall crossing wait block not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          Path('.github/workflows/patch-wall-subjective-crossing.yml').unlink()
+          PY
+      - name: Commit subjective crossing wait
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add tests/danger-layer-movement-performance.spec.ts .github/workflows/patch-wall-subjective-crossing.yml
+          git commit -m 'Wait for subjective hostile to cross wall side'
+          git push origin HEAD:agent/danger-layer-moving-units-performance
