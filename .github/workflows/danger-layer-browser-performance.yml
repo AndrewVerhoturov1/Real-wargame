@@ -66,6 +66,7 @@ jobs:
         run: |
           npm ci
           npm install --no-save @playwright/test
+          npx playwright install chromium
 
       - name: Measure exact base SHA in Chromium
         working-directory: baseline
