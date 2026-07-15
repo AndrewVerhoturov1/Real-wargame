@@ -18,7 +18,9 @@ const OBSERVER_RELATIVE_UNIT_PREFIX = 'unit:';
  * amplitude/uncertainty inputs remain part of the key, so moving-threat and
  * tactical evidence updates still schedule a new worker result. Visibility remains
  * an explicit input: losing a real contact is legitimate knowledge invalidation,
- * not an own-position raster update.
+ * not an own-position raster update. Movement acceptance starts only after the
+ * initial final-exact worker refresh has been applied, so baseline work is not
+ * misclassified as movement-triggered work.
  *
  * Pressure-zone and unknown-fire directions are evidence-authored world geometry,
  * so their direction/range remain explicit key inputs.
