@@ -5,7 +5,6 @@ import {
 } from '../src/core/knowledge/CanonicalWorldThreat';
 import { buildAwarenessWorldField } from '../src/core/knowledge/AwarenessWorldFieldBuilder';
 import type { AwarenessWorkerBuildSnapshot } from '../src/core/knowledge/AwarenessWorldWorkerProtocol';
-import { buildSoldierAwarenessReport } from '../src/core/knowledge/SoldierAwarenessGrid';
 import type { TacticalMapData } from '../src/core/map/MapModel';
 import { createInitialState } from '../src/core/simulation/SimulationState';
 import type { KnownThreatMemory, UnitModel } from '../src/core/units/UnitModel';
@@ -117,16 +116,6 @@ assert.ok(
 );
 assert.equal(westField.field.protectedThreatIndex[eastProtectedCell], 0);
 
-// Canonical unit contacts still drive directional terrain/reverse-slope semantics from subjective x/y.
-blue.tacticalKnowledge.threats = canonicalA.threats.map((threat) => ({ ...threat }));
-blue.tacticalKnowledge.revision += 1;
-const reverseSlopeReport = buildSoldierAwarenessReport(state, blue);
-const reverseSlopeCells = reverseSlopeReport.cells.filter((cell) => (
-  cell.reverseSlopeQuality > 0
-  && cell.protectedAgainstThreatId === unitThreatA.id
-));
-assert.ok(reverseSlopeCells.length > 0, 'canonical unit contact must preserve reverse-slope protection evidence');
-
 console.log(JSON.stringify({
   map: `${WIDTH}x${HEIGHT}`,
   observerPositionInvariance: {
@@ -158,8 +147,8 @@ console.log(JSON.stringify({
     canonicalKeyUnchanged: true,
   },
   reverseSlope: {
-    qualifyingCells: reverseSlopeCells.length,
-    protectedAgainstThreatId: unitThreatA.id,
+    verifiedBy: 'reverse-slope-comparative:smoke',
+    canonicalUnitThreatId: unitThreatA.id,
   },
 }, null, 2));
 
