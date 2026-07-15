@@ -5,9 +5,11 @@ on:
     branches:
       - real-wargame-preview
     paths:
+      - 'vite.config.ts'
       - 'src/core/behavior/**'
       - 'src/core/combat/**'
       - 'src/core/cover/**'
+      - 'src/core/debug/**'
       - 'src/core/knowledge/**'
       - 'src/core/map/**'
       - 'src/core/navigation/**'
@@ -20,12 +22,6 @@ on:
       - 'src/core/units/**'
       - 'src/core/visibility/**'
       - 'src/core/geometry.ts'
-      - 'src/core/debug/PerformanceMonitor.ts'
-      - 'src/core/navigation/NavigationRouteCost.ts'
-      - 'src/core/navigation/NavigationRouteReplanner.ts'
-      - 'src/core/orders/MoveOrder.ts'
-      - 'src/core/orders/MoveOrderPlanning.ts'
-      - 'src/core/knowledge/SoldierAwarenessGrid.ts'
       - 'src/core/ai/AiGameBridge.ts'
       - 'src/core/ai/AiRouteStatus.ts'
       - 'src/core/ai/UnitPlan.ts'
@@ -35,9 +31,12 @@ on:
       - 'src/core/editor/GameEditorDrafts.ts'
       - 'src/core/testing/AiTestLabRuntime.ts'
       - 'src/data/ai/soldier_default_survival_graph.json'
+      - 'src/rendering/PixiAwarenessHeatmapRenderer.ts'
       - 'src/rendering/PixiUnitRenderer.ts'
       - 'src/rendering/PixiCombatEffectsRenderer.ts'
       - 'src/rendering/CombatEffectsInstaller.ts'
+      - 'src/testing/DangerLayerMovementPerformanceHarness.ts'
+      - 'src/workers/**'
       - 'src/ui/CombatControls.ts'
       - 'src/ui/CombatAudio.ts'
       - 'src/ui/SceneExport.ts'
@@ -45,6 +44,7 @@ on:
       - 'scripts/combat_foundation_smoke.*'
       - 'scripts/combat_tactical_integration_smoke.*'
       - 'scripts/danger_layer_performance_smoke.*'
+      - 'scripts/danger_layer_movement_performance_smoke.*'
       - 'scripts/live_navigation_replan_smoke.ts'
       - 'scripts/combat_safe_position_winner_smoke.ts'
       - 'scripts/reverse_slope_comparative_fixture.ts'
@@ -55,6 +55,7 @@ on:
       - 'scripts/perception_system_smoke.ts'
       - 'scripts/tactical_workspace_smoke.mjs'
       - 'tests/combat-foundation-visual.spec.ts'
+      - 'tests/danger-layer-movement-performance.spec.ts'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/combat-foundation-core.yml'
@@ -114,6 +115,9 @@ jobs:
       - name: Reverse slope comparative smoke
         shell: bash
         run: set -o pipefail; npm run reverse-slope-comparative:smoke 2>&1 | tail -n 120
+      - name: Navigation overlay smoke
+        shell: bash
+        run: set -o pipefail; npm run navigation-overlay:smoke 2>&1 | tail -n 160
       - name: Pathfinding smoke
         shell: bash
         run: set -o pipefail; npm run pathfinding:smoke 2>&1 | tail -n 120
@@ -126,15 +130,24 @@ jobs:
       - name: Route status smoke
         shell: bash
         run: set -o pipefail; npm run route-status:smoke 2>&1 | tail -n 120
+      - name: Movement bridge smoke
+        shell: bash
+        run: set -o pipefail; npm run move-bridge:smoke 2>&1 | tail -n 160
       - name: Danger layer performance contract
         shell: bash
         run: set -o pipefail; npm run danger-layer-performance:smoke 2>&1 | tee danger-layer-performance.log
+      - name: Moving danger layer performance contract
+        shell: bash
+        run: set -o pipefail; npm run danger-layer-movement-performance:smoke 2>&1 | tee danger-layer-movement-performance.log
       - name: Production build
         shell: bash
         run: set -o pipefail; npm run build 2>&1 | tee production-build.log
       - name: Combat tactical integration smoke
         shell: bash
         run: set -o pipefail; npm run combat-tactical-integration:smoke 2>&1 | tee combat-tactical-integration.log
+      - name: AI test lab smoke
+        shell: bash
+        run: set -o pipefail; npm run lab:smoke 2>&1 | tail -n 120
       - name: Upload combat tactical integration logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -144,5 +157,6 @@ jobs:
             workspace-smoke.log
             combat-tactical-integration.log
             danger-layer-performance.log
+            danger-layer-movement-performance.log
             production-build.log
           if-no-files-found: warn
