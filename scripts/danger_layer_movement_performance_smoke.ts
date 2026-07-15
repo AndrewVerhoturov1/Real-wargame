@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
-import { getThreatRelativeCoverFieldDiagnostics } from '../src/core/cover/ThreatRelativeCoverField';
+import {
+  buildCanonicalWorldThreatSet,
+  type CanonicalWorldThreatSetSnapshot,
+} from '../src/core/knowledge/CanonicalWorldThreat';
+import { buildAwarenessWorldField } from '../src/core/knowledge/AwarenessWorldFieldBuilder';
+import type { AwarenessWorkerBuildSnapshot } from '../src/core/knowledge/AwarenessWorldWorkerProtocol';
 import { buildSoldierAwarenessReport } from '../src/core/knowledge/SoldierAwarenessGrid';
 import type { TacticalMapData } from '../src/core/map/MapModel';
 import { createInitialState } from '../src/core/simulation/SimulationState';
-import { getDirectionalTacticalFieldDiagnostics } from '../src/core/terrain/DirectionalTacticalField';
-import { getDirectionalTerrainSectorBasisDiagnostics } from '../src/core/terrain/DirectionalTerrainSectorBasis';
 import type { KnownThreatMemory, UnitModel } from '../src/core/units/UnitModel';
 
 const WIDTH = 320;
@@ -57,99 +60,137 @@ const state = createInitialState(mapData, [
 ]);
 const blue = unit('blue-moving');
 const red = unit('red-moving');
-blue.tacticalKnowledge.threats = [directionalThreat(red.position.x, red.position.y)];
-blue.tacticalKnowledge.revision += 1;
 
-const warm = buildSoldierAwarenessReport(state, blue);
-const warmCacheKey = warm.cacheKey;
-const warmCover = getThreatRelativeCoverFieldDiagnostics(state.map);
-const warmDirectional = getDirectionalTacticalFieldDiagnostics(state.map);
-const warmBasis = getDirectionalTerrainSectorBasisDiagnostics(state.map);
-assert.equal(warmCover.geometryBuildCount, 1);
-assert.equal(warmBasis.buildCount, 1);
+// One subjective unit contact, with two observer-relative memory descriptions.
+const unitThreatA = unitContact(red.position.x, red.position.y, 180, 180);
+const unitThreatB = unitContact(red.position.x, red.position.y, 17, 42);
+const canonicalA = buildCanonicalWorldThreatSet([unitThreatA], state.map.metersPerCell);
+const canonicalB = buildCanonicalWorldThreatSet([unitThreatB], state.map.metersPerCell);
+assert.equal(canonicalA.key, canonicalB.key, 'observer-relative direction/range must not enter canonical key');
+assert.deepEqual(canonicalA.threats, canonicalB.threats, 'worker payload semantics must be canonical and byte-stable');
+assert.equal(worldKey(canonicalA), worldKey(canonicalB), 'world raster key must be observer-position invariant');
 
-for (const position of [
-  { x: 168.5, y: 100.5 },
-  { x: 166.5, y: 99.5 },
-  { x: 164.5, y: 98.5 },
-  { x: 162.5, y: 97.5 },
-]) {
-  blue.position = position;
-  const moved = buildSoldierAwarenessReport(state, blue);
-  assert.equal(moved.cacheKey, warmCacheKey, 'own movement must reuse the position-independent world field');
-  assert.equal(Math.floor(moved.currentPosition.x), Math.floor(position.x));
-  assert.equal(Math.floor(moved.currentPosition.y), Math.floor(position.y));
-}
+const fieldA = buildAwarenessWorldField(state.map, workerSnapshot(1, canonicalA, { x: 171.5, y: 100.5 }));
+const fieldB = buildAwarenessWorldField(state.map, workerSnapshot(2, canonicalB, { x: 120.5, y: 45.5 }));
+assertTypedArrayEqual(fieldA.field.danger, fieldB.field.danger, 'danger');
+assertTypedArrayEqual(fieldA.field.safety, fieldB.field.safety, 'safety');
+assertTypedArrayEqual(fieldA.field.dangerPixels, fieldB.field.dangerPixels, 'dangerPixels');
+assertTypedArrayEqual(fieldA.field.protectedThreatIndex, fieldB.field.protectedThreatIndex, 'protectedThreatIndex');
+assert.equal(fieldA.rasterDigest, fieldB.rasterDigest, 'observer-position invariant fields need one raster digest');
+assert.equal(fieldA.fieldIdentity, fieldB.fieldIdentity, 'applied field identity must be independent of observer position');
 
-const afterOwnMovementCover = getThreatRelativeCoverFieldDiagnostics(state.map);
-const afterOwnMovementDirectional = getDirectionalTacticalFieldDiagnostics(state.map);
-const afterOwnMovementBasis = getDirectionalTerrainSectorBasisDiagnostics(state.map);
-assert.equal(
-  afterOwnMovementCover.geometryBuildCount,
-  warmCover.geometryBuildCount,
-  'selected-unit movement must not rebuild threat-relative geometry',
-);
-assert.equal(
-  afterOwnMovementDirectional.buildCount,
-  warmDirectional.buildCount,
-  'selected-unit movement must not rebuild the world directional field',
-);
-assert.equal(
-  afterOwnMovementBasis.buildCount,
-  warmBasis.buildCount,
-  'selected-unit movement must not rebuild directional terrain sector basis',
-);
-
+// Hidden objective movement is outside subjective knowledge and therefore outside the canonical payload.
 red.position = { x: 30.5, y: 30.5 };
-buildSoldierAwarenessReport(state, blue);
-assert.equal(
-  getThreatRelativeCoverFieldDiagnostics(state.map).geometryBuildCount,
-  warmCover.geometryBuildCount,
-  'hidden objective movement must not affect subjective danger geometry',
-);
-assert.equal(
-  getDirectionalTacticalFieldDiagnostics(state.map).buildCount,
-  warmDirectional.buildCount,
-  'hidden objective movement must not affect directional world content',
-);
+const hiddenCanonical = buildCanonicalWorldThreatSet([unitThreatA], state.map.metersPerCell);
+assert.equal(hiddenCanonical.key, canonicalA.key, 'hidden objective movement must not alter canonical threat key');
+assert.deepEqual(hiddenCanonical.threats, canonicalA.threats, 'hidden objective movement must not leak into payload');
 
-const subjectiveThreat = blue.tacticalKnowledge.threats[0];
-subjectiveThreat.x -= 4;
-subjectiveThreat.y += 1;
+// A real evidence-authored sector retains world direction/range and flips protected wall side.
+const eastEvidence = buildCanonicalWorldThreatSet([
+  directionalEvidence('incoming-east', 210.5, 100.5, 180),
+], state.map.metersPerCell);
+const westEvidence = buildCanonicalWorldThreatSet([
+  directionalEvidence('incoming-west', 110.5, 100.5, 0),
+], state.map.metersPerCell);
+assert.notEqual(eastEvidence.key, westEvidence.key, 'world-authored direction must remain in the canonical key');
+assert.equal(eastEvidence.threats[0]?.directionDegrees, 180);
+assert.equal(eastEvidence.threats[0]?.arcDegrees, 55);
+assert.equal(eastEvidence.threats[0]?.rangeCells, 180);
+
+const eastField = buildAwarenessWorldField(state.map, workerSnapshot(3, eastEvidence, blue.position));
+const westField = buildAwarenessWorldField(state.map, workerSnapshot(4, westEvidence, blue.position));
+assert.notEqual(eastField.rasterDigest, westField.rasterDigest, 'genuine directional evidence must change raster bytes');
+const westProtectedCell = cellIndex(150, 100);
+const eastExposedCell = cellIndex(170, 100);
+assert.ok(
+  (eastField.field.expectedProtectionAgainstThreat[westProtectedCell] ?? 0)
+    > (eastField.field.expectedProtectionAgainstThreat[eastExposedCell] ?? 0),
+  'east-authored fire must prefer the west protected side of the wall',
+);
+assert.equal(eastField.field.protectedThreatIndex[westProtectedCell], 0);
+const eastProtectedCell = cellIndex(170, 100);
+const westExposedCell = cellIndex(150, 100);
+assert.ok(
+  (westField.field.expectedProtectionAgainstThreat[eastProtectedCell] ?? 0)
+    > (westField.field.expectedProtectionAgainstThreat[westExposedCell] ?? 0),
+  'west-authored fire must prefer the east protected side of the wall',
+);
+assert.equal(westField.field.protectedThreatIndex[eastProtectedCell], 0);
+
+// Canonical unit contacts still drive directional terrain/reverse-slope semantics from subjective x/y.
+blue.tacticalKnowledge.threats = canonicalA.threats.map((threat) => ({ ...threat }));
 blue.tacticalKnowledge.revision += 1;
-buildSoldierAwarenessReport(state, blue);
-const afterVisibleMovementCover = getThreatRelativeCoverFieldDiagnostics(state.map);
-const afterVisibleMovementDirectional = getDirectionalTacticalFieldDiagnostics(state.map);
-const afterVisibleMovementBasis = getDirectionalTerrainSectorBasisDiagnostics(state.map);
-assert.equal(
-  afterVisibleMovementCover.geometryBuildCount,
-  warmCover.geometryBuildCount + 1,
-  'subjective hostile movement must invalidate threat-relative geometry exactly once',
-);
-assert.equal(
-  afterVisibleMovementDirectional.buildCount,
-  warmDirectional.buildCount + 1,
-  'subjective hostile movement must invalidate the derived world directional field exactly once',
-);
-assert.equal(
-  afterVisibleMovementBasis.buildCount,
-  warmBasis.buildCount,
-  'hostile movement must continue reusing the static directional terrain basis',
-);
+const reverseSlopeReport = buildSoldierAwarenessReport(state, blue);
+const reverseSlopeCells = reverseSlopeReport.cells.filter((cell) => (
+  cell.reverseSlopeQuality > 0
+  && cell.protectedAgainstThreatId === unitThreatA.id
+));
+assert.ok(reverseSlopeCells.length > 0, 'canonical unit contact must preserve reverse-slope protection evidence');
 
 console.log(JSON.stringify({
   map: `${WIDTH}x${HEIGHT}`,
-  selectedUnitMovement: {
-    threatRelativeGeometryBuilds: afterOwnMovementCover.geometryBuildCount - warmCover.geometryBuildCount,
-    directionalFieldBuilds: afterOwnMovementDirectional.buildCount - warmDirectional.buildCount,
-    directionalBasisBuilds: afterOwnMovementBasis.buildCount - warmBasis.buildCount,
+  observerPositionInvariance: {
+    canonicalKey: canonicalA.key,
+    worldKey: worldKey(canonicalA),
+    rasterDigest: fieldA.rasterDigest,
+    byteIdentical: {
+      danger: true,
+      safety: true,
+      dangerPixels: true,
+      protectedThreatIndex: true,
+    },
   },
-  subjectiveHostileMovement: {
-    threatRelativeGeometryBuilds: afterVisibleMovementCover.geometryBuildCount - afterOwnMovementCover.geometryBuildCount,
-    directionalFieldBuilds: afterVisibleMovementDirectional.buildCount - afterOwnMovementDirectional.buildCount,
-    directionalBasisBuilds: afterVisibleMovementBasis.buildCount - afterOwnMovementBasis.buildCount,
+  observerRelativeMemoryChanges: {
+    rawDirection: [unitThreatA.directionDegrees, unitThreatB.directionDegrees],
+    rawRange: [unitThreatA.rangeCells, unitThreatB.rangeCells],
+    canonicalPayloadEqual: true,
+  },
+  directionalEvidence: {
+    eastKey: eastEvidence.key,
+    westKey: westEvidence.key,
+    eastRasterDigest: eastField.rasterDigest,
+    westRasterDigest: westField.rasterDigest,
+    protectedSideFlipped: true,
+  },
+  hiddenHostile: {
+    objectivePosition: red.position,
+    subjectivePosition: { x: unitThreatA.x, y: unitThreatA.y },
+    canonicalKeyUnchanged: true,
+  },
+  reverseSlope: {
+    qualifyingCells: reverseSlopeCells.length,
+    protectedAgainstThreatId: unitThreatA.id,
   },
 }, null, 2));
+
+function workerSnapshot(
+  jobId: number,
+  canonical: CanonicalWorldThreatSetSnapshot,
+  compatibilityOrigin: { x: number; y: number },
+): AwarenessWorkerBuildSnapshot {
+  return {
+    jobId,
+    rasterKey: worldKey(canonical),
+    canonicalThreatKey: canonical.key,
+    mapKey: 'semantic-map',
+    unitId: blue.id,
+    posture: blue.behaviorRuntime.posture,
+    compatibilityOrigin,
+    threats: canonical.threats,
+    knowledgeRevision: blue.tacticalKnowledge.revision,
+    orderTarget: null,
+    finalExact: true,
+  };
+}
+
+function worldKey(canonical: CanonicalWorldThreatSetSnapshot): string {
+  return [
+    'map:semantic-map',
+    `unit:${blue.id}`,
+    `posture:${blue.behaviorRuntime.posture}`,
+    `canonicalThreats:${canonical.key}`,
+  ].join(';');
+}
 
 function unit(id: string): UnitModel {
   const found = state.units.find((item) => item.id === id);
@@ -157,7 +198,12 @@ function unit(id: string): UnitModel {
   return found;
 }
 
-function directionalThreat(x: number, y: number): KnownThreatMemory {
+function unitContact(
+  x: number,
+  y: number,
+  directionDegrees: number,
+  rangeCells: number,
+): KnownThreatMemory {
   return {
     id: 'unit:red-moving',
     labelRu: 'видимая угроза',
@@ -171,9 +217,9 @@ function directionalThreat(x: number, y: number): KnownThreatMemory {
     strength: 90,
     suppression: 25,
     stressPerSecond: 10,
-    directionDegrees: 180,
+    directionDegrees,
     arcDegrees: 160,
-    rangeCells: 180,
+    rangeCells,
     minRangeCells: 0,
     falloffPercent: 30,
     confidence: 95,
@@ -183,4 +229,54 @@ function directionalThreat(x: number, y: number): KnownThreatMemory {
     lastSeenSeconds: 0,
     lastUpdatedSeconds: 0,
   };
+}
+
+function directionalEvidence(
+  id: string,
+  x: number,
+  y: number,
+  directionDegrees: number,
+): KnownThreatMemory {
+  return {
+    id,
+    labelRu: 'направленный входящий огонь',
+    mode: 'directional_fire',
+    x,
+    y,
+    radiusCells: 0,
+    widthCells: 0,
+    heightCells: 0,
+    rotationDegrees: 0,
+    strength: 92,
+    suppression: 60,
+    stressPerSecond: 18,
+    directionDegrees,
+    arcDegrees: 55,
+    rangeCells: 180,
+    minRangeCells: 0,
+    falloffPercent: 45,
+    confidence: 90,
+    uncertaintyCells: 1,
+    source: 'fire_pressure',
+    visibleNow: false,
+    lastSeenSeconds: -1,
+    lastUpdatedSeconds: 0,
+    evidenceCount: 3,
+    lastEvidenceSeconds: 0,
+  };
+}
+
+function cellIndex(x: number, y: number): number {
+  return y * WIDTH + x;
+}
+
+function assertTypedArrayEqual(
+  left: ArrayLike<number>,
+  right: ArrayLike<number>,
+  label: string,
+): void {
+  assert.equal(left.length, right.length, `${label} length mismatch`);
+  for (let index = 0; index < left.length; index += 1) {
+    assert.equal(left[index], right[index], `${label} differs at byte/value ${index}`);
+  }
 }
