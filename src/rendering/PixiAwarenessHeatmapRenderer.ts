@@ -28,6 +28,9 @@ type AwarenessDebugWindow = Window & {
 
 const mapIdentity = new WeakMap<object, number>();
 let nextMapIdentity = 1;
+const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([0x01020304]).buffer)[0] === 0x04;
+const DANGER_PIXEL_LUT = buildPixelLut('danger');
+const STEALTH_PIXEL_LUT = buildPixelLut('stealth');
 
 export class PixiAwarenessHeatmapRenderer {
   readonly container = new Container();
@@ -42,9 +45,10 @@ export class PixiAwarenessHeatmapRenderer {
   });
   private lastRasterKey = '';
   private lastMarkerKey = '';
-  private rasterCanvas: HTMLCanvasElement | null = null;
-  private rasterContext: CanvasRenderingContext2D | null = null;
-  private rasterImageData: ImageData | null = null;
+  private rasterPixels: Uint8Array | null = null;
+  private rasterPixelWords: Uint32Array | null = null;
+  private rasterWidth = 0;
+  private rasterHeight = 0;
   private rasterTexture: Texture | null = null;
   private rasterSprite: Sprite | null = null;
   private rebuildCount = 0;
@@ -81,15 +85,10 @@ export class PixiAwarenessHeatmapRenderer {
     const startedAt = rasterChanged ? performance.now() : 0;
     const report = buildSoldierAwarenessReport(state, unit);
     this.ensureRaster(state.map.width, state.map.height, state.map.cellSize);
-    if (!this.rasterContext || !this.rasterImageData || !this.rasterTexture) return;
+    if (!this.rasterPixelWords || !this.rasterTexture) return;
 
     if (rasterChanged) {
-      drawAwarenessRasterImage(
-        this.rasterContext,
-        this.rasterImageData,
-        report.cells,
-        awarenessMode,
-      );
+      drawAwarenessRasterWords(this.rasterPixelWords, report.cells, awarenessMode);
       this.rasterTexture.baseTexture.update();
       this.title.text = `СЛОЙ БОЙЦА: ${modeLabel(awarenessMode)}`;
       this.lastRasterKey = rasterKey;
@@ -115,27 +114,27 @@ export class PixiAwarenessHeatmapRenderer {
       lastBuildMs: roundMs(this.lastBuildMs),
       maxBuildMs: roundMs(this.maxBuildMs),
       displayObjectCount: this.container.children.length,
-      rasterWidth: this.rasterCanvas?.width ?? 0,
-      rasterHeight: this.rasterCanvas?.height ?? 0,
+      rasterWidth: this.rasterWidth,
+      rasterHeight: this.rasterHeight,
     };
   }
 
   private ensureRaster(width: number, height: number, cellSize: number): void {
-    const needsNewRaster = !this.rasterCanvas
-      || this.rasterCanvas.width !== width
-      || this.rasterCanvas.height !== height;
+    const needsNewRaster = !this.rasterPixels
+      || this.rasterWidth !== width
+      || this.rasterHeight !== height;
 
     if (needsNewRaster) {
       this.container.removeChildren();
       this.rasterSprite?.destroy();
       this.rasterTexture?.destroy(true);
-      this.rasterCanvas = document.createElement('canvas');
-      this.rasterCanvas.width = width;
-      this.rasterCanvas.height = height;
-      this.rasterContext = this.rasterCanvas.getContext('2d', { alpha: true });
-      this.rasterImageData = this.rasterContext?.createImageData(width, height) ?? null;
-      this.rasterTexture = Texture.from(this.rasterCanvas);
-      this.rasterTexture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+      this.rasterWidth = width;
+      this.rasterHeight = height;
+      this.rasterPixels = new Uint8Array(width * height * 4);
+      this.rasterPixelWords = new Uint32Array(this.rasterPixels.buffer);
+      this.rasterTexture = Texture.fromBuffer(this.rasterPixels, width, height, {
+        scaleMode: SCALE_MODES.NEAREST,
+      });
       this.rasterSprite = new Sprite(this.rasterTexture);
       this.container.addChild(this.rasterSprite, this.markerGraphics, this.title);
     }
@@ -202,61 +201,75 @@ export function drawAwarenessRaster(
   width: number,
   height: number,
 ): void {
-  drawAwarenessRasterImage(context, context.createImageData(width, height), cells, mode);
+  const image = context.createImageData(width, height);
+  drawAwarenessRasterWords(new Uint32Array(image.data.buffer), cells, mode);
+  context.putImageData(image, 0, 0);
 }
 
-function drawAwarenessRasterImage(
-  context: CanvasRenderingContext2D,
-  image: ImageData,
+export function drawAwarenessRasterWords(
+  pixels: Uint32Array,
   cells: SoldierAwarenessCell[],
   mode: VisibleAwarenessMode,
 ): void {
-  const data = image.data;
-  data.fill(0);
-  const length = Math.min(cells.length, data.length / 4);
+  const length = Math.min(cells.length, pixels.length);
+  const lut = mode === 'danger' ? DANGER_PIXEL_LUT : STEALTH_PIXEL_LUT;
   const dangerMode = mode === 'danger';
-
   for (let cellIndex = 0; cellIndex < length; cellIndex += 1) {
     const cell = cells[cellIndex];
     const value = dangerMode ? cell.danger : cell.concealment;
-    if (value <= 2) continue;
-    const pixel = cellIndex * 4;
+    pixels[cellIndex] = lut[Math.max(0, Math.min(100, value))] ?? 0;
+  }
+  if (length < pixels.length) pixels.fill(0, length);
+}
 
-    if (dangerMode) {
+function buildPixelLut(mode: VisibleAwarenessMode): Uint32Array {
+  const result = new Uint32Array(101);
+  for (let value = 0; value <= 100; value += 1) {
+    if (value <= 2) continue;
+    let red: number;
+    let green: number;
+    let blue: number;
+    if (mode === 'danger') {
       if (value >= 70) {
-        data[pixel] = 0xe8;
-        data[pixel + 1] = 0x3d;
-        data[pixel + 2] = 0x32;
+        red = 0xe8;
+        green = 0x3d;
+        blue = 0x32;
       } else if (value >= 40) {
-        data[pixel] = 0xff;
-        data[pixel + 1] = 0x7a;
-        data[pixel + 2] = 0x31;
+        red = 0xff;
+        green = 0x7a;
+        blue = 0x31;
       } else {
-        data[pixel] = 0xf2;
-        data[pixel + 1] = 0xc8;
-        data[pixel + 2] = 0x4b;
+        red = 0xf2;
+        green = 0xc8;
+        blue = 0x4b;
       }
     } else if (value >= 75) {
-      data[pixel] = 0x1c;
-      data[pixel + 1] = 0x6b;
-      data[pixel + 2] = 0x45;
+      red = 0x1c;
+      green = 0x6b;
+      blue = 0x45;
     } else if (value >= 50) {
-      data[pixel] = 0x3d;
-      data[pixel + 1] = 0xa8;
-      data[pixel + 2] = 0x5f;
+      red = 0x3d;
+      green = 0xa8;
+      blue = 0x5f;
     } else if (value >= 25) {
-      data[pixel] = 0xd7;
-      data[pixel + 1] = 0xb9;
-      data[pixel + 2] = 0x4b;
+      red = 0xd7;
+      green = 0xb9;
+      blue = 0x4b;
     } else {
-      data[pixel] = 0xd9;
-      data[pixel + 1] = 0x77;
-      data[pixel + 2] = 0x32;
+      red = 0xd9;
+      green = 0x77;
+      blue = 0x32;
     }
-
-    data[pixel + 3] = Math.round(Math.min(0.55, 0.08 + value / 100 * 0.46) * 255);
+    const alpha = Math.round(Math.min(0.55, 0.08 + value / 100 * 0.46) * 255);
+    result[value] = packRgba(red, green, blue, alpha);
   }
-  context.putImageData(image, 0, 0);
+  return result;
+}
+
+function packRgba(red: number, green: number, blue: number, alpha: number): number {
+  return LITTLE_ENDIAN
+    ? (red | green << 8 | blue << 16 | alpha << 24) >>> 0
+    : (red << 24 | green << 16 | blue << 8 | alpha) >>> 0;
 }
 
 function getMapIdentity(map: object): number {
