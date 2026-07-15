@@ -14,6 +14,8 @@ on:
       - 'src/testing/CombatTacticalIntegrationVisualQaHarness.ts'
       - 'tests/danger-layer-browser-performance.spec.ts'
       - 'scripts/compare_danger_layer_browser_performance.mjs'
+      - 'scripts/danger_layer_performance_smoke.*'
+      - 'docs/subprojects/ai-single-unit-editor/DANGER_LAYER_PERFORMANCE_CONTRACT.md'
       - 'package.json'
       - 'package-lock.json'
 
