@@ -7,6 +7,11 @@ interface MovementDiagnostics {
   ownMovementLocalUpdates: number;
   safePositionLocalScans: number;
   directionalBasisBuilds: number;
+  workerThreatRelativeGeometryBuilds: number;
+  workerDirectionalFieldBuilds: number;
+  workerDirectionalBasisBuilds: number;
+  workerAwarenessGeometryBuilds: number;
+  workerAwarenessRescores: number;
   workerJobsStarted: number;
   workerJobsCompleted: number;
   workerJobsCoalesced: number;
@@ -27,7 +32,27 @@ interface MovementDiagnostics {
   maxLocalUpdateMs: number;
   lastRequestedRasterKey: string;
   lastAppliedRasterKey: string;
+  lastRequestedWorldKey: string;
+  lastAppliedWorldKey: string;
+  lastRequestedCanonicalThreatKey: string;
+  lastAppliedCanonicalThreatKey: string;
+  lastCompletedJobId: number;
+  lastAppliedJobId: number;
+  lastCompletedJobFinalExact: boolean;
+  lastFinalRefreshLatencyMs: number;
+  maxFinalRefreshLatencyMs: number;
+  lastAppliedFieldIdentity: string;
+  lastAppliedRasterDigest: string;
   lastWorkerError: string | null;
+}
+
+interface SafePositionSnapshot {
+  position: { x: number; y: number };
+  score: number;
+  danger: number;
+  expectedProtection: number;
+  expectedProtectionAgainstThreat: number;
+  protectedAgainstThreatId: string | null;
 }
 
 interface MovementSnapshot {
@@ -37,12 +62,23 @@ interface MovementSnapshot {
   hostilePosition: { x: number; y: number };
   subjectiveThreatPosition: { x: number; y: number } | null;
   subjectiveThreatVisibleNow: boolean | null;
+  subjectiveThreatDirectionDegrees: number | null;
+  subjectiveThreatRangeCells: number | null;
   tacticalKnowledgeRevision: number;
   observerMoving: boolean;
   hostileMoving: boolean;
   movingUnitCount: number;
-  bestSafePosition: { x: number; y: number } | null;
+  wallX: number | null;
+  bestSafePosition: SafePositionSnapshot | null;
   protectedAgainstThreatId: string | null;
+  markerUpdateCount: number;
+  lastRequestedWorldKey: string;
+  lastAppliedWorldKey: string;
+  lastRequestedCanonicalThreatKey: string;
+  lastAppliedCanonicalThreatKey: string;
+  lastAppliedFieldIdentity: string;
+  lastAppliedRasterDigest: string;
+  lastAppliedJobId: number;
   awarenessMovement: MovementDiagnostics | null;
 }
 
@@ -55,7 +91,7 @@ interface PerformanceReport {
     performanceContractVersion?: string;
   };
   samples: Array<{ tMs: number; sceneUpdateMs: number; layerMode: string }>;
-  longTasks: Array<{ durationMs: number }>;
+  longTasks: Array<{ startMs: number; durationMs: number }>;
   computation?: {
     awarenessMovement?: MovementDiagnostics;
   };
@@ -76,29 +112,56 @@ const EVIDENCE_PATH = process.env.DANGER_MOVEMENT_PERF_OUTPUT
 const REPORT_WINDOW_MS = 8_000;
 const scenarioEvidence: ScenarioEvidence[] = [];
 
+const WORKER_GEOMETRY_COUNTERS = [
+  'workerThreatRelativeGeometryBuilds',
+  'workerDirectionalFieldBuilds',
+  'workerDirectionalBasisBuilds',
+  'workerAwarenessGeometryBuilds',
+] as const;
+
 test.describe.configure({ mode: 'serial' });
 
-test('selected unit movement performs local updates without world rebuilds', async ({ page }) => {
+test('selected unit movement changes observer-relative memory but performs local-only updates', async ({ page }) => {
   await openHarness(page);
   await startScenarioPaused(page, 'selected-only');
   await waitForWorkerSettled(page);
-  const before = await snapshot(page, false);
+  const before = await snapshot(page);
   const beforeMovement = requireMovement(before);
   expect(before.observerMoving).toBe(true);
+  expect(before.subjectiveThreatDirectionDegrees).not.toBeNull();
+  expect(before.subjectiveThreatRangeCells).not.toBeNull();
 
   await resumeSimulation(page);
   await page.waitForFunction((start) => {
-    const current = window.__realWargameDangerMovementPerformance?.getSnapshot(false);
+    const current = window.__realWargameDangerMovementPerformance?.getSnapshot();
     return Boolean(current && Math.hypot(
       current.observerPosition.x - start.x,
       current.observerPosition.y - start.y,
     ) >= 5);
   }, before.observerPosition, { timeout: 15_000 });
-  const after = await snapshot(page, false);
+  const after = await snapshot(page);
   const afterMovement = requireMovement(after);
 
-  expect(afterMovement.worldRasterBuilds).toBe(beforeMovement.worldRasterBuilds);
-  expect(afterMovement.directionalBasisBuilds).toBe(beforeMovement.directionalBasisBuilds);
+  const observerRelativeMemoryChanged = angularDifference(
+    after.subjectiveThreatDirectionDegrees ?? 0,
+    before.subjectiveThreatDirectionDegrees ?? 0,
+  ) > 0.5 || Math.abs(
+    (after.subjectiveThreatRangeCells ?? 0) - (before.subjectiveThreatRangeCells ?? 0),
+  ) > 0.1;
+  expect(observerRelativeMemoryChanged).toBe(true);
+  expect(after.lastRequestedCanonicalThreatKey).toBe(before.lastRequestedCanonicalThreatKey);
+  expect(after.lastAppliedCanonicalThreatKey).toBe(before.lastAppliedCanonicalThreatKey);
+  expect(after.lastRequestedWorldKey).toBe(before.lastRequestedWorldKey);
+  expect(after.lastAppliedWorldKey).toBe(before.lastAppliedWorldKey);
+  expect(after.lastAppliedRasterDigest).toBe(before.lastAppliedRasterDigest);
+  expect(delta(afterMovement, beforeMovement, 'workerJobsStarted')).toBe(0);
+  expect(delta(afterMovement, beforeMovement, 'worldRasterBuilds')).toBe(0);
+  expect(delta(afterMovement, beforeMovement, 'mainThreadRasterSwaps')).toBe(0);
+  for (const counter of WORKER_GEOMETRY_COUNTERS) {
+    expect(delta(afterMovement, beforeMovement, counter), `${counter} must remain zero`).toBe(0);
+  }
+  expect(delta(afterMovement, beforeMovement, 'workerAwarenessRescores')).toBe(0);
+  expect(delta(afterMovement, beforeMovement, 'directionalBasisBuilds')).toBe(0);
   expect(afterMovement.ownMovementLocalUpdates).toBeGreaterThan(beforeMovement.ownMovementLocalUpdates);
   expect(afterMovement.safePositionLocalScans).toBeGreaterThan(beforeMovement.safePositionLocalScans);
   expect(afterMovement.maxPendingQueueDepth).toBeLessThanOrEqual(1);
@@ -110,35 +173,44 @@ test('selected unit movement performs local updates without world rebuilds', asy
     before,
     after,
     counters: {
-      worldRasterBuildDelta: afterMovement.worldRasterBuilds - beforeMovement.worldRasterBuilds,
-      directionalBasisBuildDelta: afterMovement.directionalBasisBuilds - beforeMovement.directionalBasisBuilds,
-      ownMovementLocalUpdateDelta: afterMovement.ownMovementLocalUpdates - beforeMovement.ownMovementLocalUpdates,
-      safePositionLocalScanDelta: afterMovement.safePositionLocalScans - beforeMovement.safePositionLocalScans,
+      observerRelativeMemoryChanged,
+      workerJobsStartedDelta: delta(afterMovement, beforeMovement, 'workerJobsStarted'),
+      workerThreatRelativeGeometryBuildDelta: delta(afterMovement, beforeMovement, 'workerThreatRelativeGeometryBuilds'),
+      workerDirectionalFieldBuildDelta: delta(afterMovement, beforeMovement, 'workerDirectionalFieldBuilds'),
+      workerDirectionalBasisBuildDelta: delta(afterMovement, beforeMovement, 'workerDirectionalBasisBuilds'),
+      workerAwarenessGeometryBuildDelta: delta(afterMovement, beforeMovement, 'workerAwarenessGeometryBuilds'),
+      workerAwarenessRescoreDelta: delta(afterMovement, beforeMovement, 'workerAwarenessRescores'),
+      worldRasterBuildDelta: delta(afterMovement, beforeMovement, 'worldRasterBuilds'),
+      mainThreadRasterSwapDelta: delta(afterMovement, beforeMovement, 'mainThreadRasterSwaps'),
+      ownMovementLocalUpdateDelta: delta(afterMovement, beforeMovement, 'ownMovementLocalUpdates'),
+      safePositionLocalScanDelta: delta(afterMovement, beforeMovement, 'safePositionLocalScans'),
+      markerUpdateDelta: after.markerUpdateCount - before.markerUpdateCount,
+      rasterDigestUnchanged: after.lastAppliedRasterDigest === before.lastAppliedRasterDigest,
       maxLocalUpdateMs: afterMovement.maxLocalUpdateMs,
     },
   });
   await stopScenario(page);
 });
 
-test('visible hostile movement updates subjective danger through a bounded worker queue', async ({ page }) => {
+test('visible hostile movement changes canonical geometry through a bounded worker queue', async ({ page }) => {
   await openHarness(page);
   await startScenarioPaused(page, 'hostile-only');
   await waitForWorkerSettled(page);
-  const before = await snapshot(page, false);
+  const before = await snapshot(page);
   const beforeMovement = requireMovement(before);
   const initialSubjective = requireSubjective(before);
   expect(before.hostileMoving).toBe(true);
 
   await resumeSimulation(page);
   await page.waitForFunction((initial) => {
-    const current = window.__realWargameDangerMovementPerformance?.getSnapshot(false);
+    const current = window.__realWargameDangerMovementPerformance?.getSnapshot();
     const threat = current?.subjectiveThreatPosition;
     return Boolean(threat && Math.hypot(threat.x - initial.x, threat.y - initial.y) >= 2);
   }, initialSubjective, { timeout: 20_000 });
-  const moving = await snapshot(page, false);
+  const moving = await snapshot(page);
   const movingDiagnostics = requireMovement(moving);
-
   expect(movingDiagnostics.workerJobsStarted).toBeGreaterThan(beforeMovement.workerJobsStarted);
+  expect(moving.lastRequestedCanonicalThreatKey).not.toBe(before.lastRequestedCanonicalThreatKey);
   expect(movingDiagnostics.maxPendingQueueDepth).toBeLessThanOrEqual(1);
   expect(movingDiagnostics.pendingQueueDepth).toBeLessThanOrEqual(1);
   expect(movingDiagnostics.maxMainThreadApplyMs).toBeLessThanOrEqual(5);
@@ -147,42 +219,54 @@ test('visible hostile movement updates subjective danger through a bounded worke
   await stopScenario(page);
   await page.waitForTimeout(250);
   await waitForWorkerSettled(page, beforeMovement.finalRefreshApplied + 1);
-  const after = await snapshot(page, false);
+  const after = await snapshot(page);
   const afterMovement = requireMovement(after);
   expect(afterMovement.worldRasterBuilds).toBeGreaterThan(beforeMovement.worldRasterBuilds);
-  expect(afterMovement.lastAppliedRasterKey).toBe(afterMovement.lastRequestedRasterKey);
-  expect(afterMovement.finalRefreshApplied).toBeGreaterThan(beforeMovement.finalRefreshApplied);
+  expect(afterMovement.workerThreatRelativeGeometryBuilds).toBeGreaterThan(beforeMovement.workerThreatRelativeGeometryBuilds);
+  expect(afterMovement.workerDirectionalFieldBuilds).toBeGreaterThan(beforeMovement.workerDirectionalFieldBuilds);
+  expect(afterMovement.workerAwarenessGeometryBuilds).toBeGreaterThan(beforeMovement.workerAwarenessGeometryBuilds);
+  expect(afterMovement.workerDirectionalBasisBuilds).toBe(beforeMovement.workerDirectionalBasisBuilds);
+  assertFinalApplied(after, afterMovement);
+  expect(after.lastAppliedRasterDigest).not.toBe(before.lastAppliedRasterDigest);
 
   scenarioEvidence.push({
     scenario: 'hostile-only',
     before,
     after,
     counters: {
-      workerJobsStartedDelta: afterMovement.workerJobsStarted - beforeMovement.workerJobsStarted,
-      workerJobsCompletedDelta: afterMovement.workerJobsCompleted - beforeMovement.workerJobsCompleted,
-      worldRasterBuildDelta: afterMovement.worldRasterBuilds - beforeMovement.worldRasterBuilds,
-      workerJobsCoalescedDelta: afterMovement.workerJobsCoalesced - beforeMovement.workerJobsCoalesced,
-      staleDroppedDelta: afterMovement.workerResultsStaleDropped - beforeMovement.workerResultsStaleDropped,
+      workerJobsStartedDelta: delta(afterMovement, beforeMovement, 'workerJobsStarted'),
+      workerJobsCompletedDelta: delta(afterMovement, beforeMovement, 'workerJobsCompleted'),
+      worldRasterBuildDelta: delta(afterMovement, beforeMovement, 'worldRasterBuilds'),
+      workerThreatRelativeGeometryBuildDelta: delta(afterMovement, beforeMovement, 'workerThreatRelativeGeometryBuilds'),
+      workerDirectionalFieldBuildDelta: delta(afterMovement, beforeMovement, 'workerDirectionalFieldBuilds'),
+      workerDirectionalBasisBuildDelta: delta(afterMovement, beforeMovement, 'workerDirectionalBasisBuilds'),
+      workerAwarenessGeometryBuildDelta: delta(afterMovement, beforeMovement, 'workerAwarenessGeometryBuilds'),
+      workerAwarenessRescoreDelta: delta(afterMovement, beforeMovement, 'workerAwarenessRescores'),
+      workerJobsCoalescedDelta: delta(afterMovement, beforeMovement, 'workerJobsCoalesced'),
+      staleDroppedDelta: delta(afterMovement, beforeMovement, 'workerResultsStaleDropped'),
       maxPendingQueueDepth: afterMovement.maxPendingQueueDepth,
       maxMainThreadApplyMs: afterMovement.maxMainThreadApplyMs,
       maxWorkerComputeMs: afterMovement.maxWorkerComputeMs,
       maxWorkerLatencyMs: afterMovement.maxWorkerLatencyMs,
-      finalKeyApplied: afterMovement.lastAppliedRasterKey === afterMovement.lastRequestedRasterKey,
+      lastFinalRefreshLatencyMs: afterMovement.lastFinalRefreshLatencyMs,
+      finalWorldKeyApplied: after.lastAppliedWorldKey === after.lastRequestedWorldKey,
+      finalCanonicalKeyApplied: after.lastAppliedCanonicalThreatKey === after.lastRequestedCanonicalThreatKey,
+      finalJobApplied: afterMovement.lastAppliedJobId === afterMovement.lastCompletedJobId,
     },
   });
 });
 
-test('six moving units remain bounded and apply the final snapshot', async ({ page }) => {
+test('six moving units remain bounded and apply the final canonical snapshot', async ({ page }) => {
   await openHarness(page);
   await startScenarioPaused(page, 'both');
   await waitForWorkerSettled(page);
-  const before = await snapshot(page, false);
+  const before = await snapshot(page);
   const beforeMovement = requireMovement(before);
   expect(before.movingUnitCount).toBeGreaterThanOrEqual(6);
 
   await resumeSimulation(page);
   await page.waitForFunction((initial) => {
-    const current = window.__realWargameDangerMovementPerformance?.getSnapshot(false);
+    const current = window.__realWargameDangerMovementPerformance?.getSnapshot();
     if (!current || !initial.subjectiveThreatPosition || !current.subjectiveThreatPosition) return false;
     const friendlyDistance = Math.hypot(
       current.observerPosition.x - initial.observerPosition.x,
@@ -202,14 +286,14 @@ test('six moving units remain bounded and apply the final snapshot', async ({ pa
   await stopScenario(page);
   await page.waitForTimeout(250);
   await waitForWorkerSettled(page, beforeMovement.finalRefreshApplied + 1);
-  const after = await snapshot(page, false);
+  const after = await snapshot(page);
   const movement = requireMovement(after);
   expect(movement.workerJobsStarted).toBeGreaterThan(beforeMovement.workerJobsStarted);
   expect(movement.ownMovementLocalUpdates).toBeGreaterThan(beforeMovement.ownMovementLocalUpdates);
   expect(movement.maxPendingQueueDepth).toBeLessThanOrEqual(1);
   expect(movement.pendingQueueDepth).toBe(0);
   expect(movement.workerInFlight).toBe(false);
-  expect(movement.lastAppliedRasterKey).toBe(movement.lastRequestedRasterKey);
+  assertFinalApplied(after, movement);
   expect(movement.lastWorkerError).toBeNull();
 
   scenarioEvidence.push({
@@ -218,20 +302,21 @@ test('six moving units remain bounded and apply the final snapshot', async ({ pa
     after,
     counters: {
       movingUnitCount: before.movingUnitCount,
-      workerJobsStartedDelta: movement.workerJobsStarted - beforeMovement.workerJobsStarted,
-      worldRasterBuildDelta: movement.worldRasterBuilds - beforeMovement.worldRasterBuilds,
-      ownMovementLocalUpdateDelta: movement.ownMovementLocalUpdates - beforeMovement.ownMovementLocalUpdates,
+      workerJobsStartedDelta: delta(movement, beforeMovement, 'workerJobsStarted'),
+      worldRasterBuildDelta: delta(movement, beforeMovement, 'worldRasterBuilds'),
+      ownMovementLocalUpdateDelta: delta(movement, beforeMovement, 'ownMovementLocalUpdates'),
       maxPendingQueueDepth: movement.maxPendingQueueDepth,
-      finalKeyApplied: movement.lastAppliedRasterKey === movement.lastRequestedRasterKey,
+      finalWorldKeyApplied: after.lastAppliedWorldKey === after.lastRequestedWorldKey,
+      finalCanonicalKeyApplied: after.lastAppliedCanonicalThreatKey === after.lastRequestedCanonicalThreatKey,
     },
   });
 });
 
-test('hidden hostile objective movement does not reveal a new subjective position', async ({ page }) => {
+test('hidden hostile objective movement cannot change the canonical worker field', async ({ page }) => {
   await openHarness(page);
   await startScenarioPaused(page, 'hidden-hostile');
   await waitForWorkerSettled(page);
-  const before = await snapshot(page, false);
+  const before = await snapshot(page);
   const initialObjective = before.hostilePosition;
   const initialSubjective = requireSubjective(before);
   const beforeMovement = requireMovement(before);
@@ -239,26 +324,33 @@ test('hidden hostile objective movement does not reveal a new subjective positio
 
   await resumeSimulation(page);
   await page.waitForFunction((initial) => {
-    const current = window.__realWargameDangerMovementPerformance?.getSnapshot(false);
+    const current = window.__realWargameDangerMovementPerformance?.getSnapshot();
     return Boolean(current && Math.hypot(
       current.hostilePosition.x - initial.x,
       current.hostilePosition.y - initial.y,
     ) >= 3);
   }, initialObjective, { timeout: 12_000 });
-  const after = await snapshot(page, false);
+  const after = await snapshot(page);
   const afterSubjective = requireSubjective(after);
   const afterMovement = requireMovement(after);
   const subjectiveDistance = Math.hypot(
     afterSubjective.x - initialSubjective.x,
     afterSubjective.y - initialSubjective.y,
   );
-  const worldRasterBuildDelta = afterMovement.worldRasterBuilds - beforeMovement.worldRasterBuilds;
 
   expect(subjectiveDistance).toBeLessThan(0.2);
-  // Hidden objective coordinates are excluded from the world key. One build is
-  // allowed for ordinary confidence/uncertainty decay of the unchanged memory.
-  expect(worldRasterBuildDelta).toBeLessThanOrEqual(1);
-  expect(afterMovement.directionalBasisBuilds).toBe(beforeMovement.directionalBasisBuilds);
+  expect(after.lastRequestedCanonicalThreatKey).toBe(before.lastRequestedCanonicalThreatKey);
+  expect(after.lastAppliedCanonicalThreatKey).toBe(before.lastAppliedCanonicalThreatKey);
+  expect(after.lastRequestedWorldKey).toBe(before.lastRequestedWorldKey);
+  expect(after.lastAppliedWorldKey).toBe(before.lastAppliedWorldKey);
+  expect(after.lastAppliedRasterDigest).toBe(before.lastAppliedRasterDigest);
+  expect(delta(afterMovement, beforeMovement, 'workerJobsStarted')).toBe(0);
+  expect(delta(afterMovement, beforeMovement, 'worldRasterBuilds')).toBe(0);
+  expect(delta(afterMovement, beforeMovement, 'mainThreadRasterSwaps')).toBe(0);
+  for (const counter of WORKER_GEOMETRY_COUNTERS) {
+    expect(delta(afterMovement, beforeMovement, counter), `${counter} must remain zero`).toBe(0);
+  }
+  expect(delta(afterMovement, beforeMovement, 'workerAwarenessRescores')).toBe(0);
   expect(afterMovement.maxPendingQueueDepth).toBeLessThanOrEqual(1);
   expect(afterMovement.lastWorkerError).toBeNull();
 
@@ -272,43 +364,62 @@ test('hidden hostile objective movement does not reveal a new subjective positio
         after.hostilePosition.y - before.hostilePosition.y,
       ),
       subjectiveDistanceCells: subjectiveDistance,
-      worldRasterBuildDelta,
-      directionalBasisBuildDelta: afterMovement.directionalBasisBuilds - beforeMovement.directionalBasisBuilds,
+      workerJobsStartedDelta: delta(afterMovement, beforeMovement, 'workerJobsStarted'),
+      worldRasterBuildDelta: delta(afterMovement, beforeMovement, 'worldRasterBuilds'),
+      workerThreatRelativeGeometryBuildDelta: delta(afterMovement, beforeMovement, 'workerThreatRelativeGeometryBuilds'),
+      workerDirectionalFieldBuildDelta: delta(afterMovement, beforeMovement, 'workerDirectionalFieldBuilds'),
+      workerDirectionalBasisBuildDelta: delta(afterMovement, beforeMovement, 'workerDirectionalBasisBuilds'),
+      workerAwarenessGeometryBuildDelta: delta(afterMovement, beforeMovement, 'workerAwarenessGeometryBuilds'),
+      rasterDigestUnchanged: after.lastAppliedRasterDigest === before.lastAppliedRasterDigest,
     },
   });
   await stopScenario(page);
 });
 
-test('wall-side crossing cannot apply stale worker output over the final threat side', async ({ page }) => {
+test('wall crossing proves the applied async winner flips to the protected side', async ({ page }) => {
   await openHarness(page);
   await startScenarioPaused(page, 'wall-crossing');
   await waitForWorkerSettled(page);
-  const before = await snapshot(page, true);
+  const before = await snapshot(page);
   const beforeMovement = requireMovement(before);
-  expect(before.bestSafePosition).not.toBeNull();
+  const wallX = requireWallX(before);
+  const beforeThreat = requireSubjective(before);
+  const beforeWinner = requireWinner(before);
   expect(before.hostileMoving).toBe(true);
+  expect(before.subjectiveThreatVisibleNow).toBe(true);
+  expect(beforeThreat.x).toBeGreaterThan(wallX + 2);
+  expect(beforeWinner.position.x).toBeLessThan(wallX);
+  expect(before.protectedAgainstThreatId).not.toBeNull();
+  assertFinalApplied(before, beforeMovement);
 
   await resumeSimulation(page);
-  await page.waitForFunction(() => {
-    const current = window.__realWargameDangerMovementPerformance?.getSnapshot(false);
+  await page.waitForFunction((wall) => {
+    const current = window.__realWargameDangerMovementPerformance?.getSnapshot();
     return Boolean(
       current
-      && current.hostilePosition.x < current.observerPosition.x - 2
+      && current.hostilePosition.x < wall - 2
       && current.subjectiveThreatPosition
-      && current.subjectiveThreatPosition.x < current.observerPosition.x - 2,
+      && current.subjectiveThreatPosition.x < wall - 2,
     );
-  }, undefined, { timeout: 25_000 });
+  }, wallX, { timeout: 25_000 });
   await stopScenario(page);
   await page.waitForTimeout(250);
   await waitForWorkerSettled(page, beforeMovement.finalRefreshApplied + 1);
-  const after = await snapshot(page, true);
+  const after = await snapshot(page);
   const movement = requireMovement(after);
+  const afterThreat = requireSubjective(after);
+  const afterWinner = requireWinner(after);
 
-  expect(after.bestSafePosition).not.toBeNull();
+  expect(after.subjectiveThreatVisibleNow).toBe(true);
+  expect(afterThreat.x).toBeLessThan(wallX - 2);
+  expect(afterWinner.position.x).toBeGreaterThan(wallX);
   expect(after.bestSafePosition).not.toEqual(before.bestSafePosition);
+  expect(after.protectedAgainstThreatId).toBe(before.protectedAgainstThreatId);
   expect(after.protectedAgainstThreatId).not.toBeNull();
+  expect(after.lastAppliedRasterDigest).not.toBe(before.lastAppliedRasterDigest);
+  expect(after.lastAppliedFieldIdentity).not.toBe(before.lastAppliedFieldIdentity);
   expect(movement.maxPendingQueueDepth).toBeLessThanOrEqual(1);
-  expect(movement.lastAppliedRasterKey).toBe(movement.lastRequestedRasterKey);
+  assertFinalApplied(after, movement);
   expect(movement.lastWorkerError).toBeNull();
 
   const report = await downloadReport(page);
@@ -316,30 +427,43 @@ test('wall-side crossing cannot apply stale worker output over the final threat 
   const sceneStats = summarizeSceneUpdates(report);
   expect(sceneStats.p95).toBeLessThanOrEqual(10);
   expect(sceneStats.max).toBeLessThanOrEqual(50);
+  const recentLongTasks = longTasksInReportWindow(report);
+  expect(recentLongTasks.filter((task) => task.durationMs > 100)).toEqual([]);
   const reportMovement = report.computation?.awarenessMovement;
   expect(reportMovement).toBeTruthy();
   expect(reportMovement?.maxPendingQueueDepth).toBeLessThanOrEqual(1);
   expect(reportMovement?.maxMainThreadApplyMs).toBeLessThanOrEqual(5);
-  expect(reportMovement?.lastAppliedRasterKey).toBe(reportMovement?.lastRequestedRasterKey);
+  expect(reportMovement?.maxLocalUpdateMs).toBeLessThanOrEqual(10);
+  expect(reportMovement?.lastAppliedWorldKey).toBe(reportMovement?.lastRequestedWorldKey);
+  expect(reportMovement?.lastAppliedCanonicalThreatKey).toBe(reportMovement?.lastRequestedCanonicalThreatKey);
 
   scenarioEvidence.push({
     scenario: 'wall-crossing',
     before,
     after,
     counters: {
+      wallX,
+      initialThreatSide: 'east',
+      initialWinnerSide: 'west-protected',
+      finalThreatSide: 'west',
+      finalWinnerSide: 'east-protected',
       winnerChanged: JSON.stringify(after.bestSafePosition) !== JSON.stringify(before.bestSafePosition),
       protectedAgainstThreatId: after.protectedAgainstThreatId,
       staleDropped: movement.workerResultsStaleDropped,
       maxPendingQueueDepth: movement.maxPendingQueueDepth,
-      finalKeyApplied: movement.lastAppliedRasterKey === movement.lastRequestedRasterKey,
+      finalWorldKeyApplied: after.lastAppliedWorldKey === after.lastRequestedWorldKey,
+      finalCanonicalKeyApplied: after.lastAppliedCanonicalThreatKey === after.lastRequestedCanonicalThreatKey,
+      finalFieldIdentity: after.lastAppliedFieldIdentity,
+      finalRasterDigest: after.lastAppliedRasterDigest,
     },
   });
 
   const evidence = {
-    version: 'danger-layer-movement-evidence-v1',
+    version: 'danger-layer-movement-evidence-v2',
     generatedAt: new Date().toISOString(),
     build: report.build ?? null,
     sceneUpdateMs: sceneStats,
+    dangerWindowLongTasks: recentLongTasks,
     finalMovementDiagnostics: reportMovement ?? null,
     scenarios: scenarioEvidence,
   };
@@ -356,9 +480,6 @@ async function openHarness(page: Page): Promise<void> {
 }
 
 async function startScenarioPaused(page: Page, scenario: string): Promise<MovementSnapshot> {
-  // Pause the production ticker before installing the routed scenario. Pausing
-  // after startScenario allowed one or more SimulationTick frames to race ahead,
-  // so the supposed baseline could already contain movement and perception decay.
   await setSimulationPaused(page, true);
   return page.evaluate((name) => {
     const api = window.__realWargameDangerMovementPerformance;
@@ -389,26 +510,32 @@ async function stopScenario(page: Page): Promise<MovementSnapshot> {
   });
 }
 
-async function snapshot(page: Page, includeExactAwareness: boolean): Promise<MovementSnapshot> {
-  return page.evaluate((includeExact) => {
+async function snapshot(page: Page): Promise<MovementSnapshot> {
+  return page.evaluate(() => {
     const api = window.__realWargameDangerMovementPerformance;
     if (!api) throw new Error('Danger movement performance API is unavailable.');
-    return api.getSnapshot(includeExact) as MovementSnapshot;
-  }, includeExactAwareness);
+    return api.getSnapshot() as MovementSnapshot;
+  });
 }
 
 async function waitForWorkerSettled(page: Page, minimumFinalApplied = 1): Promise<void> {
   await page.waitForFunction((minimumApplied) => {
-    const movement = window.__realWargameDangerMovementPerformance
-      ?.getSnapshot(false).awarenessMovement as MovementDiagnostics | null | undefined;
+    const current = window.__realWargameDangerMovementPerformance?.getSnapshot();
+    const movement = current?.awarenessMovement as MovementDiagnostics | null | undefined;
     return Boolean(
-      movement
+      current
+      && movement
       && !movement.workerInFlight
       && movement.pendingQueueDepth === 0
       && movement.finalRefreshRequests > 0
       && movement.finalRefreshApplied >= minimumApplied
-      && movement.lastRequestedRasterKey
-      && movement.lastAppliedRasterKey === movement.lastRequestedRasterKey,
+      && current.lastRequestedWorldKey
+      && current.lastAppliedWorldKey === current.lastRequestedWorldKey
+      && current.lastRequestedCanonicalThreatKey
+      && current.lastAppliedCanonicalThreatKey === current.lastRequestedCanonicalThreatKey
+      && current.lastAppliedFieldIdentity
+      && current.lastAppliedRasterDigest
+      && movement.lastCompletedJobFinalExact,
     );
   }, minimumFinalApplied, { timeout: 30_000 });
 }
@@ -435,6 +562,18 @@ function assertBuildIdentity(report: PerformanceReport): void {
   expect(report.build?.buildId).toBeTruthy();
 }
 
+function assertFinalApplied(snapshotValue: MovementSnapshot, movement: MovementDiagnostics): void {
+  expect(snapshotValue.lastAppliedWorldKey).toBe(snapshotValue.lastRequestedWorldKey);
+  expect(snapshotValue.lastAppliedCanonicalThreatKey).toBe(snapshotValue.lastRequestedCanonicalThreatKey);
+  expect(snapshotValue.lastAppliedFieldIdentity).toBeTruthy();
+  expect(snapshotValue.lastAppliedRasterDigest).toBeTruthy();
+  expect(snapshotValue.lastAppliedJobId).toBe(movement.lastAppliedJobId);
+  expect(movement.lastAppliedWorldKey).toBe(movement.lastRequestedWorldKey);
+  expect(movement.lastAppliedCanonicalThreatKey).toBe(movement.lastRequestedCanonicalThreatKey);
+  expect(movement.lastAppliedJobId).toBe(movement.lastCompletedJobId);
+  expect(movement.lastCompletedJobFinalExact).toBe(true);
+}
+
 function summarizeSceneUpdates(report: PerformanceReport): { p95: number; max: number } {
   const end = report.samples.at(-1)?.tMs ?? 0;
   const values = report.samples
@@ -448,16 +587,47 @@ function summarizeSceneUpdates(report: PerformanceReport): { p95: number; max: n
   };
 }
 
+function longTasksInReportWindow(report: PerformanceReport): Array<{ startMs: number; durationMs: number }> {
+  const end = report.samples.at(-1)?.tMs ?? 0;
+  return report.longTasks.filter((task) => task.startMs >= end - REPORT_WINDOW_MS);
+}
+
 function requireMovement(snapshotValue: MovementSnapshot): MovementDiagnostics {
-  if (!snapshotValue.awarenessMovement) {
-    throw new Error('Awareness movement diagnostics are unavailable.');
-  }
+  if (!snapshotValue.awarenessMovement) throw new Error('Awareness movement diagnostics are unavailable.');
   return snapshotValue.awarenessMovement;
 }
 
 function requireSubjective(snapshotValue: MovementSnapshot): { x: number; y: number } {
-  if (!snapshotValue.subjectiveThreatPosition) {
-    throw new Error('Subjective threat position is unavailable.');
-  }
+  if (!snapshotValue.subjectiveThreatPosition) throw new Error('Subjective threat position is unavailable.');
   return snapshotValue.subjectiveThreatPosition;
+}
+
+function requireWinner(snapshotValue: MovementSnapshot): SafePositionSnapshot {
+  if (!snapshotValue.bestSafePosition) throw new Error('Renderer-local safe winner is unavailable.');
+  return snapshotValue.bestSafePosition;
+}
+
+function requireWallX(snapshotValue: MovementSnapshot): number {
+  if (snapshotValue.wallX === null) throw new Error('Wall geometry is unavailable.');
+  return snapshotValue.wallX;
+}
+
+function delta(
+  after: MovementDiagnostics,
+  before: MovementDiagnostics,
+  key: keyof MovementDiagnostics,
+): number {
+  const afterValue = after[key];
+  const beforeValue = before[key];
+  if (typeof afterValue !== 'number' || typeof beforeValue !== 'number') {
+    throw new Error(`Counter ${String(key)} is not numeric.`);
+  }
+  return afterValue - beforeValue;
+}
+
+function angularDifference(left: number, right: number): number {
+  const normalizedLeft = ((left % 360) + 360) % 360;
+  const normalizedRight = ((right % 360) + 360) % 360;
+  const difference = Math.abs(normalizedLeft - normalizedRight);
+  return Math.min(difference, 360 - difference);
 }
