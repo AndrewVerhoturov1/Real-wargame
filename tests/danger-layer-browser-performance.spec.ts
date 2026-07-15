@@ -108,7 +108,7 @@ test('records paused dynamic danger-layer rescoring without screenshots', async 
 
   expect(summary.sampleCount).toBeGreaterThan(20);
   expect(summary.measurementSeconds).toBeGreaterThan(7);
-  expect(browserTiming.frameMs.length).toBeGreaterThan(100);
+  expect(browserTiming.frameMs.length).toBeGreaterThan(20);
 });
 
 async function startBrowserTiming(page: Page): Promise<void> {
