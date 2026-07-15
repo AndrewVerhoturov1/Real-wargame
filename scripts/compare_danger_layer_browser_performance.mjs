@@ -24,6 +24,8 @@ const sceneP95ReductionPercent = before.sceneUpdateMs.p95 > 0
 const acceptance = {
   browserEffectiveFpsAtLeast50: after.browserEffectiveFps >= 50,
   browserRafP95AtMost22Ms: after.browserRafMs.p95 <= 22,
+  sceneUpdateP95AtMost10Ms: after.sceneUpdateMs.p95 <= 10,
+  noRepeatedSceneUpdateOver50Ms: after.sceneUpdateMs.max <= 50,
   steadyDynamicUpdateP95AtMost10Ms: after.steadyDynamicUpdateMs.p95 <= 10,
   noSteadyDynamicUpdateOver50Ms: after.steadyDynamicUpdateMs.max <= 50,
   noSteadyLongTaskOver100Ms: after.longTasksOver100Ms === 0,
