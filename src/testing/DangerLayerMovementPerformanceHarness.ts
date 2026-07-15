@@ -331,7 +331,9 @@ function addFixtureWall(state: SimulationState, observer: UnitModel): void {
   state.map.objects.push({
     id: WALL_ID,
     kind: 'structure',
-    x: observer.position.x - 1,
+    // Place the wall east of the observer. The existing browser crossing stop
+    // condition then leaves the final subjective threat well west of the wall.
+    x: observer.position.x + 4,
     y: observer.position.y - 10,
     widthCells: 1,
     heightCells: 20,
