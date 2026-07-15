@@ -13,7 +13,7 @@ import {
 const SECTOR_COUNT = 8;
 const SECTOR_RADIANS = Math.PI / 4;
 const CACHE_LIMIT = 12;
-const ORIGIN_BUCKET_CELLS = 1;
+const DIRECTION_WEIGHT_BUCKET = 0.0001;
 
 export interface DirectionalTacticalFieldOptions {
   readonly unitId: string;
@@ -86,7 +86,8 @@ export function getDirectionalTacticalField(
 ): DirectionalTacticalField {
   const mapCache = getMapCache(map);
   const staticGrid = getDirectionalTerrainStaticGrid(map);
-  const key = buildKey(staticGrid.mapVisualRevision, options);
+  const threatField = buildThreatDirectionField(options.originX, options.originY, options.threats);
+  const key = buildKey(staticGrid.mapVisualRevision, threatField);
   const existing = mapCache.fields.get(key);
   if (existing) {
     mapCache.diagnostics.cacheHitCount += 1;
@@ -95,10 +96,11 @@ export function getDirectionalTacticalField(
       mapCache.fields.set(key, existing);
       mapCache.diagnostics.lastKey = key;
     }
-    return existing;
+    // Dynamic confidence/strength can change total threat metadata without changing the
+    // normalized directional distribution that owns the expensive full-map geometry arrays.
+    return existing.threatField === threatField ? existing : { ...existing, threatField };
   }
 
-  const threatField = buildThreatDirectionField(options.originX, options.originY, options.threats);
   const startedAt = performance.now();
   const field = buildField(map, key, threatField);
   mapCache.fields.set(key, field);
@@ -311,17 +313,11 @@ function directionalTerrainSourceRu(cell: Omit<DirectionalTacticalCell, 'sourceR
   return 'открытый склон';
 }
 
-function buildKey(mapVisualRevision: number, options: DirectionalTacticalFieldOptions): string {
+function buildKey(mapVisualRevision: number, threatField: ThreatDirectionField): string {
   return [
     mapVisualRevision,
-    options.unitId,
-    quantize(options.originX, ORIGIN_BUCKET_CELLS),
-    quantize(options.originY, ORIGIN_BUCKET_CELLS),
-    options.threats.map((threat) => [
-      threat.id,
-      quantize(threat.x, 0.05),
-      quantize(threat.y, 0.05),
-    ].join(':')).join('|'),
+    threatField.primarySector,
+    Array.from(threatField.normalizedSectorWeights, (weight) => quantize(weight, DIRECTION_WEIGHT_BUCKET)).join(':'),
   ].join('#');
 }
 
