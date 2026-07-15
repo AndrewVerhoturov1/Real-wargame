@@ -110,6 +110,9 @@ function prepareScenario(state: SimulationState, observer: UnitModel, hostile: U
   } else if (scenario === 'hostile-only') {
     routeUnit(state, hostile, { x: hostile.position.x - 30, y: hostile.position.y + 10 });
   } else if (scenario === 'both') {
+    // The mixed movement contract needs a real subjective threat update, so use
+    // deterministic visual tracking while all six units follow production routes.
+    configureWallCrossingTracking(observer);
     routeAllUnits(state, observer, hostile);
   } else if (scenario === 'hidden-hostile') {
     const contact = observer.perceptionKnowledge.contacts.find((item) => item.sourceUnitId === hostile.id);
