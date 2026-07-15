@@ -76,8 +76,13 @@ export function getThreatRelativeCoverField(
   const existing = mapCache.fields.get(key);
   if (existing) {
     mapCache.diagnostics.cacheHitCount += 1;
-    mapCache.fields.delete(key);
-    mapCache.fields.set(key, existing);
+    // Full awareness scans read the same geometry field tens of thousands of times in a row.
+    // Touch LRU ordering only when the active key changes, not on every cell lookup.
+    if (mapCache.diagnostics.lastKey !== key) {
+      mapCache.fields.delete(key);
+      mapCache.fields.set(key, existing);
+      mapCache.diagnostics.lastKey = key;
+    }
     return existing;
   }
 
