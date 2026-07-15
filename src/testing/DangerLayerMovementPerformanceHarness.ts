@@ -370,17 +370,20 @@ function addFixtureWall(state: SimulationState, observer: UnitModel): void {
   const safeRadiusCells = Math.ceil(120 / Math.max(0.001, state.map.metersPerCell));
   const wallStartY = Math.max(0, Math.floor(observer.position.y) - safeRadiusCells - 2);
   const wallEndY = Math.min(state.map.height - 1, Math.floor(observer.position.y) + safeRadiusCells + 2);
-  const wallLength = wallEndY - wallStartY + 1;
-  state.map.objects.push(...Array.from({ length: wallLength }, (_, index) => ({
+  const wallGapY = clamp(Math.floor(observer.position.y) + 20, wallStartY + 2, wallEndY - 3);
+  const wallRows = Array.from({ length: wallEndY - wallStartY + 1 }, (_, index) => wallStartY + index)
+    .filter((wallY) => wallY !== wallGapY && wallY !== wallGapY + 1);
+  state.map.objects.push(...wallRows.map((wallY, index) => ({
     id: `${WALL_ID}-${index}`,
     kind: 'structure' as const,
     x: wallX,
-    y: wallStartY + index,
+    y: wallY,
     widthCells: 1,
     heightCells: 1,
     rotationRadians: 0,
-    // Extend the accepted segmented wall beyond the local safe-search radius,
-    // preventing open-field detours while retaining standing visual contact.
+    // The wall exceeds the local safe radius, while a narrow off-axis passage
+    // allows real routed crossing without turning the winning local cover into
+    // an open-field detour.
     losHeightMeters: 0.8,
     coverProtection: 92,
     coverReliability: 96,
