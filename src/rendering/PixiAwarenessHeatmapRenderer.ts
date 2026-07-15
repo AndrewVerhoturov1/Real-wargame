@@ -24,7 +24,9 @@ import type { KnownThreatMemory, UnitModel } from '../core/units/UnitModel';
 
 type VisibleAwarenessMode = 'danger' | 'stealth';
 type SafePositions = SoldierSafePosition[];
-type MutableMovementDiagnostics = { -readonly [Key in keyof AwarenessMovementDiagnostics]: AwarenessMovementDiagnostics[Key] };
+type MutableMovementDiagnostics = {
+  -readonly [Key in keyof AwarenessMovementDiagnostics]: AwarenessMovementDiagnostics[Key];
+};
 
 interface PendingWorldBuild {
   readonly rasterKey: string;
@@ -56,16 +58,16 @@ interface LocalDerivedSnapshot {
 }
 
 export interface AwarenessOverlayDiagnostics {
-  representation: 'raster-sprite';
-  visible: boolean;
-  rebuildCount: number;
-  markerUpdateCount: number;
-  lastBuildMs: number;
-  maxBuildMs: number;
-  displayObjectCount: number;
-  rasterWidth: number;
-  rasterHeight: number;
-  movement: AwarenessMovementDiagnostics;
+  readonly representation: 'raster-sprite';
+  readonly visible: boolean;
+  readonly rebuildCount: number;
+  readonly markerUpdateCount: number;
+  readonly lastBuildMs: number;
+  readonly maxBuildMs: number;
+  readonly displayObjectCount: number;
+  readonly rasterWidth: number;
+  readonly rasterHeight: number;
+  readonly movement: AwarenessMovementDiagnostics;
 }
 
 type AwarenessDebugWindow = Window & {
@@ -78,7 +80,9 @@ const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([0x01020304]).buffer)[0] ==
 const DANGER_PIXEL_LUT = buildPixelLut('danger');
 const STEALTH_PIXEL_LUT = buildPixelLut('stealth');
 const TERRAIN_KINDS: readonly TerrainKind[] = ['field', 'forest', 'road', 'swamp', 'rough', 'water'];
-const TERRAIN_CODE = new Map<TerrainKind, number>(TERRAIN_KINDS.map((kind, index) => [kind, index]));
+const TERRAIN_CODE = new Map<TerrainKind, number>(
+  TERRAIN_KINDS.map((kind, index) => [kind, index]),
+);
 const MAX_SAFE_POSITIONS = 8;
 const SAFE_SEARCH_RADIUS_METERS = 120;
 const SAFE_DISTANCE_PENALTY_PER_METER = 0.18;
@@ -87,6 +91,7 @@ const FINAL_EXACT_DELAY_MS = 120;
 
 export class PixiAwarenessHeatmapRenderer {
   readonly container = new Container();
+
   private readonly markerGraphics = new Graphics();
   private readonly title = new Text('', {
     fontFamily: 'Arial, sans-serif',
@@ -96,6 +101,8 @@ export class PixiAwarenessHeatmapRenderer {
     stroke: 0x111510,
     strokeThickness: 4,
   });
+  private readonly movement: MutableMovementDiagnostics = createMovementDiagnostics();
+
   private lastRasterKey = '';
   private lastMarkerInputKey = '';
   private lastMarkerKey = '';
@@ -123,7 +130,6 @@ export class PixiAwarenessHeatmapRenderer {
   private markerUpdateCount = 0;
   private lastBuildMs = 0;
   private maxBuildMs = 0;
-  private readonly movement: MutableMovementDiagnostics = createMovementDiagnostics();
 
   constructor() {
     this.title.position.set(8, 8);
@@ -132,10 +138,17 @@ export class PixiAwarenessHeatmapRenderer {
   }
 
   render(state: SimulationState): void {
-    const simulationLayer = getSimulationLayerState(state);
-    const awarenessMode = simulationLayer.mode === 'danger' ? 'danger' : simulationLayer.mode === 'stealth' ? 'stealth' : 'off';
-    const unit = state.selectedUnitId ? state.units.find((item) => item.id === state.selectedUnitId) : undefined;
-    if (state.editor.enabled || awarenessMode === 'off' || !unit) {
+    const layer = getSimulationLayerState(state);
+    const mode = layer.mode === 'danger'
+      ? 'danger'
+      : layer.mode === 'stealth'
+        ? 'stealth'
+        : 'off';
+    const unit = state.selectedUnitId
+      ? state.units.find((candidate) => candidate.id === state.selectedUnitId)
+      : undefined;
+
+    if (state.editor.enabled || mode === 'off' || !unit) {
       this.container.visible = false;
       this.lastRasterKey = 'hidden';
       this.lastMarkerInputKey = 'hidden';
@@ -145,13 +158,14 @@ export class PixiAwarenessHeatmapRenderer {
     }
 
     this.container.visible = true;
-    this.currentMode = awarenessMode;
+    this.currentMode = mode;
     this.ensureRaster(state.map.width, state.map.height, state.map.cellSize);
+
     const mapKey = buildAwarenessMapKey(state.map);
     this.ensureWorkerConfigured(state.map, mapKey);
     const worldKey = buildAwarenessWorldKey(state, unit);
-    const rasterKey = `${worldKey};mode:${awarenessMode}`;
-    const markerInputKey = buildAwarenessMarkerInputKey(state, unit, awarenessMode);
+    const rasterKey = `${worldKey};mode:${mode}`;
+    const markerInputKey = buildAwarenessMarkerInputKey(state, unit, mode);
     this.latestLocalSnapshot = {
       position: { ...unit.position },
       orderTarget: unit.order ? { ...unit.order.target } : null,
@@ -167,19 +181,23 @@ export class PixiAwarenessHeatmapRenderer {
       this.latestBuildSnapshot = snapshot;
       this.movement.lastRequestedRasterKey = worldKey;
       this.requestWorldBuild(snapshot);
-      this.scheduleFinalExactRefresh(snapshot);
+      this.scheduleFinalExactRefresh();
     }
 
     if (this.worldField && this.lastAppliedWorldKey === worldKey && rasterKey !== this.lastRasterKey) {
-      this.applyRaster(awarenessMode, rasterKey);
+      this.applyRaster(mode, rasterKey);
     }
 
-    if (markerInputKey !== this.lastMarkerInputKey && this.worldField && this.lastAppliedWorldKey === worldKey) {
+    if (
+      markerInputKey !== this.lastMarkerInputKey
+      && this.worldField
+      && this.lastAppliedWorldKey === worldKey
+    ) {
       this.updateLocalDerived(this.latestLocalSnapshot);
       this.lastMarkerInputKey = markerInputKey;
     }
 
-    this.updateMarkers(awarenessMode, state.map.cellSize);
+    this.updateMarkers(mode, state.map.cellSize);
     this.publishDiagnostics();
   }
 
@@ -214,12 +232,16 @@ export class PixiAwarenessHeatmapRenderer {
 
   private ensureWorkerConfigured(map: TacticalMap, mapKey: string): void {
     if (this.worker && this.workerMapKey === mapKey) return;
+
     if (this.worker) {
       if (this.inFlight) this.movement.workerJobsCancelled += 1;
       if (this.pending) this.movement.workerJobsCancelled += 1;
       this.worker.terminate();
     }
-    this.worker = new Worker(new URL('../workers/AwarenessWorldWorker.ts', import.meta.url), { type: 'module' });
+
+    this.worker = new Worker(new URL('../workers/AwarenessWorldWorker.ts', import.meta.url), {
+      type: 'module',
+    });
     this.workerMapKey = mapKey;
     this.inFlight = null;
     this.pending = null;
@@ -227,12 +249,16 @@ export class PixiAwarenessHeatmapRenderer {
     this.lastAppliedWorldKey = '';
     this.movement.workerInFlight = false;
     this.updatePendingDepth();
-    this.worker.onmessage = (event: MessageEvent<AwarenessWorkerResponse>) => this.handleWorkerResponse(event.data);
+
+    this.worker.onmessage = (event: MessageEvent<AwarenessWorkerResponse>) => {
+      this.handleWorkerResponse(event.data);
+    };
     this.worker.onerror = (event): void => {
       this.movement.lastWorkerError = event.message || 'Unknown awareness worker error.';
       this.finishInFlight();
       this.publishDiagnostics();
     };
+
     const snapshot = buildWorkerMapSnapshot(map, mapKey);
     this.worker.postMessage({ type: 'configure', map: snapshot }, [
       snapshot.terrainCodes.buffer,
@@ -256,6 +282,7 @@ export class PixiAwarenessHeatmapRenderer {
 
   private startWorldBuild(snapshot: PendingWorldBuild): void {
     if (!this.worker || snapshot.mapKey !== this.workerMapKey) return;
+
     const jobId = this.nextJobId;
     this.nextJobId += 1;
     this.inFlight = {
@@ -267,6 +294,7 @@ export class PixiAwarenessHeatmapRenderer {
     };
     this.movement.workerJobsStarted += 1;
     this.movement.workerInFlight = true;
+
     const request: AwarenessWorkerBuildSnapshot = { jobId, ...snapshot };
     this.worker.postMessage({ type: 'build', snapshot: request });
     this.updatePendingDepth();
@@ -284,7 +312,10 @@ export class PixiAwarenessHeatmapRenderer {
     const latency = performance.now() - inFlight.requestedAt;
     this.movement.workerJobsCompleted += 1;
     this.movement.lastWorkerLatencyMs = roundMs(latency);
-    this.movement.maxWorkerLatencyMs = Math.max(this.movement.maxWorkerLatencyMs, this.movement.lastWorkerLatencyMs);
+    this.movement.maxWorkerLatencyMs = Math.max(
+      this.movement.maxWorkerLatencyMs,
+      this.movement.lastWorkerLatencyMs,
+    );
     this.inFlight = null;
     this.movement.workerInFlight = false;
 
@@ -292,9 +323,13 @@ export class PixiAwarenessHeatmapRenderer {
       this.movement.lastWorkerError = response.message;
     } else {
       this.movement.lastWorkerComputeMs = roundMs(response.computeMs);
-      this.movement.maxWorkerComputeMs = Math.max(this.movement.maxWorkerComputeMs, this.movement.lastWorkerComputeMs);
+      this.movement.maxWorkerComputeMs = Math.max(
+        this.movement.maxWorkerComputeMs,
+        this.movement.lastWorkerComputeMs,
+      );
       const stale = response.mapKey !== this.workerMapKey
         || response.rasterKey !== this.latestRequestedWorldKey;
+
       if (stale) {
         this.movement.workerResultsStaleDropped += 1;
       } else {
@@ -304,8 +339,7 @@ export class PixiAwarenessHeatmapRenderer {
         this.movement.worldRasterBuilds += 1;
         this.movement.directionalBasisBuilds += response.computation.directionalBasisBuilds;
         if (response.finalExact) this.movement.finalRefreshApplied += 1;
-        const displayKey = `${response.rasterKey};mode:${this.currentMode}`;
-        this.applyRaster(this.currentMode, displayKey);
+        this.applyRaster(this.currentMode, `${response.rasterKey};mode:${this.currentMode}`);
         if (this.latestLocalSnapshot) this.updateLocalDerived(this.latestLocalSnapshot);
         this.updateMarkers(this.currentMode, this.latestLocalSnapshot?.cellSize ?? 1);
       }
@@ -327,37 +361,46 @@ export class PixiAwarenessHeatmapRenderer {
     if (next) this.startWorldBuild(next);
   }
 
-  private scheduleFinalExactRefresh(snapshot: PendingWorldBuild): void {
+  private scheduleFinalExactRefresh(): void {
     if (this.finalRefreshTimer !== null) window.clearTimeout(this.finalRefreshTimer);
     this.finalRefreshTimer = window.setTimeout(() => {
       this.finalRefreshTimer = null;
       if (this.destroyed || !this.latestBuildSnapshot) return;
-      const exact = { ...this.latestBuildSnapshot, finalExact: true };
       this.movement.finalRefreshRequests += 1;
-      this.requestWorldBuild(exact);
+      this.requestWorldBuild({ ...this.latestBuildSnapshot, finalExact: true });
     }, FINAL_EXACT_DELAY_MS);
   }
 
   private applyRaster(mode: VisibleAwarenessMode, rasterKey: string): void {
     if (!this.worldField || !this.rasterPixelWords || !this.rasterTexture) return;
+
     const startedAt = performance.now();
-    const source = mode === 'danger' ? this.worldField.dangerPixels : this.worldField.stealthPixels;
+    const source = mode === 'danger'
+      ? this.worldField.dangerPixels
+      : this.worldField.stealthPixels;
     this.rasterPixelWords.set(source.subarray(0, this.rasterPixelWords.length));
-    if (source.length < this.rasterPixelWords.length) this.rasterPixelWords.fill(0, source.length);
+    if (source.length < this.rasterPixelWords.length) {
+      this.rasterPixelWords.fill(0, source.length);
+    }
     this.rasterTexture.baseTexture.update();
     this.title.text = `СЛОЙ БОЙЦА: ${modeLabel(mode)}`;
     this.lastRasterKey = rasterKey;
     this.rebuildCount += 1;
     this.movement.mainThreadRasterSwaps += 1;
+
     const elapsed = performance.now() - startedAt;
     this.lastBuildMs = elapsed;
     this.maxBuildMs = Math.max(this.maxBuildMs, elapsed);
     this.movement.lastMainThreadApplyMs = roundMs(elapsed);
-    this.movement.maxMainThreadApplyMs = Math.max(this.movement.maxMainThreadApplyMs, this.movement.lastMainThreadApplyMs);
+    this.movement.maxMainThreadApplyMs = Math.max(
+      this.movement.maxMainThreadApplyMs,
+      this.movement.lastMainThreadApplyMs,
+    );
   }
 
   private updateLocalDerived(snapshot: LocalDerivedSnapshot): void {
     if (!this.worldField) return;
+
     const startedAt = performance.now();
     const result = buildBestSafePositionsFromWorldField(this.worldField, snapshot);
     this.safePositions = result.positions;
@@ -365,9 +408,13 @@ export class PixiAwarenessHeatmapRenderer {
     this.movement.safePositionLocalScans += 1;
     this.movement.safePositionCellsScanned += result.scannedCells;
     evaluateRouteDangerFromWorldField(this.worldField, snapshot);
+
     const elapsed = performance.now() - startedAt;
     this.movement.lastLocalUpdateMs = roundMs(elapsed);
-    this.movement.maxLocalUpdateMs = Math.max(this.movement.maxLocalUpdateMs, this.movement.lastLocalUpdateMs);
+    this.movement.maxLocalUpdateMs = Math.max(
+      this.movement.maxLocalUpdateMs,
+      this.movement.lastLocalUpdateMs,
+    );
   }
 
   private updateMarkers(mode: VisibleAwarenessMode, cellSize: number): void {
@@ -416,6 +463,7 @@ export class PixiAwarenessHeatmapRenderer {
   ): void {
     this.markerGraphics.clear();
     if (mode !== 'danger') return;
+
     const markerCount = Math.min(5, positions.length);
     for (let index = 0; index < markerCount; index += 1) {
       const best = positions[index];
@@ -457,6 +505,7 @@ export function buildAwarenessMarkerKey(
   cellSize: number,
 ): string {
   if (mode !== 'danger') return `mode:${mode};cellSize:${cellSize};markers:none`;
+
   const markerCount = Math.min(5, positions.length);
   let key = `mode:${mode};cellSize:${cellSize};markers:${markerCount}`;
   for (let index = 0; index < markerCount; index += 1) {
@@ -567,12 +616,14 @@ function buildWorkerMapSnapshot(map: TacticalMap, mapKey: string): AwarenessWork
   const terrainCodes = new Uint8Array(count);
   const heightLevels = new Int8Array(count);
   const forestKinds = new Uint8Array(count);
+
   for (let index = 0; index < count; index += 1) {
     const cell = map.cells[index];
     terrainCodes[index] = TERRAIN_CODE.get(cell?.terrain ?? map.defaultTerrain) ?? 0;
     heightLevels[index] = cell?.height ?? map.defaultHeight;
     forestKinds[index] = cell?.forest ?? 0;
   }
+
   return {
     mapKey,
     width: map.width,
@@ -596,12 +647,12 @@ function buildBestSafePositionsFromWorldField(
   field: AwarenessWorkerFieldPayload,
   snapshot: LocalDerivedSnapshot,
 ): { positions: SafePositions; scannedCells: number } {
-  const searchRadiusCells = SAFE_SEARCH_RADIUS_METERS / Math.max(0.001, snapshot.metersPerCell);
-  const searchRadiusSquared = searchRadiusCells * searchRadiusCells;
-  const minX = Math.max(0, Math.floor(snapshot.position.x - searchRadiusCells));
-  const maxX = Math.min(snapshot.width - 1, Math.ceil(snapshot.position.x + searchRadiusCells));
-  const minY = Math.max(0, Math.floor(snapshot.position.y - searchRadiusCells));
-  const maxY = Math.min(snapshot.height - 1, Math.ceil(snapshot.position.y + searchRadiusCells));
+  const radiusCells = SAFE_SEARCH_RADIUS_METERS / Math.max(0.001, snapshot.metersPerCell);
+  const radiusSquared = radiusCells * radiusCells;
+  const minX = Math.max(0, Math.floor(snapshot.position.x - radiusCells));
+  const maxX = Math.min(snapshot.width - 1, Math.ceil(snapshot.position.x + radiusCells));
+  const minY = Math.max(0, Math.floor(snapshot.position.y - radiusCells));
+  const maxY = Math.min(snapshot.height - 1, Math.ceil(snapshot.position.y + radiusCells));
   const best: SafePositions = [];
   let scannedCells = 0;
 
@@ -612,31 +663,42 @@ function buildBestSafePositionsFromWorldField(
       const positionX = x + 0.5;
       const dx = positionX - snapshot.position.x;
       const distanceSquared = dx * dx + dy * dy;
-      if (distanceSquared > searchRadiusSquared) continue;
+      if (distanceSquared > radiusSquared) continue;
+
       scannedCells += 1;
-      const index = y * snapshot.width + x;
+      const cellIndex = y * snapshot.width + x;
       const distanceCells = Math.sqrt(distanceSquared);
       const distanceMeters = distanceCells * snapshot.metersPerCell;
-      const score = (field.safety[index] ?? 0) - distanceMeters * SAFE_DISTANCE_PENALTY_PER_METER;
+      const score = (field.safety[cellIndex] ?? 0)
+        - distanceMeters * SAFE_DISTANCE_PENALTY_PER_METER;
       if (score <= 18) continue;
-      if (best.length === MAX_SAFE_POSITIONS && score <= best[MAX_SAFE_POSITIONS - 1].score) continue;
-      const threatIndex = field.protectedThreatIndex[index] ?? -1;
+      if (
+        best.length === MAX_SAFE_POSITIONS
+        && score <= best[MAX_SAFE_POSITIONS - 1].score
+      ) continue;
+
+      const threatIndex = field.protectedThreatIndex[cellIndex] ?? -1;
       let insertionIndex = 0;
-      while (insertionIndex < best.length && best[insertionIndex].score >= score) insertionIndex += 1;
+      while (insertionIndex < best.length && best[insertionIndex].score >= score) {
+        insertionIndex += 1;
+      }
       best.splice(insertionIndex, 0, {
         position: { x: positionX, y: positionY },
         score,
-        danger: field.danger[index] ?? 0,
-        expectedProtection: field.expectedProtection[index] ?? 0,
-        expectedProtectionAgainstThreat: field.expectedProtectionAgainstThreat[index] ?? 0,
-        protectedAgainstThreatId: threatIndex >= 0 ? field.threatIds[threatIndex] ?? null : null,
-        concealment: field.concealment[index] ?? 0,
+        danger: field.danger[cellIndex] ?? 0,
+        expectedProtection: field.expectedProtection[cellIndex] ?? 0,
+        expectedProtectionAgainstThreat: field.expectedProtectionAgainstThreat[cellIndex] ?? 0,
+        protectedAgainstThreatId: threatIndex >= 0
+          ? field.threatIds[threatIndex] ?? null
+          : null,
+        concealment: field.concealment[cellIndex] ?? 0,
         distanceCells,
         sourceRu: 'асинхронное поле опасности',
       });
       if (best.length > MAX_SAFE_POSITIONS) best.pop();
     }
   }
+
   return { positions: best, scannedCells };
 }
 
@@ -644,7 +706,10 @@ function evaluateRouteDangerFromWorldField(
   field: AwarenessWorkerFieldPayload,
   snapshot: LocalDerivedSnapshot,
 ): number {
-  if (!snapshot.orderTarget) return readFieldValue(field.danger, snapshot.width, snapshot.height, snapshot.position);
+  if (!snapshot.orderTarget) {
+    return readFieldValue(field.danger, snapshot.width, snapshot.height, snapshot.position);
+  }
+
   const dx = snapshot.orderTarget.x - snapshot.position.x;
   const dy = snapshot.orderTarget.y - snapshot.position.y;
   const lengthMeters = Math.hypot(dx, dy) * snapshot.metersPerCell;
@@ -679,6 +744,7 @@ function buildPixelLut(mode: VisibleAwarenessMode): Uint32Array {
   const result = new Uint32Array(101);
   for (let value = 0; value <= 100; value += 1) {
     if (value <= 2) continue;
+
     let red: number;
     let green: number;
     let blue: number;
@@ -713,6 +779,7 @@ function buildPixelLut(mode: VisibleAwarenessMode): Uint32Array {
       green = 0x77;
       blue = 0x32;
     }
+
     const alpha = Math.round(Math.min(0.55, 0.08 + value / 100 * 0.46) * 255);
     result[value] = packRgba(red, green, blue, alpha);
   }
