@@ -54,10 +54,9 @@ export class PixiCoverDirectionRenderer {
       if (!protectedNow) {
         const ux = unit.position.x * cellSize;
         const uy = unit.position.y * cellSize;
-        graphics.moveTo(ux - 7, uy - 7).lineTo(ux + 7, uy + 7)
-          .stroke({ width: 3, color: WARNING_COLOR, alpha: 0.9 });
-        graphics.moveTo(ux + 7, uy - 7).lineTo(ux - 7, uy + 7)
-          .stroke({ width: 3, color: WARNING_COLOR, alpha: 0.9 });
+        graphics.moveTo(ux - 7, uy - 7).lineTo(ux + 7, uy + 7);
+        graphics.moveTo(ux + 7, uy - 7).lineTo(ux - 7, uy + 7);
+        graphics.stroke({ width: 3, color: WARNING_COLOR, alpha: 0.9 });
       }
     }
 
@@ -106,10 +105,10 @@ function drawArrow(
   const angle = Math.atan2(y2 - y1, x2 - x1);
   const headLength = Math.max(10, cellSize * 0.35);
 
-  const stroke = { width, color, alpha: 0.95 };
-  graphics.moveTo(x1, y1).lineTo(x2, y2).stroke(stroke);
-  graphics.moveTo(x2, y2).lineTo(x2 - Math.cos(angle - Math.PI / 6) * headLength, y2 - Math.sin(angle - Math.PI / 6) * headLength).stroke(stroke);
-  graphics.moveTo(x2, y2).lineTo(x2 - Math.cos(angle + Math.PI / 6) * headLength, y2 - Math.sin(angle + Math.PI / 6) * headLength).stroke(stroke);
+  graphics.moveTo(x1, y1).lineTo(x2, y2);
+  graphics.moveTo(x2, y2).lineTo(x2 - Math.cos(angle - Math.PI / 6) * headLength, y2 - Math.sin(angle - Math.PI / 6) * headLength);
+  graphics.moveTo(x2, y2).lineTo(x2 - Math.cos(angle + Math.PI / 6) * headLength, y2 - Math.sin(angle + Math.PI / 6) * headLength);
+  graphics.stroke({ width, color, alpha: 0.95 });
 }
 
 function createLabel(text: string, x: number, y: number, color: number): Text {

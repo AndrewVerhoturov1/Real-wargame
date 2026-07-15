@@ -132,10 +132,9 @@ export class PixiCombatEffectsRenderer {
 function drawMuzzleFlash(graphics: Graphics, effect: MuzzleEffect, progress: number): void {
   const alpha = 1 - progress;
   const radius = 3 + (1 - progress) * 7;
-  graphics.moveTo(effect.point.x - radius, effect.point.y).lineTo(effect.point.x + radius, effect.point.y)
-    .stroke({ width: 2, color: 0xfff3a1, alpha });
-  graphics.moveTo(effect.point.x, effect.point.y - radius).lineTo(effect.point.x, effect.point.y + radius)
-    .stroke({ width: 2, color: 0xfff3a1, alpha });
+  graphics.moveTo(effect.point.x - radius, effect.point.y).lineTo(effect.point.x + radius, effect.point.y);
+  graphics.moveTo(effect.point.x, effect.point.y - radius).lineTo(effect.point.x, effect.point.y + radius);
+  graphics.stroke({ width: 2, color: 0xfff3a1, alpha });
   graphics.circle(effect.point.x, effect.point.y, Math.max(1.5, radius * 0.42)).fill({ color: 0xffcf4a, alpha: alpha * 0.9 });
 }
 
