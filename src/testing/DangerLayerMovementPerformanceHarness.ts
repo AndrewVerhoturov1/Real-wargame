@@ -416,17 +416,17 @@ function addFixtureWall(state: SimulationState, observer: UnitModel): void {
   const wallStartY = Math.max(0, Math.floor(observer.position.y) - safeRadiusCells - 2);
   const wallEndY = Math.min(state.map.height - 1, Math.floor(observer.position.y) + safeRadiusCells + 2);
   const wallGapY = clamp(Math.floor(observer.position.y) + 20, wallStartY + 2, wallEndY - 3);
-  const wallRows = Array.from(
-    { length: wallEndY - wallStartY + 1 },
-    (_, index) => wallStartY + index,
-  ).filter((wallY) => wallY !== wallGapY && wallY !== wallGapY + 1);
-  state.map.objects.push(...wallRows.map((wallY, index) => ({
+  const segments = [
+    { y: wallStartY, heightCells: wallGapY - wallStartY },
+    { y: wallGapY + 2, heightCells: wallEndY - wallGapY - 1 },
+  ].filter((segment) => segment.heightCells > 0);
+  state.map.objects.push(...segments.map((segment, index) => ({
     id: `${WALL_ID}-${index}`,
     kind: 'structure' as const,
     x: wallX,
-    y: wallY,
+    y: segment.y,
     widthCells: 1,
-    heightCells: 1,
+    heightCells: segment.heightCells,
     rotationRadians: 0,
     losHeightMeters: 0.8,
     coverProtection: 92,
