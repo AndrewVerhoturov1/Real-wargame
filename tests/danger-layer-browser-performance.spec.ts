@@ -27,9 +27,12 @@ interface BrowserPerformanceSummary {
   reportVersion: string;
   measurementSeconds: number;
   sampleCount: number;
-  effectiveFps: number;
+  reportEffectiveFps: number;
   frameMs: Stats;
   sceneUpdateMs: Stats;
+  dynamicUpdateMs: Stats;
+  browserEffectiveFps: number;
+  browserRafMs: Stats;
   framesOver50Ms: number;
   framesOver100Ms: number;
   longTasksOver100Ms: number;
@@ -69,15 +72,45 @@ test('records paused dynamic danger-layer rescoring without screenshots', async 
   await expect(page.locator('#pause-toggle')).toHaveAttribute('aria-pressed', 'true');
   await page.waitForTimeout(500);
 
+  await page.evaluate(() => {
+    const perfWindow = window as Window & {
+      __dangerPerformanceRaf?: { samples: number[]; running: boolean };
+    };
+    const runtime = { samples: [] as number[], running: true };
+    perfWindow.__dangerPerformanceRaf = runtime;
+    let previous = performance.now();
+    const collect = (now: number) => {
+      if (!runtime.running) return;
+      runtime.samples.push(now - previous);
+      previous = now;
+      requestAnimationFrame(collect);
+    };
+    requestAnimationFrame(collect);
+  });
+
+  const updateDurations: number[] = [];
   for (let step = 0; step < UPDATE_COUNT; step += 1) {
-    await page.evaluate((currentStep) => {
+    const duration = await page.evaluate((currentStep) => {
       const api = window.__realWargameCombatTacticalVisualQa;
       if (!api) throw new Error('Combat tactical visual QA API is unavailable.');
+      const startedAt = performance.now();
       api.stepDangerPerformanceDynamicUpdate(currentStep);
+      return performance.now() - startedAt;
     }, step);
+    updateDurations.push(duration);
     await page.waitForTimeout(UPDATE_INTERVAL_MS);
   }
   await page.waitForTimeout(500);
+
+  const rafValues = await page.evaluate(() => {
+    const perfWindow = window as Window & {
+      __dangerPerformanceRaf?: { samples: number[]; running: boolean };
+    };
+    const runtime = perfWindow.__dangerPerformanceRaf;
+    if (!runtime) return [];
+    runtime.running = false;
+    return runtime.samples;
+  });
 
   const downloadPromise = page.waitForEvent('download');
   await page.evaluate(() => {
@@ -93,18 +126,22 @@ test('records paused dynamic danger-layer rescoring without screenshots', async 
   const awareness = await page.evaluate(() => (
     window as Window & { __realWargameAwarenessDebug?: AwarenessDiagnostics }
   ).__realWargameAwarenessDebug ?? null);
-  const summary = summarize(report, awareness);
+  const summary = summarize(report, awareness, updateDurations, rafValues);
   mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
   writeFileSync(OUTPUT_PATH, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
   console.log(JSON.stringify(summary, null, 2));
 
   expect(summary.sampleCount).toBeGreaterThan(20);
   expect(summary.measurementSeconds).toBeGreaterThan(7);
+  expect(updateDurations).toHaveLength(UPDATE_COUNT);
+  expect(rafValues.length).toBeGreaterThan(300);
 });
 
 function summarize(
   report: PerformanceReport,
   awareness: AwarenessDiagnostics | null,
+  updateDurations: number[],
+  rafValues: number[],
 ): BrowserPerformanceSummary {
   const lastSample = report.samples.at(-1);
   const windowEnd = lastSample?.tMs ?? 0;
@@ -120,15 +157,19 @@ function summarize(
     ? samples[samples.length - 1].tMs - samples[0].tMs
     : 0;
   const longTasks = report.longTasks.filter((task) => task.startMs >= windowStart);
+  const rafTotalMs = rafValues.reduce((total, value) => total + value, 0);
 
   return {
     label: LABEL,
     reportVersion: report.version,
     measurementSeconds: round(durationMs / 1000),
     sampleCount: samples.length,
-    effectiveFps: durationMs > 0 ? round((samples.length - 1) * 1000 / durationMs) : 0,
+    reportEffectiveFps: durationMs > 0 ? round((samples.length - 1) * 1000 / durationMs) : 0,
     frameMs: stats(frameValues),
     sceneUpdateMs: stats(sceneValues),
+    dynamicUpdateMs: stats(updateDurations),
+    browserEffectiveFps: rafTotalMs > 0 ? round(rafValues.length * 1000 / rafTotalMs) : 0,
+    browserRafMs: stats(rafValues),
     framesOver50Ms: frameValues.filter((value) => value > 50).length,
     framesOver100Ms: frameValues.filter((value) => value > 100).length,
     longTasksOver100Ms: longTasks.filter((task) => task.durationMs > 100).length,
@@ -156,4 +197,10 @@ function percentile(sorted: number[], fraction: number): number {
 
 function round(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+declare global {
+  interface Window {
+    __dangerPerformanceRaf?: { samples: number[]; running: boolean };
+  }
 }
