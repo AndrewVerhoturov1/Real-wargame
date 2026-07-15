@@ -10,7 +10,9 @@ export interface AwarenessMovementDiagnostics extends Record<string, unknown> {
   readonly workerJobsCoalesced: number;
   readonly workerResultsStaleDropped: number;
   readonly mainThreadRasterSwaps: number;
+  /** Cumulative timers that requested an exact final snapshot. Superseded requests may remain unapplied. */
   readonly finalRefreshRequests: number;
+  /** Cumulative exact final snapshots that were current when their worker result completed. */
   readonly finalRefreshApplied: number;
   readonly pendingQueueDepth: number;
   readonly maxPendingQueueDepth: number;
