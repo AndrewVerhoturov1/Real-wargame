@@ -9,8 +9,17 @@ interface PerformanceSample {
   layerMode: string;
 }
 
+interface BuildIdentity {
+  branch: string;
+  commitSha: string;
+  buildId: string;
+  generatedAt: string;
+  performanceContractVersion: string;
+}
+
 interface PerformanceReport {
   version: string;
+  build?: BuildIdentity;
   computation?: Record<string, unknown>;
   longTasks: Array<{ startMs: number; durationMs: number }>;
   samples: PerformanceSample[];
@@ -31,6 +40,7 @@ interface BrowserTimingResult {
 interface BrowserPerformanceSummary {
   label: string;
   reportVersion: string;
+  build: BuildIdentity | null;
   measurementSeconds: number;
   sampleCount: number;
   browserEffectiveFps: number;
@@ -56,6 +66,8 @@ interface Stats {
 const OUTPUT_PATH = process.env.DANGER_PERF_OUTPUT
   ?? path.join('artifacts', 'performance', 'danger-layer-browser-performance.json');
 const LABEL = process.env.DANGER_PERF_LABEL ?? 'candidate';
+const EXPECTED_BRANCH = process.env.DANGER_PERF_EXPECTED_BRANCH ?? '';
+const EXPECTED_SHA = process.env.DANGER_PERF_EXPECTED_SHA ?? '';
 const UPDATE_COUNT = 30;
 const UPDATE_INTERVAL_MS = 300;
 const REPORT_WINDOW_MS = 12_000;
@@ -104,6 +116,7 @@ test('records paused dynamic danger-layer rescoring without screenshots', async 
   const downloadedPath = await download.path();
   if (!downloadedPath) throw new Error('Performance report download path is unavailable.');
   const report = JSON.parse(readFileSync(downloadedPath, 'utf8')) as PerformanceReport;
+  assertBuildIdentity(report);
 
   const awareness = await page.evaluate(() => (
     window as Window & { __realWargameAwarenessDebug?: AwarenessDiagnostics }
@@ -185,6 +198,15 @@ async function stopBrowserTiming(page: Page): Promise<BrowserTimingResult> {
   });
 }
 
+function assertBuildIdentity(report: PerformanceReport): void {
+  expect(report.version).toBe('performance-report-v4');
+  expect(report.build?.performanceContractVersion).toBe('performance-report-v4');
+  expect(report.build?.buildId).toBeTruthy();
+  expect(report.build?.generatedAt).toBeTruthy();
+  if (EXPECTED_BRANCH) expect(report.build?.branch).toBe(EXPECTED_BRANCH);
+  if (EXPECTED_SHA) expect(report.build?.commitSha).toBe(EXPECTED_SHA);
+}
+
 function summarize(
   report: PerformanceReport,
   awareness: AwarenessDiagnostics | null,
@@ -206,6 +228,7 @@ function summarize(
   return {
     label: LABEL,
     reportVersion: report.version,
+    build: report.build ?? null,
     measurementSeconds: round(browserTiming.durationMs / 1000),
     sampleCount: sceneValues.length,
     browserEffectiveFps: browserTiming.durationMs > 0
