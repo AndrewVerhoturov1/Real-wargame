@@ -86,6 +86,28 @@ const hiddenCanonical = buildCanonicalWorldThreatSet([unitThreatA], state.map.me
 assert.equal(hiddenCanonical.key, canonicalA.key, 'hidden objective movement must not alter canonical threat key');
 assert.deepEqual(hiddenCanonical.threats, canonicalA.threats, 'hidden objective movement must not leak into payload');
 
+// Small confidence-derived strength decay remains inside one unit-contact bucket.
+const hiddenMemoryBefore: KnownThreatMemory = {
+  ...unitThreatA,
+  strength: 88,
+  confidence: 100,
+  uncertaintyCells: 2,
+  visibleNow: false,
+};
+const hiddenMemoryAfter: KnownThreatMemory = {
+  ...hiddenMemoryBefore,
+  strength: 87,
+  confidence: 98.4,
+  uncertaintyCells: 2.04,
+};
+const hiddenDecayBefore = buildCanonicalWorldThreatSet([hiddenMemoryBefore], state.map.metersPerCell);
+const hiddenDecayAfter = buildCanonicalWorldThreatSet([hiddenMemoryAfter], state.map.metersPerCell);
+assert.equal(hiddenDecayAfter.key, hiddenDecayBefore.key, 'minor hidden confidence decay must stay in one canonical bucket');
+assert.deepEqual(hiddenDecayAfter.threats, hiddenDecayBefore.threats, 'minor hidden decay must keep worker payload semantics');
+const hiddenFieldBefore = buildAwarenessWorldField(state.map, workerSnapshot(3, hiddenDecayBefore, blue.position));
+const hiddenFieldAfter = buildAwarenessWorldField(state.map, workerSnapshot(4, hiddenDecayAfter, blue.position));
+assert.equal(hiddenFieldAfter.rasterDigest, hiddenFieldBefore.rasterDigest, 'minor hidden decay must keep raster bytes');
+
 // A real evidence-authored sector retains world direction/range and flips protected wall side.
 const eastEvidence = buildCanonicalWorldThreatSet([
   directionalEvidence('incoming-east', 210.5, 100.5, 180),
@@ -98,8 +120,8 @@ assert.equal(eastEvidence.threats[0]?.directionDegrees, 180);
 assert.equal(eastEvidence.threats[0]?.arcDegrees, 55);
 assert.equal(eastEvidence.threats[0]?.rangeCells, 180);
 
-const eastField = buildAwarenessWorldField(state.map, workerSnapshot(3, eastEvidence, blue.position));
-const westField = buildAwarenessWorldField(state.map, workerSnapshot(4, westEvidence, blue.position));
+const eastField = buildAwarenessWorldField(state.map, workerSnapshot(5, eastEvidence, blue.position));
+const westField = buildAwarenessWorldField(state.map, workerSnapshot(6, westEvidence, blue.position));
 assert.notEqual(eastField.rasterDigest, westField.rasterDigest, 'genuine directional evidence must change raster bytes');
 const westProtectedCell = cellIndex(150, 100);
 const eastExposedCell = cellIndex(170, 100);
@@ -147,6 +169,12 @@ console.log(JSON.stringify({
     objectivePosition: red.position,
     subjectivePosition: { x: unitThreatA.x, y: unitThreatA.y },
     canonicalKeyUnchanged: true,
+    confidenceDrivenDecay: {
+      rawStrength: [hiddenMemoryBefore.strength, hiddenMemoryAfter.strength],
+      rawConfidence: [hiddenMemoryBefore.confidence, hiddenMemoryAfter.confidence],
+      canonicalKeyUnchanged: true,
+      rasterDigest: hiddenFieldBefore.rasterDigest,
+    },
   },
   reverseSlope: {
     verifiedBy: 'reverse-slope-comparative:smoke',
