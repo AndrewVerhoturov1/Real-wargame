@@ -2,99 +2,199 @@
 
 ## Scope
 
-The soldier danger overlay may rescore subjective tactical knowledge frequently, but it must not repeat threat-relative object/forest geometry, directional terrain geometry, allocate a new 320 × 200 awareness object graph, rebuild auxiliary cover knowledge, or rebuild its raster resources when geometric content is unchanged.
+The danger overlay describes the selected soldier's subjective **world danger field**. Moving the selected soldier across that field changes local lookups and marker ranking, but does not change the field's pixels. Moving a subjectively known hostile does change world danger geometry, but that full-map work must never block the browser main thread.
 
-## Root cause addressed
+The contract applies to the production PixiJS 7 renderer on large maps, including the 320 × 200 / 64,000-cell acceptance scene.
 
-The Stage 1 directional-fire integration added threat-relative object and forest protection to every awareness cell. A dynamic awareness cache miss scanned the full map and called `evaluateCoverBetween(..., { includeRelief: false })` for every relevant threat/cell pair. Forest cover then sampled the complete threat-to-cell segment. Confidence, suppression, strength, uncertainty and visibility changes were part of cache keys, so decay and evidence updates could repeat this work and recreate 64,000 awareness cell objects.
+## Movement regression root cause
 
-After geometry reuse was restored, secondary hot paths remained: every update allocated and sorted thousands of safe-position candidates to retain eight winners, the overlay copied all 64,000 values through a fresh canvas/ImageData path before uploading the one raster sprite, unchanged safe-position markers were redrawn, and the auxiliary cover-knowledge overlay rescanned all forest cells and LOS inputs despite unchanged map/unit geometry.
+PR #113 removed the original constant full-map overload, but its paused synthetic browser test changed only threat strength and confidence. It did not execute routed movement, `SimulationTick`, perception refresh or threat-memory position updates.
 
-## Threat-relative geometry cache
+Two movement-sensitive paths remained:
 
-`ThreatRelativeCoverField` owns object/forest-only protection for one subjective threat origin and posture.
+1. Selected-unit movement changed the marker input key. The renderer then called `buildSoldierAwarenessReport` even when raster pixels were unchanged. That report called `getDirectionalTacticalField` with the soldier's current position, so a cell transition could create a new directional field and invalidate awareness geometry.
+2. Visible-hostile movement changed subjective threat `x/y`. The threat-relative cover field, directional field and dynamic awareness geometry then performed legitimate 64,000-cell work synchronously on the main thread.
 
-Its content key includes:
+The user-provided `performance-report-v2` showed repeated 200–427 ms stalls, but had no `computation` section or immutable build identity. It is accepted as symptom evidence, not as proof of behavior at the PR #113 base SHA.
 
-- map dimensions and metres per cell;
-- subjective estimated threat position, quantized to 0.1 cell;
+## Data ownership
+
+### 1. Directional terrain sector basis
+
+`DirectionalTerrainSectorBasis` owns map-derived directional terrain geometry. For every cell and each of eight fixed sectors it stores:
+
+- slope;
+- protection;
+- exposure;
+- crest, valley and silhouette contributions.
+
+Its key depends only on:
+
+- map width and height;
+- metres per cell;
+- terrain revision;
+- height revision.
+
+Unit movement, knowledge revision, threat amplitude and subjective threat movement do not rebuild this basis.
+
+### 2. Position-independent world danger field
+
+The full danger raster depends on:
+
+- subjective threat content and estimated positions;
+- map terrain, height, forest and object revisions;
+- selected-unit posture and other tactical parameters that actually change world danger.
+
+It does **not** depend on the selected unit's current position. The legacy `originX/originY` directional API parameters remain for compatibility, but are not world-field key inputs.
+
+Selected-unit movement performs only:
+
+- O(1) current-cell lookup;
+- route-danger sampling from the completed field;
+- bounded-radius safe-position ranking;
+- marker redraw when displayed winners change.
+
+### 3. Worker-owned full-map builds
+
+`AwarenessWorldWorker` owns cold and moving-threat full-map computation. The browser main thread owns only scheduling, the last completed result and the Pixi texture.
+
+The worker receives:
+
+- a transferable map snapshot containing terrain, height and forest typed arrays plus normalized map objects;
+- selected posture;
+- subjective `KnownThreatMemory[]` only;
+- a stable synthetic world origin used solely for compatibility with APIs whose output is now position-independent.
+
+It never receives or reads objective hidden hostile positions.
+
+The worker returns transferable compact arrays:
+
+- danger;
+- concealment;
+- safety;
+- expected protection;
+- threat-relative protection;
+- protected-threat indexes;
+- prepacked danger and stealth RGBA words.
+
+The worker may internally build canonical `SoldierAwarenessCell[]`; those objects remain off the main thread and are not transferred.
+
+## Scheduling protocol
+
+The renderer enforces:
+
+```text
+one job in flight
++ at most one latest pending snapshot
+```
+
+Rules:
+
+- a new request while idle starts immediately;
+- a new request while busy replaces the previous pending snapshot;
+- replaced pending work increments cancellation/coalescing diagnostics;
+- an old completed result whose map key or raster key is no longer current is dropped;
+- stale results are never applied;
+- the last completed raster remains visible while a new job runs;
+- after movement settles for 120 ms, a final exact request is issued;
+- map-key changes terminate the old worker and configure a fresh map snapshot;
+- renderer destruction terminates the worker and clears timers.
+
+The queue cannot grow beyond one pending snapshot, so fast perception updates cannot create an allocation or latency backlog.
+
+## Raster application
+
+The overlay remains one cached PixiJS sprite. The main thread keeps one reusable RGBA `Uint8Array` and a `Uint32Array` view. Applying a completed worker result is:
+
+```text
+Uint32Array.set
+→ BaseTexture.update
+```
+
+No live update creates per-cell Pixi objects, canvas textures or `ImageData` copies.
+
+## Threat position precision
+
+Subjective threat position remains cell-aware rather than randomly coarsened:
+
+- threat-relative object/forest geometry uses the established 0.1-cell content quantization;
+- the directional derived-field key uses 0.1-cell subjective positions and normalized relative threat weights;
+- sector basis values remain continuous through interpolation between neighboring sectors;
+- the final exact request is mandatory after movement stops;
+- wall-side crossing and reverse-slope semantics remain acceptance requirements.
+
+Objective hidden movement cannot change these keys because only subjective memory is serialized to the worker.
+
+## Safe-position movement contract
+
+Safe ranking uses the existing 120-metre radius and score formula. It scans only the bounded local window, retains a stable top eight and allocates at most the winners. Current position and route danger read the already completed field.
+
+Marker graphics are redrawn only when the ordered coordinates of displayed winners change.
+
+## Cache and invalidation rules
+
+### Static basis invalidates on
+
+- map dimensions or metres per cell;
+- terrain revision;
+- height revision.
+
+### Threat-relative cover invalidates on
+
+- subjective threat position at its documented content resolution;
 - posture;
 - map object revision;
 - map forest revision.
 
-It intentionally excludes:
+It excludes raw strength, suppression, confidence, visibility, knowledge revision and objective hidden position.
 
-- strength and suppression;
-- confidence and uncertainty;
-- evidence count or knowledge revision;
-- `visibleNow`;
-- objective hidden unit position;
-- height/relief revision.
+### Derived directional world field invalidates on
 
-The cache is per-map, LRU ordered and bounded to 16 fields. Object or forest edits, posture changes and changes to the subjective estimated threat position invalidate the relevant field.
+- static basis key;
+- subjective threat position;
+- normalized relative threat distribution.
 
-Awareness resolves one geometry field per directional subjective threat before scanning the map. The cell loop reads the prepared `Uint8Array` directly, rather than rebuilding a content key or touching LRU state for every threat/cell pair.
+Raw amplitude/revision changes that preserve normalized distribution reuse the field.
 
-## Forest and object contract
+### World raster invalidates on
 
-A cold geometry build uses deterministic radial DDA propagation. Every non-origin map cell reads one predecessor cell and accumulates the established light/dense forest weights using the legacy three-samples-per-cell density scale. This makes forest work O(map cells), replacing one full sampled ray per target cell.
+- the map content key;
+- posture;
+- subjective awareness knowledge key.
 
-This is a documented approximation contract: the radial predecessor follows the target bearing from the subjective threat origin, preserves cumulative forest transmittance and avoids coarse angular buckets. Wall/object geometry keeps the established segment-distance, posture, reliability, penetration and multiplicative-combination formulas. Object properties are normalized once into numeric descriptors before the map scan, so the inner loop does not allocate result objects or repeatedly resolve static properties.
+It excludes selected-unit position and active route position.
 
-## Directional terrain contract
+## Performance report v4
 
-The expensive directional terrain arrays are keyed by their actual geometric output inputs:
+`performance-report-v4` contains:
 
-- map visual revision;
-- primary threat sector;
-- normalized eight-sector threat distribution, quantized by `DIRECTION_WEIGHT_BUCKET`.
+```text
+build.branch
+build.commitSha
+build.buildId
+build.generatedAt
+build.performanceContractVersion
+```
 
-The cache does not use knowledge revision or raw amplitude values directly. Strength, suppression and confidence changes that leave the normalized directional distribution unchanged reuse the same field object and arrays while its current threat metadata is refreshed. A real change in relative directional distribution, subjective bearings or map geometry rebuilds the field because its aggregate terrain output has changed.
+Unknown development builds are explicitly identified as unknown; CI injects the exact expected branch and SHA and browser tests assert them.
 
-Unit movement is not governed by a separate whole-cell origin bucket. Movement reuses the field only when the resulting quantized normalized sector distribution is unchanged; even sub-cell movement must rebuild when it materially changes the weighted directional terrain output. The navigation-overlay contract tests metadata-only reuse and movement-driven content invalidation separately.
+`computation.awarenessMovement` includes:
 
-## Dynamic awareness rescore
+- world raster builds;
+- selected-unit local updates;
+- safe-position scans and scanned-cell count;
+- directional basis builds;
+- worker jobs started, completed, cancelled and coalesced;
+- stale results dropped;
+- main-thread raster swaps;
+- final refresh requested/applied;
+- current and maximum pending depth;
+- worker compute and end-to-end latency;
+- main-thread apply and local-update costs;
+- requested/applied raster keys;
+- last worker error.
 
-A cold awareness build still creates the canonical `SoldierAwarenessCell[]`. `AwarenessDynamicRescore` then remembers a geometry signature containing static field identity, directional field identity and subjective threat shape/position data.
-
-For dynamic-only changes it lazily prepares compact typed arrays for threat factor, protection and exposure, then mutates the existing cells in place. Strength, suppression, confidence and visibility therefore update danger, suppression, uncertainty, safety and protected-threat metadata without repeating trigonometry, cover lookup, static-cell assembly or 64,000 object allocations.
-
-A posture change, map/static revision, changed directional distribution, changed subjective threat position/shape/range/arc/falloff, or changed uncertainty invalidates this rescore geometry and returns to the full cold path.
-
-## Safe-position selection
-
-Safe-position scoring still examines the same radius, threshold and score formula. Instead of allocating one object for every qualifying cell, sorting the complete set and slicing eight items, the implementation maintains a stable score-ordered top-eight list during the scan. Candidate allocation is therefore bounded, equal-score row-major ordering is preserved, and the winning positions remain semantically identical.
-
-## Raster and marker contract
-
-The overlay remains exactly one cached PixiJS sprite. Its texture is backed by one reusable RGBA `Uint8Array`; a `Uint32Array` view and precomputed 0–100 colour lookup tables write one packed pixel per cell before `baseTexture.update()`. Dynamic updates no longer allocate `ImageData`, create a temporary canvas texture or perform a second CPU-side raster copy. Public canvas helpers remain for tests and compatibility, but are not used by the live renderer.
-
-Safe-position marker graphics are keyed by their actual visible output: mode, cell size and the ordered coordinates of the first five winners. Knowledge value changes may rebuild raster pixels, but markers redraw only when the displayed winners change. The AI Test Lab smoke guard follows the buffered renderer contract through the danger/stealth lookup tables and packed-raster writer rather than an obsolete branch-text assertion.
-
-## Auxiliary unit-knowledge cache
-
-`buildUnitKnowledgeReport` is shared by the danger/memory cover overlay and used more than once during an overlay rebuild. Its cache key includes the map identity and dimensions, metres per cell, height/forest/object revisions, unit position, view range, posture and pressure-zone geometry/content.
-
-It intentionally excludes `tacticalKnowledge.revision`, threat strength, suppression, confidence and `visibleNow`: those values do not change object/forest cover candidates or their LOS. Map geometry edits, movement, posture/view-range changes and pressure-zone edits invalidate the report. This prevents dynamic danger decay from repeating a full forest-cell/LOS scan while preserving cover-marker semantics.
-
-## Semantic boundaries
-
-- The field reads only `UnitTacticalKnowledge` coordinates supplied by the caller; it never reads an objective hidden enemy position.
-- Relief is excluded from `ThreatRelativeCoverField`. `DirectionalTacticalField` remains the sole directional relief contribution in awareness, preventing double counting.
-- Default `evaluateCoverBetween` behavior is unchanged. The geometry fast path applies only to the established `{ includeRelief: false }` object+forest request.
-- `protectedAgainstThreatId` remains selected from the concrete subjective threats whose geometric factor reaches each cell.
-- East/west threat reversal, protected wall-side selection, reverse-slope behavior and route danger continue through the same public awareness interfaces.
-
-## Diagnostics
-
-Performance report v3 adds a `computation` section containing:
-
-- threat-relative geometry builds, cache hits, full-map scans, object checks, forest map reads, cold build duration, cache size and evictions;
-- directional tactical builds, cache hits, full-map scans and build duration;
-- selected-posture static awareness diagnostics;
-- dynamic awareness geometry builds, rescore count, rescored cell count and last/maximum rescore duration.
-
-The existing awareness renderer diagnostics also expose raster rebuild and marker-update counts, allowing browser A/B artifacts to prove that unchanged marker output is reused.
+Threat-relative, directional, static-awareness and dynamic-rescore diagnostics remain in the same `computation` section.
 
 ## Deterministic regression
 
@@ -102,14 +202,34 @@ Run:
 
 ```bash
 npm run danger-layer-performance:smoke
+npm run danger-layer-movement-performance:smoke
 ```
 
-The 320 × 200 contract verifies cold construction, unchanged hits, dynamic-only rescoring, evidence-only revision, sequential decay, hidden objective movement, estimated-position invalidation, object/forest invalidation, relief exclusion, wall-side winner semantics and bounded cache behavior. It also asserts that strength/confidence/suppression and sequential decay do not increment either threat-relative or directional full-map build counters. Structural counters make a return to `64,000 × full threat ray` work fail deterministically.
+The movement smoke uses a deterministic 320 × 200 scene with wall, light/dense forest and ridge content. It proves:
 
-## Browser regression
+- selected-unit movement: zero new threat-relative geometry, zero derived directional field and zero sector-basis builds;
+- objective hidden movement: zero subjective geometry invalidation;
+- subjective hostile movement: one legitimate derived geometry update while the sector basis is reused.
 
-`Danger Layer Browser Performance` checks out the exact PR base and head SHAs, injects the same paused benchmark harness into both, and performs 30 dynamic-only danger updates with fixed geometry in Chromium. The mutation is consumed by the normal paused application ticker, matching the production render path instead of calling the UI-only synchronous `forceRender` helper and contaminating the sample with a static-map invalidation.
+## Real browser movement regression
 
-The workflow records performance-report JSON, direct mutation durations, live-ticker `sceneUpdateMs`, continuous browser `requestAnimationFrame` intervals and `PerformanceObserver` long tasks without PNG generation. Cold-build and steady-state CPU thresholds are evaluated separately. Baseline sample requirements tolerate monitor starvation so a severely regressed base cannot prevent candidate measurement.
+`tests/danger-layer-movement-performance.spec.ts` uses the production application ticker and real routed orders. Coordinates are changed only by `SimulationTick`; visible threat positions are refreshed through perception and `syncSoldierThreatMemory`.
 
-GitHub-hosted headless Chromium has no representative hardware WebGL path. Therefore RAF/FPS/long-task values remain visible A/B telemetry but do not gate the CPU danger-layer contract. The 50–60 FPS hardware target must be confirmed from the exported report on the same local machine and scene as the original user report; it is not claimed from the software-rendered CI runner.
+The scene includes six units, a selected friendly, a visible hostile, light forest, dense forest, a ridge/reverse-slope fixture and a wall. Scenarios cover:
+
+1. selected unit moves while threats remain static;
+2. visible hostile moves while the selected unit is static;
+3. six units move simultaneously;
+4. hidden hostile objective movement;
+5. hostile wall-side crossing with final safe-winner validation.
+
+Structural acceptance gates queue depth, stale-result handling, final-key application, local update cost, main-thread raster apply cost and exact build identity. GitHub-hosted Chromium runs through software rendering, so its RAF/FPS and worker cold latency are evidence, not hardware acceptance. The 50–60 FPS target must still be confirmed from a fresh v4 report on the user's Windows scene.
+
+## Functional boundaries
+
+- Core simulation and AI do not import PixiJS.
+- The renderer never becomes authoritative tactical state.
+- `SimulationTick` remains the only coordinate integrator.
+- The worker receives subjective knowledge only.
+- Wall, forest, reverse-slope, protected-side and `protectedAgainstThreatId` semantics remain intact.
+- No performance threshold may replace the structural counters above.

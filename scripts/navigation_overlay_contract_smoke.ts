@@ -21,6 +21,7 @@ import {
   getDirectionalTacticalField,
   getDirectionalTacticalFieldDiagnostics,
 } from '../src/core/terrain/DirectionalTacticalField';
+import { getDirectionalTerrainSectorBasisDiagnostics } from '../src/core/terrain/DirectionalTerrainSectorBasis';
 
 void main();
 
@@ -30,9 +31,9 @@ async function main(): Promise<void> {
   verifyMapIdentityIsolation();
   verifyProfileSwitchInvalidatesField();
   verifyHoverAndTextureCounters();
-  verifySharedDirectionalFieldContentKey();
+  verifyOwnMovementReusesWorldDirectionalField();
   await verifyRendererBoundary();
-  console.log('Navigation overlay contract smoke passed: storage, map identity, typed-array hover, content-keyed shared terrain cache, hidden directional diagnostics, texture counters and renderer/A* separation.');
+  console.log('Navigation overlay contract smoke passed: storage, map identity, typed-array hover, own-movement world-field reuse, subjective-threat invalidation, static directional basis reuse, hidden diagnostics, texture counters and renderer/A* separation.');
 }
 
 function verifySelectedPlayerProfileResolution(): void {
@@ -139,7 +140,7 @@ function verifyHoverAndTextureCounters(): void {
   assert.equal(after.dynamicCostBuildCount, before.dynamicCostBuildCount, 'hover must not rebuild dynamic cost');
 }
 
-function verifySharedDirectionalFieldContentKey(): void {
+function verifyOwnMovementReusesWorldDirectionalField(): void {
   const map = normalizeMap(makeMap([]));
   const threat = {
     id: 'stable-east-threat',
@@ -158,6 +159,7 @@ function verifySharedDirectionalFieldContentKey(): void {
     threats: [threat],
   });
   const afterFirst = getDirectionalTacticalFieldDiagnostics(map);
+  const basisAfterFirst = getDirectionalTerrainSectorBasisDiagnostics(map);
 
   const metadataOnly = getDirectionalTacticalField(map, {
     unitId: 'stable-unit',
@@ -177,24 +179,48 @@ function verifySharedDirectionalFieldContentKey(): void {
   assert.equal(afterMetadataOnly.fullMapScanCount, afterFirst.fullMapScanCount);
   assert.equal(afterMetadataOnly.cacheHitCount, afterFirst.cacheHitCount + 1);
 
-  const moved = getDirectionalTacticalField(map, {
+  const ownMovement = getDirectionalTacticalField(map, {
     unitId: 'stable-unit',
     originX: 1.4,
     originY: 1.4,
     knowledgeRevision: 1000,
     threats: [threat],
   });
-  const afterMovement = getDirectionalTacticalFieldDiagnostics(map);
-  assert.notEqual(moved, first, 'movement that changes normalized directional content must build a new field');
-  assert.notEqual(moved.key, first.key, 'materially different normalized sector weights must have different content keys');
-  assert.equal(afterMovement.buildCount, afterFirst.buildCount + 1);
-  assert.equal(afterMovement.fullMapScanCount, afterFirst.fullMapScanCount + 1);
+  const afterOwnMovement = getDirectionalTacticalFieldDiagnostics(map);
+  assert.equal(ownMovement, first, 'selected-unit movement must reuse the position-independent world directional field');
+  assert.equal(ownMovement.key, first.key);
+  assert.equal(afterOwnMovement.buildCount, afterFirst.buildCount);
+  assert.equal(afterOwnMovement.fullMapScanCount, afterFirst.fullMapScanCount);
+  assert.equal(afterOwnMovement.cacheHitCount, afterMetadataOnly.cacheHitCount + 1);
+  assert.equal(
+    getDirectionalTerrainSectorBasisDiagnostics(map).buildCount,
+    basisAfterFirst.buildCount,
+    'selected-unit movement must not rebuild the static sector basis',
+  );
+
+  const movedThreat = getDirectionalTacticalField(map, {
+    unitId: 'stable-unit',
+    originX: 1.4,
+    originY: 1.4,
+    knowledgeRevision: 1001,
+    threats: [{ ...threat, x: 4.2, y: 2.4 }],
+  });
+  const afterThreatMovement = getDirectionalTacticalFieldDiagnostics(map);
+  assert.notEqual(movedThreat, first, 'subjective threat movement must build a new derived world field');
+  assert.notEqual(movedThreat.key, first.key);
+  assert.equal(afterThreatMovement.buildCount, afterFirst.buildCount + 1);
+  assert.equal(afterThreatMovement.fullMapScanCount, afterFirst.fullMapScanCount + 1);
+  assert.equal(
+    getDirectionalTerrainSectorBasisDiagnostics(map).buildCount,
+    basisAfterFirst.buildCount,
+    'subjective threat movement must reuse the static sector basis',
+  );
 
   const restored = getDirectionalTacticalField(map, {
     unitId: 'stable-unit',
-    originX: 1.1,
-    originY: 1.1,
-    knowledgeRevision: 1001,
+    originX: 2.2,
+    originY: 2.2,
+    knowledgeRevision: 1002,
     threats: [{
       ...threat,
       strength: 72,
@@ -203,9 +229,9 @@ function verifySharedDirectionalFieldContentKey(): void {
     }],
   });
   const afterRestore = getDirectionalTacticalFieldDiagnostics(map);
-  assert.equal(restored, first, 'returning to the same normalized directional content must hit the retained LRU field');
-  assert.equal(afterRestore.buildCount, afterMovement.buildCount);
-  assert.equal(afterRestore.cacheHitCount, afterMovement.cacheHitCount + 1);
+  assert.equal(restored, first, 'returning to the same subjective threat content must hit the retained LRU field');
+  assert.equal(afterRestore.buildCount, afterThreatMovement.buildCount);
+  assert.equal(afterRestore.cacheHitCount, afterThreatMovement.cacheHitCount + 1);
 }
 
 async function verifyRendererBoundary(): Promise<void> {

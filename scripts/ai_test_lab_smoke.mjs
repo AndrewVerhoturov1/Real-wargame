@@ -13,6 +13,19 @@ function expectIncludes(relativePath, snippets) {
   }
 }
 
+function expectPositiveUnitSpeeds(relativePath) {
+  const values = JSON.parse(read(relativePath));
+  if (!Array.isArray(values) || values.length === 0) {
+    failures.push(`${relativePath}: expected a non-empty unit array`);
+    return;
+  }
+  for (const unit of values) {
+    if (typeof unit?.speedCellsPerSecond !== 'number' || unit.speedCellsPerSecond <= 0) {
+      failures.push(`${relativePath}: unit ${String(unit?.id ?? 'unknown')} must have a positive speedCellsPerSecond`);
+    }
+  }
+}
+
 expectIncludes('src/core/units/UnitModel.ts', [
   'speedCellsPerSecond ?? 0.5',
   'sourceToRuntimeCellScale',
@@ -20,7 +33,7 @@ expectIncludes('src/core/units/UnitModel.ts', [
   'tacticalKnowledge: UnitTacticalKnowledge',
   'applyInitialStateToRuntime',
 ]);
-expectIncludes('src/data/units/test_units.json', ['"speedCellsPerSecond": 0.5']);
+expectPositiveUnitSpeeds('src/data/units/test_units.json');
 expectIncludes('src/core/behavior/BehaviorModel.ts', [
   'suppression: number',
   'ammo: number',
@@ -118,11 +131,27 @@ expectIncludes('src/rendering/PixiThreatEditorRenderer.ts', [
   'state.editor.enabled || runtime.open',
 ]);
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
-  'buildSoldierAwarenessReport',
-  'bestSafePositions',
-  'awarenessMode',
+  'buildAwarenessWorldKey',
+  'buildBestSafePositionsFromWorldField',
+  'currentMode',
   'STEALTH_PIXEL_LUT',
   'drawAwarenessRasterWords',
+  'new Worker',
+  'AwarenessWorldWorker.ts',
+  'workerJobsCoalesced',
+  'workerResultsStaleDropped',
+]);
+expectIncludes('src/workers/AwarenessWorldWorker.ts', [
+  'buildAwarenessWorldField',
+  'awarenessWorkerTransferables',
+  'fieldIdentity',
+  'rasterDigest',
+]);
+expectIncludes('src/core/knowledge/AwarenessWorldFieldBuilder.ts', [
+  'buildSoldierAwarenessReport',
+  'dangerPixels',
+  'stealthPixels',
+  'digestAwarenessWorldField',
 ]);
 expectIncludes('src/rendering/PixiApp.ts', [
   'PixiThreatEditorRenderer',

@@ -1,26 +1,99 @@
 import { Container, Graphics, SCALE_MODES, Sprite, Text, Texture } from 'pixi.js';
 import {
-  buildAwarenessKnowledgeKey,
-  buildSoldierAwarenessReport,
-  type SoldierAwarenessCell,
+  publishAwarenessMovementDiagnostics,
+  resetAwarenessMovementDiagnostics,
+  type AwarenessMovementDiagnostics,
+} from '../core/debug/AwarenessMovementDiagnostics';
+import type { GridPosition } from '../core/geometry';
+import {
+  buildPositionIndependentAwarenessKnowledgeSnapshot,
+} from '../core/knowledge/AwarenessWorldKey';
+import type {
+  CanonicalWorldThreatSetSnapshot,
+  CanonicalWorldThreatSnapshot,
+} from '../core/knowledge/CanonicalWorldThreat';
+import { cloneCanonicalWorldThreat } from '../core/knowledge/CanonicalWorldThreat';
+import type {
+  SoldierAwarenessCell,
+  SoldierSafePosition,
 } from '../core/knowledge/SoldierAwarenessGrid';
+import type {
+  AwarenessWorkerBuildSnapshot,
+  AwarenessWorkerFieldPayload,
+  AwarenessWorkerMapSnapshot,
+  AwarenessWorkerResponse,
+} from '../core/knowledge/AwarenessWorldWorkerProtocol';
+import type { TacticalMap, TerrainKind } from '../core/map/MapModel';
+import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { getSimulationLayerState } from '../core/ui/RuntimeUiState';
 import type { UnitModel } from '../core/units/UnitModel';
 
 type VisibleAwarenessMode = 'danger' | 'stealth';
-type SafePositions = ReturnType<typeof buildSoldierAwarenessReport>['bestSafePositions'];
+type SafePositions = SoldierSafePosition[];
+type MutableMovementDiagnostics = {
+  -readonly [Key in keyof AwarenessMovementDiagnostics]: AwarenessMovementDiagnostics[Key];
+};
+
+interface PendingWorldBuild {
+  readonly rasterKey: string;
+  readonly canonicalThreatKey: string;
+  readonly mapKey: string;
+  readonly unitId: string;
+  readonly posture: UnitModel['behaviorRuntime']['posture'];
+  readonly compatibilityOrigin: GridPosition;
+  readonly threats: readonly CanonicalWorldThreatSnapshot[];
+  readonly knowledgeRevision: number;
+  readonly orderTarget: GridPosition | null;
+  readonly finalExact: boolean;
+}
+
+interface InFlightWorldBuild {
+  readonly jobId: number;
+  readonly rasterKey: string;
+  readonly canonicalThreatKey: string;
+  readonly mapKey: string;
+  readonly requestedAt: number;
+  readonly finalExact: boolean;
+}
+
+interface LocalDerivedSnapshot {
+  readonly position: GridPosition;
+  readonly orderTarget: GridPosition | null;
+  readonly metersPerCell: number;
+  readonly cellSize: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface AwarenessAppliedRasterDiagnostics {
+  readonly width: number;
+  readonly height: number;
+  readonly digest: string;
+  readonly fieldIdentity: string;
+  readonly threatIds: readonly string[];
+}
 
 export interface AwarenessOverlayDiagnostics {
-  representation: 'raster-sprite';
-  visible: boolean;
-  rebuildCount: number;
-  markerUpdateCount: number;
-  lastBuildMs: number;
-  maxBuildMs: number;
-  displayObjectCount: number;
-  rasterWidth: number;
-  rasterHeight: number;
+  readonly representation: 'raster-sprite';
+  readonly visible: boolean;
+  readonly rebuildCount: number;
+  readonly markerUpdateCount: number;
+  readonly lastBuildMs: number;
+  readonly maxBuildMs: number;
+  readonly displayObjectCount: number;
+  readonly rasterWidth: number;
+  readonly rasterHeight: number;
+  readonly lastRequestedWorldKey: string;
+  readonly lastAppliedWorldKey: string;
+  readonly lastRequestedCanonicalThreatKey: string;
+  readonly lastAppliedCanonicalThreatKey: string;
+  readonly lastAppliedFieldIdentity: string;
+  readonly lastAppliedJobId: number;
+  readonly lastAppliedRaster: AwarenessAppliedRasterDiagnostics | null;
+  readonly rendererLocalBestSafePositions: readonly SoldierSafePosition[];
+  readonly rendererLocalBestWinner: SoldierSafePosition | null;
+  readonly movement: AwarenessMovementDiagnostics;
 }
 
 type AwarenessDebugWindow = Window & {
@@ -32,9 +105,19 @@ let nextMapIdentity = 1;
 const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([0x01020304]).buffer)[0] === 0x04;
 const DANGER_PIXEL_LUT = buildPixelLut('danger');
 const STEALTH_PIXEL_LUT = buildPixelLut('stealth');
+const TERRAIN_KINDS: readonly TerrainKind[] = ['field', 'forest', 'road', 'swamp', 'rough', 'water'];
+const TERRAIN_CODE = new Map<TerrainKind, number>(
+  TERRAIN_KINDS.map((kind, index) => [kind, index]),
+);
+const MAX_SAFE_POSITIONS = 8;
+const SAFE_SEARCH_RADIUS_METERS = 120;
+const SAFE_DISTANCE_PENALTY_PER_METER = 0.18;
+const ROUTE_SAMPLE_STEP_METERS = 5;
+const FINAL_EXACT_DELAY_MS = 120;
 
 export class PixiAwarenessHeatmapRenderer {
   readonly container = new Container();
+
   private readonly markerGraphics = new Graphics();
   private readonly title = new Text('', {
     fontFamily: 'Arial, sans-serif',
@@ -44,15 +127,36 @@ export class PixiAwarenessHeatmapRenderer {
     stroke: 0x111510,
     strokeThickness: 4,
   });
+  private readonly movement: MutableMovementDiagnostics = createMovementDiagnostics();
+
   private lastRasterKey = '';
   private lastMarkerInputKey = '';
   private lastMarkerKey = '';
+  private latestRequestedWorldKey = '';
+  private latestRequestedCanonicalThreatKey = '';
+  private lastAppliedWorldKey = '';
+  private lastAppliedCanonicalThreatKey = '';
+  private lastAppliedFieldIdentity = '';
+  private lastAppliedRasterDigest = '';
+  private lastAppliedJobId = 0;
+  private currentMode: VisibleAwarenessMode = 'danger';
   private rasterPixels: Uint8Array | null = null;
   private rasterPixelWords: Uint32Array | null = null;
   private rasterWidth = 0;
   private rasterHeight = 0;
   private rasterTexture: Texture | null = null;
   private rasterSprite: Sprite | null = null;
+  private worldField: AwarenessWorkerFieldPayload | null = null;
+  private safePositions: SafePositions = [];
+  private latestLocalSnapshot: LocalDerivedSnapshot | null = null;
+  private worker: Worker | null = null;
+  private workerMapKey = '';
+  private nextJobId = 1;
+  private inFlight: InFlightWorldBuild | null = null;
+  private pending: PendingWorldBuild | null = null;
+  private latestBuildSnapshot: PendingWorldBuild | null = null;
+  private finalRefreshTimer: number | null = null;
+  private destroyed = false;
   private rebuildCount = 0;
   private markerUpdateCount = 0;
   private lastBuildMs = 0;
@@ -61,13 +165,21 @@ export class PixiAwarenessHeatmapRenderer {
   constructor() {
     this.title.position.set(8, 8);
     this.container.visible = false;
+    resetAwarenessMovementDiagnostics();
   }
 
   render(state: SimulationState): void {
-    const simulationLayer = getSimulationLayerState(state);
-    const awarenessMode = simulationLayer.mode === 'danger' ? 'danger' : simulationLayer.mode === 'stealth' ? 'stealth' : 'off';
-    const unit = state.selectedUnitId ? state.units.find((item) => item.id === state.selectedUnitId) : undefined;
-    if (state.editor.enabled || awarenessMode === 'off' || !unit) {
+    const layer = getSimulationLayerState(state);
+    const mode = layer.mode === 'danger'
+      ? 'danger'
+      : layer.mode === 'stealth'
+        ? 'stealth'
+        : 'off';
+    const unit = state.selectedUnitId
+      ? state.units.find((candidate) => candidate.id === state.selectedUnitId)
+      : undefined;
+
+    if (state.editor.enabled || mode === 'off' || !unit) {
       this.container.visible = false;
       this.lastRasterKey = 'hidden';
       this.lastMarkerInputKey = 'hidden';
@@ -77,44 +189,70 @@ export class PixiAwarenessHeatmapRenderer {
     }
 
     this.container.visible = true;
-    // Do not build the expensive full-map report on every animation frame.
-    // Orders and movement change often, but they do not change the heatmap pixels themselves.
-    const rasterKey = buildAwarenessRenderKey(state, unit, awarenessMode);
-    const markerInputKey = buildAwarenessMarkerInputKey(state, unit, awarenessMode);
-    const rasterChanged = rasterKey !== this.lastRasterKey;
-    const markerInputChanged = markerInputKey !== this.lastMarkerInputKey;
-    if (!rasterChanged && !markerInputChanged) return;
-
-    const startedAt = rasterChanged ? performance.now() : 0;
-    const report = buildSoldierAwarenessReport(state, unit);
+    this.currentMode = mode;
     this.ensureRaster(state.map.width, state.map.height, state.map.cellSize);
-    if (!this.rasterPixelWords || !this.rasterTexture) return;
 
-    if (rasterChanged) {
-      drawAwarenessRasterWords(this.rasterPixelWords, report.cells, awarenessMode);
-      this.rasterTexture.baseTexture.update();
-      this.title.text = `СЛОЙ БОЙЦА: ${modeLabel(awarenessMode)}`;
-      this.lastRasterKey = rasterKey;
-      this.rebuildCount += 1;
-      this.lastBuildMs = performance.now() - startedAt;
-      this.maxBuildMs = Math.max(this.maxBuildMs, this.lastBuildMs);
+    const mapKey = buildAwarenessMapKey(state.map);
+    this.ensureWorkerConfigured(state.map, mapKey);
+    const canonical = buildPositionIndependentAwarenessKnowledgeSnapshot(unit, state.map.metersPerCell);
+    const worldKey = buildAwarenessWorldKey(state, unit, canonical.key);
+    const rasterKey = `${worldKey};mode:${mode}`;
+    const markerInputKey = buildAwarenessMarkerInputKey(state, unit, mode);
+    this.latestLocalSnapshot = {
+      position: { ...unit.position },
+      orderTarget: unit.order ? { ...unit.order.target } : null,
+      metersPerCell: state.map.metersPerCell,
+      cellSize: state.map.cellSize,
+      width: state.map.width,
+      height: state.map.height,
+    };
+
+    if (worldKey !== this.latestRequestedWorldKey) {
+      const snapshot = buildPendingWorldSnapshot(state, unit, worldKey, mapKey, canonical, false);
+      this.latestRequestedWorldKey = worldKey;
+      this.latestRequestedCanonicalThreatKey = canonical.key;
+      this.latestBuildSnapshot = snapshot;
+      this.movement.lastRequestedRasterKey = worldKey;
+      this.movement.lastRequestedWorldKey = worldKey;
+      this.movement.lastRequestedCanonicalThreatKey = canonical.key;
+      this.requestWorldBuild(snapshot);
+      this.scheduleFinalExactRefresh();
     }
 
-    const markerKey = buildAwarenessMarkerKey(
-      report.bestSafePositions,
-      awarenessMode,
-      state.map.cellSize,
-    );
-    if (markerKey !== this.lastMarkerKey) {
-      this.drawSafePositionMarkers(report.bestSafePositions, awarenessMode, state.map.cellSize);
-      this.lastMarkerKey = markerKey;
-      this.markerUpdateCount += 1;
+    if (this.worldField && this.lastAppliedWorldKey === worldKey && rasterKey !== this.lastRasterKey) {
+      this.applyRaster(mode, rasterKey);
     }
-    this.lastMarkerInputKey = markerInputKey;
+
+    if (
+      markerInputKey !== this.lastMarkerInputKey
+      && this.worldField
+      && this.lastAppliedWorldKey === worldKey
+      && this.lastAppliedCanonicalThreatKey === canonical.key
+    ) {
+      this.updateLocalDerived(this.latestLocalSnapshot);
+      this.lastMarkerInputKey = markerInputKey;
+    }
+
+    this.updateMarkers(mode, state.map.cellSize);
     this.publishDiagnostics();
   }
 
+  destroy(): void {
+    this.destroyed = true;
+    if (this.finalRefreshTimer !== null) window.clearTimeout(this.finalRefreshTimer);
+    this.finalRefreshTimer = null;
+    this.worker?.terminate();
+    this.worker = null;
+    this.pending = null;
+    this.inFlight = null;
+    this.rasterSprite?.destroy();
+    this.rasterTexture?.destroy(true);
+    this.container.destroy({ children: true });
+    resetAwarenessMovementDiagnostics();
+  }
+
   getDiagnostics(): AwarenessOverlayDiagnostics {
+    const positions = this.safePositions.map(cloneSafePosition);
     return {
       representation: 'raster-sprite',
       visible: this.container.visible,
@@ -125,14 +263,270 @@ export class PixiAwarenessHeatmapRenderer {
       displayObjectCount: this.container.children.length,
       rasterWidth: this.rasterWidth,
       rasterHeight: this.rasterHeight,
+      lastRequestedWorldKey: this.latestRequestedWorldKey,
+      lastAppliedWorldKey: this.lastAppliedWorldKey,
+      lastRequestedCanonicalThreatKey: this.latestRequestedCanonicalThreatKey,
+      lastAppliedCanonicalThreatKey: this.lastAppliedCanonicalThreatKey,
+      lastAppliedFieldIdentity: this.lastAppliedFieldIdentity,
+      lastAppliedJobId: this.lastAppliedJobId,
+      lastAppliedRaster: this.worldField && this.lastAppliedRasterDigest
+        ? {
+            width: this.worldField.width,
+            height: this.worldField.height,
+            digest: this.lastAppliedRasterDigest,
+            fieldIdentity: this.lastAppliedFieldIdentity,
+            threatIds: [...this.worldField.threatIds],
+          }
+        : null,
+      rendererLocalBestSafePositions: positions,
+      rendererLocalBestWinner: positions[0] ?? null,
+      movement: { ...this.movement },
     };
+  }
+
+  private ensureWorkerConfigured(map: TacticalMap, mapKey: string): void {
+    if (this.worker && this.workerMapKey === mapKey) return;
+
+    if (this.worker) {
+      if (this.inFlight) this.movement.workerJobsCancelled += 1;
+      if (this.pending) this.movement.workerJobsCancelled += 1;
+      this.worker.terminate();
+    }
+
+    this.worker = new Worker(new URL('../workers/AwarenessWorldWorker.ts', import.meta.url), {
+      type: 'module',
+    });
+    this.workerMapKey = mapKey;
+    this.inFlight = null;
+    this.pending = null;
+    this.worldField = null;
+    this.lastAppliedWorldKey = '';
+    this.lastAppliedCanonicalThreatKey = '';
+    this.lastAppliedFieldIdentity = '';
+    this.lastAppliedRasterDigest = '';
+    this.lastAppliedJobId = 0;
+    this.movement.workerInFlight = false;
+    this.movement.lastAppliedRasterKey = '';
+    this.movement.lastAppliedWorldKey = '';
+    this.movement.lastAppliedCanonicalThreatKey = '';
+    this.movement.lastAppliedFieldIdentity = '';
+    this.movement.lastAppliedRasterDigest = '';
+    this.updatePendingDepth();
+
+    this.worker.onmessage = (event: MessageEvent<AwarenessWorkerResponse>) => {
+      this.handleWorkerResponse(event.data);
+    };
+    this.worker.onerror = (event): void => {
+      this.movement.lastWorkerError = event.message || 'Unknown awareness worker error.';
+      this.finishInFlight();
+      this.publishDiagnostics();
+    };
+
+    const snapshot = buildWorkerMapSnapshot(map, mapKey);
+    this.worker.postMessage({ type: 'configure', map: snapshot }, [
+      snapshot.terrainCodes.buffer,
+      snapshot.heightLevels.buffer,
+      snapshot.forestKinds.buffer,
+    ]);
+  }
+
+  private requestWorldBuild(snapshot: PendingWorldBuild): void {
+    this.latestBuildSnapshot = snapshot;
+    if (this.inFlight) {
+      this.movement.workerJobsCoalesced += 1;
+      if (this.pending) this.movement.workerJobsCancelled += 1;
+      this.pending = snapshot;
+      this.updatePendingDepth();
+      this.publishDiagnostics();
+      return;
+    }
+    this.startWorldBuild(snapshot);
+  }
+
+  private startWorldBuild(snapshot: PendingWorldBuild): void {
+    if (!this.worker || snapshot.mapKey !== this.workerMapKey) return;
+
+    const jobId = this.nextJobId;
+    this.nextJobId += 1;
+    this.inFlight = {
+      jobId,
+      rasterKey: snapshot.rasterKey,
+      canonicalThreatKey: snapshot.canonicalThreatKey,
+      mapKey: snapshot.mapKey,
+      requestedAt: performance.now(),
+      finalExact: snapshot.finalExact,
+    };
+    this.movement.workerJobsStarted += 1;
+    this.movement.workerInFlight = true;
+
+    const request: AwarenessWorkerBuildSnapshot = { jobId, ...snapshot };
+    this.worker.postMessage({ type: 'build', snapshot: request });
+    this.updatePendingDepth();
+    this.publishDiagnostics();
+  }
+
+  private handleWorkerResponse(response: AwarenessWorkerResponse): void {
+    const inFlight = this.inFlight;
+    if (!inFlight || response.jobId !== inFlight.jobId) {
+      this.movement.workerResultsStaleDropped += 1;
+      this.publishDiagnostics();
+      return;
+    }
+
+    const latency = performance.now() - inFlight.requestedAt;
+    this.movement.workerJobsCompleted += 1;
+    this.movement.lastCompletedJobId = response.jobId;
+    this.movement.lastCompletedJobFinalExact = inFlight.finalExact;
+    this.movement.lastWorkerLatencyMs = roundMs(latency);
+    this.movement.maxWorkerLatencyMs = Math.max(
+      this.movement.maxWorkerLatencyMs,
+      this.movement.lastWorkerLatencyMs,
+    );
+    if (inFlight.finalExact) {
+      this.movement.lastFinalRefreshLatencyMs = roundMs(latency);
+      this.movement.maxFinalRefreshLatencyMs = Math.max(
+        this.movement.maxFinalRefreshLatencyMs,
+        this.movement.lastFinalRefreshLatencyMs,
+      );
+    }
+    this.inFlight = null;
+    this.movement.workerInFlight = false;
+
+    if (response.type === 'error') {
+      this.movement.lastWorkerError = response.message;
+    } else {
+      this.movement.lastWorkerComputeMs = roundMs(response.computeMs);
+      this.movement.maxWorkerComputeMs = Math.max(
+        this.movement.maxWorkerComputeMs,
+        this.movement.lastWorkerComputeMs,
+      );
+      this.movement.workerThreatRelativeGeometryBuilds += response.computation.threatRelativeGeometryBuilds;
+      this.movement.workerDirectionalFieldBuilds += response.computation.directionalFieldBuilds;
+      this.movement.workerDirectionalBasisBuilds += response.computation.directionalBasisBuilds;
+      this.movement.workerAwarenessGeometryBuilds += response.computation.awarenessGeometryBuilds;
+      this.movement.workerAwarenessRescores += response.computation.awarenessRescores;
+      this.movement.directionalBasisBuilds = this.movement.workerDirectionalBasisBuilds;
+
+      const stale = response.mapKey !== this.workerMapKey
+        || response.rasterKey !== this.latestRequestedWorldKey
+        || response.canonicalThreatKey !== this.latestRequestedCanonicalThreatKey
+        || response.canonicalThreatKey !== inFlight.canonicalThreatKey;
+
+      if (stale) {
+        this.movement.workerResultsStaleDropped += 1;
+      } else {
+        this.worldField = response.field;
+        this.lastAppliedWorldKey = response.rasterKey;
+        this.lastAppliedCanonicalThreatKey = response.canonicalThreatKey;
+        this.lastAppliedFieldIdentity = response.fieldIdentity;
+        this.lastAppliedRasterDigest = response.rasterDigest;
+        this.lastAppliedJobId = response.jobId;
+        this.movement.lastAppliedRasterKey = response.rasterKey;
+        this.movement.lastAppliedWorldKey = response.rasterKey;
+        this.movement.lastAppliedCanonicalThreatKey = response.canonicalThreatKey;
+        this.movement.lastAppliedFieldIdentity = response.fieldIdentity;
+        this.movement.lastAppliedRasterDigest = response.rasterDigest;
+        this.movement.lastAppliedJobId = response.jobId;
+        this.movement.worldRasterBuilds += 1;
+        if (response.finalExact) this.movement.finalRefreshApplied += 1;
+        this.applyRaster(this.currentMode, `${response.rasterKey};mode:${this.currentMode}`);
+        if (this.latestLocalSnapshot) this.updateLocalDerived(this.latestLocalSnapshot);
+        this.updateMarkers(this.currentMode, this.latestLocalSnapshot?.cellSize ?? 1);
+      }
+    }
+
+    const next = this.pending;
+    this.pending = null;
+    this.updatePendingDepth();
+    this.publishDiagnostics();
+    if (next) this.startWorldBuild(next);
+  }
+
+  private finishInFlight(): void {
+    this.inFlight = null;
+    this.movement.workerInFlight = false;
+    const next = this.pending;
+    this.pending = null;
+    this.updatePendingDepth();
+    if (next) this.startWorldBuild(next);
+  }
+
+  private scheduleFinalExactRefresh(): void {
+    if (this.finalRefreshTimer !== null) window.clearTimeout(this.finalRefreshTimer);
+    this.finalRefreshTimer = window.setTimeout(() => {
+      this.finalRefreshTimer = null;
+      if (this.destroyed || !this.latestBuildSnapshot) return;
+      this.movement.finalRefreshRequests += 1;
+      this.requestWorldBuild({ ...this.latestBuildSnapshot, finalExact: true });
+    }, FINAL_EXACT_DELAY_MS);
+  }
+
+  private applyRaster(mode: VisibleAwarenessMode, rasterKey: string): void {
+    if (!this.worldField || !this.rasterPixelWords || !this.rasterTexture) return;
+
+    const startedAt = performance.now();
+    const source = mode === 'danger'
+      ? this.worldField.dangerPixels
+      : this.worldField.stealthPixels;
+    this.rasterPixelWords.set(source.subarray(0, this.rasterPixelWords.length));
+    if (source.length < this.rasterPixelWords.length) {
+      this.rasterPixelWords.fill(0, source.length);
+    }
+    this.rasterTexture.baseTexture.update();
+    this.title.text = `СЛОЙ БОЙЦА: ${modeLabel(mode)}`;
+    this.lastRasterKey = rasterKey;
+    this.rebuildCount += 1;
+    this.movement.mainThreadRasterSwaps += 1;
+
+    const elapsed = performance.now() - startedAt;
+    this.lastBuildMs = elapsed;
+    this.maxBuildMs = Math.max(this.maxBuildMs, elapsed);
+    this.movement.lastMainThreadApplyMs = roundMs(elapsed);
+    this.movement.maxMainThreadApplyMs = Math.max(
+      this.movement.maxMainThreadApplyMs,
+      this.movement.lastMainThreadApplyMs,
+    );
+  }
+
+  private updateLocalDerived(snapshot: LocalDerivedSnapshot): void {
+    if (!this.worldField) return;
+
+    const startedAt = performance.now();
+    const result = buildBestSafePositionsFromWorldField(this.worldField, snapshot);
+    this.safePositions = result.positions;
+    this.movement.ownMovementLocalUpdates += 1;
+    this.movement.safePositionLocalScans += 1;
+    this.movement.safePositionCellsScanned += result.scannedCells;
+    evaluateRouteDangerFromWorldField(this.worldField, snapshot);
+
+    const elapsed = performance.now() - startedAt;
+    this.movement.lastLocalUpdateMs = roundMs(elapsed);
+    this.movement.maxLocalUpdateMs = Math.max(
+      this.movement.maxLocalUpdateMs,
+      this.movement.lastLocalUpdateMs,
+    );
+  }
+
+  private updateMarkers(mode: VisibleAwarenessMode, cellSize: number): void {
+    const markerKey = buildAwarenessMarkerKey(this.safePositions, mode, cellSize);
+    if (markerKey === this.lastMarkerKey) return;
+    this.drawSafePositionMarkers(this.safePositions, mode, cellSize);
+    this.lastMarkerKey = markerKey;
+    this.markerUpdateCount += 1;
+  }
+
+  private updatePendingDepth(): void {
+    this.movement.pendingQueueDepth = this.pending ? 1 : 0;
+    this.movement.maxPendingQueueDepth = Math.max(
+      this.movement.maxPendingQueueDepth,
+      this.movement.pendingQueueDepth,
+    );
   }
 
   private ensureRaster(width: number, height: number, cellSize: number): void {
     const needsNewRaster = !this.rasterPixels
       || this.rasterWidth !== width
       || this.rasterHeight !== height;
-
     if (needsNewRaster) {
       this.container.removeChildren();
       this.rasterSprite?.destroy();
@@ -147,7 +541,6 @@ export class PixiAwarenessHeatmapRenderer {
       this.rasterSprite = new Sprite(this.rasterTexture);
       this.container.addChild(this.rasterSprite, this.markerGraphics, this.title);
     }
-
     this.rasterSprite?.scale.set(cellSize, cellSize);
   }
 
@@ -171,6 +564,7 @@ export class PixiAwarenessHeatmapRenderer {
   }
 
   private publishDiagnostics(): void {
+    publishAwarenessMovementDiagnostics(this.movement);
     (window as AwarenessDebugWindow).__realWargameAwarenessDebug = this.getDiagnostics();
   }
 }
@@ -180,19 +574,25 @@ export function buildAwarenessRenderKey(
   unit: UnitModel,
   mode: VisibleAwarenessMode,
 ): string {
+  const canonical = buildPositionIndependentAwarenessKnowledgeSnapshot(unit, state.map.metersPerCell);
+  return `${buildAwarenessWorldKey(state, unit, canonical.key)};mode:${mode}`;
+}
+
+export function buildAwarenessWorldKey(
+  state: SimulationState,
+  unit: UnitModel,
+  canonicalThreatKey = buildPositionIndependentAwarenessKnowledgeSnapshot(unit, state.map.metersPerCell).key,
+): string {
   return [
-    `mode:${mode}`,
-    `map:${getMapIdentity(state.map)}`,
-    `size:${state.map.width}x${state.map.height}`,
-    `cellSize:${state.map.cellSize}`,
+    buildAwarenessMapKey(state.map),
     `unit:${unit.id}`,
     `posture:${unit.behaviorRuntime.posture}`,
-    `knowledge:${buildAwarenessKnowledgeKey(unit)}`,
+    `canonicalThreats:${canonicalThreatKey}`,
   ].join(';');
 }
 
 export function buildAwarenessMarkerKey(
-  positions: SafePositions,
+  positions: ReadonlyArray<{ position: GridPosition }>,
   mode: VisibleAwarenessMode,
   cellSize: number,
 ): string {
@@ -243,9 +643,23 @@ export function drawAwarenessRasterWords(
   for (let cellIndex = 0; cellIndex < length; cellIndex += 1) {
     const cell = cells[cellIndex];
     const value = dangerMode ? cell.danger : cell.concealment;
-    pixels[cellIndex] = lut[Math.max(0, Math.min(100, value))] ?? 0;
+    pixels[cellIndex] = lut[Math.max(0, Math.min(100, Math.round(value)))] ?? 0;
   }
   if (length < pixels.length) pixels.fill(0, length);
+}
+
+function buildAwarenessMapKey(map: TacticalMap): string {
+  const revisions = getMapRevisionSnapshot(map);
+  return [
+    `map:${getMapIdentity(map)}`,
+    `size:${map.width}x${map.height}`,
+    `cellSize:${map.cellSize}`,
+    `meters:${map.metersPerCell}`,
+    `terrain:${revisions.terrain}`,
+    `height:${revisions.height}`,
+    `forest:${revisions.forest}`,
+    `objects:${revisions.objects}`,
+  ].join(';');
 }
 
 function buildAwarenessMarkerInputKey(
@@ -253,13 +667,154 @@ function buildAwarenessMarkerInputKey(
   unit: UnitModel,
   mode: VisibleAwarenessMode,
 ): string {
+  const target = unit.order
+    ? `${Math.floor(unit.order.target.x)}:${Math.floor(unit.order.target.y)}`
+    : 'none';
   return [
     `mode:${mode}`,
-    `map:${getMapIdentity(state.map)}`,
-    `cellSize:${state.map.cellSize}`,
+    buildAwarenessMapKey(state.map),
     `unit:${unit.id}`,
     `unitCell:${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`,
+    `target:${target}`,
   ].join(';');
+}
+
+function buildPendingWorldSnapshot(
+  _state: SimulationState,
+  unit: UnitModel,
+  rasterKey: string,
+  mapKey: string,
+  canonical: CanonicalWorldThreatSetSnapshot,
+  finalExact: boolean,
+): PendingWorldBuild {
+  return {
+    rasterKey,
+    canonicalThreatKey: canonical.key,
+    mapKey,
+    unitId: unit.id,
+    posture: unit.behaviorRuntime.posture,
+    compatibilityOrigin: { x: 0.5, y: 0.5 },
+    threats: canonical.threats.map(cloneCanonicalWorldThreat),
+    knowledgeRevision: unit.tacticalKnowledge.revision,
+    orderTarget: unit.order ? { ...unit.order.target } : null,
+    finalExact,
+  };
+}
+
+function buildWorkerMapSnapshot(map: TacticalMap, mapKey: string): AwarenessWorkerMapSnapshot {
+  const count = map.width * map.height;
+  const terrainCodes = new Uint8Array(count);
+  const heightLevels = new Int8Array(count);
+  const forestKinds = new Uint8Array(count);
+  for (let index = 0; index < count; index += 1) {
+    const cell = map.cells[index];
+    terrainCodes[index] = TERRAIN_CODE.get(cell?.terrain ?? map.defaultTerrain) ?? 0;
+    heightLevels[index] = cell?.height ?? map.defaultHeight;
+    forestKinds[index] = cell?.forest ?? 0;
+  }
+  return {
+    mapKey,
+    width: map.width,
+    height: map.height,
+    cellSize: map.cellSize,
+    metersPerCell: map.metersPerCell,
+    sourceToRuntimeCellScale: map.sourceToRuntimeCellScale,
+    defaultTerrainCode: TERRAIN_CODE.get(map.defaultTerrain) ?? 0,
+    defaultHeight: map.defaultHeight,
+    terrainCodes,
+    heightLevels,
+    forestKinds,
+    objects: map.objects.map((object) => ({
+      ...object,
+      labels: object.labels ? { ...object.labels } : null,
+    })),
+  };
+}
+
+function buildBestSafePositionsFromWorldField(
+  field: AwarenessWorkerFieldPayload,
+  snapshot: LocalDerivedSnapshot,
+): { positions: SafePositions; scannedCells: number } {
+  const radiusCells = SAFE_SEARCH_RADIUS_METERS / Math.max(0.001, snapshot.metersPerCell);
+  const radiusSquared = radiusCells * radiusCells;
+  const minX = Math.max(0, Math.floor(snapshot.position.x - radiusCells));
+  const maxX = Math.min(snapshot.width - 1, Math.ceil(snapshot.position.x + radiusCells));
+  const minY = Math.max(0, Math.floor(snapshot.position.y - radiusCells));
+  const maxY = Math.min(snapshot.height - 1, Math.ceil(snapshot.position.y + radiusCells));
+  const best: SafePositions = [];
+  let scannedCells = 0;
+
+  for (let y = minY; y <= maxY; y += 1) {
+    const positionY = y + 0.5;
+    const dy = positionY - snapshot.position.y;
+    for (let x = minX; x <= maxX; x += 1) {
+      const positionX = x + 0.5;
+      const dx = positionX - snapshot.position.x;
+      const distanceSquared = dx * dx + dy * dy;
+      if (distanceSquared > radiusSquared) continue;
+      scannedCells += 1;
+      const cellIndex = y * snapshot.width + x;
+      const distanceCells = Math.sqrt(distanceSquared);
+      const distanceMeters = distanceCells * snapshot.metersPerCell;
+      const score = (field.safety[cellIndex] ?? 0)
+        - distanceMeters * SAFE_DISTANCE_PENALTY_PER_METER;
+      if (score <= 18) continue;
+      if (best.length === MAX_SAFE_POSITIONS && score <= best[MAX_SAFE_POSITIONS - 1].score) continue;
+      const threatIndex = field.protectedThreatIndex[cellIndex] ?? -1;
+      let insertionIndex = 0;
+      while (insertionIndex < best.length && best[insertionIndex].score >= score) insertionIndex += 1;
+      best.splice(insertionIndex, 0, {
+        position: { x: positionX, y: positionY },
+        score,
+        danger: field.danger[cellIndex] ?? 0,
+        expectedProtection: field.expectedProtection[cellIndex] ?? 0,
+        expectedProtectionAgainstThreat: field.expectedProtectionAgainstThreat[cellIndex] ?? 0,
+        protectedAgainstThreatId: threatIndex >= 0 ? field.threatIds[threatIndex] ?? null : null,
+        concealment: field.concealment[cellIndex] ?? 0,
+        distanceCells,
+        sourceRu: 'асинхронное поле опасности',
+      });
+      if (best.length > MAX_SAFE_POSITIONS) best.pop();
+    }
+  }
+  return { positions: best, scannedCells };
+}
+
+function evaluateRouteDangerFromWorldField(
+  field: AwarenessWorkerFieldPayload,
+  snapshot: LocalDerivedSnapshot,
+): number {
+  if (!snapshot.orderTarget) {
+    return readFieldValue(field.danger, snapshot.width, snapshot.height, snapshot.position);
+  }
+  const dx = snapshot.orderTarget.x - snapshot.position.x;
+  const dy = snapshot.orderTarget.y - snapshot.position.y;
+  const lengthMeters = Math.hypot(dx, dy) * snapshot.metersPerCell;
+  const samples = Math.max(2, Math.ceil(lengthMeters / ROUTE_SAMPLE_STEP_METERS));
+  let total = 0;
+  for (let index = 0; index <= samples; index += 1) {
+    const t = index / samples;
+    total += readFieldValue(field.danger, snapshot.width, snapshot.height, {
+      x: snapshot.position.x + dx * t,
+      y: snapshot.position.y + dy * t,
+    });
+  }
+  return Math.round(total / (samples + 1));
+}
+
+function readFieldValue(
+  values: Uint8Array,
+  width: number,
+  height: number,
+  position: GridPosition,
+): number {
+  const x = Math.max(0, Math.min(width - 1, Math.floor(position.x)));
+  const y = Math.max(0, Math.min(height - 1, Math.floor(position.y)));
+  return values[y * width + x] ?? 0;
+}
+
+function cloneSafePosition(value: SoldierSafePosition): SoldierSafePosition {
+  return { ...value, position: { ...value.position } };
 }
 
 function buildPixelLut(mode: VisibleAwarenessMode): Uint32Array {
@@ -310,6 +865,54 @@ function packRgba(red: number, green: number, blue: number, alpha: number): numb
   return LITTLE_ENDIAN
     ? (red | green << 8 | blue << 16 | alpha << 24) >>> 0
     : (red << 24 | green << 16 | blue << 8 | alpha) >>> 0;
+}
+
+function createMovementDiagnostics(): MutableMovementDiagnostics {
+  return {
+    worldRasterBuilds: 0,
+    ownMovementLocalUpdates: 0,
+    safePositionLocalScans: 0,
+    safePositionCellsScanned: 0,
+    directionalBasisBuilds: 0,
+    workerThreatRelativeGeometryBuilds: 0,
+    workerDirectionalFieldBuilds: 0,
+    workerDirectionalBasisBuilds: 0,
+    workerAwarenessGeometryBuilds: 0,
+    workerAwarenessRescores: 0,
+    workerJobsStarted: 0,
+    workerJobsCompleted: 0,
+    workerJobsCancelled: 0,
+    workerJobsCoalesced: 0,
+    workerResultsStaleDropped: 0,
+    mainThreadRasterSwaps: 0,
+    finalRefreshRequests: 0,
+    finalRefreshApplied: 0,
+    pendingQueueDepth: 0,
+    maxPendingQueueDepth: 0,
+    workerInFlight: false,
+    lastWorkerLatencyMs: 0,
+    maxWorkerLatencyMs: 0,
+    lastWorkerComputeMs: 0,
+    maxWorkerComputeMs: 0,
+    lastMainThreadApplyMs: 0,
+    maxMainThreadApplyMs: 0,
+    lastLocalUpdateMs: 0,
+    maxLocalUpdateMs: 0,
+    lastRequestedRasterKey: '',
+    lastAppliedRasterKey: '',
+    lastRequestedWorldKey: '',
+    lastAppliedWorldKey: '',
+    lastRequestedCanonicalThreatKey: '',
+    lastAppliedCanonicalThreatKey: '',
+    lastCompletedJobId: 0,
+    lastAppliedJobId: 0,
+    lastCompletedJobFinalExact: false,
+    lastFinalRefreshLatencyMs: 0,
+    maxFinalRefreshLatencyMs: 0,
+    lastAppliedFieldIdentity: '',
+    lastAppliedRasterDigest: '',
+    lastWorkerError: null,
+  };
 }
 
 function getMapIdentity(map: object): number {

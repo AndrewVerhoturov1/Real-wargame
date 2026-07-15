@@ -26,15 +26,6 @@ function expectExcludes(relativePath, snippets) {
   }
 }
 
-function expectBefore(relativePath, earlier, later) {
-  const content = read(relativePath);
-  const earlierIndex = content.indexOf(earlier);
-  const laterIndex = content.indexOf(later);
-  if (earlierIndex < 0 || laterIndex < 0 || earlierIndex >= laterIndex) {
-    failures.push(`${relativePath}: expected ${JSON.stringify(earlier)} before ${JSON.stringify(later)}`);
-  }
-}
-
 expectIncludes('src/ui/TacticalWorkspace.ts', [
   "type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory'",
   'Симуляция', 'Редактирование', 'Слой опасности', 'Слой скрытности', 'Обзор и память',
@@ -118,26 +109,46 @@ expectIncludes('src/core/knowledge/AwarenessStaticField.ts', [
   'getAwarenessStaticField', 'estimateLocalProtection', 'Uint8Array',
   'getMapObjectSpatialIndex', 'getMapRevisionSnapshot',
 ]);
+expectIncludes('src/core/terrain/DirectionalTerrainSectorBasis.ts', [
+  'DIRECTIONAL_SECTOR_COUNT', 'slope', 'protection', 'exposure',
+  'getDirectionalTerrainSectorBasisDiagnostics', 'revisions.height', 'revisions.terrain',
+]);
 expectIncludes('src/core/terrain/DirectionalTacticalField.ts', [
   'sectorProtection', 'sectorExposure', 'terrainProtection', 'terrainConcealment',
-  'DIRECTION_WEIGHT_BUCKET', 'normalizedSectorWeights', 'getDirectionalTacticalFieldDiagnostics',
+  'NORMALIZED_WEIGHT_BUCKET', 'getDirectionalTerrainSectorBasis', 'basis.protection',
+  'getDirectionalTacticalFieldDiagnostics',
 ]);
 
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
-  'buildAwarenessRenderKey', 'buildAwarenessMarkerKey', 'lastMarkerInputKey',
-  'Orders and movement change often, but they do not change the heatmap pixels themselves.',
+  'buildAwarenessRenderKey', 'buildAwarenessWorldKey', 'buildAwarenessMarkerKey', 'lastMarkerInputKey',
+  'latestRequestedWorldKey', 'workerJobsCoalesced', 'workerResultsStaleDropped',
   'lastRasterKey', 'lastMarkerKey', 'markerUpdateCount',
+  'new Worker', 'AwarenessWorldWorker.ts', 'dangerPixels', 'stealthPixels',
   'Sprite', 'Texture', 'SCALE_MODES.NEAREST', 'createAwarenessTexture', 'drawAwarenessRaster',
   "representation: 'raster-sprite'", 'getDiagnostics()', '__realWargameAwarenessDebug',
+  'lastRequestedCanonicalThreatKey', 'rendererLocalBestWinner', 'lastAppliedFieldIdentity',
 ]);
 expectExcludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
+  'buildSoldierAwarenessReport',
   'orderCell:', 'for (const cell of report.cells) drawCell', 'graphics.drawRect(cell.x * cellSize',
 ]);
-expectBefore(
-  'src/rendering/PixiAwarenessHeatmapRenderer.ts',
-  'if (!rasterChanged && !markerInputChanged) return;',
-  'const report = buildSoldierAwarenessReport(state, unit);',
-);
+
+expectIncludes('src/workers/AwarenessWorldWorker.ts', [
+  'buildAwarenessWorldField', 'awarenessWorkerTransferables', 'fieldIdentity', 'rasterDigest',
+]);
+expectIncludes('src/core/knowledge/AwarenessWorldFieldBuilder.ts', [
+  'buildSoldierAwarenessReport', 'buildCanonicalWorldThreatKey',
+  'dangerPixels', 'stealthPixels', 'digestAwarenessWorldField',
+]);
+expectIncludes('src/core/knowledge/CanonicalWorldThreat.ts', [
+  'CanonicalWorldThreatSnapshot', 'unit_contact', 'directional_evidence', 'buildCanonicalWorldThreatKey',
+]);
+expectIncludes('src/core/debug/PerformanceMonitor.ts', [
+  'PERFORMANCE_CONTRACT_VERSION', 'getRealWargameBuildIdentity', 'awarenessMovement',
+]);
+expectIncludes('src/core/debug/BuildIdentity.ts', [
+  "PERFORMANCE_CONTRACT_VERSION = 'performance-report-v4'", 'commitSha', 'buildId', 'branch',
+]);
 
 expectIncludes('src/core/editor/GameEditorPlacement.ts', [
   'rememberSelectedUnitForTest', 'state.units.push(unit)', 'rememberSelectedUnitForTest(state)',

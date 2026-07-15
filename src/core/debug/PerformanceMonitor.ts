@@ -4,6 +4,8 @@ import { getAwarenessStaticFieldDiagnostics } from '../knowledge/AwarenessStatic
 import type { SimulationState } from '../simulation/SimulationState';
 import { getDirectionalTacticalFieldDiagnostics } from '../terrain/DirectionalTacticalField';
 import { getSimulationLayerState } from '../ui/RuntimeUiState';
+import { getAwarenessMovementDiagnostics } from './AwarenessMovementDiagnostics';
+import { getRealWargameBuildIdentity, PERFORMANCE_CONTRACT_VERSION } from './BuildIdentity';
 
 export interface PerformanceFrameSample {
   tMs: number;
@@ -25,8 +27,53 @@ export interface PerformanceFrameSample {
   selectedZone: boolean;
 }
 
+export interface LongTaskAttributionDiagnostic {
+  name: string;
+  containerType: string;
+  containerName: string;
+  containerId: string;
+  containerSrc: string;
+}
+
+export interface BrowserLongTaskDiagnostic {
+  startMs: number;
+  durationMs: number;
+  scenario: string | null;
+  attribution: LongTaskAttributionDiagnostic[];
+}
+
+export interface LongAnimationFrameScriptDiagnostic {
+  invoker: string;
+  invokerType: string;
+  sourceUrl: string;
+  sourceFunctionName: string;
+  charPosition: number;
+  durationMs: number;
+  forcedStyleAndLayoutDurationMs: number;
+  pauseDurationMs: number;
+  windowAttribution: string;
+}
+
+export interface LongAnimationFrameDiagnostic {
+  startMs: number;
+  durationMs: number;
+  blockingDurationMs: number;
+  renderStartMs: number | null;
+  styleAndLayoutStartMs: number | null;
+  firstUiEventTimestampMs: number | null;
+  scenario: string | null;
+  scripts: LongAnimationFrameScriptDiagnostic[];
+}
+
+export interface PerformancePhaseMeasureDiagnostic {
+  name: string;
+  startMs: number;
+  durationMs: number;
+}
+
 export interface PerformanceReport {
-  version: string;
+  version: typeof PERFORMANCE_CONTRACT_VERSION;
+  build: ReturnType<typeof getRealWargameBuildIdentity>;
   exportedAt: string;
   runtimeSeconds: number;
   browser: Record<string, unknown>;
@@ -36,41 +83,74 @@ export interface PerformanceReport {
   editor: Record<string, unknown>;
   computation: Record<string, unknown>;
   summary: Record<string, unknown>;
-  longTasks: Array<{ startMs: number; durationMs: number }>;
+  longTasks: BrowserLongTaskDiagnostic[];
+  longAnimationFrames: LongAnimationFrameDiagnostic[];
+  performancePhaseMeasures: PerformancePhaseMeasureDiagnostic[];
   samples: PerformanceFrameSample[];
 }
 
+interface LongTaskAttributionEntryLike {
+  name?: string;
+  containerType?: string;
+  containerName?: string;
+  containerId?: string;
+  containerSrc?: string;
+}
+
+interface LongTaskEntryLike extends PerformanceEntry {
+  attribution?: ArrayLike<LongTaskAttributionEntryLike>;
+}
+
+interface LongAnimationFrameScriptLike {
+  invoker?: string;
+  invokerType?: string;
+  sourceURL?: string;
+  sourceFunctionName?: string;
+  charPosition?: number;
+  duration?: number;
+  forcedStyleAndLayoutDuration?: number;
+  pauseDuration?: number;
+  windowAttribution?: string;
+}
+
+interface LongAnimationFrameEntryLike extends PerformanceEntry {
+  blockingDuration?: number;
+  renderStart?: number;
+  styleAndLayoutStart?: number;
+  firstUIEventTimestamp?: number;
+  scripts?: ArrayLike<LongAnimationFrameScriptLike>;
+}
+
+type PerformanceScenarioWindow = Window & {
+  __realWargamePerformanceScenario?: string | null;
+};
+
 const MAX_SAMPLES = 3600;
 const MAX_LONG_TASKS = 200;
+const MAX_LONG_ANIMATION_FRAMES = 200;
+const PHASE_MEASURE_PREFIX = 'real-wargame.phase.';
 
 export class PerformanceMonitor {
   private readonly startedAt = performance.now();
   private readonly samples: Array<PerformanceFrameSample | undefined> = new Array(MAX_SAMPLES);
-  private readonly longTasks: Array<{ startMs: number; durationMs: number }> = [];
+  private readonly longTasks: BrowserLongTaskDiagnostic[] = [];
+  private readonly longAnimationFrames: LongAnimationFrameDiagnostic[] = [];
   private writeIndex = 0;
   private storedCount = 0;
   private lastSampleAt: number | null = null;
   private longTaskObserver: PerformanceObserver | null = null;
+  private longAnimationFrameObserver: PerformanceObserver | null = null;
 
   constructor() {
-    if (typeof PerformanceObserver === 'undefined' || !PerformanceObserver.supportedEntryTypes?.includes('longtask')) return;
-    this.longTaskObserver = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) {
-        this.longTasks.push({
-          startMs: roundOne(entry.startTime - this.startedAt),
-          durationMs: roundTwo(entry.duration),
-        });
-      }
-      if (this.longTasks.length > MAX_LONG_TASKS) {
-        this.longTasks.splice(0, this.longTasks.length - MAX_LONG_TASKS);
-      }
-    });
-    this.longTaskObserver.observe({ entryTypes: ['longtask'] });
+    this.installLongTaskObserver();
+    this.installLongAnimationFrameObserver();
   }
 
   destroy(): void {
     this.longTaskObserver?.disconnect();
     this.longTaskObserver = null;
+    this.longAnimationFrameObserver?.disconnect();
+    this.longAnimationFrameObserver = null;
   }
 
   recordFrame(state: SimulationState, zoom: number, sceneUpdateMs: number, grid = false): void {
@@ -118,16 +198,31 @@ export class PerformanceMonitor {
     const selectedUnit = state.selectedUnitId
       ? state.units.find((unit) => unit.id === state.selectedUnitId)
       : undefined;
+    const exportedAt = new Date().toISOString();
+    const performancePhaseMeasures = performance.getEntriesByType('measure')
+      .filter((entry) => entry.name.startsWith(PHASE_MEASURE_PREFIX))
+      .map((entry) => ({
+        name: entry.name,
+        startMs: roundOne(entry.startTime - this.startedAt),
+        durationMs: roundTwo(entry.duration),
+      }));
 
     return {
-      version: 'performance-report-v3',
-      exportedAt: new Date().toISOString(),
+      version: PERFORMANCE_CONTRACT_VERSION,
+      build: {
+        ...getRealWargameBuildIdentity(),
+        generatedAt: exportedAt,
+      },
+      exportedAt,
       runtimeSeconds: roundOne((performance.now() - this.startedAt) / 1000),
-      browser: getBrowserInfo(),
+      browser: {
+        ...getBrowserInfo(),
+        performanceObserverSupportedEntryTypes: [...(PerformanceObserver.supportedEntryTypes ?? [])],
+      },
       viewport: getViewportInfo(),
       renderer: {
         ...renderer,
-        timingNote: 'sceneUpdateMs/renderMs measure JavaScript scene updates only; effective FPS and browser long tasks reveal whole-frame stalls.',
+        timingNote: 'sceneUpdateMs/renderMs measure JavaScript scene updates only; global long tasks and long-animation-frame script attribution remain separate diagnostics.',
       },
       scene: {
         mapWidthCells: state.map.width,
@@ -159,6 +254,7 @@ export class PerformanceMonitor {
         awarenessDynamicRescore: selectedUnit
           ? getAwarenessDynamicRescoreDiagnostics(selectedUnit)
           : null,
+        awarenessMovement: getAwarenessMovementDiagnostics(),
       },
       summary: {
         sampleCount: samples.length,
@@ -176,6 +272,10 @@ export class PerformanceMonitor {
         },
         longTaskCount: this.longTasks.length,
         longTaskMs: buildStats(this.longTasks.map((task) => task.durationMs)),
+        longAnimationFrameCount: this.longAnimationFrames.length,
+        longAnimationFrameMs: buildStats(this.longAnimationFrames.map((frame) => frame.durationMs)),
+        longAnimationFrameScriptMs: buildStats(this.longAnimationFrames.flatMap((frame) => frame.scripts.map((script) => script.durationMs))),
+        phaseMeasureCount: performancePhaseMeasures.length,
         worstFrames: [...samples]
           .filter((sample) => sample.frameMs !== null)
           .sort((left, right) => (right.frameMs ?? 0) - (left.frameMs ?? 0))
@@ -184,9 +284,65 @@ export class PerformanceMonitor {
           .sort((left, right) => right.sceneUpdateMs - left.sceneUpdateMs)
           .slice(0, 30),
       },
-      longTasks: [...this.longTasks],
+      longTasks: this.longTasks.map(cloneLongTask),
+      longAnimationFrames: this.longAnimationFrames.map(cloneLongAnimationFrame),
+      performancePhaseMeasures,
       samples,
     };
+  }
+
+  private installLongTaskObserver(): void {
+    if (typeof PerformanceObserver === 'undefined' || !PerformanceObserver.supportedEntryTypes?.includes('longtask')) return;
+    this.longTaskObserver = new PerformanceObserver((list) => {
+      for (const rawEntry of list.getEntries()) {
+        const entry = rawEntry as LongTaskEntryLike;
+        this.longTasks.push({
+          startMs: roundOne(entry.startTime - this.startedAt),
+          durationMs: roundTwo(entry.duration),
+          scenario: currentScenario(),
+          attribution: Array.from(entry.attribution ?? []).map((item) => ({
+            name: item.name ?? '',
+            containerType: item.containerType ?? '',
+            containerName: item.containerName ?? '',
+            containerId: item.containerId ?? '',
+            containerSrc: item.containerSrc ?? '',
+          })),
+        });
+      }
+      trimOldest(this.longTasks, MAX_LONG_TASKS);
+    });
+    this.longTaskObserver.observe({ entryTypes: ['longtask'] });
+  }
+
+  private installLongAnimationFrameObserver(): void {
+    if (typeof PerformanceObserver === 'undefined' || !PerformanceObserver.supportedEntryTypes?.includes('long-animation-frame')) return;
+    this.longAnimationFrameObserver = new PerformanceObserver((list) => {
+      for (const rawEntry of list.getEntries()) {
+        const entry = rawEntry as LongAnimationFrameEntryLike;
+        this.longAnimationFrames.push({
+          startMs: roundOne(entry.startTime - this.startedAt),
+          durationMs: roundTwo(entry.duration),
+          blockingDurationMs: roundTwo(entry.blockingDuration ?? 0),
+          renderStartMs: relativeTimestamp(entry.renderStart, this.startedAt),
+          styleAndLayoutStartMs: relativeTimestamp(entry.styleAndLayoutStart, this.startedAt),
+          firstUiEventTimestampMs: relativeTimestamp(entry.firstUIEventTimestamp, this.startedAt),
+          scenario: currentScenario(),
+          scripts: Array.from(entry.scripts ?? []).map((script) => ({
+            invoker: script.invoker ?? '',
+            invokerType: script.invokerType ?? '',
+            sourceUrl: script.sourceURL ?? '',
+            sourceFunctionName: script.sourceFunctionName ?? '',
+            charPosition: Number.isFinite(script.charPosition) ? script.charPosition ?? 0 : 0,
+            durationMs: roundTwo(script.duration ?? 0),
+            forcedStyleAndLayoutDurationMs: roundTwo(script.forcedStyleAndLayoutDuration ?? 0),
+            pauseDurationMs: roundTwo(script.pauseDuration ?? 0),
+            windowAttribution: script.windowAttribution ?? '',
+          })),
+        });
+      }
+      trimOldest(this.longAnimationFrames, MAX_LONG_ANIMATION_FRAMES);
+    });
+    this.longAnimationFrameObserver.observe({ entryTypes: ['long-animation-frame'] });
   }
 
   private getSamples(): PerformanceFrameSample[] {
@@ -198,6 +354,33 @@ export class PerformanceMonitor {
       ...this.samples.slice(0, this.writeIndex),
     ].filter(isFrameSample);
   }
+}
+
+function currentScenario(): string | null {
+  return (window as PerformanceScenarioWindow).__realWargamePerformanceScenario ?? null;
+}
+
+function relativeTimestamp(value: number | undefined, startedAt: number): number | null {
+  if (!Number.isFinite(value) || !value || value <= 0) return null;
+  return roundOne(value - startedAt);
+}
+
+function trimOldest<T>(items: T[], maximum: number): void {
+  if (items.length > maximum) items.splice(0, items.length - maximum);
+}
+
+function cloneLongTask(task: BrowserLongTaskDiagnostic): BrowserLongTaskDiagnostic {
+  return {
+    ...task,
+    attribution: task.attribution.map((item) => ({ ...item })),
+  };
+}
+
+function cloneLongAnimationFrame(frame: LongAnimationFrameDiagnostic): LongAnimationFrameDiagnostic {
+  return {
+    ...frame,
+    scripts: frame.scripts.map((script) => ({ ...script })),
+  };
 }
 
 function isFrameSample(value: PerformanceFrameSample | undefined): value is PerformanceFrameSample {
