@@ -1,0 +1,56 @@
+name: Patch Final Refresh Wait Contract
+
+on:
+  push:
+    branches:
+      - agent/danger-layer-moving-units-performance
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test:
+    if: github.event.head_commit.message == 'Patch final refresh wait contract'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/danger-layer-moving-units-performance
+      - name: Patch movement wait semantics and remove workflow
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('tests/danger-layer-movement-performance.spec.ts')
+          text = path.read_text(encoding='utf-8')
+
+          stop_block = """  await stopScenario(page);\n  await page.waitForTimeout(250);\n  await waitForWorkerSettled(page);"""
+          replacement = """  await stopScenario(page);\n  await page.waitForTimeout(250);\n  await waitForWorkerSettled(page, beforeMovement.finalRefreshApplied + 1);"""
+          if text.count(stop_block) != 3:
+              raise SystemExit(f'Expected three final-settle blocks, found {text.count(stop_block)}')
+          text = text.replace(stop_block, replacement)
+
+          wall_before = """  const before = await snapshot(page, true);\n  expect(before.bestSafePosition).not.toBeNull();"""
+          wall_replacement = """  const before = await snapshot(page, true);\n  const beforeMovement = requireMovement(before);\n  expect(before.bestSafePosition).not.toBeNull();"""
+          if wall_before not in text:
+              raise SystemExit('Wall baseline block not found')
+          text = text.replace(wall_before, wall_replacement, 1)
+
+          old_helper = """async function waitForWorkerSettled(page: Page): Promise<void> {\n  await page.waitForFunction(() => {\n    const movement = window.__realWargameDangerMovementPerformance\n      ?.getSnapshot(false).awarenessMovement as MovementDiagnostics | null | undefined;\n    return Boolean(\n      movement\n      && !movement.workerInFlight\n      && movement.pendingQueueDepth === 0\n      && movement.finalRefreshRequests > 0\n      && movement.finalRefreshApplied >= movement.finalRefreshRequests\n      && movement.lastRequestedRasterKey\n      && movement.lastAppliedRasterKey === movement.lastRequestedRasterKey,\n    );\n  }, undefined, { timeout: 30_000 });\n}"""
+          new_helper = """async function waitForWorkerSettled(page: Page, minimumFinalApplied = 1): Promise<void> {\n  await page.waitForFunction((minimumApplied) => {\n    const movement = window.__realWargameDangerMovementPerformance\n      ?.getSnapshot(false).awarenessMovement as MovementDiagnostics | null | undefined;\n    return Boolean(\n      movement\n      && !movement.workerInFlight\n      && movement.pendingQueueDepth === 0\n      && movement.finalRefreshRequests > 0\n      && movement.finalRefreshApplied >= minimumApplied\n      && movement.lastRequestedRasterKey\n      && movement.lastAppliedRasterKey === movement.lastRequestedRasterKey,\n    );\n  }, minimumFinalApplied, { timeout: 30_000 });\n}"""
+          if old_helper not in text:
+              raise SystemExit('Worker-settle helper block not found')
+          text = text.replace(old_helper, new_helper, 1)
+
+          path.write_text(text, encoding='utf-8')
+          Path('.github/workflows/patch-final-refresh-wait.yml').unlink()
+          PY
+      - name: Commit final refresh test contract
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add tests/danger-layer-movement-performance.spec.ts .github/workflows/patch-final-refresh-wait.yml
+          git commit -m 'Wait for the current final awareness refresh'
+          git push origin HEAD:agent/danger-layer-moving-units-performance
