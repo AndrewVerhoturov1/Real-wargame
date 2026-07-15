@@ -164,7 +164,6 @@ function buildAwarenessField(
   for (let y = 0; y < state.map.height; y += 1) {
     for (let x = 0; x < state.map.width; x += 1) {
       cells[y * state.map.width + x] = evaluateAwarenessFieldCell(
-        state.map,
         unit,
         { x: x + 0.5, y: y + 0.5 },
         staticField,
@@ -249,7 +248,6 @@ export function evaluateRouteDanger(
     const t = index / samples;
     const point = { x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t };
     total += evaluateAwarenessFieldCell(
-      state.map,
       unit,
       point,
       staticField,
@@ -291,7 +289,6 @@ function buildThreatCoverFields(map: TacticalMap, unit: UnitModel): ThreatCoverF
 }
 
 function evaluateAwarenessFieldCell(
-  map: TacticalMap,
   unit: UnitModel,
   position: GridPosition,
   staticField: AwarenessStaticField,
