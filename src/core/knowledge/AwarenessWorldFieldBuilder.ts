@@ -1,5 +1,6 @@
 import { getThreatRelativeCoverFieldDiagnostics } from '../cover/ThreatRelativeCoverField';
 import type { TacticalMap } from '../map/MapModel';
+import { buildNavigationGrid } from '../pathfinding/GridNavigation';
 import type { SimulationState } from '../simulation/SimulationState';
 import { getDirectionalTacticalFieldDiagnostics } from '../terrain/DirectionalTacticalField';
 import { getDirectionalTerrainSectorBasisDiagnostics } from '../terrain/DirectionalTerrainSectorBasis';
@@ -16,6 +17,7 @@ import type {
 const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([0x01020304]).buffer)[0] === 0x04;
 const DANGER_PIXEL_LUT = buildPixelLut('danger');
 const STEALTH_PIXEL_LUT = buildPixelLut('stealth');
+const passabilityByMap = new WeakMap<TacticalMap, Uint8Array>();
 
 export interface AwarenessWorldFieldBuildResult {
   readonly reusableUnit: UnitModel;
@@ -52,6 +54,7 @@ export function buildAwarenessWorldField(
   const threatIds = snapshot.threats.map((threat) => threat.id);
   const threatIndexById = new Map(threatIds.map((id, index) => [id, index]));
   const count = map.width * map.height;
+  const passable = getPassabilityMask(map);
   const danger = new Uint8Array(count);
   const concealment = new Uint8Array(count);
   const safety = new Uint8Array(count);
@@ -67,12 +70,21 @@ export function buildAwarenessWorldField(
     if (!cell) continue;
     danger[index] = clampByte(cell.danger);
     concealment[index] = clampByte(cell.concealment);
-    safety[index] = clampByte(cell.safety);
-    expectedProtection[index] = clampByte(cell.expectedProtection);
-    expectedProtectionAgainstThreat[index] = clampByte(cell.expectedProtectionAgainstThreat);
-    protectedThreatIndex[index] = cell.protectedAgainstThreatId === null
-      ? -1
-      : threatIndexById.get(cell.protectedAgainstThreatId) ?? -1;
+    if (passable[index] === 1) {
+      safety[index] = clampByte(cell.safety);
+      expectedProtection[index] = clampByte(cell.expectedProtection);
+      expectedProtectionAgainstThreat[index] = clampByte(cell.expectedProtectionAgainstThreat);
+      protectedThreatIndex[index] = cell.protectedAgainstThreatId === null
+        ? -1
+        : threatIndexById.get(cell.protectedAgainstThreatId) ?? -1;
+    } else {
+      // Awareness values may describe terrain around a structure, but a blocked
+      // structure cell can never be a reachable safe-position winner.
+      safety[index] = 0;
+      expectedProtection[index] = 0;
+      expectedProtectionAgainstThreat[index] = 0;
+      protectedThreatIndex[index] = -1;
+    }
     dangerPixels[index] = DANGER_PIXEL_LUT[danger[index]] ?? 0;
     stealthPixels[index] = STEALTH_PIXEL_LUT[concealment[index]] ?? 0;
   }
@@ -116,6 +128,18 @@ export function digestAwarenessWorldField(field: AwarenessWorkerFieldPayload): s
   hash = hashTypedArray(hash, field.dangerPixels);
   hash = hashTypedArray(hash, field.protectedThreatIndex);
   return hash.toString(16).padStart(8, '0');
+}
+
+function getPassabilityMask(map: TacticalMap): Uint8Array {
+  const cached = passabilityByMap.get(map);
+  if (cached) return cached;
+  const grid = buildNavigationGrid(map);
+  const passable = new Uint8Array(grid.cells.length);
+  for (let index = 0; index < grid.cells.length; index += 1) {
+    passable[index] = grid.cells[index]?.passable ? 1 : 0;
+  }
+  passabilityByMap.set(map, passable);
+  return passable;
 }
 
 function prepareUnit(snapshot: AwarenessWorkerBuildSnapshot, reusableUnit: UnitModel | null): UnitModel {
