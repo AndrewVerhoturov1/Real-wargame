@@ -49,7 +49,7 @@ export class PixiTacticalBoardApp {
   private mapRenderInvalidated = true;
   private lastDebugPanelUpdateMs = 0;
 
-  constructor(
+  private constructor(
     private readonly root: HTMLElement,
     private readonly debugPanel: HTMLElement,
     private readonly languageToggle: HTMLButtonElement,
@@ -57,20 +57,16 @@ export class PixiTacticalBoardApp {
     private readonly visionToggle: HTMLButtonElement,
     private readonly heightToggle: HTMLButtonElement,
     private readonly state: SimulationState,
+    app: Application,
   ) {
-    this.app = new Application({
-      backgroundColor: 0x121612,
-      backgroundAlpha: 1,
-      antialias: true,
-      resizeTo: this.root,
-    });
+    this.app = app;
     this.app.ticker.maxFPS = TARGET_MAX_FPS;
     this.app.stage.eventMode = 'none';
     this.app.stage.interactiveChildren = false;
     this.worldContainer.eventMode = 'none';
     this.worldContainer.interactiveChildren = false;
 
-    const canvas = this.app.view as HTMLCanvasElement;
+    const canvas = this.app.canvas;
     canvas.setAttribute('aria-label', 'Tactical board prototype canvas');
     canvas.tabIndex = 0;
     this.root.appendChild(canvas);
@@ -103,6 +99,35 @@ export class PixiTacticalBoardApp {
     });
   }
 
+  static async create(
+    root: HTMLElement,
+    debugPanel: HTMLElement,
+    languageToggle: HTMLButtonElement,
+    gridToggle: HTMLButtonElement,
+    visionToggle: HTMLButtonElement,
+    heightToggle: HTMLButtonElement,
+    state: SimulationState,
+  ): Promise<PixiTacticalBoardApp> {
+    const app = new Application();
+    await app.init({
+      background: 0x121612,
+      backgroundAlpha: 1,
+      antialias: true,
+      preference: 'webgl',
+      resizeTo: root,
+    });
+    return new PixiTacticalBoardApp(
+      root,
+      debugPanel,
+      languageToggle,
+      gridToggle,
+      visionToggle,
+      heightToggle,
+      state,
+      app,
+    );
+  }
+
   start(): void {
     this.renderEditableMapLayerIfNeeded(true);
     this.viewConeRenderer.clear();
@@ -115,13 +140,15 @@ export class PixiTacticalBoardApp {
     this.camera.attach();
     this.boardInput.attach();
 
-    this.app.ticker.add(() => {
+    this.app.ticker.add(this.tick);
+  }
+
+  private readonly tick = (): void => {
       if (!this.getPaused()) {
         tickSimulation(this.state, this.app.ticker.elapsedMS / 1000);
       }
       this.renderFrame();
-    });
-  }
+  };
 
   destroy(): void {
     this.languageToggle.removeEventListener('click', this.handleLanguageToggle);
@@ -134,7 +161,12 @@ export class PixiTacticalBoardApp {
     this.routeCostOverlayRenderer.destroy();
     this.htmlOverlayRenderer.destroy();
     this.fixedScaleLabel.remove();
-    this.app.destroy(true);
+    this.app.ticker.remove(this.tick);
+    this.mapRenderer.container.cacheAsTexture(false);
+    this.app.destroy(
+      { removeView: true, releaseGlobalResources: true },
+      { children: true, texture: true, textureSource: true },
+    );
   }
 
   forceRender(): void {
@@ -145,7 +177,7 @@ export class PixiTacticalBoardApp {
 
   downloadPerformanceReport(): void {
     const report = this.performanceMonitor.buildReport(this.state, this.camera.zoom, {
-      pixiMajorVersion: '7',
+      pixiMajorVersion: '8',
       antialias: true,
       backgroundAlpha: 1,
       maxFPS: TARGET_MAX_FPS,
@@ -205,7 +237,7 @@ export class PixiTacticalBoardApp {
 
     this.lastMapRenderKey = nextKey;
     this.mapRenderInvalidated = false;
-    this.mapRenderer.container.cacheAsBitmap = false;
+    this.mapRenderer.container.cacheAsTexture(false);
     this.mapRenderer.render(
       this.state.map,
       this.showGrid,
@@ -215,7 +247,7 @@ export class PixiTacticalBoardApp {
 
     // The whole map, grid and map objects are static during simulation. One texture is much
     // cheaper to scale and translate than the original collection of vector Graphics objects.
-    this.mapRenderer.container.cacheAsBitmap = !this.state.editor.enabled;
+    if (!this.state.editor.enabled) this.mapRenderer.container.cacheAsTexture(true);
   }
 
   private getMapRenderKey(): string {

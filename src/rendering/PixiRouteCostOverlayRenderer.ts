@@ -1,4 +1,4 @@
-import { Container, SCALE_MODES, Sprite, Text, TextStyle, Texture } from 'pixi.js';
+import { Container, Sprite, Text, TextStyle, Texture } from 'pixi.js';
 import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../core/navigation/NavigationRuntime';
 import {
@@ -24,18 +24,14 @@ const TOOLTIP_STYLE = new TextStyle({
   fontFamily: 'Arial, sans-serif',
   fontSize: 8,
   fill: 0xf4f7ee,
-  stroke: 0x101510,
-  strokeThickness: 2,
-  lineJoin: 'round',
+  stroke: { color: 0x101510, width: 2 },
 });
 const LEGEND_STYLE = new TextStyle({
   fontFamily: 'Arial, sans-serif',
   fontSize: 8,
   fontWeight: '700',
   fill: 0xffffff,
-  stroke: 0x111510,
-  strokeThickness: 2,
-  lineJoin: 'round',
+  stroke: { color: 0x111510, width: 2 },
 });
 
 export interface RouteCostOverlayDiagnostics {
@@ -63,8 +59,8 @@ type RouteCostDebugWindow = Window & {
 export class PixiRouteCostOverlayRenderer {
   readonly container = new Container();
   private readonly cache = createRouteCostFieldCache();
-  private readonly legend = new Text('', LEGEND_STYLE);
-  private readonly tooltip = new Text('', TOOLTIP_STYLE);
+  private readonly legend = new Text({ text: '', style: LEGEND_STYLE });
+  private readonly tooltip = new Text({ text: '', style: TOOLTIP_STYLE });
   private staticCanvas: HTMLCanvasElement | null = null;
   private dynamicCanvas: HTMLCanvasElement | null = null;
   private staticContext: CanvasRenderingContext2D | null = null;
@@ -131,14 +127,14 @@ export class PixiRouteCostOverlayRenderer {
 
     if (staticTextureKey !== this.lastStaticTextureKey) {
       drawRouteCostRaster(this.staticContext, fields, 'baseTerrain');
-      this.staticTexture.baseTexture.update();
+      this.staticTexture.source.update();
       markRouteCostTextureUploaded(this.cache);
       this.lastStaticTextureKey = staticTextureKey;
       this.staticTextureBuildCount += 1;
     }
     if (dynamicTextureKey !== this.lastDynamicTextureKey) {
       drawRouteCostRaster(this.dynamicContext, fields, dynamicMode);
-      this.dynamicTexture.baseTexture.update();
+      this.dynamicTexture.source.update();
       markRouteCostTextureUploaded(this.cache);
       this.lastDynamicTextureKey = dynamicTextureKey;
       this.dynamicTextureBuildCount += 1;
@@ -213,10 +209,8 @@ export class PixiRouteCostOverlayRenderer {
       this.dynamicCanvas.height = pixelHeight;
       this.staticContext = this.staticCanvas.getContext('2d', { alpha: true });
       this.dynamicContext = this.dynamicCanvas.getContext('2d', { alpha: true });
-      this.staticTexture = Texture.from(this.staticCanvas);
-      this.dynamicTexture = Texture.from(this.dynamicCanvas);
-      this.staticTexture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
-      this.dynamicTexture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+      this.staticTexture = Texture.from({ resource: this.staticCanvas, scaleMode: 'nearest' });
+      this.dynamicTexture = Texture.from({ resource: this.dynamicCanvas, scaleMode: 'nearest' });
       this.staticSprite = new Sprite(this.staticTexture);
       this.dynamicSprite = new Sprite(this.dynamicTexture);
       this.container.addChild(this.staticSprite, this.dynamicSprite, this.legend, this.tooltip);

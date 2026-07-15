@@ -164,55 +164,48 @@ function redrawBody(graphics: Graphics, unit: UnitModel, unitRadius: number): vo
   graphics.clear();
   const fill = getUnitFill(unit);
   const border = unit.side === 'red' ? 0x5a1018 : 0x102f5c;
-  graphics.lineStyle(2, border, 1);
-
   if (unit.behaviorRuntime.posture === 'prone') {
-    graphics.beginFill(fill, 1);
-    graphics.drawRoundedRect(-unitRadius * 1.5, -unitRadius * 0.45, unitRadius * 3, unitRadius * 0.9, 4);
-    graphics.endFill();
+    graphics.roundRect(-unitRadius * 1.5, -unitRadius * 0.45, unitRadius * 3, unitRadius * 0.9, 4)
+      .fill({ color: fill })
+      .stroke({ width: 2, color: border });
     return;
   }
 
   const radius = unit.behaviorRuntime.posture === 'crouched' ? unitRadius * 0.75 : unitRadius;
-  graphics.beginFill(fill, 1);
-  graphics.drawCircle(0, 0, radius);
-  graphics.endFill();
+  graphics.circle(0, 0, radius).fill({ color: fill }).stroke({ width: 2, color: border });
 }
 
 function redrawPosture(graphics: Graphics, unit: UnitModel, unitRadius: number): void {
   graphics.clear();
   if (unit.behaviorRuntime.posture === 'standing') return;
 
-  graphics.lineStyle(1.5, 0xf6edcf, 0.9);
   if (unit.behaviorRuntime.posture === 'crouched') {
-    graphics.moveTo(-unitRadius * 0.8, unitRadius * 1.25);
-    graphics.lineTo(unitRadius * 0.8, unitRadius * 1.25);
+    graphics.moveTo(-unitRadius * 0.8, unitRadius * 1.25).lineTo(unitRadius * 0.8, unitRadius * 1.25)
+      .stroke({ width: 1.5, color: 0xf6edcf, alpha: 0.9 });
     return;
   }
 
-  graphics.moveTo(-unitRadius, unitRadius * 1.15);
-  graphics.lineTo(unitRadius, unitRadius * 1.15);
-  graphics.moveTo(-unitRadius * 0.8, unitRadius * 1.55);
-  graphics.lineTo(unitRadius * 0.8, unitRadius * 1.55);
+  graphics.moveTo(-unitRadius, unitRadius * 1.15).lineTo(unitRadius, unitRadius * 1.15)
+    .stroke({ width: 1.5, color: 0xf6edcf, alpha: 0.9 });
+  graphics.moveTo(-unitRadius * 0.8, unitRadius * 1.55).lineTo(unitRadius * 0.8, unitRadius * 1.55)
+    .stroke({ width: 1.5, color: 0xf6edcf, alpha: 0.9 });
 }
 
 function redrawStress(graphics: Graphics, unitRadius: number): void {
   graphics.clear();
-  graphics.lineStyle(1.5, 0xb6633c, 1);
-  graphics.drawCircle(0, 0, unitRadius + 5);
+  graphics.circle(0, 0, unitRadius + 5).stroke({ width: 1.5, color: 0xb6633c });
 }
 
 function redrawSelection(graphics: Graphics, unitRadius: number): void {
   graphics.clear();
   const selectionRadius = unitRadius + 5;
-  graphics.lineStyle(2, 0xfff2a8, 0.96);
-  graphics.drawRoundedRect(
+  graphics.roundRect(
     -selectionRadius,
     -selectionRadius,
     selectionRadius * 2,
     selectionRadius * 2,
     4,
-  );
+  ).stroke({ width: 2, color: 0xfff2a8, alpha: 0.96 });
 }
 
 function redrawWeapon(graphics: Graphics, itemKind: UnitModel['heldItem'], unitRadius: number): void {
@@ -225,13 +218,10 @@ function redrawWeapon(graphics: Graphics, itemKind: UnitModel['heldItem'], unitR
       : unitRadius * 1.8;
   const endX = startX + length;
 
-  graphics.lineStyle(itemKind === 'support_item' ? 3 : 2, 0x1a1710, 1);
-  graphics.moveTo(startX, 0);
-  graphics.lineTo(endX, 0);
-
-  graphics.lineStyle(1.5, 0xd2c09a, 0.95);
-  graphics.moveTo(startX, -unitRadius * 0.5);
-  graphics.lineTo(startX, unitRadius * 0.5);
+  graphics.moveTo(startX, 0).lineTo(endX, 0)
+    .stroke({ width: itemKind === 'support_item' ? 3 : 2, color: 0x1a1710 });
+  graphics.moveTo(startX, -unitRadius * 0.5).lineTo(startX, unitRadius * 0.5)
+    .stroke({ width: 1.5, color: 0xd2c09a, alpha: 0.95 });
 }
 
 function getUnitFill(unit: UnitModel): number {

@@ -44,15 +44,18 @@ import { installTacticalWorkspace } from './ui/TacticalWorkspace';
 import { installWorkspaceTooltipGuard } from './ui/WorkspaceTooltipGuard';
 
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
+let state: ReturnType<typeof createResolutionAwareInitialState>;
+let tacticalBoard: PixiTacticalBoardApp;
+type PausableRuntimeState = typeof state & { paused?: boolean };
 
-const root = document.querySelector<HTMLElement>('#app');
-const debugPanel = document.querySelector<HTMLElement>('#debug-panel');
-const languageToggle = document.querySelector<HTMLButtonElement>('#language-toggle');
-const gridToggle = document.querySelector<HTMLButtonElement>('#grid-toggle');
-const visionToggle = document.querySelector<HTMLButtonElement>('#vision-toggle');
-const heightToggle = document.querySelector<HTMLButtonElement>('#height-toggle');
-const pauseToggle = document.querySelector<HTMLButtonElement>('#pause-toggle');
-const aiEditorOpenButton = document.querySelector<HTMLButtonElement>('#ai-editor-open');
+const root = document.querySelector<HTMLElement>('#app')!;
+const debugPanel = document.querySelector<HTMLElement>('#debug-panel')!;
+const languageToggle = document.querySelector<HTMLButtonElement>('#language-toggle')!;
+const gridToggle = document.querySelector<HTMLButtonElement>('#grid-toggle')!;
+const visionToggle = document.querySelector<HTMLButtonElement>('#vision-toggle')!;
+const heightToggle = document.querySelector<HTMLButtonElement>('#height-toggle')!;
+const pauseToggle = document.querySelector<HTMLButtonElement>('#pause-toggle')!;
+const aiEditorOpenButton = document.querySelector<HTMLButtonElement>('#ai-editor-open')!;
 
 if (!root || !debugPanel || !languageToggle || !gridToggle || !visionToggle || !heightToggle || !pauseToggle || !aiEditorOpenButton) {
   throw new Error('Tactical board root elements are missing.');
@@ -60,15 +63,17 @@ if (!root || !debugPanel || !languageToggle || !gridToggle || !visionToggle || !
 
 installAppShellMenu({ mode: 'game' });
 
-const state = createResolutionAwareInitialState(
+state = createResolutionAwareInitialState(
   mapData as TacticalMapData,
   unitsData as UnitData[],
   pressureZoneData as PressureZoneData[],
 );
 initializeAiTestLabRuntime(state);
-type PausableRuntimeState = typeof state & { paused?: boolean };
 
-const tacticalBoard = new PixiTacticalBoardApp(
+void bootstrap();
+
+async function bootstrap(): Promise<void> {
+tacticalBoard = await PixiTacticalBoardApp.create(
   root,
   debugPanel,
   languageToggle,
@@ -135,6 +140,7 @@ window.addEventListener('beforeunload', () => {
   aiGameBridge.destroy();
   tacticalBoard.destroy();
 });
+}
 
 function scheduleNativeMapQuality(): void {
   window.requestAnimationFrame(() => enforceNativeMapQuality(tacticalBoard));
@@ -142,12 +148,12 @@ function scheduleNativeMapQuality(): void {
 
 function enforceNativeMapQuality(board: PixiTacticalBoardApp): void {
   const internals = board as unknown as {
-    mapRenderer?: { container?: { cacheAsBitmap: boolean } };
+    mapRenderer?: { container?: { cacheAsTexture: (enabled: boolean) => void } };
   };
   const mapContainer = internals.mapRenderer?.container;
-  if (mapContainer) mapContainer.cacheAsBitmap = false;
-  (window as Window & { __realWargameMapQualityDebug?: { cacheAsBitmap: boolean } }).__realWargameMapQualityDebug = {
-    cacheAsBitmap: mapContainer?.cacheAsBitmap ?? false,
+  if (mapContainer) mapContainer.cacheAsTexture(false);
+  (window as Window & { __realWargameMapQualityDebug?: { cacheAsTexture: boolean } }).__realWargameMapQualityDebug = {
+    cacheAsTexture: false,
   };
 }
 

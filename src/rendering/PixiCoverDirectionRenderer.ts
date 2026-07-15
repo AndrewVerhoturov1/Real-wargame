@@ -40,25 +40,24 @@ export class PixiCoverDirectionRenderer {
     const graphics = new Graphics();
     drawArrow(graphics, source, center, cellSize, FIRE_COLOR, 4);
     drawArrow(graphics, center, safePoint, cellSize, SAFE_COLOR, 5);
-    graphics.lineStyle(2, SAFE_COLOR, 0.9);
-    graphics.beginFill(SAFE_COLOR, 0.13);
-    graphics.drawCircle(safePoint.x * cellSize, safePoint.y * cellSize, Math.max(12, cellSize * 0.42));
-    graphics.endFill();
+    graphics.circle(safePoint.x * cellSize, safePoint.y * cellSize, Math.max(12, cellSize * 0.42))
+      .fill({ color: SAFE_COLOR, alpha: 0.13 })
+      .stroke({ width: 2, color: SAFE_COLOR, alpha: 0.9 });
 
     const unit = getSelectedUnit(state);
     if (unit) {
       const protectedNow = selectedCoverProtectsUnit(cover, source, unit.position, unit.behaviorRuntime.posture);
-      graphics.lineStyle(3, protectedNow ? SAFE_COLOR : WARNING_COLOR, 0.9);
-      graphics.moveTo(center.x * cellSize, center.y * cellSize);
-      graphics.lineTo(unit.position.x * cellSize, unit.position.y * cellSize);
+      graphics.moveTo(center.x * cellSize, center.y * cellSize)
+        .lineTo(unit.position.x * cellSize, unit.position.y * cellSize)
+        .stroke({ width: 3, color: protectedNow ? SAFE_COLOR : WARNING_COLOR, alpha: 0.9 });
 
       if (!protectedNow) {
         const ux = unit.position.x * cellSize;
         const uy = unit.position.y * cellSize;
-        graphics.moveTo(ux - 7, uy - 7);
-        graphics.lineTo(ux + 7, uy + 7);
-        graphics.moveTo(ux + 7, uy - 7);
-        graphics.lineTo(ux - 7, uy + 7);
+        graphics.moveTo(ux - 7, uy - 7).lineTo(ux + 7, uy + 7)
+          .stroke({ width: 3, color: WARNING_COLOR, alpha: 0.9 });
+        graphics.moveTo(ux + 7, uy - 7).lineTo(ux - 7, uy + 7)
+          .stroke({ width: 3, color: WARNING_COLOR, alpha: 0.9 });
       }
     }
 
@@ -107,24 +106,14 @@ function drawArrow(
   const angle = Math.atan2(y2 - y1, x2 - x1);
   const headLength = Math.max(10, cellSize * 0.35);
 
-  graphics.lineStyle(width, color, 0.95);
-  graphics.moveTo(x1, y1);
-  graphics.lineTo(x2, y2);
-  graphics.moveTo(x2, y2);
-  graphics.lineTo(x2 - Math.cos(angle - Math.PI / 6) * headLength, y2 - Math.sin(angle - Math.PI / 6) * headLength);
-  graphics.moveTo(x2, y2);
-  graphics.lineTo(x2 - Math.cos(angle + Math.PI / 6) * headLength, y2 - Math.sin(angle + Math.PI / 6) * headLength);
+  const stroke = { width, color, alpha: 0.95 };
+  graphics.moveTo(x1, y1).lineTo(x2, y2).stroke(stroke);
+  graphics.moveTo(x2, y2).lineTo(x2 - Math.cos(angle - Math.PI / 6) * headLength, y2 - Math.sin(angle - Math.PI / 6) * headLength).stroke(stroke);
+  graphics.moveTo(x2, y2).lineTo(x2 - Math.cos(angle + Math.PI / 6) * headLength, y2 - Math.sin(angle + Math.PI / 6) * headLength).stroke(stroke);
 }
 
 function createLabel(text: string, x: number, y: number, color: number): Text {
-  const label = new Text(text, {
-    fontFamily: 'Arial, sans-serif',
-    fontSize: 11,
-    fontWeight: '700',
-    fill: color,
-    stroke: 0x101510,
-    strokeThickness: 4,
-  });
+  const label = new Text({ text, style: { fontFamily: 'Arial, sans-serif', fontSize: 11, fontWeight: '700', fill: color, stroke: { color: 0x101510, width: 4 } } });
   label.position.set(x, y);
   return label;
 }

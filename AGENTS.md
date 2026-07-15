@@ -9,7 +9,7 @@ repository: AndrewVerhoturov1/Real-wargame
 working branch: real-wargame-preview
 stable branch: main
 canonical launcher: Run-Real-Wargame-Lab.bat
-stack: Vite + TypeScript + PixiJS 7
+stack: Vite + TypeScript + PixiJS 8
 ```
 
 This is not a Godot project.
@@ -128,7 +128,7 @@ docs/workflow/VISUAL_QA_APPROVAL_POLICY.md
 .agents/skills/real-wargame-pixijs/SKILL.md
 ```
 
-Real-Wargame uses PixiJS 7. Do not copy PixiJS 8 APIs into the project without an explicit migration task.
+Real-Wargame uses PixiJS 8. Follow the project skill and the narrow v8 skill that owns the API being changed; preserve the rendering, input and performance boundaries below.
 
 ### Soldier AI, Blackboard, Utility, stateful Runtime, Bridge or node editor
 

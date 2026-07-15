@@ -1,4 +1,4 @@
-import { Container, Graphics, SCALE_MODES, Sprite, Texture } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import type { PerceptionContactMemory } from '../core/perception/PerceptionContact';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { getAttentionOverlayState } from '../core/ui/RuntimeUiState';
@@ -67,7 +67,7 @@ export class PixiVisibilityHeatmapRenderer {
       this.ensureRaster(state.map.width, state.map.height);
       if (this.rasterContext && this.rasterTexture && this.rasterSprite) {
         drawVisibilityRaster(this.rasterContext, field, state.map.width, state.map.height);
-        this.rasterTexture.baseTexture.update();
+        this.rasterTexture.source.update();
         this.rasterSprite.position.set(0, 0);
         this.rasterSprite.scale.set(state.map.cellSize, state.map.cellSize);
         this.rasterSprite.visible = true;
@@ -132,8 +132,7 @@ export class PixiVisibilityHeatmapRenderer {
     this.rasterCanvas.width = width;
     this.rasterCanvas.height = height;
     this.rasterContext = this.rasterCanvas.getContext('2d', { alpha: true });
-    this.rasterTexture = Texture.from(this.rasterCanvas);
-    this.rasterTexture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+    this.rasterTexture = Texture.from({ resource: this.rasterCanvas, scaleMode: 'nearest' });
     this.rasterSprite = new Sprite(this.rasterTexture);
     this.container.addChild(this.rasterSprite, this.markerGraphics);
   }
@@ -220,34 +219,26 @@ function drawContactMarker(
   const color = contact.visibleNow ? 0xff664f : contact.source === 'sound' ? 0x8ec6ff : 0xf2aa62;
   const alpha = Math.max(0.22, Math.min(0.95, contact.confidence / 100));
   const size = selected ? 10 : 7;
-  graphics.lineStyle(selected ? 3 : 2, color, alpha);
-
-  if (showUncertainty && contact.stage !== 'confirmed') graphics.drawCircle(x, y, uncertainty);
+  const stroke = { width: selected ? 3 : 2, color, alpha };
+  if (showUncertainty && contact.stage !== 'confirmed') graphics.circle(x, y, uncertainty).stroke(stroke);
   if (contact.stage === 'cue') {
-    graphics.drawCircle(x, y, size);
+    graphics.circle(x, y, size).stroke(stroke);
     return;
   }
   if (contact.stage === 'suspicion') {
-    graphics.drawCircle(x, y, size * 0.65);
+    graphics.circle(x, y, size * 0.65).stroke(stroke);
     return;
   }
   graphics.moveTo(x, y - size);
   graphics.lineTo(x + size, y);
   graphics.lineTo(x, y + size);
   graphics.lineTo(x - size, y);
-  graphics.lineTo(x, y - size);
+  graphics.lineTo(x, y - size).stroke(stroke);
   if (contact.stage === 'identified' || contact.stage === 'confirmed') {
-    graphics.beginFill(color, alpha * 0.65);
-    graphics.moveTo(x, y - size + 1);
-    graphics.lineTo(x + size - 1, y);
-    graphics.lineTo(x, y + size - 1);
-    graphics.lineTo(x - size + 1, y);
-    graphics.lineTo(x, y - size + 1);
-    graphics.endFill();
+    graphics.moveTo(x, y - size + 1).lineTo(x + size - 1, y).lineTo(x, y + size - 1)
+      .lineTo(x - size + 1, y).closePath().fill({ color, alpha: alpha * 0.65 });
   }
   if (contact.stage === 'confirmed') {
-    graphics.beginFill(0xffffff, 0.95);
-    graphics.drawCircle(x, y, 2.5);
-    graphics.endFill();
+    graphics.circle(x, y, 2.5).fill({ color: 0xffffff, alpha: 0.95 });
   }
 }

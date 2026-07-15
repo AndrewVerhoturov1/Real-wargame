@@ -77,7 +77,7 @@
     "tactical-query-ui:smoke": "node scripts/tactical_query_ui_smoke.mjs"
   },
   "dependencies": {
-    "pixi.js": "^7.4.3"
+    "pixi.js": "^8.19.0"
   },
   "devDependencies": {
     "typescript": "^5.5.4",

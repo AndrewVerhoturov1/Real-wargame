@@ -10,8 +10,8 @@ Generated from canonical repository and subproject metadata.
 - **Working branch:** `real-wargame-preview`
 - **Stable branch:** `main`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
-- **PixiJS major:** 7
-- **Updated:** 2026-07-12
+- **PixiJS major:** 8
+- **Updated:** 2026-07-15
 
 ## Delivery policy
 

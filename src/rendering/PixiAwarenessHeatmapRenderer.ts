@@ -1,4 +1,4 @@
-import { Container, Graphics, SCALE_MODES, Sprite, Text, Texture } from 'pixi.js';
+import { BufferImageSource, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import {
   publishAwarenessMovementDiagnostics,
   resetAwarenessMovementDiagnostics,
@@ -119,14 +119,10 @@ export class PixiAwarenessHeatmapRenderer {
   readonly container = new Container();
 
   private readonly markerGraphics = new Graphics();
-  private readonly title = new Text('', {
-    fontFamily: 'Arial, sans-serif',
-    fontSize: 12,
-    fontWeight: '700',
-    fill: 0xffffff,
-    stroke: 0x111510,
-    strokeThickness: 4,
-  });
+  private readonly title = new Text({ text: '', style: {
+    fontFamily: 'Arial, sans-serif', fontSize: 12, fontWeight: '700', fill: 0xffffff,
+    stroke: { color: 0x111510, width: 4 },
+  } });
   private readonly movement: MutableMovementDiagnostics = createMovementDiagnostics();
 
   private lastRasterKey = '';
@@ -472,7 +468,7 @@ export class PixiAwarenessHeatmapRenderer {
     if (source.length < this.rasterPixelWords.length) {
       this.rasterPixelWords.fill(0, source.length);
     }
-    this.rasterTexture.baseTexture.update();
+    this.rasterTexture.source.update();
     this.title.text = `СЛОЙ БОЙЦА: ${modeLabel(mode)}`;
     this.lastRasterKey = rasterKey;
     this.rebuildCount += 1;
@@ -535,8 +531,8 @@ export class PixiAwarenessHeatmapRenderer {
       this.rasterHeight = height;
       this.rasterPixels = new Uint8Array(width * height * 4);
       this.rasterPixelWords = new Uint32Array(this.rasterPixels.buffer);
-      this.rasterTexture = Texture.fromBuffer(this.rasterPixels, width, height, {
-        scaleMode: SCALE_MODES.NEAREST,
+      this.rasterTexture = new Texture({
+        source: new BufferImageSource({ resource: this.rasterPixels, width, height, scaleMode: 'nearest' }),
       });
       this.rasterSprite = new Sprite(this.rasterTexture);
       this.container.addChild(this.rasterSprite, this.markerGraphics, this.title);
@@ -556,10 +552,9 @@ export class PixiAwarenessHeatmapRenderer {
       const best = positions[index];
       const x = best.position.x * cellSize;
       const y = best.position.y * cellSize;
-      this.markerGraphics.lineStyle(index === 0 ? 4 : 2, 0xefff9a, 0.95);
-      this.markerGraphics.beginFill(0x4ce78a, index === 0 ? 0.45 : 0.2);
-      this.markerGraphics.drawCircle(x, y, index === 0 ? 12 : 8);
-      this.markerGraphics.endFill();
+      this.markerGraphics.circle(x, y, index === 0 ? 12 : 8)
+        .fill({ color: 0x4ce78a, alpha: index === 0 ? 0.45 : 0.2 })
+        .stroke({ width: index === 0 ? 4 : 2, color: 0xefff9a, alpha: 0.95 });
     }
   }
 

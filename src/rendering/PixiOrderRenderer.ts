@@ -18,9 +18,7 @@ const LABEL_STYLE = new TextStyle({
   fontSize: 12,
   fontWeight: '600',
   fill: 0xdcecff,
-  stroke: 0x101720,
-  strokeThickness: 3,
-  lineJoin: 'round',
+  stroke: { color: 0x101720, width: 3 },
 });
 
 interface UnitOverlayView {
@@ -107,7 +105,7 @@ export class PixiOrderRenderer {
     const commandGraphics = new Graphics();
     const planGraphics = new Graphics();
     const routeGraphics = new Graphics();
-    const activeStageLabel = new Text('', LABEL_STYLE);
+    const activeStageLabel = new Text({ text: '', style: LABEL_STYLE });
     activeStageLabel.anchor.set(0.5, 1);
     activeStageLabel.visible = false;
     root.addChild(commandGraphics, planGraphics, routeGraphics, activeStageLabel);
@@ -164,23 +162,19 @@ function drawCommand(
   const alpha = snapshot.selected ? 0.95 : 0.34;
   drawDashedLine(graphics, from.x, from.y, to.x, to.y, snapshot.selected ? 13 : 9, 7, COMMAND_COLOR, snapshot.selected ? 3 : 2, alpha);
 
-  graphics.lineStyle(snapshot.selected ? 3 : 2, COMMAND_COLOR, alpha);
-  graphics.drawCircle(to.x, to.y, snapshot.selected ? 10 : 7);
-  graphics.moveTo(to.x - 13, to.y);
-  graphics.lineTo(to.x + 13, to.y);
-  graphics.moveTo(to.x, to.y - 13);
-  graphics.lineTo(to.x, to.y + 13);
+  const commandStroke = { width: snapshot.selected ? 3 : 2, color: COMMAND_COLOR, alpha };
+  graphics.circle(to.x, to.y, snapshot.selected ? 10 : 7).stroke(commandStroke);
+  graphics.moveTo(to.x - 13, to.y).lineTo(to.x + 13, to.y).stroke(commandStroke);
+  graphics.moveTo(to.x, to.y - 13).lineTo(to.x, to.y + 13).stroke(commandStroke);
 
   if (command.finalFacingRadians !== null) {
     drawFacingArrow(graphics, to.x, to.y, command.finalFacingRadians, snapshot.selected ? 24 : 18, COMMAND_COLOR, alpha);
   }
 
   if (command.status === 'blocked') {
-    graphics.lineStyle(3, FAILURE_COLOR, 0.95);
-    graphics.moveTo(to.x - 7, to.y - 7);
-    graphics.lineTo(to.x + 7, to.y + 7);
-    graphics.moveTo(to.x + 7, to.y - 7);
-    graphics.lineTo(to.x - 7, to.y + 7);
+    const failedStroke = { width: 3, color: FAILURE_COLOR, alpha: 0.95 };
+    graphics.moveTo(to.x - 7, to.y - 7).lineTo(to.x + 7, to.y + 7).stroke(failedStroke);
+    graphics.moveTo(to.x + 7, to.y - 7).lineTo(to.x - 7, to.y + 7).stroke(failedStroke);
   }
 }
 
@@ -199,9 +193,8 @@ function drawPlan(
     const lane = offsetLine(previous.x, previous.y, target.x, target.y, PLAN_LANE_OFFSET_PX);
     drawDashedLine(graphics, lane.fromX, lane.fromY, lane.toX, lane.toY, 8, 5, PLAN_COLOR, 2, stageAlpha(stage));
 
-    graphics.lineStyle(1, PLAN_COLOR, stageAlpha(stage) * 0.5);
-    graphics.moveTo(lane.toX, lane.toY);
-    graphics.lineTo(target.x, target.y);
+    graphics.moveTo(lane.toX, lane.toY).lineTo(target.x, target.y)
+      .stroke({ width: 1, color: PLAN_COLOR, alpha: stageAlpha(stage) * 0.5 });
     drawPlanMarker(graphics, lane.toX, lane.toY, stage);
     previous = target;
   }
@@ -213,21 +206,17 @@ function drawPlanMarker(graphics: Graphics, x: number, y: number, stage: PlanSta
   const radius = active ? 7 : 5;
   const alpha = stageAlpha(stage);
 
-  graphics.lineStyle(active ? 3 : 2, failed ? FAILURE_COLOR : PLAN_COLOR, alpha);
-  graphics.beginFill(0x14243a, active ? 0.88 : 0.62);
-  graphics.drawPolygon([
+  graphics.poly([
     x, y - radius,
     x + radius, y,
     x, y + radius,
     x - radius, y,
-  ]);
-  graphics.endFill();
+  ]).fill({ color: 0x14243a, alpha: active ? 0.88 : 0.62 })
+    .stroke({ width: active ? 3 : 2, color: failed ? FAILURE_COLOR : PLAN_COLOR, alpha });
 
   if (stage.status === 'completed') {
-    graphics.lineStyle(2, PLAN_COLOR, 0.55);
-    graphics.moveTo(x - 3, y);
-    graphics.lineTo(x - 1, y + 3);
-    graphics.lineTo(x + 4, y - 3);
+    graphics.moveTo(x - 3, y).lineTo(x - 1, y + 3).lineTo(x + 4, y - 3)
+      .stroke({ width: 2, color: PLAN_COLOR, alpha: 0.55 });
   }
 }
 
@@ -240,20 +229,19 @@ function drawRoute(
   if (!snapshot.selected || snapshot.routePoints.length < 2) return;
 
   const first = gridToWorld(map, snapshot.routePoints[0]);
-  graphics.lineStyle(4, ROUTE_COLOR, 0.95);
   graphics.moveTo(first.x, first.y);
   for (let index = 1; index < snapshot.routePoints.length; index += 1) {
     const point = gridToWorld(map, snapshot.routePoints[index]);
     graphics.lineTo(point.x, point.y);
   }
+  graphics.stroke({ width: 4, color: ROUTE_COLOR, alpha: 0.95 });
 
   for (let index = 1; index < snapshot.routePoints.length; index += 1) {
     const point = gridToWorld(map, snapshot.routePoints[index]);
     const current = index === 1;
-    graphics.lineStyle(current ? 3 : 2, ROUTE_COLOR, current ? 1 : 0.72);
-    graphics.beginFill(0x173523, current ? 0.92 : 0.7);
-    graphics.drawCircle(point.x, point.y, current ? 6 : 4);
-    graphics.endFill();
+    graphics.circle(point.x, point.y, current ? 6 : 4)
+      .fill({ color: 0x173523, alpha: current ? 0.92 : 0.7 })
+      .stroke({ width: current ? 3 : 2, color: ROUTE_COLOR, alpha: current ? 1 : 0.72 });
   }
 }
 
@@ -342,14 +330,11 @@ function drawFacingArrow(
 ): void {
   const endX = x + Math.cos(finalFacingRadians) * length;
   const endY = y + Math.sin(finalFacingRadians) * length;
-  graphics.lineStyle(3, color, alpha);
-  graphics.moveTo(x, y);
-  graphics.lineTo(endX, endY);
+  const stroke = { width: 3, color, alpha };
+  graphics.moveTo(x, y).lineTo(endX, endY).stroke(stroke);
   const size = 7;
-  graphics.moveTo(endX, endY);
-  graphics.lineTo(endX - Math.cos(finalFacingRadians - Math.PI / 6) * size, endY - Math.sin(finalFacingRadians - Math.PI / 6) * size);
-  graphics.moveTo(endX, endY);
-  graphics.lineTo(endX - Math.cos(finalFacingRadians + Math.PI / 6) * size, endY - Math.sin(finalFacingRadians + Math.PI / 6) * size);
+  graphics.moveTo(endX, endY).lineTo(endX - Math.cos(finalFacingRadians - Math.PI / 6) * size, endY - Math.sin(finalFacingRadians - Math.PI / 6) * size).stroke(stroke);
+  graphics.moveTo(endX, endY).lineTo(endX - Math.cos(finalFacingRadians + Math.PI / 6) * size, endY - Math.sin(finalFacingRadians + Math.PI / 6) * size).stroke(stroke);
 }
 
 function drawDashedLine(
@@ -371,12 +356,12 @@ function drawDashedLine(
 
   const directionX = dx / length;
   const directionY = dy / length;
-  graphics.lineStyle(width, color, alpha);
   for (let offset = 0; offset < length; offset += dashLength + gapLength) {
     const start = offset;
     const end = Math.min(length, offset + dashLength);
-    graphics.moveTo(fromX + directionX * start, fromY + directionY * start);
-    graphics.lineTo(fromX + directionX * end, fromY + directionY * end);
+    graphics.moveTo(fromX + directionX * start, fromY + directionY * start)
+      .lineTo(fromX + directionX * end, fromY + directionY * end)
+      .stroke({ width, color, alpha });
   }
 }
 

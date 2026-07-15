@@ -45,7 +45,7 @@ Do not merge or retarget it. Report `transfer_path: isolated branch only`.
 
 - Change only the requested scope.
 - Follow project-local skills before generic framework guidance.
-- Real-Wargame uses PixiJS 7.
+- Real-Wargame uses PixiJS 8; use the project route and relevant v8 skill.
 - Use TDD for behavior changes.
 - Update canonical JSON and regenerate status pages for current-state documentation changes.
 - Do not make unrelated cleanup changes.

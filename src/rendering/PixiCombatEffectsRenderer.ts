@@ -132,24 +132,19 @@ export class PixiCombatEffectsRenderer {
 function drawMuzzleFlash(graphics: Graphics, effect: MuzzleEffect, progress: number): void {
   const alpha = 1 - progress;
   const radius = 3 + (1 - progress) * 7;
-  graphics.lineStyle(2, 0xfff3a1, alpha);
-  graphics.moveTo(effect.point.x - radius, effect.point.y);
-  graphics.lineTo(effect.point.x + radius, effect.point.y);
-  graphics.moveTo(effect.point.x, effect.point.y - radius);
-  graphics.lineTo(effect.point.x, effect.point.y + radius);
-  graphics.beginFill(0xffcf4a, alpha * 0.9);
-  graphics.drawCircle(effect.point.x, effect.point.y, Math.max(1.5, radius * 0.42));
-  graphics.endFill();
+  graphics.moveTo(effect.point.x - radius, effect.point.y).lineTo(effect.point.x + radius, effect.point.y)
+    .stroke({ width: 2, color: 0xfff3a1, alpha });
+  graphics.moveTo(effect.point.x, effect.point.y - radius).lineTo(effect.point.x, effect.point.y + radius)
+    .stroke({ width: 2, color: 0xfff3a1, alpha });
+  graphics.circle(effect.point.x, effect.point.y, Math.max(1.5, radius * 0.42)).fill({ color: 0xffcf4a, alpha: alpha * 0.9 });
 }
 
 function drawTracer(graphics: Graphics, effect: TracerEffect, progress: number): void {
   const alpha = Math.max(0, 1 - progress);
-  graphics.lineStyle(2.2, 0xffe18a, alpha * 0.95);
-  graphics.moveTo(effect.from.x, effect.from.y);
-  graphics.lineTo(effect.to.x, effect.to.y);
-  graphics.lineStyle(0.8, 0xffffff, alpha * 0.75);
-  graphics.moveTo(effect.from.x, effect.from.y);
-  graphics.lineTo(effect.to.x, effect.to.y);
+  graphics.moveTo(effect.from.x, effect.from.y).lineTo(effect.to.x, effect.to.y)
+    .stroke({ width: 2.2, color: 0xffe18a, alpha: alpha * 0.95 });
+  graphics.moveTo(effect.from.x, effect.from.y).lineTo(effect.to.x, effect.to.y)
+    .stroke({ width: 0.8, color: 0xffffff, alpha: alpha * 0.75 });
 }
 
 function drawImpact(graphics: Graphics, effect: ImpactEffect, progress: number): void {
@@ -160,11 +155,10 @@ function drawImpact(graphics: Graphics, effect: ImpactEffect, progress: number):
     : effect.hitType === 'object'
       ? 0xffc26b
       : 0xd9c49a;
-  graphics.lineStyle(effect.hitType === 'unit' ? 2.5 : 1.8, color, alpha);
-  graphics.drawCircle(effect.point.x, effect.point.y, radius);
-  graphics.beginFill(color, alpha * 0.8);
-  graphics.drawCircle(effect.point.x, effect.point.y, Math.max(1, 3 * (1 - progress)));
-  graphics.endFill();
+  graphics.circle(effect.point.x, effect.point.y, radius)
+    .stroke({ width: effect.hitType === 'unit' ? 2.5 : 1.8, color, alpha });
+  graphics.circle(effect.point.x, effect.point.y, Math.max(1, 3 * (1 - progress)))
+    .fill({ color, alpha: alpha * 0.8 });
 }
 
 function findShotOrigin(

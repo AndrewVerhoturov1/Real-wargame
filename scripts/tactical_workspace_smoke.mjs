@@ -124,7 +124,7 @@ expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
   'latestRequestedWorldKey', 'workerJobsCoalesced', 'workerResultsStaleDropped',
   'lastRasterKey', 'lastMarkerKey', 'markerUpdateCount',
   'new Worker', 'AwarenessWorldWorker.ts', 'dangerPixels', 'stealthPixels',
-  'Sprite', 'Texture', 'SCALE_MODES.NEAREST', 'createAwarenessTexture', 'drawAwarenessRaster',
+  'Sprite', 'Texture', 'BufferImageSource', "scaleMode: 'nearest'", 'createAwarenessTexture', 'drawAwarenessRaster',
   "representation: 'raster-sprite'", 'getDiagnostics()', '__realWargameAwarenessDebug',
   'lastRequestedCanonicalThreatKey', 'rendererLocalBestWinner', 'lastAppliedFieldIdentity',
 ]);
@@ -132,6 +132,18 @@ expectExcludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
   'buildSoldierAwarenessReport',
   'orderCell:', 'for (const cell of report.cells) drawCell', 'graphics.drawRect(cell.x * cellSize',
 ]);
+for (const renderer of [
+  'src/rendering/PixiApp.ts',
+  'src/rendering/PixiMapRenderer.ts',
+  'src/rendering/PixiOverlayRenderer.ts',
+  'src/rendering/PixiOrderRenderer.ts',
+  'src/rendering/PixiUnitRenderer.ts',
+  'src/rendering/PixiAwarenessHeatmapRenderer.ts',
+  'src/rendering/PixiVisibilityHeatmapRenderer.ts',
+  'src/rendering/PixiRouteCostOverlayRenderer.ts',
+]) {
+  expectExcludes(renderer, ['beginFill(', 'endFill(', 'lineStyle(', 'drawRect(', 'drawCircle(', 'drawRoundedRect(', 'cacheAsBitmap', 'SCALE_MODES', '.baseTexture', 'Texture.fromBuffer', 'app.view']);
+}
 
 expectIncludes('src/workers/AwarenessWorldWorker.ts', [
   'buildAwarenessWorldField', 'awarenessWorkerTransferables', 'fieldIdentity', 'rasterDigest',

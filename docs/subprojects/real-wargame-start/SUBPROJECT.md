@@ -10,7 +10,7 @@ Active AI development continues in `ai-single-unit-editor`.
 
 ## Goal
 
-Provide a reliable 2D tactical map and editor on Vite + TypeScript + PixiJS 7 for experimenting with soldier behavior.
+Provide a reliable 2D tactical map and editor on Vite + TypeScript + PixiJS 8 for experimenting with soldier behavior.
 
 The foundation includes:
 
@@ -42,7 +42,7 @@ Core models and calculations remain independent of PixiJS.
 
 ## Stable decisions
 
-- The project is Vite + TypeScript + PixiJS 7, not Godot.
+- The project is Vite + TypeScript + PixiJS 8, not Godot.
 - Base map scale is 1 cell = 10 metres.
 - Important distances are shown in metres.
 - Height levels are `-2..+4` and are visualized as physical-map zones/lines rather than permanent numbers on every cell.

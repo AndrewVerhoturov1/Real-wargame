@@ -1,26 +1,26 @@
 ---
 name: real-wargame-pixijs
-description: "Read first for any Real-Wargame PixiJS, canvas, rendering, camera, pointer-event, visual-layer or performance task. Guards the PixiJS 7 codebase from accidental PixiJS 8 API usage and routes to the relevant project files and general PixiJS references."
+description: "Read first for any Real-Wargame PixiJS 8, canvas, rendering, camera, pointer-event, visual-layer or performance task. Routes to project invariants and narrow PixiJS 8 references."
 license: MIT
 ---
 
-# Real-Wargame PixiJS 7 Guard
+# Real-Wargame PixiJS 8 Guide
 
 ## Hard version rule
 
 Real-Wargame currently uses:
 
 ```text
-pixi.js ^7.4.3
+pixi.js ^8.19.0
 ```
 
-Do not introduce PixiJS 8-only APIs unless the task explicitly requests and scopes a major-version migration.
+Use current PixiJS 8 APIs. Do not add v7 compatibility aliases to active production rendering.
 
 Examples that require special caution:
 
-- `await app.init(...)` instead of the existing v7 application construction;
-- `GraphicsContext` or v8 chained `fill()` / `stroke()` assumptions;
-- v8 event defaults and migration-specific property names;
+- await `app.init(...)` before accessing canvas, renderer, stage or ticker;
+- Graphics shape/path then `fill()` / `stroke()` semantics;
+- v8 ticker callbacks receive a `Ticker`, not a numeric delta;
 - `DOMContainer`, WebGPU-first setup or v8 package layout;
 - advice copied from the general v8 skill collection without checking the installed version.
 
@@ -34,18 +34,18 @@ Examples that require special caution:
 6. `docs/workflow/VISUAL_QA_APPROVAL_POLICY.md` for visible work.
 7. Only then the relevant general PixiJS skill as conceptual reference.
 
-For a real v7/v8 API question, verify against PixiJS 7 documentation or the existing code pattern. Do not silently modernize the project.
+For an API question, verify against the relevant v8 project skill or official PixiJS 8 API. Do not invent compatibility APIs from memory.
 
 ## Routes
 
 | Task | Read first |
 |---|---|
-| Shapes, zones, lines, overlays | renderer involved, then scene-graphics concepts with v7 translation |
+| Shapes, zones, lines, overlays | renderer involved, then scene-graphics concepts |
 | Unit visual or sprite | `PixiUnitRenderer.ts`, asset/sprite concepts |
 | Camera, wheel, pointer or drag | `CameraController.ts`, `BoardInputController.ts`, events concepts |
 | Frame stalls or too many objects | renderer lifecycle, performance concepts, browser evidence |
 | Text readability | Pixi text or existing HTML overlay path |
-| Major migration | `pixijs-migration-v8` plus a dedicated design and full-repository plan |
+| Major-version compatibility or legacy cleanup | `pixijs-migration-v8` plus a focused implementation plan |
 
 ## Project rendering rules
 
