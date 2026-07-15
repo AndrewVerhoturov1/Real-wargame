@@ -69,7 +69,7 @@ Safe-position scoring still examines the same radius, threshold and score formul
 
 The overlay remains exactly one cached PixiJS sprite. Its texture is backed by one reusable RGBA `Uint8Array`; a `Uint32Array` view and precomputed 0–100 colour lookup tables write one packed pixel per cell before `baseTexture.update()`. Dynamic updates no longer allocate `ImageData`, create a temporary canvas texture or perform a second CPU-side raster copy. Public canvas helpers remain for tests and compatibility, but are not used by the live renderer.
 
-Safe-position marker graphics are keyed by their actual visible output: mode, cell size and the ordered coordinates of the first five winners. Knowledge value changes may rebuild raster pixels, but markers redraw only when the displayed winners change.
+Safe-position marker graphics are keyed by their actual visible output: mode, cell size and the ordered coordinates of the first five winners. Knowledge value changes may rebuild raster pixels, but markers redraw only when the displayed winners change. The AI Test Lab smoke guard follows the buffered renderer contract through the danger/stealth lookup tables and packed-raster writer rather than an obsolete branch-text assertion.
 
 ## Auxiliary unit-knowledge cache
 
