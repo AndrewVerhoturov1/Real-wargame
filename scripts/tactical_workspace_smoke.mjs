@@ -126,6 +126,7 @@ expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
   'new Worker', 'AwarenessWorldWorker.ts', 'dangerPixels', 'stealthPixels',
   'Sprite', 'Texture', 'SCALE_MODES.NEAREST', 'createAwarenessTexture', 'drawAwarenessRaster',
   "representation: 'raster-sprite'", 'getDiagnostics()', '__realWargameAwarenessDebug',
+  'lastRequestedCanonicalThreatKey', 'rendererLocalBestWinner', 'lastAppliedFieldIdentity',
 ]);
 expectExcludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
   'buildSoldierAwarenessReport',
@@ -133,7 +134,14 @@ expectExcludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
 ]);
 
 expectIncludes('src/workers/AwarenessWorldWorker.ts', [
-  'buildSoldierAwarenessReport', 'awarenessWorkerTransferables', 'dangerPixels', 'stealthPixels',
+  'buildAwarenessWorldField', 'awarenessWorkerTransferables', 'fieldIdentity', 'rasterDigest',
+]);
+expectIncludes('src/core/knowledge/AwarenessWorldFieldBuilder.ts', [
+  'buildSoldierAwarenessReport', 'buildCanonicalWorldThreatKey',
+  'dangerPixels', 'stealthPixels', 'digestAwarenessWorldField',
+]);
+expectIncludes('src/core/knowledge/CanonicalWorldThreat.ts', [
+  'CanonicalWorldThreatSnapshot', 'unit_contact', 'directional_evidence', 'buildCanonicalWorldThreatKey',
 ]);
 expectIncludes('src/core/debug/PerformanceMonitor.ts', [
   'PERFORMANCE_CONTRACT_VERSION', 'getRealWargameBuildIdentity', 'awarenessMovement',
