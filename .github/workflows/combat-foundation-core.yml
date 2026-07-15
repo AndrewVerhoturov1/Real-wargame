@@ -104,7 +104,7 @@ jobs:
         run: set -o pipefail; npm run reload:smoke 2>&1 | tail -n 120
       - name: Workspace presentation smoke
         shell: bash
-        run: set -o pipefail; npm run workspace:smoke 2>&1 | tail -n 120
+        run: set -o pipefail; npm run workspace:smoke 2>&1 | tee workspace-smoke.log
       - name: Awareness field cache smoke
         shell: bash
         run: set -o pipefail; npm run awareness-field:smoke 2>&1 | tail -n 120
@@ -141,6 +141,7 @@ jobs:
         with:
           name: combat-tactical-integration-log
           path: |
+            workspace-smoke.log
             combat-tactical-integration.log
             danger-layer-performance.log
             production-build.log
