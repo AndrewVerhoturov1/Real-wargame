@@ -96,6 +96,14 @@ test('selected unit movement performs local updates without world rebuilds', asy
   }, before.observerPosition, { timeout: 15_000 });
   const after = await snapshot(page, false);
   const afterMovement = requireMovement(after);
+  console.log('SELECTED_MOVEMENT_WORLD_KEY_DELTA', JSON.stringify({
+    beforeKey: beforeMovement.lastRequestedRasterKey,
+    afterKey: afterMovement.lastRequestedRasterKey,
+    beforeMovement,
+    afterMovement,
+    beforeSnapshot: before,
+    afterSnapshot: after,
+  }, null, 2));
 
   expect(afterMovement.worldRasterBuilds).toBe(beforeMovement.worldRasterBuilds);
   expect(afterMovement.directionalBasisBuilds).toBe(beforeMovement.directionalBasisBuilds);
