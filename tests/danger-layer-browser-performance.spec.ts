@@ -197,14 +197,17 @@ function summarize(
   const samples = report.samples.filter((sample) => (
     sample.tMs >= windowStart && sample.layerMode === 'danger'
   ));
-  const sceneValues = samples.map((sample) => sample.sceneUpdateMs);
+  const sceneValues = samples
+    .map((sample) => sample.sceneUpdateMs)
+    .filter((value) => value > 0.25)
+    .slice(-UPDATE_COUNT);
   const frames = browserTiming.frameMs;
 
   return {
     label: LABEL,
     reportVersion: report.version,
     measurementSeconds: round(browserTiming.durationMs / 1000),
-    sampleCount: samples.length,
+    sampleCount: sceneValues.length,
     browserEffectiveFps: browserTiming.durationMs > 0
       ? round(frames.length * 1000 / browserTiming.durationMs)
       : 0,
