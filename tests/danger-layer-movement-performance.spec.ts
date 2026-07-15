@@ -183,7 +183,7 @@ test('six moving units remain bounded and apply the final snapshot', async ({ pa
   await resumeSimulation(page);
   await page.waitForFunction((initial) => {
     const current = window.__realWargameDangerMovementPerformance?.getSnapshot(false);
-    if (!current) return false;
+    if (!current || !initial.subjectiveThreatPosition || !current.subjectiveThreatPosition) return false;
     const friendlyDistance = Math.hypot(
       current.observerPosition.x - initial.observerPosition.x,
       current.observerPosition.y - initial.observerPosition.y,
@@ -192,8 +192,12 @@ test('six moving units remain bounded and apply the final snapshot', async ({ pa
       current.hostilePosition.x - initial.hostilePosition.x,
       current.hostilePosition.y - initial.hostilePosition.y,
     );
-    return friendlyDistance >= 4 && hostileDistance >= 4;
-  }, before, { timeout: 20_000 });
+    const subjectiveDistance = Math.hypot(
+      current.subjectiveThreatPosition.x - initial.subjectiveThreatPosition.x,
+      current.subjectiveThreatPosition.y - initial.subjectiveThreatPosition.y,
+    );
+    return friendlyDistance >= 4 && hostileDistance >= 4 && subjectiveDistance >= 2;
+  }, before, { timeout: 25_000 });
 
   await stopScenario(page);
   await page.waitForTimeout(250);
