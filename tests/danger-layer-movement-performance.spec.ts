@@ -139,7 +139,6 @@ test('visible hostile movement updates subjective danger through a bounded worke
   const movingDiagnostics = requireMovement(moving);
 
   expect(movingDiagnostics.workerJobsStarted).toBeGreaterThan(beforeMovement.workerJobsStarted);
-  expect(movingDiagnostics.worldRasterBuilds).toBeGreaterThan(beforeMovement.worldRasterBuilds);
   expect(movingDiagnostics.maxPendingQueueDepth).toBeLessThanOrEqual(1);
   expect(movingDiagnostics.pendingQueueDepth).toBeLessThanOrEqual(1);
   expect(movingDiagnostics.maxMainThreadApplyMs).toBeLessThanOrEqual(5);
@@ -150,6 +149,7 @@ test('visible hostile movement updates subjective danger through a bounded worke
   await waitForWorkerSettled(page, beforeMovement.finalRefreshApplied + 1);
   const after = await snapshot(page, false);
   const afterMovement = requireMovement(after);
+  expect(afterMovement.worldRasterBuilds).toBeGreaterThan(beforeMovement.worldRasterBuilds);
   expect(afterMovement.lastAppliedRasterKey).toBe(afterMovement.lastRequestedRasterKey);
   expect(afterMovement.finalRefreshApplied).toBeGreaterThan(beforeMovement.finalRefreshApplied);
 
