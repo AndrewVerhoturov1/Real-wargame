@@ -6,6 +6,7 @@ const ANGLE_BUCKET_DEGREES = 1;
 const VALUE_BUCKET = 1;
 const CONFIDENCE_BUCKET = 10;
 const UNCERTAINTY_BUCKET_CELLS = 1;
+const OBSERVER_RELATIVE_UNIT_PREFIX = 'unit:';
 
 /**
  * Builds the content key for the world danger raster.
@@ -22,7 +23,7 @@ const UNCERTAINTY_BUCKET_CELLS = 1;
  */
 export function buildPositionIndependentAwarenessKnowledgeKey(unit: UnitModel): string {
   return unit.tacticalKnowledge.threats.map((threat) => {
-    const observerRelativeUnitThreat = threat.id.startsWith('unit:');
+    const observerRelativeUnitThreat = threat.id.startsWith(OBSERVER_RELATIVE_UNIT_PREFIX);
     return [
       threat.id,
       threat.mode,
