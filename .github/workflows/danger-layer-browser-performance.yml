@@ -54,6 +54,7 @@ jobs:
         run: |
           mkdir -p browser-artifacts
           cp source/tests/danger-layer-browser-performance.spec.ts baseline/tests/danger-layer-browser-performance.spec.ts
+          cp source/src/testing/CombatTacticalIntegrationVisualQaHarness.ts baseline/src/testing/CombatTacticalIntegrationVisualQaHarness.ts
 
       - name: Install baseline dependencies
         working-directory: baseline
