@@ -22,6 +22,8 @@ The renderer never transfers objective hostile coordinates. Only the selected un
 
 A threat whose id starts with `unit:` is a subjective world-space point source at the remembered `x/y`.
 
+The world danger field itself is cell-based, so a unit contact is canonicalized to the centre of its current runtime tactical-grid cell. Sub-cell interpolation remains available to visual movement and observer-relative memory, but cannot create a new 64,000-cell raster identity every animation frame. Crossing a runtime cell changes canonical `x/y`, the key and the worker field. Evidence-authored positions retain finer world-space precision.
+
 Its observer-relative `directionDegrees` and `rangeCells` are memory descriptors used by other systems, not world-raster geometry. Canonicalization therefore replaces them with:
 
 ```text
@@ -31,7 +33,7 @@ minRangeCells = 0
 rangeCells = 250 metres converted to runtime cells
 ```
 
-Danger, suppression, confidence, uncertainty and terrain/cover relations remain subjective inputs. Moving the selected observer may change raw direction/range memory, but cannot change the canonical snapshot, worker payload or raster while remembered threat `x/y` and other canonical values remain unchanged.
+Danger, suppression, confidence, uncertainty and terrain/cover relations remain subjective inputs. Moving the selected observer may change raw direction/range memory, but cannot change the canonical snapshot, worker payload or raster while remembered threat `x/y` remains in the same runtime cell and other canonical values remain unchanged.
 
 A remembered unit's raw `strength` is derived from confidence and can decay by a fraction while its last-known position remains unchanged. Unit-contact strength is therefore quantized downward in five-point buckets. A minor confidence-driven change such as `88 → 87` remains canonical strength `85`; it does not schedule a 64,000-cell refresh. Crossing a meaningful bucket boundary still changes the canonical key and legitimately refreshes the field. Evidence-authored threats retain one-point strength precision.
 
