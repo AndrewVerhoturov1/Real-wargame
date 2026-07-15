@@ -390,6 +390,8 @@ async function waitForWorkerSettled(page: Page): Promise<void> {
       movement
       && !movement.workerInFlight
       && movement.pendingQueueDepth === 0
+      && movement.finalRefreshRequests > 0
+      && movement.finalRefreshApplied >= movement.finalRefreshRequests
       && movement.lastRequestedRasterKey
       && movement.lastAppliedRasterKey === movement.lastRequestedRasterKey,
     );
