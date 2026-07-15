@@ -9,12 +9,7 @@ import { setAiTestPaused } from '../core/testing/AiTestLabRuntime';
 import { normalizeUnits, type UnitModel } from '../core/units/UnitModel';
 import { setSimulationLayerMode } from '../core/ui/RuntimeUiState';
 
-export type DangerMovementScenario =
-  | 'selected-only'
-  | 'hostile-only'
-  | 'both'
-  | 'hidden-hostile'
-  | 'wall-crossing';
+export type DangerMovementScenario = 'selected-only' | 'hostile-only' | 'both' | 'hidden-hostile' | 'wall-crossing';
 
 export interface DangerMovementSnapshot {
   readonly scenario: DangerMovementScenario | null;
@@ -41,9 +36,7 @@ export interface DangerMovementPerformanceApi {
 declare global {
   interface Window {
     __realWargameDangerMovementPerformance?: DangerMovementPerformanceApi;
-    __realWargameAwarenessDebug?: {
-      movement?: Record<string, unknown>;
-    };
+    __realWargameAwarenessDebug?: { movement?: Record<string, unknown> };
   }
 }
 
@@ -100,40 +93,26 @@ function ensureMovementFixtureUnits(state: SimulationState): void {
   }
 }
 
-function prepareScenario(
-  state: SimulationState,
-  observer: UnitModel,
-  hostile: UnitModel,
-  scenario: DangerMovementScenario,
-): void {
+function prepareScenario(state: SimulationState, observer: UnitModel, hostile: UnitModel, scenario: DangerMovementScenario): void {
   setAiTestPaused(state, true);
   state.editor.enabled = false;
   setSimulationLayerMode(state, 'danger');
   removeFixtureWall(state);
   installTerrainFixtures(state);
   resetUnits(state, observer, hostile);
-
   installVisualContact(observer, hostile, state.simulationTimeSeconds);
   syncSoldierThreatMemory(state, observer, 0.1);
   state.selectedUnitId = observer.id;
   state.selectedUnitIds = [observer.id];
 
   if (scenario === 'selected-only') {
-    routeUnit(state, observer, {
-      x: observer.position.x + 22,
-      y: observer.position.y,
-    });
+    routeUnit(state, observer, { x: observer.position.x + 22, y: observer.position.y });
   } else if (scenario === 'hostile-only') {
-    routeUnit(state, hostile, {
-      x: hostile.position.x - 30,
-      y: hostile.position.y + 10,
-    });
+    routeUnit(state, hostile, { x: hostile.position.x - 30, y: hostile.position.y + 10 });
   } else if (scenario === 'both') {
     routeAllUnits(state, observer, hostile);
   } else if (scenario === 'hidden-hostile') {
-    const contact = observer.perceptionKnowledge.contacts.find(
-      (item) => item.sourceUnitId === hostile.id,
-    );
+    const contact = observer.perceptionKnowledge.contacts.find((item) => item.sourceUnitId === hostile.id);
     if (contact) {
       contact.visibleNow = false;
       contact.observedNow = false;
@@ -141,28 +120,18 @@ function prepareScenario(
     observer.viewRangeCells = 1;
     observer.attentionSettings.vision.maximumVisualRangeMeters = 1;
     syncSoldierThreatMemory(state, observer, 0.1);
-    routeUnit(state, hostile, {
-      x: hostile.position.x - 32,
-      y: hostile.position.y + 16,
-    });
+    routeUnit(state, hostile, { x: hostile.position.x - 32, y: hostile.position.y + 16 });
   } else {
     configureWallCrossingTracking(observer);
     addFixtureWall(state, observer);
-    routeUnit(state, hostile, {
-      x: observer.position.x - 32,
-      y: observer.position.y,
-    });
+    routeUnit(state, hostile, { x: observer.position.x - 32, y: observer.position.y });
   }
 
   state.selectedUnitId = observer.id;
   state.selectedUnitIds = [observer.id];
 }
 
-function resetUnits(
-  state: SimulationState,
-  observer: UnitModel,
-  hostile: UnitModel,
-): void {
+function resetUnits(state: SimulationState, observer: UnitModel, hostile: UnitModel): void {
   const centerY = Math.floor(state.map.height * 0.52) + 0.5;
   const slots = [
     { x: state.map.width * 0.38, y: centerY },
@@ -188,10 +157,7 @@ function resetUnits(
     unit.tacticalKnowledge.revision += 1;
     unit.perceptionKnowledge.contacts = [];
     unit.speedCellsPerSecond = index === 0 ? 12 : 10;
-    unit.position = {
-      x: clamp(Math.floor(slot.x) + 0.5, 0.5, state.map.width - 0.5),
-      y: clamp(slot.y, 0.5, state.map.height - 0.5),
-    };
+    unit.position = { x: clamp(Math.floor(slot.x) + 0.5, 0.5, state.map.width - 0.5), y: clamp(slot.y, 0.5, state.map.height - 0.5) };
   }
 
   observer.side = 'blue';
@@ -204,16 +170,11 @@ function resetUnits(
     if (unit === observer || unit === hostile) continue;
     const slot = slots[auxiliarySlotIndex % slots.length];
     auxiliarySlotIndex += 1;
-    unit.position = {
-      x: clamp(Math.floor(slot.x) + 0.5, 0.5, state.map.width - 0.5),
-      y: clamp(slot.y, 0.5, state.map.height - 0.5),
-    };
+    unit.position = { x: clamp(Math.floor(slot.x) + 0.5, 0.5, state.map.width - 0.5), y: clamp(slot.y, 0.5, state.map.height - 0.5) };
   }
 
   const occupiedCells = new Set<string>();
-  for (const unit of state.units) {
-    unit.position = findNearestPassableFixturePosition(state, unit.position, occupiedCells);
-  }
+  for (const unit of state.units) unit.position = findNearestPassableFixturePosition(state, unit.position, occupiedCells);
 
   observer.facingRadians = 0;
   hostile.facingRadians = Math.PI;
@@ -223,15 +184,10 @@ function resetUnits(
   observer.tacticalKnowledge.revision += 1;
 }
 
-function findNearestPassableFixturePosition(
-  state: SimulationState,
-  preferred: { x: number; y: number },
-  occupiedCells: Set<string>,
-): { x: number; y: number } {
+function findNearestPassableFixturePosition(state: SimulationState, preferred: { x: number; y: number }, occupiedCells: Set<string>): { x: number; y: number } {
   const centerX = clamp(Math.floor(preferred.x), 0, state.map.width - 1);
   const centerY = clamp(Math.floor(preferred.y), 0, state.map.height - 1);
   const maximumRadius = Math.max(state.map.width, state.map.height);
-
   for (let radius = 0; radius <= maximumRadius; radius += 1) {
     for (let y = centerY - radius; y <= centerY + radius; y += 1) {
       for (let x = centerX - radius; x <= centerX + radius; x += 1) {
@@ -244,54 +200,25 @@ function findNearestPassableFixturePosition(
       }
     }
   }
-
   throw new Error('Movement performance harness could not find a passable unit start cell.');
 }
 
-function routeAllUnits(
-  state: SimulationState,
-  observer: UnitModel,
-  hostile: UnitModel,
-): void {
+function routeAllUnits(state: SimulationState, observer: UnitModel, hostile: UnitModel): void {
   for (let index = 0; index < state.units.length; index += 1) {
     const unit = state.units[index];
     const direction = index % 2 === 0 ? -1 : 1;
-    routeUnit(state, unit, {
-      x: unit.position.x + direction * (18 + index * 2),
-      y: unit.position.y + (index % 3 - 1) * 10,
-    });
+    routeUnit(state, unit, { x: unit.position.x + direction * (18 + index * 2), y: unit.position.y + (index % 3 - 1) * 10 });
   }
+  if (!observer.order) routeUnit(state, observer, { x: observer.position.x - 20, y: observer.position.y + 12 });
+  if (!hostile.order) routeUnit(state, hostile, { x: hostile.position.x - 34, y: hostile.position.y - 12 });
 
-  if (!observer.order) {
-    routeUnit(state, observer, {
-      x: observer.position.x - 20,
-      y: observer.position.y + 12,
-    });
-  }
-  if (!hostile.order) {
-    routeUnit(state, hostile, {
-      x: hostile.position.x - 34,
-      y: hostile.position.y - 12,
-    });
-  }
-
-  const fallbackOffsets = [
-    { x: 14, y: 0 },
-    { x: -14, y: 0 },
-    { x: 0, y: 14 },
-    { x: 0, y: -14 },
-    { x: 10, y: 10 },
-    { x: -10, y: 10 },
-  ];
+  const fallbackOffsets = [{ x: 14, y: 0 }, { x: -14, y: 0 }, { x: 0, y: 14 }, { x: 0, y: -14 }, { x: 10, y: 10 }, { x: -10, y: 10 }];
   for (let unitIndex = 0; unitIndex < state.units.length; unitIndex += 1) {
     const unit = state.units[unitIndex];
     if (unit.order) continue;
     for (let attempt = 0; attempt < fallbackOffsets.length && !unit.order; attempt += 1) {
       const offset = fallbackOffsets[(unitIndex + attempt) % fallbackOffsets.length];
-      routeUnit(state, unit, {
-        x: unit.position.x + offset.x,
-        y: unit.position.y + offset.y,
-      });
+      routeUnit(state, unit, { x: unit.position.x + offset.x, y: unit.position.y + offset.y });
     }
   }
 
@@ -301,7 +228,7 @@ function routeAllUnits(
       id: unit.id,
       position: unit.position,
       commandStatus: unit.playerCommand?.status ?? null,
-      commandReason: unit.playerCommand?.statusReason ?? null,
+      commandReason: unit.playerCommand?.reason ?? null,
       behaviorReason: unit.behaviorRuntime.reason,
       navigationProfile: unit.playerNavigationProfileId ?? null,
     })))}`);
@@ -313,29 +240,15 @@ function routeUnit(state: SimulationState, unit: UnitModel, target: { x: number;
   const selectedUnitIds = [...state.selectedUnitIds];
   state.selectedUnitId = unit.id;
   state.selectedUnitIds = [unit.id];
-  issueRoutedMoveOrderToSelectedUnits(state, {
-    x: clamp(target.x, 0.5, state.map.width - 0.5),
-    y: clamp(target.y, 0.5, state.map.height - 0.5),
-  });
+  issueRoutedMoveOrderToSelectedUnits(state, { x: clamp(target.x, 0.5, state.map.width - 0.5), y: clamp(target.y, 0.5, state.map.height - 0.5) });
   state.selectedUnitId = selectedUnitId;
   state.selectedUnitIds = selectedUnitIds;
 }
 
-function snapshot(
-  state: SimulationState,
-  observer: UnitModel,
-  hostile: UnitModel,
-  scenario: DangerMovementScenario | null,
-  includeExactAwareness: boolean,
-): DangerMovementSnapshot {
-  const subjective = observer.tacticalKnowledge.threats.find(
-    (threat) => threat.id === `unit:${hostile.id}`,
-  ) ?? observer.tacticalKnowledge.threats[0] ?? null;
-  const awareness = includeExactAwareness
-    ? buildSoldierAwarenessReport(state, observer)
-    : null;
+function snapshot(state: SimulationState, observer: UnitModel, hostile: UnitModel, scenario: DangerMovementScenario | null, includeExactAwareness: boolean): DangerMovementSnapshot {
+  const subjective = observer.tacticalKnowledge.threats.find((threat) => threat.id === `unit:${hostile.id}`) ?? observer.tacticalKnowledge.threats[0] ?? null;
+  const awareness = includeExactAwareness ? buildSoldierAwarenessReport(state, observer) : null;
   const winner = awareness?.bestSafePositions[0] ?? null;
-
   return {
     scenario,
     simulationTimeSeconds: state.simulationTimeSeconds,
@@ -355,27 +268,13 @@ function snapshot(
 
 function resolveUnits(state: SimulationState): [UnitModel, UnitModel] {
   const observer = state.units.find((unit) => unit.side === 'blue') ?? state.units[0];
-  const hostile = state.units.find(
-    (unit) => unit.side === 'red' && unit.id !== observer?.id,
-  ) ?? state.units.find((unit) => unit.id !== observer?.id) ?? state.units[1];
-  if (!observer || !hostile) {
-    throw new Error('Movement performance harness requires two units.');
-  }
+  const hostile = state.units.find((unit) => unit.side === 'red' && unit.id !== observer?.id) ?? state.units.find((unit) => unit.id !== observer?.id) ?? state.units[1];
+  if (!observer || !hostile) throw new Error('Movement performance harness requires two units.');
   return [observer, hostile];
 }
 
 function installVisualContact(observer: UnitModel, hostile: UnitModel, nowSeconds: number): void {
-  const contact = advanceVisualContact(null, {
-    id: `perception:unit:${hostile.id}`,
-    stimulusId: `unit:${hostile.id}`,
-    sourceUnitId: hostile.id,
-    labelRu: hostile.labels.ru,
-    position: { ...hostile.position },
-    evidencePerSecond: 220,
-    deltaSeconds: 1,
-    nowSeconds,
-    source: 'visual',
-  });
+  const contact = advanceVisualContact(null, { id: `perception:unit:${hostile.id}`, stimulusId: `unit:${hostile.id}`, sourceUnitId: hostile.id, labelRu: hostile.labels.ru, position: { ...hostile.position }, evidencePerSecond: 220, deltaSeconds: 1, nowSeconds, source: 'visual' });
   upsertPerceptionContact(observer.perceptionKnowledge, contact);
 }
 
@@ -404,48 +303,17 @@ function configureWallCrossingTracking(observer: UnitModel): void {
 function installTerrainFixtures(state: SimulationState): void {
   const width = state.map.width;
   const height = state.map.height;
-  const lightBounds = {
-    minX: Math.max(2, Math.floor(width * 0.18)),
-    maxX: Math.min(width - 3, Math.floor(width * 0.29)),
-    minY: Math.max(2, Math.floor(height * 0.34)),
-    maxY: Math.min(height - 3, Math.floor(height * 0.56)),
-  };
-  const denseBounds = {
-    minX: Math.max(2, Math.floor(width * 0.72)),
-    maxX: Math.min(width - 3, Math.floor(width * 0.84)),
-    minY: Math.max(2, Math.floor(height * 0.46)),
-    maxY: Math.min(height - 3, Math.floor(height * 0.70)),
-  };
-
-  for (let y = lightBounds.minY; y <= lightBounds.maxY; y += 1) {
-    for (let x = lightBounds.minX; x <= lightBounds.maxX; x += 1) {
-      state.map.cells[y * width + x].forest = 1;
-    }
-  }
-  for (let y = denseBounds.minY; y <= denseBounds.maxY; y += 1) {
-    for (let x = denseBounds.minX; x <= denseBounds.maxX; x += 1) {
-      state.map.cells[y * width + x].forest = 2;
-    }
-  }
+  const lightBounds = { minX: Math.max(2, Math.floor(width * 0.18)), maxX: Math.min(width - 3, Math.floor(width * 0.29)), minY: Math.max(2, Math.floor(height * 0.34)), maxY: Math.min(height - 3, Math.floor(height * 0.56)) };
+  const denseBounds = { minX: Math.max(2, Math.floor(width * 0.72)), maxX: Math.min(width - 3, Math.floor(width * 0.84)), minY: Math.max(2, Math.floor(height * 0.46)), maxY: Math.min(height - 3, Math.floor(height * 0.70)) };
+  for (let y = lightBounds.minY; y <= lightBounds.maxY; y += 1) for (let x = lightBounds.minX; x <= lightBounds.maxX; x += 1) state.map.cells[y * width + x].forest = 1;
+  for (let y = denseBounds.minY; y <= denseBounds.maxY; y += 1) for (let x = denseBounds.minX; x <= denseBounds.maxX; x += 1) state.map.cells[y * width + x].forest = 2;
   markMapCellsDirty(state.map, 'forest', lightBounds);
   markMapCellsDirty(state.map, 'forest', denseBounds);
-
   const ridgeCenterX = Math.floor(width * 0.52);
   const ridgeMinY = Math.max(2, Math.floor(height * 0.38));
   const ridgeMaxY = Math.min(height - 3, Math.floor(height * 0.66));
-  for (let y = ridgeMinY; y <= ridgeMaxY; y += 1) {
-    for (let offset = -3; offset <= 3; offset += 1) {
-      const x = ridgeCenterX + offset;
-      const heightLevel = Math.max(0, 3 - Math.abs(offset)) as 0 | 1 | 2 | 3;
-      state.map.cells[y * width + x].height = heightLevel;
-    }
-  }
-  markMapCellsDirty(state.map, 'height', {
-    minX: ridgeCenterX - 3,
-    maxX: ridgeCenterX + 3,
-    minY: ridgeMinY,
-    maxY: ridgeMaxY,
-  });
+  for (let y = ridgeMinY; y <= ridgeMaxY; y += 1) for (let offset = -3; offset <= 3; offset += 1) state.map.cells[y * width + ridgeCenterX + offset].height = Math.max(0, 3 - Math.abs(offset)) as 0 | 1 | 2 | 3;
+  markMapCellsDirty(state.map, 'height', { minX: ridgeCenterX - 3, maxX: ridgeCenterX + 3, minY: ridgeMinY, maxY: ridgeMaxY });
 }
 
 function addFixtureWall(state: SimulationState, observer: UnitModel): void {
@@ -454,24 +322,8 @@ function addFixtureWall(state: SimulationState, observer: UnitModel): void {
   const wallStartY = Math.max(0, Math.floor(observer.position.y) - safeRadiusCells - 2);
   const wallEndY = Math.min(state.map.height - 1, Math.floor(observer.position.y) + safeRadiusCells + 2);
   const wallGapY = clamp(Math.floor(observer.position.y) + 20, wallStartY + 2, wallEndY - 3);
-  const wallRows = Array.from({ length: wallEndY - wallStartY + 1 }, (_, index) => wallStartY + index)
-    .filter((wallY) => wallY !== wallGapY && wallY !== wallGapY + 1);
-  state.map.objects.push(...wallRows.map((wallY, index) => ({
-    id: `${WALL_ID}-${index}`,
-    kind: 'structure' as const,
-    x: wallX,
-    y: wallY,
-    widthCells: 1,
-    heightCells: 1,
-    rotationRadians: 0,
-    losHeightMeters: 0.8,
-    coverProtection: 92,
-    coverReliability: 96,
-    concealment: 10,
-    penetrable: false,
-    coverPosture: 'standing' as const,
-    labels: { en: 'Movement performance wall', ru: 'Стена проверки движения' },
-  })));
+  const wallRows = Array.from({ length: wallEndY - wallStartY + 1 }, (_, index) => wallStartY + index).filter((wallY) => wallY !== wallGapY && wallY !== wallGapY + 1);
+  state.map.objects.push(...wallRows.map((wallY, index) => ({ id: `${WALL_ID}-${index}`, kind: 'structure' as const, x: wallX, y: wallY, widthCells: 1, heightCells: 1, rotationRadians: 0, losHeightMeters: 0.8, coverProtection: 92, coverReliability: 96, concealment: 10, penetrable: false, coverPosture: 'standing' as const, labels: { en: 'Movement performance wall', ru: 'Стена проверки движения' } })));
   markMapObjectsDirty(state.map);
 }
 
