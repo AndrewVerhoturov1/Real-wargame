@@ -19,12 +19,13 @@ const OBSERVER_RELATIVE_UNIT_PREFIX = 'unit:';
  * tactical evidence updates still schedule a new worker result. Visibility remains
  * an explicit input: losing a real contact is legitimate knowledge invalidation,
  * not an own-position raster update. Movement acceptance starts only after the
- * paused initial final-exact worker refresh has been applied, so baseline work is
- * not misclassified as movement-triggered work. Each additional subjective contact
- * remains its own key entry; the selected-only browser fixture therefore isolates
- * exactly one stationary hostile instead of hiding unrelated knowledge changes.
- * The hidden-movement fixture disables the physical perception broad-phase range
- * after seeding memory, proving that objective motion alone cannot alter this key.
+ * deterministically paused initial final-exact worker refresh has been applied, so
+ * baseline work is not misclassified as movement-triggered work. Each additional
+ * subjective contact remains its own key entry; the selected-only browser fixture
+ * therefore isolates exactly one stationary hostile instead of hiding unrelated
+ * knowledge changes. The hidden-movement fixture disables the physical perception
+ * broad-phase range after seeding memory, proving that objective motion alone
+ * cannot alter this key.
  *
  * Pressure-zone and unknown-fire directions are evidence-authored world geometry,
  * so their direction/range remain explicit key inputs.
