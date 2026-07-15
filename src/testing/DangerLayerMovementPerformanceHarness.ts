@@ -2,7 +2,7 @@ import { buildSoldierAwarenessReport } from '../core/knowledge/SoldierAwarenessG
 import { syncSoldierThreatMemory } from '../core/knowledge/SoldierThreatMemory';
 import { markMapCellsDirty, markMapObjectsDirty } from '../core/map/MapRuntimeState';
 import { issueRoutedMoveOrderToSelectedUnits } from '../core/orders/RoutedMoveOrders';
-import { isMapCellPassable } from '../core/pathfinding/GridNavigation';
+import { buildNavigationGrid, isNavigationCellPassable } from '../core/pathfinding/GridNavigation';
 import { advanceVisualContact, upsertPerceptionContact } from '../core/perception/PerceptionContact';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { setAiTestPaused } from '../core/testing/AiTestLabRuntime';
@@ -173,8 +173,11 @@ function resetUnits(state: SimulationState, observer: UnitModel, hostile: UnitMo
     unit.position = { x: clamp(Math.floor(slot.x) + 0.5, 0.5, state.map.width - 0.5), y: clamp(slot.y, 0.5, state.map.height - 0.5) };
   }
 
+  const navigationGrid = buildNavigationGrid(state.map);
   const occupiedCells = new Set<string>();
-  for (const unit of state.units) unit.position = findNearestPassableFixturePosition(state, unit.position, occupiedCells);
+  for (const unit of state.units) {
+    unit.position = findNearestPassableFixturePosition(state, navigationGrid, unit.position, occupiedCells);
+  }
 
   observer.facingRadians = 0;
   hostile.facingRadians = Math.PI;
@@ -184,7 +187,12 @@ function resetUnits(state: SimulationState, observer: UnitModel, hostile: UnitMo
   observer.tacticalKnowledge.revision += 1;
 }
 
-function findNearestPassableFixturePosition(state: SimulationState, preferred: { x: number; y: number }, occupiedCells: Set<string>): { x: number; y: number } {
+function findNearestPassableFixturePosition(
+  state: SimulationState,
+  navigationGrid: ReturnType<typeof buildNavigationGrid>,
+  preferred: { x: number; y: number },
+  occupiedCells: Set<string>,
+): { x: number; y: number } {
   const centerX = clamp(Math.floor(preferred.x), 0, state.map.width - 1);
   const centerY = clamp(Math.floor(preferred.y), 0, state.map.height - 1);
   const maximumRadius = Math.max(state.map.width, state.map.height);
@@ -194,7 +202,7 @@ function findNearestPassableFixturePosition(state: SimulationState, preferred: {
         if (Math.max(Math.abs(x - centerX), Math.abs(y - centerY)) !== radius) continue;
         if (x < 0 || y < 0 || x >= state.map.width || y >= state.map.height) continue;
         const key = `${x}:${y}`;
-        if (occupiedCells.has(key) || !isMapCellPassable(state.map, x, y)) continue;
+        if (occupiedCells.has(key) || !isNavigationCellPassable(navigationGrid, x, y)) continue;
         occupiedCells.add(key);
         return { x: x + 0.5, y: y + 0.5 };
       }
