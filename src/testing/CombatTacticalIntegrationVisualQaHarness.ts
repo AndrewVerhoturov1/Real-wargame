@@ -54,6 +54,7 @@ export interface CombatTacticalVisualSnapshot {
 export interface CombatTacticalVisualQaApi {
   setScenario(scenario: CombatTacticalVisualScenario): CombatTacticalVisualSnapshot;
   getSnapshot(): CombatTacticalVisualSnapshot | null;
+  stepDangerPerformanceDynamicUpdate(step: number): void;
 }
 
 declare global {
@@ -121,6 +122,22 @@ export function installCombatTacticalIntegrationVisualQaHarness(
       const shooter = state.units.find((unit) => unit.id !== observer?.id) ?? state.units[1];
       if (!observer || !shooter) return null;
       return buildSnapshot(state, observer, shooter, activeScenario, buildSoldierAwarenessReport(state, observer));
+    },
+    stepDangerPerformanceDynamicUpdate(step): void {
+      if (!activeScenario) throw new Error('Set a combat tactical visual scenario before performance updates.');
+      const observer = state.units.find((unit) => unit.id === state.selectedUnitId) ?? state.units[0];
+      if (!observer) throw new Error('Danger performance update requires a selected observer.');
+      const phase = ((Math.floor(step) % 8) + 8) % 8;
+      for (let index = 0; index < observer.tacticalKnowledge.threats.length; index += 1) {
+        const threat = observer.tacticalKnowledge.threats[index];
+        threat.strength = clamp(58 + ((phase + index * 2) % 7) * 5, 0, 100);
+        threat.suppression = clamp(42 + ((phase * 3 + index) % 8) * 6, 0, 100);
+        threat.confidence = clamp(52 + ((phase * 2 + index * 3) % 6) * 7, 0, 100);
+        threat.visibleNow = phase % 4 !== 3;
+      }
+      observer.tacticalKnowledge.revision += 1;
+      onChanged();
+      window.dispatchEvent(new CustomEvent('real-wargame:combat-tactical-visual-qa-updated'));
     },
   };
 }
