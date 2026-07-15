@@ -189,6 +189,14 @@ function resetUnits(
     unit.side = 'blue';
     unit.order = null;
     unit.playerCommand = null;
+    unit.plan = null;
+    unit.playerNavigationProfileId = 'normal';
+    unit.unitRoleNavigationProfileId = null;
+    unit.activeNavigationProfileId = 'normal';
+    unit.activeNavigationProfileSource = 'default';
+    unit.tacticalKnowledge.threats = [];
+    unit.tacticalKnowledge.revision += 1;
+    unit.perceptionKnowledge.contacts = [];
     unit.speedCellsPerSecond = index === 0 ? 12 : 10;
     unit.position = {
       x: clamp(Math.floor(slot.x) + 0.5, 0.5, state.map.width - 0.5),
@@ -226,7 +234,6 @@ function resetUnits(
   hostile.facingRadians = Math.PI;
   observer.viewRangeCells = Math.max(state.map.width, state.map.height);
   hostile.viewRangeCells = Math.max(state.map.width, state.map.height);
-  observer.perceptionKnowledge.contacts = [];
   observer.tacticalKnowledge.threats = [];
   observer.tacticalKnowledge.revision += 1;
 }
