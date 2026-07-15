@@ -38,6 +38,7 @@ interface MovementSnapshot {
   tacticalKnowledgeRevision: number;
   observerMoving: boolean;
   hostileMoving: boolean;
+  movingUnitCount: number;
   bestSafePosition: { x: number; y: number } | null;
   protectedAgainstThreatId: string | null;
   awarenessMovement: MovementDiagnostics | null;
@@ -67,15 +68,20 @@ test.describe.configure({ mode: 'serial' });
 
 test('selected unit movement performs local updates without world rebuilds', async ({ page }) => {
   await openHarness(page);
-  await startScenario(page, 'selected-only');
+  await startScenarioPaused(page, 'selected-only');
   await waitForWorkerSettled(page);
   const before = await snapshot(page, false);
   const beforeMovement = requireMovement(before);
+  expect(before.observerMoving).toBe(true);
 
-  await page.waitForFunction((startX) => {
+  await resumeSimulation(page);
+  await page.waitForFunction((start) => {
     const current = window.__realWargameDangerMovementPerformance?.getSnapshot(false);
-    return Boolean(current && Math.abs(current.observerPosition.x - startX) >= 5);
-  }, before.observerPosition.x, { timeout: 15_000 });
+    return Boolean(current && Math.hypot(
+      current.observerPosition.x - start.x,
+      current.observerPosition.y - start.y,
+    ) >= 5);
+  }, before.observerPosition, { timeout: 15_000 });
   const after = await snapshot(page, false);
   const afterMovement = requireMovement(after);
 
@@ -92,12 +98,14 @@ test('selected unit movement performs local updates without world rebuilds', asy
 
 test('visible hostile movement updates subjective danger through a bounded worker queue', async ({ page }) => {
   await openHarness(page);
-  await startScenario(page, 'hostile-only');
+  await startScenarioPaused(page, 'hostile-only');
   await waitForWorkerSettled(page);
   const before = await snapshot(page, false);
   const beforeMovement = requireMovement(before);
   const initialSubjective = requireSubjective(before);
+  expect(before.hostileMoving).toBe(true);
 
+  await resumeSimulation(page);
   await page.waitForFunction((initial) => {
     const current = window.__realWargameDangerMovementPerformance?.getSnapshot(false);
     const threat = current?.subjectiveThreatPosition;
@@ -114,20 +122,23 @@ test('visible hostile movement updates subjective danger through a bounded worke
   expect(afterMovement.lastWorkerError).toBeNull();
 
   await stopScenario(page);
+  await page.waitForTimeout(250);
   await waitForWorkerSettled(page);
   const finalSnapshot = await snapshot(page, false);
   const finalMovement = requireMovement(finalSnapshot);
   expect(finalMovement.lastAppliedRasterKey).toBe(finalMovement.lastRequestedRasterKey);
-  expect(finalMovement.finalRefreshApplied).toBeGreaterThanOrEqual(1);
+  expect(finalMovement.finalRefreshApplied).toBeGreaterThan(beforeMovement.finalRefreshApplied);
 });
 
-test('both sides moving remains bounded and applies the final snapshot', async ({ page }) => {
+test('six moving units remain bounded and apply the final snapshot', async ({ page }) => {
   await openHarness(page);
-  await startScenario(page, 'both');
+  await startScenarioPaused(page, 'both');
   await waitForWorkerSettled(page);
   const before = await snapshot(page, false);
   const beforeMovement = requireMovement(before);
+  expect(before.movingUnitCount).toBeGreaterThanOrEqual(6);
 
+  await resumeSimulation(page);
   await page.waitForFunction((initial) => {
     const current = window.__realWargameDangerMovementPerformance?.getSnapshot(false);
     if (!current) return false;
@@ -143,6 +154,7 @@ test('both sides moving remains bounded and applies the final snapshot', async (
   }, before, { timeout: 20_000 });
 
   await stopScenario(page);
+  await page.waitForTimeout(250);
   await waitForWorkerSettled(page);
   const after = await snapshot(page, false);
   const movement = requireMovement(after);
@@ -157,13 +169,15 @@ test('both sides moving remains bounded and applies the final snapshot', async (
 
 test('hidden hostile objective movement does not reveal a new subjective position', async ({ page }) => {
   await openHarness(page);
-  await startScenario(page, 'hidden-hostile');
+  await startScenarioPaused(page, 'hidden-hostile');
   await waitForWorkerSettled(page);
   const before = await snapshot(page, false);
   const initialObjective = before.hostilePosition;
   const initialSubjective = requireSubjective(before);
   const beforeMovement = requireMovement(before);
+  expect(before.hostileMoving).toBe(true);
 
+  await resumeSimulation(page);
   await page.waitForFunction((initial) => {
     const current = window.__realWargameDangerMovementPerformance?.getSnapshot(false);
     return Boolean(current && Math.hypot(
@@ -179,6 +193,7 @@ test('hidden hostile objective movement does not reveal a new subjective positio
     afterSubjective.x - initialSubjective.x,
     afterSubjective.y - initialSubjective.y,
   )).toBeLessThan(0.2);
+  expect(afterMovement.worldRasterBuilds).toBe(beforeMovement.worldRasterBuilds);
   expect(afterMovement.directionalBasisBuilds).toBe(beforeMovement.directionalBasisBuilds);
   expect(afterMovement.maxPendingQueueDepth).toBeLessThanOrEqual(1);
   expect(afterMovement.lastWorkerError).toBeNull();
@@ -188,18 +203,19 @@ test('hidden hostile objective movement does not reveal a new subjective positio
 
 test('wall-side crossing cannot apply stale worker output over the final threat side', async ({ page }) => {
   await openHarness(page);
-  await startScenario(page, 'wall-crossing');
-  await stopScenario(page);
+  await startScenarioPaused(page, 'wall-crossing');
   await waitForWorkerSettled(page);
   const initial = await snapshot(page, true);
   expect(initial.bestSafePosition).not.toBeNull();
+  expect(initial.hostileMoving).toBe(true);
 
-  await startScenario(page, 'wall-crossing');
+  await resumeSimulation(page);
   await page.waitForFunction(() => {
     const current = window.__realWargameDangerMovementPerformance?.getSnapshot(false);
     return Boolean(current && current.hostilePosition.x < current.observerPosition.x - 2);
   }, undefined, { timeout: 25_000 });
   await stopScenario(page);
+  await page.waitForTimeout(250);
   await waitForWorkerSettled(page);
   const final = await snapshot(page, true);
   const movement = requireMovement(final);
@@ -230,12 +246,38 @@ async function openHarness(page: Page): Promise<void> {
   await page.waitForFunction(() => Boolean(window.__realWargameDangerMovementPerformance));
 }
 
-async function startScenario(page: Page, scenario: string): Promise<MovementSnapshot> {
-  return page.evaluate((name) => {
+async function startScenarioPaused(page: Page, scenario: string): Promise<MovementSnapshot> {
+  const started = await page.evaluate((name) => {
     const api = window.__realWargameDangerMovementPerformance;
     if (!api) throw new Error('Danger movement performance API is unavailable.');
     return api.startScenario(name as never) as MovementSnapshot;
   }, scenario);
+  await togglePause(page, true);
+  return started;
+}
+
+async function resumeSimulation(page: Page): Promise<void> {
+  await togglePause(page, false);
+}
+
+async function togglePause(page: Page, paused: boolean): Promise<void> {
+  const currentPaused = await page.evaluate(() => {
+    const button = document.querySelector<HTMLButtonElement>('#pause-toggle');
+    if (!button) throw new Error('Pause toggle is unavailable.');
+    return button.getAttribute('aria-pressed') === 'true';
+  });
+  if (currentPaused !== paused) {
+    await page.locator('#pause-toggle').click();
+  } else {
+    const runtimePaused = await page.evaluate(() => {
+      const button = document.querySelector<HTMLButtonElement>('#pause-toggle');
+      if (!button) throw new Error('Pause toggle is unavailable.');
+      button.click();
+      return button.getAttribute('aria-pressed') === 'true';
+    });
+    if (runtimePaused !== paused) await page.locator('#pause-toggle').click();
+  }
+  await expect(page.locator('#pause-toggle')).toHaveAttribute('aria-pressed', String(paused));
 }
 
 async function stopScenario(page: Page): Promise<MovementSnapshot> {
@@ -304,11 +346,15 @@ function summarizeSceneUpdates(report: PerformanceReport): { p95: number; max: n
 }
 
 function requireMovement(snapshotValue: MovementSnapshot): MovementDiagnostics {
-  if (!snapshotValue.awarenessMovement) throw new Error('Awareness movement diagnostics are unavailable.');
+  if (!snapshotValue.awarenessMovement) {
+    throw new Error('Awareness movement diagnostics are unavailable.');
+  }
   return snapshotValue.awarenessMovement;
 }
 
 function requireSubjective(snapshotValue: MovementSnapshot): { x: number; y: number } {
-  if (!snapshotValue.subjectiveThreatPosition) throw new Error('Subjective threat position is unavailable.');
+  if (!snapshotValue.subjectiveThreatPosition) {
+    throw new Error('Subjective threat position is unavailable.');
+  }
   return snapshotValue.subjectiveThreatPosition;
 }
