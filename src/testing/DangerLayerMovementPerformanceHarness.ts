@@ -223,6 +223,26 @@ function routeAllUnits(
       y: hostile.position.y - 12,
     });
   }
+
+  const fallbackOffsets = [
+    { x: 14, y: 0 },
+    { x: -14, y: 0 },
+    { x: 0, y: 14 },
+    { x: 0, y: -14 },
+    { x: 10, y: 10 },
+    { x: -10, y: 10 },
+  ];
+  for (let unitIndex = 0; unitIndex < state.units.length; unitIndex += 1) {
+    const unit = state.units[unitIndex];
+    if (unit.order) continue;
+    for (let attempt = 0; attempt < fallbackOffsets.length && !unit.order; attempt += 1) {
+      const offset = fallbackOffsets[(unitIndex + attempt) % fallbackOffsets.length];
+      routeUnit(state, unit, {
+        x: unit.position.x + offset.x,
+        y: unit.position.y + offset.y,
+      });
+    }
+  }
 }
 
 function routeUnit(state: SimulationState, unit: UnitModel, target: { x: number; y: number }): void {
