@@ -126,6 +126,7 @@ function prepareScenario(
       y: hostile.position.y + 16,
     });
   } else {
+    configureWallCrossingTracking(observer);
     addFixtureWall(state, observer);
     routeUnit(state, hostile, {
       x: observer.position.x - 32,
@@ -293,6 +294,28 @@ function installVisualContact(observer: UnitModel, hostile: UnitModel, nowSecond
     source: 'visual',
   });
   upsertPerceptionContact(observer.perceptionKnowledge, contact);
+}
+
+function configureWallCrossingTracking(observer: UnitModel): void {
+  observer.attentionSettings.vision.maximumVisualRangeMeters = 2_000;
+  observer.attentionSettings.vision.distanceFalloffStartMeters = 1_900;
+  observer.attentionSettings.vision.distanceFalloffExponent = 1;
+  observer.attentionSettings.vision.detectionVariancePercent = 0;
+  for (const profile of Object.values(observer.attentionSettings.profiles)) {
+    profile.focusAngleDegrees = 180;
+    profile.directAngleDegrees = 360;
+    profile.focusWeight = 1;
+    profile.directWeight = 1;
+    profile.peripheralWeight = 1;
+    profile.focusCheckIntervalSeconds = 0.05;
+    profile.directCheckIntervalSeconds = 0.05;
+    profile.peripheralCheckIntervalSeconds = 0.05;
+    profile.rearCheckIntervalSeconds = 0.25;
+  }
+  observer.attentionRuntime.nextFocusCheckSeconds = 0;
+  observer.attentionRuntime.nextDirectCheckSeconds = 0;
+  observer.attentionRuntime.nextPeripheralCheckSeconds = 0;
+  observer.attentionRuntime.nextRearCheckSeconds = 0;
 }
 
 function installTerrainFixtures(state: SimulationState): void {
