@@ -24,19 +24,21 @@ const mapData: TacticalMapData = {
     { x1: 205, x2: 290, y1: 115, y2: 185, forest: 2 },
     { x1: 130, x2: 190, y1: 70, y2: 75, height: 3 },
   ],
-  objects: [{
-    id: 'movement-wall',
-    kind: 'structure',
+  objects: Array.from({ length: 121 }, (_, index) => ({
+    id: `movement-wall-${index}`,
+    kind: 'structure' as const,
     x: 160,
-    y: 80,
+    y: 40 + index,
     widthCells: 1,
-    heightCells: 45,
+    heightCells: 1,
+    rotationRadians: 0,
+    losHeightMeters: 0.8,
     coverProtection: 92,
     coverReliability: 96,
     concealment: 80,
     penetrable: false,
-    coverPosture: 'standing',
-  }],
+    coverPosture: 'standing' as const,
+  })),
 };
 
 const state = createInitialState(mapData, [
