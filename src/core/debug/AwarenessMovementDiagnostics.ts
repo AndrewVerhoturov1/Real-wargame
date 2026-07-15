@@ -30,6 +30,8 @@ export interface AwarenessMovementDiagnostics extends Record<string, unknown> {
   readonly lastWorkerError: string | null;
 }
 
+// These counters describe scheduler history; current correctness is established by
+// bounded queue state plus equality of the latest requested and applied raster keys.
 const EMPTY_DIAGNOSTICS: AwarenessMovementDiagnostics = {
   worldRasterBuilds: 0,
   ownMovementLocalUpdates: 0,
