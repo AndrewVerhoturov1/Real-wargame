@@ -68,11 +68,15 @@ const OUTPUT_PATH = process.env.DANGER_PERF_OUTPUT
 const LABEL = process.env.DANGER_PERF_LABEL ?? 'candidate';
 const EXPECTED_BRANCH = process.env.DANGER_PERF_EXPECTED_BRANCH ?? '';
 const EXPECTED_SHA = process.env.DANGER_PERF_EXPECTED_SHA ?? '';
-const UPDATE_COUNT = 30;
+// Nearest-rank p95 needs at least 20 observations before a single runner hiccup
+// stops being the percentile itself. Sixty mutations give both exact builds a
+// representative CPU sample while preserving the independent max <= 50 ms gate.
+const UPDATE_COUNT = 60;
 const UPDATE_INTERVAL_MS = 300;
-const REPORT_WINDOW_MS = 12_000;
+const REPORT_WINDOW_MS = 22_000;
+const MINIMUM_SCENE_SAMPLE_COUNT = 25;
 
-test('records paused dynamic danger-layer rescoring without screenshots', async ({ page }) => {
+ test('records paused dynamic danger-layer rescoring without screenshots', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/?visualQa=combat-tactical-integration');
   await expect(page.locator('canvas')).toBeVisible();
@@ -103,7 +107,7 @@ test('records paused dynamic danger-layer rescoring without screenshots', async 
     dynamicUpdateMs.push(elapsed);
     await page.waitForTimeout(UPDATE_INTERVAL_MS);
   }
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(2_500);
   const browserTiming = await stopBrowserTiming(page);
 
   const downloadPromise = page.waitForEvent('download');
@@ -126,12 +130,12 @@ test('records paused dynamic danger-layer rescoring without screenshots', async 
   writeFileSync(OUTPUT_PATH, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
   console.log(JSON.stringify(summary, null, 2));
 
-  // A severely regressed baseline can starve the monitor itself; require enough samples to
-  // calculate useful percentiles without preventing the candidate half of the A/B run.
-  expect(summary.sampleCount).toBeGreaterThan(5);
-  expect(summary.measurementSeconds).toBeGreaterThan(7);
+  // Both exact builds must contribute enough scene samples for nearest-rank p95
+  // to represent sustained behavior rather than a single scheduler outlier.
+  expect(summary.sampleCount).toBeGreaterThanOrEqual(MINIMUM_SCENE_SAMPLE_COUNT);
+  expect(summary.measurementSeconds).toBeGreaterThan(18);
   expect(dynamicUpdateMs).toHaveLength(UPDATE_COUNT);
-  expect(browserTiming.frameMs.length).toBeGreaterThan(20);
+  expect(browserTiming.frameMs.length).toBeGreaterThan(40);
 });
 
 async function startBrowserTiming(page: Page): Promise<void> {
