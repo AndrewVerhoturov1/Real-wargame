@@ -2,11 +2,13 @@
 
 ## Scope
 
-The soldier danger overlay may rescore subjective tactical knowledge frequently, but it must not repeat threat-relative object/forest geometry, directional terrain geometry, or allocate a new 320 × 200 awareness object graph when geometric content is unchanged.
+The soldier danger overlay may rescore subjective tactical knowledge frequently, but it must not repeat threat-relative object/forest geometry, directional terrain geometry, allocate a new 320 × 200 awareness object graph, or rebuild its raster resources when geometric content is unchanged.
 
 ## Root cause addressed
 
 The Stage 1 directional-fire integration added threat-relative object and forest protection to every awareness cell. A dynamic awareness cache miss scanned the full map and called `evaluateCoverBetween(..., { includeRelief: false })` for every relevant threat/cell pair. Forest cover then sampled the complete threat-to-cell segment. Confidence, suppression, strength, uncertainty and visibility changes were part of cache keys, so decay and evidence updates could repeat this work and recreate 64,000 awareness cell objects.
+
+After geometry reuse was restored, two secondary hot paths remained: every update allocated and sorted thousands of safe-position candidates to retain eight winners, and the overlay copied all 64,000 values through a fresh canvas/ImageData path before uploading the one raster sprite.
 
 ## Threat-relative geometry cache
 
@@ -47,7 +49,7 @@ The expensive directional terrain arrays are keyed by their actual geometric out
 - primary threat sector;
 - normalized eight-sector threat distribution, quantized by `DIRECTION_WEIGHT_BUCKET`.
 
-The cache does not use knowledge revision or raw amplitude values directly. Strength, suppression and confidence changes that leave the normalized directional distribution unchanged reuse the arrays while the returned field receives current threat metadata. A real change in relative directional distribution, subjective bearings or map geometry rebuilds the field because its aggregate terrain output has changed.
+The cache does not use knowledge revision or raw amplitude values directly. Strength, suppression and confidence changes that leave the normalized directional distribution unchanged reuse the same field object and arrays while its current threat metadata is refreshed. A real change in relative directional distribution, subjective bearings or map geometry rebuilds the field because its aggregate terrain output has changed.
 
 ## Dynamic awareness rescore
 
@@ -56,6 +58,14 @@ A cold awareness build still creates the canonical `SoldierAwarenessCell[]`. `Aw
 For dynamic-only changes it lazily prepares compact typed arrays for threat factor, protection and exposure, then mutates the existing cells in place. Strength, suppression, confidence and visibility therefore update danger, suppression, uncertainty, safety and protected-threat metadata without repeating trigonometry, cover lookup, static-cell assembly or 64,000 object allocations.
 
 A posture change, map/static revision, changed directional distribution, changed subjective threat position/shape/range/arc/falloff, or changed uncertainty invalidates this rescore geometry and returns to the full cold path.
+
+## Safe-position selection
+
+Safe-position scoring still examines the same radius, threshold and score formula. Instead of allocating one object for every qualifying cell, sorting the complete set and slicing eight items, the implementation maintains a stable score-ordered top-eight list during the scan. Candidate allocation is therefore bounded, equal-score row-major ordering is preserved, and the winning positions remain semantically identical.
+
+## Raster contract
+
+The overlay remains exactly one cached PixiJS sprite. Its texture is backed by one reusable RGBA `Uint8Array`; a `Uint32Array` view and precomputed 0–100 colour lookup tables write one packed pixel per cell before `baseTexture.update()`. Dynamic updates no longer allocate `ImageData`, create a temporary canvas texture or perform a second CPU-side raster copy. Public canvas helpers remain for tests and compatibility, but are not used by the live renderer.
 
 ## Semantic boundaries
 
@@ -86,4 +96,4 @@ The 320 × 200 contract verifies cold construction, unchanged hits, dynamic-only
 
 ## Browser regression
 
-`Danger Layer Browser Performance` checks out the exact PR base and head SHAs, injects the same paused benchmark harness into both, and performs 30 dynamic-only danger updates with fixed geometry in Chromium. It records performance-report JSON, direct synchronous update durations, continuous browser `requestAnimationFrame` intervals and `PerformanceObserver` long tasks without PNG generation. Cold-build and steady-state thresholds are evaluated separately.
+`Danger Layer Browser Performance` checks out the exact PR base and head SHAs, injects the same paused benchmark harness into both, and performs 30 dynamic-only danger updates with fixed geometry in Chromium. It records performance-report JSON, direct synchronous update durations, continuous browser `requestAnimationFrame` intervals and `PerformanceObserver` long tasks without PNG generation. Cold-build and steady-state thresholds are evaluated separately. The baseline sampling requirements intentionally tolerate monitor starvation so a severely regressed base cannot prevent measurement of the candidate head.
