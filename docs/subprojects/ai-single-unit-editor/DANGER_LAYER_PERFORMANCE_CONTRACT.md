@@ -2,13 +2,13 @@
 
 ## Scope
 
-The soldier danger overlay may rescore subjective tactical knowledge frequently, but it must not repeat threat-relative object/forest geometry, directional terrain geometry, allocate a new 320 × 200 awareness object graph, or rebuild its raster resources when geometric content is unchanged.
+The soldier danger overlay may rescore subjective tactical knowledge frequently, but it must not repeat threat-relative object/forest geometry, directional terrain geometry, allocate a new 320 × 200 awareness object graph, rebuild auxiliary cover knowledge, or rebuild its raster resources when geometric content is unchanged.
 
 ## Root cause addressed
 
 The Stage 1 directional-fire integration added threat-relative object and forest protection to every awareness cell. A dynamic awareness cache miss scanned the full map and called `evaluateCoverBetween(..., { includeRelief: false })` for every relevant threat/cell pair. Forest cover then sampled the complete threat-to-cell segment. Confidence, suppression, strength, uncertainty and visibility changes were part of cache keys, so decay and evidence updates could repeat this work and recreate 64,000 awareness cell objects.
 
-After geometry reuse was restored, two secondary hot paths remained: every update allocated and sorted thousands of safe-position candidates to retain eight winners, and the overlay copied all 64,000 values through a fresh canvas/ImageData path before uploading the one raster sprite.
+After geometry reuse was restored, secondary hot paths remained: every update allocated and sorted thousands of safe-position candidates to retain eight winners, the overlay copied all 64,000 values through a fresh canvas/ImageData path before uploading the one raster sprite, unchanged safe-position markers were redrawn, and the auxiliary cover-knowledge overlay rescanned all forest cells and LOS inputs despite unchanged map/unit geometry.
 
 ## Threat-relative geometry cache
 
@@ -63,9 +63,17 @@ A posture change, map/static revision, changed directional distribution, changed
 
 Safe-position scoring still examines the same radius, threshold and score formula. Instead of allocating one object for every qualifying cell, sorting the complete set and slicing eight items, the implementation maintains a stable score-ordered top-eight list during the scan. Candidate allocation is therefore bounded, equal-score row-major ordering is preserved, and the winning positions remain semantically identical.
 
-## Raster contract
+## Raster and marker contract
 
 The overlay remains exactly one cached PixiJS sprite. Its texture is backed by one reusable RGBA `Uint8Array`; a `Uint32Array` view and precomputed 0–100 colour lookup tables write one packed pixel per cell before `baseTexture.update()`. Dynamic updates no longer allocate `ImageData`, create a temporary canvas texture or perform a second CPU-side raster copy. Public canvas helpers remain for tests and compatibility, but are not used by the live renderer.
+
+Safe-position marker graphics are keyed by their actual visible output: mode, cell size and the ordered coordinates of the first five winners. Knowledge value changes may rebuild raster pixels, but markers redraw only when the displayed winners change.
+
+## Auxiliary unit-knowledge cache
+
+`buildUnitKnowledgeReport` is shared by the danger/memory cover overlay and used more than once during an overlay rebuild. Its cache key includes the map identity and dimensions, metres per cell, height/forest/object revisions, unit position, view range, posture and pressure-zone geometry/content.
+
+It intentionally excludes `tacticalKnowledge.revision`, threat strength, suppression, confidence and `visibleNow`: those values do not change object/forest cover candidates or their LOS. Map geometry edits, movement, posture/view-range changes and pressure-zone edits invalidate the report. This prevents dynamic danger decay from repeating a full forest-cell/LOS scan while preserving cover-marker semantics.
 
 ## Semantic boundaries
 
@@ -83,6 +91,8 @@ Performance report v3 adds a `computation` section containing:
 - directional tactical builds, cache hits, full-map scans and build duration;
 - selected-posture static awareness diagnostics;
 - dynamic awareness geometry builds, rescore count, rescored cell count and last/maximum rescore duration.
+
+The existing awareness renderer diagnostics also expose raster rebuild and marker-update counts, allowing browser A/B artifacts to prove that unchanged marker output is reused.
 
 ## Deterministic regression
 
