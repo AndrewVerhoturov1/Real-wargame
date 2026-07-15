@@ -184,8 +184,7 @@ function buildField(
         }
       }
 
-      const combinedObjectProtection = clampPercent(100 * (1 - remainingProtection));
-      objectProtection[index] = combinedObjectProtection;
+      objectProtection[index] = clampPercent(100 * (1 - remainingProtection));
 
       const forest = forestContribution(forestDensity[index] ?? 0);
       if (forest.expectedProtection > 0) {
@@ -218,6 +217,12 @@ function buildField(
   };
 }
 
+/**
+ * Builds a bounded-cost radial transmittance approximation. Each target cell follows one
+ * deterministic DDA predecessor toward the subjective threat origin, so forest work is O(map cells)
+ * instead of tracing a separate multi-sample ray for every target. The legacy three-samples-per-cell
+ * density scale is retained when accumulating light/dense forest weights.
+ */
 function buildForestDensityField(
   map: TacticalMap,
   threatPosition: GridPosition,
@@ -225,31 +230,40 @@ function buildForestDensityField(
 ): number {
   const originX = clampInt(Math.floor(threatPosition.x), 0, map.width - 1);
   const originY = clampInt(Math.floor(threatPosition.y), 0, map.height - 1);
+  const cellCount = map.width * map.height;
   const maxRadius = Math.max(
     originX,
     originY,
     map.width - 1 - originX,
     map.height - 1 - originY,
   );
-  let mapReads = 0;
+  const counts = new Uint32Array(maxRadius + 2);
 
-  for (let radius = 1; radius <= maxRadius; radius += 1) {
-    const minX = Math.max(0, originX - radius);
-    const maxX = Math.min(map.width - 1, originX + radius);
-    const minY = Math.max(0, originY - radius);
-    const maxY = Math.min(map.height - 1, originY + radius);
-
-    for (let x = minX; x <= maxX; x += 1) {
-      mapReads += propagateForestDensity(map, density, originX, originY, x, minY);
-      if (maxY !== minY) mapReads += propagateForestDensity(map, density, originX, originY, x, maxY);
+  for (let y = 0; y < map.height; y += 1) {
+    for (let x = 0; x < map.width; x += 1) {
+      const radius = Math.max(Math.abs(x - originX), Math.abs(y - originY));
+      if (radius > 0) counts[radius + 1] += 1;
     }
-    for (let y = minY + 1; y < maxY; y += 1) {
-      mapReads += propagateForestDensity(map, density, originX, originY, minX, y);
-      if (maxX !== minX) mapReads += propagateForestDensity(map, density, originX, originY, maxX, y);
+  }
+  for (let index = 1; index < counts.length; index += 1) counts[index] += counts[index - 1];
+
+  const ordered = new Uint32Array(Math.max(0, cellCount - 1));
+  const writeOffsets = counts.slice();
+  for (let y = 0; y < map.height; y += 1) {
+    for (let x = 0; x < map.width; x += 1) {
+      const radius = Math.max(Math.abs(x - originX), Math.abs(y - originY));
+      if (radius <= 0) continue;
+      ordered[writeOffsets[radius]] = y * map.width + x;
+      writeOffsets[radius] += 1;
     }
   }
 
-  return mapReads;
+  for (const index of ordered) {
+    const x = index % map.width;
+    const y = Math.floor(index / map.width);
+    propagateForestDensity(map, density, originX, originY, x, y);
+  }
+  return ordered.length;
 }
 
 function propagateForestDensity(
@@ -259,11 +273,11 @@ function propagateForestDensity(
   originY: number,
   x: number,
   y: number,
-): number {
+): void {
   const dx = x - originX;
   const dy = y - originY;
   const steps = Math.max(Math.abs(dx), Math.abs(dy));
-  if (steps <= 0) return 0;
+  if (steps <= 0) return;
   const previousScale = (steps - 1) / steps;
   const previousX = Math.round(originX + dx * previousScale);
   const previousY = Math.round(originY + dy * previousScale);
@@ -275,7 +289,6 @@ function propagateForestDensity(
     ? 0
     : forestDensityWeight(previousCell?.forest ?? 0) * LEGACY_FOREST_SAMPLES_PER_CELL * stepLength;
   density[index] = (density[previousIndex] ?? 0) + sampleWeight;
-  return 1;
 }
 
 function forestDensityWeight(forest: number): number {
