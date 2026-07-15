@@ -131,7 +131,7 @@ jobs:
         run: set -o pipefail; npm run danger-layer-performance:smoke 2>&1 | tee danger-layer-performance.log
       - name: Production build
         shell: bash
-        run: set -o pipefail; npm run build 2>&1 | tail -n 160
+        run: set -o pipefail; npm run build 2>&1 | tee production-build.log
       - name: Combat tactical integration smoke
         shell: bash
         run: set -o pipefail; npm run combat-tactical-integration:smoke 2>&1 | tee combat-tactical-integration.log
@@ -143,4 +143,5 @@ jobs:
           path: |
             combat-tactical-integration.log
             danger-layer-performance.log
+            production-build.log
           if-no-files-found: warn
