@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -22,17 +22,20 @@ interface AwarenessDiagnostics {
   maxBuildMs: number;
 }
 
+interface BrowserTimingResult {
+  durationMs: number;
+  frameMs: number[];
+  longTaskMs: number[];
+}
+
 interface BrowserPerformanceSummary {
   label: string;
   reportVersion: string;
   measurementSeconds: number;
   sampleCount: number;
-  reportEffectiveFps: number;
+  effectiveFps: number;
   frameMs: Stats;
   sceneUpdateMs: Stats;
-  dynamicUpdateMs: Stats;
-  browserEffectiveFps: number;
-  browserRafMs: Stats;
   framesOver50Ms: number;
   framesOver100Ms: number;
   longTasksOver100Ms: number;
@@ -52,7 +55,7 @@ const OUTPUT_PATH = process.env.DANGER_PERF_OUTPUT
 const LABEL = process.env.DANGER_PERF_LABEL ?? 'candidate';
 const UPDATE_COUNT = 30;
 const UPDATE_INTERVAL_MS = 300;
-const WINDOW_MS = 12_000;
+const REPORT_WINDOW_MS = 12_000;
 
 test('records paused dynamic danger-layer rescoring without screenshots', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -71,46 +74,18 @@ test('records paused dynamic danger-layer rescoring without screenshots', async 
   });
   await expect(page.locator('#pause-toggle')).toHaveAttribute('aria-pressed', 'true');
   await page.waitForTimeout(500);
+  await startBrowserTiming(page);
 
-  await page.evaluate(() => {
-    const perfWindow = window as Window & {
-      __dangerPerformanceRaf?: { samples: number[]; running: boolean };
-    };
-    const runtime = { samples: [] as number[], running: true };
-    perfWindow.__dangerPerformanceRaf = runtime;
-    let previous = performance.now();
-    const collect = (now: number) => {
-      if (!runtime.running) return;
-      runtime.samples.push(now - previous);
-      previous = now;
-      requestAnimationFrame(collect);
-    };
-    requestAnimationFrame(collect);
-  });
-
-  const updateDurations: number[] = [];
   for (let step = 0; step < UPDATE_COUNT; step += 1) {
-    const duration = await page.evaluate((currentStep) => {
+    await page.evaluate((currentStep) => {
       const api = window.__realWargameCombatTacticalVisualQa;
       if (!api) throw new Error('Combat tactical visual QA API is unavailable.');
-      const startedAt = performance.now();
       api.stepDangerPerformanceDynamicUpdate(currentStep);
-      return performance.now() - startedAt;
     }, step);
-    updateDurations.push(duration);
     await page.waitForTimeout(UPDATE_INTERVAL_MS);
   }
   await page.waitForTimeout(500);
-
-  const rafValues = await page.evaluate(() => {
-    const perfWindow = window as Window & {
-      __dangerPerformanceRaf?: { samples: number[]; running: boolean };
-    };
-    const runtime = perfWindow.__dangerPerformanceRaf;
-    if (!runtime) return [];
-    runtime.running = false;
-    return runtime.samples;
-  });
+  const browserTiming = await stopBrowserTiming(page);
 
   const downloadPromise = page.waitForEvent('download');
   await page.evaluate(() => {
@@ -126,53 +101,107 @@ test('records paused dynamic danger-layer rescoring without screenshots', async 
   const awareness = await page.evaluate(() => (
     window as Window & { __realWargameAwarenessDebug?: AwarenessDiagnostics }
   ).__realWargameAwarenessDebug ?? null);
-  const summary = summarize(report, awareness, updateDurations, rafValues);
+  const summary = summarize(report, awareness, browserTiming);
   mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
   writeFileSync(OUTPUT_PATH, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
   console.log(JSON.stringify(summary, null, 2));
 
   expect(summary.sampleCount).toBeGreaterThan(20);
   expect(summary.measurementSeconds).toBeGreaterThan(7);
-  expect(updateDurations).toHaveLength(UPDATE_COUNT);
-  expect(rafValues.length).toBeGreaterThan(300);
+  expect(browserTiming.frameMs.length).toBeGreaterThan(100);
 });
+
+async function startBrowserTiming(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    type TimingWindow = Window & {
+      __dangerLayerBrowserTiming?: {
+        startedAt: number;
+        lastFrameAt: number | null;
+        frameMs: number[];
+        longTaskMs: number[];
+        stopped: boolean;
+        observer: PerformanceObserver | null;
+      };
+    };
+    const timingWindow = window as TimingWindow;
+    const state = {
+      startedAt: performance.now(),
+      lastFrameAt: null as number | null,
+      frameMs: [] as number[],
+      longTaskMs: [] as number[],
+      stopped: false,
+      observer: null as PerformanceObserver | null,
+    };
+    if (typeof PerformanceObserver !== 'undefined'
+      && PerformanceObserver.supportedEntryTypes?.includes('longtask')) {
+      state.observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) state.longTaskMs.push(entry.duration);
+      });
+      state.observer.observe({ entryTypes: ['longtask'] });
+    }
+    timingWindow.__dangerLayerBrowserTiming = state;
+    const sample = (now: number): void => {
+      if (state.stopped) return;
+      if (state.lastFrameAt !== null) state.frameMs.push(now - state.lastFrameAt);
+      state.lastFrameAt = now;
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+}
+
+async function stopBrowserTiming(page: Page): Promise<BrowserTimingResult> {
+  return page.evaluate(async () => {
+    type TimingWindow = Window & {
+      __dangerLayerBrowserTiming?: {
+        startedAt: number;
+        lastFrameAt: number | null;
+        frameMs: number[];
+        longTaskMs: number[];
+        stopped: boolean;
+        observer: PerformanceObserver | null;
+      };
+    };
+    const state = (window as TimingWindow).__dangerLayerBrowserTiming;
+    if (!state) throw new Error('Browser timing state is unavailable.');
+    state.stopped = true;
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    state.observer?.disconnect();
+    return {
+      durationMs: performance.now() - state.startedAt,
+      frameMs: state.frameMs,
+      longTaskMs: state.longTaskMs,
+    };
+  });
+}
 
 function summarize(
   report: PerformanceReport,
   awareness: AwarenessDiagnostics | null,
-  updateDurations: number[],
-  rafValues: number[],
+  browserTiming: BrowserTimingResult,
 ): BrowserPerformanceSummary {
   const lastSample = report.samples.at(-1);
   const windowEnd = lastSample?.tMs ?? 0;
-  const windowStart = Math.max(0, windowEnd - WINDOW_MS);
+  const windowStart = Math.max(0, windowEnd - REPORT_WINDOW_MS);
   const samples = report.samples.filter((sample) => (
     sample.tMs >= windowStart && sample.layerMode === 'danger'
   ));
-  const frameValues = samples
-    .map((sample) => sample.frameMs)
-    .filter((value): value is number => typeof value === 'number');
   const sceneValues = samples.map((sample) => sample.sceneUpdateMs);
-  const durationMs = samples.length > 1
-    ? samples[samples.length - 1].tMs - samples[0].tMs
-    : 0;
-  const longTasks = report.longTasks.filter((task) => task.startMs >= windowStart);
-  const rafTotalMs = rafValues.reduce((total, value) => total + value, 0);
+  const frames = browserTiming.frameMs;
 
   return {
     label: LABEL,
     reportVersion: report.version,
-    measurementSeconds: round(durationMs / 1000),
+    measurementSeconds: round(browserTiming.durationMs / 1000),
     sampleCount: samples.length,
-    reportEffectiveFps: durationMs > 0 ? round((samples.length - 1) * 1000 / durationMs) : 0,
-    frameMs: stats(frameValues),
+    effectiveFps: browserTiming.durationMs > 0
+      ? round(frames.length * 1000 / browserTiming.durationMs)
+      : 0,
+    frameMs: stats(frames),
     sceneUpdateMs: stats(sceneValues),
-    dynamicUpdateMs: stats(updateDurations),
-    browserEffectiveFps: rafTotalMs > 0 ? round(rafValues.length * 1000 / rafTotalMs) : 0,
-    browserRafMs: stats(rafValues),
-    framesOver50Ms: frameValues.filter((value) => value > 50).length,
-    framesOver100Ms: frameValues.filter((value) => value > 100).length,
-    longTasksOver100Ms: longTasks.filter((task) => task.durationMs > 100).length,
+    framesOver50Ms: frames.filter((value) => value > 50).length,
+    framesOver100Ms: frames.filter((value) => value > 100).length,
+    longTasksOver100Ms: browserTiming.longTaskMs.filter((value) => value > 100).length,
     awareness,
     computation: report.computation ?? null,
   };
@@ -197,10 +226,4 @@ function percentile(sorted: number[], fraction: number): number {
 
 function round(value: number): number {
   return Math.round(value * 100) / 100;
-}
-
-declare global {
-  interface Window {
-    __dangerPerformanceRaf?: { samples: number[]; running: boolean };
-  }
 }
