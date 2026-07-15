@@ -6,7 +6,7 @@ import { isMapCellPassable } from '../core/pathfinding/GridNavigation';
 import { advanceVisualContact, upsertPerceptionContact } from '../core/perception/PerceptionContact';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { setAiTestPaused } from '../core/testing/AiTestLabRuntime';
-import type { UnitModel } from '../core/units/UnitModel';
+import { normalizeUnits, type UnitModel } from '../core/units/UnitModel';
 import { setSimulationLayerMode } from '../core/ui/RuntimeUiState';
 
 export type DangerMovementScenario =
@@ -48,11 +48,13 @@ declare global {
 }
 
 const WALL_ID = 'danger-movement-performance-wall';
+const MOVEMENT_FIXTURE_UNIT_COUNT = 6;
 
 export function installDangerLayerMovementPerformanceHarness(state: SimulationState): void {
   const query = new URLSearchParams(window.location.search);
   if (query.get('visualQa') !== 'danger-layer-movement-performance') return;
 
+  ensureMovementFixtureUnits(state);
   let activeScenario: DangerMovementScenario | null = null;
   const [observer, hostile] = resolveUnits(state);
   setAiTestPaused(state, true);
@@ -72,6 +74,30 @@ export function installDangerLayerMovementPerformanceHarness(state: SimulationSt
       return snapshot(state, observer, hostile, activeScenario, includeExactAwareness);
     },
   };
+}
+
+function ensureMovementFixtureUnits(state: SimulationState): void {
+  const template = state.units.find((unit) => unit.side === 'blue') ?? state.units[0];
+  if (!template) throw new Error('Movement performance harness requires at least one unit template.');
+
+  while (state.units.length < MOVEMENT_FIXTURE_UNIT_COUNT) {
+    const fixtureIndex = state.units.length + 1;
+    const [unit] = normalizeUnits([{
+      id: `danger_movement_aux_${fixtureIndex}`,
+      label: `Movement auxiliary ${fixtureIndex}`,
+      labelRu: `Дополнительный боец движения ${fixtureIndex}`,
+      type: template.type,
+      side: 'blue',
+      x: Math.floor(template.position.x) + fixtureIndex,
+      y: Math.floor(template.position.y) + fixtureIndex,
+      speedCellsPerSecond: 10,
+      heldItem: template.heldItem,
+      behaviorProfile: template.behaviorProfile,
+      navigationProfileId: 'normal',
+    }]);
+    if (!unit) throw new Error('Movement performance harness failed to create an auxiliary unit.');
+    state.units.push(unit);
+  }
 }
 
 function prepareScenario(
