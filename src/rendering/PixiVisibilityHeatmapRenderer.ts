@@ -43,6 +43,7 @@ export class PixiVisibilityHeatmapRenderer {
   private textureUploadCount = 0;
   private markerUpdateCount = 0;
   private markerCount = 0;
+  private destroyed = false;
 
   constructor() {
     this.container.eventMode = 'none';
@@ -53,6 +54,7 @@ export class PixiVisibilityHeatmapRenderer {
   }
 
   render(state: SimulationState): void {
+    if (this.destroyed) return;
     const overlay = getAttentionOverlayState(state);
     const unit = getSelectedUnit(state);
     if (!overlay.active || !unit || state.editor.enabled) {
@@ -63,9 +65,9 @@ export class PixiVisibilityHeatmapRenderer {
 
     this.container.visible = true;
     const field = overlay.showCurrentView ? getSelectedUnitVisibilityField(state) : null;
-    if (field && field.revision !== this.lastFieldRevision) {
+    if (field) {
       this.ensureRaster(state.map.width, state.map.height);
-      if (this.rasterContext && this.rasterTexture && this.rasterSprite) {
+      if (field.revision !== this.lastFieldRevision && this.rasterContext && this.rasterTexture && this.rasterSprite) {
         drawVisibilityRaster(this.rasterContext, field, state.map.width, state.map.height);
         this.rasterTexture.source.update();
         this.rasterSprite.position.set(0, 0);
@@ -74,7 +76,7 @@ export class PixiVisibilityHeatmapRenderer {
         this.lastFieldRevision = field.revision;
         this.textureUploadCount += 1;
       }
-    } else if (!field && this.rasterSprite) {
+    } else if (this.rasterSprite) {
       this.rasterSprite.visible = false;
     }
 
@@ -96,10 +98,17 @@ export class PixiVisibilityHeatmapRenderer {
   }
 
   destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
     this.container.removeChildren();
     this.rasterSprite?.destroy();
     this.rasterTexture?.destroy(true);
     this.markerGraphics.destroy();
+    this.rasterCanvas = null;
+    this.rasterContext = null;
+    this.rasterTexture = null;
+    this.rasterSprite = null;
+    this.container.destroy();
     delete (window as ViewMemoryDebugWindow).__realWargameViewMemoryDebug;
     delete (window as ViewMemoryDebugWindow).__realWargameAttentionOverlayDebug;
   }
@@ -128,6 +137,8 @@ export class PixiVisibilityHeatmapRenderer {
     this.container.removeChildren();
     this.rasterSprite?.destroy();
     this.rasterTexture?.destroy(true);
+    this.rasterSprite = null;
+    this.rasterTexture = null;
     this.rasterCanvas = document.createElement('canvas');
     this.rasterCanvas.width = width;
     this.rasterCanvas.height = height;
@@ -135,6 +146,8 @@ export class PixiVisibilityHeatmapRenderer {
     this.rasterTexture = Texture.from({ resource: this.rasterCanvas, scaleMode: 'nearest' });
     this.rasterSprite = new Sprite(this.rasterTexture);
     this.container.addChild(this.rasterSprite, this.markerGraphics);
+    this.lastFieldRevision = -1;
+    this.lastMarkerKey = '';
   }
 
   private drawMarkers(state: SimulationState, contacts: PerceptionContactMemory[]): void {
