@@ -8,6 +8,7 @@ import { buildSoldierAwarenessReport } from '../src/core/knowledge/SoldierAwaren
 import { getCell, type TacticalMapData } from '../src/core/map/MapModel';
 import { markMapCellsDirty } from '../src/core/map/MapRuntimeState';
 import { createInitialState } from '../src/core/simulation/SimulationState';
+import { getDirectionalTacticalFieldDiagnostics } from '../src/core/terrain/DirectionalTacticalField';
 import type { KnownThreatMemory, UnitModel } from '../src/core/units/UnitModel';
 
 const WIDTH = 320;
@@ -90,8 +91,10 @@ assert.equal(firstWinner.protectedAgainstThreatId, THREAT_ID);
 assert.notDeepEqual(firstWinner.position, baselineWinner.position);
 
 let diagnostics = getThreatRelativeCoverFieldDiagnostics(state.map);
+let directionalDiagnostics = getDirectionalTacticalFieldDiagnostics(state.map);
 assert.equal(diagnostics.geometryBuildCount, 1, 'first danger report must build one threat-relative geometry field');
 assert.equal(diagnostics.fullMapScanCount, 1);
+assert.equal(directionalDiagnostics.buildCount, 2, 'baseline and first threat report must build directional fields');
 assert.equal(
   diagnostics.forestMapReads,
   CELL_COUNT - 1,
@@ -103,10 +106,12 @@ assert.equal(
   'cold object geometry must be one map scan times object count, not one ray per dynamic update',
 );
 const coldBuildMs = diagnostics.lastBuildMs;
+const directionalBuildsAfterFirstThreat = directionalDiagnostics.buildCount;
 
 const repeated = buildSoldierAwarenessReport(state, blue);
 assert.equal(repeated.cacheKey, first.cacheKey);
 assert.equal(getThreatRelativeCoverFieldDiagnostics(state.map).geometryBuildCount, 1);
+assert.equal(getDirectionalTacticalFieldDiagnostics(state.map).buildCount, directionalBuildsAfterFirstThreat);
 
 threat.confidence = 70;
 threat.strength = 75;
@@ -115,8 +120,14 @@ blue.tacticalKnowledge.revision += 1;
 const dynamicChanged = buildSoldierAwarenessReport(state, blue);
 assert.notEqual(dynamicChanged.cacheKey, first.cacheKey, 'dynamic scoring values must invalidate awareness scoring');
 diagnostics = getThreatRelativeCoverFieldDiagnostics(state.map);
+directionalDiagnostics = getDirectionalTacticalFieldDiagnostics(state.map);
 assert.equal(diagnostics.geometryBuildCount, 1, 'dynamic scoring must reuse cover geometry');
 assert.equal(diagnostics.forestMapReads, CELL_COUNT - 1, 'dynamic scoring must not repeat forest propagation');
+assert.equal(
+  directionalDiagnostics.buildCount,
+  directionalBuildsAfterFirstThreat,
+  'dynamic strength/confidence/suppression must not rebuild directional terrain geometry',
+);
 
 blue.tacticalKnowledge.revision += 1;
 const evidenceRevisionOnly = buildSoldierAwarenessReport(state, blue);
@@ -126,6 +137,7 @@ assert.equal(
   'knowledge revision without content change must not invalidate awareness or geometry content keys',
 );
 assert.equal(getThreatRelativeCoverFieldDiagnostics(state.map).geometryBuildCount, 1);
+assert.equal(getDirectionalTacticalFieldDiagnostics(state.map).buildCount, directionalBuildsAfterFirstThreat);
 
 for (const confidence of [66, 61, 57, 52]) {
   threat.confidence = confidence;
@@ -139,6 +151,11 @@ assert.equal(
   1,
   'sequential decay rescoring must not rebuild threat-relative geometry',
 );
+assert.equal(
+  getDirectionalTacticalFieldDiagnostics(state.map).buildCount,
+  directionalBuildsAfterFirstThreat,
+  'sequential decay must not rebuild directional terrain geometry',
+);
 
 red.position = { x: 30.5, y: 30.5 };
 blue.tacticalKnowledge.revision += 1;
@@ -148,6 +165,7 @@ assert.equal(
   1,
   'hidden objective movement must not invalidate geometry while subjective estimated position is unchanged',
 );
+assert.equal(getDirectionalTacticalFieldDiagnostics(state.map).buildCount, directionalBuildsAfterFirstThreat);
 
 const protectedBeforeReliefChange = evaluateCoverBetween(
   state.map,
@@ -182,6 +200,11 @@ assert.equal(
   2,
   'estimated subjective threat movement must rebuild its geometry field',
 );
+assert.equal(
+  getDirectionalTacticalFieldDiagnostics(state.map).buildCount,
+  directionalBuildsAfterFirstThreat + 2,
+  'height revision and subjective threat movement must each rebuild directional terrain geometry',
+);
 
 state.map.objects[0].x += 1;
 buildSoldierAwarenessReport(state, blue);
@@ -210,6 +233,7 @@ for (let index = 0; index < 24; index += 1) {
   });
 }
 diagnostics = getThreatRelativeCoverFieldDiagnostics(state.map);
+directionalDiagnostics = getDirectionalTacticalFieldDiagnostics(state.map);
 assert.ok(diagnostics.cachedFieldCount <= 16, `cache must remain bounded, got ${diagnostics.cachedFieldCount}`);
 assert.ok(diagnostics.evictionCount > 0, 'bounded cache exercise must evict old geometry fields');
 assert.ok(
@@ -227,8 +251,10 @@ console.log(JSON.stringify({
   objectChecks: diagnostics.objectChecks,
   cachedFieldCount: diagnostics.cachedFieldCount,
   evictionCount: diagnostics.evictionCount,
+  directionalBuildCount: directionalDiagnostics.buildCount,
+  directionalCacheHitCount: directionalDiagnostics.cacheHitCount,
 }, null, 2));
-console.log('Danger layer performance smoke passed: dynamic threat changes reuse bounded object/forest geometry and preserve wall-side semantics.');
+console.log('Danger layer performance smoke passed: dynamic threat changes reuse bounded object/forest and directional terrain geometry while preserving wall-side semantics.');
 
 function unit(id: string): UnitModel {
   const found = state.units.find((candidate) => candidate.id === id);
