@@ -1,5 +1,6 @@
 import { distance, type GridPosition } from '../geometry';
 import { type MapObject, type MapObjectKind, type TacticalMap } from '../map/MapModel';
+import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
 import type { PressureZone } from '../pressure/PressureZone';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
@@ -58,7 +59,19 @@ export interface UnitKnowledgeReport {
   dangers: KnowledgeDanger[];
 }
 
+interface UnitKnowledgeCacheEntry {
+  readonly map: TacticalMap;
+  readonly key: string;
+  readonly report: UnitKnowledgeReport;
+}
+
+const reportCache = new WeakMap<UnitModel, UnitKnowledgeCacheEntry>();
+
 export function buildUnitKnowledgeReport(state: SimulationState, unit: UnitModel): UnitKnowledgeReport {
+  const key = buildUnitKnowledgeCacheKey(state, unit);
+  const cached = reportCache.get(unit);
+  if (cached && cached.map === state.map && cached.key === key) return cached.report;
+
   const viewRangeMeters = unit.viewRangeCells * state.map.metersPerCell;
   const knownAreaMeters = Math.max(viewRangeMeters, PLAN_COVER_METERS);
   const allCovers = [
@@ -78,13 +91,42 @@ export function buildUnitKnowledgeReport(state: SimulationState, unit: UnitModel
     .sort((a, b) => Number(b.visibleNow) - Number(a.visibleNow) || a.distanceMeters - b.distanceMeters)
     .slice(0, MAX_DANGER_ROWS);
 
-  return {
+  const report = {
     viewRangeMeters,
     knownAreaMeters,
     nearbyCovers,
     planCovers,
     dangers,
   };
+  reportCache.set(unit, { map: state.map, key, report });
+  return report;
+}
+
+function buildUnitKnowledgeCacheKey(state: SimulationState, unit: UnitModel): string {
+  const revisions = getMapRevisionSnapshot(state.map);
+  return [
+    state.map.width,
+    state.map.height,
+    state.map.metersPerCell,
+    revisions.height,
+    revisions.forest,
+    revisions.objects,
+    unit.position.x.toFixed(3),
+    unit.position.y.toFixed(3),
+    unit.viewRangeCells.toFixed(3),
+    unit.behaviorRuntime.posture,
+    state.pressureZones.map((zone) => [
+      zone.id,
+      zone.labels.ru,
+      zone.shape,
+      zone.x.toFixed(3),
+      zone.y.toFixed(3),
+      zone.radiusCells.toFixed(3),
+      zone.widthCells.toFixed(3),
+      zone.heightCells.toFixed(3),
+      zone.strength.toFixed(2),
+    ].join(':')).join('|'),
+  ].join('#');
 }
 
 function buildObjectCovers(map: TacticalMap, unit: UnitModel): KnowledgeCover[] {
@@ -244,10 +286,10 @@ function formatObjectKind(kind: MapObjectKind): string {
     structure: 'дом',
     cover: 'укрытие',
     ditch: 'канава',
+    logs: 'брёвна',
     crates: 'ящики / бочки',
     fence: 'забор',
     post: 'пост / бочки',
-    logs: 'брёвна',
     well: 'колодец / круглый объект',
     bridge: 'мост',
   };

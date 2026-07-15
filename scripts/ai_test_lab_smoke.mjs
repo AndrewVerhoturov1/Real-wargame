@@ -121,7 +121,8 @@ expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
   'buildSoldierAwarenessReport',
   'bestSafePositions',
   'awarenessMode',
-  "mode === 'stealth'",
+  'STEALTH_PIXEL_LUT',
+  'drawAwarenessRasterWords',
 ]);
 expectIncludes('src/rendering/PixiApp.ts', [
   'PixiThreatEditorRenderer',

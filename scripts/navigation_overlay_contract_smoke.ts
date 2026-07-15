@@ -30,9 +30,9 @@ async function main(): Promise<void> {
   verifyMapIdentityIsolation();
   verifyProfileSwitchInvalidatesField();
   verifyHoverAndTextureCounters();
-  verifySharedDirectionalFieldMovementBucket();
+  verifySharedDirectionalFieldContentKey();
   await verifyRendererBoundary();
-  console.log('Navigation overlay contract smoke passed: storage, map identity, typed-array hover, movement-stable shared terrain cache, hidden directional diagnostics, texture counters and renderer/A* separation.');
+  console.log('Navigation overlay contract smoke passed: storage, map identity, typed-array hover, content-keyed shared terrain cache, hidden directional diagnostics, texture counters and renderer/A* separation.');
 }
 
 function verifySelectedPlayerProfileResolution(): void {
@@ -139,7 +139,7 @@ function verifyHoverAndTextureCounters(): void {
   assert.equal(after.dynamicCostBuildCount, before.dynamicCostBuildCount, 'hover must not rebuild dynamic cost');
 }
 
-function verifySharedDirectionalFieldMovementBucket(): void {
+function verifySharedDirectionalFieldContentKey(): void {
   const map = normalizeMap(makeMap([]));
   const threat = {
     id: 'stable-east-threat',
@@ -158,27 +158,54 @@ function verifySharedDirectionalFieldMovementBucket(): void {
     threats: [threat],
   });
   const afterFirst = getDirectionalTacticalFieldDiagnostics(map);
-  const sameBucket = getDirectionalTacticalField(map, {
+
+  const metadataOnly = getDirectionalTacticalField(map, {
+    unitId: 'stable-unit',
+    originX: 1.1,
+    originY: 1.1,
+    knowledgeRevision: 999,
+    threats: [{
+      ...threat,
+      strength: 58,
+      suppression: 41,
+      confidence: 54,
+    }],
+  });
+  const afterMetadataOnly = getDirectionalTacticalFieldDiagnostics(map);
+  assert.equal(metadataOnly, first, 'metadata-only amplitude/revision changes must reuse the shared full-map field');
+  assert.equal(afterMetadataOnly.buildCount, afterFirst.buildCount);
+  assert.equal(afterMetadataOnly.fullMapScanCount, afterFirst.fullMapScanCount);
+  assert.equal(afterMetadataOnly.cacheHitCount, afterFirst.cacheHitCount + 1);
+
+  const moved = getDirectionalTacticalField(map, {
     unitId: 'stable-unit',
     originX: 1.4,
     originY: 1.4,
-    knowledgeRevision: 999,
-    threats: [threat],
-  });
-  const afterSameBucket = getDirectionalTacticalFieldDiagnostics(map);
-  assert.equal(sameBucket, first, 'small movement and metadata-only knowledge revisions must reuse the shared full-map field');
-  assert.equal(afterSameBucket.buildCount, afterFirst.buildCount);
-  assert.equal(afterSameBucket.cacheHitCount, afterFirst.cacheHitCount + 1);
-
-  getDirectionalTacticalField(map, {
-    unitId: 'stable-unit',
-    originX: 2.1,
-    originY: 1.1,
     knowledgeRevision: 1000,
     threats: [threat],
   });
-  const afterNextBucket = getDirectionalTacticalFieldDiagnostics(map);
-  assert.equal(afterNextBucket.buildCount, afterFirst.buildCount + 1, 'crossing a whole-cell origin bucket must build exactly one new field');
+  const afterMovement = getDirectionalTacticalFieldDiagnostics(map);
+  assert.notEqual(moved, first, 'movement that changes normalized directional content must build a new field');
+  assert.notEqual(moved.key, first.key, 'materially different normalized sector weights must have different content keys');
+  assert.equal(afterMovement.buildCount, afterFirst.buildCount + 1);
+  assert.equal(afterMovement.fullMapScanCount, afterFirst.fullMapScanCount + 1);
+
+  const restored = getDirectionalTacticalField(map, {
+    unitId: 'stable-unit',
+    originX: 1.1,
+    originY: 1.1,
+    knowledgeRevision: 1001,
+    threats: [{
+      ...threat,
+      strength: 72,
+      suppression: 62,
+      confidence: 67,
+    }],
+  });
+  const afterRestore = getDirectionalTacticalFieldDiagnostics(map);
+  assert.equal(restored, first, 'returning to the same normalized directional content must hit the retained LRU field');
+  assert.equal(afterRestore.buildCount, afterMovement.buildCount);
+  assert.equal(afterRestore.cacheHitCount, afterMovement.cacheHitCount + 1);
 }
 
 async function verifyRendererBoundary(): Promise<void> {

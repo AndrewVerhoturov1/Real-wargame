@@ -1,5 +1,9 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
-import { evaluateCoverBetween } from '../cover/CoverEvaluation';
+import {
+  getThreatRelativeCoverField,
+  readThreatRelativeCoverProtection,
+  type ThreatRelativeCoverField,
+} from '../cover/ThreatRelativeCoverField';
 import { distance, type GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
 import type { SimulationState } from '../simulation/SimulationState';
@@ -17,6 +21,10 @@ import {
   getAwarenessStaticField,
   type AwarenessStaticField,
 } from './AwarenessStaticField';
+import {
+  rememberAwarenessGeometrySignature,
+  tryRescoreAwarenessField,
+} from './AwarenessDynamicRescore';
 
 export type SoldierAwarenessMode = 'off' | 'all' | 'danger' | 'cover' | 'safe' | 'stealth' | 'memory' | 'uncertainty' | 'objective';
 
@@ -83,6 +91,8 @@ interface CachedAwareness {
   routeDanger: number;
 }
 
+type ThreatCoverFields = ReadonlyMap<string, ThreatRelativeCoverField>;
+
 const cache = new WeakMap<UnitModel, CachedAwareness>();
 const MAX_SAFE_POSITIONS = 8;
 const SAFE_SEARCH_RADIUS_METERS = 120;
@@ -109,17 +119,30 @@ export function buildSoldierAwarenessReport(
   let cached = cache.get(unit);
 
   if (!cached || cached.key !== key) {
-    const field = buildAwarenessField(state, unit, key, staticField, directionalField);
-    cached = {
-      key,
-      field,
-      positionKey: '',
-      currentPosition: field.cells[0] ?? emptyAwarenessCell(unit.position),
-      bestSafePositions: [],
-      routeKey: '',
-      routeDanger: 0,
-    };
-    cache.set(unit, cached);
+    const rescored = cached
+      ? tryRescoreAwarenessField(state.map, unit, cached.field.cells, staticField, directionalField)
+      : false;
+
+    if (cached && rescored) {
+      cached.key = key;
+      cached.field.cacheKey = key;
+      cached.field.threatConfidence = currentThreatConfidence(unit);
+      cached.positionKey = '';
+      cached.routeKey = '';
+    } else {
+      const field = buildAwarenessField(state, unit, key, staticField, directionalField);
+      rememberAwarenessGeometrySignature(state.map, unit, staticField, directionalField);
+      cached = {
+        key,
+        field,
+        positionKey: '',
+        currentPosition: field.cells[0] ?? emptyAwarenessCell(unit.position),
+        bestSafePositions: [],
+        routeKey: '',
+        routeDanger: 0,
+      };
+      cache.set(unit, cached);
+    }
   }
 
   const positionKey = `${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`;
@@ -154,28 +177,31 @@ function buildAwarenessField(
   directionalField: DirectionalTacticalField,
 ): AwarenessField {
   const cells: SoldierAwarenessCell[] = new Array(state.map.width * state.map.height);
+  const threatCoverFields = buildThreatCoverFields(state.map, unit);
   for (let y = 0; y < state.map.height; y += 1) {
     for (let x = 0; x < state.map.width; x += 1) {
       cells[y * state.map.width + x] = evaluateAwarenessFieldCell(
-        state.map,
         unit,
         { x: x + 0.5, y: y + 0.5 },
         staticField,
         directionalField,
+        threatCoverFields,
       );
     }
   }
-
-  const threatConfidence = unit.tacticalKnowledge.threats.length > 0
-    ? Math.round(Math.max(...unit.tacticalKnowledge.threats.map((threat) => threat.confidence)))
-    : 0;
 
   return {
     unitId: unit.id,
     cacheKey: key,
     cells,
-    threatConfidence,
+    threatConfidence: currentThreatConfidence(unit),
   };
+}
+
+function currentThreatConfidence(unit: UnitModel): number {
+  return unit.tacticalKnowledge.threats.length > 0
+    ? Math.round(Math.max(...unit.tacticalKnowledge.threats.map((threat) => threat.confidence)))
+    : 0;
 }
 
 function buildBestSafePositions(
@@ -184,24 +210,33 @@ function buildBestSafePositions(
   unitPosition: GridPosition,
 ): SoldierSafePosition[] {
   const searchRadiusCells = SAFE_SEARCH_RADIUS_METERS / Math.max(0.001, map.metersPerCell);
+  const searchRadiusSquared = searchRadiusCells * searchRadiusCells;
   const minX = Math.max(0, Math.floor(unitPosition.x - searchRadiusCells));
   const maxX = Math.min(map.width - 1, Math.ceil(unitPosition.x + searchRadiusCells));
   const minY = Math.max(0, Math.floor(unitPosition.y - searchRadiusCells));
   const maxY = Math.min(map.height - 1, Math.ceil(unitPosition.y + searchRadiusCells));
-  const candidates: SoldierSafePosition[] = [];
+  const best: SoldierSafePosition[] = [];
 
   for (let y = minY; y <= maxY; y += 1) {
+    const positionY = y + 0.5;
+    const dy = positionY - unitPosition.y;
     for (let x = minX; x <= maxX; x += 1) {
       const cell = cells[y * map.width + x];
       if (!cell) continue;
-      const position = { x: x + 0.5, y: y + 0.5 };
-      const distanceCells = distance(unitPosition, position);
+      const positionX = x + 0.5;
+      const dx = positionX - unitPosition.x;
+      const distanceSquared = dx * dx + dy * dy;
+      if (distanceSquared > searchRadiusSquared) continue;
+      const distanceCells = Math.sqrt(distanceSquared);
       const distanceMeters = distanceCells * map.metersPerCell;
-      if (distanceMeters > SAFE_SEARCH_RADIUS_METERS) continue;
       const score = cell.safety - distanceMeters * SAFE_DISTANCE_PENALTY_PER_METER;
       if (score <= 18) continue;
-      candidates.push({
-        position,
+      if (best.length === MAX_SAFE_POSITIONS && score <= best[MAX_SAFE_POSITIONS - 1].score) continue;
+
+      let insertionIndex = 0;
+      while (insertionIndex < best.length && best[insertionIndex].score >= score) insertionIndex += 1;
+      best.splice(insertionIndex, 0, {
+        position: { x: positionX, y: positionY },
         score,
         danger: cell.danger,
         expectedProtection: cell.expectedProtection,
@@ -211,12 +246,11 @@ function buildBestSafePositions(
         distanceCells,
         sourceRu: cell.sourceRu,
       });
+      if (best.length > MAX_SAFE_POSITIONS) best.pop();
     }
   }
 
-  return candidates
-    .sort((left, right) => right.score - left.score)
-    .slice(0, MAX_SAFE_POSITIONS);
+  return best;
 }
 
 export function evaluateRouteDanger(
@@ -233,13 +267,20 @@ export function evaluateRouteDanger(
     knowledgeRevision: unit.tacticalKnowledge.revision,
     threats: unit.tacticalKnowledge.threats,
   });
+  const threatCoverFields = buildThreatCoverFields(state.map, unit);
   const lengthMeters = distance(start, end) * state.map.metersPerCell;
   const samples = Math.max(2, Math.ceil(lengthMeters / ROUTE_SAMPLE_STEP_METERS));
   let total = 0;
   for (let index = 0; index <= samples; index += 1) {
     const t = index / samples;
     const point = { x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t };
-    total += evaluateAwarenessFieldCell(state.map, unit, point, staticField, directionalField).danger;
+    total += evaluateAwarenessFieldCell(
+      unit,
+      point,
+      staticField,
+      directionalField,
+      threatCoverFields,
+    ).danger;
   }
   return Math.round(total / (samples + 1));
 }
@@ -261,12 +302,25 @@ function evaluateRouteDangerFromField(
   return Math.round(total / (samples + 1));
 }
 
+function buildThreatCoverFields(map: TacticalMap, unit: UnitModel): ThreatCoverFields {
+  const fields = new Map<string, ThreatRelativeCoverField>();
+  for (const threat of unit.tacticalKnowledge.threats) {
+    if (threat.mode !== 'directional_fire') continue;
+    fields.set(threat.id, getThreatRelativeCoverField(map, {
+      threatId: threat.id,
+      threatPosition: { x: threat.x, y: threat.y },
+      posture: unit.behaviorRuntime.posture,
+    }));
+  }
+  return fields;
+}
+
 function evaluateAwarenessFieldCell(
-  map: TacticalMap,
   unit: UnitModel,
   position: GridPosition,
   staticField: AwarenessStaticField,
   directionalField: DirectionalTacticalField,
+  threatCoverFields: ThreatCoverFields,
 ): SoldierAwarenessCell {
   const local = getAwarenessStaticCell(staticField, position);
   const directional = readDirectionalTacticalCell(
@@ -307,13 +361,7 @@ function evaluateAwarenessFieldCell(
     );
     const threatProtection = threat.mode === 'directional_fire'
       ? combinePercent(
-          evaluateCoverBetween(
-            map,
-            { x: threat.x, y: threat.y },
-            position,
-            unit.behaviorRuntime.posture,
-            { includeRelief: false },
-          ).protection,
+          readThreatRelativeCoverProtection(threatCoverFields.get(threat.id)!, position),
           terrainProtection,
         )
       : combinePercent(local.expectedProtection, terrainProtection * 0.35);

@@ -9,6 +9,7 @@ import { getSimulationLayerState } from '../core/ui/RuntimeUiState';
 import type { UnitModel } from '../core/units/UnitModel';
 
 type VisibleAwarenessMode = 'danger' | 'stealth';
+type SafePositions = ReturnType<typeof buildSoldierAwarenessReport>['bestSafePositions'];
 
 export interface AwarenessOverlayDiagnostics {
   representation: 'raster-sprite';
@@ -28,6 +29,9 @@ type AwarenessDebugWindow = Window & {
 
 const mapIdentity = new WeakMap<object, number>();
 let nextMapIdentity = 1;
+const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([0x01020304]).buffer)[0] === 0x04;
+const DANGER_PIXEL_LUT = buildPixelLut('danger');
+const STEALTH_PIXEL_LUT = buildPixelLut('stealth');
 
 export class PixiAwarenessHeatmapRenderer {
   readonly container = new Container();
@@ -41,9 +45,12 @@ export class PixiAwarenessHeatmapRenderer {
     strokeThickness: 4,
   });
   private lastRasterKey = '';
+  private lastMarkerInputKey = '';
   private lastMarkerKey = '';
-  private rasterCanvas: HTMLCanvasElement | null = null;
-  private rasterContext: CanvasRenderingContext2D | null = null;
+  private rasterPixels: Uint8Array | null = null;
+  private rasterPixelWords: Uint32Array | null = null;
+  private rasterWidth = 0;
+  private rasterHeight = 0;
   private rasterTexture: Texture | null = null;
   private rasterSprite: Sprite | null = null;
   private rebuildCount = 0;
@@ -63,6 +70,7 @@ export class PixiAwarenessHeatmapRenderer {
     if (state.editor.enabled || awarenessMode === 'off' || !unit) {
       this.container.visible = false;
       this.lastRasterKey = 'hidden';
+      this.lastMarkerInputKey = 'hidden';
       this.lastMarkerKey = 'hidden';
       this.publishDiagnostics();
       return;
@@ -72,24 +80,18 @@ export class PixiAwarenessHeatmapRenderer {
     // Do not build the expensive full-map report on every animation frame.
     // Orders and movement change often, but they do not change the heatmap pixels themselves.
     const rasterKey = buildAwarenessRenderKey(state, unit, awarenessMode);
-    const markerKey = `${rasterKey};unitCell:${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`;
+    const markerInputKey = buildAwarenessMarkerInputKey(state, unit, awarenessMode);
     const rasterChanged = rasterKey !== this.lastRasterKey;
-    const markerChanged = markerKey !== this.lastMarkerKey;
-    if (!rasterChanged && !markerChanged) return;
+    const markerInputChanged = markerInputKey !== this.lastMarkerInputKey;
+    if (!rasterChanged && !markerInputChanged) return;
 
     const startedAt = rasterChanged ? performance.now() : 0;
     const report = buildSoldierAwarenessReport(state, unit);
     this.ensureRaster(state.map.width, state.map.height, state.map.cellSize);
-    if (!this.rasterContext || !this.rasterTexture) return;
+    if (!this.rasterPixelWords || !this.rasterTexture) return;
 
     if (rasterChanged) {
-      drawAwarenessRaster(
-        this.rasterContext,
-        report.cells,
-        awarenessMode,
-        state.map.width,
-        state.map.height,
-      );
+      drawAwarenessRasterWords(this.rasterPixelWords, report.cells, awarenessMode);
       this.rasterTexture.baseTexture.update();
       this.title.text = `СЛОЙ БОЙЦА: ${modeLabel(awarenessMode)}`;
       this.lastRasterKey = rasterKey;
@@ -98,11 +100,17 @@ export class PixiAwarenessHeatmapRenderer {
       this.maxBuildMs = Math.max(this.maxBuildMs, this.lastBuildMs);
     }
 
-    if (markerChanged) {
+    const markerKey = buildAwarenessMarkerKey(
+      report.bestSafePositions,
+      awarenessMode,
+      state.map.cellSize,
+    );
+    if (markerKey !== this.lastMarkerKey) {
       this.drawSafePositionMarkers(report.bestSafePositions, awarenessMode, state.map.cellSize);
       this.lastMarkerKey = markerKey;
       this.markerUpdateCount += 1;
     }
+    this.lastMarkerInputKey = markerInputKey;
     this.publishDiagnostics();
   }
 
@@ -115,26 +123,27 @@ export class PixiAwarenessHeatmapRenderer {
       lastBuildMs: roundMs(this.lastBuildMs),
       maxBuildMs: roundMs(this.maxBuildMs),
       displayObjectCount: this.container.children.length,
-      rasterWidth: this.rasterCanvas?.width ?? 0,
-      rasterHeight: this.rasterCanvas?.height ?? 0,
+      rasterWidth: this.rasterWidth,
+      rasterHeight: this.rasterHeight,
     };
   }
 
   private ensureRaster(width: number, height: number, cellSize: number): void {
-    const needsNewRaster = !this.rasterCanvas
-      || this.rasterCanvas.width !== width
-      || this.rasterCanvas.height !== height;
+    const needsNewRaster = !this.rasterPixels
+      || this.rasterWidth !== width
+      || this.rasterHeight !== height;
 
     if (needsNewRaster) {
       this.container.removeChildren();
       this.rasterSprite?.destroy();
       this.rasterTexture?.destroy(true);
-      this.rasterCanvas = document.createElement('canvas');
-      this.rasterCanvas.width = width;
-      this.rasterCanvas.height = height;
-      this.rasterContext = this.rasterCanvas.getContext('2d', { alpha: true });
-      this.rasterTexture = Texture.from(this.rasterCanvas);
-      this.rasterTexture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+      this.rasterWidth = width;
+      this.rasterHeight = height;
+      this.rasterPixels = new Uint8Array(width * height * 4);
+      this.rasterPixelWords = new Uint32Array(this.rasterPixels.buffer);
+      this.rasterTexture = Texture.fromBuffer(this.rasterPixels, width, height, {
+        scaleMode: SCALE_MODES.NEAREST,
+      });
       this.rasterSprite = new Sprite(this.rasterTexture);
       this.container.addChild(this.rasterSprite, this.markerGraphics, this.title);
     }
@@ -143,13 +152,15 @@ export class PixiAwarenessHeatmapRenderer {
   }
 
   private drawSafePositionMarkers(
-    positions: ReturnType<typeof buildSoldierAwarenessReport>['bestSafePositions'],
+    positions: SafePositions,
     mode: VisibleAwarenessMode,
     cellSize: number,
   ): void {
     this.markerGraphics.clear();
     if (mode !== 'danger') return;
-    for (const [index, best] of positions.slice(0, 5).entries()) {
+    const markerCount = Math.min(5, positions.length);
+    for (let index = 0; index < markerCount; index += 1) {
+      const best = positions[index];
       const x = best.position.x * cellSize;
       const y = best.position.y * cellSize;
       this.markerGraphics.lineStyle(index === 0 ? 4 : 2, 0xefff9a, 0.95);
@@ -180,6 +191,21 @@ export function buildAwarenessRenderKey(
   ].join(';');
 }
 
+export function buildAwarenessMarkerKey(
+  positions: SafePositions,
+  mode: VisibleAwarenessMode,
+  cellSize: number,
+): string {
+  if (mode !== 'danger') return `mode:${mode};cellSize:${cellSize};markers:none`;
+  const markerCount = Math.min(5, positions.length);
+  let key = `mode:${mode};cellSize:${cellSize};markers:${markerCount}`;
+  for (let index = 0; index < markerCount; index += 1) {
+    const position = positions[index].position;
+    key += `;${index}:${position.x}:${position.y}`;
+  }
+  return key;
+}
+
 export function createAwarenessTexture(
   cells: SoldierAwarenessCell[],
   mode: VisibleAwarenessMode,
@@ -202,16 +228,88 @@ export function drawAwarenessRaster(
   height: number,
 ): void {
   const image = context.createImageData(width, height);
-  for (const cell of cells) {
-    const metric = metricForMode(cell, mode);
-    if (metric.value <= 2) continue;
-    const index = (cell.y * width + cell.x) * 4;
-    image.data[index] = (metric.color >> 16) & 0xff;
-    image.data[index + 1] = (metric.color >> 8) & 0xff;
-    image.data[index + 2] = metric.color & 0xff;
-    image.data[index + 3] = Math.round(metric.alpha * 255);
-  }
+  drawAwarenessRasterWords(new Uint32Array(image.data.buffer), cells, mode);
   context.putImageData(image, 0, 0);
+}
+
+export function drawAwarenessRasterWords(
+  pixels: Uint32Array,
+  cells: SoldierAwarenessCell[],
+  mode: VisibleAwarenessMode,
+): void {
+  const length = Math.min(cells.length, pixels.length);
+  const lut = mode === 'danger' ? DANGER_PIXEL_LUT : STEALTH_PIXEL_LUT;
+  const dangerMode = mode === 'danger';
+  for (let cellIndex = 0; cellIndex < length; cellIndex += 1) {
+    const cell = cells[cellIndex];
+    const value = dangerMode ? cell.danger : cell.concealment;
+    pixels[cellIndex] = lut[Math.max(0, Math.min(100, value))] ?? 0;
+  }
+  if (length < pixels.length) pixels.fill(0, length);
+}
+
+function buildAwarenessMarkerInputKey(
+  state: SimulationState,
+  unit: UnitModel,
+  mode: VisibleAwarenessMode,
+): string {
+  return [
+    `mode:${mode}`,
+    `map:${getMapIdentity(state.map)}`,
+    `cellSize:${state.map.cellSize}`,
+    `unit:${unit.id}`,
+    `unitCell:${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`,
+  ].join(';');
+}
+
+function buildPixelLut(mode: VisibleAwarenessMode): Uint32Array {
+  const result = new Uint32Array(101);
+  for (let value = 0; value <= 100; value += 1) {
+    if (value <= 2) continue;
+    let red: number;
+    let green: number;
+    let blue: number;
+    if (mode === 'danger') {
+      if (value >= 70) {
+        red = 0xe8;
+        green = 0x3d;
+        blue = 0x32;
+      } else if (value >= 40) {
+        red = 0xff;
+        green = 0x7a;
+        blue = 0x31;
+      } else {
+        red = 0xf2;
+        green = 0xc8;
+        blue = 0x4b;
+      }
+    } else if (value >= 75) {
+      red = 0x1c;
+      green = 0x6b;
+      blue = 0x45;
+    } else if (value >= 50) {
+      red = 0x3d;
+      green = 0xa8;
+      blue = 0x5f;
+    } else if (value >= 25) {
+      red = 0xd7;
+      green = 0xb9;
+      blue = 0x4b;
+    } else {
+      red = 0xd9;
+      green = 0x77;
+      blue = 0x32;
+    }
+    const alpha = Math.round(Math.min(0.55, 0.08 + value / 100 * 0.46) * 255);
+    result[value] = packRgba(red, green, blue, alpha);
+  }
+  return result;
+}
+
+function packRgba(red: number, green: number, blue: number, alpha: number): number {
+  return LITTLE_ENDIAN
+    ? (red | green << 8 | blue << 16 | alpha << 24) >>> 0
+    : (red << 24 | green << 16 | blue << 8 | alpha) >>> 0;
 }
 
 function getMapIdentity(map: object): number {
@@ -221,31 +319,6 @@ function getMapIdentity(map: object): number {
   nextMapIdentity += 1;
   mapIdentity.set(map, identity);
   return identity;
-}
-
-function metricForMode(
-  cell: SoldierAwarenessCell,
-  mode: VisibleAwarenessMode,
-): { value: number; color: number; alpha: number } {
-  if (mode === 'danger') return { value: cell.danger, color: dangerColor(cell.danger), alpha: alpha(cell.danger) };
-  return { value: cell.concealment, color: stealthColor(cell.concealment), alpha: alpha(cell.concealment) };
-}
-
-function dangerColor(value: number): number {
-  if (value >= 70) return 0xe83d32;
-  if (value >= 40) return 0xff7a31;
-  return 0xf2c84b;
-}
-
-function stealthColor(value: number): number {
-  if (value >= 75) return 0x1c6b45;
-  if (value >= 50) return 0x3da85f;
-  if (value >= 25) return 0xd7b94b;
-  return 0xd97732;
-}
-
-function alpha(value: number): number {
-  return Math.min(0.55, 0.08 + value / 100 * 0.46);
 }
 
 function modeLabel(mode: VisibleAwarenessMode): string {

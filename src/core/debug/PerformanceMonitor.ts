@@ -1,4 +1,8 @@
+import { getThreatRelativeCoverFieldDiagnostics } from '../cover/ThreatRelativeCoverField';
+import { getAwarenessDynamicRescoreDiagnostics } from '../knowledge/AwarenessDynamicRescore';
+import { getAwarenessStaticFieldDiagnostics } from '../knowledge/AwarenessStaticField';
 import type { SimulationState } from '../simulation/SimulationState';
+import { getDirectionalTacticalFieldDiagnostics } from '../terrain/DirectionalTacticalField';
 import { getSimulationLayerState } from '../ui/RuntimeUiState';
 
 export interface PerformanceFrameSample {
@@ -30,6 +34,7 @@ export interface PerformanceReport {
   renderer: Record<string, unknown>;
   scene: Record<string, unknown>;
   editor: Record<string, unknown>;
+  computation: Record<string, unknown>;
   summary: Record<string, unknown>;
   longTasks: Array<{ startMs: number; durationMs: number }>;
   samples: PerformanceFrameSample[];
@@ -110,9 +115,12 @@ export class PerformanceMonitor {
       ? (samples.length - 1) * 1000 / sampledDurationMs
       : null;
     const p95FrameMs = percentile(frameValues, 0.95);
+    const selectedUnit = state.selectedUnitId
+      ? state.units.find((unit) => unit.id === state.selectedUnitId)
+      : undefined;
 
     return {
-      version: 'performance-report-v2',
+      version: 'performance-report-v3',
       exportedAt: new Date().toISOString(),
       runtimeSeconds: roundOne((performance.now() - this.startedAt) / 1000),
       browser: getBrowserInfo(),
@@ -141,6 +149,16 @@ export class PerformanceMonitor {
         selectedObjectId: state.editor.selectedObjectId,
         selectedZoneId: state.editor.selectedZoneId,
         selectedUnitId: state.selectedUnitId,
+      },
+      computation: {
+        threatRelativeCover: getThreatRelativeCoverFieldDiagnostics(state.map),
+        directionalTactical: getDirectionalTacticalFieldDiagnostics(state.map),
+        awarenessStatic: selectedUnit
+          ? getAwarenessStaticFieldDiagnostics(state.map, selectedUnit.behaviorRuntime.posture)
+          : null,
+        awarenessDynamicRescore: selectedUnit
+          ? getAwarenessDynamicRescoreDiagnostics(selectedUnit)
+          : null,
       },
       summary: {
         sampleCount: samples.length,

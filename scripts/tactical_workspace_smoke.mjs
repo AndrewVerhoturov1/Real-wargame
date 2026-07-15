@@ -120,11 +120,11 @@ expectIncludes('src/core/knowledge/AwarenessStaticField.ts', [
 ]);
 expectIncludes('src/core/terrain/DirectionalTacticalField.ts', [
   'sectorProtection', 'sectorExposure', 'terrainProtection', 'terrainConcealment',
-  'ORIGIN_BUCKET_CELLS', 'getDirectionalTacticalFieldDiagnostics',
+  'DIRECTION_WEIGHT_BUCKET', 'normalizedSectorWeights', 'getDirectionalTacticalFieldDiagnostics',
 ]);
 
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
-  'buildAwarenessRenderKey',
+  'buildAwarenessRenderKey', 'buildAwarenessMarkerKey', 'lastMarkerInputKey',
   'Orders and movement change often, but they do not change the heatmap pixels themselves.',
   'lastRasterKey', 'lastMarkerKey', 'markerUpdateCount',
   'Sprite', 'Texture', 'SCALE_MODES.NEAREST', 'createAwarenessTexture', 'drawAwarenessRaster',
@@ -135,7 +135,7 @@ expectExcludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
 ]);
 expectBefore(
   'src/rendering/PixiAwarenessHeatmapRenderer.ts',
-  'if (!rasterChanged && !markerChanged) return;',
+  'if (!rasterChanged && !markerInputChanged) return;',
   'const report = buildSoldierAwarenessReport(state, unit);',
 );
 
