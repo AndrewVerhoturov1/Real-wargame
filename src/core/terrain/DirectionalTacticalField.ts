@@ -13,7 +13,7 @@ import {
 const SECTOR_COUNT = 8;
 const SECTOR_RADIANS = Math.PI / 4;
 const CACHE_LIMIT = 12;
-const DIRECTION_WEIGHT_BUCKET = 0.0001;
+const ORIGIN_BUCKET_CELLS = 1;
 
 export interface DirectionalTacticalFieldOptions {
   readonly unitId: string;
@@ -86,8 +86,7 @@ export function getDirectionalTacticalField(
 ): DirectionalTacticalField {
   const mapCache = getMapCache(map);
   const staticGrid = getDirectionalTerrainStaticGrid(map);
-  const threatField = buildThreatDirectionField(options.originX, options.originY, options.threats);
-  const key = buildKey(staticGrid.mapVisualRevision, threatField);
+  const key = buildKey(staticGrid.mapVisualRevision, options);
   const existing = mapCache.fields.get(key);
   if (existing) {
     mapCache.diagnostics.cacheHitCount += 1;
@@ -96,14 +95,10 @@ export function getDirectionalTacticalField(
       mapCache.fields.set(key, existing);
       mapCache.diagnostics.lastKey = key;
     }
-    // Dynamic confidence/strength can change total threat metadata without changing the
-    // normalized directional distribution that owns the expensive full-map geometry arrays.
-    // Preserve the established same-object contract when even that metadata is unchanged.
-    return sameThreatField(existing.threatField, threatField)
-      ? existing
-      : { ...existing, threatField };
+    return existing;
   }
 
+  const threatField = buildThreatDirectionField(options.originX, options.originY, options.threats);
   const startedAt = performance.now();
   const field = buildField(map, key, threatField);
   mapCache.fields.set(key, field);
@@ -316,29 +311,18 @@ function directionalTerrainSourceRu(cell: Omit<DirectionalTacticalCell, 'sourceR
   return 'открытый склон';
 }
 
-function buildKey(mapVisualRevision: number, threatField: ThreatDirectionField): string {
+function buildKey(mapVisualRevision: number, options: DirectionalTacticalFieldOptions): string {
   return [
     mapVisualRevision,
-    threatField.primarySector,
-    Array.from(threatField.normalizedSectorWeights, (weight) => quantize(weight, DIRECTION_WEIGHT_BUCKET)).join(':'),
+    options.unitId,
+    quantize(options.originX, ORIGIN_BUCKET_CELLS),
+    quantize(options.originY, ORIGIN_BUCKET_CELLS),
+    options.threats.map((threat) => [
+      threat.id,
+      quantize(threat.x, 0.05),
+      quantize(threat.y, 0.05),
+    ].join(':')).join('|'),
   ].join('#');
-}
-
-function sameThreatField(left: ThreatDirectionField, right: ThreatDirectionField): boolean {
-  return left.primarySector === right.primarySector
-    && left.totalWeight === right.totalWeight
-    && left.strongestSectorShare === right.strongestSectorShare
-    && left.contributingThreatCount === right.contributingThreatCount
-    && sameFloatArray(left.sectorWeights, right.sectorWeights)
-    && sameFloatArray(left.normalizedSectorWeights, right.normalizedSectorWeights);
-}
-
-function sameFloatArray(left: Float32Array, right: Float32Array): boolean {
-  if (left.length !== right.length) return false;
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) return false;
-  }
-  return true;
 }
 
 function getMapCache(map: TacticalMap): MapCache {
