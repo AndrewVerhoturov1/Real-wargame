@@ -6,16 +6,26 @@ on:
       - real-wargame-preview
     paths:
       - '.github/workflows/danger-layer-browser-performance.yml'
+      - 'vite.config.ts'
       - 'playwright.performance.config.ts'
       - 'src/core/cover/**'
       - 'src/core/knowledge/**'
       - 'src/core/terrain/**'
       - 'src/core/debug/PerformanceMonitor.ts'
+      - 'src/core/debug/BuildIdentity.ts'
+      - 'src/core/debug/AwarenessMovementDiagnostics.ts'
+      - 'src/core/simulation/**'
+      - 'src/core/perception/**'
+      - 'src/core/orders/**'
       - 'src/rendering/PixiAwarenessHeatmapRenderer.ts'
       - 'src/testing/CombatTacticalIntegrationVisualQaHarness.ts'
+      - 'src/testing/DangerLayerMovementPerformanceHarness.ts'
+      - 'src/workers/**'
       - 'tests/danger-layer-browser-performance.spec.ts'
+      - 'tests/danger-layer-movement-performance.spec.ts'
       - 'scripts/compare_danger_layer_browser_performance.mjs'
       - 'scripts/danger_layer_performance_smoke.*'
+      - 'scripts/danger_layer_movement_performance_smoke.*'
       - 'scripts/tactical_workspace_smoke.mjs'
       - 'docs/subprojects/ai-single-unit-editor/DANGER_LAYER_PERFORMANCE_CONTRACT.md'
       - 'package.json'
@@ -27,7 +37,7 @@ permissions:
 jobs:
   compare-base-and-head:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - name: Checkout PR head measurement sources
@@ -53,13 +63,17 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Prepare shared measurement
+      - name: Prepare shared exact-build measurement
         shell: bash
         run: |
-          mkdir -p browser-artifacts
+          mkdir -p browser-artifacts baseline/src/core/debug
           cp source/tests/danger-layer-browser-performance.spec.ts baseline/tests/danger-layer-browser-performance.spec.ts
           cp source/src/testing/CombatTacticalIntegrationVisualQaHarness.ts baseline/src/testing/CombatTacticalIntegrationVisualQaHarness.ts
           cp source/playwright.performance.config.ts baseline/playwright.performance.config.ts
+          cp source/vite.config.ts baseline/vite.config.ts
+          cp source/src/core/debug/BuildIdentity.ts baseline/src/core/debug/BuildIdentity.ts
+          cp source/src/core/debug/AwarenessMovementDiagnostics.ts baseline/src/core/debug/AwarenessMovementDiagnostics.ts
+          cp source/src/core/debug/PerformanceMonitor.ts baseline/src/core/debug/PerformanceMonitor.ts
 
       - name: Install baseline dependencies
         working-directory: baseline
@@ -71,6 +85,10 @@ jobs:
       - name: Measure exact base SHA in Chromium
         working-directory: baseline
         env:
+          REAL_WARGAME_BRANCH: ${{ github.event.pull_request.base.ref }}
+          REAL_WARGAME_COMMIT_SHA: ${{ github.event.pull_request.base.sha }}
+          DANGER_PERF_EXPECTED_BRANCH: ${{ github.event.pull_request.base.ref }}
+          DANGER_PERF_EXPECTED_SHA: ${{ github.event.pull_request.base.sha }}
           DANGER_PERF_LABEL: before-base
           DANGER_PERF_OUTPUT: ../browser-artifacts/before.json
         shell: bash
@@ -87,6 +105,10 @@ jobs:
       - name: Measure exact PR head SHA in Chromium
         working-directory: candidate
         env:
+          REAL_WARGAME_BRANCH: ${{ github.event.pull_request.head.ref }}
+          REAL_WARGAME_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+          DANGER_PERF_EXPECTED_BRANCH: ${{ github.event.pull_request.head.ref }}
+          DANGER_PERF_EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
           DANGER_PERF_LABEL: after-head
           DANGER_PERF_OUTPUT: ../browser-artifacts/after.json
         shell: bash
@@ -97,6 +119,19 @@ jobs:
       - name: Compare browser performance acceptance
         shell: bash
         run: node source/scripts/compare_danger_layer_browser_performance.mjs browser-artifacts/before.json browser-artifacts/after.json browser-artifacts/comparison.json
+
+      - name: Run exact-head live movement scenarios
+        working-directory: candidate
+        env:
+          REAL_WARGAME_BRANCH: ${{ github.event.pull_request.head.ref }}
+          REAL_WARGAME_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+          DANGER_PERF_EXPECTED_BRANCH: ${{ github.event.pull_request.head.ref }}
+          DANGER_PERF_EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          DANGER_MOVEMENT_PERF_OUTPUT: ../browser-artifacts/movement.json
+        shell: bash
+        run: |
+          set -o pipefail
+          npx playwright test tests/danger-layer-movement-performance.spec.ts --config=playwright.performance.config.ts --project=chromium --reporter=line 2>&1 | tee ../browser-artifacts/movement-playwright.log
 
       - name: Upload browser performance reports
         if: always()
