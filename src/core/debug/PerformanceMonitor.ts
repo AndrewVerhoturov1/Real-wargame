@@ -4,6 +4,8 @@ import { getAwarenessStaticFieldDiagnostics } from '../knowledge/AwarenessStatic
 import type { SimulationState } from '../simulation/SimulationState';
 import { getDirectionalTacticalFieldDiagnostics } from '../terrain/DirectionalTacticalField';
 import { getSimulationLayerState } from '../ui/RuntimeUiState';
+import { getAwarenessMovementDiagnostics } from './AwarenessMovementDiagnostics';
+import { getRealWargameBuildIdentity, PERFORMANCE_CONTRACT_VERSION } from './BuildIdentity';
 
 export interface PerformanceFrameSample {
   tMs: number;
@@ -26,7 +28,8 @@ export interface PerformanceFrameSample {
 }
 
 export interface PerformanceReport {
-  version: string;
+  version: typeof PERFORMANCE_CONTRACT_VERSION;
+  build: ReturnType<typeof getRealWargameBuildIdentity>;
   exportedAt: string;
   runtimeSeconds: number;
   browser: Record<string, unknown>;
@@ -118,10 +121,15 @@ export class PerformanceMonitor {
     const selectedUnit = state.selectedUnitId
       ? state.units.find((unit) => unit.id === state.selectedUnitId)
       : undefined;
+    const exportedAt = new Date().toISOString();
 
     return {
-      version: 'performance-report-v3',
-      exportedAt: new Date().toISOString(),
+      version: PERFORMANCE_CONTRACT_VERSION,
+      build: {
+        ...getRealWargameBuildIdentity(),
+        generatedAt: exportedAt,
+      },
+      exportedAt,
       runtimeSeconds: roundOne((performance.now() - this.startedAt) / 1000),
       browser: getBrowserInfo(),
       viewport: getViewportInfo(),
@@ -159,6 +167,7 @@ export class PerformanceMonitor {
         awarenessDynamicRescore: selectedUnit
           ? getAwarenessDynamicRescoreDiagnostics(selectedUnit)
           : null,
+        awarenessMovement: getAwarenessMovementDiagnostics(),
       },
       summary: {
         sampleCount: samples.length,
