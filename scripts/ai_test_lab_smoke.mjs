@@ -142,10 +142,16 @@ expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
   'workerResultsStaleDropped',
 ]);
 expectIncludes('src/workers/AwarenessWorldWorker.ts', [
-  'buildSoldierAwarenessReport',
+  'buildAwarenessWorldField',
   'awarenessWorkerTransferables',
+  'fieldIdentity',
+  'rasterDigest',
+]);
+expectIncludes('src/core/knowledge/AwarenessWorldFieldBuilder.ts', [
+  'buildSoldierAwarenessReport',
   'dangerPixels',
   'stealthPixels',
+  'digestAwarenessWorldField',
 ]);
 expectIncludes('src/rendering/PixiApp.ts', [
   'PixiThreatEditorRenderer',
