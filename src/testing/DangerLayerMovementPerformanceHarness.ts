@@ -412,30 +412,28 @@ function installTerrainFixtures(state: SimulationState): void {
 
 function addFixtureWall(state: SimulationState, observer: UnitModel): void {
   const wallX = Math.floor(observer.position.x + 3.5);
-  const safeRadiusCells = Math.ceil(120 / Math.max(0.001, state.map.metersPerCell));
-  const wallStartY = Math.max(0, Math.floor(observer.position.y) - safeRadiusCells - 2);
-  const wallEndY = Math.min(state.map.height - 1, Math.floor(observer.position.y) + safeRadiusCells + 2);
-  const wallGapY = clamp(Math.floor(observer.position.y) + 20, wallStartY + 2, wallEndY - 3);
-  const segments = [
-    { y: wallStartY, heightCells: wallGapY - wallStartY },
-    { y: wallGapY + 2, heightCells: wallEndY - wallGapY - 1 },
-  ].filter((segment) => segment.heightCells > 0);
-  state.map.objects.push(...segments.map((segment, index) => ({
-    id: `${WALL_ID}-${index}`,
-    kind: 'structure' as const,
-    x: wallX,
-    y: segment.y,
-    widthCells: 1,
-    heightCells: segment.heightCells,
-    rotationRadians: 0,
-    losHeightMeters: 0.8,
-    coverProtection: 92,
-    coverReliability: 96,
-    concealment: 10,
-    penetrable: false,
-    coverPosture: 'standing' as const,
-    labels: { en: 'Movement performance wall', ru: 'Стена проверки движения' },
-  })));
+  const centerY = Math.floor(observer.position.y);
+  const wallStartY = Math.max(0, centerY - 6);
+  const wallEndY = Math.min(state.map.height - 1, centerY + 6);
+  state.map.objects.push(...Array.from(
+    { length: wallEndY - wallStartY + 1 },
+    (_, index) => ({
+      id: `${WALL_ID}-${index}`,
+      kind: 'structure' as const,
+      x: wallX,
+      y: wallStartY + index,
+      widthCells: 1,
+      heightCells: 1,
+      rotationRadians: 0,
+      losHeightMeters: 0.8,
+      coverProtection: 92,
+      coverReliability: 96,
+      concealment: 10,
+      penetrable: false,
+      coverPosture: 'standing' as const,
+      labels: { en: 'Movement performance wall', ru: 'Стена проверки движения' },
+    }),
+  ));
   markMapObjectsDirty(state.map);
 }
 
