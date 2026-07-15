@@ -2,6 +2,7 @@ import { buildSoldierAwarenessReport } from '../core/knowledge/SoldierAwarenessG
 import { syncSoldierThreatMemory } from '../core/knowledge/SoldierThreatMemory';
 import { markMapCellsDirty, markMapObjectsDirty } from '../core/map/MapRuntimeState';
 import { issueRoutedMoveOrderToSelectedUnits } from '../core/orders/RoutedMoveOrders';
+import { isMapCellPassable } from '../core/pathfinding/GridNavigation';
 import { advanceVisualContact, upsertPerceptionContact } from '../core/perception/PerceptionContact';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { setAiTestPaused } from '../core/testing/AiTestLabRuntime';
@@ -188,6 +189,13 @@ function resetUnits(
     };
   }
 
+  // A route cannot recover from start_blocked. Snap every test unit to the
+  // nearest unique passable navigation cell before issuing production orders.
+  const occupiedCells = new Set<string>();
+  for (const unit of state.units) {
+    unit.position = findNearestPassableFixturePosition(state, unit.position, occupiedCells);
+  }
+
   observer.facingRadians = 0;
   hostile.facingRadians = Math.PI;
   observer.viewRangeCells = Math.max(state.map.width, state.map.height);
@@ -195,6 +203,31 @@ function resetUnits(
   observer.perceptionKnowledge.contacts = [];
   observer.tacticalKnowledge.threats = [];
   observer.tacticalKnowledge.revision += 1;
+}
+
+function findNearestPassableFixturePosition(
+  state: SimulationState,
+  preferred: { x: number; y: number },
+  occupiedCells: Set<string>,
+): { x: number; y: number } {
+  const centerX = clamp(Math.floor(preferred.x), 0, state.map.width - 1);
+  const centerY = clamp(Math.floor(preferred.y), 0, state.map.height - 1);
+  const maximumRadius = Math.max(state.map.width, state.map.height);
+
+  for (let radius = 0; radius <= maximumRadius; radius += 1) {
+    for (let y = centerY - radius; y <= centerY + radius; y += 1) {
+      for (let x = centerX - radius; x <= centerX + radius; x += 1) {
+        if (Math.max(Math.abs(x - centerX), Math.abs(y - centerY)) !== radius) continue;
+        if (x < 0 || y < 0 || x >= state.map.width || y >= state.map.height) continue;
+        const key = `${x}:${y}`;
+        if (occupiedCells.has(key) || !isMapCellPassable(state.map, x, y)) continue;
+        occupiedCells.add(key);
+        return { x: x + 0.5, y: y + 0.5 };
+      }
+    }
+  }
+
+  throw new Error('Movement performance harness could not find a passable unit start cell.');
 }
 
 function routeAllUnits(
