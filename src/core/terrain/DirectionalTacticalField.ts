@@ -98,7 +98,10 @@ export function getDirectionalTacticalField(
     }
     // Dynamic confidence/strength can change total threat metadata without changing the
     // normalized directional distribution that owns the expensive full-map geometry arrays.
-    return existing.threatField === threatField ? existing : { ...existing, threatField };
+    // Preserve the established same-object contract when even that metadata is unchanged.
+    return sameThreatField(existing.threatField, threatField)
+      ? existing
+      : { ...existing, threatField };
   }
 
   const startedAt = performance.now();
@@ -319,6 +322,23 @@ function buildKey(mapVisualRevision: number, threatField: ThreatDirectionField):
     threatField.primarySector,
     Array.from(threatField.normalizedSectorWeights, (weight) => quantize(weight, DIRECTION_WEIGHT_BUCKET)).join(':'),
   ].join('#');
+}
+
+function sameThreatField(left: ThreatDirectionField, right: ThreatDirectionField): boolean {
+  return left.primarySector === right.primarySector
+    && left.totalWeight === right.totalWeight
+    && left.strongestSectorShare === right.strongestSectorShare
+    && left.contributingThreatCount === right.contributingThreatCount
+    && sameFloatArray(left.sectorWeights, right.sectorWeights)
+    && sameFloatArray(left.normalizedSectorWeights, right.normalizedSectorWeights);
+}
+
+function sameFloatArray(left: Float32Array, right: Float32Array): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
 }
 
 function getMapCache(map: TacticalMap): MapCache {
