@@ -2,7 +2,7 @@ import type { KnownThreatMemory } from '../units/UnitModel';
 
 const UNIT_THREAT_PREFIX = 'unit:';
 const UNIT_CONTACT_RANGE_METERS = 250;
-const POSITION_BUCKET_CELLS = 0.05;
+const WORLD_EVIDENCE_POSITION_BUCKET_CELLS = 0.05;
 const SIZE_BUCKET_CELLS = 0.1;
 const ANGLE_BUCKET_DEGREES = 1;
 const VALUE_BUCKET = 1;
@@ -79,8 +79,17 @@ export function canonicalizeWorldThreat(
   return {
     ...threat,
     worldSemantic: semantic,
-    x: quantize(threat.x, POSITION_BUCKET_CELLS),
-    y: quantize(threat.y, POSITION_BUCKET_CELLS),
+    // A unit contact represents danger on the runtime tactical grid. Sub-cell
+    // interpolation is useful for animation, but transferring a full 64k-cell
+    // field for every visual frame only creates redundant raster identities and
+    // main-thread transfer/GC pressure. Keep the remembered contact at its current
+    // runtime cell centre. Authored evidence retains finer world-space precision.
+    x: unitContact
+      ? canonicalUnitCellCenter(threat.x)
+      : quantize(threat.x, WORLD_EVIDENCE_POSITION_BUCKET_CELLS),
+    y: unitContact
+      ? canonicalUnitCellCenter(threat.y)
+      : quantize(threat.y, WORLD_EVIDENCE_POSITION_BUCKET_CELLS),
     radiusCells: quantize(threat.radiusCells, SIZE_BUCKET_CELLS),
     widthCells: quantize(threat.widthCells, SIZE_BUCKET_CELLS),
     heightCells: quantize(threat.heightCells, SIZE_BUCKET_CELLS),
@@ -115,6 +124,10 @@ export function cloneCanonicalWorldThreat(
   threat: CanonicalWorldThreatSnapshot,
 ): CanonicalWorldThreatSnapshot {
   return { ...threat };
+}
+
+function canonicalUnitCellCenter(value: number): number {
+  return Math.floor(finite(value)) + 0.5;
 }
 
 function quantize(value: number, bucket: number): number {
