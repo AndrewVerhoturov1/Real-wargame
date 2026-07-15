@@ -336,7 +336,9 @@ function addFixtureWall(state: SimulationState, observer: UnitModel): void {
     widthCells: 1,
     heightCells: 20,
     rotationRadians: 0,
-    losHeightMeters: 2.6,
+    // Keep object-cover semantics while allowing a standing observer to retain
+    // visual contact as the hostile crosses from one protected side to the other.
+    losHeightMeters: 0.8,
     coverProtection: 95,
     coverReliability: 100,
     concealment: 15,
