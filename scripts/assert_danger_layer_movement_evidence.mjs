@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import process from 'node:process';
 
+// Runs after the exact-head live movement suite to enforce semantic wall-side evidence.
 const evidencePath = process.argv[2];
 if (!evidencePath) {
   console.error('Usage: node scripts/assert_danger_layer_movement_evidence.mjs <movement.json>');
