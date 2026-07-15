@@ -344,8 +344,11 @@ function installTerrainFixtures(state: SimulationState): void {
 
 function addFixtureWall(state: SimulationState, observer: UnitModel): void {
   const wallX = Math.floor(observer.position.x + 3.5);
-  const wallStartY = Math.floor(observer.position.y) - 3;
-  state.map.objects.push(...Array.from({ length: 7 }, (_, index) => ({
+  const safeRadiusCells = Math.ceil(120 / Math.max(0.001, state.map.metersPerCell));
+  const wallStartY = Math.max(0, Math.floor(observer.position.y) - safeRadiusCells - 2);
+  const wallEndY = Math.min(state.map.height - 1, Math.floor(observer.position.y) + safeRadiusCells + 2);
+  const wallLength = wallEndY - wallStartY + 1;
+  state.map.objects.push(...Array.from({ length: wallLength }, (_, index) => ({
     id: `${WALL_ID}-${index}`,
     kind: 'structure' as const,
     x: wallX,
@@ -353,8 +356,8 @@ function addFixtureWall(state: SimulationState, observer: UnitModel): void {
     widthCells: 1,
     heightCells: 1,
     rotationRadians: 0,
-    // Match the accepted segmented wall-side winner geometry while keeping
-    // standing visual contact alive throughout the runtime crossing.
+    // Extend the accepted segmented wall beyond the local safe-search radius,
+    // preventing open-field detours while retaining standing visual contact.
     losHeightMeters: 0.8,
     coverProtection: 92,
     coverReliability: 96,
