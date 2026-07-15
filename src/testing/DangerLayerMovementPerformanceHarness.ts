@@ -92,9 +92,12 @@ function prepareScenario(
   state.selectedUnitIds = [observer.id];
 
   if (scenario === 'selected-only') {
+    // Move toward the stationary visible hostile so observer facing does not
+    // turn the contact invisible. This isolates own-position movement from
+    // legitimate visibility/knowledge invalidation.
     routeUnit(state, observer, {
-      x: observer.position.x - 22,
-      y: observer.position.y + 8,
+      x: observer.position.x + 22,
+      y: observer.position.y,
     });
   } else if (scenario === 'hostile-only') {
     routeUnit(state, hostile, {
