@@ -21,6 +21,10 @@ import {
   getAwarenessStaticField,
   type AwarenessStaticField,
 } from './AwarenessStaticField';
+import {
+  rememberAwarenessGeometrySignature,
+  tryRescoreAwarenessField,
+} from './AwarenessDynamicRescore';
 
 export type SoldierAwarenessMode = 'off' | 'all' | 'danger' | 'cover' | 'safe' | 'stealth' | 'memory' | 'uncertainty' | 'objective';
 
@@ -115,17 +119,30 @@ export function buildSoldierAwarenessReport(
   let cached = cache.get(unit);
 
   if (!cached || cached.key !== key) {
-    const field = buildAwarenessField(state, unit, key, staticField, directionalField);
-    cached = {
-      key,
-      field,
-      positionKey: '',
-      currentPosition: field.cells[0] ?? emptyAwarenessCell(unit.position),
-      bestSafePositions: [],
-      routeKey: '',
-      routeDanger: 0,
-    };
-    cache.set(unit, cached);
+    const rescored = cached
+      ? tryRescoreAwarenessField(state.map, unit, cached.field.cells, staticField, directionalField)
+      : false;
+
+    if (cached && rescored) {
+      cached.key = key;
+      cached.field.cacheKey = key;
+      cached.field.threatConfidence = currentThreatConfidence(unit);
+      cached.positionKey = '';
+      cached.routeKey = '';
+    } else {
+      const field = buildAwarenessField(state, unit, key, staticField, directionalField);
+      rememberAwarenessGeometrySignature(state.map, unit, staticField, directionalField);
+      cached = {
+        key,
+        field,
+        positionKey: '',
+        currentPosition: field.cells[0] ?? emptyAwarenessCell(unit.position),
+        bestSafePositions: [],
+        routeKey: '',
+        routeDanger: 0,
+      };
+      cache.set(unit, cached);
+    }
   }
 
   const positionKey = `${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`;
@@ -173,16 +190,18 @@ function buildAwarenessField(
     }
   }
 
-  const threatConfidence = unit.tacticalKnowledge.threats.length > 0
-    ? Math.round(Math.max(...unit.tacticalKnowledge.threats.map((threat) => threat.confidence)))
-    : 0;
-
   return {
     unitId: unit.id,
     cacheKey: key,
     cells,
-    threatConfidence,
+    threatConfidence: currentThreatConfidence(unit),
   };
+}
+
+function currentThreatConfidence(unit: UnitModel): number {
+  return unit.tacticalKnowledge.threats.length > 0
+    ? Math.round(Math.max(...unit.tacticalKnowledge.threats.map((threat) => threat.confidence)))
+    : 0;
 }
 
 function buildBestSafePositions(
