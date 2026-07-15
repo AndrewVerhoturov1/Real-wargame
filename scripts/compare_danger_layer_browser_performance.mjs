@@ -11,11 +11,11 @@ const coldAfter = after.awareness?.maxBuildMs ?? null;
 const coldReductionPercent = typeof coldBefore === 'number' && coldBefore > 0 && typeof coldAfter === 'number'
   ? percentReduction(coldBefore, coldAfter)
   : null;
-const dynamicP95ReductionPercent = before.dynamicUpdateMs.p95 > 0
-  ? percentReduction(before.dynamicUpdateMs.p95, after.dynamicUpdateMs.p95)
+const steadyP95ReductionPercent = before.steadyDynamicUpdateMs.p95 > 0
+  ? percentReduction(before.steadyDynamicUpdateMs.p95, after.steadyDynamicUpdateMs.p95)
   : null;
-const dynamicMaxReductionPercent = before.dynamicUpdateMs.max > 0
-  ? percentReduction(before.dynamicUpdateMs.max, after.dynamicUpdateMs.max)
+const steadyMaxReductionPercent = before.steadyDynamicUpdateMs.max > 0
+  ? percentReduction(before.steadyDynamicUpdateMs.max, after.steadyDynamicUpdateMs.max)
   : null;
 const sceneP95ReductionPercent = before.sceneUpdateMs.p95 > 0
   ? percentReduction(before.sceneUpdateMs.p95, after.sceneUpdateMs.p95)
@@ -24,8 +24,8 @@ const sceneP95ReductionPercent = before.sceneUpdateMs.p95 > 0
 const acceptance = {
   browserEffectiveFpsAtLeast50: after.browserEffectiveFps >= 50,
   browserRafP95AtMost22Ms: after.browserRafMs.p95 <= 22,
-  dynamicUpdateP95AtMost10Ms: after.dynamicUpdateMs.p95 <= 10,
-  noDynamicUpdateOver50Ms: after.dynamicUpdateMs.max <= 50,
+  steadyDynamicUpdateP95AtMost10Ms: after.steadyDynamicUpdateMs.p95 <= 10,
+  noSteadyDynamicUpdateOver50Ms: after.steadyDynamicUpdateMs.max <= 50,
   noSteadyLongTaskOver100Ms: after.longTasksOver100Ms === 0,
   coldBuildAccepted: typeof coldAfter === 'number' && (
     coldAfter <= 100
@@ -42,8 +42,8 @@ const comparison = {
   after,
   reductions: {
     coldBuildPercent: coldReductionPercent,
-    dynamicUpdateP95Percent: dynamicP95ReductionPercent,
-    dynamicUpdateMaxPercent: dynamicMaxReductionPercent,
+    steadyDynamicUpdateP95Percent: steadyP95ReductionPercent,
+    steadyDynamicUpdateMaxPercent: steadyMaxReductionPercent,
     sceneUpdateP95Percent: sceneP95ReductionPercent,
   },
   acceptance,
