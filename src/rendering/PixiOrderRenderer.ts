@@ -18,7 +18,7 @@ const LABEL_STYLE = new TextStyle({
   fontSize: 12,
   fontWeight: '600',
   fill: 0xdcecff,
-  stroke: { color: 0x101720, width: 3 },
+  stroke: { color: 0x101720, width: 3, join: 'round' },
 });
 
 interface UnitOverlayView {
@@ -164,17 +164,18 @@ function drawCommand(
 
   const commandStroke = { width: snapshot.selected ? 3 : 2, color: COMMAND_COLOR, alpha };
   graphics.circle(to.x, to.y, snapshot.selected ? 10 : 7).stroke(commandStroke);
-  graphics.moveTo(to.x - 13, to.y).lineTo(to.x + 13, to.y).stroke(commandStroke);
-  graphics.moveTo(to.x, to.y - 13).lineTo(to.x, to.y + 13).stroke(commandStroke);
+  graphics.moveTo(to.x - 13, to.y).lineTo(to.x + 13, to.y);
+  graphics.moveTo(to.x, to.y - 13).lineTo(to.x, to.y + 13);
+  graphics.stroke(commandStroke);
 
   if (command.finalFacingRadians !== null) {
     drawFacingArrow(graphics, to.x, to.y, command.finalFacingRadians, snapshot.selected ? 24 : 18, COMMAND_COLOR, alpha);
   }
 
   if (command.status === 'blocked') {
-    const failedStroke = { width: 3, color: FAILURE_COLOR, alpha: 0.95 };
-    graphics.moveTo(to.x - 7, to.y - 7).lineTo(to.x + 7, to.y + 7).stroke(failedStroke);
-    graphics.moveTo(to.x + 7, to.y - 7).lineTo(to.x - 7, to.y + 7).stroke(failedStroke);
+    graphics.moveTo(to.x - 7, to.y - 7).lineTo(to.x + 7, to.y + 7);
+    graphics.moveTo(to.x + 7, to.y - 7).lineTo(to.x - 7, to.y + 7);
+    graphics.stroke({ width: 3, color: FAILURE_COLOR, alpha: 0.95 });
   }
 }
 
@@ -330,11 +331,11 @@ function drawFacingArrow(
 ): void {
   const endX = x + Math.cos(finalFacingRadians) * length;
   const endY = y + Math.sin(finalFacingRadians) * length;
-  const stroke = { width: 3, color, alpha };
-  graphics.moveTo(x, y).lineTo(endX, endY).stroke(stroke);
   const size = 7;
-  graphics.moveTo(endX, endY).lineTo(endX - Math.cos(finalFacingRadians - Math.PI / 6) * size, endY - Math.sin(finalFacingRadians - Math.PI / 6) * size).stroke(stroke);
-  graphics.moveTo(endX, endY).lineTo(endX - Math.cos(finalFacingRadians + Math.PI / 6) * size, endY - Math.sin(finalFacingRadians + Math.PI / 6) * size).stroke(stroke);
+  graphics.moveTo(x, y).lineTo(endX, endY);
+  graphics.moveTo(endX, endY).lineTo(endX - Math.cos(finalFacingRadians - Math.PI / 6) * size, endY - Math.sin(finalFacingRadians - Math.PI / 6) * size);
+  graphics.moveTo(endX, endY).lineTo(endX - Math.cos(finalFacingRadians + Math.PI / 6) * size, endY - Math.sin(finalFacingRadians + Math.PI / 6) * size);
+  graphics.stroke({ width: 3, color, alpha });
 }
 
 function drawDashedLine(
@@ -360,9 +361,9 @@ function drawDashedLine(
     const start = offset;
     const end = Math.min(length, offset + dashLength);
     graphics.moveTo(fromX + directionX * start, fromY + directionY * start)
-      .lineTo(fromX + directionX * end, fromY + directionY * end)
-      .stroke({ width, color, alpha });
+      .lineTo(fromX + directionX * end, fromY + directionY * end);
   }
+  graphics.stroke({ width, color, alpha });
 }
 
 function isOverlayEnabled(): boolean {

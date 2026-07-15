@@ -78,6 +78,7 @@ export class PixiRouteCostOverlayRenderer {
   private lastRenderedProfileId: string | null = null;
   private staticTextureBuildCount = 0;
   private dynamicTextureBuildCount = 0;
+  private destroyed = false;
 
   constructor() {
     this.container.eventMode = 'none';
@@ -90,6 +91,7 @@ export class PixiRouteCostOverlayRenderer {
   }
 
   render(state: SimulationState): void {
+    if (this.destroyed) return;
     const overlay = getRouteCostOverlayState(state);
     const unit = selectedUnit(state);
     if (!overlay.active || state.editor.enabled || !unit) {
@@ -168,6 +170,8 @@ export class PixiRouteCostOverlayRenderer {
   }
 
   destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
     this.container.removeChildren();
     this.staticSprite?.destroy();
     this.dynamicSprite?.destroy();
@@ -184,6 +188,10 @@ export class PixiRouteCostOverlayRenderer {
     this.staticSprite = null;
     this.dynamicSprite = null;
     this.fields = null;
+    this.profile = null;
+    this.selectedUnitId = null;
+    this.container.destroy();
+    delete (window as RouteCostDebugWindow).__realWargameRouteCostDebug;
   }
 
   private ensureRaster(width: number, height: number, cellSize: number): void {
@@ -216,6 +224,7 @@ export class PixiRouteCostOverlayRenderer {
       this.container.addChild(this.staticSprite, this.dynamicSprite, this.legend, this.tooltip);
       this.lastStaticTextureKey = '';
       this.lastDynamicTextureKey = '';
+      this.lastHoverKey = '';
     }
 
     const scale = cellSize / RASTER_PIXELS_PER_CELL;

@@ -185,10 +185,9 @@ function redrawPosture(graphics: Graphics, unit: UnitModel, unitRadius: number):
     return;
   }
 
-  graphics.moveTo(-unitRadius, unitRadius * 1.15).lineTo(unitRadius, unitRadius * 1.15)
-    .stroke({ width: 1.5, color: 0xf6edcf, alpha: 0.9 });
-  graphics.moveTo(-unitRadius * 0.8, unitRadius * 1.55).lineTo(unitRadius * 0.8, unitRadius * 1.55)
-    .stroke({ width: 1.5, color: 0xf6edcf, alpha: 0.9 });
+  graphics.moveTo(-unitRadius, unitRadius * 1.15).lineTo(unitRadius, unitRadius * 1.15);
+  graphics.moveTo(-unitRadius * 0.8, unitRadius * 1.55).lineTo(unitRadius * 0.8, unitRadius * 1.55);
+  graphics.stroke({ width: 1.5, color: 0xf6edcf, alpha: 0.9 });
 }
 
 function redrawStress(graphics: Graphics, unitRadius: number): void {

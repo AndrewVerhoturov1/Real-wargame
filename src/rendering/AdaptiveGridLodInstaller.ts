@@ -105,12 +105,13 @@ function drawMajorGrid(graphics: Graphics, state: SimulationState): void {
 
   for (let x = 0; x <= map.width; x += spacingCells) {
     const px = x * map.cellSize;
-    graphics.moveTo(px, 0).lineTo(px, mapHeight).stroke({ width: 2, color: 0xf6edcf, alpha: 0.22 });
+    graphics.moveTo(px, 0).lineTo(px, mapHeight);
   }
   for (let y = 0; y <= map.height; y += spacingCells) {
     const py = y * map.cellSize;
-    graphics.moveTo(0, py).lineTo(mapWidth, py).stroke({ width: 2, color: 0xf6edcf, alpha: 0.22 });
+    graphics.moveTo(0, py).lineTo(mapWidth, py);
   }
+  graphics.stroke({ width: 2, color: 0xf6edcf, alpha: 0.22 });
 }
 
 function findSourceGrid(staticContainer: Container, showGrid: boolean): Graphics | null {

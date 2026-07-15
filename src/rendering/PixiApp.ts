@@ -1,4 +1,4 @@
-import { Application, Container } from 'pixi.js';
+import { Application, Container, type Ticker } from 'pixi.js';
 import { PerformanceMonitor } from '../core/debug/PerformanceMonitor';
 import { getCell, gridToCellLabel, type MapCell } from '../core/map/MapModel';
 import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
@@ -48,6 +48,8 @@ export class PixiTacticalBoardApp {
   private lastMapRenderKey = '';
   private mapRenderInvalidated = true;
   private lastDebugPanelUpdateMs = 0;
+  private started = false;
+  private destroyed = false;
 
   private constructor(
     private readonly root: HTMLElement,
@@ -109,26 +111,36 @@ export class PixiTacticalBoardApp {
     state: SimulationState,
   ): Promise<PixiTacticalBoardApp> {
     const app = new Application();
-    await app.init({
-      background: 0x121612,
-      backgroundAlpha: 1,
-      antialias: true,
-      preference: 'webgl',
-      resizeTo: root,
-    });
-    return new PixiTacticalBoardApp(
-      root,
-      debugPanel,
-      languageToggle,
-      gridToggle,
-      visionToggle,
-      heightToggle,
-      state,
-      app,
-    );
+    try {
+      await app.init({
+        background: 0x121612,
+        backgroundAlpha: 1,
+        antialias: true,
+        preference: 'webgl',
+        resizeTo: root,
+      });
+      return new PixiTacticalBoardApp(
+        root,
+        debugPanel,
+        languageToggle,
+        gridToggle,
+        visionToggle,
+        heightToggle,
+        state,
+        app,
+      );
+    } catch (error) {
+      try {
+        app.destroy({ removeView: true, releaseGlobalResources: true });
+      } catch {
+        // init may reject before the renderer/plugins exist; preserve the original startup error.
+      }
+      throw error;
+    }
   }
 
   start(): void {
+    if (this.started || this.destroyed) return;
     this.renderEditableMapLayerIfNeeded(true);
     this.viewConeRenderer.clear();
     this.updateStaticText();
@@ -141,28 +153,40 @@ export class PixiTacticalBoardApp {
     this.boardInput.attach();
 
     this.app.ticker.add(this.tick);
+    this.started = true;
   }
 
-  private readonly tick = (): void => {
-      if (!this.getPaused()) {
-        tickSimulation(this.state, this.app.ticker.elapsedMS / 1000);
-      }
-      this.renderFrame();
+  private readonly tick = (ticker: Ticker): void => {
+    if (!this.getPaused()) {
+      tickSimulation(this.state, ticker.elapsedMS / 1000);
+    }
+    this.renderFrame();
   };
 
   destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.app.ticker.remove(this.tick);
+    this.app.stop();
+    this.started = false;
     this.languageToggle.removeEventListener('click', this.handleLanguageToggle);
     this.gridToggle.removeEventListener('click', this.handleGridToggle);
     this.visionToggle.removeEventListener('click', this.handleVisionToggle);
     this.heightToggle.removeEventListener('click', this.handleHeightToggle);
     this.camera.destroy();
     this.boardInput.destroy();
+    this.mapRenderer.container.cacheAsTexture(false);
     this.overlayRenderer.destroy();
+    if (this.routeCostOverlayRenderer.container.parent === this.worldContainer) {
+      this.worldContainer.removeChild(this.routeCostOverlayRenderer.container);
+    }
     this.routeCostOverlayRenderer.destroy();
+    if (this.awarenessHeatmapRenderer.container.parent === this.worldContainer) {
+      this.worldContainer.removeChild(this.awarenessHeatmapRenderer.container);
+    }
+    this.awarenessHeatmapRenderer.destroy();
     this.htmlOverlayRenderer.destroy();
     this.fixedScaleLabel.remove();
-    this.app.ticker.remove(this.tick);
-    this.mapRenderer.container.cacheAsTexture(false);
     this.app.destroy(
       { removeView: true, releaseGlobalResources: true },
       { children: true, texture: true, textureSource: true },
@@ -170,6 +194,7 @@ export class PixiTacticalBoardApp {
   }
 
   forceRender(): void {
+    if (this.destroyed) return;
     this.mapRenderInvalidated = true;
     this.renderFrame();
     this.updateDebugPanelIfNeeded(true);

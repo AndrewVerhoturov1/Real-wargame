@@ -2,6 +2,7 @@ import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'vite';
+import './pixijs8_raster_lifecycle_contract_smoke.mjs';
 
 const repoRoot = process.cwd();
 const outDir = path.join(repoRoot, '.tmp-navigation-overlay-contract-smoke');

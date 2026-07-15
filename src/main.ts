@@ -45,7 +45,7 @@ import { installWorkspaceTooltipGuard } from './ui/WorkspaceTooltipGuard';
 
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 let state: ReturnType<typeof createResolutionAwareInitialState>;
-let tacticalBoard: PixiTacticalBoardApp;
+let tacticalBoard: PixiTacticalBoardApp | null = null;
 type PausableRuntimeState = typeof state & { paused?: boolean };
 
 const root = document.querySelector<HTMLElement>('#app')!;
@@ -70,80 +70,103 @@ state = createResolutionAwareInitialState(
 );
 initializeAiTestLabRuntime(state);
 
-void bootstrap();
+void bootstrap().catch(reportBootstrapFailure);
 
 async function bootstrap(): Promise<void> {
-tacticalBoard = await PixiTacticalBoardApp.create(
-  root,
-  debugPanel,
-  languageToggle,
-  gridToggle,
-  visionToggle,
-  heightToggle,
-  state,
-);
-const aiGameBridge = installAiGameBridge(state);
-const forceRenderAtNativeMapQuality = () => {
-  tacticalBoard.forceRender();
-  enforceNativeMapQuality(tacticalBoard);
-};
+  const board = await PixiTacticalBoardApp.create(
+    root,
+    debugPanel,
+    languageToggle,
+    gridToggle,
+    visionToggle,
+    heightToggle,
+    state,
+  );
+  tacticalBoard = board;
+  const aiGameBridge = installAiGameBridge(state);
+  const forceRenderAtNativeMapQuality = () => {
+    board.forceRender();
+    enforceNativeMapQuality(board);
+  };
 
-installGameEditorWorkbench(debugPanel, state, forceRenderAtNativeMapQuality);
-const destroyAttentionProfileControls = installAttentionProfileControls(state, forceRenderAtNativeMapQuality);
-installSceneExportControls(state);
-installPerformanceReportControls(() => tacticalBoard.downloadPerformanceReport());
-installAiEditorOpenButton(aiEditorOpenButton);
-installPauseToggle(pauseToggle, forceRenderAtNativeMapQuality);
-installTacticalWorkspace(state, aiGameBridge, forceRenderAtNativeMapQuality);
-const destroyCombatControls = installCombatControls(state, forceRenderAtNativeMapQuality);
-installAiStatePlanVisualQaHarness(state, forceRenderAtNativeMapQuality);
-installCombatTacticalIntegrationVisualQaHarness(state, forceRenderAtNativeMapQuality);
-installDangerLayerMovementPerformanceHarness(state);
-const destroyAttentionRuntimePanel = installAttentionRuntimePanel(state, forceRenderAtNativeMapQuality);
-const destroyAttentionOverlayRenderer = installAttentionOverlayRenderer(tacticalBoard, state);
-const destroyCombatEffectsRenderer = installCombatEffectsRenderer(tacticalBoard, state);
-const destroyCommandPlanRouteUi = installCommandPlanRouteUi(state, forceRenderAtNativeMapQuality);
-const destroyRouteCostOverlayUi = installRouteCostOverlayUi(state, forceRenderAtNativeMapQuality);
-const destroyAiDictionary = installAiDictionaryGameIntegration(state, forceRenderAtNativeMapQuality);
-const destroyFrontZoneControls = installFrontZoneControls(state, forceRenderAtNativeMapQuality);
-const destroyEditorHeaderPlacement = installEditorHeaderPlacement();
-const destroyWorkspaceTooltipGuard = installWorkspaceTooltipGuard();
-tacticalBoard.start();
-const destroyAdaptiveGridLod = installAdaptiveGridLod(tacticalBoard, state, gridToggle);
-enforceNativeMapQuality(tacticalBoard);
-gridToggle.addEventListener('click', scheduleNativeMapQuality);
-// Pixi starts with the legacy English locale; switch once after its listener is installed.
-languageToggle.click();
-forceRussianTopControls(
-  languageToggle,
-  gridToggle,
-  visionToggle,
-  heightToggle,
-  pauseToggle,
-  aiEditorOpenButton,
-);
+  installGameEditorWorkbench(debugPanel, state, forceRenderAtNativeMapQuality);
+  const destroyAttentionProfileControls = installAttentionProfileControls(state, forceRenderAtNativeMapQuality);
+  installSceneExportControls(state);
+  installPerformanceReportControls(() => board.downloadPerformanceReport());
+  installAiEditorOpenButton(aiEditorOpenButton);
+  installPauseToggle(pauseToggle, forceRenderAtNativeMapQuality);
+  installTacticalWorkspace(state, aiGameBridge, forceRenderAtNativeMapQuality);
+  const destroyCombatControls = installCombatControls(state, forceRenderAtNativeMapQuality);
+  installAiStatePlanVisualQaHarness(state, forceRenderAtNativeMapQuality);
+  installCombatTacticalIntegrationVisualQaHarness(state, forceRenderAtNativeMapQuality);
+  installDangerLayerMovementPerformanceHarness(state);
+  const destroyAttentionRuntimePanel = installAttentionRuntimePanel(state, forceRenderAtNativeMapQuality);
+  const destroyAttentionOverlayRenderer = installAttentionOverlayRenderer(board, state);
+  const destroyCombatEffectsRenderer = installCombatEffectsRenderer(tacticalBoard, state);
+  const destroyCommandPlanRouteUi = installCommandPlanRouteUi(state, forceRenderAtNativeMapQuality);
+  const destroyRouteCostOverlayUi = installRouteCostOverlayUi(state, forceRenderAtNativeMapQuality);
+  const destroyAiDictionary = installAiDictionaryGameIntegration(state, forceRenderAtNativeMapQuality);
+  const destroyFrontZoneControls = installFrontZoneControls(state, forceRenderAtNativeMapQuality);
+  const destroyEditorHeaderPlacement = installEditorHeaderPlacement();
+  const destroyWorkspaceTooltipGuard = installWorkspaceTooltipGuard();
+  board.start();
+  const destroyAdaptiveGridLod = installAdaptiveGridLod(board, state, gridToggle);
+  enforceNativeMapQuality(board);
+  gridToggle.addEventListener('click', scheduleNativeMapQuality);
+  // Pixi starts with the legacy English locale; switch once after its listener is installed.
+  languageToggle.click();
+  forceRussianTopControls(
+    languageToggle,
+    gridToggle,
+    visionToggle,
+    heightToggle,
+    pauseToggle,
+    aiEditorOpenButton,
+  );
 
-window.addEventListener('beforeunload', () => {
-  gridToggle.removeEventListener('click', scheduleNativeMapQuality);
-  destroyAdaptiveGridLod();
-  destroyCommandPlanRouteUi();
-  destroyRouteCostOverlayUi();
-  destroyAiDictionary();
-  destroyFrontZoneControls();
-  destroyWorkspaceTooltipGuard();
-  destroyEditorHeaderPlacement();
-  destroyCombatControls();
-  destroyCombatEffectsRenderer();
-  destroyAttentionRuntimePanel();
-  destroyAttentionOverlayRenderer();
-  destroyAttentionProfileControls();
-  aiGameBridge.destroy();
-  tacticalBoard.destroy();
-});
+  window.addEventListener('beforeunload', () => {
+    gridToggle.removeEventListener('click', scheduleNativeMapQuality);
+    destroyAdaptiveGridLod();
+    destroyCommandPlanRouteUi();
+    destroyRouteCostOverlayUi();
+    destroyAiDictionary();
+    destroyFrontZoneControls();
+    destroyWorkspaceTooltipGuard();
+    destroyEditorHeaderPlacement();
+    destroyCombatControls();
+    destroyCombatEffectsRenderer();
+    destroyAttentionRuntimePanel();
+    destroyAttentionOverlayRenderer();
+    destroyAttentionProfileControls();
+    aiGameBridge.destroy();
+    board.destroy();
+    if (tacticalBoard === board) tacticalBoard = null;
+    clearNativeMapQualityDiagnostics();
+  });
 }
 
 function scheduleNativeMapQuality(): void {
-  window.requestAnimationFrame(() => enforceNativeMapQuality(tacticalBoard));
+  const board = tacticalBoard;
+  if (!board) return;
+  window.requestAnimationFrame(() => {
+    if (tacticalBoard === board) enforceNativeMapQuality(board);
+  });
+}
+
+function reportBootstrapFailure(error: unknown): void {
+  const board = tacticalBoard;
+  tacticalBoard = null;
+  try {
+    board?.destroy();
+  } catch (destroyError) {
+    console.error('Failed to clean up the tactical board after bootstrap failure.', destroyError);
+  }
+  clearNativeMapQualityDiagnostics();
+  const message = error instanceof Error ? error.message : String(error);
+  console.error('Failed to start the tactical board.', error);
+  debugPanel.setAttribute('role', 'alert');
+  debugPanel.textContent = `Не удалось запустить тактическую карту.\n${message}`;
+  root.dataset.bootstrapState = 'failed';
 }
 
 function enforceNativeMapQuality(board: PixiTacticalBoardApp): void {
@@ -155,6 +178,10 @@ function enforceNativeMapQuality(board: PixiTacticalBoardApp): void {
   (window as Window & { __realWargameMapQualityDebug?: { cacheAsTexture: boolean } }).__realWargameMapQualityDebug = {
     cacheAsTexture: false,
   };
+}
+
+function clearNativeMapQualityDiagnostics(): void {
+  delete (window as Window & { __realWargameMapQualityDebug?: { cacheAsTexture: boolean } }).__realWargameMapQualityDebug;
 }
 
 function forceRussianTopControls(

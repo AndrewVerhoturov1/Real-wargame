@@ -231,8 +231,9 @@ export class PixiOverlayRenderer {
       const draftStroke = { width: 3, color: 0xffd85a, alpha: 0.95 };
       this.commandDraftGraphics.circle(startX, startY, 8).stroke(draftStroke);
       if (draft.finalFacingRadians !== null) {
-        this.commandDraftGraphics.moveTo(startX, startY).lineTo(endX, endY).stroke(draftStroke);
-        drawArrowHead(this.commandDraftGraphics, endX, endY, draft.finalFacingRadians, 9, draftStroke);
+        this.commandDraftGraphics.moveTo(startX, startY).lineTo(endX, endY);
+        drawArrowHead(this.commandDraftGraphics, endX, endY, draft.finalFacingRadians, 9);
+        this.commandDraftGraphics.stroke(draftStroke);
       }
     }
 
@@ -333,10 +334,14 @@ function drawThreatMemoryGeometry(container: Container, state: SimulationState):
 }
 
 function drawCurrentThreatMarkers(graphics: Graphics, threats: KnownThreatMemory[], cellSize: number): void {
+  let hasVisibleMarker = false;
   for (const threat of threats) {
     if (!threat.visibleNow) continue;
-    graphics.circle(threat.x * cellSize, threat.y * cellSize, 4)
-      .fill({ color: CURRENT_CONTACT_MARKER_COLOR, alpha: 0.82 })
+    hasVisibleMarker = true;
+    graphics.circle(threat.x * cellSize, threat.y * cellSize, 4);
+  }
+  if (hasVisibleMarker) {
+    graphics.fill({ color: CURRENT_CONTACT_MARKER_COLOR, alpha: 0.82 })
       .stroke({ width: 2, color: CURRENT_CONTACT_MARKER_COLOR });
   }
 }
@@ -411,9 +416,9 @@ function drawRememberedThreat(graphics: Graphics, threat: KnownThreatMemory, cel
     ).stroke({ width: 2, color: dangerColor, alpha: confidenceAlpha * 0.7 });
   }
 
-  const cross = { width: 2, color: dangerColor, alpha: confidenceAlpha };
-  graphics.moveTo(sourceX - 6, sourceY - 6).lineTo(sourceX + 6, sourceY + 6).stroke(cross);
-  graphics.moveTo(sourceX + 6, sourceY - 6).lineTo(sourceX - 6, sourceY + 6).stroke(cross);
+  graphics.moveTo(sourceX - 6, sourceY - 6).lineTo(sourceX + 6, sourceY + 6);
+  graphics.moveTo(sourceX + 6, sourceY - 6).lineTo(sourceX - 6, sourceY + 6);
+  graphics.stroke({ width: 2, color: dangerColor, alpha: confidenceAlpha });
 }
 
 function drawVisibilityProbe(container: Container, state: SimulationState): void {
@@ -430,12 +435,14 @@ function drawVisibilityProbe(container: Container, state: SimulationState): void
     .stroke({ width: 3, color: 0x2dff55, alpha: 0.95 });
 
   if (result.blocked && result.blockedAt) {
-    graphics.moveTo(result.blockedAt.x * cellSize, result.blockedAt.y * cellSize).lineTo(target.x * cellSize, target.y * cellSize)
+    const blockedX = result.blockedAt.x * cellSize;
+    const blockedY = result.blockedAt.y * cellSize;
+    graphics.moveTo(blockedX, blockedY).lineTo(target.x * cellSize, target.y * cellSize)
       .stroke({ width: 3, color: 0xff3535, alpha: 0.95 });
-    const blockedStroke = { width: 2, color: 0xff3535, alpha: 1 };
-    graphics.circle(result.blockedAt.x * cellSize, result.blockedAt.y * cellSize, 6).stroke(blockedStroke);
-    graphics.moveTo(result.blockedAt.x * cellSize - 7, result.blockedAt.y * cellSize - 7).lineTo(result.blockedAt.x * cellSize + 7, result.blockedAt.y * cellSize + 7).stroke(blockedStroke);
-    graphics.moveTo(result.blockedAt.x * cellSize + 7, result.blockedAt.y * cellSize - 7).lineTo(result.blockedAt.x * cellSize - 7, result.blockedAt.y * cellSize + 7).stroke(blockedStroke);
+    graphics.circle(blockedX, blockedY, 6);
+    graphics.moveTo(blockedX - 7, blockedY - 7).lineTo(blockedX + 7, blockedY + 7);
+    graphics.moveTo(blockedX + 7, blockedY - 7).lineTo(blockedX - 7, blockedY + 7);
+    graphics.stroke({ width: 2, color: 0xff3535, alpha: 1 });
   }
 
   container.addChild(graphics);
@@ -584,7 +591,7 @@ function drawAreaThreat(graphics: Graphics, zone: PressureZone, cellSize: number
       zone.heightCells * cellSize,
     ).fill({ color: 0xb6633c, alpha }).stroke(stroke);
   }
-  if (isSelected) drawZoneHandles(graphics, zone, cellSize);
+  if (isSelected) drawZoneHandles(graphics, zone, cellSize, stroke);
 }
 
 function drawDirectionalThreat(graphics: Graphics, zone: PressureZone, cellSize: number, isSelected: boolean): void {
@@ -607,10 +614,13 @@ function drawDirectionalThreat(graphics: Graphics, zone: PressureZone, cellSize:
   const endX = centerX + Math.cos(direction) * radius;
   const endY = centerY + Math.sin(direction) * radius;
   const directionStroke = { width: isSelected ? 4 : 3, color: isSelected ? 0xfff2a8 : 0xff765f, alpha: 0.95 * activeAlpha };
-  graphics.moveTo(centerX, centerY).lineTo(endX, endY).stroke(directionStroke);
-  drawArrowHead(graphics, endX, endY, direction, isSelected ? 12 : 9, directionStroke);
+  graphics.moveTo(centerX, centerY).lineTo(endX, endY);
+  drawArrowHead(graphics, endX, endY, direction, isSelected ? 12 : 9);
+  graphics.stroke(directionStroke);
 
-  graphics.circle(centerX, centerY, isSelected ? 7 : 5).fill({ color: isSelected ? 0xfff2a8 : 0xff765f, alpha: activeAlpha });
+  graphics.circle(centerX, centerY, isSelected ? 7 : 5)
+    .fill({ color: isSelected ? 0xfff2a8 : 0xff765f, alpha: activeAlpha })
+    .stroke(directionStroke);
 
   if (settings.minRangeCells > 0) {
     graphics.circle(centerX, centerY, settings.minRangeCells * cellSize)
@@ -618,12 +628,17 @@ function drawDirectionalThreat(graphics: Graphics, zone: PressureZone, cellSize:
   }
 }
 
-function drawArrowHead(graphics: Graphics, x: number, y: number, angle: number, size: number, stroke: { width: number; color: number; alpha: number }): void {
-  graphics.moveTo(x, y).lineTo(x - Math.cos(angle - Math.PI / 6) * size, y - Math.sin(angle - Math.PI / 6) * size).stroke(stroke);
-  graphics.moveTo(x, y).lineTo(x - Math.cos(angle + Math.PI / 6) * size, y - Math.sin(angle + Math.PI / 6) * size).stroke(stroke);
+function drawArrowHead(graphics: Graphics, x: number, y: number, angle: number, size: number): void {
+  graphics.moveTo(x, y).lineTo(x - Math.cos(angle - Math.PI / 6) * size, y - Math.sin(angle - Math.PI / 6) * size);
+  graphics.moveTo(x, y).lineTo(x - Math.cos(angle + Math.PI / 6) * size, y - Math.sin(angle + Math.PI / 6) * size);
 }
 
-function drawZoneHandles(graphics: Graphics, zone: PressureZone, cellSize: number): void {
+function drawZoneHandles(
+  graphics: Graphics,
+  zone: PressureZone,
+  cellSize: number,
+  stroke: { width: number; color: number; alpha: number },
+): void {
   const handleSize = 8;
   if (zone.shape === 'circle') {
     for (const [x, y] of [
@@ -632,29 +647,29 @@ function drawZoneHandles(graphics: Graphics, zone: PressureZone, cellSize: numbe
       [zone.x, zone.y + zone.radiusCells],
       [zone.x, zone.y - zone.radiusCells],
     ] as Array<[number, number]>) {
-      graphics.rect(x * cellSize - handleSize / 2, y * cellSize - handleSize / 2, handleSize, handleSize).fill({ color: 0xfff2a8 });
+      graphics.rect(x * cellSize - handleSize / 2, y * cellSize - handleSize / 2, handleSize, handleSize);
     }
-    return;
+  } else {
+    const left = (zone.x - zone.widthCells / 2) * cellSize;
+    const right = (zone.x + zone.widthCells / 2) * cellSize;
+    const top = (zone.y - zone.heightCells / 2) * cellSize;
+    const bottom = (zone.y + zone.heightCells / 2) * cellSize;
+
+    for (const [x, y] of [
+      [left, top],
+      [(left + right) / 2, top],
+      [right, top],
+      [right, (top + bottom) / 2],
+      [right, bottom],
+      [(left + right) / 2, bottom],
+      [left, bottom],
+      [left, (top + bottom) / 2],
+    ] as Array<[number, number]>) {
+      graphics.rect(x - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
+    }
   }
 
-  const left = (zone.x - zone.widthCells / 2) * cellSize;
-  const right = (zone.x + zone.widthCells / 2) * cellSize;
-  const top = (zone.y - zone.heightCells / 2) * cellSize;
-  const bottom = (zone.y + zone.heightCells / 2) * cellSize;
-
-  for (const [x, y] of [
-    [left, top],
-    [(left + right) / 2, top],
-    [right, top],
-    [right, (top + bottom) / 2],
-    [right, bottom],
-    [(left + right) / 2, bottom],
-    [left, bottom],
-    [left, (top + bottom) / 2],
-  ] as Array<[number, number]>) {
-    graphics.rect(x - handleSize / 2, y - handleSize / 2, handleSize, handleSize).fill({ color: 0xfff2a8 });
-  }
-
+  graphics.fill({ color: 0xfff2a8 }).stroke(stroke);
 }
 
 function degreesToRadians(degrees: number): number {
