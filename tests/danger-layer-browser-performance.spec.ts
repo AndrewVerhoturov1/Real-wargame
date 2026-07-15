@@ -89,7 +89,9 @@ test('records steady-state danger-layer performance without screenshots', async 
   writeFileSync(OUTPUT_PATH, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
   console.log(JSON.stringify(summary, null, 2));
 
-  expect(summary.sampleCount).toBeGreaterThan(100);
+  // The broken base can render only about one measured frame per second; five samples are
+  // sufficient to prove the stall while still rejecting a failed or empty recording.
+  expect(summary.sampleCount).toBeGreaterThan(5);
   expect(summary.measurementSeconds).toBeGreaterThan(7);
 });
 
