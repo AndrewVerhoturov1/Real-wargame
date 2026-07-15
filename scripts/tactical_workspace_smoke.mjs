@@ -120,7 +120,7 @@ expectIncludes('src/core/knowledge/AwarenessStaticField.ts', [
 ]);
 expectIncludes('src/core/terrain/DirectionalTacticalField.ts', [
   'sectorProtection', 'sectorExposure', 'terrainProtection', 'terrainConcealment',
-  'DIRECTION_WEIGHT_BUCKET', 'normalizedSectorWeights', 'getDirectionalTacticalFieldDiagnostics',
+  'ORIGIN_BUCKET_CELLS', 'normalizedSectorWeights', 'getDirectionalTacticalFieldDiagnostics',
 ]);
 
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
