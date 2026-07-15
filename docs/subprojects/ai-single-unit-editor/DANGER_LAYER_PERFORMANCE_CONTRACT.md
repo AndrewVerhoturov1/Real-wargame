@@ -51,6 +51,8 @@ The expensive directional terrain arrays are keyed by their actual geometric out
 
 The cache does not use knowledge revision or raw amplitude values directly. Strength, suppression and confidence changes that leave the normalized directional distribution unchanged reuse the same field object and arrays while its current threat metadata is refreshed. A real change in relative directional distribution, subjective bearings or map geometry rebuilds the field because its aggregate terrain output has changed.
 
+Unit movement is not governed by a separate whole-cell origin bucket. Movement reuses the field only when the resulting quantized normalized sector distribution is unchanged; even sub-cell movement must rebuild when it materially changes the weighted directional terrain output. The navigation-overlay contract tests metadata-only reuse and movement-driven content invalidation separately.
+
 ## Dynamic awareness rescore
 
 A cold awareness build still creates the canonical `SoldierAwarenessCell[]`. `AwarenessDynamicRescore` then remembers a geometry signature containing static field identity, directional field identity and subjective threat shape/position data.
