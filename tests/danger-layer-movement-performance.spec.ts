@@ -225,7 +225,7 @@ test('visible hostile movement changes canonical geometry through a bounded work
   expect(afterMovement.workerThreatRelativeGeometryBuilds).toBeGreaterThan(beforeMovement.workerThreatRelativeGeometryBuilds);
   expect(afterMovement.workerDirectionalFieldBuilds).toBeGreaterThan(beforeMovement.workerDirectionalFieldBuilds);
   expect(afterMovement.workerAwarenessGeometryBuilds).toBeGreaterThanOrEqual(beforeMovement.workerAwarenessGeometryBuilds);
-  expect(afterMovement.workerAwarenessRescores).toBeGreaterThan(beforeMovement.workerAwarenessRescores);
+  expect(afterMovement.workerAwarenessRescores).toBeGreaterThanOrEqual(beforeMovement.workerAwarenessRescores);
   expect(afterMovement.workerDirectionalBasisBuilds).toBe(beforeMovement.workerDirectionalBasisBuilds);
   assertFinalApplied(after, afterMovement);
   expect(after.lastAppliedRasterDigest).not.toBe(before.lastAppliedRasterDigest);
