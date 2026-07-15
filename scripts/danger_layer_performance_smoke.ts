@@ -202,8 +202,8 @@ assert.equal(
 );
 assert.equal(
   getDirectionalTacticalFieldDiagnostics(state.map).buildCount,
-  directionalBuildsAfterFirstThreat + 2,
-  'height revision and subjective threat movement must each rebuild directional terrain geometry',
+  directionalBuildsAfterFirstThreat + 1,
+  'the next report must rebuild directional terrain once for changed geometry content',
 );
 
 state.map.objects[0].x += 1;
