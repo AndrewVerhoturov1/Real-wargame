@@ -109,6 +109,26 @@ function resolveApplicationBinding(name, scope) {
   return null;
 }
 
+function classOwnerKey(node) {
+  for (let current = node.parent; current; current = current.parent) {
+    if (ts.isClassDeclaration(current) || ts.isClassExpression(current)) {
+      return `class:${current.name?.text ?? '<anonymous>'}`;
+    }
+  }
+  return 'module';
+}
+
+function directThisPropertyKey(node) {
+  if (!ts.isPropertyAccessExpression(node) || node.expression.kind !== ts.SyntaxKind.ThisKeyword) return null;
+  return `${classOwnerKey(node)}:this.${node.name.text}`;
+}
+
+function resolveApplicationExpression(expression, scope, ownedProperties) {
+  if (ts.isIdentifier(expression)) return resolveApplicationBinding(expression.text, scope);
+  const propertyKey = directThisPropertyKey(expression);
+  return propertyKey ? (ownedProperties.get(propertyKey) ?? null) : null;
+}
+
 function isAwaitedCall(call) {
   let current = call.parent;
   while (current && (ts.isParenthesizedExpression(current)
@@ -157,9 +177,11 @@ function inspectPixiV8Baseline() {
     const scopeByNode = new Map();
     const applicationRecords = [];
     const trackedConstructions = new Set();
+    const ownedProperties = new Map();
 
     // Deterministic supported pattern: a PixiJS Application must be assigned directly to
-    // an identifier variable. This intentionally does not claim arbitrary data-flow analysis.
+    // an identifier variable, with an optional direct transfer to this.<property>. This
+    // intentionally does not claim arbitrary control-flow or interprocedural data-flow analysis.
     const collectBindings = (node, parentScope) => {
       const scope = createsLexicalScope(node)
         ? { parent: parentScope, bindings: new Map() }
@@ -185,6 +207,19 @@ function inspectPixiV8Baseline() {
           trackedConstructions.add(node.initializer);
         }
         registerBindingName(node.name, record, scope);
+      }
+      if (ts.isPropertyDeclaration(node) && ts.isIdentifier(node.name) && node.type
+        && applicationAliases.has(node.type.getText(sourceFile))) {
+        ownedProperties.set(`${classOwnerKey(node)}:this.${node.name.text}`, {
+          name: `this.${node.name.text}`,
+        });
+      }
+      if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+        const propertyKey = directThisPropertyKey(node.left);
+        if (propertyKey && ts.isIdentifier(node.right)) {
+          const record = resolveApplicationBinding(node.right.text, scope);
+          if (record) ownedProperties.set(propertyKey, record);
+        }
       }
 
       ts.forEachChild(node, (child) => collectBindings(child, scope));
@@ -245,13 +280,11 @@ function inspectPixiV8Baseline() {
 
       if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
         const receiver = node.expression;
-        if (ts.isIdentifier(receiver)) {
-          const record = resolveApplicationBinding(receiver.text, scope);
-          if (record && member === 'view') {
-            failures.push(`${relativePath}:${lineOf(sourceFile, node)}: use ${record.name}.canvas instead of ${record.name}.view`);
-          }
-          if (record && member === 'canvas') totals.canvas += 1;
+        const record = resolveApplicationExpression(receiver, scope, ownedProperties);
+        if (record && member === 'view') {
+          failures.push(`${relativePath}:${lineOf(sourceFile, node)}: use ${record.name}.canvas instead of ${record.name}.view`);
         }
+        if (record && member === 'canvas') totals.canvas += 1;
       }
       if (ts.isCallExpression(node) && syntaxName(node.expression) === 'update'
         && (ts.isPropertyAccessExpression(node.expression) || ts.isElementAccessExpression(node.expression))
