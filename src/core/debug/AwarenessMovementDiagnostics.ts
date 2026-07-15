@@ -1,4 +1,4 @@
-export interface AwarenessMovementDiagnostics {
+export interface AwarenessMovementDiagnostics extends Record<string, unknown> {
   readonly worldRasterBuilds: number;
   readonly ownMovementLocalUpdates: number;
   readonly safePositionLocalScans: number;
