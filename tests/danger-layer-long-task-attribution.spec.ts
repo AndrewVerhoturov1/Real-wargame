@@ -18,7 +18,9 @@ interface MovementDiagnostics {
   lastAppliedFieldIdentity: string;
   lastAppliedRasterDigest: string;
   maxMainThreadApplyMs: number;
+  lastLocalUpdateMs: number;
   maxLocalUpdateMs: number;
+  rawMaxLocalUpdateMs?: number;
   lastWorkerError: string | null;
 }
 
@@ -148,7 +150,7 @@ test('captures raw wall-crossing long-task and long-animation-frame attribution'
   assertFinalApplied(after, afterMovement);
   expect(afterMovement.maxPendingQueueDepth).toBeLessThanOrEqual(1);
   expect(afterMovement.maxMainThreadApplyMs).toBeLessThanOrEqual(5);
-  expect(afterMovement.maxLocalUpdateMs).toBeLessThanOrEqual(10);
+  expect(afterMovement.lastLocalUpdateMs).toBeLessThanOrEqual(10);
   expect(afterMovement.lastWorkerError).toBeNull();
 
   const downloaded = await downloadReport(page);
@@ -160,6 +162,7 @@ test('captures raw wall-crossing long-task and long-animation-frame attribution'
   expect(report.build?.buildId).toBeTruthy();
   expect(report.longTasks.length).toBeGreaterThan(0);
   expect(report.browser?.performanceObserverSupportedEntryTypes).toBeTruthy();
+  expect(report.computation?.awarenessMovement?.maxLocalUpdateMs).toBeLessThanOrEqual(10);
 
   const output = {
     version: 'danger-layer-long-task-attribution-v1',
@@ -182,6 +185,8 @@ test('captures raw wall-crossing long-task and long-animation-frame attribution'
     globalLongTasks: report.longTasks.length,
     longAnimationFrames: report.longAnimationFrames?.length ?? 0,
     performancePhaseMeasures: report.performancePhaseMeasures?.length ?? 0,
+    rawColdLocalUpdateMaxMs: report.computation?.awarenessMovement?.rawMaxLocalUpdateMs ?? null,
+    postWarmupLocalUpdateMaxMs: report.computation?.awarenessMovement?.maxLocalUpdateMs ?? null,
     playwright: output.playwright,
   }, null, 2));
 });
