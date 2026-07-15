@@ -20,8 +20,9 @@ const OBSERVER_RELATIVE_UNIT_PREFIX = 'unit:';
  * an explicit input: losing a real contact is legitimate knowledge invalidation,
  * not an own-position raster update. Movement acceptance starts only after the
  * initial final-exact worker refresh has been applied, so baseline work is not
- * misclassified as movement-triggered work. Browser diagnostics retain the full
- * requested/applied keys so any remaining invalidation input is attributable.
+ * misclassified as movement-triggered work. Each additional subjective contact
+ * remains its own key entry; the selected-only browser fixture therefore isolates
+ * exactly one stationary hostile instead of hiding unrelated knowledge changes.
  *
  * Pressure-zone and unknown-fire directions are evidence-authored world geometry,
  * so their direction/range remain explicit key inputs.
