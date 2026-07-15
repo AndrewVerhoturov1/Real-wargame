@@ -55,6 +55,7 @@
     "spatial-index:smoke": "node scripts/map_object_spatial_index_smoke.mjs",
     "visibility-probe:smoke": "node scripts/visibility_probe_cache_smoke.mjs",
     "awareness-field:smoke": "node scripts/awareness_field_cache_smoke.mjs",
+    "danger-layer-performance:smoke": "node scripts/danger_layer_performance_smoke.mjs",
     "lab:manager": "node scripts/real_wargame_lab_manager.mjs",
     "visual-qa-policy:smoke": "node scripts/visual_qa_policy_smoke.mjs",
     "docs:generate": "node scripts/generate_agent_docs.mjs",
