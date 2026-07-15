@@ -291,7 +291,12 @@ test('wall-side crossing cannot apply stale worker output over the final threat 
   await resumeSimulation(page);
   await page.waitForFunction(() => {
     const current = window.__realWargameDangerMovementPerformance?.getSnapshot(false);
-    return Boolean(current && current.hostilePosition.x < current.observerPosition.x - 2);
+    return Boolean(
+      current
+      && current.hostilePosition.x < current.observerPosition.x - 2
+      && current.subjectiveThreatPosition
+      && current.subjectiveThreatPosition.x < current.observerPosition.x - 2,
+    );
   }, undefined, { timeout: 25_000 });
   await stopScenario(page);
   await page.waitForTimeout(250);
