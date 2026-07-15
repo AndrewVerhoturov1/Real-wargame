@@ -33,6 +33,8 @@ rangeCells = 250 metres converted to runtime cells
 
 Danger, suppression, confidence, uncertainty and terrain/cover relations remain subjective inputs. Moving the selected observer may change raw direction/range memory, but cannot change the canonical snapshot, worker payload or raster while remembered threat `x/y` and other canonical values remain unchanged.
 
+A remembered unit's raw `strength` is derived from confidence and can decay by a fraction while its last-known position remains unchanged. Unit-contact strength is therefore quantized downward in five-point buckets. A minor confidence-driven change such as `88 → 87` remains canonical strength `85`; it does not schedule a 64,000-cell refresh. Crossing a meaningful bucket boundary still changes the canonical key and legitimately refreshes the field. Evidence-authored threats retain one-point strength precision.
+
 ## Evidence-authored directional fire
 
 A non-`unit:` threat with `mode: directional_fire` is authored world evidence. Its source `x/y`, direction, arc, minimum range, maximum range and falloff remain in the canonical snapshot, key and computation.
