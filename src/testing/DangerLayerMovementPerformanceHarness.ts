@@ -56,7 +56,7 @@ export function installDangerLayerMovementPerformanceHarness(state: SimulationSt
     startScenario(scenario): DangerMovementSnapshot {
       activeScenario = scenario;
       prepareScenario(state, observer, hostile, scenario);
-      setAiTestPaused(state, false);
+      // The Playwright contract owns resume timing so the baseline remains exact.
       return snapshot(state, observer, hostile, activeScenario, false);
     },
     stopScenario(): DangerMovementSnapshot {
