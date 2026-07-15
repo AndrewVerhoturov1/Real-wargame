@@ -135,6 +135,9 @@ jobs:
           npx playwright test tests/danger-layer-movement-performance.spec.ts --config=playwright.performance.config.ts --project=chromium --reporter=line 2>&1 | tee ../browser-artifacts/movement-playwright.log
 
       - name: Assert semantic movement evidence
+        env:
+          DANGER_PERF_EXPECTED_BRANCH: ${{ github.event.pull_request.head.ref }}
+          DANGER_PERF_EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
         shell: bash
         run: node source/scripts/assert_danger_layer_movement_evidence.mjs browser-artifacts/movement.json
 
