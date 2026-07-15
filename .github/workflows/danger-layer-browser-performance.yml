@@ -31,6 +31,7 @@ on:
       - 'scripts/danger_layer_movement_performance_smoke.*'
       - 'scripts/tactical_workspace_smoke.mjs'
       - 'docs/subprojects/ai-single-unit-editor/DANGER_LAYER_PERFORMANCE_CONTRACT.md'
+      - 'docs/subprojects/ai-single-unit-editor/DANGER_LAYER_LONG_TASK_ATTRIBUTION.md'
       - 'package.json'
       - 'package-lock.json'
 
