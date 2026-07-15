@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -47,10 +47,11 @@ interface Stats {
 const OUTPUT_PATH = process.env.DANGER_PERF_OUTPUT
   ?? path.join('artifacts', 'performance', 'danger-layer-browser-performance.json');
 const LABEL = process.env.DANGER_PERF_LABEL ?? 'candidate';
-const MEASUREMENT_MS = 12_000;
-const WINDOW_MS = 10_000;
+const UPDATE_COUNT = 30;
+const UPDATE_INTERVAL_MS = 300;
+const WINDOW_MS = 12_000;
 
-test('records steady-state danger-layer performance without screenshots', async ({ page }) => {
+test('records paused dynamic danger-layer rescoring without screenshots', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/?visualQa=combat-tactical-integration');
   await expect(page.locator('canvas')).toBeVisible();
@@ -65,10 +66,18 @@ test('records steady-state danger-layer performance without screenshots', async 
     }).__realWargameAwarenessDebug;
     return Boolean(diagnostics && diagnostics.rebuildCount > 0);
   });
+  await expect(page.locator('#pause-toggle')).toHaveAttribute('aria-pressed', 'true');
+  await page.waitForTimeout(500);
 
-  await unpauseSimulation(page);
-  await page.waitForTimeout(MEASUREMENT_MS);
-  await pauseSimulation(page);
+  for (let step = 0; step < UPDATE_COUNT; step += 1) {
+    await page.evaluate((currentStep) => {
+      const api = window.__realWargameCombatTacticalVisualQa;
+      if (!api) throw new Error('Combat tactical visual QA API is unavailable.');
+      api.stepDangerPerformanceDynamicUpdate(currentStep);
+    }, step);
+    await page.waitForTimeout(UPDATE_INTERVAL_MS);
+  }
+  await page.waitForTimeout(500);
 
   const downloadPromise = page.waitForEvent('download');
   await page.evaluate(() => {
@@ -89,29 +98,9 @@ test('records steady-state danger-layer performance without screenshots', async 
   writeFileSync(OUTPUT_PATH, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
   console.log(JSON.stringify(summary, null, 2));
 
-  // The broken base can render only about one measured frame per second; five samples are
-  // sufficient to prove the stall while still rejecting a failed or empty recording.
-  expect(summary.sampleCount).toBeGreaterThan(5);
+  expect(summary.sampleCount).toBeGreaterThan(20);
   expect(summary.measurementSeconds).toBeGreaterThan(7);
 });
-
-async function unpauseSimulation(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const button = document.querySelector<HTMLButtonElement>('#pause-toggle');
-    if (!button) throw new Error('Pause control is missing.');
-    if (button.getAttribute('aria-pressed') === 'true') button.click();
-  });
-  await expect(page.locator('#pause-toggle')).toHaveAttribute('aria-pressed', 'false');
-}
-
-async function pauseSimulation(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const button = document.querySelector<HTMLButtonElement>('#pause-toggle');
-    if (!button) throw new Error('Pause control is missing.');
-    if (button.getAttribute('aria-pressed') !== 'true') button.click();
-  });
-  await expect(page.locator('#pause-toggle')).toHaveAttribute('aria-pressed', 'true');
-}
 
 function summarize(
   report: PerformanceReport,
