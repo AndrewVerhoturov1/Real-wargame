@@ -89,7 +89,8 @@ function assertVisibleHostile(hostile) {
   if (!(counters.workerJobsStartedDelta > 0)) failures.push('visible hostile movement did not start a worker job');
   if (!(counters.workerThreatRelativeGeometryBuildDelta > 0)) failures.push('visible hostile movement did not rebuild threat-relative geometry');
   if (!(counters.workerDirectionalFieldBuildDelta > 0)) failures.push('visible hostile movement did not rebuild directional field');
-  if (!(counters.workerAwarenessGeometryBuildDelta > 0)) failures.push('visible hostile movement did not rebuild awareness geometry');
+  if (!(counters.workerAwarenessRescoreDelta > 0)) failures.push('visible hostile movement did not dynamically rescore awareness');
+  if ((counters.workerAwarenessGeometryBuildDelta ?? -1) < 0) failures.push('visible hostile awareness geometry delta is invalid');
   if (counters.workerDirectionalBasisBuildDelta !== 0) failures.push(`visible hostile movement rebuilt static directional basis: ${counters.workerDirectionalBasisBuildDelta}`);
   if (counters.finalWorldKeyApplied !== true || counters.finalCanonicalKeyApplied !== true || counters.finalJobApplied !== true) {
     failures.push('visible hostile final requested field was not the applied field');
