@@ -140,7 +140,8 @@ function resetUnits(
   const centerY = Math.floor(state.map.height * 0.52) + 0.5;
   const slots = [
     { x: state.map.width * 0.38, y: centerY },
-    { x: state.map.width * 0.66, y: centerY },
+    // Keep the sole hostile west of the ridge for selected-only contact stability.
+    { x: state.map.width * 0.47, y: centerY },
     { x: state.map.width * 0.30, y: centerY - 18 },
     { x: state.map.width * 0.32, y: centerY + 18 },
     { x: state.map.width * 0.72, y: centerY - 18 },
@@ -150,6 +151,9 @@ function resetUnits(
   for (let index = 0; index < state.units.length; index += 1) {
     const unit = state.units[index];
     const slot = slots[index % slots.length];
+    // Scenario 1 must contain one static subjective hostile only. Scenario 3
+    // still routes all six units, but auxiliary movers remain allies.
+    unit.side = 'blue';
     unit.order = null;
     unit.playerCommand = null;
     unit.speedCellsPerSecond = index === 0 ? 12 : 10;
