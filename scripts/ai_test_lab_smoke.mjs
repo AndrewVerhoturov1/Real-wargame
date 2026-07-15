@@ -118,11 +118,21 @@ expectIncludes('src/rendering/PixiThreatEditorRenderer.ts', [
   'state.editor.enabled || runtime.open',
 ]);
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
-  'buildSoldierAwarenessReport',
-  'bestSafePositions',
-  'awarenessMode',
+  'buildAwarenessWorldKey',
+  'buildBestSafePositionsFromWorldField',
+  'currentMode',
   'STEALTH_PIXEL_LUT',
   'drawAwarenessRasterWords',
+  'new Worker',
+  'AwarenessWorldWorker.ts',
+  'workerJobsCoalesced',
+  'workerResultsStaleDropped',
+]);
+expectIncludes('src/workers/AwarenessWorldWorker.ts', [
+  'buildSoldierAwarenessReport',
+  'awarenessWorkerTransferables',
+  'dangerPixels',
+  'stealthPixels',
 ]);
 expectIncludes('src/rendering/PixiApp.ts', [
   'PixiThreatEditorRenderer',
