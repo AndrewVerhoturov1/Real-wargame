@@ -1,4 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 
 interface MovementDiagnostics {
   worldRasterBuilds: number;
@@ -59,10 +61,20 @@ interface PerformanceReport {
   };
 }
 
+interface ScenarioEvidence {
+  readonly scenario: string;
+  readonly before: MovementSnapshot;
+  readonly after: MovementSnapshot;
+  readonly counters: Record<string, number | string | boolean | null>;
+}
+
 const EXPECTED_BRANCH = process.env.DANGER_PERF_EXPECTED_BRANCH
   ?? 'agent/danger-layer-moving-units-performance';
 const EXPECTED_SHA = process.env.DANGER_PERF_EXPECTED_SHA ?? '';
+const EVIDENCE_PATH = process.env.DANGER_MOVEMENT_PERF_OUTPUT
+  ?? path.join('artifacts', 'performance', 'danger-layer-movement-performance.json');
 const REPORT_WINDOW_MS = 8_000;
+const scenarioEvidence: ScenarioEvidence[] = [];
 
 test.describe.configure({ mode: 'serial' });
 
@@ -93,6 +105,18 @@ test('selected unit movement performs local updates without world rebuilds', asy
   expect(afterMovement.maxLocalUpdateMs).toBeLessThanOrEqual(10);
   expect(afterMovement.lastWorkerError).toBeNull();
 
+  scenarioEvidence.push({
+    scenario: 'selected-only',
+    before,
+    after,
+    counters: {
+      worldRasterBuildDelta: afterMovement.worldRasterBuilds - beforeMovement.worldRasterBuilds,
+      directionalBasisBuildDelta: afterMovement.directionalBasisBuilds - beforeMovement.directionalBasisBuilds,
+      ownMovementLocalUpdateDelta: afterMovement.ownMovementLocalUpdates - beforeMovement.ownMovementLocalUpdates,
+      safePositionLocalScanDelta: afterMovement.safePositionLocalScans - beforeMovement.safePositionLocalScans,
+      maxLocalUpdateMs: afterMovement.maxLocalUpdateMs,
+    },
+  });
   await stopScenario(page);
 });
 
@@ -111,23 +135,41 @@ test('visible hostile movement updates subjective danger through a bounded worke
     const threat = current?.subjectiveThreatPosition;
     return Boolean(threat && Math.hypot(threat.x - initial.x, threat.y - initial.y) >= 2);
   }, initialSubjective, { timeout: 20_000 });
-  const after = await snapshot(page, false);
-  const afterMovement = requireMovement(after);
+  const moving = await snapshot(page, false);
+  const movingDiagnostics = requireMovement(moving);
 
-  expect(afterMovement.workerJobsStarted).toBeGreaterThan(beforeMovement.workerJobsStarted);
-  expect(afterMovement.worldRasterBuilds).toBeGreaterThan(beforeMovement.worldRasterBuilds);
-  expect(afterMovement.maxPendingQueueDepth).toBeLessThanOrEqual(1);
-  expect(afterMovement.pendingQueueDepth).toBeLessThanOrEqual(1);
-  expect(afterMovement.maxMainThreadApplyMs).toBeLessThanOrEqual(5);
-  expect(afterMovement.lastWorkerError).toBeNull();
+  expect(movingDiagnostics.workerJobsStarted).toBeGreaterThan(beforeMovement.workerJobsStarted);
+  expect(movingDiagnostics.worldRasterBuilds).toBeGreaterThan(beforeMovement.worldRasterBuilds);
+  expect(movingDiagnostics.maxPendingQueueDepth).toBeLessThanOrEqual(1);
+  expect(movingDiagnostics.pendingQueueDepth).toBeLessThanOrEqual(1);
+  expect(movingDiagnostics.maxMainThreadApplyMs).toBeLessThanOrEqual(5);
+  expect(movingDiagnostics.lastWorkerError).toBeNull();
 
   await stopScenario(page);
   await page.waitForTimeout(250);
   await waitForWorkerSettled(page);
-  const finalSnapshot = await snapshot(page, false);
-  const finalMovement = requireMovement(finalSnapshot);
-  expect(finalMovement.lastAppliedRasterKey).toBe(finalMovement.lastRequestedRasterKey);
-  expect(finalMovement.finalRefreshApplied).toBeGreaterThan(beforeMovement.finalRefreshApplied);
+  const after = await snapshot(page, false);
+  const afterMovement = requireMovement(after);
+  expect(afterMovement.lastAppliedRasterKey).toBe(afterMovement.lastRequestedRasterKey);
+  expect(afterMovement.finalRefreshApplied).toBeGreaterThan(beforeMovement.finalRefreshApplied);
+
+  scenarioEvidence.push({
+    scenario: 'hostile-only',
+    before,
+    after,
+    counters: {
+      workerJobsStartedDelta: afterMovement.workerJobsStarted - beforeMovement.workerJobsStarted,
+      workerJobsCompletedDelta: afterMovement.workerJobsCompleted - beforeMovement.workerJobsCompleted,
+      worldRasterBuildDelta: afterMovement.worldRasterBuilds - beforeMovement.worldRasterBuilds,
+      workerJobsCoalescedDelta: afterMovement.workerJobsCoalesced - beforeMovement.workerJobsCoalesced,
+      staleDroppedDelta: afterMovement.workerResultsStaleDropped - beforeMovement.workerResultsStaleDropped,
+      maxPendingQueueDepth: afterMovement.maxPendingQueueDepth,
+      maxMainThreadApplyMs: afterMovement.maxMainThreadApplyMs,
+      maxWorkerComputeMs: afterMovement.maxWorkerComputeMs,
+      maxWorkerLatencyMs: afterMovement.maxWorkerLatencyMs,
+      finalKeyApplied: afterMovement.lastAppliedRasterKey === afterMovement.lastRequestedRasterKey,
+    },
+  });
 });
 
 test('six moving units remain bounded and apply the final snapshot', async ({ page }) => {
@@ -165,6 +207,20 @@ test('six moving units remain bounded and apply the final snapshot', async ({ pa
   expect(movement.workerInFlight).toBe(false);
   expect(movement.lastAppliedRasterKey).toBe(movement.lastRequestedRasterKey);
   expect(movement.lastWorkerError).toBeNull();
+
+  scenarioEvidence.push({
+    scenario: 'both-six-units',
+    before,
+    after,
+    counters: {
+      movingUnitCount: before.movingUnitCount,
+      workerJobsStartedDelta: movement.workerJobsStarted - beforeMovement.workerJobsStarted,
+      worldRasterBuildDelta: movement.worldRasterBuilds - beforeMovement.worldRasterBuilds,
+      ownMovementLocalUpdateDelta: movement.ownMovementLocalUpdates - beforeMovement.ownMovementLocalUpdates,
+      maxPendingQueueDepth: movement.maxPendingQueueDepth,
+      finalKeyApplied: movement.lastAppliedRasterKey === movement.lastRequestedRasterKey,
+    },
+  });
 });
 
 test('hidden hostile objective movement does not reveal a new subjective position', async ({ page }) => {
@@ -188,16 +244,31 @@ test('hidden hostile objective movement does not reveal a new subjective positio
   const after = await snapshot(page, false);
   const afterSubjective = requireSubjective(after);
   const afterMovement = requireMovement(after);
-
-  expect(Math.hypot(
+  const subjectiveDistance = Math.hypot(
     afterSubjective.x - initialSubjective.x,
     afterSubjective.y - initialSubjective.y,
-  )).toBeLessThan(0.2);
+  );
+
+  expect(subjectiveDistance).toBeLessThan(0.2);
   expect(afterMovement.worldRasterBuilds).toBe(beforeMovement.worldRasterBuilds);
   expect(afterMovement.directionalBasisBuilds).toBe(beforeMovement.directionalBasisBuilds);
   expect(afterMovement.maxPendingQueueDepth).toBeLessThanOrEqual(1);
   expect(afterMovement.lastWorkerError).toBeNull();
 
+  scenarioEvidence.push({
+    scenario: 'hidden-hostile',
+    before,
+    after,
+    counters: {
+      objectiveDistanceCells: Math.hypot(
+        after.hostilePosition.x - before.hostilePosition.x,
+        after.hostilePosition.y - before.hostilePosition.y,
+      ),
+      subjectiveDistanceCells: subjectiveDistance,
+      worldRasterBuildDelta: afterMovement.worldRasterBuilds - beforeMovement.worldRasterBuilds,
+      directionalBasisBuildDelta: afterMovement.directionalBasisBuilds - beforeMovement.directionalBasisBuilds,
+    },
+  });
   await stopScenario(page);
 });
 
@@ -205,9 +276,9 @@ test('wall-side crossing cannot apply stale worker output over the final threat 
   await openHarness(page);
   await startScenarioPaused(page, 'wall-crossing');
   await waitForWorkerSettled(page);
-  const initial = await snapshot(page, true);
-  expect(initial.bestSafePosition).not.toBeNull();
-  expect(initial.hostileMoving).toBe(true);
+  const before = await snapshot(page, true);
+  expect(before.bestSafePosition).not.toBeNull();
+  expect(before.hostileMoving).toBe(true);
 
   await resumeSimulation(page);
   await page.waitForFunction(() => {
@@ -217,12 +288,12 @@ test('wall-side crossing cannot apply stale worker output over the final threat 
   await stopScenario(page);
   await page.waitForTimeout(250);
   await waitForWorkerSettled(page);
-  const final = await snapshot(page, true);
-  const movement = requireMovement(final);
+  const after = await snapshot(page, true);
+  const movement = requireMovement(after);
 
-  expect(final.bestSafePosition).not.toBeNull();
-  expect(final.bestSafePosition).not.toEqual(initial.bestSafePosition);
-  expect(final.protectedAgainstThreatId).not.toBeNull();
+  expect(after.bestSafePosition).not.toBeNull();
+  expect(after.bestSafePosition).not.toEqual(before.bestSafePosition);
+  expect(after.protectedAgainstThreatId).not.toBeNull();
   expect(movement.maxPendingQueueDepth).toBeLessThanOrEqual(1);
   expect(movement.lastAppliedRasterKey).toBe(movement.lastRequestedRasterKey);
   expect(movement.lastWorkerError).toBeNull();
@@ -237,6 +308,31 @@ test('wall-side crossing cannot apply stale worker output over the final threat 
   expect(reportMovement?.maxPendingQueueDepth).toBeLessThanOrEqual(1);
   expect(reportMovement?.maxMainThreadApplyMs).toBeLessThanOrEqual(5);
   expect(reportMovement?.lastAppliedRasterKey).toBe(reportMovement?.lastRequestedRasterKey);
+
+  scenarioEvidence.push({
+    scenario: 'wall-crossing',
+    before,
+    after,
+    counters: {
+      winnerChanged: JSON.stringify(after.bestSafePosition) !== JSON.stringify(before.bestSafePosition),
+      protectedAgainstThreatId: after.protectedAgainstThreatId,
+      staleDropped: movement.workerResultsStaleDropped,
+      maxPendingQueueDepth: movement.maxPendingQueueDepth,
+      finalKeyApplied: movement.lastAppliedRasterKey === movement.lastRequestedRasterKey,
+    },
+  });
+
+  const evidence = {
+    version: 'danger-layer-movement-evidence-v1',
+    generatedAt: new Date().toISOString(),
+    build: report.build ?? null,
+    sceneUpdateMs: sceneStats,
+    finalMovementDiagnostics: reportMovement ?? null,
+    scenarios: scenarioEvidence,
+  };
+  mkdirSync(path.dirname(EVIDENCE_PATH), { recursive: true });
+  writeFileSync(EVIDENCE_PATH, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
+  console.log(JSON.stringify(evidence, null, 2));
 });
 
 async function openHarness(page: Page): Promise<void> {
@@ -252,31 +348,21 @@ async function startScenarioPaused(page: Page, scenario: string): Promise<Moveme
     if (!api) throw new Error('Danger movement performance API is unavailable.');
     return api.startScenario(name as never) as MovementSnapshot;
   }, scenario);
-  await togglePause(page, true);
+  await setSimulationPaused(page, true);
   return started;
 }
 
 async function resumeSimulation(page: Page): Promise<void> {
-  await togglePause(page, false);
+  await setSimulationPaused(page, false);
 }
 
-async function togglePause(page: Page, paused: boolean): Promise<void> {
-  const currentPaused = await page.evaluate(() => {
+async function setSimulationPaused(page: Page, paused: boolean): Promise<void> {
+  await page.evaluate((desired) => {
     const button = document.querySelector<HTMLButtonElement>('#pause-toggle');
     if (!button) throw new Error('Pause toggle is unavailable.');
-    return button.getAttribute('aria-pressed') === 'true';
-  });
-  if (currentPaused !== paused) {
-    await page.locator('#pause-toggle').click();
-  } else {
-    const runtimePaused = await page.evaluate(() => {
-      const button = document.querySelector<HTMLButtonElement>('#pause-toggle');
-      if (!button) throw new Error('Pause toggle is unavailable.');
-      button.click();
-      return button.getAttribute('aria-pressed') === 'true';
-    });
-    if (runtimePaused !== paused) await page.locator('#pause-toggle').click();
-  }
+    button.click();
+    if ((button.getAttribute('aria-pressed') === 'true') !== desired) button.click();
+  }, paused);
   await expect(page.locator('#pause-toggle')).toHaveAttribute('aria-pressed', String(paused));
 }
 
@@ -318,10 +404,10 @@ async function downloadReport(page: Page): Promise<PerformanceReport> {
     button.click();
   });
   const download = await downloadPromise;
-  const path = await download.path();
-  if (!path) throw new Error('Performance report download path is unavailable.');
+  const downloadedPath = await download.path();
+  if (!downloadedPath) throw new Error('Performance report download path is unavailable.');
   const { readFileSync } = await import('node:fs');
-  return JSON.parse(readFileSync(path, 'utf8')) as PerformanceReport;
+  return JSON.parse(readFileSync(downloadedPath, 'utf8')) as PerformanceReport;
 }
 
 function assertBuildIdentity(report: PerformanceReport): void {
