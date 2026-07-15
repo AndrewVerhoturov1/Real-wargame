@@ -33,9 +33,12 @@ interface BrowserPerformanceSummary {
   reportVersion: string;
   measurementSeconds: number;
   sampleCount: number;
-  effectiveFps: number;
-  frameMs: Stats;
+  browserEffectiveFps: number;
+  browserRafMs: Stats;
   sceneUpdateMs: Stats;
+  firstDynamicUpdateMs: number;
+  dynamicUpdateMs: Stats;
+  steadyDynamicUpdateMs: Stats;
   framesOver50Ms: number;
   framesOver100Ms: number;
   longTasksOver100Ms: number;
@@ -76,12 +79,16 @@ test('records paused dynamic danger-layer rescoring without screenshots', async 
   await page.waitForTimeout(500);
   await startBrowserTiming(page);
 
+  const dynamicUpdateMs: number[] = [];
   for (let step = 0; step < UPDATE_COUNT; step += 1) {
-    await page.evaluate((currentStep) => {
+    const elapsed = await page.evaluate((currentStep) => {
       const api = window.__realWargameCombatTacticalVisualQa;
       if (!api) throw new Error('Combat tactical visual QA API is unavailable.');
+      const startedAt = performance.now();
       api.stepDangerPerformanceDynamicUpdate(currentStep);
+      return performance.now() - startedAt;
     }, step);
+    dynamicUpdateMs.push(elapsed);
     await page.waitForTimeout(UPDATE_INTERVAL_MS);
   }
   await page.waitForTimeout(500);
@@ -101,13 +108,16 @@ test('records paused dynamic danger-layer rescoring without screenshots', async 
   const awareness = await page.evaluate(() => (
     window as Window & { __realWargameAwarenessDebug?: AwarenessDiagnostics }
   ).__realWargameAwarenessDebug ?? null);
-  const summary = summarize(report, awareness, browserTiming);
+  const summary = summarize(report, awareness, browserTiming, dynamicUpdateMs);
   mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
   writeFileSync(OUTPUT_PATH, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
   console.log(JSON.stringify(summary, null, 2));
 
   expect(summary.sampleCount).toBeGreaterThan(20);
   expect(summary.measurementSeconds).toBeGreaterThan(7);
+  expect(dynamicUpdateMs).toHaveLength(UPDATE_COUNT);
+  // The regressed baseline can block nearly every RAF opportunity. Twenty intervals are
+  // enough to quantify it while still allowing the candidate measurement to run.
   expect(browserTiming.frameMs.length).toBeGreaterThan(20);
 });
 
@@ -179,6 +189,7 @@ function summarize(
   report: PerformanceReport,
   awareness: AwarenessDiagnostics | null,
   browserTiming: BrowserTimingResult,
+  dynamicUpdates: number[],
 ): BrowserPerformanceSummary {
   const lastSample = report.samples.at(-1);
   const windowEnd = lastSample?.tMs ?? 0;
@@ -194,11 +205,14 @@ function summarize(
     reportVersion: report.version,
     measurementSeconds: round(browserTiming.durationMs / 1000),
     sampleCount: samples.length,
-    effectiveFps: browserTiming.durationMs > 0
+    browserEffectiveFps: browserTiming.durationMs > 0
       ? round(frames.length * 1000 / browserTiming.durationMs)
       : 0,
-    frameMs: stats(frames),
+    browserRafMs: stats(frames),
     sceneUpdateMs: stats(sceneValues),
+    firstDynamicUpdateMs: round(dynamicUpdates[0] ?? 0),
+    dynamicUpdateMs: stats(dynamicUpdates),
+    steadyDynamicUpdateMs: stats(dynamicUpdates.slice(1)),
     framesOver50Ms: frames.filter((value) => value > 50).length,
     framesOver100Ms: frames.filter((value) => value > 100).length,
     longTasksOver100Ms: browserTiming.longTaskMs.filter((value) => value > 100).length,
