@@ -6,6 +6,7 @@ const POSITION_BUCKET_CELLS = 0.05;
 const SIZE_BUCKET_CELLS = 0.1;
 const ANGLE_BUCKET_DEGREES = 1;
 const VALUE_BUCKET = 1;
+const UNIT_CONTACT_STRENGTH_BUCKET = 5;
 const CONFIDENCE_BUCKET = 10;
 const UNCERTAINTY_BUCKET_CELLS = 1;
 
@@ -84,7 +85,13 @@ export function canonicalizeWorldThreat(
     widthCells: quantize(threat.widthCells, SIZE_BUCKET_CELLS),
     heightCells: quantize(threat.heightCells, SIZE_BUCKET_CELLS),
     rotationDegrees: quantize(normalizeDegrees(threat.rotationDegrees), ANGLE_BUCKET_DEGREES),
-    strength: quantize(clampPercent(threat.strength), VALUE_BUCKET),
+    // A remembered unit's strength is derived from confidence and decays by tiny
+    // fractions while its last-known world position remains unchanged. Bucket it
+    // downward so a 1-point confidence-driven decay cannot rebuild 64k cells.
+    // Evidence-authored threats keep one-point precision.
+    strength: unitContact
+      ? quantizeDown(clampPercent(threat.strength), UNIT_CONTACT_STRENGTH_BUCKET)
+      : quantize(clampPercent(threat.strength), VALUE_BUCKET),
     suppression: quantize(clampPercent(threat.suppression), VALUE_BUCKET),
     directionDegrees: unitContact
       ? 0
@@ -112,6 +119,10 @@ export function cloneCanonicalWorldThreat(
 
 function quantize(value: number, bucket: number): number {
   return Math.round(finite(value) / bucket) * bucket;
+}
+
+function quantizeDown(value: number, bucket: number): number {
+  return Math.floor(finite(value) / bucket) * bucket;
 }
 
 function normalizeDegrees(value: number): number {
