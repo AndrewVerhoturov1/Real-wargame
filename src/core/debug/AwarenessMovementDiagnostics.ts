@@ -3,7 +3,13 @@ export interface AwarenessMovementDiagnostics extends Record<string, unknown> {
   readonly ownMovementLocalUpdates: number;
   readonly safePositionLocalScans: number;
   readonly safePositionCellsScanned: number;
+  /** Legacy alias retained for existing reports. */
   readonly directionalBasisBuilds: number;
+  readonly workerThreatRelativeGeometryBuilds: number;
+  readonly workerDirectionalFieldBuilds: number;
+  readonly workerDirectionalBasisBuilds: number;
+  readonly workerAwarenessGeometryBuilds: number;
+  readonly workerAwarenessRescores: number;
   readonly workerJobsStarted: number;
   readonly workerJobsCompleted: number;
   readonly workerJobsCancelled: number;
@@ -27,18 +33,33 @@ export interface AwarenessMovementDiagnostics extends Record<string, unknown> {
   readonly maxLocalUpdateMs: number;
   readonly lastRequestedRasterKey: string;
   readonly lastAppliedRasterKey: string;
+  readonly lastRequestedWorldKey: string;
+  readonly lastAppliedWorldKey: string;
+  readonly lastRequestedCanonicalThreatKey: string;
+  readonly lastAppliedCanonicalThreatKey: string;
+  readonly lastCompletedJobId: number;
+  readonly lastAppliedJobId: number;
+  readonly lastCompletedJobFinalExact: boolean;
+  readonly lastFinalRefreshLatencyMs: number;
+  readonly maxFinalRefreshLatencyMs: number;
+  readonly lastAppliedFieldIdentity: string;
+  readonly lastAppliedRasterDigest: string;
   readonly lastWorkerError: string | null;
 }
 
 // These counters describe scheduler history; current correctness is established by
-// bounded queue state plus equality of the latest requested and applied raster keys.
-// Movement fixtures validate local-radius behavior without weakening these counters.
+// bounded queue state plus equality of requested/applied world and canonical keys.
 const EMPTY_DIAGNOSTICS: AwarenessMovementDiagnostics = {
   worldRasterBuilds: 0,
   ownMovementLocalUpdates: 0,
   safePositionLocalScans: 0,
   safePositionCellsScanned: 0,
   directionalBasisBuilds: 0,
+  workerThreatRelativeGeometryBuilds: 0,
+  workerDirectionalFieldBuilds: 0,
+  workerDirectionalBasisBuilds: 0,
+  workerAwarenessGeometryBuilds: 0,
+  workerAwarenessRescores: 0,
   workerJobsStarted: 0,
   workerJobsCompleted: 0,
   workerJobsCancelled: 0,
@@ -60,6 +81,17 @@ const EMPTY_DIAGNOSTICS: AwarenessMovementDiagnostics = {
   maxLocalUpdateMs: 0,
   lastRequestedRasterKey: '',
   lastAppliedRasterKey: '',
+  lastRequestedWorldKey: '',
+  lastAppliedWorldKey: '',
+  lastRequestedCanonicalThreatKey: '',
+  lastAppliedCanonicalThreatKey: '',
+  lastCompletedJobId: 0,
+  lastAppliedJobId: 0,
+  lastCompletedJobFinalExact: false,
+  lastFinalRefreshLatencyMs: 0,
+  maxFinalRefreshLatencyMs: 0,
+  lastAppliedFieldIdentity: '',
+  lastAppliedRasterDigest: '',
   lastWorkerError: null,
 };
 
