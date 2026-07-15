@@ -680,7 +680,7 @@ function buildAwarenessMarkerInputKey(
 }
 
 function buildPendingWorldSnapshot(
-  state: SimulationState,
+  _state: SimulationState,
   unit: UnitModel,
   rasterKey: string,
   mapKey: string,
