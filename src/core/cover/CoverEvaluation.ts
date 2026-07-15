@@ -3,6 +3,10 @@ import {
   evaluateSmallArmsCover,
   type SmallArmsCoverOptions,
 } from './SmallArmsCoverEvaluation';
+import {
+  getThreatRelativeCoverField,
+  readThreatRelativeCoverCell,
+} from './ThreatRelativeCoverField';
 import { distance, type GridPosition } from '../geometry';
 import {
   clampGridPositionToMap,
@@ -31,6 +35,27 @@ export function evaluateCoverBetween(
   posture: UnitPosture,
   options: SmallArmsCoverOptions = {},
 ): CoverProtectionResult {
+  if (
+    options.includeRelief === false
+    && options.includeObjects !== false
+    && options.includeForest !== false
+  ) {
+    const field = getThreatRelativeCoverField(map, {
+      threatId: `subjective:${quantize(threatPosition.x, 0.1)}:${quantize(threatPosition.y, 0.1)}`,
+      threatPosition,
+      posture,
+    });
+    const cached = readThreatRelativeCoverCell(map, field, unitPosition);
+    if (cached) {
+      return {
+        object: cached.object,
+        protection: cached.protection,
+        concealment: cached.concealment,
+        blocksThreat: cached.protection > 0,
+      };
+    }
+  }
+
   const result = evaluateSmallArmsCover(map, threatPosition, unitPosition, posture, options);
   return {
     object: result.object,
@@ -141,4 +166,9 @@ function distanceToSegment(point: GridPosition, start: GridPosition, end: GridPo
 
 function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function quantize(value: number, step: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value / step) * step;
 }
