@@ -96,14 +96,6 @@ test('selected unit movement performs local updates without world rebuilds', asy
   }, before.observerPosition, { timeout: 15_000 });
   const after = await snapshot(page, false);
   const afterMovement = requireMovement(after);
-  console.log('SELECTED_MOVEMENT_WORLD_KEY_DELTA', JSON.stringify({
-    beforeKey: beforeMovement.lastRequestedRasterKey,
-    afterKey: afterMovement.lastRequestedRasterKey,
-    beforeMovement,
-    afterMovement,
-    beforeSnapshot: before,
-    afterSnapshot: after,
-  }, null, 2));
 
   expect(afterMovement.worldRasterBuilds).toBe(beforeMovement.worldRasterBuilds);
   expect(afterMovement.directionalBasisBuilds).toBe(beforeMovement.directionalBasisBuilds);
@@ -352,13 +344,15 @@ async function openHarness(page: Page): Promise<void> {
 }
 
 async function startScenarioPaused(page: Page, scenario: string): Promise<MovementSnapshot> {
-  const started = await page.evaluate((name) => {
+  // Pause the production ticker before installing the routed scenario. Pausing
+  // after startScenario allowed one or more SimulationTick frames to race ahead,
+  // so the supposed baseline could already contain movement and perception decay.
+  await setSimulationPaused(page, true);
+  return page.evaluate((name) => {
     const api = window.__realWargameDangerMovementPerformance;
     if (!api) throw new Error('Danger movement performance API is unavailable.');
     return api.startScenario(name as never) as MovementSnapshot;
   }, scenario);
-  await setSimulationPaused(page, true);
-  return started;
 }
 
 async function resumeSimulation(page: Page): Promise<void> {
