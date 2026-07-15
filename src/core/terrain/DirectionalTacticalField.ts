@@ -15,7 +15,7 @@ import {
 
 const CACHE_LIMIT = 12;
 const THREAT_POSITION_BUCKET_CELLS = 0.1;
-const THREAT_VALUE_BUCKET = 1;
+const NORMALIZED_WEIGHT_BUCKET = 0.0001;
 const UNCERTAINTY_HALF_WEIGHT_CELLS = 4;
 
 export interface DirectionalTacticalFieldOptions {
@@ -336,16 +336,15 @@ function directionalTerrainSourceRu(cell: Omit<DirectionalTacticalCell, 'sourceR
 }
 
 function buildKey(basisKey: string, threats: readonly DirectionalThreatSource[]): string {
+  const weights = threats.map(threatWeight);
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
   return [
     basisKey,
-    ...threats.map((threat) => [
+    ...threats.map((threat, index) => [
       threat.id,
       quantize(threat.x, THREAT_POSITION_BUCKET_CELLS),
       quantize(threat.y, THREAT_POSITION_BUCKET_CELLS),
-      quantize(threat.strength, THREAT_VALUE_BUCKET),
-      quantize(threat.suppression, THREAT_VALUE_BUCKET),
-      quantize(threat.confidence, THREAT_VALUE_BUCKET),
-      quantize(threat.uncertaintyCells, THREAT_POSITION_BUCKET_CELLS),
+      quantize(totalWeight > 1e-6 ? (weights[index] ?? 0) / totalWeight : 0, NORMALIZED_WEIGHT_BUCKET),
     ].join(':')),
   ].join('#');
 }
