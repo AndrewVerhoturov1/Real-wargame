@@ -96,4 +96,8 @@ The 320 × 200 contract verifies cold construction, unchanged hits, dynamic-only
 
 ## Browser regression
 
-`Danger Layer Browser Performance` checks out the exact PR base and head SHAs, injects the same paused benchmark harness into both, and performs 30 dynamic-only danger updates with fixed geometry in Chromium. It records performance-report JSON, direct synchronous update durations, continuous browser `requestAnimationFrame` intervals and `PerformanceObserver` long tasks without PNG generation. Cold-build and steady-state thresholds are evaluated separately. The baseline sampling requirements intentionally tolerate monitor starvation so a severely regressed base cannot prevent measurement of the candidate head.
+`Danger Layer Browser Performance` checks out the exact PR base and head SHAs, injects the same paused benchmark harness into both, and performs 30 dynamic-only danger updates with fixed geometry in Chromium. The mutation is consumed by the normal paused application ticker, matching the production render path instead of calling the UI-only synchronous `forceRender` helper and contaminating the sample with a static-map invalidation.
+
+The workflow records performance-report JSON, direct mutation durations, live-ticker `sceneUpdateMs`, continuous browser `requestAnimationFrame` intervals and `PerformanceObserver` long tasks without PNG generation. Cold-build and steady-state CPU thresholds are evaluated separately. Baseline sample requirements tolerate monitor starvation so a severely regressed base cannot prevent candidate measurement.
+
+GitHub-hosted headless Chromium has no representative hardware WebGL path. Therefore RAF/FPS/long-task values remain visible A/B telemetry but do not gate the CPU danger-layer contract. The 50–60 FPS hardware target must be confirmed from the exported report on the same local machine and scene as the original user report; it is not claimed from the software-rendered CI runner.
