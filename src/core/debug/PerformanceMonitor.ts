@@ -1,4 +1,5 @@
 import { getThreatRelativeCoverFieldDiagnostics } from '../cover/ThreatRelativeCoverField';
+import { getAwarenessDynamicRescoreDiagnostics } from '../knowledge/AwarenessDynamicRescore';
 import { getAwarenessStaticFieldDiagnostics } from '../knowledge/AwarenessStaticField';
 import type { SimulationState } from '../simulation/SimulationState';
 import { getDirectionalTacticalFieldDiagnostics } from '../terrain/DirectionalTacticalField';
@@ -154,6 +155,9 @@ export class PerformanceMonitor {
         directionalTactical: getDirectionalTacticalFieldDiagnostics(state.map),
         awarenessStatic: selectedUnit
           ? getAwarenessStaticFieldDiagnostics(state.map, selectedUnit.behaviorRuntime.posture)
+          : null,
+        awarenessDynamicRescore: selectedUnit
+          ? getAwarenessDynamicRescoreDiagnostics(selectedUnit)
           : null,
       },
       summary: {
