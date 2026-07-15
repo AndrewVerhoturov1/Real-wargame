@@ -51,3 +51,5 @@ jobs:
           git add tests/danger-layer-movement-performance.spec.ts .github/workflows/patch-wall-subjective-crossing.yml
           git commit -m 'Wait for subjective hostile to cross wall side'
           git push origin HEAD:agent/danger-layer-moving-units-performance
+
+# trigger
