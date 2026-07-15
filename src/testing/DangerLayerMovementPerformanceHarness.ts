@@ -1,4 +1,4 @@
-import { buildSoldierAwarenessReport } from '../core/knowledge/SoldierAwarenessGrid';
+import type { AwarenessMovementDiagnostics } from '../core/debug/AwarenessMovementDiagnostics';
 import { syncSoldierThreatMemory } from '../core/knowledge/SoldierThreatMemory';
 import { markMapCellsDirty, markMapObjectsDirty } from '../core/map/MapRuntimeState';
 import { issueRoutedMoveOrderToSelectedUnits } from '../core/orders/RoutedMoveOrders';
@@ -6,8 +6,10 @@ import { buildNavigationGrid, isNavigationCellPassable } from '../core/pathfindi
 import { advanceVisualContact, upsertPerceptionContact } from '../core/perception/PerceptionContact';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { setAiTestPaused } from '../core/testing/AiTestLabRuntime';
+import type { SoldierSafePosition } from '../core/knowledge/SoldierAwarenessGrid';
 import { normalizeUnits, type UnitModel } from '../core/units/UnitModel';
 import { setSimulationLayerMode } from '../core/ui/RuntimeUiState';
+import type { AwarenessOverlayDiagnostics } from '../rendering/PixiAwarenessHeatmapRenderer';
 
 export type DangerMovementScenario = 'selected-only' | 'hostile-only' | 'both' | 'hidden-hostile' | 'wall-crossing';
 
@@ -18,25 +20,36 @@ export interface DangerMovementSnapshot {
   readonly hostilePosition: { x: number; y: number };
   readonly subjectiveThreatPosition: { x: number; y: number } | null;
   readonly subjectiveThreatVisibleNow: boolean | null;
+  readonly subjectiveThreatDirectionDegrees: number | null;
+  readonly subjectiveThreatRangeCells: number | null;
   readonly tacticalKnowledgeRevision: number;
   readonly observerMoving: boolean;
   readonly hostileMoving: boolean;
   readonly movingUnitCount: number;
-  readonly bestSafePosition: { x: number; y: number } | null;
+  readonly wallX: number | null;
+  readonly bestSafePosition: SoldierSafePosition | null;
   readonly protectedAgainstThreatId: string | null;
-  readonly awarenessMovement: Record<string, unknown> | null;
+  readonly markerUpdateCount: number;
+  readonly lastRequestedWorldKey: string;
+  readonly lastAppliedWorldKey: string;
+  readonly lastRequestedCanonicalThreatKey: string;
+  readonly lastAppliedCanonicalThreatKey: string;
+  readonly lastAppliedFieldIdentity: string;
+  readonly lastAppliedRasterDigest: string;
+  readonly lastAppliedJobId: number;
+  readonly awarenessMovement: AwarenessMovementDiagnostics | null;
 }
 
 export interface DangerMovementPerformanceApi {
   startScenario(scenario: DangerMovementScenario): DangerMovementSnapshot;
   stopScenario(): DangerMovementSnapshot;
-  getSnapshot(includeExactAwareness?: boolean): DangerMovementSnapshot;
+  getSnapshot(): DangerMovementSnapshot;
 }
 
 declare global {
   interface Window {
     __realWargameDangerMovementPerformance?: DangerMovementPerformanceApi;
-    __realWargameAwarenessDebug?: { movement?: Record<string, unknown> };
+    __realWargameAwarenessDebug?: AwarenessOverlayDiagnostics;
   }
 }
 
@@ -56,15 +69,14 @@ export function installDangerLayerMovementPerformanceHarness(state: SimulationSt
     startScenario(scenario): DangerMovementSnapshot {
       activeScenario = scenario;
       prepareScenario(state, observer, hostile, scenario);
-      // The Playwright contract owns resume timing so the baseline remains exact.
-      return snapshot(state, observer, hostile, activeScenario, false);
+      return snapshot(state, observer, hostile, activeScenario);
     },
     stopScenario(): DangerMovementSnapshot {
       setAiTestPaused(state, true);
-      return snapshot(state, observer, hostile, activeScenario, true);
+      return snapshot(state, observer, hostile, activeScenario);
     },
-    getSnapshot(includeExactAwareness = false): DangerMovementSnapshot {
-      return snapshot(state, observer, hostile, activeScenario, includeExactAwareness);
+    getSnapshot(): DangerMovementSnapshot {
+      return snapshot(state, observer, hostile, activeScenario);
     },
   };
 }
@@ -110,8 +122,6 @@ function prepareScenario(state: SimulationState, observer: UnitModel, hostile: U
   } else if (scenario === 'hostile-only') {
     routeUnit(state, hostile, { x: hostile.position.x - 30, y: hostile.position.y + 10 });
   } else if (scenario === 'both') {
-    // The mixed movement contract needs a real subjective threat update, so use
-    // deterministic visual tracking while all six units follow production routes.
     configureWallCrossingTracking(observer);
     routeAllUnits(state, observer, hostile);
   } else if (scenario === 'hidden-hostile') {
@@ -160,7 +170,10 @@ function resetUnits(state: SimulationState, observer: UnitModel, hostile: UnitMo
     unit.tacticalKnowledge.revision += 1;
     unit.perceptionKnowledge.contacts = [];
     unit.speedCellsPerSecond = index === 0 ? 12 : 10;
-    unit.position = { x: clamp(Math.floor(slot.x) + 0.5, 0.5, state.map.width - 0.5), y: clamp(slot.y, 0.5, state.map.height - 0.5) };
+    unit.position = {
+      x: clamp(Math.floor(slot.x) + 0.5, 0.5, state.map.width - 0.5),
+      y: clamp(slot.y, 0.5, state.map.height - 0.5),
+    };
   }
 
   observer.side = 'blue';
@@ -173,7 +186,10 @@ function resetUnits(state: SimulationState, observer: UnitModel, hostile: UnitMo
     if (unit === observer || unit === hostile) continue;
     const slot = slots[auxiliarySlotIndex % slots.length];
     auxiliarySlotIndex += 1;
-    unit.position = { x: clamp(Math.floor(slot.x) + 0.5, 0.5, state.map.width - 0.5), y: clamp(slot.y, 0.5, state.map.height - 0.5) };
+    unit.position = {
+      x: clamp(Math.floor(slot.x) + 0.5, 0.5, state.map.width - 0.5),
+      y: clamp(slot.y, 0.5, state.map.height - 0.5),
+    };
   }
 
   const navigationGrid = buildNavigationGrid(state.map);
@@ -218,12 +234,22 @@ function routeAllUnits(state: SimulationState, observer: UnitModel, hostile: Uni
   for (let index = 0; index < state.units.length; index += 1) {
     const unit = state.units[index];
     const direction = index % 2 === 0 ? -1 : 1;
-    routeUnit(state, unit, { x: unit.position.x + direction * (18 + index * 2), y: unit.position.y + (index % 3 - 1) * 10 });
+    routeUnit(state, unit, {
+      x: unit.position.x + direction * (18 + index * 2),
+      y: unit.position.y + (index % 3 - 1) * 10,
+    });
   }
   if (!observer.order) routeUnit(state, observer, { x: observer.position.x - 20, y: observer.position.y + 12 });
   if (!hostile.order) routeUnit(state, hostile, { x: hostile.position.x - 34, y: hostile.position.y - 12 });
 
-  const fallbackOffsets = [{ x: 14, y: 0 }, { x: -14, y: 0 }, { x: 0, y: 14 }, { x: 0, y: -14 }, { x: 10, y: 10 }, { x: -10, y: 10 }];
+  const fallbackOffsets = [
+    { x: 14, y: 0 },
+    { x: -14, y: 0 },
+    { x: 0, y: 14 },
+    { x: 0, y: -14 },
+    { x: 10, y: 10 },
+    { x: -10, y: 10 },
+  ];
   for (let unitIndex = 0; unitIndex < state.units.length; unitIndex += 1) {
     const unit = state.units[unitIndex];
     if (unit.order) continue;
@@ -251,15 +277,26 @@ function routeUnit(state: SimulationState, unit: UnitModel, target: { x: number;
   const selectedUnitIds = [...state.selectedUnitIds];
   state.selectedUnitId = unit.id;
   state.selectedUnitIds = [unit.id];
-  issueRoutedMoveOrderToSelectedUnits(state, { x: clamp(target.x, 0.5, state.map.width - 0.5), y: clamp(target.y, 0.5, state.map.height - 0.5) });
+  issueRoutedMoveOrderToSelectedUnits(state, {
+    x: clamp(target.x, 0.5, state.map.width - 0.5),
+    y: clamp(target.y, 0.5, state.map.height - 0.5),
+  });
   state.selectedUnitId = selectedUnitId;
   state.selectedUnitIds = selectedUnitIds;
 }
 
-function snapshot(state: SimulationState, observer: UnitModel, hostile: UnitModel, scenario: DangerMovementScenario | null, includeExactAwareness: boolean): DangerMovementSnapshot {
-  const subjective = observer.tacticalKnowledge.threats.find((threat) => threat.id === `unit:${hostile.id}`) ?? observer.tacticalKnowledge.threats[0] ?? null;
-  const awareness = includeExactAwareness ? buildSoldierAwarenessReport(state, observer) : null;
-  const winner = awareness?.bestSafePositions[0] ?? null;
+function snapshot(
+  state: SimulationState,
+  observer: UnitModel,
+  hostile: UnitModel,
+  scenario: DangerMovementScenario | null,
+): DangerMovementSnapshot {
+  const subjective = observer.tacticalKnowledge.threats.find((threat) => threat.id === `unit:${hostile.id}`)
+    ?? observer.tacticalKnowledge.threats[0]
+    ?? null;
+  const diagnostics = window.__realWargameAwarenessDebug ?? null;
+  const winner = diagnostics?.rendererLocalBestWinner ?? null;
+  const wall = state.map.objects.find((object) => object.id.startsWith(WALL_ID));
   return {
     scenario,
     simulationTimeSeconds: state.simulationTimeSeconds,
@@ -267,25 +304,48 @@ function snapshot(state: SimulationState, observer: UnitModel, hostile: UnitMode
     hostilePosition: { ...hostile.position },
     subjectiveThreatPosition: subjective ? { x: subjective.x, y: subjective.y } : null,
     subjectiveThreatVisibleNow: subjective?.visibleNow ?? null,
+    subjectiveThreatDirectionDegrees: subjective?.directionDegrees ?? null,
+    subjectiveThreatRangeCells: subjective?.rangeCells ?? null,
     tacticalKnowledgeRevision: observer.tacticalKnowledge.revision,
     observerMoving: observer.order !== null,
     hostileMoving: hostile.order !== null,
     movingUnitCount: state.units.filter((unit) => unit.order !== null).length,
-    bestSafePosition: winner ? { ...winner.position } : null,
+    wallX: wall ? wall.x + wall.widthCells / 2 : null,
+    bestSafePosition: winner ? { ...winner, position: { ...winner.position } } : null,
     protectedAgainstThreatId: winner?.protectedAgainstThreatId ?? null,
-    awarenessMovement: window.__realWargameAwarenessDebug?.movement ?? null,
+    markerUpdateCount: diagnostics?.markerUpdateCount ?? 0,
+    lastRequestedWorldKey: diagnostics?.lastRequestedWorldKey ?? '',
+    lastAppliedWorldKey: diagnostics?.lastAppliedWorldKey ?? '',
+    lastRequestedCanonicalThreatKey: diagnostics?.lastRequestedCanonicalThreatKey ?? '',
+    lastAppliedCanonicalThreatKey: diagnostics?.lastAppliedCanonicalThreatKey ?? '',
+    lastAppliedFieldIdentity: diagnostics?.lastAppliedFieldIdentity ?? '',
+    lastAppliedRasterDigest: diagnostics?.lastAppliedRaster?.digest ?? '',
+    lastAppliedJobId: diagnostics?.lastAppliedJobId ?? 0,
+    awarenessMovement: diagnostics?.movement ?? null,
   };
 }
 
 function resolveUnits(state: SimulationState): [UnitModel, UnitModel] {
   const observer = state.units.find((unit) => unit.side === 'blue') ?? state.units[0];
-  const hostile = state.units.find((unit) => unit.side === 'red' && unit.id !== observer?.id) ?? state.units.find((unit) => unit.id !== observer?.id) ?? state.units[1];
+  const hostile = state.units.find((unit) => unit.side === 'red' && unit.id !== observer?.id)
+    ?? state.units.find((unit) => unit.id !== observer?.id)
+    ?? state.units[1];
   if (!observer || !hostile) throw new Error('Movement performance harness requires two units.');
   return [observer, hostile];
 }
 
 function installVisualContact(observer: UnitModel, hostile: UnitModel, nowSeconds: number): void {
-  const contact = advanceVisualContact(null, { id: `perception:unit:${hostile.id}`, stimulusId: `unit:${hostile.id}`, sourceUnitId: hostile.id, labelRu: hostile.labels.ru, position: { ...hostile.position }, evidencePerSecond: 220, deltaSeconds: 1, nowSeconds, source: 'visual' });
+  const contact = advanceVisualContact(null, {
+    id: `perception:unit:${hostile.id}`,
+    stimulusId: `unit:${hostile.id}`,
+    sourceUnitId: hostile.id,
+    labelRu: hostile.labels.ru,
+    position: { ...hostile.position },
+    evidencePerSecond: 220,
+    deltaSeconds: 1,
+    nowSeconds,
+    source: 'visual',
+  });
   upsertPerceptionContact(observer.perceptionKnowledge, contact);
 }
 
@@ -314,17 +374,40 @@ function configureWallCrossingTracking(observer: UnitModel): void {
 function installTerrainFixtures(state: SimulationState): void {
   const width = state.map.width;
   const height = state.map.height;
-  const lightBounds = { minX: Math.max(2, Math.floor(width * 0.18)), maxX: Math.min(width - 3, Math.floor(width * 0.29)), minY: Math.max(2, Math.floor(height * 0.34)), maxY: Math.min(height - 3, Math.floor(height * 0.56)) };
-  const denseBounds = { minX: Math.max(2, Math.floor(width * 0.72)), maxX: Math.min(width - 3, Math.floor(width * 0.84)), minY: Math.max(2, Math.floor(height * 0.46)), maxY: Math.min(height - 3, Math.floor(height * 0.70)) };
-  for (let y = lightBounds.minY; y <= lightBounds.maxY; y += 1) for (let x = lightBounds.minX; x <= lightBounds.maxX; x += 1) state.map.cells[y * width + x].forest = 1;
-  for (let y = denseBounds.minY; y <= denseBounds.maxY; y += 1) for (let x = denseBounds.minX; x <= denseBounds.maxX; x += 1) state.map.cells[y * width + x].forest = 2;
+  const lightBounds = {
+    minX: Math.max(2, Math.floor(width * 0.18)),
+    maxX: Math.min(width - 3, Math.floor(width * 0.29)),
+    minY: Math.max(2, Math.floor(height * 0.34)),
+    maxY: Math.min(height - 3, Math.floor(height * 0.56)),
+  };
+  const denseBounds = {
+    minX: Math.max(2, Math.floor(width * 0.72)),
+    maxX: Math.min(width - 3, Math.floor(width * 0.84)),
+    minY: Math.max(2, Math.floor(height * 0.46)),
+    maxY: Math.min(height - 3, Math.floor(height * 0.70)),
+  };
+  for (let y = lightBounds.minY; y <= lightBounds.maxY; y += 1) {
+    for (let x = lightBounds.minX; x <= lightBounds.maxX; x += 1) state.map.cells[y * width + x].forest = 1;
+  }
+  for (let y = denseBounds.minY; y <= denseBounds.maxY; y += 1) {
+    for (let x = denseBounds.minX; x <= denseBounds.maxX; x += 1) state.map.cells[y * width + x].forest = 2;
+  }
   markMapCellsDirty(state.map, 'forest', lightBounds);
   markMapCellsDirty(state.map, 'forest', denseBounds);
   const ridgeCenterX = Math.floor(width * 0.52);
   const ridgeMinY = Math.max(2, Math.floor(height * 0.38));
   const ridgeMaxY = Math.min(height - 3, Math.floor(height * 0.66));
-  for (let y = ridgeMinY; y <= ridgeMaxY; y += 1) for (let offset = -3; offset <= 3; offset += 1) state.map.cells[y * width + ridgeCenterX + offset].height = Math.max(0, 3 - Math.abs(offset)) as 0 | 1 | 2 | 3;
-  markMapCellsDirty(state.map, 'height', { minX: ridgeCenterX - 3, maxX: ridgeCenterX + 3, minY: ridgeMinY, maxY: ridgeMaxY });
+  for (let y = ridgeMinY; y <= ridgeMaxY; y += 1) {
+    for (let offset = -3; offset <= 3; offset += 1) {
+      state.map.cells[y * width + ridgeCenterX + offset].height = Math.max(0, 3 - Math.abs(offset)) as 0 | 1 | 2 | 3;
+    }
+  }
+  markMapCellsDirty(state.map, 'height', {
+    minX: ridgeCenterX - 3,
+    maxX: ridgeCenterX + 3,
+    minY: ridgeMinY,
+    maxY: ridgeMaxY,
+  });
 }
 
 function addFixtureWall(state: SimulationState, observer: UnitModel): void {
@@ -333,8 +416,26 @@ function addFixtureWall(state: SimulationState, observer: UnitModel): void {
   const wallStartY = Math.max(0, Math.floor(observer.position.y) - safeRadiusCells - 2);
   const wallEndY = Math.min(state.map.height - 1, Math.floor(observer.position.y) + safeRadiusCells + 2);
   const wallGapY = clamp(Math.floor(observer.position.y) + 20, wallStartY + 2, wallEndY - 3);
-  const wallRows = Array.from({ length: wallEndY - wallStartY + 1 }, (_, index) => wallStartY + index).filter((wallY) => wallY !== wallGapY && wallY !== wallGapY + 1);
-  state.map.objects.push(...wallRows.map((wallY, index) => ({ id: `${WALL_ID}-${index}`, kind: 'structure' as const, x: wallX, y: wallY, widthCells: 1, heightCells: 1, rotationRadians: 0, losHeightMeters: 0.8, coverProtection: 92, coverReliability: 96, concealment: 10, penetrable: false, coverPosture: 'standing' as const, labels: { en: 'Movement performance wall', ru: 'Стена проверки движения' } })));
+  const wallRows = Array.from(
+    { length: wallEndY - wallStartY + 1 },
+    (_, index) => wallStartY + index,
+  ).filter((wallY) => wallY !== wallGapY && wallY !== wallGapY + 1);
+  state.map.objects.push(...wallRows.map((wallY, index) => ({
+    id: `${WALL_ID}-${index}`,
+    kind: 'structure' as const,
+    x: wallX,
+    y: wallY,
+    widthCells: 1,
+    heightCells: 1,
+    rotationRadians: 0,
+    losHeightMeters: 0.8,
+    coverProtection: 92,
+    coverReliability: 96,
+    concealment: 10,
+    penetrable: false,
+    coverPosture: 'standing' as const,
+    labels: { en: 'Movement performance wall', ru: 'Стена проверки движения' },
+  })));
   markMapObjectsDirty(state.map);
 }
 
