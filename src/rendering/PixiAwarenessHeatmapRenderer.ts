@@ -9,6 +9,7 @@ import { getSimulationLayerState } from '../core/ui/RuntimeUiState';
 import type { UnitModel } from '../core/units/UnitModel';
 
 type VisibleAwarenessMode = 'danger' | 'stealth';
+type SafePositions = ReturnType<typeof buildSoldierAwarenessReport>['bestSafePositions'];
 
 export interface AwarenessOverlayDiagnostics {
   representation: 'raster-sprite';
@@ -44,6 +45,7 @@ export class PixiAwarenessHeatmapRenderer {
     strokeThickness: 4,
   });
   private lastRasterKey = '';
+  private lastMarkerInputKey = '';
   private lastMarkerKey = '';
   private rasterPixels: Uint8Array | null = null;
   private rasterPixelWords: Uint32Array | null = null;
@@ -68,6 +70,7 @@ export class PixiAwarenessHeatmapRenderer {
     if (state.editor.enabled || awarenessMode === 'off' || !unit) {
       this.container.visible = false;
       this.lastRasterKey = 'hidden';
+      this.lastMarkerInputKey = 'hidden';
       this.lastMarkerKey = 'hidden';
       this.publishDiagnostics();
       return;
@@ -77,10 +80,10 @@ export class PixiAwarenessHeatmapRenderer {
     // Do not build the expensive full-map report on every animation frame.
     // Orders and movement change often, but they do not change the heatmap pixels themselves.
     const rasterKey = buildAwarenessRenderKey(state, unit, awarenessMode);
-    const markerKey = `${rasterKey};unitCell:${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`;
+    const markerInputKey = buildAwarenessMarkerInputKey(state, unit, awarenessMode);
     const rasterChanged = rasterKey !== this.lastRasterKey;
-    const markerChanged = markerKey !== this.lastMarkerKey;
-    if (!rasterChanged && !markerChanged) return;
+    const markerInputChanged = markerInputKey !== this.lastMarkerInputKey;
+    if (!rasterChanged && !markerInputChanged) return;
 
     const startedAt = rasterChanged ? performance.now() : 0;
     const report = buildSoldierAwarenessReport(state, unit);
@@ -97,11 +100,17 @@ export class PixiAwarenessHeatmapRenderer {
       this.maxBuildMs = Math.max(this.maxBuildMs, this.lastBuildMs);
     }
 
-    if (markerChanged) {
+    const markerKey = buildAwarenessMarkerKey(
+      report.bestSafePositions,
+      awarenessMode,
+      state.map.cellSize,
+    );
+    if (markerKey !== this.lastMarkerKey) {
       this.drawSafePositionMarkers(report.bestSafePositions, awarenessMode, state.map.cellSize);
       this.lastMarkerKey = markerKey;
       this.markerUpdateCount += 1;
     }
+    this.lastMarkerInputKey = markerInputKey;
     this.publishDiagnostics();
   }
 
@@ -143,13 +152,15 @@ export class PixiAwarenessHeatmapRenderer {
   }
 
   private drawSafePositionMarkers(
-    positions: ReturnType<typeof buildSoldierAwarenessReport>['bestSafePositions'],
+    positions: SafePositions,
     mode: VisibleAwarenessMode,
     cellSize: number,
   ): void {
     this.markerGraphics.clear();
     if (mode !== 'danger') return;
-    for (const [index, best] of positions.slice(0, 5).entries()) {
+    const markerCount = Math.min(5, positions.length);
+    for (let index = 0; index < markerCount; index += 1) {
+      const best = positions[index];
       const x = best.position.x * cellSize;
       const y = best.position.y * cellSize;
       this.markerGraphics.lineStyle(index === 0 ? 4 : 2, 0xefff9a, 0.95);
@@ -178,6 +189,21 @@ export function buildAwarenessRenderKey(
     `posture:${unit.behaviorRuntime.posture}`,
     `knowledge:${buildAwarenessKnowledgeKey(unit)}`,
   ].join(';');
+}
+
+export function buildAwarenessMarkerKey(
+  positions: SafePositions,
+  mode: VisibleAwarenessMode,
+  cellSize: number,
+): string {
+  if (mode !== 'danger') return `mode:${mode};cellSize:${cellSize};markers:none`;
+  const markerCount = Math.min(5, positions.length);
+  let key = `mode:${mode};cellSize:${cellSize};markers:${markerCount}`;
+  for (let index = 0; index < markerCount; index += 1) {
+    const position = positions[index].position;
+    key += `;${index}:${position.x}:${position.y}`;
+  }
+  return key;
 }
 
 export function createAwarenessTexture(
@@ -220,6 +246,20 @@ export function drawAwarenessRasterWords(
     pixels[cellIndex] = lut[Math.max(0, Math.min(100, value))] ?? 0;
   }
   if (length < pixels.length) pixels.fill(0, length);
+}
+
+function buildAwarenessMarkerInputKey(
+  state: SimulationState,
+  unit: UnitModel,
+  mode: VisibleAwarenessMode,
+): string {
+  return [
+    `mode:${mode}`,
+    `map:${getMapIdentity(state.map)}`,
+    `cellSize:${state.map.cellSize}`,
+    `unit:${unit.id}`,
+    `unitCell:${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`,
+  ].join(';');
 }
 
 function buildPixelLut(mode: VisibleAwarenessMode): Uint32Array {
