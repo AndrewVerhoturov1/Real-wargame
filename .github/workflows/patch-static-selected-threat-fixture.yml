@@ -1,0 +1,47 @@
+name: Patch Static Selected Threat Fixture
+
+on:
+  push:
+    branches:
+      - agent/danger-layer-moving-units-performance
+
+permissions:
+  contents: write
+
+jobs:
+  patch-harness:
+    if: github.event.head_commit.message == 'Isolate static selected movement threat fixture'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/danger-layer-moving-units-performance
+      - name: Patch fixture and remove workflow
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/testing/DangerLayerMovementPerformanceHarness.ts')
+          text = path.read_text(encoding='utf-8')
+          old_slot = "    { x: state.map.width * 0.66, y: centerY },"
+          new_slot = "    // Keep the sole hostile west of the ridge for selected-only contact stability.\n    { x: state.map.width * 0.47, y: centerY },"
+          if old_slot not in text:
+              raise SystemExit('Expected hostile slot not found')
+          text = text.replace(old_slot, new_slot, 1)
+          old_loop = """    const unit = state.units[index];\n    const slot = slots[index % slots.length];\n    unit.order = null;"""
+          new_loop = """    const unit = state.units[index];\n    const slot = slots[index % slots.length];\n    // Scenario 1 must contain one static subjective hostile only. Scenario 3\n    // still routes all six units, but auxiliary movers remain allies.\n    unit.side = 'blue';\n    unit.order = null;"""
+          if old_loop not in text:
+              raise SystemExit('Expected reset loop not found')
+          text = text.replace(old_loop, new_loop, 1)
+          path.write_text(text, encoding='utf-8')
+          Path('.github/workflows/patch-static-selected-threat-fixture.yml').unlink()
+          PY
+      - name: Commit static-threat fixture
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/testing/DangerLayerMovementPerformanceHarness.ts .github/workflows/patch-static-selected-threat-fixture.yml
+          git commit -m 'Keep selected movement threat content static'
+          git push origin HEAD:agent/danger-layer-moving-units-performance
