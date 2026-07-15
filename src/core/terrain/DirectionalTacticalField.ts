@@ -13,7 +13,7 @@ import {
 const SECTOR_COUNT = 8;
 const SECTOR_RADIANS = Math.PI / 4;
 const CACHE_LIMIT = 12;
-const ORIGIN_BUCKET_CELLS = 1;
+const DIRECTION_WEIGHT_BUCKET = 0.0001;
 
 export interface DirectionalTacticalFieldOptions {
   readonly unitId: string;
@@ -86,17 +86,23 @@ export function getDirectionalTacticalField(
 ): DirectionalTacticalField {
   const mapCache = getMapCache(map);
   const staticGrid = getDirectionalTerrainStaticGrid(map);
-  const key = buildKey(staticGrid.mapVisualRevision, options);
+  const threatField = buildThreatDirectionField(options.originX, options.originY, options.threats);
+  const key = buildKey(staticGrid.mapVisualRevision, threatField);
   const existing = mapCache.fields.get(key);
   if (existing) {
     mapCache.diagnostics.cacheHitCount += 1;
-    mapCache.fields.delete(key);
-    mapCache.fields.set(key, existing);
-    return existing;
+    if (mapCache.diagnostics.lastKey !== key) {
+      mapCache.fields.delete(key);
+      mapCache.fields.set(key, existing);
+      mapCache.diagnostics.lastKey = key;
+    }
+    // Dynamic confidence/strength can change total threat metadata without changing the
+    // normalized directional distribution that owns the expensive full-map geometry arrays.
+    return existing.threatField === threatField ? existing : { ...existing, threatField };
   }
 
   const startedAt = performance.now();
-  const field = buildField(map, key, options);
+  const field = buildField(map, key, threatField);
   mapCache.fields.set(key, field);
   trimCache(mapCache.fields);
   mapCache.diagnostics.buildCount += 1;
@@ -173,10 +179,9 @@ export function clearDirectionalTacticalFieldCache(map: TacticalMap): void {
 function buildField(
   map: TacticalMap,
   key: string,
-  options: DirectionalTacticalFieldOptions,
+  threatField: ThreatDirectionField,
 ): DirectionalTacticalField {
   const terrain = getDirectionalTerrainStaticGrid(map);
-  const threatField = buildThreatDirectionField(options.originX, options.originY, options.threats);
   const cellCount = map.width * map.height;
   const primarySlope = new Float32Array(cellCount);
   const forwardSlopeRisk = new Uint8Array(cellCount);
@@ -308,21 +313,11 @@ function directionalTerrainSourceRu(cell: Omit<DirectionalTacticalCell, 'sourceR
   return 'открытый склон';
 }
 
-function buildKey(mapVisualRevision: number, options: DirectionalTacticalFieldOptions): string {
+function buildKey(mapVisualRevision: number, threatField: ThreatDirectionField): string {
   return [
     mapVisualRevision,
-    options.unitId,
-    quantize(options.originX, ORIGIN_BUCKET_CELLS),
-    quantize(options.originY, ORIGIN_BUCKET_CELLS),
-    options.threats.map((threat) => [
-      threat.id,
-      quantize(threat.x, 0.05),
-      quantize(threat.y, 0.05),
-      quantize(threat.strength, 1),
-      quantize(threat.suppression, 1),
-      quantize(threat.confidence, 1),
-      quantize(threat.uncertaintyCells, 0.1),
-    ].join(':')).join('|'),
+    threatField.primarySector,
+    Array.from(threatField.normalizedSectorWeights, (weight) => quantize(weight, DIRECTION_WEIGHT_BUCKET)).join(':'),
   ].join('#');
 }
 
