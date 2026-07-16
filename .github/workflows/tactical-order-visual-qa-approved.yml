@@ -1,9 +1,7 @@
-name: Tactical Order Visual QA Approved
+name: Tactical Order Visual QA
 
 on:
-  push:
-    branches:
-      - agent/tactical-order-radial-menu-v1
+  workflow_dispatch:
   pull_request:
     branches:
       - real-wargame-preview
@@ -20,19 +18,23 @@ on:
       - 'tests/tactical-order-radial-menu.spec.ts'
       - '.github/workflows/tactical-order-visual-qa-approved.yml'
 
+concurrency:
+  group: tactical-order-visual-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   statuses: write
 
 jobs:
   visual-qa:
-    if: github.event_name == 'push' || github.head_ref == 'agent/tactical-order-radial-menu-v1'
+    if: "${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.body || '', 'VISUAL_QA_APPROVED_BY_USER: yes') }}"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - name: Checkout exact approved branch SHA
+      - name: Checkout exact approved candidate SHA
         uses: actions/checkout@v4
         with:
           ref: ${{ env.CANDIDATE_SHA }}
