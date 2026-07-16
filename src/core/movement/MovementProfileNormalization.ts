@@ -1,5 +1,5 @@
 import { BUILT_IN_MOVEMENT_PROFILES, cloneMovementProfile, getBuiltInMovementProfile, isBuiltInMovementProfileId, mergeSettings } from './MovementProfileDefaults';
-import { MOVEMENT_PROFILE_FORMAT_VERSION, type BuiltInMovementProfileId, type MovementProfile, type MovementProfileRegistryData, type MovementProfileSettings } from './MovementProfileTypes';
+import { MOVEMENT_GAITS, MOVEMENT_PROFILE_FORMAT_VERSION, type BuiltInMovementProfileId, type MovementGait, type MovementProfile, type MovementProfileRegistryData, type MovementProfileSettings } from './MovementProfileTypes';
 
 export function normalizeMovementRegistryData(data?: Partial<MovementProfileRegistryData>): MovementProfileRegistryData {
   const imported = new Map<string, Record<string, unknown>>();
@@ -54,7 +54,7 @@ export function normalizeMovementProfile(value: unknown): MovementProfile {
     nameRu: text(value.nameRu, value.nameEn ?? defaults.nameRu),
     descriptionEn: text(value.descriptionEn, defaults.descriptionEn),
     descriptionRu: text(value.descriptionRu, value.descriptionEn ?? defaults.descriptionRu),
-    preferredGait: choice(value.preferredGait, ['walk', 'crouch', 'run', 'sprint', 'crawl'] as const, defaults.preferredGait),
+    preferredGait: normalizeMovementGait(value.preferredGait, defaults.preferredGait),
     stancePolicy: choice(value.stancePolicy, ['standing', 'crouched', 'prone', 'adaptive'] as const, defaults.stancePolicy),
     fallbackProfileId: normalizeMovementProfileReference(value.fallbackProfileId),
     templateProfileId: template,
@@ -64,6 +64,13 @@ export function normalizeMovementProfile(value: unknown): MovementProfile {
     revision: integer(value.revision, defaults.revision, 1, Number.MAX_SAFE_INTEGER),
     builtIn: Boolean(value.builtIn),
   };
+}
+
+function normalizeMovementGait(value: unknown, fallback: MovementGait): MovementGait {
+  if (value === 'crouch') return 'crouch_walk';
+  return typeof value === 'string' && (MOVEMENT_GAITS as readonly string[]).includes(value)
+    ? value as MovementGait
+    : fallback;
 }
 
 function normalizeSettings(value: Record<string, unknown>, defaults: MovementProfileSettings): MovementProfileSettings {
