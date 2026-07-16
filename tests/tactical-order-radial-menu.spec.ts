@@ -112,7 +112,7 @@ test.describe('tactical order radial menu visual QA — approved by user', () =>
     }
 
     await reset(page);
-    const denseAnchor = { x: box.x + box.width * 0.7, y: box.y + box.height * 0.42 };
+    const denseAnchor = { x: box.x + box.width * 0.48, y: box.y + box.height * 0.42 };
     const denseOpen = await openMenu(page, denseAnchor, 'move');
     await assertCompactMenu(menu);
     await screenshot(page, '06-compact-menu-over-dense-map.png');
@@ -177,6 +177,10 @@ async function assertCompactMenu(menu: Locator): Promise<void> {
     return getComputedStyle(element).backgroundColor;
   });
   expect(inactiveBackground).toBe('rgba(0, 0, 0, 0)');
+  const labelsFit = await menu.locator('.tactical-order-radial-sector strong').evaluateAll((elements) => {
+    return elements.every((element) => element.scrollWidth <= element.clientWidth);
+  });
+  expect(labelsFit).toBe(true);
 }
 
 async function cancelInCenter(page: Page, center: { x: number; y: number }): Promise<void> {
