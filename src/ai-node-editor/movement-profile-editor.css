@@ -75,7 +75,8 @@
 }
 
 .movement-profile-editor-layout :is(button, input, select, textarea):focus-visible,
-.movement-profile-selector select:focus-visible {
+.movement-profile-selector select:focus-visible,
+.movement-profile-draft-dialog button:focus-visible {
   outline: 3px solid #a6d397;
   outline-offset: 2px;
 }
@@ -83,6 +84,56 @@
 .navigation-profile-form-actions button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.movement-profile-draft-dialog {
+  max-width: 560px;
+  padding: 0;
+  border: 1px solid #55705c;
+  border-radius: 10px;
+  background: #101812;
+  color: #e7f0e4;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .6);
+}
+
+.movement-profile-draft-dialog::backdrop {
+  background: rgba(0, 0, 0, .72);
+}
+
+.movement-profile-draft-dialog section {
+  padding: 22px;
+}
+
+.movement-profile-draft-dialog h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.movement-profile-draft-dialog p {
+  margin: 0 0 18px;
+  color: #aebfad;
+}
+
+.movement-profile-draft-dialog div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.movement-profile-draft-dialog button {
+  min-height: 36px;
+  padding: 7px 14px;
+  border: 1px solid #48604e;
+  border-radius: 5px;
+  background: #203025;
+  color: #e3eee1;
+  cursor: pointer;
+}
+
+.movement-profile-draft-dialog button.primary {
+  border-color: #82b679;
+  background: #31553a;
 }
 
 @media (max-width: 720px) {
@@ -93,5 +144,10 @@
 
   .navigation-profile-field-control {
     grid-template-columns: minmax(100px, 1fr) 84px 32px;
+  }
+
+  .movement-profile-draft-dialog div {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
