@@ -54,19 +54,23 @@ jobs:
           rm -rf .agent
           git diff --check
 
-      - name: Make raster smoke Node 20 compatible
+      - name: Make raster smokes Node 20 compatible
         if: steps.detect.outputs.apply == 'true'
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          path = Path('scripts/vegetation_chunk_raster_smoke.mjs')
-          source = path.read_text(encoding='utf-8')
+          files = [
+              Path('scripts/vegetation_chunk_raster_smoke.mjs'),
+              Path('scripts/environment_performance_smoke.mjs'),
+          ]
           old = "  await import(`${pathToFileURL(entryFile).href}?run=${Date.now()}`);"
           new = "  if (!('navigator' in globalThis)) Object.defineProperty(globalThis, 'navigator', { value: { userAgent: '' }, configurable: true });\n  await import(`${pathToFileURL(entryFile).href}?run=${Date.now()}`);"
-          if old not in source:
-              raise SystemExit('expected raster smoke import not found')
-          path.write_text(source.replace(old, new), encoding='utf-8')
+          for path in files:
+              source = path.read_text(encoding='utf-8')
+              if old not in source:
+                  raise SystemExit(f'expected raster smoke import not found: {path}')
+              path.write_text(source.replace(old, new), encoding='utf-8')
           PY
           git diff --check
 
@@ -94,19 +98,7 @@ jobs:
 
       - name: Vegetation chunk raster smoke
         if: steps.detect.outputs.apply == 'true'
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run vegetation-chunk-raster:smoke 2>&1 | tee /tmp/vegetation-chunk-raster.log
-
-      - name: Upload vegetation smoke diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: vegetation-chunk-raster-diagnostics
-          path: /tmp/vegetation-chunk-raster.log
-          if-no-files-found: ignore
-          retention-days: 1
+        run: npm run vegetation-chunk-raster:smoke
 
       - name: Environment performance smoke
         if: steps.detect.outputs.apply == 'true'
