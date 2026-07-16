@@ -5,7 +5,7 @@ export function normalizeMovementRegistryData(data?: Partial<MovementProfileRegi
   const imported = new Map<string, Record<string, unknown>>();
   for (const value of Array.isArray(data?.profiles) ? data.profiles : []) {
     if (!isRecord(value) || typeof value.id !== 'string') continue;
-    const id = normalizeCustomOrBuiltIn(value.id.trim());
+    const id = normalizeCustomOrBuiltIn(value.id);
     imported.set(id, { ...value, id });
   }
 
@@ -37,16 +37,19 @@ export function normalizeMovementRegistryData(data?: Partial<MovementProfileRegi
 
 export function normalizeMovementProfile(value: unknown): MovementProfile {
   if (!isRecord(value)) throw new Error('Movement profile must be an object.');
-  const rawId = text(value.id, 'normal_walk');
-  const template = isBuiltInMovementProfileId(String(value.templateProfileId ?? ''))
-    ? String(value.templateProfileId) as BuiltInMovementProfileId
-    : isBuiltInMovementProfileId(rawId)
-      ? rawId
+  const normalizedId = normalizeCustomOrBuiltIn(text(value.id, 'normal_walk'));
+  const templateCandidate = typeof value.templateProfileId === 'string'
+    ? value.templateProfileId.trim().toLowerCase()
+    : '';
+  const template = isBuiltInMovementProfileId(templateCandidate)
+    ? templateCandidate as BuiltInMovementProfileId
+    : isBuiltInMovementProfileId(normalizedId)
+      ? normalizedId
       : 'normal_walk';
   const defaults = getBuiltInMovementProfile(template);
   const settings = isRecord(value.settings) ? value.settings : {};
   return {
-    id: Boolean(value.builtIn) && isBuiltInMovementProfileId(rawId) ? rawId : normalizeCustomOrBuiltIn(rawId),
+    id: normalizedId,
     nameEn: text(value.nameEn, defaults.nameEn),
     nameRu: text(value.nameRu, value.nameEn ?? defaults.nameRu),
     descriptionEn: text(value.descriptionEn, defaults.descriptionEn),
@@ -132,11 +135,12 @@ export function normalizeCustomMovementId(value: string): string {
 
 function normalizeMovementProfileReference(value: unknown): string | null {
   if (typeof value !== 'string' || !value.trim()) return null;
-  return normalizeCustomOrBuiltIn(value.trim());
+  return normalizeCustomOrBuiltIn(value);
 }
 
 function normalizeCustomOrBuiltIn(id: string): string {
-  return isBuiltInMovementProfileId(id) ? id : normalizeCustomMovementId(id);
+  const normalized = id.trim().toLowerCase();
+  return isBuiltInMovementProfileId(normalized) ? normalized : normalizeCustomMovementId(normalized);
 }
 
 function rec(value: unknown): Record<string, unknown> {
