@@ -65,6 +65,7 @@ test.describe('tactical order radial menu visual QA — approved by user', () =>
 
     await reset(page);
     await issuePreset(page, anchor, 'recon');
+    await expect(page.locator('[data-role="tactical-order-status"]')).toBeVisible();
     await expect(page.locator('[data-role="tactical-order-status"]')).toContainText('Приказ: Разведка');
     await expect(page.locator('[data-role="tactical-order-status"]')).toContainText('Осторожный');
     const recon = await snapshot(page);
@@ -79,6 +80,7 @@ test.describe('tactical order radial menu visual QA — approved by user', () =>
 
     await reset(page);
     await issuePreset(page, anchor, 'assault');
+    await expect(page.locator('[data-role="tactical-order-status"]')).toBeVisible();
     await expect(page.locator('[data-role="tactical-order-status"]')).toContainText('Приказ: Штурм');
     await expect(page.locator('[data-role="tactical-order-status"]')).toContainText('Атакующий');
     const assault = await snapshot(page);
@@ -98,8 +100,8 @@ async function openHarness(page: Page): Promise<void> {
   await page.goto('/?visualQa=tactical-order-radial-menu');
   await expect(page.locator('canvas')).toBeVisible();
   await page.waitForFunction(() => Boolean(window.__realWargameTacticalOrderVisualQa));
-  await expect(page.locator('[data-role="tactical-order-status"]')).toBeVisible();
   await reset(page);
+  await expect(page.locator('[data-role="tactical-order-status"]')).toBeHidden();
 }
 
 async function openMenu(
