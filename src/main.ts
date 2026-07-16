@@ -89,6 +89,7 @@ async function bootstrap(): Promise<void> {
     board.forceRender();
     enforceNativeMapQuality(board);
   };
+  const refreshTacticalOrderUi = () => board.renderNow();
 
   installGameEditorWorkbench(debugPanel, state, forceRenderAtNativeMapQuality);
   const destroyAttentionProfileControls = installAttentionProfileControls(state, forceRenderAtNativeMapQuality);
@@ -111,7 +112,7 @@ async function bootstrap(): Promise<void> {
   const destroyEditorHeaderPlacement = installEditorHeaderPlacement();
   const destroyWorkspaceTooltipGuard = installWorkspaceTooltipGuard();
   board.start();
-  const destroyTacticalOrderRadialInput = installTacticalOrderRadialInput(board, state, forceRenderAtNativeMapQuality);
+  const destroyTacticalOrderRadialInput = installTacticalOrderRadialInput(board, state, refreshTacticalOrderUi);
   const destroyAdaptiveGridLod = installAdaptiveGridLod(board, state, gridToggle);
   enforceNativeMapQuality(board);
   gridToggle.addEventListener('click', scheduleNativeMapQuality);
