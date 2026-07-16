@@ -1,5 +1,6 @@
 name: Agent Pin Node 20 CI
 
+# One-shot exact-head CI setup repair.
 on:
   pull_request:
     branches:
