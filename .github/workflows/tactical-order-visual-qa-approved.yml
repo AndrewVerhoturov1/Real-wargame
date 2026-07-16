@@ -29,9 +29,13 @@ jobs:
     if: github.event_name == 'push' || github.head_ref == 'agent/tactical-order-radial-menu-v1'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Checkout exact approved branch SHA
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -59,13 +63,13 @@ jobs:
         if: always()
         run: |
           mkdir -p artifacts/screenshots/tactical-order-radial-menu-v1
-          printf '%s\n' "${GITHUB_SHA}" > artifacts/screenshots/tactical-order-radial-menu-v1/COMMIT_SHA.txt
+          printf '%s\n' "${CANDIDATE_SHA}" > artifacts/screenshots/tactical-order-radial-menu-v1/COMMIT_SHA.txt
 
       - name: Upload tactical order PNG files
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: tactical-order-radial-menu-v1-${{ github.sha }}
+          name: tactical-order-radial-menu-v1-${{ env.CANDIDATE_SHA }}
           path: artifacts/screenshots/tactical-order-radial-menu-v1/
           if-no-files-found: warn
           retention-days: 14
@@ -74,7 +78,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: tactical-order-radial-menu-v1-log-${{ github.sha }}
+          name: tactical-order-radial-menu-v1-log-${{ env.CANDIDATE_SHA }}
           path: tactical-order-visual-qa.log
           if-no-files-found: warn
           retention-days: 7
