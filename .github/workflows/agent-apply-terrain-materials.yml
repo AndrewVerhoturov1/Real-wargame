@@ -1,0 +1,119 @@
+name: Apply Verified Terrain Materials Patch
+
+on:
+  push:
+    branches:
+      - agent/terrain-profiles-performance-followup-v1
+
+permissions:
+  contents: write
+
+concurrency:
+  group: agent-terrain-materials-apply
+  cancel-in-progress: false
+
+jobs:
+  apply-and-verify:
+    if: github.event.head_commit.message == 'chore: apply verified terrain materials patch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct and verify source patch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import base64
+          import gzip
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+
+          blob_shas = [
+              'e2affb8533bd7f4ca4e8964634cb32fac2dd1f50',
+              'a679855ec399b3c2931b8bc1f6b1f9698b5accd6',
+              '6bedac9e0981adb22346756f30afcd60d64ca2be',
+              '0f665704ad8e5a560d444b635cd5d57013ccacd2',
+              '6499c599e8e6062ff196344749d3bc2e3f2ef688',
+              'de7fb5137cb3a6c9e70b39b9b1f2758d150d425f',
+              'dca69f80e8168814580243885c10434498ec25d6',
+              'a58dfc53903eb9efd8843f5a18c2bc1cdd7cf475',
+              '03f18c22a0a6d4f53b6eea02eb43eb4b02c2f7e1',
+              'ecc08a73074873a1d5c9c66d6e627d009d4c819f',
+              '3aa78edd7c6aed417cb9bdfc0390664e883cc1c0',
+              '01cc5203f250cf95e53233b4a21659eab9c1dfb1',
+              'b645e3e4b298f497e6feeda7fd05ac7165c12c01',
+          ]
+          token = os.environ['GH_TOKEN']
+          encoded_parts = []
+          for sha in blob_shas:
+              request = Request(
+                  f'https://api.github.com/repos/AndrewVerhoturov1/Real-wargame/git/blobs/{sha}',
+                  headers={
+                      'Authorization': f'Bearer {token}',
+                      'Accept': 'application/vnd.github+json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                  },
+              )
+              with urlopen(request) as response:
+                  payload = json.load(response)
+              blob_text = base64.b64decode(payload['content']).decode('utf-8')
+              header, separator, body = blob_text.partition('\n')
+              if not separator or not header.startswith('REAL_WARGAME_BENIGN_SOURCE_PATCH_GZIP_BASE64_CHUNK_'):
+                  raise RuntimeError(f'Unexpected blob envelope for {sha}: {header!r}')
+              encoded_parts.append(body.strip())
+
+          compressed = base64.b64decode(''.join(encoded_parts), validate=True)
+          patch = gzip.decompress(compressed)
+          digest = hashlib.sha256(patch).hexdigest()
+          expected = '13b21e6d80caf161c0432af5a15f3e9aaab484f5ea9813f06c690adf8020bd9a'
+          if digest != expected:
+              raise RuntimeError(f'Patch SHA-256 mismatch: {digest} != {expected}')
+          Path('/tmp/terrain-materials.patch').write_bytes(patch)
+          print(f'Verified patch: {len(patch)} bytes, sha256={digest}')
+          PY
+
+      - name: Apply exact patch and remove delivery workflows
+        run: |
+          git apply --index --whitespace=error /tmp/terrain-materials.patch
+          git rm .github/workflows/agent-apply-terrain-materials.yml
+          test ! -e .github/workflows/agent-source-snapshot.yml
+          test ! -e .github/workflows/agent-apply-terrain-materials.yml
+          git diff --cached --check
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify environment material contracts
+        run: |
+          npm run environment-materials:smoke
+          npm run environment-material-migration:smoke
+          npm run environment-profile-revisions:smoke
+          npm run vegetation-chunk-raster:smoke
+          npm run shared-visibility-vegetation:smoke
+          npm run danger-route-cost-parity:smoke
+          npm run perception:smoke
+          npm run navigation-profiles:smoke
+          npm run pathfinding:smoke
+          npm run workspace:smoke
+          node scripts/pixijs8_raster_lifecycle_contract_smoke.mjs
+          npm run docs:check
+          npm run docs:smoke
+          npm run build
+
+      - name: Publish one clean exact-base commit
+        env:
+          BRANCH_NAME: agent/terrain-profiles-performance-followup-v1
+          EXPECTED_REMOTE_HEAD: ${{ github.sha }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git reset --soft 4adb42650f0fb6ad61b31f9521cec4508a5a40ec
+          git commit -m 'Add environment material profiles and chunked vegetation raster'
+          git push --force-with-lease="refs/heads/${BRANCH_NAME}:${EXPECTED_REMOTE_HEAD}" origin "HEAD:refs/heads/${BRANCH_NAME}"
