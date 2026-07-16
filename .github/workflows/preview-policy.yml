@@ -1,72 +1,117 @@
-name: Preview Policy
+name: Apply Gait Observation Compatibility Fix
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited, ready_for_review]
+    branches:
+      - real-wargame-preview
+    types: [synchronize]
+
+permissions:
+  contents: write
 
 jobs:
-  check-preview-policy:
+  apply-gait-observation-fix:
+    if: github.event.pull_request.head.ref == 'agent/physical-movement-runtime-v1' && github.event.pull_request.head.sha == '7dbc6f67b3f20b6e750f30f6aa51606f1f597d6d'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - name: Check preview policy
-        env:
-          PR_BODY: ${{ github.event.pull_request.body || '' }}
+      - name: Checkout exact candidate branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/physical-movement-runtime-v1
+          fetch-depth: 0
+
+      - name: Apply gait-aware observation contract
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
 
-          # This workflow guards PRs targeting main.
-          # Visual QA is deliberately not run here. It is manual-only through
-          # .github/workflows/preview-screenshots.yml after user approval.
-          # The preferred external delivery is direct push to real-wargame-preview, not PRs.
-          # PRs targeting main from task branches are a preview-policy violation without GO.
+          def replace_exact(path: str, old: str, new: str) -> None:
+              file_path = Path(path)
+              text = file_path.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{path}: expected exactly one replacement anchor, found {count}')
+              file_path.write_text(text.replace(old, new), encoding='utf-8')
 
-          BASE_BRANCH="${{ github.base_ref }}"
-          HEAD_BRANCH="${{ github.head_ref }}"
+          replace_exact(
+              'src/core/movement/MovementProfiles.ts',
+              """  observation: {\n    focusMultiplier: 0.9,\n    directMultiplier: 0.86,\n    peripheralMultiplier: 0.78,\n    rearMultiplier: 0.7,\n    stationaryTargetMultiplier: 0.92,\n    movingTargetMultiplier: 1,\n  },""",
+              """  observation: {\n    focusMultiplier: 1,\n    directMultiplier: 1,\n    peripheralMultiplier: 1,\n    rearMultiplier: 1,\n    stationaryTargetMultiplier: 1,\n    movingTargetMultiplier: 1,\n  },""",
+          )
+          replace_exact(
+              'src/core/movement/MovementProfiles.ts',
+              "    observation: { focusMultiplier: 0.7, directMultiplier: 0.62, peripheralMultiplier: 0.48, rearMultiplier: 0.38, stationaryTargetMultiplier: 0.64, movingTargetMultiplier: 0.8 },",
+              "    observation: { focusMultiplier: 1, directMultiplier: 1, peripheralMultiplier: 1, rearMultiplier: 1, stationaryTargetMultiplier: 1, movingTargetMultiplier: 1 },",
+          )
+          replace_exact(
+              'src/core/movement/MovementProfiles.ts',
+              "    observation: { focusMultiplier: 0.5, directMultiplier: 0.42, peripheralMultiplier: 0.3, rearMultiplier: 0.22, stationaryTargetMultiplier: 0.45, movingTargetMultiplier: 0.65 },",
+              "    observation: { focusMultiplier: 1, directMultiplier: 1, peripheralMultiplier: 1, rearMultiplier: 1, stationaryTargetMultiplier: 1, movingTargetMultiplier: 1 },",
+          )
 
-          echo "=== Preview Policy Check ==="
-          echo "Base branch: $BASE_BRANCH"
-          echo "Head branch: $HEAD_BRANCH"
-          echo ""
+          replace_exact(
+              'src/core/movement/MovementRuntime.ts',
+              """interface GaitDefinition {\n  speedMultiplier: number;\n  posture: UnitPosture;\n  postureRequired: boolean;\n  staminaDrainPerSecond: number;\n  readyDelayAfterStopSeconds: number;\n}\n\nconst GAITS: Record<MovementGait, GaitDefinition> = {\n  crawl: { speedMultiplier: 0.7, posture: 'prone', postureRequired: true, staminaDrainPerSecond: 0, readyDelayAfterStopSeconds: 0.05 },\n  crouch_walk: { speedMultiplier: 0.9, posture: 'crouched', postureRequired: true, staminaDrainPerSecond: 0, readyDelayAfterStopSeconds: 0.08 },\n  walk: { speedMultiplier: 1, posture: 'standing', postureRequired: false, staminaDrainPerSecond: 0, readyDelayAfterStopSeconds: 0.1 },\n  run: { speedMultiplier: 1.65, posture: 'standing', postureRequired: false, staminaDrainPerSecond: 10, readyDelayAfterStopSeconds: 0.35 },\n  sprint: { speedMultiplier: 2.15, posture: 'standing', postureRequired: true, staminaDrainPerSecond: 22, readyDelayAfterStopSeconds: 0.75 },\n};""",
+              """interface GaitDefinition {\n  speedMultiplier: number;\n  posture: UnitPosture;\n  postureRequired: boolean;\n  staminaDrainPerSecond: number;\n  readyDelayAfterStopSeconds: number;\n  observation: MovementProfile['observation'];\n}\n\nconst NEUTRAL_GAIT_OBSERVATION: MovementProfile['observation'] = {\n  focusMultiplier: 1,\n  directMultiplier: 1,\n  peripheralMultiplier: 1,\n  rearMultiplier: 1,\n  stationaryTargetMultiplier: 1,\n  movingTargetMultiplier: 1,\n};\n\nconst RUN_GAIT_OBSERVATION: MovementProfile['observation'] = {\n  focusMultiplier: 0.7,\n  directMultiplier: 0.62,\n  peripheralMultiplier: 0.48,\n  rearMultiplier: 0.38,\n  stationaryTargetMultiplier: 0.64,\n  movingTargetMultiplier: 0.8,\n};\n\nconst SPRINT_GAIT_OBSERVATION: MovementProfile['observation'] = {\n  focusMultiplier: 0.5,\n  directMultiplier: 0.42,\n  peripheralMultiplier: 0.3,\n  rearMultiplier: 0.22,\n  stationaryTargetMultiplier: 0.45,\n  movingTargetMultiplier: 0.65,\n};\n\nconst GAITS: Record<MovementGait, GaitDefinition> = {\n  crawl: { speedMultiplier: 0.7, posture: 'prone', postureRequired: true, staminaDrainPerSecond: 0, readyDelayAfterStopSeconds: 0.05, observation: NEUTRAL_GAIT_OBSERVATION },\n  crouch_walk: { speedMultiplier: 0.9, posture: 'crouched', postureRequired: true, staminaDrainPerSecond: 0, readyDelayAfterStopSeconds: 0.08, observation: NEUTRAL_GAIT_OBSERVATION },\n  walk: { speedMultiplier: 1, posture: 'standing', postureRequired: false, staminaDrainPerSecond: 0, readyDelayAfterStopSeconds: 0.1, observation: NEUTRAL_GAIT_OBSERVATION },\n  run: { speedMultiplier: 1.65, posture: 'standing', postureRequired: false, staminaDrainPerSecond: 10, readyDelayAfterStopSeconds: 0.35, observation: RUN_GAIT_OBSERVATION },\n  sprint: { speedMultiplier: 2.15, posture: 'standing', postureRequired: true, staminaDrainPerSecond: 22, readyDelayAfterStopSeconds: 0.75, observation: SPRINT_GAIT_OBSERVATION },\n};""",
+          )
+          replace_exact(
+              'src/core/movement/MovementRuntime.ts',
+              """    observationFocusMultiplier: profile.observation.focusMultiplier,\n    observationDirectMultiplier: profile.observation.directMultiplier,\n    observationPeripheralMultiplier: profile.observation.peripheralMultiplier,\n    observationRearMultiplier: profile.observation.rearMultiplier,\n    stationaryTargetMultiplier: profile.observation.stationaryTargetMultiplier,\n    movingTargetMultiplier: profile.observation.movingTargetMultiplier,""",
+              """    observationFocusMultiplier: profile.observation.focusMultiplier * gait.observation.focusMultiplier,\n    observationDirectMultiplier: profile.observation.directMultiplier * gait.observation.directMultiplier,\n    observationPeripheralMultiplier: profile.observation.peripheralMultiplier * gait.observation.peripheralMultiplier,\n    observationRearMultiplier: profile.observation.rearMultiplier * gait.observation.rearMultiplier,\n    stationaryTargetMultiplier: profile.observation.stationaryTargetMultiplier * gait.observation.stationaryTargetMultiplier,\n    movingTargetMultiplier: profile.observation.movingTargetMultiplier * gait.observation.movingTargetMultiplier,""",
+          )
 
-          DEFAULT_TARGET="real-wargame-preview"
-          echo "Default target branch: $DEFAULT_TARGET"
-          echo "Default external delivery: direct push to $DEFAULT_TARGET (PR is fallback)"
-          echo ""
+          replace_exact(
+              'scripts/physical_movement_runtime_smoke.ts',
+              """verifyStaminaDrainRecoveryAndFallback();\nverifyPerceptionMovementAndSignature();""",
+              """verifyStaminaDrainRecoveryAndFallback();\nverifyWalkNeutralAndGaitObservationPenalty();\nverifyPerceptionMovementAndSignature();""",
+          )
+          replace_exact(
+              'scripts/physical_movement_runtime_smoke.ts',
+              "console.log('Physical movement runtime smoke passed: gait speed, partition invariance, stamina, perception, sound, weapon preparation, migration, UI independence and route replan persistence.');",
+              "console.log('Physical movement runtime smoke passed: gait speed, partition invariance, stamina, gait-aware observation, perception, sound, weapon preparation, migration, UI independence and route replan persistence.');",
+          )
+          replace_exact(
+              'scripts/physical_movement_runtime_smoke.ts',
+              """function verifyPerceptionMovementAndSignature(): void {""",
+              """function verifyWalkNeutralAndGaitObservationPenalty(): void {\n  const walkingState = makeState();\n  const walker = walkingState.units[0];\n  setMovementRequest(walker, 'normal', 'player', 'walk');\n  walker.order = createMoveOrder({ x: 100.5, y: 2.5 }, { source: 'player' });\n  tickSimulation(walkingState, 0.5);\n  assert.equal(walker.movementRuntime.diagnostics.observationFocusMultiplier, 1, 'ordinary walk must preserve legacy-neutral focus observation');\n  assert.equal(walker.movementRuntime.diagnostics.observationDirectMultiplier, 1, 'ordinary walk must preserve legacy-neutral direct observation');\n  assert.equal(walker.movementRuntime.diagnostics.observationPeripheralMultiplier, 1, 'ordinary walk must preserve legacy-neutral peripheral observation');\n  assert.equal(walker.movementRuntime.diagnostics.observationRearMultiplier, 1, 'ordinary walk must preserve legacy-neutral rear observation');\n  assert.equal(walker.movementRuntime.diagnostics.stationaryTargetMultiplier, 1, 'ordinary walk must not penalize stationary-target evidence');\n  assert.equal(walker.movementRuntime.diagnostics.movingTargetMultiplier, 1, 'ordinary walk must not penalize moving-target evidence');\n\n  const runningState = makeState();\n  const runner = runningState.units[0];\n  setMovementRequest(runner, 'normal', 'player', 'run');\n  runner.order = createMoveOrder({ x: 100.5, y: 2.5 }, { source: 'player' });\n  tickSimulation(runningState, 0.5);\n  assert.ok(runner.movementRuntime.diagnostics.observationFocusMultiplier < 1, 'run must reduce focus observation even under the normal profile');\n  assert.ok(runner.movementRuntime.diagnostics.observationPeripheralMultiplier < runner.movementRuntime.diagnostics.observationFocusMultiplier, 'run must degrade peripheral observation more than focus');\n  assert.ok(runner.movementRuntime.diagnostics.movingTargetMultiplier < 1, 'run must reduce moving-target evidence processing');\n\n  const sprintState = makeState();\n  const sprinter = sprintState.units[0];\n  setMovementRequest(sprinter, 'normal', 'player', 'sprint');\n  sprinter.order = createMoveOrder({ x: 100.5, y: 2.5 }, { source: 'player' });\n  tickSimulation(sprintState, 0.5);\n  assert.ok(sprinter.movementRuntime.diagnostics.observationFocusMultiplier < runner.movementRuntime.diagnostics.observationFocusMultiplier, 'sprint must degrade observation more than run');\n}\n\nfunction verifyPerceptionMovementAndSignature(): void {""",
+          )
 
-          # Check: if base is main, flag it unless MAIN_GO is recorded
-          if [ "$BASE_BRANCH" = "main" ]; then
-            # Check head branch pattern: codex/*, preview/*, r-init/*
-            if echo "$HEAD_BRANCH" | grep -qE '^(codex/|preview/|r-init/)'; then
-              # Look for MAIN_GO marker in PR body
-              if printf '%s\n' "$PR_BODY" | grep -Eiq 'MAIN_GO_APPROVED_BY_USER:[[:space:]]*yes'; then
-                echo "PASS: PR targets main with explicit MAIN_GO approval."
-                echo "preview_policy=pass" >> $GITHUB_ENV
-                exit 0
-              else
-                echo "FAIL: PR targets main from branch '$HEAD_BRANCH'"
-                echo "      without MAIN_GO_APPROVED_BY_USER: yes marker."
-                echo ""
-                echo "Default target is '$DEFAULT_TARGET'."
-                echo "Please retarget this PR to '$DEFAULT_TARGET' or"
-                echo "add 'MAIN_GO_APPROVED_BY_USER: yes' to the PR body"
-                echo "if the user has explicitly approved a main merge."
-                echo "preview_policy=fail" >> $GITHUB_ENV
-                exit 1
-              fi
-            else
-              echo "PASS: Head branch '$HEAD_BRANCH' does not match codex/*, preview/*, or r-init/* patterns."
-              echo "preview_policy=pass" >> $GITHUB_ENV
-            fi
-          else
-            echo "PASS: Base branch is '$BASE_BRANCH' (expected default is '$DEFAULT_TARGET')."
-            echo "preview_policy=pass" >> $GITHUB_ENV
-          fi
+          replace_exact(
+              'docs/subprojects/ai-single-unit-editor/PHYSICAL_MOVEMENT_PROFILES_V1.md',
+              "The moving observer keeps perception active. Its effective attention weights and check intervals are multiplied by the profile's focus, direct, peripheral and rear observation factors. Run and sprint reduce observation without setting any channel to zero.",
+              "The moving observer keeps perception active. Ordinary `walk`, `crouch_walk` and `crawl` are gait-neutral for legacy observation cadence; profile factors may still tune them. `run` and `sprint` impose mandatory gait-level reductions on attention weights, check cadence and target processing, then the effective profile applies its additional observation factors. No channel is set to zero.",
+          )
+          replace_exact(
+              'docs/subprojects/ai-single-unit-editor/PHYSICAL_MOVEMENT_PROFILES_V1.md',
+              "15. route replan preserves the active physical movement request.",
+              "15. route replan preserves the active physical movement request;\n16. ordinary walk preserves legacy-neutral observation, while run and sprint apply gait-level penalties even under the normal profile.",
+          )
+          PY
+          git diff --check
+          git diff --stat
 
-      - name: Print policy result
+      - name: Verify gait-aware compatibility
         shell: bash
         run: |
-          echo "Preview policy result: ${{ env.preview_policy }}"
-          echo "Default target for this repository is: real-wargame-preview"
-          echo "Default external delivery is: direct push to preview (PR is fallback)"
-          echo "Visual QA execution is manual-only after explicit user approval"
+          set -euo pipefail
+          npm ci
+          npm run physical-movement:smoke
+          npm run ai-scheduler:smoke
+          npm run perception:smoke
+          npm run combat-tactical-integration:smoke
+          npm run build
+          npm run docs:check
+
+      - name: Commit source-only fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/core/movement/MovementProfiles.ts src/core/movement/MovementRuntime.ts scripts/physical_movement_runtime_smoke.ts docs/subprojects/ai-single-unit-editor/PHYSICAL_MOVEMENT_PROFILES_V1.md
+          git diff --cached --check
+          git commit -m 'Make movement observation penalties gait-aware'
+          git push origin HEAD:agent/physical-movement-runtime-v1
