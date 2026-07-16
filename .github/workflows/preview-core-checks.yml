@@ -274,25 +274,36 @@ jobs:
               build: process.env.BUILD_OUTCOME,
             };
             const targetUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const targetSha = context.payload.pull_request?.head?.sha ?? context.sha;
+            const statusErrors = [];
             for (const [name, value] of Object.entries(outcomes)) {
+              try {
+                await github.rest.repos.createCommitStatus({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  sha: targetSha,
+                  state: value === 'success' ? 'success' : 'failure',
+                  context: `preview-core/${name}`,
+                  description: `${name}: ${value}`,
+                  target_url: targetUrl,
+                });
+              } catch (error) {
+                statusErrors.push(`${name}: ${error instanceof Error ? error.message : String(error)}`);
+              }
+            }
+            const passed = Object.values(outcomes).every((value) => value === 'success');
+            try {
               await github.rest.repos.createCommitStatus({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                sha: context.sha,
-                state: value === 'success' ? 'success' : 'failure',
-                context: `preview-core/${name}`,
-                description: `${name}: ${value}`,
+                sha: targetSha,
+                state: passed ? 'success' : 'failure',
+                context: 'preview-core-checks',
+                description: Object.entries(outcomes).map(([key, value]) => `${key}:${value}`).join(' ').slice(0, 140),
                 target_url: targetUrl,
               });
+            } catch (error) {
+              statusErrors.push(`preview-core-checks: ${error instanceof Error ? error.message : String(error)}`);
             }
-            const passed = Object.values(outcomes).every((value) => value === 'success');
-            await github.rest.repos.createCommitStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha: context.sha,
-              state: passed ? 'success' : 'failure',
-              context: 'preview-core-checks',
-              description: Object.entries(outcomes).map(([key, value]) => `${key}:${value}`).join(' ').slice(0, 140),
-              target_url: targetUrl,
-            });
+            if (statusErrors.length > 0) core.warning(`Commit-status publication failed without invalidating completed checks: ${statusErrors.join('; ')}`);
             if (!passed) core.setFailed(`One or more core checks failed: ${JSON.stringify(outcomes)}`);
