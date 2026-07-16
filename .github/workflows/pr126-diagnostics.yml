@@ -1,0 +1,48 @@
+name: PR 126 Diagnostics
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - '.github/workflows/pr126-diagnostics.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics:
+    if: github.head_ref == 'agent/danger-route-cost-parity-v1'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - run: npm ci
+      - name: Capture targeted diagnostics
+        shell: bash
+        run: |
+          set +e
+          npm run navigation-profiles:smoke > navigation-profiles.log 2>&1
+          echo $? > navigation-profiles.status
+          npm run workspace:smoke > workspace.log 2>&1
+          echo $? > workspace.status
+          npm run build > build.log 2>&1
+          echo $? > build.status
+          npm run docs:check > docs.log 2>&1
+          echo $? > docs.status
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr126-diagnostics
+          path: |
+            navigation-profiles.log
+            navigation-profiles.status
+            workspace.log
+            workspace.status
+            build.log
+            build.status
+            docs.log
+            docs.status
+          if-no-files-found: error
