@@ -16,7 +16,8 @@ export interface MoveToBlackboardPositionActionState {
   readonly acceptanceRadiusCells: number;
   readonly timeoutMs: number;
   readonly actionToken: string;
-  readonly movementProfileSelection: MovementProfileSelectionMode;
+  /** Added after the initial state format; omitted legacy snapshots mean automatic. */
+  readonly movementProfileSelection?: MovementProfileSelectionMode;
   readonly movementProfileId?: string;
   readonly movementProfileSource?: MovementProfileSource;
 }
@@ -185,9 +186,15 @@ export function isMoveToBlackboardPositionActionState(value: unknown): value is 
     && isFiniteNonNegative(value.timeoutMs)
     && typeof value.actionToken === 'string'
     && value.actionToken.length > 0
-    && MOVEMENT_PROFILE_SELECTION_MODES.includes(value.movementProfileSelection as MovementProfileSelectionMode)
+    && (
+      value.movementProfileSelection === undefined
+      || MOVEMENT_PROFILE_SELECTION_MODES.includes(value.movementProfileSelection as MovementProfileSelectionMode)
+    )
     && (value.movementProfileId === undefined || typeof value.movementProfileId === 'string')
-    && (value.movementProfileSource === undefined || MOVEMENT_PROFILE_SOURCES.includes(value.movementProfileSource as MovementProfileSource));
+    && (
+      value.movementProfileSource === undefined
+      || MOVEMENT_PROFILE_SOURCES.includes(value.movementProfileSource as MovementProfileSource)
+    );
 }
 
 function beginMoveEffect(state: MoveToBlackboardPositionActionState): AiGraphEffect {
@@ -219,7 +226,7 @@ function moveDetails(state: MoveToBlackboardPositionActionState, remaining?: num
     targetPosition: { ...state.target },
     actionToken: state.actionToken,
     distanceRemainingCells: remaining,
-    movementProfileSelection: state.movementProfileSelection,
+    movementProfileSelection: state.movementProfileSelection ?? 'automatic',
     movementProfileId: state.movementProfileId,
     movementProfileSource: state.movementProfileSource,
   };
