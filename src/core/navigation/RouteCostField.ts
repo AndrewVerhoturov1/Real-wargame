@@ -72,6 +72,7 @@ export interface RouteCostFieldDiagnostics {
   readonly fullMapScanCount: number;
   readonly profileRevision: number;
   readonly knowledgeRevision: number;
+  readonly snapshotReuseCount: number;
 }
 
 export interface RouteCostCellBreakdown {
@@ -151,6 +152,7 @@ export interface RouteCostFieldCache {
   readonly staticFields: Map<string, StaticRouteCostField>;
   readonly dynamicFields: Map<string, DynamicRouteCostField>;
   readonly combinedFields: Map<string, RouteCostFields>;
+  contextFields: WeakMap<TacticalRouteContext, Map<string, RouteCostFields>>;
   diagnostics: {
     staticCostBuildCount: number;
     dynamicCostBuildCount: number;
@@ -159,6 +161,7 @@ export interface RouteCostFieldCache {
     fullMapScanCount: number;
     profileRevision: number;
     knowledgeRevision: number;
+    snapshotReuseCount: number;
   };
 }
 
@@ -167,6 +170,7 @@ export function createRouteCostFieldCache(): RouteCostFieldCache {
     staticFields: new Map(),
     dynamicFields: new Map(),
     combinedFields: new Map(),
+    contextFields: new WeakMap(),
     diagnostics: {
       staticCostBuildCount: 0,
       dynamicCostBuildCount: 0,
@@ -175,6 +179,7 @@ export function createRouteCostFieldCache(): RouteCostFieldCache {
       fullMapScanCount: 0,
       profileRevision: 0,
       knowledgeRevision: 0,
+      snapshotReuseCount: 0,
     },
   };
 }
@@ -204,6 +209,21 @@ export function getRouteCostFields(
     trimCache(cache.staticFields, 8);
   }
 
+  const contextRequestKey = tacticalContext
+    ? [
+      staticKey,
+      tacticalContext.exposureRevision ?? 0,
+      tacticalContext.territoryRevision ?? 0,
+    ].join(':')
+    : null;
+  if (tacticalContext && contextRequestKey) {
+    const ready = cache.contextFields.get(tacticalContext)?.get(contextRequestKey);
+    if (ready) {
+      cache.diagnostics.snapshotReuseCount += 1;
+      return ready;
+    }
+  }
+
   const knowledgeRevision = tacticalContext?.knowledgeRevision ?? 0;
   const knownThreats = tacticalContext?.knownThreats ?? [];
   const hasKnownThreats = knownThreats.length > 0;
@@ -229,8 +249,6 @@ export function getRouteCostFields(
   const dynamicKey = [
     staticKey,
     needsDirectionalTerrain ? tacticalContext?.unitId ?? 'route' : 'none',
-    needsDirectionalTerrain ? quantizedCoordinate(tacticalContext?.originX) : 'none',
-    needsDirectionalTerrain ? quantizedCoordinate(tacticalContext?.originY) : 'none',
     effectiveKnowledgeRevision,
     profile.exposureWeight > 0 ? tacticalContext?.exposureRevision ?? 0 : 0,
     tacticalContext?.territoryRevision ?? 0,
@@ -246,7 +264,17 @@ export function getRouteCostFields(
 
   const combinedKey = `${staticKey}|${dynamicKey}`;
   const existing = cache.combinedFields.get(combinedKey);
-  if (existing) return existing;
+  if (existing) {
+    if (tacticalContext && contextRequestKey) {
+      let readyByKey = cache.contextFields.get(tacticalContext);
+      if (!readyByKey) {
+        readyByKey = new Map();
+        cache.contextFields.set(tacticalContext, readyByKey);
+      }
+      readyByKey.set(contextRequestKey, existing);
+    }
+    return existing;
+  }
 
   const totalCost = new Float32Array(map.width * map.height);
   for (let index = 0; index < totalCost.length; index += 1) {
@@ -293,6 +321,14 @@ export function getRouteCostFields(
     cacheKey: combinedKey,
   };
   cache.combinedFields.set(combinedKey, combined);
+  if (tacticalContext && contextRequestKey) {
+    let readyByKey = cache.contextFields.get(tacticalContext);
+    if (!readyByKey) {
+      readyByKey = new Map();
+      cache.contextFields.set(tacticalContext, readyByKey);
+    }
+    readyByKey.set(contextRequestKey, combined);
+  }
   trimCache(cache.combinedFields, 12);
   cache.diagnostics.profileRevision = profile.revision;
   cache.diagnostics.knowledgeRevision = effectiveKnowledgeRevision;
@@ -342,6 +378,7 @@ export function clearRouteCostFieldCache(cache: RouteCostFieldCache): void {
   cache.staticFields.clear();
   cache.dynamicFields.clear();
   cache.combinedFields.clear();
+  cache.contextFields = new WeakMap();
 }
 
 function buildStaticField(
@@ -589,10 +626,6 @@ function buildSoldierDangerFieldContext(
       fireThreatClass: threat.fireThreatClass ?? null,
     })),
   };
-}
-
-function quantizedCoordinate(value: number | undefined): string {
-  return Number.isFinite(value) ? (Math.round((value ?? 0) * 4) / 4).toFixed(2) : 'none';
 }
 
 function getMapIdentity(map: TacticalMap): number {

@@ -1,4 +1,5 @@
 import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
+import { measurePerformancePhase } from '../debug/PerformancePhases';
 import type { MoveOrder } from '../orders/MoveOrder';
 import { planMoveOrder } from '../orders/MoveOrderPlanning';
 import { updatePlayerCommandStatus } from '../orders/PlayerCommand';
@@ -20,7 +21,10 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
   updateRouteCellIndex(unit, order);
   const blocked = routeLookaheadBlocked(state, order);
   const resolved = resolveUnitNavigationProfile(unit, unit.playerCommand);
-  const tacticalContext = buildUnitTacticalRouteContext(unit);
+  const tacticalContext = measurePerformancePhase(
+    'route.context',
+    () => buildUnitTacticalRouteContext(unit, { freshness: 'coalesced' }),
+  );
   const evaluation = evaluateNavigationReplan({
     order,
     profile: resolved.profile,
@@ -36,13 +40,13 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
   const replanSearchCount = (order.replanSearchCount ?? 0) + 1;
   const currentRouteCost = blocked
     ? order.pathCost
-    : evaluateNavigationRouteCost(
+    : measurePerformancePhase('route.current-cost', () => evaluateNavigationRouteCost(
         state.map,
         remainingRouteCells(order),
         resolved.profile,
         tacticalContext,
-      );
-  const replanned = planMoveOrder(state.map, unit.position, requestedTarget, {
+      ));
+  const replanned = measurePerformancePhase('route.replan-search', () => planMoveOrder(state.map, unit.position, requestedTarget, {
     source: order.source,
     ownerToken: order.ownerToken,
     playerCommandId: order.playerCommandId,
@@ -61,7 +65,7 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
     lastReplanAtSeconds: state.simulationTimeSeconds,
     lastReplanReason: reason,
     lastReplanReasonRu: reasonRu,
-  });
+  }));
 
   if (!replanned.ok) {
     markReplanRevisionProcessed(
