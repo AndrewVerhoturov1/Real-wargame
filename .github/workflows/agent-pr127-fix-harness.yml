@@ -25,6 +25,7 @@ jobs:
       - name: Declare manual ownership for harness-controlled units
         shell: bash
         run: |
+          # Focused branch-local repair; no preview or main refs are modified.
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
