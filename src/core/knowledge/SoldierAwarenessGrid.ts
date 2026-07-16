@@ -1,6 +1,7 @@
 import { distance, type GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
 import type { SimulationState } from '../simulation/SimulationState';
+import { getDirectionalTerrainSectorBasis } from '../terrain/DirectionalTerrainSectorBasis';
 import {
   getDirectionalTacticalField,
   readDirectionalTacticalCell,
@@ -98,6 +99,7 @@ export function buildSoldierAwarenessReport(
   unit: UnitModel,
 ): SoldierAwarenessReport {
   const staticField = getAwarenessStaticField(state.map, unit.behaviorRuntime.posture);
+  const directionalBasis = getDirectionalTerrainSectorBasis(state.map);
   const directionalField = getDirectionalTacticalField(state.map, {
     unitId: unit.id,
     originX: unit.position.x,
@@ -112,7 +114,7 @@ export function buildSoldierAwarenessReport(
     posture: unit.behaviorRuntime.posture,
     knowledgeRevision: unit.tacticalKnowledge.revision,
     threats: unit.tacticalKnowledge.threats,
-  }, { staticField, directionalField });
+  }, { staticField, directionalBasis });
   const key = buildCacheKey(state, unit, staticField.key, directionalField.key, dangerField.key);
   let cached = cache.get(unit);
 

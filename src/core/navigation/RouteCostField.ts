@@ -11,6 +11,7 @@ import {
   getDirectionalTacticalField,
   type DirectionalTacticalField,
 } from '../terrain/DirectionalTacticalField';
+import { getDirectionalTerrainSectorBasis } from '../terrain/DirectionalTerrainSectorBasis';
 import {
   getDirectionalTerrainStaticGrid,
   type DirectionalTerrainStaticGrid,
@@ -204,8 +205,14 @@ export function getRouteCostFields(
 
   const knowledgeRevision = tacticalContext?.knowledgeRevision ?? 0;
   const knownThreats = tacticalContext?.knownThreats ?? [];
+  const hasKnownThreats = knownThreats.length > 0;
   const hasOrigin = Number.isFinite(tacticalContext?.originX) && Number.isFinite(tacticalContext?.originY);
-  const tacticalField = hasOrigin
+  const needsDanger = hasKnownThreats && profile.dangerWeight > 0;
+  const needsDirectionalTerrain = hasKnownThreats && hasOrigin && hasDirectionalTerrainWeights(profile);
+  const usesTacticalKnowledge = needsDanger || needsDirectionalTerrain;
+  const effectiveKnowledgeRevision = usesTacticalKnowledge ? knowledgeRevision : 0;
+  const directionalBasis = needsDanger ? getDirectionalTerrainSectorBasis(map) : undefined;
+  const tacticalField = needsDirectionalTerrain
     ? getDirectionalTacticalField(map, {
       unitId: tacticalContext?.unitId ?? 'route',
       originX: tacticalContext?.originX ?? 0,
@@ -214,19 +221,20 @@ export function getRouteCostFields(
       threats: knownThreats,
     })
     : null;
-  const dangerContext = buildSoldierDangerFieldContext(tacticalContext);
+  const dangerContext = needsDanger ? buildSoldierDangerFieldContext(tacticalContext) : null;
   const dangerField = dangerContext
-    ? getSoldierDangerField(map, dangerContext, { directionalField: tacticalField ?? undefined })
+    ? getSoldierDangerField(map, dangerContext, { directionalBasis })
     : null;
   const dynamicKey = [
     staticKey,
-    tacticalContext?.unitId ?? 'none',
-    quantizedCoordinate(tacticalContext?.originX),
-    quantizedCoordinate(tacticalContext?.originY),
-    knowledgeRevision,
-    tacticalContext?.exposureRevision ?? 0,
+    needsDirectionalTerrain ? tacticalContext?.unitId ?? 'route' : 'none',
+    needsDirectionalTerrain ? quantizedCoordinate(tacticalContext?.originX) : 'none',
+    needsDirectionalTerrain ? quantizedCoordinate(tacticalContext?.originY) : 'none',
+    effectiveKnowledgeRevision,
+    profile.exposureWeight > 0 ? tacticalContext?.exposureRevision ?? 0 : 0,
     tacticalContext?.territoryRevision ?? 0,
     dangerField?.key ?? 'no-danger',
+    tacticalField?.key ?? 'no-directional',
   ].join(':');
   let dynamicField = cache.dynamicFields.get(dynamicKey);
   if (!dynamicField) {
@@ -261,7 +269,7 @@ export function getRouteCostFields(
     height: map.height,
     profileId: profile.id,
     profileRevision: profile.revision,
-    knowledgeRevision,
+    knowledgeRevision: effectiveKnowledgeRevision,
     dangerFieldKey: dynamicField.dangerFieldKey,
     passable: staticField.passable,
     terrainKeys: staticField.terrainKeys,
@@ -286,7 +294,7 @@ export function getRouteCostFields(
   cache.combinedFields.set(combinedKey, combined);
   trimCache(cache.combinedFields, 12);
   cache.diagnostics.profileRevision = profile.revision;
-  cache.diagnostics.knowledgeRevision = knowledgeRevision;
+  cache.diagnostics.knowledgeRevision = effectiveKnowledgeRevision;
   return combined;
 }
 

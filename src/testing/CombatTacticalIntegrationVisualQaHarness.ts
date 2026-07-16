@@ -4,14 +4,19 @@ import { clearCombatEvents, drainDueCombatEvents, queueCombatEvent } from '../co
 import { buildSoldierAwarenessReport } from '../core/knowledge/SoldierAwarenessGrid';
 import { syncSoldierThreatMemory } from '../core/knowledge/SoldierThreatMemory';
 import { fullMapRegion, getMapRevisionSnapshot, markMapCellsDirty, markMapObjectsDirty } from '../core/map/MapRuntimeState';
+import { buildUnitTacticalRouteContext } from '../core/navigation/NavigationRuntime';
+import { createRouteCostFieldCache, getRouteCostFields } from '../core/navigation/RouteCostField';
+import { getBuiltInNavigationProfile } from '../core/navigation/NavigationProfiles';
 import { issueRoutedMoveOrderToSelectedUnits } from '../core/orders/RoutedMoveOrders';
+import { findGridPath } from '../core/pathfinding/GridPathfinder';
 import { advanceVisualContact, upsertPerceptionContact } from '../core/perception/PerceptionContact';
 import { evaluateThreatsAtPosition } from '../core/pressure/ThreatEvaluation';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { setAiTestPaused } from '../core/testing/AiTestLabRuntime';
-import type { UnitModel } from '../core/units/UnitModel';
+import type { KnownThreatMemory, UnitModel } from '../core/units/UnitModel';
 import {
   getRealReliefOverlayState,
+  getSimulationLayerState,
   setAttentionCurrentContacts,
   setAttentionMemoryMarkers,
   setAttentionOverlayActive,
@@ -30,7 +35,8 @@ export type CombatTacticalVisualScenario =
   | 'slice1-near-miss-evidence-suppression'
   | 'slice1-wall-evidence-attenuation'
   | 'slice1-repeated-unknown-fire-merged'
-  | 'slice1-detected-shooter-alias';
+  | 'slice1-detected-shooter-alias'
+  | 'danger-route-cost-parity';
 
 export interface CombatTacticalVisualSnapshot {
   readonly scenario: CombatTacticalVisualScenario;
@@ -49,12 +55,31 @@ export interface CombatTacticalVisualSnapshot {
   readonly bestSafePosition: { x: number; y: number } | null;
   readonly routeWaypointCount: number;
   readonly mapVisualRevision: number;
+  readonly dangerFieldKey?: string;
+  readonly parity?: DangerParitySnapshot;
+}
+
+export type DangerParityPhase = 'single-rifle' | 'two-rifles' | 'rifle-and-machine-gun' | 'overlay-hidden-route';
+
+export interface DangerParitySnapshot {
+  readonly phase: DangerParityPhase;
+  readonly overlayMode: string;
+  readonly threatCount: number;
+  readonly exposedCell: { x: number; y: number; danger: number; expectedProtectionAgainstThreat: number };
+  readonly protectedCell: { x: number; y: number; danger: number; expectedProtectionAgainstThreat: number };
+  readonly awarenessDangerFieldKey: string;
+  readonly routeDangerFieldKey: string;
+  readonly routeDangerAvailable: boolean;
+  readonly routeCells: readonly { x: number; y: number }[];
+  readonly orderWaypointCount: number;
 }
 
 export interface CombatTacticalVisualQaApi {
   setScenario(scenario: CombatTacticalVisualScenario): CombatTacticalVisualSnapshot;
   getSnapshot(): CombatTacticalVisualSnapshot | null;
+  setDangerParityPhase(phase: DangerParityPhase): CombatTacticalVisualSnapshot;
   stepDangerPerformanceDynamicUpdate(step: number): void;
+  stepDangerPerformanceGeometryUpdate(step: number): void;
 }
 
 declare global {
@@ -64,6 +89,8 @@ declare global {
 }
 
 const VISUAL_OBJECT_PREFIX = 'combat-tactical-visual-';
+const dangerParityRouteCache = createRouteCostFieldCache();
+let activeDangerParityPhase: DangerParityPhase = 'single-rifle';
 
 export function installCombatTacticalIntegrationVisualQaHarness(
   state: SimulationState,
@@ -83,7 +110,7 @@ export function installCombatTacticalIntegrationVisualQaHarness(
       positionFixture(state, observer, shooter);
       configureOverlays(state);
 
-      if (scenario === 'wall-cover' || scenario === 'slice1-wall-evidence-attenuation') {
+      if (scenario === 'wall-cover' || scenario === 'slice1-wall-evidence-attenuation' || scenario === 'danger-route-cost-parity') {
         addWallFixture(state, observer, shooter);
       }
       if (scenario === 'reverse-slope') addReverseSlopeFixture(state, observer, shooter);
@@ -97,6 +124,10 @@ export function installCombatTacticalIntegrationVisualQaHarness(
       } else if (scenario === 'slice1-detected-shooter-alias') {
         installDetectedShooterAliasEvidence(state, observer, shooter);
         memorySynced = true;
+      } else if (scenario === 'danger-route-cost-parity') {
+        activeDangerParityPhase = 'single-rifle';
+        installDangerParityThreats(observer, shooter, activeDangerParityPhase);
+        memorySynced = true;
       } else {
         fireNearObserver(state, observer, shooter, scenario);
       }
@@ -104,7 +135,7 @@ export function installCombatTacticalIntegrationVisualQaHarness(
       if (!memorySynced) syncSoldierThreatMemory(state, observer, 0.1);
       state.selectedUnitId = observer.id;
       state.selectedUnitIds = [observer.id];
-      observer.playerNavigationProfileId = 'retreat';
+      observer.playerNavigationProfileId = scenario === 'danger-route-cost-parity' ? 'cautious' : 'retreat';
       issueRoutedMoveOrderToSelectedUnits(state, {
         x: clamp(observer.position.x + state.map.width * 0.42, 0.5, state.map.width - 0.5),
         y: observer.position.y,
@@ -123,6 +154,21 @@ export function installCombatTacticalIntegrationVisualQaHarness(
       if (!observer || !shooter) return null;
       return buildSnapshot(state, observer, shooter, activeScenario, buildSoldierAwarenessReport(state, observer));
     },
+    setDangerParityPhase(phase): CombatTacticalVisualSnapshot {
+      if (activeScenario !== 'danger-route-cost-parity') throw new Error('Danger parity phase requires the danger-route-cost-parity scenario.');
+      const [observer, shooter] = resolveFixtureUnits(state);
+      activeDangerParityPhase = phase;
+      installDangerParityThreats(observer, shooter, phase);
+      setSimulationLayerMode(state, phase === 'overlay-hidden-route' ? 'info' : 'danger');
+      observer.playerNavigationProfileId = 'cautious';
+      state.selectedUnitId = observer.id;
+      state.selectedUnitIds = [observer.id];
+      issueRoutedMoveOrderToSelectedUnits(state, parityRouteTarget(state, observer));
+      const report = buildSoldierAwarenessReport(state, observer);
+      onChanged();
+      window.dispatchEvent(new CustomEvent('real-wargame:combat-tactical-visual-qa-updated'));
+      return buildSnapshot(state, observer, shooter, activeScenario, report);
+    },
     stepDangerPerformanceDynamicUpdate(step): void {
       if (!activeScenario) throw new Error('Set a combat tactical visual scenario before performance updates.');
       const observer = state.units.find((unit) => unit.id === state.selectedUnitId) ?? state.units[0];
@@ -139,6 +185,15 @@ export function installCombatTacticalIntegrationVisualQaHarness(
       // The real simulation changes tactical knowledge inside the live ticker. Let that same
       // ticker perform the next render instead of calling the UI-only forceRender path, which
       // synthetically invalidates the static map and contaminates danger-layer measurements.
+      window.dispatchEvent(new CustomEvent('real-wargame:combat-tactical-visual-qa-updated'));
+    },
+    stepDangerPerformanceGeometryUpdate(step): void {
+      if (!activeScenario) throw new Error('Set a combat tactical visual scenario before geometry updates.');
+      const observer = state.units.find((unit) => unit.id === state.selectedUnitId) ?? state.units[0];
+      if (!observer || observer.tacticalKnowledge.threats.length === 0) throw new Error('Danger geometry update requires known threats.');
+      const moving = observer.tacticalKnowledge.threats[Math.abs(Math.floor(step)) % observer.tacticalKnowledge.threats.length];
+      moving.x = clamp(moving.x + 0.35, 0.5, state.map.width - 0.5);
+      observer.tacticalKnowledge.revision += 1;
       window.dispatchEvent(new CustomEvent('real-wargame:combat-tactical-visual-qa-updated'));
     },
   };
@@ -301,6 +356,65 @@ function incomingDirectionDegrees(observer: UnitModel, shooter: UnitModel): numb
   return result < 0 ? result + 360 : result;
 }
 
+function installDangerParityThreats(
+  observer: UnitModel,
+  shooter: UnitModel,
+  phase: DangerParityPhase,
+): void {
+  const primary = dangerParityThreat('unit:visual-parity-rifle-primary', shooter, 78, 92, 'rifle_fire', 34);
+  const weaker = dangerParityThreat('unit:visual-parity-rifle-weaker', shooter, 42, 88, 'rifle_fire', 22);
+  const machineGun = dangerParityThreat('unit:visual-parity-machine-gun', shooter, 66, 86, 'machine_gun_fire', 58);
+  observer.tacticalKnowledge.threats = phase === 'single-rifle'
+    ? [primary]
+    : phase === 'two-rifles'
+      ? [primary, weaker]
+      : [primary, weaker, machineGun];
+  observer.tacticalKnowledge.revision += 1;
+}
+
+function dangerParityThreat(
+  id: string,
+  shooter: UnitModel,
+  strength: number,
+  confidence: number,
+  fireThreatClass: 'rifle_fire' | 'machine_gun_fire',
+  suppression: number,
+): KnownThreatMemory {
+  return {
+    id,
+    labelRu: id,
+    mode: 'directional_fire',
+    x: shooter.position.x,
+    y: shooter.position.y,
+    radiusCells: 0,
+    widthCells: 0,
+    heightCells: 0,
+    rotationDegrees: 0,
+    strength,
+    suppression,
+    stressPerSecond: 4,
+    directionDegrees: 180,
+    arcDegrees: 150,
+    rangeCells: 80,
+    minRangeCells: 0,
+    falloffPercent: 20,
+    confidence,
+    uncertaintyCells: 0,
+    source: 'seen',
+    visibleNow: true,
+    lastSeenSeconds: 0,
+    lastUpdatedSeconds: 0,
+    fireThreatClass,
+  } as KnownThreatMemory;
+}
+
+function parityRouteTarget(state: SimulationState, observer: UnitModel) {
+  return {
+    x: clamp(observer.position.x + state.map.width * 0.42, 0.5, state.map.width - 0.5),
+    y: observer.position.y,
+  };
+}
+
 function fireNearObserver(
   state: SimulationState,
   observer: UnitModel,
@@ -309,7 +423,8 @@ function fireNearObserver(
     | 'visual-contact'
     | 'slice1-contact-danger-zero-suppression'
     | 'slice1-repeated-unknown-fire-merged'
-    | 'slice1-detected-shooter-alias'>,
+    | 'slice1-detected-shooter-alias'
+    | 'danger-route-cost-parity'>,
 ): void {
   const metresPerCell = state.map.metersPerCell;
   const shotId = `visual-${scenario}-${Math.round(state.simulationTimeSeconds * 1000)}`;
@@ -399,6 +514,54 @@ function addReverseSlopeFixture(state: SimulationState, observer: UnitModel, sho
   markMapCellsDirty(state.map, 'height', { minX: startX, minY, maxX: endX, maxY });
 }
 
+function buildDangerParitySnapshot(
+  state: SimulationState,
+  observer: UnitModel,
+  report: ReturnType<typeof buildSoldierAwarenessReport>,
+): DangerParitySnapshot {
+  const wall = state.map.objects.find((object) => object.id === `${VISUAL_OBJECT_PREFIX}wall`);
+  if (!wall) throw new Error('Danger parity wall fixture is missing.');
+  const y = Math.max(0, Math.min(state.map.height - 1, Math.floor(observer.position.y)));
+  const protectedX = Math.max(0, Math.floor(wall.x) - 1);
+  const exposedX = Math.min(state.map.width - 1, Math.ceil(wall.x + wall.widthCells) + 1);
+  const protectedCell = report.cells[y * state.map.width + protectedX];
+  const exposedCell = report.cells[y * state.map.width + exposedX];
+  if (!protectedCell || !exposedCell) throw new Error('Danger parity awareness cells are unavailable.');
+  const profile = getBuiltInNavigationProfile('cautious');
+  const context = buildUnitTacticalRouteContext(observer);
+  const routeFields = getRouteCostFields(state.map, profile, context, dangerParityRouteCache);
+  const route = findGridPath(state.map, observer.position, parityRouteTarget(state, observer), {
+    navigationProfile: profile,
+    tacticalContext: context,
+    costFieldCache: dangerParityRouteCache,
+  });
+  if (!route.ok) throw new Error(route.reason);
+  const reportRecord = report as unknown as { dangerFieldKey?: string };
+  const fieldsRecord = routeFields as unknown as { dangerFieldKey?: string };
+  return {
+    phase: activeDangerParityPhase,
+    overlayMode: getSimulationLayerState(state).mode,
+    threatCount: observer.tacticalKnowledge.threats.length,
+    exposedCell: {
+      x: exposedX,
+      y,
+      danger: exposedCell.danger,
+      expectedProtectionAgainstThreat: exposedCell.expectedProtectionAgainstThreat,
+    },
+    protectedCell: {
+      x: protectedX,
+      y,
+      danger: protectedCell.danger,
+      expectedProtectionAgainstThreat: protectedCell.expectedProtectionAgainstThreat,
+    },
+    awarenessDangerFieldKey: reportRecord.dangerFieldKey ?? '',
+    routeDangerFieldKey: fieldsRecord.dangerFieldKey ?? '',
+    routeDangerAvailable: routeFields.availability.danger,
+    routeCells: route.cells.map((cell) => ({ x: cell.x, y: cell.y })),
+    orderWaypointCount: observer.order?.waypoints?.length ?? 0,
+  };
+}
+
 function buildSnapshot(
   state: SimulationState,
   observer: UnitModel,
@@ -418,6 +581,10 @@ function buildSnapshot(
   const hiddenFieldLeak = unitThreat
     ? ['weapon', 'weaponState', 'currentShooterPosition'].filter((key) => key in unitThreat).length
     : 0;
+  const reportRecord = report as unknown as { dangerFieldKey?: string };
+  const parity = scenario === 'danger-route-cost-parity'
+    ? buildDangerParitySnapshot(state, observer, report)
+    : undefined;
   return {
     scenario,
     suppression: getCombatSuppressionSnapshot(observer, state.simulationTimeSeconds).suppression,
@@ -437,6 +604,8 @@ function buildSnapshot(
       : null,
     routeWaypointCount: observer.order?.waypoints?.length ?? 0,
     mapVisualRevision: getMapRevisionSnapshot(state.map).visual,
+    dangerFieldKey: reportRecord.dangerFieldKey,
+    parity,
   };
 }
 

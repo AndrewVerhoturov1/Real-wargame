@@ -42,7 +42,7 @@ Different map objects cannot share one field merely because their numeric revisi
 
 ## Canonical internal danger field
 
-`SoldierDangerField` is the renderer-independent source of per-cell danger semantics for machine consumers. It is built from the observing soldier's subjective `UnitTacticalKnowledge.threats` and reuses the existing static awareness, `ThreatRelativeCoverField`, and `DirectionalTacticalField` caches.
+`SoldierDangerField` is the renderer-independent source of per-cell danger semantics for machine consumers. It is built from the observing soldier's subjective `UnitTacticalKnowledge.threats` and reuses the existing static awareness, `ThreatRelativeCoverField`, and static `DirectionalTerrainSectorBasis` caches. Weighted `DirectionalTacticalField` output is not part of the danger geometry key.
 
 The dependency direction is:
 
@@ -105,15 +105,17 @@ Legacy known unit memories without the field load as `rifle_fire`. Unknown sourc
 Danger computation has two bounded layers:
 
 ```text
-geometry cache
-  positions, sectors, range/falloff, uncertainty geometry,
-  cover and directional terrain relationships
+per-threat geometry cache (maximum 24 entries)
+  threat identity, position, shape, direction, range/falloff and uncertainty,
+  posture, static map geometry and directional-sector-basis revision
 
-scored field cache
-  strength, suppression, confidence and fire class
+scored field cache (maximum 12 entries)
+  canonical threat order plus strength, suppression, confidence and fire class
 ```
 
-Changing only profile does not rebuild either danger layer. Changing fire class or confidence invalidates the scored field. For a stable single-source geometry it reuses the geometry arrays. Static map geometry changes invalidate through existing map/static-field revision keys.
+Changing profile, strength, suppression, confidence, fire class, or array order does not rebuild threat geometry. Scored content changes create or reuse a scored field; a pure reorder reuses the same field key. Moving one threat rebuilds only that threat geometry. Diagnostics publish cached threat geometries, scored fields, map scans, cache hits, and retained typed-array bytes.
+
+A profile with `dangerWeight = 0` and all directional-terrain weights equal to zero does not request `SoldierDangerField` or `DirectionalTacticalField`. Its route key ignores tactical-knowledge revisions that cannot affect cost.
 
 The route dynamic field is cached by its static/profile key plus the canonical danger-field key and future exposure/territory revisions.
 
@@ -193,7 +195,8 @@ The original player command id and AI owner token are copied into a replacement 
 - A* obtains the ready/cached danger field once before neighbor expansion.
 - A* is called on order creation or an allowed replan only, never every frame.
 - No renderer or PixiJS import exists in core danger or navigation code.
-- Threat-relative cover and directional terrain fields are reused.
+- Threat-relative cover and the static directional sector basis are reused.
+- Non-tactical profiles skip danger and weighted directional-field construction entirely.
 - No objective unit lookup occurs during the full-map danger pass.
 - Static/dynamic typed arrays and bounded caches are reused by content keys.
 - Baseline routes use a bounded per-map endpoint cache.

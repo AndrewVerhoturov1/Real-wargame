@@ -1,6 +1,7 @@
 import { getThreatRelativeCoverFieldDiagnostics } from '../cover/ThreatRelativeCoverField';
 import { getAwarenessDynamicRescoreDiagnostics } from '../knowledge/AwarenessDynamicRescore';
 import { getAwarenessStaticFieldDiagnostics } from '../knowledge/AwarenessStaticField';
+import { getSoldierDangerFieldDiagnostics } from '../knowledge/SoldierDangerField';
 import type { SimulationState } from '../simulation/SimulationState';
 import { getDirectionalTacticalFieldDiagnostics } from '../terrain/DirectionalTacticalField';
 import { getSimulationLayerState } from '../ui/RuntimeUiState';
@@ -254,7 +255,11 @@ export class PerformanceMonitor {
         awarenessDynamicRescore: selectedUnit
           ? getAwarenessDynamicRescoreDiagnostics(selectedUnit)
           : null,
-        awarenessMovement: getAwarenessMovementDiagnostics(),
+        soldierDangerField: getSoldierDangerFieldDiagnostics(state.map),
+        awarenessMovement: {
+          ...getAwarenessMovementDiagnostics(),
+          mainThreadSoldierDangerField: getSoldierDangerFieldDiagnostics(state.map),
+        },
       },
       summary: {
         sampleCount: samples.length,
