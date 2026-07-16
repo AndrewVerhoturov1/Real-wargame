@@ -31,8 +31,6 @@ export interface PlanMoveOrderOptions {
   readonly movementProfileOwnerToken?: string;
   readonly movementProfileDefinitionRevision?: number;
   readonly movementProfileSelectionRevision?: number;
-  /** Deprecated compatibility input; interpreted only as selection revision. */
-  readonly movementProfileRevision?: number;
   readonly finalFacingRadians?: number;
   readonly tacticalContext?: TacticalRouteContext;
   readonly replanSearchCount?: number;
@@ -107,7 +105,7 @@ export function planMoveOrder(
     movementProfileSource: options.movementProfileSource,
     movementProfileOwnerToken: options.movementProfileOwnerToken,
     movementProfileDefinitionRevision: options.movementProfileDefinitionRevision,
-    movementProfileSelectionRevision: options.movementProfileSelectionRevision ?? options.movementProfileRevision,
+    movementProfileSelectionRevision: options.movementProfileSelectionRevision,
     finalFacingRadians: options.finalFacingRadians,
     knowledgeRevision: options.tacticalContext?.knowledgeRevision ?? 0,
     replanSearchCount: options.replanSearchCount ?? 0,
