@@ -1,6 +1,7 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import { getCell } from '../map/MapModel';
+import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 import { resolvePressureZoneSettings } from '../pressure/PressureZone';
 import type { SimulationState } from '../simulation/SimulationState';
 import { areUnitsHostile } from '../units/SideRelations';
@@ -42,7 +43,7 @@ export function buildPerceptionStimuli(state: SimulationState, observer?: UnitMo
     if (!settings.enabled) continue;
     const position = { x: zone.x, y: zone.y };
     const cell = getCell(state.map, Math.floor(position.x), Math.floor(position.y));
-    const concealment = cell?.forest === 2 ? 65 : cell?.forest === 1 ? 35 : 0;
+    const concealment = resolveCellVegetationDefinition(cell).visibility.targetConcealment;
     const targetType = zone.sourceTargetType ?? 'soldier';
     const targetProfile = resolvePerceptionTargetProfile(targetType);
     const posture: UnitPosture = 'standing';
@@ -70,7 +71,7 @@ export function buildPerceptionStimuli(state: SimulationState, observer?: UnitMo
   for (const unit of state.units) {
     if (observer && (unit.id === observer.id || !areUnitsHostile(observer, unit))) continue;
     const cell = getCell(state.map, Math.floor(unit.position.x), Math.floor(unit.position.y));
-    const terrainConcealment = cell?.forest === 2 ? 65 : cell?.forest === 1 ? 35 : 0;
+    const terrainConcealment = resolveCellVegetationDefinition(cell).visibility.targetConcealment;
     const posture = unit.behaviorRuntime.posture;
     const targetType: PerceptionTargetType = 'soldier';
     const targetProfile = resolvePerceptionTargetProfile(targetType);
