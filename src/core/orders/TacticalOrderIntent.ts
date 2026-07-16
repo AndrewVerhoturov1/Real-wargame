@@ -71,8 +71,8 @@ export function createTacticalOrderIntent(presetId: TacticalOrderPresetId): Tact
 }
 
 export function normalizeTacticalOrderIntent(value: unknown): TacticalOrderIntent {
-  if (!isRecord(value)) return createTacticalOrderIntent('move');
-  const presetId = normalizePresetId(value.presetId);
+  if (!isRecord(value) || !isPresetId(value.presetId)) return createTacticalOrderIntent('move');
+  const presetId = value.presetId;
   const canonical = PRESETS[presetId].intent;
   return cloneAndFreezeIntent({
     formatVersion: TACTICAL_ORDER_INTENT_FORMAT_VERSION,
@@ -171,10 +171,8 @@ function cloneAndFreezeIntent(value: TacticalOrderIntent): TacticalOrderIntent {
   });
 }
 
-function normalizePresetId(value: unknown): TacticalOrderPresetId {
-  return typeof value === 'string' && (TACTICAL_ORDER_PRESET_IDS as readonly string[]).includes(value)
-    ? value as TacticalOrderPresetId
-    : 'move';
+function isPresetId(value: unknown): value is TacticalOrderPresetId {
+  return typeof value === 'string' && (TACTICAL_ORDER_PRESET_IDS as readonly string[]).includes(value);
 }
 
 function cleanProfileId(value: unknown, fallback: string): string {
