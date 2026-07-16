@@ -88,6 +88,10 @@ function issueTacticalOrderIntentToSelectedUnits(
       movementMode: command.movementMode,
       navigationProfile: resolvedNavigation.profile,
       navigationProfileSource: resolvedNavigation.source,
+      movementProfileId: command.intent.movementProfileId,
+      movementProfileSource: 'player_order',
+      movementProfileOwnerToken: command.id,
+      movementProfileRevision: command.revision,
       finalFacingRadians,
       tacticalContext: buildUnitTacticalRouteContext(unit),
     });
