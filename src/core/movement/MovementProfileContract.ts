@@ -18,6 +18,7 @@ export const MOVEMENT_PROFILE_SOURCES = [
   'default',
 ] as const;
 export type MovementProfileSource = typeof MOVEMENT_PROFILE_SOURCES[number];
+export type MovementProfileBaselineSource = Exclude<MovementProfileSource, 'hard_safety' | 'ai_override'>;
 
 export const MOVEMENT_PROFILE_SELECTION_MODES = [
   'from_order',
@@ -71,6 +72,10 @@ export interface ResolveMovementProfileInput {
 }
 
 export interface ResolvedMovementProfile {
+  /** Baseline intent before hard-safety or AI override selection. */
+  readonly requestedProfileId: string;
+  readonly requestedSource: MovementProfileBaselineSource;
+  /** Effective profile consumed by the physical runtime. */
   readonly profileId: string;
   readonly source: MovementProfileSource;
   readonly ownerToken?: string;
@@ -81,7 +86,8 @@ export interface ResolvedMovementProfile {
 export interface ResolveMovementProfileSelectionInput {
   readonly mode?: unknown;
   readonly specificProfileId?: unknown;
-  readonly requestedProfileId?: unknown;
+  readonly playerOrderActive?: unknown;
+  readonly playerOrderProfileId?: unknown;
   readonly activeProfileId?: unknown;
   readonly activeProfileSource?: unknown;
 }
@@ -90,6 +96,8 @@ export interface ResolvedMovementProfileSelection {
   readonly mode: MovementProfileSelectionMode;
   readonly profileId?: string;
   readonly source?: MovementProfileSource;
+  readonly diagnosticReason?: string;
+  readonly diagnosticReasonRu?: string;
 }
 
 export function normalizeMovementProfileId(
@@ -118,52 +126,34 @@ export function normalizeMovementProfileSelectionMode(
 }
 
 export function resolveMovementProfile(input: ResolveMovementProfileInput): ResolvedMovementProfile {
-  const candidates: readonly {
-    readonly value: unknown;
-    readonly source: MovementProfileSource;
-    readonly ownerToken?: unknown;
-    readonly reason?: unknown;
-  }[] = [
-    {
-      value: input.hardSafetyProfileId,
-      source: 'hard_safety',
-      reason: input.hardSafetyReason,
-    },
-    {
-      value: input.aiOverrideProfileId,
-      source: 'ai_override',
-      ownerToken: input.aiOverrideOwnerToken,
-      reason: input.aiOverrideReason,
-    },
-    { value: input.playerOrderProfileId, source: 'player_order' },
-    { value: input.unitRoleProfileId, source: 'unit_role' },
-    { value: input.defaultProfileId, source: 'default' },
-  ];
-
-  const selected = candidates.find((candidate) => isNonEmptyText(candidate.value)) ?? {
-    value: DEFAULT_MOVEMENT_PROFILE_ID,
-    source: 'default' as const,
-  };
-  const requestedId = normalizeMovementProfileId(selected.value);
+  const baseline = selectRequestedBaseline(input);
+  const effective = selectEffectiveCandidate(input, baseline);
+  const requestedProfileId = normalizeMovementProfileId(baseline.value);
+  const selectedProfileId = normalizeMovementProfileId(effective.value);
   const registry = normalizeKnownIds(input.knownProfileIds);
-  if (!registry || registry.has(requestedId)) {
-    return Object.freeze({
-      profileId: requestedId,
-      source: selected.source,
-      ownerToken: cleanOptionalText(selected.ownerToken),
-      forcedFallback: false,
-      forcedReason: cleanOptionalText(selected.reason),
-    });
-  }
+  const registryFallback = Boolean(registry && !registry.has(selectedProfileId));
+  const profileId = registryFallback
+    ? resolveRegisteredFallback(registry as ReadonlySet<string>, input.defaultProfileId)
+    : selectedProfileId;
+  const hardSafetyApplied = effective.source === 'hard_safety';
+  const forcedFallback = hardSafetyApplied || registryFallback;
+  const forcedReason = hardSafetyApplied
+    ? cleanOptionalText(input.hardSafetyReason)
+      ?? `Hard safety replaced requested movement profile "${requestedProfileId}" with "${profileId}".`
+    : registryFallback
+      ? `Movement profile "${selectedProfileId}" is unavailable; fallback "${profileId}" is active.`
+      : undefined;
 
-  const fallbackId = resolveRegisteredFallback(registry, input.defaultProfileId);
   return Object.freeze({
-    profileId: fallbackId,
-    source: selected.source,
-    ownerToken: cleanOptionalText(selected.ownerToken),
-    forcedFallback: true,
-    forcedReason: cleanOptionalText(selected.reason)
-      ?? `Movement profile "${requestedId}" is unavailable; fallback "${fallbackId}" is active.`,
+    requestedProfileId,
+    requestedSource: baseline.source,
+    profileId,
+    source: effective.source,
+    ownerToken: effective.source === 'ai_override'
+      ? cleanOptionalText(input.aiOverrideOwnerToken)
+      : undefined,
+    forcedFallback,
+    forcedReason,
   });
 }
 
@@ -179,17 +169,35 @@ export function resolveMovementProfileSelection(
     });
   }
   if (mode === 'from_order') {
+    const playerOrderProfileId = input.playerOrderActive === true
+      ? cleanOptionalText(input.playerOrderProfileId)
+      : undefined;
+    if (playerOrderProfileId) {
+      return Object.freeze({
+        mode,
+        profileId: playerOrderProfileId,
+        source: 'player_order',
+      });
+    }
     return Object.freeze({
       mode,
-      profileId: normalizeMovementProfileId(input.requestedProfileId),
-      source: 'player_order',
+      diagnosticReason: 'No active player order profile is available; automatic movement-profile resolution is used.',
+      diagnosticReasonRu: 'Активный профиль приказа игрока отсутствует; используется автоматический выбор профиля движения.',
     });
   }
   if (mode === 'current_active') {
+    const activeProfileId = cleanOptionalText(input.activeProfileId);
+    if (activeProfileId) {
+      return Object.freeze({
+        mode,
+        profileId: activeProfileId,
+        source: normalizeMovementProfileSource(input.activeProfileSource),
+      });
+    }
     return Object.freeze({
       mode,
-      profileId: normalizeMovementProfileId(input.activeProfileId),
-      source: normalizeMovementProfileSource(input.activeProfileSource),
+      diagnosticReason: 'No active movement profile is available; automatic movement-profile resolution is used.',
+      diagnosticReasonRu: 'Активный профиль движения отсутствует; используется автоматический выбор профиля движения.',
     });
   }
   return Object.freeze({ mode });
@@ -221,6 +229,35 @@ export function resolveMovementProfileDefinitionRevision(
   return typeof revision === 'number' && Number.isFinite(revision)
     ? Math.max(0, Math.floor(revision))
     : undefined;
+}
+
+function selectRequestedBaseline(input: ResolveMovementProfileInput): {
+  readonly value: unknown;
+  readonly source: MovementProfileBaselineSource;
+} {
+  if (isNonEmptyText(input.playerOrderProfileId)) {
+    return { value: input.playerOrderProfileId, source: 'player_order' };
+  }
+  if (isNonEmptyText(input.unitRoleProfileId)) {
+    return { value: input.unitRoleProfileId, source: 'unit_role' };
+  }
+  return {
+    value: isNonEmptyText(input.defaultProfileId) ? input.defaultProfileId : DEFAULT_MOVEMENT_PROFILE_ID,
+    source: 'default',
+  };
+}
+
+function selectEffectiveCandidate(
+  input: ResolveMovementProfileInput,
+  baseline: { readonly value: unknown; readonly source: MovementProfileBaselineSource },
+): { readonly value: unknown; readonly source: MovementProfileSource } {
+  if (isNonEmptyText(input.hardSafetyProfileId)) {
+    return { value: input.hardSafetyProfileId, source: 'hard_safety' };
+  }
+  if (isNonEmptyText(input.aiOverrideProfileId)) {
+    return { value: input.aiOverrideProfileId, source: 'ai_override' };
+  }
+  return baseline;
 }
 
 function resolveRegisteredFallback(registry: ReadonlySet<string>, value: unknown): string {
