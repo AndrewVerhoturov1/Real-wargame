@@ -1,5 +1,10 @@
 import type { AiRouteStatus, AiRouteStatusState } from '../AiRouteStatus';
 import type { GridPosition } from '../../geometry';
+import {
+  MOVEMENT_PROFILE_SOURCES,
+  normalizeMovementProfileId,
+  type MovementProfileSource,
+} from '../../movement/MovementProfileContract';
 import type {
   MoveOrder,
   MoveOrderRouteCell,
@@ -31,6 +36,10 @@ export interface SerializedMoveOrder {
   readonly pathVisitedCells?: number;
   readonly pathReason?: string;
   readonly pathReasonRu?: string;
+  readonly movementProfileId?: string;
+  readonly movementProfileSource?: MovementProfileSource;
+  readonly movementProfileOwnerToken?: string;
+  readonly movementProfileRevision?: number;
 }
 
 export interface AiRuntimeSceneSnapshotV1 {
@@ -181,6 +190,10 @@ export function serializeMoveOrder(order: MoveOrder): SerializedMoveOrder {
     pathVisitedCells: integerNonNegative(order.pathVisitedCells),
     pathReason: order.pathReason,
     pathReasonRu: order.pathReasonRu,
+    movementProfileId: order.movementProfileId,
+    movementProfileSource: order.movementProfileSource,
+    movementProfileOwnerToken: order.movementProfileOwnerToken,
+    movementProfileRevision: integerNonNegative(order.movementProfileRevision),
   };
 }
 
@@ -203,6 +216,10 @@ export function restoreMoveOrder(value: SerializedMoveOrder): MoveOrder {
     pathVisitedCells: value.pathVisitedCells,
     pathReason: value.pathReason,
     pathReasonRu: value.pathReasonRu,
+    movementProfileId: value.movementProfileId,
+    movementProfileSource: value.movementProfileSource,
+    movementProfileOwnerToken: value.movementProfileOwnerToken,
+    movementProfileRevision: value.movementProfileRevision,
   };
 }
 
@@ -213,6 +230,9 @@ function normalizeSerializedMoveOrder(value: unknown): SerializedMoveOrder | und
     : undefined;
   const routeStatus = MOVE_ROUTE_STATUSES.includes(value.routeStatus as MoveOrderRouteStatus)
     ? value.routeStatus as MoveOrderRouteStatus
+    : undefined;
+  const movementProfileSource = MOVEMENT_PROFILE_SOURCES.includes(value.movementProfileSource as MovementProfileSource)
+    ? value.movementProfileSource as MovementProfileSource
     : undefined;
   const waypoints = normalizePositions(value.waypoints);
   const routeCells = normalizeRouteCells(value.routeCells);
@@ -234,6 +254,14 @@ function normalizeSerializedMoveOrder(value: unknown): SerializedMoveOrder | und
     pathVisitedCells: integerNonNegative(value.pathVisitedCells),
     pathReason: typeof value.pathReason === 'string' ? value.pathReason : undefined,
     pathReasonRu: typeof value.pathReasonRu === 'string' ? value.pathReasonRu : undefined,
+    movementProfileId: typeof value.movementProfileId === 'string'
+      ? normalizeMovementProfileId(value.movementProfileId)
+      : undefined,
+    movementProfileSource,
+    movementProfileOwnerToken: typeof value.movementProfileOwnerToken === 'string'
+      ? value.movementProfileOwnerToken
+      : undefined,
+    movementProfileRevision: integerNonNegative(value.movementProfileRevision),
   };
 }
 
