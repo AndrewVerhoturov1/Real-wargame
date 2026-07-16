@@ -8,7 +8,11 @@ const MAX_WHEEL_DELTA_PER_FRAME = 360;
 
 type VisualQaWindow = Window & {
   __realWargameCameraDebug?: { zoom: number };
-  __realWargameAwarenessDebug?: { representation?: string; displayObjectCount?: number };
+  __realWargameAwarenessDebug?: {
+    representation?: string;
+    visible?: boolean;
+    displayObjectCount?: number;
+  };
 };
 
 // Approval-gated by docs/workflow/VISUAL_QA_APPROVAL_POLICY.md.
@@ -35,7 +39,9 @@ test.describe('environment material profiles visual QA — explicit approval req
     await expect(page.locator('[data-role="sidebar-title"]')).toContainText(/Опасность|Danger/);
     await page.waitForFunction(() => {
       const diagnostics = (window as VisualQaWindow).__realWargameAwarenessDebug;
-      return diagnostics?.representation === 'raster-sprite' && (diagnostics.displayObjectCount ?? 0) > 0;
+      return diagnostics?.representation === 'raster-sprite'
+        && diagnostics.visible === true
+        && (diagnostics.displayObjectCount ?? 0) > 0;
     });
     await page.waitForTimeout(500);
     const dangerOnCanvas = await canvas.screenshot();
@@ -90,17 +96,22 @@ async function selectFixtureSoldier(page: Page): Promise<void> {
   const box = await label.boundingBox();
   if (!box) throw new Error('Fixture soldier label bounds unavailable.');
 
-  const zoom = await readZoom(page);
+  const selectedName = page.locator('[data-role="unit-name"]');
   const centerX = box.x + box.width / 2;
-  const markerY = box.y - 22 * zoom;
-  for (const offset of [0, -6, 6, -12, 12]) {
-    await page.mouse.click(centerX, markerY + offset);
-    await page.waitForTimeout(150);
-    const selectedName = await page.locator('[data-role="unit-name"]').textContent();
-    if (selectedName?.includes('Солдат')) return;
+  const xOffsets = [0, -4, 4, -8, 8, -12, 12, -16, 16];
+  const firstY = box.y + box.height + 4;
+  const lastY = box.y + box.height + 72;
+
+  for (let y = firstY; y <= lastY; y += 4) {
+    for (const xOffset of xOffsets) {
+      await page.mouse.click(centerX + xOffset, y);
+      await page.waitForTimeout(45);
+      if ((await selectedName.textContent())?.includes('Солдат')) return;
+    }
   }
 
-  throw new Error('Could not select the visible fixture soldier from its rendered label.');
+  const zoom = await readZoom(page);
+  throw new Error(`Could not select fixture soldier; label=${JSON.stringify(box)} zoom=${zoom}`);
 }
 
 async function setZoom(page: Page, target: number): Promise<void> {
