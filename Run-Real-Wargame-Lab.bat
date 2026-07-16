@@ -22,6 +22,10 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+echo [INFO] Osvobozhdayu porty pred obnovleniem zavisimostey...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ports=@(%LAB_MANAGER_PORT%,%ENGINE_PORT%,%APP_PORT%); foreach($p in $ports){ Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue ^| Select-Object -ExpandProperty OwningProcess -Unique ^| ForEach-Object { taskkill /F /T /PID $_ >$null 2>$null } }" >nul 2>nul
+>nul 2>nul timeout /t 1 /nobreak
+
 set "INSTALL_DEPENDENCIES=0"
 if not exist "node_modules\" (
     set "INSTALL_DEPENDENCIES=1"
@@ -46,8 +50,6 @@ if !errorlevel! neq 0 (
     pause
     exit /b 1
 )
-
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ports=@(%LAB_MANAGER_PORT%,%ENGINE_PORT%,%APP_PORT%); foreach($p in $ports){ Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue ^| ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } }" >nul 2>nul
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'node' -ArgumentList 'scripts/real_wargame_lab_manager.mjs' -WorkingDirectory '%SCRIPT_DIR%' -WindowStyle Hidden" >nul 2>nul
 
