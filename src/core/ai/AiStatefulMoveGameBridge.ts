@@ -451,13 +451,22 @@ function publishMovementProfileMemory(
     ? normalizeMovementProfileSource(order?.movementProfileSource, 'default')
     : undefined;
   const resolved = resolveMovementProfile({
-    hardSafetyProfileId: memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId]
-      ?? (orderSource === 'hard_safety' ? orderProfileId : undefined),
+    hardSafetyProfileId: readMemoryCandidate(
+      memory,
+      MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId,
+      orderSource === 'hard_safety' ? orderProfileId : undefined,
+    ),
     hardSafetyReason: memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason],
-    aiOverrideProfileId: memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId]
-      ?? (orderSource === 'ai_override' ? orderProfileId : undefined),
-    aiOverrideOwnerToken: memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken]
-      ?? (orderSource === 'ai_override' ? order?.movementProfileOwnerToken : undefined),
+    aiOverrideProfileId: readMemoryCandidate(
+      memory,
+      MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId,
+      orderSource === 'ai_override' ? orderProfileId : undefined,
+    ),
+    aiOverrideOwnerToken: readMemoryCandidate(
+      memory,
+      MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken,
+      orderSource === 'ai_override' ? order?.movementProfileOwnerToken : undefined,
+    ),
     playerOrderProfileId: unit.playerCommand?.intent.movementProfileId
       ?? (orderSource === 'player_order' ? orderProfileId : undefined),
     unitRoleProfileId: unit.unitRoleMovementProfileId
@@ -494,6 +503,14 @@ function syncMoveOrderMovementProfileSnapshot(
   order.movementProfileRevision = resolved.source === 'player_order'
     ? unit.playerCommand?.revision ?? (order.movementProfileRevision ?? 1)
     : (order.movementProfileRevision ?? 0) + 1;
+}
+
+function readMemoryCandidate(
+  memory: Readonly<Record<string, AiBlackboardValue>>,
+  key: string,
+  fallback: AiBlackboardValue | undefined,
+): AiBlackboardValue | undefined {
+  return Object.prototype.hasOwnProperty.call(memory, key) ? memory[key] : fallback;
 }
 
 function publishRouteMemory(memory: Record<string, AiBlackboardValue>, result: AiRouteStatusResult): void {
