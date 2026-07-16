@@ -41,8 +41,6 @@ export interface MoveOrderOptions {
   readonly movementProfileOwnerToken?: string;
   readonly movementProfileDefinitionRevision?: number;
   readonly movementProfileSelectionRevision?: number;
-  /** Legacy deserialization input only. */
-  readonly movementProfileRevision?: number;
   readonly finalFacingRadians?: number;
   readonly knowledgeRevision?: number;
   readonly replanSearchCount?: number;
@@ -125,7 +123,7 @@ export function createMoveOrder(target: GridPosition, options: MoveOrderOptions 
     movementProfileSource: options.movementProfileSource,
     movementProfileOwnerToken: options.movementProfileOwnerToken,
     movementProfileDefinitionRevision: options.movementProfileDefinitionRevision,
-    movementProfileSelectionRevision: options.movementProfileSelectionRevision ?? options.movementProfileRevision,
+    movementProfileSelectionRevision: options.movementProfileSelectionRevision,
     finalFacingRadians: options.finalFacingRadians,
     knowledgeRevision: options.knowledgeRevision,
     replanSearchCount: options.replanSearchCount,
