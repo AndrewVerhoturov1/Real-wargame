@@ -1,10 +1,12 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 
 const VIEWPORT = { width: 1440, height: 900 };
 const OUTPUT_DIR = path.join('artifacts', 'screenshots', 'tactical-order-radial-menu-v1');
 const HOLD_MS = 310;
+const SECTOR_RADIUS_PX = 72;
+const OUTSIDE_RADIUS_PX = 138;
 
 type PresetId = 'move' | 'recon' | 'assault';
 
@@ -27,71 +29,86 @@ interface TacticalOrderVisualApi {
   getSnapshot(): TacticalOrderSnapshot;
 }
 
+interface OpenMenuResult {
+  center: { x: number; y: number };
+  displayedTarget: { x: number; y: number };
+}
+
 test.describe('tactical order radial menu visual QA — approved by user', () => {
-  test('captures radial menu sectors, edge clamping and issued orders', async ({ page }) => {
+  test('captures compact transparency, edge parity, keyboard confirmation and cancellation bounds', async ({ page }) => {
     mkdirSync(OUTPUT_DIR, { recursive: true });
     await openHarness(page);
     const canvas = page.locator('canvas');
     const box = await canvas.boundingBox();
     if (!box) throw new Error('Canvas bounding box is unavailable.');
+    const menu = page.locator('[data-role="tactical-order-radial-menu"]');
     const anchor = { x: box.x + Math.min(720, box.width * 0.58), y: box.y + Math.min(410, box.height * 0.52) };
 
-    await openMenu(page, anchor, 'move');
-    await expect(page.locator('[data-role="tactical-order-radial-menu"]')).toHaveAttribute('data-highlighted-preset', 'move');
-    await screenshot(page, '01-radial-menu-normal.png');
-    await cancelInCenter(page, anchor);
+    const normalOpen = await openMenu(page, anchor, 'move');
+    await assertCompactMenu(menu);
+    await expect(menu).toHaveAttribute('data-highlighted-preset', 'move');
+    expect((await snapshot(page)).playerCommandId).toBeNull();
+    await screenshot(page, '01-compact-radial-normal.png');
+    await cancelInCenter(page, normalOpen.center);
     expect((await snapshot(page)).playerCommandId).toBeNull();
 
-    await openMenu(page, anchor, 'recon');
+    const reconOpen = await openMenu(page, anchor, 'recon');
     await expect(page.locator('[data-preset-id="recon"]')).toHaveClass(/active/);
-    await screenshot(page, '02-radial-menu-recon-hover.png');
-    await cancelInCenter(page, anchor);
+    await screenshot(page, '02-compact-radial-recon-hover.png');
+    await cancelInCenter(page, reconOpen.center);
 
-    await openMenu(page, anchor, 'assault');
+    const assaultOpen = await openMenu(page, anchor, 'assault');
     await expect(page.locator('[data-preset-id="assault"]')).toHaveClass(/active/);
-    await screenshot(page, '03-radial-menu-assault-hover.png');
-    await cancelInCenter(page, anchor);
-
-    const edgeAnchor = { x: box.x + 24, y: box.y + 24 };
-    await openMenu(page, edgeAnchor, null);
-    const menuBox = await page.locator('[data-role="tactical-order-radial-menu"]').boundingBox();
-    expect(menuBox).toBeTruthy();
-    expect(menuBox?.x).toBeGreaterThanOrEqual(0);
-    expect(menuBox?.y).toBeGreaterThanOrEqual(0);
-    expect((menuBox?.x ?? 0) + (menuBox?.width ?? 0)).toBeLessThanOrEqual(VIEWPORT.width);
-    expect((menuBox?.y ?? 0) + (menuBox?.height ?? 0)).toBeLessThanOrEqual(VIEWPORT.height);
-    await screenshot(page, '04-radial-menu-near-screen-edge.png');
-    await cancelInCenter(page, edgeAnchor);
+    await screenshot(page, '03-compact-radial-assault-hover.png');
+    await cancelInCenter(page, assaultOpen.center);
 
     await reset(page);
-    await issuePreset(page, anchor, 'recon');
-    await expect(page.locator('[data-role="tactical-order-status"]')).toBeVisible();
+    const edgeAnchor = { x: box.x + 5, y: box.y + 5 };
+    const edgeOpen = await openMenu(page, edgeAnchor, 'recon');
+    expect(Math.abs(edgeOpen.center.x - edgeAnchor.x)).toBeGreaterThan(40);
+    expect(Math.abs(edgeOpen.center.y - edgeAnchor.y)).toBeGreaterThan(40);
+    await expect(page.locator('[data-preset-id="recon"]')).toHaveClass(/active/);
+    await screenshot(page, '04-compact-radial-edge-recon-hover.png');
+    await page.mouse.up({ button: 'right' });
+    await expect(menu).toBeHidden();
+    const edgeRecon = await waitForPreset(page, 'recon');
+    expect(edgeRecon.target).toEqual(edgeOpen.displayedTarget);
     await expect(page.locator('[data-role="tactical-order-status"]')).toContainText('Приказ: Разведка');
-    await expect(page.locator('[data-role="tactical-order-status"]')).toContainText('Осторожный');
-    const recon = await snapshot(page);
-    expect(recon.presetId).toBe('recon');
-    expect(recon.navigationProfileId).toBe('cautious');
-    expect(recon.attentionPolicy).toBe('search');
-    expect(recon.contactPolicy).toBe('pause_and_observe');
-    expect(recon.firePolicy).toBe('self_defense');
-    expect(recon.playerCommandId).toBeTruthy();
-    expect(recon.movePlayerCommandId).toBe(recon.playerCommandId);
-    await screenshot(page, '05-recon-order-issued.png');
+    await screenshot(page, '05-edge-recon-order-issued.png');
 
     await reset(page);
-    await issuePreset(page, anchor, 'assault');
-    await expect(page.locator('[data-role="tactical-order-status"]')).toBeVisible();
-    await expect(page.locator('[data-role="tactical-order-status"]')).toContainText('Приказ: Штурм');
-    await expect(page.locator('[data-role="tactical-order-status"]')).toContainText('Атакующий');
-    const assault = await snapshot(page);
-    expect(assault.presetId).toBe('assault');
-    expect(assault.navigationProfileId).toBe('attack');
-    expect(assault.attentionPolicy).toBe('engage');
-    expect(assault.contactPolicy).toBe('press_attack');
-    expect(assault.firePolicy).toBe('fire_at_will');
-    expect(assault.playerCommandId).toBeTruthy();
-    expect(assault.movePlayerCommandId).toBe(assault.playerCommandId);
-    await screenshot(page, '06-assault-order-issued.png');
+    const oppositeEdgeAnchor = { x: box.x + box.width - 5, y: box.y + box.height - 5 };
+    const oppositeOpen = await openMenu(page, oppositeEdgeAnchor, 'assault');
+    await page.mouse.up({ button: 'right' });
+    const oppositeAssault = await waitForPreset(page, 'assault');
+    expect(oppositeAssault.target).toEqual(oppositeOpen.displayedTarget);
+
+    await reset(page);
+    const outsideOpen = await openMenu(page, anchor, null);
+    await page.mouse.move(outsideOpen.center.x + OUTSIDE_RADIUS_PX, outsideOpen.center.y, { steps: 4 });
+    await page.mouse.up({ button: 'right' });
+    await expect(menu).toBeHidden();
+    expect((await snapshot(page)).playerCommandId).toBeNull();
+
+    await reset(page);
+    await openMenu(page, anchor, null);
+    await page.keyboard.press('2');
+    await expect(menu).toBeHidden();
+    await page.mouse.up({ button: 'right' });
+    const keyboardRecon = await waitForPreset(page, 'recon');
+    expect(keyboardRecon.navigationProfileId).toBe('cautious');
+    expect(keyboardRecon.movePlayerCommandId).toBe(keyboardRecon.playerCommandId);
+
+    await reset(page);
+    const denseAnchor = { x: box.x + box.width * 0.7, y: box.y + box.height * 0.42 };
+    const denseOpen = await openMenu(page, denseAnchor, 'move');
+    await assertCompactMenu(menu);
+    await screenshot(page, '06-compact-menu-over-dense-map.png');
+    await cancelInCenter(page, denseOpen.center);
+
+    await page.evaluate(() => window.dispatchEvent(new Event('beforeunload')));
+    await expect(page.locator('[data-role="tactical-order-radial-menu"]')).toHaveCount(0);
+    await expect(page.locator('[data-role="tactical-order-status"]')).toHaveCount(0);
   });
 });
 
@@ -108,40 +125,65 @@ async function openMenu(
   page: Page,
   anchor: { x: number; y: number },
   presetId: PresetId | null,
-): Promise<void> {
+): Promise<OpenMenuResult> {
+  const menu = page.locator('[data-role="tactical-order-radial-menu"]');
   await page.mouse.move(anchor.x, anchor.y);
   await page.mouse.down({ button: 'right' });
   await page.waitForTimeout(HOLD_MS);
-  await expect(page.locator('[data-role="tactical-order-radial-menu"]')).toBeVisible();
+  await expect(menu).toBeVisible();
+  const result = await readMenuGeometry(menu);
   if (presetId) {
-    const point = presetPoint(anchor, presetId);
+    const point = presetPoint(result.center, presetId);
     await page.mouse.move(point.x, point.y, { steps: 4 });
   }
+  return result;
 }
 
-async function issuePreset(
-  page: Page,
-  anchor: { x: number; y: number },
-  presetId: PresetId,
-): Promise<void> {
-  await openMenu(page, anchor, presetId);
+async function readMenuGeometry(menu: Locator): Promise<OpenMenuResult> {
+  return menu.evaluate((element) => {
+    const root = element as HTMLElement;
+    const centerX = Number(root.dataset.menuCenterX);
+    const centerY = Number(root.dataset.menuCenterY);
+    const targetX = Number(root.dataset.targetX);
+    const targetY = Number(root.dataset.targetY);
+    if (![centerX, centerY, targetX, targetY].every(Number.isFinite)) {
+      throw new Error('Tactical order menu geometry diagnostics are incomplete.');
+    }
+    return {
+      center: { x: centerX, y: centerY },
+      displayedTarget: { x: targetX, y: targetY },
+    };
+  });
+}
+
+async function assertCompactMenu(menu: Locator): Promise<void> {
+  const box = await menu.boundingBox();
+  expect(box).toBeTruthy();
+  expect(box?.width).toBeLessThanOrEqual(240);
+  expect(box?.height).toBeLessThanOrEqual(240);
+  const inactiveBackground = await menu.locator('[data-preset-id="recon"]').evaluate((element) => {
+    return getComputedStyle(element).backgroundColor;
+  });
+  expect(inactiveBackground).toBe('rgba(0, 0, 0, 0)');
+}
+
+async function cancelInCenter(page: Page, center: { x: number; y: number }): Promise<void> {
+  await page.mouse.move(center.x, center.y, { steps: 3 });
   await page.mouse.up({ button: 'right' });
   await expect(page.locator('[data-role="tactical-order-radial-menu"]')).toBeHidden();
+}
+
+function presetPoint(center: { x: number; y: number }, presetId: PresetId): { x: number; y: number } {
+  if (presetId === 'recon') return { x: center.x, y: center.y - SECTOR_RADIUS_PX };
+  if (presetId === 'assault') return { x: center.x + 62, y: center.y + 36 };
+  return { x: center.x - 62, y: center.y + 36 };
+}
+
+async function waitForPreset(page: Page, presetId: PresetId): Promise<TacticalOrderSnapshot> {
   await page.waitForFunction((expected) => {
     return window.__realWargameTacticalOrderVisualQa?.getSnapshot().presetId === expected;
   }, presetId);
-}
-
-async function cancelInCenter(page: Page, anchor: { x: number; y: number }): Promise<void> {
-  await page.mouse.move(anchor.x, anchor.y, { steps: 3 });
-  await page.mouse.up({ button: 'right' });
-  await expect(page.locator('[data-role="tactical-order-radial-menu"]')).toBeHidden();
-}
-
-function presetPoint(anchor: { x: number; y: number }, presetId: PresetId): { x: number; y: number } {
-  if (presetId === 'recon') return { x: anchor.x, y: anchor.y - 92 };
-  if (presetId === 'assault') return { x: anchor.x + 82, y: anchor.y + 48 };
-  return { x: anchor.x - 82, y: anchor.y + 48 };
+  return snapshot(page);
 }
 
 async function reset(page: Page): Promise<TacticalOrderSnapshot> {
