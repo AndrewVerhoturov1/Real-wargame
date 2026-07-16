@@ -1,8 +1,10 @@
 import type { GridPosition } from '../geometry';
+import { normalizeMovementProfileId } from '../movement/MovementProfileContract';
 import type { NavigationMovementMode } from '../navigation/NavigationProfiles';
 import {
   createTacticalOrderIntent,
   normalizeTacticalOrderIntent,
+  withTacticalOrderMovementProfile,
   withTacticalOrderNavigationProfile,
   type TacticalOrderIntent,
   type TacticalOrderPresetId,
@@ -19,6 +21,7 @@ export interface PlayerCommand {
   readonly intent: TacticalOrderIntent;
   readonly movementMode?: NavigationMovementMode;
   readonly navigationProfileId?: string;
+  readonly movementProfileId?: string;
   readonly finalFacingRadians?: number;
   readonly status: PlayerCommandStatus;
   readonly revision: number;
@@ -47,6 +50,7 @@ export function createPlayerMoveCommand(
     intent,
     movementMode,
     navigationProfileId: intent.navigationProfileId,
+    movementProfileId: intent.movementProfileId,
     finalFacingRadians: normalizeOptionalRadians(finalFacingRadians),
     status: 'active',
     revision,
@@ -67,10 +71,14 @@ export function normalizePlayerCommand(value: unknown, fallbackUnitId = ''): Pla
   const issuedAtMs = normalizeFiniteNumber(value.issuedAtMs, 0);
   const type: PlayerCommandType = value.type === 'move_to_position' ? value.type : 'move_to_position';
   const status = normalizeStatus(value.status);
-  const profileId = typeof value.navigationProfileId === 'string' && value.navigationProfileId.trim()
+  const navigationProfileId = typeof value.navigationProfileId === 'string' && value.navigationProfileId.trim()
     ? value.navigationProfileId.trim()
     : intent.navigationProfileId;
-  const normalizedIntent = withTacticalOrderNavigationProfile(intent, profileId);
+  const movementProfileId = normalizeMovementProfileId(value.movementProfileId, intent.movementProfileId);
+  const normalizedIntent = withTacticalOrderMovementProfile(
+    withTacticalOrderNavigationProfile(intent, navigationProfileId),
+    movementProfileId,
+  );
   return {
     id: cleanText(value.id, `${unitId}:player-command:${revision}:${Math.max(0, Math.round(issuedAtMs))}`),
     unitId,
@@ -79,6 +87,7 @@ export function normalizePlayerCommand(value: unknown, fallbackUnitId = ''): Pla
     intent: normalizedIntent,
     movementMode: normalizeMovementMode(value.movementMode ?? normalizedIntent.navigationProfileId),
     navigationProfileId: normalizedIntent.navigationProfileId,
+    movementProfileId: normalizedIntent.movementProfileId,
     finalFacingRadians: normalizeOptionalRadians(value.finalFacingRadians),
     status,
     revision,
@@ -128,6 +137,23 @@ export function updatePlayerCommandNavigationProfile(
     revision: command.revision + 1,
     reason: `Player navigation profile changed to ${navigationProfileId}.`,
     reasonRu: `Профиль маршрута игрока изменён: ${navigationProfileId}.`,
+  };
+}
+
+export function updatePlayerCommandMovementProfile(
+  command: PlayerCommand,
+  profileId: string | null,
+): PlayerCommand {
+  const movementProfileId = normalizeMovementProfileId(profileId, command.intent.movementProfileId);
+  if (command.movementProfileId === movementProfileId) return command;
+  return {
+    ...command,
+    target: { ...command.target },
+    intent: withTacticalOrderMovementProfile(command.intent, movementProfileId),
+    movementProfileId,
+    revision: command.revision + 1,
+    reason: `Player movement profile changed to ${movementProfileId}.`,
+    reasonRu: `Физический профиль движения игрока изменён: ${movementProfileId}.`,
   };
 }
 
