@@ -1,3 +1,4 @@
+import { publishTacticalOrderIntentToAiMemory } from '../ai/TacticalOrderBlackboard';
 import type { UnitPlanState } from '../ai/UnitPlan';
 import { initializeSimulationAiEventFacts } from '../ai/events/SimulationAiEvents';
 import {
@@ -224,6 +225,7 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
     applyInitialStateToRuntime(model, false);
     if (unit.runtime?.weapon) replaceWeaponRuntime(model, unit.runtime.weapon);
     restoreAiRuntimeSnapshot(model, unit.runtime?.aiRuntime);
+    if (model.playerCommand) publishTacticalOrderIntentToAiMemory(model, model.playerCommand.intent);
     if (unit.runtime?.combat) replaceCombatRuntime(model, unit.runtime.combat);
     initializeSimulationAiEventFacts(model);
     return model;
