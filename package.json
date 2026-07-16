@@ -78,6 +78,7 @@
     "state-plan-scenario:smoke": "node scripts/ai_state_plan_scenario_smoke.mjs",
     "tactical-query:smoke": "node scripts/tactical_query_system_smoke.mjs",
     "tactical-query-ui:smoke": "node scripts/tactical_query_ui_smoke.mjs",
+    "movement-intent-ai:smoke": "node scripts/movement_intent_ai_integration_smoke.mjs",
     "ai-scheduler:smoke": "node scripts/ai_per_unit_scheduler_smoke.mjs"
   },
   "dependencies": {
