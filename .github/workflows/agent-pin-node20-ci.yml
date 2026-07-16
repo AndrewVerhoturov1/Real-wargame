@@ -59,4 +59,5 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
           git commit -m "Pin affected CI workflows to Node 20"
+          git pull --rebase origin agent/terrain-profiles-performance-followup-v1
           git push origin HEAD:agent/terrain-profiles-performance-followup-v1
