@@ -1,0 +1,2294 @@
+{
+  "version": "danger-layer-movement-evidence-v3",
+  "generatedAt": "2026-07-16T20:25:13.604Z",
+  "build": {
+    "branch": "agent/performance-regression-root-cause-audit-v1",
+    "commitSha": "7cbad49df0be8fd73c7b67655a4d0f85913757d7",
+    "buildId": "7cbad49df0be-2026-07-16T20:23:42.798Z",
+    "generatedAt": "2026-07-16T20:25:13.573Z",
+    "performanceContractVersion": "performance-report-v4"
+  },
+  "sceneUpdateMs": {
+    "count": 13,
+    "last": 1.6,
+    "max": 2.2,
+    "p95": 2.2
+  },
+  "finalMovementDiagnostics": {
+    "worldRasterBuilds": 8,
+    "ownMovementLocalUpdates": 9,
+    "safePositionLocalScans": 9,
+    "safePositionCellsScanned": 101601,
+    "directionalBasisBuilds": 1,
+    "workerThreatRelativeGeometryBuilds": 10,
+    "workerDirectionalFieldBuilds": 10,
+    "workerDirectionalBasisBuilds": 1,
+    "workerAwarenessGeometryBuilds": 0,
+    "workerAwarenessRescores": 0,
+    "workerJobsStarted": 14,
+    "workerJobsCompleted": 14,
+    "workerJobsCancelled": 0,
+    "workerJobsCoalesced": 9,
+    "workerResultsStaleDropped": 6,
+    "mainThreadRasterSwaps": 8,
+    "finalRefreshRequests": 4,
+    "finalRefreshApplied": 2,
+    "pendingQueueDepth": 0,
+    "maxPendingQueueDepth": 1,
+    "workerInFlight": false,
+    "lastWorkerLatencyMs": 596,
+    "maxWorkerLatencyMs": 2871.5,
+    "lastWorkerComputeMs": 4.8,
+    "maxWorkerComputeMs": 738.3,
+    "lastMainThreadApplyMs": 0.3,
+    "maxMainThreadApplyMs": 0.7,
+    "lastLocalUpdateMs": 0.2,
+    "maxLocalUpdateMs": 3.3,
+    "lastRequestedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:15;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+    "lastAppliedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:15;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+    "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:15;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+    "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:15;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+    "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+    "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+    "lastCompletedJobId": 14,
+    "lastAppliedJobId": 14,
+    "lastCompletedJobFinalExact": true,
+    "lastFinalRefreshLatencyMs": 596,
+    "maxFinalRefreshLatencyMs": 623.6,
+    "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1@4f55bf52",
+    "lastAppliedRasterDigest": "4f55bf52",
+    "lastWorkerError": null,
+    "rawMaxLocalUpdateMs": 3.4,
+    "localUpdateWarmupDiscarded": 1,
+    "postWarmupLocalUpdateCount": 8,
+    "postWarmupLocalUpdateP95Ms": 3.3,
+    "mainThreadSoldierDangerField": {
+      "geometryBuildCount": 9,
+      "fieldBuildCount": 3,
+      "geometryCacheHitCount": 13,
+      "fieldCacheHitCount": 3,
+      "fullMapScanCount": 9,
+      "lastGeometryKey": "standing#320:200:2:standing:1:2:3:15#320:200:2:2:1#standing#320:200:2:standing:1:2:3:15#320:200:2:2:1#visibility-geometry:v1:96.500:86.500:1.400:1.400:130.000:18:1#unit:editor_unit_1:directional_fire:96.5:86.5:0:0:0:0:0:360:125:0:62:5|standing#320:200:2:standing:1:2:3:15#320:200:2:2:1#visibility-geometry:v1:102.500:122.500:1.400:1.400:130.000:18:1#unit:editor_unit_2:directional_fire:102.5:122.5:0:0:0:0:0:360:125:0:62:5|standing#320:200:2:standing:1:2:3:15#320:200:2:2:1#visibility-geometry:v1:230.500:86.500:1.400:1.400:130.000:18:1#unit:editor_unit_4:directional_fire:230.5:86.5:0:0:0:0:0:360:125:0:62:5|standing#320:200:2:standing:1:2:3:15#320:200:2:2:1#visibility-geometry:v1:224.500:122.500:1.400:1.400:130.000:18:1#unit:editor_unit_5:directional_fire:224.5:122.5:0:0:0:0:0:360:125:0:62:5|standing#320:200:2:standing:1:2:3:15#320:200:2:2:1#visibility-geometry:v1:121.500:104.500:1.400:1.400:129.000:18:1#unit:soldier_1:directional_fire:121.5:104.5:0:0:0:0:0:360:125:0:62:4",
+      "lastFieldKey": "standing#320:200:2:standing:1:2:3:15#320:200:2:2:1#standing#320:200:2:standing:1:2:3:15#320:200:2:2:1#visibility-geometry:v1:96.500:86.500:1.400:1.400:130.000:18:1#unit:editor_unit_1:directional_fire:96.5:86.5:0:0:0:0:0:360:125:0:62:5|standing#320:200:2:standing:1:2:3:15#320:200:2:2:1#visibility-geometry:v1:102.500:122.500:1.400:1.400:130.000:18:1#unit:editor_unit_2:directional_fire:102.5:122.5:0:0:0:0:0:360:125:0:62:5|standing#320:200:2:standing:1:2:3:15#320:200:2:2:1#visibility-geometry:v1:230.500:86.500:1.400:1.400:130.000:18:1#unit:editor_unit_4:directional_fire:230.5:86.5:0:0:0:0:0:360:125:0:62:5|standing#320:200:2:standing:1:2:3:15#320:200:2:2:1#visibility-geometry:v1:224.500:122.500:1.400:1.400:130.000:18:1#unit:editor_unit_5:directional_fire:224.5:122.5:0:0:0:0:0:360:125:0:62:5|standing#320:200:2:standing:1:2:3:15#320:200:2:2:1#visibility-geometry:v1:121.500:104.500:1.400:1.400:129.000:18:1#unit:soldier_1:directional_fire:121.5:104.5:0:0:0:0:0:360:125:0:62:4#unit:editor_unit_1:45:0:20:rifle_fire|unit:editor_unit_2:45:0:10:rifle_fire|unit:editor_unit_4:50:0:20:rifle_fire|unit:editor_unit_5:45:0:10:rifle_fire|unit:soldier_1:60:0:40:rifle_fire",
+      "cachedGeometryCount": 9,
+      "cachedThreatGeometryCount": 9,
+      "cachedFieldCount": 3,
+      "retainedThreatGeometryBytes": 5184000,
+      "retainedFieldBytes": 1344000,
+      "retainedTypedArrayBytes": 6528000
+    }
+  },
+  "longTaskAttribution": {
+    "captureVersion": "danger-layer-long-task-attribution-v1",
+    "captureBuild": {
+      "branch": "agent/performance-regression-root-cause-audit-v1",
+      "commitSha": "7cbad49df0be8fd73c7b67655a4d0f85913757d7",
+      "buildId": "7cbad49df0be-2026-07-16T20:25:16.076Z",
+      "generatedAt": "2026-07-16T20:25:40.127Z",
+      "performanceContractVersion": "performance-report-v4"
+    },
+    "supportedEntryTypes": [
+      "element",
+      "event",
+      "first-input",
+      "largest-contentful-paint",
+      "layout-shift",
+      "long-animation-frame",
+      "longtask",
+      "mark",
+      "measure",
+      "navigation",
+      "paint",
+      "resource",
+      "visibility-state"
+    ],
+    "globalLongTasks": [
+      {
+        "startMs": 12859.7,
+        "durationMs": 1022,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [],
+        "productionOverlapDurationMs": 0,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 1022,
+        "classification": "browser-rendering-or-runner",
+        "reason": "1022 of 1022 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 13883.6,
+        "durationMs": 663,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame",
+          "real-wargame.phase.ticker.simulation",
+          "real-wargame.phase.simulation.perception",
+          "real-wargame.phase.field.visibility-geometry.build"
+        ],
+        "productionOverlapDurationMs": 25.6,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 637.4,
+        "classification": "browser-rendering-or-runner",
+        "reason": "637.4 of 663 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 14548.7,
+        "durationMs": 605,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame"
+        ],
+        "productionOverlapDurationMs": 1,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 604,
+        "classification": "browser-rendering-or-runner",
+        "reason": "604 of 605 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 15157,
+        "durationMs": 619,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame",
+          "real-wargame.phase.ticker.simulation",
+          "real-wargame.phase.simulation.perception",
+          "real-wargame.phase.field.visibility-geometry.build"
+        ],
+        "productionOverlapDurationMs": 31,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 588,
+        "classification": "browser-rendering-or-runner",
+        "reason": "588 of 619 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 15777.8,
+        "durationMs": 778,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame",
+          "real-wargame.phase.ticker.simulation",
+          "real-wargame.phase.simulation.perception",
+          "real-wargame.phase.field.visibility-geometry.build",
+          "real-wargame.phase.simulation.movement-events",
+          "real-wargame.phase.route.current-cost",
+          "real-wargame.phase.field.directional-tactical.build",
+          "real-wargame.phase.field.soldier-danger.geometry",
+          "real-wargame.phase.field.threat-relative-cover.build",
+          "real-wargame.phase.route.replan-search"
+        ],
+        "productionOverlapDurationMs": 189.8,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 588.2,
+        "classification": "application-attributed",
+        "reason": "named/measured application work exceeded 50 ms (0 ms named, 189.8 ms overlap)"
+      },
+      {
+        "startMs": 16556.9,
+        "durationMs": 661,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame",
+          "real-wargame.phase.ticker.simulation",
+          "real-wargame.phase.simulation.perception",
+          "real-wargame.phase.field.visibility-geometry.build"
+        ],
+        "productionOverlapDurationMs": 68.7,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 592.3,
+        "classification": "application-attributed",
+        "reason": "named/measured application work exceeded 50 ms (0 ms named, 68.7 ms overlap)"
+      },
+      {
+        "startMs": 17219.5,
+        "durationMs": 638,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame",
+          "real-wargame.phase.ticker.simulation",
+          "real-wargame.phase.simulation.perception",
+          "real-wargame.phase.field.visibility-geometry.build"
+        ],
+        "productionOverlapDurationMs": 39.6,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 598.4,
+        "classification": "browser-rendering-or-runner",
+        "reason": "598.4 of 638 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 17859,
+        "durationMs": 848,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame",
+          "real-wargame.phase.ticker.simulation",
+          "real-wargame.phase.simulation.perception",
+          "real-wargame.phase.field.visibility-geometry.build",
+          "real-wargame.phase.simulation.movement-events",
+          "real-wargame.phase.route.current-cost",
+          "real-wargame.phase.field.directional-tactical.build",
+          "real-wargame.phase.field.soldier-danger.geometry",
+          "real-wargame.phase.field.soldier-danger.score",
+          "real-wargame.phase.route.replan-search"
+        ],
+        "productionOverlapDurationMs": 254.7,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 593.3,
+        "classification": "application-attributed",
+        "reason": "named/measured application work exceeded 50 ms (0 ms named, 254.7 ms overlap)"
+      },
+      {
+        "startMs": 18708.3,
+        "durationMs": 636,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame",
+          "real-wargame.phase.ticker.simulation",
+          "real-wargame.phase.simulation.perception",
+          "real-wargame.phase.field.visibility-geometry.build"
+        ],
+        "productionOverlapDurationMs": 23.2,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 612.8,
+        "classification": "browser-rendering-or-runner",
+        "reason": "612.8 of 636 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 19346,
+        "durationMs": 631,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame",
+          "real-wargame.phase.ticker.simulation",
+          "real-wargame.phase.simulation.perception",
+          "real-wargame.phase.field.visibility-geometry.build"
+        ],
+        "productionOverlapDurationMs": 39.3,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 591.7,
+        "classification": "browser-rendering-or-runner",
+        "reason": "591.7 of 631 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 19979.7,
+        "durationMs": 614,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame"
+        ],
+        "productionOverlapDurationMs": 1.2,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 612.8,
+        "classification": "browser-rendering-or-runner",
+        "reason": "612.8 of 614 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 20595.6,
+        "durationMs": 598,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame"
+        ],
+        "productionOverlapDurationMs": 0.5,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 597.5,
+        "classification": "browser-rendering-or-runner",
+        "reason": "597.5 of 598 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 21195.9,
+        "durationMs": 596,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame"
+        ],
+        "productionOverlapDurationMs": 0.8,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 595.2,
+        "classification": "browser-rendering-or-runner",
+        "reason": "595.2 of 596 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      }
+    ],
+    "dangerAttributedLongTasks": [],
+    "applicationAttributedLongTasks": [
+      {
+        "startMs": 15777.8,
+        "durationMs": 778,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame",
+          "real-wargame.phase.ticker.simulation",
+          "real-wargame.phase.simulation.perception",
+          "real-wargame.phase.field.visibility-geometry.build",
+          "real-wargame.phase.simulation.movement-events",
+          "real-wargame.phase.route.current-cost",
+          "real-wargame.phase.field.directional-tactical.build",
+          "real-wargame.phase.field.soldier-danger.geometry",
+          "real-wargame.phase.field.threat-relative-cover.build",
+          "real-wargame.phase.route.replan-search"
+        ],
+        "productionOverlapDurationMs": 189.8,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 588.2,
+        "classification": "application-attributed",
+        "reason": "named/measured application work exceeded 50 ms (0 ms named, 189.8 ms overlap)"
+      },
+      {
+        "startMs": 16556.9,
+        "durationMs": 661,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame",
+          "real-wargame.phase.ticker.simulation",
+          "real-wargame.phase.simulation.perception",
+          "real-wargame.phase.field.visibility-geometry.build"
+        ],
+        "productionOverlapDurationMs": 68.7,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 592.3,
+        "classification": "application-attributed",
+        "reason": "named/measured application work exceeded 50 ms (0 ms named, 68.7 ms overlap)"
+      },
+      {
+        "startMs": 17859,
+        "durationMs": 848,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame",
+          "real-wargame.phase.ticker.simulation",
+          "real-wargame.phase.simulation.perception",
+          "real-wargame.phase.field.visibility-geometry.build",
+          "real-wargame.phase.simulation.movement-events",
+          "real-wargame.phase.route.current-cost",
+          "real-wargame.phase.field.directional-tactical.build",
+          "real-wargame.phase.field.soldier-danger.geometry",
+          "real-wargame.phase.field.soldier-danger.score",
+          "real-wargame.phase.route.replan-search"
+        ],
+        "productionOverlapDurationMs": 254.7,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 593.3,
+        "classification": "application-attributed",
+        "reason": "named/measured application work exceeded 50 ms (0 ms named, 254.7 ms overlap)"
+      }
+    ],
+    "diagnosticOnlyLongTasks": [
+      {
+        "startMs": 12859.7,
+        "durationMs": 1022,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [],
+        "productionOverlapDurationMs": 0,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 1022,
+        "classification": "browser-rendering-or-runner",
+        "reason": "1022 of 1022 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 13883.6,
+        "durationMs": 663,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame",
+          "real-wargame.phase.ticker.simulation",
+          "real-wargame.phase.simulation.perception",
+          "real-wargame.phase.field.visibility-geometry.build"
+        ],
+        "productionOverlapDurationMs": 25.6,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 637.4,
+        "classification": "browser-rendering-or-runner",
+        "reason": "637.4 of 663 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 14548.7,
+        "durationMs": 605,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame"
+        ],
+        "productionOverlapDurationMs": 1,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 604,
+        "classification": "browser-rendering-or-runner",
+        "reason": "604 of 605 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 15157,
+        "durationMs": 619,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame",
+          "real-wargame.phase.ticker.simulation",
+          "real-wargame.phase.simulation.perception",
+          "real-wargame.phase.field.visibility-geometry.build"
+        ],
+        "productionOverlapDurationMs": 31,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 588,
+        "classification": "browser-rendering-or-runner",
+        "reason": "588 of 619 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 17219.5,
+        "durationMs": 638,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame",
+          "real-wargame.phase.ticker.simulation",
+          "real-wargame.phase.simulation.perception",
+          "real-wargame.phase.field.visibility-geometry.build"
+        ],
+        "productionOverlapDurationMs": 39.6,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 598.4,
+        "classification": "browser-rendering-or-runner",
+        "reason": "598.4 of 638 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 18708.3,
+        "durationMs": 636,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame",
+          "real-wargame.phase.ticker.simulation",
+          "real-wargame.phase.simulation.perception",
+          "real-wargame.phase.field.visibility-geometry.build"
+        ],
+        "productionOverlapDurationMs": 23.2,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 612.8,
+        "classification": "browser-rendering-or-runner",
+        "reason": "612.8 of 636 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 19346,
+        "durationMs": 631,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame",
+          "real-wargame.phase.ticker.simulation",
+          "real-wargame.phase.simulation.perception",
+          "real-wargame.phase.field.visibility-geometry.build"
+        ],
+        "productionOverlapDurationMs": 39.3,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 591.7,
+        "classification": "browser-rendering-or-runner",
+        "reason": "591.7 of 631 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 19979.7,
+        "durationMs": 614,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame"
+        ],
+        "productionOverlapDurationMs": 1.2,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 612.8,
+        "classification": "browser-rendering-or-runner",
+        "reason": "612.8 of 614 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 20595.6,
+        "durationMs": 598,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame"
+        ],
+        "productionOverlapDurationMs": 0.5,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 597.5,
+        "classification": "browser-rendering-or-runner",
+        "reason": "597.5 of 598 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      },
+      {
+        "startMs": 21195.9,
+        "durationMs": 596,
+        "scenario": "wall-crossing-attribution",
+        "attribution": [
+          {
+            "name": "unknown",
+            "containerType": "window",
+            "containerName": "",
+            "containerId": "",
+            "containerSrc": ""
+          }
+        ],
+        "overlappingProductionPhases": [
+          "simulation-and-scene-frame"
+        ],
+        "productionOverlapDurationMs": 0.8,
+        "applicationScriptDurationMs": 0,
+        "renderingInfrastructureScriptDurationMs": 0,
+        "dangerScriptDurationMs": 0,
+        "workerResponseScriptDurationMs": 0,
+        "unaccountedDurationMs": 595.2,
+        "classification": "browser-rendering-or-runner",
+        "reason": "595.2 of 596 ms is outside bounded production work; Pixi/ticker/render infrastructure script time=0 ms"
+      }
+    ],
+    "unattributedLongTasks": [],
+    "productionPhases": {
+      "simulationAndSceneUpdate": {
+        "count": 13,
+        "last": 1.6,
+        "max": 2.2,
+        "p95": 2.2,
+        "source": "performance-report frame samples from the production ticker window"
+      },
+      "workerResponseMainThreadHandling": {
+        "count": 1,
+        "last": 4,
+        "max": 4,
+        "p95": 4,
+        "source": "conservative upper bound: production raster apply max + renderer-local update max"
+      },
+      "typedArrayApplyAndBaseTextureUpdate": {
+        "count": 8,
+        "last": 0.3,
+        "max": 0.7,
+        "p95": 0.7,
+        "source": "production AwarenessMovementDiagnostics applyRaster timing"
+      },
+      "rendererLocalSafePositionAndRouteEvaluation": {
+        "count": 9,
+        "last": 0.2,
+        "max": 3.3,
+        "p95": 3.3,
+        "source": "production AwarenessMovementDiagnostics updateLocalDerived timing"
+      },
+      "wallFixtureSetupAndNavigationGrid": {
+        "count": 1,
+        "last": 195.6,
+        "max": 195.6,
+        "p95": 195.6,
+        "source": "synchronous page.evaluate duration around production wall scenario setup and navigation-grid fixture work"
+      },
+      "scenarioStop": {
+        "count": 1,
+        "last": 0,
+        "max": 0,
+        "p95": 0,
+        "source": "synchronous page.evaluate duration around production stopScenario"
+      },
+      "performanceReportSerializationAndDownloadTrigger": {
+        "count": 1,
+        "last": 3.8,
+        "max": 3.8,
+        "p95": 3.8,
+        "source": "synchronous page.evaluate duration covering report build, JSON.stringify, Blob creation and download click"
+      },
+      "playwrightWallCrossingWait": {
+        "count": 1,
+        "last": 8539,
+        "max": 8539,
+        "p95": 8539,
+        "source": "Playwright wall-crossing wait elapsed time; orchestration diagnostic, not main-thread production work"
+      },
+      "namedApplicationScriptsInLongAnimationFrames": {
+        "count": 0,
+        "last": 0,
+        "max": 0,
+        "p95": 0,
+        "source": "Long Animation Frame scripts with explicit named production functions"
+      },
+      "renderingInfrastructureScriptsInLongAnimationFrames": {
+        "count": 0,
+        "last": 0,
+        "max": 0,
+        "p95": 0,
+        "source": "Long Animation Frame scripts attributed to Pixi ticker/render/requestAnimationFrame infrastructure"
+      },
+      "dangerScriptsInLongAnimationFrames": {
+        "count": 0,
+        "last": 0,
+        "max": 0,
+        "p95": 0,
+        "source": "Long Animation Frame scripts explicitly attributed to danger/awareness production functions"
+      }
+    },
+    "productionPhaseMaxMs": {
+      "simulationAndSceneUpdate": 2.2,
+      "workerResponseMainThreadHandling": 4,
+      "typedArrayApplyAndBaseTextureUpdate": 0.7,
+      "rendererLocalSafePositionAndRouteEvaluation": 3.3,
+      "wallFixtureSetupAndNavigationGrid": 195.6,
+      "scenarioStop": 0,
+      "performanceReportSerializationAndDownloadTrigger": 3.8,
+      "playwrightWallCrossingWait": 8539,
+      "namedApplicationScriptsInLongAnimationFrames": 0,
+      "renderingInfrastructureScriptsInLongAnimationFrames": 0,
+      "dangerScriptsInLongAnimationFrames": 0
+    },
+    "longAnimationFrames": [
+      {
+        "startMs": 15776.7,
+        "durationMs": 192.1,
+        "blockingDurationMs": 141.4,
+        "renderStartMs": 15777.8,
+        "styleAndLayoutStartMs": 15968.7,
+        "firstUiEventTimestampMs": null,
+        "scenario": "wall-crossing-attribution",
+        "scripts": [
+          {
+            "invoker": "FrameRequestCallback",
+            "invokerType": "user-callback",
+            "sourceUrl": "http://127.0.0.1:4173/node_modules/.vite/deps/chunk-BUPI2P7X.js?v=008fe610",
+            "sourceFunctionName": "",
+            "charPosition": 0,
+            "durationMs": 190.7,
+            "forcedStyleAndLayoutDurationMs": 0.6,
+            "pauseDurationMs": 0,
+            "windowAttribution": "self"
+          }
+        ]
+      },
+      {
+        "startMs": 16556.4,
+        "durationMs": 70.7,
+        "blockingDurationMs": 20.6,
+        "renderStartMs": 16556.9,
+        "styleAndLayoutStartMs": 16627.1,
+        "firstUiEventTimestampMs": null,
+        "scenario": "wall-crossing-attribution",
+        "scripts": [
+          {
+            "invoker": "FrameRequestCallback",
+            "invokerType": "user-callback",
+            "sourceUrl": "http://127.0.0.1:4173/node_modules/.vite/deps/chunk-BUPI2P7X.js?v=008fe610",
+            "sourceFunctionName": "",
+            "charPosition": 0,
+            "durationMs": 69.9,
+            "forcedStyleAndLayoutDurationMs": 0,
+            "pauseDurationMs": 0,
+            "windowAttribution": "self"
+          }
+        ]
+      },
+      {
+        "startMs": 17857.9,
+        "durationMs": 256.9,
+        "blockingDurationMs": 206.7,
+        "renderStartMs": 17859,
+        "styleAndLayoutStartMs": 18114.7,
+        "firstUiEventTimestampMs": null,
+        "scenario": "wall-crossing-attribution",
+        "scripts": [
+          {
+            "invoker": "FrameRequestCallback",
+            "invokerType": "user-callback",
+            "sourceUrl": "http://127.0.0.1:4173/node_modules/.vite/deps/chunk-BUPI2P7X.js?v=008fe610",
+            "sourceFunctionName": "",
+            "charPosition": 0,
+            "durationMs": 255.6,
+            "forcedStyleAndLayoutDurationMs": 0,
+            "pauseDurationMs": 0,
+            "windowAttribution": "self"
+          }
+        ]
+      }
+    ],
+    "rawPerformancePhaseMeasures": [
+      {
+        "name": "real-wargame.phase.ticker.simulation",
+        "startMs": 13883.8,
+        "durationMs": 24.5
+      },
+      {
+        "name": "real-wargame.phase.simulation.perception",
+        "startMs": 13884.7,
+        "durationMs": 22.9
+      },
+      {
+        "name": "real-wargame.phase.field.visibility-geometry.build",
+        "startMs": 13884.9,
+        "durationMs": 22.4
+      },
+      {
+        "name": "real-wargame.phase.ticker.simulation",
+        "startMs": 15157.1,
+        "durationMs": 30
+      },
+      {
+        "name": "real-wargame.phase.simulation.perception",
+        "startMs": 15157.8,
+        "durationMs": 28.8
+      },
+      {
+        "name": "real-wargame.phase.field.visibility-geometry.build",
+        "startMs": 15158.1,
+        "durationMs": 28.3
+      },
+      {
+        "name": "real-wargame.phase.ticker.simulation",
+        "startMs": 15777.9,
+        "durationMs": 188.2
+      },
+      {
+        "name": "real-wargame.phase.simulation.perception",
+        "startMs": 15779.2,
+        "durationMs": 21.1
+      },
+      {
+        "name": "real-wargame.phase.field.visibility-geometry.build",
+        "startMs": 15779.4,
+        "durationMs": 20.6
+      },
+      {
+        "name": "real-wargame.phase.simulation.movement-events",
+        "startMs": 15800.4,
+        "durationMs": 165.7
+      },
+      {
+        "name": "real-wargame.phase.route.current-cost",
+        "startMs": 15801,
+        "durationMs": 147.2
+      },
+      {
+        "name": "real-wargame.phase.field.directional-tactical.build",
+        "startMs": 15801.2,
+        "durationMs": 51.1
+      },
+      {
+        "name": "real-wargame.phase.field.visibility-geometry.build",
+        "startMs": 15852.4,
+        "durationMs": 18.4
+      },
+      {
+        "name": "real-wargame.phase.field.soldier-danger.geometry",
+        "startMs": 15870.8,
+        "durationMs": 29.6
+      },
+      {
+        "name": "real-wargame.phase.field.threat-relative-cover.build",
+        "startMs": 15871,
+        "durationMs": 14.2
+      },
+      {
+        "name": "real-wargame.phase.field.visibility-geometry.build",
+        "startMs": 15900.4,
+        "durationMs": 12.7
+      },
+      {
+        "name": "real-wargame.phase.field.soldier-danger.geometry",
+        "startMs": 15913.1,
+        "durationMs": 16.2
+      },
+      {
+        "name": "real-wargame.phase.route.replan-search",
+        "startMs": 15948.2,
+        "durationMs": 17.8
+      },
+      {
+        "name": "real-wargame.phase.ticker.simulation",
+        "startMs": 16557.1,
+        "durationMs": 67.5
+      },
+      {
+        "name": "real-wargame.phase.simulation.perception",
+        "startMs": 16557.9,
+        "durationMs": 66
+      },
+      {
+        "name": "real-wargame.phase.field.visibility-geometry.build",
+        "startMs": 16558.1,
+        "durationMs": 37.4
+      },
+      {
+        "name": "real-wargame.phase.field.visibility-geometry.build",
+        "startMs": 16595.8,
+        "durationMs": 27.9
+      },
+      {
+        "name": "real-wargame.phase.ticker.simulation",
+        "startMs": 17219.7,
+        "durationMs": 37.7
+      },
+      {
+        "name": "real-wargame.phase.simulation.perception",
+        "startMs": 17220.2,
+        "durationMs": 36.3
+      },
+      {
+        "name": "real-wargame.phase.field.visibility-geometry.build",
+        "startMs": 17220.3,
+        "durationMs": 35.9
+      },
+      {
+        "name": "real-wargame.phase.ticker.simulation",
+        "startMs": 17859.1,
+        "durationMs": 253.9
+      },
+      {
+        "name": "real-wargame.phase.simulation.perception",
+        "startMs": 17859.5,
+        "durationMs": 38
+      },
+      {
+        "name": "real-wargame.phase.field.visibility-geometry.build",
+        "startMs": 17859.8,
+        "durationMs": 37.2
+      },
+      {
+        "name": "real-wargame.phase.simulation.movement-events",
+        "startMs": 17897.7,
+        "durationMs": 215.2
+      },
+      {
+        "name": "real-wargame.phase.route.current-cost",
+        "startMs": 17898.5,
+        "durationMs": 194.5
+      },
+      {
+        "name": "real-wargame.phase.field.directional-tactical.build",
+        "startMs": 17898.6,
+        "durationMs": 68
+      },
+      {
+        "name": "real-wargame.phase.field.visibility-geometry.build",
+        "startMs": 17966.7,
+        "durationMs": 13.6
+      },
+      {
+        "name": "real-wargame.phase.field.soldier-danger.geometry",
+        "startMs": 17980.4,
+        "durationMs": 8
+      },
+      {
+        "name": "real-wargame.phase.field.visibility-geometry.build",
+        "startMs": 17988.4,
+        "durationMs": 13.4
+      },
+      {
+        "name": "real-wargame.phase.field.soldier-danger.geometry",
+        "startMs": 18001.9,
+        "durationMs": 8.1
+      },
+      {
+        "name": "real-wargame.phase.field.visibility-geometry.build",
+        "startMs": 18010.1,
+        "durationMs": 13
+      },
+      {
+        "name": "real-wargame.phase.field.visibility-geometry.build",
+        "startMs": 18031.1,
+        "durationMs": 12.9
+      },
+      {
+        "name": "real-wargame.phase.field.soldier-danger.geometry",
+        "startMs": 18044,
+        "durationMs": 12.4
+      },
+      {
+        "name": "real-wargame.phase.field.visibility-geometry.build",
+        "startMs": 18056.5,
+        "durationMs": 14.2
+      },
+      {
+        "name": "real-wargame.phase.field.soldier-danger.geometry",
+        "startMs": 18070.8,
+        "durationMs": 8.5
+      },
+      {
+        "name": "real-wargame.phase.field.soldier-danger.score",
+        "startMs": 18079.3,
+        "durationMs": 8.9
+      },
+      {
+        "name": "real-wargame.phase.route.replan-search",
+        "startMs": 18093,
+        "durationMs": 19.9
+      },
+      {
+        "name": "real-wargame.phase.ticker.simulation",
+        "startMs": 18708.3,
+        "durationMs": 21
+      },
+      {
+        "name": "real-wargame.phase.simulation.perception",
+        "startMs": 18708.7,
+        "durationMs": 20.1
+      },
+      {
+        "name": "real-wargame.phase.field.visibility-geometry.build",
+        "startMs": 18708.8,
+        "durationMs": 19.7
+      },
+      {
+        "name": "real-wargame.phase.ticker.simulation",
+        "startMs": 19346.1,
+        "durationMs": 38.3
+      },
+      {
+        "name": "real-wargame.phase.simulation.perception",
+        "startMs": 19346.8,
+        "durationMs": 37
+      },
+      {
+        "name": "real-wargame.phase.field.visibility-geometry.build",
+        "startMs": 19347,
+        "durationMs": 36.5
+      },
+      {
+        "name": "real-wargame.phase.wall-crossing-attribution.scenario-stop",
+        "startMs": 19979.2,
+        "durationMs": 0
+      }
+    ],
+    "blockingContractPassed": false,
+    "blockingFailures": [
+      "3 application-attributed long tasks remain"
+    ],
+    "interpretation": "Global browser long tasks remain in the artifact. A task is diagnostic-only only when explicit danger/named production work stays below blocking limits and at least 80% of its wall time remains outside instrumented production phases, including Pixi/software-rendering or hosted-runner time."
+  },
+  "scenarios": [
+    {
+      "scenario": "selected-only",
+      "before": {
+        "scenario": "selected-only",
+        "simulationTimeSeconds": 0,
+        "observerPosition": {
+          "x": 121.5,
+          "y": 104.5
+        },
+        "hostilePosition": {
+          "x": 150.5,
+          "y": 104.5
+        },
+        "subjectiveThreatPosition": {
+          "x": 150.5,
+          "y": 104.5
+        },
+        "subjectiveThreatVisibleNow": true,
+        "subjectiveThreatDirectionDegrees": 180,
+        "subjectiveThreatRangeCells": 125,
+        "tacticalKnowledgeRevision": 3,
+        "observerMoving": true,
+        "hostileMoving": false,
+        "movingUnitCount": 1,
+        "wallX": null,
+        "bestSafePosition": {
+          "position": {
+            "x": 119.5,
+            "y": 111.5
+          },
+          "score": 97.379160439859,
+          "danger": 0,
+          "expectedProtection": 62,
+          "expectedProtectionAgainstThreat": 70,
+          "protectedAgainstThreatId": "unit:editor_unit_3",
+          "concealment": 79,
+          "distanceCells": 7.280109889280518,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        "protectedAgainstThreatId": "unit:editor_unit_3",
+        "markerUpdateCount": 2,
+        "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1@a88d46ae",
+        "lastAppliedRasterDigest": "a88d46ae",
+        "lastAppliedJobId": 2,
+        "awarenessMovement": {
+          "worldRasterBuilds": 2,
+          "ownMovementLocalUpdates": 3,
+          "safePositionLocalScans": 3,
+          "safePositionCellsScanned": 33867,
+          "directionalBasisBuilds": 1,
+          "workerThreatRelativeGeometryBuilds": 1,
+          "workerDirectionalFieldBuilds": 1,
+          "workerDirectionalBasisBuilds": 1,
+          "workerAwarenessGeometryBuilds": 0,
+          "workerAwarenessRescores": 0,
+          "workerJobsStarted": 2,
+          "workerJobsCompleted": 2,
+          "workerJobsCancelled": 0,
+          "workerJobsCoalesced": 1,
+          "workerResultsStaleDropped": 0,
+          "mainThreadRasterSwaps": 2,
+          "finalRefreshRequests": 1,
+          "finalRefreshApplied": 1,
+          "pendingQueueDepth": 0,
+          "maxPendingQueueDepth": 1,
+          "workerInFlight": false,
+          "lastWorkerLatencyMs": 7.3,
+          "maxWorkerLatencyMs": 2240.1,
+          "lastWorkerComputeMs": 6.7,
+          "maxWorkerComputeMs": 767.6,
+          "lastMainThreadApplyMs": 0.5,
+          "maxMainThreadApplyMs": 0.7,
+          "lastLocalUpdateMs": 0.4,
+          "maxLocalUpdateMs": 1.6,
+          "lastRequestedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastCompletedJobId": 2,
+          "lastAppliedJobId": 2,
+          "lastCompletedJobFinalExact": true,
+          "lastFinalRefreshLatencyMs": 7.3,
+          "maxFinalRefreshLatencyMs": 7.3,
+          "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1@a88d46ae",
+          "lastAppliedRasterDigest": "a88d46ae",
+          "lastWorkerError": null,
+          "rawMaxLocalUpdateMs": 1.6,
+          "localUpdateWarmupDiscarded": 1,
+          "postWarmupLocalUpdateCount": 2,
+          "postWarmupLocalUpdateP95Ms": 1.6
+        }
+      },
+      "after": {
+        "scenario": "selected-only",
+        "simulationTimeSeconds": 2.6498999999999997,
+        "observerPosition": {
+          "x": 135.907768,
+          "y": 106.5
+        },
+        "hostilePosition": {
+          "x": 150.5,
+          "y": 104.5
+        },
+        "subjectiveThreatPosition": {
+          "x": 150.5,
+          "y": 104.5
+        },
+        "subjectiveThreatVisibleNow": true,
+        "subjectiveThreatDirectionDegrees": 173.99099404250546,
+        "subjectiveThreatRangeCells": 125,
+        "tacticalKnowledgeRevision": 3,
+        "observerMoving": true,
+        "hostileMoving": false,
+        "movingUnitCount": 1,
+        "wallX": null,
+        "bestSafePosition": {
+          "position": {
+            "x": 119.5,
+            "y": 111.5
+          },
+          "score": 93.82503079715045,
+          "danger": 0,
+          "expectedProtection": 62,
+          "expectedProtectionAgainstThreat": 70,
+          "protectedAgainstThreatId": "unit:editor_unit_3",
+          "concealment": 79,
+          "distanceCells": 17.15269223013764,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        "protectedAgainstThreatId": "unit:editor_unit_3",
+        "markerUpdateCount": 3,
+        "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1@a88d46ae",
+        "lastAppliedRasterDigest": "a88d46ae",
+        "lastAppliedJobId": 2,
+        "awarenessMovement": {
+          "worldRasterBuilds": 2,
+          "ownMovementLocalUpdates": 7,
+          "safePositionLocalScans": 7,
+          "safePositionCellsScanned": 79057,
+          "directionalBasisBuilds": 1,
+          "workerThreatRelativeGeometryBuilds": 1,
+          "workerDirectionalFieldBuilds": 1,
+          "workerDirectionalBasisBuilds": 1,
+          "workerAwarenessGeometryBuilds": 0,
+          "workerAwarenessRescores": 0,
+          "workerJobsStarted": 2,
+          "workerJobsCompleted": 2,
+          "workerJobsCancelled": 0,
+          "workerJobsCoalesced": 1,
+          "workerResultsStaleDropped": 0,
+          "mainThreadRasterSwaps": 2,
+          "finalRefreshRequests": 1,
+          "finalRefreshApplied": 1,
+          "pendingQueueDepth": 0,
+          "maxPendingQueueDepth": 1,
+          "workerInFlight": false,
+          "lastWorkerLatencyMs": 7.3,
+          "maxWorkerLatencyMs": 2240.1,
+          "lastWorkerComputeMs": 6.7,
+          "maxWorkerComputeMs": 767.6,
+          "lastMainThreadApplyMs": 0.5,
+          "maxMainThreadApplyMs": 0.7,
+          "lastLocalUpdateMs": 0.2,
+          "maxLocalUpdateMs": 1.6,
+          "lastRequestedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastCompletedJobId": 2,
+          "lastAppliedJobId": 2,
+          "lastCompletedJobFinalExact": true,
+          "lastFinalRefreshLatencyMs": 7.3,
+          "maxFinalRefreshLatencyMs": 7.3,
+          "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1@a88d46ae",
+          "lastAppliedRasterDigest": "a88d46ae",
+          "lastWorkerError": null,
+          "rawMaxLocalUpdateMs": 1.6,
+          "localUpdateWarmupDiscarded": 1,
+          "postWarmupLocalUpdateCount": 6,
+          "postWarmupLocalUpdateP95Ms": 1.6
+        }
+      },
+      "counters": {
+        "worldSpaceMemoryStable": true,
+        "observerRelativeMemoryChanged": true,
+        "workerJobsStartedDelta": 0,
+        "workerThreatRelativeGeometryBuildDelta": 0,
+        "workerDirectionalFieldBuildDelta": 0,
+        "workerDirectionalBasisBuildDelta": 0,
+        "workerAwarenessGeometryBuildDelta": 0,
+        "workerAwarenessRescoreDelta": 0,
+        "worldRasterBuildDelta": 0,
+        "mainThreadRasterSwapDelta": 0,
+        "ownMovementLocalUpdateDelta": 4,
+        "safePositionLocalScanDelta": 4,
+        "markerUpdateDelta": 1,
+        "rasterDigestUnchanged": true,
+        "maxLocalUpdateMs": 1.6
+      }
+    },
+    {
+      "scenario": "hostile-only",
+      "before": {
+        "scenario": "hostile-only",
+        "simulationTimeSeconds": 0,
+        "observerPosition": {
+          "x": 121.5,
+          "y": 104.5
+        },
+        "hostilePosition": {
+          "x": 150.5,
+          "y": 104.5
+        },
+        "subjectiveThreatPosition": {
+          "x": 150.5,
+          "y": 104.5
+        },
+        "subjectiveThreatVisibleNow": true,
+        "subjectiveThreatDirectionDegrees": 180,
+        "subjectiveThreatRangeCells": 125,
+        "tacticalKnowledgeRevision": 3,
+        "observerMoving": false,
+        "hostileMoving": true,
+        "movingUnitCount": 1,
+        "wallX": null,
+        "bestSafePosition": {
+          "position": {
+            "x": 119.5,
+            "y": 111.5
+          },
+          "score": 97.379160439859,
+          "danger": 0,
+          "expectedProtection": 62,
+          "expectedProtectionAgainstThreat": 70,
+          "protectedAgainstThreatId": "unit:editor_unit_3",
+          "concealment": 79,
+          "distanceCells": 7.280109889280518,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        "protectedAgainstThreatId": "unit:editor_unit_3",
+        "markerUpdateCount": 2,
+        "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1@a88d46ae",
+        "lastAppliedRasterDigest": "a88d46ae",
+        "lastAppliedJobId": 2,
+        "awarenessMovement": {
+          "worldRasterBuilds": 2,
+          "ownMovementLocalUpdates": 3,
+          "safePositionLocalScans": 3,
+          "safePositionCellsScanned": 33867,
+          "directionalBasisBuilds": 1,
+          "workerThreatRelativeGeometryBuilds": 1,
+          "workerDirectionalFieldBuilds": 1,
+          "workerDirectionalBasisBuilds": 1,
+          "workerAwarenessGeometryBuilds": 0,
+          "workerAwarenessRescores": 0,
+          "workerJobsStarted": 2,
+          "workerJobsCompleted": 2,
+          "workerJobsCancelled": 0,
+          "workerJobsCoalesced": 1,
+          "workerResultsStaleDropped": 0,
+          "mainThreadRasterSwaps": 2,
+          "finalRefreshRequests": 1,
+          "finalRefreshApplied": 1,
+          "pendingQueueDepth": 0,
+          "maxPendingQueueDepth": 1,
+          "workerInFlight": false,
+          "lastWorkerLatencyMs": 611.8,
+          "maxWorkerLatencyMs": 2829.9,
+          "lastWorkerComputeMs": 8.9,
+          "maxWorkerComputeMs": 743.4,
+          "lastMainThreadApplyMs": 0.5,
+          "maxMainThreadApplyMs": 0.5,
+          "lastLocalUpdateMs": 1.4,
+          "maxLocalUpdateMs": 2.9,
+          "lastRequestedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastCompletedJobId": 2,
+          "lastAppliedJobId": 2,
+          "lastCompletedJobFinalExact": true,
+          "lastFinalRefreshLatencyMs": 611.8,
+          "maxFinalRefreshLatencyMs": 611.8,
+          "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1@a88d46ae",
+          "lastAppliedRasterDigest": "a88d46ae",
+          "lastWorkerError": null,
+          "rawMaxLocalUpdateMs": 2.9,
+          "localUpdateWarmupDiscarded": 1,
+          "postWarmupLocalUpdateCount": 2,
+          "postWarmupLocalUpdateP95Ms": 2.9
+        }
+      },
+      "after": {
+        "scenario": "hostile-only",
+        "simulationTimeSeconds": 3.7663999999999995,
+        "observerPosition": {
+          "x": 121.5,
+          "y": 104.5
+        },
+        "hostilePosition": {
+          "x": 135.53744,
+          "y": 106.5
+        },
+        "subjectiveThreatPosition": {
+          "x": 139.5,
+          "y": 106.5
+        },
+        "subjectiveThreatVisibleNow": true,
+        "subjectiveThreatDirectionDegrees": 186.3401917459099,
+        "subjectiveThreatRangeCells": 125,
+        "tacticalKnowledgeRevision": 7,
+        "observerMoving": false,
+        "hostileMoving": true,
+        "movingUnitCount": 1,
+        "wallX": null,
+        "bestSafePosition": {
+          "position": {
+            "x": 119.5,
+            "y": 111.5
+          },
+          "score": 97.379160439859,
+          "danger": 0,
+          "expectedProtection": 62,
+          "expectedProtectionAgainstThreat": 62,
+          "protectedAgainstThreatId": "unit:editor_unit_3",
+          "concealment": 79,
+          "distanceCells": 7.280109889280518,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        "protectedAgainstThreatId": "unit:editor_unit_3",
+        "markerUpdateCount": 4,
+        "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:139.5:106.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:139.5:106.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:139.5:106.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:139.5:106.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:139.5:106.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1@51ffde65",
+        "lastAppliedRasterDigest": "51ffde65",
+        "lastAppliedJobId": 7,
+        "awarenessMovement": {
+          "worldRasterBuilds": 7,
+          "ownMovementLocalUpdates": 8,
+          "safePositionLocalScans": 8,
+          "safePositionCellsScanned": 90312,
+          "directionalBasisBuilds": 1,
+          "workerThreatRelativeGeometryBuilds": 5,
+          "workerDirectionalFieldBuilds": 5,
+          "workerDirectionalBasisBuilds": 1,
+          "workerAwarenessGeometryBuilds": 0,
+          "workerAwarenessRescores": 0,
+          "workerJobsStarted": 7,
+          "workerJobsCompleted": 7,
+          "workerJobsCancelled": 0,
+          "workerJobsCoalesced": 1,
+          "workerResultsStaleDropped": 0,
+          "mainThreadRasterSwaps": 7,
+          "finalRefreshRequests": 2,
+          "finalRefreshApplied": 2,
+          "pendingQueueDepth": 0,
+          "maxPendingQueueDepth": 1,
+          "workerInFlight": false,
+          "lastWorkerLatencyMs": 609.2,
+          "maxWorkerLatencyMs": 2829.9,
+          "lastWorkerComputeMs": 3.4,
+          "maxWorkerComputeMs": 743.4,
+          "lastMainThreadApplyMs": 0.4,
+          "maxMainThreadApplyMs": 0.6,
+          "lastLocalUpdateMs": 0.6,
+          "maxLocalUpdateMs": 2.9,
+          "lastRequestedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:139.5:106.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:139.5:106.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:139.5:106.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:139.5:106.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:139.5:106.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:139.5:106.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastCompletedJobId": 7,
+          "lastAppliedJobId": 7,
+          "lastCompletedJobFinalExact": true,
+          "lastFinalRefreshLatencyMs": 609.2,
+          "maxFinalRefreshLatencyMs": 611.8,
+          "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:139.5:106.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1@51ffde65",
+          "lastAppliedRasterDigest": "51ffde65",
+          "lastWorkerError": null,
+          "rawMaxLocalUpdateMs": 2.9,
+          "localUpdateWarmupDiscarded": 1,
+          "postWarmupLocalUpdateCount": 7,
+          "postWarmupLocalUpdateP95Ms": 2.9
+        }
+      },
+      "counters": {
+        "workerJobsStartedDelta": 5,
+        "workerJobsCompletedDelta": 5,
+        "worldRasterBuildDelta": 5,
+        "workerThreatRelativeGeometryBuildDelta": 4,
+        "workerDirectionalFieldBuildDelta": 4,
+        "workerDirectionalBasisBuildDelta": 0,
+        "workerAwarenessGeometryBuildDelta": 0,
+        "workerAwarenessRescoreDelta": 0,
+        "workerJobsCoalescedDelta": 0,
+        "staleDroppedDelta": 0,
+        "maxPendingQueueDepth": 1,
+        "maxMainThreadApplyMs": 0.6,
+        "maxWorkerComputeMs": 743.4,
+        "maxWorkerLatencyMs": 2829.9,
+        "lastFinalRefreshLatencyMs": 609.2,
+        "finalWorldKeyApplied": true,
+        "finalCanonicalKeyApplied": true,
+        "finalJobApplied": true
+      }
+    },
+    {
+      "scenario": "both-six-units",
+      "before": {
+        "scenario": "both",
+        "simulationTimeSeconds": 0,
+        "observerPosition": {
+          "x": 121.5,
+          "y": 104.5
+        },
+        "hostilePosition": {
+          "x": 150.5,
+          "y": 104.5
+        },
+        "subjectiveThreatPosition": {
+          "x": 150.5,
+          "y": 104.5
+        },
+        "subjectiveThreatVisibleNow": true,
+        "subjectiveThreatDirectionDegrees": 180,
+        "subjectiveThreatRangeCells": 125,
+        "tacticalKnowledgeRevision": 3,
+        "observerMoving": true,
+        "hostileMoving": true,
+        "movingUnitCount": 6,
+        "wallX": null,
+        "bestSafePosition": {
+          "position": {
+            "x": 119.5,
+            "y": 111.5
+          },
+          "score": 97.379160439859,
+          "danger": 0,
+          "expectedProtection": 62,
+          "expectedProtectionAgainstThreat": 70,
+          "protectedAgainstThreatId": "unit:editor_unit_3",
+          "concealment": 79,
+          "distanceCells": 7.280109889280518,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        "protectedAgainstThreatId": "unit:editor_unit_3",
+        "markerUpdateCount": 2,
+        "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1@a88d46ae",
+        "lastAppliedRasterDigest": "a88d46ae",
+        "lastAppliedJobId": 2,
+        "awarenessMovement": {
+          "worldRasterBuilds": 2,
+          "ownMovementLocalUpdates": 3,
+          "safePositionLocalScans": 3,
+          "safePositionCellsScanned": 33867,
+          "directionalBasisBuilds": 1,
+          "workerThreatRelativeGeometryBuilds": 1,
+          "workerDirectionalFieldBuilds": 1,
+          "workerDirectionalBasisBuilds": 1,
+          "workerAwarenessGeometryBuilds": 0,
+          "workerAwarenessRescores": 0,
+          "workerJobsStarted": 2,
+          "workerJobsCompleted": 2,
+          "workerJobsCancelled": 0,
+          "workerJobsCoalesced": 1,
+          "workerResultsStaleDropped": 0,
+          "mainThreadRasterSwaps": 2,
+          "finalRefreshRequests": 1,
+          "finalRefreshApplied": 1,
+          "pendingQueueDepth": 0,
+          "maxPendingQueueDepth": 1,
+          "workerInFlight": false,
+          "lastWorkerLatencyMs": 615.3,
+          "maxWorkerLatencyMs": 2884.3,
+          "lastWorkerComputeMs": 38.2,
+          "maxWorkerComputeMs": 839,
+          "lastMainThreadApplyMs": 0.5,
+          "maxMainThreadApplyMs": 0.5,
+          "lastLocalUpdateMs": 0.2,
+          "maxLocalUpdateMs": 2.2,
+          "lastRequestedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastCompletedJobId": 2,
+          "lastAppliedJobId": 2,
+          "lastCompletedJobFinalExact": true,
+          "lastFinalRefreshLatencyMs": 615.3,
+          "maxFinalRefreshLatencyMs": 615.3,
+          "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1@a88d46ae",
+          "lastAppliedRasterDigest": "a88d46ae",
+          "lastWorkerError": null,
+          "rawMaxLocalUpdateMs": 2.2,
+          "localUpdateWarmupDiscarded": 1,
+          "postWarmupLocalUpdateCount": 2,
+          "postWarmupLocalUpdateP95Ms": 2.2
+        }
+      },
+      "after": {
+        "scenario": "both",
+        "simulationTimeSeconds": 3.0498999999999996,
+        "observerPosition": {
+          "x": 115.5,
+          "y": 100.5
+        },
+        "hostilePosition": {
+          "x": 161.5,
+          "y": 96.5
+        },
+        "subjectiveThreatPosition": {
+          "x": 153.5,
+          "y": 104.5
+        },
+        "subjectiveThreatVisibleNow": false,
+        "subjectiveThreatDirectionDegrees": 184.63546342690265,
+        "subjectiveThreatRangeCells": 125,
+        "tacticalKnowledgeRevision": 5,
+        "observerMoving": true,
+        "hostileMoving": true,
+        "movingUnitCount": 6,
+        "wallX": null,
+        "bestSafePosition": {
+          "position": {
+            "x": 114.5,
+            "y": 99.5
+          },
+          "score": 99.49088311754569,
+          "danger": 0,
+          "expectedProtection": 87,
+          "expectedProtectionAgainstThreat": 76,
+          "protectedAgainstThreatId": "unit:editor_unit_3",
+          "concealment": 80,
+          "distanceCells": 1.4142135623730951,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        "protectedAgainstThreatId": "unit:editor_unit_3",
+        "markerUpdateCount": 4,
+        "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:153.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+        "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:153.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+        "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:153.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+        "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:153.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+        "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:153.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0@73d502e9",
+        "lastAppliedRasterDigest": "73d502e9",
+        "lastAppliedJobId": 6,
+        "awarenessMovement": {
+          "worldRasterBuilds": 5,
+          "ownMovementLocalUpdates": 8,
+          "safePositionLocalScans": 8,
+          "safePositionCellsScanned": 90312,
+          "directionalBasisBuilds": 1,
+          "workerThreatRelativeGeometryBuilds": 2,
+          "workerDirectionalFieldBuilds": 2,
+          "workerDirectionalBasisBuilds": 1,
+          "workerAwarenessGeometryBuilds": 0,
+          "workerAwarenessRescores": 0,
+          "workerJobsStarted": 6,
+          "workerJobsCompleted": 6,
+          "workerJobsCancelled": 0,
+          "workerJobsCoalesced": 3,
+          "workerResultsStaleDropped": 1,
+          "mainThreadRasterSwaps": 5,
+          "finalRefreshRequests": 3,
+          "finalRefreshApplied": 2,
+          "pendingQueueDepth": 0,
+          "maxPendingQueueDepth": 1,
+          "workerInFlight": false,
+          "lastWorkerLatencyMs": 630.5,
+          "maxWorkerLatencyMs": 2884.3,
+          "lastWorkerComputeMs": 4.5,
+          "maxWorkerComputeMs": 839,
+          "lastMainThreadApplyMs": 0.7,
+          "maxMainThreadApplyMs": 0.7,
+          "lastLocalUpdateMs": 0.3,
+          "maxLocalUpdateMs": 2.2,
+          "lastRequestedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:153.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastAppliedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:153.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:153.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:153.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:153.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:153.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastCompletedJobId": 6,
+          "lastAppliedJobId": 6,
+          "lastCompletedJobFinalExact": true,
+          "lastFinalRefreshLatencyMs": 630.5,
+          "maxFinalRefreshLatencyMs": 757.6,
+          "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:153.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0@73d502e9",
+          "lastAppliedRasterDigest": "73d502e9",
+          "lastWorkerError": null,
+          "rawMaxLocalUpdateMs": 2.2,
+          "localUpdateWarmupDiscarded": 1,
+          "postWarmupLocalUpdateCount": 7,
+          "postWarmupLocalUpdateP95Ms": 2.2
+        }
+      },
+      "counters": {
+        "movingUnitCount": 6,
+        "workerJobsStartedDelta": 4,
+        "worldRasterBuildDelta": 3,
+        "ownMovementLocalUpdateDelta": 5,
+        "maxPendingQueueDepth": 1,
+        "finalWorldKeyApplied": true,
+        "finalCanonicalKeyApplied": true
+      }
+    },
+    {
+      "scenario": "hidden-hostile",
+      "before": {
+        "scenario": "hidden-hostile",
+        "simulationTimeSeconds": 0,
+        "observerPosition": {
+          "x": 121.5,
+          "y": 104.5
+        },
+        "hostilePosition": {
+          "x": 150.5,
+          "y": 104.5
+        },
+        "subjectiveThreatPosition": {
+          "x": 150.5,
+          "y": 104.5
+        },
+        "subjectiveThreatVisibleNow": false,
+        "subjectiveThreatDirectionDegrees": 180,
+        "subjectiveThreatRangeCells": 125,
+        "tacticalKnowledgeRevision": 4,
+        "observerMoving": false,
+        "hostileMoving": true,
+        "movingUnitCount": 1,
+        "wallX": null,
+        "bestSafePosition": {
+          "position": {
+            "x": 119.5,
+            "y": 111.5
+          },
+          "score": 97.379160439859,
+          "danger": 0,
+          "expectedProtection": 62,
+          "expectedProtectionAgainstThreat": 70,
+          "protectedAgainstThreatId": "unit:editor_unit_3",
+          "concealment": 79,
+          "distanceCells": 7.280109889280518,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        "protectedAgainstThreatId": "unit:editor_unit_3",
+        "markerUpdateCount": 2,
+        "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+        "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+        "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+        "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+        "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0@2ec7460e",
+        "lastAppliedRasterDigest": "2ec7460e",
+        "lastAppliedJobId": 2,
+        "awarenessMovement": {
+          "worldRasterBuilds": 2,
+          "ownMovementLocalUpdates": 3,
+          "safePositionLocalScans": 3,
+          "safePositionCellsScanned": 33867,
+          "directionalBasisBuilds": 1,
+          "workerThreatRelativeGeometryBuilds": 1,
+          "workerDirectionalFieldBuilds": 1,
+          "workerDirectionalBasisBuilds": 1,
+          "workerAwarenessGeometryBuilds": 0,
+          "workerAwarenessRescores": 0,
+          "workerJobsStarted": 2,
+          "workerJobsCompleted": 2,
+          "workerJobsCancelled": 0,
+          "workerJobsCoalesced": 1,
+          "workerResultsStaleDropped": 0,
+          "mainThreadRasterSwaps": 2,
+          "finalRefreshRequests": 1,
+          "finalRefreshApplied": 1,
+          "pendingQueueDepth": 0,
+          "maxPendingQueueDepth": 1,
+          "workerInFlight": false,
+          "lastWorkerLatencyMs": 628.5,
+          "maxWorkerLatencyMs": 2897.9,
+          "lastWorkerComputeMs": 21.4,
+          "maxWorkerComputeMs": 649.8,
+          "lastMainThreadApplyMs": 0.4,
+          "maxMainThreadApplyMs": 0.6,
+          "lastLocalUpdateMs": 1.2,
+          "maxLocalUpdateMs": 3,
+          "lastRequestedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastAppliedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastCompletedJobId": 2,
+          "lastAppliedJobId": 2,
+          "lastCompletedJobFinalExact": true,
+          "lastFinalRefreshLatencyMs": 628.5,
+          "maxFinalRefreshLatencyMs": 628.5,
+          "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0@2ec7460e",
+          "lastAppliedRasterDigest": "2ec7460e",
+          "lastWorkerError": null,
+          "rawMaxLocalUpdateMs": 3,
+          "localUpdateWarmupDiscarded": 1,
+          "postWarmupLocalUpdateCount": 2,
+          "postWarmupLocalUpdateP95Ms": 3
+        }
+      },
+      "after": {
+        "scenario": "hidden-hostile",
+        "simulationTimeSeconds": 2.9000000000000004,
+        "observerPosition": {
+          "x": 121.5,
+          "y": 104.5
+        },
+        "hostilePosition": {
+          "x": 139.5,
+          "y": 106.5
+        },
+        "subjectiveThreatPosition": {
+          "x": 150.5,
+          "y": 104.5
+        },
+        "subjectiveThreatVisibleNow": false,
+        "subjectiveThreatDirectionDegrees": 180,
+        "subjectiveThreatRangeCells": 125,
+        "tacticalKnowledgeRevision": 5,
+        "observerMoving": false,
+        "hostileMoving": true,
+        "movingUnitCount": 1,
+        "wallX": null,
+        "bestSafePosition": {
+          "position": {
+            "x": 119.5,
+            "y": 111.5
+          },
+          "score": 97.379160439859,
+          "danger": 0,
+          "expectedProtection": 62,
+          "expectedProtectionAgainstThreat": 70,
+          "protectedAgainstThreatId": "unit:editor_unit_3",
+          "concealment": 79,
+          "distanceCells": 7.280109889280518,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        "protectedAgainstThreatId": "unit:editor_unit_3",
+        "markerUpdateCount": 2,
+        "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+        "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+        "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+        "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+        "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0@2ec7460e",
+        "lastAppliedRasterDigest": "2ec7460e",
+        "lastAppliedJobId": 2,
+        "awarenessMovement": {
+          "worldRasterBuilds": 2,
+          "ownMovementLocalUpdates": 3,
+          "safePositionLocalScans": 3,
+          "safePositionCellsScanned": 33867,
+          "directionalBasisBuilds": 1,
+          "workerThreatRelativeGeometryBuilds": 1,
+          "workerDirectionalFieldBuilds": 1,
+          "workerDirectionalBasisBuilds": 1,
+          "workerAwarenessGeometryBuilds": 0,
+          "workerAwarenessRescores": 0,
+          "workerJobsStarted": 2,
+          "workerJobsCompleted": 2,
+          "workerJobsCancelled": 0,
+          "workerJobsCoalesced": 1,
+          "workerResultsStaleDropped": 0,
+          "mainThreadRasterSwaps": 2,
+          "finalRefreshRequests": 1,
+          "finalRefreshApplied": 1,
+          "pendingQueueDepth": 0,
+          "maxPendingQueueDepth": 1,
+          "workerInFlight": false,
+          "lastWorkerLatencyMs": 628.5,
+          "maxWorkerLatencyMs": 2897.9,
+          "lastWorkerComputeMs": 21.4,
+          "maxWorkerComputeMs": 649.8,
+          "lastMainThreadApplyMs": 0.4,
+          "maxMainThreadApplyMs": 0.6,
+          "lastLocalUpdateMs": 1.2,
+          "maxLocalUpdateMs": 3,
+          "lastRequestedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastAppliedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:1;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0",
+          "lastCompletedJobId": 2,
+          "lastAppliedJobId": 2,
+          "lastCompletedJobFinalExact": true,
+          "lastFinalRefreshLatencyMs": 628.5,
+          "maxFinalRefreshLatencyMs": 628.5,
+          "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:2:rifle_fire:seen:0@2ec7460e",
+          "lastAppliedRasterDigest": "2ec7460e",
+          "lastWorkerError": null,
+          "rawMaxLocalUpdateMs": 3,
+          "localUpdateWarmupDiscarded": 1,
+          "postWarmupLocalUpdateCount": 2,
+          "postWarmupLocalUpdateP95Ms": 3
+        }
+      },
+      "counters": {
+        "objectiveDistanceCells": 11.180339887498947,
+        "subjectiveDistanceCells": 0,
+        "workerJobsStartedDelta": 0,
+        "worldRasterBuildDelta": 0,
+        "workerThreatRelativeGeometryBuildDelta": 0,
+        "workerDirectionalFieldBuildDelta": 0,
+        "workerDirectionalBasisBuildDelta": 0,
+        "workerAwarenessGeometryBuildDelta": 0,
+        "rasterDigestUnchanged": true
+      }
+    },
+    {
+      "scenario": "wall-crossing",
+      "before": {
+        "scenario": "wall-crossing",
+        "simulationTimeSeconds": 0,
+        "observerPosition": {
+          "x": 121.5,
+          "y": 104.5
+        },
+        "hostilePosition": {
+          "x": 150.5,
+          "y": 104.5
+        },
+        "subjectiveThreatPosition": {
+          "x": 150.5,
+          "y": 104.5
+        },
+        "subjectiveThreatVisibleNow": true,
+        "subjectiveThreatDirectionDegrees": 180,
+        "subjectiveThreatRangeCells": 125,
+        "tacticalKnowledgeRevision": 3,
+        "observerMoving": false,
+        "hostileMoving": true,
+        "movingUnitCount": 1,
+        "wallX": 125.5,
+        "bestSafePosition": {
+          "position": {
+            "x": 124.5,
+            "y": 110.5
+          },
+          "score": 97.58504658430023,
+          "danger": 7,
+          "expectedProtection": 93,
+          "expectedProtectionAgainstThreat": 86,
+          "protectedAgainstThreatId": "unit:editor_unit_3",
+          "concealment": 60,
+          "distanceCells": 6.708203932499369,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        "protectedAgainstThreatId": "unit:editor_unit_3",
+        "markerUpdateCount": 2,
+        "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:15;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:15;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1@48062e1f",
+        "lastAppliedRasterDigest": "48062e1f",
+        "lastAppliedJobId": 2,
+        "awarenessMovement": {
+          "worldRasterBuilds": 2,
+          "ownMovementLocalUpdates": 3,
+          "safePositionLocalScans": 3,
+          "safePositionCellsScanned": 33867,
+          "directionalBasisBuilds": 1,
+          "workerThreatRelativeGeometryBuilds": 1,
+          "workerDirectionalFieldBuilds": 1,
+          "workerDirectionalBasisBuilds": 1,
+          "workerAwarenessGeometryBuilds": 0,
+          "workerAwarenessRescores": 0,
+          "workerJobsStarted": 2,
+          "workerJobsCompleted": 2,
+          "workerJobsCancelled": 0,
+          "workerJobsCoalesced": 1,
+          "workerResultsStaleDropped": 0,
+          "mainThreadRasterSwaps": 2,
+          "finalRefreshRequests": 1,
+          "finalRefreshApplied": 1,
+          "pendingQueueDepth": 0,
+          "maxPendingQueueDepth": 1,
+          "workerInFlight": false,
+          "lastWorkerLatencyMs": 614,
+          "maxWorkerLatencyMs": 2871.5,
+          "lastWorkerComputeMs": 7.7,
+          "maxWorkerComputeMs": 738.3,
+          "lastMainThreadApplyMs": 0.5,
+          "maxMainThreadApplyMs": 0.7,
+          "lastLocalUpdateMs": 1.2,
+          "maxLocalUpdateMs": 3.3,
+          "lastRequestedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:15;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:15;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:15;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:15;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastCompletedJobId": 2,
+          "lastAppliedJobId": 2,
+          "lastCompletedJobFinalExact": true,
+          "lastFinalRefreshLatencyMs": 614,
+          "maxFinalRefreshLatencyMs": 614,
+          "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:150.5:104.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1@48062e1f",
+          "lastAppliedRasterDigest": "48062e1f",
+          "lastWorkerError": null,
+          "rawMaxLocalUpdateMs": 3.4,
+          "localUpdateWarmupDiscarded": 1,
+          "postWarmupLocalUpdateCount": 2,
+          "postWarmupLocalUpdateP95Ms": 3.3
+        }
+      },
+      "after": {
+        "scenario": "wall-crossing",
+        "simulationTimeSeconds": 8.516300000000001,
+        "observerPosition": {
+          "x": 121.5,
+          "y": 104.5
+        },
+        "hostilePosition": {
+          "x": 119.97077803864508,
+          "y": 100.02922196135492
+        },
+        "subjectiveThreatPosition": {
+          "x": 122.5,
+          "y": 97.5
+        },
+        "subjectiveThreatVisibleNow": true,
+        "subjectiveThreatDirectionDegrees": 98.130102354156,
+        "subjectiveThreatRangeCells": 125,
+        "tacticalKnowledgeRevision": 13,
+        "observerMoving": false,
+        "hostileMoving": true,
+        "movingUnitCount": 1,
+        "wallX": 125.5,
+        "bestSafePosition": {
+          "position": {
+            "x": 126.5,
+            "y": 104.5
+          },
+          "score": 98.2,
+          "danger": 1,
+          "expectedProtection": 92,
+          "expectedProtectionAgainstThreat": 99,
+          "protectedAgainstThreatId": "unit:editor_unit_3",
+          "concealment": 10,
+          "distanceCells": 5,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        "protectedAgainstThreatId": "unit:editor_unit_3",
+        "markerUpdateCount": 6,
+        "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:15;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:15;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+        "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1@4f55bf52",
+        "lastAppliedRasterDigest": "4f55bf52",
+        "lastAppliedJobId": 14,
+        "awarenessMovement": {
+          "worldRasterBuilds": 8,
+          "ownMovementLocalUpdates": 9,
+          "safePositionLocalScans": 9,
+          "safePositionCellsScanned": 101601,
+          "directionalBasisBuilds": 1,
+          "workerThreatRelativeGeometryBuilds": 10,
+          "workerDirectionalFieldBuilds": 10,
+          "workerDirectionalBasisBuilds": 1,
+          "workerAwarenessGeometryBuilds": 0,
+          "workerAwarenessRescores": 0,
+          "workerJobsStarted": 14,
+          "workerJobsCompleted": 14,
+          "workerJobsCancelled": 0,
+          "workerJobsCoalesced": 9,
+          "workerResultsStaleDropped": 6,
+          "mainThreadRasterSwaps": 8,
+          "finalRefreshRequests": 4,
+          "finalRefreshApplied": 2,
+          "pendingQueueDepth": 0,
+          "maxPendingQueueDepth": 1,
+          "workerInFlight": false,
+          "lastWorkerLatencyMs": 596,
+          "maxWorkerLatencyMs": 2871.5,
+          "lastWorkerComputeMs": 4.8,
+          "maxWorkerComputeMs": 738.3,
+          "lastMainThreadApplyMs": 0.3,
+          "maxMainThreadApplyMs": 0.7,
+          "lastLocalUpdateMs": 0.2,
+          "maxLocalUpdateMs": 3.3,
+          "lastRequestedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:15;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:15;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:15;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:3;objects:15;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastRequestedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastAppliedCanonicalThreatKey": "unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1",
+          "lastCompletedJobId": 14,
+          "lastAppliedJobId": 14,
+          "lastCompletedJobFinalExact": true,
+          "lastFinalRefreshLatencyMs": 596,
+          "maxFinalRefreshLatencyMs": 623.6,
+          "lastAppliedFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1@4f55bf52",
+          "lastAppliedRasterDigest": "4f55bf52",
+          "lastWorkerError": null,
+          "rawMaxLocalUpdateMs": 3.4,
+          "localUpdateWarmupDiscarded": 1,
+          "postWarmupLocalUpdateCount": 8,
+          "postWarmupLocalUpdateP95Ms": 3.3
+        }
+      },
+      "counters": {
+        "wallX": 125.5,
+        "initialThreatSide": "east",
+        "initialWinnerSide": "west-protected",
+        "finalThreatSide": "west",
+        "finalWinnerSide": "east-protected",
+        "winnerChanged": true,
+        "protectedAgainstThreatId": "unit:editor_unit_3",
+        "staleDropped": 6,
+        "maxPendingQueueDepth": 1,
+        "finalWorldKeyApplied": true,
+        "finalCanonicalKeyApplied": true,
+        "finalJobApplied": true,
+        "finalFieldIdentity": "unit_contact:unit:editor_unit_3:directional_fire:122.5:97.5:0:0:0:0:85:0:0:360:125:0:62:100:1:rifle_fire:seen:1@4f55bf52",
+        "finalRasterDigest": "4f55bf52"
+      }
+    }
+  ]
+}

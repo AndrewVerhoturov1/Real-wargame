@@ -1,6 +1,6 @@
 # Performance regression root-cause audit
 
-Status: **optimization implemented; local semantic/contract checks passed; exact browser comparison pending CI**.
+Status: **optimization implemented and locally verified; exact browser CPU comparison accepted; residual route/perception long tasks measured**.
 
 The baseline evidence is the supplied
 `real-wargame-performance-2026-07-16_18-52-03-589.json`, produced by exact commit
@@ -13,10 +13,13 @@ The baseline evidence is the supplied
 | A | `4a9fd2292ee9ded682d34064a2b721feab21ec4a` | After PR #127, before shared visibility/vegetation |
 | B | `4adb42650f0fb6ad61b31f9521cec4508a5a40ec` | After PR #128, before tactical orders |
 | C | `5f097f79e2150764d5dc4ac8cb0c4db6ba90aa74` | Problematic preview and exact PR base |
+| Head | `7cbad49df0be8fd73c7b67655a4d0f85913757d7` | Final measured PR head |
 
-Only C has supplied browser data. The repository workflow
-`Danger Layer Browser Performance` performs an exact-base versus exact-head Chromium run after the PR head is pushed.
-No FPS, frame-time, or long-task improvement is claimed before that workflow produces its raw JSON artifacts.
+The supplied report is the representative YaBrowser C measurement. GitHub Actions run
+`29531512505` additionally measured the exact C SHA and exact head in the same hosted headless Chromium job.
+Its final attempt passed the CPU comparison and all five live-movement semantic scenarios; the stricter
+long-task-attribution assertion remained red because three application-attributed tasks were still observed.
+Raw files are committed under `ci-7cbad49/`.
 
 ## Measured C environment
 
@@ -27,6 +30,31 @@ No FPS, frame-time, or long-task improvement is claimed before that workflow pro
   calls from the Vite/Pixi chunk, totalling 34,339 ms of script attribution;
 - worker compute can be slow, but main-thread raster apply is about 0.5 ms, so moving the same work to a
   worker was not selected as the primary fix.
+
+## Exact CI browser evidence
+
+The hosted runner has no representative hardware WebGL path: its effective FPS was about 1.3 for both builds and
+RAF p95 was 900.0 ms before versus 799.9 ms after. Those renderer values are diagnostic only and are **not** a
+claimed user-device improvement. The CPU contract did pass:
+
+| Metric | Exact base | Exact head | Interpretation |
+| --- | ---: | ---: | --- |
+| scene update p95 / max | 4.3 / 4.6 ms | 3.4 / 7.7 ms | accepted; no repeated scene update over 50 ms |
+| steady dynamic p95 / max | 5.9 / 9.3 ms | 6.8 / 16.7 ms | accepted, but no improvement claimed |
+| cold awareness raster apply max | 3.4 ms | 0.9 ms | workflow-reported 73.53% reduction |
+| threat-cover object candidates | 192,000 for 1 build | 108,725 for 2 builds | bounded spatial work; unlike workloads, so not treated as a timing ratio |
+| threat-cover map-cell forest reads | 63,999 | 0 | static density layer is used on head |
+| main-thread raster apply max, movement run | n/a | 0.7 ms | worker response remains cheap |
+| renderer-local movement update max | n/a | 3.3 ms | below the 10 ms contract |
+
+All five movement cases passed: selected-only, hostile-only, six moving units, hidden hostile and wall crossing.
+Selected-only produced zero worker jobs/rasters and preserved the world field while observer-relative direction and
+range changed. Wall crossing applied the final canonical job and flipped the protected-side winner correctly.
+
+The attribution window still contained 12 browser long tasks. Nine were classified as hosted-runner/rendering
+infrastructure; three were application-attributed. Two contained meaningful route replans with
+`route.current-cost` at 147.2 and 194.5 ms; one contained perception/visibility work with 68.7 ms of unioned
+production overlap. This is the measured residual bottleneck, not hidden by the accepted synthetic CPU comparison.
 
 ## Proven causal chain
 
@@ -62,11 +90,18 @@ Baseline diagnostics support the chain:
 - Published contexts are immutable snapshots rather than mutable arrays owned by knowledge state.
 - Route fields are reused by context identity. The dynamic world-field key no longer includes the friendly unit
   origin; route search still uses the exact current start cell.
+- Route monitoring consumes the same canonical world-threat boundary as the awareness worker. Observer-relative
+  unit-contact direction/range and sub-cell animation cannot change a route field; authored directional evidence
+  remains precise.
+- Coalesced route consumers ignore score-only drift smaller than 20 strength, 15 suppression or 20 confidence
+  points. These thresholds are route-local and cumulative against the published snapshot. Immediate order planning,
+  topology changes and geometry changes retain exact canonical semantics.
 - Performance phases distinguish `route.context`, `route.current-cost` and `route.replan-search`.
 
-This is a local and tested precision compromise: only movement/scalar refresh used by continuous route monitoring
-and UI may be delayed, and never by more than 0.5 simulation seconds. Orders and topology changes stay exact and
-immediate. No coordinate rounding was made coarser.
+This is a local and tested precision compromise: canonical geometry refresh used by continuous route monitoring and
+UI may be delayed by at most 0.5 simulation seconds, and minor score-only drift is suppressed until its cumulative
+route-local threshold is meaningful. Orders and topology changes stay exact and immediate. No shared coordinate
+rounding was made coarser.
 
 ### 2. Static cover/vegetation inputs separated from threat projection
 
@@ -132,18 +167,22 @@ Passed:
 - `navigation-overlay:smoke`, `map-revision:smoke`, `spatial-index:smoke`, `map-grid-lod:smoke` and the
   PixiJS 8 raster lifecycle contract.
 
-No supported local Chromium binary is installed in the current environment, so a local Playwright performance run
-was not fabricated. Exact before/after frame and long-task numbers must come from the PR workflow and its uploaded
-`before.json`, `after.json`, `comparison.json`, `movement.json` and `long-task-attribution.json` files.
+No supported local Chromium binary is installed in the current environment, so no local Playwright number was
+fabricated. The committed `ci-7cbad49/{before,after,comparison,movement,long-task-attribution}.json` files are the
+raw output of the exact GitHub-hosted run. The job remains red only on its final long-task assertion; the base/head
+CPU acceptance and all semantic movement tests passed.
 
 ## Residual work and risks
 
-- A genuinely new coalesced threat snapshot can still require linear DirectionalTacticalField and danger scoring
-  passes. Their frequency is bounded and shared now, but the raster algorithms are not incremental.
+- A genuinely new, meaningful threat snapshot can still require linear DirectionalTacticalField and danger scoring
+  passes. Their frequency is bounded and shared now, but the raster algorithms are not incremental. The final raw
+  run measured two route replans at 147.2 and 194.5 ms for current-route cost.
 - Forest shadow propagation is linear in map cells per actual cover projection. It now uses static typed data, but a
   future measured hotspot may justify an incremental or sector-based algorithm.
-- The 0.5 s route/UI freshness bound needs gameplay review under unusually fast threats. The focused tests protect
-  its intended boundary, but only repeated browser/gameplay scenarios can validate perception at production scale.
+- The 0.5 s route/UI freshness bound and 20/15/20 score thresholds need gameplay review under unusually fast or
+  rapidly strengthening threats. Focused tests protect exact orders, topology and cumulative significant changes.
+- Visibility geometry remains a separate main-thread residual: one final attribution task had 68.7 ms of unioned
+  perception/visibility production time. It was not moved to the worker without evidence.
 - Cache limits were not increased as the optimization. Remaining cache retention and GC pressure must be judged
   from the exact-head browser artifact before further tuning.
 - No change was made to `main`; the work remains isolated to draft PR #131.
