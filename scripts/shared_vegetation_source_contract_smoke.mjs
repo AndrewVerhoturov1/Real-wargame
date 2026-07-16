@@ -33,6 +33,11 @@ const navigation = source('src/core/pathfinding/GridNavigation.ts');
 assert.match(navigation, /movement\.baseResistance/);
 assert.doesNotMatch(navigation, /forest >= 2 \? 1\.45/);
 
+const routeCost = source('src/core/navigation/RouteCostField.ts');
+assert.match(routeCost, /resolveCellVegetationDefinition/);
+assert.match(routeCost, /movement\.tacticalConcealment/);
+assert.doesNotMatch(routeCost, /cell\.forest >= 2 \? 0\.6/);
+
 const currentView = source('src/core/visibility/SelectedUnitVisibilityField.ts');
 assert.match(currentView, /getUnitVisibilityField/);
 assert.doesNotMatch(currentView, /SPARSE_FOREST_LOSS_PER_METER|DENSE_FOREST_LOSS_PER_METER/);
@@ -42,4 +47,4 @@ assert.match(danger, /getVisibilityGeometryField/);
 assert.match(danger, /lineOfFire\.hardBlocked/);
 assert.doesNotMatch(danger, /pixi\.js|\.\.\/rendering\//);
 
-console.log('Shared vegetation source contract smoke passed: renderer, perception, visibility, awareness, danger and navigation use the shared core catalog/field boundary.');
+console.log('Shared vegetation source contract smoke passed: renderer, perception, visibility, awareness, danger and route/navigation costs use the shared core catalog/field boundary.');
