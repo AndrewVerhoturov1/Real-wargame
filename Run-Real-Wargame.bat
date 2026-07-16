@@ -30,6 +30,8 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr /C:":%PORT% "') do (
         taskkill /f /t /pid %%a >nul 2>nul && echo [OK] Process tree s PID %%a ostanovlen.
     )
 )
+echo [INFO] Ostanavlivayu proektnye Node/esbuild protsessy...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$project=[Regex]::Escape((Get-Location).Path); Get-CimInstance Win32_Process -ErrorAction SilentlyContinue ^| Where-Object { $_.Name -in @('node.exe','esbuild.exe') -and $_.CommandLine -match $project } ^| ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>nul
 >nul 2>nul timeout /t 1 /nobreak
 
 :: ---- dependency consistency check ----
