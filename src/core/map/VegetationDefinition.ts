@@ -1,6 +1,11 @@
 export type VegetationKind = 'none' | 'sparse_forest' | 'dense_forest';
 export type VegetationLayerKind = 0 | 1 | 2;
 
+export interface VegetationCellLike {
+  readonly terrain?: string;
+  readonly forest?: number;
+}
+
 export interface VegetationDefinition {
   readonly id: VegetationKind;
   readonly layer: VegetationLayerKind;
@@ -69,6 +74,7 @@ export const VEGETATION_DEFINITIONS: Readonly<Record<VegetationKind, VegetationD
   },
   dense_forest: {
     id: 'dense_forest',
+    layer: 2,
     // Previous alpha 165/255, multiplied by three and clamped to one.
     presentation: { color: 0x133a25, opacity: 1, detailDensity: 7 },
     visibility: {
@@ -94,6 +100,16 @@ export function normalizeVegetationLayer(value: number | undefined): VegetationL
   return 1;
 }
 
+/**
+ * Canonical compatibility rule: the explicit forest layer wins. Legacy cells
+ * with terrain='forest' and forest=0 are interpreted as sparse forest.
+ */
+export function resolveCellVegetationLayer(cell: VegetationCellLike | null | undefined): VegetationLayerKind {
+  const explicit = normalizeVegetationLayer(cell?.forest);
+  if (explicit > 0) return explicit;
+  return cell?.terrain === 'forest' ? 1 : 0;
+}
+
 export function resolveVegetationKind(value: number | undefined): VegetationKind {
   const layer = normalizeVegetationLayer(value);
   if (layer === 2) return 'dense_forest';
@@ -101,9 +117,19 @@ export function resolveVegetationKind(value: number | undefined): VegetationKind
   return 'none';
 }
 
+export function resolveCellVegetationKind(cell: VegetationCellLike | null | undefined): VegetationKind {
+  return resolveVegetationKind(resolveCellVegetationLayer(cell));
+}
+
 export function resolveVegetationDefinition(
   value: VegetationKind | number | undefined,
 ): VegetationDefinition {
   const kind = typeof value === 'string' ? value : resolveVegetationKind(value);
   return VEGETATION_DEFINITIONS[kind];
+}
+
+export function resolveCellVegetationDefinition(
+  cell: VegetationCellLike | null | undefined,
+): VegetationDefinition {
+  return VEGETATION_DEFINITIONS[resolveCellVegetationKind(cell)];
 }
