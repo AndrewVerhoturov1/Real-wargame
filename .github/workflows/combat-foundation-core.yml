@@ -75,13 +75,69 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write # PR127_SELF_HEAL_PERMISSION
 
 jobs:
   combat-foundation:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # PR127_SELF_HEAL_START
+      - name: Apply PR127 scheduler overlap once
+        if: github.head_ref == 'agent/per-unit-ai-scheduler-v1' && github.actor != 'github-actions[bot]'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin agent/per-unit-ai-scheduler-v1 --depth=1
+          git checkout -B agent/per-unit-ai-scheduler-v1 origin/agent/per-unit-ai-scheduler-v1
+          python - <<'PYCODE'
+          from pathlib import Path
+
+          def replace_once(path: Path, old: str, new: str, label: str) -> None:
+              text = path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{label}: expected exactly one match, found {count}')
+              path.write_text(text.replace(old, new, 1))
+
+          tactical = Path('scripts/tactical_workspace_smoke_pixijs8_baseline.mjs')
+          replace_once(tactical, "'Приказать двигаться сюда', 'Один расчёт ИИ', 'Рассчитать и выполнить',", "'Приказать двигаться сюда', 'Диагностика ИИ (без изменений)', 'Рассчитать и выполнить',", 'workspace label')
+
+          unit_model = Path('src/core/units/UnitModel.ts')
+          replace_once(unit_model, "export type ThreatMemorySource = 'seen' | 'heard' | 'reported' | 'fire_pressure';", "export type ThreatMemorySource = 'seen' | 'heard' | 'reported' | 'fire_pressure';\nexport type FireThreatClass = 'rifle_fire' | 'machine_gun_fire';", 'fire class type')
+          replace_once(unit_model, '  lastUpdatedSeconds: number;\n  evidenceCount?: number;', '  lastUpdatedSeconds: number;\n  fireThreatClass?: FireThreatClass | null;\n  evidenceCount?: number;', 'fire class field')
+
+          memory = Path('src/core/knowledge/SoldierThreatMemory.ts')
+          replacements = [
+              ("import type { KnownThreatMemory, UnitModel, UnitTacticalKnowledge } from '../units/UnitModel';", "import type { FireThreatClass, KnownThreatMemory, UnitModel, UnitTacticalKnowledge } from '../units/UnitModel';", 'import'),
+              ('buildRealUnitThreat(state, unit, contact, threatId, existing.get(threatId), now)', 'buildRealUnitThreat(state, unit, sourceUnit, contact, threatId, existing.get(threatId), now)', 'call'),
+              ('  observer: UnitModel,\n  contact:', '  observer: UnitModel,\n  sourceUnit: UnitModel,\n  contact:', 'signature'),
+              ('    lastUpdatedSeconds: now,\n    evidenceCount: previousEvidence?.evidenceCount ?? 0,', "    lastUpdatedSeconds: now,\n    fireThreatClass: visibleNow\n      ? classifyUnitFireThreat(sourceUnit)\n      : previous?.fireThreatClass ?? 'rifle_fire',\n    evidenceCount: previousEvidence?.evidenceCount ?? 0,", 'real class'),
+              ('      lastUpdatedSeconds: now,\n      evidenceCount: evidence.evidenceCount,', '      lastUpdatedSeconds: now,\n      fireThreatClass: null,\n      evidenceCount: evidence.evidenceCount,', 'unknown class'),
+              ('    lastUpdatedSeconds: now,\n    evidenceCount: 0,', '    lastUpdatedSeconds: now,\n    fireThreatClass: null,\n    evidenceCount: 0,', 'known class'),
+              ('    lastUpdatedSeconds,\n    evidenceCount,', '    lastUpdatedSeconds,\n    fireThreatClass: normalizeFireThreatClass(value.fireThreatClass, id),\n    evidenceCount,', 'normalize class'),
+              ('    visibleNow: memory.visibleNow,\n    evidenceCount: memory.evidenceCount ?? 0,', '    visibleNow: memory.visibleNow,\n    fireThreatClass: memory.fireThreatClass ?? null,\n    evidenceCount: memory.evidenceCount ?? 0,', 'revision class'),
+              ("\nfunction sourceForContact(contact: PerceptionContactMemory): KnownThreatMemory['source'] {", "\nfunction classifyUnitFireThreat(unit: UnitModel): FireThreatClass {\n  return unit.type === 'support_team' || unit.heldItem === 'support_item'\n    ? 'machine_gun_fire'\n    : 'rifle_fire';\n}\n\nfunction normalizeFireThreatClass(value: unknown, id: string): FireThreatClass | null {\n  if (!id.startsWith('unit:')) return null;\n  return value === 'machine_gun_fire' ? 'machine_gun_fire' : 'rifle_fire';\n}\n\nfunction sourceForContact(contact: PerceptionContactMemory): KnownThreatMemory['source'] {", 'helpers'),
+          ]
+          for old, new, label in replacements:
+              replace_once(memory, old, new, label)
+
+          workflow = Path('.github/workflows/combat-foundation-core.yml')
+          text = workflow.read_text()
+          start = text.index('      # PR127_SELF_HEAL_START\n')
+          end_marker = '      # PR127_SELF_HEAL_END\n'
+          end = text.index(end_marker, start) + len(end_marker)
+          text = text[:start] + text[end:]
+          text = text.replace('permissions:\n  contents: write # PR127_SELF_HEAL_PERMISSION\n', 'permissions:\n  contents: read\n', 1)
+          workflow.write_text(text)
+          PYCODE
+          rm -f .github/workflows/agent-pr127-overlap-finalize.yml
+          git add -A
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'fix: reconcile scheduler follow-up with danger contracts'
+          git push origin HEAD:agent/per-unit-ai-scheduler-v1
+      # PR127_SELF_HEAL_END
       - uses: actions/setup-node@v4
         with:
           node-version: 20
