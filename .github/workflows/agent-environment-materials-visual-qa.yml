@@ -20,6 +20,12 @@ on:
       - 'src/core/map/EnvironmentProfileRuntime.ts'
       - 'src/ui/EnvironmentProfileStorage.ts'
       - 'playwright.config.ts'
+  push:
+    branches:
+      - agent/terrain-profiles-performance-followup-v1
+    paths:
+      - '.github/workflows/agent-environment-materials-visual-qa.yml'
+      - 'tests/environment-materials-visual.spec.ts'
 
 permissions:
   contents: read
@@ -33,7 +39,7 @@ env:
 
 jobs:
   visual-qa:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.body, 'VISUAL_QA_APPROVED_BY_USER: yes')
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || contains(github.event.pull_request.body, 'VISUAL_QA_APPROVED_BY_USER: yes')
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
