@@ -91,7 +91,7 @@ function issueTacticalOrderIntentToSelectedUnits(
       movementProfileId: command.intent.movementProfileId,
       movementProfileSource: 'player_order',
       movementProfileOwnerToken: command.id,
-      movementProfileRevision: command.revision,
+      movementProfileSelectionRevision: command.revision,
       finalFacingRadians,
       tacticalContext: buildUnitTacticalRouteContext(unit),
     });
