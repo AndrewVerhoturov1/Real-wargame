@@ -97,7 +97,7 @@ async function bootstrap(): Promise<void> {
   installPerformanceReportControls(() => board.downloadPerformanceReport());
   installAiEditorOpenButton(aiEditorOpenButton);
   installPauseToggle(pauseToggle, forceRenderAtNativeMapQuality);
-  installTacticalWorkspace(state, aiGameBridge, forceRenderAtNativeMapQuality);
+  const destroyTacticalWorkspace = installTacticalWorkspace(state, aiGameBridge, forceRenderAtNativeMapQuality);
   const destroyCombatControls = installCombatControls(state, forceRenderAtNativeMapQuality);
   installAiStatePlanVisualQaHarness(state, forceRenderAtNativeMapQuality);
   installCombatTacticalIntegrationVisualQaHarness(state, forceRenderAtNativeMapQuality);
@@ -131,6 +131,7 @@ async function bootstrap(): Promise<void> {
     gridToggle.removeEventListener('click', scheduleNativeMapQuality);
     destroyAdaptiveGridLod();
     destroyTacticalOrderRadialInput();
+    destroyTacticalWorkspace();
     destroyCommandPlanRouteUi();
     destroyRouteCostOverlayUi();
     destroyAiDictionary();
