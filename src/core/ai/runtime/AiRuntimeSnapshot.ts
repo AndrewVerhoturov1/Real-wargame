@@ -39,6 +39,9 @@ export interface SerializedMoveOrder {
   readonly movementProfileId?: string;
   readonly movementProfileSource?: MovementProfileSource;
   readonly movementProfileOwnerToken?: string;
+  readonly movementProfileDefinitionRevision?: number;
+  readonly movementProfileSelectionRevision?: number;
+  /** Legacy input only. */
   readonly movementProfileRevision?: number;
 }
 
@@ -193,7 +196,10 @@ export function serializeMoveOrder(order: MoveOrder): SerializedMoveOrder {
     movementProfileId: order.movementProfileId,
     movementProfileSource: order.movementProfileSource,
     movementProfileOwnerToken: order.movementProfileOwnerToken,
-    movementProfileRevision: integerNonNegative(order.movementProfileRevision),
+    movementProfileDefinitionRevision: integerNonNegative(order.movementProfileDefinitionRevision),
+    movementProfileSelectionRevision: integerNonNegative(
+      order.movementProfileSelectionRevision ?? order.movementProfileRevision,
+    ),
   };
 }
 
@@ -219,7 +225,8 @@ export function restoreMoveOrder(value: SerializedMoveOrder): MoveOrder {
     movementProfileId: value.movementProfileId,
     movementProfileSource: value.movementProfileSource,
     movementProfileOwnerToken: value.movementProfileOwnerToken,
-    movementProfileRevision: value.movementProfileRevision,
+    movementProfileDefinitionRevision: value.movementProfileDefinitionRevision,
+    movementProfileSelectionRevision: value.movementProfileSelectionRevision ?? value.movementProfileRevision,
   };
 }
 
@@ -261,7 +268,10 @@ function normalizeSerializedMoveOrder(value: unknown): SerializedMoveOrder | und
     movementProfileOwnerToken: typeof value.movementProfileOwnerToken === 'string'
       ? value.movementProfileOwnerToken
       : undefined,
-    movementProfileRevision: integerNonNegative(value.movementProfileRevision),
+    movementProfileDefinitionRevision: integerNonNegative(value.movementProfileDefinitionRevision),
+    movementProfileSelectionRevision: integerNonNegative(
+      value.movementProfileSelectionRevision ?? value.movementProfileRevision,
+    ),
   };
 }
 
