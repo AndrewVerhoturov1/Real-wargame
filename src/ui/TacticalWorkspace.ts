@@ -1,5 +1,6 @@
 import '../tactical-workspace-stage8.css';
 import type { AiGameBridgeHandle } from '../core/ai/AiGameBridge';
+import { measurePerformancePhase } from '../core/debug/PerformancePhases';
 import type { UnitPosture } from '../core/behavior/BehaviorModel';
 import { getCombatRuntime } from '../core/combat/CombatDamage';
 import { findBestDirectFireContact } from '../core/combat/CombatDecision';
@@ -176,8 +177,8 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
     attentionProfileSelect.value = registry.hasProfile(requested) ? requested : 'individual';
   };
   refreshAttentionProfiles();
-  subscribeAttentionProfileRegistry(() => { refreshAttentionProfiles(); updateBottom(); onChanged(); });
-  subscribeNavigationProfileRegistry(() => {
+  const unsubscribeAttentionProfiles = subscribeAttentionProfileRegistry(() => { refreshAttentionProfiles(); updateBottom(); onChanged(); });
+  const unsubscribeNavigationProfiles = subscribeNavigationProfileRegistry(() => {
     refreshNavigationProfiles();
     updateBottom();
     onChanged();
@@ -324,11 +325,13 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   }
 
   function update(force = false): void {
-    if (force) lastSidebarKey = '';
-    updateBottom();
-    renderSidebar();
-    updateEditorPlaceButton();
-    for (const item of shell.querySelectorAll<HTMLButtonElement>('[data-tab]')) item.classList.toggle('active', item.dataset.tab === tab);
+    measurePerformancePhase('ui.tactical-workspace.update', () => {
+      if (force) lastSidebarKey = '';
+      updateBottom();
+      renderSidebar();
+      updateEditorPlaceButton();
+      for (const item of shell.querySelectorAll<HTMLButtonElement>('[data-tab]')) item.classList.toggle('active', item.dataset.tab === tab);
+    });
   }
 
   function updateBottom(): void {
@@ -445,6 +448,8 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   }, 300);
   return () => {
     window.clearInterval(updateInterval);
+    unsubscribeAttentionProfiles();
+    unsubscribeNavigationProfiles();
     detachTooltip();
     shell.remove();
   };
