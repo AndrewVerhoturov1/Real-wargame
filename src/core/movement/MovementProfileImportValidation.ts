@@ -2,6 +2,7 @@ import { isBuiltInMovementProfileId } from './MovementProfileDefaults';
 import { normalizeCustomMovementId, normalizeMovementRegistryData } from './MovementProfileNormalization';
 import {
   BUILT_IN_MOVEMENT_PROFILE_IDS,
+  MOVEMENT_GAITS,
   MOVEMENT_PROFILE_FORMAT_VERSION,
   type MovementProfileRegistryData,
 } from './MovementProfileTypes';
@@ -22,8 +23,9 @@ export class MovementProfileImportError extends Error {
   }
 }
 
+const LEGACY_MOVEMENT_GAITS = ['crouch'] as const;
+
 const ENUM_FIELDS: ReadonlyArray<readonly [string, readonly string[]]> = [
-  ['preferredGait', ['walk', 'crouch', 'run', 'sprint', 'crawl']],
   ['stancePolicy', ['standing', 'crouched', 'prone', 'adaptive']],
   ['category', ['routine', 'stealth', 'combat', 'emergency']],
   ['settings.noise.surfacePolicy', ['profile_multiplier', 'material_profile_future']],
@@ -227,6 +229,15 @@ function validateProfileShape(
     }
   }
 
+  const preferredGait = readPresent(profile, 'preferredGait');
+  if (preferredGait.present && !isSupportedImportedMovementGait(preferredGait.value)) {
+    issues.push(issue(
+      `${path}.preferredGait`,
+      `Field must be one of: ${MOVEMENT_GAITS.join(', ')}. Legacy value "crouch" is also accepted for migration.`,
+      `Недопустимый способ движения. Допустимо: ${MOVEMENT_GAITS.join(', ')}. Legacy-значение «crouch» принимается только для миграции.`,
+    ));
+  }
+
   const template = readPresent(profile, 'templateProfileId');
   if (template.present) {
     const normalizedTemplate = typeof template.value === 'string'
@@ -273,6 +284,12 @@ function validateProfileShape(
       ));
     }
   }
+}
+
+function isSupportedImportedMovementGait(value: unknown): boolean {
+  return typeof value === 'string'
+    && ((MOVEMENT_GAITS as readonly string[]).includes(value)
+      || (LEGACY_MOVEMENT_GAITS as readonly string[]).includes(value));
 }
 
 function normalizeReferenceId(value: string): string | null {
