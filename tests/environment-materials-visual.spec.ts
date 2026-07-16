@@ -1,10 +1,8 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 
 const OUTPUT_DIR = path.join('artifacts', 'visual-qa', 'environment-materials-v1');
-const BOARD_ORIGIN = { x: 72, y: 72 };
-const CELL_SIZE = 24;
 const ZOOM_SENSITIVITY = 0.00042;
 const MAX_WHEEL_DELTA_PER_FRAME = 360;
 
@@ -21,7 +19,7 @@ test.describe('environment material profiles visual QA — explicit approval req
     await openMap(page);
 
     const canvas = page.locator('canvas');
-    await selectFixtureSoldier(page, canvas);
+    await selectFixtureSoldier(page);
 
     await setZoom(page, 1);
     await page.screenshot({ path: path.join(OUTPUT_DIR, '01-forest-zoom-1-danger-off.png'), fullPage: false });
@@ -86,19 +84,22 @@ async function openMap(page: Page): Promise<void> {
   await page.waitForTimeout(750);
 }
 
-async function selectFixtureSoldier(page: Page, canvas: Locator): Promise<void> {
-  const soldier = await worldPoint(canvas, 27.574, 17.589);
-  await page.mouse.click(soldier.x, soldier.y);
-  await expect(page.locator('[data-role="unit-name"]')).toContainText('Солдат');
-}
+async function selectFixtureSoldier(page: Page): Promise<void> {
+  const label = page.locator('.unit-label').filter({ hasText: 'Солдат' }).first();
+  await expect(label).toBeVisible();
+  const box = await label.boundingBox();
+  if (!box) throw new Error('Fixture soldier label bounds unavailable.');
 
-async function worldPoint(canvas: Locator, gridX: number, gridY: number): Promise<{ x: number; y: number }> {
-  const box = await canvas.boundingBox();
-  if (!box) throw new Error('Canvas bounds unavailable.');
-  return {
-    x: box.x + BOARD_ORIGIN.x + gridX * CELL_SIZE,
-    y: box.y + BOARD_ORIGIN.y + gridY * CELL_SIZE,
-  };
+  const centerX = box.x + box.width / 2;
+  const candidateY = [box.y + box.height + 22, box.y + box.height + 44, box.y - 12];
+  for (const y of candidateY) {
+    await page.mouse.click(centerX, y);
+    await page.waitForTimeout(150);
+    const selectedName = await page.locator('[data-role="unit-name"]').textContent();
+    if (selectedName?.includes('Солдат')) return;
+  }
+
+  throw new Error('Could not select the visible fixture soldier from its rendered label.');
 }
 
 async function setZoom(page: Page, target: number): Promise<void> {
