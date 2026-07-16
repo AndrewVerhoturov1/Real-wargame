@@ -1,5 +1,6 @@
 import { distance, type GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
+import { buildNavigationGrid } from '../pathfinding/GridNavigation';
 import type { SimulationState } from '../simulation/SimulationState';
 import { getDirectionalTerrainSectorBasis } from '../terrain/DirectionalTerrainSectorBasis';
 import {
@@ -205,14 +206,16 @@ function buildBestSafePositions(
   const maxX = Math.min(map.width - 1, Math.ceil(unitPosition.x + searchRadiusCells));
   const minY = Math.max(0, Math.floor(unitPosition.y - searchRadiusCells));
   const maxY = Math.min(map.height - 1, Math.ceil(unitPosition.y + searchRadiusCells));
+  const navigation = buildNavigationGrid(map);
   const best: SoldierSafePosition[] = [];
 
   for (let y = minY; y <= maxY; y += 1) {
     const positionY = y + 0.5;
     const dy = positionY - unitPosition.y;
     for (let x = minX; x <= maxX; x += 1) {
-      const cell = cells[y * map.width + x];
-      if (!cell) continue;
+      const index = y * map.width + x;
+      const cell = cells[index];
+      if (!cell || navigation.cells[index]?.passable !== true) continue;
       const positionX = x + 0.5;
       const dx = positionX - unitPosition.x;
       const distanceSquared = dx * dx + dy * dy;
@@ -351,40 +354,34 @@ function buildCacheKey(
     staticFieldKey,
     directionalFieldKey,
     dangerFieldKey,
-  ].join('#');
-}
-
-function buildRouteKey(unit: UnitModel): string {
-  const position = `${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`;
-  const target = unit.order
-    ? `${Math.floor(unit.order.target.x)}:${Math.floor(unit.order.target.y)}`
-    : 'none';
-  return [position, target, unit.behaviorRuntime.posture, buildAwarenessKnowledgeKey(unit)].join(':');
+  ].join(':');
 }
 
 export function buildAwarenessKnowledgeKey(unit: UnitModel): string {
   return unit.tacticalKnowledge.threats.map((threat) => [
     threat.id,
     threat.mode,
-    quantize(threat.x, 0.05),
-    quantize(threat.y, 0.05),
-    quantize(threat.radiusCells, 0.1),
-    quantize(threat.widthCells, 0.1),
-    quantize(threat.heightCells, 0.1),
-    quantize(threat.rotationDegrees, 1),
-    quantize(threat.strength, 1),
-    quantize(threat.suppression, 1),
-    quantize(threat.directionDegrees, 1),
-    quantize(threat.arcDegrees, 1),
-    quantize(threat.rangeCells, 0.1),
-    quantize(threat.minRangeCells, 0.1),
-    quantize(threat.falloffPercent, 1),
+    quantize(threat.x, 0.25),
+    quantize(threat.y, 0.25),
+    quantize(threat.radiusCells, 0.5),
+    quantize(threat.widthCells, 0.5),
+    quantize(threat.heightCells, 0.5),
+    quantize(threat.rotationDegrees, 5),
+    quantize(threat.directionDegrees, 5),
+    quantize(threat.arcDegrees, 5),
+    quantize(threat.rangeCells, 1),
+    quantize(threat.minRangeCells, 1),
+    quantize(threat.falloffPercent, 5),
+    quantize(threat.strength, 5),
+    quantize(threat.suppression, 5),
     quantize(threat.confidence, KNOWLEDGE_CONFIDENCE_BUCKET),
     quantize(threat.uncertaintyCells, KNOWLEDGE_UNCERTAINTY_BUCKET),
-    threat.fireThreatClass ?? (threat.id.startsWith('unit:') ? 'rifle_fire' : 'independent'),
-    threat.source,
-    threat.visibleNow ? '1' : '0',
-  ].join(':')).join('|');
+  ].join(',')).sort().join('|');
+}
+
+function buildRouteKey(unit: UnitModel): string {
+  if (!unit.order) return 'none';
+  return `${unit.order.type}:${unit.order.target.x.toFixed(2)}:${unit.order.target.y.toFixed(2)}:${unit.order.pathRevision}`;
 }
 
 function awarenessCellAt(
@@ -392,49 +389,22 @@ function awarenessCellAt(
   cells: SoldierAwarenessCell[],
   position: GridPosition,
 ): SoldierAwarenessCell | undefined {
-  const x = Math.floor(position.x);
-  const y = Math.floor(position.y);
-  if (x < 0 || y < 0 || x >= map.width || y >= map.height) return undefined;
+  const x = Math.max(0, Math.min(map.width - 1, Math.floor(position.x)));
+  const y = Math.max(0, Math.min(map.height - 1, Math.floor(position.y)));
   return cells[y * map.width + x];
 }
 
 function awarenessSourceRu(
   unit: UnitModel,
-  localSourceRu: string,
+  localSource: string,
   directional: DirectionalTacticalCell,
 ): string {
-  if (unit.tacticalKnowledge.threats.length === 0) {
-    return localSourceRu === 'открытая местность' ? 'нет известной угрозы' : localSourceRu;
-  }
-  const terrainMeaningful = directional.terrainProtection >= 15
-    || directional.terrainConcealment >= 15
-    || directional.silhouetteRisk >= 35;
-  if (!terrainMeaningful) return localSourceRu;
-  if (localSourceRu === 'открытая местность') return directional.sourceRu;
-  if (localSourceRu === directional.sourceRu) return localSourceRu;
-  return `${localSourceRu} + ${directional.sourceRu}`;
-}
-
-function combinePercent(base: number, addition: number): number {
-  const base01 = clampPercent(base) / 100;
-  const addition01 = clampPercent(addition) / 100;
-  return clampPercent((1 - (1 - base01) * (1 - addition01)) * 100);
-}
-
-function emptyDirectionalCell(): DirectionalTacticalCell {
-  return {
-    primarySlope: 0,
-    forwardSlopeRisk: 0,
-    reverseSlopeProtection: 0,
-    crestRisk: 0,
-    valleyProtection: 0,
-    silhouetteRisk: 0,
-    primaryThreatExposure: 0,
-    flankExposure: 0,
-    terrainProtection: 0,
-    terrainConcealment: 0,
-    sourceRu: 'открытый склон',
-  };
+  if (unit.tacticalKnowledge.threats.length === 0) return localSource;
+  if (directional.reverseSlopeProtection >= 45) return `${localSource}; обратный склон относительно известной угрозы`;
+  if (directional.valleyProtection >= 45) return `${localSource}; низина относительно известной угрозы`;
+  if (directional.silhouetteRisk >= 55) return `${localSource}; риск силуэта относительно известной угрозы`;
+  if (directional.crestRisk >= 55) return `${localSource}; гребень относительно известной угрозы`;
+  return `${localSource}; оценка относительно известной угрозы`;
 }
 
 function emptyAwarenessCell(position: GridPosition): SoldierAwarenessCell {
@@ -449,7 +419,7 @@ function emptyAwarenessCell(position: GridPosition): SoldierAwarenessCell {
     coverReliability: 0,
     concealment: 0,
     uncertainty: 0,
-    safety: 100,
+    safety: 0,
     confidence: 0,
     terrainProtection: 0,
     terrainConcealment: 0,
@@ -463,11 +433,29 @@ function emptyAwarenessCell(position: GridPosition): SoldierAwarenessCell {
   };
 }
 
-function quantize(value: number, bucket: number): number {
-  return Math.round(value / bucket) * bucket;
+function emptyDirectionalCell(): DirectionalTacticalCell {
+  return {
+    terrainProtection: 0,
+    terrainConcealment: 0,
+    reverseSlopeProtection: 0,
+    forwardSlopeRisk: 0,
+    crestRisk: 0,
+    silhouetteRisk: 0,
+    valleyProtection: 0,
+    flankExposure: 0,
+  };
 }
 
+function combinePercent(base: number, addition: number): number {
+  const base01 = clampPercent(base) / 100;
+  const addition01 = clampPercent(addition) / 100;
+  return clampPercent((1 - (1 - base01) * (1 - addition01)) * 100);
+}
 
 function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function quantize(value: number, bucket: number): number {
+  return Math.round((Number.isFinite(value) ? value : 0) / bucket) * bucket;
 }
