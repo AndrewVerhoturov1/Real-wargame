@@ -12,6 +12,22 @@ For every PixiJS task, read first:
 
 Then use this index to choose the narrowest applicable v8 reference. Do not retain v7 compatibility aliases in active production code.
 
+## Migration baseline and current operational status
+
+The accepted PixiJS 7 → 8 campaign, architecture contracts, visual-QA status, and unresolved Windows launcher blocker are documented in:
+
+```text
+docs/architecture/PIXIJS8_MIGRATION_CAMPAIGN.md
+```
+
+Keep these statuses separate:
+
+- the PixiJS 8 code migration is integrated;
+- visual QA has not produced and inspected fresh PNGs;
+- the user's Windows launcher remains blocked by a reported Rollup native-module `EPERM unlink` error after PRs #120–#123.
+
+Do not claim local launch or visual success from the migration smokes alone.
+
 ## General skill locations
 
 ```text
