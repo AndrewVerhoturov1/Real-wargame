@@ -1,0 +1,86 @@
+.movement-profile-status {
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border: 1px solid #38503f;
+  border-radius: 6px;
+  background: #121c15;
+  color: #aebfad;
+  font-size: 12px;
+}
+
+.movement-profile-group-description {
+  margin: -5px 0 12px;
+  color: #91a393;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.movement-profile-select-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.movement-profile-select-grid-spaced {
+  margin-top: 12px;
+}
+
+.movement-profile-select {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid #314536;
+  border-radius: 6px;
+  background: #111a14;
+  color: #c4d2c3;
+  font-size: 12px;
+}
+
+.movement-profile-select select,
+.movement-profile-select input,
+.movement-profile-selector select {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 8px;
+  border: 1px solid #405748;
+  border-radius: 5px;
+  background: #0f1712;
+  color: #f0f5ed;
+}
+
+.movement-profile-select small,
+.movement-profile-selector small {
+  color: #8fa090;
+  line-height: 1.4;
+}
+
+.movement-profile-selector {
+  display: grid;
+  gap: 5px;
+}
+
+.movement-profile-selector select.has-error {
+  border-color: #cf7f68;
+}
+
+.movement-profile-selector small.error {
+  color: #ffb19d;
+}
+
+.navigation-profile-form-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .movement-profile-select-grid,
+  .navigation-profile-field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .navigation-profile-field-control {
+    grid-template-columns: minmax(100px, 1fr) 84px 32px;
+  }
+}
