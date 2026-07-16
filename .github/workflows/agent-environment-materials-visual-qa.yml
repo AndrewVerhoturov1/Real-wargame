@@ -8,6 +8,11 @@ on:
   pull_request:
     branches:
       - real-wargame-preview
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
     paths:
       - '.github/workflows/agent-environment-materials-visual-qa.yml'
       - 'tests/environment-materials-visual.spec.ts'
