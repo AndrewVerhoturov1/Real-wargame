@@ -17,9 +17,29 @@ interface BuildIdentity {
   performanceContractVersion: string;
 }
 
+interface SoldierDangerDiagnostics {
+  geometryBuildCount: number;
+  fieldBuildCount: number;
+  geometryCacheHitCount: number;
+  fieldCacheHitCount: number;
+  fullMapScanCount: number;
+  cachedGeometryCount: number;
+  cachedThreatGeometryCount: number;
+  cachedFieldCount: number;
+  retainedThreatGeometryBytes: number;
+  retainedFieldBytes: number;
+  retainedTypedArrayBytes: number;
+  lastGeometryKey: string;
+  lastFieldKey: string;
+}
+
 interface PerformanceReport {
   version: string;
   build?: BuildIdentity;
+  scene?: {
+    mapWidthCells?: number;
+    mapHeightCells?: number;
+  };
   computation?: Record<string, unknown>;
   longTasks: Array<{ startMs: number; durationMs: number }>;
   samples: PerformanceSample[];
@@ -35,6 +55,20 @@ interface BrowserTimingResult {
   durationMs: number;
   frameMs: number[];
   longTaskMs: number[];
+}
+
+interface DangerFieldPerformanceEvidence {
+  classifiedThreatCount: number;
+  initial: SoldierDangerDiagnostics;
+  afterRescore: SoldierDangerDiagnostics;
+  afterGeometryMove: SoldierDangerDiagnostics;
+  rescoreGeometryBuildDelta: number;
+  rescoreFieldBuildDelta: number;
+  rescoreFullMapScanDelta: number;
+  geometryMoveBuildDelta: number;
+  geometryMoveFieldBuildDelta: number;
+  geometryMoveFullMapScanDelta: number;
+  maximumRetainedTypedArrayBytes: number;
 }
 
 interface BrowserPerformanceSummary {
@@ -54,6 +88,7 @@ interface BrowserPerformanceSummary {
   longTasksOver100Ms: number;
   awareness: AwarenessDiagnostics | null;
   computation: Record<string, unknown> | null;
+  soldierDangerField: DangerFieldPerformanceEvidence | null;
 }
 
 interface Stats {
@@ -63,11 +98,19 @@ interface Stats {
   max: number;
 }
 
+interface ExtendedCombatVisualApi {
+  setScenario(scenario: string): { unitThreatCount?: number };
+  setDangerParityPhase?(phase: string): { unitThreatCount?: number };
+  stepDangerPerformanceDynamicUpdate(step: number): void;
+  stepDangerPerformanceGeometryUpdate?(step: number): void;
+}
+
 const OUTPUT_PATH = process.env.DANGER_PERF_OUTPUT
   ?? path.join('artifacts', 'performance', 'danger-layer-browser-performance.json');
 const LABEL = process.env.DANGER_PERF_LABEL ?? 'candidate';
 const EXPECTED_BRANCH = process.env.DANGER_PERF_EXPECTED_BRANCH ?? '';
 const EXPECTED_SHA = process.env.DANGER_PERF_EXPECTED_SHA ?? '';
+const IS_CANDIDATE = LABEL !== 'before-base';
 // Nearest-rank p95 needs at least 20 observations before a single runner hiccup
 // stops being the percentile itself. Sixty mutations give both exact builds a
 // representative CPU sample while preserving the independent max <= 50 ms gate.
@@ -76,15 +119,20 @@ const UPDATE_INTERVAL_MS = 300;
 const REPORT_WINDOW_MS = 22_000;
 const MINIMUM_SCENE_SAMPLE_COUNT = 25;
 
- test('records paused dynamic danger-layer rescoring without screenshots', async ({ page }) => {
+ test('records paused multi-threat danger rescoring without screenshots', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/?visualQa=combat-tactical-integration');
   await expect(page.locator('canvas')).toBeVisible();
   await page.waitForFunction(() => Boolean(window.__realWargameCombatTacticalVisualQa));
 
-  await page.evaluate(() => {
-    window.__realWargameCombatTacticalVisualQa?.setScenario('slice1-near-miss-evidence-suppression');
-  });
+  const classifiedThreatCount = await page.evaluate((candidate) => {
+    const api = window.__realWargameCombatTacticalVisualQa as unknown as ExtendedCombatVisualApi | undefined;
+    if (!api) throw new Error('Combat tactical visual QA API is unavailable.');
+    if (!candidate) return api.setScenario('slice1-near-miss-evidence-suppression').unitThreatCount ?? 0;
+    api.setScenario('danger-route-cost-parity');
+    if (!api.setDangerParityPhase) throw new Error('Candidate danger parity API is unavailable.');
+    return api.setDangerParityPhase('rifle-and-machine-gun').unitThreatCount ?? 0;
+  }, IS_CANDIDATE);
   await page.waitForFunction(() => {
     const diagnostics = (window as Window & {
       __realWargameAwarenessDebug?: AwarenessDiagnostics;
@@ -93,12 +141,20 @@ const MINIMUM_SCENE_SAMPLE_COUNT = 25;
   });
   await expect(page.locator('#pause-toggle')).toHaveAttribute('aria-pressed', 'true');
   await page.waitForTimeout(500);
-  await startBrowserTiming(page);
 
+  const initialReport = await downloadPerformanceReport(page);
+  const initialDanger = readSoldierDangerDiagnostics(initialReport);
+  if (IS_CANDIDATE) {
+    expect(classifiedThreatCount).toBeGreaterThanOrEqual(3);
+    expect(initialDanger, 'candidate performance report must publish SoldierDangerField diagnostics').not.toBeNull();
+    expect(initialDanger?.geometryBuildCount ?? 0).toBeGreaterThanOrEqual(3);
+  }
+
+  await startBrowserTiming(page);
   const dynamicUpdateMs: number[] = [];
   for (let step = 0; step < UPDATE_COUNT; step += 1) {
     const elapsed = await page.evaluate((currentStep) => {
-      const api = window.__realWargameCombatTacticalVisualQa;
+      const api = window.__realWargameCombatTacticalVisualQa as unknown as ExtendedCombatVisualApi | undefined;
       if (!api) throw new Error('Combat tactical visual QA API is unavailable.');
       const startedAt = performance.now();
       api.stepDangerPerformanceDynamicUpdate(currentStep);
@@ -107,25 +163,48 @@ const MINIMUM_SCENE_SAMPLE_COUNT = 25;
     dynamicUpdateMs.push(elapsed);
     await page.waitForTimeout(UPDATE_INTERVAL_MS);
   }
-  await page.waitForTimeout(2_500);
+  await page.waitForTimeout(500);
   const browserTiming = await stopBrowserTiming(page);
 
-  const downloadPromise = page.waitForEvent('download');
-  await page.evaluate(() => {
-    const button = document.querySelector<HTMLElement>('[data-workspace-file-action="performance"]');
-    if (!button) throw new Error('Performance report control is missing.');
-    button.click();
-  });
-  const download = await downloadPromise;
-  const downloadedPath = await download.path();
-  if (!downloadedPath) throw new Error('Performance report download path is unavailable.');
-  const report = JSON.parse(readFileSync(downloadedPath, 'utf8')) as PerformanceReport;
-  assertBuildIdentity(report);
+  const afterRescoreReport = await downloadPerformanceReport(page);
+  const afterRescoreDanger = readSoldierDangerDiagnostics(afterRescoreReport);
+  if (IS_CANDIDATE) {
+    expect(afterRescoreDanger).not.toBeNull();
+    expect(afterRescoreDanger?.geometryBuildCount).toBe(initialDanger?.geometryBuildCount);
+    expect(afterRescoreDanger?.fullMapScanCount).toBe(initialDanger?.fullMapScanCount);
+    expect(afterRescoreDanger?.fieldBuildCount ?? 0).toBeGreaterThan(initialDanger?.fieldBuildCount ?? 0);
+  }
+
+  if (IS_CANDIDATE) {
+    await page.evaluate(() => {
+      const api = window.__realWargameCombatTacticalVisualQa as unknown as ExtendedCombatVisualApi | undefined;
+      if (!api?.stepDangerPerformanceGeometryUpdate) throw new Error('Candidate geometry update API is unavailable.');
+      api.stepDangerPerformanceGeometryUpdate(1);
+    });
+    await page.waitForTimeout(750);
+  }
+  const finalReport = await downloadPerformanceReport(page);
+  const afterGeometryMoveDanger = readSoldierDangerDiagnostics(finalReport);
+  if (IS_CANDIDATE) {
+    expect(afterGeometryMoveDanger).not.toBeNull();
+    expect(afterGeometryMoveDanger?.geometryBuildCount).toBe((afterRescoreDanger?.geometryBuildCount ?? 0) + 1);
+    expect(afterGeometryMoveDanger?.fullMapScanCount).toBe((afterRescoreDanger?.fullMapScanCount ?? 0) + 1);
+    expect(afterGeometryMoveDanger?.fieldBuildCount ?? 0).toBeGreaterThan(afterRescoreDanger?.fieldBuildCount ?? 0);
+  }
 
   const awareness = await page.evaluate(() => (
     window as Window & { __realWargameAwarenessDebug?: AwarenessDiagnostics }
   ).__realWargameAwarenessDebug ?? null);
-  const summary = summarize(report, awareness, browserTiming, dynamicUpdateMs);
+  const dangerEvidence = IS_CANDIDATE
+    ? buildDangerEvidence(
+        classifiedThreatCount,
+        initialDanger,
+        afterRescoreDanger,
+        afterGeometryMoveDanger,
+        finalReport,
+      )
+    : null;
+  const summary = summarize(finalReport, awareness, browserTiming, dynamicUpdateMs, dangerEvidence);
   mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
   writeFileSync(OUTPUT_PATH, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
   console.log(JSON.stringify(summary, null, 2));
@@ -202,6 +281,56 @@ async function stopBrowserTiming(page: Page): Promise<BrowserTimingResult> {
   });
 }
 
+async function downloadPerformanceReport(page: Page): Promise<PerformanceReport> {
+  const downloadPromise = page.waitForEvent('download');
+  await page.evaluate(() => {
+    const button = document.querySelector<HTMLElement>('[data-workspace-file-action="performance"]');
+    if (!button) throw new Error('Performance report control is missing.');
+    button.click();
+  });
+  const download = await downloadPromise;
+  const downloadedPath = await download.path();
+  if (!downloadedPath) throw new Error('Performance report download path is unavailable.');
+  const report = JSON.parse(readFileSync(downloadedPath, 'utf8')) as PerformanceReport;
+  assertBuildIdentity(report);
+  return report;
+}
+
+function readSoldierDangerDiagnostics(report: PerformanceReport): SoldierDangerDiagnostics | null {
+  const value = report.computation?.soldierDangerField;
+  if (!value || typeof value !== 'object') return null;
+  return value as SoldierDangerDiagnostics;
+}
+
+function buildDangerEvidence(
+  classifiedThreatCount: number,
+  initial: SoldierDangerDiagnostics | null,
+  afterRescore: SoldierDangerDiagnostics | null,
+  afterGeometryMove: SoldierDangerDiagnostics | null,
+  report: PerformanceReport,
+): DangerFieldPerformanceEvidence {
+  expect(initial).not.toBeNull();
+  expect(afterRescore).not.toBeNull();
+  expect(afterGeometryMove).not.toBeNull();
+  const initialValue = initial as SoldierDangerDiagnostics;
+  const afterRescoreValue = afterRescore as SoldierDangerDiagnostics;
+  const afterGeometryMoveValue = afterGeometryMove as SoldierDangerDiagnostics;
+  const cellCount = Math.max(1, (report.scene?.mapWidthCells ?? 0) * (report.scene?.mapHeightCells ?? 0));
+  return {
+    classifiedThreatCount,
+    initial: initialValue,
+    afterRescore: afterRescoreValue,
+    afterGeometryMove: afterGeometryMoveValue,
+    rescoreGeometryBuildDelta: afterRescoreValue.geometryBuildCount - initialValue.geometryBuildCount,
+    rescoreFieldBuildDelta: afterRescoreValue.fieldBuildCount - initialValue.fieldBuildCount,
+    rescoreFullMapScanDelta: afterRescoreValue.fullMapScanCount - initialValue.fullMapScanCount,
+    geometryMoveBuildDelta: afterGeometryMoveValue.geometryBuildCount - afterRescoreValue.geometryBuildCount,
+    geometryMoveFieldBuildDelta: afterGeometryMoveValue.fieldBuildCount - afterRescoreValue.fieldBuildCount,
+    geometryMoveFullMapScanDelta: afterGeometryMoveValue.fullMapScanCount - afterRescoreValue.fullMapScanCount,
+    maximumRetainedTypedArrayBytes: cellCount * (24 * 9 + 12 * 7),
+  };
+}
+
 function assertBuildIdentity(report: PerformanceReport): void {
   expect(report.version).toBe('performance-report-v4');
   expect(report.build?.performanceContractVersion).toBe('performance-report-v4');
@@ -216,6 +345,7 @@ function summarize(
   awareness: AwarenessDiagnostics | null,
   browserTiming: BrowserTimingResult,
   dynamicUpdates: number[],
+  soldierDangerField: DangerFieldPerformanceEvidence | null,
 ): BrowserPerformanceSummary {
   const lastSample = report.samples.at(-1);
   const windowEnd = lastSample?.tMs ?? 0;
@@ -248,6 +378,7 @@ function summarize(
     longTasksOver100Ms: browserTiming.longTaskMs.filter((value) => value > 100).length,
     awareness,
     computation: report.computation ?? null,
+    soldierDangerField,
   };
 }
 

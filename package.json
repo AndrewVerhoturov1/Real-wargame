@@ -55,6 +55,7 @@
     "spatial-index:smoke": "node scripts/map_object_spatial_index_smoke.mjs",
     "visibility-probe:smoke": "node scripts/visibility_probe_cache_smoke.mjs",
     "awareness-field:smoke": "node scripts/awareness_field_cache_smoke.mjs",
+    "danger-route-cost-parity:smoke": "node scripts/danger_route_cost_parity_smoke.mjs && node scripts/danger_route_cost_cache_smoke.mjs",
     "danger-layer-performance:smoke": "node scripts/danger_layer_performance_smoke.mjs",
     "danger-layer-movement-performance:smoke": "node scripts/danger_layer_movement_performance_smoke.mjs",
     "lab:manager": "node scripts/real_wargame_lab_manager.mjs",

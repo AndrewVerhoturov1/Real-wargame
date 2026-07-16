@@ -112,7 +112,7 @@ function assertLongTaskAttribution() {
 function assertSelectedOnly(selected) {
   if (!selected) return;
   const counters = selected.counters ?? {};
-  if (counters.observerRelativeMemoryChanged !== true) failures.push('selected-only did not exercise observer-relative memory changes');
+  if (counters.worldSpaceMemoryStable !== true) failures.push('selected-only changed world-space threat memory during observer-only movement');
   for (const name of [
     'workerJobsStartedDelta',
     'workerThreatRelativeGeometryBuildDelta',

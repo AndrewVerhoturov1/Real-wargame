@@ -27,6 +27,7 @@ export function buildUnitTacticalRouteContext(unit: UnitModel): TacticalRouteCon
     unitId: unit.id,
     originX: unit.position.x,
     originY: unit.position.y,
+    posture: unit.behaviorRuntime.posture,
     knowledgeRevision: unit.tacticalKnowledge.revision,
     knownThreats: unit.tacticalKnowledge.threats.map((threat) => ({
       id: threat.id,
@@ -46,6 +47,7 @@ export function buildUnitTacticalRouteContext(unit: UnitModel): TacticalRouteCon
       rangeCells: threat.rangeCells,
       minRangeCells: threat.minRangeCells,
       falloffPercent: threat.falloffPercent,
+      fireThreatClass: threat.fireThreatClass ?? null,
     })),
   };
 }

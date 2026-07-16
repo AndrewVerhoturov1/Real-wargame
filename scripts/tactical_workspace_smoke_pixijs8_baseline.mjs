@@ -387,11 +387,18 @@ expectIncludes('src/ui/WorkspaceTooltipGuard.ts', [
 expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
   'buildAwarenessField', 'buildBestSafePositions', 'buildRouteKey',
   'getDirectionalTacticalField', 'readDirectionalTacticalCell',
-  'readDirectionalProtectionForBearing', 'readDirectionalExposureForBearing',
   'buildAwarenessKnowledgeKey', 'KNOWLEDGE_CONFIDENCE_BUCKET', 'KNOWLEDGE_UNCERTAINTY_BUCKET',
   'evaluateAwarenessFieldCell', 'getAwarenessStaticField', 'evaluateRouteDangerFromField',
   'reverseSlopeQuality', 'terrainConcealment', 'silhouetteRisk',
 ]);
+expectIncludes('src/core/knowledge/SoldierDangerField.ts', [
+  'getSoldierDangerField', 'getSoldierDangerFieldDiagnostics',
+  'getThreatRelativeCoverField', 'getDirectionalTerrainSectorBasis',
+  'readDirectionalBasisValue',
+  'fireThreatClassForAggregation', "'rifle_fire'", "'machine_gun_fire'",
+  'THREAT_GEOMETRY_CACHE_LIMIT', 'FIELD_CACHE_LIMIT', 'cachedThreatGeometryCount', 'retainedTypedArrayBytes',
+]);
+expectExcludes('src/core/knowledge/SoldierDangerField.ts', ['pixi.js', '../rendering/', '../ui/']);
 expectExcludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
   'const orderCellX', 'const orderCellY',
   'evaluateSmallArmsCover', 'getCachedCover', 'coverCacheByMap', 'buildMapHash',

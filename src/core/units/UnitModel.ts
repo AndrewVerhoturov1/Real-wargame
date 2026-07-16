@@ -45,6 +45,7 @@ export type UnitSideInput = UnitSide | 'player';
 export type UnitType = 'infantry_squad' | 'scout_team' | 'support_team';
 export type UnitHeldItem = 'long_item' | 'support_item' | 'short_item';
 export type ThreatMemorySource = 'seen' | 'heard' | 'reported' | 'fire_pressure';
+export type FireThreatClass = 'rifle_fire' | 'machine_gun_fire';
 
 export interface KnownThreatMemory {
   id: string;
@@ -70,6 +71,7 @@ export interface KnownThreatMemory {
   visibleNow: boolean;
   lastSeenSeconds: number;
   lastUpdatedSeconds: number;
+  fireThreatClass?: FireThreatClass | null;
   evidenceCount?: number;
   lastEvidenceSeconds?: number;
 }

@@ -1,3 +1,9 @@
+import type { UnitPosture } from '../behavior/BehaviorModel';
+import {
+  getSoldierDangerField,
+  type SoldierDangerField,
+  type SoldierDangerFieldContext,
+} from '../knowledge/SoldierDangerField';
 import type { TacticalMap } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
 import { buildNavigationGrid } from '../pathfinding/GridNavigation';
@@ -5,10 +11,12 @@ import {
   getDirectionalTacticalField,
   type DirectionalTacticalField,
 } from '../terrain/DirectionalTacticalField';
+import { getDirectionalTerrainSectorBasis } from '../terrain/DirectionalTerrainSectorBasis';
 import {
   getDirectionalTerrainStaticGrid,
   type DirectionalTerrainStaticGrid,
 } from '../terrain/DirectionalTerrainStaticGrid';
+import type { FireThreatClass } from '../units/UnitModel';
 import type { NavigationProfile, NavigationTerrainCostKey } from './NavigationProfiles';
 
 const mapIdentityByMap = new WeakMap<TacticalMap, number>();
@@ -32,12 +40,14 @@ export interface TacticalRouteKnownThreat {
   readonly rangeCells?: number;
   readonly minRangeCells?: number;
   readonly falloffPercent?: number;
+  readonly fireThreatClass?: FireThreatClass | null;
 }
 
 export interface TacticalRouteContext {
   readonly unitId: string;
   readonly originX?: number;
   readonly originY?: number;
+  readonly posture?: UnitPosture;
   readonly knowledgeRevision: number;
   readonly knownThreats: readonly TacticalRouteKnownThreat[];
   readonly exposureRevision?: number;
@@ -96,6 +106,7 @@ interface StaticRouteCostField {
 
 interface DynamicRouteCostField {
   readonly key: string;
+  readonly dangerFieldKey: string;
   readonly dangerCost: Float32Array;
   readonly exposureCost: Float32Array;
   readonly directionalTerrainCost: Float32Array;
@@ -113,6 +124,7 @@ export interface RouteCostFields {
   readonly profileId: string;
   readonly profileRevision: number;
   readonly knowledgeRevision: number;
+  readonly dangerFieldKey: string;
   readonly passable: Uint8Array;
   readonly terrainKeys: readonly NavigationTerrainCostKey[];
   readonly terrainCost: Float32Array;
@@ -192,18 +204,41 @@ export function getRouteCostFields(
   }
 
   const knowledgeRevision = tacticalContext?.knowledgeRevision ?? 0;
+  const knownThreats = tacticalContext?.knownThreats ?? [];
+  const hasKnownThreats = knownThreats.length > 0;
+  const hasOrigin = Number.isFinite(tacticalContext?.originX) && Number.isFinite(tacticalContext?.originY);
+  const needsDanger = hasKnownThreats && profile.dangerWeight > 0;
+  const needsDirectionalTerrain = hasKnownThreats && hasOrigin && hasDirectionalTerrainWeights(profile);
+  const usesTacticalKnowledge = needsDanger || needsDirectionalTerrain;
+  const effectiveKnowledgeRevision = usesTacticalKnowledge ? knowledgeRevision : 0;
+  const directionalBasis = needsDanger ? getDirectionalTerrainSectorBasis(map) : undefined;
+  const tacticalField = needsDirectionalTerrain
+    ? getDirectionalTacticalField(map, {
+      unitId: tacticalContext?.unitId ?? 'route',
+      originX: tacticalContext?.originX ?? 0,
+      originY: tacticalContext?.originY ?? 0,
+      knowledgeRevision,
+      threats: knownThreats,
+    })
+    : null;
+  const dangerContext = needsDanger ? buildSoldierDangerFieldContext(tacticalContext) : null;
+  const dangerField = dangerContext
+    ? getSoldierDangerField(map, dangerContext, { directionalBasis })
+    : null;
   const dynamicKey = [
     staticKey,
-    tacticalContext?.unitId ?? 'none',
-    quantizedCoordinate(tacticalContext?.originX),
-    quantizedCoordinate(tacticalContext?.originY),
-    knowledgeRevision,
-    tacticalContext?.exposureRevision ?? 0,
+    needsDirectionalTerrain ? tacticalContext?.unitId ?? 'route' : 'none',
+    needsDirectionalTerrain ? quantizedCoordinate(tacticalContext?.originX) : 'none',
+    needsDirectionalTerrain ? quantizedCoordinate(tacticalContext?.originY) : 'none',
+    effectiveKnowledgeRevision,
+    profile.exposureWeight > 0 ? tacticalContext?.exposureRevision ?? 0 : 0,
     tacticalContext?.territoryRevision ?? 0,
+    dangerField?.key ?? 'no-danger',
+    tacticalField?.key ?? 'no-directional',
   ].join(':');
   let dynamicField = cache.dynamicFields.get(dynamicKey);
   if (!dynamicField) {
-    dynamicField = buildDynamicField(map, profile, tacticalContext, staticField, dynamicKey, cache);
+    dynamicField = buildDynamicField(map, profile, tacticalContext, dangerField, tacticalField, staticField, dynamicKey, cache);
     cache.dynamicFields.set(dynamicKey, dynamicField);
     trimCache(cache.dynamicFields, 12);
   }
@@ -234,7 +269,8 @@ export function getRouteCostFields(
     height: map.height,
     profileId: profile.id,
     profileRevision: profile.revision,
-    knowledgeRevision,
+    knowledgeRevision: effectiveKnowledgeRevision,
+    dangerFieldKey: dynamicField.dangerFieldKey,
     passable: staticField.passable,
     terrainKeys: staticField.terrainKeys,
     terrainCost: staticField.terrainCost,
@@ -258,7 +294,7 @@ export function getRouteCostFields(
   cache.combinedFields.set(combinedKey, combined);
   trimCache(cache.combinedFields, 12);
   cache.diagnostics.profileRevision = profile.revision;
-  cache.diagnostics.knowledgeRevision = knowledgeRevision;
+  cache.diagnostics.knowledgeRevision = effectiveKnowledgeRevision;
   return combined;
 }
 
@@ -355,6 +391,8 @@ function buildDynamicField(
   map: TacticalMap,
   profile: NavigationProfile,
   tacticalContext: TacticalRouteContext | undefined,
+  dangerField: SoldierDangerField | null,
+  tacticalField: DirectionalTacticalField | null,
   staticField: StaticRouteCostField,
   key: string,
   cache: RouteCostFieldCache,
@@ -367,16 +405,6 @@ function buildDynamicField(
   const enemyDistanceCost = new Float32Array(count);
   const territoryCost = new Float32Array(count);
   const knownThreats = tacticalContext?.knownThreats ?? [];
-  const hasOrigin = Number.isFinite(tacticalContext?.originX) && Number.isFinite(tacticalContext?.originY);
-  const tacticalField = hasOrigin
-    ? getDirectionalTacticalField(map, {
-      unitId: tacticalContext?.unitId ?? 'route',
-      originX: tacticalContext?.originX ?? 0,
-      originY: tacticalContext?.originY ?? 0,
-      knowledgeRevision: tacticalContext?.knowledgeRevision ?? 0,
-      threats: knownThreats,
-    })
-    : null;
   const directionalAvailable = Boolean(
     tacticalField
     && tacticalField.threatField.totalWeight > 1e-6
@@ -394,10 +422,8 @@ function buildDynamicField(
         const centerX = x + 0.5;
         const centerY = y + 0.5;
 
-        if (knownThreats.length > 0 && profile.dangerWeight > 0) {
-          let knownDanger = 0;
-          for (const threat of knownThreats) knownDanger += evaluateKnownThreatAt(threat, centerX, centerY);
-          dangerCost[index] = profile.dangerWeight * Math.min(4, knownDanger);
+        if (dangerField && profile.dangerWeight > 0) {
+          dangerCost[index] = profile.dangerWeight * (dangerField.danger[index] ?? 0) / 100;
         }
 
         if (directionalAvailable && tacticalField) {
@@ -410,6 +436,7 @@ function buildDynamicField(
 
   return {
     key,
+    dangerFieldKey: dangerField?.key ?? '',
     dangerCost,
     exposureCost,
     directionalTerrainCost,
@@ -419,7 +446,7 @@ function buildDynamicField(
     primaryThreatSector: tacticalField?.threatField.primarySector ?? -1,
     threatSectorWeights: tacticalField?.threatField.normalizedSectorWeights ?? new Float32Array(8),
     availability: {
-      danger: Boolean(tacticalContext),
+      danger: Boolean(dangerField && knownThreats.length > 0),
       exposure: false,
       directionalTerrain: directionalAvailable,
       cover: true,
@@ -525,42 +552,38 @@ function estimateLocalSlope(map: TacticalMap, x: number, y: number): number {
   return maximum;
 }
 
-function evaluateKnownThreatAt(threat: TacticalRouteKnownThreat, x: number, y: number): number {
-  const confidence = clamp01(threat.confidence / 100);
-  const intensity = clamp01(Math.max(threat.strength, threat.suppression) / 100);
-  if (confidence <= 0 || intensity <= 0) return 0;
 
-  if (threat.mode === 'directional_fire') {
-    const dx = x - threat.x;
-    const dy = y - threat.y;
-    const distance = Math.hypot(dx, dy);
-    const minimum = Math.max(0, threat.minRangeCells ?? 0);
-    const range = Math.max(minimum + 0.001, (threat.rangeCells ?? 0) + threat.uncertaintyCells);
-    if (distance < minimum || distance > range) return 0;
-    const bearing = normalizeDegrees(Math.atan2(dy, dx) * 180 / Math.PI);
-    const direction = normalizeDegrees(threat.directionDegrees ?? 0);
-    const arc = Math.max(1, Math.min(360, threat.arcDegrees ?? 45));
-    if (angularDifference(bearing, direction) > arc / 2 + threat.uncertaintyCells * 2) return 0;
-    return confidence * intensity * Math.max(0.1, 1 - distance / range);
-  }
-
-  const dx = x - threat.x;
-  const dy = y - threat.y;
-  if (threat.widthCells > 0 && threat.heightCells > 0) {
-    const radians = -(threat.rotationDegrees ?? 0) * Math.PI / 180;
-    const localX = dx * Math.cos(radians) - dy * Math.sin(radians);
-    const localY = dx * Math.sin(radians) + dy * Math.cos(radians);
-    const halfWidth = threat.widthCells / 2 + threat.uncertaintyCells;
-    const halfHeight = threat.heightCells / 2 + threat.uncertaintyCells;
-    if (Math.abs(localX) > halfWidth || Math.abs(localY) > halfHeight) return 0;
-    const edgeRatio = Math.max(Math.abs(localX) / Math.max(0.001, halfWidth), Math.abs(localY) / Math.max(0.001, halfHeight));
-    return confidence * intensity * Math.max(0.15, 1 - edgeRatio);
-  }
-
-  const radius = Math.max(0.25, threat.radiusCells + threat.uncertaintyCells);
-  const distance = Math.hypot(dx, dy);
-  if (distance > radius) return 0;
-  return confidence * intensity * Math.max(0.15, 1 - distance / radius);
+function buildSoldierDangerFieldContext(
+  tacticalContext: TacticalRouteContext | undefined,
+): SoldierDangerFieldContext | null {
+  if (!tacticalContext) return null;
+  return {
+    unitId: tacticalContext.unitId,
+    originX: tacticalContext.originX ?? 0,
+    originY: tacticalContext.originY ?? 0,
+    posture: tacticalContext.posture ?? 'standing',
+    knowledgeRevision: tacticalContext.knowledgeRevision,
+    threats: tacticalContext.knownThreats.map((threat) => ({
+      id: threat.id,
+      mode: threat.mode,
+      x: threat.x,
+      y: threat.y,
+      radiusCells: threat.radiusCells,
+      widthCells: threat.widthCells,
+      heightCells: threat.heightCells,
+      rotationDegrees: threat.rotationDegrees,
+      strength: threat.strength,
+      suppression: threat.suppression,
+      confidence: threat.confidence,
+      uncertaintyCells: threat.uncertaintyCells,
+      directionDegrees: threat.directionDegrees ?? 0,
+      arcDegrees: threat.arcDegrees ?? 45,
+      rangeCells: threat.rangeCells ?? Math.max(0.5, threat.radiusCells),
+      minRangeCells: threat.minRangeCells ?? 0,
+      falloffPercent: threat.falloffPercent ?? 0,
+      fireThreatClass: threat.fireThreatClass ?? null,
+    })),
+  };
 }
 
 function quantizedCoordinate(value: number | undefined): string {
@@ -584,16 +607,3 @@ function trimCache<T>(cache: Map<string, T>, maximum: number): void {
   }
 }
 
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
-}
-
-function normalizeDegrees(value: number): number {
-  const normalized = value % 360;
-  return normalized < 0 ? normalized + 360 : normalized;
-}
-
-function angularDifference(left: number, right: number): number {
-  const difference = Math.abs(normalizeDegrees(left) - normalizeDegrees(right));
-  return Math.min(difference, 360 - difference);
-}

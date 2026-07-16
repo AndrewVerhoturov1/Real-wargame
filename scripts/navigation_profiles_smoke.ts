@@ -259,7 +259,7 @@ function verifyCostFieldCacheAndHoverReads(): void {
   getRouteCostFields(map, profile, { ...context, knowledgeRevision: 2 }, cache);
   diagnostics = getRouteCostFieldDiagnostics(cache);
   assert.equal(diagnostics.staticCostBuildCount, 1);
-  assert.equal(diagnostics.dynamicCostBuildCount, 2);
+  assert.equal(diagnostics.dynamicCostBuildCount, 1, 'empty threat knowledge revisions must not rebuild dynamic route cost');
 }
 
 function verifyReplanPolicy(): void {
