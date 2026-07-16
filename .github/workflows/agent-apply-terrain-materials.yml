@@ -1,26 +1,31 @@
 name: Apply Verified Terrain Materials Patch
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/terrain-profiles-performance-followup-v1
+      - real-wargame-preview
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   contents: write
 
 concurrency:
   group: agent-terrain-materials-apply
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   apply-and-verify:
-    if: github.event.head_commit.message == 'chore: apply verified terrain materials patch'
+    if: github.event.pull_request.head.ref == 'agent/terrain-profiles-performance-followup-v1'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Reconstruct and verify source patch
         env:
@@ -110,7 +115,7 @@ jobs:
       - name: Publish one clean exact-base commit
         env:
           BRANCH_NAME: agent/terrain-profiles-performance-followup-v1
-          EXPECTED_REMOTE_HEAD: ${{ github.sha }}
+          EXPECTED_REMOTE_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
