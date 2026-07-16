@@ -1,0 +1,83 @@
+name: Fix PR127 performance harness ownership
+
+on:
+  push:
+    branches:
+      - agent/per-unit-ai-scheduler-v1
+    paths:
+      - .github/workflows/agent-pr127-fix-harness.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix-harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/per-unit-ai-scheduler-v1
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Declare manual ownership for harness-controlled units
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/testing/DangerLayerMovementPerformanceHarness.ts')
+          text = path.read_text(encoding='utf-8')
+          creation_anchor = "      navigationProfileId: 'normal',\n    }]);"
+          creation_replacement = "      navigationProfileId: 'normal',\n      aiControl: 'manual',\n    }]);"
+          if "      aiControl: 'manual',\n" not in text:
+              if creation_anchor not in text:
+                  raise SystemExit('fixture creation anchor missing')
+              text = text.replace(creation_anchor, creation_replacement, 1)
+
+          ownership_anchor = "    state.units.push(unit);\n  }\n}\n\nfunction prepareScenario"
+          ownership_replacement = "    state.units.push(unit);\n  }\n\n  for (const unit of state.units) unit.aiControl = 'manual';\n}\n\nfunction prepareScenario"
+          if "for (const unit of state.units) unit.aiControl = 'manual';" not in text:
+              if ownership_anchor not in text:
+                  raise SystemExit('fixture ownership anchor missing')
+              text = text.replace(ownership_anchor, ownership_replacement, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+          git diff --check
+          grep -q "aiControl: 'manual'" src/testing/DangerLayerMovementPerformanceHarness.ts
+          grep -q "unit.aiControl = 'manual'" src/testing/DangerLayerMovementPerformanceHarness.ts
+      - run: npm ci
+      - name: Verify scheduler ownership contract
+        shell: bash
+        run: set -o pipefail; npm run ai-scheduler:smoke 2>&1 | tee ai-scheduler-smoke.log
+      - name: Capture editor smoke
+        shell: bash
+        run: |
+          set +e
+          npm run editor:smoke > editor-smoke.log 2>&1
+          echo $? > editor-smoke.exit
+          tail -n 160 editor-smoke.log
+          exit 0
+      - name: Upload focused logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr127-harness-editor-diagnostic
+          path: |
+            ai-scheduler-smoke.log
+            editor-smoke.log
+            editor-smoke.exit
+          if-no-files-found: warn
+      - name: Publish harness ownership fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add src/testing/DangerLayerMovementPerformanceHarness.ts
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'fix: isolate scripted danger performance fixtures'
+          git push origin HEAD:agent/per-unit-ai-scheduler-v1
