@@ -102,6 +102,11 @@ function verifySceneRoundTrip(): void {
   assert.equal(restoredUnit.playerCommand?.intent.presetId, 'assault');
   assert.equal(restoredUnit.playerCommand?.intent.navigationProfileId, 'attack');
   assert.deepEqual(restoredUnit.playerCommand?.target, { x: 6.5, y: 2.5 });
+  const restoredBlackboard = buildBlackboardForUnit(restored, restoredUnit);
+  assert.equal(restoredBlackboard.player_order_preset, 'assault');
+  assert.equal(restoredBlackboard.player_order_navigation_profile, 'attack');
+  assert.equal(restoredBlackboard.player_order_contact_policy, 'press_attack');
+  assert.equal(restoredBlackboard.player_order_fire_policy, 'fire_at_will');
 }
 
 function verifyGestureContract(): void {
