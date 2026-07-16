@@ -15,10 +15,7 @@ export class TacticalOrderStatusCard {
     this.root.className = 'tactical-order-card';
     this.root.dataset.role = 'tactical-order-status';
     this.root.setAttribute('aria-live', 'polite');
-    const host = document.querySelector<HTMLElement>('.workspace-route-controls')
-      ?? document.querySelector<HTMLElement>('.tactical-workspace-bottom-bar')
-      ?? document.body;
-    host.append(this.root);
+    document.body.append(this.root);
     this.update(true);
   }
 
