@@ -9,7 +9,6 @@ import {
   type MovementProfileSource,
   type ResolvedMovementProfile,
 } from '../movement/MovementProfileContract';
-import type { MoveOrder } from '../orders/MoveOrder';
 import type { UnitModel } from '../units/UnitModel';
 
 export interface MovementProfileRuntimeResolution {
@@ -107,7 +106,6 @@ export function reconcileMovementProfileRuntime(
     order.movementProfileOwnerToken = ownerToken;
     order.movementProfileDefinitionRevision = definitionRevision;
     order.movementProfileSelectionRevision = selectionRevision;
-    delete (order as MoveOrder & { movementProfileRevision?: number }).movementProfileRevision;
   }
 
   return { resolved, definitionRevision, selectionRevision };
