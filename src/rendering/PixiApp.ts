@@ -1,5 +1,6 @@
 import { Application, Container, type Ticker } from 'pixi.js';
 import { PerformanceMonitor } from '../core/debug/PerformanceMonitor';
+import { measurePerformancePhase } from '../core/debug/PerformancePhases';
 import { getCell, gridToCellLabel, type MapCell } from '../core/map/MapModel';
 import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
@@ -158,9 +159,13 @@ export class PixiTacticalBoardApp {
 
   private readonly tick = (ticker: Ticker): void => {
     if (!this.getPaused()) {
-      tickSimulation(this.state, ticker.elapsedMS / 1000);
+      measurePerformancePhase('ticker.simulation', () => {
+        tickSimulation(this.state, ticker.elapsedMS / 1000);
+      });
     }
-    this.renderFrame();
+    measurePerformancePhase('ticker.render-frame', () => {
+      this.renderFrame();
+    });
   };
 
   destroy(): void {
@@ -238,24 +243,30 @@ export class PixiTacticalBoardApp {
 
   private renderFrame(): void {
     const renderStartedAt = performance.now();
-    this.renderEditableMapLayerIfNeeded(false);
+    measurePerformancePhase('render.map', () => this.renderEditableMapLayerIfNeeded(false));
 
     const visibleUnits = this.state.editor.layers.units ? this.state.units : [];
     const visibleSelectedIds = this.state.editor.layers.units ? this.state.selectedUnitIds : [];
 
     if (this.showViewCones) {
-      this.viewConeRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
+      measurePerformancePhase('render.view-cones', () => {
+        this.viewConeRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
+      });
     }
 
-    this.awarenessHeatmapRenderer.render(this.state);
-    this.routeCostOverlayRenderer.render(this.state);
-    this.orderRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
-    this.overlayRenderer.render(this.state, this.showGrid, this.state.editor.layers.pressureZones);
-    this.coverDirectionRenderer.render(this.state);
-    this.threatEditorRenderer.render(this.state);
-    this.unitRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
-    this.htmlOverlayRenderer.render(this.state, this.locale, this.showHeightLabels);
-    this.updateDebugPanelIfNeeded(false);
+    measurePerformancePhase('render.awareness-heatmap', () => this.awarenessHeatmapRenderer.render(this.state));
+    measurePerformancePhase('render.route-cost', () => this.routeCostOverlayRenderer.render(this.state));
+    measurePerformancePhase('render.orders', () => this.orderRenderer.render(this.state.map, visibleUnits, visibleSelectedIds));
+    measurePerformancePhase('render.overlay', () => {
+      this.overlayRenderer.render(this.state, this.showGrid, this.state.editor.layers.pressureZones);
+    });
+    measurePerformancePhase('render.cover-direction', () => this.coverDirectionRenderer.render(this.state));
+    measurePerformancePhase('render.threat-editor', () => this.threatEditorRenderer.render(this.state));
+    measurePerformancePhase('render.units', () => this.unitRenderer.render(this.state.map, visibleUnits, visibleSelectedIds));
+    measurePerformancePhase('render.html-overlay', () => {
+      this.htmlOverlayRenderer.render(this.state, this.locale, this.showHeightLabels);
+    });
+    measurePerformancePhase('render.debug-panel', () => this.updateDebugPanelIfNeeded(false));
     this.performanceMonitor.recordFrame(this.state, this.camera.zoom, performance.now() - renderStartedAt, this.showGrid);
   }
 
