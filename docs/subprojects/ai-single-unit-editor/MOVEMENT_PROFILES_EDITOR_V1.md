@@ -84,7 +84,7 @@ sprint
 
 The built-in `crouched_move` profile uses `preferredGait: crouch_walk`. The Russian editor label remains `Пригнувшись`.
 
-Older branch-local saved data may contain the former value `crouch`. Strict import accepts that one legacy value before normalization and migrates it to `crouch_walk`. Registry state and new JSON exports contain canonical values only; they never serialize `preferredGait: crouch`.
+Older branch-local saved data may contain the former value `crouch`. Strict import accepts that one legacy value before normalization and migrates it to `crouch_walk`. This compatibility value is accepted only at the import boundary; it is not part of `MovementGait`, editor options, registry state or serialization. Registry state and new JSON exports contain canonical values only; they never serialize `preferredGait: crouch`.
 
 Unknown gait values remain transactional import errors and do not replace the current registry.
 
