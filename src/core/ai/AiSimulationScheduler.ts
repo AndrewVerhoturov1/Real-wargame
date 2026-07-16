@@ -93,4 +93,3 @@ export function tickAiSimulationScheduler(
 export function isSimulationAiControlledUnit(unit: UnitModel): boolean {
   return isUnitGraphAiControlled(unit) && isUnitCombatCapable(unit);
 }
-
