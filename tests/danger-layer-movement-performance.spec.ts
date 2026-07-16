@@ -215,7 +215,7 @@ const WORKER_GEOMETRY_COUNTERS = [
 
 test.describe.configure({ mode: 'serial' });
 
-test('selected unit movement changes observer-relative memory but performs local-only updates', async ({ page }) => {
+test('selected unit movement preserves world-space threat memory and performs local-only updates', async ({ page }) => {
   await openHarness(page);
   await startScenarioPaused(page, 'selected-only');
   await waitForWorkerSettled(page);
@@ -236,13 +236,13 @@ test('selected unit movement changes observer-relative memory but performs local
   const after = await snapshot(page);
   const afterMovement = requireMovement(after);
 
-  const observerRelativeMemoryChanged = angularDifference(
+  const worldSpaceMemoryStable = angularDifference(
     after.subjectiveThreatDirectionDegrees ?? 0,
     before.subjectiveThreatDirectionDegrees ?? 0,
-  ) > 0.5 || Math.abs(
+  ) <= 0.5 && Math.abs(
     (after.subjectiveThreatRangeCells ?? 0) - (before.subjectiveThreatRangeCells ?? 0),
-  ) > 0.1;
-  expect(observerRelativeMemoryChanged).toBe(true);
+  ) <= 0.1;
+  expect(worldSpaceMemoryStable).toBe(true);
   expect(after.lastRequestedCanonicalThreatKey).toBe(before.lastRequestedCanonicalThreatKey);
   expect(after.lastAppliedCanonicalThreatKey).toBe(before.lastAppliedCanonicalThreatKey);
   expect(after.lastRequestedWorldKey).toBe(before.lastRequestedWorldKey);
@@ -267,7 +267,7 @@ test('selected unit movement changes observer-relative memory but performs local
     before,
     after,
     counters: {
-      observerRelativeMemoryChanged,
+      worldSpaceMemoryStable,
       workerJobsStartedDelta: delta(afterMovement, beforeMovement, 'workerJobsStarted'),
       workerThreatRelativeGeometryBuildDelta: delta(afterMovement, beforeMovement, 'workerThreatRelativeGeometryBuilds'),
       workerDirectionalFieldBuildDelta: delta(afterMovement, beforeMovement, 'workerDirectionalFieldBuilds'),
