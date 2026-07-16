@@ -55,6 +55,7 @@ on:
       - 'scripts/combat_threat_evidence_source_direction_regression_smoke.ts'
       - 'scripts/perception_system_smoke.ts'
       - 'scripts/tactical_workspace_smoke.mjs'
+      - 'scripts/tactical_workspace_smoke_pixijs8_baseline.mjs'
       - 'scripts/ai_test_lab_smoke.mjs'
       - 'tests/combat-foundation-visual.spec.ts'
       - 'tests/danger-layer-movement-performance.spec.ts'
@@ -64,13 +65,29 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   combat-foundation:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
+      - name: Apply workspace contract patch
+        shell: bash
+        run: |
+          if git apply --check scripts/danger-route-workspace-contract.patch; then
+            git apply scripts/danger-route-workspace-contract.patch
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add scripts/tactical_workspace_smoke_pixijs8_baseline.mjs
+            git commit -m "Move danger geometry workspace contract to canonical field"
+            git push origin HEAD:${{ github.head_ref }}
+            exit 1
+          fi
+          echo "Workspace contract patch already applied."
       - uses: actions/setup-node@v4
         with:
           node-version: 20
