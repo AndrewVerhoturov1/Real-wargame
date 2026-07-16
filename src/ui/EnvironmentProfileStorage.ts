@@ -1,5 +1,5 @@
-import { EnvironmentProfileRegistry, createDefaultEnvironmentProfileRegistry } from './EnvironmentMaterialProfile';
-import { installEnvironmentProfileRegistry } from './EnvironmentProfileRuntime';
+import { EnvironmentProfileRegistry, createDefaultEnvironmentProfileRegistry } from '../core/map/EnvironmentMaterialProfile';
+import { installEnvironmentProfileRegistry } from '../core/map/EnvironmentProfileRuntime';
 
 export const ENVIRONMENT_PROFILE_STORAGE_KEY = 'real-wargame.environment-profiles.v1';
 let currentRegistry: EnvironmentProfileRegistry | null = null;

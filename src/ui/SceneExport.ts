@@ -12,7 +12,7 @@ import {
 import { replaceSceneAtRuntimeResolution } from '../core/simulation/ResolutionAwareScene';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { refreshAiTestLabSceneSnapshot } from '../core/testing/AiTestLabRuntime';
-import { getEnvironmentProfileRegistry, saveEnvironmentProfileRegistry } from '../core/map/EnvironmentProfileStorage';
+import { getEnvironmentProfileRegistry, saveEnvironmentProfileRegistry } from './EnvironmentProfileStorage';
 import type { UnitData, UnitModel } from '../core/units/UnitModel';
 
 export interface ExportedSceneData {

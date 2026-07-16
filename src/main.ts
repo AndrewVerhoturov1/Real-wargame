@@ -21,7 +21,7 @@ import {
   getEnvironmentProfileRegistry,
   saveEnvironmentProfileRegistry,
   subscribeEnvironmentProfileRegistry,
-} from './core/map/EnvironmentProfileStorage';
+} from './ui/EnvironmentProfileStorage';
 import type { PressureZoneData } from './core/pressure/PressureZone';
 import { createResolutionAwareInitialState } from './core/simulation/ResolutionAwareScene';
 import { initializeAiTestLabRuntime } from './core/testing/AiTestLabRuntime';

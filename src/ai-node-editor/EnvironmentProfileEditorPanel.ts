@@ -7,7 +7,7 @@ import {
   getEnvironmentProfileRegistry,
   saveEnvironmentProfileRegistry,
   subscribeEnvironmentProfileRegistry,
-} from '../core/map/EnvironmentProfileStorage';
+} from '../ui/EnvironmentProfileStorage';
 
 let registry = getEnvironmentProfileRegistry();
 let selectedProfileId = registry.activeProfileId;

@@ -29,7 +29,7 @@ Simulation never samples canvas pixels, texture colors, procedural noise or Pixi
 
 ## Registry and runtime
 
-`EnvironmentMaterialProfile.ts` owns versioned surface and vegetation definitions. Browser storage is isolated in `EnvironmentProfileStorage.ts`; core consumers read an immutable snapshot from `EnvironmentProfileRuntime.ts`.
+`EnvironmentMaterialProfile.ts` owns versioned surface and vegetation definitions. Browser persistence is isolated in `src/ui/EnvironmentProfileStorage.ts`; core consumers read an immutable snapshot from `EnvironmentProfileRuntime.ts` and never import DOM or localStorage APIs.
 
 The built-in profile defines:
 

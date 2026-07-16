@@ -8,7 +8,7 @@ import {
   ENVIRONMENT_PROFILE_STORAGE_KEY,
   loadEnvironmentProfileRegistry,
   saveEnvironmentProfileRegistry,
-} from '../src/core/map/EnvironmentProfileStorage';
+} from '../src/ui/EnvironmentProfileStorage';
 import { normalizeMap } from '../src/core/map/MapModel';
 import {
   buildAwarenessWorkerMapSnapshot,
@@ -170,6 +170,15 @@ assert.deepEqual(restoredWorkerMap.cells.map((cell) => [cell.surfaceMaterialId, 
   ['road', 'sparse_forest'], ['field', 'dense_forest'],
 ]);
 assert.equal(workerSnapshot.surfaceMaterialCodes.byteLength + workerSnapshot.vegetationMaterialCodes.byteLength, 8);
+
+const materialCoreSource = readFileSync('src/core/map/EnvironmentMaterialProfile.ts', 'utf8');
+const materialRuntimeSource = readFileSync('src/core/map/EnvironmentProfileRuntime.ts', 'utf8');
+const storageAdapterSource = readFileSync('src/ui/EnvironmentProfileStorage.ts', 'utf8');
+for (const coreSource of [materialCoreSource, materialRuntimeSource]) {
+  assert.doesNotMatch(coreSource, /\bwindow\b|\blocalStorage\b|\bStorage\b/, 'environment-profile core must remain browser-independent');
+}
+assert.match(storageAdapterSource, /window\.localStorage/, 'browser persistence must live in the UI adapter');
+assert.equal(materialRuntimeSource.includes('EnvironmentProfileStorage'), false, 'core runtime must not depend on the browser storage adapter');
 
 const uiSource = readFileSync('src/ai-node-editor/NavigationProfileEditor.ts', 'utf8');
 const panelSource = readFileSync('src/ai-node-editor/EnvironmentProfileEditorPanel.ts', 'utf8');

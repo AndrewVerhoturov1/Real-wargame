@@ -134,7 +134,7 @@ Review the exact-head material, migration, revision, renderer and integration ch
 - `src/core/ai/AiSimulationScheduler.ts`
 - `src/core/map/EnvironmentMaterialProfile.ts`
 - `src/core/map/EnvironmentProfileRuntime.ts`
-- `src/core/map/EnvironmentProfileStorage.ts`
+- `src/ui/EnvironmentProfileStorage.ts`
 - `src/core/knowledge/AwarenessWorkerMapSnapshot.ts`
 - `src/rendering/VegetationChunkRaster.ts`
 - `src/ai-node-editor/EnvironmentProfileEditorPanel.ts`
