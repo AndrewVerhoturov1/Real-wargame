@@ -9,6 +9,7 @@ import {
   type MovementProfileSource,
   type ResolvedMovementProfile,
 } from '../movement/MovementProfileContract';
+import { isPlayerCommandOutstanding } from '../orders/PlayerCommand';
 import type { UnitModel } from '../units/UnitModel';
 
 export interface MovementProfileRuntimeResolution {
@@ -40,8 +41,11 @@ export function reconcileMovementProfileRuntime(
     ? normalizeOptionalSource(order?.movementProfileSource)
     : undefined;
   const knownProfileIds = registryEntries?.map((entry) => entry.id);
+  const activePlayerCommand = isPlayerCommandOutstanding(unit.playerCommand)
+    ? unit.playerCommand
+    : null;
   const memoryPlayerOrderActive = memory.player_command_active === true;
-  const playerOrderProfileId = unit.playerCommand?.intent.movementProfileId
+  const playerOrderProfileId = activePlayerCommand?.intent.movementProfileId
     ?? (memoryPlayerOrderActive ? cleanOptionalText(memory.player_order_movement_profile) : undefined);
 
   const resolved = resolveMovementProfile({
@@ -65,7 +69,7 @@ export function reconcileMovementProfileRuntime(
   });
 
   const ownerToken = resolved.source === 'player_order'
-    ? unit.playerCommand?.id
+    ? activePlayerCommand?.id
     : resolved.ownerToken;
   const previousId = cleanOptionalText(order?.movementProfileId)
     ?? cleanOptionalText(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId]);
@@ -83,7 +87,7 @@ export function reconcileMovementProfileRuntime(
       ?? memory[MOVEMENT_PROFILE_MEMORY_KEYS.profileSelectionRevision],
   );
   const initialSelectionRevision = resolved.requestedSource === 'player_order'
-    ? finiteRevision(unit.playerCommand?.revision) ?? 1
+    ? finiteRevision(activePlayerCommand?.revision) ?? 1
     : 1;
   const selectionRevision = selectionChanged
     ? Math.max(1, (previousSelectionRevision ?? initialSelectionRevision) + 1)
