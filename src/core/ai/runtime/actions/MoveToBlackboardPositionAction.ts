@@ -243,6 +243,7 @@ function memoryUpdatesToEffects(updates: readonly AiMemoryUpdate[]): readonly Ai
 
 function beginMoveEffect(state: MoveToBlackboardPositionActionState): AiGraphEffect {
   const explicitSelection = state.movementProfileSelection === 'from_order'
+    || state.movementProfileSelection === 'current_active'
     || state.movementProfileSelection === 'specific';
   const ownsProfileOverride = state.movementProfileSelection === 'specific';
   return {
