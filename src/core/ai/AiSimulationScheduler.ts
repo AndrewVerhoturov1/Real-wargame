@@ -3,6 +3,7 @@ import type { SimulationState } from '../simulation/SimulationState';
 import { isUnitGraphAiControlled, type UnitModel } from '../units/UnitModel';
 import { resolveRuntimeGraphSnapshot } from './AiGameBridge';
 import { tickStatefulMoveBridgeForTrustedUnit } from './AiStatefulMoveGameBridge';
+import { reconcileMovementProfileRuntime } from './MovementProfileRuntimeResolver';
 
 export interface AiSimulationSchedulerOptions {
   readonly cycleStartMs?: number;
@@ -62,6 +63,9 @@ export function tickAiSimulationScheduler(
     processedUnitIds.push(unit.id);
     trustedBridgeCalls += 1;
 
+    // Publish the effective profile before graph evaluation, then finalize again
+    // after graph effects so override intents cannot write derived active fields.
+    reconcileMovementProfileRuntime(unit);
     const result = tickStatefulMoveBridgeForTrustedUnit(state, unit, cycleEndMs, {
       force: false,
       applyEffects: true,
@@ -69,6 +73,7 @@ export function tickAiSimulationScheduler(
       cycleStartMs,
       cycleEndMs,
     });
+    reconcileMovementProfileRuntime(unit);
     if (result) graphTickedUnitIds.push(unit.id);
   }
 
