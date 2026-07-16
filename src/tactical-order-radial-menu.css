@@ -53,9 +53,9 @@
 
 .tactical-order-radial-sector {
   position: absolute;
-  width: 102px;
+  width: 112px;
   min-height: 38px;
-  padding: 6px 16px 5px 27px;
+  padding: 6px 6px 5px 27px;
   border: 1px solid transparent;
   border-radius: 8px;
   box-sizing: border-box;
@@ -66,17 +66,17 @@
 }
 
 .tactical-order-sector-recon {
-  left: 53px;
+  left: 48px;
   top: 9px;
 }
 
 .tactical-order-sector-assault {
-  right: 0;
+  right: -4px;
   top: 119px;
 }
 
 .tactical-order-sector-move {
-  left: 0;
+  left: -4px;
   top: 119px;
 }
 
@@ -116,7 +116,7 @@
 .tactical-order-radial-sector kbd {
   position: absolute;
   right: 4px;
-  top: 3px;
+  top: -6px;
   min-width: 12px;
   padding: 0 2px;
   border: 1px solid rgba(237, 218, 164, 0.22);
