@@ -245,15 +245,13 @@ function buildThreatGeometry(
     for (let x = 0; x < map.width; x += 1) {
       const index = y * map.width + x;
       const position = { x: x + 0.5, y: y + 0.5 };
-      let threatFactor = threatFactorAtPosition(position, threat, staticField.metersPerCell);
+      const threatFactor = threatFactorAtPosition(position, threat, staticField.metersPerCell);
       if (threatFactor <= 0) continue;
-
-      if (lineOfFire) {
-        if (lineOfFire.hardBlocked[index] === 1) continue;
-        const fireTransmission = (lineOfFire.fireTransmission[index] ?? 0) / 255;
-        if (fireTransmission <= 0) continue;
-        threatFactor *= fireTransmission;
-      }
+      const lineOfFireFactor = lineOfFire
+        ? lineOfFire.hardBlocked[index] === 1
+          ? 0
+          : (lineOfFire.fireTransmission[index] ?? 0) / 255
+        : 1;
 
       const bearingToThreat = Math.atan2(threat.y - position.y, threat.x - position.x);
       const terrainProtection = readDirectionalBasisValue(
@@ -274,7 +272,7 @@ function buildThreatGeometry(
         ? combinePercent(coverProtectionAt(coverField!, index), terrainProtection)
         : combinePercent(staticField.expectedProtection[index] ?? 0, terrainProtection * 0.35);
 
-      factor[index] = threatFactor;
+      factor[index] = threatFactor * lineOfFireFactor;
       protection[index] = threatProtection;
       exposureFactor[index] = threat.mode === 'directional_fire'
         ? 0.72 + terrainExposure / 100 * 0.28
@@ -324,13 +322,12 @@ function scoreDangerField(
       const threatGeometry = threatGeometries[threatIndex];
       if (!threatGeometry || threatGeometry.threatId !== threat.id) continue;
       const factor = threatGeometry.factor[cellIndex] ?? 0;
-      if (factor <= 0) continue;
-
       const threatProtection = threatGeometry.protection[cellIndex] ?? 0;
       if (threatProtection > strongestProtection) {
         strongestProtection = threatProtection;
         strongestProtectionIndex = threatIndex;
       }
+      if (factor <= 0) continue;
 
       const confidenceFactor = clampPercent(threat.confidence) / 100;
       const uncovered = 1 - threatProtection / 100;
