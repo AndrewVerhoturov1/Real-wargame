@@ -21,6 +21,7 @@ export interface TacticalOrderPresetDefinition {
   readonly id: TacticalOrderPresetId;
   readonly nameEn: string;
   readonly nameRu: string;
+  readonly menuHintRu: string;
   readonly shortDescriptionEn: string;
   readonly shortDescriptionRu: string;
   readonly icon: string;
@@ -32,6 +33,7 @@ const PRESETS: Readonly<Record<TacticalOrderPresetId, TacticalOrderPresetDefinit
     'move',
     'Normal movement',
     'Обычное',
+    'Обычное выполнение',
     'Carry out the order normally while reacting to danger through current self-preservation logic.',
     'Выполнить приказ обычным способом, реагируя на опасность по текущей логике самосохранения.',
     '→',
@@ -44,6 +46,7 @@ const PRESETS: Readonly<Record<TacticalOrderPresetId, TacticalOrderPresetDefinit
     'recon',
     'Reconnaissance',
     'Разведка',
+    'Осторожно искать контакты',
     'Move cautiously, actively search for contacts and pause to observe when one is found.',
     'Осторожно двигаться, активно искать контакты и при обнаружении остановиться для наблюдения.',
     '◉',
@@ -56,6 +59,7 @@ const PRESETS: Readonly<Record<TacticalOrderPresetId, TacticalOrderPresetDefinit
     'assault',
     'Assault',
     'Штурм',
+    'Решительно давить к цели',
     'Advance decisively and press the attack without bypassing hard safety constraints.',
     'Решительно двигаться к цели и продолжать атаку, не игнорируя критические ограничения безопасности.',
     '⚔',
@@ -132,6 +136,7 @@ function preset(
   id: TacticalOrderPresetId,
   nameEn: string,
   nameRu: string,
+  menuHintRu: string,
   shortDescriptionEn: string,
   shortDescriptionRu: string,
   icon: string,
@@ -144,6 +149,7 @@ function preset(
     id,
     nameEn,
     nameRu,
+    menuHintRu,
     shortDescriptionEn,
     shortDescriptionRu,
     icon,
