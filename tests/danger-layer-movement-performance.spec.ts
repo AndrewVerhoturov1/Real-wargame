@@ -222,6 +222,7 @@ test('selected unit movement preserves world-space threat memory and performs lo
   const before = await snapshot(page);
   const beforeMovement = requireMovement(before);
   expect(before.observerMoving).toBe(true);
+  expect(before.subjectiveThreatPosition).not.toBeNull();
   expect(before.subjectiveThreatDirectionDegrees).not.toBeNull();
   expect(before.subjectiveThreatRangeCells).not.toBeNull();
 
@@ -236,13 +237,22 @@ test('selected unit movement preserves world-space threat memory and performs lo
   const after = await snapshot(page);
   const afterMovement = requireMovement(after);
 
-  const worldSpaceMemoryStable = angularDifference(
+  const worldSpaceMemoryStable = Boolean(
+    before.subjectiveThreatPosition
+    && after.subjectiveThreatPosition
+    && Math.hypot(
+      after.subjectiveThreatPosition.x - before.subjectiveThreatPosition.x,
+      after.subjectiveThreatPosition.y - before.subjectiveThreatPosition.y,
+    ) <= 0.01
+  );
+  const observerRelativeMemoryChanged = angularDifference(
     after.subjectiveThreatDirectionDegrees ?? 0,
     before.subjectiveThreatDirectionDegrees ?? 0,
-  ) <= 0.5 && Math.abs(
+  ) > 0.5 || Math.abs(
     (after.subjectiveThreatRangeCells ?? 0) - (before.subjectiveThreatRangeCells ?? 0),
-  ) <= 0.1;
+  ) > 0.1;
   expect(worldSpaceMemoryStable).toBe(true);
+  expect(observerRelativeMemoryChanged).toBe(true);
   expect(after.lastRequestedCanonicalThreatKey).toBe(before.lastRequestedCanonicalThreatKey);
   expect(after.lastAppliedCanonicalThreatKey).toBe(before.lastAppliedCanonicalThreatKey);
   expect(after.lastRequestedWorldKey).toBe(before.lastRequestedWorldKey);
@@ -268,6 +278,7 @@ test('selected unit movement preserves world-space threat memory and performs lo
     after,
     counters: {
       worldSpaceMemoryStable,
+      observerRelativeMemoryChanged,
       workerJobsStartedDelta: delta(afterMovement, beforeMovement, 'workerJobsStarted'),
       workerThreatRelativeGeometryBuildDelta: delta(afterMovement, beforeMovement, 'workerThreatRelativeGeometryBuilds'),
       workerDirectionalFieldBuildDelta: delta(afterMovement, beforeMovement, 'workerDirectionalFieldBuilds'),
