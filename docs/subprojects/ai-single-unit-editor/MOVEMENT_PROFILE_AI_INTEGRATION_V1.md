@@ -2,28 +2,13 @@
 
 ## Scope
 
-This slice connects a string `movementProfileId` to immutable tactical intent, `PlayerCommand`, `MoveOrder`, route replanning, AI graph memory, stateful movement, scene/runtime snapshots and selected-unit diagnostics.
+This slice carries a string `movementProfileId` through immutable tactical intent, `PlayerCommand`, `MoveOrder`, route replanning, AI memory, stateful movement, scene/runtime snapshots and selected-unit diagnostics.
 
-Physical locomotion parameters and profile editing remain owned by the movement-profile registry/runtime result. This integration consumes registry IDs and revisions without duplicating profile definitions.
+Profile definitions and physical locomotion remain owned by the movement-profile registry/runtime result. This integration consumes registry IDs and revisions without duplicating profile definitions.
 
-## Canonical separation
+## Canonical IDs and presets
 
-```text
-navigationProfileId
-→ route selection and route cost
-
-movementProfileId
-→ requested physical execution profile
-
-active_movement_gait
-→ actual physical runtime state
-```
-
-`NavigationMovementMode` is not renamed or reused as a physical gait.
-
-## Canonical registry IDs
-
-The built-in IDs are shared with PR #133:
+Built-in IDs shared with PR #133:
 
 ```text
 normal_walk
@@ -34,48 +19,15 @@ sprint
 crawl
 ```
 
-Tactical preset defaults:
-
 | Tactical preset | Navigation profile | Physical movement profile |
 | --- | --- | --- |
 | `move` | `normal` | `normal_walk` |
 | `recon` | `cautious` | `stealth_move` |
 | `assault` | `attack` | `run` |
 
-`Sprint` is a short acceleration profile and is not the persistent assault default.
+`Sprint` remains a short acceleration profile rather than the persistent assault default.
 
-A version 1 intent receives the canonical physical default of its preset. A non-empty custom string ID remains unchanged while no registry view is available.
-
-## Source priority
-
-The runtime resolver applies this strict priority:
-
-1. hard runtime safety restriction;
-2. temporary AI override intent;
-3. immutable player-order profile;
-4. unit-role profile;
-5. default profile.
-
-AI graph nodes write only override intent:
-
-```text
-movement_profile_override_id
-movement_profile_override_owner_token
-movement_profile_override_reason
-```
-
-The runtime resolver alone publishes derived `active_*` and `forced_*` fields. Therefore a graph node cannot bypass hard safety by directly writing an active profile.
-
-Override cleanup uses owner tokens. A stale cleanup may not clear a newer override.
-
-## AI graph contracts
-
-Typed nodes:
-
-- `SetMovementProfile`;
-- `ClearMovementProfileOverride`.
-
-The serialized legacy `SetMovementMode` remains readable and maps:
+Legacy `SetMovementMode` migration:
 
 ```text
 fast    → run
@@ -84,47 +36,135 @@ crawl   → crawl
 other   → normal_walk
 ```
 
-It no longer writes a decorative `movement_mode:*` string to `currentAction`.
+## Requested baseline and effective selection
 
-`SetMovementProfile.profileId` and `MoveToBlackboardPosition.movementProfileId` are serialized as plain string IDs. Their visual fields use `movement_profile_registry` selector metadata rather than a hard-coded enum.
+The finalizer separates two concepts.
 
-The editor adapter reads the same registry storage contract as PR #133 and displays built-in, custom and missing IDs honestly.
+Requested baseline:
 
-`MoveToBlackboardPosition` source semantics:
+```text
+player order
+→ unit role
+→ default
+```
+
+Effective selection:
+
+```text
+hard safety
+→ AI override
+→ requested baseline
+```
+
+`requested_movement_profile_id` always reports the baseline intent. A hard-safety replacement does not overwrite it.
+
+Hard safety is reported as a forced fallback:
+
+```text
+movement_forced_fallback = true
+movement_forced_reason = movement_hard_safety_reason
+```
+
+A valid AI override is not a forced fallback. A selected ID missing from the supplied registry is a forced fallback and keeps the missing requested ID in diagnostics.
+
+## Single finalizer ownership
+
+`reconcileMovementProfileRuntime()` is the only owner of:
+
+```text
+requested_movement_profile_id
+active_movement_profile_id
+active_movement_profile_source
+movement_forced_fallback
+movement_forced_reason
+movement_profile_definition_revision
+movement_profile_selection_revision
+effective MoveOrder movement snapshot
+```
+
+AI nodes and move actions publish only source intent or an initial explicit snapshot. They do not implement priority, registry fallback or revision rules.
+
+`AiStatefulMoveGameBridge.syncMoveOrderMemoryForUnit()` publishes only route/order facts:
+
+```text
+active_move_source
+active_move_owner_token
+active_move_target
+active_move_path_*
+```
+
+The bridge contains no second movement-profile resolver. It delegates effective state before graph evaluation, after graph effects and immediately after creating an AI move order to `reconcileMovementProfileRuntime()`.
+
+## AI override intent
+
+`SetMovementProfile` writes only:
+
+```text
+movement_profile_override_id
+movement_profile_override_owner_token
+movement_profile_override_reason
+```
+
+`ClearMovementProfileOverride` clears only those intent fields and respects owner-token cleanup. It never writes `active_*` or `forced_*` fields.
+
+## Stateful move source semantics
+
+`MoveToBlackboardPosition` supports:
 
 ```text
 from_order
-→ snapshot the immutable order profile
-
 current_active
-→ snapshot the current effective profile without claiming ownership
-
-specific
-→ create a temporary AI override owned by the action token
-
 automatic
-→ let the runtime resolver choose the effective source
+specific
 ```
 
-Older stateful snapshots without the source field migrate as `automatic`.
+### `from_order`
+
+Uses only an active `player_order_movement_profile` snapshot.
+
+When an active player order exists:
+
+```text
+profile ID = player_order_movement_profile
+source = player_order
+profile owner = none on the AI action snapshot
+```
+
+When no active player order exists, the action emits no explicit movement profile/source/owner. The canonical finalizer then selects unit role or default. It does not manufacture `player_order` source or ownership. The stateful action records an honest diagnostic reason for this automatic fallback.
+
+Custom player-order IDs are preserved as plain strings.
+
+### `current_active`
+
+Snapshots the current finalizer-published effective ID and source. It does not claim the existing profile owner.
+
+### `specific`
+
+Writes a temporary AI override owned by the action token. Cleanup clears only that owned override.
+
+### `automatic`
+
+Emits no explicit movement snapshot. The finalizer resolves the source when the order is created.
+
+Older stateful snapshots without source fields migrate as `automatic`.
 
 ## Revision contract
 
-Two independent revisions are preserved:
-
 ```text
 movementProfileDefinitionRevision
-→ revision of the selected profile definition from the registry
+→ selected profile-definition revision supplied by the registry
 
 movementProfileSelectionRevision
-→ revision of the order/override/effective selection
+→ order/override/effective-selection revision
 ```
 
-The old `movementProfileRevision` is accepted only as a migration alias for `movementProfileSelectionRevision`. It is not used as a definition revision.
+The old `movementProfileRevision` is accepted only while reading legacy data:
 
-The AI scheduler accepts an optional pure registry snapshot and passes its profile revisions to runtime reconciliation. Browser storage remains outside the core resolver.
+- `MoveOrderOptions` may migrate it into `movementProfileSelectionRevision`;
+- runtime snapshot normalization may read it;
+- new runtime objects and new snapshots never write it.
 
-## Blackboard contract
+## Blackboard and diagnostics
 
 Canonical per-unit keys:
 
@@ -144,21 +184,33 @@ movement_profile_definition_revision
 movement_profile_selection_revision
 ```
 
-Internal intent/safety keys:
+Physical values remain `null` or `unknown` until the physical runtime publishes them. UI diagnostics are read-only and never become gameplay state.
 
-```text
-movement_profile_override_id
-movement_profile_override_owner_token
-movement_profile_override_reason
-movement_hard_safety_profile_id
-movement_hard_safety_reason
+## Selector provider boundary
+
+Generic `node-contract-ui.ts` does not parse movement-profile JSON or access browser storage.
+
+It consumes the UI-only interface:
+
+```ts
+interface MovementProfileSelectorProvider {
+  listProfiles(): readonly {
+    id: string;
+    nameRu: string;
+    revision?: number;
+  }[];
+}
 ```
 
-Unknown physical runtime values remain `null` or `unknown`. UI diagnostics are read-only and never become gameplay state.
+Until the registry PR is integrated, the provider falls back to the six canonical built-ins.
 
-## MoveOrder and runtime snapshot
+The real integration provider must be backed by PR #133 `MovementProfileBrowserStorage` and the canonical movement-profile selector/registry. Storage parsing and registry subscription belong in that adapter, not in generic contract rendering or movement core.
 
-The active order carries:
+Unknown selected IDs remain visible as unavailable rather than being silently replaced in the graph JSON.
+
+## MoveOrder and serialization
+
+The effective order carries:
 
 ```text
 movementProfileId
@@ -168,21 +220,19 @@ movementProfileDefinitionRevision
 movementProfileSelectionRevision
 ```
 
-Route replanning preserves all five fields.
+Route replanning preserves those fields.
 
-Runtime serialization writes the two revisions separately. Legacy snapshots containing only `movementProfileRevision` restore it as `movementProfileSelectionRevision`.
-
-Scene export remains on the additive compatible envelope:
+Scene export remains additive-compatible:
 
 ```text
 scene-export-v9-minimal-target-visibility-ai-runtime-2m-grid
 ```
 
-The new movement-profile fields do not require a v10 envelope and old v9 consumers remain valid.
+Runtime serialization writes the two explicit revisions separately and reads the old single revision only for migration.
 
-## Adapter required from physical runtime
+## Physical-runtime adapter
 
-The physical runtime consumes the active `MoveOrder` snapshot and publishes:
+The physical runtime consumes the effective `MoveOrder` snapshot and publishes:
 
 ```text
 active_movement_gait
@@ -193,59 +243,46 @@ movement_visual_signature
 movement_can_fire
 ```
 
-Hard safety publishes:
+Hard safety publishes intent through:
 
 ```text
 movement_hard_safety_profile_id
 movement_hard_safety_reason
 ```
 
-It must not mutate `TacticalOrderIntent` or create a second route system.
+It must not mutate `TacticalOrderIntent`, directly write resolved movement diagnostics or create a second route system.
 
-## Adapter required from registry/editor
-
-The registry adapter provides:
-
-1. known profile IDs for validation and honest fallback;
-2. Russian display names;
-3. custom selector options;
-4. profile definition revisions;
-5. numeric physical parameters used only by the physical runtime.
-
-The AI integration owns string IDs, selection priority and adapters only.
-
-## Focused non-browser check
+## Focused non-browser verification
 
 ```text
 npm run movement-intent-ai:smoke
 ```
 
-The smoke verifies:
+The smoke proves:
 
-- canonical six-profile IDs and preset mapping;
+- six canonical IDs and tactical preset mapping;
 - v1 intent migration and custom IDs;
-- registry fallback;
-- intent-only override writes and owner-token cleanup;
-- hard-safety priority over AI override;
-- `current_active` snapshot without ownership;
-- registry-backed string node parameters;
-- split revisions and legacy snapshot migration.
+- intent-only AI override and owner-token cleanup;
+- registry-aware fallback;
+- route/order-memory synchronization does not change finalizer output;
+- `current_active` snapshots the same finalizer result;
+- `from_order` behavior with active order, unit-role fallback, default fallback and custom IDs;
+- player order + hard safety;
+- AI override + hard safety;
+- player order + AI override;
+- missing player profile;
+- hard safety always wins and sets forced diagnostics;
+- AI override alone is not a forced fallback;
+- selector-provider built-in and custom entries;
+- split revisions and read-only legacy migration;
+- bridge source contains no duplicate priority/fallback implementation.
 
-It is also included in:
+It is included at the start of:
 
 ```text
 npm run tactical-order:smoke
 ```
 
-## Prepared visual QA
+## Visual QA
 
-Browser execution still requires explicit user approval. The prepared checks are:
-
-1. Russian source selector options;
-2. registry-backed built-in and custom profile selector;
-3. honest missing-ID display;
-4. `move → normal_walk`;
-5. `recon → stealth_move`;
-6. `assault → run`;
-7. selected-unit diagnostics with unpublished physical values shown as unavailable;
-8. compact radial-menu geometry unchanged.
+Browser visual QA is intentionally deferred until the common integration branch. No visual evidence is claimed by this PR follow-up.
