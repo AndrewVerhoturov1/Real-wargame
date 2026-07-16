@@ -1,0 +1,23 @@
+name: Agent Source Snapshot
+
+on:
+  push:
+    branches:
+      - agent/terrain-profiles-performance-followup-v1
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package source snapshot
+        run: zip -qr real-wargame-source.zip . -x '.git/*'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: real-wargame-source
+          path: real-wargame-source.zip
+          if-no-files-found: error
+          retention-days: 1
