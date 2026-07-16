@@ -37,6 +37,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Playwright test runner
+        run: npm install --no-save @playwright/test
+
       - name: Enable the user-approved visual suite in the runner only
         shell: bash
         run: |
