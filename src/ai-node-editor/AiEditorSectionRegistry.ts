@@ -26,7 +26,7 @@ const sections = new Map<string, AiEditorSectionDefinition>();
 let host: EditorHost | null = null;
 let activeSectionId: string | null = null;
 let bypassBuiltInClick = false;
-let unloadListenerInstalled = false;
+let pageHideListenerInstalled = false;
 
 export function registerAiEditorSection(definition: AiEditorSectionDefinition): () => void {
   if (!definition.id.trim()) throw new Error('AI editor section id is required.');
@@ -34,7 +34,7 @@ export function registerAiEditorSection(definition: AiEditorSectionDefinition): 
   sections.set(definition.id, definition);
   ensureHost();
   syncSectionButtons();
-  installUnloadListener();
+  installPageHideListener();
   return () => unregisterAiEditorSection(definition.id);
 }
 
@@ -200,10 +200,10 @@ function updateSelectedButtons(sectionId: string | null): void {
   }
 }
 
-function installUnloadListener(): void {
-  if (unloadListenerInstalled) return;
-  unloadListenerInstalled = true;
-  window.addEventListener('beforeunload', () => {
+function installPageHideListener(): void {
+  if (pageHideListenerInstalled) return;
+  pageHideListenerInstalled = true;
+  window.addEventListener('pagehide', () => {
     for (const definition of sections.values()) definition.dispose?.();
   }, { once: true });
 }
