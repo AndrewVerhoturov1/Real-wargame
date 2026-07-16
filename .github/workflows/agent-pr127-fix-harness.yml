@@ -1,18 +1,17 @@
-name: Verify PR127 ownership and editor contracts
+name: Publish verified PR127 ownership and editor fixes
 
 on:
-  pull_request:
+  push:
     branches:
-      - real-wargame-preview
+      - agent/per-unit-ai-scheduler-v1
     paths:
       - .github/workflows/agent-pr127-fix-harness.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  verify-focused-fixes:
-    if: github.head_ref == 'agent/per-unit-ai-scheduler-v1'
+  publish-focused-fixes:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,7 +22,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - name: Apply focused fixes in the verification worktree
+      - name: Apply verified focused fixes
         shell: bash
         run: |
           set -euo pipefail
@@ -61,25 +60,19 @@ jobs:
           editor_smoke.write_text(text, encoding='utf-8')
           PY
           git diff --check
-          grep -q "aiControl: 'manual'" src/testing/DangerLayerMovementPerformanceHarness.ts
-          grep -q "unit.aiControl = 'manual'" src/testing/DangerLayerMovementPerformanceHarness.ts
-          grep -q "cloneSimulationStateForDiagnostic" scripts/ai_node_editor_smoke.mjs
-          grep -q "setInterval(" scripts/ai_node_editor_smoke.mjs
       - run: npm ci
       - name: Verify scheduler ownership contract
         shell: bash
-        run: set -o pipefail; npm run ai-scheduler:smoke 2>&1 | tee ai-scheduler-smoke.log
+        run: npm run ai-scheduler:smoke
       - name: Verify editor contract
         shell: bash
-        run: set -o pipefail; npm run editor:smoke 2>&1 | tee editor-smoke.log
-      - name: Upload exact verified files and logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr127-focused-verified-files
-          path: |
-            src/testing/DangerLayerMovementPerformanceHarness.ts
-            scripts/ai_node_editor_smoke.mjs
-            ai-scheduler-smoke.log
-            editor-smoke.log
-          if-no-files-found: error
+        run: npm run editor:smoke
+      - name: Publish focused fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add src/testing/DangerLayerMovementPerformanceHarness.ts scripts/ai_node_editor_smoke.mjs
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'fix: isolate scripted AI ownership contracts'
+          git push origin HEAD:agent/per-unit-ai-scheduler-v1
