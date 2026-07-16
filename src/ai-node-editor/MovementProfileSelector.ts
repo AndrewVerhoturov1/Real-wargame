@@ -2,7 +2,7 @@ import type { MovementProfileRegistry } from '../core/movement/MovementProfiles'
 import {
   getMovementProfileRegistry,
   subscribeMovementProfileRegistry,
-} from '../core/movement/MovementProfileStorage';
+} from './MovementProfileBrowserStorage';
 
 export interface MovementProfileSelectorOptions {
   value: string | null;
@@ -38,12 +38,13 @@ export function resolveMovementProfileSelection(
       messageRu: 'Профиль не выбран.',
     };
   }
-  if (registry.hasProfile(requestedId)) {
+  const profile = registry.findProfile(requestedId);
+  if (profile) {
     return {
       requestedId,
-      resolvedId: requestedId,
+      resolvedId: profile.id,
       missing: false,
-      messageRu: `Выбран профиль «${registry.getProfile(requestedId).nameRu}».`,
+      messageRu: `Выбран профиль «${profile.nameRu}».`,
     };
   }
   return {
