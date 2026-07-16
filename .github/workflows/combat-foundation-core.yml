@@ -240,7 +240,7 @@ jobs:
           if-no-files-found: warn
 
   approved-environment-materials-visual-qa:
-    if: github.event_name == 'pull_request' && github.head_ref == 'agent/terrain-profiles-performance-followup-v1' && contains(github.event.pull_request.body, 'VISUAL_QA_APPROVED_BY_USER: yes')
+    if: "github.event_name == 'pull_request' && github.head_ref == 'agent/terrain-profiles-performance-followup-v1' && contains(github.event.pull_request.body, 'VISUAL_QA_APPROVED_BY_USER: yes')"
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
