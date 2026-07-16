@@ -82,6 +82,13 @@ export interface UnitBehaviorRuntime {
   aiSpeechUntilMs: number;
   aiGraphReason: string;
   aiGraphLastTickMs: number;
+  aiNextDecisionAtMs: number;
+  aiObserverNextPollMs: number;
+  aiDecisionTickCount: number;
+  aiObserverPollCount: number;
+  aiReactiveWakeCount: number;
+  aiLastReactiveWakeAtMs: number;
+  aiLastSimulationStep: number;
   aiNodeCooldowns: Record<string, number>;
   aiRuntimeSession: AiRuntimeSessionSnapshotV1 | null;
   aiRouteStatusState: AiRouteStatusState | null;
@@ -342,7 +349,14 @@ export function createBehaviorRuntime(initialState?: Partial<UnitInitialState>):
     aiSpeechRu: null,
     aiSpeechUntilMs: 0,
     aiGraphReason: 'AI graph is not connected yet.',
-    aiGraphLastTickMs: 0,
+    aiGraphLastTickMs: -1,
+    aiNextDecisionAtMs: 0,
+    aiObserverNextPollMs: 0,
+    aiDecisionTickCount: 0,
+    aiObserverPollCount: 0,
+    aiReactiveWakeCount: 0,
+    aiLastReactiveWakeAtMs: -1,
+    aiLastSimulationStep: -1,
     aiNodeCooldowns: {},
     aiRuntimeSession: null,
     aiRouteStatusState: null,

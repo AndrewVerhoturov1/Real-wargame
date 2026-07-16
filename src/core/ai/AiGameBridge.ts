@@ -13,7 +13,6 @@ import { degreesToRadians, radiansToDegrees } from '../perception/AttentionModel
 import { getBestPerceptionContact } from '../perception/PerceptionSystem';
 import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
 import type { SimulationState } from '../simulation/SimulationState';
-import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
 import type { AiBlackboardValue } from './AiBlackboard';
 import {
@@ -49,10 +48,9 @@ import bundledGraph from '../../data/ai/soldier_default_survival_graph.json';
 
 const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
-const AI_GRAPH_TICK_INTERVAL_MS = 600;
-const AI_GRAPH_POLL_INTERVAL_MS = 60;
+export const AI_GRAPH_TICK_INTERVAL_MS = 600;
+export const AI_OBSERVER_POLL_INTERVAL_MS = 60;
 
-type PausableSimulationState = SimulationState & { paused?: boolean };
 type LegacyAiUnitGraphRuntime = UnitModel['behaviorRuntime'] & {
   aiGraphMemory?: AiGraphRunnerBlackboard;
   aiGraphSimulationTimeMs?: number;
@@ -63,96 +61,205 @@ export interface AiGameBridgeHandle {
   destroy(): void;
   tickNow(): AiGraphRuntimeResult | null;
   evaluateNow(): AiGraphRuntimeResult | null;
-  cancelNow(reason: string, reasonRu?: string): AiGraphRuntimeResult | null;
+  previewCancelNow(reason: string, reasonRu?: string): AiGraphRuntimeResult | null;
 }
 
-interface TickOptions {
-  force: boolean;
-  applyEffects: boolean;
-  cancel?: AiGraphCancellationRequest;
+export interface AiRuntimeGraphSnapshot {
+  readonly graph: AiGraph;
+  readonly sourceRevision: string;
+}
+
+export interface AiGameBridgeTickOptions {
+  readonly force: boolean;
+  readonly applyEffects: boolean;
+  readonly cancel?: AiGraphCancellationRequest;
+  readonly graphSnapshot?: AiRuntimeGraphSnapshot;
+  readonly cycleStartMs?: number;
+  readonly cycleEndMs?: number;
+  readonly diagnosticPreview?: boolean;
 }
 
 export function installAiGameBridge(state: SimulationState): AiGameBridgeHandle {
-  const handle = window.setInterval(() => {
-    tickAiGameBridge(state);
-  }, AI_GRAPH_POLL_INTERVAL_MS);
-
   return {
-    destroy: () => window.clearInterval(handle),
-    tickNow: () => tickAiGameBridge(state, Date.now(), { force: true, applyEffects: true }),
-    evaluateNow: () => tickAiGameBridge(state, Date.now(), { force: true, applyEffects: false }),
-    cancelNow: (reason, reasonRu) => tickAiGameBridge(state, Date.now(), {
+    destroy: () => undefined,
+    tickNow: () => tickAiGameBridge(state, getSimulationNowMs(state), { force: true, applyEffects: false }),
+    evaluateNow: () => tickAiGameBridge(state, getSimulationNowMs(state), { force: true, applyEffects: false }),
+    previewCancelNow: (reason, reasonRu) => tickAiGameBridge(state, getSimulationNowMs(state), {
       force: true,
-      applyEffects: true,
+      applyEffects: false,
       cancel: { reason, reasonRu },
     }),
   };
 }
 
+
+export function cloneSimulationStateForDiagnostic(state: SimulationState): SimulationState {
+  return JSON.parse(JSON.stringify(state)) as SimulationState;
+}
+
+/** Selected-unit read-only facade retained for tests and diagnostics. */
 export function tickAiGameBridge(
   state: SimulationState,
-  nowMs = Date.now(),
-  options: TickOptions = { force: false, applyEffects: true },
+  nowMs = getSimulationNowMs(state),
+  options: AiGameBridgeTickOptions = { force: true, applyEffects: false },
 ): AiGraphRuntimeResult | null {
   const unit = state.selectedUnitId
     ? state.units.find((candidate) => candidate.id === state.selectedUnitId)
     : undefined;
+  return unit ? tickAiGameBridgeForUnit(state, unit, nowMs, options) : null;
+}
 
-  if (!unit) return null;
-  if (!options.force && (state.editor.enabled || isPaused(state))) return null;
+/**
+ * Validated external per-unit facade. Scheduler code must call the trusted
+ * variant so its stable O(n) traversal does not perform nested membership scans.
+ */
+export function tickAiGameBridgeForUnit(
+  state: SimulationState,
+  unit: UnitModel,
+  nowMs = getSimulationNowMs(state),
+  options: AiGameBridgeTickOptions = { force: false, applyEffects: true },
+): AiGraphRuntimeResult | null {
+  if (!state.units.includes(unit)) return null;
+  if (!options.applyEffects) {
+    const diagnosticState = cloneSimulationStateForDiagnostic(state);
+    const diagnosticUnit = diagnosticState.units.find((candidate) => candidate.id === unit.id);
+    if (!diagnosticUnit) return null;
+    return tickAiGameBridgeForTrustedUnit(diagnosticState, diagnosticUnit, nowMs, {
+      ...options,
+      applyEffects: true,
+      diagnosticPreview: true,
+    });
+  }
+  return tickAiGameBridgeForTrustedUnit(state, unit, nowMs, options);
+}
 
-  const observerPoll = options.applyEffects
-    ? pollAiBlackboardObservers(state, unit)
-    : { events: 0, checks: 0 };
-  const scaledInterval = AI_GRAPH_TICK_INTERVAL_MS / getAiTestTimeScale(state);
-  const cadenceReady = nowMs - unit.behaviorRuntime.aiGraphLastTickMs >= scaledInterval;
-  if (!options.force && !cadenceReady && observerPoll.events === 0) return null;
+/** Trusted scheduler path. The unit is already known to belong to state.units. */
+export function tickAiGameBridgeForTrustedUnit(
+  state: SimulationState,
+  unit: UnitModel,
+  nowMs = getSimulationNowMs(state),
+  options: AiGameBridgeTickOptions = { force: false, applyEffects: true },
+): AiGraphRuntimeResult | null {
+  const graphSnapshot = options.graphSnapshot ?? resolveRuntimeGraphSnapshot();
+  const graph = graphSnapshot.graph;
+  const cycleStartMs = Math.max(0, options.cycleStartMs ?? nowMs);
+  const cycleEndMs = Math.max(cycleStartMs, options.cycleEndMs ?? (nowMs + 1));
 
-  const graph = readRuntimeGraph();
   let session = ensureRuntimeSession(unit, graph.id);
   session = clearLegacyAutomaticStatePlan(unit, session);
-  if (options.applyEffects) {
-    publishSimulationAiEvents(unit, session.simulationTimeMs);
-    session = unit.behaviorRuntime.aiRuntimeSession ?? session;
-  }
-  const observerWakeOnly = !options.force && !cadenceReady && observerPoll.events > 0;
-  const simulationNowMs = options.applyEffects && !observerWakeOnly
-    ? session.simulationTimeMs + AI_GRAPH_TICK_INTERVAL_MS
-    : session.simulationTimeMs;
-  const previousPlan = readActiveRunPlan(graph, session.executionState);
-  const blackboard = buildGraphControlBlackboard(state, unit, session, graph);
-  const result = runAiGraphRuntime({
-    graph,
-    unitId: unit.id,
-    blackboard,
-    cooldowns: session.cooldowns,
-    nowMs: simulationNowMs,
-    tacticalHost: createTacticalHost(state, unit),
-    executionState: session.executionState,
-    cancel: options.cancel,
-    events: session.eventQueue.events,
-  });
-  session = applyRuntimeResultToSession(session, result, simulationNowMs);
-  session = applyGraphStateEffects(session, result.effects, simulationNowMs);
-  session = updateGraphPlanMemory(session, graph, result, previousPlan);
+  unit.behaviorRuntime.aiRuntimeSession = session;
+  publishSimulationAiEvents(unit, cycleEndMs);
+  session = unit.behaviorRuntime.aiRuntimeSession ?? session;
 
-  publishRuntimeDebugTrace(state, unit, graph, result, nowMs, simulationNowMs, !options.applyEffects, session.status);
-  publishStatePlanDebug(session, graph, result);
-  if (!options.applyEffects) return result;
+  const results: AiGraphRuntimeResult[] = [];
+  const decisionTimes: number[] = [];
+  let nextOrdinaryAtMs = Math.max(0, unit.behaviorRuntime.aiNextDecisionAtMs);
+
+  const runDecisionAt = (decisionAtMs: number): void => {
+    const previousPlan = readActiveRunPlan(graph, session.executionState);
+    const blackboard = buildGraphControlBlackboard(state, unit, session, graph);
+    const result = runAiGraphRuntime({
+      graph,
+      unitId: unit.id,
+      blackboard,
+      cooldowns: session.cooldowns,
+      nowMs: decisionAtMs,
+      tacticalHost: createTacticalHost(state, unit),
+      executionState: session.executionState,
+      cancel: options.cancel,
+      events: session.eventQueue.events,
+    });
+    session = applyRuntimeResultToSession(session, result, decisionAtMs);
+    session = applyGraphStateEffects(session, result.effects, decisionAtMs);
+    session = updateGraphPlanMemory(session, graph, result, previousPlan);
+    unit.behaviorRuntime.aiRuntimeSession = session;
+    unit.behaviorRuntime.aiGraphLastTickMs = decisionAtMs;
+    unit.behaviorRuntime.aiDecisionTickCount += 1;
+    unit.behaviorRuntime.aiNodeCooldowns = { ...session.cooldowns };
+    applyGraphEffects(state, unit, result.effects, result.blackboard, decisionAtMs, session.blackboardMemory);
+    unit.plan = updateUnitPlanFromRuntime(unit.plan, graph, result);
+    unit.behaviorRuntime.aiGraphReason = result.explanationRu ?? result.explanation;
+    unit.behaviorRuntime.reason = result.explanationRu ?? result.explanation;
+    const stateEffect = [...result.effects].reverse().find((effect) => effect.type === 'set_ai_state');
+    unit.behaviorRuntime.lastEvent = stateEffect
+      ? `ai_state_graph_to_${stateEffect.stateId}`
+      : `ai_graph_runtime_${result.status}`;
+    publishSimulationAiEvents(unit, decisionAtMs);
+    session = unit.behaviorRuntime.aiRuntimeSession ?? session;
+    results.push(result);
+    decisionTimes.push(decisionAtMs);
+  };
+
+  if (options.force) {
+    runDecisionAt(nowMs);
+  } else {
+    let ordinaryDueAtMs = unit.behaviorRuntime.aiDecisionTickCount === 0
+      ? cycleStartMs
+      : nextOrdinaryAtMs;
+    let observerDueAtMs = unit.behaviorRuntime.aiObserverPollCount === 0
+      ? cycleStartMs
+      : Math.max(0, unit.behaviorRuntime.aiObserverNextPollMs);
+    let observerGuard = 0;
+    let decisionGuard = 0;
+
+    while (true) {
+      const ordinaryInCycle = decisionGuard < 64 && ordinaryDueAtMs <= cycleEndMs
+        ? ordinaryDueAtMs
+        : Number.POSITIVE_INFINITY;
+      const observerInCycle = observerGuard < 256 && observerDueAtMs <= cycleEndMs
+        ? observerDueAtMs
+        : Number.POSITIVE_INFINITY;
+      const atMs = Math.min(ordinaryInCycle, observerInCycle);
+      if (!Number.isFinite(atMs)) break;
+
+      let reactiveWake = false;
+      if (observerInCycle === atMs) {
+        const observerPoll = pollAiBlackboardObserversAt(state, unit, atMs);
+        session = unit.behaviorRuntime.aiRuntimeSession ?? session;
+        observerDueAtMs = unit.behaviorRuntime.aiObserverNextPollMs;
+        observerGuard += 1;
+        if (observerPoll.events > 0) {
+          reactiveWake = true;
+          unit.behaviorRuntime.aiReactiveWakeCount += 1;
+          unit.behaviorRuntime.aiLastReactiveWakeAtMs = atMs;
+        }
+      }
+
+      const ordinaryDue = ordinaryInCycle === atMs;
+      if (ordinaryDue) {
+        ordinaryDueAtMs += AI_GRAPH_TICK_INTERVAL_MS;
+        nextOrdinaryAtMs = ordinaryDueAtMs;
+      }
+      if (ordinaryDue || reactiveWake) {
+        runDecisionAt(atMs);
+        decisionGuard += 1;
+      }
+    }
+    unit.behaviorRuntime.aiNextDecisionAtMs = nextOrdinaryAtMs;
+  }
 
   unit.behaviorRuntime.aiRuntimeSession = session;
-  unit.behaviorRuntime.aiGraphLastTickMs = nowMs;
-  unit.behaviorRuntime.aiNodeCooldowns = { ...session.cooldowns };
-  applyGraphEffects(state, unit, result.effects, result.blackboard, nowMs, session.blackboardMemory);
-  unit.plan = updateUnitPlanFromRuntime(unit.plan, graph, result);
-  unit.behaviorRuntime.aiGraphReason = result.explanationRu ?? result.explanation;
-  unit.behaviorRuntime.reason = result.explanationRu ?? result.explanation;
-  const stateEffect = [...result.effects].reverse().find((effect) => effect.type === 'set_ai_state');
-  unit.behaviorRuntime.lastEvent = stateEffect
-    ? `ai_state_graph_to_${stateEffect.stateId}`
-    : `ai_graph_runtime_${result.status}`;
-  publishSimulationAiEvents(unit, session.simulationTimeMs);
-  return result;
+  if (results.length === 0) return null;
+
+  const lastResult = results[results.length - 1];
+  const combinedResult: AiGraphRuntimeResult = results.length === 1
+    ? lastResult
+    : { ...lastResult, effects: results.flatMap((result) => result.effects) };
+
+  if (state.selectedUnitId === unit.id) {
+    publishRuntimeDebugTrace(
+      state,
+      unit,
+      graph,
+      combinedResult,
+      decisionTimes[decisionTimes.length - 1],
+      cycleEndMs,
+      Boolean(options.diagnosticPreview),
+      session.status,
+    );
+    publishStatePlanDebug(session, graph, combinedResult);
+  }
+  return combinedResult;
 }
 
 interface GraphOwnedPlanDescriptor {
@@ -300,28 +407,78 @@ function readActiveRunPlan(
   };
 }
 
+interface AiObserverPollResult {
+  readonly events: number;
+  readonly checks: number;
+}
+
+function pollAiBlackboardObserversAt(
+  state: SimulationState,
+  unit: UnitModel,
+  pollAtMs: number,
+): AiObserverPollResult {
+  const session = unit.behaviorRuntime.aiRuntimeSession;
+  if (!session) return { events: 0, checks: 0 };
+
+  const keys = listObservedBlackboardKeys(session.observerRegistry);
+  let nextSession = session;
+  let events = 0;
+  let checks = 0;
+  if (keys.length > 0) {
+    const compactBlackboard = buildObservedBlackboardForUnit(state, unit, keys, session.blackboardMemory);
+    const evaluated = evaluateAiBlackboardObservers(
+      session.observerRegistry,
+      compactBlackboard,
+      pollAtMs,
+    );
+    let queue: AiRuntimeSessionSnapshotV1['eventQueue'] = session.eventQueue;
+    for (const event of evaluated.events) queue = pushAiEvent(queue, event, pollAtMs).queue;
+    events = evaluated.events.length;
+    checks = evaluated.checks;
+    nextSession = {
+      ...session,
+      eventQueue: queue,
+      observerRegistry: evaluated.registry,
+    };
+  }
+
+  unit.behaviorRuntime.aiRuntimeSession = nextSession;
+  unit.behaviorRuntime.aiObserverNextPollMs = pollAtMs + AI_OBSERVER_POLL_INTERVAL_MS;
+  unit.behaviorRuntime.aiObserverPollCount += 1;
+  return { events, checks };
+}
+
 export function pollAiBlackboardObservers(
   state: SimulationState,
   unit: UnitModel,
-): { readonly events: number; readonly checks: number } {
-  const session = unit.behaviorRuntime.aiRuntimeSession;
-  if (!session) return { events: 0, checks: 0 };
-  const keys = listObservedBlackboardKeys(session.observerRegistry);
-  if (keys.length === 0) return { events: 0, checks: 0 };
-  const compactBlackboard = buildObservedBlackboardForUnit(state, unit, keys, session.blackboardMemory);
-  const evaluated = evaluateAiBlackboardObservers(
-    session.observerRegistry,
-    compactBlackboard,
-    session.simulationTimeMs,
-  );
-  let queue = session.eventQueue;
-  for (const event of evaluated.events) queue = pushAiEvent(queue, event, session.simulationTimeMs).queue;
-  unit.behaviorRuntime.aiRuntimeSession = {
-    ...session,
-    eventQueue: queue,
-    observerRegistry: evaluated.registry,
-  };
-  return { events: evaluated.events.length, checks: evaluated.checks };
+  cycleEndMs?: number,
+  cycleStartMs?: number,
+): { readonly events: number; readonly checks: number; readonly polls: number; readonly firstEventAtMs: number | null } {
+  if (!unit.behaviorRuntime.aiRuntimeSession) {
+    return { events: 0, checks: 0, polls: 0, firstEventAtMs: null };
+  }
+
+  const simulationNowMs = getSimulationNowMs(state);
+  const effectiveCycleStartMs = Math.max(0, cycleStartMs ?? simulationNowMs);
+  let nextPollAtMs = unit.behaviorRuntime.aiObserverPollCount === 0
+    ? effectiveCycleStartMs
+    : Math.max(0, unit.behaviorRuntime.aiObserverNextPollMs);
+  const effectiveCycleEndMs = cycleEndMs ?? Math.max(simulationNowMs, nextPollAtMs);
+  let events = 0;
+  let checks = 0;
+  let polls = 0;
+  let firstEventAtMs: number | null = null;
+
+  while (nextPollAtMs <= effectiveCycleEndMs && polls < 256) {
+    const evaluated = pollAiBlackboardObserversAt(state, unit, nextPollAtMs);
+    if (evaluated.events > 0 && firstEventAtMs === null) firstEventAtMs = nextPollAtMs;
+    events += evaluated.events;
+    checks += evaluated.checks;
+    polls += 1;
+    nextPollAtMs = unit.behaviorRuntime.aiObserverNextPollMs;
+  }
+
+  return { events, checks, polls, firstEventAtMs };
 }
 
 export function buildObservedBlackboardForUnit(
@@ -680,7 +837,7 @@ function publishRuntimeDebugTrace(
       lifecycle: result.lifecycle,
       cancellationReason: result.cancellationReason,
       cancellationReasonRu: result.cancellationReasonRu,
-      paused: isPaused(state),
+      paused: Boolean((state as SimulationState & { paused?: boolean }).paused),
       previewOnly,
       nowMs,
       simulationNowMs,
@@ -853,10 +1010,20 @@ function makeRetreatPoint(map: TacticalMap, position: GridPosition, threatPositi
   });
 }
 
-function readRuntimeGraph(): AiGraph {
+let cachedRuntimeGraphSnapshot: AiRuntimeGraphSnapshot | null = null;
+
+export function resolveRuntimeGraphSnapshot(): AiRuntimeGraphSnapshot {
   const raw = readLocalStorageGraph();
+  const sourceRevision = raw ?? '__bundled_graph__';
+  if (cachedRuntimeGraphSnapshot?.sourceRevision === sourceRevision) return cachedRuntimeGraphSnapshot;
   const parsed = raw ? safeJsonParse(raw) : null;
-  return normalizeRuntimeGraph(parsed ?? bundledGraph);
+  const graph = deepFreeze(normalizeRuntimeGraph(parsed ?? bundledGraph));
+  cachedRuntimeGraphSnapshot = Object.freeze({ graph, sourceRevision });
+  return cachedRuntimeGraphSnapshot;
+}
+
+export function resetRuntimeGraphSnapshotCacheForTests(): void {
+  cachedRuntimeGraphSnapshot = null;
 }
 
 function readLocalStorageGraph(): string | null {
@@ -939,13 +1106,20 @@ function isGraphValue(value: unknown): value is AiBlackboardValue {
   return value === null || ['string', 'number', 'boolean'].includes(typeof value) || readPosition(value as AiBlackboardValue) !== null;
 }
 
-function isPaused(state: SimulationState): boolean {
-  return Boolean((state as PausableSimulationState).paused);
+function getSimulationNowMs(state: SimulationState): number {
+  return Math.max(0, Math.round(state.simulationTimeSeconds * 1000));
 }
 
 function normalizeDegrees(value: number): number {
   const normalized = Math.round(value) % 360;
   return normalized < 0 ? normalized + 360 : normalized;
+}
+
+function deepFreeze<T>(value: T): T {
+  if (typeof value !== 'object' || value === null || Object.isFrozen(value)) return value;
+  Object.freeze(value);
+  for (const nested of Object.values(value as Record<string, unknown>)) deepFreeze(nested);
+  return value;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

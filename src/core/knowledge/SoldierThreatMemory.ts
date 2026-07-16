@@ -539,6 +539,7 @@ function tacticalKnowledgeFingerprint(threats: readonly KnownThreatMemory[]): st
 }
 
 function threatRevisionFingerprint(memory: KnownThreatMemory): Record<string, unknown> {
+  const observerRelativeUnitContact = memory.id.startsWith('unit:');
   return {
     id: memory.id,
     labelRu: memory.labelRu,
@@ -552,9 +553,9 @@ function threatRevisionFingerprint(memory: KnownThreatMemory): Record<string, un
     strength: quantize(memory.strength, 5),
     suppression: quantize(memory.suppression, 5),
     stressPerSecond: quantize(memory.stressPerSecond, 2),
-    directionDegrees: quantize(memory.directionDegrees, 10),
+    directionDegrees: observerRelativeUnitContact ? null : quantize(memory.directionDegrees, 10),
     arcDegrees: quantize(memory.arcDegrees, 10),
-    rangeCells: quantize(memory.rangeCells, 1),
+    rangeCells: observerRelativeUnitContact ? null : quantize(memory.rangeCells, 1),
     minRangeCells: quantize(memory.minRangeCells, 1),
     falloffPercent: quantize(memory.falloffPercent, 5),
     confidence: quantize(memory.confidence, 10),

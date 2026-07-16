@@ -1,3 +1,4 @@
+import { tickAiSimulationScheduler } from '../ai/AiSimulationScheduler';
 import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import { publishSimulationAiEvents } from '../ai/events/SimulationAiEvents';
 import { clampPercent, POSTURE_MOVE_MULTIPLIER } from '../behavior/BehaviorModel';
@@ -27,25 +28,32 @@ const COLLISION_PASSES = 3;
 
 export function tickSimulation(state: SimulationState, deltaSeconds: number): void {
   const scaledDeltaSeconds = deltaSeconds * getAiTestTimeScale(state);
+  const cycleStartMs = Math.max(0, Math.round(state.simulationTimeSeconds * 1000));
+  state.simulationStep += 1;
   state.simulationTimeSeconds += scaledDeltaSeconds;
+  const cycleEndMs = Math.max(cycleStartMs, Math.round(state.simulationTimeSeconds * 1000));
 
   for (const unit of state.units) {
     updateMetrics(unit, state, scaledDeltaSeconds);
     updateStateLabels(unit);
   }
 
+  // Perception and subjective threat memory must be current before AI reads
+  // the blackboard. Graph effects can then affect combat and movement during
+  // the same deterministic simulation step.
   tickAllUnitPerception(state, scaledDeltaSeconds);
+  for (const unit of state.units) {
+    syncSoldierThreatMemory(state, unit, scaledDeltaSeconds);
+  }
+
+  tickAiSimulationScheduler(state, { cycleStartMs, cycleEndMs });
   tickAutomaticCombatEngagements(state);
   tickAllFireActions(state, scaledDeltaSeconds);
 
+  const simulationTimeMs = Math.max(0, Math.round(state.simulationTimeSeconds * 1000));
   for (const unit of state.units) {
-    syncSoldierThreatMemory(state, unit, scaledDeltaSeconds);
     moveUnit(unit, state, scaledDeltaSeconds);
-    publishSimulationAiEvents(
-      unit,
-      unit.behaviorRuntime.aiRuntimeSession?.simulationTimeMs
-        ?? Math.max(0, Math.round(state.simulationTimeSeconds * 1000)),
-    );
+    publishSimulationAiEvents(unit, simulationTimeMs);
   }
 
   resolveUnitCollisions(state);
@@ -97,7 +105,10 @@ function updateStateLabels(unit: UnitModel): void {
     return;
   }
 
-  unit.behaviorRuntime.currentAction = unit.order ? 'move' : 'observe';
+  if (unit.order) unit.behaviorRuntime.currentAction = 'move';
+  else if (!(unit.aiControl === 'graph' && unit.behaviorRuntime.aiRuntimeSession?.status === 'active')) {
+    unit.behaviorRuntime.currentAction = 'observe';
+  }
 
   if (unit.order) {
     setState(unit, 'moving', 'active move order');

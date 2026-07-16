@@ -2,10 +2,10 @@
   "id": "ai-single-unit-editor",
   "title": "AI Single-Unit Editor — Stateful Tactical Awareness, Hierarchical States and Plans",
   "status": "active",
-  "updated_at": "2026-07-15",
+  "updated_at": "2026-07-16",
   "goal": "Создать понятную человеку лабораторию поведения одиночного бойца: Utility AI выбирает решение, stateful runtime исполняет длительные действия, общий A* ведёт бойца по карте, постоянные профили маршрута задают стоимость местности, а гибридная система обзора и внимания формирует субъективные визуальные и звуковые контакты без всезнания ИИ.",
-  "current_focus": "Slice 1 кампании Stage 1–2 завершён и перенесён в real-wargame-preview через PR #106: потенциальная опасность отделена от evidence-derived suppression, а память неизвестного огня получила устойчивое объединение, разделение разных направлений и reconciliation с unit:<id>. Stage 1 остаётся открытым до live route replan, усиленных safe-position/reverse-slope доказательств, постоянного CI и отдельной визуальной приёмки.",
-  "next_step": "Продолжить Stage 1 со следующего вертикального среза: доказать живое перестроение активного маршрута через обычный SimulationTick с сохранением ownerToken, цели, профиля и final facing; затем усилить safe-position и reverse-slope проверки, закрепить combat-tactical-integration:smoke в постоянном CI и только после отдельного разрешения запустить подготовленные девять visual QA сцен.",
+  "current_focus": "Draft PR #127 follow-up hardens the accepted simulation-owned per-unit scheduler: explicit paused steps advance all simulation systems, selected-unit diagnostics are read-only, observer polling and graph decisions use partition-invariant simulation-time cadence, the scheduler is one O(n) pass with one frozen graph snapshot, and ai-scheduler:smoke is blocking CI. It is not yet part of real-wargame-preview.",
+  "next_step": "Review the corrected exact head of draft PR #127 and its Combat Foundation Core scheduler-smoke evidence; if accepted, integrate it with PR #126 while preserving canonical world-threat semantics and the scheduler phase order.",
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
   "last_verified_commit": "3f01f4ba9b96daa1b8951bdd08f4005a482fee8c",
   "last_verified_runs": {
@@ -289,7 +289,8 @@
     "src/core/ai/tactical/TacticalQuery.ts",
     "src/core/cover/CoverTacticalCandidates.ts",
     "src/core/ai/AiGraphRuntime.ts",
-    "src/ai-node-editor/runtime-debug-overlay.ts"
+    "src/ai-node-editor/runtime-debug-overlay.ts",
+    "src/core/ai/AiSimulationScheduler.ts"
   ],
   "test_files": [
     "scripts/perception_system_smoke.ts",
@@ -328,7 +329,8 @@
     "scripts/ai_state_plan_scenario_smoke.ts",
     "scripts/tactical_query_system_smoke.ts",
     "scripts/combat_tactical_integration_smoke.ts",
-    "tests/ai-state-plan-visual.spec.ts"
+    "tests/ai-state-plan-visual.spec.ts",
+    "scripts/ai_per_unit_scheduler_smoke.ts"
   ],
   "manual_docs": [
     "docs/subprojects/ai-single-unit-editor/COMBAT_TACTICAL_INTEGRATION_STAGE1.md",
@@ -350,7 +352,8 @@
     "docs/subprojects/ai-single-unit-editor/journal/2026-07-13-attention-profiles-motion-flicker.md",
     "docs/subprojects/ai-single-unit-editor/GRAPH_V2_TYPED_CONTRACTS_AND_SUBGRAPHS.md",
     "docs/subprojects/ai-single-unit-editor/HIERARCHICAL_STATES_AND_PLANS_V1.md",
-    "docs/superpowers/plans/2026-07-14-ai-state-plan-v1.md"
+    "docs/superpowers/plans/2026-07-14-ai-state-plan-v1.md",
+    "docs/subprojects/ai-single-unit-editor/PER_UNIT_AI_SCHEDULER_V1.md"
   ],
   "suggested_verification": [
     "npm run state-machine:smoke",
@@ -395,7 +398,8 @@
     "npm run graph-v2-scenario:smoke",
     "npm run node-contract-ui:smoke",
     "npm run runtime-debug-v2:smoke",
-    "npm run graph-v2-cli:smoke"
+    "npm run graph-v2-cli:smoke",
+    "npm run ai-scheduler:smoke"
   ],
   "safety_rules": [
     "SimulationTick остаётся единственным кодом, который изменяет координаты бойца.",
@@ -403,7 +407,7 @@
     "Физическая опасность может давать подавление и стресс без раскрытия точной позиции источника в Blackboard.",
     "sourceVisible означает возможность создать зрительный сигнал, а не автоматическое обнаружение.",
     "Blackboard current_target, enemyVisible и enemyKnown получают данные только из личных контактов бойца.",
-    "Восприятие версии 1 рассчитывается только для выбранного бойца и не запускается от движения камеры или курсора.",
+    "PerceptionSystem рассчитывает всех боеспособных бойцов из SimulationTick; UI selection управляет только отображением готового субъективного состояния.",
     "Фокус, прямой сектор и периферия имеют разные интервалы; угол проверяется до дорогого LOS.",
     "A* выполняется только при создании приказа или разрешённом перестроении; renderer и UI не импортируют GridPathfinder.",
     "Динамическая стоимость использует только UnitTacticalKnowledge выбранного бойца и не выдаёт скрытое объективное знание за известное.",
@@ -423,10 +427,15 @@
     "A restored running plan step must continue update without repeating start or cleanup.",
     "State/Plan v1 and Tactical Query System are canonical parts of real-wargame-preview; do not describe them as isolated temporary-branch work.",
     "Configurable combat policy belongs to Graph v2 node properties and subgraphs; deterministic facts and non-bypassable safety invariants remain in code.",
-    "Do not mark Combat Tactical Integration Stage 1 complete until every follow-up criterion and the approved visual QA pass."
+    "Do not mark Combat Tactical Integration Stage 1 complete until every follow-up criterion and the approved visual QA pass.",
+    "UI selection controls inspection only; every gameplay advance, including an explicit paused step, goes through SimulationTick and AiSimulationScheduler.",
+    "The first graph decision occurs on the first explicit simulation step; ordinary decisions use 600 ms simulation time and observer polling uses a deterministic 60 ms simulation-time cadence.",
+    "Each graph-controlled unit owns its AiRuntimeSession, route status and action owner tokens; one O(n) scheduler pass resolves one immutable graph snapshot and may process each unit at most once.",
+    "Selected-unit evaluate/tick/cancel-preview diagnostics must execute on a detached state and never mutate gameplay state.",
+    "Observer-relative direction/range changes for unit contacts do not increment semantic tacticalKnowledge revision or trigger route replanning.",
+    "Canonical scene/editor units declare aiControl='graph'; externally scripted fixtures declare aiControl='manual'."
   ],
   "known_limits": [
-    "Perception v1 рассчитывает зрение и слух только выбранного бойца, а не всех юнитов армии.",
     "Источниками зрительных стимулов пока служат зоны угрозы и расширяемый контракт unit; полноценной вражеской стороны с боевыми юнитами ещё нет.",
     "Звуковой контакт приблизителен, не даёт точных координат и сам по себе не поднимается выше подозрения.",
     "Командная передача контактов, бинокли, приборы техники, ночь и подробная погода не реализованы.",
@@ -441,6 +450,7 @@
     "An ordinary unit contact still contributes suppression before confirmed fire evidence; danger and factual suppression must be separated.",
     "Cross-tick unknown-fire merging, live route replanning, safe-position winner changes and reverse-slope direction effects still need stronger end-to-end proof.",
     "The Combat Tactical Integration Stage 1 smoke is not yet part of the permanent preview-delivery CI workflow.",
-    "The four-scene combat tactical visual scenario is prepared but Chromium and PNG inspection have not run without explicit approval."
+    "The four-scene combat tactical visual scenario is prepared but Chromium and PNG inspection have not run without explicit approval.",
+    "Per-unit scheduling currently uses a simple stable O(n) array traversal, 600 ms ordinary decisions and 60 ms observer polling; no worker pool or phased load distribution is implemented."
   ]
 }

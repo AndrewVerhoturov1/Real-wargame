@@ -41,6 +41,7 @@ import {
 import type { PressureZoneMode } from '../pressure/PressureZone';
 
 export type UnitSide = 'blue' | 'red';
+export type UnitAiControl = 'graph' | 'manual';
 export type UnitSideInput = UnitSide | 'player';
 export type UnitType = 'infantry_squad' | 'scout_team' | 'support_team';
 export type UnitHeldItem = 'long_item' | 'support_item' | 'short_item';
@@ -94,6 +95,7 @@ export interface UnitData {
   labelRu?: string;
   type: UnitType;
   side: UnitSideInput;
+  aiControl?: UnitAiControl;
   x: number;
   y: number;
   speedCellsPerSecond?: number;
@@ -122,6 +124,7 @@ export interface UnitModel {
   };
   type: UnitType;
   side: UnitSide;
+  aiControl: UnitAiControl;
   position: GridPosition;
   speedCellsPerSecond: number;
   playerCommand: PlayerCommand | null;
@@ -182,6 +185,7 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
       },
       type: unit.type,
       side: normalizeUnitSide(unit.side),
+      aiControl: normalizeUnitAiControl(unit.aiControl),
       position: {
         x: (unit.x + 0.5) * scale,
         y: (unit.y + 0.5) * scale,
@@ -262,6 +266,14 @@ export function applyInitialStateToRuntime(unit: UnitModel, clearPerceptionKnowl
   unit.behaviorRuntime.currentAction = 'waiting';
   unit.behaviorRuntime.reason = 'Initial state applied.';
   unit.behaviorRuntime.lastEvent = 'initial_state_applied';
+  unit.behaviorRuntime.aiGraphLastTickMs = -1;
+  unit.behaviorRuntime.aiNextDecisionAtMs = 0;
+  unit.behaviorRuntime.aiObserverNextPollMs = 0;
+  unit.behaviorRuntime.aiDecisionTickCount = 0;
+  unit.behaviorRuntime.aiObserverPollCount = 0;
+  unit.behaviorRuntime.aiReactiveWakeCount = 0;
+  unit.behaviorRuntime.aiLastReactiveWakeAtMs = -1;
+  unit.behaviorRuntime.aiLastSimulationStep = -1;
   unit.behaviorRuntime.aiNodeCooldowns = {};
   unit.behaviorRuntime.aiRuntimeSession = null;
   unit.behaviorRuntime.aiRouteStatusState = null;
@@ -308,6 +320,14 @@ export function findUnitAtGridPosition(
 
 export function normalizeUnitSide(value: UnitSideInput | string | undefined): UnitSide {
   return value === 'red' ? 'red' : 'blue';
+}
+
+export function normalizeUnitAiControl(value: UnitAiControl | string | undefined): UnitAiControl {
+  return value === 'manual' ? 'manual' : 'graph';
+}
+
+export function isUnitGraphAiControlled(unit: UnitModel): boolean {
+  return unit.aiControl === 'graph';
 }
 
 function scalePerceptionKnowledge(knowledge: UnitPerceptionKnowledge, scale: number): UnitPerceptionKnowledge {

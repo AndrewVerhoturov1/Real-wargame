@@ -107,6 +107,7 @@ export interface SimulationState {
   mouseGridPosition: GridPosition | null;
   selectionBox: SelectionBox | null;
   simulationTimeSeconds: number;
+  simulationStep: number;
   editor: EditorState;
 }
 
@@ -124,6 +125,7 @@ export function createInitialState(
     mouseGridPosition: null,
     selectionBox: null,
     simulationTimeSeconds: 0,
+    simulationStep: 0,
     editor: {
       enabled: false,
       panelOpen: false,
@@ -767,6 +769,7 @@ function spawnEditorUnit(state: SimulationState, grid: GridPosition): void {
       labelRu: label,
       type: draft.type,
       side: draft.side,
+      aiControl: 'graph',
       x: Math.max(0, Math.floor(grid.x)),
       y: Math.max(0, Math.floor(grid.y)),
       speedCellsPerSecond: draft.speedCellsPerSecond,

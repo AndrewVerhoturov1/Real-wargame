@@ -98,7 +98,11 @@ The only coordinate integrator. It follows waypoints, checks the short route loo
 
 ### `AiGameBridge.ts`
 
-General selected-unit game adapter: builds Blackboard, invokes Runner/Runtime, applies normal effects and stores trace/state.
+Per-unit game adapter: builds Blackboard, invokes Runner/Runtime and applies effects only for simulation-owned calls. Selected-unit evaluate/tick/cancel-preview facades run on a detached clone and are read-only.
+
+### `AiSimulationScheduler.ts`
+
+The only normal gameplay scheduler. It is called from `SimulationTick.ts`, resolves one frozen graph snapshot per cycle and performs one stable O(n) pass over graph-controlled combat-capable units. Trusted bridge functions do not rescan unit membership. First decision is on the first explicit simulation step; ordinary decisions use 600 ms and Blackboard observer polling uses 60 ms of simulation time.
 
 ### `AiStatefulMoveGameBridge.ts`
 
@@ -144,7 +148,7 @@ Never clear an order because its type resembles the AI action. Clear only when `
 - no moving-obstacle prediction;
 - no cover reservation;
 - no threat/concealment route cost yet;
-- automatic graph only for selected soldier.
+- automatic graph execution is simulation-owned and per-unit; selection is diagnostics-only.
 
 ## Blackboard and knowledge
 

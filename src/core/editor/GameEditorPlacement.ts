@@ -53,6 +53,7 @@ export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: Gri
       labelRu: draft.name || id,
       type: draft.type,
       side: draft.side,
+      aiControl: 'graph',
       x: grid.x - 0.5,
       y: grid.y - 0.5,
       speedCellsPerSecond: draft.speedCellsPerSecond,

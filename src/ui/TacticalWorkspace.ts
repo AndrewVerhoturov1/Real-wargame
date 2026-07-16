@@ -115,7 +115,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
       </div>
       <div class="unit-bar-command-group simulation-controls">
         <button class="primary" data-action="pause">Пауза</button><button data-action="step">Один шаг</button>
-        <button data-action="evaluate">Один расчёт ИИ</button><button class="primary" data-action="execute">Рассчитать и выполнить</button>
+        <button data-action="evaluate">Диагностика ИИ (без изменений)</button><button class="primary" data-action="execute">Рассчитать и выполнить</button>
         <button class="primary" data-action="fire-contact">Огонь по контакту</button><button data-action="clear-order">Очистить приказ</button><button data-action="reset-unit">Сбросить бойца</button>
       </div>
       <div class="unit-bar-speed-group">${AI_TEST_TIME_SCALES.map((scale) => `<button data-speed="${scale}">×${scale}</button>`).join('')}</div>
@@ -267,7 +267,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   q<HTMLButtonElement>('[data-action="pause"]').onclick = () => { setAiTestPaused(state, !getAiTestPaused(state)); updateBottom(); onChanged(); };
   q<HTMLButtonElement>('[data-action="step"]').onclick = () => { tickSimulation(state, 0.1); update(false); onChanged(); };
   q<HTMLButtonElement>('[data-action="evaluate"]').onclick = () => { aiBridge.evaluateNow(); update(false); onChanged(); };
-  q<HTMLButtonElement>('[data-action="execute"]').onclick = () => { aiBridge.tickNow(); update(false); onChanged(); };
+  q<HTMLButtonElement>('[data-action="execute"]').onclick = () => { tickSimulation(state, 0.1); update(false); onChanged(); };
   fireContactButton.onclick = () => {
     const unit = getSelectedUnit(state);
     const contact = unit ? findBestDirectFireContact(state, unit) : null;

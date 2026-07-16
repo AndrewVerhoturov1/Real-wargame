@@ -192,13 +192,13 @@ export function installAiTestLabControls(
       onChanged();
       updateDiagnostics(diagnostics, state);
     }));
-    bottomBar.append(button('Один расчёт ИИ', () => {
+    bottomBar.append(button('Диагностика ИИ (без изменений)', () => {
       aiBridge.evaluateNow();
       onChanged();
       updateDiagnostics(diagnostics, state);
     }));
     bottomBar.append(button('Рассчитать и выполнить', () => {
-      aiBridge.tickNow();
+      tickSimulation(state, 0.1);
       onChanged();
       updateDiagnostics(diagnostics, state);
     }, 'primary'));

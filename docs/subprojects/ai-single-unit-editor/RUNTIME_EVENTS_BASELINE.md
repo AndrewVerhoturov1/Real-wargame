@@ -13,21 +13,23 @@ Purpose: regression contract before general lifecycle, composite and event-syste
 - a replacement player order survives stale AI cleanup;
 - route status distinguishes moving, stalled, blocked, arrived, player override, target loss and missing order;
 - exact unreachable AI targets fail without fake adjacent success;
-- pause time is excluded from wait and no-progress timers;
+- the paused outer Pixi loop makes no automatic simulation call, while an explicit `tickSimulation` step advances wait, route and no-progress timers coherently;
 - preview evaluation does not advance simulation time, replace the live session or install an order;
 - each soldier owns an independent runtime session, memory, cooldown map and execution state;
 - changing the selected soldier does not copy the first soldier's action token or active state;
 - `SimulationTick` remains the only coordinate mutator;
-- the 60 ms route tracker does not rebuild awareness and does not run A*;
+- 60 ms Blackboard observer polling uses simulation time and does not depend on renderer FPS; route lifecycle remains simulation-step-owned and neither path rebuilds awareness or runs A*;
 - A* runs only when a route is created or invalidated.
 
 ## Current timing boundaries
 
 ```text
+first graph decision: first explicit simulation step
 normal AI graph cadence: 600 ms of AI simulation time
-route status polling: 60 ms wall-clock polling
-pause: simulation time does not advance
-preview evaluate: no live state mutation
+Blackboard observer polling: 60 ms of simulation time
+route lifecycle: evaluated by explicit simulation steps, never by an independent browser timer
+pause: outer Pixi ticker does not call tickSimulation; an explicit call advances all simulation systems
+preview evaluate/tick/cancel: detached read-only diagnostic state
 ```
 
 ## Required automated commands
@@ -75,7 +77,7 @@ AiGameBridge / AiStatefulMoveGameBridge
   live-game adaptation and ownership-safe effects
 
 SimulationTick
-  physical coordinate changes only
+  canonical simulation phase order, per-unit scheduler call and physical coordinate changes
 ```
 
 ## Completion state
