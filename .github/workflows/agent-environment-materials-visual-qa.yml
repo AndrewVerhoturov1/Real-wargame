@@ -1,0 +1,80 @@
+name: Approved Environment Materials Visual QA
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - '.github/workflows/agent-environment-materials-visual-qa.yml'
+  push:
+    branches:
+      - agent/terrain-profiles-performance-followup-v1
+    paths:
+      - '.github/workflows/agent-environment-materials-visual-qa.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  visual-qa:
+    if: github.head_ref == 'agent/terrain-profiles-performance-followup-v1' || github.ref_name == 'agent/terrain-profiles-performance-followup-v1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: agent/terrain-profiles-performance-followup-v1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Enable the user-approved visual suite in the runner only
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tests/environment-materials-visual.spec.ts')
+          source = path.read_text()
+          enabled = source.replace("test.skip('shows continuous sparse/dense forest across zoom and danger-overlay states'", "test('shows continuous sparse/dense forest across zoom and danger-overlay states'")
+          enabled = enabled.replace("test.skip('live profile edit refreshes the open map without a page reload'", "test('live profile edit refreshes the open map without a page reload'")
+          if enabled == source or enabled.count("test('shows continuous sparse/dense forest") != 1 or enabled.count("test('live profile edit") != 1:
+              raise SystemExit('approved environment-material visual tests were not enabled exactly once')
+          path.write_text(enabled)
+          PY
+
+      - name: Production build
+        run: npm run build
+
+      - name: Run approved environment-material visual QA
+        shell: bash
+        run: |
+          set -o pipefail
+          npx playwright test tests/environment-materials-visual.spec.ts --project=chromium --reporter=line 2>&1 | tee environment-materials-visual-playwright.log
+
+      - name: Upload visual screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-materials-visual-screenshots
+          path: artifacts/visual-qa/environment-materials-v1/*.png
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload Playwright evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-materials-visual-evidence
+          path: |
+            environment-materials-visual-playwright.log
+            test-results/**
+          if-no-files-found: warn
+          retention-days: 7
