@@ -38,6 +38,11 @@ on:
       - 'src/core/testing/AiTestLabRuntime.ts'
       - 'src/data/ai/soldier_default_survival_graph.json'
       - 'src/rendering/PixiAwarenessHeatmapRenderer.ts'
+      - 'src/rendering/PixiMapRenderer.ts'
+      - 'src/rendering/VegetationChunkRaster.ts'
+      - 'src/ai-node-editor/EnvironmentProfileEditorPanel.ts'
+      - 'src/ai-node-editor/NavigationProfileEditor.ts'
+      - 'src/ai-node-editor/navigation-profile-editor.css'
       - 'src/rendering/PixiUnitRenderer.ts'
       - 'src/rendering/PixiCombatEffectsRenderer.ts'
       - 'src/rendering/CombatEffectsInstaller.ts'
@@ -55,6 +60,11 @@ on:
       - 'scripts/danger_layer_movement_performance_smoke.*'
       - 'scripts/shared_visibility_vegetation_smoke.*'
       - 'scripts/shared_vegetation_source_contract_smoke.*'
+      - 'scripts/environment_materials_smoke.*'
+      - 'scripts/environment_material_migration_smoke.*'
+      - 'scripts/environment_profile_revisions_smoke.*'
+      - 'scripts/vegetation_chunk_raster_smoke.*'
+      - 'scripts/environment_performance_smoke.*'
       - 'scripts/view_memory_heatmap_smoke.*'
       - 'scripts/view_memory_heatmap_performance_smoke.*'
       - 'scripts/visibility_probe_cache_smoke.*'
@@ -76,6 +86,9 @@ on:
       - 'tests/danger-layer-movement-performance.spec.ts'
       - 'tests/danger-route-cost-parity-visual.spec.ts'
       - 'tests/shared-visibility-vegetation-visual.spec.ts'
+      - 'tests/environment-materials-visual.spec.ts'
+      - 'tests/environment-stable-performance.spec.ts'
+      - 'docs/subprojects/ai-single-unit-editor/ENVIRONMENT_MATERIAL_PROFILES_V1.md'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/combat-foundation-core.yml'
@@ -97,6 +110,15 @@ jobs:
       - name: Shared visibility and vegetation smoke
         shell: bash
         run: set -o pipefail; npm run shared-visibility-vegetation:smoke 2>&1 | tee shared-visibility-vegetation.log
+      - name: Environment material profile contracts
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run environment-materials:smoke 2>&1 | tee environment-materials.log
+          npm run environment-material-migration:smoke 2>&1 | tee environment-material-migration.log
+          npm run environment-profile-revisions:smoke 2>&1 | tee environment-profile-revisions.log
+          npm run vegetation-chunk-raster:smoke 2>&1 | tee vegetation-chunk-raster.log
+          npm run environment-performance:smoke 2>&1 | tee environment-performance.log
       - name: Danger route cost parity smoke
         shell: bash
         run: set -o pipefail; npm run danger-route-cost-parity:smoke 2>&1 | tee danger-route-cost-parity.log
@@ -199,6 +221,11 @@ jobs:
           name: combat-tactical-integration-log
           path: |
             shared-visibility-vegetation.log
+            environment-materials.log
+            environment-material-migration.log
+            environment-profile-revisions.log
+            vegetation-chunk-raster.log
+            environment-performance.log
             perception-smoke.log
             perception-performance.log
             view-memory-heatmap.log
