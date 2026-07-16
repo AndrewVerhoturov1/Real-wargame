@@ -40,9 +40,13 @@ if "!INSTALL_DEPENDENCIES!"=="1" (
     echo [INFO] Zavisimosti otsutstvuyut ili ne sootvetstvuyut package-lock.json. Zapuskayu npm ci...
     call npm ci
     if !errorlevel! neq 0 (
-        echo [OSHIBKA] npm ci ne udalsya.
-        pause
-        exit /b 1
+        echo [INFO] npm ci ne smog udalit zablokirovannyy modul. Probuyu npm install bez polnoy ochistki...
+        call npm install
+        if !errorlevel! neq 0 (
+            echo [OSHIBKA] Ne udalos vosstanovit zavisimosti ni cherez npm ci, ni cherez npm install.
+            pause
+            exit /b 1
+        )
     )
 )
 
