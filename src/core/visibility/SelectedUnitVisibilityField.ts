@@ -3,19 +3,20 @@ import {
   radiansToDegrees,
   sampleAttentionWeight,
 } from '../perception/AttentionModel';
+import { resolveVegetationDefinition } from '../map/VegetationDefinition';
 import { getSelectedUnit, type SimulationState } from '../simulation/SimulationState';
 import { getAttentionOverlayState } from '../ui/RuntimeUiState';
 import type { UnitModel } from '../units/UnitModel';
 import { evaluateCellVisibilityQuality, observerVisibilityCondition } from './VisibilityQuality';
-import { getVisibilityStaticGrid, type VisibilityStaticGrid } from './VisibilityStaticGrid';
+import {
+  getVisibilityGeometryField,
+  getVisibilityGeometryFieldDiagnostics,
+} from './VisibilityGeometryField';
 
-const FOREST_MIN_TRANSMISSION = 0.04;
-const SPARSE_FOREST_LOSS_PER_METER = 0.035;
-const DENSE_FOREST_LOSS_PER_METER = 0.075;
 const MOVING_REBUILD_INTERVAL_SECONDS = 0.2;
 const POSITION_QUANTUM_CELLS = 0.25;
 const TARGET_EYE_HEIGHT_METERS = 1.4;
-const HORIZON_MARGIN = 0.02;
+const MIN_VISUAL_TRANSMISSION = resolveVegetationDefinition('none').visibility.minimumTransmission;
 
 export interface SelectedUnitVisibilityField {
   observerId: string;
@@ -46,64 +47,95 @@ export interface VisibilityFieldDiagnostics {
 }
 
 interface VisibilityFieldRuntime {
-  field: SelectedUnitVisibilityField | null;
+  readonly fieldsByUnit: Map<string, SelectedUnitVisibilityField>;
+  readonly lastObserverPositionByUnit: Map<string, { x: number; y: number }>;
   diagnostics: VisibilityFieldDiagnostics;
-  lastObserverPosition: { x: number; y: number } | null;
 }
 
 const runtimeByState = new WeakMap<SimulationState, VisibilityFieldRuntime>();
 
+/** UI-facing facade. Hidden overlays still perform zero work. */
 export function getSelectedUnitVisibilityField(state: SimulationState): SelectedUnitVisibilityField | null {
   const overlay = getAttentionOverlayState(state);
   const unit = getSelectedUnit(state);
-  const runtime = getRuntime(state);
   if (!overlay.active || !overlay.showCurrentView || !unit || state.editor.enabled) return null;
+  return getUnitVisibilityField(state, unit);
+}
 
-  const staticGrid = getVisibilityStaticGrid(state.map);
-  const key = buildCalculationKey(state, unit, staticGrid.mapVisualRevision);
-  if (runtime.field?.calculationKey === key) {
+/** Renderer-independent current-view field for any requested unit. */
+export function getUnitVisibilityField(
+  state: SimulationState,
+  unit: UnitModel,
+): SelectedUnitVisibilityField {
+  const runtime = getRuntime(state);
+  const current = runtime.fieldsByUnit.get(unit.id) ?? null;
+  const lastPosition = runtime.lastObserverPositionByUnit.get(unit.id) ?? null;
+  const moved = lastPosition !== null
+    && (Math.abs(lastPosition.x - unit.position.x) > 0.001
+      || Math.abs(lastPosition.y - unit.position.y) > 0.001);
+
+  if (moved && current && state.simulationTimeSeconds - current.builtAtSeconds < MOVING_REBUILD_INTERVAL_SECONDS) {
     runtime.diagnostics.cacheHitCount += 1;
-    return runtime.field;
+    return current;
   }
 
-  const moved = runtime.lastObserverPosition !== null
-    && (Math.abs(runtime.lastObserverPosition.x - unit.position.x) > 0.001
-      || Math.abs(runtime.lastObserverPosition.y - unit.position.y) > 0.001);
-  if (moved && runtime.field && state.simulationTimeSeconds - runtime.field.builtAtSeconds < MOVING_REBUILD_INTERVAL_SECONDS) {
+  const radiusCells = Math.max(
+    1,
+    Math.ceil(unit.attentionSettings.vision.maximumVisualRangeMeters / state.map.metersPerCell),
+  );
+  const geometry = getVisibilityGeometryField(state.map, {
+    origin: unit.position,
+    originHeightAboveGroundMeters: eyeHeightForPosture(unit.behaviorRuntime.posture),
+    targetHeightAboveGroundMeters: TARGET_EYE_HEIGHT_METERS,
+    rangeCells: radiusCells,
+  });
+  const key = buildCalculationKey(state, unit, geometry.key);
+  if (current?.calculationKey === key) {
     runtime.diagnostics.cacheHitCount += 1;
-    return runtime.field;
+    return current;
   }
 
-  const reason = runtime.field === null
+  const reason = current === null
     ? 'initial'
-    : runtime.field.mapVisualRevision !== staticGrid.mapVisualRevision
+    : current.mapVisualRevision !== geometry.mapVisualRevision
       ? 'map-visual-revision'
       : moved
         ? 'observer-moved'
         : 'observer-state';
   const started = nowMilliseconds();
-  const field = buildVisibilityField(state, unit, staticGrid, key, runtime.diagnostics.fieldRevision + 1);
-  runtime.field = field;
-  runtime.lastObserverPosition = { ...unit.position };
+  const field = buildVisibilityField(
+    state,
+    unit,
+    geometry,
+    key,
+    runtime.diagnostics.fieldRevision + 1,
+  );
+  runtime.fieldsByUnit.set(unit.id, field);
+  runtime.lastObserverPositionByUnit.set(unit.id, { ...unit.position });
+  trimUnitFields(runtime, state);
   runtime.diagnostics.rebuildCount += 1;
   runtime.diagnostics.lastBuildReason = reason;
   runtime.diagnostics.lastBuildDurationMs = Math.max(0, nowMilliseconds() - started);
   runtime.diagnostics.lastKey = key;
   runtime.diagnostics.fieldRevision = field.revision;
+  runtime.diagnostics.processedCellCount = field.width * field.height;
+  runtime.diagnostics.rayCount = getVisibilityGeometryFieldDiagnostics(state.map).rayCount;
+  runtime.diagnostics.cachedFieldCount = runtime.fieldsByUnit.size;
   return field;
 }
 
 export function getVisibilityFieldDiagnostics(state: SimulationState): VisibilityFieldDiagnostics {
   const runtime = getRuntime(state);
-  return { ...runtime.diagnostics, cachedFieldCount: runtime.field ? 1 : 0 };
+  return { ...runtime.diagnostics, cachedFieldCount: runtime.fieldsByUnit.size };
 }
 
 export function invalidateSelectedUnitVisibilityField(state: SimulationState, reason = 'manual'): void {
   const runtime = getRuntime(state);
-  runtime.field = null;
-  runtime.lastObserverPosition = null;
+  runtime.fieldsByUnit.clear();
+  runtime.lastObserverPositionByUnit.clear();
   runtime.diagnostics.lastBuildReason = reason;
   runtime.diagnostics.lastKey = '';
+  runtime.diagnostics.cachedFieldCount = 0;
 }
 
 export function sampleSelectedUnitVisibilityField(
@@ -120,11 +152,14 @@ export function sampleSelectedUnitVisibilityField(
 function buildVisibilityField(
   state: SimulationState,
   unit: UnitModel,
-  staticGrid: VisibilityStaticGrid,
+  geometry: ReturnType<typeof getVisibilityGeometryField>,
   calculationKey: string,
   revision: number,
 ): SelectedUnitVisibilityField {
-  const radiusCells = Math.max(1, Math.ceil(unit.attentionSettings.vision.maximumVisualRangeMeters / state.map.metersPerCell));
+  const radiusCells = Math.max(
+    1,
+    Math.ceil(unit.attentionSettings.vision.maximumVisualRangeMeters / state.map.metersPerCell),
+  );
   const originCellX = clamp(Math.floor(unit.position.x), 0, state.map.width - 1);
   const originCellY = clamp(Math.floor(unit.position.y), 0, state.map.height - 1);
   const minCellX = Math.max(0, originCellX - radiusCells);
@@ -142,72 +177,34 @@ function buildVisibilityField(
     health: unit.soldier.condition.health,
     suppression: unit.behaviorRuntime.suppression,
   });
-  const originIndex = originCellY * staticGrid.width + originCellX;
-  const originEye = staticGrid.terrainHeightMeters[originIndex] + eyeHeightForPosture(unit.behaviorRuntime.posture);
-  const perimeter = perimeterCells(minCellX, minCellY, maxCellX, maxCellY);
-  const diagnostics = getRuntime(state).diagnostics;
-  diagnostics.processedCellCount = 0;
-  diagnostics.rayCount = perimeter.length;
 
-  setFieldCell(quality, blocker, width, minCellX, minCellY, originCellX, originCellY, 255, false);
-  for (const target of perimeter) {
-    let transmission = 1;
-    let horizonSlope = Number.NEGATIVE_INFINITY;
-    const cells = supercoverLine(originCellX, originCellY, target.x, target.y);
-    let previousX = originCellX;
-    let previousY = originCellY;
-    for (let index = 1; index < cells.length; index += 1) {
-      const cell = cells[index];
-      const dx = cell.x + 0.5 - unit.position.x;
-      const dy = cell.y + 0.5 - unit.position.y;
+  for (let y = minCellY; y <= maxCellY; y += 1) {
+    for (let x = minCellX; x <= maxCellX; x += 1) {
+      const localIndex = (y - minCellY) * width + (x - minCellX);
+      const mapIndex = y * state.map.width + x;
+      const dx = x + 0.5 - unit.position.x;
+      const dy = y + 0.5 - unit.position.y;
       const distanceCells = Math.hypot(dx, dy);
       const distanceMeters = distanceCells * state.map.metersPerCell;
-      if (distanceMeters > unit.attentionSettings.vision.maximumVisualRangeMeters) break;
-      const mapIndex = cell.y * staticGrid.width + cell.x;
-      const terrainHeight = staticGrid.terrainHeightMeters[mapIndex];
-      const targetSlope = (terrainHeight + TARGET_EYE_HEIGHT_METERS - originEye) / Math.max(0.001, distanceMeters);
-      const blockedByHorizon = targetSlope + HORIZON_MARGIN < horizonSlope;
-      const stepMeters = Math.hypot(cell.x - previousX, cell.y - previousY) * state.map.metersPerCell;
-      previousX = cell.x;
-      previousY = cell.y;
-      const forestKind = staticGrid.forestKind[mapIndex];
-      if (forestKind > 0) {
-        const loss = forestKind === 2 ? DENSE_FOREST_LOSS_PER_METER : SPARSE_FOREST_LOSS_PER_METER;
-        transmission *= Math.exp(-loss * stepMeters);
-      }
+      if (distanceMeters > unit.attentionSettings.vision.maximumVisualRangeMeters) continue;
+
+      const visualTransmission = (geometry.visualTransmission[mapIndex] ?? 0) / 255;
+      const hardBlocked = geometry.hardBlocked[mapIndex] === 1;
       const bearing = Math.atan2(dy, dx);
       const angleDifferenceDegrees = normalizeSignedDegrees(
         radiansToDegrees(bearing - unit.attentionRuntime.focusDirectionRadians),
       );
       const attention = sampleAttentionWeight(profile, angleDifferenceDegrees);
       const evaluated = evaluateCellVisibilityQuality({
-        blocked: blockedByHorizon || transmission <= FOREST_MIN_TRANSMISSION,
-        visualTransmission: transmission,
+        blocked: hardBlocked || visualTransmission <= MIN_VISUAL_TRANSMISSION,
+        visualTransmission,
         distanceMeters,
         attentionWeight: attention.weight,
         observerCondition,
         vision: unit.attentionSettings.vision,
       });
-      const encoded = Math.round(evaluated.quality01 * 255);
-      setFieldCell(
-        quality,
-        blocker,
-        width,
-        minCellX,
-        minCellY,
-        cell.x,
-        cell.y,
-        encoded,
-        evaluated.blocked || staticGrid.blockingFlags[mapIndex] === 1,
-      );
-      diagnostics.processedCellCount += 1;
-
-      const groundSlope = (terrainHeight - originEye) / Math.max(0.001, distanceMeters);
-      horizonSlope = Math.max(horizonSlope, groundSlope);
-      if (staticGrid.blockingFlags[mapIndex] === 1) {
-        const objectSlope = (staticGrid.objectTopHeightMeters[mapIndex] - originEye) / Math.max(0.001, distanceMeters);
-        horizonSlope = Math.max(horizonSlope, objectSlope);
-      }
+      quality[localIndex] = Math.round(evaluated.quality01 * 255);
+      blocker[localIndex] = evaluated.blocked ? 1 : 0;
     }
   }
 
@@ -223,16 +220,21 @@ function buildVisibilityField(
     blocker,
     revision,
     calculationKey,
-    mapVisualRevision: staticGrid.mapVisualRevision,
+    mapVisualRevision: geometry.mapVisualRevision,
     builtAtSeconds: state.simulationTimeSeconds,
   };
 }
 
-function buildCalculationKey(state: SimulationState, unit: UnitModel, mapVisualRevision: number): string {
+function buildCalculationKey(
+  state: SimulationState,
+  unit: UnitModel,
+  geometryKey: string,
+): string {
   const profile = unit.attentionSettings.profiles[unit.attentionRuntime.mode];
   return [
-    'view-memory:v1',
+    'current-unit-view:v2',
     unit.id,
+    geometryKey,
     quantize(unit.position.x, POSITION_QUANTUM_CELLS),
     quantize(unit.position.y, POSITION_QUANTUM_CELLS),
     unit.behaviorRuntime.posture,
@@ -246,80 +248,20 @@ function buildCalculationKey(state: SimulationState, unit: UnitModel, mapVisualR
     unit.attentionSettings.vision.maximumVisualRangeMeters.toFixed(1),
     unit.attentionSettings.vision.distanceFalloffStartMeters.toFixed(1),
     unit.attentionSettings.vision.distanceFalloffExponent.toFixed(2),
-    mapVisualRevision,
+    quantize(unit.soldier.condition.fatigue, 1),
+    quantize(unit.soldier.condition.confusion, 1),
+    quantize(unit.soldier.condition.health, 1),
+    quantize(unit.behaviorRuntime.suppression, 1),
     state.map.metersPerCell.toFixed(3),
   ].join(':');
-}
-
-function perimeterCells(minX: number, minY: number, maxX: number, maxY: number): Array<{ x: number; y: number }> {
-  const result: Array<{ x: number; y: number }> = [];
-  for (let x = minX; x <= maxX; x += 1) {
-    result.push({ x, y: minY });
-    if (maxY !== minY) result.push({ x, y: maxY });
-  }
-  for (let y = minY + 1; y < maxY; y += 1) {
-    result.push({ x: minX, y });
-    if (maxX !== minX) result.push({ x: maxX, y });
-  }
-  return result;
-}
-
-function supercoverLine(x0: number, y0: number, x1: number, y1: number): Array<{ x: number; y: number }> {
-  const points: Array<{ x: number; y: number }> = [];
-  const dx = x1 - x0;
-  const dy = y1 - y0;
-  const nx = Math.abs(dx);
-  const ny = Math.abs(dy);
-  const signX = dx > 0 ? 1 : dx < 0 ? -1 : 0;
-  const signY = dy > 0 ? 1 : dy < 0 ? -1 : 0;
-  let x = x0;
-  let y = y0;
-  let ix = 0;
-  let iy = 0;
-  points.push({ x, y });
-  while (ix < nx || iy < ny) {
-    const decision = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx;
-    if (decision === 0) {
-      x += signX;
-      y += signY;
-      ix += 1;
-      iy += 1;
-    } else if (decision < 0) {
-      x += signX;
-      ix += 1;
-    } else {
-      y += signY;
-      iy += 1;
-    }
-    points.push({ x, y });
-  }
-  return points;
-}
-
-function setFieldCell(
-  quality: Uint8Array,
-  blocker: Uint8Array,
-  width: number,
-  minX: number,
-  minY: number,
-  cellX: number,
-  cellY: number,
-  value: number,
-  blocked: boolean,
-): void {
-  const x = cellX - minX;
-  const y = cellY - minY;
-  if (x < 0 || y < 0 || x >= width || y >= blocker.length / width) return;
-  const index = y * width + x;
-  if (value > quality[index]) quality[index] = value;
-  if (blocked) blocker[index] = 1;
 }
 
 function getRuntime(state: SimulationState): VisibilityFieldRuntime {
   let runtime = runtimeByState.get(state);
   if (!runtime) {
     runtime = {
-      field: null,
+      fieldsByUnit: new Map(),
+      lastObserverPositionByUnit: new Map(),
       diagnostics: {
         rebuildCount: 0,
         cacheHitCount: 0,
@@ -331,11 +273,19 @@ function getRuntime(state: SimulationState): VisibilityFieldRuntime {
         fieldRevision: 0,
         cachedFieldCount: 0,
       },
-      lastObserverPosition: null,
     };
     runtimeByState.set(state, runtime);
   }
   return runtime;
+}
+
+function trimUnitFields(runtime: VisibilityFieldRuntime, state: SimulationState): void {
+  const validIds = new Set(state.units.map((unit) => unit.id));
+  for (const unitId of runtime.fieldsByUnit.keys()) {
+    if (validIds.has(unitId)) continue;
+    runtime.fieldsByUnit.delete(unitId);
+    runtime.lastObserverPositionByUnit.delete(unitId);
+  }
 }
 
 function eyeHeightForPosture(posture: UnitModel['behaviorRuntime']['posture']): number {
