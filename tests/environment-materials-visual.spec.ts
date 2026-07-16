@@ -90,10 +90,11 @@ async function selectFixtureSoldier(page: Page): Promise<void> {
   const box = await label.boundingBox();
   if (!box) throw new Error('Fixture soldier label bounds unavailable.');
 
+  const zoom = await readZoom(page);
   const centerX = box.x + box.width / 2;
-  const candidateY = [box.y + box.height + 22, box.y + box.height + 44, box.y - 12];
-  for (const y of candidateY) {
-    await page.mouse.click(centerX, y);
+  const markerY = box.y - 22 * zoom;
+  for (const offset of [0, -6, 6, -12, 12]) {
+    await page.mouse.click(centerX, markerY + offset);
     await page.waitForTimeout(150);
     const selectedName = await page.locator('[data-role="unit-name"]').textContent();
     if (selectedName?.includes('Солдат')) return;
