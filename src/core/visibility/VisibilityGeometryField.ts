@@ -1,4 +1,5 @@
 import type { GridPosition } from '../geometry';
+import { measurePerformancePhase } from '../debug/PerformancePhases';
 import type { TacticalMap } from '../map/MapModel';
 import {
   resolveVegetationDefinition,
@@ -79,7 +80,10 @@ export function getVisibilityGeometryField(
     return existing;
   }
 
-  const build = buildField(map, staticGrid, normalized, key);
+  const build = measurePerformancePhase(
+    'field.visibility-geometry.build',
+    () => buildField(map, staticGrid, normalized, key),
+  );
   cache.fields.set(key, build.field);
   trimCache(cache.fields, CACHE_LIMIT);
   cache.diagnostics.geometryBuildCount += 1;

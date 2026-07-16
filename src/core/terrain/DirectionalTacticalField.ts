@@ -1,4 +1,5 @@
 import type { TacticalMap } from '../map/MapModel';
+import { measurePerformancePhase } from '../debug/PerformancePhases';
 import {
   DIRECTIONAL_SECTOR_COUNT,
   DIRECTIONAL_SECTOR_RADIANS,
@@ -107,7 +108,10 @@ export function getDirectionalTacticalField(
   }
 
   const startedAt = performance.now();
-  const field = buildField(map, key, metadata, basis, options.threats);
+  const field = measurePerformancePhase(
+    'field.directional-tactical.build',
+    () => buildField(map, key, metadata, basis, options.threats),
+  );
   mapCache.fields.set(key, field);
   trimCache(mapCache.fields);
   mapCache.diagnostics.buildCount += 1;

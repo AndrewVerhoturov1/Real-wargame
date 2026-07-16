@@ -94,16 +94,21 @@ let diagnostics = getThreatRelativeCoverFieldDiagnostics(state.map);
 let directionalDiagnostics = getDirectionalTacticalFieldDiagnostics(state.map);
 assert.equal(diagnostics.geometryBuildCount, 1, 'first danger report must build one threat-relative geometry field');
 assert.equal(diagnostics.fullMapScanCount, 1);
+assert.equal(diagnostics.staticBuildCount, 1, 'map-derived cover inputs must build once for the current revisions');
 assert.equal(directionalDiagnostics.buildCount, 2, 'baseline and first threat report must build directional fields');
 assert.equal(
   diagnostics.forestMapReads,
-  CELL_COUNT - 1,
-  'cold forest geometry must perform one bounded radial read per non-origin map cell',
+  0,
+  'dynamic cover geometry must not reread vegetation from TacticalMap cells',
 );
 assert.equal(
-  diagnostics.objectChecks,
-  CELL_COUNT * state.map.objects.length,
-  'cold object geometry must be one map scan times object count, not one ray per dynamic update',
+  diagnostics.forestDensitySamples,
+  CELL_COUNT - 1,
+  'cold forest geometry must sample the prepared density layer once per non-origin map cell',
+);
+assert.ok(
+  diagnostics.objectChecks > 0 && diagnostics.objectChecks < CELL_COUNT * state.map.objects.length,
+  'object shadow bounds must reduce exact candidate checks below cell-count times object-count',
 );
 const coldBuildMs = diagnostics.lastBuildMs;
 const directionalBuildsAfterFirstThreat = directionalDiagnostics.buildCount;
@@ -122,7 +127,8 @@ assert.notEqual(dynamicChanged.cacheKey, first.cacheKey, 'dynamic scoring values
 diagnostics = getThreatRelativeCoverFieldDiagnostics(state.map);
 directionalDiagnostics = getDirectionalTacticalFieldDiagnostics(state.map);
 assert.equal(diagnostics.geometryBuildCount, 1, 'dynamic scoring must reuse cover geometry');
-assert.equal(diagnostics.forestMapReads, CELL_COUNT - 1, 'dynamic scoring must not repeat forest propagation');
+assert.equal(diagnostics.forestMapReads, 0, 'dynamic scoring must not read map vegetation');
+assert.equal(diagnostics.forestDensitySamples, CELL_COUNT - 1, 'dynamic scoring must not repeat forest propagation');
 assert.equal(
   directionalDiagnostics.buildCount,
   directionalBuildsAfterFirstThreat,
@@ -237,8 +243,8 @@ directionalDiagnostics = getDirectionalTacticalFieldDiagnostics(state.map);
 assert.ok(diagnostics.cachedFieldCount <= 16, `cache must remain bounded, got ${diagnostics.cachedFieldCount}`);
 assert.ok(diagnostics.evictionCount > 0, 'bounded cache exercise must evict old geometry fields');
 assert.ok(
-  diagnostics.forestMapReads <= diagnostics.geometryBuildCount * CELL_COUNT,
-  'forest work must remain linear in map cells for every cold geometry build',
+  diagnostics.forestDensitySamples <= diagnostics.geometryBuildCount * CELL_COUNT,
+  'prepared forest-density work must remain linear in map cells for every cold geometry build',
 );
 
 console.log(JSON.stringify({
@@ -248,6 +254,7 @@ console.log(JSON.stringify({
   geometryBuildCount: diagnostics.geometryBuildCount,
   cacheHitCount: diagnostics.cacheHitCount,
   forestMapReads: diagnostics.forestMapReads,
+  forestDensitySamples: diagnostics.forestDensitySamples,
   objectChecks: diagnostics.objectChecks,
   cachedFieldCount: diagnostics.cachedFieldCount,
   evictionCount: diagnostics.evictionCount,

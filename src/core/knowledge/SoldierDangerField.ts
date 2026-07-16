@@ -1,4 +1,5 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
+import { measurePerformancePhase } from '../debug/PerformancePhases';
 import {
   getThreatRelativeCoverField,
   type ThreatRelativeCoverField,
@@ -147,7 +148,10 @@ export function getSoldierDangerField(
     return existing;
   }
 
-  const field = scoreDangerField(map, threats, threatGeometries, geometryKey, fieldKey);
+  const field = measurePerformancePhase(
+    'field.soldier-danger.score',
+    () => scoreDangerField(map, threats, threatGeometries, geometryKey, fieldKey),
+  );
   cache.fields.set(fieldKey, field);
   trimCache(cache.fields, FIELD_CACHE_LIMIT);
   cache.diagnostics.fieldBuildCount += 1;
@@ -212,7 +216,10 @@ function getThreatGeometry(
     return existing;
   }
 
-  const geometry = buildThreatGeometry(map, posture, threat, staticField, directionalBasis, lineOfFire, key);
+  const geometry = measurePerformancePhase(
+    'field.soldier-danger.geometry',
+    () => buildThreatGeometry(map, posture, threat, staticField, directionalBasis, lineOfFire, key),
+  );
   cache.threatGeometries.set(key, geometry);
   trimCache(cache.threatGeometries, THREAT_GEOMETRY_CACHE_LIMIT);
   cache.diagnostics.geometryBuildCount += 1;
