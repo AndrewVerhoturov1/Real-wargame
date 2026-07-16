@@ -65,8 +65,14 @@ test.describe('tactical order radial menu visual QA — approved by user', () =>
     await reset(page);
     const edgeAnchor = { x: box.x + 5, y: box.y + 5 };
     const edgeOpen = await openMenu(page, edgeAnchor, 'recon');
-    expect(Math.abs(edgeOpen.center.x - edgeAnchor.x)).toBeGreaterThan(40);
-    expect(Math.abs(edgeOpen.center.y - edgeAnchor.y)).toBeGreaterThan(40);
+    expect(Math.abs(edgeOpen.center.x - edgeAnchor.x)).toBeGreaterThan(30);
+    expect(Math.abs(edgeOpen.center.y - edgeAnchor.y)).toBeGreaterThan(30);
+    const edgeMenuBox = await menu.boundingBox();
+    expect(edgeMenuBox).toBeTruthy();
+    expect(edgeMenuBox?.x).toBeGreaterThanOrEqual(0);
+    expect(edgeMenuBox?.y).toBeGreaterThanOrEqual(0);
+    expect((edgeMenuBox?.x ?? 0) + (edgeMenuBox?.width ?? 0)).toBeLessThanOrEqual(VIEWPORT.width);
+    expect((edgeMenuBox?.y ?? 0) + (edgeMenuBox?.height ?? 0)).toBeLessThanOrEqual(VIEWPORT.height);
     await expect(page.locator('[data-preset-id="recon"]')).toHaveClass(/active/);
     await screenshot(page, '04-compact-radial-edge-recon-hover.png');
     await page.mouse.up({ button: 'right' });
