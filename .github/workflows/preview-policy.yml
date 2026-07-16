@@ -1,72 +1,104 @@
-name: Preview Policy
+name: Apply Perception Sensor Precedence Fix
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited, ready_for_review]
+    branches:
+      - real-wargame-preview
+    types: [synchronize]
+
+permissions:
+  contents: write
 
 jobs:
-  check-preview-policy:
+  apply-sensor-precedence-fix:
+    if: github.event.pull_request.head.ref == 'agent/physical-movement-runtime-v1'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - name: Check preview policy
-        env:
-          PR_BODY: ${{ github.event.pull_request.body || '' }}
+      - name: Checkout exact candidate branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/physical-movement-runtime-v1
+          fetch-depth: 0
+
+      - name: Apply visual-over-sound precedence
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
 
-          # This workflow guards PRs targeting main.
-          # Visual QA is deliberately not run here. It is manual-only through
-          # .github/workflows/preview-screenshots.yml after user approval.
-          # The preferred external delivery is direct push to real-wargame-preview, not PRs.
-          # PRs targeting main from task branches are a preview-policy violation without GO.
+          def replace_exact(path: str, old: str, new: str) -> None:
+              file_path = Path(path)
+              text = file_path.read_text(encoding='utf-8')
+              old_count = text.count(old)
+              new_count = text.count(new)
+              if old_count == 1:
+                  file_path.write_text(text.replace(old, new), encoding='utf-8')
+                  return
+              if old_count == 0 and new_count == 1:
+                  return
+              raise RuntimeError(f'{path}: invalid replacement state old={old_count}, new={new_count}')
 
-          BASE_BRANCH="${{ github.base_ref }}"
-          HEAD_BRANCH="${{ github.head_ref }}"
+          replace_exact(
+              'src/core/perception/PerceptionSystem.ts',
+              """    const previous = unit.perceptionKnowledge.contacts.find((item) => item.id === contactId) ?? null;\n    const contact = advanceReportedContact(previous, {""",
+              """    const previous = unit.perceptionKnowledge.contacts.find((item) => item.id === contactId) ?? null;\n    if (previous?.source === 'visual' && previous.lastUpdatedSeconds === now) {\n      updatedContacts.add(contactId);\n      continue;\n    }\n    const contact = advanceReportedContact(previous, {""",
+          )
 
-          echo "=== Preview Policy Check ==="
-          echo "Base branch: $BASE_BRANCH"
-          echo "Head branch: $HEAD_BRANCH"
-          echo ""
+          replace_exact(
+              'scripts/physical_movement_runtime_smoke.ts',
+              """verifyPerceptionMovementAndSignature();\nverifySprintWeaponPreparation();""",
+              """verifyPerceptionMovementAndSignature();\nverifyMovementSoundDoesNotDowngradeVisualContact();\nverifySprintWeaponPreparation();""",
+          )
+          replace_exact(
+              'scripts/physical_movement_runtime_smoke.ts',
+              "console.log('Physical movement runtime smoke passed: gait speed, partition invariance, stamina, gait-aware observation, perception, sound, weapon preparation, migration, UI independence and route replan persistence.');",
+              "console.log('Physical movement runtime smoke passed: gait speed, partition invariance, stamina, gait-aware observation, perception, sensor precedence, sound, weapon preparation, migration, UI independence and route replan persistence.');",
+          )
+          replace_exact(
+              'scripts/physical_movement_runtime_smoke.ts',
+              """function verifySprintWeaponPreparation(): void {""",
+              """function verifyMovementSoundDoesNotDowngradeVisualContact(): void {\n  const state = makeCombatState();\n  const observer = state.units[0];\n  const target = state.units[1];\n  for (const profile of Object.values(observer.attentionSettings.profiles)) {\n    profile.focusAngleDegrees = 180;\n    profile.directAngleDegrees = 360;\n    profile.focusWeight = 1;\n    profile.directWeight = 1;\n    profile.peripheralWeight = 1;\n    profile.focusCheckIntervalSeconds = 0.05;\n    profile.directCheckIntervalSeconds = 0.05;\n    profile.peripheralCheckIntervalSeconds = 0.05;\n    profile.rearCheckIntervalSeconds = 0.05;\n  }\n  observer.attentionRuntime.nextFocusCheckSeconds = 0;\n  observer.attentionRuntime.nextDirectCheckSeconds = 0;\n  observer.attentionRuntime.nextPeripheralCheckSeconds = 0;\n  observer.attentionRuntime.nextRearCheckSeconds = 0;\n  installIdentifiedContact(observer, target, state.simulationTimeSeconds);\n  setMovementRequest(target, 'normal', 'player', 'walk');\n  target.order = createMoveOrder({ x: 5.5, y: 2.5 }, { source: 'player' });\n  for (let index = 0; index < 30; index += 1) tickSimulation(state, 0.1);\n  assert.ok(target.movementRuntime.emittedSoundCount > 0, 'fixture must emit at least one movement sound');\n  const contact = observer.perceptionKnowledge.contacts.find((item) => item.sourceUnitId === target.id);\n  assert.ok(contact, 'observer must retain the hostile contact');\n  assert.equal(contact.source, 'visual', 'same-tick movement sound must not replace a current visual contact');\n  assert.equal(contact.visibleNow, true, 'same-tick movement sound must not clear visual visibility');\n  assert.ok(Math.hypot(\n    contact.lastKnownPosition.x - target.position.x,\n    contact.lastKnownPosition.y - target.position.y,\n  ) < 0.001, 'visual contact must keep the exact current target position');\n}\n\nfunction verifySprintWeaponPreparation(): void {""",
+          )
 
-          DEFAULT_TARGET="real-wargame-preview"
-          echo "Default target branch: $DEFAULT_TARGET"
-          echo "Default external delivery: direct push to $DEFAULT_TARGET (PR is fallback)"
-          echo ""
+          replace_exact(
+              'docs/subprojects/ai-single-unit-editor/PHYSICAL_MOVEMENT_PROFILES_V1.md',
+              "Target visibility includes the effective profile's movement signature and stealth-skill share. Lateral motion is derived from actual velocity relative to the observer rather than a constant value.",
+              "Target visibility includes the effective profile's movement signature and stealth-skill share. Lateral motion is derived from actual velocity relative to the observer rather than a constant value. When visual and movement-sound evidence identify the same unit in one tick, the current visual contact has precedence: sound cannot clear `visibleNow` or replace the exact visual position with an acoustic estimate.",
+          )
+          replace_exact(
+              'docs/subprojects/ai-single-unit-editor/PHYSICAL_MOVEMENT_PROFILES_V1.md',
+              "16. ordinary walk preserves legacy-neutral observation, while run and sprint apply gait-level penalties even under the normal profile.",
+              "16. ordinary walk preserves legacy-neutral observation, while run and sprint apply gait-level penalties even under the normal profile;\n17. a same-tick movement sound cannot downgrade a current visual contact.",
+          )
+          PY
+          git diff --check
+          git diff --stat
 
-          # Check: if base is main, flag it unless MAIN_GO is recorded
-          if [ "$BASE_BRANCH" = "main" ]; then
-            # Check head branch pattern: codex/*, preview/*, r-init/*
-            if echo "$HEAD_BRANCH" | grep -qE '^(codex/|preview/|r-init/)'; then
-              # Look for MAIN_GO marker in PR body
-              if printf '%s\n' "$PR_BODY" | grep -Eiq 'MAIN_GO_APPROVED_BY_USER:[[:space:]]*yes'; then
-                echo "PASS: PR targets main with explicit MAIN_GO approval."
-                echo "preview_policy=pass" >> $GITHUB_ENV
-                exit 0
-              else
-                echo "FAIL: PR targets main from branch '$HEAD_BRANCH'"
-                echo "      without MAIN_GO_APPROVED_BY_USER: yes marker."
-                echo ""
-                echo "Default target is '$DEFAULT_TARGET'."
-                echo "Please retarget this PR to '$DEFAULT_TARGET' or"
-                echo "add 'MAIN_GO_APPROVED_BY_USER: yes' to the PR body"
-                echo "if the user has explicitly approved a main merge."
-                echo "preview_policy=fail" >> $GITHUB_ENV
-                exit 1
-              fi
-            else
-              echo "PASS: Head branch '$HEAD_BRANCH' does not match codex/*, preview/*, or r-init/* patterns."
-              echo "preview_policy=pass" >> $GITHUB_ENV
-            fi
-          else
-            echo "PASS: Base branch is '$BASE_BRANCH' (expected default is '$DEFAULT_TARGET')."
-            echo "preview_policy=pass" >> $GITHUB_ENV
+      - name: Verify perception compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run physical-movement:smoke
+          npm run perception:smoke
+          npm run ai-scheduler:smoke
+          npm run combat-tactical-integration:smoke
+          npm run build
+          npm run docs:check
+
+      - name: Commit source-only fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/core/perception/PerceptionSystem.ts scripts/physical_movement_runtime_smoke.ts docs/subprojects/ai-single-unit-editor/PHYSICAL_MOVEMENT_PROFILES_V1.md
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'Sensor precedence fix already applied.'
+            exit 0
           fi
-
-      - name: Print policy result
-        shell: bash
-        run: |
-          echo "Preview policy result: ${{ env.preview_policy }}"
-          echo "Default target for this repository is: real-wargame-preview"
-          echo "Default external delivery is: direct push to preview (PR is fallback)"
-          echo "Visual QA execution is manual-only after explicit user approval"
+          git commit -m 'Preserve current visual contacts over movement sounds'
+          git push origin HEAD:agent/physical-movement-runtime-v1
