@@ -24,14 +24,8 @@ if %errorlevel% neq 0 (
 echo [OK] npm naiden.
 
 :: ---- stop stale server process tree before dependency refresh ----
-echo [INFO] Osvobozhdayu port %PORT% pred obnovleniem zavisimostey...
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr /C:":%PORT% "') do (
-    if not "%%a"=="0" (
-        taskkill /f /t /pid %%a >nul 2>nul && echo [OK] Process tree s PID %%a ostanovlen.
-    )
-)
-echo [INFO] Ostanavlivayu proektnye Node/esbuild protsessy...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$project=[Regex]::Escape((Get-Location).Path); Get-CimInstance Win32_Process -ErrorAction SilentlyContinue ^| Where-Object { $_.Name -in @('node.exe','esbuild.exe') -and $_.CommandLine -match $project } ^| ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>nul
+echo [INFO] Osvobozhdayu port %PORT% i proektnye protsessy...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$c=Get-NetTCPConnection -LocalPort %PORT% -State Listen -ErrorAction SilentlyContinue; foreach($x in $c){$ownerPid=$x.OwningProcess; if($ownerPid -and $ownerPid -ne 0){Stop-Process -Id $ownerPid -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 400}}; $project=[Regex]::Escape((Get-Location).Path); $all=Get-CimInstance Win32_Process -ErrorAction SilentlyContinue; foreach($proc in $all){if($proc.Name -in @('node.exe','esbuild.exe') -and $proc.CommandLine -and $proc.CommandLine -match $project){Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue}}" >nul 2>nul
 >nul 2>nul timeout /t 1 /nobreak
 
 :: ---- dependency consistency check ----
