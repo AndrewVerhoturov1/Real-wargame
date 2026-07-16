@@ -99,10 +99,13 @@ function ensureMovementFixtureUnits(state: SimulationState): void {
       heldItem: template.heldItem,
       behaviorProfile: template.behaviorProfile,
       navigationProfileId: 'normal',
+      aiControl: 'manual',
     }]);
     if (!unit) throw new Error('Movement performance harness failed to create an auxiliary unit.');
     state.units.push(unit);
   }
+
+  for (const unit of state.units) unit.aiControl = 'manual';
 }
 
 function prepareScenario(state: SimulationState, observer: UnitModel, hostile: UnitModel, scenario: DangerMovementScenario): void {
