@@ -9,6 +9,9 @@ test('movement profile editor supports guarded visual authoring', async ({ page 
   for (const builtIn of ['Обычный шаг', 'Скрытное движение', 'Движение пригнувшись', 'Бег', 'Спринт', 'Ползком']) {
     await expect(page.getByRole('button', { name: new RegExp(builtIn) })).toBeVisible();
   }
+  const gaitSelector = page.locator('select[data-movement-select="preferredGait"]');
+  await expect(gaitSelector.locator('option[value="crouch_walk"]')).toHaveText('Пригнувшись');
+  await expect(gaitSelector.locator('option[value="crouch"]')).toHaveCount(0);
   await page.screenshot({ path: 'test-results/movement-profiles/01-built-ins.png', fullPage: true });
 
   const speedNumber = page.getByLabel('Множитель скорости: точное значение');
