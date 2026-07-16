@@ -1,11 +1,9 @@
 import type { GridPosition } from '../geometry';
 import {
   MOVEMENT_PROFILE_MEMORY_KEYS,
-  normalizeMovementProfileId,
-  normalizeMovementProfileSource,
-  resolveMovementProfile,
+  MOVEMENT_PROFILE_SOURCES,
+  type MovementProfileRegistryEntry,
   type MovementProfileSource,
-  type ResolvedMovementProfile,
 } from '../movement/MovementProfileContract';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../navigation/NavigationRuntime';
 import type { MoveOrder } from '../orders/MoveOrder';
@@ -32,6 +30,7 @@ import {
   type AiRouteStatusSettings,
   type AiRouteStatusState,
 } from './AiRouteStatus';
+import { reconcileMovementProfileRuntime } from './MovementProfileRuntimeResolver';
 
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
@@ -61,6 +60,7 @@ export interface TickOptions {
   readonly cycleStartMs?: number;
   readonly cycleEndMs?: number;
   readonly diagnosticPreview?: boolean;
+  readonly movementProfileRegistryEntries?: readonly MovementProfileRegistryEntry[];
 }
 
 interface ActiveMoveSnapshot {
@@ -78,11 +78,10 @@ interface BeginMoveMovementProfileFields {
   readonly movementProfileOwnerToken?: unknown;
 }
 
-interface ResolvedMoveMovementProfile {
-  readonly profileId: string;
-  readonly source: MovementProfileSource;
+interface BeginMoveMovementProfileSnapshot {
+  readonly profileId?: string;
+  readonly source?: MovementProfileSource;
   readonly ownerToken?: string;
-  readonly revision: number;
 }
 
 export function installAiStatefulMoveGameBridge(state: SimulationState): AiGameBridgeHandle {
@@ -152,6 +151,7 @@ export function tickStatefulMoveBridgeForTrustedUnit(
   nowMs = getSimulationNowMs(state),
   options: TickOptions = { force: false, applyEffects: true },
 ): AiGraphRuntimeResult | null {
+  reconcileMovementProfileRuntime(unit, options.movementProfileRegistryEntries);
   syncMoveOrderMemoryForUnit(unit);
 
   let routeResult: AiRouteStatusResult | null = null;
@@ -163,7 +163,15 @@ export function tickStatefulMoveBridgeForTrustedUnit(
   }
 
   const result = tickAiGameBridgeForTrustedUnit(state, unit, nowMs, runtimeOptions);
-  if (result && runtimeOptions.applyEffects) applyOwnedMoveEffectsForUnit(state, unit, result);
+  if (result && runtimeOptions.applyEffects) {
+    applyOwnedMoveEffectsForUnit(
+      state,
+      unit,
+      result,
+      options.movementProfileRegistryEntries,
+    );
+  }
+  reconcileMovementProfileRuntime(unit, options.movementProfileRegistryEntries);
   syncMoveOrderMemoryForUnit(unit);
 
   if (options.applyEffects) {
@@ -184,6 +192,7 @@ export function syncSelectedMoveOrderMemory(state: SimulationState): void {
   if (unit) syncMoveOrderMemoryForUnit(unit);
 }
 
+/** Publishes route/order facts only. Movement-profile selection belongs to the finalizer. */
 export function syncMoveOrderMemoryForUnit(unit: UnitModel): void {
   const runtime = unit.behaviorRuntime as AiMoveRuntime;
   const memory = getRuntimeMemory(runtime);
@@ -194,7 +203,6 @@ export function syncMoveOrderMemoryForUnit(unit: UnitModel): void {
   memory.active_move_owner_token = order?.ownerToken ?? null;
   memory.active_move_target = order ? { ...order.target } : null;
   if (order) publishPathOrderMemory(memory, order);
-  publishMovementProfileMemory(unit, memory, order);
 }
 
 export function updateSelectedRouteStatus(
@@ -248,16 +256,21 @@ export function updateRouteStatusForTrustedUnit(
   return routeResult;
 }
 
-export function applyOwnedMoveEffects(state: SimulationState, result: AiGraphRuntimeResult): void {
+export function applyOwnedMoveEffects(
+  state: SimulationState,
+  result: AiGraphRuntimeResult,
+  registryEntries?: readonly MovementProfileRegistryEntry[],
+): void {
   const unit = state.units.find((candidate) => candidate.id === result.unitId);
   if (!unit) return;
-  applyOwnedMoveEffectsForUnit(state, unit, result);
+  applyOwnedMoveEffectsForUnit(state, unit, result, registryEntries);
 }
 
 export function applyOwnedMoveEffectsForUnit(
   state: SimulationState,
   unit: UnitModel,
   result: AiGraphRuntimeResult,
+  registryEntries?: readonly MovementProfileRegistryEntry[],
 ): void {
   const runtime = unit.behaviorRuntime as AiMoveRuntime;
   const memory = getRuntimeMemory(runtime);
@@ -269,7 +282,7 @@ export function applyOwnedMoveEffectsForUnit(
     if (effect.type === 'begin_move') {
       runtime.aiRouteStatusState = null;
       const resolvedNavigation = resolveUnitNavigationProfile(unit, null);
-      const resolvedMovement = resolveMoveMovementProfile(unit, memory, rawEffect, effect.ownerToken);
+      const movementSnapshot = readBeginMoveMovementProfileSnapshot(rawEffect);
       const planned = planMoveOrder(state.map, unit.position, effect.targetPosition, {
         source: 'ai',
         ownerToken: effect.ownerToken,
@@ -277,10 +290,9 @@ export function applyOwnedMoveEffectsForUnit(
         movementMode: unit.navigationMovementMode ?? 'normal',
         navigationProfile: resolvedNavigation.profile,
         navigationProfileSource: resolvedNavigation.source,
-        movementProfileId: resolvedMovement.profileId,
-        movementProfileSource: resolvedMovement.source,
-        movementProfileOwnerToken: resolvedMovement.ownerToken,
-        movementProfileRevision: resolvedMovement.revision,
+        movementProfileId: movementSnapshot.profileId,
+        movementProfileSource: movementSnapshot.source,
+        movementProfileOwnerToken: movementSnapshot.ownerToken,
         tacticalContext: buildUnitTacticalRouteContext(unit),
       });
       if (!planned.ok) {
@@ -293,11 +305,11 @@ export function applyOwnedMoveEffectsForUnit(
       }
 
       unit.order = planned.order;
+      reconcileMovementProfileRuntime(unit, registryEntries);
       unit.behaviorRuntime.currentAction = 'move';
       unit.behaviorRuntime.reason = planned.path.reasonRu;
       unit.behaviorRuntime.lastEvent = 'ai_graph_owned_move_started';
       publishPathOrderMemory(memory, planned.order);
-      publishMovementProfileMemory(unit, memory, planned.order);
       continue;
     }
 
@@ -398,119 +410,19 @@ function loadRouteSettings(activeNodeId: string, graph?: { readonly nodes: reado
   }
 }
 
-function resolveMoveMovementProfile(
-  unit: UnitModel,
-  memory: Readonly<Record<string, AiBlackboardValue>>,
-  rawEffect: unknown,
-  moveOwnerToken: string,
-): ResolvedMoveMovementProfile {
-  const profileEffect = isRecord(rawEffect) ? rawEffect as BeginMoveMovementProfileFields : {};
-  if (typeof profileEffect.movementProfileId === 'string' && profileEffect.movementProfileId.trim()) {
-    const source = normalizeMovementProfileSource(profileEffect.movementProfileSource, 'ai_override');
-    return {
-      profileId: normalizeMovementProfileId(profileEffect.movementProfileId),
-      source,
-      ownerToken: cleanOptionalText(profileEffect.movementProfileOwnerToken)
-        ?? (source === 'player_order'
-          ? unit.playerCommand?.id
-          : source === 'ai_override'
-            ? moveOwnerToken
-            : undefined),
-      revision: source === 'player_order' ? unit.playerCommand?.revision ?? 1 : 1,
-    };
-  }
-
-  const resolved = resolveMovementProfile({
-    hardSafetyProfileId: memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId],
-    hardSafetyReason: memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason],
-    aiOverrideProfileId: memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId],
-    aiOverrideOwnerToken: memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken],
-    playerOrderProfileId: unit.playerCommand?.intent.movementProfileId,
-    unitRoleProfileId: unit.unitRoleMovementProfileId,
-  });
-  return {
-    profileId: resolved.profileId,
-    source: resolved.source,
-    ownerToken: resolved.ownerToken
-      ?? (resolved.source === 'player_order'
-        ? unit.playerCommand?.id
-        : resolved.source === 'ai_override'
-          ? moveOwnerToken
-          : undefined),
-    revision: resolved.source === 'player_order' ? unit.playerCommand?.revision ?? 1 : 1,
-  };
-}
-
-function publishMovementProfileMemory(
-  unit: UnitModel,
-  memory: Record<string, AiBlackboardValue>,
-  order: MoveOrder | null,
-): void {
-  const orderProfileId = cleanOptionalText(order?.movementProfileId);
-  const orderSource = orderProfileId
-    ? normalizeMovementProfileSource(order?.movementProfileSource, 'default')
+function readBeginMoveMovementProfileSnapshot(rawEffect: unknown): BeginMoveMovementProfileSnapshot {
+  if (!isRecord(rawEffect)) return {};
+  const fields = rawEffect as BeginMoveMovementProfileFields;
+  const profileId = cleanOptionalText(fields.movementProfileId);
+  const source = MOVEMENT_PROFILE_SOURCES.includes(fields.movementProfileSource as MovementProfileSource)
+    ? fields.movementProfileSource as MovementProfileSource
     : undefined;
-  const resolved = resolveMovementProfile({
-    hardSafetyProfileId: readMemoryCandidate(
-      memory,
-      MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId,
-      orderSource === 'hard_safety' ? orderProfileId : undefined,
-    ),
-    hardSafetyReason: memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason],
-    aiOverrideProfileId: readMemoryCandidate(
-      memory,
-      MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId,
-      orderSource === 'ai_override' ? orderProfileId : undefined,
-    ),
-    aiOverrideOwnerToken: readMemoryCandidate(
-      memory,
-      MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken,
-      orderSource === 'ai_override' ? order?.movementProfileOwnerToken : undefined,
-    ),
-    playerOrderProfileId: unit.playerCommand?.intent.movementProfileId
-      ?? (orderSource === 'player_order' ? orderProfileId : undefined),
-    unitRoleProfileId: unit.unitRoleMovementProfileId
-      ?? (orderSource === 'unit_role' ? orderProfileId : undefined),
-    defaultProfileId: orderSource === 'default' ? orderProfileId : undefined,
-  });
-  memory[MOVEMENT_PROFILE_MEMORY_KEYS.requestedProfileId] = unit.playerCommand?.intent.movementProfileId
-    ?? unit.unitRoleMovementProfileId
-    ?? (orderSource === 'player_order' || orderSource === 'unit_role' || orderSource === 'default'
-      ? orderProfileId
-      : undefined)
-    ?? resolved.profileId;
-  memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId] = resolved.profileId;
-  memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource] = resolved.source;
-  memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedFallback] = resolved.forcedFallback;
-  memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedReason] = resolved.forcedReason ?? '';
-  if (order) syncMoveOrderMovementProfileSnapshot(unit, order, resolved);
-}
-
-function syncMoveOrderMovementProfileSnapshot(
-  unit: UnitModel,
-  order: MoveOrder,
-  resolved: ResolvedMovementProfile,
-): void {
-  const ownerToken = resolved.ownerToken
-    ?? (resolved.source === 'player_order' ? unit.playerCommand?.id : undefined);
-  const changed = order.movementProfileId !== resolved.profileId
-    || order.movementProfileSource !== resolved.source
-    || order.movementProfileOwnerToken !== ownerToken;
-  if (!changed) return;
-  order.movementProfileId = resolved.profileId;
-  order.movementProfileSource = resolved.source;
-  order.movementProfileOwnerToken = ownerToken;
-  order.movementProfileRevision = resolved.source === 'player_order'
-    ? unit.playerCommand?.revision ?? (order.movementProfileRevision ?? 1)
-    : (order.movementProfileRevision ?? 0) + 1;
-}
-
-function readMemoryCandidate(
-  memory: Readonly<Record<string, AiBlackboardValue>>,
-  key: string,
-  fallback: AiBlackboardValue | undefined,
-): AiBlackboardValue | undefined {
-  return Object.prototype.hasOwnProperty.call(memory, key) ? memory[key] : fallback;
+  if (!profileId || !source) return {};
+  return {
+    profileId,
+    source,
+    ownerToken: cleanOptionalText(fields.movementProfileOwnerToken),
+  };
 }
 
 function publishRouteMemory(memory: Record<string, AiBlackboardValue>, result: AiRouteStatusResult): void {
