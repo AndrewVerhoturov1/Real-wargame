@@ -83,11 +83,10 @@ test.describe('tactical order radial menu visual QA — approved by user', () =>
     await screenshot(page, '05-edge-recon-order-issued.png');
 
     await reset(page);
-    const oppositeEdgeAnchor = { x: box.x + box.width - 5, y: box.y + box.height - 5 };
-    const oppositeOpen = await openMenu(page, oppositeEdgeAnchor, 'assault');
+    const edgeAssaultOpen = await openMenu(page, edgeAnchor, 'assault');
     await page.mouse.up({ button: 'right' });
-    const oppositeAssault = await waitForPreset(page, 'assault');
-    expect(oppositeAssault.target).toEqual(oppositeOpen.displayedTarget);
+    const edgeAssault = await waitForPreset(page, 'assault');
+    expect(edgeAssault.target).toEqual(edgeAssaultOpen.displayedTarget);
 
     await reset(page);
     const outsideOpen = await openMenu(page, anchor, null);
