@@ -231,6 +231,10 @@ function processSoundEvents(
     const stimulusId = event.sourceId ? `unit:${event.sourceId}` : `sound:${event.id}`;
     const contactId = event.sourceId ? contactIdForStimulus(stimulusId) : `perception:sound:${event.id}`;
     const previous = unit.perceptionKnowledge.contacts.find((item) => item.id === contactId) ?? null;
+    if (previous?.source === 'visual' && previous.lastUpdatedSeconds === now) {
+      updatedContacts.add(contactId);
+      continue;
+    }
     const contact = advanceReportedContact(previous, {
       id: contactId,
       stimulusId,

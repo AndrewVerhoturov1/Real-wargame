@@ -124,7 +124,7 @@ crawl / crouch_walk / walk → walking
 run / sprint               → running
 ```
 
-Target visibility includes the effective profile's movement signature and stealth-skill share. Lateral motion is derived from actual velocity relative to the observer rather than a constant value.
+Target visibility includes the effective profile's movement signature and stealth-skill share. Lateral motion is derived from actual velocity relative to the observer rather than a constant value. When visual and movement-sound evidence identify the same unit in one tick, the current visual contact has precedence: sound cannot clear `visibleNow` or replace the exact visual position with an acoustic estimate.
 
 The moving observer keeps perception active. Ordinary `walk`, `crouch_walk` and `crawl` are gait-neutral for legacy observation cadence; profile factors may still tune them. `run` and `sprint` impose mandatory gait-level reductions on attention weights, check cadence and target processing, then the effective profile applies its additional observation factors. No channel is set to zero.
 
@@ -240,4 +240,5 @@ It proves:
 13. old scenes receive safe defaults and custom profiles round-trip;
 14. selected-unit UI state cannot change physical results;
 15. route replan preserves the active physical movement request;
-16. ordinary walk preserves legacy-neutral observation, while run and sprint apply gait-level penalties even under the normal profile.
+16. ordinary walk preserves legacy-neutral observation, while run and sprint apply gait-level penalties even under the normal profile;
+17. a same-tick movement sound cannot downgrade a current visual contact.

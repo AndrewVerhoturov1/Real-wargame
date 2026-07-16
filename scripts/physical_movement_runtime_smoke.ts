@@ -24,12 +24,13 @@ verifyPartitionInvariantMovementAndSound();
 verifyStaminaDrainRecoveryAndFallback();
 verifyWalkNeutralAndGaitObservationPenalty();
 verifyPerceptionMovementAndSignature();
+verifyMovementSoundDoesNotDowngradeVisualContact();
 verifySprintWeaponPreparation();
 verifyLegacyAndCustomProfileSerialization();
 verifySelectionIndependence();
 verifyRouteReplanKeepsMovementProfile();
 
-console.log('Physical movement runtime smoke passed: gait speed, partition invariance, stamina, gait-aware observation, perception, sound, weapon preparation, migration, UI independence and route replan persistence.');
+console.log('Physical movement runtime smoke passed: gait speed, partition invariance, stamina, gait-aware observation, perception, sensor precedence, sound, weapon preparation, migration, UI independence and route replan persistence.');
 
 function verifyGaitSpeedOrder(): void {
   const crawl = movedDistance('low', 'crawl', 2);
@@ -160,6 +161,43 @@ function verifyPerceptionMovementAndSignature(): void {
   const stealthSignal = evaluateVisualSignal({ observer: stealth, stimulus: stealthStimulus, attention, visibility: fakeVisibility });
   assert.ok(stealthSignal.evidencePerSecond < runningSignal.evidencePerSecond, 'stealth movement must create less visual evidence than running under equal visibility');
   assert.ok(stealth.movementRuntime.diagnostics.observationFocusMultiplier > sprinter.movementRuntime.diagnostics.observationFocusMultiplier, 'sprint must degrade self-observation more than stealth movement');
+}
+
+function verifyMovementSoundDoesNotDowngradeVisualContact(): void {
+  const state = makeCombatState();
+  const observer = state.units[0];
+  const target = state.units[1];
+  target.position = { x: 8.5, y: 2.5 };
+  observer.viewRangeCells = 100;
+  observer.attentionSettings.vision.maximumVisualRangeMeters = 100;
+  for (const profile of Object.values(observer.attentionSettings.profiles)) {
+    profile.focusAngleDegrees = 180;
+    profile.directAngleDegrees = 360;
+    profile.focusWeight = 1;
+    profile.directWeight = 1;
+    profile.peripheralWeight = 1;
+    profile.focusCheckIntervalSeconds = 0.05;
+    profile.directCheckIntervalSeconds = 0.05;
+    profile.peripheralCheckIntervalSeconds = 0.05;
+    profile.rearCheckIntervalSeconds = 0.05;
+  }
+  observer.attentionRuntime.nextFocusCheckSeconds = 0;
+  observer.attentionRuntime.nextDirectCheckSeconds = 0;
+  observer.attentionRuntime.nextPeripheralCheckSeconds = 0;
+  observer.attentionRuntime.nextRearCheckSeconds = 0;
+  installIdentifiedContact(observer, target, state.simulationTimeSeconds);
+  setMovementRequest(target, 'normal', 'player', 'walk');
+  target.order = createMoveOrder({ x: 3.5, y: 2.5 }, { source: 'player' });
+  for (let index = 0; index < 30; index += 1) tickSimulation(state, 0.1);
+  assert.ok(target.movementRuntime.emittedSoundCount > 0, 'fixture must emit at least one movement sound');
+  const contact = observer.perceptionKnowledge.contacts.find((item) => item.sourceUnitId === target.id);
+  assert.ok(contact, 'observer must retain the hostile contact');
+  assert.equal(contact.source, 'visual', 'same-tick movement sound must not replace a current visual contact');
+  assert.equal(contact.visibleNow, true, 'same-tick movement sound must not clear visual visibility');
+  assert.ok(Math.hypot(
+    contact.lastKnownPosition.x - target.position.x,
+    contact.lastKnownPosition.y - target.position.y,
+  ) < 0.001, 'visual contact must keep the exact current target position');
 }
 
 function verifySprintWeaponPreparation(): void {
