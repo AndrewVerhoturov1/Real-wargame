@@ -5,6 +5,7 @@ import {
   normalizeMovementProfileSource,
   resolveMovementProfile,
   type MovementProfileSource,
+  type ResolvedMovementProfile,
 } from '../movement/MovementProfileContract';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../navigation/NavigationRuntime';
 import type { MoveOrder } from '../orders/MoveOrder';
@@ -410,7 +411,11 @@ function resolveMoveMovementProfile(
       profileId: normalizeMovementProfileId(profileEffect.movementProfileId),
       source,
       ownerToken: cleanOptionalText(profileEffect.movementProfileOwnerToken)
-        ?? (source === 'player_order' ? unit.playerCommand?.id : moveOwnerToken),
+        ?? (source === 'player_order'
+          ? unit.playerCommand?.id
+          : source === 'ai_override'
+            ? moveOwnerToken
+            : undefined),
       revision: source === 'player_order' ? unit.playerCommand?.revision ?? 1 : 1,
     };
   }
@@ -427,7 +432,11 @@ function resolveMoveMovementProfile(
     profileId: resolved.profileId,
     source: resolved.source,
     ownerToken: resolved.ownerToken
-      ?? (resolved.source === 'player_order' ? unit.playerCommand?.id : moveOwnerToken),
+      ?? (resolved.source === 'player_order'
+        ? unit.playerCommand?.id
+        : resolved.source === 'ai_override'
+          ? moveOwnerToken
+          : undefined),
     revision: resolved.source === 'player_order' ? unit.playerCommand?.revision ?? 1 : 1,
   };
 }
@@ -437,29 +446,54 @@ function publishMovementProfileMemory(
   memory: Record<string, AiBlackboardValue>,
   order: MoveOrder | null,
 ): void {
-  if (order?.movementProfileId) {
-    memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId] = order.movementProfileId;
-    memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource] = order.movementProfileSource ?? 'default';
-    memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedFallback] = false;
-    memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedReason] = '';
-    return;
-  }
-
+  const orderProfileId = cleanOptionalText(order?.movementProfileId);
+  const orderSource = orderProfileId
+    ? normalizeMovementProfileSource(order?.movementProfileSource, 'default')
+    : undefined;
   const resolved = resolveMovementProfile({
-    hardSafetyProfileId: memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId],
+    hardSafetyProfileId: memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId]
+      ?? (orderSource === 'hard_safety' ? orderProfileId : undefined),
     hardSafetyReason: memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason],
-    aiOverrideProfileId: memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId],
-    aiOverrideOwnerToken: memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken],
-    playerOrderProfileId: unit.playerCommand?.intent.movementProfileId,
-    unitRoleProfileId: unit.unitRoleMovementProfileId,
+    aiOverrideProfileId: memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId]
+      ?? (orderSource === 'ai_override' ? orderProfileId : undefined),
+    aiOverrideOwnerToken: memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken]
+      ?? (orderSource === 'ai_override' ? order?.movementProfileOwnerToken : undefined),
+    playerOrderProfileId: unit.playerCommand?.intent.movementProfileId
+      ?? (orderSource === 'player_order' ? orderProfileId : undefined),
+    unitRoleProfileId: unit.unitRoleMovementProfileId
+      ?? (orderSource === 'unit_role' ? orderProfileId : undefined),
+    defaultProfileId: orderSource === 'default' ? orderProfileId : undefined,
   });
   memory[MOVEMENT_PROFILE_MEMORY_KEYS.requestedProfileId] = unit.playerCommand?.intent.movementProfileId
     ?? unit.unitRoleMovementProfileId
+    ?? (orderSource === 'player_order' || orderSource === 'unit_role' || orderSource === 'default'
+      ? orderProfileId
+      : undefined)
     ?? resolved.profileId;
   memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId] = resolved.profileId;
   memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource] = resolved.source;
   memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedFallback] = resolved.forcedFallback;
   memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedReason] = resolved.forcedReason ?? '';
+  if (order) syncMoveOrderMovementProfileSnapshot(unit, order, resolved);
+}
+
+function syncMoveOrderMovementProfileSnapshot(
+  unit: UnitModel,
+  order: MoveOrder,
+  resolved: ResolvedMovementProfile,
+): void {
+  const ownerToken = resolved.ownerToken
+    ?? (resolved.source === 'player_order' ? unit.playerCommand?.id : undefined);
+  const changed = order.movementProfileId !== resolved.profileId
+    || order.movementProfileSource !== resolved.source
+    || order.movementProfileOwnerToken !== ownerToken;
+  if (!changed) return;
+  order.movementProfileId = resolved.profileId;
+  order.movementProfileSource = resolved.source;
+  order.movementProfileOwnerToken = ownerToken;
+  order.movementProfileRevision = resolved.source === 'player_order'
+    ? unit.playerCommand?.revision ?? (order.movementProfileRevision ?? 1)
+    : (order.movementProfileRevision ?? 0) + 1;
 }
 
 function publishRouteMemory(memory: Record<string, AiBlackboardValue>, result: AiRouteStatusResult): void {
