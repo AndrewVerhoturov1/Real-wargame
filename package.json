@@ -36,7 +36,7 @@
     "pathfinding:smoke": "node scripts/grid_pathfinding_smoke.mjs",
     "routed-move:smoke": "node scripts/routed_move_smoke.mjs",
     "command-plan-route:smoke": "node scripts/command_plan_route_smoke.mjs",
-    "tactical-order:smoke": "node scripts/tactical_order_radial_menu_smoke.mjs && node scripts/movement_intent_ai_integration_smoke.mjs",
+    "tactical-order:smoke": "node scripts/movement_intent_ai_integration_smoke.mjs && node scripts/tactical_order_radial_menu_smoke.mjs",
     "navigation-profiles:smoke": "node scripts/navigation_profiles_smoke.mjs",
     "navigation-profile-switch:smoke": "node scripts/navigation_replan_profile_switch_smoke.mjs",
     "navigation-overlay:smoke": "node scripts/navigation_overlay_contract_smoke.mjs",
