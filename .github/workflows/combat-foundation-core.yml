@@ -76,6 +76,9 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Focused danger route cost parity smoke
+        shell: bash
+        run: set -o pipefail; npm run danger-route-cost-parity:smoke 2>&1 | tee danger-route-cost-parity.log
       - name: Capture combat foundation smoke
         shell: bash
         run: |
