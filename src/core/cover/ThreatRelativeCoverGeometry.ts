@@ -6,6 +6,7 @@ import {
   type TacticalMap,
 } from '../map/MapModel';
 import { getMapLayerRevision } from '../map/MapRuntimeState';
+import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 
 const CACHE_LIMIT = 16;
 const THREAT_POSITION_BUCKET_CELLS = 0.1;
@@ -66,6 +67,7 @@ interface MapCache {
   readonly hotFields: Map<number, ThreatRelativeCoverField>;
   objectRevision: number;
   forestRevision: number;
+  terrainRevision: number;
   readonly diagnostics: MutableDiagnostics;
 }
 
@@ -90,9 +92,15 @@ export function getThreatRelativeCoverField(
   const mapCache = getMapCache(map);
   const objectRevision = getMapLayerRevision(map, 'objects');
   const forestRevision = getMapLayerRevision(map, 'forest');
-  if (mapCache.objectRevision !== objectRevision || mapCache.forestRevision !== forestRevision) {
+  const terrainRevision = getMapLayerRevision(map, 'terrain');
+  if (
+    mapCache.objectRevision !== objectRevision
+    || mapCache.forestRevision !== forestRevision
+    || mapCache.terrainRevision !== terrainRevision
+  ) {
     mapCache.objectRevision = objectRevision;
     mapCache.forestRevision = forestRevision;
+    mapCache.terrainRevision = terrainRevision;
     mapCache.hotFields.clear();
   }
 
@@ -114,6 +122,7 @@ export function getThreatRelativeCoverField(
     options.posture,
     objectRevision,
     forestRevision,
+    terrainRevision,
   ].join(':');
   const existing = mapCache.fields.get(key);
   if (existing) {
@@ -382,14 +391,10 @@ function propagateForestDensity(
   const stepLength = previousX !== x && previousY !== y ? SQRT_TWO : 1;
   const sampleWeight = previousX === originX && previousY === originY
     ? 0
-    : forestDensityWeight(previousCell?.forest ?? 0) * LEGACY_FOREST_SAMPLES_PER_CELL * stepLength;
+    : resolveCellVegetationDefinition(previousCell).fire.densityWeight
+      * LEGACY_FOREST_SAMPLES_PER_CELL
+      * stepLength;
   density[index] = (density[previousIndex] ?? 0) + sampleWeight;
-}
-
-function forestDensityWeight(forest: number): number {
-  if (forest === 2) return 1.7;
-  if (forest === 1) return 0.8;
-  return 0;
 }
 
 function postureFitsCover(posture: UnitPosture, coverPosture: UnitPosture): boolean {
@@ -410,6 +415,7 @@ function getMapCache(map: TacticalMap): MapCache {
     hotFields: new Map(),
     objectRevision: -1,
     forestRevision: -1,
+    terrainRevision: -1,
     diagnostics: {
       geometryBuildCount: 0,
       cacheHitCount: 0,

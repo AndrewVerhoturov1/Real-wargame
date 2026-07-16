@@ -1,10 +1,14 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import {
   type ElevationLevel,
-  type ForestLayerKind,
+  type MapCell,
   type MapObject,
   type TacticalMap,
 } from '../core/map/MapModel';
+import {
+  resolveCellVegetationDefinition,
+  VEGETATION_DEFINITION_REVISION,
+} from '../core/map/VegetationDefinition';
 import { TERRAIN_STYLE } from './terrainStyle';
 
 interface LayerPaletteEntry {
@@ -22,12 +26,6 @@ const ELEVATION_PALETTE: Record<ElevationLevel, LayerPaletteEntry> = {
   2: { red: 180, green: 138, blue: 66, alpha: 126 },
   3: { red: 205, green: 153, blue: 70, alpha: 152 },
   4: { red: 232, green: 184, blue: 94, alpha: 178 },
-};
-
-const FOREST_PALETTE: Record<ForestLayerKind, LayerPaletteEntry> = {
-  0: { red: 0, green: 0, blue: 0, alpha: 0 },
-  1: { red: 34, green: 86, blue: 55, alpha: 118 },
-  2: { red: 19, green: 58, blue: 37, alpha: 165 },
 };
 
 const MIN_VISIBLE_ELEVATION = 0.35;
@@ -178,7 +176,7 @@ function renderElevationLayer(map: TacticalMap): Sprite | null {
 }
 
 function renderForestLayer(map: TacticalMap): Sprite | null {
-  if (!map.cells.some((cell) => cell.forest !== 0)) {
+  if (!map.cells.some((cell) => resolveCellVegetationDefinition(cell).layer > 0)) {
     return null;
   }
 
@@ -192,11 +190,11 @@ function renderForestLayer(map: TacticalMap): Sprite | null {
   context.save();
   context.scale(TEXTURE_DETAIL_SCALE, TEXTURE_DETAIL_SCALE);
   for (const cell of map.cells) {
-    if (cell.forest === 0) {
+    if (resolveCellVegetationDefinition(cell).layer === 0) {
       continue;
     }
 
-    drawForestCell(context, map, cell.x, cell.y, cell.forest);
+    drawForestCell(context, map, cell);
   }
   context.restore();
 
@@ -219,36 +217,49 @@ function createScaledSprite(canvas: HTMLCanvasElement): Sprite {
 function drawForestCell(
   context: CanvasRenderingContext2D,
   map: TacticalMap,
-  cellX: number,
-  cellY: number,
-  forest: ForestLayerKind,
+  cell: MapCell,
 ): void {
+  const vegetation = resolveCellVegetationDefinition(cell);
+  const forest = vegetation.layer;
   const size = map.cellSize;
-  const left = cellX * size;
-  const top = cellY * size;
-  const palette = FOREST_PALETTE[forest];
-  const seed = makeSeed(cellX, cellY, forest, 11);
-  const count = forest === 2 ? 7 : 3;
+  const left = cell.x * size;
+  const top = cell.y * size;
+  const { red, green, blue } = colorChannels(vegetation.presentation.color);
+  const seed = makeSeed(cell.x, cell.y, forest, 11);
+  const count = vegetation.presentation.detailDensity;
 
   context.save();
-  context.fillStyle = `rgba(${palette.red}, ${palette.green}, ${palette.blue}, ${palette.alpha / 255})`;
+  context.fillStyle = `rgba(${red}, ${green}, ${blue}, ${vegetation.presentation.opacity})`;
   context.beginPath();
   context.ellipse(left + size * 0.5, top + size * 0.5, size * 0.52, size * 0.42, random01(seed) * Math.PI, 0, Math.PI * 2);
   context.fill();
 
+  const detailScale = forest === 2 ? 0.42 : 0.7;
+  const detailRed = Math.round(red * detailScale);
+  const detailGreen = Math.round(green * detailScale);
+  const detailBlue = Math.round(blue * detailScale);
+  const detailAlpha = vegetation.presentation.opacity * (forest === 2 ? 0.72 : 0.58);
   for (let index = 0; index < count; index += 1) {
-    const dotSeed = makeSeed(cellX, cellY, forest, index + 31);
+    const dotSeed = makeSeed(cell.x, cell.y, forest, index + 31);
     const x = left + size * (0.18 + random01(dotSeed) * 0.64);
     const y = top + size * (0.18 + random01(dotSeed + 9) * 0.64);
     const radius = size * (forest === 2 ? 0.12 + random01(dotSeed + 13) * 0.08 : 0.09 + random01(dotSeed + 13) * 0.06);
 
-    context.fillStyle = forest === 2 ? 'rgba(8, 38, 22, 0.72)' : 'rgba(22, 76, 42, 0.58)';
+    context.fillStyle = `rgba(${detailRed}, ${detailGreen}, ${detailBlue}, ${detailAlpha})`;
     context.beginPath();
     context.arc(x, y, radius, 0, Math.PI * 2);
     context.fill();
   }
 
   context.restore();
+}
+
+function colorChannels(color: number): { red: number; green: number; blue: number } {
+  return {
+    red: color >> 16 & 0xff,
+    green: color >> 8 & 0xff,
+    blue: color & 0xff,
+  };
 }
 
 function buildSmoothedHeightGrid(map: TacticalMap): number[][] {
@@ -402,6 +413,7 @@ function getStaticLayerKey(map: TacticalMap, showGrid: boolean): string {
     `cell:${map.cellSize}`,
     `meters:${map.metersPerCell}`,
     `grid:${showGrid ? '1' : '0'}`,
+    `vegetation:${VEGETATION_DEFINITION_REVISION}`,
     `cells:${map.cells.map((cell) => `${cell.x}:${cell.y}:${cell.terrain}:${cell.height}:${cell.forest}`).join('|')}`,
   ].join(';');
 }

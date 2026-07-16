@@ -6,6 +6,7 @@ import {
 } from '../knowledge/SoldierDangerField';
 import type { TacticalMap } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
+import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 import { buildNavigationGrid } from '../pathfinding/GridNavigation';
 import {
   getDirectionalTacticalField,
@@ -365,12 +366,16 @@ function buildStaticField(
   for (let index = 0; index < count; index += 1) {
     const cell = map.cells[index];
     const navigation = grid.cells[index];
+    const vegetation = resolveCellVegetationDefinition(cell);
     passable[index] = navigation.passable ? 1 : 0;
-    const terrainKey = resolveTerrainKey(cell.terrain, cell.forest, navigation.bridge, ditchCells[index] === 1);
+    const terrainKey = resolveTerrainKey(cell.terrain, vegetation.layer, navigation.bridge, ditchCells[index] === 1);
     terrainKeys[index] = terrainKey;
     terrainCost[index] = navigation.passable ? profile.terrainCosts[terrainKey] : Number.POSITIVE_INFINITY;
     slopeCost[index] = navigation.passable ? estimateLocalSlope(map, cell.x, cell.y) * profile.slopeWeight : 0;
-    const concealment = cell.forest >= 2 ? 0.6 : cell.forest >= 1 ? 0.35 : ditchCells[index] ? 0.45 : 0;
+    const concealment = Math.max(
+      vegetation.movement.tacticalConcealment,
+      ditchCells[index] ? 0.45 : 0,
+    );
     coverAdjustment[index] = navigation.passable ? -profile.coverWeight * concealment : 0;
   }
 
@@ -490,14 +495,14 @@ function hasDirectionalTerrainWeights(profile: NavigationProfile): boolean {
 
 function resolveTerrainKey(
   terrain: TacticalMap['cells'][number]['terrain'],
-  forest: number,
+  forestLayer: number,
   bridge: boolean,
   ditch: boolean,
 ): NavigationTerrainCostKey {
   if (bridge) return 'bridge';
   if (ditch) return 'ditch';
-  if (forest >= 2) return 'denseForest';
-  if (forest >= 1) return 'sparseForest';
+  if (forestLayer >= 2) return 'denseForest';
+  if (forestLayer >= 1) return 'sparseForest';
   switch (terrain) {
     case 'road': return 'road';
     case 'rough': return 'rough';
@@ -606,4 +611,3 @@ function trimCache<T>(cache: Map<string, T>, maximum: number): void {
     cache.delete(oldest);
   }
 }
-

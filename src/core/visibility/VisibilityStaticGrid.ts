@@ -1,5 +1,6 @@
 import type { MapObject, MapObjectKind, TacticalMap } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
+import { resolveCellVegetationLayer } from '../map/VegetationDefinition';
 import { sampleSmoothHeightLevel } from '../terrain/SmoothTerrain';
 
 const ELEVATION_STEP_METERS = 2;
@@ -45,7 +46,7 @@ function buildVisibilityStaticGrid(map: TacticalMap, revision: number): Visibili
     for (let x = 0; x < map.width; x += 1) {
       const index = y * map.width + x;
       terrainHeightMeters[index] = sampleSmoothHeightLevel(map, x + 0.5, y + 0.5) * ELEVATION_STEP_METERS;
-      forestKind[index] = map.cells[index]?.forest ?? 0;
+      forestKind[index] = resolveCellVegetationLayer(map.cells[index]);
     }
   }
 

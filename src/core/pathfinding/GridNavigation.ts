@@ -4,6 +4,7 @@ import type {
   TacticalMap,
   TerrainKind,
 } from '../map/MapModel';
+import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 
 export const INFANTRY_NAVIGATION_RADIUS_CELLS = 0.18;
 
@@ -66,7 +67,7 @@ export function buildNavigationGrid(map: TacticalMap): NavigationGrid {
       x: cell.x,
       y: cell.y,
       passable,
-      movementCost: bridge ? 0.9 : terrainMovementCost(cell.terrain, cell.forest),
+      movementCost: bridge ? 0.9 : terrainMovementCost(cell.terrain, cell),
       height: cell.height,
       terrain: cell.terrain,
       bridge,
@@ -195,16 +196,19 @@ function pointInsideRotatedObject(x: number, y: number, object: MapObject): bool
     && Math.abs(localY) <= object.heightCells / 2;
 }
 
-function terrainMovementCost(terrain: TerrainKind, forest: number): number {
+function terrainMovementCost(
+  terrain: TerrainKind,
+  cell: TacticalMap['cells'][number],
+): number {
+  const vegetationResistance = resolveCellVegetationDefinition(cell).movement.baseResistance;
   switch (terrain) {
-    case 'road': return 0.8;
-    case 'forest': return forest >= 2 ? 1.45 : 1.25;
-    case 'rough': return 1.3;
-    case 'swamp': return 1.8;
+    case 'road': return Math.max(0.8, vegetationResistance);
+    case 'rough': return Math.max(1.3, vegetationResistance);
+    case 'swamp': return Math.max(1.8, vegetationResistance);
     case 'water': return Number.POSITIVE_INFINITY;
+    case 'forest':
     case 'field':
-    default:
-      return forest >= 2 ? 1.45 : forest >= 1 ? 1.25 : 1;
+    default: return vegetationResistance;
   }
 }
 
