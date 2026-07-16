@@ -2,11 +2,6 @@ name: Agent Pin Node 20 CI
 
 # One-shot exact-head CI setup repair.
 on:
-  pull_request:
-    branches:
-      - real-wargame-preview
-    paths:
-      - '.github/workflows/agent-pin-node20-ci.yml'
   push:
     branches:
       - agent/terrain-profiles-performance-followup-v1
@@ -15,6 +10,10 @@ on:
 
 permissions:
   contents: write
+
+concurrency:
+  group: agent-pin-node20-ci
+  cancel-in-progress: true
 
 jobs:
   apply:
