@@ -20,6 +20,16 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
+      - name: Fix generated template escaping
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply_pr126_performance_followup.mjs')
+          source = path.read_text(encoding='utf-8')
+          source = source.replace(r'\`${VISUAL_OBJECT_PREFIX}wall\`', r'\`\${VISUAL_OBJECT_PREFIX}wall\`')
+          path.write_text(source, encoding='utf-8')
+          PY
       - name: Apply follow-up changes
         shell: bash
         run: |
