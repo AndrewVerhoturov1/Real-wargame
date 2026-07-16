@@ -1,4 +1,7 @@
-import { publishTacticalOrderIntentToAiMemory } from '../ai/TacticalOrderBlackboard';
+import {
+  publishMovementProfileStateToAiMemory,
+  publishTacticalOrderIntentToAiMemory,
+} from '../ai/TacticalOrderBlackboard';
 import type { UnitPlanState } from '../ai/UnitPlan';
 import { initializeSimulationAiEventFacts } from '../ai/events/SimulationAiEvents';
 import {
@@ -23,6 +26,7 @@ import { clearCombatRuntime, replaceCombatRuntime, type CombatRuntimeState } fro
 import { clearWeaponRuntime, replaceWeaponRuntime, type WeaponRuntimeState } from '../combat/WeaponModel';
 import type { GridPosition } from '../geometry';
 import { createEmptyTacticalKnowledge, normalizeTacticalKnowledge } from '../knowledge/SoldierThreatMemory';
+import { normalizeMovementProfileId } from '../movement/MovementProfileContract';
 import type { NavigationProfileSource } from '../navigation/NavigationProfileResolver';
 import type { NavigationMovementMode } from '../navigation/NavigationProfiles';
 import type { MoveOrder } from '../orders/MoveOrder';
@@ -115,6 +119,7 @@ export interface UnitData {
   runtime?: UnitRuntimeData;
   navigationProfileId?: string;
   navigationMovementMode?: NavigationMovementMode;
+  movementProfileId?: string;
   playerCommand?: unknown;
 }
 
@@ -151,6 +156,7 @@ export interface UnitModel {
   navigationMovementMode?: NavigationMovementMode | null;
   activeNavigationProfileId?: string;
   activeNavigationProfileSource?: NavigationProfileSource;
+  unitRoleMovementProfileId?: string | null;
 }
 
 export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): UnitModel[] {
@@ -221,11 +227,15 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
       navigationMovementMode: unit.navigationMovementMode ?? null,
       activeNavigationProfileId: importedPlayerCommand?.intent.navigationProfileId ?? initialNavigationProfile,
       activeNavigationProfileSource: importedPlayerCommand ? 'playerCommand' : unit.navigationProfileId ? 'unitRole' : 'default',
+      unitRoleMovementProfileId: unit.movementProfileId
+        ? normalizeMovementProfileId(unit.movementProfileId)
+        : null,
     };
     applyInitialStateToRuntime(model, false);
     if (unit.runtime?.weapon) replaceWeaponRuntime(model, unit.runtime.weapon);
     restoreAiRuntimeSnapshot(model, unit.runtime?.aiRuntime);
     if (model.playerCommand) publishTacticalOrderIntentToAiMemory(model, model.playerCommand.intent);
+    else publishMovementProfileStateToAiMemory(model);
     if (unit.runtime?.combat) replaceCombatRuntime(model, unit.runtime.combat);
     initializeSimulationAiEventFacts(model);
     return model;
