@@ -1,0 +1,31 @@
+name: Apply PR 126 Performance Follow-up
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - 'scripts/apply_pr126_performance_followup.mjs'
+      - '.github/workflows/apply-pr126-performance-followup.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'agent/danger-route-cost-parity-v1'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - name: Apply follow-up changes
+        run: node scripts/apply_pr126_performance_followup.mjs
+      - name: Commit follow-up changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Harden danger cache performance and verification"
+          git push origin HEAD:${{ github.head_ref }}
