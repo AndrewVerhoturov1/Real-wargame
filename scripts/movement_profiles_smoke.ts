@@ -3,6 +3,7 @@ import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   BUILT_IN_MOVEMENT_PROFILE_IDS,
+  MOVEMENT_GAITS,
   MovementProfileImportError,
   MovementProfileRegistry,
   createDefaultMovementProfileRegistry,
@@ -12,11 +13,24 @@ import { resolveMovementProfileSelection } from '../src/ai-node-editor/MovementP
 
 const registry = createDefaultMovementProfileRegistry();
 assert.deepEqual(
+  MOVEMENT_GAITS,
+  ['crawl', 'crouch_walk', 'walk', 'run', 'sprint'],
+  'movement gait values must match the physical runtime contract',
+);
+assert.deepEqual(
   registry.listProfiles().slice(0, BUILT_IN_MOVEMENT_PROFILE_IDS.length).map((profile) => profile.id),
   [...BUILT_IN_MOVEMENT_PROFILE_IDS],
   'built-in movement profiles must keep stable order',
 );
 assert.equal(registry.deleteProfile('normal_walk'), false, 'built-in profiles cannot be deleted');
+assert.equal(
+  registry.requireProfile('crouched_move').preferredGait,
+  'crouch_walk',
+  'crouched movement must serialize with the canonical physical runtime gait',
+);
+const defaultExport = registry.exportJson();
+assert.match(defaultExport, /"preferredGait": "crouch_walk"/);
+assert.doesNotMatch(defaultExport, /"preferredGait": "crouch"/);
 
 const created = registry.createCustomProfile('quiet_patrol', 'Quiet patrol', 'Тихий патруль', 'stealth_move');
 assert.equal(created.builtIn, false);
@@ -55,7 +69,7 @@ const migrated = MovementProfileRegistry.fromUnknown({
     id: ' Legacy Profile ',
     nameRu: 'Старый профиль',
     nameEn: 'Legacy profile',
-    preferredGait: 'run',
+    preferredGait: 'crouch',
     fallbackProfileId: ' NORMAL_WALK ',
     settings: { speed: { speedMultiplier: 1.4 } },
   }],
@@ -63,10 +77,18 @@ const migrated = MovementProfileRegistry.fromUnknown({
 assert.equal(migrated.requireProfile('legacy_profile').settings.speed.speedMultiplier, 1.4);
 assert.equal(migrated.requireProfile('legacy_profile').fallbackProfileId, 'normal_walk');
 assert.equal(
+  migrated.requireProfile('legacy_profile').preferredGait,
+  'crouch_walk',
+  'legacy crouch gait must migrate before the registry is committed',
+);
+assert.equal(
   migrated.requireProfile('legacy_profile').settings.weapon.allowFireWhileMoving,
   true,
   'missing fields receive safe defaults',
 );
+const migratedExport = migrated.exportJson();
+assert.match(migratedExport, /"preferredGait": "crouch_walk"/);
+assert.doesNotMatch(migratedExport, /"preferredGait": "crouch"/);
 
 const beforeBrokenImport = registry.exportJson();
 assert.throws(() => MovementProfileRegistry.importJson('{broken'), MovementProfileImportError);
@@ -112,6 +134,8 @@ for (const label of ['Профили движения', 'Скорость и п�
 assert.match(editorSource, /type="range"/);
 assert.match(editorSource, /type="number"/);
 assert.match(editorSource, /Сохранить изменения/);
+assert.match(viewSource, /\['crouch_walk','Пригнувшись'\]/);
+assert.doesNotMatch(viewSource, /\['crouch','Пригнувшись'\]/);
 assert.match(panelSource, /Есть несохранённые изменения/);
 assert.match(panelSource, /Отменить изменения/);
 assert.match(panelSource, /Остаться/);
