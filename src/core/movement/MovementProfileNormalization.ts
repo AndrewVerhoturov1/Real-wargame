@@ -4,7 +4,9 @@ import { MOVEMENT_PROFILE_FORMAT_VERSION, type BuiltInMovementProfileId, type Mo
 export function normalizeMovementRegistryData(data?: Partial<MovementProfileRegistryData>): MovementProfileRegistryData {
   const imported = new Map<string, Record<string, unknown>>();
   for (const value of Array.isArray(data?.profiles) ? data.profiles : []) {
-    if (isRecord(value) && typeof value.id === 'string') imported.set(value.id, value);
+    if (!isRecord(value) || typeof value.id !== 'string') continue;
+    const id = normalizeCustomOrBuiltIn(value.id.trim());
+    imported.set(id, { ...value, id });
   }
 
   const profiles = BUILT_IN_MOVEMENT_PROFILES.map((defaults) => {
@@ -16,7 +18,7 @@ export function normalizeMovementRegistryData(data?: Partial<MovementProfileRegi
   });
 
   for (const [id, value] of imported) {
-    profiles.push(normalizeMovementProfile({ ...value, id: normalizeCustomMovementId(id), builtIn: false }));
+    profiles.push(normalizeMovementProfile({ ...value, id, builtIn: false }));
   }
 
   const valid = new Set(profiles.map((profile) => profile.id));
@@ -51,9 +53,7 @@ export function normalizeMovementProfile(value: unknown): MovementProfile {
     descriptionRu: text(value.descriptionRu, value.descriptionEn ?? defaults.descriptionRu),
     preferredGait: choice(value.preferredGait, ['walk', 'crouch', 'run', 'sprint', 'crawl'] as const, defaults.preferredGait),
     stancePolicy: choice(value.stancePolicy, ['standing', 'crouched', 'prone', 'adaptive'] as const, defaults.stancePolicy),
-    fallbackProfileId: typeof value.fallbackProfileId === 'string' && value.fallbackProfileId.trim()
-      ? value.fallbackProfileId.trim()
-      : null,
+    fallbackProfileId: normalizeMovementProfileReference(value.fallbackProfileId),
     templateProfileId: template,
     category: choice(value.category, ['routine', 'stealth', 'combat', 'emergency'] as const, defaults.category),
     sortOrder: integer(value.sortOrder, defaults.sortOrder, 0, 100000),
@@ -128,6 +128,11 @@ export function normalizeCustomMovementId(value: string): string {
   if (!id) throw new Error('Movement profile id is empty after normalization.');
   if (isBuiltInMovementProfileId(id)) throw new Error(`Movement profile id is reserved: ${id}`);
   return id;
+}
+
+function normalizeMovementProfileReference(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  return normalizeCustomOrBuiltIn(value.trim());
 }
 
 function normalizeCustomOrBuiltIn(id: string): string {
