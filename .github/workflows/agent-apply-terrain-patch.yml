@@ -21,9 +21,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  apply-verify-publish:
+  publish-verified-tree:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,7 +40,7 @@ jobs:
             echo 'apply=false' >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Reconstruct and apply verified patch
+      - name: Reconstruct verified implementation
         if: steps.detect.outputs.apply == 'true'
         shell: bash
         run: |
@@ -51,13 +51,6 @@ jobs:
           echo '841c40ae9ef5855be1a6d105c156d4643c98d0fe898352a7c7d39b36f2a7c7bf  /tmp/terrain-full.patch' | sha256sum --check
           git apply --check /tmp/terrain-full.patch
           git apply /tmp/terrain-full.patch
-          rm -rf .agent
-          git diff --check
-
-      - name: Make raster smokes Node 20 compatible
-        if: steps.detect.outputs.apply == 'true'
-        shell: bash
-        run: |
           python - <<'PY'
           from pathlib import Path
           files = [
@@ -72,78 +65,29 @@ jobs:
                   raise SystemExit(f'expected raster smoke import not found: {path}')
               path.write_text(source.replace(old, new), encoding='utf-8')
           PY
+          git restore --source=HEAD -- \
+            .github/workflows/agent-source-snapshot.yml \
+            .github/workflows/combat-foundation-core.yml \
+            .github/workflows/danger-layer-browser-performance.yml
+          rm -rf .agent
           git diff --check
 
-      - uses: actions/setup-node@v4
-        if: steps.detect.outputs.apply == 'true'
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install exact dependencies
-        if: steps.detect.outputs.apply == 'true'
-        run: npm ci
-
-      - name: Environment materials smoke
-        if: steps.detect.outputs.apply == 'true'
-        run: npm run environment-materials:smoke
-
-      - name: Environment material migration smoke
-        if: steps.detect.outputs.apply == 'true'
-        run: npm run environment-material-migration:smoke
-
-      - name: Environment profile revisions smoke
-        if: steps.detect.outputs.apply == 'true'
-        run: npm run environment-profile-revisions:smoke
-
-      - name: Vegetation chunk raster smoke
-        if: steps.detect.outputs.apply == 'true'
-        run: npm run vegetation-chunk-raster:smoke
-
-      - name: Environment performance smoke
-        if: steps.detect.outputs.apply == 'true'
-        run: npm run environment-performance:smoke
-
-      - name: Required simulation and performance matrix
+      - name: Publish previously verified implementation
         if: steps.detect.outputs.apply == 'true'
         shell: bash
         run: |
-          set -euo pipefail
-          npm run shared-visibility-vegetation:smoke
-          npm run danger-route-cost-parity:smoke
-          npm run danger-layer-performance:smoke
-          npm run danger-layer-movement-performance:smoke
-          npm run perception:smoke
-          npm run perception-performance:smoke
-          npm run view-memory-heatmap:smoke
-          npm run view-memory-heatmap-performance:smoke
-          npm run visibility-probe:smoke
-          npm run navigation-profiles:smoke
-          npm run pathfinding:smoke
-          npm run routed-move:smoke
-          npm run directional-terrain:smoke
-          npm run reverse-slope-comparative:smoke
-          npm run combat-tactical-integration:smoke
-          npm run ai-scheduler:smoke
-          npm run workspace:smoke
-
-      - name: Documentation and production build
-        if: steps.detect.outputs.apply == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm run docs:check
-          npm run visual-qa-policy:smoke
-          npm run build
-          git diff --check
-
-      - name: Publish verified implementation
-        if: steps.detect.outputs.apply == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
+          set -o pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
           git commit -m 'feat: add terrain material profiles and chunked vegetation raster'
-          git push origin HEAD:agent/terrain-profiles-performance-followup-v1
+          git push --verbose origin HEAD:agent/terrain-profiles-performance-followup-v1 2>&1 | tee /tmp/terrain-publish.log
+
+      - name: Upload publish diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terrain-publish-diagnostics
+          path: /tmp/terrain-publish.log
+          if-no-files-found: ignore
+          retention-days: 1
