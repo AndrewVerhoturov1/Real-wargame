@@ -6,6 +6,9 @@ import { getNavigationProfileRegistry } from './NavigationProfileStorage';
 import type { TacticalRouteContext } from './RouteCostField';
 
 const COALESCED_TACTICAL_SNAPSHOT_SECONDS = 0.5;
+const MEANINGFUL_STRENGTH_DELTA = 20;
+const MEANINGFUL_SUPPRESSION_DELTA = 15;
+const MEANINGFUL_CONFIDENCE_DELTA = 20;
 
 export interface TacticalRouteContextOptions {
   /** Initial player/AI orders require the newest known state; background consumers may coalesce it. */
@@ -72,6 +75,19 @@ export function buildUnitTacticalRouteContext(
     options.freshness === 'coalesced'
     && cached
     && cached.topologyKey === topologyKey
+    && !hasMeaningfulTacticalChange(cached.context.knownThreats, canonical.threats)
+  ) {
+    tacticalContextByUnit.set(unit, {
+      ...cached,
+      sourceKnowledgeRevision: unit.tacticalKnowledge.revision,
+      canonicalThreatKey: canonical.key,
+    });
+    return cached.context;
+  }
+  if (
+    options.freshness === 'coalesced'
+    && cached
+    && cached.topologyKey === topologyKey
     && (
       cached.context.knowledgeRevision === unit.tacticalKnowledge.revision
       || currentTimeSeconds - cached.capturedAtSeconds < COALESCED_TACTICAL_SNAPSHOT_SECONDS
@@ -131,6 +147,38 @@ function buildThreatTopologyKey(unit: UnitModel): string {
     ].join(':'))
     .sort()
     .join('|');
+}
+
+function hasMeaningfulTacticalChange(
+  previous: TacticalRouteContext['knownThreats'],
+  current: ReturnType<typeof buildCanonicalWorldThreatSet>['threats'],
+): boolean {
+  if (previous.length !== current.length) return true;
+  const currentById = new Map(current.map((threat) => [threat.id, threat]));
+  for (const before of previous) {
+    const after = currentById.get(before.id);
+    if (!after) return true;
+    if (
+      before.mode !== after.mode
+      || before.x !== after.x
+      || before.y !== after.y
+      || before.radiusCells !== after.radiusCells
+      || before.widthCells !== after.widthCells
+      || before.heightCells !== after.heightCells
+      || before.rotationDegrees !== after.rotationDegrees
+      || before.directionDegrees !== after.directionDegrees
+      || before.arcDegrees !== after.arcDegrees
+      || before.rangeCells !== after.rangeCells
+      || before.minRangeCells !== after.minRangeCells
+      || before.falloffPercent !== after.falloffPercent
+      || before.uncertaintyCells !== after.uncertaintyCells
+      || before.fireThreatClass !== after.fireThreatClass
+      || Math.abs(before.strength - after.strength) >= MEANINGFUL_STRENGTH_DELTA
+      || Math.abs(before.suppression - after.suppression) >= MEANINGFUL_SUPPRESSION_DELTA
+      || Math.abs(before.confidence - after.confidence) >= MEANINGFUL_CONFIDENCE_DELTA
+    ) return true;
+  }
+  return false;
 }
 
 function defaultProfileForUnitRole(unit: UnitModel): string {

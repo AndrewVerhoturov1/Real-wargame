@@ -71,19 +71,36 @@ assert.equal(
   'observer-relative unit-contact descriptors must not invalidate a world-space route snapshot',
 );
 
-movingThreat.x = 7.9;
+movingThreat.strength = 75;
+movingThreat.confidence = 90;
 unit.tacticalKnowledge.revision = 4;
+const scalarNoise = buildUnitTacticalRouteContext(unit, {
+  freshness: 'coalesced',
+  metersPerCell: map.metersPerCell,
+});
+assert.equal(scalarNoise, elapsed, 'minor score-only drift must not trigger a route-field rebuild');
+
+movingThreat.strength = 90;
+unit.tacticalKnowledge.revision = 5;
+const significantScalar = buildUnitTacticalRouteContext(unit, {
+  freshness: 'immediate',
+  metersPerCell: map.metersPerCell,
+});
+assert.notEqual(significantScalar, elapsed, 'a meaningful danger-score change must publish immediately');
+
+movingThreat.x = 7.9;
+unit.tacticalKnowledge.revision = 6;
 unit.tacticalKnowledge.lastUpdatedSeconds = 1.56;
 const immediate = buildUnitTacticalRouteContext(unit, {
   freshness: 'immediate',
   metersPerCell: map.metersPerCell,
 });
-assert.notEqual(immediate, elapsed, 'initial order planning must be able to request the current snapshot immediately');
+assert.notEqual(immediate, significantScalar, 'initial order planning must be able to request the current snapshot immediately');
 assert.equal(immediate.knownThreats[0].x, 7.5);
 
 const addedThreat = threat('unknown-fire:new', 7.5, 6.5, false);
 unit.tacticalKnowledge.threats.push(addedThreat);
-unit.tacticalKnowledge.revision = 5;
+unit.tacticalKnowledge.revision = 7;
 unit.tacticalKnowledge.lastUpdatedSeconds = 1.6;
 const topologyChange = buildUnitTacticalRouteContext(unit, {
   freshness: 'coalesced',
