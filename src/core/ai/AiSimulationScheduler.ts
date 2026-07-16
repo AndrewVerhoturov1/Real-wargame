@@ -1,4 +1,5 @@
 import { isUnitCombatCapable } from '../combat/CombatDamage';
+import type { MovementProfileRegistryEntry } from '../movement/MovementProfileContract';
 import type { SimulationState } from '../simulation/SimulationState';
 import { isUnitGraphAiControlled, type UnitModel } from '../units/UnitModel';
 import { resolveRuntimeGraphSnapshot } from './AiGameBridge';
@@ -8,6 +9,8 @@ import { reconcileMovementProfileRuntime } from './MovementProfileRuntimeResolve
 export interface AiSimulationSchedulerOptions {
   readonly cycleStartMs?: number;
   readonly cycleEndMs?: number;
+  /** Pure registry snapshot supplied by the UI/runtime adapter from PR #133. */
+  readonly movementProfileRegistryEntries?: readonly MovementProfileRegistryEntry[];
 }
 
 export interface AiSimulationSchedulerResult {
@@ -63,9 +66,7 @@ export function tickAiSimulationScheduler(
     processedUnitIds.push(unit.id);
     trustedBridgeCalls += 1;
 
-    // Publish the effective profile before graph evaluation, then finalize again
-    // after graph effects so override intents cannot write derived active fields.
-    reconcileMovementProfileRuntime(unit);
+    reconcileMovementProfileRuntime(unit, options.movementProfileRegistryEntries);
     const result = tickStatefulMoveBridgeForTrustedUnit(state, unit, cycleEndMs, {
       force: false,
       applyEffects: true,
@@ -73,7 +74,7 @@ export function tickAiSimulationScheduler(
       cycleStartMs,
       cycleEndMs,
     });
-    reconcileMovementProfileRuntime(unit);
+    reconcileMovementProfileRuntime(unit, options.movementProfileRegistryEntries);
     if (result) graphTickedUnitIds.push(unit.id);
   }
 
