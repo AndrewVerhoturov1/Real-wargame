@@ -25,7 +25,11 @@ const computation = after.computation ?? {};
 const threatRelativeCover = computation.threatRelativeCover ?? {};
 const directionalTactical = computation.directionalTactical ?? {};
 const awarenessStatic = computation.awarenessStatic ?? {};
-const awarenessDynamicRescore = computation.awarenessDynamicRescore ?? {};
+const soldierDanger = after.soldierDangerField ?? {};
+const initialDanger = soldierDanger.initial ?? {};
+const afterRescoreDanger = soldierDanger.afterRescore ?? {};
+const afterGeometryMoveDanger = soldierDanger.afterGeometryMove ?? {};
+const finalReportDanger = computation.soldierDangerField ?? {};
 
 const acceptance = {
   sceneUpdateP95AtMost10Ms: after.sceneUpdateMs.p95 <= 10,
@@ -41,10 +45,22 @@ const acceptance = {
       && coldAfter <= coldBefore * 0.30
     )
   ),
-  oneThreatGeometryScan: threatRelativeCover.fullMapScanCount <= 1,
-  oneDirectionalGeometryScan: directionalTactical.fullMapScanCount <= 1,
+  oneThreatRelativeCoverScanPerPreparedThreat: threatRelativeCover.fullMapScanCount <= 4,
+  oneWeightedDirectionalFieldBuild: directionalTactical.fullMapScanCount <= 1,
   oneStaticAwarenessBuild: awarenessStatic.buildCount <= 1,
-  oneDynamicRescoreGeometryBuild: awarenessDynamicRescore.geometryBuildCount <= 1,
+  severalClassifiedThreatsExercised: (soldierDanger.classifiedThreatCount ?? 0) >= 3,
+  initialThreatGeometriesPrepared: (initialDanger.geometryBuildCount ?? 0) >= 3,
+  confidenceRescoreReusesGeometry: soldierDanger.rescoreGeometryBuildDelta === 0,
+  confidenceRescoreAvoidsGeometryScans: soldierDanger.rescoreFullMapScanDelta === 0,
+  confidenceRescoreBuildsScoredFields: (soldierDanger.rescoreFieldBuildDelta ?? 0) > 0,
+  oneMovedThreatBuildsOneGeometry: soldierDanger.geometryMoveBuildDelta === 1,
+  oneMovedThreatPerformsOneGeometryScan: soldierDanger.geometryMoveFullMapScanDelta === 1,
+  movedThreatBuildsScoredField: (soldierDanger.geometryMoveFieldBuildDelta ?? 0) > 0,
+  boundedThreatGeometryCache: (afterGeometryMoveDanger.cachedThreatGeometryCount ?? Infinity) <= 24,
+  boundedScoredFieldCache: (afterGeometryMoveDanger.cachedFieldCount ?? Infinity) <= 12,
+  retainedTypedArraysWithinDeclaredBound: (afterGeometryMoveDanger.retainedTypedArrayBytes ?? Infinity)
+    <= (soldierDanger.maximumRetainedTypedArrayBytes ?? -1),
+  performanceReportPublishesExactDangerCounters: sameDangerDiagnostics(afterGeometryMoveDanger, finalReportDanger),
 };
 
 const rendererTelemetry = {
@@ -74,6 +90,19 @@ console.log(JSON.stringify(comparison, null, 2));
 if (!comparison.accepted) {
   const failed = Object.entries(acceptance).filter(([, value]) => !value).map(([key]) => key);
   throw new Error(`Danger layer browser CPU acceptance failed: ${failed.join(', ')}`);
+}
+
+function sameDangerDiagnostics(left, right) {
+  return [
+    'geometryBuildCount',
+    'fieldBuildCount',
+    'geometryCacheHitCount',
+    'fieldCacheHitCount',
+    'cachedThreatGeometryCount',
+    'cachedFieldCount',
+    'fullMapScanCount',
+    'retainedTypedArrayBytes',
+  ].every((key) => left?.[key] === right?.[key]);
 }
 
 function percentReduction(beforeValue, afterValue) {
