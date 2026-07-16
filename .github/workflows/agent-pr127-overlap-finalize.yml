@@ -135,3 +135,5 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git commit -m 'fix: reconcile scheduler follow-up with danger contracts'
           git push origin HEAD:agent/per-unit-ai-scheduler-v1
+
+# exact-head trigger
