@@ -50,12 +50,14 @@ jobs:
           echo 'bf0bed399a8c26158b76777f260bb8ce27a6ed278a8da86afcb4dd74bc36986f  /tmp/physical-movement-payload.tgz' | sha256sum --check
           tar -tzf /tmp/physical-movement-payload.tgz
 
-      - name: Apply implementation and remove payload staging
+      - name: Apply implementation without workflow-file writes
         shell: bash
         run: |
           set -euo pipefail
           tar -xzf /tmp/physical-movement-payload.tgz -C .
           rm -rf .agent-payload
+          git restore --source=HEAD -- .github/workflows/preview-policy.yml
+          rm -f .github/workflows/physical-movement-core.yml
           git status --short
 
       - name: Commit verified implementation
