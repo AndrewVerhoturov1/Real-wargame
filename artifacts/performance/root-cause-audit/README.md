@@ -1,52 +1,68 @@
-# Performance regression root-cause audit — initial evidence
+# Performance regression root-cause audit
 
-Status: **in progress**. This document records evidence that can be proven from exact source state
-`5f097f79e2150764d5dc4ac8cb0c4db6ba90aa74`. It is deliberately not a substitute for the
-required A/B/C browser measurements.
+Status: **partial implementation + measured root-cause evidence**. The report below analyses the supplied raw
+`real-wargame-performance-2026-07-16_18-52-03-589.json`, produced by exact C
+`5f097f79e2150764d5dc4ac8cb0c4db6ba90aa74` in YaBrowser 26.6 (Chromium 148).
 
-## Source states
+## Comparison states
 
 | State | SHA | Role |
 | --- | --- | --- |
 | A | `4a9fd2292ee9ded682d34064a2b721feab21ec4a` | After PR #127, before shared visibility/vegetation |
 | B | `4adb42650f0fb6ad61b31f9521cec4508a5a40ec` | After PR #128, before tactical orders |
-| C | `5f097f79e2150764d5dc4ac8cb0c4db6ba90aa74` | Problematic preview |
+| C | `5f097f79e2150764d5dc4ac8cb0c4db6ba90aa74` | Problematic preview and source report |
 
-The supplied task names `real-wargame-performance-2026-07-16_18-52-03-589.json`, but the raw
-JSON was not present in the worker input or repository. Consequently, no reported timing, p95,
-frequency, browser attribution, or A/B/C delta below is inferred from the task text.
+Only C has raw browser data. No A/B/C delta is claimed until identical repeated runs are made.
 
-## Proven source-level causes
+## Measured C environment
 
-| Rank | Cause | Regression / pre-existing | Trigger | Code path | Measured cost | Frequency | Status | Recommended fix |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Tactical-order UI invalidated immutable map | Introduced by PR #129 | Open/close/confirm radial order | `TacticalOrderRadialInput.notifyChanged → main.refresh callback → PixiTacticalBoardApp.forceRender → renderEditableMapLayerIfNeeded` | Static map: 320×200 cells; each rebuild allocates/renders two 3072×1920 raster layers (about 45 MiB raw RGBA before GPU copies) and recreates Pixi textures | At least menu open and close/confirmation | PROVEN | Implemented: order refresh now calls `renderNow()`, retaining map cache |
-| 2 | Moving directional threat causes full-map cover rebuilds | Introduced/exposed by PR #128 shared field path | Threat origin crosses 0.1-cell bucket | `getSoldierDangerField → buildThreatGeometry → getThreatRelativeCoverField → buildField` | 64,000 map cells × eligible object descriptors; one field retains 384,000 bytes plus temporary 256,000-byte forest density | One build per new 0.1-cell origin, cache limit 16 | PROVEN source-level work; runtime share not yet measured | Bound work by threat range/spatial geometry and stabilize/reuse origin fields without changing combat semantics |
-| 3 | Moving directional threat causes line-of-fire geometry rebuilds | Introduced by PR #128 | Threat origin crosses 0.25-cell bucket or changes range | `getSoldierDangerField → getVisibilityGeometryField → buildField → perimeter supercover rays` | Four full-map typed arrays = 256,000 bytes/field; each rebuild traces every perimeter ray in range; cache limit 24 | One build per new geometry key | PROVEN source-level work; runtime share not yet measured | Instrument keys/rays/cells; reuse stable geometry or incrementally update only after semantic validation |
-| 4 | Soldier danger geometry and scored fields use fine moving keys | Existing danger implementation, intensified by PR #128 inputs | Threat x/y quantized at 0.05 cells | `buildThreatGeometrySignature → buildThreatGeometry`; `buildGeometrySetKey → scoreDangerField` | Geometry: 576,000 bytes each × 24; score field: 384,000 bytes each × 12; every miss scans all 64,000 cells | Every newly quantized threat state | PROVEN source-level work; runtime share not yet measured | Separate immutable threat geometry from low-cost dynamic scoring; validate a coarser key only against tactical correctness |
-| 5 | TacticalWorkspace repeats hidden/background work and is not disposable | Pre-existing | Every 300 ms, including editor mode | `installTacticalWorkspace → setInterval(update, 300) → updateBottom/renderSidebar` | `updateBottom` queries every unit/contact; danger/stealth sidebar can call `buildSoldierAwarenessReport`; no timer/listener cleanup exists | 3.33 callbacks/s for page lifetime | PROVEN lifecycle defect; timing not measured | Return teardown; stop timer when workspace hidden/editor; render only changed UI state |
-| 6 | Grid toggle rebuilds whole static map | Pre-existing before A; PR #128 only changes vegetation presentation inputs | Grid toggle or any forced map refresh | `PixiApp.handleGridToggle → renderEditableMapLayerIfNeeded → PixiMapRenderer.renderStaticLayerIfNeeded` | Same two 3072×1920 rasters plus terrain/vector and grid reconstruction | Per toggle/forced refresh | PROVEN source-level work; A/B delta not measured | Split grid from terrain/raster caches; retain raster textures and toggle grid visibility |
+- viewport: 1440×756; DPR 1; map: 320×200 (64,000 cells); 6 units; 9 objects;
+- report window: 76.64 s (runtime 157.5 s); effective FPS 46.96;
+- frame p95 33.1 ms, maximum 614.3 ms; 200 long tasks, p95 351 ms, maximum 678 ms;
+- `sceneUpdateMs` p95 is only 0.5 ms, but 185/200 LoAF scripts are `FrameRequestCallback` from the Vite/Pixi chunk, totalling 34,339 ms of script attribution;
+- the report had no project phase measures. This branch adds slow-phase instrumentation for the next run.
 
-## Explicitly not proven
+## Root causes
 
-| Suspect | Status | Why |
-| --- | --- | --- |
-| TacticalOrderStatusCard 250 ms interval | NOT MEASURABLE | Its key guard avoids DOM replacement when unchanged; raw CPU/LoAF data is required. |
-| Per-unit AI scheduler | NOT MEASURABLE | The scheduler is simulation-time cadence controlled; exact unit controls, tick rate and CPU samples are missing. |
-| PerformanceObserver/report collection | NOT MEASURABLE | Observer support and report overhead depend on the measured browser; no enabled/disabled A/B was supplied. |
-| Pixi GPU submission, browser or dev-server effects | NOT MEASURABLE | Requires real-browser trace/LoAF attribution. |
-| GC pauses | LIKELY allocation pressure | The typed-array/canvas churn above is concrete, but GC attribution needs a browser trace. |
+| Rank | Cause | Regression / pre-existing | Trigger and code path | Measured evidence | Status | Recommended fix |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | Full-map directional tactical rebuild storm | **Introduced by PR #128** | Moving known threats → `getDirectionalTacticalField` key buckets x/y at 0.1 cells → `buildField` scans 64,000 cells for every new key | 647 builds, 647 full-map scans, 12-entry cache, 1,273 hits, last build 34 ms. This is the only reported computation with hundreds of full-map directional scans and matches the recurring `FrameRequestCallback` group. | PROVEN | Keep correctness but coalesce/reuse world threat snapshots; route replanning must not demand a new full field on each sub-cell enemy movement. Validate semantics with focused route tests and A/B browser runs. |
+| 2 | Main-thread SoldierDangerField rebuild/scoring storm | Existing danger machinery, **amplified by PR #128** shared directional inputs | Movement/key changes → `getSoldierDangerField` → visibility geometry + cover geometry + `scoreDangerField` | 444 geometry builds/full-map scans, 631 field scores, 1,289 field hits, only 12 score fields retained; 19.2 MB typed arrays retained. | PROVEN | Separate immutable geometry from dynamic scalar scoring and stop all consumers from requesting an independent full score at each knowledge tick. |
+| 3 | Threat-relative cover cache thrashing | **Introduced/exposed by PR #128 path** | Directional threat crosses 0.1-cell origin bucket → `getThreatRelativeCoverField` | 125 full-map builds; 24,000,000 object checks; 7,999,875 forest reads; 109 evictions from a 16-entry cache. | PROVEN | Use bounded/range-aware geometry or a spatial representation; do not make every map cell test every cover object for a tiny origin move. |
+| 4 | Explicit grid toggle rebuilds map | Pre-existing before A | `PixiApp.handleGridToggle → renderEditableMapLayerIfNeeded → PixiMapRenderer` | One direct `handleGridToggle` LoAF was 624.9 ms, including 536 ms in that function. The map rebuild recreates two 3072×1920 canvas raster layers and textures. | PROVEN | Split persistent terrain/relief/forest rasters from the separately toggled grid. |
+| 5 | TacticalWorkspace poll and action work | Pre-existing | 300 ms interval calls `update`; UI buttons can rebuild sidebar/report state | 9 interval LoAFs: 489 ms total, max 88 ms; 4 workspace-button LoAFs: 483 ms total, max 359 ms; forced style/layout total 27 ms. | PROVEN | Implemented lifecycle fix: polling stops when editor/hidden, listeners and interval are disposed on teardown. Further tab-specific timing remains required. |
+| 6 | PR #129 tactical-order refresh rebuilt unchanged map | **Introduced by PR #129** | `TacticalOrderRadialInput.notifyChanged → main callback → forceRender → map invalidation` | 3 `handlePointerUp` LoAFs total 285 ms, max 214 ms. Source path proves every order UI refresh requested the expensive map rebuild. | PROVEN | Implemented: tactical order updates call `renderNow()` and retain immutable map cache. |
+| 7 | Worker compute | PR #128 worker path | Awareness-world worker build | Worker compute max 406.4 ms and latency max 571.8 ms, but main-thread raster apply max 0.5 ms and local update p95 1.1 ms. | DISPROVEN as the direct cause of the recorded main-thread long frames | Keep worker job coalescing; track worker latency separately from UI jank. |
+| 8 | TacticalOrderStatusCard interval | PR #129 | 250 ms key-guarded status refresh | No LoAF script was attributed to this interval; its code skips DOM replacement when the key is unchanged. | NOT MEASURABLE | Test enabled/disabled with new phase instrumentation; do not optimise blindly. |
+| 9 | Per-unit AI scheduler | PR #127, already present in A | Simulation tick scheduler pass | The raw report cannot isolate scheduler from perception, memory, route replan and movement because phase measures were absent. | NOT MEASURABLE | New `simulation.ai-scheduler` phase will measure it independently. |
 
-## Required next evidence
+## Causal chain for recurring 200–600 ms stalls
 
-1. Supply the original JSON report and provide a checkout/artifact that can execute the exact A/B/C browser scenario.
-2. Add phase timing and cache-key instrumentation before interpreting `FrameRequestCallback` stalls.
-3. Repeat each scenario, record median/p95/max, then classify the remaining long tasks by overlap with:
-   `tickSimulation`, map rebuild, overlay renders, workspace interval, status-card interval, worker message application, and LoAF script/layout attribution.
-4. Run the same scenario with diagnostics enabled and disabled, then with all units manual and graph-controlled.
+```text
+moving hostile contact / knowledge revision
+  → directional tactical key changes at 0.1 cells
+  → full 64,000-cell DirectionalTacticalField build
+  → danger geometry/score requests
+  → visibility rays + threat-relative cover full-map checks
+  → typed-array allocation, cache eviction and possible GC
+  → long FrameRequestCallback
+```
 
-## Change made during audit
+## Changes on this branch
 
-The PR #129 tactical-order callback now refreshes dynamic order/UI layers without marking the
-static map invalid. Map-mutating controls retain `forceRender()` and therefore still rebuild the
-map when required.
+1. `src/main.ts`, `src/rendering/PixiApp.ts`
+   - order-menu refresh is dynamic-only; it no longer invalidates the static map;
+   - map-mutating callers still use `forceRender()`.
+2. `src/ui/TacticalWorkspace.ts`
+   - poll does not run while editor mode or document is hidden;
+   - poll and canvas listeners are torn down.
+3. `src/core/debug/PerformancePhases.ts`, `SimulationTick.ts`, `PixiApp.ts`
+   - records only synchronous phases ≥8 ms, avoiding per-frame diagnostic allocation;
+   - next report will identify simulation metrics, perception, threat memory, scheduler, combat, movement/events, collisions, map, each renderer and DOM/debug work.
+
+## Required completion evidence
+
+1. Run the identical repeated scenario on A, B, C and this final branch, including manual/graph units, paused/running, grid, tabs, camera/pointer and tactical-order cases.
+2. Use the new phase report to attribute each remaining long frame.
+3. Run `npm run build`, `workspace:smoke`, `ai-scheduler:smoke`, `danger-route-cost-parity:smoke`, visibility/awareness/navigation smokes, then browser performance scenarios.
+4. Only after those data exist, tune keys/cache bounds or move work without weakening route and danger semantics.
