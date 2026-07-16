@@ -4,7 +4,7 @@ import { publishSimulationAiEvents } from '../ai/events/SimulationAiEvents';
 import { clampPercent, POSTURE_MOVE_MULTIPLIER } from '../behavior/BehaviorModel';
 import { getCombatMovementMultiplier, getCombatRuntime, isUnitCombatCapable } from '../combat/CombatDamage';
 import { tickAutomaticCombatEngagements } from '../combat/CombatEngagement';
-import { getFireAction, tickAllFireActions } from '../combat/FireAction';
+import { getFireAction, reconcileAllPendingFireIntents, tickAllFireActions } from '../combat/FireAction';
 import { getCombatSuppressionSnapshot } from '../combat/CombatSuppression';
 import type { GridPosition } from '../geometry';
 import { syncSoldierThreatMemory } from '../knowledge/SoldierThreatMemory';
@@ -48,6 +48,7 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
   }
 
   tickAiSimulationScheduler(state, { cycleStartMs, cycleEndMs });
+  reconcileAllPendingFireIntents(state);
   tickAutomaticCombatEngagements(state);
   tickAllFireActions(state, scaledDeltaSeconds);
 

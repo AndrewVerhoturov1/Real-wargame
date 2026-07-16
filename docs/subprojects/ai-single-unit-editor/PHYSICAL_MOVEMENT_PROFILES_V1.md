@@ -2,45 +2,37 @@
 
 ## Status
 
-This contract is implemented on draft PR #132 from exact `real-wargame-preview` base `5f097f79e2150764d5dc4ac8cb0c4db6ba90aa74`.
+This contract is implemented in draft PR #132 and is designed to be the shared core contract for the visual movement-profile editor from PR #133 and the order/AI adapters from PR #134. Those branches are not merged or copied wholesale here.
 
-It is one isolated core/simulation result in a three-worker campaign. It does not include the profile editor or the final player-order/AI adapters.
+`SimulationTick.ts` remains the only coordinate integrator. Navigation chooses the route; physical movement executes that route. The physical runtime does not import PixiJS, DOM, browser storage or selected-unit presentation state.
 
-## Boundary
+## Canonical profile IDs
 
-Route planning and physical movement are different systems:
-
-```text
-NavigationProfile / NavigationMovementMode
-  → where a path goes and how A* values candidate cells
-
-MovementProfile / MovementGait / MovementRuntimeState
-  → how a soldier physically travels along the already selected path
-```
-
-`SimulationTick.ts` remains the only coordinate integrator. The movement runtime never imports PixiJS, DOM, local storage or selected-unit UI state. It samples only the current core map cell and does not invoke A*.
-
-## Core model
-
-`MovementProfile` has a string ID. Built-in profiles are defaults, not a closed profile enum. The editor may add or replace registry entries through the pure registry contract.
+The built-in physical profile IDs are:
 
 ```text
-MovementProfile
-├── movement
-│   ├── preferred posture
-│   ├── posture requirement
-│   ├── speed multiplier
-│   ├── start time
-│   ├── stop time
-│   └── automatic posture policy
-├── stamina
-├── signature
-├── observation
-├── weapon
-└── restrictions
+normal_walk
+stealth_move
+crouched_move
+run
+sprint
+crawl
 ```
 
-The fixed physical gaits are:
+Legacy and parallel-worker IDs are normalized at the boundary:
+
+```text
+normal  → normal_walk
+stealth → stealth_move
+rapid   → run
+fast    → run
+assault → run
+low     → crawl
+```
+
+`assault` remains a tactical preset name, not a physical profile. Its physical selection is `run`. `sprint` is a separate short-duration profile or an explicit AI override.
+
+A profile ID and a gait are separate values. The fixed physical gaits are:
 
 ```text
 crawl
@@ -50,61 +42,108 @@ run
 sprint
 ```
 
-A profile ID and a gait are separate values. For example, a custom profile `night_patrol` may request `walk` or `crouch_walk` without becoming a new gait.
+A custom profile may choose any preferred gait without creating a new gait enum.
 
-## Runtime ownership
+## One editor/runtime profile contract
 
-Every `UnitModel` owns one `MovementRuntimeState` with:
-
-- requested and effective profile IDs;
-- requested profile source and effective source;
-- requested and actual gait;
-- stamina;
-- forced fallback reason;
-- distance-based sound accumulator and sequence;
-- moving/stopped state and current velocity;
-- weapon-stop preparation state;
-- speed, noise, visibility and observation diagnostics.
-
-`currentAction` remains a coarse behavior/UI label and is not the source of physical gait.
-
-## Physical speed
-
-The movement step uses independent physical factors:
+The pure core contract is split by responsibility:
 
 ```text
-base unit speed
-× gait multiplier
-× movement-profile multiplier
-× posture multiplier
-× physical ability
-× wound multiplier
-× integrated stamina multiplier
-× current-cell physical surface multiplier
+MovementProfileTypes.ts
+MovementProfileDefaults.ts
+MovementProfileNormalization.ts
+MovementProfileRegistry.ts
+MovementProfiles.ts             # public barrel
 ```
 
-The current-cell multiplier is not an A* cost. Water remains impassable rather than becoming an extreme numeric slowdown. The implementation performs one bounded cell lookup per moving unit and does not rebuild route fields.
-
-## Deterministic stamina
-
-Run and sprint drain stamina. Slow movement has no drain and may recover a bounded amount. Stopped units recover according to the effective profile.
-
-When a strenuous gait crosses its downgrade threshold inside a tick, the runtime analytically splits that tick into requested-gait and fallback-gait segments. Distance and stamina therefore remain equivalent for coarse and fine tick partitions, including a threshold crossing.
-
-A fallback changes only effective execution:
+The profile editor and runtime must use the same `MovementProfile` shape:
 
 ```text
-requested profile/gait → preserved
-active MoveOrder       → preserved
-actual gait            → safe fallback
-source                  → fallback
+MovementProfile
+├── identity and labels
+├── preferredGait
+├── stancePolicy
+├── fallbackProfileId
+├── templateProfileId
+├── category / sortOrder / revision
+└── settings
+    ├── speed
+    ├── stamina
+    ├── visibility
+    ├── noise
+    ├── attention
+    ├── weapon
+    ├── restrictions
+    └── surface
 ```
 
-The requested gait resumes only after its start threshold is available again. This avoids per-tick oscillation at the downgrade boundary.
+Every user-tunable numeric coefficient used by physical movement is stored in `settings` and can be exposed by the visual editor.
 
-## Posture arbitration
+### `settings.speed`
 
-Hard physical relationships are enforced:
+- `speedMultiplier`;
+- `startDelaySeconds`;
+- `stopDelaySeconds`;
+- `stanceChangeSeconds`;
+- `minimumSpeedMetersPerSecond`;
+- `lowStaminaSpeedMultiplier`.
+
+### `settings.stamina`
+
+- `drainPerSecond`;
+- `recoveryPerSecond`;
+- `minimumToStart`;
+- `fallbackThreshold`;
+- `resumeThreshold`.
+
+### `settings.visibility`
+
+- `movementVisibilityMultiplier`;
+- `usesStealthSkill`;
+- `stealthSkillShare`;
+- `lateralMovementMultiplier`;
+- `openTerrainExposureBonus`.
+
+### `settings.noise`
+
+- `loudness`;
+- `eventSpacingMeters`;
+- `fatigueMultiplier`;
+- `surfacePolicy`.
+
+### `settings.attention`
+
+- `focusMultiplier`;
+- `directAttentionMultiplier`;
+- `peripheralMultiplier`;
+- `rearAwarenessMultiplier`;
+- `stationaryTargetDetectionMultiplier`;
+- `movingTargetDetectionMultiplier`;
+- `scanSpeedMultiplier`.
+
+### `settings.weapon`
+
+- `allowFireWhileMoving`;
+- `allowReloadWhileMoving`;
+- `readyDelayAfterStopSeconds`;
+- `aimPreparationMultiplier`;
+- `weaponPreparationPenalty`.
+
+### `settings.restrictions`
+
+- `maximumWoundSeverity`;
+- `allowedWhileSuppressed`;
+- `maximumSuppressionPercent`;
+- `minimumPhysicalCapability`;
+- `minimumSoldierSpeedMetersPerSecond`;
+- `fallbackRule`.
+
+### `settings.surface`
+
+- `materialSpeedMultiplier`;
+- `materialNoiseMultiplier`.
+
+The runtime contains no second numeric gait table. Gait code keeps only hard structural relationships that are not editor tuning:
 
 ```text
 crawl        → prone
@@ -112,11 +151,74 @@ crouch_walk  → crouched
 sprint       → standing
 ```
 
-For non-required posture, a manual or AI posture change is treated as an external decision and is not overwritten every tick. The movement runtime records the last posture it applied so that manual controls, AI graph posture effects and self-preservation logic remain separate authorities.
+All speed, stamina, perception, visibility, noise and weapon-delay numbers come from the resolved profile. Runtime diagnostics retain `gaitMultiplier: 1` so an accidental hidden multiplier is visible to tests and tooling.
 
-## Perception and observation
+## Runtime ownership and authority
 
-`PerceptionStimulus` reads actual movement, not the existence of an order:
+Every unit owns a `MovementRuntimeState` with separate requested and effective state:
+
+- requested profile ID and requested gait;
+- requested authority source;
+- effective profile ID, actual gait and effective authority source;
+- stamina and motion diagnostics;
+- `forcedFallbackReason`;
+- `migrationInfo`;
+- distance-based sound accumulation;
+- intent-owned weapon preparation.
+
+Canonical authority sources are:
+
+```text
+hard_safety
+ai_override
+player_order
+unit_role
+default
+```
+
+`fallback` and `migration` are not authority sources. A physical restriction changes only effective execution:
+
+```text
+requestedProfileId / requestedGait / requestedProfileSource → preserved
+effectiveProfileId / actualGait / effectiveProfileSource   → constrained
+forcedFallbackReason                                        → explicit
+active MoveOrder                                             → preserved
+```
+
+Legacy source names are migrated explicitly:
+
+```text
+ai        → ai_override
+player    → player_order
+unit      → unit_role
+fallback  → hard_safety + migrationInfo
+migration → default + migrationInfo
+```
+
+## Deterministic speed and stamina
+
+Physical distance uses profile-owned factors:
+
+```text
+base unit speed
+× profile speed multiplier
+× posture
+× physical capability
+× wound factor
+× integrated low-stamina multiplier
+× material-provider speed
+× profile surface multiplier
+```
+
+There is no independent numeric gait multiplier.
+
+When stamina crosses `fallbackThreshold` inside a tick, the runtime analytically divides that tick between the requested and fallback profiles. Coarse and fine tick partitions therefore produce equivalent stamina and distance. The requested profile resumes only at `resumeThreshold`, which prevents oscillation at the fallback boundary.
+
+Wound, suppression, physical-capability and minimum-speed restrictions are evaluated before translation. Their values come from `settings.restrictions`; the runtime only enforces bounded hard-safety behavior.
+
+## Perception and movement sound
+
+Perception reads actual movement rather than the mere existence of an order:
 
 ```text
 not moving                 → stationary
@@ -124,121 +226,117 @@ crawl / crouch_walk / walk → walking
 run / sprint               → running
 ```
 
-Target visibility includes the effective profile's movement signature and stealth-skill share. Lateral motion is derived from actual velocity relative to the observer rather than a constant value. When visual and movement-sound evidence identify the same unit in one tick, the current visual contact has precedence: sound cannot clear `visibleNow` or replace the exact visual position with an acoustic estimate.
+Target movement visibility, stealth-skill contribution and lateral visibility use the effective profile. Observer attention channels and check cadence use `settings.attention`, including `scanSpeedMultiplier`.
 
-The moving observer keeps perception active. Ordinary `walk`, `crouch_walk` and `crawl` are gait-neutral for legacy observation cadence; profile factors may still tune them. `run` and `sprint` impose mandatory gait-level reductions on attention weights, check cadence and target processing, then the effective profile applies its additional observation factors. No channel is set to zero.
+Movement sound uses the existing perception-sound system. Events are accumulated by physical distance, not frames. The event interval and loudness are profile values. The same path produces the same sound count under different tick partitions.
 
-## Movement sound
+When visual and movement-sound evidence identify the same unit in one simulation tick, the current visual contact has precedence. Sound cannot clear `visibleNow` or replace the exact visual position with an acoustic estimate.
 
-Movement uses the existing `PerceptionSound` system. Events are emitted when accumulated physical distance crosses the profile interval, not once per frame.
+## Weapon preparation lifecycle
 
-Each event has:
+There is no second weapon state machine. The existing `FireAction` remains authoritative for firing.
 
-- a deterministic per-unit sequence ID;
-- an interpolated point along the travelled segment;
-- an interpolated simulation timestamp;
-- profile loudness;
-- the standard `movement` sound kind.
-
-The same path creates the same number of movement events under different tick partitions.
-
-## Weapon integration
-
-There is no second weapon runtime.
-
-A fire request queries the physical movement runtime before creating the existing `FireAction`:
+A moving-fire request that requires stopping creates a pending preparation owned by one concrete fire intent:
 
 ```text
-slow gait allowed by profile
-  → existing FireAction may start
-
-run / sprint or profile-disallowed moving fire
-  → keep MoveOrder
-  → request physical stop
-  → wait profile/gait preparation delay
-  → permit the existing FireAction
+ownerToken
+contactId
+orderIssuedAtMs
+remainingSeconds
+revision
 ```
 
-The active route remains paused while `FireAction` exists and can continue afterward. Starting a fire action no longer destroys the route merely to stop coordinate integration.
+The pending preparation:
+
+- preserves the active move order;
+- pauses translation only for its remaining duration;
+- clears deterministically when the duration reaches zero, even without a repeated fire request;
+- is cancelled when the target disappears;
+- is cancelled when fire intent or fire permission is cancelled;
+- is cancelled when a newer movement order replaces the order it was created for;
+- cannot be removed by stale cleanup if owner, contact or revision no longer match;
+- does not delete the route or active order.
+
+If preparation completes partway through a simulation tick, movement may resume during the unblocked remainder of that tick.
 
 ## Serialization and migration
 
-Scene export v10 stores:
+Scene export stores:
 
-- the movement-profile registry;
-- requested profile ID and gait per unit;
-- movement runtime state.
+- the canonical movement-profile registry;
+- requested profile ID, requested source and requested gait;
+- effective runtime state;
+- weapon preparation as `remainingSeconds`.
 
-Old scenes without these fields normalize to:
+Absolute `weaponReadyAtSeconds` is never serialized because scene simulation time is not serialized as an equivalent clock origin. A save/load cycle continues only the remaining preparation duration.
 
-```text
-profile: normal
-gait: walk
-stamina: 100
-```
-
-Custom profile definitions are serialized and restored. Unknown or malformed runtime fields use bounded safe defaults rather than silently removing the user's profile selection.
-
-## Adapter for the profile-editor worker
-
-The visual editor should use only core registry functions:
+Legacy unfinished preparation fields are normalized safely:
 
 ```text
-createMovementProfileRegistry
-resolveMovementProfile
-upsertMovementProfile
-serializeMovementProfileRegistry
+weaponStopRequested
+weaponReadyAtSeconds
 ```
 
-It must not store a second browser-only profile schema. Human-facing labels use «Профили движения», «Способ движения» and «Фактическое движение».
+They do not recreate an indefinite stop. The old absolute state is discarded and recorded through `migrationInfo.reason = runtime_normalization`.
 
-## Adapter for the order/AI worker
+Legacy profile IDs and legacy authority sources are migrated through explicit aliases. Custom profiles retain every unaffected settings group during normalization, registry updates and scene round trips.
 
-The order and AI integration should call:
+## Material-profile boundary
+
+Physical movement does not own a permanent terrain coefficient table. `MovementMaterialAdapter.ts` defines a pure provider boundary:
+
+```text
+MovementMaterialProfileProvider
+  input: state, unit, position, profile
+  output: passable, speedMultiplier, noiseMultiplier, visibilityMultiplier
+```
+
+`SimulationState.movementMaterialProfileProvider` is `null` until an integrator connects the canonical material profiles from PR #130.
+
+An explicit `resolveLegacyMovementMaterialFactors` fallback preserves current road/rough/swamp/water and vegetation behavior only for compatibility. New coefficients must not be added to this fallback. Tests distinguish `material_profile_provider` from `legacy_fallback`.
+
+The boundary preserves these invariants:
+
+- no A* call from physical movement;
+- passability remains separate from numeric speed;
+- `SimulationTick.ts` remains the only coordinate integrator;
+- renderer and presentation settings never become simulation inputs.
+
+## Editor and order adapters
+
+The visual editor should import the pure core registry/types rather than maintain a second schema. Browser persistence remains outside `src/core`.
+
+Order and AI integration should call:
 
 ```text
 setMovementProfileRequest(state, unit, profileId, source, optionalGait)
 ```
 
-The adapter decides which command/graph policy selects the requested profile and gait. It must not write `actualGait`, stamina, diagnostics or coordinates directly.
-
-## PR #130 integration note
-
-PR #130 replaces legacy terrain/vegetation definitions with canonical environment material profiles and independent revisions. This branch intentionally does not import that isolated work.
-
-The expected integration point is the single function that resolves the current-cell physical surface multiplier. During integration it should read PR #130's canonical movement material parameters while preserving these invariants:
-
-- no A* call from physical movement;
-- passability remains separate from numeric speed;
-- `SimulationTick` remains the only coordinate integrator;
-- material presentation settings never become simulation input.
-
-`SimulationTick.ts`, `SceneExport.ts`, `SimulationState.ts` and map-profile imports are expected conflict files.
+Adapters may set requested profile/gait/source. They must not write `actualGait`, effective hard-safety state, stamina, diagnostics, weapon-preparation revisions or coordinates directly.
 
 ## Verification
 
-The focused runner is:
+The focused runner `npm run physical-movement:smoke` proves:
 
-```text
-npm run physical-movement:smoke
-```
+1. canonical IDs and every migration alias;
+2. profile-owned speed ordering with no hidden gait multiplier;
+3. custom numeric settings alter runtime behavior;
+4. deterministic stamina, recovery and threshold crossing;
+5. hard-safety fallback preserves requested state and active order;
+6. distance-based sound partition invariance;
+7. profile-owned visibility and attention, including scan cadence;
+8. visual contact precedence over movement sound;
+9. target disappearance and explicit fire cancellation clear preparation;
+10. newer orders invalidate stale preparation;
+11. stale cleanup cannot cancel newer intent-owned preparation;
+12. preparation self-clears and movement resumes without another fire request;
+13. save/load preserves remaining duration and never absolute readiness time;
+14. legacy absolute preparation state is safely normalized;
+15. all custom profile settings round-trip;
+16. material provider and explicit legacy fallback are distinct;
+17. UI selection cannot change physical results;
+18. route replanning preserves the requested physical profile.
 
-It proves:
+`Physical Movement Core` also runs tactical-order, routed-movement, route-status, AI movement bridge, perception, combat, scene/runtime serialization, production build and documentation checks when relevant order/AI/profile files change.
 
-1. run is faster than walk;
-2. sprint is faster than run;
-3. stealth crouch movement is slower than walk;
-4. crawl is the slowest primary gait;
-5. coarse/fine tick partitions produce equivalent distance;
-6. stamina drain and recovery are deterministic;
-7. exhaustion falls back without deleting the order;
-8. run and sprint become `running` stimuli;
-9. stealth movement produces less visual evidence than run;
-10. run has a stronger sound signature than stealth movement;
-11. movement sound count is partition invariant;
-12. sprint blocks immediate fire until stop preparation completes;
-13. old scenes receive safe defaults and custom profiles round-trip;
-14. selected-unit UI state cannot change physical results;
-15. route replan preserves the active physical movement request;
-16. ordinary walk preserves legacy-neutral observation, while run and sprint apply gait-level penalties even under the normal profile;
-17. a same-tick movement sound cannot downgrade a current visual contact.
+Visual QA is intentionally not part of this core follow-up.

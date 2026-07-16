@@ -10,6 +10,15 @@ on:
       - 'src/core/units/**'
       - 'src/core/perception/**'
       - 'src/core/combat/FireAction.ts'
+      - 'src/core/orders/**'
+      - 'src/core/ai/**'
+      - 'src/core/navigation/NavigationRouteReplanner.ts'
+      - 'src/core/navigation/NavigationRuntime.ts'
+      - 'src/ui/TacticalOrderStatusCard.ts'
+      - 'scripts/tactical_order_radial_menu_smoke.*'
+      - 'scripts/ai_stateful_move_bridge_smoke.*'
+      - 'scripts/ai_plan_move_scope_smoke.*'
+      - 'scripts/ai_graph_ownership_smoke.*'
       - 'src/ui/SceneExport.ts'
       - 'scripts/physical_movement_runtime_smoke.*'
       - 'scripts/ai_runtime_scene_integration_smoke.ts'
@@ -28,6 +37,15 @@ on:
       - 'src/core/units/**'
       - 'src/core/perception/**'
       - 'src/core/combat/FireAction.ts'
+      - 'src/core/orders/**'
+      - 'src/core/ai/**'
+      - 'src/core/navigation/NavigationRouteReplanner.ts'
+      - 'src/core/navigation/NavigationRuntime.ts'
+      - 'src/ui/TacticalOrderStatusCard.ts'
+      - 'scripts/tactical_order_radial_menu_smoke.*'
+      - 'scripts/ai_stateful_move_bridge_smoke.*'
+      - 'scripts/ai_plan_move_scope_smoke.*'
+      - 'scripts/ai_graph_ownership_smoke.*'
       - 'src/ui/SceneExport.ts'
       - 'scripts/physical_movement_runtime_smoke.*'
       - 'scripts/ai_runtime_scene_integration_smoke.ts'
@@ -65,8 +83,10 @@ jobs:
       - name: Physical movement runtime
         run: npm run physical-movement:smoke
 
-      - name: Movement facing
-        run: npm run movement-facing:smoke
+      - name: Tactical order and movement facing
+        run: |
+          npm run tactical-order:smoke
+          npm run movement-facing:smoke
 
       - name: Routed movement and route status
         run: |

@@ -59,7 +59,7 @@ Overlay visibility and selected-unit state are presentation concerns. Machine co
 
 ### Physical movement
 
-Navigation chooses a route; physical movement executes that route. `MovementProfile` is a string-addressed configuration, `MovementGait` is the actual crawl/crouch/walk/run/sprint mode, and `MovementRuntimeState` belongs to each unit. `SimulationTick.ts` is the only coordinate integrator. Physical speed samples the current core map cell but never invokes A* or reads renderer/UI state. Movement sound is distance-based, stamina threshold crossing is partition-invariant, and temporary fallback preserves the original order.
+Navigation chooses a route; physical movement executes that route. The canonical built-ins are `normal_walk`, `stealth_move`, `crouched_move`, `run`, `sprint` and `crawl`. `MovementProfile.settings` is the single editable numeric contract for runtime and the visual editor; gait code contains only structural posture invariants. `MovementRuntimeState` keeps requested authority separate from effective `hard_safety` constraints. `SimulationTick.ts` is the only coordinate integrator. Physical surface effects enter through `MovementMaterialProfileProvider`, with an explicit legacy fallback until canonical material profiles are integrated. Movement sound is distance-based, stamina threshold crossing is partition-invariant, intent-owned weapon preparation stores remaining duration rather than an absolute simulation timestamp, and fallback never deletes the active order.
 
 ### Rendering
 

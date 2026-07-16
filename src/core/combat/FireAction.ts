@@ -1,4 +1,9 @@
-import { getMovementAimPreparationMultiplier, requestMovementWeaponPreparation } from '../movement/MovementRuntime';
+import {
+  cancelMovementWeaponPreparation,
+  getMovementAimPreparationMultiplier,
+  getMovementWeaponPreparation,
+  requestMovementWeaponPreparation,
+} from '../movement/MovementRuntime';
 import { setAttentionMode, setFocusTarget } from '../perception/AttentionController';
 import { emitPerceptionSound } from '../perception/PerceptionSound';
 import type { SimulationState } from '../simulation/SimulationState';
@@ -56,16 +61,18 @@ export function requestFireAction(state: SimulationState, unit: UnitModel, conta
     return false;
   }
   if (actionByUnit.has(unit) || !isUnitCombatCapable(unit)) return false;
-  const movementPermission = requestMovementWeaponPreparation(state, unit);
+  const ownerToken = fireIntentOwnerToken(contactId);
+  const decision = evaluateFireRequest(state, unit, contactId);
+  if (!decision.allowed) {
+    cancelMovementWeaponPreparation(unit, { ownerToken });
+    unit.behaviorRuntime.reason = decision.reasonRu;
+    unit.behaviorRuntime.lastEvent = 'combat_fire_request_denied';
+    return false;
+  }
+  const movementPermission = requestMovementWeaponPreparation(state, unit, { contactId, ownerToken });
   if (!movementPermission.allowed) {
     unit.behaviorRuntime.reason = movementPermission.reasonRu;
     unit.behaviorRuntime.lastEvent = 'movement_weapon_preparation_required';
-    return false;
-  }
-  const decision = evaluateFireRequest(state, unit, contactId);
-  if (!decision.allowed) {
-    unit.behaviorRuntime.reason = decision.reasonRu;
-    unit.behaviorRuntime.lastEvent = 'combat_fire_request_denied';
     return false;
   }
   actionByUnit.set(unit, {
@@ -85,6 +92,38 @@ export function requestFireAction(state: SimulationState, unit: UnitModel, conta
   return true;
 }
 
+
+export function cancelPendingFireIntent(unit: UnitModel, contactId?: string): boolean {
+  const pending = getMovementWeaponPreparation(unit);
+  if (!pending) return false;
+  if (contactId && pending.contactId !== contactId) return false;
+  return cancelMovementWeaponPreparation(unit, {
+    ownerToken: pending.ownerToken,
+    revision: pending.revision,
+    contactId: pending.contactId,
+  });
+}
+
+export function reconcilePendingFireIntent(state: SimulationState, unit: UnitModel): void {
+  const pending = getMovementWeaponPreparation(unit);
+  if (!pending) return;
+  const expected = { ownerToken: pending.ownerToken, revision: pending.revision, contactId: pending.contactId };
+  if (pending.orderIssuedAtMs !== (unit.order?.issuedAtMs ?? null)) {
+    cancelMovementWeaponPreparation(unit, expected);
+    return;
+  }
+  if (!isFireAllowed(state) || !isUnitCombatCapable(unit)) {
+    cancelMovementWeaponPreparation(unit, expected);
+    return;
+  }
+  const decision = evaluateFireRequest(state, unit, pending.contactId);
+  if (!decision.allowed || !decision.target) cancelMovementWeaponPreparation(unit, expected);
+}
+
+export function reconcileAllPendingFireIntents(state: SimulationState): void {
+  for (const unit of state.units) reconcilePendingFireIntent(state, unit);
+}
+
 export function getFireAction(unit: UnitModel): FireActionState | null {
   const action = actionByUnit.get(unit);
   return action ? { ...action } : null;
@@ -98,6 +137,7 @@ export function getLastShotResult(unit: UnitModel): LastShotResult | null {
 export function cancelFireAction(unit: UnitModel, reason: string, reasonRu = reason): void {
   const action = actionByUnit.get(unit);
   if (!action) return;
+  cancelMovementWeaponPreparation(unit, { ownerToken: fireIntentOwnerToken(action.contactId) });
   action.phase = 'cancelled';
   action.reason = reason;
   action.reasonRu = reasonRu;
@@ -406,4 +446,8 @@ function deterministicSigned(value: string): number {
     hash = Math.imul(hash, 16777619);
   }
   return ((hash >>> 0) / 0xffffffff) * 2 - 1;
+}
+
+function fireIntentOwnerToken(contactId: string): string {
+  return `fire-intent:${contactId}`;
 }

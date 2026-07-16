@@ -1,22 +1,38 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
-import { getCell } from '../map/MapModel';
-import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 import { emitPerceptionSound } from '../perception/PerceptionSound';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
+import { resolveMovementMaterialFactors, type MovementMaterialFactors } from './MovementMaterialAdapter';
 import {
   DEFAULT_MOVEMENT_PROFILE_ID,
   isMovementGait,
+  profileIdForGait,
   resolveMovementProfile,
+  resolveMovementProfileIdAlias,
   type MovementGait,
   type MovementProfile,
+  type MovementProfileAuthoritySource,
+  type MovementProfileMigrationInfo,
   type MovementProfileSource,
+  type MovementWeaponPreparationState,
 } from './MovementProfiles';
+
+export type MovementForcedFallbackReason =
+  | 'missing_profile'
+  | 'insufficient_stamina'
+  | 'stamina_fallback'
+  | 'wound_restriction'
+  | 'suppression_restriction'
+  | 'physical_capability'
+  | 'minimum_speed'
+  | 'impassable_material'
+  | 'profile_stop';
 
 export interface MovementRuntimeDiagnostics {
   speedCellsPerSecond: number;
   baseSpeedCellsPerSecond: number;
+  /** Kept for diagnostic compatibility. Numeric gait tuning lives in profiles, so this is always 1. */
   gaitMultiplier: number;
   profileMultiplier: number;
   postureMultiplier: number;
@@ -24,6 +40,7 @@ export interface MovementRuntimeDiagnostics {
   woundMultiplier: number;
   staminaMultiplier: number;
   surfaceMultiplier: number;
+  materialSource: MovementMaterialFactors['source'];
   noiseLoudness: number;
   visualMovementMultiplier: number;
   lateralVisibility: number;
@@ -33,18 +50,20 @@ export interface MovementRuntimeDiagnostics {
   observationRearMultiplier: number;
   stationaryTargetMultiplier: number;
   movingTargetMultiplier: number;
+  observationScanSpeedMultiplier: number;
   stealthSkillShare: number;
 }
 
 export interface MovementRuntimeState {
   requestedProfileId: string;
   effectiveProfileId: string;
-  requestedProfileSource: MovementProfileSource;
-  effectiveProfileSource: MovementProfileSource;
+  requestedProfileSource: MovementProfileAuthoritySource;
+  effectiveProfileSource: MovementProfileAuthoritySource;
   requestedGait: MovementGait;
   actualGait: MovementGait;
   stamina: number;
-  forcedFallbackReason: string | null;
+  forcedFallbackReason: MovementForcedFallbackReason | null;
+  migrationInfo: MovementProfileMigrationInfo | null;
   distanceSinceSoundMeters: number;
   emittedSoundCount: number;
   movementSequence: number;
@@ -52,8 +71,8 @@ export interface MovementRuntimeState {
   startElapsedSeconds: number;
   stopElapsedSeconds: number;
   lastMovementPosture: UnitPosture | null;
-  weaponStopRequested: boolean;
-  weaponReadyAtSeconds: number | null;
+  weaponPreparation: MovementWeaponPreparationState | null;
+  weaponPreparationRevision: number;
   velocityCellsPerSecond: GridPosition;
   diagnostics: MovementRuntimeDiagnostics;
 }
@@ -66,50 +85,21 @@ export interface MovementStep {
   staminaStart: number;
   staminaEnd: number;
   speedCellsPerSecond: number;
+  materialFactors: MovementMaterialFactors;
 }
 
-interface GaitDefinition {
-  speedMultiplier: number;
-  posture: UnitPosture;
-  postureRequired: boolean;
-  staminaDrainPerSecond: number;
-  readyDelayAfterStopSeconds: number;
-  observation: MovementProfile['observation'];
+interface MovementExecution {
+  profile: MovementProfile;
+  gait: MovementGait;
+  source: MovementProfileAuthoritySource;
+  reason: MovementForcedFallbackReason | null;
+  stop: boolean;
 }
 
-const NEUTRAL_GAIT_OBSERVATION: MovementProfile['observation'] = {
-  focusMultiplier: 1,
-  directMultiplier: 1,
-  peripheralMultiplier: 1,
-  rearMultiplier: 1,
-  stationaryTargetMultiplier: 1,
-  movingTargetMultiplier: 1,
-};
-
-const RUN_GAIT_OBSERVATION: MovementProfile['observation'] = {
-  focusMultiplier: 0.7,
-  directMultiplier: 0.62,
-  peripheralMultiplier: 0.48,
-  rearMultiplier: 0.38,
-  stationaryTargetMultiplier: 0.64,
-  movingTargetMultiplier: 0.8,
-};
-
-const SPRINT_GAIT_OBSERVATION: MovementProfile['observation'] = {
-  focusMultiplier: 0.5,
-  directMultiplier: 0.42,
-  peripheralMultiplier: 0.3,
-  rearMultiplier: 0.22,
-  stationaryTargetMultiplier: 0.45,
-  movingTargetMultiplier: 0.65,
-};
-
-const GAITS: Record<MovementGait, GaitDefinition> = {
-  crawl: { speedMultiplier: 0.7, posture: 'prone', postureRequired: true, staminaDrainPerSecond: 0, readyDelayAfterStopSeconds: 0.05, observation: NEUTRAL_GAIT_OBSERVATION },
-  crouch_walk: { speedMultiplier: 0.9, posture: 'crouched', postureRequired: true, staminaDrainPerSecond: 0, readyDelayAfterStopSeconds: 0.08, observation: NEUTRAL_GAIT_OBSERVATION },
-  walk: { speedMultiplier: 1, posture: 'standing', postureRequired: false, staminaDrainPerSecond: 0, readyDelayAfterStopSeconds: 0.1, observation: NEUTRAL_GAIT_OBSERVATION },
-  run: { speedMultiplier: 1.65, posture: 'standing', postureRequired: false, staminaDrainPerSecond: 10, readyDelayAfterStopSeconds: 0.35, observation: RUN_GAIT_OBSERVATION },
-  sprint: { speedMultiplier: 2.15, posture: 'standing', postureRequired: true, staminaDrainPerSecond: 22, readyDelayAfterStopSeconds: 0.75, observation: SPRINT_GAIT_OBSERVATION },
+const REQUIRED_GAIT_POSTURES: Partial<Record<MovementGait, UnitPosture>> = {
+  crawl: 'prone',
+  crouch_walk: 'crouched',
+  sprint: 'standing',
 };
 
 export function createMovementRuntime(
@@ -119,48 +109,59 @@ export function createMovementRuntime(
 ): MovementRuntimeState {
   const record = isRecord(input) ? input : {};
   const diagnostics = isRecord(record.diagnostics) ? record.diagnostics : {};
-  const effectiveProfileId = string(record.effectiveProfileId, requestedProfileId);
-  const source = movementSource(record.effectiveProfileSource, input === undefined ? 'default' : 'migration');
+  const requestedAlias = resolveMovementProfileIdAlias(string(record.requestedProfileId, requestedProfileId));
+  const effectiveAlias = resolveMovementProfileIdAlias(string(record.effectiveProfileId, requestedAlias.id));
+  const sourceMigration = normalizeAuthoritySource(record.requestedProfileSource, input === undefined ? 'default' : 'default');
+  const effectiveSourceMigration = normalizeAuthoritySource(record.effectiveProfileSource, sourceMigration.source);
+  const migrationInfo = normalizeMigrationInfo(record.migrationInfo)
+    ?? requestedAlias.migrationInfo
+    ?? effectiveAlias.migrationInfo
+    ?? sourceMigration.migrationInfo
+    ?? effectiveSourceMigration.migrationInfo
+    ?? legacyRuntimeMigration(record);
+  const normalizedRequestedGait = isMovementGait(record.requestedGait) ? record.requestedGait : requestedGait;
+  const normalizedActualGait = isMovementGait(record.actualGait) ? record.actualGait : normalizedRequestedGait;
   return {
-    requestedProfileId: string(record.requestedProfileId, requestedProfileId),
-    effectiveProfileId,
-    requestedProfileSource: movementSource(record.requestedProfileSource, source),
-    effectiveProfileSource: source,
-    requestedGait: isMovementGait(record.requestedGait) ? record.requestedGait : requestedGait,
-    actualGait: isMovementGait(record.actualGait) ? record.actualGait : requestedGait,
+    requestedProfileId: requestedAlias.id,
+    effectiveProfileId: effectiveAlias.id,
+    requestedProfileSource: sourceMigration.source,
+    effectiveProfileSource: effectiveSourceMigration.source,
+    requestedGait: normalizedRequestedGait,
+    actualGait: normalizedActualGait,
     stamina: finite(record.stamina, 100, 0, 100),
-    forcedFallbackReason: typeof record.forcedFallbackReason === 'string' ? record.forcedFallbackReason : null,
+    forcedFallbackReason: forcedFallbackReason(record.forcedFallbackReason),
+    migrationInfo,
     distanceSinceSoundMeters: finite(record.distanceSinceSoundMeters, 0, 0, 1_000_000),
-    emittedSoundCount: Math.max(0, Math.floor(finite(record.emittedSoundCount, 0, 0, 1_000_000_000))),
-    movementSequence: Math.max(0, Math.floor(finite(record.movementSequence, 0, 0, 1_000_000_000))),
+    emittedSoundCount: integer(record.emittedSoundCount, 0, 0, 1_000_000_000),
+    movementSequence: integer(record.movementSequence, 0, 0, 1_000_000_000),
     isMoving: record.isMoving === true,
     startElapsedSeconds: finite(record.startElapsedSeconds, 0, 0, 60),
     stopElapsedSeconds: finite(record.stopElapsedSeconds, 0, 0, 60),
     lastMovementPosture: postureOrNull(record.lastMovementPosture),
-    weaponStopRequested: record.weaponStopRequested === true,
-    weaponReadyAtSeconds: typeof record.weaponReadyAtSeconds === 'number' && Number.isFinite(record.weaponReadyAtSeconds)
-      ? Math.max(0, record.weaponReadyAtSeconds)
-      : null,
+    weaponPreparation: normalizeWeaponPreparation(record.weaponPreparation),
+    weaponPreparationRevision: integer(record.weaponPreparationRevision, 0, 0, Number.MAX_SAFE_INTEGER),
     velocityCellsPerSecond: vector(record.velocityCellsPerSecond),
     diagnostics: {
       speedCellsPerSecond: finite(diagnostics.speedCellsPerSecond, 0, 0, 100),
       baseSpeedCellsPerSecond: finite(diagnostics.baseSpeedCellsPerSecond, 0, 0, 100),
-      gaitMultiplier: finite(diagnostics.gaitMultiplier, 1, 0, 10),
+      gaitMultiplier: 1,
       profileMultiplier: finite(diagnostics.profileMultiplier, 1, 0, 10),
       postureMultiplier: finite(diagnostics.postureMultiplier, 1, 0, 10),
       abilityMultiplier: finite(diagnostics.abilityMultiplier, 1, 0, 10),
       woundMultiplier: finite(diagnostics.woundMultiplier, 1, 0, 10),
       staminaMultiplier: finite(diagnostics.staminaMultiplier, 1, 0, 10),
       surfaceMultiplier: finite(diagnostics.surfaceMultiplier, 1, 0, 10),
-      noiseLoudness: finite(diagnostics.noiseLoudness, 0, 0, 2),
-      visualMovementMultiplier: finite(diagnostics.visualMovementMultiplier, 1, 0, 4),
-      lateralVisibility: finite(diagnostics.lateralVisibility, 0, 0, 4),
+      materialSource: diagnostics.materialSource === 'material_profile_provider' ? 'material_profile_provider' : 'legacy_fallback',
+      noiseLoudness: finite(diagnostics.noiseLoudness, 0, 0, 4),
+      visualMovementMultiplier: finite(diagnostics.visualMovementMultiplier, 1, 0, 5),
+      lateralVisibility: finite(diagnostics.lateralVisibility, 1, 0, 5),
       observationFocusMultiplier: finite(diagnostics.observationFocusMultiplier, 1, 0, 4),
       observationDirectMultiplier: finite(diagnostics.observationDirectMultiplier, 1, 0, 4),
       observationPeripheralMultiplier: finite(diagnostics.observationPeripheralMultiplier, 1, 0, 4),
       observationRearMultiplier: finite(diagnostics.observationRearMultiplier, 1, 0, 4),
       stationaryTargetMultiplier: finite(diagnostics.stationaryTargetMultiplier, 1, 0, 4),
       movingTargetMultiplier: finite(diagnostics.movingTargetMultiplier, 1, 0, 4),
+      observationScanSpeedMultiplier: finite(diagnostics.observationScanSpeedMultiplier, 1, 0.05, 4),
       stealthSkillShare: finite(diagnostics.stealthSkillShare, 0.45, 0, 1),
     },
   };
@@ -173,8 +174,11 @@ export function setMovementProfileRequest(
   source: MovementProfileSource,
   gait?: MovementGait,
 ): void {
-  const profile = resolveMovementProfile(state.movementProfiles, profileId);
-  setMovementRequest(unit, profile.id, source, gait ?? profile.defaultGait);
+  const resolution = state.movementProfiles.resolveProfile(profileId);
+  const alias = resolveMovementProfileIdAlias(profileId);
+  setMovementRequest(unit, resolution.profile.id, source, gait ?? resolution.profile.preferredGait);
+  if (alias.migrationInfo) unit.movementRuntime.migrationInfo = alias.migrationInfo;
+  if (resolution.fallbackReason) unit.movementRuntime.forcedFallbackReason = 'missing_profile';
 }
 
 export function setMovementRequest(
@@ -183,12 +187,16 @@ export function setMovementRequest(
   source: MovementProfileSource,
   gait?: MovementGait,
 ): void {
-  unit.movementRuntime.requestedProfileId = profileId || DEFAULT_MOVEMENT_PROFILE_ID;
+  const alias = resolveMovementProfileIdAlias(profileId || DEFAULT_MOVEMENT_PROFILE_ID);
+  unit.movementRuntime.requestedProfileId = alias.id;
   unit.movementRuntime.requestedProfileSource = source;
   unit.movementRuntime.effectiveProfileSource = source;
+  unit.movementRuntime.effectiveProfileId = alias.id;
   if (gait) unit.movementRuntime.requestedGait = gait;
   unit.movementRuntime.startElapsedSeconds = 0;
   unit.movementRuntime.forcedFallbackReason = null;
+  unit.movementRuntime.migrationInfo = alias.migrationInfo;
+  cancelMovementWeaponPreparation(unit);
 }
 
 export function preparePhysicalMovementStep(
@@ -196,145 +204,141 @@ export function preparePhysicalMovementStep(
   unit: UnitModel,
   deltaSeconds: number,
   canTranslate: boolean,
-  postureMultiplier: number,
+  _postureMultiplier: number,
   woundMultiplier: number,
 ): MovementStep {
   const runtime = unit.movementRuntime;
-  const profile = resolveMovementProfile(state.movementProfiles, runtime.requestedProfileId);
-  const requestedGait = runtime.requestedGait;
-  const missingProfile = profile.id !== runtime.requestedProfileId;
-  let gait = missingProfile ? profile.defaultGait : requestedGait;
-  let fallbackReason: string | null = missingProfile ? 'missing_profile' : null;
-  const physicalCapability = Math.max(0, Math.min(1, unit.soldier.condition.speed / 100));
-  const wounded = unit.soldier.condition.health < 55;
-  const suppressed = unit.behaviorRuntime.suppression >= 55;
-
-  if ((wounded && !profile.restrictions.allowedWhenWounded)
-    || (suppressed && !profile.restrictions.allowedWhenSuppressed)
-    || physicalCapability < profile.restrictions.minimumPhysicalCapability) {
-    gait = profile.restrictions.safeFallbackGait;
-    fallbackReason = wounded ? 'wounded_restriction' : suppressed ? 'suppression_restriction' : 'physical_capability';
+  const requestedResolution = state.movementProfiles.resolveProfile(runtime.requestedProfileId);
+  let requestedProfile = requestedResolution.profile;
+  if (requestedResolution.fallbackReason) {
+    runtime.migrationInfo ??= {
+      fromProfileId: runtime.requestedProfileId,
+      toProfileId: requestedProfile.id,
+      reason: 'runtime_normalization',
+    };
   }
 
-  const strenuousRequested = requestedGait === 'run' || requestedGait === 'sprint';
-  const continuingRequested = runtime.isMoving
-    && runtime.actualGait === requestedGait
-    && runtime.forcedFallbackReason === null;
-  const requiredStamina = continuingRequested
-    ? profile.stamina.downgradeThreshold
-    : profile.stamina.minimumToStart;
-  if (fallbackReason === null && strenuousRequested && runtime.stamina + 1e-9 < requiredStamina) {
-    gait = profile.stamina.fallbackGait;
-    fallbackReason = continuingRequested ? 'stamina_downgrade' : 'insufficient_stamina';
+  const weaponBlockedSeconds = consumeMovementWeaponPreparation(unit, deltaSeconds);
+  const execution = resolveExecution(state, unit, requestedProfile);
+  let profile = execution.profile;
+  let gait = execution.gait;
+  let fallbackReason = execution.reason ?? (requestedResolution.fallbackReason ? 'missing_profile' : null);
+  const movementOwnsPosture = canTranslate || runtime.isMoving || runtime.weaponPreparation !== null;
+  if (movementOwnsPosture) applyMovementPosture(unit, profile, gait);
+  const postureMultiplier = postureSpeedMultiplier(unit.behaviorRuntime.posture);
+  let materialFactors = resolveMovementMaterialFactors(state, unit, unit.position, profile);
+  if (!materialFactors.passable || materialFactors.speedMultiplier <= 0) {
+    fallbackReason = 'impassable_material';
   }
 
   runtime.effectiveProfileId = profile.id;
-  runtime.effectiveProfileSource = fallbackReason ? 'fallback' : runtime.requestedProfileSource;
+  runtime.effectiveProfileSource = fallbackReason ? 'hard_safety' : execution.source;
   runtime.forcedFallbackReason = fallbackReason;
   runtime.actualGait = gait;
-  const movementOwnsPosture = canTranslate || runtime.isMoving;
-  if (movementOwnsPosture) applyMovementPosture(unit, profile, gait);
-  postureMultiplier = postureSpeedMultiplier(unit.behaviorRuntime.posture);
 
-  const surfaceMultiplier = resolvePhysicalSurfaceMultiplier(state, unit.position);
-  const gaitDefinition = GAITS[gait];
-  const shouldMove = canTranslate && !runtime.weaponStopRequested && surfaceMultiplier > 0;
-  if (!shouldMove || deltaSeconds <= 0) {
+  if (weaponBlockedSeconds > 0) {
+    runtime.stamina = recoverStamina(runtime.stamina, profile, weaponBlockedSeconds, false);
+  }
+  const movementSeconds = Math.max(0, deltaSeconds - weaponBlockedSeconds);
+  const shouldMove = canTranslate && !execution.stop && materialFactors.passable && movementSeconds > 0;
+  if (!shouldMove) {
     runtime.isMoving = false;
     runtime.velocityCellsPerSecond = { x: 0, y: 0 };
     runtime.stopElapsedSeconds += Math.max(0, deltaSeconds);
     runtime.startElapsedSeconds = 0;
-    runtime.stamina = Math.min(100, runtime.stamina + profile.stamina.recoveryPerSecond * Math.max(0, deltaSeconds));
-    publishDiagnostics(runtime, unit, profile, gaitDefinition, postureMultiplier, woundMultiplier, surfaceMultiplier, 0, runtime.stamina);
-    return {
-      maxDistanceCells: 0,
-      activeSeconds: 0,
-      profile,
-      gait,
-      staminaStart: runtime.stamina,
-      staminaEnd: runtime.stamina,
-      speedCellsPerSecond: 0,
-    };
+    runtime.stamina = recoverStamina(runtime.stamina, profile, movementSeconds, false);
+    publishDiagnostics(runtime, unit, profile, postureMultiplier, woundMultiplier, materialFactors, 0, runtime.stamina);
+    return zeroStep(profile, gait, runtime.stamina, materialFactors);
   }
 
   const previousStart = runtime.startElapsedSeconds;
-  runtime.startElapsedSeconds += deltaSeconds;
+  runtime.startElapsedSeconds += movementSeconds;
   runtime.stopElapsedSeconds = 0;
-  const activeSeconds = Math.max(0, runtime.startElapsedSeconds - Math.max(previousStart, profile.movement.startSeconds));
+  const activeSeconds = Math.max(0, runtime.startElapsedSeconds - Math.max(previousStart, profile.settings.speed.startDelaySeconds));
   if (activeSeconds <= 0) {
     runtime.isMoving = false;
     runtime.velocityCellsPerSecond = { x: 0, y: 0 };
-    publishDiagnostics(runtime, unit, profile, gaitDefinition, postureMultiplier, woundMultiplier, surfaceMultiplier, 0, runtime.stamina);
-    return {
-      maxDistanceCells: 0,
-      activeSeconds: 0,
-      profile,
-      gait,
-      staminaStart: runtime.stamina,
-      staminaEnd: runtime.stamina,
-      speedCellsPerSecond: 0,
-    };
+    publishDiagnostics(runtime, unit, profile, postureMultiplier, woundMultiplier, materialFactors, 0, runtime.stamina);
+    return zeroStep(profile, gait, runtime.stamina, materialFactors);
   }
 
   const staminaStart = runtime.stamina;
-  const segments: Array<{ gait: MovementGait; seconds: number }> = [];
-  const initialDrain = GAITS[gait].staminaDrainPerSecond * profile.stamina.drainMultiplier;
-  const crossesDowngrade = fallbackReason === null
-    && (gait === 'run' || gait === 'sprint')
-    && initialDrain > 0
-    && staminaStart > profile.stamina.downgradeThreshold
-    && staminaStart - initialDrain * activeSeconds < profile.stamina.downgradeThreshold;
+  let staminaEnd = staminaStart;
+  let maxDistanceCells = 0;
+  let weightedStamina = 0;
+  const drain = profile.settings.stamina.drainPerSecond;
+  const canCrossThreshold = fallbackReason === null
+    && drain > 0
+    && profile.settings.stamina.fallbackThreshold > 0
+    && staminaStart > profile.settings.stamina.fallbackThreshold
+    && staminaStart - drain * activeSeconds < profile.settings.stamina.fallbackThreshold;
 
-  if (crossesDowngrade) {
+  if (canCrossThreshold) {
     const requestedSeconds = clamp(
-      (staminaStart - profile.stamina.downgradeThreshold) / initialDrain,
+      (staminaStart - profile.settings.stamina.fallbackThreshold) / drain,
       0,
       activeSeconds,
     );
-    if (requestedSeconds > 0) segments.push({ gait, seconds: requestedSeconds });
-    const fallbackSeconds = activeSeconds - requestedSeconds;
-    gait = profile.stamina.fallbackGait;
-    if (fallbackSeconds > 0) segments.push({ gait, seconds: fallbackSeconds });
-    fallbackReason = 'stamina_downgrade';
-    runtime.effectiveProfileSource = 'fallback';
+    const requestedSegment = evaluateMovementSegment(
+      state,
+      unit,
+      profile,
+      requestedSeconds,
+      staminaStart,
+      woundMultiplier,
+      materialFactors,
+    );
+    maxDistanceCells += requestedSegment.distanceCells;
+    weightedStamina += requestedSegment.averageStamina * requestedSeconds;
+    staminaEnd = requestedSegment.staminaEnd;
+
+    const fallbackExecution = resolveConfiguredFallback(state, unit, profile, 'stamina_fallback');
+    profile = fallbackExecution.profile;
+    gait = fallbackExecution.gait;
+    fallbackReason = fallbackExecution.reason;
+    runtime.effectiveProfileId = profile.id;
+    runtime.effectiveProfileSource = 'hard_safety';
     runtime.forcedFallbackReason = fallbackReason;
     runtime.actualGait = gait;
     if (movementOwnsPosture) applyMovementPosture(unit, profile, gait);
-  } else {
-    segments.push({ gait, seconds: activeSeconds });
-  }
-
-  let staminaCursor = staminaStart;
-  let maxDistanceCells = 0;
-  let weightedStamina = 0;
-  for (const segment of segments) {
-    const result = evaluateMovementSegment(
+    materialFactors = resolveMovementMaterialFactors(state, unit, unit.position, profile);
+    const fallbackSeconds = activeSeconds - requestedSeconds;
+    const fallbackSegment = evaluateMovementSegment(
+      state,
       unit,
       profile,
-      segment.gait,
-      segment.seconds,
-      staminaCursor,
-      physicalCapability,
+      fallbackSeconds,
+      staminaEnd,
       woundMultiplier,
-      surfaceMultiplier,
+      materialFactors,
     );
-    staminaCursor = result.staminaEnd;
-    maxDistanceCells += result.distanceCells;
-    weightedStamina += result.averageStamina * segment.seconds;
+    maxDistanceCells += fallbackSegment.distanceCells;
+    weightedStamina += fallbackSegment.averageStamina * fallbackSeconds;
+    staminaEnd = fallbackSegment.staminaEnd;
+  } else {
+    const segment = evaluateMovementSegment(
+      state,
+      unit,
+      profile,
+      activeSeconds,
+      staminaStart,
+      woundMultiplier,
+      materialFactors,
+    );
+    maxDistanceCells = segment.distanceCells;
+    weightedStamina = segment.averageStamina * activeSeconds;
+    staminaEnd = segment.staminaEnd;
   }
-  const staminaEnd = staminaCursor;
+
   const averageStamina = activeSeconds > 0 ? weightedStamina / activeSeconds : staminaStart;
   const averageSpeed = activeSeconds > 0 ? maxDistanceCells / activeSeconds : 0;
-  const finalDefinition = GAITS[gait];
-  const finalPostureMultiplier = postureSpeedMultiplier(unit.behaviorRuntime.posture);
   publishDiagnostics(
     runtime,
     unit,
     profile,
-    finalDefinition,
-    finalPostureMultiplier,
+    postureSpeedMultiplier(unit.behaviorRuntime.posture),
     woundMultiplier,
-    surfaceMultiplier,
+    materialFactors,
     averageSpeed,
     averageStamina,
   );
@@ -346,6 +350,7 @@ export function preparePhysicalMovementStep(
     staminaStart,
     staminaEnd,
     speedCellsPerSecond: Math.max(0, averageSpeed),
+    materialFactors,
   };
 }
 
@@ -365,39 +370,91 @@ export function commitPhysicalMovementStep(
   runtime.actualGait = step.gait;
   if (deltaSeconds > 0 && runtime.isMoving) {
     runtime.velocityCellsPerSecond = { x: (to.x - from.x) / deltaSeconds, y: (to.y - from.y) / deltaSeconds };
-    emitMovementSounds(state, unit, step.profile, from, to, deltaSeconds);
+    emitMovementSounds(state, unit, step.profile, step.materialFactors, from, to, deltaSeconds);
   } else {
     runtime.velocityCellsPerSecond = { x: 0, y: 0 };
   }
 }
 
+export interface MovementWeaponPreparationRequest {
+  contactId: string;
+  ownerToken: string;
+}
+
+export interface MovementWeaponPreparationHandle {
+  ownerToken: string;
+  revision: number;
+}
+
 export function requestMovementWeaponPreparation(
   state: SimulationState,
   unit: UnitModel,
-): { allowed: boolean; reasonRu: string } {
+  request: MovementWeaponPreparationRequest,
+): { allowed: boolean; reasonRu: string; handle: MovementWeaponPreparationHandle | null } {
   const runtime = unit.movementRuntime;
   const profile = resolveMovementProfile(state.movementProfiles, runtime.effectiveProfileId || runtime.requestedProfileId);
-  if (runtime.isMoving && profile.weapon.allowFireWhileMoving) return { allowed: true, reasonRu: '' };
-  if (runtime.isMoving || runtime.weaponStopRequested) {
-    if (!runtime.weaponStopRequested) {
-      const gaitDelay = GAITS[runtime.actualGait].readyDelayAfterStopSeconds;
-      runtime.weaponStopRequested = true;
-      runtime.weaponReadyAtSeconds = state.simulationTimeSeconds
-        + profile.movement.stopSeconds
-        + Math.max(profile.weapon.readyDelayAfterStopSeconds, gaitDelay);
+  const current = runtime.weaponPreparation;
+  if (current && current.ownerToken === request.ownerToken && current.contactId === request.contactId) {
+    if (current.remainingSeconds > 1e-9) {
+      return {
+        allowed: false,
+        reasonRu: 'Боец останавливается и подготавливает оружие после движения.',
+        handle: { ownerToken: current.ownerToken, revision: current.revision },
+      };
     }
-    if (state.simulationTimeSeconds + 1e-9 < (runtime.weaponReadyAtSeconds ?? 0)) {
-      return { allowed: false, reasonRu: 'Боец останавливается и подготавливает оружие после движения.' };
-    }
-    runtime.weaponStopRequested = false;
-    runtime.weaponReadyAtSeconds = null;
+    const handle = { ownerToken: current.ownerToken, revision: current.revision };
+    cancelMovementWeaponPreparation(unit, handle);
+    return { allowed: true, reasonRu: '', handle };
   }
-  return { allowed: true, reasonRu: '' };
+  if (!runtime.isMoving || profile.settings.weapon.allowFireWhileMoving) {
+    if (current) cancelMovementWeaponPreparation(unit, { ownerToken: current.ownerToken, revision: current.revision });
+    return { allowed: true, reasonRu: '', handle: null };
+  }
+
+  if (!current || current.ownerToken !== request.ownerToken || current.contactId !== request.contactId) {
+    runtime.weaponPreparationRevision += 1;
+    runtime.weaponPreparation = {
+      ownerToken: request.ownerToken,
+      contactId: request.contactId,
+      orderIssuedAtMs: unit.order?.issuedAtMs ?? null,
+      remainingSeconds: profile.settings.speed.stopDelaySeconds + profile.settings.weapon.readyDelayAfterStopSeconds,
+      revision: runtime.weaponPreparationRevision,
+    };
+  }
+  const pending = runtime.weaponPreparation;
+  if (pending && pending.remainingSeconds > 1e-9) {
+    return {
+      allowed: false,
+      reasonRu: 'Боец останавливается и подготавливает оружие после движения.',
+      handle: { ownerToken: pending.ownerToken, revision: pending.revision },
+    };
+  }
+  const handle = pending ? { ownerToken: pending.ownerToken, revision: pending.revision } : null;
+  if (pending) cancelMovementWeaponPreparation(unit, handle ?? undefined);
+  return { allowed: true, reasonRu: '', handle };
+}
+
+export function cancelMovementWeaponPreparation(
+  unit: UnitModel,
+  expected?: Partial<MovementWeaponPreparationHandle> & { contactId?: string },
+): boolean {
+  const current = unit.movementRuntime.weaponPreparation;
+  if (!current) return false;
+  if (expected?.ownerToken !== undefined && current.ownerToken !== expected.ownerToken) return false;
+  if (expected?.revision !== undefined && current.revision !== expected.revision) return false;
+  if (expected?.contactId !== undefined && current.contactId !== expected.contactId) return false;
+  unit.movementRuntime.weaponPreparation = null;
+  return true;
+}
+
+export function getMovementWeaponPreparation(unit: UnitModel): MovementWeaponPreparationState | null {
+  const value = unit.movementRuntime.weaponPreparation;
+  return value ? { ...value } : null;
 }
 
 export function getMovementAimPreparationMultiplier(state: SimulationState, unit: UnitModel): number {
   const profile = resolveMovementProfile(state.movementProfiles, unit.movementRuntime.effectiveProfileId || unit.movementRuntime.requestedProfileId);
-  return Math.max(0.25, profile.weapon.aimPreparationMultiplier);
+  return Math.max(0.25, profile.settings.weapon.aimPreparationMultiplier + profile.settings.weapon.weaponPreparationPenalty);
 }
 
 export function getMovementTargetVisibilityMultiplier(unit: UnitModel): number {
@@ -413,46 +470,118 @@ export function getMovementObservationTargetMultiplier(unit: UnitModel, targetMo
 }
 
 export function serializeMovementRuntime(runtime: MovementRuntimeState): MovementRuntimeState {
-  return JSON.parse(JSON.stringify(runtime)) as MovementRuntimeState;
+  return {
+    ...runtime,
+    migrationInfo: runtime.migrationInfo ? { ...runtime.migrationInfo } : null,
+    weaponPreparation: runtime.weaponPreparation ? { ...runtime.weaponPreparation } : null,
+    velocityCellsPerSecond: { ...runtime.velocityCellsPerSecond },
+    diagnostics: { ...runtime.diagnostics },
+  };
+}
+
+function resolveExecution(state: SimulationState, unit: UnitModel, requestedProfile: MovementProfile): MovementExecution {
+  const runtime = unit.movementRuntime;
+  const restrictionReason = profileRestrictionReason(state, unit, requestedProfile);
+  if (restrictionReason) return resolveConfiguredFallback(state, unit, requestedProfile, restrictionReason);
+
+  const alreadyFallback = runtime.forcedFallbackReason === 'stamina_fallback' || runtime.forcedFallbackReason === 'insufficient_stamina';
+  const continuingRequested = runtime.isMoving
+    && runtime.effectiveProfileId === requestedProfile.id
+    && runtime.actualGait === runtime.requestedGait
+    && runtime.forcedFallbackReason === null;
+  const staminaSettings = requestedProfile.settings.stamina;
+  const needed = alreadyFallback
+    ? staminaSettings.resumeThreshold
+    : continuingRequested
+      ? staminaSettings.fallbackThreshold
+      : staminaSettings.minimumToStart;
+  if (staminaSettings.drainPerSecond > 0 && runtime.stamina + 1e-9 < needed) {
+    return resolveConfiguredFallback(state, unit, requestedProfile, alreadyFallback ? 'stamina_fallback' : 'insufficient_stamina');
+  }
+  return {
+    profile: requestedProfile,
+    gait: runtime.requestedGait,
+    source: runtime.requestedProfileSource,
+    reason: null,
+    stop: false,
+  };
+}
+
+function resolveConfiguredFallback(
+  state: SimulationState,
+  unit: UnitModel,
+  requestedProfile: MovementProfile,
+  reason: MovementForcedFallbackReason,
+): MovementExecution {
+  if (requestedProfile.settings.restrictions.fallbackRule === 'stop') {
+    return { profile: requestedProfile, gait: unit.movementRuntime.requestedGait, source: 'hard_safety', reason: 'profile_stop', stop: true };
+  }
+  const fallbackId = requestedProfile.settings.restrictions.fallbackRule === 'profile'
+    ? requestedProfile.fallbackProfileId
+    : slowerProfileId(unit.movementRuntime.requestedGait);
+  const fallbackProfile = resolveMovementProfile(state.movementProfiles, fallbackId ?? DEFAULT_MOVEMENT_PROFILE_ID);
+  return {
+    profile: fallbackProfile,
+    gait: fallbackProfile.preferredGait,
+    source: 'hard_safety',
+    reason,
+    stop: false,
+  };
+}
+
+function profileRestrictionReason(state: SimulationState, unit: UnitModel, profile: MovementProfile): MovementForcedFallbackReason | null {
+  const restrictions = profile.settings.restrictions;
+  const woundSeverity = clamp(1 - unit.soldier.condition.health / 100, 0, 1);
+  if (woundSeverity > restrictions.maximumWoundSeverity) return 'wound_restriction';
+  if ((!restrictions.allowedWhileSuppressed && unit.behaviorRuntime.suppression > 0)
+    || unit.behaviorRuntime.suppression > restrictions.maximumSuppressionPercent) return 'suppression_restriction';
+  const physicalCapability = clamp(unit.soldier.condition.speed / 100, 0, 1);
+  if (physicalCapability < restrictions.minimumPhysicalCapability) return 'physical_capability';
+  const soldierSpeedMeters = unit.speedCellsPerSecond * state.map.metersPerCell * physicalCapability;
+  if (soldierSpeedMeters < restrictions.minimumSoldierSpeedMetersPerSecond) return 'minimum_speed';
+  return null;
 }
 
 function evaluateMovementSegment(
+  state: SimulationState,
   unit: UnitModel,
   profile: MovementProfile,
-  gait: MovementGait,
   seconds: number,
   staminaStart: number,
-  physicalCapability: number,
   woundMultiplier: number,
-  surfaceMultiplier: number,
+  materialFactors: MovementMaterialFactors,
 ): { distanceCells: number; staminaEnd: number; averageStamina: number } {
-  const definition = GAITS[gait];
-  const drainRate = definition.staminaDrainPerSecond * profile.stamina.drainMultiplier;
-  const recoveryRate = drainRate <= 0 ? profile.stamina.recoveryPerSecond * 0.35 : 0;
+  if (seconds <= 0) return { distanceCells: 0, staminaEnd: staminaStart, averageStamina: staminaStart };
+  const drainRate = profile.settings.stamina.drainPerSecond;
+  const recoveryRate = drainRate <= 0 ? profile.settings.stamina.recoveryPerSecond * 0.35 : 0;
   const staminaEnd = clamp(staminaStart + (recoveryRate - drainRate) * seconds, 0, 100);
   const averageStamina = (staminaStart + staminaEnd) / 2;
-  const staminaMultiplier = 0.82 + averageStamina * 0.0018;
-  const abilityMultiplier = Math.max(0.35, physicalCapability);
-  const posture = definition.postureRequired ? definition.posture : unit.behaviorRuntime.posture;
+  const staminaMultiplier = averageStaminaSpeedMultiplier(profile, staminaStart, staminaEnd);
+  const abilityMultiplier = Math.max(0.35, unit.soldier.condition.speed / 100);
+  const postureMultiplier = postureSpeedMultiplier(unit.behaviorRuntime.posture);
+  const profileSurfaceMultiplier = profile.settings.surface.materialSpeedMultiplier;
   const speed = unit.speedCellsPerSecond
-    * definition.speedMultiplier
-    * profile.movement.speedMultiplier
-    * postureSpeedMultiplier(posture)
+    * profile.settings.speed.speedMultiplier
+    * postureMultiplier
     * abilityMultiplier
     * woundMultiplier
     * staminaMultiplier
-    * surfaceMultiplier;
-  return { distanceCells: Math.max(0, speed * seconds), staminaEnd, averageStamina };
+    * materialFactors.speedMultiplier
+    * profileSurfaceMultiplier;
+  const minimumCellsPerSecond = profile.settings.speed.minimumSpeedMetersPerSecond / Math.max(0.001, state.map.metersPerCell);
+  return {
+    distanceCells: Math.max(0, Math.max(minimumCellsPerSecond, speed) * seconds),
+    staminaEnd,
+    averageStamina,
+  };
 }
 
 function applyMovementPosture(unit: UnitModel, profile: MovementProfile, gait: MovementGait): void {
   const runtime = unit.movementRuntime;
-  const gaitDefinition = GAITS[gait];
-  const desired = gaitDefinition.postureRequired ? gaitDefinition.posture : profile.movement.preferredPosture;
-  const required = gaitDefinition.postureRequired || profile.movement.postureRequired;
-  if (!profile.movement.autoPosture) return;
-  const externallyChanged = runtime.lastMovementPosture !== null
-    && unit.behaviorRuntime.posture !== runtime.lastMovementPosture;
+  const structuralPosture = REQUIRED_GAIT_POSTURES[gait];
+  const desired = structuralPosture ?? (profile.stancePolicy === 'adaptive' ? unit.behaviorRuntime.posture : profile.stancePolicy);
+  const required = structuralPosture !== undefined || profile.stancePolicy !== 'adaptive';
+  const externallyChanged = runtime.lastMovementPosture !== null && unit.behaviorRuntime.posture !== runtime.lastMovementPosture;
   if (!required && externallyChanged) {
     runtime.lastMovementPosture = null;
     return;
@@ -471,34 +600,44 @@ function publishDiagnostics(
   runtime: MovementRuntimeState,
   unit: UnitModel,
   profile: MovementProfile,
-  gait: GaitDefinition,
   postureMultiplier: number,
   woundMultiplier: number,
-  surfaceMultiplier: number,
+  materialFactors: MovementMaterialFactors,
   speed: number,
   stamina: number,
 ): void {
+  const settings = profile.settings;
   const ability = Math.max(0.35, unit.soldier.condition.speed / 100);
+  const staminaMultiplier = instantaneousStaminaSpeedMultiplier(profile, stamina);
+  const fatigue = clamp((100 - stamina) / 100, 0, 1);
+  const noiseSurface = settings.noise.surfacePolicy === 'material_profile_adapter' ? materialFactors.noiseMultiplier : 1;
   runtime.diagnostics = {
     speedCellsPerSecond: speed,
     baseSpeedCellsPerSecond: unit.speedCellsPerSecond,
-    gaitMultiplier: gait.speedMultiplier,
-    profileMultiplier: profile.movement.speedMultiplier,
+    gaitMultiplier: 1,
+    profileMultiplier: settings.speed.speedMultiplier,
     postureMultiplier,
     abilityMultiplier: ability,
     woundMultiplier,
-    staminaMultiplier: 0.82 + stamina * 0.0018,
-    surfaceMultiplier,
-    noiseLoudness: profile.signature.soundLoudness,
-    visualMovementMultiplier: profile.signature.visualMovementMultiplier,
-    lateralVisibility: profile.signature.lateralVisibilityMultiplier,
-    observationFocusMultiplier: profile.observation.focusMultiplier * gait.observation.focusMultiplier,
-    observationDirectMultiplier: profile.observation.directMultiplier * gait.observation.directMultiplier,
-    observationPeripheralMultiplier: profile.observation.peripheralMultiplier * gait.observation.peripheralMultiplier,
-    observationRearMultiplier: profile.observation.rearMultiplier * gait.observation.rearMultiplier,
-    stationaryTargetMultiplier: profile.observation.stationaryTargetMultiplier * gait.observation.stationaryTargetMultiplier,
-    movingTargetMultiplier: profile.observation.movingTargetMultiplier * gait.observation.movingTargetMultiplier,
-    stealthSkillShare: profile.signature.stealthSkillShare,
+    staminaMultiplier,
+    surfaceMultiplier: materialFactors.speedMultiplier * settings.surface.materialSpeedMultiplier,
+    materialSource: materialFactors.source,
+    noiseLoudness: settings.noise.loudness
+      * (1 + fatigue * settings.noise.fatigueMultiplier)
+      * noiseSurface
+      * settings.surface.materialNoiseMultiplier,
+    visualMovementMultiplier: settings.visibility.movementVisibilityMultiplier
+      * materialFactors.visibilityMultiplier
+      * (1 + settings.visibility.openTerrainExposureBonus * Math.max(0, materialFactors.visibilityMultiplier - 1)),
+    lateralVisibility: settings.visibility.lateralMovementMultiplier,
+    observationFocusMultiplier: settings.attention.focusMultiplier,
+    observationDirectMultiplier: settings.attention.directAttentionMultiplier,
+    observationPeripheralMultiplier: settings.attention.peripheralMultiplier,
+    observationRearMultiplier: settings.attention.rearAwarenessMultiplier,
+    stationaryTargetMultiplier: settings.attention.stationaryTargetDetectionMultiplier,
+    movingTargetMultiplier: settings.attention.movingTargetDetectionMultiplier,
+    observationScanSpeedMultiplier: settings.attention.scanSpeedMultiplier,
+    stealthSkillShare: settings.visibility.usesStealthSkill ? settings.visibility.stealthSkillShare : 0,
   };
 }
 
@@ -506,6 +645,7 @@ function emitMovementSounds(
   state: SimulationState,
   unit: UnitModel,
   profile: MovementProfile,
+  materialFactors: MovementMaterialFactors,
   from: GridPosition,
   to: GridPosition,
   deltaSeconds: number,
@@ -514,7 +654,7 @@ function emitMovementSounds(
   const distanceCells = Math.hypot(to.x - from.x, to.y - from.y);
   const distanceMeters = distanceCells * state.map.metersPerCell;
   if (distanceMeters <= 0) return;
-  const interval = profile.signature.soundIntervalMeters;
+  const interval = profile.settings.noise.eventSpacingMeters;
   let remaining = distanceMeters;
   let consumed = 0;
   let accumulator = runtime.distanceSinceSoundMeters;
@@ -525,13 +665,18 @@ function emitMovementSounds(
     const fraction = clamp(consumed / distanceMeters, 0, 1);
     runtime.movementSequence += 1;
     runtime.emittedSoundCount += 1;
+    const fatigue = clamp((100 - runtime.stamina) / 100, 0, 1);
+    const noiseSurface = profile.settings.noise.surfacePolicy === 'material_profile_adapter' ? materialFactors.noiseMultiplier : 1;
     emitPerceptionSound(state, {
       id: `${unit.id}:movement:${runtime.movementSequence}`,
       kind: 'movement',
       sourceId: unit.id,
       labelRu: 'Шум движения бойца',
       position: { x: from.x + (to.x - from.x) * fraction, y: from.y + (to.y - from.y) * fraction },
-      loudness: profile.signature.soundLoudness,
+      loudness: profile.settings.noise.loudness
+        * (1 + fatigue * profile.settings.noise.fatigueMultiplier)
+        * noiseSurface
+        * profile.settings.surface.materialNoiseMultiplier,
       createdSeconds: state.simulationTimeSeconds - deltaSeconds + deltaSeconds * fraction,
       durationSeconds: 1.2,
     });
@@ -540,28 +685,135 @@ function emitMovementSounds(
   runtime.distanceSinceSoundMeters = accumulator + Math.max(0, remaining);
 }
 
-function resolvePhysicalSurfaceMultiplier(state: SimulationState, position: GridPosition): number {
-  const cell = getCell(state.map, Math.floor(position.x), Math.floor(position.y));
-  if (!cell) return 0;
-  const terrain = cell.terrain === 'road' ? 1.08
-    : cell.terrain === 'rough' ? 0.78
-      : cell.terrain === 'swamp' ? 0.55
-        : cell.terrain === 'water' ? 0
-          : 1;
-  const vegetation = 1 / Math.max(1, resolveCellVegetationDefinition(cell).movement.baseResistance);
-  return clamp(terrain * vegetation, 0, 1.2);
+function consumeMovementWeaponPreparation(unit: UnitModel, deltaSeconds: number): number {
+  const pending = unit.movementRuntime.weaponPreparation;
+  if (!pending || deltaSeconds <= 0) return 0;
+  const blockedSeconds = Math.min(deltaSeconds, Math.max(0, pending.remainingSeconds));
+  pending.remainingSeconds = Math.max(0, pending.remainingSeconds - blockedSeconds);
+  if (pending.remainingSeconds <= 1e-9) {
+    unit.movementRuntime.weaponPreparation = null;
+  }
+  return blockedSeconds;
+}
+
+function instantaneousStaminaSpeedMultiplier(profile: MovementProfile, stamina: number): number {
+  const threshold = profile.settings.stamina.fallbackThreshold;
+  const low = profile.settings.speed.lowStaminaSpeedMultiplier;
+  if (threshold <= 0 || stamina >= threshold) return 1;
+  return low + (1 - low) * clamp(stamina / threshold, 0, 1);
+}
+
+function averageStaminaSpeedMultiplier(profile: MovementProfile, start: number, end: number): number {
+  if (Math.abs(start - end) <= 1e-12) return instantaneousStaminaSpeedMultiplier(profile, start);
+  const threshold = profile.settings.stamina.fallbackThreshold;
+  const low = profile.settings.speed.lowStaminaSpeedMultiplier;
+  if (threshold <= 0) return 1;
+  const primitive = (value: number): number => {
+    const stamina = clamp(value, 0, 100);
+    if (stamina >= threshold) {
+      const below = low * threshold + (1 - low) * threshold / 2;
+      return below + (stamina - threshold);
+    }
+    return low * stamina + (1 - low) * stamina * stamina / (2 * threshold);
+  };
+  return Math.abs(primitive(end) - primitive(start)) / Math.abs(end - start);
+}
+
+function recoverStamina(stamina: number, profile: MovementProfile, deltaSeconds: number, moving: boolean): number {
+  const factor = moving ? 0.35 : 1;
+  return clamp(stamina + profile.settings.stamina.recoveryPerSecond * factor * Math.max(0, deltaSeconds), 0, 100);
+}
+
+function slowerProfileId(gait: MovementGait): string {
+  if (gait === 'sprint') return 'run';
+  if (gait === 'run') return 'normal_walk';
+  if (gait === 'walk') return 'crouched_move';
+  if (gait === 'crouch_walk') return 'crawl';
+  return profileIdForGait(gait);
+}
+
+function zeroStep(profile: MovementProfile, gait: MovementGait, stamina: number, materialFactors: MovementMaterialFactors): MovementStep {
+  return {
+    maxDistanceCells: 0,
+    activeSeconds: 0,
+    profile,
+    gait,
+    staminaStart: stamina,
+    staminaEnd: stamina,
+    speedCellsPerSecond: 0,
+    materialFactors,
+  };
+}
+
+function normalizeAuthoritySource(value: unknown, fallback: MovementProfileAuthoritySource): {
+  source: MovementProfileAuthoritySource;
+  migrationInfo: MovementProfileMigrationInfo | null;
+} {
+  if (value === 'hard_safety' || value === 'ai_override' || value === 'player_order' || value === 'unit_role' || value === 'default') {
+    return { source: value, migrationInfo: null };
+  }
+  const migrated = value === 'ai' ? 'ai_override'
+    : value === 'player' ? 'player_order'
+      : value === 'unit' ? 'unit_role'
+        : value === 'fallback' ? 'hard_safety'
+          : value === 'migration' ? 'default'
+            : fallback;
+  return {
+    source: migrated,
+    migrationInfo: typeof value === 'string' && value !== migrated
+      ? { fromProfileId: `source:${value}`, toProfileId: `source:${migrated}`, reason: 'legacy_source' }
+      : null,
+  };
+}
+
+function legacyRuntimeMigration(record: Record<string, any>): MovementProfileMigrationInfo | null {
+  if (record.weaponStopRequested === true || typeof record.weaponReadyAtSeconds === 'number') {
+    return { fromProfileId: 'weaponReadyAtSeconds', toProfileId: 'remaining_weapon_preparation', reason: 'runtime_normalization' };
+  }
+  return null;
+}
+
+function normalizeWeaponPreparation(value: unknown): MovementWeaponPreparationState | null {
+  if (!isRecord(value)) return null;
+  const ownerToken = string(value.ownerToken, '');
+  const contactId = string(value.contactId, '');
+  if (!ownerToken || !contactId) return null;
+  return {
+    ownerToken,
+    contactId,
+    orderIssuedAtMs: typeof value.orderIssuedAtMs === 'number' && Number.isFinite(value.orderIssuedAtMs) ? value.orderIssuedAtMs : null,
+    remainingSeconds: finite(value.remainingSeconds, 0, 0, 60),
+    revision: integer(value.revision, 0, 0, Number.MAX_SAFE_INTEGER),
+  };
+}
+
+function normalizeMigrationInfo(value: unknown): MovementProfileMigrationInfo | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.fromProfileId !== 'string' || typeof value.toProfileId !== 'string') return null;
+  const reason = value.reason === 'legacy_alias' || value.reason === 'legacy_source' || value.reason === 'runtime_normalization'
+    ? value.reason
+    : 'runtime_normalization';
+  return { fromProfileId: value.fromProfileId, toProfileId: value.toProfileId, reason };
+}
+
+function forcedFallbackReason(value: unknown): MovementForcedFallbackReason | null {
+  return value === 'missing_profile'
+    || value === 'insufficient_stamina'
+    || value === 'stamina_fallback'
+    || value === 'wound_restriction'
+    || value === 'suppression_restriction'
+    || value === 'physical_capability'
+    || value === 'minimum_speed'
+    || value === 'impassable_material'
+    || value === 'profile_stop'
+    ? value
+    : null;
 }
 
 function postureSpeedMultiplier(posture: UnitPosture): number {
   if (posture === 'prone') return 0.25;
   if (posture === 'crouched') return 0.65;
   return 1;
-}
-
-function movementSource(value: unknown, fallback: MovementProfileSource): MovementProfileSource {
-  return value === 'default' || value === 'unit' || value === 'player' || value === 'ai' || value === 'fallback' || value === 'migration'
-    ? value
-    : fallback;
 }
 
 function postureOrNull(value: unknown): UnitPosture | null {
@@ -574,7 +826,11 @@ function vector(value: unknown): GridPosition {
 }
 
 function string(value: unknown, fallback: string): string {
-  return typeof value === 'string' && value.trim() ? value : fallback;
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+function integer(value: unknown, fallback: number, min: number, max: number): number {
+  return Math.round(finite(value, fallback, min, max));
 }
 
 function finite(value: unknown, fallback: number, min: number, max: number): number {

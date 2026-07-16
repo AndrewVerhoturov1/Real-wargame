@@ -315,6 +315,7 @@ function effectiveProfile(unit: UnitModel): AttentionModeProfile {
   const directMultiplier = movement?.observationDirectMultiplier ?? 1;
   const peripheralMultiplier = movement?.observationPeripheralMultiplier ?? 1;
   const rearMultiplier = movement?.observationRearMultiplier ?? 1;
+  const scanSpeedMultiplier = movement?.observationScanSpeedMultiplier ?? 1;
   return {
     ...base,
     focusAngleDegrees: Math.max(4, base.focusAngleDegrees * narrowing),
@@ -322,10 +323,10 @@ function effectiveProfile(unit: UnitModel): AttentionModeProfile {
     focusWeight: base.focusWeight * focusMultiplier,
     directWeight: base.directWeight * directMultiplier,
     peripheralWeight: base.peripheralWeight * peripheralMultiplier,
-    focusCheckIntervalSeconds: base.focusCheckIntervalSeconds / Math.max(0.05, focusMultiplier),
-    directCheckIntervalSeconds: base.directCheckIntervalSeconds / Math.max(0.05, directMultiplier),
-    peripheralCheckIntervalSeconds: base.peripheralCheckIntervalSeconds / Math.max(0.05, peripheralMultiplier),
-    rearCheckIntervalSeconds: base.rearCheckIntervalSeconds / Math.max(0.05, rearMultiplier),
+    focusCheckIntervalSeconds: base.focusCheckIntervalSeconds / Math.max(0.05, focusMultiplier * scanSpeedMultiplier),
+    directCheckIntervalSeconds: base.directCheckIntervalSeconds / Math.max(0.05, directMultiplier * scanSpeedMultiplier),
+    peripheralCheckIntervalSeconds: base.peripheralCheckIntervalSeconds / Math.max(0.05, peripheralMultiplier * scanSpeedMultiplier),
+    rearCheckIntervalSeconds: base.rearCheckIntervalSeconds / Math.max(0.05, rearMultiplier * scanSpeedMultiplier),
   };
 }
 

@@ -23,7 +23,7 @@ import { clearCombatRuntime, replaceCombatRuntime, type CombatRuntimeState } fro
 import { clearWeaponRuntime, replaceWeaponRuntime, type WeaponRuntimeState } from '../combat/WeaponModel';
 import type { GridPosition } from '../geometry';
 import { createMovementRuntime, type MovementRuntimeState } from '../movement/MovementRuntime';
-import { BUILT_IN_MOVEMENT_PROFILES, isMovementGait, isMovementProfileSource, type MovementGait, type MovementProfileSource } from '../movement/MovementProfiles';
+import { DEFAULT_MOVEMENT_PROFILE_ID, BUILT_IN_MOVEMENT_PROFILES, isMovementGait, resolveMovementProfileIdAlias, type MovementGait, type MovementProfileSource } from '../movement/MovementProfiles';
 import { createEmptyTacticalKnowledge, normalizeTacticalKnowledge } from '../knowledge/SoldierThreatMemory';
 import type { NavigationProfileSource } from '../navigation/NavigationProfileResolver';
 import type { NavigationMovementMode } from '../navigation/NavigationProfiles';
@@ -118,7 +118,7 @@ export interface UnitData {
   runtime?: UnitRuntimeData;
   movementProfileId?: string;
   movementGait?: MovementGait;
-  movementProfileSource?: MovementProfileSource;
+  movementProfileSource?: MovementProfileSource | 'player' | 'unit' | 'ai' | 'fallback' | 'migration';
   navigationProfileId?: string;
   navigationMovementMode?: NavigationMovementMode;
   playerCommand?: unknown;
@@ -185,10 +185,11 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
     const importedPerceptionKnowledge = unit.perceptionKnowledge
       ? scalePerceptionKnowledge(normalizePerceptionKnowledge(unit.perceptionKnowledge), scale)
       : createEmptyPerceptionKnowledge();
-    const requestedMovementProfileId = unit.movementProfileId ?? 'normal';
+    const rawMovementProfileId = unit.movementProfileId ?? DEFAULT_MOVEMENT_PROFILE_ID;
+    const requestedMovementProfileId = resolveMovementProfileIdAlias(rawMovementProfileId).id;
     const requestedMovementGait = isMovementGait(unit.movementGait)
       ? unit.movementGait
-      : BUILT_IN_MOVEMENT_PROFILES[requestedMovementProfileId]?.defaultGait ?? 'walk';
+      : BUILT_IN_MOVEMENT_PROFILES.find((profile) => profile.id === requestedMovementProfileId)?.preferredGait ?? 'walk';
     const importedPlayerCommand = scalePlayerCommand(
       normalizePlayerCommand(unit.playerCommand, unit.id),
       scale,
@@ -228,7 +229,7 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
         : createEmptyTacticalKnowledge(),
       perceptionKnowledge: importedPerceptionKnowledge,
       movementRuntime: createMovementRuntime(
-        requestedMovementProfileId,
+        rawMovementProfileId,
         requestedMovementGait,
         unit.runtime?.movement,
       ),
@@ -240,14 +241,15 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
     };
     applyInitialStateToRuntime(model, false);
     model.movementRuntime = createMovementRuntime(
-      requestedMovementProfileId,
+      rawMovementProfileId,
       requestedMovementGait,
-      unit.runtime?.movement,
+      {
+        ...(unit.runtime?.movement ?? {}),
+        requestedProfileSource: unit.runtime?.movement?.requestedProfileSource
+          ?? unit.movementProfileSource
+          ?? (unit.movementProfileId ? 'unit' : 'default'),
+      },
     );
-    model.movementRuntime.requestedProfileSource = isMovementProfileSource(unit.movementProfileSource)
-      ? unit.movementProfileSource
-      : unit.runtime?.movement ? 'migration' : unit.movementProfileId ? 'unit' : 'default';
-    model.movementRuntime.effectiveProfileSource = model.movementRuntime.requestedProfileSource;
     if (unit.runtime?.weapon) replaceWeaponRuntime(model, unit.runtime.weapon);
     restoreAiRuntimeSnapshot(model, unit.runtime?.aiRuntime);
     if (!model.order) {
@@ -319,7 +321,7 @@ export function applyInitialStateToRuntime(unit: UnitModel, clearPerceptionKnowl
   unit.soldier.condition.confusion = initial.confusion;
   unit.soldier.condition.health = initial.health;
   unit.attentionRuntime = createAttentionRuntime(unit.attentionSettings, unit.facingRadians);
-  const movementProfileId = unit.movementRuntime?.requestedProfileId ?? 'normal';
+  const movementProfileId = unit.movementRuntime?.requestedProfileId ?? DEFAULT_MOVEMENT_PROFILE_ID;
   const movementGait = unit.movementRuntime?.requestedGait ?? 'walk';
   const movementSource = unit.movementRuntime?.requestedProfileSource ?? 'default';
   unit.movementRuntime = createMovementRuntime(movementProfileId, movementGait);
