@@ -53,7 +53,11 @@ test.describe('environment and danger stable-scene performance', () => {
 
 async function downloadPerformanceReport(page: Page): Promise<PerformanceReport> {
   const downloadPromise = page.waitForEvent('download');
-  await page.locator('[data-workspace-file-action="performance"]').click();
+  await page.evaluate(() => {
+    const button = document.querySelector<HTMLElement>('[data-workspace-file-action="performance"]');
+    if (!button) throw new Error('Performance report control is missing.');
+    button.click();
+  });
   const download = await downloadPromise;
   const downloadedPath = await download.path();
   if (!downloadedPath) throw new Error('Performance report download path is unavailable.');
