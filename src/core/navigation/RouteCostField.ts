@@ -67,6 +67,7 @@ export interface RouteCostAvailability {
 export interface RouteCostFieldDiagnostics {
   readonly staticCostBuildCount: number;
   readonly dynamicCostBuildCount: number;
+  readonly combinedCostBuildCount: number;
   readonly textureUploadCount: number;
   readonly hoverReadCount: number;
   readonly fullMapScanCount: number;
@@ -121,6 +122,8 @@ interface DynamicRouteCostField {
 }
 
 export interface RouteCostFields {
+  readonly mapIdentity: number;
+  readonly mapRevisionKey: string;
   readonly width: number;
   readonly height: number;
   readonly profileId: string;
@@ -156,6 +159,7 @@ export interface RouteCostFieldCache {
   diagnostics: {
     staticCostBuildCount: number;
     dynamicCostBuildCount: number;
+    combinedCostBuildCount: number;
     textureUploadCount: number;
     hoverReadCount: number;
     fullMapScanCount: number;
@@ -164,6 +168,8 @@ export interface RouteCostFieldCache {
     snapshotReuseCount: number;
   };
 }
+
+const sharedCacheByMap = new WeakMap<TacticalMap, RouteCostFieldCache>();
 
 export function createRouteCostFieldCache(): RouteCostFieldCache {
   return {
@@ -174,6 +180,7 @@ export function createRouteCostFieldCache(): RouteCostFieldCache {
     diagnostics: {
       staticCostBuildCount: 0,
       dynamicCostBuildCount: 0,
+      combinedCostBuildCount: 0,
       textureUploadCount: 0,
       hoverReadCount: 0,
       fullMapScanCount: 0,
@@ -184,6 +191,19 @@ export function createRouteCostFieldCache(): RouteCostFieldCache {
   };
 }
 
+/** The sole default owner for route-cost fields used by evaluators, A* and replanning. */
+export function getSharedRouteCostFieldCache(map: TacticalMap): RouteCostFieldCache {
+  const existing = sharedCacheByMap.get(map);
+  if (existing) return existing;
+  const created = createRouteCostFieldCache();
+  sharedCacheByMap.set(map, created);
+  return created;
+}
+
+export function clearSharedRouteCostFieldCache(map: TacticalMap): void {
+  sharedCacheByMap.delete(map);
+}
+
 export function getRouteCostFields(
   map: TacticalMap,
   profile: NavigationProfile,
@@ -191,8 +211,10 @@ export function getRouteCostFields(
   cache: RouteCostFieldCache,
 ): RouteCostFields {
   const revisions = getMapRevisionSnapshot(map);
+  const mapIdentity = getMapIdentity(map);
+  const mapRevisionKey = [revisions.terrain, revisions.height, revisions.forest, revisions.objects].join(':');
   const staticKey = [
-    getMapIdentity(map),
+    mapIdentity,
     map.width,
     map.height,
     revisions.terrain,
@@ -290,6 +312,8 @@ export function getRouteCostFields(
   }
 
   const combined: RouteCostFields = {
+    mapIdentity,
+    mapRevisionKey,
     width: map.width,
     height: map.height,
     profileId: profile.id,
@@ -316,6 +340,7 @@ export function getRouteCostFields(
     availability: dynamicField.availability,
     cacheKey: combinedKey,
   };
+  cache.diagnostics.combinedCostBuildCount += 1;
   cache.combinedFields.set(combinedKey, combined);
   if (tacticalContext && contextRequestKey) {
     let readyByKey = cache.contextFields.get(tacticalContext);
@@ -329,6 +354,20 @@ export function getRouteCostFields(
   cache.diagnostics.profileRevision = profile.revision;
   cache.diagnostics.knowledgeRevision = effectiveKnowledgeRevision;
   return combined;
+}
+
+export function routeCostFieldsMatch(
+  map: TacticalMap,
+  profile: NavigationProfile,
+  fields: RouteCostFields,
+): boolean {
+  const revisions = getMapRevisionSnapshot(map);
+  return fields.mapIdentity === getMapIdentity(map)
+    && fields.mapRevisionKey === [revisions.terrain, revisions.height, revisions.forest, revisions.objects].join(':')
+    && fields.width === map.width
+    && fields.height === map.height
+    && fields.profileId === profile.id
+    && fields.profileRevision === profile.revision;
 }
 
 export function readRouteCostCell(

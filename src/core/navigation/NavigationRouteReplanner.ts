@@ -7,8 +7,9 @@ import { isMapCellPassable } from '../pathfinding/GridNavigation';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
 import { evaluateNavigationReplan } from './NavigationReplanPolicy';
-import { evaluateNavigationRouteCost } from './NavigationRouteCost';
+import { evaluatePreparedNavigationRouteCost } from './NavigationRouteCost';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from './NavigationRuntime';
+import { getRouteCostFields, getSharedRouteCostFieldCache } from './RouteCostField';
 
 const ROUTE_LOOKAHEAD_CELLS = 6;
 
@@ -41,15 +42,22 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
   const reason = evaluation.reason ?? (blocked ? 'blocked' : 'navigation_changed');
   const reasonRu = evaluation.reasonRu ?? 'Изменились условия построения маршрута.';
   const replanSearchCount = (order.replanSearchCount ?? 0) + 1;
+  const routeFields = measurePerformancePhase(
+    'route.fields.prepare',
+    () => getRouteCostFields(
+      state.map,
+      resolved.profile,
+      tacticalContext,
+      getSharedRouteCostFieldCache(state.map),
+    ),
+  );
   const currentRouteCost = blocked
     ? order.pathCost
-    : measurePerformancePhase('route.current-cost', () => evaluateNavigationRouteCost(
-        state.map,
+    : measurePerformancePhase('route.current-path-evaluate', () => evaluatePreparedNavigationRouteCost(
         remainingRouteCells(order),
-        resolved.profile,
-        tacticalContext,
+        routeFields,
       ));
-  const replanned = measurePerformancePhase('route.replan-search', () => planMoveOrder(state.map, unit.position, requestedTarget, {
+  const replanned = measurePerformancePhase('route.candidate-search', () => planMoveOrder(state.map, unit.position, requestedTarget, {
     source: order.source,
     ownerToken: order.ownerToken,
     playerCommandId: order.playerCommandId,
@@ -63,6 +71,7 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
     navigationProfileSource: resolved.source,
     finalFacingRadians: order.finalFacingRadians,
     tacticalContext,
+    preparedCostFields: routeFields,
     replanSearchCount,
     replanCount: (order.replanCount ?? 0) + 1,
     lastReplanAtSeconds: state.simulationTimeSeconds,

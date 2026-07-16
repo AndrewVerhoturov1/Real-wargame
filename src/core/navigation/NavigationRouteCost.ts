@@ -2,23 +2,29 @@ import type { TacticalMap } from '../map/MapModel';
 import type { MoveOrderRouteCell } from '../orders/MoveOrder';
 import { evaluateGridPathCost } from '../pathfinding/GridPathfinder';
 import {
-  createRouteCostFieldCache,
+  getSharedRouteCostFieldCache,
   getRouteCostFields,
   type RouteCostFieldCache,
+  type RouteCostFields,
   type TacticalRouteContext,
 } from './RouteCostField';
 import type { NavigationProfile } from './NavigationProfiles';
-
-const sharedRouteCostFieldCache = createRouteCostFieldCache();
 
 export function evaluateNavigationRouteCost(
   map: TacticalMap,
   cells: readonly MoveOrderRouteCell[],
   profile: NavigationProfile,
   tacticalContext: TacticalRouteContext | undefined,
-  cache: RouteCostFieldCache = sharedRouteCostFieldCache,
+  cache: RouteCostFieldCache = getSharedRouteCostFieldCache(map),
 ): number {
   const fields = getRouteCostFields(map, profile, tacticalContext, cache);
+  return evaluatePreparedNavigationRouteCost(cells, fields);
+}
+
+export function evaluatePreparedNavigationRouteCost(
+  cells: readonly MoveOrderRouteCell[],
+  fields: RouteCostFields,
+): number {
   return round(evaluateGridPathCost(cells, fields), 6);
 }
 

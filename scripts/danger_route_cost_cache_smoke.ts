@@ -5,10 +5,14 @@ import { buildSoldierAwarenessReport } from '../src/core/knowledge/SoldierAwaren
 import { getSoldierDangerFieldDiagnostics } from '../src/core/knowledge/SoldierDangerField';
 import { normalizeTacticalKnowledge } from '../src/core/knowledge/SoldierThreatMemory';
 import type { TacticalMapData } from '../src/core/map/MapModel';
+import { markMapCellsDirty } from '../src/core/map/MapRuntimeState';
+import { evaluatePreparedNavigationRouteCost } from '../src/core/navigation/NavigationRouteCost';
 import { buildUnitTacticalRouteContext } from '../src/core/navigation/NavigationRuntime';
 import {
   createRouteCostFieldCache,
+  getRouteCostFieldDiagnostics,
   getRouteCostFields,
+  getSharedRouteCostFieldCache,
 } from '../src/core/navigation/RouteCostField';
 import { getBuiltInNavigationProfile } from '../src/core/navigation/NavigationProfiles';
 import { findGridPath } from '../src/core/pathfinding/GridPathfinder';
@@ -41,13 +45,16 @@ const mapData: TacticalMapData = {
 
 const directEvidence = assertDirectProfileIsLazy();
 const multiThreatEvidence = assertMultiThreatGeometryReuse();
+const preparedReplanEvidence = assertPreparedReplanFieldsAreShared();
 assertLegacyNormalization();
 assertRendererIndependence();
+assertSinglePreparedRouteCostBoundary();
 
 console.log(JSON.stringify({
   smoke: 'danger-route-cost-cache',
   directProfile: directEvidence,
   multiThreat: multiThreatEvidence,
+  preparedReplan: preparedReplanEvidence,
 }, null, 2));
 console.log('Danger route cache smoke passed: lazy direct routing and bounded per-threat geometry reuse are renderer-independent.');
 
@@ -286,6 +293,96 @@ function assertRendererIndependence() {
     assert.ok(!source.includes('../rendering/'), `${relativePath} must not import rendering`);
     assert.ok(!source.includes('../ui/'), `${relativePath} must not import UI state`);
   }
+}
+
+function assertSinglePreparedRouteCostBoundary() {
+  const routeCostSource = readFileSync('src/core/navigation/NavigationRouteCost.ts', 'utf8');
+  const pathfinderSource = readFileSync('src/core/pathfinding/GridPathfinder.ts', 'utf8');
+  const replannerSource = readFileSync('src/core/navigation/NavigationRouteReplanner.ts', 'utf8');
+  assert.ok(!routeCostSource.includes('sharedRouteCostFieldCache'), 'route evaluator must not own a module-global field cache');
+  assert.ok(!pathfinderSource.includes('sharedCostFieldCache'), 'pathfinder must not own a second module-global field cache');
+  assert.match(replannerSource, /route\.fields\.prepare/, 'replan must expose field preparation separately');
+  assert.match(replannerSource, /route\.current-path-evaluate/, 'replan must expose current path evaluation separately');
+  assert.match(replannerSource, /route\.candidate-search/, 'replan must expose candidate search separately');
+}
+
+function assertPreparedReplanFieldsAreShared() {
+  const state = makeState('prepared-replan');
+  const unit = requireUnit(state, 'blue-prepared-replan');
+  const profile = getBuiltInNavigationProfile('normal');
+  const direct = getBuiltInNavigationProfile('direct');
+  const cache = getSharedRouteCostFieldCache(state.map);
+  const start = { ...unit.position };
+  const goal = { x: 14.5, y: 9.5 };
+
+  const baselineWarmup = findGridPath(state.map, start, goal, {
+    navigationProfile: direct,
+    costFieldCache: cache,
+  });
+  assert.equal(baselineWarmup.ok, true);
+
+  unit.tacticalKnowledge.threats = [threat('unit:prepared', 15.5, 5.5, 80, 90, 'rifle_fire', 45)];
+  unit.tacticalKnowledge.revision = 1;
+  const context = buildUnitTacticalRouteContext(unit, { freshness: 'immediate', metersPerCell: state.map.metersPerCell });
+  const beforePrepare = getRouteCostFieldDiagnostics(cache);
+  const fields = getRouteCostFields(state.map, profile, context, cache);
+  const afterPrepare = getRouteCostFieldDiagnostics(cache);
+  const currentCost = evaluatePreparedNavigationRouteCost(baselineWarmup.ok ? baselineWarmup.cells : [], fields);
+  const candidate = findGridPath(state.map, start, goal, {
+    navigationProfile: profile,
+    tacticalContext: context,
+    costFieldCache: cache,
+    preparedCostFields: fields,
+  });
+  const afterCandidate = getRouteCostFieldDiagnostics(cache);
+  assert.equal(candidate.ok, true);
+  if (!candidate.ok) throw new Error(candidate.reason);
+  assert.ok(Number.isFinite(currentCost));
+  assert.equal(candidate.costFieldIdentity, fields.cacheKey, 'current route and candidate must use one field identity');
+  assert.equal(afterPrepare.staticCostBuildCount - beforePrepare.staticCostBuildCount, 1);
+  assert.equal(afterPrepare.dynamicCostBuildCount - beforePrepare.dynamicCostBuildCount, 1);
+  assert.equal(afterPrepare.combinedCostBuildCount - beforePrepare.combinedCostBuildCount, 1);
+  assert.equal(afterCandidate.staticCostBuildCount, afterPrepare.staticCostBuildCount, 'candidate search must not rebuild static fields');
+  assert.equal(afterCandidate.dynamicCostBuildCount, afterPrepare.dynamicCostBuildCount, 'candidate search must not rebuild dynamic fields');
+  assert.equal(afterCandidate.combinedCostBuildCount, afterPrepare.combinedCostBuildCount, 'candidate search must not rebuild combined fields');
+
+  const otherState = makeState('prepared-other-map');
+  const otherPath = findGridPath(otherState.map, otherState.units[0]!.position, goal, {
+    navigationProfile: profile,
+    preparedCostFields: fields,
+  });
+  assert.equal(otherPath.ok, true);
+  if (otherPath.ok) assert.notEqual(otherPath.costFieldIdentity, fields.cacheKey, 'prepared fields must not cross map identity');
+
+  const revisedProfile = { ...profile, revision: profile.revision + 1 };
+  const profileMismatch = findGridPath(state.map, start, goal, {
+    navigationProfile: revisedProfile,
+    preparedCostFields: fields,
+    costFieldCache: cache,
+  });
+  assert.equal(profileMismatch.ok, true);
+  if (profileMismatch.ok) {
+    assert.notEqual(profileMismatch.costFieldIdentity, fields.cacheKey, 'prepared fields must not cross profile revision');
+    assert.equal(profileMismatch.profileId, profile.id, 'profile revision smoke must retain the same profile identity');
+    assert.equal(profileMismatch.profileRevision, revisedProfile.revision);
+  }
+
+  markMapCellsDirty(state.map, 'terrain', { minX: 0, minY: 0, maxX: 0, maxY: 0 });
+  const revisedMapPath = findGridPath(state.map, start, goal, {
+    navigationProfile: profile,
+    tacticalContext: context,
+    preparedCostFields: fields,
+    costFieldCache: cache,
+  });
+  assert.equal(revisedMapPath.ok, true);
+  if (revisedMapPath.ok) assert.notEqual(revisedMapPath.costFieldIdentity, fields.cacheKey, 'map revisions must invalidate prepared fields');
+
+  return {
+    fieldIdentity: fields.cacheKey,
+    staticBuilds: afterPrepare.staticCostBuildCount - beforePrepare.staticCostBuildCount,
+    dynamicBuilds: afterPrepare.dynamicCostBuildCount - beforePrepare.dynamicCostBuildCount,
+    combinedBuilds: afterPrepare.combinedCostBuildCount - beforePrepare.combinedCostBuildCount,
+  };
 }
 
 function makeState(suffix: string): SimulationState {
