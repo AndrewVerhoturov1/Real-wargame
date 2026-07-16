@@ -56,7 +56,7 @@ const TABS: Array<[SimulationTab, string]> = [
   ['info', 'Инфо'], ['danger', 'Опасность'], ['stealth', 'Скрытность'], ['memory', 'Обзор и память'],
 ];
 
-export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGameBridgeHandle, onChanged: () => void): void {
+export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGameBridgeHandle, onChanged: () => void): () => void {
   let mode: TacticalWorkspaceMode = state.editor.enabled ? 'editor' : 'simulation';
   let tab: SimulationTab = 'info';
   let collapsed = false;
@@ -412,10 +412,10 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
     editorPlace.classList.toggle('active', Boolean(placementTool?.classList.contains('active')));
   }
 
-  const attachTooltip = () => {
+  const attachTooltip = (): (() => void) => {
     const canvas = document.querySelector<HTMLCanvasElement>('canvas');
-    if (!canvas) return;
-    canvas.addEventListener('pointermove', (event) => {
+    if (!canvas) return () => {};
+    const handlePointerMove = (event: PointerEvent): void => {
       if (mode !== 'simulation' || tab === 'info') { tooltip.hidden = true; setHoveredSimulationCover(state, null); return; }
       const cover = hoverSimulationCoverAtPosition(state, state.mouseGridPosition);
       if (!cover) { tooltip.hidden = true; return; }
@@ -423,14 +423,31 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
       tooltip.style.left = `${Math.min(window.innerWidth - 300, event.clientX + 18)}px`;
       tooltip.style.top = `${Math.min(window.innerHeight - 150, event.clientY + 18)}px`;
       tooltip.innerHTML = `<strong>${esc(cover.labelRu)}</strong><span>Расстояние: ${Math.round(cover.distanceMeters)} м</span><span>Качество: ${Math.round(cover.quality)}/100</span><span>${esc(cover.sourceRu)}</span>`;
-    });
-    canvas.addEventListener('pointerleave', () => { tooltip.hidden = true; setHoveredSimulationCover(state, null); });
-    canvas.addEventListener('pointerdown', () => { tooltip.hidden = true; window.setTimeout(() => update(false), 0); });
+    };
+    const hideTooltip = (): void => { tooltip.hidden = true; setHoveredSimulationCover(state, null); };
+    const handlePointerDown = (): void => { tooltip.hidden = true; window.setTimeout(() => update(false), 0); };
+    canvas.addEventListener('pointermove', handlePointerMove);
+    canvas.addEventListener('pointerleave', hideTooltip);
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      canvas.removeEventListener('pointermove', handlePointerMove);
+      canvas.removeEventListener('pointerleave', hideTooltip);
+      canvas.removeEventListener('pointerdown', handlePointerDown);
+    };
   };
 
   setSimulationLayerMode(state, tab);
-  syncLayout(); update(true); attachTooltip();
-  window.setInterval(() => update(false), 300);
+  syncLayout(); update(true);
+  const detachTooltip = attachTooltip();
+  const updateInterval = window.setInterval(() => {
+    if (mode !== 'simulation' || document.hidden) return;
+    update(false);
+  }, 300);
+  return () => {
+    window.clearInterval(updateInterval);
+    detachTooltip();
+    shell.remove();
+  };
 }
 
 function combatCapabilityLabel(value: ReturnType<typeof getCombatRuntime>['capability']): string {
