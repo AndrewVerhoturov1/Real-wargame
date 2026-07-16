@@ -1,7 +1,6 @@
 import '../tactical-order-radial-menu.css';
 import type { GridPosition } from '../core/geometry';
 import {
-  getTacticalOrderPresetDefinition,
   listTacticalOrderPresetDefinitions,
   type TacticalOrderPresetId,
 } from '../core/orders/TacticalOrderIntent';
@@ -38,7 +37,7 @@ export class TacticalOrderRadialMenu {
       item.innerHTML = `
         <span class="tactical-order-sector-icon" aria-hidden="true">${escapeHtml(definition.icon)}</span>
         <strong>${escapeHtml(definition.nameRu)}</strong>
-        <small>${escapeHtml(definition.shortDescriptionRu)}</small>
+        <small>${escapeHtml(definition.menuHintRu)}</small>
         <kbd>${definition.id === 'move' ? '1' : definition.id === 'recon' ? '2' : '3'}</kbd>
       `;
       ring.append(item);
