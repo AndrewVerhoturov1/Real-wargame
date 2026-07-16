@@ -1,0 +1,108 @@
+name: Agent Fix Environment Storage Boundary
+
+on:
+  push:
+    branches:
+      - agent/terrain-profiles-performance-followup-v1
+    paths:
+      - '.github/workflows/agent-fix-environment-storage.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Move browser persistence out of core
+        shell: bash
+        run: |
+          set -euo pipefail
+          git mv src/core/map/EnvironmentProfileStorage.ts src/ui/EnvironmentProfileStorage.ts
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('src/ui/EnvironmentProfileStorage.ts')
+          text = p.read_text()
+          text = text.replace("from './EnvironmentMaterialProfile'", "from '../core/map/EnvironmentMaterialProfile'")
+          text = text.replace("from './EnvironmentProfileRuntime'", "from '../core/map/EnvironmentProfileRuntime'")
+          p.write_text(text)
+
+          replacements = {
+              'src/ai-node-editor/EnvironmentProfileEditorPanel.ts': (
+                  "from '../core/map/EnvironmentProfileStorage'",
+                  "from '../ui/EnvironmentProfileStorage'",
+              ),
+              'src/ui/SceneExport.ts': (
+                  "from '../core/map/EnvironmentProfileStorage'",
+                  "from './EnvironmentProfileStorage'",
+              ),
+              'src/main.ts': (
+                  "from './core/map/EnvironmentProfileStorage'",
+                  "from './ui/EnvironmentProfileStorage'",
+              ),
+              'scripts/environment_materials_smoke.ts': (
+                  "from '../src/core/map/EnvironmentProfileStorage'",
+                  "from '../src/ui/EnvironmentProfileStorage'",
+              ),
+          }
+          for path, (old, new) in replacements.items():
+              file = Path(path)
+              source = file.read_text()
+              if old not in source:
+                  raise SystemExit(f'missing expected import in {path}: {old}')
+              file.write_text(source.replace(old, new))
+
+          smoke = Path('scripts/environment_materials_smoke.ts')
+          source = smoke.read_text()
+          marker = "const uiSource = readFileSync('src/ai-node-editor/NavigationProfileEditor.ts', 'utf8');\n"
+          boundary = """const materialCoreSource = readFileSync('src/core/map/EnvironmentMaterialProfile.ts', 'utf8');
+          const materialRuntimeSource = readFileSync('src/core/map/EnvironmentProfileRuntime.ts', 'utf8');
+          const storageAdapterSource = readFileSync('src/ui/EnvironmentProfileStorage.ts', 'utf8');
+          for (const coreSource of [materialCoreSource, materialRuntimeSource]) {
+            assert.doesNotMatch(coreSource, /\\bwindow\\b|\\blocalStorage\\b|\\bStorage\\b/, 'environment-profile core must remain browser-independent');
+          }
+          assert.match(storageAdapterSource, /window\\.localStorage/, 'browser persistence must live in the UI adapter');
+          assert.equal(materialRuntimeSource.includes('EnvironmentProfileStorage'), false, 'core runtime must not depend on the browser storage adapter');
+
+          """
+          if marker not in source:
+              raise SystemExit('environment material smoke insertion point missing')
+          smoke.write_text(source.replace(marker, boundary + marker))
+
+          metadata = Path('docs/subprojects/ai-single-unit-editor/subproject.json')
+          metadata.write_text(metadata.read_text().replace(
+              'src/core/map/EnvironmentProfileStorage.ts',
+              'src/ui/EnvironmentProfileStorage.ts',
+          ))
+
+          contract = Path('docs/subprojects/ai-single-unit-editor/ENVIRONMENT_MATERIAL_PROFILES_V1.md')
+          old = '`EnvironmentMaterialProfile.ts` owns versioned surface and vegetation definitions. Browser storage is isolated in `EnvironmentProfileStorage.ts`; core consumers read an immutable snapshot from `EnvironmentProfileRuntime.ts`.'
+          new = '`EnvironmentMaterialProfile.ts` owns versioned surface and vegetation definitions. Browser persistence is isolated in `src/ui/EnvironmentProfileStorage.ts`; core consumers read an immutable snapshot from `EnvironmentProfileRuntime.ts` and never import DOM or localStorage APIs.'
+          source = contract.read_text()
+          if old not in source:
+              raise SystemExit('environment profile contract text not found')
+          contract.write_text(source.replace(old, new))
+          PY
+          npm run docs:sync
+          npm run environment-materials:smoke
+          npm run build
+      - name: Commit final boundary fix and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/agent-fix-environment-storage.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Move environment profile storage out of core"
+          git push origin HEAD:${GITHUB_REF_NAME}
