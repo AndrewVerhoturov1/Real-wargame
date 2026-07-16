@@ -1,0 +1,22 @@
+diff --git a/src/core/knowledge/CanonicalWorldThreat.ts b/src/core/knowledge/CanonicalWorldThreat.ts
+index 4b49c63..00dcaab 100644
+--- a/src/core/knowledge/CanonicalWorldThreat.ts
++++ b/src/core/knowledge/CanonicalWorldThreat.ts
+@@ -58,6 +58,7 @@ export function buildCanonicalWorldThreatKey(
+     threat.falloffPercent,
+     threat.confidence,
+     threat.uncertaintyCells,
++    threat.fireThreatClass ?? 'independent',
+     threat.source,
+     threat.visibleNow ? '1' : '0',
+   ].join(':')).join('|');
+@@ -117,6 +118,9 @@ export function canonicalizeWorldThreat(
+     falloffPercent: quantize(clampPercent(threat.falloffPercent), VALUE_BUCKET),
+     confidence: quantize(clampPercent(threat.confidence), CONFIDENCE_BUCKET),
+     uncertaintyCells: quantize(Math.max(0, finite(threat.uncertaintyCells)), UNCERTAINTY_BUCKET_CELLS),
++    fireThreatClass: unitContact
++      ? threat.fireThreatClass === 'machine_gun_fire' ? 'machine_gun_fire' : 'rifle_fire'
++      : null,
+   };
+ }
+ 
