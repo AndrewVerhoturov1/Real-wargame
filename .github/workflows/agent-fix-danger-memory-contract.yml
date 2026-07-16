@@ -1,0 +1,80 @@
+name: Agent Fix Danger Memory Contract
+
+on:
+  push:
+    branches:
+      - agent/terrain-profiles-performance-followup-v1
+    paths:
+      - '.github/workflows/agent-fix-danger-memory-contract.yml'
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - '.github/workflows/agent-fix-danger-memory-contract.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: agent-fix-danger-memory-contract
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/terrain-profiles-performance-followup-v1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Correct world-space memory assertion
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tests/danger-layer-movement-performance.spec.ts')
+          source = path.read_text()
+          old = """  const worldSpaceMemoryStable = angularDifference(
+              after.subjectiveThreatDirectionDegrees ?? 0,
+              before.subjectiveThreatDirectionDegrees ?? 0,
+            ) <= 0.5 && Math.abs(
+              (after.subjectiveThreatRangeCells ?? 0) - (before.subjectiveThreatRangeCells ?? 0),
+            ) <= 0.1;
+            expect(worldSpaceMemoryStable).toBe(true);
+          """
+          new = """  const beforeThreatPosition = before.subjectiveThreatPosition;
+            const afterThreatPosition = after.subjectiveThreatPosition;
+            const worldSpaceMemoryStable = Boolean(
+              beforeThreatPosition
+              && afterThreatPosition
+              && Math.hypot(
+                afterThreatPosition.x - beforeThreatPosition.x,
+                afterThreatPosition.y - beforeThreatPosition.y,
+              ) <= 0.001,
+            );
+            expect(worldSpaceMemoryStable, JSON.stringify({ before, after })).toBe(true);
+          """
+          if old not in source:
+              if new not in source:
+                  raise SystemExit('danger movement memory assertion block not found')
+          else:
+              path.write_text(source.replace(old, new))
+          PY
+          npm run build
+      - name: Commit fix and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/agent-fix-danger-memory-contract.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Correct world-space threat memory performance assertion"
+          git push origin HEAD:agent/terrain-profiles-performance-followup-v1
