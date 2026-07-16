@@ -1,5 +1,6 @@
 import { BufferImageSource, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import {
+  getAwarenessMovementDiagnostics,
   publishAwarenessMovementDiagnostics,
   resetAwarenessMovementDiagnostics,
   type AwarenessMovementDiagnostics,
@@ -290,7 +291,7 @@ export class PixiAwarenessHeatmapRenderer {
         : null,
       rendererLocalBestSafePositions: positions,
       rendererLocalBestWinner: positions[0] ?? null,
-      movement: { ...this.movement },
+      movement: getAwarenessMovementDiagnostics(),
     };
   }
 
