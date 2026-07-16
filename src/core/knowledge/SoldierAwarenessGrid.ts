@@ -112,7 +112,7 @@ export function buildSoldierAwarenessReport(
     posture: unit.behaviorRuntime.posture,
     knowledgeRevision: unit.tacticalKnowledge.revision,
     threats: unit.tacticalKnowledge.threats,
-  });
+  }, { staticField, directionalField });
   const key = buildCacheKey(state, unit, staticField.key, directionalField.key, dangerField.key);
   let cached = cache.get(unit);
 

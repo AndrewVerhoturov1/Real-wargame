@@ -203,8 +203,21 @@ export function getRouteCostFields(
   }
 
   const knowledgeRevision = tacticalContext?.knowledgeRevision ?? 0;
+  const knownThreats = tacticalContext?.knownThreats ?? [];
+  const hasOrigin = Number.isFinite(tacticalContext?.originX) && Number.isFinite(tacticalContext?.originY);
+  const tacticalField = hasOrigin
+    ? getDirectionalTacticalField(map, {
+      unitId: tacticalContext?.unitId ?? 'route',
+      originX: tacticalContext?.originX ?? 0,
+      originY: tacticalContext?.originY ?? 0,
+      knowledgeRevision,
+      threats: knownThreats,
+    })
+    : null;
   const dangerContext = buildSoldierDangerFieldContext(tacticalContext);
-  const dangerField = dangerContext ? getSoldierDangerField(map, dangerContext) : null;
+  const dangerField = dangerContext
+    ? getSoldierDangerField(map, dangerContext, { directionalField: tacticalField ?? undefined })
+    : null;
   const dynamicKey = [
     staticKey,
     tacticalContext?.unitId ?? 'none',
@@ -217,7 +230,7 @@ export function getRouteCostFields(
   ].join(':');
   let dynamicField = cache.dynamicFields.get(dynamicKey);
   if (!dynamicField) {
-    dynamicField = buildDynamicField(map, profile, tacticalContext, dangerField, staticField, dynamicKey, cache);
+    dynamicField = buildDynamicField(map, profile, tacticalContext, dangerField, tacticalField, staticField, dynamicKey, cache);
     cache.dynamicFields.set(dynamicKey, dynamicField);
     trimCache(cache.dynamicFields, 12);
   }
@@ -371,6 +384,7 @@ function buildDynamicField(
   profile: NavigationProfile,
   tacticalContext: TacticalRouteContext | undefined,
   dangerField: SoldierDangerField | null,
+  tacticalField: DirectionalTacticalField | null,
   staticField: StaticRouteCostField,
   key: string,
   cache: RouteCostFieldCache,
@@ -383,16 +397,6 @@ function buildDynamicField(
   const enemyDistanceCost = new Float32Array(count);
   const territoryCost = new Float32Array(count);
   const knownThreats = tacticalContext?.knownThreats ?? [];
-  const hasOrigin = Number.isFinite(tacticalContext?.originX) && Number.isFinite(tacticalContext?.originY);
-  const tacticalField = hasOrigin
-    ? getDirectionalTacticalField(map, {
-      unitId: tacticalContext?.unitId ?? 'route',
-      originX: tacticalContext?.originX ?? 0,
-      originY: tacticalContext?.originY ?? 0,
-      knowledgeRevision: tacticalContext?.knowledgeRevision ?? 0,
-      threats: knownThreats,
-    })
-    : null;
   const directionalAvailable = Boolean(
     tacticalField
     && tacticalField.threatField.totalWeight > 1e-6

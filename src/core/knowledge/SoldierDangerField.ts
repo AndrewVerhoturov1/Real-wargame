@@ -52,6 +52,11 @@ export interface SoldierDangerFieldContext {
   readonly threats: readonly SoldierDangerThreat[];
 }
 
+export interface SoldierDangerFieldDependencies {
+  readonly staticField?: AwarenessStaticField;
+  readonly directionalField?: DirectionalTacticalField;
+}
+
 export interface SoldierDangerField {
   readonly key: string;
   readonly geometryKey: string;
@@ -112,10 +117,11 @@ const cacheByMap = new WeakMap<TacticalMap, MapCache>();
 export function getSoldierDangerField(
   map: TacticalMap,
   context: SoldierDangerFieldContext,
+  dependencies: SoldierDangerFieldDependencies = {},
 ): SoldierDangerField {
   const cache = getMapCache(map);
-  const staticField = getAwarenessStaticField(map, context.posture);
-  const directionalField = getDirectionalTacticalField(map, {
+  const staticField = dependencies.staticField ?? getAwarenessStaticField(map, context.posture);
+  const directionalField = dependencies.directionalField ?? getDirectionalTacticalField(map, {
     unitId: context.unitId,
     originX: context.originX,
     originY: context.originY,
