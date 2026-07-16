@@ -176,9 +176,8 @@ function classifyTask(task) {
   const namedApplicationDuration = sum(scriptEntries.filter(isNamedApplicationScript).map(duration));
   const renderingInfrastructureDuration = sum(scriptEntries.filter(isRenderingInfrastructureScript).map(duration));
   const workerResponseDuration = max(scriptEntries.filter(isWorkerResponseScript).map(duration));
-  const sceneOverlap = sum(overlappingScenes.map((phase) => intervalOverlap(task.startMs, task.durationMs, phase.startMs, phase.durationMs)));
-  const measureOverlap = sum(overlappingMeasures.map((measure) => intervalOverlap(task.startMs, task.durationMs, measure.startMs, measure.durationMs)));
-  const productionOverlap = Math.min(task.durationMs, sceneOverlap + measureOverlap + namedApplicationDuration);
+  const measuredOverlap = unionOverlapDuration(task, [...overlappingScenes, ...overlappingMeasures]);
+  const productionOverlap = Math.min(task.durationMs, measuredOverlap + namedApplicationDuration);
   const unaccounted = Math.max(0, task.durationMs - productionOverlap);
   const phases = [
     ...overlappingScenes.map((phase) => phase.name),
@@ -260,6 +259,30 @@ function intervalOverlap(leftStart, leftDuration, rightStart, rightDuration) {
   const startValue = Math.max(leftStart, rightStart);
   const endValue = Math.min(leftStart + leftDuration, rightStart + rightDuration);
   return Math.max(0, endValue - startValue);
+}
+
+function unionOverlapDuration(task, intervals) {
+  const taskEnd = task.startMs + task.durationMs;
+  const clipped = intervals
+    .map((interval) => ({
+      start: Math.max(task.startMs, interval.startMs),
+      end: Math.min(taskEnd, interval.startMs + interval.durationMs),
+    }))
+    .filter((interval) => interval.end > interval.start)
+    .sort((left, right) => left.start - right.start || left.end - right.end);
+  let total = 0;
+  let currentStart = clipped[0]?.start ?? 0;
+  let currentEnd = clipped[0]?.end ?? 0;
+  for (const interval of clipped.slice(1)) {
+    if (interval.start <= currentEnd) {
+      currentEnd = Math.max(currentEnd, interval.end);
+      continue;
+    }
+    total += currentEnd - currentStart;
+    currentStart = interval.start;
+    currentEnd = interval.end;
+  }
+  return total + Math.max(0, currentEnd - currentStart);
 }
 
 function stats(values) {
