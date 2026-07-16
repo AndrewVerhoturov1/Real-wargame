@@ -24,40 +24,32 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
+          import re
 
           profiles = Path('src/core/movement/MovementProfiles.ts')
           text = profiles.read_text()
-          old = '    startSeconds: 0.12,'
-          if text.count(old) != 1:
-              raise SystemExit(f'expected one normal start delay, found {text.count(old)}')
-          profiles.write_text(text.replace(old, '    startSeconds: 0,', 1))
+          text, count = re.subn(r'(?m)^    startSeconds: 0\.12,$', '    startSeconds: 0,', text, count=1)
+          if count != 1:
+              raise SystemExit(f'normal start delay replacement count: {count}')
+          profiles.write_text(text)
 
           runtime = Path('src/core/movement/MovementRuntime.ts')
           text = runtime.read_text()
-          first = '''  runtime.forcedFallbackReason = fallbackReason;
-          runtime.actualGait = gait;
-          applyMovementPosture(unit, profile, gait);
-          postureMultiplier = postureSpeedMultiplier(unit.behaviorRuntime.posture);
-          '''
-          first_fixed = '''  runtime.forcedFallbackReason = fallbackReason;
-          runtime.actualGait = gait;
-          const movementOwnsPosture = canTranslate || runtime.isMoving;
-          if (movementOwnsPosture) applyMovementPosture(unit, profile, gait);
-          postureMultiplier = postureSpeedMultiplier(unit.behaviorRuntime.posture);
-          '''
-          second = '''    runtime.forcedFallbackReason = fallbackReason;
-          runtime.actualGait = gait;
-          applyMovementPosture(unit, profile, gait);
-          } else {
-          '''
-          second_fixed = '''    runtime.forcedFallbackReason = fallbackReason;
-          runtime.actualGait = gait;
-          if (movementOwnsPosture) applyMovementPosture(unit, profile, gait);
-          } else {
-          '''
-          if text.count(first) != 1 or text.count(second) != 1:
-              raise SystemExit('movement posture patch anchors are not unique')
-          runtime.write_text(text.replace(first, first_fixed, 1).replace(second, second_fixed, 1))
+          text, first = re.subn(
+              r'(?m)^  applyMovementPosture\(unit, profile, gait\);\n  postureMultiplier =',
+              '  const movementOwnsPosture = canTranslate || runtime.isMoving;\n  if (movementOwnsPosture) applyMovementPosture(unit, profile, gait);\n  postureMultiplier =',
+              text,
+              count=1,
+          )
+          text, second = re.subn(
+              r'(?m)^    applyMovementPosture\(unit, profile, gait\);\n  \} else \{',
+              '    if (movementOwnsPosture) applyMovementPosture(unit, profile, gait);\n  } else {',
+              text,
+              count=1,
+          )
+          if first != 1 or second != 1:
+              raise SystemExit(f'movement posture replacements: first={first}, second={second}')
+          runtime.write_text(text)
           PY
 
       - name: Verify compatibility fix
