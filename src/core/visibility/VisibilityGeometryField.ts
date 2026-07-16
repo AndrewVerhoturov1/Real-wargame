@@ -198,16 +198,18 @@ function buildField(
       fire *= Math.exp(-vegetation.fire.transmissionLossPerMeter * stepMeters);
 
       const blockedByObject = staticGrid.blockingFlags[mapIndex] === 1;
-      if (blockedByHorizon || blockedByObject) {
+      if (blockedByHorizon) {
         writeBlockedCell(
           hardBlocked,
           visualTransmission,
           fireTransmission,
           blockerKind,
           mapIndex,
-          blockedByObject ? 2 : horizonKind,
+          horizonKind,
         );
       } else {
+        // The occluding terrain/object cell itself remains observable and targetable.
+        // Its height enters the horizon below, so the hard shadow starts on later cells.
         writeVisibleCell(
           hardBlocked,
           visualTransmission,
