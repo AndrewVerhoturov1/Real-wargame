@@ -780,10 +780,14 @@ function buildBestSafePositionsFromWorldField(
       if (distanceSquared > radiusSquared) continue;
       scannedCells += 1;
       const cellIndex = y * snapshot.width + x;
+      // Safety is the first term of the score. A cell at or below the threshold
+      // cannot become a candidate after subtracting the non-negative distance
+      // penalty, so avoid a square root for the overwhelmingly common reject.
+      const safety = field.safety[cellIndex] ?? 0;
+      if (safety <= 18) continue;
       const distanceCells = Math.sqrt(distanceSquared);
       const distanceMeters = distanceCells * snapshot.metersPerCell;
-      const score = (field.safety[cellIndex] ?? 0)
-        - distanceMeters * SAFE_DISTANCE_PENALTY_PER_METER;
+      const score = safety - distanceMeters * SAFE_DISTANCE_PENALTY_PER_METER;
       if (score <= 18) continue;
       if (best.length === MAX_SAFE_POSITIONS && score <= best[MAX_SAFE_POSITIONS - 1].score) continue;
       const threatIndex = field.protectedThreatIndex[cellIndex] ?? -1;
