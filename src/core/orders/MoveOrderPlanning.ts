@@ -1,5 +1,6 @@
 import type { GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
+import type { MovementProfileSource } from '../movement/MovementProfileContract';
 import type { NavigationProfileSource } from '../navigation/NavigationProfileResolver';
 import type { NavigationMovementMode, NavigationProfile } from '../navigation/NavigationProfiles';
 import type { TacticalRouteContext } from '../navigation/RouteCostField';
@@ -25,6 +26,10 @@ export interface PlanMoveOrderOptions {
   readonly navigationProfile?: NavigationProfile;
   readonly navigationProfileSource?: NavigationProfileSource;
   readonly movementMode?: NavigationMovementMode;
+  readonly movementProfileId?: string;
+  readonly movementProfileSource?: MovementProfileSource;
+  readonly movementProfileOwnerToken?: string;
+  readonly movementProfileRevision?: number;
   readonly finalFacingRadians?: number;
   readonly tacticalContext?: TacticalRouteContext;
   readonly replanSearchCount?: number;
@@ -95,6 +100,10 @@ export function planMoveOrder(
     navigationProfileId: path.profileId,
     navigationProfileRevision: path.profileRevision,
     navigationProfileSource: options.navigationProfileSource,
+    movementProfileId: options.movementProfileId,
+    movementProfileSource: options.movementProfileSource,
+    movementProfileOwnerToken: options.movementProfileOwnerToken,
+    movementProfileRevision: options.movementProfileRevision,
     finalFacingRadians: options.finalFacingRadians,
     knowledgeRevision: options.tacticalContext?.knowledgeRevision ?? 0,
     replanSearchCount: options.replanSearchCount ?? 0,
