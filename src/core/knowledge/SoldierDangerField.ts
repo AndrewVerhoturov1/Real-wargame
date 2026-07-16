@@ -8,8 +8,9 @@ import type { GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
 import {
   getDirectionalTerrainSectorBasis,
-  readDirectionalBasisValue,
   type DirectionalTerrainSectorBasis,
+  DIRECTIONAL_SECTOR_COUNT,
+  DIRECTIONAL_SECTOR_RADIANS,
 } from '../terrain/DirectionalTerrainSectorBasis';
 import type { FireThreatClass } from '../units/UnitModel';
 import {
@@ -249,8 +250,14 @@ function buildThreatGeometry(
   for (let y = 0; y < map.height; y += 1) {
     for (let x = 0; x < map.width; x += 1) {
       const index = y * map.width + x;
-      const position = { x: x + 0.5, y: y + 0.5 };
-      const threatFactor = threatFactorAtPosition(position, threat, staticField.metersPerCell);
+      const positionX = x + 0.5;
+      const positionY = y + 0.5;
+      const threatFactor = threatFactorAtPosition(
+        positionX,
+        positionY,
+        threat,
+        staticField.metersPerCell,
+      );
       if (threatFactor <= 0) continue;
       const lineOfFireFactor = lineOfFire
         ? lineOfFire.hardBlocked[index] === 1
@@ -258,21 +265,21 @@ function buildThreatGeometry(
           : (lineOfFire.fireTransmission[index] ?? 0) / 255
         : 1;
 
-      const bearingToThreat = Math.atan2(threat.y - position.y, threat.x - position.x);
-      const terrainProtection = readDirectionalBasisValue(
-        directionalBasis.protection,
-        directionalBasis,
-        position.x,
-        position.y,
-        bearingToThreat,
-      );
-      const terrainExposure = readDirectionalBasisValue(
-        directionalBasis.exposure,
-        directionalBasis,
-        position.x,
-        position.y,
-        bearingToThreat,
-      );
+      const bearingToThreat = Math.atan2(threat.y - positionY, threat.x - positionX);
+      const sectorPosition = normalizeRadians(bearingToThreat) / DIRECTIONAL_SECTOR_RADIANS;
+      const lowerSector = Math.floor(sectorPosition);
+      const baseSector = lowerSector % DIRECTIONAL_SECTOR_COUNT;
+      const sectorFraction = sectorPosition - lowerSector;
+      const nextSector = (baseSector + 1) % DIRECTIONAL_SECTOR_COUNT;
+      const sectorOffset = index * DIRECTIONAL_SECTOR_COUNT;
+      // Both terrain arrays use the identical basis interpolation. Calculate
+      // its cell/sector coordinates once, without allocating a GridPosition.
+      const terrainProtection = (directionalBasis.protection[sectorOffset + baseSector] ?? 0)
+        * (1 - sectorFraction)
+        + (directionalBasis.protection[sectorOffset + nextSector] ?? 0) * sectorFraction;
+      const terrainExposure = (directionalBasis.exposure[sectorOffset + baseSector] ?? 0)
+        * (1 - sectorFraction)
+        + (directionalBasis.exposure[sectorOffset + nextSector] ?? 0) * sectorFraction;
       const threatProtection = threat.mode === 'directional_fire'
         ? combinePercent(coverProtectionAt(coverField!, index), terrainProtection)
         : combinePercent(staticField.expectedProtection[index] ?? 0, terrainProtection * 0.35);
@@ -447,12 +454,13 @@ function buildFieldKey(geometryKey: string, threats: readonly SoldierDangerThrea
 }
 
 function threatFactorAtPosition(
-  position: GridPosition,
+  positionX: number,
+  positionY: number,
   threat: SoldierDangerThreat,
   metersPerCell: number,
 ): number {
-  const dx = position.x - threat.x;
-  const dy = position.y - threat.y;
+  const dx = positionX - threat.x;
+  const dy = positionY - threat.y;
   const range = Math.hypot(dx, dy);
   const uncertaintyBonus = threat.uncertaintyCells;
 
@@ -486,6 +494,12 @@ function threatFactorAtPosition(
     && Math.abs(localY) <= threat.heightCells / 2 + uncertaintyBonus
     ? 1
     : 0;
+}
+
+function normalizeRadians(value: number): number {
+  const full = Math.PI * 2;
+  const normalized = value % full;
+  return normalized < 0 ? normalized + full : normalized;
 }
 
 function targetHeightForPosture(posture: UnitPosture): number {
