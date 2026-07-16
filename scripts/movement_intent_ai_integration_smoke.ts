@@ -8,13 +8,8 @@ import {
   buildClearAiMovementProfileUpdates,
   buildSetAiMovementProfileUpdates,
 } from '../src/core/ai/MovementProfileAiMemory';
-import {
-  isMoveToBlackboardPositionActionState,
-} from '../src/core/ai/runtime/actions/MoveToBlackboardPositionAction';
-import {
-  restoreMoveOrder,
-  serializeMoveOrder,
-} from '../src/core/ai/runtime/AiRuntimeSnapshot';
+import { restoreMoveOrder, serializeMoveOrder } from '../src/core/ai/runtime/AiRuntimeSnapshot';
+import { isMoveToBlackboardPositionActionState } from '../src/core/ai/runtime/actions/MoveToBlackboardPositionAction';
 import {
   DEFAULT_MOVEMENT_PROFILE_ID,
   MOVEMENT_PROFILE_MEMORY_KEYS,
@@ -44,7 +39,9 @@ verifyStatefulMoveMigration();
 verifyNodeEditorContracts();
 verifyBlackboardDictionary();
 
-console.log('Movement intent and AI integration smoke passed: intent v2, order snapshots, live source priority, owned overrides, legacy migration, node-editor dropdowns and Blackboard dictionary.');
+console.log(
+  'Movement intent and AI integration smoke passed: intent v2, order snapshots, live source priority, owned overrides, legacy migration, node-editor dropdowns and Blackboard dictionary.',
+);
 
 function verifyTacticalIntentV2(): void {
   const expected = {
@@ -122,9 +119,6 @@ function verifyPlayerCommandAndMoveOrderSnapshots(): void {
     movementProfileOwnerToken: command.id,
     movementProfileRevision: command.revision,
   });
-  assert.equal(order.movementProfileId, 'custom_recon_walk');
-  assert.equal(order.movementProfileSource, 'player_order');
-
   const restored = restoreMoveOrder(serializeMoveOrder(order));
   assert.equal(restored.movementProfileId, 'custom_recon_walk');
   assert.equal(restored.movementProfileSource, 'player_order');
@@ -133,8 +127,7 @@ function verifyPlayerCommandAndMoveOrderSnapshots(): void {
 }
 
 function verifyProfileSourcePriorityAndFallback(): void {
-  const defaultResolved = resolveMovementProfile({});
-  assert.deepEqual(defaultResolved, {
+  assert.deepEqual(resolveMovementProfile({}), {
     profileId: DEFAULT_MOVEMENT_PROFILE_ID,
     source: 'default',
     ownerToken: undefined,
@@ -174,20 +167,18 @@ function verifyProfileSourcePriorityAndFallback(): void {
   assert.equal(safety.source, 'hard_safety');
   assert.equal(safety.forcedReason, 'injury');
 
-  const unknownPreservedWithoutRegistry = resolveMovementProfile({
-    playerOrderProfileId: 'downloaded_custom_profile',
-  });
-  assert.equal(unknownPreservedWithoutRegistry.profileId, 'downloaded_custom_profile');
-  assert.equal(unknownPreservedWithoutRegistry.forcedFallback, false);
+  const custom = resolveMovementProfile({ playerOrderProfileId: 'downloaded_custom_profile' });
+  assert.equal(custom.profileId, 'downloaded_custom_profile');
+  assert.equal(custom.forcedFallback, false);
 
-  const unknownWithRegistry = resolveMovementProfile({
+  const missing = resolveMovementProfile({
     playerOrderProfileId: 'missing_custom_profile',
     knownProfileIds: ['normal', 'stealth', 'fast'],
   });
-  assert.equal(unknownWithRegistry.profileId, 'normal');
-  assert.equal(unknownWithRegistry.source, 'player_order');
-  assert.equal(unknownWithRegistry.forcedFallback, true);
-  assert.match(unknownWithRegistry.forcedReason ?? '', /missing_custom_profile/);
+  assert.equal(missing.profileId, 'normal');
+  assert.equal(missing.source, 'player_order');
+  assert.equal(missing.forcedFallback, true);
+  assert.match(missing.forcedReason ?? '', /missing_custom_profile/);
 
   assert.deepEqual(resolveMovementProfileSelection({
     mode: 'from_order',
@@ -234,7 +225,9 @@ function verifyAiOverrideOwnership(): void {
     fallbackSource: 'player_order',
   });
   assert.equal(ownedClear.cleared, true);
-  const clearUpdates = Object.fromEntries(ownedClear.updates.map((entry) => [entry.key, entry.value]));
+  const clearUpdates = Object.fromEntries(
+    ownedClear.updates.map((entry) => [entry.key, entry.value]),
+  );
   assert.equal(clearUpdates[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId], null);
   assert.equal(clearUpdates[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId], 'stealth');
   assert.equal(clearUpdates[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource], 'player_order');
@@ -248,6 +241,7 @@ function verifyTypedAiNodes(): void {
     }),
     unitId: 'unit-a',
     blackboard: {
+      player_order_movement_profile: 'stealth',
       requested_movement_profile_id: 'stealth',
       active_movement_profile_id: 'stealth',
       active_movement_profile_source: 'player_order',
@@ -314,6 +308,7 @@ function verifyLiveOrderPriority(): void {
     movementProfileOwnerToken: command.id,
     movementProfileRevision: command.revision,
   });
+
   const runtime = unit.behaviorRuntime as typeof unit.behaviorRuntime & {
     aiGraphMemory?: Record<string, AiBlackboardValue>;
   };
@@ -325,6 +320,7 @@ function verifyLiveOrderPriority(): void {
   syncMoveOrderMemoryForUnit(unit);
   assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId], 'fast');
   assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource], 'ai_override');
+  assert.ok(unit.order);
   assert.equal(unit.order.movementProfileId, 'fast');
   assert.equal(unit.order.movementProfileSource, 'ai_override');
   assert.equal(unit.order.movementProfileOwnerToken, 'dash-action');
@@ -369,7 +365,9 @@ function verifyStatefulMoveMigration(): void {
 
 function verifyNodeEditorContracts(): void {
   const moveContract = DEFAULT_AI_NODE_CONTRACT_REGISTRY.require('MoveToBlackboardPosition');
-  const sourceParameter = moveContract.parameters.find((entry) => entry.id === 'movementProfileSource');
+  const sourceParameter = moveContract.parameters.find(
+    (entry) => entry.id === 'movementProfileSource',
+  );
   assert.equal(sourceParameter?.kind, 'enum');
   assert.deepEqual(
     sourceParameter?.options?.map((entry) => entry.value),
@@ -380,9 +378,14 @@ function verifyNodeEditorContracts(): void {
     ['Из приказа', 'Текущий активный', 'Автоматически', 'Конкретный профиль'],
   );
 
-  const profileParameter = moveContract.parameters.find((entry) => entry.id === 'movementProfileId');
+  const profileParameter = moveContract.parameters.find(
+    (entry) => entry.id === 'movementProfileId',
+  );
   assert.equal(profileParameter?.kind, 'enum');
-  assert.deepEqual(profileParameter?.options?.map((entry) => entry.value), ['normal', 'stealth', 'fast']);
+  assert.deepEqual(
+    profileParameter?.options?.map((entry) => entry.value),
+    ['normal', 'stealth', 'fast'],
+  );
   assert.deepEqual(
     profileParameter?.options?.map((entry) => entry.labelRu),
     ['Обычное движение', 'Скрытное движение', 'Быстрое движение'],
@@ -390,12 +393,23 @@ function verifyNodeEditorContracts(): void {
 
   const setContract = DEFAULT_AI_NODE_CONTRACT_REGISTRY.require('SetMovementProfile');
   assert.equal(setContract.labelRu, 'Установить профиль движения');
-  assert.equal(setContract.parameters.find((entry) => entry.id === 'ownerToken')?.kind, 'string');
-  assert.equal(setContract.parameters.find((entry) => entry.id === 'reasonRu')?.defaultValue, 'Временный профиль выбран AI-графом.');
+  assert.equal(
+    setContract.parameters.find((entry) => entry.id === 'ownerToken')?.kind,
+    'string',
+  );
+  assert.equal(
+    setContract.parameters.find((entry) => entry.id === 'reasonRu')?.defaultValue,
+    'Временный профиль выбран AI-графом.',
+  );
 
-  const clearContract = DEFAULT_AI_NODE_CONTRACT_REGISTRY.require('ClearMovementProfileOverride');
+  const clearContract = DEFAULT_AI_NODE_CONTRACT_REGISTRY.require(
+    'ClearMovementProfileOverride',
+  );
   assert.equal(clearContract.labelRu, 'Вернуть профиль движения');
-  assert.equal(clearContract.parameters.find((entry) => entry.id === 'ownerToken')?.kind, 'string');
+  assert.equal(
+    clearContract.parameters.find((entry) => entry.id === 'ownerToken')?.kind,
+    'string',
+  );
 }
 
 function verifyBlackboardDictionary(): void {
@@ -415,8 +429,8 @@ function verifyBlackboardDictionary(): void {
   ]) {
     const entry = schema.get(key);
     assert.ok(entry, `Missing Blackboard schema entry: ${key}`);
-    assert.ok(entry?.labelRu, `Missing Russian Blackboard label: ${key}`);
-    assert.ok(entry?.descriptionRu, `Missing Russian Blackboard description: ${key}`);
+    assert.ok(entry.labelRu, `Missing Russian Blackboard label: ${key}`);
+    assert.ok(entry.descriptionRu, `Missing Russian Blackboard description: ${key}`);
   }
 }
 
