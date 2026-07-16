@@ -104,11 +104,11 @@ const BASE_PROFILE: Omit<MovementProfile, 'id' | 'label' | 'labelRu' | 'builtIn'
     soundIntervalMeters: 3.2,
   },
   observation: {
-    focusMultiplier: 0.9,
-    directMultiplier: 0.86,
-    peripheralMultiplier: 0.78,
-    rearMultiplier: 0.7,
-    stationaryTargetMultiplier: 0.92,
+    focusMultiplier: 1,
+    directMultiplier: 1,
+    peripheralMultiplier: 1,
+    rearMultiplier: 1,
+    stationaryTargetMultiplier: 1,
     movingTargetMultiplier: 1,
   },
   weapon: {
@@ -142,7 +142,7 @@ export const BUILT_IN_MOVEMENT_PROFILES: Readonly<Record<string, MovementProfile
     movement: { preferredPosture: 'standing', postureRequired: false, speedMultiplier: 1.05, startSeconds: 0.08, stopSeconds: 0.14, autoPosture: true },
     stamina: { drainMultiplier: 1.08, recoveryPerSecond: 6, minimumToStart: 18, downgradeThreshold: 14, fallbackGait: 'walk' },
     signature: { visualMovementMultiplier: 1.28, stealthSkillShare: 0.12, lateralVisibilityMultiplier: 1.2, soundLoudness: 0.95, soundIntervalMeters: 2.6 },
-    observation: { focusMultiplier: 0.7, directMultiplier: 0.62, peripheralMultiplier: 0.48, rearMultiplier: 0.38, stationaryTargetMultiplier: 0.64, movingTargetMultiplier: 0.8 },
+    observation: { focusMultiplier: 1, directMultiplier: 1, peripheralMultiplier: 1, rearMultiplier: 1, stationaryTargetMultiplier: 1, movingTargetMultiplier: 1 },
     weapon: { allowFireWhileMoving: false, allowReloadWhileMoving: false, readyDelayAfterStopSeconds: 0.35, aimPreparationMultiplier: 1.35 },
   }),
   assault: profile({
@@ -150,7 +150,7 @@ export const BUILT_IN_MOVEMENT_PROFILES: Readonly<Record<string, MovementProfile
     movement: { preferredPosture: 'standing', postureRequired: true, speedMultiplier: 1.08, startSeconds: 0.06, stopSeconds: 0.2, autoPosture: true },
     stamina: { drainMultiplier: 1.15, recoveryPerSecond: 5, minimumToStart: 28, downgradeThreshold: 18, fallbackGait: 'run' },
     signature: { visualMovementMultiplier: 1.55, stealthSkillShare: 0, lateralVisibilityMultiplier: 1.35, soundLoudness: 1.2, soundIntervalMeters: 2.2 },
-    observation: { focusMultiplier: 0.5, directMultiplier: 0.42, peripheralMultiplier: 0.3, rearMultiplier: 0.22, stationaryTargetMultiplier: 0.45, movingTargetMultiplier: 0.65 },
+    observation: { focusMultiplier: 1, directMultiplier: 1, peripheralMultiplier: 1, rearMultiplier: 1, stationaryTargetMultiplier: 1, movingTargetMultiplier: 1 },
     weapon: { allowFireWhileMoving: false, allowReloadWhileMoving: false, readyDelayAfterStopSeconds: 0.75, aimPreparationMultiplier: 1.7 },
   }),
   low: profile({

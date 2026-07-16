@@ -74,14 +74,42 @@ interface GaitDefinition {
   postureRequired: boolean;
   staminaDrainPerSecond: number;
   readyDelayAfterStopSeconds: number;
+  observation: MovementProfile['observation'];
 }
 
+const NEUTRAL_GAIT_OBSERVATION: MovementProfile['observation'] = {
+  focusMultiplier: 1,
+  directMultiplier: 1,
+  peripheralMultiplier: 1,
+  rearMultiplier: 1,
+  stationaryTargetMultiplier: 1,
+  movingTargetMultiplier: 1,
+};
+
+const RUN_GAIT_OBSERVATION: MovementProfile['observation'] = {
+  focusMultiplier: 0.7,
+  directMultiplier: 0.62,
+  peripheralMultiplier: 0.48,
+  rearMultiplier: 0.38,
+  stationaryTargetMultiplier: 0.64,
+  movingTargetMultiplier: 0.8,
+};
+
+const SPRINT_GAIT_OBSERVATION: MovementProfile['observation'] = {
+  focusMultiplier: 0.5,
+  directMultiplier: 0.42,
+  peripheralMultiplier: 0.3,
+  rearMultiplier: 0.22,
+  stationaryTargetMultiplier: 0.45,
+  movingTargetMultiplier: 0.65,
+};
+
 const GAITS: Record<MovementGait, GaitDefinition> = {
-  crawl: { speedMultiplier: 0.7, posture: 'prone', postureRequired: true, staminaDrainPerSecond: 0, readyDelayAfterStopSeconds: 0.05 },
-  crouch_walk: { speedMultiplier: 0.9, posture: 'crouched', postureRequired: true, staminaDrainPerSecond: 0, readyDelayAfterStopSeconds: 0.08 },
-  walk: { speedMultiplier: 1, posture: 'standing', postureRequired: false, staminaDrainPerSecond: 0, readyDelayAfterStopSeconds: 0.1 },
-  run: { speedMultiplier: 1.65, posture: 'standing', postureRequired: false, staminaDrainPerSecond: 10, readyDelayAfterStopSeconds: 0.35 },
-  sprint: { speedMultiplier: 2.15, posture: 'standing', postureRequired: true, staminaDrainPerSecond: 22, readyDelayAfterStopSeconds: 0.75 },
+  crawl: { speedMultiplier: 0.7, posture: 'prone', postureRequired: true, staminaDrainPerSecond: 0, readyDelayAfterStopSeconds: 0.05, observation: NEUTRAL_GAIT_OBSERVATION },
+  crouch_walk: { speedMultiplier: 0.9, posture: 'crouched', postureRequired: true, staminaDrainPerSecond: 0, readyDelayAfterStopSeconds: 0.08, observation: NEUTRAL_GAIT_OBSERVATION },
+  walk: { speedMultiplier: 1, posture: 'standing', postureRequired: false, staminaDrainPerSecond: 0, readyDelayAfterStopSeconds: 0.1, observation: NEUTRAL_GAIT_OBSERVATION },
+  run: { speedMultiplier: 1.65, posture: 'standing', postureRequired: false, staminaDrainPerSecond: 10, readyDelayAfterStopSeconds: 0.35, observation: RUN_GAIT_OBSERVATION },
+  sprint: { speedMultiplier: 2.15, posture: 'standing', postureRequired: true, staminaDrainPerSecond: 22, readyDelayAfterStopSeconds: 0.75, observation: SPRINT_GAIT_OBSERVATION },
 };
 
 export function createMovementRuntime(
@@ -464,12 +492,12 @@ function publishDiagnostics(
     noiseLoudness: profile.signature.soundLoudness,
     visualMovementMultiplier: profile.signature.visualMovementMultiplier,
     lateralVisibility: profile.signature.lateralVisibilityMultiplier,
-    observationFocusMultiplier: profile.observation.focusMultiplier,
-    observationDirectMultiplier: profile.observation.directMultiplier,
-    observationPeripheralMultiplier: profile.observation.peripheralMultiplier,
-    observationRearMultiplier: profile.observation.rearMultiplier,
-    stationaryTargetMultiplier: profile.observation.stationaryTargetMultiplier,
-    movingTargetMultiplier: profile.observation.movingTargetMultiplier,
+    observationFocusMultiplier: profile.observation.focusMultiplier * gait.observation.focusMultiplier,
+    observationDirectMultiplier: profile.observation.directMultiplier * gait.observation.directMultiplier,
+    observationPeripheralMultiplier: profile.observation.peripheralMultiplier * gait.observation.peripheralMultiplier,
+    observationRearMultiplier: profile.observation.rearMultiplier * gait.observation.rearMultiplier,
+    stationaryTargetMultiplier: profile.observation.stationaryTargetMultiplier * gait.observation.stationaryTargetMultiplier,
+    movingTargetMultiplier: profile.observation.movingTargetMultiplier * gait.observation.movingTargetMultiplier,
     stealthSkillShare: profile.signature.stealthSkillShare,
   };
 }

@@ -22,13 +22,14 @@ import { buildExportedScene, normalizeImportedScene } from '../src/ui/SceneExpor
 verifyGaitSpeedOrder();
 verifyPartitionInvariantMovementAndSound();
 verifyStaminaDrainRecoveryAndFallback();
+verifyWalkNeutralAndGaitObservationPenalty();
 verifyPerceptionMovementAndSignature();
 verifySprintWeaponPreparation();
 verifyLegacyAndCustomProfileSerialization();
 verifySelectionIndependence();
 verifyRouteReplanKeepsMovementProfile();
 
-console.log('Physical movement runtime smoke passed: gait speed, partition invariance, stamina, perception, sound, weapon preparation, migration, UI independence and route replan persistence.');
+console.log('Physical movement runtime smoke passed: gait speed, partition invariance, stamina, gait-aware observation, perception, sound, weapon preparation, migration, UI independence and route replan persistence.');
 
 function verifyGaitSpeedOrder(): void {
   const crawl = movedDistance('low', 'crawl', 2);
@@ -85,6 +86,36 @@ function verifyStaminaDrainRecoveryAndFallback(): void {
   assert.notEqual(fallbackUnit.movementRuntime.actualGait, 'sprint', 'low stamina must select a safe effective gait');
   assert.equal(fallbackUnit.order, order, 'temporary stamina fallback must not delete or replace the order');
   assert.equal(fallbackUnit.movementRuntime.effectiveProfileSource, 'fallback');
+}
+
+function verifyWalkNeutralAndGaitObservationPenalty(): void {
+  const walkingState = makeState();
+  const walker = walkingState.units[0];
+  setMovementRequest(walker, 'normal', 'player', 'walk');
+  walker.order = createMoveOrder({ x: 100.5, y: 2.5 }, { source: 'player' });
+  tickSimulation(walkingState, 0.5);
+  assert.equal(walker.movementRuntime.diagnostics.observationFocusMultiplier, 1, 'ordinary walk must preserve legacy-neutral focus observation');
+  assert.equal(walker.movementRuntime.diagnostics.observationDirectMultiplier, 1, 'ordinary walk must preserve legacy-neutral direct observation');
+  assert.equal(walker.movementRuntime.diagnostics.observationPeripheralMultiplier, 1, 'ordinary walk must preserve legacy-neutral peripheral observation');
+  assert.equal(walker.movementRuntime.diagnostics.observationRearMultiplier, 1, 'ordinary walk must preserve legacy-neutral rear observation');
+  assert.equal(walker.movementRuntime.diagnostics.stationaryTargetMultiplier, 1, 'ordinary walk must not penalize stationary-target evidence');
+  assert.equal(walker.movementRuntime.diagnostics.movingTargetMultiplier, 1, 'ordinary walk must not penalize moving-target evidence');
+
+  const runningState = makeState();
+  const runner = runningState.units[0];
+  setMovementRequest(runner, 'normal', 'player', 'run');
+  runner.order = createMoveOrder({ x: 100.5, y: 2.5 }, { source: 'player' });
+  tickSimulation(runningState, 0.5);
+  assert.ok(runner.movementRuntime.diagnostics.observationFocusMultiplier < 1, 'run must reduce focus observation even under the normal profile');
+  assert.ok(runner.movementRuntime.diagnostics.observationPeripheralMultiplier < runner.movementRuntime.diagnostics.observationFocusMultiplier, 'run must degrade peripheral observation more than focus');
+  assert.ok(runner.movementRuntime.diagnostics.movingTargetMultiplier < 1, 'run must reduce moving-target evidence processing');
+
+  const sprintState = makeState();
+  const sprinter = sprintState.units[0];
+  setMovementRequest(sprinter, 'normal', 'player', 'sprint');
+  sprinter.order = createMoveOrder({ x: 100.5, y: 2.5 }, { source: 'player' });
+  tickSimulation(sprintState, 0.5);
+  assert.ok(sprinter.movementRuntime.diagnostics.observationFocusMultiplier < runner.movementRuntime.diagnostics.observationFocusMultiplier, 'sprint must degrade observation more than run');
 }
 
 function verifyPerceptionMovementAndSignature(): void {
