@@ -46,7 +46,7 @@ let diagnostics = getAwarenessStaticFieldDiagnostics(state.map, 'standing');
 assert.equal(diagnostics.buildCount, 1);
 assert.ok(diagnostics.lastCandidateChecks < state.map.cells.length * Math.max(1, state.map.objects.length));
 let dangerDiagnostics = getSoldierDangerFieldDiagnostics(state.map);
-assert.equal(dangerDiagnostics.geometryBuildCount, 1);
+assert.equal(dangerDiagnostics.geometryBuildCount, 0, 'an empty threat set must not allocate per-threat geometry');
 assert.equal(dangerDiagnostics.fieldBuildCount, 1);
 
 unit.position.x += 0.2;
@@ -57,7 +57,7 @@ diagnostics = getAwarenessStaticFieldDiagnostics(state.map, 'standing');
 assert.equal(diagnostics.buildCount, 1);
 assert.ok(diagnostics.cacheHitCount >= 1);
 dangerDiagnostics = getSoldierDangerFieldDiagnostics(state.map);
-assert.equal(dangerDiagnostics.geometryBuildCount, 1);
+assert.equal(dangerDiagnostics.geometryBuildCount, 0);
 assert.equal(dangerDiagnostics.fieldBuildCount, 1);
 assert.ok(dangerDiagnostics.fieldCacheHitCount >= 1);
 
@@ -94,7 +94,7 @@ assert.notEqual(threatened.cacheKey, first.cacheKey, 'knowledge changes must reb
 assert.notEqual(threatened.dangerFieldKey, first.dangerFieldKey, 'knowledge changes must invalidate canonical danger pixels');
 assert.equal(getAwarenessStaticFieldDiagnostics(state.map, 'standing').buildCount, 1);
 dangerDiagnostics = getSoldierDangerFieldDiagnostics(state.map);
-assert.equal(dangerDiagnostics.geometryBuildCount, 2);
+assert.equal(dangerDiagnostics.geometryBuildCount, 1, 'adding one threat must build exactly one threat geometry');
 assert.equal(dangerDiagnostics.fieldBuildCount, 2);
 
 state.map.objects[0].x += 2;
