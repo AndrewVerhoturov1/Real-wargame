@@ -22,6 +22,8 @@ import {
 import { clearCombatRuntime, replaceCombatRuntime, type CombatRuntimeState } from '../combat/CombatDamage';
 import { clearWeaponRuntime, replaceWeaponRuntime, type WeaponRuntimeState } from '../combat/WeaponModel';
 import type { GridPosition } from '../geometry';
+import { createMovementRuntime, type MovementRuntimeState } from '../movement/MovementRuntime';
+import { BUILT_IN_MOVEMENT_PROFILES, isMovementGait, isMovementProfileSource, type MovementGait, type MovementProfileSource } from '../movement/MovementProfiles';
 import { createEmptyTacticalKnowledge, normalizeTacticalKnowledge } from '../knowledge/SoldierThreatMemory';
 import type { NavigationProfileSource } from '../navigation/NavigationProfileResolver';
 import type { NavigationMovementMode } from '../navigation/NavigationProfiles';
@@ -88,6 +90,7 @@ export interface UnitRuntimeData extends Partial<Pick<UnitBehaviorRuntime, 'stre
   weapon?: WeaponRuntimeState;
   combat?: CombatRuntimeState;
   aiRuntime?: AiRuntimeSceneSnapshotV1;
+  movement?: MovementRuntimeState;
 }
 
 export interface UnitData {
@@ -113,6 +116,9 @@ export interface UnitData {
   tacticalKnowledge?: Partial<UnitTacticalKnowledge>;
   perceptionKnowledge?: Partial<UnitPerceptionKnowledge>;
   runtime?: UnitRuntimeData;
+  movementProfileId?: string;
+  movementGait?: MovementGait;
+  movementProfileSource?: MovementProfileSource;
   navigationProfileId?: string;
   navigationMovementMode?: NavigationMovementMode;
   playerCommand?: unknown;
@@ -146,6 +152,7 @@ export interface UnitModel {
   initialState: UnitInitialState;
   tacticalKnowledge: UnitTacticalKnowledge;
   perceptionKnowledge: UnitPerceptionKnowledge;
+  movementRuntime: MovementRuntimeState;
   unitRoleNavigationProfileId?: string | null;
   playerNavigationProfileId?: string | null;
   navigationMovementMode?: NavigationMovementMode | null;
@@ -178,6 +185,10 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
     const importedPerceptionKnowledge = unit.perceptionKnowledge
       ? scalePerceptionKnowledge(normalizePerceptionKnowledge(unit.perceptionKnowledge), scale)
       : createEmptyPerceptionKnowledge();
+    const requestedMovementProfileId = unit.movementProfileId ?? 'normal';
+    const requestedMovementGait = isMovementGait(unit.movementGait)
+      ? unit.movementGait
+      : BUILT_IN_MOVEMENT_PROFILES[requestedMovementProfileId]?.defaultGait ?? 'walk';
     const importedPlayerCommand = scalePlayerCommand(
       normalizePlayerCommand(unit.playerCommand, unit.id),
       scale,
@@ -216,6 +227,11 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
         ? normalizeTacticalKnowledge(unit.tacticalKnowledge, scale)
         : createEmptyTacticalKnowledge(),
       perceptionKnowledge: importedPerceptionKnowledge,
+      movementRuntime: createMovementRuntime(
+        requestedMovementProfileId,
+        requestedMovementGait,
+        unit.runtime?.movement,
+      ),
       unitRoleNavigationProfileId: unit.navigationProfileId ?? null,
       playerNavigationProfileId: importedPlayerCommand?.intent.navigationProfileId ?? initialNavigationProfile,
       navigationMovementMode: unit.navigationMovementMode ?? null,
@@ -223,8 +239,21 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
       activeNavigationProfileSource: importedPlayerCommand ? 'playerCommand' : unit.navigationProfileId ? 'unitRole' : 'default',
     };
     applyInitialStateToRuntime(model, false);
+    model.movementRuntime = createMovementRuntime(
+      requestedMovementProfileId,
+      requestedMovementGait,
+      unit.runtime?.movement,
+    );
+    model.movementRuntime.requestedProfileSource = isMovementProfileSource(unit.movementProfileSource)
+      ? unit.movementProfileSource
+      : unit.runtime?.movement ? 'migration' : unit.movementProfileId ? 'unit' : 'default';
+    model.movementRuntime.effectiveProfileSource = model.movementRuntime.requestedProfileSource;
     if (unit.runtime?.weapon) replaceWeaponRuntime(model, unit.runtime.weapon);
     restoreAiRuntimeSnapshot(model, unit.runtime?.aiRuntime);
+    if (!model.order) {
+      model.movementRuntime.isMoving = false;
+      model.movementRuntime.velocityCellsPerSecond = { x: 0, y: 0 };
+    }
     if (model.playerCommand) publishTacticalOrderIntentToAiMemory(model, model.playerCommand.intent);
     if (unit.runtime?.combat) replaceCombatRuntime(model, unit.runtime.combat);
     initializeSimulationAiEventFacts(model);
@@ -290,6 +319,12 @@ export function applyInitialStateToRuntime(unit: UnitModel, clearPerceptionKnowl
   unit.soldier.condition.confusion = initial.confusion;
   unit.soldier.condition.health = initial.health;
   unit.attentionRuntime = createAttentionRuntime(unit.attentionSettings, unit.facingRadians);
+  const movementProfileId = unit.movementRuntime?.requestedProfileId ?? 'normal';
+  const movementGait = unit.movementRuntime?.requestedGait ?? 'walk';
+  const movementSource = unit.movementRuntime?.requestedProfileSource ?? 'default';
+  unit.movementRuntime = createMovementRuntime(movementProfileId, movementGait);
+  unit.movementRuntime.requestedProfileSource = movementSource;
+  unit.movementRuntime.effectiveProfileSource = movementSource;
   if (clearPerceptionKnowledge) unit.perceptionKnowledge = createEmptyPerceptionKnowledge();
 }
 

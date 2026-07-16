@@ -57,6 +57,10 @@ The current-view adapter may add attention, viewing direction, distance falloff 
 
 Overlay visibility and selected-unit state are presentation concerns. Machine consumers may request a field for any unit or known source while every relevant overlay is hidden. Renderers read core fields and vegetation presentation settings; they never become a simulation input.
 
+### Physical movement
+
+Navigation chooses a route; physical movement executes that route. `MovementProfile` is a string-addressed configuration, `MovementGait` is the actual crawl/crouch/walk/run/sprint mode, and `MovementRuntimeState` belongs to each unit. `SimulationTick.ts` is the only coordinate integrator. Physical speed samples the current core map cell but never invokes A* or reads renderer/UI state. Movement sound is distance-based, stamina threshold crossing is partition-invariant, and temporary fallback preserves the original order.
+
 ### Rendering
 
 `src/rendering/` converts current state into visible PixiJS or HTML output. A renderer is not the authoritative source of game state.

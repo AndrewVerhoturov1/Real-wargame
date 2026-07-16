@@ -1,3 +1,4 @@
+import { getMovementAimPreparationMultiplier, requestMovementWeaponPreparation } from '../movement/MovementRuntime';
 import { setAttentionMode, setFocusTarget } from '../perception/AttentionController';
 import { emitPerceptionSound } from '../perception/PerceptionSound';
 import type { SimulationState } from '../simulation/SimulationState';
@@ -55,6 +56,12 @@ export function requestFireAction(state: SimulationState, unit: UnitModel, conta
     return false;
   }
   if (actionByUnit.has(unit) || !isUnitCombatCapable(unit)) return false;
+  const movementPermission = requestMovementWeaponPreparation(state, unit);
+  if (!movementPermission.allowed) {
+    unit.behaviorRuntime.reason = movementPermission.reasonRu;
+    unit.behaviorRuntime.lastEvent = 'movement_weapon_preparation_required';
+    return false;
+  }
   const decision = evaluateFireRequest(state, unit, contactId);
   if (!decision.allowed) {
     unit.behaviorRuntime.reason = decision.reasonRu;
@@ -72,7 +79,6 @@ export function requestFireAction(state: SimulationState, unit: UnitModel, conta
     reason: 'Fire action started.',
     reasonRu: 'Начато наведение на цель.',
   });
-  unit.order = null;
   unit.behaviorRuntime.currentAction = 'aim';
   unit.behaviorRuntime.reason = 'Начато наведение на цель.';
   unit.behaviorRuntime.lastEvent = 'combat_fire_action_started';
@@ -156,7 +162,8 @@ export function tickFireAction(state: SimulationState, unit: UnitModel, deltaSec
       const skill = Math.max(0.35, unit.soldier.traits.weaponSkill / 70);
       const stability = postureAimFactor(unit) * getCombatAimMultiplier(unit);
       const impairment = 1 + unit.behaviorRuntime.suppression / 80 + unit.behaviorRuntime.stress / 180;
-      const required = definition.aimTimeSeconds * impairment / Math.max(0.2, skill * stability);
+      const movementPreparation = getMovementAimPreparationMultiplier(state, unit);
+      const required = definition.aimTimeSeconds * impairment * movementPreparation / Math.max(0.2, skill * stability);
       action.accumulatedAimQuality = Math.max(0, Math.min(1, elapsed(action, state) / Math.max(0.05, required)));
       unit.behaviorRuntime.currentAction = 'aim';
       unit.behaviorRuntime.reason = `Наведение: ${Math.round(action.accumulatedAimQuality * 100)}%.`;

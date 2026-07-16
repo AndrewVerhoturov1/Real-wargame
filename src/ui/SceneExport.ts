@@ -1,6 +1,8 @@
 import { buildAiRuntimeSceneSnapshot } from '../core/ai/runtime/AiRuntimeSnapshot';
 import { getCombatRuntime } from '../core/combat/CombatDamage';
 import { getWeaponRuntime } from '../core/combat/WeaponModel';
+import { serializeMovementRuntime } from '../core/movement/MovementRuntime';
+import { createMovementProfileRegistry, serializeMovementProfileRegistry, type MovementProfileRegistryData } from '../core/movement/MovementProfiles';
 import {
   resolveObjectCoverProperties,
   type TacticalMapData,
@@ -29,6 +31,7 @@ export interface ExportedSceneData {
     forestMap: number[][];
     objects: Array<Record<string, unknown>>;
   };
+  movementProfiles: MovementProfileRegistryData;
   units: Array<Record<string, unknown>>;
   pressureZones: Array<Record<string, unknown>>;
 }
@@ -45,6 +48,7 @@ export async function loadSceneJsonFromFile(state: SimulationState, file: File):
 
   const scene = normalizeImportedScene(parsed);
   replaceSceneAtRuntimeResolution(state, scene.map, scene.units, scene.pressureZones);
+  state.movementProfiles = createMovementProfileRegistry(scene.movementProfiles);
   state.editor.selectedObjectId = null;
   state.editor.selectedZoneId = null;
   state.editor.drag = null;
@@ -81,6 +85,7 @@ export function normalizeImportedScene(value: unknown): {
   map: TacticalMapData;
   units: UnitData[];
   pressureZones: PressureZoneData[];
+  movementProfiles: unknown;
 } {
   const scene = requireRecord(value, 'Файл должен содержать объект сцены.');
   const map = requireRecord(scene.map, 'В JSON сцены нет блока map.');
@@ -89,14 +94,15 @@ export function normalizeImportedScene(value: unknown): {
     map: map as unknown as TacticalMapData,
     units: readArray(scene.units) as unknown as UnitData[],
     pressureZones: readArray(scene.pressureZones) as unknown as PressureZoneData[],
+    movementProfiles: scene.movementProfiles,
   };
 }
 
 export function buildExportedScene(state: SimulationState): ExportedSceneData {
   return {
-    version: 'scene-export-v9-minimal-target-visibility-ai-runtime-2m-grid',
+    version: 'scene-export-v10-physical-movement-runtime-2m-grid',
     exportedAt: new Date().toISOString(),
-    noteRu: 'Экспорт полигона ИИ с тактическим намерением PlayerCommand, слоем «Обзор и память», типом видимой цели у источников угроз, метрическими настройками зрения, навигационными профилями и активным runtime. Старые сцены без новых полей получают безопасные значения по умолчанию; сцены 10 м преобразуются в текущую сетку при загрузке.',
+    noteRu: 'Экспорт полигона ИИ с физическими профилями движения, выносливостью, фактическим способом движения, тактическим намерением PlayerCommand, слоем «Обзор и память», типом видимой цели у источников угроз, метрическими настройками зрения, навигационными профилями и активным runtime. Старые сцены без новых полей получают безопасные значения по умолчанию; сцены 10 м преобразуются в текущую сетку при загрузке.',
     map: {
       width: state.map.width,
       height: state.map.height,
@@ -127,6 +133,7 @@ export function buildExportedScene(state: SimulationState): ExportedSceneData {
         };
       }),
     },
+    movementProfiles: serializeMovementProfileRegistry(state.movementProfiles),
     units: state.units.map(exportUnit),
     pressureZones: state.pressureZones.map((zone) => {
       const settings = resolvePressureZoneSettings(zone);
@@ -221,6 +228,9 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
     initialState: { ...unit.initialState },
     tacticalKnowledge: JSON.parse(JSON.stringify(unit.tacticalKnowledge)),
     perceptionKnowledge: JSON.parse(JSON.stringify(unit.perceptionKnowledge)),
+    movementProfileId: unit.movementRuntime.requestedProfileId,
+    movementGait: unit.movementRuntime.requestedGait,
+    movementProfileSource: unit.movementRuntime.requestedProfileSource,
     navigationProfileId: unit.unitRoleNavigationProfileId ?? undefined,
     navigationMovementMode: unit.navigationMovementMode ?? undefined,
     playerCommand: unit.playerCommand ? JSON.parse(JSON.stringify(unit.playerCommand)) : undefined,
@@ -232,6 +242,7 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
       posture: unit.behaviorRuntime.posture,
       weapon: { ...getWeaponRuntime(unit) },
       combat: JSON.parse(JSON.stringify(getCombatRuntime(unit))),
+      movement: serializeMovementRuntime(unit.movementRuntime),
       aiRuntime: buildAiRuntimeSceneSnapshot(
         unit.behaviorRuntime.aiRuntimeSession,
         unit.order,

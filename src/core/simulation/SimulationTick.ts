@@ -9,6 +9,7 @@ import { getCombatSuppressionSnapshot } from '../combat/CombatSuppression';
 import type { GridPosition } from '../geometry';
 import { syncSoldierThreatMemory } from '../knowledge/SoldierThreatMemory';
 import { clampGridPositionToMap } from '../map/MapModel';
+import { commitPhysicalMovementStep, preparePhysicalMovementStep } from '../movement/MovementRuntime';
 import { ensureNavigationRouteCurrent } from '../navigation/NavigationRouteReplanner';
 import type { MoveOrder } from '../orders/MoveOrder';
 import { updatePlayerCommandStatus } from '../orders/PlayerCommand';
@@ -119,22 +120,40 @@ function updateStateLabels(unit: UnitModel): void {
 }
 
 function moveUnit(unit: UnitModel, state: SimulationState, deltaSeconds: number): void {
-  if (!unit.order || deltaSeconds <= 0 || !isUnitCombatCapable(unit) || getFireAction(unit)) return;
-  if (!ensureRoutePassable(unit, state)) return;
+  const combatCapable = isUnitCombatCapable(unit);
+  const firing = Boolean(getFireAction(unit));
+  const routeReady = Boolean(unit.order) && combatCapable && !firing && deltaSeconds > 0
+    ? ensureRoutePassable(unit, state)
+    : false;
+  const postureMultiplier = POSTURE_MOVE_MULTIPLIER[unit.behaviorRuntime.posture];
+  const woundMultiplier = getCombatMovementMultiplier(unit);
+  const step = preparePhysicalMovementStep(
+    state,
+    unit,
+    deltaSeconds,
+    routeReady && Boolean(unit.order),
+    postureMultiplier,
+    woundMultiplier,
+  );
   const order = unit.order;
-  if (!order) return;
+  if (!order) {
+    commitPhysicalMovementStep(state, unit, step, unit.position, unit.position, deltaSeconds);
+    return;
+  }
 
   const waypointIndex = order.waypointIndex ?? 0;
   const movementTarget = order.waypoints?.[waypointIndex] ?? order.target;
-  const remainingDistance = getDistance(unit.position, movementTarget);
-  const postureMultiplier = POSTURE_MOVE_MULTIPLIER[unit.behaviorRuntime.posture];
-  const conditionMultiplier = Math.max(0.35, unit.soldier.condition.speed / 100);
-  const woundMultiplier = getCombatMovementMultiplier(unit);
-  const stepDistance = unit.speedCellsPerSecond * postureMultiplier * conditionMultiplier * woundMultiplier * deltaSeconds;
   updateFacingAlongRoute(unit, movementTarget);
-  unit.position = moveToPoint(unit.position, movementTarget, stepDistance);
+  if (step.maxDistanceCells <= 0) {
+    commitPhysicalMovementStep(state, unit, step, unit.position, unit.position, deltaSeconds);
+    return;
+  }
+  const remainingDistance = getDistance(unit.position, movementTarget);
+  const startPosition = { ...unit.position };
+  unit.position = moveToPoint(unit.position, movementTarget, step.maxDistanceCells);
+  commitPhysicalMovementStep(state, unit, step, startPosition, unit.position, deltaSeconds);
 
-  if (remainingDistance > stepDistance + ORDER_COMPLETION_EPSILON_CELLS) return;
+  if (remainingDistance > step.maxDistanceCells + ORDER_COMPLETION_EPSILON_CELLS) return;
   unit.position = { ...movementTarget };
 
   const waypoints = order.waypoints;

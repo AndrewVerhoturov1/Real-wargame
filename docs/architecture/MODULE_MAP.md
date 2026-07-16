@@ -17,6 +17,8 @@ Open this file after `docs/ai/TASK_ROUTER.md` when the task needs code-level ori
 | HTML map labels | `src/rendering/HtmlOverlayRenderer.ts` | camera transforms, selection, LOS labels |
 | Simulation state | `src/core/simulation/SimulationState.ts` | unit model, orders, scene export |
 | Simulation update and movement integration | `src/core/simulation/SimulationTick.ts` | token-owned move orders, behavior runtime, pause state |
+| Physical movement profiles | `src/core/movement/MovementProfiles.ts` | string-addressed profiles, gait-independent parameter groups, registry serialization |
+| Physical movement runtime | `src/core/movement/MovementRuntime.ts` | stamina, gait fallback, surface speed, movement sound, weapon preparation, diagnostics |
 | Move order ownership | `src/core/orders/MoveOrder.ts` | player orders, stateful AI movement bridge, SimulationTick |
 | Map model | `src/core/map/MapModel.ts` | terrain, forest, JSON data |
 | Smooth terrain | `src/core/terrain/SmoothTerrain.ts` | line of sight, map renderer |

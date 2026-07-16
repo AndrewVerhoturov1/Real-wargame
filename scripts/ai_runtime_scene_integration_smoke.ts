@@ -81,7 +81,7 @@ function verifySceneExportRoundTrip(): void {
   );
 
   const exported = buildExportedScene(state);
-  assert.equal(exported.version, 'scene-export-v9-minimal-target-visibility-ai-runtime-2m-grid');
+  assert.equal(exported.version, 'scene-export-v10-physical-movement-runtime-2m-grid');
   const exportedUnit = exported.units.find((candidate) => candidate.id === unit.id) as {
     attention?: { vision?: { maximumVisualRangeMeters?: number; distanceFalloffStartMeters?: number } };
     runtime?: { aiRuntime?: { version?: number; session?: { graphId?: string } } };

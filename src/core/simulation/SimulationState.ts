@@ -8,6 +8,7 @@ import {
   type TacticalMap,
   type TacticalMapData,
 } from '../map/MapModel';
+import { createMovementProfileRegistry, type MovementProfileRegistry } from '../movement/MovementProfiles';
 import { createMoveOrder } from '../orders/MoveOrder';
 import {
   getPressureReportAtPosition,
@@ -102,6 +103,7 @@ export interface SimulationState {
   map: TacticalMap;
   units: UnitModel[];
   pressureZones: PressureZone[];
+  movementProfiles: MovementProfileRegistry;
   selectedUnitId: string | null;
   selectedUnitIds: string[];
   mouseGridPosition: GridPosition | null;
@@ -120,6 +122,7 @@ export function createInitialState(
     map: normalizeMap(mapData),
     units: normalizeUnits(unitsData),
     pressureZones: normalizePressureZones(pressureZoneData),
+    movementProfiles: createMovementProfileRegistry(),
     selectedUnitId: null,
     selectedUnitIds: [],
     mouseGridPosition: null,
