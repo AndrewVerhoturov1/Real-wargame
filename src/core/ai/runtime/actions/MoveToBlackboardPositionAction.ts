@@ -1,4 +1,11 @@
 import { distance, type GridPosition } from '../../../geometry';
+import {
+  MOVEMENT_PROFILE_SELECTION_MODES,
+  MOVEMENT_PROFILE_SOURCES,
+  resolveMovementProfileSelection,
+  type MovementProfileSelectionMode,
+  type MovementProfileSource,
+} from '../../../movement/MovementProfileContract';
 import type { AiGraphEffect } from '../../AiGraphRunner';
 import type { AiNodeLifecycle } from '../AiNodeLifecycle';
 
@@ -9,6 +16,9 @@ export interface MoveToBlackboardPositionActionState {
   readonly acceptanceRadiusCells: number;
   readonly timeoutMs: number;
   readonly actionToken: string;
+  readonly movementProfileSelection: MovementProfileSelectionMode;
+  readonly movementProfileId?: string;
+  readonly movementProfileSource?: MovementProfileSource;
 }
 
 export const moveToBlackboardPositionLifecycle: AiNodeLifecycle<MoveToBlackboardPositionActionState> = {
@@ -32,6 +42,13 @@ export const moveToBlackboardPositionLifecycle: AiNodeLifecycle<MoveToBlackboard
       };
     }
 
+    const movementSelection = resolveMovementProfileSelection({
+      mode: context.node.parameters?.movementProfileSource,
+      specificProfileId: context.node.parameters?.movementProfileId,
+      requestedProfileId: context.blackboard.requested_movement_profile_id,
+      activeProfileId: context.blackboard.active_movement_profile_id,
+      activeProfileSource: context.blackboard.active_movement_profile_source,
+    });
     const state: MoveToBlackboardPositionActionState = {
       kind: 'move_to_blackboard_position',
       targetKey,
@@ -39,6 +56,9 @@ export const moveToBlackboardPositionLifecycle: AiNodeLifecycle<MoveToBlackboard
       acceptanceRadiusCells: readNumber(context.node.parameters?.acceptanceRadiusCells, 0.2),
       timeoutMs: toMilliseconds(readNumber(context.node.parameters?.timeoutSeconds, 15)),
       actionToken: makeActionToken(context.unitId, context.node.id, context.nowMs),
+      movementProfileSelection: movementSelection.mode,
+      movementProfileId: movementSelection.profileId,
+      movementProfileSource: movementSelection.source,
     };
     const remaining = distance(selfPosition, state.target);
     if (remaining <= state.acceptanceRadiusCells) {
@@ -164,7 +184,10 @@ export function isMoveToBlackboardPositionActionState(value: unknown): value is 
     && isFiniteNonNegative(value.acceptanceRadiusCells)
     && isFiniteNonNegative(value.timeoutMs)
     && typeof value.actionToken === 'string'
-    && value.actionToken.length > 0;
+    && value.actionToken.length > 0
+    && MOVEMENT_PROFILE_SELECTION_MODES.includes(value.movementProfileSelection as MovementProfileSelectionMode)
+    && (value.movementProfileId === undefined || typeof value.movementProfileId === 'string')
+    && (value.movementProfileSource === undefined || MOVEMENT_PROFILE_SOURCES.includes(value.movementProfileSource as MovementProfileSource));
 }
 
 function beginMoveEffect(state: MoveToBlackboardPositionActionState): AiGraphEffect {
@@ -173,6 +196,9 @@ function beginMoveEffect(state: MoveToBlackboardPositionActionState): AiGraphEff
     ownerToken: state.actionToken,
     targetPosition: { ...state.target },
     targetKey: state.targetKey,
+    movementProfileId: state.movementProfileId,
+    movementProfileSource: state.movementProfileSource,
+    movementProfileOwnerToken: state.movementProfileId ? state.actionToken : undefined,
     reason: `AI movement started toward ${state.targetKey}.`,
     reasonRu: `Движение ИИ начато к цели «${state.targetKey}».`,
   } as unknown as AiGraphEffect;
@@ -193,6 +219,9 @@ function moveDetails(state: MoveToBlackboardPositionActionState, remaining?: num
     targetPosition: { ...state.target },
     actionToken: state.actionToken,
     distanceRemainingCells: remaining,
+    movementProfileSelection: state.movementProfileSelection,
+    movementProfileId: state.movementProfileId,
+    movementProfileSource: state.movementProfileSource,
   };
 }
 
