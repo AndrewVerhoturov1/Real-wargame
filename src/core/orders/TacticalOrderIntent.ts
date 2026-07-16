@@ -1,4 +1,9 @@
-export const TACTICAL_ORDER_INTENT_FORMAT_VERSION = 1 as const;
+import {
+  DEFAULT_MOVEMENT_PROFILE_ID,
+  normalizeMovementProfileId,
+} from '../movement/MovementProfileContract';
+
+export const TACTICAL_ORDER_INTENT_FORMAT_VERSION = 2 as const;
 
 export const TACTICAL_ORDER_PRESET_IDS = ['move', 'recon', 'assault'] as const;
 export type TacticalOrderPresetId = typeof TACTICAL_ORDER_PRESET_IDS[number];
@@ -11,6 +16,7 @@ export interface TacticalOrderIntent {
   readonly formatVersion: typeof TACTICAL_ORDER_INTENT_FORMAT_VERSION;
   readonly presetId: TacticalOrderPresetId;
   readonly navigationProfileId: string;
+  readonly movementProfileId: string;
   readonly attentionPolicy: TacticalOrderAttentionPolicy;
   readonly contactPolicy: TacticalOrderContactPolicy;
   readonly firePolicy: TacticalOrderFirePolicy;
@@ -38,6 +44,7 @@ const PRESETS: Readonly<Record<TacticalOrderPresetId, TacticalOrderPresetDefinit
     'Выполнить приказ обычным способом, реагируя на опасность по текущей логике самосохранения.',
     '→',
     'normal',
+    'normal',
     'automatic',
     'continue_if_possible',
     'self_defense',
@@ -51,6 +58,7 @@ const PRESETS: Readonly<Record<TacticalOrderPresetId, TacticalOrderPresetDefinit
     'Осторожно двигаться, активно искать контакты и при обнаружении остановиться для наблюдения.',
     '◉',
     'cautious',
+    'stealth',
     'search',
     'pause_and_observe',
     'self_defense',
@@ -64,6 +72,7 @@ const PRESETS: Readonly<Record<TacticalOrderPresetId, TacticalOrderPresetDefinit
     'Решительно двигаться к цели и продолжать атаку, не игнорируя критические ограничения безопасности.',
     '⚔',
     'attack',
+    'fast',
     'engage',
     'press_attack',
     'fire_at_will',
@@ -82,6 +91,7 @@ export function normalizeTacticalOrderIntent(value: unknown): TacticalOrderInten
     formatVersion: TACTICAL_ORDER_INTENT_FORMAT_VERSION,
     presetId,
     navigationProfileId: cleanProfileId(value.navigationProfileId, canonical.navigationProfileId),
+    movementProfileId: normalizeMovementProfileId(value.movementProfileId, canonical.movementProfileId),
     attentionPolicy: isAttentionPolicy(value.attentionPolicy) ? value.attentionPolicy : canonical.attentionPolicy,
     contactPolicy: isContactPolicy(value.contactPolicy) ? value.contactPolicy : canonical.contactPolicy,
     firePolicy: isFirePolicy(value.firePolicy) ? value.firePolicy : canonical.firePolicy,
@@ -99,6 +109,17 @@ export function withTacticalOrderNavigationProfile(
   return cloneAndFreezeIntent({
     ...normalized,
     navigationProfileId: cleanProfileId(navigationProfileId, normalized.navigationProfileId),
+  });
+}
+
+export function withTacticalOrderMovementProfile(
+  intent: TacticalOrderIntent,
+  movementProfileId: string,
+): TacticalOrderIntent {
+  const normalized = normalizeTacticalOrderIntent(intent);
+  return cloneAndFreezeIntent({
+    ...normalized,
+    movementProfileId: normalizeMovementProfileId(movementProfileId, normalized.movementProfileId),
   });
 }
 
@@ -141,6 +162,7 @@ function preset(
   shortDescriptionRu: string,
   icon: string,
   navigationProfileId: string,
+  movementProfileId: string,
   attentionPolicy: TacticalOrderAttentionPolicy,
   contactPolicy: TacticalOrderContactPolicy,
   firePolicy: TacticalOrderFirePolicy,
@@ -157,6 +179,7 @@ function preset(
       formatVersion: TACTICAL_ORDER_INTENT_FORMAT_VERSION,
       presetId: id,
       navigationProfileId,
+      movementProfileId,
       attentionPolicy,
       contactPolicy,
       firePolicy,
@@ -170,6 +193,7 @@ function cloneAndFreezeIntent(value: TacticalOrderIntent): TacticalOrderIntent {
     formatVersion: TACTICAL_ORDER_INTENT_FORMAT_VERSION,
     presetId: value.presetId,
     navigationProfileId: value.navigationProfileId,
+    movementProfileId: value.movementProfileId || DEFAULT_MOVEMENT_PROFILE_ID,
     attentionPolicy: value.attentionPolicy,
     contactPolicy: value.contactPolicy,
     firePolicy: value.firePolicy,
