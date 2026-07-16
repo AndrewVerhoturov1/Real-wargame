@@ -1,0 +1,30 @@
+import { BUILT_IN_MOVEMENT_PROFILE_IDS, type BuiltInMovementProfileId, type DeepPartial, type MovementProfile, type MovementProfileSettings } from './MovementProfileTypes';
+
+const BASE: MovementProfileSettings = {
+ speed:{speedMultiplier:1,startDelaySeconds:.2,stopDelaySeconds:.15,stanceChangeSeconds:.8,minimumSpeedMetersPerSecond:.25,lowStaminaSpeedMultiplier:.65},
+ stamina:{drainPerSecond:.25,recoveryPerSecond:1.1,minimumToStart:0,fallbackThreshold:12,resumeThreshold:24},
+ visibility:{movementVisibilityMultiplier:1,usesStealthSkill:false,lateralMovementMultiplier:1.12,openTerrainExposureBonus:.18},
+ noise:{loudness:.28,eventSpacingMeters:1.2,fatigueMultiplier:.15,surfacePolicy:'profile_multiplier'},
+ attention:{focusMultiplier:.92,directAttentionMultiplier:.95,peripheralMultiplier:.9,rearAwarenessMultiplier:.82,stationaryTargetDetectionMultiplier:.92,movingTargetDetectionMultiplier:1,scanSpeedMultiplier:.95},
+ weapon:{allowFireWhileMoving:true,allowReloadWhileMoving:true,readyDelayAfterStopSeconds:.15,weaponPreparationPenalty:.12},
+ restrictions:{maximumWoundSeverity:1,allowedWhileSuppressed:true,minimumSoldierSpeedMetersPerSecond:.2,fallbackRule:'slower_gait'},
+};
+
+type ProfileSeed = Omit<MovementProfile,'settings'|'revision'|'builtIn'|'templateProfileId'> & {settings?:DeepPartial<MovementProfileSettings>};
+function make(seed:ProfileSeed):MovementProfile{return {...seed,templateProfileId:seed.id as BuiltInMovementProfileId,settings:mergeSettings(BASE,seed.settings),revision:1,builtIn:true};}
+
+export const BUILT_IN_MOVEMENT_PROFILES: readonly MovementProfile[] = [
+ make({id:'normal_walk',nameEn:'Normal walk',nameRu:'Обычный шаг',descriptionEn:'Balanced routine movement.',descriptionRu:'Сбалансированное движение для обычных приказов.',preferredGait:'walk',stancePolicy:'standing',fallbackProfileId:null,category:'routine',sortOrder:10}),
+ make({id:'stealth_move',nameEn:'Stealth movement',nameRu:'Скрытное движение',descriptionEn:'Slow and quiet movement using stealth skill.',descriptionRu:'Медленное тихое движение с навыком скрытности.',preferredGait:'walk',stancePolicy:'adaptive',fallbackProfileId:'crouched_move',category:'stealth',sortOrder:20,settings:{speed:{speedMultiplier:.68,startDelaySeconds:.45},stamina:{drainPerSecond:.45},visibility:{movementVisibilityMultiplier:.55,usesStealthSkill:true},noise:{loudness:.12,eventSpacingMeters:1.8},attention:{focusMultiplier:1.08},weapon:{allowFireWhileMoving:false},restrictions:{allowedWhileSuppressed:false,fallbackRule:'profile'}}}),
+ make({id:'crouched_move',nameEn:'Crouched movement',nameRu:'Движение пригнувшись',descriptionEn:'Lower silhouette with weapon readiness.',descriptionRu:'Движение с пониженным силуэтом и готовым оружием.',preferredGait:'crouch',stancePolicy:'crouched',fallbackProfileId:'normal_walk',category:'combat',sortOrder:30,settings:{speed:{speedMultiplier:.74},stamina:{drainPerSecond:.7},visibility:{movementVisibilityMultiplier:.72,usesStealthSkill:true},noise:{loudness:.2},restrictions:{maximumWoundSeverity:.85,fallbackRule:'profile'}}}),
+ make({id:'run',nameEn:'Run',nameRu:'Бег',descriptionEn:'Fast sustained movement.',descriptionRu:'Быстрое движение с повышенным шумом и ухудшенным обзором.',preferredGait:'run',stancePolicy:'standing',fallbackProfileId:'normal_walk',category:'routine',sortOrder:40,settings:{speed:{speedMultiplier:1.55,minimumSpeedMetersPerSecond:.55},stamina:{drainPerSecond:3.5,minimumToStart:8},visibility:{movementVisibilityMultiplier:1.55},noise:{loudness:.68},attention:{focusMultiplier:.72},weapon:{allowReloadWhileMoving:false,readyDelayAfterStopSeconds:.35},restrictions:{maximumWoundSeverity:.65,minimumSoldierSpeedMetersPerSecond:.55,fallbackRule:'profile'}}}),
+ make({id:'sprint',nameEn:'Sprint',nameRu:'Спринт',descriptionEn:'Maximum short-duration speed.',descriptionRu:'Максимальная скорость с большим расходом сил и штрафом оружия.',preferredGait:'sprint',stancePolicy:'standing',fallbackProfileId:'run',category:'emergency',sortOrder:50,settings:{speed:{speedMultiplier:2.05,minimumSpeedMetersPerSecond:.8},stamina:{drainPerSecond:8.5,minimumToStart:24,fallbackThreshold:12,resumeThreshold:48},visibility:{movementVisibilityMultiplier:2.1},noise:{loudness:1},attention:{focusMultiplier:.45},weapon:{allowFireWhileMoving:false,allowReloadWhileMoving:false,readyDelayAfterStopSeconds:.75,weaponPreparationPenalty:.85},restrictions:{maximumWoundSeverity:.4,minimumSoldierSpeedMetersPerSecond:.8,fallbackRule:'profile'}}}),
+ make({id:'crawl',nameEn:'Crawl',nameRu:'Ползком',descriptionEn:'Very slow prone movement.',descriptionRu:'Очень медленное движение лёжа с низким силуэтом.',preferredGait:'crawl',stancePolicy:'prone',fallbackProfileId:'crouched_move',category:'stealth',sortOrder:60,settings:{speed:{speedMultiplier:.28,minimumSpeedMetersPerSecond:.08},stamina:{drainPerSecond:1.4},visibility:{movementVisibilityMultiplier:.3,usesStealthSkill:true},noise:{loudness:.08,eventSpacingMeters:2.2},weapon:{allowFireWhileMoving:false,allowReloadWhileMoving:false},restrictions:{minimumSoldierSpeedMetersPerSecond:.08,fallbackRule:'stop'}}}),
+];
+
+export function getBuiltInMovementProfile(id:BuiltInMovementProfileId):MovementProfile{const value=BUILT_IN_MOVEMENT_PROFILES.find(p=>p.id===id);if(!value)throw new Error(`Unknown built-in movement profile: ${id}`);return cloneMovementProfile(value);}
+export function isBuiltInMovementProfileId(id:string):id is BuiltInMovementProfileId{return (BUILT_IN_MOVEMENT_PROFILE_IDS as readonly string[]).includes(id);}
+export function cloneMovementProfile(value:MovementProfile):MovementProfile{return {...value,settings:mergeSettings(value.settings)};}
+export function mergeSettings(base:MovementProfileSettings,patch?:DeepPartial<MovementProfileSettings>):MovementProfileSettings{return {
+ speed:{...base.speed,...patch?.speed},stamina:{...base.stamina,...patch?.stamina},visibility:{...base.visibility,...patch?.visibility},noise:{...base.noise,...patch?.noise},attention:{...base.attention,...patch?.attention},weapon:{...base.weapon,...patch?.weapon},restrictions:{...base.restrictions,...patch?.restrictions},
+};}
