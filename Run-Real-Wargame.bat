@@ -23,6 +23,15 @@ if %errorlevel% neq 0 (
 )
 echo [OK] npm naiden.
 
+:: ---- stop stale server process tree before dependency refresh ----
+echo [INFO] Osvobozhdayu port %PORT% pred obnovleniem zavisimostey...
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr /C:":%PORT% "') do (
+    if not "%%a"=="0" (
+        taskkill /f /t /pid %%a >nul 2>nul && echo [OK] Process tree s PID %%a ostanovlen.
+    )
+)
+>nul 2>nul timeout /t 1 /nobreak
+
 :: ---- dependency consistency check ----
 set "INSTALL_DEPENDENCIES=0"
 if not exist "node_modules\" (
@@ -43,14 +52,6 @@ if "!INSTALL_DEPENDENCIES!"=="1" (
     echo [OK] npm ci zavershen.
 ) else (
     echo [OK] zavisimosti sootvetstvuyut package-lock.json.
-)
-
-:: ---- kill existing listeners on PORT ----
-echo [INFO] Proveryayu port %PORT%...
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr /C:":%PORT% "') do (
-    if not "%%a"=="0" (
-        taskkill /f /pid %%a >nul 2>nul && echo [OK] Process s PID %%a na porte %PORT% ostanovlen.
-    )
 )
 
 :: ---- start dev server in new window ----
