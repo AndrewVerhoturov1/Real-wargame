@@ -1,8 +1,9 @@
 export const MOVEMENT_PROFILE_FORMAT_VERSION = 1 as const;
 export const BUILT_IN_MOVEMENT_PROFILE_IDS = ['normal_walk','stealth_move','crouched_move','run','sprint','crawl'] as const;
+export const MOVEMENT_GAITS = ['crawl','crouch_walk','walk','run','sprint'] as const;
 export type BuiltInMovementProfileId = typeof BUILT_IN_MOVEMENT_PROFILE_IDS[number];
 export type MovementProfileId = string;
-export type MovementGait = 'walk'|'crouch'|'run'|'sprint'|'crawl';
+export type MovementGait = typeof MOVEMENT_GAITS[number];
 export type MovementStancePolicy = 'standing'|'crouched'|'prone'|'adaptive';
 export type MovementNoiseSurfacePolicy = 'profile_multiplier'|'material_profile_future';
 export type MovementFallbackRule = 'profile'|'slower_gait'|'stop';
