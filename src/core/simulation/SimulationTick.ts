@@ -1,4 +1,5 @@
 import { tickAiSimulationScheduler } from '../ai/AiSimulationScheduler';
+import { measurePerformancePhase } from '../debug/PerformancePhases';
 import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import { publishSimulationAiEvents } from '../ai/events/SimulationAiEvents';
 import { clampPercent, POSTURE_MOVE_MULTIPLIER } from '../behavior/BehaviorModel';
@@ -33,30 +34,44 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
   state.simulationTimeSeconds += scaledDeltaSeconds;
   const cycleEndMs = Math.max(cycleStartMs, Math.round(state.simulationTimeSeconds * 1000));
 
-  for (const unit of state.units) {
-    updateMetrics(unit, state, scaledDeltaSeconds);
-    updateStateLabels(unit);
-  }
+  measurePerformancePhase('simulation.metrics', () => {
+    for (const unit of state.units) {
+      updateMetrics(unit, state, scaledDeltaSeconds);
+      updateStateLabels(unit);
+    }
+  });
 
   // Perception and subjective threat memory must be current before AI reads
   // the blackboard. Graph effects can then affect combat and movement during
   // the same deterministic simulation step.
-  tickAllUnitPerception(state, scaledDeltaSeconds);
-  for (const unit of state.units) {
-    syncSoldierThreatMemory(state, unit, scaledDeltaSeconds);
-  }
+  measurePerformancePhase('simulation.perception', () => {
+    tickAllUnitPerception(state, scaledDeltaSeconds);
+  });
+  measurePerformancePhase('simulation.threat-memory', () => {
+    for (const unit of state.units) {
+      syncSoldierThreatMemory(state, unit, scaledDeltaSeconds);
+    }
+  });
 
-  tickAiSimulationScheduler(state, { cycleStartMs, cycleEndMs });
-  tickAutomaticCombatEngagements(state);
-  tickAllFireActions(state, scaledDeltaSeconds);
+  measurePerformancePhase('simulation.ai-scheduler', () => {
+    tickAiSimulationScheduler(state, { cycleStartMs, cycleEndMs });
+  });
+  measurePerformancePhase('simulation.combat', () => {
+    tickAutomaticCombatEngagements(state);
+    tickAllFireActions(state, scaledDeltaSeconds);
+  });
 
   const simulationTimeMs = Math.max(0, Math.round(state.simulationTimeSeconds * 1000));
-  for (const unit of state.units) {
-    moveUnit(unit, state, scaledDeltaSeconds);
-    publishSimulationAiEvents(unit, simulationTimeMs);
-  }
+  measurePerformancePhase('simulation.movement-events', () => {
+    for (const unit of state.units) {
+      moveUnit(unit, state, scaledDeltaSeconds);
+      publishSimulationAiEvents(unit, simulationTimeMs);
+    }
+  });
 
-  resolveUnitCollisions(state);
+  measurePerformancePhase('simulation.collisions', () => {
+    resolveUnitCollisions(state);
+  });
 }
 
 function updateMetrics(unit: UnitModel, state: SimulationState, deltaSeconds: number): void {
