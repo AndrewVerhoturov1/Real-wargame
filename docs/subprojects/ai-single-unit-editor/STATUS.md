@@ -3,7 +3,7 @@
 
 - **ID:** `ai-single-unit-editor`
 - **Status:** `active`
-- **Updated:** 2026-07-15
+- **Updated:** 2026-07-16
 - **Working branch:** `real-wargame-preview`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
 - **Last verified commit:** `3f01f4ba9b96daa1b8951bdd08f4005a482fee8c`
@@ -14,11 +14,11 @@
 
 ## Current focus
 
-Slice 1 кампании Stage 1–2 завершён и перенесён в real-wargame-preview через PR #106: потенциальная опасность отделена от evidence-derived suppression, а память неизвестного огня получила устойчивое объединение, разделение разных направлений и reconciliation с unit:<id>. Stage 1 остаётся открытым до live route replan, усиленных safe-position/reverse-slope доказательств, постоянного CI и отдельной визуальной приёмки.
+Draft PR #127 follow-up hardens the accepted simulation-owned per-unit scheduler: explicit paused steps advance all simulation systems, selected-unit diagnostics are read-only, observer polling and graph decisions use partition-invariant simulation-time cadence, the scheduler is one O(n) pass with one frozen graph snapshot, and ai-scheduler:smoke is blocking CI. It is not yet part of real-wargame-preview.
 
 ## Next step
 
-Продолжить Stage 1 со следующего вертикального среза: доказать живое перестроение активного маршрута через обычный SimulationTick с сохранением ownerToken, цели, профиля и final facing; затем усилить safe-position и reverse-slope проверки, закрепить combat-tactical-integration:smoke в постоянном CI и только после отдельного разрешения запустить подготовленные девять visual QA сцен.
+Review the corrected exact head of draft PR #127 and its Combat Foundation Core scheduler-smoke evidence; if accepted, integrate it with PR #126 while preserving canonical world-threat semantics and the scheduler phase order.
 
 ## Read first
 
@@ -131,6 +131,7 @@ Slice 1 кампании Stage 1–2 завершён и перенесён в r
 - `src/core/cover/CoverTacticalCandidates.ts`
 - `src/core/ai/AiGraphRuntime.ts`
 - `src/ai-node-editor/runtime-debug-overlay.ts`
+- `src/core/ai/AiSimulationScheduler.ts`
 
 ## Suggested verification
 
@@ -177,6 +178,7 @@ Slice 1 кампании Stage 1–2 завершён и перенесён в r
 - `npm run node-contract-ui:smoke`
 - `npm run runtime-debug-v2:smoke`
 - `npm run graph-v2-cli:smoke`
+- `npm run ai-scheduler:smoke`
 
 ## Safety rules
 
@@ -185,7 +187,7 @@ Slice 1 кампании Stage 1–2 завершён и перенесён в r
 - Физическая опасность может давать подавление и стресс без раскрытия точной позиции источника в Blackboard.
 - sourceVisible означает возможность создать зрительный сигнал, а не автоматическое обнаружение.
 - Blackboard current_target, enemyVisible и enemyKnown получают данные только из личных контактов бойца.
-- Восприятие версии 1 рассчитывается только для выбранного бойца и не запускается от движения камеры или курсора.
+- PerceptionSystem рассчитывает всех боеспособных бойцов из SimulationTick; UI selection управляет только отображением готового субъективного состояния.
 - Фокус, прямой сектор и периферия имеют разные интервалы; угол проверяется до дорогого LOS.
 - A* выполняется только при создании приказа или разрешённом перестроении; renderer и UI не импортируют GridPathfinder.
 - Динамическая стоимость использует только UnitTacticalKnowledge выбранного бойца и не выдаёт скрытое объективное знание за известное.
@@ -206,3 +208,9 @@ Slice 1 кампании Stage 1–2 завершён и перенесён в r
 - State/Plan v1 and Tactical Query System are canonical parts of real-wargame-preview; do not describe them as isolated temporary-branch work.
 - Configurable combat policy belongs to Graph v2 node properties and subgraphs; deterministic facts and non-bypassable safety invariants remain in code.
 - Do not mark Combat Tactical Integration Stage 1 complete until every follow-up criterion and the approved visual QA pass.
+- UI selection controls inspection only; every gameplay advance, including an explicit paused step, goes through SimulationTick and AiSimulationScheduler.
+- The first graph decision occurs on the first explicit simulation step; ordinary decisions use 600 ms simulation time and observer polling uses a deterministic 60 ms simulation-time cadence.
+- Each graph-controlled unit owns its AiRuntimeSession, route status and action owner tokens; one O(n) scheduler pass resolves one immutable graph snapshot and may process each unit at most once.
+- Selected-unit evaluate/tick/cancel-preview diagnostics must execute on a detached state and never mutate gameplay state.
+- Observer-relative direction/range changes for unit contacts do not increment semantic tacticalKnowledge revision or trigger route replanning.
+- Canonical scene/editor units declare aiControl='graph'; externally scripted fixtures declare aiControl='manual'.

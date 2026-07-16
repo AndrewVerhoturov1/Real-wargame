@@ -79,7 +79,7 @@ assert.ok(distanceAfterTick < distanceBeforeTick, 'SimulationTick must physicall
 assert.equal(unit.order?.ownerToken, aiToken, 'movement integration must preserve AI order ownership');
 
 syncSelectedMoveOrderMemory(state);
-const memory = readAiMemory(unit);
+let memory = readAiMemory(unit);
 assert.equal(memory.active_move_source, 'ai');
 assert.equal(memory.active_move_owner_token, aiToken);
 assert.deepEqual(memory.active_move_target, unit.order?.target);
@@ -91,6 +91,7 @@ assert.deepEqual(memory.active_move_path_resolved_target, unit.order?.target);
 unit.order = createMoveOrder({ x: 12, y: 8 });
 const playerOrder = unit.order;
 syncSelectedMoveOrderMemory(state);
+memory = readAiMemory(unit);
 assert.equal(memory.active_move_source, 'player', 'legacy right-click orders without a token must be treated as player orders');
 assert.equal(memory.active_move_owner_token, null);
 applyOwnedMoveEffects(state, runtimeResult(unit.id, [{
@@ -247,8 +248,9 @@ function readAiMemory(unitModel: UnitModel): Record<string, AiBlackboardValue> {
   const runtime = unitModel.behaviorRuntime as UnitModel['behaviorRuntime'] & {
     aiGraphMemory?: Record<string, AiBlackboardValue>;
   };
-  assert.ok(runtime.aiGraphMemory);
-  return runtime.aiGraphMemory;
+  const memory = runtime.aiRuntimeSession?.blackboardMemory ?? runtime.aiGraphMemory;
+  assert.ok(memory);
+  return memory;
 }
 
 function distanceTo(from: { x: number; y: number }, to: { x: number; y: number }): number {

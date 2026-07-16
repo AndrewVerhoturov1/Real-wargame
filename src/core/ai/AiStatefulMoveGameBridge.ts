@@ -3,13 +3,14 @@ import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../
 import type { MoveOrder } from '../orders/MoveOrder';
 import { planMoveOrder } from '../orders/MoveOrderPlanning';
 import type { SimulationState } from '../simulation/SimulationState';
-import { getAiTestPaused } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
 import type { AiBlackboardValue } from './AiBlackboard';
 import { publishSimulationAiEvents } from './events/SimulationAiEvents';
 import {
-  tickAiGameBridge,
+  cloneSimulationStateForDiagnostic,
+  tickAiGameBridgeForTrustedUnit,
   type AiGameBridgeHandle,
+  type AiRuntimeGraphSnapshot,
 } from './AiGameBridge';
 import {
   readAiGraphRuntimeMoveEffect,
@@ -24,7 +25,6 @@ import {
   type AiRouteStatusState,
 } from './AiRouteStatus';
 
-const AI_GRAPH_POLL_INTERVAL_MS = 60;
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
 const DEFAULT_ROUTE_SETTINGS: AiRouteStatusSettings = {
@@ -49,6 +49,10 @@ export interface TickOptions {
   readonly force: boolean;
   readonly applyEffects: boolean;
   readonly cancel?: AiGraphCancellationRequest;
+  readonly graphSnapshot?: AiRuntimeGraphSnapshot;
+  readonly cycleStartMs?: number;
+  readonly cycleEndMs?: number;
+  readonly diagnosticPreview?: boolean;
 }
 
 interface ActiveMoveSnapshot {
@@ -61,24 +65,21 @@ interface ActiveMoveSnapshot {
 }
 
 export function installAiStatefulMoveGameBridge(state: SimulationState): AiGameBridgeHandle {
-  const interval = window.setInterval(() => {
-    tickStatefulMoveBridge(state);
-  }, AI_GRAPH_POLL_INTERVAL_MS);
-
   return {
-    destroy: () => window.clearInterval(interval),
-    tickNow: () => tickStatefulMoveBridge(state, Date.now(), { force: true, applyEffects: true }),
-    evaluateNow: () => tickStatefulMoveBridge(state, Date.now(), { force: true, applyEffects: false }),
-    cancelNow: (reason, reasonRu) => tickStatefulMoveBridge(state, Date.now(), {
+    destroy: () => undefined,
+    tickNow: () => tickStatefulMoveBridge(state, getSimulationNowMs(state), { force: true, applyEffects: false }),
+    evaluateNow: () => tickStatefulMoveBridge(state, getSimulationNowMs(state), { force: true, applyEffects: false }),
+    previewCancelNow: (reason, reasonRu) => tickStatefulMoveBridge(state, getSimulationNowMs(state), {
       force: true,
-      applyEffects: true,
+      applyEffects: false,
       cancel: { reason, reasonRu },
     }),
   };
 }
 
-export function buildReactiveRouteTickOptions(routeResult: AiRouteStatusResult): TickOptions {
+export function buildReactiveRouteTickOptions(routeResult: AiRouteStatusResult, base: TickOptions = { force: false, applyEffects: true }): TickOptions {
   return {
+    ...base,
     force: true,
     applyEffects: true,
     cancel: routeResult.shouldCancelRuntime
@@ -90,55 +91,79 @@ export function buildReactiveRouteTickOptions(routeResult: AiRouteStatusResult):
   };
 }
 
+/**
+ * Selected-unit compatibility facade for explicit UI/debug actions only.
+ * Gameplay execution is owned by AiSimulationScheduler.
+ */
 export function tickStatefulMoveBridge(
   state: SimulationState,
-  nowMs = Date.now(),
+  nowMs = getSimulationNowMs(state),
+  options: TickOptions = { force: true, applyEffects: false },
+): AiGraphRuntimeResult | null {
+  const unit = getSelectedUnit(state);
+  return unit ? tickStatefulMoveBridgeForUnit(state, unit, nowMs, options) : null;
+}
+
+export function tickStatefulMoveBridgeForUnit(
+  state: SimulationState,
+  unit: UnitModel,
+  nowMs = getSimulationNowMs(state),
   options: TickOptions = { force: false, applyEffects: true },
 ): AiGraphRuntimeResult | null {
-  syncSelectedMoveOrderMemory(state);
-  const selectedUnitId = state.selectedUnitId;
+  if (!state.units.includes(unit)) return null;
+  if (!options.applyEffects) {
+    const diagnosticState = cloneSimulationStateForDiagnostic(state);
+    const diagnosticUnit = diagnosticState.units.find((candidate) => candidate.id === unit.id);
+    if (!diagnosticUnit) return null;
+    return tickStatefulMoveBridgeForTrustedUnit(diagnosticState, diagnosticUnit, nowMs, {
+      ...options,
+      applyEffects: true,
+      diagnosticPreview: true,
+    });
+  }
+  return tickStatefulMoveBridgeForTrustedUnit(state, unit, nowMs, options);
+}
+
+/** Trusted scheduler path. The unit is already known to belong to state.units. */
+export function tickStatefulMoveBridgeForTrustedUnit(
+  state: SimulationState,
+  unit: UnitModel,
+  nowMs = getSimulationNowMs(state),
+  options: TickOptions = { force: false, applyEffects: true },
+): AiGraphRuntimeResult | null {
+  syncMoveOrderMemoryForUnit(unit);
 
   let routeResult: AiRouteStatusResult | null = null;
   let runtimeOptions = options;
   if (options.applyEffects && !options.cancel) {
-    routeResult = updateSelectedRouteStatus(state, nowMs);
-    const unitBeforeRuntime = getSelectedUnit(state);
-    if (routeResult && unitBeforeRuntime) {
-      publishSimulationAiEvents(
-        unitBeforeRuntime,
-        unitBeforeRuntime.behaviorRuntime.aiRuntimeSession?.simulationTimeMs
-          ?? Math.max(0, Math.round(state.simulationTimeSeconds * 1000)),
-      );
-    }
-    if (routeResult?.shouldForceRuntimeTick) runtimeOptions = buildReactiveRouteTickOptions(routeResult);
+    routeResult = updateRouteStatusForTrustedUnit(state, unit, nowMs, options.graphSnapshot);
+    if (routeResult) publishSimulationAiEvents(unit, nowMs);
+    if (routeResult?.shouldForceRuntimeTick) runtimeOptions = buildReactiveRouteTickOptions(routeResult, options);
   }
 
-  const result = tickAiGameBridge(state, nowMs, runtimeOptions);
-  if (result && runtimeOptions.applyEffects) applyOwnedMoveEffects(state, result);
-  syncSelectedMoveOrderMemory(state);
+  const result = tickAiGameBridgeForTrustedUnit(state, unit, nowMs, runtimeOptions);
+  if (result && runtimeOptions.applyEffects) applyOwnedMoveEffectsForUnit(state, unit, result);
+  syncMoveOrderMemoryForUnit(unit);
 
   if (options.applyEffects) {
-    const afterEffects = updateSelectedRouteStatus(state, nowMs);
+    const afterEffects = updateRouteStatusForTrustedUnit(state, unit, nowMs, options.graphSnapshot);
     if (afterEffects) routeResult = afterEffects;
+    publishSimulationAiEvents(unit, nowMs);
   }
 
-  const unitAfterRuntime = getSelectedUnit(state);
-  if (options.applyEffects && unitAfterRuntime) {
-    publishSimulationAiEvents(
-      unitAfterRuntime,
-      unitAfterRuntime.behaviorRuntime.aiRuntimeSession?.simulationTimeMs
-        ?? Math.max(0, Math.round(state.simulationTimeSeconds * 1000)),
-    );
+  if (state.selectedUnitId === unit.id) {
+    if (result) publishMoveDebugDetailsForUnit(unit, result, routeResult);
+    else if (routeResult) publishRouteDebugDetailsForUnit(unit, routeResult);
   }
-  if (result) publishMoveDebugDetails(state, result, routeResult);
-  else if (routeResult && selectedUnitId) publishRouteDebugDetails(state, routeResult, selectedUnitId);
   return result;
 }
 
 export function syncSelectedMoveOrderMemory(state: SimulationState): void {
   const unit = getSelectedUnit(state);
-  if (!unit) return;
+  if (unit) syncMoveOrderMemoryForUnit(unit);
+}
 
+export function syncMoveOrderMemoryForUnit(unit: UnitModel): void {
   const runtime = unit.behaviorRuntime as AiMoveRuntime;
   const memory = getRuntimeMemory(runtime);
   const order = unit.order;
@@ -152,11 +177,27 @@ export function syncSelectedMoveOrderMemory(state: SimulationState): void {
 
 export function updateSelectedRouteStatus(
   state: SimulationState,
-  nowMs = Date.now(),
+  nowMs = getSimulationNowMs(state),
 ): AiRouteStatusResult | null {
   const unit = getSelectedUnit(state);
-  if (!unit) return null;
+  return unit ? updateRouteStatusForUnit(state, unit, nowMs) : null;
+}
 
+export function updateRouteStatusForUnit(
+  state: SimulationState,
+  unit: UnitModel,
+  nowMs = getSimulationNowMs(state),
+): AiRouteStatusResult | null {
+  if (!state.units.includes(unit)) return null;
+  return updateRouteStatusForTrustedUnit(state, unit, nowMs);
+}
+
+export function updateRouteStatusForTrustedUnit(
+  state: SimulationState,
+  unit: UnitModel,
+  nowMs = getSimulationNowMs(state),
+  graphSnapshot?: AiRuntimeGraphSnapshot,
+): AiRouteStatusResult | null {
   const runtime = unit.behaviorRuntime as AiMoveRuntime;
   const memory = getRuntimeMemory(runtime);
   const activeMove = readActiveMoveSnapshot(getExecutionState(runtime), memory);
@@ -175,8 +216,8 @@ export function updateSelectedRouteStatus(
     activeOrderSource,
     activeOrderToken: order?.ownerToken ?? null,
     targetAvailable: activeMove.targetAvailable,
-    paused: state.editor.enabled || getAiTestPaused(state),
-    settings: readRouteSettings(runtime, activeMove),
+    paused: state.editor.enabled,
+    settings: readRouteSettings(runtime, activeMove, graphSnapshot?.graph),
     previousState: runtime.aiRouteStatusState ?? undefined,
   });
 
@@ -188,6 +229,14 @@ export function updateSelectedRouteStatus(
 export function applyOwnedMoveEffects(state: SimulationState, result: AiGraphRuntimeResult): void {
   const unit = state.units.find((candidate) => candidate.id === result.unitId);
   if (!unit) return;
+  applyOwnedMoveEffectsForUnit(state, unit, result);
+}
+
+export function applyOwnedMoveEffectsForUnit(
+  state: SimulationState,
+  unit: UnitModel,
+  result: AiGraphRuntimeResult,
+): void {
   const runtime = unit.behaviorRuntime as AiMoveRuntime;
   const memory = getRuntimeMemory(runtime);
 
@@ -279,13 +328,13 @@ function readActiveMoveSnapshot(
   };
 }
 
-function readRouteSettings(runtime: AiMoveRuntime, activeMove: ActiveMoveSnapshot): AiRouteStatusSettings {
+function readRouteSettings(runtime: AiMoveRuntime, activeMove: ActiveMoveSnapshot, graph?: { readonly nodes: readonly { readonly id: string; readonly parameters?: Record<string, unknown> }[] }): AiRouteStatusSettings {
   const cached = runtime.aiRouteSettingsCache;
   if (cached && cached.ownerToken === activeMove.ownerToken && cached.activeNodeId === activeMove.activeNodeId) {
     return cached.settings;
   }
 
-  const settings = loadRouteSettings(activeMove.activeNodeId);
+  const settings = loadRouteSettings(activeMove.activeNodeId, graph);
   runtime.aiRouteSettingsCache = {
     ownerToken: activeMove.ownerToken,
     activeNodeId: activeMove.activeNodeId,
@@ -294,13 +343,22 @@ function readRouteSettings(runtime: AiMoveRuntime, activeMove: ActiveMoveSnapsho
   return settings;
 }
 
-function loadRouteSettings(activeNodeId: string): AiRouteStatusSettings {
+function loadRouteSettings(activeNodeId: string, graph?: { readonly nodes: readonly { readonly id: string; readonly parameters?: Record<string, unknown> }[] }): AiRouteStatusSettings {
+  if (graph) {
+    const node = graph.nodes.find((candidate) => candidate.id === activeNodeId);
+    const parameters = node?.parameters;
+    return {
+      stuckTimeoutMs: finiteNonNegative(parameters?.stuckTimeoutSeconds, 2.5) * 1000,
+      minimumProgressCells: finiteNonNegative(parameters?.minimumProgressCells, 0.05),
+      abortOnTargetLost: typeof parameters?.abortOnTargetLost === 'boolean' ? parameters.abortOnTargetLost : true,
+    };
+  }
   if (typeof window === 'undefined') return DEFAULT_ROUTE_SETTINGS;
   try {
     const raw = window.localStorage.getItem(GRAPH_STORAGE_KEY);
     if (!raw) return DEFAULT_ROUTE_SETTINGS;
-    const graph = JSON.parse(raw) as { nodes?: Array<{ id?: unknown; parameters?: Record<string, unknown> }> };
-    const node = graph.nodes?.find((candidate) => candidate.id === activeNodeId);
+    const storedGraph = JSON.parse(raw) as { nodes?: Array<{ id?: unknown; parameters?: Record<string, unknown> }> };
+    const node = storedGraph.nodes?.find((candidate) => candidate.id === activeNodeId);
     const parameters = node?.parameters;
     return {
       stuckTimeoutMs: finiteNonNegative(parameters?.stuckTimeoutSeconds, 2.5) * 1000,
@@ -349,13 +407,12 @@ function hasLaterNonMoveEffect(result: AiGraphRuntimeResult, currentIndex: numbe
   return false;
 }
 
-function publishMoveDebugDetails(
-  state: SimulationState,
+function publishMoveDebugDetailsForUnit(
+  unit: UnitModel,
   result: AiGraphRuntimeResult,
   routeResult: AiRouteStatusResult | null,
 ): void {
-  const unit = state.units.find((candidate) => candidate.id === result.unitId);
-  const memory = unit ? getRuntimeMemory(unit.behaviorRuntime as AiMoveRuntime) : undefined;
+  const memory = getRuntimeMemory(unit.behaviorRuntime as AiMoveRuntime);
   updateDebugPayload((payload) => {
     if (payload.unitId !== result.unitId) return;
     payload.targetKey = result.targetKey;
@@ -367,15 +424,13 @@ function publishMoveDebugDetails(
   });
 }
 
-function publishRouteDebugDetails(
-  state: SimulationState,
+function publishRouteDebugDetailsForUnit(
+  unit: UnitModel,
   result: AiRouteStatusResult,
-  unitId: string,
 ): void {
-  const unit = state.units.find((candidate) => candidate.id === unitId);
-  const memory = unit ? getRuntimeMemory(unit.behaviorRuntime as AiMoveRuntime) : undefined;
+  const memory = getRuntimeMemory(unit.behaviorRuntime as AiMoveRuntime);
   updateDebugPayload((payload) => {
-    if (payload.unitId !== unitId) return;
+    if (payload.unitId !== unit.id) return;
     writeRouteDebugFields(payload, result);
     writePathDebugFields(payload, memory);
   });
@@ -414,6 +469,10 @@ function updateDebugPayload(update: (payload: Record<string, unknown>) => void):
   } catch {
     // Route diagnostics are optional and must never interrupt simulation.
   }
+}
+
+function getSimulationNowMs(state: SimulationState): number {
+  return Math.max(0, Math.round(state.simulationTimeSeconds * 1000));
 }
 
 function isGridPosition(value: unknown): value is GridPosition {

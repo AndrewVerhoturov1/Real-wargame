@@ -68,7 +68,7 @@ A running action must clean up only state that it owns. It must not delete a rep
 
 ### Game bridge
 
-`AiGameBridge.ts` is the adapter between pure AI code and the live game. It builds the selected soldier Blackboard, invokes Runner/Runtime, applies effects and stores diagnostics.
+`AiGameBridge.ts` is the per-unit adapter between pure AI code and the live game. `AiSimulationScheduler.ts`, called only from `SimulationTick.ts`, resolves one immutable graph snapshot and traverses graph-controlled combat-capable units once in stable O(n) simulation order. A new/reset unit decides on its first explicit step; ordinary decisions use 600 ms simulation time and Blackboard observers use a partition-invariant 60 ms simulation-time cadence. UI selection controls only read-only diagnostics for already-computed Blackboard, runtime trace and route state.
 
 ### Tactical knowledge
 

@@ -23,8 +23,8 @@ Generated from canonical repository and subproject metadata.
 ## Active subproject: AI Single-Unit Editor — Stateful Tactical Awareness, Hierarchical States and Plans
 
 - **ID:** `ai-single-unit-editor`
-- **Updated:** 2026-07-15
-- **Current focus:** Slice 1 кампании Stage 1–2 завершён и перенесён в real-wargame-preview через PR #106: потенциальная опасность отделена от evidence-derived suppression, а память неизвестного огня получила устойчивое объединение, разделение разных направлений и reconciliation с unit:<id>. Stage 1 остаётся открытым до live route replan, усиленных safe-position/reverse-slope доказательств, постоянного CI и отдельной визуальной приёмки.
-- **Next step:** Продолжить Stage 1 со следующего вертикального среза: доказать живое перестроение активного маршрута через обычный SimulationTick с сохранением ownerToken, цели, профиля и final facing; затем усилить safe-position и reverse-slope проверки, закрепить combat-tactical-integration:smoke в постоянном CI и только после отдельного разрешения запустить подготовленные девять visual QA сцен.
+- **Updated:** 2026-07-16
+- **Current focus:** Draft PR #127 follow-up hardens the accepted simulation-owned per-unit scheduler: explicit paused steps advance all simulation systems, selected-unit diagnostics are read-only, observer polling and graph decisions use partition-invariant simulation-time cadence, the scheduler is one O(n) pass with one frozen graph snapshot, and ai-scheduler:smoke is blocking CI. It is not yet part of real-wargame-preview.
+- **Next step:** Review the corrected exact head of draft PR #127 and its Combat Foundation Core scheduler-smoke evidence; if accepted, integrate it with PR #126 while preserving canonical world-threat semantics and the scheduler phase order.
 - **Last verified commit:** `3f01f4ba9b96daa1b8951bdd08f4005a482fee8c`
 - **Status:** [generated status](../subprojects/ai-single-unit-editor/STATUS.md)

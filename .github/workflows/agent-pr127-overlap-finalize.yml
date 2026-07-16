@@ -1,0 +1,137 @@
+name: Finalize PR127 overlap rebase
+
+on:
+  push:
+    branches:
+      - agent/per-unit-ai-scheduler-v1
+    paths:
+      - .github/workflows/agent-pr127-overlap-finalize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize-overlap:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/per-unit-ai-scheduler-v1
+          fetch-depth: 0
+
+      - name: Merge scheduler follow-up with accepted danger contracts
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path: Path, old: str, new: str, label: str) -> None:
+              text = path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{label}: expected exactly one match, found {count}')
+              path.write_text(text.replace(old, new, 1))
+
+          tactical = Path('scripts/tactical_workspace_smoke_pixijs8_baseline.mjs')
+          replace_once(
+              tactical,
+              "'Приказать двигаться сюда', 'Один расчёт ИИ', 'Рассчитать и выполнить',",
+              "'Приказать двигаться сюда', 'Диагностика ИИ (без изменений)', 'Рассчитать и выполнить',",
+              'workspace diagnostic label',
+          )
+
+          unit_model = Path('src/core/units/UnitModel.ts')
+          replace_once(
+              unit_model,
+              "export type ThreatMemorySource = 'seen' | 'heard' | 'reported' | 'fire_pressure';",
+              "export type ThreatMemorySource = 'seen' | 'heard' | 'reported' | 'fire_pressure';\nexport type FireThreatClass = 'rifle_fire' | 'machine_gun_fire';",
+              'fire threat class type',
+          )
+          replace_once(
+              unit_model,
+              '  lastUpdatedSeconds: number;\n  evidenceCount?: number;',
+              '  lastUpdatedSeconds: number;\n  fireThreatClass?: FireThreatClass | null;\n  evidenceCount?: number;',
+              'known threat fire class field',
+          )
+
+          memory = Path('src/core/knowledge/SoldierThreatMemory.ts')
+          replacements = [
+              (
+                  "import type { KnownThreatMemory, UnitModel, UnitTacticalKnowledge } from '../units/UnitModel';",
+                  "import type { FireThreatClass, KnownThreatMemory, UnitModel, UnitTacticalKnowledge } from '../units/UnitModel';",
+                  'threat memory import',
+              ),
+              (
+                  'buildRealUnitThreat(state, unit, contact, threatId, existing.get(threatId), now)',
+                  'buildRealUnitThreat(state, unit, sourceUnit, contact, threatId, existing.get(threatId), now)',
+                  'real unit threat call',
+              ),
+              (
+                  '  observer: UnitModel,\n  contact:',
+                  '  observer: UnitModel,\n  sourceUnit: UnitModel,\n  contact:',
+                  'real unit threat signature',
+              ),
+              (
+                  '    lastUpdatedSeconds: now,\n    evidenceCount: previousEvidence?.evidenceCount ?? 0,',
+                  "    lastUpdatedSeconds: now,\n    fireThreatClass: visibleNow\n      ? classifyUnitFireThreat(sourceUnit)\n      : previous?.fireThreatClass ?? 'rifle_fire',\n    evidenceCount: previousEvidence?.evidenceCount ?? 0,",
+                  'real unit fire class',
+              ),
+              (
+                  '      lastUpdatedSeconds: now,\n      evidenceCount: evidence.evidenceCount,',
+                  '      lastUpdatedSeconds: now,\n      fireThreatClass: null,\n      evidenceCount: evidence.evidenceCount,',
+                  'unknown evidence fire class',
+              ),
+              (
+                  '    lastUpdatedSeconds: now,\n    evidenceCount: 0,',
+                  '    lastUpdatedSeconds: now,\n    fireThreatClass: null,\n    evidenceCount: 0,',
+                  'known threat fire class default',
+              ),
+              (
+                  '    lastUpdatedSeconds,\n    evidenceCount,',
+                  '    lastUpdatedSeconds,\n    fireThreatClass: normalizeFireThreatClass(value.fireThreatClass, id),\n    evidenceCount,',
+                  'normalized fire class',
+              ),
+              (
+                  '    visibleNow: memory.visibleNow,\n    evidenceCount: memory.evidenceCount ?? 0,',
+                  '    visibleNow: memory.visibleNow,\n    fireThreatClass: memory.fireThreatClass ?? null,\n    evidenceCount: memory.evidenceCount ?? 0,',
+                  'revision fire class',
+              ),
+              (
+                  "\nfunction sourceForContact(contact: PerceptionContactMemory): KnownThreatMemory['source'] {",
+                  "\nfunction classifyUnitFireThreat(unit: UnitModel): FireThreatClass {\n  return unit.type === 'support_team' || unit.heldItem === 'support_item'\n    ? 'machine_gun_fire'\n    : 'rifle_fire';\n}\n\nfunction normalizeFireThreatClass(value: unknown, id: string): FireThreatClass | null {\n  if (!id.startsWith('unit:')) return null;\n  return value === 'machine_gun_fire' ? 'machine_gun_fire' : 'rifle_fire';\n}\n\nfunction sourceForContact(contact: PerceptionContactMemory): KnownThreatMemory['source'] {",
+                  'fire class helpers',
+              ),
+          ]
+          for old, new, label in replacements:
+              replace_once(memory, old, new, label)
+
+      - name: Remove temporary workflow
+        shell: bash
+        run: rm .github/workflows/agent-pr127-overlap-finalize.yml
+
+      - name: Verify merged contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run ai-scheduler:smoke
+          npm run route-status:smoke
+          npm run navigation-profiles:smoke
+          npm run routed-move:smoke
+          npm run combat-tactical-integration:smoke
+          npm run danger-layer-movement-performance:smoke
+          npm run build
+          npm run docs:sync
+          npm run docs:check
+          npm run docs:smoke
+          git diff --check
+
+      - name: Publish rebased verified follow-up
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'fix: reconcile scheduler follow-up with danger contracts'
+          git push origin HEAD:agent/per-unit-ai-scheduler-v1
