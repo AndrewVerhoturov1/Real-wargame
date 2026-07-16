@@ -70,3 +70,18 @@ jobs:
           echo "Default target for this repository is: real-wargame-preview"
           echo "Default external delivery is: direct push to preview (PR is fallback)"
           echo "Visual QA execution is manual-only after explicit user approval"
+
+      - name: Checkout exact branch head for temporary source snapshot
+        uses: actions/checkout@v4
+
+      - name: Package temporary source snapshot
+        shell: bash
+        run: tar --exclude=.git --exclude=node_modules -czf /tmp/real-wargame-source.tgz .
+
+      - name: Upload temporary source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-wargame-source-${{ github.sha }}
+          path: /tmp/real-wargame-source.tgz
+          if-no-files-found: error
+          retention-days: 1
