@@ -205,8 +205,6 @@ export function installCombatTacticalIntegrationVisualQaHarness(
 function scoreCanonicalDangerPerformanceField(state: SimulationState, observer: UnitModel): void {
   getSoldierDangerField(state.map, {
     unitId: observer.id,
-    originX: observer.position.x,
-    originY: observer.position.y,
     posture: observer.behaviorRuntime.posture,
     knowledgeRevision: observer.tacticalKnowledge.revision,
     threats: observer.tacticalKnowledge.threats,

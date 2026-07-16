@@ -100,8 +100,6 @@ function verifySharedDirectionalTacticalField(): void {
   const map = normalizeMap(makeMap(9, 5, (x) => [0, 1, 2, 3, 4, 3, 2, 1, 0][x]));
   const options = {
     unitId: 'shared-field-soldier',
-    originX: 4.5,
-    originY: 2.5,
     knowledgeRevision: 1,
     threats: [directionalThreat('east-threat', 12.5, 2.5)],
   };
@@ -150,8 +148,7 @@ function verifyAwarenessLayersUseDirectionalTerrain(): void {
   const cache = createRouteCostFieldCache();
   getRouteCostFields(state.map, createDefaultNavigationProfileRegistry().getProfile('stealth'), {
     unitId: unit.id,
-    originX: unit.position.x,
-    originY: unit.position.y,
+    posture: unit.behaviorRuntime.posture,
     knowledgeRevision: unit.tacticalKnowledge.revision,
     knownThreats: unit.tacticalKnowledge.threats,
   }, cache);
@@ -166,8 +163,7 @@ function verifyDirectionalRouteCostsAndCacheSeparation(): void {
   const cache = createRouteCostFieldCache();
   const context = {
     unitId: 'directional-soldier',
-    originX: 4.5,
-    originY: 2.5,
+    posture: 'standing' as const,
     knowledgeRevision: 1,
     knownThreats: [threat('east-threat', 12.5, 2.5, 100, 0.25)],
   };

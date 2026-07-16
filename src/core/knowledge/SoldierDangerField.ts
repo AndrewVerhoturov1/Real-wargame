@@ -50,8 +50,6 @@ export interface SoldierDangerThreat {
 
 export interface SoldierDangerFieldContext {
   readonly unitId: string;
-  readonly originX: number;
-  readonly originY: number;
   readonly posture: UnitPosture;
   readonly knowledgeRevision: number;
   readonly threats: readonly SoldierDangerThreat[];

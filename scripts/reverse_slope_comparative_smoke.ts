@@ -160,8 +160,6 @@ function assertIdenticalQueriesHitCache(result: ScenarioEvaluation) {
   const directionalBefore = getDirectionalTacticalFieldDiagnostics(result.state.map);
   const field = getDirectionalTacticalField(result.state.map, {
     unitId: result.blue.id,
-    originX: result.blue.position.x,
-    originY: result.blue.position.y,
     knowledgeRevision: result.blue.tacticalKnowledge.revision,
     threats: result.blue.tacticalKnowledge.threats,
   });

@@ -45,9 +45,9 @@ export interface TacticalRouteKnownThreat {
 }
 
 export interface TacticalRouteContext {
+  /** Metadata for diagnostics/ownership; world-field identity does not depend on the observer id. */
   readonly unitId: string;
-  readonly originX?: number;
-  readonly originY?: number;
+  /** Changes static awareness and target-height visibility geometry. */
   readonly posture?: UnitPosture;
   readonly knowledgeRevision: number;
   readonly knownThreats: readonly TacticalRouteKnownThreat[];
@@ -227,17 +227,14 @@ export function getRouteCostFields(
   const knowledgeRevision = tacticalContext?.knowledgeRevision ?? 0;
   const knownThreats = tacticalContext?.knownThreats ?? [];
   const hasKnownThreats = knownThreats.length > 0;
-  const hasOrigin = Number.isFinite(tacticalContext?.originX) && Number.isFinite(tacticalContext?.originY);
   const needsDanger = hasKnownThreats && profile.dangerWeight > 0;
-  const needsDirectionalTerrain = hasKnownThreats && hasOrigin && hasDirectionalTerrainWeights(profile);
+  const needsDirectionalTerrain = hasKnownThreats && hasDirectionalTerrainWeights(profile);
   const usesTacticalKnowledge = needsDanger || needsDirectionalTerrain;
   const effectiveKnowledgeRevision = usesTacticalKnowledge ? knowledgeRevision : 0;
   const directionalBasis = needsDanger ? getDirectionalTerrainSectorBasis(map) : undefined;
   const tacticalField = needsDirectionalTerrain
     ? getDirectionalTacticalField(map, {
       unitId: tacticalContext?.unitId ?? 'route',
-      originX: tacticalContext?.originX ?? 0,
-      originY: tacticalContext?.originY ?? 0,
       knowledgeRevision,
       threats: knownThreats,
     })
@@ -248,7 +245,6 @@ export function getRouteCostFields(
     : null;
   const dynamicKey = [
     staticKey,
-    needsDirectionalTerrain ? tacticalContext?.unitId ?? 'route' : 'none',
     effectiveKnowledgeRevision,
     profile.exposureWeight > 0 ? tacticalContext?.exposureRevision ?? 0 : 0,
     tacticalContext?.territoryRevision ?? 0,
@@ -601,8 +597,6 @@ function buildSoldierDangerFieldContext(
   if (!tacticalContext) return null;
   return {
     unitId: tacticalContext.unitId,
-    originX: tacticalContext.originX ?? 0,
-    originY: tacticalContext.originY ?? 0,
     posture: tacticalContext.posture ?? 'standing',
     knowledgeRevision: tacticalContext.knowledgeRevision,
     threats: tacticalContext.knownThreats.map((threat) => ({

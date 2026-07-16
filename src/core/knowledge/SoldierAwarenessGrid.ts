@@ -102,15 +102,11 @@ export function buildSoldierAwarenessReport(
   const directionalBasis = getDirectionalTerrainSectorBasis(state.map);
   const directionalField = getDirectionalTacticalField(state.map, {
     unitId: unit.id,
-    originX: unit.position.x,
-    originY: unit.position.y,
     knowledgeRevision: unit.tacticalKnowledge.revision,
     threats: unit.tacticalKnowledge.threats,
   });
   const dangerField = getSoldierDangerField(state.map, {
     unitId: unit.id,
-    originX: unit.position.x,
-    originY: unit.position.y,
     posture: unit.behaviorRuntime.posture,
     knowledgeRevision: unit.tacticalKnowledge.revision,
     threats: unit.tacticalKnowledge.threats,

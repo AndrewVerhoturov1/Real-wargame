@@ -90,8 +90,7 @@ export function generateCoverTacticalCandidates(
           navigationProfile: getBuiltInNavigationProfile('cautious'),
           tacticalContext: {
             unitId: input.unit.id,
-            originX: input.unit.position.x,
-            originY: input.unit.position.y,
+            posture: input.unit.behaviorRuntime.posture,
             knowledgeRevision: input.unit.tacticalKnowledge.revision,
             knownThreats: input.unit.tacticalKnowledge.threats.map(toRouteThreat),
           },

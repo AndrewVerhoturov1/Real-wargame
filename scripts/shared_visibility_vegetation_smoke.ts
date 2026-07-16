@@ -216,8 +216,6 @@ function buildForestCase(forest: 0 | 1 | 2): { visual: number; fire: number; dan
 function dangerContext(threats: SoldierDangerFieldContext['threats']): SoldierDangerFieldContext {
   return {
     unitId: 'observer',
-    originX: 9.5,
-    originY: 3.5,
     posture: 'standing',
     knowledgeRevision: 1,
     threats,

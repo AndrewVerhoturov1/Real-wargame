@@ -127,8 +127,6 @@ export function buildUnitTacticalRouteContext(
   })));
   const context: TacticalRouteContext = Object.freeze({
     unitId: unit.id,
-    originX: unit.position.x,
-    originY: unit.position.y,
     posture: unit.behaviorRuntime.posture,
     knowledgeRevision: unit.tacticalKnowledge.revision,
     knownThreats,

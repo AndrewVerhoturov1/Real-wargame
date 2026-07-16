@@ -21,10 +21,6 @@ const UNCERTAINTY_HALF_WEIGHT_CELLS = 4;
 
 export interface DirectionalTacticalFieldOptions {
   readonly unitId: string;
-  /** Retained for API compatibility. World danger content no longer depends on own position. */
-  readonly originX: number;
-  /** Retained for API compatibility. World danger content no longer depends on own position. */
-  readonly originY: number;
   readonly knowledgeRevision?: number;
   readonly threats: readonly DirectionalThreatSource[];
 }
