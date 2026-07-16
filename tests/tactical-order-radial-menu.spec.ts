@@ -90,14 +90,21 @@ test.describe('tactical order radial menu visual QA — approved by user', () =>
     await expect(menu).toBeHidden();
     expect((await snapshot(page)).playerCommandId).toBeNull();
 
-    await reset(page);
-    await openMenu(page, anchor, null);
-    await page.keyboard.press('2');
-    await expect(menu).toBeHidden();
-    await page.mouse.up({ button: 'right' });
-    const keyboardRecon = await waitForPreset(page, 'recon');
-    expect(keyboardRecon.navigationProfileId).toBe('cautious');
-    expect(keyboardRecon.movePlayerCommandId).toBe(keyboardRecon.playerCommandId);
+    const keyboardCases: ReadonlyArray<readonly [string, PresetId, string]> = [
+      ['1', 'move', 'normal'],
+      ['2', 'recon', 'cautious'],
+      ['3', 'assault', 'attack'],
+    ];
+    for (const [key, presetId, navigationProfileId] of keyboardCases) {
+      await reset(page);
+      await openMenu(page, anchor, null);
+      await page.keyboard.press(key);
+      await expect(menu).toBeHidden();
+      await page.mouse.up({ button: 'right' });
+      const keyboardOrder = await waitForPreset(page, presetId);
+      expect(keyboardOrder.navigationProfileId).toBe(navigationProfileId);
+      expect(keyboardOrder.movePlayerCommandId).toBe(keyboardOrder.playerCommandId);
+    }
 
     await reset(page);
     const denseAnchor = { x: box.x + box.width * 0.7, y: box.y + box.height * 0.42 };
