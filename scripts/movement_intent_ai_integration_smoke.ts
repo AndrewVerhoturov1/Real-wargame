@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { SOLDIER_BLACKBOARD_SCHEMA } from '../src/core/ai/AiBlackboard';
+import { SOLDIER_BLACKBOARD_SCHEMA, type AiBlackboardValue } from '../src/core/ai/AiBlackboard';
 import type { AiGraph } from '../src/core/ai/AiGraph';
 import { runAiGraph } from '../src/core/ai/AiGraphRunner';
+import { syncMoveOrderMemoryForUnit } from '../src/core/ai/AiStatefulMoveGameBridge';
 import { DEFAULT_AI_NODE_CONTRACT_REGISTRY } from '../src/core/ai/contracts/AiNodeContractRegistry';
 import {
   buildClearAiMovementProfileUpdates,
@@ -31,17 +32,19 @@ import {
   normalizeTacticalOrderIntent,
   withTacticalOrderMovementProfile,
 } from '../src/core/orders/TacticalOrderIntent';
+import { normalizeUnits } from '../src/core/units/UnitModel';
 
 verifyTacticalIntentV2();
 verifyPlayerCommandAndMoveOrderSnapshots();
 verifyProfileSourcePriorityAndFallback();
 verifyAiOverrideOwnership();
 verifyTypedAiNodes();
+verifyLiveOrderPriority();
 verifyStatefulMoveMigration();
 verifyNodeEditorContracts();
 verifyBlackboardDictionary();
 
-console.log('Movement intent and AI integration smoke passed: intent v2, order snapshots, resolver priority, owned overrides, legacy migration, node-editor dropdowns and Blackboard dictionary.');
+console.log('Movement intent and AI integration smoke passed: intent v2, order snapshots, live source priority, owned overrides, legacy migration, node-editor dropdowns and Blackboard dictionary.');
 
 function verifyTacticalIntentV2(): void {
   const expected = {
@@ -284,6 +287,66 @@ function verifyTypedAiNodes(): void {
     false,
     'legacy node must not emit the old decorative currentAction effect',
   );
+}
+
+function verifyLiveOrderPriority(): void {
+  const [unit] = normalizeUnits([{
+    id: 'unit-live-priority',
+    type: 'infantry_squad',
+    side: 'blue',
+    x: 1,
+    y: 1,
+    movementProfileId: 'role_profile',
+  }]);
+  const command = createPlayerMoveCommand(
+    unit.id,
+    { x: 5.5, y: 5.5 },
+    null,
+    2000,
+    createTacticalOrderIntent('recon'),
+  );
+  unit.playerCommand = command;
+  unit.order = createMoveOrder(command.target, {
+    source: 'player',
+    playerCommandId: command.id,
+    movementProfileId: command.intent.movementProfileId,
+    movementProfileSource: 'player_order',
+    movementProfileOwnerToken: command.id,
+    movementProfileRevision: command.revision,
+  });
+  const runtime = unit.behaviorRuntime as typeof unit.behaviorRuntime & {
+    aiGraphMemory?: Record<string, AiBlackboardValue>;
+  };
+  const memory = runtime.aiGraphMemory ?? {};
+  runtime.aiGraphMemory = memory;
+
+  memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId] = 'fast';
+  memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken] = 'dash-action';
+  syncMoveOrderMemoryForUnit(unit);
+  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId], 'fast');
+  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource], 'ai_override');
+  assert.equal(unit.order.movementProfileId, 'fast');
+  assert.equal(unit.order.movementProfileSource, 'ai_override');
+  assert.equal(unit.order.movementProfileOwnerToken, 'dash-action');
+
+  memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId] = 'normal';
+  memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason] = 'exhausted';
+  syncMoveOrderMemoryForUnit(unit);
+  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId], 'normal');
+  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource], 'hard_safety');
+  assert.equal(unit.order.movementProfileId, 'normal');
+  assert.equal(unit.order.movementProfileSource, 'hard_safety');
+
+  memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId] = null;
+  memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason] = null;
+  memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId] = null;
+  memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken] = null;
+  syncMoveOrderMemoryForUnit(unit);
+  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId], 'stealth');
+  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource], 'player_order');
+  assert.equal(unit.order.movementProfileId, 'stealth');
+  assert.equal(unit.order.movementProfileSource, 'player_order');
+  assert.equal(unit.order.movementProfileOwnerToken, command.id);
 }
 
 function verifyStatefulMoveMigration(): void {
