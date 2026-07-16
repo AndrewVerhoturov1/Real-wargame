@@ -1,5 +1,6 @@
 import type { AiBlackboardValue } from './AiBlackboard';
 import {
+  DEFAULT_MOVEMENT_PROFILE_ID,
   MOVEMENT_PROFILE_MEMORY_KEYS,
   normalizeMovementProfileSource,
   resolveMovementProfile,
@@ -24,9 +25,9 @@ type MovementRuntime = UnitModel['behaviorRuntime'] & {
 /**
  * Canonical finalizer for physical movement-profile selection.
  *
- * AI nodes publish only override intent. This resolver is the sole owner of
- * active/forced fields and of the effective MoveOrder snapshot. It is pure
- * with respect to browser APIs; a registry adapter may pass profile entries.
+ * AI nodes and move actions publish only source intent. This function is the
+ * sole owner of requested/active/forced fields, both revisions and the
+ * effective MoveOrder movement snapshot. It never reads browser APIs.
  */
 export function reconcileMovementProfileRuntime(
   unit: UnitModel,
@@ -37,16 +38,15 @@ export function reconcileMovementProfileRuntime(
   const order = unit.order;
   const orderProfileId = cleanOptionalText(order?.movementProfileId);
   const orderSource = orderProfileId
-    ? normalizeMovementProfileSource(order?.movementProfileSource, 'default')
+    ? normalizeOptionalSource(order?.movementProfileSource)
     : undefined;
   const knownProfileIds = registryEntries?.map((entry) => entry.id);
+  const memoryPlayerOrderActive = memory.player_command_active === true;
+  const playerOrderProfileId = unit.playerCommand?.intent.movementProfileId
+    ?? (memoryPlayerOrderActive ? cleanOptionalText(memory.player_order_movement_profile) : undefined);
 
   const resolved = resolveMovementProfile({
-    hardSafetyProfileId: readMemoryCandidate(
-      memory,
-      MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId,
-      orderSource === 'hard_safety' ? orderProfileId : undefined,
-    ),
+    hardSafetyProfileId: memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId],
     hardSafetyReason: memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason],
     aiOverrideProfileId: readMemoryCandidate(
       memory,
@@ -59,16 +59,15 @@ export function reconcileMovementProfileRuntime(
       orderSource === 'ai_override' ? order?.movementProfileOwnerToken : undefined,
     ),
     aiOverrideReason: memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideReason],
-    playerOrderProfileId: unit.playerCommand?.intent.movementProfileId
-      ?? (orderSource === 'player_order' ? orderProfileId : undefined),
-    unitRoleProfileId: unit.unitRoleMovementProfileId
-      ?? (orderSource === 'unit_role' ? orderProfileId : undefined),
-    defaultProfileId: orderSource === 'default' ? orderProfileId : undefined,
+    playerOrderProfileId,
+    unitRoleProfileId: unit.unitRoleMovementProfileId,
+    defaultProfileId: DEFAULT_MOVEMENT_PROFILE_ID,
     knownProfileIds,
   });
 
-  const ownerToken = resolved.ownerToken
-    ?? (resolved.source === 'player_order' ? unit.playerCommand?.id : undefined);
+  const ownerToken = resolved.source === 'player_order'
+    ? unit.playerCommand?.id
+    : resolved.ownerToken;
   const previousId = cleanOptionalText(order?.movementProfileId)
     ?? cleanOptionalText(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId]);
   const previousSource = normalizeOptionalSource(
@@ -82,10 +81,9 @@ export function reconcileMovementProfileRuntime(
   );
   const previousSelectionRevision = finiteRevision(
     order?.movementProfileSelectionRevision
-      ?? order?.movementProfileRevision
       ?? memory[MOVEMENT_PROFILE_MEMORY_KEYS.profileSelectionRevision],
   );
-  const initialSelectionRevision = resolved.source === 'player_order'
+  const initialSelectionRevision = resolved.requestedSource === 'player_order'
     ? finiteRevision(unit.playerCommand?.revision) ?? 1
     : 1;
   const selectionRevision = selectionChanged
@@ -95,9 +93,7 @@ export function reconcileMovementProfileRuntime(
     ?? finiteRevision(memory[MOVEMENT_PROFILE_MEMORY_KEYS.profileDefinitionRevision])
     ?? finiteRevision(order?.movementProfileDefinitionRevision);
 
-  memory[MOVEMENT_PROFILE_MEMORY_KEYS.requestedProfileId] = unit.playerCommand?.intent.movementProfileId
-    ?? unit.unitRoleMovementProfileId
-    ?? resolved.profileId;
+  memory[MOVEMENT_PROFILE_MEMORY_KEYS.requestedProfileId] = resolved.requestedProfileId;
   memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId] = resolved.profileId;
   memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource] = resolved.source;
   memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedFallback] = resolved.forcedFallback;
@@ -111,6 +107,7 @@ export function reconcileMovementProfileRuntime(
     order.movementProfileOwnerToken = ownerToken;
     order.movementProfileDefinitionRevision = definitionRevision;
     order.movementProfileSelectionRevision = selectionRevision;
+    delete (order as MoveOrder & { movementProfileRevision?: number }).movementProfileRevision;
   }
 
   return { resolved, definitionRevision, selectionRevision };
