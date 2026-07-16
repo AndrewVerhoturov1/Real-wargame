@@ -44,6 +44,7 @@ on:
       - 'scripts/combat_foundation_smoke.*'
       - 'scripts/combat_tactical_integration_smoke.*'
       - 'scripts/danger_route_cost_parity_smoke.*'
+      - 'scripts/danger_route_cost_cache_smoke.*'
       - 'scripts/danger_layer_performance_smoke.*'
       - 'scripts/danger_layer_movement_performance_smoke.*'
       - 'scripts/live_navigation_replan_smoke.ts'
@@ -59,6 +60,7 @@ on:
       - 'scripts/ai_test_lab_smoke.mjs'
       - 'tests/combat-foundation-visual.spec.ts'
       - 'tests/danger-layer-movement-performance.spec.ts'
+      - 'tests/danger-route-cost-parity-visual.spec.ts'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/combat-foundation-core.yml'
@@ -114,7 +116,7 @@ jobs:
         run: set -o pipefail; npm run workspace:smoke 2>&1 | tee workspace-smoke.log
       - name: Awareness field cache smoke
         shell: bash
-        run: set -o pipefail; npm run awareness-field:smoke 2>&1 | tail -n 120
+        run: set -o pipefail; npm run awareness-field:smoke 2>&1 | tee awareness-field.log
       - name: Directional terrain smoke
         shell: bash
         run: set -o pipefail; npm run directional-terrain:smoke 2>&1 | tail -n 160
@@ -164,6 +166,7 @@ jobs:
           name: combat-tactical-integration-log
           path: |
             workspace-smoke.log
+            awareness-field.log
             danger-route-cost-parity.log
             combat-tactical-integration.log
             danger-layer-performance.log
