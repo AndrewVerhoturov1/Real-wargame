@@ -1,3 +1,4 @@
+import { publishTacticalOrderIntentToAiMemory } from '../ai/TacticalOrderBlackboard';
 import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap } from '../map/MapModel';
@@ -78,6 +79,7 @@ function issueTacticalOrderIntentToSelectedUnits(
     );
     unit.playerCommand = command;
     unit.playerNavigationProfileId = command.intent.navigationProfileId;
+    publishTacticalOrderIntentToAiMemory(unit, command.intent);
     applyIntentAttention(unit, command.intent);
     const resolvedNavigation = resolveUnitNavigationProfile(unit, command);
     const planned = planMoveOrder(state.map, unit.position, requestedTarget, {
