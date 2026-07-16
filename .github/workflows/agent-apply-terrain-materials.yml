@@ -2,8 +2,7 @@ name: Apply Verified Terrain Materials Patch
 
 on:
   pull_request:
-    branches:
-      - real-wargame-preview
+    branches: [real-wargame-preview]
     types: [opened, synchronize, reopened]
 
 permissions:
@@ -19,22 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          show-progress: false
-          ref: ${{ github.event.pull_request.head.sha }}
-
       - name: Reconstruct and verify source patch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python - <<'PY'
-          import base64
-          import gzip
-          import hashlib
-          import json
-          import os
+          import base64, gzip, hashlib, json, os
           from pathlib import Path
           from urllib.request import Request, urlopen
 
@@ -54,49 +43,49 @@ jobs:
               ('b645e3e4b298f497e6feeda7fd05ac7165c12c01', 3072, '67940e925f475da3e7ee8dc886da215e60e98973dac576d42e98c0610d686d19'),
           ]
           token = os.environ['GH_TOKEN']
-          encoded_parts = []
+          parts = []
           for index, (sha, expected_length, expected_digest) in enumerate(chunks):
-              print(f'Fetching chunk {index}: {sha}', flush=True)
+              print(f'FETCH {index} {sha}', flush=True)
               request = Request(
                   f'https://api.github.com/repos/AndrewVerhoturov1/Real-wargame/git/blobs/{sha}',
-                  headers={
-                      'Authorization': f'Bearer {token}',
-                      'Accept': 'application/vnd.github+json',
-                      'X-GitHub-Api-Version': '2022-11-28',
-                  },
+                  headers={'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json'},
               )
               with urlopen(request) as response:
                   payload = json.load(response)
-              blob_text = base64.b64decode(payload['content']).decode('utf-8')
-              header, separator, body = blob_text.partition('\n')
+              text = base64.b64decode(payload['content']).decode('utf-8')
+              header, separator, body = text.partition('\n')
               body = body.strip()
-              digest = hashlib.sha256(body.encode('utf-8')).hexdigest()
-              print(f'Chunk {index}: header={header!r} length={len(body)} sha256={digest}', flush=True)
+              digest = hashlib.sha256(body.encode()).hexdigest()
+              print(f'CHECK {index} len={len(body)} sha256={digest} header={header}', flush=True)
               if not separator or not header.startswith('REAL_WARGAME_BENIGN_SOURCE_PATCH_GZIP_BASE64_CHUNK_'):
-                  raise RuntimeError(f'Unexpected blob envelope for {sha}: {header!r}')
+                  raise RuntimeError(f'Envelope mismatch at chunk {index}')
               if len(body) != expected_length or digest != expected_digest:
-                  raise RuntimeError(f'Chunk {index} mismatch for {sha}')
-              encoded_parts.append(body)
+                  raise RuntimeError(f'Content mismatch at chunk {index}')
+              parts.append(body)
 
-          encoded = ''.join(encoded_parts)
+          encoded = ''.join(parts)
+          print(f'COMBINED len={len(encoded)}', flush=True)
           if len(encoded) != 79072:
               raise RuntimeError(f'Combined base64 length mismatch: {len(encoded)}')
-          compressed = base64.b64decode(encoded, validate=True)
-          patch = gzip.decompress(compressed)
+          patch = gzip.decompress(base64.b64decode(encoded, validate=True))
           digest = hashlib.sha256(patch).hexdigest()
-          expected = '13b21e6d80caf161c0432af5a15f3e9aaab484f5ea9813f06c690adf8020bd9a'
-          if digest != expected:
-              raise RuntimeError(f'Patch SHA-256 mismatch: {digest} != {expected}')
+          if digest != '13b21e6d80caf161c0432af5a15f3e9aaab484f5ea9813f06c690adf8020bd9a':
+              raise RuntimeError(f'Patch SHA-256 mismatch: {digest}')
           Path('/tmp/terrain-materials.patch').write_bytes(patch)
-          print(f'Verified patch: {len(patch)} bytes, sha256={digest}')
+          print(f'PATCH len={len(patch)} sha256={digest}', flush=True)
           PY
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          show-progress: false
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Apply exact patch and remove delivery workflows
         run: |
           git apply --index --whitespace=error /tmp/terrain-materials.patch
           git rm .github/workflows/agent-apply-terrain-materials.yml
           test ! -e .github/workflows/agent-source-snapshot.yml
-          test ! -e .github/workflows/agent-apply-terrain-materials.yml
           git diff --cached --check
 
       - name: Install dependencies
