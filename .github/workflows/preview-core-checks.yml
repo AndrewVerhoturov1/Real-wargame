@@ -98,7 +98,7 @@ jobs:
         run: npm run event-queue:smoke
 
       - name: AI action lifecycle smoke
-        id: ifecycle
+        id: lifecycle
         if: steps.install.outcome == 'success'
         continue-on-error: true
         run: npm run lifecycle:smoke
@@ -134,7 +134,7 @@ jobs:
           retention-days: 3
 
       - name: Reactive route status smoke
-        id: kroute_status
+        id: route_status
         if: steps.install.outcome == 'success'
         continue-on-error: true
         run: npm run route-status:smoke
