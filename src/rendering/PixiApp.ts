@@ -180,7 +180,7 @@ export class PixiTacticalBoardApp {
     this.heightToggle.removeEventListener('click', this.handleHeightToggle);
     this.camera.destroy();
     this.boardInput.destroy();
-    this.mapRenderer.container.cacheAsTexture(false);
+    this.mapRenderer.destroy();
     this.overlayRenderer.destroy();
     if (this.routeCostOverlayRenderer.container.parent === this.worldContainer) {
       this.worldContainer.removeChild(this.routeCostOverlayRenderer.container);
@@ -191,6 +191,7 @@ export class PixiTacticalBoardApp {
     }
     this.awarenessHeatmapRenderer.destroy();
     this.htmlOverlayRenderer.destroy();
+    this.performanceMonitor.destroy();
     this.fixedScaleLabel.remove();
     this.app.destroy(
       { removeView: true, releaseGlobalResources: true },
@@ -218,6 +219,7 @@ export class PixiTacticalBoardApp {
       backgroundAlpha: 1,
       maxFPS: TARGET_MAX_FPS,
       mapRender: 'revision-driven map rebuilds; editable batched Pixi Graphics terrain + raster relief/forest + grid/objects',
+      mapRendererDiagnostics: this.mapRenderer.getDiagnostics(),
       zoomMode: 'requestAnimationFrame-coalesced wheel input anchored under the pointer',
       keyboardPan: 'continuous WASD and arrow-key camera movement synchronized to animation frames',
       pointerMode: 'pointer movement coalesced to one state update per animation frame',
@@ -249,7 +251,7 @@ export class PixiTacticalBoardApp {
     const visibleSelectedIds = this.state.editor.layers.units ? this.state.selectedUnitIds : [];
 
     if (this.showViewCones) {
-      measurePerformancePhase('render.view-cones', () => {
+      measurePerformancePhase('render.viewCones', () => {
         this.viewConeRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
       });
     }
@@ -279,7 +281,6 @@ export class PixiTacticalBoardApp {
 
     this.lastMapRenderKey = nextKey;
     this.mapRenderInvalidated = false;
-    this.mapRenderer.container.cacheAsTexture(false);
     this.mapRenderer.render(
       this.state.map,
       this.showGrid,
@@ -287,9 +288,6 @@ export class PixiTacticalBoardApp {
       this.state.editor.layers.objects,
     );
 
-    // The whole map, grid and map objects are static during simulation. One texture is much
-    // cheaper to scale and translate than the original collection of vector Graphics objects.
-    if (!this.state.editor.enabled) this.mapRenderer.container.cacheAsTexture(true);
   }
 
   private getMapRenderKey(): string {
