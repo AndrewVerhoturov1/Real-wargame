@@ -5,8 +5,7 @@ on:
     branches:
       - agent/terrain-profiles-performance-followup-v1
     paths:
-      - '.agent/terrain-patch.part05'
-      - '.github/workflows/agent-apply-terrain-patch.yml'
+      - '.agent/**'
 
 permissions:
   contents: write
