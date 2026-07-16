@@ -1,0 +1,94 @@
+name: Agent Fix Six Unit Readiness Contract
+
+on:
+  push:
+    branches:
+      - agent/terrain-profiles-performance-followup-v1
+    paths:
+      - '.github/workflows/agent-fix-six-unit-readiness.yml'
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - '.github/workflows/agent-fix-six-unit-readiness.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/terrain-profiles-performance-followup-v1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Correct six-unit readiness condition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tests/danger-layer-movement-performance.spec.ts')
+          source = path.read_text()
+          old = """  await page.waitForFunction((initial) => {
+              const current = window.__realWargameDangerMovementPerformance?.getSnapshot();
+              if (!current || !initial.subjectiveThreatPosition || !current.subjectiveThreatPosition) return false;
+              const friendlyDistance = Math.hypot(
+                current.observerPosition.x - initial.observerPosition.x,
+                current.observerPosition.y - initial.observerPosition.y,
+              );
+              const hostileDistance = Math.hypot(
+                current.hostilePosition.x - initial.hostilePosition.x,
+                current.hostilePosition.y - initial.hostilePosition.y,
+              );
+              const subjectiveDistance = Math.hypot(
+                current.subjectiveThreatPosition.x - initial.subjectiveThreatPosition.x,
+                current.subjectiveThreatPosition.y - initial.subjectiveThreatPosition.y,
+              );
+              return friendlyDistance >= 4 && hostileDistance >= 4 && subjectiveDistance >= 2;
+            }, before, { timeout: 25_000 });
+          """
+          new = """  await page.waitForFunction((initial) => {
+              const current = window.__realWargameDangerMovementPerformance?.getSnapshot();
+              if (!current?.awarenessMovement) return false;
+              const friendlyDistance = Math.hypot(
+                current.observerPosition.x - initial.observerPosition.x,
+                current.observerPosition.y - initial.observerPosition.y,
+              );
+              const hostileDistance = Math.hypot(
+                current.hostilePosition.x - initial.hostilePosition.x,
+                current.hostilePosition.y - initial.hostilePosition.y,
+              );
+              return friendlyDistance >= 4
+                && hostileDistance >= 4
+                && current.awarenessMovement.workerJobsStarted > initial.workerJobsStarted;
+            }, {
+              observerPosition: before.observerPosition,
+              hostilePosition: before.hostilePosition,
+              workerJobsStarted: beforeMovement.workerJobsStarted,
+            }, { timeout: 25_000 });
+          """
+          if old not in source:
+              if new not in source:
+                  raise SystemExit('six-unit readiness block not found')
+          else:
+              path.write_text(source.replace(old, new))
+          PY
+          npm run build
+      - name: Commit fix and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/agent-fix-six-unit-readiness.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Correct six-unit movement readiness assertion"
+          git push origin HEAD:agent/terrain-profiles-performance-followup-v1
