@@ -65,63 +65,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   combat-foundation:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
-          fetch-depth: 0
-      - name: Apply workspace contract update
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('scripts/tactical_workspace_smoke_pixijs8_baseline.mjs')
-          text = path.read_text()
-          old = """expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
-            'buildAwarenessField', 'buildBestSafePositions', 'buildRouteKey',
-            'getDirectionalTacticalField', 'readDirectionalTacticalCell',
-            'readDirectionalProtectionForBearing', 'readDirectionalExposureForBearing',
-            'buildAwarenessKnowledgeKey', 'KNOWLEDGE_CONFIDENCE_BUCKET', 'KNOWLEDGE_UNCERTAINTY_BUCKET',
-            'evaluateAwarenessFieldCell', 'getAwarenessStaticField', 'evaluateRouteDangerFromField',
-            'reverseSlopeQuality', 'terrainConcealment', 'silhouetteRisk',
-          ]);
-          """
-          new = """expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
-            'buildAwarenessField', 'buildBestSafePositions', 'buildRouteKey',
-            'getDirectionalTacticalField', 'readDirectionalTacticalCell',
-            'buildAwarenessKnowledgeKey', 'KNOWLEDGE_CONFIDENCE_BUCKET', 'KNOWLEDGE_UNCERTAINTY_BUCKET',
-            'evaluateAwarenessFieldCell', 'getAwarenessStaticField', 'evaluateRouteDangerFromField',
-            'reverseSlopeQuality', 'terrainConcealment', 'silhouetteRisk',
-          ]);
-          expectIncludes('src/core/knowledge/SoldierDangerField.ts', [
-            'getSoldierDangerField', 'getSoldierDangerFieldDiagnostics',
-            'getThreatRelativeCoverField', 'getDirectionalTacticalField',
-            'readDirectionalProtectionForBearing', 'readDirectionalExposureForBearing',
-            'fireThreatClassForAggregation', \"'rifle_fire'\", \"'machine_gun_fire'\",
-            'GEOMETRY_CACHE_LIMIT', 'FIELD_CACHE_LIMIT',
-          ]);
-          expectExcludes('src/core/knowledge/SoldierDangerField.ts', ['pixi.js', '../rendering/', '../ui/']);
-          """
-          if old in text:
-              path.write_text(text.replace(old, new, 1))
-          elif new not in text:
-              raise SystemExit('workspace contract source block not found')
-          PY
-          if git diff --quiet -- scripts/tactical_workspace_smoke_pixijs8_baseline.mjs; then
-            echo "Workspace contract already updated."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add scripts/tactical_workspace_smoke_pixijs8_baseline.mjs
-          git commit -m "Move danger geometry workspace contract to canonical field"
-          git push origin HEAD:${{ github.head_ref }}
-          exit 1
       - uses: actions/setup-node@v4
         with:
           node-version: 20
