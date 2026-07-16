@@ -39,6 +39,9 @@ export interface MoveOrderOptions {
   readonly movementProfileId?: string;
   readonly movementProfileSource?: MovementProfileSource;
   readonly movementProfileOwnerToken?: string;
+  readonly movementProfileDefinitionRevision?: number;
+  readonly movementProfileSelectionRevision?: number;
+  /** Legacy additive-input alias. New code must use the two explicit revisions above. */
   readonly movementProfileRevision?: number;
   readonly finalFacingRadians?: number;
   readonly knowledgeRevision?: number;
@@ -79,6 +82,9 @@ export interface MoveOrder {
   movementProfileId?: string;
   movementProfileSource?: MovementProfileSource;
   movementProfileOwnerToken?: string;
+  movementProfileDefinitionRevision?: number;
+  movementProfileSelectionRevision?: number;
+  /** Legacy deserialization field; not updated by runtime selection changes. */
   movementProfileRevision?: number;
   finalFacingRadians?: number;
   knowledgeRevision?: number;
@@ -120,6 +126,8 @@ export function createMoveOrder(target: GridPosition, options: MoveOrderOptions 
     movementProfileId: options.movementProfileId,
     movementProfileSource: options.movementProfileSource,
     movementProfileOwnerToken: options.movementProfileOwnerToken,
+    movementProfileDefinitionRevision: options.movementProfileDefinitionRevision,
+    movementProfileSelectionRevision: options.movementProfileSelectionRevision ?? options.movementProfileRevision,
     movementProfileRevision: options.movementProfileRevision,
     finalFacingRadians: options.finalFacingRadians,
     knowledgeRevision: options.knowledgeRevision,
