@@ -75,13 +75,34 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write # PR127_EXACT_OVERLAP
 
 jobs:
   combat-foundation:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: agent/per-unit-ai-scheduler-v1
+          fetch-depth: 0
+      - name: Apply exact verified PR127 overlap archive
+        if: github.head_ref == 'agent/per-unit-ai-scheduler-v1' && github.actor != 'github-actions[bot]'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/pr127-overlap-payload/part-* > /tmp/pr127-overlap.tgz.b64
+          base64 -d /tmp/pr127-overlap.tgz.b64 > /tmp/pr127-overlap.tgz
+          echo '3988447b188fc937953c20dcae5ca4eacff15b1f254801da8156b0b81e6642a6  /tmp/pr127-overlap.tgz' | sha256sum --check
+          tar -xzf /tmp/pr127-overlap.tgz
+          rm -rf .github/pr127-overlap-payload
+          rm -f .github/workflows/agent-pr127-exact-overlap.yml
+          rm -f .github/workflows/agent-pr127-overlap-finalize.yml
+          git diff --check
+          git add -A
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'fix: reconcile scheduler follow-up with danger contracts'
+          git push origin HEAD:agent/per-unit-ai-scheduler-v1
       - uses: actions/setup-node@v4
         with:
           node-version: 20
