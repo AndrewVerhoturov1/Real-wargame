@@ -82,14 +82,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: agent/per-unit-ai-scheduler-v1
+          fetch-depth: 0
       # PR127_SELF_HEAL_START
       - name: Apply PR127 scheduler overlap once
         if: github.head_ref == 'agent/per-unit-ai-scheduler-v1' && github.actor != 'github-actions[bot]'
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin agent/per-unit-ai-scheduler-v1 --depth=1
-          git checkout -B agent/per-unit-ai-scheduler-v1 origin/agent/per-unit-ai-scheduler-v1
           python - <<'PYCODE'
           from pathlib import Path
 
