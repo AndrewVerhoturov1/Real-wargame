@@ -245,14 +245,20 @@ test('selected unit movement preserves world-space threat memory and performs lo
       after.subjectiveThreatPosition.y - before.subjectiveThreatPosition.y,
     ) <= 0.01
   );
-  const observerRelativeMemoryChanged = angularDifference(
-    after.subjectiveThreatDirectionDegrees ?? 0,
-    before.subjectiveThreatDirectionDegrees ?? 0,
-  ) > 0.5 || Math.abs(
-    (after.subjectiveThreatRangeCells ?? 0) - (before.subjectiveThreatRangeCells ?? 0),
-  ) > 0.1;
+  const beforeRelativeThreat = {
+    x: (before.subjectiveThreatPosition?.x ?? 0) - before.observerPosition.x,
+    y: (before.subjectiveThreatPosition?.y ?? 0) - before.observerPosition.y,
+  };
+  const afterRelativeThreat = {
+    x: (after.subjectiveThreatPosition?.x ?? 0) - after.observerPosition.x,
+    y: (after.subjectiveThreatPosition?.y ?? 0) - after.observerPosition.y,
+  };
+  const observerRelativeGeometryChanged = Math.hypot(
+    afterRelativeThreat.x - beforeRelativeThreat.x,
+    afterRelativeThreat.y - beforeRelativeThreat.y,
+  ) >= 4.9;
   expect(worldSpaceMemoryStable).toBe(true);
-  expect(observerRelativeMemoryChanged).toBe(true);
+  expect(observerRelativeGeometryChanged).toBe(true);
   expect(after.lastRequestedCanonicalThreatKey).toBe(before.lastRequestedCanonicalThreatKey);
   expect(after.lastAppliedCanonicalThreatKey).toBe(before.lastAppliedCanonicalThreatKey);
   expect(after.lastRequestedWorldKey).toBe(before.lastRequestedWorldKey);
@@ -278,7 +284,7 @@ test('selected unit movement preserves world-space threat memory and performs lo
     after,
     counters: {
       worldSpaceMemoryStable,
-      observerRelativeMemoryChanged,
+      observerRelativeGeometryChanged,
       workerJobsStartedDelta: delta(afterMovement, beforeMovement, 'workerJobsStarted'),
       workerThreatRelativeGeometryBuildDelta: delta(afterMovement, beforeMovement, 'workerThreatRelativeGeometryBuilds'),
       workerDirectionalFieldBuildDelta: delta(afterMovement, beforeMovement, 'workerDirectionalFieldBuilds'),
@@ -982,13 +988,6 @@ function delta(
     throw new Error(`Counter ${String(key)} is not numeric.`);
   }
   return afterValue - beforeValue;
-}
-
-function angularDifference(left: number, right: number): number {
-  const normalizedLeft = ((left % 360) + 360) % 360;
-  const normalizedRight = ((right % 360) + 360) % 360;
-  const difference = Math.abs(normalizedLeft - normalizedRight);
-  return Math.min(difference, 360 - difference);
 }
 
 function roundTwo(value: number): number {

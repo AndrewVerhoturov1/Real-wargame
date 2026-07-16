@@ -48,8 +48,8 @@ claimed user-device improvement. The CPU contract did pass:
 | renderer-local movement update max | n/a | 3.3 ms | below the 10 ms contract |
 
 All five movement cases passed: selected-only, hostile-only, six moving units, hidden hostile and wall crossing.
-Selected-only produced zero worker jobs/rasters and preserved the world field while observer-relative direction and
-range changed. Wall crossing applied the final canonical job and flipped the protected-side winner correctly.
+Selected-only produced zero worker jobs/rasters and preserved the world field while the observer-relative vector
+changed. Wall crossing applied the final canonical job and flipped the protected-side winner correctly.
 
 The attribution window still contained 12 browser long tasks. Nine were classified as hosted-runner/rendering
 infrastructure; three were application-attributed. Two contained meaningful route replans with
