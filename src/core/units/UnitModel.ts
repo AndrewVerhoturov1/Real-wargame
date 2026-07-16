@@ -25,7 +25,7 @@ import { createEmptyTacticalKnowledge, normalizeTacticalKnowledge } from '../kno
 import type { NavigationProfileSource } from '../navigation/NavigationProfileResolver';
 import type { NavigationMovementMode } from '../navigation/NavigationProfiles';
 import type { MoveOrder } from '../orders/MoveOrder';
-import type { PlayerCommand } from '../orders/PlayerCommand';
+import { normalizePlayerCommand, type PlayerCommand } from '../orders/PlayerCommand';
 import {
   createAttentionRuntime,
   createAttentionSettings,
@@ -114,6 +114,7 @@ export interface UnitData {
   runtime?: UnitRuntimeData;
   navigationProfileId?: string;
   navigationMovementMode?: NavigationMovementMode;
+  playerCommand?: unknown;
 }
 
 export interface UnitModel {
@@ -176,6 +177,10 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
     const importedPerceptionKnowledge = unit.perceptionKnowledge
       ? scalePerceptionKnowledge(normalizePerceptionKnowledge(unit.perceptionKnowledge), scale)
       : createEmptyPerceptionKnowledge();
+    const importedPlayerCommand = scalePlayerCommand(
+      normalizePlayerCommand(unit.playerCommand, unit.id),
+      scale,
+    );
 
     const model: UnitModel = {
       id: unit.id,
@@ -191,7 +196,7 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
         y: (unit.y + 0.5) * scale,
       },
       speedCellsPerSecond: Math.max(0, (unit.speedCellsPerSecond ?? 0.5) * scale),
-      playerCommand: null,
+      playerCommand: importedPlayerCommand,
       plan: null,
       order: null,
       heldItem: unit.heldItem ?? defaultHeldItemForUnitType(unit.type),
@@ -211,10 +216,10 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
         : createEmptyTacticalKnowledge(),
       perceptionKnowledge: importedPerceptionKnowledge,
       unitRoleNavigationProfileId: unit.navigationProfileId ?? null,
-      playerNavigationProfileId: initialNavigationProfile,
+      playerNavigationProfileId: importedPlayerCommand?.intent.navigationProfileId ?? initialNavigationProfile,
       navigationMovementMode: unit.navigationMovementMode ?? null,
-      activeNavigationProfileId: initialNavigationProfile,
-      activeNavigationProfileSource: unit.navigationProfileId ? 'unitRole' : 'default',
+      activeNavigationProfileId: importedPlayerCommand?.intent.navigationProfileId ?? initialNavigationProfile,
+      activeNavigationProfileSource: importedPlayerCommand ? 'playerCommand' : unit.navigationProfileId ? 'unitRole' : 'default',
     };
     applyInitialStateToRuntime(model, false);
     if (unit.runtime?.weapon) replaceWeaponRuntime(model, unit.runtime.weapon);
@@ -328,6 +333,17 @@ export function normalizeUnitAiControl(value: UnitAiControl | string | undefined
 
 export function isUnitGraphAiControlled(unit: UnitModel): boolean {
   return unit.aiControl === 'graph';
+}
+
+function scalePlayerCommand(command: PlayerCommand | null, scale: number): PlayerCommand | null {
+  if (!command || scale === 1) return command;
+  return {
+    ...command,
+    target: {
+      x: command.target.x * scale,
+      y: command.target.y * scale,
+    },
+  };
 }
 
 function scalePerceptionKnowledge(knowledge: UnitPerceptionKnowledge, scale: number): UnitPerceptionKnowledge {
