@@ -158,8 +158,9 @@ function buildField(
   const originIndex = originCellY * map.width + originCellX;
   const originEye = staticGrid.terrainHeightMeters[originIndex]
     + options.originHeightAboveGroundMeters;
-  const perimeter = perimeterCells(minX, minY, maxX, maxY);
   let processedCellCount = 0;
+  let rayCount = 0;
+  const vegetationTransmission = createVegetationTransmissionLuts(map.metersPerCell);
 
   writeVisibleCell(
     hardBlocked,
@@ -171,35 +172,58 @@ function buildField(
     255,
   );
 
-  for (const target of perimeter) {
+  const traceRay = (targetX: number, targetY: number): void => {
+    rayCount += 1;
     let visual = 1;
     let fire = 1;
     let horizonSlope = Number.NEGATIVE_INFINITY;
     let horizonKind: VisibilityBlockerKind = 1;
-    let previousX = originCellX;
-    let previousY = originCellY;
-    const cells = supercoverLine(originCellX, originCellY, target.x, target.y);
+    const deltaX = targetX - originCellX;
+    const deltaY = targetY - originCellY;
+    const stepsX = Math.abs(deltaX);
+    const stepsY = Math.abs(deltaY);
+    const signX = deltaX > 0 ? 1 : deltaX < 0 ? -1 : 0;
+    const signY = deltaY > 0 ? 1 : deltaY < 0 ? -1 : 0;
+    let cellX = originCellX;
+    let cellY = originCellY;
+    let completedX = 0;
+    let completedY = 0;
 
-    for (let index = 1; index < cells.length; index += 1) {
-      const cell = cells[index];
-      const dx = cell.x + 0.5 - options.origin.x;
-      const dy = cell.y + 0.5 - options.origin.y;
+    while (completedX < stepsX || completedY < stepsY) {
+      const decision = (1 + 2 * completedX) * stepsY - (1 + 2 * completedY) * stepsX;
+      let diagonal = false;
+      if (decision === 0) {
+        cellX += signX;
+        cellY += signY;
+        completedX += 1;
+        completedY += 1;
+        diagonal = true;
+      } else if (decision < 0) {
+        cellX += signX;
+        completedX += 1;
+      } else {
+        cellY += signY;
+        completedY += 1;
+      }
+
+      const dx = cellX + 0.5 - options.origin.x;
+      const dy = cellY + 0.5 - options.origin.y;
       const distanceCells = Math.hypot(dx, dy);
       if (distanceCells > options.rangeCells + 0.001) break;
       const distanceMeters = distanceCells * map.metersPerCell;
-      const mapIndex = cell.y * map.width + cell.x;
+      const mapIndex = cellY * map.width + cellX;
       const terrainHeight = staticGrid.terrainHeightMeters[mapIndex];
       const targetSlope = (
         terrainHeight + options.targetHeightAboveGroundMeters - originEye
       ) / Math.max(0.001, distanceMeters);
       const blockedByHorizon = targetSlope + HORIZON_MARGIN < horizonSlope;
-      const stepMeters = Math.hypot(cell.x - previousX, cell.y - previousY) * map.metersPerCell;
-      previousX = cell.x;
-      previousY = cell.y;
-
-      const vegetation = resolveVegetationDefinition(staticGrid.forestKind[mapIndex]);
-      visual *= Math.exp(-vegetation.visibility.transmissionLossPerMeter * stepMeters);
-      fire *= Math.exp(-vegetation.fire.transmissionLossPerMeter * stepMeters);
+      const vegetationKind = staticGrid.forestKind[mapIndex] ?? 0;
+      visual *= diagonal
+        ? vegetationTransmission.visualDiagonal[vegetationKind] ?? 1
+        : vegetationTransmission.visualAxis[vegetationKind] ?? 1;
+      fire *= diagonal
+        ? vegetationTransmission.fireDiagonal[vegetationKind] ?? 1
+        : vegetationTransmission.fireAxis[vegetationKind] ?? 1;
 
       const blockedByObject = staticGrid.blockingFlags[mapIndex] === 1;
       if (blockedByHorizon) {
@@ -241,6 +265,17 @@ function buildField(
         }
       }
     }
+  };
+
+  // Keep the original perimeter order so competing rays preserve their exact
+  // max-transmission tie behaviour, without allocating one object per target.
+  for (let x = minX; x <= maxX; x += 1) {
+    traceRay(x, minY);
+    if (maxY !== minY) traceRay(x, maxY);
+  }
+  for (let y = minY + 1; y < maxY; y += 1) {
+    traceRay(minX, y);
+    if (maxX !== minX) traceRay(maxX, y);
   }
 
   return {
@@ -258,7 +293,29 @@ function buildField(
       mapVisualRevision: staticGrid.mapVisualRevision,
     },
     processedCellCount,
-    rayCount: perimeter.length,
+    rayCount,
+  };
+}
+
+function createVegetationTransmissionLuts(metersPerCell: number): {
+  readonly visualAxis: readonly number[];
+  readonly visualDiagonal: readonly number[];
+  readonly fireAxis: readonly number[];
+  readonly fireDiagonal: readonly number[];
+} {
+  const visualLoss = [0, 0, 0];
+  const fireLoss = [0, 0, 0];
+  for (let kind = 0; kind <= 2; kind += 1) {
+    const vegetation = resolveVegetationDefinition(kind);
+    visualLoss[kind] = vegetation.visibility.transmissionLossPerMeter;
+    fireLoss[kind] = vegetation.fire.transmissionLossPerMeter;
+  }
+  const diagonalMeters = Math.SQRT2 * metersPerCell;
+  return {
+    visualAxis: visualLoss.map((loss) => Math.exp(-loss * metersPerCell)),
+    visualDiagonal: visualLoss.map((loss) => Math.exp(-loss * diagonalMeters)),
+    fireAxis: fireLoss.map((loss) => Math.exp(-loss * metersPerCell)),
+    fireDiagonal: fireLoss.map((loss) => Math.exp(-loss * diagonalMeters)),
   };
 }
 
@@ -320,50 +377,6 @@ function writeBlockedCell(
   blockerKind[index] = kind;
 }
 
-function perimeterCells(minX: number, minY: number, maxX: number, maxY: number): Array<{ x: number; y: number }> {
-  const result: Array<{ x: number; y: number }> = [];
-  for (let x = minX; x <= maxX; x += 1) {
-    result.push({ x, y: minY });
-    if (maxY !== minY) result.push({ x, y: maxY });
-  }
-  for (let y = minY + 1; y < maxY; y += 1) {
-    result.push({ x: minX, y });
-    if (maxX !== minX) result.push({ x: maxX, y });
-  }
-  return result;
-}
-
-function supercoverLine(x0: number, y0: number, x1: number, y1: number): Array<{ x: number; y: number }> {
-  const points: Array<{ x: number; y: number }> = [];
-  const dx = x1 - x0;
-  const dy = y1 - y0;
-  const nx = Math.abs(dx);
-  const ny = Math.abs(dy);
-  const signX = dx > 0 ? 1 : dx < 0 ? -1 : 0;
-  const signY = dy > 0 ? 1 : dy < 0 ? -1 : 0;
-  let x = x0;
-  let y = y0;
-  let ix = 0;
-  let iy = 0;
-  points.push({ x, y });
-  while (ix < nx || iy < ny) {
-    const decision = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx;
-    if (decision === 0) {
-      x += signX;
-      y += signY;
-      ix += 1;
-      iy += 1;
-    } else if (decision < 0) {
-      x += signX;
-      ix += 1;
-    } else {
-      y += signY;
-      iy += 1;
-    }
-    points.push({ x, y });
-  }
-  return points;
-}
 
 function getMapCache(map: TacticalMap): MapCache {
   const existing = cacheByMap.get(map);

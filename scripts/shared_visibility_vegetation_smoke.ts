@@ -178,6 +178,36 @@ assert.equal(
   'moving an origin must build a new geometry field',
 );
 
+const regressionMap = normalizeMap({
+  width: 64,
+  height: 40,
+  cellSize: 8,
+  metersPerCell: 2,
+  defaultTerrain: 'field',
+  defaultHeight: 0,
+  cellRects: [
+    { x1: 18, x2: 25, y1: 0, y2: 39, height: 3 },
+    { x1: 28, x2: 45, y1: 8, y2: 31, forest: 1 },
+    { x1: 36, x2: 43, y1: 12, y2: 27, forest: 2 },
+  ],
+  objects: [
+    { id: 'regression-wall', kind: 'structure', x: 31, y: 18, widthCells: 2, heightCells: 9, rotationRadians: 0 },
+    { id: 'regression-cover', kind: 'cover', x: 48, y: 25, widthCells: 4, heightCells: 1, rotationRadians: Math.PI / 6 },
+  ],
+});
+const regressionGeometry = getVisibilityGeometryField(regressionMap, {
+  origin: { x: 12.5, y: 20.5 },
+  originHeightAboveGroundMeters: 1.7,
+  targetHeightAboveGroundMeters: 1.1,
+  rangeCells: 55,
+});
+const geometryRegressionDigest = digestGeometry(regressionGeometry);
+assert.equal(
+  geometryRegressionDigest,
+  '5958f5c5',
+  'visibility geometry optimization must preserve the established occlusion and transmission raster',
+);
+
 console.log(JSON.stringify({
   hillDangerOpen: readByte(hillDanger.danger, hillMap, 4, 3),
   hillDangerShadow: readByte(hillDanger.danger, hillMap, 8, 3),
@@ -186,6 +216,7 @@ console.log(JSON.stringify({
   legacyForestProtection: readByte(legacyCover.forestProtection, legacyMap, 2, 0),
   cachedGeometryCount: geometryDiagnostics.cachedFieldCount,
   retainedTypedArrayBytes: geometryDiagnostics.retainedTypedArrayBytes,
+  geometryRegressionDigest,
 }));
 console.log('Shared visibility and vegetation smoke passed: reusable geometry, hill shadow, forest attenuation, overlay independence, route/cover parity and cache contract.');
 
@@ -224,6 +255,17 @@ function dangerContext(threats: SoldierDangerFieldContext['threats']): SoldierDa
 
 function readByte(field: Uint8Array, map: TacticalMap, x: number, y: number): number {
   return field[y * map.width + x] ?? 0;
+}
+
+function digestGeometry(field: ReturnType<typeof getVisibilityGeometryField>): string {
+  let hash = 0x811c9dc5;
+  for (const bytes of [field.hardBlocked, field.visualTransmission, field.fireTransmission, field.blockerKind]) {
+    for (const value of bytes) {
+      hash ^= value;
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+  }
+  return hash.toString(16).padStart(8, '0');
 }
 
 function unitData(id: string, x: number, y: number): UnitData {

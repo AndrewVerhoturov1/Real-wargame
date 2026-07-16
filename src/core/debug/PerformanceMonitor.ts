@@ -2,8 +2,13 @@ import { getThreatRelativeCoverFieldDiagnostics } from '../cover/ThreatRelativeC
 import { getAwarenessDynamicRescoreDiagnostics } from '../knowledge/AwarenessDynamicRescore';
 import { getAwarenessStaticFieldDiagnostics } from '../knowledge/AwarenessStaticField';
 import { getSoldierDangerFieldDiagnostics } from '../knowledge/SoldierDangerField';
+import {
+  getRouteCostFieldDiagnostics,
+  getSharedRouteCostFieldCache,
+} from '../navigation/RouteCostField';
 import type { SimulationState } from '../simulation/SimulationState';
 import { getDirectionalTacticalFieldDiagnostics } from '../terrain/DirectionalTacticalField';
+import { getVisibilityGeometryFieldDiagnostics } from '../visibility/VisibilityGeometryField';
 import { getSimulationLayerState } from '../ui/RuntimeUiState';
 import { getAwarenessMovementDiagnostics } from './AwarenessMovementDiagnostics';
 import { getRealWargameBuildIdentity, PERFORMANCE_CONTRACT_VERSION } from './BuildIdentity';
@@ -249,6 +254,8 @@ export class PerformanceMonitor {
       computation: {
         threatRelativeCover: getThreatRelativeCoverFieldDiagnostics(state.map),
         directionalTactical: getDirectionalTacticalFieldDiagnostics(state.map),
+        visibilityGeometry: getVisibilityGeometryFieldDiagnostics(state.map),
+        routeCostFields: getRouteCostFieldDiagnostics(getSharedRouteCostFieldCache(state.map)),
         awarenessStatic: selectedUnit
           ? getAwarenessStaticFieldDiagnostics(state.map, selectedUnit.behaviorRuntime.posture)
           : null,
