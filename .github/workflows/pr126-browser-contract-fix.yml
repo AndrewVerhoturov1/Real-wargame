@@ -1,0 +1,76 @@
+name: PR 126 Browser Contract Fix
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - '.github/workflows/pr126-browser-contract-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-verify:
+    if: github.head_ref == 'agent/danger-route-cost-parity-v1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Make performance mutations exercise the canonical core field
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/testing/CombatTacticalIntegrationVisualQaHarness.ts')
+          source = path.read_text(encoding='utf-8')
+          dynamic_before = """      observer.tacticalKnowledge.revision += 1;
+          // The real simulation changes tactical knowledge inside the live ticker. Let that same
+          """
+          dynamic_after = """      observer.tacticalKnowledge.revision += 1;
+          buildSoldierAwarenessReport(state, observer);
+          // The real simulation changes tactical knowledge inside the live ticker. Let that same
+          """
+          geometry_before = """      moving.x = clamp(moving.x + 0.35, 0.5, state.map.width - 0.5);
+          observer.tacticalKnowledge.revision += 1;
+          window.dispatchEvent(new CustomEvent('real-wargame:combat-tactical-visual-qa-updated'));
+          """
+          geometry_after = """      moving.x = clamp(moving.x + 0.35, 0.5, state.map.width - 0.5);
+          observer.tacticalKnowledge.revision += 1;
+          buildSoldierAwarenessReport(state, observer);
+          window.dispatchEvent(new CustomEvent('real-wargame:combat-tactical-visual-qa-updated'));
+          """
+          if source.count(dynamic_before) != 1:
+              raise SystemExit(f'dynamic performance anchor count: {source.count(dynamic_before)}')
+          if source.count(geometry_before) != 1:
+              raise SystemExit(f'geometry performance anchor count: {source.count(geometry_before)}')
+          source = source.replace(dynamic_before, dynamic_after)
+          source = source.replace(geometry_before, geometry_after)
+          path.write_text(source, encoding='utf-8')
+          PY
+      - run: npm ci
+      - run: npm install --no-save @playwright/test
+      - run: npx playwright install chromium
+      - name: Verify focused browser performance contract
+        env:
+          DANGER_PERF_LABEL: candidate-local-verification
+          DANGER_PERF_OUTPUT: artifacts/performance/pr126-browser-contract.json
+        run: npx playwright test tests/danger-layer-browser-performance.spec.ts --config=playwright.performance.config.ts --project=chromium --reporter=line
+      - name: Verify core regressions
+        run: |
+          npm run danger-route-cost-parity:smoke
+          npm run danger-layer-performance:smoke
+          npm run build
+      - name: Commit browser contract fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/testing/CombatTacticalIntegrationVisualQaHarness.ts
+          git commit -m "Exercise canonical danger field in performance harness"
+          git push origin HEAD:${{ github.head_ref }}
