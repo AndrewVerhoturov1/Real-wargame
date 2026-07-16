@@ -1,6 +1,7 @@
 import { isBuiltInMovementProfileId } from './MovementProfileDefaults';
 import { normalizeCustomMovementId, normalizeMovementRegistryData } from './MovementProfileNormalization';
 import {
+  BUILT_IN_MOVEMENT_PROFILE_IDS,
   MOVEMENT_PROFILE_FORMAT_VERSION,
   type MovementProfileRegistryData,
 } from './MovementProfileTypes';
@@ -98,12 +99,11 @@ export function validateMovementProfileImport(value: unknown): MovementProfileRe
 
   validateTopLevel(value, issues);
   const rawProfiles = value.profiles;
-  if (!Array.isArray(rawProfiles)) {
-    throw new MovementProfileImportError(issues);
-  }
+  if (!Array.isArray(rawProfiles)) throw new MovementProfileImportError(issues);
 
   const normalizedIds = new Map<number, string>();
   const firstIndexById = new Map<string, number>();
+  const validFallbackIds = new Set<string>(BUILT_IN_MOVEMENT_PROFILE_IDS);
 
   rawProfiles.forEach((profile, index) => {
     const path = `profiles[${index}]`;
@@ -115,6 +115,7 @@ export function validateMovementProfileImport(value: unknown): MovementProfileRe
     const id = validateId(profile, path, issues);
     if (id) {
       normalizedIds.set(index, id);
+      validFallbackIds.add(id);
       const firstIndex = firstIndexById.get(id);
       if (firstIndex !== undefined) {
         issues.push(issue(
@@ -151,7 +152,7 @@ export function validateMovementProfileImport(value: unknown): MovementProfileRe
     }
     const normalizedFallback = normalizeReferenceId(fallback);
     const currentId = normalizedIds.get(index);
-    if (!normalizedFallback || !firstIndexById.has(normalizedFallback)) {
+    if (!normalizedFallback || !validFallbackIds.has(normalizedFallback)) {
       issues.push(issue(
         `profiles[${index}].fallbackProfileId`,
         `Fallback profile "${fallback}" does not exist in the imported registry.`,
@@ -175,7 +176,7 @@ function validateTopLevel(value: Record<string, unknown>, issues: MovementProfil
     issues.push(issue('profiles', 'Field must be an array.', 'Поле должно быть массивом.'));
   }
   if (value.formatVersion !== undefined) {
-    if (!Number.isInteger(value.formatVersion) || typeof value.formatVersion !== 'number') {
+    if (typeof value.formatVersion !== 'number' || !Number.isInteger(value.formatVersion)) {
       issues.push(issue('formatVersion', 'Format version must be an integer.', 'Версия формата должна быть целым числом.'));
     } else if (value.formatVersion > MOVEMENT_PROFILE_FORMAT_VERSION) {
       issues.push(issue(
@@ -185,7 +186,8 @@ function validateTopLevel(value: Record<string, unknown>, issues: MovementProfil
       ));
     }
   }
-  if (value.revision !== undefined && (!Number.isInteger(value.revision) || typeof value.revision !== 'number')) {
+  if (value.revision !== undefined
+    && (typeof value.revision !== 'number' || !Number.isInteger(value.revision))) {
     issues.push(issue('revision', 'Registry revision must be an integer.', 'Ревизия реестра должна быть целым числом.'));
   }
 }
@@ -226,7 +228,8 @@ function validateProfileShape(
   }
 
   const template = readPresent(profile, 'templateProfileId');
-  if (template.present && (typeof template.value !== 'string' || !isBuiltInMovementProfileId(template.value))) {
+  if (template.present
+    && (typeof template.value !== 'string' || !isBuiltInMovementProfileId(template.value))) {
     issues.push(issue(
       `${path}.templateProfileId`,
       'Template profile id must reference a built-in movement profile.',
@@ -257,7 +260,8 @@ function validateProfileShape(
 
   for (const [field, allowed] of ENUM_FIELDS) {
     const state = readPresent(profile, field);
-    if (state.present && (typeof state.value !== 'string' || !allowed.includes(state.value))) {
+    if (state.present
+      && (typeof state.value !== 'string' || !allowed.includes(state.value))) {
       issues.push(issue(
         `${path}.${field}`,
         `Field must be one of: ${allowed.join(', ')}.`,
