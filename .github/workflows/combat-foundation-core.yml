@@ -54,6 +54,11 @@ on:
       - 'scripts/danger_layer_performance_smoke.*'
       - 'scripts/danger_layer_movement_performance_smoke.*'
       - 'scripts/shared_visibility_vegetation_smoke.*'
+      - 'scripts/shared_vegetation_source_contract_smoke.*'
+      - 'scripts/view_memory_heatmap_smoke.*'
+      - 'scripts/view_memory_heatmap_performance_smoke.*'
+      - 'scripts/visibility_probe_cache_smoke.*'
+      - 'scripts/perception_performance_smoke.*'
       - 'scripts/live_navigation_replan_smoke.ts'
       - 'scripts/combat_safe_position_winner_smoke.ts'
       - 'scripts/reverse_slope_comparative_fixture.ts'
@@ -70,6 +75,7 @@ on:
       - 'tests/combat-foundation-visual.spec.ts'
       - 'tests/danger-layer-movement-performance.spec.ts'
       - 'tests/danger-route-cost-parity-visual.spec.ts'
+      - 'tests/shared-visibility-vegetation-visual.spec.ts'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/combat-foundation-core.yml'
@@ -116,7 +122,19 @@ jobs:
         run: test "$(cat combat-foundation.exit)" = "0"
       - name: Existing perception smoke
         shell: bash
-        run: set -o pipefail; npm run perception:smoke 2>&1 | tail -n 120
+        run: set -o pipefail; npm run perception:smoke 2>&1 | tee perception-smoke.log
+      - name: Perception performance smoke
+        shell: bash
+        run: set -o pipefail; npm run perception-performance:smoke 2>&1 | tee perception-performance.log
+      - name: Current-view and memory heatmap smoke
+        shell: bash
+        run: set -o pipefail; npm run view-memory-heatmap:smoke 2>&1 | tee view-memory-heatmap.log
+      - name: Current-view and memory performance smoke
+        shell: bash
+        run: set -o pipefail; npm run view-memory-heatmap-performance:smoke 2>&1 | tee view-memory-heatmap-performance.log
+      - name: Visibility probe cache smoke
+        shell: bash
+        run: set -o pipefail; npm run visibility-probe:smoke 2>&1 | tee visibility-probe.log
       - name: Existing runtime smoke
         shell: bash
         run: set -o pipefail; npm run runtime:smoke 2>&1 | tail -n 120
@@ -181,6 +199,11 @@ jobs:
           name: combat-tactical-integration-log
           path: |
             shared-visibility-vegetation.log
+            perception-smoke.log
+            perception-performance.log
+            view-memory-heatmap.log
+            view-memory-heatmap-performance.log
+            visibility-probe.log
             workspace-smoke.log
             awareness-field.log
             danger-route-cost-parity.log
