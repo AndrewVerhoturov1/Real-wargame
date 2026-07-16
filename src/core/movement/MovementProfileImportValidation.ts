@@ -201,7 +201,7 @@ function validateId(
     issues.push(issue(`${path}.id`, 'Profile id is required.', 'Не указан ID профиля.'));
     return null;
   }
-  const rawId = profile.id.trim();
+  const rawId = profile.id.trim().toLowerCase();
   if (isBuiltInMovementProfileId(rawId)) return rawId;
   try {
     return normalizeCustomMovementId(rawId);
@@ -228,13 +228,17 @@ function validateProfileShape(
   }
 
   const template = readPresent(profile, 'templateProfileId');
-  if (template.present
-    && (typeof template.value !== 'string' || !isBuiltInMovementProfileId(template.value))) {
-    issues.push(issue(
-      `${path}.templateProfileId`,
-      'Template profile id must reference a built-in movement profile.',
-      'Шаблон должен ссылаться на встроенный профиль движения.',
-    ));
+  if (template.present) {
+    const normalizedTemplate = typeof template.value === 'string'
+      ? template.value.trim().toLowerCase()
+      : '';
+    if (!isBuiltInMovementProfileId(normalizedTemplate)) {
+      issues.push(issue(
+        `${path}.templateProfileId`,
+        'Template profile id must reference a built-in movement profile.',
+        'Шаблон должен ссылаться на встроенный профиль движения.',
+      ));
+    }
   }
 
   for (const field of OBJECT_FIELDS) {
@@ -272,11 +276,11 @@ function validateProfileShape(
 }
 
 function normalizeReferenceId(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  if (isBuiltInMovementProfileId(trimmed)) return trimmed;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  if (isBuiltInMovementProfileId(normalized)) return normalized;
   try {
-    return normalizeCustomMovementId(trimmed);
+    return normalizeCustomMovementId(normalized);
   } catch {
     return null;
   }
