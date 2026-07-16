@@ -70,6 +70,7 @@ async function deactivateCurrentSection(): Promise<boolean> {
   activeSectionId = null;
   const currentHost = ensureHost();
   delete currentHost.panel.dataset.activeAiEditorSection;
+  delete currentHost.panel.dataset.activeProfileEditor;
   updateSelectedButtons(null);
   return true;
 }
@@ -117,9 +118,13 @@ function handleNavigationClick(event: MouseEvent): void {
   if (!builtInButton) return;
   if (bypassBuiltInClick) {
     bypassBuiltInClick = false;
+    scheduleBuiltInPanelLabel(builtInButton.dataset.navigationTab ?? '');
     return;
   }
-  if (!activeSectionId) return;
+  if (!activeSectionId) {
+    scheduleBuiltInPanelLabel(builtInButton.dataset.navigationTab ?? '');
+    return;
+  }
 
   event.preventDefault();
   event.stopImmediatePropagation();
@@ -161,6 +166,16 @@ function applyBuiltInLabels(mainTabs: HTMLElement): void {
     const button = mainTabs.querySelector<HTMLButtonElement>(`[data-navigation-tab="${id}"]`);
     if (button) button.textContent = labelRu;
   }
+}
+
+function scheduleBuiltInPanelLabel(sectionId: string): void {
+  if (sectionId !== 'profiles') return;
+  queueMicrotask(() => {
+    const currentHost = ensureHost();
+    if (currentHost.panel.dataset.activeAiEditorSection) return;
+    const heading = currentHost.panel.querySelector<HTMLHeadingElement>('.navigation-profile-list-heading h2');
+    if (heading?.textContent?.trim() === 'Профили движения') heading.textContent = 'Профили маршрута';
+  });
 }
 
 function sectionOrder(button: HTMLButtonElement): number {
