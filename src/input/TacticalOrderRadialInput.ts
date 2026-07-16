@@ -9,6 +9,7 @@ import type { SimulationState } from '../core/simulation/SimulationState';
 import { getAiLabRuntime } from '../core/testing/AiLabRuntime';
 import { getUnitCommandToolState, setRouteFacingDraft } from '../core/ui/RuntimeUiState';
 import type { PixiTacticalBoardApp } from '../rendering/PixiApp';
+import { TacticalOrderStatusCard } from '../ui/TacticalOrderStatusCard';
 import {
   beginTacticalOrderGesture,
   cancelTacticalOrderGesture,
@@ -23,6 +24,7 @@ import { TacticalOrderRadialMenu, tacticalOrderPresetFromKeyboard } from './Tact
 
 const QUICK_MOVE_FACING_THRESHOLD_CELLS = 0.35;
 const CAMERA_KEYS = new Set(['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd']);
+const STATUS_CARD_UPDATE_INTERVAL_MS = 250;
 
 interface BoardInternals {
   readonly app?: { readonly canvas?: HTMLCanvasElement };
@@ -42,11 +44,18 @@ export function installTacticalOrderRadialInput(
   if (!canvas || !camera) throw new Error('Tactical order radial input requires the board canvas and camera.');
 
   const menu = new TacticalOrderRadialMenu();
+  const statusCard = new TacticalOrderStatusCard(state);
+  const statusInterval = window.setInterval(() => statusCard.update(), STATUS_CARD_UPDATE_INTERVAL_MS);
   let pointerId: number | null = null;
   let gesture: TacticalOrderGestureState | null = null;
   let currentScreen: ScreenPoint | null = null;
   let currentGrid: GridPosition | null = null;
   let holdTimer: number | null = null;
+
+  const notifyChanged = (): void => {
+    statusCard.update(true);
+    onChanged();
+  };
 
   const eventGrid = (event: { clientX: number; clientY: number }): GridPosition => {
     return worldToGrid(state.map, camera.screenToWorld(event));
@@ -59,15 +68,19 @@ export function installTacticalOrderRadialInput(
 
   const close = (reason?: TacticalOrderGestureCancelReason): void => {
     clearTimer();
-    if (gesture && reason) gesture = cancelTacticalOrderGesture(gesture, reason);
-    if (pointerId !== null && canvas.hasPointerCapture(pointerId)) canvas.releasePointerCapture(pointerId);
+    const closingGesture = gesture;
+    const capturedPointerId = pointerId;
+    if (closingGesture && reason) cancelTacticalOrderGesture(closingGesture, reason);
     pointerId = null;
     gesture = null;
     currentScreen = null;
     currentGrid = null;
     menu.hide();
     setRouteFacingDraft(state, null);
-    onChanged();
+    if (capturedPointerId !== null && canvas.hasPointerCapture(capturedPointerId)) {
+      canvas.releasePointerCapture(capturedPointerId);
+    }
+    notifyChanged();
   };
 
   const openMenu = (): void => {
@@ -79,7 +92,7 @@ export function installTacticalOrderRadialInput(
     menu.show(gesture.anchorScreen, gesture.targetGrid);
     menu.updateHighlighted(gesture.highlightedPresetId);
     setRouteFacingDraft(state, null);
-    onChanged();
+    notifyChanged();
   };
 
   const handleContextMenu = (event: MouseEvent): void => {
@@ -160,6 +173,10 @@ export function installTacticalOrderRadialInput(
     close(reason);
   };
 
+  const handlePointerCancel = (event: PointerEvent): void => cancelFromPointer(event, 'pointer_cancel');
+  const handleLostPointerCapture = (event: PointerEvent): void => cancelFromPointer(event, 'pointer_capture_lost');
+  const handlePointerLeave = (event: PointerEvent): void => cancelFromPointer(event, 'pointer_leave');
+
   const handleKeyDown = (event: KeyboardEvent): void => {
     if (!gesture) return;
     if (event.key === 'Escape') {
@@ -191,20 +208,25 @@ export function installTacticalOrderRadialInput(
   canvas.addEventListener('pointerdown', handlePointerDown, true);
   canvas.addEventListener('pointermove', handlePointerMove, true);
   canvas.addEventListener('pointerup', handlePointerUp, true);
-  canvas.addEventListener('pointercancel', (event) => cancelFromPointer(event, 'pointer_cancel'), true);
-  canvas.addEventListener('lostpointercapture', (event) => cancelFromPointer(event, 'pointer_capture_lost'), true);
-  canvas.addEventListener('pointerleave', (event) => cancelFromPointer(event, 'pointer_leave'), true);
+  canvas.addEventListener('pointercancel', handlePointerCancel, true);
+  canvas.addEventListener('lostpointercapture', handleLostPointerCapture, true);
+  canvas.addEventListener('pointerleave', handlePointerLeave, true);
   canvas.addEventListener('wheel', handleWheel, { capture: true, passive: false });
   window.addEventListener('keydown', handleKeyDown, true);
 
   return () => {
+    window.clearInterval(statusInterval);
     close('destroy');
     canvas.removeEventListener('contextmenu', handleContextMenu, true);
     canvas.removeEventListener('pointerdown', handlePointerDown, true);
     canvas.removeEventListener('pointermove', handlePointerMove, true);
     canvas.removeEventListener('pointerup', handlePointerUp, true);
+    canvas.removeEventListener('pointercancel', handlePointerCancel, true);
+    canvas.removeEventListener('lostpointercapture', handleLostPointerCapture, true);
+    canvas.removeEventListener('pointerleave', handlePointerLeave, true);
     canvas.removeEventListener('wheel', handleWheel, true);
     window.removeEventListener('keydown', handleKeyDown, true);
+    statusCard.destroy();
     menu.destroy();
   };
 }
