@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/directional-terrain-visual-qa.yml'
       - 'tests/directional-terrain-visual.spec.ts'
+      - 'tests/environment-materials-visual.spec.ts'
       - 'scripts/directional_terrain_smoke.ts'
       - 'scripts/navigation_overlay_contract_smoke.ts'
       - 'src/**'
@@ -67,5 +68,81 @@ jobs:
         with:
           name: directional-terrain-visual-log
           path: directional-terrain-playwright.log
+          if-no-files-found: warn
+          retention-days: 7
+
+  environment-materials-visual-qa:
+    if: github.head_ref == 'agent/terrain-profiles-performance-followup-v1' && contains(github.event.pull_request.body, 'VISUAL_QA_APPROVED_BY_USER: yes')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright test runner
+        run: npm install --no-save @playwright/test
+
+      - name: Enable approved environment-material suite in runner only
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tests/environment-materials-visual.spec.ts')
+          source = path.read_text()
+          enabled = source.replace("test.skip('shows continuous sparse/dense forest across zoom and danger-overlay states'", "test('shows continuous sparse/dense forest across zoom and danger-overlay states'")
+          enabled = enabled.replace("test.skip('live profile edit refreshes the open map without a page reload'", "test('live profile edit refreshes the open map without a page reload'")
+          if enabled == source or enabled.count("test('shows continuous sparse/dense forest") != 1 or enabled.count("test('live profile edit") != 1:
+              raise SystemExit('approved environment-material tests were not enabled exactly once')
+          path.write_text(enabled)
+          PY
+
+      - name: Production build
+        run: npm run build
+
+      - name: Run approved environment-material visual QA
+        shell: bash
+        run: |
+          set -o pipefail
+          npx playwright test tests/environment-materials-visual.spec.ts --project=chromium --reporter=line 2>&1 | tee environment-materials-visual-playwright.log
+
+      - name: Record exact tested SHA
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p artifacts/visual-qa/environment-materials-v1
+          printf '%s\n' '${{ github.event.pull_request.head.sha }}' > artifacts/visual-qa/environment-materials-v1/COMMIT_SHA.txt
+
+      - name: Upload environment-material screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-materials-visual-screenshots-${{ github.event.pull_request.head.sha }}
+          path: |
+            artifacts/visual-qa/environment-materials-v1/*.png
+            artifacts/visual-qa/environment-materials-v1/COMMIT_SHA.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload environment-material evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-materials-visual-evidence-${{ github.event.pull_request.head.sha }}
+          path: |
+            environment-materials-visual-playwright.log
+            test-results/**
+            artifacts/visual-qa/environment-materials-v1/COMMIT_SHA.txt
           if-no-files-found: warn
           retention-days: 7
