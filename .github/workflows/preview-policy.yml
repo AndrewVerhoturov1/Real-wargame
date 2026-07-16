@@ -4,62 +4,69 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, edited, ready_for_review]
 
-permissions:
-  contents: write
-
 jobs:
-  apply-danger-movement-fixture-fix:
-    if: github.head_ref == 'agent/physical-movement-runtime-v1'
+  check-preview-policy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout exact candidate branch
-        uses: actions/checkout@v4
-        with:
-          ref: agent/physical-movement-runtime-v1
-          fetch-depth: 0
-
-      - name: Apply deterministic selected-only route
+      - name: Check preview policy
+        env:
+          PR_BODY: ${{ github.event.pull_request.body || '' }}
         shell: bash
         run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          import re
+          set -e
 
-          path = Path('src/testing/DangerLayerMovementPerformanceHarness.ts')
-          text = path.read_text()
-          pattern = r"(?m)^  if \(scenario === 'selected-only'\) \{\n    routeUnit\(state, observer, \{ x: observer\.position\.x \+ 22, y: observer\.position\.y \}\);"
-          replacement = """  if (scenario === 'selected-only') {
-            // Keep the acceptance segment on one horizontal bearing. The scenario only
-            // requires five cells of own movement; routing farther crosses a terrain
-            // detour and makes the raw observer-relative direction depend on browser
-            // polling cadence rather than on danger-layer semantics.
-            routeUnit(state, observer, { x: observer.position.x + 10, y: observer.position.y });"""
-          text, count = re.subn(pattern, replacement, text, count=1)
-          if count != 1:
-              raise SystemExit(f'fixture patch replacement count: {count}')
-          path.write_text(text)
-          PY
+          # This workflow guards PRs targeting main.
+          # Visual QA is deliberately not run here. It is manual-only through
+          # .github/workflows/preview-screenshots.yml after user approval.
+          # The preferred external delivery is direct push to real-wargame-preview, not PRs.
+          # PRs targeting main from task branches are a preview-policy violation without GO.
 
-      - name: Verify core compatibility
+          BASE_BRANCH="${{ github.base_ref }}"
+          HEAD_BRANCH="${{ github.head_ref }}"
+
+          echo "=== Preview Policy Check ==="
+          echo "Base branch: $BASE_BRANCH"
+          echo "Head branch: $HEAD_BRANCH"
+          echo ""
+
+          DEFAULT_TARGET="real-wargame-preview"
+          echo "Default target branch: $DEFAULT_TARGET"
+          echo "Default external delivery: direct push to $DEFAULT_TARGET (PR is fallback)"
+          echo ""
+
+          # Check: if base is main, flag it unless MAIN_GO is recorded
+          if [ "$BASE_BRANCH" = "main" ]; then
+            # Check head branch pattern: codex/*, preview/*, r-init/*
+            if echo "$HEAD_BRANCH" | grep -qE '^(codex/|preview/|r-init/)'; then
+              # Look for MAIN_GO marker in PR body
+              if printf '%s\n' "$PR_BODY" | grep -Eiq 'MAIN_GO_APPROVED_BY_USER:[[:space:]]*yes'; then
+                echo "PASS: PR targets main with explicit MAIN_GO approval."
+                echo "preview_policy=pass" >> $GITHUB_ENV
+                exit 0
+              else
+                echo "FAIL: PR targets main from branch '$HEAD_BRANCH'"
+                echo "      without MAIN_GO_APPROVED_BY_USER: yes marker."
+                echo ""
+                echo "Default target is '$DEFAULT_TARGET'."
+                echo "Please retarget this PR to '$DEFAULT_TARGET' or"
+                echo "add 'MAIN_GO_APPROVED_BY_USER: yes' to the PR body"
+                echo "if the user has explicitly approved a main merge."
+                echo "preview_policy=fail" >> $GITHUB_ENV
+                exit 1
+              fi
+            else
+              echo "PASS: Head branch '$HEAD_BRANCH' does not match codex/*, preview/*, or r-init/* patterns."
+              echo "preview_policy=pass" >> $GITHUB_ENV
+            fi
+          else
+            echo "PASS: Base branch is '$BASE_BRANCH' (expected default is '$DEFAULT_TARGET')."
+            echo "preview_policy=pass" >> $GITHUB_ENV
+          fi
+
+      - name: Print policy result
         shell: bash
         run: |
-          set -euo pipefail
-          npm ci
-          npm run physical-movement:smoke
-          npm run ai-scheduler:smoke
-          npm run combat-foundation:smoke
-          npm run combat-tactical-integration:smoke
-          npm run build
-
-      - name: Commit code-only fixture fix
-        shell: bash
-        run: |
-          set -euo pipefail
-          git restore --source=HEAD -- .github/workflows/preview-policy.yml
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/testing/DangerLayerMovementPerformanceHarness.ts
-          git diff --cached --stat
-          git commit -m 'Stabilize danger movement performance fixture'
-          git push origin HEAD:agent/physical-movement-runtime-v1
+          echo "Preview policy result: ${{ env.preview_policy }}"
+          echo "Default target for this repository is: real-wargame-preview"
+          echo "Default external delivery is: direct push to preview (PR is fallback)"
+          echo "Visual QA execution is manual-only after explicit user approval"
