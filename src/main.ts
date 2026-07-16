@@ -21,6 +21,7 @@ import type { PressureZoneData } from './core/pressure/PressureZone';
 import { createResolutionAwareInitialState } from './core/simulation/ResolutionAwareScene';
 import { initializeAiTestLabRuntime } from './core/testing/AiTestLabRuntime';
 import type { UnitData } from './core/units/UnitModel';
+import { installTacticalOrderRadialInput } from './input/TacticalOrderRadialInput';
 import { installAdaptiveGridLod } from './rendering/AdaptiveGridLodInstaller';
 import { installAttentionOverlayRenderer } from './rendering/AttentionOverlayInstaller';
 import { installCombatEffectsRenderer } from './rendering/CombatEffectsInstaller';
@@ -110,6 +111,7 @@ async function bootstrap(): Promise<void> {
   const destroyEditorHeaderPlacement = installEditorHeaderPlacement();
   const destroyWorkspaceTooltipGuard = installWorkspaceTooltipGuard();
   board.start();
+  const destroyTacticalOrderRadialInput = installTacticalOrderRadialInput(board, state, forceRenderAtNativeMapQuality);
   const destroyAdaptiveGridLod = installAdaptiveGridLod(board, state, gridToggle);
   enforceNativeMapQuality(board);
   gridToggle.addEventListener('click', scheduleNativeMapQuality);
@@ -127,6 +129,7 @@ async function bootstrap(): Promise<void> {
   window.addEventListener('beforeunload', () => {
     gridToggle.removeEventListener('click', scheduleNativeMapQuality);
     destroyAdaptiveGridLod();
+    destroyTacticalOrderRadialInput();
     destroyCommandPlanRouteUi();
     destroyRouteCostOverlayUi();
     destroyAiDictionary();
