@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { access, readFile } from 'node:fs/promises';
+import path from 'node:path';
 import {
   BUILT_IN_MOVEMENT_PROFILE_IDS,
   MovementProfileImportError,
@@ -136,7 +137,7 @@ for (const relativePath of [
     `movement core must remain browser-independent: ${relativePath}`);
 }
 await assert.rejects(
-  access(new URL('../src/core/movement/MovementProfileStorage.ts', import.meta.url)),
+  access(path.join(process.cwd(), 'src', 'core', 'movement', 'MovementProfileStorage.ts')),
   /ENOENT/,
   'browser storage adapter must not remain under src/core',
 );
