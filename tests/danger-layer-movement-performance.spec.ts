@@ -366,7 +366,7 @@ test('six moving units remain bounded and apply the final canonical snapshot', a
   await resumeSimulation(page);
   await page.waitForFunction((initial) => {
     const current = window.__realWargameDangerMovementPerformance?.getSnapshot();
-    if (!current || !initial.subjectiveThreatPosition || !current.subjectiveThreatPosition) return false;
+    if (!current?.awarenessMovement) return false;
     const friendlyDistance = Math.hypot(
       current.observerPosition.x - initial.observerPosition.x,
       current.observerPosition.y - initial.observerPosition.y,
@@ -375,12 +375,14 @@ test('six moving units remain bounded and apply the final canonical snapshot', a
       current.hostilePosition.x - initial.hostilePosition.x,
       current.hostilePosition.y - initial.hostilePosition.y,
     );
-    const subjectiveDistance = Math.hypot(
-      current.subjectiveThreatPosition.x - initial.subjectiveThreatPosition.x,
-      current.subjectiveThreatPosition.y - initial.subjectiveThreatPosition.y,
-    );
-    return friendlyDistance >= 4 && hostileDistance >= 4 && subjectiveDistance >= 2;
-  }, before, { timeout: 25_000 });
+    return friendlyDistance >= 4
+      && hostileDistance >= 4
+      && current.awarenessMovement.workerJobsStarted > initial.workerJobsStarted;
+  }, {
+    observerPosition: before.observerPosition,
+    hostilePosition: before.hostilePosition,
+    workerJobsStarted: beforeMovement.workerJobsStarted,
+  }, { timeout: 25_000 });
 
   await stopScenario(page);
   await page.waitForTimeout(250);
