@@ -41,7 +41,7 @@ export interface MoveOrderOptions {
   readonly movementProfileOwnerToken?: string;
   readonly movementProfileDefinitionRevision?: number;
   readonly movementProfileSelectionRevision?: number;
-  /** Legacy additive-input alias. New code must use the explicit selection revision. */
+  /** Legacy deserialization input only. */
   readonly movementProfileRevision?: number;
   readonly finalFacingRadians?: number;
   readonly knowledgeRevision?: number;
@@ -84,8 +84,6 @@ export interface MoveOrder {
   movementProfileOwnerToken?: string;
   movementProfileDefinitionRevision?: number;
   movementProfileSelectionRevision?: number;
-  /** Deprecated runtime alias synchronized with movementProfileSelectionRevision. */
-  movementProfileRevision?: number;
   finalFacingRadians?: number;
   knowledgeRevision?: number;
   replanSearchCount?: number;
@@ -96,8 +94,7 @@ export interface MoveOrder {
 }
 
 export function createMoveOrder(target: GridPosition, options: MoveOrderOptions = {}): MoveOrder {
-  const selectionRevision = options.movementProfileSelectionRevision ?? options.movementProfileRevision;
-  const order: MoveOrder = {
+  return {
     type: 'move',
     target: { ...target },
     issuedAtMs: Date.now(),
@@ -128,7 +125,7 @@ export function createMoveOrder(target: GridPosition, options: MoveOrderOptions 
     movementProfileSource: options.movementProfileSource,
     movementProfileOwnerToken: options.movementProfileOwnerToken,
     movementProfileDefinitionRevision: options.movementProfileDefinitionRevision,
-    movementProfileSelectionRevision: selectionRevision,
+    movementProfileSelectionRevision: options.movementProfileSelectionRevision ?? options.movementProfileRevision,
     finalFacingRadians: options.finalFacingRadians,
     knowledgeRevision: options.knowledgeRevision,
     replanSearchCount: options.replanSearchCount,
@@ -137,13 +134,4 @@ export function createMoveOrder(target: GridPosition, options: MoveOrderOptions 
     lastReplanReason: options.lastReplanReason,
     lastReplanReasonRu: options.lastReplanReasonRu,
   };
-  Object.defineProperty(order, 'movementProfileRevision', {
-    configurable: true,
-    enumerable: false,
-    get: () => order.movementProfileSelectionRevision,
-    set: (value: number | undefined) => {
-      order.movementProfileSelectionRevision = value;
-    },
-  });
-  return order;
 }
