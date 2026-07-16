@@ -1,13 +1,13 @@
 .tactical-order-radial-menu {
   position: fixed;
   z-index: 1200;
-  width: 332px;
-  height: 332px;
+  width: 224px;
+  height: 224px;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  color: #f3ead2;
+  color: #eee5cc;
   font-family: Inter, system-ui, sans-serif;
-  filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.55));
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.28));
 }
 
 .tactical-order-radial-menu[hidden],
@@ -17,108 +17,114 @@
 
 .tactical-order-radial-ring {
   position: absolute;
-  inset: 0;
+  inset: 8px;
+  border: 1px solid rgba(220, 205, 164, 0.28);
   border-radius: 50%;
   background:
-    radial-gradient(circle at center, rgba(15, 18, 15, 0.98) 0 39px, transparent 40px),
-    radial-gradient(circle at center, transparent 0 48px, rgba(35, 41, 34, 0.95) 49px 151px, transparent 152px),
-    conic-gradient(from -150deg, rgba(74, 91, 69, 0.38) 0 120deg, rgba(96, 76, 51, 0.38) 120deg 240deg, rgba(53, 78, 86, 0.38) 240deg 360deg);
-  border: 1px solid rgba(220, 205, 164, 0.38);
-  box-shadow: inset 0 0 0 7px rgba(11, 14, 12, 0.62), inset 0 0 22px rgba(0, 0, 0, 0.7);
+    repeating-conic-gradient(
+      from -150deg,
+      rgba(226, 211, 169, 0.18) 0 1deg,
+      transparent 1deg 120deg
+    ),
+    radial-gradient(
+      circle at center,
+      transparent 0 32px,
+      rgba(22, 27, 22, 0.14) 33px 101px,
+      transparent 102px
+    );
+  box-shadow:
+    inset 0 0 0 1px rgba(239, 222, 178, 0.06),
+    inset 0 0 18px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(1.5px);
 }
 
 .tactical-order-radial-menu::after {
   content: '';
   position: absolute;
-  width: 12px;
-  height: 12px;
+  width: 8px;
+  height: 8px;
   left: calc(50% + var(--tactical-order-anchor-offset-x, 0px));
   top: calc(50% + var(--tactical-order-anchor-offset-y, 0px));
   transform: translate(-50%, -50%) rotate(45deg);
-  border: 2px solid #e2c87f;
-  background: rgba(15, 18, 15, 0.9);
+  border: 1px solid rgba(231, 198, 111, 0.8);
+  background: rgba(16, 20, 16, 0.22);
   box-sizing: border-box;
 }
 
 .tactical-order-radial-sector {
   position: absolute;
-  width: 126px;
-  min-height: 72px;
-  padding: 9px 10px 8px 38px;
-  border: 1px solid rgba(218, 205, 169, 0.38);
-  border-radius: 12px;
+  width: 84px;
+  min-height: 38px;
+  padding: 6px 16px 5px 27px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   box-sizing: border-box;
-  background: rgba(25, 30, 25, 0.92);
+  background: transparent;
   text-align: left;
-  transition: transform 90ms ease, border-color 90ms ease, background 90ms ease;
+  opacity: 0.86;
+  transition: transform 80ms ease, border-color 80ms ease, background 80ms ease, opacity 80ms ease;
 }
 
 .tactical-order-sector-recon {
-  left: 103px;
-  top: 20px;
+  left: 62px;
+  top: 9px;
 }
 
 .tactical-order-sector-assault {
-  right: 14px;
-  bottom: 70px;
+  right: 0;
+  top: 119px;
 }
 
 .tactical-order-sector-move {
-  left: 14px;
-  bottom: 70px;
+  left: 0;
+  top: 119px;
 }
 
 .tactical-order-radial-sector.active {
-  transform: scale(1.08);
-  border-color: #f2d37f;
-  background: rgba(89, 74, 43, 0.97);
-  box-shadow: 0 0 0 2px rgba(242, 211, 127, 0.2), 0 8px 18px rgba(0, 0, 0, 0.42);
+  z-index: 2;
+  transform: scale(1.04);
+  border-color: #e8c96f;
+  background: rgba(83, 69, 39, 0.72);
+  opacity: 1;
+  box-shadow: 0 0 0 2px rgba(232, 201, 111, 0.12), 0 5px 12px rgba(0, 0, 0, 0.24);
 }
 
 .tactical-order-sector-icon {
   position: absolute;
-  left: 11px;
-  top: 12px;
-  width: 20px;
-  height: 20px;
+  left: 7px;
+  top: 8px;
+  width: 17px;
+  height: 17px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: rgba(229, 211, 159, 0.15);
-  color: #f3d785;
-  font-size: 17px;
-}
-
-.tactical-order-radial-sector strong,
-.tactical-order-radial-sector small {
-  display: block;
+  background: rgba(229, 211, 159, 0.08);
+  color: #efd17d;
+  font-size: 14px;
 }
 
 .tactical-order-radial-sector strong {
-  font-size: 14px;
-  line-height: 1.15;
-}
-
-.tactical-order-radial-sector small {
-  margin-top: 4px;
-  color: #c8c3b5;
-  font-size: 10px;
-  line-height: 1.2;
-  max-height: 25px;
+  display: block;
   overflow: hidden;
+  color: #eee5cc;
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tactical-order-radial-sector kbd {
   position: absolute;
-  right: 7px;
-  top: 7px;
-  min-width: 16px;
-  padding: 1px 3px;
-  border: 1px solid rgba(237, 218, 164, 0.35);
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.28);
-  color: #d8cfb3;
-  font-size: 9px;
+  right: 4px;
+  top: 3px;
+  min-width: 12px;
+  padding: 0 2px;
+  border: 1px solid rgba(237, 218, 164, 0.22);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.12);
+  color: rgba(216, 207, 179, 0.78);
+  font-size: 7px;
+  line-height: 12px;
   text-align: center;
 }
 
@@ -126,51 +132,91 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 76px;
-  height: 76px;
+  width: 50px;
+  height: 50px;
   transform: translate(-50%, -50%);
-  border: 1px solid rgba(218, 205, 169, 0.4);
+  border: 1px solid rgba(218, 205, 169, 0.26);
   border-radius: 50%;
   display: grid;
   align-content: center;
   justify-items: center;
-  background: rgba(18, 22, 18, 0.97);
+  background: rgba(18, 22, 18, 0.2);
 }
 
 .tactical-order-radial-menu.center-active .tactical-order-radial-center {
-  border-color: #e7c66f;
-  box-shadow: 0 0 0 3px rgba(231, 198, 111, 0.14);
+  border-color: rgba(231, 198, 111, 0.75);
+  background: rgba(54, 47, 30, 0.34);
+  box-shadow: 0 0 0 2px rgba(231, 198, 111, 0.08);
 }
 
 .tactical-order-radial-center strong {
-  font-size: 13px;
+  color: #ded5bc;
+  font-size: 10px;
+  line-height: 1.1;
 }
 
 .tactical-order-radial-center small {
-  width: 60px;
-  margin-top: 2px;
+  margin-top: 1px;
   color: #aaa696;
+  font-size: 7px;
+  line-height: 1;
+}
+
+.tactical-order-active-hint {
+  position: absolute;
+  left: 50%;
+  top: 174px;
+  width: 154px;
+  min-height: 24px;
+  transform: translateX(-50%);
+  padding: 3px 7px;
+  border: 1px solid rgba(218, 205, 169, 0.18);
+  border-radius: 6px;
+  box-sizing: border-box;
+  background: rgba(14, 18, 15, 0.46);
+  text-align: center;
+  backdrop-filter: blur(2px);
+}
+
+.tactical-order-active-hint strong,
+.tactical-order-active-hint span {
+  display: block;
+}
+
+.tactical-order-active-hint strong {
+  color: #f0d58b;
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+.tactical-order-active-hint span {
+  margin-top: 1px;
+  overflow: hidden;
+  color: #c3c0b4;
   font-size: 8px;
   line-height: 1.1;
-  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tactical-order-radial-target {
   position: absolute;
   left: 50%;
-  bottom: -8px;
+  top: 204px;
   transform: translateX(-50%);
-  padding: 5px 9px;
-  border: 1px solid rgba(218, 205, 169, 0.28);
-  border-radius: 8px;
-  background: rgba(13, 16, 13, 0.93);
+  padding: 2px 6px;
+  border: 1px solid rgba(218, 205, 169, 0.16);
+  border-radius: 5px;
+  background: rgba(13, 16, 13, 0.42);
   color: #d4c9aa;
-  font-size: 11px;
+  font-size: 8px;
+  line-height: 12px;
   white-space: nowrap;
+  backdrop-filter: blur(2px);
 }
 
 .tactical-order-radial-menu.is-clamped .tactical-order-radial-target::before {
-  content: 'меню сдвинуто от края · ';
+  content: 'сдвинуто · ';
   color: #9fa58f;
 }
 
