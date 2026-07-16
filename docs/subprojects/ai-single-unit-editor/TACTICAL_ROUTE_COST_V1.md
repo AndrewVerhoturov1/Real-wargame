@@ -40,27 +40,82 @@ profile id / revision
 
 Different map objects cannot share one field merely because their numeric revisions match.
 
-## Dynamic cost
+## Canonical internal danger field
 
-Version 1 honestly implements known danger from `UnitTacticalKnowledge.threats`:
+`SoldierDangerField` is the renderer-independent source of per-cell danger semantics for machine consumers. It is built from the observing soldier's subjective `UnitTacticalKnowledge.threats` and reuses the existing static awareness, `ThreatRelativeCoverField`, and `DirectionalTacticalField` caches.
 
-- position and shape;
-- threat mode (`area` or `directional_fire`);
-- confidence;
-- uncertainty;
-- strength/suppression;
-- soldier knowledge revision.
-
-It does not read hidden global enemy truth. A threat unknown to the soldier contributes nothing.
-
-The dynamic field is cached by the static key plus:
+The dependency direction is:
 
 ```text
-unit id
-knowledge revision
-future exposure revision
-future territory revision
+subjective soldier knowledge
+→ SoldierDangerField typed arrays
+    ├── SoldierAwarenessGrid
+    ├── RouteCostField / A*
+    ├── safe-position and AI consumers
+    └── graphical danger overlay as a read-only consumer
 ```
+
+Core navigation never reads textures, pixels, colors, renderer state, overlay visibility, or PixiJS objects. Turning the graphical overlay off does not disable danger construction or A*.
+
+The field contains bounded typed arrays for final danger, suppression, confidence, uncertainty, and threat-relative protection. Awareness and routing expose the same `dangerFieldKey`; equal keys mean equal danger content.
+
+## Dynamic route cost
+
+Known danger comes from the canonical field, not from a second route-only cone evaluator:
+
+```text
+canonical cell danger / 100
+× navigation profile dangerWeight
+= route dangerCost
+```
+
+The danger value and a profile's willingness to avoid danger remain separate contracts. Switching profile can rebuild profile-weighted route arrays, but it does not rebuild threat geometry or change the danger-field key.
+
+The underlying subjective inputs include:
+
+- remembered position and shape;
+- threat mode (`area` or `directional_fire`);
+- confidence and uncertainty;
+- strength and suppression;
+- remembered fire-threat class;
+- soldier knowledge revision.
+
+The calculation does not read hidden global enemy truth. A threat unknown to the soldier contributes nothing, and a hidden objective weapon change cannot rewrite existing memory.
+
+## Fire-threat classes v1
+
+Recognized unit-sourced fire uses two stable technical classes:
+
+```text
+rifle_fire       — ordinary non-machine-gun small arms
+machine_gun_fire — machine-gun sources
+```
+
+For each cell, every source is first evaluated independently after range/falloff, sector, confidence, cover, terrain protection, reverse/forward slope, and exposure. Then:
+
+- `rifle_fire` uses the maximum individual final danger among known rifle-class units;
+- `machine_gun_fire` uses the maximum individual final danger among known machine-gun units;
+- the maxima of different classes are combined with the existing bounded probabilistic formula;
+- unknown fire, pressure zones, area threats, and unclassified non-unit sources remain independent and are not collapsed into one `unknown` maximum.
+
+Legacy known unit memories without the field load as `rifle_fire`. Unknown sources remain unclassified. Suppression intentionally keeps its previous independent stacking semantics; anti-stacking applies only to danger.
+
+## Cache contract
+
+Danger computation has two bounded layers:
+
+```text
+geometry cache
+  positions, sectors, range/falloff, uncertainty geometry,
+  cover and directional terrain relationships
+
+scored field cache
+  strength, suppression, confidence and fire class
+```
+
+Changing only profile does not rebuild either danger layer. Changing fire class or confidence invalidates the scored field. For a stable single-source geometry it reuses the geometry arrays. Static map geometry changes invalidate through existing map/static-field revision keys.
+
+The route dynamic field is cached by its static/profile key plus the canonical danger-field key and future exposure/territory revisions.
 
 ## Implemented versus prepared factors
 
@@ -70,7 +125,10 @@ future territory revision
 | bridge / ditch | implemented |
 | slope | implemented |
 | hard passability | implemented |
-| known danger | implemented from soldier memory |
+| known danger | implemented through `SoldierDangerField` |
+| threat-relative wall/cover protection | implemented |
+| direct/reverse slope and terrain exposure | implemented |
+| same-class fire anti-stacking | implemented for rifle and machine-gun classes |
 | forest/ditch concealment adjustment | implemented as map-known cover preference |
 | exposure to known enemy observation | contract prepared, currently unavailable/zero |
 | exact soldier-known enemy distance | contract prepared, currently unavailable/zero |
@@ -95,7 +153,7 @@ costBreakdown
 routeReason / routeReasonRu
 ```
 
-`MoveOrder` stores only route-level summaries and revisions. Full per-cell values remain in the route-cost field cache and are requested by the overlay.
+`MoveOrder` stores only route-level summaries and revisions. Full per-cell values remain in the route-cost and canonical danger caches and are requested by read-only consumers.
 
 ## Maximum detour
 
@@ -132,8 +190,11 @@ The original player command id and AI owner token are copied into a replacement 
 
 ## Performance constraints
 
-- A* is called on order creation or an allowed replan only.
-- No renderer imports `GridPathfinder`.
-- Static/dynamic arrays are reused by revision keys.
+- A* obtains the ready/cached danger field once before neighbor expansion.
+- A* is called on order creation or an allowed replan only, never every frame.
+- No renderer or PixiJS import exists in core danger or navigation code.
+- Threat-relative cover and directional terrain fields are reused.
+- No objective unit lookup occurs during the full-map danger pass.
+- Static/dynamic typed arrays and bounded caches are reused by content keys.
 - Baseline routes use a bounded per-map endpoint cache.
 - `visitedCells` reports the tactical search; the internal cached baseline is not falsely added to the public search-limit counter.
