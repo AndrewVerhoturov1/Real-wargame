@@ -12,6 +12,7 @@ try {
     root,
     logLevel: 'warn',
     build: {
+      target: 'esnext',
       ssr: path.join(root, 'scripts', 'movement_profiles_smoke.ts'),
       outDir,
       emptyOutDir: true,
