@@ -24,22 +24,21 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path('src/testing/DangerLayerMovementPerformanceHarness.ts')
           text = path.read_text()
-          old = """  if (scenario === 'selected-only') {
-            routeUnit(state, observer, { x: observer.position.x + 22, y: observer.position.y });
-          """
-          new = """  if (scenario === 'selected-only') {
+          pattern = r"(?m)^  if \(scenario === 'selected-only'\) \{\n    routeUnit\(state, observer, \{ x: observer\.position\.x \+ 22, y: observer\.position\.y \}\);"
+          replacement = """  if (scenario === 'selected-only') {
             // Keep the acceptance segment on one horizontal bearing. The scenario only
             // requires five cells of own movement; routing farther crosses a terrain
             // detour and makes the raw observer-relative direction depend on browser
             // polling cadence rather than on danger-layer semantics.
-            routeUnit(state, observer, { x: observer.position.x + 10, y: observer.position.y });
-          """
-          if text.count(old) != 1:
-              raise SystemExit(f'fixture patch anchor count: {text.count(old)}')
-          path.write_text(text.replace(old, new, 1))
+            routeUnit(state, observer, { x: observer.position.x + 10, y: observer.position.y });"""
+          text, count = re.subn(pattern, replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'fixture patch replacement count: {count}')
+          path.write_text(text)
           PY
 
       - name: Verify core compatibility
