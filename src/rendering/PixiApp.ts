@@ -1,5 +1,7 @@
 import { Application, Container, type Ticker } from 'pixi.js';
 import { PerformanceMonitor } from '../core/debug/PerformanceMonitor';
+import { measurePerformancePhase } from '../core/debug/PerformancePhases';
+import { getActiveEnvironmentProfile } from '../core/map/EnvironmentProfileRuntime';
 import { getCell, gridToCellLabel, type MapCell } from '../core/map/MapModel';
 import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
@@ -157,10 +159,12 @@ export class PixiTacticalBoardApp {
   }
 
   private readonly tick = (ticker: Ticker): void => {
-    if (!this.getPaused()) {
-      tickSimulation(this.state, ticker.elapsedMS / 1000);
-    }
-    this.renderFrame();
+    measurePerformancePhase('pixi-ticker', () => {
+      if (!this.getPaused()) {
+        tickSimulation(this.state, ticker.elapsedMS / 1000);
+      }
+      measurePerformancePhase('workspace-render-frame', () => this.renderFrame());
+    });
   };
 
   destroy(): void {
@@ -176,6 +180,10 @@ export class PixiTacticalBoardApp {
     this.camera.destroy();
     this.boardInput.destroy();
     this.mapRenderer.container.cacheAsTexture(false);
+    if (this.mapRenderer.container.parent === this.worldContainer) {
+      this.worldContainer.removeChild(this.mapRenderer.container);
+    }
+    this.mapRenderer.destroy();
     this.overlayRenderer.destroy();
     if (this.routeCostOverlayRenderer.container.parent === this.worldContainer) {
       this.worldContainer.removeChild(this.routeCostOverlayRenderer.container);
@@ -214,6 +222,7 @@ export class PixiTacticalBoardApp {
       viewCones: this.showViewCones,
       heightLabels: this.showHeightLabels,
       htmlLabels: 'map labels are HTML overlay, height numbers are hidden until the debug toggle is enabled',
+      vegetationChunkRaster: this.mapRenderer.getVegetationRasterDiagnostics(),
     });
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -232,7 +241,7 @@ export class PixiTacticalBoardApp {
 
   private renderFrame(): void {
     const renderStartedAt = performance.now();
-    this.renderEditableMapLayerIfNeeded(false);
+    measurePerformancePhase('map-raster-apply', () => this.renderEditableMapLayerIfNeeded(false));
 
     const visibleUnits = this.state.editor.layers.units ? this.state.units : [];
     const visibleSelectedIds = this.state.editor.layers.units ? this.state.selectedUnitIds : [];
@@ -241,7 +250,7 @@ export class PixiTacticalBoardApp {
       this.viewConeRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
     }
 
-    this.awarenessHeatmapRenderer.render(this.state);
+    measurePerformancePhase('danger-overlay-update', () => this.awarenessHeatmapRenderer.render(this.state));
     this.routeCostOverlayRenderer.render(this.state);
     this.orderRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
     this.overlayRenderer.render(this.state, this.showGrid, this.state.editor.layers.pressureZones);
@@ -286,6 +295,8 @@ export class PixiTacticalBoardApp {
       `terrainRevision:${revisions.terrain}`,
       `heightRevision:${revisions.height}`,
       `forestRevision:${revisions.forest}`,
+      `environmentProfile:${getActiveEnvironmentProfile().id}`,
+      `environmentPresentationRevision:${getActiveEnvironmentProfile().revisions.presentation}`,
       `objectsRevision:${revisions.objects}`,
     ].join(';');
   }

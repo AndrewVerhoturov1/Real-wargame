@@ -1,4 +1,6 @@
 import { BufferImageSource, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import { measurePerformancePhase } from '../core/debug/PerformancePhases';
+import { getActiveEnvironmentProfile } from '../core/map/EnvironmentProfileRuntime';
 import {
   getAwarenessMovementDiagnostics,
   publishAwarenessMovementDiagnostics,
@@ -21,10 +23,10 @@ import type {
 import type {
   AwarenessWorkerBuildSnapshot,
   AwarenessWorkerFieldPayload,
-  AwarenessWorkerMapSnapshot,
   AwarenessWorkerResponse,
 } from '../core/knowledge/AwarenessWorldWorkerProtocol';
-import type { TacticalMap, TerrainKind } from '../core/map/MapModel';
+import { buildAwarenessWorkerMapSnapshot } from '../core/knowledge/AwarenessWorkerMapSnapshot';
+import type { TacticalMap } from '../core/map/MapModel';
 import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { getSimulationLayerState } from '../core/ui/RuntimeUiState';
@@ -106,16 +108,11 @@ let nextMapIdentity = 1;
 const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([0x01020304]).buffer)[0] === 0x04;
 const DANGER_PIXEL_LUT = buildPixelLut('danger');
 const STEALTH_PIXEL_LUT = buildPixelLut('stealth');
-const TERRAIN_KINDS: readonly TerrainKind[] = ['field', 'forest', 'road', 'swamp', 'rough', 'water'];
-const TERRAIN_CODE = new Map<TerrainKind, number>(
-  TERRAIN_KINDS.map((kind, index) => [kind, index]),
-);
 const MAX_SAFE_POSITIONS = 8;
 const SAFE_SEARCH_RADIUS_METERS = 120;
 const SAFE_DISTANCE_PENALTY_PER_METER = 0.18;
 const ROUTE_SAMPLE_STEP_METERS = 5;
 const FINAL_EXACT_DELAY_MS = 120;
-
 export class PixiAwarenessHeatmapRenderer {
   readonly container = new Container();
 
@@ -326,7 +323,7 @@ export class PixiAwarenessHeatmapRenderer {
     this.updatePendingDepth();
 
     this.worker.onmessage = (event: MessageEvent<AwarenessWorkerResponse>) => {
-      this.handleWorkerResponse(event.data);
+      measurePerformancePhase('worker-message-apply', () => this.handleWorkerResponse(event.data));
     };
     this.worker.onerror = (event): void => {
       if (this.destroyed) return;
@@ -335,11 +332,11 @@ export class PixiAwarenessHeatmapRenderer {
       this.publishDiagnostics();
     };
 
-    const snapshot = buildWorkerMapSnapshot(map, mapKey);
+    const snapshot = buildAwarenessWorkerMapSnapshot(map, mapKey, getActiveEnvironmentProfile());
     this.worker.postMessage({ type: 'configure', map: snapshot }, [
-      snapshot.terrainCodes.buffer,
+      snapshot.surfaceMaterialCodes.buffer,
+      snapshot.vegetationMaterialCodes.buffer,
       snapshot.heightLevels.buffer,
-      snapshot.forestKinds.buffer,
     ]);
   }
 
@@ -470,10 +467,12 @@ export class PixiAwarenessHeatmapRenderer {
   private scheduleFinalExactRefresh(): void {
     if (this.finalRefreshTimer !== null) window.clearTimeout(this.finalRefreshTimer);
     this.finalRefreshTimer = window.setTimeout(() => {
-      this.finalRefreshTimer = null;
-      if (this.destroyed || !this.latestBuildSnapshot) return;
-      this.movement.finalRefreshRequests += 1;
-      this.requestWorldBuild({ ...this.latestBuildSnapshot, finalExact: true });
+      measurePerformancePhase('ui-timer.final-exact-refresh', () => {
+        this.finalRefreshTimer = null;
+        if (this.destroyed || !this.latestBuildSnapshot) return;
+        this.movement.finalRefreshRequests += 1;
+        this.requestWorldBuild({ ...this.latestBuildSnapshot, finalExact: true });
+      });
     }, FINAL_EXACT_DELAY_MS);
   }
 
@@ -481,18 +480,23 @@ export class PixiAwarenessHeatmapRenderer {
     if (!this.worldField || !this.rasterPixelWords || !this.rasterTexture) return;
 
     const startedAt = performance.now();
-    const source = mode === 'danger'
-      ? this.worldField.dangerPixels
-      : this.worldField.stealthPixels;
-    this.rasterPixelWords.set(source.subarray(0, this.rasterPixelWords.length));
-    if (source.length < this.rasterPixelWords.length) {
-      this.rasterPixelWords.fill(0, source.length);
-    }
-    this.rasterTexture.source.update();
-    this.title.text = `СЛОЙ БОЙЦА: ${modeLabel(mode)}`;
-    this.lastRasterKey = rasterKey;
-    this.rebuildCount += 1;
-    this.movement.mainThreadRasterSwaps += 1;
+    const worldField = this.worldField;
+    const rasterPixelWords = this.rasterPixelWords;
+    const rasterTexture = this.rasterTexture;
+    measurePerformancePhase('awareness-raster-digest-apply', () => {
+      const source = mode === 'danger'
+        ? worldField.dangerPixels
+        : worldField.stealthPixels;
+      rasterPixelWords.set(source.subarray(0, rasterPixelWords.length));
+      if (source.length < rasterPixelWords.length) {
+        rasterPixelWords.fill(0, source.length);
+      }
+      rasterTexture.source.update();
+      this.title.text = `СЛОЙ БОЙЦА: ${modeLabel(mode)}`;
+      this.lastRasterKey = rasterKey;
+      this.rebuildCount += 1;
+      this.movement.mainThreadRasterSwaps += 1;
+    });
 
     const elapsed = performance.now() - startedAt;
     this.lastBuildMs = elapsed;
@@ -508,7 +512,7 @@ export class PixiAwarenessHeatmapRenderer {
     if (!this.worldField) return;
 
     const startedAt = performance.now();
-    const result = buildBestSafePositionsFromWorldField(this.worldField, snapshot);
+    const result = measurePerformancePhase('safe-position-scan', () => buildBestSafePositionsFromWorldField(this.worldField!, snapshot));
     this.safePositions = result.positions;
     this.movement.ownMovementLocalUpdates += 1;
     this.movement.safePositionLocalScans += 1;
@@ -676,6 +680,7 @@ export function drawAwarenessRasterWords(
 
 function buildAwarenessMapKey(map: TacticalMap): string {
   const revisions = getMapRevisionSnapshot(map);
+  const environment = getActiveEnvironmentProfile();
   return [
     `map:${getMapIdentity(map)}`,
     `size:${map.width}x${map.height}`,
@@ -685,6 +690,10 @@ function buildAwarenessMapKey(map: TacticalMap): string {
     `height:${revisions.height}`,
     `forest:${revisions.forest}`,
     `objects:${revisions.objects}`,
+    `environment:${environment.id}`,
+    `visibility:${environment.revisions.visibility}`,
+    `fire:${environment.revisions.fire}`,
+    `movement:${environment.revisions.movement}`,
   ].join(';');
 }
 
@@ -727,35 +736,7 @@ function buildPendingWorldSnapshot(
   };
 }
 
-function buildWorkerMapSnapshot(map: TacticalMap, mapKey: string): AwarenessWorkerMapSnapshot {
-  const count = map.width * map.height;
-  const terrainCodes = new Uint8Array(count);
-  const heightLevels = new Int8Array(count);
-  const forestKinds = new Uint8Array(count);
-  for (let index = 0; index < count; index += 1) {
-    const cell = map.cells[index];
-    terrainCodes[index] = TERRAIN_CODE.get(cell?.terrain ?? map.defaultTerrain) ?? 0;
-    heightLevels[index] = cell?.height ?? map.defaultHeight;
-    forestKinds[index] = cell?.forest ?? 0;
-  }
-  return {
-    mapKey,
-    width: map.width,
-    height: map.height,
-    cellSize: map.cellSize,
-    metersPerCell: map.metersPerCell,
-    sourceToRuntimeCellScale: map.sourceToRuntimeCellScale,
-    defaultTerrainCode: TERRAIN_CODE.get(map.defaultTerrain) ?? 0,
-    defaultHeight: map.defaultHeight,
-    terrainCodes,
-    heightLevels,
-    forestKinds,
-    objects: map.objects.map((object) => ({
-      ...object,
-      labels: object.labels ? { ...object.labels } : null,
-    })),
-  };
-}
+
 
 function buildBestSafePositionsFromWorldField(
   field: AwarenessWorkerFieldPayload,

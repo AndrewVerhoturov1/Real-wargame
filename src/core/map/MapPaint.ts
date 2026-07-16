@@ -1,6 +1,7 @@
 import { distance, type GridPosition } from '../geometry';
 import type { SimulationState } from '../simulation/SimulationState';
-import { getCell, normalizeElevationLevel, normalizeForestLayer, type TacticalMap } from './MapModel';
+import { getCell, normalizeElevationLevel, normalizeForestLayer, setCellVegetationMaterialId, type TacticalMap } from './MapModel';
+import { legacyForestLayerToVegetationMaterialId } from './EnvironmentMaterialProfile';
 import {
   fullMapRegion,
   markMapCellsDirty,
@@ -67,8 +68,8 @@ export function clearHeightLayer(state: SimulationState): void {
 export function clearForestLayer(state: SimulationState): void {
   let changed = false;
   for (const cell of state.map.cells) {
-    if (cell.forest === 0) continue;
-    cell.forest = 0;
+    if (cell.vegetationMaterialId === 'none') continue;
+    setCellVegetationMaterialId(cell, 'none');
     changed = true;
   }
   if (changed) markMapCellsDirty(state.map, 'forest', fullMapRegion(state.map));
@@ -103,8 +104,9 @@ function paintForest(
   const normalized = normalizeForestLayer(kind);
   return collectPaintChanges(map, center, radius, shape, (x, y) => {
     const cell = getCell(map, x, y);
-    if (!cell || cell.forest === normalized) return false;
-    cell.forest = normalized;
+    const materialId = legacyForestLayerToVegetationMaterialId(normalized);
+    if (!cell || cell.vegetationMaterialId === materialId) return false;
+    setCellVegetationMaterialId(cell, materialId);
     return true;
   });
 }

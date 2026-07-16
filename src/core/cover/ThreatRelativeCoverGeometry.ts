@@ -1,3 +1,4 @@
+import { measurePerformancePhase } from '../debug/PerformancePhases';
 import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import {
@@ -46,6 +47,9 @@ export interface ThreatRelativeCoverFieldDiagnostics {
   readonly objectChecks: number;
   readonly forestMapReads: number;
   readonly lastBuildMs: number;
+  readonly typedArrayAllocationCount: number;
+  readonly totalTypedArrayAllocatedBytes: number;
+  readonly lastBuildTypedArrayBytes: number;
   readonly cachedFieldCount: number;
   readonly evictionCount: number;
   readonly lastKey: string;
@@ -58,6 +62,9 @@ interface MutableDiagnostics {
   objectChecks: number;
   forestMapReads: number;
   lastBuildMs: number;
+  typedArrayAllocationCount: number;
+  totalTypedArrayAllocatedBytes: number;
+  lastBuildTypedArrayBytes: number;
   evictionCount: number;
   lastKey: string;
 }
@@ -135,13 +142,17 @@ export function getThreatRelativeCoverField(
   }
 
   const startedAt = performance.now();
-  const build = buildField(map, key, options);
+  const build = measurePerformancePhase('threat-relative-cover-geometry-build', () => buildField(map, key, options));
   mapCache.fields.set(key, build.field);
   mapCache.hotFields.set(hotKey, build.field);
   mapCache.diagnostics.geometryBuildCount += 1;
   mapCache.diagnostics.fullMapScanCount += 1;
   mapCache.diagnostics.objectChecks += build.objectChecks;
   mapCache.diagnostics.forestMapReads += build.forestMapReads;
+  const allocatedBytes = threatRelativeFieldTypedArrayBytes(build.field);
+  mapCache.diagnostics.typedArrayAllocationCount += 5;
+  mapCache.diagnostics.totalTypedArrayAllocatedBytes += allocatedBytes;
+  mapCache.diagnostics.lastBuildTypedArrayBytes = allocatedBytes;
   mapCache.diagnostics.lastBuildMs = performance.now() - startedAt;
   mapCache.diagnostics.lastKey = key;
   trimCache(mapCache);
@@ -407,6 +418,14 @@ function buildNumericHotKey(x: number, y: number, posture: UnitPosture): number 
   return ((x + 100_000) * 200_001 + (y + 100_000)) * 4 + postureCode;
 }
 
+function threatRelativeFieldTypedArrayBytes(field: ThreatRelativeCoverField): number {
+  return field.protection.byteLength
+    + field.concealment.byteLength
+    + field.objectProtection.byteLength
+    + field.forestProtection.byteLength
+    + field.strongestObjectIndex.byteLength;
+}
+
 function getMapCache(map: TacticalMap): MapCache {
   const existing = cache.get(map);
   if (existing) return existing;
@@ -423,6 +442,9 @@ function getMapCache(map: TacticalMap): MapCache {
       objectChecks: 0,
       forestMapReads: 0,
       lastBuildMs: 0,
+      typedArrayAllocationCount: 0,
+      totalTypedArrayAllocatedBytes: 0,
+      lastBuildTypedArrayBytes: 0,
       evictionCount: 0,
       lastKey: '',
     },
@@ -454,6 +476,9 @@ function emptyDiagnostics(): ThreatRelativeCoverFieldDiagnostics {
     objectChecks: 0,
     forestMapReads: 0,
     lastBuildMs: 0,
+    typedArrayAllocationCount: 0,
+    totalTypedArrayAllocatedBytes: 0,
+    lastBuildTypedArrayBytes: 0,
     cachedFieldCount: 0,
     evictionCount: 0,
     lastKey: '',

@@ -40,6 +40,7 @@ import {
 import { applyInitialStateToRuntime, type UnitModel } from '../core/units/UnitModel';
 import { bindTacticalStatePlanPanel, renderTacticalStatePlanPanelMarkup } from './AiStatePlanPanel';
 import { exitLab } from '../shared/AppShellMenu';
+import { measurePerformancePhase } from '../core/debug/PerformancePhases';
 
 export type TacticalWorkspaceMode = 'simulation' | 'editor';
 type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory';
@@ -430,7 +431,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
 
   setSimulationLayerMode(state, tab);
   syncLayout(); update(true); attachTooltip();
-  window.setInterval(() => update(false), 300);
+  window.setInterval(() => measurePerformancePhase('ui-timer.tactical-workspace', () => update(false)), 300);
 }
 
 function combatCapabilityLabel(value: ReturnType<typeof getCombatRuntime>['capability']): string {

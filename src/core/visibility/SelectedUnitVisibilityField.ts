@@ -88,6 +88,7 @@ export function getUnitVisibilityField(
     originHeightAboveGroundMeters: eyeHeightForPosture(unit.behaviorRuntime.posture),
     targetHeightAboveGroundMeters: TARGET_EYE_HEIGHT_METERS,
     rangeCells: radiusCells,
+    channel: 'visual',
   });
   const key = buildCalculationKey(state, unit, geometry.key);
   if (current?.calculationKey === key) {

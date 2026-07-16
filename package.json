@@ -77,7 +77,12 @@
     "state-plan-scenario:smoke": "node scripts/ai_state_plan_scenario_smoke.mjs",
     "tactical-query:smoke": "node scripts/tactical_query_system_smoke.mjs",
     "tactical-query-ui:smoke": "node scripts/tactical_query_ui_smoke.mjs",
-    "ai-scheduler:smoke": "node scripts/ai_per_unit_scheduler_smoke.mjs"
+    "ai-scheduler:smoke": "node scripts/ai_per_unit_scheduler_smoke.mjs",
+    "environment-materials:smoke": "node scripts/environment_materials_smoke.mjs",
+    "environment-material-migration:smoke": "node scripts/environment_material_migration_smoke.mjs",
+    "environment-profile-revisions:smoke": "node scripts/environment_profile_revisions_smoke.mjs",
+    "vegetation-chunk-raster:smoke": "node scripts/vegetation_chunk_raster_smoke.mjs",
+    "environment-performance:smoke": "node scripts/environment_performance_smoke.mjs"
   },
   "dependencies": {
     "pixi.js": "^8.19.0"

@@ -2,6 +2,7 @@ import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import { getCell, resolveObjectCoverProperties, type MapObject, type TacticalMap } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
+import { getActiveEnvironmentProfile } from '../map/EnvironmentProfileRuntime';
 import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 import { getMapObjectSpatialIndex } from '../spatial/MapObjectSpatialIndex';
 
@@ -134,6 +135,8 @@ function buildStaticFieldKey(map: TacticalMap, posture: UnitPosture): string {
     revisions.terrain,
     revisions.height,
     revisions.forest,
+    getActiveEnvironmentProfile().id,
+    getActiveEnvironmentProfile().revisions.visibility,
     revisions.objects,
   ].join(':');
 }

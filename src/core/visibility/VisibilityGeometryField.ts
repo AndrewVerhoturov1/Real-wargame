@@ -1,10 +1,9 @@
 import type { GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
-import {
-  resolveVegetationDefinition,
-  VEGETATION_DEFINITION_REVISION,
-} from '../map/VegetationDefinition';
+import { resolveVegetationDefinition, getVegetationDefinitionRevision } from '../map/VegetationDefinition';
 import { getVisibilityStaticGrid } from './VisibilityStaticGrid';
+import { measurePerformancePhase } from '../debug/PerformancePhases';
+import { getEnvironmentProfileRuntimeSnapshot } from '../map/EnvironmentProfileRuntime';
 
 const CACHE_LIMIT = 24;
 const POSITION_QUANTUM_CELLS = 0.25;
@@ -18,6 +17,7 @@ export interface VisibilityGeometryFieldOptions {
   readonly originHeightAboveGroundMeters: number;
   readonly targetHeightAboveGroundMeters: number;
   readonly rangeCells: number;
+  readonly channel?: 'visual' | 'fire' | 'combined';
 }
 
 export interface VisibilityGeometryField {
@@ -34,6 +34,9 @@ export interface VisibilityGeometryField {
   /** 0 none, 1 terrain/horizon, 2 map object. */
   readonly blockerKind: Uint8Array;
   readonly mapVisualRevision: number;
+  readonly channel: 'visual' | 'fire' | 'combined';
+  readonly profileId: string;
+  readonly profileRevision: number;
 }
 
 export interface VisibilityGeometryFieldDiagnostics {
@@ -44,6 +47,12 @@ export interface VisibilityGeometryFieldDiagnostics {
   readonly processedCellCount: number;
   readonly rayCount: number;
   readonly retainedTypedArrayBytes: number;
+  readonly typedArrayAllocationCount: number;
+  readonly totalTypedArrayAllocatedBytes: number;
+  readonly lastBuildTypedArrayBytes: number;
+  readonly lastBuildMs: number;
+  readonly maxBuildMs: number;
+  readonly lastBuildReason: string;
   readonly lastKey: string;
 }
 
@@ -53,6 +62,12 @@ interface MutableDiagnostics {
   fullMapScanCount: number;
   processedCellCount: number;
   rayCount: number;
+  typedArrayAllocationCount: number;
+  totalTypedArrayAllocatedBytes: number;
+  lastBuildTypedArrayBytes: number;
+  lastBuildMs: number;
+  maxBuildMs: number;
+  lastBuildReason: string;
   lastKey: string;
 }
 
@@ -79,12 +94,21 @@ export function getVisibilityGeometryField(
     return existing;
   }
 
-  const build = buildField(map, staticGrid, normalized, key);
+  const startedAt = nowMilliseconds();
+  const build = measurePerformancePhase(`visibility-geometry.${normalized.channel}`, () => buildField(map, staticGrid, normalized, key));
+  const buildMs = nowMilliseconds() - startedAt;
   cache.fields.set(key, build.field);
   trimCache(cache.fields, CACHE_LIMIT);
   cache.diagnostics.geometryBuildCount += 1;
   cache.diagnostics.processedCellCount += build.processedCellCount;
   cache.diagnostics.rayCount += build.rayCount;
+  const allocatedBytes = visibilityFieldTypedArrayBytes(build.field);
+  cache.diagnostics.typedArrayAllocationCount += 4;
+  cache.diagnostics.totalTypedArrayAllocatedBytes += allocatedBytes;
+  cache.diagnostics.lastBuildTypedArrayBytes = allocatedBytes;
+  cache.diagnostics.lastBuildMs = buildMs;
+  cache.diagnostics.maxBuildMs = Math.max(cache.diagnostics.maxBuildMs, buildMs);
+  cache.diagnostics.lastBuildReason = `${normalized.channel}:cache-miss`;
   cache.diagnostics.lastKey = key;
   return build.field;
 }
@@ -194,8 +218,13 @@ function buildField(
       previousY = cell.y;
 
       const vegetation = resolveVegetationDefinition(staticGrid.forestKind[mapIndex]);
-      visual *= Math.exp(-vegetation.visibility.transmissionLossPerMeter * stepMeters);
-      fire *= Math.exp(-vegetation.fire.transmissionLossPerMeter * stepMeters);
+      if (options.channel !== 'fire') {
+        visual = Math.max(
+          vegetation.visibility.minimumTransmission,
+          visual * Math.exp(-vegetation.visibility.transmissionLossPerMeter * stepMeters),
+        );
+      }
+      if (options.channel !== 'visual') fire *= Math.exp(-vegetation.fire.transmissionLossPerMeter * stepMeters);
 
       const blockedByObject = staticGrid.blockingFlags[mapIndex] === 1;
       if (blockedByHorizon) {
@@ -252,6 +281,13 @@ function buildField(
       fireTransmission,
       blockerKind,
       mapVisualRevision: staticGrid.mapVisualRevision,
+      channel: options.channel,
+      profileId: getEnvironmentProfileRuntimeSnapshot().activeProfileId,
+      profileRevision: options.channel === 'visual'
+        ? getVegetationDefinitionRevision('visibility')
+        : options.channel === 'fire'
+          ? getVegetationDefinitionRevision('fire')
+          : Math.max(getVegetationDefinitionRevision('visibility'), getVegetationDefinitionRevision('fire')),
     },
     processedCellCount,
     rayCount: perimeter.length,
@@ -267,6 +303,7 @@ function normalizeOptions(map: TacticalMap, options: VisibilityGeometryFieldOpti
     originHeightAboveGroundMeters: Math.max(0.05, finite(options.originHeightAboveGroundMeters)),
     targetHeightAboveGroundMeters: Math.max(0.05, finite(options.targetHeightAboveGroundMeters)),
     rangeCells: Math.max(0.5, Math.min(Math.hypot(map.width, map.height), finite(options.rangeCells))),
+    channel: options.channel ?? 'combined',
   };
 }
 
@@ -282,7 +319,13 @@ function buildKey(
     quantize(options.targetHeightAboveGroundMeters, HEIGHT_QUANTUM_METERS),
     quantize(options.rangeCells, 0.25),
     mapVisualRevision,
-    VEGETATION_DEFINITION_REVISION,
+    options.channel,
+    getEnvironmentProfileRuntimeSnapshot().activeProfileId,
+    options.channel === 'visual'
+      ? getVegetationDefinitionRevision('visibility')
+      : options.channel === 'fire'
+        ? getVegetationDefinitionRevision('fire')
+        : `${getVegetationDefinitionRevision('visibility')}.${getVegetationDefinitionRevision('fire')}`,
   ].join(':');
 }
 
@@ -372,6 +415,12 @@ function getMapCache(map: TacticalMap): MapCache {
       fullMapScanCount: 0,
       processedCellCount: 0,
       rayCount: 0,
+      typedArrayAllocationCount: 0,
+      totalTypedArrayAllocatedBytes: 0,
+      lastBuildTypedArrayBytes: 0,
+      lastBuildMs: 0,
+      maxBuildMs: 0,
+      lastBuildReason: 'not-built',
       lastKey: '',
     },
   };
@@ -388,6 +437,12 @@ function emptyDiagnostics(): VisibilityGeometryFieldDiagnostics {
     processedCellCount: 0,
     rayCount: 0,
     retainedTypedArrayBytes: 0,
+    typedArrayAllocationCount: 0,
+    totalTypedArrayAllocatedBytes: 0,
+    lastBuildTypedArrayBytes: 0,
+    lastBuildMs: 0,
+    maxBuildMs: 0,
+    lastBuildReason: 'not-built',
     lastKey: '',
   };
 }
@@ -424,3 +479,12 @@ function clamp(value: number, min: number, max: number): number {
 function clampInt(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.round(value)));
 }
+
+function visibilityFieldTypedArrayBytes(field: VisibilityGeometryField): number {
+  return field.hardBlocked.byteLength
+    + field.visualTransmission.byteLength
+    + field.fireTransmission.byteLength
+    + field.blockerKind.byteLength;
+}
+
+function nowMilliseconds(): number { return typeof performance === 'undefined' ? Date.now() : performance.now(); }

@@ -17,6 +17,10 @@ import pressureZoneData from './data/pressure_zones/test_pressure_zones.json';
 import unitsData from './data/units/test_units.json';
 import { installAiStatefulMoveGameBridge as installAiGameBridge } from './core/ai/AiStatefulMoveGameBridge';
 import type { TacticalMapData } from './core/map/MapModel';
+import {
+  getEnvironmentProfileRegistry,
+  subscribeEnvironmentProfileRegistry,
+} from './core/map/EnvironmentProfileStorage';
 import type { PressureZoneData } from './core/pressure/PressureZone';
 import { createResolutionAwareInitialState } from './core/simulation/ResolutionAwareScene';
 import { initializeAiTestLabRuntime } from './core/testing/AiTestLabRuntime';
@@ -63,11 +67,14 @@ if (!root || !debugPanel || !languageToggle || !gridToggle || !visionToggle || !
 
 installAppShellMenu({ mode: 'game' });
 
+const environmentProfileRegistry = getEnvironmentProfileRegistry();
+
 state = createResolutionAwareInitialState(
   mapData as TacticalMapData,
   unitsData as UnitData[],
   pressureZoneData as PressureZoneData[],
 );
+state.map.environmentProfileId = environmentProfileRegistry.activeProfileId;
 initializeAiTestLabRuntime(state);
 
 void bootstrap().catch(reportBootstrapFailure);
@@ -84,6 +91,10 @@ async function bootstrap(): Promise<void> {
   );
   tacticalBoard = board;
   const aiGameBridge = installAiGameBridge(state);
+  const destroyEnvironmentProfileSubscription = subscribeEnvironmentProfileRegistry((registry) => {
+    state.map.environmentProfileId = registry.activeProfileId;
+    board.forceRender();
+  });
   const forceRenderAtNativeMapQuality = () => {
     board.forceRender();
     enforceNativeMapQuality(board);
@@ -126,6 +137,7 @@ async function bootstrap(): Promise<void> {
 
   window.addEventListener('beforeunload', () => {
     gridToggle.removeEventListener('click', scheduleNativeMapQuality);
+    destroyEnvironmentProfileSubscription();
     destroyAdaptiveGridLod();
     destroyCommandPlanRouteUi();
     destroyRouteCostOverlayUi();

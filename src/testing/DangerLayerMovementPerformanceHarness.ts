@@ -1,3 +1,4 @@
+import { setCellVegetationMaterialId } from '../core/map/MapModel';
 import type { AwarenessMovementDiagnostics } from '../core/debug/AwarenessMovementDiagnostics';
 import { syncSoldierThreatMemory } from '../core/knowledge/SoldierThreatMemory';
 import { markMapCellsDirty, markMapObjectsDirty } from '../core/map/MapRuntimeState';
@@ -390,10 +391,10 @@ function installTerrainFixtures(state: SimulationState): void {
     maxY: Math.min(height - 3, Math.floor(height * 0.70)),
   };
   for (let y = lightBounds.minY; y <= lightBounds.maxY; y += 1) {
-    for (let x = lightBounds.minX; x <= lightBounds.maxX; x += 1) state.map.cells[y * width + x].forest = 1;
+    for (let x = lightBounds.minX; x <= lightBounds.maxX; x += 1) setCellVegetationMaterialId(state.map.cells[y * width + x], 'sparse_forest');
   }
   for (let y = denseBounds.minY; y <= denseBounds.maxY; y += 1) {
-    for (let x = denseBounds.minX; x <= denseBounds.maxX; x += 1) state.map.cells[y * width + x].forest = 2;
+    for (let x = denseBounds.minX; x <= denseBounds.maxX; x += 1) setCellVegetationMaterialId(state.map.cells[y * width + x], 'dense_forest');
   }
   markMapCellsDirty(state.map, 'forest', lightBounds);
   markMapCellsDirty(state.map, 'forest', denseBounds);

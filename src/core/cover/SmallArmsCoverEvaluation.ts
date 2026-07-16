@@ -6,6 +6,7 @@ import {
   type MapObject,
   type TacticalMap,
 } from '../map/MapModel';
+import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 
 export interface SmallArmsCoverContribution {
   kind: 'object' | 'forest' | 'relief';
@@ -127,18 +128,20 @@ export function evaluateForestCover(
   if (length < 0.5) return null;
 
   const samples = Math.max(4, Math.ceil(length * 3));
-  let lightCells = 0;
-  let denseCells = 0;
+  let sparseSamples = 0;
+  let denseSamples = 0;
+  let density = 0;
 
   for (let index = 1; index < samples; index += 1) {
     const t = index / samples;
     const point = lerpPoint(threatPosition, targetPosition, t);
     const cell = getCell(map, Math.floor(point.x), Math.floor(point.y));
-    if (cell?.forest === 1) lightCells += 1;
-    if (cell?.forest === 2) denseCells += 1;
+    const vegetation = resolveCellVegetationDefinition(cell);
+    density += vegetation.fire.densityWeight;
+    if (vegetation.id === 'sparse_forest') sparseSamples += 1;
+    if (vegetation.id === 'dense_forest') denseSamples += 1;
   }
 
-  const density = denseCells * 1.7 + lightCells * 0.8;
   if (density <= 0) return null;
 
   const strength = clampPercent(8 + Math.min(34, density * 2.1));
@@ -147,7 +150,7 @@ export function evaluateForestCover(
 
   return {
     kind: 'forest',
-    labelRu: denseCells > lightCells ? 'густой лес' : 'лес и кустарник',
+    labelRu: denseSamples > sparseSamples ? 'густой лес' : 'лес и кустарник',
     strength,
     reliability,
     expectedProtection: clampPercent(strength * reliability / 100),

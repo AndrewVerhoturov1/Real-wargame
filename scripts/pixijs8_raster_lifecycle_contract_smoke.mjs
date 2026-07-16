@@ -26,7 +26,7 @@ assert.match(appSource, /releaseGlobalResources: true/, 'application teardown mu
 const awarenessHiddenBranch = awarenessSource.match(/if \(state\.editor\.enabled \|\| mode === 'off' \|\| !unit\) \{[\s\S]*?return;\n    \}/)?.[0] ?? '';
 assert.doesNotMatch(awarenessHiddenBranch, /ensureRaster|ensureWorkerConfigured|source\.update/, 'hidden awareness overlay must not allocate or upload');
 assert.match(awarenessSource, /new BufferImageSource\(\{[\s\S]*resource: this\.rasterPixels,[\s\S]*width,[\s\S]*height,[\s\S]*format: 'rgba8unorm',[\s\S]*scaleMode: 'nearest'/, 'mutable RGBA byte raster must declare RGBA format and nearest sampling');
-assert.match(awarenessSource, /this\.rasterTexture\.source\.update\(\)/, 'mutable awareness bytes must notify the v8 texture source');
+assert.match(awarenessSource, /rasterTexture\.source\.update\(\)/, 'mutable awareness bytes must notify the v8 texture source through the non-null local captured after the guard');
 assert.match(awarenessSource, /this\.worker\?\.terminate\(\)/);
 assert.match(awarenessSource, /window\.clearTimeout\(this\.finalRefreshTimer\)/);
 assert.match(awarenessSource, /delete \(window as AwarenessDebugWindow\)\.__realWargameAwarenessDebug/);

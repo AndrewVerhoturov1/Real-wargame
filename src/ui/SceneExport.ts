@@ -12,6 +12,7 @@ import {
 import { replaceSceneAtRuntimeResolution } from '../core/simulation/ResolutionAwareScene';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { refreshAiTestLabSceneSnapshot } from '../core/testing/AiTestLabRuntime';
+import { getEnvironmentProfileRegistry, saveEnvironmentProfileRegistry } from '../core/map/EnvironmentProfileStorage';
 import type { UnitData, UnitModel } from '../core/units/UnitModel';
 
 export interface ExportedSceneData {
@@ -25,8 +26,11 @@ export interface ExportedSceneData {
     metersPerCell: number;
     defaultTerrain: string;
     defaultHeight: number;
+    environmentProfileId: string;
     heightMap: number[][];
     forestMap: number[][];
+    surfaceMaterialMap: string[][];
+    vegetationMaterialMap: string[][];
     objects: Array<Record<string, unknown>>;
   };
   units: Array<Record<string, unknown>>;
@@ -45,6 +49,13 @@ export async function loadSceneJsonFromFile(state: SimulationState, file: File):
 
   const scene = normalizeImportedScene(parsed);
   replaceSceneAtRuntimeResolution(state, scene.map, scene.units, scene.pressureZones);
+  const environmentRegistry = getEnvironmentProfileRegistry();
+  if (environmentRegistry.hasProfile(state.map.environmentProfileId)) {
+    environmentRegistry.setActiveProfile(state.map.environmentProfileId);
+    saveEnvironmentProfileRegistry(environmentRegistry);
+  } else {
+    state.map.environmentProfileId = environmentRegistry.activeProfileId;
+  }
   state.editor.selectedObjectId = null;
   state.editor.selectedZoneId = null;
   state.editor.drag = null;
@@ -104,8 +115,11 @@ export function buildExportedScene(state: SimulationState): ExportedSceneData {
       metersPerCell: state.map.metersPerCell,
       defaultTerrain: state.map.defaultTerrain,
       defaultHeight: state.map.defaultHeight,
+      environmentProfileId: state.map.environmentProfileId,
       heightMap: buildHeightMap(state),
       forestMap: buildForestMap(state),
+      surfaceMaterialMap: buildMaterialMap(state, 'surfaceMaterialId'),
+      vegetationMaterialMap: buildMaterialMap(state, 'vegetationMaterialId'),
       objects: state.map.objects.map((object) => {
         const cover = resolveObjectCoverProperties(object);
         return {
@@ -184,6 +198,17 @@ function buildForestMap(state: SimulationState): number[][] {
     for (let x = 0; x < state.map.width; x += 1) {
       row.push(state.map.cells[y * state.map.width + x]?.forest ?? 0);
     }
+    rows.push(row);
+  }
+  return rows;
+}
+
+
+function buildMaterialMap(state: SimulationState, field: 'surfaceMaterialId' | 'vegetationMaterialId'): string[][] {
+  const rows: string[][] = [];
+  for (let y = 0; y < state.map.height; y += 1) {
+    const row: string[] = [];
+    for (let x = 0; x < state.map.width; x += 1) row.push(state.map.cells[y * state.map.width + x]?.[field] ?? (field === 'surfaceMaterialId' ? 'field' : 'none'));
     rows.push(row);
   }
   return rows;

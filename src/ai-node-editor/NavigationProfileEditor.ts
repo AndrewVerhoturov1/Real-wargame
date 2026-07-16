@@ -1,4 +1,5 @@
 import { renderAttentionProfiles } from './AttentionProfileEditorPanel';
+import { renderEnvironmentProfiles } from './EnvironmentProfileEditorPanel';
 import {
   NavigationProfileRegistry,
   getBuiltInNavigationProfile,
@@ -16,7 +17,7 @@ const graphRootElement = document.querySelector<HTMLElement>('#ai-node-editor-ro
 if (!graphRootElement) throw new Error('AI node editor root is missing for navigation profile editor.');
 const graphRoot: HTMLElement = graphRootElement;
 
-type EditorTab = 'graph' | 'blackboard' | 'profiles' | 'attentionProfiles';
+type EditorTab = 'graph' | 'blackboard' | 'profiles' | 'attentionProfiles' | 'environmentProfiles';
 type NumericPath =
   | `terrainCosts.${keyof NavigationProfile['terrainCosts']}`
   | 'slopeWeight'
@@ -101,6 +102,7 @@ navigation.innerHTML = `
     <button type="button" data-navigation-tab="graph">Граф поведения</button>
     <button type="button" data-navigation-tab="profiles">Профили движения</button>
     <button type="button" data-navigation-tab="attentionProfiles">Профили внимания</button>
+    <button type="button" data-navigation-tab="environmentProfiles">Профили местности</button>
     <button type="button" data-navigation-tab="blackboard">Данные бойца</button>
   </div>
   <div class="navigation-profile-global-actions" data-editor-global-actions></div>
@@ -150,6 +152,7 @@ function showTab(tab: EditorTab): void {
   });
   if (tab === 'profiles') renderProfiles();
   else if (tab === 'attentionProfiles') renderAttentionProfiles(panel);
+  else if (tab === 'environmentProfiles') renderEnvironmentProfiles(panel);
   else if (tab === 'blackboard') renderBlackboard();
 }
 

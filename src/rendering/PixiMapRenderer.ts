@@ -1,15 +1,14 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import {
   type ElevationLevel,
-  type MapCell,
   type MapObject,
   type TacticalMap,
 } from '../core/map/MapModel';
-import {
-  resolveCellVegetationDefinition,
-  VEGETATION_DEFINITION_REVISION,
-} from '../core/map/VegetationDefinition';
 import { TERRAIN_STYLE } from './terrainStyle';
+import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
+import { getActiveEnvironmentProfile } from '../core/map/EnvironmentProfileRuntime';
+import { getSurfaceMaterial } from '../core/map/EnvironmentMaterialProfile';
+import { VegetationChunkRaster, type VegetationChunkRasterDiagnostics } from './VegetationChunkRaster';
 
 interface LayerPaletteEntry {
   red: number;
@@ -36,7 +35,9 @@ export class PixiMapRenderer {
   readonly container = new Container();
   private readonly staticContainer = new Container();
   private readonly objectContainer = new Container();
+  private readonly vegetationRaster = new VegetationChunkRaster();
   private lastStaticKey = '';
+  private lastStaticMap: TacticalMap | null = null;
   private lastObjectKey = '';
 
   constructor() {
@@ -56,12 +57,13 @@ export class PixiMapRenderer {
   private renderStaticLayerIfNeeded(map: TacticalMap, showGrid: boolean): void {
     const nextKey = getStaticLayerKey(map, showGrid);
 
-    if (nextKey === this.lastStaticKey) {
+    if (map === this.lastStaticMap && nextKey === this.lastStaticKey) {
       return;
     }
 
+    this.lastStaticMap = map;
     this.lastStaticKey = nextKey;
-    this.staticContainer.removeChildren();
+    destroyRemovedChildren(this.staticContainer, this.vegetationRaster.container);
     renderTerrainBatches(this.staticContainer, map);
 
     const elevationLayer = renderElevationLayer(map);
@@ -69,10 +71,8 @@ export class PixiMapRenderer {
       this.staticContainer.addChild(elevationLayer);
     }
 
-    const forestLayer = renderForestLayer(map);
-    if (forestLayer) {
-      this.staticContainer.addChild(forestLayer);
-    }
+    this.vegetationRaster.render(map);
+    this.staticContainer.addChild(this.vegetationRaster.container);
 
     if (showGrid) {
       this.staticContainer.addChild(renderMeterGrid(map));
@@ -82,6 +82,18 @@ export class PixiMapRenderer {
     border.rect(0, 0, map.width * map.cellSize, map.height * map.cellSize)
       .stroke({ width: 3, color: 0x10160f, alpha: 0.85 });
     this.staticContainer.addChild(border);
+  }
+
+  getVegetationRasterDiagnostics(): VegetationChunkRasterDiagnostics {
+    return this.vegetationRaster.getDiagnostics();
+  }
+
+  destroy(): void {
+    if (this.vegetationRaster.container.parent === this.staticContainer) {
+      this.staticContainer.removeChild(this.vegetationRaster.container);
+    }
+    this.vegetationRaster.destroy();
+    this.container.destroy({ children: true });
   }
 
   private renderObjectLayerIfNeeded(
@@ -96,7 +108,7 @@ export class PixiMapRenderer {
     }
 
     this.lastObjectKey = nextKey;
-    this.objectContainer.removeChildren();
+    destroyRemovedChildren(this.objectContainer);
 
     if (!showObjects) {
       return;
@@ -108,27 +120,31 @@ export class PixiMapRenderer {
   }
 }
 
+function destroyRemovedChildren(container: Container, preserve?: Container): void {
+  const removed = container.removeChildren();
+  for (const child of removed) {
+    if (child === preserve) continue;
+    child.destroy({ children: true });
+  }
+}
+
 function renderTerrainBatches(container: Container, map: TacticalMap): void {
-  const terrainGraphics = new Map<keyof typeof TERRAIN_STYLE, Graphics>();
+  const profile = getActiveEnvironmentProfile();
+  const terrainGraphics = new Map<string, Graphics>();
 
   for (const cell of map.cells) {
-    let graphics = terrainGraphics.get(cell.terrain);
-
+    let graphics = terrainGraphics.get(cell.surfaceMaterialId);
     if (!graphics) {
       graphics = new Graphics();
-      terrainGraphics.set(cell.terrain, graphics);
+      terrainGraphics.set(cell.surfaceMaterialId, graphics);
     }
-
-    graphics.rect(
-      cell.x * map.cellSize,
-      cell.y * map.cellSize,
-      map.cellSize,
-      map.cellSize,
-    );
+    graphics.rect(cell.x * map.cellSize, cell.y * map.cellSize, map.cellSize, map.cellSize);
   }
 
-  for (const [terrain, graphics] of terrainGraphics) {
-    graphics.fill({ color: TERRAIN_STYLE[terrain].fill });
+  for (const [materialId, graphics] of terrainGraphics) {
+    const material = getSurfaceMaterial(profile, materialId);
+    const legacy = TERRAIN_STYLE[materialId as keyof typeof TERRAIN_STYLE]?.fill;
+    graphics.fill({ color: material.presentation.colorTint ?? legacy ?? 0x77775b, alpha: material.presentation.opacity });
     container.addChild(graphics);
   }
 }
@@ -175,36 +191,11 @@ function renderElevationLayer(map: TacticalMap): Sprite | null {
   return createScaledSprite(canvas);
 }
 
-function renderForestLayer(map: TacticalMap): Sprite | null {
-  if (!map.cells.some((cell) => resolveCellVegetationDefinition(cell).layer > 0)) {
-    return null;
-  }
-
-  const canvas = createHighQualityCanvas(map);
-  const context = canvas.getContext('2d');
-
-  if (!context) {
-    return null;
-  }
-
-  context.save();
-  context.scale(TEXTURE_DETAIL_SCALE, TEXTURE_DETAIL_SCALE);
-  for (const cell of map.cells) {
-    if (resolveCellVegetationDefinition(cell).layer === 0) {
-      continue;
-    }
-
-    drawForestCell(context, map, cell);
-  }
-  context.restore();
-
-  return createScaledSprite(canvas);
-}
 
 function createHighQualityCanvas(map: TacticalMap): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
-  canvas.width = map.width * map.cellSize * TEXTURE_DETAIL_SCALE;
-  canvas.height = map.height * map.cellSize * TEXTURE_DETAIL_SCALE;
+  canvas.width = Math.max(1, Math.ceil(map.width * map.cellSize * TEXTURE_DETAIL_SCALE));
+  canvas.height = Math.max(1, Math.ceil(map.height * map.cellSize * TEXTURE_DETAIL_SCALE));
   return canvas;
 }
 
@@ -212,54 +203,6 @@ function createScaledSprite(canvas: HTMLCanvasElement): Sprite {
   const sprite = new Sprite(Texture.from(canvas));
   sprite.scale.set(1 / TEXTURE_DETAIL_SCALE);
   return sprite;
-}
-
-function drawForestCell(
-  context: CanvasRenderingContext2D,
-  map: TacticalMap,
-  cell: MapCell,
-): void {
-  const vegetation = resolveCellVegetationDefinition(cell);
-  const forest = vegetation.layer;
-  const size = map.cellSize;
-  const left = cell.x * size;
-  const top = cell.y * size;
-  const { red, green, blue } = colorChannels(vegetation.presentation.color);
-  const seed = makeSeed(cell.x, cell.y, forest, 11);
-  const count = vegetation.presentation.detailDensity;
-
-  context.save();
-  context.fillStyle = `rgba(${red}, ${green}, ${blue}, ${vegetation.presentation.opacity})`;
-  context.beginPath();
-  context.ellipse(left + size * 0.5, top + size * 0.5, size * 0.52, size * 0.42, random01(seed) * Math.PI, 0, Math.PI * 2);
-  context.fill();
-
-  const detailScale = forest === 2 ? 0.42 : 0.7;
-  const detailRed = Math.round(red * detailScale);
-  const detailGreen = Math.round(green * detailScale);
-  const detailBlue = Math.round(blue * detailScale);
-  const detailAlpha = vegetation.presentation.opacity * (forest === 2 ? 0.72 : 0.58);
-  for (let index = 0; index < count; index += 1) {
-    const dotSeed = makeSeed(cell.x, cell.y, forest, index + 31);
-    const x = left + size * (0.18 + random01(dotSeed) * 0.64);
-    const y = top + size * (0.18 + random01(dotSeed + 9) * 0.64);
-    const radius = size * (forest === 2 ? 0.12 + random01(dotSeed + 13) * 0.08 : 0.09 + random01(dotSeed + 13) * 0.06);
-
-    context.fillStyle = `rgba(${detailRed}, ${detailGreen}, ${detailBlue}, ${detailAlpha})`;
-    context.beginPath();
-    context.arc(x, y, radius, 0, Math.PI * 2);
-    context.fill();
-  }
-
-  context.restore();
-}
-
-function colorChannels(color: number): { red: number; green: number; blue: number } {
-  return {
-    red: color >> 16 & 0xff,
-    green: color >> 8 & 0xff,
-    blue: color & 0xff,
-  };
 }
 
 function buildSmoothedHeightGrid(map: TacticalMap): number[][] {
@@ -408,13 +351,18 @@ function drawSegment(context: CanvasRenderingContext2D, start: { x: number; y: n
 }
 
 function getStaticLayerKey(map: TacticalMap, showGrid: boolean): string {
+  const revisions = getMapRevisionSnapshot(map);
+  const environment = getActiveEnvironmentProfile();
   return [
     `size:${map.width}x${map.height}`,
     `cell:${map.cellSize}`,
     `meters:${map.metersPerCell}`,
     `grid:${showGrid ? '1' : '0'}`,
-    `vegetation:${VEGETATION_DEFINITION_REVISION}`,
-    `cells:${map.cells.map((cell) => `${cell.x}:${cell.y}:${cell.terrain}:${cell.height}:${cell.forest}`).join('|')}`,
+    `terrain:${revisions.terrain}`,
+    `height:${revisions.height}`,
+    `vegetation:${revisions.forest}`,
+    `environment:${environment.id}`,
+    `presentation:${environment.revisions.presentation}`,
   ].join(';');
 }
 

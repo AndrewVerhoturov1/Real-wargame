@@ -4,16 +4,12 @@ import {
   type AwarenessWorkerRequest,
   type AwarenessWorkerResponse,
 } from '../core/knowledge/AwarenessWorldWorkerProtocol';
-import type {
-  ElevationLevel,
-  ForestLayerKind,
-  MapCell,
-  TacticalMap,
-  TerrainKind,
-} from '../core/map/MapModel';
+import type { TacticalMap } from '../core/map/MapModel';
 import type { UnitModel } from '../core/units/UnitModel';
-
-const TERRAIN_KINDS: readonly TerrainKind[] = ['field', 'forest', 'road', 'swamp', 'rough', 'water'];
+import {
+  installAwarenessWorkerEnvironmentProfile,
+  restoreAwarenessWorkerMap,
+} from '../core/knowledge/AwarenessWorkerMapSnapshot';
 
 type WorkerGlobal = {
   onmessage: ((event: MessageEvent<AwarenessWorkerRequest>) => void) | null;
@@ -28,7 +24,8 @@ let workerUnit: UnitModel | null = null;
 workerGlobal.onmessage = (event): void => {
   const request = event.data;
   if (request.type === 'configure') {
-    configuredMap = restoreMap(request.map);
+    installAwarenessWorkerEnvironmentProfile(request.map);
+    configuredMap = restoreAwarenessWorkerMap(request.map);
     configuredMapKey = request.map.mapKey;
     workerUnit = null;
     return;
@@ -66,46 +63,3 @@ workerGlobal.onmessage = (event): void => {
     });
   }
 };
-
-function restoreMap(snapshot: Extract<AwarenessWorkerRequest, { type: 'configure' }>['map']): TacticalMap {
-  const cells: MapCell[] = new Array(snapshot.width * snapshot.height);
-  for (let y = 0; y < snapshot.height; y += 1) {
-    for (let x = 0; x < snapshot.width; x += 1) {
-      const index = y * snapshot.width + x;
-      cells[index] = {
-        x,
-        y,
-        terrain: TERRAIN_KINDS[snapshot.terrainCodes[index] ?? 0] ?? 'field',
-        height: clampHeight(snapshot.heightLevels[index] ?? 0),
-        forest: clampForest(snapshot.forestKinds[index] ?? 0),
-      };
-    }
-  }
-  return {
-    width: snapshot.width,
-    height: snapshot.height,
-    cellSize: snapshot.cellSize,
-    metersPerCell: snapshot.metersPerCell,
-    sourceToRuntimeCellScale: snapshot.sourceToRuntimeCellScale,
-    defaultTerrain: TERRAIN_KINDS[snapshot.defaultTerrainCode] ?? 'field',
-    defaultHeight: clampHeight(snapshot.defaultHeight),
-    cells,
-    objects: snapshot.objects.map((object) => ({
-      ...object,
-      labels: object.labels ? { ...object.labels } : null,
-    })),
-  };
-}
-
-function clampHeight(value: number): ElevationLevel {
-  const rounded = Math.round(value);
-  if (rounded <= -2) return -2;
-  if (rounded >= 4) return 4;
-  return rounded as ElevationLevel;
-}
-
-function clampForest(value: number): ForestLayerKind {
-  if (value <= 0) return 0;
-  if (value >= 2) return 2;
-  return 1;
-}

@@ -1,5 +1,7 @@
 # Shared Visibility and Vegetation Fields v1
 
+> Follow-up: the profile registry, canonical material IDs and chunked vegetation renderer are specified in `ENVIRONMENT_MATERIAL_PROFILES_V1.md`.
+
 ## Status
 
 This document describes the contract implemented on draft PR #128. The branch is based on `real-wargame-preview` merge commit `4a9fd2292ee9ded682d34064a2b721feab21ec4a`, which contains the accepted PR #127 scheduler result. This work is not part of preview until PR #128 is reviewed and transferred.

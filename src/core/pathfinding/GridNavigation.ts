@@ -5,6 +5,8 @@ import type {
   TerrainKind,
 } from '../map/MapModel';
 import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
+import { getSurfaceMaterial } from '../map/EnvironmentMaterialProfile';
+import { getActiveEnvironmentProfile } from '../map/EnvironmentProfileRuntime';
 
 export const INFANTRY_NAVIGATION_RADIUS_CELLS = 0.18;
 
@@ -62,7 +64,8 @@ export function buildNavigationGrid(map: TacticalMap): NavigationGrid {
 
   const mutable = map.cells.map((cell, index): NavigationCell => {
     const bridge = bridgeMask[index] === 1;
-    const passable = cell.terrain !== 'water' || bridge;
+    const surface = getSurfaceMaterial(getActiveEnvironmentProfile(), cell.surfaceMaterialId);
+    const passable = surface.movement.passable || bridge;
     return {
       x: cell.x,
       y: cell.y,
@@ -107,7 +110,8 @@ export function isMapCellPassable(map: TacticalMap, x: number, y: number): boole
   const cell = map.cells[y * map.width + x];
   if (!cell) return false;
   const bridge = map.objects.some((object) => object.kind === 'bridge' && objectOccupiesCell(object, x, y, false));
-  if (cell.terrain === 'water' && !bridge) return false;
+  const surface = getSurfaceMaterial(getActiveEnvironmentProfile(), cell.surfaceMaterialId);
+  if (!surface.movement.passable && !bridge) return false;
   return !map.objects.some((object) => (
     isMapObjectMovementBlocking(object.kind)
     && objectOccupiesCell(object, x, y, true)
@@ -200,16 +204,10 @@ function terrainMovementCost(
   terrain: TerrainKind,
   cell: TacticalMap['cells'][number],
 ): number {
-  const vegetationResistance = resolveCellVegetationDefinition(cell).movement.baseResistance;
-  switch (terrain) {
-    case 'road': return Math.max(0.8, vegetationResistance);
-    case 'rough': return Math.max(1.3, vegetationResistance);
-    case 'swamp': return Math.max(1.8, vegetationResistance);
-    case 'water': return Number.POSITIVE_INFINITY;
-    case 'forest':
-    case 'field':
-    default: return vegetationResistance;
-  }
+  const vegetationResistance = resolveCellVegetationDefinition(cell).movement.resistance;
+  const surface = getSurfaceMaterial(getActiveEnvironmentProfile(), cell.surfaceMaterialId);
+  if (!surface.movement.passable || terrain === 'water') return Number.POSITIVE_INFINITY;
+  return Math.max(0.05, Math.max(surface.movement.resistance, vegetationResistance) + surface.movement.physicalCost);
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

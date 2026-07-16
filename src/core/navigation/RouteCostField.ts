@@ -6,6 +6,7 @@ import {
 } from '../knowledge/SoldierDangerField';
 import type { TacticalMap } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
+import { getActiveEnvironmentProfile } from '../map/EnvironmentProfileRuntime';
 import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 import { buildNavigationGrid } from '../pathfinding/GridNavigation';
 import {
@@ -193,6 +194,8 @@ export function getRouteCostFields(
     revisions.terrain,
     revisions.height,
     revisions.forest,
+    getActiveEnvironmentProfile().id,
+    getActiveEnvironmentProfile().revisions.movement,
     revisions.objects,
     profile.id,
     profile.revision,

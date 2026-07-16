@@ -24,7 +24,7 @@ Generated from canonical repository and subproject metadata.
 
 - **ID:** `ai-single-unit-editor`
 - **Updated:** 2026-07-16
-- **Current focus:** Draft PR #127 follow-up hardens the accepted simulation-owned per-unit scheduler: explicit paused steps advance all simulation systems, selected-unit diagnostics are read-only, observer polling and graph decisions use partition-invariant simulation-time cadence, the scheduler is one O(n) pass with one frozen graph snapshot, and ai-scheduler:smoke is blocking CI. It is not yet part of real-wargame-preview.
-- **Next step:** Review the corrected exact head of draft PR #127 and its Combat Foundation Core scheduler-smoke evidence; if accepted, integrate it with PR #126 while preserving canonical world-threat semantics and the scheduler phase order.
+- **Current focus:** Draft PR #130 implements canonical surface/vegetation material profiles, the visible «Профили местности» editor, independent presentation/visibility/fire/movement revisions, continuous dirty-chunk vegetation raster rendering, canonical worker material snapshots, and exact performance/allocation attribution from preview base 4adb42650f0fb6ad61b31f9521cec4508a5a40ec. The complete non-visual matrix and production build pass locally; the result remains isolated pending exact-head CI and visual-QA approval.
+- **Next step:** Review exact-head CI for PR #130, including the 30-second stable-scene browser performance fixture. Run the prepared forest/profile screenshot QA only after explicit user approval.
 - **Last verified commit:** `3f01f4ba9b96daa1b8951bdd08f4005a482fee8c`
 - **Status:** [generated status](../subprojects/ai-single-unit-editor/STATUS.md)

@@ -1,6 +1,8 @@
 import type { GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
+import { getActiveEnvironmentProfile } from '../map/EnvironmentProfileRuntime';
+import { measurePerformancePhase } from '../debug/PerformancePhases';
 import {
   createRouteCostFieldCache,
   getRouteCostFields,
@@ -175,7 +177,7 @@ export function findGridPath(
     ? navigationCellCenter(resolvedGoalCell.x, resolvedGoalCell.y)
     : clampPositionInsideCell(requestedGoal, resolvedGoalCell.x, resolvedGoalCell.y);
   const maxVisitedCells = Math.max(1, Math.floor(options.maxVisitedCells ?? grid.width * grid.height));
-  const tacticalSearch = runAStar(grid, fields, startCell, resolvedGoalCell, maxVisitedCells);
+  const tacticalSearch = measurePerformancePhase('route-recalculation', () => runAStar(grid, fields, startCell, resolvedGoalCell, maxVisitedCells));
 
   if (!tacticalSearch.ok) {
     return failure(tacticalSearch.code, requestedGoal, tacticalSearch.visitedCells, tacticalSearch.reason, tacticalSearch.reasonRu);
@@ -243,6 +245,8 @@ function getBaselineSearch(
     revisions.terrain,
     revisions.height,
     revisions.forest,
+    getActiveEnvironmentProfile().id,
+    getActiveEnvironmentProfile().revisions.movement,
     revisions.objects,
     start.x,
     start.y,
@@ -260,7 +264,7 @@ function getBaselineSearch(
 
   const direct = getBuiltInNavigationProfile('direct');
   const fields = getRouteCostFields(map, direct, undefined, costCache);
-  const result = runAStar(grid, fields, start, goal, maxVisitedCells);
+  const result = measurePerformancePhase('route-recalculation.baseline', () => runAStar(grid, fields, start, goal, maxVisitedCells));
   if (result.ok) {
     mapCache.set(key, result);
     while (mapCache.size > 32) {
