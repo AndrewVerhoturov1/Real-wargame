@@ -1,10 +1,7 @@
-import {
-  MOVEMENT_PROFILE_MEMORY_KEYS,
-  resolveMovementProfile,
-} from '../movement/MovementProfileContract';
 import type { TacticalOrderIntent } from '../orders/TacticalOrderIntent';
 import type { UnitModel } from '../units/UnitModel';
 import type { AiGraphRunnerBlackboard } from './AiGraphRunner';
+import { reconcileMovementProfileRuntime } from './MovementProfileRuntimeResolver';
 
 interface TacticalOrderRuntimeMemoryCarrier {
   aiGraphMemory?: AiGraphRunnerBlackboard;
@@ -31,43 +28,12 @@ export function publishTacticalOrderIntentToAiMemory(
 
 export function publishMovementProfileStateToAiMemory(
   unit: UnitModel,
-  intent: TacticalOrderIntent | null = unit.playerCommand?.intent ?? null,
+  _intent: TacticalOrderIntent | null = unit.playerCommand?.intent ?? null,
   additionalValues: AiGraphRunnerBlackboard = {},
 ): void {
   const runtime = unit.behaviorRuntime as UnitModel['behaviorRuntime'] & TacticalOrderRuntimeMemoryCarrier;
   const memory = runtime.aiRuntimeSession?.blackboardMemory ?? runtime.aiGraphMemory ?? {};
-  const resolved = resolveMovementProfile({
-    hardSafetyProfileId: memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId],
-    hardSafetyReason: memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason],
-    aiOverrideProfileId: memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId],
-    aiOverrideOwnerToken: memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken],
-    playerOrderProfileId: intent?.movementProfileId,
-    unitRoleProfileId: unit.unitRoleMovementProfileId,
-  });
-  const requestedProfileId = intent?.movementProfileId
-    ?? unit.unitRoleMovementProfileId
-    ?? resolved.profileId;
-  const values: AiGraphRunnerBlackboard = {
-    ...additionalValues,
-    [MOVEMENT_PROFILE_MEMORY_KEYS.requestedProfileId]: requestedProfileId,
-    [MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId]: resolved.profileId,
-    [MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource]: resolved.source,
-    [MOVEMENT_PROFILE_MEMORY_KEYS.forcedFallback]: resolved.forcedFallback,
-    [MOVEMENT_PROFILE_MEMORY_KEYS.forcedReason]: resolved.forcedReason ?? '',
-  };
-
-  if (runtime.aiRuntimeSession) {
-    runtime.aiRuntimeSession = {
-      ...runtime.aiRuntimeSession,
-      blackboardMemory: {
-        ...runtime.aiRuntimeSession.blackboardMemory,
-        ...values,
-      },
-    } as typeof runtime.aiRuntimeSession;
-    return;
-  }
-  runtime.aiGraphMemory = {
-    ...(runtime.aiGraphMemory ?? {}),
-    ...values,
-  };
+  Object.assign(memory, additionalValues);
+  if (!runtime.aiRuntimeSession) runtime.aiGraphMemory = memory;
+  reconcileMovementProfileRuntime(unit);
 }
