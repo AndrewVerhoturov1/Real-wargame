@@ -77,7 +77,7 @@ export interface ResolvedMovementProfileSelection {
 
 export function normalizeMovementProfileId(
   value: unknown,
-  fallback = DEFAULT_MOVEMENT_PROFILE_ID,
+  fallback: string = DEFAULT_MOVEMENT_PROFILE_ID,
 ): string {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
 }
