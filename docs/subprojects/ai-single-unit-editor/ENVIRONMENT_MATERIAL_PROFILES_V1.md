@@ -89,6 +89,8 @@ terrain: forest with no explicit forest layer → sparse_forest
 
 Scene export writes canonical surface and vegetation material maps and retains `forestMap` for older readers. The awareness worker receives the active immutable profile plus compact `Uint16` material-code rasters; it no longer reconstructs gameplay from legacy terrain/forest codes or silently falls back to built-in values.
 
+Observer-only movement verification compares the remembered world-space threat position (`x/y`). Observer-relative bearing and range may legitimately change as the observer follows a material-aware route; they are excluded from the canonical unit-threat worker key and must not trigger a world-raster rebuild.
+
 ## Verification
 
 Focused contracts:
