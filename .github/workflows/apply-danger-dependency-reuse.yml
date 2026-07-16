@@ -1,0 +1,191 @@
+name: Apply Danger Dependency Reuse
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - '.github/workflows/apply-danger-dependency-reuse.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - name: Reuse prepared static and directional fields
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          danger = Path('src/core/knowledge/SoldierDangerField.ts')
+          text = danger.read_text()
+          old = """export interface SoldierDangerFieldContext {
+            readonly unitId: string;
+            readonly originX: number;
+            readonly originY: number;
+            readonly posture: UnitPosture;
+            readonly knowledgeRevision: number;
+            readonly threats: readonly SoldierDangerThreat[];
+          }
+
+          export interface SoldierDangerField {
+          """
+          new = """export interface SoldierDangerFieldContext {
+            readonly unitId: string;
+            readonly originX: number;
+            readonly originY: number;
+            readonly posture: UnitPosture;
+            readonly knowledgeRevision: number;
+            readonly threats: readonly SoldierDangerThreat[];
+          }
+
+          export interface SoldierDangerFieldDependencies {
+            readonly staticField?: AwarenessStaticField;
+            readonly directionalField?: DirectionalTacticalField;
+          }
+
+          export interface SoldierDangerField {
+          """
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('danger dependencies insertion point not found')
+          old = """export function getSoldierDangerField(
+            map: TacticalMap,
+            context: SoldierDangerFieldContext,
+          ): SoldierDangerField {
+            const cache = getMapCache(map);
+            const staticField = getAwarenessStaticField(map, context.posture);
+            const directionalField = getDirectionalTacticalField(map, {
+              unitId: context.unitId,
+              originX: context.originX,
+              originY: context.originY,
+              knowledgeRevision: context.knowledgeRevision,
+              threats: context.threats,
+            });
+          """
+          new = """export function getSoldierDangerField(
+            map: TacticalMap,
+            context: SoldierDangerFieldContext,
+            dependencies: SoldierDangerFieldDependencies = {},
+          ): SoldierDangerField {
+            const cache = getMapCache(map);
+            const staticField = dependencies.staticField ?? getAwarenessStaticField(map, context.posture);
+            const directionalField = dependencies.directionalField ?? getDirectionalTacticalField(map, {
+              unitId: context.unitId,
+              originX: context.originX,
+              originY: context.originY,
+              knowledgeRevision: context.knowledgeRevision,
+              threats: context.threats,
+            });
+          """
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('danger builder source not found')
+          danger.write_text(text)
+
+          awareness = Path('src/core/knowledge/SoldierAwarenessGrid.ts')
+          text = awareness.read_text()
+          old = """  const dangerField = getSoldierDangerField(state.map, {
+              unitId: unit.id,
+              originX: unit.position.x,
+              originY: unit.position.y,
+              posture: unit.behaviorRuntime.posture,
+              knowledgeRevision: unit.tacticalKnowledge.revision,
+              threats: unit.tacticalKnowledge.threats,
+            });
+          """
+          new = """  const dangerField = getSoldierDangerField(state.map, {
+              unitId: unit.id,
+              originX: unit.position.x,
+              originY: unit.position.y,
+              posture: unit.behaviorRuntime.posture,
+              knowledgeRevision: unit.tacticalKnowledge.revision,
+              threats: unit.tacticalKnowledge.threats,
+            }, { staticField, directionalField });
+          """
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('awareness danger dependency source not found')
+          awareness.write_text(text)
+
+          route = Path('src/core/navigation/RouteCostField.ts')
+          text = route.read_text()
+          old = """  const knowledgeRevision = tacticalContext?.knowledgeRevision ?? 0;
+            const dangerContext = buildSoldierDangerFieldContext(tacticalContext);
+            const dangerField = dangerContext ? getSoldierDangerField(map, dangerContext) : null;
+          """
+          new = """  const knowledgeRevision = tacticalContext?.knowledgeRevision ?? 0;
+            const knownThreats = tacticalContext?.knownThreats ?? [];
+            const hasOrigin = Number.isFinite(tacticalContext?.originX) && Number.isFinite(tacticalContext?.originY);
+            const tacticalField = hasOrigin
+              ? getDirectionalTacticalField(map, {
+                unitId: tacticalContext?.unitId ?? 'route',
+                originX: tacticalContext?.originX ?? 0,
+                originY: tacticalContext?.originY ?? 0,
+                knowledgeRevision,
+                threats: knownThreats,
+              })
+              : null;
+            const dangerContext = buildSoldierDangerFieldContext(tacticalContext);
+            const dangerField = dangerContext
+              ? getSoldierDangerField(map, dangerContext, { directionalField: tacticalField ?? undefined })
+              : null;
+          """
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('route danger preparation source not found')
+          old = "dynamicField = buildDynamicField(map, profile, tacticalContext, dangerField, staticField, dynamicKey, cache);"
+          new = "dynamicField = buildDynamicField(map, profile, tacticalContext, dangerField, tacticalField, staticField, dynamicKey, cache);"
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('route dynamic call source not found')
+          old = """  tacticalContext: TacticalRouteContext | undefined,
+            dangerField: SoldierDangerField | null,
+            staticField: StaticRouteCostField,
+          """
+          new = """  tacticalContext: TacticalRouteContext | undefined,
+            dangerField: SoldierDangerField | null,
+            tacticalField: DirectionalTacticalField | null,
+            staticField: StaticRouteCostField,
+          """
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('route dynamic signature source not found')
+          old = """  const knownThreats = tacticalContext?.knownThreats ?? [];
+            const hasOrigin = Number.isFinite(tacticalContext?.originX) && Number.isFinite(tacticalContext?.originY);
+            const tacticalField = hasOrigin
+              ? getDirectionalTacticalField(map, {
+                unitId: tacticalContext?.unitId ?? 'route',
+                originX: tacticalContext?.originX ?? 0,
+                originY: tacticalContext?.originY ?? 0,
+                knowledgeRevision: tacticalContext?.knowledgeRevision ?? 0,
+                threats: knownThreats,
+              })
+              : null;
+          """
+          new = """  const knownThreats = tacticalContext?.knownThreats ?? [];
+          """
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('duplicate route directional lookup source not found')
+          route.write_text(text)
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/core/knowledge/SoldierDangerField.ts src/core/knowledge/SoldierAwarenessGrid.ts src/core/navigation/RouteCostField.ts
+          git commit -m "Reuse prepared fields in canonical danger consumers"
+          git push origin HEAD:${{ github.head_ref }}
