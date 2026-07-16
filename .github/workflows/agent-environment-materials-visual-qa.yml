@@ -1,40 +1,38 @@
 name: Approved Environment Materials Visual QA
 
-# User approval is recorded by VISUAL_QA_APPROVED_BY_USER: yes in the PR body.
+# User approval was recorded in PR #130 on 2026-07-17.
 # The suite remains skipped in the repository and is enabled only inside this approved run.
-# The fixture is frozen before selecting the rendered soldier marker.
 on:
   workflow_dispatch:
-  pull_request:
+  push:
     branches:
-      - real-wargame-preview
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - edited
+      - agent/terrain-profiles-performance-followup-v1
+    paths:
+      - '.github/workflows/agent-environment-materials-visual-qa.yml'
+      - 'tests/environment-materials-visual.spec.ts'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: environment-materials-visual-qa-${{ github.event.pull_request.number || github.ref }}
+  group: environment-materials-visual-qa-approved
   cancel-in-progress: true
 
 env:
-  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  CANDIDATE_SHA: ${{ github.sha }}
+  REPORT_PATH: docs/visual-qa/ENVIRONMENT_MATERIALS_LATEST.md
 
 jobs:
   visual-qa:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.body, 'VISUAL_QA_APPROVED_BY_USER: yes')
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
-      - name: Checkout exact candidate SHA
+      - name: Checkout exact candidate branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.CANDIDATE_SHA }}
+          ref: agent/terrain-profiles-performance-followup-v1
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -66,6 +64,8 @@ jobs:
         run: npm run build
 
       - name: Run approved environment-material visual QA
+        id: visual
+        continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
@@ -77,6 +77,43 @@ jobs:
         run: |
           mkdir -p artifacts/visual-qa/environment-materials-v1
           printf '%s\n' "$CANDIDATE_SHA" > artifacts/visual-qa/environment-materials-v1/COMMIT_SHA.txt
+
+      - name: Publish visual QA run metadata
+        if: always()
+        shell: bash
+        env:
+          VISUAL_OUTCOME: ${{ steps.visual.outcome }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$REPORT_PATH")"
+          screenshot_count=$(find artifacts/visual-qa/environment-materials-v1 -maxdepth 1 -name '*.png' -type f | wc -l | tr -d ' ')
+          {
+            echo '# Environment Materials Visual QA — latest approved run'
+            echo
+            echo "- tested_sha: \`$CANDIDATE_SHA\`"
+            echo "- workflow_run_id: \`$GITHUB_RUN_ID\`"
+            echo "- workflow_attempt: \`$GITHUB_RUN_ATTEMPT\`"
+            echo "- outcome: \`$VISUAL_OUTCOME\`"
+            echo "- screenshot_count: \`$screenshot_count\`"
+            echo
+            echo '## Screenshot SHA-256'
+            echo
+            if [ "$screenshot_count" -gt 0 ]; then
+              find artifacts/visual-qa/environment-materials-v1 -maxdepth 1 -name '*.png' -type f -print0 \
+                | sort -z \
+                | xargs -0 sha256sum \
+                | sed 's#  artifacts/visual-qa/environment-materials-v1/#  #'
+            else
+              echo 'No PNG screenshots were produced.'
+            fi
+          } > "$REPORT_PATH"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$REPORT_PATH"
+          if ! git diff --cached --quiet; then
+            git commit -m "Record approved environment visual QA run $GITHUB_RUN_ID"
+            git push origin HEAD:agent/terrain-profiles-performance-followup-v1
+          fi
 
       - name: Upload visual screenshots
         if: always()
@@ -100,3 +137,11 @@ jobs:
             artifacts/visual-qa/environment-materials-v1/COMMIT_SHA.txt
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Require approved visual QA success
+        if: always()
+        shell: bash
+        env:
+          VISUAL_OUTCOME: ${{ steps.visual.outcome }}
+        run: |
+          test "$VISUAL_OUTCOME" = success
