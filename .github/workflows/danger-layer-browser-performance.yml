@@ -57,7 +57,7 @@ jobs:
           path: baseline
 
       - name: Checkout exact PR head SHA
-        uses: actions/checkout@v4
+        uses: actions/checkoutv4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           path: candidate
@@ -65,7 +65,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 20
 
       - name: Prepare shared exact-build measurement
         shell: bash

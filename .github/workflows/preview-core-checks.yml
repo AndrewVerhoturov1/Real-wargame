@@ -23,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 20
           cache: npm
 
       - name: Install dependencies
@@ -98,7 +98,7 @@ jobs:
         run: npm run event-queue:smoke
 
       - name: AI action lifecycle smoke
-        id: lifecycle
+        id: ifecycle
         if: steps.install.outcome == 'success'
         continue-on-error: true
         run: npm run lifecycle:smoke
@@ -134,7 +134,7 @@ jobs:
           retention-days: 3
 
       - name: Reactive route status smoke
-        id: route_status
+        id: kroute_status
         if: steps.install.outcome == 'success'
         continue-on-error: true
         run: npm run route-status:smoke
@@ -274,25 +274,37 @@ jobs:
               build: process.env.BUILD_OUTCOME,
             };
             const targetUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const passed = Object.values(outcomes).every((value) => value === 'success');
+            const publicationErrors = [];
             for (const [name, value] of Object.entries(outcomes)) {
+              try {
+                await github.rest.repos.createCommitStatus({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  sha: context.sha,
+                  state: value === 'success' ? 'success' : 'failure',
+                  context: `preview-core/${name}`,
+                  description: `${name}: ${value}`,
+                  target_url: targetUrl,
+                });
+              } catch (error) {
+                publicationErrors.push(`${name}: ${error.message}`);
+              }
+            }
+            try {
               await github.rest.repos.createCommitStatus({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 sha: context.sha,
-                state: value === 'success' ? 'success' : 'failure',
-                context: `preview-core/${name}`,
-                description: `${name}: ${value}`,
+                state: passed ? 'success' : 'failure',
+                context: 'preview-core-checks',
+                description: Object.entries(outcomes).map(([key, value]) => `${key}:${value}`).join(' ').slice(0, 140),
                 target_url: targetUrl,
               });
+            } catch (error) {
+              publicationErrors.push(`aggregate: ${error.message}`);
             }
-            const passed = Object.values(outcomes).every((value) => value === 'success');
-            await github.rest.repos.createCommitStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha: context.sha,
-              state: passed ? 'success' : 'failure',
-              context: 'preview-core-checks',
-              description: Object.entries(outcomes).map(([key, value]) => `${key}:${value}`).join(' ').slice(0, 140),
-              target_url: targetUrl,
-            });
+            if (publicationErrors.length > 0) {
+              core.warning(`Commit status publication failed without changing the verified test verdict: ${publicationErrors.join(' | ')}`);
+            }
             if (!passed) core.setFailed(`One or more core checks failed: ${JSON.stringify(outcomes)}`);
