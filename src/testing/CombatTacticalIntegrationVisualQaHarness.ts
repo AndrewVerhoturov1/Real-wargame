@@ -182,6 +182,7 @@ export function installCombatTacticalIntegrationVisualQaHarness(
         threat.visibleNow = phase % 4 !== 3;
       }
       observer.tacticalKnowledge.revision += 1;
+      buildSoldierAwarenessReport(state, observer);
       // The real simulation changes tactical knowledge inside the live ticker. Let that same
       // ticker perform the next render instead of calling the UI-only forceRender path, which
       // synthetically invalidates the static map and contaminates danger-layer measurements.
@@ -194,6 +195,7 @@ export function installCombatTacticalIntegrationVisualQaHarness(
       const moving = observer.tacticalKnowledge.threats[Math.abs(Math.floor(step)) % observer.tacticalKnowledge.threats.length];
       moving.x = clamp(moving.x + 0.35, 0.5, state.map.width - 0.5);
       observer.tacticalKnowledge.revision += 1;
+      buildSoldierAwarenessReport(state, observer);
       window.dispatchEvent(new CustomEvent('real-wargame:combat-tactical-visual-qa-updated'));
     },
   };
