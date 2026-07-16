@@ -47,7 +47,7 @@ function verifyAcceptedLiveReplanAndCompletion(): void {
       state.map,
       initialRouteCells,
       profile,
-      buildUnitTacticalRouteContext(mover),
+      buildUnitTacticalRouteContext(mover, { metersPerCell: state.map.metersPerCell }),
     );
     assert.ok(
       Math.abs(evaluatedInitialPathCost - initialPathCost) < 1e-6,
@@ -95,14 +95,14 @@ function verifyAcceptedLiveReplanAndCompletion(): void {
       state.map,
       initialRouteCells,
       profile,
-      buildUnitTacticalRouteContext(mover),
+      buildUnitTacticalRouteContext(mover, { metersPerCell: state.map.metersPerCell }),
     );
     const replacementCost = requiredNumber(replacement.pathCost, 'replacement pathCost');
     const evaluatedReplacementCost = evaluateNavigationRouteCost(
       state.map,
       replacement.routeCells ?? [],
       profile,
-      buildUnitTacticalRouteContext(mover),
+      buildUnitTacticalRouteContext(mover, { metersPerCell: state.map.metersPerCell }),
     );
     assert.ok(
       Math.abs(evaluatedReplacementCost - replacementCost) < 1e-6,
@@ -130,7 +130,7 @@ function verifyAcceptedLiveReplanAndCompletion(): void {
       source: 'ai',
       ownerToken: 'newer-foreign-owner',
       navigationProfile: registry.getProfile('direct'),
-      tacticalContext: buildUnitTacticalRouteContext(mover),
+      tacticalContext: buildUnitTacticalRouteContext(mover, { metersPerCell: state.map.metersPerCell }),
     });
     assert.equal(newerPlan.ok, true);
     if (!newerPlan.ok) return;
@@ -253,7 +253,7 @@ function installPlannedPlayerLinkedOrder(
     navigationProfile: resolved.profile,
     navigationProfileSource: resolved.source,
     finalFacingRadians: command.finalFacingRadians,
-    tacticalContext: buildUnitTacticalRouteContext(mover),
+    tacticalContext: buildUnitTacticalRouteContext(mover, { metersPerCell: state.map.metersPerCell }),
   });
   if (!planned.ok) assert.fail(planned.reasonRu);
   mover.order = planned.order;

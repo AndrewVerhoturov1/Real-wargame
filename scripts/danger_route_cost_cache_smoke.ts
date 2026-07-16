@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { buildCanonicalWorldThreatSet } from '../src/core/knowledge/CanonicalWorldThreat';
 import { buildSoldierAwarenessReport } from '../src/core/knowledge/SoldierAwarenessGrid';
 import { getSoldierDangerFieldDiagnostics } from '../src/core/knowledge/SoldierDangerField';
 import { normalizeTacticalKnowledge } from '../src/core/knowledge/SoldierThreatMemory';
@@ -63,7 +64,7 @@ function assertDirectProfileIsLazy() {
 
   const dangerBefore = getSoldierDangerFieldDiagnostics(state.map);
   const directionalBefore = getDirectionalTacticalFieldDiagnostics(state.map);
-  const fields = getRouteCostFields(state.map, direct, buildUnitTacticalRouteContext(unit), cache);
+  const fields = getRouteCostFields(state.map, direct, buildUnitTacticalRouteContext(unit, { metersPerCell: state.map.metersPerCell }), cache);
   const dangerAfter = getSoldierDangerFieldDiagnostics(state.map);
   const directionalAfter = getDirectionalTacticalFieldDiagnostics(state.map);
 
@@ -78,7 +79,7 @@ function assertDirectProfileIsLazy() {
   const goal = { x: 14.5, y: 9.5 };
   const tacticalRoute = findGridPath(state.map, unit.position, goal, {
     navigationProfile: direct,
-    tacticalContext: buildUnitTacticalRouteContext(unit),
+    tacticalContext: buildUnitTacticalRouteContext(unit, { metersPerCell: state.map.metersPerCell }),
     costFieldCache: cache,
   });
   const plainRoute = findGridPath(state.map, unit.position, goal, {
@@ -94,7 +95,7 @@ function assertDirectProfileIsLazy() {
   unit.tacticalKnowledge.threats[0].confidence = 25;
   unit.tacticalKnowledge.threats.reverse();
   unit.tacticalKnowledge.revision += 1;
-  const changedKnowledgeFields = getRouteCostFields(state.map, direct, buildUnitTacticalRouteContext(unit), cache);
+  const changedKnowledgeFields = getRouteCostFields(state.map, direct, buildUnitTacticalRouteContext(unit, { metersPerCell: state.map.metersPerCell }), cache);
   const dangerAfterKnowledge = getSoldierDangerFieldDiagnostics(state.map);
   const directionalAfterKnowledge = getDirectionalTacticalFieldDiagnostics(state.map);
   assert.equal(changedKnowledgeFields, fields, 'unused tactical knowledge must reuse the direct route fields');
@@ -174,7 +175,7 @@ function assertMultiThreatGeometryReuse() {
   assert.ok(afterMove.fieldBuildCount > afterClass.fieldBuildCount, 'geometry movement must produce a new scored field');
   assert.equal(moved.report.dangerFieldKey, moved.fields.dangerFieldKey);
 
-  const cautiousFields = getRouteCostFields(state.map, cautious, buildUnitTacticalRouteContext(unit), routeCache);
+  const cautiousFields = getRouteCostFields(state.map, cautious, buildUnitTacticalRouteContext(unit, { metersPerCell: state.map.metersPerCell }), routeCache);
   const afterProfile = getSoldierDangerFieldDiagnostics(state.map);
   assert.equal(cautiousFields.dangerFieldKey, moved.fields.dangerFieldKey, 'profile weights must layer over the same danger field');
   assert.equal(afterProfile.geometryBuildCount, afterMove.geometryBuildCount, 'profile change must not rebuild danger geometry');
@@ -182,7 +183,7 @@ function assertMultiThreatGeometryReuse() {
 
   const route = findGridPath(state.map, unit.position, { x: 13.5, y: 9.5 }, {
     navigationProfile: cautious,
-    tacticalContext: buildUnitTacticalRouteContext(unit),
+    tacticalContext: buildUnitTacticalRouteContext(unit, { metersPerCell: state.map.metersPerCell }),
     costFieldCache: routeCache,
   });
   assert.ok(route.ok, `headless A* must remain operational without overlay or renderer: ${route.reason}`);
@@ -247,8 +248,14 @@ function buildBoth(
   profile: ReturnType<typeof getBuiltInNavigationProfile>,
   routeCache: ReturnType<typeof createRouteCostFieldCache>,
 ) {
+  const originalThreats = unit.tacticalKnowledge.threats;
+  unit.tacticalKnowledge.threats = [...buildCanonicalWorldThreatSet(
+    originalThreats,
+    state.map.metersPerCell,
+  ).threats];
   const report = buildSoldierAwarenessReport(state, unit);
-  const fields = getRouteCostFields(state.map, profile, buildUnitTacticalRouteContext(unit), routeCache);
+  unit.tacticalKnowledge.threats = originalThreats;
+  const fields = getRouteCostFields(state.map, profile, buildUnitTacticalRouteContext(unit, { metersPerCell: state.map.metersPerCell }), routeCache);
   assert.equal(report.dangerFieldKey, fields.dangerFieldKey, 'awareness and route cost must publish the same danger field key');
   return { report, fields };
 }

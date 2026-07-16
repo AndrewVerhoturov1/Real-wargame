@@ -35,31 +35,60 @@ unit.tacticalKnowledge.threats = [movingThreat];
 unit.tacticalKnowledge.revision = 1;
 unit.tacticalKnowledge.lastUpdatedSeconds = 1;
 
-const initial = buildUnitTacticalRouteContext(unit, { freshness: 'coalesced' });
-movingThreat.x = 9.25;
+const initial = buildUnitTacticalRouteContext(unit, {
+  freshness: 'coalesced',
+  metersPerCell: map.metersPerCell,
+});
+movingThreat.x = 8.75;
 unit.tacticalKnowledge.revision = 2;
 unit.tacticalKnowledge.lastUpdatedSeconds = 1.1;
-const coalesced = buildUnitTacticalRouteContext(unit, { freshness: 'coalesced' });
+const coalesced = buildUnitTacticalRouteContext(unit, {
+  freshness: 'coalesced',
+  metersPerCell: map.metersPerCell,
+});
 assert.equal(coalesced, initial, 'sub-window movement must reuse the coherent tactical snapshot');
 assert.equal(coalesced.knownThreats[0].x, 9.5, 'coalescing must never mutate an already published snapshot');
 
 unit.tacticalKnowledge.lastUpdatedSeconds = 1.51;
-const elapsed = buildUnitTacticalRouteContext(unit, { freshness: 'coalesced' });
+const elapsed = buildUnitTacticalRouteContext(unit, {
+  freshness: 'coalesced',
+  metersPerCell: map.metersPerCell,
+});
 assert.notEqual(elapsed, initial, 'the bounded simulation-time window must eventually publish the new position');
-assert.equal(elapsed.knownThreats[0].x, 9.25);
+assert.equal(elapsed.knownThreats[0].x, 8.5);
 
-movingThreat.x = 9;
+movingThreat.directionDegrees = 45;
+movingThreat.rangeCells = 3;
 unit.tacticalKnowledge.revision = 3;
 unit.tacticalKnowledge.lastUpdatedSeconds = 1.55;
-const immediate = buildUnitTacticalRouteContext(unit, { freshness: 'immediate' });
+const observerRelativeOnly = buildUnitTacticalRouteContext(unit, {
+  freshness: 'immediate',
+  metersPerCell: map.metersPerCell,
+});
+assert.equal(
+  observerRelativeOnly,
+  elapsed,
+  'observer-relative unit-contact descriptors must not invalidate a world-space route snapshot',
+);
+
+movingThreat.x = 7.9;
+unit.tacticalKnowledge.revision = 4;
+unit.tacticalKnowledge.lastUpdatedSeconds = 1.56;
+const immediate = buildUnitTacticalRouteContext(unit, {
+  freshness: 'immediate',
+  metersPerCell: map.metersPerCell,
+});
 assert.notEqual(immediate, elapsed, 'initial order planning must be able to request the current snapshot immediately');
-assert.equal(immediate.knownThreats[0].x, 9);
+assert.equal(immediate.knownThreats[0].x, 7.5);
 
 const addedThreat = threat('unknown-fire:new', 7.5, 6.5, false);
 unit.tacticalKnowledge.threats.push(addedThreat);
-unit.tacticalKnowledge.revision = 4;
+unit.tacticalKnowledge.revision = 5;
 unit.tacticalKnowledge.lastUpdatedSeconds = 1.6;
-const topologyChange = buildUnitTacticalRouteContext(unit, { freshness: 'coalesced' });
+const topologyChange = buildUnitTacticalRouteContext(unit, {
+  freshness: 'coalesced',
+  metersPerCell: map.metersPerCell,
+});
 assert.notEqual(topologyChange, immediate, 'new/removed threats must bypass movement coalescing');
 assert.equal(topologyChange.knownThreats.length, 2);
 
@@ -71,7 +100,10 @@ assert.equal(reusedFields, readyFields, 'the same UI/AI snapshot must read alrea
 assert.equal(getRouteCostFieldDiagnostics(routeCache).snapshotReuseCount, 1);
 
 clearUnitTacticalRouteContext(unit);
-assert.notEqual(buildUnitTacticalRouteContext(unit, { freshness: 'coalesced' }), topologyChange, 'explicit reset must discard the cached snapshot');
+assert.notEqual(buildUnitTacticalRouteContext(unit, {
+  freshness: 'coalesced',
+  metersPerCell: map.metersPerCell,
+}), topologyChange, 'explicit reset must discard the cached snapshot');
 
 console.log('Tactical snapshot coalescing smoke passed: movement is time-bounded while orders and topology changes remain immediate.');
 

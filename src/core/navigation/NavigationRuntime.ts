@@ -1,4 +1,5 @@
 import { isPlayerCommandOutstanding, type PlayerCommand } from '../orders/PlayerCommand';
+import { buildCanonicalWorldThreatSet } from '../knowledge/CanonicalWorldThreat';
 import type { UnitModel } from '../units/UnitModel';
 import { resolveActiveNavigationProfile, type ResolvedNavigationProfile } from './NavigationProfileResolver';
 import { getNavigationProfileRegistry } from './NavigationProfileStorage';
@@ -9,10 +10,14 @@ const COALESCED_TACTICAL_SNAPSHOT_SECONDS = 0.5;
 export interface TacticalRouteContextOptions {
   /** Initial player/AI orders require the newest known state; background consumers may coalesce it. */
   readonly freshness?: 'coalesced' | 'immediate';
+  /** Required by the shared world-space unit-contact canonicalization. */
+  readonly metersPerCell: number;
 }
 
 interface CachedTacticalRouteContext {
   readonly capturedAtSeconds: number;
+  readonly sourceKnowledgeRevision: number;
+  readonly canonicalThreatKey: string;
   readonly topologyKey: string;
   readonly context: TacticalRouteContext;
 }
@@ -39,11 +44,30 @@ export function resolveUnitNavigationProfile(
 
 export function buildUnitTacticalRouteContext(
   unit: UnitModel,
-  options: TacticalRouteContextOptions = {},
+  options: TacticalRouteContextOptions,
 ): TacticalRouteContext {
   const topologyKey = buildThreatTopologyKey(unit);
   const currentTimeSeconds = unit.tacticalKnowledge.lastUpdatedSeconds;
   const cached = tacticalContextByUnit.get(unit);
+  if (
+    cached
+    && cached.topologyKey === topologyKey
+    && cached.sourceKnowledgeRevision === unit.tacticalKnowledge.revision
+  ) {
+    return cached.context;
+  }
+
+  const canonical = buildCanonicalWorldThreatSet(
+    unit.tacticalKnowledge.threats,
+    options.metersPerCell,
+  );
+  if (cached && cached.topologyKey === topologyKey && cached.canonicalThreatKey === canonical.key) {
+    tacticalContextByUnit.set(unit, {
+      ...cached,
+      sourceKnowledgeRevision: unit.tacticalKnowledge.revision,
+    });
+    return cached.context;
+  }
   if (
     options.freshness === 'coalesced'
     && cached
@@ -62,7 +86,7 @@ export function buildUnitTacticalRouteContext(
     originY: unit.position.y,
     posture: unit.behaviorRuntime.posture,
     knowledgeRevision: unit.tacticalKnowledge.revision,
-    knownThreats: unit.tacticalKnowledge.threats.map((threat) => ({
+    knownThreats: canonical.threats.map((threat) => ({
       id: threat.id,
       x: threat.x,
       y: threat.y,
@@ -85,6 +109,8 @@ export function buildUnitTacticalRouteContext(
   };
   tacticalContextByUnit.set(unit, {
     capturedAtSeconds: currentTimeSeconds,
+    sourceKnowledgeRevision: unit.tacticalKnowledge.revision,
+    canonicalThreatKey: canonical.key,
     topologyKey,
     context,
   });

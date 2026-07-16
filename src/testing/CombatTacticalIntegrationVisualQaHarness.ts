@@ -542,7 +542,7 @@ function buildDangerParitySnapshot(
   const exposedCell = report.cells[y * state.map.width + exposedX];
   if (!protectedCell || !exposedCell) throw new Error('Danger parity awareness cells are unavailable.');
   const profile = getBuiltInNavigationProfile('cautious');
-  const context = buildUnitTacticalRouteContext(observer);
+  const context = buildUnitTacticalRouteContext(observer, { metersPerCell: state.map.metersPerCell });
   const routeFields = getRouteCostFields(state.map, profile, context, dangerParityRouteCache);
   const route = findGridPath(state.map, observer.position, parityRouteTarget(state, observer), {
     navigationProfile: profile,

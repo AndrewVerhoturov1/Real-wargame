@@ -23,7 +23,10 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
   const resolved = resolveUnitNavigationProfile(unit, unit.playerCommand);
   const tacticalContext = measurePerformancePhase(
     'route.context',
-    () => buildUnitTacticalRouteContext(unit, { freshness: 'coalesced' }),
+    () => buildUnitTacticalRouteContext(unit, {
+      freshness: 'coalesced',
+      metersPerCell: state.map.metersPerCell,
+    }),
   );
   const evaluation = evaluateNavigationReplan({
     order,
