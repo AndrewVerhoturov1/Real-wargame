@@ -11,10 +11,11 @@ export function measurePerformancePhase<T>(name: string, callback: () => T): T {
     return callback();
   } finally {
     const duration = performance.now() - startedAt;
-    if (duration < MIN_RECORDED_PHASE_DURATION_MS) return;
-    performance.measure(`${PERFORMANCE_PHASE_PREFIX}${name}`, {
-      start: startedAt,
-      duration,
-    });
+    if (duration >= MIN_RECORDED_PHASE_DURATION_MS) {
+      performance.measure(`${PERFORMANCE_PHASE_PREFIX}${name}`, {
+        start: startedAt,
+        duration,
+      });
+    }
   }
 }
