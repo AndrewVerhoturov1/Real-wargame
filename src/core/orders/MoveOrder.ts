@@ -1,4 +1,5 @@
 import type { GridPosition } from '../geometry';
+import type { MovementProfileSource } from '../movement/MovementProfileContract';
 import type { NavigationProfileSource } from '../navigation/NavigationProfileResolver';
 import type { NavigationMovementMode } from '../navigation/NavigationProfiles';
 import type { GridPathCostBreakdown } from '../pathfinding/GridPathfinder';
@@ -35,6 +36,10 @@ export interface MoveOrderOptions {
   readonly navigationProfileId?: string;
   readonly navigationProfileRevision?: number;
   readonly navigationProfileSource?: NavigationProfileSource;
+  readonly movementProfileId?: string;
+  readonly movementProfileSource?: MovementProfileSource;
+  readonly movementProfileOwnerToken?: string;
+  readonly movementProfileRevision?: number;
   readonly finalFacingRadians?: number;
   readonly knowledgeRevision?: number;
   readonly replanSearchCount?: number;
@@ -71,6 +76,10 @@ export interface MoveOrder {
   navigationProfileId?: string;
   navigationProfileRevision?: number;
   navigationProfileSource?: NavigationProfileSource;
+  movementProfileId?: string;
+  movementProfileSource?: MovementProfileSource;
+  movementProfileOwnerToken?: string;
+  movementProfileRevision?: number;
   finalFacingRadians?: number;
   knowledgeRevision?: number;
   replanSearchCount?: number;
@@ -108,6 +117,10 @@ export function createMoveOrder(target: GridPosition, options: MoveOrderOptions 
     navigationProfileId: options.navigationProfileId,
     navigationProfileRevision: options.navigationProfileRevision,
     navigationProfileSource: options.navigationProfileSource,
+    movementProfileId: options.movementProfileId,
+    movementProfileSource: options.movementProfileSource,
+    movementProfileOwnerToken: options.movementProfileOwnerToken,
+    movementProfileRevision: options.movementProfileRevision,
     finalFacingRadians: options.finalFacingRadians,
     knowledgeRevision: options.knowledgeRevision,
     replanSearchCount: options.replanSearchCount,
