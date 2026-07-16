@@ -22,11 +22,19 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+set "INSTALL_DEPENDENCIES=0"
 if not exist "node_modules\" (
-    echo [INFO] node_modules ne naideno. Zapuskayu npm install...
-    call npm install
+    set "INSTALL_DEPENDENCIES=1"
+) else (
+    call npm ls --depth=0 >nul 2>nul
+    if !errorlevel! neq 0 set "INSTALL_DEPENDENCIES=1"
+)
+
+if "!INSTALL_DEPENDENCIES!"=="1" (
+    echo [INFO] Zavisimosti otsutstvuyut ili ne sootvetstvuyut package-lock.json. Zapuskayu npm ci...
+    call npm ci
     if !errorlevel! neq 0 (
-        echo [OSHIBKA] npm install ne udalsya.
+        echo [OSHIBKA] npm ci ne udalsya.
         pause
         exit /b 1
     )
