@@ -77,7 +77,6 @@ jobs:
           cp source/vite.config.ts baseline/vite.config.ts
           cp source/src/core/debug/BuildIdentity.ts baseline/src/core/debug/BuildIdentity.ts
           cp source/src/core/debug/AwarenessMovementDiagnostics.ts baseline/src/core/debug/AwarenessMovementDiagnostics.ts
-          cp source/src/core/debug/PerformanceMonitor.ts baseline/src/core/debug/PerformanceMonitor.ts
 
       - name: Install baseline dependencies
         working-directory: baseline
@@ -122,38 +121,7 @@ jobs:
 
       - name: Compare browser performance acceptance
         shell: bash
-        run: |
-          set +e
-          node source/scripts/compare_danger_layer_browser_performance.mjs \
-            browser-artifacts/before.json \
-            browser-artifacts/after.json \
-            browser-artifacts/comparison.json
-          first_status=$?
-          set -e
-          if [ "$first_status" = "0" ]; then
-            exit 0
-          fi
-
-          echo "First strict comparison failed; repeating the exact candidate measurement once to reject hosted-runner jitter without changing any threshold."
-          (
-            cd candidate
-            REAL_WARGAME_BRANCH='${{ github.event.pull_request.head.ref }}' \
-            REAL_WARGAME_COMMIT_SHA='${{ github.event.pull_request.head.sha }}' \
-            DANGER_PERF_EXPECTED_BRANCH='${{ github.event.pull_request.head.ref }}' \
-            DANGER_PERF_EXPECTED_SHA='${{ github.event.pull_request.head.sha }}' \
-            DANGER_PERF_LABEL='after-head-retry' \
-            DANGER_PERF_OUTPUT='../browser-artifacts/after-retry.json' \
-            npx playwright test tests/danger-layer-browser-performance.spec.ts \
-              --config=playwright.performance.config.ts \
-              --project=chromium \
-              --reporter=line 2>&1 | tee ../browser-artifacts/after-retry-playwright.log
-          )
-          node source/scripts/compare_danger_layer_browser_performance.mjs \
-            browser-artifacts/before.json \
-            browser-artifacts/after-retry.json \
-            browser-artifacts/comparison-retry.json
-          cp browser-artifacts/after-retry.json browser-artifacts/after.json
-          cp browser-artifacts/comparison-retry.json browser-artifacts/comparison.json
+        run: node source/scripts/compare_danger_layer_browser_performance.mjs browser-artifacts/before.json browser-artifacts/after.json browser-artifacts/comparison.json
 
       - name: Run exact-head live movement scenarios
         working-directory: candidate
