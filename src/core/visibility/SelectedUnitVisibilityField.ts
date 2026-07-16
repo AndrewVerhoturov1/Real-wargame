@@ -126,6 +126,7 @@ export function getUnitVisibilityField(
 
 export function getVisibilityFieldDiagnostics(state: SimulationState): VisibilityFieldDiagnostics {
   const runtime = getRuntime(state);
+  // Legacy v1 exposed `cachedFieldCount: runtime.field ? 1 : 0`; v2 reports every requested unit field.
   return { ...runtime.diagnostics, cachedFieldCount: runtime.fieldsByUnit.size };
 }
 
