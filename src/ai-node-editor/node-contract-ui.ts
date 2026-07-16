@@ -3,7 +3,13 @@ import type { AiNodeContract, AiParameterDefinition } from '../core/ai/contracts
 import { DEFAULT_AI_NODE_CONTRACT_REGISTRY } from '../core/ai/contracts/AiNodeContractRegistry';
 import type { AiPortDefinition, AiPortValueKind } from '../core/ai/contracts/AiPortTypes';
 import { areAiPortKindsCompatible } from '../core/ai/contracts/AiPortTypes';
+import {
+  BUILTIN_MOVEMENT_PROFILE_IDS,
+  movementProfileLabelRu,
+} from '../core/movement/MovementProfileContract';
 import { getSubgraphChoice } from './subgraph-ui';
+
+const MOVEMENT_PROFILE_STORAGE_KEY = 'real-wargame.movement-profiles.v1';
 
 export interface NodeContractUiModel {
   readonly contract?: AiNodeContract;
@@ -49,7 +55,9 @@ function renderParameter(parameter: AiParameterDefinition, value: unknown): stri
     : '';
   const attrs = `${parameter.minimum !== undefined ? ` min="${parameter.minimum}"` : ''}${parameter.maximum !== undefined ? ` max="${parameter.maximum}"` : ''}${parameter.integer ? ' step="1"' : parameter.kind === 'number' ? ' step="any"' : ''}`;
   let control = '';
-  if (parameter.kind === 'boolean') {
+  if (parameter.selector === 'movement_profile_registry') {
+    control = renderMovementProfileRegistrySelector(parameter.id, String(actual));
+  } else if (parameter.kind === 'boolean') {
     control = `<input class="contract-parameter-field" data-param-id="${escapeAttribute(parameter.id)}" data-param-kind="boolean" type="checkbox" ${actual === true ? 'checked' : ''} />`;
   } else if (parameter.kind === 'enum') {
     control = `<select class="contract-parameter-field" data-param-id="${escapeAttribute(parameter.id)}" data-param-kind="enum">${(parameter.options ?? []).map((option) => `<option value="${escapeAttribute(option.value)}" ${option.value === actual ? 'selected' : ''}>${escapeHtml(option.labelRu)} · ${escapeHtml(option.value)}</option>`).join('')}</select>`;
@@ -73,6 +81,41 @@ export function readContractParameterFields(container: ParentNode, fallback: Rec
         : field.value;
   });
   return next;
+}
+
+function renderMovementProfileRegistrySelector(parameterId: string, selectedId: string): string {
+  const profiles = readMovementProfileRegistryEntries();
+  const options = profiles.map((profile) => `<option value="${escapeAttribute(profile.id)}" ${profile.id === selectedId ? 'selected' : ''}>${escapeHtml(profile.nameRu)} · ${escapeHtml(profile.id)}</option>`);
+  if (selectedId && !profiles.some((profile) => profile.id === selectedId)) {
+    options.unshift(`<option value="${escapeAttribute(selectedId)}" selected>Недоступен: ${escapeHtml(selectedId)}</option>`);
+  }
+  return `<select class="contract-parameter-field movement-profile-registry-selector" data-param-id="${escapeAttribute(parameterId)}" data-param-kind="string" data-selector="movement_profile_registry">${options.join('')}</select>`;
+}
+
+function readMovementProfileRegistryEntries(): readonly { id: string; nameRu: string }[] {
+  const fallback = BUILTIN_MOVEMENT_PROFILE_IDS.map((id) => ({ id, nameRu: movementProfileLabelRu(id) }));
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(MOVEMENT_PROFILE_STORAGE_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as { profiles?: unknown };
+    if (!Array.isArray(parsed.profiles)) return fallback;
+    const entries = parsed.profiles.flatMap((profile) => {
+      if (!isRecord(profile) || typeof profile.id !== 'string' || !profile.id.trim()) return [];
+      const id = profile.id.trim();
+      const nameRu = typeof profile.nameRu === 'string' && profile.nameRu.trim()
+        ? profile.nameRu.trim()
+        : movementProfileLabelRu(id);
+      return [{ id, nameRu }];
+    });
+    return entries.length > 0 ? entries : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function portKindRu(kind: AiPortValueKind): string {
