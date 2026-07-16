@@ -13,19 +13,6 @@ on:
       - synchronize
       - reopened
       - edited
-    paths:
-      - '.github/workflows/agent-environment-materials-visual-qa.yml'
-      - 'tests/environment-materials-visual.spec.ts'
-      - 'src/rendering/PixiMapRenderer.ts'
-      - 'src/rendering/VegetationChunkRaster.ts'
-      - 'src/rendering/PixiAwarenessHeatmapRenderer.ts'
-      - 'src/ai-node-editor/EnvironmentProfileEditorPanel.ts'
-      - 'src/ai-node-editor/NavigationProfileEditor.ts'
-      - 'src/ai-node-editor/navigation-profile-editor.css'
-      - 'src/core/map/EnvironmentMaterialProfile.ts'
-      - 'src/core/map/EnvironmentProfileRuntime.ts'
-      - 'src/ui/EnvironmentProfileStorage.ts'
-      - 'playwright.config.ts'
 
 permissions:
   contents: read
