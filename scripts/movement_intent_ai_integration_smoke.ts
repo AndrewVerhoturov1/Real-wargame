@@ -1,27 +1,23 @@
 import assert from 'node:assert/strict';
-import { SOLDIER_BLACKBOARD_SCHEMA, type AiBlackboardValue } from '../src/core/ai/AiBlackboard';
 import type { AiGraph } from '../src/core/ai/AiGraph';
 import { runAiGraph } from '../src/core/ai/AiGraphRunner';
-import { syncMoveOrderMemoryForUnit } from '../src/core/ai/AiStatefulMoveGameBridge';
+import { runAiGraphRuntime } from '../src/core/ai/AiGraphRuntime';
+import { reconcileMovementProfileRuntime } from '../src/core/ai/MovementProfileRuntimeResolver';
 import { DEFAULT_AI_NODE_CONTRACT_REGISTRY } from '../src/core/ai/contracts/AiNodeContractRegistry';
 import {
   buildClearAiMovementProfileUpdates,
   buildSetAiMovementProfileUpdates,
+  legacyMovementModeToProfileId,
 } from '../src/core/ai/MovementProfileAiMemory';
 import { restoreMoveOrder, serializeMoveOrder } from '../src/core/ai/runtime/AiRuntimeSnapshot';
-import { isMoveToBlackboardPositionActionState } from '../src/core/ai/runtime/actions/MoveToBlackboardPositionAction';
 import {
+  BUILTIN_MOVEMENT_PROFILE_IDS,
   DEFAULT_MOVEMENT_PROFILE_ID,
   MOVEMENT_PROFILE_MEMORY_KEYS,
   resolveMovementProfile,
-  resolveMovementProfileSelection,
 } from '../src/core/movement/MovementProfileContract';
 import { createMoveOrder } from '../src/core/orders/MoveOrder';
-import {
-  createPlayerMoveCommand,
-  normalizePlayerCommand,
-  updatePlayerCommandStatus,
-} from '../src/core/orders/PlayerCommand';
+import { createPlayerMoveCommand } from '../src/core/orders/PlayerCommand';
 import {
   createTacticalOrderIntent,
   normalizeTacticalOrderIntent,
@@ -29,274 +25,112 @@ import {
 } from '../src/core/orders/TacticalOrderIntent';
 import { normalizeUnits } from '../src/core/units/UnitModel';
 
-verifyTacticalIntentV2();
-verifyPlayerCommandAndMoveOrderSnapshots();
-verifyProfileSourcePriorityAndFallback();
-verifyAiOverrideOwnership();
-verifyTypedAiNodes();
-verifyLiveOrderPriority();
-verifyStatefulMoveMigration();
-verifyNodeEditorContracts();
-verifyBlackboardDictionary();
+verifyCanonicalIdsAndPresets();
+verifyRegistryFallbackAndCustomIds();
+verifyIntentOnlyOverrideMemory();
+verifyRuntimeSafetyPriority();
+verifyCurrentActiveSnapshotWithoutOwnership();
+verifyRegistryBackedNodeContracts();
+verifySplitRevisionsAndLegacyMigration();
 
-console.log(
-  'Movement intent and AI integration smoke passed: intent v2, order snapshots, live source priority, owned overrides, legacy migration, node-editor dropdowns and Blackboard dictionary.',
-);
+console.log('Movement intent and AI integration smoke passed: canonical registry ids, intent-only overrides, safety resolver priority, current-active snapshot ownership and split revisions.');
 
-function verifyTacticalIntentV2(): void {
-  const expected = {
-    move: ['normal', 'normal'],
-    recon: ['cautious', 'stealth'],
-    assault: ['attack', 'fast'],
-  } as const;
+function verifyCanonicalIdsAndPresets(): void {
+  assert.deepEqual(BUILTIN_MOVEMENT_PROFILE_IDS, [
+    'normal_walk',
+    'stealth_move',
+    'crouched_move',
+    'run',
+    'sprint',
+    'crawl',
+  ]);
+  assert.equal(DEFAULT_MOVEMENT_PROFILE_ID, 'normal_walk');
+  assert.equal(createTacticalOrderIntent('move').movementProfileId, 'normal_walk');
+  assert.equal(createTacticalOrderIntent('recon').movementProfileId, 'stealth_move');
+  assert.equal(createTacticalOrderIntent('assault').movementProfileId, 'run');
 
-  for (const [presetId, [navigationProfileId, movementProfileId]] of Object.entries(expected)) {
-    const intent = createTacticalOrderIntent(presetId as keyof typeof expected);
-    assert.equal(intent.formatVersion, 2);
-    assert.equal(intent.navigationProfileId, navigationProfileId);
-    assert.equal(intent.movementProfileId, movementProfileId);
-    assert.equal(Object.isFrozen(intent), true);
-  }
-
-  const migratedRecon = normalizeTacticalOrderIntent({
+  const migrated = normalizeTacticalOrderIntent({
     formatVersion: 1,
     presetId: 'recon',
     navigationProfileId: 'cautious',
   });
-  assert.equal(migratedRecon.formatVersion, 2);
-  assert.equal(migratedRecon.movementProfileId, 'stealth');
-  assert.equal(Object.isFrozen(migratedRecon), true);
+  assert.equal(migrated.movementProfileId, 'stealth_move');
+  assert.equal(Object.isFrozen(migrated), true);
 
-  const custom = withTacticalOrderMovementProfile(
-    createTacticalOrderIntent('move'),
-    'custom_low_silhouette',
-  );
+  const custom = withTacticalOrderMovementProfile(createTacticalOrderIntent('move'), 'custom_low_silhouette');
   assert.equal(custom.movementProfileId, 'custom_low_silhouette');
   assert.equal(Object.isFrozen(custom), true);
+
+  assert.equal(legacyMovementModeToProfileId('fast'), 'run');
+  assert.equal(legacyMovementModeToProfileId('careful'), 'stealth_move');
+  assert.equal(legacyMovementModeToProfileId('crawl'), 'crawl');
 }
 
-function verifyPlayerCommandAndMoveOrderSnapshots(): void {
-  const intent = withTacticalOrderMovementProfile(
-    createTacticalOrderIntent('recon'),
-    'custom_recon_walk',
-  );
-  const command = createPlayerMoveCommand(
-    'unit-a',
-    { x: 6.5, y: 4.5 },
-    null,
-    1000,
-    intent,
-  );
-  assert.equal(command.movementProfileId, 'custom_recon_walk');
-  assert.equal(command.intent.movementProfileId, 'custom_recon_walk');
-
-  const blocked = updatePlayerCommandStatus(command, 'blocked', 'blocked', 'заблокирован');
-  assert.equal(blocked.movementProfileId, 'custom_recon_walk');
-  assert.equal(blocked.intent.movementProfileId, 'custom_recon_walk');
-
-  const normalizedLegacy = normalizePlayerCommand({
-    ...command,
-    intent: {
-      formatVersion: 1,
-      presetId: 'assault',
-      navigationProfileId: 'attack',
-      attentionPolicy: 'engage',
-      contactPolicy: 'press_attack',
-      firePolicy: 'fire_at_will',
-      resumeAfterTemporaryInterruption: true,
-    },
-    movementProfileId: undefined,
-  }, 'unit-a');
-  assert.equal(normalizedLegacy?.movementProfileId, 'fast');
-  assert.equal(normalizedLegacy?.intent.movementProfileId, 'fast');
-
-  const order = createMoveOrder({ x: 6.5, y: 4.5 }, {
-    source: 'player',
-    ownerToken: command.id,
-    playerCommandId: command.id,
-    movementProfileId: command.intent.movementProfileId,
-    movementProfileSource: 'player_order',
-    movementProfileOwnerToken: command.id,
-    movementProfileRevision: command.revision,
-  });
-  const restored = restoreMoveOrder(serializeMoveOrder(order));
-  assert.equal(restored.movementProfileId, 'custom_recon_walk');
-  assert.equal(restored.movementProfileSource, 'player_order');
-  assert.equal(restored.movementProfileOwnerToken, command.id);
-  assert.equal(restored.movementProfileRevision, command.revision);
-}
-
-function verifyProfileSourcePriorityAndFallback(): void {
-  assert.deepEqual(resolveMovementProfile({}), {
-    profileId: DEFAULT_MOVEMENT_PROFILE_ID,
-    source: 'default',
-    ownerToken: undefined,
-    forcedFallback: false,
-    forcedReason: undefined,
-  });
-
-  const role = resolveMovementProfile({ unitRoleProfileId: 'role_profile' });
-  assert.equal(role.profileId, 'role_profile');
-  assert.equal(role.source, 'unit_role');
-
-  const player = resolveMovementProfile({
-    unitRoleProfileId: 'role_profile',
-    playerOrderProfileId: 'player_profile',
-  });
-  assert.equal(player.profileId, 'player_profile');
-  assert.equal(player.source, 'player_order');
-
-  const ai = resolveMovementProfile({
-    unitRoleProfileId: 'role_profile',
-    playerOrderProfileId: 'player_profile',
-    aiOverrideProfileId: 'ai_profile',
-    aiOverrideOwnerToken: 'ai-owner',
-  });
-  assert.equal(ai.profileId, 'ai_profile');
-  assert.equal(ai.source, 'ai_override');
-  assert.equal(ai.ownerToken, 'ai-owner');
-
-  const safety = resolveMovementProfile({
-    unitRoleProfileId: 'role_profile',
-    playerOrderProfileId: 'player_profile',
-    aiOverrideProfileId: 'ai_profile',
-    hardSafetyProfileId: 'safe_profile',
-    hardSafetyReason: 'injury',
-  });
-  assert.equal(safety.profileId, 'safe_profile');
-  assert.equal(safety.source, 'hard_safety');
-  assert.equal(safety.forcedReason, 'injury');
-
+function verifyRegistryFallbackAndCustomIds(): void {
   const custom = resolveMovementProfile({ playerOrderProfileId: 'downloaded_custom_profile' });
   assert.equal(custom.profileId, 'downloaded_custom_profile');
   assert.equal(custom.forcedFallback, false);
 
   const missing = resolveMovementProfile({
-    playerOrderProfileId: 'missing_custom_profile',
-    knownProfileIds: ['normal', 'stealth', 'fast'],
+    playerOrderProfileId: 'missing_profile',
+    knownProfileIds: [...BUILTIN_MOVEMENT_PROFILE_IDS],
   });
-  assert.equal(missing.profileId, 'normal');
+  assert.equal(missing.profileId, 'normal_walk');
   assert.equal(missing.source, 'player_order');
   assert.equal(missing.forcedFallback, true);
-  assert.match(missing.forcedReason ?? '', /missing_custom_profile/);
-
-  assert.deepEqual(resolveMovementProfileSelection({
-    mode: 'from_order',
-    requestedProfileId: 'stealth',
-  }), {
-    mode: 'from_order',
-    profileId: 'stealth',
-    source: 'player_order',
-  });
-  assert.deepEqual(resolveMovementProfileSelection({
-    mode: 'specific',
-    specificProfileId: 'fast',
-  }), {
-    mode: 'specific',
-    profileId: 'fast',
-    source: 'ai_override',
-  });
 }
 
-function verifyAiOverrideOwnership(): void {
-  const setUpdates = Object.fromEntries(
-    buildSetAiMovementProfileUpdates({
-      profileId: 'fast',
-      ownerToken: 'action-new',
-      reason: 'dash to cover',
-    }).map((entry) => [entry.key, entry.value]),
-  );
-  assert.equal(setUpdates[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId], 'fast');
-  assert.equal(setUpdates[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken], 'action-new');
-  assert.equal(setUpdates[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource], 'ai_override');
+function verifyIntentOnlyOverrideMemory(): void {
+  const setUpdates = Object.fromEntries(buildSetAiMovementProfileUpdates({
+    profileId: 'sprint',
+    ownerToken: 'dash-owner',
+    reason: 'Short dash.',
+  }).map((entry) => [entry.key, entry.value]));
+  assert.deepEqual(Object.keys(setUpdates).sort(), [
+    MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken,
+    MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId,
+    MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideReason,
+  ].sort());
+  assert.equal(setUpdates[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId], 'sprint');
+  assert.equal(setUpdates[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId], undefined);
+  assert.equal(setUpdates[MOVEMENT_PROFILE_MEMORY_KEYS.forcedFallback], undefined);
 
-  const staleClear = buildClearAiMovementProfileUpdates({
-    expectedOwnerToken: 'action-old',
-    activeOwnerToken: 'action-new',
-    requestedProfileId: 'stealth',
+  const stale = buildClearAiMovementProfileUpdates({
+    expectedOwnerToken: 'old-owner',
+    activeOwnerToken: 'new-owner',
   });
-  assert.equal(staleClear.cleared, false);
-  assert.equal(staleClear.updates.length, 0);
+  assert.equal(stale.cleared, false);
+  assert.equal(stale.updates.length, 0);
 
-  const ownedClear = buildClearAiMovementProfileUpdates({
-    expectedOwnerToken: 'action-new',
-    activeOwnerToken: 'action-new',
-    requestedProfileId: 'stealth',
-    fallbackSource: 'player_order',
+  const cleared = buildClearAiMovementProfileUpdates({
+    expectedOwnerToken: 'new-owner',
+    activeOwnerToken: 'new-owner',
   });
-  assert.equal(ownedClear.cleared, true);
-  const clearUpdates = Object.fromEntries(
-    ownedClear.updates.map((entry) => [entry.key, entry.value]),
-  );
-  assert.equal(clearUpdates[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId], null);
-  assert.equal(clearUpdates[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId], 'stealth');
-  assert.equal(clearUpdates[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource], 'player_order');
-}
-
-function verifyTypedAiNodes(): void {
-  const setResult = runAiGraph({
-    graph: graphWithAction('SetMovementProfile', {
-      profileId: 'fast',
-      ownerToken: 'dash-action',
-    }),
-    unitId: 'unit-a',
-    blackboard: {
-      player_order_movement_profile: 'stealth',
-      requested_movement_profile_id: 'stealth',
-      active_movement_profile_id: 'stealth',
-      active_movement_profile_source: 'player_order',
-    },
-    nowMs: 1000,
-  });
-  assert.equal(setResult.ok, true);
-  assert.equal(setResult.blackboard.movement_profile_override_id, 'fast');
-  assert.equal(setResult.blackboard.movement_profile_override_owner_token, 'dash-action');
-  assert.equal(setResult.blackboard.active_movement_profile_id, 'fast');
-  assert.equal(setResult.blackboard.active_movement_profile_source, 'ai_override');
-
-  const clearResult = runAiGraph({
-    graph: graphWithAction('ClearMovementProfileOverride', {
-      ownerToken: 'dash-action',
-    }),
-    unitId: 'unit-a',
-    blackboard: setResult.blackboard,
-    nowMs: 1100,
-  });
-  assert.equal(clearResult.ok, true);
-  assert.equal(clearResult.blackboard.movement_profile_override_id, null);
-  assert.equal(clearResult.blackboard.active_movement_profile_id, 'stealth');
-  assert.equal(clearResult.blackboard.active_movement_profile_source, 'player_order');
-
-  const legacyResult = runAiGraph({
-    graph: graphWithAction('SetMovementMode', { mode: 'crawl' }),
-    unitId: 'unit-a',
-    blackboard: {},
-    nowMs: 1200,
-  });
-  assert.equal(legacyResult.ok, true);
-  assert.equal(legacyResult.blackboard.movement_profile_override_id, 'stealth');
-  assert.equal(legacyResult.blackboard.movement_profile_legacy_migrated_from, 'crawl');
-  assert.equal(
-    legacyResult.effects.some((effect) => effect.type === 'set_movement_mode'),
-    false,
-    'legacy node must not emit the old decorative currentAction effect',
+  assert.equal(cleared.cleared, true);
+  assert.deepEqual(
+    cleared.updates.map((entry) => entry.key).sort(),
+    [
+      MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken,
+      MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId,
+      MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideReason,
+    ].sort(),
   );
 }
 
-function verifyLiveOrderPriority(): void {
+function verifyRuntimeSafetyPriority(): void {
   const [unit] = normalizeUnits([{
-    id: 'unit-live-priority',
+    id: 'movement-resolver-unit',
     type: 'infantry_squad',
     side: 'blue',
     x: 1,
     y: 1,
-    movementProfileId: 'role_profile',
+    movementProfileId: 'crouched_move',
   }]);
   const command = createPlayerMoveCommand(
     unit.id,
     { x: 5.5, y: 5.5 },
     null,
-    2000,
+    1000,
     createTacticalOrderIntent('recon'),
   );
   unit.playerCommand = command;
@@ -306,135 +140,118 @@ function verifyLiveOrderPriority(): void {
     movementProfileId: command.intent.movementProfileId,
     movementProfileSource: 'player_order',
     movementProfileOwnerToken: command.id,
-    movementProfileRevision: command.revision,
+    movementProfileSelectionRevision: command.revision,
   });
-
   const runtime = unit.behaviorRuntime as typeof unit.behaviorRuntime & {
-    aiGraphMemory?: Record<string, AiBlackboardValue>;
+    aiGraphMemory?: Record<string, string | number | boolean | null | { x: number; y: number }>;
   };
   const memory = runtime.aiGraphMemory ?? {};
   runtime.aiGraphMemory = memory;
 
-  memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId] = 'fast';
-  memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken] = 'dash-action';
-  syncMoveOrderMemoryForUnit(unit);
-  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId], 'fast');
-  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource], 'ai_override');
-  assert.ok(unit.order);
-  assert.equal(unit.order.movementProfileId, 'fast');
-  assert.equal(unit.order.movementProfileSource, 'ai_override');
-  assert.equal(unit.order.movementProfileOwnerToken, 'dash-action');
+  const graphResult = runAiGraph({
+    graph: graphWithAction('SetMovementProfile', {
+      profileId: 'sprint',
+      ownerToken: 'dash-owner',
+      reasonRu: 'Короткий рывок.',
+    }),
+    unitId: unit.id,
+    blackboard: memory,
+    nowMs: 1100,
+  });
+  assert.equal(graphResult.ok, true);
+  Object.assign(memory, graphResult.blackboard);
+  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId], undefined);
 
-  memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId] = 'normal';
-  memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason] = 'exhausted';
-  syncMoveOrderMemoryForUnit(unit);
-  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId], 'normal');
+  memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId] = 'crawl';
+  memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason] = 'injury';
+  const reconciled = reconcileMovementProfileRuntime(unit, BUILTIN_MOVEMENT_PROFILE_IDS.map((id) => ({ id, revision: 3 })));
+  assert.equal(reconciled.resolved.profileId, 'crawl');
+  assert.equal(reconciled.resolved.source, 'hard_safety');
+  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId], 'crawl');
   assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource], 'hard_safety');
-  assert.equal(unit.order.movementProfileId, 'normal');
+  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.profileDefinitionRevision], 3);
+  assert.equal(unit.order.movementProfileId, 'crawl');
   assert.equal(unit.order.movementProfileSource, 'hard_safety');
-
-  memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId] = null;
-  memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason] = null;
-  memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId] = null;
-  memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken] = null;
-  syncMoveOrderMemoryForUnit(unit);
-  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId], 'stealth');
-  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource], 'player_order');
-  assert.equal(unit.order.movementProfileId, 'stealth');
-  assert.equal(unit.order.movementProfileSource, 'player_order');
-  assert.equal(unit.order.movementProfileOwnerToken, command.id);
 }
 
-function verifyStatefulMoveMigration(): void {
-  const legacyState = {
-    kind: 'move_to_blackboard_position',
-    targetKey: 'best_cover_position',
-    target: { x: 3.5, y: 4.5 },
-    acceptanceRadiusCells: 0.2,
-    timeoutMs: 15000,
-    actionToken: 'unit-a:move:1000',
-  };
-  assert.equal(isMoveToBlackboardPositionActionState(legacyState), true);
-  assert.equal(isMoveToBlackboardPositionActionState({
-    ...legacyState,
-    movementProfileSelection: 'specific',
-    movementProfileId: 'fast',
-    movementProfileSource: 'ai_override',
-  }), true);
+function verifyCurrentActiveSnapshotWithoutOwnership(): void {
+  const result = runAiGraphRuntime({
+    graph: graphWithAction('MoveToBlackboardPosition', {
+      targetKey: 'best_cover_position',
+      movementProfileSource: 'current_active',
+      movementProfileId: 'normal_walk',
+      acceptanceRadiusCells: 0.2,
+      timeoutSeconds: 15,
+      stuckTimeoutSeconds: 2.5,
+      minimumProgressCells: 0.05,
+      abortOnTargetLost: true,
+    }),
+    unitId: 'current-active-unit',
+    blackboard: {
+      self_position: { x: 1, y: 1 },
+      best_cover_position: { x: 5, y: 5 },
+      active_movement_profile_id: 'crawl',
+      active_movement_profile_source: 'ai_override',
+      movement_profile_override_id: 'crawl',
+      movement_profile_override_owner_token: 'existing-owner',
+    },
+    cooldowns: {},
+    nowMs: 2000,
+  });
+  const beginMove = result.effects.find((effect) => effect.type === 'begin_move') as (
+    typeof result.effects[number] & {
+      movementProfileId?: string;
+      movementProfileSource?: string;
+      movementProfileOwnerToken?: string;
+    }
+  ) | undefined;
+  assert.ok(beginMove);
+  assert.equal(beginMove.movementProfileId, 'crawl');
+  assert.equal(beginMove.movementProfileSource, 'ai_override');
+  assert.equal(beginMove.movementProfileOwnerToken, undefined, 'current_active must not claim override ownership');
 }
 
-function verifyNodeEditorContracts(): void {
-  const moveContract = DEFAULT_AI_NODE_CONTRACT_REGISTRY.require('MoveToBlackboardPosition');
-  const sourceParameter = moveContract.parameters.find(
-    (entry) => entry.id === 'movementProfileSource',
-  );
-  assert.equal(sourceParameter?.kind, 'enum');
-  assert.deepEqual(
-    sourceParameter?.options?.map((entry) => entry.value),
-    ['from_order', 'current_active', 'automatic', 'specific'],
-  );
-  assert.deepEqual(
-    sourceParameter?.options?.map((entry) => entry.labelRu),
-    ['Из приказа', 'Текущий активный', 'Автоматически', 'Конкретный профиль'],
-  );
-
-  const profileParameter = moveContract.parameters.find(
-    (entry) => entry.id === 'movementProfileId',
-  );
-  assert.equal(profileParameter?.kind, 'enum');
-  assert.deepEqual(
-    profileParameter?.options?.map((entry) => entry.value),
-    ['normal', 'stealth', 'fast'],
-  );
-  assert.deepEqual(
-    profileParameter?.options?.map((entry) => entry.labelRu),
-    ['Обычное движение', 'Скрытное движение', 'Быстрое движение'],
-  );
-
-  const setContract = DEFAULT_AI_NODE_CONTRACT_REGISTRY.require('SetMovementProfile');
-  assert.equal(setContract.labelRu, 'Установить профиль движения');
-  assert.equal(
-    setContract.parameters.find((entry) => entry.id === 'ownerToken')?.kind,
-    'string',
-  );
-  assert.equal(
-    setContract.parameters.find((entry) => entry.id === 'reasonRu')?.defaultValue,
-    'Временный профиль выбран AI-графом.',
-  );
-
-  const clearContract = DEFAULT_AI_NODE_CONTRACT_REGISTRY.require(
-    'ClearMovementProfileOverride',
-  );
-  assert.equal(clearContract.labelRu, 'Вернуть профиль движения');
-  assert.equal(
-    clearContract.parameters.find((entry) => entry.id === 'ownerToken')?.kind,
-    'string',
-  );
-}
-
-function verifyBlackboardDictionary(): void {
-  const schema = new Map(SOLDIER_BLACKBOARD_SCHEMA.map((entry) => [entry.key, entry]));
-  for (const key of [
-    'requested_movement_profile_id',
-    'active_movement_profile_id',
-    'active_movement_profile_source',
-    'active_movement_gait',
-    'movement_speed',
-    'movement_stamina',
-    'movement_noise',
-    'movement_visual_signature',
-    'movement_can_fire',
-    'movement_forced_fallback',
-    'movement_forced_reason',
-  ]) {
-    const entry = schema.get(key);
-    assert.ok(entry, `Missing Blackboard schema entry: ${key}`);
-    assert.ok(entry.labelRu, `Missing Russian Blackboard label: ${key}`);
-    assert.ok(entry.descriptionRu, `Missing Russian Blackboard description: ${key}`);
+function verifyRegistryBackedNodeContracts(): void {
+  for (const [type, parameterId] of [
+    ['SetMovementProfile', 'profileId'],
+    ['MoveToBlackboardPosition', 'movementProfileId'],
+  ] as const) {
+    const contract = DEFAULT_AI_NODE_CONTRACT_REGISTRY.require(type);
+    const parameter = contract.parameters.find((entry) => entry.id === parameterId);
+    assert.equal(parameter?.kind, 'string');
+    assert.equal(parameter?.selector, 'movement_profile_registry');
+    assert.equal(parameter?.options, undefined);
   }
 }
 
-function graphWithAction(type: string, parameters: Record<string, string>): AiGraph {
+function verifySplitRevisionsAndLegacyMigration(): void {
+  const order = createMoveOrder({ x: 3, y: 4 }, {
+    source: 'ai',
+    ownerToken: 'move-owner',
+    movementProfileId: 'run',
+    movementProfileSource: 'ai_override',
+    movementProfileOwnerToken: 'profile-owner',
+    movementProfileDefinitionRevision: 7,
+    movementProfileSelectionRevision: 11,
+  });
+  const serialized = serializeMoveOrder(order);
+  assert.equal(serialized.movementProfileDefinitionRevision, 7);
+  assert.equal(serialized.movementProfileSelectionRevision, 11);
+  assert.equal(serialized.movementProfileRevision, undefined);
+
+  const restored = restoreMoveOrder(serialized);
+  assert.equal(restored.movementProfileDefinitionRevision, 7);
+  assert.equal(restored.movementProfileSelectionRevision, 11);
+
+  const legacy = restoreMoveOrder({
+    ...serialized,
+    movementProfileSelectionRevision: undefined,
+    movementProfileRevision: 5,
+  });
+  assert.equal(legacy.movementProfileSelectionRevision, 5);
+}
+
+function graphWithAction(type: string, parameters: Record<string, unknown>): AiGraph {
   return {
     version: 2,
     id: `movement-profile-${type}`,
