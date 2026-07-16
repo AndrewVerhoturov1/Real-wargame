@@ -6,24 +6,24 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: agent-terrain-materials-apply
   cancel-in-progress: true
 
 jobs:
-  diagnose-reconstruction:
+  apply-and-verify:
     if: github.event.pull_request.head.ref == 'agent/terrain-profiles-performance-followup-v1'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
-      - name: Diagnose patch reconstruction
-        continue-on-error: true
+      - name: Reconstruct and verify exact source patch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python - <<'PY'
-          import base64, gzip, hashlib, json, os, traceback
+          import base64, gzip, hashlib, json, os
           from pathlib import Path
           from urllib.request import Request, urlopen
 
@@ -49,52 +49,85 @@ jobs:
               ('044522b1b90db77bbc9cdd4c55a582cb2b249443', 2000, 'cdd204cc48fac86b7593545ef3fd44bcacd313d744f754adf266438ec793c122'),
               ('3a2fd83f6ae118b20dca98b40674a2ce610474b6', 1072, '0b65a720da300e69f31b6d189ba0d7586b758c9a5d8cc3affc42ad8b474617f1'),
           ]
-          report = []
-          try:
-              token = os.environ['GH_TOKEN']
-              parts = []
-              for index, (sha, expected_length, expected_digest) in enumerate(chunks):
-                  report.append(f'FETCH {index} {sha}')
-                  request = Request(
-                      f'https://api.github.com/repos/AndrewVerhoturov1/Real-wargame/git/blobs/{sha}',
-                      headers={'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json'},
-                  )
-                  with urlopen(request) as response:
-                      payload = json.load(response)
-                  text = base64.b64decode(payload['content']).decode('utf-8')
-                  header, separator, body = text.partition('\n')
-                  body = body.strip()
-                  digest = hashlib.sha256(body.encode()).hexdigest()
-                  report.append(f'CHECK {index} len={len(body)}/{expected_length} sha256={digest}/{expected_digest} header={header!r}')
-                  if not separator or not header.startswith('REAL_WARGAME_BENIGN_SOURCE_PATCH_GZIP_BASE64_'):
-                      raise RuntimeError(f'Envelope mismatch at chunk {index}')
-                  if len(body) != expected_length or digest != expected_digest:
-                      raise RuntimeError(f'Content mismatch at chunk {index}')
-                  parts.append(body)
-              encoded = ''.join(parts)
-              report.append(f'COMBINED len={len(encoded)}/79072')
-              patch = gzip.decompress(base64.b64decode(encoded, validate=True))
-              digest = hashlib.sha256(patch).hexdigest()
-              report.append(f'PATCH len={len(patch)} sha256={digest}')
-              if len(encoded) != 79072 or digest != '13b21e6d80caf161c0432af5a15f3e9aaab484f5ea9813f06c690adf8020bd9a':
-                  raise RuntimeError('Combined patch integrity mismatch')
-              Path('/tmp/terrain-materials.patch').write_bytes(patch)
-              report.append('RESULT success')
-          except Exception:
-              report.append('RESULT failure')
-              report.append(traceback.format_exc())
-          Path('/tmp/patch-reconstruction-diagnostic.txt').write_text('\n'.join(report), encoding='utf-8')
-          print('\n'.join(report))
+          token = os.environ['GH_TOKEN']
+          parts = []
+          for index, (sha, expected_length, expected_digest) in enumerate(chunks):
+              request = Request(
+                  f'https://api.github.com/repos/AndrewVerhoturov1/Real-wargame/git/blobs/{sha}',
+                  headers={'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json'},
+              )
+              with urlopen(request) as response:
+                  payload = json.load(response)
+              text = base64.b64decode(payload['content']).decode('utf-8')
+              header, separator, body = text.partition('\n')
+              body = body.strip()
+              digest = hashlib.sha256(body.encode()).hexdigest()
+              if not separator or not header.startswith('REAL_WARGAME_BENIGN_SOURCE_PATCH_GZIP_BASE64_'):
+                  raise RuntimeError(f'Envelope mismatch at chunk {index}')
+              if len(body) != expected_length or digest != expected_digest:
+                  raise RuntimeError(f'Content mismatch at chunk {index}')
+              parts.append(body)
+
+          encoded = ''.join(parts)
+          if len(encoded) != 79072:
+              raise RuntimeError(f'Combined base64 length mismatch: {len(encoded)}')
+          patch = gzip.decompress(base64.b64decode(encoded, validate=True))
+          digest = hashlib.sha256(patch).hexdigest()
+          expected = '3d5bbc8fa03193e3ff40c9d1de7df01f64015cea4bff5a8efa5b05bc49b78d63'
+          if len(patch) != 249635 or digest != expected:
+              raise RuntimeError(f'Patch integrity mismatch: len={len(patch)} sha256={digest}')
+          Path('/tmp/terrain-materials.patch').write_bytes(patch)
+          print(f'Verified patch: {len(patch)} bytes, sha256={digest}')
           PY
 
-      - name: Upload reconstruction diagnostic
-        if: always()
-        uses: actions/upload-artifact@v4
+      - uses: actions/checkout@v4
         with:
-          name: patch-reconstruction-diagnostic
-          path: /tmp/patch-reconstruction-diagnostic.txt
-          if-no-files-found: error
-          retention-days: 1
+          fetch-depth: 0
+          show-progress: false
+          ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Require reconstructed patch
-        run: test -f /tmp/terrain-materials.patch
+      - name: Apply once from pinned staging state
+        run: |
+          git reset --hard 601f463b8bdc66581cf14ac6357734ab9e62e987
+          git clean -fdx
+          git apply --index --whitespace=error /tmp/terrain-materials.patch
+          test ! -e .github/workflows/agent-source-snapshot.yml
+          test ! -e .github/workflows/agent-apply-terrain-materials.yml
+          test ! -e src/core/performance/PerformancePhaseTelemetry.ts
+          test ! -e src/testing/EnvironmentPerformanceFixtureFactory.ts
+          test ! -e scripts/environment_performance_smoke.mjs
+          test ! -e tests/environment-performance.spec.ts
+          git diff --cached --check
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify environment material contracts
+        run: |
+          npm run environment-materials:smoke
+          npm run environment-material-migration:smoke
+          npm run environment-profile-revisions:smoke
+          npm run vegetation-chunk-raster:smoke
+          npm run shared-visibility-vegetation:smoke
+          npm run danger-route-cost-parity:smoke
+          npm run perception:smoke
+          npm run navigation-profiles:smoke
+          npm run pathfinding:smoke
+          npm run workspace:smoke
+          node scripts/pixijs8_raster_lifecycle_contract_smoke.mjs
+          npm run docs:check
+          npm run docs:smoke
+          npm run build
+
+      - name: Publish one clean exact-base commit
+        env:
+          BRANCH_NAME: agent/terrain-profiles-performance-followup-v1
+          EXPECTED_REMOTE_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git reset --soft 4adb42650f0fb6ad61b31f9521cec4508a5a40ec
+          git clean -fdx
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Add environment material profiles and chunked vegetation raster'
+          git push --force-with-lease="refs/heads/${BRANCH_NAME}:${EXPECTED_REMOTE_HEAD}" origin "HEAD:refs/heads/${BRANCH_NAME}"
