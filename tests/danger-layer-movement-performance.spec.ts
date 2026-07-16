@@ -236,13 +236,17 @@ test('selected unit movement preserves world-space threat memory and performs lo
   const after = await snapshot(page);
   const afterMovement = requireMovement(after);
 
-  const worldSpaceMemoryStable = angularDifference(
-    after.subjectiveThreatDirectionDegrees ?? 0,
-    before.subjectiveThreatDirectionDegrees ?? 0,
-  ) <= 0.5 && Math.abs(
-    (after.subjectiveThreatRangeCells ?? 0) - (before.subjectiveThreatRangeCells ?? 0),
-  ) <= 0.1;
-  expect(worldSpaceMemoryStable).toBe(true);
+  const beforeThreatPosition = before.subjectiveThreatPosition;
+  const afterThreatPosition = after.subjectiveThreatPosition;
+  const worldSpaceMemoryStable = Boolean(
+    beforeThreatPosition
+    && afterThreatPosition
+    && Math.hypot(
+      afterThreatPosition.x - beforeThreatPosition.x,
+      afterThreatPosition.y - beforeThreatPosition.y,
+    ) <= 0.001,
+  );
+  expect(worldSpaceMemoryStable, JSON.stringify({ before, after })).toBe(true);
   expect(after.lastRequestedCanonicalThreatKey).toBe(before.lastRequestedCanonicalThreatKey);
   expect(after.lastAppliedCanonicalThreatKey).toBe(before.lastAppliedCanonicalThreatKey);
   expect(after.lastRequestedWorldKey).toBe(before.lastRequestedWorldKey);
