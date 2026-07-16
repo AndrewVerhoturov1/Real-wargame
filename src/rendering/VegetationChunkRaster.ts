@@ -5,7 +5,7 @@ import { getActiveEnvironmentProfile } from '../core/map/EnvironmentProfileRunti
 import { getEnvironmentProfileDomainKey, getVegetationMaterial } from '../core/map/EnvironmentMaterialProfile';
 
 export const VEGETATION_CHUNK_SIZE_CELLS = 32;
-const TARGET_PIXELS_PER_CELL = 1.5;
+export const VEGETATION_TARGET_PIXELS_PER_CELL = 6;
 
 export interface VegetationChunkRasterDiagnostics {
   readonly chunkBuildCount: number;
@@ -202,7 +202,6 @@ export class VegetationChunkRaster {
   }
 }
 
-
 export function vegetationChunkCoordinatesForRegion(
   map: Pick<TacticalMap, 'width' | 'height'>,
   region: MapDirtyRegion,
@@ -226,7 +225,7 @@ export function vegetationChunkCoordinatesForRegion(
 }
 
 export function vegetationRasterScale(map: Pick<TacticalMap, 'cellSize'>): number {
-  return Math.max(0.25, Math.min(1, TARGET_PIXELS_PER_CELL / Math.max(0.1, map.cellSize)));
+  return Math.max(0.25, Math.min(1, VEGETATION_TARGET_PIXELS_PER_CELL / Math.max(0.1, map.cellSize)));
 }
 
 export interface VegetationChunkPixels {
@@ -271,7 +270,15 @@ export function renderVegetationChunkPixels(
           )
         : 0.5;
       const edgeWidth = 0.04 + material.presentation.edgeSoftness * 0.46;
-      const regionMask = smoothstep(0.5 - edgeWidth, 0.5 + edgeWidth, occupancy);
+      const edgeNoise = continuousNoise(
+        gridX * 3.5,
+        gridY * 3.5,
+        0.65 + material.presentation.edgeSoftness * 0.6,
+        stringHash(material.id) ^ 0x5f3759df,
+      );
+      const edgeOffset = (edgeNoise - 0.5) * material.presentation.edgeSoftness * 0.36;
+      const edgeThreshold = 0.5 + edgeOffset;
+      const regionMask = smoothstep(edgeThreshold - edgeWidth, edgeThreshold + edgeWidth, occupancy);
       const textureMask = patterned
         ? smoothstep(
             1 - material.presentation.coverage - 0.08,
