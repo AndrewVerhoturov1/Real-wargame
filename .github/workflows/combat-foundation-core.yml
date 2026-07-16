@@ -64,41 +64,19 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   combat-foundation:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
-          fetch-depth: 0
-      - name: Apply staged danger field refactor
-        shell: bash
-        run: |
-          patches=(scripts/danger-route-patches/*.patch)
-          if git apply --check "${patches[@]}"; then
-            git apply "${patches[@]}"
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add src/core/knowledge/CanonicalWorldThreat.ts \
-              src/core/knowledge/SoldierAwarenessGrid.ts \
-              src/core/knowledge/SoldierThreatMemory.ts \
-              src/core/navigation/NavigationRuntime.ts \
-              src/core/navigation/RouteCostField.ts
-            git commit -m "Unify danger field consumers and threat classes"
-            git push origin HEAD:${{ github.head_ref }}
-            echo "Applied staged core refactor; the pushed commit will run the complete matrix."
-            exit 1
-          fi
-          echo "Core refactor already applied; continuing with verification."
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Focused danger route cost parity smoke
+      - name: Danger route cost parity smoke
         shell: bash
         run: set -o pipefail; npm run danger-route-cost-parity:smoke 2>&1 | tee danger-route-cost-parity.log
       - name: Capture combat foundation smoke
@@ -136,9 +114,6 @@ jobs:
       - name: Awareness field cache smoke
         shell: bash
         run: set -o pipefail; npm run awareness-field:smoke 2>&1 | tail -n 120
-      - name: Danger route cost parity smoke
-        shell: bash
-        run: set -o pipefail; npm run danger-route-cost-parity:smoke 2>&1 | tee danger-route-cost-parity.log
       - name: Directional terrain smoke
         shell: bash
         run: set -o pipefail; npm run directional-terrain:smoke 2>&1 | tail -n 160
