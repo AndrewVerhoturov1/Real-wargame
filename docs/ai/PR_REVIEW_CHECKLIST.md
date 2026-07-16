@@ -26,7 +26,7 @@ Use this checklist for a fallback PR, an explicitly isolated feature branch or f
 
 ## Project compatibility
 
-- [ ] PixiJS changes remain compatible with version 7 unless migration was explicitly requested.
+- [ ] PixiJS changes use current v8 APIs without active v7 compatibility aliases.
 - [ ] English canonical code/data names and complete Russian human-facing text are present.
 - [ ] Normal user workflow does not require source code, JSON or terminal commands.
 - [ ] Core AI/simulation boundaries remain independent of PixiJS and DOM.

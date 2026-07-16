@@ -108,6 +108,8 @@ export class PixiOverlayRenderer {
   }
 
   destroy(): void {
+    this.zoneContainer.cacheAsTexture(false);
+    this.realReliefContainer.cacheAsTexture(false);
     delete (window as OverlayDebugWindow).__realWargameOverlayDebug;
   }
 
@@ -116,12 +118,12 @@ export class PixiOverlayRenderer {
     if (nextKey === this.lastZoneKey) return;
 
     this.lastZoneKey = nextKey;
-    this.zoneContainer.cacheAsBitmap = false;
+    this.zoneContainer.cacheAsTexture(false);
     destroyContainerChildren(this.zoneContainer);
 
     if (showPressureZones) {
       drawPressureZones(this.zoneContainer, state.pressureZones, state.map.cellSize, state.editor.selectedZoneId);
-      this.zoneContainer.cacheAsBitmap = state.editor.selectedZoneId === null;
+      if (state.editor.selectedZoneId === null) this.zoneContainer.cacheAsTexture(true);
     }
   }
 
@@ -130,13 +132,13 @@ export class PixiOverlayRenderer {
     if (nextKey === this.lastRealReliefKey) return;
 
     this.lastRealReliefKey = nextKey;
-    this.realReliefContainer.cacheAsBitmap = false;
+    this.realReliefContainer.cacheAsTexture(false);
     destroyContainerChildren(this.realReliefContainer);
 
     if (!getRealReliefOverlayState(state).active || !hasHeightVariation(state.map)) return;
 
     drawRealReliefOverlay(this.realReliefContainer, state);
-    this.realReliefContainer.cacheAsBitmap = true;
+    this.realReliefContainer.cacheAsTexture(true);
   }
 
   private renderKnowledgeLayerIfNeeded(state: SimulationState): void {
@@ -211,13 +213,12 @@ export class PixiOverlayRenderer {
         y: Math.floor(state.mouseGridPosition.y),
       });
 
-      this.hoverCellGraphics.lineStyle(2, 0xfff2a8, 0.5);
-      this.hoverCellGraphics.drawRect(
+      this.hoverCellGraphics.rect(
         (cell.x - 0.5) * map.cellSize,
         (cell.y - 0.5) * map.cellSize,
         map.cellSize,
         map.cellSize,
-      );
+      ).stroke({ width: 2, color: 0xfff2a8, alpha: 0.5 });
     }
 
     const commandTool = getUnitCommandToolState(state);
@@ -227,12 +228,12 @@ export class PixiOverlayRenderer {
       const startY = draft.target.y * state.map.cellSize;
       const endX = draft.pointer.x * state.map.cellSize;
       const endY = draft.pointer.y * state.map.cellSize;
-      this.commandDraftGraphics.lineStyle(3, 0xffd85a, 0.95);
-      this.commandDraftGraphics.drawCircle(startX, startY, 8);
+      const draftStroke = { width: 3, color: 0xffd85a, alpha: 0.95 };
+      this.commandDraftGraphics.circle(startX, startY, 8).stroke(draftStroke);
       if (draft.finalFacingRadians !== null) {
-        this.commandDraftGraphics.moveTo(startX, startY);
-        this.commandDraftGraphics.lineTo(endX, endY);
+        this.commandDraftGraphics.moveTo(startX, startY).lineTo(endX, endY);
         drawArrowHead(this.commandDraftGraphics, endX, endY, draft.finalFacingRadians, 9);
+        this.commandDraftGraphics.stroke(draftStroke);
       }
     }
 
@@ -243,10 +244,9 @@ export class PixiOverlayRenderer {
       const maxX = Math.max(state.selectionBox.start.x, state.selectionBox.current.x) * map.cellSize;
       const maxY = Math.max(state.selectionBox.start.y, state.selectionBox.current.y) * map.cellSize;
 
-      this.selectionBoxGraphics.lineStyle(2, 0xfff2a8, 0.9);
-      this.selectionBoxGraphics.beginFill(0xfff2a8, 0.08);
-      this.selectionBoxGraphics.drawRect(minX, minY, maxX - minX, maxY - minY);
-      this.selectionBoxGraphics.endFill();
+      this.selectionBoxGraphics.rect(minX, minY, maxX - minX, maxY - minY)
+        .fill({ color: 0xfff2a8, alpha: 0.08 })
+        .stroke({ width: 2, color: 0xfff2a8, alpha: 0.9 });
     }
 
     this.diagnostics.interactionUpdateCount += 1;
@@ -288,9 +288,7 @@ function drawRealReliefOverlay(container: Container, state: SimulationState): vo
       const alpha = Math.min(0.34, Math.abs(level) * 0.12 + 0.07);
       if (Math.abs(level) < 0.08) continue;
 
-      graphics.beginFill(color, alpha);
-      graphics.drawRect(x * cellSize, y * cellSize, cellSize + 0.5, cellSize + 0.5);
-      graphics.endFill();
+      graphics.rect(x * cellSize, y * cellSize, cellSize + 0.5, cellSize + 0.5).fill({ color, alpha });
     }
   }
 
@@ -306,10 +304,9 @@ function drawKnowledgeOverlay(container: Container, state: SimulationState): voi
   const graphics = new Graphics();
   const cellSize = state.map.cellSize;
 
-  graphics.beginFill(0x4fbf72, 0.055);
-  graphics.lineStyle(1, 0x4fbf72, 0.2);
-  graphics.drawCircle(unit.position.x * cellSize, unit.position.y * cellSize, unit.viewRangeCells * cellSize);
-  graphics.endFill();
+  graphics.circle(unit.position.x * cellSize, unit.position.y * cellSize, unit.viewRangeCells * cellSize)
+    .fill({ color: 0x4fbf72, alpha: 0.055 })
+    .stroke({ width: 1, color: 0x4fbf72, alpha: 0.2 });
 
   for (const cover of report.planCovers) drawCoverMarker(graphics, cover, cellSize, false, false);
   for (const cover of report.nearbyCovers) drawCoverMarker(graphics, cover, cellSize, true, false);
@@ -337,12 +334,15 @@ function drawThreatMemoryGeometry(container: Container, state: SimulationState):
 }
 
 function drawCurrentThreatMarkers(graphics: Graphics, threats: KnownThreatMemory[], cellSize: number): void {
+  let hasVisibleMarker = false;
   for (const threat of threats) {
     if (!threat.visibleNow) continue;
-    graphics.lineStyle(2, CURRENT_CONTACT_MARKER_COLOR, 1);
-    graphics.beginFill(CURRENT_CONTACT_MARKER_COLOR, 0.82);
-    graphics.drawCircle(threat.x * cellSize, threat.y * cellSize, 4);
-    graphics.endFill();
+    hasVisibleMarker = true;
+    graphics.circle(threat.x * cellSize, threat.y * cellSize, 4);
+  }
+  if (hasVisibleMarker) {
+    graphics.fill({ color: CURRENT_CONTACT_MARKER_COLOR, alpha: 0.82 })
+      .stroke({ width: 2, color: CURRENT_CONTACT_MARKER_COLOR });
   }
 }
 
@@ -361,9 +361,8 @@ export function drawCoverKnowledgeOverlay(container: Container, state: Simulatio
     drawCoverMarker(graphics, cover, cellSize, cover.currentCover, selected || hovered);
     if (selected && unit.tacticalKnowledge.threats[0]) {
       const threat = unit.tacticalKnowledge.threats[0];
-      graphics.lineStyle(2, 0x9ff29c, 0.75);
-      graphics.moveTo(cover.x * cellSize, cover.y * cellSize);
-      graphics.lineTo(threat.x * cellSize, threat.y * cellSize);
+      graphics.moveTo(cover.x * cellSize, cover.y * cellSize).lineTo(threat.x * cellSize, threat.y * cellSize)
+        .stroke({ width: 2, color: 0x9ff29c, alpha: 0.75 });
     }
   }
   container.addChild(graphics);
@@ -380,11 +379,10 @@ function drawCoverMarker(
   const y = cover.y * cellSize;
   const color = emphasized ? 0xffffff : nearby ? 0xfff2a8 : 0xe8d985;
   const radius = emphasized ? 10 : nearby ? 7 : 5;
-  graphics.lineStyle(emphasized ? 4 : 2, color, emphasized ? 1 : 0.86);
-  graphics.beginFill(nearby ? 0x8acb76 : 0xfff2a8, emphasized ? 0.38 : nearby ? 0.18 : 0.12);
-  if (nearby) graphics.drawRoundedRect(x - radius, y - radius, radius * 2, radius * 2, 3);
-  else graphics.drawCircle(x, y, radius);
-  graphics.endFill();
+  const fill = { color: nearby ? 0x8acb76 : 0xfff2a8, alpha: emphasized ? 0.38 : nearby ? 0.18 : 0.12 };
+  const stroke = { width: emphasized ? 4 : 2, color, alpha: emphasized ? 1 : 0.86 };
+  if (nearby) graphics.roundRect(x - radius, y - radius, radius * 2, radius * 2, 3).fill(fill).stroke(stroke);
+  else graphics.circle(x, y, radius).fill(fill).stroke(stroke);
 }
 
 function drawRememberedThreat(graphics: Graphics, threat: KnownThreatMemory, cellSize: number, memoryMode: boolean): void {
@@ -394,41 +392,33 @@ function drawRememberedThreat(graphics: Graphics, threat: KnownThreatMemory, cel
   const dangerColor = threat.mode === 'directional_fire' ? STABLE_DIRECTIONAL_FIRE_COLOR : 0xf09a55;
   const uncertaintyRadius = Math.max(0.18, threat.uncertaintyCells) * cellSize;
 
-  graphics.lineStyle(2, dangerColor, confidenceAlpha);
-  graphics.beginFill(dangerColor, memoryMode ? 0.08 : 0.12);
-  graphics.drawCircle(sourceX, sourceY, uncertaintyRadius);
-  graphics.endFill();
+  graphics.circle(sourceX, sourceY, uncertaintyRadius)
+    .fill({ color: dangerColor, alpha: memoryMode ? 0.08 : 0.12 })
+    .stroke({ width: 2, color: dangerColor, alpha: confidenceAlpha });
 
   if (threat.mode === 'directional_fire') {
     const direction = degreesToRadians(threat.directionDegrees);
     const halfArc = degreesToRadians(threat.arcDegrees / 2);
     const radius = threat.rangeCells * cellSize;
-    graphics.lineStyle(2, dangerColor, confidenceAlpha * 0.8);
-    graphics.beginFill(dangerColor, memoryMode ? 0.035 : 0.075);
-    graphics.moveTo(sourceX, sourceY);
-    graphics.arc(sourceX, sourceY, radius, direction - halfArc, direction + halfArc);
-    graphics.lineTo(sourceX, sourceY);
-    graphics.endFill();
-    graphics.moveTo(sourceX, sourceY);
-    graphics.lineTo(sourceX + Math.cos(direction) * radius, sourceY + Math.sin(direction) * radius);
+    const sectorStroke = { width: 2, color: dangerColor, alpha: confidenceAlpha * 0.8 };
+    graphics.moveTo(sourceX, sourceY).arc(sourceX, sourceY, radius, direction - halfArc, direction + halfArc)
+      .lineTo(sourceX, sourceY).closePath().fill({ color: dangerColor, alpha: memoryMode ? 0.035 : 0.075 }).stroke(sectorStroke);
+    graphics.moveTo(sourceX, sourceY).lineTo(sourceX + Math.cos(direction) * radius, sourceY + Math.sin(direction) * radius).stroke(sectorStroke);
   } else if (threat.radiusCells > 0) {
-    graphics.lineStyle(2, dangerColor, confidenceAlpha * 0.7);
-    graphics.drawCircle(sourceX, sourceY, threat.radiusCells * cellSize);
+    graphics.circle(sourceX, sourceY, threat.radiusCells * cellSize)
+      .stroke({ width: 2, color: dangerColor, alpha: confidenceAlpha * 0.7 });
   } else {
-    graphics.lineStyle(2, dangerColor, confidenceAlpha * 0.7);
-    graphics.drawRect(
+    graphics.rect(
       (threat.x - threat.widthCells / 2) * cellSize,
       (threat.y - threat.heightCells / 2) * cellSize,
       threat.widthCells * cellSize,
       threat.heightCells * cellSize,
-    );
+    ).stroke({ width: 2, color: dangerColor, alpha: confidenceAlpha * 0.7 });
   }
 
-  graphics.lineStyle(2, dangerColor, confidenceAlpha);
-  graphics.moveTo(sourceX - 6, sourceY - 6);
-  graphics.lineTo(sourceX + 6, sourceY + 6);
-  graphics.moveTo(sourceX + 6, sourceY - 6);
-  graphics.lineTo(sourceX - 6, sourceY + 6);
+  graphics.moveTo(sourceX - 6, sourceY - 6).lineTo(sourceX + 6, sourceY + 6);
+  graphics.moveTo(sourceX + 6, sourceY - 6).lineTo(sourceX - 6, sourceY + 6);
+  graphics.stroke({ width: 2, color: dangerColor, alpha: confidenceAlpha });
 }
 
 function drawVisibilityProbe(container: Container, state: SimulationState): void {
@@ -441,20 +431,18 @@ function drawVisibilityProbe(container: Container, state: SimulationState): void
   const target = result.target;
   const visibleEnd = result.blockedAt ?? target;
 
-  graphics.lineStyle(3, 0x2dff55, 0.95);
-  graphics.moveTo(origin.x * cellSize, origin.y * cellSize);
-  graphics.lineTo(visibleEnd.x * cellSize, visibleEnd.y * cellSize);
+  graphics.moveTo(origin.x * cellSize, origin.y * cellSize).lineTo(visibleEnd.x * cellSize, visibleEnd.y * cellSize)
+    .stroke({ width: 3, color: 0x2dff55, alpha: 0.95 });
 
   if (result.blocked && result.blockedAt) {
-    graphics.lineStyle(3, 0xff3535, 0.95);
-    graphics.moveTo(result.blockedAt.x * cellSize, result.blockedAt.y * cellSize);
-    graphics.lineTo(target.x * cellSize, target.y * cellSize);
-    graphics.lineStyle(2, 0xff3535, 1);
-    graphics.drawCircle(result.blockedAt.x * cellSize, result.blockedAt.y * cellSize, 6);
-    graphics.moveTo(result.blockedAt.x * cellSize - 7, result.blockedAt.y * cellSize - 7);
-    graphics.lineTo(result.blockedAt.x * cellSize + 7, result.blockedAt.y * cellSize + 7);
-    graphics.moveTo(result.blockedAt.x * cellSize + 7, result.blockedAt.y * cellSize - 7);
-    graphics.lineTo(result.blockedAt.x * cellSize - 7, result.blockedAt.y * cellSize + 7);
+    const blockedX = result.blockedAt.x * cellSize;
+    const blockedY = result.blockedAt.y * cellSize;
+    graphics.moveTo(blockedX, blockedY).lineTo(target.x * cellSize, target.y * cellSize)
+      .stroke({ width: 3, color: 0xff3535, alpha: 0.95 });
+    graphics.circle(blockedX, blockedY, 6);
+    graphics.moveTo(blockedX - 7, blockedY - 7).lineTo(blockedX + 7, blockedY + 7);
+    graphics.moveTo(blockedX + 7, blockedY - 7).lineTo(blockedX - 7, blockedY + 7);
+    graphics.stroke({ width: 2, color: 0xff3535, alpha: 1 });
   }
 
   container.addChild(graphics);
@@ -592,22 +580,18 @@ function drawPressureZones(
 
 function drawAreaThreat(graphics: Graphics, zone: PressureZone, cellSize: number, isSelected: boolean): void {
   const alpha = Math.max(0.08, Math.min(0.28, zone.strength / 350));
-  graphics.lineStyle(isSelected ? 4 : 2, isSelected ? 0xfff2a8 : 0xb6633c, isSelected ? 0.95 : 0.75);
-  graphics.beginFill(0xb6633c, alpha);
-
+  const stroke = { width: isSelected ? 4 : 2, color: isSelected ? 0xfff2a8 : 0xb6633c, alpha: isSelected ? 0.95 : 0.75 };
   if (zone.shape === 'circle') {
-    graphics.drawCircle(zone.x * cellSize, zone.y * cellSize, zone.radiusCells * cellSize);
+    graphics.circle(zone.x * cellSize, zone.y * cellSize, zone.radiusCells * cellSize).fill({ color: 0xb6633c, alpha }).stroke(stroke);
   } else {
-    graphics.drawRect(
+    graphics.rect(
       (zone.x - zone.widthCells / 2) * cellSize,
       (zone.y - zone.heightCells / 2) * cellSize,
       zone.widthCells * cellSize,
       zone.heightCells * cellSize,
-    );
+    ).fill({ color: 0xb6633c, alpha }).stroke(stroke);
   }
-
-  graphics.endFill();
-  if (isSelected) drawZoneHandles(graphics, zone, cellSize);
+  if (isSelected) drawZoneHandles(graphics, zone, cellSize, stroke);
 }
 
 function drawDirectionalThreat(graphics: Graphics, zone: PressureZone, cellSize: number, isSelected: boolean): void {
@@ -623,41 +607,39 @@ function drawDirectionalThreat(graphics: Graphics, zone: PressureZone, cellSize:
   const color = settings.enabled ? 0xd33f32 : 0x777777;
   const fillAlpha = Math.max(0.06, Math.min(0.3, zone.strength / 300)) * activeAlpha;
 
-  graphics.lineStyle(isSelected ? 4 : 2, isSelected ? 0xfff2a8 : color, 0.9 * activeAlpha);
-  graphics.beginFill(color, fillAlpha);
-  graphics.moveTo(centerX, centerY);
-  graphics.arc(centerX, centerY, radius, start, end);
-  graphics.lineTo(centerX, centerY);
-  graphics.endFill();
+  const sectorStroke = { width: isSelected ? 4 : 2, color: isSelected ? 0xfff2a8 : color, alpha: 0.9 * activeAlpha };
+  graphics.moveTo(centerX, centerY).arc(centerX, centerY, radius, start, end).lineTo(centerX, centerY)
+    .closePath().fill({ color, alpha: fillAlpha }).stroke(sectorStroke);
 
   const endX = centerX + Math.cos(direction) * radius;
   const endY = centerY + Math.sin(direction) * radius;
-  graphics.lineStyle(isSelected ? 4 : 3, isSelected ? 0xfff2a8 : 0xff765f, 0.95 * activeAlpha);
-  graphics.moveTo(centerX, centerY);
-  graphics.lineTo(endX, endY);
+  const directionStroke = { width: isSelected ? 4 : 3, color: isSelected ? 0xfff2a8 : 0xff765f, alpha: 0.95 * activeAlpha };
+  graphics.moveTo(centerX, centerY).lineTo(endX, endY);
   drawArrowHead(graphics, endX, endY, direction, isSelected ? 12 : 9);
+  graphics.stroke(directionStroke);
 
-  graphics.beginFill(isSelected ? 0xfff2a8 : 0xff765f, activeAlpha);
-  graphics.drawCircle(centerX, centerY, isSelected ? 7 : 5);
-  graphics.endFill();
+  graphics.circle(centerX, centerY, isSelected ? 7 : 5)
+    .fill({ color: isSelected ? 0xfff2a8 : 0xff765f, alpha: activeAlpha })
+    .stroke(directionStroke);
 
   if (settings.minRangeCells > 0) {
-    graphics.lineStyle(1, color, 0.65 * activeAlpha);
-    graphics.drawCircle(centerX, centerY, settings.minRangeCells * cellSize);
+    graphics.circle(centerX, centerY, settings.minRangeCells * cellSize)
+      .stroke({ width: 1, color, alpha: 0.65 * activeAlpha });
   }
 }
 
 function drawArrowHead(graphics: Graphics, x: number, y: number, angle: number, size: number): void {
-  graphics.moveTo(x, y);
-  graphics.lineTo(x - Math.cos(angle - Math.PI / 6) * size, y - Math.sin(angle - Math.PI / 6) * size);
-  graphics.moveTo(x, y);
-  graphics.lineTo(x - Math.cos(angle + Math.PI / 6) * size, y - Math.sin(angle + Math.PI / 6) * size);
+  graphics.moveTo(x, y).lineTo(x - Math.cos(angle - Math.PI / 6) * size, y - Math.sin(angle - Math.PI / 6) * size);
+  graphics.moveTo(x, y).lineTo(x - Math.cos(angle + Math.PI / 6) * size, y - Math.sin(angle + Math.PI / 6) * size);
 }
 
-function drawZoneHandles(graphics: Graphics, zone: PressureZone, cellSize: number): void {
+function drawZoneHandles(
+  graphics: Graphics,
+  zone: PressureZone,
+  cellSize: number,
+  stroke: { width: number; color: number; alpha: number },
+): void {
   const handleSize = 8;
-  graphics.beginFill(0xfff2a8, 1);
-
   if (zone.shape === 'circle') {
     for (const [x, y] of [
       [zone.x + zone.radiusCells, zone.y],
@@ -665,31 +647,29 @@ function drawZoneHandles(graphics: Graphics, zone: PressureZone, cellSize: numbe
       [zone.x, zone.y + zone.radiusCells],
       [zone.x, zone.y - zone.radiusCells],
     ] as Array<[number, number]>) {
-      graphics.drawRect(x * cellSize - handleSize / 2, y * cellSize - handleSize / 2, handleSize, handleSize);
+      graphics.rect(x * cellSize - handleSize / 2, y * cellSize - handleSize / 2, handleSize, handleSize);
     }
-    graphics.endFill();
-    return;
+  } else {
+    const left = (zone.x - zone.widthCells / 2) * cellSize;
+    const right = (zone.x + zone.widthCells / 2) * cellSize;
+    const top = (zone.y - zone.heightCells / 2) * cellSize;
+    const bottom = (zone.y + zone.heightCells / 2) * cellSize;
+
+    for (const [x, y] of [
+      [left, top],
+      [(left + right) / 2, top],
+      [right, top],
+      [right, (top + bottom) / 2],
+      [right, bottom],
+      [(left + right) / 2, bottom],
+      [left, bottom],
+      [left, (top + bottom) / 2],
+    ] as Array<[number, number]>) {
+      graphics.rect(x - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
+    }
   }
 
-  const left = (zone.x - zone.widthCells / 2) * cellSize;
-  const right = (zone.x + zone.widthCells / 2) * cellSize;
-  const top = (zone.y - zone.heightCells / 2) * cellSize;
-  const bottom = (zone.y + zone.heightCells / 2) * cellSize;
-
-  for (const [x, y] of [
-    [left, top],
-    [(left + right) / 2, top],
-    [right, top],
-    [right, (top + bottom) / 2],
-    [right, bottom],
-    [(left + right) / 2, bottom],
-    [left, bottom],
-    [left, (top + bottom) / 2],
-  ] as Array<[number, number]>) {
-    graphics.drawRect(x - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
-  }
-
-  graphics.endFill();
+  graphics.fill({ color: 0xfff2a8 }).stroke(stroke);
 }
 
 function degreesToRadians(degrees: number): number {

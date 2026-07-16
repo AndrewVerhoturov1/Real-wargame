@@ -81,8 +81,8 @@ export class PixiMapRenderer {
     }
 
     const border = new Graphics();
-    border.lineStyle(3, 0x10160f, 0.85);
-    border.drawRect(0, 0, map.width * map.cellSize, map.height * map.cellSize);
+    border.rect(0, 0, map.width * map.cellSize, map.height * map.cellSize)
+      .stroke({ width: 3, color: 0x10160f, alpha: 0.85 });
     this.staticContainer.addChild(border);
   }
 
@@ -111,19 +111,17 @@ export class PixiMapRenderer {
 }
 
 function renderTerrainBatches(container: Container, map: TacticalMap): void {
-  const terrainGraphics = new Map<string, Graphics>();
+  const terrainGraphics = new Map<keyof typeof TERRAIN_STYLE, Graphics>();
 
   for (const cell of map.cells) {
-    const style = TERRAIN_STYLE[cell.terrain];
     let graphics = terrainGraphics.get(cell.terrain);
 
     if (!graphics) {
       graphics = new Graphics();
-      graphics.beginFill(style.fill, 1);
       terrainGraphics.set(cell.terrain, graphics);
     }
 
-    graphics.drawRect(
+    graphics.rect(
       cell.x * map.cellSize,
       cell.y * map.cellSize,
       map.cellSize,
@@ -131,8 +129,8 @@ function renderTerrainBatches(container: Container, map: TacticalMap): void {
     );
   }
 
-  for (const graphics of terrainGraphics.values()) {
-    graphics.endFill();
+  for (const [terrain, graphics] of terrainGraphics) {
+    graphics.fill({ color: TERRAIN_STYLE[terrain].fill });
     container.addChild(graphics);
   }
 }
@@ -437,33 +435,27 @@ function renderMeterGrid(map: TacticalMap): Graphics {
   const mapWidth = map.width * map.cellSize;
   const mapHeight = map.height * map.cellSize;
 
-  graphics.lineStyle(1, 0xf6edcf, 0.12);
-
   for (let x = 0; x <= map.width; x += 1) {
     const px = x * map.cellSize;
-    graphics.moveTo(px, 0);
-    graphics.lineTo(px, mapHeight);
+    graphics.moveTo(px, 0).lineTo(px, mapHeight);
   }
 
   for (let y = 0; y <= map.height; y += 1) {
     const py = y * map.cellSize;
-    graphics.moveTo(0, py);
-    graphics.lineTo(mapWidth, py);
+    graphics.moveTo(0, py).lineTo(mapWidth, py);
   }
-
-  graphics.lineStyle(2, 0xf6edcf, 0.22);
+  graphics.stroke({ width: 1, color: 0xf6edcf, alpha: 0.12 });
 
   for (let x = 0; x <= map.width; x += 5) {
     const px = x * map.cellSize;
-    graphics.moveTo(px, 0);
-    graphics.lineTo(px, mapHeight);
+    graphics.moveTo(px, 0).lineTo(px, mapHeight);
   }
 
   for (let y = 0; y <= map.height; y += 5) {
     const py = y * map.cellSize;
-    graphics.moveTo(0, py);
-    graphics.lineTo(mapWidth, py);
+    graphics.moveTo(0, py).lineTo(mapWidth, py);
   }
+  graphics.stroke({ width: 2, color: 0xf6edcf, alpha: 0.22 });
 
   return graphics;
 }
@@ -528,11 +520,10 @@ function drawSelectedObjectControls(graphics: Graphics, width: number, height: n
   const right = width / 2 + pad;
   const top = -height / 2 - pad;
   const bottom = height / 2 + pad;
+  const selectedControlStroke = { width: 3, color: 0xfff2a8, alpha: 0.95 };
 
-  graphics.lineStyle(3, 0xfff2a8, 0.95);
-  graphics.drawRoundedRect(left, top, right - left, bottom - top, 5);
+  graphics.roundRect(left, top, right - left, bottom - top, 5).stroke(selectedControlStroke);
 
-  graphics.beginFill(0xfff2a8, 1);
   for (const point of [
     [left, top],
     [(left + right) / 2, top],
@@ -543,153 +534,100 @@ function drawSelectedObjectControls(graphics: Graphics, width: number, height: n
     [left, bottom],
     [left, (top + bottom) / 2],
   ] as Array<[number, number]>) {
-    graphics.drawRect(point[0] - handle / 2, point[1] - handle / 2, handle, handle);
+    graphics.rect(point[0] - handle / 2, point[1] - handle / 2, handle, handle);
   }
-  graphics.endFill();
+  graphics.fill({ color: 0xfff2a8 }).stroke(selectedControlStroke);
 
-  graphics.lineStyle(2, 0xfff2a8, 0.9);
-  graphics.moveTo(0, top);
-  graphics.lineTo(0, top - 18);
-  graphics.beginFill(0x121612, 1);
-  graphics.drawCircle(0, top - 25, 6);
-  graphics.endFill();
-  graphics.lineStyle(2, 0xfff2a8, 1);
-  graphics.drawCircle(0, top - 25, 6);
+  graphics.moveTo(0, top).lineTo(0, top - 18).stroke({ width: 2, color: 0xfff2a8, alpha: 0.9 });
+  graphics.circle(0, top - 25, 6).fill({ color: 0x121612 }).stroke({ width: 2, color: 0xfff2a8 });
 }
 
 function drawTopDownTree(graphics: Graphics, width: number, height: number): void {
   const radius = Math.min(width, height) / 2;
+  const outline = { width: 2, color: 0x142314, alpha: 0.7 };
 
-  graphics.lineStyle(2, 0x142314, 0.7);
-  graphics.beginFill(0x275431, 1);
-  graphics.drawCircle(0, 0, radius);
-  graphics.endFill();
-
-  graphics.beginFill(0x3c6b35, 0.9);
-  graphics.drawCircle(-radius * 0.25, -radius * 0.15, radius * 0.45);
-  graphics.drawCircle(radius * 0.22, radius * 0.12, radius * 0.4);
-  graphics.endFill();
-
-  graphics.beginFill(0x6a4328, 1);
-  graphics.drawCircle(0, 0, Math.max(2, radius * 0.18));
-  graphics.endFill();
+  graphics.circle(0, 0, radius).fill({ color: 0x275431 }).stroke(outline);
+  graphics.circle(-radius * 0.25, -radius * 0.15, radius * 0.45);
+  graphics.circle(radius * 0.22, radius * 0.12, radius * 0.4);
+  graphics.fill({ color: 0x3c6b35, alpha: 0.9 }).stroke(outline);
+  graphics.circle(0, 0, Math.max(2, radius * 0.18)).fill({ color: 0x6a4328 }).stroke(outline);
 }
 
 function drawTopDownRock(graphics: Graphics, width: number, height: number): void {
   const halfWidth = width / 2;
   const halfHeight = height / 2;
 
-  graphics.lineStyle(2, 0x2d3029, 0.75);
-  graphics.beginFill(0x77786f, 1);
-  graphics.drawPolygon([
+  graphics.poly([
     -halfWidth * 0.9, -halfHeight * 0.15,
     -halfWidth * 0.35, -halfHeight * 0.95,
     halfWidth * 0.55, -halfHeight * 0.75,
     halfWidth, halfHeight * 0.2,
     halfWidth * 0.15, halfHeight,
     -halfWidth, halfHeight * 0.55,
-  ]);
-  graphics.endFill();
+  ]).fill({ color: 0x77786f }).stroke({ width: 2, color: 0x2d3029, alpha: 0.75 });
 }
 
 function drawTopDownStructure(graphics: Graphics, width: number, height: number): void {
-  graphics.lineStyle(2, 0x241d17, 0.95);
-  graphics.beginFill(0x6c563f, 1);
-  graphics.drawRoundedRect(-width / 2, -height / 2, width, height, 4);
-  graphics.endFill();
-
-  graphics.lineStyle(2, 0x3a2c22, 0.8);
-  graphics.moveTo(-width / 2 + 5, 0);
-  graphics.lineTo(width / 2 - 5, 0);
-  graphics.moveTo(0, -height / 2 + 5);
-  graphics.lineTo(0, height / 2 - 5);
+  graphics.roundRect(-width / 2, -height / 2, width, height, 4).fill({ color: 0x6c563f }).stroke({ width: 2, color: 0x241d17, alpha: 0.95 });
+  graphics.moveTo(-width / 2 + 5, 0).lineTo(width / 2 - 5, 0);
+  graphics.moveTo(0, -height / 2 + 5).lineTo(0, height / 2 - 5);
+  graphics.stroke({ width: 2, color: 0x3a2c22, alpha: 0.8 });
 }
 
 function drawTopDownDitch(graphics: Graphics, width: number, height: number): void {
-  graphics.lineStyle(3, 0x2a1f15, 0.95);
-  graphics.beginFill(0x45311f, 1);
-  graphics.drawRoundedRect(-width / 2, -height / 2, width, height, height / 2);
-  graphics.endFill();
-
-  graphics.lineStyle(2, 0x1b140f, 0.85);
-  graphics.moveTo(-width / 2 + 8, 0);
-  graphics.lineTo(width / 2 - 8, 0);
+  graphics.roundRect(-width / 2, -height / 2, width, height, height / 2).fill({ color: 0x45311f }).stroke({ width: 3, color: 0x2a1f15, alpha: 0.95 });
+  graphics.moveTo(-width / 2 + 8, 0).lineTo(width / 2 - 8, 0).stroke({ width: 2, color: 0x1b140f, alpha: 0.85 });
 }
 
 function drawTopDownCrates(graphics: Graphics, width: number, height: number): void {
   const crateWidth = width * 0.42;
   const crateHeight = height * 0.42;
 
-  graphics.lineStyle(2, 0x251b12, 0.9);
-  graphics.beginFill(0x8f6a3d, 1);
-  graphics.drawRect(-crateWidth, -crateHeight, crateWidth, crateHeight);
-  graphics.drawRect(0, -crateHeight, crateWidth, crateHeight);
-  graphics.drawRect(-crateWidth / 2, 0, crateWidth, crateHeight);
-  graphics.endFill();
+  graphics.rect(-crateWidth, -crateHeight, crateWidth, crateHeight);
+  graphics.rect(0, -crateHeight, crateWidth, crateHeight);
+  graphics.rect(-crateWidth / 2, 0, crateWidth, crateHeight);
+  graphics.fill({ color: 0x8f6a3d }).stroke({ width: 2, color: 0x251b12, alpha: 0.9 });
 }
 
 function drawTopDownFence(graphics: Graphics, width: number, height: number): void {
   const postHeight = Math.max(6, height);
 
-  graphics.lineStyle(3, 0x5c422a, 0.95);
-  graphics.moveTo(-width / 2, 0);
-  graphics.lineTo(width / 2, 0);
-
+  graphics.moveTo(-width / 2, 0).lineTo(width / 2, 0);
   for (let offset = -width / 2; offset <= width / 2; offset += Math.max(10, width / 8)) {
-    graphics.moveTo(offset, -postHeight / 2);
-    graphics.lineTo(offset, postHeight / 2);
+    graphics.moveTo(offset, -postHeight / 2).lineTo(offset, postHeight / 2);
   }
+  graphics.stroke({ width: 3, color: 0x5c422a, alpha: 0.95 });
 }
 
 function drawTopDownPost(graphics: Graphics, width: number, height: number): void {
-  graphics.lineStyle(2, 0x33251a, 0.95);
-  graphics.beginFill(0x8a6a42, 1);
-  graphics.drawRoundedRect(-width / 2, -height / 2, width, height, 3);
-  graphics.endFill();
-
-  graphics.lineStyle(2, 0x3d2b1b, 0.85);
-  graphics.moveTo(-width / 2, -height / 2);
-  graphics.lineTo(width / 2, height / 2);
-  graphics.moveTo(width / 2, -height / 2);
-  graphics.lineTo(-width / 2, height / 2);
+  graphics.roundRect(-width / 2, -height / 2, width, height, 3).fill({ color: 0x8a6a42 }).stroke({ width: 2, color: 0x33251a, alpha: 0.95 });
+  graphics.moveTo(-width / 2, -height / 2).lineTo(width / 2, height / 2);
+  graphics.moveTo(width / 2, -height / 2).lineTo(-width / 2, height / 2);
+  graphics.stroke({ width: 2, color: 0x3d2b1b, alpha: 0.85 });
 }
 
 function drawTopDownLogs(graphics: Graphics, width: number, height: number): void {
   const spacing = height / 3;
 
-  graphics.lineStyle(Math.max(3, height * 0.22), 0x5a351c, 0.95);
-  graphics.moveTo(-width / 2, -spacing);
-  graphics.lineTo(width / 2, -spacing);
-  graphics.moveTo(-width / 2, 0);
-  graphics.lineTo(width / 2, 0);
-  graphics.moveTo(-width / 2, spacing);
-  graphics.lineTo(width / 2, spacing);
+  graphics.moveTo(-width / 2, -spacing).lineTo(width / 2, -spacing);
+  graphics.moveTo(-width / 2, 0).lineTo(width / 2, 0);
+  graphics.moveTo(-width / 2, spacing).lineTo(width / 2, spacing);
+  graphics.stroke({ width: Math.max(3, height * 0.22), color: 0x5a351c, alpha: 0.95 });
 }
 
 function drawTopDownWell(graphics: Graphics, width: number, height: number): void {
   const radius = Math.min(width, height) / 2;
+  const outline = { width: 3, color: 0x2b2b2b, alpha: 0.85 };
 
-  graphics.lineStyle(3, 0x2b2b2b, 0.85);
-  graphics.beginFill(0x808070, 1);
-  graphics.drawCircle(0, 0, radius);
-  graphics.endFill();
-
-  graphics.beginFill(0x293844, 1);
-  graphics.drawCircle(0, 0, radius * 0.55);
-  graphics.endFill();
+  graphics.circle(0, 0, radius).fill({ color: 0x808070 }).stroke(outline);
+  graphics.circle(0, 0, radius * 0.55).fill({ color: 0x293844 }).stroke(outline);
 }
 
 function drawTopDownBridge(graphics: Graphics, width: number, height: number): void {
-  graphics.lineStyle(3, 0x403225, 0.95);
-  graphics.beginFill(0x8b7459, 1);
-  graphics.drawRoundedRect(-width / 2, -height / 2, width, height, 5);
-  graphics.endFill();
-
-  graphics.lineStyle(2, 0x5c4936, 0.9);
-  graphics.moveTo(-width / 2 + 6, -height / 3);
-  graphics.lineTo(width / 2 - 6, -height / 3);
-  graphics.moveTo(-width / 2 + 6, height / 3);
-  graphics.lineTo(width / 2 - 6, height / 3);
+  graphics.roundRect(-width / 2, -height / 2, width, height, 5).fill({ color: 0x8b7459 }).stroke({ width: 3, color: 0x403225, alpha: 0.95 });
+  graphics.moveTo(-width / 2 + 6, -height / 3).lineTo(width / 2 - 6, -height / 3);
+  graphics.moveTo(-width / 2 + 6, height / 3).lineTo(width / 2 - 6, height / 3);
+  graphics.stroke({ width: 2, color: 0x5c4936, alpha: 0.9 });
 }
 
 function drawSegmentedCover(
@@ -699,15 +637,11 @@ function drawSegmentedCover(
   fill: number,
   stroke: number,
 ): void {
-  graphics.lineStyle(2, stroke, 0.9);
-  graphics.beginFill(fill, 1);
-
   const segmentWidth = Math.max(10, width / 7);
   for (let x = -width / 2; x < width / 2; x += segmentWidth) {
-    graphics.drawRoundedRect(x, -height / 2, segmentWidth - 2, height, 4);
+    graphics.roundRect(x, -height / 2, segmentWidth - 2, height, 4);
   }
-
-  graphics.endFill();
+  graphics.fill({ color: fill }).stroke({ width: 2, color: stroke, alpha: 0.9 });
 }
 
 function makeSeed(x: number, y: number, level: number, salt: number): number {

@@ -27,7 +27,7 @@ Important facts:
 working branch: real-wargame-preview
 stable branch: main
 launcher: Run-Real-Wargame-Lab.bat
-stack: Vite + TypeScript + PixiJS 7
+stack: Vite + TypeScript + PixiJS 8
 ```
 
 Never change or merge to `main` without explicit human GO. Never claim visual verification without the real browser, fresh PNGs and inspected key frames.

@@ -14,7 +14,7 @@ Project skill router for `Real-wargame`. Read only the skills required by the cu
 | Skill | Path | Read when |
 |---|---|---|
 | Real-Wargame local preview | `.agents/skills/real-wargame-local-preview/SKILL.md` | Local launch, terminal-free preview, GitHub Actions screenshots, Playwright, visual QA, artifacts or showing the real game in chat. |
-| Real-Wargame PixiJS 7 guard | `.agents/skills/real-wargame-pixijs/SKILL.md` | Any PixiJS, canvas, renderer, camera, pointer event, visual layer or rendering-performance task. Read before general PixiJS skills. |
+| Real-Wargame PixiJS 8 guide | `.agents/skills/real-wargame-pixijs/SKILL.md` | Any PixiJS, canvas, renderer, camera, pointer event, visual layer or rendering-performance task. Read before general PixiJS skills. |
 | Real-Wargame AI Runtime | `.agents/skills/real-wargame-ai-runtime/SKILL.md` | Soldier AI graph, Utility scoring, Blackboard, Runtime, lifecycle, cancellation, Bridge, AI Dictionary, node authoring or live trace. |
 
 ## Common routes
@@ -31,7 +31,7 @@ Project skill router for `Real-wargame`. Read only the skills required by the cu
 
 ## General PixiJS skills
 
-The installed general collection is oriented around PixiJS 8. Real-Wargame currently uses PixiJS 7.4.x.
+Real-Wargame uses PixiJS 8.19.x; the installed general collection is the canonical API route.
 
 For any PixiJS task:
 
@@ -41,7 +41,7 @@ real-wargame-pixijs
 → only the relevant general skill
 ```
 
-Do not copy v8 API into the project unless the task explicitly approves a major migration.
+Do not introduce deprecated v7 compatibility aliases into active production code.
 
 ## Required honesty
 

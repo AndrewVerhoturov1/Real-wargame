@@ -10,7 +10,7 @@ license: MIT
 
 Use this skill before preparing or running Real-Wargame visual verification.
 
-The project is **Vite + TypeScript + PixiJS 7**, not Godot.
+The project is **Vite + TypeScript + PixiJS 8**, not Godot.
 
 Canonical approval policy:
 

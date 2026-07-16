@@ -4,7 +4,7 @@
 
 The danger overlay describes the selected soldier's subjective **world danger field**. Moving the selected soldier across that field changes local lookups and marker ranking, but does not change the field's pixels. Moving a subjectively known hostile does change world danger geometry, but that full-map work must never block the browser main thread.
 
-The contract applies to the production PixiJS 7 renderer on large maps, including the 320 × 200 / 64,000-cell acceptance scene.
+The contract applies to the production PixiJS 8 renderer on large maps, including the 320 × 200 / 64,000-cell acceptance scene.
 
 ## Movement regression root cause
 

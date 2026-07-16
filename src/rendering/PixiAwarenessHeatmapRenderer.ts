@@ -1,4 +1,4 @@
-import { Container, Graphics, SCALE_MODES, Sprite, Text, Texture } from 'pixi.js';
+import { BufferImageSource, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import {
   publishAwarenessMovementDiagnostics,
   resetAwarenessMovementDiagnostics,
@@ -119,14 +119,10 @@ export class PixiAwarenessHeatmapRenderer {
   readonly container = new Container();
 
   private readonly markerGraphics = new Graphics();
-  private readonly title = new Text('', {
-    fontFamily: 'Arial, sans-serif',
-    fontSize: 12,
-    fontWeight: '700',
-    fill: 0xffffff,
-    stroke: 0x111510,
-    strokeThickness: 4,
-  });
+  private readonly title = new Text({ text: '', style: {
+    fontFamily: 'Arial, sans-serif', fontSize: 12, fontWeight: '700', fill: 0xffffff,
+    stroke: { color: 0x111510, width: 4 },
+  } });
   private readonly movement: MutableMovementDiagnostics = createMovementDiagnostics();
 
   private lastRasterKey = '';
@@ -169,6 +165,7 @@ export class PixiAwarenessHeatmapRenderer {
   }
 
   render(state: SimulationState): void {
+    if (this.destroyed) return;
     const layer = getSimulationLayerState(state);
     const mode = layer.mode === 'danger'
       ? 'danger'
@@ -238,6 +235,7 @@ export class PixiAwarenessHeatmapRenderer {
   }
 
   destroy(): void {
+    if (this.destroyed) return;
     this.destroyed = true;
     if (this.finalRefreshTimer !== null) window.clearTimeout(this.finalRefreshTimer);
     this.finalRefreshTimer = null;
@@ -245,9 +243,21 @@ export class PixiAwarenessHeatmapRenderer {
     this.worker = null;
     this.pending = null;
     this.inFlight = null;
+    this.latestBuildSnapshot = null;
+    this.latestLocalSnapshot = null;
+    this.worldField = null;
+    this.safePositions = [];
+    this.container.removeChildren();
     this.rasterSprite?.destroy();
     this.rasterTexture?.destroy(true);
-    this.container.destroy({ children: true });
+    this.rasterSprite = null;
+    this.rasterTexture = null;
+    this.rasterPixelWords = null;
+    this.rasterPixels = null;
+    this.markerGraphics.destroy();
+    this.title.destroy();
+    this.container.destroy();
+    delete (window as AwarenessDebugWindow).__realWargameAwarenessDebug;
     resetAwarenessMovementDiagnostics();
   }
 
@@ -285,6 +295,7 @@ export class PixiAwarenessHeatmapRenderer {
   }
 
   private ensureWorkerConfigured(map: TacticalMap, mapKey: string): void {
+    if (this.destroyed) return;
     if (this.worker && this.workerMapKey === mapKey) return;
 
     if (this.worker) {
@@ -317,6 +328,7 @@ export class PixiAwarenessHeatmapRenderer {
       this.handleWorkerResponse(event.data);
     };
     this.worker.onerror = (event): void => {
+      if (this.destroyed) return;
       this.movement.lastWorkerError = event.message || 'Unknown awareness worker error.';
       this.finishInFlight();
       this.publishDiagnostics();
@@ -331,6 +343,7 @@ export class PixiAwarenessHeatmapRenderer {
   }
 
   private requestWorldBuild(snapshot: PendingWorldBuild): void {
+    if (this.destroyed) return;
     this.latestBuildSnapshot = snapshot;
     if (this.inFlight) {
       this.movement.workerJobsCoalesced += 1;
@@ -344,7 +357,7 @@ export class PixiAwarenessHeatmapRenderer {
   }
 
   private startWorldBuild(snapshot: PendingWorldBuild): void {
-    if (!this.worker || snapshot.mapKey !== this.workerMapKey) return;
+    if (this.destroyed || !this.worker || snapshot.mapKey !== this.workerMapKey) return;
 
     const jobId = this.nextJobId;
     this.nextJobId += 1;
@@ -366,6 +379,7 @@ export class PixiAwarenessHeatmapRenderer {
   }
 
   private handleWorkerResponse(response: AwarenessWorkerResponse): void {
+    if (this.destroyed) return;
     const inFlight = this.inFlight;
     if (!inFlight || response.jobId !== inFlight.jobId) {
       this.movement.workerResultsStaleDropped += 1;
@@ -443,6 +457,7 @@ export class PixiAwarenessHeatmapRenderer {
   }
 
   private finishInFlight(): void {
+    if (this.destroyed) return;
     this.inFlight = null;
     this.movement.workerInFlight = false;
     const next = this.pending;
@@ -472,7 +487,7 @@ export class PixiAwarenessHeatmapRenderer {
     if (source.length < this.rasterPixelWords.length) {
       this.rasterPixelWords.fill(0, source.length);
     }
-    this.rasterTexture.baseTexture.update();
+    this.rasterTexture.source.update();
     this.title.text = `СЛОЙ БОЙЦА: ${modeLabel(mode)}`;
     this.lastRasterKey = rasterKey;
     this.rebuildCount += 1;
@@ -531,12 +546,23 @@ export class PixiAwarenessHeatmapRenderer {
       this.container.removeChildren();
       this.rasterSprite?.destroy();
       this.rasterTexture?.destroy(true);
+      this.rasterSprite = null;
+      this.rasterTexture = null;
+      this.lastRasterKey = '';
+      this.lastMarkerInputKey = '';
+      this.lastMarkerKey = '';
       this.rasterWidth = width;
       this.rasterHeight = height;
       this.rasterPixels = new Uint8Array(width * height * 4);
       this.rasterPixelWords = new Uint32Array(this.rasterPixels.buffer);
-      this.rasterTexture = Texture.fromBuffer(this.rasterPixels, width, height, {
-        scaleMode: SCALE_MODES.NEAREST,
+      this.rasterTexture = new Texture({
+        source: new BufferImageSource({
+          resource: this.rasterPixels,
+          width,
+          height,
+          format: 'rgba8unorm',
+          scaleMode: 'nearest',
+        }),
       });
       this.rasterSprite = new Sprite(this.rasterTexture);
       this.container.addChild(this.rasterSprite, this.markerGraphics, this.title);
@@ -556,10 +582,9 @@ export class PixiAwarenessHeatmapRenderer {
       const best = positions[index];
       const x = best.position.x * cellSize;
       const y = best.position.y * cellSize;
-      this.markerGraphics.lineStyle(index === 0 ? 4 : 2, 0xefff9a, 0.95);
-      this.markerGraphics.beginFill(0x4ce78a, index === 0 ? 0.45 : 0.2);
-      this.markerGraphics.drawCircle(x, y, index === 0 ? 12 : 8);
-      this.markerGraphics.endFill();
+      this.markerGraphics.circle(x, y, index === 0 ? 12 : 8)
+        .fill({ color: 0x4ce78a, alpha: index === 0 ? 0.45 : 0.2 })
+        .stroke({ width: index === 0 ? 4 : 2, color: 0xefff9a, alpha: 0.95 });
     }
   }
 

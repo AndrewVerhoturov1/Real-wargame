@@ -13,7 +13,7 @@
     "runtime": "browser-and-local-node",
     "viteMajor": 5,
     "typescriptMajor": 5,
-    "pixiJsMajor": 7
+    "pixiJsMajor": 8
   },
   "activeSubprojects": [
     "ai-single-unit-editor"
@@ -35,5 +35,5 @@
     "pixiJs": ".agents/skills/real-wargame-pixijs/SKILL.md",
     "aiRuntime": ".agents/skills/real-wargame-ai-runtime/SKILL.md"
   },
-  "updatedAt": "2026-07-12"
+  "updatedAt": "2026-07-15"
 }

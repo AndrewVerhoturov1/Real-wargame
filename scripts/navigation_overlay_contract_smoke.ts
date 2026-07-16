@@ -245,7 +245,7 @@ async function verifyRendererBoundary(): Promise<void> {
   assert.doesNotMatch(uiSource, /option value="directionalTerrain"/, 'standalone directional terrain must stay an internal diagnostic, not a normal player layer');
   assert.match(uiSource, /учёт рельефа/);
   assert.match(source, /fontSize: 8/);
-  assert.match(source, /strokeThickness: 2/);
+  assert.match(source, /stroke: \{ color: 0x101510, width: 2 \}/);
   assert.match(source, /this\.legend\.resolution = ROUTE_TEXT_RESOLUTION/);
   assert.match(source, /this\.tooltip\.resolution = ROUTE_TEXT_RESOLUTION/);
   assert.match(source, /this\.container\.visible = false/);

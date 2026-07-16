@@ -8,7 +8,7 @@
 - Working branch: `real-wargame-preview`.
 - Stable branch: `main`.
 - Canonical launcher: `Run-Real-Wargame-Lab.bat`.
-- Stack: Vite + TypeScript + PixiJS **7**.
+- Stack: Vite + TypeScript + PixiJS **8**.
 - This is not a Godot project.
 - Canonical development names are English.
 - Russian is the default human-facing language and must be complete.
@@ -120,7 +120,7 @@ Read first:
 .agents/skills/real-wargame-pixijs/SKILL.md
 ```
 
-The general PixiJS collection is v8-oriented. Real-Wargame remains on PixiJS 7 unless an explicit migration task says otherwise.
+Real-Wargame uses PixiJS 8. Read the project skill first, then the narrow v8 skill for the relevant API; do not use v7 compatibility aliases in active production rendering.
 
 ## 8. AI runtime work
 

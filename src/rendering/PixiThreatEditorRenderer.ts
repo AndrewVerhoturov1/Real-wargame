@@ -82,23 +82,26 @@ export class PixiThreatEditorRenderer {
 }
 
 function drawGuide(graphics: Graphics, start: { x: number; y: number }, end: { x: number; y: number }, cellSize: number, color: number): void {
-  graphics.lineStyle(2, color, 0.82);
-  graphics.moveTo(start.x * cellSize, start.y * cellSize);
-  graphics.lineTo(end.x * cellSize, end.y * cellSize);
+  graphics.moveTo(start.x * cellSize, start.y * cellSize)
+    .lineTo(end.x * cellSize, end.y * cellSize)
+    .stroke({ width: 2, color, alpha: 0.82 });
 }
 
 function drawHandle(graphics: Graphics, point: { x: number; y: number }, cellSize: number, handle: AiLabThreatHandle, runtime: ReturnType<typeof getAiLabRuntime>, color: number): void {
   const active = runtime.hoveredHandle === handle || runtime.drag?.handle === handle;
   const radius = active ? 9 : 7;
-  graphics.lineStyle(active ? 3 : 2, active ? ACTIVE_COLOR : 0x171b15, 1);
-  graphics.beginFill(active ? ACTIVE_COLOR : color, 0.98);
-  if (handle === 'arc_left' || handle === 'arc_right') graphics.drawRect(point.x * cellSize - radius, point.y * cellSize - radius, radius * 2, radius * 2);
-  else graphics.drawCircle(point.x * cellSize, point.y * cellSize, radius);
-  graphics.endFill();
+  const style = { width: active ? 3 : 2, color: active ? ACTIVE_COLOR : 0x171b15, alpha: 1 };
+  if (handle === 'arc_left' || handle === 'arc_right') {
+    graphics.rect(point.x * cellSize - radius, point.y * cellSize - radius, radius * 2, radius * 2)
+      .fill({ color: active ? ACTIVE_COLOR : color, alpha: 0.98 }).stroke(style);
+  } else {
+    graphics.circle(point.x * cellSize, point.y * cellSize, radius)
+      .fill({ color: active ? ACTIVE_COLOR : color, alpha: 0.98 }).stroke(style);
+  }
 }
 
 function label(text: string, point: { x: number; y: number }, cellSize: number, color: number, dy: number): Text {
-  const item = new Text(text, { fontFamily: 'Arial, sans-serif', fontSize: 10, fontWeight: '700', fill: color, stroke: 0x111510, strokeThickness: 4 });
+  const item = new Text({ text, style: { fontFamily: 'Arial, sans-serif', fontSize: 10, fontWeight: '700', fill: color, stroke: { color: 0x111510, width: 4 } } });
   item.anchor.set(0.5, 0.5);
   item.position.set(point.x * cellSize, point.y * cellSize + dy);
   return item;
