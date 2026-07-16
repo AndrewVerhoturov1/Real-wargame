@@ -94,9 +94,9 @@ export function normalizeImportedScene(value: unknown): {
 
 export function buildExportedScene(state: SimulationState): ExportedSceneData {
   return {
-    version: 'scene-export-v9-minimal-target-visibility-ai-runtime-2m-grid',
+    version: 'scene-export-v10-tactical-order-intent-ai-runtime-2m-grid',
     exportedAt: new Date().toISOString(),
-    noteRu: 'Экспорт полигона ИИ со слоем «Обзор и память», типом видимой цели у источников угроз, метрическими настройками зрения, навигационными профилями и активным runtime. Старые сцены без новых полей получают безопасные значения по умолчанию; сцены 10 м преобразуются в текущую сетку при загрузке.',
+    noteRu: 'Экспорт полигона ИИ с тактическим намерением PlayerCommand, слоем «Обзор и память», типом видимой цели у источников угроз, метрическими настройками зрения, навигационными профилями и активным runtime. Старые сцены без новых полей получают безопасные значения по умолчанию; сцены 10 м преобразуются в текущую сетку при загрузке.',
     map: {
       width: state.map.width,
       height: state.map.height,
@@ -196,6 +196,7 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
     labelRu: unit.labels.ru,
     type: unit.type,
     side: unit.side,
+    aiControl: unit.aiControl,
     x: roundThree(unit.position.x - 0.5),
     y: roundThree(unit.position.y - 0.5),
     speedCellsPerSecond: roundThree(unit.speedCellsPerSecond),
@@ -222,6 +223,7 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
     perceptionKnowledge: JSON.parse(JSON.stringify(unit.perceptionKnowledge)),
     navigationProfileId: unit.unitRoleNavigationProfileId ?? undefined,
     navigationMovementMode: unit.navigationMovementMode ?? undefined,
+    playerCommand: unit.playerCommand ? JSON.parse(JSON.stringify(unit.playerCommand)) : undefined,
     runtime: {
       stress: roundOne(unit.behaviorRuntime.stress),
       suppression: roundOne(unit.behaviorRuntime.suppression),
