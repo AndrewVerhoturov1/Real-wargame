@@ -7,6 +7,11 @@ import {
   type MovementProfileSource,
 } from '../../../movement/MovementProfileContract';
 import type { AiGraphEffect } from '../../AiGraphRunner';
+import {
+  buildClearAiMovementProfileUpdates,
+  buildSetAiMovementProfileUpdates,
+  type AiMemoryUpdate,
+} from '../../MovementProfileAiMemory';
 import type { AiNodeLifecycle } from '../AiNodeLifecycle';
 
 export interface MoveToBlackboardPositionActionState {
@@ -74,7 +79,7 @@ export const moveToBlackboardPositionLifecycle: AiNodeLifecycle<MoveToBlackboard
     return {
       status: 'running',
       state,
-      effects: [beginMoveEffect(state)],
+      effects: [...startMovementProfileEffects(state), beginMoveEffect(state)],
       reason: `Move ${context.node.id} started toward ${targetKey}.`,
       reasonRu: `Движение «${nodeNameRu(context.node)}» начато к цели «${targetKey}».`,
       details: moveDetails(state, remaining),
@@ -159,7 +164,7 @@ export const moveToBlackboardPositionLifecycle: AiNodeLifecycle<MoveToBlackboard
     reasonRu: cancellation.reasonRu,
     details: moveDetails(state),
   }),
-  cleanup: (_context, state, outcome) => {
+  cleanup: (context, state, outcome) => {
     if (!state) return [];
     const reason = outcome === 'success'
       ? 'AI movement completed.'
@@ -171,7 +176,10 @@ export const moveToBlackboardPositionLifecycle: AiNodeLifecycle<MoveToBlackboard
       : outcome === 'cancelled'
         ? 'Движение ИИ отменено.'
         : 'Движение ИИ провалилось.';
-    return [clearMoveEffect(state.actionToken, reason, reasonRu)];
+    return [
+      ...cleanupMovementProfileEffects(context.blackboard, state, reasonRu),
+      clearMoveEffect(state.actionToken, reason, reasonRu),
+    ];
   },
   validateState: isMoveToBlackboardPositionActionState,
 };
@@ -197,15 +205,54 @@ export function isMoveToBlackboardPositionActionState(value: unknown): value is 
     );
 }
 
+function startMovementProfileEffects(state: MoveToBlackboardPositionActionState): readonly AiGraphEffect[] {
+  if (state.movementProfileSelection !== 'specific' || !state.movementProfileId) return [];
+  return memoryUpdatesToEffects(buildSetAiMovementProfileUpdates({
+    profileId: state.movementProfileId,
+    ownerToken: state.actionToken,
+    reason: 'Specific movement profile selected by the active move action.',
+  }));
+}
+
+function cleanupMovementProfileEffects(
+  blackboard: Readonly<Record<string, unknown>>,
+  state: MoveToBlackboardPositionActionState,
+  reasonRu: string,
+): readonly AiGraphEffect[] {
+  if (state.movementProfileSelection !== 'specific') return [];
+  const fallbackSource = readNullableString(blackboard.player_order_movement_profile)
+    ? 'player_order' as const
+    : 'default' as const;
+  const result = buildClearAiMovementProfileUpdates({
+    expectedOwnerToken: state.actionToken,
+    activeOwnerToken: blackboard.movement_profile_override_owner_token,
+    requestedProfileId: blackboard.requested_movement_profile_id,
+    fallbackSource,
+    reason: reasonRu,
+  });
+  return memoryUpdatesToEffects(result.updates);
+}
+
+function memoryUpdatesToEffects(updates: readonly AiMemoryUpdate[]): readonly AiGraphEffect[] {
+  return updates.map((update) => ({
+    type: 'write_memory',
+    key: update.key,
+    value: update.value,
+  }));
+}
+
 function beginMoveEffect(state: MoveToBlackboardPositionActionState): AiGraphEffect {
+  const explicitSelection = state.movementProfileSelection === 'from_order'
+    || state.movementProfileSelection === 'specific';
+  const ownsProfileOverride = state.movementProfileSelection === 'specific';
   return {
     type: 'begin_move',
     ownerToken: state.actionToken,
     targetPosition: { ...state.target },
     targetKey: state.targetKey,
-    movementProfileId: state.movementProfileId,
-    movementProfileSource: state.movementProfileSource,
-    movementProfileOwnerToken: state.movementProfileId ? state.actionToken : undefined,
+    movementProfileId: explicitSelection ? state.movementProfileId : undefined,
+    movementProfileSource: explicitSelection ? state.movementProfileSource : undefined,
+    movementProfileOwnerToken: ownsProfileOverride ? state.actionToken : undefined,
     reason: `AI movement started toward ${state.targetKey}.`,
     reasonRu: `Движение ИИ начато к цели «${state.targetKey}».`,
   } as unknown as AiGraphEffect;
