@@ -320,7 +320,7 @@ inspectPixiV8Baseline();
 expectIncludes('src/ui/TacticalWorkspace.ts', [
   "type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory'",
   'Симуляция', 'Редактирование', 'Слой опасности', 'Слой скрытности', 'Обзор и память',
-  'Приказать двигаться сюда', 'Один расчёт ИИ', 'Рассчитать и выполнить',
+  'Приказать двигаться сюда', 'Диагностика ИИ (без изменений)', 'Рассчитать и выполнить',
   'workspace-file-menu', 'updateInfoPanelLive', 'stableDecision',
   'data-action="turn-unit"', 'Повернуть',
   'data-action="unit-attention-mode"', 'Автоматически', 'Наблюдение', 'Поиск', 'Стрельба',
