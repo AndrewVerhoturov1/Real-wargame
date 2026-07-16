@@ -2,10 +2,10 @@ import type { GridPosition } from '../core/geometry';
 import type { TacticalOrderPresetId } from '../core/orders/TacticalOrderIntent';
 
 export const TACTICAL_ORDER_HOLD_DELAY_MS = 240;
-export const TACTICAL_ORDER_CENTER_RADIUS_PX = 38;
-export const TACTICAL_ORDER_INNER_RADIUS_PX = 46;
-export const TACTICAL_ORDER_OUTER_RADIUS_PX = 152;
-export const TACTICAL_ORDER_VIEWPORT_MARGIN_PX = 14;
+export const TACTICAL_ORDER_CENTER_RADIUS_PX = 25;
+export const TACTICAL_ORDER_INNER_RADIUS_PX = 34;
+export const TACTICAL_ORDER_OUTER_RADIUS_PX = 104;
+export const TACTICAL_ORDER_VIEWPORT_MARGIN_PX = 12;
 
 export interface ScreenPoint {
   readonly x: number;
@@ -18,6 +18,7 @@ export type TacticalOrderGestureCancelReason = 'escape' | 'pointer_cancel' | 'po
 export interface TacticalOrderGestureState {
   readonly phase: TacticalOrderGesturePhase;
   readonly anchorScreen: ScreenPoint;
+  readonly menuCenterScreen: ScreenPoint | null;
   readonly targetGrid: GridPosition;
   readonly startedAtMs: number;
   readonly currentScreen: ScreenPoint;
@@ -38,6 +39,7 @@ export function beginTacticalOrderGesture(
   return {
     phase: 'pending',
     anchorScreen: { ...anchorScreen },
+    menuCenterScreen: null,
     targetGrid: { ...targetGrid },
     startedAtMs,
     currentScreen: { ...anchorScreen },
@@ -45,36 +47,56 @@ export function beginTacticalOrderGesture(
   };
 }
 
-export function updateTacticalOrderGesture(
+export function openTacticalOrderGesture(
   state: TacticalOrderGestureState,
+  menuCenterScreen: ScreenPoint,
   currentScreen: ScreenPoint,
   nowMs: number,
 ): TacticalOrderGestureState {
   if (state.phase === 'cancelled') return state;
-  const phase = state.phase === 'open' || nowMs - state.startedAtMs >= TACTICAL_ORDER_HOLD_DELAY_MS
-    ? 'open'
-    : 'pending';
+  if (nowMs - state.startedAtMs < TACTICAL_ORDER_HOLD_DELAY_MS) {
+    return updateTacticalOrderGesture(state, currentScreen, nowMs);
+  }
   return {
     ...state,
-    phase,
+    phase: 'open',
+    menuCenterScreen: { ...menuCenterScreen },
     currentScreen: { ...currentScreen },
-    highlightedPresetId: phase === 'open'
-      ? resolveTacticalOrderPresetAtPoint(state.anchorScreen, currentScreen)
-      : null,
+    highlightedPresetId: resolveTacticalOrderPresetAtPoint(menuCenterScreen, currentScreen),
+  };
+}
+
+export function updateTacticalOrderGesture(
+  state: TacticalOrderGestureState,
+  currentScreen: ScreenPoint,
+  _nowMs: number,
+): TacticalOrderGestureState {
+  if (state.phase === 'cancelled') return state;
+  if (state.phase !== 'open') {
+    return {
+      ...state,
+      currentScreen: { ...currentScreen },
+      highlightedPresetId: null,
+    };
+  }
+  const menuCenter = state.menuCenterScreen ?? state.anchorScreen;
+  return {
+    ...state,
+    currentScreen: { ...currentScreen },
+    highlightedPresetId: resolveTacticalOrderPresetAtPoint(menuCenter, currentScreen),
   };
 }
 
 export function releaseTacticalOrderGesture(
   state: TacticalOrderGestureState,
   currentScreen: ScreenPoint,
-  nowMs: number,
+  _nowMs: number,
 ): TacticalOrderGestureRelease {
   if (state.phase === 'cancelled') return { kind: 'cancel' };
-  const updated = updateTacticalOrderGesture(state, currentScreen, nowMs);
-  if (updated.phase === 'pending') return { kind: 'quick_move' };
-  return updated.highlightedPresetId
-    ? { kind: 'issue', presetId: updated.highlightedPresetId }
-    : { kind: 'cancel' };
+  if (state.phase === 'pending') return { kind: 'quick_move' };
+  const menuCenter = state.menuCenterScreen ?? state.anchorScreen;
+  const presetId = resolveTacticalOrderPresetAtPoint(menuCenter, currentScreen);
+  return presetId ? { kind: 'issue', presetId } : { kind: 'cancel' };
 }
 
 export function cancelTacticalOrderGesture(
@@ -90,13 +112,15 @@ export function cancelTacticalOrderGesture(
 }
 
 export function resolveTacticalOrderPresetAtPoint(
-  anchor: ScreenPoint,
+  menuCenter: ScreenPoint,
   point: ScreenPoint,
 ): TacticalOrderPresetId | null {
-  const dx = point.x - anchor.x;
-  const dy = point.y - anchor.y;
+  const dx = point.x - menuCenter.x;
+  const dy = point.y - menuCenter.y;
   const radius = Math.hypot(dx, dy);
   if (radius < TACTICAL_ORDER_CENTER_RADIUS_PX) return null;
+  if (radius < TACTICAL_ORDER_INNER_RADIUS_PX || radius > TACTICAL_ORDER_OUTER_RADIUS_PX) return null;
+
   const angle = Math.atan2(dy, dx) * 180 / Math.PI;
   const sectors: ReadonlyArray<readonly [TacticalOrderPresetId, number]> = [
     ['recon', -90],
