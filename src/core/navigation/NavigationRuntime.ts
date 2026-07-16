@@ -75,6 +75,9 @@ export function buildUnitTacticalRouteContext(
     canonical,
   };
   const published = cached?.published;
+  const geometryChanged = published
+    ? hasThreatGeometryChange(published.context.knownThreats, canonical.threats)
+    : false;
   if (
     published
     && published.snapshotIdentityKey === snapshotIdentityKey
@@ -89,6 +92,7 @@ export function buildUnitTacticalRouteContext(
     && published
     && published.snapshotIdentityKey === snapshotIdentityKey
     && published.topologyKey === topologyKey
+    && !geometryChanged
     && !hasMeaningfulTacticalChange(published.context.knownThreats, canonical.threats)
   ) {
     tacticalContextByUnit.set(unit, { observed, published });
@@ -168,6 +172,10 @@ function hasMeaningfulTacticalChange(
   previous: TacticalRouteContext['knownThreats'],
   current: ReturnType<typeof buildCanonicalWorldThreatSet>['threats'],
 ): boolean {
+  // Geometry belongs to the canonical snapshot but is deliberately not a
+  // coalesced-consumer invalidator here: the caller's existing 0.5 s window
+  // publishes the newest geometry afterwards. Immediate callers bypass this
+  // function and always receive the current canonical world-threat state.
   if (previous.length !== current.length) return true;
   const currentById = new Map(current.map((threat) => [threat.id, threat]));
   for (const before of previous) {
@@ -175,18 +183,6 @@ function hasMeaningfulTacticalChange(
     if (!after) return true;
     if (
       before.mode !== after.mode
-      || before.x !== after.x
-      || before.y !== after.y
-      || before.radiusCells !== after.radiusCells
-      || before.widthCells !== after.widthCells
-      || before.heightCells !== after.heightCells
-      || before.rotationDegrees !== after.rotationDegrees
-      || before.directionDegrees !== after.directionDegrees
-      || before.arcDegrees !== after.arcDegrees
-      || before.rangeCells !== after.rangeCells
-      || before.minRangeCells !== after.minRangeCells
-      || before.falloffPercent !== after.falloffPercent
-      || before.uncertaintyCells !== after.uncertaintyCells
       || before.fireThreatClass !== after.fireThreatClass
       || Math.abs(before.strength - after.strength) >= MEANINGFUL_STRENGTH_DELTA
       || Math.abs(before.suppression - after.suppression) >= MEANINGFUL_SUPPRESSION_DELTA
@@ -194,6 +190,24 @@ function hasMeaningfulTacticalChange(
     ) return true;
   }
   return false;
+}
+
+function hasThreatGeometryChange(
+  previous: TacticalRouteContext['knownThreats'],
+  current: ReturnType<typeof buildCanonicalWorldThreatSet>['threats'],
+): boolean {
+  if (previous.length !== current.length) return true;
+  const currentById = new Map(current.map((threat) => [threat.id, threat]));
+  return previous.some((before) => {
+    const after = currentById.get(before.id);
+    return !after
+      || before.x !== after.x || before.y !== after.y
+      || before.radiusCells !== after.radiusCells || before.widthCells !== after.widthCells
+      || before.heightCells !== after.heightCells || before.rotationDegrees !== after.rotationDegrees
+      || before.directionDegrees !== after.directionDegrees || before.arcDegrees !== after.arcDegrees
+      || before.rangeCells !== after.rangeCells || before.minRangeCells !== after.minRangeCells
+      || before.falloffPercent !== after.falloffPercent || before.uncertaintyCells !== after.uncertaintyCells;
+  });
 }
 
 function defaultProfileForUnitRole(unit: UnitModel): string {
