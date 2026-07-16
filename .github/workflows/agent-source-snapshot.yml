@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/terrain-profiles-performance-followup-v1
+  pull_request:
+    branches:
+      - real-wargame-preview
 
 permissions:
   contents: read
