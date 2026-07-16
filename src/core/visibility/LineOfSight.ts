@@ -1,5 +1,9 @@
 import { distance, type GridPosition } from '../geometry';
 import { getCell, type MapObject, type MapObjectKind, type TacticalMap } from '../map/MapModel';
+import {
+  resolveCellVegetationDefinition,
+  resolveVegetationDefinition,
+} from '../map/VegetationDefinition';
 import { getMapObjectSpatialIndex } from '../spatial/MapObjectSpatialIndex';
 import { sampleSmoothHeightLevel } from '../terrain/SmoothTerrain';
 import type { UnitModel } from '../units/UnitModel';
@@ -10,9 +14,7 @@ const ENDPOINT_RELIEF_GRACE_METERS = 7;
 const OBJECT_ORIGIN_IGNORE_METERS = 1.25;
 const TERRAIN_BLOCK_MARGIN_METERS = 0.95;
 const OBJECT_BLOCK_MARGIN_METERS = 0.15;
-const MIN_VISUAL_TRANSMISSION = 0.04;
-const SPARSE_FOREST_LOSS_PER_METER = 0.035;
-const DENSE_FOREST_LOSS_PER_METER = 0.075;
+const MIN_VISUAL_TRANSMISSION = resolveVegetationDefinition('none').visibility.minimumTransmission;
 
 export interface LineOfSightProbeResult {
   origin: GridPosition;
@@ -108,11 +110,11 @@ export function computeLineOfSight(
     }
 
     const stepMeters = totalDistanceMeters / steps;
-    if (cell.forest > 0) {
+    const vegetation = resolveCellVegetationDefinition(cell);
+    if (vegetation.layer > 0) {
       accumulatedForestMeters += stepMeters;
-      strongestForestKind = Math.max(strongestForestKind, cell.forest);
-      const lossPerMeter = cell.forest === 2 ? DENSE_FOREST_LOSS_PER_METER : SPARSE_FOREST_LOSS_PER_METER;
-      visualTransmission *= Math.exp(-lossPerMeter * stepMeters);
+      strongestForestKind = Math.max(strongestForestKind, vegetation.layer);
+      visualTransmission *= Math.exp(-vegetation.visibility.transmissionLossPerMeter * stepMeters);
       if (visualTransmission <= MIN_VISUAL_TRANSMISSION) {
         return blockedResult(
           origin,
@@ -120,7 +122,7 @@ export function computeLineOfSight(
           totalDistanceMeters,
           currentDistanceMeters,
           sample,
-          cell.forest === 2 ? 'густой лес почти полностью закрыл обзор' : 'лес почти полностью закрыл обзор',
+          vegetation.layer === 2 ? 'густой лес почти полностью закрыл обзор' : 'лес почти полностью закрыл обзор',
           visualTransmission,
           accumulatedForestMeters,
           forestReason(strongestForestKind, accumulatedForestMeters),
