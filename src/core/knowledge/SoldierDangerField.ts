@@ -1,5 +1,4 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
-import { measurePerformancePhase } from '../debug/PerformancePhases';
 import {
   getThreatRelativeCoverField,
   type ThreatRelativeCoverField,
@@ -88,10 +87,6 @@ export interface SoldierDangerFieldDiagnostics {
   readonly retainedThreatGeometryBytes: number;
   readonly retainedFieldBytes: number;
   readonly retainedTypedArrayBytes: number;
-  readonly typedArrayAllocationCount: number;
-  readonly totalTypedArrayAllocatedBytes: number;
-  readonly lastGeometryBuildTypedArrayBytes: number;
-  readonly lastFieldBuildTypedArrayBytes: number;
   readonly lastGeometryKey: string;
   readonly lastFieldKey: string;
 }
@@ -111,10 +106,6 @@ interface MutableDiagnostics {
   geometryCacheHitCount: number;
   fieldCacheHitCount: number;
   fullMapScanCount: number;
-  typedArrayAllocationCount: number;
-  totalTypedArrayAllocatedBytes: number;
-  lastGeometryBuildTypedArrayBytes: number;
-  lastFieldBuildTypedArrayBytes: number;
   lastGeometryKey: string;
   lastFieldKey: string;
 }
@@ -156,11 +147,7 @@ export function getSoldierDangerField(
     return existing;
   }
 
-  const field = measurePerformancePhase('soldier-danger-score-build', () => scoreDangerField(map, threats, threatGeometries, geometryKey, fieldKey));
-  const fieldBytes = soldierDangerFieldTypedArrayBytes(field);
-  cache.diagnostics.typedArrayAllocationCount += 6;
-  cache.diagnostics.totalTypedArrayAllocatedBytes += fieldBytes;
-  cache.diagnostics.lastFieldBuildTypedArrayBytes = fieldBytes;
+  const field = scoreDangerField(map, threats, threatGeometries, geometryKey, fieldKey);
   cache.fields.set(fieldKey, field);
   trimCache(cache.fields, FIELD_CACHE_LIMIT);
   cache.diagnostics.fieldBuildCount += 1;
@@ -226,11 +213,7 @@ function getThreatGeometry(
     return existing;
   }
 
-  const geometry = measurePerformancePhase('soldier-danger-geometry-build', () => buildThreatGeometry(map, posture, threat, staticField, directionalBasis, lineOfFire, key));
-  const geometryBytes = threatGeometryTypedArrayBytes(geometry);
-  cache.diagnostics.typedArrayAllocationCount += 3;
-  cache.diagnostics.totalTypedArrayAllocatedBytes += geometryBytes;
-  cache.diagnostics.lastGeometryBuildTypedArrayBytes = geometryBytes;
+  const geometry = buildThreatGeometry(map, posture, threat, staticField, directionalBasis, lineOfFire, key);
   cache.threatGeometries.set(key, geometry);
   trimCache(cache.threatGeometries, THREAT_GEOMETRY_CACHE_LIMIT);
   cache.diagnostics.geometryBuildCount += 1;
@@ -529,10 +512,6 @@ function getMapCache(map: TacticalMap): MapCache {
       geometryCacheHitCount: 0,
       fieldCacheHitCount: 0,
       fullMapScanCount: 0,
-      typedArrayAllocationCount: 0,
-      totalTypedArrayAllocatedBytes: 0,
-      lastGeometryBuildTypedArrayBytes: 0,
-      lastFieldBuildTypedArrayBytes: 0,
       lastGeometryKey: '',
       lastFieldKey: '',
     },
@@ -548,10 +527,6 @@ function emptyDiagnostics(): SoldierDangerFieldDiagnostics {
     geometryCacheHitCount: 0,
     fieldCacheHitCount: 0,
     fullMapScanCount: 0,
-    typedArrayAllocationCount: 0,
-    totalTypedArrayAllocatedBytes: 0,
-    lastGeometryBuildTypedArrayBytes: 0,
-    lastFieldBuildTypedArrayBytes: 0,
     cachedGeometryCount: 0,
     cachedThreatGeometryCount: 0,
     cachedFieldCount: 0,
@@ -561,19 +536,6 @@ function emptyDiagnostics(): SoldierDangerFieldDiagnostics {
     lastGeometryKey: '',
     lastFieldKey: '',
   };
-}
-
-function threatGeometryTypedArrayBytes(geometry: ThreatCellGeometry): number {
-  return geometry.factor.byteLength + geometry.protection.byteLength + geometry.exposureFactor.byteLength;
-}
-
-function soldierDangerFieldTypedArrayBytes(field: SoldierDangerField): number {
-  return field.danger.byteLength
-    + field.suppression.byteLength
-    + field.confidence.byteLength
-    + field.uncertainty.byteLength
-    + field.expectedProtectionAgainstThreat.byteLength
-    + field.protectedThreatIndex.byteLength;
 }
 
 function sumThreatGeometryBytes(values: Iterable<ThreatCellGeometry>): number {

@@ -55,33 +55,31 @@ export class PixiMapRenderer {
   }
 
   private renderStaticLayerIfNeeded(map: TacticalMap, showGrid: boolean): void {
-    const nextKey = getStaticLayerKey(map, showGrid);
+    const nextKey = getStaticBaseLayerKey(map, showGrid);
+    const baseLayerChanged = map !== this.lastStaticMap || nextKey !== this.lastStaticKey;
 
-    if (map === this.lastStaticMap && nextKey === this.lastStaticKey) {
-      return;
+    if (baseLayerChanged) {
+      this.lastStaticMap = map;
+      this.lastStaticKey = nextKey;
+      destroyRemovedChildren(this.staticContainer, this.vegetationRaster.container);
+      renderTerrainBatches(this.staticContainer, map);
+
+      const elevationLayer = renderElevationLayer(map);
+      if (elevationLayer) this.staticContainer.addChild(elevationLayer);
+
+      this.staticContainer.addChild(this.vegetationRaster.container);
+
+      if (showGrid) this.staticContainer.addChild(renderMeterGrid(map));
+
+      const border = new Graphics();
+      border.rect(0, 0, map.width * map.cellSize, map.height * map.cellSize)
+        .stroke({ width: 3, color: 0x10160f, alpha: 0.85 });
+      this.staticContainer.addChild(border);
     }
 
-    this.lastStaticMap = map;
-    this.lastStaticKey = nextKey;
-    destroyRemovedChildren(this.staticContainer, this.vegetationRaster.container);
-    renderTerrainBatches(this.staticContainer, map);
-
-    const elevationLayer = renderElevationLayer(map);
-    if (elevationLayer) {
-      this.staticContainer.addChild(elevationLayer);
-    }
-
+    // Vegetation owns its own dirty-chunk invalidation. A forest cell edit must
+    // not rebuild terrain, relief, grid or border display objects.
     this.vegetationRaster.render(map);
-    this.staticContainer.addChild(this.vegetationRaster.container);
-
-    if (showGrid) {
-      this.staticContainer.addChild(renderMeterGrid(map));
-    }
-
-    const border = new Graphics();
-    border.rect(0, 0, map.width * map.cellSize, map.height * map.cellSize)
-      .stroke({ width: 3, color: 0x10160f, alpha: 0.85 });
-    this.staticContainer.addChild(border);
   }
 
   getVegetationRasterDiagnostics(): VegetationChunkRasterDiagnostics {
@@ -350,7 +348,7 @@ function drawSegment(context: CanvasRenderingContext2D, start: { x: number; y: n
   context.lineTo(end.x, end.y);
 }
 
-function getStaticLayerKey(map: TacticalMap, showGrid: boolean): string {
+function getStaticBaseLayerKey(map: TacticalMap, showGrid: boolean): string {
   const revisions = getMapRevisionSnapshot(map);
   const environment = getActiveEnvironmentProfile();
   return [
@@ -360,10 +358,19 @@ function getStaticLayerKey(map: TacticalMap, showGrid: boolean): string {
     `grid:${showGrid ? '1' : '0'}`,
     `terrain:${revisions.terrain}`,
     `height:${revisions.height}`,
-    `vegetation:${revisions.forest}`,
-    `environment:${environment.id}`,
-    `presentation:${environment.revisions.presentation}`,
+    `surfacePresentation:${buildSurfacePresentationSignature(environment)}`,
   ].join(';');
+}
+
+function buildSurfacePresentationSignature(environment: ReturnType<typeof getActiveEnvironmentProfile>): string {
+  return Object.values(environment.surfaces)
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map((material) => [
+      material.id,
+      material.presentation.colorTint,
+      material.presentation.opacity,
+    ].join(':'))
+    .join('|');
 }
 
 function getObjectLayerKey(

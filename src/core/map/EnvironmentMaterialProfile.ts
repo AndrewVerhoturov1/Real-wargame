@@ -12,9 +12,6 @@ export interface SurfaceMaterialDefinition {
   readonly presentation: {
     readonly colorTint: number;
     readonly opacity: number;
-    readonly textureId: string;
-    readonly textureScale: number;
-    readonly noiseScale: number;
   };
   readonly movement: {
     readonly resistance: number;
@@ -102,7 +99,7 @@ const DEFAULT_PROFILE: EnvironmentMaterialProfile = deepFreeze({
     none: vegetation('none', 'No vegetation', 'Нет растительности', 0, {
       textureId: 'none', colorTint: 0x000000, opacity: 0, coverage: 0,
       textureScale: 1, noiseScale: 1, edgeSoftness: 0,
-    }, { transmissionLossPerMeter: 0, minimumTransmission: 0.04, targetConcealment: 0, localConcealment: 0 },
+    }, { transmissionLossPerMeter: 0, minimumTransmission: 0, targetConcealment: 0, localConcealment: 0 },
     { transmissionLossPerMeter: 0, protectionPerMeter: 0, maximumProtection: 0, densityWeight: 0 },
     { resistance: 1, tacticalConcealment: 0 }),
     sparse_forest: vegetation('sparse_forest', 'Sparse forest', 'Редкий лес', 1, {
@@ -189,7 +186,8 @@ export class EnvironmentProfileRegistry {
     if (!previous) throw new Error(`Unknown vegetation material: ${materialId}`);
     const next = normalizeVegetation({ ...previous, ...changes, id: previous.id, legacyLayer: previous.legacyLayer }, previous);
     const domains = changedVegetationDomains(previous, next);
-    if (domains.length === 0) return cloneProfile(current);
+    const metadataChanged = previous.nameEn !== next.nameEn || previous.nameRu !== next.nameRu;
+    if (domains.length === 0 && !metadataChanged) return cloneProfile(current);
     return this.replaceProfile(profileId, { vegetation: { ...current.vegetation, [materialId]: next } }, domains);
   }
 
@@ -205,7 +203,8 @@ export class EnvironmentProfileRegistry {
     const domains: EnvironmentRevisionDomain[] = [];
     if (JSON.stringify(previous.presentation) !== JSON.stringify(next.presentation)) domains.push('presentation');
     if (JSON.stringify(previous.movement) !== JSON.stringify(next.movement)) domains.push('movement');
-    if (domains.length === 0) return cloneProfile(current);
+    const metadataChanged = previous.nameEn !== next.nameEn || previous.nameRu !== next.nameRu;
+    if (domains.length === 0 && !metadataChanged) return cloneProfile(current);
     return this.replaceProfile(profileId, { surfaces: { ...current.surfaces, [materialId]: next } }, domains);
   }
 
@@ -269,6 +268,27 @@ export class EnvironmentProfileRegistry {
   private touch(): void { this.registryRevision += 1; }
 }
 
+
+export function getEnvironmentProfileDomainKey(
+  profile: EnvironmentMaterialProfile,
+  domain: EnvironmentRevisionDomain,
+): string {
+  const payload = domain === 'presentation'
+    ? {
+        surfaces: mapMaterialGroup(profile.surfaces, (material) => material.presentation),
+        vegetation: mapMaterialGroup(profile.vegetation, (material) => material.presentation),
+      }
+    : domain === 'visibility'
+      ? mapMaterialGroup(profile.vegetation, (material) => material.visibility)
+      : domain === 'fire'
+        ? mapMaterialGroup(profile.vegetation, (material) => material.fire)
+        : {
+            surfaces: mapMaterialGroup(profile.surfaces, (material) => material.movement),
+            vegetation: mapMaterialGroup(profile.vegetation, (material) => material.movement),
+          };
+  return `${profile.id}:${profile.revisions[domain]}:${hashText(stableSerialize(payload))}`;
+}
+
 export function createDefaultEnvironmentProfileRegistry(): EnvironmentProfileRegistry { return new EnvironmentProfileRegistry(); }
 export function getDefaultEnvironmentProfile(): EnvironmentMaterialProfile { return cloneProfile(DEFAULT_PROFILE); }
 
@@ -298,7 +318,7 @@ export function surfaceMaterialIdToTerrainKind(id: string | undefined): 'field' 
 }
 
 function surface(id: string, nameEn: string, nameRu: string, colorTint: number, opacity: number, passable: boolean, resistance: number, physicalCost: number): SurfaceMaterialDefinition {
-  return { id, nameEn, nameRu, presentation: { colorTint, opacity, textureId: `surface_${id}`, textureScale: 1, noiseScale: 1 }, movement: { resistance, passable, physicalCost } };
+  return { id, nameEn, nameRu, presentation: { colorTint, opacity }, movement: { resistance, passable, physicalCost } };
 }
 
 function vegetation(
@@ -353,9 +373,8 @@ function normalizeSurface(value: Partial<SurfaceMaterialDefinition>, fallback: S
   return deepFreeze({
     id: cleanText(value.id, fallback.id), nameEn: cleanText(value.nameEn, fallback.nameEn), nameRu: cleanText(value.nameRu, fallback.nameRu),
     presentation: {
-      colorTint: colorNumber(presentation.colorTint, fallback.presentation.colorTint), opacity: bounded(presentation.opacity, 0, 1, fallback.presentation.opacity),
-      textureId: cleanText(presentation.textureId, fallback.presentation.textureId), textureScale: bounded(presentation.textureScale, 0.1, 10, fallback.presentation.textureScale),
-      noiseScale: bounded(presentation.noiseScale, 0, 10, fallback.presentation.noiseScale),
+      colorTint: colorNumber(presentation.colorTint, fallback.presentation.colorTint),
+      opacity: bounded(presentation.opacity, 0, 1, fallback.presentation.opacity),
     },
     movement: { resistance: bounded(movement.resistance, 0.05, 100, fallback.movement.resistance), passable: typeof movement.passable === 'boolean' ? movement.passable : fallback.movement.passable, physicalCost: bounded(movement.physicalCost, -10, 100, fallback.movement.physicalCost) },
   });
@@ -374,6 +393,31 @@ function normalizeVegetation(value: Partial<VegetationMaterialDefinition>, fallb
     fire: { transmissionLossPerMeter: bounded(f.transmissionLossPerMeter, 0, 10, fallback.fire.transmissionLossPerMeter), protectionPerMeter: bounded(f.protectionPerMeter, 0, 100, fallback.fire.protectionPerMeter), maximumProtection: bounded(f.maximumProtection, 0, 100, fallback.fire.maximumProtection), densityWeight: bounded(f.densityWeight, 0, 100, fallback.fire.densityWeight) },
     movement: { resistance: bounded(m.resistance, 0.05, 100, fallback.movement.resistance), tacticalConcealment: bounded(m.tacticalConcealment, 0, 10, fallback.movement.tacticalConcealment) },
   });
+}
+
+
+function mapMaterialGroup<T extends { readonly id: string }, R>(
+  group: Readonly<Record<string, T>>,
+  select: (material: T) => R,
+): Record<string, R> {
+  const result: Record<string, R> = {};
+  for (const id of Object.keys(group).sort()) result[id] = select(group[id]);
+  return result;
+}
+
+function stableSerialize(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`).join(',')}}`;
+}
+
+function hashText(value: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = Math.imul(hash ^ value.charCodeAt(index), 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
 function changedVegetationDomains(a: VegetationMaterialDefinition, b: VegetationMaterialDefinition): EnvironmentRevisionDomain[] {

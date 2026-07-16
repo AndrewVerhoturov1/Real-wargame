@@ -3,6 +3,7 @@ import type { GridPosition } from '../geometry';
 import { getCell, resolveObjectCoverProperties, type MapObject, type TacticalMap } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
 import { getActiveEnvironmentProfile } from '../map/EnvironmentProfileRuntime';
+import { getEnvironmentProfileDomainKey, getSurfaceMaterial } from '../map/EnvironmentMaterialProfile';
 import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 import { getMapObjectSpatialIndex } from '../spatial/MapObjectSpatialIndex';
 
@@ -63,6 +64,7 @@ export function getAwarenessStaticField(map: TacticalMap, posture: UnitPosture):
   const terrainPenalty = new Uint8Array(cellCount);
   const sourceRu = new Array<string>(cellCount);
   const spatialIndex = getMapObjectSpatialIndex(map);
+  const environmentProfile = getActiveEnvironmentProfile();
   let candidateChecks = 0;
 
   for (let y = 0; y < map.height; y += 1) {
@@ -76,7 +78,7 @@ export function getAwarenessStaticField(map: TacticalMap, posture: UnitPosture):
       expectedProtection[index] = local.expectedProtection;
       reliability[index] = local.reliability;
       concealment[index] = local.concealment;
-      terrainPenalty[index] = movementPenalty(cell?.terrain ?? 'field');
+      terrainPenalty[index] = movementPenalty(environmentProfile, cell);
       sourceRu[index] = local.sourceRu;
     }
   }
@@ -127,6 +129,7 @@ export function getAwarenessStaticFieldDiagnostics(
 
 function buildStaticFieldKey(map: TacticalMap, posture: UnitPosture): string {
   const revisions = getMapRevisionSnapshot(map);
+  const environmentProfile = getActiveEnvironmentProfile();
   return [
     map.width,
     map.height,
@@ -135,8 +138,8 @@ function buildStaticFieldKey(map: TacticalMap, posture: UnitPosture): string {
     revisions.terrain,
     revisions.height,
     revisions.forest,
-    getActiveEnvironmentProfile().id,
-    getActiveEnvironmentProfile().revisions.visibility,
+    getEnvironmentProfileDomainKey(environmentProfile, 'visibility'),
+    getEnvironmentProfileDomainKey(environmentProfile, 'movement'),
     revisions.objects,
   ].join(':');
 }
@@ -148,13 +151,14 @@ function estimateLocalProtection(
   candidates: MapObject[],
 ): { expectedProtection: number; reliability: number; concealment: number; sourceRu: string } {
   const cell = getCell(map, Math.floor(position.x), Math.floor(position.y));
-  const terrainConcealment = resolveCellVegetationDefinition(cell).visibility.localConcealment;
+  const vegetation = resolveCellVegetationDefinition(cell);
+  const terrainConcealment = vegetation.visibility.localConcealment;
   const reliefProtection = reliefLocalProtection(map, position, posture);
   let result = {
     expectedProtection: reliefProtection,
     reliability: reliefProtection,
     concealment: clampPercent(terrainConcealment + postureConcealmentBonus(posture)),
-    sourceRu: terrainConcealment > 0 ? 'лес' : reliefProtection > 0 ? 'складка местности' : 'открытая местность',
+    sourceRu: terrainConcealment > 0 ? vegetation.nameRu.toLowerCase() : reliefProtection > 0 ? 'складка местности' : 'открытая местность',
   };
 
   for (const object of candidates) {
@@ -222,11 +226,19 @@ function postureConcealmentBonus(posture: UnitPosture): number {
   return 0;
 }
 
-function movementPenalty(terrain: string): number {
-  if (terrain === 'water') return 35;
-  if (terrain === 'swamp') return 18;
-  if (terrain === 'rough') return 7;
-  return 0;
+function movementPenalty(
+  profile: ReturnType<typeof getActiveEnvironmentProfile>,
+  cell: TacticalMap['cells'][number] | undefined,
+): number {
+  if (!cell) return 0;
+  const surface = getSurfaceMaterial(profile, cell.surfaceMaterialId);
+  if (!surface.movement.passable) return 35;
+  const vegetation = resolveCellVegetationDefinition(cell);
+  const resistance = 1
+    + (surface.movement.resistance - 1)
+    + (vegetation.movement.resistance - 1)
+    + Math.max(0, surface.movement.physicalCost);
+  return clampPercent(Math.max(0, resistance - 1) * 20);
 }
 
 function clampPercent(value: number): number {

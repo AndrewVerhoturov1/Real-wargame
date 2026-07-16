@@ -1,9 +1,6 @@
 import { distance, type GridPosition } from '../geometry';
 import { getCell, type MapObject, type MapObjectKind, type TacticalMap } from '../map/MapModel';
-import {
-  resolveCellVegetationDefinition,
-  resolveVegetationDefinition,
-} from '../map/VegetationDefinition';
+import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 import { getMapObjectSpatialIndex } from '../spatial/MapObjectSpatialIndex';
 import { sampleSmoothHeightLevel } from '../terrain/SmoothTerrain';
 import type { UnitModel } from '../units/UnitModel';
@@ -14,7 +11,6 @@ const ENDPOINT_RELIEF_GRACE_METERS = 7;
 const OBJECT_ORIGIN_IGNORE_METERS = 1.25;
 const TERRAIN_BLOCK_MARGIN_METERS = 0.95;
 const OBJECT_BLOCK_MARGIN_METERS = 0.15;
-const MIN_VISUAL_TRANSMISSION = resolveVegetationDefinition('none').visibility.minimumTransmission;
 
 export interface LineOfSightProbeResult {
   origin: GridPosition;
@@ -69,6 +65,8 @@ export function computeLineOfSight(
   let accumulatedForestMeters = 0;
   let visualTransmission = 1;
   let strongestForestKind = 0;
+  let strongestVegetationNameRu = '';
+  let strongestVegetationLoss = 0;
 
   for (let step = 1; step <= steps; step += 1) {
     const factor = step / steps;
@@ -90,7 +88,7 @@ export function computeLineOfSight(
         'край карты',
         0,
         accumulatedForestMeters,
-        forestReason(strongestForestKind, accumulatedForestMeters),
+        forestReason(strongestForestKind, accumulatedForestMeters, strongestVegetationNameRu),
       );
     }
 
@@ -105,27 +103,36 @@ export function computeLineOfSight(
         `${formatObjectBlocker(objectBlocker)} / высота ${getObjectHeightMeters(objectBlocker)} м`,
         0,
         accumulatedForestMeters,
-        forestReason(strongestForestKind, accumulatedForestMeters),
+        forestReason(strongestForestKind, accumulatedForestMeters, strongestVegetationNameRu),
       );
     }
 
     const stepMeters = totalDistanceMeters / steps;
     const vegetation = resolveCellVegetationDefinition(cell);
-    if (vegetation.layer > 0) {
+    const hasVegetation = vegetation.id !== 'none'
+      && (vegetation.visibility.transmissionLossPerMeter > 0
+        || vegetation.visibility.localConcealment > 0
+        || vegetation.visibility.targetConcealment > 0);
+    if (hasVegetation) {
       accumulatedForestMeters += stepMeters;
       strongestForestKind = Math.max(strongestForestKind, vegetation.layer);
+      if (vegetation.visibility.transmissionLossPerMeter >= strongestVegetationLoss) {
+        strongestVegetationLoss = vegetation.visibility.transmissionLossPerMeter;
+        strongestVegetationNameRu = vegetation.nameRu;
+      }
       visualTransmission *= Math.exp(-vegetation.visibility.transmissionLossPerMeter * stepMeters);
-      if (visualTransmission <= MIN_VISUAL_TRANSMISSION) {
+      if (vegetation.visibility.minimumTransmission > 0
+        && visualTransmission <= vegetation.visibility.minimumTransmission) {
         return blockedResult(
           origin,
           target,
           totalDistanceMeters,
           currentDistanceMeters,
           sample,
-          vegetation.layer === 2 ? 'густой лес почти полностью закрыл обзор' : 'лес почти полностью закрыл обзор',
+          `${vegetation.nameRu.toLowerCase()} почти полностью закрыл обзор`,
           visualTransmission,
           accumulatedForestMeters,
-          forestReason(strongestForestKind, accumulatedForestMeters),
+          forestReason(strongestForestKind, accumulatedForestMeters, strongestVegetationNameRu),
         );
       }
     }
@@ -145,7 +152,7 @@ export function computeLineOfSight(
         `плавный склон / рельеф ${formatSigned(smoothHeightLevel)}`,
         0,
         accumulatedForestMeters,
-        forestReason(strongestForestKind, accumulatedForestMeters),
+        forestReason(strongestForestKind, accumulatedForestMeters, strongestVegetationNameRu),
       );
     }
   }
@@ -162,7 +169,7 @@ export function computeLineOfSight(
     visualTransmission,
     partialObscuration,
     accumulatedForestMeters,
-    obscurationReasonRu: forestReason(strongestForestKind, accumulatedForestMeters),
+    obscurationReasonRu: forestReason(strongestForestKind, accumulatedForestMeters, strongestVegetationNameRu),
   };
 }
 
@@ -192,10 +199,10 @@ function blockedResult(
   };
 }
 
-function forestReason(kind: number, meters: number): string {
-  if (meters <= 0 || kind <= 0) return 'препятствий растительностью нет';
-  const label = kind === 2 ? 'густой лес' : 'редкий лес';
-  return `${label}: пройдено около ${Math.round(meters)} м растительности`;
+function forestReason(kind: number, meters: number, materialNameRu = ''): string {
+  if (meters <= 0) return 'препятствий растительностью нет';
+  const label = materialNameRu || (kind === 2 ? 'Густой лес' : kind === 1 ? 'Редкий лес' : 'Растительность');
+  return `${label.toLowerCase()}: пройдено около ${Math.round(meters)} м растительности`;
 }
 
 function findObjectBlocker(

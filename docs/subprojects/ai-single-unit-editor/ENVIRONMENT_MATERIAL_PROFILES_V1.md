@@ -36,7 +36,7 @@ The built-in profile defines:
 - surfaces: field, road, rough ground, swamp and water;
 - vegetation: none, sparse forest and dense forest.
 
-The visible **Профили местности** workbench supports selecting, copying, renaming, resetting, importing, exporting and deleting custom profiles. Every numeric field is clamped by the registry. A broken or old storage payload falls back to the built-in profile.
+The visible **Профили местности** workbench supports selecting, copying, renaming, resetting, importing, exporting and deleting custom profiles. Russian material names are editable without exposing technical IDs. Every numeric field is clamped by the registry. A broken or old storage payload falls back to the built-in profile.
 
 ## Revision domains
 
@@ -47,7 +47,7 @@ Each profile carries independent revisions:
 - `fire` — fire transmission and vegetation protection;
 - `movement` — passability, physical resistance and tactical concealment.
 
-Every cache key also includes the active profile ID. Switching between profiles with equal revision numbers therefore still invalidates the correct data.
+Every cache key includes the active profile ID and a stable hash of the relevant material-domain content. Switching profiles or importing changed values with unchanged external revision numbers therefore still invalidates the correct data.
 
 Expected invalidation:
 
@@ -57,6 +57,8 @@ visibility edit   → visual geometry/perception only
 fire edit         → line-of-fire/danger geometry only
 movement edit     → navigation and route costs only
 ```
+
+Route calculation keeps physical material resistance separate from tactical movement-profile preference. The existing navigation profile value is interpreted as a tactical delta from the built-in physical baseline, so default routes remain compatible while a changed surface or vegetation resistance still changes the actual route cost.
 
 ## Continuous vegetation renderer
 
@@ -72,25 +74,7 @@ movement edit     → navigation and route costs only
 
 A global presentation edit rebuilds the vegetation layer once. A single-cell edit rebuilds only the intersecting chunk and the minimal border-neighbor set needed for edge continuity.
 
-Diagnostics exported in the performance report include chunk builds, cache hits, dirty chunks, texture uploads/reuse/destruction, active chunks, retained canvas bytes, build timings, reason and dirty region.
-
-## Performance attribution
-
-The performance report now includes `VisibilityGeometryField` diagnostics and bounded Performance API measures for:
-
-- Pixi ticker and simulation tick;
-- workspace render and danger-overlay update;
-- map raster apply;
-- worker-result apply and awareness raster digest/upload;
-- vegetation raster generation and texture upload;
-- visibility geometry;
-- SoldierDanger geometry and score builds;
-- DirectionalTactical and ThreatRelativeCover geometry;
-- safe-position scan;
-- route recalculation;
-- representative UI timer callbacks.
-
-Fast measurements are sampled and slow measurements are retained in a bounded ring so instrumentation does not itself create unbounded browser memory pressure. Visibility, danger and threat-relative geometry diagnostics also expose typed-array allocation counts, total allocated bytes and bytes allocated by the latest rebuild; allocation rate can therefore be derived from `runtimeSeconds` without guessing.
+The raster exposes bounded chunk lifecycle diagnostics for focused tests and future profiling, but performance attribution and browser-stall investigation are intentionally outside this PR.
 
 ## Compatibility
 
@@ -114,9 +98,6 @@ npm run environment-materials:smoke
 npm run environment-material-migration:smoke
 npm run environment-profile-revisions:smoke
 npm run vegetation-chunk-raster:smoke
-npm run environment-performance:smoke
 ```
-
-`tests/environment-stable-performance.spec.ts` is a non-screenshot 30-second paused-scene fixture. It verifies that geometry scans and vegetation uploads stop after warmup.
 
 `tests/environment-materials-visual.spec.ts` is prepared under `test.skip` according to the visual-QA policy. Its expected PNG set covers sparse/dense forest at zoom 0.7, 1.0 and 1.3, danger overlay on/off, live coverage/opacity edits and the visible profile editor. It must not run without explicit user approval.

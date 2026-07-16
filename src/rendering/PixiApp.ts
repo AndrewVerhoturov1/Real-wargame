@@ -1,7 +1,7 @@
 import { Application, Container, type Ticker } from 'pixi.js';
 import { PerformanceMonitor } from '../core/debug/PerformanceMonitor';
-import { measurePerformancePhase } from '../core/debug/PerformancePhases';
 import { getActiveEnvironmentProfile } from '../core/map/EnvironmentProfileRuntime';
+import { getEnvironmentProfileDomainKey, getSurfaceMaterial, getVegetationMaterial } from '../core/map/EnvironmentMaterialProfile';
 import { getCell, gridToCellLabel, type MapCell } from '../core/map/MapModel';
 import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
@@ -159,12 +159,10 @@ export class PixiTacticalBoardApp {
   }
 
   private readonly tick = (ticker: Ticker): void => {
-    measurePerformancePhase('pixi-ticker', () => {
-      if (!this.getPaused()) {
-        tickSimulation(this.state, ticker.elapsedMS / 1000);
-      }
-      measurePerformancePhase('workspace-render-frame', () => this.renderFrame());
-    });
+    if (!this.getPaused()) {
+      tickSimulation(this.state, ticker.elapsedMS / 1000);
+    }
+    this.renderFrame();
   };
 
   destroy(): void {
@@ -222,7 +220,6 @@ export class PixiTacticalBoardApp {
       viewCones: this.showViewCones,
       heightLabels: this.showHeightLabels,
       htmlLabels: 'map labels are HTML overlay, height numbers are hidden until the debug toggle is enabled',
-      vegetationChunkRaster: this.mapRenderer.getVegetationRasterDiagnostics(),
     });
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -241,7 +238,7 @@ export class PixiTacticalBoardApp {
 
   private renderFrame(): void {
     const renderStartedAt = performance.now();
-    measurePerformancePhase('map-raster-apply', () => this.renderEditableMapLayerIfNeeded(false));
+    this.renderEditableMapLayerIfNeeded(false);
 
     const visibleUnits = this.state.editor.layers.units ? this.state.units : [];
     const visibleSelectedIds = this.state.editor.layers.units ? this.state.selectedUnitIds : [];
@@ -250,7 +247,7 @@ export class PixiTacticalBoardApp {
       this.viewConeRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
     }
 
-    measurePerformancePhase('danger-overlay-update', () => this.awarenessHeatmapRenderer.render(this.state));
+    this.awarenessHeatmapRenderer.render(this.state);
     this.routeCostOverlayRenderer.render(this.state);
     this.orderRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
     this.overlayRenderer.render(this.state, this.showGrid, this.state.editor.layers.pressureZones);
@@ -295,8 +292,7 @@ export class PixiTacticalBoardApp {
       `terrainRevision:${revisions.terrain}`,
       `heightRevision:${revisions.height}`,
       `forestRevision:${revisions.forest}`,
-      `environmentProfile:${getActiveEnvironmentProfile().id}`,
-      `environmentPresentationRevision:${getActiveEnvironmentProfile().revisions.presentation}`,
+      `environmentPresentation:${getEnvironmentProfileDomainKey(getActiveEnvironmentProfile(), 'presentation')}`,
       `objectsRevision:${revisions.objects}`,
     ].join(';');
   }
@@ -446,22 +442,25 @@ export class PixiTacticalBoardApp {
 function formatHoveredCellDetails(cell: MapCell | undefined, locale: Locale): string[] {
   if (!cell) {
     return locale === 'ru'
-      ? ['Высота: вне карты', 'Местность: вне карты', 'Лес: вне карты']
-      : ['Height: outside map', 'Terrain: outside map', 'Forest: outside map'];
+      ? ['Высота: вне карты', 'Поверхность: вне карты', 'Растительность: вне карты']
+      : ['Height: outside map', 'Surface: outside map', 'Vegetation: outside map'];
   }
 
+  const environment = getActiveEnvironmentProfile();
+  const surface = getSurfaceMaterial(environment, cell.surfaceMaterialId);
+  const vegetation = getVegetationMaterial(environment, cell.vegetationMaterialId);
   if (locale === 'ru') {
     return [
       `Высота: ${formatElevationLevel(cell.height, locale)}`,
-      `Местность: ${formatTerrainKind(cell.terrain, locale)}`,
-      `Лес: ${formatForestLayer(cell.forest, locale)}`,
+      `Поверхность: ${surface.nameRu.toLowerCase()}`,
+      `Растительность: ${vegetation.id === 'none' ? 'нет' : vegetation.nameRu.toLowerCase()}`,
     ];
   }
 
   return [
     `Height: ${formatElevationLevel(cell.height, locale)}`,
-    `Terrain: ${formatTerrainKind(cell.terrain, locale)}`,
-    `Forest: ${formatForestLayer(cell.forest, locale)}`,
+    `Surface: ${surface.nameEn.toLowerCase()}`,
+    `Vegetation: ${vegetation.id === 'none' ? 'none' : vegetation.nameEn.toLowerCase()}`,
   ];
 }
 
@@ -489,41 +488,6 @@ function formatElevationLevel(height: number, locale: Locale): string {
   return `${prefix}${height} — ${(locale === 'ru' ? nameRu : nameEn)[height] ?? 'unknown'}`;
 }
 
-function formatTerrainKind(terrain: string, locale: Locale): string {
-  const ru: Record<string, string> = {
-    field: 'поле / открытая земля',
-    forest: 'лесная местность',
-    road: 'дорога',
-    swamp: 'болото',
-    rough: 'пересечённая местность',
-    water: 'вода',
-  };
-  const en: Record<string, string> = {
-    field: 'field / open ground',
-    forest: 'forest terrain',
-    road: 'road',
-    swamp: 'swamp',
-    rough: 'rough ground',
-    water: 'water',
-  };
-
-  return (locale === 'ru' ? ru : en)[terrain] ?? terrain;
-}
-
-function formatForestLayer(forest: number, locale: Locale): string {
-  const ru: Record<number, string> = {
-    0: 'нет',
-    1: 'редкий лес',
-    2: 'густой лес',
-  };
-  const en: Record<number, string> = {
-    0: 'none',
-    1: 'sparse forest',
-    2: 'dense forest',
-  };
-
-  return (locale === 'ru' ? ru : en)[forest] ?? String(forest);
-}
 
 function formatBehaviorInspector(unit: UnitModel | undefined, locale: Locale): string[] {
   if (!unit) {

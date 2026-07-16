@@ -2,8 +2,7 @@ import { Container, Sprite, Texture } from 'pixi.js';
 import type { TacticalMap } from '../core/map/MapModel';
 import { getMapDirtyRegionSince, getMapLayerRevision, type MapDirtyRegion } from '../core/map/MapRuntimeState';
 import { getActiveEnvironmentProfile } from '../core/map/EnvironmentProfileRuntime';
-import { getVegetationMaterial } from '../core/map/EnvironmentMaterialProfile';
-import { measurePerformancePhase } from '../core/debug/PerformancePhases';
+import { getEnvironmentProfileDomainKey, getVegetationMaterial } from '../core/map/EnvironmentMaterialProfile';
 
 export const VEGETATION_CHUNK_SIZE_CELLS = 32;
 const TARGET_PIXELS_PER_CELL = 1.5;
@@ -52,8 +51,7 @@ export class VegetationChunkRaster {
   private readonly chunks = new Map<string, ChunkRecord>();
   private map: TacticalMap | null = null;
   private forestRevision = 0;
-  private profileId = '';
-  private presentationRevision = 0;
+  private presentationKey = '';
   private cellSize = 0;
   private readonly diagnostics: MutableDiagnostics = {
     chunkBuildCount: 0,
@@ -72,8 +70,8 @@ export class VegetationChunkRaster {
     const profile = getActiveEnvironmentProfile();
     const nextForestRevision = getMapLayerRevision(map, 'forest');
     const mapChanged = this.map !== map || this.cellSize !== map.cellSize;
-    const presentationChanged = this.profileId !== profile.id
-      || this.presentationRevision !== profile.revisions.presentation;
+    const nextPresentationKey = getEnvironmentProfileDomainKey(profile, 'presentation');
+    const presentationChanged = this.presentationKey !== nextPresentationKey;
     const forestChanged = this.forestRevision !== nextForestRevision;
 
     if (!mapChanged && !presentationChanged && !forestChanged) {
@@ -97,8 +95,7 @@ export class VegetationChunkRaster {
     this.map = map;
     this.cellSize = map.cellSize;
     this.forestRevision = nextForestRevision;
-    this.profileId = profile.id;
-    this.presentationRevision = profile.revisions.presentation;
+    this.presentationKey = nextPresentationKey;
     this.diagnostics.lastDirtyRegion = dirtyRegion;
     this.diagnostics.lastBuildReason = reason;
     if (!dirtyRegion) return;
@@ -142,7 +139,11 @@ export class VegetationChunkRaster {
     const bounds = chunkBounds(map, chunkX, chunkY);
     if (!bounds) return;
     const activeProfile = getActiveEnvironmentProfile();
-    const signature = buildChunkSignature(map, bounds, activeProfile.id, activeProfile.revisions.presentation);
+    const signature = buildChunkSignature(
+      map,
+      bounds,
+      getEnvironmentProfileDomainKey(activeProfile, 'presentation'),
+    );
     const existing = this.chunks.get(key);
     if (existing?.signature === signature) {
       this.diagnostics.chunkCacheHitCount += 1;
@@ -151,7 +152,7 @@ export class VegetationChunkRaster {
 
     const record = existing ?? this.createChunk(map, key, chunkX, chunkY, bounds);
     const rasterScale = vegetationRasterScale(map);
-    const pixels = measurePerformancePhase('vegetation-chunk-raster-build', () => renderVegetationChunkPixels(map, bounds, rasterScale));
+    const pixels = renderVegetationChunkPixels(map, bounds, rasterScale);
     record.canvas.width = pixels.width;
     record.canvas.height = pixels.height;
     const context = record.canvas.getContext('2d');
@@ -165,7 +166,7 @@ export class VegetationChunkRaster {
     record.sprite.position.set(bounds.minX * map.cellSize, bounds.minY * map.cellSize);
     record.sprite.scale.set(1 / rasterScale);
     // PixiJS 8 keeps the Texture identity stable; only its canvas source is refreshed.
-    measurePerformancePhase('texture-upload', () => record.texture.source.update());
+    record.texture.source.update();
     this.diagnostics.textureUploadCount += 1;
     if (existing) this.diagnostics.textureReuseCount += 1;
     this.diagnostics.chunkBuildCount += 1;
@@ -260,16 +261,25 @@ export function renderVegetationChunkPixels(
       containsVegetation = true;
 
       const occupancy = smoothedVegetationOccupancy(map, gridX, gridY, material.id);
-      const noise = continuousNoise(
-        mapPixelX / Math.max(0.1, material.presentation.textureScale),
-        mapPixelY / Math.max(0.1, material.presentation.textureScale),
-        material.presentation.noiseScale,
-        stringHash(material.presentation.textureId),
-      );
-      const edge = Math.max(0.015, material.presentation.edgeSoftness);
-      const threshold = 1 - material.presentation.coverage;
-      const alphaMask = smoothstep(threshold - edge, threshold + edge, occupancy + (noise - 0.5) * 0.24);
-      const alpha = material.presentation.opacity * alphaMask;
+      const patterned = material.presentation.textureId !== 'none';
+      const noise = patterned
+        ? continuousNoise(
+            mapPixelX / Math.max(0.1, material.presentation.textureScale),
+            mapPixelY / Math.max(0.1, material.presentation.textureScale),
+            material.presentation.noiseScale,
+            stringHash(material.presentation.textureId),
+          )
+        : 0.5;
+      const edgeWidth = 0.04 + material.presentation.edgeSoftness * 0.46;
+      const regionMask = smoothstep(0.5 - edgeWidth, 0.5 + edgeWidth, occupancy);
+      const textureMask = patterned
+        ? smoothstep(
+            1 - material.presentation.coverage - 0.08,
+            1 - material.presentation.coverage + 0.08,
+            noise,
+          )
+        : material.presentation.coverage;
+      const alpha = material.presentation.opacity * regionMask * textureMask;
       if (alpha <= 0.002) continue;
 
       const color = material.presentation.colorTint;
@@ -329,13 +339,13 @@ function stringHash(value: string): number {
   return hash | 0;
 }
 function smoothstep01(value: number): number { return value * value * (3 - 2 * value); }
-function buildChunkSignature(map: TacticalMap, bounds: MapDirtyRegion, profileId: string, presentationRevision: number): string {
+function buildChunkSignature(map: TacticalMap, bounds: MapDirtyRegion, presentationKey: string): string {
   let hash = 2166136261;
   for (let y = bounds.minY; y <= bounds.maxY; y += 1) for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
     const id = map.cells[y * map.width + x]?.vegetationMaterialId ?? 'none';
     for (let i = 0; i < id.length; i += 1) hash = Math.imul(hash ^ id.charCodeAt(i), 16777619);
   }
-  return `${profileId}:${presentationRevision}:${hash >>> 0}:${map.cellSize}`;
+  return `${presentationKey}:${hash >>> 0}:${map.cellSize}`;
 }
 function chunkBounds(map: TacticalMap, chunkX: number, chunkY: number): MapDirtyRegion | null {
   const minX = chunkX * VEGETATION_CHUNK_SIZE_CELLS;

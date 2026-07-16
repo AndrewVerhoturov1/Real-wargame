@@ -12,7 +12,9 @@ import { getAttentionProfileRegistry, subscribeAttentionProfileRegistry } from '
 import { degreesToRadians, type AttentionMode } from '../core/perception/AttentionModel';
 import { getSelectedSimulationCover, getSimulationCovers, hoverSimulationCoverAtPosition } from '../core/knowledge/SimulationCoverSelection';
 import { buildUnitKnowledgeReport } from '../core/knowledge/UnitKnowledge';
-import { getCell, resolveObjectCoverProperties } from '../core/map/MapModel';
+import { getCell, resolveObjectCoverProperties, type MapCell } from '../core/map/MapModel';
+import { getSurfaceMaterial, getVegetationMaterial } from '../core/map/EnvironmentMaterialProfile';
+import { getActiveEnvironmentProfile } from '../core/map/EnvironmentProfileRuntime';
 import { getNavigationProfileRegistry, subscribeNavigationProfileRegistry } from '../core/navigation/NavigationProfileStorage';
 import { isPlayerCommandOutstanding, updatePlayerCommandNavigationProfile } from '../core/orders/PlayerCommand';
 import { getSelectedUnit, issueMoveOrderToSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
@@ -40,7 +42,6 @@ import {
 import { applyInitialStateToRuntime, type UnitModel } from '../core/units/UnitModel';
 import { bindTacticalStatePlanPanel, renderTacticalStatePlanPanelMarkup } from './AiStatePlanPanel';
 import { exitLab } from '../shared/AppShellMenu';
-import { measurePerformancePhase } from '../core/debug/PerformancePhases';
 
 export type TacticalWorkspaceMode = 'simulation' | 'editor';
 type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory';
@@ -431,7 +432,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
 
   setSimulationLayerMode(state, tab);
   syncLayout(); update(true); attachTooltip();
-  window.setInterval(() => measurePerformancePhase('ui-timer.tactical-workspace', () => update(false)), 300);
+  window.setInterval(() => update(false), 300);
 }
 
 function combatCapabilityLabel(value: ReturnType<typeof getCombatRuntime>['capability']): string {
@@ -476,7 +477,7 @@ function updateInfoPanelLive(target: HTMLElement, state: SimulationState, unit: 
   const values: Record<string, string> = {
     position: `${unit.position.x.toFixed(1)}, ${unit.position.y.toFixed(1)}`,
     height: cell ? elevation(smoothHeight) : 'вне карты',
-    terrain: cell ? terrain(cell.terrain, cell.forest) : 'вне карты',
+    terrain: cell ? terrain(cell) : 'вне карты',
     posture: postureLabel(r.posture),
     action: actionLabel(r.currentAction),
     order: orderLabel(state, unit),
@@ -616,7 +617,7 @@ function orderLabel(state:SimulationState,unit:UnitModel):string{if(!unit.order)
 function postureLabel(x:UnitPosture):string{return x==='crouched'?'пригнулся':x==='prone'?'лежит':'стоит';}
 function profileLabel(x:string):string{return ({green:'новобранец',regular:'обычный',veteran:'ветеран',cautious:'осторожный',reckless:'безрассудный'} as Record<string,string>)[x]??x;}
 function actionLabel(x:string):string{return ({waiting:'ожидает',observing:'наблюдает',moving:'движется',move_to:'идёт к позиции',retreat:'отходит',fire:'ведёт огонь',suppress:'подавляет',reload:'перезаряжается',wait:'ожидает'} as Record<string,string>)[x]??x;}
-function terrain(x:string,forest:number):string{if(forest===2)return 'густой лес';if(forest===1)return 'редкий лес';return ({field:'открытое поле',forest:'лесная почва',road:'дорога',swamp:'болото',rough:'пересечённая местность',water:'вода'} as Record<string,string>)[x]??x;}
+function terrain(cell:MapCell):string{const profile=getActiveEnvironmentProfile();const surface=getSurfaceMaterial(profile,cell.surfaceMaterialId);const vegetation=getVegetationMaterial(profile,cell.vegetationMaterialId);return vegetation.id==='none'?surface.nameRu.toLowerCase():`${surface.nameRu.toLowerCase()} + ${vegetation.nameRu.toLowerCase()}`;}
 function elevation(x:number):string{const rounded=Math.round(x*10)/10;const normalized=Math.abs(rounded)<0.05?0:rounded;const level=Math.max(-2,Math.min(4,Math.round(normalized)));return `${normalized>0?'+':''}${normalized.toFixed(1)} · ${({[-2]:'глубокая низина',[-1]:'низина',0:'ровно',1:'подъём',2:'холм',3:'высота',4:'гребень'} as Record<number,string>)[level]??'уровень'}`;}
 function pct(x:number):string{return `${Math.max(0,Math.min(100,Math.round(x)))} / 100`;}
 function direction(x:number):string{const a=((x%360)+360)%360;return ['восток','юго-восток','юг','юго-запад','запад','северо-запад','север','северо-восток'][Math.round(a/45)%8];}

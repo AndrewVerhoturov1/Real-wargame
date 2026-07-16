@@ -1,5 +1,4 @@
-import { getVegetationDefinitionRevision } from '../map/VegetationDefinition';
-import { getEnvironmentProfileRuntimeSnapshot } from '../map/EnvironmentProfileRuntime';
+import { getVegetationDefinitionKey } from '../map/VegetationDefinition';
 import { distance, type GridPosition } from '../geometry';
 import type { AttentionSample } from '../perception/AttentionModel';
 import type { SimulationState } from '../simulation/SimulationState';
@@ -113,8 +112,7 @@ function getPerceptionGeometryField(
   const mapVisualRevision = getVisibilityStaticGrid(state.map).mapVisualRevision;
   const mapCurrent = current?.map === state.map
     && current.field.mapVisualRevision === mapVisualRevision
-    && current.field.profileId === getEnvironmentProfileRuntimeSnapshot().activeProfileId
-    && current.field.profileRevision === getVegetationDefinitionRevision('visibility');
+    && current.field.profileKey === getVegetationDefinitionKey('visibility');
   const moved = current !== null
     && (Math.abs(current.observerPosition.x - observer.position.x) > 0.001
       || Math.abs(current.observerPosition.y - observer.position.y) > 0.001);

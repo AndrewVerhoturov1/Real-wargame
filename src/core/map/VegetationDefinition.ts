@@ -1,5 +1,6 @@
 import {
   type VegetationMaterialDefinition,
+  getEnvironmentProfileDomainKey,
   getVegetationMaterial,
   legacyForestLayerToVegetationMaterialId,
   vegetationMaterialIdToLegacyForestLayer,
@@ -34,6 +35,10 @@ export function getVegetationDefinitionRevision(domain: 'presentation' | 'visibi
   return getActiveEnvironmentProfile().revisions[domain];
 }
 
+export function getVegetationDefinitionKey(domain: 'presentation' | 'visibility' | 'fire' | 'movement' = 'presentation'): string {
+  return getEnvironmentProfileDomainKey(getActiveEnvironmentProfile(), domain);
+}
+
 /** @deprecated Use getVegetationDefinitionRevision(domain). */
 export const VEGETATION_DEFINITION_REVISION = 1;
 
@@ -42,7 +47,7 @@ export function normalizeVegetationLayer(value: number | undefined): VegetationL
 }
 
 export function resolveCellVegetationLayer(cell: VegetationCellLike | null | undefined): VegetationLayerKind {
-  return vegetationMaterialIdToLegacyForestLayer(resolveCellVegetationKind(cell));
+  return vegetationMaterialIdToLegacyForestLayer(resolveCellVegetationMaterialId(cell));
 }
 
 export function resolveVegetationKind(value: number | string | undefined): VegetationKind {
@@ -52,20 +57,17 @@ export function resolveVegetationKind(value: number | string | undefined): Veget
   return 'none';
 }
 
-export function resolveCellVegetationKind(cell: VegetationCellLike | null | undefined): VegetationKind {
-  const materialId = cell?.vegetationMaterialId;
-  const explicit = normalizeVegetationLayer(cell?.forest);
-  if (materialId === 'none' || materialId === 'sparse_forest' || materialId === 'dense_forest') {
-    const canonicalLayer = vegetationMaterialIdToLegacyForestLayer(materialId);
-    // Transitional compatibility: old callers may still mutate `forest` directly.
-    // A mismatch is interpreted as that legacy write; canonical setters keep both
-    // projections synchronized, while custom material IDs remain authoritative.
-    if (explicit !== canonicalLayer) return resolveVegetationKind(explicit);
-    return resolveVegetationKind(materialId);
-  }
-  if (materialId) return resolveVegetationKind(materialId);
-  if (explicit > 0) return resolveVegetationKind(explicit);
+export function resolveCellVegetationMaterialId(cell: VegetationCellLike | null | undefined): string {
+  const canonical = cell?.vegetationMaterialId?.trim();
+  if (canonical) return canonical;
+
+  const legacyLayer = normalizeVegetationLayer(cell?.forest);
+  if (legacyLayer > 0) return legacyForestLayerToVegetationMaterialId(legacyLayer);
   return cell?.terrain === 'forest' ? 'sparse_forest' : 'none';
+}
+
+export function resolveCellVegetationKind(cell: VegetationCellLike | null | undefined): VegetationKind {
+  return resolveVegetationKind(resolveCellVegetationMaterialId(cell));
 }
 
 export function resolveVegetationDefinition(value: VegetationKind | number | string | undefined): VegetationDefinition {
@@ -74,7 +76,7 @@ export function resolveVegetationDefinition(value: VegetationKind | number | str
 }
 
 export function resolveCellVegetationDefinition(cell: VegetationCellLike | null | undefined): VegetationDefinition {
-  return resolveVegetationDefinition(resolveCellVegetationKind(cell));
+  return resolveVegetationDefinition(resolveCellVegetationMaterialId(cell));
 }
 
 function withCompatibilityAliases(material: VegetationMaterialDefinition): VegetationDefinition {

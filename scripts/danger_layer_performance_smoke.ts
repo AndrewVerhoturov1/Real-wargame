@@ -5,7 +5,7 @@ import {
   getThreatRelativeCoverFieldDiagnostics,
 } from '../src/core/cover/ThreatRelativeCoverField';
 import { buildSoldierAwarenessReport } from '../src/core/knowledge/SoldierAwarenessGrid';
-import { getCell, type TacticalMapData } from '../src/core/map/MapModel';
+import { getCell, setCellVegetationMaterialId, type TacticalMapData } from '../src/core/map/MapModel';
 import { markMapCellsDirty } from '../src/core/map/MapRuntimeState';
 import { createInitialState } from '../src/core/simulation/SimulationState';
 import { getDirectionalTacticalFieldDiagnostics } from '../src/core/terrain/DirectionalTacticalField';
@@ -216,7 +216,7 @@ assert.equal(
 
 const forestCell = getCell(state.map, 180, 100);
 assert.ok(forestCell);
-forestCell.forest = forestCell.forest === 2 ? 1 : 2;
+setCellVegetationMaterialId(forestCell, forestCell.vegetationMaterialId === 'dense_forest' ? 'sparse_forest' : 'dense_forest');
 markMapCellsDirty(state.map, 'forest', { minX: 180, minY: 100, maxX: 180, maxY: 100 });
 buildSoldierAwarenessReport(state, blue);
 assert.equal(

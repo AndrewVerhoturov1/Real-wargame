@@ -1,8 +1,5 @@
+import { resolveVegetationDefinition } from '../map/VegetationDefinition';
 import type { VisibilityStaticGrid } from './VisibilityStaticGrid';
-
-const FOREST_MIN_TRANSMISSION = 0.04;
-const SPARSE_FOREST_LOSS_PER_METER = 0.035;
-const DENSE_FOREST_LOSS_PER_METER = 0.075;
 const TERRAIN_CLEARANCE_MARGIN_METERS = 0.03;
 
 export interface VisibilityRayPoint {
@@ -42,6 +39,7 @@ export function evaluateTerrainVisibilityRay(
   let blockedBy: TerrainVisibilityRayResult['blockedBy'] = null;
   let blockerCell: TerrainVisibilityRayResult['blockerCell'] = null;
   let processedCells = 0;
+  let minimumTransmission = 0;
   let previousCenterX = from.x;
   let previousCenterY = from.y;
 
@@ -66,11 +64,10 @@ export function evaluateTerrainVisibilityRay(
     const stepMeters = Math.hypot(centerX - previousCenterX, centerY - previousCenterY) * Math.max(0.001, metersPerCell);
     previousCenterX = centerX;
     previousCenterY = centerY;
-    const forestKind = grid.forestKind[mapIndex];
-    if (forestKind > 0) {
-      const loss = forestKind === 2 ? DENSE_FOREST_LOSS_PER_METER : SPARSE_FOREST_LOSS_PER_METER;
-      transmission *= Math.exp(-loss * stepMeters);
-    }
+    const vegetationMaterialId = grid.vegetationMaterialIds[grid.vegetationMaterialCodes[mapIndex] ?? 0] ?? 'none';
+    const vegetation = resolveVegetationDefinition(vegetationMaterialId);
+    transmission *= Math.exp(-vegetation.visibility.transmissionLossPerMeter * stepMeters);
+    minimumTransmission = Math.max(minimumTransmission, vegetation.visibility.minimumTransmission);
     processedCells += 1;
   }
 
@@ -84,7 +81,7 @@ export function evaluateTerrainVisibilityRay(
       blockerCell,
     };
   }
-  if (transmission <= FOREST_MIN_TRANSMISSION) {
+  if (minimumTransmission > 0 && transmission <= minimumTransmission) {
     return {
       visible: false,
       blockedBy: 'forest',

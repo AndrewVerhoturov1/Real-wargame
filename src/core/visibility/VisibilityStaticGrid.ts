@@ -1,6 +1,6 @@
 import type { MapObject, MapObjectKind, TacticalMap } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
-import { resolveCellVegetationLayer } from '../map/VegetationDefinition';
+import { resolveCellVegetationMaterialId } from '../map/VegetationDefinition';
 import { sampleSmoothHeightLevel } from '../terrain/SmoothTerrain';
 
 const ELEVATION_STEP_METERS = 2;
@@ -10,7 +10,8 @@ export interface VisibilityStaticGrid {
   height: number;
   terrainHeightMeters: Float32Array;
   objectTopHeightMeters: Float32Array;
-  forestKind: Uint8Array;
+  vegetationMaterialIds: readonly string[];
+  vegetationMaterialCodes: Uint16Array;
   blockingFlags: Uint8Array;
   mapVisualRevision: number;
 }
@@ -39,14 +40,23 @@ function buildVisibilityStaticGrid(map: TacticalMap, revision: number): Visibili
   const length = map.width * map.height;
   const terrainHeightMeters = new Float32Array(length);
   const objectTopHeightMeters = new Float32Array(length);
-  const forestKind = new Uint8Array(length);
+  const vegetationMaterialIds: string[] = [];
+  const vegetationCodeById = new Map<string, number>();
+  const vegetationMaterialCodes = new Uint16Array(length);
   const blockingFlags = new Uint8Array(length);
 
   for (let y = 0; y < map.height; y += 1) {
     for (let x = 0; x < map.width; x += 1) {
       const index = y * map.width + x;
       terrainHeightMeters[index] = sampleSmoothHeightLevel(map, x + 0.5, y + 0.5) * ELEVATION_STEP_METERS;
-      forestKind[index] = resolveCellVegetationLayer(map.cells[index]);
+      const vegetationMaterialId = resolveCellVegetationMaterialId(map.cells[index]);
+      let vegetationCode = vegetationCodeById.get(vegetationMaterialId);
+      if (vegetationCode === undefined) {
+        vegetationCode = vegetationMaterialIds.length;
+        vegetationMaterialIds.push(vegetationMaterialId);
+        vegetationCodeById.set(vegetationMaterialId, vegetationCode);
+      }
+      vegetationMaterialCodes[index] = vegetationCode;
     }
   }
 
@@ -57,7 +67,8 @@ function buildVisibilityStaticGrid(map: TacticalMap, revision: number): Visibili
     height: map.height,
     terrainHeightMeters,
     objectTopHeightMeters,
-    forestKind,
+    vegetationMaterialIds,
+    vegetationMaterialCodes,
     blockingFlags,
     mapVisualRevision: revision,
   };

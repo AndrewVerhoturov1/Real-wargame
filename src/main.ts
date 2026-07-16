@@ -19,6 +19,7 @@ import { installAiStatefulMoveGameBridge as installAiGameBridge } from './core/a
 import type { TacticalMapData } from './core/map/MapModel';
 import {
   getEnvironmentProfileRegistry,
+  saveEnvironmentProfileRegistry,
   subscribeEnvironmentProfileRegistry,
 } from './core/map/EnvironmentProfileStorage';
 import type { PressureZoneData } from './core/pressure/PressureZone';
@@ -68,6 +69,13 @@ if (!root || !debugPanel || !languageToggle || !gridToggle || !visionToggle || !
 installAppShellMenu({ mode: 'game' });
 
 const environmentProfileRegistry = getEnvironmentProfileRegistry();
+const requestedInitialEnvironmentProfileId = typeof (mapData as TacticalMapData).environmentProfileId === 'string'
+  ? (mapData as TacticalMapData).environmentProfileId?.trim()
+  : '';
+if (requestedInitialEnvironmentProfileId && environmentProfileRegistry.hasProfile(requestedInitialEnvironmentProfileId)) {
+  environmentProfileRegistry.setActiveProfile(requestedInitialEnvironmentProfileId);
+  saveEnvironmentProfileRegistry(environmentProfileRegistry);
+}
 
 state = createResolutionAwareInitialState(
   mapData as TacticalMapData,

@@ -1,8 +1,11 @@
 import type { GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
-import { resolveVegetationDefinition, getVegetationDefinitionRevision } from '../map/VegetationDefinition';
+import {
+  resolveVegetationDefinition,
+  getVegetationDefinitionKey,
+  getVegetationDefinitionRevision,
+} from '../map/VegetationDefinition';
 import { getVisibilityStaticGrid } from './VisibilityStaticGrid';
-import { measurePerformancePhase } from '../debug/PerformancePhases';
 import { getEnvironmentProfileRuntimeSnapshot } from '../map/EnvironmentProfileRuntime';
 
 const CACHE_LIMIT = 24;
@@ -37,6 +40,7 @@ export interface VisibilityGeometryField {
   readonly channel: 'visual' | 'fire' | 'combined';
   readonly profileId: string;
   readonly profileRevision: number;
+  readonly profileKey: string;
 }
 
 export interface VisibilityGeometryFieldDiagnostics {
@@ -47,12 +51,6 @@ export interface VisibilityGeometryFieldDiagnostics {
   readonly processedCellCount: number;
   readonly rayCount: number;
   readonly retainedTypedArrayBytes: number;
-  readonly typedArrayAllocationCount: number;
-  readonly totalTypedArrayAllocatedBytes: number;
-  readonly lastBuildTypedArrayBytes: number;
-  readonly lastBuildMs: number;
-  readonly maxBuildMs: number;
-  readonly lastBuildReason: string;
   readonly lastKey: string;
 }
 
@@ -62,12 +60,6 @@ interface MutableDiagnostics {
   fullMapScanCount: number;
   processedCellCount: number;
   rayCount: number;
-  typedArrayAllocationCount: number;
-  totalTypedArrayAllocatedBytes: number;
-  lastBuildTypedArrayBytes: number;
-  lastBuildMs: number;
-  maxBuildMs: number;
-  lastBuildReason: string;
   lastKey: string;
 }
 
@@ -94,21 +86,12 @@ export function getVisibilityGeometryField(
     return existing;
   }
 
-  const startedAt = nowMilliseconds();
-  const build = measurePerformancePhase(`visibility-geometry.${normalized.channel}`, () => buildField(map, staticGrid, normalized, key));
-  const buildMs = nowMilliseconds() - startedAt;
+  const build = buildField(map, staticGrid, normalized, key);
   cache.fields.set(key, build.field);
   trimCache(cache.fields, CACHE_LIMIT);
   cache.diagnostics.geometryBuildCount += 1;
   cache.diagnostics.processedCellCount += build.processedCellCount;
   cache.diagnostics.rayCount += build.rayCount;
-  const allocatedBytes = visibilityFieldTypedArrayBytes(build.field);
-  cache.diagnostics.typedArrayAllocationCount += 4;
-  cache.diagnostics.totalTypedArrayAllocatedBytes += allocatedBytes;
-  cache.diagnostics.lastBuildTypedArrayBytes = allocatedBytes;
-  cache.diagnostics.lastBuildMs = buildMs;
-  cache.diagnostics.maxBuildMs = Math.max(cache.diagnostics.maxBuildMs, buildMs);
-  cache.diagnostics.lastBuildReason = `${normalized.channel}:cache-miss`;
   cache.diagnostics.lastKey = key;
   return build.field;
 }
@@ -217,7 +200,8 @@ function buildField(
       previousX = cell.x;
       previousY = cell.y;
 
-      const vegetation = resolveVegetationDefinition(staticGrid.forestKind[mapIndex]);
+      const vegetationMaterialId = staticGrid.vegetationMaterialIds[staticGrid.vegetationMaterialCodes[mapIndex] ?? 0] ?? 'none';
+      const vegetation = resolveVegetationDefinition(vegetationMaterialId);
       if (options.channel !== 'fire') {
         visual = Math.max(
           vegetation.visibility.minimumTransmission,
@@ -288,6 +272,11 @@ function buildField(
         : options.channel === 'fire'
           ? getVegetationDefinitionRevision('fire')
           : Math.max(getVegetationDefinitionRevision('visibility'), getVegetationDefinitionRevision('fire')),
+      profileKey: options.channel === 'visual'
+        ? getVegetationDefinitionKey('visibility')
+        : options.channel === 'fire'
+          ? getVegetationDefinitionKey('fire')
+          : `${getVegetationDefinitionKey('visibility')}|${getVegetationDefinitionKey('fire')}`,
     },
     processedCellCount,
     rayCount: perimeter.length,
@@ -322,10 +311,10 @@ function buildKey(
     options.channel,
     getEnvironmentProfileRuntimeSnapshot().activeProfileId,
     options.channel === 'visual'
-      ? getVegetationDefinitionRevision('visibility')
+      ? getVegetationDefinitionKey('visibility')
       : options.channel === 'fire'
-        ? getVegetationDefinitionRevision('fire')
-        : `${getVegetationDefinitionRevision('visibility')}.${getVegetationDefinitionRevision('fire')}`,
+        ? getVegetationDefinitionKey('fire')
+        : `${getVegetationDefinitionKey('visibility')}|${getVegetationDefinitionKey('fire')}`,
   ].join(':');
 }
 
@@ -415,12 +404,6 @@ function getMapCache(map: TacticalMap): MapCache {
       fullMapScanCount: 0,
       processedCellCount: 0,
       rayCount: 0,
-      typedArrayAllocationCount: 0,
-      totalTypedArrayAllocatedBytes: 0,
-      lastBuildTypedArrayBytes: 0,
-      lastBuildMs: 0,
-      maxBuildMs: 0,
-      lastBuildReason: 'not-built',
       lastKey: '',
     },
   };
@@ -437,12 +420,6 @@ function emptyDiagnostics(): VisibilityGeometryFieldDiagnostics {
     processedCellCount: 0,
     rayCount: 0,
     retainedTypedArrayBytes: 0,
-    typedArrayAllocationCount: 0,
-    totalTypedArrayAllocatedBytes: 0,
-    lastBuildTypedArrayBytes: 0,
-    lastBuildMs: 0,
-    maxBuildMs: 0,
-    lastBuildReason: 'not-built',
     lastKey: '',
   };
 }
@@ -479,12 +456,3 @@ function clamp(value: number, min: number, max: number): number {
 function clampInt(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.round(value)));
 }
-
-function visibilityFieldTypedArrayBytes(field: VisibilityGeometryField): number {
-  return field.hardBlocked.byteLength
-    + field.visualTransmission.byteLength
-    + field.fireTransmission.byteLength
-    + field.blockerKind.byteLength;
-}
-
-function nowMilliseconds(): number { return typeof performance === 'undefined' ? Date.now() : performance.now(); }

@@ -6,7 +6,6 @@ import type { SimulationState } from '../simulation/SimulationState';
 import { getDirectionalTacticalFieldDiagnostics } from '../terrain/DirectionalTacticalField';
 import { getSimulationLayerState } from '../ui/RuntimeUiState';
 import { getAwarenessMovementDiagnostics } from './AwarenessMovementDiagnostics';
-import { getVisibilityGeometryFieldDiagnostics } from '../visibility/VisibilityGeometryField';
 import { getRealWargameBuildIdentity, PERFORMANCE_CONTRACT_VERSION } from './BuildIdentity';
 
 export interface PerformanceFrameSample {
@@ -204,7 +203,7 @@ export class PerformanceMonitor {
     const performancePhaseMeasures = performance.getEntriesByType('measure')
       .filter((entry) => entry.name.startsWith(PHASE_MEASURE_PREFIX))
       .map((entry) => ({
-        name: entry.name.replace(/\.m\.\d+$/, ''),
+        name: entry.name,
         startMs: roundOne(entry.startTime - this.startedAt),
         durationMs: roundTwo(entry.duration),
       }));
@@ -248,7 +247,6 @@ export class PerformanceMonitor {
         selectedUnitId: state.selectedUnitId,
       },
       computation: {
-        visibilityGeometry: getVisibilityGeometryFieldDiagnostics(state.map),
         threatRelativeCover: getThreatRelativeCoverFieldDiagnostics(state.map),
         directionalTactical: getDirectionalTacticalFieldDiagnostics(state.map),
         awarenessStatic: selectedUnit

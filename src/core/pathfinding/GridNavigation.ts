@@ -207,7 +207,10 @@ function terrainMovementCost(
   const vegetationResistance = resolveCellVegetationDefinition(cell).movement.resistance;
   const surface = getSurfaceMaterial(getActiveEnvironmentProfile(), cell.surfaceMaterialId);
   if (!surface.movement.passable || terrain === 'water') return Number.POSITIVE_INFINITY;
-  return Math.max(0.05, Math.max(surface.movement.resistance, vegetationResistance) + surface.movement.physicalCost);
+  return Math.max(0.05, 1
+    + (surface.movement.resistance - 1)
+    + (vegetationResistance - 1)
+    + surface.movement.physicalCost);
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

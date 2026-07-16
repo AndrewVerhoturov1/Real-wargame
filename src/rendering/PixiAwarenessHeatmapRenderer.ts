@@ -1,6 +1,6 @@
 import { BufferImageSource, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
-import { measurePerformancePhase } from '../core/debug/PerformancePhases';
 import { getActiveEnvironmentProfile } from '../core/map/EnvironmentProfileRuntime';
+import { getEnvironmentProfileDomainKey } from '../core/map/EnvironmentMaterialProfile';
 import {
   getAwarenessMovementDiagnostics,
   publishAwarenessMovementDiagnostics,
@@ -323,7 +323,7 @@ export class PixiAwarenessHeatmapRenderer {
     this.updatePendingDepth();
 
     this.worker.onmessage = (event: MessageEvent<AwarenessWorkerResponse>) => {
-      measurePerformancePhase('worker-message-apply', () => this.handleWorkerResponse(event.data));
+      this.handleWorkerResponse(event.data);
     };
     this.worker.onerror = (event): void => {
       if (this.destroyed) return;
@@ -467,12 +467,10 @@ export class PixiAwarenessHeatmapRenderer {
   private scheduleFinalExactRefresh(): void {
     if (this.finalRefreshTimer !== null) window.clearTimeout(this.finalRefreshTimer);
     this.finalRefreshTimer = window.setTimeout(() => {
-      measurePerformancePhase('ui-timer.final-exact-refresh', () => {
-        this.finalRefreshTimer = null;
-        if (this.destroyed || !this.latestBuildSnapshot) return;
-        this.movement.finalRefreshRequests += 1;
-        this.requestWorldBuild({ ...this.latestBuildSnapshot, finalExact: true });
-      });
+      this.finalRefreshTimer = null;
+      if (this.destroyed || !this.latestBuildSnapshot) return;
+      this.movement.finalRefreshRequests += 1;
+      this.requestWorldBuild({ ...this.latestBuildSnapshot, finalExact: true });
     }, FINAL_EXACT_DELAY_MS);
   }
 
@@ -480,23 +478,18 @@ export class PixiAwarenessHeatmapRenderer {
     if (!this.worldField || !this.rasterPixelWords || !this.rasterTexture) return;
 
     const startedAt = performance.now();
-    const worldField = this.worldField;
-    const rasterPixelWords = this.rasterPixelWords;
-    const rasterTexture = this.rasterTexture;
-    measurePerformancePhase('awareness-raster-digest-apply', () => {
-      const source = mode === 'danger'
-        ? worldField.dangerPixels
-        : worldField.stealthPixels;
-      rasterPixelWords.set(source.subarray(0, rasterPixelWords.length));
-      if (source.length < rasterPixelWords.length) {
-        rasterPixelWords.fill(0, source.length);
-      }
-      rasterTexture.source.update();
-      this.title.text = `СЛОЙ БОЙЦА: ${modeLabel(mode)}`;
-      this.lastRasterKey = rasterKey;
-      this.rebuildCount += 1;
-      this.movement.mainThreadRasterSwaps += 1;
-    });
+    const source = mode === 'danger'
+      ? this.worldField.dangerPixels
+      : this.worldField.stealthPixels;
+    this.rasterPixelWords.set(source.subarray(0, this.rasterPixelWords.length));
+    if (source.length < this.rasterPixelWords.length) {
+      this.rasterPixelWords.fill(0, source.length);
+    }
+    this.rasterTexture.source.update();
+    this.title.text = `СЛОЙ БОЙЦА: ${modeLabel(mode)}`;
+    this.lastRasterKey = rasterKey;
+    this.rebuildCount += 1;
+    this.movement.mainThreadRasterSwaps += 1;
 
     const elapsed = performance.now() - startedAt;
     this.lastBuildMs = elapsed;
@@ -512,7 +505,7 @@ export class PixiAwarenessHeatmapRenderer {
     if (!this.worldField) return;
 
     const startedAt = performance.now();
-    const result = measurePerformancePhase('safe-position-scan', () => buildBestSafePositionsFromWorldField(this.worldField!, snapshot));
+    const result = buildBestSafePositionsFromWorldField(this.worldField, snapshot);
     this.safePositions = result.positions;
     this.movement.ownMovementLocalUpdates += 1;
     this.movement.safePositionLocalScans += 1;
@@ -690,10 +683,9 @@ function buildAwarenessMapKey(map: TacticalMap): string {
     `height:${revisions.height}`,
     `forest:${revisions.forest}`,
     `objects:${revisions.objects}`,
-    `environment:${environment.id}`,
-    `visibility:${environment.revisions.visibility}`,
-    `fire:${environment.revisions.fire}`,
-    `movement:${environment.revisions.movement}`,
+    `visibility:${getEnvironmentProfileDomainKey(environment, 'visibility')}`,
+    `fire:${getEnvironmentProfileDomainKey(environment, 'fire')}`,
+    `movement:${getEnvironmentProfileDomainKey(environment, 'movement')}`,
   ].join(';');
 }
 

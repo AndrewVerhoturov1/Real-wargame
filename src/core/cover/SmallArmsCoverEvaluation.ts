@@ -131,6 +131,7 @@ export function evaluateForestCover(
   let sparseSamples = 0;
   let denseSamples = 0;
   let density = 0;
+  const materialWeights = new Map<string, { nameRu: string; weight: number }>();
 
   for (let index = 1; index < samples; index += 1) {
     const t = index / samples;
@@ -138,6 +139,13 @@ export function evaluateForestCover(
     const cell = getCell(map, Math.floor(point.x), Math.floor(point.y));
     const vegetation = resolveCellVegetationDefinition(cell);
     density += vegetation.fire.densityWeight;
+    if (vegetation.fire.densityWeight > 0) {
+      const current = materialWeights.get(vegetation.id);
+      materialWeights.set(vegetation.id, {
+        nameRu: vegetation.nameRu.toLowerCase(),
+        weight: (current?.weight ?? 0) + vegetation.fire.densityWeight,
+      });
+    }
     if (vegetation.id === 'sparse_forest') sparseSamples += 1;
     if (vegetation.id === 'dense_forest') denseSamples += 1;
   }
@@ -148,9 +156,10 @@ export function evaluateForestCover(
   const reliability = clampPercent(18 + Math.min(72, density * 4.2));
   const concealment = clampPercent(20 + Math.min(78, density * 6));
 
+  const strongestMaterial = [...materialWeights.values()].sort((left, right) => right.weight - left.weight)[0];
   return {
     kind: 'forest',
-    labelRu: denseSamples > sparseSamples ? 'густой лес' : 'лес и кустарник',
+    labelRu: strongestMaterial?.nameRu ?? (denseSamples > sparseSamples ? 'густой лес' : 'лес и кустарник'),
     strength,
     reliability,
     expectedProtection: clampPercent(strength * reliability / 100),

@@ -7,7 +7,6 @@ import { tickAutomaticCombatEngagements } from '../combat/CombatEngagement';
 import { getFireAction, tickAllFireActions } from '../combat/FireAction';
 import { getCombatSuppressionSnapshot } from '../combat/CombatSuppression';
 import type { GridPosition } from '../geometry';
-import { measurePerformancePhase } from '../debug/PerformancePhases';
 import { syncSoldierThreatMemory } from '../knowledge/SoldierThreatMemory';
 import { clampGridPositionToMap } from '../map/MapModel';
 import { ensureNavigationRouteCurrent } from '../navigation/NavigationRouteReplanner';
@@ -28,10 +27,6 @@ const UNIT_MIN_CENTER_DISTANCE_CELLS = UNIT_COLLISION_RADIUS_CELLS * 2;
 const COLLISION_PASSES = 3;
 
 export function tickSimulation(state: SimulationState, deltaSeconds: number): void {
-  measurePerformancePhase('simulation-tick', () => tickSimulationInternal(state, deltaSeconds));
-}
-
-function tickSimulationInternal(state: SimulationState, deltaSeconds: number): void {
   const scaledDeltaSeconds = deltaSeconds * getAiTestTimeScale(state);
   const cycleStartMs = Math.max(0, Math.round(state.simulationTimeSeconds * 1000));
   state.simulationStep += 1;

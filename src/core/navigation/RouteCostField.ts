@@ -7,6 +7,12 @@ import {
 import type { TacticalMap } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
 import { getActiveEnvironmentProfile } from '../map/EnvironmentProfileRuntime';
+import {
+  getDefaultEnvironmentProfile,
+  getEnvironmentProfileDomainKey,
+  getSurfaceMaterial,
+  getVegetationMaterial,
+} from '../map/EnvironmentMaterialProfile';
 import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 import { buildNavigationGrid } from '../pathfinding/GridNavigation';
 import {
@@ -20,6 +26,8 @@ import {
 } from '../terrain/DirectionalTerrainStaticGrid';
 import type { FireThreatClass } from '../units/UnitModel';
 import type { NavigationProfile, NavigationTerrainCostKey } from './NavigationProfiles';
+
+const DEFAULT_PHYSICAL_TERRAIN_COSTS = buildDefaultPhysicalTerrainCosts();
 
 const mapIdentityByMap = new WeakMap<TacticalMap, number>();
 let nextMapIdentity = 1;
@@ -194,8 +202,7 @@ export function getRouteCostFields(
     revisions.terrain,
     revisions.height,
     revisions.forest,
-    getActiveEnvironmentProfile().id,
-    getActiveEnvironmentProfile().revisions.movement,
+    getEnvironmentProfileDomainKey(getActiveEnvironmentProfile(), 'movement'),
     revisions.objects,
     profile.id,
     profile.revision,
@@ -373,7 +380,9 @@ function buildStaticField(
     passable[index] = navigation.passable ? 1 : 0;
     const terrainKey = resolveTerrainKey(cell.terrain, vegetation.layer, navigation.bridge, ditchCells[index] === 1);
     terrainKeys[index] = terrainKey;
-    terrainCost[index] = navigation.passable ? profile.terrainCosts[terrainKey] : Number.POSITIVE_INFINITY;
+    terrainCost[index] = navigation.passable
+      ? combinePhysicalAndTacticalTerrainCost(navigation.movementCost, profile.terrainCosts[terrainKey], terrainKey)
+      : Number.POSITIVE_INFINITY;
     slopeCost[index] = navigation.passable ? estimateLocalSlope(map, cell.x, cell.y) * profile.slopeWeight : 0;
     const concealment = Math.max(
       vegetation.movement.tacticalConcealment,
@@ -494,6 +503,38 @@ function hasDirectionalTerrainWeights(profile: NavigationProfile): boolean {
     || value.crestPenalty > 0
     || value.silhouettePenalty > 0
     || value.valleyPreference > 0;
+}
+
+
+function combinePhysicalAndTacticalTerrainCost(
+  physicalCost: number,
+  tacticalProfileCost: number,
+  terrainKey: NavigationTerrainCostKey,
+): number {
+  const tacticalDeltaFromDefault = tacticalProfileCost - DEFAULT_PHYSICAL_TERRAIN_COSTS[terrainKey];
+  return Math.max(0.05, physicalCost + tacticalDeltaFromDefault);
+}
+
+function buildDefaultPhysicalTerrainCosts(): Record<NavigationTerrainCostKey, number> {
+  const profile = getDefaultEnvironmentProfile();
+  const cost = (surfaceId: string, vegetationId = 'none'): number => {
+    const surface = getSurfaceMaterial(profile, surfaceId);
+    const vegetation = getVegetationMaterial(profile, vegetationId);
+    return Math.max(0.05, 1
+      + (surface.movement.resistance - 1)
+      + (vegetation.movement.resistance - 1)
+      + surface.movement.physicalCost);
+  };
+  return {
+    road: cost('road'),
+    field: cost('field'),
+    sparseForest: cost('field', 'sparse_forest'),
+    denseForest: cost('field', 'dense_forest'),
+    rough: cost('rough'),
+    swamp: cost('swamp'),
+    bridge: 0.9,
+    ditch: cost('field'),
+  };
 }
 
 function resolveTerrainKey(

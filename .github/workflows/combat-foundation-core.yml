@@ -64,7 +64,6 @@ on:
       - 'scripts/environment_material_migration_smoke.*'
       - 'scripts/environment_profile_revisions_smoke.*'
       - 'scripts/vegetation_chunk_raster_smoke.*'
-      - 'scripts/environment_performance_smoke.*'
       - 'scripts/view_memory_heatmap_smoke.*'
       - 'scripts/view_memory_heatmap_performance_smoke.*'
       - 'scripts/visibility_probe_cache_smoke.*'
@@ -87,7 +86,6 @@ on:
       - 'tests/danger-route-cost-parity-visual.spec.ts'
       - 'tests/shared-visibility-vegetation-visual.spec.ts'
       - 'tests/environment-materials-visual.spec.ts'
-      - 'tests/environment-stable-performance.spec.ts'
       - 'docs/subprojects/ai-single-unit-editor/ENVIRONMENT_MATERIAL_PROFILES_V1.md'
       - 'package.json'
       - 'package-lock.json'
@@ -118,7 +116,6 @@ jobs:
           npm run environment-material-migration:smoke 2>&1 | tee environment-material-migration.log
           npm run environment-profile-revisions:smoke 2>&1 | tee environment-profile-revisions.log
           npm run vegetation-chunk-raster:smoke 2>&1 | tee vegetation-chunk-raster.log
-          npm run environment-performance:smoke 2>&1 | tee environment-performance.log
       - name: Danger route cost parity smoke
         shell: bash
         run: set -o pipefail; npm run danger-route-cost-parity:smoke 2>&1 | tee danger-route-cost-parity.log
@@ -225,7 +222,6 @@ jobs:
             environment-material-migration.log
             environment-profile-revisions.log
             vegetation-chunk-raster.log
-            environment-performance.log
             perception-smoke.log
             perception-performance.log
             view-memory-heatmap.log

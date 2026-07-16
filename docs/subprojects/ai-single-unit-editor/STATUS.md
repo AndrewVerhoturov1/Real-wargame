@@ -14,11 +14,11 @@
 
 ## Current focus
 
-Draft PR #130 implements canonical surface/vegetation material profiles, the visible «Профили местности» editor, independent presentation/visibility/fire/movement revisions, continuous dirty-chunk vegetation raster rendering, canonical worker material snapshots, and exact performance/allocation attribution from preview base 4adb42650f0fb6ad61b31f9521cec4508a5a40ec. The complete non-visual matrix and production build pass locally; the result remains isolated pending exact-head CI and visual-QA approval.
+Draft PR #130 implements canonical surface/vegetation material profiles, the visible «Профили местности» editor, independent presentation/visibility/fire/movement revisions, continuous dirty-chunk vegetation raster rendering and canonical worker material snapshots from preview base 4adb42650f0fb6ad61b31f9521cec4508a5a40ec. Performance investigation is intentionally delegated to a separate follow-up.
 
 ## Next step
 
-Review exact-head CI for PR #130, including the 30-second stable-scene browser performance fixture. Run the prepared forest/profile screenshot QA only after explicit user approval.
+Review the exact-head material, migration, revision, renderer and integration checks for PR #130. Run the prepared forest/profile screenshot QA only after explicit user approval.
 
 ## Read first
 
@@ -189,7 +189,6 @@ Review exact-head CI for PR #130, including the 30-second stable-scene browser p
 - `npm run environment-material-migration:smoke`
 - `npm run environment-profile-revisions:smoke`
 - `npm run vegetation-chunk-raster:smoke`
-- `npm run environment-performance:smoke`
 
 ## Safety rules
 
@@ -225,3 +224,6 @@ Review exact-head CI for PR #130, including the 30-second stable-scene browser p
 - Selected-unit evaluate/tick/cancel-preview diagnostics must execute on a detached state and never mutate gameplay state.
 - Observer-relative direction/range changes for unit contacts do not increment semantic tacticalKnowledge revision or trigger route replanning.
 - Canonical scene/editor units declare aiControl='graph'; externally scripted fixtures declare aiControl='manual'.
+- Cells reference canonical surfaceMaterialId and vegetationMaterialId; legacy terrain/forest values are compatibility projections only.
+- Simulation and AI read material profile values and never infer gameplay from raster pixels, texture colors or Pixi display objects.
+- Presentation, visibility, fire and movement profile changes invalidate only their owned consumers.

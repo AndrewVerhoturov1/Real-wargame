@@ -20,6 +20,25 @@ let leftBorder = 0; let rightBorder = 0;
 for (let y = 0; y < left.height; y += 1) { leftBorder += left.data[(y * left.width + left.width - 1) * 4 + 3]; rightBorder += right.data[(y * right.width) * 4 + 3]; }
 assert.ok(leftBorder / left.height > 100 && rightBorder / right.height > 100, 'connected chunks must not have a transparent seam');
 
+
+const coverageRegistry = createDefaultEnvironmentProfileRegistry();
+installEnvironmentProfileRegistry(coverageRegistry);
+const coverageProfile = coverageRegistry.getProfile();
+coverageRegistry.updateVegetationMaterial('default', 'sparse_forest', {
+  presentation: { ...coverageProfile.vegetation.sparse_forest.presentation, coverage: 0.2 },
+});
+installEnvironmentProfileRegistry(coverageRegistry);
+const lowCoverage = renderVegetationChunkPixels(map, { minX: 0, minY: 0, maxX: 31, maxY: 31 }, 1);
+const lowAlpha = averageAlpha(lowCoverage.data);
+const lowProfile = coverageRegistry.getProfile();
+coverageRegistry.updateVegetationMaterial('default', 'sparse_forest', {
+  presentation: { ...lowProfile.vegetation.sparse_forest.presentation, coverage: 0.9 },
+});
+installEnvironmentProfileRegistry(coverageRegistry);
+const highCoverage = renderVegetationChunkPixels(map, { minX: 0, minY: 0, maxX: 31, maxY: 31 }, 1);
+const highAlpha = averageAlpha(highCoverage.data);
+assert.ok(highAlpha > lowAlpha + 45, `coverage must materially change filled area/alpha: low=${lowAlpha}, high=${highAlpha}`);
+
 const textureRegistry = createDefaultEnvironmentProfileRegistry();
 installEnvironmentProfileRegistry(textureRegistry);
 const beforeTexture = renderVegetationChunkPixels(map, { minX: 0, minY: 0, maxX: 31, maxY: 31 }, 1);
@@ -38,3 +57,9 @@ assert.equal(largeMapChunkCount, 70);
 const rendererSource = readFileSync('src/rendering/VegetationChunkRaster.ts', 'utf8');
 assert.doesNotMatch(rendererSource, /new Graphics\(\).*cell|ellipse\(|circle\(/s);
 console.log('vegetation-chunk-raster: smoke passed');
+
+function averageAlpha(data: Uint8ClampedArray): number {
+  let total = 0;
+  for (let index = 3; index < data.length; index += 4) total += data[index];
+  return total / Math.max(1, data.length / 4);
+}

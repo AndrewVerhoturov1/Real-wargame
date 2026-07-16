@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import type { TacticalMapData } from '../src/core/map/MapModel';
-import { getCell } from '../src/core/map/MapModel';
+import { getCell, setCellVegetationMaterialId } from '../src/core/map/MapModel';
 import { setAttentionMode, setSearchSector, updateAttentionController } from '../src/core/perception/AttentionController';
 import {
   CONTACT_STAGE_THRESHOLDS,
@@ -137,7 +137,7 @@ const forestMap = createInitialState({ ...baseMap, width: 48, height: 12 }, [{ .
 for (let x = 7; x <= 11; x += 1) {
   const cell = getCell(forestMap.map, x, 5);
   assert.ok(cell);
-  cell.forest = 1;
+  setCellVegetationMaterialId(cell, 'sparse_forest');
 }
 const forestObserver = forestMap.units[0];
 const partial = computeLineOfSight(forestMap.map, forestObserver, { x: 16.5, y: 5.5 });
@@ -148,7 +148,7 @@ assert.ok(partial.visualTransmission > 0.04 && partial.visualTransmission < 1);
 for (let x = 7; x <= 34; x += 1) {
   const cell = getCell(forestMap.map, x, 5);
   assert.ok(cell);
-  cell.forest = 2;
+  setCellVegetationMaterialId(cell, 'dense_forest');
 }
 const dense = computeLineOfSight(forestMap.map, forestObserver, { x: 39.5, y: 5.5 });
 assert.equal(dense.blocked, true);

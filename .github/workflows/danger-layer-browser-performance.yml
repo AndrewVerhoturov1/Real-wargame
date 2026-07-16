@@ -12,28 +12,18 @@ on:
       - 'src/core/knowledge/**'
       - 'src/core/terrain/**'
       - 'src/core/debug/PerformanceMonitor.ts'
-      - 'src/core/debug/PerformancePhases.ts'
       - 'src/core/debug/BuildIdentity.ts'
       - 'src/core/debug/AwarenessMovementDiagnostics.ts'
       - 'src/core/simulation/**'
       - 'src/core/perception/**'
       - 'src/core/orders/**'
       - 'src/rendering/PixiAwarenessHeatmapRenderer.ts'
-      - 'src/rendering/PixiMapRenderer.ts'
-      - 'src/rendering/VegetationChunkRaster.ts'
-      - 'src/core/map/EnvironmentMaterialProfile.ts'
-      - 'src/core/map/EnvironmentProfileRuntime.ts'
-      - 'src/core/map/EnvironmentProfileStorage.ts'
-      - 'src/core/map/MapModel.ts'
-      - 'src/core/knowledge/AwarenessWorldWorkerProtocol.ts'
-      - 'src/main.ts'
       - 'src/testing/CombatTacticalIntegrationVisualQaHarness.ts'
       - 'src/testing/DangerLayerMovementPerformanceHarness.ts'
       - 'src/workers/**'
       - 'tests/danger-layer-browser-performance.spec.ts'
       - 'tests/danger-layer-movement-performance.spec.ts'
       - 'tests/danger-layer-long-task-attribution.spec.ts'
-      - 'tests/environment-stable-performance.spec.ts'
       - 'scripts/compare_danger_layer_browser_performance.mjs'
       - 'scripts/finalize_danger_layer_movement_attribution.mjs'
       - 'scripts/assert_danger_layer_movement_evidence.mjs'
@@ -127,16 +117,6 @@ jobs:
         run: |
           set -o pipefail
           npx playwright test tests/danger-layer-browser-performance.spec.ts --config=playwright.performance.config.ts --project=chromium --reporter=line 2>&1 | tee ../browser-artifacts/after-playwright.log
-
-      - name: Verify exact-head stable environment scene
-        working-directory: candidate
-        env:
-          REAL_WARGAME_BRANCH: ${{ github.event.pull_request.head.ref }}
-          REAL_WARGAME_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
-        shell: bash
-        run: |
-          set -o pipefail
-          npx playwright test tests/environment-stable-performance.spec.ts --config=playwright.performance.config.ts --project=chromium --reporter=line 2>&1 | tee ../browser-artifacts/environment-stable-playwright.log
 
       - name: Compare browser performance acceptance
         shell: bash

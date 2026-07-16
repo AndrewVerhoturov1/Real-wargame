@@ -169,7 +169,8 @@ function buildForestCovers(map: TacticalMap, unit: UnitModel): KnowledgeCover[] 
 
   for (const cell of map.cells) {
     const vegetation = resolveCellVegetationDefinition(cell);
-    if (vegetation.id === 'none') {
+    if (vegetation.id === 'none'
+      || (vegetation.visibility.localConcealment <= 0 && vegetation.fire.maximumProtection <= 0)) {
       continue;
     }
 

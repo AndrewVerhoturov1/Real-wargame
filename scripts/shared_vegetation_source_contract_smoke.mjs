@@ -39,7 +39,13 @@ assert.match(worker, /restoreAwarenessWorkerMap/);
 
 const exactLos = source('src/core/visibility/LineOfSight.ts');
 assert.match(exactLos, /resolveCellVegetationDefinition/);
-assert.doesNotMatch(exactLos, /SPARSE_FOREST_LOSS_PER_METER|DENSE_FOREST_LOSS_PER_METER/);
+assert.doesNotMatch(exactLos, /SPARSE_FOREST_LOSS_PER_METER|DENSE_FOREST_LOSS_PER_METER|MIN_VISUAL_TRANSMISSION|vegetation\.layer > 0/);
+assert.match(exactLos, /vegetation\.id !== 'none'/);
+
+const raycast = source('src/core/visibility/VisibilityRaycast.ts');
+assert.match(raycast, /resolveVegetationDefinition/);
+assert.match(raycast, /vegetationMaterialCodes/);
+assert.doesNotMatch(raycast, /SPARSE_FOREST_LOSS_PER_METER|DENSE_FOREST_LOSS_PER_METER|FOREST_MIN_TRANSMISSION/);
 
 const pointVisibility = source('src/core/visibility/PointVisibility.ts');
 assert.match(pointVisibility, /getVisibilityGeometryField/);
