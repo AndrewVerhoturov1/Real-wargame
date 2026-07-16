@@ -38,6 +38,11 @@ assert.match(routeCost, /resolveCellVegetationDefinition/);
 assert.match(routeCost, /movement\.tacticalConcealment/);
 assert.doesNotMatch(routeCost, /cell\.forest >= 2 \? 0\.6/);
 
+const threatRelativeCover = source('src/core/cover/ThreatRelativeCoverGeometry.ts');
+assert.match(threatRelativeCover, /resolveCellVegetationDefinition/);
+assert.match(threatRelativeCover, /fire\.densityWeight/);
+assert.doesNotMatch(threatRelativeCover, /forest === 2\) return 1\.7|forest === 1\) return 0\.8/);
+
 const currentView = source('src/core/visibility/SelectedUnitVisibilityField.ts');
 assert.match(currentView, /getUnitVisibilityField/);
 assert.doesNotMatch(currentView, /SPARSE_FOREST_LOSS_PER_METER|DENSE_FOREST_LOSS_PER_METER/);
@@ -47,4 +52,4 @@ assert.match(danger, /getVisibilityGeometryField/);
 assert.match(danger, /lineOfFire\.hardBlocked/);
 assert.doesNotMatch(danger, /pixi\.js|\.\.\/rendering\//);
 
-console.log('Shared vegetation source contract smoke passed: renderer, perception, visibility, awareness, danger and route/navigation costs use the shared core catalog/field boundary.');
+console.log('Shared vegetation source contract smoke passed: renderer, perception, visibility, awareness, danger, cover and route/navigation costs use the shared core catalog/field boundary.');
