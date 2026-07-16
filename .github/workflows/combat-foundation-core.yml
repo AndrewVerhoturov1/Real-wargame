@@ -173,4 +173,13 @@ jobs:
             production-build.log
             docs-check.log
             ai-test-lab.log
+            src/core/knowledge/SoldierThreatMemory.ts
+            src/core/knowledge/SoldierAwarenessGrid.ts
+            src/core/knowledge/AwarenessDynamicRescore.ts
+            src/core/knowledge/CanonicalWorldThreat.ts
+            src/core/navigation/NavigationRuntime.ts
+            src/core/navigation/RouteCostField.ts
+            src/rendering/PixiAwarenessHeatmapRenderer.ts
+            tests/combat-foundation-visual.spec.ts
+            docs/subprojects/ai-single-unit-editor/TACTICAL_ROUTE_COST_V1.md
           if-no-files-found: warn
