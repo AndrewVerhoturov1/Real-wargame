@@ -1,0 +1,278 @@
+.tactical-order-radial-menu {
+  position: fixed;
+  z-index: 1200;
+  width: 224px;
+  height: 224px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  color: #eee5cc;
+  font-family: Inter, system-ui, sans-serif;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.28));
+}
+
+.tactical-order-radial-menu[hidden],
+.tactical-order-card[hidden] {
+  display: none;
+}
+
+.tactical-order-radial-ring {
+  position: absolute;
+  inset: 8px;
+  border: 1px solid rgba(220, 205, 164, 0.28);
+  border-radius: 50%;
+  background:
+    repeating-conic-gradient(
+      from -150deg,
+      rgba(226, 211, 169, 0.18) 0 1deg,
+      transparent 1deg 120deg
+    ),
+    radial-gradient(
+      circle at center,
+      transparent 0 32px,
+      rgba(22, 27, 22, 0.14) 33px 101px,
+      transparent 102px
+    );
+  box-shadow:
+    inset 0 0 0 1px rgba(239, 222, 178, 0.06),
+    inset 0 0 18px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(1.5px);
+}
+
+.tactical-order-radial-menu::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  left: calc(50% + var(--tactical-order-anchor-offset-x, 0px));
+  top: calc(50% + var(--tactical-order-anchor-offset-y, 0px));
+  transform: translate(-50%, -50%) rotate(45deg);
+  border: 1px solid rgba(231, 198, 111, 0.8);
+  background: rgba(16, 20, 16, 0.22);
+  box-sizing: border-box;
+}
+
+.tactical-order-radial-sector {
+  position: absolute;
+  width: 112px;
+  min-height: 38px;
+  padding: 6px 6px 5px 27px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  box-sizing: border-box;
+  background: transparent;
+  text-align: left;
+  opacity: 0.86;
+  transition: transform 80ms ease, border-color 80ms ease, background 80ms ease, opacity 80ms ease;
+}
+
+.tactical-order-sector-recon {
+  left: 48px;
+  top: 9px;
+}
+
+.tactical-order-sector-assault {
+  right: -4px;
+  top: 119px;
+}
+
+.tactical-order-sector-move {
+  left: -4px;
+  top: 119px;
+}
+
+.tactical-order-radial-sector.active {
+  z-index: 2;
+  transform: scale(1.04);
+  border-color: #e8c96f;
+  background: rgba(83, 69, 39, 0.72);
+  opacity: 1;
+  box-shadow: 0 0 0 2px rgba(232, 201, 111, 0.12), 0 5px 12px rgba(0, 0, 0, 0.24);
+}
+
+.tactical-order-sector-icon {
+  position: absolute;
+  left: 7px;
+  top: 8px;
+  width: 17px;
+  height: 17px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(229, 211, 159, 0.08);
+  color: #efd17d;
+  font-size: 14px;
+}
+
+.tactical-order-radial-sector strong {
+  display: block;
+  overflow: hidden;
+  color: #eee5cc;
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tactical-order-radial-sector kbd {
+  position: absolute;
+  right: 4px;
+  top: -6px;
+  min-width: 12px;
+  padding: 0 2px;
+  border: 1px solid rgba(237, 218, 164, 0.22);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.12);
+  color: rgba(216, 207, 179, 0.78);
+  font-size: 7px;
+  line-height: 12px;
+  text-align: center;
+}
+
+.tactical-order-radial-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 50px;
+  height: 50px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(218, 205, 169, 0.26);
+  border-radius: 50%;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  background: rgba(18, 22, 18, 0.2);
+}
+
+.tactical-order-radial-menu.center-active .tactical-order-radial-center {
+  border-color: rgba(231, 198, 111, 0.75);
+  background: rgba(54, 47, 30, 0.34);
+  box-shadow: 0 0 0 2px rgba(231, 198, 111, 0.08);
+}
+
+.tactical-order-radial-center strong {
+  color: #ded5bc;
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+.tactical-order-radial-center small {
+  margin-top: 1px;
+  color: #aaa696;
+  font-size: 7px;
+  line-height: 1;
+}
+
+.tactical-order-active-hint {
+  position: absolute;
+  left: 50%;
+  top: 174px;
+  width: 154px;
+  min-height: 24px;
+  transform: translateX(-50%);
+  padding: 3px 7px;
+  border: 1px solid rgba(218, 205, 169, 0.18);
+  border-radius: 6px;
+  box-sizing: border-box;
+  background: rgba(14, 18, 15, 0.46);
+  text-align: center;
+  backdrop-filter: blur(2px);
+}
+
+.tactical-order-active-hint strong,
+.tactical-order-active-hint span {
+  display: block;
+}
+
+.tactical-order-active-hint strong {
+  color: #f0d58b;
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+.tactical-order-active-hint span {
+  margin-top: 1px;
+  overflow: hidden;
+  color: #c3c0b4;
+  font-size: 8px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tactical-order-radial-target {
+  position: absolute;
+  left: 50%;
+  top: 204px;
+  transform: translateX(-50%);
+  padding: 2px 6px;
+  border: 1px solid rgba(218, 205, 169, 0.16);
+  border-radius: 5px;
+  background: rgba(13, 16, 13, 0.42);
+  color: #d4c9aa;
+  font-size: 8px;
+  line-height: 12px;
+  white-space: nowrap;
+  backdrop-filter: blur(2px);
+}
+
+.tactical-order-radial-menu.is-clamped .tactical-order-radial-target::before {
+  content: 'сдвинуто · ';
+  color: #9fa58f;
+}
+
+.tactical-order-card {
+  position: fixed;
+  z-index: 1100;
+  left: 18px;
+  bottom: 112px;
+  width: min(330px, calc(100vw - 36px));
+  min-width: 0;
+  max-width: 330px;
+  padding: 9px 11px;
+  border: 1px solid rgba(216, 197, 145, 0.4);
+  border-radius: 9px;
+  box-sizing: border-box;
+  background: rgba(15, 19, 16, 0.94);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(5px);
+  display: grid;
+  grid-template-columns: minmax(78px, 0.8fr) minmax(120px, 1.2fr);
+  gap: 4px 10px;
+  color: #e8e1ca;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.tactical-order-card > strong,
+.tactical-order-card > p {
+  grid-column: 1 / -1;
+}
+
+.tactical-order-card > strong {
+  color: #f0d58b;
+  font-size: 13px;
+}
+
+.tactical-order-card > p {
+  margin: 0 0 3px;
+  color: #c3c0b4;
+  line-height: 1.3;
+}
+
+.tactical-order-card span {
+  color: #aaa696;
+}
+
+.tactical-order-card b {
+  color: #e7e0c9;
+  font-weight: 600;
+}
+
+@media (max-width: 780px) {
+  .tactical-order-card {
+    left: 10px;
+    bottom: 94px;
+    width: min(310px, calc(100vw - 20px));
+  }
+}

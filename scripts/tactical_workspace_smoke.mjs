@@ -3,3 +3,4 @@
 // The vector module adds the focused Graphics fill/stroke and Text stroke-join assertions.
 import './tactical_workspace_smoke_pixijs8_baseline.mjs';
 import './tactical_workspace_smoke_vector_semantics.mjs';
+import './tactical_order_radial_menu_smoke.mjs';

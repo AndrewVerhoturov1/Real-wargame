@@ -1,0 +1,101 @@
+name: Tactical Order Core Verification
+
+on:
+  push:
+    branches:
+      - real-wargame-preview
+    paths:
+      - 'src/core/ai/**'
+      - 'src/core/orders/**'
+      - 'src/core/units/**'
+      - 'src/input/TacticalOrderRadial*'
+      - 'src/ui/TacticalOrderStatusCard.ts'
+      - 'src/ui/SceneExport.ts'
+      - 'src/tactical-order-radial-menu.css'
+      - 'tests/tactical-order-radial-menu.spec.ts'
+      - 'scripts/tactical_order_radial_menu_smoke.*'
+      - 'scripts/tactical_workspace_smoke.mjs'
+      - 'package.json'
+      - '.github/workflows/tactical-order-core-verification.yml'
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - 'src/core/ai/**'
+      - 'src/core/orders/**'
+      - 'src/core/units/**'
+      - 'src/input/TacticalOrderRadial*'
+      - 'src/ui/TacticalOrderStatusCard.ts'
+      - 'src/ui/SceneExport.ts'
+      - 'src/tactical-order-radial-menu.css'
+      - 'tests/tactical-order-radial-menu.spec.ts'
+      - 'scripts/tactical_order_radial_menu_smoke.*'
+      - 'scripts/tactical_workspace_smoke.mjs'
+      - 'package.json'
+      - '.github/workflows/tactical-order-core-verification.yml'
+
+concurrency:
+  group: tactical-order-core-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  core-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact candidate SHA
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Tactical order intent, issue, serialization and gesture
+        run: npm run tactical-order:smoke
+
+      - name: Command plan route
+        run: npm run command-plan-route:smoke
+
+      - name: Routed move
+        run: npm run routed-move:smoke
+
+      - name: Navigation profiles
+        run: npm run navigation-profiles:smoke
+
+      - name: Navigation profile switching
+        run: npm run navigation-profile-switch:smoke
+
+      - name: Runtime
+        run: npm run runtime:smoke
+
+      - name: State machine
+        run: npm run state-machine:smoke
+
+      - name: Plan runtime
+        run: npm run plan-runtime:smoke
+
+      - name: Graph v2
+        run: npm run graph-v2:smoke
+
+      - name: Per-unit AI scheduler
+        run: npm run ai-scheduler:smoke
+
+      - name: Tactical workspace
+        run: npm run workspace:smoke
+
+      - name: Combat tactical integration
+        run: npm run combat-tactical-integration:smoke
+
+      - name: Production build
+        run: npm run build
+
+      - name: Documentation consistency
+        run: npm run docs:check

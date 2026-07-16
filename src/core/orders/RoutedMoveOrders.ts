@@ -1,16 +1,56 @@
+import { publishTacticalOrderIntentToAiMemory } from '../ai/TacticalOrderBlackboard';
 import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap } from '../map/MapModel';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../navigation/NavigationRuntime';
+import { clearAttentionOverride, setAttentionMode, setSearchSector } from '../perception/AttentionController';
+import { degreesToRadians } from '../perception/AttentionModel';
 import { getPressureReportAtPosition } from '../pressure/PressureZone';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
 import { planMoveOrder } from './MoveOrderPlanning';
 import { createPlayerMoveCommand, updatePlayerCommandStatus } from './PlayerCommand';
+import {
+  createTacticalOrderIntent,
+  withTacticalOrderNavigationProfile,
+  type TacticalOrderIntent,
+  type TacticalOrderPresetId,
+} from './TacticalOrderIntent';
+
+export function issueTacticalOrderToSelectedUnits(
+  state: SimulationState,
+  rawTarget: GridPosition,
+  presetId: TacticalOrderPresetId,
+  finalFacingRadians?: number,
+): void {
+  issueTacticalOrderIntentToSelectedUnits(
+    state,
+    rawTarget,
+    () => createTacticalOrderIntent(presetId),
+    finalFacingRadians,
+  );
+}
 
 export function issueRoutedMoveOrderToSelectedUnits(
   state: SimulationState,
   rawTarget: GridPosition,
+  finalFacingRadians?: number,
+): void {
+  issueTacticalOrderIntentToSelectedUnits(
+    state,
+    rawTarget,
+    (unit) => withTacticalOrderNavigationProfile(
+      createTacticalOrderIntent('move'),
+      unit.playerNavigationProfileId ?? 'normal',
+    ),
+    finalFacingRadians,
+  );
+}
+
+function issueTacticalOrderIntentToSelectedUnits(
+  state: SimulationState,
+  rawTarget: GridPosition,
+  resolveIntent: (unit: UnitModel) => TacticalOrderIntent,
   finalFacingRadians?: number,
 ): void {
   const selectedIds = new Set(state.selectedUnitIds);
@@ -27,16 +67,20 @@ export function issueRoutedMoveOrderToSelectedUnits(
           x: target.x + unit.position.x - center.x,
           y: target.y + unit.position.y - center.y,
         });
+    const intent = resolveIntent(unit);
     const command = createPlayerMoveCommand(
       unit.id,
       requestedTarget,
       unit.playerCommand,
       Date.now(),
-      'normal',
-      unit.playerNavigationProfileId ?? 'normal',
+      intent,
+      null,
       finalFacingRadians ?? null,
     );
     unit.playerCommand = command;
+    unit.playerNavigationProfileId = command.intent.navigationProfileId;
+    publishTacticalOrderIntentToAiMemory(unit, command.intent);
+    applyIntentAttention(unit, command.intent);
     const resolvedNavigation = resolveUnitNavigationProfile(unit, command);
     const planned = planMoveOrder(state.map, unit.position, requestedTarget, {
       source: 'player',
@@ -53,8 +97,8 @@ export function issueRoutedMoveOrderToSelectedUnits(
       unit.playerCommand = updatePlayerCommandStatus(
         command,
         'blocked',
-        `Player movement command is blocked: ${planned.reason}`,
-        `Приказ движения заблокирован: ${planned.reasonRu}`,
+        `Player tactical order is blocked: ${planned.reason}`,
+        `Тактический приказ заблокирован: ${planned.reasonRu}`,
       );
       unit.plan = createDirectPlayerMovePlan(unit.plan, unit.playerCommand, requestedTarget);
       unit.behaviorRuntime.currentAction = 'observe';
@@ -66,9 +110,27 @@ export function issueRoutedMoveOrderToSelectedUnits(
     unit.order = planned.order;
     unit.plan = createDirectPlayerMovePlan(unit.plan, command, planned.order.target);
     applyPressurePreview(state, unit, planned.order.target);
-    unit.behaviorRuntime.lastEvent = 'move_order_received';
+    unit.behaviorRuntime.lastEvent = `tactical_order_${command.intent.presetId}_received`;
+    unit.behaviorRuntime.reason = `Принят приказ «${command.intent.presetId}».`;
     setUnitDirection(unit, planned.order.waypoints?.[0] ?? planned.order.target);
   }
+}
+
+function applyIntentAttention(unit: UnitModel, intent: TacticalOrderIntent): void {
+  if (intent.attentionPolicy === 'automatic') {
+    clearAttentionOverride(unit);
+    return;
+  }
+  if (intent.attentionPolicy === 'search') {
+    setSearchSector(
+      unit,
+      unit.facingRadians,
+      degreesToRadians(unit.attentionSettings.profiles.search.defaultSearchArcDegrees),
+      'player',
+    );
+    return;
+  }
+  setAttentionMode(unit, 'engage', 'player');
 }
 
 function applyPressurePreview(
