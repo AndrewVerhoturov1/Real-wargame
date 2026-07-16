@@ -2,6 +2,7 @@ name: Approved Environment Materials Visual QA
 
 # User approval is recorded by VISUAL_QA_APPROVED_BY_USER: yes in the PR body.
 # The suite remains skipped in the repository and is enabled only inside this approved run.
+# This attempt freezes the fixture before selecting the rendered soldier marker.
 on:
   workflow_dispatch:
   pull_request:
