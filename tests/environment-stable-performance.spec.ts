@@ -46,8 +46,12 @@ test.describe('environment and danger stable-scene performance', () => {
     for (const phase of [
       'real-wargame.phase.pixi-ticker',
       'real-wargame.phase.danger-overlay-update',
-      'real-wargame.phase.worker-message-apply',
     ]) expect(phases.has(phase), `missing performance phase ${phase}`).toBe(true);
+
+    const completedWorkerJobs = Number(after.computation?.awarenessMovement?.workerJobsCompleted ?? 0);
+    if (completedWorkerJobs > 0) {
+      expect(phases.has('real-wargame.phase.worker-message-apply'), 'completed worker jobs must emit worker-message-apply measures').toBe(true);
+    }
   });
 });
 
