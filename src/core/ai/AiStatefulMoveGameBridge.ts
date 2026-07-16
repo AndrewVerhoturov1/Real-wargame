@@ -1,4 +1,11 @@
 import type { GridPosition } from '../geometry';
+import {
+  MOVEMENT_PROFILE_MEMORY_KEYS,
+  normalizeMovementProfileId,
+  normalizeMovementProfileSource,
+  resolveMovementProfile,
+  type MovementProfileSource,
+} from '../movement/MovementProfileContract';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../navigation/NavigationRuntime';
 import type { MoveOrder } from '../orders/MoveOrder';
 import { planMoveOrder } from '../orders/MoveOrderPlanning';
@@ -62,6 +69,19 @@ interface ActiveMoveSnapshot {
   readonly acceptanceRadiusCells: number;
   readonly ownerToken: string;
   readonly targetAvailable: boolean;
+}
+
+interface BeginMoveMovementProfileFields {
+  readonly movementProfileId?: unknown;
+  readonly movementProfileSource?: unknown;
+  readonly movementProfileOwnerToken?: unknown;
+}
+
+interface ResolvedMoveMovementProfile {
+  readonly profileId: string;
+  readonly source: MovementProfileSource;
+  readonly ownerToken?: string;
+  readonly revision: number;
 }
 
 export function installAiStatefulMoveGameBridge(state: SimulationState): AiGameBridgeHandle {
@@ -173,6 +193,7 @@ export function syncMoveOrderMemoryForUnit(unit: UnitModel): void {
   memory.active_move_owner_token = order?.ownerToken ?? null;
   memory.active_move_target = order ? { ...order.target } : null;
   if (order) publishPathOrderMemory(memory, order);
+  publishMovementProfileMemory(unit, memory, order);
 }
 
 export function updateSelectedRouteStatus(
@@ -247,6 +268,7 @@ export function applyOwnedMoveEffectsForUnit(
     if (effect.type === 'begin_move') {
       runtime.aiRouteStatusState = null;
       const resolvedNavigation = resolveUnitNavigationProfile(unit, null);
+      const resolvedMovement = resolveMoveMovementProfile(unit, memory, rawEffect, effect.ownerToken);
       const planned = planMoveOrder(state.map, unit.position, effect.targetPosition, {
         source: 'ai',
         ownerToken: effect.ownerToken,
@@ -254,6 +276,10 @@ export function applyOwnedMoveEffectsForUnit(
         movementMode: unit.navigationMovementMode ?? 'normal',
         navigationProfile: resolvedNavigation.profile,
         navigationProfileSource: resolvedNavigation.source,
+        movementProfileId: resolvedMovement.profileId,
+        movementProfileSource: resolvedMovement.source,
+        movementProfileOwnerToken: resolvedMovement.ownerToken,
+        movementProfileRevision: resolvedMovement.revision,
         tacticalContext: buildUnitTacticalRouteContext(unit),
       });
       if (!planned.ok) {
@@ -270,6 +296,7 @@ export function applyOwnedMoveEffectsForUnit(
       unit.behaviorRuntime.reason = planned.path.reasonRu;
       unit.behaviorRuntime.lastEvent = 'ai_graph_owned_move_started';
       publishPathOrderMemory(memory, planned.order);
+      publishMovementProfileMemory(unit, memory, planned.order);
       continue;
     }
 
@@ -370,6 +397,71 @@ function loadRouteSettings(activeNodeId: string, graph?: { readonly nodes: reado
   }
 }
 
+function resolveMoveMovementProfile(
+  unit: UnitModel,
+  memory: Readonly<Record<string, AiBlackboardValue>>,
+  rawEffect: unknown,
+  moveOwnerToken: string,
+): ResolvedMoveMovementProfile {
+  const profileEffect = isRecord(rawEffect) ? rawEffect as BeginMoveMovementProfileFields : {};
+  if (typeof profileEffect.movementProfileId === 'string' && profileEffect.movementProfileId.trim()) {
+    const source = normalizeMovementProfileSource(profileEffect.movementProfileSource, 'ai_override');
+    return {
+      profileId: normalizeMovementProfileId(profileEffect.movementProfileId),
+      source,
+      ownerToken: cleanOptionalText(profileEffect.movementProfileOwnerToken)
+        ?? (source === 'player_order' ? unit.playerCommand?.id : moveOwnerToken),
+      revision: source === 'player_order' ? unit.playerCommand?.revision ?? 1 : 1,
+    };
+  }
+
+  const resolved = resolveMovementProfile({
+    hardSafetyProfileId: memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId],
+    hardSafetyReason: memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason],
+    aiOverrideProfileId: memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId],
+    aiOverrideOwnerToken: memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken],
+    playerOrderProfileId: unit.playerCommand?.intent.movementProfileId,
+    unitRoleProfileId: unit.unitRoleMovementProfileId,
+  });
+  return {
+    profileId: resolved.profileId,
+    source: resolved.source,
+    ownerToken: resolved.ownerToken
+      ?? (resolved.source === 'player_order' ? unit.playerCommand?.id : moveOwnerToken),
+    revision: resolved.source === 'player_order' ? unit.playerCommand?.revision ?? 1 : 1,
+  };
+}
+
+function publishMovementProfileMemory(
+  unit: UnitModel,
+  memory: Record<string, AiBlackboardValue>,
+  order: MoveOrder | null,
+): void {
+  if (order?.movementProfileId) {
+    memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId] = order.movementProfileId;
+    memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource] = order.movementProfileSource ?? 'default';
+    memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedFallback] = false;
+    memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedReason] = '';
+    return;
+  }
+
+  const resolved = resolveMovementProfile({
+    hardSafetyProfileId: memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId],
+    hardSafetyReason: memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason],
+    aiOverrideProfileId: memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId],
+    aiOverrideOwnerToken: memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken],
+    playerOrderProfileId: unit.playerCommand?.intent.movementProfileId,
+    unitRoleProfileId: unit.unitRoleMovementProfileId,
+  });
+  memory[MOVEMENT_PROFILE_MEMORY_KEYS.requestedProfileId] = unit.playerCommand?.intent.movementProfileId
+    ?? unit.unitRoleMovementProfileId
+    ?? resolved.profileId;
+  memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId] = resolved.profileId;
+  memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource] = resolved.source;
+  memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedFallback] = resolved.forcedFallback;
+  memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedReason] = resolved.forcedReason ?? '';
+}
+
 function publishRouteMemory(memory: Record<string, AiBlackboardValue>, result: AiRouteStatusResult): void {
   memory.active_move_route_status = result.status;
   memory.active_move_no_progress_ms = result.noProgressMs;
@@ -455,6 +547,12 @@ function writePathDebugFields(
   payload.pathRequestedTarget = memory.active_move_path_requested_target;
   payload.pathResolvedTarget = memory.active_move_path_resolved_target;
   payload.pathReasonRu = memory.active_move_path_reason;
+  payload.requestedMovementProfileId = memory[MOVEMENT_PROFILE_MEMORY_KEYS.requestedProfileId];
+  payload.activeMovementProfileId = memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId];
+  payload.activeMovementProfileSource = memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource];
+  payload.activeMovementGait = memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeGait];
+  payload.movementForcedFallback = memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedFallback];
+  payload.movementForcedReason = memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedReason];
 }
 
 function updateDebugPayload(update: (payload: Record<string, unknown>) => void): void {
@@ -488,4 +586,12 @@ function isGridPosition(value: unknown): value is GridPosition {
 
 function finiteNonNegative(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : fallback;
+}
+
+function cleanOptionalText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
