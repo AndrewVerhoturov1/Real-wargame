@@ -1,0 +1,89 @@
+diff --git a/src/core/knowledge/SoldierThreatMemory.ts b/src/core/knowledge/SoldierThreatMemory.ts
+index 58d501c..94bfa27 100644
+--- a/src/core/knowledge/SoldierThreatMemory.ts
++++ b/src/core/knowledge/SoldierThreatMemory.ts
+@@ -3,7 +3,7 @@ import type { PerceptionContactMemory } from '../perception/PerceptionContact';
+ import { resolvePressureZoneSettings } from '../pressure/PressureZone';
+ import type { SimulationState } from '../simulation/SimulationState';
+ import { areUnitsHostile } from '../units/SideRelations';
+-import type { KnownThreatMemory, UnitModel, UnitTacticalKnowledge } from '../units/UnitModel';
++import type { FireThreatClass, KnownThreatMemory, UnitModel, UnitTacticalKnowledge } from '../units/UnitModel';
+ 
+ const CONFIDENCE_DECAY_PER_SECOND = 0.55;
+ const UNCERTAINTY_GROWTH_METERS_PER_SECOND = 0.12;
+@@ -65,7 +65,7 @@ export function syncSoldierThreatMemory(
+     const sourceUnit = state.units.find((candidate) => candidate.id === sourceUnitId);
+     if (!sourceUnit || !areUnitsHostile(unit, sourceUnit)) continue;
+     const threatId = `unit:${sourceUnitId}`;
+-    const next = buildRealUnitThreat(state, unit, contact, threatId, existing.get(threatId), now);
++    const next = buildRealUnitThreat(state, unit, sourceUnit, contact, threatId, existing.get(threatId), now);
+     existing.set(threatId, next);
+     refreshed.add(threatId);
+   }
+@@ -151,6 +151,7 @@ function buildPressureZoneThreat(
+ function buildRealUnitThreat(
+   state: SimulationState,
+   observer: UnitModel,
++  sourceUnit: UnitModel,
+   contact: PerceptionContactMemory,
+   threatId: string,
+   previous: KnownThreatMemory | undefined,
+@@ -197,6 +198,9 @@ function buildRealUnitThreat(
+     visibleNow,
+     lastSeenSeconds: visibleNow ? now : previous?.lastSeenSeconds ?? contact.lastObservedSeconds,
+     lastUpdatedSeconds: now,
++    fireThreatClass: visibleNow
++      ? classifyUnitFireThreat(sourceUnit)
++      : previous?.fireThreatClass ?? 'rifle_fire',
+     evidenceCount: previousEvidence?.evidenceCount ?? 0,
+     lastEvidenceSeconds: previousEvidence?.lastEvidenceSeconds ?? -1,
+   };
+@@ -276,6 +280,7 @@ function mergeCombatEvidence(
+       visibleNow: false,
+       lastSeenSeconds: -1,
+       lastUpdatedSeconds: now,
++      fireThreatClass: null,
+       evidenceCount: evidence.evidenceCount,
+       lastEvidenceSeconds: evidence.lastUpdatedSeconds,
+     });
+@@ -443,6 +448,7 @@ function buildKnownThreat(
+     visibleNow,
+     lastSeenSeconds: visibleNow ? now : -1,
+     lastUpdatedSeconds: now,
++    fireThreatClass: null,
+     evidenceCount: 0,
+     lastEvidenceSeconds: -1,
+   };
+@@ -503,6 +509,7 @@ function normalizeKnownThreat(value: Partial<KnownThreatMemory>, scale: number):
+     visibleNow: Boolean(value.visibleNow),
+     lastSeenSeconds: number(value.lastSeenSeconds, -1),
+     lastUpdatedSeconds,
++    fireThreatClass: normalizeFireThreatClass(value.fireThreatClass, id),
+     evidenceCount,
+     lastEvidenceSeconds,
+   };
+@@ -554,11 +561,24 @@ function threatRevisionFingerprint(memory: KnownThreatMemory): Record<string, un
+     uncertaintyCells: quantize(memory.uncertaintyCells, 1),
+     source: memory.source,
+     visibleNow: memory.visibleNow,
++    fireThreatClass: memory.fireThreatClass ?? null,
+     evidenceCount: memory.evidenceCount ?? 0,
+     lastEvidenceSeconds: quantize(memory.lastEvidenceSeconds ?? -1, 1),
+   };
+ }
+ 
++
++function classifyUnitFireThreat(unit: UnitModel): FireThreatClass {
++  return unit.type === 'support_team' || unit.heldItem === 'support_item'
++    ? 'machine_gun_fire'
++    : 'rifle_fire';
++}
++
++function normalizeFireThreatClass(value: unknown, id: string): FireThreatClass | null {
++  if (!id.startsWith('unit:')) return null;
++  return value === 'machine_gun_fire' ? 'machine_gun_fire' : 'rifle_fire';
++}
++
+ function sourceForContact(contact: PerceptionContactMemory): KnownThreatMemory['source'] {
+   if (contact.source === 'visual') return 'seen';
+   if (contact.source === 'sound') return 'heard';
