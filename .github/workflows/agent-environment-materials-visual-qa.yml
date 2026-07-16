@@ -1,6 +1,7 @@
 name: Approved Environment Materials Visual QA
 
 # User approval recorded in the orchestration chat on 2026-07-17.
+# This run uses the corrected zoom, selected-unit danger and live-canvas assertions.
 on:
   pull_request:
     branches:
