@@ -4,7 +4,6 @@ import type { SimulationState } from '../simulation/SimulationState';
 import { isUnitGraphAiControlled, type UnitModel } from '../units/UnitModel';
 import { resolveRuntimeGraphSnapshot } from './AiGameBridge';
 import { tickStatefulMoveBridgeForTrustedUnit } from './AiStatefulMoveGameBridge';
-import { reconcileMovementProfileRuntime } from './MovementProfileRuntimeResolver';
 
 export interface AiSimulationSchedulerOptions {
   readonly cycleStartMs?: number;
@@ -66,15 +65,14 @@ export function tickAiSimulationScheduler(
     processedUnitIds.push(unit.id);
     trustedBridgeCalls += 1;
 
-    reconcileMovementProfileRuntime(unit, options.movementProfileRegistryEntries);
     const result = tickStatefulMoveBridgeForTrustedUnit(state, unit, cycleEndMs, {
       force: false,
       applyEffects: true,
       graphSnapshot,
       cycleStartMs,
       cycleEndMs,
+      movementProfileRegistryEntries: options.movementProfileRegistryEntries,
     });
-    reconcileMovementProfileRuntime(unit, options.movementProfileRegistryEntries);
     if (result) graphTickedUnitIds.push(unit.id);
   }
 
