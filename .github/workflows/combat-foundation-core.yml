@@ -43,6 +43,7 @@ on:
       - 'src/main.ts'
       - 'scripts/combat_foundation_smoke.*'
       - 'scripts/combat_tactical_integration_smoke.*'
+      - 'scripts/danger_route_cost_parity_smoke.*'
       - 'scripts/danger_layer_performance_smoke.*'
       - 'scripts/danger_layer_movement_performance_smoke.*'
       - 'scripts/live_navigation_replan_smoke.ts'
@@ -110,6 +111,9 @@ jobs:
       - name: Awareness field cache smoke
         shell: bash
         run: set -o pipefail; npm run awareness-field:smoke 2>&1 | tail -n 120
+      - name: Danger route cost parity smoke
+        shell: bash
+        run: set -o pipefail; npm run danger-route-cost-parity:smoke 2>&1 | tee danger-route-cost-parity.log
       - name: Directional terrain smoke
         shell: bash
         run: set -o pipefail; npm run directional-terrain:smoke 2>&1 | tail -n 160
@@ -146,6 +150,9 @@ jobs:
       - name: Combat tactical integration smoke
         shell: bash
         run: set -o pipefail; npm run combat-tactical-integration:smoke 2>&1 | tee combat-tactical-integration.log
+      - name: Documentation consistency
+        shell: bash
+        run: set -o pipefail; npm run docs:check 2>&1 | tee docs-check.log
       - name: AI test lab smoke
         shell: bash
         run: set -o pipefail; npm run lab:smoke 2>&1 | tee ai-test-lab.log
@@ -156,9 +163,11 @@ jobs:
           name: combat-tactical-integration-log
           path: |
             workspace-smoke.log
+            danger-route-cost-parity.log
             combat-tactical-integration.log
             danger-layer-performance.log
             danger-layer-movement-performance.log
             production-build.log
+            docs-check.log
             ai-test-lab.log
           if-no-files-found: warn
