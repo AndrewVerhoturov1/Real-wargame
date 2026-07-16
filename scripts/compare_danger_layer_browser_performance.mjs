@@ -46,7 +46,7 @@ const acceptance = {
     )
   ),
   oneThreatRelativeCoverScanPerPreparedThreat: threatRelativeCover.fullMapScanCount <= 4,
-  oneWeightedDirectionalFieldBuild: directionalTactical.fullMapScanCount <= 1,
+  oneDirectionalSectorBasisBuild: directionalTactical.basisBuildCount <= 1,
   oneStaticAwarenessBuild: awarenessStatic.buildCount <= 1,
   severalClassifiedThreatsExercised: (soldierDanger.classifiedThreatCount ?? 0) >= 3,
   initialThreatGeometriesPrepared: (initialDanger.geometryBuildCount ?? 0) >= 3,

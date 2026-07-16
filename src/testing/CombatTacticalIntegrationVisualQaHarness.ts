@@ -2,6 +2,7 @@ import { applyBallisticCombatEffects, clearCombatSuppression, getCombatSuppressi
 import { clearCombatThreatEvidence, recordCombatThreatEvidence } from '../core/combat/CombatThreatEvidence';
 import { clearCombatEvents, drainDueCombatEvents, queueCombatEvent } from '../core/combat/CombatEvents';
 import { buildSoldierAwarenessReport } from '../core/knowledge/SoldierAwarenessGrid';
+import { getSoldierDangerField } from '../core/knowledge/SoldierDangerField';
 import { syncSoldierThreatMemory } from '../core/knowledge/SoldierThreatMemory';
 import { fullMapRegion, getMapRevisionSnapshot, markMapCellsDirty, markMapObjectsDirty } from '../core/map/MapRuntimeState';
 import { buildUnitTacticalRouteContext } from '../core/navigation/NavigationRuntime';
@@ -182,7 +183,7 @@ export function installCombatTacticalIntegrationVisualQaHarness(
         threat.visibleNow = phase % 4 !== 3;
       }
       observer.tacticalKnowledge.revision += 1;
-      buildSoldierAwarenessReport(state, observer);
+      scoreCanonicalDangerPerformanceField(state, observer);
       // The real simulation changes tactical knowledge inside the live ticker. Let that same
       // ticker perform the next render instead of calling the UI-only forceRender path, which
       // synthetically invalidates the static map and contaminates danger-layer measurements.
@@ -195,10 +196,21 @@ export function installCombatTacticalIntegrationVisualQaHarness(
       const moving = observer.tacticalKnowledge.threats[Math.abs(Math.floor(step)) % observer.tacticalKnowledge.threats.length];
       moving.x = clamp(moving.x + 0.35, 0.5, state.map.width - 0.5);
       observer.tacticalKnowledge.revision += 1;
-      buildSoldierAwarenessReport(state, observer);
+      scoreCanonicalDangerPerformanceField(state, observer);
       window.dispatchEvent(new CustomEvent('real-wargame:combat-tactical-visual-qa-updated'));
     },
   };
+}
+
+function scoreCanonicalDangerPerformanceField(state: SimulationState, observer: UnitModel): void {
+  getSoldierDangerField(state.map, {
+    unitId: observer.id,
+    originX: observer.position.x,
+    originY: observer.position.y,
+    posture: observer.behaviorRuntime.posture,
+    knowledgeRevision: observer.tacticalKnowledge.revision,
+    threats: observer.tacticalKnowledge.threats,
+  });
 }
 
 function resolveFixtureUnits(state: SimulationState): [UnitModel, UnitModel] {

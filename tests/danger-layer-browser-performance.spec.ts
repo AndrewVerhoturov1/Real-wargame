@@ -100,9 +100,9 @@ interface Stats {
 
 interface ExtendedCombatVisualApi {
   setScenario(scenario: string): { unitThreatCount?: number };
-  setDangerParityPhase(phase: string): { unitThreatCount?: number };
+  setDangerParityPhase?(phase: string): { unitThreatCount?: number };
   stepDangerPerformanceDynamicUpdate(step: number): void;
-  stepDangerPerformanceGeometryUpdate(step: number): void;
+  stepDangerPerformanceGeometryUpdate?(step: number): void;
 }
 
 const OUTPUT_PATH = process.env.DANGER_PERF_OUTPUT
@@ -125,12 +125,14 @@ const MINIMUM_SCENE_SAMPLE_COUNT = 25;
   await expect(page.locator('canvas')).toBeVisible();
   await page.waitForFunction(() => Boolean(window.__realWargameCombatTacticalVisualQa));
 
-  const classifiedThreatCount = await page.evaluate(() => {
+  const classifiedThreatCount = await page.evaluate((candidate) => {
     const api = window.__realWargameCombatTacticalVisualQa as unknown as ExtendedCombatVisualApi | undefined;
     if (!api) throw new Error('Combat tactical visual QA API is unavailable.');
+    if (!candidate) return api.setScenario('slice1-near-miss-evidence-suppression').unitThreatCount ?? 0;
     api.setScenario('danger-route-cost-parity');
+    if (!api.setDangerParityPhase) throw new Error('Candidate danger parity API is unavailable.');
     return api.setDangerParityPhase('rifle-and-machine-gun').unitThreatCount ?? 0;
-  });
+  }, IS_CANDIDATE);
   await page.waitForFunction(() => {
     const diagnostics = (window as Window & {
       __realWargameAwarenessDebug?: AwarenessDiagnostics;
@@ -173,12 +175,14 @@ const MINIMUM_SCENE_SAMPLE_COUNT = 25;
     expect(afterRescoreDanger?.fieldBuildCount ?? 0).toBeGreaterThan(initialDanger?.fieldBuildCount ?? 0);
   }
 
-  await page.evaluate(() => {
-    const api = window.__realWargameCombatTacticalVisualQa as unknown as ExtendedCombatVisualApi | undefined;
-    if (!api) throw new Error('Combat tactical visual QA API is unavailable.');
-    api.stepDangerPerformanceGeometryUpdate(1);
-  });
-  await page.waitForTimeout(750);
+  if (IS_CANDIDATE) {
+    await page.evaluate(() => {
+      const api = window.__realWargameCombatTacticalVisualQa as unknown as ExtendedCombatVisualApi | undefined;
+      if (!api?.stepDangerPerformanceGeometryUpdate) throw new Error('Candidate geometry update API is unavailable.');
+      api.stepDangerPerformanceGeometryUpdate(1);
+    });
+    await page.waitForTimeout(750);
+  }
   const finalReport = await downloadPerformanceReport(page);
   const afterGeometryMoveDanger = readSoldierDangerDiagnostics(finalReport);
   if (IS_CANDIDATE) {
