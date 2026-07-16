@@ -178,7 +178,9 @@ expectContains(gameBridge, 'buildBlackboardForUnit', 'Мост должен со
 expectContains(gameBridge, 'real-wargame.ai-node-editor.graph.v6', 'Мост должен брать граф из localStorage v6.');
 expectContains(gameBridge, 'real-wargame.ai-node-editor.debug.v1', 'Мост должен писать runtime debug trace для редактора.');
 expectContains(gameBridge, 'publishRuntimeDebugTrace', 'Мост должен публиковать последний след решения GraphRunner.');
-expectContains(gameBridge, 'isPaused(state)', 'Мост не должен пересчитывать AI во время паузы.');
+expectContains(gameBridge, 'cloneSimulationStateForDiagnostic', 'Диагностический мост должен работать на глубокой копии состояния.');
+expectContains(gameBridge, 'applyEffects: false', 'Selected-unit мост должен оставаться read-only диагностикой.');
+expectNotContains(gameBridge, 'setInterval(', 'Gameplay AI не должен иметь отдельный browser timer внутри bridge.');
 expectNotContains(gameBridge, 'case \'ParameterScore\'', 'Score-ноды не должны быть заглушками внутри bridge.');
 expectNotContains(gameBridge, 'is accepted by the game bridge but not used', 'Bridge больше не должен говорить, что score-ноды только допустимы.');
 
