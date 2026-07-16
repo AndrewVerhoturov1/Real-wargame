@@ -1,6 +1,13 @@
-export const DEFAULT_MOVEMENT_PROFILE_ID = 'normal' as const;
+export const DEFAULT_MOVEMENT_PROFILE_ID = 'normal_walk' as const;
 
-export const BUILTIN_MOVEMENT_PROFILE_IDS = ['normal', 'stealth', 'fast'] as const;
+export const BUILTIN_MOVEMENT_PROFILE_IDS = [
+  'normal_walk',
+  'stealth_move',
+  'crouched_move',
+  'run',
+  'sprint',
+  'crawl',
+] as const;
 export type BuiltinMovementProfileId = typeof BUILTIN_MOVEMENT_PROFILE_IDS[number];
 
 export const MOVEMENT_PROFILE_SOURCES = [
@@ -32,22 +39,32 @@ export const MOVEMENT_PROFILE_MEMORY_KEYS = Object.freeze({
   canFire: 'movement_can_fire',
   forcedFallback: 'movement_forced_fallback',
   forcedReason: 'movement_forced_reason',
+  profileDefinitionRevision: 'movement_profile_definition_revision',
+  profileSelectionRevision: 'movement_profile_selection_revision',
   aiOverrideProfileId: 'movement_profile_override_id',
   aiOverrideOwnerToken: 'movement_profile_override_owner_token',
+  aiOverrideReason: 'movement_profile_override_reason',
   hardSafetyProfileId: 'movement_hard_safety_profile_id',
   hardSafetyReason: 'movement_hard_safety_reason',
 } as const);
+
+export interface MovementProfileRegistryEntry {
+  readonly id: string;
+  readonly revision?: number;
+  readonly nameRu?: string;
+}
 
 export interface ResolveMovementProfileInput {
   readonly hardSafetyProfileId?: unknown;
   readonly hardSafetyReason?: unknown;
   readonly aiOverrideProfileId?: unknown;
   readonly aiOverrideOwnerToken?: unknown;
+  readonly aiOverrideReason?: unknown;
   readonly playerOrderProfileId?: unknown;
   readonly unitRoleProfileId?: unknown;
   readonly defaultProfileId?: unknown;
   /**
-   * Optional registry view supplied by the profile-registry integration.
+   * Optional registry view supplied by the movement-profile registry integration.
    * When omitted, non-empty custom ids are preserved instead of guessed.
    */
   readonly knownProfileIds?: readonly string[];
@@ -116,6 +133,7 @@ export function resolveMovementProfile(input: ResolveMovementProfileInput): Reso
       value: input.aiOverrideProfileId,
       source: 'ai_override',
       ownerToken: input.aiOverrideOwnerToken,
+      reason: input.aiOverrideReason,
     },
     { value: input.playerOrderProfileId, source: 'player_order' },
     { value: input.unitRoleProfileId, source: 'unit_role' },
@@ -178,9 +196,12 @@ export function resolveMovementProfileSelection(
 }
 
 export function movementProfileLabelRu(profileId: string): string {
-  if (profileId === 'normal') return 'Обычное движение';
-  if (profileId === 'stealth') return 'Скрытное движение';
-  if (profileId === 'fast') return 'Быстрое движение';
+  if (profileId === 'normal_walk') return 'Обычный шаг';
+  if (profileId === 'stealth_move') return 'Скрытное движение';
+  if (profileId === 'crouched_move') return 'Движение пригнувшись';
+  if (profileId === 'run') return 'Бег';
+  if (profileId === 'sprint') return 'Спринт';
+  if (profileId === 'crawl') return 'Ползком';
   return profileId;
 }
 
@@ -190,6 +211,16 @@ export function movementProfileSourceLabelRu(source: MovementProfileSource): str
   if (source === 'player_order') return 'приказ игрока';
   if (source === 'unit_role') return 'данные бойца';
   return 'профиль по умолчанию';
+}
+
+export function resolveMovementProfileDefinitionRevision(
+  profileId: string,
+  registryEntries?: readonly MovementProfileRegistryEntry[],
+): number | undefined {
+  const revision = registryEntries?.find((entry) => entry.id === profileId)?.revision;
+  return typeof revision === 'number' && Number.isFinite(revision)
+    ? Math.max(0, Math.floor(revision))
+    : undefined;
 }
 
 function resolveRegisteredFallback(registry: ReadonlySet<string>, value: unknown): string {
