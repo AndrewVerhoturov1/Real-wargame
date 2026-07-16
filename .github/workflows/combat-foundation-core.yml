@@ -53,6 +53,7 @@ on:
       - 'scripts/danger_route_cost_cache_smoke.*'
       - 'scripts/danger_layer_performance_smoke.*'
       - 'scripts/danger_layer_movement_performance_smoke.*'
+      - 'scripts/shared_visibility_vegetation_smoke.*'
       - 'scripts/live_navigation_replan_smoke.ts'
       - 'scripts/combat_safe_position_winner_smoke.ts'
       - 'scripts/reverse_slope_comparative_fixture.ts'
@@ -87,6 +88,9 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Shared visibility and vegetation smoke
+        shell: bash
+        run: set -o pipefail; npm run shared-visibility-vegetation:smoke 2>&1 | tee shared-visibility-vegetation.log
       - name: Danger route cost parity smoke
         shell: bash
         run: set -o pipefail; npm run danger-route-cost-parity:smoke 2>&1 | tee danger-route-cost-parity.log
@@ -176,6 +180,7 @@ jobs:
         with:
           name: combat-tactical-integration-log
           path: |
+            shared-visibility-vegetation.log
             workspace-smoke.log
             awareness-field.log
             danger-route-cost-parity.log
