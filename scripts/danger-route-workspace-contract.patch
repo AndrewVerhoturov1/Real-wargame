@@ -1,0 +1,24 @@
+diff --git a/scripts/tactical_workspace_smoke_pixijs8_baseline.mjs b/scripts/tactical_workspace_smoke_pixijs8_baseline.mjs
+index d878f5d..8a3ac02 100644
+--- a/scripts/tactical_workspace_smoke_pixijs8_baseline.mjs
++++ b/scripts/tactical_workspace_smoke_pixijs8_baseline.mjs
+@@ -385,13 +385,20 @@ expectIncludes('src/ui/WorkspaceTooltipGuard.ts', [
+ expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
+   'buildAwarenessField', 'buildBestSafePositions', 'buildRouteKey',
+   'getDirectionalTacticalField', 'readDirectionalTacticalCell',
+-  'readDirectionalProtectionForBearing', 'readDirectionalExposureForBearing',
+   'buildAwarenessKnowledgeKey', 'KNOWLEDGE_CONFIDENCE_BUCKET', 'KNOWLEDGE_UNCERTAINTY_BUCKET',
+   'evaluateAwarenessFieldCell', 'getAwarenessStaticField', 'evaluateRouteDangerFromField',
+   'reverseSlopeQuality', 'terrainConcealment', 'silhouetteRisk',
+ ]);
++expectIncludes('src/core/knowledge/SoldierDangerField.ts', [
++  'getSoldierDangerField', 'getSoldierDangerFieldDiagnostics',
++  'getThreatRelativeCoverField', 'getDirectionalTacticalField',
++  'readDirectionalProtectionForBearing', 'readDirectionalExposureForBearing',
++  'fireThreatClassForAggregation', "'rifle_fire'", "'machine_gun_fire'",
++  'GEOMETRY_CACHE_LIMIT', 'FIELD_CACHE_LIMIT',
++]);
++expectExcludes('src/core/knowledge/SoldierDangerField.ts', ['pixi.js', '../rendering/', '../ui/']);
+ expectExcludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
+   'const orderCellX', 'const orderCellY',
+   'evaluateSmallArmsCover', 'getCachedCover', 'coverCacheByMap', 'buildMapHash',
