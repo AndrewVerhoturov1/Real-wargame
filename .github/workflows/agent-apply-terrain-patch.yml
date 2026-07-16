@@ -64,16 +64,25 @@ jobs:
         if: steps.detect.outputs.apply == 'true'
         run: npm ci
 
-      - name: Environment material contracts
+      - name: Environment materials smoke
         if: steps.detect.outputs.apply == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm run environment-materials:smoke
-          npm run environment-material-migration:smoke
-          npm run environment-profile-revisions:smoke
-          npm run vegetation-chunk-raster:smoke
-          npm run environment-performance:smoke
+        run: npm run environment-materials:smoke
+
+      - name: Environment material migration smoke
+        if: steps.detect.outputs.apply == 'true'
+        run: npm run environment-material-migration:smoke
+
+      - name: Environment profile revisions smoke
+        if: steps.detect.outputs.apply == 'true'
+        run: npm run environment-profile-revisions:smoke
+
+      - name: Vegetation chunk raster smoke
+        if: steps.detect.outputs.apply == 'true'
+        run: npm run vegetation-chunk-raster:smoke
+
+      - name: Environment performance smoke
+        if: steps.detect.outputs.apply == 'true'
+        run: npm run environment-performance:smoke
 
       - name: Required simulation and performance matrix
         if: steps.detect.outputs.apply == 'true'
