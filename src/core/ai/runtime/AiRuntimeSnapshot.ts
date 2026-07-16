@@ -41,7 +41,7 @@ export interface SerializedMoveOrder {
   readonly movementProfileOwnerToken?: string;
   readonly movementProfileDefinitionRevision?: number;
   readonly movementProfileSelectionRevision?: number;
-  /** Legacy input only. */
+  /** Legacy serialized input only. New snapshots never write this field. */
   readonly movementProfileRevision?: number;
 }
 
@@ -197,9 +197,7 @@ export function serializeMoveOrder(order: MoveOrder): SerializedMoveOrder {
     movementProfileSource: order.movementProfileSource,
     movementProfileOwnerToken: order.movementProfileOwnerToken,
     movementProfileDefinitionRevision: integerNonNegative(order.movementProfileDefinitionRevision),
-    movementProfileSelectionRevision: integerNonNegative(
-      order.movementProfileSelectionRevision ?? order.movementProfileRevision,
-    ),
+    movementProfileSelectionRevision: integerNonNegative(order.movementProfileSelectionRevision),
   };
 }
 
