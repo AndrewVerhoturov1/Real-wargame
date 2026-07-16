@@ -204,7 +204,8 @@ export function preparePhysicalMovementStep(
   runtime.effectiveProfileSource = fallbackReason ? 'fallback' : runtime.requestedProfileSource;
   runtime.forcedFallbackReason = fallbackReason;
   runtime.actualGait = gait;
-  applyMovementPosture(unit, profile, gait);
+  const movementOwnsPosture = canTranslate || runtime.isMoving;
+  if (movementOwnsPosture) applyMovementPosture(unit, profile, gait);
   postureMultiplier = postureSpeedMultiplier(unit.behaviorRuntime.posture);
 
   const surfaceMultiplier = resolvePhysicalSurfaceMultiplier(state, unit.position);
@@ -270,7 +271,7 @@ export function preparePhysicalMovementStep(
     runtime.effectiveProfileSource = 'fallback';
     runtime.forcedFallbackReason = fallbackReason;
     runtime.actualGait = gait;
-    applyMovementPosture(unit, profile, gait);
+    if (movementOwnsPosture) applyMovementPosture(unit, profile, gait);
   } else {
     segments.push({ gait, seconds: activeSeconds });
   }

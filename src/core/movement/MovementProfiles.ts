@@ -85,7 +85,7 @@ const BASE_PROFILE: Omit<MovementProfile, 'id' | 'label' | 'labelRu' | 'builtIn'
     preferredPosture: 'standing',
     postureRequired: false,
     speedMultiplier: 1,
-    startSeconds: 0.12,
+    startSeconds: 0,
     stopSeconds: 0.08,
     autoPosture: true,
   },
