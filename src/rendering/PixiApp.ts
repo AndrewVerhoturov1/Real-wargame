@@ -196,6 +196,12 @@ export class PixiTacticalBoardApp {
   forceRender(): void {
     if (this.destroyed) return;
     this.mapRenderInvalidated = true;
+    this.renderNow();
+  }
+
+  /** Render changing simulation/UI layers while retaining the immutable map cache. */
+  renderNow(): void {
+    if (this.destroyed) return;
     this.renderFrame();
     this.updateDebugPanelIfNeeded(true);
   }
