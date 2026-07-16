@@ -15,6 +15,7 @@ export class TacticalOrderStatusCard {
     this.root.className = 'tactical-order-card';
     this.root.dataset.role = 'tactical-order-status';
     this.root.setAttribute('aria-live', 'polite');
+    this.root.hidden = true;
     document.body.append(this.root);
     this.update(true);
   }
@@ -28,16 +29,14 @@ export class TacticalOrderStatusCard {
     if (!force && key === this.lastKey) return;
     this.lastKey = key;
 
-    if (!unit) {
-      this.root.innerHTML = '<strong>Приказ: боец не выбран</strong><p>Выберите бойца, затем удерживайте правую кнопку мыши на карте.</p>';
-      return;
-    }
-    if (!command) {
-      this.root.innerHTML = '<strong>Приказ: нет</strong><p>Короткий RMB — обычное движение. Удержание RMB — выбор способа выполнения.</p>';
+    if (!unit || !command) {
+      this.root.hidden = true;
+      this.root.replaceChildren();
       return;
     }
 
     const preset = getTacticalOrderPresetDefinition(command.intent.presetId);
+    this.root.hidden = false;
     this.root.innerHTML = `
       <strong>Приказ: ${escapeHtml(preset.nameRu)}</strong>
       <p>${escapeHtml(preset.shortDescriptionRu)}</p>
