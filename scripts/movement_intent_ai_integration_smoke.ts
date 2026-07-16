@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { AiBlackboardValue } from '../src/core/ai/AiBlackboard';
 import type { AiGraph } from '../src/core/ai/AiGraph';
 import { runAiGraph } from '../src/core/ai/AiGraphRunner';
 import { runAiGraphRuntime } from '../src/core/ai/AiGraphRuntime';
+import { syncMoveOrderMemoryForUnit } from '../src/core/ai/AiStatefulMoveGameBridge';
 import { reconcileMovementProfileRuntime } from '../src/core/ai/MovementProfileRuntimeResolver';
 import { DEFAULT_AI_NODE_CONTRACT_REGISTRY } from '../src/core/ai/contracts/AiNodeContractRegistry';
 import {
@@ -24,14 +27,23 @@ import {
   normalizeTacticalOrderIntent,
   withTacticalOrderMovementProfile,
 } from '../src/core/orders/TacticalOrderIntent';
-import { normalizeUnits } from '../src/core/units/UnitModel';
+import { normalizeUnits, type UnitModel } from '../src/core/units/UnitModel';
+import {
+  BUILTIN_MOVEMENT_PROFILE_SELECTOR_PROVIDER,
+  listMovementProfileSelectorEntries,
+  setMovementProfileSelectorProvider,
+} from '../src/ai-node-editor/MovementProfileSelectorProvider';
+
+const REGISTRY = BUILTIN_MOVEMENT_PROFILE_IDS.map((id, index) => ({ id, revision: index + 10 }));
 
 verifyCanonicalIds();
-verifyRegistryFallback();
 verifyIntentOnlyMemory();
-verifySafetyResolver();
+verifySingleFinalizer();
+verifyFromOrderBehavior();
+verifyHardSafetyDiagnostics();
 verifyCurrentActiveSnapshot();
 verifyNodeSelectors();
+verifySelectorProvider();
 verifySplitRevisions();
 
 console.log('Movement intent and AI integration smoke passed.');
@@ -56,18 +68,6 @@ function verifyCanonicalIds(): void {
   assert.equal(legacyMovementModeToProfileId('fast'), 'run');
   assert.equal(legacyMovementModeToProfileId('careful'), 'stealth_move');
   assert.equal(legacyMovementModeToProfileId('crawl'), 'crawl');
-}
-
-function verifyRegistryFallback(): void {
-  assert.equal(resolveMovementProfile({
-    playerOrderProfileId: 'downloaded_custom_profile',
-  }).profileId, 'downloaded_custom_profile');
-  const missing = resolveMovementProfile({
-    playerOrderProfileId: 'missing_profile',
-    knownProfileIds: [...BUILTIN_MOVEMENT_PROFILE_IDS],
-  });
-  assert.equal(missing.profileId, 'normal_walk');
-  assert.equal(missing.forcedFallback, true);
 }
 
 function verifyIntentOnlyMemory(): void {
@@ -96,13 +96,14 @@ function verifyIntentOnlyMemory(): void {
   ].sort());
 }
 
-function verifySafetyResolver(): void {
-  const [unit] = normalizeUnits([{
-    id: 'resolver-unit', type: 'infantry_squad', side: 'blue', x: 1, y: 1,
-    movementProfileId: 'crouched_move',
-  }]);
+function verifySingleFinalizer(): void {
+  const unit = createUnit('single-finalizer-unit');
   const command = createPlayerMoveCommand(
-    unit.id, { x: 5.5, y: 5.5 }, null, 1000, createTacticalOrderIntent('recon'),
+    unit.id,
+    { x: 5.5, y: 5.5 },
+    null,
+    1000,
+    withTacticalOrderMovementProfile(createTacticalOrderIntent('move'), 'missing_profile'),
   );
   unit.playerCommand = command;
   unit.order = createMoveOrder(command.target, {
@@ -113,72 +114,148 @@ function verifySafetyResolver(): void {
     movementProfileOwnerToken: command.id,
     movementProfileSelectionRevision: command.revision,
   });
-  const runtime = unit.behaviorRuntime as typeof unit.behaviorRuntime & {
-    aiGraphMemory?: Record<string, AiBlackboardValue>;
-  };
-  const memory = runtime.aiGraphMemory ?? {};
-  runtime.aiGraphMemory = memory;
-  const activeBefore = memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId];
 
-  const graphResult = runAiGraph({
-    graph: graphWithAction('SetMovementProfile', {
-      profileId: 'sprint', ownerToken: 'dash-owner', reasonRu: 'Короткий рывок.',
-    }),
-    unitId: unit.id,
-    blackboard: memory,
-    nowMs: 1100,
+  const memory = movementMemory(unit);
+  const resolution = reconcileMovementProfileRuntime(unit, REGISTRY);
+  assert.equal(resolution.resolved.requestedProfileId, 'missing_profile');
+  assert.equal(resolution.resolved.profileId, 'normal_walk');
+  assert.equal(resolution.resolved.source, 'player_order');
+  assert.equal(resolution.resolved.forcedFallback, true);
+  assert.match(resolution.resolved.forcedReason ?? '', /missing_profile/);
+
+  const beforeSync = movementSnapshot(unit, memory);
+  syncMoveOrderMemoryForUnit(unit);
+  assert.deepEqual(movementSnapshot(unit, memory), beforeSync);
+
+  const effect = runMoveAction('single-finalizer-current', 'current_active', {
+    ...memory,
+    self_position: { x: 1, y: 1 },
+    best_cover_position: { x: 5, y: 5 },
   });
-  assert.equal(graphResult.ok, true);
-  Object.assign(memory, graphResult.blackboard);
-  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId], activeBefore);
-  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId], 'sprint');
+  assert.equal(effect.movementProfileId, 'normal_walk');
+  assert.equal(effect.movementProfileSource, 'player_order');
+  assert.equal(effect.movementProfileOwnerToken, undefined);
 
-  memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId] = 'crawl';
-  memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason] = 'injury';
-  const resolution = reconcileMovementProfileRuntime(
-    unit,
-    BUILTIN_MOVEMENT_PROFILE_IDS.map((id) => ({ id, revision: 3 })),
+  const bridgeSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/core/ai/AiStatefulMoveGameBridge.ts'),
+    'utf8',
   );
-  assert.equal(resolution.resolved.profileId, 'crawl');
-  assert.equal(resolution.resolved.source, 'hard_safety');
-  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId], 'crawl');
-  assert.equal(memory[MOVEMENT_PROFILE_MEMORY_KEYS.profileDefinitionRevision], 3);
-  assert.equal(unit.order?.movementProfileId, 'crawl');
-  assert.equal(unit.order?.movementProfileSource, 'hard_safety');
+  assert.equal(bridgeSource.includes('function publishMovementProfileMemory'), false);
+  assert.equal(bridgeSource.includes('function syncMoveOrderMovementProfileSnapshot'), false);
+  assert.equal(bridgeSource.includes('resolveMovementProfile('), false);
+  assert.equal(bridgeSource.includes('movementProfileRevision:'), false);
+}
+
+function verifyFromOrderBehavior(): void {
+  const withOrder = runMoveAction('from-order-present', 'from_order', {
+    self_position: { x: 1, y: 1 },
+    best_cover_position: { x: 5, y: 5 },
+    player_command_active: true,
+    player_order_movement_profile: 'stealth_move',
+    requested_movement_profile_id: 'run',
+  });
+  assert.equal(withOrder.movementProfileId, 'stealth_move');
+  assert.equal(withOrder.movementProfileSource, 'player_order');
+  assert.equal(withOrder.movementProfileOwnerToken, undefined);
+
+  const withoutOrderRole = runMoveAction('from-order-role', 'from_order', {
+    self_position: { x: 1, y: 1 },
+    best_cover_position: { x: 5, y: 5 },
+    player_command_active: false,
+    requested_movement_profile_id: 'run',
+  });
+  assert.equal(withoutOrderRole.movementProfileId, undefined);
+  assert.equal(withoutOrderRole.movementProfileSource, undefined);
+  assert.equal(withoutOrderRole.movementProfileOwnerToken, undefined);
+  const roleUnit = createUnit('role-fallback-unit', 'crouched_move');
+  const roleResolution = reconcileMovementProfileRuntime(roleUnit, REGISTRY);
+  assert.equal(roleResolution.resolved.profileId, 'crouched_move');
+  assert.equal(roleResolution.resolved.source, 'unit_role');
+
+  const withoutOrderDefault = runMoveAction('from-order-default', 'from_order', {
+    self_position: { x: 1, y: 1 },
+    best_cover_position: { x: 5, y: 5 },
+    player_command_active: false,
+  });
+  assert.equal(withoutOrderDefault.movementProfileId, undefined);
+  assert.equal(withoutOrderDefault.movementProfileSource, undefined);
+  const defaultResolution = reconcileMovementProfileRuntime(createUnit('default-fallback-unit'), REGISTRY);
+  assert.equal(defaultResolution.resolved.profileId, 'normal_walk');
+  assert.equal(defaultResolution.resolved.source, 'default');
+
+  const custom = runMoveAction('from-order-custom', 'from_order', {
+    self_position: { x: 1, y: 1 },
+    best_cover_position: { x: 5, y: 5 },
+    player_command_active: true,
+    player_order_movement_profile: 'custom_order_profile',
+  });
+  assert.equal(custom.movementProfileId, 'custom_order_profile');
+  assert.equal(custom.movementProfileSource, 'player_order');
+}
+
+function verifyHardSafetyDiagnostics(): void {
+  const orderSafety = createPlayerUnit('order-safety', 'stealth_move');
+  const orderSafetyMemory = movementMemory(orderSafety);
+  orderSafetyMemory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId] = 'crawl';
+  orderSafetyMemory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason] = 'Leg injury requires crawling.';
+  const orderSafetyResolution = reconcileMovementProfileRuntime(orderSafety, REGISTRY);
+  assert.equal(orderSafetyResolution.resolved.requestedProfileId, 'stealth_move');
+  assert.equal(orderSafetyResolution.resolved.profileId, 'crawl');
+  assert.equal(orderSafetyResolution.resolved.source, 'hard_safety');
+  assert.equal(orderSafetyResolution.resolved.forcedFallback, true);
+  assert.equal(orderSafetyResolution.resolved.forcedReason, 'Leg injury requires crawling.');
+
+  const overrideSafety = createPlayerUnit('override-safety', 'normal_walk');
+  const overrideSafetyMemory = movementMemory(overrideSafety);
+  overrideSafetyMemory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId] = 'sprint';
+  overrideSafetyMemory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken] = 'dash-owner';
+  overrideSafetyMemory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId] = 'crawl';
+  overrideSafetyMemory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason] = 'Suppression forces crawl.';
+  const overrideSafetyResolution = reconcileMovementProfileRuntime(overrideSafety, REGISTRY);
+  assert.equal(overrideSafetyResolution.resolved.requestedProfileId, 'normal_walk');
+  assert.equal(overrideSafetyResolution.resolved.profileId, 'crawl');
+  assert.equal(overrideSafetyResolution.resolved.source, 'hard_safety');
+  assert.equal(overrideSafetyResolution.resolved.forcedFallback, true);
+  assert.equal(overrideSafetyResolution.resolved.forcedReason, 'Suppression forces crawl.');
+
+  const orderOverride = createPlayerUnit('order-override', 'stealth_move');
+  const orderOverrideMemory = movementMemory(orderOverride);
+  orderOverrideMemory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId] = 'sprint';
+  orderOverrideMemory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken] = 'dash-owner';
+  orderOverrideMemory[MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideReason] = 'AI dash.';
+  const orderOverrideResolution = reconcileMovementProfileRuntime(orderOverride, REGISTRY);
+  assert.equal(orderOverrideResolution.resolved.requestedProfileId, 'stealth_move');
+  assert.equal(orderOverrideResolution.resolved.profileId, 'sprint');
+  assert.equal(orderOverrideResolution.resolved.source, 'ai_override');
+  assert.equal(orderOverrideResolution.resolved.ownerToken, 'dash-owner');
+  assert.equal(orderOverrideResolution.resolved.forcedFallback, false);
+  assert.equal(orderOverrideResolution.resolved.forcedReason, undefined);
+
+  const missingOrder = createPlayerUnit('missing-order', 'missing_player_profile');
+  const missingResolution = reconcileMovementProfileRuntime(missingOrder, REGISTRY);
+  assert.equal(missingResolution.resolved.requestedProfileId, 'missing_player_profile');
+  assert.equal(missingResolution.resolved.profileId, 'normal_walk');
+  assert.equal(missingResolution.resolved.source, 'player_order');
+  assert.equal(missingResolution.resolved.forcedFallback, true);
+  assert.match(missingResolution.resolved.forcedReason ?? '', /missing_player_profile/);
+
+  const directOverride = resolveMovementProfile({
+    playerOrderProfileId: 'normal_walk',
+    aiOverrideProfileId: 'run',
+    knownProfileIds: [...BUILTIN_MOVEMENT_PROFILE_IDS],
+  });
+  assert.equal(directOverride.forcedFallback, false);
 }
 
 function verifyCurrentActiveSnapshot(): void {
-  const result = runAiGraphRuntime({
-    graph: graphWithAction('MoveToBlackboardPosition', {
-      targetKey: 'best_cover_position',
-      movementProfileSource: 'current_active',
-      movementProfileId: 'normal_walk',
-      acceptanceRadiusCells: 0.2,
-      timeoutSeconds: 15,
-      stuckTimeoutSeconds: 2.5,
-      minimumProgressCells: 0.05,
-      abortOnTargetLost: true,
-    }),
-    unitId: 'current-active-unit',
-    blackboard: {
-      self_position: { x: 1, y: 1 },
-      best_cover_position: { x: 5, y: 5 },
-      active_movement_profile_id: 'crawl',
-      active_movement_profile_source: 'ai_override',
-      movement_profile_override_id: 'crawl',
-      movement_profile_override_owner_token: 'existing-owner',
-    },
-    cooldowns: {},
-    nowMs: 2000,
+  const effect = runMoveAction('current-active-unit', 'current_active', {
+    self_position: { x: 1, y: 1 },
+    best_cover_position: { x: 5, y: 5 },
+    active_movement_profile_id: 'crawl',
+    active_movement_profile_source: 'ai_override',
+    movement_profile_override_id: 'crawl',
+    movement_profile_override_owner_token: 'existing-owner',
   });
-  const effect = result.effects.find((candidate) => candidate.type === 'begin_move') as (
-    typeof result.effects[number] & {
-      movementProfileId?: string;
-      movementProfileSource?: string;
-      movementProfileOwnerToken?: string;
-    }
-  ) | undefined;
-  assert.ok(effect);
   assert.equal(effect.movementProfileId, 'crawl');
   assert.equal(effect.movementProfileSource, 'ai_override');
   assert.equal(effect.movementProfileOwnerToken, undefined);
@@ -196,6 +273,21 @@ function verifyNodeSelectors(): void {
     assert.equal(parameter?.selector, 'movement_profile_registry');
     assert.equal(parameter?.options, undefined);
   }
+}
+
+function verifySelectorProvider(): void {
+  setMovementProfileSelectorProvider(BUILTIN_MOVEMENT_PROFILE_SELECTOR_PROVIDER);
+  assert.deepEqual(
+    listMovementProfileSelectorEntries().map((entry) => entry.id),
+    [...BUILTIN_MOVEMENT_PROFILE_IDS],
+  );
+  setMovementProfileSelectorProvider({
+    listProfiles: () => [{ id: 'custom_selector_profile', nameRu: 'Пользовательский', revision: 7 }],
+  });
+  assert.deepEqual(listMovementProfileSelectorEntries(), [{
+    id: 'custom_selector_profile', nameRu: 'Пользовательский', revision: 7,
+  }]);
+  setMovementProfileSelectorProvider(null);
 }
 
 function verifySplitRevisions(): void {
@@ -217,6 +309,103 @@ function verifySplitRevisions(): void {
     movementProfileSelectionRevision: undefined,
     movementProfileRevision: 5,
   }).movementProfileSelectionRevision, 5);
+}
+
+function runMoveAction(
+  unitId: string,
+  movementProfileSource: 'from_order' | 'current_active' | 'automatic' | 'specific',
+  blackboard: Record<string, AiBlackboardValue>,
+): {
+  readonly movementProfileId?: string;
+  readonly movementProfileSource?: string;
+  readonly movementProfileOwnerToken?: string;
+} {
+  const result = runAiGraphRuntime({
+    graph: graphWithAction('MoveToBlackboardPosition', {
+      targetKey: 'best_cover_position',
+      movementProfileSource,
+      movementProfileId: 'normal_walk',
+      acceptanceRadiusCells: 0.2,
+      timeoutSeconds: 15,
+      stuckTimeoutSeconds: 2.5,
+      minimumProgressCells: 0.05,
+      abortOnTargetLost: true,
+    }),
+    unitId,
+    blackboard,
+    cooldowns: {},
+    nowMs: 2000,
+  });
+  const effect = result.effects.find((candidate) => candidate.type === 'begin_move') as (
+    typeof result.effects[number] & {
+      movementProfileId?: string;
+      movementProfileSource?: string;
+      movementProfileOwnerToken?: string;
+    }
+  ) | undefined;
+  assert.ok(effect);
+  return effect;
+}
+
+function createUnit(id: string, movementProfileId?: string): UnitModel {
+  const [unit] = normalizeUnits([{
+    id,
+    type: 'infantry_squad',
+    side: 'blue',
+    x: 1,
+    y: 1,
+    movementProfileId,
+  }]);
+  return unit;
+}
+
+function createPlayerUnit(id: string, movementProfileId: string): UnitModel {
+  const unit = createUnit(id);
+  const command = createPlayerMoveCommand(
+    unit.id,
+    { x: 5.5, y: 5.5 },
+    null,
+    1000,
+    withTacticalOrderMovementProfile(createTacticalOrderIntent('move'), movementProfileId),
+  );
+  unit.playerCommand = command;
+  unit.order = createMoveOrder(command.target, {
+    source: 'player',
+    playerCommandId: command.id,
+    movementProfileId,
+    movementProfileSource: 'player_order',
+    movementProfileOwnerToken: command.id,
+    movementProfileSelectionRevision: command.revision,
+  });
+  return unit;
+}
+
+function movementMemory(unit: UnitModel): Record<string, AiBlackboardValue> {
+  const runtime = unit.behaviorRuntime as typeof unit.behaviorRuntime & {
+    aiGraphMemory?: Record<string, AiBlackboardValue>;
+  };
+  const memory = runtime.aiRuntimeSession?.blackboardMemory ?? runtime.aiGraphMemory ?? {};
+  if (!runtime.aiRuntimeSession) runtime.aiGraphMemory = memory;
+  return memory;
+}
+
+function movementSnapshot(unit: UnitModel, memory: Record<string, AiBlackboardValue>): unknown {
+  return {
+    requested: memory[MOVEMENT_PROFILE_MEMORY_KEYS.requestedProfileId],
+    active: memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId],
+    source: memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource],
+    forced: memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedFallback],
+    reason: memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedReason],
+    definitionRevision: memory[MOVEMENT_PROFILE_MEMORY_KEYS.profileDefinitionRevision],
+    selectionRevision: memory[MOVEMENT_PROFILE_MEMORY_KEYS.profileSelectionRevision],
+    order: unit.order ? {
+      id: unit.order.movementProfileId,
+      source: unit.order.movementProfileSource,
+      owner: unit.order.movementProfileOwnerToken,
+      definitionRevision: unit.order.movementProfileDefinitionRevision,
+      selectionRevision: unit.order.movementProfileSelectionRevision,
+    } : null,
+  };
 }
 
 function graphWithAction(type: string, parameters: Record<string, AiBlackboardValue>): AiGraph {
