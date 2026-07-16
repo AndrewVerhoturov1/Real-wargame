@@ -43,7 +43,7 @@ The finalizer separates two concepts.
 Requested baseline:
 
 ```text
-player order
+active player order
 → unit role
 → default
 ```
@@ -55,6 +55,8 @@ hard safety
 → AI override
 → requested baseline
 ```
+
+Completed or cancelled player commands are not movement-profile sources.
 
 `requested_movement_profile_id` always reports the baseline intent. A hard-safety replacement does not overwrite it.
 
@@ -158,11 +160,9 @@ movementProfileSelectionRevision
 → order/override/effective-selection revision
 ```
 
-The old `movementProfileRevision` is accepted only while reading legacy data:
+New runtime objects and new snapshots write only these explicit fields.
 
-- `MoveOrderOptions` may migrate it into `movementProfileSelectionRevision`;
-- runtime snapshot normalization may read it;
-- new runtime objects and new snapshots never write it.
+The old `movementProfileRevision` is accepted only while reading or normalizing a legacy runtime snapshot. It migrates to `movementProfileSelectionRevision`; it is not a field of new `MoveOrder` options or runtime objects.
 
 ## Blackboard and diagnostics
 
@@ -207,6 +207,8 @@ Until the registry PR is integrated, the provider falls back to the six canonica
 The real integration provider must be backed by PR #133 `MovementProfileBrowserStorage` and the canonical movement-profile selector/registry. Storage parsing and registry subscription belong in that adapter, not in generic contract rendering or movement core.
 
 Unknown selected IDs remain visible as unavailable rather than being silently replaced in the graph JSON.
+
+See `MOVEMENT_PROFILE_SELECTOR_PROVIDER_INTEGRATION.md` for the adapter boundary.
 
 ## MoveOrder and serialization
 
@@ -274,7 +276,7 @@ The smoke proves:
 - hard safety always wins and sets forced diagnostics;
 - AI override alone is not a forced fallback;
 - selector-provider built-in and custom entries;
-- split revisions and read-only legacy migration;
+- split revisions and snapshot-read-only legacy migration;
 - bridge source contains no duplicate priority/fallback implementation.
 
 It is included at the start of:
