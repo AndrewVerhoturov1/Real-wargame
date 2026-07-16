@@ -12,6 +12,10 @@ import {
 } from '../terrain/DirectionalTerrainSectorBasis';
 import type { FireThreatClass } from '../units/UnitModel';
 import {
+  getVisibilityGeometryField,
+  type VisibilityGeometryField,
+} from '../visibility/VisibilityGeometryField';
+import {
   getAwarenessStaticField,
   type AwarenessStaticField,
 } from './AwarenessStaticField';
@@ -20,6 +24,7 @@ const THREAT_GEOMETRY_CACHE_LIMIT = 24;
 const FIELD_CACHE_LIMIT = 12;
 const DIRECTIONAL_UNCERTAINTY_ARC_DEGREES_PER_METER = 1;
 const UNCERTAINTY_SCORE_PER_METER = 0.5;
+const THREAT_ORIGIN_HEIGHT_METERS = 1.4;
 
 export interface SoldierDangerThreat {
   readonly id: string;
@@ -71,15 +76,11 @@ export interface SoldierDangerField {
 }
 
 export interface SoldierDangerFieldDiagnostics {
-  /** Number of individual threat geometries built. */
   readonly geometryBuildCount: number;
   readonly fieldBuildCount: number;
-  /** Number of individual threat-geometry cache hits. */
   readonly geometryCacheHitCount: number;
   readonly fieldCacheHitCount: number;
-  /** One full-map scan per individual threat geometry build. */
   readonly fullMapScanCount: number;
-  /** Legacy alias retained for callers that previously observed set snapshots. */
   readonly cachedGeometryCount: number;
   readonly cachedThreatGeometryCount: number;
   readonly cachedFieldCount: number;
@@ -174,10 +175,7 @@ export function clearSoldierDangerFieldCache(map: TacticalMap): void {
   cacheByMap.delete(map);
 }
 
-export function readSoldierDangerAt(
-  field: SoldierDangerField,
-  position: GridPosition,
-): number {
+export function readSoldierDangerAt(field: SoldierDangerField, position: GridPosition): number {
   const x = Math.floor(position.x);
   const y = Math.floor(position.y);
   if (x < 0 || y < 0 || x >= field.width || y >= field.height) return 0;
@@ -192,7 +190,21 @@ function getThreatGeometry(
   directionalBasis: DirectionalTerrainSectorBasis,
   cache: MapCache,
 ): ThreatCellGeometry {
-  const key = buildThreatGeometryKey(posture, staticField.key, directionalBasis.key, threat);
+  const lineOfFire = threat.mode === 'directional_fire'
+    ? getVisibilityGeometryField(map, {
+        origin: { x: threat.x, y: threat.y },
+        originHeightAboveGroundMeters: THREAT_ORIGIN_HEIGHT_METERS,
+        targetHeightAboveGroundMeters: targetHeightForPosture(posture),
+        rangeCells: Math.max(0.5, threat.rangeCells + threat.uncertaintyCells),
+      })
+    : null;
+  const key = buildThreatGeometryKey(
+    posture,
+    staticField.key,
+    directionalBasis.key,
+    lineOfFire?.key ?? 'area-no-line-of-fire',
+    threat,
+  );
   const existing = cache.threatGeometries.get(key);
   if (existing) {
     cache.diagnostics.geometryCacheHitCount += 1;
@@ -200,7 +212,7 @@ function getThreatGeometry(
     return existing;
   }
 
-  const geometry = buildThreatGeometry(map, posture, threat, staticField, directionalBasis, key);
+  const geometry = buildThreatGeometry(map, posture, threat, staticField, directionalBasis, lineOfFire, key);
   cache.threatGeometries.set(key, geometry);
   trimCache(cache.threatGeometries, THREAT_GEOMETRY_CACHE_LIMIT);
   cache.diagnostics.geometryBuildCount += 1;
@@ -214,6 +226,7 @@ function buildThreatGeometry(
   threat: SoldierDangerThreat,
   staticField: AwarenessStaticField,
   directionalBasis: DirectionalTerrainSectorBasis,
+  lineOfFire: VisibilityGeometryField | null,
   key: string,
 ): ThreatCellGeometry {
   const cellCount = map.width * map.height;
@@ -232,8 +245,15 @@ function buildThreatGeometry(
     for (let x = 0; x < map.width; x += 1) {
       const index = y * map.width + x;
       const position = { x: x + 0.5, y: y + 0.5 };
-      const threatFactor = threatFactorAtPosition(position, threat, staticField.metersPerCell);
+      let threatFactor = threatFactorAtPosition(position, threat, staticField.metersPerCell);
       if (threatFactor <= 0) continue;
+
+      if (lineOfFire) {
+        if (lineOfFire.hardBlocked[index] === 1) continue;
+        const fireTransmission = (lineOfFire.fireTransmission[index] ?? 0) / 255;
+        if (fireTransmission <= 0) continue;
+        threatFactor *= fireTransmission;
+      }
 
       const bearingToThreat = Math.atan2(threat.y - position.y, threat.x - position.x);
       const terrainProtection = readDirectionalBasisValue(
@@ -372,9 +392,10 @@ function buildThreatGeometryKey(
   posture: UnitPosture,
   staticFieldKey: string,
   directionalBasisKey: string,
+  lineOfFireKey: string,
   threat: SoldierDangerThreat,
 ): string {
-  return [posture, staticFieldKey, directionalBasisKey, buildThreatGeometrySignature(threat)].join('#');
+  return [posture, staticFieldKey, directionalBasisKey, lineOfFireKey, buildThreatGeometrySignature(threat)].join('#');
 }
 
 function buildThreatGeometrySignature(threat: SoldierDangerThreat): string {
@@ -463,6 +484,12 @@ function threatFactorAtPosition(
     && Math.abs(localY) <= threat.heightCells / 2 + uncertaintyBonus
     ? 1
     : 0;
+}
+
+function targetHeightForPosture(posture: UnitPosture): number {
+  if (posture === 'prone') return 0.35;
+  if (posture === 'crouched') return 1.1;
+  return 1.4;
 }
 
 function coverProtectionAt(field: ThreatRelativeCoverField, index: number): number {
