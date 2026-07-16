@@ -30,6 +30,7 @@ const state = createInitialState(map, [{
   y: 3,
 }]);
 const unit = state.units[0];
+assert.ok(unit);
 const movingThreat = threat('unit:moving', 9.5, 3.5, true);
 unit.tacticalKnowledge.threats = [movingThreat];
 unit.tacticalKnowledge.revision = 1;
@@ -116,6 +117,9 @@ const reusedFields = getRouteCostFields(state.map, profile, topologyChange, rout
 assert.equal(reusedFields, readyFields, 'the same UI/AI snapshot must read already prepared route fields');
 assert.equal(getRouteCostFieldDiagnostics(routeCache).snapshotReuseCount, 1);
 
+verifyImmediateBypassesCoalescedScoreSuppression();
+verifyObserverDependentSnapshotIdentity();
+
 clearUnitTacticalRouteContext(unit);
 assert.notEqual(buildUnitTacticalRouteContext(unit, {
   freshness: 'coalesced',
@@ -123,6 +127,92 @@ assert.notEqual(buildUnitTacticalRouteContext(unit, {
 }), topologyChange, 'explicit reset must discard the cached snapshot');
 
 console.log('Tactical snapshot coalescing smoke passed: movement is time-bounded while orders and topology changes remain immediate.');
+
+function verifyImmediateBypassesCoalescedScoreSuppression(): void {
+  for (const scalar of ['strength', 'suppression', 'confidence'] as const) {
+    clearUnitTacticalRouteContext(unit);
+    const current = threat(`unit:immediate-${scalar}`, 9.5, 3.5, true);
+    current.strength = 70;
+    current.suppression = 20;
+    current.confidence = 70;
+    unit.tacticalKnowledge.threats = [current];
+    unit.tacticalKnowledge.revision = 100;
+    unit.tacticalKnowledge.lastUpdatedSeconds = 10;
+
+    const published = buildUnitTacticalRouteContext(unit, {
+      freshness: 'coalesced',
+      metersPerCell: map.metersPerCell,
+    });
+    const nextValue = scalar === 'suppression' ? 25 : 75;
+    const expectedCanonicalValue = scalar === 'confidence' ? 80 : nextValue;
+    current[scalar] = nextValue;
+    unit.tacticalKnowledge.revision += 1;
+    unit.tacticalKnowledge.lastUpdatedSeconds += 0.1;
+
+    const suppressed = buildUnitTacticalRouteContext(unit, {
+      freshness: 'coalesced',
+      metersPerCell: map.metersPerCell,
+    });
+    assert.equal(suppressed, published, `coalesced ${scalar} drift must retain the published snapshot`);
+    assert.equal(suppressed.knownThreats[0]?.[scalar], scalar === 'suppression' ? 20 : 70);
+
+    const exact = buildUnitTacticalRouteContext(unit, {
+      freshness: 'immediate',
+      metersPerCell: map.metersPerCell,
+    });
+    assert.notEqual(exact, published, `immediate ${scalar} must not inherit coalesced suppression`);
+    assert.equal(exact.knownThreats[0]?.[scalar], expectedCanonicalValue);
+    assert.equal(exact.knowledgeRevision, unit.tacticalKnowledge.revision);
+    assert.equal(Object.isFrozen(exact), true, 'published context must be immutable at runtime');
+    assert.equal(Object.isFrozen(exact.knownThreats), true, 'published threat collection must be immutable at runtime');
+    assert.equal(Object.isFrozen(exact.knownThreats[0]), true, 'published threat entries must be immutable at runtime');
+  }
+}
+
+function verifyObserverDependentSnapshotIdentity(): void {
+  clearUnitTacticalRouteContext(unit);
+  const current = threat('unit:posture', 9.5, 3.5, true);
+  unit.tacticalKnowledge.threats = [current];
+  unit.tacticalKnowledge.revision = 200;
+  unit.tacticalKnowledge.lastUpdatedSeconds = 20;
+  unit.behaviorRuntime.posture = 'standing';
+
+  const standing = buildUnitTacticalRouteContext(unit, {
+    freshness: 'immediate',
+    metersPerCell: map.metersPerCell,
+  });
+  const standingFields = getRouteCostFields(state.map, profile, standing, createRouteCostFieldCache());
+  assert.equal(standing.posture, 'standing');
+  assert.match(standingFields.dangerFieldKey, /^standing#/);
+
+  unit.behaviorRuntime.posture = 'crouched';
+  const crouched = buildUnitTacticalRouteContext(unit, {
+    freshness: 'immediate',
+    metersPerCell: map.metersPerCell,
+  });
+  const crouchedFields = getRouteCostFields(state.map, profile, crouched, createRouteCostFieldCache());
+  assert.notEqual(crouched, standing, 'posture must invalidate the snapshot without a knowledge revision');
+  assert.equal(crouched.posture, 'crouched');
+  assert.match(crouchedFields.dangerFieldKey, /^crouched#/);
+
+  unit.behaviorRuntime.posture = 'prone';
+  const prone = buildUnitTacticalRouteContext(unit, {
+    freshness: 'immediate',
+    metersPerCell: map.metersPerCell,
+  });
+  const proneFields = getRouteCostFields(state.map, profile, prone, createRouteCostFieldCache());
+  assert.notEqual(prone, crouched, 'each posture transition must publish a new snapshot');
+  assert.equal(prone.posture, 'prone');
+  assert.match(proneFields.dangerFieldKey, /^prone#/);
+
+  const rescaled = buildUnitTacticalRouteContext(unit, {
+    freshness: 'immediate',
+    metersPerCell: 2,
+  });
+  assert.notEqual(rescaled, prone, 'metersPerCell must participate in snapshot identity');
+  assert.equal(rescaled.knownThreats[0]?.rangeCells, 125);
+  assert.equal(prone.knownThreats[0]?.rangeCells, 50);
+}
 
 function threat(id: string, x: number, y: number, visibleNow: boolean): KnownThreatMemory {
   return {

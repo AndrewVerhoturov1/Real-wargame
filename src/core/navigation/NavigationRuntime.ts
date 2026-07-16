@@ -18,11 +18,19 @@ export interface TacticalRouteContextOptions {
 }
 
 interface CachedTacticalRouteContext {
-  readonly capturedAtSeconds: number;
-  readonly sourceKnowledgeRevision: number;
-  readonly canonicalThreatKey: string;
-  readonly topologyKey: string;
-  readonly context: TacticalRouteContext;
+  readonly observed: {
+    readonly sourceKnowledgeRevision: number;
+    readonly snapshotIdentityKey: string;
+    readonly topologyKey: string;
+    readonly canonical: ReturnType<typeof buildCanonicalWorldThreatSet>;
+  };
+  readonly published: {
+    readonly capturedAtSeconds: number;
+    readonly snapshotIdentityKey: string;
+    readonly topologyKey: string;
+    readonly canonicalThreatKey: string;
+    readonly context: TacticalRouteContext;
+  };
 }
 
 const tacticalContextByUnit = new WeakMap<UnitModel, CachedTacticalRouteContext>();
@@ -51,86 +59,95 @@ export function buildUnitTacticalRouteContext(
 ): TacticalRouteContext {
   const topologyKey = buildThreatTopologyKey(unit);
   const currentTimeSeconds = unit.tacticalKnowledge.lastUpdatedSeconds;
+  const metersPerCell = normalizeMetersPerCell(options.metersPerCell);
+  const snapshotIdentityKey = `${unit.behaviorRuntime.posture}:${metersPerCell}`;
   const cached = tacticalContextByUnit.get(unit);
+  const canonical = cached
+    && cached.observed.sourceKnowledgeRevision === unit.tacticalKnowledge.revision
+    && cached.observed.snapshotIdentityKey === snapshotIdentityKey
+    && cached.observed.topologyKey === topologyKey
+    ? cached.observed.canonical
+    : buildCanonicalWorldThreatSet(unit.tacticalKnowledge.threats, metersPerCell);
+  const observed: CachedTacticalRouteContext['observed'] = {
+    sourceKnowledgeRevision: unit.tacticalKnowledge.revision,
+    snapshotIdentityKey,
+    topologyKey,
+    canonical,
+  };
+  const published = cached?.published;
   if (
-    cached
-    && cached.topologyKey === topologyKey
-    && cached.sourceKnowledgeRevision === unit.tacticalKnowledge.revision
+    published
+    && published.snapshotIdentityKey === snapshotIdentityKey
+    && published.topologyKey === topologyKey
+    && published.canonicalThreatKey === canonical.key
   ) {
-    return cached.context;
-  }
-
-  const canonical = buildCanonicalWorldThreatSet(
-    unit.tacticalKnowledge.threats,
-    options.metersPerCell,
-  );
-  if (cached && cached.topologyKey === topologyKey && cached.canonicalThreatKey === canonical.key) {
-    tacticalContextByUnit.set(unit, {
-      ...cached,
-      sourceKnowledgeRevision: unit.tacticalKnowledge.revision,
-    });
-    return cached.context;
-  }
-  if (
-    options.freshness === 'coalesced'
-    && cached
-    && cached.topologyKey === topologyKey
-    && !hasMeaningfulTacticalChange(cached.context.knownThreats, canonical.threats)
-  ) {
-    tacticalContextByUnit.set(unit, {
-      ...cached,
-      sourceKnowledgeRevision: unit.tacticalKnowledge.revision,
-      canonicalThreatKey: canonical.key,
-    });
-    return cached.context;
+    tacticalContextByUnit.set(unit, { observed, published });
+    return published.context;
   }
   if (
     options.freshness === 'coalesced'
-    && cached
-    && cached.topologyKey === topologyKey
-    && (
-      cached.context.knowledgeRevision === unit.tacticalKnowledge.revision
-      || currentTimeSeconds - cached.capturedAtSeconds < COALESCED_TACTICAL_SNAPSHOT_SECONDS
-    )
+    && published
+    && published.snapshotIdentityKey === snapshotIdentityKey
+    && published.topologyKey === topologyKey
+    && !hasMeaningfulTacticalChange(published.context.knownThreats, canonical.threats)
   ) {
-    return cached.context;
+    tacticalContextByUnit.set(unit, { observed, published });
+    return published.context;
+  }
+  if (
+    options.freshness === 'coalesced'
+    && published
+    && published.snapshotIdentityKey === snapshotIdentityKey
+    && published.topologyKey === topologyKey
+    && currentTimeSeconds - published.capturedAtSeconds < COALESCED_TACTICAL_SNAPSHOT_SECONDS
+  ) {
+    tacticalContextByUnit.set(unit, { observed, published });
+    return published.context;
   }
 
-  const context: TacticalRouteContext = {
+  const knownThreats = Object.freeze(canonical.threats.map((threat) => Object.freeze({
+    id: threat.id,
+    x: threat.x,
+    y: threat.y,
+    radiusCells: threat.radiusCells,
+    widthCells: threat.widthCells,
+    heightCells: threat.heightCells,
+    rotationDegrees: threat.rotationDegrees,
+    mode: threat.mode,
+    strength: threat.strength,
+    suppression: threat.suppression,
+    confidence: threat.confidence,
+    uncertaintyCells: threat.uncertaintyCells,
+    directionDegrees: threat.directionDegrees,
+    arcDegrees: threat.arcDegrees,
+    rangeCells: threat.rangeCells,
+    minRangeCells: threat.minRangeCells,
+    falloffPercent: threat.falloffPercent,
+    fireThreatClass: threat.fireThreatClass ?? null,
+  })));
+  const context: TacticalRouteContext = Object.freeze({
     unitId: unit.id,
     originX: unit.position.x,
     originY: unit.position.y,
     posture: unit.behaviorRuntime.posture,
     knowledgeRevision: unit.tacticalKnowledge.revision,
-    knownThreats: canonical.threats.map((threat) => ({
-      id: threat.id,
-      x: threat.x,
-      y: threat.y,
-      radiusCells: threat.radiusCells,
-      widthCells: threat.widthCells,
-      heightCells: threat.heightCells,
-      rotationDegrees: threat.rotationDegrees,
-      mode: threat.mode,
-      strength: threat.strength,
-      suppression: threat.suppression,
-      confidence: threat.confidence,
-      uncertaintyCells: threat.uncertaintyCells,
-      directionDegrees: threat.directionDegrees,
-      arcDegrees: threat.arcDegrees,
-      rangeCells: threat.rangeCells,
-      minRangeCells: threat.minRangeCells,
-      falloffPercent: threat.falloffPercent,
-      fireThreatClass: threat.fireThreatClass ?? null,
-    })),
-  };
+    knownThreats,
+  });
   tacticalContextByUnit.set(unit, {
-    capturedAtSeconds: currentTimeSeconds,
-    sourceKnowledgeRevision: unit.tacticalKnowledge.revision,
-    canonicalThreatKey: canonical.key,
-    topologyKey,
-    context,
+    observed,
+    published: {
+      capturedAtSeconds: currentTimeSeconds,
+      snapshotIdentityKey,
+      canonicalThreatKey: canonical.key,
+      topologyKey,
+      context,
+    },
   });
   return context;
+}
+
+function normalizeMetersPerCell(value: number): number {
+  return Math.max(0.001, Number.isFinite(value) ? value : 0);
 }
 
 export function clearUnitTacticalRouteContext(unit: UnitModel): void {
