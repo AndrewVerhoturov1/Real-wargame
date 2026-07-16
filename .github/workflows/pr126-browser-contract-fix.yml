@@ -28,30 +28,35 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+
           path = Path('src/testing/CombatTacticalIntegrationVisualQaHarness.ts')
           source = path.read_text(encoding='utf-8')
-          dynamic_before = """      observer.tacticalKnowledge.revision += 1;
-          // The real simulation changes tactical knowledge inside the live ticker. Let that same
-          """
-          dynamic_after = """      observer.tacticalKnowledge.revision += 1;
-          buildSoldierAwarenessReport(state, observer);
-          // The real simulation changes tactical knowledge inside the live ticker. Let that same
-          """
-          geometry_before = """      moving.x = clamp(moving.x + 0.35, 0.5, state.map.width - 0.5);
-          observer.tacticalKnowledge.revision += 1;
-          window.dispatchEvent(new CustomEvent('real-wargame:combat-tactical-visual-qa-updated'));
-          """
-          geometry_after = """      moving.x = clamp(moving.x + 0.35, 0.5, state.map.width - 0.5);
-          observer.tacticalKnowledge.revision += 1;
-          buildSoldierAwarenessReport(state, observer);
-          window.dispatchEvent(new CustomEvent('real-wargame:combat-tactical-visual-qa-updated'));
-          """
-          if source.count(dynamic_before) != 1:
-              raise SystemExit(f'dynamic performance anchor count: {source.count(dynamic_before)}')
-          if source.count(geometry_before) != 1:
-              raise SystemExit(f'geometry performance anchor count: {source.count(geometry_before)}')
-          source = source.replace(dynamic_before, dynamic_after)
-          source = source.replace(geometry_before, geometry_after)
+
+          dynamic_start = source.index('    stepDangerPerformanceDynamicUpdate(step): void {')
+          geometry_start = source.index('    stepDangerPerformanceGeometryUpdate(step): void {', dynamic_start)
+          dynamic = source[dynamic_start:geometry_start]
+          dynamic_anchor = '      observer.tacticalKnowledge.revision += 1;\n'
+          if dynamic.count(dynamic_anchor) != 1:
+              raise SystemExit(f'dynamic revision anchor count: {dynamic.count(dynamic_anchor)}')
+          dynamic = dynamic.replace(
+              dynamic_anchor,
+              dynamic_anchor + '      buildSoldierAwarenessReport(state, observer);\n',
+          )
+
+          geometry_end = source.index('    },\n  };', geometry_start) + len('    },\n')
+          geometry = source[geometry_start:geometry_end]
+          geometry_anchor = '      observer.tacticalKnowledge.revision += 1;\n'
+          if geometry.count(geometry_anchor) != 1:
+              raise SystemExit(f'geometry revision anchor count: {geometry.count(geometry_anchor)}')
+          geometry = geometry.replace(
+              geometry_anchor,
+              geometry_anchor + '      buildSoldierAwarenessReport(state, observer);\n',
+          )
+
+          source = source[:dynamic_start] + dynamic + source[geometry_start:]
+          adjusted_geometry_start = source.index('    stepDangerPerformanceGeometryUpdate(step): void {', dynamic_start)
+          adjusted_geometry_end = source.index('    },\n  };', adjusted_geometry_start) + len('    },\n')
+          source = source[:adjusted_geometry_start] + geometry + source[adjusted_geometry_end:]
           path.write_text(source, encoding='utf-8')
           PY
       - run: npm ci
