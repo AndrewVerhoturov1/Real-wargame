@@ -35,6 +35,28 @@ Core modules must not depend on:
 - `localStorage`;
 - visual panel state.
 
+### Shared vegetation and visibility fields
+
+Vegetation is a cell property, not a renderer object. `VegetationDefinition.ts` is the shared catalog for presentation, visual transmission, target concealment, fire transmission/protection and base movement resistance. The serialized `forest: 0 | 1 | 2` format remains supported; legacy cells with `terrain='forest'` and no explicit forest layer normalize to sparse forest for core consumers.
+
+`VisibilityStaticGrid` contains map-derived height, object blocker and vegetation data. `VisibilityGeometryField` builds bounded cached typed-array fields for an arbitrary origin:
+
+```text
+map revisions + origin + heights + range
+        ↓
+hardBlocked / visualTransmission / fireTransmission / blockerKind
+       ↙                                      ↘
+current unit view                         known-threat line of fire
+       ↓                                      ↓
+subjective observation                 SoldierDangerField
+                                              ↓
+                                    route cost / safe position / AI
+```
+
+The current-view adapter may add attention, viewing direction, distance falloff and observer condition. Those observer-dependent factors must not be reused as the fire mask of another unit. Directional-fire danger uses the same geometry provider with the subjective last-known threat position as origin. Unknown area threats keep area semantics and do not invent a precise point-source shadow.
+
+Overlay visibility and selected-unit state are presentation concerns. Machine consumers may request a field for any unit or known source while every relevant overlay is hidden. Renderers read core fields and vegetation presentation settings; they never become a simulation input.
+
 ### Rendering
 
 `src/rendering/` converts current state into visible PixiJS or HTML output. A renderer is not the authoritative source of game state.
@@ -84,7 +106,9 @@ Awareness is subjective. A soldier cannot automatically use complete objective w
 ## Performance rules
 
 - Do not recompute heavy tactical maps every frame.
-- Cache awareness and relief calculations with explicit invalidation.
+- Cache awareness, visibility geometry and relief calculations with explicit invalidation.
+- Confidence, fire class and navigation-profile changes may rescore an existing geometry field; they must not rebuild map visibility geometry.
+- Do not trace LOS inside every A* neighbor evaluation. Routing consumes the already-built danger field.
 - Do not draw large overlays as thousands of independent cells when a bounded texture, geometry or small fixed set of elements can represent them.
 - Do not couple mouse hover updates to rebuilding static terrain.
 - Diagnose with real browser evidence before changing the application for a performance issue.
