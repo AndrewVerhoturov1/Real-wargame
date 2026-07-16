@@ -114,13 +114,6 @@ jobs:
           ])
           test_path.write_text(test[:geometry_start] + geometry_block + test[geometry_end:], encoding='utf-8')
 
-          workflow_path = Path('.github/workflows/danger-layer-browser-performance.yml')
-          workflow = workflow_path.read_text(encoding='utf-8')
-          copy_line = '          cp source/src/testing/CombatTacticalIntegrationVisualQaHarness.ts baseline/src/testing/CombatTacticalIntegrationVisualQaHarness.ts\n'
-          if workflow.count(copy_line) != 1:
-              raise SystemExit(f'baseline harness copy count: {workflow.count(copy_line)}')
-          workflow_path.write_text(workflow.replace(copy_line, ''), encoding='utf-8')
-
           compare_path = Path('scripts/compare_danger_layer_browser_performance.mjs')
           compare = compare_path.read_text(encoding='utf-8')
           old_gate = '  oneWeightedDirectionalFieldBuild: directionalTactical.fullMapScanCount <= 1,\n'
@@ -146,14 +139,13 @@ jobs:
           npm run navigation-profiles:smoke
           npm run build
           npm run docs:check
-      - name: Commit performance measurement correction
+      - name: Commit source and test corrections
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
             src/testing/CombatTacticalIntegrationVisualQaHarness.ts \
             tests/danger-layer-browser-performance.spec.ts \
-            scripts/compare_danger_layer_browser_performance.mjs \
-            .github/workflows/danger-layer-browser-performance.yml
+            scripts/compare_danger_layer_browser_performance.mjs
           git commit -m "Measure canonical danger rescoring directly"
           git push origin HEAD:${{ github.head_ref }}
