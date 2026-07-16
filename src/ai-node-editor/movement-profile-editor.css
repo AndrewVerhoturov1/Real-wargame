@@ -69,6 +69,17 @@
   color: #ffb19d;
 }
 
+.navigation-profile-field-meta [data-movement-warning]:not(:empty) {
+  color: #f1a45a;
+  font-weight: 700;
+}
+
+.movement-profile-editor-layout :is(button, input, select, textarea):focus-visible,
+.movement-profile-selector select:focus-visible {
+  outline: 3px solid #a6d397;
+  outline-offset: 2px;
+}
+
 .navigation-profile-form-actions button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
