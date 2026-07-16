@@ -58,6 +58,7 @@
     "danger-route-cost-parity:smoke": "node scripts/danger_route_cost_parity_smoke.mjs && node scripts/danger_route_cost_cache_smoke.mjs",
     "danger-layer-performance:smoke": "node scripts/danger_layer_performance_smoke.mjs",
     "danger-layer-movement-performance:smoke": "node scripts/danger_layer_movement_performance_smoke.mjs",
+    "shared-visibility-vegetation:smoke": "node scripts/shared_visibility_vegetation_smoke.mjs",
     "lab:manager": "node scripts/real_wargame_lab_manager.mjs",
     "visual-qa-policy:smoke": "node scripts/visual_qa_policy_smoke.mjs",
     "docs:generate": "node scripts/generate_agent_docs.mjs",
