@@ -2,6 +2,7 @@ import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import { getCell, resolveObjectCoverProperties, type MapObject, type TacticalMap } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
+import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 import { getMapObjectSpatialIndex } from '../spatial/MapObjectSpatialIndex';
 
 export interface AwarenessStaticField {
@@ -144,7 +145,7 @@ function estimateLocalProtection(
   candidates: MapObject[],
 ): { expectedProtection: number; reliability: number; concealment: number; sourceRu: string } {
   const cell = getCell(map, Math.floor(position.x), Math.floor(position.y));
-  const terrainConcealment = forestConcealment(cell?.forest ?? 0);
+  const terrainConcealment = resolveCellVegetationDefinition(cell).visibility.localConcealment;
   const reliefProtection = reliefLocalProtection(map, position, posture);
   let result = {
     expectedProtection: reliefProtection,
@@ -210,10 +211,6 @@ function reliefLocalProtection(map: TacticalMap, position: GridPosition, posture
   const rise = Math.max(0, ...neighbors.map((neighbor) => (neighbor?.height ?? center.height) - center.height));
   const postureBonus = posture === 'prone' ? 18 : posture === 'crouched' ? 9 : 0;
   return clampPercent(rise * 22 + postureBonus);
-}
-
-function forestConcealment(forest: number): number {
-  return forest === 2 ? 82 : forest === 1 ? 52 : 0;
 }
 
 function postureConcealmentBonus(posture: UnitPosture): number {
