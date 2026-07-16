@@ -41,7 +41,13 @@ real-wargame-pixijs
 → only the relevant general skill
 ```
 
-Do not introduce deprecated v7 compatibility aliases into active production code.
+Campaign history, accepted architecture contracts, visual-QA state, and the unresolved Windows launcher blocker:
+
+```text
+docs/architecture/PIXIJS8_MIGRATION_CAMPAIGN.md
+```
+
+Do not introduce deprecated v7 compatibility aliases into active production code. Historical v7 references may remain when they are clearly marked as historical behavior rather than current API guidance.
 
 ## Required honesty
 
@@ -49,6 +55,8 @@ Do not introduce deprecated v7 compatibility aliases into active production code
 - A green workflow is not proof of good visuals until fresh PNGs are inspected.
 - Do not claim a skill was followed unless its required checks were actually performed.
 - Do not read all `.agents/skills/` by default.
+- Do not claim that the Windows launcher is fixed while the reported Rollup native-module `EPERM unlink` blocker remains open.
+- The integrated PixiJS 8 code migration and the unverified user-PC launch are separate statuses.
 
 ## Search limitation
 
