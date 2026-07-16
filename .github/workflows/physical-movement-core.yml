@@ -1,0 +1,95 @@
+name: Physical Movement Core
+
+on:
+  push:
+    branches:
+      - real-wargame-preview
+    paths:
+      - 'src/core/movement/**'
+      - 'src/core/simulation/**'
+      - 'src/core/units/**'
+      - 'src/core/perception/**'
+      - 'src/core/combat/FireAction.ts'
+      - 'src/ui/SceneExport.ts'
+      - 'scripts/physical_movement_runtime_smoke.*'
+      - 'scripts/ai_runtime_scene_integration_smoke.ts'
+      - 'scripts/ai_runtime_snapshot_smoke.ts'
+      - 'scripts/ai_test_lab_smoke.mjs'
+      - 'docs/subprojects/ai-single-unit-editor/PHYSICAL_MOVEMENT_PROFILES_V1.md'
+      - 'docs/architecture/**'
+      - 'package.json'
+      - '.github/workflows/physical-movement-core.yml'
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - 'src/core/movement/**'
+      - 'src/core/simulation/**'
+      - 'src/core/units/**'
+      - 'src/core/perception/**'
+      - 'src/core/combat/FireAction.ts'
+      - 'src/ui/SceneExport.ts'
+      - 'scripts/physical_movement_runtime_smoke.*'
+      - 'scripts/ai_runtime_scene_integration_smoke.ts'
+      - 'scripts/ai_runtime_snapshot_smoke.ts'
+      - 'scripts/ai_test_lab_smoke.mjs'
+      - 'docs/subprojects/ai-single-unit-editor/PHYSICAL_MOVEMENT_PROFILES_V1.md'
+      - 'docs/architecture/**'
+      - 'package.json'
+      - '.github/workflows/physical-movement-core.yml'
+
+concurrency:
+  group: physical-movement-core-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  core-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact candidate SHA
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Physical movement runtime
+        run: npm run physical-movement:smoke
+
+      - name: Movement facing
+        run: npm run movement-facing:smoke
+
+      - name: Routed movement and route status
+        run: |
+          npm run routed-move:smoke
+          npm run route-status:smoke
+          npm run move-bridge:smoke
+
+      - name: Perception
+        run: npm run perception:smoke
+
+      - name: Combat integration
+        run: |
+          npm run combat-foundation:smoke
+          npm run combat-tactical-integration:smoke
+
+      - name: Scene and runtime serialization
+        run: |
+          npm run runtime-scene:smoke
+          npm run runtime-snapshot:smoke
+          npm run game-editor:smoke
+
+      - name: Production build
+        run: npm run build
+
+      - name: Documentation consistency
+        run: npm run docs:check
