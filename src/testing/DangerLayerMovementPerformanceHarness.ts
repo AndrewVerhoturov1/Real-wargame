@@ -121,7 +121,11 @@ function prepareScenario(state: SimulationState, observer: UnitModel, hostile: U
   state.selectedUnitIds = [observer.id];
 
   if (scenario === 'selected-only') {
-    routeUnit(state, observer, { x: observer.position.x + 22, y: observer.position.y });
+  // Keep the acceptance segment on one horizontal bearing. The scenario only
+  // requires five cells of own movement; routing farther crosses a terrain
+  // detour and makes the raw observer-relative direction depend on browser
+  // polling cadence rather than on danger-layer semantics.
+  routeUnit(state, observer, { x: observer.position.x + 10, y: observer.position.y });
   } else if (scenario === 'hostile-only') {
     routeUnit(state, hostile, { x: hostile.position.x - 30, y: hostile.position.y + 10 });
   } else if (scenario === 'both') {
