@@ -1,9 +1,9 @@
 name: Fix PR127 performance harness ownership
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/per-unit-ai-scheduler-v1
+      - real-wargame-preview
     paths:
       - .github/workflows/agent-pr127-fix-harness.yml
 
@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   fix-harness:
+    if: github.head_ref == 'agent/per-unit-ai-scheduler-v1'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,7 +26,6 @@ jobs:
       - name: Declare manual ownership for harness-controlled units
         shell: bash
         run: |
-          # Focused branch-local repair; no preview or main refs are modified.
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
