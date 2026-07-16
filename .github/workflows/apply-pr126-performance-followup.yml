@@ -20,7 +20,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
-      - name: Fix generated template escaping
+      - name: Prepare source-only follow-up patch
         shell: bash
         run: |
           python - <<'PY'
@@ -28,6 +28,9 @@ jobs:
           path = Path('scripts/apply_pr126_performance_followup.mjs')
           source = path.read_text(encoding='utf-8')
           source = source.replace(r'\`${VISUAL_OBJECT_PREFIX}wall\`', r'\`\${VISUAL_OBJECT_PREFIX}wall\`')
+          source = source.replace('patchBrowserWorkflow();\n', '')
+          source = source.replace("fs.rmSync('scripts/apply_pr126_performance_followup.mjs');\n", '')
+          source = source.replace("fs.rmSync('.github/workflows/apply-pr126-performance-followup.yml');\n", '')
           path.write_text(source, encoding='utf-8')
           PY
       - name: Apply follow-up changes
@@ -42,10 +45,15 @@ jobs:
           name: pr126-followup-patch-log
           path: apply-pr126-followup.log
           if-no-files-found: error
-      - name: Commit follow-up changes
+      - name: Commit core follow-up changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Harden danger cache performance and verification"
+          git add \
+            src/core/navigation/RouteCostField.ts \
+            src/core/knowledge/SoldierAwarenessGrid.ts \
+            src/core/debug/PerformanceMonitor.ts \
+            src/testing/CombatTacticalIntegrationVisualQaHarness.ts \
+            docs/subprojects/ai-single-unit-editor/TACTICAL_ROUTE_COST_V1.md
+          git commit -m "Apply PR 126 performance follow-up"
           git push origin HEAD:${{ github.head_ref }}
