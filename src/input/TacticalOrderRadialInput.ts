@@ -9,6 +9,7 @@ import type { SimulationState } from '../core/simulation/SimulationState';
 import { getAiLabRuntime } from '../core/testing/AiLabRuntime';
 import { getUnitCommandToolState, setRouteFacingDraft } from '../core/ui/RuntimeUiState';
 import type { PixiTacticalBoardApp } from '../rendering/PixiApp';
+import { installTacticalOrderVisualQaHarness } from '../testing/TacticalOrderVisualQaHarness';
 import { TacticalOrderStatusCard } from '../ui/TacticalOrderStatusCard';
 import {
   beginTacticalOrderGesture,
@@ -56,6 +57,7 @@ export function installTacticalOrderRadialInput(
     statusCard.update(true);
     onChanged();
   };
+  const destroyVisualQaHarness = installTacticalOrderVisualQaHarness(state, notifyChanged);
 
   const eventGrid = (event: { clientX: number; clientY: number }): GridPosition => {
     return worldToGrid(state.map, camera.screenToWorld(event));
@@ -216,6 +218,7 @@ export function installTacticalOrderRadialInput(
 
   return () => {
     window.clearInterval(statusInterval);
+    destroyVisualQaHarness();
     close('destroy');
     canvas.removeEventListener('contextmenu', handleContextMenu, true);
     canvas.removeEventListener('pointerdown', handlePointerDown, true);
