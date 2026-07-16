@@ -91,6 +91,8 @@ Scene export writes canonical surface and vegetation material maps and retains `
 
 Observer-only movement verification compares the remembered world-space threat position (`x/y`). Observer-relative bearing and range may legitimately change as the observer follows a material-aware route; they are excluded from the canonical unit-threat worker key and must not trigger a world-raster rebuild.
 
+The six-unit movement fixture waits for both physical movers and a newly started canonical worker job, rather than requiring an arbitrary displacement of the remembered threat position. Its bounded-queue, exact-applied-key and semantic evidence assertions remain unchanged.
+
 ## Verification
 
 Focused contracts:
