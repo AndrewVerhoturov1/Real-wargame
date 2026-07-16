@@ -1,6 +1,6 @@
 import { MovementProfileRegistry, getBuiltInMovementProfile, type MovementProfile } from '../core/movement/MovementProfiles';
 import { getMovementProfileRegistry, saveMovementProfileRegistry, subscribeMovementProfileRegistry } from '../core/movement/MovementProfileStorage';
-import { MOVEMENT_EDITOR_GROUPS } from './MovementProfileEditorSchema';
+import { MOVEMENT_EDITOR_GROUPS, type MovementEditorField } from './MovementProfileEditorSchema';
 import { renderMovementProfileEditorView } from './MovementProfileEditorView';
 
 let registry=getMovementProfileRegistry(),selectedId=registry.listProfiles()[0]?.id??'normal_walk',draft=registry.getProfile(selectedId);
@@ -12,7 +12,7 @@ function ensureSubscription():void{if(unsubscribe)return;unsubscribe=subscribeMo
 
 function bind(panel:HTMLElement):void{
  panel.querySelectorAll<HTMLButtonElement>('[data-movement-profile-id]').forEach(b=>b.addEventListener('click',()=>{selectedId=b.dataset.movementProfileId??'normal_walk';draft=registry.getProfile(selectedId);dirty=false;renderMovementProfiles(panel);}));
- panel.querySelectorAll<HTMLInputElement>('[data-movement-number]').forEach(input=>input.addEventListener('input',()=>{const path=input.dataset.movementNumber??'',f=MOVEMENT_EDITOR_GROUPS.flatMap(g=>g[2]).find(x=>x[0]===path);setPath(path,clamp(Number(input.value),f?.[3]??Number(input.min||0),f?.[4]??Number(input.max||100000)));panel.querySelectorAll<HTMLInputElement>(`[data-movement-number="${css(path)}"]`).forEach(peer=>{if(peer!==input)peer.value=input.value;});markDirty(panel);}));
+ panel.querySelectorAll<HTMLInputElement>('[data-movement-number]').forEach(input=>input.addEventListener('input',()=>{const path=input.dataset.movementNumber??'',field=MOVEMENT_EDITOR_GROUPS.flatMap(g=>g[2]).find(x=>x[0]===path),value=clamp(Number(input.value),field?.[3]??Number(input.min||0),field?.[4]??Number(input.max||100000));setPath(path,value);panel.querySelectorAll<HTMLInputElement>(`[data-movement-number="${css(path)}"]`).forEach(peer=>{if(peer!==input)peer.value=String(value);});updateWarning(panel,path,value,field);markDirty(panel);}));
  panel.querySelectorAll<HTMLInputElement>('[data-movement-text]').forEach(i=>i.addEventListener('input',()=>{setPath(i.dataset.movementText??'',i.value);markDirty(panel);}));
  panel.querySelectorAll<HTMLTextAreaElement>('[data-movement-area]').forEach(i=>i.addEventListener('input',()=>{setPath(i.dataset.movementArea??'',i.value);markDirty(panel);}));
  panel.querySelectorAll<HTMLSelectElement>('[data-movement-select]').forEach(i=>i.addEventListener('change',()=>{setPath(i.dataset.movementSelect??'',i.value||null);markDirty(panel);}));
@@ -33,6 +33,7 @@ function handleAction(panel:HTMLElement,name:string):void{
 async function importFile(panel:HTMLElement,event:Event):Promise<void>{const input=event.currentTarget as HTMLInputElement,file=input.files?.[0];input.value='';if(!file)return;try{registry=MovementProfileRegistry.importJson(await file.text());selectedId=registry.hasProfile(selectedId)?selectedId:'normal_walk';saveMovementProfileRegistry(registry);draft=registry.getProfile(selectedId);dirty=false;renderMovementProfiles(panel);}catch(error){alert(`Не удалось импортировать профили движения. Текущие настройки сохранены. ${error instanceof Error?error.message:String(error)}`);}}
 function getPath(source:unknown,path:string):unknown{return path.split('.').reduce<unknown>((v,k)=>typeof v==='object'&&v!==null?(v as Record<string,unknown>)[k]:undefined,source);}
 function setPath(path:string,value:unknown):void{const clone=structuredClone(draft) as unknown as Record<string,unknown>,parts=path.split('.');let target=clone;for(const part of parts.slice(0,-1))target=target[part] as Record<string,unknown>;target[parts[parts.length-1]??'']=value;draft=clone as unknown as MovementProfile;}
+function updateWarning(panel:HTMLElement,path:string,value:number,field:MovementEditorField|undefined):void{const warning=panel.querySelector<HTMLElement>(`[data-movement-warning="${css(path)}"]`);if(!warning||!field)return;const min=field[3],max=field[4],edge=(max-min)*.08;warning.textContent=value<=min+edge||value>=max-edge?'Экстремальное значение':'';}
 function markDirty(panel:HTMLElement):void{dirty=true;const status=panel.querySelector<HTMLElement>('[data-movement-status]');if(status)status.textContent='Есть несохранённые изменения.';panel.querySelectorAll<HTMLButtonElement>('[data-movement-action="save"],[data-movement-action="cancel"]').forEach(b=>b.disabled=false);}
 function uniqueId(base:string):string{let candidate=base||'custom_movement',n=2;while(registry.hasProfile(candidate))candidate=`${base||'custom_movement'}_${n++}`;return candidate;}
 function slug(value:string):string{return value.trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'')||`custom_${Date.now().toString(36)}`;}
