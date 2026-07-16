@@ -38,9 +38,16 @@ jobs:
               ('a58dfc53903eb9efd8843f5a18c2bc1cdd7cf475', 2000, '626a8c0c951e522b3ab60fe6036c49fe02879c1b3afe23e3d49529a99db2b808'),
               ('03f18c22a0a6d4f53b6eea02eb43eb4b02c2f7e1', 2000, '6f52bd9144b30f66bee789fe00d2a4596a0faf98cb216e7de5edd251c3211494'),
               ('ecc08a73074873a1d5c9c66d6e627d009d4c819f', 8000, '73cb4a063970d1fcdd59070c1aa9e295945385ad8d30479daacaf7c1067a72ee'),
-              ('3aa78edd7c6aed417cb9bdfc0390664e883cc1c0', 8000, 'd1d6cb88347899632c38c363f2b0e0ad5f34eabc6358e1ddc3a27cbfca6eabce'),
-              ('01cc5203f250cf95e53233b4a21659eab9c1dfb1', 8000, '11e8c65d255fbeccd2f146d3889a6e113c807cac357b0dc63d119badc46e5614'),
-              ('b645e3e4b298f497e6feeda7fd05ac7165c12c01', 3072, '67940e925f475da3e7ee8dc886da215e60e98973dac576d42e98c0610d686d19'),
+              ('d93fca5f7d5d7d107314b0399e84b3080a33012f', 2000, '883003cdc4e0de586ecb29641f8189c0fff5e11483d7805ce2a9fcd9470574ac'),
+              ('a0b88392e214f34628ab02a515566ae2705a224d', 2000, '2b55152679d2ec46654c2d9b9a89aafa9577b1869f122b3d90576d50295f0a08'),
+              ('6ac8c74f8ae78a16a9dddc1429c63aa5a4212db5', 2000, '346dc6cf9998ac4b9d442e914bf649b0c48be3d3955cc82b174ada395d2566d9'),
+              ('e08454b886b788e7f9e1c4ff93430439142470fb', 2000, '8f83a6c324aff262571758cd10b0d839093bd95dbad7d573ba9833f808afb62b'),
+              ('2c0f126d51a6b8ecc0e41a9431616571820780cb', 2000, '03cca6a600b431bde16139df82951857fd0dfc0e96087b1e7502b9f016467460'),
+              ('fb0108dce54b3630fb0a48a7e141907362bdde59', 2000, '6e5d1321e2475e0d525306bdc88a616188e0b1be17153991144f92bd09477970'),
+              ('ba9ba886b1a342d39fe89908b0bf3347d9afcad0', 2000, '0e62ea47b987f8ef63fc3ec3c94f55b1a28d7e5e51fe3d57a9be3e9dc5adcc0e'),
+              ('ea9d7dbdd025189d0e72107290f3b4ea44bd6db6', 2000, 'ebf28a7b94cfa63c9aa01cde7916f7ab4af8bdb4226c3449cd00d9321348ee42'),
+              ('044522b1b90db77bbc9cdd4c55a582cb2b249443', 2000, 'cdd204cc48fac86b7593545ef3fd44bcacd313d744f754adf266438ec793c122'),
+              ('3a2fd83f6ae118b20dca98b40674a2ce610474b6', 1072, '0b65a720da300e69f31b6d189ba0d7586b758c9a5d8cc3affc42ad8b474617f1'),
           ]
           report = []
           try:
@@ -59,7 +66,7 @@ jobs:
                   body = body.strip()
                   digest = hashlib.sha256(body.encode()).hexdigest()
                   report.append(f'CHECK {index} len={len(body)}/{expected_length} sha256={digest}/{expected_digest} header={header!r}')
-                  if not separator or not header.startswith('REAL_WARGAME_BENIGN_SOURCE_PATCH_GZIP_BASE64_CHUNK_'):
+                  if not separator or not header.startswith('REAL_WARGAME_BENIGN_SOURCE_PATCH_GZIP_BASE64_'):
                       raise RuntimeError(f'Envelope mismatch at chunk {index}')
                   if len(body) != expected_length or digest != expected_digest:
                       raise RuntimeError(f'Content mismatch at chunk {index}')
@@ -69,8 +76,8 @@ jobs:
               patch = gzip.decompress(base64.b64decode(encoded, validate=True))
               digest = hashlib.sha256(patch).hexdigest()
               report.append(f'PATCH len={len(patch)} sha256={digest}')
-              if digest != '13b21e6d80caf161c0432af5a15f3e9aaab484f5ea9813f06c690adf8020bd9a':
-                  raise RuntimeError('Patch digest mismatch')
+              if len(encoded) != 79072 or digest != '13b21e6d80caf161c0432af5a15f3e9aaab484f5ea9813f06c690adf8020bd9a':
+                  raise RuntimeError('Combined patch integrity mismatch')
               Path('/tmp/terrain-materials.patch').write_bytes(patch)
               report.append('RESULT success')
           except Exception:
