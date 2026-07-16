@@ -41,7 +41,7 @@ export interface MoveOrderOptions {
   readonly movementProfileOwnerToken?: string;
   readonly movementProfileDefinitionRevision?: number;
   readonly movementProfileSelectionRevision?: number;
-  /** Legacy additive-input alias. New code must use the two explicit revisions above. */
+  /** Legacy additive-input alias. New code must use the explicit selection revision. */
   readonly movementProfileRevision?: number;
   readonly finalFacingRadians?: number;
   readonly knowledgeRevision?: number;
@@ -84,7 +84,7 @@ export interface MoveOrder {
   movementProfileOwnerToken?: string;
   movementProfileDefinitionRevision?: number;
   movementProfileSelectionRevision?: number;
-  /** Legacy deserialization field; not updated by runtime selection changes. */
+  /** Deprecated runtime alias synchronized with movementProfileSelectionRevision. */
   movementProfileRevision?: number;
   finalFacingRadians?: number;
   knowledgeRevision?: number;
@@ -96,7 +96,8 @@ export interface MoveOrder {
 }
 
 export function createMoveOrder(target: GridPosition, options: MoveOrderOptions = {}): MoveOrder {
-  return {
+  const selectionRevision = options.movementProfileSelectionRevision ?? options.movementProfileRevision;
+  const order: MoveOrder = {
     type: 'move',
     target: { ...target },
     issuedAtMs: Date.now(),
@@ -127,8 +128,7 @@ export function createMoveOrder(target: GridPosition, options: MoveOrderOptions 
     movementProfileSource: options.movementProfileSource,
     movementProfileOwnerToken: options.movementProfileOwnerToken,
     movementProfileDefinitionRevision: options.movementProfileDefinitionRevision,
-    movementProfileSelectionRevision: options.movementProfileSelectionRevision ?? options.movementProfileRevision,
-    movementProfileRevision: options.movementProfileRevision,
+    movementProfileSelectionRevision: selectionRevision,
     finalFacingRadians: options.finalFacingRadians,
     knowledgeRevision: options.knowledgeRevision,
     replanSearchCount: options.replanSearchCount,
@@ -137,4 +137,13 @@ export function createMoveOrder(target: GridPosition, options: MoveOrderOptions 
     lastReplanReason: options.lastReplanReason,
     lastReplanReasonRu: options.lastReplanReasonRu,
   };
+  Object.defineProperty(order, 'movementProfileRevision', {
+    configurable: true,
+    enumerable: false,
+    get: () => order.movementProfileSelectionRevision,
+    set: (value: number | undefined) => {
+      order.movementProfileSelectionRevision = value;
+    },
+  });
+  return order;
 }
