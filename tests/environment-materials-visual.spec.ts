@@ -1,8 +1,17 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 
 const OUTPUT_DIR = path.join('artifacts', 'visual-qa', 'environment-materials-v1');
+const BOARD_ORIGIN = { x: 72, y: 72 };
+const CELL_SIZE = 24;
+const ZOOM_SENSITIVITY = 0.00042;
+const MAX_WHEEL_DELTA_PER_FRAME = 360;
+
+type VisualQaWindow = Window & {
+  __realWargameCameraDebug?: { zoom: number };
+  __realWargameAwarenessDebug?: { representation?: string; displayObjectCount?: number };
+};
 
 // Approval-gated by docs/workflow/VISUAL_QA_APPROVAL_POLICY.md.
 // Keep this suite skipped until the user explicitly authorizes visual QA.
@@ -12,29 +21,38 @@ test.describe('environment material profiles visual QA — explicit approval req
     await openMap(page);
 
     const canvas = page.locator('canvas');
-    const box = await canvas.boundingBox();
-    if (!box) throw new Error('Canvas bounds unavailable.');
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await selectFixtureSoldier(page, canvas);
 
+    await setZoom(page, 1);
     await page.screenshot({ path: path.join(OUTPUT_DIR, '01-forest-zoom-1-danger-off.png'), fullPage: false });
-    await page.mouse.wheel(0, 700);
-    await page.waitForTimeout(350);
+
+    await setZoom(page, 0.7);
     await page.screenshot({ path: path.join(OUTPUT_DIR, '02-forest-zoom-0-7-danger-off.png'), fullPage: false });
-    await page.mouse.wheel(0, -1050);
-    await page.waitForTimeout(350);
+
+    await setZoom(page, 1.3);
     await page.screenshot({ path: path.join(OUTPUT_DIR, '03-forest-zoom-1-3-danger-off.png'), fullPage: false });
+    const dangerOffCanvas = await canvas.screenshot();
 
     await page.locator('[data-tab="danger"]').click();
     await expect(page.locator('[data-role="sidebar-title"]')).toContainText(/Опасность|Danger/);
+    await page.waitForFunction(() => {
+      const diagnostics = (window as VisualQaWindow).__realWargameAwarenessDebug;
+      return diagnostics?.representation === 'raster-sprite' && (diagnostics.displayObjectCount ?? 0) > 0;
+    });
+    await page.waitForTimeout(500);
+    const dangerOnCanvas = await canvas.screenshot();
+    expect(dangerOnCanvas.equals(dangerOffCanvas), 'danger-on must change the map canvas, not only the sidebar tab').toBe(false);
     await page.screenshot({ path: path.join(OUTPUT_DIR, '04-forest-zoom-1-3-danger-on.png'), fullPage: false });
-
   });
 
   test.skip('live profile edit refreshes the open map without a page reload', async ({ context }) => {
     mkdirSync(OUTPUT_DIR, { recursive: true });
     const mapPage = await context.newPage();
     await openMap(mapPage);
+    const beforeEditCanvas = await mapPage.locator('canvas').screenshot();
+
     const editorPage = await context.newPage();
+    await editorPage.setViewportSize({ width: 1440, height: 900 });
     await editorPage.goto('/ai-node-editor.html');
     await editorPage.locator('[data-navigation-tab="environmentProfiles"]').click();
     await expect(editorPage.getByRole('heading', { name: 'Профили местности' })).toBeVisible();
@@ -49,7 +67,9 @@ test.describe('environment material profiles visual QA — explicit approval req
     await editorPage.waitForTimeout(250);
 
     await mapPage.bringToFront();
-    await mapPage.waitForTimeout(350);
+    await mapPage.waitForTimeout(500);
+    const afterEditCanvas = await mapPage.locator('canvas').screenshot();
+    expect(afterEditCanvas.equals(beforeEditCanvas), 'live presentation edits must change the open map canvas').toBe(false);
     await mapPage.screenshot({ path: path.join(OUTPUT_DIR, '05-live-coverage-opacity-edit.png'), fullPage: false });
 
     await editorPage.bringToFront();
@@ -64,4 +84,44 @@ async function openMap(page: Page): Promise<void> {
   await expect(page.locator('canvas')).toBeVisible();
   await expect(page.locator('.tactical-workspace-bar')).toBeVisible();
   await page.waitForTimeout(750);
+}
+
+async function selectFixtureSoldier(page: Page, canvas: Locator): Promise<void> {
+  const soldier = await worldPoint(canvas, 27.574, 17.589);
+  await page.mouse.click(soldier.x, soldier.y);
+  await expect(page.locator('[data-role="unit-name"]')).toContainText('Солдат');
+}
+
+async function worldPoint(canvas: Locator, gridX: number, gridY: number): Promise<{ x: number; y: number }> {
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error('Canvas bounds unavailable.');
+  return {
+    x: box.x + BOARD_ORIGIN.x + gridX * CELL_SIZE,
+    y: box.y + BOARD_ORIGIN.y + gridY * CELL_SIZE,
+  };
+}
+
+async function setZoom(page: Page, target: number): Promise<void> {
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error('Canvas bounds unavailable.');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const current = await readZoom(page);
+    if (Math.abs(current - target) <= 0.015) break;
+    const requiredDelta = -Math.log(target / current) / ZOOM_SENSITIVITY;
+    const delta = Math.max(-MAX_WHEEL_DELTA_PER_FRAME, Math.min(MAX_WHEEL_DELTA_PER_FRAME, requiredDelta));
+    await page.mouse.wheel(0, delta);
+    await page.waitForTimeout(100);
+  }
+
+  const finalZoom = await readZoom(page);
+  expect(Math.abs(finalZoom - target), `expected zoom ${target}, received ${finalZoom}`).toBeLessThanOrEqual(0.02);
+}
+
+async function readZoom(page: Page): Promise<number> {
+  const zoom = await page.evaluate(() => (window as VisualQaWindow).__realWargameCameraDebug?.zoom);
+  if (!zoom) throw new Error('Camera diagnostics unavailable.');
+  return zoom;
 }
