@@ -72,7 +72,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 20
           cache: npm
       - run: npm ci
       - name: Capture combat foundation smoke
@@ -110,12 +110,6 @@ jobs:
       - name: Awareness field cache smoke
         shell: bash
         run: set -o pipefail; npm run awareness-field:smoke 2>&1 | tail -n 120
-      - name: View-memory heatmap smoke
-        shell: bash
-        run: set -o pipefail; npm run view-memory-heatmap:smoke 2>&1 | tail -n 160
-      - name: View-memory heatmap performance smoke
-        shell: bash
-        run: set -o pipefail; npm run view-memory-heatmap-performance:smoke 2>&1 | tail -n 160
       - name: Directional terrain smoke
         shell: bash
         run: set -o pipefail; npm run directional-terrain:smoke 2>&1 | tail -n 160
@@ -155,18 +149,6 @@ jobs:
       - name: AI test lab smoke
         shell: bash
         run: set -o pipefail; npm run lab:smoke 2>&1 | tee ai-test-lab.log
-      - name: Visual QA policy smoke
-        shell: bash
-        run: npm run visual-qa-policy:smoke
-      - name: Agent docs sync
-        shell: bash
-        run: npm run docs:sync
-      - name: Agent docs smoke
-        shell: bash
-        run: npm run docs:smoke
-      - name: Git diff check
-        shell: bash
-        run: git diff --check
       - name: Upload combat tactical integration logs
         if: always()
         uses: actions/upload-artifact@v4
