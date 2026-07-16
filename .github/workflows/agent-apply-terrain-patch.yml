@@ -6,6 +6,12 @@ on:
       - agent/terrain-profiles-performance-followup-v1
     paths:
       - '.agent/**'
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - '.agent/**'
+      - '.github/workflows/agent-apply-terrain-patch.yml'
 
 permissions:
   contents: write
