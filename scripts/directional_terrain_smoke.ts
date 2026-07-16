@@ -104,6 +104,12 @@ function verifySharedDirectionalTacticalField(): void {
     threats: [directionalThreat('east-threat', 12.5, 2.5)],
   };
   const first = getDirectionalTacticalField(map, options);
+  const regressionDigest = digestDirectionalField(first);
+  assert.equal(
+    regressionDigest,
+    '37158ce2',
+    'directional tactical projection must preserve the established terrain raster',
+  );
   const west = readDirectionalTacticalCell(first, 2, 2);
   const east = readDirectionalTacticalCell(first, 6, 2);
   assert.ok(west && east);
@@ -216,6 +222,25 @@ function verifyExactTerrainVisibility(): void {
   assert.equal(ridgeResult.visible, false, 'a high intermediate ridge must block the exact ray');
   assert.equal(ridgeResult.blockedBy, 'terrain');
   assert.ok(ridgeResult.occlusionDepthMeters > 1);
+}
+
+function digestDirectionalField(field: ReturnType<typeof getDirectionalTacticalField>): string {
+  let hash = 0x811c9dc5;
+  for (const values of [
+    new Uint8Array(field.primarySlope.buffer, field.primarySlope.byteOffset, field.primarySlope.byteLength),
+    field.forwardSlopeRisk,
+    field.reverseSlopeProtection,
+    field.primaryThreatExposure,
+    field.flankExposure,
+    field.terrainProtection,
+    field.terrainConcealment,
+  ]) {
+    for (const value of values) {
+      hash ^= value;
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+  }
+  return hash.toString(16).padStart(8, '0');
 }
 
 function verifyLocalTacticalPositionQuery(): void {
