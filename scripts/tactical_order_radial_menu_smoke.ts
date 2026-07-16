@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { buildBlackboardForUnit } from '../src/core/ai/AiGameBridge';
 import type { TacticalMapData } from '../src/core/map/MapModel';
 import {
@@ -10,15 +11,18 @@ import {
   createPlayerMoveCommand,
   normalizePlayerCommand,
 } from '../src/core/orders/PlayerCommand';
-import {
-  issueTacticalOrderToSelectedUnits,
-} from '../src/core/orders/RoutedMoveOrders';
+import { issueTacticalOrderToSelectedUnits } from '../src/core/orders/RoutedMoveOrders';
 import { createInitialState } from '../src/core/simulation/SimulationState';
 import type { UnitData } from '../src/core/units/UnitModel';
 import {
   beginTacticalOrderGesture,
   cancelTacticalOrderGesture,
+  clampTacticalOrderMenuCenter,
+  openTacticalOrderGesture,
   releaseTacticalOrderGesture,
+  TACTICAL_ORDER_CENTER_RADIUS_PX,
+  TACTICAL_ORDER_INNER_RADIUS_PX,
+  TACTICAL_ORDER_OUTER_RADIUS_PX,
   updateTacticalOrderGesture,
 } from '../src/input/TacticalOrderRadialGesture';
 import { buildExportedScene, normalizeImportedScene } from '../src/ui/SceneExport';
@@ -27,8 +31,9 @@ verifyIntentContract();
 verifyCommandIssueAndAiVisibility();
 verifySceneRoundTrip();
 verifyGestureContract();
+verifyListenerTeardownContract();
 
-console.log('Tactical order radial menu smoke passed: intent, command issue, Blackboard, serialization and gesture contract.');
+console.log('Tactical order radial menu smoke passed: intent, command issue, Blackboard, serialization, radial geometry and teardown contracts.');
 
 function verifyIntentContract(): void {
   const expected = {
@@ -110,22 +115,59 @@ function verifySceneRoundTrip(): void {
 }
 
 function verifyGestureContract(): void {
-  const start = beginTacticalOrderGesture({ x: 120, y: 90 }, { x: 4.5, y: 3.5 }, 0);
-  assert.equal(releaseTacticalOrderGesture(start, { x: 120, y: 90 }, 120).kind, 'quick_move');
+  assert.ok(TACTICAL_ORDER_CENTER_RADIUS_PX < TACTICAL_ORDER_INNER_RADIUS_PX);
+  assert.ok(TACTICAL_ORDER_INNER_RADIUS_PX < TACTICAL_ORDER_OUTER_RADIUS_PX);
 
-  const open = updateTacticalOrderGesture(start, { x: 120, y: 90 }, 280);
+  const anchor = { x: 18, y: 18 };
+  const start = beginTacticalOrderGesture(anchor, { x: 4.5, y: 3.5 }, 0);
+  assert.equal(releaseTacticalOrderGesture(start, anchor, 120).kind, 'quick_move');
+
+  const menuCenter = clampTacticalOrderMenuCenter(anchor, 400, 300);
+  assert.notDeepEqual(menuCenter, anchor, 'edge clamping must create a distinct interactive menu center');
+  const open = openTacticalOrderGesture(start, menuCenter, menuCenter, 280);
   assert.equal(open.phase, 'open');
-  const recon = updateTacticalOrderGesture(open, { x: 120, y: 10 }, 300);
+  assert.deepEqual(open.menuCenterScreen, menuCenter);
+
+  const reconPoint = { x: menuCenter.x, y: menuCenter.y - 72 };
+  const recon = updateTacticalOrderGesture(open, reconPoint, 300);
   assert.equal(recon.highlightedPresetId, 'recon');
-  assert.deepEqual(releaseTacticalOrderGesture(recon, { x: 120, y: 10 }, 320), {
+  assert.deepEqual(releaseTacticalOrderGesture(recon, reconPoint, 320), {
     kind: 'issue',
     presetId: 'recon',
   });
 
-  const center = updateTacticalOrderGesture(open, { x: 121, y: 91 }, 310);
-  assert.equal(releaseTacticalOrderGesture(center, { x: 121, y: 91 }, 320).kind, 'cancel');
+  const centerPoint = { x: menuCenter.x + TACTICAL_ORDER_CENTER_RADIUS_PX - 1, y: menuCenter.y };
+  assert.equal(releaseTacticalOrderGesture(open, centerPoint, 320).kind, 'cancel');
+
+  const innerGapPoint = { x: menuCenter.x + TACTICAL_ORDER_INNER_RADIUS_PX - 1, y: menuCenter.y };
+  assert.equal(releaseTacticalOrderGesture(open, innerGapPoint, 320).kind, 'cancel');
+
+  const farPoint = { x: menuCenter.x + TACTICAL_ORDER_OUTER_RADIUS_PX + 30, y: menuCenter.y };
+  assert.equal(releaseTacticalOrderGesture(open, farPoint, 320).kind, 'cancel');
+
   assert.equal(cancelTacticalOrderGesture(open, 'escape').phase, 'cancelled');
   assert.equal(cancelTacticalOrderGesture(open, 'pointer_capture_lost').phase, 'cancelled');
+}
+
+function verifyListenerTeardownContract(): void {
+  const source = readFileSync('src/input/TacticalOrderRadialInput.ts', 'utf8');
+  for (const eventName of [
+    'contextmenu',
+    'pointerdown',
+    'pointermove',
+    'pointerup',
+    'pointercancel',
+    'lostpointercapture',
+    'pointerleave',
+    'wheel',
+  ]) {
+    assert.match(source, new RegExp(`addEventListener\\('${eventName}'`));
+    assert.match(source, new RegExp(`removeEventListener\\('${eventName}'`));
+  }
+  assert.match(source, /window\.addEventListener\('keydown', handleKeyDown, true\)/);
+  assert.match(source, /window\.removeEventListener\('keydown', handleKeyDown, true\)/);
+  assert.match(source, /window\.clearInterval\(statusInterval\)/);
+  assert.match(source, /if \(destroyed\) return;/);
 }
 
 function createState() {
