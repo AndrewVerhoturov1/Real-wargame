@@ -13,6 +13,12 @@ import {
   getSoldierDangerFieldDiagnostics,
   type SoldierDangerFieldContext,
 } from '../src/core/knowledge/SoldierDangerField';
+import { getThreatRelativeCoverField } from '../src/core/cover/ThreatRelativeCoverField';
+import {
+  createRouteCostFieldCache,
+  getRouteCostFields,
+} from '../src/core/navigation/RouteCostField';
+import { getBuiltInNavigationProfile } from '../src/core/navigation/NavigationProfiles';
 import { buildNavigationGrid } from '../src/core/pathfinding/GridNavigation';
 import { createInitialState } from '../src/core/simulation/SimulationState';
 import type { UnitData } from '../src/core/units/UnitModel';
@@ -93,8 +99,27 @@ const legacyMap = normalizeMap({
   defaultHeight: 0,
 });
 const legacyVegetation = resolveCellVegetationDefinition(legacyMap.cells[0]);
+const sparseDefinition = resolveVegetationDefinition('sparse_forest');
 assert.equal(legacyVegetation.id, 'sparse_forest', 'legacy terrain=forest with forest=0 must normalize to sparse forest');
-assert.equal(buildNavigationGrid(legacyMap).cells[0].movementCost, resolveVegetationDefinition('sparse_forest').movement.baseResistance);
+assert.equal(buildNavigationGrid(legacyMap).cells[0].movementCost, sparseDefinition.movement.baseResistance);
+
+const normalProfile = getBuiltInNavigationProfile('normal');
+const legacyRoute = getRouteCostFields(legacyMap, normalProfile, undefined, createRouteCostFieldCache());
+assert.equal(legacyRoute.terrainKeys[0], 'sparseForest', 'legacy forest must use the sparse-forest route terrain key');
+assert.ok(
+  Math.abs(legacyRoute.coverAdjustment[0] + normalProfile.coverWeight * sparseDefinition.movement.tacticalConcealment) < 1e-6,
+  'route cover preference must use shared vegetation tactical concealment',
+);
+
+const legacyCover = getThreatRelativeCoverField(legacyMap, {
+  threatId: 'legacy-forest-threat',
+  threatPosition: { x: 0.5, y: 0.5 },
+  posture: 'standing',
+});
+assert.ok(
+  readByte(legacyCover.forestProtection, legacyMap, 2, 0) > 0,
+  'threat-relative cover must use shared vegetation density for legacy forest cells',
+);
 
 const units: UnitData[] = [
   unitData('observer-a', 1.5, 1.5),
@@ -157,10 +182,12 @@ console.log(JSON.stringify({
   hillDangerOpen: readByte(hillDanger.danger, hillMap, 4, 3),
   hillDangerShadow: readByte(hillDanger.danger, hillMap, 8, 3),
   forestDanger: { open: open.danger, sparse: sparse.danger, dense: dense.danger },
+  legacyRouteCoverAdjustment: legacyRoute.coverAdjustment[0],
+  legacyForestProtection: readByte(legacyCover.forestProtection, legacyMap, 2, 0),
   cachedGeometryCount: geometryDiagnostics.cachedFieldCount,
   retainedTypedArrayBytes: geometryDiagnostics.retainedTypedArrayBytes,
 }));
-console.log('Shared visibility and vegetation smoke passed: reusable geometry, hill shadow, forest attenuation, overlay independence and cache contract.');
+console.log('Shared visibility and vegetation smoke passed: reusable geometry, hill shadow, forest attenuation, overlay independence, route/cover parity and cache contract.');
 
 function buildForestCase(forest: 0 | 1 | 2): { visual: number; fire: number; danger: number } {
   const map = normalizeMap({
