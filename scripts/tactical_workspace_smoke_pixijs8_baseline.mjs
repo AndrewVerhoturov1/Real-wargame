@@ -393,10 +393,10 @@ expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
 ]);
 expectIncludes('src/core/knowledge/SoldierDangerField.ts', [
   'getSoldierDangerField', 'getSoldierDangerFieldDiagnostics',
-  'getThreatRelativeCoverField', 'getDirectionalTacticalField',
-  'readDirectionalProtectionForBearing', 'readDirectionalExposureForBearing',
+  'getThreatRelativeCoverField', 'getDirectionalTerrainSectorBasis',
+  'readDirectionalBasisValue',
   'fireThreatClassForAggregation', "'rifle_fire'", "'machine_gun_fire'",
-  'GEOMETRY_CACHE_LIMIT', 'FIELD_CACHE_LIMIT',
+  'THREAT_GEOMETRY_CACHE_LIMIT', 'FIELD_CACHE_LIMIT', 'cachedThreatGeometryCount', 'retainedTypedArrayBytes',
 ]);
 expectExcludes('src/core/knowledge/SoldierDangerField.ts', ['pixi.js', '../rendering/', '../ui/']);
 expectExcludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
