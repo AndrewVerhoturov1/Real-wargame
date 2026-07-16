@@ -1,0 +1,373 @@
+diff --git a/src/core/knowledge/SoldierAwarenessGrid.ts b/src/core/knowledge/SoldierAwarenessGrid.ts
+index 22ae427..d354801 100644
+--- a/src/core/knowledge/SoldierAwarenessGrid.ts
++++ b/src/core/knowledge/SoldierAwarenessGrid.ts
+@@ -1,30 +1,22 @@
+-import type { UnitPosture } from '../behavior/BehaviorModel';
+-import {
+-  getThreatRelativeCoverField,
+-  readThreatRelativeCoverProtection,
+-  type ThreatRelativeCoverField,
+-} from '../cover/ThreatRelativeCoverField';
+ import { distance, type GridPosition } from '../geometry';
+ import type { TacticalMap } from '../map/MapModel';
+ import type { SimulationState } from '../simulation/SimulationState';
+ import {
+   getDirectionalTacticalField,
+-  readDirectionalExposureForBearing,
+-  readDirectionalProtectionForBearing,
+   readDirectionalTacticalCell,
+   type DirectionalTacticalField,
+   type DirectionalTacticalCell,
+ } from '../terrain/DirectionalTacticalField';
+-import type { KnownThreatMemory, UnitModel } from '../units/UnitModel';
++import type { UnitModel } from '../units/UnitModel';
+ import {
+   getAwarenessStaticCell,
+   getAwarenessStaticField,
+   type AwarenessStaticField,
+ } from './AwarenessStaticField';
+ import {
+-  rememberAwarenessGeometrySignature,
+-  tryRescoreAwarenessField,
+-} from './AwarenessDynamicRescore';
++  getSoldierDangerField,
++  type SoldierDangerField,
++} from './SoldierDangerField';
+ 
+ export type SoldierAwarenessMode = 'off' | 'all' | 'danger' | 'cover' | 'safe' | 'stealth' | 'memory' | 'uncertainty' | 'objective';
+ 
+@@ -67,6 +59,7 @@ export interface SoldierSafePosition {
+ export interface SoldierAwarenessReport {
+   unitId: string;
+   cacheKey: string;
++  dangerFieldKey: string;
+   cells: SoldierAwarenessCell[];
+   bestSafePositions: SoldierSafePosition[];
+   currentPosition: SoldierAwarenessCell;
+@@ -77,6 +70,7 @@ export interface SoldierAwarenessReport {
+ interface AwarenessField {
+   unitId: string;
+   cacheKey: string;
++  dangerFieldKey: string;
+   cells: SoldierAwarenessCell[];
+   threatConfidence: number;
+ }
+@@ -91,15 +85,11 @@ interface CachedAwareness {
+   routeDanger: number;
+ }
+ 
+-type ThreatCoverFields = ReadonlyMap<string, ThreatRelativeCoverField>;
+-
+ const cache = new WeakMap<UnitModel, CachedAwareness>();
+ const MAX_SAFE_POSITIONS = 8;
+ const SAFE_SEARCH_RADIUS_METERS = 120;
+ const SAFE_DISTANCE_PENALTY_PER_METER = 0.18;
+ const ROUTE_SAMPLE_STEP_METERS = 5;
+-const UNCERTAINTY_SCORE_PER_METER = 0.5;
+-const DIRECTIONAL_UNCERTAINTY_ARC_DEGREES_PER_METER = 1;
+ export const KNOWLEDGE_CONFIDENCE_BUCKET = 10;
+ export const KNOWLEDGE_UNCERTAINTY_BUCKET = 1;
+ 
+@@ -115,34 +105,29 @@ export function buildSoldierAwarenessReport(
+     knowledgeRevision: unit.tacticalKnowledge.revision,
+     threats: unit.tacticalKnowledge.threats,
+   });
+-  const key = buildCacheKey(state, unit, staticField.key, directionalField.key);
++  const dangerField = getSoldierDangerField(state.map, {
++    unitId: unit.id,
++    originX: unit.position.x,
++    originY: unit.position.y,
++    posture: unit.behaviorRuntime.posture,
++    knowledgeRevision: unit.tacticalKnowledge.revision,
++    threats: unit.tacticalKnowledge.threats,
++  });
++  const key = buildCacheKey(state, unit, staticField.key, directionalField.key, dangerField.key);
+   let cached = cache.get(unit);
+ 
+   if (!cached || cached.key !== key) {
+-    const rescored = cached
+-      ? tryRescoreAwarenessField(state.map, unit, cached.field.cells, staticField, directionalField)
+-      : false;
+-
+-    if (cached && rescored) {
+-      cached.key = key;
+-      cached.field.cacheKey = key;
+-      cached.field.threatConfidence = currentThreatConfidence(unit);
+-      cached.positionKey = '';
+-      cached.routeKey = '';
+-    } else {
+-      const field = buildAwarenessField(state, unit, key, staticField, directionalField);
+-      rememberAwarenessGeometrySignature(state.map, unit, staticField, directionalField);
+-      cached = {
+-        key,
+-        field,
+-        positionKey: '',
+-        currentPosition: field.cells[0] ?? emptyAwarenessCell(unit.position),
+-        bestSafePositions: [],
+-        routeKey: '',
+-        routeDanger: 0,
+-      };
+-      cache.set(unit, cached);
+-    }
++    const field = buildAwarenessField(state, unit, key, staticField, directionalField, dangerField);
++    cached = {
++      key,
++      field,
++      positionKey: '',
++      currentPosition: field.cells[0] ?? emptyAwarenessCell(unit.position),
++      bestSafePositions: [],
++      routeKey: '',
++      routeDanger: 0,
++    };
++    cache.set(unit, cached);
+   }
+ 
+   const positionKey = `${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`;
+@@ -175,17 +160,19 @@ function buildAwarenessField(
+   key: string,
+   staticField: AwarenessStaticField,
+   directionalField: DirectionalTacticalField,
++  dangerField: SoldierDangerField,
+ ): AwarenessField {
+   const cells: SoldierAwarenessCell[] = new Array(state.map.width * state.map.height);
+-  const threatCoverFields = buildThreatCoverFields(state.map, unit);
+   for (let y = 0; y < state.map.height; y += 1) {
+     for (let x = 0; x < state.map.width; x += 1) {
+-      cells[y * state.map.width + x] = evaluateAwarenessFieldCell(
++      const index = y * state.map.width + x;
++      cells[index] = evaluateAwarenessFieldCell(
+         unit,
+         { x: x + 0.5, y: y + 0.5 },
++        index,
+         staticField,
+         directionalField,
+-        threatCoverFields,
++        dangerField,
+       );
+     }
+   }
+@@ -193,6 +180,7 @@ function buildAwarenessField(
+   return {
+     unitId: unit.id,
+     cacheKey: key,
++    dangerFieldKey: dangerField.key,
+     cells,
+     threatConfidence: currentThreatConfidence(unit),
+   };
+@@ -259,30 +247,8 @@ export function evaluateRouteDanger(
+   start: GridPosition,
+   end: GridPosition,
+ ): number {
+-  const staticField = getAwarenessStaticField(state.map, unit.behaviorRuntime.posture);
+-  const directionalField = getDirectionalTacticalField(state.map, {
+-    unitId: unit.id,
+-    originX: unit.position.x,
+-    originY: unit.position.y,
+-    knowledgeRevision: unit.tacticalKnowledge.revision,
+-    threats: unit.tacticalKnowledge.threats,
+-  });
+-  const threatCoverFields = buildThreatCoverFields(state.map, unit);
+-  const lengthMeters = distance(start, end) * state.map.metersPerCell;
+-  const samples = Math.max(2, Math.ceil(lengthMeters / ROUTE_SAMPLE_STEP_METERS));
+-  let total = 0;
+-  for (let index = 0; index <= samples; index += 1) {
+-    const t = index / samples;
+-    const point = { x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t };
+-    total += evaluateAwarenessFieldCell(
+-      unit,
+-      point,
+-      staticField,
+-      directionalField,
+-      threatCoverFields,
+-    ).danger;
+-  }
+-  return Math.round(total / (samples + 1));
++  const report = buildSoldierAwarenessReport(state, unit);
++  return evaluateRouteDangerFromField(state.map, report.cells, start, end);
+ }
+ 
+ function evaluateRouteDangerFromField(
+@@ -302,25 +268,13 @@ function evaluateRouteDangerFromField(
+   return Math.round(total / (samples + 1));
+ }
+ 
+-function buildThreatCoverFields(map: TacticalMap, unit: UnitModel): ThreatCoverFields {
+-  const fields = new Map<string, ThreatRelativeCoverField>();
+-  for (const threat of unit.tacticalKnowledge.threats) {
+-    if (threat.mode !== 'directional_fire') continue;
+-    fields.set(threat.id, getThreatRelativeCoverField(map, {
+-      threatId: threat.id,
+-      threatPosition: { x: threat.x, y: threat.y },
+-      posture: unit.behaviorRuntime.posture,
+-    }));
+-  }
+-  return fields;
+-}
+-
+ function evaluateAwarenessFieldCell(
+   unit: UnitModel,
+   position: GridPosition,
++  cellIndex: number,
+   staticField: AwarenessStaticField,
+   directionalField: DirectionalTacticalField,
+-  threatCoverFields: ThreatCoverFields,
++  dangerField: SoldierDangerField,
+ ): SoldierAwarenessCell {
+   const local = getAwarenessStaticCell(staticField, position);
+   const directional = readDirectionalTacticalCell(
+@@ -334,61 +288,15 @@ function evaluateAwarenessFieldCell(
+     local.reliability,
+     directional.terrainProtection * 0.82,
+   ));
+-  let remainingSafe = 1;
+-  let remainingUnsuppressed = 1;
+-  let confidenceTotal = 0;
+-  let confidenceWeight = 0;
+-  let uncertainty = 0;
+-  let expectedProtectionAgainstThreat = 0;
+-  let protectedAgainstThreatId: string | null = null;
+-
+-  for (const threat of unit.tacticalKnowledge.threats) {
+-    const factor = threatFactorAtPosition(position, threat, staticField.metersPerCell);
+-    if (factor <= 0) continue;
+-    const confidenceFactor = threat.confidence / 100;
+-    const bearingToThreat = Math.atan2(threat.y - position.y, threat.x - position.x);
+-    const terrainProtection = readDirectionalProtectionForBearing(
+-      directionalField,
+-      position.x,
+-      position.y,
+-      bearingToThreat,
+-    );
+-    const terrainExposure = readDirectionalExposureForBearing(
+-      directionalField,
+-      position.x,
+-      position.y,
+-      bearingToThreat,
+-    );
+-    const threatProtection = threat.mode === 'directional_fire'
+-      ? combinePercent(
+-          readThreatRelativeCoverProtection(threatCoverFields.get(threat.id)!, position),
+-          terrainProtection,
+-        )
+-      : combinePercent(local.expectedProtection, terrainProtection * 0.35);
+-    if (threatProtection > expectedProtectionAgainstThreat) {
+-      expectedProtectionAgainstThreat = threatProtection;
+-      protectedAgainstThreatId = threat.id;
+-    }
+-    const uncovered = 1 - threatProtection / 100;
+-    const exposureFactor = threat.mode === 'directional_fire'
+-      ? 0.72 + terrainExposure / 100 * 0.28
+-      : 1;
+-    const danger = clampPercent(threat.strength * factor * confidenceFactor * uncovered * exposureFactor);
+-    const suppression = clampPercent(threat.suppression * factor * confidenceFactor * uncovered * exposureFactor);
+-    remainingSafe *= 1 - danger / 100;
+-    remainingUnsuppressed *= 1 - suppression / 100;
+-    confidenceTotal += threat.confidence * factor;
+-    confidenceWeight += factor;
+-    const uncertaintyMeters = threat.uncertaintyCells * staticField.metersPerCell;
+-    uncertainty = Math.max(
+-      uncertainty,
+-      clampPercent((100 - threat.confidence) + uncertaintyMeters * UNCERTAINTY_SCORE_PER_METER),
+-    );
+-  }
+-
+-  const danger = clampPercent(100 * (1 - remainingSafe));
+-  const suppression = clampPercent(100 * (1 - remainingUnsuppressed));
+-  const confidence = confidenceWeight > 0 ? clampPercent(confidenceTotal / confidenceWeight) : 0;
++  const danger = dangerField.danger[cellIndex] ?? 0;
++  const suppression = dangerField.suppression[cellIndex] ?? 0;
++  const confidence = dangerField.confidence[cellIndex] ?? 0;
++  const uncertainty = dangerField.uncertainty[cellIndex] ?? 0;
++  const expectedProtectionAgainstThreat = dangerField.expectedProtectionAgainstThreat[cellIndex] ?? 0;
++  const protectedIndex = dangerField.protectedThreatIndex[cellIndex] ?? -1;
++  const protectedAgainstThreatId = protectedIndex >= 0
++    ? dangerField.threatIds[protectedIndex] ?? null
++    : null;
+   const safety = clampPercent(
+     expectedProtection * 0.58
+       + concealment * 0.24
+@@ -426,50 +334,12 @@ function evaluateAwarenessFieldCell(
+   };
+ }
+ 
+-function threatFactorAtPosition(
+-  position: GridPosition,
+-  threat: KnownThreatMemory,
+-  metersPerCell: number,
+-): number {
+-  const dx = position.x - threat.x;
+-  const dy = position.y - threat.y;
+-  const range = Math.hypot(dx, dy);
+-  const uncertaintyBonus = threat.uncertaintyCells;
+-
+-  if (threat.mode === 'directional_fire') {
+-    if (range < Math.max(0, threat.minRangeCells - uncertaintyBonus)) return 0;
+-    if (range > threat.rangeCells + uncertaintyBonus) return 0;
+-    const bearing = normalizeDegrees(Math.atan2(dy, dx) * 180 / Math.PI);
+-    const uncertaintyMeters = uncertaintyBonus * metersPerCell;
+-    const allowedArc = Math.min(
+-      360,
+-      threat.arcDegrees + uncertaintyMeters * DIRECTIONAL_UNCERTAINTY_ARC_DEGREES_PER_METER,
+-    );
+-    if (angularDifference(bearing, threat.directionDegrees) > allowedArc / 2) return 0;
+-    const progress = Math.max(0, Math.min(1, (range - threat.minRangeCells) / Math.max(0.001, threat.rangeCells - threat.minRangeCells)));
+-    return Math.max(0.05, 1 - progress * threat.falloffPercent / 100);
+-  }
+-
+-  if (threat.radiusCells > 0) {
+-    return range <= threat.radiusCells + uncertaintyBonus
+-      ? Math.max(0.2, 1 - range / Math.max(1, threat.radiusCells + uncertaintyBonus) * 0.35)
+-      : 0;
+-  }
+-
+-  const rotation = -(threat.rotationDegrees ?? 0) * Math.PI / 180;
+-  const localX = dx * Math.cos(rotation) - dy * Math.sin(rotation);
+-  const localY = dx * Math.sin(rotation) + dy * Math.cos(rotation);
+-  return Math.abs(localX) <= threat.widthCells / 2 + uncertaintyBonus
+-    && Math.abs(localY) <= threat.heightCells / 2 + uncertaintyBonus
+-    ? 1
+-    : 0;
+-}
+-
+ function buildCacheKey(
+   state: SimulationState,
+   unit: UnitModel,
+   staticFieldKey: string,
+   directionalFieldKey: string,
++  dangerFieldKey: string,
+ ): string {
+   return [
+     unit.id,
+@@ -478,6 +348,7 @@ function buildCacheKey(
+     state.map.cellSize,
+     staticFieldKey,
+     directionalFieldKey,
++    dangerFieldKey,
+   ].join('#');
+ }
+ 
+@@ -508,6 +379,7 @@ export function buildAwarenessKnowledgeKey(unit: UnitModel): string {
+     quantize(threat.falloffPercent, 1),
+     quantize(threat.confidence, KNOWLEDGE_CONFIDENCE_BUCKET),
+     quantize(threat.uncertaintyCells, KNOWLEDGE_UNCERTAINTY_BUCKET),
++    threat.fireThreatClass ?? (threat.id.startsWith('unit:') ? 'rifle_fire' : 'independent'),
+     threat.source,
+     threat.visibleNow ? '1' : '0',
+   ].join(':')).join('|');
+@@ -593,15 +465,6 @@ function quantize(value: number, bucket: number): number {
+   return Math.round(value / bucket) * bucket;
+ }
+ 
+-function normalizeDegrees(value: number): number {
+-  const result = value % 360;
+-  return result < 0 ? result + 360 : result;
+-}
+-
+-function angularDifference(left: number, right: number): number {
+-  const difference = Math.abs(normalizeDegrees(left) - normalizeDegrees(right));
+-  return Math.min(difference, 360 - difference);
+-}
+ 
+ function clampPercent(value: number): number {
+   return Math.max(0, Math.min(100, Math.round(value)));
