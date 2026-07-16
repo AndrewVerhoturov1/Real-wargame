@@ -91,27 +91,31 @@ async function openMap(page: Page): Promise<void> {
 }
 
 async function selectFixtureSoldier(page: Page): Promise<void> {
+  const pause = page.locator('[data-action="pause"]');
+  if ((await pause.textContent())?.includes('Пауза')) {
+    await pause.click();
+    await expect(pause).toContainText('Продолжить');
+  }
+  await page.waitForTimeout(200);
+
   const label = page.locator('.unit-label').filter({ hasText: 'Солдат' }).first();
   await expect(label).toBeVisible();
   const box = await label.boundingBox();
   if (!box) throw new Error('Fixture soldier label bounds unavailable.');
 
+  const zoom = await readZoom(page);
   const selectedName = page.locator('[data-role="unit-name"]');
-  const centerX = box.x + box.width / 2;
-  const xOffsets = [0, -4, 4, -8, 8, -12, 12, -16, 16];
-  const firstY = box.y + box.height + 4;
-  const lastY = box.y + box.height + 72;
-
-  for (let y = firstY; y <= lastY; y += 4) {
-    for (const xOffset of xOffsets) {
-      await page.mouse.click(centerX + xOffset, y);
-      await page.waitForTimeout(45);
+  const markerX = box.x + box.width / 2;
+  const markerY = box.y - 22 * zoom;
+  for (const yOffset of [0, -4, 4, -8, 8, -12, 12]) {
+    for (const xOffset of [0, -4, 4, -8, 8]) {
+      await page.mouse.click(markerX + xOffset, markerY + yOffset);
+      await page.waitForTimeout(60);
       if ((await selectedName.textContent())?.includes('Солдат')) return;
     }
   }
 
-  const zoom = await readZoom(page);
-  throw new Error(`Could not select fixture soldier; label=${JSON.stringify(box)} zoom=${zoom}`);
+  throw new Error(`Could not select paused fixture soldier; label=${JSON.stringify(box)} zoom=${zoom} marker=(${markerX},${markerY})`);
 }
 
 async function setZoom(page: Page, target: number): Promise<void> {
