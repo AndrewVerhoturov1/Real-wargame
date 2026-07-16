@@ -78,7 +78,19 @@ jobs:
 
       - name: Vegetation chunk raster smoke
         if: steps.detect.outputs.apply == 'true'
-        run: npm run vegetation-chunk-raster:smoke
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run vegetation-chunk-raster:smoke 2>&1 | tee /tmp/vegetation-chunk-raster.log
+
+      - name: Upload vegetation smoke diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vegetation-chunk-raster-diagnostics
+          path: /tmp/vegetation-chunk-raster.log
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Environment performance smoke
         if: steps.detect.outputs.apply == 'true'
