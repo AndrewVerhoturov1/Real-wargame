@@ -3,7 +3,20 @@ name: Tactical Order Core Verification
 on:
   push:
     branches:
-      - agent/tactical-order-radial-menu-v1
+      - real-wargame-preview
+    paths:
+      - 'src/core/ai/**'
+      - 'src/core/orders/**'
+      - 'src/core/units/**'
+      - 'src/input/TacticalOrderRadial*'
+      - 'src/ui/TacticalOrderStatusCard.ts'
+      - 'src/ui/SceneExport.ts'
+      - 'src/tactical-order-radial-menu.css'
+      - 'tests/tactical-order-radial-menu.spec.ts'
+      - 'scripts/tactical_order_radial_menu_smoke.*'
+      - 'scripts/tactical_workspace_smoke.mjs'
+      - 'package.json'
+      - '.github/workflows/tactical-order-core-verification.yml'
   pull_request:
     branches:
       - real-wargame-preview
@@ -14,17 +27,22 @@ on:
       - 'src/input/TacticalOrderRadial*'
       - 'src/ui/TacticalOrderStatusCard.ts'
       - 'src/ui/SceneExport.ts'
+      - 'src/tactical-order-radial-menu.css'
+      - 'tests/tactical-order-radial-menu.spec.ts'
       - 'scripts/tactical_order_radial_menu_smoke.*'
       - 'scripts/tactical_workspace_smoke.mjs'
       - 'package.json'
       - '.github/workflows/tactical-order-core-verification.yml'
+
+concurrency:
+  group: tactical-order-core-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
   core-matrix:
-    if: github.event_name == 'push' || github.head_ref == 'agent/tactical-order-radial-menu-v1'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
