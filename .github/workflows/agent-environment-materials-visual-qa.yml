@@ -2,7 +2,7 @@ name: Approved Environment Materials Visual QA
 
 # User approval is recorded by VISUAL_QA_APPROVED_BY_USER: yes in the PR body.
 # The suite remains skipped in the repository and is enabled only inside this approved run.
-# This attempt freezes the fixture before selecting the rendered soldier marker.
+# The fixture is frozen before selecting the rendered soldier marker.
 on:
   workflow_dispatch:
   pull_request:
@@ -21,12 +21,6 @@ on:
       - 'src/core/map/EnvironmentProfileRuntime.ts'
       - 'src/ui/EnvironmentProfileStorage.ts'
       - 'playwright.config.ts'
-  push:
-    branches:
-      - agent/terrain-profiles-performance-followup-v1
-    paths:
-      - '.github/workflows/agent-environment-materials-visual-qa.yml'
-      - 'tests/environment-materials-visual.spec.ts'
 
 permissions:
   contents: read
@@ -40,7 +34,7 @@ env:
 
 jobs:
   visual-qa:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || contains(github.event.pull_request.body, 'VISUAL_QA_APPROVED_BY_USER: yes')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.body, 'VISUAL_QA_APPROVED_BY_USER: yes')
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
