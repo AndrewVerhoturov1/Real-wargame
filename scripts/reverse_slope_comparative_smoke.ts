@@ -94,7 +94,10 @@ function assertReverseSlopeBenefit(flat: ScenarioEvaluation, slope: ScenarioEval
 
   assert.equal(flat.route.detourLimited, false);
   assert.equal(slope.route.detourLimited, false);
-  assert.ok(routeSideCount(flat, 'east') > routeSideCount(flat, 'west'));
+  assert.ok(
+    routeCell(slope, REVERSE).dangerCost < routeCell(flat, REVERSE).dangerCost - 0.1,
+    'route dangerCost must inherit the canonical reverse-slope protection instead of preserving the old cone-only route bias',
+  );
   assert.ok(routeSideCount(slope, 'west') > routeSideCount(slope, 'east'));
   assert.notDeepEqual(slope.route.cells, flat.route.cells);
   assert.ok(slope.route.visitedCells <= WIDTH * HEIGHT);
