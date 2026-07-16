@@ -70,6 +70,24 @@ Stable order:
 
 Built-ins can be edited and reset, but cannot be deleted. Custom profiles can be created, copied, renamed and deleted. The visual workflow generates custom IDs automatically.
 
+## MovementGait contract
+
+Movement profiles use the same canonical gait values as the physical runtime:
+
+```text
+crawl
+crouch_walk
+walk
+run
+sprint
+```
+
+The built-in `crouched_move` profile uses `preferredGait: crouch_walk`. The Russian editor label remains `Пригнувшись`.
+
+Older branch-local saved data may contain the former value `crouch`. Strict import accepts that one legacy value before normalization and migrates it to `crouch_walk`. Registry state and new JSON exports contain canonical values only; they never serialize `preferredGait: crouch`.
+
+Unknown gait values remain transactional import errors and do not replace the current registry.
+
 ## Registry lookup contract
 
 The registry does not silently replace an unknown ID:
@@ -166,9 +184,9 @@ PR #130 should register terrain/material sections through the same mechanism. Pr
 
 ## Reconciliation with physical runtime worker
 
-Compare and unify:
+The canonical `MovementGait` names are aligned. Remaining integration points are:
 
-- `MovementGait` names and actual speed units;
+- actual speed units;
 - stamina scale and hysteresis thresholds;
 - wound/suppression capability inputs;
 - fallback resolution and loop prevention;
@@ -192,6 +210,12 @@ npm run movement-profiles:smoke
 
 The focused smoke enforces:
 
+- canonical runtime-compatible `MovementGait` values;
+- `crouched_move → crouch_walk` serialization;
+- legacy `crouch → crouch_walk` import migration;
+- absence of legacy `crouch` in new exports;
+- rejection of unknown gait values;
+- Russian `Пригнувшись` editor label;
 - pure-core browser independence;
 - absence of the former core storage adapter;
 - strict aggregate import errors and transactional replacement;
