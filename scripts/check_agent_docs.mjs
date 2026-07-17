@@ -1,3 +1,4 @@
+import './performance_principles_contract_smoke.mjs';
 import process from 'node:process';
 import { validateAgentDocuments } from './agent_docs_validation.mjs';
 
