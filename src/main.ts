@@ -17,6 +17,7 @@ import pressureZoneData from './data/pressure_zones/test_pressure_zones.json';
 import unitsData from './data/units/test_units.json';
 import { installAiStatefulMoveGameBridge as installAiGameBridge } from './core/ai/AiStatefulMoveGameBridge';
 import type { TacticalMapData } from './core/map/MapModel';
+import { clearAsyncRouteCostWorker } from './core/navigation/RouteCostWorkerClient';
 import type { PressureZoneData } from './core/pressure/PressureZone';
 import { createResolutionAwareInitialState } from './core/simulation/ResolutionAwareScene';
 import { initializeAiTestLabRuntime } from './core/testing/AiTestLabRuntime';
@@ -143,6 +144,7 @@ async function bootstrap(): Promise<void> {
     destroyAttentionRuntimePanel();
     destroyAttentionOverlayRenderer();
     destroyAttentionProfileControls();
+    clearAsyncRouteCostWorker(state.map);
     aiGameBridge.destroy();
     board.destroy();
     if (tacticalBoard === board) tacticalBoard = null;
