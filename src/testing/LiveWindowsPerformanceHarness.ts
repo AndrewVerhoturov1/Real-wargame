@@ -1,4 +1,6 @@
 import { resetRuntimeGraphSnapshotCacheForTests } from '../core/ai/AiGameBridge';
+import { getGameEditorDrafts } from '../core/editor/GameEditorDrafts';
+import { placeConfiguredEditorEntity } from '../core/editor/GameEditorPlacement';
 import { syncSoldierThreatMemory } from '../core/knowledge/SoldierThreatMemory';
 import { issueRoutedMoveOrderToSelectedUnits } from '../core/orders/RoutedMoveOrders';
 import { buildNavigationGrid, isNavigationCellPassable } from '../core/pathfinding/GridNavigation';
@@ -23,6 +25,7 @@ export interface LiveWindowsPerformanceSnapshot {
 export interface LiveWindowsPerformanceApi {
   start(): LiveWindowsPerformanceSnapshot;
   stop(): LiveWindowsPerformanceSnapshot;
+  addUnits(targetCount: number): LiveWindowsPerformanceSnapshot;
   retargetAll(seed: number): LiveWindowsPerformanceSnapshot;
   refreshContacts(): LiveWindowsPerformanceSnapshot;
   setLayer(mode: SimulationLayerMode): LiveWindowsPerformanceSnapshot;
@@ -52,7 +55,9 @@ export function installLiveWindowsPerformanceHarness(state: SimulationState): vo
 
   window.__realWargameLiveWindowsPerformance = {
     start(): LiveWindowsPerformanceSnapshot {
-      window.__realWargamePerformanceScenario = 'live-windows-six-unit-ai';
+      window.__realWargamePerformanceScenario = state.units.length > UNIT_COUNT
+        ? 'live-windows-performance-report-v6-mass-route'
+        : 'live-windows-six-unit-ai';
       refreshContacts(state);
       routeAllUnits(state, 0);
       setAiTestPaused(state, false);
@@ -63,6 +68,10 @@ export function installLiveWindowsPerformanceHarness(state: SimulationState): vo
       const stopped = snapshot(state);
       window.__realWargamePerformanceScenario = null;
       return stopped;
+    },
+    addUnits(targetCount): LiveWindowsPerformanceSnapshot {
+      addUnitsThroughEditor(state, Math.max(UNIT_COUNT, Math.floor(targetCount)));
+      return snapshot(state);
     },
     retargetAll(seed): LiveWindowsPerformanceSnapshot {
       routeAllUnits(state, seed);
@@ -109,6 +118,42 @@ function ensureFixtureUnits(state: SimulationState): void {
     }]);
     if (!unit) throw new Error('Failed to create Live Windows performance fixture unit.');
     state.units.push(unit);
+  }
+}
+
+function addUnitsThroughEditor(state: SimulationState, targetCount: number): void {
+  if (state.units.length >= targetCount) return;
+  const previousEnabled = state.editor.enabled;
+  const previousTool = state.editor.tool;
+  const drafts = getGameEditorDrafts(state);
+  const grid = buildNavigationGrid(state.map);
+  const occupied = new Set(state.units.map((unit) => `${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`));
+  state.editor.enabled = true;
+  state.editor.tool = 'spawn_unit';
+
+  try {
+    while (state.units.length < targetCount) {
+      const index = state.units.length;
+      drafts.unit.name = `Performance v6 unit ${index + 1}`;
+      drafts.unit.side = index % 2 === 0 ? 'blue' : 'red';
+      const column = index % 20;
+      const row = Math.floor(index / 20);
+      const preferred = {
+        x: 24 + column * Math.max(3, Math.floor((state.map.width - 48) / 20)),
+        y: 24 + row * Math.max(8, Math.floor((state.map.height - 48) / 5)),
+      };
+      const position = findPassablePosition(state, grid, preferred, occupied);
+      if (!placeConfiguredEditorEntity(state, position)) {
+        throw new Error(`Editor API failed to create performance unit ${index + 1}.`);
+      }
+      const created = state.units[state.units.length - 1];
+      if (!created) throw new Error(`Editor API did not append performance unit ${index + 1}.`);
+      created.position = position;
+      configureUnitRuntime(state, created, index);
+    }
+  } finally {
+    state.editor.tool = previousTool;
+    state.editor.enabled = previousEnabled;
   }
 }
 
@@ -186,26 +231,7 @@ function configureUnits(state: SimulationState): void {
   for (let index = 0; index < state.units.length; index += 1) {
     const unit = state.units[index];
     const slot = slots[index % slots.length];
-    unit.side = index % 2 === 0 ? 'blue' : 'red';
-    unit.aiControl = 'graph';
-    unit.order = null;
-    unit.playerCommand = null;
-    unit.plan = null;
-    unit.speedCellsPerSecond = 8;
-    unit.behaviorRuntime.ammo = 0;
-    unit.behaviorRuntime.weaponReady = false;
-    unit.behaviorRuntime.aiLastSimulationStep = -1;
-    unit.behaviorRuntime.aiNextDecisionAtMs = 0;
-    unit.behaviorRuntime.aiObserverNextPollMs = 0;
-    unit.behaviorRuntime.aiDecisionTickCount = 0;
-    unit.behaviorRuntime.aiObserverPollCount = 0;
-    unit.behaviorRuntime.aiReactiveWakeCount = 0;
-    unit.behaviorRuntime.aiRuntimeSession = null;
-    unit.tacticalKnowledge.threats = [];
-    unit.tacticalKnowledge.revision += 1;
-    unit.perceptionKnowledge.contacts = [];
-    unit.viewRangeCells = Math.max(state.map.width, state.map.height);
-    unit.attentionSettings.vision.maximumVisualRangeMeters = 2_000;
+    configureUnitRuntime(state, unit, index);
     unit.position = findPassablePosition(
       state,
       grid,
@@ -215,6 +241,29 @@ function configureUnits(state: SimulationState): void {
   }
   state.selectedUnitId = state.units[0]?.id ?? null;
   state.selectedUnitIds = state.units[0] ? [state.units[0].id] : [];
+}
+
+function configureUnitRuntime(state: SimulationState, unit: UnitModel, index: number): void {
+  unit.side = index % 2 === 0 ? 'blue' : 'red';
+  unit.aiControl = 'graph';
+  unit.order = null;
+  unit.playerCommand = null;
+  unit.plan = null;
+  unit.speedCellsPerSecond = 8;
+  unit.behaviorRuntime.ammo = 0;
+  unit.behaviorRuntime.weaponReady = false;
+  unit.behaviorRuntime.aiLastSimulationStep = -1;
+  unit.behaviorRuntime.aiNextDecisionAtMs = 0;
+  unit.behaviorRuntime.aiObserverNextPollMs = 0;
+  unit.behaviorRuntime.aiDecisionTickCount = 0;
+  unit.behaviorRuntime.aiObserverPollCount = 0;
+  unit.behaviorRuntime.aiReactiveWakeCount = 0;
+  unit.behaviorRuntime.aiRuntimeSession = null;
+  unit.tacticalKnowledge.threats = [];
+  unit.tacticalKnowledge.revision += 1;
+  unit.perceptionKnowledge.contacts = [];
+  unit.viewRangeCells = Math.max(state.map.width, state.map.height);
+  unit.attentionSettings.vision.maximumVisualRangeMeters = 2_000;
 }
 
 function refreshContacts(state: SimulationState): void {
@@ -260,17 +309,14 @@ function findNearestHostile(units: readonly UnitModel[], observer: UnitModel): U
 function routeAllUnits(state: SimulationState, seed: number): void {
   const previousSelectedId = state.selectedUnitId;
   const previousSelectedIds = [...state.selectedUnitIds];
-  for (let index = 0; index < state.units.length; index += 1) {
-    const unit = state.units[index];
-    const direction = ((seed + index) % 2 === 0) ? 1 : -1;
-    const vertical = ((seed + index) % 3) - 1;
-    state.selectedUnitId = unit.id;
-    state.selectedUnitIds = [unit.id];
-    issueRoutedMoveOrderToSelectedUnits(state, {
-      x: clamp(unit.position.x + direction * (18 + index * 2), 0.5, state.map.width - 0.5),
-      y: clamp(unit.position.y + vertical * (8 + index), 0.5, state.map.height - 0.5),
-    });
-  }
+  state.selectedUnitId = state.units[0]?.id ?? null;
+  state.selectedUnitIds = state.units.map((unit) => unit.id);
+  const horizontal = seed % 2 === 0 ? 0.72 : 0.28;
+  const vertical = seed % 3 === 0 ? 0.62 : 0.38;
+  issueRoutedMoveOrderToSelectedUnits(state, {
+    x: clamp(state.map.width * horizontal, 0.5, state.map.width - 0.5),
+    y: clamp(state.map.height * vertical, 0.5, state.map.height - 0.5),
+  });
   state.selectedUnitId = previousSelectedId;
   state.selectedUnitIds = previousSelectedIds;
 }
