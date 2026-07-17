@@ -87,6 +87,7 @@ export function planMoveOrder(
     routeCellIndex: 0,
     routeStatus: options.routeStatus ?? 'planned',
     routeRevision: options.routeRevision ?? 1,
+    calculatedAtSimulationStep: options.calculatedAtSimulationStep ?? 0,
     routeDangerDiagnostic: path.routeDangerDiagnostic ?? undefined,
     pathCost: path.totalCost,
     pathDistanceMeters: path.distanceMeters,
