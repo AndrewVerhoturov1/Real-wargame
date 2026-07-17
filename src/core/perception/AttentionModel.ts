@@ -56,9 +56,16 @@ export interface AttentionSample {
   zone: AttentionZone;
   weight: number;
   normalizedAngle01: number;
+  /** True only inside the short sector centred directly behind the observer. */
+  rear?: boolean;
+  /** Reduces evidence because a rear glimpse is brief rather than continuous observation. */
+  evidenceFactor?: number;
 }
 
 export const ATTENTION_MODES: readonly AttentionMode[] = ['march', 'observe', 'search', 'engage'];
+export const REAR_SECTOR_START_DEGREES = 135;
+export const REAR_ATTENTION_WEIGHT = 0.06;
+export const REAR_GLIMPSE_SECONDS = 1;
 
 export const DEFAULT_VISION_SETTINGS: Readonly<UnitVisionSettings> = {
   maximumVisualRangeMeters: 600,
@@ -200,13 +207,27 @@ export function sampleAttentionWeight(
   const focusMix = smoothstep(focusHalf - focusBlend, focusHalf + focusBlend, angle);
   const directMix = smoothstep(directHalf - directBlend, directHalf + directBlend, angle);
   const focusToDirect = lerp(profile.focusWeight, profile.directWeight, focusMix);
-  const weight = clampFinite(lerp(focusToDirect, profile.peripheralWeight, directMix), 0, 2, 0);
+  const peripheralWeight = clampFinite(profile.peripheralWeight, 0, 1, 0.1);
+  const baseWeight = clampFinite(lerp(focusToDirect, peripheralWeight, directMix), 0, 2, 0);
+  const rearBlend = smoothstep(REAR_SECTOR_START_DEGREES - 12, REAR_SECTOR_START_DEGREES + 12, angle);
+  const rearWeight = Math.min(peripheralWeight, REAR_ATTENTION_WEIGHT);
+  const weight = clampFinite(lerp(baseWeight, rearWeight, rearBlend), 0, 2, 0);
+  let evidenceFactor = 1;
+  if (rearBlend > 0) {
+    const rearDutyCycle = Math.min(
+      1,
+      REAR_GLIMPSE_SECONDS / Math.max(REAR_GLIMPSE_SECONDS, profile.rearCheckIntervalSeconds),
+    );
+    evidenceFactor = clampFinite(lerp(1, rearDutyCycle, rearBlend), 0, 1, 1);
+  }
   const zone: AttentionZone = angle <= focusHalf ? 'focus' : angle <= directHalf ? 'direct' : 'peripheral';
 
   return {
     zone,
     weight,
     normalizedAngle01: angle / 180,
+    rear: angle >= REAR_SECTOR_START_DEGREES,
+    evidenceFactor,
   };
 }
 
