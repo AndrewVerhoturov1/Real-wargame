@@ -11,7 +11,8 @@ docs/performance/PERFORMANCE_PRINCIPLES.md
 docs/performance/PERFORMANCE_REPORT_V6.md
 ```
 
-These documents are repository contracts. They are not optional guidance.
+This document is a repository contract. It is not optional guidance.
+The linked performance documents are repository contracts as well.
 
 ## Trigger
 
