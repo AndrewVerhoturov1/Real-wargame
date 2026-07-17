@@ -30,6 +30,15 @@ Read in this order:
 4. `docs/subprojects/<active-id>/STATUS.md`;
 5. the relevant skill from `docs/ai/SKILLS_INDEX.md`.
 
+For every task that can affect runtime cost, also read before design or implementation:
+
+```text
+docs/performance/PERFORMANCE_PRINCIPLES.md
+.agents/skills/real-wargame-performance/SKILL.md
+```
+
+The performance document is a mandatory repository contract, not optional advice. Runtime-affecting work is incomplete without its design review, bounded-cost implementation and required evidence.
+
 Detailed web-chat route:
 
 ```text
@@ -115,6 +124,15 @@ docs/ai/DEVELOPMENT_LANGUAGE_RULES.md
 
 ## 5. Skill routing
 
+### Performance-sensitive work
+
+```text
+.agents/skills/real-wargame-performance/SKILL.md
+docs/performance/PERFORMANCE_PRINCIPLES.md
+```
+
+This route is mandatory for any change to simulation, AI, perception, navigation, tactical fields, map data, rendering, recurring UI, workers, queues, caches, revisions, lifecycle, diagnostics or browser performance gates. It applies even when the feature request does not explicitly mention performance.
+
 ### Visual launch, screenshots or Playwright
 
 ```text
@@ -159,9 +177,48 @@ Hard boundaries:
 - `AiGameBridge` adapts pure AI to the live game;
 - renderers display state and do not become the source of truth;
 - subjective soldier knowledge must not reveal the objective world;
-- heavy awareness, relief or overlay work must not be recomputed every frame without evidence and design.
+- heavy awareness, relief or overlay work must not be recomputed every frame without evidence and design;
+- UI, renderer selection and visible layers never own gameplay computation;
+- one changed entity must not invalidate unrelated world state;
+- interactive full-map scans, unbounded queues and unbounded per-step work are forbidden;
+- asynchronous results require exact identity, bounded ownership and stale-result rejection.
 
-## 7. Current-status documentation
+## 7. Mandatory performance contract
+
+The canonical contract is:
+
+```text
+docs/performance/PERFORMANCE_PRINCIPLES.md
+```
+
+For runtime-affecting work, every agent must establish before implementation:
+
+```text
+hot path
+worst-case complexity
+main-thread work
+full-map work
+shared prepared result
+revision identity
+worker and queue budget
+cache memory bound
+teardown
+measurement plan
+```
+
+The implementation must prefer shared prepared data, narrow revision-based invalidation, bounded deterministic work, local/point/route queries, dirty chunks, typed data and revision-driven UI.
+
+A feature must not be made “fast” by weakening gameplay semantics, hidden-contact boundaries, LOS, terrain, vegetation, route meaning, fairness or determinism.
+
+Pull-request performance workflows must enforce their thresholds and verify the exact head SHA. Diagnostic-only capture is not an acceptance gate.
+
+Runtime-affecting final reports must include the `Performance impact` section from:
+
+```text
+docs/orchestration/RESULT_TEMPLATE.md
+```
+
+## 8. Current-status documentation
 
 Edit current state only in:
 
@@ -178,7 +235,7 @@ npm run docs:sync
 
 Files marked `GENERATED FILE` must not be edited manually.
 
-## 8. Verification honesty
+## 9. Verification honesty
 
 Never claim a check that was not run.
 
@@ -223,7 +280,7 @@ The canonical detailed policy is:
 docs/workflow/VISUAL_QA_APPROVAL_POLICY.md
 ```
 
-## 9. Specialized and legacy collaboration references
+## 10. Specialized and legacy collaboration references
 
 The default multi-chat route is:
 
@@ -242,7 +299,7 @@ docs/ai/PR_REVIEW_CHECKLIST.md
 
 R, Q, X/r-init and related letter modes are not part of ordinary chat-only orchestration. Do not route a normal multi-chat request through them unless the user explicitly asks for the legacy workflow.
 
-## 10. Required report
+## 11. Required report
 
 Every implementation report includes:
 
@@ -255,6 +312,7 @@ checks_run: ...
 visual_qa_prepared: yes / no / not applicable
 visual_qa_approval: approved / declined / pending / not applicable
 visual_qa_run: passed / failed / not run / not applicable
+performance_impact: completed / not applicable with reason
 not_checked: ...
 manual_checks_needed: ...
 risks: ...
