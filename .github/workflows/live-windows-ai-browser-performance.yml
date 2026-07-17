@@ -16,8 +16,10 @@ on:
       - 'src/core/ai/**'
       - 'src/core/cover/**'
       - 'src/core/debug/**'
+      - 'src/core/editor/**'
       - 'src/core/knowledge/**'
       - 'src/core/navigation/**'
+      - 'src/core/orders/**'
       - 'src/core/perception/**'
       - 'src/core/simulation/**'
       - 'src/core/terrain/**'
@@ -26,10 +28,12 @@ on:
       - 'src/rendering/PixiRouteCostOverlayRenderer.ts'
       - 'src/workers/RouteCostWorker.ts'
       - 'src/testing/LiveWindowsPerformanceHarness.ts'
+      - 'src/ui/PerformanceReportControls.ts'
       - 'src/ui/TacticalWorkspace.ts'
       - 'src/main.ts'
-      - 'tests/live-windows-ai-performance.spec.ts'
+      - 'tests/performance-report-v6-browser.spec.ts'
       - 'scripts/performance_report_contract_smoke.mjs'
+      - 'scripts/performance_report_v6_smoke.*'
       - 'scripts/perception_performance_smoke.ts'
       - 'scripts/danger_layer_performance_smoke.ts'
       - 'scripts/live_windows_workflow_enforce_contract_smoke.mjs'
@@ -54,7 +58,7 @@ jobs:
       LIVE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       LIVE_HEAD_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
       LIVE_BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha || '' }}
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - name: Checkout exact PR head
         uses: actions/checkout@v4
@@ -79,6 +83,7 @@ jobs:
           npx tsc --noEmit
           npm run build
           node scripts/performance_report_contract_smoke.mjs
+          npm run performance-report-v6:smoke
           npm run live-windows-workflow-contract:smoke
           npm run long-task-classification:smoke
           npm run route-danger-semantics:smoke
@@ -89,7 +94,7 @@ jobs:
           npm run shared-visibility-vegetation:smoke
           npm run perception-performance:smoke
           npm run danger-layer-performance:smoke
-      - name: Run 90-second live AI capture
+      - name: Run v6 live browser capture
         env:
           REAL_WARGAME_BRANCH: ${{ env.LIVE_HEAD_BRANCH }}
           REAL_WARGAME_COMMIT_SHA: ${{ env.LIVE_HEAD_SHA }}
@@ -104,7 +109,7 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p "artifacts/performance/live-performance-contract-followup/ci-${{ env.LIVE_HEAD_SHA }}"
-          npx playwright test tests/live-windows-ai-performance.spec.ts \
+          npx playwright test tests/performance-report-v6-browser.spec.ts \
             --config=playwright.performance.config.ts \
             --project=chromium \
             --reporter=line 2>&1 | tee "artifacts/performance/live-performance-contract-followup/ci-${{ env.LIVE_HEAD_SHA }}/playwright.log"
