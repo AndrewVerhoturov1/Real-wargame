@@ -316,7 +316,23 @@ function verifyLinearTraversalAndSingleGraphResolution(): void {
   const moveBridgeSource = readFileSync('src/core/ai/AiStatefulMoveGameBridge.ts', 'utf8');
   assert.doesNotMatch(schedulerSource, /state\.units\.includes/);
   assert.doesNotMatch(extractFunction(gameBridgeSource, 'tickAiGameBridgeForTrustedUnit'), /state\.units\.includes/);
-  assert.doesNotMatch(extractFunction(moveBridgeSource, 'tickStatefulMoveBridgeForTrustedUnit'), /state\.units\.includes/);
+  const trustedMoveBridge = extractFunction(moveBridgeSource, 'tickStatefulMoveBridgeForTrustedUnit');
+  assert.doesNotMatch(trustedMoveBridge, /state\.units\.includes/);
+  assert.match(
+    schedulerSource,
+    /movementProfileRegistryEntries:\s*options\.movementProfileRegistryEntries/,
+    'the scheduler must forward the stable registry snapshot instead of rebuilding profile lookup inputs per unit',
+  );
+  assert.match(
+    trustedMoveBridge,
+    /requiresPostReconcile/,
+    'quiet scheduler passes must not unconditionally repeat movement authority reconciliation',
+  );
+  assert.match(
+    trustedMoveBridge,
+    /if \(result \|\| orderChanged \|\| options\.cancel\)/,
+    'quiet scheduler passes must reuse the first route-status result instead of evaluating it twice',
+  );
   assert.doesNotMatch(extractFunction(moveBridgeSource, 'updateRouteStatusForTrustedUnit'), /state\.units\.includes/);
 }
 

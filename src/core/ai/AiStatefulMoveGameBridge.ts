@@ -153,6 +153,7 @@ export function tickStatefulMoveBridgeForTrustedUnit(
 ): AiGraphRuntimeResult | null {
   reconcileMovementProfileRuntime(unit, options.movementProfileRegistryEntries);
   syncMoveOrderMemoryForUnit(unit);
+  const orderBeforeRuntimeTick = unit.order;
 
   let routeResult: AiRouteStatusResult | null = null;
   let runtimeOptions = options;
@@ -163,15 +164,27 @@ export function tickStatefulMoveBridgeForTrustedUnit(
   }
 
   const result = tickAiGameBridgeForTrustedUnit(state, unit, nowMs, runtimeOptions);
-  if (result && runtimeOptions.applyEffects) {
-    applyOwnedMoveEffectsForUnit(state, unit, result, options.movementProfileRegistryEntries);
+  const movementReconciledByBegin = result && runtimeOptions.applyEffects
+    ? applyOwnedMoveEffectsForUnit(state, unit, result, options.movementProfileRegistryEntries)
+    : false;
+
+  const moveEffectState = describeMoveEffectState(result);
+  const orderChanged = unit.order !== orderBeforeRuntimeTick;
+  const requiresPostReconcile = moveEffectState.hasClear
+    || (moveEffectState.hasMovementProfileMemoryWrite && !movementReconciledByBegin)
+    || (!result && orderChanged);
+  if (requiresPostReconcile) {
+    reconcileMovementProfileRuntime(unit, options.movementProfileRegistryEntries);
   }
-  reconcileMovementProfileRuntime(unit, options.movementProfileRegistryEntries);
-  syncMoveOrderMemoryForUnit(unit);
+  if (orderChanged || moveEffectState.hasBegin || moveEffectState.hasClear) {
+    syncMoveOrderMemoryForUnit(unit);
+  }
 
   if (options.applyEffects) {
-    const afterEffects = updateRouteStatusForTrustedUnit(state, unit, nowMs, options.graphSnapshot);
-    if (afterEffects) routeResult = afterEffects;
+    if (result || orderChanged || options.cancel) {
+      const afterEffects = updateRouteStatusForTrustedUnit(state, unit, nowMs, options.graphSnapshot);
+      if (afterEffects) routeResult = afterEffects;
+    }
     publishSimulationAiEvents(unit, nowMs);
   }
 
@@ -191,11 +204,11 @@ export function syncMoveOrderMemoryForUnit(unit: UnitModel): void {
   const runtime = unit.behaviorRuntime as AiMoveRuntime;
   const memory = getRuntimeMemory(runtime);
   const order = unit.order;
-  memory.active_move_source = order
+  setMemoryIfChanged(memory, 'active_move_source', order
     ? order.source ?? (order.ownerToken ? 'ai' : 'player')
-    : null;
-  memory.active_move_owner_token = order?.ownerToken ?? null;
-  memory.active_move_target = order ? { ...order.target } : null;
+    : null);
+  setMemoryIfChanged(memory, 'active_move_owner_token', order?.ownerToken ?? null);
+  setGridPositionMemoryIfChanged(memory, 'active_move_target', order?.target ?? null);
   if (order) publishPathOrderMemory(memory, order);
 }
 
@@ -265,9 +278,10 @@ export function applyOwnedMoveEffectsForUnit(
   unit: UnitModel,
   result: AiGraphRuntimeResult,
   registryEntries?: readonly MovementProfileRegistryEntry[],
-): void {
+): boolean {
   const runtime = unit.behaviorRuntime as AiMoveRuntime;
   const memory = getRuntimeMemory(runtime);
+  let movementReconciled = false;
 
   for (const [index, rawEffect] of result.effects.entries()) {
     const effect = readAiGraphRuntimeMoveEffect(rawEffect);
@@ -304,6 +318,7 @@ export function applyOwnedMoveEffectsForUnit(
 
       unit.order = planned.order;
       reconcileMovementProfileRuntime(unit, registryEntries);
+      movementReconciled = true;
       unit.behaviorRuntime.currentAction = 'move';
       unit.behaviorRuntime.reason = planned.path.reasonRu;
       unit.behaviorRuntime.lastEvent = 'ai_graph_owned_move_started';
@@ -328,6 +343,7 @@ export function applyOwnedMoveEffectsForUnit(
       unit.behaviorRuntime.lastEvent = 'ai_graph_owned_move_cleanup_skipped';
     }
   }
+  return movementReconciled;
 }
 
 function getSelectedUnit(state: SimulationState): UnitModel | undefined {
@@ -432,12 +448,65 @@ function publishRouteMemory(memory: Record<string, AiBlackboardValue>, result: A
 }
 
 function publishPathOrderMemory(memory: Record<string, AiBlackboardValue>, order: MoveOrder): void {
-  memory.active_move_path_status = order.routeStatus ?? 'direct';
-  memory.active_move_path_waypoint_count = order.waypoints?.length ?? 0;
-  memory.active_move_path_waypoint_index = order.waypointIndex ?? 0;
-  memory.active_move_path_requested_target = order.requestedTarget ? { ...order.requestedTarget } : { ...order.target };
-  memory.active_move_path_resolved_target = { ...order.target };
-  memory.active_move_path_reason = order.pathReasonRu ?? order.pathReason ?? null;
+  setMemoryIfChanged(memory, 'active_move_path_status', order.routeStatus ?? 'direct');
+  setMemoryIfChanged(memory, 'active_move_path_waypoint_count', order.waypoints?.length ?? 0);
+  setMemoryIfChanged(memory, 'active_move_path_waypoint_index', order.waypointIndex ?? 0);
+  setGridPositionMemoryIfChanged(
+    memory,
+    'active_move_path_requested_target',
+    order.requestedTarget ?? order.target,
+  );
+  setGridPositionMemoryIfChanged(memory, 'active_move_path_resolved_target', order.target);
+  setMemoryIfChanged(memory, 'active_move_path_reason', order.pathReasonRu ?? order.pathReason ?? null);
+}
+
+interface MoveEffectState {
+  readonly hasBegin: boolean;
+  readonly hasClear: boolean;
+  readonly hasMovementProfileMemoryWrite: boolean;
+}
+
+function describeMoveEffectState(result: AiGraphRuntimeResult | null): MoveEffectState {
+  let hasBegin = false;
+  let hasClear = false;
+  let hasMovementProfileMemoryWrite = false;
+  for (const effect of result?.effects ?? []) {
+    const moveEffect = readAiGraphRuntimeMoveEffect(effect);
+    if (moveEffect?.type === 'begin_move') hasBegin = true;
+    else if (moveEffect?.type === 'clear_move') hasClear = true;
+    if (effect.type === 'write_memory' && isMovementProfileAuthorityMemoryKey(effect.key)) {
+      hasMovementProfileMemoryWrite = true;
+    }
+  }
+  return { hasBegin, hasClear, hasMovementProfileMemoryWrite };
+}
+
+function isMovementProfileAuthorityMemoryKey(key: string): boolean {
+  return key === MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId
+    || key === MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken
+    || key === MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideReason;
+}
+
+function setMemoryIfChanged(
+  memory: Record<string, AiBlackboardValue>,
+  key: string,
+  value: AiBlackboardValue,
+): void {
+  if (memory[key] !== value) memory[key] = value;
+}
+
+function setGridPositionMemoryIfChanged(
+  memory: Record<string, AiBlackboardValue>,
+  key: string,
+  value: GridPosition | null,
+): void {
+  const current = memory[key];
+  if (value === null) {
+    if (current !== null) memory[key] = null;
+    return;
+  }
+  if (isGridPosition(current) && current.x === value.x && current.y === value.y) return;
+  memory[key] = { ...value };
 }
 
 function publishPathFailureMemory(

@@ -70,11 +70,15 @@ export function reconcileMovementProfileRuntime(
       : undefined;
     if (commit) {
       if (nextSafetyProfileId) {
-        memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId] = nextSafetyProfileId;
-        memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason] = hardSafetyReason ?? 'physical_runtime';
+        setMemoryIfChanged(memory, MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId, nextSafetyProfileId);
+        setMemoryIfChanged(
+          memory,
+          MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason,
+          hardSafetyReason ?? 'physical_runtime',
+        );
       } else {
-        delete memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId];
-        delete memory[MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason];
+        deleteMemoryIfPresent(memory, MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyProfileId);
+        deleteMemoryIfPresent(memory, MOVEMENT_PROFILE_MEMORY_KEYS.hardSafetyReason);
       }
     }
   }
@@ -159,21 +163,21 @@ export function reconcileMovementProfileRuntime(
     ?? finiteRevision(order?.movementProfileDefinitionRevision);
 
   if (commit) {
-    unit.movementRuntime.profileDefinitionRevision = definitionRevision ?? null;
-    unit.movementRuntime.profileSelectionRevision = selectionRevision;
-    memory[MOVEMENT_PROFILE_MEMORY_KEYS.requestedProfileId] = resolved.requestedProfileId;
-    memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId] = resolved.profileId;
-    memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource] = resolved.source;
-    memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedFallback] = resolved.forcedFallback;
-    memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedReason] = resolved.forcedReason ?? '';
-    memory[MOVEMENT_PROFILE_MEMORY_KEYS.profileDefinitionRevision] = definitionRevision ?? null;
-    memory[MOVEMENT_PROFILE_MEMORY_KEYS.profileSelectionRevision] = selectionRevision;
+    setRuntimeIfChanged(unit.movementRuntime, 'profileDefinitionRevision', definitionRevision ?? null);
+    setRuntimeIfChanged(unit.movementRuntime, 'profileSelectionRevision', selectionRevision);
+    setMemoryIfChanged(memory, MOVEMENT_PROFILE_MEMORY_KEYS.requestedProfileId, resolved.requestedProfileId);
+    setMemoryIfChanged(memory, MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId, resolved.profileId);
+    setMemoryIfChanged(memory, MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource, resolved.source);
+    setMemoryIfChanged(memory, MOVEMENT_PROFILE_MEMORY_KEYS.forcedFallback, resolved.forcedFallback);
+    setMemoryIfChanged(memory, MOVEMENT_PROFILE_MEMORY_KEYS.forcedReason, resolved.forcedReason ?? '');
+    setMemoryIfChanged(memory, MOVEMENT_PROFILE_MEMORY_KEYS.profileDefinitionRevision, definitionRevision ?? null);
+    setMemoryIfChanged(memory, MOVEMENT_PROFILE_MEMORY_KEYS.profileSelectionRevision, selectionRevision);
   }
 
-  unit.movementRuntime.requestedProfileId = resolved.requestedProfileId;
-  unit.movementRuntime.requestedProfileSource = resolved.requestedSource;
-  unit.movementRuntime.effectiveProfileId = resolved.profileId;
-  unit.movementRuntime.effectiveProfileSource = resolved.source;
+  setRuntimeIfChanged(unit.movementRuntime, 'requestedProfileId', resolved.requestedProfileId);
+  setRuntimeIfChanged(unit.movementRuntime, 'requestedProfileSource', resolved.requestedSource);
+  setRuntimeIfChanged(unit.movementRuntime, 'effectiveProfileId', resolved.profileId);
+  setRuntimeIfChanged(unit.movementRuntime, 'effectiveProfileSource', resolved.source);
 
   // MoveOrder is the route/request snapshot. A transient physical fallback is
   // effective runtime state only and must never rewrite player/AI intent or route revisions.
@@ -191,6 +195,28 @@ export function reconcileMovementProfileRuntime(
   }
 
   return { resolved, definitionRevision, selectionRevision };
+}
+
+function setMemoryIfChanged(
+  memory: Record<string, AiBlackboardValue>,
+  key: string,
+  value: AiBlackboardValue,
+): void {
+  if (memory[key] !== value) memory[key] = value;
+}
+
+function deleteMemoryIfPresent(memory: Record<string, AiBlackboardValue>, key: string): void {
+  if (Object.prototype.hasOwnProperty.call(memory, key)) delete memory[key];
+}
+
+function setRuntimeIfChanged<
+  Key extends keyof UnitModel['movementRuntime'],
+>(
+  runtime: UnitModel['movementRuntime'],
+  key: Key,
+  value: UnitModel['movementRuntime'][Key],
+): void {
+  if (runtime[key] !== value) runtime[key] = value;
 }
 
 function getRuntimeMemory(runtime: MovementRuntime): Record<string, AiBlackboardValue> {
