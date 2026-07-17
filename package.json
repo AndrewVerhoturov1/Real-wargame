@@ -65,6 +65,7 @@
     "shared-visibility-vegetation:smoke": "node scripts/shared_visibility_vegetation_smoke.mjs && node scripts/shared_vegetation_source_contract_smoke.mjs",
     "lab:manager": "node scripts/real_wargame_lab_manager.mjs",
     "visual-qa-policy:smoke": "node scripts/visual_qa_policy_smoke.mjs",
+    "performance-contract:smoke": "node scripts/performance_principles_contract_smoke.mjs",
     "docs:generate": "node scripts/generate_agent_docs.mjs",
     "docs:check": "node scripts/check_agent_docs.mjs",
     "docs:smoke": "node scripts/agent_docs_smoke.mjs",
