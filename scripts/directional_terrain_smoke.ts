@@ -5,6 +5,7 @@ import {
   NAVIGATION_PROFILE_FORMAT_VERSION,
   NavigationProfileRegistry,
   createDefaultNavigationProfileRegistry,
+  type NavigationProfile,
 } from '../src/core/navigation/NavigationProfiles';
 import {
   createRouteCostFieldCache,
@@ -42,7 +43,7 @@ verifyDirectionalRouteCostsAndCacheSeparation();
 verifyExactTerrainVisibility();
 verifyLocalTacticalPositionQuery();
 
-console.log('Directional terrain smoke passed: shared directional terrain enriches awareness, concealment, cover, safety and route costs while preserving cached derivatives, exact visibility and local position queries.');
+console.log('Directional terrain smoke passed: shared directional basis enriches awareness, concealment, cover, safety and fused route costs while preserving cached derivatives, exact visibility and local position queries.');
 
 function verifyStaticSlopeDirectionAndCache(): void {
   const flat = normalizeMap(makeMap(7, 5, () => 2));
@@ -159,8 +160,8 @@ function verifyAwarenessLayersUseDirectionalTerrain(): void {
     knownThreats: unit.tacticalKnowledge.threats,
   }, cache);
   const diagnosticsAfterRoute = getDirectionalTacticalFieldDiagnostics(state.map);
-  assert.equal(diagnosticsAfterRoute.buildCount, diagnosticsBeforeRoute.buildCount, 'route and awareness layers must share one directional field build');
-  assert.ok(diagnosticsAfterRoute.cacheHitCount > diagnosticsBeforeRoute.cacheHitCount, 'route must reuse the awareness directional field cache');
+  assert.equal(diagnosticsAfterRoute.buildCount, diagnosticsBeforeRoute.buildCount, 'route must reuse the shared directional basis without rebuilding the full awareness field');
+  assert.equal(diagnosticsAfterRoute.cacheHitCount, diagnosticsBeforeRoute.cacheHitCount, 'fused route projection must not materialize or read the full awareness directional field');
 }
 
 function verifyDirectionalRouteCostsAndCacheSeparation(): void {
@@ -173,8 +174,36 @@ function verifyDirectionalRouteCostsAndCacheSeparation(): void {
     knowledgeRevision: 1,
     knownThreats: [threat('east-threat', 12.5, 2.5, 100, 0.25)],
   };
+  const profile = registry.getProfile('stealth');
+  const reference = getDirectionalTacticalField(map, {
+    unitId: context.unitId,
+    knowledgeRevision: context.knowledgeRevision,
+    threats: context.knownThreats,
+  });
+  const diagnosticsBeforeRoute = getDirectionalTacticalFieldDiagnostics(map);
+  const stealth = getRouteCostFields(map, profile, context, cache);
+  const diagnosticsAfterRoute = getDirectionalTacticalFieldDiagnostics(map);
+  assert.deepEqual(
+    [...stealth.threatSectorWeights],
+    [...reference.threatField.normalizedSectorWeights],
+    'fused route projection must preserve directional threat-sector metadata',
+  );
+  assert.equal(stealth.primaryThreatSector, reference.threatField.primarySector);
+  assert.equal(diagnosticsAfterRoute.buildCount, diagnosticsBeforeRoute.buildCount);
+  assert.equal(diagnosticsAfterRoute.cacheHitCount, diagnosticsBeforeRoute.cacheHitCount);
+  for (let y = 0; y < map.height; y += 1) {
+    for (let x = 0; x < map.width; x += 1) {
+      const route = readRouteCostCell(stealth, x, y);
+      assert.ok(route);
+      const index = y * map.width + x;
+      assert.ok(
+        Math.abs((route?.directionalTerrainCost ?? 0) - referenceDirectionalRouteCost(reference, profile, index)) <= 1e-6,
+        `fused directional route cost must match the established field at ${x}:${y}`,
+      );
+      assert.ok(Math.abs((route?.directionalSlope ?? 0) - (reference.primarySlope[index] ?? 0)) <= 1e-6);
+    }
+  }
 
-  const stealth = getRouteCostFields(map, registry.getProfile('stealth'), context, cache);
   const west = readRouteCostCell(stealth, 2, 2, cache);
   const east = readRouteCostCell(stealth, 6, 2, cache);
   assert.ok(west && east);
@@ -192,10 +221,33 @@ function verifyDirectionalRouteCostsAndCacheSeparation(): void {
   let diagnostics = getRouteCostFieldDiagnostics(cache);
   const staticBuildsBeforeKnowledgeChange = diagnostics.staticCostBuildCount;
   const dynamicBuildsBeforeKnowledgeChange = diagnostics.dynamicCostBuildCount;
-  getRouteCostFields(map, registry.getProfile('stealth'), { ...context, knowledgeRevision: 2 }, cache);
+  getRouteCostFields(map, profile, { ...context, knowledgeRevision: 2 }, cache);
   diagnostics = getRouteCostFieldDiagnostics(cache);
   assert.equal(diagnostics.staticCostBuildCount, staticBuildsBeforeKnowledgeChange, 'knowledge changes must not rebuild static terrain costs');
-  assert.equal(diagnostics.dynamicCostBuildCount, dynamicBuildsBeforeKnowledgeChange + 1, 'knowledge changes must rebuild the dynamic directional field once');
+  assert.equal(diagnostics.dynamicCostBuildCount, dynamicBuildsBeforeKnowledgeChange + 1, 'knowledge changes must rebuild the fused dynamic route field once');
+}
+
+function referenceDirectionalRouteCost(
+  field: ReturnType<typeof getDirectionalTacticalField>,
+  profile: NavigationProfile,
+  index: number,
+): number {
+  const weights = profile.directionalTerrain;
+  const forward = (field.forwardSlopeRisk[index] ?? 0) / 100;
+  const reverse = (field.reverseSlopeProtection[index] ?? 0) / 100;
+  const crest = (field.crestRisk[index] ?? 0) / 100;
+  const silhouette = (field.silhouetteRisk[index] ?? 0) / 100;
+  const valley = (field.valleyProtection[index] ?? 0) / 100;
+  const criticalExposure = Math.max(
+    (field.primaryThreatExposure[index] ?? 0) / 100,
+    (field.flankExposure[index] ?? 0) / 100,
+  );
+  const base = forward * weights.forwardSlopePenalty
+    - reverse * weights.reverseSlopePreference
+    + crest * weights.crestPenalty
+    + silhouette * weights.silhouettePenalty
+    - valley * weights.valleyPreference;
+  return Math.max(-0.95, base + Math.max(0, base) * criticalExposure * weights.criticalSectorMultiplier);
 }
 
 function verifyExactTerrainVisibility(): void {
