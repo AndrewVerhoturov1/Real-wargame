@@ -36,6 +36,7 @@ jobs:
               scripts/.phase_diag_parts/part02.pyfrag \
               scripts/.phase_diag_parts/part03.pyfrag \
               > scripts/agent_live_phase_diagnostics_apply.py
+          sed -i 's/readonly Array</ReadonlyArray</g' scripts/agent_live_phase_diagnostics_apply.py
           python3 scripts/agent_live_phase_diagnostics_apply.py 2>&1 | tee phase-diagnostics-apply.log
       - run: npm ci
       - name: Verify diagnostics
