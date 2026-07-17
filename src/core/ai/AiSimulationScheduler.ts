@@ -7,7 +7,9 @@ import type { SimulationState } from '../simulation/SimulationState';
 import { isUnitGraphAiControlled, type UnitModel } from '../units/UnitModel';
 import {
   recordAiSchedulerCycle,
+  recordAiSchedulerCycleDuration,
   recordAiSchedulerUnitPass,
+  recordAiSchedulerUnitPassDuration,
 } from './AiSchedulerPerformanceDiagnostics';
 import { resolveRuntimeGraphSnapshot } from './AiGameBridge';
 import { tickStatefulMoveBridgeForTrustedUnit } from './AiStatefulMoveGameBridge';
@@ -108,44 +110,55 @@ export function tickAiSimulationScheduler(
       maxUnitDurationMs = unitDurationMs;
       maxUnitId = unit.id;
     }
-    if (result) graphTickedUnitIds.push(unit.id);
+    const graphTicked = result !== null;
+    if (graphTicked) graphTickedUnitIds.push(unit.id);
 
-    const activeAfter = unit.behaviorRuntime.aiRuntimeSession?.executionState;
-    recordAiSchedulerUnitPass({
-      simulationStep: state.simulationStep,
-      cycleStartMs,
-      cycleEndMs,
-      unitId: unit.id,
-      durationMs: roundTwo(unitDurationMs),
-      decisionTickDelta: unit.behaviorRuntime.aiDecisionTickCount - decisionTickBefore,
-      observerPollDelta: unit.behaviorRuntime.aiObserverPollCount - observerPollBefore,
-      reactiveWakeDelta: unit.behaviorRuntime.aiReactiveWakeCount - reactiveWakeBefore,
-      graphTicked: result !== null,
-      resultStatus: result?.status ?? null,
-      activeNodeBefore: activeBefore?.activeNodeId ?? null,
-      activeNodeAfter: result?.activeNodeId ?? activeAfter?.activeNodeId ?? null,
-      activeSubgraphAfter: result?.activeSubgraphId ?? readActiveSubgraphId(activeAfter?.activeData),
-      effectTypes: result ? describeEffects(result.effects) : [],
-      currentAction: unit.behaviorRuntime.currentAction,
-      lastEvent: unit.behaviorRuntime.lastEvent ?? null,
-    });
+    const decisionTickDelta = unit.behaviorRuntime.aiDecisionTickCount - decisionTickBefore;
+    const observerPollDelta = unit.behaviorRuntime.aiObserverPollCount - observerPollBefore;
+    const reactiveWakeDelta = unit.behaviorRuntime.aiReactiveWakeCount - reactiveWakeBefore;
+    recordAiSchedulerUnitPassDuration(unitDurationMs, graphTicked);
+    if (graphTicked || unitDurationMs >= 8) {
+      const activeAfter = unit.behaviorRuntime.aiRuntimeSession?.executionState;
+      recordAiSchedulerUnitPass({
+        simulationStep: state.simulationStep,
+        cycleStartMs,
+        cycleEndMs,
+        unitId: unit.id,
+        durationMs: roundTwo(unitDurationMs),
+        decisionTickDelta,
+        observerPollDelta,
+        reactiveWakeDelta,
+        graphTicked,
+        resultStatus: result?.status ?? null,
+        activeNodeBefore: activeBefore?.activeNodeId ?? null,
+        activeNodeAfter: result?.activeNodeId ?? activeAfter?.activeNodeId ?? null,
+        activeSubgraphAfter: result?.activeSubgraphId ?? readActiveSubgraphId(activeAfter?.activeData),
+        effectTypes: result ? describeEffects(result.effects) : [],
+        currentAction: unit.behaviorRuntime.currentAction,
+        lastEvent: unit.behaviorRuntime.lastEvent ?? null,
+      });
+    }
   }
 
   const schedulerDurationMs = performance.now() - schedulerStartedAt;
-  recordAiSchedulerCycle({
-    simulationStep: state.simulationStep,
-    cycleStartMs,
-    cycleEndMs,
-    durationMs: roundTwo(schedulerDurationMs),
-    graphResolutionMs: roundTwo(graphResolutionMs),
-    unitPassDurationMs: roundTwo(unitPassDurationMs),
-    overheadMs: roundTwo(Math.max(0, schedulerDurationMs - graphResolutionMs - unitPassDurationMs)),
-    eligibleUnitCount: eligibleUnitIds.length,
-    processedUnitCount: processedUnitIds.length,
-    graphTickedUnitCount: graphTickedUnitIds.length,
-    maxUnitId,
-    maxUnitDurationMs: roundTwo(maxUnitDurationMs),
-  });
+  const decisionCycle = graphTickedUnitIds.length > 0;
+  recordAiSchedulerCycleDuration(schedulerDurationMs, decisionCycle);
+  if (decisionCycle || schedulerDurationMs >= 8) {
+    recordAiSchedulerCycle({
+      simulationStep: state.simulationStep,
+      cycleStartMs,
+      cycleEndMs,
+      durationMs: roundTwo(schedulerDurationMs),
+      graphResolutionMs: roundTwo(graphResolutionMs),
+      unitPassDurationMs: roundTwo(unitPassDurationMs),
+      overheadMs: roundTwo(Math.max(0, schedulerDurationMs - graphResolutionMs - unitPassDurationMs)),
+      eligibleUnitCount: eligibleUnitIds.length,
+      processedUnitCount: processedUnitIds.length,
+      graphTickedUnitCount: graphTickedUnitIds.length,
+      maxUnitId,
+      maxUnitDurationMs: roundTwo(maxUnitDurationMs),
+    });
+  }
 
   return {
     simulationStep: state.simulationStep,
