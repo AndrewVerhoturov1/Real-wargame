@@ -419,3 +419,21 @@ remaining risks:
 ```
 
 The statement “the change is small and should not matter” is not evidence.
+
+## 21. Causal observability is mandatory
+
+Any new heavy subsystem must provide Performance Report v6 evidence that answers more than duration. Its bounded diagnostics must include, where applicable:
+
+```text
+cause of launch
+operation / request / unit / order identity
+work volume
+queue depth, in-flight and wait
+completed / cancelled / failed / timedOut / stale
+memory or payload estimate
+semantic consequences
+```
+
+Use explicit operation context for nested and asynchronous work. Do not use one global mutable current cause. Keep full-run aggregates, a recent bounded ring buffer, protected critical evidence and Top-N outliers. Report truncation, telemetry overhead and possible missing tail honestly.
+
+A subsystem is not observability-complete if a LongTask can be measured but cannot be connected to the triggering event, operation, queue, unit/revision and gameplay consequence.
