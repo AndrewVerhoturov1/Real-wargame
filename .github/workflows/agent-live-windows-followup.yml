@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: agent-live-windows-performance-followup-v1
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   apply-safe-position-removal:
