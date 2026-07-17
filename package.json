@@ -82,7 +82,12 @@
     "state-plan-scenario:smoke": "node scripts/ai_state_plan_scenario_smoke.mjs",
     "tactical-query:smoke": "node scripts/tactical_query_system_smoke.mjs",
     "tactical-query-ui:smoke": "node scripts/tactical_query_ui_smoke.mjs",
-    "ai-scheduler:smoke": "node scripts/ai_per_unit_scheduler_smoke.mjs"
+    "ai-scheduler:smoke": "node scripts/ai_per_unit_scheduler_smoke.mjs",
+    "live-windows-workflow-contract:smoke": "node scripts/live_windows_workflow_enforce_contract_smoke.mjs",
+    "long-task-classification:smoke": "node scripts/long_task_classification_smoke.mjs",
+    "route-danger-semantics:smoke": "node scripts/route_danger_semantics_smoke.mjs",
+    "point-los-differential:smoke": "node scripts/point_visibility_differential_smoke.mjs",
+    "simulation-slowest-pass:smoke": "node scripts/simulation_slowest_pass_attribution_smoke.mjs"
   },
   "dependencies": {
     "pixi.js": "^8.19.0"

@@ -1,0 +1,5 @@
+{
+  "baselineCanonical": false,
+  "baselineBehavior": "routeDanger equaled current-position danger",
+  "target": "published route diagnostic"
+}

@@ -1,4 +1,5 @@
 import type { GridPosition } from '../geometry';
+import { cloneRouteDangerDiagnostic, type RouteDangerDiagnostic } from '../navigation/RouteDangerDiagnostic';
 import type { NavigationProfileSource } from '../navigation/NavigationProfileResolver';
 import type { NavigationMovementMode } from '../navigation/NavigationProfiles';
 import type { GridPathCostBreakdown } from '../pathfinding/GridPathfinder';
@@ -22,6 +23,7 @@ export interface MoveOrderOptions {
   readonly routeCellIndex?: number;
   readonly routeStatus?: MoveOrderRouteStatus;
   readonly routeRevision?: number;
+  readonly routeDangerDiagnostic?: RouteDangerDiagnostic;
   readonly pathCost?: number;
   readonly pathDistanceMeters?: number;
   readonly baselineDistanceMeters?: number;
@@ -58,6 +60,7 @@ export interface MoveOrder {
   routeCellIndex?: number;
   routeStatus?: MoveOrderRouteStatus;
   routeRevision?: number;
+  routeDangerDiagnostic?: RouteDangerDiagnostic;
   pathCost?: number;
   pathDistanceMeters?: number;
   baselineDistanceMeters?: number;
@@ -95,6 +98,7 @@ export function createMoveOrder(target: GridPosition, options: MoveOrderOptions 
     routeCellIndex: options.routeCellIndex,
     routeStatus: options.routeStatus,
     routeRevision: options.routeRevision,
+    routeDangerDiagnostic: cloneRouteDangerDiagnostic(options.routeDangerDiagnostic),
     pathCost: options.pathCost,
     pathDistanceMeters: options.pathDistanceMeters,
     baselineDistanceMeters: options.baselineDistanceMeters,

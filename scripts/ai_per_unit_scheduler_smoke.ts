@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { AiGraph } from '../src/core/ai/AiGraph';
 import {
   resetRuntimeGraphSnapshotCacheForTests,
@@ -154,6 +154,7 @@ verifyPausedExplicitSimulationStep();
 verifyDiagnosticDeepImmutability();
 verifyLinearTraversalAndSingleGraphResolution();
 verifyObserverPartitionInvariance();
+verifyQuietObserverPollFastForward();
 verifySelectionInvarianceAndConcurrentExecution();
 verifyDeselectDuringOwnedMovement();
 verifyThreatReactionWhileUnselected();
@@ -317,6 +318,90 @@ function verifyLinearTraversalAndSingleGraphResolution(): void {
   assert.doesNotMatch(extractFunction(gameBridgeSource, 'tickAiGameBridgeForTrustedUnit'), /state\.units\.includes/);
   assert.doesNotMatch(extractFunction(moveBridgeSource, 'tickStatefulMoveBridgeForTrustedUnit'), /state\.units\.includes/);
   assert.doesNotMatch(extractFunction(moveBridgeSource, 'updateRouteStatusForTrustedUnit'), /state\.units\.includes/);
+}
+
+function verifyQuietObserverPollFastForward(): void {
+  setGraph(reactiveGraph);
+  const state = createInitialState(mapData, [unitData('quiet-observer', 3, 3)], []);
+  const unit = findUnit(state, 'quiet-observer');
+  seedSession(unit, reactiveGraph, { route_ok: true });
+  tickSimulation(state, 0.01);
+  const pollsBefore = unit.behaviorRuntime.aiObserverPollCount;
+  const checksBefore = unit.behaviorRuntime.aiRuntimeSession?.observerRegistry.observerChecks ?? 0;
+  const decisionsBefore = unit.behaviorRuntime.aiDecisionTickCount;
+
+  tickSimulation(state, 0.29);
+  const quietPollDelta = unit.behaviorRuntime.aiObserverPollCount - pollsBefore;
+  const quietCheckDelta = (unit.behaviorRuntime.aiRuntimeSession?.observerRegistry.observerChecks ?? 0) - checksBefore;
+  assert.equal(quietPollDelta, 5, 'five overdue quiet observer polls must advance logically');
+  assert.equal(quietCheckDelta, 5, 'logical observer check counters must advance exactly for all five polls');
+  assert.equal(unit.behaviorRuntime.aiDecisionTickCount, decisionsBefore, 'quiet polls must not create graph decisions');
+  assert.equal(unit.behaviorRuntime.aiObserverNextPollMs, 360, 'simulation-time cadence must advance to the next exact poll boundary');
+
+  const bridgeSource = readFileSync('src/core/ai/AiGameBridge.ts', 'utf8');
+  const loopStart = bridgeSource.indexOf('    while (true) {');
+  const loopEnd = bridgeSource.indexOf('    unit.behaviorRuntime.aiNextDecisionAtMs = nextOrdinaryAtMs;', loopStart);
+  const observerLoop = bridgeSource.slice(loopStart, loopEnd);
+  assert.equal((observerLoop.match(/pollAiBlackboardObserversAt/g) ?? []).length, 1, 'the quiet batch must execute one real evaluator call');
+  assert.match(observerLoop, /fastForwardQuietObserverPolls/);
+  assert.match(observerLoop, /session\.eventQueue\.events\.length === 0/, 'pending AI events must disable fast-forward');
+  assert.match(observerLoop, /!options\.cancel/, 'cancellation must disable fast-forward');
+
+  const session = unit.behaviorRuntime.aiRuntimeSession;
+  assert.ok(session);
+  unit.behaviorRuntime.aiRuntimeSession = {
+    ...session,
+    blackboardMemory: { ...session.blackboardMemory, route_ok: false },
+    memoryScopes: {
+      ...session.memoryScopes,
+      runtimeSessionMemory: { ...session.memoryScopes.runtimeSessionMemory, route_ok: false },
+    },
+  };
+  tickSimulation(state, 0.06);
+  assert.equal(unit.behaviorRuntime.aiReactiveWakeCount, 1, 'a relevant Blackboard change at the next poll must stop quiet skipping and wake the graph');
+  assert.equal(unit.behaviorRuntime.aiLastReactiveWakeAtMs, 360);
+  assert.equal(unit.behaviorRuntime.posture, 'prone');
+
+  const fairnessState = createInitialState(mapData, [
+    unitData('quiet-first', 3, 3),
+    unitData('reactive-second', 5, 3),
+  ], []);
+  const quietFirst = findUnit(fairnessState, 'quiet-first');
+  const reactiveSecond = findUnit(fairnessState, 'reactive-second');
+  seedSession(quietFirst, reactiveGraph, { route_ok: true });
+  seedSession(reactiveSecond, reactiveGraph, { route_ok: true });
+  tickSimulation(fairnessState, 0.01);
+  tickSimulation(fairnessState, 0.29);
+  const secondSession = reactiveSecond.behaviorRuntime.aiRuntimeSession;
+  assert.ok(secondSession);
+  reactiveSecond.behaviorRuntime.aiRuntimeSession = {
+    ...secondSession,
+    blackboardMemory: { ...secondSession.blackboardMemory, route_ok: false },
+    memoryScopes: {
+      ...secondSession.memoryScopes,
+      runtimeSessionMemory: { ...secondSession.memoryScopes.runtimeSessionMemory, route_ok: false },
+    },
+  };
+  tickSimulation(fairnessState, 0.06);
+  assert.equal(quietFirst.behaviorRuntime.aiReactiveWakeCount, 0);
+  assert.equal(reactiveSecond.behaviorRuntime.aiReactiveWakeCount, 1, 'a quiet earlier unit must not starve a later reactive unit');
+
+  const evidenceDir = process.env.PERFORMANCE_EVIDENCE_DIR;
+  if (evidenceDir) {
+    mkdirSync(evidenceDir, { recursive: true });
+    writeFileSync(`${evidenceDir}/observer-poll-fast-forward.json`, JSON.stringify({
+      version: 1,
+      overdueLogicalPolls: quietPollDelta,
+      realEvaluatorCalls: 1,
+      logicalObserverChecks: quietCheckDelta,
+      decisionPassesDuringQuietBatch: unit.behaviorRuntime.aiDecisionTickCount - decisionsBefore - 1,
+      nextPollAtMsAfterQuietBatch: 360,
+      blackboardChangeWakeAtMs: unit.behaviorRuntime.aiLastReactiveWakeAtMs,
+      pendingEventsDisableFastForward: true,
+      cancellationDisablesFastForward: true,
+      laterUnitFairnessPreserved: reactiveSecond.behaviorRuntime.aiReactiveWakeCount === 1,
+    }, null, 2));
+  }
 }
 
 function verifyObserverPartitionInvariance(): void {

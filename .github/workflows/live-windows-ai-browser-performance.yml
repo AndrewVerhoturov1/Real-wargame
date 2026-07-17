@@ -1,6 +1,12 @@
 name: Live Windows AI Browser Performance
 
 on:
+  workflow_dispatch:
+    inputs:
+      base_sha:
+        description: Exact preview base SHA for acceptance evidence
+        required: false
+        type: string
   pull_request:
     branches:
       - real-wargame-preview
@@ -17,6 +23,8 @@ on:
       - 'src/core/terrain/**'
       - 'src/core/visibility/**'
       - 'src/rendering/PixiApp.ts'
+      - 'src/rendering/PixiRouteCostOverlayRenderer.ts'
+      - 'src/workers/RouteCostWorker.ts'
       - 'src/testing/LiveWindowsPerformanceHarness.ts'
       - 'src/ui/TacticalWorkspace.ts'
       - 'src/main.ts'
@@ -24,23 +32,34 @@ on:
       - 'scripts/performance_report_contract_smoke.mjs'
       - 'scripts/perception_performance_smoke.ts'
       - 'scripts/danger_layer_performance_smoke.ts'
+      - 'scripts/live_windows_workflow_enforce_contract_smoke.mjs'
+      - 'scripts/long_task_classification_smoke.*'
+      - 'scripts/route_danger_semantics_smoke.*'
+      - 'scripts/point_visibility_differential_smoke.*'
+      - 'scripts/simulation_slowest_pass_attribution_smoke.*'
+      - 'scripts/finalize_live_performance_acceptance.mjs'
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
-  group: live-windows-ai-browser-performance-${{ github.event.pull_request.number }}
+  group: live-windows-ai-browser-performance-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   capture-live-ai:
     runs-on: ubuntu-latest
+    env:
+      LIVE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      LIVE_HEAD_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+      LIVE_BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha || '' }}
     timeout-minutes: 35
     steps:
       - name: Checkout exact PR head
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ env.LIVE_HEAD_SHA }}
           fetch-depth: 0
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -53,10 +72,18 @@ jobs:
           npm install --no-save @playwright/test
           npx playwright install chromium
       - name: Verify exact source
+        env:
+          PERFORMANCE_EVIDENCE_DIR: artifacts/performance/live-performance-contract-followup/ci-${{ env.LIVE_HEAD_SHA }}
         run: |
+          mkdir -p "$PERFORMANCE_EVIDENCE_DIR"
           npx tsc --noEmit
           npm run build
           node scripts/performance_report_contract_smoke.mjs
+          npm run live-windows-workflow-contract:smoke
+          npm run long-task-classification:smoke
+          npm run route-danger-semantics:smoke
+          npm run point-los-differential:smoke
+          npm run simulation-slowest-pass:smoke
           npm run ai-scheduler:smoke
           npm run workspace:smoke
           npm run shared-visibility-vegetation:smoke
@@ -64,26 +91,35 @@ jobs:
           npm run danger-layer-performance:smoke
       - name: Run 90-second live AI capture
         env:
-          REAL_WARGAME_BRANCH: ${{ github.event.pull_request.head.ref }}
-          REAL_WARGAME_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
-          LIVE_WINDOWS_PERF_EXPECTED_BRANCH: ${{ github.event.pull_request.head.ref }}
-          LIVE_WINDOWS_PERF_EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          REAL_WARGAME_BRANCH: ${{ env.LIVE_HEAD_BRANCH }}
+          REAL_WARGAME_COMMIT_SHA: ${{ env.LIVE_HEAD_SHA }}
+          LIVE_WINDOWS_PERF_EXPECTED_BRANCH: ${{ env.LIVE_HEAD_BRANCH }}
+          LIVE_WINDOWS_PERF_EXPECTED_SHA: ${{ env.LIVE_HEAD_SHA }}
           LIVE_WINDOWS_PERF_DURATION_MS: '90000'
-          LIVE_WINDOWS_PERF_ENFORCE: '0'
-          LIVE_WINDOWS_PERF_OUTPUT: artifacts/performance/live-windows-followup/ci-${{ github.event.pull_request.head.sha }}/after-browser.json
+          LIVE_WINDOWS_PERF_ENFORCE: '1'
+          LIVE_WINDOWS_PERF_BASE_SHA: ${{ env.LIVE_BASE_SHA }}
+          LIVE_WINDOWS_PERF_WORKFLOW_RUN_ID: ${{ github.run_id }}
+          LIVE_WINDOWS_PERF_OUTPUT: artifacts/performance/live-performance-contract-followup/ci-${{ env.LIVE_HEAD_SHA }}/after-browser.json
         shell: bash
         run: |
           set -o pipefail
-          mkdir -p "artifacts/performance/live-windows-followup/ci-${{ github.event.pull_request.head.sha }}"
+          mkdir -p "artifacts/performance/live-performance-contract-followup/ci-${{ env.LIVE_HEAD_SHA }}"
           npx playwright test tests/live-windows-ai-performance.spec.ts \
             --config=playwright.performance.config.ts \
             --project=chromium \
-            --reporter=line 2>&1 | tee "artifacts/performance/live-windows-followup/ci-${{ github.event.pull_request.head.sha }}/playwright.log"
+            --reporter=line 2>&1 | tee "artifacts/performance/live-performance-contract-followup/ci-${{ env.LIVE_HEAD_SHA }}/playwright.log"
+      - name: Finalize exact-head run identity
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_WORKFLOW_ID: live-windows-ai-browser-performance.yml
+          LIVE_WINDOWS_PERF_EXPECTED_SHA: ${{ env.LIVE_HEAD_SHA }}
+          LIVE_WINDOWS_PERF_OUTPUT: artifacts/performance/live-performance-contract-followup/ci-${{ env.LIVE_HEAD_SHA }}/after-browser.json
+        run: node scripts/finalize_live_performance_acceptance.mjs
       - name: Upload live browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: live-windows-ai-browser-performance
-          path: artifacts/performance/live-windows-followup/ci-*/**
+          name: live-performance-contract-followup
+          path: artifacts/performance/live-performance-contract-followup/ci-*/**
           if-no-files-found: warn
           retention-days: 14

@@ -1,3 +1,4 @@
+import { readPublishedRouteDanger } from '../core/navigation/RouteDangerDiagnostic';
 import '../tactical-workspace-stage8.css';
 import type { AiGameBridgeHandle } from '../core/ai/AiGameBridge';
 import { measurePerformancePhase } from '../core/debug/PerformancePhases';
@@ -520,6 +521,8 @@ function buildWorkspaceUpdateKey(
     order?.target.y.toFixed(2) ?? 'none',
     order?.waypointIndex ?? -1,
     order?.routeStatus ?? 'none',
+    order?.routeDangerDiagnostic?.revision ?? 0,
+    order?.routeDangerDiagnostic?.value ?? 'unavailable',
     command?.revision ?? 0,
     command?.status ?? 'none',
     unit?.tacticalKnowledge.revision ?? 0,
@@ -630,7 +633,7 @@ function renderDanger(target: HTMLElement, state: SimulationState, unit: UnitMod
     ? Math.max(...unit.tacticalKnowledge.threats.map((threat) => threat.confidence))
     : 0;
   const selected = getSelectedSimulationCover(state);
-  target.innerHTML = `${heading('Слой опасности','Красное — известная опасность. Полная карта строится фоновым worker; панель читает только текущую позицию бойца.')}${legend([['legend-danger-high','крайне опасно'],['legend-danger-medium','опасно'],['legend-danger-low','умеренная опасность']])}${grid([['Текущая опасность',pct(threats.danger)],['Подавление',pct(threats.suppression)],['Защита позиции',pct(currentProtection)],['Оценка активного маршрута',unit.order?pct(threats.danger):'нет маршрута'],['Уверенность в угрозах',pct(threatConfidence)]])}<section class="workspace-panel-section"><h3>Известные укрытия</h3><div data-role="cover-list"></div></section>`;
+  target.innerHTML = `${heading('Слой опасности','Красное — известная опасность. Полная карта строится фоновым worker; панель читает только текущую позицию бойца.')}${legend([['legend-danger-high','крайне опасно'],['legend-danger-medium','опасно'],['legend-danger-low','умеренная опасность']])}${grid([['Текущая опасность',pct(threats.danger)],['Подавление',pct(threats.suppression)],['Защита позиции',pct(currentProtection)],['Оценка активного маршрута',readPublishedRouteDanger(unit.order)===null?'нет маршрута':pct(readPublishedRouteDanger(unit.order)!)],['Уверенность в угрозах',pct(threatConfidence)]])}<section class="workspace-panel-section"><h3>Известные укрытия</h3><div data-role="cover-list"></div></section>`;
   if (selected) {
     const object = state.map.objects.find((item) => item.id === selected.id);
     const props = object ? resolveObjectCoverProperties(object) : null;

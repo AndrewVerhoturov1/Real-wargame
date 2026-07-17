@@ -1,5 +1,6 @@
 import type { AiRouteStatus, AiRouteStatusState } from '../AiRouteStatus';
 import type { GridPosition } from '../../geometry';
+import { cloneRouteDangerDiagnostic, normalizeRouteDangerDiagnostic, type RouteDangerDiagnostic } from '../../navigation/RouteDangerDiagnostic';
 import type {
   MoveOrder,
   MoveOrderRouteCell,
@@ -27,6 +28,7 @@ export interface SerializedMoveOrder {
   readonly routeCellIndex?: number;
   readonly routeStatus?: MoveOrderRouteStatus;
   readonly routeRevision?: number;
+  readonly routeDangerDiagnostic?: RouteDangerDiagnostic;
   readonly pathCost?: number;
   readonly pathVisitedCells?: number;
   readonly pathReason?: string;
@@ -177,6 +179,7 @@ export function serializeMoveOrder(order: MoveOrder): SerializedMoveOrder {
     routeCellIndex: integerNonNegative(order.routeCellIndex),
     routeStatus: order.routeStatus,
     routeRevision: integerNonNegative(order.routeRevision),
+    routeDangerDiagnostic: cloneRouteDangerDiagnostic(order.routeDangerDiagnostic),
     pathCost: finiteOptional(order.pathCost),
     pathVisitedCells: integerNonNegative(order.pathVisitedCells),
     pathReason: order.pathReason,
@@ -199,6 +202,7 @@ export function restoreMoveOrder(value: SerializedMoveOrder): MoveOrder {
     routeCellIndex: value.routeCellIndex,
     routeStatus: value.routeStatus,
     routeRevision: value.routeRevision,
+    routeDangerDiagnostic: cloneRouteDangerDiagnostic(value.routeDangerDiagnostic),
     pathCost: value.pathCost,
     pathVisitedCells: value.pathVisitedCells,
     pathReason: value.pathReason,
@@ -230,6 +234,7 @@ function normalizeSerializedMoveOrder(value: unknown): SerializedMoveOrder | und
     routeCellIndex: integerNonNegative(value.routeCellIndex),
     routeStatus,
     routeRevision: integerNonNegative(value.routeRevision),
+    routeDangerDiagnostic: normalizeRouteDangerDiagnostic(value.routeDangerDiagnostic),
     pathCost: finiteOptional(value.pathCost),
     pathVisitedCells: integerNonNegative(value.pathVisitedCells),
     pathReason: typeof value.pathReason === 'string' ? value.pathReason : undefined,

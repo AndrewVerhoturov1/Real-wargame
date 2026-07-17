@@ -18,6 +18,7 @@ export interface AiConceptDefinition {
   readonly kind: AiConceptKind;
   readonly category: AiConceptCategory;
   readonly valueType?: AiConceptValueType;
+  readonly nullable?: boolean;
   readonly label: string;
   readonly labelRu: string;
   readonly description: string;
@@ -87,8 +88,8 @@ export function formatAiConceptValue(concept: AiConceptDefinition, value: AiBlac
   return String(value);
 }
 
-export function matchesAiConceptValueType(value: AiBlackboardValue, valueType?: AiConceptValueType): boolean {
-  if (value === null) return valueType === 'position' || valueType === 'text' || valueType === 'action';
+export function matchesAiConceptValueType(value: AiBlackboardValue, valueType?: AiConceptValueType, nullable = false): boolean {
+  if (value === null) return nullable || valueType === 'position' || valueType === 'text' || valueType === 'action';
   if (!valueType) return true;
   if (valueType === 'boolean') return typeof value === 'boolean';
   if (valueType === 'position') return typeof value === 'object' && typeof value.x === 'number' && typeof value.y === 'number';

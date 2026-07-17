@@ -11,6 +11,7 @@ import { evaluatePreparedNavigationRouteCost } from './NavigationRouteCost';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from './NavigationRuntime';
 import { getRouteCostFields, getSharedRouteCostFieldCache, type RouteCostFields } from './RouteCostField';
 import { getOrRequestAsyncRouteCostFields } from './RouteCostWorkerClient';
+import { buildBoundedRouteDangerDiagnostic, routeDangerDiagnosticInputsMatch } from './RouteDangerDiagnostic';
 
 const ROUTE_LOOKAHEAD_CELLS = 6;
 
@@ -29,6 +30,12 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
       freshness: 'coalesced',
       metersPerCell: state.map.metersPerCell,
     }),
+  );
+  refreshRouteDangerDiagnostic(
+    order,
+    state,
+    resolved.profile.revision,
+    tacticalContext,
   );
   const evaluation = evaluateNavigationReplan({
     order,
@@ -89,6 +96,7 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
     navigationProfile: resolved.profile,
     navigationProfileSource: resolved.source,
     finalFacingRadians: order.finalFacingRadians,
+    calculatedAtSimulationStep: state.simulationStep,
     tacticalContext,
     preparedCostFields: routeFields,
     replanSearchCount,
@@ -154,6 +162,29 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
   unit.behaviorRuntime.lastEvent = 'move_route_replanned';
   unit.behaviorRuntime.reason = `Маршрут перестроен: ${replanned.path.reasonRu}`;
   return true;
+}
+
+function refreshRouteDangerDiagnostic(
+  order: MoveOrder,
+  state: SimulationState,
+  navigationProfileRevision: number,
+  tacticalContext: ReturnType<typeof buildUnitTacticalRouteContext>,
+): void {
+  const routeCells = order.routeCells ?? [];
+  if (routeCells.length === 0 || routeDangerDiagnosticInputsMatch(
+    order.routeDangerDiagnostic,
+    state.map,
+    routeCells,
+    navigationProfileRevision,
+    tacticalContext,
+  )) return;
+  const diagnostic = buildBoundedRouteDangerDiagnostic(state.map, routeCells, {
+    revision: (order.routeDangerDiagnostic?.revision ?? 0) + 1,
+    calculatedAtSimulationStep: state.simulationStep,
+    navigationProfileRevision,
+    tacticalContext,
+  });
+  order.routeDangerDiagnostic = diagnostic ?? undefined;
 }
 
 function updateRouteCellIndex(unit: UnitModel, order: MoveOrder): void {

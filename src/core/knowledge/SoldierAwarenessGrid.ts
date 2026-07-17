@@ -1,6 +1,7 @@
 import { distance, type GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
 import type { SimulationState } from '../simulation/SimulationState';
+import { readPublishedRouteDanger } from '../navigation/RouteDangerDiagnostic';
 import { getDirectionalTerrainSectorBasis } from '../terrain/DirectionalTerrainSectorBasis';
 import {
   getDirectionalTacticalField,
@@ -51,7 +52,7 @@ export interface SoldierAwarenessReport {
   dangerFieldKey: string;
   cells: SoldierAwarenessCell[];
   currentPosition: SoldierAwarenessCell;
-  routeDanger: number;
+  routeDanger: number | null;
   threatConfidence: number;
 }
 
@@ -69,7 +70,7 @@ interface CachedAwareness {
   positionKey: string;
   currentPosition: SoldierAwarenessCell;
   routeKey: string;
-  routeDanger: number;
+  routeDanger: number | null;
 }
 
 const cache = new WeakMap<UnitModel, CachedAwareness>();
@@ -105,7 +106,7 @@ export function buildSoldierAwarenessReport(
       positionKey: '',
       currentPosition: field.cells[0] ?? emptyAwarenessCell(unit.position),
       routeKey: '',
-      routeDanger: 0,
+      routeDanger: null,
     };
     cache.set(unit, cached);
   }
@@ -120,9 +121,7 @@ export function buildSoldierAwarenessReport(
   const routeKey = buildRouteKey(unit);
   if (routeKey !== cached.routeKey) {
     cached.routeKey = routeKey;
-    cached.routeDanger = unit.order
-      ? evaluateRouteDangerFromField(state.map, cached.field.cells, unit.position, unit.order.target)
-      : cached.currentPosition.danger;
+    cached.routeDanger = readPublishedRouteDanger(unit.order);
   }
 
   return {

@@ -1,4 +1,7 @@
 import { getAiSchedulerPerformanceDiagnostics } from '../ai/AiSchedulerPerformanceDiagnostics';
+import { getSimulationStepPerformanceDiagnostics } from './SimulationStepPerformanceDiagnostics';
+import { classifyLongTasks, type ClassifiedLongTaskDiagnostic } from './LongTaskClassification';
+import { getRouteCostWorkerDiagnostics } from '../navigation/RouteCostWorkerClient';
 import { getThreatRelativeCoverFieldDiagnostics } from '../cover/ThreatRelativeCoverField';
 import { getAwarenessDynamicRescoreDiagnostics } from '../knowledge/AwarenessDynamicRescore';
 import { getAwarenessStaticFieldDiagnostics } from '../knowledge/AwarenessStaticField';
@@ -133,6 +136,7 @@ export interface PerformanceReport {
   performancePhaseMeasures: PerformancePhaseMeasureDiagnostic[];
   performancePhaseAggregates: PerformancePhaseAggregateDiagnostic[];
   contextualPerformancePhaseEvents: ContextualPerformancePhaseEventDiagnostic[];
+  longTaskClassification: ClassifiedLongTaskDiagnostic[];
   applicationAttribution: {
     longTasks: ApplicationIntervalAttributionDiagnostic[];
     longAnimationFrames: ApplicationIntervalAttributionDiagnostic[];
@@ -140,6 +144,8 @@ export interface PerformanceReport {
     applicationDominatedLongTaskCount: number;
     partiallyAttributedLongTaskCount: number;
     unattributedLongTaskCount: number;
+    applicationBlockingLongTaskCount: number;
+    unknownLongTaskCount: number;
     applicationAttributedLongAnimationFrameCount: number;
     applicationDominatedLongAnimationFrameCount: number;
     partiallyAttributedLongAnimationFrameCount: number;
@@ -292,6 +298,13 @@ export class PerformanceMonitor {
       this.longAnimationFrames,
       performancePhaseMeasures,
     );
+    const longTaskClassification = classifyLongTasks(
+      this.longTasks,
+      applicationLongTasks,
+      performancePhaseMeasures,
+      this.longAnimationFrames,
+      samples,
+    );
 
     return {
       version: PERFORMANCE_CONTRACT_VERSION,
@@ -338,6 +351,8 @@ export class PerformanceMonitor {
         visibilityGeometry: getVisibilityGeometryFieldDiagnostics(state.map),
         perceptionPointProbes: getPerceptionGeometryPreparationDiagnostics(state),
         routeCostFields: getRouteCostFieldDiagnostics(getSharedRouteCostFieldCache(state.map)),
+        routeCostWorker: getRouteCostWorkerDiagnostics(state.map),
+        simulationSlowestPasses: getSimulationStepPerformanceDiagnostics(),
         awarenessStatic: selectedUnit
           ? getAwarenessStaticFieldDiagnostics(state.map, selectedUnit.behaviorRuntime.posture)
           : null,
@@ -378,6 +393,8 @@ export class PerformanceMonitor {
         partiallyAttributedLongTaskCount: applicationLongTasks
           .filter((item) => item.applicationAttributed && !item.applicationDominated).length,
         unattributedLongTaskCount: applicationLongTasks.filter((item) => !item.applicationAttributed).length,
+        applicationBlockingLongTaskCount: longTaskClassification.filter((item) => item.classification === 'application_blocking').length,
+        unknownLongTaskCount: longTaskClassification.filter((item) => item.classification === 'unknown').length,
         worstFrames: [...samples]
           .filter((sample) => sample.frameMs !== null)
           .sort((left, right) => (right.frameMs ?? 0) - (left.frameMs ?? 0))
@@ -397,6 +414,7 @@ export class PerformanceMonitor {
       performancePhaseMeasures,
       performancePhaseAggregates,
       contextualPerformancePhaseEvents,
+      longTaskClassification,
       applicationAttribution: {
         longTasks: applicationLongTasks,
         longAnimationFrames: applicationLongAnimationFrames,
@@ -405,6 +423,8 @@ export class PerformanceMonitor {
         partiallyAttributedLongTaskCount: applicationLongTasks
           .filter((item) => item.applicationAttributed && !item.applicationDominated).length,
         unattributedLongTaskCount: applicationLongTasks.filter((item) => !item.applicationAttributed).length,
+        applicationBlockingLongTaskCount: longTaskClassification.filter((item) => item.classification === 'application_blocking').length,
+        unknownLongTaskCount: longTaskClassification.filter((item) => item.classification === 'unknown').length,
         applicationAttributedLongAnimationFrameCount: applicationLongAnimationFrames
           .filter((item) => item.applicationAttributed).length,
         applicationDominatedLongAnimationFrameCount: applicationLongAnimationFrames

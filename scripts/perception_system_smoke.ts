@@ -5,9 +5,11 @@ import { setAttentionMode, setSearchSector, updateAttentionController } from '..
 import {
   CONTACT_STAGE_THRESHOLDS,
   advanceVisualContact,
+  contactStageRank,
   createEmptyPerceptionKnowledge,
   decayUnobservedContact,
   upsertPerceptionContact,
+  type PerceptionContactMemory,
 } from '../src/core/perception/PerceptionContact';
 import { emitPerceptionSound } from '../src/core/perception/PerceptionSound';
 import { buildPerceptionStimuli } from '../src/core/perception/PerceptionStimulus';
@@ -235,12 +237,50 @@ const imported = createInitialState(baseMap, [{
 }]);
 assert.equal(imported.units[0].perceptionKnowledge.contacts.length, 1, 'scene import must preserve saved perception memory');
 
+const bestContactState = createInitialState(baseMap, [observerData], []);
+const bestContactUnit = bestContactState.units[0]!;
+const contactBase = evidenceContact;
+const differentialContactSets: PerceptionContactMemory[][] = [
+  [],
+  [
+    { ...contactBase, id: 'tie-first', stimulusId: 'tie-first', confidence: 70, lastUpdatedSeconds: 4 },
+    { ...contactBase, id: 'tie-second', stimulusId: 'tie-second', confidence: 70, lastUpdatedSeconds: 4 },
+  ],
+  [
+    { ...contactBase, id: 'older-identified', stimulusId: 'older-identified', confidence: 80, lastUpdatedSeconds: 2 },
+    { ...contactBase, id: 'newer-identified', stimulusId: 'newer-identified', confidence: 80, lastUpdatedSeconds: 6 },
+    { ...contactBase, id: 'high-confidence-suspicion', stimulusId: 'high-confidence-suspicion', stage: 'suspicion', confidence: 100, lastUpdatedSeconds: 20 },
+  ],
+  [
+    { ...contactBase, id: 'expired-but-ranked', stimulusId: 'expired-but-ranked', confidence: 0, lastUpdatedSeconds: -10, visibleNow: false, observedNow: false },
+    { ...contactBase, id: 'fresh-suspicion', stimulusId: 'fresh-suspicion', stage: 'suspicion', confidence: 99, lastUpdatedSeconds: 30 },
+  ],
+];
+for (const contacts of differentialContactSets) {
+  bestContactUnit.perceptionKnowledge.contacts = [...contacts];
+  const before = bestContactUnit.perceptionKnowledge.contacts.map((contact) => contact.id);
+  const expected = referenceBestPerceptionContact(bestContactUnit.perceptionKnowledge.contacts);
+  const actual = getBestPerceptionContact(bestContactUnit);
+  assert.strictEqual(actual, expected, 'single-pass best-contact selection must match the stable clone/sort reference');
+  assert.deepEqual(bestContactUnit.perceptionKnowledge.contacts.map((contact) => contact.id), before, 'best-contact selection must not mutate source order');
+}
+bestContactUnit.perceptionKnowledge.contacts = differentialContactSets[1]!;
+assert.equal(getBestPerceptionContact(bestContactUnit)?.id, 'tie-first', 'exact ties must preserve the first input contact just like stable Array.sort');
+
 const noSelection = createInitialState(baseMap, [observerData], [frontZone]);
 noSelection.simulationTimeSeconds = 1;
 tickSelectedSoldierPerception(noSelection, 0.1);
 assert.equal(getPerceptionDiagnostics(noSelection).losCalculationCount, 0, 'no selected soldier must do no LOS work');
 
 console.log('Perception system smoke passed: stable attention, rear cadence, shared visibility quality, target types, target height, transmission, contacts, sound and import behavior.');
+
+function referenceBestPerceptionContact(contacts: readonly PerceptionContactMemory[]): PerceptionContactMemory | null {
+  return [...contacts].sort((left, right) => (
+    contactStageRank(right.stage) - contactStageRank(left.stage)
+    || right.confidence - left.confidence
+    || right.lastUpdatedSeconds - left.lastUpdatedSeconds
+  ))[0] ?? null;
+}
 
 function runPerception(simulation: ReturnType<typeof createInitialState>, seconds: number): void {
   const step = 0.1;

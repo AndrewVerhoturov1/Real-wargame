@@ -1,0 +1,5 @@
+{
+  "baselineDifferentialSmokeAvailable": false,
+  "acceptedRuntime": "cached point-LOS from PR #136",
+  "target": "fixed-scene differential parity"
+}

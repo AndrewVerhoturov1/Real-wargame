@@ -495,7 +495,7 @@ function renderAwarenessPanel(target: HTMLElement, state: SimulationState, reren
     ['Опасность здесь', `${report.currentPosition.danger}/100`],
     ['Ожидаемая защита здесь', `${report.currentPosition.expectedProtection}/100`],
     ['Безопасность здесь', `${report.currentPosition.safety}/100`],
-    ['Опасность маршрута', `${report.routeDanger}/100`],
+    ['Опасность маршрута', report.routeDanger === null ? 'нет маршрута' : `${report.routeDanger}/100`],
     ['Уверенность в угрозе', `${report.threatConfidence}%`],
   ]));
   target.append(sectionTitle('Известные угрозы этого бойца'));

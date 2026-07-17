@@ -1,0 +1,367 @@
+[
+  {
+    "startMs": -172.8,
+    "durationMs": 829,
+    "applicationOverlapMs": 624.5,
+    "applicationOverlapRatio": 0.7533,
+    "overlappingApplicationPhases": [
+      "renderer.static-map-rebuild",
+      "ui.tactical-workspace.update"
+    ],
+    "largestApplicationPhase": "renderer.static-map-rebuild",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 624.50 ms (75.33%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 662,
+    "durationMs": 346,
+    "applicationOverlapMs": 37.6,
+    "applicationOverlapRatio": 0.1087,
+    "overlappingApplicationPhases": [
+      "perception.point-los",
+      "simulation.ai-scheduler",
+      "simulation.perception",
+      "ticker.simulation"
+    ],
+    "largestApplicationPhase": "ticker.simulation",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 37.60 ms (10.87%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 4832.1,
+    "durationMs": 351,
+    "applicationOverlapMs": 110.3,
+    "applicationOverlapRatio": 0.3142,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "field.threat-relative-cover.build",
+      "field.visibility-geometry.build"
+    ],
+    "largestApplicationPhase": "field.soldier-danger.geometry",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 110.30 ms (31.42%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 15697.6,
+    "durationMs": 54,
+    "applicationOverlapMs": 19.6,
+    "applicationOverlapRatio": 0.363,
+    "overlappingApplicationPhases": [
+      "field.visibility-geometry.build"
+    ],
+    "largestApplicationPhase": "field.visibility-geometry.build",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 19.60 ms (36.30%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 18922.3,
+    "durationMs": 123,
+    "applicationOverlapMs": 63.1,
+    "applicationOverlapRatio": 0.513,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "field.visibility-geometry.build"
+    ],
+    "largestApplicationPhase": "field.soldier-danger.geometry",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 63.10 ms (51.30%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 37416.3,
+    "durationMs": 214,
+    "applicationOverlapMs": 112.6,
+    "applicationOverlapRatio": 0.5262,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "field.threat-relative-cover.build",
+      "field.visibility-geometry.build",
+      "render.route-cost"
+    ],
+    "largestApplicationPhase": "render.route-cost",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 112.60 ms (52.62%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 37904.8,
+    "durationMs": 94,
+    "applicationOverlapMs": 93.3,
+    "applicationOverlapRatio": 0.9926,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "field.visibility-geometry.build",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "render.route-cost",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 93.30 ms (99.26%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 38405.6,
+    "durationMs": 112,
+    "applicationOverlapMs": 109.4,
+    "applicationOverlapRatio": 0.9768,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.score",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "ticker.render-frame",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 109.40 ms (97.68%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 38906.7,
+    "durationMs": 65,
+    "applicationOverlapMs": 63.7,
+    "applicationOverlapRatio": 0.98,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "field.visibility-geometry.build",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "ticker.render-frame",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 63.70 ms (98.00%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 39408.2,
+    "durationMs": 72,
+    "applicationOverlapMs": 69.9,
+    "applicationOverlapRatio": 0.9708,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "field.visibility-geometry.build",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "ticker.render-frame",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 69.90 ms (97.08%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 39908.3,
+    "durationMs": 72,
+    "applicationOverlapMs": 70.5,
+    "applicationOverlapRatio": 0.9792,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "ticker.render-frame",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 70.50 ms (97.92%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 40509.7,
+    "durationMs": 63,
+    "applicationOverlapMs": 60.9,
+    "applicationOverlapRatio": 0.9667,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "field.visibility-geometry.build",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "ticker.render-frame",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 60.90 ms (96.67%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 41127.4,
+    "durationMs": 62,
+    "applicationOverlapMs": 60.3,
+    "applicationOverlapRatio": 0.9726,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "field.visibility-geometry.build",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "ticker.render-frame",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 60.30 ms (97.26%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 41928.8,
+    "durationMs": 65,
+    "applicationOverlapMs": 63.4,
+    "applicationOverlapRatio": 0.9754,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "ticker.render-frame",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 63.40 ms (97.54%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 42530,
+    "durationMs": 62,
+    "applicationOverlapMs": 60.6,
+    "applicationOverlapRatio": 0.9774,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "field.visibility-geometry.build",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "ticker.render-frame",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 60.60 ms (97.74%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 43331.5,
+    "durationMs": 62,
+    "applicationOverlapMs": 60.2,
+    "applicationOverlapRatio": 0.971,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "field.visibility-geometry.build",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "ticker.render-frame",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 60.20 ms (97.10%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 43932.6,
+    "durationMs": 61,
+    "applicationOverlapMs": 59.0,
+    "applicationOverlapRatio": 0.9672,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "ticker.render-frame",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 59.00 ms (96.72%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 44534.3,
+    "durationMs": 61,
+    "applicationOverlapMs": 58.4,
+    "applicationOverlapRatio": 0.9574,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "ticker.render-frame",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 58.40 ms (95.74%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 45368.5,
+    "durationMs": 67,
+    "applicationOverlapMs": 64.9,
+    "applicationOverlapRatio": 0.9687,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "ticker.render-frame",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 64.90 ms (96.87%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 46169.9,
+    "durationMs": 66,
+    "applicationOverlapMs": 64.2,
+    "applicationOverlapRatio": 0.9727,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "field.visibility-geometry.build",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "ticker.render-frame",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 64.20 ms (97.27%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 46971.4,
+    "durationMs": 64,
+    "applicationOverlapMs": 62.7,
+    "applicationOverlapRatio": 0.9797,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "field.visibility-geometry.build",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "ticker.render-frame",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 62.70 ms (97.97%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 47572.5,
+    "durationMs": 64,
+    "applicationOverlapMs": 61.6,
+    "applicationOverlapRatio": 0.9625,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "ticker.render-frame",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 61.60 ms (96.25%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 48374.1,
+    "durationMs": 64,
+    "applicationOverlapMs": 60.8,
+    "applicationOverlapRatio": 0.95,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "field.visibility-geometry.build",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "ticker.render-frame",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 60.80 ms (95.00%) exceeds 12 ms/20% bounds."
+  },
+  {
+    "startMs": 48991.8,
+    "durationMs": 66,
+    "applicationOverlapMs": 64.9,
+    "applicationOverlapRatio": 0.9833,
+    "overlappingApplicationPhases": [
+      "field.soldier-danger.geometry",
+      "field.soldier-danger.score",
+      "field.visibility-geometry.build",
+      "render.route-cost",
+      "ticker.render-frame"
+    ],
+    "largestApplicationPhase": "ticker.render-frame",
+    "classification": "application_blocking",
+    "classificationReason": "Measured application overlap 64.90 ms (98.33%) exceeds 12 ms/20% bounds."
+  }
+]

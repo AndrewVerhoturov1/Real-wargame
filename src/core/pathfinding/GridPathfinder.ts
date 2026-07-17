@@ -1,5 +1,6 @@
 import type { GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
+import { buildRouteDangerDiagnostic, type RouteDangerDiagnostic } from '../navigation/RouteDangerDiagnostic';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
 import {
   getSharedRouteCostFieldCache,
@@ -39,6 +40,8 @@ export interface GridPathOptions {
   readonly tacticalContext?: TacticalRouteContext;
   readonly costFieldCache?: RouteCostFieldCache;
   readonly preparedCostFields?: RouteCostFields;
+  readonly routeDangerRevision?: number;
+  readonly calculatedAtSimulationStep?: number;
 }
 
 export interface GridPathSuccess {
@@ -58,6 +61,7 @@ export interface GridPathSuccess {
   readonly profileId: string;
   readonly profileRevision: number;
   readonly costFieldIdentity: string;
+  readonly routeDangerDiagnostic: RouteDangerDiagnostic | null;
   readonly costBreakdown: GridPathCostBreakdown;
   readonly routeReason: string;
   readonly routeReasonRu: string;
@@ -205,6 +209,11 @@ export function findGridPath(
   const routeReason = buildRouteReason(goalAdjusted, detourLimited, profile, costBreakdown, false);
   const routeReasonRu = buildRouteReason(goalAdjusted, detourLimited, profile, costBreakdown, true);
   const waypoints = simplifyPathToWaypoints(selectedSearch.cells, resolvedGoal);
+  const routeDangerDiagnostic = buildRouteDangerDiagnostic(map, selectedSearch.cells, fields, {
+    revision: options.routeDangerRevision ?? 1,
+    calculatedAtSimulationStep: options.calculatedAtSimulationStep ?? 0,
+    tacticalContext: options.tacticalContext,
+  });
   return {
     ok: true,
     requestedGoal: { ...requestedGoal },
@@ -222,6 +231,7 @@ export function findGridPath(
     profileId: profile.id,
     profileRevision: profile.revision,
     costFieldIdentity: fields.cacheKey,
+    routeDangerDiagnostic,
     costBreakdown: roundBreakdown(costBreakdown),
     routeReason,
     routeReasonRu,

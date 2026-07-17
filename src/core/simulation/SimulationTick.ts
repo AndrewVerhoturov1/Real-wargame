@@ -1,5 +1,11 @@
-import { tickAiSimulationScheduler } from '../ai/AiSimulationScheduler';
-import { measurePerformancePhase } from '../debug/PerformancePhases';
+import { tickAiSimulationScheduler, type AiSimulationSchedulerResult } from '../ai/AiSimulationScheduler';
+import { measurePerformancePhase, withPerformancePhaseContext } from '../debug/PerformancePhases';
+import { getThreatRelativeCoverFieldDiagnostics } from '../cover/ThreatRelativeCoverField';
+import { getSoldierDangerFieldDiagnostics } from '../knowledge/SoldierDangerField';
+import { getDirectionalTacticalFieldDiagnostics } from '../terrain/DirectionalTacticalField';
+import { getVisibilityGeometryFieldDiagnostics } from '../visibility/VisibilityGeometryField';
+import { getPerceptionGeometryPreparationDiagnostics } from '../visibility/PointVisibility';
+import { recordSimulationStepPerformance, roundSimulationDuration, type SimulationStepPhaseDurations } from '../debug/SimulationStepPerformanceDiagnostics';
 import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import { publishSimulationAiEvents } from '../ai/events/SimulationAiEvents';
 import { clampPercent, POSTURE_MOVE_MULTIPLIER } from '../behavior/BehaviorModel';
@@ -33,45 +39,109 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
   state.simulationStep += 1;
   state.simulationTimeSeconds += scaledDeltaSeconds;
   const cycleEndMs = Math.max(cycleStartMs, Math.round(state.simulationTimeSeconds * 1000));
+  const simulationStep = state.simulationStep;
+  const startedAt = performance.now();
+  const pointBefore = getPerceptionGeometryPreparationDiagnostics(state);
+  const tacticalBefore = tacticalBuildCount(state);
+  const schedulerAttribution: { result: AiSimulationSchedulerResult | null } = { result: null };
+  let routeNavigationDurationMs = 0;
+  const phases: SimulationStepPhaseDurations = {
+    metricsMs: 0,
+    perceptionMs: 0,
+    threatMemoryMs: 0,
+    aiSchedulerMs: 0,
+    combatMs: 0,
+    movementEventsMs: 0,
+    collisionsMs: 0,
+  };
 
-  measurePerformancePhase('simulation.metrics', () => {
-    for (const unit of state.units) {
-      updateMetrics(unit, state, scaledDeltaSeconds);
-      updateStateLabels(unit);
-    }
+  withPerformancePhaseContext({ simulationStep }, () => {
+    phases.metricsMs = measureTimedPhase('simulation.metrics', () => {
+      for (const unit of state.units) {
+        updateMetrics(unit, state, scaledDeltaSeconds);
+        updateStateLabels(unit);
+      }
+    });
+
+    // Perception and subjective threat memory must be current before AI reads
+    // the blackboard. Graph effects can then affect combat and movement during
+    // the same deterministic simulation step.
+    phases.perceptionMs = measureTimedPhase('simulation.perception', () => {
+      tickAllUnitPerception(state, scaledDeltaSeconds);
+    });
+    phases.threatMemoryMs = measureTimedPhase('simulation.threat-memory', () => {
+      for (const unit of state.units) syncSoldierThreatMemory(state, unit, scaledDeltaSeconds);
+    });
+
+    phases.aiSchedulerMs = measureTimedPhase('simulation.ai-scheduler', () => {
+      schedulerAttribution.result = tickAiSimulationScheduler(state, { cycleStartMs, cycleEndMs });
+    });
+    phases.combatMs = measureTimedPhase('simulation.combat', () => {
+      tickAutomaticCombatEngagements(state);
+      tickAllFireActions(state, scaledDeltaSeconds);
+    });
+
+    const simulationTimeMs = Math.max(0, Math.round(state.simulationTimeSeconds * 1000));
+    phases.movementEventsMs = measureTimedPhase('simulation.movement-events', () => {
+      for (const unit of state.units) {
+        routeNavigationDurationMs += moveUnit(unit, state, scaledDeltaSeconds);
+        publishSimulationAiEvents(unit, simulationTimeMs);
+      }
+    });
+
+    phases.collisionsMs = measureTimedPhase('simulation.collisions', () => {
+      resolveUnitCollisions(state);
+    });
   });
 
-  // Perception and subjective threat memory must be current before AI reads
-  // the blackboard. Graph effects can then affect combat and movement during
-  // the same deterministic simulation step.
-  measurePerformancePhase('simulation.perception', () => {
-    tickAllUnitPerception(state, scaledDeltaSeconds);
+  const performanceEndMs = performance.now();
+  const totalDurationMs = performanceEndMs - startedAt;
+  const pointAfter = getPerceptionGeometryPreparationDiagnostics(state);
+  const covered = Object.values(phases).reduce((sum, duration) => sum + duration, 0);
+  recordSimulationStepPerformance({
+    simulationStep,
+    simulationTimeSeconds: roundSimulationDuration(state.simulationTimeSeconds),
+    performanceStartMs: roundSimulationDuration(startedAt),
+    performanceEndMs: roundSimulationDuration(performanceEndMs),
+    totalDurationMs: roundSimulationDuration(totalDurationMs),
+    phases: mapRoundedPhases(phases),
+    aiSchedulerDurationMs: roundSimulationDuration(phases.aiSchedulerMs),
+    perceptionDurationMs: roundSimulationDuration(phases.perceptionMs),
+    movementEventsDurationMs: roundSimulationDuration(phases.movementEventsMs),
+    routeNavigationDurationMs: roundSimulationDuration(routeNavigationDurationMs),
+    tacticalFieldBuilds: Math.max(0, tacticalBuildCount(state) - tacticalBefore),
+    pointLosCacheMisses: Math.max(0, pointAfter.preparationCount - pointBefore.preparationCount),
+    pointLosCacheHits: Math.max(0, pointAfter.cacheHitCount - pointBefore.cacheHitCount),
+    unitId: schedulerAttribution.result?.maxUnitId ?? null,
+    activeGraphNode: schedulerAttribution.result?.maxUnitActiveNode ?? null,
+    maxUnitPassDurationMs: roundSimulationDuration(schedulerAttribution.result?.maxUnitDurationMs ?? 0),
+    uncoveredResidualDurationMs: roundSimulationDuration(Math.max(0, totalDurationMs - covered)),
   });
-  measurePerformancePhase('simulation.threat-memory', () => {
-    for (const unit of state.units) {
-      syncSoldierThreatMemory(state, unit, scaledDeltaSeconds);
-    }
-  });
+}
 
-  measurePerformancePhase('simulation.ai-scheduler', () => {
-    tickAiSimulationScheduler(state, { cycleStartMs, cycleEndMs });
-  });
-  measurePerformancePhase('simulation.combat', () => {
-    tickAutomaticCombatEngagements(state);
-    tickAllFireActions(state, scaledDeltaSeconds);
-  });
+function measureTimedPhase(name: string, callback: () => void): number {
+  const startedAt = performance.now();
+  measurePerformancePhase(name, callback);
+  return performance.now() - startedAt;
+}
 
-  const simulationTimeMs = Math.max(0, Math.round(state.simulationTimeSeconds * 1000));
-  measurePerformancePhase('simulation.movement-events', () => {
-    for (const unit of state.units) {
-      moveUnit(unit, state, scaledDeltaSeconds);
-      publishSimulationAiEvents(unit, simulationTimeMs);
-    }
-  });
+function mapRoundedPhases(phases: SimulationStepPhaseDurations): SimulationStepPhaseDurations {
+  return {
+    metricsMs: roundSimulationDuration(phases.metricsMs),
+    perceptionMs: roundSimulationDuration(phases.perceptionMs),
+    threatMemoryMs: roundSimulationDuration(phases.threatMemoryMs),
+    aiSchedulerMs: roundSimulationDuration(phases.aiSchedulerMs),
+    combatMs: roundSimulationDuration(phases.combatMs),
+    movementEventsMs: roundSimulationDuration(phases.movementEventsMs),
+    collisionsMs: roundSimulationDuration(phases.collisionsMs),
+  };
+}
 
-  measurePerformancePhase('simulation.collisions', () => {
-    resolveUnitCollisions(state);
-  });
+function tacticalBuildCount(state: SimulationState): number {
+  return getThreatRelativeCoverFieldDiagnostics(state.map).geometryBuildCount
+    + getSoldierDangerFieldDiagnostics(state.map).fieldBuildCount
+    + getDirectionalTacticalFieldDiagnostics(state.map).buildCount
+    + getVisibilityGeometryFieldDiagnostics(state.map).geometryBuildCount;
 }
 
 function updateMetrics(unit: UnitModel, state: SimulationState, deltaSeconds: number): void {
@@ -133,11 +203,14 @@ function updateStateLabels(unit: UnitModel): void {
   setState(unit, unit.behaviorRuntime.state === 'idle' ? 'idle' : 'observing', 'no active move order');
 }
 
-function moveUnit(unit: UnitModel, state: SimulationState, deltaSeconds: number): void {
-  if (!unit.order || deltaSeconds <= 0 || !isUnitCombatCapable(unit) || getFireAction(unit)) return;
-  if (!ensureRoutePassable(unit, state)) return;
+function moveUnit(unit: UnitModel, state: SimulationState, deltaSeconds: number): number {
+  if (!unit.order || deltaSeconds <= 0 || !isUnitCombatCapable(unit) || getFireAction(unit)) return 0;
+  const routeStartedAt = performance.now();
+  const routePassable = ensureRoutePassable(unit, state);
+  const routeNavigationDurationMs = performance.now() - routeStartedAt;
+  if (!routePassable) return routeNavigationDurationMs;
   const order = unit.order;
-  if (!order) return;
+  if (!order) return routeNavigationDurationMs;
 
   const waypointIndex = order.waypointIndex ?? 0;
   const movementTarget = order.waypoints?.[waypointIndex] ?? order.target;
@@ -149,7 +222,7 @@ function moveUnit(unit: UnitModel, state: SimulationState, deltaSeconds: number)
   updateFacingAlongRoute(unit, movementTarget);
   unit.position = moveToPoint(unit.position, movementTarget, stepDistance);
 
-  if (remainingDistance > stepDistance + ORDER_COMPLETION_EPSILON_CELLS) return;
+  if (remainingDistance > stepDistance + ORDER_COMPLETION_EPSILON_CELLS) return routeNavigationDurationMs;
   unit.position = { ...movementTarget };
 
   const waypoints = order.waypoints;
@@ -158,7 +231,7 @@ function moveUnit(unit: UnitModel, state: SimulationState, deltaSeconds: number)
     if (order.routeStatus === 'planned') order.routeStatus = 'following';
     unit.behaviorRuntime.lastEvent = 'move_waypoint_reached';
     unit.behaviorRuntime.reason = `Точка маршрута ${order.waypointIndex + 1} из ${waypoints.length}.`;
-    return;
+    return routeNavigationDurationMs;
   }
 
   unit.position = { ...order.target };
@@ -169,6 +242,7 @@ function moveUnit(unit: UnitModel, state: SimulationState, deltaSeconds: number)
   unit.behaviorRuntime.currentAction = 'observe';
   unit.behaviorRuntime.reason = 'target reached';
   unit.behaviorRuntime.lastEvent = 'move_done';
+  return routeNavigationDurationMs;
 }
 
 function updateFacingAlongRoute(unit: UnitModel, movementTarget: GridPosition): void {
