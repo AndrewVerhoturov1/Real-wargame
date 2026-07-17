@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: agent-live-windows-performance-followup-v1-${{ github.event_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   apply-safe-position-removal:
