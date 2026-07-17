@@ -9,10 +9,13 @@ Project skill router for `Real-wargame`. Read only the skills required by the cu
 3. Choose a skill from the table below.
 4. Read narrower references only when the project skill routes to them.
 
+For every runtime-affecting task, `real-wargame-performance` is mandatory in addition to the domain skill.
+
 ## Project skills
 
 | Skill | Path | Read when |
 |---|---|---|
+| Real-Wargame performance contract | `.agents/skills/real-wargame-performance/SKILL.md` | Mandatory for simulation, AI, perception, navigation, tactical fields, map data, rendering, recurring UI, workers, queues, caches, revisions, lifecycle, diagnostics or browser-performance gates. Read even when the feature request does not explicitly mention performance. |
 | Real-Wargame local preview | `.agents/skills/real-wargame-local-preview/SKILL.md` | Local launch, terminal-free preview, GitHub Actions screenshots, Playwright, visual QA, artifacts or showing the real game in chat. |
 | Real-Wargame PixiJS 8 guide | `.agents/skills/real-wargame-pixijs/SKILL.md` | Any PixiJS, canvas, renderer, camera, pointer event, visual layer or rendering-performance task. Read before general PixiJS skills. |
 | Real-Wargame AI Runtime | `.agents/skills/real-wargame-ai-runtime/SKILL.md` | Soldier AI graph, Utility scoring, Blackboard, Runtime, lifecycle, cancellation, Bridge, AI Dictionary, node authoring or live trace. |
@@ -22,11 +25,12 @@ Project skill router for `Real-wargame`. Read only the skills required by the cu
 | User task | Skills |
 |---|---|
 | Run or show the game | `real-wargame-local-preview` |
-| Change map/unit/overlay visual | `real-wargame-pixijs`, then local preview for visual verification |
-| Diagnose FPS or overlay stalls | `real-wargame-pixijs`, then the narrow Pixi performance reference |
-| Change GraphRunner or Utility score | `real-wargame-ai-runtime` |
-| Add a multi-tick action | `real-wargame-ai-runtime`, then local preview for visible runtime behavior |
-| Change AI Node Editor controls | `real-wargame-ai-runtime`, local preview |
+| Change simulation, AI, perception, navigation, map runtime, UI runtime or caches | `real-wargame-performance`, then the relevant domain skill |
+| Change map/unit/overlay visual | `real-wargame-performance`, `real-wargame-pixijs`, then local preview for visual verification |
+| Diagnose FPS or overlay stalls | `real-wargame-performance`, `real-wargame-pixijs`, then the narrow Pixi performance reference |
+| Change GraphRunner or Utility score | `real-wargame-performance`, `real-wargame-ai-runtime` |
+| Add a multi-tick action | `real-wargame-performance`, `real-wargame-ai-runtime`, then local preview for visible runtime behavior |
+| Change AI Node Editor controls | `real-wargame-performance` when recurring/runtime work changes, then `real-wargame-ai-runtime` and local preview |
 | Change documentation/navigation | no domain skill; use canonical JSON and `npm run docs:sync` |
 
 ## General PixiJS skills
@@ -36,7 +40,8 @@ Real-Wargame uses PixiJS 8.19.x; the installed general collection is the canonic
 For any PixiJS task:
 
 ```text
-real-wargame-pixijs
+real-wargame-performance
+→ real-wargame-pixijs
 → docs/ai/PIXIJS_SKILLS_INDEX.md
 → only the relevant general skill
 ```
@@ -47,6 +52,7 @@ Do not introduce deprecated v7 compatibility aliases into active production code
 
 - A GitHub Actions browser run is not a local run on the user's PC.
 - A green workflow is not proof of good visuals until fresh PNGs are inspected.
+- A diagnostic performance capture with enforcement disabled is not an acceptance gate.
 - Do not claim a skill was followed unless its required checks were actually performed.
 - Do not read all `.agents/skills/` by default.
 
