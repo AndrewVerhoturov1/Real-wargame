@@ -30,7 +30,22 @@ jobs:
           node-version: 20
           cache: npm
       - name: Apply targeted follow-up
-        run: python3 scripts/agent_performance_attribution_followup_apply.py
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/performance/live-windows-followup
+          {
+            python3 scripts/agent_performance_attribution_followup_patchfix.py
+            python3 scripts/agent_performance_attribution_followup_apply.py
+          } 2>&1 | tee artifacts/performance/live-windows-followup/attribution-patch.log
+      - name: Upload patch diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-attribution-patch-log
+          path: artifacts/performance/live-windows-followup/attribution-patch.log
+          if-no-files-found: warn
+          retention-days: 3
       - name: Install dependencies
         run: npm ci
       - name: Verify source and focused contracts
@@ -45,7 +60,9 @@ jobs:
       - name: Commit verified result
         run: |
           rm scripts/agent_performance_attribution_followup_apply.py
+          rm scripts/agent_performance_attribution_followup_patchfix.py
           rm -f artifacts/performance/live-windows-followup/.attribution-followup-trigger
+          rm -f artifacts/performance/live-windows-followup/attribution-patch.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
