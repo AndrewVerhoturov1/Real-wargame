@@ -114,6 +114,16 @@ assert.doesNotMatch(
   /const REAR_SECTOR_START_DEGREES = 135;/,
   'PerceptionSystem must not own a parallel rear-sector formula',
 );
+assert.match(
+  perceptionSource,
+  /const directionalRangeCells = broadPhaseCells \* calculateAttentionVisualRangeFactor\(attention\.weight\);/,
+  'runtime must derive the early range guard from the canonical visibility function',
+);
+assert.match(
+  perceptionSource,
+  /if \(distanceCells > directionalRangeCells\) continue;\s+const visibility = evaluatePointVisibility/,
+  'targets with guaranteed zero directional quality must be rejected before point LOS',
+);
 
 console.log(JSON.stringify({
   status: 'passed',
@@ -135,5 +145,6 @@ console.log(JSON.stringify({
   runtimeContract: {
     canonicalRearSample: true,
     intuitionCannotRaiseRearCap: true,
+    directionalRangeRejectedBeforePointLos: true,
   },
 }, null, 2));
