@@ -2,7 +2,6 @@ import { clampPercent, type UnitPosture } from '../behavior/BehaviorModel';
 import { findBestDirectFireContact } from '../combat/CombatDecision';
 import { requestFireAction } from '../combat/FireAction';
 import { clearWeaponRuntime } from '../combat/WeaponModel';
-import { generateCoverTacticalCandidates } from '../cover/CoverTacticalCandidates';
 import { distance, type GridPosition } from '../geometry';
 import { clampGridPositionToMap, type TacticalMap } from '../map/MapModel';
 import { createMoveOrder } from '../orders/MoveOrder';
@@ -651,10 +650,9 @@ function readCurrentRuntimeMemory(unit: UnitModel): AiGraphRunnerBlackboard {
 function createTacticalHost(state: SimulationState, unit: UnitModel): AiGraphTacticalHost {
   return {
     resolveDistanceMeters: (fromKey, toKey, blackboard) => resolveDistanceMeters(state, unit, blackboard, fromKey, toKey),
-    generateCoverCandidates: (request) => {
-      const threats = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
-      return generateCoverTacticalCandidates({ map: state.map, unit, threatPosition: threats.targetPosition, orderTarget: unit.order?.target ?? null, searchRadiusMeters: request.searchRadiusMeters, maxCandidates: request.maxCandidates, maxCalculationMs: request.maxCalculationMs });
-    },
+    // Legacy safe-position/cover-candidate generation is intentionally absent.
+    // CreateCoverCandidates therefore receives the existing host_unavailable result
+    // without synchronous pathfinding or full-map tactical work.
     tacticalCheck: (checkKind, blackboard) => evaluateTacticalCheck(state, unit, blackboard, checkKind),
   };
 }

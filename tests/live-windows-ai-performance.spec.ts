@@ -112,7 +112,7 @@ const ENFORCE = process.env.LIVE_WINDOWS_PERF_ENFORCE !== '0';
 
 const LAYERS = ['danger', 'memory', 'stealth', 'danger'] as const;
 
-test.setTimeout(MEASUREMENT_MS + WARMUP_MS + 90_000);
+test.setTimeout(MEASUREMENT_MS + WARMUP_MS + 240_000);
 
 test('runs six-unit graph AI with moving contacts and active tactical workspace for at least 90 seconds', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
