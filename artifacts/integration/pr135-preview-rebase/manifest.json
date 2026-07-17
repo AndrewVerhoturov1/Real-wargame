@@ -1,11 +1,17 @@
 {
-  "version": 1,
+  "version": 2,
   "pullRequest": 135,
   "branch": "agent/movement-environment-integration-v1",
   "target": "real-wargame-preview",
   "previousReviewedHead": "00d95a6044ea3b3f2bf72fba3164688521d06c10",
   "exactPreviewBase": "ad4f35535425aef11db6f27ca959bbd3696d36dc",
   "previewPerformanceMerge": "ad4f35535425aef11db6f27ca959bbd3696d36dc",
+  "hotpathFollowupCommit": "622c85280e497931c938d1ed3b07251b8c9f8574",
+  "hotpathFollowup": [
+    "forward one stable movement registry snapshot through each scheduler cycle",
+    "avoid duplicate movement reconciliation and route-status publication after successful begin_move",
+    "avoid no-op movement memory/runtime writes and coordinate allocations"
+  ],
   "workflowPolicy": "canonical preview workflows retained unchanged",
   "rearVisibilityPolicy": "preserve the visibility semantics actually present in exact preview; draft PR 137 was not imported",
   "integrationPolicy": "reconstruct accepted movement and environment functionality on top of exact preview without restoring deprecated hot paths or duplicate authority sources",
