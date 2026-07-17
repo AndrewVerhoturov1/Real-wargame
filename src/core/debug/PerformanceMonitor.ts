@@ -10,6 +10,7 @@ import {
 import type { SimulationState } from '../simulation/SimulationState';
 import { getDirectionalTacticalFieldDiagnostics } from '../terrain/DirectionalTacticalField';
 import { getVisibilityGeometryFieldDiagnostics } from '../visibility/VisibilityGeometryField';
+import { getPerceptionGeometryPreparationDiagnostics } from '../visibility/PointVisibility';
 import { getSimulationLayerState } from '../ui/RuntimeUiState';
 import { getAwarenessMovementDiagnostics } from './AwarenessMovementDiagnostics';
 import { getRealWargameBuildIdentity, PERFORMANCE_CONTRACT_VERSION } from './BuildIdentity';
@@ -99,7 +100,11 @@ export interface ApplicationIntervalAttributionDiagnostic {
   readonly startMs: number;
   readonly durationMs: number;
   readonly scenario: string | null;
+  /** True when any measured application phase overlaps the browser window. */
   readonly applicationAttributed: boolean;
+  /** True only when measured application phases occupy at least half of the browser window. */
+  readonly applicationDominated: boolean;
+  readonly applicationOverlapRatio: number;
   readonly overlappingPhases: readonly string[];
   readonly overlapDurationMs: number;
 }
@@ -132,8 +137,12 @@ export interface PerformanceReport {
     longTasks: ApplicationIntervalAttributionDiagnostic[];
     longAnimationFrames: ApplicationIntervalAttributionDiagnostic[];
     applicationAttributedLongTaskCount: number;
+    applicationDominatedLongTaskCount: number;
+    partiallyAttributedLongTaskCount: number;
     unattributedLongTaskCount: number;
     applicationAttributedLongAnimationFrameCount: number;
+    applicationDominatedLongAnimationFrameCount: number;
+    partiallyAttributedLongAnimationFrameCount: number;
   };
   samples: PerformanceFrameSample[];
 }
@@ -327,6 +336,7 @@ export class PerformanceMonitor {
         threatRelativeCover: getThreatRelativeCoverFieldDiagnostics(state.map),
         directionalTactical: getDirectionalTacticalFieldDiagnostics(state.map),
         visibilityGeometry: getVisibilityGeometryFieldDiagnostics(state.map),
+        perceptionPointProbes: getPerceptionGeometryPreparationDiagnostics(state),
         routeCostFields: getRouteCostFieldDiagnostics(getSharedRouteCostFieldCache(state.map)),
         awarenessStatic: selectedUnit
           ? getAwarenessStaticFieldDiagnostics(state.map, selectedUnit.behaviorRuntime.posture)
@@ -364,6 +374,9 @@ export class PerformanceMonitor {
         phaseMeasureCount: performancePhaseMeasures.length,
         phaseAggregateCount: performancePhaseAggregates.length,
         applicationAttributedLongTaskCount: applicationLongTasks.filter((item) => item.applicationAttributed).length,
+        applicationDominatedLongTaskCount: applicationLongTasks.filter((item) => item.applicationDominated).length,
+        partiallyAttributedLongTaskCount: applicationLongTasks
+          .filter((item) => item.applicationAttributed && !item.applicationDominated).length,
         unattributedLongTaskCount: applicationLongTasks.filter((item) => !item.applicationAttributed).length,
         worstFrames: [...samples]
           .filter((sample) => sample.frameMs !== null)
@@ -388,9 +401,16 @@ export class PerformanceMonitor {
         longTasks: applicationLongTasks,
         longAnimationFrames: applicationLongAnimationFrames,
         applicationAttributedLongTaskCount: applicationLongTasks.filter((item) => item.applicationAttributed).length,
+        applicationDominatedLongTaskCount: applicationLongTasks.filter((item) => item.applicationDominated).length,
+        partiallyAttributedLongTaskCount: applicationLongTasks
+          .filter((item) => item.applicationAttributed && !item.applicationDominated).length,
         unattributedLongTaskCount: applicationLongTasks.filter((item) => !item.applicationAttributed).length,
         applicationAttributedLongAnimationFrameCount: applicationLongAnimationFrames
           .filter((item) => item.applicationAttributed).length,
+        applicationDominatedLongAnimationFrameCount: applicationLongAnimationFrames
+          .filter((item) => item.applicationDominated).length,
+        partiallyAttributedLongAnimationFrameCount: applicationLongAnimationFrames
+          .filter((item) => item.applicationAttributed && !item.applicationDominated).length,
       },
       samples,
     };
@@ -496,13 +516,19 @@ function buildApplicationIntervalAttribution(
         endMs: Math.min(windowEnd, measure.startMs + measure.durationMs),
       }))
       .filter((item) => item.endMs > item.startMs);
+    const overlapDurationMs = unionDuration(overlaps.map((item) => [item.startMs, item.endMs]));
+    const applicationOverlapRatio = window.durationMs > 0
+      ? Math.min(1, overlapDurationMs / window.durationMs)
+      : 0;
     return {
       startMs: window.startMs,
       durationMs: window.durationMs,
       scenario: window.scenario,
-      applicationAttributed: overlaps.length > 0,
+      applicationAttributed: overlapDurationMs > 0,
+      applicationDominated: applicationOverlapRatio >= 0.5,
+      applicationOverlapRatio: roundThree(applicationOverlapRatio),
       overlappingPhases: [...new Set(overlaps.map((item) => item.name))].sort(),
-      overlapDurationMs: roundTwo(unionDuration(overlaps.map((item) => [item.startMs, item.endMs]))),
+      overlapDurationMs: roundTwo(overlapDurationMs),
     };
   });
 }

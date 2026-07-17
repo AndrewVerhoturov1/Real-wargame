@@ -33,6 +33,7 @@ export interface LiveWindowsPerformanceApi {
 declare global {
   interface Window {
     __realWargameLiveWindowsPerformance?: LiveWindowsPerformanceApi;
+    __realWargamePerformanceScenario?: string | null;
   }
 }
 
@@ -51,6 +52,7 @@ export function installLiveWindowsPerformanceHarness(state: SimulationState): vo
 
   window.__realWargameLiveWindowsPerformance = {
     start(): LiveWindowsPerformanceSnapshot {
+      window.__realWargamePerformanceScenario = 'live-windows-six-unit-ai';
       refreshContacts(state);
       routeAllUnits(state, 0);
       setAiTestPaused(state, false);
@@ -58,7 +60,9 @@ export function installLiveWindowsPerformanceHarness(state: SimulationState): vo
     },
     stop(): LiveWindowsPerformanceSnapshot {
       setAiTestPaused(state, true);
-      return snapshot(state);
+      const stopped = snapshot(state);
+      window.__realWargamePerformanceScenario = null;
+      return stopped;
     },
     retargetAll(seed): LiveWindowsPerformanceSnapshot {
       routeAllUnits(state, seed);

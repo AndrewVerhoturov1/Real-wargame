@@ -5,6 +5,7 @@ import {
   getThreatRelativeCoverFieldDiagnostics,
 } from '../src/core/cover/ThreatRelativeCoverField';
 import { buildSoldierAwarenessReport } from '../src/core/knowledge/SoldierAwarenessGrid';
+import { getSoldierDangerFieldDiagnostics } from '../src/core/knowledge/SoldierDangerField';
 import { getCell, type TacticalMapData } from '../src/core/map/MapModel';
 import { markMapCellsDirty } from '../src/core/map/MapRuntimeState';
 import { createInitialState } from '../src/core/simulation/SimulationState';
@@ -103,6 +104,7 @@ assert.ok(
 const coldBuildMs = diagnostics.lastBuildMs;
 const protectedProbePosition = { x: WALL_X - 1.5, y: 100.5 };
 const directionalBuildsAfterFirstThreat = directionalDiagnostics.buildCount;
+const soldierDangerGeometryBuildsAfterFirstThreat = getSoldierDangerFieldDiagnostics(state.map).geometryBuildCount;
 
 const repeated = buildSoldierAwarenessReport(state, blue);
 assert.equal(repeated.cacheKey, first.cacheKey);
@@ -189,7 +191,24 @@ assert.equal(
   'height/relief change must not enter the object/forest geometry cache key',
 );
 
-threat.x += 2;
+buildSoldierAwarenessReport(state, blue);
+const soldierDangerGeometryBuildsAfterHeightChange = getSoldierDangerFieldDiagnostics(state.map).geometryBuildCount;
+threat.x += 0.1;
+blue.tacticalKnowledge.revision += 1;
+buildSoldierAwarenessReport(state, blue);
+assert.equal(
+  getSoldierDangerFieldDiagnostics(state.map).geometryBuildCount,
+  soldierDangerGeometryBuildsAfterHeightChange,
+  'sub-quarter-cell subjective movement must reuse full-map danger geometry after map revisions are warm',
+);
+const directionalBuildsAfterSubCellMovement = getDirectionalTacticalFieldDiagnostics(state.map).buildCount;
+assert.equal(
+  getThreatRelativeCoverFieldDiagnostics(state.map).geometryBuildCount,
+  1,
+  'sub-quarter-cell movement must not rebuild threat-relative cover geometry',
+);
+
+threat.x += 1.9;
 blue.tacticalKnowledge.revision += 1;
 buildSoldierAwarenessReport(state, blue);
 assert.equal(
@@ -199,8 +218,8 @@ assert.equal(
 );
 assert.equal(
   getDirectionalTacticalFieldDiagnostics(state.map).buildCount,
-  directionalBuildsAfterFirstThreat + 1,
-  'the next report must rebuild directional terrain once for changed geometry content',
+  directionalBuildsAfterSubCellMovement + 1,
+  'material movement after the sub-cell probe must rebuild directional terrain once',
 );
 
 state.map.objects[0].x += 1;

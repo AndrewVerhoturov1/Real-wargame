@@ -25,8 +25,13 @@ for (const token of [
   'longTaskOverlapDurationMs',
   'buildApplicationIntervalAttribution',
   'applicationAttributedLongTaskCount',
+  'applicationDominatedLongTaskCount',
+  'applicationDominated',
+  'applicationOverlapRatio',
   'unattributedLongTaskCount',
   'contextualPerformancePhaseEvents',
+  'getPerceptionGeometryPreparationDiagnostics',
+  'perceptionPointProbes',
   'getAiSchedulerPerformanceDiagnostics',
 ]) assert.ok(monitor.includes(token), `PerformanceMonitor missing ${token}`);
 
@@ -38,4 +43,4 @@ for (const token of ['slowestUnitPasses', 'slowestCycles', 'p95Ms', 'MAX_DURATIO
 }
 assert.ok(pixi.includes('recordSimulationUpdate(simulationUpdateMs)'), 'Pixi ticker must publish SimulationTick wall time');
 assert.ok(!monitor.includes("sceneUpdateMs/renderMs measure JavaScript scene updates only"), 'legacy misleading timing note must be removed');
-console.log('Performance report contract smoke passed: simulation timing, phase aggregates, contextual field ownership and per-unit scheduler attribution are present.');
+console.log('Performance report contract smoke passed: simulation timing, dominant application attribution, bounded point probes, contextual field ownership and per-unit scheduler attribution are present.');
