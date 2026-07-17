@@ -119,8 +119,8 @@ export function diagnose(
   }
   const slow = searches.find((item) => item.durationMs >= 50);
   if (slow) out.push({
-    severity: slow.durationMs >= 200 ? 'critical' : 'warning', code: 'MAIN_THREAD_PATHFINDING',
-    message: 'A route remained unresolved long enough to overlap user-visible blocking.',
+    severity: slow.durationMs >= 200 ? 'critical' : 'warning', code: 'ROUTE_RESULT_LATENCY',
+    message: 'Observed order-to-route latency exceeded the diagnostic threshold; this does not by itself prove main-thread pathfinding.',
     evidence: { routeRequestId: slow.routeRequestId, unitId: slow.unitId, durationMs: slow.durationMs, durationSource: slow.durationSource },
   });
   const semanticTotal = Object.entries(semantic)
@@ -137,31 +137,62 @@ export function diagnose(
 
 export function worstWindows(
   frames: PerformanceTraceFrameV6[], timeline: SceneTimelineEntryV6[], events: PerformanceEventV6[],
-  phases: Record<string, unknown>[], operations: Record<string, unknown>[],
+  phases: object[], operations: Record<string, unknown>[],
 ): WorstWindowV6[] {
   return ([1000, 5000, 10000] as const).map((durationMs) => {
-    let start = frames[0]?.tMs ?? 0; let score = -Infinity;
-    for (const candidate of frames) {
-      const end = candidate.tMs + durationMs;
-      const current = frames.filter((frame) => frame.tMs >= candidate.tMs && frame.tMs <= end)
-        .reduce((sum, frame) => sum + frame.applicationUpdateMs + Math.max(0, (frame.frameMs ?? 0) - 16.67), 0);
-      if (current > score) { score = current; start = candidate.tMs; }
-    }
+    const { startIndex, endIndex } = findWorstFrameWindow(frames, durationMs);
+    const selected = frames.slice(startIndex, endIndex);
+    const start = selected[0]?.tMs ?? frames[0]?.tMs ?? 0;
     const end = start + durationMs;
-    const selected = frames.filter((frame) => frame.tMs >= start && frame.tMs <= end);
     const windowEvents = events.filter((event) => event.tMs >= start && event.tMs <= end).slice(-100);
     return {
       durationMs, startMs: r1(start), endMs: r1(end),
       frame: { sampleCount: selected.length, frameMs: buildNumericStats(selected.flatMap((frame) => frame.frameMs === null ? [] : [frame.frameMs])), jankFramesOver50Ms: selected.filter((frame) => (frame.frameMs ?? 0) >= 50).length },
       simulation: { simulationUpdateMs: buildNumericStats(selected.map((frame) => frame.simulationUpdateMs)), applicationUpdateMs: buildNumericStats(selected.map((frame) => frame.applicationUpdateMs)) },
-      scene: [...timeline].reverse().find((entry) => entry.tMs <= end) ?? null,
+      scene: latestTimelineAtOrBefore(timeline, end),
       queuePeaks: { routePlanning: Math.max(0, ...selected.map((frame) => frame.routeQueueDepth)), routeReplanning: Math.max(0, ...selected.map((frame) => frame.replanQueueDepth)) },
-      topPhases: phases.filter((item) => overlaps(item, start, end)).sort((a, b) => number(b.durationMs) - number(a.durationMs)).slice(0, 10),
+      topPhases: phases.filter((item) => overlaps(item as Record<string, unknown>, start, end)).sort((a, b) => number((b as Record<string, unknown>).durationMs) - number((a as Record<string, unknown>).durationMs)).slice(0, 10).map((item) => ({ ...(item as Record<string, unknown>) })),
       topOperations: operations.filter((item) => overlaps(item, start, end)).sort((a, b) => number(b.durationMs) - number(a.durationMs)).slice(0, 10),
       events: windowEvents, userMarkers: windowEvents.filter((event) => event.type === 'user.marker'),
       semanticViolations: windowEvents.filter((event) => event.type === 'semantic.violation'),
     };
   });
+}
+
+function findWorstFrameWindow(frames: PerformanceTraceFrameV6[], durationMs: number): { startIndex: number; endIndex: number } {
+  if (frames.length === 0) return { startIndex: 0, endIndex: 0 };
+  let endIndex = 0;
+  let score = 0;
+  let bestScore = -Infinity;
+  let bestStart = 0;
+  let bestEnd = 0;
+  for (let startIndex = 0; startIndex < frames.length; startIndex += 1) {
+    const endMs = frames[startIndex].tMs + durationMs;
+    while (endIndex < frames.length && frames[endIndex].tMs <= endMs) {
+      score += framePressure(frames[endIndex]);
+      endIndex += 1;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestStart = startIndex;
+      bestEnd = endIndex;
+    }
+    score -= framePressure(frames[startIndex]);
+    if (endIndex < startIndex + 1) endIndex = startIndex + 1;
+  }
+  return { startIndex: bestStart, endIndex: bestEnd };
+}
+
+function framePressure(frame: PerformanceTraceFrameV6): number {
+  return frame.applicationUpdateMs + Math.max(0, (frame.frameMs ?? 0) - 16.67);
+}
+
+function latestTimelineAtOrBefore(timeline: SceneTimelineEntryV6[], tMs: number): SceneTimelineEntryV6 | null {
+  for (let index = timeline.length - 1; index >= 0; index -= 1) {
+    const entry = timeline[index];
+    if (entry.tMs <= tMs) return entry;
+  }
+  return null;
 }
 
 export function emptyQueue(): MutableQueueV6 {
