@@ -34,6 +34,8 @@ import { evaluateVisualSignal } from './VisualSignal';
 export { getPerceptionDiagnostics } from './PerceptionDiagnostics';
 
 const REAR_SECTOR_START_DEGREES = 135;
+const BACKGROUND_INITIAL_PHASE_STEP_SECONDS = 1 / 60;
+const BACKGROUND_INITIAL_PHASE_MAX_SECONDS = 0.1;
 
 interface DueAttentionChecks extends Record<AttentionZone, boolean> {
   rear: boolean;
@@ -62,8 +64,13 @@ export function tickAllUnitPerception(state: SimulationState, deltaSeconds: numb
     diagnostics.lastObserverId = selected?.id ?? null;
   }
 
+  let backgroundPhaseSlot = 0;
   for (const unit of state.units) {
     if (!isUnitCombatCapable(unit)) continue;
+    if (unit.id !== selected?.id) {
+      initializeBackgroundAttentionPhase(unit, backgroundPhaseSlot);
+      backgroundPhaseSlot += 1;
+    }
     tickUnitPerception(state, unit, deltaSeconds, unit.id === selected?.id ? diagnostics : null);
   }
 
@@ -194,6 +201,23 @@ export function getBestPerceptionContact(unit: UnitModel): PerceptionContactMemo
     || right.confidence - left.confidence
     || right.lastUpdatedSeconds - left.lastUpdatedSeconds
   ))[0] ?? null;
+}
+
+function initializeBackgroundAttentionPhase(unit: UnitModel, phaseSlot: number): void {
+  const runtime = unit.attentionRuntime;
+  if (
+    runtime.nextFocusCheckSeconds !== 0
+    || runtime.nextDirectCheckSeconds !== 0
+    || runtime.nextPeripheralCheckSeconds !== 0
+  ) return;
+  const phaseSeconds = Math.min(
+    BACKGROUND_INITIAL_PHASE_MAX_SECONDS,
+    (phaseSlot + 1) * BACKGROUND_INITIAL_PHASE_STEP_SECONDS,
+  );
+  runtime.nextFocusCheckSeconds = phaseSeconds;
+  runtime.nextDirectCheckSeconds = phaseSeconds;
+  runtime.nextPeripheralCheckSeconds = phaseSeconds;
+  runtime.nextRearCheckSeconds = Math.max(runtime.nextRearCheckSeconds, phaseSeconds);
 }
 
 function processSoundEvents(
