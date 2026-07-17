@@ -110,6 +110,10 @@ export function getPerformancePhaseContextualEvents(): PerformancePhaseEventDiag
   }));
 }
 
+export function getCurrentPerformancePhaseContext(): PerformancePhaseContext | null {
+  return activeContext ? { ...activeContext } : null;
+}
+
 export function resetPerformancePhaseRuntimeDiagnosticsForTests(): void {
   accumulators.clear();
   contextualEvents.length = 0;
