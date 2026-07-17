@@ -158,11 +158,15 @@ export class PixiTacticalBoardApp {
   }
 
   private readonly tick = (ticker: Ticker): void => {
+    let simulationUpdateMs = 0;
     if (!this.getPaused()) {
+      const simulationStartedAt = performance.now();
       measurePerformancePhase('ticker.simulation', () => {
         tickSimulation(this.state, ticker.elapsedMS / 1000);
       });
+      simulationUpdateMs = performance.now() - simulationStartedAt;
     }
+    this.performanceMonitor.recordSimulationUpdate(simulationUpdateMs);
     measurePerformancePhase('ticker.render-frame', () => {
       this.renderFrame();
     });

@@ -4,9 +4,6 @@ import path from 'node:path';
 
 interface MovementDiagnostics {
   worldRasterBuilds: number;
-  ownMovementLocalUpdates: number;
-  safePositionLocalScans: number;
-  safePositionCellsScanned: number;
   directionalBasisBuilds: number;
   workerThreatRelativeGeometryBuilds: number;
   workerDirectionalFieldBuilds: number;
@@ -30,8 +27,6 @@ interface MovementDiagnostics {
   maxWorkerComputeMs: number;
   lastMainThreadApplyMs: number;
   maxMainThreadApplyMs: number;
-  lastLocalUpdateMs: number;
-  maxLocalUpdateMs: number;
   lastRequestedRasterKey: string;
   lastAppliedRasterKey: string;
   lastRequestedWorldKey: string;
@@ -48,15 +43,6 @@ interface MovementDiagnostics {
   lastWorkerError: string | null;
 }
 
-interface SafePositionSnapshot {
-  position: { x: number; y: number };
-  score: number;
-  danger: number;
-  expectedProtection: number;
-  expectedProtectionAgainstThreat: number;
-  protectedAgainstThreatId: string | null;
-}
-
 interface MovementSnapshot {
   scenario: string | null;
   simulationTimeSeconds: number;
@@ -71,9 +57,6 @@ interface MovementSnapshot {
   hostileMoving: boolean;
   movingUnitCount: number;
   wallX: number | null;
-  bestSafePosition: SafePositionSnapshot | null;
-  protectedAgainstThreatId: string | null;
-  markerUpdateCount: number;
   lastRequestedWorldKey: string;
   lastAppliedWorldKey: string;
   lastRequestedCanonicalThreatKey: string;
@@ -201,7 +184,6 @@ const LONG_TASK_THRESHOLD_MS = 100;
 const SCENE_P95_LIMIT_MS = 10;
 const SCENE_MAX_LIMIT_MS = 50;
 const RASTER_APPLY_LIMIT_MS = 5;
-const LOCAL_UPDATE_LIMIT_MS = 10;
 const WORKER_RESPONSE_LIMIT_MS = 5;
 const APPLICATION_SCRIPT_LIMIT_MS = 50;
 const scenarioEvidence: ScenarioEvidence[] = [];
@@ -272,10 +254,7 @@ test('selected unit movement preserves world-space threat memory and performs lo
   }
   expect(delta(afterMovement, beforeMovement, 'workerAwarenessRescores')).toBe(0);
   expect(delta(afterMovement, beforeMovement, 'directionalBasisBuilds')).toBe(0);
-  expect(afterMovement.ownMovementLocalUpdates).toBeGreaterThan(beforeMovement.ownMovementLocalUpdates);
-  expect(afterMovement.safePositionLocalScans).toBeGreaterThan(beforeMovement.safePositionLocalScans);
   expect(afterMovement.maxPendingQueueDepth).toBeLessThanOrEqual(1);
-  expect(afterMovement.maxLocalUpdateMs).toBeLessThanOrEqual(LOCAL_UPDATE_LIMIT_MS);
   expect(afterMovement.lastWorkerError).toBeNull();
 
   scenarioEvidence.push({
@@ -293,11 +272,7 @@ test('selected unit movement preserves world-space threat memory and performs lo
       workerAwarenessRescoreDelta: delta(afterMovement, beforeMovement, 'workerAwarenessRescores'),
       worldRasterBuildDelta: delta(afterMovement, beforeMovement, 'worldRasterBuilds'),
       mainThreadRasterSwapDelta: delta(afterMovement, beforeMovement, 'mainThreadRasterSwaps'),
-      ownMovementLocalUpdateDelta: delta(afterMovement, beforeMovement, 'ownMovementLocalUpdates'),
-      safePositionLocalScanDelta: delta(afterMovement, beforeMovement, 'safePositionLocalScans'),
-      markerUpdateDelta: after.markerUpdateCount - before.markerUpdateCount,
       rasterDigestUnchanged: after.lastAppliedRasterDigest === before.lastAppliedRasterDigest,
-      maxLocalUpdateMs: afterMovement.maxLocalUpdateMs,
     },
   });
   await stopScenario(page);
@@ -401,7 +376,6 @@ test('six moving units remain bounded and apply the final canonical snapshot', a
   const after = await snapshot(page);
   const movement = requireMovement(after);
   expect(movement.workerJobsStarted).toBeGreaterThan(beforeMovement.workerJobsStarted);
-  expect(movement.ownMovementLocalUpdates).toBeGreaterThan(beforeMovement.ownMovementLocalUpdates);
   expect(movement.maxPendingQueueDepth).toBeLessThanOrEqual(1);
   expect(movement.pendingQueueDepth).toBe(0);
   expect(movement.workerInFlight).toBe(false);
@@ -416,7 +390,6 @@ test('six moving units remain bounded and apply the final canonical snapshot', a
       movingUnitCount: before.movingUnitCount,
       workerJobsStartedDelta: delta(movement, beforeMovement, 'workerJobsStarted'),
       worldRasterBuildDelta: delta(movement, beforeMovement, 'worldRasterBuilds'),
-      ownMovementLocalUpdateDelta: delta(movement, beforeMovement, 'ownMovementLocalUpdates'),
       maxPendingQueueDepth: movement.maxPendingQueueDepth,
       finalWorldKeyApplied: after.lastAppliedWorldKey === after.lastRequestedWorldKey,
       finalCanonicalKeyApplied: after.lastAppliedCanonicalThreatKey === after.lastRequestedCanonicalThreatKey,
@@ -488,7 +461,7 @@ test('hidden hostile objective movement cannot change the canonical worker field
   await stopScenario(page);
 });
 
-test('wall crossing proves the applied async winner flips to the protected side', async ({ page }) => {
+test('wall crossing applies the final canonical async field after threat-side change', async ({ page }) => {
   await openHarness(page);
   await startScenarioPaused(page, 'wall-crossing');
   await waitForWorkerSettled(page);
@@ -496,12 +469,9 @@ test('wall crossing proves the applied async winner flips to the protected side'
   const beforeMovement = requireMovement(before);
   const wallX = requireWallX(before);
   const beforeThreat = requireSubjective(before);
-  const beforeWinner = requireWinner(before);
   expect(before.hostileMoving).toBe(true);
   expect(before.subjectiveThreatVisibleNow).toBe(true);
   expect(beforeThreat.x).toBeGreaterThan(wallX + 2);
-  expect(beforeWinner.position.x).toBeLessThan(wallX);
-  expect(before.protectedAgainstThreatId).not.toBeNull();
   assertFinalApplied(before, beforeMovement);
 
   await resumeSimulation(page);
@@ -520,14 +490,9 @@ test('wall crossing proves the applied async winner flips to the protected side'
   const after = await snapshot(page);
   const movement = requireMovement(after);
   const afterThreat = requireSubjective(after);
-  const afterWinner = requireWinner(after);
 
   expect(after.subjectiveThreatVisibleNow).toBe(true);
   expect(afterThreat.x).toBeLessThan(wallX - 2);
-  expect(afterWinner.position.x).toBeGreaterThan(wallX);
-  expect(after.bestSafePosition).not.toEqual(before.bestSafePosition);
-  expect(after.protectedAgainstThreatId).toBe(before.protectedAgainstThreatId);
-  expect(after.protectedAgainstThreatId).not.toBeNull();
   expect(after.lastAppliedRasterDigest).not.toBe(before.lastAppliedRasterDigest);
   expect(after.lastAppliedFieldIdentity).not.toBe(before.lastAppliedFieldIdentity);
   expect(movement.maxPendingQueueDepth).toBeLessThanOrEqual(1);
@@ -541,11 +506,7 @@ test('wall crossing proves the applied async winner flips to the protected side'
     counters: {
       wallX,
       initialThreatSide: 'east',
-      initialWinnerSide: 'west-protected',
       finalThreatSide: 'west',
-      finalWinnerSide: 'east-protected',
-      winnerChanged: JSON.stringify(after.bestSafePosition) !== JSON.stringify(before.bestSafePosition),
-      protectedAgainstThreatId: after.protectedAgainstThreatId,
       staleDropped: movement.workerResultsStaleDropped,
       maxPendingQueueDepth: movement.maxPendingQueueDepth,
       finalWorldKeyApplied: after.lastAppliedWorldKey === after.lastRequestedWorldKey,
@@ -566,7 +527,6 @@ test('wall crossing proves the applied async winner flips to the protected side'
   expect(reportMovement).toBeTruthy();
   expect(reportMovement?.maxPendingQueueDepth).toBeLessThanOrEqual(1);
   expect(reportMovement?.maxMainThreadApplyMs).toBeLessThanOrEqual(RASTER_APPLY_LIMIT_MS);
-  expect(reportMovement?.maxLocalUpdateMs).toBeLessThanOrEqual(LOCAL_UPDATE_LIMIT_MS);
   expect(reportMovement?.lastAppliedWorldKey).toBe(reportMovement?.lastRequestedWorldKey);
   expect(reportMovement?.lastAppliedCanonicalThreatKey).toBe(reportMovement?.lastRequestedCanonicalThreatKey);
   expect(reportMovement?.lastAppliedJobId).toBe(reportMovement?.lastCompletedJobId);
@@ -729,12 +689,10 @@ function buildLongTaskAttribution(
     durationMs: sample.sceneUpdateMs,
   }));
   const workerResponseScripts = loafs.flatMap((frame) => frame.scripts.filter(isWorkerResponseScript).map((script) => script.durationMs));
-  const markerScripts = loafs.flatMap((frame) => frame.scripts.filter((script) => /updateMarkers|drawSafePositionMarkers/i.test(scriptIdentity(script))).map((script) => script.durationMs));
   const applicationScripts = loafs.flatMap((frame) => frame.scripts.filter(isApplicationScript).map((script) => script.durationMs));
   const dangerScripts = loafs.flatMap((frame) => frame.scripts.filter(isDangerScript).map((script) => script.durationMs));
   const conservativeWorkerResponseMax = Math.max(
     stats(workerResponseScripts).max,
-    movement.maxMainThreadApplyMs + movement.maxLocalUpdateMs,
   );
   const scenarioSetup = stats(measures.filter((measure) => measure.name.endsWith('.scenario-setup')).map((measure) => measure.durationMs));
   const scenarioStop = stats(measures.filter((measure) => measure.name.endsWith('.scenario-stop')).map((measure) => measure.durationMs));
@@ -746,8 +704,8 @@ function buildLongTaskAttribution(
       ...stats(workerResponseScripts.length > 0 ? workerResponseScripts : [conservativeWorkerResponseMax]),
       max: conservativeWorkerResponseMax,
       source: workerResponseScripts.length > 0
-        ? 'Long Animation Frame script attribution plus conservative raster/local aggregate'
-        : 'conservative raster-apply plus renderer-local aggregate; no matching LoAF script was emitted',
+        ? 'Long Animation Frame script attribution plus conservative raster-apply bound'
+        : 'conservative raster-apply bound; no matching LoAF script was emitted',
     },
     typedArrayApplyAndBaseTextureUpdate: {
       count: movement.mainThreadRasterSwaps,
@@ -755,20 +713,6 @@ function buildLongTaskAttribution(
       max: movement.maxMainThreadApplyMs,
       p95: movement.maxMainThreadApplyMs,
       source: 'production AwarenessMovementDiagnostics applyRaster timing',
-    },
-    rendererLocalSafePositionAndRouteEvaluation: {
-      count: movement.safePositionLocalScans,
-      last: movement.lastLocalUpdateMs,
-      max: movement.maxLocalUpdateMs,
-      p95: movement.maxLocalUpdateMs,
-      source: 'production AwarenessMovementDiagnostics updateLocalDerived timing',
-    },
-    markerRedraw: {
-      ...stats(markerScripts),
-      count: Math.max(stats(markerScripts).count, finalSnapshot.markerUpdateCount),
-      source: markerScripts.length > 0
-        ? 'Long Animation Frame script attribution'
-        : 'marker count is production diagnostics; duration remains included in sceneUpdate',
     },
     wallFixtureSetupAndNavigationGrid: { ...scenarioSetup, source: 'browser User Timing around production startScenario fixture setup' },
     scenarioStop: { ...scenarioStop, source: 'browser User Timing around production stopScenario' },
@@ -856,7 +800,6 @@ function buildLongTaskAttribution(
   if (sceneUpdate.p95 > SCENE_P95_LIMIT_MS) blockingFailures.push(`sceneUpdate p95 ${sceneUpdate.p95} > ${SCENE_P95_LIMIT_MS}`);
   if (sceneUpdate.max > SCENE_MAX_LIMIT_MS) blockingFailures.push(`sceneUpdate max ${sceneUpdate.max} > ${SCENE_MAX_LIMIT_MS}`);
   if (movement.maxMainThreadApplyMs > RASTER_APPLY_LIMIT_MS) blockingFailures.push(`raster apply max ${movement.maxMainThreadApplyMs} > ${RASTER_APPLY_LIMIT_MS}`);
-  if (movement.maxLocalUpdateMs > LOCAL_UPDATE_LIMIT_MS) blockingFailures.push(`renderer-local update max ${movement.maxLocalUpdateMs} > ${LOCAL_UPDATE_LIMIT_MS}`);
   if (conservativeWorkerResponseMax > WORKER_RESPONSE_LIMIT_MS) blockingFailures.push(`worker-response main-thread handling max ${conservativeWorkerResponseMax} > ${WORKER_RESPONSE_LIMIT_MS}`);
   if (movement.maxPendingQueueDepth > 1) blockingFailures.push(`pending queue depth ${movement.maxPendingQueueDepth} > 1`);
   if (movement.lastRequestedWorldKey !== movement.lastAppliedWorldKey) blockingFailures.push('requested/applied world keys differ');
@@ -883,8 +826,8 @@ function buildLongTaskAttribution(
 }
 
 function assertBuildIdentity(report: PerformanceReport): void {
-  expect(report.version).toBe('performance-report-v4');
-  expect(report.build?.performanceContractVersion).toBe('performance-report-v4');
+  expect(report.version).toBe('performance-report-v5');
+  expect(report.build?.performanceContractVersion).toBe('performance-report-v5');
   expect(report.build?.branch).toBe(EXPECTED_BRANCH);
   if (EXPECTED_SHA) expect(report.build?.commitSha).toBe(EXPECTED_SHA);
   expect(report.build?.buildId).toBeTruthy();
@@ -965,11 +908,6 @@ function requireMovement(snapshotValue: MovementSnapshot): MovementDiagnostics {
 function requireSubjective(snapshotValue: MovementSnapshot): { x: number; y: number } {
   if (!snapshotValue.subjectiveThreatPosition) throw new Error('Subjective threat position is unavailable.');
   return snapshotValue.subjectiveThreatPosition;
-}
-
-function requireWinner(snapshotValue: MovementSnapshot): SafePositionSnapshot {
-  if (!snapshotValue.bestSafePosition) throw new Error('Renderer-local safe winner is unavailable.');
-  return snapshotValue.bestSafePosition;
 }
 
 function requireWallX(snapshotValue: MovementSnapshot): number {

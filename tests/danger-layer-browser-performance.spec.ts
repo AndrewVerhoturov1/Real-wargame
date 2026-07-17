@@ -332,8 +332,8 @@ function buildDangerEvidence(
 }
 
 function assertBuildIdentity(report: PerformanceReport): void {
-  expect(report.version).toBe('performance-report-v4');
-  expect(report.build?.performanceContractVersion).toBe('performance-report-v4');
+  expect(report.version).toBe('performance-report-v5');
+  expect(report.build?.performanceContractVersion).toBe('performance-report-v5');
   expect(report.build?.buildId).toBeTruthy();
   expect(report.build?.generatedAt).toBeTruthy();
   if (EXPECTED_BRANCH) expect(report.build?.branch).toBe(EXPECTED_BRANCH);

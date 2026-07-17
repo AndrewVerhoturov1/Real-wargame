@@ -60,7 +60,6 @@ on:
       - 'scripts/visibility_probe_cache_smoke.*'
       - 'scripts/perception_performance_smoke.*'
       - 'scripts/live_navigation_replan_smoke.ts'
-      - 'scripts/combat_safe_position_winner_smoke.ts'
       - 'scripts/reverse_slope_comparative_fixture.ts'
       - 'scripts/reverse_slope_comparative_smoke.ts'
       - 'scripts/reverse_slope_comparative_smoke.mjs'

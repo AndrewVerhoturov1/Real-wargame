@@ -25,8 +25,6 @@ const TEST_LAB_NUMERIC_OPTIONS: readonly NumericOption[] = [
   { value: 'bestCoverQuality', labelRu: 'Качество лучшего укрытия', labelEn: 'Best cover quality' },
   { value: 'currentPositionDanger', labelRu: 'Опасность текущей позиции', labelEn: 'Current position danger' },
   { value: 'currentExpectedProtection', labelRu: 'Ожидаемая защита позиции', labelEn: 'Current expected protection' },
-  { value: 'bestSafePositionScore', labelRu: 'Оценка лучшей безопасной позиции', labelEn: 'Best safe position score' },
-  { value: 'distanceToBestSafePosition', labelRu: 'Расстояние до безопасной позиции', labelEn: 'Distance to best safe position' },
   { value: 'routeDanger', labelRu: 'Опасность текущего маршрута', labelEn: 'Current route danger' },
   { value: 'threatConfidence', labelRu: 'Уверенность в главной угрозе', labelEn: 'Main threat confidence' },
 ];

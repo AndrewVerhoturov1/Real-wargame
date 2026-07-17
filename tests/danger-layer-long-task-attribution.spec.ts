@@ -18,15 +18,7 @@ interface MovementDiagnostics {
   lastAppliedFieldIdentity: string;
   lastAppliedRasterDigest: string;
   maxMainThreadApplyMs: number;
-  lastLocalUpdateMs: number;
-  maxLocalUpdateMs: number;
-  rawMaxLocalUpdateMs?: number;
   lastWorkerError: string | null;
-}
-
-interface SafePositionSnapshot {
-  position: { x: number; y: number };
-  protectedAgainstThreatId: string | null;
 }
 
 interface MovementSnapshot {
@@ -35,8 +27,6 @@ interface MovementSnapshot {
   subjectiveThreatPosition: { x: number; y: number } | null;
   subjectiveThreatVisibleNow: boolean | null;
   wallX: number | null;
-  bestSafePosition: SafePositionSnapshot | null;
-  protectedAgainstThreatId: string | null;
   lastRequestedWorldKey: string;
   lastAppliedWorldKey: string;
   lastRequestedCanonicalThreatKey: string;
@@ -101,11 +91,8 @@ test('captures raw wall-crossing long-task and long-animation-frame attribution'
   const beforeMovement = requireMovement(before);
   const wallX = requireWallX(before);
   const beforeThreat = requireSubjective(before);
-  const beforeWinner = requireWinner(before);
   expect(beforeThreat.x).toBeGreaterThan(wallX + 2);
-  expect(beforeWinner.position.x).toBeLessThan(wallX);
   expect(before.subjectiveThreatVisibleNow).toBe(true);
-  expect(before.protectedAgainstThreatId).not.toBeNull();
   assertFinalApplied(before, beforeMovement);
 
   const resumeStartedAt = Date.now();
@@ -139,29 +126,23 @@ test('captures raw wall-crossing long-task and long-animation-frame attribution'
   const after = await snapshot(page);
   const afterMovement = requireMovement(after);
   const afterThreat = requireSubjective(after);
-  const afterWinner = requireWinner(after);
   expect(after.subjectiveThreatVisibleNow).toBe(true);
   expect(afterThreat.x).toBeLessThan(wallX - 2);
-  expect(afterWinner.position.x).toBeGreaterThan(wallX);
-  expect(after.bestSafePosition).not.toEqual(before.bestSafePosition);
-  expect(after.protectedAgainstThreatId).toBe(before.protectedAgainstThreatId);
   expect(after.lastAppliedFieldIdentity).not.toBe(before.lastAppliedFieldIdentity);
   assertFinalApplied(after, afterMovement);
   expect(afterMovement.maxPendingQueueDepth).toBeLessThanOrEqual(1);
   expect(afterMovement.maxMainThreadApplyMs).toBeLessThanOrEqual(5);
-  expect(afterMovement.lastLocalUpdateMs).toBeLessThanOrEqual(10);
   expect(afterMovement.lastWorkerError).toBeNull();
 
   const downloaded = await downloadReport(page);
   const report = downloaded.report;
-  expect(report.version).toBe('performance-report-v4');
-  expect(report.build?.performanceContractVersion).toBe('performance-report-v4');
+  expect(report.version).toBe('performance-report-v5');
+  expect(report.build?.performanceContractVersion).toBe('performance-report-v5');
   expect(report.build?.branch).toBe(EXPECTED_BRANCH);
   if (EXPECTED_SHA) expect(report.build?.commitSha).toBe(EXPECTED_SHA);
   expect(report.build?.buildId).toBeTruthy();
   expect(report.longTasks.length).toBeGreaterThan(0);
   expect(report.browser?.performanceObserverSupportedEntryTypes).toBeTruthy();
-  expect(report.computation?.awarenessMovement?.maxLocalUpdateMs).toBeLessThanOrEqual(10);
 
   const output = {
     version: 'danger-layer-long-task-attribution-v1',
@@ -184,8 +165,6 @@ test('captures raw wall-crossing long-task and long-animation-frame attribution'
     globalLongTasks: report.longTasks.length,
     longAnimationFrames: report.longAnimationFrames?.length ?? 0,
     performancePhaseMeasures: report.performancePhaseMeasures?.length ?? 0,
-    rawColdLocalUpdateMaxMs: report.computation?.awarenessMovement?.rawMaxLocalUpdateMs ?? null,
-    postWarmupLocalUpdateMaxMs: report.computation?.awarenessMovement?.maxLocalUpdateMs ?? null,
     playwright: output.playwright,
   }, null, 2));
 });
@@ -267,11 +246,6 @@ function requireMovement(value: MovementSnapshot): MovementDiagnostics {
 function requireSubjective(value: MovementSnapshot): { x: number; y: number } {
   if (!value.subjectiveThreatPosition) throw new Error('Subjective threat position is unavailable.');
   return value.subjectiveThreatPosition;
-}
-
-function requireWinner(value: MovementSnapshot): SafePositionSnapshot {
-  if (!value.bestSafePosition) throw new Error('Renderer-local safe winner is unavailable.');
-  return value.bestSafePosition;
 }
 
 function requireWallX(value: MovementSnapshot): number {

@@ -16,7 +16,7 @@ const expectedSha = process.env.DANGER_PERF_EXPECTED_SHA ?? '';
 if (evidence.version !== 'danger-layer-movement-evidence-v3') {
   failures.push(`unexpected movement evidence version: ${evidence.version ?? 'missing'}`);
 }
-if (evidence.build?.performanceContractVersion !== 'performance-report-v4') {
+if (evidence.build?.performanceContractVersion !== 'performance-report-v5') {
   failures.push(`unexpected performance contract: ${evidence.build?.performanceContractVersion ?? 'missing'}`);
 }
 if (!evidence.build?.commitSha) failures.push('movement evidence commit SHA is missing');
@@ -61,7 +61,6 @@ function assertGlobalContract() {
     return;
   }
   if ((final.maxMainThreadApplyMs ?? Infinity) > 5) failures.push(`main-thread raster apply exceeded 5 ms: ${final.maxMainThreadApplyMs}`);
-  if ((final.maxLocalUpdateMs ?? Infinity) > 10) failures.push(`local selected-unit update exceeded 10 ms: ${final.maxLocalUpdateMs}`);
   if ((final.maxPendingQueueDepth ?? Infinity) > 1) failures.push(`pending queue exceeded one: ${final.maxPendingQueueDepth}`);
   if (final.pendingQueueDepth !== 0) failures.push(`final pending queue is not empty: ${final.pendingQueueDepth}`);
   if (final.workerInFlight !== false) failures.push('worker remains in flight at final evidence');
@@ -100,7 +99,6 @@ function assertLongTaskAttribution() {
   if ((phases.simulationAndSceneUpdate ?? Infinity) > 50) failures.push(`simulation/scene phase exceeded 50 ms: ${phases.simulationAndSceneUpdate}`);
   if ((phases.workerResponseMainThreadHandling ?? Infinity) > 5) failures.push(`worker response handling exceeded 5 ms: ${phases.workerResponseMainThreadHandling}`);
   if ((phases.typedArrayApplyAndBaseTextureUpdate ?? Infinity) > 5) failures.push(`typed-array/texture apply exceeded 5 ms: ${phases.typedArrayApplyAndBaseTextureUpdate}`);
-  if ((phases.rendererLocalSafePositionAndRouteEvaluation ?? Infinity) > 10) failures.push(`renderer-local update exceeded 10 ms: ${phases.rendererLocalSafePositionAndRouteEvaluation}`);
   for (const task of attribution.globalLongTasks ?? []) {
     if (!Number.isFinite(task.startMs) || !Number.isFinite(task.durationMs)) failures.push('long task is missing start/duration');
     if (!task.classification || !task.reason) failures.push('long task is missing classification/reason');
@@ -126,8 +124,6 @@ function assertSelectedOnly(selected) {
   ]) {
     if (counters[name] !== 0) failures.push(`selected-only ${name} must equal zero, got ${counters[name]}`);
   }
-  if (!(counters.ownMovementLocalUpdateDelta > 0)) failures.push('selected-only local updates did not increase');
-  if (!(counters.safePositionLocalScanDelta > 0)) failures.push('selected-only safe-position scans did not increase');
   if (counters.rasterDigestUnchanged !== true) failures.push('selected-only applied raster digest changed');
   if (selected.before?.lastRequestedCanonicalThreatKey !== selected.after?.lastRequestedCanonicalThreatKey) {
     failures.push('selected-only canonical threat key changed');
@@ -160,7 +156,6 @@ function assertSixUnits(both) {
   const counters = both.counters ?? {};
   if ((counters.movingUnitCount ?? 0) < 6) failures.push(`six-unit scenario routed only ${counters.movingUnitCount ?? 0} units`);
   if (!(counters.workerJobsStartedDelta > 0)) failures.push('six-unit scenario did not start worker jobs');
-  if (!(counters.ownMovementLocalUpdateDelta > 0)) failures.push('six-unit scenario did not exercise selected-unit local updates');
   if ((counters.maxPendingQueueDepth ?? Infinity) > 1) failures.push(`six-unit pending queue exceeded one: ${counters.maxPendingQueueDepth}`);
   if (counters.finalWorldKeyApplied !== true || counters.finalCanonicalKeyApplied !== true) {
     failures.push('six-unit final requested field was not applied');
@@ -195,23 +190,11 @@ function assertWallCrossing(wall) {
   const wallX = wall.counters?.wallX;
   const beforeThreat = before?.subjectiveThreatPosition;
   const afterThreat = after?.subjectiveThreatPosition;
-  const beforeWinner = before?.bestSafePosition?.position;
-  const afterWinner = after?.bestSafePosition?.position;
-  if (![wallX, beforeThreat?.x, afterThreat?.x, beforeWinner?.x, afterWinner?.x].every(Number.isFinite)) {
-    failures.push('wall-crossing geometry is incomplete');
-    return;
-  }
   if (!(beforeThreat.x > wallX + 2)) failures.push('initial threat is not east of the wall');
-  if (!(beforeWinner.x < wallX)) failures.push('initial renderer-local winner is not west/protected');
   if (!(afterThreat.x < wallX - 2)) failures.push('final threat is not west of the wall');
-  if (!(afterWinner.x > wallX)) failures.push('final renderer-local winner is not east/protected');
   if (before?.subjectiveThreatVisibleNow !== true || after?.subjectiveThreatVisibleNow !== true) {
     failures.push('wall-crossing hostile was not visually tracked on both sides');
   }
-  if (!after?.protectedAgainstThreatId || after.protectedAgainstThreatId !== before?.protectedAgainstThreatId) {
-    failures.push('wall-crossing protectedAgainstThreatId was not preserved');
-  }
-  if (wall.counters?.winnerChanged !== true) failures.push('wall-crossing renderer-local winner did not change');
   if (wall.counters?.finalWorldKeyApplied !== true || wall.counters?.finalCanonicalKeyApplied !== true || wall.counters?.finalJobApplied !== true) {
     failures.push('wall-crossing final applied field does not match requested identities/job');
   }

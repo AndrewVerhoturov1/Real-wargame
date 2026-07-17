@@ -2,9 +2,7 @@ import { clampPercent, type UnitPosture } from '../behavior/BehaviorModel';
 import { findBestDirectFireContact } from '../combat/CombatDecision';
 import { requestFireAction } from '../combat/FireAction';
 import { clearWeaponRuntime } from '../combat/WeaponModel';
-import { generateCoverTacticalCandidates } from '../cover/CoverTacticalCandidates';
 import { distance, type GridPosition } from '../geometry';
-import { buildSoldierAwarenessReport } from '../knowledge/SoldierAwarenessGrid';
 import { clampGridPositionToMap, type TacticalMap } from '../map/MapModel';
 import { createMoveOrder } from '../orders/MoveOrder';
 import { isPlayerCommandOutstanding } from '../orders/PlayerCommand';
@@ -513,8 +511,14 @@ export function buildBlackboardForUnit(
     ? distance(unit.position, threatPosition) * state.map.metersPerCell
     : 9999;
   const underFire = threats.danger > 0 || threats.suppression > 0;
-  const awareness = buildSoldierAwarenessReport(state, unit);
-  const bestSafe = awareness.bestSafePositions[0];
+  const currentExpectedProtection = Math.max(
+    strongest?.expectedProtection ?? 0,
+    threats.strongestKnown?.expectedProtection ?? 0,
+  );
+  const currentThreatConfidence = Math.max(
+    bestContact?.confidence ?? 0,
+    ...unit.tacticalKnowledge.threats.map((threat) => threat.confidence),
+  );
   const command = unit.playerCommand;
   const contactVisible = Boolean(bestContact?.visibleNow);
   const contactKnown = Boolean(bestContact || threats.enemyKnown);
@@ -543,12 +547,10 @@ export function buildBlackboardForUnit(
     threatAngle: strongest?.zone.arcDegrees ?? 0,
     coverProtection: strongest?.coverProtection ?? 0,
     bestCoverQuality: Math.max(0, Math.round(readNumber(runtimeMemory.bestCoverQuality, 0))),
-    currentPositionDanger: awareness.currentPosition.danger,
-    currentExpectedProtection: awareness.currentPosition.expectedProtection,
-    bestSafePositionScore: Math.max(0, Math.round(bestSafe?.score ?? 0)),
-    distanceToBestSafePosition: Math.round((bestSafe?.distanceCells ?? 9999) * state.map.metersPerCell),
-    routeDanger: awareness.routeDanger,
-    threatConfidence: Math.round(bestContact?.confidence ?? awareness.threatConfidence),
+    currentPositionDanger: clampPercent(threats.danger),
+    currentExpectedProtection: clampPercent(currentExpectedProtection),
+    routeDanger: clampPercent(threats.danger),
+    threatConfidence: Math.round(currentThreatConfidence),
     attention_mode: unit.attentionRuntime.mode,
     attention_focus_direction: normalizeDegrees(radiansToDegrees(unit.attentionRuntime.focusDirectionRadians)),
     best_contact_stage: bestContact?.stage ?? 'none',
@@ -648,10 +650,9 @@ function readCurrentRuntimeMemory(unit: UnitModel): AiGraphRunnerBlackboard {
 function createTacticalHost(state: SimulationState, unit: UnitModel): AiGraphTacticalHost {
   return {
     resolveDistanceMeters: (fromKey, toKey, blackboard) => resolveDistanceMeters(state, unit, blackboard, fromKey, toKey),
-    generateCoverCandidates: (request) => {
-      const threats = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
-      return generateCoverTacticalCandidates({ map: state.map, unit, threatPosition: threats.targetPosition, orderTarget: unit.order?.target ?? null, searchRadiusMeters: request.searchRadiusMeters, maxCandidates: request.maxCandidates, maxCalculationMs: request.maxCalculationMs });
-    },
+    // Legacy safe-position/cover-candidate generation is intentionally absent.
+    // CreateCoverCandidates therefore receives the existing host_unavailable result
+    // without synchronous pathfinding or full-map tactical work.
     tacticalCheck: (checkKind, blackboard) => evaluateTacticalCheck(state, unit, blackboard, checkKind),
   };
 }

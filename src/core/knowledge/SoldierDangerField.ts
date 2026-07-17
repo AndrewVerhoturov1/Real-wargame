@@ -27,6 +27,7 @@ const FIELD_CACHE_LIMIT = 12;
 const DIRECTIONAL_UNCERTAINTY_ARC_DEGREES_PER_METER = 1;
 const UNCERTAINTY_SCORE_PER_METER = 0.5;
 const THREAT_ORIGIN_HEIGHT_METERS = 1.4;
+const THREAT_POSITION_QUANTUM_CELLS = 0.25;
 
 export interface SoldierDangerThreat {
   readonly id: string;
@@ -411,8 +412,8 @@ function buildThreatGeometrySignature(threat: SoldierDangerThreat): string {
   return [
     threat.id,
     threat.mode,
-    quantize(threat.x, 0.05),
-    quantize(threat.y, 0.05),
+    quantize(threat.x, THREAT_POSITION_QUANTUM_CELLS),
+    quantize(threat.y, THREAT_POSITION_QUANTUM_CELLS),
     quantize(threat.radiusCells, 0.1),
     quantize(threat.widthCells, 0.1),
     quantize(threat.heightCells, 0.1),

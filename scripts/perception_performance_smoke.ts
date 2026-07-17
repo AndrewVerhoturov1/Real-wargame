@@ -105,12 +105,16 @@ for (let tick = 0; tick < 30; tick += 1) {
   tickAllUnitPerception(stagedState, 0.1);
 }
 const staging = getPerceptionGeometryPreparationDiagnostics(stagedState);
-assert.equal(staging.maxPreparationsPerStep, 1, 'one simulation step must prepare at most one cold perception geometry');
+assert.ok(
+  staging.maxPreparationsPerStep > 0 && staging.maxPreparationsPerStep <= 4,
+  'one simulation step must execute at most four bounded point LOS probes',
+);
 assert.ok(staging.deferredCount > 0, 'simultaneous cold observers must be deferred instead of blocking one tick');
 assert.ok(
   staging.preparationCount >= stagedObservers.length,
-  'all deferred observer geometries must become eligible on later attention cadences',
+  'all deferred observer probes must become eligible on later attention cadences',
 );
+assert.ok(staging.cacheHitCount > 0, 'stable observer-target pairs must reuse cached point LOS results');
 for (const unit of stagedState.units) {
   assert.ok(
     unit.perceptionKnowledge.contacts.length > 0,
@@ -196,4 +200,4 @@ assert.ok(
   'ambient targets must still receive remaining perception opportunities',
 );
 
-console.log(`Perception performance smoke passed: ${diagnostics.losCalculationCount} LOS calculations for ${diagnostics.candidateCount} candidates across 600 ticks; ${staging.preparationCount} cold geometries staged fairly with max ${staging.maxPreparationsPerStep} per step; tracked hostile movement stayed current across mixed target heights.`);
+console.log(`Perception performance smoke passed: ${diagnostics.losCalculationCount} LOS calculations for ${diagnostics.candidateCount} candidates across 600 ticks; ${staging.preparationCount} bounded point probes with ${staging.cacheHitCount} cache hits and max ${staging.maxPreparationsPerStep} probes per step; tracked hostile movement stayed current across mixed target heights.`);

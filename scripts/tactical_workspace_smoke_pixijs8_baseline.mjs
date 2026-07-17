@@ -321,7 +321,7 @@ expectIncludes('src/ui/TacticalWorkspace.ts', [
   "type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory'",
   'Симуляция', 'Редактирование', 'Слой опасности', 'Слой скрытности', 'Обзор и память',
   'Приказать двигаться сюда', 'Диагностика ИИ (без изменений)', 'Рассчитать и выполнить',
-  'workspace-file-menu', 'updateInfoPanelLive', 'stableDecision',
+  'workspace-file-menu', 'updateInfoPanelLive', 'stableDecision', 'buildWorkspaceUpdateKey', 'lastWorkspaceUpdateKey',
   'data-action="turn-unit"', 'Повернуть',
   'data-action="unit-attention-mode"', 'Автоматически', 'Наблюдение', 'Поиск', 'Стрельба',
   'setAttentionMode', 'clearAttentionOverride',
@@ -385,7 +385,7 @@ expectIncludes('src/ui/WorkspaceTooltipGuard.ts', [
 ]);
 
 expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
-  'buildAwarenessField', 'buildBestSafePositions', 'buildRouteKey',
+  'buildAwarenessField', 'buildRouteKey',
   'getDirectionalTacticalField', 'readDirectionalTacticalCell',
   'buildAwarenessKnowledgeKey', 'KNOWLEDGE_CONFIDENCE_BUCKET', 'KNOWLEDGE_UNCERTAINTY_BUCKET',
   'evaluateAwarenessFieldCell', 'getAwarenessStaticField', 'evaluateRouteDangerFromField',
@@ -418,13 +418,13 @@ expectIncludes('src/core/terrain/DirectionalTacticalField.ts', [
 ]);
 
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
-  'buildAwarenessRenderKey', 'buildAwarenessWorldKey', 'buildAwarenessMarkerKey', 'lastMarkerInputKey',
+  'buildAwarenessRenderKey', 'buildAwarenessWorldKey',
   'latestRequestedWorldKey', 'workerJobsCoalesced', 'workerResultsStaleDropped',
-  'lastRasterKey', 'lastMarkerKey', 'markerUpdateCount',
+  'lastRasterKey',
   'new Worker', 'AwarenessWorldWorker.ts', 'dangerPixels', 'stealthPixels',
   'Sprite', 'Texture', 'BufferImageSource', "scaleMode: 'nearest'", 'createAwarenessTexture', 'drawAwarenessRaster',
   "representation: 'raster-sprite'", 'getDiagnostics()', '__realWargameAwarenessDebug',
-  'lastRequestedCanonicalThreatKey', 'rendererLocalBestWinner', 'lastAppliedFieldIdentity',
+  'lastRequestedCanonicalThreatKey', 'lastAppliedFieldIdentity',
 ]);
 expectExcludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
   'buildSoldierAwarenessReport',
@@ -445,7 +445,7 @@ expectIncludes('src/core/debug/PerformanceMonitor.ts', [
   'PERFORMANCE_CONTRACT_VERSION', 'getRealWargameBuildIdentity', 'awarenessMovement',
 ]);
 expectIncludes('src/core/debug/BuildIdentity.ts', [
-  "PERFORMANCE_CONTRACT_VERSION = 'performance-report-v4'", 'commitSha', 'buildId', 'branch',
+  "PERFORMANCE_CONTRACT_VERSION = 'performance-report-v5'", 'commitSha', 'buildId', 'branch',
 ]);
 
 expectIncludes('src/core/editor/GameEditorPlacement.ts', [

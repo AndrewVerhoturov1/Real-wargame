@@ -6,7 +6,6 @@ import { getCombatRuntime } from '../core/combat/CombatDamage';
 import { findBestDirectFireContact } from '../core/combat/CombatDecision';
 import { getFireAction, requestFireAction } from '../core/combat/FireAction';
 import { getWeaponRuntime } from '../core/combat/WeaponModel';
-import { buildSoldierAwarenessReport } from '../core/knowledge/SoldierAwarenessGrid';
 import { clearAttentionOverride, setAttentionMode, setSearchSector } from '../core/perception/AttentionController';
 import { applyAttentionProfileToUnit } from '../core/perception/AttentionProfiles';
 import { getAttentionProfileRegistry, subscribeAttentionProfileRegistry } from '../core/perception/AttentionProfileStorage';
@@ -14,6 +13,8 @@ import { degreesToRadians, type AttentionMode } from '../core/perception/Attenti
 import { getSelectedSimulationCover, getSimulationCovers, hoverSimulationCoverAtPosition } from '../core/knowledge/SimulationCoverSelection';
 import { buildUnitKnowledgeReport } from '../core/knowledge/UnitKnowledge';
 import { getCell, resolveObjectCoverProperties } from '../core/map/MapModel';
+import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
+import { evaluateThreatsAtPosition } from '../core/pressure/ThreatEvaluation';
 import { getNavigationProfileRegistry, subscribeNavigationProfileRegistry } from '../core/navigation/NavigationProfileStorage';
 import { isPlayerCommandOutstanding, updatePlayerCommandNavigationProfile } from '../core/orders/PlayerCommand';
 import { getSelectedUnit, issueMoveOrderToSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
@@ -62,6 +63,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   let tab: SimulationTab = 'info';
   let collapsed = false;
   let lastSidebarKey = '';
+  let lastWorkspaceUpdateKey = '';
   const stableDecisions = new Map<string, StableDecision>();
 
   const shell = document.createElement('div');
@@ -325,6 +327,9 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   }
 
   function update(force = false): void {
+    const nextKey = buildWorkspaceUpdateKey(state, mode, tab, collapsed);
+    if (!force && nextKey === lastWorkspaceUpdateKey) return;
+    lastWorkspaceUpdateKey = nextKey;
     measurePerformancePhase('ui.tactical-workspace.update', () => {
       if (force) lastSidebarKey = '';
       updateBottom();
@@ -455,6 +460,83 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   };
 }
 
+function buildWorkspaceUpdateKey(
+  state: SimulationState,
+  mode: TacticalWorkspaceMode,
+  tab: SimulationTab,
+  collapsed: boolean,
+): string {
+  const unit = getSelectedUnit(state);
+  const revisions = getMapRevisionSnapshot(state.map);
+  const layer = getSimulationLayerState(state);
+  const commandTool = getUnitCommandToolState(state);
+  const weapon = unit ? getWeaponRuntime(unit) : null;
+  const fireAction = unit ? getFireAction(unit) : null;
+  const contact = unit ? findBestDirectFireContact(state, unit) : null;
+  const order = unit?.order;
+  const command = unit?.playerCommand;
+  const runtimeSession = unit?.behaviorRuntime.aiRuntimeSession;
+  return [
+    mode,
+    tab,
+    collapsed ? 1 : 0,
+    state.selectedUnitId ?? 'none',
+    state.editor.enabled ? 1 : 0,
+    state.editor.tool,
+    state.editor.selectedObjectId ?? 'none',
+    state.editor.selectedZoneId ?? 'none',
+    state.editor.lastMessage ?? '',
+    revisions.terrain,
+    revisions.height,
+    revisions.forest,
+    revisions.objects,
+    state.pressureZones.length,
+    layer.mode,
+    layer.selectedCoverId ?? 'none',
+    layer.hoveredCoverId ?? 'none',
+    commandTool.turnToolActive ? 1 : 0,
+    commandTool.routeFacingDraft
+      ? `${commandTool.routeFacingDraft.target.x.toFixed(2)}:${commandTool.routeFacingDraft.target.y.toFixed(2)}:${commandTool.routeFacingDraft.finalFacingRadians?.toFixed(4) ?? 'none'}`
+      : 'none',
+    getAiTestPaused(state) ? 1 : 0,
+    getAiTestTimeScale(state),
+    unit?.id ?? 'none',
+    unit ? `${unit.position.x.toFixed(2)}:${unit.position.y.toFixed(2)}` : 'none',
+    unit?.behaviorRuntime.currentAction ?? '',
+    unit?.behaviorRuntime.state ?? '',
+    unit?.behaviorRuntime.posture ?? '',
+    unit?.behaviorRuntime.lastEvent ?? '',
+    unit?.behaviorRuntime.reason ?? '',
+    unit ? Math.round(unit.behaviorRuntime.danger) : 0,
+    unit ? Math.round(unit.behaviorRuntime.stress) : 0,
+    unit ? Math.round(unit.behaviorRuntime.suppression) : 0,
+    unit ? Math.round(unit.soldier.condition.health) : 0,
+    unit ? Math.round(unit.soldier.condition.morale) : 0,
+    unit ? Math.round(unit.soldier.condition.fatigue) : 0,
+    weapon?.roundsLoaded ?? 0,
+    weapon?.roundsReserve ?? 0,
+    fireAction?.phase ?? 'none',
+    order?.target.x.toFixed(2) ?? 'none',
+    order?.target.y.toFixed(2) ?? 'none',
+    order?.waypointIndex ?? -1,
+    order?.routeStatus ?? 'none',
+    command?.revision ?? 0,
+    command?.status ?? 'none',
+    unit?.tacticalKnowledge.revision ?? 0,
+    unit?.attentionRuntime.mode ?? 'none',
+    unit?.attentionRuntime.modeSource ?? 'none',
+    unit?.attentionRuntime.focusDirectionRadians.toFixed(4) ?? 'none',
+    runtimeSession?.status ?? 'none',
+    runtimeSession?.executionState?.activeNodeId ?? 'none',
+    unit?.behaviorRuntime.aiGraphReason ?? '',
+    unit?.playerNavigationProfileId ?? 'none',
+    unit?.playerAttentionProfileId ?? 'individual',
+    contact?.id ?? 'none',
+    contact?.visibleNow ? 1 : 0,
+    contact ? Math.round(contact.confidence) : 0,
+  ].join('|');
+}
+
 function combatCapabilityLabel(value: ReturnType<typeof getCombatRuntime>['capability']): string {
   if (value === 'wounded') return 'ранен';
   if (value === 'severely_wounded') return 'тяжело ранен';
@@ -539,27 +621,46 @@ function stableDecision(unit: UnitModel, decisions: Map<string, StableDecision>)
 }
 
 function renderDanger(target: HTMLElement, state: SimulationState, unit: UnitModel, onChanged: () => void, rerender: () => void): void {
-  const report = buildSoldierAwarenessReport(state, unit), current = report.currentPosition, selected = getSelectedSimulationCover(state);
-  target.innerHTML = `${heading('Слой опасности','Красное — известная опасность. Метки показывают известные укрытия и безопасные позиции.')}${legend([['legend-danger-high','крайне опасно'],['legend-danger-medium','опасно'],['legend-danger-low','умеренная опасность'],['legend-safe','безопасная позиция']])}${grid([['Текущая опасность',pct(current.danger)],['Подавление',pct(current.suppression)],['Защита позиции',pct(current.expectedProtection)],['Опасность маршрута',pct(report.routeDanger)],['Уверенность в угрозах',pct(report.threatConfidence)]])}<section class="workspace-panel-section"><h3>Известные укрытия</h3><div data-role="cover-list"></div></section>`;
+  const threats = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
+  const currentProtection = Math.max(
+    threats.strongest?.expectedProtection ?? 0,
+    threats.strongestKnown?.expectedProtection ?? 0,
+  );
+  const threatConfidence = unit.tacticalKnowledge.threats.length > 0
+    ? Math.max(...unit.tacticalKnowledge.threats.map((threat) => threat.confidence))
+    : 0;
+  const selected = getSelectedSimulationCover(state);
+  target.innerHTML = `${heading('Слой опасности','Красное — известная опасность. Полная карта строится фоновым worker; панель читает только текущую позицию бойца.')}${legend([['legend-danger-high','крайне опасно'],['legend-danger-medium','опасно'],['legend-danger-low','умеренная опасность']])}${grid([['Текущая опасность',pct(threats.danger)],['Подавление',pct(threats.suppression)],['Защита позиции',pct(currentProtection)],['Оценка активного маршрута',unit.order?pct(threats.danger):'нет маршрута'],['Уверенность в угрозах',pct(threatConfidence)]])}<section class="workspace-panel-section"><h3>Известные укрытия</h3><div data-role="cover-list"></div></section>`;
   if (selected) {
-    const object = state.map.objects.find((item) => item.id === selected.id), props = object ? resolveObjectCoverProperties(object) : null;
-    const cell = report.cells.find((item) => item.x === Math.floor(selected.x) && item.y === Math.floor(selected.y));
+    const object = state.map.objects.find((item) => item.id === selected.id);
+    const props = object ? resolveObjectCoverProperties(object) : null;
     const threat = unit.tacticalKnowledge.threats[0];
-    const card = document.createElement('section'); card.className='selected-cover-card';
-    card.innerHTML = `<h3>${esc(selected.labelRu)}</h3>${grid([['Расстояние',`${Math.round(selected.distanceMeters)} м`],['Ожидаемая защита',pct(cell?.expectedProtection??props?.coverProtection??selected.quality)],['Надёжность',pct(cell?.coverReliability??props?.coverReliability??selected.quality)],['Маскировка',pct(cell?.concealment??props?.concealment??0)],['Сторона защиты',threat?direction(Math.atan2(threat.y-selected.y,threat.x-selected.x)*180/Math.PI):'нет известной угрозы'],['Угроза',threat?.labelRu??'неизвестна']])}`;
-    const move=button('Приказать двигаться сюда','primary full-width'); move.onclick=()=>{ issueMoveOrderToSelectedUnit(state,{x:selected.x,y:selected.y}); onChanged(); }; card.append(move); target.prepend(card);
+    const card = document.createElement('section');
+    card.className = 'selected-cover-card';
+    card.innerHTML = `<h3>${esc(selected.labelRu)}</h3>${grid([['Расстояние',`${Math.round(selected.distanceMeters)} м`],['Ожидаемая защита',pct(props?.coverProtection??selected.quality)],['Надёжность',pct(props?.coverReliability??selected.quality)],['Маскировка',pct(props?.concealment??0)],['Сторона защиты',threat?direction(Math.atan2(threat.y-selected.y,threat.x-selected.x)*180/Math.PI):'нет известной угрозы'],['Угроза',threat?.labelRu??'неизвестна']])}`;
+    const move = button('Приказать двигаться сюда','primary full-width');
+    move.onclick = () => { issueMoveOrderToSelectedUnit(state,{x:selected.x,y:selected.y}); onChanged(); };
+    card.append(move);
+    target.prepend(card);
   }
   const list = target.querySelector<HTMLElement>('[data-role="cover-list"]')!;
-  const covers=getSimulationCovers(state).slice(0,12); if(!covers.length) list.innerHTML=empty('Известных укрытий пока нет.');
-  for(const cover of covers){ const item=button(`${cover.labelRu} · ${Math.round(cover.distanceMeters)} м · ${Math.round(cover.quality)}/100`,'cover-list-card'); item.classList.toggle('selected',selected?.id===cover.id); item.onclick=()=>{setSelectedSimulationCover(state,cover.id);rerender();onChanged();}; list.append(item); }
+  const covers = getSimulationCovers(state).slice(0,12);
+  if (!covers.length) list.innerHTML = empty('Известных укрытий пока нет.');
+  for (const cover of covers) {
+    const item = button(`${cover.labelRu} · ${Math.round(cover.distanceMeters)} м · ${Math.round(cover.quality)}/100`,'cover-list-card');
+    item.classList.toggle('selected',selected?.id===cover.id);
+    item.onclick = () => { setSelectedSimulationCover(state,cover.id); rerender(); onChanged(); };
+    list.append(item);
+  }
 }
 
-function renderStealth(target: HTMLElement, state: SimulationState, unit: UnitModel, onChanged: () => void): void {
-  const report=buildSoldierAwarenessReport(state,unit), current=report.currentPosition;
-  const best=report.cells.map((cell)=>({cell,d:Math.hypot(unit.position.x-cell.x-.5,unit.position.y-cell.y-.5)})).filter((x)=>x.d<=12&&x.cell.concealment>=20).sort((a,b)=>(b.cell.concealment-b.d*1.4)-(a.cell.concealment-a.d*1.4)).slice(0,8);
-  target.innerHTML=`${heading('Слой скрытности','Показывает, где бойца труднее заметить. Маскировка не равна физической защите.')}${legend([['legend-stealth-best','очень трудно заметить'],['legend-stealth-good','хорошая скрытность'],['legend-stealth-medium','заметен'],['legend-stealth-bad','хорошо заметен']])}${grid([['Скрытность клетки',pct(current.concealment)],['Открытость',pct(100-current.concealment)],['Поза',postureLabel(unit.behaviorRuntime.posture)],['Источник оценки',current.sourceRu],['Уверенность',pct(current.confidence)]])}<section class="workspace-panel-section"><h3>Лучшие скрытые позиции</h3><div data-role="stealth-list"></div></section>`;
-  const list=target.querySelector<HTMLElement>('[data-role="stealth-list"]')!; if(!best.length)list.innerHTML=empty('Рядом нет заметно более скрытых позиций.');
-  for(const item of best){const row=document.createElement('div');row.className='stealth-position-card';row.innerHTML=`<strong>Клетка ${item.cell.x+1}:${item.cell.y+1}</strong><span>${Math.round(item.d*state.map.metersPerCell)} м</span><b>${item.cell.concealment}/100</b><em>${esc(item.cell.sourceRu)}</em>`;const move=button('Идти','compact');move.onclick=()=>{issueMoveOrderToSelectedUnit(state,{x:item.cell.x+.5,y:item.cell.y+.5});onChanged();};row.append(move);list.append(row);}
+function renderStealth(target: HTMLElement, state: SimulationState, unit: UnitModel, _onChanged: () => void): void {
+  const cell = getCell(state.map, Math.floor(unit.position.x), Math.floor(unit.position.y));
+  const concealment = resolveLocalConcealment(cell?.terrain ?? state.map.defaultTerrain, cell?.forest ?? 0);
+  const confidence = unit.tacticalKnowledge.threats.length > 0
+    ? Math.max(...unit.tacticalKnowledge.threats.map((threat) => threat.confidence))
+    : 0;
+  target.innerHTML = `${heading('Слой скрытности','Полная карта скрытности рисуется фоновым worker. Автоматический поиск безопасных и скрытых позиций удалён как легаси.')}${legend([['legend-stealth-best','очень трудно заметить'],['legend-stealth-good','хорошая скрытность'],['legend-stealth-medium','заметен'],['legend-stealth-bad','хорошо заметен']])}${grid([['Скрытность клетки',pct(concealment)],['Открытость',pct(100-concealment)],['Поза',postureLabel(unit.behaviorRuntime.posture)],['Тип клетки',terrain(cell?.terrain ?? state.map.defaultTerrain,cell?.forest ?? 0)],['Уверенность',pct(confidence)]])}`;
 }
 
 function memoryPanel(state: SimulationState, unit: UnitModel): string {
@@ -638,6 +739,7 @@ function postureLabel(x:UnitPosture):string{return x==='crouched'?'пригну�
 function profileLabel(x:string):string{return ({green:'новобранец',regular:'обычный',veteran:'ветеран',cautious:'осторожный',reckless:'безрассудный'} as Record<string,string>)[x]??x;}
 function actionLabel(x:string):string{return ({waiting:'ожидает',observing:'наблюдает',moving:'движется',move_to:'идёт к позиции',retreat:'отходит',fire:'ведёт огонь',suppress:'подавляет',reload:'перезаряжается',wait:'ожидает'} as Record<string,string>)[x]??x;}
 function terrain(x:string,forest:number):string{if(forest===2)return 'густой лес';if(forest===1)return 'редкий лес';return ({field:'открытое поле',forest:'лесная почва',road:'дорога',swamp:'болото',rough:'пересечённая местность',water:'вода'} as Record<string,string>)[x]??x;}
+function resolveLocalConcealment(terrainKind:string,forest:number):number{if(forest===2)return 72;if(forest===1)return 38;if(terrainKind==='forest')return 24;if(terrainKind==='rough')return 12;if(terrainKind==='swamp')return 8;return 0;}
 function elevation(x:number):string{const rounded=Math.round(x*10)/10;const normalized=Math.abs(rounded)<0.05?0:rounded;const level=Math.max(-2,Math.min(4,Math.round(normalized)));return `${normalized>0?'+':''}${normalized.toFixed(1)} · ${({[-2]:'глубокая низина',[-1]:'низина',0:'ровно',1:'подъём',2:'холм',3:'высота',4:'гребень'} as Record<number,string>)[level]??'уровень'}`;}
 function pct(x:number):string{return `${Math.max(0,Math.min(100,Math.round(x)))} / 100`;}
 function direction(x:number):string{const a=((x%360)+360)%360;return ['восток','юго-восток','юг','юго-запад','запад','северо-запад','север','северо-восток'][Math.round(a/45)%8];}

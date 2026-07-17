@@ -18,8 +18,12 @@ assert.match(exactLos, /resolveCellVegetationDefinition/);
 assert.doesNotMatch(exactLos, /SPARSE_FOREST_LOSS_PER_METER|DENSE_FOREST_LOSS_PER_METER/);
 
 const pointVisibility = source('src/core/visibility/PointVisibility.ts');
-assert.match(pointVisibility, /getVisibilityGeometryField/);
-assert.doesNotMatch(pointVisibility, /computeLineOfSight/);
+assert.match(pointVisibility, /computeLineOfSight/);
+assert.match(pointVisibility, /MAX_PERCEPTION_POINT_PROBES_PER_SIMULATION_STEP/);
+assert.match(pointVisibility, /perceptionPointCacheByState/);
+assert.match(pointVisibility, /getMapRevisionSnapshot/);
+assert.match(pointVisibility, /perception\.point-los/);
+assert.doesNotMatch(pointVisibility, /getVisibilityGeometryField/);
 
 const perception = source('src/core/perception/PerceptionStimulus.ts');
 assert.match(perception, /visibility\.targetConcealment/);
@@ -54,4 +58,4 @@ assert.match(danger, /getVisibilityGeometryField/);
 assert.match(danger, /lineOfFire\.hardBlocked/);
 assert.doesNotMatch(danger, /pixi\.js|\.\.\/rendering\//);
 
-console.log('Shared vegetation source contract smoke passed: renderer, perception, visibility, awareness, danger, cover and route/navigation costs use the shared core catalog/field boundary.');
+console.log('Shared vegetation source contract smoke passed: renderer, bounded perception probes, machine visibility, awareness, danger, cover and route/navigation costs use the shared core catalog boundary.');

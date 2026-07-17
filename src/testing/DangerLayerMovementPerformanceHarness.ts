@@ -6,7 +6,6 @@ import { buildNavigationGrid, isNavigationCellPassable } from '../core/pathfindi
 import { advanceVisualContact, upsertPerceptionContact } from '../core/perception/PerceptionContact';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { setAiTestPaused } from '../core/testing/AiTestLabRuntime';
-import type { SoldierSafePosition } from '../core/knowledge/SoldierAwarenessGrid';
 import { normalizeUnits, type UnitModel } from '../core/units/UnitModel';
 import { setSimulationLayerMode } from '../core/ui/RuntimeUiState';
 import type { AwarenessOverlayDiagnostics } from '../rendering/PixiAwarenessHeatmapRenderer';
@@ -27,9 +26,6 @@ export interface DangerMovementSnapshot {
   readonly hostileMoving: boolean;
   readonly movingUnitCount: number;
   readonly wallX: number | null;
-  readonly bestSafePosition: SoldierSafePosition | null;
-  readonly protectedAgainstThreatId: string | null;
-  readonly markerUpdateCount: number;
   readonly lastRequestedWorldKey: string;
   readonly lastAppliedWorldKey: string;
   readonly lastRequestedCanonicalThreatKey: string;
@@ -298,7 +294,6 @@ function snapshot(
     ?? observer.tacticalKnowledge.threats[0]
     ?? null;
   const diagnostics = window.__realWargameAwarenessDebug ?? null;
-  const winner = diagnostics?.rendererLocalBestWinner ?? null;
   const wall = state.map.objects.find((object) => object.id.startsWith(WALL_ID));
   return {
     scenario,
@@ -314,9 +309,6 @@ function snapshot(
     hostileMoving: hostile.order !== null,
     movingUnitCount: state.units.filter((unit) => unit.order !== null).length,
     wallX: wall ? wall.x + wall.widthCells / 2 : null,
-    bestSafePosition: winner ? { ...winner, position: { ...winner.position } } : null,
-    protectedAgainstThreatId: winner?.protectedAgainstThreatId ?? null,
-    markerUpdateCount: diagnostics?.markerUpdateCount ?? 0,
     lastRequestedWorldKey: diagnostics?.lastRequestedWorldKey ?? '',
     lastAppliedWorldKey: diagnostics?.lastAppliedWorldKey ?? '',
     lastRequestedCanonicalThreatKey: diagnostics?.lastRequestedCanonicalThreatKey ?? '',

@@ -17,8 +17,7 @@ const languageRules = read('docs/ai/DEVELOPMENT_LANGUAGE_RULES.md');
 for (const key of [
   'danger', 'stress', 'suppression', 'fatigue', 'morale', 'health', 'ammo',
   'enemyVisible', 'enemyKnown', 'underFire', 'hasOrder', 'isInCover', 'weaponReady',
-  'currentPositionDanger', 'currentExpectedProtection', 'bestSafePositionScore',
-  'distanceToBestSafePosition', 'routeDanger', 'threatConfidence',
+  'currentPositionDanger', 'currentExpectedProtection', 'routeDanger', 'threatConfidence',
   'directionToThreat', 'threatDistance', 'coverProtection', 'bestCoverQuality',
   'current_action', 'self_position', 'order_target_position', 'retreat_position',
   'best_cover_position', 'current_target', 'remembered_enemy_position',

@@ -45,24 +45,11 @@ export interface SoldierAwarenessCell {
   sourceRu: string;
 }
 
-export interface SoldierSafePosition {
-  position: GridPosition;
-  score: number;
-  danger: number;
-  expectedProtection: number;
-  expectedProtectionAgainstThreat: number;
-  protectedAgainstThreatId: string | null;
-  concealment: number;
-  distanceCells: number;
-  sourceRu: string;
-}
-
 export interface SoldierAwarenessReport {
   unitId: string;
   cacheKey: string;
   dangerFieldKey: string;
   cells: SoldierAwarenessCell[];
-  bestSafePositions: SoldierSafePosition[];
   currentPosition: SoldierAwarenessCell;
   routeDanger: number;
   threatConfidence: number;
@@ -81,15 +68,11 @@ interface CachedAwareness {
   field: AwarenessField;
   positionKey: string;
   currentPosition: SoldierAwarenessCell;
-  bestSafePositions: SoldierSafePosition[];
   routeKey: string;
   routeDanger: number;
 }
 
 const cache = new WeakMap<UnitModel, CachedAwareness>();
-const MAX_SAFE_POSITIONS = 8;
-const SAFE_SEARCH_RADIUS_METERS = 120;
-const SAFE_DISTANCE_PENALTY_PER_METER = 0.18;
 const ROUTE_SAMPLE_STEP_METERS = 5;
 export const KNOWLEDGE_CONFIDENCE_BUCKET = 10;
 export const KNOWLEDGE_UNCERTAINTY_BUCKET = 1;
@@ -121,7 +104,6 @@ export function buildSoldierAwarenessReport(
       field,
       positionKey: '',
       currentPosition: field.cells[0] ?? emptyAwarenessCell(unit.position),
-      bestSafePositions: [],
       routeKey: '',
       routeDanger: 0,
     };
@@ -133,7 +115,6 @@ export function buildSoldierAwarenessReport(
     cached.positionKey = positionKey;
     cached.currentPosition = awarenessCellAt(state.map, cached.field.cells, unit.position)
       ?? emptyAwarenessCell(unit.position);
-    cached.bestSafePositions = buildBestSafePositions(state.map, cached.field.cells, unit.position);
   }
 
   const routeKey = buildRouteKey(unit);
@@ -147,7 +128,6 @@ export function buildSoldierAwarenessReport(
   return {
     ...cached.field,
     currentPosition: cached.currentPosition,
-    bestSafePositions: cached.bestSafePositions,
     routeDanger: cached.routeDanger,
   };
 }
@@ -188,55 +168,6 @@ function currentThreatConfidence(unit: UnitModel): number {
   return unit.tacticalKnowledge.threats.length > 0
     ? Math.round(Math.max(...unit.tacticalKnowledge.threats.map((threat) => threat.confidence)))
     : 0;
-}
-
-function buildBestSafePositions(
-  map: TacticalMap,
-  cells: SoldierAwarenessCell[],
-  unitPosition: GridPosition,
-): SoldierSafePosition[] {
-  const searchRadiusCells = SAFE_SEARCH_RADIUS_METERS / Math.max(0.001, map.metersPerCell);
-  const searchRadiusSquared = searchRadiusCells * searchRadiusCells;
-  const minX = Math.max(0, Math.floor(unitPosition.x - searchRadiusCells));
-  const maxX = Math.min(map.width - 1, Math.ceil(unitPosition.x + searchRadiusCells));
-  const minY = Math.max(0, Math.floor(unitPosition.y - searchRadiusCells));
-  const maxY = Math.min(map.height - 1, Math.ceil(unitPosition.y + searchRadiusCells));
-  const best: SoldierSafePosition[] = [];
-
-  for (let y = minY; y <= maxY; y += 1) {
-    const positionY = y + 0.5;
-    const dy = positionY - unitPosition.y;
-    for (let x = minX; x <= maxX; x += 1) {
-      const cell = cells[y * map.width + x];
-      if (!cell) continue;
-      const positionX = x + 0.5;
-      const dx = positionX - unitPosition.x;
-      const distanceSquared = dx * dx + dy * dy;
-      if (distanceSquared > searchRadiusSquared) continue;
-      const distanceCells = Math.sqrt(distanceSquared);
-      const distanceMeters = distanceCells * map.metersPerCell;
-      const score = cell.safety - distanceMeters * SAFE_DISTANCE_PENALTY_PER_METER;
-      if (score <= 18) continue;
-      if (best.length === MAX_SAFE_POSITIONS && score <= best[MAX_SAFE_POSITIONS - 1].score) continue;
-
-      let insertionIndex = 0;
-      while (insertionIndex < best.length && best[insertionIndex].score >= score) insertionIndex += 1;
-      best.splice(insertionIndex, 0, {
-        position: { x: positionX, y: positionY },
-        score,
-        danger: cell.danger,
-        expectedProtection: cell.expectedProtection,
-        expectedProtectionAgainstThreat: cell.expectedProtectionAgainstThreat,
-        protectedAgainstThreatId: cell.protectedAgainstThreatId,
-        concealment: cell.concealment,
-        distanceCells,
-        sourceRu: cell.sourceRu,
-      });
-      if (best.length > MAX_SAFE_POSITIONS) best.pop();
-    }
-  }
-
-  return best;
 }
 
 export function evaluateRouteDanger(

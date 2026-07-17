@@ -53,7 +53,6 @@ export interface CombatTacticalVisualSnapshot {
   readonly maxThreatStrength: number;
   readonly maxThreatSuppression: number;
   readonly hiddenFactLeakCount: number;
-  readonly bestSafePosition: { x: number; y: number } | null;
   readonly routeWaypointCount: number;
   readonly mapVisualRevision: number;
   readonly dangerFieldKey?: string;
@@ -611,9 +610,6 @@ function buildSnapshot(
     maxThreatStrength: threats.reduce((maximum, threat) => Math.max(maximum, threat.strength), 0),
     maxThreatSuppression: threats.reduce((maximum, threat) => Math.max(maximum, threat.suppression), 0),
     hiddenFactLeakCount: hiddenPositionLeak + hiddenFieldLeak,
-    bestSafePosition: report.bestSafePositions[0]
-      ? { ...report.bestSafePositions[0].position }
-      : null,
     routeWaypointCount: observer.order?.waypoints?.length ?? 0,
     mapVisualRevision: getMapRevisionSnapshot(state.map).visual,
     dangerFieldKey: reportRecord.dangerFieldKey,

@@ -5,6 +5,7 @@ import {
   getThreatRelativeCoverFieldDiagnostics,
 } from '../src/core/cover/ThreatRelativeCoverField';
 import { buildSoldierAwarenessReport } from '../src/core/knowledge/SoldierAwarenessGrid';
+import { getSoldierDangerFieldDiagnostics } from '../src/core/knowledge/SoldierDangerField';
 import { getCell, type TacticalMapData } from '../src/core/map/MapModel';
 import { markMapCellsDirty } from '../src/core/map/MapRuntimeState';
 import { createInitialState } from '../src/core/simulation/SimulationState';
@@ -73,22 +74,12 @@ const red = unit('red-performance');
 blue.position = { x: 165.5, y: 100.5 };
 red.position = { x: 190.5, y: 100.5 };
 
-const baseline = buildSoldierAwarenessReport(state, blue);
-const baselineWinner = baseline.bestSafePositions[0];
-assert.ok(baselineWinner, 'baseline must expose a safe-position winner');
+buildSoldierAwarenessReport(state, blue);
 
 const threat = directionalThreat(red.position.x, red.position.y);
 blue.tacticalKnowledge.threats.push(threat);
 blue.tacticalKnowledge.revision += 1;
 const first = buildSoldierAwarenessReport(state, blue);
-const firstWinner = first.bestSafePositions[0];
-assert.ok(firstWinner, 'directional threat must expose a safe-position winner');
-assert.ok(
-  firstWinner.position.x < WALL_X,
-  `eastern directional threat must select the west/protected wall side (winner x=${firstWinner.position.x})`,
-);
-assert.equal(firstWinner.protectedAgainstThreatId, THREAT_ID);
-assert.notDeepEqual(firstWinner.position, baselineWinner.position);
 
 let diagnostics = getThreatRelativeCoverFieldDiagnostics(state.map);
 let directionalDiagnostics = getDirectionalTacticalFieldDiagnostics(state.map);
@@ -111,7 +102,9 @@ assert.ok(
   'object shadow bounds must reduce exact candidate checks below cell-count times object-count',
 );
 const coldBuildMs = diagnostics.lastBuildMs;
+const protectedProbePosition = { x: WALL_X - 1.5, y: 100.5 };
 const directionalBuildsAfterFirstThreat = directionalDiagnostics.buildCount;
+const soldierDangerGeometryBuildsAfterFirstThreat = getSoldierDangerFieldDiagnostics(state.map).geometryBuildCount;
 
 const repeated = buildSoldierAwarenessReport(state, blue);
 assert.equal(repeated.cacheKey, first.cacheKey);
@@ -176,7 +169,7 @@ assert.equal(getDirectionalTacticalFieldDiagnostics(state.map).buildCount, direc
 const protectedBeforeReliefChange = evaluateCoverBetween(
   state.map,
   { x: threat.x, y: threat.y },
-  firstWinner.position,
+  protectedProbePosition,
   blue.behaviorRuntime.posture,
   { includeRelief: false },
 ).protection;
@@ -187,7 +180,7 @@ markMapCellsDirty(state.map, 'height', { minX: 158, minY: 100, maxX: 158, maxY: 
 const protectedAfterReliefChange = evaluateCoverBetween(
   state.map,
   { x: threat.x, y: threat.y },
-  firstWinner.position,
+  protectedProbePosition,
   blue.behaviorRuntime.posture,
   { includeRelief: false },
 ).protection;
@@ -198,7 +191,24 @@ assert.equal(
   'height/relief change must not enter the object/forest geometry cache key',
 );
 
-threat.x += 2;
+buildSoldierAwarenessReport(state, blue);
+const soldierDangerGeometryBuildsAfterHeightChange = getSoldierDangerFieldDiagnostics(state.map).geometryBuildCount;
+threat.x += 0.1;
+blue.tacticalKnowledge.revision += 1;
+buildSoldierAwarenessReport(state, blue);
+assert.equal(
+  getSoldierDangerFieldDiagnostics(state.map).geometryBuildCount,
+  soldierDangerGeometryBuildsAfterHeightChange,
+  'sub-quarter-cell subjective movement must reuse full-map danger geometry after map revisions are warm',
+);
+const directionalBuildsAfterSubCellMovement = getDirectionalTacticalFieldDiagnostics(state.map).buildCount;
+assert.equal(
+  getThreatRelativeCoverFieldDiagnostics(state.map).geometryBuildCount,
+  1,
+  'sub-quarter-cell movement must not rebuild threat-relative cover geometry',
+);
+
+threat.x += 1.9;
 blue.tacticalKnowledge.revision += 1;
 buildSoldierAwarenessReport(state, blue);
 assert.equal(
@@ -208,8 +218,8 @@ assert.equal(
 );
 assert.equal(
   getDirectionalTacticalFieldDiagnostics(state.map).buildCount,
-  directionalBuildsAfterFirstThreat + 1,
-  'the next report must rebuild directional terrain once for changed geometry content',
+  directionalBuildsAfterSubCellMovement + 1,
+  'material movement after the sub-cell probe must rebuild directional terrain once',
 );
 
 state.map.objects[0].x += 1;
@@ -261,7 +271,7 @@ console.log(JSON.stringify({
   directionalBuildCount: directionalDiagnostics.buildCount,
   directionalCacheHitCount: directionalDiagnostics.cacheHitCount,
 }, null, 2));
-console.log('Danger layer performance smoke passed: dynamic threat changes reuse bounded object/forest and directional terrain geometry while preserving wall-side semantics.');
+console.log('Danger layer performance smoke passed: dynamic threat changes reuse bounded object/forest and directional terrain geometry while preserving cache semantics.');
 
 function unit(id: string): UnitModel {
   const found = state.units.find((candidate) => candidate.id === id);
