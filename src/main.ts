@@ -31,6 +31,7 @@ import { installAppShellMenu } from './shared/AppShellMenu';
 import { installAiStatePlanVisualQaHarness } from './testing/AiStatePlanVisualQaHarness';
 import { installCombatTacticalIntegrationVisualQaHarness } from './testing/CombatTacticalIntegrationVisualQaHarness';
 import { installDangerLayerMovementPerformanceHarness } from './testing/DangerLayerMovementPerformanceHarness';
+import { installLiveWindowsPerformanceHarness } from './testing/LiveWindowsPerformanceHarness';
 import { installAiDictionaryGameIntegration } from './ui/AiDictionaryGameIntegration';
 import { installAttentionProfileControls } from './ui/AttentionProfileControls';
 import { installAttentionRuntimePanel } from './ui/AttentionRuntimePanel';
@@ -103,6 +104,7 @@ async function bootstrap(): Promise<void> {
   installAiStatePlanVisualQaHarness(state, forceRenderAtNativeMapQuality);
   installCombatTacticalIntegrationVisualQaHarness(state, forceRenderAtNativeMapQuality);
   installDangerLayerMovementPerformanceHarness(state);
+  installLiveWindowsPerformanceHarness(state);
   const destroyAttentionRuntimePanel = installAttentionRuntimePanel(state, forceRenderAtNativeMapQuality);
   const destroyAttentionOverlayRenderer = installAttentionOverlayRenderer(board, state);
   const destroyCombatEffectsRenderer = installCombatEffectsRenderer(tacticalBoard, state);
