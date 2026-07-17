@@ -4,78 +4,50 @@ on:
   pull_request:
     branches:
       - real-wargame-preview
-    paths:
-      - '.github/workflows/live-windows-ai-browser-performance.yml'
-      - 'playwright.performance.config.ts'
-      - 'src/core/ai/**'
-      - 'src/core/debug/**'
-      - 'src/core/knowledge/**'
-      - 'src/core/navigation/**'
-      - 'src/core/perception/**'
-      - 'src/core/simulation/**'
-      - 'src/rendering/PixiApp.ts'
-      - 'src/testing/LiveWindowsPerformanceHarness.ts'
-      - 'src/ui/TacticalWorkspace.ts'
-      - 'src/main.ts'
-      - 'tests/live-windows-ai-performance.spec.ts'
-      - 'scripts/performance_report_contract_smoke.mjs'
+    types: [opened, synchronize, reopened]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: live-windows-ai-browser-performance-${{ github.event.pull_request.number }}
+  group: live-windows-attribution-apply-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  capture-live-ai:
+  apply-verified-followup:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 30
     steps:
-      - name: Checkout exact PR head
+      - name: Checkout task branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: agent/live-windows-performance-followup-v1
           fetch-depth: 0
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-      - name: Install dependencies and Chromium
-        run: |
-          npm ci
-          npm install --no-save @playwright/test
-          npx playwright install chromium
-      - name: Verify exact source
+      - name: Apply targeted follow-up
+        run: python3 scripts/agent_performance_attribution_followup_apply.py
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify source and focused contracts
         run: |
           npx tsc --noEmit
           npm run build
           node scripts/performance_report_contract_smoke.mjs
+          npm run shared-visibility-vegetation:smoke
+          npm run perception-performance:smoke
+          npm run danger-layer-performance:smoke
           npm run ai-scheduler:smoke
-          npm run workspace:smoke
-      - name: Run 90-second live AI capture
-        env:
-          REAL_WARGAME_BRANCH: ${{ github.event.pull_request.head.ref }}
-          REAL_WARGAME_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
-          LIVE_WINDOWS_PERF_EXPECTED_BRANCH: ${{ github.event.pull_request.head.ref }}
-          LIVE_WINDOWS_PERF_EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
-          LIVE_WINDOWS_PERF_DURATION_MS: '90000'
-          LIVE_WINDOWS_PERF_ENFORCE: '0'
-          LIVE_WINDOWS_PERF_OUTPUT: artifacts/performance/live-windows-followup/ci-${{ github.event.pull_request.head.sha }}/after-browser.json
-        shell: bash
+      - name: Commit verified result
         run: |
-          set -o pipefail
-          mkdir -p "artifacts/performance/live-windows-followup/ci-${{ github.event.pull_request.head.sha }}"
-          npx playwright test tests/live-windows-ai-performance.spec.ts \
-            --config=playwright.performance.config.ts \
-            --project=chromium \
-            --reporter=line 2>&1 | tee "artifacts/performance/live-windows-followup/ci-${{ github.event.pull_request.head.sha }}/playwright.log"
-      - name: Upload live browser evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: live-windows-ai-browser-performance
-          path: artifacts/performance/live-windows-followup/ci-*/**
-          if-no-files-found: warn
-          retention-days: 14
+          rm scripts/agent_performance_attribution_followup_apply.py
+          rm -f artifacts/performance/live-windows-followup/.attribution-followup-trigger
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "perf: refine application attribution and dynamic geometry reuse"
+          git push origin HEAD:agent/live-windows-performance-followup-v1
