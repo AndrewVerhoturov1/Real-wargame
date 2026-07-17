@@ -49,20 +49,40 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Verify source and focused contracts
+        shell: bash
         run: |
-          npx tsc --noEmit
-          npm run build
-          node scripts/performance_report_contract_smoke.mjs
-          npm run shared-visibility-vegetation:smoke
-          npm run perception-performance:smoke
-          npm run danger-layer-performance:smoke
-          npm run ai-scheduler:smoke
+          set -o pipefail
+          {
+            echo '## TypeScript'
+            npx tsc --noEmit
+            echo '## Production build'
+            npm run build
+            echo '## Performance report contract'
+            node scripts/performance_report_contract_smoke.mjs
+            echo '## Shared visibility and vegetation'
+            npm run shared-visibility-vegetation:smoke
+            echo '## Perception performance'
+            npm run perception-performance:smoke
+            echo '## Danger layer performance'
+            npm run danger-layer-performance:smoke
+            echo '## AI scheduler'
+            npm run ai-scheduler:smoke
+          } 2>&1 | tee artifacts/performance/live-windows-followup/attribution-verification.log
+      - name: Upload verification diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-attribution-verification-log
+          path: artifacts/performance/live-windows-followup/attribution-verification.log
+          if-no-files-found: warn
+          retention-days: 3
       - name: Commit verified result
         run: |
           rm scripts/agent_performance_attribution_followup_apply.py
           rm scripts/agent_performance_attribution_followup_patchfix.py
           rm -f artifacts/performance/live-windows-followup/.attribution-followup-trigger
           rm -f artifacts/performance/live-windows-followup/attribution-patch.log
+          rm -f artifacts/performance/live-windows-followup/attribution-verification.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
