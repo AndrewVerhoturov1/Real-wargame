@@ -257,7 +257,11 @@ function assertKnowledgeRevisionInvalidation(west: ScenarioEvaluation) {
   assert.equal(routeAfter.dynamicCostBuildCount, routeBefore.dynamicCostBuildCount + 1);
   assert.equal(routeAfter.fullMapScanCount, routeBefore.fullMapScanCount + 1);
   assert.equal(directionalAfter.buildCount, directionalBefore.buildCount);
-  assert.equal(directionalAfter.cacheHitCount, directionalBefore.cacheHitCount + 1);
+  assert.equal(
+    directionalAfter.cacheHitCount,
+    directionalBefore.cacheHitCount,
+    'route knowledge invalidation must rebuild only the fused route projection, not read the full directional awareness field',
+  );
 }
 
 function assertMapRevisionInvalidation(west: ScenarioEvaluation) {
