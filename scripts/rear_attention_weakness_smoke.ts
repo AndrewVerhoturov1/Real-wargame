@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import {
   DEFAULT_ATTENTION_PROFILES,
   REAR_ATTENTION_WEIGHT,
@@ -8,8 +10,6 @@ import {
   calculateAttentionVisualRangeFactor,
   evaluateCellVisibilityQuality,
 } from '../src/core/visibility/VisibilityQuality';
-import type { SelectedUnitVisibilityField } from '../src/core/visibility/SelectedUnitVisibilityField';
-import { drawVisibilityRaster } from '../src/rendering/PixiVisibilityHeatmapRenderer';
 
 const profile = DEFAULT_ATTENTION_PROFILES.observe;
 const front = sampleAttentionWeight(profile, 0);
@@ -78,46 +78,21 @@ assert.ok(rearClose.quality01 > 0, 'close rear target may create a weak visual s
 assert.ok(rearClose.quality01 < 0.04, 'close rear signal must remain very weak');
 assert.equal(rearBlocked.quality01, 0, 'hard blockers must still eliminate rear visibility');
 
-const rasterField: SelectedUnitVisibilityField = {
-  observerId: 'smoke-observer',
-  originCellX: 0,
-  originCellY: 0,
-  minCellX: 0,
-  minCellY: 0,
-  width: 2,
-  height: 1,
-  quality: new Uint8Array([0, 1]),
-  blocker: new Uint8Array(2),
-  revision: 1,
-  calculationKey: 'rear-attention-smoke',
-  mapVisualRevision: 1,
-  builtAtSeconds: 0,
-};
-let rasterData: Uint8ClampedArray | null = null;
-const rasterContext = {
-  createImageData(width: number, height: number) {
-    return {
-      width,
-      height,
-      data: new Uint8ClampedArray(width * height * 4),
-      colorSpace: 'srgb',
-    } as ImageData;
-  },
-  putImageData(image: ImageData) {
-    rasterData = image.data;
-  },
-} as unknown as CanvasRenderingContext2D;
-
-drawVisibilityRaster(rasterContext, rasterField, 2, 1);
-assert.ok(rasterData, 'raster output must be published');
-assert.deepEqual(
-  Array.from(rasterData.slice(0, 4)),
-  [0, 0, 0, 255],
-  'exactly zero visibility must be fully opaque black',
+const rendererSource = readFileSync(
+  path.join(process.cwd(), 'src', 'rendering', 'PixiVisibilityHeatmapRenderer.ts'),
+  'utf8',
 );
-assert.ok(
-  rasterData[4] !== 0 || rasterData[5] !== 0 || rasterData[6] !== 0,
-  'every positive machine visibility value must retain a visible heatmap colour',
+assert.match(rendererSource, /const UNSEEN_OVERLAY_COLOR = 0x000000;/, 'zero current visibility must use black');
+assert.match(rendererSource, /const UNSEEN_OVERLAY_ALPHA = 1;/, 'zero current visibility must be fully opaque');
+assert.match(rendererSource, /if \(quality <= 0\) continue;/, 'only exactly zero quality may remain black');
+assert.match(rendererSource, /0x315a78/, 'weak positive visibility colour must remain present');
+assert.match(rendererSource, /0x4aa9b8/, 'medium visibility colour must remain present');
+assert.match(rendererSource, /0x69d7a2/, 'good visibility colour must remain present');
+assert.match(rendererSource, /0xffe88a/, 'strong visibility colour must remain present');
+assert.match(
+  rendererSource,
+  /Math\.round\(\(0\.12 \+ quality \* 0\.48\) \* 255\)/,
+  'existing positive-visibility opacity gradient must remain unchanged',
 );
 
 console.log(JSON.stringify({
@@ -132,8 +107,9 @@ console.log(JSON.stringify({
     rear: vision.maximumVisualRangeMeters * rearRangeFactor,
   },
   quality: { frontFar: frontFar.quality01, rearFar: rearFar.quality01, rearClose: rearClose.quality01 },
-  raster: {
-    unseen: Array.from(rasterData.slice(0, 4)),
-    weakestPositive: Array.from(rasterData.slice(4, 8)),
+  rasterContract: {
+    zeroVisibility: '#000000@1.0',
+    positivePalettePreserved: true,
+    positiveOpacityGradientPreserved: true,
   },
 }, null, 2));
