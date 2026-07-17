@@ -1,29 +1,21 @@
 import { distance, type GridPosition } from '../geometry';
+import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
 import type { AttentionSample } from '../perception/AttentionModel';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
-import type { LineOfSightProbeResult } from './LineOfSight';
-import {
-  getVisibilityGeometryField,
-  readVisibilityGeometryCell,
-  type VisibilityGeometryField,
-} from './VisibilityGeometryField';
-import { getVisibilityStaticGrid } from './VisibilityStaticGrid';
+import { computeLineOfSight, type LineOfSightProbeResult } from './LineOfSight';
 import {
   evaluateCellVisibilityQuality,
   observerVisibilityCondition,
   type CellVisibilityQuality,
 } from './VisibilityQuality';
 
-const PERCEPTION_MOVING_GEOMETRY_INTERVAL_SECONDS = 0.4;
-const MAX_PERCEPTION_GEOMETRY_FIELDS_PER_STATE = 32;
-const MAX_GEOMETRY_PREPARATIONS_PER_SIMULATION_STEP = 1;
+const MAX_PERCEPTION_POINT_PROBES_PER_SIMULATION_STEP = 4;
+const MAX_PERCEPTION_POINT_CACHE_ENTRIES = 512;
+const POINT_POSITION_QUANTUM_CELLS = 0.05;
 
-interface PerceptionGeometryRuntimeEntry {
-  readonly map: SimulationState['map'];
-  readonly field: VisibilityGeometryField;
-  readonly observerPosition: GridPosition;
-  readonly builtAtSeconds: number;
+interface PerceptionPointCacheEntry {
+  readonly result: LineOfSightProbeResult;
 }
 
 interface PerceptionGeometryPreparationRuntime {
@@ -31,13 +23,14 @@ interface PerceptionGeometryPreparationRuntime {
   simulationTimeSeconds: number;
   preparationsThisStep: number;
   preparationCount: number;
+  cacheHitCount: number;
   deferredCount: number;
   maxPreparationsPerStep: number;
 }
 
-const perceptionGeometryRuntimeByState = new WeakMap<
+const perceptionPointCacheByState = new WeakMap<
   SimulationState,
-  Map<string, PerceptionGeometryRuntimeEntry>
+  Map<string, PerceptionPointCacheEntry>
 >();
 const perceptionGeometryPreparationByState = new WeakMap<SimulationState, PerceptionGeometryPreparationRuntime>();
 
@@ -48,8 +41,13 @@ export interface PointVisibilityResult {
   explanationRu: string[];
 }
 
+/**
+ * Compatibility name retained for report/smoke consumers. The runtime now
+ * prepares bounded point probes instead of full 64,000-cell geometry fields.
+ */
 export interface PerceptionGeometryPreparationDiagnostics {
   readonly preparationCount: number;
+  readonly cacheHitCount: number;
   readonly deferredCount: number;
   readonly preparationsThisStep: number;
   readonly maxPreparationsPerStep: number;
@@ -68,22 +66,16 @@ export function evaluatePointVisibility(
     1,
     observer.attentionSettings.vision.maximumVisualRangeMeters / Math.max(0.001, state.map.metersPerCell),
   );
-  const geometry = getPerceptionGeometryField(
+  if (distanceCells > rangeCells) return null;
+
+  const lineOfSight = getPerceptionPointProbe(
     state,
     observer,
-    targetHeightMeters,
-    rangeCells,
-  );
-  if (!geometry) return null;
-  const geometryCell = readVisibilityGeometryCell(geometry, target.x, target.y);
-  const lineOfSight = buildPointLineOfSight(
-    observer.position,
     target,
-    distanceMeters,
-    geometryCell.hardBlocked,
-    geometryCell.visualTransmission,
-    geometryCell.blockerKind,
+    targetHeightMeters,
   );
+  if (!lineOfSight) return null;
+
   const observerCondition = observerVisibilityCondition({
     fatigue: observer.soldier.condition.fatigue,
     confusion: observer.soldier.condition.confusion,
@@ -119,63 +111,81 @@ export function getPerceptionGeometryPreparationDiagnostics(
   const runtime = perceptionGeometryPreparationByState.get(state);
   return runtime ? {
     preparationCount: runtime.preparationCount,
+    cacheHitCount: runtime.cacheHitCount,
     deferredCount: runtime.deferredCount,
     preparationsThisStep: runtime.preparationsThisStep,
     maxPreparationsPerStep: runtime.maxPreparationsPerStep,
   } : {
     preparationCount: 0,
+    cacheHitCount: 0,
     deferredCount: 0,
     preparationsThisStep: 0,
     maxPreparationsPerStep: 0,
   };
 }
 
-function getPerceptionGeometryField(
-  state: SimulationState,
-  observer: UnitModel,
-  targetHeightMeters: number,
-  rangeCells: number,
-): VisibilityGeometryField | null {
-  const runtime = getPerceptionGeometryRuntime(state);
-  const key = [
-    observer.id,
-    observer.behaviorRuntime.posture,
-    quantize(targetHeightMeters, 0.05),
-    quantize(rangeCells, 0.25),
-  ].join(':');
-  const current = runtime.get(key) ?? null;
-  const mapVisualRevision = getVisibilityStaticGrid(state.map).mapVisualRevision;
-  const mapCurrent = current?.map === state.map
-    && current.field.mapVisualRevision === mapVisualRevision;
-  const moved = current !== null
-    && (Math.abs(current.observerPosition.x - observer.position.x) > 0.001
-      || Math.abs(current.observerPosition.y - observer.position.y) > 0.001);
-
-  if (current && mapCurrent && (!moved
-    || state.simulationTimeSeconds - current.builtAtSeconds < PERCEPTION_MOVING_GEOMETRY_INTERVAL_SECONDS)) {
-    touch(runtime, key, current);
-    return current.field;
-  }
-
-  if (!consumeGeometryPreparationBudget(state)) return null;
-  const field = getVisibilityGeometryField(state.map, {
-    origin: observer.position,
-    originHeightAboveGroundMeters: eyeHeightForPosture(observer.behaviorRuntime.posture),
-    targetHeightAboveGroundMeters: targetHeightMeters,
-    rangeCells,
-  });
-  const next: PerceptionGeometryRuntimeEntry = {
-    map: state.map,
-    field,
-    observerPosition: { ...observer.position },
-    builtAtSeconds: state.simulationTimeSeconds,
-  };
-  runtime.set(key, next);
-  trim(runtime, MAX_PERCEPTION_GEOMETRY_FIELDS_PER_STATE);
-  return field;
+export function clearPerceptionPointVisibilityCache(state: SimulationState): void {
+  perceptionPointCacheByState.delete(state);
+  perceptionGeometryPreparationByState.delete(state);
 }
 
-function consumeGeometryPreparationBudget(state: SimulationState): boolean {
+function getPerceptionPointProbe(
+  state: SimulationState,
+  observer: UnitModel,
+  target: GridPosition,
+  targetHeightMeters: number,
+): LineOfSightProbeResult | null {
+  const cache = getPerceptionPointCache(state);
+  const key = buildPerceptionPointKey(state, observer, target, targetHeightMeters);
+  const cached = cache.get(key);
+  if (cached) {
+    touch(cache, key, cached);
+    getPreparationRuntime(state).cacheHitCount += 1;
+    return cached.result;
+  }
+
+  if (!consumePointProbeBudget(state)) return null;
+  const result = computeLineOfSight(state.map, observer, target, targetHeightMeters);
+  cache.set(key, { result });
+  trim(cache, MAX_PERCEPTION_POINT_CACHE_ENTRIES);
+  return result;
+}
+
+function buildPerceptionPointKey(
+  state: SimulationState,
+  observer: UnitModel,
+  target: GridPosition,
+  targetHeightMeters: number,
+): string {
+  const revisions = getMapRevisionSnapshot(state.map);
+  return [
+    observer.id,
+    observer.behaviorRuntime.posture,
+    quantize(observer.position.x, POINT_POSITION_QUANTUM_CELLS),
+    quantize(observer.position.y, POINT_POSITION_QUANTUM_CELLS),
+    quantize(target.x, POINT_POSITION_QUANTUM_CELLS),
+    quantize(target.y, POINT_POSITION_QUANTUM_CELLS),
+    quantize(targetHeightMeters, 0.05),
+    revisions.terrain,
+    revisions.height,
+    revisions.forest,
+    revisions.objects,
+  ].join(':');
+}
+
+function consumePointProbeBudget(state: SimulationState): boolean {
+  const runtime = getPreparationRuntime(state);
+  if (runtime.preparationsThisStep >= MAX_PERCEPTION_POINT_PROBES_PER_SIMULATION_STEP) {
+    runtime.deferredCount += 1;
+    return false;
+  }
+  runtime.preparationsThisStep += 1;
+  runtime.preparationCount += 1;
+  runtime.maxPreparationsPerStep = Math.max(runtime.maxPreparationsPerStep, runtime.preparationsThisStep);
+  return true;
+}
+
+function getPreparationRuntime(state: SimulationState): PerceptionGeometryPreparationRuntime {
   let runtime = perceptionGeometryPreparationByState.get(state);
   if (!runtime) {
     runtime = {
@@ -183,6 +193,7 @@ function consumeGeometryPreparationBudget(state: SimulationState): boolean {
       simulationTimeSeconds: state.simulationTimeSeconds,
       preparationsThisStep: 0,
       preparationCount: 0,
+      cacheHitCount: 0,
       deferredCount: 0,
       maxPreparationsPerStep: 0,
     };
@@ -196,76 +207,28 @@ function consumeGeometryPreparationBudget(state: SimulationState): boolean {
     runtime.simulationTimeSeconds = state.simulationTimeSeconds;
     runtime.preparationsThisStep = 0;
   }
-  if (runtime.preparationsThisStep >= MAX_GEOMETRY_PREPARATIONS_PER_SIMULATION_STEP) {
-    runtime.deferredCount += 1;
-    return false;
-  }
-  runtime.preparationsThisStep += 1;
-  runtime.preparationCount += 1;
-  runtime.maxPreparationsPerStep = Math.max(runtime.maxPreparationsPerStep, runtime.preparationsThisStep);
-  return true;
-}
-
-function getPerceptionGeometryRuntime(
-  state: SimulationState,
-): Map<string, PerceptionGeometryRuntimeEntry> {
-  let runtime = perceptionGeometryRuntimeByState.get(state);
-  if (!runtime) {
-    runtime = new Map();
-    perceptionGeometryRuntimeByState.set(state, runtime);
-  }
   return runtime;
 }
 
-function buildPointLineOfSight(
-  origin: GridPosition,
-  target: GridPosition,
-  totalDistanceMeters: number,
-  blocked: boolean,
-  visualTransmission: number,
-  blockerKind: number,
-): LineOfSightProbeResult {
-  const partialObscuration = !blocked && visualTransmission < 0.995;
-  const blockerReasonRu = blockerKind === 2
-    ? 'линию обзора закрыл объект карты'
-    : blockerKind === 1
-      ? 'линию обзора закрыл рельеф'
-      : partialObscuration
-        ? 'прямая видимость есть, но растительность ухудшает обзор'
-        : 'прямая видимость есть';
-  return {
-    origin: { ...origin },
-    target: { ...target },
-    totalDistanceMeters,
-    visibleDistanceMeters: blocked ? 0 : totalDistanceMeters,
-    blocked,
-    blockedAt: null,
-    blockerReasonRu,
-    visualTransmission,
-    partialObscuration,
-    accumulatedForestMeters: 0,
-    obscurationReasonRu: partialObscuration
-      ? 'растительность ослабляет общий visibility geometry field'
-      : 'препятствий растительностью нет',
-  };
+function getPerceptionPointCache(state: SimulationState): Map<string, PerceptionPointCacheEntry> {
+  let cache = perceptionPointCacheByState.get(state);
+  if (!cache) {
+    cache = new Map();
+    perceptionPointCacheByState.set(state, cache);
+  }
+  return cache;
 }
 
-function eyeHeightForPosture(posture: UnitModel['behaviorRuntime']['posture']): number {
-  if (posture === 'prone') return 0.35;
-  if (posture === 'crouched') return 1.1;
-  return 1.7;
+function touch<T>(cache: Map<string, T>, key: string, value: T): void {
+  cache.delete(key);
+  cache.set(key, value);
 }
 
-function touch<T>(runtime: Map<string, T>, key: string, value: T): void {
-  runtime.delete(key);
-  runtime.set(key, value);
-}
-
-function trim<T>(runtime: Map<string, T>, maximum: number): void {
-  while (runtime.size > maximum) {
-    const oldest = runtime.keys().next().value as string | undefined;
+function trim<T>(cache: Map<string, T>, maximum: number): void {
+  while (cache.size > maximum) {
+    const oldest = cache.keys().next().value as string | undefined;
     if (oldest === undefined) break;
-    runtime.delete(oldest);
+    cache.delete(oldest);
   }
 }
 
