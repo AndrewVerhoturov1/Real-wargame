@@ -12,7 +12,16 @@ interface MutablePhaseAccumulator {
 }
 
 export interface PerformancePhaseContext {
+  readonly sessionId?: string;
+  readonly eventId?: string;
+  readonly operationId?: string;
+  readonly requestId?: string;
+  readonly orderId?: string;
+  readonly routeRequestId?: string;
+  readonly workerRequestId?: string;
   readonly unitId?: string;
+  readonly revision?: number;
+  readonly profileId?: string;
   readonly simulationStep?: number;
   readonly activeNodeId?: string | null;
   readonly activeSubgraphId?: string | null;
@@ -43,9 +52,9 @@ const contextualEvents: PerformancePhaseEventDiagnostic[] = [];
 let activeContext: PerformancePhaseContext | null = null;
 
 /**
- * Attaches synchronous ownership metadata to nested measured phases. The
- * scheduler uses this to attribute field builds to a concrete unit and graph
- * execution state without polling every cache on every simulation tick.
+ * Attaches synchronous ownership metadata to nested measured phases. Explicit
+ * operation/request IDs remain stable across nested calls; asynchronous work
+ * must carry the context in its request payload and re-enter it on completion.
  */
 export function withPerformancePhaseContext<T>(
   context: PerformancePhaseContext,
@@ -61,10 +70,8 @@ export function withPerformancePhaseContext<T>(
 }
 
 /**
- * Records every synchronous phase in a bounded in-memory accumulator and emits
- * PerformanceMeasure entries only for potentially blocking calls. The runtime
- * aggregate fixes the old report gap where fast samples disappeared entirely,
- * while the 8 ms entry threshold keeps LoAF overlap instrumentation bounded.
+ * Records every synchronous phase in a bounded accumulator and emits browser
+ * PerformanceMeasure entries only for potentially blocking calls.
  */
 export function measurePerformancePhase<T>(name: string, callback: () => T): T {
   const startedAt = performance.now();
