@@ -29,7 +29,8 @@ Stable branch: main
 3. Прочитай docs/orchestration/CHAT_WORKFLOW.md.
 4. Прочитай актуальный STATUS.md подпроекта.
 5. Прочитай релевантный project skill и архитектурные документы.
-6. Повторно открой актуальные версии всех затронутых файлов.
+6. Для любого runtime-affecting результата прочитай docs/performance/PERFORMANCE_PRINCIPLES.md и .agents/skills/real-wargame-performance/SKILL.md.
+7. Повторно открой актуальные версии всех затронутых файлов.
 
 Правила интеграции:
 
@@ -39,11 +40,13 @@ Stable branch: main
 4. При пересечении решений объединяй смысловые изменения.
 5. Отбрасывай лишние, дублирующие или архитектурно слабые части.
 6. Добавляй связующие изменения, если они необходимы для целостной системы.
-7. Не сохраняй одновременно два конкурирующих владельца одного жизненного цикла.
-8. Обновляй текущую статусную документацию только после фактической интеграции.
-9. Generated-файлы обновляй через предусмотренный генератор.
-10. Доставляй итог в real-wargame-preview или возвращай воспроизводимый пакет, если запись в GitHub недоступна.
-11. Не изменяй main без отдельного явного разрешения пользователя.
+7. Не сохраняй одновременно два конкурирующих владельца одного жизненного цикла или gameplay value.
+8. Не принимай функционально рабочую часть, если она добавляет unbounded main-thread work, broad invalidation, cache churn, UI-owned computation или отключённый performance gate.
+9. Проверяй, что shared prepared data, revision identity, queue budget, cache limits, stale-result rejection и teardown остаются едиными после объединения веток.
+10. Обновляй текущую статусную документацию только после фактической интеграции.
+11. Generated-файлы обновляй через предусмотренный генератор.
+12. Доставляй итог в real-wargame-preview или возвращай воспроизводимый пакет, если запись в GitHub недоступна.
+13. Не изменяй main без отдельного явного разрешения пользователя.
 
 Фундаментальные инварианты:
 
@@ -54,11 +57,32 @@ Stable branch: main
 - AiGameBridge адаптирует AI к игре;
 - renderer не становится источником истины;
 - субъективное знание не раскрывает скрытое объективное состояние;
-- PixiJS остаётся версии 7;
+- UI, selected unit и visible layer не владеют gameplay computation;
+- one-entity change не инвалидирует unrelated world state без доказанной причины;
+- queues, caches и per-step work имеют явные bounds;
+- async results имеют exact identity и stale-result rejection;
+- PixiJS остаётся версии 8;
 - пользовательский интерфейс имеет полный русский перевод;
-- проверки и visual QA указываются честно.
+- проверки, performance evidence и visual QA указываются честно.
 
-После сборки запусти релевантные focused smoke, общие регрессии, production build и docs checks, которые реально доступны в среде. Не утверждай выполнение недоступных проверок.
+Для runtime-affecting интеграции отдельно проверь:
+
+```text
+hot path
+worst-case complexity
+main-thread work
+full-map build count
+canonical shared result
+invalidation revisions
+worker and queue budget
+cache key/limit/memory
+stale-result rejection
+teardown
+before/after p95, p99 and max
+exact-head enforced workflow
+```
+
+После сборки запусти релевантные focused smoke, общие регрессии, production build, docs checks и performance checks, которые реально доступны в среде. Не утверждай выполнение недоступных проверок.
 
 Для пользовательских визуальных изменений подготовь visual QA: сценарий, ключевые PNG и ожидаемые доказательства. Не запускай реальный браузерный workflow без явного разрешения пользователя.
 
@@ -89,6 +113,10 @@ Stable branch: main
 ## Conflict resolutions
 
 Какие смысловые конфликты разрешены.
+
+## Performance impact
+
+Для runtime-affecting интеграции заполни обязательные поля из docs/orchestration/RESULT_TEMPLATE.md. Для truly non-runtime changes укажи not applicable и точную причину.
 
 ## Checks actually run
 
