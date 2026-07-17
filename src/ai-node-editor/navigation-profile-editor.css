@@ -422,3 +422,9 @@
 .navigation-profile-mode-select span { color: var(--navigation-profile-muted); font-weight: 700; }
 .navigation-profile-mode-select select { min-width: 0; }
 .attention-profile-editor-layout .navigation-profile-field-control input[type="range"] { min-width: 0; }
+
+.environment-material-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+.environment-material-groups button.active { border-color: #8dc58e; background: rgba(83, 128, 82, 0.35); }
+.environment-revision-badges { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.environment-revision-badges span { padding: 4px 7px; border: 1px solid rgba(181, 213, 173, 0.25); border-radius: 999px; font-size: 11px; color: #c9dcc3; }
+.navigation-profile-list-heading.compact { margin-top: 18px; }

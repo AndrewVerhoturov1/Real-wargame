@@ -6,6 +6,13 @@ import {
 } from '../knowledge/SoldierDangerField';
 import type { TacticalMap } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
+import { getActiveEnvironmentProfile } from '../map/EnvironmentProfileRuntime';
+import {
+  getDefaultEnvironmentProfile,
+  getEnvironmentProfileDomainKey,
+  getSurfaceMaterial,
+  getVegetationMaterial,
+} from '../map/EnvironmentMaterialProfile';
 import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 import { buildNavigationGrid } from '../pathfinding/GridNavigation';
 import {
@@ -37,6 +44,8 @@ const NAVIGATION_TERRAIN_KEYS: readonly NavigationTerrainCostKey[] = [
 const NAVIGATION_TERRAIN_KEY_CODE = new Map<NavigationTerrainCostKey, number>(
   NAVIGATION_TERRAIN_KEYS.map((key, index) => [key, index]),
 );
+
+const DEFAULT_PHYSICAL_TERRAIN_COSTS = buildDefaultPhysicalTerrainCosts();
 
 const mapIdentityByMap = new WeakMap<TacticalMap, number>();
 let nextMapIdentity = 1;
@@ -239,7 +248,14 @@ export function getRouteCostFields(
 ): RouteCostFields {
   const revisions = getMapRevisionSnapshot(map);
   const mapIdentity = getMapIdentity(map);
-  const mapRevisionKey = [revisions.terrain, revisions.height, revisions.forest, revisions.objects].join(':');
+  const environmentMovementKey = getEnvironmentProfileDomainKey(getActiveEnvironmentProfile(), 'movement');
+  const mapRevisionKey = [
+    revisions.terrain,
+    revisions.height,
+    revisions.forest,
+    environmentMovementKey,
+    revisions.objects,
+  ].join(':');
   const staticKey = [
     mapIdentity,
     map.width,
@@ -247,6 +263,7 @@ export function getRouteCostFields(
     revisions.terrain,
     revisions.height,
     revisions.forest,
+    environmentMovementKey,
     revisions.objects,
     profile.id,
     profile.revision,
@@ -371,7 +388,13 @@ export function routeCostFieldsMatch(
 ): boolean {
   const revisions = getMapRevisionSnapshot(map);
   return fields.mapIdentity === getMapIdentity(map)
-    && fields.mapRevisionKey === [revisions.terrain, revisions.height, revisions.forest, revisions.objects].join(':')
+    && fields.mapRevisionKey === [
+      revisions.terrain,
+      revisions.height,
+      revisions.forest,
+      getEnvironmentProfileDomainKey(getActiveEnvironmentProfile(), 'movement'),
+      revisions.objects,
+    ].join(':')
     && fields.width === map.width
     && fields.height === map.height
     && fields.profileId === profile.id
@@ -454,7 +477,9 @@ function buildStaticField(
     const terrainKey = resolveTerrainKey(cell.terrain, vegetation.layer, navigation.bridge, ditchCells[index] === 1);
     terrainKeys[index] = terrainKey;
     terrainKeyCodes[index] = NAVIGATION_TERRAIN_KEY_CODE.get(terrainKey) ?? 1;
-    terrainCost[index] = navigation.passable ? profile.terrainCosts[terrainKey] : Number.POSITIVE_INFINITY;
+    terrainCost[index] = navigation.passable
+      ? combinePhysicalAndTacticalTerrainCost(navigation.movementCost, profile.terrainCosts[terrainKey], terrainKey)
+      : Number.POSITIVE_INFINITY;
     slopeCost[index] = navigation.passable ? estimateLocalSlope(map, cell.x, cell.y) * profile.slopeWeight : 0;
     const concealment = Math.max(
       vegetation.movement.tacticalConcealment,
@@ -589,6 +614,37 @@ function hasDirectionalTerrainWeights(profile: NavigationProfile): boolean {
     || value.crestPenalty > 0
     || value.silhouettePenalty > 0
     || value.valleyPreference > 0;
+}
+
+function combinePhysicalAndTacticalTerrainCost(
+  physicalCost: number,
+  tacticalProfileCost: number,
+  terrainKey: NavigationTerrainCostKey,
+): number {
+  const tacticalDeltaFromDefault = tacticalProfileCost - DEFAULT_PHYSICAL_TERRAIN_COSTS[terrainKey];
+  return Math.max(0.05, physicalCost + tacticalDeltaFromDefault);
+}
+
+function buildDefaultPhysicalTerrainCosts(): Record<NavigationTerrainCostKey, number> {
+  const profile = getDefaultEnvironmentProfile();
+  const cost = (surfaceId: string, vegetationId = 'none'): number => {
+    const surface = getSurfaceMaterial(profile, surfaceId);
+    const vegetation = getVegetationMaterial(profile, vegetationId);
+    return Math.max(0.05, 1
+      + (surface.movement.resistance - 1)
+      + (vegetation.movement.resistance - 1)
+      + surface.movement.physicalCost);
+  };
+  return {
+    road: cost('road'),
+    field: cost('field'),
+    sparseForest: cost('field', 'sparse_forest'),
+    denseForest: cost('field', 'dense_forest'),
+    rough: cost('rough'),
+    swamp: cost('swamp'),
+    bridge: 0.9,
+    ditch: cost('field'),
+  };
 }
 
 function resolveTerrainKey(

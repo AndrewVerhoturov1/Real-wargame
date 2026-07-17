@@ -1,135 +1,97 @@
+import {
+  type VegetationMaterialDefinition,
+  getEnvironmentProfileDomainKey,
+  getVegetationMaterial,
+  legacyForestLayerToVegetationMaterialId,
+  vegetationMaterialIdToLegacyForestLayer,
+} from './EnvironmentMaterialProfile';
+import { getActiveEnvironmentProfile } from './EnvironmentProfileRuntime';
+
 export type VegetationKind = 'none' | 'sparse_forest' | 'dense_forest';
 export type VegetationLayerKind = 0 | 1 | 2;
 
 export interface VegetationCellLike {
   readonly terrain?: string;
   readonly forest?: number;
-}
-
-export interface VegetationDefinition {
-  readonly id: VegetationKind;
-  readonly layer: VegetationLayerKind;
-  readonly presentation: {
-    readonly color: number;
-    readonly opacity: number;
-    readonly detailDensity: number;
-  };
-  readonly visibility: {
-    readonly transmissionLossPerMeter: number;
-    readonly minimumTransmission: number;
-    readonly targetConcealment: number;
-    readonly localConcealment: number;
-  };
-  readonly fire: {
-    readonly transmissionLossPerMeter: number;
-    readonly protectionPerMeter: number;
-    readonly maximumProtection: number;
-    readonly densityWeight: number;
-  };
-  readonly movement: {
-    readonly baseResistance: number;
-    readonly tacticalConcealment: number;
-  };
-}
-
-export const VEGETATION_DEFINITION_REVISION = 1;
-
-export const VEGETATION_DEFINITIONS: Readonly<Record<VegetationKind, VegetationDefinition>> = {
-  none: {
-    id: 'none',
-    layer: 0,
-    presentation: { color: 0x000000, opacity: 0, detailDensity: 0 },
-    visibility: {
-      transmissionLossPerMeter: 0,
-      minimumTransmission: 0.04,
-      targetConcealment: 0,
-      localConcealment: 0,
-    },
-    fire: {
-      transmissionLossPerMeter: 0,
-      protectionPerMeter: 0,
-      maximumProtection: 0,
-      densityWeight: 0,
-    },
-    movement: { baseResistance: 1, tacticalConcealment: 0 },
-  },
-  sparse_forest: {
-    id: 'sparse_forest',
-    layer: 1,
-    // Previous alpha 118/255, multiplied by three and clamped to one.
-    presentation: { color: 0x225637, opacity: 1, detailDensity: 3 },
-    visibility: {
-      transmissionLossPerMeter: 0.035,
-      minimumTransmission: 0.04,
-      targetConcealment: 35,
-      localConcealment: 52,
-    },
-    fire: {
-      transmissionLossPerMeter: 0.018,
-      protectionPerMeter: 0.8,
-      maximumProtection: 42,
-      densityWeight: 0.8,
-    },
-    movement: { baseResistance: 1.25, tacticalConcealment: 0.35 },
-  },
-  dense_forest: {
-    id: 'dense_forest',
-    layer: 2,
-    // Previous alpha 165/255, multiplied by three and clamped to one.
-    presentation: { color: 0x133a25, opacity: 1, detailDensity: 7 },
-    visibility: {
-      transmissionLossPerMeter: 0.075,
-      minimumTransmission: 0.04,
-      targetConcealment: 65,
-      localConcealment: 82,
-    },
-    fire: {
-      transmissionLossPerMeter: 0.04,
-      protectionPerMeter: 1.7,
-      maximumProtection: 68,
-      densityWeight: 1.7,
-    },
-    movement: { baseResistance: 1.45, tacticalConcealment: 0.6 },
-  },
-};
-
-export function normalizeVegetationLayer(value: number | undefined): VegetationLayerKind {
-  const rounded = Number.isFinite(value) ? Math.round(value as number) : 0;
-  if (rounded <= 0) return 0;
-  if (rounded >= 2) return 2;
-  return 1;
+  readonly vegetationMaterialId?: string;
 }
 
 /**
- * Canonical compatibility rule: the explicit forest layer wins. Legacy cells
- * with terrain='forest' and forest=0 are interpreted as sparse forest.
+ * Compatibility facade for older consumers. New code should use the canonical
+ * VegetationMaterialDefinition fields directly.
  */
-export function resolveCellVegetationLayer(cell: VegetationCellLike | null | undefined): VegetationLayerKind {
-  const explicit = normalizeVegetationLayer(cell?.forest);
-  if (explicit > 0) return explicit;
-  return cell?.terrain === 'forest' ? 1 : 0;
+export interface VegetationDefinition extends VegetationMaterialDefinition {
+  readonly layer: VegetationLayerKind;
+  readonly presentation: VegetationMaterialDefinition['presentation'] & {
+    readonly color: number;
+    readonly detailDensity: number;
+  };
+  readonly movement: VegetationMaterialDefinition['movement'] & {
+    readonly baseResistance: number;
+  };
 }
 
-export function resolveVegetationKind(value: number | undefined): VegetationKind {
-  const layer = normalizeVegetationLayer(value);
-  if (layer === 2) return 'dense_forest';
-  if (layer === 1) return 'sparse_forest';
+export function getVegetationDefinitionRevision(domain: 'presentation' | 'visibility' | 'fire' | 'movement' = 'presentation'): number {
+  return getActiveEnvironmentProfile().revisions[domain];
+}
+
+export function getVegetationDefinitionKey(domain: 'presentation' | 'visibility' | 'fire' | 'movement' = 'presentation'): string {
+  return getEnvironmentProfileDomainKey(getActiveEnvironmentProfile(), domain);
+}
+
+/** @deprecated Use getVegetationDefinitionRevision(domain). */
+export const VEGETATION_DEFINITION_REVISION = 1;
+
+export function normalizeVegetationLayer(value: number | undefined): VegetationLayerKind {
+  return vegetationMaterialIdToLegacyForestLayer(legacyForestLayerToVegetationMaterialId(value));
+}
+
+export function resolveCellVegetationLayer(cell: VegetationCellLike | null | undefined): VegetationLayerKind {
+  return vegetationMaterialIdToLegacyForestLayer(resolveCellVegetationMaterialId(cell));
+}
+
+export function resolveVegetationKind(value: number | string | undefined): VegetationKind {
+  const id = typeof value === 'string' ? value : legacyForestLayerToVegetationMaterialId(value);
+  if (id === 'dense_forest') return 'dense_forest';
+  if (id === 'sparse_forest') return 'sparse_forest';
   return 'none';
 }
 
+export function resolveCellVegetationMaterialId(cell: VegetationCellLike | null | undefined): string {
+  const canonical = cell?.vegetationMaterialId?.trim();
+  if (canonical) return canonical;
+
+  const legacyLayer = normalizeVegetationLayer(cell?.forest);
+  if (legacyLayer > 0) return legacyForestLayerToVegetationMaterialId(legacyLayer);
+  return cell?.terrain === 'forest' ? 'sparse_forest' : 'none';
+}
+
 export function resolveCellVegetationKind(cell: VegetationCellLike | null | undefined): VegetationKind {
-  return resolveVegetationKind(resolveCellVegetationLayer(cell));
+  return resolveVegetationKind(resolveCellVegetationMaterialId(cell));
 }
 
-export function resolveVegetationDefinition(
-  value: VegetationKind | number | undefined,
-): VegetationDefinition {
-  const kind = typeof value === 'string' ? value : resolveVegetationKind(value);
-  return VEGETATION_DEFINITIONS[kind];
+export function resolveVegetationDefinition(value: VegetationKind | number | string | undefined): VegetationDefinition {
+  const material = getVegetationMaterial(getActiveEnvironmentProfile(), typeof value === 'number' ? legacyForestLayerToVegetationMaterialId(value) : value);
+  return withCompatibilityAliases(material);
 }
 
-export function resolveCellVegetationDefinition(
-  cell: VegetationCellLike | null | undefined,
-): VegetationDefinition {
-  return VEGETATION_DEFINITIONS[resolveCellVegetationKind(cell)];
+export function resolveCellVegetationDefinition(cell: VegetationCellLike | null | undefined): VegetationDefinition {
+  return resolveVegetationDefinition(resolveCellVegetationMaterialId(cell));
+}
+
+function withCompatibilityAliases(material: VegetationMaterialDefinition): VegetationDefinition {
+  const layer = vegetationMaterialIdToLegacyForestLayer(material.id);
+  return {
+    ...material,
+    layer,
+    presentation: {
+      ...material.presentation,
+      color: material.presentation.colorTint,
+      detailDensity: layer === 2 ? 7 : layer === 1 ? 3 : 0,
+    },
+    movement: {
+      ...material.movement,
+      baseResistance: material.movement.resistance,
+    },
+  };
 }

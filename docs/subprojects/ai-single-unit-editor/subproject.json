@@ -4,8 +4,8 @@
   "status": "active",
   "updated_at": "2026-07-16",
   "goal": "Создать понятную человеку лабораторию поведения одиночного бойца: Utility AI выбирает решение, stateful runtime исполняет длительные действия, общий A* ведёт бойца по карте, постоянные профили маршрута задают стоимость местности, а гибридная система обзора и внимания формирует субъективные визуальные и звуковые контакты без всезнания ИИ.",
-  "current_focus": "Draft PR #127 follow-up hardens the accepted simulation-owned per-unit scheduler: explicit paused steps advance all simulation systems, selected-unit diagnostics are read-only, observer polling and graph decisions use partition-invariant simulation-time cadence, the scheduler is one O(n) pass with one frozen graph snapshot, and ai-scheduler:smoke is blocking CI. It is not yet part of real-wargame-preview.",
-  "next_step": "Review the corrected exact head of draft PR #127 and its Combat Foundation Core scheduler-smoke evidence; if accepted, integrate it with PR #126 while preserving canonical world-threat semantics and the scheduler phase order.",
+  "current_focus": "Draft PR #130 implements canonical surface/vegetation material profiles, the visible «Профили местности» editor, independent presentation/visibility/fire/movement revisions, continuous dirty-chunk vegetation raster rendering and canonical worker material snapshots from preview base 4adb42650f0fb6ad61b31f9521cec4508a5a40ec. Performance investigation is intentionally delegated to a separate follow-up.",
+  "next_step": "Review the exact-head material, migration, revision, renderer and integration checks for PR #130. Run the prepared forest/profile screenshot QA only after explicit user approval.",
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
   "last_verified_commit": "3f01f4ba9b96daa1b8951bdd08f4005a482fee8c",
   "last_verified_runs": {
@@ -290,7 +290,13 @@
     "src/core/cover/CoverTacticalCandidates.ts",
     "src/core/ai/AiGraphRuntime.ts",
     "src/ai-node-editor/runtime-debug-overlay.ts",
-    "src/core/ai/AiSimulationScheduler.ts"
+    "src/core/ai/AiSimulationScheduler.ts",
+    "src/core/map/EnvironmentMaterialProfile.ts",
+    "src/core/map/EnvironmentProfileRuntime.ts",
+    "src/ui/EnvironmentProfileStorage.ts",
+    "src/core/knowledge/AwarenessWorkerMapSnapshot.ts",
+    "src/rendering/VegetationChunkRaster.ts",
+    "src/ai-node-editor/EnvironmentProfileEditorPanel.ts"
   ],
   "test_files": [
     "scripts/perception_system_smoke.ts",
@@ -330,7 +336,12 @@
     "scripts/tactical_query_system_smoke.ts",
     "scripts/combat_tactical_integration_smoke.ts",
     "tests/ai-state-plan-visual.spec.ts",
-    "scripts/ai_per_unit_scheduler_smoke.ts"
+    "scripts/ai_per_unit_scheduler_smoke.ts",
+    "scripts/environment_materials_smoke.ts",
+    "scripts/environment_material_migration_smoke.ts",
+    "scripts/environment_profile_revisions_smoke.ts",
+    "scripts/vegetation_chunk_raster_smoke.ts",
+    "tests/environment-materials-visual.spec.ts"
   ],
   "manual_docs": [
     "docs/subprojects/ai-single-unit-editor/COMBAT_TACTICAL_INTEGRATION_STAGE1.md",
@@ -353,7 +364,8 @@
     "docs/subprojects/ai-single-unit-editor/GRAPH_V2_TYPED_CONTRACTS_AND_SUBGRAPHS.md",
     "docs/subprojects/ai-single-unit-editor/HIERARCHICAL_STATES_AND_PLANS_V1.md",
     "docs/superpowers/plans/2026-07-14-ai-state-plan-v1.md",
-    "docs/subprojects/ai-single-unit-editor/PER_UNIT_AI_SCHEDULER_V1.md"
+    "docs/subprojects/ai-single-unit-editor/PER_UNIT_AI_SCHEDULER_V1.md",
+    "docs/subprojects/ai-single-unit-editor/ENVIRONMENT_MATERIAL_PROFILES_V1.md"
   ],
   "suggested_verification": [
     "npm run state-machine:smoke",
@@ -399,7 +411,11 @@
     "npm run node-contract-ui:smoke",
     "npm run runtime-debug-v2:smoke",
     "npm run graph-v2-cli:smoke",
-    "npm run ai-scheduler:smoke"
+    "npm run ai-scheduler:smoke",
+    "npm run environment-materials:smoke",
+    "npm run environment-material-migration:smoke",
+    "npm run environment-profile-revisions:smoke",
+    "npm run vegetation-chunk-raster:smoke"
   ],
   "safety_rules": [
     "SimulationTick остаётся единственным кодом, который изменяет координаты бойца.",
@@ -433,7 +449,10 @@
     "Each graph-controlled unit owns its AiRuntimeSession, route status and action owner tokens; one O(n) scheduler pass resolves one immutable graph snapshot and may process each unit at most once.",
     "Selected-unit evaluate/tick/cancel-preview diagnostics must execute on a detached state and never mutate gameplay state.",
     "Observer-relative direction/range changes for unit contacts do not increment semantic tacticalKnowledge revision or trigger route replanning.",
-    "Canonical scene/editor units declare aiControl='graph'; externally scripted fixtures declare aiControl='manual'."
+    "Canonical scene/editor units declare aiControl='graph'; externally scripted fixtures declare aiControl='manual'.",
+    "Cells reference canonical surfaceMaterialId and vegetationMaterialId; legacy terrain/forest values are compatibility projections only.",
+    "Simulation and AI read material profile values and never infer gameplay from raster pixels, texture colors or Pixi display objects.",
+    "Presentation, visibility, fire and movement profile changes invalidate only their owned consumers."
   ],
   "known_limits": [
     "Источниками зрительных стимулов пока служат зоны угрозы и расширяемый контракт unit; полноценной вражеской стороны с боевыми юнитами ещё нет.",
@@ -451,6 +470,11 @@
     "Cross-tick unknown-fire merging, live route replanning, safe-position winner changes and reverse-slope direction effects still need stronger end-to-end proof.",
     "The Combat Tactical Integration Stage 1 smoke is not yet part of the permanent preview-delivery CI workflow.",
     "The four-scene combat tactical visual scenario is prepared but Chromium and PNG inspection have not run without explicit approval.",
-    "Per-unit scheduling currently uses a simple stable O(n) array traversal, 600 ms ordinary decisions and 60 ms observer polling; no worker pool or phased load distribution is implemented."
+    "Per-unit scheduling currently uses a simple stable O(n) array traversal, 600 ms ordinary decisions and 60 ms observer polling; no worker pool or phased load distribution is implemented.",
+    "Environment material visual QA is prepared but has not run without explicit user approval.",
+    "Browser performance attribution is intentionally outside PR #130 and belongs to a separate follow-up."
+  ],
+  "read_first": [
+    "docs/subprojects/ai-single-unit-editor/ENVIRONMENT_MATERIAL_PROFILES_V1.md"
   ]
 }

@@ -1,6 +1,7 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import type { MapObject } from '../map/MapModel';
+import type { EnvironmentMaterialProfile } from '../map/EnvironmentMaterialProfile';
 import type { CanonicalWorldThreatSnapshot } from './CanonicalWorldThreat';
 
 export interface AwarenessWorkerMapSnapshot {
@@ -10,11 +11,15 @@ export interface AwarenessWorkerMapSnapshot {
   readonly cellSize: number;
   readonly metersPerCell: number;
   readonly sourceToRuntimeCellScale: number;
-  readonly defaultTerrainCode: number;
+  readonly environmentProfile: EnvironmentMaterialProfile;
+  readonly defaultSurfaceMaterialId: string;
+  readonly defaultVegetationMaterialId: string;
   readonly defaultHeight: number;
-  readonly terrainCodes: Uint8Array;
+  readonly surfaceMaterialIds: readonly string[];
+  readonly vegetationMaterialIds: readonly string[];
+  readonly surfaceMaterialCodes: Uint16Array;
+  readonly vegetationMaterialCodes: Uint16Array;
   readonly heightLevels: Int8Array;
-  readonly forestKinds: Uint8Array;
   readonly objects: MapObject[];
 }
 

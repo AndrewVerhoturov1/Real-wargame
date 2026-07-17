@@ -5,7 +5,7 @@ import type { PerceptionStimulus } from './PerceptionStimulus';
 
 export interface VisualSignalFactor {
   key: 'posture' | 'movement' | 'action' | 'size' | 'concealment' | 'distance'
-    | 'lateral_motion' | 'attention' | 'observer' | 'transmission' | 'condition';
+    | 'lateral_motion' | 'movement_profile' | 'attention' | 'observer' | 'transmission' | 'condition';
   multiplier: number;
   labelRu: string;
   explanationRu: string;
@@ -79,6 +79,7 @@ export function evaluateVisualSignal(input: VisualSignalInput): VisualSignalResu
     factor('concealment', concealmentMultiplier, 'Маскировка', `Маскировка ${Math.round(stimulus.concealment)} из 100: ×${format(concealmentMultiplier)}.`),
     factor('distance', quality.distanceFactor, 'Дистанция', `Дистанция ${Math.round(visibility.distanceMeters)} м в существующей зоне обзора: ×${format(quality.distanceFactor)}.`),
     factor('lateral_motion', lateralMultiplier, 'Поперечное движение', `Поперечное движение: ×${format(lateralMultiplier)}.`),
+    factor('movement_profile', stimulus.movementSignatureMultiplier, 'Способ движения', `Фактический способ движения: ×${format(stimulus.movementSignatureMultiplier)}.`),
     factor('attention', quality.attentionFactor, 'Направление внимания', `${attentionZoneLabel(attention.zone)}: ×${format(quality.attentionFactor)}.`),
     factor('observer', observerMultiplier, 'Способности наблюдателя', `Зрение и внимание бойца: ×${format(observerMultiplier)}.`),
     factor('transmission', quality.transmissionFactor, 'Проходимость обзора', `${lineOfSight.obscurationReasonRu}: ×${format(quality.transmissionFactor)}.`),

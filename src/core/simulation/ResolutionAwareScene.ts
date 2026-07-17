@@ -46,6 +46,7 @@ export function replaceSceneAtRuntimeResolution(
   state.map = loaded.map;
   state.units = loaded.units;
   state.pressureZones = loaded.pressureZones;
+  state.movementProfiles = loaded.movementProfiles;
   state.selectedUnitId = null;
   state.selectedUnitIds = [];
   state.mouseGridPosition = null;

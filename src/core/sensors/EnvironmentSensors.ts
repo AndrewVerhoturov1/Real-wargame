@@ -7,6 +7,7 @@ import {
   type TacticalMap,
   type TerrainKind,
 } from '../map/MapModel';
+import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 import { resolvePressureZoneSettings } from '../pressure/PressureZone';
 import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
 import type { SimulationState } from '../simulation/SimulationState';
@@ -98,13 +99,19 @@ export function buildEnvironmentSensorReport(state: SimulationState, unit: UnitM
 
 function scorePlace(map: TacticalMap, position: GridPosition): PlaceScore {
   const cell = getCell(map, Math.floor(position.x), Math.floor(position.y));
-  const terrainScore = cell ? TERRAIN_SCORES[cell.terrain] : TERRAIN_SCORES.field;
+  const surfaceScore = cell ? TERRAIN_SCORES[cell.terrain] : TERRAIN_SCORES.field;
+  const vegetation = resolveCellVegetationDefinition(cell);
+  const vegetationScore: PlaceScore = {
+    cover: clampPercent(vegetation.fire.maximumProtection * 0.3),
+    concealment: clampPercent(vegetation.visibility.localConcealment),
+    openness: clampPercent(100 - vegetation.visibility.localConcealment),
+  };
   const strongestObjectScore = getStrongestObjectScoreAtPosition(map, position);
 
   return {
-    cover: clampPercent(Math.max(terrainScore.cover, strongestObjectScore.cover)),
-    concealment: clampPercent(Math.max(terrainScore.concealment, strongestObjectScore.concealment)),
-    openness: clampPercent(Math.min(terrainScore.openness, strongestObjectScore.openness)),
+    cover: clampPercent(Math.max(surfaceScore.cover, vegetationScore.cover, strongestObjectScore.cover)),
+    concealment: clampPercent(Math.max(surfaceScore.concealment, vegetationScore.concealment, strongestObjectScore.concealment)),
+    openness: clampPercent(Math.min(surfaceScore.openness, vegetationScore.openness, strongestObjectScore.openness)),
   };
 }
 

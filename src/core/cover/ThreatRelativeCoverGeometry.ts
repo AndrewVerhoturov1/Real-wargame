@@ -7,7 +7,7 @@ import {
   type TacticalMap,
 } from '../map/MapModel';
 import { getMapLayerRevision } from '../map/MapRuntimeState';
-import { resolveVegetationDefinition } from '../map/VegetationDefinition';
+import { getVegetationDefinitionKey, resolveVegetationDefinition } from '../map/VegetationDefinition';
 import { getVisibilityStaticGrid } from '../visibility/VisibilityStaticGrid';
 
 const CACHE_LIMIT = 16;
@@ -74,6 +74,7 @@ interface MapCache {
   objectRevision: number;
   forestRevision: number;
   terrainRevision: number;
+  vegetationFireKey: string;
   staticGrid: ThreatRelativeCoverStaticGrid | null;
   readonly diagnostics: MutableDiagnostics;
 }
@@ -82,6 +83,7 @@ interface ThreatRelativeCoverStaticGrid {
   readonly objectRevision: number;
   readonly forestRevision: number;
   readonly terrainRevision: number;
+  readonly vegetationFireKey: string;
   readonly forestDensityWeight: Float32Array;
   readonly descriptorsByPosture: Record<UnitPosture, readonly ObjectDescriptor[]>;
 }
@@ -108,19 +110,22 @@ export function getThreatRelativeCoverField(
   const objectRevision = getMapLayerRevision(map, 'objects');
   const forestRevision = getMapLayerRevision(map, 'forest');
   const terrainRevision = getMapLayerRevision(map, 'terrain');
+  const vegetationFireKey = getVegetationDefinitionKey('fire');
   if (
     mapCache.objectRevision !== objectRevision
     || mapCache.forestRevision !== forestRevision
     || mapCache.terrainRevision !== terrainRevision
+    || mapCache.vegetationFireKey !== vegetationFireKey
   ) {
     mapCache.objectRevision = objectRevision;
     mapCache.forestRevision = forestRevision;
     mapCache.terrainRevision = terrainRevision;
+    mapCache.vegetationFireKey = vegetationFireKey;
     mapCache.hotFields.clear();
     mapCache.staticGrid = null;
   }
 
-  const staticGrid = getStaticGrid(map, mapCache, objectRevision, forestRevision, terrainRevision);
+  const staticGrid = getStaticGrid(map, mapCache, objectRevision, forestRevision, terrainRevision, vegetationFireKey);
 
   const quantizedX = quantizeInteger(options.threatPosition.x, THREAT_POSITION_BUCKET_CELLS);
   const quantizedY = quantizeInteger(options.threatPosition.y, THREAT_POSITION_BUCKET_CELLS);
@@ -141,6 +146,7 @@ export function getThreatRelativeCoverField(
     objectRevision,
     forestRevision,
     terrainRevision,
+    vegetationFireKey,
   ].join(':');
   const existing = mapCache.fields.get(key);
   if (existing) {
@@ -359,6 +365,7 @@ function getStaticGrid(
   objectRevision: number,
   forestRevision: number,
   terrainRevision: number,
+  vegetationFireKey: string,
 ): ThreatRelativeCoverStaticGrid {
   const existing = mapCache.staticGrid;
   if (
@@ -366,19 +373,22 @@ function getStaticGrid(
     && existing.objectRevision === objectRevision
     && existing.forestRevision === forestRevision
     && existing.terrainRevision === terrainRevision
+    && existing.vegetationFireKey === vegetationFireKey
   ) return existing;
 
   const visibilityGrid = getVisibilityStaticGrid(map);
   const forestDensityWeight = new Float32Array(map.width * map.height);
   for (let index = 0; index < forestDensityWeight.length; index += 1) {
-    forestDensityWeight[index] = resolveVegetationDefinition(
-      visibilityGrid.forestKind[index] ?? 0,
-    ).fire.densityWeight;
+    const vegetationMaterialId = visibilityGrid.vegetationMaterialIds[
+      visibilityGrid.vegetationMaterialCodes[index] ?? 0
+    ] ?? 'none';
+    forestDensityWeight[index] = resolveVegetationDefinition(vegetationMaterialId).fire.densityWeight;
   }
   const created: ThreatRelativeCoverStaticGrid = {
     objectRevision,
     forestRevision,
     terrainRevision,
+    vegetationFireKey,
     forestDensityWeight,
     descriptorsByPosture: {
       standing: buildObjectDescriptors(map, 'standing'),
@@ -532,6 +542,7 @@ function getMapCache(map: TacticalMap): MapCache {
     objectRevision: -1,
     forestRevision: -1,
     terrainRevision: -1,
+    vegetationFireKey: '',
     staticGrid: null,
     diagnostics: {
       geometryBuildCount: 0,

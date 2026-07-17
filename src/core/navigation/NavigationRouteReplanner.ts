@@ -95,6 +95,12 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
       ?? 'normal',
     navigationProfile: resolved.profile,
     navigationProfileSource: resolved.source,
+    movementProfileId: order.movementProfileId
+      ?? unit.playerCommand?.intent.movementProfileId,
+    movementProfileSource: order.movementProfileSource,
+    movementProfileOwnerToken: order.movementProfileOwnerToken,
+    movementProfileDefinitionRevision: order.movementProfileDefinitionRevision,
+    movementProfileSelectionRevision: order.movementProfileSelectionRevision,
     finalFacingRadians: order.finalFacingRadians,
     calculatedAtSimulationStep: state.simulationStep,
     tacticalContext,

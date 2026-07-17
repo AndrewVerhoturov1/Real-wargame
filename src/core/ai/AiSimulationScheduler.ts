@@ -1,4 +1,5 @@
 import { isUnitCombatCapable } from '../combat/CombatDamage';
+import type { MovementProfileRegistryEntry } from '../movement/MovementProfiles';
 import {
   measurePerformancePhase,
   withPerformancePhaseContext,
@@ -17,6 +18,7 @@ import { tickStatefulMoveBridgeForTrustedUnit } from './AiStatefulMoveGameBridge
 export interface AiSimulationSchedulerOptions {
   readonly cycleStartMs?: number;
   readonly cycleEndMs?: number;
+  readonly movementProfileRegistryEntries?: readonly MovementProfileRegistryEntry[];
 }
 
 export interface AiSimulationSchedulerResult {

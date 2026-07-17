@@ -1,5 +1,10 @@
 import type { AiRouteStatus, AiRouteStatusState } from '../AiRouteStatus';
 import type { GridPosition } from '../../geometry';
+import {
+  MOVEMENT_PROFILE_SOURCES,
+  normalizeMovementProfileId,
+  type MovementProfileSource,
+} from '../../movement/MovementProfiles';
 import { cloneRouteDangerDiagnostic, normalizeRouteDangerDiagnostic, type RouteDangerDiagnostic } from '../../navigation/RouteDangerDiagnostic';
 import type {
   MoveOrder,
@@ -33,6 +38,13 @@ export interface SerializedMoveOrder {
   readonly pathVisitedCells?: number;
   readonly pathReason?: string;
   readonly pathReasonRu?: string;
+  readonly movementProfileId?: string;
+  readonly movementProfileSource?: MovementProfileSource;
+  readonly movementProfileOwnerToken?: string;
+  readonly movementProfileDefinitionRevision?: number;
+  readonly movementProfileSelectionRevision?: number;
+  /** Legacy serialized input only. New snapshots never write this field. */
+  readonly movementProfileRevision?: number;
 }
 
 export interface AiRuntimeSceneSnapshotV1 {
@@ -184,6 +196,11 @@ export function serializeMoveOrder(order: MoveOrder): SerializedMoveOrder {
     pathVisitedCells: integerNonNegative(order.pathVisitedCells),
     pathReason: order.pathReason,
     pathReasonRu: order.pathReasonRu,
+    movementProfileId: order.movementProfileId,
+    movementProfileSource: order.movementProfileSource,
+    movementProfileOwnerToken: order.movementProfileOwnerToken,
+    movementProfileDefinitionRevision: integerNonNegative(order.movementProfileDefinitionRevision),
+    movementProfileSelectionRevision: integerNonNegative(order.movementProfileSelectionRevision),
   };
 }
 
@@ -207,16 +224,24 @@ export function restoreMoveOrder(value: SerializedMoveOrder): MoveOrder {
     pathVisitedCells: value.pathVisitedCells,
     pathReason: value.pathReason,
     pathReasonRu: value.pathReasonRu,
+    movementProfileId: value.movementProfileId,
+    movementProfileSource: value.movementProfileSource,
+    movementProfileOwnerToken: value.movementProfileOwnerToken,
+    movementProfileDefinitionRevision: value.movementProfileDefinitionRevision,
+    movementProfileSelectionRevision: value.movementProfileSelectionRevision ?? value.movementProfileRevision,
   };
 }
 
-function normalizeSerializedMoveOrder(value: unknown): SerializedMoveOrder | undefined {
+export function normalizeSerializedMoveOrder(value: unknown): SerializedMoveOrder | undefined {
   if (!isRecord(value) || value.type !== 'move' || !isPosition(value.target)) return undefined;
   const source = MOVE_SOURCES.includes(value.source as MoveOrderSource)
     ? value.source as MoveOrderSource
     : undefined;
   const routeStatus = MOVE_ROUTE_STATUSES.includes(value.routeStatus as MoveOrderRouteStatus)
     ? value.routeStatus as MoveOrderRouteStatus
+    : undefined;
+  const movementProfileSource = MOVEMENT_PROFILE_SOURCES.includes(value.movementProfileSource as MovementProfileSource)
+    ? value.movementProfileSource as MovementProfileSource
     : undefined;
   const waypoints = normalizePositions(value.waypoints);
   const routeCells = normalizeRouteCells(value.routeCells);
@@ -239,6 +264,17 @@ function normalizeSerializedMoveOrder(value: unknown): SerializedMoveOrder | und
     pathVisitedCells: integerNonNegative(value.pathVisitedCells),
     pathReason: typeof value.pathReason === 'string' ? value.pathReason : undefined,
     pathReasonRu: typeof value.pathReasonRu === 'string' ? value.pathReasonRu : undefined,
+    movementProfileId: typeof value.movementProfileId === 'string'
+      ? normalizeMovementProfileId(value.movementProfileId)
+      : undefined,
+    movementProfileSource,
+    movementProfileOwnerToken: typeof value.movementProfileOwnerToken === 'string'
+      ? value.movementProfileOwnerToken
+      : undefined,
+    movementProfileDefinitionRevision: integerNonNegative(value.movementProfileDefinitionRevision),
+    movementProfileSelectionRevision: integerNonNegative(
+      value.movementProfileSelectionRevision ?? value.movementProfileRevision,
+    ),
   };
 }
 

@@ -1,6 +1,8 @@
 import type { UnitPosture } from '../core/behavior/BehaviorModel';
 import { buildUnitKnowledgeReport, type KnowledgeCover, type KnowledgeDanger } from '../core/knowledge/UnitKnowledge';
 import { getCell, gridToCellLabel, type MapCell } from '../core/map/MapModel';
+import { getSurfaceMaterial, getVegetationMaterial } from '../core/map/EnvironmentMaterialProfile';
+import { getActiveEnvironmentProfile } from '../core/map/EnvironmentProfileRuntime';
 import { buildEnvironmentSensorReport } from '../core/sensors/EnvironmentSensors';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import {
@@ -137,7 +139,7 @@ function renderCellStrip(cellStrip: HTMLElement, state: SimulationState): void {
     ? gridToCellLabel(state.map, state.mouseGridPosition)
     : 'вне карты';
   const text = hoveredCell
-    ? `Клетка ${cellLabel}  |  ${formatElevation(hoveredCell.height)}  |  ${formatTerrain(hoveredCell.terrain)}  |  лес: ${formatForest(hoveredCell.forest)}`
+    ? `Клетка ${cellLabel}  |  ${formatElevation(hoveredCell.height)}  |  ${formatSurface(hoveredCell)}  |  растительность: ${formatVegetation(hoveredCell)}`
     : `Клетка: ${cellLabel}`;
 
   updateTextIfChanged(cellStrip, text);
@@ -229,7 +231,7 @@ function renderUnitTab(unit: UnitModel, state: SimulationState): string {
     row('Поза', formatPosture(unit.behaviorRuntime.posture)),
     row('Позиция', `${Math.floor(unit.position.x)}, ${Math.floor(unit.position.y)}`),
     row('Высота', cell ? formatElevation(cell.height) : 'нет'),
-    row('Лес', cell ? formatForest(cell.forest) : 'нет'),
+    row('Растительность', cell ? formatVegetation(cell) : 'нет'),
     row('Скорость', `${formatMeters(unit.speedCellsPerSecond * state.map.metersPerCell)}/сек`),
     row('Обзор', formatMeters(unit.viewRangeCells * state.map.metersPerCell)),
   ]);
@@ -405,26 +407,13 @@ function formatElevation(height: number): string {
   return `${prefix}${height} ${names[height] ?? ''}`.trim();
 }
 
-function formatTerrain(terrain: string): string {
-  const names: Record<string, string> = {
-    field: 'поле',
-    forest: 'лесная земля',
-    road: 'дорога',
-    swamp: 'болото',
-    rough: 'пересечённая',
-    water: 'вода',
-  };
-  return names[terrain] ?? terrain;
+function formatSurface(cell: MapCell): string {
+  return getSurfaceMaterial(getActiveEnvironmentProfile(), cell.surfaceMaterialId).nameRu.toLowerCase();
 }
 
-function formatForest(forest: number): string {
-  if (forest === 2) {
-    return 'густой';
-  }
-  if (forest === 1) {
-    return 'редкий';
-  }
-  return 'нет';
+function formatVegetation(cell: MapCell): string {
+  const material = getVegetationMaterial(getActiveEnvironmentProfile(), cell.vegetationMaterialId);
+  return material.id === 'none' ? 'нет' : material.nameRu.toLowerCase();
 }
 
 function formatPosture(posture: UnitPosture): string {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import type { TacticalMapData } from '../src/core/map/MapModel';
-import { getCell } from '../src/core/map/MapModel';
+import { getCell, setCellVegetationMaterialId } from '../src/core/map/MapModel';
 import { markMapCellsDirty } from '../src/core/map/MapRuntimeState';
 import { setAttentionMode, setSearchSector, updateAttentionController } from '../src/core/perception/AttentionController';
 import { createInitialState, selectUnit } from '../src/core/simulation/SimulationState';
@@ -118,7 +118,7 @@ assert.ok(moved && moved !== first, 'meaningful movement after throttle window m
 for (let x = 14; x <= 18; x += 1) {
   const cell = getCell(state.map, x, 15);
   assert.ok(cell);
-  cell.forest = 2;
+  setCellVegetationMaterialId(cell, 'dense_forest');
 }
 markMapCellsDirty(state.map, 'forest', { minX: 14, minY: 15, maxX: 18, maxY: 15 });
 state.simulationTimeSeconds += 0.3;

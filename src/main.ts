@@ -16,7 +16,12 @@ import mapData from './data/maps/test_map.json';
 import pressureZoneData from './data/pressure_zones/test_pressure_zones.json';
 import unitsData from './data/units/test_units.json';
 import { installAiStatefulMoveGameBridge as installAiGameBridge } from './core/ai/AiStatefulMoveGameBridge';
+import {
+  getMovementProfileRegistry,
+  subscribeMovementProfileRegistry,
+} from './ai-node-editor/MovementProfileBrowserStorage';
 import type { TacticalMapData } from './core/map/MapModel';
+import { installEnvironmentMovementMaterialProvider } from './core/movement/MovementMaterialAdapter';
 import { clearAsyncRouteCostWorker } from './core/navigation/RouteCostWorkerClient';
 import type { PressureZoneData } from './core/pressure/PressureZone';
 import { createResolutionAwareInitialState } from './core/simulation/ResolutionAwareScene';
@@ -45,6 +50,11 @@ import { installPerformanceReportControls } from './ui/PerformanceReportControls
 import { installSceneExportControls } from './ui/SceneExportControls';
 import { installTacticalWorkspace } from './ui/TacticalWorkspace';
 import { installWorkspaceTooltipGuard } from './ui/WorkspaceTooltipGuard';
+import {
+  getEnvironmentProfileRegistry,
+  saveEnvironmentProfileRegistry,
+  subscribeEnvironmentProfileRegistry,
+} from './ui/EnvironmentProfileStorage';
 
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 let state: ReturnType<typeof createResolutionAwareInitialState>;
@@ -66,11 +76,23 @@ if (!root || !debugPanel || !languageToggle || !gridToggle || !visionToggle || !
 
 installAppShellMenu({ mode: 'game' });
 
+const environmentProfileRegistry = getEnvironmentProfileRegistry();
+const requestedInitialEnvironmentProfileId = typeof (mapData as TacticalMapData).environmentProfileId === 'string'
+  ? (mapData as TacticalMapData).environmentProfileId?.trim()
+  : '';
+if (requestedInitialEnvironmentProfileId && environmentProfileRegistry.hasProfile(requestedInitialEnvironmentProfileId)) {
+  environmentProfileRegistry.setActiveProfile(requestedInitialEnvironmentProfileId);
+  saveEnvironmentProfileRegistry(environmentProfileRegistry);
+}
+
 state = createResolutionAwareInitialState(
   mapData as TacticalMapData,
   unitsData as UnitData[],
   pressureZoneData as PressureZoneData[],
 );
+state.map.environmentProfileId = environmentProfileRegistry.activeProfileId;
+state.movementProfiles = getMovementProfileRegistry();
+installEnvironmentMovementMaterialProvider(state);
 initializeAiTestLabRuntime(state);
 
 void bootstrap().catch(reportBootstrapFailure);
@@ -87,6 +109,14 @@ async function bootstrap(): Promise<void> {
   );
   tacticalBoard = board;
   const aiGameBridge = installAiGameBridge(state);
+  const destroyEnvironmentProfileSubscription = subscribeEnvironmentProfileRegistry((registry) => {
+    state.map.environmentProfileId = registry.activeProfileId;
+    installEnvironmentMovementMaterialProvider(state);
+    board.forceRender();
+  });
+  const destroyMovementProfileSubscription = subscribeMovementProfileRegistry((registry) => {
+    state.movementProfiles = registry;
+  });
   const forceRenderAtNativeMapQuality = () => {
     board.forceRender();
     enforceNativeMapQuality(board);
@@ -132,6 +162,8 @@ async function bootstrap(): Promise<void> {
 
   window.addEventListener('beforeunload', () => {
     gridToggle.removeEventListener('click', scheduleNativeMapQuality);
+    destroyEnvironmentProfileSubscription();
+    destroyMovementProfileSubscription();
     destroyAdaptiveGridLod();
     destroyTacticalOrderRadialInput();
     destroyTacticalWorkspace();
