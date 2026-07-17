@@ -45,6 +45,7 @@ jobs:
             python3 scripts/agent_live_windows_followup_workspacefix.py
             python3 scripts/agent_live_windows_followup_testsfix_hotfix.py
             python3 scripts/agent_live_windows_followup_smokefix.py
+            python3 scripts/agent_live_windows_followup_workflowfilterfix.py
             python3 scripts/agent_live_windows_followup_testsfix.py
           } 2>&1 | tee artifacts/performance/live-windows-followup/patch-apply.log
 
@@ -96,6 +97,7 @@ jobs:
           rm scripts/agent_live_windows_followup_labfix.py
           rm scripts/agent_live_windows_followup_interfacefix.py
           rm scripts/agent_live_windows_followup_workspacefix.py
+          rm scripts/agent_live_windows_followup_workflowfilterfix.py
           rm scripts/agent_live_windows_followup_testsfix.py
           rm scripts/agent_live_windows_followup_testsfix_hotfix.py
           rm scripts/agent_live_windows_followup_smokefix.py
