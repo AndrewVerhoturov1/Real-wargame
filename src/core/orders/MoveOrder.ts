@@ -23,6 +23,7 @@ export interface MoveOrderOptions {
   readonly routeCellIndex?: number;
   readonly routeStatus?: MoveOrderRouteStatus;
   readonly routeRevision?: number;
+  readonly calculatedAtSimulationStep?: number;
   readonly routeDangerDiagnostic?: RouteDangerDiagnostic;
   readonly pathCost?: number;
   readonly pathDistanceMeters?: number;
@@ -60,6 +61,7 @@ export interface MoveOrder {
   routeCellIndex?: number;
   routeStatus?: MoveOrderRouteStatus;
   routeRevision?: number;
+  calculatedAtSimulationStep?: number;
   routeDangerDiagnostic?: RouteDangerDiagnostic;
   pathCost?: number;
   pathDistanceMeters?: number;
@@ -98,6 +100,7 @@ export function createMoveOrder(target: GridPosition, options: MoveOrderOptions 
     routeCellIndex: options.routeCellIndex,
     routeStatus: options.routeStatus,
     routeRevision: options.routeRevision,
+    calculatedAtSimulationStep: options.calculatedAtSimulationStep,
     routeDangerDiagnostic: cloneRouteDangerDiagnostic(options.routeDangerDiagnostic),
     pathCost: options.pathCost,
     pathDistanceMeters: options.pathDistanceMeters,
