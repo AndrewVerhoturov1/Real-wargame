@@ -94,6 +94,21 @@ test('shows stable march, engage and search heatmaps without cursor or camera re
   expect(browserErrors).toEqual([]);
 });
 
+test('prepares black unseen and coloured current-view visual evidence', async ({ page }) => {
+  await page.setViewportSize(VIEWPORT);
+  const browserErrors = collectBrowserErrors(page);
+
+  await openViewMemoryMode(page, modeGraph('observe'), 'Наблюдение');
+  await pauseSimulation(page);
+  const diagnostics = await readViewMemoryDiagnostics(page);
+  expect(diagnostics?.representation).toBe('raster-sprite');
+  expect(diagnostics?.displayObjectCount ?? 99).toBeLessThanOrEqual(2);
+  expect(diagnostics?.textureUploadCount ?? 0).toBeGreaterThan(0);
+  await saveScreenshot(page, 'rear-attention-black-unseen-colour-bands.png');
+
+  expect(browserErrors).toEqual([]);
+});
+
 test('shows editable view and memory profiles in the real game editor', async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   const browserErrors = collectBrowserErrors(page);
