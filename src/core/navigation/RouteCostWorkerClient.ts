@@ -18,6 +18,7 @@ import type {
 const TERRAIN_KINDS: readonly TerrainKind[] = ['field', 'forest', 'road', 'swamp', 'rough', 'water'];
 const TERRAIN_CODE = new Map<TerrainKind, number>(TERRAIN_KINDS.map((kind, index) => [kind, index]));
 const MAX_READY_FIELDS = 8;
+const MAX_PENDING_OWNERS = 32;
 // A worker preparation is allowed to outlive slow software-rendered CI frames.
 // The current route remains authoritative while the exact replacement is pending;
 // synchronous main-thread fallback is reserved for a genuinely failed worker.
@@ -70,7 +71,7 @@ interface MapRuntime {
   configuredMapKey: string;
   mainMapIdentity: number;
   inFlight: InFlightRequest | null;
-  pending: RequestDescriptor | null;
+  readonly pendingByOwner: Map<string, RequestDescriptor>;
   readonly latestRequestKeyByOwner: Map<string, string>;
   readonly ready: Map<string, RouteCostFields>;
   readonly diagnostics: MutableDiagnostics;
@@ -103,6 +104,7 @@ export function getOrRequestAsyncRouteCostFields(
   const ready = runtime.ready.get(requestKey);
   if (ready) {
     if (routeCostFieldsMatch(map, profile, ready)) {
+      runtime.pendingByOwner.delete(ownerKey);
       touch(runtime.ready, requestKey, ready);
       return { status: 'ready', fields: ready };
     }
@@ -117,10 +119,7 @@ export function getOrRequestAsyncRouteCostFields(
     tacticalContext: cloneContext(tacticalContext),
   };
   if (runtime.inFlight) {
-    if (runtime.inFlight.requestKey !== requestKey) {
-      runtime.pending = descriptor;
-      runtime.diagnostics.jobsCoalesced += 1;
-    }
+    if (runtime.inFlight.requestKey !== requestKey) queueLatestOwnerRequest(runtime, descriptor);
     return { status: 'pending' };
   }
 
@@ -157,7 +156,7 @@ function getRuntime(map: TacticalMap): MapRuntime | null {
       configuredMapKey: '',
       mainMapIdentity: direct.mapIdentity,
       inFlight: null,
-      pending: null,
+      pendingByOwner: new Map(),
       latestRequestKeyByOwner: new Map(),
       ready: new Map(),
       diagnostics: emptyDiagnostics(),
@@ -194,7 +193,7 @@ function ensureConfigured(map: TacticalMap, runtime: MapRuntime, mapKey: string)
     }
   }
   runtime.inFlight = null;
-  runtime.pending = null;
+  runtime.pendingByOwner.clear();
   runtime.latestRequestKeyByOwner.clear();
   runtime.ready.clear();
   const snapshot = measurePerformancePhase('route.worker.configure', () => buildMapSnapshot(map, mapKey));
@@ -204,6 +203,20 @@ function ensureConfigured(map: TacticalMap, runtime: MapRuntime, mapKey: string)
     snapshot.forestKinds.buffer,
   ]);
   runtime.configuredMapKey = mapKey;
+}
+
+function queueLatestOwnerRequest(runtime: MapRuntime, descriptor: RequestDescriptor): void {
+  const current = runtime.pendingByOwner.get(descriptor.ownerKey);
+  if (current?.requestKey === descriptor.requestKey) return;
+  if (!current && runtime.pendingByOwner.size >= MAX_PENDING_OWNERS) {
+    const oldestOwner = runtime.pendingByOwner.keys().next().value as string | undefined;
+    if (oldestOwner) {
+      runtime.pendingByOwner.delete(oldestOwner);
+      runtime.diagnostics.staleResultsDropped += 1;
+    }
+  }
+  runtime.pendingByOwner.set(descriptor.ownerKey, descriptor);
+  runtime.diagnostics.jobsCoalesced += 1;
 }
 
 function startRequest(runtime: MapRuntime, descriptor: RequestDescriptor): void {
@@ -224,6 +237,13 @@ function startRequest(runtime: MapRuntime, descriptor: RequestDescriptor): void 
     tacticalContext: descriptor.tacticalContext,
   };
   runtime.worker.postMessage({ type: 'build', snapshot });
+}
+
+function startNextPendingRequest(runtime: MapRuntime): void {
+  const next = runtime.pendingByOwner.entries().next().value as [string, RequestDescriptor] | undefined;
+  if (!next) return;
+  runtime.pendingByOwner.delete(next[0]);
+  startRequest(runtime, next[1]);
 }
 
 function handleResponse(map: TacticalMap, runtime: MapRuntime, response: RouteCostWorkerResponse): void {
@@ -267,9 +287,7 @@ function handleResponse(map: TacticalMap, runtime: MapRuntime, response: RouteCo
         runtime.diagnostics.staleResultsDropped += 1;
       }
     }
-    const pending = runtime.pending;
-    runtime.pending = null;
-    if (pending) startRequest(runtime, pending);
+    startNextPendingRequest(runtime);
   });
 }
 
@@ -278,7 +296,7 @@ function disableRuntime(runtime: MapRuntime, message: string): void {
   runtime.worker = null;
   runtime.disabled = true;
   runtime.inFlight = null;
-  runtime.pending = null;
+  runtime.pendingByOwner.clear();
   runtime.latestRequestKeyByOwner.clear();
   runtime.ready.clear();
   runtime.diagnostics.workerErrors += 1;
@@ -336,7 +354,7 @@ function buildRequestKey(
   context: TacticalRouteContext,
 ): string {
   return [
-    'route-worker:v2',
+    'route-worker:v3',
     mapKey,
     profile.id,
     profile.revision,
