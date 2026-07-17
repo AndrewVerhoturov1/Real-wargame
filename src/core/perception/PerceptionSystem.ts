@@ -33,7 +33,6 @@ import { evaluateVisualSignal } from './VisualSignal';
 
 export { getPerceptionDiagnostics } from './PerceptionDiagnostics';
 
-const REAR_SECTOR_START_DEGREES = 135;
 const perceptionStimulusCursorByState = new WeakMap<SimulationState, Map<string, number>>();
 
 interface DueAttentionChecks extends Record<AttentionZone, boolean> {
@@ -164,7 +163,7 @@ export function tickUnitPerception(
       radiansToDegrees(bearingRadians - unit.attentionRuntime.focusDirectionRadians),
     );
     const attention = sampleAttentionWeight(profile, angleDifferenceDegrees);
-    const rearSector = Math.abs(angleDifferenceDegrees) >= REAR_SECTOR_START_DEGREES;
+    const rearSector = attention.rear === true;
     const checkDue = rearSector ? due.rear : due[attention.zone];
     if (!checkDue) {
       if (diagnostics) diagnostics.skippedNotDueCount += 1;
@@ -172,7 +171,7 @@ export function tickUnitPerception(
       continue;
     }
 
-    if (attention.zone === 'peripheral') {
+    if (attention.zone === 'peripheral' && !rearSector) {
       attention.weight *= 1 + Math.min(0.25, unit.soldier.condition.intuition / 400);
     }
     const visibility = evaluatePointVisibility(
