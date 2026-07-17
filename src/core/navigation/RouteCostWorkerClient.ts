@@ -18,7 +18,10 @@ import type {
 const TERRAIN_KINDS: readonly TerrainKind[] = ['field', 'forest', 'road', 'swamp', 'rough', 'water'];
 const TERRAIN_CODE = new Map<TerrainKind, number>(TERRAIN_KINDS.map((kind, index) => [kind, index]));
 const MAX_READY_FIELDS = 8;
-const MAX_PENDING_MS = 1500;
+// A worker preparation is allowed to outlive slow software-rendered CI frames.
+// The current route remains authoritative while the exact replacement is pending;
+// synchronous main-thread fallback is reserved for a genuinely failed worker.
+const MAX_PENDING_MS = 30_000;
 
 export type AsyncRouteCostPreparation =
   | { readonly status: 'ready'; readonly fields: RouteCostFields }
