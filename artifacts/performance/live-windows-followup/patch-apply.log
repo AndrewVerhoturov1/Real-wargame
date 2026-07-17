@@ -1,5 +1,6 @@
 Adjusted safe-position removal for runtime, harnesses, and diagnostics.
+Added AI test-lab safe-position removal to the source patch.
 Traceback (most recent call last):
-  File "/home/runner/work/Real-wargame/Real-wargame/scripts/agent_live_windows_followup_apply.py", line 387, in <module>
+  File "/home/runner/work/Real-wargame/Real-wargame/scripts/agent_live_windows_followup_apply.py", line 398, in <module>
     raise RuntimeError(f"legacy safe-position identifier {forbidden!r} remains in {source_path.relative_to(ROOT)}")
-RuntimeError: legacy safe-position identifier 'bestSafePositions' remains in src/ui/AiTestLabControls.ts
+RuntimeError: legacy safe-position identifier 'bestSafePositionScore' remains in src/ai-node-editor/ai-test-lab-node-options.ts
