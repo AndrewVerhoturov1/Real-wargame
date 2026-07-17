@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/home/runner/work/Real-wargame/Real-wargame/scripts/agent_live_windows_followup_apply.py", line 82, in <module>
+    content = remove_exact(content, "  bestSafePositions: SoldierSafePosition[];\n", "awareness report safe positions")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/Real-wargame/Real-wargame/scripts/agent_live_windows_followup_apply.py", line 32, in remove_exact
+    return replace_exact(content, value, "", label)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/Real-wargame/Real-wargame/scripts/agent_live_windows_followup_apply.py", line 20, in replace_exact
+    raise RuntimeError(f"{label}: expected one exact match, found {count}")
+RuntimeError: awareness report safe positions: expected one exact match, found 2
