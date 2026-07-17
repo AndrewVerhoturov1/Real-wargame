@@ -4,6 +4,7 @@ import { getSelectedUnit, type SimulationState } from '../simulation/SimulationS
 import { areUnitsHostile } from '../units/SideRelations';
 import type { UnitModel } from '../units/UnitModel';
 import { evaluatePointVisibility } from '../visibility/PointVisibility';
+import { calculateAttentionVisualRangeFactor } from '../visibility/VisibilityQuality';
 import { updateAttentionController } from './AttentionController';
 import {
   normalizeSignedDegrees,
@@ -174,6 +175,9 @@ export function tickUnitPerception(
     if (attention.zone === 'peripheral' && !rearSector) {
       attention.weight *= 1 + Math.min(0.25, unit.soldier.condition.intuition / 400);
     }
+    const directionalRangeCells = broadPhaseCells * calculateAttentionVisualRangeFactor(attention.weight);
+    if (distanceCells > directionalRangeCells) continue;
+
     const visibility = evaluatePointVisibility(
       state,
       unit,
