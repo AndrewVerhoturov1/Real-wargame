@@ -78,6 +78,14 @@ jobs:
           cp source/src/core/debug/BuildIdentity.ts baseline/src/core/debug/BuildIdentity.ts
           cp source/src/core/debug/AwarenessMovementDiagnostics.ts baseline/src/core/debug/AwarenessMovementDiagnostics.ts
 
+      - name: Upload exact candidate scanner source
+        uses: actions/upload-artifact@v4
+        with:
+          name: awareness-scanner-source
+          path: candidate/src/rendering/PixiAwarenessHeatmapRenderer.ts
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Install baseline dependencies
         working-directory: baseline
         run: |
