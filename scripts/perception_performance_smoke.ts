@@ -110,5 +110,11 @@ assert.ok(
   staging.preparationCount >= stagedObservers.length,
   'all deferred observer geometries must become eligible on later attention cadences',
 );
+for (const unit of stagedState.units) {
+  assert.ok(
+    unit.perceptionKnowledge.contacts.length > 0,
+    `${unit.id} must receive a fair perception turn without selection-dependent priority`,
+  );
+}
 
-console.log(`Perception performance smoke passed: ${diagnostics.losCalculationCount} LOS calculations for ${diagnostics.candidateCount} candidates across 600 ticks; ${staging.preparationCount} cold geometries staged with max ${staging.maxPreparationsPerStep} per step.`);
+console.log(`Perception performance smoke passed: ${diagnostics.losCalculationCount} LOS calculations for ${diagnostics.candidateCount} candidates across 600 ticks; ${staging.preparationCount} cold geometries staged fairly with max ${staging.maxPreparationsPerStep} per step.`);

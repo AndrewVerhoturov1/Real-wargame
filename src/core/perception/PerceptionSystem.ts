@@ -62,8 +62,10 @@ export function tickAllUnitPerception(state: SimulationState, deltaSeconds: numb
     diagnostics.lastObserverId = selected?.id ?? null;
   }
 
-  for (const unit of state.units) {
-    if (!isUnitCombatCapable(unit)) continue;
+  const units = state.units.filter((unit) => isUnitCombatCapable(unit));
+  const startIndex = units.length > 0 ? state.simulationStep % units.length : 0;
+  for (let offset = 0; offset < units.length; offset += 1) {
+    const unit = units[(startIndex + offset) % units.length]!;
     tickUnitPerception(state, unit, deltaSeconds, unit.id === selected?.id ? diagnostics : null);
   }
 
