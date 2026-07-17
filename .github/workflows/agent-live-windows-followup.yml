@@ -35,7 +35,21 @@ jobs:
           cache: npm
 
       - name: Apply source patch
-        run: python3 scripts/agent_live_windows_followup_apply.py
+        id: apply_patch
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/performance/live-windows-followup
+          python3 scripts/agent_live_windows_followup_apply.py 2>&1 | tee artifacts/performance/live-windows-followup/patch-apply.log
+
+      - name: Publish patch failure
+        if: failure() && steps.apply_patch.outcome == 'failure'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/performance/live-windows-followup/patch-apply.log
+          git commit -m "chore: capture follow-up patch failure"
+          git push origin HEAD:agent/live-windows-performance-followup-v1
 
       - name: Install dependencies
         run: npm ci
@@ -60,6 +74,7 @@ jobs:
           rm scripts/agent_live_windows_followup_apply.py
           rm .github/workflows/agent-live-windows-followup.yml
           rm -f artifacts/performance/live-windows-followup/.apply-trigger
+          rm -f artifacts/performance/live-windows-followup/patch-apply.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
