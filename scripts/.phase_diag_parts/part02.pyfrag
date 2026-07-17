@@ -1,0 +1,95 @@
+)
+content = replace_exact(
+    content,
+    "        sceneUpdateMs: buildStats(sceneUpdateValues),\n        renderMs: buildStats(sceneUpdateValues),\n",
+    "        simulationUpdateMs: buildStats(simulationUpdateValues),\n        applicationUpdateMs: buildStats(applicationUpdateValues),\n        sceneUpdateMs: buildStats(sceneUpdateValues),\n        renderMs: buildStats(sceneUpdateValues),\n",
+    'PerformanceMonitor summary timing stats',
+)
+content = replace_exact(
+    content,
+    "        phaseMeasureCount: performancePhaseMeasures.length,\n",
+    "        phaseMeasureCount: performancePhaseMeasures.length,\n        phaseAggregateCount: performancePhaseAggregates.length,\n        applicationAttributedLongTaskCount: applicationLongTasks.filter((item) => item.applicationAttributed).length,\n        unattributedLongTaskCount: applicationLongTasks.filter((item) => !item.applicationAttributed).length,\n",
+    'PerformanceMonitor summary attribution counts',
+)
+content = replace_exact(
+    content,
+    "        worstSceneUpdates: [...samples]\n          .sort((left, right) => right.sceneUpdateMs - left.sceneUpdateMs)\n          .slice(0, 30),\n",
+    "        worstApplicationUpdates: [...samples]\n          .sort((left, right) => right.applicationUpdateMs - left.applicationUpdateMs)\n          .slice(0, 30),\n        worstSimulationUpdates: [...samples]\n          .sort((left, right) => right.simulationUpdateMs - left.simulationUpdateMs)\n          .slice(0, 30),\n        worstSceneUpdates: [...samples]\n          .sort((left, right) => right.sceneUpdateMs - left.sceneUpdateMs)\n          .slice(0, 30),\n",
+    'PerformanceMonitor worst updates',
+)
+content = replace_exact(
+    content,
+    "      performancePhaseMeasures,\n      samples,\n",
+    "      performancePhaseMeasures,\n      performancePhaseAggregates,\n      applicationAttribution: {\n        longTasks: applicationLongTasks,\n        longAnimationFrames: applicationLongAnimationFrames,\n        applicationAttributedLongTaskCount: applicationLongTasks.filter((item) => item.applicationAttributed).length,\n        unattributedLongTaskCount: applicationLongTasks.filter((item) => !item.applicationAttributed).length,\n        applicationAttributedLongAnimationFrameCount: applicationLongAnimationFrames\n          .filter((item) => item.applicationAttributed).length,\n      },\n      samples,\n",
+    'PerformanceMonitor report aggregates',
+)
+helper_block = '''
+function buildPerformancePhaseAggregates(
+  runtime: readonly PerformancePhaseRuntimeDiagnostic[],
+  measures: readonly PerformancePhaseMeasureDiagnostic[],
+  longTasks: readonly BrowserLongTaskDiagnostic[],
+  longAnimationFrames: readonly LongAnimationFrameDiagnostic[],
+): PerformancePhaseAggregateDiagnostic[] {
+  return runtime.map((phase) => {
+    const phaseMeasures = measures.filter((measure) => shortPhaseName(measure.name) === phase.name);
+    const longTaskOverlap = phaseWindowOverlap(phaseMeasures, longTasks);
+    const longAnimationFrameOverlap = phaseWindowOverlap(phaseMeasures, longAnimationFrames);
+    return {
+      ...phase,
+      longTaskOverlapCount: longTaskOverlap.count,
+      longTaskOverlapDurationMs: roundTwo(longTaskOverlap.durationMs),
+      longAnimationFrameOverlapCount: longAnimationFrameOverlap.count,
+      longAnimationFrameOverlapDurationMs: roundTwo(longAnimationFrameOverlap.durationMs),
+    };
+  });
+}
+
+function buildApplicationIntervalAttribution(
+  windows: readonly Array<{ startMs: number; durationMs: number; scenario: string | null }>,
+  measures: readonly PerformancePhaseMeasureDiagnostic[],
+): ApplicationIntervalAttributionDiagnostic[] {
+  const applicationMeasures = measures.filter((measure) => isApplicationPhase(shortPhaseName(measure.name)));
+  return windows.map((window) => {
+    const windowEnd = window.startMs + window.durationMs;
+    const overlaps = applicationMeasures
+      .map((measure) => ({
+        name: shortPhaseName(measure.name),
+        startMs: Math.max(window.startMs, measure.startMs),
+        endMs: Math.min(windowEnd, measure.startMs + measure.durationMs),
+      }))
+      .filter((item) => item.endMs > item.startMs);
+    return {
+      startMs: window.startMs,
+      durationMs: window.durationMs,
+      scenario: window.scenario,
+      applicationAttributed: overlaps.length > 0,
+      overlappingPhases: [...new Set(overlaps.map((item) => item.name))].sort(),
+      overlapDurationMs: roundTwo(unionDuration(overlaps.map((item) => [item.startMs, item.endMs]))),
+    };
+  });
+}
+
+function phaseWindowOverlap(
+  measures: readonly PerformancePhaseMeasureDiagnostic[],
+  windows: readonly Array<{ startMs: number; durationMs: number }>,
+): { count: number; durationMs: number } {
+  let count = 0;
+  let durationMs = 0;
+  for (const window of windows) {
+    const windowEnd = window.startMs + window.durationMs;
+    const intervals: Array<[number, number]> = [];
+    for (const measure of measures) {
+      const startMs = Math.max(window.startMs, measure.startMs);
+      const endMs = Math.min(windowEnd, measure.startMs + measure.durationMs);
+      if (endMs > startMs) intervals.push([startMs, endMs]);
+    }
+    if (intervals.length === 0) continue;
+    count += 1;
+    durationMs += unionDuration(intervals);
+  }
+  return { count, durationMs };
+}
+
+function unionDuration(intervals: readonly Array<readonly [number, number]>): number {
+  if (intervals.length === 0) return 0;
+  const sorted = [...intervals].sort((left, right) => left[0] - right[0] || left[1] - right[1]);
