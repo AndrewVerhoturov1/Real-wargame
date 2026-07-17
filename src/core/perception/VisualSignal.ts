@@ -5,7 +5,7 @@ import type { PerceptionStimulus } from './PerceptionStimulus';
 
 export interface VisualSignalFactor {
   key: 'posture' | 'movement' | 'action' | 'size' | 'concealment' | 'distance'
-    | 'lateral_motion' | 'attention' | 'observer' | 'transmission' | 'condition';
+    | 'lateral_motion' | 'attention' | 'sampling' | 'observer' | 'transmission' | 'condition';
   multiplier: number;
   labelRu: string;
   explanationRu: string;
@@ -70,6 +70,7 @@ export function evaluateVisualSignal(input: VisualSignalInput): VisualSignalResu
     1.45,
   );
   const sizeMultiplier = clamp(stimulus.baseSize, 0.25, 3);
+  const samplingMultiplier = clamp(attention.evidenceFactor ?? 1, 0, 1);
 
   const factors: VisualSignalFactor[] = [
     factor('posture', POSTURE_MULTIPLIER[stimulus.posture], 'Поза цели', postureExplanation(stimulus.posture)),
@@ -79,11 +80,23 @@ export function evaluateVisualSignal(input: VisualSignalInput): VisualSignalResu
     factor('concealment', concealmentMultiplier, 'Маскировка', `Маскировка ${Math.round(stimulus.concealment)} из 100: ×${format(concealmentMultiplier)}.`),
     factor('distance', quality.distanceFactor, 'Дистанция', `Дистанция ${Math.round(visibility.distanceMeters)} м в существующей зоне обзора: ×${format(quality.distanceFactor)}.`),
     factor('lateral_motion', lateralMultiplier, 'Поперечное движение', `Поперечное движение: ×${format(lateralMultiplier)}.`),
-    factor('attention', quality.attentionFactor, 'Направление внимания', `${attentionZoneLabel(attention.zone)}: ×${format(quality.attentionFactor)}.`),
+    factor('attention', quality.attentionFactor, 'Направление внимания', `${attentionZoneLabel(attention)}: ×${format(quality.attentionFactor)}.`),
+  ];
+  if (samplingMultiplier < 1) {
+    factors.push(factor(
+      'sampling',
+      samplingMultiplier,
+      'Частота проверки',
+      attention.rear
+        ? `Тыл воспринимается короткими редкими взглядами: ×${format(samplingMultiplier)}.`
+        : `Переход к тыловой зоне ослабляет накопление наблюдения: ×${format(samplingMultiplier)}.`,
+    ));
+  }
+  factors.push(
     factor('observer', observerMultiplier, 'Способности наблюдателя', `Зрение и внимание бойца: ×${format(observerMultiplier)}.`),
     factor('transmission', quality.transmissionFactor, 'Проходимость обзора', `${lineOfSight.obscurationReasonRu}: ×${format(quality.transmissionFactor)}.`),
     factor('condition', quality.observerConditionFactor, 'Состояние бойца', `Состояние наблюдателя из существующей зоны обзора: ×${format(quality.observerConditionFactor)}.`),
-  ];
+  );
 
   const combined = factors.reduce((result, item) => result * item.multiplier, 1);
   const evidencePerSecond = clamp(combined * 52, 0, 300);
@@ -123,10 +136,11 @@ function actionExplanation(action: PerceptionStimulus['action']): string {
   return 'Спокойное наблюдение: ×0,90.';
 }
 
-function attentionZoneLabel(zone: AttentionSample['zone']): string {
-  if (zone === 'focus') return 'Цель в фокусе';
-  if (zone === 'direct') return 'Цель в прямом внимании';
-  return 'Цель замечается косвенным вниманием';
+function attentionZoneLabel(attention: AttentionSample): string {
+  if (attention.rear) return 'Цель находится в короткой тыловой зоне';
+  if (attention.zone === 'focus') return 'Цель в фокусе';
+  if (attention.zone === 'direct') return 'Цель в прямом внимании';
+  return 'Цель замечается боковым вниманием';
 }
 
 function format(value: number): string {
