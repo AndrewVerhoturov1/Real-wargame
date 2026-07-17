@@ -1,0 +1,31 @@
+[
+  {
+    "simulationStep": 1,
+    "simulationTimeSeconds": 0.652,
+    "totalDurationMs": 37.6,
+    "aiSchedulerDurationMs": 8.8,
+    "perceptionDurationMs": 26.4,
+    "movementEventsDurationMs": 0,
+    "routeNavigationDurationMs": 0,
+    "tacticalFieldBuilds": 0,
+    "pointLosCacheMisses": 4,
+    "unitId": "soldier_1",
+    "activeGraphNode": null,
+    "maxUnitPassDurationMs": 4.5,
+    "uncoveredResidualDurationMs": 2.2,
+    "overlappingPhases": [
+      {
+        "name": "simulation.perception",
+        "durationMs": 26.4
+      },
+      {
+        "name": "perception.point-los",
+        "durationMs": 21.9
+      },
+      {
+        "name": "simulation.ai-scheduler",
+        "durationMs": 9
+      }
+    ]
+  }
+]

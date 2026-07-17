@@ -1,0 +1,13 @@
+{
+  "baseSha": "18b45a08ee39dda252e406060e2f8cac5c4114af",
+  "headSha": "18b45a08ee39dda252e406060e2f8cac5c4114af",
+  "enforceEnabled": false,
+  "allThresholdsPassed": false,
+  "blockingFailures": [
+    "LIVE_WINDOWS_PERF_ENFORCE was disabled in the PR gate.",
+    "SimulationTick max 37.6 ms exceeded 25 ms.",
+    "24 application_blocking LongTasks remained in this manual baseline.",
+    "routeDanger still aliased current-position danger in the baseline code."
+  ],
+  "workflowRunIds": []
+}

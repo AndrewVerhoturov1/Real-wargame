@@ -19,7 +19,7 @@ export function validateAiBlackboardSnapshot(snapshot:Readonly<Record<string,AiB
   for(const [rawKey,value] of Object.entries(snapshot)) {
     const key=resolveAiConceptKey(rawKey); const concept=BY_KEY.get(key);
     if(!concept||concept.kind!=='value') { if(!rawKey.startsWith('stable:')&&!rawKey.endsWith('_rule')&&!rawKey.startsWith('user_')) unknownKeys.push(rawKey); continue; }
-    present.add(key); if(!matchesAiConceptValueType(value,concept.valueType)) typeMismatches.push(rawKey);
+    present.add(key); if(!matchesAiConceptValueType(value,concept.valueType,concept.nullable)) typeMismatches.push(rawKey);
   }
   const missingKeys=AI_CONCEPT_CATALOG.filter((concept)=>concept.kind==='value'&&concept.readiness!=='planned'&&concept.defaultValue!==undefined&&!present.has(concept.key)).map((concept)=>concept.key);
   return {valid:unknownKeys.length===0&&typeMismatches.length===0,unknownKeys,missingKeys,typeMismatches};

@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const workflowPath = '.github/workflows/live-windows-ai-browser-performance.yml';
+const workflow = readFileSync(workflowPath, 'utf8');
+const spec = readFileSync('tests/live-windows-ai-performance.spec.ts', 'utf8');
+assert.match(workflow, /pull_request:\s*[\s\S]*branches:\s*[\s\S]*real-wargame-preview/, 'workflow must remain a pull-request gate for preview');
+assert.doesNotMatch(workflow, /LIVE_WINDOWS_PERF_ENFORCE:\s*['"]?0['"]?/, 'pull-request workflow must never disable enforcement');
+assert.match(workflow, /LIVE_WINDOWS_PERF_ENFORCE:\s*['"]?1['"]?/, 'pull-request capture must explicitly enable enforcement');
+assert.match(spec, /acceptance-result\.json/, 'capture must preserve an explicit acceptance result');
+console.log('Live Windows workflow enforce contract smoke passed: PR capture explicitly enforces thresholds and writes acceptance evidence.');

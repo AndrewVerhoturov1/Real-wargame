@@ -52,8 +52,10 @@ export function routeCostWorkerTransferables(
   const fields = response.fields;
   const buffers = [
     fields.passable.buffer,
+    fields.terrainKeyCodes.buffer,
     fields.terrainCost.buffer,
     fields.slopeCost.buffer,
+    fields.dangerPercent.buffer,
     fields.dangerCost.buffer,
     fields.exposureCost.buffer,
     fields.directionalTerrainCost.buffer,

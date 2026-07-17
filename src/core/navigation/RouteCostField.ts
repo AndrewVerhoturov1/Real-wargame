@@ -24,6 +24,20 @@ import {
 } from './DirectionalRouteCostProjection';
 import type { NavigationProfile, NavigationTerrainCostKey } from './NavigationProfiles';
 
+const NAVIGATION_TERRAIN_KEYS: readonly NavigationTerrainCostKey[] = [
+  'road',
+  'field',
+  'sparseForest',
+  'denseForest',
+  'rough',
+  'swamp',
+  'bridge',
+  'ditch',
+];
+const NAVIGATION_TERRAIN_KEY_CODE = new Map<NavigationTerrainCostKey, number>(
+  NAVIGATION_TERRAIN_KEYS.map((key, index) => [key, index]),
+);
+
 const mapIdentityByMap = new WeakMap<TacticalMap, number>();
 let nextMapIdentity = 1;
 
@@ -105,6 +119,7 @@ interface StaticRouteCostField {
   readonly height: number;
   readonly passable: Uint8Array;
   readonly terrainKeys: NavigationTerrainCostKey[];
+  readonly terrainKeyCodes: Uint8Array;
   readonly terrainCost: Float32Array;
   readonly slopeCost: Float32Array;
   readonly coverAdjustment: Float32Array;
@@ -114,6 +129,7 @@ interface StaticRouteCostField {
 interface DynamicRouteCostField {
   readonly key: string;
   readonly dangerFieldKey: string;
+  readonly dangerPercent: Uint8Array;
   readonly dangerCost: Float32Array;
   readonly exposureCost: Float32Array;
   readonly directionalTerrainCost: Float32Array;
@@ -137,8 +153,10 @@ export interface RouteCostFields {
   readonly dangerFieldKey: string;
   readonly passable: Uint8Array;
   readonly terrainKeys: readonly NavigationTerrainCostKey[];
+  readonly terrainKeyCodes: Uint8Array;
   readonly terrainCost: Float32Array;
   readonly slopeCost: Float32Array;
+  readonly dangerPercent: Uint8Array;
   readonly dangerCost: Float32Array;
   readonly exposureCost: Float32Array;
   readonly directionalTerrainCost: Float32Array;
@@ -197,6 +215,10 @@ export function createRouteCostFieldCache(): RouteCostFieldCache {
 }
 
 /** The sole default owner for route-cost fields used by evaluators, A* and replanning. */
+export function getRouteCostMapIdentity(map: TacticalMap): number {
+  return getMapIdentity(map);
+}
+
 export function getSharedRouteCostFieldCache(map: TacticalMap): RouteCostFieldCache {
   const existing = sharedCacheByMap.get(map);
   if (existing) return existing;
@@ -254,6 +276,8 @@ export function getRouteCostFields(
   const knowledgeRevision = tacticalContext?.knowledgeRevision ?? 0;
   const knownThreats = tacticalContext?.knownThreats ?? [];
   const hasKnownThreats = knownThreats.length > 0;
+  // Profiles that do not consume danger must remain lazy. Route diagnostics use
+  // bounded point sampling when no worker-owned danger field is required.
   const needsDanger = hasKnownThreats && profile.dangerWeight > 0;
   const needsDirectionalTerrain = hasKnownThreats && hasDirectionalTerrainWeights(profile);
   const usesTacticalKnowledge = needsDanger || needsDirectionalTerrain;
@@ -311,8 +335,10 @@ export function getRouteCostFields(
     dangerFieldKey: dynamicField.dangerFieldKey,
     passable: staticField.passable,
     terrainKeys: staticField.terrainKeys,
+    terrainKeyCodes: staticField.terrainKeyCodes,
     terrainCost: staticField.terrainCost,
     slopeCost: staticField.slopeCost,
+    dangerPercent: dynamicField.dangerPercent,
     dangerCost: dynamicField.dangerCost,
     exposureCost: dynamicField.exposureCost,
     directionalTerrainCost: dynamicField.directionalTerrainCost,
@@ -365,7 +391,9 @@ export function readRouteCostCell(
   const index = y * fields.width + x;
   return {
     passable: fields.passable[index] === 1,
-    terrainKey: fields.terrainKeys[index],
+    terrainKey: fields.terrainKeys[index]
+      ?? NAVIGATION_TERRAIN_KEYS[fields.terrainKeyCodes[index] ?? 1]
+      ?? 'field',
     terrainCost: fields.terrainCost[index],
     slopeCost: fields.slopeCost[index],
     dangerCost: fields.dangerCost[index],
@@ -409,6 +437,7 @@ function buildStaticField(
   const count = map.width * map.height;
   const passable = new Uint8Array(count);
   const terrainKeys = new Array<NavigationTerrainCostKey>(count);
+  const terrainKeyCodes = new Uint8Array(count);
   const terrainCost = new Float32Array(count);
   const slopeCost = new Float32Array(count);
   const coverAdjustment = new Float32Array(count);
@@ -424,6 +453,7 @@ function buildStaticField(
     passable[index] = navigation.passable ? 1 : 0;
     const terrainKey = resolveTerrainKey(cell.terrain, vegetation.layer, navigation.bridge, ditchCells[index] === 1);
     terrainKeys[index] = terrainKey;
+    terrainKeyCodes[index] = NAVIGATION_TERRAIN_KEY_CODE.get(terrainKey) ?? 1;
     terrainCost[index] = navigation.passable ? profile.terrainCosts[terrainKey] : Number.POSITIVE_INFINITY;
     slopeCost[index] = navigation.passable ? estimateLocalSlope(map, cell.x, cell.y) * profile.slopeWeight : 0;
     const concealment = Math.max(
@@ -439,6 +469,7 @@ function buildStaticField(
     height: map.height,
     passable,
     terrainKeys,
+    terrainKeyCodes,
     terrainCost,
     slopeCost,
     coverAdjustment,
@@ -458,6 +489,7 @@ function buildDynamicField(
   cache: RouteCostFieldCache,
 ): DynamicRouteCostField {
   const count = map.width * map.height;
+  const dangerPercent = new Uint8Array(count);
   const dangerCost = new Float32Array(count);
   const exposureCost = new Float32Array(count);
   const directionalTerrainCost = new Float32Array(count);
@@ -482,8 +514,10 @@ function buildDynamicField(
         totalCost[index] = Number.POSITIVE_INFINITY;
         continue;
       }
-      if (dangerField && profile.dangerWeight > 0) {
-        dangerCost[index] = profile.dangerWeight * (dangerField.danger[index] ?? 0) / 100;
+      if (dangerField) {
+        const rawDanger = dangerField.danger[index] ?? 0;
+        dangerPercent[index] = rawDanger;
+        if (profile.dangerWeight > 0) dangerCost[index] = profile.dangerWeight * rawDanger / 100;
       }
       if (directionalAvailable && directionalBasis && directionalProjection) {
         writeDirectionalRouteCostCell(
@@ -512,6 +546,7 @@ function buildDynamicField(
   return {
     key,
     dangerFieldKey: dangerField?.key ?? '',
+    dangerPercent,
     dangerCost,
     exposureCost,
     directionalTerrainCost,

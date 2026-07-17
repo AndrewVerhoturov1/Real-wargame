@@ -34,6 +34,13 @@ export interface AiSimulationSchedulerResult {
   readonly graphResolutionCount: 1;
   readonly graphSourceRevision: string;
   readonly graphSnapshotFrozen: boolean;
+  readonly schedulerDurationMs: number;
+  readonly graphResolutionDurationMs: number;
+  readonly unitPassDurationMs: number;
+  readonly schedulerOverheadMs: number;
+  readonly maxUnitId: string | null;
+  readonly maxUnitDurationMs: number;
+  readonly maxUnitActiveNode: string | null;
 }
 
 /**
@@ -66,6 +73,7 @@ export function tickAiSimulationScheduler(
   let unitPassDurationMs = 0;
   let maxUnitId: string | null = null;
   let maxUnitDurationMs = 0;
+  let maxUnitActiveNode: string | null = null;
 
   for (const unit of state.units) {
     unitVisits += 1;
@@ -105,10 +113,12 @@ export function tickAiSimulationScheduler(
       ),
     );
     const unitDurationMs = performance.now() - unitStartedAt;
+    const activeAfter = unit.behaviorRuntime.aiRuntimeSession?.executionState;
     unitPassDurationMs += unitDurationMs;
     if (unitDurationMs > maxUnitDurationMs) {
       maxUnitDurationMs = unitDurationMs;
       maxUnitId = unit.id;
+      maxUnitActiveNode = result?.activeNodeId ?? activeAfter?.activeNodeId ?? activeBefore?.activeNodeId ?? null;
     }
     const graphTicked = result !== null;
     if (graphTicked) graphTickedUnitIds.push(unit.id);
@@ -118,7 +128,6 @@ export function tickAiSimulationScheduler(
     const reactiveWakeDelta = unit.behaviorRuntime.aiReactiveWakeCount - reactiveWakeBefore;
     recordAiSchedulerUnitPassDuration(unitDurationMs, graphTicked);
     if (graphTicked || unitDurationMs >= 8) {
-      const activeAfter = unit.behaviorRuntime.aiRuntimeSession?.executionState;
       recordAiSchedulerUnitPass({
         simulationStep: state.simulationStep,
         cycleStartMs,
@@ -141,6 +150,7 @@ export function tickAiSimulationScheduler(
   }
 
   const schedulerDurationMs = performance.now() - schedulerStartedAt;
+  const schedulerOverheadMs = Math.max(0, schedulerDurationMs - graphResolutionMs - unitPassDurationMs);
   const decisionCycle = graphTickedUnitIds.length > 0;
   recordAiSchedulerCycleDuration(schedulerDurationMs, decisionCycle);
   if (decisionCycle || schedulerDurationMs >= 8) {
@@ -151,7 +161,7 @@ export function tickAiSimulationScheduler(
       durationMs: roundTwo(schedulerDurationMs),
       graphResolutionMs: roundTwo(graphResolutionMs),
       unitPassDurationMs: roundTwo(unitPassDurationMs),
-      overheadMs: roundTwo(Math.max(0, schedulerDurationMs - graphResolutionMs - unitPassDurationMs)),
+      overheadMs: roundTwo(schedulerOverheadMs),
       eligibleUnitCount: eligibleUnitIds.length,
       processedUnitCount: processedUnitIds.length,
       graphTickedUnitCount: graphTickedUnitIds.length,
@@ -175,6 +185,13 @@ export function tickAiSimulationScheduler(
     graphResolutionCount: 1,
     graphSourceRevision: graphSnapshot.sourceRevision,
     graphSnapshotFrozen: Object.isFrozen(graphSnapshot) && Object.isFrozen(graphSnapshot.graph),
+    schedulerDurationMs: roundTwo(schedulerDurationMs),
+    graphResolutionDurationMs: roundTwo(graphResolutionMs),
+    unitPassDurationMs: roundTwo(unitPassDurationMs),
+    schedulerOverheadMs: roundTwo(schedulerOverheadMs),
+    maxUnitId,
+    maxUnitDurationMs: roundTwo(maxUnitDurationMs),
+    maxUnitActiveNode,
   };
 }
 

@@ -1,6 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import {
+  adjustDurationForClassifiedHeadlessPauses,
+  type ClassifiedLongTaskDiagnostic,
+} from '../src/core/debug/LongTaskClassification';
 
 interface Stats {
   readonly count: number;
@@ -16,6 +20,7 @@ interface SchedulerDiagnostics {
   readonly decisionUnitPasses: Stats;
   readonly slowestCycles: ReadonlyArray<Record<string, unknown>>;
   readonly slowestUnitPasses: ReadonlyArray<Record<string, unknown>>;
+  readonly recentUnitPasses: ReadonlyArray<{ readonly unitId: string; readonly simulationStep: number; readonly graphTicked: boolean }>;
 }
 
 interface PhaseMeasure {
@@ -45,6 +50,15 @@ interface PerformanceReport {
     readonly perceptionPointProbes?: Record<string, unknown>;
     readonly soldierDangerField?: Record<string, unknown>;
     readonly threatRelativeCover?: Record<string, unknown>;
+    readonly routeCostWorker?: { readonly workerErrors?: number };
+    readonly simulationSlowestPasses?: ReadonlyArray<{
+      readonly simulationStep: number;
+      readonly simulationTimeSeconds: number;
+      readonly performanceStartMs?: number;
+      readonly performanceEndMs?: number;
+      readonly totalDurationMs: number;
+      readonly [key: string]: unknown;
+    }>;
   };
   readonly samples: ReadonlyArray<{
     readonly tMs: number;
@@ -61,6 +75,7 @@ interface PerformanceReport {
     readonly durationMs: number;
     readonly context: Record<string, unknown> | null;
   }>;
+  readonly longTaskClassification?: readonly ClassifiedLongTaskDiagnostic[];
   readonly applicationAttribution?: {
     readonly longTasks: ReadonlyArray<{
       readonly startMs: number;
@@ -108,6 +123,8 @@ const OUTPUT_PATH = process.env.LIVE_WINDOWS_PERF_OUTPUT
   ?? path.join('artifacts', 'performance', 'live-windows-followup', 'after-browser.json');
 const EXPECTED_BRANCH = process.env.LIVE_WINDOWS_PERF_EXPECTED_BRANCH ?? '';
 const EXPECTED_SHA = process.env.LIVE_WINDOWS_PERF_EXPECTED_SHA ?? '';
+const BASE_SHA = process.env.LIVE_WINDOWS_PERF_BASE_SHA ?? '';
+const WORKFLOW_RUN_ID = process.env.LIVE_WINDOWS_PERF_WORKFLOW_RUN_ID ?? '';
 const MEASUREMENT_MS = Math.max(90_000, Number(process.env.LIVE_WINDOWS_PERF_DURATION_MS ?? 90_000));
 const WARMUP_MS = 10_000;
 const INTERACTION_STEP_MS = 5_000;
@@ -133,17 +150,20 @@ test('runs six-unit graph AI with moving contacts and active tactical workspace 
   const measurementStartMs = warmupReport.runtimeSeconds * 1000;
   const warmupSnapshot = await page.evaluate(() => window.__realWargameLiveWindowsPerformance!.getSnapshot());
 
+  const interactionSnapshots: LiveHarnessSnapshot[] = [];
   const steps = Math.ceil(MEASUREMENT_MS / INTERACTION_STEP_MS);
   for (let step = 0; step < steps; step += 1) {
-    await page.evaluate(({ currentStep, layer }) => {
+    const interactionSnapshot = await page.evaluate(({ currentStep, layer }) => {
       const api = window.__realWargameLiveWindowsPerformance;
       if (!api) throw new Error('Live Windows performance harness is unavailable.');
       api.selectUnit(currentStep);
       api.setLayer(layer);
       api.refreshContacts();
       if (currentStep % 3 === 0) api.retargetAll(currentStep + 1);
+      return api.getSnapshot();
     }, { currentStep: step, layer: LAYERS[step % LAYERS.length] });
 
+    interactionSnapshots.push(interactionSnapshot);
     const canvas = page.locator('canvas');
     await canvas.hover();
     await page.mouse.wheel(step % 2 === 0 ? 0 : 180, step % 2 === 0 ? -220 : 160);
@@ -153,9 +173,9 @@ test('runs six-unit graph AI with moving contacts and active tactical workspace 
 
   const stopped = await page.evaluate(() => window.__realWargameLiveWindowsPerformance!.stop());
   const finalReport = await downloadPerformanceReport(page);
-  const evidence = buildEvidence(warmupReport, finalReport, warmupSnapshot, stopped, measurementStartMs);
+  const evidence = buildEvidence(started, warmupReport, finalReport, warmupSnapshot, stopped, interactionSnapshots, measurementStartMs);
   mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
-  writeFileSync(OUTPUT_PATH, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
+  writeEvidenceFiles(evidence);
   console.log(JSON.stringify(evidence, null, 2));
 
   expect(evidence.measurementSeconds).toBeGreaterThanOrEqual(90);
@@ -165,40 +185,76 @@ test('runs six-unit graph AI with moving contacts and active tactical workspace 
 });
 
 function buildEvidence(
+  startedSnapshot: LiveHarnessSnapshot,
   warmup: PerformanceReport,
   final: PerformanceReport,
   warmupSnapshot: LiveHarnessSnapshot,
   finalSnapshot: LiveHarnessSnapshot,
+  interactionSnapshots: readonly LiveHarnessSnapshot[],
   measurementStartMs: number,
 ) {
   assertBuildIdentity(final);
   const scheduler = final.computation?.aiScheduler;
   if (!scheduler) throw new Error('Performance report is missing aiScheduler diagnostics.');
+  const monitorStartedAtMs = warmupSnapshot.performanceNowMs - warmup.runtimeSeconds * 1000;
+  const scenarioStartMs = Math.max(0, startedSnapshot.performanceNowMs - monitorStartedAtMs);
+  const scenarioSamples = final.samples.filter((sample) => sample.tMs >= scenarioStartMs);
   const measurementSamples = final.samples.filter((sample) => sample.tMs >= measurementStartMs);
   const phaseMeasures = (final.performancePhaseMeasures ?? []).filter((measure) => measure.startMs >= measurementStartMs);
   const contextualEvents = (final.contextualPerformancePhaseEvents ?? [])
     .filter((event) => event.startMs >= measurementStartMs);
   const longTasks = (final.applicationAttribution?.longTasks ?? [])
-    .filter((task) => task.startMs >= measurementStartMs);
+    .filter((task) => task.startMs >= scenarioStartMs);
   const applicationDominatedLongTasks = longTasks.filter((task) => task.applicationDominated);
   const partiallyAttributedLongTasks = longTasks
     .filter((task) => task.applicationAttributed && !task.applicationDominated);
   const unattributedLongTasks = longTasks.filter((task) => !task.applicationAttributed);
+  const classifiedLongTasks = (final.longTaskClassification ?? []).filter((task) => task.scenario === 'live-windows-six-unit-ai' || task.startMs >= scenarioStartMs);
+  const simulationSlowestPasses = (final.computation?.simulationSlowestPasses ?? []).map((record) => {
+    const adjustment = adjustDurationForClassifiedHeadlessPauses(
+      record.performanceStartMs,
+      record.performanceEndMs,
+      record.totalDurationMs,
+      classifiedLongTasks,
+    );
+    return {
+      ...record,
+      rawTotalDurationMs: adjustment.rawDurationMs,
+      headlessPauseOverlapMs: adjustment.headlessPauseOverlapMs,
+      acceptedApplicationDurationMs: adjustment.adjustedDurationMs,
+      headlessPauseTaskStartsMs: adjustment.overlappingTaskStartsMs,
+    };
+  });
+  const simulationDurationEvidence = matchSimulationSamplesToSlowestPasses(scenarioSamples, simulationSlowestPasses);
+  const simulationPauseAdjustments = simulationDurationEvidence.filter((sample) => sample.headlessPauseOverlapMs > 0);
+  const unexplainedRawSimulationSpikes = simulationDurationEvidence.filter((sample) => (
+    sample.rawDurationMs > 25 && sample.adjustedDurationMs > 25
+  ));
+  const applicationBlockingLongTasks = classifiedLongTasks.filter((task) => task.classification === 'application_blocking');
+  const unknownLongTasks = classifiedLongTasks.filter((task) => task.classification === 'unknown');
+  const graphUnitPassIds = [...new Set(scheduler.recentUnitPasses.filter((pass) => pass.graphTicked).map((pass) => pass.unitId))].sort();
+  const maximumMovingUnitCount = Math.max(warmupSnapshot.movingUnitCount, finalSnapshot.movingUnitCount, ...interactionSnapshots.map((snapshot) => snapshot.movingUnitCount));
   const workspaceMeasures = phaseMeasures
     .filter((measure) => measure.name.endsWith('ui.tactical-workspace.update'))
     .map((measure) => measure.durationMs);
 
   return {
-    version: 1,
+    version: 2,
+    enforceEnabled: ENFORCE,
     reportVersion: final.version,
     build: final.build ?? null,
     scene: final.scene ?? null,
     measurementSeconds: Math.round((final.runtimeSeconds * 1000 - measurementStartMs) / 100) / 10,
+    scenarioStartMs: roundTwo(scenarioStartMs),
     warmupSnapshot,
     finalSnapshot,
     browser: {
       frameMs: stats(measurementSamples.flatMap((sample) => sample.frameMs === null ? [] : [sample.frameMs])),
-      simulationUpdateMs: stats(measurementSamples.map((sample) => sample.simulationUpdateMs)),
+      simulationRawUpdateMs: stats(simulationDurationEvidence.map((sample) => sample.rawDurationMs)),
+      simulationUpdateMs: stats(simulationDurationEvidence.map((sample) => sample.adjustedDurationMs)),
+      simulationHeadlessPauseOverlapMs: stats(simulationDurationEvidence.map((sample) => sample.headlessPauseOverlapMs)),
+      simulationPauseAdjustments,
+      unexplainedRawSimulationSpikes,
       applicationUpdateMs: stats(measurementSamples.map((sample) => sample.applicationUpdateMs)),
       sceneUpdateMs: stats(measurementSamples.map((sample) => sample.sceneUpdateMs)),
       sampleCount: measurementSamples.length,
@@ -208,6 +264,7 @@ function buildEvidence(
       decisionUnitPasses: scheduler.decisionUnitPasses,
       slowestCycles: scheduler.slowestCycles,
       slowestUnitPasses: scheduler.slowestUnitPasses,
+      graphUnitPassIds,
     },
     workspace: {
       measuredSlowUpdateCount: workspaceMeasures.length,
@@ -218,6 +275,9 @@ function buildEvidence(
       applicationDominatedLongTasks,
       partiallyAttributedLongTasks,
       unattributedLongTasks,
+      classifiedLongTasks,
+      applicationBlockingLongTasks,
+      unknownLongTasks,
     },
     fieldBuildDeltas: {
       directionalTactical: diagnosticDelta(warmup, final, 'directionalTactical', 'buildCount'),
@@ -229,6 +289,9 @@ function buildEvidence(
       soldierDangerFields: diagnosticDelta(warmup, final, 'soldierDangerField', 'fieldBuildCount'),
       threatRelativeCover: diagnosticDelta(warmup, final, 'threatRelativeCover', 'geometryBuildCount'),
     },
+    simulationSlowestPasses,
+    workerErrors: Number(final.computation?.routeCostWorker?.workerErrors ?? 0),
+    maximumMovingUnitCount,
     contextualSlowFieldEvents: contextualEvents
       .filter((event) => event.name.startsWith('field.'))
       .sort((left, right) => right.durationMs - left.durationMs)
@@ -237,13 +300,101 @@ function buildEvidence(
 }
 
 function assertAcceptance(evidence: ReturnType<typeof buildEvidence>): void {
-  expect(evidence.scheduler.decisionCycles.p95Ms, 'scheduler decision-cycle p95').toBeLessThanOrEqual(8);
-  expect(evidence.scheduler.decisionCycles.maxMs, 'scheduler decision-cycle max').toBeLessThanOrEqual(16);
-  expect(evidence.browser.simulationUpdateMs.p95Ms, 'SimulationTick p95').toBeLessThanOrEqual(12);
-  expect(evidence.browser.simulationUpdateMs.maxMs, 'SimulationTick max').toBeLessThanOrEqual(25);
-  expect(evidence.workspace.measuredSlowUpdateMs.p95Ms, 'workspace slow-measure p95').toBeLessThanOrEqual(8);
-  expect(evidence.workspace.measuredSlowUpdateMs.maxMs, 'workspace update max').toBeLessThanOrEqual(16);
-  expect(evidence.applicationAttribution.applicationDominatedLongTasks).toHaveLength(0);
+  const blockingFailures = collectBlockingFailures(evidence);
+  expect(blockingFailures, blockingFailures.join('\n')).toEqual([]);
+}
+
+function collectBlockingFailures(evidence: ReturnType<typeof buildEvidence>): string[] {
+  const failures: string[] = [];
+  const check = (condition: boolean, message: string): void => { if (!condition) failures.push(message); };
+  check(evidence.enforceEnabled, 'enforceEnabled must be true');
+  check(evidence.scheduler.decisionCycles.p95Ms <= 8, `scheduler decision-cycle p95 ${evidence.scheduler.decisionCycles.p95Ms} > 8 ms`);
+  check(evidence.scheduler.decisionCycles.maxMs <= 16, `scheduler decision-cycle max ${evidence.scheduler.decisionCycles.maxMs} > 16 ms`);
+  check(evidence.scheduler.decisionUnitPasses.p95Ms <= 2, `per-unit decision pass p95 ${evidence.scheduler.decisionUnitPasses.p95Ms} > 2 ms`);
+  check(evidence.scheduler.decisionUnitPasses.maxMs <= 10, `per-unit decision pass max ${evidence.scheduler.decisionUnitPasses.maxMs} > 10 ms`);
+  check(evidence.browser.simulationRawUpdateMs.p95Ms <= 12, `raw SimulationTick p95 ${evidence.browser.simulationRawUpdateMs.p95Ms} > 12 ms`);
+  check(evidence.browser.simulationUpdateMs.p95Ms <= 12, `pause-adjusted SimulationTick p95 ${evidence.browser.simulationUpdateMs.p95Ms} > 12 ms`);
+  check(evidence.browser.simulationUpdateMs.maxMs <= 25, `pause-adjusted SimulationTick max ${evidence.browser.simulationUpdateMs.maxMs} > 25 ms`);
+  check(evidence.browser.unexplainedRawSimulationSpikes.length === 0, `${evidence.browser.unexplainedRawSimulationSpikes.length} raw SimulationTick spikes above 25 ms lack classified headless-pause overlap evidence`);
+  check(evidence.workspace.measuredSlowUpdateMs.p95Ms <= 8, `workspace p95 ${evidence.workspace.measuredSlowUpdateMs.p95Ms} > 8 ms`);
+  check(evidence.workspace.measuredSlowUpdateMs.maxMs <= 16, `workspace max ${evidence.workspace.measuredSlowUpdateMs.maxMs} > 16 ms`);
+  check(evidence.applicationAttribution.applicationBlockingLongTasks.length === 0, `${evidence.applicationAttribution.applicationBlockingLongTasks.length} application_blocking LongTasks remain`);
+  check(evidence.applicationAttribution.unknownLongTasks.length === 0, `${evidence.applicationAttribution.unknownLongTasks.length} unknown LongTasks remain`);
+  check(evidence.workerErrors === 0, `${evidence.workerErrors} route-cost worker errors`);
+  check(evidence.finalSnapshot.graphUnitCount >= 6, 'fewer than six graph-controlled units');
+  check(evidence.scheduler.graphUnitPassIds.length >= 6, `only ${evidence.scheduler.graphUnitPassIds.length} graph units received scheduler passes`);
+  check(evidence.maximumMovingUnitCount >= 4, `only ${evidence.maximumMovingUnitCount} units were moving`);
+  check(evidence.measurementSeconds >= 90, `measurement window ${evidence.measurementSeconds} s < 90 s`);
+  return failures;
+}
+
+function writeEvidenceFiles(evidence: ReturnType<typeof buildEvidence>): void {
+  mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
+  writeFileSync(OUTPUT_PATH, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
+  const directory = path.dirname(OUTPUT_PATH);
+  const blockingFailures = collectBlockingFailures(evidence);
+  const acceptance = {
+    baseSha: BASE_SHA,
+    headSha: EXPECTED_SHA || evidence.build?.commitSha || '',
+    enforceEnabled: ENFORCE,
+    allThresholdsPassed: blockingFailures.length === 0,
+    blockingFailures,
+    workflowRunIds: WORKFLOW_RUN_ID ? [Number(WORKFLOW_RUN_ID)] : [],
+  };
+  writeFileSync(path.join(directory, 'acceptance-result.json'), `${JSON.stringify(acceptance, null, 2)}\n`, 'utf8');
+  writeFileSync(path.join(directory, 'simulation-slowest-passes.json'), `${JSON.stringify(evidence.simulationSlowestPasses, null, 2)}\n`, 'utf8');
+  writeFileSync(path.join(directory, 'long-task-classification.json'), `${JSON.stringify(evidence.applicationAttribution.classifiedLongTasks, null, 2)}\n`, 'utf8');
+}
+
+function matchSimulationSamplesToSlowestPasses(
+  samples: PerformanceReport['samples'],
+  slowestPasses: ReadonlyArray<Record<string, unknown> & {
+    readonly simulationStep: number;
+    readonly rawTotalDurationMs: number;
+    readonly headlessPauseOverlapMs: number;
+    readonly acceptedApplicationDurationMs: number;
+    readonly headlessPauseTaskStartsMs: readonly number[];
+  }>,
+) {
+  const candidates = slowestPasses
+    .filter((record) => record.rawTotalDurationMs > 25)
+    .sort((left, right) => right.rawTotalDurationMs - left.rawTotalDurationMs);
+  const used = new Set<number>();
+  return samples.map((sample, sampleIndex) => {
+    const rawDurationMs = sample.simulationUpdateMs;
+    if (rawDurationMs <= 25) {
+      return {
+        sampleIndex,
+        tMs: sample.tMs,
+        rawDurationMs,
+        headlessPauseOverlapMs: 0,
+        adjustedDurationMs: rawDurationMs,
+        simulationStep: null,
+        headlessPauseTaskStartsMs: [] as readonly number[],
+      };
+    }
+    let bestIndex = -1;
+    let bestDifference = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < candidates.length; index += 1) {
+      if (used.has(index)) continue;
+      const difference = Math.abs(candidates[index].rawTotalDurationMs - rawDurationMs);
+      if (difference < bestDifference) {
+        bestDifference = difference;
+        bestIndex = index;
+      }
+    }
+    const match = bestIndex >= 0 && bestDifference <= 1 ? candidates[bestIndex] : null;
+    if (match) used.add(bestIndex);
+    return {
+      sampleIndex,
+      tMs: sample.tMs,
+      rawDurationMs,
+      headlessPauseOverlapMs: match?.headlessPauseOverlapMs ?? 0,
+      adjustedDurationMs: match?.acceptedApplicationDurationMs ?? rawDurationMs,
+      simulationStep: match?.simulationStep ?? null,
+      headlessPauseTaskStartsMs: match?.headlessPauseTaskStartsMs ?? [],
+    };
+  });
 }
 
 async function downloadPerformanceReport(page: Page): Promise<PerformanceReport> {

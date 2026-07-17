@@ -8,17 +8,19 @@ import {
 import {
   createRouteCostFieldCache,
   getRouteCostFieldDiagnostics,
-  getRouteCostFields,
   markRouteCostTextureUploaded,
   readRouteCostCell,
   type RouteCostCellBreakdown,
   type RouteCostFields,
 } from '../core/navigation/RouteCostField';
+import { getOrRequestAsyncRouteCostFields, getRouteCostWorkerDiagnostics } from '../core/navigation/RouteCostWorkerClient';
 import type { NavigationProfile } from '../core/navigation/NavigationProfiles';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import type { UnitModel } from '../core/units/UnitModel';
 
-const RASTER_PIXELS_PER_CELL = 4;
+// One source pixel per map cell is exact for a cell-uniform overlay and keeps
+// 320x200 route-cost uploads bounded. Nearest scaling expands it to cellSize.
+const RASTER_PIXELS_PER_CELL = 1;
 const ROUTE_TEXT_RESOLUTION = Math.max(2, Math.min(4, window.devicePixelRatio * 2));
 const TOOLTIP_STYLE = new TextStyle({
   fontFamily: 'Arial, sans-serif',
@@ -50,6 +52,8 @@ export interface RouteCostOverlayDiagnostics {
   readonly displayObjectCount: number;
   readonly activeProfileId: string | null;
   readonly selectedUnitId: string | null;
+  readonly preparationStatus: 'idle' | 'pending' | 'ready' | 'unavailable';
+  readonly workerErrors: number;
 }
 
 type RouteCostDebugWindow = Window & {
@@ -79,6 +83,8 @@ export class PixiRouteCostOverlayRenderer {
   private staticTextureBuildCount = 0;
   private dynamicTextureBuildCount = 0;
   private destroyed = false;
+  private preparationStatus: RouteCostOverlayDiagnostics['preparationStatus'] = 'idle';
+  private lastMap: SimulationState['map'] | null = null;
 
   constructor() {
     this.container.eventMode = 'none';
@@ -102,7 +108,10 @@ export class PixiRouteCostOverlayRenderer {
     }
 
     const resolved = resolveUnitNavigationProfile(unit);
-    if (this.lastRenderedProfileId !== resolved.profileId) {
+    const sourceChanged = this.selectedUnitId !== null && this.selectedUnitId !== unit.id;
+    const profileChanged = this.lastRenderedProfileId !== resolved.profileId;
+    if (sourceChanged || profileChanged) {
+      this.fields = null;
       this.lastStaticTextureKey = '';
       this.lastDynamicTextureKey = '';
       this.lastRenderedProfileId = resolved.profileId;
@@ -111,9 +120,25 @@ export class PixiRouteCostOverlayRenderer {
       freshness: 'coalesced',
       metersPerCell: state.map.metersPerCell,
     });
-    const fields = getRouteCostFields(state.map, resolved.profile, tacticalContext, this.cache);
+    const preparation = getOrRequestAsyncRouteCostFields(state.map, resolved.profile, tacticalContext);
+    this.preparationStatus = preparation.status;
+    this.lastMap = state.map;
+    if (preparation.status === 'ready') this.fields = preparation.fields;
+    const fields = preparation.status === 'ready'
+      ? preparation.fields
+      : this.fields && this.fields.profileId === resolved.profile.id
+        ? this.fields
+        : null;
     this.ensureRaster(state.map.width, state.map.height, state.map.cellSize);
     if (!this.staticContext || !this.dynamicContext || !this.staticTexture || !this.dynamicTexture) return;
+    if (!fields) {
+      this.container.visible = false;
+      this.tooltip.visible = false;
+      this.profile = resolved.profile;
+      this.selectedUnitId = unit.id;
+      this.publishDiagnostics(overlay.mode);
+      return;
+    }
 
     const revisions = getMapRevisionSnapshot(state.map);
     const staticTextureKey = [
@@ -148,7 +173,7 @@ export class PixiRouteCostOverlayRenderer {
     this.container.visible = true;
     if (this.staticSprite) this.staticSprite.visible = overlay.mode === 'baseTerrain';
     if (this.dynamicSprite) this.dynamicSprite.visible = overlay.mode !== 'baseTerrain';
-    this.legend.text = legendText(overlay.mode, resolved.profile.nameRu, fields.availability.directionalTerrain);
+    this.legend.text = `${legendText(overlay.mode, resolved.profile.nameRu, fields.availability.directionalTerrain)}${this.preparationStatus === 'pending' ? '\nФоновое обновление поля…' : ''}`;
 
     this.fields = fields;
     this.profile = resolved.profile;
@@ -159,6 +184,7 @@ export class PixiRouteCostOverlayRenderer {
 
   getDiagnostics(mode: RouteCostOverlayMode = 'finalCost'): RouteCostOverlayDiagnostics {
     const diagnostics = getRouteCostFieldDiagnostics(this.cache);
+    const worker = this.lastMap ? getRouteCostWorkerDiagnostics(this.lastMap) : null;
     return {
       representation: 'two-raster-sprites',
       visible: this.container.visible,
@@ -169,6 +195,8 @@ export class PixiRouteCostOverlayRenderer {
       displayObjectCount: this.container.children.length,
       activeProfileId: this.profile?.id ?? null,
       selectedUnitId: this.selectedUnitId,
+      preparationStatus: this.preparationStatus,
+      workerErrors: worker?.workerErrors ?? 0,
     };
   }
 
@@ -193,6 +221,8 @@ export class PixiRouteCostOverlayRenderer {
     this.fields = null;
     this.profile = null;
     this.selectedUnitId = null;
+    this.lastMap = null;
+    this.preparationStatus = 'idle';
     this.container.destroy();
     delete (window as RouteCostDebugWindow).__realWargameRouteCostDebug;
   }
@@ -294,7 +324,9 @@ export function drawRouteCostRaster(
           const outputX = x * RASTER_PIXELS_PER_CELL + px;
           const outputY = y * RASTER_PIXELS_PER_CELL + py;
           const offset = (outputY * width + outputX) * 4;
-          const hatch = !passable && (px === py || px + py === RASTER_PIXELS_PER_CELL - 1);
+          const hatch = RASTER_PIXELS_PER_CELL > 1
+            && !passable
+            && (px === py || px + py === RASTER_PIXELS_PER_CELL - 1);
           image.data[offset] = hatch ? 225 : color[0];
           image.data[offset + 1] = hatch ? 225 : color[1];
           image.data[offset + 2] = hatch ? 225 : color[2];

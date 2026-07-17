@@ -254,6 +254,7 @@ export function applyOwnedMoveEffectsForUnit(
         movementMode: unit.navigationMovementMode ?? 'normal',
         navigationProfile: resolvedNavigation.profile,
         navigationProfileSource: resolvedNavigation.source,
+        calculatedAtSimulationStep: state.simulationStep,
         tacticalContext: buildUnitTacticalRouteContext(unit, {
           freshness: 'immediate',
           metersPerCell: state.map.metersPerCell,

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import type { TacticalMapData } from '../src/core/map/MapModel';
 import { advanceVisualContact, upsertPerceptionContact } from '../src/core/perception/PerceptionContact';
 import {
@@ -65,6 +66,74 @@ const zones: PressureZoneData[] = Array.from({ length: 120 }, (_, index) => {
     reasonRu: 'Источник для проверки производительности.',
   };
 });
+
+const reuseObservers: UnitData[] = Array.from({ length: 6 }, (_, index) => ({
+  ...observer,
+  id: `reuse-observer-${index}`,
+  label: `Reuse observer ${index}`,
+  labelRu: `Наблюдатель повторного входа ${index}`,
+  side: index % 2 === 0 ? 'blue' : 'red',
+  x: 80.5 + index * 4,
+  y: 90.5,
+}));
+const reuseState = createInitialState(map, reuseObservers, []);
+reuseState.simulationStep = 1;
+reuseState.simulationTimeSeconds = 0.1;
+const reuseDiagnostic = tickAllUnitPerception(reuseState, 0.1);
+assert.deepEqual(reuseDiagnostic, {
+  stimuliBuildCount: 1,
+  observerEvaluationCount: 6,
+  sharedStimulusCount: 6,
+}, 'six observers in one simulation step must share one objective stimulus preparation and retain six observer-specific evaluations');
+
+const leakState = createInitialState(map, [
+  { ...observer, id: 'known-observer', side: 'blue', x: 40.5, y: 40.5 },
+  { ...observer, id: 'unknown-observer', side: 'blue', x: 44.5, y: 40.5 },
+  { ...observer, id: 'hidden-hostile', side: 'red', x: 180.5, y: 180.5 },
+], []);
+const knownObserver = leakState.units.find((unit) => unit.id === 'known-observer')!;
+const unknownObserver = leakState.units.find((unit) => unit.id === 'unknown-observer')!;
+const hiddenHostile = leakState.units.find((unit) => unit.id === 'hidden-hostile')!;
+upsertPerceptionContact(knownObserver.perceptionKnowledge, advanceVisualContact(null, {
+  id: 'perception:unit:hidden-hostile',
+  stimulusId: 'unit:hidden-hostile',
+  sourceUnitId: hiddenHostile.id,
+  labelRu: hiddenHostile.labels.ru,
+  position: hiddenHostile.position,
+  evidencePerSecond: 220,
+  deltaSeconds: 1,
+  nowSeconds: 0,
+  source: 'visual',
+}));
+unknownObserver.attentionRuntime.nextFocusCheckSeconds = 999;
+unknownObserver.attentionRuntime.nextDirectCheckSeconds = 999;
+unknownObserver.attentionRuntime.nextPeripheralCheckSeconds = 999;
+unknownObserver.attentionRuntime.nextRearCheckSeconds = 999;
+leakState.simulationStep = 1;
+leakState.simulationTimeSeconds = 0.1;
+const leakDiagnostic = tickAllUnitPerception(leakState, 0.1);
+assert.ok(knownObserver.perceptionKnowledge.contacts.some((contact) => contact.sourceUnitId === hiddenHostile.id));
+assert.equal(
+  unknownObserver.perceptionKnowledge.contacts.some((contact) => contact.sourceUnitId === hiddenHostile.id),
+  false,
+  "shared objective stimuli must not copy one observer's subjective contact knowledge into another observer",
+);
+
+const evidenceDir = process.env.PERFORMANCE_EVIDENCE_DIR;
+if (evidenceDir) {
+  mkdirSync(evidenceDir, { recursive: true });
+  writeFileSync(`${evidenceDir}/perception-stimuli-reuse.json`, JSON.stringify({
+    version: 1,
+    observers: reuseDiagnostic.observerEvaluationCount,
+    stimuliBuildCount: reuseDiagnostic.stimuliBuildCount,
+    sharedStimulusCount: reuseDiagnostic.sharedStimulusCount,
+    observerSpecificEvaluations: reuseDiagnostic.observerEvaluationCount,
+    hiddenTargetKnownToFirstObserver: true,
+    hiddenTargetKnownToSecondObserver: false,
+    knowledgeLeak: false,
+    leakScenarioStimuliBuildCount: leakDiagnostic.stimuliBuildCount,
+  }, null, 2));
+}
 
 const state = createInitialState(map, [observer], zones);
 selectUnit(state, observer.id);

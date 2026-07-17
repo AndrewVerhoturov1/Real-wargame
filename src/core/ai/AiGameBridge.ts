@@ -3,6 +3,7 @@ import { findBestDirectFireContact } from '../combat/CombatDecision';
 import { requestFireAction } from '../combat/FireAction';
 import { clearWeaponRuntime } from '../combat/WeaponModel';
 import { distance, type GridPosition } from '../geometry';
+import { readPublishedRouteDanger } from '../navigation/RouteDangerDiagnostic';
 import { clampGridPositionToMap, type TacticalMap } from '../map/MapModel';
 import { createMoveOrder } from '../orders/MoveOrder';
 import { isPlayerCommandOutstanding } from '../orders/PlayerCommand';
@@ -220,6 +221,23 @@ export function tickAiGameBridgeForTrustedUnit(
           reactiveWake = true;
           unit.behaviorRuntime.aiReactiveWakeCount += 1;
           unit.behaviorRuntime.aiLastReactiveWakeAtMs = atMs;
+        } else if (
+          ordinaryInCycle > atMs
+          && !options.cancel
+          && session.eventQueue.events.length === 0
+        ) {
+          const quietUntilMs = Math.min(
+            cycleEndMs,
+            Number.isFinite(ordinaryInCycle) ? ordinaryInCycle - 0.001 : cycleEndMs,
+          );
+          observerGuard += fastForwardQuietObserverPolls(
+            unit,
+            observerDueAtMs,
+            quietUntilMs,
+            observerPoll.checks,
+          );
+          session = unit.behaviorRuntime.aiRuntimeSession ?? session;
+          observerDueAtMs = unit.behaviorRuntime.aiObserverNextPollMs;
         }
       }
 
@@ -446,6 +464,30 @@ function pollAiBlackboardObserversAt(
   return { events, checks };
 }
 
+function fastForwardQuietObserverPolls(
+  unit: UnitModel,
+  nextPollAtMs: number,
+  quietUntilMs: number,
+  checksPerPoll: number,
+): number {
+  if (nextPollAtMs > quietUntilMs) return 0;
+  const polls = Math.floor((quietUntilMs - nextPollAtMs) / AI_OBSERVER_POLL_INTERVAL_MS) + 1;
+  if (polls <= 0) return 0;
+  const session = unit.behaviorRuntime.aiRuntimeSession;
+  if (session && checksPerPoll > 0) {
+    unit.behaviorRuntime.aiRuntimeSession = {
+      ...session,
+      observerRegistry: {
+        ...session.observerRegistry,
+        observerChecks: session.observerRegistry.observerChecks + checksPerPoll * polls,
+      },
+    };
+  }
+  unit.behaviorRuntime.aiObserverPollCount += polls;
+  unit.behaviorRuntime.aiObserverNextPollMs = nextPollAtMs + polls * AI_OBSERVER_POLL_INTERVAL_MS;
+  return polls;
+}
+
 export function pollAiBlackboardObservers(
   state: SimulationState,
   unit: UnitModel,
@@ -549,7 +591,7 @@ export function buildBlackboardForUnit(
     bestCoverQuality: Math.max(0, Math.round(readNumber(runtimeMemory.bestCoverQuality, 0))),
     currentPositionDanger: clampPercent(threats.danger),
     currentExpectedProtection: clampPercent(currentExpectedProtection),
-    routeDanger: clampPercent(threats.danger),
+    routeDanger: readPublishedRouteDanger(unit.order),
     threatConfidence: Math.round(currentThreatConfidence),
     attention_mode: unit.attentionRuntime.mode,
     attention_focus_direction: normalizeDegrees(radiansToDegrees(unit.attentionRuntime.focusDirectionRadians)),
@@ -623,6 +665,7 @@ function readCompactObservedValue(
     case 'weaponReady': return unit.behaviorRuntime.weaponReady && unit.behaviorRuntime.ammo > 0;
     case 'underFire': return unit.behaviorRuntime.danger > 0 || unit.behaviorRuntime.suppression > 0;
     case 'hasOrder': return Boolean(unit.order);
+    case 'routeDanger': return readPublishedRouteDanger(unit.order);
     case 'current_action': return unit.behaviorRuntime.currentAction;
     case 'self_position': return { ...unit.position };
     case 'order_target_position': return unit.order ? { ...unit.order.target } : null;

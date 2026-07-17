@@ -10,7 +10,7 @@ Read first:
 docs/performance/PERFORMANCE_PRINCIPLES.md
 ```
 
-That document is a repository contract. It is not optional guidance.
+This document is a repository contract. It is not optional guidance.
 
 ## Trigger
 

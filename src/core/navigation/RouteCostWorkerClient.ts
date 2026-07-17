@@ -5,6 +5,7 @@ import { getBuiltInNavigationProfile, type NavigationProfile } from './Navigatio
 import {
   getRouteCostFields,
   getSharedRouteCostFieldCache,
+  getRouteCostMapIdentity,
   routeCostFieldsMatch,
   type RouteCostFields,
   type TacticalRouteContext,
@@ -143,18 +144,12 @@ function getRuntime(map: TacticalMap): MapRuntime | null {
   if (existing) return existing;
   try {
     const worker = new Worker(new URL('../../workers/RouteCostWorker.ts', import.meta.url), { type: 'module' });
-    const direct = getRouteCostFields(
-      map,
-      getBuiltInNavigationProfile('direct'),
-      undefined,
-      getSharedRouteCostFieldCache(map),
-    );
     const created: MapRuntime = {
       worker,
       disabled: false,
       nextJobId: 1,
       configuredMapKey: '',
-      mainMapIdentity: direct.mapIdentity,
+      mainMapIdentity: getRouteCostMapIdentity(map),
       inFlight: null,
       pendingByOwner: new Map(),
       latestRequestKeyByOwner: new Map(),
@@ -268,17 +263,11 @@ function handleResponse(map: TacticalMap, runtime: MapRuntime, response: RouteCo
     if (stale) {
       runtime.diagnostics.staleResultsDropped += 1;
     } else {
-      const mainStatic = getRouteCostFields(
-        map,
-        getBuiltInNavigationProfile('direct'),
-        undefined,
-        getSharedRouteCostFieldCache(map),
-      );
+      const revisions = getMapRevisionSnapshot(map);
       const fields: RouteCostFields = {
         ...response.fields,
         mapIdentity: runtime.mainMapIdentity,
-        mapRevisionKey: mainStatic.mapRevisionKey,
-        terrainKeys: mainStatic.terrainKeys,
+        mapRevisionKey: [revisions.terrain, revisions.height, revisions.forest, revisions.objects].join(':'),
       };
       if (routeCostFieldsMatch(map, inFlight.profile, fields)) {
         runtime.ready.set(response.requestKey, fields);

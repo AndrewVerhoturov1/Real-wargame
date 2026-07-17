@@ -54,8 +54,19 @@ export function tickSelectedSoldierPerception(state: SimulationState, deltaSecon
   publishPerceptionDiagnostics(state);
 }
 
-export function tickAllUnitPerception(state: SimulationState, deltaSeconds: number): void {
-  if (deltaSeconds <= 0) return;
+export interface PerceptionStepReuseDiagnostic {
+  readonly stimuliBuildCount: number;
+  readonly observerEvaluationCount: number;
+  readonly sharedStimulusCount: number;
+}
+
+export function tickAllUnitPerception(
+  state: SimulationState,
+  deltaSeconds: number,
+): PerceptionStepReuseDiagnostic {
+  if (deltaSeconds <= 0) {
+    return { stimuliBuildCount: 0, observerEvaluationCount: 0, sharedStimulusCount: 0 };
+  }
   const selected = getSelectedUnit(state);
   const diagnostics = selected ? getMutablePerceptionDiagnostics(state) : null;
   if (diagnostics) {
@@ -67,14 +78,34 @@ export function tickAllUnitPerception(state: SimulationState, deltaSeconds: numb
     state.units.filter((unit) => isUnitCombatCapable(unit)),
     state.simulationStep,
   );
+  const sharedStimuli: readonly PerceptionStimulus[] = buildPerceptionStimuli(state);
+  const sourceUnitsById = new Map(state.units.map((unit) => [unit.id, unit] as const));
+  let observerEvaluationCount = 0;
   for (const unit of units) {
-    tickUnitPerception(state, unit, deltaSeconds, unit.id === selected?.id ? diagnostics : null);
+    const unitStimuli = sharedStimuli.filter((stimulus) => {
+      if (stimulus.sourceUnitId === null) return true;
+      const source = sourceUnitsById.get(stimulus.sourceUnitId);
+      return Boolean(source && source.id !== unit.id && areUnitsHostile(unit, source));
+    });
+    observerEvaluationCount += 1;
+    tickUnitPerception(
+      state,
+      unit,
+      deltaSeconds,
+      unit.id === selected?.id ? diagnostics : null,
+      unitStimuli,
+    );
   }
 
   if (diagnostics) {
     diagnostics.bestContactId = selected ? getBestPerceptionContact(selected)?.id ?? null : null;
     publishPerceptionDiagnostics(state);
   }
+  return {
+    stimuliBuildCount: 1,
+    observerEvaluationCount,
+    sharedStimulusCount: sharedStimuli.length,
+  };
 }
 
 export function tickUnitPerception(
@@ -82,13 +113,14 @@ export function tickUnitPerception(
   unit: UnitModel,
   deltaSeconds: number,
   diagnostics: MutablePerceptionDiagnostics | null = null,
+  preparedStimuli?: readonly PerceptionStimulus[],
 ): void {
   if (deltaSeconds <= 0 || !isUnitCombatCapable(unit)) return;
   updateAttentionController(unit, deltaSeconds);
   const now = state.simulationTimeSeconds;
   const due = resolveDueZones(unit, now);
   const updatedContacts = new Set<string>();
-  const stimuli = buildPerceptionStimuli(state, unit);
+  const stimuli = preparedStimuli ?? buildPerceptionStimuli(state, unit);
   const stimulusCursor = resolveStimulusStartIndex(state, unit, stimuli);
   let firstDeferredStimulusIndex: number | null = null;
   const broadPhaseCells = Math.max(
@@ -205,11 +237,17 @@ export function tickUnitPerception(
 }
 
 export function getBestPerceptionContact(unit: UnitModel): PerceptionContactMemory | null {
-  return [...unit.perceptionKnowledge.contacts].sort((left, right) => (
-    contactStageRank(right.stage) - contactStageRank(left.stage)
-    || right.confidence - left.confidence
-    || right.lastUpdatedSeconds - left.lastUpdatedSeconds
-  ))[0] ?? null;
+  let best: PerceptionContactMemory | null = null;
+  for (const contact of unit.perceptionKnowledge.contacts) {
+    if (!best || compareBestPerceptionContact(contact, best) > 0) best = contact;
+  }
+  return best;
+}
+
+function compareBestPerceptionContact(left: PerceptionContactMemory, right: PerceptionContactMemory): number {
+  return contactStageRank(left.stage) - contactStageRank(right.stage)
+    || left.confidence - right.confidence
+    || left.lastUpdatedSeconds - right.lastUpdatedSeconds;
 }
 
 function resolveStimulusStartIndex(

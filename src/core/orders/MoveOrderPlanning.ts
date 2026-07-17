@@ -21,6 +21,7 @@ export interface PlanMoveOrderOptions {
   readonly playerCommandId?: string;
   readonly routeStatus?: MoveOrderRouteStatus;
   readonly routeRevision?: number;
+  readonly calculatedAtSimulationStep?: number;
   readonly allowGoalAdjustment?: boolean;
   readonly navigationProfile?: NavigationProfile;
   readonly navigationProfileSource?: NavigationProfileSource;
@@ -62,6 +63,8 @@ export function planMoveOrder(
     navigationProfile: options.navigationProfile,
     tacticalContext: options.tacticalContext,
     preparedCostFields: options.preparedCostFields,
+    routeDangerRevision: options.routeRevision ?? 1,
+    calculatedAtSimulationStep: options.calculatedAtSimulationStep ?? 0,
   });
   if (!path.ok) {
     return {
@@ -84,6 +87,7 @@ export function planMoveOrder(
     routeCellIndex: 0,
     routeStatus: options.routeStatus ?? 'planned',
     routeRevision: options.routeRevision ?? 1,
+    routeDangerDiagnostic: path.routeDangerDiagnostic ?? undefined,
     pathCost: path.totalCost,
     pathDistanceMeters: path.distanceMeters,
     baselineDistanceMeters: path.baselineDistanceMeters,

@@ -5,7 +5,7 @@ type ValueArgs = {
   key: string; label: string; ru: string; description: string; descriptionRu: string;
   type: AiConceptValueType; category: AiConceptCategory; readiness?: AiConceptReadiness;
   limitation?: string; limitationRu?: string; source: string; sourceRu: string;
-  defaultValue: AiBlackboardValue; mapFocus?: AiConceptMapFocus; nodes?: 'numeric' | 'flag' | 'move' | 'none';
+  defaultValue: AiBlackboardValue; mapFocus?: AiConceptMapFocus; nodes?: 'numeric' | 'flag' | 'move' | 'none'; nullable?: boolean;
   minimum?: number; maximum?: number; aliases?: readonly string[];
 };
 
@@ -18,7 +18,7 @@ function value(args: ValueArgs): AiConceptDefinition {
     label: args.label, labelRu: args.ru, description: args.description, descriptionRu: args.descriptionRu,
     readiness, readinessExplanation: args.limitation ?? defaultReady, readinessExplanationRu: args.limitationRu ?? defaultReadyRu,
     source: args.source, sourceRu: args.sourceRu, defaultValue: args.defaultValue,
-    minimum: args.minimum, maximum: args.maximum, mapFocus: args.mapFocus ?? 'unit', aliases: args.aliases,
+    minimum: args.minimum, maximum: args.maximum, mapFocus: args.mapFocus ?? 'unit', aliases: args.aliases, nullable: args.nullable,
     nodeTemplates: args.nodes === 'numeric' ? numericNodes(args.key) : args.nodes === 'flag' ? [flag(args.key)] : args.nodes === 'move' ? [moveTo(args.key)] : [],
   };
 }
@@ -60,7 +60,7 @@ export const AI_VALUE_CONCEPTS: readonly AiConceptDefinition[] = [
   value({ key:'bestCoverQuality', label:'Best cover quality', ru:'Качество лучшего укрытия', description:'Score of the best physical cover candidate.', descriptionRu:'Оценка лучшего найденного физического укрытия.', type:'number', category:'cover', source:'Cover search', sourceRu:'Поиск укрытий', defaultValue:0, minimum:0, mapFocus:'cover', nodes:'numeric' }),
   value({ key:'currentPositionDanger', label:'Perceived danger here', ru:'Опасность текущей позиции по мнению бойца', description:'Danger of the current cell according to personal knowledge.', descriptionRu:'Опасность текущей клетки по личным знаниям бойца.', type:'percent', category:'danger', readiness:'hidden', limitation:exposed, limitationRu:exposedRu, source:'Soldier awareness grid', sourceRu:'Личная тактическая карта бойца', defaultValue:0, minimum:0, maximum:100, mapFocus:'unit', nodes:'numeric' }),
   value({ key:'currentExpectedProtection', label:'Expected protection here', ru:'Ожидаемая защита текущей позиции', description:'Expected protection of the current cell.', descriptionRu:'Ожидаемая защита текущей клетки.', type:'percent', category:'cover', readiness:'hidden', limitation:exposed, limitationRu:exposedRu, source:'Soldier awareness grid', sourceRu:'Личная тактическая карта бойца', defaultValue:0, minimum:0, maximum:100, mapFocus:'cover', nodes:'numeric' }),
-  value({ key:'routeDanger', label:'Route danger', ru:'Опасность маршрута', description:'Average perceived danger along the current ordered route.', descriptionRu:'Средняя субъективная опасность пути к точке приказа.', type:'percent', category:'route', readiness:'hidden', limitation:exposed, limitationRu:exposedRu, source:'Soldier awareness grid', sourceRu:'Личная тактическая карта бойца', defaultValue:0, minimum:0, maximum:100, mapFocus:'route', nodes:'numeric' }),
+  value({ key:'routeDanger', label:'Route danger', ru:'Опасность маршрута', description:'Average subjective danger along the remaining active route; unavailable when no route exists.', descriptionRu:'Средняя субъективная опасность оставшейся части активного маршрута; без маршрута значение недоступно.', type:'percent', category:'route', readiness:'hidden', limitation:exposed, limitationRu:exposedRu, source:'Published route diagnostic', sourceRu:'Опубликованная диагностика маршрута', defaultValue:null, nullable:true, minimum:0, maximum:100, mapFocus:'route', nodes:'numeric' }),
   value({ key:'threatConfidence', label:'Threat confidence', ru:'Уверенность в сведениях об угрозе', description:'Highest confidence among threats in personal memory.', descriptionRu:'Наибольшая уверенность среди угроз в личной памяти.', type:'percent', category:'memory', readiness:'hidden', limitation:exposed, limitationRu:exposedRu, source:'Threat memory', sourceRu:'Личная память угроз бойца', defaultValue:0, minimum:0, maximum:100, mapFocus:'memory', nodes:'numeric' }),
   value({ key:'attention_mode', label:'Attention mode', ru:'Режим внимания', description:'Current march, observation, search, or engagement attention mode.', descriptionRu:'Текущий режим внимания: марш, наблюдение, поиск цели или стрельба.', type:'text', category:'perception', source:'Attention runtime', sourceRu:'Текущее управление вниманием', defaultValue:'observe' }),
   value({ key:'attention_focus_direction', label:'Attention focus direction', ru:'Направление фокуса внимания', description:'Current direction of the narrow attention focus.', descriptionRu:'Текущее направление узкого фокуса внимания.', type:'degrees', category:'perception', source:'Attention runtime', sourceRu:'Текущее управление вниманием', defaultValue:0, minimum:0, maximum:360, mapFocus:'unit', nodes:'numeric' }),
