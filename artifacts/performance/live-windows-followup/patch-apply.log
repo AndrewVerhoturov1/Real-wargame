@@ -1,3 +1,4 @@
+Adjusted safe-position removal for runtime, harnesses, and diagnostics.
 Traceback (most recent call last):
   File "/home/runner/work/Real-wargame/Real-wargame/scripts/agent_live_windows_followup_apply.py", line 387, in <module>
     raise RuntimeError(f"legacy safe-position identifier {forbidden!r} remains in {source_path.relative_to(ROOT)}")
