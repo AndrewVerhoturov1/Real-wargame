@@ -445,7 +445,7 @@ expectIncludes('src/core/debug/PerformanceMonitor.ts', [
   'PERFORMANCE_CONTRACT_VERSION', 'getRealWargameBuildIdentity', 'awarenessMovement',
 ]);
 expectIncludes('src/core/debug/BuildIdentity.ts', [
-  "PERFORMANCE_CONTRACT_VERSION = 'performance-report-v4'", 'commitSha', 'buildId', 'branch',
+  "PERFORMANCE_CONTRACT_VERSION = 'performance-report-v5'", 'commitSha', 'buildId', 'branch',
 ]);
 
 expectIncludes('src/core/editor/GameEditorPlacement.ts', [

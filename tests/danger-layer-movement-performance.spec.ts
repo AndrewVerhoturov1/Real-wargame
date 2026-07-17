@@ -826,8 +826,8 @@ function buildLongTaskAttribution(
 }
 
 function assertBuildIdentity(report: PerformanceReport): void {
-  expect(report.version).toBe('performance-report-v4');
-  expect(report.build?.performanceContractVersion).toBe('performance-report-v4');
+  expect(report.version).toBe('performance-report-v5');
+  expect(report.build?.performanceContractVersion).toBe('performance-report-v5');
   expect(report.build?.branch).toBe(EXPECTED_BRANCH);
   if (EXPECTED_SHA) expect(report.build?.commitSha).toBe(EXPECTED_SHA);
   expect(report.build?.buildId).toBeTruthy();

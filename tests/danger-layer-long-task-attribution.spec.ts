@@ -136,8 +136,8 @@ test('captures raw wall-crossing long-task and long-animation-frame attribution'
 
   const downloaded = await downloadReport(page);
   const report = downloaded.report;
-  expect(report.version).toBe('performance-report-v4');
-  expect(report.build?.performanceContractVersion).toBe('performance-report-v4');
+  expect(report.version).toBe('performance-report-v5');
+  expect(report.build?.performanceContractVersion).toBe('performance-report-v5');
   expect(report.build?.branch).toBe(EXPECTED_BRANCH);
   if (EXPECTED_SHA) expect(report.build?.commitSha).toBe(EXPECTED_SHA);
   expect(report.build?.buildId).toBeTruthy();

@@ -12,11 +12,19 @@ import { getVisibilityGeometryFieldDiagnostics } from '../visibility/VisibilityG
 import { getSimulationLayerState } from '../ui/RuntimeUiState';
 import { getAwarenessMovementDiagnostics } from './AwarenessMovementDiagnostics';
 import { getRealWargameBuildIdentity, PERFORMANCE_CONTRACT_VERSION } from './BuildIdentity';
+import {
+  getPerformancePhaseRuntimeDiagnostics,
+  type PerformancePhaseRuntimeDiagnostic,
+} from './PerformancePhases';
 
 export interface PerformanceFrameSample {
   tMs: number;
   frameMs: number | null;
-  /** CPU time spent updating render data before Pixi performs its WebGL draw. */
+  /** CPU time spent in SimulationTick during the frame. */
+  simulationUpdateMs: number;
+  /** Simulation plus render-data JavaScript work owned by the application. */
+  applicationUpdateMs: number;
+  /** Legacy render-data-only sample retained for compatibility. */
   sceneUpdateMs: number;
   /** Legacy alias retained for old report readers. This is not GPU/WebGL render time. */
   renderMs: number;
@@ -77,6 +85,22 @@ export interface PerformancePhaseMeasureDiagnostic {
   durationMs: number;
 }
 
+export interface PerformancePhaseAggregateDiagnostic extends PerformancePhaseRuntimeDiagnostic {
+  readonly longTaskOverlapCount: number;
+  readonly longTaskOverlapDurationMs: number;
+  readonly longAnimationFrameOverlapCount: number;
+  readonly longAnimationFrameOverlapDurationMs: number;
+}
+
+export interface ApplicationIntervalAttributionDiagnostic {
+  readonly startMs: number;
+  readonly durationMs: number;
+  readonly scenario: string | null;
+  readonly applicationAttributed: boolean;
+  readonly overlappingPhases: readonly string[];
+  readonly overlapDurationMs: number;
+}
+
 export interface PerformanceReport {
   version: typeof PERFORMANCE_CONTRACT_VERSION;
   build: ReturnType<typeof getRealWargameBuildIdentity>;
@@ -92,6 +116,14 @@ export interface PerformanceReport {
   longTasks: BrowserLongTaskDiagnostic[];
   longAnimationFrames: LongAnimationFrameDiagnostic[];
   performancePhaseMeasures: PerformancePhaseMeasureDiagnostic[];
+  performancePhaseAggregates: PerformancePhaseAggregateDiagnostic[];
+  applicationAttribution: {
+    longTasks: ApplicationIntervalAttributionDiagnostic[];
+    longAnimationFrames: ApplicationIntervalAttributionDiagnostic[];
+    applicationAttributedLongTaskCount: number;
+    unattributedLongTaskCount: number;
+    applicationAttributedLongAnimationFrameCount: number;
+  };
   samples: PerformanceFrameSample[];
 }
 
@@ -146,6 +178,7 @@ export class PerformanceMonitor {
   private lastSampleAt: number | null = null;
   private longTaskObserver: PerformanceObserver | null = null;
   private longAnimationFrameObserver: PerformanceObserver | null = null;
+  private pendingSimulationUpdateMs = 0;
 
   constructor() {
     this.installLongTaskObserver();
@@ -159,6 +192,10 @@ export class PerformanceMonitor {
     this.longAnimationFrameObserver = null;
   }
 
+  recordSimulationUpdate(durationMs: number): void {
+    this.pendingSimulationUpdateMs = Math.max(0, durationMs);
+  }
+
   recordFrame(state: SimulationState, zoom: number, sceneUpdateMs: number, grid = false): void {
     const now = performance.now();
     const frameMs = this.lastSampleAt === null ? null : now - this.lastSampleAt;
@@ -166,9 +203,13 @@ export class PerformanceMonitor {
     const layer = getSimulationLayerState(state);
     const mouse = state.mouseGridPosition;
 
+    const simulationUpdateMs = this.pendingSimulationUpdateMs;
+    this.pendingSimulationUpdateMs = 0;
     this.samples[this.writeIndex] = {
       tMs: roundOne(now - this.startedAt),
       frameMs: frameMs === null ? null : roundTwo(frameMs),
+      simulationUpdateMs: roundTwo(simulationUpdateMs),
+      applicationUpdateMs: roundTwo(simulationUpdateMs + sceneUpdateMs),
       sceneUpdateMs: roundTwo(sceneUpdateMs),
       renderMs: roundTwo(sceneUpdateMs),
       zoom: roundThree(zoom),
@@ -194,6 +235,8 @@ export class PerformanceMonitor {
       .map((sample) => sample.frameMs)
       .filter((value): value is number => typeof value === 'number');
     const sceneUpdateValues = samples.map((sample) => sample.sceneUpdateMs);
+    const simulationUpdateValues = samples.map((sample) => sample.simulationUpdateMs);
+    const applicationUpdateValues = samples.map((sample) => sample.applicationUpdateMs);
     const sampledDurationMs = samples.length > 1
       ? samples[samples.length - 1].tMs - samples[0].tMs
       : 0;
@@ -212,6 +255,17 @@ export class PerformanceMonitor {
         startMs: roundOne(entry.startTime - this.startedAt),
         durationMs: roundTwo(entry.duration),
       }));
+    const performancePhaseAggregates = buildPerformancePhaseAggregates(
+      getPerformancePhaseRuntimeDiagnostics(),
+      performancePhaseMeasures,
+      this.longTasks,
+      this.longAnimationFrames,
+    );
+    const applicationLongTasks = buildApplicationIntervalAttribution(this.longTasks, performancePhaseMeasures);
+    const applicationLongAnimationFrames = buildApplicationIntervalAttribution(
+      this.longAnimationFrames,
+      performancePhaseMeasures,
+    );
 
     return {
       version: PERFORMANCE_CONTRACT_VERSION,
@@ -228,7 +282,7 @@ export class PerformanceMonitor {
       viewport: getViewportInfo(),
       renderer: {
         ...renderer,
-        timingNote: 'sceneUpdateMs/renderMs measure JavaScript scene updates only; global long tasks and long-animation-frame script attribution remain separate diagnostics.',
+        timingNote: 'sceneUpdateMs/renderMs remain render-data-only compatibility metrics. simulationUpdateMs measures SimulationTick; applicationUpdateMs combines simulation and render-data JavaScript work. Nested phase overlap owns application attribution for LongTask and LoAF windows.',
       },
       scene: {
         mapWidthCells: state.map.width,
@@ -274,6 +328,8 @@ export class PerformanceMonitor {
         effectiveFps: effectiveFps === null ? null : roundTwo(effectiveFps),
         fpsAtP95FrameTime: p95FrameMs && p95FrameMs > 0 ? roundTwo(1000 / p95FrameMs) : null,
         frameMs: buildStats(frameValues),
+        simulationUpdateMs: buildStats(simulationUpdateValues),
+        applicationUpdateMs: buildStats(applicationUpdateValues),
         sceneUpdateMs: buildStats(sceneUpdateValues),
         renderMs: buildStats(sceneUpdateValues),
         jankFrames: {
@@ -288,9 +344,18 @@ export class PerformanceMonitor {
         longAnimationFrameMs: buildStats(this.longAnimationFrames.map((frame) => frame.durationMs)),
         longAnimationFrameScriptMs: buildStats(this.longAnimationFrames.flatMap((frame) => frame.scripts.map((script) => script.durationMs))),
         phaseMeasureCount: performancePhaseMeasures.length,
+        phaseAggregateCount: performancePhaseAggregates.length,
+        applicationAttributedLongTaskCount: applicationLongTasks.filter((item) => item.applicationAttributed).length,
+        unattributedLongTaskCount: applicationLongTasks.filter((item) => !item.applicationAttributed).length,
         worstFrames: [...samples]
           .filter((sample) => sample.frameMs !== null)
           .sort((left, right) => (right.frameMs ?? 0) - (left.frameMs ?? 0))
+          .slice(0, 30),
+        worstApplicationUpdates: [...samples]
+          .sort((left, right) => right.applicationUpdateMs - left.applicationUpdateMs)
+          .slice(0, 30),
+        worstSimulationUpdates: [...samples]
+          .sort((left, right) => right.simulationUpdateMs - left.simulationUpdateMs)
           .slice(0, 30),
         worstSceneUpdates: [...samples]
           .sort((left, right) => right.sceneUpdateMs - left.sceneUpdateMs)
@@ -299,6 +364,15 @@ export class PerformanceMonitor {
       longTasks: this.longTasks.map(cloneLongTask),
       longAnimationFrames: this.longAnimationFrames.map(cloneLongAnimationFrame),
       performancePhaseMeasures,
+      performancePhaseAggregates,
+      applicationAttribution: {
+        longTasks: applicationLongTasks,
+        longAnimationFrames: applicationLongAnimationFrames,
+        applicationAttributedLongTaskCount: applicationLongTasks.filter((item) => item.applicationAttributed).length,
+        unattributedLongTaskCount: applicationLongTasks.filter((item) => !item.applicationAttributed).length,
+        applicationAttributedLongAnimationFrameCount: applicationLongAnimationFrames
+          .filter((item) => item.applicationAttributed).length,
+      },
       samples,
     };
   }
@@ -366,6 +440,100 @@ export class PerformanceMonitor {
       ...this.samples.slice(0, this.writeIndex),
     ].filter(isFrameSample);
   }
+}
+
+
+function buildPerformancePhaseAggregates(
+  runtime: readonly PerformancePhaseRuntimeDiagnostic[],
+  measures: readonly PerformancePhaseMeasureDiagnostic[],
+  longTasks: readonly BrowserLongTaskDiagnostic[],
+  longAnimationFrames: readonly LongAnimationFrameDiagnostic[],
+): PerformancePhaseAggregateDiagnostic[] {
+  return runtime.map((phase) => {
+    const phaseMeasures = measures.filter((measure) => shortPhaseName(measure.name) === phase.name);
+    const longTaskOverlap = phaseWindowOverlap(phaseMeasures, longTasks);
+    const longAnimationFrameOverlap = phaseWindowOverlap(phaseMeasures, longAnimationFrames);
+    return {
+      ...phase,
+      longTaskOverlapCount: longTaskOverlap.count,
+      longTaskOverlapDurationMs: roundTwo(longTaskOverlap.durationMs),
+      longAnimationFrameOverlapCount: longAnimationFrameOverlap.count,
+      longAnimationFrameOverlapDurationMs: roundTwo(longAnimationFrameOverlap.durationMs),
+    };
+  });
+}
+
+function buildApplicationIntervalAttribution(
+  windows: ReadonlyArray<{ startMs: number; durationMs: number; scenario: string | null }>,
+  measures: readonly PerformancePhaseMeasureDiagnostic[],
+): ApplicationIntervalAttributionDiagnostic[] {
+  const applicationMeasures = measures.filter((measure) => isApplicationPhase(shortPhaseName(measure.name)));
+  return windows.map((window) => {
+    const windowEnd = window.startMs + window.durationMs;
+    const overlaps = applicationMeasures
+      .map((measure) => ({
+        name: shortPhaseName(measure.name),
+        startMs: Math.max(window.startMs, measure.startMs),
+        endMs: Math.min(windowEnd, measure.startMs + measure.durationMs),
+      }))
+      .filter((item) => item.endMs > item.startMs);
+    return {
+      startMs: window.startMs,
+      durationMs: window.durationMs,
+      scenario: window.scenario,
+      applicationAttributed: overlaps.length > 0,
+      overlappingPhases: [...new Set(overlaps.map((item) => item.name))].sort(),
+      overlapDurationMs: roundTwo(unionDuration(overlaps.map((item) => [item.startMs, item.endMs]))),
+    };
+  });
+}
+
+function phaseWindowOverlap(
+  measures: readonly PerformancePhaseMeasureDiagnostic[],
+  windows: ReadonlyArray<{ startMs: number; durationMs: number }>,
+): { count: number; durationMs: number } {
+  let count = 0;
+  let durationMs = 0;
+  for (const window of windows) {
+    const windowEnd = window.startMs + window.durationMs;
+    const intervals: Array<[number, number]> = [];
+    for (const measure of measures) {
+      const startMs = Math.max(window.startMs, measure.startMs);
+      const endMs = Math.min(windowEnd, measure.startMs + measure.durationMs);
+      if (endMs > startMs) intervals.push([startMs, endMs]);
+    }
+    if (intervals.length === 0) continue;
+    count += 1;
+    durationMs += unionDuration(intervals);
+  }
+  return { count, durationMs };
+}
+
+function unionDuration(intervals: ReadonlyArray<readonly [number, number]>): number {
+  if (intervals.length === 0) return 0;
+  const sorted = [...intervals].sort((left, right) => left[0] - right[0] || left[1] - right[1]);
+  let start = sorted[0][0];
+  let end = sorted[0][1];
+  let total = 0;
+  for (let index = 1; index < sorted.length; index += 1) {
+    const next = sorted[index];
+    if (next[0] <= end) {
+      end = Math.max(end, next[1]);
+      continue;
+    }
+    total += end - start;
+    start = next[0];
+    end = next[1];
+  }
+  return total + end - start;
+}
+
+function shortPhaseName(name: string): string {
+  return name.startsWith(PHASE_MEASURE_PREFIX) ? name.slice(PHASE_MEASURE_PREFIX.length) : name;
+}
+
+function isApplicationPhase(name: string): boolean {
+  return /^(ticker|simulation|field|ui|renderer)\./.test(name);
 }
 
 function currentScenario(): string | null {
