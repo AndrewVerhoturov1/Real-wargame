@@ -1,0 +1,163 @@
+{
+  "version": 1,
+  "sourceReport": "real-wargame-performance-2026-07-17_12-42-55-960(2).json",
+  "build": {
+    "branch": "real-wargame-preview",
+    "commitSha": "e5771994a2ee0b1d687de9747b81b935d5245d51",
+    "buildId": "e5771994a2ee-2026-07-17T12:31:05.099Z",
+    "generatedAt": "2026-07-17T12:42:55.936Z",
+    "performanceContractVersion": "performance-report-v4"
+  },
+  "limitations": [
+    "performance-report-v4 has no per-unit, graph-node, action, cache-key or miss-reason tags",
+    "uncoveredMs is scheduler wall time not covered by existing nested performance measures"
+  ],
+  "topSchedulerStalls": [
+    {
+      "startMs": 660.4,
+      "durationMs": 321.5,
+      "nestedMeasureUnionMs": 92.6,
+      "uncoveredMs": 228.9,
+      "nestedPhases": {
+        "field.visibility-geometry.build": { "count": 1, "totalMs": 16.1, "maxMs": 16.1, "events": [{ "startMs": 664.2, "durationMs": 16.1 }] },
+        "field.directional-tactical.build": { "count": 1, "totalMs": 38.1, "maxMs": 38.1, "events": [{ "startMs": 680.7, "durationMs": 38.1 }] },
+        "field.threat-relative-cover.build": { "count": 1, "totalMs": 16.4, "maxMs": 16.4, "events": [{ "startMs": 719, "durationMs": 16.4 }] },
+        "field.soldier-danger.geometry": { "count": 1, "totalMs": 38.4, "maxMs": 38.4, "events": [{ "startMs": 735.5, "durationMs": 38.4 }] }
+      },
+      "longTaskOverlaps": [{ "index": 1, "startMs": 660.3, "durationMs": 322, "overlapMs": 321.5, "scenario": null }]
+    },
+    {
+      "startMs": 1801,
+      "durationMs": 295.1,
+      "nestedMeasureUnionMs": 198.6,
+      "uncoveredMs": 96.5,
+      "nestedPhases": {
+        "field.visibility-geometry.build": { "count": 2, "totalMs": 18.3, "maxMs": 9.9, "events": [{ "startMs": 1803.7, "durationMs": 8.4 }, { "startMs": 1947.2, "durationMs": 9.9 }] },
+        "field.directional-tactical.build": { "count": 4, "totalMs": 89.9, "maxMs": 25.4, "events": [{ "startMs": 1812.3, "durationMs": 23.1 }, { "startMs": 1870.8, "durationMs": 25.4 }, { "startMs": 1957.3, "durationMs": 20.8 }, { "startMs": 2035.6, "durationMs": 20.6 }] },
+        "field.threat-relative-cover.build": { "count": 1, "totalMs": 15.6, "maxMs": 15.6, "events": [{ "startMs": 1835.5, "durationMs": 15.6 }] },
+        "field.soldier-danger.geometry": { "count": 4, "totalMs": 62.1, "maxMs": 21.1, "events": [{ "startMs": 1851.2, "durationMs": 19.5 }, { "startMs": 1896.4, "durationMs": 21.1 }, { "startMs": 1978.2, "durationMs": 10.7 }, { "startMs": 2056.3, "durationMs": 10.8 }] },
+        "field.soldier-danger.score": { "count": 3, "totalMs": 28.3, "maxMs": 10.1, "events": [{ "startMs": 1917.6, "durationMs": 10.1 }, { "startMs": 1989, "durationMs": 9.3 }, { "startMs": 2067.3, "durationMs": 8.9 }] }
+      },
+      "longTaskOverlaps": [{ "index": 2, "startMs": 1800.8, "durationMs": 296, "overlapMs": 295.1, "scenario": null }]
+    },
+    {
+      "startMs": 5407.7,
+      "durationMs": 257.9,
+      "nestedMeasureUnionMs": 164.8,
+      "uncoveredMs": 93.1,
+      "nestedPhases": {
+        "field.visibility-geometry.build": { "count": 2, "totalMs": 33.4, "maxMs": 17.2, "events": [{ "startMs": 5410.3, "durationMs": 16.2 }, { "startMs": 5533.5, "durationMs": 17.2 }] },
+        "field.directional-tactical.build": { "count": 4, "totalMs": 111.4, "maxMs": 31.8, "events": [{ "startMs": 5426.7, "durationMs": 25.8 }, { "startMs": 5485.5, "durationMs": 25.1 }, { "startMs": 5550.9, "durationMs": 28.7 }, { "startMs": 5617.6, "durationMs": 31.8 }] },
+        "field.soldier-danger.geometry": { "count": 1, "totalMs": 9.1, "maxMs": 9.1, "events": [{ "startMs": 5452.7, "durationMs": 9.1 }] },
+        "field.soldier-danger.score": { "count": 1, "totalMs": 10.9, "maxMs": 10.9, "events": [{ "startMs": 5462, "durationMs": 10.9 }] }
+      },
+      "longTaskOverlaps": [{ "index": 5, "startMs": 5407.5, "durationMs": 258, "overlapMs": 257.9, "scenario": null }]
+    },
+    {
+      "startMs": 9615,
+      "durationMs": 237.2,
+      "nestedMeasureUnionMs": 94.3,
+      "uncoveredMs": 142.9,
+      "nestedPhases": {
+        "field.visibility-geometry.build": { "count": 3, "totalMs": 27.4, "maxMs": 10.2, "events": [{ "startMs": 9617.6, "durationMs": 8.7 }, { "startMs": 9690.8, "durationMs": 8.5 }, { "startMs": 9770.3, "durationMs": 10.2 }] },
+        "field.directional-tactical.build": { "count": 4, "totalMs": 66.9, "maxMs": 17.6, "events": [{ "startMs": 9626.4, "durationMs": 16.5 }, { "startMs": 9665.1, "durationMs": 17.6 }, { "startMs": 9699.5, "durationMs": 16.4 }, { "startMs": 9780.6, "durationMs": 16.4 }] }
+      },
+      "longTaskOverlaps": [{ "index": 9, "startMs": 9614.9, "durationMs": 238, "overlapMs": 237.2, "scenario": null }]
+    },
+    {
+      "startMs": 237099.5,
+      "durationMs": 227.4,
+      "nestedMeasureUnionMs": 138.6,
+      "uncoveredMs": 88.8,
+      "nestedPhases": {
+        "field.visibility-geometry.build": { "count": 3, "totalMs": 26.9, "maxMs": 9.3, "events": [{ "startMs": 237102.1, "durationMs": 8.8 }, { "startMs": 237182.4, "durationMs": 8.8 }, { "startMs": 237266.1, "durationMs": 9.3 }] },
+        "field.directional-tactical.build": { "count": 5, "totalMs": 81.4, "maxMs": 17.7, "events": [{ "startMs": 237111.1, "durationMs": 16.2 }, { "startMs": 237149.5, "durationMs": 16.1 }, { "startMs": 237191.3, "durationMs": 15.9 }, { "startMs": 237233, "durationMs": 15.5 }, { "startMs": 237275.5, "durationMs": 17.7 }] },
+        "field.soldier-danger.geometry": { "count": 3, "totalMs": 30.3, "maxMs": 10.4, "events": [{ "startMs": 237127.4, "durationMs": 10 }, { "startMs": 237207.4, "durationMs": 9.9 }, { "startMs": 237293.3, "durationMs": 10.4 }] }
+      },
+      "longTaskOverlaps": [{ "index": 196, "startMs": 237099.3, "durationMs": 228, "overlapMs": 227.4, "scenario": null }]
+    },
+    {
+      "startMs": 31547.6,
+      "durationMs": 224.3,
+      "nestedMeasureUnionMs": 97,
+      "uncoveredMs": 127.3,
+      "nestedPhases": {
+        "field.visibility-geometry.build": { "count": 2, "totalMs": 31.4, "maxMs": 18, "events": [{ "startMs": 31550.3, "durationMs": 13.4 }, { "startMs": 31672.4, "durationMs": 18 }] },
+        "field.directional-tactical.build": { "count": 4, "totalMs": 65.6, "maxMs": 17.6, "events": [{ "startMs": 31563.9, "durationMs": 16.2 }, { "startMs": 31604.6, "durationMs": 15.3 }, { "startMs": 31690.6, "durationMs": 16.5 }, { "startMs": 31732, "durationMs": 17.6 }] }
+      },
+      "longTaskOverlaps": [{ "index": 27, "startMs": 31547.5, "durationMs": 225, "overlapMs": 224.3, "scenario": null }]
+    },
+    {
+      "startMs": 37800.2,
+      "durationMs": 222.3,
+      "nestedMeasureUnionMs": 104.6,
+      "uncoveredMs": 117.7,
+      "nestedPhases": {
+        "field.visibility-geometry.build": { "count": 3, "totalMs": 27.9, "maxMs": 10.5, "events": [{ "startMs": 37802.8, "durationMs": 8.9 }, { "startMs": 37875.4, "durationMs": 8.5 }, { "startMs": 37953.4, "durationMs": 10.5 }] },
+        "field.directional-tactical.build": { "count": 4, "totalMs": 66.8, "maxMs": 17.8, "events": [{ "startMs": 37811.9, "durationMs": 16.4 }, { "startMs": 37850.4, "durationMs": 16.2 }, { "startMs": 37884.1, "durationMs": 16.4 }, { "startMs": 37964.1, "durationMs": 17.8 }] },
+        "field.soldier-danger.geometry": { "count": 1, "totalMs": 9.9, "maxMs": 9.9, "events": [{ "startMs": 37828.4, "durationMs": 9.9 }] }
+      },
+      "longTaskOverlaps": [{ "index": 32, "startMs": 37800, "durationMs": 223, "overlapMs": 222.3, "scenario": null }]
+    },
+    {
+      "startMs": 123608,
+      "durationMs": 217,
+      "nestedMeasureUnionMs": 134.3,
+      "uncoveredMs": 82.7,
+      "nestedPhases": {
+        "field.visibility-geometry.build": { "count": 2, "totalMs": 19.1, "maxMs": 9.7, "events": [{ "startMs": 123610.6, "durationMs": 9.4 }, { "startMs": 123693.4, "durationMs": 9.7 }] },
+        "field.directional-tactical.build": { "count": 5, "totalMs": 83.5, "maxMs": 17.7, "events": [{ "startMs": 123620.1, "durationMs": 16.5 }, { "startMs": 123660.2, "durationMs": 16.2 }, { "startMs": 123703.2, "durationMs": 16.1 }, { "startMs": 123744.6, "durationMs": 17 }, { "startMs": 123785.5, "durationMs": 17.7 }] },
+        "field.soldier-danger.geometry": { "count": 3, "totalMs": 31.7, "maxMs": 10.9, "events": [{ "startMs": 123636.8, "durationMs": 10.5 }, { "startMs": 123719.5, "durationMs": 10.3 }, { "startMs": 123761.8, "durationMs": 10.9 }] }
+      },
+      "longTaskOverlaps": [{ "index": 101, "startMs": 123607.9, "durationMs": 217, "overlapMs": 217, "scenario": null }]
+    },
+    {
+      "startMs": 199897.9,
+      "durationMs": 216.6,
+      "nestedMeasureUnionMs": 101,
+      "uncoveredMs": 115.6,
+      "nestedPhases": {
+        "field.directional-tactical.build": { "count": 3, "totalMs": 52.9, "maxMs": 19, "events": [{ "startMs": 199900.6, "durationMs": 16.9 }, { "startMs": 199954, "durationMs": 17 }, { "startMs": 200045.6, "durationMs": 19 }] },
+        "field.soldier-danger.geometry": { "count": 2, "totalMs": 34.2, "maxMs": 20.1, "events": [{ "startMs": 199917.7, "durationMs": 14.1 }, { "startMs": 199971.2, "durationMs": 20.1 }] },
+        "field.soldier-danger.score": { "count": 1, "totalMs": 13.9, "maxMs": 13.9, "events": [{ "startMs": 199991.5, "durationMs": 13.9 }] }
+      },
+      "longTaskOverlaps": [{ "index": 164, "startMs": 199897.8, "durationMs": 217, "overlapMs": 216.6, "scenario": null }]
+    },
+    {
+      "startMs": 235295.9,
+      "durationMs": 211.3,
+      "nestedMeasureUnionMs": 112,
+      "uncoveredMs": 99.3,
+      "nestedPhases": {
+        "field.visibility-geometry.build": { "count": 4, "totalMs": 37.4, "maxMs": 10.4, "events": [{ "startMs": 235298.5, "durationMs": 9.3 }, { "startMs": 235371.7, "durationMs": 8.6 }, { "startMs": 235413.1, "durationMs": 9.1 }, { "startMs": 235454.6, "durationMs": 10.4 }] },
+        "field.directional-tactical.build": { "count": 4, "totalMs": 64.1, "maxMs": 16.4, "events": [{ "startMs": 235307.9, "durationMs": 16 }, { "startMs": 235380.4, "durationMs": 15.9 }, { "startMs": 235422.3, "durationMs": 15.8 }, { "startMs": 235465.2, "durationMs": 16.4 }] },
+        "field.soldier-danger.geometry": { "count": 1, "totalMs": 10.5, "maxMs": 10.5, "events": [{ "startMs": 235324.1, "durationMs": 10.5 }] }
+      },
+      "longTaskOverlaps": [{ "index": 194, "startMs": 235295.8, "durationMs": 212, "overlapMs": 211.3, "scenario": null }]
+    },
+    {
+      "startMs": 32407,
+      "durationMs": 209.3,
+      "nestedMeasureUnionMs": 101.8,
+      "uncoveredMs": 107.5,
+      "nestedPhases": {
+        "field.visibility-geometry.build": { "count": 3, "totalMs": 28, "maxMs": 10.1, "events": [{ "startMs": 32409.6, "durationMs": 8.8 }, { "startMs": 32482.6, "durationMs": 9.1 }, { "startMs": 32560.9, "durationMs": 10.1 }] },
+        "field.directional-tactical.build": { "count": 4, "totalMs": 64.2, "maxMs": 16.6, "events": [{ "startMs": 32418.6, "durationMs": 16 }, { "startMs": 32457.2, "durationMs": 16.1 }, { "startMs": 32491.8, "durationMs": 15.5 }, { "startMs": 32571.1, "durationMs": 16.6 }] },
+        "field.soldier-danger.geometry": { "count": 1, "totalMs": 9.6, "maxMs": 9.6, "events": [{ "startMs": 32434.7, "durationMs": 9.6 }] }
+      },
+      "longTaskOverlaps": [{ "index": 28, "startMs": 32406.8, "durationMs": 210, "overlapMs": 209.3, "scenario": null }]
+    },
+    {
+      "startMs": 43223,
+      "durationMs": 209.1,
+      "nestedMeasureUnionMs": 107.1,
+      "uncoveredMs": 102,
+      "nestedPhases": {
+        "field.visibility-geometry.build": { "count": 3, "totalMs": 27.7, "maxMs": 10.2, "events": [{ "startMs": 43225.7, "durationMs": 8.6 }, { "startMs": 43298.2, "durationMs": 8.9 }, { "startMs": 43375.7, "durationMs": 10.2 }] },
+        "field.directional-tactical.build": { "count": 4, "totalMs": 69.3, "maxMs": 18.9, "events": [{ "startMs": 43234.5, "durationMs": 16.7 }, { "startMs": 43273.1, "durationMs": 16.3 }, { "startMs": 43307.2, "durationMs": 17.4 }, { "startMs": 43386.1, "durationMs": 18.9 }] },
+        "field.soldier-danger.geometry": { "count": 1, "totalMs": 10.1, "maxMs": 10.1, "events": [{ "startMs": 43251.3, "durationMs": 10.1 }] }
+      },
+      "longTaskOverlaps": [{ "index": 36, "startMs": 43222.9, "durationMs": 210, "overlapMs": 209.1, "scenario": null }]
+    }
+  ]
+}
