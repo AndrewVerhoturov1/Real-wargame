@@ -34,8 +34,6 @@ import { evaluateVisualSignal } from './VisualSignal';
 export { getPerceptionDiagnostics } from './PerceptionDiagnostics';
 
 const REAR_SECTOR_START_DEGREES = 135;
-const BACKGROUND_INITIAL_PHASE_STEP_SECONDS = 1 / 60;
-const BACKGROUND_INITIAL_PHASE_MAX_SECONDS = 0.1;
 
 interface DueAttentionChecks extends Record<AttentionZone, boolean> {
   rear: boolean;
@@ -64,13 +62,8 @@ export function tickAllUnitPerception(state: SimulationState, deltaSeconds: numb
     diagnostics.lastObserverId = selected?.id ?? null;
   }
 
-  let backgroundPhaseSlot = 0;
   for (const unit of state.units) {
     if (!isUnitCombatCapable(unit)) continue;
-    if (unit.id !== selected?.id) {
-      initializeBackgroundAttentionPhase(unit, backgroundPhaseSlot);
-      backgroundPhaseSlot += 1;
-    }
     tickUnitPerception(state, unit, deltaSeconds, unit.id === selected?.id ? diagnostics : null);
   }
 
@@ -90,6 +83,7 @@ export function tickUnitPerception(
   updateAttentionController(unit, deltaSeconds);
   const now = state.simulationTimeSeconds;
   const due = resolveDueZones(unit, now);
+  const completedDue: DueAttentionChecks = { ...due };
   const updatedContacts = new Set<string>();
   const stimuli = buildPerceptionStimuli(state, unit);
   const broadPhaseCells = Math.max(
@@ -135,10 +129,7 @@ export function tickUnitPerception(
     const checkDue = rearSector ? due.rear : due[attention.zone];
     if (!checkDue) {
       if (diagnostics) diagnostics.skippedNotDueCount += 1;
-      const existingContactId = contactIdForStimulus(stimulus.id);
-      if (unit.perceptionKnowledge.contacts.some((item) => item.id === existingContactId)) {
-        updatedContacts.add(existingContactId);
-      }
+      preserveExistingContact(unit, stimulus.id, updatedContacts);
       continue;
     }
 
@@ -152,6 +143,12 @@ export function tickUnitPerception(
       stimulus.targetHeightMeters,
       attention,
     );
+    if (!visibility) {
+      if (rearSector) completedDue.rear = false;
+      else completedDue[attention.zone] = false;
+      preserveExistingContact(unit, stimulus.id, updatedContacts);
+      continue;
+    }
     if (diagnostics) diagnostics.losCalculationCount += 1;
     const visualSignal = evaluateVisualSignal({
       observer: unit,
@@ -191,7 +188,7 @@ export function tickUnitPerception(
 
   processSoundEvents(state, unit, updatedContacts);
   decayContacts(state, unit, updatedContacts, deltaSeconds);
-  scheduleNextChecks(unit, now, due);
+  scheduleNextChecks(unit, now, completedDue);
   unit.perceptionKnowledge.lastUpdatedSeconds = now;
 }
 
@@ -203,21 +200,15 @@ export function getBestPerceptionContact(unit: UnitModel): PerceptionContactMemo
   ))[0] ?? null;
 }
 
-function initializeBackgroundAttentionPhase(unit: UnitModel, phaseSlot: number): void {
-  const runtime = unit.attentionRuntime;
-  if (
-    runtime.nextFocusCheckSeconds !== 0
-    || runtime.nextDirectCheckSeconds !== 0
-    || runtime.nextPeripheralCheckSeconds !== 0
-  ) return;
-  const phaseSeconds = Math.min(
-    BACKGROUND_INITIAL_PHASE_MAX_SECONDS,
-    (phaseSlot + 1) * BACKGROUND_INITIAL_PHASE_STEP_SECONDS,
-  );
-  runtime.nextFocusCheckSeconds = phaseSeconds;
-  runtime.nextDirectCheckSeconds = phaseSeconds;
-  runtime.nextPeripheralCheckSeconds = phaseSeconds;
-  runtime.nextRearCheckSeconds = Math.max(runtime.nextRearCheckSeconds, phaseSeconds);
+function preserveExistingContact(
+  unit: UnitModel,
+  stimulusId: string,
+  updatedContacts: Set<string>,
+): void {
+  const existingContactId = contactIdForStimulus(stimulusId);
+  if (unit.perceptionKnowledge.contacts.some((item) => item.id === existingContactId)) {
+    updatedContacts.add(existingContactId);
+  }
 }
 
 function processSoundEvents(
