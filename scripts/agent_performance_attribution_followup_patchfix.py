@@ -52,10 +52,31 @@ new_smoke = '''    "buildSoldierAwarenessReport(state, blue);\\n"
     "  soldierDangerGeometryBuildsAfterHeightChange,\\n"
     "  'sub-quarter-cell subjective movement must reuse full-map danger geometry after map revisions are warm',\\n"
     ");\\n"
+    "const directionalBuildsAfterSubCellMovement = getDirectionalTacticalFieldDiagnostics(state.map).buildCount;\\n"
 '''
 if content.count(old_smoke) != 1:
     raise RuntimeError(f'sub-cell danger smoke replacement changed: found {content.count(old_smoke)}')
 content = content.replace(old_smoke, new_smoke, 1)
 
+marker = '''    'danger performance sub-cell movement scenario',
+)
+write(path, content)
+'''
+replacement = '''    'danger performance sub-cell movement scenario',
+)
+content = replace_exact(
+    content,
+    "  directionalBuildsAfterFirstThreat + 1,\\n"
+    "  'the next report must rebuild directional terrain once for changed geometry content',\\n",
+    "  directionalBuildsAfterSubCellMovement + 1,\\n"
+    "  'material movement after the sub-cell probe must rebuild directional terrain once',\\n",
+    'danger performance directional movement baseline',
+)
+write(path, content)
+'''
+if content.count(marker) != 1:
+    raise RuntimeError(f'danger performance write marker changed: found {content.count(marker)}')
+content = content.replace(marker, replacement, 1)
+
 path.write_text(content, encoding='utf-8')
-print('Disambiguated attribution replacement and isolated sub-cell movement from height-revision warmup.')
+print('Disambiguated attribution replacement and isolated danger movement assertions from map and directional warmup.')
