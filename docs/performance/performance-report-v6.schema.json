@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://real-wargame.local/schemas/performance-report-v6.schema.json",
+  "title": "Real-Wargame Performance Report v6",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["version", "schemaVersion", "summary", "report", "trace"],
+  "properties": {
+    "version": { "const": "performance-report-v6" },
+    "schemaVersion": { "const": 6 },
+    "summary": {
+      "type": "object",
+      "required": ["identity", "runtimeSeconds", "verdict", "scenePopulation", "worstWindows", "diagnoses", "criticalErrors", "reportHealth", "semanticHealth"],
+      "properties": {
+        "identity": { "type": "object", "required": ["branch", "commitSha", "buildId", "generatedAt", "reportVersion", "contractVersion", "sessionId", "captureId"] },
+        "runtimeSeconds": { "type": "number", "minimum": 0 },
+        "verdict": { "enum": ["pass", "warning", "fail", "incomplete"] },
+        "scenePopulation": {
+          "type": "object",
+          "required": ["initial", "measurementStart", "minimum", "maximum", "final"]
+        },
+        "worstWindows": { "type": "array" },
+        "diagnoses": { "type": "array" },
+        "criticalErrors": { "type": "array" },
+        "reportHealth": { "type": "object", "required": ["samplesRecorded", "samplesDropped", "eventsRecorded", "eventsDropped", "buffers", "telemetryCostMs", "recoveredFromCheckpoint", "possibleMissingTailMs"] },
+        "semanticHealth": { "type": "object" }
+      }
+    },
+    "report": {
+      "type": "object",
+      "required": ["phases", "queues", "navigation", "workCounters", "unitOutliers", "workerDiagnostics", "memory", "semanticHealth"],
+      "properties": {
+        "phases": { "type": "array" },
+        "queues": { "type": "object" },
+        "navigation": { "type": "object" },
+        "workCounters": { "type": "object" },
+        "unitOutliers": { "type": "array" },
+        "workerDiagnostics": { "type": "object" },
+        "memory": { "type": "object" },
+        "semanticHealth": { "type": "object" }
+      }
+    },
+    "trace": {
+      "type": "object",
+      "required": ["retentionMs", "frames", "sceneTimeline", "events", "slowOperations", "userMarkers"],
+      "properties": {
+        "retentionMs": { "type": "number", "minimum": 0 },
+        "frames": { "type": "array" },
+        "sceneTimeline": { "type": "array" },
+        "events": { "type": "array" },
+        "slowOperations": { "type": "array" },
+        "userMarkers": { "type": "array" }
+      }
+    }
+  }
+}
