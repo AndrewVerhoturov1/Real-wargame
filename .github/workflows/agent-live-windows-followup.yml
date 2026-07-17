@@ -1,9 +1,6 @@
 name: Agent Live Windows Follow-up
 
 on:
-  push:
-    branches:
-      - agent/live-windows-performance-followup-v1
   pull_request:
     branches:
       - real-wargame-preview
@@ -13,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: agent-live-windows-performance-followup-v1-${{ github.event_name }}
+  group: agent-live-windows-performance-followup-v1
   cancel-in-progress: false
 
 jobs:
@@ -102,7 +99,6 @@ jobs:
           rm scripts/agent_live_windows_followup_testsfix.py
           rm scripts/agent_live_windows_followup_testsfix_hotfix.py
           rm scripts/agent_live_windows_followup_smokefix.py
-          rm .github/workflows/agent-live-windows-followup.yml
           rm -f artifacts/performance/live-windows-followup/.apply-trigger
           rm -f artifacts/performance/live-windows-followup/patch-apply.log
           rm -f artifacts/performance/live-windows-followup/source-verification.log
