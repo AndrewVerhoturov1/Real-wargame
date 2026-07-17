@@ -51,7 +51,9 @@ export interface AiSchedulerDurationStats {
 
 export interface AiSchedulerPerformanceDiagnostics {
   readonly unitPasses: AiSchedulerDurationStats;
+  readonly decisionUnitPasses: AiSchedulerDurationStats;
   readonly cycles: AiSchedulerDurationStats;
+  readonly decisionCycles: AiSchedulerDurationStats;
   readonly slowUnitPassCount: number;
   readonly slowCycleCount: number;
   readonly recentUnitPasses: readonly AiSchedulerUnitPassDiagnostic[];
@@ -69,7 +71,9 @@ interface DurationAccumulator {
 }
 
 const unitDurations: DurationAccumulator = makeAccumulator();
+const decisionUnitDurations: DurationAccumulator = makeAccumulator();
 const cycleDurations: DurationAccumulator = makeAccumulator();
+const decisionCycleDurations: DurationAccumulator = makeAccumulator();
 const recentUnitPasses: AiSchedulerUnitPassDiagnostic[] = [];
 const slowestUnitPasses: AiSchedulerUnitPassDiagnostic[] = [];
 const recentCycles: AiSchedulerCycleDiagnostic[] = [];
@@ -80,6 +84,7 @@ let slowCycleCount = 0;
 export function recordAiSchedulerUnitPass(value: AiSchedulerUnitPassDiagnostic): void {
   const snapshot = cloneUnitPass(value);
   recordDuration(unitDurations, snapshot.durationMs);
+  if (snapshot.decisionTickDelta > 0) recordDuration(decisionUnitDurations, snapshot.durationMs);
   if (snapshot.durationMs >= 8) slowUnitPassCount += 1;
   pushBounded(recentUnitPasses, snapshot, MAX_RECENT_UNIT_PASSES);
   pushSlowest(slowestUnitPasses, snapshot, MAX_SLOWEST_UNIT_PASSES);
@@ -88,6 +93,7 @@ export function recordAiSchedulerUnitPass(value: AiSchedulerUnitPassDiagnostic):
 export function recordAiSchedulerCycle(value: AiSchedulerCycleDiagnostic): void {
   const snapshot = { ...value };
   recordDuration(cycleDurations, snapshot.durationMs);
+  if (snapshot.graphTickedUnitCount > 0) recordDuration(decisionCycleDurations, snapshot.durationMs);
   if (snapshot.durationMs >= 8) slowCycleCount += 1;
   pushBounded(recentCycles, snapshot, MAX_RECENT_CYCLES);
   pushSlowest(slowestCycles, snapshot, MAX_SLOWEST_CYCLES);
@@ -96,7 +102,9 @@ export function recordAiSchedulerCycle(value: AiSchedulerCycleDiagnostic): void 
 export function getAiSchedulerPerformanceDiagnostics(): AiSchedulerPerformanceDiagnostics {
   return {
     unitPasses: buildStats(unitDurations),
+    decisionUnitPasses: buildStats(decisionUnitDurations),
     cycles: buildStats(cycleDurations),
+    decisionCycles: buildStats(decisionCycleDurations),
     slowUnitPassCount,
     slowCycleCount,
     recentUnitPasses: recentUnitPasses.map(cloneUnitPass),
@@ -108,7 +116,9 @@ export function getAiSchedulerPerformanceDiagnostics(): AiSchedulerPerformanceDi
 
 export function resetAiSchedulerPerformanceDiagnosticsForTests(): void {
   resetAccumulator(unitDurations);
+  resetAccumulator(decisionUnitDurations);
   resetAccumulator(cycleDurations);
+  resetAccumulator(decisionCycleDurations);
   recentUnitPasses.length = 0;
   slowestUnitPasses.length = 0;
   recentCycles.length = 0;
