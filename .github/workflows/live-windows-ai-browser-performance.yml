@@ -1,0 +1,93 @@
+name: Live Windows AI Browser Performance
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - '.github/workflows/live-windows-ai-browser-performance.yml'
+      - 'playwright.performance.config.ts'
+      - 'src/core/ai/**'
+      - 'src/core/debug/**'
+      - 'src/core/knowledge/**'
+      - 'src/core/navigation/**'
+      - 'src/core/perception/**'
+      - 'src/core/simulation/**'
+      - 'src/testing/LiveWindowsPerformanceHarness.ts'
+      - 'src/ui/TacticalWorkspace.ts'
+      - 'src/main.ts'
+      - 'tests/live-windows-ai-performance.spec.ts'
+      - 'scripts/agent_live_windows_browser_apply.py'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: live-windows-ai-browser-performance
+  cancel-in-progress: false
+
+jobs:
+  capture-live-ai:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/live-windows-performance-followup-v1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install harness bootstrap
+        run: python3 scripts/agent_live_windows_browser_apply.py
+      - name: Install dependencies and Chromium
+        run: |
+          npm ci
+          npm install --no-save @playwright/test
+          npx playwright install chromium
+      - name: Verify source
+        run: |
+          npx tsc --noEmit
+          npm run build
+          node scripts/performance_report_contract_smoke.mjs
+          npm run ai-scheduler:smoke
+          npm run workspace:smoke
+      - name: Publish exact scenario source
+        id: publish
+        shell: bash
+        run: |
+          rm scripts/agent_live_windows_browser_apply.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "test: add live Windows six-unit browser scenario"
+          git push origin HEAD:agent/live-windows-performance-followup-v1
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "short=$(git rev-parse --short=8 HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Run 90-second live AI capture
+        env:
+          REAL_WARGAME_BRANCH: agent/live-windows-performance-followup-v1
+          REAL_WARGAME_COMMIT_SHA: ${{ steps.publish.outputs.sha }}
+          LIVE_WINDOWS_PERF_EXPECTED_BRANCH: agent/live-windows-performance-followup-v1
+          LIVE_WINDOWS_PERF_EXPECTED_SHA: ${{ steps.publish.outputs.sha }}
+          LIVE_WINDOWS_PERF_DURATION_MS: '90000'
+          LIVE_WINDOWS_PERF_ENFORCE: '0'
+          LIVE_WINDOWS_PERF_OUTPUT: artifacts/performance/live-windows-followup/ci-${{ steps.publish.outputs.short }}/after-browser.json
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "artifacts/performance/live-windows-followup/ci-${{ steps.publish.outputs.short }}"
+          npx playwright test tests/live-windows-ai-performance.spec.ts \
+            --config=playwright.performance.config.ts \
+            --project=chromium \
+            --reporter=line 2>&1 | tee "artifacts/performance/live-windows-followup/ci-${{ steps.publish.outputs.short }}/playwright.log"
+      - name: Upload live browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-windows-ai-browser-performance
+          path: artifacts/performance/live-windows-followup/ci-*/**
+          if-no-files-found: warn
+          retention-days: 14
