@@ -63,10 +63,11 @@ export function tickAllUnitPerception(state: SimulationState, deltaSeconds: numb
     diagnostics.lastObserverId = selected?.id ?? null;
   }
 
-  const units = state.units.filter((unit) => isUnitCombatCapable(unit));
-  const startIndex = units.length > 0 ? state.simulationStep % units.length : 0;
-  for (let offset = 0; offset < units.length; offset += 1) {
-    const unit = units[(startIndex + offset) % units.length]!;
+  const units = orderPerceptionUnits(
+    state.units.filter((unit) => isUnitCombatCapable(unit)),
+    state.simulationStep,
+  );
+  for (const unit of units) {
     tickUnitPerception(state, unit, deltaSeconds, unit.id === selected?.id ? diagnostics : null);
   }
 
@@ -234,6 +235,27 @@ function setStimulusCursor(
     perceptionStimulusCursorByState.set(state, cursors);
   }
   cursors.set(unitId, ((nextCursor % stimulusCount) + stimulusCount) % stimulusCount);
+}
+
+function orderPerceptionUnits(units: readonly UnitModel[], simulationStep: number): UnitModel[] {
+  const tracking: UnitModel[] = [];
+  const other: UnitModel[] = [];
+  for (const unit of units) {
+    const hasActiveVisualContact = unit.perceptionKnowledge.contacts.some((contact) => (
+      contact.source === 'visual' && (contact.visibleNow || contact.observedNow)
+    ));
+    (hasActiveVisualContact ? tracking : other).push(unit);
+  }
+  return [
+    ...rotateUnits(tracking, simulationStep),
+    ...rotateUnits(other, simulationStep),
+  ];
+}
+
+function rotateUnits(units: readonly UnitModel[], simulationStep: number): UnitModel[] {
+  if (units.length <= 1) return [...units];
+  const startIndex = ((simulationStep % units.length) + units.length) % units.length;
+  return Array.from({ length: units.length }, (_, offset) => units[(startIndex + offset) % units.length]!);
 }
 
 function preserveExistingContact(
