@@ -1,0 +1,34 @@
+{
+  "status": "covered by scripts/rear_attention_weakness_smoke.ts",
+  "profile": "observe",
+  "baseVisualRangeMeters": 600,
+  "rearAttentionWeight": 0.06,
+  "rearEffectiveRangeFactor": 0.25,
+  "rearEffectiveRangeMeters": 150,
+  "cases": [
+    {
+      "name": "far-open-rear",
+      "distanceMeters": 250,
+      "hardBlocked": false,
+      "expectedVisibilityQuality": 0,
+      "expectedRaster": "opaque black",
+      "expectedGameplayVisualEvidence": 0
+    },
+    {
+      "name": "close-open-rear",
+      "distanceMeters": 60,
+      "hardBlocked": false,
+      "expectedVisibilityQuality": 0.0333142394,
+      "expectedRaster": "weakest existing visible heatmap colour",
+      "expectedGameplayVisualEvidence": "weak and sampled by rear glimpse factor"
+    },
+    {
+      "name": "blocked-close-rear",
+      "distanceMeters": 20,
+      "hardBlocked": true,
+      "expectedVisibilityQuality": 0,
+      "expectedRaster": "opaque black",
+      "expectedGameplayVisualEvidence": 0
+    }
+  ]
+}
