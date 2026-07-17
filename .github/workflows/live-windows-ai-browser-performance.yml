@@ -25,7 +25,7 @@ permissions:
 
 concurrency:
   group: live-windows-ai-browser-performance-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   capture-live-ai:
