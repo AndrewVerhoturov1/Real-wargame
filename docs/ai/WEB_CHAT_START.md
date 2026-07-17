@@ -29,6 +29,15 @@ Read only:
 4. `docs/subprojects/<active-id>/STATUS.md`;
 5. the relevant project skill from `docs/ai/SKILLS_INDEX.md`.
 
+For any task that can affect runtime cost, the following are additionally mandatory before design or implementation:
+
+```text
+docs/performance/PERFORMANCE_PRINCIPLES.md
+.agents/skills/real-wargame-performance/SKILL.md
+```
+
+This includes feature work in simulation, AI, perception, navigation, tactical fields, map data, rendering, recurring UI, workers, caches, revisions and lifecycle even when the user did not explicitly ask for optimization.
+
 Do not read all journals, plans, screenshots, reports or skills by default.
 
 ### Ordinary parallel ChatGPT chats
@@ -98,11 +107,39 @@ Never:
 - claim visual success without opening the fresh PNG artifact;
 - publish `.env`, tokens, private keys or personal data.
 
-## 5. GitHub search limitation
+## 5. Mandatory performance route
+
+Performance is designed with the feature, not deferred to a later cleanup campaign.
+
+Read:
+
+```text
+.agents/skills/real-wargame-performance/SKILL.md
+docs/performance/PERFORMANCE_PRINCIPLES.md
+```
+
+Before implementing runtime-affecting work, define:
+
+```text
+hot path
+worst-case complexity
+main-thread work
+full-map work
+shared prepared result
+revision identity
+worker and queue budget
+cache memory bound
+teardown
+measurement plan
+```
+
+The implementation must use bounded work, exact invalidation, shared machine-owned data and honest exact-head evidence. Runtime-affecting final reports must include the `Performance impact` section from `docs/orchestration/RESULT_TEMPLATE.md`.
+
+## 6. GitHub search limitation
 
 GitHub code search may omit newly created preview files or resolve the default branch. When an exact path is known, fetch it directly with the explicit ref instead of concluding that the file does not exist.
 
-## 6. Local and browser verification
+## 7. Local and browser verification
 
 For launch, screenshots, Playwright, visual QA or terminal-free instructions, read first:
 
@@ -112,7 +149,7 @@ For launch, screenshots, Playwright, visual QA or terminal-free instructions, re
 
 A valid visual claim requires the real application, a real browser, fresh PNG files, inspected key frames and commit-SHA matching.
 
-## 7. PixiJS work
+## 8. PixiJS work
 
 Read first:
 
@@ -122,7 +159,7 @@ Read first:
 
 Real-Wargame uses PixiJS 8. Read the project skill first, then the narrow v8 skill for the relevant API; do not use v7 compatibility aliases in active production rendering.
 
-## 8. AI runtime work
+## 9. AI runtime work
 
 Read first:
 
@@ -138,7 +175,7 @@ Keep these boundaries:
 - core AI does not import PixiJS, DOM or localStorage;
 - cancellation must not delete a newer player order.
 
-## 9. Documentation changes
+## 10. Documentation changes
 
 Current status is edited only in:
 
@@ -155,7 +192,7 @@ npm run docs:sync
 
 Do not manually edit files marked `GENERATED FILE`.
 
-## 10. Required final report
+## 11. Required final report
 
 ```text
 branch: ...
@@ -163,6 +200,7 @@ commit/pr: ...
 transfer_path: direct push / PR fallback / isolated branch only / file package / patch / not changed
 changed_files: ...
 checks_run: ...
+performance_impact: completed / not applicable with reason
 not_checked: ...
 manual_checks_needed: ...
 risks: ...
