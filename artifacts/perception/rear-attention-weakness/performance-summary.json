@@ -3,24 +3,27 @@
   "exactPreviewBase": "ad4f35535425aef11db6f27ca959bbd3696d36dc",
   "hotPath": [
     "sampleAttentionWeight",
+    "directional range rejection before point LOS",
     "evaluateCellVisibilityQuality",
     "due point-perception checks",
     "revision-driven selected-unit raster upload"
   ],
   "worstCaseComplexity": {
-    "gameplayPerception": "unchanged O(candidate stimuli) with bounded point-LOS preparation",
+    "gameplayPerception": "unchanged O(candidate stimuli) with bounded point-LOS preparation; candidates outside guaranteed directional range now stop before point LOS",
     "selectedUnitRaster": "unchanged O(cells in the explicitly requested current-view field)",
     "newMultiplicativeShape": "none"
   },
   "mainThreadWork": [
     "bounded scalar rear blend",
     "bounded directional range conversion",
+    "one scalar early range comparison before point LOS",
     "optional rear sampling factor only when below 1",
     "no new traversal, query or recurring callback"
   ],
   "fullMapBuildsAdded": 0,
   "sharedPreparedData": [
     "AttentionSample",
+    "calculateAttentionVisualRangeFactor shared by early rejection and visibility quality",
     "CellVisibilityQuality",
     "existing SelectedUnitVisibilityField only while the current-view layer is enabled"
   ],
@@ -66,6 +69,6 @@
   ],
   "remainingPerformanceRisks": [
     "the existing selected-unit visibility field remains an explicit full field when the user enables the layer; this PR adds no rebuild trigger or extra field",
-    "directional range arithmetic runs where visibility quality already ran and must remain below enforced exact-head thresholds"
+    "hosted headless full-application gate has shown unrelated phase outliers across identical runs; exact-head status must still be reported without weakening thresholds"
   ]
 }
