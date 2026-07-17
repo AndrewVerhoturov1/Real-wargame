@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import type { TacticalMapData } from '../src/core/map/MapModel';
+import { advanceVisualContact, upsertPerceptionContact } from '../src/core/perception/PerceptionContact';
 import {
   getPerceptionDiagnostics,
   tickAllUnitPerception,
@@ -146,31 +147,53 @@ const mixedHostile: UnitData = {
   x: 105.5,
   y: 80.5,
 };
-const mixedTankZone: PressureZoneData = {
-  ...zones[0]!,
-  id: 'mixed-tank-zone',
-  label: 'Mixed tank zone',
-  labelRu: 'Смешанная танковая цель',
-  x: 100.5,
-  y: 86.5,
-  sourceTargetType: 'tank',
+const mixedZones: PressureZoneData[] = Array.from({ length: 8 }, (_, index) => ({
+  ...zones[index]!,
+  id: `mixed-zone-${index}`,
+  label: `Mixed zone ${index}`,
+  labelRu: `Смешанная цель ${index}`,
+  x: 94.5 + index,
+  y: 86.5 + index % 2,
+  sourceTargetType: index % 2 === 0 ? 'tank' : 'sniper',
   sourceVisible: true,
-};
-const mixedState = createInitialState(map, [mixedObserver, mixedHostile], [mixedTankZone]);
+}));
+const mixedState = createInitialState(map, [mixedObserver, mixedHostile], mixedZones);
+const mixedObserverModel = mixedState.units[0]!;
+const mixedHostileModel = mixedState.units[1]!;
+const tracked = advanceVisualContact(null, {
+  id: 'perception:unit:mixed-hostile',
+  stimulusId: 'unit:mixed-hostile',
+  sourceUnitId: 'mixed-hostile',
+  labelRu: mixedHostileModel.labels.ru,
+  position: { ...mixedHostileModel.position },
+  evidencePerSecond: 220,
+  deltaSeconds: 1,
+  nowSeconds: 0,
+  source: 'visual',
+});
+upsertPerceptionContact(mixedObserverModel.perceptionKnowledge, tracked);
+const trackedStart = { ...tracked.lastKnownPosition };
 for (let tick = 0; tick < 40; tick += 1) {
   mixedState.simulationStep += 1;
   mixedState.simulationTimeSeconds += 0.1;
-  mixedState.units[0]!.position.x += 0.08;
+  mixedObserverModel.position.x += 0.08;
+  mixedHostileModel.position.x += 0.16;
   tickAllUnitPerception(mixedState, 0.1);
 }
-const mixedKnowledge = mixedState.units[0]!.perceptionKnowledge.contacts;
+const trackedAfter = mixedObserverModel.perceptionKnowledge.contacts.find(
+  (contact) => contact.stimulusId === 'unit:mixed-hostile',
+);
+assert.ok(trackedAfter, 'the tracked hostile contact must remain present');
 assert.ok(
-  mixedKnowledge.some((contact) => contact.stimulusId === 'threat:mixed-tank-zone'),
-  'a moving observer must eventually rebuild the deferred tank-height visibility field',
+  Math.hypot(
+    trackedAfter.lastKnownPosition.x - trackedStart.x,
+    trackedAfter.lastKnownPosition.y - trackedStart.y,
+  ) >= 2,
+  'an existing hostile track must receive visibility budget ahead of ambient target-height fields',
 );
 assert.ok(
-  mixedKnowledge.some((contact) => contact.stimulusId === 'unit:mixed-hostile'),
-  'a moving observer must not starve the deferred soldier-height hostile field behind another target height',
+  mixedObserverModel.perceptionKnowledge.contacts.some((contact) => contact.stimulusId.startsWith('threat:mixed-zone-')),
+  'ambient targets must still receive remaining perception opportunities',
 );
 
-console.log(`Perception performance smoke passed: ${diagnostics.losCalculationCount} LOS calculations for ${diagnostics.candidateCount} candidates across 600 ticks; ${staging.preparationCount} cold geometries staged fairly with max ${staging.maxPreparationsPerStep} per step; mixed target heights remained observable.`);
+console.log(`Perception performance smoke passed: ${diagnostics.losCalculationCount} LOS calculations for ${diagnostics.candidateCount} candidates across 600 ticks; ${staging.preparationCount} cold geometries staged fairly with max ${staging.maxPreparationsPerStep} per step; tracked hostile movement stayed current across mixed target heights.`);

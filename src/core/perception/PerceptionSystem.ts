@@ -28,7 +28,7 @@ import {
   type MutablePerceptionDiagnostics,
 } from './PerceptionDiagnostics';
 import { getActivePerceptionSounds, soundBaseRangeMeters } from './PerceptionSound';
-import { buildPerceptionStimuli } from './PerceptionStimulus';
+import { buildPerceptionStimuli, type PerceptionStimulus } from './PerceptionStimulus';
 import { evaluateVisualSignal } from './VisualSignal';
 
 export { getPerceptionDiagnostics } from './PerceptionDiagnostics';
@@ -89,7 +89,7 @@ export function tickUnitPerception(
   const due = resolveDueZones(unit, now);
   const updatedContacts = new Set<string>();
   const stimuli = buildPerceptionStimuli(state, unit);
-  const stimulusCursor = getStimulusCursor(state, unit.id, stimuli.length);
+  const stimulusCursor = resolveStimulusStartIndex(state, unit, stimuli);
   let firstDeferredStimulusIndex: number | null = null;
   const broadPhaseCells = Math.max(
     1,
@@ -210,6 +210,43 @@ export function getBestPerceptionContact(unit: UnitModel): PerceptionContactMemo
     || right.confidence - left.confidence
     || right.lastUpdatedSeconds - left.lastUpdatedSeconds
   ))[0] ?? null;
+}
+
+function resolveStimulusStartIndex(
+  state: SimulationState,
+  unit: UnitModel,
+  stimuli: readonly PerceptionStimulus[],
+): number {
+  if (stimuli.length === 0) return 0;
+  const focusTargetId = unit.attentionRuntime.focusTargetId;
+  if (focusTargetId) {
+    const focusedIndex = stimuli.findIndex((stimulus) => (
+      stimulus.sourceUnitId === focusTargetId || stimulus.id === focusTargetId
+    ));
+    if (focusedIndex >= 0) return focusedIndex;
+  }
+
+  let bestTracked: PerceptionContactMemory | null = null;
+  for (const contact of unit.perceptionKnowledge.contacts) {
+    if (!contact.visibleNow && !contact.observedNow && contact.confidence < 50) continue;
+    if (!bestTracked || compareTrackedContact(contact, bestTracked) > 0) bestTracked = contact;
+  }
+  if (bestTracked) {
+    const trackedIndex = stimuli.findIndex((stimulus) => (
+      stimulus.id === bestTracked?.stimulusId
+      || (bestTracked?.sourceUnitId !== null && stimulus.sourceUnitId === bestTracked?.sourceUnitId)
+    ));
+    if (trackedIndex >= 0) return trackedIndex;
+  }
+  return getStimulusCursor(state, unit.id, stimuli.length);
+}
+
+function compareTrackedContact(left: PerceptionContactMemory, right: PerceptionContactMemory): number {
+  return Number(left.visibleNow) - Number(right.visibleNow)
+    || Number(left.observedNow) - Number(right.observedNow)
+    || contactStageRank(left.stage) - contactStageRank(right.stage)
+    || left.confidence - right.confidence
+    || left.lastUpdatedSeconds - right.lastUpdatedSeconds;
 }
 
 function getStimulusCursor(state: SimulationState, unitId: string, stimulusCount: number): number {
