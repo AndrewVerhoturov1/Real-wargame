@@ -1,6 +1,7 @@
 export const PERFORMANCE_PHASE_PREFIX = 'real-wargame.phase.';
 const MIN_RECORDED_PHASE_DURATION_MS = 8;
 const MAX_DURATION_SAMPLES_PER_PHASE = 4096;
+const MAX_CONTEXTUAL_EVENTS = 2048;
 
 interface MutablePhaseAccumulator {
   count: number;
@@ -8,6 +9,20 @@ interface MutablePhaseAccumulator {
   maxMs: number;
   samples: number[];
   writeIndex: number;
+}
+
+export interface PerformancePhaseContext {
+  readonly unitId?: string;
+  readonly simulationStep?: number;
+  readonly activeNodeId?: string | null;
+  readonly activeSubgraphId?: string | null;
+}
+
+export interface PerformancePhaseEventDiagnostic {
+  readonly name: string;
+  readonly startTimeMs: number;
+  readonly durationMs: number;
+  readonly context: PerformancePhaseContext | null;
 }
 
 export interface PerformancePhaseRuntimeDiagnostic {
@@ -24,6 +39,26 @@ export interface PerformancePhaseRuntimeDiagnostic {
 }
 
 const accumulators = new Map<string, MutablePhaseAccumulator>();
+const contextualEvents: PerformancePhaseEventDiagnostic[] = [];
+let activeContext: PerformancePhaseContext | null = null;
+
+/**
+ * Attaches synchronous ownership metadata to nested measured phases. The
+ * scheduler uses this to attribute field builds to a concrete unit and graph
+ * execution state without polling every cache on every simulation tick.
+ */
+export function withPerformancePhaseContext<T>(
+  context: PerformancePhaseContext,
+  callback: () => T,
+): T {
+  const previous = activeContext;
+  activeContext = previous ? { ...previous, ...context } : { ...context };
+  try {
+    return callback();
+  } finally {
+    activeContext = previous;
+  }
+}
 
 /**
  * Records every synchronous phase in a bounded in-memory accumulator and emits
@@ -43,6 +78,7 @@ export function measurePerformancePhase<T>(name: string, callback: () => T): T {
         start: startedAt,
         duration,
       });
+      recordContextualEvent(name, startedAt, duration, activeContext);
     }
   }
 }
@@ -67,8 +103,17 @@ export function getPerformancePhaseRuntimeDiagnostics(): PerformancePhaseRuntime
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
+export function getPerformancePhaseContextualEvents(): PerformancePhaseEventDiagnostic[] {
+  return contextualEvents.map((event) => ({
+    ...event,
+    context: event.context ? { ...event.context } : null,
+  }));
+}
+
 export function resetPerformancePhaseRuntimeDiagnosticsForTests(): void {
   accumulators.clear();
+  contextualEvents.length = 0;
+  activeContext = null;
 }
 
 function recordPhaseDuration(name: string, duration: number): void {
@@ -86,6 +131,23 @@ function recordPhaseDuration(name: string, duration: number): void {
   }
   accumulator.samples[accumulator.writeIndex] = duration;
   accumulator.writeIndex = (accumulator.writeIndex + 1) % MAX_DURATION_SAMPLES_PER_PHASE;
+}
+
+function recordContextualEvent(
+  name: string,
+  startTimeMs: number,
+  durationMs: number,
+  context: PerformancePhaseContext | null,
+): void {
+  contextualEvents.push({
+    name,
+    startTimeMs: roundTwo(startTimeMs),
+    durationMs: roundTwo(durationMs),
+    context: context ? { ...context } : null,
+  });
+  if (contextualEvents.length > MAX_CONTEXTUAL_EVENTS) {
+    contextualEvents.splice(0, contextualEvents.length - MAX_CONTEXTUAL_EVENTS);
+  }
 }
 
 function orderedSamples(accumulator: MutablePhaseAccumulator): number[] {
