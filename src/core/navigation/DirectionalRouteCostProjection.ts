@@ -1,5 +1,4 @@
 import type { TacticalMap } from '../map/MapModel';
-import type { NavigationProfile } from './NavigationProfiles';
 import {
   DIRECTIONAL_SECTOR_COUNT,
   DIRECTIONAL_SECTOR_RADIANS,
@@ -10,6 +9,7 @@ import {
   type DirectionalThreatSource,
   type ThreatDirectionField,
 } from '../terrain/ThreatDirectionField';
+import type { NavigationProfile } from './NavigationProfiles';
 
 const THREAT_POSITION_BUCKET_CELLS = 0.1;
 const NORMALIZED_WEIGHT_BUCKET = 0.0001;
@@ -43,6 +43,7 @@ export function prepareDirectionalRouteCostProjection(
     .filter((entry) => entry.weight > 1e-6);
   const totalThreatWeight = weightedThreats.reduce((sum, entry) => sum + entry.weight, 0);
   const primaryThreatIndex = strongestThreatIndex(weightedThreats);
+  const threatField = buildThreatDirectionField(map.width / 2, map.height / 2, threats);
   return {
     key: [
       basisKey,
@@ -53,11 +54,11 @@ export function prepareDirectionalRouteCostProjection(
         quantize(totalWeightForKey > 1e-6 ? (weights[index] ?? 0) / totalWeightForKey : 0, NORMALIZED_WEIGHT_BUCKET),
       ].join(':')),
     ].join('#'),
-    threatField: buildThreatDirectionField(map.width / 2, map.height / 2, threats),
+    threatField,
     weightedThreats,
     totalThreatWeight,
     primaryThreatIndex,
-    available: totalThreatWeight > 1e-6 && primaryThreatIndex >= 0,
+    available: threatField.totalWeight > 1e-6 && totalThreatWeight > 1e-6 && primaryThreatIndex >= 0,
   };
 }
 
@@ -103,7 +104,6 @@ export function writeDirectionalRouteCostCell(
   ));
   let weightedForward = 0;
   let weightedReverse = 0;
-  let weightedExposure = 0;
   let worstFlankExposure = 0;
   let primarySlopeValue = 0;
   let primaryExposureValue = 0;
@@ -127,7 +127,6 @@ export function writeDirectionalRouteCostCell(
       + (basis.exposure[sectorOffset + nextSector] ?? 0) * fraction) / 100;
     weightedForward += clamp01(slope) * normalizedWeight;
     weightedReverse += clamp01(-slope) * normalizedWeight;
-    weightedExposure += exposure * normalizedWeight;
     const rawBearingDifference = Math.abs(bearing - primaryBearing);
     const bearingDifference = Math.min(rawBearingDifference, FULL_TURN_RADIANS - rawBearingDifference);
     if (bearingDifference >= Math.PI / 2) {
@@ -140,12 +139,17 @@ export function writeDirectionalRouteCostCell(
   }
 
   const weights = profile.directionalTerrain;
+  const forward = encodePercent(weightedForward) / 100;
+  const reverse = encodePercent(weightedReverse) / 100;
   const crest = (basis.crestRisk[index] ?? 0) / 100;
   const silhouette = (basis.silhouetteRisk[index] ?? 0) / 100;
   const valley = (basis.valleyProtection[index] ?? 0) / 100;
-  const criticalExposure = Math.max(primaryExposureValue, worstFlankExposure);
-  const base = weightedForward * weights.forwardSlopePenalty
-    - weightedReverse * weights.reverseSlopePreference
+  const criticalExposure = Math.max(
+    encodePercent(primaryExposureValue) / 100,
+    encodePercent(worstFlankExposure) / 100,
+  );
+  const base = forward * weights.forwardSlopePenalty
+    - reverse * weights.reverseSlopePreference
     + crest * weights.crestPenalty
     + silhouette * weights.silhouettePenalty
     - valley * weights.valleyPreference;
@@ -154,11 +158,6 @@ export function writeDirectionalRouteCostCell(
     base + Math.max(0, base) * criticalExposure * weights.criticalSectorMultiplier,
   );
   directionalSlope[index] = primarySlopeValue;
-
-  // Keep the weighted exposure calculation in the fused projection. It is part
-  // of the established directional semantics even though route cost currently
-  // consumes only primary/flank exposure for the critical-sector multiplier.
-  void weightedExposure;
 }
 
 function strongestThreatIndex(threats: readonly WeightedThreat[]): number {
@@ -198,6 +197,10 @@ function quantize(value: number, step: number): number {
 function normalizeRadians(value: number): number {
   const normalized = value % FULL_TURN_RADIANS;
   return normalized < 0 ? normalized + FULL_TURN_RADIANS : normalized;
+}
+
+function encodePercent(value01: number): number {
+  return Math.round(clamp01(value01) * 100);
 }
 
 function clamp01(value: number): number {
