@@ -13,6 +13,7 @@ import { degreesToRadians, type AttentionMode } from '../core/perception/Attenti
 import { getSelectedSimulationCover, getSimulationCovers, hoverSimulationCoverAtPosition } from '../core/knowledge/SimulationCoverSelection';
 import { buildUnitKnowledgeReport } from '../core/knowledge/UnitKnowledge';
 import { getCell, resolveObjectCoverProperties } from '../core/map/MapModel';
+import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
 import { evaluateThreatsAtPosition } from '../core/pressure/ThreatEvaluation';
 import { getNavigationProfileRegistry, subscribeNavigationProfileRegistry } from '../core/navigation/NavigationProfileStorage';
 import { isPlayerCommandOutstanding, updatePlayerCommandNavigationProfile } from '../core/orders/PlayerCommand';
@@ -62,6 +63,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   let tab: SimulationTab = 'info';
   let collapsed = false;
   let lastSidebarKey = '';
+  let lastWorkspaceUpdateKey = '';
   const stableDecisions = new Map<string, StableDecision>();
 
   const shell = document.createElement('div');
@@ -325,6 +327,9 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   }
 
   function update(force = false): void {
+    const nextKey = buildWorkspaceUpdateKey(state, mode, tab, collapsed);
+    if (!force && nextKey === lastWorkspaceUpdateKey) return;
+    lastWorkspaceUpdateKey = nextKey;
     measurePerformancePhase('ui.tactical-workspace.update', () => {
       if (force) lastSidebarKey = '';
       updateBottom();
@@ -453,6 +458,83 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
     detachTooltip();
     shell.remove();
   };
+}
+
+function buildWorkspaceUpdateKey(
+  state: SimulationState,
+  mode: TacticalWorkspaceMode,
+  tab: SimulationTab,
+  collapsed: boolean,
+): string {
+  const unit = getSelectedUnit(state);
+  const revisions = getMapRevisionSnapshot(state.map);
+  const layer = getSimulationLayerState(state);
+  const commandTool = getUnitCommandToolState(state);
+  const weapon = unit ? getWeaponRuntime(unit) : null;
+  const fireAction = unit ? getFireAction(unit) : null;
+  const contact = unit ? findBestDirectFireContact(state, unit) : null;
+  const order = unit?.order;
+  const command = unit?.playerCommand;
+  const runtimeSession = unit?.behaviorRuntime.aiRuntimeSession;
+  return [
+    mode,
+    tab,
+    collapsed ? 1 : 0,
+    state.selectedUnitId ?? 'none',
+    state.editor.enabled ? 1 : 0,
+    state.editor.tool,
+    state.editor.selectedObjectId ?? 'none',
+    state.editor.selectedZoneId ?? 'none',
+    state.editor.lastMessage ?? '',
+    revisions.terrain,
+    revisions.height,
+    revisions.forest,
+    revisions.objects,
+    state.pressureZones.length,
+    layer.mode,
+    layer.selectedCoverId ?? 'none',
+    layer.hoveredCoverId ?? 'none',
+    commandTool.turnToolActive ? 1 : 0,
+    commandTool.routeFacingDraft
+      ? `${commandTool.routeFacingDraft.target.x.toFixed(2)}:${commandTool.routeFacingDraft.target.y.toFixed(2)}:${commandTool.routeFacingDraft.finalFacingRadians?.toFixed(4) ?? 'none'}`
+      : 'none',
+    getAiTestPaused(state) ? 1 : 0,
+    getAiTestTimeScale(state),
+    unit?.id ?? 'none',
+    unit ? `${unit.position.x.toFixed(2)}:${unit.position.y.toFixed(2)}` : 'none',
+    unit?.behaviorRuntime.currentAction ?? '',
+    unit?.behaviorRuntime.state ?? '',
+    unit?.behaviorRuntime.posture ?? '',
+    unit?.behaviorRuntime.lastEvent ?? '',
+    unit?.behaviorRuntime.reason ?? '',
+    unit ? Math.round(unit.behaviorRuntime.danger) : 0,
+    unit ? Math.round(unit.behaviorRuntime.stress) : 0,
+    unit ? Math.round(unit.behaviorRuntime.suppression) : 0,
+    unit ? Math.round(unit.soldier.condition.health) : 0,
+    unit ? Math.round(unit.soldier.condition.morale) : 0,
+    unit ? Math.round(unit.soldier.condition.fatigue) : 0,
+    weapon?.roundsLoaded ?? 0,
+    weapon?.roundsReserve ?? 0,
+    fireAction?.phase ?? 'none',
+    order?.target.x.toFixed(2) ?? 'none',
+    order?.target.y.toFixed(2) ?? 'none',
+    order?.waypointIndex ?? -1,
+    order?.routeStatus ?? 'none',
+    command?.revision ?? 0,
+    command?.status ?? 'none',
+    unit?.tacticalKnowledge.revision ?? 0,
+    unit?.attentionRuntime.mode ?? 'none',
+    unit?.attentionRuntime.modeSource ?? 'none',
+    unit?.attentionRuntime.focusDirectionRadians.toFixed(4) ?? 'none',
+    runtimeSession?.status ?? 'none',
+    runtimeSession?.executionState?.activeNodeId ?? 'none',
+    unit?.behaviorRuntime.aiGraphReason ?? '',
+    unit?.playerNavigationProfileId ?? 'none',
+    unit?.playerAttentionProfileId ?? 'individual',
+    contact?.id ?? 'none',
+    contact?.visibleNow ? 1 : 0,
+    contact ? Math.round(contact.confidence) : 0,
+  ].join('|');
 }
 
 function combatCapabilityLabel(value: ReturnType<typeof getCombatRuntime>['capability']): string {
