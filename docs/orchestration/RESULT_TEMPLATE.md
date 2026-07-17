@@ -25,6 +25,30 @@
 
 Почему выбран этот подход и как он связан с существующими системами.
 
+## Performance impact
+
+Этот раздел обязателен для любого изменения, способного повлиять на runtime. Для truly non-runtime задачи укажи `not applicable` и точную причину.
+
+```text
+hot path:
+worst-case complexity:
+main-thread work:
+full-map builds:
+shared prepared data:
+worker and queue budget:
+cache owner/key/limit:
+invalidation revisions:
+memory estimate:
+stale-result rejection:
+teardown:
+before metrics:
+after metrics:
+exact-head enforced workflow:
+remaining performance risks:
+```
+
+Не используй фразу «изменение небольшое и не должно повлиять» вместо анализа.
+
 ## Changed files
 
 - `path/to/file`
@@ -48,7 +72,7 @@
 
 ## Risks
 
-Известные технические, поведенческие и интеграционные риски.
+Известные технические, поведенческие, performance и интеграционные риски.
 
 ## Integration notes
 
