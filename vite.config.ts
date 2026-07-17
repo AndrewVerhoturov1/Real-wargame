@@ -28,7 +28,7 @@ export default defineConfig({
       commitSha,
       buildId,
       generatedAt,
-      performanceContractVersion: 'performance-report-v4',
+      performanceContractVersion: 'performance-report-v6',
     }),
   },
 });
