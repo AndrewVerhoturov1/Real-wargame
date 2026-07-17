@@ -73,7 +73,10 @@ function cloneFields(fields: RouteCostFields): RouteCostFields {
   return {
     ...fields,
     passable: fields.passable.slice(),
-    terrainKeys: [...fields.terrainKeys],
+    // Terrain keys are map-static and already retained by the main-thread direct
+    // field. Avoid structured-cloning 64k repeated strings with every response;
+    // the client restores the canonical main-map array before publishing.
+    terrainKeys: [],
     terrainCost: fields.terrainCost.slice(),
     slopeCost: fields.slopeCost.slice(),
     dangerCost: fields.dangerCost.slice(),
