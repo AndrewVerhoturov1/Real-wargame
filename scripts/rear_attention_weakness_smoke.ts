@@ -95,6 +95,26 @@ assert.match(
   'existing positive-visibility opacity gradient must remain unchanged',
 );
 
+const perceptionSource = readFileSync(
+  path.join(process.cwd(), 'src', 'core', 'perception', 'PerceptionSystem.ts'),
+  'utf8',
+);
+assert.match(
+  perceptionSource,
+  /const rearSector = attention\.rear === true;/,
+  'runtime rear scheduling must consume the canonical attention sample',
+);
+assert.match(
+  perceptionSource,
+  /attention\.zone === 'peripheral' && !rearSector/,
+  'intuition must not raise the canonical rear attention cap',
+);
+assert.doesNotMatch(
+  perceptionSource,
+  /const REAR_SECTOR_START_DEGREES = 135;/,
+  'PerceptionSystem must not own a parallel rear-sector formula',
+);
+
 console.log(JSON.stringify({
   status: 'passed',
   profile: 'observe',
@@ -111,5 +131,9 @@ console.log(JSON.stringify({
     zeroVisibility: '#000000@1.0',
     positivePalettePreserved: true,
     positiveOpacityGradientPreserved: true,
+  },
+  runtimeContract: {
+    canonicalRearSample: true,
+    intuitionCannotRaiseRearCap: true,
   },
 }, null, 2));
