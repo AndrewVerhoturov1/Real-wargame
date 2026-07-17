@@ -107,7 +107,10 @@ export class PixiRouteCostOverlayRenderer {
       this.lastDynamicTextureKey = '';
       this.lastRenderedProfileId = resolved.profileId;
     }
-    const tacticalContext = buildUnitTacticalRouteContext(unit);
+    const tacticalContext = buildUnitTacticalRouteContext(unit, {
+      freshness: 'coalesced',
+      metersPerCell: state.map.metersPerCell,
+    });
     const fields = getRouteCostFields(state.map, resolved.profile, tacticalContext, this.cache);
     this.ensureRaster(state.map.width, state.map.height, state.map.cellSize);
     if (!this.staticContext || !this.dynamicContext || !this.staticTexture || !this.dynamicTexture) return;

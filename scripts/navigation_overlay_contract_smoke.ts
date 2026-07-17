@@ -108,8 +108,7 @@ function verifyHoverAndTextureCounters(): void {
   const map = normalizeMap(makeMap([]));
   const fields = getRouteCostFields(map, registry.getProfile('stealth'), {
     unitId: 'unit-1',
-    originX: 1.5,
-    originY: 1.5,
+    posture: 'standing',
     knowledgeRevision: 3,
     knownThreats: [{
       id: 'east-threat',
@@ -153,8 +152,6 @@ function verifyOwnMovementReusesWorldDirectionalField(): void {
   };
   const first = getDirectionalTacticalField(map, {
     unitId: 'stable-unit',
-    originX: 1.1,
-    originY: 1.1,
     knowledgeRevision: 1,
     threats: [threat],
   });
@@ -163,8 +160,6 @@ function verifyOwnMovementReusesWorldDirectionalField(): void {
 
   const metadataOnly = getDirectionalTacticalField(map, {
     unitId: 'stable-unit',
-    originX: 1.1,
-    originY: 1.1,
     knowledgeRevision: 999,
     threats: [{
       ...threat,
@@ -181,8 +176,6 @@ function verifyOwnMovementReusesWorldDirectionalField(): void {
 
   const ownMovement = getDirectionalTacticalField(map, {
     unitId: 'stable-unit',
-    originX: 1.4,
-    originY: 1.4,
     knowledgeRevision: 1000,
     threats: [threat],
   });
@@ -200,8 +193,6 @@ function verifyOwnMovementReusesWorldDirectionalField(): void {
 
   const movedThreat = getDirectionalTacticalField(map, {
     unitId: 'stable-unit',
-    originX: 1.4,
-    originY: 1.4,
     knowledgeRevision: 1001,
     threats: [{ ...threat, x: 4.2, y: 2.4 }],
   });
@@ -218,8 +209,6 @@ function verifyOwnMovementReusesWorldDirectionalField(): void {
 
   const restored = getDirectionalTacticalField(map, {
     unitId: 'stable-unit',
-    originX: 2.2,
-    originY: 2.2,
     knowledgeRevision: 1002,
     threats: [{
       ...threat,

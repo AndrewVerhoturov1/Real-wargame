@@ -41,6 +41,11 @@ function verifyOpenFieldThreatChangesWinner(): void {
   const threatened = buildSoldierAwarenessReport(state, blue);
   const threatenedWinner = winner(threatened, 'open-field visual threat');
 
+  assert.ok(
+    threatened.currentPosition.danger > baseline.currentPosition.danger,
+    `a confirmed subjective threat must raise current danger (baseline=${baseline.currentPosition.danger}, threatened=${threatened.currentPosition.danger})`,
+  );
+
   assert.notDeepEqual(
     threatenedWinner.position,
     baselineWinner.position,

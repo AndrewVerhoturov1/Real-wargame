@@ -17,6 +17,7 @@ import {
 
 const PERCEPTION_MOVING_GEOMETRY_INTERVAL_SECONDS = 0.4;
 const MAX_PERCEPTION_GEOMETRY_FIELDS_PER_STATE = 32;
+const MAX_GEOMETRY_PREPARATIONS_PER_SIMULATION_STEP = 1;
 
 interface PerceptionGeometryRuntimeEntry {
   readonly map: SimulationState['map'];
@@ -25,10 +26,20 @@ interface PerceptionGeometryRuntimeEntry {
   readonly builtAtSeconds: number;
 }
 
+interface PerceptionGeometryPreparationRuntime {
+  simulationStep: number;
+  simulationTimeSeconds: number;
+  preparationsThisStep: number;
+  preparationCount: number;
+  deferredCount: number;
+  maxPreparationsPerStep: number;
+}
+
 const perceptionGeometryRuntimeByState = new WeakMap<
   SimulationState,
   Map<string, PerceptionGeometryRuntimeEntry>
 >();
+const perceptionGeometryPreparationByState = new WeakMap<SimulationState, PerceptionGeometryPreparationRuntime>();
 
 export interface PointVisibilityResult {
   lineOfSight: LineOfSightProbeResult;
@@ -37,13 +48,20 @@ export interface PointVisibilityResult {
   explanationRu: string[];
 }
 
+export interface PerceptionGeometryPreparationDiagnostics {
+  readonly preparationCount: number;
+  readonly deferredCount: number;
+  readonly preparationsThisStep: number;
+  readonly maxPreparationsPerStep: number;
+}
+
 export function evaluatePointVisibility(
   state: SimulationState,
   observer: UnitModel,
   target: GridPosition,
   targetHeightMeters: number,
   attention: AttentionSample,
-): PointVisibilityResult {
+): PointVisibilityResult | null {
   const distanceCells = distance(observer.position, target);
   const distanceMeters = distanceCells * state.map.metersPerCell;
   const rangeCells = Math.max(
@@ -56,6 +74,7 @@ export function evaluatePointVisibility(
     targetHeightMeters,
     rangeCells,
   );
+  if (!geometry) return null;
   const geometryCell = readVisibilityGeometryCell(geometry, target.x, target.y);
   const lineOfSight = buildPointLineOfSight(
     observer.position,
@@ -94,12 +113,29 @@ export function evaluatePointVisibility(
   };
 }
 
+export function getPerceptionGeometryPreparationDiagnostics(
+  state: SimulationState,
+): PerceptionGeometryPreparationDiagnostics {
+  const runtime = perceptionGeometryPreparationByState.get(state);
+  return runtime ? {
+    preparationCount: runtime.preparationCount,
+    deferredCount: runtime.deferredCount,
+    preparationsThisStep: runtime.preparationsThisStep,
+    maxPreparationsPerStep: runtime.maxPreparationsPerStep,
+  } : {
+    preparationCount: 0,
+    deferredCount: 0,
+    preparationsThisStep: 0,
+    maxPreparationsPerStep: 0,
+  };
+}
+
 function getPerceptionGeometryField(
   state: SimulationState,
   observer: UnitModel,
   targetHeightMeters: number,
   rangeCells: number,
-): VisibilityGeometryField {
+): VisibilityGeometryField | null {
   const runtime = getPerceptionGeometryRuntime(state);
   const key = [
     observer.id,
@@ -121,6 +157,7 @@ function getPerceptionGeometryField(
     return current.field;
   }
 
+  if (!consumeGeometryPreparationBudget(state)) return null;
   const field = getVisibilityGeometryField(state.map, {
     origin: observer.position,
     originHeightAboveGroundMeters: eyeHeightForPosture(observer.behaviorRuntime.posture),
@@ -136,6 +173,37 @@ function getPerceptionGeometryField(
   runtime.set(key, next);
   trim(runtime, MAX_PERCEPTION_GEOMETRY_FIELDS_PER_STATE);
   return field;
+}
+
+function consumeGeometryPreparationBudget(state: SimulationState): boolean {
+  let runtime = perceptionGeometryPreparationByState.get(state);
+  if (!runtime) {
+    runtime = {
+      simulationStep: state.simulationStep,
+      simulationTimeSeconds: state.simulationTimeSeconds,
+      preparationsThisStep: 0,
+      preparationCount: 0,
+      deferredCount: 0,
+      maxPreparationsPerStep: 0,
+    };
+    perceptionGeometryPreparationByState.set(state, runtime);
+  }
+  if (
+    runtime.simulationStep !== state.simulationStep
+    || runtime.simulationTimeSeconds !== state.simulationTimeSeconds
+  ) {
+    runtime.simulationStep = state.simulationStep;
+    runtime.simulationTimeSeconds = state.simulationTimeSeconds;
+    runtime.preparationsThisStep = 0;
+  }
+  if (runtime.preparationsThisStep >= MAX_GEOMETRY_PREPARATIONS_PER_SIMULATION_STEP) {
+    runtime.deferredCount += 1;
+    return false;
+  }
+  runtime.preparationsThisStep += 1;
+  runtime.preparationCount += 1;
+  runtime.maxPreparationsPerStep = Math.max(runtime.maxPreparationsPerStep, runtime.preparationsThisStep);
+  return true;
 }
 
 function getPerceptionGeometryRuntime(

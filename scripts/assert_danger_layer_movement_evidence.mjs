@@ -113,6 +113,7 @@ function assertSelectedOnly(selected) {
   if (!selected) return;
   const counters = selected.counters ?? {};
   if (counters.worldSpaceMemoryStable !== true) failures.push('selected-only changed world-space threat memory during observer-only movement');
+  if (counters.observerRelativeGeometryChanged !== true) failures.push('selected-only did not change observer-relative threat geometry');
   for (const name of [
     'workerJobsStartedDelta',
     'workerThreatRelativeGeometryBuildDelta',

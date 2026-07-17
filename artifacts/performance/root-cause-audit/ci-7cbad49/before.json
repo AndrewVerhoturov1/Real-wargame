@@ -1,0 +1,364 @@
+{
+  "label": "before-base",
+  "reportVersion": "performance-report-v4",
+  "build": {
+    "branch": "real-wargame-preview",
+    "commitSha": "5f097f79e2150764d5dc4ac8cb0c4db6ba90aa74",
+    "buildId": "5f097f79e215-2026-07-16T20:21:30.771Z",
+    "generatedAt": "2026-07-16T20:22:29.500Z",
+    "performanceContractVersion": "performance-report-v4"
+  },
+  "measurementSeconds": 45.01,
+  "sampleCount": 32,
+  "browserEffectiveFps": 1.36,
+  "browserRafMs": {
+    "min": 683.2,
+    "avg": 726.47,
+    "p95": 900,
+    "max": 916.5
+  },
+  "sceneUpdateMs": {
+    "min": 0.4,
+    "avg": 1.77,
+    "p95": 4.3,
+    "max": 4.6
+  },
+  "firstDynamicUpdateMs": 13.7,
+  "dynamicUpdateMs": {
+    "min": 0,
+    "avg": 0.94,
+    "p95": 5.9,
+    "max": 13.7
+  },
+  "steadyDynamicUpdateMs": {
+    "min": 0,
+    "avg": 0.72,
+    "p95": 5.9,
+    "max": 9.3
+  },
+  "framesOver50Ms": 61,
+  "framesOver100Ms": 61,
+  "longTasksOver100Ms": 61,
+  "awareness": {
+    "representation": "raster-sprite",
+    "visible": true,
+    "rebuildCount": 63,
+    "markerUpdateCount": 2,
+    "lastBuildMs": 0.3,
+    "maxBuildMs": 3.4,
+    "displayObjectCount": 3,
+    "rasterWidth": 320,
+    "rasterHeight": 200,
+    "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+    "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+    "lastRequestedCanonicalThreatKey": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+    "lastAppliedCanonicalThreatKey": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+    "lastAppliedFieldIdentity": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0@8ba624bb",
+    "lastAppliedJobId": 63,
+    "lastAppliedRaster": {
+      "width": 320,
+      "height": 200,
+      "digest": "8ba624bb",
+      "fieldIdentity": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0@8ba624bb",
+      "threatIds": [
+        "unknown-fire:1dahzem"
+      ]
+    },
+    "rendererLocalBestSafePositions": [
+      {
+        "position": {
+          "x": 89.5,
+          "y": 118.5
+        },
+        "score": 94.36510869670053,
+        "danger": 16,
+        "expectedProtection": 92,
+        "expectedProtectionAgainstThreat": 0,
+        "protectedAgainstThreatId": null,
+        "concealment": 95,
+        "distanceCells": 15.652475842498529,
+        "sourceRu": "асинхронное поле опасности"
+      },
+      {
+        "position": {
+          "x": 88.5,
+          "y": 118.5
+        },
+        "score": 94.19517442122505,
+        "danger": 16,
+        "expectedProtection": 92,
+        "expectedProtectionAgainstThreat": 0,
+        "protectedAgainstThreatId": null,
+        "concealment": 95,
+        "distanceCells": 16.1245154965971,
+        "sourceRu": "асинхронное поле опасности"
+      },
+      {
+        "position": {
+          "x": 87.5,
+          "y": 118.5
+        },
+        "score": 94.00840588824643,
+        "danger": 15,
+        "expectedProtection": 92,
+        "expectedProtectionAgainstThreat": 0,
+        "protectedAgainstThreatId": null,
+        "concealment": 95,
+        "distanceCells": 16.64331697709324,
+        "sourceRu": "асинхронное поле опасности"
+      },
+      {
+        "position": {
+          "x": 86.5,
+          "y": 118.5
+        },
+        "score": 93.80632580772931,
+        "danger": 15,
+        "expectedProtection": 92,
+        "expectedProtectionAgainstThreat": 0,
+        "protectedAgainstThreatId": null,
+        "concealment": 95,
+        "distanceCells": 17.204650534085253,
+        "sourceRu": "асинхронное поле опасности"
+      },
+      {
+        "position": {
+          "x": 85.5,
+          "y": 118.5
+        },
+        "score": 93.59038222668465,
+        "danger": 15,
+        "expectedProtection": 92,
+        "expectedProtectionAgainstThreat": 0,
+        "protectedAgainstThreatId": null,
+        "concealment": 95,
+        "distanceCells": 17.804493814764857,
+        "sourceRu": "асинхронное поле опасности"
+      },
+      {
+        "position": {
+          "x": 89.5,
+          "y": 121.5
+        },
+        "score": 93.38148052809392,
+        "danger": 16,
+        "expectedProtection": 92,
+        "expectedProtectionAgainstThreat": 0,
+        "protectedAgainstThreatId": null,
+        "concealment": 95,
+        "distanceCells": 18.384776310850235,
+        "sourceRu": "асинхронное поле опасности"
+      },
+      {
+        "position": {
+          "x": 84.5,
+          "y": 118.5
+        },
+        "score": 93.36192799074912,
+        "danger": 15,
+        "expectedProtection": 92,
+        "expectedProtectionAgainstThreat": 0,
+        "protectedAgainstThreatId": null,
+        "concealment": 95,
+        "distanceCells": 18.439088914585774,
+        "sourceRu": "асинхронное поле опасности"
+      },
+      {
+        "position": {
+          "x": 114.5,
+          "y": 98.5
+        },
+        "score": 93.1694802540363,
+        "danger": 0,
+        "expectedProtection": 82,
+        "expectedProtectionAgainstThreat": 0,
+        "protectedAgainstThreatId": null,
+        "concealment": 72,
+        "distanceCells": 18.973665961010276,
+        "sourceRu": "асинхронное поле опасности"
+      }
+    ],
+    "rendererLocalBestWinner": {
+      "position": {
+        "x": 89.5,
+        "y": 118.5
+      },
+      "score": 94.36510869670053,
+      "danger": 16,
+      "expectedProtection": 92,
+      "expectedProtectionAgainstThreat": 0,
+      "protectedAgainstThreatId": null,
+      "concealment": 95,
+      "distanceCells": 15.652475842498529,
+      "sourceRu": "асинхронное поле опасности"
+    },
+    "movement": {
+      "worldRasterBuilds": 63,
+      "ownMovementLocalUpdates": 64,
+      "safePositionLocalScans": 64,
+      "safePositionCellsScanned": 722496,
+      "directionalBasisBuilds": 1,
+      "workerThreatRelativeGeometryBuilds": 1,
+      "workerDirectionalFieldBuilds": 1,
+      "workerDirectionalBasisBuilds": 1,
+      "workerAwarenessGeometryBuilds": 0,
+      "workerAwarenessRescores": 0,
+      "workerJobsStarted": 63,
+      "workerJobsCompleted": 63,
+      "workerJobsCancelled": 0,
+      "workerJobsCoalesced": 1,
+      "workerResultsStaleDropped": 0,
+      "mainThreadRasterSwaps": 63,
+      "finalRefreshRequests": 2,
+      "finalRefreshApplied": 2,
+      "pendingQueueDepth": 0,
+      "maxPendingQueueDepth": 1,
+      "workerInFlight": false,
+      "lastWorkerLatencyMs": 718.5,
+      "maxWorkerLatencyMs": 2485.8,
+      "lastWorkerComputeMs": 6.4,
+      "maxWorkerComputeMs": 777.8,
+      "lastMainThreadApplyMs": 0.3,
+      "maxMainThreadApplyMs": 3.4,
+      "lastLocalUpdateMs": 0.4,
+      "maxLocalUpdateMs": 22.3,
+      "lastRequestedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+      "lastAppliedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+      "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+      "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+      "lastRequestedCanonicalThreatKey": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+      "lastAppliedCanonicalThreatKey": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+      "lastCompletedJobId": 63,
+      "lastAppliedJobId": 63,
+      "lastCompletedJobFinalExact": true,
+      "lastFinalRefreshLatencyMs": 718.5,
+      "maxFinalRefreshLatencyMs": 718.5,
+      "lastAppliedFieldIdentity": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0@8ba624bb",
+      "lastAppliedRasterDigest": "8ba624bb",
+      "lastWorkerError": null,
+      "rawMaxLocalUpdateMs": 22.3,
+      "localUpdateWarmupDiscarded": 1,
+      "postWarmupLocalUpdateCount": 63,
+      "postWarmupLocalUpdateP95Ms": 0.4
+    }
+  },
+  "computation": {
+    "threatRelativeCover": {
+      "geometryBuildCount": 1,
+      "cacheHitCount": 0,
+      "fullMapScanCount": 1,
+      "objectChecks": 192000,
+      "forestMapReads": 63999,
+      "lastBuildMs": 21.400000000023283,
+      "evictionCount": 0,
+      "lastKey": "320:200:2:1190:1025:standing:2:1:1",
+      "cachedFieldCount": 1
+    },
+    "directionalTactical": {
+      "buildCount": 1,
+      "cacheHitCount": 1,
+      "fullMapScanCount": 1,
+      "lastBuildMs": 57.59999999997672,
+      "lastKey": "320:200:2:2:1#unknown-fire:1dahzem:119:102.5:1",
+      "cachedFieldCount": 1,
+      "basisBuildCount": 1
+    },
+    "awarenessStatic": {
+      "buildCount": 1,
+      "cacheHitCount": 61,
+      "lastBuildMs": 50.40000000002328,
+      "lastCandidateChecks": 119,
+      "key": "320:200:2:standing:1:2:1:2"
+    },
+    "awarenessDynamicRescore": {
+      "geometryBuildCount": 0,
+      "dynamicRescoreCount": 0,
+      "rescoredCellCount": 0,
+      "lastGeometryBuildMs": 0,
+      "lastRescoreMs": 0,
+      "maxRescoreMs": 0,
+      "geometryReady": false,
+      "geometryKey": ""
+    },
+    "soldierDangerField": {
+      "geometryBuildCount": 1,
+      "fieldBuildCount": 9,
+      "geometryCacheHitCount": 61,
+      "fieldCacheHitCount": 53,
+      "fullMapScanCount": 1,
+      "lastGeometryKey": "standing#320:200:2:standing:1:2:1:2#320:200:2:2:1#standing#320:200:2:standing:1:2:1:2#320:200:2:2:1#visibility-geometry:v1:119.000:102.500:1.400:1.400:68.000:3:1#unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:180:58:60:0:70:8",
+      "lastFieldKey": "standing#320:200:2:standing:1:2:1:2#320:200:2:2:1#standing#320:200:2:standing:1:2:1:2#320:200:2:2:1#visibility-geometry:v1:119.000:102.500:1.400:1.400:68.000:3:1#unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:180:58:60:0:70:8#unknown-fire:1dahzem:73:48:52:independent",
+      "cachedGeometryCount": 1,
+      "cachedThreatGeometryCount": 1,
+      "cachedFieldCount": 9,
+      "retainedThreatGeometryBytes": 576000,
+      "retainedFieldBytes": 4032000,
+      "retainedTypedArrayBytes": 4608000
+    },
+    "awarenessMovement": {
+      "worldRasterBuilds": 63,
+      "ownMovementLocalUpdates": 64,
+      "safePositionLocalScans": 64,
+      "safePositionCellsScanned": 722496,
+      "directionalBasisBuilds": 1,
+      "workerThreatRelativeGeometryBuilds": 1,
+      "workerDirectionalFieldBuilds": 1,
+      "workerDirectionalBasisBuilds": 1,
+      "workerAwarenessGeometryBuilds": 0,
+      "workerAwarenessRescores": 0,
+      "workerJobsStarted": 63,
+      "workerJobsCompleted": 63,
+      "workerJobsCancelled": 0,
+      "workerJobsCoalesced": 1,
+      "workerResultsStaleDropped": 0,
+      "mainThreadRasterSwaps": 63,
+      "finalRefreshRequests": 2,
+      "finalRefreshApplied": 2,
+      "pendingQueueDepth": 0,
+      "maxPendingQueueDepth": 1,
+      "workerInFlight": false,
+      "lastWorkerLatencyMs": 718.5,
+      "maxWorkerLatencyMs": 2485.8,
+      "lastWorkerComputeMs": 6.4,
+      "maxWorkerComputeMs": 777.8,
+      "lastMainThreadApplyMs": 0.3,
+      "maxMainThreadApplyMs": 3.4,
+      "lastLocalUpdateMs": 0.4,
+      "maxLocalUpdateMs": 22.3,
+      "lastRequestedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+      "lastAppliedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+      "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+      "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+      "lastRequestedCanonicalThreatKey": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+      "lastAppliedCanonicalThreatKey": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+      "lastCompletedJobId": 63,
+      "lastAppliedJobId": 63,
+      "lastCompletedJobFinalExact": true,
+      "lastFinalRefreshLatencyMs": 718.5,
+      "maxFinalRefreshLatencyMs": 718.5,
+      "lastAppliedFieldIdentity": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0@8ba624bb",
+      "lastAppliedRasterDigest": "8ba624bb",
+      "lastWorkerError": null,
+      "rawMaxLocalUpdateMs": 22.3,
+      "localUpdateWarmupDiscarded": 1,
+      "postWarmupLocalUpdateCount": 63,
+      "postWarmupLocalUpdateP95Ms": 0.4,
+      "mainThreadSoldierDangerField": {
+        "geometryBuildCount": 1,
+        "fieldBuildCount": 9,
+        "geometryCacheHitCount": 61,
+        "fieldCacheHitCount": 53,
+        "fullMapScanCount": 1,
+        "lastGeometryKey": "standing#320:200:2:standing:1:2:1:2#320:200:2:2:1#standing#320:200:2:standing:1:2:1:2#320:200:2:2:1#visibility-geometry:v1:119.000:102.500:1.400:1.400:68.000:3:1#unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:180:58:60:0:70:8",
+        "lastFieldKey": "standing#320:200:2:standing:1:2:1:2#320:200:2:2:1#standing#320:200:2:standing:1:2:1:2#320:200:2:2:1#visibility-geometry:v1:119.000:102.500:1.400:1.400:68.000:3:1#unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:180:58:60:0:70:8#unknown-fire:1dahzem:73:48:52:independent",
+        "cachedGeometryCount": 1,
+        "cachedThreatGeometryCount": 1,
+        "cachedFieldCount": 9,
+        "retainedThreatGeometryBytes": 576000,
+        "retainedFieldBytes": 4032000,
+        "retainedTypedArrayBytes": 4608000
+      }
+    }
+  },
+  "soldierDangerField": null
+}

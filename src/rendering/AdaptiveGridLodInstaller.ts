@@ -6,7 +6,7 @@ interface BoardInternals {
   worldContainer: Container;
   mapRenderer: {
     container: Container;
-    staticContainer: Container;
+    gridContainer: Container;
   };
   camera: {
     zoom: number;
@@ -30,7 +30,7 @@ export function installAdaptiveGridLod(
   const internals = board as BoardInternals;
   const majorGrid = new Graphics();
   majorGrid.eventMode = 'none';
-  internals.mapRenderer.container.addChildAt(majorGrid, Math.min(1, internals.mapRenderer.container.children.length));
+  internals.mapRenderer.container.addChildAt(majorGrid, Math.min(2, internals.mapRenderer.container.children.length));
 
   let animationFrameId = 0;
   let lastMapKey = '';
@@ -56,7 +56,7 @@ export function installAdaptiveGridLod(
       zoom: internals.camera.zoom,
       editorEnabled: state.editor.enabled,
     });
-    const sourceGrid = findSourceGrid(internals.mapRenderer.staticContainer, showGrid);
+    const sourceGrid = findSourceGrid(internals.mapRenderer.gridContainer, showGrid);
     const lodKey = [
       lod.majorVisible ? '1' : '0',
       lod.minorVisible ? '1' : '0',
@@ -114,8 +114,8 @@ function drawMajorGrid(graphics: Graphics, state: SimulationState): void {
   graphics.stroke({ width: 2, color: 0xf6edcf, alpha: 0.22 });
 }
 
-function findSourceGrid(staticContainer: Container, showGrid: boolean): Graphics | null {
-  if (!showGrid || staticContainer.children.length < 2) return null;
-  const candidate = staticContainer.children[staticContainer.children.length - 2];
+function findSourceGrid(gridContainer: Container, showGrid: boolean): Graphics | null {
+  if (!showGrid || gridContainer.children.length < 1) return null;
+  const candidate = gridContainer.children[0];
   return candidate instanceof Graphics ? candidate : null;
 }

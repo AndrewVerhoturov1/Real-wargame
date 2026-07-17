@@ -254,7 +254,10 @@ export function applyOwnedMoveEffectsForUnit(
         movementMode: unit.navigationMovementMode ?? 'normal',
         navigationProfile: resolvedNavigation.profile,
         navigationProfileSource: resolvedNavigation.source,
-        tacticalContext: buildUnitTacticalRouteContext(unit),
+        tacticalContext: buildUnitTacticalRouteContext(unit, {
+          freshness: 'immediate',
+          metersPerCell: state.map.metersPerCell,
+        }),
       });
       if (!planned.ok) {
         unit.order = null;

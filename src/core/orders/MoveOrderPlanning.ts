@@ -2,7 +2,7 @@ import type { GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
 import type { NavigationProfileSource } from '../navigation/NavigationProfileResolver';
 import type { NavigationMovementMode, NavigationProfile } from '../navigation/NavigationProfiles';
-import type { TacticalRouteContext } from '../navigation/RouteCostField';
+import type { RouteCostFields, TacticalRouteContext } from '../navigation/RouteCostField';
 import {
   findGridPath,
   type GridPathFailure,
@@ -27,6 +27,7 @@ export interface PlanMoveOrderOptions {
   readonly movementMode?: NavigationMovementMode;
   readonly finalFacingRadians?: number;
   readonly tacticalContext?: TacticalRouteContext;
+  readonly preparedCostFields?: RouteCostFields;
   readonly replanSearchCount?: number;
   readonly replanCount?: number;
   readonly lastReplanAtSeconds?: number;
@@ -60,6 +61,7 @@ export function planMoveOrder(
     allowGoalAdjustment: options.allowGoalAdjustment,
     navigationProfile: options.navigationProfile,
     tacticalContext: options.tacticalContext,
+    preparedCostFields: options.preparedCostFields,
   });
   if (!path.ok) {
     return {

@@ -232,7 +232,11 @@ function verifyPausedExplicitSimulationStep(): void {
   assert.ok((mover.behaviorRuntime.aiRouteStatusState?.lastCheckedAtMs ?? -1) >= 700, 'route monitoring must not freeze on the outer pause flag');
 
   const pixiSource = readFileSync('src/rendering/PixiApp.ts', 'utf8');
-  assert.match(pixiSource, /if \(!this\.getPaused\(\)\) \{\s*tickSimulation\(this\.state, ticker\.elapsedMS \/ 1000\);\s*\}/, 'the automatic Pixi ticker must still suppress outer-loop simulation calls while paused');
+  assert.match(
+    pixiSource,
+    /if \(!this\.getPaused\(\)\) \{[\s\S]*?tickSimulation\(this\.state, ticker\.elapsedMS \/ 1000\);[\s\S]*?\n\s*\}/,
+    'the automatic Pixi ticker must still suppress outer-loop simulation calls while paused',
+  );
 }
 
 function verifyDiagnosticDeepImmutability(): void {

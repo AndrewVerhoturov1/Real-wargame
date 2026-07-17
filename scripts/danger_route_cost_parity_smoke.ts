@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { buildCanonicalWorldThreatSet } from '../src/core/knowledge/CanonicalWorldThreat';
 import { buildSoldierAwarenessReport } from '../src/core/knowledge/SoldierAwarenessGrid';
 import type { TacticalMapData } from '../src/core/map/MapModel';
 import { buildUnitTacticalRouteContext } from '../src/core/navigation/NavigationRuntime';
@@ -135,7 +136,10 @@ function sample(threats: ClassifiedThreat[], cell: { x: number; y: number }): { 
 }
 
 function setThreats(threats: ClassifiedThreat[]): void {
-  blue.tacticalKnowledge.threats = threats;
+  blue.tacticalKnowledge.threats = [...buildCanonicalWorldThreatSet(
+    threats,
+    state.map.metersPerCell,
+  ).threats];
   blue.tacticalKnowledge.revision += 1;
 }
 
@@ -143,7 +147,7 @@ function routeFields(): ReturnType<typeof getRouteCostFields> {
   return getRouteCostFields(
     state.map,
     profile,
-    buildUnitTacticalRouteContext(blue),
+    buildUnitTacticalRouteContext(blue, { metersPerCell: state.map.metersPerCell }),
     createRouteCostFieldCache(),
   );
 }

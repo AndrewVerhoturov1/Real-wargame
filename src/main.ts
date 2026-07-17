@@ -17,6 +17,7 @@ import pressureZoneData from './data/pressure_zones/test_pressure_zones.json';
 import unitsData from './data/units/test_units.json';
 import { installAiStatefulMoveGameBridge as installAiGameBridge } from './core/ai/AiStatefulMoveGameBridge';
 import type { TacticalMapData } from './core/map/MapModel';
+import { clearAsyncRouteCostWorker } from './core/navigation/RouteCostWorkerClient';
 import type { PressureZoneData } from './core/pressure/PressureZone';
 import { createResolutionAwareInitialState } from './core/simulation/ResolutionAwareScene';
 import { initializeAiTestLabRuntime } from './core/testing/AiTestLabRuntime';
@@ -89,6 +90,7 @@ async function bootstrap(): Promise<void> {
     board.forceRender();
     enforceNativeMapQuality(board);
   };
+  const refreshTacticalOrderUi = () => board.renderNow();
 
   installGameEditorWorkbench(debugPanel, state, forceRenderAtNativeMapQuality);
   const destroyAttentionProfileControls = installAttentionProfileControls(state, forceRenderAtNativeMapQuality);
@@ -96,7 +98,7 @@ async function bootstrap(): Promise<void> {
   installPerformanceReportControls(() => board.downloadPerformanceReport());
   installAiEditorOpenButton(aiEditorOpenButton);
   installPauseToggle(pauseToggle, forceRenderAtNativeMapQuality);
-  installTacticalWorkspace(state, aiGameBridge, forceRenderAtNativeMapQuality);
+  const destroyTacticalWorkspace = installTacticalWorkspace(state, aiGameBridge, forceRenderAtNativeMapQuality);
   const destroyCombatControls = installCombatControls(state, forceRenderAtNativeMapQuality);
   installAiStatePlanVisualQaHarness(state, forceRenderAtNativeMapQuality);
   installCombatTacticalIntegrationVisualQaHarness(state, forceRenderAtNativeMapQuality);
@@ -111,7 +113,7 @@ async function bootstrap(): Promise<void> {
   const destroyEditorHeaderPlacement = installEditorHeaderPlacement();
   const destroyWorkspaceTooltipGuard = installWorkspaceTooltipGuard();
   board.start();
-  const destroyTacticalOrderRadialInput = installTacticalOrderRadialInput(board, state, forceRenderAtNativeMapQuality);
+  const destroyTacticalOrderRadialInput = installTacticalOrderRadialInput(board, state, refreshTacticalOrderUi);
   const destroyAdaptiveGridLod = installAdaptiveGridLod(board, state, gridToggle);
   enforceNativeMapQuality(board);
   gridToggle.addEventListener('click', scheduleNativeMapQuality);
@@ -130,6 +132,7 @@ async function bootstrap(): Promise<void> {
     gridToggle.removeEventListener('click', scheduleNativeMapQuality);
     destroyAdaptiveGridLod();
     destroyTacticalOrderRadialInput();
+    destroyTacticalWorkspace();
     destroyCommandPlanRouteUi();
     destroyRouteCostOverlayUi();
     destroyAiDictionary();
@@ -141,6 +144,7 @@ async function bootstrap(): Promise<void> {
     destroyAttentionRuntimePanel();
     destroyAttentionOverlayRenderer();
     destroyAttentionProfileControls();
+    clearAsyncRouteCostWorker(state.map);
     aiGameBridge.destroy();
     board.destroy();
     if (tacticalBoard === board) tacticalBoard = null;

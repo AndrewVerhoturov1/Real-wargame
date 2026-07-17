@@ -1,4 +1,5 @@
 import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
+import { measurePerformancePhase } from '../debug/PerformancePhases';
 import type { MoveOrder } from '../orders/MoveOrder';
 import { planMoveOrder } from '../orders/MoveOrderPlanning';
 import { updatePlayerCommandStatus } from '../orders/PlayerCommand';
@@ -6,8 +7,10 @@ import { isMapCellPassable } from '../pathfinding/GridNavigation';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
 import { evaluateNavigationReplan } from './NavigationReplanPolicy';
-import { evaluateNavigationRouteCost } from './NavigationRouteCost';
+import { evaluatePreparedNavigationRouteCost } from './NavigationRouteCost';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from './NavigationRuntime';
+import { getRouteCostFields, getSharedRouteCostFieldCache, type RouteCostFields } from './RouteCostField';
+import { getOrRequestAsyncRouteCostFields } from './RouteCostWorkerClient';
 
 const ROUTE_LOOKAHEAD_CELLS = 6;
 
@@ -20,7 +23,13 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
   updateRouteCellIndex(unit, order);
   const blocked = routeLookaheadBlocked(state, order);
   const resolved = resolveUnitNavigationProfile(unit, unit.playerCommand);
-  const tacticalContext = buildUnitTacticalRouteContext(unit);
+  const tacticalContext = measurePerformancePhase(
+    'route.context',
+    () => buildUnitTacticalRouteContext(unit, {
+      freshness: 'coalesced',
+      metersPerCell: state.map.metersPerCell,
+    }),
+  );
   const evaluation = evaluateNavigationReplan({
     order,
     profile: resolved.profile,
@@ -34,15 +43,40 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
   const reason = evaluation.reason ?? (blocked ? 'blocked' : 'navigation_changed');
   const reasonRu = evaluation.reasonRu ?? 'Изменились условия построения маршрута.';
   const replanSearchCount = (order.replanSearchCount ?? 0) + 1;
-  const currentRouteCost = blocked
-    ? order.pathCost
-    : evaluateNavigationRouteCost(
+  let routeFields: RouteCostFields | null = null;
+  const asynchronous = getOrRequestAsyncRouteCostFields(
+    state.map,
+    resolved.profile,
+    tacticalContext,
+  );
+  if (asynchronous.status === 'pending') {
+    unit.behaviorRuntime.lastEvent = blocked
+      ? 'move_blocked_route_field_pending'
+      : 'move_route_field_pending';
+    unit.behaviorRuntime.reason = blocked
+      ? 'Текущий маршрут заблокирован; боец остановлен до готовности точного фонового перестроения.'
+      : 'Тактическое поле маршрута готовится в фоне; текущий маршрут сохранён.';
+    return !blocked;
+  }
+  if (asynchronous.status === 'ready') routeFields = asynchronous.fields;
+  if (!routeFields) {
+    routeFields = measurePerformancePhase(
+      'route.fields.prepare',
+      () => getRouteCostFields(
         state.map,
-        remainingRouteCells(order),
         resolved.profile,
         tacticalContext,
-      );
-  const replanned = planMoveOrder(state.map, unit.position, requestedTarget, {
+        getSharedRouteCostFieldCache(state.map),
+      ),
+    );
+  }
+  const currentRouteCost = blocked
+    ? order.pathCost
+    : measurePerformancePhase('route.current-path-evaluate', () => evaluatePreparedNavigationRouteCost(
+        remainingRouteCells(order),
+        routeFields,
+      ));
+  const replanned = measurePerformancePhase('route.candidate-search', () => planMoveOrder(state.map, unit.position, requestedTarget, {
     source: order.source,
     ownerToken: order.ownerToken,
     playerCommandId: order.playerCommandId,
@@ -56,12 +90,13 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
     navigationProfileSource: resolved.source,
     finalFacingRadians: order.finalFacingRadians,
     tacticalContext,
+    preparedCostFields: routeFields,
     replanSearchCount,
     replanCount: (order.replanCount ?? 0) + 1,
     lastReplanAtSeconds: state.simulationTimeSeconds,
     lastReplanReason: reason,
     lastReplanReasonRu: reasonRu,
-  });
+  }));
 
   if (!replanned.ok) {
     markReplanRevisionProcessed(

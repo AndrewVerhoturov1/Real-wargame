@@ -160,8 +160,6 @@ function assertIdenticalQueriesHitCache(result: ScenarioEvaluation) {
   const directionalBefore = getDirectionalTacticalFieldDiagnostics(result.state.map);
   const field = getDirectionalTacticalField(result.state.map, {
     unitId: result.blue.id,
-    originX: result.blue.position.x,
-    originY: result.blue.position.y,
     knowledgeRevision: result.blue.tacticalKnowledge.revision,
     threats: result.blue.tacticalKnowledge.threats,
   });
@@ -259,7 +257,11 @@ function assertKnowledgeRevisionInvalidation(west: ScenarioEvaluation) {
   assert.equal(routeAfter.dynamicCostBuildCount, routeBefore.dynamicCostBuildCount + 1);
   assert.equal(routeAfter.fullMapScanCount, routeBefore.fullMapScanCount + 1);
   assert.equal(directionalAfter.buildCount, directionalBefore.buildCount);
-  assert.equal(directionalAfter.cacheHitCount, directionalBefore.cacheHitCount + 1);
+  assert.equal(
+    directionalAfter.cacheHitCount,
+    directionalBefore.cacheHitCount,
+    'route knowledge invalidation must rebuild only the fused route projection, not read the full directional awareness field',
+  );
 }
 
 function assertMapRevisionInvalidation(west: ScenarioEvaluation) {

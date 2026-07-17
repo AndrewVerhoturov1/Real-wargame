@@ -89,7 +89,10 @@ function issueTacticalOrderIntentToSelectedUnits(
       navigationProfile: resolvedNavigation.profile,
       navigationProfileSource: resolvedNavigation.source,
       finalFacingRadians,
-      tacticalContext: buildUnitTacticalRouteContext(unit),
+      tacticalContext: buildUnitTacticalRouteContext(unit, {
+        freshness: 'immediate',
+        metersPerCell: state.map.metersPerCell,
+      }),
     });
 
     if (!planned.ok) {

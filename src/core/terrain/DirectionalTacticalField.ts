@@ -1,4 +1,5 @@
 import type { TacticalMap } from '../map/MapModel';
+import { measurePerformancePhase } from '../debug/PerformancePhases';
 import {
   DIRECTIONAL_SECTOR_COUNT,
   DIRECTIONAL_SECTOR_RADIANS,
@@ -17,13 +18,11 @@ const CACHE_LIMIT = 12;
 const THREAT_POSITION_BUCKET_CELLS = 0.1;
 const NORMALIZED_WEIGHT_BUCKET = 0.0001;
 const UNCERTAINTY_HALF_WEIGHT_CELLS = 4;
+const FULL_TURN_RADIANS = Math.PI * 2;
+const ZERO_DISTANCE_SQUARED = 1e-12;
 
 export interface DirectionalTacticalFieldOptions {
   readonly unitId: string;
-  /** Retained for API compatibility. World danger content no longer depends on own position. */
-  readonly originX: number;
-  /** Retained for API compatibility. World danger content no longer depends on own position. */
-  readonly originY: number;
   readonly knowledgeRevision?: number;
   readonly threats: readonly DirectionalThreatSource[];
 }
@@ -107,7 +106,10 @@ export function getDirectionalTacticalField(
   }
 
   const startedAt = performance.now();
-  const field = buildField(map, key, metadata, basis, options.threats);
+  const field = measurePerformancePhase(
+    'field.directional-tactical.build',
+    () => buildField(map, key, metadata, basis, options.threats),
+  );
   mapCache.fields.set(key, field);
   trimCache(mapCache.fields);
   mapCache.diagnostics.buildCount += 1;
@@ -199,30 +201,68 @@ function buildField(
   const flankExposure = new Uint8Array(cellCount);
   const terrainProtection = new Uint8Array(cellCount);
   const terrainConcealment = new Uint8Array(cellCount);
+  const weightedThreats = threats
+    .map((threat) => ({ threat, weight: threatWeight(threat) }))
+    .filter((entry) => entry.weight > 1e-6);
+  const totalThreatWeight = weightedThreats.reduce((sum, entry) => sum + entry.weight, 0);
+  const primaryThreatIndex = strongestThreatIndex(weightedThreats);
+
+  if (totalThreatWeight <= 1e-6 || primaryThreatIndex < 0) {
+    return {
+      key,
+      width: map.width,
+      height: map.height,
+      threatField,
+      primarySlope,
+      forwardSlopeRisk,
+      reverseSlopeProtection,
+      crestRisk: basis.crestRisk,
+      valleyProtection: basis.valleyProtection,
+      silhouetteRisk: basis.silhouetteRisk,
+      primaryThreatExposure,
+      flankExposure,
+      terrainProtection,
+      terrainConcealment,
+      sectorProtection: basis.protection,
+      sectorExposure: basis.exposure,
+    };
+  }
 
   for (let y = 0; y < map.height; y += 1) {
     const cellY = y + 0.5;
     for (let x = 0; x < map.width; x += 1) {
       const index = y * map.width + x;
       const cellX = x + 0.5;
-      let totalWeight = 0;
-      let strongestWeight = 0;
-      let primaryBearing = 0;
+      const primaryThreat = weightedThreats[primaryThreatIndex]!;
+      const primaryDx = primaryThreat.threat.x - cellX;
+      const primaryDy = primaryThreat.threat.y - cellY;
+      const primaryAtCell = primaryDx * primaryDx + primaryDy * primaryDy <= ZERO_DISTANCE_SQUARED;
+      let totalWeight = totalThreatWeight;
+      let localPrimaryThreatIndex = primaryThreatIndex;
 
-      for (const threat of threats) {
-        const weight = threatWeight(threat);
-        if (weight <= 1e-6) continue;
-        const dx = threat.x - cellX;
-        const dy = threat.y - cellY;
-        if (Math.hypot(dx, dy) <= 1e-6) continue;
-        totalWeight += weight;
-        if (weight > strongestWeight) {
-          strongestWeight = weight;
-          primaryBearing = Math.atan2(dy, dx);
+      // A source located precisely at this cell has no bearing. This is rare,
+      // but retain the former per-cell exclusion semantics exactly.
+      if (primaryAtCell) {
+        totalWeight = 0;
+        let strongestWeight = 0;
+        for (let threatIndex = 0; threatIndex < weightedThreats.length; threatIndex += 1) {
+          const candidate = weightedThreats[threatIndex]!;
+          const dx = candidate.threat.x - cellX;
+          const dy = candidate.threat.y - cellY;
+          if (dx * dx + dy * dy <= ZERO_DISTANCE_SQUARED) continue;
+          totalWeight += candidate.weight;
+          if (candidate.weight > strongestWeight) {
+            strongestWeight = candidate.weight;
+            localPrimaryThreatIndex = threatIndex;
+          }
         }
       }
-
       if (totalWeight <= 1e-6) continue;
+      const localPrimary = weightedThreats[localPrimaryThreatIndex]!;
+      const primaryBearing = normalizeRadians(Math.atan2(
+        localPrimary.threat.y - cellY,
+        localPrimary.threat.x - cellX,
+      ));
       let weightedForward = 0;
       let weightedReverse = 0;
       let weightedProtection = 0;
@@ -231,26 +271,35 @@ function buildField(
       let primarySlopeValue = 0;
       let primaryExposureValue = 0;
 
-      for (const threat of threats) {
-        const weight = threatWeight(threat);
-        if (weight <= 1e-6) continue;
-        const dx = threat.x - cellX;
-        const dy = threat.y - cellY;
-        if (Math.hypot(dx, dy) <= 1e-6) continue;
-        const bearing = Math.atan2(dy, dx);
-        const normalizedWeight = weight / totalWeight;
-        const slope = readBasisSlope(basis, x, y, bearing);
-        const protection = readDirectionalBasisValue(basis.protection, basis, x, y, bearing) / 100;
-        const exposure = readDirectionalBasisValue(basis.exposure, basis, x, y, bearing) / 100;
+      for (let threatIndex = 0; threatIndex < weightedThreats.length; threatIndex += 1) {
+        const entry = weightedThreats[threatIndex]!;
+        const dx = entry.threat.x - cellX;
+        const dy = entry.threat.y - cellY;
+        if (dx * dx + dy * dy <= ZERO_DISTANCE_SQUARED) continue;
+        const bearing = normalizeRadians(Math.atan2(dy, dx));
+        const normalizedWeight = entry.weight / totalWeight;
+        const sectorPosition = bearing / DIRECTIONAL_SECTOR_RADIANS;
+        const lower = Math.floor(sectorPosition);
+        const baseSector = lower % DIRECTIONAL_SECTOR_COUNT;
+        const fraction = sectorPosition - lower;
+        const nextSector = (baseSector + 1) % DIRECTIONAL_SECTOR_COUNT;
+        const sectorOffset = index * DIRECTIONAL_SECTOR_COUNT;
+        const slope = (basis.slope[sectorOffset + baseSector] ?? 0) * (1 - fraction)
+          + (basis.slope[sectorOffset + nextSector] ?? 0) * fraction;
+        const protection = ((basis.protection[sectorOffset + baseSector] ?? 0) * (1 - fraction)
+          + (basis.protection[sectorOffset + nextSector] ?? 0) * fraction) / 100;
+        const exposure = ((basis.exposure[sectorOffset + baseSector] ?? 0) * (1 - fraction)
+          + (basis.exposure[sectorOffset + nextSector] ?? 0) * fraction) / 100;
         weightedForward += clamp01(slope) * normalizedWeight;
         weightedReverse += clamp01(-slope) * normalizedWeight;
         weightedProtection += protection * normalizedWeight;
         weightedExposure += exposure * normalizedWeight;
-        const bearingDifference = angularDifferenceRadians(bearing, primaryBearing);
+        const rawBearingDifference = Math.abs(bearing - primaryBearing);
+        const bearingDifference = Math.min(rawBearingDifference, FULL_TURN_RADIANS - rawBearingDifference);
         if (bearingDifference >= Math.PI / 2) {
           worstFlankExposure = Math.max(worstFlankExposure, exposure * Math.min(1, normalizedWeight * 4));
         }
-        if (weight === strongestWeight && bearingDifference <= 1e-6) {
+        if (threatIndex === localPrimaryThreatIndex && bearingDifference <= 1e-6) {
           primarySlopeValue = slope;
           primaryExposureValue = exposure;
         }
@@ -298,22 +347,19 @@ function buildField(
   };
 }
 
-function readBasisSlope(
-  basis: DirectionalTerrainSectorBasis,
-  x: number,
-  y: number,
-  bearingRadians: number,
+function strongestThreatIndex(
+  threats: ReadonlyArray<{ readonly weight: number }>,
 ): number {
-  const cellX = clampInt(Math.floor(x), 0, basis.width - 1);
-  const cellY = clampInt(Math.floor(y), 0, basis.height - 1);
-  const sectorPosition = normalizeRadians(bearingRadians) / DIRECTIONAL_SECTOR_RADIANS;
-  const lower = Math.floor(sectorPosition);
-  const baseSector = lower % DIRECTIONAL_SECTOR_COUNT;
-  const fraction = sectorPosition - lower;
-  const nextSector = (baseSector + 1) % DIRECTIONAL_SECTOR_COUNT;
-  const offset = (cellY * basis.width + cellX) * DIRECTIONAL_SECTOR_COUNT;
-  return (basis.slope[offset + baseSector] ?? 0) * (1 - fraction)
-    + (basis.slope[offset + nextSector] ?? 0) * fraction;
+  let strongestIndex = -1;
+  let strongestWeight = 0;
+  for (let index = 0; index < threats.length; index += 1) {
+    const weight = threats[index]!.weight;
+    if (weight > strongestWeight) {
+      strongestWeight = weight;
+      strongestIndex = index;
+    }
+  }
+  return strongestIndex;
 }
 
 function readSectorValue(
@@ -382,12 +428,6 @@ function threatWeight(threat: DirectionalThreatSource): number {
   return confidence01 * (0.25 + force01 * 0.75) * uncertaintyAttenuation;
 }
 
-function angularDifferenceRadians(left: number, right: number): number {
-  const full = Math.PI * 2;
-  const difference = Math.abs(normalizeRadians(left) - normalizeRadians(right));
-  return Math.min(difference, full - difference);
-}
-
 function percent01(value: number): number {
   return Math.max(0, Math.min(1, finite(value) / 100));
 }
@@ -406,9 +446,8 @@ function quantize(value: number, step: number): number {
 }
 
 function normalizeRadians(value: number): number {
-  const full = Math.PI * 2;
-  const normalized = value % full;
-  return normalized < 0 ? normalized + full : normalized;
+  const normalized = value % FULL_TURN_RADIANS;
+  return normalized < 0 ? normalized + FULL_TURN_RADIANS : normalized;
 }
 
 function clamp01(value: number): number {

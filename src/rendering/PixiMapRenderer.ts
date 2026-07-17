@@ -5,6 +5,8 @@ import {
   type MapObject,
   type TacticalMap,
 } from '../core/map/MapModel';
+import { measurePerformancePhase } from '../core/debug/PerformancePhases';
+import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
 import {
   resolveCellVegetationDefinition,
   VEGETATION_DEFINITION_REVISION,
@@ -32,15 +34,25 @@ const MIN_VISIBLE_ELEVATION = 0.35;
 const CONTOUR_THRESHOLDS = [-1.5, -0.5, 0.5, 1.5, 2.5, 3.5];
 const TEXTURE_DETAIL_SCALE = 2;
 
+type MapRendererDebugWindow = Window & {
+  __realWargameMapRendererDebug?: ReturnType<PixiMapRenderer['getDiagnostics']>;
+};
+
 export class PixiMapRenderer {
   readonly container = new Container();
-  private readonly staticContainer = new Container();
+  readonly staticContainer = new Container();
+  readonly gridContainer = new Container();
   private readonly objectContainer = new Container();
   private lastStaticKey = '';
+  private lastGridKey = '';
   private lastObjectKey = '';
+  private staticRebuildCount = 0;
+  private gridBuildCount = 0;
+  private gridVisibilityChangeCount = 0;
+  private lastGridVisible = true;
 
   constructor() {
-    this.container.addChild(this.staticContainer, this.objectContainer);
+    this.container.addChild(this.staticContainer, this.gridContainer, this.objectContainer);
   }
 
   render(
@@ -49,39 +61,70 @@ export class PixiMapRenderer {
     selectedObjectId: string | null = null,
     showObjects = true,
   ): void {
-    this.renderStaticLayerIfNeeded(map, showGrid);
+    this.renderStaticLayerIfNeeded(map);
+    this.renderGridLayerIfNeeded(map, showGrid);
     this.renderObjectLayerIfNeeded(map, selectedObjectId, showObjects);
+    (window as MapRendererDebugWindow).__realWargameMapRendererDebug = this.getDiagnostics();
   }
 
-  private renderStaticLayerIfNeeded(map: TacticalMap, showGrid: boolean): void {
-    const nextKey = getStaticLayerKey(map, showGrid);
+  getDiagnostics(): {
+    staticRebuildCount: number;
+    gridBuildCount: number;
+    gridVisibilityChangeCount: number;
+  } {
+    return {
+      staticRebuildCount: this.staticRebuildCount,
+      gridBuildCount: this.gridBuildCount,
+      gridVisibilityChangeCount: this.gridVisibilityChangeCount,
+    };
+  }
+
+  destroy(): void {
+    destroyContainerChildren(this.staticContainer, true);
+    destroyContainerChildren(this.gridContainer, false);
+    destroyContainerChildren(this.objectContainer, false);
+    delete (window as MapRendererDebugWindow).__realWargameMapRendererDebug;
+  }
+
+  private renderStaticLayerIfNeeded(map: TacticalMap): void {
+    const nextKey = getStaticLayerKey(map);
 
     if (nextKey === this.lastStaticKey) {
       return;
     }
 
     this.lastStaticKey = nextKey;
-    this.staticContainer.removeChildren();
-    renderTerrainBatches(this.staticContainer, map);
+    measurePerformancePhase('renderer.static-map-rebuild', () => {
+      destroyContainerChildren(this.staticContainer, true);
+      renderTerrainBatches(this.staticContainer, map);
 
-    const elevationLayer = renderElevationLayer(map);
-    if (elevationLayer) {
-      this.staticContainer.addChild(elevationLayer);
+      const elevationLayer = renderElevationLayer(map);
+      if (elevationLayer) this.staticContainer.addChild(elevationLayer);
+
+      const forestLayer = renderForestLayer(map);
+      if (forestLayer) this.staticContainer.addChild(forestLayer);
+
+      const border = new Graphics();
+      border.rect(0, 0, map.width * map.cellSize, map.height * map.cellSize)
+        .stroke({ width: 3, color: 0x10160f, alpha: 0.85 });
+      this.staticContainer.addChild(border);
+    });
+    this.staticRebuildCount += 1;
+  }
+
+  private renderGridLayerIfNeeded(map: TacticalMap, showGrid: boolean): void {
+    const nextKey = getGridLayerKey(map);
+    if (nextKey !== this.lastGridKey) {
+      this.lastGridKey = nextKey;
+      destroyContainerChildren(this.gridContainer, false);
+      this.gridContainer.addChild(renderMeterGrid(map));
+      this.gridBuildCount += 1;
     }
-
-    const forestLayer = renderForestLayer(map);
-    if (forestLayer) {
-      this.staticContainer.addChild(forestLayer);
+    if (this.lastGridVisible !== showGrid) {
+      this.lastGridVisible = showGrid;
+      this.gridVisibilityChangeCount += 1;
     }
-
-    if (showGrid) {
-      this.staticContainer.addChild(renderMeterGrid(map));
-    }
-
-    const border = new Graphics();
-    border.rect(0, 0, map.width * map.cellSize, map.height * map.cellSize)
-      .stroke({ width: 3, color: 0x10160f, alpha: 0.85 });
-    this.staticContainer.addChild(border);
+    this.gridContainer.visible = showGrid;
   }
 
   private renderObjectLayerIfNeeded(
@@ -96,7 +139,7 @@ export class PixiMapRenderer {
     }
 
     this.lastObjectKey = nextKey;
-    this.objectContainer.removeChildren();
+    destroyContainerChildren(this.objectContainer, false);
 
     if (!showObjects) {
       return;
@@ -407,15 +450,21 @@ function drawSegment(context: CanvasRenderingContext2D, start: { x: number; y: n
   context.lineTo(end.x, end.y);
 }
 
-function getStaticLayerKey(map: TacticalMap, showGrid: boolean): string {
+function getStaticLayerKey(map: TacticalMap): string {
+  const revisions = getMapRevisionSnapshot(map);
   return [
     `size:${map.width}x${map.height}`,
     `cell:${map.cellSize}`,
     `meters:${map.metersPerCell}`,
-    `grid:${showGrid ? '1' : '0'}`,
     `vegetation:${VEGETATION_DEFINITION_REVISION}`,
-    `cells:${map.cells.map((cell) => `${cell.x}:${cell.y}:${cell.terrain}:${cell.height}:${cell.forest}`).join('|')}`,
+    `terrain:${revisions.terrain}`,
+    `height:${revisions.height}`,
+    `forest:${revisions.forest}`,
   ].join(';');
+}
+
+function getGridLayerKey(map: TacticalMap): string {
+  return `grid:${map.width}:${map.height}:${map.cellSize}:${map.metersPerCell}`;
 }
 
 function getObjectLayerKey(
@@ -423,23 +472,26 @@ function getObjectLayerKey(
   selectedObjectId: string | null,
   showObjects: boolean,
 ): string {
+  const objectsRevision = getMapRevisionSnapshot(map).objects;
   if (!showObjects) {
-    return `objects:hidden;selected:${selectedObjectId ?? 'none'}`;
+    return `objects:hidden;revision:${objectsRevision};selected:${selectedObjectId ?? 'none'}`;
   }
 
   return [
     `cell:${map.cellSize}`,
     `selected:${selectedObjectId ?? 'none'}`,
-    `objects:${map.objects.map((object) => [
-      object.id,
-      object.kind,
-      object.x.toFixed(3),
-      object.y.toFixed(3),
-      object.widthCells.toFixed(3),
-      object.heightCells.toFixed(3),
-      object.rotationRadians.toFixed(3),
-    ].join(':')).join('|')}`,
+    `objectsRevision:${objectsRevision}`,
   ].join(';');
+}
+
+function destroyContainerChildren(container: Container, destroyTextures: boolean): void {
+  for (const child of container.removeChildren()) {
+    child.destroy({
+      children: true,
+      texture: destroyTextures,
+      textureSource: destroyTextures,
+    });
+  }
 }
 
 function renderMeterGrid(map: TacticalMap): Graphics {

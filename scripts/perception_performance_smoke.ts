@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
 import type { TacticalMapData } from '../src/core/map/MapModel';
-import { getPerceptionDiagnostics, tickSelectedSoldierPerception } from '../src/core/perception/PerceptionSystem';
+import { advanceVisualContact, upsertPerceptionContact } from '../src/core/perception/PerceptionContact';
+import {
+  getPerceptionDiagnostics,
+  tickAllUnitPerception,
+  tickSelectedSoldierPerception,
+} from '../src/core/perception/PerceptionSystem';
 import type { PressureZoneData } from '../src/core/pressure/PressureZone';
 import { createInitialState, selectUnit } from '../src/core/simulation/SimulationState';
 import type { UnitData } from '../src/core/units/UnitModel';
+import { getPerceptionGeometryPreparationDiagnostics } from '../src/core/visibility/PointVisibility';
 
 const map: TacticalMapData = {
   width: 220,
@@ -84,4 +90,110 @@ const noSelectionDiagnostics = getPerceptionDiagnostics(noSelection);
 assert.equal(noSelectionDiagnostics.losCalculationCount, 0);
 assert.equal(noSelectionDiagnostics.candidateCount, 0);
 
-console.log(`Perception performance smoke passed: ${diagnostics.losCalculationCount} LOS calculations for ${diagnostics.candidateCount} candidates across 600 ticks.`);
+const stagedObservers: UnitData[] = Array.from({ length: 5 }, (_, index) => ({
+  ...observer,
+  id: `staged-observer-${index}`,
+  label: `Staged observer ${index}`,
+  labelRu: `Поэтапный наблюдатель ${index}`,
+  x: 95.5,
+  y: 101.5 + index * 4,
+}));
+const stagedState = createInitialState(map, stagedObservers, [zones[0]!]);
+for (let tick = 0; tick < 30; tick += 1) {
+  stagedState.simulationStep += 1;
+  stagedState.simulationTimeSeconds += 0.1;
+  tickAllUnitPerception(stagedState, 0.1);
+}
+const staging = getPerceptionGeometryPreparationDiagnostics(stagedState);
+assert.equal(staging.maxPreparationsPerStep, 1, 'one simulation step must prepare at most one cold perception geometry');
+assert.ok(staging.deferredCount > 0, 'simultaneous cold observers must be deferred instead of blocking one tick');
+assert.ok(
+  staging.preparationCount >= stagedObservers.length,
+  'all deferred observer geometries must become eligible on later attention cadences',
+);
+for (const unit of stagedState.units) {
+  assert.ok(
+    unit.perceptionKnowledge.contacts.length > 0,
+    `${unit.id} must receive a fair perception turn without selection-dependent priority`,
+  );
+}
+
+const mixedObserver: UnitData = {
+  ...observer,
+  id: 'mixed-observer',
+  side: 'blue',
+  x: 70.5,
+  y: 80.5,
+  attention: {
+    defaultMode: 'observe',
+    profiles: {
+      observe: {
+        focusAngleDegrees: 180,
+        directAngleDegrees: 360,
+        focusCheckIntervalSeconds: 0.05,
+        directCheckIntervalSeconds: 0.05,
+        peripheralCheckIntervalSeconds: 0.05,
+      },
+    },
+    vision: { maximumVisualRangeMeters: 1_000 },
+  },
+};
+const mixedHostile: UnitData = {
+  ...observer,
+  id: 'mixed-hostile',
+  label: 'Mixed hostile',
+  labelRu: 'Смешанная вражеская цель',
+  side: 'red',
+  x: 105.5,
+  y: 80.5,
+};
+const mixedZones: PressureZoneData[] = Array.from({ length: 8 }, (_, index) => ({
+  ...zones[index]!,
+  id: `mixed-zone-${index}`,
+  label: `Mixed zone ${index}`,
+  labelRu: `Смешанная цель ${index}`,
+  x: 94.5 + index,
+  y: 86.5 + index % 2,
+  sourceTargetType: index % 2 === 0 ? 'tank' : 'sniper',
+  sourceVisible: true,
+}));
+const mixedState = createInitialState(map, [mixedObserver, mixedHostile], mixedZones);
+const mixedObserverModel = mixedState.units[0]!;
+const mixedHostileModel = mixedState.units[1]!;
+const tracked = advanceVisualContact(null, {
+  id: 'perception:unit:mixed-hostile',
+  stimulusId: 'unit:mixed-hostile',
+  sourceUnitId: 'mixed-hostile',
+  labelRu: mixedHostileModel.labels.ru,
+  position: { ...mixedHostileModel.position },
+  evidencePerSecond: 220,
+  deltaSeconds: 1,
+  nowSeconds: 0,
+  source: 'visual',
+});
+upsertPerceptionContact(mixedObserverModel.perceptionKnowledge, tracked);
+const trackedStart = { ...tracked.lastKnownPosition };
+for (let tick = 0; tick < 40; tick += 1) {
+  mixedState.simulationStep += 1;
+  mixedState.simulationTimeSeconds += 0.1;
+  mixedObserverModel.position.x += 0.08;
+  mixedHostileModel.position.x += 0.16;
+  tickAllUnitPerception(mixedState, 0.1);
+}
+const trackedAfter = mixedObserverModel.perceptionKnowledge.contacts.find(
+  (contact) => contact.stimulusId === 'unit:mixed-hostile',
+);
+assert.ok(trackedAfter, 'the tracked hostile contact must remain present');
+assert.ok(
+  Math.hypot(
+    trackedAfter.lastKnownPosition.x - trackedStart.x,
+    trackedAfter.lastKnownPosition.y - trackedStart.y,
+  ) >= 2,
+  'an existing hostile track must receive visibility budget ahead of ambient target-height fields',
+);
+assert.ok(
+  mixedObserverModel.perceptionKnowledge.contacts.some((contact) => contact.stimulusId.startsWith('threat:mixed-zone-')),
+  'ambient targets must still receive remaining perception opportunities',
+);
+
+console.log(`Perception performance smoke passed: ${diagnostics.losCalculationCount} LOS calculations for ${diagnostics.candidateCount} candidates across 600 ticks; ${staging.preparationCount} cold geometries staged fairly with max ${staging.maxPreparationsPerStep} per step; tracked hostile movement stayed current across mixed target heights.`);

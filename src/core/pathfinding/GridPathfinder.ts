@@ -2,8 +2,9 @@ import type { GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
 import {
-  createRouteCostFieldCache,
+  getSharedRouteCostFieldCache,
   getRouteCostFields,
+  routeCostFieldsMatch,
   type RouteCostFieldCache,
   type RouteCostFields,
   type TacticalRouteContext,
@@ -13,12 +14,8 @@ import {
   type NavigationProfile,
 } from '../navigation/NavigationProfiles';
 import {
-  buildNavigationGrid,
   gridPositionToNavigationCell,
-  isNavigationCellPassable,
-  navigationCellAt,
   navigationCellCenter,
-  type NavigationGrid,
 } from './GridNavigation';
 
 export type GridPathFailureCode = 'start_blocked' | 'goal_unreachable' | 'no_route' | 'search_limit';
@@ -41,6 +38,7 @@ export interface GridPathOptions {
   readonly navigationProfile?: NavigationProfile;
   readonly tacticalContext?: TacticalRouteContext;
   readonly costFieldCache?: RouteCostFieldCache;
+  readonly preparedCostFields?: RouteCostFields;
 }
 
 export interface GridPathSuccess {
@@ -59,6 +57,7 @@ export interface GridPathSuccess {
   readonly visitedCells: number;
   readonly profileId: string;
   readonly profileRevision: number;
+  readonly costFieldIdentity: string;
   readonly costBreakdown: GridPathCostBreakdown;
   readonly routeReason: string;
   readonly routeReasonRu: string;
@@ -115,7 +114,6 @@ const DIRECTIONS: ReadonlyArray<readonly [number, number, number]> = [
   [1, -1, DIAGONAL_COST],
 ];
 
-const sharedCostFieldCache = createRouteCostFieldCache();
 const baselineCache = new WeakMap<TacticalMap, Map<string, SearchSuccess>>();
 
 export function findGridPath(
@@ -124,12 +122,13 @@ export function findGridPath(
   requestedGoal: GridPosition,
   options: GridPathOptions = {},
 ): GridPathResult {
-  const grid = buildNavigationGrid(map);
   const profile = options.navigationProfile ?? getBuiltInNavigationProfile('normal');
-  const costCache = options.costFieldCache ?? sharedCostFieldCache;
-  const fields = getRouteCostFields(map, profile, options.tacticalContext, costCache);
+  const costCache = options.costFieldCache ?? getSharedRouteCostFieldCache(map);
+  const fields = options.preparedCostFields && routeCostFieldsMatch(map, profile, options.preparedCostFields)
+    ? options.preparedCostFields
+    : getRouteCostFields(map, profile, options.tacticalContext, costCache);
   const startCell = gridPositionToNavigationCell(map, start);
-  if (!isNavigationCellPassable(grid, startCell.x, startCell.y)) {
+  if (!isFieldPassable(fields, startCell.x, startCell.y)) {
     return failure(
       'start_blocked',
       requestedGoal,
@@ -140,7 +139,7 @@ export function findGridPath(
   }
 
   const requestedGoalCell = gridPositionToNavigationCell(map, requestedGoal);
-  const requestedGoalPassable = isNavigationCellPassable(grid, requestedGoalCell.x, requestedGoalCell.y);
+  const requestedGoalPassable = isFieldPassable(fields, requestedGoalCell.x, requestedGoalCell.y);
   const allowGoalAdjustment = options.allowGoalAdjustment ?? profile.allowGoalAdjustment;
   if (!requestedGoalPassable && allowGoalAdjustment === false) {
     return failure(
@@ -155,7 +154,7 @@ export function findGridPath(
   const resolvedGoalCell = requestedGoalPassable
     ? requestedGoalCell
     : findNearestPassableGoal(
-        grid,
+        fields,
         requestedGoalCell,
         Math.max(0, Math.floor(options.nearestGoalRadiusCells ?? DEFAULT_NEAREST_GOAL_RADIUS)),
       );
@@ -174,14 +173,14 @@ export function findGridPath(
   const resolvedGoal = goalAdjusted
     ? navigationCellCenter(resolvedGoalCell.x, resolvedGoalCell.y)
     : clampPositionInsideCell(requestedGoal, resolvedGoalCell.x, resolvedGoalCell.y);
-  const maxVisitedCells = Math.max(1, Math.floor(options.maxVisitedCells ?? grid.width * grid.height));
-  const tacticalSearch = runAStar(grid, fields, startCell, resolvedGoalCell, maxVisitedCells);
+  const maxVisitedCells = Math.max(1, Math.floor(options.maxVisitedCells ?? fields.width * fields.height));
+  const tacticalSearch = runAStar(fields, startCell, resolvedGoalCell, maxVisitedCells);
 
   if (!tacticalSearch.ok) {
     return failure(tacticalSearch.code, requestedGoal, tacticalSearch.visitedCells, tacticalSearch.reason, tacticalSearch.reasonRu);
   }
 
-  const baseline = getBaselineSearch(map, grid, costCache, startCell, resolvedGoalCell, maxVisitedCells);
+  const baseline = getBaselineSearch(map, costCache, startCell, resolvedGoalCell, maxVisitedCells);
   const tacticalDistanceCells = pathDistanceCells(tacticalSearch.cells);
   const baselineDistanceCells = baseline.ok ? pathDistanceCells(baseline.cells) : tacticalDistanceCells;
   const rawDetourRatio = baselineDistanceCells > 0 ? tacticalDistanceCells / baselineDistanceCells : 1;
@@ -222,6 +221,7 @@ export function findGridPath(
     visitedCells: tacticalSearch.visitedCells,
     profileId: profile.id,
     profileRevision: profile.revision,
+    costFieldIdentity: fields.cacheKey,
     costBreakdown: roundBreakdown(costBreakdown),
     routeReason,
     routeReasonRu,
@@ -232,7 +232,6 @@ export function findGridPath(
 
 function getBaselineSearch(
   map: TacticalMap,
-  grid: NavigationGrid,
   costCache: RouteCostFieldCache,
   start: { x: number; y: number },
   goal: { x: number; y: number },
@@ -260,7 +259,7 @@ function getBaselineSearch(
 
   const direct = getBuiltInNavigationProfile('direct');
   const fields = getRouteCostFields(map, direct, undefined, costCache);
-  const result = runAStar(grid, fields, start, goal, maxVisitedCells);
+  const result = runAStar(fields, start, goal, maxVisitedCells);
   if (result.ok) {
     mapCache.set(key, result);
     while (mapCache.size > 32) {
@@ -273,15 +272,14 @@ function getBaselineSearch(
 }
 
 function runAStar(
-  grid: NavigationGrid,
   fields: RouteCostFields,
   start: { x: number; y: number },
   goal: { x: number; y: number },
   maxVisitedCells: number,
 ): SearchResult {
-  const cellCount = grid.width * grid.height;
-  const startIndex = indexOf(grid, start.x, start.y);
-  const goalIndex = indexOf(grid, goal.x, goal.y);
+  const cellCount = fields.width * fields.height;
+  const startIndex = indexOf(fields, start.x, start.y);
+  const goalIndex = indexOf(fields, goal.x, goal.y);
   const gScore = new Float64Array(cellCount);
   const parent = new Int32Array(cellCount);
   const closed = new Uint8Array(cellCount);
@@ -314,32 +312,31 @@ function runAStar(
     if (current.index === goalIndex) {
       return {
         ok: true,
-        cells: reconstructPath(grid, parent, current.index),
+        cells: reconstructPath(fields, parent, current.index),
         cost: gScore[current.index],
         visitedCells,
       };
     }
 
-    const currentX = current.index % grid.width;
-    const currentY = Math.floor(current.index / grid.width);
-    if (!navigationCellAt(grid, currentX, currentY)) continue;
+    const currentX = current.index % fields.width;
+    const currentY = Math.floor(current.index / fields.width);
 
     for (const [dx, dy, stepLength] of DIRECTIONS) {
       const nextX = currentX + dx;
       const nextY = currentY + dy;
-      if (!isNavigationCellPassable(grid, nextX, nextY)) continue;
+      if (!isFieldPassable(fields, nextX, nextY)) continue;
       if (
         dx !== 0
         && dy !== 0
         && (
-          !isNavigationCellPassable(grid, currentX + dx, currentY)
-          || !isNavigationCellPassable(grid, currentX, currentY + dy)
+          !isFieldPassable(fields, currentX + dx, currentY)
+          || !isFieldPassable(fields, currentX, currentY + dy)
         )
       ) {
         continue;
       }
 
-      const nextIndex = indexOf(grid, nextX, nextY);
+      const nextIndex = indexOf(fields, nextX, nextY);
       if (closed[nextIndex]) continue;
       const stepCost = evaluateGridPathStepCost(fields, current.index, nextIndex, stepLength);
       if (!Number.isFinite(stepCost)) continue;
@@ -505,19 +502,19 @@ function buildRouteReason(
 }
 
 function findNearestPassableGoal(
-  grid: NavigationGrid,
+  fields: RouteCostFields,
   goal: { x: number; y: number },
   radius: number,
 ): { x: number; y: number } | null {
   const candidates: Array<{ x: number; y: number; distanceSquared: number; index: number }> = [];
-  for (let y = Math.max(0, goal.y - radius); y <= Math.min(grid.height - 1, goal.y + radius); y += 1) {
-    for (let x = Math.max(0, goal.x - radius); x <= Math.min(grid.width - 1, goal.x + radius); x += 1) {
-      if (!isNavigationCellPassable(grid, x, y)) continue;
+  for (let y = Math.max(0, goal.y - radius); y <= Math.min(fields.height - 1, goal.y + radius); y += 1) {
+    for (let x = Math.max(0, goal.x - radius); x <= Math.min(fields.width - 1, goal.x + radius); x += 1) {
+      if (!isFieldPassable(fields, x, y)) continue;
       const dx = x - goal.x;
       const dy = y - goal.y;
       const distanceSquared = dx * dx + dy * dy;
       if (distanceSquared > radius * radius) continue;
-      candidates.push({ x, y, distanceSquared, index: indexOf(grid, x, y) });
+      candidates.push({ x, y, distanceSquared, index: indexOf(fields, x, y) });
     }
   }
   candidates.sort((left, right) => left.distanceSquared - right.distanceSquared || left.index - right.index);
@@ -553,14 +550,14 @@ function simplifyPathToWaypoints(
 }
 
 function reconstructPath(
-  grid: NavigationGrid,
+  fields: RouteCostFields,
   parent: Int32Array,
   goalIndex: number,
 ): Array<{ x: number; y: number }> {
   const reverse: Array<{ x: number; y: number }> = [];
   let current = goalIndex;
   while (current >= 0) {
-    reverse.push({ x: current % grid.width, y: Math.floor(current / grid.width) });
+    reverse.push({ x: current % fields.width, y: Math.floor(current / fields.width) });
     current = parent[current];
   }
   reverse.reverse();
@@ -583,8 +580,18 @@ function heuristic(x: number, y: number, goalX: number, goalY: number): number {
   return MINIMUM_STEP_COST * (Math.max(dx, dy) + (DIAGONAL_COST - 1) * Math.min(dx, dy));
 }
 
-function indexOf(grid: NavigationGrid, x: number, y: number): number {
-  return y * grid.width + x;
+function indexOf(fields: RouteCostFields, x: number, y: number): number {
+  return y * fields.width + x;
+}
+
+function isFieldPassable(fields: RouteCostFields, x: number, y: number): boolean {
+  return Number.isInteger(x)
+    && Number.isInteger(y)
+    && x >= 0
+    && y >= 0
+    && x < fields.width
+    && y < fields.height
+    && fields.passable[y * fields.width + x] === 1;
 }
 
 function clampPositionInsideCell(position: GridPosition, cellX: number, cellY: number): GridPosition {

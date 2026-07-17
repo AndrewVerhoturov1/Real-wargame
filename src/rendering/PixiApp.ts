@@ -1,5 +1,6 @@
 import { Application, Container, type Ticker } from 'pixi.js';
 import { PerformanceMonitor } from '../core/debug/PerformanceMonitor';
+import { measurePerformancePhase } from '../core/debug/PerformancePhases';
 import { getCell, gridToCellLabel, type MapCell } from '../core/map/MapModel';
 import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
@@ -158,9 +159,13 @@ export class PixiTacticalBoardApp {
 
   private readonly tick = (ticker: Ticker): void => {
     if (!this.getPaused()) {
-      tickSimulation(this.state, ticker.elapsedMS / 1000);
+      measurePerformancePhase('ticker.simulation', () => {
+        tickSimulation(this.state, ticker.elapsedMS / 1000);
+      });
     }
-    this.renderFrame();
+    measurePerformancePhase('ticker.render-frame', () => {
+      this.renderFrame();
+    });
   };
 
   destroy(): void {
@@ -175,7 +180,7 @@ export class PixiTacticalBoardApp {
     this.heightToggle.removeEventListener('click', this.handleHeightToggle);
     this.camera.destroy();
     this.boardInput.destroy();
-    this.mapRenderer.container.cacheAsTexture(false);
+    this.mapRenderer.destroy();
     this.overlayRenderer.destroy();
     if (this.routeCostOverlayRenderer.container.parent === this.worldContainer) {
       this.worldContainer.removeChild(this.routeCostOverlayRenderer.container);
@@ -186,6 +191,7 @@ export class PixiTacticalBoardApp {
     }
     this.awarenessHeatmapRenderer.destroy();
     this.htmlOverlayRenderer.destroy();
+    this.performanceMonitor.destroy();
     this.fixedScaleLabel.remove();
     this.app.destroy(
       { removeView: true, releaseGlobalResources: true },
@@ -196,6 +202,12 @@ export class PixiTacticalBoardApp {
   forceRender(): void {
     if (this.destroyed) return;
     this.mapRenderInvalidated = true;
+    this.renderNow();
+  }
+
+  /** Render changing simulation/UI layers while retaining the immutable map cache. */
+  renderNow(): void {
+    if (this.destroyed) return;
     this.renderFrame();
     this.updateDebugPanelIfNeeded(true);
   }
@@ -207,6 +219,7 @@ export class PixiTacticalBoardApp {
       backgroundAlpha: 1,
       maxFPS: TARGET_MAX_FPS,
       mapRender: 'revision-driven map rebuilds; editable batched Pixi Graphics terrain + raster relief/forest + grid/objects',
+      mapRendererDiagnostics: this.mapRenderer.getDiagnostics(),
       zoomMode: 'requestAnimationFrame-coalesced wheel input anchored under the pointer',
       keyboardPan: 'continuous WASD and arrow-key camera movement synchronized to animation frames',
       pointerMode: 'pointer movement coalesced to one state update per animation frame',
@@ -232,24 +245,30 @@ export class PixiTacticalBoardApp {
 
   private renderFrame(): void {
     const renderStartedAt = performance.now();
-    this.renderEditableMapLayerIfNeeded(false);
+    measurePerformancePhase('render.map', () => this.renderEditableMapLayerIfNeeded(false));
 
     const visibleUnits = this.state.editor.layers.units ? this.state.units : [];
     const visibleSelectedIds = this.state.editor.layers.units ? this.state.selectedUnitIds : [];
 
     if (this.showViewCones) {
-      this.viewConeRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
+      measurePerformancePhase('render.viewCones', () => {
+        this.viewConeRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
+      });
     }
 
-    this.awarenessHeatmapRenderer.render(this.state);
-    this.routeCostOverlayRenderer.render(this.state);
-    this.orderRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
-    this.overlayRenderer.render(this.state, this.showGrid, this.state.editor.layers.pressureZones);
-    this.coverDirectionRenderer.render(this.state);
-    this.threatEditorRenderer.render(this.state);
-    this.unitRenderer.render(this.state.map, visibleUnits, visibleSelectedIds);
-    this.htmlOverlayRenderer.render(this.state, this.locale, this.showHeightLabels);
-    this.updateDebugPanelIfNeeded(false);
+    measurePerformancePhase('render.awareness-heatmap', () => this.awarenessHeatmapRenderer.render(this.state));
+    measurePerformancePhase('render.route-cost', () => this.routeCostOverlayRenderer.render(this.state));
+    measurePerformancePhase('render.orders', () => this.orderRenderer.render(this.state.map, visibleUnits, visibleSelectedIds));
+    measurePerformancePhase('render.overlay', () => {
+      this.overlayRenderer.render(this.state, this.showGrid, this.state.editor.layers.pressureZones);
+    });
+    measurePerformancePhase('render.cover-direction', () => this.coverDirectionRenderer.render(this.state));
+    measurePerformancePhase('render.threat-editor', () => this.threatEditorRenderer.render(this.state));
+    measurePerformancePhase('render.units', () => this.unitRenderer.render(this.state.map, visibleUnits, visibleSelectedIds));
+    measurePerformancePhase('render.html-overlay', () => {
+      this.htmlOverlayRenderer.render(this.state, this.locale, this.showHeightLabels);
+    });
+    measurePerformancePhase('render.debug-panel', () => this.updateDebugPanelIfNeeded(false));
     this.performanceMonitor.recordFrame(this.state, this.camera.zoom, performance.now() - renderStartedAt, this.showGrid);
   }
 
@@ -262,7 +281,6 @@ export class PixiTacticalBoardApp {
 
     this.lastMapRenderKey = nextKey;
     this.mapRenderInvalidated = false;
-    this.mapRenderer.container.cacheAsTexture(false);
     this.mapRenderer.render(
       this.state.map,
       this.showGrid,
@@ -270,9 +288,6 @@ export class PixiTacticalBoardApp {
       this.state.editor.layers.objects,
     );
 
-    // The whole map, grid and map objects are static during simulation. One texture is much
-    // cheaper to scale and translate than the original collection of vector Graphics objects.
-    if (!this.state.editor.enabled) this.mapRenderer.container.cacheAsTexture(true);
   }
 
   private getMapRenderKey(): string {

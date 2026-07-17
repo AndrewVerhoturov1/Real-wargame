@@ -146,8 +146,6 @@ export function evaluateScenario(state: SimulationState, profile: NavigationProf
   if (!route.ok) throw new Error(route.reason);
   const directional = getDirectionalTacticalField(state.map, {
     unitId: blue.id,
-    originX: blue.position.x,
-    originY: blue.position.y,
     knowledgeRevision: blue.tacticalKnowledge.revision,
     threats: blue.tacticalKnowledge.threats,
   });
@@ -174,8 +172,7 @@ export type ScenarioEvaluation = ReturnType<typeof evaluateScenario>;
 export function routeContext(unit: UnitModel): TacticalRouteContext {
   return {
     unitId: unit.id,
-    originX: unit.position.x,
-    originY: unit.position.y,
+    posture: unit.behaviorRuntime.posture,
     knowledgeRevision: unit.tacticalKnowledge.revision,
     knownThreats: unit.tacticalKnowledge.threats,
   };

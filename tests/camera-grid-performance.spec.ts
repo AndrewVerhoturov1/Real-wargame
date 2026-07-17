@@ -39,7 +39,13 @@ interface CoverCacheDiagnostics {
 }
 
 interface MapQualityDiagnostics {
-  cacheAsBitmap: boolean;
+  cacheAsTexture: boolean;
+}
+
+interface MapRendererDiagnostics {
+  staticRebuildCount: number;
+  gridBuildCount: number;
+  gridVisibilityChangeCount: number;
 }
 
 test.beforeAll(() => {
@@ -74,6 +80,12 @@ async function readMapQualityDiagnostics(page: Page): Promise<MapQualityDiagnost
   return page.evaluate(() => (
     window as Window & { __realWargameMapQualityDebug?: MapQualityDiagnostics }
   ).__realWargameMapQualityDebug);
+}
+
+async function readMapRendererDiagnostics(page: Page): Promise<MapRendererDiagnostics | undefined> {
+  return page.evaluate(() => (
+    window as Window & { __realWargameMapRendererDebug?: MapRendererDiagnostics }
+  ).__realWargameMapRendererDebug);
 }
 
 async function saveScreenshot(page: Page, name: string): Promise<void> {
@@ -207,7 +219,7 @@ test('danger-layer pointer movement reuses cover analysis and map stays at nativ
   ));
 
   const quality = await readMapQualityDiagnostics(page);
-  expect(quality?.cacheAsBitmap).toBe(false);
+  expect(quality?.cacheAsTexture).toBe(false);
   const before = await readCoverCacheDiagnostics(page);
   expect(before).toBeDefined();
 
@@ -224,6 +236,24 @@ test('danger-layer pointer movement reuses cover analysis and map stays at nativ
   await page.mouse.wheel(0, -900);
   await page.waitForTimeout(200);
   const qualityAfterZoom = await readMapQualityDiagnostics(page);
-  expect(qualityAfterZoom?.cacheAsBitmap).toBe(false);
+  expect(qualityAfterZoom?.cacheAsTexture).toBe(false);
   await saveScreenshot(page, '13-native-map-quality-danger.png');
+});
+
+test('grid toggle changes only the retained grid layer', async ({ page }) => {
+  await page.setViewportSize(VIEWPORT);
+  await page.goto('/');
+  await expect(page.locator('canvas')).toBeVisible();
+  await page.waitForFunction(() => Boolean(
+    (window as Window & { __realWargameMapRendererDebug?: MapRendererDiagnostics }).__realWargameMapRendererDebug,
+  ));
+
+  const before = await readMapRendererDiagnostics(page);
+  await page.locator('#grid-toggle').click();
+  await expect(page.locator('#grid-toggle')).toHaveAttribute('aria-pressed', 'false');
+  const after = await readMapRendererDiagnostics(page);
+
+  expect(after?.staticRebuildCount).toBe(before?.staticRebuildCount);
+  expect(after?.gridBuildCount).toBe(before?.gridBuildCount);
+  expect((after?.gridVisibilityChangeCount ?? 0) - (before?.gridVisibilityChangeCount ?? 0)).toBe(1);
 });

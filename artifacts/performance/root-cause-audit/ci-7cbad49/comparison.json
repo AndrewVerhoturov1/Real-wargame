@@ -1,0 +1,824 @@
+{
+  "before": {
+    "label": "before-base",
+    "reportVersion": "performance-report-v4",
+    "build": {
+      "branch": "real-wargame-preview",
+      "commitSha": "5f097f79e2150764d5dc4ac8cb0c4db6ba90aa74",
+      "buildId": "5f097f79e215-2026-07-16T20:21:30.771Z",
+      "generatedAt": "2026-07-16T20:22:29.500Z",
+      "performanceContractVersion": "performance-report-v4"
+    },
+    "measurementSeconds": 45.01,
+    "sampleCount": 32,
+    "browserEffectiveFps": 1.36,
+    "browserRafMs": {
+      "min": 683.2,
+      "avg": 726.47,
+      "p95": 900,
+      "max": 916.5
+    },
+    "sceneUpdateMs": {
+      "min": 0.4,
+      "avg": 1.77,
+      "p95": 4.3,
+      "max": 4.6
+    },
+    "firstDynamicUpdateMs": 13.7,
+    "dynamicUpdateMs": {
+      "min": 0,
+      "avg": 0.94,
+      "p95": 5.9,
+      "max": 13.7
+    },
+    "steadyDynamicUpdateMs": {
+      "min": 0,
+      "avg": 0.72,
+      "p95": 5.9,
+      "max": 9.3
+    },
+    "framesOver50Ms": 61,
+    "framesOver100Ms": 61,
+    "longTasksOver100Ms": 61,
+    "awareness": {
+      "representation": "raster-sprite",
+      "visible": true,
+      "rebuildCount": 63,
+      "markerUpdateCount": 2,
+      "lastBuildMs": 0.3,
+      "maxBuildMs": 3.4,
+      "displayObjectCount": 3,
+      "rasterWidth": 320,
+      "rasterHeight": 200,
+      "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+      "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+      "lastRequestedCanonicalThreatKey": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+      "lastAppliedCanonicalThreatKey": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+      "lastAppliedFieldIdentity": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0@8ba624bb",
+      "lastAppliedJobId": 63,
+      "lastAppliedRaster": {
+        "width": 320,
+        "height": 200,
+        "digest": "8ba624bb",
+        "fieldIdentity": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0@8ba624bb",
+        "threatIds": [
+          "unknown-fire:1dahzem"
+        ]
+      },
+      "rendererLocalBestSafePositions": [
+        {
+          "position": {
+            "x": 89.5,
+            "y": 118.5
+          },
+          "score": 94.36510869670053,
+          "danger": 16,
+          "expectedProtection": 92,
+          "expectedProtectionAgainstThreat": 0,
+          "protectedAgainstThreatId": null,
+          "concealment": 95,
+          "distanceCells": 15.652475842498529,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        {
+          "position": {
+            "x": 88.5,
+            "y": 118.5
+          },
+          "score": 94.19517442122505,
+          "danger": 16,
+          "expectedProtection": 92,
+          "expectedProtectionAgainstThreat": 0,
+          "protectedAgainstThreatId": null,
+          "concealment": 95,
+          "distanceCells": 16.1245154965971,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        {
+          "position": {
+            "x": 87.5,
+            "y": 118.5
+          },
+          "score": 94.00840588824643,
+          "danger": 15,
+          "expectedProtection": 92,
+          "expectedProtectionAgainstThreat": 0,
+          "protectedAgainstThreatId": null,
+          "concealment": 95,
+          "distanceCells": 16.64331697709324,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        {
+          "position": {
+            "x": 86.5,
+            "y": 118.5
+          },
+          "score": 93.80632580772931,
+          "danger": 15,
+          "expectedProtection": 92,
+          "expectedProtectionAgainstThreat": 0,
+          "protectedAgainstThreatId": null,
+          "concealment": 95,
+          "distanceCells": 17.204650534085253,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        {
+          "position": {
+            "x": 85.5,
+            "y": 118.5
+          },
+          "score": 93.59038222668465,
+          "danger": 15,
+          "expectedProtection": 92,
+          "expectedProtectionAgainstThreat": 0,
+          "protectedAgainstThreatId": null,
+          "concealment": 95,
+          "distanceCells": 17.804493814764857,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        {
+          "position": {
+            "x": 89.5,
+            "y": 121.5
+          },
+          "score": 93.38148052809392,
+          "danger": 16,
+          "expectedProtection": 92,
+          "expectedProtectionAgainstThreat": 0,
+          "protectedAgainstThreatId": null,
+          "concealment": 95,
+          "distanceCells": 18.384776310850235,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        {
+          "position": {
+            "x": 84.5,
+            "y": 118.5
+          },
+          "score": 93.36192799074912,
+          "danger": 15,
+          "expectedProtection": 92,
+          "expectedProtectionAgainstThreat": 0,
+          "protectedAgainstThreatId": null,
+          "concealment": 95,
+          "distanceCells": 18.439088914585774,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        {
+          "position": {
+            "x": 114.5,
+            "y": 98.5
+          },
+          "score": 93.1694802540363,
+          "danger": 0,
+          "expectedProtection": 82,
+          "expectedProtectionAgainstThreat": 0,
+          "protectedAgainstThreatId": null,
+          "concealment": 72,
+          "distanceCells": 18.973665961010276,
+          "sourceRu": "асинхронное поле опасности"
+        }
+      ],
+      "rendererLocalBestWinner": {
+        "position": {
+          "x": 89.5,
+          "y": 118.5
+        },
+        "score": 94.36510869670053,
+        "danger": 16,
+        "expectedProtection": 92,
+        "expectedProtectionAgainstThreat": 0,
+        "protectedAgainstThreatId": null,
+        "concealment": 95,
+        "distanceCells": 15.652475842498529,
+        "sourceRu": "асинхронное поле опасности"
+      },
+      "movement": {
+        "worldRasterBuilds": 63,
+        "ownMovementLocalUpdates": 64,
+        "safePositionLocalScans": 64,
+        "safePositionCellsScanned": 722496,
+        "directionalBasisBuilds": 1,
+        "workerThreatRelativeGeometryBuilds": 1,
+        "workerDirectionalFieldBuilds": 1,
+        "workerDirectionalBasisBuilds": 1,
+        "workerAwarenessGeometryBuilds": 0,
+        "workerAwarenessRescores": 0,
+        "workerJobsStarted": 63,
+        "workerJobsCompleted": 63,
+        "workerJobsCancelled": 0,
+        "workerJobsCoalesced": 1,
+        "workerResultsStaleDropped": 0,
+        "mainThreadRasterSwaps": 63,
+        "finalRefreshRequests": 2,
+        "finalRefreshApplied": 2,
+        "pendingQueueDepth": 0,
+        "maxPendingQueueDepth": 1,
+        "workerInFlight": false,
+        "lastWorkerLatencyMs": 718.5,
+        "maxWorkerLatencyMs": 2485.8,
+        "lastWorkerComputeMs": 6.4,
+        "maxWorkerComputeMs": 777.8,
+        "lastMainThreadApplyMs": 0.3,
+        "maxMainThreadApplyMs": 3.4,
+        "lastLocalUpdateMs": 0.4,
+        "maxLocalUpdateMs": 22.3,
+        "lastRequestedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+        "lastAppliedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+        "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+        "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+        "lastRequestedCanonicalThreatKey": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+        "lastAppliedCanonicalThreatKey": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+        "lastCompletedJobId": 63,
+        "lastAppliedJobId": 63,
+        "lastCompletedJobFinalExact": true,
+        "lastFinalRefreshLatencyMs": 718.5,
+        "maxFinalRefreshLatencyMs": 718.5,
+        "lastAppliedFieldIdentity": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0@8ba624bb",
+        "lastAppliedRasterDigest": "8ba624bb",
+        "lastWorkerError": null,
+        "rawMaxLocalUpdateMs": 22.3,
+        "localUpdateWarmupDiscarded": 1,
+        "postWarmupLocalUpdateCount": 63,
+        "postWarmupLocalUpdateP95Ms": 0.4
+      }
+    },
+    "computation": {
+      "threatRelativeCover": {
+        "geometryBuildCount": 1,
+        "cacheHitCount": 0,
+        "fullMapScanCount": 1,
+        "objectChecks": 192000,
+        "forestMapReads": 63999,
+        "lastBuildMs": 21.400000000023283,
+        "evictionCount": 0,
+        "lastKey": "320:200:2:1190:1025:standing:2:1:1",
+        "cachedFieldCount": 1
+      },
+      "directionalTactical": {
+        "buildCount": 1,
+        "cacheHitCount": 1,
+        "fullMapScanCount": 1,
+        "lastBuildMs": 57.59999999997672,
+        "lastKey": "320:200:2:2:1#unknown-fire:1dahzem:119:102.5:1",
+        "cachedFieldCount": 1,
+        "basisBuildCount": 1
+      },
+      "awarenessStatic": {
+        "buildCount": 1,
+        "cacheHitCount": 61,
+        "lastBuildMs": 50.40000000002328,
+        "lastCandidateChecks": 119,
+        "key": "320:200:2:standing:1:2:1:2"
+      },
+      "awarenessDynamicRescore": {
+        "geometryBuildCount": 0,
+        "dynamicRescoreCount": 0,
+        "rescoredCellCount": 0,
+        "lastGeometryBuildMs": 0,
+        "lastRescoreMs": 0,
+        "maxRescoreMs": 0,
+        "geometryReady": false,
+        "geometryKey": ""
+      },
+      "soldierDangerField": {
+        "geometryBuildCount": 1,
+        "fieldBuildCount": 9,
+        "geometryCacheHitCount": 61,
+        "fieldCacheHitCount": 53,
+        "fullMapScanCount": 1,
+        "lastGeometryKey": "standing#320:200:2:standing:1:2:1:2#320:200:2:2:1#standing#320:200:2:standing:1:2:1:2#320:200:2:2:1#visibility-geometry:v1:119.000:102.500:1.400:1.400:68.000:3:1#unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:180:58:60:0:70:8",
+        "lastFieldKey": "standing#320:200:2:standing:1:2:1:2#320:200:2:2:1#standing#320:200:2:standing:1:2:1:2#320:200:2:2:1#visibility-geometry:v1:119.000:102.500:1.400:1.400:68.000:3:1#unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:180:58:60:0:70:8#unknown-fire:1dahzem:73:48:52:independent",
+        "cachedGeometryCount": 1,
+        "cachedThreatGeometryCount": 1,
+        "cachedFieldCount": 9,
+        "retainedThreatGeometryBytes": 576000,
+        "retainedFieldBytes": 4032000,
+        "retainedTypedArrayBytes": 4608000
+      },
+      "awarenessMovement": {
+        "worldRasterBuilds": 63,
+        "ownMovementLocalUpdates": 64,
+        "safePositionLocalScans": 64,
+        "safePositionCellsScanned": 722496,
+        "directionalBasisBuilds": 1,
+        "workerThreatRelativeGeometryBuilds": 1,
+        "workerDirectionalFieldBuilds": 1,
+        "workerDirectionalBasisBuilds": 1,
+        "workerAwarenessGeometryBuilds": 0,
+        "workerAwarenessRescores": 0,
+        "workerJobsStarted": 63,
+        "workerJobsCompleted": 63,
+        "workerJobsCancelled": 0,
+        "workerJobsCoalesced": 1,
+        "workerResultsStaleDropped": 0,
+        "mainThreadRasterSwaps": 63,
+        "finalRefreshRequests": 2,
+        "finalRefreshApplied": 2,
+        "pendingQueueDepth": 0,
+        "maxPendingQueueDepth": 1,
+        "workerInFlight": false,
+        "lastWorkerLatencyMs": 718.5,
+        "maxWorkerLatencyMs": 2485.8,
+        "lastWorkerComputeMs": 6.4,
+        "maxWorkerComputeMs": 777.8,
+        "lastMainThreadApplyMs": 0.3,
+        "maxMainThreadApplyMs": 3.4,
+        "lastLocalUpdateMs": 0.4,
+        "maxLocalUpdateMs": 22.3,
+        "lastRequestedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+        "lastAppliedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+        "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+        "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:2;unit:soldier_1;posture:standing;canonicalThreats:directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+        "lastRequestedCanonicalThreatKey": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+        "lastAppliedCanonicalThreatKey": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0",
+        "lastCompletedJobId": 63,
+        "lastAppliedJobId": 63,
+        "lastCompletedJobFinalExact": true,
+        "lastFinalRefreshLatencyMs": 718.5,
+        "maxFinalRefreshLatencyMs": 718.5,
+        "lastAppliedFieldIdentity": "directional_evidence:unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:73:48:180:58:60:0:70:50:8:independent:fire_pressure:0@8ba624bb",
+        "lastAppliedRasterDigest": "8ba624bb",
+        "lastWorkerError": null,
+        "rawMaxLocalUpdateMs": 22.3,
+        "localUpdateWarmupDiscarded": 1,
+        "postWarmupLocalUpdateCount": 63,
+        "postWarmupLocalUpdateP95Ms": 0.4,
+        "mainThreadSoldierDangerField": {
+          "geometryBuildCount": 1,
+          "fieldBuildCount": 9,
+          "geometryCacheHitCount": 61,
+          "fieldCacheHitCount": 53,
+          "fullMapScanCount": 1,
+          "lastGeometryKey": "standing#320:200:2:standing:1:2:1:2#320:200:2:2:1#standing#320:200:2:standing:1:2:1:2#320:200:2:2:1#visibility-geometry:v1:119.000:102.500:1.400:1.400:68.000:3:1#unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:180:58:60:0:70:8",
+          "lastFieldKey": "standing#320:200:2:standing:1:2:1:2#320:200:2:2:1#standing#320:200:2:standing:1:2:1:2#320:200:2:2:1#visibility-geometry:v1:119.000:102.500:1.400:1.400:68.000:3:1#unknown-fire:1dahzem:directional_fire:119:102.45:0:0:0:0:180:58:60:0:70:8#unknown-fire:1dahzem:73:48:52:independent",
+          "cachedGeometryCount": 1,
+          "cachedThreatGeometryCount": 1,
+          "cachedFieldCount": 9,
+          "retainedThreatGeometryBytes": 576000,
+          "retainedFieldBytes": 4032000,
+          "retainedTypedArrayBytes": 4608000
+        }
+      }
+    },
+    "soldierDangerField": null
+  },
+  "after": {
+    "label": "after-head",
+    "reportVersion": "performance-report-v4",
+    "build": {
+      "branch": "agent/performance-regression-root-cause-audit-v1",
+      "commitSha": "7cbad49df0be8fd73c7b67655a4d0f85913757d7",
+      "buildId": "7cbad49df0be-2026-07-16T20:22:36.670Z",
+      "generatedAt": "2026-07-16T20:23:39.709Z",
+      "performanceContractVersion": "performance-report-v4"
+    },
+    "measurementSeconds": 46.52,
+    "sampleCount": 29,
+    "browserEffectiveFps": 1.31,
+    "browserRafMs": {
+      "min": 733.2,
+      "avg": 750.52,
+      "p95": 799.9,
+      "max": 816.6
+    },
+    "sceneUpdateMs": {
+      "min": 0.3,
+      "avg": 1.65,
+      "p95": 3.4,
+      "max": 7.7
+    },
+    "firstDynamicUpdateMs": 8.2,
+    "dynamicUpdateMs": {
+      "min": 0,
+      "avg": 1.38,
+      "p95": 6.8,
+      "max": 16.7
+    },
+    "steadyDynamicUpdateMs": {
+      "min": 0,
+      "avg": 1.26,
+      "p95": 6.8,
+      "max": 16.7
+    },
+    "framesOver50Ms": 61,
+    "framesOver100Ms": 61,
+    "longTasksOver100Ms": 61,
+    "awareness": {
+      "representation": "raster-sprite",
+      "visible": true,
+      "rebuildCount": 62,
+      "markerUpdateCount": 2,
+      "lastBuildMs": 0.5,
+      "maxBuildMs": 0.9,
+      "displayObjectCount": 3,
+      "rasterWidth": 320,
+      "rasterHeight": 200,
+      "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:4;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0",
+      "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:4;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0",
+      "lastRequestedCanonicalThreatKey": "unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0",
+      "lastAppliedCanonicalThreatKey": "unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0",
+      "lastAppliedFieldIdentity": "unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0@e113eaae",
+      "lastAppliedJobId": 64,
+      "lastAppliedRaster": {
+        "width": 320,
+        "height": 200,
+        "digest": "e113eaae",
+        "fieldIdentity": "unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0@e113eaae",
+        "threatIds": [
+          "unit:visual-parity-rifle-primary",
+          "unit:visual-parity-rifle-weaker",
+          "unit:visual-parity-machine-gun"
+        ]
+      },
+      "rendererLocalBestSafePositions": [
+        {
+          "position": {
+            "x": 98.5,
+            "y": 105.5
+          },
+          "score": 99.19501552810007,
+          "danger": 0,
+          "expectedProtection": 95,
+          "expectedProtectionAgainstThreat": 0,
+          "protectedAgainstThreatId": null,
+          "concealment": 10,
+          "distanceCells": 2.23606797749979,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        {
+          "position": {
+            "x": 99.5,
+            "y": 105.5
+          },
+          "score": 98.86158004233938,
+          "danger": 0,
+          "expectedProtection": 95,
+          "expectedProtectionAgainstThreat": 0,
+          "protectedAgainstThreatId": null,
+          "concealment": 10,
+          "distanceCells": 3.1622776601683795,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        {
+          "position": {
+            "x": 98.5,
+            "y": 99.5
+          },
+          "score": 98.06134066943157,
+          "danger": 0,
+          "expectedProtection": 95,
+          "expectedProtectionAgainstThreat": 0,
+          "protectedAgainstThreatId": null,
+          "concealment": 10,
+          "distanceCells": 5.385164807134504,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        {
+          "position": {
+            "x": 99.5,
+            "y": 99.5
+          },
+          "score": 97.9008573178557,
+          "danger": 0,
+          "expectedProtection": 95,
+          "expectedProtectionAgainstThreat": 0,
+          "protectedAgainstThreatId": null,
+          "concealment": 10,
+          "distanceCells": 5.830951894845301,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        {
+          "position": {
+            "x": 89.5,
+            "y": 118.5
+          },
+          "score": 94.36510869670053,
+          "danger": 0,
+          "expectedProtection": 92,
+          "expectedProtectionAgainstThreat": 0,
+          "protectedAgainstThreatId": null,
+          "concealment": 95,
+          "distanceCells": 15.652475842498529,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        {
+          "position": {
+            "x": 88.5,
+            "y": 118.5
+          },
+          "score": 94.19517442122505,
+          "danger": 0,
+          "expectedProtection": 92,
+          "expectedProtectionAgainstThreat": 0,
+          "protectedAgainstThreatId": null,
+          "concealment": 95,
+          "distanceCells": 16.1245154965971,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        {
+          "position": {
+            "x": 87.5,
+            "y": 118.5
+          },
+          "score": 94.00840588824643,
+          "danger": 0,
+          "expectedProtection": 92,
+          "expectedProtectionAgainstThreat": 0,
+          "protectedAgainstThreatId": null,
+          "concealment": 95,
+          "distanceCells": 16.64331697709324,
+          "sourceRu": "асинхронное поле опасности"
+        },
+        {
+          "position": {
+            "x": 86.5,
+            "y": 118.5
+          },
+          "score": 93.80632580772931,
+          "danger": 0,
+          "expectedProtection": 92,
+          "expectedProtectionAgainstThreat": 0,
+          "protectedAgainstThreatId": null,
+          "concealment": 95,
+          "distanceCells": 17.204650534085253,
+          "sourceRu": "асинхронное поле опасности"
+        }
+      ],
+      "rendererLocalBestWinner": {
+        "position": {
+          "x": 98.5,
+          "y": 105.5
+        },
+        "score": 99.19501552810007,
+        "danger": 0,
+        "expectedProtection": 95,
+        "expectedProtectionAgainstThreat": 0,
+        "protectedAgainstThreatId": null,
+        "concealment": 10,
+        "distanceCells": 2.23606797749979,
+        "sourceRu": "асинхронное поле опасности"
+      },
+      "movement": {
+        "worldRasterBuilds": 62,
+        "ownMovementLocalUpdates": 63,
+        "safePositionLocalScans": 63,
+        "safePositionCellsScanned": 711207,
+        "directionalBasisBuilds": 1,
+        "workerThreatRelativeGeometryBuilds": 1,
+        "workerDirectionalFieldBuilds": 10,
+        "workerDirectionalBasisBuilds": 1,
+        "workerAwarenessGeometryBuilds": 0,
+        "workerAwarenessRescores": 0,
+        "workerJobsStarted": 64,
+        "workerJobsCompleted": 64,
+        "workerJobsCancelled": 1,
+        "workerJobsCoalesced": 4,
+        "workerResultsStaleDropped": 2,
+        "mainThreadRasterSwaps": 62,
+        "finalRefreshRequests": 3,
+        "finalRefreshApplied": 2,
+        "pendingQueueDepth": 0,
+        "maxPendingQueueDepth": 1,
+        "workerInFlight": false,
+        "lastWorkerLatencyMs": 734,
+        "maxWorkerLatencyMs": 3116.3,
+        "lastWorkerComputeMs": 3.8,
+        "maxWorkerComputeMs": 627.1,
+        "lastMainThreadApplyMs": 0.5,
+        "maxMainThreadApplyMs": 0.9,
+        "lastLocalUpdateMs": 0.1,
+        "maxLocalUpdateMs": 2.9,
+        "lastRequestedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:4;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0",
+        "lastAppliedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:4;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0",
+        "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:4;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0",
+        "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:4;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0",
+        "lastRequestedCanonicalThreatKey": "unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0",
+        "lastAppliedCanonicalThreatKey": "unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0",
+        "lastCompletedJobId": 64,
+        "lastAppliedJobId": 64,
+        "lastCompletedJobFinalExact": true,
+        "lastFinalRefreshLatencyMs": 734,
+        "maxFinalRefreshLatencyMs": 811.3,
+        "lastAppliedFieldIdentity": "unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0@e113eaae",
+        "lastAppliedRasterDigest": "e113eaae",
+        "lastWorkerError": null,
+        "rawMaxLocalUpdateMs": 13.8,
+        "localUpdateWarmupDiscarded": 1,
+        "postWarmupLocalUpdateCount": 62,
+        "postWarmupLocalUpdateP95Ms": 0.4
+      }
+    },
+    "computation": {
+      "threatRelativeCover": {
+        "geometryBuildCount": 2,
+        "staticBuildCount": 1,
+        "cacheHitCount": 5,
+        "fullMapScanCount": 2,
+        "objectChecks": 108725,
+        "forestMapReads": 0,
+        "forestDensitySamples": 127998,
+        "lastBuildMs": 25.400000000023283,
+        "evictionCount": 0,
+        "lastKey": "320:200:2:2339:1045:standing:4:1:1",
+        "cachedFieldCount": 2
+      },
+      "directionalTactical": {
+        "buildCount": 3,
+        "cacheHitCount": 3,
+        "fullMapScanCount": 3,
+        "lastBuildMs": 53.09999999997672,
+        "lastKey": "320:200:2:2:1#unit:visual-parity-rifle-primary:233.5:104.5:0.3869#unit:visual-parity-rifle-weaker:233.5:104.5:0.2619#unit:visual-parity-machine-gun:233.5:104.5:0.3512",
+        "cachedFieldCount": 3,
+        "basisBuildCount": 1
+      },
+      "awarenessStatic": {
+        "buildCount": 1,
+        "cacheHitCount": 66,
+        "lastBuildMs": 53.5,
+        "lastCandidateChecks": 133,
+        "key": "320:200:2:standing:1:2:1:4"
+      },
+      "awarenessDynamicRescore": {
+        "geometryBuildCount": 0,
+        "dynamicRescoreCount": 0,
+        "rescoredCellCount": 0,
+        "lastGeometryBuildMs": 0,
+        "lastRescoreMs": 0,
+        "maxRescoreMs": 0,
+        "geometryReady": false,
+        "geometryKey": ""
+      },
+      "soldierDangerField": {
+        "geometryBuildCount": 7,
+        "fieldBuildCount": 13,
+        "geometryCacheHitCount": 188,
+        "fieldCacheHitCount": 54,
+        "fullMapScanCount": 7,
+        "lastGeometryKey": "standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.750:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-rifle-weaker:directional_fire:233.85000000000002:104.5:0:0:0:0:180:150:80:0:20:0",
+        "lastFieldKey": "standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.750:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-rifle-weaker:directional_fire:233.85000000000002:104.5:0:0:0:0:180:150:80:0:20:0#unit:visual-parity-machine-gun:58:60:52:machine_gun_fire|unit:visual-parity-rifle-primary:73:48:52:rifle_fire|unit:visual-parity-rifle-weaker:83:54:73:rifle_fire",
+        "cachedGeometryCount": 7,
+        "cachedThreatGeometryCount": 7,
+        "cachedFieldCount": 12,
+        "retainedThreatGeometryBytes": 4032000,
+        "retainedFieldBytes": 5376000,
+        "retainedTypedArrayBytes": 9408000
+      },
+      "awarenessMovement": {
+        "worldRasterBuilds": 62,
+        "ownMovementLocalUpdates": 63,
+        "safePositionLocalScans": 63,
+        "safePositionCellsScanned": 711207,
+        "directionalBasisBuilds": 1,
+        "workerThreatRelativeGeometryBuilds": 1,
+        "workerDirectionalFieldBuilds": 10,
+        "workerDirectionalBasisBuilds": 1,
+        "workerAwarenessGeometryBuilds": 0,
+        "workerAwarenessRescores": 0,
+        "workerJobsStarted": 64,
+        "workerJobsCompleted": 64,
+        "workerJobsCancelled": 1,
+        "workerJobsCoalesced": 4,
+        "workerResultsStaleDropped": 2,
+        "mainThreadRasterSwaps": 62,
+        "finalRefreshRequests": 3,
+        "finalRefreshApplied": 2,
+        "pendingQueueDepth": 0,
+        "maxPendingQueueDepth": 1,
+        "workerInFlight": false,
+        "lastWorkerLatencyMs": 734,
+        "maxWorkerLatencyMs": 3116.3,
+        "lastWorkerComputeMs": 3.8,
+        "maxWorkerComputeMs": 627.1,
+        "lastMainThreadApplyMs": 0.5,
+        "maxMainThreadApplyMs": 0.9,
+        "lastLocalUpdateMs": 0.1,
+        "maxLocalUpdateMs": 2.9,
+        "lastRequestedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:4;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0",
+        "lastAppliedRasterKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:4;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0",
+        "lastRequestedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:4;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0",
+        "lastAppliedWorldKey": "map:1;size:320x200;cellSize:4.8;meters:2;terrain:1;height:2;forest:1;objects:4;unit:soldier_1;posture:standing;canonicalThreats:unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0",
+        "lastRequestedCanonicalThreatKey": "unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0",
+        "lastAppliedCanonicalThreatKey": "unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0",
+        "lastCompletedJobId": 64,
+        "lastAppliedJobId": 64,
+        "lastCompletedJobFinalExact": true,
+        "lastFinalRefreshLatencyMs": 734,
+        "maxFinalRefreshLatencyMs": 811.3,
+        "lastAppliedFieldIdentity": "unit_contact:unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:70:48:0:360:125:0:20:50:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:80:54:0:360:125:0:20:70:0:rifle_fire:seen:0|unit_contact:unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:55:60:0:360:125:0:20:50:0:machine_gun_fire:seen:0@e113eaae",
+        "lastAppliedRasterDigest": "e113eaae",
+        "lastWorkerError": null,
+        "rawMaxLocalUpdateMs": 13.8,
+        "localUpdateWarmupDiscarded": 1,
+        "postWarmupLocalUpdateCount": 62,
+        "postWarmupLocalUpdateP95Ms": 0.4,
+        "mainThreadSoldierDangerField": {
+          "geometryBuildCount": 7,
+          "fieldBuildCount": 13,
+          "geometryCacheHitCount": 188,
+          "fieldCacheHitCount": 54,
+          "fullMapScanCount": 7,
+          "lastGeometryKey": "standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.750:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-rifle-weaker:directional_fire:233.85000000000002:104.5:0:0:0:0:180:150:80:0:20:0",
+          "lastFieldKey": "standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.750:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-rifle-weaker:directional_fire:233.85000000000002:104.5:0:0:0:0:180:150:80:0:20:0#unit:visual-parity-machine-gun:58:60:52:machine_gun_fire|unit:visual-parity-rifle-primary:73:48:52:rifle_fire|unit:visual-parity-rifle-weaker:83:54:73:rifle_fire",
+          "cachedGeometryCount": 7,
+          "cachedThreatGeometryCount": 7,
+          "cachedFieldCount": 12,
+          "retainedThreatGeometryBytes": 4032000,
+          "retainedFieldBytes": 5376000,
+          "retainedTypedArrayBytes": 9408000
+        }
+      }
+    },
+    "soldierDangerField": {
+      "classifiedThreatCount": 3,
+      "initial": {
+        "geometryBuildCount": 6,
+        "fieldBuildCount": 4,
+        "geometryCacheHitCount": 6,
+        "fieldCacheHitCount": 2,
+        "fullMapScanCount": 6,
+        "lastGeometryKey": "standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:125.000:5:1#unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:0:360:125:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:125.000:5:1#unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:0:360:125:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:125.000:5:1#unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:0:360:125:0:20:0",
+        "lastFieldKey": "standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:125.000:5:1#unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:0:360:125:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:125.000:5:1#unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:0:360:125:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:125.000:5:1#unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:0:360:125:0:20:0#unit:visual-parity-machine-gun:65:58:90:machine_gun_fire|unit:visual-parity-rifle-primary:75:34:90:rifle_fire|unit:visual-parity-rifle-weaker:40:22:90:rifle_fire",
+        "cachedGeometryCount": 6,
+        "cachedThreatGeometryCount": 6,
+        "cachedFieldCount": 4,
+        "retainedThreatGeometryBytes": 3456000,
+        "retainedFieldBytes": 1792000,
+        "retainedTypedArrayBytes": 5248000
+      },
+      "afterRescore": {
+        "geometryBuildCount": 6,
+        "fieldBuildCount": 12,
+        "geometryCacheHitCount": 186,
+        "fieldCacheHitCount": 54,
+        "fullMapScanCount": 6,
+        "lastGeometryKey": "standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0",
+        "lastFieldKey": "standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-rifle-weaker:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0#unit:visual-parity-machine-gun:58:60:52:machine_gun_fire|unit:visual-parity-rifle-primary:73:48:52:rifle_fire|unit:visual-parity-rifle-weaker:83:54:73:rifle_fire",
+        "cachedGeometryCount": 6,
+        "cachedThreatGeometryCount": 6,
+        "cachedFieldCount": 12,
+        "retainedThreatGeometryBytes": 3456000,
+        "retainedFieldBytes": 5376000,
+        "retainedTypedArrayBytes": 8832000
+      },
+      "afterGeometryMove": {
+        "geometryBuildCount": 7,
+        "fieldBuildCount": 13,
+        "geometryCacheHitCount": 188,
+        "fieldCacheHitCount": 54,
+        "fullMapScanCount": 7,
+        "lastGeometryKey": "standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.750:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-rifle-weaker:directional_fire:233.85000000000002:104.5:0:0:0:0:180:150:80:0:20:0",
+        "lastFieldKey": "standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-machine-gun:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.500:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-rifle-primary:directional_fire:233.5:104.5:0:0:0:0:180:150:80:0:20:0|standing#320:200:2:standing:1:2:1:4#320:200:2:2:1#visibility-geometry:v1:233.750:104.500:1.400:1.400:80.000:5:1#unit:visual-parity-rifle-weaker:directional_fire:233.85000000000002:104.5:0:0:0:0:180:150:80:0:20:0#unit:visual-parity-machine-gun:58:60:52:machine_gun_fire|unit:visual-parity-rifle-primary:73:48:52:rifle_fire|unit:visual-parity-rifle-weaker:83:54:73:rifle_fire",
+        "cachedGeometryCount": 7,
+        "cachedThreatGeometryCount": 7,
+        "cachedFieldCount": 12,
+        "retainedThreatGeometryBytes": 4032000,
+        "retainedFieldBytes": 5376000,
+        "retainedTypedArrayBytes": 9408000
+      },
+      "rescoreGeometryBuildDelta": 0,
+      "rescoreFieldBuildDelta": 8,
+      "rescoreFullMapScanDelta": 0,
+      "geometryMoveBuildDelta": 1,
+      "geometryMoveFieldBuildDelta": 1,
+      "geometryMoveFullMapScanDelta": 1,
+      "maximumRetainedTypedArrayBytes": 19200000
+    }
+  },
+  "reductions": {
+    "coldBuildPercent": 73.53,
+    "steadyDynamicUpdateP95Percent": -15.25,
+    "steadyDynamicUpdateMaxPercent": -79.57,
+    "sceneUpdateP95Percent": 20.93
+  },
+  "acceptance": {
+    "sceneUpdateP95AtMost10Ms": true,
+    "noRepeatedSceneUpdateOver50Ms": true,
+    "steadyDynamicMutationP95AtMost10Ms": true,
+    "noSteadyDynamicMutationOver50Ms": true,
+    "coldBuildAccepted": true,
+    "oneThreatRelativeCoverScanPerPreparedThreat": true,
+    "oneDirectionalSectorBasisBuild": true,
+    "oneStaticAwarenessBuild": true,
+    "severalClassifiedThreatsExercised": true,
+    "initialThreatGeometriesPrepared": true,
+    "confidenceRescoreReusesGeometry": true,
+    "confidenceRescoreAvoidsGeometryScans": true,
+    "confidenceRescoreBuildsScoredFields": true,
+    "oneMovedThreatBuildsOneGeometry": true,
+    "oneMovedThreatPerformsOneGeometryScan": true,
+    "movedThreatBuildsScoredField": true,
+    "boundedThreatGeometryCache": true,
+    "boundedScoredFieldCache": true,
+    "retainedTypedArraysWithinDeclaredBound": true,
+    "performanceReportPublishesExactDangerCounters": true
+  },
+  "rendererTelemetry": {
+    "status": "diagnostic-only-on-github-hosted-headless-chromium",
+    "reason": "The GitHub runner has no representative hardware WebGL path. RAF/FPS/long-task values are retained for A/B evidence but do not gate the CPU danger-layer contract.",
+    "browserEffectiveFpsAtLeast50": false,
+    "browserRafP95AtMost22Ms": false,
+    "noSteadyLongTaskOver100Ms": false
+  },
+  "accepted": true
+}

@@ -39,8 +39,10 @@ assert.match(routeCost, /movement\.tacticalConcealment/);
 assert.doesNotMatch(routeCost, /cell\.forest >= 2 \? 0\.6/);
 
 const threatRelativeCover = source('src/core/cover/ThreatRelativeCoverGeometry.ts');
-assert.match(threatRelativeCover, /resolveCellVegetationDefinition/);
+assert.match(threatRelativeCover, /getVisibilityStaticGrid/);
+assert.match(threatRelativeCover, /resolveVegetationDefinition/);
 assert.match(threatRelativeCover, /fire\.densityWeight/);
+assert.doesNotMatch(threatRelativeCover, /map\.cells\[previousIndex\]/);
 assert.doesNotMatch(threatRelativeCover, /forest === 2\) return 1\.7|forest === 1\) return 0\.8/);
 
 const currentView = source('src/core/visibility/SelectedUnitVisibilityField.ts');

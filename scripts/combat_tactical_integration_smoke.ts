@@ -250,7 +250,7 @@ function verifyRealThreatChangesRouteCostAndReplan(): void {
   const goal = { x: 14.5, y: 4.5 };
   const fireSectorCell = { x: 4, y: 4 };
 
-  const beforeContext = { unitId: blue.id, originX: blue.position.x, originY: blue.position.y, knowledgeRevision: 0, knownThreats: [] };
+  const beforeContext = { unitId: blue.id, posture: blue.behaviorRuntime.posture, knowledgeRevision: 0, knownThreats: [] };
   const beforeFields = getRouteCostFields(state.map, profile, beforeContext, cache);
   const beforeDanger = readRouteCostCell(beforeFields, fireSectorCell.x, fireSectorCell.y)?.dangerCost ?? 0;
   const beforeRoute = findGridPath(state.map, start, goal, { navigationProfile: profile, tacticalContext: beforeContext });
@@ -260,8 +260,7 @@ function verifyRealThreatChangesRouteCostAndReplan(): void {
   syncSoldierThreatMemory(state, blue, 0.1);
   const afterContext = {
     unitId: blue.id,
-    originX: blue.position.x,
-    originY: blue.position.y,
+    posture: blue.behaviorRuntime.posture,
     knowledgeRevision: blue.tacticalKnowledge.revision,
     knownThreats: blue.tacticalKnowledge.threats,
   };
