@@ -177,7 +177,7 @@ function readActiveSubgraphId(value: unknown): string | null {
     : null;
 }
 
-function describeEffects(effects: readonly Array<{ readonly type: string; readonly action?: string }>): string[] {
+function describeEffects(effects: ReadonlyArray<{ readonly type: string; readonly action?: string }>): string[] {
   return effects.map((effect) => effect.type === 'set_action' && effect.action
     ? `${effect.type}:${effect.action}`
     : effect.type);

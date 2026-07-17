@@ -1,3 +1,4 @@
+import { getAiSchedulerPerformanceDiagnostics } from '../ai/AiSchedulerPerformanceDiagnostics';
 import { getThreatRelativeCoverFieldDiagnostics } from '../cover/ThreatRelativeCoverField';
 import { getAwarenessDynamicRescoreDiagnostics } from '../knowledge/AwarenessDynamicRescore';
 import { getAwarenessStaticFieldDiagnostics } from '../knowledge/AwarenessStaticField';
@@ -13,7 +14,9 @@ import { getSimulationLayerState } from '../ui/RuntimeUiState';
 import { getAwarenessMovementDiagnostics } from './AwarenessMovementDiagnostics';
 import { getRealWargameBuildIdentity, PERFORMANCE_CONTRACT_VERSION } from './BuildIdentity';
 import {
+  getPerformancePhaseContextualEvents,
   getPerformancePhaseRuntimeDiagnostics,
+  type PerformancePhaseContext,
   type PerformancePhaseRuntimeDiagnostic,
 } from './PerformancePhases';
 
@@ -101,6 +104,13 @@ export interface ApplicationIntervalAttributionDiagnostic {
   readonly overlapDurationMs: number;
 }
 
+export interface ContextualPerformancePhaseEventDiagnostic {
+  readonly name: string;
+  readonly startMs: number;
+  readonly durationMs: number;
+  readonly context: PerformancePhaseContext | null;
+}
+
 export interface PerformanceReport {
   version: typeof PERFORMANCE_CONTRACT_VERSION;
   build: ReturnType<typeof getRealWargameBuildIdentity>;
@@ -117,6 +127,7 @@ export interface PerformanceReport {
   longAnimationFrames: LongAnimationFrameDiagnostic[];
   performancePhaseMeasures: PerformancePhaseMeasureDiagnostic[];
   performancePhaseAggregates: PerformancePhaseAggregateDiagnostic[];
+  contextualPerformancePhaseEvents: ContextualPerformancePhaseEventDiagnostic[];
   applicationAttribution: {
     longTasks: ApplicationIntervalAttributionDiagnostic[];
     longAnimationFrames: ApplicationIntervalAttributionDiagnostic[];
@@ -261,6 +272,12 @@ export class PerformanceMonitor {
       this.longTasks,
       this.longAnimationFrames,
     );
+    const contextualPerformancePhaseEvents = getPerformancePhaseContextualEvents().map((event) => ({
+      name: event.name,
+      startMs: roundOne(event.startTimeMs - this.startedAt),
+      durationMs: roundTwo(event.durationMs),
+      context: event.context ? { ...event.context } : null,
+    }));
     const applicationLongTasks = buildApplicationIntervalAttribution(this.longTasks, performancePhaseMeasures);
     const applicationLongAnimationFrames = buildApplicationIntervalAttribution(
       this.longAnimationFrames,
@@ -306,6 +323,7 @@ export class PerformanceMonitor {
         selectedUnitId: state.selectedUnitId,
       },
       computation: {
+        aiScheduler: getAiSchedulerPerformanceDiagnostics(),
         threatRelativeCover: getThreatRelativeCoverFieldDiagnostics(state.map),
         directionalTactical: getDirectionalTacticalFieldDiagnostics(state.map),
         visibilityGeometry: getVisibilityGeometryFieldDiagnostics(state.map),
@@ -365,6 +383,7 @@ export class PerformanceMonitor {
       longAnimationFrames: this.longAnimationFrames.map(cloneLongAnimationFrame),
       performancePhaseMeasures,
       performancePhaseAggregates,
+      contextualPerformancePhaseEvents,
       applicationAttribution: {
         longTasks: applicationLongTasks,
         longAnimationFrames: applicationLongAnimationFrames,
