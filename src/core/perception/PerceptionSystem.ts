@@ -34,6 +34,7 @@ import { evaluateVisualSignal } from './VisualSignal';
 export { getPerceptionDiagnostics } from './PerceptionDiagnostics';
 
 const REAR_SECTOR_START_DEGREES = 135;
+const perceptionStimulusCursorByState = new WeakMap<SimulationState, Map<string, number>>();
 
 interface DueAttentionChecks extends Record<AttentionZone, boolean> {
   rear: boolean;
@@ -87,13 +88,17 @@ export function tickUnitPerception(
   const due = resolveDueZones(unit, now);
   const updatedContacts = new Set<string>();
   const stimuli = buildPerceptionStimuli(state, unit);
+  const stimulusCursor = getStimulusCursor(state, unit.id, stimuli.length);
+  let firstDeferredStimulusIndex: number | null = null;
   const broadPhaseCells = Math.max(
     1,
     unit.attentionSettings.vision.maximumVisualRangeMeters / Math.max(0.001, state.map.metersPerCell),
   );
   const profile = effectiveProfile(unit);
 
-  for (const stimulus of stimuli) {
+  for (let offset = 0; offset < stimuli.length; offset += 1) {
+    const stimulusIndex = (stimulusCursor + offset) % stimuli.length;
+    const stimulus = stimuli[stimulusIndex]!;
     const distanceCells = distance(unit.position, stimulus.position);
     if (distanceCells > broadPhaseCells) continue;
     if (diagnostics) diagnostics.candidateCount += 1;
@@ -145,6 +150,7 @@ export function tickUnitPerception(
       attention,
     );
     if (!visibility) {
+      if (firstDeferredStimulusIndex === null) firstDeferredStimulusIndex = stimulusIndex;
       preserveExistingContact(unit, stimulus.id, updatedContacts);
       continue;
     }
@@ -185,6 +191,12 @@ export function tickUnitPerception(
     if (diagnostics) diagnostics.contactUpdateCount += 1;
   }
 
+  setStimulusCursor(
+    state,
+    unit.id,
+    stimuli.length,
+    firstDeferredStimulusIndex ?? stimulusCursor + 1,
+  );
   processSoundEvents(state, unit, updatedContacts);
   decayContacts(state, unit, updatedContacts, deltaSeconds);
   scheduleNextChecks(unit, now, due);
@@ -197,6 +209,31 @@ export function getBestPerceptionContact(unit: UnitModel): PerceptionContactMemo
     || right.confidence - left.confidence
     || right.lastUpdatedSeconds - left.lastUpdatedSeconds
   ))[0] ?? null;
+}
+
+function getStimulusCursor(state: SimulationState, unitId: string, stimulusCount: number): number {
+  if (stimulusCount <= 0) return 0;
+  let cursors = perceptionStimulusCursorByState.get(state);
+  if (!cursors) {
+    cursors = new Map();
+    perceptionStimulusCursorByState.set(state, cursors);
+  }
+  return (cursors.get(unitId) ?? 0) % stimulusCount;
+}
+
+function setStimulusCursor(
+  state: SimulationState,
+  unitId: string,
+  stimulusCount: number,
+  nextCursor: number,
+): void {
+  if (stimulusCount <= 0) return;
+  let cursors = perceptionStimulusCursorByState.get(state);
+  if (!cursors) {
+    cursors = new Map();
+    perceptionStimulusCursorByState.set(state, cursors);
+  }
+  cursors.set(unitId, ((nextCursor % stimulusCount) + stimulusCount) % stimulusCount);
 }
 
 function preserveExistingContact(

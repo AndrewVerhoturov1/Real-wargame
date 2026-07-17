@@ -117,4 +117,60 @@ for (const unit of stagedState.units) {
   );
 }
 
-console.log(`Perception performance smoke passed: ${diagnostics.losCalculationCount} LOS calculations for ${diagnostics.candidateCount} candidates across 600 ticks; ${staging.preparationCount} cold geometries staged fairly with max ${staging.maxPreparationsPerStep} per step.`);
+const mixedObserver: UnitData = {
+  ...observer,
+  id: 'mixed-observer',
+  side: 'blue',
+  x: 70.5,
+  y: 80.5,
+  attention: {
+    defaultMode: 'observe',
+    profiles: {
+      observe: {
+        focusAngleDegrees: 180,
+        directAngleDegrees: 360,
+        focusCheckIntervalSeconds: 0.05,
+        directCheckIntervalSeconds: 0.05,
+        peripheralCheckIntervalSeconds: 0.05,
+      },
+    },
+    vision: { maximumVisualRangeMeters: 1_000 },
+  },
+};
+const mixedHostile: UnitData = {
+  ...observer,
+  id: 'mixed-hostile',
+  label: 'Mixed hostile',
+  labelRu: 'Смешанная вражеская цель',
+  side: 'red',
+  x: 105.5,
+  y: 80.5,
+};
+const mixedTankZone: PressureZoneData = {
+  ...zones[0]!,
+  id: 'mixed-tank-zone',
+  label: 'Mixed tank zone',
+  labelRu: 'Смешанная танковая цель',
+  x: 100.5,
+  y: 86.5,
+  sourceTargetType: 'tank',
+  sourceVisible: true,
+};
+const mixedState = createInitialState(map, [mixedObserver, mixedHostile], [mixedTankZone]);
+for (let tick = 0; tick < 40; tick += 1) {
+  mixedState.simulationStep += 1;
+  mixedState.simulationTimeSeconds += 0.1;
+  mixedState.units[0]!.position.x += 0.08;
+  tickAllUnitPerception(mixedState, 0.1);
+}
+const mixedKnowledge = mixedState.units[0]!.perceptionKnowledge.contacts;
+assert.ok(
+  mixedKnowledge.some((contact) => contact.stimulusId === 'threat:mixed-tank-zone'),
+  'a moving observer must eventually rebuild the deferred tank-height visibility field',
+);
+assert.ok(
+  mixedKnowledge.some((contact) => contact.stimulusId === 'unit:mixed-hostile'),
+  'a moving observer must not starve the deferred soldier-height hostile field behind another target height',
+);
+
+console.log(`Perception performance smoke passed: ${diagnostics.losCalculationCount} LOS calculations for ${diagnostics.candidateCount} candidates across 600 ticks; ${staging.preparationCount} cold geometries staged fairly with max ${staging.maxPreparationsPerStep} per step; mixed target heights remained observable.`);
