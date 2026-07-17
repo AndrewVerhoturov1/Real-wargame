@@ -1,3 +1,4 @@
+import { measurePerformancePhase } from '../debug/PerformancePhases';
 import { distance, type GridPosition } from '../geometry';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
 import type { AttentionSample } from '../perception/AttentionModel';
@@ -145,7 +146,10 @@ function getPerceptionPointProbe(
   }
 
   if (!consumePointProbeBudget(state)) return null;
-  const result = computeLineOfSight(state.map, observer, target, targetHeightMeters);
+  const result = measurePerformancePhase(
+    'perception.point-los',
+    () => computeLineOfSight(state.map, observer, target, targetHeightMeters),
+  );
   cache.set(key, { result });
   trim(cache, MAX_PERCEPTION_POINT_CACHE_ENTRIES);
   return result;
