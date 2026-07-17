@@ -166,7 +166,7 @@ export interface PerformanceReportV6 {
     reportHealth: ReportHealthV6; semanticHealth: SemanticHealthV6;
   };
   report: {
-    phases: Record<string, unknown>[]; queues: Record<string, PerformanceQueueDiagnosticV6>;
+    phases: object[]; queues: Record<string, PerformanceQueueDiagnosticV6>;
     navigation: NavigationDiagnosticsV6; workCounters: Record<string, Record<string, number>>;
     unitOutliers: UnitPerformanceOutlierV6[]; workerDiagnostics: Record<string, WorkerDiagnosticsV6>;
     memory: MemoryDiagnosticsV6; semanticHealth: SemanticHealthV6; legacyDiagnostics: Record<string, unknown>;
@@ -217,7 +217,7 @@ export function buildNumericStats(values: readonly number[]): NumericStats {
   if (!sorted.length) return emptyNumericStats();
   const total = sorted.reduce((sum, value) => sum + value, 0);
   const at = (p: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1))] ?? 0;
-  return { count: sorted.length, total: r2(total), min: r2(sorted[0] ?? 0), avg: r2(total / sorted.length), p50: r2(at(.5)), p95: r2(at(.95)), p99: r2(at(.99)), max: r2(sorted.at(-1) ?? 0) };
+  return { count: sorted.length, total: r2(total), min: r2(sorted[0] ?? 0), avg: r2(total / sorted.length), p50: r2(at(.5)), p95: r2(at(.95)), p99: r2(at(.99)), max: r2(sorted[sorted.length - 1] ?? 0) };
 }
 export function createStableId(prefix: string, now = Date.now(), random = Math.random()): string {
   return `${prefix}-${Math.floor(now).toString(36)}-${Math.floor(random * 0xffffff).toString(36).padStart(5, '0')}`;
