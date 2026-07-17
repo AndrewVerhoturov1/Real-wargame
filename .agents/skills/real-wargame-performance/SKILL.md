@@ -8,9 +8,10 @@ Read first:
 
 ```text
 docs/performance/PERFORMANCE_PRINCIPLES.md
+docs/performance/PERFORMANCE_REPORT_V6.md
 ```
 
-This document is a repository contract. It is not optional guidance.
+These documents are repository contracts. They are not optional guidance.
 
 ## Trigger
 
@@ -56,6 +57,22 @@ Reject a design that adds unbounded interactive work, duplicates a canonical cal
 - lifecycle and teardown are symmetric;
 - subjective knowledge and deterministic gameplay semantics are preserved.
 
+## Required observability contract
+
+Every new potentially heavy subsystem must publish bounded Performance Report v6 diagnostics. Duration alone is insufficient. Record, where applicable:
+
+```text
+cause of launch
+operationId / requestId / unitId / revision
+work counters
+queue created / depth / in-flight / wait
+completed / cancelled / failed / timedOut / stale
+memory or payload estimate
+semantic consequence
+```
+
+Use explicit operation context across async boundaries. Do not depend on one global mutable “current cause”. Keep aggregates for the full run, a recent ring buffer, protected critical events and Top-N outliers. Never add an unbounded per-frame or per-unit event history.
+
 ## Required validation
 
 For runtime-affecting work, add or update focused checks for:
@@ -66,7 +83,10 @@ For runtime-affecting work, add or update focused checks for:
 - stale async rejection;
 - selection/layer independence;
 - teardown without accumulation;
-- bounded long-run cache and latency.
+- bounded long-run cache and latency;
+- v6 schema and causal identity;
+- truncation preserving critical evidence and recent tail;
+- checkpoint recovery when final export is absent.
 
 Run the relevant smoke checks and the exact-head enforced browser performance workflow when the task touches an interactive hot path.
 
@@ -74,4 +94,4 @@ The baseline contract for the 320×200 six-unit scenario is defined in `docs/per
 
 ## Required report
 
-Use the `Performance impact` section from `docs/orchestration/RESULT_TEMPLATE.md`. A runtime-affecting result without that section is incomplete.
+Use the `Performance impact` section from `docs/orchestration/RESULT_TEMPLATE.md`. A runtime-affecting result without that section is incomplete. Include real v6 evidence for scene population, queue peaks, worst windows, report health, semantic health and any recovered incomplete capture.
