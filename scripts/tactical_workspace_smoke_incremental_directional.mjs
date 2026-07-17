@@ -18,8 +18,13 @@ if (baseline.status === 0) {
     .split(/\r?\n/)
     .filter((line) => line.startsWith('- '));
   const staleDirectionalToken = 'src/core/knowledge/SoldierDangerField.ts: missing "readDirectionalBasisValue"';
+  const staleMonitorContract = 'src/core/debug/PerformanceMonitor.ts: missing "PERFORMANCE_CONTRACT_VERSION"';
+  const staleBuildContract = 'src/core/debug/BuildIdentity.ts: missing "PERFORMANCE_CONTRACT_VERSION = \'performance-report-v5\'"';
+  const knownIncrementalContract = (line) => line.includes(staleDirectionalToken)
+    || line.includes(staleMonitorContract)
+    || line.includes(staleBuildContract);
   const onlyKnownStaleContract = failureLines.length > 0
-    && failureLines.every((line) => line.includes(staleDirectionalToken));
+    && failureLines.every(knownIncrementalContract);
 
   if (!onlyKnownStaleContract) {
     if (baseline.stdout) process.stdout.write(baseline.stdout);
@@ -27,14 +32,27 @@ if (baseline.status === 0) {
     process.exit(baseline.status ?? 1);
   }
 
-  const source = readFileSync('src/core/knowledge/SoldierDangerField.ts', 'utf8');
-  assert.ok(source.includes('DIRECTIONAL_SECTOR_RADIANS'), 'SoldierDanger must retain the canonical directional sector basis');
-  assert.ok(source.includes('const sectorFraction = sectorPosition - lowerSector'), 'SoldierDanger must interpolate adjacent sectors exactly');
-  assert.ok(source.includes('const terrainProtection ='), 'SoldierDanger must calculate directional protection inline');
-  assert.ok(source.includes('const terrainExposure ='), 'SoldierDanger must calculate directional exposure inline');
-  assert.ok(source.includes('without allocating a GridPosition'), 'SoldierDanger must document the allocation-free hot path');
-  assert.ok(!source.includes('readDirectionalBasisValue('), 'SoldierDanger hot-path interpolation must not restore the per-cell helper call');
+  if (failureLines.some((line) => line.includes(staleDirectionalToken))) {
+    const source = readFileSync('src/core/knowledge/SoldierDangerField.ts', 'utf8');
+    assert.ok(source.includes('DIRECTIONAL_SECTOR_RADIANS'), 'SoldierDanger must retain the canonical directional sector basis');
+    assert.ok(source.includes('const sectorFraction = sectorPosition - lowerSector'), 'SoldierDanger must interpolate adjacent sectors exactly');
+    assert.ok(source.includes('const terrainProtection ='), 'SoldierDanger must calculate directional protection inline');
+    assert.ok(source.includes('const terrainExposure ='), 'SoldierDanger must calculate directional exposure inline');
+    assert.ok(source.includes('without allocating a GridPosition'), 'SoldierDanger must document the allocation-free hot path');
+    assert.ok(!source.includes('readDirectionalBasisValue('), 'SoldierDanger hot-path interpolation must not restore the per-cell helper call');
+  }
+
+  if (failureLines.some((line) => line.includes('PerformanceMonitor.ts') || line.includes('BuildIdentity.ts'))) {
+    const identity = readFileSync('src/core/debug/BuildIdentity.ts', 'utf8');
+    const report = readFileSync('src/core/debug/PerformanceReportV6.ts', 'utf8');
+    const monitor = readFileSync('src/core/debug/PerformanceMonitor.ts', 'utf8');
+    assert.ok(identity.includes('PERFORMANCE_CONTRACT_VERSION = PERFORMANCE_REPORT_VERSION'), 'Build identity must derive the contract from the v6 schema constant');
+    assert.ok(report.includes("PERFORMANCE_REPORT_VERSION = 'performance-report-v6'"), 'The canonical report version must be v6');
+    assert.ok(report.includes('PERFORMANCE_REPORT_SCHEMA_VERSION = 6'), 'The canonical schema version must be 6');
+    assert.ok(monitor.includes('PerformanceCaptureV6'), 'PerformanceMonitor must own the v6 capture rather than a renamed v5 payload');
+    assert.ok(!identity.includes("PERFORMANCE_CONTRACT_VERSION = 'performance-report-v5'"), 'Build identity must not advertise v5 after the v6 migration');
+  }
 
   if (baseline.stdout) process.stdout.write(baseline.stdout);
-  console.log('Tactical workspace baseline accepted the allocation-free SoldierDanger directional interpolation contract.');
+  console.log('Tactical workspace baseline accepted the allocation-free directional interpolation and explicit performance-report-v6 contracts.');
 }
