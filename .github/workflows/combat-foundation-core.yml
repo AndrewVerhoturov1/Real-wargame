@@ -137,3 +137,80 @@ jobs:
       - name: Existing runtime smoke
         shell: bash
         run: set -o pipefail; npm run runtime:smoke 2>&1 | tail -n 120
+      - name: Per-unit AI scheduler smoke
+        shell: bash
+        run: set -o pipefail; npm run ai-scheduler:smoke 2>&1 | tee ai-scheduler-smoke.log
+      - name: Existing reload smoke
+        shell: bash
+        run: set -o pipefail; npm run reload:smoke 2>&1 | tail -n 120
+      - name: Workspace presentation smoke
+        shell: bash
+        run: set -o pipefail; npm run workspace:smoke 2>&1 | tee workspace-smoke.log
+      - name: Awareness field cache smoke
+        shell: bash
+        run: set -o pipefail; npm run awareness-field:smoke 2>&1 | tee awareness-field.log
+      - name: Directional terrain smoke
+        shell: bash
+        run: set -o pipefail; npm run directional-terrain:smoke 2>&1 | tail -n 160
+      - name: Reverse slope comparative smoke
+        shell: bash
+        run: set -o pipefail; npm run reverse-slope-comparative:smoke 2>&1 | tail -n 120
+      - name: Navigation overlay smoke
+        shell: bash
+        run: set -o pipefail; npm run navigation-overlay:smoke 2>&1 | tail -n 160
+      - name: Pathfinding smoke
+        shell: bash
+        run: set -o pipefail; npm run pathfinding:smoke 2>&1 | tail -n 120
+      - name: Navigation profiles smoke
+        shell: bash
+        run: set -o pipefail; npm run navigation-profiles:smoke 2>&1 | tail -n 120
+      - name: Routed move smoke
+        shell: bash
+        run: set -o pipefail; npm run routed-move:smoke 2>&1 | tail -n 120
+      - name: Route status smoke
+        shell: bash
+        run: set -o pipefail; npm run route-status:smoke 2>&1 | tail -n 120
+      - name: Movement bridge smoke
+        shell: bash
+        run: set -o pipefail; npm run move-bridge:smoke 2>&1 | tail -n 160
+      - name: Danger layer performance contract
+        shell: bash
+        run: set -o pipefail; npm run danger-layer-performance:smoke 2>&1 | tee danger-layer-performance.log
+      - name: Moving danger layer performance contract
+        shell: bash
+        run: set -o pipefail; npm run danger-layer-movement-performance:smoke 2>&1 | tee danger-layer-movement-performance.log
+      - name: Production build
+        shell: bash
+        run: set -o pipefail; npm run build 2>&1 | tee production-build.log
+      - name: Combat tactical integration smoke
+        shell: bash
+        run: set -o pipefail; npm run combat-tactical-integration:smoke 2>&1 | tee combat-tactical-integration.log
+      - name: Documentation consistency
+        shell: bash
+        run: set -o pipefail; npm run docs:check 2>&1 | tee docs-check.log
+      - name: AI test lab smoke
+        shell: bash
+        run: set -o pipefail; npm run lab:smoke 2>&1 | tee ai-test-lab.log
+      - name: Upload combat tactical integration logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-tactical-integration-log
+          path: |
+            shared-visibility-vegetation.log
+            perception-smoke.log
+            perception-performance.log
+            view-memory-heatmap.log
+            view-memory-heatmap-performance.log
+            visibility-probe.log
+            workspace-smoke.log
+            awareness-field.log
+            danger-route-cost-parity.log
+            combat-tactical-integration.log
+            danger-layer-performance.log
+            danger-layer-movement-performance.log
+            production-build.log
+            docs-check.log
+            ai-test-lab.log
+            ai-scheduler-smoke.log
+          if-no-files-found: warn
