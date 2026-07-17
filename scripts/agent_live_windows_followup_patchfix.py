@@ -11,5 +11,10 @@ duplicate = 'content = remove_exact(content, "  bestSafePositions: SoldierSafePo
 if content.count(duplicate) != 1:
     raise RuntimeError('duplicate cached safe-position removal step changed unexpectedly')
 content = content.replace(duplicate, '', 1)
+marker = '# Ensure the active source tree contains no safe-position feature identifiers.\n'
+if content.count(marker) != 1:
+    raise RuntimeError('final safe-position verification marker changed unexpectedly')
+harness_patch = '''# Remove the legacy safe-position field from the visual QA snapshot contract while retaining danger parity checks.\npath = "src/testing/CombatTacticalIntegrationVisualQaHarness.ts"\ncontent = read(path)\ncontent = remove_exact(content, "  readonly bestSafePosition: { x: number; y: number } | null;\\n", "visual QA safe-position snapshot field")\ncontent = remove_exact(\n    content,\n    "    bestSafePosition: report.bestSafePositions[0]\\n"\n    "      ? { ...report.bestSafePositions[0].position }\\n"\n    "      : null,\\n",\n    "visual QA safe-position snapshot value",\n)\nwrite(path, content)\n\n\n'''
+content = content.replace(marker, harness_patch + marker, 1)
 path.write_text(content, encoding='utf-8')
-print('Adjusted patch helper and removed the duplicate safe-position declaration step.')
+print('Adjusted patch helper and removed duplicate plus visual-QA safe-position contracts.')
