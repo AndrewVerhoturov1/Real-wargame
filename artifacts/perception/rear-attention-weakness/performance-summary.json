@@ -1,0 +1,71 @@
+{
+  "contract": "docs/performance/PERFORMANCE_PRINCIPLES.md",
+  "exactPreviewBase": "ad4f35535425aef11db6f27ca959bbd3696d36dc",
+  "hotPath": [
+    "sampleAttentionWeight",
+    "evaluateCellVisibilityQuality",
+    "due point-perception checks",
+    "revision-driven selected-unit raster upload"
+  ],
+  "worstCaseComplexity": {
+    "gameplayPerception": "unchanged O(candidate stimuli) with bounded point-LOS preparation",
+    "selectedUnitRaster": "unchanged O(cells in the explicitly requested current-view field)",
+    "newMultiplicativeShape": "none"
+  },
+  "mainThreadWork": [
+    "bounded scalar rear blend",
+    "bounded directional range conversion",
+    "optional rear sampling factor only when below 1",
+    "no new traversal, query or recurring callback"
+  ],
+  "fullMapBuildsAdded": 0,
+  "sharedPreparedData": [
+    "AttentionSample",
+    "CellVisibilityQuality",
+    "existing SelectedUnitVisibilityField only while the current-view layer is enabled"
+  ],
+  "workerAndQueueBudget": {
+    "newWorkers": 0,
+    "newQueues": 0,
+    "pointLosPreparationsPerSimulationStep": 2,
+    "changed": false
+  },
+  "cacheOwnerKeyLimit": {
+    "newCaches": 0,
+    "pointLosOwner": "SimulationState",
+    "pointLosLimitEntries": 512,
+    "selectedUnitFieldOwnership": "existing per-state latest requested unit fields",
+    "changed": false
+  },
+  "invalidationRevisions": [
+    "existing terrain/height/forest/object revisions",
+    "observer quantized position and posture",
+    "attention mode, focus direction and profile values",
+    "observer condition"
+  ],
+  "memoryEstimate": "no persistent runtime structure added; existing typed arrays, texture, point cache and field cache are reused",
+  "staleResultRejection": "not applicable; no asynchronous path added",
+  "teardown": "unchanged symmetric PixiVisibilityHeatmapRenderer.destroy; no worker, timer or listener added",
+  "beforeMetrics": {
+    "source": "optimized real-wargame-preview accepted through PR #138",
+    "exactSha": "ad4f35535425aef11db6f27ca959bbd3696d36dc",
+    "contract": "enforced live browser thresholds are the baseline and may not be weakened"
+  },
+  "afterMetrics": {
+    "source": "exact-head enforced GitHub workflow",
+    "status": "pending final branch head"
+  },
+  "requiredChecks": [
+    "perception:smoke",
+    "perception-performance:smoke",
+    "view-memory-heatmap:smoke",
+    "view-memory-heatmap-performance:smoke",
+    "point-los-differential:smoke",
+    "performance-contract:smoke",
+    "Live Windows AI Browser Performance with enforcement enabled"
+  ],
+  "remainingPerformanceRisks": [
+    "the existing selected-unit visibility field remains an explicit full field when the user enables the layer; this PR adds no rebuild trigger or extra field",
+    "directional range arithmetic runs where visibility quality already ran and must remain below enforced exact-head thresholds"
+  ]
+}
