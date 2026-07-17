@@ -1,4 +1,4 @@
 Traceback (most recent call last):
-  File "/home/runner/work/Real-wargame/Real-wargame/scripts/agent_live_windows_followup_apply.py", line 308, in <module>
+  File "/home/runner/work/Real-wargame/Real-wargame/scripts/agent_live_windows_followup_apply.py", line 387, in <module>
     raise RuntimeError(f"legacy safe-position identifier {forbidden!r} remains in {source_path.relative_to(ROOT)}")
-RuntimeError: legacy safe-position identifier 'SoldierSafePosition' remains in src/testing/DangerLayerMovementPerformanceHarness.ts
+RuntimeError: legacy safe-position identifier 'bestSafePositions' remains in src/ui/AiTestLabControls.ts
