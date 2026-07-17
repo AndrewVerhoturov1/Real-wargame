@@ -83,7 +83,6 @@ export function tickUnitPerception(
   updateAttentionController(unit, deltaSeconds);
   const now = state.simulationTimeSeconds;
   const due = resolveDueZones(unit, now);
-  const completedDue: DueAttentionChecks = { ...due };
   const updatedContacts = new Set<string>();
   const stimuli = buildPerceptionStimuli(state, unit);
   const broadPhaseCells = Math.max(
@@ -144,8 +143,6 @@ export function tickUnitPerception(
       attention,
     );
     if (!visibility) {
-      if (rearSector) completedDue.rear = false;
-      else completedDue[attention.zone] = false;
       preserveExistingContact(unit, stimulus.id, updatedContacts);
       continue;
     }
@@ -188,7 +185,7 @@ export function tickUnitPerception(
 
   processSoundEvents(state, unit, updatedContacts);
   decayContacts(state, unit, updatedContacts, deltaSeconds);
-  scheduleNextChecks(unit, now, completedDue);
+  scheduleNextChecks(unit, now, due);
   unit.perceptionKnowledge.lastUpdatedSeconds = now;
 }
 

@@ -98,7 +98,7 @@ const stagedObservers: UnitData[] = Array.from({ length: 5 }, (_, index) => ({
   y: 101.5 + index * 4,
 }));
 const stagedState = createInitialState(map, stagedObservers, [zones[0]!]);
-for (let tick = 0; tick < stagedObservers.length + 2; tick += 1) {
+for (let tick = 0; tick < 30; tick += 1) {
   stagedState.simulationStep += 1;
   stagedState.simulationTimeSeconds += 0.1;
   tickAllUnitPerception(stagedState, 0.1);
@@ -108,7 +108,7 @@ assert.equal(staging.maxPreparationsPerStep, 1, 'one simulation step must prepar
 assert.ok(staging.deferredCount > 0, 'simultaneous cold observers must be deferred instead of blocking one tick');
 assert.ok(
   staging.preparationCount >= stagedObservers.length,
-  'all deferred observer geometries must become eligible across following simulation steps',
+  'all deferred observer geometries must become eligible on later attention cadences',
 );
 
 console.log(`Perception performance smoke passed: ${diagnostics.losCalculationCount} LOS calculations for ${diagnostics.candidateCount} candidates across 600 ticks; ${staging.preparationCount} cold geometries staged with max ${staging.maxPreparationsPerStep} per step.`);
