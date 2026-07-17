@@ -26,7 +26,7 @@ export interface SceneUnitLikeV6 {
   id: string; side?: string; aiControl?: string; position: PointV6; order?: SceneOrderLikeV6 | null; plan?: unknown;
   tacticalKnowledge?: { threats?: readonly unknown[]; revision?: number };
   perceptionKnowledge?: { contacts?: readonly unknown[]; revision?: number };
-  behaviorRuntime?: Record<string, unknown>; soldier?: { condition?: Record<string, unknown> };
+  behaviorRuntime?: { health?: number; lastEvent?: unknown }; soldier?: { condition?: { health?: number } };
 }
 export interface SceneStateLikeV6 {
   units: readonly SceneUnitLikeV6[]; map: { width: number; height: number; objects: readonly { id?: string }[] };
