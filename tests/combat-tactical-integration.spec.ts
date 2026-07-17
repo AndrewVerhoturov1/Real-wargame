@@ -25,7 +25,6 @@ type Snapshot = {
   maxThreatStrength: number;
   maxThreatSuppression: number;
   hiddenFactLeakCount: number;
-  bestSafePosition: { x: number; y: number } | null;
   routeWaypointCount: number;
   mapVisualRevision: number;
 };
@@ -36,11 +35,10 @@ test.describe('combat tactical integration visual QA (prepared, run only after u
     await expect.poll(() => page.evaluate(() => Boolean(window.__realWargameCombatTacticalVisualQa))).toBe(true);
   });
 
-  test('real visual contact appears in the existing danger, safe-position and route views', async ({ page }, testInfo) => {
+  test('real visual contact appears in the existing danger and route views', async ({ page }, testInfo) => {
     const snapshot = await setScenario(page, 'visual-contact');
     expect(snapshot.threatIds.some((id) => id.startsWith('unit:'))).toBe(true);
     expect(snapshot.threatConfidence).toBeGreaterThan(0);
-    expect(snapshot.bestSafePosition).not.toBeNull();
     expect(snapshot.routeWaypointCount).toBeGreaterThan(0);
     await page.screenshot({ path: testInfo.outputPath('combat-stage1-01-visual-contact-danger-route.png'), fullPage: true });
   });
@@ -61,13 +59,12 @@ test.describe('combat tactical integration visual QA (prepared, run only after u
     await page.screenshot({ path: testInfo.outputPath('combat-stage1-03-wall-cover-attenuation.png'), fullPage: true });
   });
 
-  test('reverse slope changes the safe-position and routed movement context', async ({ page }, testInfo) => {
+  test('reverse slope changes the danger and routed movement context', async ({ page }, testInfo) => {
     const snapshot = await setScenario(page, 'reverse-slope');
     expect(snapshot.threatIds.length).toBeGreaterThan(0);
-    expect(snapshot.bestSafePosition).not.toBeNull();
     expect(snapshot.routeWaypointCount).toBeGreaterThan(0);
     expect(snapshot.mapVisualRevision).toBeGreaterThan(0);
-    await page.screenshot({ path: testInfo.outputPath('combat-stage1-04-reverse-slope-safe-route.png'), fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath('combat-stage1-04-reverse-slope-danger-route.png'), fullPage: true });
   });
 
   test('Slice 1 contact shows positive danger and exactly zero suppression', async ({ page }, testInfo) => {

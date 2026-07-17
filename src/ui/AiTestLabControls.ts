@@ -86,7 +86,6 @@ const AWARENESS_MODES: Array<[SoldierAwarenessMode, string]> = [
   ['all', 'Всё'],
   ['danger', 'Угрозы'],
   ['cover', 'Защита'],
-  ['safe', 'Безопасные места'],
   ['uncertainty', 'Неопределённость'],
   ['objective', 'Объективная карта'],
 ];
@@ -492,14 +491,12 @@ function renderAwarenessPanel(target: HTMLElement, state: SimulationState, reren
   target.append(modes);
 
   const report = buildSoldierAwarenessReport(state, unit);
-  const best = report.bestSafePositions[0];
   target.append(readonlyGrid([
     ['Опасность здесь', `${report.currentPosition.danger}/100`],
     ['Ожидаемая защита здесь', `${report.currentPosition.expectedProtection}/100`],
     ['Безопасность здесь', `${report.currentPosition.safety}/100`],
     ['Опасность маршрута', `${report.routeDanger}/100`],
     ['Уверенность в угрозе', `${report.threatConfidence}%`],
-    ['Лучшая позиция', best ? `${best.score.toFixed(0)} баллов, ${Math.round(best.distanceCells * state.map.metersPerCell)} м` : 'не найдена'],
   ]));
   target.append(sectionTitle('Известные угрозы этого бойца'));
   if (unit.tacticalKnowledge.threats.length === 0) {
@@ -525,14 +522,12 @@ function updateDiagnostics(target: HTMLElement, state: SimulationState): void {
     return;
   }
   const report = buildSoldierAwarenessReport(state, unit);
-  const best = report.bestSafePositions[0];
   target.textContent = [
     `Статус: ${runtime.status}`,
     `Боец: ${unit.labels.ru}`,
     `Опасность ${report.currentPosition.danger} · защита ${report.currentPosition.expectedProtection} · безопасность ${report.currentPosition.safety}`,
     `Стресс ${round(unit.behaviorRuntime.stress)} · подавление ${round(unit.behaviorRuntime.suppression)} · мораль ${round(unit.soldier.condition.morale)}`,
     `Знаний об угрозах: ${unit.tacticalKnowledge.threats.length} · уверенность ${report.threatConfidence}%`,
-    best ? `Лучшее безопасное место: ${Math.round(best.distanceCells * state.map.metersPerCell)} м, оценка ${best.score.toFixed(0)}` : 'Лучшее безопасное место: нет',
     `Последнее решение ИИ: ${unit.behaviorRuntime.aiGraphReason}`,
   ].join('\n');
 }
@@ -684,7 +679,6 @@ function legend(): HTMLElement {
     ['danger-high', 'Красный — высокая известная опасность'],
     ['danger-medium', 'Оранжевый — средняя опасность'],
     ['uncertain', 'Жёлтый — неточная или устаревающая угроза'],
-    ['safe', 'Зелёный — безопасная позиция'],
     ['concealment', 'Голубой — хорошая маскировка'],
   ]) {
     const row = document.createElement('div');

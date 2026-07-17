@@ -21,7 +21,6 @@ const WINDOW_MS = 8_000;
 const SCENE_P95_LIMIT_MS = 10;
 const SCENE_MAX_LIMIT_MS = 50;
 const APPLY_LIMIT_MS = 5;
-const LOCAL_LIMIT_MS = 10;
 const WORKER_RESPONSE_LIMIT_MS = 5;
 const APPLICATION_LIMIT_MS = 50;
 
@@ -49,7 +48,6 @@ const namedApplicationScripts = windowLoafs.flatMap((frame) => scripts(frame).fi
 const renderingInfrastructureScripts = windowLoafs.flatMap((frame) => scripts(frame).filter(isRenderingInfrastructureScript).map(duration));
 const conservativeWorkerResponseMax = Math.max(
   max(workerResponseScripts),
-  Number(final.maxMainThreadApplyMs ?? 0) + Number(final.maxLocalUpdateMs ?? 0),
 );
 
 const productionPhases = {
@@ -61,8 +59,8 @@ const productionPhases = {
     ...stats(workerResponseScripts.length > 0 ? workerResponseScripts : [conservativeWorkerResponseMax]),
     max: roundTwo(conservativeWorkerResponseMax),
     source: workerResponseScripts.length > 0
-      ? 'Long Animation Frame named worker-response scripts plus conservative raster/local aggregate'
-      : 'conservative upper bound: production raster apply max + renderer-local update max',
+      ? 'Long Animation Frame named worker-response scripts plus conservative raster-apply bound'
+      : 'conservative upper bound: production raster apply max',
   },
   typedArrayApplyAndBaseTextureUpdate: {
     count: Number(final.mainThreadRasterSwaps ?? 0),
@@ -70,13 +68,6 @@ const productionPhases = {
     max: Number(final.maxMainThreadApplyMs ?? 0),
     p95: Number(final.maxMainThreadApplyMs ?? 0),
     source: 'production AwarenessMovementDiagnostics applyRaster timing',
-  },
-  rendererLocalSafePositionAndRouteEvaluation: {
-    count: Number(final.safePositionLocalScans ?? 0),
-    last: Number(final.lastLocalUpdateMs ?? 0),
-    max: Number(final.maxLocalUpdateMs ?? 0),
-    p95: Number(final.maxLocalUpdateMs ?? 0),
-    source: 'production AwarenessMovementDiagnostics updateLocalDerived timing',
   },
   wallFixtureSetupAndNavigationGrid: {
     ...stats([Number(capture.playwright?.scenarioSetupEvaluateMs ?? 0)]),
@@ -122,7 +113,6 @@ const failures = [];
 if (scene.p95 > SCENE_P95_LIMIT_MS) failures.push(`sceneUpdate p95 ${scene.p95} > ${SCENE_P95_LIMIT_MS}`);
 if (scene.max > SCENE_MAX_LIMIT_MS) failures.push(`sceneUpdate max ${scene.max} > ${SCENE_MAX_LIMIT_MS}`);
 if (Number(final.maxMainThreadApplyMs ?? Infinity) > APPLY_LIMIT_MS) failures.push(`raster apply max ${final.maxMainThreadApplyMs} > ${APPLY_LIMIT_MS}`);
-if (Number(final.maxLocalUpdateMs ?? Infinity) > LOCAL_LIMIT_MS) failures.push(`renderer-local update max ${final.maxLocalUpdateMs} > ${LOCAL_LIMIT_MS}`);
 if (conservativeWorkerResponseMax > WORKER_RESPONSE_LIMIT_MS) failures.push(`worker-response conservative max ${roundTwo(conservativeWorkerResponseMax)} > ${WORKER_RESPONSE_LIMIT_MS}`);
 if (Number(final.maxPendingQueueDepth ?? Infinity) > 1) failures.push(`pending queue depth ${final.maxPendingQueueDepth} > 1`);
 if (final.pendingQueueDepth !== 0 || final.workerInFlight !== false) failures.push('final worker scheduler is not settled');
@@ -231,7 +221,7 @@ function identity(script) {
 }
 
 function isDangerScript(script) {
-  return /(?:Danger|Awareness|PixiAwareness|SoldierAwareness|AwarenessWorldWorker|handleWorkerResponse|applyRaster|updateLocalDerived|updateMarkers|drawSafePositionMarkers)/i.test(
+  return /(?:Danger|Awareness|PixiAwareness|SoldierAwareness|AwarenessWorldWorker|handleWorkerResponse|applyRaster)/i.test(
     `${script.sourceUrl ?? ''} ${identity(script)}`,
   );
 }

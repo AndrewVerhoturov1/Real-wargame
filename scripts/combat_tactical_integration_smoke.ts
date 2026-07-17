@@ -20,7 +20,6 @@ verifyHiddenMovementDoesNotLeak();
 verifyNearMissCreatesSuppression();
 verifyDistantPassHasNegligibleEffect();
 verifyCoverReducesSuppression();
-verifyRealThreatChangesSafePositions();
 verifyRealThreatChangesRouteCostAndReplan();
 verifyThreatMemoryDecays();
 verifyEvidenceDoesNotDuplicateKnownShooter();
@@ -33,7 +32,7 @@ verifyDetectedShooterAliasesUnknownEvidence();
 verifyThreatEvidenceRoundTripAndLegacyNormalization();
 verifyPressureZoneSuppressionRemainsIndependent();
 
-console.log('Combat tactical integration smoke passed: 17 subjective contact, evidence memory, suppression, merge, alias, persistence, terrain and route checks.');
+console.log('Combat tactical integration smoke passed: 16 subjective contact, evidence memory, suppression, merge, alias, persistence and route checks.');
 
 function verifyRealContactBecomesThreat(): void {
   const state = makeState();
@@ -208,35 +207,6 @@ function verifyCoverReducesSuppression(): void {
   const openPressure = getCombatSuppressionSnapshot(open, state.simulationTimeSeconds).suppression;
   const coveredPressure = getCombatSuppressionSnapshot(covered, state.simulationTimeSeconds).suppression;
   assert.ok(openPressure > coveredPressure + 2, `cover must attenuate suppression (${openPressure} vs ${coveredPressure})`);
-}
-
-function verifyRealThreatChangesSafePositions(): void {
-  const state = makeState();
-  const blue = unit(state, 'blue-1');
-  const red = unit(state, 'red-1');
-  state.map.objects.push({
-    id: 'safe-wall',
-    kind: 'structure',
-    x: 8,
-    y: 4,
-    widthCells: 1,
-    heightCells: 5,
-    rotationRadians: 0,
-    losHeightMeters: 2.5,
-    coverProtection: 90,
-    coverReliability: 95,
-    concealment: 15,
-    labels: { en: 'Wall', ru: 'Стена' },
-  });
-  const before = buildSoldierAwarenessReport(state, blue);
-  installVisualContact(blue, red, state.simulationTimeSeconds);
-  syncSoldierThreatMemory(state, blue, 0.1);
-  const after = buildSoldierAwarenessReport(state, blue);
-
-  assert.notEqual(after.cacheKey, before.cacheKey);
-  assert.ok(after.threatConfidence > 0);
-  assert.ok(after.bestSafePositions.length > 0);
-  assert.ok(after.bestSafePositions.some((position) => position.expectedProtection > 0 || position.danger < after.currentPosition.danger));
 }
 
 function verifyRealThreatChangesRouteCostAndReplan(): void {

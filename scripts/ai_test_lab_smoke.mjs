@@ -92,8 +92,6 @@ expectIncludes('src/core/knowledge/SoldierThreatMemory.ts', [
 expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
   'SoldierAwarenessMode',
   'buildSoldierAwarenessReport',
-  'SAFE_SEARCH_RADIUS_METERS',
-  'bestSafePositions',
   'routeDanger',
   "'stealth'",
 ]);
@@ -132,7 +130,6 @@ expectIncludes('src/rendering/PixiThreatEditorRenderer.ts', [
 ]);
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
   'buildAwarenessWorldKey',
-  'buildBestSafePositionsFromWorldField',
   'currentMode',
   'STEALTH_PIXEL_LUT',
   'drawAwarenessRasterWords',
@@ -187,16 +184,12 @@ expectIncludes('src/core/ai/AiGameBridge.ts', [
   'coverProtection',
   'currentPositionDanger',
   'currentExpectedProtection',
-  'bestSafePositionScore',
-  'distanceToBestSafePosition',
   'routeDanger',
   'threatConfidence',
 ]);
 expectIncludes('src/ai-node-editor/ai-test-lab-node-options.ts', [
   'currentPositionDanger',
   'currentExpectedProtection',
-  'bestSafePositionScore',
-  'distanceToBestSafePosition',
   'routeDanger',
   'threatConfidence',
 ]);

@@ -86,12 +86,6 @@ function assertReverseSlopeBenefit(flat: ScenarioEvaluation, slope: ScenarioEval
   assert.ok(slopeCrest.crestRisk >= 45 || slopeCrest.silhouetteRisk >= 45);
   assert.ok(slopeForward.forwardSlopeRisk >= 70);
 
-  assert.ok(flat.winner.position.x >= CREST_X - 0.5);
-  assert.ok(slope.winner.position.x < CREST_X + 0.5);
-  assert.ok(slope.winner.position.x < flat.winner.position.x);
-  const winnerCell = awarenessCell(slope.awareness, { x: Math.floor(slope.winner.position.x), y: Math.floor(slope.winner.position.y) });
-  assert.ok(winnerCell.reverseSlopeQuality >= 45);
-
   assert.equal(flat.route.detourLimited, false);
   assert.equal(slope.route.detourLimited, false);
   assert.ok(
@@ -172,7 +166,6 @@ function assertIdenticalQueriesHitCache(result: ScenarioEvaluation) {
   const awareness = buildSoldierAwarenessReport(result.state, result.blue);
   assert.equal(awareness.cacheKey, result.awareness.cacheKey);
   assert.equal(awareness.cells, result.awareness.cells);
-  assert.equal(awareness.bestSafePositions, result.awareness.bestSafePositions);
 
   const queryBefore = getDirectionalTerrainPositionQueryDiagnostics(result.state.map);
   const query = queryDirectionalTerrainPositions(result.state.map, {
@@ -214,8 +207,6 @@ function assertDirectionReversal(east: ScenarioEvaluation, west: ScenarioEvaluat
   assert.equal(westThreat.uncertaintyCells, eastThreat.uncertaintyCells);
   assert.equal(westThreat.strength, eastThreat.strength);
   assert.ok(angleDifference(eastThreat.directionDegrees, westThreat.directionDegrees) >= 170);
-  assert.ok(east.winner.position.x < CREST_X + 0.5);
-  assert.ok(west.winner.position.x > CREST_X + 0.5);
   assert.ok(routeSideCount(east, 'west') > routeSideCount(east, 'east'));
   assert.ok(routeSideCount(west, 'east') > routeSideCount(west, 'west'));
   assert.notDeepEqual(west.route.cells, east.route.cells);
@@ -297,7 +288,6 @@ function summary(result: ScenarioEvaluation) {
     reverse: awarenessCell(result.awareness, REVERSE),
     crest: awarenessCell(result.awareness, CREST),
     forward: awarenessCell(result.awareness, FORWARD),
-    winner: result.winner.position,
     reverseQueryWinner: result.query.bestReverseSlopePosition?.position ?? null,
     route: result.route.cells,
     visitedCells: result.route.visitedCells,

@@ -121,8 +121,6 @@ export function evaluateScenario(state: SimulationState, profile: NavigationProf
   const threat = blue.tacticalKnowledge.threats[0];
   assert.ok(threat);
   const awareness = buildSoldierAwarenessReport(state, blue);
-  const winner = awareness.bestSafePositions[0];
-  assert.ok(winner);
   const query = queryDirectionalTerrainPositions(state.map, {
     unitId: blue.id,
     origin: blue.position,
@@ -154,7 +152,6 @@ export function evaluateScenario(state: SimulationState, profile: NavigationProf
     blue,
     threat,
     awareness,
-    winner,
     query,
     fields,
     route,

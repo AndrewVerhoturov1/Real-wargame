@@ -385,7 +385,7 @@ expectIncludes('src/ui/WorkspaceTooltipGuard.ts', [
 ]);
 
 expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
-  'buildAwarenessField', 'buildBestSafePositions', 'buildRouteKey',
+  'buildAwarenessField', 'buildRouteKey',
   'getDirectionalTacticalField', 'readDirectionalTacticalCell',
   'buildAwarenessKnowledgeKey', 'KNOWLEDGE_CONFIDENCE_BUCKET', 'KNOWLEDGE_UNCERTAINTY_BUCKET',
   'evaluateAwarenessFieldCell', 'getAwarenessStaticField', 'evaluateRouteDangerFromField',
@@ -418,13 +418,13 @@ expectIncludes('src/core/terrain/DirectionalTacticalField.ts', [
 ]);
 
 expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
-  'buildAwarenessRenderKey', 'buildAwarenessWorldKey', 'buildAwarenessMarkerKey', 'lastMarkerInputKey',
+  'buildAwarenessRenderKey', 'buildAwarenessWorldKey',
   'latestRequestedWorldKey', 'workerJobsCoalesced', 'workerResultsStaleDropped',
-  'lastRasterKey', 'lastMarkerKey', 'markerUpdateCount',
+  'lastRasterKey',
   'new Worker', 'AwarenessWorldWorker.ts', 'dangerPixels', 'stealthPixels',
   'Sprite', 'Texture', 'BufferImageSource', "scaleMode: 'nearest'", 'createAwarenessTexture', 'drawAwarenessRaster',
   "representation: 'raster-sprite'", 'getDiagnostics()', '__realWargameAwarenessDebug',
-  'lastRequestedCanonicalThreatKey', 'rendererLocalBestWinner', 'lastAppliedFieldIdentity',
+  'lastRequestedCanonicalThreatKey', 'lastAppliedFieldIdentity',
 ]);
 expectExcludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
   'buildSoldierAwarenessReport',

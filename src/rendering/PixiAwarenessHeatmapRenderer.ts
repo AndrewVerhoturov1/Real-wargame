@@ -1,4 +1,4 @@
-import { BufferImageSource, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import { BufferImageSource, Container, Sprite, Text, Texture } from 'pixi.js';
 import {
   getAwarenessMovementDiagnostics,
   publishAwarenessMovementDiagnostics,
@@ -14,10 +14,7 @@ import type {
   CanonicalWorldThreatSnapshot,
 } from '../core/knowledge/CanonicalWorldThreat';
 import { cloneCanonicalWorldThreat } from '../core/knowledge/CanonicalWorldThreat';
-import type {
-  SoldierAwarenessCell,
-  SoldierSafePosition,
-} from '../core/knowledge/SoldierAwarenessGrid';
+import type { SoldierAwarenessCell } from '../core/knowledge/SoldierAwarenessGrid';
 import type {
   AwarenessWorkerBuildSnapshot,
   AwarenessWorkerFieldPayload,
@@ -31,7 +28,6 @@ import { getSimulationLayerState } from '../core/ui/RuntimeUiState';
 import type { UnitModel } from '../core/units/UnitModel';
 
 type VisibleAwarenessMode = 'danger' | 'stealth';
-type SafePositions = SoldierSafePosition[];
 type MutableMovementDiagnostics = {
   -readonly [Key in keyof AwarenessMovementDiagnostics]: AwarenessMovementDiagnostics[Key];
 };
@@ -58,14 +54,6 @@ interface InFlightWorldBuild {
   readonly finalExact: boolean;
 }
 
-interface LocalDerivedSnapshot {
-  readonly position: GridPosition;
-  readonly orderTarget: GridPosition | null;
-  readonly metersPerCell: number;
-  readonly cellSize: number;
-  readonly width: number;
-  readonly height: number;
-}
 
 export interface AwarenessAppliedRasterDiagnostics {
   readonly width: number;
@@ -79,7 +67,6 @@ export interface AwarenessOverlayDiagnostics {
   readonly representation: 'raster-sprite';
   readonly visible: boolean;
   readonly rebuildCount: number;
-  readonly markerUpdateCount: number;
   readonly lastBuildMs: number;
   readonly maxBuildMs: number;
   readonly displayObjectCount: number;
@@ -92,8 +79,6 @@ export interface AwarenessOverlayDiagnostics {
   readonly lastAppliedFieldIdentity: string;
   readonly lastAppliedJobId: number;
   readonly lastAppliedRaster: AwarenessAppliedRasterDiagnostics | null;
-  readonly rendererLocalBestSafePositions: readonly SoldierSafePosition[];
-  readonly rendererLocalBestWinner: SoldierSafePosition | null;
   readonly movement: AwarenessMovementDiagnostics;
 }
 
@@ -110,16 +95,11 @@ const TERRAIN_KINDS: readonly TerrainKind[] = ['field', 'forest', 'road', 'swamp
 const TERRAIN_CODE = new Map<TerrainKind, number>(
   TERRAIN_KINDS.map((kind, index) => [kind, index]),
 );
-const MAX_SAFE_POSITIONS = 8;
-const SAFE_SEARCH_RADIUS_METERS = 120;
-const SAFE_DISTANCE_PENALTY_PER_METER = 0.18;
-const ROUTE_SAMPLE_STEP_METERS = 5;
 const FINAL_EXACT_DELAY_MS = 120;
 
 export class PixiAwarenessHeatmapRenderer {
   readonly container = new Container();
 
-  private readonly markerGraphics = new Graphics();
   private readonly title = new Text({ text: '', style: {
     fontFamily: 'Arial, sans-serif', fontSize: 12, fontWeight: '700', fill: 0xffffff,
     stroke: { color: 0x111510, width: 4 },
@@ -127,8 +107,6 @@ export class PixiAwarenessHeatmapRenderer {
   private readonly movement: MutableMovementDiagnostics = createMovementDiagnostics();
 
   private lastRasterKey = '';
-  private lastMarkerInputKey = '';
-  private lastMarkerKey = '';
   private latestRequestedWorldKey = '';
   private latestRequestedCanonicalThreatKey = '';
   private lastAppliedWorldKey = '';
@@ -144,8 +122,6 @@ export class PixiAwarenessHeatmapRenderer {
   private rasterTexture: Texture | null = null;
   private rasterSprite: Sprite | null = null;
   private worldField: AwarenessWorkerFieldPayload | null = null;
-  private safePositions: SafePositions = [];
-  private latestLocalSnapshot: LocalDerivedSnapshot | null = null;
   private worker: Worker | null = null;
   private workerMapKey = '';
   private nextJobId = 1;
@@ -155,7 +131,6 @@ export class PixiAwarenessHeatmapRenderer {
   private finalRefreshTimer: number | null = null;
   private destroyed = false;
   private rebuildCount = 0;
-  private markerUpdateCount = 0;
   private lastBuildMs = 0;
   private maxBuildMs = 0;
 
@@ -180,8 +155,6 @@ export class PixiAwarenessHeatmapRenderer {
     if (state.editor.enabled || mode === 'off' || !unit) {
       this.container.visible = false;
       this.lastRasterKey = 'hidden';
-      this.lastMarkerInputKey = 'hidden';
-      this.lastMarkerKey = 'hidden';
       this.publishDiagnostics();
       return;
     }
@@ -195,16 +168,6 @@ export class PixiAwarenessHeatmapRenderer {
     const canonical = buildPositionIndependentAwarenessKnowledgeSnapshot(unit, state.map.metersPerCell);
     const worldKey = buildAwarenessWorldKey(state, unit, canonical.key);
     const rasterKey = `${worldKey};mode:${mode}`;
-    const markerInputKey = buildAwarenessMarkerInputKey(state, unit, mode);
-    this.latestLocalSnapshot = {
-      position: { ...unit.position },
-      orderTarget: unit.order ? { ...unit.order.target } : null,
-      metersPerCell: state.map.metersPerCell,
-      cellSize: state.map.cellSize,
-      width: state.map.width,
-      height: state.map.height,
-    };
-
     if (worldKey !== this.latestRequestedWorldKey) {
       const snapshot = buildPendingWorldSnapshot(state, unit, worldKey, mapKey, canonical, false);
       this.latestRequestedWorldKey = worldKey;
@@ -221,17 +184,6 @@ export class PixiAwarenessHeatmapRenderer {
       this.applyRaster(mode, rasterKey);
     }
 
-    if (
-      markerInputKey !== this.lastMarkerInputKey
-      && this.worldField
-      && this.lastAppliedWorldKey === worldKey
-      && this.lastAppliedCanonicalThreatKey === canonical.key
-    ) {
-      this.updateLocalDerived(this.latestLocalSnapshot);
-      this.lastMarkerInputKey = markerInputKey;
-    }
-
-    this.updateMarkers(mode, state.map.cellSize);
     this.publishDiagnostics();
   }
 
@@ -245,9 +197,7 @@ export class PixiAwarenessHeatmapRenderer {
     this.pending = null;
     this.inFlight = null;
     this.latestBuildSnapshot = null;
-    this.latestLocalSnapshot = null;
     this.worldField = null;
-    this.safePositions = [];
     this.container.removeChildren();
     this.rasterSprite?.destroy();
     this.rasterTexture?.destroy(true);
@@ -255,7 +205,6 @@ export class PixiAwarenessHeatmapRenderer {
     this.rasterTexture = null;
     this.rasterPixelWords = null;
     this.rasterPixels = null;
-    this.markerGraphics.destroy();
     this.title.destroy();
     this.container.destroy();
     delete (window as AwarenessDebugWindow).__realWargameAwarenessDebug;
@@ -263,12 +212,10 @@ export class PixiAwarenessHeatmapRenderer {
   }
 
   getDiagnostics(): AwarenessOverlayDiagnostics {
-    const positions = this.safePositions.map(cloneSafePosition);
     return {
       representation: 'raster-sprite',
       visible: this.container.visible,
       rebuildCount: this.rebuildCount,
-      markerUpdateCount: this.markerUpdateCount,
       lastBuildMs: roundMs(this.lastBuildMs),
       maxBuildMs: roundMs(this.maxBuildMs),
       displayObjectCount: this.container.children.length,
@@ -289,8 +236,6 @@ export class PixiAwarenessHeatmapRenderer {
             threatIds: [...this.worldField.threatIds],
           }
         : null,
-      rendererLocalBestSafePositions: positions,
-      rendererLocalBestWinner: positions[0] ?? null,
       movement: getAwarenessMovementDiagnostics(),
     };
   }
@@ -445,8 +390,6 @@ export class PixiAwarenessHeatmapRenderer {
         this.movement.worldRasterBuilds += 1;
         if (response.finalExact) this.movement.finalRefreshApplied += 1;
         this.applyRaster(this.currentMode, `${response.rasterKey};mode:${this.currentMode}`);
-        if (this.latestLocalSnapshot) this.updateLocalDerived(this.latestLocalSnapshot);
-        this.updateMarkers(this.currentMode, this.latestLocalSnapshot?.cellSize ?? 1);
       }
     }
 
@@ -504,33 +447,6 @@ export class PixiAwarenessHeatmapRenderer {
     );
   }
 
-  private updateLocalDerived(snapshot: LocalDerivedSnapshot): void {
-    if (!this.worldField) return;
-
-    const startedAt = performance.now();
-    const result = buildBestSafePositionsFromWorldField(this.worldField, snapshot);
-    this.safePositions = result.positions;
-    this.movement.ownMovementLocalUpdates += 1;
-    this.movement.safePositionLocalScans += 1;
-    this.movement.safePositionCellsScanned += result.scannedCells;
-    evaluateRouteDangerFromWorldField(this.worldField, snapshot);
-
-    const elapsed = performance.now() - startedAt;
-    this.movement.lastLocalUpdateMs = roundMs(elapsed);
-    this.movement.maxLocalUpdateMs = Math.max(
-      this.movement.maxLocalUpdateMs,
-      this.movement.lastLocalUpdateMs,
-    );
-  }
-
-  private updateMarkers(mode: VisibleAwarenessMode, cellSize: number): void {
-    const markerKey = buildAwarenessMarkerKey(this.safePositions, mode, cellSize);
-    if (markerKey === this.lastMarkerKey) return;
-    this.drawSafePositionMarkers(this.safePositions, mode, cellSize);
-    this.lastMarkerKey = markerKey;
-    this.markerUpdateCount += 1;
-  }
-
   private updatePendingDepth(): void {
     this.movement.pendingQueueDepth = this.pending ? 1 : 0;
     this.movement.maxPendingQueueDepth = Math.max(
@@ -550,8 +466,6 @@ export class PixiAwarenessHeatmapRenderer {
       this.rasterSprite = null;
       this.rasterTexture = null;
       this.lastRasterKey = '';
-      this.lastMarkerInputKey = '';
-      this.lastMarkerKey = '';
       this.rasterWidth = width;
       this.rasterHeight = height;
       this.rasterPixels = new Uint8Array(width * height * 4);
@@ -566,27 +480,9 @@ export class PixiAwarenessHeatmapRenderer {
         }),
       });
       this.rasterSprite = new Sprite(this.rasterTexture);
-      this.container.addChild(this.rasterSprite, this.markerGraphics, this.title);
+      this.container.addChild(this.rasterSprite, this.title);
     }
     this.rasterSprite?.scale.set(cellSize, cellSize);
-  }
-
-  private drawSafePositionMarkers(
-    positions: SafePositions,
-    mode: VisibleAwarenessMode,
-    cellSize: number,
-  ): void {
-    this.markerGraphics.clear();
-    if (mode !== 'danger') return;
-    const markerCount = Math.min(5, positions.length);
-    for (let index = 0; index < markerCount; index += 1) {
-      const best = positions[index];
-      const x = best.position.x * cellSize;
-      const y = best.position.y * cellSize;
-      this.markerGraphics.circle(x, y, index === 0 ? 12 : 8)
-        .fill({ color: 0x4ce78a, alpha: index === 0 ? 0.45 : 0.2 })
-        .stroke({ width: index === 0 ? 4 : 2, color: 0xefff9a, alpha: 0.95 });
-    }
   }
 
   private publishDiagnostics(): void {
@@ -615,21 +511,6 @@ export function buildAwarenessWorldKey(
     `posture:${unit.behaviorRuntime.posture}`,
     `canonicalThreats:${canonicalThreatKey}`,
   ].join(';');
-}
-
-export function buildAwarenessMarkerKey(
-  positions: ReadonlyArray<{ position: GridPosition }>,
-  mode: VisibleAwarenessMode,
-  cellSize: number,
-): string {
-  if (mode !== 'danger') return `mode:${mode};cellSize:${cellSize};markers:none`;
-  const markerCount = Math.min(5, positions.length);
-  let key = `mode:${mode};cellSize:${cellSize};markers:${markerCount}`;
-  for (let index = 0; index < markerCount; index += 1) {
-    const position = positions[index].position;
-    key += `;${index}:${position.x}:${position.y}`;
-  }
-  return key;
 }
 
 export function createAwarenessTexture(
@@ -688,23 +569,6 @@ function buildAwarenessMapKey(map: TacticalMap): string {
   ].join(';');
 }
 
-function buildAwarenessMarkerInputKey(
-  state: SimulationState,
-  unit: UnitModel,
-  mode: VisibleAwarenessMode,
-): string {
-  const target = unit.order
-    ? `${Math.floor(unit.order.target.x)}:${Math.floor(unit.order.target.y)}`
-    : 'none';
-  return [
-    `mode:${mode}`,
-    buildAwarenessMapKey(state.map),
-    `unit:${unit.id}`,
-    `unitCell:${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`,
-    `target:${target}`,
-  ].join(';');
-}
-
 function buildPendingWorldSnapshot(
   _state: SimulationState,
   unit: UnitModel,
@@ -755,115 +619,6 @@ function buildWorkerMapSnapshot(map: TacticalMap, mapKey: string): AwarenessWork
       labels: object.labels ? { ...object.labels } : null,
     })),
   };
-}
-
-function buildBestSafePositionsFromWorldField(
-  field: AwarenessWorkerFieldPayload,
-  snapshot: LocalDerivedSnapshot,
-): { positions: SafePositions; scannedCells: number } {
-  const radiusCells = SAFE_SEARCH_RADIUS_METERS / Math.max(0.001, snapshot.metersPerCell);
-  const radiusSquared = radiusCells * radiusCells;
-  const minX = Math.max(0, Math.floor(snapshot.position.x - radiusCells));
-  const maxX = Math.min(snapshot.width - 1, Math.ceil(snapshot.position.x + radiusCells));
-  const minY = Math.max(0, Math.floor(snapshot.position.y - radiusCells));
-  const maxY = Math.min(snapshot.height - 1, Math.ceil(snapshot.position.y + radiusCells));
-  const bestScores = new Float64Array(MAX_SAFE_POSITIONS);
-  const bestCellIndices = new Int32Array(MAX_SAFE_POSITIONS);
-  const bestDistances = new Float64Array(MAX_SAFE_POSITIONS);
-  let bestCount = 0;
-  let scannedCells = 0;
-
-  for (let y = minY; y <= maxY; y += 1) {
-    const positionY = y + 0.5;
-    const dy = positionY - snapshot.position.y;
-    const rowStart = y * snapshot.width;
-    for (let x = minX; x <= maxX; x += 1) {
-      const dx = x + 0.5 - snapshot.position.x;
-      const distanceSquared = dx * dx + dy * dy;
-      if (distanceSquared > radiusSquared) continue;
-      scannedCells += 1;
-      const cellIndex = rowStart + x;
-      const safety = field.safety[cellIndex] ?? 0;
-      if (safety <= 18) continue;
-      // score <= safety because distance penalty is non-negative. Once the top-8
-      // buffer is full this upper bound rejects most cells before Math.sqrt().
-      if (bestCount === MAX_SAFE_POSITIONS && safety <= bestScores[MAX_SAFE_POSITIONS - 1]) continue;
-      const distanceCells = Math.sqrt(distanceSquared);
-      const score = safety - distanceCells * snapshot.metersPerCell * SAFE_DISTANCE_PENALTY_PER_METER;
-      if (score <= 18) continue;
-      if (bestCount === MAX_SAFE_POSITIONS && score <= bestScores[MAX_SAFE_POSITIONS - 1]) continue;
-
-      let insertionIndex = 0;
-      while (insertionIndex < bestCount && bestScores[insertionIndex] >= score) insertionIndex += 1;
-      const lastIndex = Math.min(bestCount, MAX_SAFE_POSITIONS - 1);
-      for (let index = lastIndex; index > insertionIndex; index -= 1) {
-        bestScores[index] = bestScores[index - 1];
-        bestCellIndices[index] = bestCellIndices[index - 1];
-        bestDistances[index] = bestDistances[index - 1];
-      }
-      bestScores[insertionIndex] = score;
-      bestCellIndices[insertionIndex] = cellIndex;
-      bestDistances[insertionIndex] = distanceCells;
-      if (bestCount < MAX_SAFE_POSITIONS) bestCount += 1;
-    }
-  }
-
-  const positions: SafePositions = new Array(bestCount);
-  for (let index = 0; index < bestCount; index += 1) {
-    const cellIndex = bestCellIndices[index];
-    const x = cellIndex % snapshot.width;
-    const y = Math.floor(cellIndex / snapshot.width);
-    const threatIndex = field.protectedThreatIndex[cellIndex] ?? -1;
-    positions[index] = {
-      position: { x: x + 0.5, y: y + 0.5 },
-      score: bestScores[index],
-      danger: field.danger[cellIndex] ?? 0,
-      expectedProtection: field.expectedProtection[cellIndex] ?? 0,
-      expectedProtectionAgainstThreat: field.expectedProtectionAgainstThreat[cellIndex] ?? 0,
-      protectedAgainstThreatId: threatIndex >= 0 ? field.threatIds[threatIndex] ?? null : null,
-      concealment: field.concealment[cellIndex] ?? 0,
-      distanceCells: bestDistances[index],
-      sourceRu: 'асинхронное поле опасности',
-    };
-  }
-  return { positions, scannedCells };
-}
-
-function evaluateRouteDangerFromWorldField(
-  field: AwarenessWorkerFieldPayload,
-  snapshot: LocalDerivedSnapshot,
-): number {
-  if (!snapshot.orderTarget) {
-    return readFieldValue(field.danger, snapshot.width, snapshot.height, snapshot.position);
-  }
-  const dx = snapshot.orderTarget.x - snapshot.position.x;
-  const dy = snapshot.orderTarget.y - snapshot.position.y;
-  const lengthMeters = Math.hypot(dx, dy) * snapshot.metersPerCell;
-  const samples = Math.max(2, Math.ceil(lengthMeters / ROUTE_SAMPLE_STEP_METERS));
-  let total = 0;
-  for (let index = 0; index <= samples; index += 1) {
-    const t = index / samples;
-    total += readFieldValue(field.danger, snapshot.width, snapshot.height, {
-      x: snapshot.position.x + dx * t,
-      y: snapshot.position.y + dy * t,
-    });
-  }
-  return Math.round(total / (samples + 1));
-}
-
-function readFieldValue(
-  values: Uint8Array,
-  width: number,
-  height: number,
-  position: GridPosition,
-): number {
-  const x = Math.max(0, Math.min(width - 1, Math.floor(position.x)));
-  const y = Math.max(0, Math.min(height - 1, Math.floor(position.y)));
-  return values[y * width + x] ?? 0;
-}
-
-function cloneSafePosition(value: SoldierSafePosition): SoldierSafePosition {
-  return { ...value, position: { ...value.position } };
 }
 
 function buildPixelLut(mode: VisibleAwarenessMode): Uint32Array {
@@ -919,9 +674,6 @@ function packRgba(red: number, green: number, blue: number, alpha: number): numb
 function createMovementDiagnostics(): MutableMovementDiagnostics {
   return {
     worldRasterBuilds: 0,
-    ownMovementLocalUpdates: 0,
-    safePositionLocalScans: 0,
-    safePositionCellsScanned: 0,
     directionalBasisBuilds: 0,
     workerThreatRelativeGeometryBuilds: 0,
     workerDirectionalFieldBuilds: 0,
@@ -945,8 +697,6 @@ function createMovementDiagnostics(): MutableMovementDiagnostics {
     maxWorkerComputeMs: 0,
     lastMainThreadApplyMs: 0,
     maxMainThreadApplyMs: 0,
-    lastLocalUpdateMs: 0,
-    maxLocalUpdateMs: 0,
     lastRequestedRasterKey: '',
     lastAppliedRasterKey: '',
     lastRequestedWorldKey: '',

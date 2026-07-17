@@ -1,8 +1,5 @@
 export interface AwarenessMovementDiagnostics extends Record<string, unknown> {
   readonly worldRasterBuilds: number;
-  readonly ownMovementLocalUpdates: number;
-  readonly safePositionLocalScans: number;
-  readonly safePositionCellsScanned: number;
   /** Legacy alias retained for existing reports. */
   readonly directionalBasisBuilds: number;
   readonly workerThreatRelativeGeometryBuilds: number;
@@ -29,13 +26,6 @@ export interface AwarenessMovementDiagnostics extends Record<string, unknown> {
   readonly maxWorkerComputeMs: number;
   readonly lastMainThreadApplyMs: number;
   readonly maxMainThreadApplyMs: number;
-  readonly lastLocalUpdateMs: number;
-  /** Post-warmup maximum. The first local scan remains available as rawMaxLocalUpdateMs. */
-  readonly maxLocalUpdateMs: number;
-  readonly rawMaxLocalUpdateMs?: number;
-  readonly localUpdateWarmupDiscarded?: number;
-  readonly postWarmupLocalUpdateCount?: number;
-  readonly postWarmupLocalUpdateP95Ms?: number;
   readonly lastRequestedRasterKey: string;
   readonly lastAppliedRasterKey: string;
   readonly lastRequestedWorldKey: string;
@@ -56,9 +46,6 @@ export interface AwarenessMovementDiagnostics extends Record<string, unknown> {
 // bounded queue state plus equality of requested/applied world and canonical keys.
 const EMPTY_DIAGNOSTICS: AwarenessMovementDiagnostics = {
   worldRasterBuilds: 0,
-  ownMovementLocalUpdates: 0,
-  safePositionLocalScans: 0,
-  safePositionCellsScanned: 0,
   directionalBasisBuilds: 0,
   workerThreatRelativeGeometryBuilds: 0,
   workerDirectionalFieldBuilds: 0,
@@ -82,12 +69,6 @@ const EMPTY_DIAGNOSTICS: AwarenessMovementDiagnostics = {
   maxWorkerComputeMs: 0,
   lastMainThreadApplyMs: 0,
   maxMainThreadApplyMs: 0,
-  lastLocalUpdateMs: 0,
-  maxLocalUpdateMs: 0,
-  rawMaxLocalUpdateMs: 0,
-  localUpdateWarmupDiscarded: 0,
-  postWarmupLocalUpdateCount: 0,
-  postWarmupLocalUpdateP95Ms: 0,
   lastRequestedRasterKey: '',
   lastAppliedRasterKey: '',
   lastRequestedWorldKey: '',
@@ -104,40 +85,10 @@ const EMPTY_DIAGNOSTICS: AwarenessMovementDiagnostics = {
   lastWorkerError: null,
 };
 
-const MAX_LOCAL_UPDATE_SAMPLES = 256;
 let current: AwarenessMovementDiagnostics = EMPTY_DIAGNOSTICS;
-let lastObservedLocalUpdateCount = 0;
-let localWarmupDiscarded = false;
-let postWarmupLocalSamples: number[] = [];
 
 export function publishAwarenessMovementDiagnostics(value: AwarenessMovementDiagnostics): void {
-  if (value.ownMovementLocalUpdates < lastObservedLocalUpdateCount) {
-    lastObservedLocalUpdateCount = 0;
-    localWarmupDiscarded = false;
-    postWarmupLocalSamples = [];
-  }
-  if (value.ownMovementLocalUpdates > lastObservedLocalUpdateCount) {
-    if (!localWarmupDiscarded) {
-      localWarmupDiscarded = true;
-    } else {
-      postWarmupLocalSamples.push(value.lastLocalUpdateMs);
-      if (postWarmupLocalSamples.length > MAX_LOCAL_UPDATE_SAMPLES) {
-        postWarmupLocalSamples.splice(0, postWarmupLocalSamples.length - MAX_LOCAL_UPDATE_SAMPLES);
-      }
-    }
-    lastObservedLocalUpdateCount = value.ownMovementLocalUpdates;
-  }
-  const postWarmupMaximum = postWarmupLocalSamples.length > 0
-    ? Math.max(...postWarmupLocalSamples)
-    : 0;
-  current = {
-    ...value,
-    rawMaxLocalUpdateMs: value.maxLocalUpdateMs,
-    maxLocalUpdateMs: postWarmupMaximum,
-    localUpdateWarmupDiscarded: localWarmupDiscarded ? 1 : 0,
-    postWarmupLocalUpdateCount: postWarmupLocalSamples.length,
-    postWarmupLocalUpdateP95Ms: percentile(postWarmupLocalSamples, 0.95),
-  };
+  current = { ...value };
 }
 
 export function getAwarenessMovementDiagnostics(): AwarenessMovementDiagnostics {
@@ -146,14 +97,4 @@ export function getAwarenessMovementDiagnostics(): AwarenessMovementDiagnostics 
 
 export function resetAwarenessMovementDiagnostics(): void {
   current = EMPTY_DIAGNOSTICS;
-  lastObservedLocalUpdateCount = 0;
-  localWarmupDiscarded = false;
-  postWarmupLocalSamples = [];
-}
-
-function percentile(values: readonly number[], fraction: number): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((left, right) => left - right);
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * fraction) - 1));
-  return sorted[index] ?? 0;
 }
