@@ -81,20 +81,30 @@ const slowestCycles: AiSchedulerCycleDiagnostic[] = [];
 let slowUnitPassCount = 0;
 let slowCycleCount = 0;
 
+/** Records complete duration statistics without allocating a detailed pass snapshot. */
+export function recordAiSchedulerUnitPassDuration(durationMs: number, graphTicked: boolean): void {
+  recordDuration(unitDurations, durationMs);
+  if (graphTicked) recordDuration(decisionUnitDurations, durationMs);
+  if (durationMs >= 8) slowUnitPassCount += 1;
+}
+
+/** Stores bounded detail only for graph decisions or otherwise slow passes. */
 export function recordAiSchedulerUnitPass(value: AiSchedulerUnitPassDiagnostic): void {
   const snapshot = cloneUnitPass(value);
-  recordDuration(unitDurations, snapshot.durationMs);
-  if (snapshot.decisionTickDelta > 0) recordDuration(decisionUnitDurations, snapshot.durationMs);
-  if (snapshot.durationMs >= 8) slowUnitPassCount += 1;
   pushBounded(recentUnitPasses, snapshot, MAX_RECENT_UNIT_PASSES);
   pushSlowest(slowestUnitPasses, snapshot, MAX_SLOWEST_UNIT_PASSES);
 }
 
+/** Records complete cycle statistics without retaining a per-frame object. */
+export function recordAiSchedulerCycleDuration(durationMs: number, graphTicked: boolean): void {
+  recordDuration(cycleDurations, durationMs);
+  if (graphTicked) recordDuration(decisionCycleDurations, durationMs);
+  if (durationMs >= 8) slowCycleCount += 1;
+}
+
+/** Stores bounded detail only for decision cycles or otherwise slow cycles. */
 export function recordAiSchedulerCycle(value: AiSchedulerCycleDiagnostic): void {
   const snapshot = { ...value };
-  recordDuration(cycleDurations, snapshot.durationMs);
-  if (snapshot.graphTickedUnitCount > 0) recordDuration(decisionCycleDurations, snapshot.durationMs);
-  if (snapshot.durationMs >= 8) slowCycleCount += 1;
   pushBounded(recentCycles, snapshot, MAX_RECENT_CYCLES);
   pushSlowest(slowestCycles, snapshot, MAX_SLOWEST_CYCLES);
 }
