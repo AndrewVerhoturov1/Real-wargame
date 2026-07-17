@@ -2,8 +2,8 @@ import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import type { PerceptionContactMemory } from '../core/perception/PerceptionContact';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { getAttentionOverlayState } from '../core/ui/RuntimeUiState';
-const UNSEEN_OVERLAY_COLOR = 0x101820;
-const UNSEEN_OVERLAY_ALPHA = 0.52;
+const UNSEEN_OVERLAY_COLOR = 0x000000;
+const UNSEEN_OVERLAY_ALPHA = 1;
 
 import {
   getSelectedUnitVisibilityField,
@@ -201,7 +201,7 @@ export function drawVisibilityRaster(
     const mapY = field.minCellY + localY;
     if (mapX < 0 || mapY < 0 || mapX >= mapWidth || mapY >= mapHeight) continue;
     const quality = field.quality[index] / 255;
-    if (quality <= 0.01) continue;
+    if (quality <= 0) continue;
     const color = heatmapColor(quality);
     const pixel = (mapY * mapWidth + mapX) * 4;
     image.data[pixel] = (color >> 16) & 0xff;
