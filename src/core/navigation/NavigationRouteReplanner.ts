@@ -44,19 +44,21 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
   const reasonRu = evaluation.reasonRu ?? 'Изменились условия построения маршрута.';
   const replanSearchCount = (order.replanSearchCount ?? 0) + 1;
   let routeFields: RouteCostFields | null = null;
-  if (!blocked) {
-    const asynchronous = getOrRequestAsyncRouteCostFields(
-      state.map,
-      resolved.profile,
-      tacticalContext,
-    );
-    if (asynchronous.status === 'pending') {
-      unit.behaviorRuntime.lastEvent = 'move_route_field_pending';
-      unit.behaviorRuntime.reason = 'Тактическое поле маршрута готовится в фоне; текущий маршрут сохранён.';
-      return true;
-    }
-    if (asynchronous.status === 'ready') routeFields = asynchronous.fields;
+  const asynchronous = getOrRequestAsyncRouteCostFields(
+    state.map,
+    resolved.profile,
+    tacticalContext,
+  );
+  if (asynchronous.status === 'pending') {
+    unit.behaviorRuntime.lastEvent = blocked
+      ? 'move_blocked_route_field_pending'
+      : 'move_route_field_pending';
+    unit.behaviorRuntime.reason = blocked
+      ? 'Текущий маршрут заблокирован; боец остановлен до готовности точного фонового перестроения.'
+      : 'Тактическое поле маршрута готовится в фоне; текущий маршрут сохранён.';
+    return !blocked;
   }
+  if (asynchronous.status === 'ready') routeFields = asynchronous.fields;
   if (!routeFields) {
     routeFields = measurePerformancePhase(
       'route.fields.prepare',

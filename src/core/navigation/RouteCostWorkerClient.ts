@@ -17,7 +17,7 @@ import type {
 
 const TERRAIN_KINDS: readonly TerrainKind[] = ['field', 'forest', 'road', 'swamp', 'rough', 'water'];
 const TERRAIN_CODE = new Map<TerrainKind, number>(TERRAIN_KINDS.map((kind, index) => [kind, index]));
-const MAX_READY_FIELDS = 4;
+const MAX_READY_FIELDS = 8;
 const MAX_PENDING_MS = 1500;
 
 export type AsyncRouteCostPreparation =
@@ -37,6 +37,7 @@ export interface RouteCostWorkerDiagnostics {
 }
 
 interface RequestDescriptor {
+  readonly ownerKey: string;
   readonly requestKey: string;
   readonly mapKey: string;
   readonly profile: NavigationProfile;
@@ -64,10 +65,10 @@ interface MapRuntime {
   disabled: boolean;
   nextJobId: number;
   configuredMapKey: string;
-  latestRequestKey: string;
   mainMapIdentity: number;
   inFlight: InFlightRequest | null;
   pending: RequestDescriptor | null;
+  readonly latestRequestKeyByOwner: Map<string, string>;
   readonly ready: Map<string, RouteCostFields>;
   readonly diagnostics: MutableDiagnostics;
 }
@@ -92,8 +93,9 @@ export function getOrRequestAsyncRouteCostFields(
   ensureConfigured(map, runtime, mapKey);
   if (runtime.disabled || !runtime.worker) return { status: 'unavailable' };
 
+  const ownerKey = tacticalContext.unitId;
   const requestKey = buildRequestKey(mapKey, profile, tacticalContext);
-  runtime.latestRequestKey = requestKey;
+  runtime.latestRequestKeyByOwner.set(ownerKey, requestKey);
   runtime.diagnostics.requests += 1;
   const ready = runtime.ready.get(requestKey);
   if (ready) {
@@ -105,6 +107,7 @@ export function getOrRequestAsyncRouteCostFields(
   }
 
   const descriptor: RequestDescriptor = {
+    ownerKey,
     requestKey,
     mapKey,
     profile: cloneProfile(profile),
@@ -149,10 +152,10 @@ function getRuntime(map: TacticalMap): MapRuntime | null {
       disabled: false,
       nextJobId: 1,
       configuredMapKey: '',
-      latestRequestKey: '',
       mainMapIdentity: direct.mapIdentity,
       inFlight: null,
       pending: null,
+      latestRequestKeyByOwner: new Map(),
       ready: new Map(),
       diagnostics: emptyDiagnostics(),
     };
@@ -189,6 +192,7 @@ function ensureConfigured(map: TacticalMap, runtime: MapRuntime, mapKey: string)
   }
   runtime.inFlight = null;
   runtime.pending = null;
+  runtime.latestRequestKeyByOwner.clear();
   runtime.ready.clear();
   const snapshot = measurePerformancePhase('route.worker.configure', () => buildMapSnapshot(map, mapKey));
   runtime.worker?.postMessage({ type: 'configure', map: snapshot }, [
@@ -209,7 +213,13 @@ function startRequest(runtime: MapRuntime, descriptor: RequestDescriptor): void 
     startedAtMs: performance.now(),
   };
   runtime.diagnostics.jobsStarted += 1;
-  const snapshot: RouteCostWorkerBuildSnapshot = { jobId, ...descriptor };
+  const snapshot: RouteCostWorkerBuildSnapshot = {
+    jobId,
+    requestKey: descriptor.requestKey,
+    mapKey: descriptor.mapKey,
+    profile: descriptor.profile,
+    tacticalContext: descriptor.tacticalContext,
+  };
   runtime.worker.postMessage({ type: 'build', snapshot });
 }
 
@@ -231,7 +241,7 @@ function handleResponse(map: TacticalMap, runtime: MapRuntime, response: RouteCo
     const stale = response.mapKey !== runtime.configuredMapKey
       || response.mapKey !== currentMapKey
       || response.requestKey !== inFlight.requestKey
-      || response.requestKey !== runtime.latestRequestKey;
+      || response.requestKey !== runtime.latestRequestKeyByOwner.get(inFlight.ownerKey);
     if (stale) {
       runtime.diagnostics.staleResultsDropped += 1;
     } else {
@@ -266,6 +276,7 @@ function disableRuntime(runtime: MapRuntime, message: string): void {
   runtime.disabled = true;
   runtime.inFlight = null;
   runtime.pending = null;
+  runtime.latestRequestKeyByOwner.clear();
   runtime.ready.clear();
   runtime.diagnostics.workerErrors += 1;
   runtime.diagnostics.lastWorkerError = message;
@@ -322,7 +333,7 @@ function buildRequestKey(
   context: TacticalRouteContext,
 ): string {
   return [
-    'route-worker:v1',
+    'route-worker:v2',
     mapKey,
     profile.id,
     profile.revision,
