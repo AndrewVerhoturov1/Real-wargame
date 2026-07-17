@@ -1,0 +1,73 @@
+name: Agent Live Phase Diagnostics
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: agent-live-phase-diagnostics
+  cancel-in-progress: false
+
+jobs:
+  apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/live-windows-performance-followup-v1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Assemble and apply patch
+        shell: bash
+        run: |
+          set -o pipefail
+          cat scripts/.phase_diag_parts/part00.pyfrag \
+              scripts/.phase_diag_parts/part01.pyfrag \
+              scripts/.phase_diag_parts/part02.pyfrag \
+              scripts/.phase_diag_parts/part03.pyfrag \
+              > scripts/agent_live_phase_diagnostics_apply.py
+          python3 scripts/agent_live_phase_diagnostics_apply.py 2>&1 | tee phase-diagnostics-apply.log
+      - run: npm ci
+      - name: Verify diagnostics
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            npx tsc --noEmit
+            npm run build
+            node scripts/performance_report_contract_smoke.mjs
+            npm run docs:check
+            npm run workspace:smoke
+            npm run ai-scheduler:smoke
+            npm run danger-layer-movement-performance:smoke
+          } 2>&1 | tee phase-diagnostics-verification.log
+      - name: Upload diagnostics logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-phase-diagnostics-verification
+          path: |
+            phase-diagnostics-apply.log
+            phase-diagnostics-verification.log
+          if-no-files-found: warn
+          retention-days: 3
+      - name: Commit verified diagnostics
+        run: |
+          rm -rf scripts/.phase_diag_parts
+          rm -f scripts/agent_live_phase_diagnostics_apply.py
+          rm -f phase-diagnostics-apply.log phase-diagnostics-verification.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "perf: expose simulation and phase attribution aggregates"
+          git push origin HEAD:agent/live-windows-performance-followup-v1
