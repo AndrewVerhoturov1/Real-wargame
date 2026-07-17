@@ -1,4 +1,6 @@
-export const PERFORMANCE_CONTRACT_VERSION = 'performance-report-v5' as const;
+import { PERFORMANCE_REPORT_VERSION } from './PerformanceReportV6';
+
+export const PERFORMANCE_CONTRACT_VERSION = PERFORMANCE_REPORT_VERSION;
 
 export interface RealWargameBuildIdentity {
   readonly branch: string;
