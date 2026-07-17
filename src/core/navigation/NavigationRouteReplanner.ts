@@ -9,7 +9,8 @@ import type { UnitModel } from '../units/UnitModel';
 import { evaluateNavigationReplan } from './NavigationReplanPolicy';
 import { evaluatePreparedNavigationRouteCost } from './NavigationRouteCost';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from './NavigationRuntime';
-import { getRouteCostFields, getSharedRouteCostFieldCache } from './RouteCostField';
+import { getRouteCostFields, getSharedRouteCostFieldCache, type RouteCostFields } from './RouteCostField';
+import { getOrRequestAsyncRouteCostFields } from './RouteCostWorkerClient';
 
 const ROUTE_LOOKAHEAD_CELLS = 6;
 
@@ -42,15 +43,31 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
   const reason = evaluation.reason ?? (blocked ? 'blocked' : 'navigation_changed');
   const reasonRu = evaluation.reasonRu ?? 'Изменились условия построения маршрута.';
   const replanSearchCount = (order.replanSearchCount ?? 0) + 1;
-  const routeFields = measurePerformancePhase(
-    'route.fields.prepare',
-    () => getRouteCostFields(
+  let routeFields: RouteCostFields | null = null;
+  if (!blocked) {
+    const asynchronous = getOrRequestAsyncRouteCostFields(
       state.map,
       resolved.profile,
       tacticalContext,
-      getSharedRouteCostFieldCache(state.map),
-    ),
-  );
+    );
+    if (asynchronous.status === 'pending') {
+      unit.behaviorRuntime.lastEvent = 'move_route_field_pending';
+      unit.behaviorRuntime.reason = 'Тактическое поле маршрута готовится в фоне; текущий маршрут сохранён.';
+      return true;
+    }
+    if (asynchronous.status === 'ready') routeFields = asynchronous.fields;
+  }
+  if (!routeFields) {
+    routeFields = measurePerformancePhase(
+      'route.fields.prepare',
+      () => getRouteCostFields(
+        state.map,
+        resolved.profile,
+        tacticalContext,
+        getSharedRouteCostFieldCache(state.map),
+      ),
+    );
+  }
   const currentRouteCost = blocked
     ? order.pathCost
     : measurePerformancePhase('route.current-path-evaluate', () => evaluatePreparedNavigationRouteCost(
