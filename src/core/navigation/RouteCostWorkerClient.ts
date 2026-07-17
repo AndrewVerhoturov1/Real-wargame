@@ -1,6 +1,6 @@
+import { measurePerformancePhase } from '../debug/PerformancePhases';
 import type { TacticalMap, TerrainKind } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
-import { measurePerformancePhase } from '../debug/PerformancePhases';
 import { getBuiltInNavigationProfile, type NavigationProfile } from './NavigationProfiles';
 import {
   getRouteCostFields,
@@ -227,15 +227,25 @@ function handleResponse(map: TacticalMap, runtime: MapRuntime, response: RouteCo
     }
     runtime.diagnostics.jobsCompleted += 1;
     runtime.diagnostics.lastWorkerComputeMs = response.computeMs;
+    const currentMapKey = buildMapKey(map);
     const stale = response.mapKey !== runtime.configuredMapKey
+      || response.mapKey !== currentMapKey
       || response.requestKey !== inFlight.requestKey
       || response.requestKey !== runtime.latestRequestKey;
     if (stale) {
       runtime.diagnostics.staleResultsDropped += 1;
     } else {
+      const mainStatic = getRouteCostFields(
+        map,
+        getBuiltInNavigationProfile('direct'),
+        undefined,
+        getSharedRouteCostFieldCache(map),
+      );
       const fields: RouteCostFields = {
         ...response.fields,
         mapIdentity: runtime.mainMapIdentity,
+        mapRevisionKey: mainStatic.mapRevisionKey,
+        terrainKeys: mainStatic.terrainKeys,
       };
       if (routeCostFieldsMatch(map, inFlight.profile, fields)) {
         runtime.ready.set(response.requestKey, fields);
