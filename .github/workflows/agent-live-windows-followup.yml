@@ -40,6 +40,7 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p artifacts/performance/live-windows-followup
+          python3 scripts/agent_live_windows_followup_patchfix.py
           python3 scripts/agent_live_windows_followup_apply.py 2>&1 | tee artifacts/performance/live-windows-followup/patch-apply.log
 
       - name: Publish patch failure
@@ -72,6 +73,7 @@ jobs:
       - name: Commit verified result
         run: |
           rm scripts/agent_live_windows_followup_apply.py
+          rm scripts/agent_live_windows_followup_patchfix.py
           rm .github/workflows/agent-live-windows-followup.yml
           rm -f artifacts/performance/live-windows-followup/.apply-trigger
           rm -f artifacts/performance/live-windows-followup/patch-apply.log
