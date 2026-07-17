@@ -14,17 +14,31 @@ export interface CellVisibilityQuality {
   distanceFactor: number;
   transmissionFactor: number;
   attentionFactor: number;
+  /** Effective visual range derived from directional attention strength. */
+  attentionRangeFactor?: number;
   observerConditionFactor: number;
   blocked: boolean;
+}
+
+export function calculateAttentionVisualRangeFactor(attentionWeight: number): number {
+  const weight = clamp01(attentionWeight);
+  if (weight <= 0) return 0;
+  if (weight <= 0.06) return weight / 0.06 * 0.25;
+  if (weight <= 0.16) return 0.25 + (weight - 0.06) / 0.1 * 0.35;
+  if (weight <= 0.66) return 0.6 + (weight - 0.16) / 0.5 * 0.4;
+  return 1;
 }
 
 export function calculateDistanceVisibilityFactor(
   distanceMeters: number,
   vision: Pick<UnitVisionSettings, 'maximumVisualRangeMeters' | 'distanceFalloffStartMeters' | 'distanceFalloffExponent'>,
+  visualRangeFactor = 1,
 ): number {
   const distance = Math.max(0, distanceMeters);
-  const maximum = Math.max(1, vision.maximumVisualRangeMeters);
-  const start = Math.max(0, Math.min(maximum - 0.001, vision.distanceFalloffStartMeters));
+  const rangeFactor = clamp01(visualRangeFactor);
+  if (rangeFactor <= 0) return 0;
+  const maximum = Math.max(1, vision.maximumVisualRangeMeters * rangeFactor);
+  const start = Math.max(0, Math.min(maximum - 0.001, vision.distanceFalloffStartMeters * rangeFactor));
   if (distance <= start) return 1;
   if (distance >= maximum) return 0;
   const normalized = (distance - start) / Math.max(0.001, maximum - start);
@@ -32,9 +46,14 @@ export function calculateDistanceVisibilityFactor(
 }
 
 export function evaluateCellVisibilityQuality(input: CellVisibilityQualityInput): CellVisibilityQuality {
-  const distanceFactor = calculateDistanceVisibilityFactor(input.distanceMeters, input.vision);
-  const transmissionFactor = clamp01(input.visualTransmission);
   const attentionFactor = clamp01(input.attentionWeight);
+  const attentionRangeFactor = calculateAttentionVisualRangeFactor(attentionFactor);
+  const distanceFactor = calculateDistanceVisibilityFactor(
+    input.distanceMeters,
+    input.vision,
+    attentionRangeFactor,
+  );
+  const transmissionFactor = clamp01(input.visualTransmission);
   const observerConditionFactor = clamp01(input.observerCondition);
   const quality01 = input.blocked
     ? 0
@@ -44,6 +63,7 @@ export function evaluateCellVisibilityQuality(input: CellVisibilityQualityInput)
     distanceFactor,
     transmissionFactor,
     attentionFactor,
+    attentionRangeFactor,
     observerConditionFactor,
     blocked: input.blocked,
   };
