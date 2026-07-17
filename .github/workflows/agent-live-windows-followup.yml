@@ -42,6 +42,7 @@ jobs:
           mkdir -p artifacts/performance/live-windows-followup
           {
             python3 scripts/agent_live_windows_followup_patchfix.py
+            python3 scripts/agent_live_windows_followup_labfix.py
             python3 scripts/agent_live_windows_followup_apply.py
             python3 scripts/agent_live_windows_followup_testsfix.py
           } 2>&1 | tee artifacts/performance/live-windows-followup/patch-apply.log
@@ -77,6 +78,7 @@ jobs:
         run: |
           rm scripts/agent_live_windows_followup_apply.py
           rm scripts/agent_live_windows_followup_patchfix.py
+          rm scripts/agent_live_windows_followup_labfix.py
           rm scripts/agent_live_windows_followup_testsfix.py
           rm .github/workflows/agent-live-windows-followup.yml
           rm -f artifacts/performance/live-windows-followup/.apply-trigger
