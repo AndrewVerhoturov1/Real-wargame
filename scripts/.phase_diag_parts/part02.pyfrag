@@ -1,4 +1,3 @@
-)
 content = replace_exact(
     content,
     "        sceneUpdateMs: buildStats(sceneUpdateValues),\n        renderMs: buildStats(sceneUpdateValues),\n",
