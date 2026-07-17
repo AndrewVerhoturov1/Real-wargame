@@ -28,10 +28,10 @@ import { installAttentionOverlayRenderer } from './rendering/AttentionOverlayIns
 import { installCombatEffectsRenderer } from './rendering/CombatEffectsInstaller';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
 import { installAppShellMenu } from './shared/AppShellMenu';
+import { installAiSchedulerBrowserPerformanceHarness } from './testing/AiSchedulerBrowserPerformanceHarness';
 import { installAiStatePlanVisualQaHarness } from './testing/AiStatePlanVisualQaHarness';
 import { installCombatTacticalIntegrationVisualQaHarness } from './testing/CombatTacticalIntegrationVisualQaHarness';
 import { installDangerLayerMovementPerformanceHarness } from './testing/DangerLayerMovementPerformanceHarness';
-import { installLiveWindowsPerformanceHarness } from './testing/LiveWindowsPerformanceHarness';
 import { installAiDictionaryGameIntegration } from './ui/AiDictionaryGameIntegration';
 import { installAttentionProfileControls } from './ui/AttentionProfileControls';
 import { installAttentionRuntimePanel } from './ui/AttentionRuntimePanel';
@@ -101,10 +101,10 @@ async function bootstrap(): Promise<void> {
   installPauseToggle(pauseToggle, forceRenderAtNativeMapQuality);
   const destroyTacticalWorkspace = installTacticalWorkspace(state, aiGameBridge, forceRenderAtNativeMapQuality);
   const destroyCombatControls = installCombatControls(state, forceRenderAtNativeMapQuality);
+  installAiSchedulerBrowserPerformanceHarness(state, forceRenderAtNativeMapQuality);
   installAiStatePlanVisualQaHarness(state, forceRenderAtNativeMapQuality);
   installCombatTacticalIntegrationVisualQaHarness(state, forceRenderAtNativeMapQuality);
   installDangerLayerMovementPerformanceHarness(state);
-  installLiveWindowsPerformanceHarness(state);
   const destroyAttentionRuntimePanel = installAttentionRuntimePanel(state, forceRenderAtNativeMapQuality);
   const destroyAttentionOverlayRenderer = installAttentionOverlayRenderer(board, state);
   const destroyCombatEffectsRenderer = installCombatEffectsRenderer(tacticalBoard, state);
