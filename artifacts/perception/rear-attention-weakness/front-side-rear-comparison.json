@@ -1,0 +1,45 @@
+{
+  "status": "contract-defined; targeted smoke is wired into perception:smoke",
+  "profile": "observe",
+  "baseVisualRangeMeters": 600,
+  "benchmarkDistanceMeters": 60,
+  "contactEvidenceThreshold": 80,
+  "directions": {
+    "front": {
+      "angleDegrees": 0,
+      "attentionWeight": 1.0,
+      "evidenceSamplingFactor": 1.0,
+      "effectiveVisualRangeFactor": 1.0,
+      "effectiveVisualRangeMeters": 600,
+      "visibilityQualityAtBenchmark": 1.0,
+      "neutralEvidencePerSecond": 52.0,
+      "neutralContactTimeSeconds": 1.5384615385
+    },
+    "side": {
+      "angleDegrees": 90,
+      "attentionWeight": 0.3085125171,
+      "evidenceSamplingFactor": 1.0,
+      "effectiveVisualRangeFactor": 0.7188100137,
+      "effectiveVisualRangeMeters": 431.2860082,
+      "visibilityQualityAtBenchmark": 0.3052239321,
+      "neutralEvidencePerSecond": 15.8716444671,
+      "neutralContactTimeSeconds": 5.0404354864
+    },
+    "rear": {
+      "angleDegrees": 180,
+      "attentionWeight": 0.06,
+      "evidenceSamplingFactor": 0.2,
+      "effectiveVisualRangeFactor": 0.25,
+      "effectiveVisualRangeMeters": 150,
+      "visibilityQualityAtBenchmark": 0.0333142394,
+      "neutralEvidencePerSecond": 0.3464680894,
+      "neutralContactTimeSeconds": 230.9014955734
+    }
+  },
+  "notes": [
+    "Neutral timing isolates attention, directional range and rear sampling.",
+    "Target movement, action, posture, size, concealment and stable variance remain active gameplay multipliers.",
+    "The rear transition is smoothed between 123 and 147 degrees.",
+    "No new point-LOS preparation or full-map runtime pass is introduced."
+  ]
+}
