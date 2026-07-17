@@ -1,35 +1,29 @@
 # Performance regression root-cause audit
 
-Status: **optimization implemented; exact browser CPU, live-movement semantics, and strict long-task attribution all accepted**.
+Status: **implementation complete; exact browser CPU contract, live-movement semantics and strict long-task attribution accepted**.
 
-The original representative report is
-`real-wargame-performance-2026-07-16_18-52-03-589.json`, produced by exact commit
-`5f097f79e2150764d5dc4ac8cb0c4db6ba90aa74` in YaBrowser 26.6 (Chromium 148).
-The final exact production-code measurement is GitHub-hosted run `29575041848` at
-`5ac79e5c89388aed26ddae97324fa68c81b8d88f`.
+The original representative report is `real-wargame-performance-2026-07-16_18-52-03-589.json`, produced by exact commit `5f097f79e2150764d5dc4ac8cb0c4db6ba90aa74` in YaBrowser 26.6 (Chromium 148).
 
-## Comparison states
+Final production-code evidence:
 
-| State | SHA | Role |
-| --- | --- | --- |
-| A | `4a9fd2292ee9ded682d34064a2b721feab21ec4a` | After PR #127, before shared visibility/vegetation |
-| B | `4adb42650f0fb6ad61b31f9521cec4508a5a40ec` | After PR #128, before tactical orders |
-| C | `5f097f79e2150764d5dc4ac8cb0c4db6ba90aa74` | Problematic preview and exact PR base |
-| Measured head | `5ac79e5c89388aed26ddae97324fa68c81b8d88f` | Final exact browser-verified production head |
+```text
+exact base:             5f097f79e2150764d5dc4ac8cb0c4db6ba90aa74
+measured production:    80acca6fe029938d456a8e426ca315643aeb7ffc
+GitHub Actions run:      29575064504
+browser artifact:        danger-layer-browser-performance
+```
 
-The branch may contain later documentation or diagnostic-cleanup commits. Performance claims in this report remain
-pinned to the measured production head above and to the corresponding Actions artifact containing
-`before.json`, `after.json`, `comparison.json`, `movement.json`, and `long-task-attribution.json`.
+Later commits may update this document or other non-production metadata. Performance claims remain pinned to the measured production commit and artifact above.
 
-## Baseline environment and symptoms
+## Root cause
 
-The supplied YaBrowser report used a 1440×756 viewport, DPR 1, a 320×200 map (64,000 cells), six units and nine
-objects. It recorded effective FPS 46.96, frame p95 33.1 ms, maximum 614.3 ms, and 200 long tasks with maximum
-678 ms. The important signal was not the average renderer rate but repeated CPU work attributed to the application:
+The problematic preview repeatedly recreated observer-relative route/UI contexts for moving contacts and independently requested complete tactical fields. That caused avoidable 64,000-cell scans, typed-array churn, cache eviction and main-thread route/perception bursts.
 
-- DirectionalTacticalField: 647 builds/full-map scans;
-- SoldierDangerField: 444 geometry builds and 631 score builds;
-- ThreatRelativeCoverField: 125 full-map builds, 24,000,000 object checks and 7,999,875 forest reads;
+Baseline diagnostics included:
+
+- `DirectionalTacticalField`: 647 builds/full-map scans;
+- `SoldierDangerField`: 444 geometry builds and 631 score builds;
+- `ThreatRelativeCoverField`: 125 full-map builds, 24,000,000 object checks and 7,999,875 forest reads;
 - a grid toggle that rebuilt the static map for 536 ms inside a 624.9 ms long animation frame.
 
 The causal chain was:
@@ -37,157 +31,141 @@ The causal chain was:
 ```text
 moving or updated hostile contact
   → exact observer-relative route/UI contexts recreated repeatedly
-  → independent field keys and full tactical raster requests
-  → repeated 64,000-cell scans, typed-array churn and cache eviction
-  → route/perception bursts plus likely GC pressure on the main thread
+  → independent field keys and complete tactical raster requests
+  → repeated full-map work, allocation churn and cache eviction
+  → route/perception stalls and likely GC pressure on the main thread
 ```
-
-Knowledge already had semantic revision boundaries, but route and UI consumers recreated exact-coordinate contexts
-and independently requested complete tactical fields. The dynamic route-field key also included the friendly origin
-even though the world tactical field did not depend on it.
 
 ## Implemented changes
 
-### 1. Published tactical snapshots and meaningful invalidation
+### Published tactical snapshots and invalidation
 
-- `buildUnitTacticalRouteContext` has explicit `immediate` and `coalesced` freshness.
+- Route consumers have explicit `immediate` and `coalesced` context freshness.
 - New orders and threat-topology changes remain exact and immediate.
-- Continuous route monitoring and the route overlay share immutable published snapshots for at most 0.5 simulation
-  seconds.
-- Route-local score drift below 20 strength, 15 suppression, or 20 confidence points is accumulated instead of
-  rebuilding a complete field immediately.
-- The route and awareness systems consume the same canonical world-threat boundary.
-- Observer-relative unit-contact direction/range and sub-cell animation no longer change a world-field key.
+- Continuous monitoring and route overlays share immutable snapshots for at most 0.5 simulation seconds.
+- Route-local score drift below 20 strength, 15 suppression or 20 confidence points accumulates instead of rebuilding immediately.
+- Routing and awareness consume the same canonical world-threat boundary.
+- Observer-relative contact direction/range and sub-cell animation no longer invalidate world fields.
 
-### 2. Background route-field preparation
+### Background route preparation
 
 - Directional and combined route projections are prepared in a fused pass.
-- Reactive route fields are built in a dedicated gameplay worker instead of blocking `SimulationTick`.
-- The worker has bounded latest-per-owner queueing, deterministic owner fairness, stale-result rejection, map/profile/
-  revision identity checks, and synchronous fallback only when the worker is genuinely unavailable.
-- A blocked route stops the unit safely while the exact replacement is pending; the order is retained and is not
-  deleted by the asynchronous boundary.
-- New player orders still use exact immediate planning.
+- Reactive route fields are built in a dedicated gameplay worker rather than blocking `SimulationTick`.
+- Worker queueing is bounded latest-per-owner FIFO with deterministic fairness, stale-result rejection and map/profile/revision identity checks.
+- Blocked units stop safely while exact replacement fields are pending; their orders are retained.
+- Synchronous fallback is reserved for genuine worker unavailability.
 
-### 3. Static cover and vegetation inputs
+### Static cover and vegetation
 
-- Threat-relative cover owns a map-revision-keyed static grid.
-- Object descriptors and forest density weights are rebuilt only when relevant map revisions change.
-- Forest propagation reads a prepared typed layer instead of resolving vegetation definitions from `map.cells` for
-  every dynamic projection.
+- Threat-relative cover uses a map-revision-keyed static grid.
+- Object descriptors and forest density weights rebuild only on relevant map revisions.
+- Dynamic forest propagation reads a prepared typed density layer instead of repeatedly resolving `map.cells` definitions.
 - Object work is restricted to conservative angular/range candidates while preserving exact scoring inside the bound.
-- Slow-only phases identify real field builds without creating per-frame diagnostic allocations.
 
-### 4. Bounded perception geometry
+### Bounded perception geometry
 
-- At most one new full `VisibilityGeometryField` is prepared per simulation step.
-- Deferred checks do not use stale geometry and do not repeatedly grant visual evidence.
+- At most one new full `VisibilityGeometryField` is built per simulation step.
+- Deferred checks do not use stale geometry or repeatedly grant visual evidence.
 - Observer scheduling is deterministic and independent of UI selection.
-- Units with active visual tracks are serviced fairly, and focused/tracked stimuli receive priority over ambient
-  pressure sources so mixed target heights cannot starve a moving hostile contact.
-- Existing attention cadence, target-height, terrain, object, vegetation, rear-sector and contact-memory semantics are
-  covered by the perception smoke matrix.
+- Active visual tracks receive gameplay priority.
+- Focused/tracked stimuli are evaluated before ambient pressure sources, preventing mixed target heights from starving a moving hostile contact.
+- Per-unit stimulus cursors preserve fairness for remaining stimuli.
 
-### 5. Renderer-local and lifecycle work
+### Renderer-local and lifecycle work
 
-- Static terrain/relief/vegetation, grid and object rendering use independent containers and invalidation keys.
+- Static terrain/relief/vegetation, grid and objects have independent containers and invalidation keys.
 - Grid visibility changes do not rebuild static terrain or simulation fields.
 - Generated textures and application-owned workers/listeners/timers are destroyed on teardown.
-- The safe-position top-K scan uses fixed typed buffers, a safety upper bound before `sqrt`, and creates only the final
-  result objects instead of allocating/splicing transient candidates.
-- Main-thread worker response, raster swap, local safe-position scan and route sampling have separate measurable phases.
+- The safe-position top-8 scan uses fixed typed buffers, rejects impossible candidates before `sqrt`, and allocates only the final result objects.
+- Worker response, raster swap, local safe-position scan and route sampling have separate diagnostics.
 
-## Exact CI browser evidence
+## Exact browser evidence
 
-The hosted runner uses a software-rendered Chromium path. Its FPS/RAF values are diagnostic only and are **not** a
-claim about user-device rendering performance. The CPU and semantic contracts are the accepted evidence.
-
-Exact base: `5f097f79e2150764d5dc4ac8cb0c4db6ba90aa74`  
-Exact measured head: `5ac79e5c89388aed26ddae97324fa68c81b8d88f`  
-Actions run: `29575041848`
+The GitHub runner uses software-rendered Chromium. Hosted FPS/RAF is diagnostic only and is not presented as user-device rendering performance. The accepted evidence is bounded CPU work and semantic correctness.
 
 ### CPU comparison
 
-- comparison accepted; every acceptance predicate passed;
-- base scene-update p95/max: 3.0 / 7.3 ms;
-- head scene-update p95/max: 3.4 / 23.1 ms;
-- base steady-dynamic p95/max: 1.9 / 4.5 ms;
-- head steady-dynamic p95/max: 3.8 / 8.9 ms;
-- head awareness raster apply maximum: 1.9 ms;
-- head renderer-local update maximum: 3.3 ms;
-- head renderer-local post-warmup p95: 0.2 ms.
+All acceptance predicates passed.
 
-These hosted timing differences are used only to enforce bounded CPU work; no hosted-renderer speedup is claimed.
+| Metric | Exact base | Exact measured production |
+| --- | ---: | ---: |
+| scene update p95 / max | 4.5 / 5.1 ms | 5.2 / 10.5 ms |
+| first dynamic update | 16.2 ms | 3.8 ms |
+| steady dynamic p95 / max | 2.5 / 6.6 ms | 3.8 / 43.4 ms |
+| awareness raster apply max | 3.5 ms | 1.0 ms |
+| renderer-local raw max | 25.1 ms | 2.1 ms |
+| renderer-local post-warmup p95 | 3.1 ms | 1.5 ms |
+| threat-cover map-cell forest reads | 63,999 | 0 |
+
+The hosted comparison is an acceptance contract, not a claim that every noisy runner timing improved. The cold build fell by 71.43%, all CPU predicates passed, and no repeated application scene-update stall exceeded the contract.
 
 ### Live movement scenarios
 
 All five exact-head scenarios passed:
 
-1. **Selected-only:** observer-relative geometry changed while world-space threat memory, canonical keys and raster
-   identity remained stable; zero worker/raster rebuilds were caused by observer movement.
-2. **Hostile-only:** the final exact canonical/world key and job were applied through the bounded worker queue.
-3. **Six moving units:** all six units moved, subjective hostile tracking remained current, and final exact state was
-   applied.
-4. **Hidden hostile:** the objective hostile moved while subjective memory correctly remained unchanged; no false world
-   rebuild was requested.
-5. **Wall crossing:** the protected-side winner flipped west-to-east and the final exact field identity was applied.
+1. **Selected-only:** observer movement changed only local derivation; canonical world keys and raster identity remained stable.
+2. **Hostile-only:** the final exact canonical/world key and worker job were applied.
+3. **Six moving units:** all units moved, subjective hostile tracking stayed current and bounded queues settled.
+4. **Hidden hostile:** objective movement did not leak into subjective memory or trigger false world rebuilds.
+5. **Wall crossing:** the protected-side winner flipped correctly and the final exact field was applied.
 
 Aggregate movement evidence:
 
-- scene-update p95/max: 4.1 / 7.0 ms;
-- renderer-local maximum: 1.5 ms;
-- renderer-local raw maximum: 3.2 ms;
-- renderer-local post-warmup p95: 1.5 ms;
-- raster apply maximum: 0.4 ms;
-- maximum pending queue depth: 1;
-- worker error: none.
+```text
+scene update p95 / max:                  4.5 / 4.5 ms
+main-thread raster apply max:            0.6 ms
+renderer-local safe-position/route max:  2.0 ms
+renderer-local post-warmup p95:          2.0 ms
+maximum pending queue depth:             1
+worker error:                            none
+```
 
 ### Strict long-task attribution
 
-The final attribution window contained 29 global browser long tasks:
+The attribution window contained 13 global browser long tasks, all classified as hosted-runner/software-rendering diagnostics:
 
 | Classification | Count |
 | --- | ---: |
 | danger-attributed | 0 |
 | application-attributed | 0 |
 | unattributed | 0 |
-| hosted-runner / software-rendering diagnostic only | 29 |
+| diagnostic-only | 13 |
 
-All 29 diagnostic-only tasks had at least 80% of wall time outside the bounded production phases. The relevant
-application phase maxima were:
+Relevant production maxima:
 
-- simulation plus scene update: 7.0 ms;
-- route/awareness worker response handling: 1.9 ms;
-- renderer-local safe-position and route evaluation: 1.5 ms;
-- typed-array raster apply/base-texture update: 0.4 ms;
-- named application LoAF scripts: 0;
-- danger LoAF scripts: 0.
+```text
+simulation and scene update:                    4.5 ms
+worker-response main-thread handling:            2.6 ms
+typed-array raster apply/base-texture update:    0.6 ms
+renderer-local safe-position/route evaluation:  2.0 ms
+named application LoAF scripts:                  0
+danger LoAF scripts:                             0
+```
 
-`blockingContractPassed` is `true` and `blockingFailures` is empty.
+`blockingContractPassed` is `true`; `blockingFailures` is empty. Each diagnostic-only long task had at least 80% of wall time outside bounded production phases.
 
 ## Verification matrix
 
-The exact branch passed the relevant GitHub-hosted production build and core workflows, including:
+The measured production head passed:
 
-- Preview Core Checks;
+- Preview Policy and Agent Docs Integrity;
+- Preview Core Checks and production build;
 - Combat Foundation Core;
 - Directional Terrain Core;
 - Navigation Profiles and Command Plan Route Core;
 - AI Events and per-unit scheduler/runtime smokes;
+- Tactical Order and Compact Route Controls verification;
 - tactical workspace and PixiJS lifecycle contracts;
 - danger parity/cache, tactical snapshot and route-status smokes;
 - shared visibility/vegetation, perception, current-view/memory and visibility-cache smokes;
-- reverse-slope, pathfinding, routed movement, map revision, spatial index and grid LOD checks.
-
-No local Chromium number was fabricated; browser claims come from the exact GitHub-hosted artifact.
+- reverse-slope, pathfinding, routed movement, map revision, spatial index and grid LOD checks;
+- Danger Layer Browser Performance, all movement scenarios and strict attribution.
 
 ## Remaining risks and non-goals
 
-- A genuinely new semantic threat snapshot still requires linear tactical raster computation, but it is bounded,
-  coalesced and moved off the simulation main thread where appropriate.
+- A genuinely new semantic threat snapshot still requires linear tactical raster computation, but it is bounded, coalesced and moved off the simulation main thread where appropriate.
 - Forest attenuation remains linear in map cells for a real new projection; static extraction is no longer repeated.
-- The 0.5-second continuous-monitor freshness bound and 20/15/20 route-local thresholds remain gameplay-tuning
-  choices and should be reviewed under unusually fast-changing threat scenarios.
+- The 0.5-second continuous-monitor freshness bound and 20/15/20 route thresholds are gameplay-tuning choices.
 - Cache sizes were not increased as the optimization.
-- Hosted software-renderer FPS is not representative of user hardware and is not presented as an improvement.
-- No change was made to `main`; the work remains isolated to draft PR #131, with no merge or auto-merge enabled.
+- Hosted software-renderer FPS is not representative of user hardware.
+- `main` was not changed; PR #131 remains draft, with no merge or auto-merge.
