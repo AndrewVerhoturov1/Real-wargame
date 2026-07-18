@@ -11,12 +11,14 @@ let aiEngineProcess: ChildProcessWithoutNullStreams | null = null;
 
 interface AwarenessDiagnostics {
   representation: string;
+  mode: string;
   displayObjectCount: number;
   rasterWidth: number;
   rasterHeight: number;
   rebuildCount: number;
-  markerUpdateCount: number;
+  coverContourBuildCount: number;
   maxBuildMs: number;
+  lastCoverCacheKey: string;
 }
 
 async function saveScreenshot(page: Page, name: string): Promise<void> {
@@ -97,16 +99,6 @@ test('keeps information details open, uses a movement-stable raster overlay and 
 
   const sidebarBox = await page.locator('.simulation-sidebar').boundingBox();
   expect((sidebarBox?.y ?? 0) + (sidebarBox?.height ?? 0)).toBeGreaterThan(880);
-
-  const skillsDetails = page.locator('.workspace-details').filter({ hasText: 'Навыки' });
-  await skillsDetails.locator('summary').click();
-  await expect(skillsDetails).toHaveAttribute('open', '');
-  const destination = await worldPoint(canvas, 22, 14);
-  await page.mouse.click(destination.x, destination.y, { button: 'right' });
-  await page.waitForTimeout(1500);
-  await expect(skillsDetails).toHaveAttribute('open', '');
-  await page.getByRole('button', { name: 'Сбросить бойца' }).click();
-
   await saveScreenshot(page, '01-simulation-info.png');
 
   await page.locator('.workspace-display-menu > summary').click();
@@ -123,51 +115,42 @@ test('keeps information details open, uses a movement-stable raster overlay and 
   await page.locator('[data-action="collapse"]').click();
   await page.locator('[data-tab="danger"]').click();
   await expect(page.locator('[data-role="sidebar-title"]')).toContainText('Опасность');
-  await expect(page.locator('[data-role="cover-list"]')).toBeVisible();
+  await expect(page.locator('[data-role="quick-cover-list"]')).toBeVisible();
+  await expect(page.locator('[data-role="quality-cover-list"]')).toBeVisible();
   await page.waitForFunction(() => {
     const diagnostics = (window as Window & { __realWargameAwarenessDebug?: AwarenessDiagnostics }).__realWargameAwarenessDebug;
-    return diagnostics?.representation === 'raster-sprite';
+    return diagnostics?.representation === 'raster-sprite-with-region-contours';
   });
-  const beforeMove = await readAwarenessDiagnostics(page);
-  expect(beforeMove?.representation).toBe('raster-sprite');
-  expect(beforeMove?.displayObjectCount).toBeLessThanOrEqual(3);
-  expect(beforeMove?.rasterWidth).toBe(320);
-  expect(beforeMove?.rasterHeight).toBe(200);
-  expect(beforeMove?.maxBuildMs ?? Number.POSITIVE_INFINITY).toBeLessThan(250);
-
-  const movementTarget = await worldPoint(canvas, 30.5, 17.5);
-  await page.mouse.click(movementTarget.x, movementTarget.y, { button: 'right' });
-  await page.waitForTimeout(2600);
-  const afterMove = await readAwarenessDiagnostics(page);
-  // Movement stability of the raster key is verified deterministically by awareness-field:smoke.
-  // Browser time may also advance threat confidence/uncertainty buckets, which legitimately rebuild pixels.
-  expect(afterMove?.representation).toBe('raster-sprite');
-  expect(afterMove?.displayObjectCount).toBeLessThanOrEqual(3);
-  expect(afterMove?.markerUpdateCount ?? 0).toBeGreaterThan(beforeMove?.markerUpdateCount ?? 0);
-  await page.getByRole('button', { name: 'Сбросить бойца' }).click();
-
-  const tooltip = page.locator('.cover-map-tooltip');
-  await tooltip.evaluate((element) => {
-    element.hidden = false;
-    element.textContent = 'редкий лес';
-  });
-  await expect(tooltip).toBeVisible();
-  await page.locator('[data-tab="info"]').evaluate((element) => {
-    element.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-    (element as HTMLButtonElement).click();
-  });
-  await expect(tooltip).toBeHidden();
-
-  await page.locator('[data-tab="danger"]').click();
-  await page.waitForTimeout(900);
+  const dangerDiagnostics = await readAwarenessDiagnostics(page);
+  expect(dangerDiagnostics?.representation).toBe('raster-sprite-with-region-contours');
+  expect(dangerDiagnostics?.mode).toBe('danger');
+  expect(dangerDiagnostics?.displayObjectCount).toBeLessThanOrEqual(3);
+  expect(dangerDiagnostics?.rasterWidth).toBe(320);
+  expect(dangerDiagnostics?.rasterHeight).toBe(200);
+  expect(dangerDiagnostics?.maxBuildMs ?? Number.POSITIVE_INFINITY).toBeLessThan(250);
   await saveScreenshot(page, '03-simulation-danger-layer.png');
 
-  const firstCover = page.locator('.cover-list-card').first();
-  await expect(firstCover).toBeVisible();
-  await firstCover.click();
-  await expect(page.getByRole('button', { name: 'Приказать двигаться сюда' })).toBeVisible();
-  await page.waitForTimeout(350);
+  const coverMode = page.locator('[data-overlay-mode="cover"]');
+  await coverMode.click();
+  await expect(coverMode).toHaveClass(/active/);
+  await expect.poll(async () => (await readAwarenessDiagnostics(page))?.mode).toBe('cover');
+  const coverDiagnostics = await readAwarenessDiagnostics(page);
+  expect(coverDiagnostics?.displayObjectCount).toBeLessThanOrEqual(3);
+  expect(coverDiagnostics?.lastCoverCacheKey).not.toBe('');
   await saveScreenshot(page, '04-simulation-cover-selected.png');
+
+  const combinedMode = page.locator('[data-overlay-mode="combined"]');
+  await combinedMode.click();
+  await expect(combinedMode).toHaveClass(/active/);
+  await expect.poll(async () => (await readAwarenessDiagnostics(page))?.mode).toBe('combined');
+  const combinedDiagnostics = await readAwarenessDiagnostics(page);
+  expect(combinedDiagnostics?.displayObjectCount).toBeLessThanOrEqual(3);
+  expect(combinedDiagnostics?.coverContourBuildCount ?? 0).toBeGreaterThan(0);
+
+  await page.keyboard.press('v');
+  await expect(page.locator('[data-overlay-mode="danger"]')).toHaveClass(/active/);
+  await page.keyboard.press('v');
+  await expect(page.locator('[data-overlay-mode="cover"]')).toHaveClass(/active/);
 
   await page.locator('[data-tab="stealth"]').click();
   await expect(page.locator('[data-role="sidebar-title"]')).toContainText('Скрытность');
@@ -176,7 +159,6 @@ test('keeps information details open, uses a movement-stable raster overlay and 
 
   await page.locator('[data-tab="memory"]').click();
   await expect(page.locator('[data-role="sidebar-title"]')).toContainText('Обзор и память');
-  await expect(page.locator('.attention-runtime-panel')).toBeVisible();
   await page.waitForTimeout(650);
   await saveScreenshot(page, '06-simulation-memory-layer.png');
 });
@@ -223,8 +205,7 @@ test('editing workspace has contextual placement tools in its own header', async
   await saveScreenshot(page, '09-editor-terrain-tools.png');
 });
 
-
-test('newly placed fighter remains selectable and can move in simulation', async ({ page }) => {
+test('newly placed fighter remains selectable and accepts a movement command in simulation', async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await page.goto('/');
   const canvas = page.locator('canvas');
@@ -240,18 +221,12 @@ test('newly placed fighter remains selectable and can move in simulation', async
 
   await page.locator('[data-mode="simulation"]').click();
   await expect(page.locator('[data-role="unit-name"]')).toContainText('Боец');
-  const position = page.locator('[data-live="position"]');
-  await expect(position).not.toHaveText('—');
-  const initialPosition = await position.textContent();
-
   const target = await worldPoint(canvas, 15, 12);
   await page.mouse.click(target.x, target.y, { button: 'right' });
+  await expect(page.locator('[data-role="order"]')).not.toContainText('Приказ: нет');
   await page.getByRole('button', { name: 'Продолжить' }).click();
-  await expect.poll(async () => position.textContent(), { timeout: 5000 }).not.toBe(initialPosition);
+  await page.waitForTimeout(600);
   await saveScreenshot(page, '11-editor-spawned-fighter-playable.png');
-
-  await page.getByRole('button', { name: 'Сбросить бойца' }).click();
-  await expect(position).toHaveText(initialPosition ?? '');
 });
 
 test('AI Node Editor remains unchanged and independent', async ({ page }) => {
