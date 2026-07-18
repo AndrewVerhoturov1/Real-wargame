@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "project": {
     "name": "Real-Wargame",
     "repository": "AndrewVerhoturov1/Real-wargame",
@@ -29,13 +29,23 @@
     "codexRole": "branch-linked-vercel-preview-only",
     "codexMayModifyCode": false,
     "codexReentryRequiredAfterFeaturePush": false,
-    "visualQaTrigger": "explicit-user-request-only",
+    "visualQaTrigger": "explicit-user-intent-only",
+    "visualQaSkillNameNeedNotBeStatedByUser": true,
+    "directBrowserVisualSkill": ".agents/skills/real-wargame-local-preview/SKILL.md",
+    "deployedVercelVisualFallbackSkill": ".agents/skills/vercel-deployment-playwright-e2e/SKILL.md",
+    "deployedVercelVisualFallbackAutoLoad": true,
+    "deployedVercelVisualFallbackCondition": "visual-request-and-no-direct-controlled-browser",
+    "visualCiUsesTemporaryBranchesOnly": true,
+    "visualCiPullRequestMayMerge": false,
+    "visualCiMayModifyProductBranches": false,
+    "visualEvidenceInvalidatedByProductShaChange": true,
     "previewTransferRequiresExplicitUserGo": true,
     "pullRequestIsDefault": false,
     "mainRequiresExplicitUserGo": true,
     "autoMergeAllowed": false
   },
   "canonicalWorkflow": "docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md",
+  "canonicalVisualPolicy": "docs/workflow/VISUAL_QA_APPROVAL_POLICY.md",
   "agentEntryPoints": [
     "AGENTS.md",
     "docs/ai/WEB_CHAT_START.md",
@@ -44,6 +54,7 @@
   ],
   "defaultSkills": {
     "localPreview": ".agents/skills/real-wargame-local-preview/SKILL.md",
+    "deployedVercelVisualE2E": ".agents/skills/vercel-deployment-playwright-e2e/SKILL.md",
     "pixiJs": ".agents/skills/real-wargame-pixijs/SKILL.md",
     "aiRuntime": ".agents/skills/real-wargame-ai-runtime/SKILL.md"
   },
