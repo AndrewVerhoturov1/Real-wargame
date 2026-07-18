@@ -1,4 +1,6 @@
 import { measurePerformancePhase } from '../debug/PerformancePhases';
+import { getEnvironmentProfileDomainKey } from '../map/EnvironmentMaterialProfile';
+import { getActiveEnvironmentProfile } from '../map/EnvironmentProfileRuntime';
 import type { TacticalMap, TerrainKind } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
 import { getBuiltInNavigationProfile, type NavigationProfile } from './NavigationProfiles';
@@ -79,6 +81,22 @@ interface MapRuntime {
 }
 
 const runtimeByMap = new WeakMap<TacticalMap, MapRuntime>();
+
+/**
+ * Must stay byte-for-byte compatible with RouteCostField.mapRevisionKey.
+ * PR #135 added the active environment movement domain to the route field key;
+ * worker results that used the legacy four-part key were therefore rejected forever.
+ */
+export function buildRouteCostWorkerMapRevisionKey(map: TacticalMap): string {
+  const revisions = getMapRevisionSnapshot(map);
+  return [
+    revisions.terrain,
+    revisions.height,
+    revisions.forest,
+    getEnvironmentProfileDomainKey(getActiveEnvironmentProfile(), 'movement'),
+    revisions.objects,
+  ].join(':');
+}
 
 export function getOrRequestAsyncRouteCostFields(
   map: TacticalMap,
@@ -263,11 +281,10 @@ function handleResponse(map: TacticalMap, runtime: MapRuntime, response: RouteCo
     if (stale) {
       runtime.diagnostics.staleResultsDropped += 1;
     } else {
-      const revisions = getMapRevisionSnapshot(map);
       const fields: RouteCostFields = {
         ...response.fields,
         mapIdentity: runtime.mainMapIdentity,
-        mapRevisionKey: [revisions.terrain, revisions.height, revisions.forest, revisions.objects].join(':'),
+        mapRevisionKey: buildRouteCostWorkerMapRevisionKey(map),
       };
       if (routeCostFieldsMatch(map, inFlight.profile, fields)) {
         runtime.ready.set(response.requestKey, fields);
@@ -323,17 +340,13 @@ function buildMapSnapshot(map: TacticalMap, mapKey: string): RouteCostWorkerMapS
 }
 
 function buildMapKey(map: TacticalMap): string {
-  const revisions = getMapRevisionSnapshot(map);
   return [
     map.width,
     map.height,
     map.cellSize,
     map.metersPerCell,
     map.sourceToRuntimeCellScale,
-    revisions.terrain,
-    revisions.height,
-    revisions.forest,
-    revisions.objects,
+    buildRouteCostWorkerMapRevisionKey(map),
   ].join(':');
 }
 
