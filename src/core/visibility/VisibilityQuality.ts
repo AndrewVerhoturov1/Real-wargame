@@ -7,6 +7,8 @@ export interface CellVisibilityQualityInput {
   attentionWeight: number;
   observerCondition: number;
   vision: UnitVisionSettings;
+  /** Optional close-awareness floor. It is ignored when hard LOS is blocked. */
+  minimumVisibilityQuality?: number;
 }
 
 export interface CellVisibilityQuality {
@@ -36,9 +38,10 @@ export function evaluateCellVisibilityQuality(input: CellVisibilityQualityInput)
   const transmissionFactor = clamp01(input.visualTransmission);
   const attentionFactor = clamp01(input.attentionWeight);
   const observerConditionFactor = clamp01(input.observerCondition);
+  const calculated = clamp01(distanceFactor * transmissionFactor * attentionFactor * observerConditionFactor);
   const quality01 = input.blocked
     ? 0
-    : clamp01(distanceFactor * transmissionFactor * attentionFactor * observerConditionFactor);
+    : Math.max(calculated, clamp01(input.minimumVisibilityQuality ?? 0));
   return {
     quality01,
     distanceFactor,
