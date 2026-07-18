@@ -40,6 +40,11 @@ export function installPerformanceReportControls(downloadReport: () => void): ()
 }
 
 function mountPerformanceReportControls(editorRoot: HTMLElement, downloadReport: () => void): () => void {
+  const group = document.createElement('section');
+  group.className = 'performance-report-controls';
+  group.dataset.workspaceFileAction = 'performance';
+  group.dataset.performanceControlGroup = 'v6';
+
   const title = element('div', 'Отладка производительности', 'editor-group-title');
   const hint = element(
     'div',
@@ -58,7 +63,6 @@ function mountPerformanceReportControls(editorRoot: HTMLElement, downloadReport:
   markerButton.dataset.performanceMarker = 'add';
 
   const exportButton = button('Экспортировать Performance Report v6', downloadReport);
-  exportButton.dataset.workspaceFileAction = 'performance';
   exportButton.dataset.performanceExport = 'v6';
 
   const recoveryRow = document.createElement('div');
@@ -82,7 +86,8 @@ function mountPerformanceReportControls(editorRoot: HTMLElement, downloadReport:
   clearButton.dataset.performanceRecovery = 'clear';
   recoveryRow.append(recoveredButton, clearButton);
 
-  editorRoot.append(title, hint, status, markerButton, exportButton, recoveryRow);
+  group.append(title, hint, status, markerButton, exportButton, recoveryRow);
+  editorRoot.append(group);
   const timer = window.setInterval(() => {
     const capture = getActivePerformanceStatus();
     if (!capture) return;
@@ -97,12 +102,7 @@ function mountPerformanceReportControls(editorRoot: HTMLElement, downloadReport:
 
   return () => {
     window.clearInterval(timer);
-    title.remove();
-    hint.remove();
-    status.remove();
-    markerButton.remove();
-    exportButton.remove();
-    recoveryRow.remove();
+    group.remove();
   };
 }
 
