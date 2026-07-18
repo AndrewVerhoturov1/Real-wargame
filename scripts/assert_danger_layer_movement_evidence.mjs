@@ -16,7 +16,7 @@ const expectedSha = process.env.DANGER_PERF_EXPECTED_SHA ?? '';
 if (evidence.version !== 'danger-layer-movement-evidence-v3') {
   failures.push(`unexpected movement evidence version: ${evidence.version ?? 'missing'}`);
 }
-if (evidence.build?.performanceContractVersion !== 'performance-report-v5') {
+if (evidence.build?.performanceContractVersion !== 'performance-report-v6') {
   failures.push(`unexpected performance contract: ${evidence.build?.performanceContractVersion ?? 'missing'}`);
 }
 if (!evidence.build?.commitSha) failures.push('movement evidence commit SHA is missing');

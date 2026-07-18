@@ -651,7 +651,8 @@ async function waitForWorkerSettled(page: Page, minimumFinalApplied = 1): Promis
 async function downloadReport(page: Page): Promise<{ report: PerformanceReport; exportTriggerMs: number }> {
   const downloadPromise = page.waitForEvent('download');
   const exportTriggerMs = await page.evaluate(() => {
-    const button = document.querySelector<HTMLElement>('[data-workspace-file-action="performance"]');
+    const button = document.querySelector<HTMLElement>('[data-performance-export="v6"]')
+      ?? document.querySelector<HTMLElement>('[data-workspace-file-action="performance"]');
     if (!button) throw new Error('Performance report control is missing.');
     const scenario = (window as Window & { __realWargamePerformanceScenario?: string | null }).__realWargamePerformanceScenario ?? 'none';
     const startedAt = performance.now();

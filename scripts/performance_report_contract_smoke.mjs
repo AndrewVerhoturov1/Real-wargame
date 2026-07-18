@@ -24,8 +24,10 @@ for (const token of [
 for (const token of [
   'traceRetentionMs: 30_000', 'sceneSampleIntervalMs: 750', 'editor.units-created',
   'route.request-created', 'route.search-completed', 'user.marker', 'worstWindows',
-  'recordQueueTransition', 'recordOperation',
+  'recordQueueTransition', 'recordOperation', 'FALLBACK_DEEP_SCAN_INTERVAL_MS',
 ]) assert.ok(capture.includes(token), `PerformanceCaptureV6 missing ${token}`);
+assert.ok(!capture.includes('sceneShapeChanged || slow'), 'Slow renderer frames must not amplify deep telemetry scans.');
+assert.ok(!capture.includes('tMs - this.lastOrderScanAt >= 100'), 'Per-frame order fallback must remain bounded.');
 for (const token of ['ROUTE_QUEUE_OVERLOAD', 'TELEMETRY_OVERHEAD', 'SEMANTIC_FAILURE', 'worstWindows']) {
   assert.ok(analysis.includes(token), `PerformanceCaptureAnalysisV6 missing ${token}`);
 }

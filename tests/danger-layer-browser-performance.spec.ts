@@ -283,7 +283,8 @@ async function stopBrowserTiming(page: Page): Promise<BrowserTimingResult> {
 async function downloadPerformanceReport(page: Page): Promise<PerformanceReport> {
   const downloadPromise = page.waitForEvent('download');
   await page.evaluate(() => {
-    const button = document.querySelector<HTMLElement>('[data-workspace-file-action="performance"]');
+    const button = document.querySelector<HTMLElement>('[data-performance-export="v6"]')
+      ?? document.querySelector<HTMLElement>('[data-workspace-file-action="performance"]');
     if (!button) throw new Error('Performance report control is missing.');
     button.click();
   });
