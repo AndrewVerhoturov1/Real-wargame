@@ -1,0 +1,225 @@
+name: PR Risk CI
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+    inputs:
+      base_sha:
+        description: Optional comparison base. Defaults to the previous commit.
+        required: false
+        type: string
+      full_matrix:
+        description: Run the full non-browser integration matrix.
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-risk-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  classify:
+    name: Classify change risk
+    runs-on: ubuntu-latest
+    outputs:
+      docs: ${{ steps.classify.outputs.docs }}
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+      runtime: ${{ steps.classify.outputs.runtime }}
+      build: ${{ steps.classify.outputs.build }}
+      ai: ${{ steps.classify.outputs.ai }}
+      navigation: ${{ steps.classify.outputs.navigation }}
+      terrain: ${{ steps.classify.outputs.terrain }}
+      combat: ${{ steps.classify.outputs.combat }}
+      tactical_order: ${{ steps.classify.outputs.tactical_order }}
+      ui: ${{ steps.classify.outputs.ui }}
+      performance_contract: ${{ steps.classify.outputs.performance_contract }}
+      danger_performance_recommended: ${{ steps.classify.outputs.danger_performance_recommended }}
+      live_performance_recommended: ${{ steps.classify.outputs.live_performance_recommended }}
+      performance_reason: ${{ steps.classify.outputs.performance_reason }}
+      needs_install: ${{ steps.classify.outputs.needs_install }}
+      needs_build: ${{ steps.classify.outputs.needs_build }}
+      full_matrix: ${{ steps.classify.outputs.full_matrix }}
+      evidence_status: ${{ steps.classify.outputs.evidence_status }}
+      evidence_valid: ${{ steps.classify.outputs.evidence_valid }}
+      tested_implementation_head: ${{ steps.classify.outputs.tested_implementation_head }}
+      changed_count: ${{ steps.classify.outputs.changed_count }}
+      invalidating_count: ${{ steps.classify.outputs.invalidating_count }}
+      evidence_invalidating_count: ${{ steps.classify.outputs.evidence_invalidating_count }}
+    steps:
+      - name: Checkout exact candidate with history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Classify paths and tested-head tail
+        id: classify
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha || github.event.before || format('{0}^', github.sha) }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_BODY: ${{ github.event.pull_request.body || '' }}
+          FULL_MATRIX: ${{ inputs.full_matrix || false }}
+        run: node scripts/ci_change_classifier.mjs
+
+  verify:
+    name: Minimal sufficient verification
+    needs: classify
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Verify CI classifier contract
+        run: node scripts/ci_change_classifier_smoke.mjs
+
+      - name: Install dependencies once
+        if: needs.classify.outputs.needs_install == 'true'
+        run: npm ci
+
+      - name: Documentation and policy integrity
+        if: needs.classify.outputs.docs == 'true'
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run visual-qa-policy:smoke
+          npm run docs:smoke
+          npm run docs:generate
+          git diff --exit-code
+          npm run docs:check
+
+      - name: TypeScript verification
+        if: needs.classify.outputs.runtime == 'true'
+        run: npx tsc --noEmit
+
+      - name: Focused AI contracts
+        if: needs.classify.outputs.full_matrix != 'true' && needs.classify.outputs.ai == 'true'
+        run: |
+          npm run event-queue:smoke
+          npm run runtime-session:smoke
+          npm run runtime-snapshot:smoke
+          npm run ai-scheduler:smoke
+
+      - name: Focused navigation contracts
+        if: needs.classify.outputs.full_matrix != 'true' && needs.classify.outputs.navigation == 'true'
+        run: |
+          npm run pathfinding:smoke
+          npm run routed-move:smoke
+          npm run command-plan-route:smoke
+          npm run navigation-profiles:smoke
+
+      - name: Focused terrain and visibility contracts
+        if: needs.classify.outputs.full_matrix != 'true' && needs.classify.outputs.terrain == 'true'
+        run: |
+          npm run directional-terrain:smoke
+          npm run map-revision:smoke
+          npm run shared-visibility-vegetation:smoke
+
+      - name: Focused combat and perception contracts
+        if: needs.classify.outputs.full_matrix != 'true' && needs.classify.outputs.combat == 'true'
+        run: |
+          npm run combat-foundation:smoke
+          npm run perception:smoke
+
+      - name: Focused tactical-order contracts
+        if: needs.classify.outputs.full_matrix != 'true' && needs.classify.outputs.tactical_order == 'true'
+        run: npm run tactical-order:smoke
+
+      - name: Focused UI and editor contracts
+        if: needs.classify.outputs.full_matrix != 'true' && needs.classify.outputs.ui == 'true'
+        run: |
+          npm run workspace:smoke
+          npm run editor:smoke
+
+      - name: Fast performance-contract checks
+        if: needs.classify.outputs.full_matrix != 'true' && needs.classify.outputs.performance_contract == 'true'
+        run: |
+          npm run performance-contract:smoke
+          npm run live-windows-workflow-contract:smoke
+
+      - name: Full non-browser matrix
+        if: needs.classify.outputs.full_matrix == 'true'
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run workspace:smoke
+          npm run lab:smoke
+          npm run game-editor:smoke
+          npm run editor:smoke
+          npm run engine:smoke
+          npm run runtime:smoke
+          npm run runtime-session:smoke
+          npm run runtime-snapshot:smoke
+          npm run event-queue:smoke
+          npm run ai-scheduler:smoke
+          npm run pathfinding:smoke
+          npm run routed-move:smoke
+          npm run command-plan-route:smoke
+          npm run navigation-profiles:smoke
+          npm run directional-terrain:smoke
+          npm run combat-foundation:smoke
+          npm run combat-tactical-integration:smoke
+          npm run tactical-order:smoke
+          npm run performance-contract:smoke
+
+      - name: Production build once
+        if: needs.classify.outputs.needs_build == 'true'
+        run: npm run build
+
+  decision:
+    name: Risk decision and evidence validity
+    if: always()
+    needs: [classify, verify]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish selected matrix
+        env:
+          VERIFY_RESULT: ${{ needs.verify.result }}
+          EVIDENCE_STATUS: ${{ needs.classify.outputs.evidence_status }}
+          EVIDENCE_VALID: ${{ needs.classify.outputs.evidence_valid }}
+          TESTED_HEAD: ${{ needs.classify.outputs.tested_implementation_head }}
+          PERFORMANCE_REASON: ${{ needs.classify.outputs.performance_reason }}
+          DANGER_RECOMMENDED: ${{ needs.classify.outputs.danger_performance_recommended }}
+          LIVE_RECOMMENDED: ${{ needs.classify.outputs.live_performance_recommended }}
+          FULL_MATRIX: ${{ needs.classify.outputs.full_matrix }}
+        shell: bash
+        run: |
+          {
+            echo '## PR Risk CI decision'
+            echo
+            echo "- focused verification: $VERIFY_RESULT"
+            echo "- full non-browser matrix: $FULL_MATRIX"
+            echo "- tested implementation head: $TESTED_HEAD"
+            echo "- evidence status: $EVIDENCE_STATUS"
+            echo "- danger performance recommended: $DANGER_RECOMMENDED"
+            echo "- live performance recommended: $LIVE_RECOMMENDED"
+            echo "- performance reason: $PERFORMANCE_REASON"
+            echo
+            echo 'Heavy browser performance is intentionally not an implicit required job.'
+            echo 'Run it by applying ci:danger-performance / ci:live-performance or through workflow_dispatch with a concrete PERFORMANCE_REASON.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$VERIFY_RESULT" != "success" ]; then
+            echo "Focused verification did not succeed: $VERIFY_RESULT" >&2
+            exit 1
+          fi
+          if [ "$EVIDENCE_VALID" != "true" ]; then
+            echo "Declared tested implementation head is invalid: $EVIDENCE_STATUS" >&2
+            exit 1
+          fi
