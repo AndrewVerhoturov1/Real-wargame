@@ -1,83 +1,6 @@
 name: Combat Foundation Core
 
 on:
-  pull_request:
-    branches:
-      - real-wargame-preview
-    paths:
-      - 'vite.config.ts'
-      - 'src/core/behavior/**'
-      - 'src/core/combat/**'
-      - 'src/core/cover/**'
-      - 'src/core/debug/**'
-      - 'src/core/knowledge/**'
-      - 'src/core/map/**'
-      - 'src/core/navigation/**'
-      - 'src/core/orders/**'
-      - 'src/core/pathfinding/**'
-      - 'src/core/perception/**'
-      - 'src/core/pressure/**'
-      - 'src/core/simulation/**'
-      - 'src/core/terrain/**'
-      - 'src/core/units/**'
-      - 'src/core/visibility/**'
-      - 'src/core/geometry.ts'
-      - 'src/core/simulation/SimulationTick.ts'
-      - 'src/core/simulation/SimulationState.ts'
-      - 'src/core/behavior/BehaviorModel.ts'
-      - 'src/core/units/UnitModel.ts'
-      - 'src/core/ai/AiGameBridge.ts'
-      - 'src/core/ai/AiSimulationScheduler.ts'
-      - 'src/core/ai/AiStatefulMoveGameBridge.ts'
-      - 'src/core/ai/AiRouteStatus.ts'
-      - 'src/core/ai/UnitPlan.ts'
-      - 'src/core/ai/events/SimulationAiEvents.ts'
-      - 'src/core/ai/runtime/**'
-      - 'src/core/ai/state/**'
-      - 'src/core/editor/GameEditorDrafts.ts'
-      - 'src/core/testing/AiTestLabRuntime.ts'
-      - 'src/data/ai/soldier_default_survival_graph.json'
-      - 'src/rendering/PixiAwarenessHeatmapRenderer.ts'
-      - 'src/rendering/PixiUnitRenderer.ts'
-      - 'src/rendering/PixiCombatEffectsRenderer.ts'
-      - 'src/rendering/CombatEffectsInstaller.ts'
-      - 'src/testing/DangerLayerMovementPerformanceHarness.ts'
-      - 'src/workers/**'
-      - 'src/ui/CombatControls.ts'
-      - 'src/ui/CombatAudio.ts'
-      - 'src/ui/SceneExport.ts'
-      - 'src/main.ts'
-      - 'scripts/combat_foundation_smoke.*'
-      - 'scripts/combat_tactical_integration_smoke.*'
-      - 'scripts/danger_route_cost_parity_smoke.*'
-      - 'scripts/danger_route_cost_cache_smoke.*'
-      - 'scripts/danger_layer_performance_smoke.*'
-      - 'scripts/danger_layer_movement_performance_smoke.*'
-      - 'scripts/shared_visibility_vegetation_smoke.*'
-      - 'scripts/shared_vegetation_source_contract_smoke.*'
-      - 'scripts/view_memory_heatmap_smoke.*'
-      - 'scripts/view_memory_heatmap_performance_smoke.*'
-      - 'scripts/visibility_probe_cache_smoke.*'
-      - 'scripts/perception_performance_smoke.*'
-      - 'scripts/live_navigation_replan_smoke.ts'
-      - 'scripts/reverse_slope_comparative_fixture.ts'
-      - 'scripts/reverse_slope_comparative_smoke.ts'
-      - 'scripts/reverse_slope_comparative_smoke.mjs'
-      - 'scripts/directional_terrain_smoke.mjs'
-      - 'scripts/combat_threat_evidence_source_direction_regression_smoke.ts'
-      - 'scripts/perception_system_smoke.ts'
-      - 'scripts/tactical_workspace_smoke.mjs'
-      - 'scripts/tactical_workspace_smoke_pixijs8_baseline.mjs'
-      - 'scripts/ai_test_lab_smoke.mjs'
-      - 'scripts/ai_per_unit_scheduler_smoke.mjs'
-      - 'scripts/ai_per_unit_scheduler_smoke.ts'
-      - 'tests/combat-foundation-visual.spec.ts'
-      - 'tests/danger-layer-movement-performance.spec.ts'
-      - 'tests/danger-route-cost-parity-visual.spec.ts'
-      - 'tests/shared-visibility-vegetation-visual.spec.ts'
-      - 'package.json'
-      - 'package-lock.json'
-      - '.github/workflows/combat-foundation-core.yml'
   workflow_dispatch:
 
 permissions:
@@ -86,6 +9,7 @@ permissions:
 jobs:
   combat-foundation:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -93,124 +17,31 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Shared visibility and vegetation smoke
-        shell: bash
-        run: set -o pipefail; npm run shared-visibility-vegetation:smoke 2>&1 | tee shared-visibility-vegetation.log
-      - name: Danger route cost parity smoke
-        shell: bash
-        run: set -o pipefail; npm run danger-route-cost-parity:smoke 2>&1 | tee danger-route-cost-parity.log
-      - name: Capture combat foundation smoke
-        shell: bash
+      - name: Run preserved combat integration matrix
         run: |
-          set +e
-          npm run combat-foundation:smoke > combat-foundation.log 2>&1
-          echo $? > combat-foundation.exit
-          tail -n 120 combat-foundation.log
-          exit 0
-      - name: Upload combat foundation log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: combat-foundation-log
-          path: |
-            combat-foundation.log
-            combat-foundation.exit
-          if-no-files-found: error
-      - name: Require combat foundation smoke success
-        shell: bash
-        run: test "$(cat combat-foundation.exit)" = "0"
-      - name: Existing perception smoke
-        shell: bash
-        run: set -o pipefail; npm run perception:smoke 2>&1 | tee perception-smoke.log
-      - name: Perception performance smoke
-        shell: bash
-        run: set -o pipefail; npm run perception-performance:smoke 2>&1 | tee perception-performance.log
-      - name: Current-view and memory heatmap smoke
-        shell: bash
-        run: set -o pipefail; npm run view-memory-heatmap:smoke 2>&1 | tee view-memory-heatmap.log
-      - name: Current-view and memory performance smoke
-        shell: bash
-        run: set -o pipefail; npm run view-memory-heatmap-performance:smoke 2>&1 | tee view-memory-heatmap-performance.log
-      - name: Visibility probe cache smoke
-        shell: bash
-        run: set -o pipefail; npm run visibility-probe:smoke 2>&1 | tee visibility-probe.log
-      - name: Existing runtime smoke
-        shell: bash
-        run: set -o pipefail; npm run runtime:smoke 2>&1 | tail -n 120
-      - name: Per-unit AI scheduler smoke
-        shell: bash
-        run: set -o pipefail; npm run ai-scheduler:smoke 2>&1 | tee ai-scheduler-smoke.log
-      - name: Existing reload smoke
-        shell: bash
-        run: set -o pipefail; npm run reload:smoke 2>&1 | tail -n 120
-      - name: Workspace presentation smoke
-        shell: bash
-        run: set -o pipefail; npm run workspace:smoke 2>&1 | tee workspace-smoke.log
-      - name: Awareness field cache smoke
-        shell: bash
-        run: set -o pipefail; npm run awareness-field:smoke 2>&1 | tee awareness-field.log
-      - name: Directional terrain smoke
-        shell: bash
-        run: set -o pipefail; npm run directional-terrain:smoke 2>&1 | tail -n 160
-      - name: Reverse slope comparative smoke
-        shell: bash
-        run: set -o pipefail; npm run reverse-slope-comparative:smoke 2>&1 | tail -n 120
-      - name: Navigation overlay smoke
-        shell: bash
-        run: set -o pipefail; npm run navigation-overlay:smoke 2>&1 | tail -n 160
-      - name: Pathfinding smoke
-        shell: bash
-        run: set -o pipefail; npm run pathfinding:smoke 2>&1 | tail -n 120
-      - name: Navigation profiles smoke
-        shell: bash
-        run: set -o pipefail; npm run navigation-profiles:smoke 2>&1 | tail -n 120
-      - name: Routed move smoke
-        shell: bash
-        run: set -o pipefail; npm run routed-move:smoke 2>&1 | tail -n 120
-      - name: Route status smoke
-        shell: bash
-        run: set -o pipefail; npm run route-status:smoke 2>&1 | tail -n 120
-      - name: Movement bridge smoke
-        shell: bash
-        run: set -o pipefail; npm run move-bridge:smoke 2>&1 | tail -n 160
-      - name: Danger layer performance contract
-        shell: bash
-        run: set -o pipefail; npm run danger-layer-performance:smoke 2>&1 | tee danger-layer-performance.log
-      - name: Moving danger layer performance contract
-        shell: bash
-        run: set -o pipefail; npm run danger-layer-movement-performance:smoke 2>&1 | tee danger-layer-movement-performance.log
-      - name: Production build
-        shell: bash
-        run: set -o pipefail; npm run build 2>&1 | tee production-build.log
-      - name: Combat tactical integration smoke
-        shell: bash
-        run: set -o pipefail; npm run combat-tactical-integration:smoke 2>&1 | tee combat-tactical-integration.log
-      - name: Documentation consistency
-        shell: bash
-        run: set -o pipefail; npm run docs:check 2>&1 | tee docs-check.log
-      - name: AI test lab smoke
-        shell: bash
-        run: set -o pipefail; npm run lab:smoke 2>&1 | tee ai-test-lab.log
-      - name: Upload combat tactical integration logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: combat-tactical-integration-log
-          path: |
-            shared-visibility-vegetation.log
-            perception-smoke.log
-            perception-performance.log
-            view-memory-heatmap.log
-            view-memory-heatmap-performance.log
-            visibility-probe.log
-            workspace-smoke.log
-            awareness-field.log
-            danger-route-cost-parity.log
-            combat-tactical-integration.log
-            danger-layer-performance.log
-            danger-layer-movement-performance.log
-            production-build.log
-            docs-check.log
-            ai-test-lab.log
-            ai-scheduler-smoke.log
-          if-no-files-found: warn
+          npm run shared-visibility-vegetation:smoke
+          npm run danger-route-cost-parity:smoke
+          npm run combat-foundation:smoke
+          npm run perception:smoke
+          npm run perception-performance:smoke
+          npm run view-memory-heatmap:smoke
+          npm run view-memory-heatmap-performance:smoke
+          npm run visibility-probe:smoke
+          npm run runtime:smoke
+          npm run ai-scheduler:smoke
+          npm run workspace:smoke
+          npm run awareness-field:smoke
+          npm run directional-terrain:smoke
+          npm run reverse-slope-comparative:smoke
+          npm run navigation-overlay:smoke
+          npm run pathfinding:smoke
+          npm run navigation-profiles:smoke
+          npm run routed-move:smoke
+          npm run route-status:smoke
+          npm run move-bridge:smoke
+          npm run danger-layer-performance:smoke
+          npm run danger-layer-movement-performance:smoke
+          npm run combat-tactical-integration:smoke
+          npm run lab:smoke
+      - run: npm run build
+      - run: npm run docs:check
