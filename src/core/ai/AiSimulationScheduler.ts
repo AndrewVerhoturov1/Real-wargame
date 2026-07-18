@@ -9,6 +9,7 @@ import { isUnitGraphAiControlled, type UnitModel } from '../units/UnitModel';
 import {
   recordAiSchedulerCycle,
   recordAiSchedulerCycleDuration,
+  recordAiSchedulerGraphUnitPass,
   recordAiSchedulerUnitPass,
   recordAiSchedulerUnitPassDuration,
 } from './AiSchedulerPerformanceDiagnostics';
@@ -150,7 +151,17 @@ export function tickAiSimulationScheduler(
     const observerPollDelta = unit.behaviorRuntime.aiObserverPollCount - observerPollBefore;
     const reactiveWakeDelta = unit.behaviorRuntime.aiReactiveWakeCount - reactiveWakeBefore;
     recordAiSchedulerUnitPassDuration(unitDurationMs, graphTicked);
-    if (graphTicked || unitDurationMs >= 8) {
+    if (graphTicked) {
+      recordAiSchedulerGraphUnitPass(
+        state.simulationStep,
+        cycleStartMs,
+        cycleEndMs,
+        unit.id,
+        unit.behaviorRuntime.currentAction,
+        unit.behaviorRuntime.lastEvent ?? null,
+      );
+    }
+    if (unitDurationMs >= 8) {
       recordAiSchedulerUnitPass({
         simulationStep: state.simulationStep,
         cycleStartMs,
@@ -176,7 +187,7 @@ export function tickAiSimulationScheduler(
   const schedulerOverheadMs = Math.max(0, schedulerDurationMs - graphResolutionMs - unitPassDurationMs);
   const decisionCycle = graphTickedUnitIds.length > 0;
   recordAiSchedulerCycleDuration(schedulerDurationMs, decisionCycle);
-  if (decisionCycle || schedulerDurationMs >= 8) {
+  if (schedulerDurationMs >= 8) {
     recordAiSchedulerCycle({
       simulationStep: state.simulationStep,
       cycleStartMs,

@@ -20,6 +20,12 @@ import {
   tryConsumeRound,
 } from '../src/core/combat/WeaponModel';
 import { tickAllUnitPerception } from '../src/core/perception/PerceptionSystem';
+import { normalizePressureZones } from '../src/core/pressure/PressureZone';
+import {
+  createThreatRuntimeEvaluation,
+  evaluateThreatRuntimeAtPosition,
+  evaluateThreatsAtPosition,
+} from '../src/core/pressure/ThreatEvaluation';
 import { createInitialState } from '../src/core/simulation/SimulationState';
 import { tickSimulation } from '../src/core/simulation/SimulationTick';
 import { areUnitsHostile, getSideRelation } from '../src/core/units/SideRelations';
@@ -135,6 +141,62 @@ function verifyAllUnitPerception(): void {
   assert.ok(blueContact, 'blue unit must perceive the real red unit without being selected');
   assert.ok(redContact, 'red unit must perceive the real blue unit without being selected');
   assert.notEqual(blueContact, redContact, 'each observer must retain independent subjective contact memory');
+}
+
+function verifyThreatRuntimeSummaryParity(): void {
+  const state = makeState();
+  const blue = state.units[0];
+  state.pressureZones.push(...normalizePressureZones([{
+    id: 'zone-runtime-parity',
+    label: 'Runtime parity zone',
+    type: 'open_area_pressure',
+    shape: 'circle',
+    x: 6,
+    y: 5,
+    radiusCells: 8,
+    strength: 42,
+    suppression: 31,
+    stressPerSecond: 3.5,
+    reason: 'runtime parity',
+  }]));
+  blue.tacticalKnowledge.threats = [{
+    id: 'known-runtime-parity',
+    labelRu: 'Известная угроза',
+    mode: 'directional_fire',
+    x: 9,
+    y: 5,
+    radiusCells: 0,
+    widthCells: 0,
+    heightCells: 0,
+    rotationDegrees: 0,
+    strength: 35,
+    suppression: 27,
+    stressPerSecond: 2,
+    directionDegrees: 180,
+    arcDegrees: 90,
+    rangeCells: 12,
+    minRangeCells: 0,
+    falloffPercent: 25,
+    confidence: 80,
+    uncertaintyCells: 0.5,
+    source: 'seen',
+    visibleNow: false,
+    lastSeenSeconds: 0,
+    lastUpdatedSeconds: 0,
+  }];
+
+  const detailed = evaluateThreatsAtPosition(state.map, blue, state.pressureZones);
+  const runtime = evaluateThreatRuntimeAtPosition(
+    state.map,
+    blue,
+    state.pressureZones,
+    createThreatRuntimeEvaluation(),
+  );
+  assert.equal(runtime.danger, detailed.danger);
+  assert.equal(runtime.suppression, detailed.suppression);
+  assert.equal(runtime.stressPerSecond, detailed.stressPerSecond);
+  assert.equal(runtime.strongestScenarioId, detailed.strongest?.zone.id ?? null);
+  assert.equal(runtime.strongestKnownId, detailed.strongestKnown?.threat.id ?? null);
 }
 
 function verifyWeaponRuntime(): void {
@@ -394,6 +456,7 @@ function restoreTargetForContinuedFire(target: UnitModel): void {
 
 verifySides();
 verifyAllUnitPerception();
+verifyThreatRuntimeSummaryParity();
 verifyWeaponRuntime();
 verifyHitShapes();
 verifyBallistics();

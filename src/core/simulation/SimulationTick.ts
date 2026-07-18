@@ -25,7 +25,7 @@ import { updatePlayerCommandStatus } from '../orders/PlayerCommand';
 import { updateAttentionController } from '../perception/AttentionController';
 import { normalizeRadians } from '../perception/AttentionModel';
 import { tickAllUnitPerception } from '../perception/PerceptionSystem';
-import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
+import { createThreatRuntimeEvaluation, evaluateThreatRuntimeAtPosition } from '../pressure/ThreatEvaluation';
 import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
 import type { SimulationState } from './SimulationState';
@@ -36,6 +36,7 @@ const UNIT_COLLISION_RADIUS_CELLS = UNIT_VISUAL_BODY_RADIUS_CELLS / 3;
 const UNIT_MIN_CENTER_DISTANCE_CELLS = UNIT_COLLISION_RADIUS_CELLS * 2;
 const COLLISION_PASSES = 3;
 const MAX_ROUTE_REPLAN_SEARCHES_PER_STEP = 1;
+const threatRuntimeEvaluation = createThreatRuntimeEvaluation();
 
 export function tickSimulation(state: SimulationState, deltaSeconds: number): void {
   const scaledDeltaSeconds = deltaSeconds * getAiTestTimeScale(state);
@@ -169,19 +170,19 @@ function tacticalBuildCount(state: SimulationState): number {
 }
 
 function updateMetrics(unit: UnitModel, state: SimulationState, deltaSeconds: number): void {
-  const report = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
+  const report = evaluateThreatRuntimeAtPosition(state.map, unit, state.pressureZones, threatRuntimeEvaluation);
   const combatPressure = getCombatSuppressionSnapshot(unit, state.simulationTimeSeconds);
 
   unit.behaviorRuntime.rawDanger = report.danger;
   unit.behaviorRuntime.danger = clampPercent(report.danger + combatPressure.suppression * 0.45);
   unit.behaviorRuntime.suppression = combinePercent(report.suppression, combatPressure.suppression);
 
-  const strongestId = report.strongest?.zone.id ?? report.strongestKnown?.threat.id ?? null;
+  const strongestId = report.strongestScenarioId ?? report.strongestKnownId;
   if (strongestId) {
     unit.behaviorRuntime.stress = clampPercent(
       unit.behaviorRuntime.stress + report.stressPerSecond * unit.behaviorSettings.fear * deltaSeconds,
     );
-    unit.behaviorRuntime.lastEvent = report.strongest
+    unit.behaviorRuntime.lastEvent = report.strongestScenarioId
       ? `pressure:${strongestId}`
       : `known_threat:${strongestId}`;
     unit.behaviorRuntime.reason = `under threat from ${strongestId}`;
