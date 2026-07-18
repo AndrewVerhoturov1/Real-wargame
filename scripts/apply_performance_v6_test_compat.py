@@ -1,16 +1,29 @@
 from pathlib import Path
 
 
-def replace_once(path: str, old: str, new: str) -> None:
+def replace_or_assert(path: str, old: str, new: str) -> None:
     target = Path(path)
     text = target.read_text(encoding='utf-8')
+    if new in text:
+        return
     count = text.count(old)
     if count != 1:
-        raise SystemExit(f'{path}: expected one replacement, found {count}')
+        raise SystemExit(f'{path}: expected one source replacement, found {count}')
     target.write_text(text.replace(old, new, 1), encoding='utf-8')
 
 
-replace_once(
+def ensure_after(path: str, anchor: str, addition: str) -> None:
+    target = Path(path)
+    text = target.read_text(encoding='utf-8')
+    if addition in text:
+        return
+    count = text.count(anchor)
+    if count != 1:
+        raise SystemExit(f'{path}: expected one insertion anchor, found {count}')
+    target.write_text(text.replace(anchor, f'{anchor}{addition}', 1), encoding='utf-8')
+
+
+replace_or_assert(
     'src/core/debug/PerformanceMonitor.ts',
     """        compatibility: {
           v5SceneUnitCount: state.units.length,
@@ -36,29 +49,35 @@ replace_once(
 )
 
 workflow = '.github/workflows/danger-layer-browser-performance.yml'
-replace_once(
+ensure_after(
     workflow,
     "      - 'tests/danger-layer-browser-performance.spec.ts'\n",
-    "      - 'tests/danger-layer-browser-performance.spec.ts'\n      - 'tests/performance-report-compat.ts'\n",
+    "      - 'tests/performance-report-compat.ts'\n",
 )
-replace_once(
+workflow_target = Path(workflow)
+workflow_text = workflow_target.read_text(encoding='utf-8')
+legacy_identity_copy = "          cp source/src/core/debug/BuildIdentity.ts baseline/src/core/debug/BuildIdentity.ts\n"
+if legacy_identity_copy in workflow_text:
+    workflow_text = workflow_text.replace(legacy_identity_copy, '', 1)
+    workflow_target.write_text(workflow_text, encoding='utf-8')
+ensure_after(
     workflow,
-    "          cp source/src/core/debug/BuildIdentity.ts baseline/src/core/debug/BuildIdentity.ts\n",
+    "          cp source/vite.config.ts baseline/vite.config.ts\n",
     "          cp source/tests/performance-report-compat.ts baseline/tests/performance-report-compat.ts\n",
 )
 
 browser = 'tests/danger-layer-browser-performance.spec.ts'
-replace_once(
+replace_or_assert(
     browser,
     "import path from 'node:path';\n",
     "import path from 'node:path';\nimport { normalizePerformanceReport } from './performance-report-compat';\n",
 )
-replace_once(
+replace_or_assert(
     browser,
     "  const report = JSON.parse(readFileSync(downloadedPath, 'utf8')) as PerformanceReport;\n",
     "  const report = normalizePerformanceReport<PerformanceReport>(JSON.parse(readFileSync(downloadedPath, 'utf8')));\n",
 )
-replace_once(
+replace_or_assert(
     browser,
     """  expect(report.version).toBe('performance-report-v5');
   expect(report.build?.performanceContractVersion).toBe('performance-report-v5');""",
@@ -67,17 +86,17 @@ replace_once(
 )
 
 movement = 'tests/danger-layer-movement-performance.spec.ts'
-replace_once(
+replace_or_assert(
     movement,
     "import path from 'node:path';\n",
     "import path from 'node:path';\nimport { normalizePerformanceReport } from './performance-report-compat';\n",
 )
-replace_once(
+replace_or_assert(
     movement,
     "    report: JSON.parse(readFileSync(downloadedPath, 'utf8')) as PerformanceReport,\n",
     "    report: normalizePerformanceReport<PerformanceReport>(JSON.parse(readFileSync(downloadedPath, 'utf8'))),\n",
 )
-replace_once(
+replace_or_assert(
     movement,
     """  expect(report.version).toBe('performance-report-v5');
   expect(report.build?.performanceContractVersion).toBe('performance-report-v5');""",
@@ -86,17 +105,17 @@ replace_once(
 )
 
 long_task = 'tests/danger-layer-long-task-attribution.spec.ts'
-replace_once(
+replace_or_assert(
     long_task,
     "import path from 'node:path';\n",
     "import path from 'node:path';\nimport { normalizePerformanceReport } from './performance-report-compat';\n",
 )
-replace_once(
+replace_or_assert(
     long_task,
     "    report: JSON.parse(readFileSync(downloadedPath, 'utf8')) as PerformanceReport,\n",
     "    report: normalizePerformanceReport<PerformanceReport>(JSON.parse(readFileSync(downloadedPath, 'utf8'))),\n",
 )
-replace_once(
+replace_or_assert(
     long_task,
     """  expect(report.version).toBe('performance-report-v5');
   expect(report.build?.performanceContractVersion).toBe('performance-report-v5');""",
@@ -104,18 +123,18 @@ replace_once(
   expect(report.build?.performanceContractVersion).toBe(report.version);""",
 )
 
-for path in (
-    browser,
-    movement,
-    long_task,
-):
+for path in (browser, movement, long_task):
     text = Path(path).read_text(encoding='utf-8')
     if "expect(report.version).toBe('performance-report-v5')" in text:
         raise SystemExit(f'{path}: stale hardcoded v5 assertion remains')
+    if "normalizePerformanceReport<PerformanceReport>" not in text:
+        raise SystemExit(f'{path}: normalized v6 compatibility read missing')
 
 monitor = Path('src/core/debug/PerformanceMonitor.ts').read_text(encoding='utf-8')
 if 'v5Scene:' not in monitor:
     raise SystemExit('PerformanceMonitor: v5Scene compatibility view missing')
 workflow_text = Path(workflow).read_text(encoding='utf-8')
-if 'performance-report-compat.ts' not in workflow_text:
-    raise SystemExit('Danger workflow: test compatibility reader missing')
+if workflow_text.count('performance-report-compat.ts') < 2:
+    raise SystemExit('Danger workflow: test compatibility reader path/copy missing')
+if 'BuildIdentity.ts baseline/src/core/debug/BuildIdentity.ts' in workflow_text:
+    raise SystemExit('Danger workflow: exact v5 baseline identity is still overwritten')
