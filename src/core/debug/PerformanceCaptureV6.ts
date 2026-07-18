@@ -77,6 +77,7 @@ const DEFAULT_LIMITS: PerformanceCaptureLimitsV6 = {
 const DEFAULT_CLOCK: PerformanceCaptureClockV6 = {
   now: () => performance.now(), wallNow: () => Date.now(), random: () => Math.random(),
 };
+const FALLBACK_DEEP_SCAN_INTERVAL_MS = 15_000;
 
 export class PerformanceCaptureV6 {
   readonly sessionId: string;
@@ -132,6 +133,7 @@ export class PerformanceCaptureV6 {
 
   recordFrame(state: SceneStateLikeV6, input: PerformanceFrameInputV6): void {
     const costStart = this.clock.now();
+    const initializing = !this.initial;
     const tMs = this.elapsed();
     this.lastFrameAt = tMs;
     this.observePause(state);
@@ -141,11 +143,11 @@ export class PerformanceCaptureV6 {
       || state.units.length !== this.final.unitCount
       || state.map.objects.length !== this.final.objectCount
       || state.pressureZones.length !== this.final.pressureZoneCount;
-    const shouldScanPopulation = !this.initial || sceneShapeChanged || slow
-      || tMs - this.lastPopulationScanAt >= this.limits.sceneSampleIntervalMs;
+    const shouldScanPopulation = !this.initial || sceneShapeChanged
+      || tMs - this.lastPopulationScanAt >= FALLBACK_DEEP_SCAN_INTERVAL_MS;
     const population = shouldScanPopulation
       ? populationOf(state, tMs)
-      : { ...(this.final ?? emptyPopulation(tMs)), tMs: r1(tMs) };
+      : (this.final ?? emptyPopulation(tMs));
 
     if (shouldScanPopulation) {
       if (!this.initial) this.initializeScene(state, population);
@@ -157,11 +159,11 @@ export class PerformanceCaptureV6 {
       this.setQueueDepth('routeReplanning', population.unitsWaitingForReplan, 0, 'scene-sample', tMs);
       this.sampleMemory();
     }
-    if (tMs - this.lastOrderScanAt >= 100 || sceneShapeChanged || slow) {
+    if (tMs - this.lastOrderScanAt >= FALLBACK_DEEP_SCAN_INTERVAL_MS || sceneShapeChanged) {
       this.observeOrders(state, tMs);
       this.lastOrderScanAt = tMs;
     }
-    if (tMs - this.lastSemanticScanAt >= this.limits.sceneSampleIntervalMs || sceneShapeChanged || slow) {
+    if (tMs - this.lastSemanticScanAt >= FALLBACK_DEEP_SCAN_INTERVAL_MS || sceneShapeChanged) {
       this.scanSemantic(state);
       this.lastSemanticScanAt = tMs;
     }
@@ -182,6 +184,7 @@ export class PerformanceCaptureV6 {
     if (changed || queueSpike || slow || tMs - this.lastTimelineAt >= this.limits.sceneSampleIntervalMs) {
       this.pushTimeline({
         ...population,
+        tMs: r1(tMs),
         reason: changed ? 'population-change' : queueSpike ? 'queue-spike' : slow ? 'slow-frame' : 'periodic',
         routeQueueDepth: population.unitsWaitingForRoute, replanQueueDepth: population.unitsWaitingForReplan,
         frameMs: frame.frameMs, applicationUpdateMs: frame.applicationUpdateMs,
@@ -189,7 +192,18 @@ export class PerformanceCaptureV6 {
       });
       this.lastTimelineAt = tMs;
     }
-    this.pushCost('collection', this.clock.now() - costStart);
+    const collectionDurationMs = this.clock.now() - costStart;
+    if (initializing) {
+      this.recordOperation({
+        phase: 'telemetry.capture-initialization',
+        durationMs: collectionDurationMs,
+        startedAtMs: tMs,
+        cause: { source: 'performance-monitor' },
+        result: 'initialized',
+      });
+    } else {
+      this.pushCost('collection', collectionDurationMs);
+    }
   }
 
   refreshScene(state: SceneStateLikeV6): void {
