@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { normalizePerformanceReport } from './performance-report-compat';
 
 interface MovementDiagnostics {
   worldRasterBuilds: number;
@@ -666,7 +667,7 @@ async function downloadReport(page: Page): Promise<{ report: PerformanceReport; 
   const downloadedPath = await download.path();
   if (!downloadedPath) throw new Error('Performance report download path is unavailable.');
   return {
-    report: JSON.parse(readFileSync(downloadedPath, 'utf8')) as PerformanceReport,
+    report: normalizePerformanceReport<PerformanceReport>(JSON.parse(readFileSync(downloadedPath, 'utf8'))),
     exportTriggerMs,
   };
 }
@@ -826,8 +827,8 @@ function buildLongTaskAttribution(
 }
 
 function assertBuildIdentity(report: PerformanceReport): void {
-  expect(report.version).toBe('performance-report-v5');
-  expect(report.build?.performanceContractVersion).toBe('performance-report-v5');
+  expect(report.version).toBe('performance-report-v6');
+  expect(report.build?.performanceContractVersion).toBe(report.version);
   expect(report.build?.branch).toBe(EXPECTED_BRANCH);
   if (EXPECTED_SHA) expect(report.build?.commitSha).toBe(EXPECTED_SHA);
   expect(report.build?.buildId).toBeTruthy();

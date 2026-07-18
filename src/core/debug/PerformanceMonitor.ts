@@ -350,6 +350,17 @@ export class PerformanceMonitor {
         },
         compatibility: {
           v5SceneUnitCount: state.units.length,
+          v5Scene: {
+            mapWidthCells: state.map.width,
+            mapHeightCells: state.map.height,
+            cellSizePx: state.map.cellSize,
+            metersPerCell: state.map.metersPerCell,
+            terrainCells: state.map.cells.length,
+            objectCount: state.map.objects.length,
+            unitCount: state.units.length,
+            pressureZoneCount: state.pressureZones.length,
+            currentZoom: roundThree(zoom),
+          },
           v5Samples: samples,
           note: 'Explicit legacy compatibility payload. This file remains performance-report-v6 and must not be parsed as v5.',
         },
