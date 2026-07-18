@@ -1,1 +1,1 @@
-rerun after fixing strict editor selection locator
+rerun clean deployed E2E after removing temporary patch step
