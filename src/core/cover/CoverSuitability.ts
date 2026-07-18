@@ -26,6 +26,17 @@ export type CoverCandidateReason =
   | 'dominated-by-closer-cover'
   | 'utility-too-low';
 
+export const COVER_REJECTION_REASON_CODE = Object.freeze({
+  none: 0,
+  unreachable: 1,
+  insufficientDangerReduction: 2,
+  routeTooLong: 3,
+  routeTooDangerous: 4,
+  isolatedMinimum: 5,
+  dominatedByCloserCover: 6,
+  utilityTooLow: 7,
+} as const);
+
 export interface CoverSuitabilityConfig {
   readonly revision: number;
   readonly quickMaxRouteMeters: number;
@@ -49,7 +60,7 @@ export interface CoverSuitabilityConfig {
 }
 
 export const COVER_SUITABILITY_CONFIG: CoverSuitabilityConfig = Object.freeze({
-  revision: 1,
+  revision: 2,
   quickMaxRouteMeters: 10,
   qualityMaxRouteMeters: 180,
   maxVisitedCells: 4096,
@@ -120,6 +131,8 @@ export interface CoverSuitabilityResult {
   readonly coverSuitabilityField: Uint8Array;
   readonly quickCoverMask: Uint8Array;
   readonly qualityCoverMask: Uint8Array;
+  /** Compact per-cell rejection codes; detailed objects are created only for top candidates. */
+  readonly rejectionReasonCodes: Uint8Array;
   readonly bestQuickCoverCandidates: readonly CoverCandidateDiagnostic[];
   readonly bestQualityCoverCandidates: readonly CoverCandidateDiagnostic[];
   readonly regions: readonly CoverRegionSummary[];
@@ -151,7 +164,6 @@ interface SearchWorkspace {
   routeDangerMax: Uint8Array;
   routeSteps: Uint16Array;
   settled: Uint8Array;
-  parent: Int32Array;
   touched: Int32Array;
   touchedCount: number;
   regionQueue: Int32Array;
@@ -184,9 +196,8 @@ export function getCoverSuitability(
   config: CoverSuitabilityConfig = COVER_SUITABILITY_CONFIG,
 ): CoverSuitabilityResult {
   const resolved = resolveUnitNavigationProfile(unit).profile;
-  // A diagnostic/direct profile deliberately does not publish danger. Cover suitability
-  // must still use the canonical danger field, so fall back to the balanced profile only
-  // for field preparation while preserving the same navigation grid and map revisions.
+  // A diagnostic/direct profile may publish no danger weight. Cover remains based on
+  // the canonical danger field, so use the balanced profile only to prepare fields.
   const profile = resolved.dangerWeight > 0 ? resolved : getBuiltInNavigationProfile('normal');
   const context = buildUnitTacticalRouteContext(unit, {
     freshness: 'immediate',
@@ -245,6 +256,7 @@ export function buildCoverSuitabilityFromFields(
   const suitability = new Uint8Array(count);
   const quickMask = new Uint8Array(count);
   const qualityMask = new Uint8Array(count);
+  const rejectionCodes = new Uint8Array(count);
   const workspace = prepareWorkspace(map, fields.width, fields.height);
   const startX = clampCell(Math.floor(origin.x), fields.width);
   const startY = clampCell(Math.floor(origin.y), fields.height);
@@ -262,38 +274,44 @@ export function buildCoverSuitabilityFromFields(
     if (
       absoluteReduction < config.minimumAbsoluteDangerReduction
       || relativeReduction < config.minimumRelativeDangerReduction
-    ) continue;
+    ) {
+      rejectionCodes[index] = COVER_REJECTION_REASON_CODE.insufficientDangerReduction;
+      continue;
+    }
 
     const stability = evaluateLocalStability(fields, index, currentDanger, config);
-    if (stability.stableNeighbours < config.stableNeighbourCount) continue;
+    if (stability.stableNeighbours < config.stableNeighbourCount) {
+      rejectionCodes[index] = COVER_REJECTION_REASON_CODE.isolatedMinimum;
+      continue;
+    }
 
     const routeMeters = workspace.routeMeters[index];
     const routeCost = workspace.routeCost[index];
     const routeDanger = workspace.routeDangerMax[index];
     const averageRouteDanger = workspace.routeSteps[index] > 0
       ? workspace.routeDangerSum[index] / workspace.routeSteps[index]
-      : currentDanger;
-    const routeDangerLimit = Math.min(
-      100,
-      Math.max(currentDanger + config.routeDangerToleranceAboveCurrent, config.maximumQualityRouteDanger),
-    );
+      : 0;
+    const quickDangerLimit = Math.min(100, Math.max(
+      config.maximumQuickRouteDanger,
+      currentDanger + config.routeDangerToleranceAboveCurrent,
+    ));
+    const qualityDangerLimit = Math.min(100, Math.max(
+      config.maximumQualityRouteDanger,
+      currentDanger + config.routeDangerToleranceAboveCurrent,
+    ));
     const stableAreaFactor = Math.min(1, stability.stableNeighbours / 5);
-    const baseSuitability = clampPercent(
+    suitability[index] = clampPercent(
       absoluteReduction * 0.72
       + relativeReduction * 34
       + stableAreaFactor * 18
       + Math.max(0, stability.neighbourAverage - positionDanger) * 0.22
       - averageRouteDanger * 0.09,
     );
-    suitability[index] = baseSuitability;
 
-    if (
-      routeMeters <= config.quickMaxRouteMeters + 1e-6
-      && routeCost <= config.quickMaxRouteCost
-      && routeDanger <= Math.min(config.maximumQuickRouteDanger, routeDangerLimit)
-    ) {
-      quickMask[index] = 1;
-    }
+    const quickDistanceOk = routeMeters <= config.quickMaxRouteMeters + 1e-6;
+    const quickCostOk = routeCost <= config.quickMaxRouteCost;
+    const quickDangerOk = routeDanger <= quickDangerLimit;
+    if (quickDistanceOk && quickCostOk && quickDangerOk) quickMask[index] = 1;
 
     const qualityUtility = calculateQualityUtility(
       absoluteReduction,
@@ -303,16 +321,20 @@ export function buildCoverSuitabilityFromFields(
       routeDanger,
       stableAreaFactor,
     );
-    if (
-      routeMeters > config.quickMaxRouteMeters
-      && routeMeters <= config.qualityMaxRouteMeters + 1e-6
-      && routeCost <= config.qualityMaxRouteCost
-      && absoluteReduction >= config.qualityAbsoluteDangerReduction
-      && routeDanger <= routeDangerLimit
-      && routeDanger <= config.maximumQualityRouteDanger
-      && qualityUtility >= config.qualityMinimumUtility
-    ) {
+    const qualityDistanceOk = routeMeters > config.quickMaxRouteMeters
+      && routeMeters <= config.qualityMaxRouteMeters + 1e-6;
+    const qualityCostOk = routeCost <= config.qualityMaxRouteCost;
+    const qualityDangerOk = routeDanger <= qualityDangerLimit;
+    const qualityImprovementOk = absoluteReduction >= config.qualityAbsoluteDangerReduction;
+    const qualityUtilityOk = qualityUtility >= config.qualityMinimumUtility;
+    if (qualityDistanceOk && qualityCostOk && qualityDangerOk && qualityImprovementOk && qualityUtilityOk) {
       qualityMask[index] = 1;
+    } else if (!quickMask[index]) {
+      rejectionCodes[index] = !quickDistanceOk && routeMeters > config.qualityMaxRouteMeters
+        ? COVER_REJECTION_REASON_CODE.routeTooLong
+        : (!quickDangerOk && !qualityDangerOk)
+          ? COVER_REJECTION_REASON_CODE.routeTooDangerous
+          : COVER_REJECTION_REASON_CODE.utilityTooLow;
     }
   }
 
@@ -320,6 +342,7 @@ export function buildCoverSuitabilityFromFields(
     fields,
     quickMask,
     suitability,
+    rejectionCodes,
     workspace,
     'quick',
     config.minimumRegionCells,
@@ -328,6 +351,7 @@ export function buildCoverSuitabilityFromFields(
     fields,
     qualityMask,
     suitability,
+    rejectionCodes,
     workspace,
     'quality',
     config.minimumRegionCells,
@@ -349,7 +373,7 @@ export function buildCoverSuitabilityFromFields(
       && closer.positionDanger <= candidate.positionDanger + config.dominatedDangerTolerance,
     );
     if (dominated) {
-      clearRegionMask(qualityMask, qualityRegions, candidate.regionId);
+      clearRegionMask(qualityMask, qualityRegions, candidate.regionId, rejectionCodes);
       continue;
     }
     acceptedQualityCandidates.push(candidate);
@@ -372,6 +396,7 @@ export function buildCoverSuitabilityFromFields(
     coverSuitabilityField: suitability,
     quickCoverMask: quickMask,
     qualityCoverMask: qualityMask,
+    rejectionReasonCodes: rejectionCodes,
     bestQuickCoverCandidates: quickCandidates,
     bestQualityCoverCandidates: acceptedQualityCandidates,
     regions: [
@@ -390,6 +415,25 @@ export function buildCoverSuitabilityFromFields(
     currentDanger,
     visitedCellCount: workspace.touchedCount,
   };
+}
+
+export function coverRejectionReasonAt(
+  result: CoverSuitabilityResult,
+  x: number,
+  y: number,
+): CoverCandidateReason {
+  if (x < 0 || y < 0 || x >= result.width || y >= result.height) return 'unreachable';
+  const index = y * result.width + x;
+  if (result.quickCoverMask[index] === 1 || result.qualityCoverMask[index] === 1) return 'accepted';
+  switch (result.rejectionReasonCodes[index]) {
+    case COVER_REJECTION_REASON_CODE.insufficientDangerReduction: return 'insufficient-danger-reduction';
+    case COVER_REJECTION_REASON_CODE.routeTooLong: return 'route-too-long';
+    case COVER_REJECTION_REASON_CODE.routeTooDangerous: return 'route-too-dangerous';
+    case COVER_REJECTION_REASON_CODE.isolatedMinimum: return 'isolated-minimum';
+    case COVER_REJECTION_REASON_CODE.dominatedByCloserCover: return 'dominated-by-closer-cover';
+    case COVER_REJECTION_REASON_CODE.utilityTooLow: return 'utility-too-low';
+    default: return 'unreachable';
+  }
 }
 
 export function invalidateCoverSuitability(unit: UnitModel): void {
@@ -418,10 +462,11 @@ function runBoundedSearch(
   const heap = new MinHeap();
   workspace.routeCost[startIndex] = 0;
   workspace.routeMeters[startIndex] = 0;
-  workspace.routeDangerSum[startIndex] = fields.dangerPercent[startIndex] ?? 0;
-  workspace.routeDangerMax[startIndex] = fields.dangerPercent[startIndex] ?? 0;
-  workspace.routeSteps[startIndex] = 1;
-  workspace.parent[startIndex] = -1;
+  // Route danger intentionally starts after leaving the current cell. Current danger
+  // is the comparison baseline and must not prevent an emergency escape from it.
+  workspace.routeDangerSum[startIndex] = 0;
+  workspace.routeDangerMax[startIndex] = 0;
+  workspace.routeSteps[startIndex] = 0;
   touch(workspace, startIndex);
   heap.push(startIndex, 0);
   let visited = 0;
@@ -464,7 +509,6 @@ function runBoundedSearch(
       workspace.routeDangerSum[nextIndex] = workspace.routeDangerSum[current.index] + danger;
       workspace.routeDangerMax[nextIndex] = Math.max(workspace.routeDangerMax[current.index], danger);
       workspace.routeSteps[nextIndex] = Math.min(65535, workspace.routeSteps[current.index] + 1);
-      workspace.parent[nextIndex] = current.index;
       heap.push(nextIndex, nextCost);
     }
   }
@@ -504,12 +548,15 @@ function buildRegions(
   fields: RouteCostFields,
   mask: Uint8Array,
   suitability: Uint8Array,
+  rejectionCodes: Uint8Array,
   workspace: SearchWorkspace,
   coverClass: CoverClass,
   minimumCells: number,
   idOffset = 0,
 ): RegionBuild[] {
-  workspace.regionVisited.fill(0);
+  for (let index = 0; index < workspace.touchedCount; index += 1) {
+    workspace.regionVisited[workspace.touched[index]] = 0;
+  }
   const regions: RegionBuild[] = [];
   for (let touchedIndex = 0; touchedIndex < workspace.touchedCount; touchedIndex += 1) {
     const seed = workspace.touched[touchedIndex];
@@ -548,7 +595,10 @@ function buildRegions(
     }
 
     if (cells.length < minimumCells) {
-      for (const index of cells) mask[index] = 0;
+      for (const index of cells) {
+        mask[index] = 0;
+        rejectionCodes[index] = COVER_REJECTION_REASON_CODE.isolatedMinimum;
+      }
       continue;
     }
     const id = idOffset + regions.length;
@@ -585,7 +635,7 @@ function createCandidate(
   const relativeDangerReduction = currentDanger > 0 ? absoluteDangerReduction / currentDanger : 0;
   const averageRouteDanger = workspace.routeSteps[index] > 0
     ? workspace.routeDangerSum[index] / workspace.routeSteps[index]
-    : currentDanger;
+    : 0;
   const utility = coverClass === 'quality'
     ? calculateQualityUtility(
         absoluteDangerReduction,
@@ -653,10 +703,18 @@ function compareQualityCandidates(left: CoverCandidateDiagnostic, right: CoverCa
     || left.routeLengthMeters - right.routeLengthMeters;
 }
 
-function clearRegionMask(mask: Uint8Array, regions: RegionBuild[], regionId: number): void {
+function clearRegionMask(
+  mask: Uint8Array,
+  regions: RegionBuild[],
+  regionId: number,
+  rejectionCodes: Uint8Array,
+): void {
   const region = regions.find((candidate) => candidate.summary.id === regionId);
   if (!region) return;
-  for (const index of region.cells) mask[index] = 0;
+  for (const index of region.cells) {
+    mask[index] = 0;
+    rejectionCodes[index] = COVER_REJECTION_REASON_CODE.dominatedByCloserCover;
+  }
 }
 
 function prepareWorkspace(map: TacticalMap, width: number, height: number): SearchWorkspace {
@@ -672,14 +730,12 @@ function prepareWorkspace(map: TacticalMap, width: number, height: number): Sear
     routeDangerMax: new Uint8Array(count),
     routeSteps: new Uint16Array(count),
     settled: new Uint8Array(count),
-    parent: new Int32Array(count),
     touched: new Int32Array(count),
     touchedCount: 0,
     regionQueue: new Int32Array(count),
     regionVisited: new Uint8Array(count),
   };
   created.routeCost.fill(Number.POSITIVE_INFINITY);
-  created.parent.fill(-1);
   workspaceByMap.set(map, created);
   return created;
 }
@@ -693,7 +749,6 @@ function resetWorkspace(workspace: SearchWorkspace): void {
     workspace.routeDangerMax[cell] = 0;
     workspace.routeSteps[cell] = 0;
     workspace.settled[cell] = 0;
-    workspace.parent[cell] = -1;
   }
   workspace.touchedCount = 0;
 }
