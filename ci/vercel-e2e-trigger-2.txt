@@ -1,1 +1,1 @@
-rerun clean deployed E2E after removing temporary patch step
+rerun clean deployed E2E after reopening PR event
