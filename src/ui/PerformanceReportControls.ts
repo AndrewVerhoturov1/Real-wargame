@@ -6,10 +6,40 @@ import {
 } from '../core/debug/PerformanceTelemetryBridge';
 
 export function installPerformanceReportControls(downloadReport: () => void): () => void {
-  const editorRoot = document.querySelector<HTMLElement>('.editor-scene-tools-slot')
-    ?? document.querySelector<HTMLElement>('.editor-controls');
-  if (!editorRoot) return () => undefined;
+  let destroyed = false;
+  let observer: MutationObserver | null = null;
+  let destroyMountedControls: (() => void) | null = null;
 
+  const tryMount = (): boolean => {
+    if (destroyed || destroyMountedControls) return Boolean(destroyMountedControls);
+    const editorRoot = document.querySelector<HTMLElement>('.editor-scene-tools-slot')
+      ?? document.querySelector<HTMLElement>('.editor-controls');
+    if (!editorRoot) return false;
+    destroyMountedControls = mountPerformanceReportControls(editorRoot, downloadReport);
+    observer?.disconnect();
+    observer = null;
+    return true;
+  };
+
+  if (!tryMount()) {
+    observer = new MutationObserver(() => { tryMount(); });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  const destroy = (): void => {
+    if (destroyed) return;
+    destroyed = true;
+    observer?.disconnect();
+    observer = null;
+    destroyMountedControls?.();
+    destroyMountedControls = null;
+    window.removeEventListener('beforeunload', destroy);
+  };
+  window.addEventListener('beforeunload', destroy, { once: true });
+  return destroy;
+}
+
+function mountPerformanceReportControls(editorRoot: HTMLElement, downloadReport: () => void): () => void {
   const title = element('div', 'Отладка производительности', 'editor-group-title');
   const hint = element(
     'div',
@@ -64,6 +94,7 @@ export function installPerformanceReportControls(downloadReport: () => void): ()
       `dropped events: ${capture.eventsDropped}`,
     ].join(' · ');
   }, 1000);
+
   return () => {
     window.clearInterval(timer);
     title.remove();
