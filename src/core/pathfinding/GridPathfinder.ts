@@ -103,6 +103,23 @@ interface SearchFailure {
 
 type SearchResult = SearchSuccess | SearchFailure;
 
+
+interface AStarScratch {
+  readonly gScore: Float64Array;
+  readonly parent: Int32Array;
+  readonly seenGeneration: Uint32Array;
+  readonly closedGeneration: Uint32Array;
+  readonly open: BinaryHeap;
+  generation: number;
+  inUse: boolean;
+}
+
+export interface GridPathfinderDiagnostics {
+  readonly searches: number;
+  readonly scratchAllocations: number;
+  readonly scratchReuses: number;
+}
+
 const CARDINAL_COST = 1;
 const DIAGONAL_COST = Math.SQRT2;
 const MINIMUM_STEP_COST = 0.05;
@@ -119,6 +136,22 @@ const DIRECTIONS: ReadonlyArray<readonly [number, number, number]> = [
 ];
 
 const baselineCache = new WeakMap<TacticalMap, Map<string, SearchSuccess>>();
+const aStarScratchPool = new Map<number, AStarScratch[]>();
+const pathfinderDiagnostics = {
+  searches: 0,
+  scratchAllocations: 0,
+  scratchReuses: 0,
+};
+
+export function getGridPathfinderDiagnostics(): GridPathfinderDiagnostics {
+  return { ...pathfinderDiagnostics };
+}
+
+export function resetGridPathfinderDiagnostics(): void {
+  pathfinderDiagnostics.searches = 0;
+  pathfinderDiagnostics.scratchAllocations = 0;
+  pathfinderDiagnostics.scratchReuses = 0;
+}
 
 export function findGridPath(
   map: TacticalMap,
@@ -288,85 +321,133 @@ function runAStar(
   maxVisitedCells: number,
 ): SearchResult {
   const cellCount = fields.width * fields.height;
-  const startIndex = indexOf(fields, start.x, start.y);
-  const goalIndex = indexOf(fields, goal.x, goal.y);
-  const gScore = new Float64Array(cellCount);
-  const parent = new Int32Array(cellCount);
-  const closed = new Uint8Array(cellCount);
-  gScore.fill(Number.POSITIVE_INFINITY);
-  parent.fill(-1);
-  gScore[startIndex] = 0;
+  const scratch = acquireAStarScratch(cellCount);
+  const {
+    gScore,
+    parent,
+    seenGeneration,
+    closedGeneration,
+    open,
+    generation,
+  } = scratch;
+  pathfinderDiagnostics.searches += 1;
 
-  const open = new BinaryHeap();
-  const startH = heuristic(start.x, start.y, goal.x, goal.y);
-  open.push({ index: startIndex, f: startH, h: startH });
-  let visitedCells = 0;
+  try {
+    const startIndex = indexOf(fields, start.x, start.y);
+    const goalIndex = indexOf(fields, goal.x, goal.y);
+    seenGeneration[startIndex] = generation;
+    gScore[startIndex] = 0;
+    parent[startIndex] = -1;
 
-  while (open.size > 0) {
-    const current = open.pop();
-    if (!current) break;
-    if (closed[current.index]) continue;
-    closed[current.index] = 1;
-    visitedCells += 1;
+    const startH = heuristic(start.x, start.y, goal.x, goal.y);
+    open.push({ index: startIndex, f: startH, h: startH });
+    let visitedCells = 0;
 
-    if (visitedCells > maxVisitedCells) {
-      return {
-        ok: false,
-        code: 'search_limit',
-        visitedCells,
-        reason: 'Path search exceeded its visited-cell limit.',
-        reasonRu: 'Поиск пути превысил лимит проверенных клеток.',
-      };
-    }
+    while (open.size > 0) {
+      const current = open.pop();
+      if (!current) break;
+      if (closedGeneration[current.index] === generation) continue;
+      closedGeneration[current.index] = generation;
+      visitedCells += 1;
 
-    if (current.index === goalIndex) {
-      return {
-        ok: true,
-        cells: reconstructPath(fields, parent, current.index),
-        cost: gScore[current.index],
-        visitedCells,
-      };
-    }
-
-    const currentX = current.index % fields.width;
-    const currentY = Math.floor(current.index / fields.width);
-
-    for (const [dx, dy, stepLength] of DIRECTIONS) {
-      const nextX = currentX + dx;
-      const nextY = currentY + dy;
-      if (!isFieldPassable(fields, nextX, nextY)) continue;
-      if (
-        dx !== 0
-        && dy !== 0
-        && (
-          !isFieldPassable(fields, currentX + dx, currentY)
-          || !isFieldPassable(fields, currentX, currentY + dy)
-        )
-      ) {
-        continue;
+      if (visitedCells > maxVisitedCells) {
+        return {
+          ok: false,
+          code: 'search_limit',
+          visitedCells,
+          reason: 'Path search exceeded its visited-cell limit.',
+          reasonRu: 'Поиск пути превысил лимит проверенных клеток.',
+        };
       }
 
-      const nextIndex = indexOf(fields, nextX, nextY);
-      if (closed[nextIndex]) continue;
-      const stepCost = evaluateGridPathStepCost(fields, current.index, nextIndex, stepLength);
-      if (!Number.isFinite(stepCost)) continue;
-      const tentativeG = gScore[current.index] + stepCost;
-      if (tentativeG + 1e-9 >= gScore[nextIndex]) continue;
+      if (current.index === goalIndex) {
+        return {
+          ok: true,
+          cells: reconstructPath(fields, parent, current.index),
+          cost: gScore[current.index],
+          visitedCells,
+        };
+      }
 
-      parent[nextIndex] = current.index;
-      gScore[nextIndex] = tentativeG;
-      const h = heuristic(nextX, nextY, goal.x, goal.y);
-      open.push({ index: nextIndex, f: tentativeG + h, h });
+      const currentX = current.index % fields.width;
+      const currentY = Math.floor(current.index / fields.width);
+
+      for (const [dx, dy, stepLength] of DIRECTIONS) {
+        const nextX = currentX + dx;
+        const nextY = currentY + dy;
+        if (!isFieldPassable(fields, nextX, nextY)) continue;
+        if (
+          dx !== 0
+          && dy !== 0
+          && (
+            !isFieldPassable(fields, currentX + dx, currentY)
+            || !isFieldPassable(fields, currentX, currentY + dy)
+          )
+        ) {
+          continue;
+        }
+
+        const nextIndex = indexOf(fields, nextX, nextY);
+        if (closedGeneration[nextIndex] === generation) continue;
+        const stepCost = evaluateGridPathStepCost(fields, current.index, nextIndex, stepLength);
+        if (!Number.isFinite(stepCost)) continue;
+        const tentativeG = gScore[current.index] + stepCost;
+        const previousG = seenGeneration[nextIndex] === generation
+          ? gScore[nextIndex]
+          : Number.POSITIVE_INFINITY;
+        if (tentativeG + 1e-9 >= previousG) continue;
+
+        seenGeneration[nextIndex] = generation;
+        parent[nextIndex] = current.index;
+        gScore[nextIndex] = tentativeG;
+        const h = heuristic(nextX, nextY, goal.x, goal.y);
+        open.push({ index: nextIndex, f: tentativeG + h, h });
+      }
     }
-  }
 
-  return {
-    ok: false,
-    code: 'no_route',
-    visitedCells,
-    reason: 'No passable route connects the start and goal.',
-    reasonRu: 'Между стартом и целью нет проходимого маршрута.',
-  };
+    return {
+      ok: false,
+      code: 'no_route',
+      visitedCells,
+      reason: 'No passable route connects the start and goal.',
+      reasonRu: 'Между стартом и целью нет проходимого маршрута.',
+    };
+  } finally {
+    scratch.inUse = false;
+  }
+}
+
+function acquireAStarScratch(cellCount: number): AStarScratch {
+  let pool = aStarScratchPool.get(cellCount);
+  if (!pool) {
+    pool = [];
+    aStarScratchPool.set(cellCount, pool);
+  }
+  let scratch = pool.find((candidate) => !candidate.inUse);
+  if (!scratch) {
+    scratch = {
+      gScore: new Float64Array(cellCount),
+      parent: new Int32Array(cellCount),
+      seenGeneration: new Uint32Array(cellCount),
+      closedGeneration: new Uint32Array(cellCount),
+      open: new BinaryHeap(),
+      generation: 0,
+      inUse: false,
+    };
+    pool.push(scratch);
+    pathfinderDiagnostics.scratchAllocations += 1;
+  } else {
+    pathfinderDiagnostics.scratchReuses += 1;
+  }
+  scratch.inUse = true;
+  scratch.generation = (scratch.generation + 1) >>> 0;
+  if (scratch.generation === 0) {
+    scratch.seenGeneration.fill(0);
+    scratch.closedGeneration.fill(0);
+    scratch.generation = 1;
+  }
+  scratch.open.clear();
+  return scratch;
 }
 
 export function evaluateGridPathCost(
@@ -638,6 +719,11 @@ class BinaryHeap {
 
   get size(): number {
     return this.values.length;
+  }
+
+
+  clear(): void {
+    this.values.length = 0;
   }
 
   push(value: OpenNode): void {

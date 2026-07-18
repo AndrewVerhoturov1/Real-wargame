@@ -4,7 +4,11 @@ import {
   buildNavigationGrid,
   isNavigationCellPassable,
 } from '../src/core/pathfinding/GridNavigation';
-import { findGridPath } from '../src/core/pathfinding/GridPathfinder';
+import {
+  findGridPath,
+  getGridPathfinderDiagnostics,
+  resetGridPathfinderDiagnostics,
+} from '../src/core/pathfinding/GridPathfinder';
 
 verifyRotatedObjectOccupancy();
 verifyWaterAndBridge();
@@ -15,6 +19,7 @@ verifyBlockedGoalAdjustment();
 verifyExactBlockedGoalFailure();
 verifyEnclosedGoalFailure();
 verifyDeterminism();
+verifyScratchReuse();
 verifyPerformanceBound();
 
 console.log('Grid pathfinding smoke passed: canonical object geometry, terrain, A*, exact goals, failure, determinism, performance.');
@@ -162,6 +167,20 @@ function verifyDeterminism(): void {
   const first = findGridPath(map, { x: 1.5, y: 2.5 }, { x: 10.5, y: 2.5 });
   const second = findGridPath(map, { x: 1.5, y: 2.5 }, { x: 10.5, y: 2.5 });
   assert.deepEqual(second, first, 'same map and endpoints must produce byte-stable route data');
+}
+
+
+function verifyScratchReuse(): void {
+  resetGridPathfinderDiagnostics();
+  const map = normalizeMap(makeMap(64, 64));
+  const first = findGridPath(map, { x: 1.5, y: 1.5 }, { x: 62.5, y: 62.5 });
+  const second = findGridPath(map, { x: 2.5, y: 2.5 }, { x: 62.5, y: 62.5 });
+  assert.equal(first.ok, true);
+  assert.equal(second.ok, true);
+  const diagnostics = getGridPathfinderDiagnostics();
+  assert.ok(diagnostics.searches >= 4, 'two planned routes must execute tactical and baseline searches');
+  assert.equal(diagnostics.scratchAllocations, 1, 'same-size sequential A* searches must share one scratch set');
+  assert.ok(diagnostics.scratchReuses >= 3, 'subsequent tactical/baseline searches must reuse scratch arrays');
 }
 
 function verifyPerformanceBound(): void {
