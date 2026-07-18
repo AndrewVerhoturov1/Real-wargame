@@ -11,6 +11,7 @@ on:
       - 'src/ai-node-editor/AttentionProfileEditorPanel.ts'
       - 'scripts/attention_profiles_smoke.ts'
       - 'scripts/rear_attention_perception_smoke.*'
+      - 'scripts/rear_attention_visual_qa.mjs'
       - 'package.json'
       - '.github/workflows/rear-attention-diagnostics.yml'
 
@@ -24,7 +25,7 @@ concurrency:
 jobs:
   diagnostics:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,7 +35,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: mkdir -p diagnostics
+      - run: mkdir -p diagnostics visual-qa
       - name: TypeScript
         if: always()
         shell: bash
@@ -95,10 +96,32 @@ jobs:
         if: always()
         shell: bash
         run: set -o pipefail; npm run build 2>&1 | tee diagnostics/build.log
-      - name: Upload diagnostics
+      - name: Install Chromium for visual QA
+        if: always()
+        shell: bash
+        run: |
+          set -o pipefail
+          npm install --no-save --package-lock=false playwright@1.54.1 2>&1 | tee diagnostics/playwright-install.log
+          npx playwright install chromium 2>&1 | tee -a diagnostics/playwright-install.log
+      - name: Capture rear attention visual QA
+        if: always()
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run dev -- --host 127.0.0.1 --port 4173 > diagnostics/vite.log 2>&1 &
+          VITE_PID=$!
+          trap 'kill $VITE_PID || true' EXIT
+          for attempt in {1..40}; do
+            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then break; fi
+            sleep 1
+          done
+          REAR_ATTENTION_VISUAL_OUTPUT=visual-qa node scripts/rear_attention_visual_qa.mjs 2>&1 | tee diagnostics/visual-qa.log
+      - name: Upload diagnostics and screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: rear-attention-diagnostics-${{ github.event.pull_request.head.sha }}
-          path: diagnostics
+          path: |
+            diagnostics
+            visual-qa
           if-no-files-found: error
