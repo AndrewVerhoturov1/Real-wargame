@@ -60,6 +60,11 @@ assert.ok(cover.includes('fields.totalCost'), 'cover search must reuse canonical
 assert.ok(cover.includes('fields.dangerPercent'), 'cover search must reuse canonical danger');
 assert.ok(!cover.includes('computeLineOfSight'), 'cover search must not repeat LOS');
 assert.ok(cover.includes('resultCache'), 'cover result must be cached');
+assert.ok(cover.includes('heapIndices: Int32Array'), 'bounded search queue must use reusable typed storage');
+assert.ok(cover.includes('heapPositions: Int32Array'), 'bounded search must use decrease-key without duplicate heap objects');
+assert.ok(!cover.includes('new MinHeap'), 'cover search must not allocate a heap per calculation');
+assert.ok(!cover.includes('interface HeapItem'), 'cover search must not allocate heap item objects');
+assert.ok(cover.includes('totalCost already contains the configured danger component'), 'route danger must not be added twice');
 
 const workspace = readFileSync('src/ui/TacticalWorkspace.ts', 'utf8');
 assert.ok(workspace.includes('data-overlay-mode="danger"') || workspace.includes('data-overlay-mode="${id}"'), 'workspace must expose tactical overlay segments');
