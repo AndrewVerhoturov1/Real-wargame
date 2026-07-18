@@ -9,6 +9,7 @@ import {
   getCoverSuitability,
   type CoverCandidateDiagnostic,
 } from '../core/cover/CoverSuitability';
+import { buildUnitKnowledgeReport } from '../core/knowledge/UnitKnowledge';
 import { getCell, type MapCell } from '../core/map/MapModel';
 import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
 import { getNavigationProfileRegistry, subscribeNavigationProfileRegistry } from '../core/navigation/NavigationProfileStorage';
@@ -550,7 +551,7 @@ function renderStealth(target: HTMLElement, state: SimulationState, unit: UnitMo
   const confidence = unit.tacticalKnowledge.threats.length > 0
     ? Math.max(...unit.tacticalKnowledge.threats.map((threat) => threat.confidence))
     : 0;
-  target.innerHTML = `${heading('Слой скрытности','Полная карта скрытности рисуется фоновым worker.')}${legend([
+  target.innerHTML = `${heading('Слой скрытности','Полная карта скрытности рисуется фоновым worker. Автоматический поиск безопасных и скрытых позиций удалён как легаси.')}${legend([
     ['legend-stealth-best','очень трудно заметить'],
     ['legend-stealth-good','хорошая скрытность'],
     ['legend-stealth-medium','заметен'],
@@ -565,14 +566,13 @@ function renderStealth(target: HTMLElement, state: SimulationState, unit: UnitMo
 }
 
 function memoryPanel(state: SimulationState, unit: UnitModel): string {
-  const result = getCoverSuitability(state, unit);
-  const threats = unit.tacticalKnowledge.threats.map((threat) => `<div class="memory-card"><strong>${esc(threat.labelRu)}</strong><span>${threat.visibleNow ? 'видит сейчас' : `обновлено ${Math.max(0, state.simulationTimeSeconds - threat.lastUpdatedSeconds).toFixed(1)} с назад`}</span><b>уверенность ${Math.round(threat.confidence)}%</b><em>неточность ±${threat.uncertaintyCells.toFixed(1)} клетки</em></div>`).join('') || empty('Солдат пока не знает ни об одной угрозе.');
-  const covers = [...result.bestQuickCoverCandidates, ...result.bestQualityCoverCandidates].slice(0, 16).map((candidate) => `<div class="memory-card"><strong>${candidate.coverClass === 'quick' ? 'Быстрое укрытие' : 'Качественное укрытие'}</strong><span>${candidate.routeLengthMeters.toFixed(1)} м</span><b>${Math.round(candidate.suitability)}/100</b><em>опасность ${Math.round(candidate.positionDanger)}%</em></div>`).join('') || empty('Подходящих укрытий пока нет.');
-  const knownAreaMeters = Math.max(unit.viewRangeCells * state.map.metersPerCell, 500);
+  const report = buildUnitKnowledgeReport(state, unit);
+  const threats = unit.tacticalKnowledge.threats.map((threat) => `<div class="memory-card"><strong>${esc(threat.labelRu)}</strong><span>${threat.visibleNow ? 'видит сейчас' : `обновлено ${Math.max(0, state.simulationTimeSeconds - threat.lastUpdatedSeconds).toFixed(1)} с назад`}</span><b>уверенность ${Math.round(threat.confidence)}%</b><em>неточность ±${threat.uncertaintyCells.toFixed(1)} клетки · ${sourceLabel(threat.source)}</em></div>`).join('') || empty('Солдат пока не знает ни об одной угрозе.');
+  const covers = [...report.nearbyCovers, ...report.planCovers].slice(0, 16).map((cover) => `<div class="memory-card"><strong>${esc(cover.labelRu)}</strong><span>${Math.round(cover.distanceMeters)} м</span><b>${Math.round(cover.quality)}/100</b><em>${esc(cover.sourceRu)}</em></div>`).join('') || empty('Известных предметов и укрытий пока нет.');
   return `${heading('Обзор и память','Текущая видимость показывается тепловой картой, а старые знания остаются субъективными метками бойца.')}${grid([
-    ['Известная область', `${Math.round(knownAreaMeters)} м`],
+    ['Известная область', `${Math.round(report.knownAreaMeters)} м`],
     ['Угроз в памяти', String(unit.tacticalKnowledge.threats.length)],
-    ['Известных укрытий', String(result.bestQuickCoverCandidates.length + result.bestQualityCoverCandidates.length)],
+    ['Известных укрытий', String(report.nearbyCovers.length + report.planCovers.length)],
     ['Версия знаний', String(unit.tacticalKnowledge.revision)],
   ])}<section class="workspace-panel-section"><h3>Опасности и противник</h3>${threats}</section><section class="workspace-panel-section"><h3>Известные предметы и укрытия</h3>${covers}</section>`;
 }
@@ -659,6 +659,13 @@ function resolveLocalConcealment(cell: MapCell | null): number {
     water: 0,
   };
   return Math.max(0, Math.min(100, terrainBase[cell.terrain] + cell.forest * 24));
+}
+
+function sourceLabel(value: string): string {
+  if (value === 'visual') return 'вижу сам';
+  if (value === 'memory') return 'по памяти';
+  if (value === 'pressure') return 'ощущаю давление';
+  return value;
 }
 
 function heading(title: string, description: string): string {
