@@ -34,30 +34,47 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: mkdir -p diagnostics
       - name: TypeScript
         if: always()
-        run: npx tsc --noEmit
+        shell: bash
+        run: set -o pipefail; npx tsc --noEmit 2>&1 | tee diagnostics/typescript.log
       - name: Event queue
         if: always()
-        run: npm run event-queue:smoke
+        shell: bash
+        run: set -o pipefail; npm run event-queue:smoke 2>&1 | tee diagnostics/event-queue.log
       - name: Runtime session
         if: always()
-        run: npm run runtime-session:smoke
+        shell: bash
+        run: set -o pipefail; npm run runtime-session:smoke 2>&1 | tee diagnostics/runtime-session.log
       - name: Runtime snapshot
         if: always()
-        run: npm run runtime-snapshot:smoke
+        shell: bash
+        run: set -o pipefail; npm run runtime-snapshot:smoke 2>&1 | tee diagnostics/runtime-snapshot.log
       - name: AI scheduler
         if: always()
-        run: npm run ai-scheduler:smoke
+        shell: bash
+        run: set -o pipefail; npm run ai-scheduler:smoke 2>&1 | tee diagnostics/ai-scheduler.log
       - name: Attention profiles
         if: always()
-        run: npm run attention-profiles:smoke
+        shell: bash
+        run: set -o pipefail; npm run attention-profiles:smoke 2>&1 | tee diagnostics/attention-profiles.log
       - name: Perception including rear acceptance
         if: always()
-        run: npm run perception:smoke
+        shell: bash
+        run: set -o pipefail; npm run perception:smoke 2>&1 | tee diagnostics/perception.log
       - name: View memory
         if: always()
-        run: npm run view-memory-heatmap:smoke
+        shell: bash
+        run: set -o pipefail; npm run view-memory-heatmap:smoke 2>&1 | tee diagnostics/view-memory.log
       - name: Build
         if: always()
-        run: npm run build
+        shell: bash
+        run: set -o pipefail; npm run build 2>&1 | tee diagnostics/build.log
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rear-attention-diagnostics-${{ github.event.pull_request.head.sha }}
+          path: diagnostics
+          if-no-files-found: error
