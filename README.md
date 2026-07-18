@@ -7,18 +7,19 @@
 ```text
 Vite
 TypeScript
-PixiJS 7
+PixiJS 8
 HTML/CSS
 Node.js
 Playwright
 GitHub Actions
+Vercel Preview
 ```
 
 Это не проект на Godot.
 
-## Ветки
+## Ветки и разработка фич
 
-Рабочая ветка разработки:
+Ветка приёмки разработки:
 
 ```text
 real-wargame-preview
@@ -30,7 +31,34 @@ real-wargame-preview
 main
 ```
 
-`main` не меняется без прямого разрешения пользователя.
+Каждая новая фича разрабатывается в отдельной временной ветке, созданной от актуального commit `real-wargame-preview`:
+
+```text
+feature/YYYYMMDD-short-kebab-slug
+```
+
+Канонический маршрут:
+
+```text
+Web Chat реализует фичу в feature-ветке
+→ выполняет focused non-browser checks
+→ публикует ветку и manual live-test checklist
+→ пользователь один раз передаёт ветку Codex
+→ Codex только предоставляет branch-linked Vercel Preview URL
+→ пользователь тестирует живое приложение
+→ Web Chat исправляет проблемы в той же feature-ветке
+→ по запросу пользователя Web Chat запускает visual GitHub Actions check
+→ после явного GO пользователя Web Chat переносит exact tested commit в real-wargame-preview
+```
+
+Нельзя разрабатывать фичу напрямую в `real-wargame-preview`. `main` не меняется без отдельного прямого разрешения пользователя.
+
+Подробный контракт:
+
+```text
+AGENTS.md
+docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md
+```
 
 ## Запуск для пользователя
 
@@ -110,6 +138,7 @@ Core и чистый AI не должны зависеть от PixiJS или DO
 AGENTS.md
 docs/ai/WEB_CHAT_START.md
 docs/ai/repo-context.json
+docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md
 docs/subprojects/index.json
 ```
 
@@ -117,15 +146,17 @@ docs/subprojects/index.json
 
 ## Проверка
 
-Основные машинные команды зависят от задачи. Общие проверки:
+До публикации feature-ветки Web Chat выполняет минимальный достаточный невизуальный набор:
 
 ```text
+npx tsc --noEmit
+focused smoke tests
 npm run build
-npm run docs:smoke
-npm run docs:check
 ```
 
-Для визуальных изменений обязательны реальный браузер, свежие PNG и их фактический просмотр. Статус GitHub Actions сам по себе не доказывает, что экран выглядит правильно.
+Для документации применяются `docs:smoke`, `docs:generate` и `docs:check` по правилам репозитория.
+
+Playwright, Chromium и screenshot workflow не запускаются автоматически. Визуальная проверка выполняется только по явной просьбе пользователя и требует exact feature SHA, реального браузера, свежих PNG и их фактического просмотра. Статус GitHub Actions сам по себе не доказывает, что экран выглядит правильно.
 
 ## Большая концепция игры
 
