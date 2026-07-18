@@ -47,6 +47,51 @@
   font-size: 12px;
 }
 
+.tactical-overlay-segmented {
+  display: inline-grid;
+  grid-template-columns: repeat(3, max-content);
+  align-items: center;
+  padding: 2px;
+  border: 1px solid rgba(238, 239, 232, 0.22);
+  border-radius: 9px;
+  background: rgba(10, 13, 11, 0.7);
+}
+
+.tactical-overlay-segmented > button {
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 7px;
+  color: rgba(238, 239, 232, 0.72);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.tactical-overlay-segmented > button.active {
+  color: #101410;
+  background: #e6e7df;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.cover-list-card {
+  display: block;
+  width: 100%;
+  margin: 0 0 6px;
+  padding: 8px 9px;
+  border: 1px solid rgba(230, 231, 223, 0.2);
+  border-radius: 8px;
+  color: var(--workspace-text);
+  background: rgba(230, 231, 223, 0.055);
+  text-align: left;
+  line-height: 1.35;
+}
+
+.cover-list-card:hover {
+  border-color: rgba(230, 231, 223, 0.48);
+  background: rgba(230, 231, 223, 0.1);
+}
+
 /* The old proxy button in the application bar must never duplicate the real editor tool. */
 [data-action="editor-place"] {
   display: none !important;
@@ -58,11 +103,6 @@ body.workspace-editor .game-editor-body [data-editor-tool="spawn_unit"],
 body.workspace-editor .game-editor-body [data-editor-tool="spawn_zone"],
 body.workspace-editor .game-editor-body [data-editor-tool="paint_height"],
 body.workspace-editor .game-editor-body [data-editor-tool="paint_forest"] {
-  display: none !important;
-}
-
-/* Author CSS uses display:grid for the tooltip, so explicitly restore hidden semantics. */
-.cover-map-tooltip[hidden] {
   display: none !important;
 }
 
@@ -148,5 +188,10 @@ body.workspace-simulation .editor-scene-tools-slot {
   .workspace-display-menu > summary {
     padding-inline: 8px;
     font-size: 11px;
+  }
+
+  .tactical-overlay-segmented > button {
+    padding-inline: 6px;
+    font-size: 10px;
   }
 }
