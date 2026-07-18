@@ -40,7 +40,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .tmp-performance-v6-payload
-          tr -d '\r\n\t ' < artifacts/tmp/perf-v6/PerformanceCaptureV6.ts.gz.b64 | base64 --decode > .tmp-performance-v6-payload/capture.gz
+          cat \
+            artifacts/tmp/perf-v6/PerformanceCaptureV6.ts.gz.b64.part1 \
+            artifacts/tmp/perf-v6/PerformanceCaptureV6.ts.gz.b64.part2a \
+            artifacts/tmp/perf-v6/PerformanceCaptureV6.ts.gz.b64.part2b \
+            artifacts/tmp/perf-v6/PerformanceCaptureV6.ts.gz.b64.part2c \
+            | tr -d '\r\n\t ' | base64 --decode > .tmp-performance-v6-payload/capture.gz
           tr -d '\r\n\t ' < artifacts/tmp/perf-v6/PerformanceMonitor.ts.gz.b64 | base64 --decode > .tmp-performance-v6-payload/monitor.gz
           gzip --test .tmp-performance-v6-payload/capture.gz
           gzip --test .tmp-performance-v6-payload/monitor.gz
