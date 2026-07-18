@@ -29,7 +29,7 @@ Stable branch: main
 3. Прочитай docs/orchestration/CHAT_WORKFLOW.md.
 4. Прочитай актуальный STATUS.md подпроекта.
 5. Прочитай релевантный project skill и архитектурные документы.
-6. Для любого runtime-affecting результата прочитай docs/performance/PERFORMANCE_PRINCIPLES.md и .agents/skills/real-wargame-performance/SKILL.md.
+6. Для любого runtime-affecting результата прочитай docs/performance/PERFORMANCE_PRINCIPLES.md, .agents/skills/real-wargame-performance/SKILL.md и docs/workflow/CI_RISK_BASED_ACCEPTANCE.md.
 7. Повторно открой актуальные версии всех затронутых файлов.
 
 Правила интеграции:
@@ -47,6 +47,8 @@ Stable branch: main
 11. Generated-файлы обновляй через предусмотренный генератор.
 12. Доставляй итог в real-wargame-preview или возвращай воспроизводимый пакет, если запись в GitHub недоступна.
 13. Не изменяй main без отдельного явного разрешения пользователя.
+14. Классифицируй риск итогового diff и выбирай минимальную достаточную focused matrix.
+15. Не запускай performance без конкретного performance reason и не повторяй его только из-за нового SHA.
 
 Фундаментальные инварианты:
 
@@ -79,10 +81,12 @@ cache key/limit/memory
 stale-result rejection
 teardown
 before/after p95, p99 and max
-exact-head enforced workflow
+selected focused matrix
+tested implementation head
+performance reason
 ```
 
-После сборки запусти релевантные focused smoke, общие регрессии, production build, docs checks и performance checks, которые реально доступны в среде. Не утверждай выполнение недоступных проверок.
+После сборки запусти релевантные focused smoke, общие регрессии, production build, docs checks и только те performance checks, которые способны обнаружить регрессию от текущего изменения. Один новый SHA без изменения программы или измеряемого сценария не является основанием для повторного performance-прогона. Не утверждай выполнение недоступных проверок.
 
 Для пользовательских визуальных изменений подготовь visual QA: сценарий, ключевые PNG и ожидаемые доказательства. Не запускай реальный браузерный workflow без явного разрешения пользователя.
 
@@ -117,6 +121,10 @@ exact-head enforced workflow
 ## Performance impact
 
 Для runtime-affecting интеграции заполни обязательные поля из docs/orchestration/RESULT_TEMPLATE.md. Для truly non-runtime changes укажи not applicable и точную причину.
+
+## Verification selection
+
+Раздели обязательные, risk-selected, manual и сознательно не запущенные тяжёлые проверки. Укажи TESTED_IMPLEMENTATION_HEAD и PERFORMANCE_REASON либо none.
 
 ## Checks actually run
 
