@@ -1,9 +1,9 @@
 name: Apply Performance v6 Test Compatibility
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/performance-report-v6-observability
+      - real-wargame-preview
     paths:
       - scripts/apply_performance_v6_test_compat.py
       - .github/workflows/apply-performance-v6-test-compat.yml
@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: apply-performance-v6-test-compat-publish
+  group: apply-performance-v6-test-compat-publish-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
@@ -20,10 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout exact branch head
+      - name: Checkout exact PR head
         uses: actions/checkout@v4
         with:
-          ref: agent/performance-report-v6-observability
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
       - name: Apply exact compatibility patch
         run: python scripts/apply_performance_v6_test_compat.py
@@ -46,4 +46,4 @@ jobs:
           git add -A
           git diff --cached --check
           git commit -m 'test(perf): bridge legacy browser checks to report v6'
-          git push origin HEAD:agent/performance-report-v6-observability
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
