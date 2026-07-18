@@ -46,7 +46,7 @@ if (baseline.status === 0) {
     const identity = readFileSync('src/core/debug/BuildIdentity.ts', 'utf8');
     const report = readFileSync('src/core/debug/PerformanceReportV6.ts', 'utf8');
     const monitor = readFileSync('src/core/debug/PerformanceMonitor.ts', 'utf8');
-    assert.ok(identity.includes('PERFORMANCE_CONTRACT_VERSION = PERFORMANCE_REPORT_VERSION'), 'Build identity must derive the contract from the v6 schema constant');
+    assert.ok(identity.includes("PERFORMANCE_CONTRACT_VERSION = 'performance-report-v6'"), 'Build identity must advertise the exact v6 contract without requiring the baseline to contain the v6 schema module');
     assert.ok(report.includes("PERFORMANCE_REPORT_VERSION = 'performance-report-v6'"), 'The canonical report version must be v6');
     assert.ok(report.includes('PERFORMANCE_REPORT_SCHEMA_VERSION = 6'), 'The canonical schema version must be 6');
     assert.ok(monitor.includes('PerformanceCaptureV6'), 'PerformanceMonitor must own the v6 capture rather than a renamed v5 payload');
