@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "pullRequest": 135,
   "branch": "agent/movement-environment-integration-v1",
   "target": "real-wargame-preview",
@@ -11,6 +11,13 @@
     "forward one stable movement registry snapshot through each scheduler cycle",
     "avoid duplicate movement reconciliation and route-status publication after successful begin_move",
     "avoid no-op movement memory/runtime writes and coordinate allocations"
+  ],
+  "boundedWorkFollowupCommit": "ad68790cedd1d0b314f302185d7081b59ad390ee",
+  "boundedWorkFollowup": [
+    "execute at most three ordinary graph decisions per scheduler cycle with deterministic round-robin defer",
+    "execute at most one ordinary cadence decision per unit per simulation step while preserving reactive wakes",
+    "execute at most one synchronous route candidate search per simulation step and preserve deferred orders",
+    "aggregate pressure-zone and known-threat metrics in one stable pass without clone-sort-reduce tails"
   ],
   "workflowPolicy": "canonical preview workflows retained unchanged",
   "rearVisibilityPolicy": "preserve the visibility semantics actually present in exact preview; draft PR 137 was not imported",
