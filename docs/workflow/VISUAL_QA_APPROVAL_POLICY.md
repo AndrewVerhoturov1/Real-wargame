@@ -2,22 +2,40 @@
 
 This is the canonical approval gate for Real-Wargame browser-based visual verification.
 
-## Purpose
+## Position in the feature workflow
 
-Visual verification can be valuable but expensive. The agent must prepare it for user-visible changes, while the human decides whether the real browser run is worth executing now.
+Visual QA belongs after the Web Chat has implemented and pushed the feature branch and after the branch is available through a branch-linked Vercel Preview.
+
+Canonical route:
+
+```text
+Web Chat implements on feature branch
+→ focused non-browser checks
+→ branch push and readiness report
+→ one-time Codex branch-linked Vercel Preview
+→ human live test
+→ same-branch fixes as needed
+→ explicit user request for visual GitHub Actions verification
+→ exact-SHA Playwright run and artifact inspection
+→ explicit user GO
+→ transfer into real-wargame-preview
+```
+
+Visual verification is valuable but expensive. It must be prepared for user-visible changes, while the human decides whether the real browser workflow should run.
 
 ## Default rule
 
 ```text
-prepare visual QA
+prepare visual QA on the feature branch
 → run focused non-browser checks
-→ ask the user once
-→ execute browser/PNG verification only after explicit approval
+→ report the live-test checklist and remaining visual risk
+→ wait for explicit user request
+→ execute browser/PNG verification through GitHub Actions
 ```
 
-The screenshot workflow is manual-only. A normal push or pull request must not launch it automatically.
+The screenshot workflow is manual-only. A normal branch push, Vercel deployment or Pull Request must not launch it automatically.
 
-## When visual QA preparation is required
+## When preparation is required
 
 Prepare visual QA when a change affects what the user can see or interact with, including:
 
@@ -32,14 +50,16 @@ Pure internal logic, documentation and non-visual refactors may use focused smok
 
 ## What “prepared” means
 
-Before asking for approval, the agent must:
+Before asking for approval, the Web Chat must:
 
-1. finish the implementation;
+1. finish the implementation on the canonical feature branch;
 2. prepare or update the relevant Playwright scenario;
-3. identify the key screenshots to capture;
-4. state what each screenshot should prove;
-5. run focused smoke checks and the production build;
-6. report known visual risks that remain unverified.
+3. identify the exact feature commit to test;
+4. identify key screenshots to capture;
+5. state what each screenshot should prove;
+6. run focused non-browser checks and the production build;
+7. report known visual risks that remain unverified;
+8. provide the human live-test checklist.
 
 Preparing a test is not the same as running it.
 
@@ -48,7 +68,7 @@ Preparing a test is not the same as running it.
 Ask once:
 
 ```text
-Визуальная проверка подготовлена. Запустить её сейчас?
+Визуальная проверка подготовлена. Запустить её через GitHub Actions?
 ```
 
 Explicit approval may be given earlier in the task. Phrases such as these count:
@@ -58,6 +78,7 @@ Explicit approval may be given earlier in the task. Phrases such as these count:
 сделай скриншоты
 запусти браузерную проверку
 проверь через Playwright
+запусти визуальную проверку этой ветки
 ```
 
 When approval was already explicit, do not ask again.
@@ -67,12 +88,13 @@ Do not infer approval merely because:
 - the change is visual;
 - a Playwright test exists;
 - a workflow is available;
+- the branch has a Vercel Preview;
 - the task is important;
 - previous tasks used screenshots.
 
 ## If approval is declined or absent
 
-The agent may finish and deliver the change unless the user explicitly made visual QA a release or merge gate.
+The Web Chat may keep the branch ready for human live testing. Do not transfer it into `real-wargame-preview` without the user's separate explicit transfer GO.
 
 The report must say:
 
@@ -82,20 +104,37 @@ visual_qa_approval: declined or pending
 visual_qa_run: not run
 ```
 
-Do not say the visual issue is fixed or visually verified. Say that the implementation is complete and visual verification remains optional/pending.
+Do not say the visual issue is fixed or visually verified. Say that the implementation is ready for live testing and visual GitHub Actions verification remains pending or declined.
 
 ## If approval is granted
 
+Run the relevant manual GitHub Actions workflow against the exact canonical feature-branch commit.
+
 A valid completed visual check requires:
 
+- exact tested feature commit SHA;
 - the real Vite application;
 - a real Chrome/Chromium browser;
-- fresh PNG files from the tested commit;
-- matching workflow/artifact SHA;
-- Playwright result and log;
+- fresh PNG files created after the change;
+- workflow and artifact SHA matching the feature commit;
+- Playwright result and logs;
 - opened and inspected changed/key PNG files.
 
 A green workflow alone is not enough.
+
+## Same-branch failure loop
+
+When visual verification finds a problem:
+
+1. return to the same canonical feature branch;
+2. add or update a regression scenario when practical;
+3. fix the code;
+4. rerun focused non-browser checks;
+5. commit and push the same branch;
+6. let the branch-linked Vercel Preview update;
+7. repeat the visual workflow only when the user still wants it.
+
+Do not create a fresh branch or call Codex again for each visual defect.
 
 ## Workflow rule
 
@@ -108,11 +147,15 @@ on:
 
 Do not restore `push` or `pull_request` triggers without a separate explicit policy change approved by the user.
 
+The workflow input or dispatch context must identify the exact feature branch or commit under test. Results from another SHA are not acceptance evidence.
+
 ## Reporting
 
 Every implementation report uses:
 
 ```text
+feature_branch
+current_commit
 visual_qa_prepared: yes / no / not applicable
 visual_qa_approval: approved / declined / pending / not applicable
 visual_qa_run: passed / failed / not run / not applicable
@@ -128,3 +171,12 @@ artifact_sha_match
 screenshots_inspected
 key_frames
 ```
+
+Keep human live-test status separate:
+
+```text
+live_test_status: pending / passed / failed / not run
+live_tested_commit:
+```
+
+Visual GitHub Actions verification does not grant permission to transfer into preview. Transfer still requires explicit user GO for the exact accepted feature commit.
