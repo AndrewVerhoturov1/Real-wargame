@@ -74,7 +74,6 @@ jobs:
           cp source/tests/danger-layer-browser-performance.spec.ts baseline/tests/danger-layer-browser-performance.spec.ts
           cp source/playwright.performance.config.ts baseline/playwright.performance.config.ts
           cp source/vite.config.ts baseline/vite.config.ts
-          cp source/src/core/debug/BuildIdentity.ts baseline/src/core/debug/BuildIdentity.ts
           cp source/src/core/debug/AwarenessMovementDiagnostics.ts baseline/src/core/debug/AwarenessMovementDiagnostics.ts
 
       - name: Install baseline dependencies
