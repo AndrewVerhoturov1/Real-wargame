@@ -11,6 +11,8 @@ docs/performance/PERFORMANCE_PRINCIPLES.md
 docs/workflow/CI_RISK_BASED_ACCEPTANCE.md
 ```
 
+This document is a repository contract. It is not optional guidance.
+
 The performance principles define runtime quality. The CI policy defines when and how that quality must be re-measured.
 
 ## Trigger
@@ -57,7 +59,7 @@ Reject a design that adds unbounded interactive work, duplicates a canonical cal
 - lifecycle and teardown are symmetric;
 - subjective knowledge and deterministic gameplay semantics are preserved.
 
-## Validation selection
+## Required validation selection
 
 Classify the actual change before running checks.
 
