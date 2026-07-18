@@ -11,7 +11,7 @@ import {
   type RouteCostFields,
 } from '../navigation/RouteCostField';
 import { getOrRequestAsyncRouteCostFields } from '../navigation/RouteCostWorkerClient';
-import { getBuiltInNavigationProfile } from '../navigation/NavigationProfiles';
+import { getBuiltInNavigationProfile, type NavigationProfile } from '../navigation/NavigationProfiles';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
 
@@ -59,10 +59,11 @@ export interface CoverSuitabilityConfig {
   readonly dominatedDangerTolerance: number;
   readonly dominatedDistanceRatio: number;
   readonly maxCandidatesPerClass: number;
+  readonly pendingPollIntervalMs: number;
 }
 
 export const COVER_SUITABILITY_CONFIG: CoverSuitabilityConfig = Object.freeze({
-  revision: 4,
+  revision: 5,
   quickMaxRouteMeters: 10,
   qualityMaxRouteMeters: 180,
   maxVisitedCells: 4096,
@@ -81,6 +82,7 @@ export const COVER_SUITABILITY_CONFIG: CoverSuitabilityConfig = Object.freeze({
   dominatedDangerTolerance: 5,
   dominatedDistanceRatio: 0.62,
   maxCandidatesPerClass: 8,
+  pendingPollIntervalMs: 100,
 });
 
 export interface CoverSourceVersions {
@@ -148,6 +150,7 @@ export interface CoverSuitabilityDiagnostics {
   readonly buildCount: number;
   readonly cacheHitCount: number;
   readonly pendingCount: number;
+  readonly workerRequestCount: number;
   readonly visitedCellCount: number;
   readonly lastCacheKey: string;
 }
@@ -156,6 +159,7 @@ interface MutableDiagnostics {
   buildCount: number;
   cacheHitCount: number;
   pendingCount: number;
+  workerRequestCount: number;
   visitedCellCount: number;
   lastCacheKey: string;
 }
@@ -184,17 +188,26 @@ interface RegionBuild {
   cells: number[];
 }
 
+interface RuntimePreparationEntry {
+  readonly map: TacticalMap;
+  readonly inputKey: string;
+  readonly nextPollAtMs: number;
+  readonly result: CoverSuitabilityResult;
+}
+
 const DIRECTION_X = new Int8Array([1, 0, -1, 0, 1, -1, -1, 1]);
 const DIRECTION_Y = new Int8Array([0, 1, 0, -1, 1, 1, -1, -1]);
 const DIRECTION_LENGTH = new Float32Array([1, 1, 1, 1, Math.SQRT2, Math.SQRT2, Math.SQRT2, Math.SQRT2]);
 
 const resultCache = new WeakMap<UnitModel, { map: TacticalMap; key: string; result: CoverSuitabilityResult }>();
 const pendingResultCache = new WeakMap<UnitModel, { map: TacticalMap; key: string; result: CoverSuitabilityResult }>();
+const runtimePreparationCache = new WeakMap<UnitModel, RuntimePreparationEntry>();
 const workspaceByMap = new WeakMap<TacticalMap, SearchWorkspace>();
 const diagnostics: MutableDiagnostics = {
   buildCount: 0,
   cacheHitCount: 0,
   pendingCount: 0,
+  workerRequestCount: 0,
   visitedCellCount: 0,
   lastCacheKey: '',
 };
@@ -211,26 +224,53 @@ export function getCoverSuitability(
   config: CoverSuitabilityConfig = COVER_SUITABILITY_CONFIG,
 ): CoverSuitabilityResult {
   const resolvedProfile = resolveUnitNavigationProfile(unit).profile;
-  const context = buildUnitTacticalRouteContext(unit, {
-    freshness: typeof Worker === 'undefined' ? 'immediate' : 'coalesced',
-    metersPerCell: state.map.metersPerCell,
-  });
+  const runtimeInputKey = buildRuntimeInputKey(state.map, unit, resolvedProfile, config);
 
   if (typeof Worker !== 'undefined') {
+    const now = performance.now();
+    const runtimeCached = runtimePreparationCache.get(unit);
+    if (
+      runtimeCached?.map === state.map
+      && runtimeCached.inputKey === runtimeInputKey
+      && (runtimeCached.result.preparationStatus === 'ready' || now < runtimeCached.nextPollAtMs)
+    ) {
+      diagnostics.cacheHitCount += 1;
+      diagnostics.lastCacheKey = runtimeCached.result.cacheKey;
+      return runtimeCached.result;
+    }
+
+    const context = buildUnitTacticalRouteContext(unit, {
+      freshness: 'immediate',
+      metersPerCell: state.map.metersPerCell,
+    });
+    diagnostics.workerRequestCount += 1;
     const routePreparation = getOrRequestAsyncRouteCostFields(state.map, resolvedProfile, context);
     if (routePreparation.status === 'pending') {
-      return readCachedOrPendingResult(state.map, unit, `route:${resolvedProfile.id}`, config);
+      return rememberRuntimePreparation(
+        state.map,
+        unit,
+        runtimeInputKey,
+        readPendingResult(state.map, unit, `route:${resolvedProfile.id}`, config),
+        now + config.pendingPollIntervalMs,
+      );
     }
     if (routePreparation.status === 'ready') {
       let fields = routePreparation.fields;
       if (!fields.availability.danger) {
+        diagnostics.workerRequestCount += 1;
         const dangerPreparation = getOrRequestAsyncRouteCostFields(
           state.map,
           getBuiltInNavigationProfile('normal'),
           context,
         );
         if (dangerPreparation.status === 'pending') {
-          return readCachedOrPendingResult(state.map, unit, `danger:${fields.cacheKey}`, config);
+          return rememberRuntimePreparation(
+            state.map,
+            unit,
+            runtimeInputKey,
+            readPendingResult(state.map, unit, `danger:${fields.cacheKey}`, config),
+            now + config.pendingPollIntervalMs,
+          );
         }
         if (dangerPreparation.status === 'ready') {
           fields = combineRouteAndDangerFields(fields, dangerPreparation.fields);
@@ -238,10 +278,20 @@ export function getCoverSuitability(
           fields = buildSynchronousRouteAndDangerFields(state.map, resolvedProfile, context);
         }
       }
-      return buildOrReadCachedResult(state.map, unit, fields, config);
+      return rememberRuntimePreparation(
+        state.map,
+        unit,
+        runtimeInputKey,
+        buildOrReadCachedResult(state.map, unit, fields, config),
+        Number.POSITIVE_INFINITY,
+      );
     }
   }
 
+  const context = buildUnitTacticalRouteContext(unit, {
+    freshness: 'immediate',
+    metersPerCell: state.map.metersPerCell,
+  });
   return buildOrReadCachedResult(
     state.map,
     unit,
@@ -449,6 +499,7 @@ export function coverRejectionReasonAt(
 export function invalidateCoverSuitability(unit: UnitModel): void {
   resultCache.delete(unit);
   pendingResultCache.delete(unit);
+  runtimePreparationCache.delete(unit);
 }
 
 export function getCoverSuitabilityDiagnostics(): CoverSuitabilityDiagnostics {
@@ -459,8 +510,39 @@ export function resetCoverSuitabilityDiagnostics(): void {
   diagnostics.buildCount = 0;
   diagnostics.cacheHitCount = 0;
   diagnostics.pendingCount = 0;
+  diagnostics.workerRequestCount = 0;
   diagnostics.visitedCellCount = 0;
   diagnostics.lastCacheKey = '';
+}
+
+function buildRuntimeInputKey(
+  map: TacticalMap,
+  unit: UnitModel,
+  profile: NavigationProfile,
+  config: CoverSuitabilityConfig,
+): string {
+  const revisions = getMapRevisionSnapshot(map);
+  return [
+    `unit:${unit.id}`,
+    `position:${clampCell(Math.floor(unit.position.x), map.width)}:${clampCell(Math.floor(unit.position.y), map.height)}`,
+    `posture:${unit.behaviorRuntime.posture}`,
+    `profile:${profile.id}:${profile.revision}`,
+    `knowledge:${unit.tacticalKnowledge.revision}`,
+    `map:${revisions.terrain}:${revisions.height}:${revisions.forest}:${revisions.objects}`,
+    `environment:${map.environmentProfileId ?? ''}`,
+    `config:${config.revision}`,
+  ].join(';');
+}
+
+function rememberRuntimePreparation(
+  map: TacticalMap,
+  unit: UnitModel,
+  inputKey: string,
+  result: CoverSuitabilityResult,
+  nextPollAtMs: number,
+): CoverSuitabilityResult {
+  runtimePreparationCache.set(unit, { map, inputKey, nextPollAtMs, result });
+  return result;
 }
 
 function buildOrReadCachedResult(
@@ -502,22 +584,22 @@ function buildOrReadCachedResult(
   return result;
 }
 
-function readCachedOrPendingResult(
+function readPendingResult(
   map: TacticalMap,
   unit: UnitModel,
   pendingReason: string,
   config: CoverSuitabilityConfig,
 ): CoverSuitabilityResult {
-  const ready = resultCache.get(unit);
-  if (ready?.map === map) {
-    diagnostics.cacheHitCount += 1;
-    diagnostics.pendingCount += 1;
-    diagnostics.lastCacheKey = ready.key;
-    return ready.result;
-  }
   const startX = clampCell(Math.floor(unit.position.x), map.width);
   const startY = clampCell(Math.floor(unit.position.y), map.height);
-  const key = `cover:pending:${unit.id}:${startX}:${startY}:${pendingReason}:${config.revision}`;
+  const key = [
+    `cover:pending:${unit.id}`,
+    `position:${startX}:${startY}`,
+    `posture:${unit.behaviorRuntime.posture}`,
+    `knowledge:${unit.tacticalKnowledge.revision}`,
+    pendingReason,
+    `config:${config.revision}`,
+  ].join(';');
   const existing = pendingResultCache.get(unit);
   if (existing?.map === map && existing.key === key) {
     diagnostics.pendingCount += 1;
@@ -563,7 +645,7 @@ function readCachedOrPendingResult(
 
 function buildSynchronousRouteAndDangerFields(
   map: TacticalMap,
-  routeProfile: ReturnType<typeof resolveUnitNavigationProfile>['profile'],
+  routeProfile: NavigationProfile,
   context: ReturnType<typeof buildUnitTacticalRouteContext>,
 ): RouteCostFields {
   const cache = getSharedRouteCostFieldCache(map);
