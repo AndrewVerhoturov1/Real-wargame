@@ -1,1 +1,1 @@
-rerun with persisted Playwright diagnostics
+rerun after fixing strict editor selection locator
