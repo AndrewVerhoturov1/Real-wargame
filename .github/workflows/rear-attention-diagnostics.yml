@@ -24,7 +24,7 @@ concurrency:
 jobs:
   diagnostics:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -67,6 +67,30 @@ jobs:
         if: always()
         shell: bash
         run: set -o pipefail; npm run view-memory-heatmap:smoke 2>&1 | tee diagnostics/view-memory.log
+      - name: Visibility and vegetation contracts
+        if: always()
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            npm run visibility-probe:smoke
+            npm run point-los-differential:smoke
+            npm run shared-visibility-vegetation:smoke
+          } 2>&1 | tee diagnostics/visibility-contracts.log
+      - name: Attention editor contracts
+        if: always()
+        shell: bash
+        run: set -o pipefail; npm run editor:smoke 2>&1 | tee diagnostics/editor.log
+      - name: Targeted performance contracts
+        if: always()
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            npm run perception-performance:smoke
+            npm run view-memory-heatmap-performance:smoke
+            npm run performance-contract:smoke
+          } 2>&1 | tee diagnostics/performance.log
       - name: Build
         if: always()
         shell: bash
