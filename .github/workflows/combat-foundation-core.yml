@@ -1,4 +1,4 @@
-name: Combat Foundation Core
+name: Per-unit AI scheduler smoke and Combat Foundation Core
 
 on:
   workflow_dispatch:
