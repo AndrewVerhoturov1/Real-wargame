@@ -39,10 +39,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base64 --decode artifacts/tmp/perf-v6/PerformanceCaptureV6.ts.gz.b64 | gzip --decompress > src/core/debug/PerformanceCaptureV6.ts
-          base64 --decode artifacts/tmp/perf-v6/PerformanceMonitor.ts.gz.b64 | gzip --decompress > src/core/debug/PerformanceMonitor.ts
+          mkdir -p .tmp-performance-v6-payload
+          tr -d '\r\n\t ' < artifacts/tmp/perf-v6/PerformanceCaptureV6.ts.gz.b64 | base64 --decode > .tmp-performance-v6-payload/capture.gz
+          tr -d '\r\n\t ' < artifacts/tmp/perf-v6/PerformanceMonitor.ts.gz.b64 | base64 --decode > .tmp-performance-v6-payload/monitor.gz
+          gzip --test .tmp-performance-v6-payload/capture.gz
+          gzip --test .tmp-performance-v6-payload/monitor.gz
+          gzip --decompress --stdout .tmp-performance-v6-payload/capture.gz > src/core/debug/PerformanceCaptureV6.ts
+          gzip --decompress --stdout .tmp-performance-v6-payload/monitor.gz > src/core/debug/PerformanceMonitor.ts
           grep -q 'buildReportInternal' src/core/debug/PerformanceCaptureV6.ts
           grep -q 'requestIdleCallback' src/core/debug/PerformanceMonitor.ts
+          rm -rf .tmp-performance-v6-payload
       - name: Install and verify
         run: |
           npm ci
