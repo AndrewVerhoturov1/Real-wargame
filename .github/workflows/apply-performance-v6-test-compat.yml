@@ -7,12 +7,22 @@ on:
     paths:
       - tests/performance-report-compat.ts
       - .github/workflows/apply-performance-v6-test-compat.yml
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - tests/performance-report-compat.ts
+      - .github/workflows/apply-performance-v6-test-compat.yml
 
 permissions:
   contents: write
 
+env:
+  PATCH_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  PATCH_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+
 concurrency:
-  group: apply-performance-v6-test-compat
+  group: apply-performance-v6-test-compat-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -23,7 +33,7 @@ jobs:
       - name: Checkout exact branch head
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.PATCH_HEAD_SHA }}
           fetch-depth: 0
       - name: Patch legacy browser readers without changing v6 JSON
         shell: bash
@@ -154,4 +164,4 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
           git commit -m 'test(perf): bridge legacy browser checks to report v6'
-          git push origin HEAD:agent/performance-report-v6-observability
+          git push origin HEAD:${PATCH_BRANCH}
