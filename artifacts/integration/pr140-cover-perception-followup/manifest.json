@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "pullRequest": 140,
+  "branch": "agent/pr135-cover-metrics-followup-v1",
+  "target": "real-wargame-preview",
+  "exactBase": "934a9b9d1c3ed0629d10600eeffee91353d16020",
+  "coverMetricsCommit": "61d7857b01992a673accd3ea7071b2cbb61dc5ee",
+  "perceptionAllocationCommit": "ba45e1860ff0719df66bffa7224e6b353337662e",
+  "changes": [
+    "allocation-bounded scalar small-arms cover evaluation for simulation threat metrics",
+    "direct canonical vegetation material reads in cover and perception hot paths",
+    "shared perception stimuli without per-observer filtered arrays",
+    "reused per-unit contact-id scratch sets and in-place contact decay compaction",
+    "direct rounded contact fingerprint comparison without JSON serialization"
+  ],
+  "evidencePolicy": "cold-start and first active simulation steps remain inside enforced Live Windows evidence",
+  "thresholdsChanged": false,
+  "mergePerformed": false,
+  "autoMergeEnabled": false,
+  "mainTouched": false
+}
