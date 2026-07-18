@@ -69,9 +69,9 @@ function verifyNearHardLosStillBlocks(): void {
     objects: [{
       id: 'near-wall',
       kind: 'structure',
-      x: 79,
+      x: 78.6,
       y: 10,
-      widthCells: 1,
+      widthCells: 1.2,
       heightCells: 1,
       losHeightMeters: 3,
       coverProtection: 100,
