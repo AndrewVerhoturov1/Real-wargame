@@ -1,0 +1,28 @@
+name: Locate Route Candidate Search
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - '.github/workflows/locate-route-candidate-search.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  locate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Locate candidate-search phase and surrounding implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -R -n -C 12 --exclude-dir=node_modules --exclude-dir=dist "route.candidate-search\|candidate-search" src scripts tests || true
+          echo '--- ensureNavigationRouteCurrent ---'
+          grep -R -n -C 12 --exclude-dir=node_modules --exclude-dir=dist "ensureNavigationRouteCurrent" src scripts tests || true
+          echo '--- candidate route functions ---'
+          grep -R -n -C 6 --exclude-dir=node_modules --exclude-dir=dist "candidate.*route\|route.*candidate" src/core | head -n 800 || true
