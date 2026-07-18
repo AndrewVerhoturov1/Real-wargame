@@ -65,6 +65,11 @@ assert.ok(cover.includes('heapPositions: Int32Array'), 'bounded search must use 
 assert.ok(!cover.includes('new MinHeap'), 'cover search must not allocate a heap per calculation');
 assert.ok(!cover.includes('interface HeapItem'), 'cover search must not allocate heap item objects');
 assert.ok(cover.includes('totalCost already contains the configured danger component'), 'route danger must not be added twice');
+assert.ok(cover.includes('getOrRequestAsyncRouteCostFields'), 'runtime cover preparation must use the canonical route worker');
+assert.ok(cover.includes("preparationStatus: 'pending'"), 'runtime cover preparation must expose a stable pending result');
+assert.ok(cover.includes('pendingPollIntervalMs: 100'), 'pending worker polling must be throttled');
+assert.ok(cover.includes('runtimePreparationCache'), 'unchanged runtime inputs must reuse ready/pending results');
+assert.ok(cover.includes('combineRouteAndDangerFields'), 'a danger-disabled route profile must keep its route costs while reusing canonical danger');
 
 const workspace = readFileSync('src/ui/TacticalWorkspace.ts', 'utf8');
 assert.ok(workspace.includes('data-overlay-mode="danger"') || workspace.includes('data-overlay-mode="${id}"'), 'workspace must expose tactical overlay segments');
