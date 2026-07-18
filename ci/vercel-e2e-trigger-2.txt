@@ -1,1 +1,1 @@
-rerun after correcting Playwright CLI invocation
+rerun with persisted Playwright diagnostics
