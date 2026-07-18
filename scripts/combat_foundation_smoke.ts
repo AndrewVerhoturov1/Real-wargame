@@ -19,6 +19,8 @@ import {
   reloadWeapon,
   tryConsumeRound,
 } from '../src/core/combat/WeaponModel';
+import { evaluateSmallArmsCover, evaluateSmallArmsExpectedProtection } from '../src/core/cover/SmallArmsCoverEvaluation';
+import { normalizeMap } from '../src/core/map/MapModel';
 import { tickAllUnitPerception } from '../src/core/perception/PerceptionSystem';
 import { normalizePressureZones } from '../src/core/pressure/PressureZone';
 import {
@@ -141,6 +143,50 @@ function verifyAllUnitPerception(): void {
   assert.ok(blueContact, 'blue unit must perceive the real red unit without being selected');
   assert.ok(redContact, 'red unit must perceive the real blue unit without being selected');
   assert.notEqual(blueContact, redContact, 'each observer must retain independent subjective contact memory');
+}
+
+function verifySmallArmsRuntimeCoverParity(): void {
+  const map = normalizeMap({
+    width: 12,
+    height: 6,
+    cellSize: 16,
+    metersPerCell: 2,
+    defaultTerrain: 'field',
+    defaultHeight: 0,
+    cellRects: [
+      { x1: 6, x2: 7, y1: 2, y2: 2, vegetationMaterialId: 'dense_forest' },
+      { x1: 8, x2: 8, y1: 2, y2: 2, height: 2 },
+    ],
+    objects: [{
+      id: 'runtime-cover-parity',
+      kind: 'structure',
+      x: 4,
+      y: 2,
+      widthCells: 1,
+      heightCells: 1,
+      coverProtection: 92,
+      coverReliability: 96,
+      penetrable: false,
+      coverPosture: 'standing',
+    }],
+  });
+  const source = { x: 1.5, y: 2.5 };
+  const target = { x: 10.5, y: 2.5 };
+  const optionSets = [
+    undefined,
+    { includeObjects: false },
+    { includeForest: false },
+    { includeRelief: false },
+    { includeObjects: false, includeForest: false },
+  ] as const;
+
+  for (const posture of ['standing', 'crouched', 'prone'] as const) {
+    for (const options of optionSets) {
+      const detailed = evaluateSmallArmsCover(map, source, target, posture, options).expectedProtection;
+      const runtime = evaluateSmallArmsExpectedProtection(map, source, target, posture, options);
+      assert.equal(runtime, detailed, `runtime cover parity failed for ${posture} ${JSON.stringify(options)}`);
+    }
+  }
 }
 
 function verifyThreatRuntimeSummaryParity(): void {
@@ -456,6 +502,7 @@ function restoreTargetForContinuedFire(target: UnitModel): void {
 
 verifySides();
 verifyAllUnitPerception();
+verifySmallArmsRuntimeCoverParity();
 verifyThreatRuntimeSummaryParity();
 verifyWeaponRuntime();
 verifyHitShapes();

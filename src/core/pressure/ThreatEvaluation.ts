@@ -1,5 +1,5 @@
 import { POSTURE_EXPOSURE_MULTIPLIER } from '../behavior/BehaviorModel';
-import { evaluateSmallArmsCover } from '../cover/SmallArmsCoverEvaluation';
+import { evaluateSmallArmsCover, evaluateSmallArmsExpectedProtection } from '../cover/SmallArmsCoverEvaluation';
 import { distance, type GridPosition } from '../geometry';
 import type { TacticalMap } from '../map/MapModel';
 import { getBestPerceptionContact } from '../perception/PerceptionSystem';
@@ -268,14 +268,19 @@ function evaluateZoneScalars(
     ? directionalRangeFactor(distanceCells, settings)
     : 1;
   const exposure = POSTURE_EXPOSURE_MULTIPLIER[unit.behaviorRuntime.posture];
-  const cover = evaluateSmallArmsCover(map, zone, unit.position, unit.behaviorRuntime.posture);
-  const coverMultiplier = 1 - cover.expectedProtection / 100;
+  const expectedProtection = evaluateSmallArmsExpectedProtection(
+    map,
+    zone,
+    unit.position,
+    unit.behaviorRuntime.posture,
+  );
+  const coverMultiplier = 1 - expectedProtection / 100;
   output.danger = clampPercent(zone.strength * rangeFactor * exposure * coverMultiplier);
   output.suppression = clampPercent(settings.suppression * rangeFactor * Math.max(0.35, exposure) * coverMultiplier);
   output.stressPerSecond = Math.max(0, zone.stressPerSecond * rangeFactor * coverMultiplier);
   output.distanceCells = distanceCells;
   output.directionFromUnitDegrees = normalizeDegrees((Math.atan2(zone.y - unit.position.y, zone.x - unit.position.x) * 180) / Math.PI);
-  output.coverProtection = cover.expectedProtection;
+  output.coverProtection = expectedProtection;
   return true;
 }
 
@@ -320,14 +325,19 @@ function evaluateKnownThreatScalars(
 
   const confidenceFactor = threat.confidence / 100;
   const exposure = POSTURE_EXPOSURE_MULTIPLIER[unit.behaviorRuntime.posture];
-  const cover = evaluateSmallArmsCover(map, threat, unit.position, unit.behaviorRuntime.posture);
-  const coverMultiplier = 1 - cover.expectedProtection / 100;
+  const expectedProtection = evaluateSmallArmsExpectedProtection(
+    map,
+    threat,
+    unit.position,
+    unit.behaviorRuntime.posture,
+  );
+  const coverMultiplier = 1 - expectedProtection / 100;
   output.danger = clampPercent(threat.strength * factor * confidenceFactor * exposure * coverMultiplier);
   output.suppression = clampPercent(threat.suppression * factor * confidenceFactor * Math.max(0.35, exposure) * coverMultiplier);
   output.stressPerSecond = Math.max(0, threat.stressPerSecond * factor * confidenceFactor * coverMultiplier);
   output.distanceCells = distanceCells;
   output.directionFromUnitDegrees = normalizeDegrees(Math.atan2(threat.y - unit.position.y, threat.x - unit.position.x) * 180 / Math.PI);
-  output.coverProtection = cover.expectedProtection;
+  output.coverProtection = expectedProtection;
   return true;
 }
 

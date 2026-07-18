@@ -6,7 +6,9 @@ import {
   type MapObject,
   type TacticalMap,
 } from '../map/MapModel';
-import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
+import { getVegetationMaterial } from '../map/EnvironmentMaterialProfile';
+import { getActiveEnvironmentProfile } from '../map/EnvironmentProfileRuntime';
+import { resolveCellVegetationDefinition, resolveCellVegetationMaterialId } from '../map/VegetationDefinition';
 
 export interface SmallArmsCoverContribution {
   kind: 'object' | 'forest' | 'relief';
@@ -40,6 +42,37 @@ const POSTURE_HEIGHT_METERS: Record<UnitPosture, number> = {
   crouched: 1.05,
   prone: 0.38,
 };
+
+
+/**
+ * Allocation-bounded cover summary for simulation hot paths.
+ * It preserves the exact combined expected-protection semantics of
+ * evaluateSmallArmsCover without constructing contribution arrays, maps,
+ * labels, or temporary point objects.
+ */
+export function evaluateSmallArmsExpectedProtection(
+  map: TacticalMap,
+  threatPosition: GridPosition,
+  targetPosition: GridPosition,
+  posture: UnitPosture,
+  options?: SmallArmsCoverOptions,
+): number {
+  let remaining = 1;
+
+  if (options?.includeObjects !== false) {
+    remaining *= evaluateObjectCoverRemaining(map, threatPosition, targetPosition, posture);
+  }
+  if (options?.includeForest !== false) {
+    const expectedProtection = evaluateForestExpectedProtection(map, threatPosition, targetPosition);
+    remaining *= 1 - expectedProtection / 100;
+  }
+  if (options?.includeRelief !== false) {
+    const expectedProtection = evaluateReliefExpectedProtection(map, threatPosition, targetPosition, posture);
+    remaining *= 1 - expectedProtection / 100;
+  }
+
+  return clampPercent(100 * (1 - remaining));
+}
 
 export function evaluateSmallArmsCover(
   map: TacticalMap,
@@ -79,6 +112,139 @@ export function evaluateSmallArmsCover(
     object: strongest?.object ?? null,
     contributions,
   };
+}
+
+function evaluateObjectCoverRemaining(
+  map: TacticalMap,
+  threatPosition: GridPosition,
+  targetPosition: GridPosition,
+  posture: UnitPosture,
+): number {
+  let remaining = 1;
+  const segmentDx = targetPosition.x - threatPosition.x;
+  const segmentDy = targetPosition.y - threatPosition.y;
+  const segmentLengthSquared = segmentDx * segmentDx + segmentDy * segmentDy;
+
+  for (const object of map.objects) {
+    const normalizedProperties = object.coverProtection !== undefined
+      && object.coverReliability !== undefined
+      && object.penetrable !== undefined
+      && object.coverPosture !== undefined
+      ? null
+      : resolveObjectCoverProperties(object);
+    const coverProtection = object.coverProtection ?? normalizedProperties!.coverProtection;
+    const coverReliability = object.coverReliability ?? normalizedProperties!.coverReliability;
+    const penetrable = object.penetrable ?? normalizedProperties!.penetrable;
+    const coverPosture = object.coverPosture ?? normalizedProperties!.coverPosture;
+    if (!postureFitsCover(posture, coverPosture)) continue;
+
+    const centerX = object.x + object.widthCells / 2;
+    const centerY = object.y + object.heightCells / 2;
+    let segmentT = 0;
+    let segmentDistance: number;
+    if (segmentLengthSquared <= 0.000001) {
+      segmentDistance = Math.hypot(centerX - threatPosition.x, centerY - threatPosition.y);
+    } else {
+      const rawT = (
+        (centerX - threatPosition.x) * segmentDx
+        + (centerY - threatPosition.y) * segmentDy
+      ) / segmentLengthSquared;
+      segmentT = Math.max(0, Math.min(1, rawT));
+      const projectionX = threatPosition.x + segmentDx * segmentT;
+      const projectionY = threatPosition.y + segmentDy * segmentT;
+      segmentDistance = Math.hypot(centerX - projectionX, centerY - projectionY);
+    }
+
+    const hitRadius = Math.max(0.28, Math.min(object.widthCells, object.heightCells) * 0.72);
+    if (segmentT <= 0.035 || segmentT >= 0.985 || segmentDistance > hitRadius) continue;
+
+    const angleReliability = clampPercent(100 - (segmentDistance / hitRadius) * 52);
+    const sizeReliability = clampPercent(35 + Math.min(55, Math.max(object.widthCells, object.heightCells) * 18));
+    const reliability = clampPercent(
+      coverReliability * 0.55 + angleReliability * 0.3 + sizeReliability * 0.15,
+    );
+    const strength = clampPercent(coverProtection * (penetrable ? 0.58 : 1));
+    const expectedProtection = clampPercent(strength * reliability / 100);
+    if (expectedProtection > 0) remaining *= 1 - expectedProtection / 100;
+  }
+
+  return remaining;
+}
+
+function evaluateForestExpectedProtection(
+  map: TacticalMap,
+  threatPosition: GridPosition,
+  targetPosition: GridPosition,
+): number {
+  const dx = targetPosition.x - threatPosition.x;
+  const dy = targetPosition.y - threatPosition.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 0.5) return 0;
+
+  const samples = Math.max(4, Math.ceil(length * 3));
+  const environmentProfile = getActiveEnvironmentProfile();
+  let density = 0;
+  for (let index = 1; index < samples; index += 1) {
+    const t = index / samples;
+    const cell = getCell(
+      map,
+      Math.floor(threatPosition.x + dx * t),
+      Math.floor(threatPosition.y + dy * t),
+    );
+    density += getVegetationMaterial(
+      environmentProfile,
+      resolveCellVegetationMaterialId(cell),
+    ).fire.densityWeight;
+  }
+  if (density <= 0) return 0;
+
+  const strength = clampPercent(8 + Math.min(34, density * 2.1));
+  const reliability = clampPercent(18 + Math.min(72, density * 4.2));
+  return clampPercent(strength * reliability / 100);
+}
+
+function evaluateReliefExpectedProtection(
+  map: TacticalMap,
+  threatPosition: GridPosition,
+  targetPosition: GridPosition,
+  posture: UnitPosture,
+): number {
+  const dx = targetPosition.x - threatPosition.x;
+  const dy = targetPosition.y - threatPosition.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 0.75) return 0;
+
+  const sourceCell = getCell(map, Math.floor(threatPosition.x), Math.floor(threatPosition.y));
+  const targetCell = getCell(map, Math.floor(targetPosition.x), Math.floor(targetPosition.y));
+  if (!sourceCell || !targetCell) return 0;
+
+  const sourceHeight = sourceCell.height * ELEVATION_METERS_PER_LEVEL + 1.45;
+  const targetHeight = targetCell.height * ELEVATION_METERS_PER_LEVEL + POSTURE_HEIGHT_METERS[posture];
+  const samples = Math.max(8, Math.ceil(length * 5));
+  let bestClearance = 0;
+  let blockingSamples = 0;
+
+  for (let index = 1; index < samples; index += 1) {
+    const t = index / samples;
+    const cell = getCell(
+      map,
+      Math.floor(threatPosition.x + dx * t),
+      Math.floor(threatPosition.y + dy * t),
+    );
+    if (!cell) continue;
+
+    const lineHeight = sourceHeight + (targetHeight - sourceHeight) * t;
+    const clearance = cell.height * ELEVATION_METERS_PER_LEVEL - lineHeight;
+    if (clearance > 0) {
+      bestClearance = Math.max(bestClearance, clearance);
+      blockingSamples += 1;
+    }
+  }
+
+  if (blockingSamples === 0) return 0;
+  const strength = clampPercent(62 + bestClearance * 16);
+  const reliability = clampPercent(48 + blockingSamples * 5 + bestClearance * 10);
+  return clampPercent(strength * reliability / 100);
 }
 
 function evaluateObjectCover(
