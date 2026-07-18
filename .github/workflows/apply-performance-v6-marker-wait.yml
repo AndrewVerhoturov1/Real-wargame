@@ -1,9 +1,9 @@
 name: Apply Performance v6 Marker Wait
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/performance-report-v6-observability
+      - real-wargame-preview
     paths:
       - scripts/apply_performance_v6_marker_wait.py
       - .github/workflows/apply-performance-v6-marker-wait.yml
@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: apply-performance-v6-marker-wait
+  group: apply-performance-v6-marker-wait-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
@@ -20,10 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout current branch head
+      - name: Checkout exact PR head
         uses: actions/checkout@v4
         with:
-          ref: agent/performance-report-v6-observability
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
       - name: Apply marker wait patch
         run: python scripts/apply_performance_v6_marker_wait.py
@@ -38,11 +38,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          branch='agent/performance-report-v6-observability'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add tests/performance-report-v6-browser.spec.ts
           git diff --cached --check
           git commit -m 'test(perf): wait for marker control across editor rerenders'
-          git pull --rebase origin "$branch"
-          git push origin "HEAD:$branch"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
