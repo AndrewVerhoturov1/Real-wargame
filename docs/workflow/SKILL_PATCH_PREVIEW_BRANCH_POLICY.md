@@ -1,32 +1,49 @@
-# Patch / Instruction для внешних локальных навыков (Codex, OpenCode, zworker, Route A/X/W/Q/R)
+# External Skill Branch Policy
 
-## Контекст
+This compatibility document exists for external local skills that still reference the former preview-branch policy.
 
-Репозиторий `AndrewVerhoturov1/Real-wargame` использует двухпапочную схему preview:
+The old rule “push finished work directly to `real-wargame-preview`, use a temporary branch only as fallback” is revoked.
 
-- `Real-wargame` — основная папка, `main`.
-- `Real-wargame-preview` — preview-папка, ветка `real-wargame-preview`.
+Current canonical policy:
 
-Подробно: `docs/workflow/LOCAL_TWO_FOLDER_WORKFLOW.md` и `docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md`.
+```text
+AGENTS.md
+docs/ai/WEB_CHAT_START.md
+docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md
+docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md
+```
 
-## Правила для любого исполнителя
+## Required route for any implementation skill
 
-1. **Прямой коммит/пуш в `real-wargame-preview` — предпочтительный способ.** Временная ветка + PR используется как fallback, если прямой пуш невозможен. Временная ветка — это черновик; готовый результат должен оказаться в `real-wargame-preview`.
+1. Resolve the exact current remote head of `real-wargame-preview`.
+2. Create one temporary feature branch:
 
-2. **`main` менять только после явного разрешения пользователя.** Пока пользователь не сказал «ГОДИТСЯ» или «GO», `main` не трогать.
+```text
+feature/YYYYMMDD-short-kebab-slug
+```
 
-3. **Локальное тестирование — через preview-папку.** Запускайте `scripts/windows/run-preview.bat` из preview-папки. Не полагайтесь на основную папку для теста незавершённых изменений.
+3. Implement, commit, push and perform later fixes only on that feature branch.
+4. Run focused non-browser checks before reporting readiness.
+5. Report the exact base commit, current commit and manual live-test checklist.
+6. The user gives the already-pushed branch to Codex once.
+7. Codex only exposes a branch-linked Vercel Preview and returns the URL.
+8. The user performs live testing.
+9. Fix all reported defects on the same feature branch.
+10. Run visual GitHub Actions verification only after explicit user approval.
+11. Transfer into `real-wargame-preview` only after explicit user GO for the exact tested commit.
+12. Do not change `main` without separate explicit user GO.
 
-4. **Handoff-отчёт обязан включать инструкцию по запуску preview.** Что открыть, какой .bat запустить, что ожидать.
+## Prohibited for external skills
 
-5. **Внешние skill-файлы** (находящиеся вне репозитория, например в `~/.config/opencode/skills/`) **физически не редактируются** данным документом. Эта инструкция — repo-файл, который навыки должны прочитать при старте задачи.
-6. **GitHub push не обновляет ПК пользователя автоматически.** После внешнего push/PR в `real-wargame-preview` локальная preview-папка должна быть синхронизирована из `origin/real-wargame-preview` (через `git fetch` + `reset`/`pull --ff-only` или `scripts/windows/update-preview.bat`) до начала локального тестирования. Без синхронизации результат нельзя считать готовым к локальной проверке.
+- direct implementation push to `real-wargame-preview`;
+- PR-first feature development;
+- Codex implementation, fixes, merge or branch transfer;
+- automatic browser checks on push;
+- a new feature branch for every NO-GO issue;
+- transfer into preview before explicit user approval.
 
-## Что делать, если задача завершена
+## Local folders
 
-1. Убедиться, что изменения есть в ветке `real-wargame-preview` (локально и на GitHub).
-2. Написать пользователю, что изменения готовы к проверке в preview-папке.
-3. Указать, какой .bat запустить и что проверять.
-4. Не закрывать task-ветку до подтверждения пользователя, если есть риск, что изменения не попали в preview.
-5. После подтверждения пользователя — перенести изменения в `main`.
-6. После переноса в `main` или в `real-wargame-preview`: закрыть/удалить временную task-ветку, если она больше не нужна. Если ветка остаётся открытой, отчёт обязан содержать фразу по смыслу «Временная ветка оставлена открытой, потому что ...».
+A local `Real-wargame-preview` folder may remain available as an optional diagnostic convenience, but it is not the canonical live-test route for unfinished features. The normal human test uses the branch-linked Vercel Preview of the feature branch.
+
+External skill files outside the repository are not physically edited by this document. Any such skill must read this repository policy at task start and follow it over older cached instructions.
