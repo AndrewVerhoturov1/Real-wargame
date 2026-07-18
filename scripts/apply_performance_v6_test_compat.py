@@ -58,31 +58,11 @@ workflow_target = Path(workflow)
 workflow_text = workflow_target.read_text(encoding='utf-8')
 legacy_identity_copy = "          cp source/src/core/debug/BuildIdentity.ts baseline/src/core/debug/BuildIdentity.ts\n"
 if legacy_identity_copy in workflow_text:
-    workflow_text = workflow_text.replace(legacy_identity_copy, '', 1)
-    workflow_target.write_text(workflow_text, encoding='utf-8')
+    workflow_target.write_text(workflow_text.replace(legacy_identity_copy, '', 1), encoding='utf-8')
 ensure_after(
     workflow,
-    "          cp source/vite.config.ts baseline/vite.config.ts\n",
+    "          cp source/tests/danger-layer-browser-performance.spec.ts baseline/tests/danger-layer-browser-performance.spec.ts\n",
     "          cp source/tests/performance-report-compat.ts baseline/tests/performance-report-compat.ts\n",
-)
-
-browser = 'tests/danger-layer-browser-performance.spec.ts'
-replace_or_assert(
-    browser,
-    "import path from 'node:path';\n",
-    "import path from 'node:path';\nimport { normalizePerformanceReport } from './performance-report-compat';\n",
-)
-replace_or_assert(
-    browser,
-    "  const report = JSON.parse(readFileSync(downloadedPath, 'utf8')) as PerformanceReport;\n",
-    "  const report = normalizePerformanceReport<PerformanceReport>(JSON.parse(readFileSync(downloadedPath, 'utf8')));\n",
-)
-replace_or_assert(
-    browser,
-    """  expect(report.version).toBe('performance-report-v5');
-  expect(report.build?.performanceContractVersion).toBe('performance-report-v5');""",
-    """  expect(['performance-report-v5', 'performance-report-v6']).toContain(report.version);
-  expect(report.build?.performanceContractVersion).toBe(report.version);""",
 )
 
 movement = 'tests/danger-layer-movement-performance.spec.ts'
@@ -100,7 +80,7 @@ replace_or_assert(
     movement,
     """  expect(report.version).toBe('performance-report-v5');
   expect(report.build?.performanceContractVersion).toBe('performance-report-v5');""",
-    """  expect(['performance-report-v5', 'performance-report-v6']).toContain(report.version);
+    """  expect(report.version).toBe('performance-report-v6');
   expect(report.build?.performanceContractVersion).toBe(report.version);""",
 )
 
@@ -119,11 +99,15 @@ replace_or_assert(
     long_task,
     """  expect(report.version).toBe('performance-report-v5');
   expect(report.build?.performanceContractVersion).toBe('performance-report-v5');""",
-    """  expect(['performance-report-v5', 'performance-report-v6']).toContain(report.version);
+    """  expect(report.version).toBe('performance-report-v6');
   expect(report.build?.performanceContractVersion).toBe(report.version);""",
 )
 
-for path in (browser, movement, long_task):
+browser_text = Path('tests/danger-layer-browser-performance.spec.ts').read_text(encoding='utf-8')
+if "EXPECTED_REPORT_VERSION = IS_CANDIDATE ? 'performance-report-v6' : 'performance-report-v5'" not in browser_text:
+    raise SystemExit('Danger browser test must explicitly distinguish baseline v5 from candidate v6')
+
+for path in (movement, long_task):
     text = Path(path).read_text(encoding='utf-8')
     if "expect(report.version).toBe('performance-report-v5')" in text:
         raise SystemExit(f'{path}: stale hardcoded v5 assertion remains')
