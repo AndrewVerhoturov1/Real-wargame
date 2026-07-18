@@ -1,20 +1,21 @@
 # Real-Wargame Performance
 
-Use this project skill for every task that can affect runtime cost, not only tasks explicitly called “performance work”.
+Use this project skill for tasks that can affect runtime cost, not for documentation or repository-process changes that cannot alter the program or measured scenario.
 
-## Mandatory source
+## Mandatory sources
 
 Read first:
 
 ```text
 docs/performance/PERFORMANCE_PRINCIPLES.md
+docs/workflow/CI_RISK_BASED_ACCEPTANCE.md
 ```
 
-This document is a repository contract. It is not optional guidance.
+The performance principles define runtime quality. The CI policy defines when and how that quality must be re-measured.
 
 ## Trigger
 
-This skill is mandatory when changing any of the following:
+Use this skill when changing:
 
 - `SimulationTick`, AI scheduling or per-unit runtime;
 - perception, attention, LOS or tactical knowledge;
@@ -28,7 +29,7 @@ This skill is mandatory when changing any of the following:
 
 ## Required design review
 
-Before implementation, write down:
+Before implementation, record:
 
 ```text
 hot path
@@ -56,22 +57,31 @@ Reject a design that adds unbounded interactive work, duplicates a canonical cal
 - lifecycle and teardown are symmetric;
 - subjective knowledge and deterministic gameplay semantics are preserved.
 
-## Required validation
+## Validation selection
 
-For runtime-affecting work, add or update focused checks for:
+Classify the actual change before running checks.
 
-- unchanged-snapshot reuse;
-- one-entity invalidation;
-- multi-unit fairness;
-- stale async rejection;
-- selection/layer independence;
-- teardown without accumulation;
-- bounded long-run cache and latency.
+1. Run focused smoke/contract checks for the affected subsystem.
+2. Run TypeScript and one production build when executable code changed.
+3. Do not run browser performance merely because a new commit SHA exists.
+4. Run a heavy performance scenario only when the change can affect that scenario, the scenario/contract changed, or the user/integrator explicitly requests it.
+5. State the concrete `PERFORMANCE_REASON`: the regression the run can detect after this change.
+6. Freeze the implementation before the justified heavy run.
+7. Record `TESTED_IMPLEMENTATION_HEAD` in the PR body.
+8. A later documentation-only tail remains valid only when `PR Risk CI` confirms every tail path is non-invalidating.
 
-Run the relevant smoke checks and the exact-head enforced browser performance workflow when the task touches an interactive hot path.
+Not sufficient reasons:
+
+- documentation or PR-description changes;
+- temporary-file cleanup;
+- an unrelated test change;
+- “for reliability”, “just in case” or a desire for another confirmation;
+- exact SHA mismatch with no change to program, dependencies, harness, workflow or contract.
+
+For runtime-affecting work, add or update focused checks for the risks that actually apply, such as unchanged-snapshot reuse, one-entity invalidation, multi-unit fairness, stale async rejection, selection/layer independence, teardown, or bounded long-run cache/latency.
 
 The baseline contract for the 320×200 six-unit scenario is defined in `docs/performance/PERFORMANCE_PRINCIPLES.md` and must not be weakened inside a feature PR.
 
 ## Required report
 
-Use the `Performance impact` section from `docs/orchestration/RESULT_TEMPLATE.md`. A runtime-affecting result without that section is incomplete.
+Use the `Performance impact` and `Verification selection` sections from `docs/orchestration/RESULT_TEMPLATE.md`. Separate checks actually run from heavy checks deliberately not run. A justified focused matrix is a complete result; an unrelated full matrix is not stronger evidence.
