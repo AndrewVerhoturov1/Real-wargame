@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import type { TacticalMapData } from '../src/core/map/MapModel';
 import { setAttentionMode } from '../src/core/perception/AttentionController';
-import { createEmptyPerceptionKnowledge } from '../src/core/perception/PerceptionContact';
+import {
+  advanceVisualContact,
+  createEmptyPerceptionKnowledge,
+} from '../src/core/perception/PerceptionContact';
 import {
   getPerceptionDiagnostics,
   tickSelectedSoldierPerception,
@@ -44,10 +47,12 @@ const observerData: UnitData = {
 verifyNearRearBypassesRearCadence();
 verifyNearHardLosStillBlocks();
 verifyRearRangeDeniesBeforeLos();
+verifyRearCadenceDoesNotFreezeCurrentContact();
+verifyOutsideRearRangeDoesNotFreezeCurrentContact();
 verifyCheckIntervalDoesNotBecomeSampleDuration();
 verifyCurrentVisibilityIsDenyByDefault();
 
-console.log('Rear attention perception smoke passed: near 360 awareness, hard LOS, bounded rear range, bounded samples and deny-by-default current visibility.');
+console.log('Rear attention perception smoke passed: near 360 awareness, hard LOS, bounded rear range, bounded samples, stale-current-contact revocation and deny-by-default current visibility.');
 
 function verifyNearRearBypassesRearCadence(): void {
   const target = threat('near-rear', 78.6, 10.5);
@@ -97,6 +102,14 @@ function verifyNearHardLosStillBlocks(): void {
     undefined,
     'near awareness must never see through hard blockers',
   );
+
+  observer.perceptionKnowledge.contacts = [confirmedVisualContact('threat:near-blocked', targetPosition)];
+  state.simulationTimeSeconds = 0.2;
+  tickSelectedSoldierPerception(state, 0.1);
+  const stale = observer.perceptionKnowledge.contacts.find((item) => item.stimulusId === 'threat:near-blocked');
+  assert.ok(stale, 'the previously confirmed contact should remain as memory');
+  assert.equal(stale.visibleNow, false, 'hard LOS must revoke visibleNow immediately');
+  assert.equal(stale.observedNow, false, 'hard LOS must revoke observedNow immediately');
 }
 
 function verifyRearRangeDeniesBeforeLos(): void {
@@ -113,6 +126,39 @@ function verifyRearRangeDeniesBeforeLos(): void {
     'a rear target beyond engage rearMaximumRangeMeters must remain unseen',
   );
   assert.equal(getPerceptionDiagnostics(state).losCalculationCount, 0, 'rear range must reject the target before the expensive LOS probe');
+}
+
+function verifyRearCadenceDoesNotFreezeCurrentContact(): void {
+  const targetPosition = { x: 30.5, y: 10.5 };
+  const state = createInitialState(openMap, [observerData], [threat('rear-stale', targetPosition.x, targetPosition.y)]);
+  selectUnit(state, observerData.id);
+  const observer = state.units[0]!;
+  setAttentionMode(observer, 'observe', 'player');
+  observer.perceptionKnowledge.contacts = [confirmedVisualContact('threat:rear-stale', targetPosition)];
+  observer.attentionRuntime.nextRearCheckSeconds = 100;
+  state.simulationTimeSeconds = 0.1;
+  tickSelectedSoldierPerception(state, 0.1);
+  const contact = observer.perceptionKnowledge.contacts.find((item) => item.stimulusId === 'threat:rear-stale');
+  assert.ok(contact, 'a confirmed rear contact should remain in memory between rear samples');
+  assert.equal(contact.visibleNow, false, 'rear cadence must not preserve continuous current visibility');
+  assert.equal(contact.observedNow, false, 'rear cadence must not preserve continuous current observation');
+  assert.ok(contact.evidence < 200, 'an unsampled rear contact must decay instead of being marked updated');
+}
+
+function verifyOutsideRearRangeDoesNotFreezeCurrentContact(): void {
+  const targetPosition = { x: 14.5, y: 10.5 };
+  const state = createInitialState(openMap, [observerData], [threat('outside-rear-stale', targetPosition.x, targetPosition.y)]);
+  selectUnit(state, observerData.id);
+  const observer = state.units[0]!;
+  setAttentionMode(observer, 'engage', 'player');
+  observer.perceptionKnowledge.contacts = [confirmedVisualContact('threat:outside-rear-stale', targetPosition)];
+  observer.attentionRuntime.nextRearCheckSeconds = 100;
+  state.simulationTimeSeconds = 0.1;
+  tickSelectedSoldierPerception(state, 0.1);
+  const contact = observer.perceptionKnowledge.contacts.find((item) => item.stimulusId === 'threat:outside-rear-stale');
+  assert.ok(contact, 'an out-of-range contact should remain as decaying memory');
+  assert.equal(contact.visibleNow, false, 'outside rear range can never remain currently visible');
+  assert.equal(contact.observedNow, false, 'outside rear range can never remain currently observed');
 }
 
 function verifyCheckIntervalDoesNotBecomeSampleDuration(): void {
@@ -159,6 +205,22 @@ function verifyCurrentVisibilityIsDenyByDefault(): void {
   const rearInsideRangeZone = sampleSelectedUnitVisibilityZone(field, 30, 10);
   assert.ok(rearInsideRangeQuality > 0, 'rear cells inside the configured range must be explicitly resolved');
   assert.equal(rearInsideRangeZone, VISIBILITY_ZONE_CODE.rear);
+}
+
+function confirmedVisualContact(stimulusId: string, position: { x: number; y: number }) {
+  return advanceVisualContact(null, {
+    id: `perception:${stimulusId}`,
+    stimulusId,
+    sourceUnitId: null,
+    labelRu: `Подтверждённый ${stimulusId}`,
+    position,
+    evidencePerSecond: 200,
+    detectionVariance: 1,
+    deltaSeconds: 1,
+    nowSeconds: 0,
+    source: 'visual',
+    explanationRu: ['Начальный подтверждённый контакт для regression smoke.'],
+  });
 }
 
 function threat(id: string, x: number, y: number): PressureZoneData {

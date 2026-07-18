@@ -135,7 +135,10 @@ assert.match(visibilityFieldSource, /let currentVisibilityQuality = 0/);
 assert.match(visibilityFieldSource, /Deny by default/);
 assert.match(rendererSource, /0x8b70d6/);
 assert.match(rendererSource, /complete map is shadow/);
+assert.match(rendererSource, /shadow mask with a diagnostic tint/);
+assert.match(rendererSource, /UNSEEN_OVERLAY_ALPHA \* \(1 - reveal \* 0\.82\)/);
+assert.doesNotMatch(rendererSource, /0\.12 \+ quality \* 0\.48/);
 assert.match(sceneExportSource, /nearAwarenessRangeMeters:\s*unit\.attentionSettings\.nearAwarenessRangeMeters/);
 assert.match(sceneExportSource, /nearMinimumVisibilityQuality:\s*unit\.attentionSettings\.nearMinimumVisibilityQuality/);
 
-console.log('Attention profiles smoke passed: rear zones, bounded samples, near awareness, migration, serialization, editor and deny-by-default visibility.');
+console.log('Attention profiles smoke passed: rear zones, bounded samples, near awareness, migration, serialization, continuous shadowed overlay, editor and deny-by-default visibility.');

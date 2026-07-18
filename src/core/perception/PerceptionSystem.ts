@@ -174,7 +174,6 @@ export function tickUnitPerception(
 
     // Deny by default: outside the canonical zone/range there is no current visual sample and no LOS work.
     if (attention.zone === 'outside' || attention.weight <= 0) {
-      preserveExistingContact(unit, stimulus.id, updatedContacts);
       continue;
     }
 
@@ -183,7 +182,14 @@ export function tickUnitPerception(
       : isScheduledAttentionZone(attention.zone) && due[attention.zone];
     if (!checkDue) {
       if (diagnostics) diagnostics.skippedNotDueCount += 1;
-      preserveExistingContact(unit, stimulus.id, updatedContacts);
+      preserveFreshForwardContact(
+        unit,
+        stimulus.id,
+        updatedContacts,
+        attention.zone,
+        attention.checkIntervalSeconds,
+        now,
+      );
       continue;
     }
 
@@ -199,7 +205,14 @@ export function tickUnitPerception(
     );
     if (!visibility) {
       if (firstDeferredStimulusIndex === null) firstDeferredStimulusIndex = stimulusIndex;
-      preserveExistingContact(unit, stimulus.id, updatedContacts);
+      preserveFreshForwardContact(
+        unit,
+        stimulus.id,
+        updatedContacts,
+        attention.zone,
+        attention.checkIntervalSeconds,
+        now,
+      );
       continue;
     }
     if (diagnostics) diagnostics.losCalculationCount += 1;
@@ -356,13 +369,23 @@ function rotateUnits(units: readonly UnitModel[], simulationStep: number): UnitM
   return Array.from({ length: units.length }, (_, offset) => units[(startIndex + offset) % units.length]!);
 }
 
-function preserveExistingContact(
+function preserveFreshForwardContact(
   unit: UnitModel,
   stimulusId: string,
   updatedContacts: Set<string>,
+  zone: AttentionZone,
+  checkIntervalSeconds: number,
+  nowSeconds: number,
 ): void {
+  // A rear sample is a discrete glance. Between rear checks there is memory, not continuous current vision.
+  // Outside the canonical range there is never a current visual contact. Forward samples receive only a
+  // short bounded grace period so scheduler cadence does not cause one-frame flicker.
+  if (zone !== 'focus' && zone !== 'direct' && zone !== 'peripheral') return;
   const existingContactId = contactIdForStimulus(stimulusId);
-  if (unit.perceptionKnowledge.contacts.some((item) => item.id === existingContactId)) {
+  const existing = unit.perceptionKnowledge.contacts.find((item) => item.id === existingContactId) ?? null;
+  if (!existing || existing.source !== 'visual' || (!existing.visibleNow && !existing.observedNow)) return;
+  const freshnessSeconds = Math.min(1.5, Math.max(0.1, checkIntervalSeconds * 1.25));
+  if (nowSeconds - existing.lastObservedSeconds <= freshnessSeconds) {
     updatedContacts.add(existingContactId);
   }
 }

@@ -228,10 +228,16 @@ function heatmapColor(quality: number, zoneCode: VisibilityZoneCode): number {
 }
 
 function visibilityAlpha(quality: number, zoneCode: VisibilityZoneCode): number {
-  // Rear is intentionally legible even with a small gameplay weight; opacity is not the weight itself.
-  if (zoneCode === VISIBILITY_ZONE_CODE.rear) return Math.min(0.52, 0.22 + quality * 0.38);
-  if (zoneCode === VISIBILITY_ZONE_CODE.near) return Math.min(0.64, 0.28 + quality * 0.36);
-  return Math.min(0.6, 0.12 + quality * 0.48);
+  // The raster is a shadow mask with a diagnostic tint, not a brightness overlay.
+  // Low-quality vision must stay close to the default shadow; only high quality reveals the map.
+  // This prevents transparent wedges between adjacent attention colors from looking perfectly visible.
+  const reveal = Math.max(0, Math.min(1, quality));
+  const minimumTintAlpha = zoneCode === VISIBILITY_ZONE_CODE.rear
+    ? 0.2
+    : zoneCode === VISIBILITY_ZONE_CODE.near
+      ? 0.16
+      : 0.12;
+  return Math.max(minimumTintAlpha, UNSEEN_OVERLAY_ALPHA * (1 - reveal * 0.82));
 }
 
 function drawContactMarker(
