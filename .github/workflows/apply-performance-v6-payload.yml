@@ -7,12 +7,22 @@ on:
     paths:
       - artifacts/tmp/perf-v6/**
       - .github/workflows/apply-performance-v6-payload.yml
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - artifacts/tmp/perf-v6/**
+      - .github/workflows/apply-performance-v6-payload.yml
 
 permissions:
   contents: write
 
+env:
+  PAYLOAD_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  PAYLOAD_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+
 concurrency:
-  group: apply-performance-v6-payload
+  group: apply-performance-v6-payload-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -23,7 +33,7 @@ jobs:
       - name: Checkout payload head
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.PAYLOAD_HEAD_SHA }}
           fetch-depth: 0
       - name: Restore optimized source files
         shell: bash
@@ -50,4 +60,4 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
           git commit -m 'perf: finalize bounded report v6 capture runtime'
-          git push origin HEAD:${GITHUB_REF_NAME}
+          git push origin HEAD:${PAYLOAD_BRANCH}
