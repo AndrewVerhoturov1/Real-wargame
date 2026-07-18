@@ -1,12 +1,8 @@
 # Visual QA Approval Policy
 
-This is the canonical approval gate for Real-Wargame browser-based visual verification.
+This is the canonical approval and routing gate for Real-Wargame browser-based visual verification.
 
 ## Position in the feature workflow
-
-Visual QA belongs after the Web Chat has implemented and pushed the feature branch and after the branch is available through a branch-linked Vercel Preview.
-
-Canonical route:
 
 ```text
 Web Chat implements on feature branch
@@ -15,168 +11,251 @@ Web Chat implements on feature branch
 → one-time Codex branch-linked Vercel Preview
 → human live test
 → same-branch fixes as needed
-→ explicit user request for visual GitHub Actions verification
-→ exact-SHA Playwright run and artifact inspection
-→ explicit user GO
+→ user requests visual verification
+→ automatic visual skill selection
+→ exact-product browser evidence and inspection
+→ separate explicit user GO
 → transfer into real-wargame-preview
 ```
 
-Visual verification is valuable but expensive. It must be prepared for user-visible changes, while the human decides whether the real browser workflow should run.
+Visual verification is valuable but expensive. Prepare it for user-visible work, but run it only after explicit user intent.
 
-## Default rule
+## User intent is the trigger
 
-```text
-prepare visual QA on the feature branch
-→ run focused non-browser checks
-→ report the live-test checklist and remaining visual risk
-→ wait for explicit user request
-→ execute browser/PNG verification through GitHub Actions
-```
+The user does not need to name a skill.
 
-The screenshot workflow is manual-only. A normal branch push, Vercel deployment or Pull Request must not launch it automatically.
-
-## When preparation is required
-
-Prepare visual QA when a change affects what the user can see or interact with, including:
-
-- game or editor UI;
-- map, units, overlays, routes, camera or layers;
-- node highlighting and runtime diagnostics;
-- buttons, forms, panels or layout;
-- visible input behavior;
-- visual performance or rendering regressions.
-
-Pure internal logic, documentation and non-visual refactors may use focused smoke checks and the production build without preparing screenshots unless the task specifically requests them.
-
-## What “prepared” means
-
-Before asking for approval, the Web Chat must:
-
-1. finish the implementation on the canonical feature branch;
-2. prepare or update the relevant Playwright scenario;
-3. identify the exact feature commit to test;
-4. identify key screenshots to capture;
-5. state what each screenshot should prove;
-6. run focused non-browser checks and the production build;
-7. report known visual risks that remain unverified;
-8. provide the human live-test checklist.
-
-Preparing a test is not the same as running it.
-
-## Approval
-
-Ask once:
-
-```text
-Визуальная проверка подготовлена. Запустить её через GitHub Actions?
-```
-
-Explicit approval may be given earlier in the task. Phrases such as these count:
+These and equivalent requests count as approval:
 
 ```text
 проверь визуально
+запусти визуальную проверку
 сделай скриншоты
-запусти браузерную проверку
 проверь через Playwright
-запусти визуальную проверку этой ветки
+проверь живой Vercel Preview
 ```
 
-When approval was already explicit, do not ask again.
+Do not ask the user to repeat the skill name. Do not ask for approval again when intent was already explicit.
 
-Do not infer approval merely because:
+Do not infer approval merely because the change is visual, a test exists, a workflow exists, a Vercel Preview exists or a previous task used screenshots.
 
-- the change is visual;
-- a Playwright test exists;
-- a workflow is available;
-- the branch has a Vercel Preview;
-- the task is important;
-- previous tasks used screenshots.
+## Mandatory automatic skill selection
 
-## If approval is declined or absent
+After approval, determine whether the current Web Chat can directly control a real browser against the intended target URL.
 
-The Web Chat may keep the branch ready for human live testing. Do not transfer it into `real-wargame-preview` without the user's separate explicit transfer GO.
+### Direct controlled browser available
 
-The report must say:
+Read and use:
 
 ```text
-visual_qa_prepared: yes
-visual_qa_approval: declined or pending
-visual_qa_run: not run
+.agents/skills/real-wargame-local-preview/SKILL.md
 ```
 
-Do not say the visual issue is fixed or visually verified. Say that the implementation is ready for live testing and visual GitHub Actions verification remains pending or declined.
+### Direct controlled browser unavailable, target is branch-linked Vercel Preview
 
-## If approval is granted
+**MUST read and use:**
 
-Run the relevant manual GitHub Actions workflow against the exact canonical feature-branch commit.
+```text
+.agents/skills/vercel-deployment-playwright-e2e/SKILL.md
+```
 
-A valid completed visual check requires:
+This fallback is mandatory. The user does not need to request it by name.
 
-- exact tested feature commit SHA;
-- the real Vite application;
-- a real Chrome/Chromium browser;
-- fresh PNG files created after the change;
-- workflow and artifact SHA matching the feature commit;
-- Playwright result and logs;
-- opened and inspected changed/key PNG files.
+The old local screenshot workflow is not a substitute when the requested object is the deployed Vercel URL.
 
-A green workflow alone is not enough.
+## Default preparation rule
 
-## Same-branch failure loop
+```text
+prepare visual QA on canonical feature branch
+→ run focused non-browser checks
+→ report live-test checklist and remaining risk
+→ wait for explicit user intent
+→ apply direct-browser versus deployed-Vercel routing decision
+```
 
-When visual verification finds a problem:
+A normal feature push, Vercel deployment or product PR must not automatically launch browser verification.
 
-1. return to the same canonical feature branch;
-2. add or update a regression scenario when practical;
-3. fix the code;
+## When preparation is required
+
+Prepare visual QA for changes affecting:
+
+- game/editor UI;
+- map, units, overlays, routes, camera or layers;
+- node highlighting and runtime diagnostics;
+- buttons, panels, layout or visible input;
+- rendering or visual-performance regressions.
+
+Pure internal logic, documentation and non-visual refactors may use focused non-browser checks unless the user specifically requests visual verification.
+
+## What prepared means
+
+Before execution, Web Chat must:
+
+1. finish implementation on the canonical feature branch;
+2. identify exact feature commit and target URL;
+3. prepare/update deterministic scenario;
+4. identify milestone screenshots and what each proves;
+5. run focused non-browser checks and build when available;
+6. report visual risks and manual live-test checklist;
+7. resolve approval;
+8. select the correct visual skill automatically.
+
+Preparing is not running.
+
+## Direct-browser route
+
+A valid direct-browser check requires:
+
+- intended real target application;
+- real Chrome/Chromium;
+- state-changing behavior, not only page/DOM presence;
+- expected/observed product identity when available;
+- fresh milestone screenshots;
+- key screenshots opened and inspected;
+- diagnostics and honest limitations.
+
+## Deployed Vercel CI fallback
+
+When direct browser is unavailable, the `vercel-deployment-playwright-e2e` skill governs the run.
+
+Mandatory invariants:
+
+- create temporary `ci/**` base/head branches from the same exact product SHA;
+- base contains only temporary workflow;
+- head contains only temporary Playwright harness;
+- create temporary PR from head to base;
+- never merge temporary PR;
+- never place CI harness files in canonical feature branch, preview or main;
+- never commit Vercel share tokens or bypass secrets;
+- test the real deployed URL;
+- save `evidence.json`, milestone PNGs, trace, video and diagnostics;
+- download and inspect the artifact;
+- show key screenshots and a contact sheet when useful;
+- close PR without merge and clean temporary branches when supported.
+
+## Product identity
+
+Visual evidence belongs to one exact product SHA.
+
+Record:
+
+```text
+expected_product_sha
+observed_product_sha
+product_sha_match: yes / no / unproven
+```
+
+When deployed build identity cannot be independently read, report `unproven`. Do not call the result exact-SHA acceptance.
+
+Any new product commit invalidates previous visual evidence for acceptance. Create a new temporary CI pair and fresh evidence.
+
+## Failure classification and ownership
+
+Classify failures before edits:
+
+### Environment
+
+Browser install/start, deployment unavailable, protection access, Actions infrastructure.
+
+Change only CI/environment configuration.
+
+### Test harness
+
+Selector, coordinate conversion, timeout or assertion defect.
+
+Change only temporary CI head branch and rerun the same temporary PR.
+
+### Application
+
+Actual product behavior, runtime failure, missing state change, disappearing layer, application error.
+
+Change only the canonical feature branch. Run focused checks, push, wait for updated branch-linked Vercel Preview, close old CI PR and create fresh CI branches from the new product SHA.
+
+Never fix product code on temporary CI branches.
+
+## Evidence standard
+
+A completed visual check requires:
+
+- real application opened in real Chrome/Chromium;
+- requested user scenario executed;
+- actual state change confirmed;
+- `evidence.json` saved, including last stage on failure;
+- fresh successful milestone PNGs;
+- trace and failure video as configured;
+- console/page/network diagnostics;
+- workflow/run/artifact identity checked;
+- artifact downloaded and extracted;
+- key screenshots opened and inspected;
+- failure class identified when applicable.
+
+A green workflow alone is insufficient.
+
+## User presentation
+
+Do not report only that screenshots are inside ZIP.
+
+Provide:
+
+- contact sheet when useful;
+- direct links to key full-size screenshots;
+- short caption for each;
+- full artifact link;
+- workflow run link;
+- exact limitations.
+
+## Same-feature-branch loop
+
+When application verification finds a defect:
+
+1. return to same canonical feature branch;
+2. add/update focused regression coverage when practical;
+3. fix product code there;
 4. rerun focused non-browser checks;
-5. commit and push the same branch;
-6. let the branch-linked Vercel Preview update;
-7. repeat the visual workflow only when the user still wants it.
+5. commit and push same feature branch;
+6. wait for branch-linked Vercel Preview update;
+7. create fresh CI branch pair from new SHA;
+8. repeat verification under existing user approval.
 
-Do not create a fresh branch or call Codex again for each visual defect.
+Do not call Codex again and do not create a new product feature branch.
 
-## Workflow rule
+## Transfer independence
 
-`.github/workflows/preview-screenshots.yml` must use only:
+Visual success does not grant permission to transfer into `real-wargame-preview`.
 
-```yaml
-on:
-  workflow_dispatch:
-```
-
-Do not restore `push` or `pull_request` triggers without a separate explicit policy change approved by the user.
-
-The workflow input or dispatch context must identify the exact feature branch or commit under test. Results from another SHA are not acceptance evidence.
+Transfer requires separate explicit user GO for the exact accepted feature commit. `main` requires separate explicit approval.
 
 ## Reporting
 
-Every implementation report uses:
-
 ```text
-feature_branch
-current_commit
-visual_qa_prepared: yes / no / not applicable
-visual_qa_approval: approved / declined / pending / not applicable
-visual_qa_run: passed / failed / not run / not applicable
+feature_branch:
+current_commit:
+visual_qa_prepared:
+visual_qa_approval:
+visual_qa_route: direct-browser / vercel-deployment-playwright-e2e
+visual_qa_run:
+target_url: clean URL without secrets
+expected_product_sha:
+observed_product_sha:
+product_sha_match:
+temporary_base_branch:
+temporary_head_branch:
+temporary_pr:
+workflow_run:
+workflow_conclusion:
+artifact_id:
+artifact_digest:
+evidence_json_inspected:
+screenshots_inspected:
+key_frames:
+trace_inspected:
+failure_class:
+temporary_pr_closed_without_merge:
+ci_branch_cleanup:
+live_test_status:
+preview_transfer_approval:
+preview_touched:
+main_touched:
+limitations:
 ```
 
-When visual QA was run, also report:
-
-```text
-tested_sha
-workflow_run
-playwright_result
-artifact_sha_match
-screenshots_inspected
-key_frames
-```
-
-Keep human live-test status separate:
-
-```text
-live_test_status: pending / passed / failed / not run
-live_tested_commit:
-```
-
-Visual GitHub Actions verification does not grant permission to transfer into preview. Transfer still requires explicit user GO for the exact accepted feature commit.
+Keep Web Chat checks, GitHub Actions, Vercel deployment, direct-browser evidence and human live testing separate.
