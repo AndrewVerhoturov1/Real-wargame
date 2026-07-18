@@ -1,140 +1,39 @@
-# R-INIT: Preview-интеграционный workflow
+# R-INIT Workflow — Deprecated
 
-R-init — preview-интеграционный режим, в котором изменения сначала выкладываются в preview-ветку `real-wargame-preview` для ручного тестирования человеком, и только после явного GO попадают в `main`. Route X — отдельный механизм браузерной/GitHub-доставки, который r-init может использовать как транспортный слой; r-init и Route X не идентичны.
+`R-init`, Route X and the former preview-integration process are historical compatibility references. They are not valid entry points for current feature development.
 
-Политика permanent preview закреплена в `docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md` и `docs/workflow/SKILL_PATCH_PREVIEW_BRANCH_POLICY.md`.
+Do not use the old route that:
 
-Режим дополняет существующие R (ручной zworker) и Q (GitHub-aware внешний исполнитель), добавляя слой preview-проверки перед merge.
+- writes implementation directly into `real-wargame-preview`;
+- asks Codex to implement, prepare launchers, fix bugs, merge or transfer branches;
+- creates a new branch and PR for every NO-GO correction;
+- treats local preview-folder synchronization as the normal live-test path;
+- moves from preview to `main` as part of ordinary feature acceptance.
 
-## Модель внешнего ChatGPT для Route X
-
-Route X открывает **новый ChatGPT-чат** и оставляет модель, которую ChatGPT автоматически выбрал для этого нового чата. Этот автоматически выбранный default считается самым сильным доступным вариантом для текущего аккаунта и среды.
-
-Нельзя:
-
-- переключать новый чат на более слабую модель;
-- кодировать в skill, prompt или launcher конкретную UI-метку модели, сохранённый model slug или хрупкий текстовый selector;
-- считать старое имя модели постоянной частью контракта Route X.
-
-Точное имя модели допускается фиксировать только тогда, когда оно подтверждено текущим UI или GitHub-visible контекстом конкретной задачи. В остальных случаях использовать формулировку `strongest available default model in a fresh ChatGPT chat`.
-
-Порядок маршрутизации навыков не меняется: skill-задачи по-прежнему обрабатываются D-first, а Route X остаётся последующим внешним транспортом. Эта модельная политика также не меняет permanent `real-wargame-preview`, запрет записи в `main` без GO, запрет merge и запрет auto-merge.
-
-## Когда использовать r-init
-
-Использовать r-init, если:
-
-- изменение влияет на поведение, интерфейс или пользовательский опыт;
-- результат нужно увидеть глазами до merge;
-- человек хочет запустить проект и проверить работу вживую;
-- есть риск, что изменение непонятно или спорно «в сухую»;
-- нужно получить явное подтверждение: «да, это работает как надо».
-
-Не использовать r-init для:
-
-- чисто документальных правок без визуального влияния;
-- тривиальных изменений (опечатки, переименования);
-- экстренных исправлений, где дорога каждая минута.
-
-## Preview-ветка
-
-Этот проект использует постоянную preview-ветку `real-wargame-preview`. Пользователь тестирует в локальной preview-папке `Real-wargame-preview`.
-
-1. Изменения попадают в `real-wargame-preview` (прямым пушем или через PR, если прямой пуш невозможен).
-2. После GO пользователя выполняется merge из `real-wargame-preview` в `main`.
-3. К результату прикладывается `.bat`-лаунчер (см. раздел «Launcher»).
-4. После внешней доставки (push/PR) Codex/OpenCode обязан синхронизировать локальную preview-папку (`Real-wargame-preview`) из `origin/real-wargame-preview` перед подготовкой `.bat`, чеклиста и отчёта. Без локальной синхронизации результат нельзя считать готовым к тестированию.
-
-## Launcher: .bat для терминал-фри тестирования
-
-Каждый r-init PR должен содержать `.bat`-файл (Windows) в корне проекта или в `tools/`, который:
-
-- запускает проект одним двойным кликом;
-- не требует открытия терминала или ручного ввода команд;
-- завершается понятным сообщением об успехе или ошибке.
-
-Если проект кроссплатформенный, допускается пара `.bat` + `.sh`.
-
-Codex проверяет, что лаунчер работает, и прилагает инструкцию: что открыть, на что нажать, что ожидать.
-
-## Чеклист ручного тестирования
-
-Codex даёт человеку короткий чеклист:
+The current canonical route is:
 
 ```text
-Что открыть:
-- <путь к проекту или файлу>
-
-Что сделать:
-- запустить .bat двойным кликом;
-- проверить <сценарий 1>;
-- проверить <сценарий 2>.
-
-Ожидаемый результат:
-- <описание>
-
-Если не так:
-- напиши, что пошло не так;
-- пришли скриншот, если возможно.
+AGENTS.md
+docs/ai/WEB_CHAT_START.md
+docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md
+docs/workflow/VISUAL_QA_APPROVAL_POLICY.md
 ```
 
-Чеклист должен быть выполнимым без технической подготовки.
-
-## GO / NO-GO
-
-После тестирования человек говорит одно из двух:
+Current summary:
 
 ```text
-GO    — всё работает, можно мержить.
-NO-GO — нужно доработать, пока не принимаем.
+Web Chat creates one feature branch from the exact current real-wargame-preview head
+→ Web Chat implements and runs focused non-browser checks
+→ Web Chat pushes and reports the exact commit plus manual checklist
+→ user gives the branch to Codex once
+→ Codex only exposes a branch-linked Vercel Preview and returns the URL
+→ user performs live testing
+→ Web Chat fixes every issue on the same feature branch
+→ optional visual GitHub Actions verification after explicit approval
+→ explicit user GO
+→ Web Chat transfers the accepted exact commit into real-wargame-preview
 ```
 
-### После GO
+`main` remains outside this route and requires separate explicit user GO.
 
-1. Codex убеждается, что все пункты чеклиста пройдены.
-2. Codex проверяет, что нет незакрытых замечаний.
-3. Codex выполняет merge из `real-wargame-preview` в `main`.
-4. Codex обновляет статусы компонентов.
-5. Task-ветка при необходимости закрывается/удаляется.
-
-### После NO-GO
-
-1. R-init останавливается. Preview-ветка и PR не мержатся.
-2. Codex фиксирует список замечаний и причину NO-GO.
-3. Доработки выносятся в отдельную задачу (новая ветка, новый PR) — не внутри текущего r-init.
-4. Повторный r-init запускается только как новая задача после завершения доработок.
-5. Codex не задаёт человеку технических вопросов о merge, конфликтах или деталях diff. Если merge невозможен — r-init останавливается, и создаётся отдельная задача на разрешение.
-
-Пример: вместо «У меня конфликт в строке 42, какую версию брать?» Codex говорит: «Ветки несовместимы, r-init остановлен. Создана отдельная задача на разрешение конфликта.»
-
-## Merge-handoff шаблон
-
-После получения GO Codex использует шаблон:
-
-```text
-## Merge handoff: r-init <название>
-
-GO получен: <дата/время>
-Чеклист пройден: да / нет
-Замечания: <нет / список>
-
-Preview-ветка: <имя ветки>
-Preview-PR: #<номер>
-
-Статусы компонентов:
-- <компонент 1>: included in preview
-- <компонент 2>: excluded
-- <компонент 3>: blocked
-- <компонент 4>: superseded
-- <компонент 5>: needs follow-up
-
-Merge выполнен: да / нет
-```
-
-## Статусы компонентов preview
-
-- `included in preview` — компонент включён в preview и протестирован;
-- `excluded` — компонент исключён из preview (не входит в объём);
-- `blocked` — компонент заблокирован (нельзя продолжать без уточнения);
-- `superseded` — компонент заменён другим решением;
-- `needs follow-up` — компонент требует отдельной доработки после merge.
+Historical content may be recovered from Git history when analysing the former process, but agents must not follow or reproduce it for new work.
