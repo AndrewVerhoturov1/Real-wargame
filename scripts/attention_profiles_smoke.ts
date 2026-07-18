@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import {
   DEFAULT_ATTENTION_PROFILES,
   rearAngleDegrees,
@@ -107,10 +107,10 @@ assert.throws(
 );
 assert.equal(registry.exportJson(), beforeBrokenImport, 'failed import must not mutate the current registry');
 
-const editorSource = await readFile(new URL('../src/ai-node-editor/AttentionProfileEditorPanel.ts', import.meta.url), 'utf8');
-const perceptionSource = await readFile(new URL('../src/core/perception/PerceptionSystem.ts', import.meta.url), 'utf8');
-const visibilityFieldSource = await readFile(new URL('../src/core/visibility/SelectedUnitVisibilityField.ts', import.meta.url), 'utf8');
-const rendererSource = await readFile(new URL('../src/rendering/PixiVisibilityHeatmapRenderer.ts', import.meta.url), 'utf8');
+const editorSource = readFileSync(new URL('../src/ai-node-editor/AttentionProfileEditorPanel.ts', import.meta.url), 'utf8');
+const perceptionSource = readFileSync(new URL('../src/core/perception/PerceptionSystem.ts', import.meta.url), 'utf8');
+const visibilityFieldSource = readFileSync(new URL('../src/core/visibility/SelectedUnitVisibilityField.ts', import.meta.url), 'utf8');
+const rendererSource = readFileSync(new URL('../src/rendering/PixiVisibilityHeatmapRenderer.ts', import.meta.url), 'utf8');
 for (const label of [
   'Внешний угол периферии',
   'Задний сектор:',
