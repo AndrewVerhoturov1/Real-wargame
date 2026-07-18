@@ -70,9 +70,6 @@ export const CONTACT_STAGE_THRESHOLDS = {
   confirmed: 150,
 } as const;
 
-const REAR_CHECK_INTERVAL_EXPLANATION = /^Зона «тыл» проверяется раз в ([0-9]+(?:[.,][0-9]+)?) с\.$/;
-const SCHEDULED_VISUAL_GRACE_MULTIPLIER = 1.25;
-
 export function createEmptyPerceptionKnowledge(): UnitPerceptionKnowledge {
   return {
     contacts: [],
@@ -190,8 +187,6 @@ export function decayUnobservedContact(
   contact: PerceptionContactMemory,
   input: ContactDecayInput,
 ): PerceptionContactMemory | null {
-  if (shouldHoldScheduledRearVisualState(contact, input.nowSeconds)) return contact;
-
   const delta = Math.max(0, input.deltaSeconds);
   const evidence = Math.max(0, contact.evidence - 1.15 * delta);
   const confidence = Math.max(0, contact.confidence - 0.55 * delta);
@@ -229,27 +224,6 @@ export function upsertPerceptionContact(
   ));
   knowledge.lastUpdatedSeconds = Math.max(knowledge.lastUpdatedSeconds, contact.lastUpdatedSeconds);
   if (!previous || contactFingerprint(previous) !== contactFingerprint(contact)) knowledge.revision += 1;
-}
-
-function shouldHoldScheduledRearVisualState(
-  contact: PerceptionContactMemory,
-  nowSeconds: number,
-): boolean {
-  if (contact.source !== 'visual' || (!contact.visibleNow && !contact.observedNow)) return false;
-  const checkIntervalSeconds = rearCheckIntervalSeconds(contact.explanationRu);
-  if (checkIntervalSeconds === null) return false;
-  const freshnessSeconds = Math.max(0.1, checkIntervalSeconds * SCHEDULED_VISUAL_GRACE_MULTIPLIER);
-  return nowSeconds - contact.lastObservedSeconds <= freshnessSeconds;
-}
-
-function rearCheckIntervalSeconds(explanationRu: readonly string[]): number | null {
-  for (const line of explanationRu) {
-    const match = REAR_CHECK_INTERVAL_EXPLANATION.exec(line);
-    if (!match) continue;
-    const parsed = Number(match[1]!.replace(',', '.'));
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  }
-  return null;
 }
 
 function normalizeContact(value: Partial<PerceptionContactMemory>): PerceptionContactMemory {
