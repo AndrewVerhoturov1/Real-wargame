@@ -60,7 +60,7 @@ export interface CoverSuitabilityConfig {
 }
 
 export const COVER_SUITABILITY_CONFIG: CoverSuitabilityConfig = Object.freeze({
-  revision: 2,
+  revision: 3,
   quickMaxRouteMeters: 10,
   qualityMaxRouteMeters: 180,
   maxVisitedCells: 4096,
@@ -168,6 +168,10 @@ interface SearchWorkspace {
   touchedCount: number;
   regionQueue: Int32Array;
   regionVisited: Uint8Array;
+  heapIndices: Int32Array;
+  heapCosts: Float64Array;
+  heapPositions: Int32Array;
+  heapSize: number;
 }
 
 interface RegionBuild {
@@ -175,11 +179,9 @@ interface RegionBuild {
   cells: number[];
 }
 
-const DIAGONAL = Math.SQRT2;
-const DIRECTIONS: ReadonlyArray<readonly [number, number, number]> = [
-  [1, 0, 1], [0, 1, 1], [-1, 0, 1], [0, -1, 1],
-  [1, 1, DIAGONAL], [-1, 1, DIAGONAL], [-1, -1, DIAGONAL], [1, -1, DIAGONAL],
-];
+const DIRECTION_X = new Int8Array([1, 0, -1, 0, 1, -1, -1, 1]);
+const DIRECTION_Y = new Int8Array([0, 1, 0, -1, 1, 1, -1, -1]);
+const DIRECTION_LENGTH = new Float32Array([1, 1, 1, 1, Math.SQRT2, Math.SQRT2, Math.SQRT2, Math.SQRT2]);
 
 const resultCache = new WeakMap<UnitModel, { map: TacticalMap; key: string; result: CoverSuitabilityResult }>();
 const workspaceByMap = new WeakMap<TacticalMap, SearchWorkspace>();
@@ -215,7 +217,6 @@ export function getCoverSuitability(
     `unit:${unit.id}`,
     `position:${startX}:${startY}`,
     `posture:${unit.behaviorRuntime.posture}`,
-    `knowledge:${unit.tacticalKnowledge.revision}`,
     `route:${fields.cacheKey}`,
     `danger:${fields.dangerFieldKey}`,
     `config:${config.revision}`,
@@ -300,12 +301,15 @@ export function buildCoverSuitabilityFromFields(
       currentDanger + config.routeDangerToleranceAboveCurrent,
     ));
     const stableAreaFactor = Math.min(1, stability.stableNeighbours / 5);
+    // totalCost already contains the configured danger component. Keep path danger as
+    // a hard constraint and diagnostic instead of subtracting it a second time here.
     suitability[index] = clampPercent(
       absoluteReduction * 0.72
       + relativeReduction * 34
       + stableAreaFactor * 18
       + Math.max(0, stability.neighbourAverage - positionDanger) * 0.22
-      - averageRouteDanger * 0.09,
+      - routeCost * 0.08
+      - routeMeters * 0.25,
     );
 
     const quickDistanceOk = routeMeters <= config.quickMaxRouteMeters + 1e-6;
@@ -318,7 +322,6 @@ export function buildCoverSuitabilityFromFields(
       relativeReduction,
       routeMeters,
       routeCost,
-      routeDanger,
       stableAreaFactor,
     );
     const qualityDistanceOk = routeMeters > config.quickMaxRouteMeters
@@ -459,7 +462,6 @@ function runBoundedSearch(
   config: CoverSuitabilityConfig,
 ): void {
   resetWorkspace(workspace);
-  const heap = new MinHeap();
   workspace.routeCost[startIndex] = 0;
   workspace.routeMeters[startIndex] = 0;
   // Route danger intentionally starts after leaving the current cell. Current danger
@@ -468,22 +470,24 @@ function runBoundedSearch(
   workspace.routeDangerMax[startIndex] = 0;
   workspace.routeSteps[startIndex] = 0;
   touch(workspace, startIndex);
-  heap.push(startIndex, 0);
+  heapPushOrDecrease(workspace, startIndex, 0);
   let visited = 0;
 
-  while (heap.size > 0 && visited < config.maxVisitedCells) {
-    const current = heap.pop();
-    if (!current || workspace.settled[current.index] === 1) continue;
-    if (current.cost > workspace.routeCost[current.index] + 1e-9) continue;
-    workspace.settled[current.index] = 1;
+  while (workspace.heapSize > 0 && visited < config.maxVisitedCells) {
+    const currentIndex = heapPop(workspace);
+    if (currentIndex < 0 || workspace.settled[currentIndex] === 1) continue;
+    workspace.settled[currentIndex] = 1;
     visited += 1;
 
-    const currentMeters = workspace.routeMeters[current.index];
+    const currentMeters = workspace.routeMeters[currentIndex];
     if (currentMeters >= config.qualityMaxRouteMeters) continue;
-    const currentX = current.index % fields.width;
-    const currentY = Math.floor(current.index / fields.width);
+    const currentX = currentIndex % fields.width;
+    const currentY = Math.floor(currentIndex / fields.width);
 
-    for (const [dx, dy, stepLength] of DIRECTIONS) {
+    for (let direction = 0; direction < DIRECTION_X.length; direction += 1) {
+      const dx = DIRECTION_X[direction];
+      const dy = DIRECTION_Y[direction];
+      const stepLength = DIRECTION_LENGTH[direction];
       const nextX = currentX + dx;
       const nextY = currentY + dy;
       if (!isPassable(fields, nextX, nextY)) continue;
@@ -493,23 +497,24 @@ function runBoundedSearch(
       )) continue;
 
       const nextIndex = nextY * fields.width + nextX;
+      if (workspace.settled[nextIndex] === 1) continue;
       const nextMeters = currentMeters + stepLength * map.metersPerCell;
       if (nextMeters > config.qualityMaxRouteMeters + 1e-6) continue;
-      const leftCost = fields.totalCost[current.index];
+      const leftCost = fields.totalCost[currentIndex];
       const rightCost = fields.totalCost[nextIndex];
       if (!Number.isFinite(leftCost) || !Number.isFinite(rightCost)) continue;
       const stepCost = stepLength * Math.max(0.05, (leftCost + rightCost) / 2);
-      const nextCost = workspace.routeCost[current.index] + stepCost;
+      const nextCost = workspace.routeCost[currentIndex] + stepCost;
       if (nextCost > config.qualityMaxRouteCost || nextCost + 1e-9 >= workspace.routeCost[nextIndex]) continue;
 
       if (!Number.isFinite(workspace.routeCost[nextIndex])) touch(workspace, nextIndex);
       workspace.routeCost[nextIndex] = nextCost;
       workspace.routeMeters[nextIndex] = nextMeters;
       const danger = fields.dangerPercent[nextIndex] ?? 0;
-      workspace.routeDangerSum[nextIndex] = workspace.routeDangerSum[current.index] + danger;
-      workspace.routeDangerMax[nextIndex] = Math.max(workspace.routeDangerMax[current.index], danger);
-      workspace.routeSteps[nextIndex] = Math.min(65535, workspace.routeSteps[current.index] + 1);
-      heap.push(nextIndex, nextCost);
+      workspace.routeDangerSum[nextIndex] = workspace.routeDangerSum[currentIndex] + danger;
+      workspace.routeDangerMax[nextIndex] = Math.max(workspace.routeDangerMax[currentIndex], danger);
+      workspace.routeSteps[nextIndex] = Math.min(65535, workspace.routeSteps[currentIndex] + 1);
+      heapPushOrDecrease(workspace, nextIndex, nextCost);
     }
   }
 }
@@ -526,9 +531,9 @@ function evaluateLocalStability(
   let stableNeighbours = 0;
   let sum = 0;
   let samples = 0;
-  for (const [dx, dy] of DIRECTIONS) {
-    const nx = x + dx;
-    const ny = y + dy;
+  for (let direction = 0; direction < DIRECTION_X.length; direction += 1) {
+    const nx = x + DIRECTION_X[direction];
+    const ny = y + DIRECTION_Y[direction];
     if (!isPassable(fields, nx, ny)) continue;
     const neighbourDanger = fields.dangerPercent[ny * fields.width + nx] ?? 0;
     sum += neighbourDanger;
@@ -583,9 +588,9 @@ function buildRegions(
       }
       const x = index % fields.width;
       const y = Math.floor(index / fields.width);
-      for (const [dx, dy] of DIRECTIONS) {
-        const nx = x + dx;
-        const ny = y + dy;
+      for (let direction = 0; direction < DIRECTION_X.length; direction += 1) {
+        const nx = x + DIRECTION_X[direction];
+        const ny = y + DIRECTION_Y[direction];
         if (nx < 0 || ny < 0 || nx >= fields.width || ny >= fields.height) continue;
         const neighbour = ny * fields.width + nx;
         if (mask[neighbour] === 0 || workspace.regionVisited[neighbour] === 1) continue;
@@ -642,10 +647,9 @@ function createCandidate(
         relativeDangerReduction,
         workspace.routeMeters[index],
         workspace.routeCost[index],
-        workspace.routeDangerMax[index],
         Math.min(1, region.summary.areaCells / 6),
       )
-    : suitability[index] - workspace.routeMeters[index] * 1.8 - averageRouteDanger * 0.1;
+    : suitability[index] - workspace.routeMeters[index] * 1.8;
   return {
     index,
     x: index % fields.width,
@@ -676,15 +680,13 @@ function calculateQualityUtility(
   relativeReduction: number,
   routeMeters: number,
   routeCost: number,
-  routeDanger: number,
   stability: number,
 ): number {
   const distancePenalty = Math.log2(1 + routeMeters / 10) * 5.5;
   return absoluteReduction * (0.72 + relativeReduction * 0.48)
     + stability * 13
     - distancePenalty
-    - routeCost * 0.055
-    - routeDanger * 0.12;
+    - routeCost * 0.055;
 }
 
 function compareQuickCandidates(left: CoverCandidateDiagnostic, right: CoverCandidateDiagnostic): number {
@@ -734,8 +736,13 @@ function prepareWorkspace(map: TacticalMap, width: number, height: number): Sear
     touchedCount: 0,
     regionQueue: new Int32Array(count),
     regionVisited: new Uint8Array(count),
+    heapIndices: new Int32Array(count),
+    heapCosts: new Float64Array(count),
+    heapPositions: new Int32Array(count),
+    heapSize: 0,
   };
   created.routeCost.fill(Number.POSITIVE_INFINITY);
+  created.heapPositions.fill(-1);
   workspaceByMap.set(map, created);
   return created;
 }
@@ -749,12 +756,69 @@ function resetWorkspace(workspace: SearchWorkspace): void {
     workspace.routeDangerMax[cell] = 0;
     workspace.routeSteps[cell] = 0;
     workspace.settled[cell] = 0;
+    workspace.heapPositions[cell] = -1;
   }
   workspace.touchedCount = 0;
+  workspace.heapSize = 0;
 }
 
 function touch(workspace: SearchWorkspace, index: number): void {
   workspace.touched[workspace.touchedCount++] = index;
+}
+
+function heapPushOrDecrease(workspace: SearchWorkspace, index: number, cost: number): void {
+  let position = workspace.heapPositions[index];
+  if (position < 0) {
+    position = workspace.heapSize;
+    workspace.heapSize += 1;
+    workspace.heapIndices[position] = index;
+    workspace.heapPositions[index] = position;
+  }
+  workspace.heapCosts[position] = cost;
+  while (position > 0) {
+    const parent = (position - 1) >> 1;
+    if (workspace.heapCosts[parent] <= cost) break;
+    moveHeapEntry(workspace, parent, position);
+    position = parent;
+  }
+  workspace.heapIndices[position] = index;
+  workspace.heapCosts[position] = cost;
+  workspace.heapPositions[index] = position;
+}
+
+function heapPop(workspace: SearchWorkspace): number {
+  if (workspace.heapSize <= 0) return -1;
+  const rootIndex = workspace.heapIndices[0];
+  const lastPosition = workspace.heapSize - 1;
+  const lastIndex = workspace.heapIndices[lastPosition];
+  const lastCost = workspace.heapCosts[lastPosition];
+  workspace.heapSize = lastPosition;
+  workspace.heapPositions[rootIndex] = -1;
+  if (lastPosition === 0) return rootIndex;
+
+  let position = 0;
+  while (true) {
+    const left = position * 2 + 1;
+    if (left >= lastPosition) break;
+    const right = left + 1;
+    const child = right < lastPosition && workspace.heapCosts[right] < workspace.heapCosts[left]
+      ? right
+      : left;
+    if (workspace.heapCosts[child] >= lastCost) break;
+    moveHeapEntry(workspace, child, position);
+    position = child;
+  }
+  workspace.heapIndices[position] = lastIndex;
+  workspace.heapCosts[position] = lastCost;
+  workspace.heapPositions[lastIndex] = position;
+  return rootIndex;
+}
+
+function moveHeapEntry(workspace: SearchWorkspace, from: number, to: number): void {
+  const index = workspace.heapIndices[from];
+  workspace.heapIndices[to] = index;
+  workspace.heapCosts[to] = workspace.heapCosts[from];
+  workspace.heapPositions[index] = to;
 }
 
 function isPassable(fields: RouteCostFields, x: number, y: number): boolean {
@@ -771,51 +835,4 @@ function clampCell(value: number, size: number): number {
 
 function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
-}
-
-interface HeapItem {
-  index: number;
-  cost: number;
-}
-
-class MinHeap {
-  private readonly values: HeapItem[] = [];
-
-  get size(): number {
-    return this.values.length;
-  }
-
-  push(index: number, cost: number): void {
-    const value = { index, cost };
-    this.values.push(value);
-    let child = this.values.length - 1;
-    while (child > 0) {
-      const parent = Math.floor((child - 1) / 2);
-      if (this.values[parent].cost <= value.cost) break;
-      this.values[child] = this.values[parent];
-      child = parent;
-    }
-    this.values[child] = value;
-  }
-
-  pop(): HeapItem | null {
-    if (this.values.length === 0) return null;
-    const root = this.values[0];
-    const last = this.values.pop();
-    if (!last || this.values.length === 0) return root;
-    let parent = 0;
-    while (true) {
-      const left = parent * 2 + 1;
-      if (left >= this.values.length) break;
-      const right = left + 1;
-      const child = right < this.values.length && this.values[right].cost < this.values[left].cost
-        ? right
-        : left;
-      if (this.values[child].cost >= last.cost) break;
-      this.values[parent] = this.values[child];
-      parent = child;
-    }
-    this.values[parent] = last;
-    return root;
-  }
 }
