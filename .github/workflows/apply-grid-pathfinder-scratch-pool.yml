@@ -1,0 +1,53 @@
+name: Apply Grid Pathfinder Scratch Pool
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - scripts/apply_grid_pathfinder_scratch_pool.py
+      - .github/workflows/apply-grid-pathfinder-scratch-pool.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-grid-pathfinder-scratch-pool-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  patch-verify-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Apply A-star scratch pool
+        run: python scripts/apply_grid_pathfinder_scratch_pool.py
+      - name: Verify pathfinding semantics and contracts
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm run pathfinding:smoke
+          npm run routed-move:smoke
+          npm run command-plan-route:smoke
+          npm run navigation-profiles:smoke
+          npm run navigation-profile-switch:smoke
+          npm run route-danger-semantics:smoke
+          npm run build
+      - name: Publish verified pathfinder changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch='${{ github.event.pull_request.head.ref }}'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/core/pathfinding/GridPathfinder.ts
+          git add scripts/grid_pathfinding_smoke.ts
+          git diff --cached --check
+          git commit -m 'perf(pathfinding): reuse A-star scratch arrays'
+          git pull --rebase origin "$branch"
+          git push origin "HEAD:$branch"
