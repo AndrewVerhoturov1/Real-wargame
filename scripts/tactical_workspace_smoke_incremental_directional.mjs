@@ -14,8 +14,6 @@ const acceptedMigratedContracts = [
   'src/ui/TacticalWorkspace.ts: missing "Слой опасности"',
   'src/ui/TacticalWorkspace.ts: missing "Приказать двигаться сюда"',
   'src/ui/TacticalWorkspace.ts: missing "Диагностика ИИ (без изменений)"',
-  'src/ui/TacticalWorkspace.ts: missing "updateInfoPanelLive"',
-  'src/ui/TacticalWorkspace.ts: missing "stableDecision"',
   'src/ui/TacticalWorkspace.ts: missing "buildWorkspaceUpdateKey"',
   'src/ui/TacticalWorkspace.ts: missing "lastWorkspaceUpdateKey"',
   'src/ui/WorkspaceTooltipGuard.ts: missing "clearCoverTooltip"',
@@ -58,7 +56,7 @@ assert.ok(cover.includes('maxVisitedCells: 4096'), 'cover search must be bounded
 assert.ok(cover.includes('quickMaxRouteMeters: 10'), 'quick cover route limit must be ten meters');
 assert.ok(cover.includes('fields.totalCost'), 'cover search must reuse canonical route costs');
 assert.ok(cover.includes('fields.dangerPercent'), 'cover search must reuse canonical danger');
-assert.ok(!cover.includes('computeLineOfSight'), 'cover search must not repeat LOS');
+assert.ok(!cover.includes('computeLineOfSight'), 'the new danger/cover field must not repeat LOS');
 assert.ok(cover.includes('resultCache'), 'cover result must be cached');
 assert.ok(cover.includes('heapIndices: Int32Array'), 'bounded search queue must use reusable typed storage');
 assert.ok(cover.includes('heapPositions: Int32Array'), 'bounded search must use decrease-key without duplicate heap objects');
@@ -72,15 +70,27 @@ assert.ok(cover.includes('runtimePreparationCache'), 'unchanged runtime inputs m
 assert.ok(cover.includes('combineRouteAndDangerFields'), 'a danger-disabled route profile must keep its route costs while reusing canonical danger');
 
 const workspace = readFileSync('src/ui/TacticalWorkspace.ts', 'utf8');
-assert.ok(workspace.includes('data-overlay-mode="danger"') || workspace.includes('data-overlay-mode="${id}"'), 'workspace must expose tactical overlay segments');
+assert.ok(workspace.includes('data-overlay-mode="danger"') || workspace.includes('data-overlay-mode="${id}"'), 'danger panel must expose tactical overlay segments');
 assert.ok(workspace.includes("['danger', 'Опасность']"));
 assert.ok(workspace.includes("['cover', 'Укрытия']"));
 assert.ok(workspace.includes("['combined', 'Вместе']"));
-assert.ok(workspace.includes('getCoverSuitability(state, unit)'), 'workspace must read regional cover candidates');
+assert.ok(workspace.includes('getCoverSuitability(state, unit)'), 'danger panel must read regional cover candidates');
 assert.ok(workspace.includes('bestQuickCoverCandidates'));
 assert.ok(workspace.includes('bestQualityCoverCandidates'));
 assert.ok(!workspace.includes('cover-map-tooltip'));
 assert.ok(!workspace.includes('SimulationCoverSelection'));
+const shellMarkup = workspace.slice(workspace.indexOf('shell.innerHTML'), workspace.indexOf('document.body.append'));
+assert.ok(!shellMarkup.includes('data-overlay-mode'), 'overlay switch must not be rendered in the lower unit bar');
+const dangerPanel = workspace.slice(workspace.indexOf('function renderDanger'), workspace.indexOf('function renderCandidateList'));
+assert.ok(dangerPanel.includes('tactical-overlay-segmented-panel'), 'overlay switch must be rendered inside the Danger sidebar panel');
+assert.ok(workspace.includes("cover?.preparationStatus ?? ''"), 'idle polling must observe pending-to-ready cover transitions');
+assert.ok(workspace.includes("cover?.cacheKey ?? ''"), 'idle polling must observe a newly ready cover cache key');
+assert.ok(workspace.includes("previousKey !== lastRenderKey"), 'the workspace must request a renderer refresh when cover preparation changes while idle');
+assert.ok(workspace.includes('updateInfoPanelLive'), 'the Info tab live presentation must remain restored');
+assert.ok(workspace.includes('stableDecision'), 'the Info tab stable AI decision presentation must remain restored');
+assert.ok(workspace.includes("heading('Слой скрытности'"), 'the Stealth tab presentation must remain restored');
+assert.ok(workspace.includes("heading('Обзор и память'"), 'the Overview and memory presentation must remain restored');
+assert.ok(workspace.includes('buildUnitKnowledgeReport(state, unit)'), 'the Memory tab must keep its previous knowledge source');
 
 const runtimeUi = readFileSync('src/core/ui/RuntimeUiState.ts', 'utf8');
 assert.ok(runtimeUi.includes("export type TacticalOverlayMode = 'danger' | 'cover' | 'combined'"));
@@ -94,9 +104,12 @@ assert.ok(!input.includes('hoverSimulationCoverAtPosition'));
 const renderer = readFileSync('src/rendering/PixiAwarenessHeatmapRenderer.ts', 'utf8');
 assert.ok(renderer.includes("representation: 'raster-sprite-with-region-contours'"));
 assert.ok(renderer.includes('drawCoverRasterWords'));
+assert.ok(renderer.includes('blendCoverRasterWords'), 'combined mode must include a visible neutral cover fill, not contours alone');
 assert.ok(renderer.includes('drawMaskBoundaries'));
 assert.ok(renderer.includes('quickCoverMask'));
 assert.ok(renderer.includes('qualityCoverMask'));
+assert.ok(renderer.includes("nextCoverResult.preparationStatus === 'ready'"), 'a pending refresh must not erase the last ready cover display');
+assert.ok(renderer.includes("this.coverResult.preparationStatus !== 'ready'"), 'the first pending result must still be replaceable by ready data');
 assert.ok(!renderer.includes('drawCoverMarker'));
 
 const overlay = readFileSync('src/rendering/PixiOverlayRenderer.ts', 'utf8');
@@ -106,14 +119,15 @@ assert.ok(!overlay.includes('KnowledgeCover'));
 assert.ok(!overlay.includes('drawCoverMarker'));
 
 const knowledge = readFileSync('src/core/knowledge/UnitKnowledge.ts', 'utf8');
-assert.ok(!knowledge.includes('buildObjectCovers'));
-assert.ok(!knowledge.includes('buildForestCovers'));
-assert.ok(!knowledge.includes('KnowledgeCover'));
-assert.equal(existsSync('src/core/knowledge/SimulationCoverSelection.ts'), false, 'legacy cover selection bridge must be deleted');
+assert.ok(knowledge.includes('buildObjectCovers'), 'the Overview and memory tab must retain its previous object-knowledge source');
+assert.ok(knowledge.includes('buildForestCovers'), 'the Overview and memory tab must retain its previous vegetation-knowledge source');
+assert.ok(knowledge.includes('KnowledgeCover'), 'the Overview and memory tab contract must remain unchanged');
+assert.equal(existsSync('src/core/knowledge/SimulationCoverSelection.ts'), false, 'the removed interactive legacy bridge must stay deleted');
 
 const css = readFileSync('src/tactical-workspace-stage8.css', 'utf8');
 assert.ok(css.includes('.tactical-overlay-segmented'));
+assert.ok(css.includes('.tactical-overlay-segmented-panel'), 'the danger-panel switch must have panel-specific layout');
 assert.ok(!css.includes('.cover-map-tooltip[hidden]'));
 
 if (baseline.stdout) process.stdout.write(baseline.stdout);
-console.log('Tactical workspace accepted the unified danger/cover raster contract.');
+console.log('Tactical workspace keeps non-danger tabs intact and renders cover persistently from the Danger panel.');
