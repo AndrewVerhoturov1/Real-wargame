@@ -35,12 +35,12 @@ interface SoldierDangerDiagnostics {
 
 interface PerformanceReport {
   version: string;
-  build?: BuildIdentity;
-  scene?: {
-    mapWidthCells?: number;
-    mapHeightCells?: number;
+  build: BuildIdentity | null;
+  scene: {
+    mapWidthCells: number | null;
+    mapHeightCells: number | null;
   };
-  computation?: Record<string, unknown>;
+  computation: Record<string, unknown> | null;
   longTasks: Array<{ startMs: number; durationMs: number }>;
   samples: PerformanceSample[];
 }
@@ -111,21 +111,20 @@ const LABEL = process.env.DANGER_PERF_LABEL ?? 'candidate';
 const EXPECTED_BRANCH = process.env.DANGER_PERF_EXPECTED_BRANCH ?? '';
 const EXPECTED_SHA = process.env.DANGER_PERF_EXPECTED_SHA ?? '';
 const IS_CANDIDATE = LABEL !== 'before-base';
-// Nearest-rank p95 needs at least 20 observations before a single runner hiccup
-// stops being the percentile itself. Sixty mutations give both exact builds a
-// representative CPU sample while preserving the independent max <= 50 ms gate.
+const EXPECTED_REPORT_VERSION = IS_CANDIDATE ? 'performance-report-v6' : 'performance-report-v5';
+const CANONICAL_PERFORMANCE_CELL_COUNT = 320 * 200;
 const UPDATE_COUNT = 60;
 const UPDATE_INTERVAL_MS = 300;
 const REPORT_WINDOW_MS = 22_000;
 const MINIMUM_SCENE_SAMPLE_COUNT = 25;
 
- test('records paused multi-threat danger rescoring without screenshots', async ({ page }) => {
+test('records paused multi-threat danger rescoring without screenshots', async ({ page }: { page: Page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/?visualQa=combat-tactical-integration');
   await expect(page.locator('canvas')).toBeVisible();
   await page.waitForFunction(() => Boolean(window.__realWargameCombatTacticalVisualQa));
 
-  const classifiedThreatCount = await page.evaluate((candidate) => {
+  const classifiedThreatCount = await page.evaluate((candidate: boolean) => {
     const api = window.__realWargameCombatTacticalVisualQa as unknown as ExtendedCombatVisualApi | undefined;
     if (!api) throw new Error('Combat tactical visual QA API is unavailable.');
     if (!candidate) return api.setScenario('slice1-near-miss-evidence-suppression').unitThreatCount ?? 0;
@@ -133,6 +132,7 @@ const MINIMUM_SCENE_SAMPLE_COUNT = 25;
     if (!api.setDangerParityPhase) throw new Error('Candidate danger parity API is unavailable.');
     return api.setDangerParityPhase('rifle-and-machine-gun').unitThreatCount ?? 0;
   }, IS_CANDIDATE);
+
   await page.waitForFunction(() => {
     const diagnostics = (window as Window & {
       __realWargameAwarenessDebug?: AwarenessDiagnostics;
@@ -153,7 +153,7 @@ const MINIMUM_SCENE_SAMPLE_COUNT = 25;
   await startBrowserTiming(page);
   const dynamicUpdateMs: number[] = [];
   for (let step = 0; step < UPDATE_COUNT; step += 1) {
-    const elapsed = await page.evaluate((currentStep) => {
+    const elapsed = await page.evaluate((currentStep: number) => {
       const api = window.__realWargameCombatTacticalVisualQa as unknown as ExtendedCombatVisualApi | undefined;
       if (!api) throw new Error('Combat tactical visual QA API is unavailable.');
       const startedAt = performance.now();
@@ -183,6 +183,7 @@ const MINIMUM_SCENE_SAMPLE_COUNT = 25;
     });
     await page.waitForTimeout(750);
   }
+
   const finalReport = await downloadPerformanceReport(page);
   const afterGeometryMoveDanger = readSoldierDangerDiagnostics(finalReport);
   if (IS_CANDIDATE) {
@@ -209,8 +210,6 @@ const MINIMUM_SCENE_SAMPLE_COUNT = 25;
   writeFileSync(OUTPUT_PATH, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
   console.log(JSON.stringify(summary, null, 2));
 
-  // Both exact builds must contribute enough scene samples for nearest-rank p95
-  // to represent sustained behavior rather than a single scheduler outlier.
   expect(summary.sampleCount).toBeGreaterThanOrEqual(MINIMUM_SCENE_SAMPLE_COUNT);
   expect(summary.measurementSeconds).toBeGreaterThan(18);
   expect(dynamicUpdateMs).toHaveLength(UPDATE_COUNT);
@@ -291,9 +290,80 @@ async function downloadPerformanceReport(page: Page): Promise<PerformanceReport>
   const download = await downloadPromise;
   const downloadedPath = await download.path();
   if (!downloadedPath) throw new Error('Performance report download path is unavailable.');
-  const report = JSON.parse(readFileSync(downloadedPath, 'utf8')) as PerformanceReport;
+  const report = normalizePerformanceReport(JSON.parse(readFileSync(downloadedPath, 'utf8')));
   assertBuildIdentity(report);
   return report;
+}
+
+function normalizePerformanceReport(value: unknown): PerformanceReport {
+  const root = record(value);
+  const version = stringValue(root.version) ?? 'unknown';
+  if (version === 'performance-report-v6') return normalizeV6(root);
+  return normalizeV5(root, version);
+}
+
+function normalizeV5(root: Record<string, unknown>, version: string): PerformanceReport {
+  const build = record(root.build);
+  const scene = record(root.scene);
+  return {
+    version,
+    build: buildIdentity(build, version),
+    scene: {
+      mapWidthCells: numberValue(scene.mapWidthCells),
+      mapHeightCells: numberValue(scene.mapHeightCells),
+    },
+    computation: nullableRecord(root.computation),
+    longTasks: array(root.longTasks).filter(isLongTask),
+    samples: array(root.samples).filter(isPerformanceSample),
+  };
+}
+
+function normalizeV6(root: Record<string, unknown>): PerformanceReport {
+  const summary = record(root.summary);
+  const identity = record(summary.identity);
+  const report = record(root.report);
+  const legacy = record(report.legacyDiagnostics);
+  const compatibility = record(legacy.compatibility);
+  const compatibilityScene = record(compatibility.v5Scene);
+  const renderer = record(identity.renderer);
+  const mapDiagnostics = record(renderer.mapRendererDiagnostics);
+  const version = stringValue(root.version) ?? 'performance-report-v6';
+  return {
+    version,
+    build: buildIdentity(identity, version),
+    scene: {
+      mapWidthCells: firstNumber(
+        compatibilityScene.mapWidthCells,
+        mapDiagnostics.mapWidthCells,
+        mapDiagnostics.widthCells,
+      ),
+      mapHeightCells: firstNumber(
+        compatibilityScene.mapHeightCells,
+        mapDiagnostics.mapHeightCells,
+        mapDiagnostics.heightCells,
+      ),
+    },
+    computation: nullableRecord(legacy.computation),
+    longTasks: array(legacy.browserLongTasks).filter(isLongTask),
+    samples: array(compatibility.v5Samples).filter(isPerformanceSample),
+  };
+}
+
+function buildIdentity(source: Record<string, unknown>, reportVersion: string): BuildIdentity | null {
+  const branch = stringValue(source.branch);
+  const commitSha = stringValue(source.commitSha);
+  const buildId = stringValue(source.buildId);
+  const generatedAt = stringValue(source.generatedAt);
+  if (!branch || !commitSha || !buildId || !generatedAt) return null;
+  return {
+    branch,
+    commitSha,
+    buildId,
+    generatedAt,
+    performanceContractVersion: stringValue(source.reportVersion)
+      ?? stringValue(source.performanceContractVersion)
+      ?? reportVersion,
+  };
 }
 
 function readSoldierDangerDiagnostics(report: PerformanceReport): SoldierDangerDiagnostics | null {
@@ -315,7 +385,8 @@ function buildDangerEvidence(
   const initialValue = initial as SoldierDangerDiagnostics;
   const afterRescoreValue = afterRescore as SoldierDangerDiagnostics;
   const afterGeometryMoveValue = afterGeometryMove as SoldierDangerDiagnostics;
-  const cellCount = Math.max(1, (report.scene?.mapWidthCells ?? 0) * (report.scene?.mapHeightCells ?? 0));
+  const reportedCellCount = (report.scene.mapWidthCells ?? 0) * (report.scene.mapHeightCells ?? 0);
+  const cellCount = reportedCellCount > 0 ? reportedCellCount : CANONICAL_PERFORMANCE_CELL_COUNT;
   return {
     classifiedThreatCount,
     initial: initialValue,
@@ -332,8 +403,8 @@ function buildDangerEvidence(
 }
 
 function assertBuildIdentity(report: PerformanceReport): void {
-  expect(report.version).toBe('performance-report-v5');
-  expect(report.build?.performanceContractVersion).toBe('performance-report-v5');
+  expect(report.version).toBe(EXPECTED_REPORT_VERSION);
+  expect(report.build?.performanceContractVersion).toBe(EXPECTED_REPORT_VERSION);
   expect(report.build?.buildId).toBeTruthy();
   expect(report.build?.generatedAt).toBeTruthy();
   if (EXPECTED_BRANCH) expect(report.build?.branch).toBe(EXPECTED_BRANCH);
@@ -362,7 +433,7 @@ function summarize(
   return {
     label: LABEL,
     reportVersion: report.version,
-    build: report.build ?? null,
+    build: report.build,
     measurementSeconds: round(browserTiming.durationMs / 1000),
     sampleCount: sceneValues.length,
     browserEffectiveFps: browserTiming.durationMs > 0
@@ -377,9 +448,53 @@ function summarize(
     framesOver100Ms: frames.filter((value) => value > 100).length,
     longTasksOver100Ms: browserTiming.longTaskMs.filter((value) => value > 100).length,
     awareness,
-    computation: report.computation ?? null,
+    computation: report.computation,
     soldierDangerField,
   };
+}
+
+function isPerformanceSample(value: unknown): value is PerformanceSample {
+  const sample = record(value);
+  return typeof sample.tMs === 'number'
+    && (typeof sample.frameMs === 'number' || sample.frameMs === null)
+    && typeof sample.sceneUpdateMs === 'number'
+    && typeof sample.layerMode === 'string';
+}
+
+function isLongTask(value: unknown): value is { startMs: number; durationMs: number } {
+  const task = record(value);
+  return typeof task.startMs === 'number' && typeof task.durationMs === 'number';
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function nullableRecord(value: unknown): Record<string, unknown> | null {
+  const target = record(value);
+  return Object.keys(target).length > 0 ? target : null;
+}
+
+function array(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function numberValue(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function firstNumber(...values: unknown[]): number | null {
+  for (const value of values) {
+    const candidate = numberValue(value);
+    if (candidate !== null) return candidate;
+  }
+  return null;
 }
 
 function stats(values: number[]): Stats {
@@ -387,10 +502,10 @@ function stats(values: number[]): Stats {
   const sorted = [...values].sort((left, right) => left - right);
   const total = values.reduce((sum, value) => sum + value, 0);
   return {
-    min: round(sorted[0]),
+    min: round(sorted[0] ?? 0),
     avg: round(total / values.length),
     p95: round(percentile(sorted, 0.95)),
-    max: round(sorted[sorted.length - 1]),
+    max: round(sorted[sorted.length - 1] ?? 0),
   };
 }
 
