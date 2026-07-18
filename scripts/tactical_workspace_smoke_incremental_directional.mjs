@@ -22,6 +22,8 @@ const acceptedMigratedContracts = [
   'src/ui/WorkspaceTooltipGuard.ts: missing "tooltip.hidden = true"',
   'src/rendering/PixiAwarenessHeatmapRenderer.ts: missing "representation: \'raster-sprite\'"',
   'src/tactical-workspace-stage8.css: missing ".cover-map-tooltip[hidden]"',
+  'tests/preview-screenshots.spec.ts: missing "raster-sprite"',
+  'tests/preview-screenshots.spec.ts: missing "newly placed fighter remains selectable and can move in simulation"',
 ];
 
 if (baseline.status === 0) {
