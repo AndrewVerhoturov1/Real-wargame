@@ -1,6 +1,6 @@
 # Real-Wargame Agent Contract
 
-This file is the canonical short contract for GitHub-aware Web Chat work, ordinary ChatGPT collaboration and the bounded Codex deployment step.
+This file is the canonical short contract for GitHub-aware Web Chat work, ordinary ChatGPT collaboration, the bounded Codex deployment step and visual verification.
 
 ## 1. Project facts
 
@@ -15,13 +15,13 @@ stack: Vite + TypeScript + PixiJS 8
 
 This is not a Godot project.
 
-Machine-readable repository state:
+Machine-readable state:
 
 ```text
 docs/ai/repo-context.json
 ```
 
-Detailed canonical delivery route:
+Canonical delivery route:
 
 ```text
 docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md
@@ -37,44 +37,35 @@ Read in this order:
 4. `docs/subprojects/<active-id>/STATUS.md`;
 5. the relevant skill from `docs/ai/SKILLS_INDEX.md`.
 
-For every task that can affect runtime cost, also read before design or implementation:
+For runtime-affecting work also read before design or implementation:
 
 ```text
 docs/performance/PERFORMANCE_PRINCIPLES.md
 .agents/skills/real-wargame-performance/SKILL.md
 ```
 
-The performance document is a mandatory repository contract, not optional advice. Runtime-affecting work is incomplete without its design review, bounded-cost implementation and required evidence.
+Use `docs/ai/TASK_ROUTER.md` for task-to-file routing. Do not read every skill, journal, plan or historical handoff by default.
 
-Task-to-file route:
+## 3. Canonical feature route
 
-```text
-docs/ai/TASK_ROUTER.md
-```
-
-Do not read every skill, journal, plan, report or historical handoff by default.
-
-## 3. Canonical feature-delivery route
-
-Every bounded implementation task follows this route:
+Every implementation task follows:
 
 ```text
 user task
-→ Web Chat reads the current real-wargame-preview head
-→ Web Chat creates one temporary feature branch from that exact head
-→ Web Chat implements the task on the feature branch
-→ Web Chat runs focused non-browser checks
-→ Web Chat commits and pushes the feature branch
-→ Web Chat reports the exact commit and manual live-test checklist
-→ user gives the branch to Codex once
-→ Codex exposes that branch as a branch-linked Vercel Preview and returns the URL
-→ user tests the live application
-→ Web Chat fixes all reported issues on the same feature branch
-→ optional visual GitHub Actions verification runs only after explicit user approval
-→ Web Chat transfers the tested result to real-wargame-preview only after explicit user GO
+→ Web Chat resolves the exact current real-wargame-preview head
+→ Web Chat creates one feature branch from that exact commit
+→ Web Chat implements, tests, commits and pushes that branch
+→ Web Chat reports focused non-browser checks and a live-test checklist
+→ user gives the already-pushed branch to Codex once
+→ Codex exposes a branch-linked Vercel Preview and returns the URL
+→ user performs live testing
+→ Web Chat fixes reported defects on the same feature branch
+→ optional visual verification after explicit user request
+→ explicit user GO for the exact accepted commit
+→ Web Chat transfers the result into real-wargame-preview
 ```
 
-The same feature branch remains the source of truth for implementation, regression fixes and visual-test preparation until the user approves transfer.
+The same feature branch remains the product source of truth until accepted transfer.
 
 ## 4. Role ownership
 
@@ -82,47 +73,34 @@ The same feature branch remains the source of truth for implementation, regressi
 
 Web Chat owns:
 
-- creating the feature branch from the current `real-wargame-preview` head;
-- implementation, tests, commits and pushes;
-- focused non-browser verification;
-- preparing the manual live-test checklist;
-- receiving user bug reports and fixing them on the same branch;
-- preparing and, after explicit approval, running visual GitHub Actions checks;
-- transferring the accepted result into `real-wargame-preview` after explicit user GO;
-- reporting exact branch and commit identity at every handoff.
+- feature-branch creation from the current preview head;
+- implementation, focused tests, commits and pushes;
+- readiness and manual live-test reports;
+- all product fixes on the same feature branch;
+- visual-verification preparation and execution after approval;
+- final transfer after explicit user GO.
 
 ### Codex
 
-Codex has one bounded role only:
+Codex only:
 
-- receive the already-pushed feature branch;
-- make it available as a branch-linked Vercel Preview;
-- return the branch Preview URL, immutable commit Preview URL when available, tested commit and deployment status.
+- receives the already-pushed feature branch and exact commit;
+- exposes it as a branch-linked Vercel Preview;
+- returns branch/commit Preview URLs and deployment status.
 
-Codex must not:
-
-- implement or modify the feature;
-- create replacement commits or branches;
-- fix regressions;
-- merge or transfer the branch;
-- change `real-wargame-preview` or `main`;
-- remain in the later iteration loop.
-
-A detached one-off deployment that does not follow later pushes to the same feature branch is not the canonical result. The Preview must stay associated with the branch so Web Chat updates become testable without calling Codex again.
+Codex must not implement, modify code, create replacement commits, fix defects, merge, transfer branches or remain in the iteration loop.
 
 ### Human user
 
 The user:
 
-- performs live testing in the Vercel Preview;
-- reports observed defects to the same Web Chat;
-- decides whether GitHub Actions visual verification is needed;
-- gives the explicit GO for transfer into `real-wargame-preview`;
-- separately approves any work involving `main`.
+- tests the Vercel Preview in real time;
+- reports defects to the same Web Chat;
+- decides whether visual verification is needed;
+- approves transfer into `real-wargame-preview` for an exact commit;
+- separately approves any `main` operation.
 
 ## 5. Branch policy
-
-For every implementation task, create a branch from the current remote preview head:
 
 ```text
 base: real-wargame-preview
@@ -132,28 +110,28 @@ head: feature/YYYYMMDD-short-kebab-slug
 Mandatory rules:
 
 - do not implement directly on `real-wargame-preview`;
-- do not push unfinished or unaccepted feature work to `real-wargame-preview`;
-- keep all live-test fixes on the same feature branch;
-- do not create a new branch for every reported bug;
-- do not transfer the feature branch until the user explicitly approves it;
+- do not push unaccepted product work to preview;
+- keep product fixes on the same feature branch;
+- do not create a new feature branch for each reported defect;
+- do not transfer before explicit user GO;
 - do not write to `main` without separate explicit human GO;
-- do not open or retarget a PR to `main` without documented `MAIN_GO_APPROVED_BY_USER: yes`;
+- do not open or retarget a PR to `main` without `MAIN_GO_APPROVED_BY_USER: yes`;
 - do not merge without explicit human GO;
 - do not enable auto-merge.
 
-A Pull Request is not the default development route. It may be used only when the user explicitly asks for review/transfer through a PR or repository protection makes it technically necessary. It is never a substitute for the feature-branch live-test cycle.
+A PR is not the default development route. It may be used only for explicitly requested review/transfer or when repository protection makes it technically necessary.
 
-After accepted transfer, close or delete the temporary feature branch unless the user explicitly asks to keep it.
+Temporary visual-QA CI branches and PRs are a separate test harness. They are never product-delivery branches and are never merged.
 
 ## 6. Focused non-browser verification
 
-Before reporting a feature branch ready for live testing, Web Chat runs the smallest sufficient local or workspace matrix:
+Before reporting a branch ready for live testing, run the smallest sufficient matrix:
 
 ```text
 TypeScript check
 + focused smoke tests for the changed subsystem
 + one production build
-+ documentation checks when documentation or generated state changed
++ documentation checks when applicable
 ```
 
 Typical commands:
@@ -164,7 +142,7 @@ npm run <focused-smoke-script>
 npm run build
 ```
 
-For documentation changes:
+For documentation or generated state:
 
 ```bash
 npm run docs:smoke
@@ -173,67 +151,89 @@ git diff --exit-code
 npm run docs:check
 ```
 
-Do not run by default:
+Do not run by default every smoke test, broad matrices, Chromium, Playwright, unjustified performance workflows, Vercel deployment or duplicate builds.
 
-- every smoke test in the repository;
-- the complete integration matrix;
-- Chromium or Playwright;
-- performance workflows without a concrete performance reason;
-- Vercel deployment;
-- duplicate builds.
+When Node commands are unavailable, report that honestly. A small non-browser Actions check is an optional fallback.
 
-`npm ci` or dependency installation is setup work, not a check to repeat before every command.
+## 7. Visual verification: mandatory automatic skill routing
 
-If the Web Chat environment cannot execute Node commands, report that limitation honestly. A small non-visual GitHub Actions check may be used only as a fallback; it does not replace the manual live test.
+Visual execution requires explicit user approval. The user does **not** need to name a skill.
 
-## 7. Visual QA approval gate
-
-For user-visible changes, visual QA must be prepared but is not run automatically.
-
-Before asking the user, Web Chat must:
-
-- finish the implementation on the feature branch;
-- prepare or update the relevant Playwright scenario;
-- define the key PNG files and what each should prove;
-- run focused non-browser checks and the production build;
-- report remaining visual risks;
-- provide the live manual checklist.
-
-Then ask once:
+Any clear intent such as:
 
 ```text
-Визуальная проверка подготовлена. Запустить её через GitHub Actions?
+проверь визуально
+запусти визуальную проверку
+сделай скриншоты
+проверь через Playwright
+проверь живой Vercel Preview
 ```
 
-An earlier explicit request such as `проверь визуально`, `сделай скриншоты`, `запусти браузерную проверку` or `проверь через Playwright` already counts as approval.
+counts as approval and triggers this decision:
 
-A visual check is complete only after:
+```text
+Can the current Web Chat directly control a real browser against the target Vercel URL?
 
-- the exact feature-branch commit was tested;
-- the real Vite application ran in a real browser;
-- fresh PNG files were created after the change;
-- workflow/artifact SHA matches the reported commit;
-- changed and key PNG files were opened and inspected;
-- failures are fixed on the same feature branch and the cycle is repeated.
+YES
+→ read and use .agents/skills/real-wargame-local-preview/SKILL.md
+→ run the direct-browser route
 
-Canonical detailed policy:
+NO
+→ MUST read and use .agents/skills/vercel-deployment-playwright-e2e/SKILL.md
+→ run deployed Vercel E2E through temporary GitHub Actions CI branches and a non-merge PR
+```
+
+Do not ask the user to say “use this skill”. Intent is sufficient. Do not ask again when approval was already explicit.
+
+The deployed-Vercel CI skill is mandatory when all are true:
+
+- visual/browser/screenshot/Playwright verification was requested;
+- a branch-linked Vercel Preview exists;
+- the current Web Chat cannot directly control a browser against that URL.
+
+The CI route must:
+
+- create temporary base/head `ci/**` branches from the exact product SHA;
+- keep workflow and Playwright harness files out of product branches;
+- use a temporary PR that is never merged;
+- test the real deployed URL;
+- save `evidence.json`, milestone PNGs, trace, video and diagnostics;
+- download and inspect artifacts;
+- show key screenshots and, when useful, a contact sheet;
+- classify failures before edits;
+- fix test-harness defects only on the CI head branch;
+- fix application defects only on the canonical feature branch;
+- create fresh CI branches and evidence after every new product SHA;
+- close the temporary PR without merge.
+
+Never commit Vercel share tokens, bypass secrets or protected URLs containing secrets to any branch, including temporary CI branches.
+
+Canonical visual policy:
 
 ```text
 docs/workflow/VISUAL_QA_APPROVAL_POLICY.md
 ```
 
-## 8. Parallel ordinary ChatGPT chats
+## 8. Visual evidence standard
 
-Parallel chats are optional research or proposal helpers. They do not create independent delivery routes.
+A visual check is complete only after:
 
-During a parallel campaign:
+- the real application ran in real Chrome/Chromium;
+- the requested state-changing scenario executed;
+- the tested product identity was proven or explicitly reported as unproven;
+- fresh PNGs and `evidence.json` were created;
+- workflow/run/artifact identity was checked;
+- key screenshots were opened and inspected;
+- failures were correctly classified;
+- temporary PR cleanup was completed or honestly reported.
 
-- one designated Web Chat owns the canonical feature branch;
-- worker chats return analysis, complete files or patches;
-- worker chats do not update `real-wargame-preview`;
-- worker chats do not deploy through Codex;
-- the designated Web Chat integrates selected results into the same feature branch;
-- the canonical feature-delivery route remains unchanged.
+A green workflow alone is not proof of correct visuals.
+
+Visual verification does not grant transfer permission. Transfer still requires separate explicit user GO for the exact accepted feature commit.
+
+## 9. Parallel chats
+
+Parallel chats are optional research or proposal helpers. One designated Web Chat owns the canonical feature branch. Workers return analysis, complete files or patches; they do not update preview or create independent Codex/CI delivery routes.
 
 Read:
 
@@ -244,28 +244,19 @@ docs/orchestration/WORKER_PROMPT.md
 docs/orchestration/INTEGRATOR_PROMPT.md
 ```
 
-## 9. Development and language
+## 10. Development language
 
-Canonical development language is English for:
+Use English for file names, identifiers, serialized keys, technical comments, canonical labels, tests and commit messages.
 
-- file names;
-- TypeScript identifiers, types, functions and interfaces;
-- serialized data keys;
-- technical comments;
-- canonical labels and descriptions;
-- test names and commit messages.
+Every human-facing feature must have a complete Russian version. Russian is the default UI language. The user must not need to edit code, JSON or technical keys for normal use.
 
-Every human-facing feature must have a complete Russian version. Russian is the default interface language. Use the established English base plus `*Ru` overlay contract where applicable.
-
-The user must not need to edit code, JSON, technical keys or run terminal commands for normal use.
-
-Full language rules:
+Full rules:
 
 ```text
 docs/ai/DEVELOPMENT_LANGUAGE_RULES.md
 ```
 
-## 10. Skill routing
+## 11. Skill routing
 
 ### Performance-sensitive work
 
@@ -274,24 +265,29 @@ docs/ai/DEVELOPMENT_LANGUAGE_RULES.md
 docs/performance/PERFORMANCE_PRINCIPLES.md
 ```
 
-This route is mandatory for any change to simulation, AI, perception, navigation, tactical fields, map data, rendering, recurring UI, workers, queues, caches, revisions, lifecycle, diagnostics or browser performance gates.
+Mandatory for simulation, AI, perception, navigation, tactical fields, map data, rendering, recurring UI, workers, queues, caches, revisions, lifecycle, diagnostics and browser-performance gates.
 
-### Visual launch, screenshots or Playwright
+### Visual preparation or direct browser
 
 ```text
 .agents/skills/real-wargame-local-preview/SKILL.md
-docs/workflow/VISUAL_QA_APPROVAL_POLICY.md
 ```
 
-### PixiJS, canvas, renderers, camera, pointer events or performance
+### Deployed Vercel visual verification without a directly controlled browser
+
+```text
+.agents/skills/vercel-deployment-playwright-e2e/SKILL.md
+```
+
+This skill is auto-selected from user intent; the user does not need to name it.
+
+### PixiJS/canvas/rendering
 
 ```text
 .agents/skills/real-wargame-pixijs/SKILL.md
 ```
 
-Real-Wargame uses PixiJS 8. Follow the project skill and the narrow v8 skill that owns the API being changed.
-
-### Soldier AI, Blackboard, Utility, stateful Runtime, Bridge or node editor
+### Soldier AI/runtime/editor
 
 ```text
 .agents/skills/real-wargame-ai-runtime/SKILL.md
@@ -303,38 +299,22 @@ General index:
 docs/ai/SKILLS_INDEX.md
 ```
 
-## 11. Architecture boundaries
+## 12. Architecture boundaries
 
-Read:
-
-```text
-docs/architecture/OVERVIEW.md
-docs/architecture/MODULE_MAP.md
-```
-
-Hard boundaries:
-
-- core simulation and AI do not import PixiJS;
+- core simulation and pure AI do not import PixiJS or DOM;
 - `AiGraphRunner` is a pure immediate evaluator;
-- `AiGraphRuntime` owns resumable execution state;
-- `AiGameBridge` adapts pure AI to the live game;
-- renderers display state and do not become the source of truth;
-- subjective soldier knowledge must not reveal the objective world;
-- heavy awareness, relief or overlay work must not be recomputed every frame without evidence and design;
-- UI, renderer selection and visible layers never own gameplay computation;
-- one changed entity must not invalidate unrelated world state;
-- interactive full-map scans, unbounded queues and unbounded per-step work are forbidden;
-- asynchronous results require exact identity, bounded ownership and stale-result rejection.
+- `AiGraphRuntime` owns resumable state;
+- `AiGameBridge` adapts pure AI to the game;
+- renderers display state and are not sources of gameplay truth;
+- subjective knowledge does not reveal objective hidden state;
+- UI and visible layers do not own gameplay computation;
+- one changed entity does not invalidate unrelated world state;
+- full-map scans, queues and per-step work are bounded;
+- asynchronous results use exact identity and stale-result rejection.
 
-## 12. Mandatory performance contract
+## 13. Performance contract
 
-The canonical contract is:
-
-```text
-docs/performance/PERFORMANCE_PRINCIPLES.md
-```
-
-For runtime-affecting work, every agent establishes before implementation:
+For runtime-affecting work establish before implementation:
 
 ```text
 hot path
@@ -349,17 +329,9 @@ teardown
 measurement plan
 ```
 
-The implementation must prefer shared prepared data, narrow revision-based invalidation, bounded deterministic work, local/point/route queries, dirty chunks, typed data and revision-driven UI.
+Preserve gameplay semantics, LOS, terrain, vegetation, route meaning, fairness and determinism. Use the `Performance impact` section from `docs/orchestration/RESULT_TEMPLATE.md`.
 
-A feature must not be made faster by weakening gameplay semantics, hidden-contact boundaries, LOS, terrain, vegetation, route meaning, fairness or determinism.
-
-Runtime-affecting final reports include the `Performance impact` section from:
-
-```text
-docs/orchestration/RESULT_TEMPLATE.md
-```
-
-## 13. Current-status documentation
+## 14. Current-status documentation
 
 Edit current state only in:
 
@@ -368,52 +340,58 @@ docs/ai/repo-context.json
 docs/subprojects/<id>/subproject.json
 ```
 
-Then run:
+Then run `npm run docs:sync`. Do not edit generated files manually.
 
-```text
-npm run docs:sync
-```
+## 15. Prohibited legacy routes
 
-Files marked `GENERATED FILE` must not be edited manually.
+Do not reintroduce:
 
-## 14. Prohibited legacy routes
-
-Do not reintroduce these as normal workflow:
-
-- direct implementation push to `real-wargame-preview`;
+- direct product implementation in preview;
 - PR-first feature development;
-- Codex implementation, commits, fixes, merge or branch transfer;
-- automatic visual checks on every push;
-- a fresh branch for every live-test defect;
-- transfer to preview before explicit user GO.
+- Codex implementation or fixes;
+- automatic browser checks on every push;
+- product fixes on temporary CI branches;
+- committed Vercel share tokens;
+- reuse of visual evidence after product SHA changes;
+- transfer before explicit user GO.
 
-Historical Q/R/X/W and r-init documents may be read only when the user explicitly asks about that legacy process. They are not entry points for normal feature work.
+Historical Q/R/X/W and r-init documents are not normal entry points.
 
-## 15. Required report
-
-Every implementation report includes:
+## 16. Required report
 
 ```text
-feature_branch: ...
+feature_branch:
 base_branch: real-wargame-preview
-base_commit: ...
-current_commit: ...
-delivery_state: implementation / ready_for_live_test / live_test_revision / visual_qa / approved_for_preview / transferred
-changed_files: ...
-checks_run: ...
-visual_qa_prepared: yes / no / not applicable
-visual_qa_approval: approved / declined / pending / not applicable
-visual_qa_run: passed / failed / not run / not applicable
-vercel_preview: URL / pending / not requested
-live_test_status: pending / passed / failed / not run
-not_checked: ...
-manual_checks_needed: ...
-performance_impact: completed / not applicable with reason
-risks: ...
-preview_transfer_approval: approved / not approved
-preview_touched: no / explicit approved transfer
-main_touched: no / explicit approved change
-branch_cleanup_status: open / deleted / kept by user request
+base_commit:
+current_commit:
+delivery_state:
+changed_files:
+checks_run:
+visual_qa_prepared:
+visual_qa_approval:
+visual_qa_route: direct-browser / vercel-deployment-playwright-e2e / not run / not applicable
+visual_qa_run:
+vercel_preview:
+live_test_status:
+tested_product_sha:
+observed_deployment_sha:
+product_sha_match: yes / no / unproven
+workflow_run:
+artifact_id:
+evidence_json_inspected:
+screenshots_inspected:
+key_frames:
+failure_class: none / environment / test-harness / application
+ci_pr_closed_without_merge:
+ci_branch_cleanup:
+not_checked:
+manual_checks_needed:
+performance_impact:
+risks:
+preview_transfer_approval:
+preview_touched:
+main_touched:
+branch_cleanup_status:
 ```
 
-Explain the result to the user in simple Russian. Do not ask the user to manage Git or terminal commands when the agent can do it.
+Explain the result in simple Russian. Do not ask the user to manage Git or terminal commands when the agent can do it.
