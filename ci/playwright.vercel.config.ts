@@ -2,9 +2,9 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: '.',
-  testMatch: 'vercel-soldier-control.spec.ts',
-  timeout: 150_000,
-  expect: { timeout: 15_000 },
+  testMatch: 'vercel-soldier-control-v2.spec.ts',
+  timeout: 180_000,
+  expect: { timeout: 20_000 },
   workers: 1,
   reporter: 'line',
   outputDir: '../test-results/vercel-control',
