@@ -1,10 +1,11 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "project": {
     "name": "Real-Wargame",
     "repository": "AndrewVerhoturov1/Real-wargame",
     "workingBranch": "real-wargame-preview",
     "stableBranch": "main",
+    "featureBranchPattern": "feature/YYYYMMDD-short-kebab-slug",
     "canonicalLauncher": "Run-Real-Wargame-Lab.bat",
     "defaultUserLanguage": "ru",
     "canonicalDevelopmentLanguage": "en"
@@ -19,15 +20,26 @@
     "ai-single-unit-editor"
   ],
   "delivery": {
-    "preferred": "direct-push-to-preview",
-    "target": "real-wargame-preview",
-    "fallback": "pull-request-to-preview",
+    "owner": "web-chat",
+    "baseBranch": "real-wargame-preview",
+    "featureBranchRequired": true,
+    "directImplementationPushToPreviewAllowed": false,
+    "sameBranchRevisionLoop": true,
+    "focusedNonBrowserChecksRequired": true,
+    "codexRole": "branch-linked-vercel-preview-only",
+    "codexMayModifyCode": false,
+    "codexReentryRequiredAfterFeaturePush": false,
+    "visualQaTrigger": "explicit-user-request-only",
+    "previewTransferRequiresExplicitUserGo": true,
+    "pullRequestIsDefault": false,
     "mainRequiresExplicitUserGo": true,
     "autoMergeAllowed": false
   },
+  "canonicalWorkflow": "docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md",
   "agentEntryPoints": [
     "AGENTS.md",
     "docs/ai/WEB_CHAT_START.md",
+    "docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md",
     "docs/subprojects/index.json"
   ],
   "defaultSkills": {
@@ -35,5 +47,5 @@
     "pixiJs": ".agents/skills/real-wargame-pixijs/SKILL.md",
     "aiRuntime": ".agents/skills/real-wargame-ai-runtime/SKILL.md"
   },
-  "updatedAt": "2026-07-15"
+  "updatedAt": "2026-07-19"
 }
