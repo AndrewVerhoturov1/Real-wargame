@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "pullRequest": 135,
   "branch": "agent/movement-environment-integration-v1",
   "target": "real-wargame-preview",
@@ -18,6 +18,13 @@
     "execute at most one ordinary cadence decision per unit per simulation step while preserving reactive wakes",
     "execute at most one synchronous route candidate search per simulation step and preserve deferred orders",
     "aggregate pressure-zone and known-threat metrics in one stable pass without clone-sort-reduce tails"
+  ],
+  "diagnosticsAllocationFollowupCommit": "f09568e91825acc320bf6d6009c35c005a8de777",
+  "diagnosticsAllocationFollowup": [
+    "use allocation-bounded threat summaries in the per-step metrics hot path while retaining detailed UI reports",
+    "retain one latest graph-pass identity per unit and full effect detail only for genuinely slow scheduler passes",
+    "insert bounded slowest diagnostics only when a sample qualifies instead of cloning and sorting every step",
+    "prove runtime threat summary parity against the detailed canonical evaluation"
   ],
   "workflowPolicy": "canonical preview workflows retained unchanged",
   "rearVisibilityPolicy": "preserve the visibility semantics actually present in exact preview; draft PR 137 was not imported",
