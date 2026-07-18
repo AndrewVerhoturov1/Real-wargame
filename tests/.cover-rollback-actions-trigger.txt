@@ -1,2 +1,3 @@
 Temporary GitHub Actions validation marker for the cover rollback backup branch.
 Synchronize event: full CI requested on 2026-07-18.
+Target workflow base: real-wargame-preview.
