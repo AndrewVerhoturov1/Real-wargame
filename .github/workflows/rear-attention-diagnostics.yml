@@ -1,0 +1,63 @@
+name: Rear Attention Diagnostics
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - 'src/core/perception/**'
+      - 'src/core/visibility/**'
+      - 'src/rendering/PixiVisibilityHeatmapRenderer.ts'
+      - 'src/ai-node-editor/AttentionProfileEditorPanel.ts'
+      - 'scripts/attention_profiles_smoke.ts'
+      - 'scripts/rear_attention_perception_smoke.*'
+      - 'package.json'
+      - '.github/workflows/rear-attention-diagnostics.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rear-attention-diagnostics-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: TypeScript
+        if: always()
+        run: npx tsc --noEmit
+      - name: Event queue
+        if: always()
+        run: npm run event-queue:smoke
+      - name: Runtime session
+        if: always()
+        run: npm run runtime-session:smoke
+      - name: Runtime snapshot
+        if: always()
+        run: npm run runtime-snapshot:smoke
+      - name: AI scheduler
+        if: always()
+        run: npm run ai-scheduler:smoke
+      - name: Attention profiles
+        if: always()
+        run: npm run attention-profiles:smoke
+      - name: Perception including rear acceptance
+        if: always()
+        run: npm run perception:smoke
+      - name: View memory
+        if: always()
+        run: npm run view-memory-heatmap:smoke
+      - name: Build
+        if: always()
+        run: npm run build
