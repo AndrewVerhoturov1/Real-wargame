@@ -95,6 +95,8 @@ test('keeps information details open, uses a movement-stable raster overlay and 
   await expect(page.locator('body')).toHaveClass(/workspace-simulation/);
   await selectFixtureSoldier(page, canvas);
   await expect(page.locator('.unit-label').filter({ hasText: 'Солдат' })).toBeVisible();
+  await expect(page.locator('.workspace-live-details')).toHaveCount(4);
+  await expect(page.locator('.simulation-unit-bar [data-overlay-mode]')).toHaveCount(0);
   await page.waitForTimeout(700);
 
   const sidebarBox = await page.locator('.simulation-sidebar').boundingBox();
@@ -117,6 +119,8 @@ test('keeps information details open, uses a movement-stable raster overlay and 
   await expect(page.locator('[data-role="sidebar-title"]')).toContainText('Опасность');
   await expect(page.locator('[data-role="quick-cover-list"]')).toBeVisible();
   await expect(page.locator('[data-role="quality-cover-list"]')).toBeVisible();
+  await expect(page.locator('.simulation-sidebar [data-overlay-mode]')).toHaveCount(3);
+  await expect(page.locator('.simulation-unit-bar [data-overlay-mode]')).toHaveCount(0);
   await page.waitForFunction(() => {
     const diagnostics = (window as Window & { __realWargameAwarenessDebug?: AwarenessDiagnostics }).__realWargameAwarenessDebug;
     return diagnostics?.representation === 'raster-sprite-with-region-contours';
@@ -130,16 +134,28 @@ test('keeps information details open, uses a movement-stable raster overlay and 
   expect(dangerDiagnostics?.maxBuildMs ?? Number.POSITIVE_INFINITY).toBeLessThan(250);
   await saveScreenshot(page, '03-simulation-danger-layer.png');
 
-  const coverMode = page.locator('[data-overlay-mode="cover"]');
+  const coverMode = page.locator('.simulation-sidebar [data-overlay-mode="cover"]');
   await coverMode.click();
   await expect(coverMode).toHaveClass(/active/);
   await expect.poll(async () => (await readAwarenessDiagnostics(page))?.mode).toBe('cover');
+  await expect.poll(async () => {
+    const key = (await readAwarenessDiagnostics(page))?.lastCoverCacheKey ?? '';
+    return key !== '' && !key.includes('pending');
+  }).toBe(true);
   const coverDiagnostics = await readAwarenessDiagnostics(page);
   expect(coverDiagnostics?.displayObjectCount).toBeLessThanOrEqual(3);
   expect(coverDiagnostics?.lastCoverCacheKey).not.toBe('');
+  expect(coverDiagnostics?.coverContourBuildCount ?? 0).toBeGreaterThan(0);
+  const stableCoverKey = coverDiagnostics?.lastCoverCacheKey;
+  const stableContourCount = coverDiagnostics?.coverContourBuildCount ?? 0;
+  await page.waitForTimeout(900);
+  const idleCoverDiagnostics = await readAwarenessDiagnostics(page);
+  expect(idleCoverDiagnostics?.mode).toBe('cover');
+  expect(idleCoverDiagnostics?.lastCoverCacheKey).toBe(stableCoverKey);
+  expect(idleCoverDiagnostics?.coverContourBuildCount ?? 0).toBeGreaterThanOrEqual(stableContourCount);
   await saveScreenshot(page, '04-simulation-cover-selected.png');
 
-  const combinedMode = page.locator('[data-overlay-mode="combined"]');
+  const combinedMode = page.locator('.simulation-sidebar [data-overlay-mode="combined"]');
   await combinedMode.click();
   await expect(combinedMode).toHaveClass(/active/);
   await expect.poll(async () => (await readAwarenessDiagnostics(page))?.mode).toBe('combined');
@@ -148,17 +164,19 @@ test('keeps information details open, uses a movement-stable raster overlay and 
   expect(combinedDiagnostics?.coverContourBuildCount ?? 0).toBeGreaterThan(0);
 
   await page.keyboard.press('v');
-  await expect(page.locator('[data-overlay-mode="danger"]')).toHaveClass(/active/);
+  await expect(page.locator('.simulation-sidebar [data-overlay-mode="danger"]')).toHaveClass(/active/);
   await page.keyboard.press('v');
-  await expect(page.locator('[data-overlay-mode="cover"]')).toHaveClass(/active/);
+  await expect(page.locator('.simulation-sidebar [data-overlay-mode="cover"]')).toHaveClass(/active/);
 
   await page.locator('[data-tab="stealth"]').click();
   await expect(page.locator('[data-role="sidebar-title"]')).toContainText('Скрытность');
+  await expect(page.locator('.workspace-legend')).toBeVisible();
   await page.waitForTimeout(650);
   await saveScreenshot(page, '05-simulation-stealth-layer.png');
 
   await page.locator('[data-tab="memory"]').click();
   await expect(page.locator('[data-role="sidebar-title"]')).toContainText('Обзор и память');
+  await expect(page.getByRole('heading', { name: 'Известные предметы и укрытия' })).toBeVisible();
   await page.waitForTimeout(650);
   await saveScreenshot(page, '06-simulation-memory-layer.png');
 });
