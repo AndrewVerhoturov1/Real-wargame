@@ -1,20 +1,24 @@
-# Pull Request and Delivery Review Checklist
+# Feature Delivery and Optional Pull Request Review Checklist
 
-Use this checklist for a fallback PR, an explicitly isolated feature branch or final review before preview transfer. A PR is not mandatory when a bounded GitHub-aware executor can safely deliver directly to `real-wargame-preview`.
+Use this checklist before live-test publication, before optional visual GitHub Actions verification and before an explicitly approved transfer into `real-wargame-preview`.
 
-## Delivery route
+A Pull Request is not the default development route. Use the PR-specific section only when the user explicitly requests PR review/transfer or repository protection requires it.
 
-- [ ] The report states `direct push`, `PR fallback`, `isolated branch only` or `not changed`.
-- [ ] The target is `real-wargame-preview`, unless the user explicitly approved `main`.
-- [ ] An isolated branch has not been transferred when the user said not to transfer yet.
-- [ ] If a temporary branch was used, its cleanup state is documented.
+## Canonical branch identity
+
+- [ ] `feature_branch` follows `feature/YYYYMMDD-short-kebab-slug`.
+- [ ] The feature branch was created from the exact current `real-wargame-preview` head recorded as `base_commit`.
+- [ ] `current_commit` is reported exactly.
+- [ ] All implementation and live-test fixes remain on the same feature branch.
+- [ ] `real-wargame-preview` was not used as the active implementation branch.
+- [ ] `main` was not changed.
 
 ## Scope
 
 - [ ] The change solves one clear task.
-- [ ] Changed files match the allowed scope.
+- [ ] Changed files match the intended scope.
 - [ ] There is no unrelated formatting or cleanup.
-- [ ] Architecture was not rewritten without approval.
+- [ ] Architecture was not rewritten without a task-related reason.
 - [ ] Files were not deleted without a clear reason.
 
 ## Safety
@@ -23,6 +27,7 @@ Use this checklist for a fallback PR, an explicitly isolated feature branch or f
 - [ ] `main` was not changed without `MAIN_GO_APPROVED_BY_USER: yes`.
 - [ ] Auto-merge is not enabled.
 - [ ] The author did not claim checks that did not run.
+- [ ] Codex did not implement, commit, fix, merge or transfer the feature.
 
 ## Project compatibility
 
@@ -30,54 +35,93 @@ Use this checklist for a fallback PR, an explicitly isolated feature branch or f
 - [ ] English canonical code/data names and complete Russian human-facing text are present.
 - [ ] Normal user workflow does not require source code, JSON or terminal commands.
 - [ ] Core AI/simulation boundaries remain independent of PixiJS and DOM.
+- [ ] Runtime-affecting changes satisfy the mandatory performance contract.
 
-## Checks
+## Focused non-browser checks
 
-- [ ] Exact checks are listed with passed/failed/not run status.
-- [ ] Production build ran when source or package scripts changed.
-- [ ] Focused smoke tests cover changed behavior.
-- [ ] TDD RED evidence exists for new behavior when applicable.
-- [ ] Documentation changes passed `docs:smoke` and `docs:check`.
+- [ ] Exact commands are listed with passed/failed/not run status.
+- [ ] `npx tsc --noEmit` ran when TypeScript source changed, or the limitation is reported.
+- [ ] Focused smoke tests cover the changed behavior.
+- [ ] One production build ran when source, package scripts or build configuration changed.
+- [ ] Documentation changes passed the required docs checks.
+- [ ] Broad matrices and performance workflows were omitted unless the diff gave a concrete reason to run them.
+
+## Ready for human live testing
+
+- [ ] Feature branch and exact commit were pushed.
+- [ ] The readiness report lists changed files, checks, not checked items and risks.
+- [ ] The manual live-test checklist is task-specific and understandable.
+- [ ] Expected result is stated for each important manual step.
+- [ ] `preview_touched: no` and `main_touched: no` are explicit.
+
+## Codex deployment-only handoff
+
+- [ ] Codex received the already-pushed feature branch and exact commit.
+- [ ] Codex returned a branch-linked Vercel Preview URL.
+- [ ] Codex returned deployment status and deployed commit.
+- [ ] The deployment follows later pushes to the same feature branch.
+- [ ] Codex did not modify code or create replacement commits.
+- [ ] Codex did not merge or transfer branches.
+
+## Human live test
+
+- [ ] `live_test_status` is reported.
+- [ ] `live_tested_commit` matches the branch commit the user opened.
+- [ ] Reported defects were fixed on the same feature branch.
+- [ ] Every revision reports a new exact commit.
+- [ ] A new branch was not created for each defect.
 
 ## Visual work
 
+Preparation:
+
+- [ ] Relevant Playwright scenario exists or was updated.
+- [ ] Key PNGs and the evidence each should prove are defined.
+- [ ] Visual risks not covered by non-browser checks are reported.
+
+When visual QA was explicitly requested:
+
+- [ ] The exact feature commit was used.
 - [ ] The real application ran in a real browser.
 - [ ] Fresh PNGs were captured after the change.
 - [ ] Artifact SHA matches the reported commit.
+- [ ] Playwright result and logs are available.
 - [ ] Changed/key PNGs were opened and inspected.
-- [ ] The report distinguishes GitHub Actions, local agent checkout and the user's PC.
+- [ ] Failures were corrected on the same feature branch.
 
-## Fallback PR only
+## Explicit transfer gate
+
+- [ ] The user explicitly approved transfer into `real-wargame-preview`.
+- [ ] The approval refers to the exact accepted feature commit.
+- [ ] The feature branch was updated from current preview when necessary.
+- [ ] Conflicts were resolved on the feature branch.
+- [ ] Focused checks required by the final diff passed.
+- [ ] The resulting `preview_commit` is reported.
+- [ ] The feature branch cleanup state is documented.
+
+## Optional Pull Request only
+
+Use this section only after explicit user request or when branch protection requires a PR.
 
 - [ ] PR base is `real-wargame-preview`.
-- [ ] Head is a separate task branch, not `main`.
-- [ ] PR body explains why direct preview delivery was not used or why isolation is useful.
-- [ ] The PR is not self-merged.
-- [ ] Temporary visual-QA PRs are closed after artifact inspection.
-
-## Q-mode result
-
-- [ ] Repository, branch and commit are reported.
-- [ ] PR number/link is reported only when fallback PR was used.
-- [ ] Changed files, checks, not checked, risks and human verification are listed.
-- [ ] `transfer_path` and `main_touched` are explicit.
-
-## X / r-init result
-
-- [ ] Terminal-free launcher is present when required.
-- [ ] Human checklist is understandable without technical preparation.
-- [ ] Expected result is stated for each manual step.
-- [ ] GO/NO-GO remains a human decision.
+- [ ] PR head is the already-tested canonical feature branch.
+- [ ] PR was not opened as the initial development route.
+- [ ] PR body reports `base_commit`, `current_commit`, Vercel Preview and live-test status.
+- [ ] PR body includes the user's explicit preview-transfer approval state.
+- [ ] The PR is not self-merged without explicit user GO.
+- [ ] Temporary QA-only PRs are closed after use.
 
 ## Recommendation
 
 Return one clear recommendation:
 
 ```text
-Можно принимать.
-Нужно доработать.
-Нужна локальная проверка.
-Нужно оставить в изолированной ветке.
+Готово к живому тесту.
+Нужно доработать в той же feature-ветке.
+Готово к визуальной проверке через GitHub Actions.
+Визуальная проверка пройдена; ожидается GO на перенос.
+Можно переносить exact commit в real-wargame-preview.
+Нельзя переносить: нет явного GO пользователя.
 Лучше отклонить.
 Нужно разделить задачу.
 ```
