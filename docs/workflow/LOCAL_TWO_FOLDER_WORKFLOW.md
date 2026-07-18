@@ -1,53 +1,84 @@
-# Две папки: main и preview — как это работает
+# Local Main and Preview Folders
 
-## Зачем две папки?
+This document describes the optional local two-folder setup. It is no longer the canonical feature-development or live-test route.
 
-У вас есть две копии проекта:
+Canonical feature workflow:
 
-- `Real-wargame` — основная папка. Она всегда показывает `main` (стабильную версию).
-- `Real-wargame-preview` — папка для предварительного просмотра. Она показывает ветку `real-wargame-preview`, где лежат изменения, которые вы ещё не приняли.
+```text
+docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md
+```
 
-Так сделано, чтобы основная папка всегда оставалась рабочей, а вы могли спокойно тестировать новое в отдельной копии.
+## What the two folders mean
 
-## Почему файлы «пропадают» при переключении веток
+A local setup may contain:
 
-Git устроен так: когда вы переключаете ветку (`checkout`), файлы на диске заменяются на те, что есть в этой ветке.
+- `Real-wargame` — local checkout of `main`;
+- `Real-wargame-preview` — local checkout of `real-wargame-preview`.
 
-Поэтому **нельзя** переключать `Real-wargame` между `main` и `real-wargame-preview` — файлы будут постоянно меняться, и вы будете теряться.
+The folders avoid repeatedly switching branches in one working directory.
 
-Правильное решение: **две отдельные папки**. В одной всегда `main`, в другой — preview. Переключать ничего не нужно.
+## Current limitation of this setup
 
-## Как пользоваться preview
+Unaccepted feature work no longer goes directly into `real-wargame-preview`. Therefore the local preview folder does not normally contain the current feature under live testing.
 
-1. Откройте папку `Real-wargame-preview`.
-2. Запустите `scripts/windows/setup-preview-folder.bat` — он создаст или обновит папку из GitHub.
-3. Запустите `scripts/windows/run-preview.bat` — он запустит проект из этой папки.
-4. Проверьте изменения.
-5. Если всё хорошо — скажите «ГОДИТСЯ» или «GO». Изменения попадут в `main`.
-6. Если нужно доработать — скажите «ДОРАБОТАТЬ» или «NO-GO». Изменения останутся в preview.
+The canonical unfinished-feature test uses:
 
-## Как обновить preview
+```text
+feature branch
+→ branch-linked Vercel Preview
+→ human live test
+```
 
-Запустите `scripts/windows/update-preview.bat` — он заберёт новые изменения из ветки `real-wargame-preview` без удаления ваших файлов.
+The local `Real-wargame-preview` folder shows only the accepted preview integration state after explicit user GO and transfer.
 
-## После внешнего push/PR
+## Optional use of the local preview folder
 
-После того как внешний GitHub-aware исполнитель запушил изменения в `real-wargame-preview`, локальная preview-папка не обновляется автоматически. Codex/OpenCode обязан выполнить синхронизацию (запустить `scripts/windows/update-preview.bat` или выполнить `git fetch` + `git reset --hard` / `git pull --ff-only`), прежде чем сообщать, что результат готов к тестированию.
+Use the local preview folder when the user explicitly wants to:
 
-## Почему main ждёт явного разрешения
+- run the accepted `real-wargame-preview` state locally;
+- compare Vercel Preview behavior with the integrated preview branch;
+- diagnose environment-specific behavior after transfer;
+- prepare a later release from preview to `main`.
 
-`main` — это стабильная версия. В неё попадает только то, что вы лично проверили и сказали «ДА».
+It is not required for the normal unfinished-feature cycle.
 
-Никто — ни Codex, ни OpenCode, ни внешний помощник — не имеет права менять `main` без вашего прямого разрешения.
+## Updating the local preview folder
 
-Это защита от случайных поломок.
+After an explicitly approved transfer into `real-wargame-preview`, update the local folder with the repository-provided scripts or an equivalent safe Git synchronization route.
 
-## Что происходит с временной рабочей веткой
+Typical project scripts:
 
-После успешного переноса изменений в `real-wargame-preview` временная task-ветка должна быть закрыта/удалена, чтобы не накапливались использованные ветки.
+```text
+scripts/windows/setup-preview-folder.bat
+scripts/windows/update-preview.bat
+scripts/windows/run-preview.bat
+```
 
-Если ветка по какой-то причине остаётся открытой, отчёт обязан содержать фразу по смыслу: «Временная ветка оставлена открытой, потому что ...».
+Do not claim the user's PC was synchronized or tested unless that actually happened.
 
-## Внешние исполнители
+## Feature work ownership
 
-Внешние GitHub-aware исполнители (web-chat, Q-mode, zworker с GitHub-доступом) обязаны прочитать `docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md` перед началом работы. По умолчанию они коммитят/пушат результат напрямую в `real-wargame-preview`. Если прямой пуш невозможен — используют временную ветку + PR с последующей очисткой.
+For new work:
+
+1. Web Chat creates `feature/YYYYMMDD-short-kebab-slug` from the exact current preview head.
+2. Web Chat implements and pushes that feature branch.
+3. Codex only exposes it as a branch-linked Vercel Preview.
+4. The user tests the live Vercel deployment.
+5. Web Chat fixes issues on the same feature branch.
+6. After explicit user GO, Web Chat transfers the accepted exact commit into `real-wargame-preview`.
+7. Only then may the local `Real-wargame-preview` folder be updated to show the accepted state.
+
+## Main branch
+
+`main` is the stable branch and remains outside the normal feature loop. No agent, Codex or local script may change or merge to `main` without separate explicit user GO.
+
+## Temporary feature branch cleanup
+
+After successful transfer into `real-wargame-preview`, close or delete the temporary feature branch unless the user explicitly asks to keep it.
+
+If it remains open, the report must include:
+
+```text
+branch_cleanup_status: kept by user request
+branch_cleanup_reason: ...
+```
