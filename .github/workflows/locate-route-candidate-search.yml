@@ -17,12 +17,22 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - name: Locate candidate-search phase and surrounding implementation
+      - name: Capture candidate-search implementation context
         shell: bash
         run: |
           set -euo pipefail
-          grep -R -n -C 12 --exclude-dir=node_modules --exclude-dir=dist "route.candidate-search\|candidate-search" src scripts tests || true
-          echo '--- ensureNavigationRouteCurrent ---'
-          grep -R -n -C 12 --exclude-dir=node_modules --exclude-dir=dist "ensureNavigationRouteCurrent" src scripts tests || true
-          echo '--- candidate route functions ---'
-          grep -R -n -C 6 --exclude-dir=node_modules --exclude-dir=dist "candidate.*route\|route.*candidate" src/core | head -n 800 || true
+          {
+            grep -R -n -C 24 --exclude-dir=node_modules --exclude-dir=dist "route.candidate-search\|candidate-search" src scripts tests || true
+            echo '--- ensureNavigationRouteCurrent ---'
+            grep -R -n -C 24 --exclude-dir=node_modules --exclude-dir=dist "ensureNavigationRouteCurrent" src scripts tests || true
+            echo '--- candidate route functions ---'
+            grep -R -n -C 12 --exclude-dir=node_modules --exclude-dir=dist "candidate.*route\|route.*candidate" src/core || true
+          } > route-candidate-search-context.txt
+          cat route-candidate-search-context.txt
+      - name: Upload context
+        uses: actions/upload-artifact@v4
+        with:
+          name: route-candidate-search-context
+          path: route-candidate-search-context.txt
+          if-no-files-found: error
+          retention-days: 1
