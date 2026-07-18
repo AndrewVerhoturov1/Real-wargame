@@ -80,10 +80,14 @@ export interface GridPathFailure {
 
 export type GridPathResult = GridPathSuccess | GridPathFailure;
 
-interface OpenNode {
-  readonly index: number;
-  readonly f: number;
-  readonly h: number;
+interface GridSearchWorkspace {
+  readonly cellCount: number;
+  generation: number;
+  readonly gScore: Float64Array;
+  readonly parent: Int32Array;
+  readonly seenGeneration: Uint32Array;
+  readonly closedGeneration: Uint32Array;
+  readonly open: BinaryHeap;
 }
 
 interface SearchSuccess {
@@ -119,6 +123,7 @@ const DIRECTIONS: ReadonlyArray<readonly [number, number, number]> = [
 ];
 
 const baselineCache = new WeakMap<TacticalMap, Map<string, SearchSuccess>>();
+const searchWorkspaceByMap = new WeakMap<TacticalMap, GridSearchWorkspace>();
 
 export function findGridPath(
   map: TacticalMap,
@@ -178,7 +183,7 @@ export function findGridPath(
     ? navigationCellCenter(resolvedGoalCell.x, resolvedGoalCell.y)
     : clampPositionInsideCell(requestedGoal, resolvedGoalCell.x, resolvedGoalCell.y);
   const maxVisitedCells = Math.max(1, Math.floor(options.maxVisitedCells ?? fields.width * fields.height));
-  const tacticalSearch = runAStar(fields, startCell, resolvedGoalCell, maxVisitedCells);
+  const tacticalSearch = runAStar(map, fields, startCell, resolvedGoalCell, maxVisitedCells);
 
   if (!tacticalSearch.ok) {
     return failure(tacticalSearch.code, requestedGoal, tacticalSearch.visitedCells, tacticalSearch.reason, tacticalSearch.reasonRu);
@@ -269,7 +274,7 @@ function getBaselineSearch(
 
   const direct = getBuiltInNavigationProfile('direct');
   const fields = getRouteCostFields(map, direct, undefined, costCache);
-  const result = runAStar(fields, start, goal, maxVisitedCells);
+  const result = runAStar(map, fields, start, goal, maxVisitedCells);
   if (result.ok) {
     mapCache.set(key, result);
     while (mapCache.size > 32) {
@@ -282,31 +287,31 @@ function getBaselineSearch(
 }
 
 function runAStar(
+  map: TacticalMap,
   fields: RouteCostFields,
   start: { x: number; y: number },
   goal: { x: number; y: number },
   maxVisitedCells: number,
 ): SearchResult {
   const cellCount = fields.width * fields.height;
+  const workspace = prepareSearchWorkspace(map, cellCount);
+  const generation = workspace.generation;
+  const { gScore, parent, seenGeneration, closedGeneration, open } = workspace;
   const startIndex = indexOf(fields, start.x, start.y);
   const goalIndex = indexOf(fields, goal.x, goal.y);
-  const gScore = new Float64Array(cellCount);
-  const parent = new Int32Array(cellCount);
-  const closed = new Uint8Array(cellCount);
-  gScore.fill(Number.POSITIVE_INFINITY);
-  parent.fill(-1);
+  seenGeneration[startIndex] = generation;
+  parent[startIndex] = -1;
   gScore[startIndex] = 0;
 
-  const open = new BinaryHeap();
   const startH = heuristic(start.x, start.y, goal.x, goal.y);
-  open.push({ index: startIndex, f: startH, h: startH });
+  open.push(startIndex, startH, startH);
   let visitedCells = 0;
 
   while (open.size > 0) {
-    const current = open.pop();
-    if (!current) break;
-    if (closed[current.index]) continue;
-    closed[current.index] = 1;
+    const currentIndex = open.popIndex();
+    if (currentIndex < 0) break;
+    if (closedGeneration[currentIndex] === generation) continue;
+    closedGeneration[currentIndex] = generation;
     visitedCells += 1;
 
     if (visitedCells > maxVisitedCells) {
@@ -319,17 +324,17 @@ function runAStar(
       };
     }
 
-    if (current.index === goalIndex) {
+    if (currentIndex === goalIndex) {
       return {
         ok: true,
-        cells: reconstructPath(fields, parent, current.index),
-        cost: gScore[current.index],
+        cells: reconstructPath(fields, parent, currentIndex),
+        cost: gScore[currentIndex],
         visitedCells,
       };
     }
 
-    const currentX = current.index % fields.width;
-    const currentY = Math.floor(current.index / fields.width);
+    const currentX = currentIndex % fields.width;
+    const currentY = Math.floor(currentIndex / fields.width);
 
     for (const [dx, dy, stepLength] of DIRECTIONS) {
       const nextX = currentX + dx;
@@ -347,16 +352,20 @@ function runAStar(
       }
 
       const nextIndex = indexOf(fields, nextX, nextY);
-      if (closed[nextIndex]) continue;
-      const stepCost = evaluateGridPathStepCost(fields, current.index, nextIndex, stepLength);
+      if (closedGeneration[nextIndex] === generation) continue;
+      const stepCost = evaluateGridPathStepCost(fields, currentIndex, nextIndex, stepLength);
       if (!Number.isFinite(stepCost)) continue;
-      const tentativeG = gScore[current.index] + stepCost;
-      if (tentativeG + 1e-9 >= gScore[nextIndex]) continue;
+      const tentativeG = gScore[currentIndex] + stepCost;
+      const previousG = seenGeneration[nextIndex] === generation
+        ? gScore[nextIndex]
+        : Number.POSITIVE_INFINITY;
+      if (tentativeG + 1e-9 >= previousG) continue;
 
-      parent[nextIndex] = current.index;
+      seenGeneration[nextIndex] = generation;
+      parent[nextIndex] = currentIndex;
       gScore[nextIndex] = tentativeG;
       const h = heuristic(nextX, nextY, goal.x, goal.y);
-      open.push({ index: nextIndex, f: tentativeG + h, h });
+      open.push(nextIndex, tentativeG + h, h);
     }
   }
 
@@ -367,6 +376,31 @@ function runAStar(
     reason: 'No passable route connects the start and goal.',
     reasonRu: 'Между стартом и целью нет проходимого маршрута.',
   };
+}
+
+function prepareSearchWorkspace(map: TacticalMap, cellCount: number): GridSearchWorkspace {
+  let workspace = searchWorkspaceByMap.get(map);
+  if (!workspace || workspace.cellCount !== cellCount) {
+    workspace = {
+      cellCount,
+      generation: 0,
+      gScore: new Float64Array(cellCount),
+      parent: new Int32Array(cellCount),
+      seenGeneration: new Uint32Array(cellCount),
+      closedGeneration: new Uint32Array(cellCount),
+      open: new BinaryHeap(),
+    };
+    searchWorkspaceByMap.set(map, workspace);
+  }
+
+  workspace.generation = (workspace.generation + 1) >>> 0;
+  if (workspace.generation === 0) {
+    workspace.seenGeneration.fill(0);
+    workspace.closedGeneration.fill(0);
+    workspace.generation = 1;
+  }
+  workspace.open.clear();
+  return workspace;
 }
 
 export function evaluateGridPathCost(
@@ -634,34 +668,50 @@ function round(value: number, digits: number): number {
 }
 
 class BinaryHeap {
-  private readonly values: OpenNode[] = [];
+  private readonly indices: number[] = [];
+  private readonly fScores: number[] = [];
+  private readonly hScores: number[] = [];
 
   get size(): number {
-    return this.values.length;
+    return this.indices.length;
   }
 
-  push(value: OpenNode): void {
-    this.values.push(value);
-    this.bubbleUp(this.values.length - 1);
+  clear(): void {
+    this.indices.length = 0;
+    this.fScores.length = 0;
+    this.hScores.length = 0;
   }
 
-  pop(): OpenNode | undefined {
-    if (this.values.length === 0) return undefined;
-    const first = this.values[0];
-    const last = this.values.pop();
-    if (last && this.values.length > 0) {
-      this.values[0] = last;
+  push(indexValue: number, f: number, h: number): void {
+    const index = this.indices.length;
+    this.indices.push(indexValue);
+    this.fScores.push(f);
+    this.hScores.push(h);
+    this.bubbleUp(index);
+  }
+
+  popIndex(): number {
+    const length = this.indices.length;
+    if (length === 0) return -1;
+    const firstIndex = this.indices[0]!;
+    const lastIndex = this.indices.pop()!;
+    const lastF = this.fScores.pop()!;
+    const lastH = this.hScores.pop()!;
+    if (length > 1) {
+      this.indices[0] = lastIndex;
+      this.fScores[0] = lastF;
+      this.hScores[0] = lastH;
       this.sinkDown(0);
     }
-    return first;
+    return firstIndex;
   }
 
   private bubbleUp(startIndex: number): void {
     let index = startIndex;
     while (index > 0) {
       const parent = Math.floor((index - 1) / 2);
-      if (compareNodes(this.values[parent], this.values[index]) <= 0) break;
-      [this.values[parent], this.values[index]] = [this.values[index], this.values[parent]];
+      if (this.comparePositions(parent, index) <= 0) break;
+      this.swap(parent, index);
       index = parent;
     }
   }
@@ -672,15 +722,29 @@ class BinaryHeap {
       const left = index * 2 + 1;
       const right = left + 1;
       let smallest = index;
-      if (left < this.values.length && compareNodes(this.values[left], this.values[smallest]) < 0) smallest = left;
-      if (right < this.values.length && compareNodes(this.values[right], this.values[smallest]) < 0) smallest = right;
+      if (left < this.indices.length && this.comparePositions(left, smallest) < 0) smallest = left;
+      if (right < this.indices.length && this.comparePositions(right, smallest) < 0) smallest = right;
       if (smallest === index) break;
-      [this.values[index], this.values[smallest]] = [this.values[smallest], this.values[index]];
+      this.swap(index, smallest);
       index = smallest;
     }
   }
-}
 
-function compareNodes(left: OpenNode, right: OpenNode): number {
-  return left.f - right.f || left.h - right.h || left.index - right.index;
+  private comparePositions(left: number, right: number): number {
+    return this.fScores[left]! - this.fScores[right]!
+      || this.hScores[left]! - this.hScores[right]!
+      || this.indices[left]! - this.indices[right]!;
+  }
+
+  private swap(left: number, right: number): void {
+    const indexValue = this.indices[left]!;
+    this.indices[left] = this.indices[right]!;
+    this.indices[right] = indexValue;
+    const f = this.fScores[left]!;
+    this.fScores[left] = this.fScores[right]!;
+    this.fScores[right] = f;
+    const h = this.hScores[left]!;
+    this.hScores[left] = this.hScores[right]!;
+    this.hScores[right] = h;
+  }
 }
