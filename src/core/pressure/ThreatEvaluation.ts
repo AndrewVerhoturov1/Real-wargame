@@ -52,27 +52,37 @@ export function evaluateThreatsAtPosition(
   unit: UnitModel,
   zones: PressureZone[],
 ): ThreatEvaluationReport {
-  const contributions = zones
-    .map((zone) => evaluateZone(map, unit, zone))
-    .filter((item): item is ThreatContribution => item !== null);
-  const scenarioIds = new Set(zones.map((zone) => zone.id));
-  const knownContributions = unit.tacticalKnowledge.threats
-    .filter((threat) => !scenarioIds.has(threat.id))
-    .map((threat) => evaluateKnownThreat(map, unit, threat))
-    .filter((item): item is KnownThreatContribution => item !== null);
+  const contributions: ThreatContribution[] = [];
+  const knownContributions: KnownThreatContribution[] = [];
+  const scenarioIds = zones.length > 0 ? new Set<string>() : null;
+  let strongest: ThreatContribution | null = null;
+  let strongestKnown: KnownThreatContribution | null = null;
+  let totalDanger = 0;
+  let totalSuppression = 0;
+  let stressPerSecond = 0;
 
-  const strongest = [...contributions].sort((a, b) => b.danger - a.danger || b.suppression - a.suppression)[0] ?? null;
-  const strongestKnown = [...knownContributions].sort((a, b) => b.danger - a.danger || b.suppression - a.suppression)[0] ?? null;
-  const danger = clampPercent(
-    contributions.reduce((sum, item) => sum + item.danger, 0)
-      + knownContributions.reduce((sum, item) => sum + item.danger, 0),
-  );
-  const suppression = clampPercent(
-    contributions.reduce((sum, item) => sum + item.suppression, 0)
-      + knownContributions.reduce((sum, item) => sum + item.suppression, 0),
-  );
-  const stressPerSecond = contributions.reduce((sum, item) => sum + item.stressPerSecond, 0)
-    + knownContributions.reduce((sum, item) => sum + item.stressPerSecond, 0);
+  for (const zone of zones) {
+    scenarioIds?.add(zone.id);
+    const contribution = evaluateZone(map, unit, zone);
+    if (!contribution) continue;
+    contributions.push(contribution);
+    totalDanger += contribution.danger;
+    totalSuppression += contribution.suppression;
+    stressPerSecond += contribution.stressPerSecond;
+    if (isStrongerContribution(contribution, strongest)) strongest = contribution;
+  }
+
+  for (const threat of unit.tacticalKnowledge.threats) {
+    if (scenarioIds?.has(threat.id)) continue;
+    const contribution = evaluateKnownThreat(map, unit, threat);
+    if (!contribution) continue;
+    knownContributions.push(contribution);
+    totalDanger += contribution.danger;
+    totalSuppression += contribution.suppression;
+    stressPerSecond += contribution.stressPerSecond;
+    if (isStrongerContribution(contribution, strongestKnown)) strongestKnown = contribution;
+  }
+
   const bestContact = getBestPerceptionContact(unit);
   const rememberedThreat = unit.tacticalKnowledge.threats[0];
   const targetPosition = bestContact
@@ -82,8 +92,8 @@ export function evaluateThreatsAtPosition(
       : null;
 
   return {
-    danger,
-    suppression,
+    danger: clampPercent(totalDanger),
+    suppression: clampPercent(totalSuppression),
     stressPerSecond,
     strongest,
     strongestKnown,
@@ -93,6 +103,15 @@ export function evaluateThreatsAtPosition(
     enemyKnown: Boolean(bestContact || rememberedThreat),
     targetPosition,
   };
+}
+
+function isStrongerContribution<T extends { danger: number; suppression: number }>(
+  candidate: T,
+  current: T | null,
+): boolean {
+  return current === null
+    || candidate.danger > current.danger
+    || (candidate.danger === current.danger && candidate.suppression > current.suppression);
 }
 
 export function isInsideDirectionalThreat(position: GridPosition, zone: PressureZone): boolean {

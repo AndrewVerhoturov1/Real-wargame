@@ -60,6 +60,7 @@ export interface TickOptions {
   readonly cycleStartMs?: number;
   readonly cycleEndMs?: number;
   readonly diagnosticPreview?: boolean;
+  readonly deferOrdinaryDecision?: boolean;
   readonly movementProfileRegistryEntries?: readonly MovementProfileRegistryEntry[];
 }
 

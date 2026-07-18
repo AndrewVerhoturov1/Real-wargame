@@ -153,6 +153,7 @@ verifyInitialDecisionAndUiExecutionContract();
 verifyPausedExplicitSimulationStep();
 verifyDiagnosticDeepImmutability();
 verifyLinearTraversalAndSingleGraphResolution();
+verifyDeterministicOrdinaryDecisionBudget();
 verifyObserverPartitionInvariance();
 verifyQuietObserverPollFastForward();
 verifySelectionInvarianceAndConcurrentExecution();
@@ -163,7 +164,7 @@ verifyThreatKnowledgeRevisionIsolation();
 verifyAiControlOwnershipPolicy();
 verifyPersistentCiContract();
 
-console.log('AI per-unit scheduler smoke passed: paused explicit steps, read-only diagnostics, O(n) traversal, one graph snapshot, deterministic observer cadence, delta partition invariance, first-step decisions, selection independence, per-unit ownership, threat revision isolation, aiControl policy and blocking CI coverage.');
+console.log('AI per-unit scheduler smoke passed: paused explicit steps, read-only diagnostics, O(n) traversal, one graph snapshot, fair bounded ordinary decisions, deterministic observer cadence, delta partition invariance, first-step decisions, selection independence, per-unit ownership, threat revision isolation, aiControl policy and blocking CI coverage.');
 
 function verifyInitialDecisionAndUiExecutionContract(): void {
   setGraph(firstDecisionGraph);
@@ -418,6 +419,44 @@ function verifyQuietObserverPollFastForward(): void {
       laterUnitFairnessPreserved: reactiveSecond.behaviorRuntime.aiReactiveWakeCount === 1,
     }, null, 2));
   }
+}
+
+function verifyDeterministicOrdinaryDecisionBudget(): void {
+  setGraph(firstDecisionGraph);
+  const state = createInitialState(mapData, [
+    unitData('budget-0', 2, 2),
+    unitData('budget-1', 3, 2),
+    unitData('budget-2', 4, 2),
+    unitData('budget-3', 5, 2),
+    unitData('budget-4', 6, 2),
+    unitData('budget-5', 7, 2),
+  ], []);
+
+  state.simulationStep = 1;
+  const first = tickAiSimulationScheduler(state, { cycleStartMs: 0, cycleEndMs: 0 });
+  assert.equal(first.ordinaryDecisionUnitIds.length, 3, 'one scheduler cycle must own a fixed ordinary-decision budget');
+  assert.equal(first.ordinaryDeferredUnitIds.length, 3, 'overdue ordinary decisions beyond the budget must be deferred, not dropped');
+  assert.equal(first.graphTickedUnitIds.length, 3);
+
+  state.simulationStep = 2;
+  const second = tickAiSimulationScheduler(state, { cycleStartMs: 0, cycleEndMs: 0 });
+  assert.equal(second.ordinaryDecisionUnitIds.length, 3);
+  assert.equal(second.ordinaryDeferredUnitIds.length, 0, 'round-robin selection must service the previously deferred half next');
+  assert.deepEqual(
+    state.units.map((unit) => unit.behaviorRuntime.aiDecisionTickCount),
+    [1, 1, 1, 1, 1, 1],
+    'all six units must receive one ordinary decision after two bounded cycles',
+  );
+
+  const catchup = createInitialState(mapData, [unitData('catchup', 2, 2)], []);
+  catchup.simulationStep = 1;
+  tickAiSimulationScheduler(catchup, { cycleStartMs: 0, cycleEndMs: 1800 });
+  assert.equal(
+    findUnit(catchup, 'catchup').behaviorRuntime.aiDecisionTickCount,
+    1,
+    'one unit may execute at most one ordinary cadence decision in a single large-delta step',
+  );
+  assert.equal(findUnit(catchup, 'catchup').behaviorRuntime.aiNextDecisionAtMs, 600);
 }
 
 function verifyObserverPartitionInvariance(): void {

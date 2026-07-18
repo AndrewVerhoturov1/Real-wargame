@@ -19,7 +19,7 @@ import { syncSoldierThreatMemory } from '../knowledge/SoldierThreatMemory';
 import { clampGridPositionToMap } from '../map/MapModel';
 import { commitPhysicalMovementStep, preparePhysicalMovementStep } from '../movement/MovementRuntime';
 import type { MovementProfileRegistryEntry } from '../movement/MovementProfileTypes';
-import { ensureNavigationRouteCurrent } from '../navigation/NavigationRouteReplanner';
+import { ensureNavigationRouteCurrent, type NavigationReplanWorkBudget } from '../navigation/NavigationRouteReplanner';
 import type { MoveOrder } from '../orders/MoveOrder';
 import { updatePlayerCommandStatus } from '../orders/PlayerCommand';
 import { updateAttentionController } from '../perception/AttentionController';
@@ -35,6 +35,7 @@ const UNIT_VISUAL_BODY_RADIUS_CELLS = 0.42;
 const UNIT_COLLISION_RADIUS_CELLS = UNIT_VISUAL_BODY_RADIUS_CELLS / 3;
 const UNIT_MIN_CENTER_DISTANCE_CELLS = UNIT_COLLISION_RADIUS_CELLS * 2;
 const COLLISION_PASSES = 3;
+const MAX_ROUTE_REPLAN_SEARCHES_PER_STEP = 1;
 
 export function tickSimulation(state: SimulationState, deltaSeconds: number): void {
   const scaledDeltaSeconds = deltaSeconds * getAiTestTimeScale(state);
@@ -92,8 +93,22 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
 
     const simulationTimeMs = Math.max(0, Math.round(state.simulationTimeSeconds * 1000));
     phases.movementEventsMs = measureTimedPhase('simulation.movement-events', () => {
-      for (const unit of state.units) {
-        routeNavigationDurationMs += moveUnit(unit, state, scaledDeltaSeconds, movementProfileRegistryEntries);
+      const routeReplanWorkBudget: NavigationReplanWorkBudget = {
+        remainingSearches: MAX_ROUTE_REPLAN_SEARCHES_PER_STEP,
+        claimedUnitIds: [],
+        deferredUnitIds: [],
+      };
+      const unitCount = state.units.length;
+      const movementStartIndex = unitCount > 0 ? state.simulationStep % unitCount : 0;
+      for (let offset = 0; offset < unitCount; offset += 1) {
+        const unit = state.units[(movementStartIndex + offset) % unitCount];
+        routeNavigationDurationMs += moveUnit(
+          unit,
+          state,
+          scaledDeltaSeconds,
+          movementProfileRegistryEntries,
+          routeReplanWorkBudget,
+        );
         publishSimulationAiEvents(unit, simulationTimeMs);
       }
     });
@@ -217,6 +232,7 @@ function moveUnit(
   state: SimulationState,
   deltaSeconds: number,
   movementProfileRegistryEntries: readonly MovementProfileRegistryEntry[],
+  routeReplanWorkBudget: NavigationReplanWorkBudget,
 ): number {
   const previousMovementAuthority = {
     profileId: unit.movementRuntime.effectiveProfileId,
@@ -235,7 +251,7 @@ function moveUnit(
   let routeReady = false;
   if (unit.order && combatCapable && !firing && deltaSeconds > 0) {
     const routeStartedAt = performance.now();
-    routeReady = ensureRoutePassable(unit, state);
+    routeReady = ensureRoutePassable(unit, state, routeReplanWorkBudget);
     routeNavigationDurationMs = performance.now() - routeStartedAt;
   }
 
@@ -322,8 +338,12 @@ function applyFinalFacing(unit: UnitModel, order: MoveOrder): void {
   unit.behaviorRuntime.lastEvent = 'move_final_facing_applied';
 }
 
-function ensureRoutePassable(unit: UnitModel, state: SimulationState): boolean {
-  return ensureNavigationRouteCurrent(unit, state);
+function ensureRoutePassable(
+  unit: UnitModel,
+  state: SimulationState,
+  routeReplanWorkBudget: NavigationReplanWorkBudget,
+): boolean {
+  return ensureNavigationRouteCurrent(unit, state, routeReplanWorkBudget);
 }
 
 function completeLinkedPlayerCommand(unit: UnitModel, order: MoveOrder): void {
