@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  patch-verify-publish-and-clean:
+  patch-verify-and-publish-code:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -35,15 +35,16 @@ jobs:
           npm run performance-report-v6:smoke
           node scripts/performance_report_contract_smoke.mjs
           npm run performance-contract:smoke
-      - name: Publish verified sources and remove temporary transport
+      - name: Publish verified non-workflow sources
         shell: bash
         run: |
           set -euo pipefail
-          rm -f scripts/apply_performance_v6_test_compat.py
-          rm -f .github/workflows/apply-performance-v6-test-compat.yml
+          git checkout -- .github/workflows/danger-layer-browser-performance.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
+          git add src/core/debug/PerformanceMonitor.ts
+          git add tests/danger-layer-movement-performance.spec.ts
+          git add tests/danger-layer-long-task-attribution.spec.ts
           git diff --cached --check
           git commit -m 'test(perf): bridge legacy browser checks to report v6'
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
