@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { syncSoldierThreatMemory } from '../src/core/knowledge/SoldierThreatMemory';
 import type { TacticalMapData } from '../src/core/map/MapModel';
 import { setAttentionMode } from '../src/core/perception/AttentionController';
 import {
@@ -47,12 +48,12 @@ const observerData: UnitData = {
 verifyNearRearBypassesRearCadence();
 verifyNearHardLosStillBlocks();
 verifyRearRangeDeniesBeforeLos();
-verifyRearCadenceDoesNotFreezeCurrentContact();
+verifyRearCadenceKeepsCurrentContactStable();
 verifyOutsideRearRangeDoesNotFreezeCurrentContact();
 verifyCheckIntervalDoesNotBecomeSampleDuration();
 verifyCurrentVisibilityIsDenyByDefault();
 
-console.log('Rear attention perception smoke passed: near 360 awareness, hard LOS, bounded rear range, bounded samples, stale-current-contact revocation and deny-by-default current visibility.');
+console.log('Rear attention perception smoke passed: near 360 awareness, hard LOS, bounded rear range and samples, stable scheduled rear contacts and tactical danger memory, stale-current-contact revocation and deny-by-default current visibility.');
 
 function verifyNearRearBypassesRearCadence(): void {
   const target = threat('near-rear', 78.6, 10.5);
@@ -128,21 +129,50 @@ function verifyRearRangeDeniesBeforeLos(): void {
   assert.equal(getPerceptionDiagnostics(state).losCalculationCount, 0, 'rear range must reject the target before the expensive LOS probe');
 }
 
-function verifyRearCadenceDoesNotFreezeCurrentContact(): void {
+function verifyRearCadenceKeepsCurrentContactStable(): void {
   const targetPosition = { x: 30.5, y: 10.5 };
-  const state = createInitialState(openMap, [observerData], [threat('rear-stale', targetPosition.x, targetPosition.y)]);
+  const state = createInitialState(openMap, [observerData], [threat('rear-stable', targetPosition.x, targetPosition.y)]);
   selectUnit(state, observerData.id);
   const observer = state.units[0]!;
   setAttentionMode(observer, 'observe', 'player');
-  observer.perceptionKnowledge.contacts = [confirmedVisualContact('threat:rear-stale', targetPosition)];
+  const rearCheckIntervalSeconds = observer.attentionSettings.profiles.observe.rearCheckIntervalSeconds;
+  const rearExplanation = [
+    `Зона «тыл» проверяется раз в ${rearCheckIntervalSeconds.toFixed(2).replace('.', ',')} с.`,
+    'Условная длительность взгляда: 0,30 с.',
+  ];
+  observer.perceptionKnowledge.contacts = [confirmedVisualContact('threat:rear-stable', targetPosition, rearExplanation)];
   observer.attentionRuntime.nextRearCheckSeconds = 100;
+
   state.simulationTimeSeconds = 0.1;
   tickSelectedSoldierPerception(state, 0.1);
-  const contact = observer.perceptionKnowledge.contacts.find((item) => item.stimulusId === 'threat:rear-stale');
-  assert.ok(contact, 'a confirmed rear contact should remain in memory between rear samples');
-  assert.equal(contact.visibleNow, false, 'rear cadence must not preserve continuous current visibility');
-  assert.equal(contact.observedNow, false, 'rear cadence must not preserve continuous current observation');
-  assert.ok(contact.evidence < 200, 'an unsampled rear contact must decay instead of being marked updated');
+  syncSoldierThreatMemory(state, observer, 0.1);
+  const firstContact = observer.perceptionKnowledge.contacts.find((item) => item.stimulusId === 'threat:rear-stable');
+  const firstThreat = observer.tacticalKnowledge.threats.find((item) => item.id === 'rear-stable');
+  assert.ok(firstContact, 'a confirmed rear contact should remain available between scheduled rear samples');
+  assert.equal(firstContact.visibleNow, true, 'rear cadence must not blink visibleNow off between checks');
+  assert.equal(firstContact.observedNow, true, 'rear cadence must not blink observedNow off between checks');
+  assert.equal(firstContact.evidence, 200, 'a held scheduled contact must not decay between checks');
+  assert.ok(firstThreat, 'the stable rear contact must feed tactical threat memory');
+  assert.equal(firstThreat.visibleNow, true, 'tactical danger memory must not blink off between rear checks');
+
+  state.simulationTimeSeconds = 0.2;
+  tickSelectedSoldierPerception(state, 0.1);
+  syncSoldierThreatMemory(state, observer, 0.1);
+  const secondContact = observer.perceptionKnowledge.contacts.find((item) => item.stimulusId === 'threat:rear-stable');
+  const secondThreat = observer.tacticalKnowledge.threats.find((item) => item.id === 'rear-stable');
+  assert.ok(secondContact);
+  assert.equal(secondContact.visibleNow, true, 'successive non-due ticks must keep the rear marker stable');
+  assert.equal(secondThreat?.visibleNow, true, 'successive non-due ticks must keep the danger source stable');
+
+  state.simulationTimeSeconds = rearCheckIntervalSeconds * 1.25 + 0.2;
+  tickSelectedSoldierPerception(state, 0.1);
+  syncSoldierThreatMemory(state, observer, 0.1);
+  const expiredContact = observer.perceptionKnowledge.contacts.find((item) => item.stimulusId === 'threat:rear-stable');
+  const expiredThreat = observer.tacticalKnowledge.threats.find((item) => item.id === 'rear-stable');
+  assert.ok(expiredContact, 'an expired rear contact should remain as decaying memory');
+  assert.equal(expiredContact.visibleNow, false, 'current rear visibility must expire when no scheduled sample refreshes it');
+  assert.equal(expiredContact.observedNow, false, 'current rear observation must expire when no scheduled sample refreshes it');
+  assert.equal(expiredThreat?.visibleNow, false, 'danger memory should transition to remembered rather than blink every tick');
 }
 
 function verifyOutsideRearRangeDoesNotFreezeCurrentContact(): void {
@@ -207,7 +237,11 @@ function verifyCurrentVisibilityIsDenyByDefault(): void {
   assert.equal(rearInsideRangeZone, VISIBILITY_ZONE_CODE.rear);
 }
 
-function confirmedVisualContact(stimulusId: string, position: { x: number; y: number }) {
+function confirmedVisualContact(
+  stimulusId: string,
+  position: { x: number; y: number },
+  explanationRu: string[] = ['Начальный подтверждённый контакт для regression smoke.'],
+) {
   return advanceVisualContact(null, {
     id: `perception:${stimulusId}`,
     stimulusId,
@@ -219,7 +253,7 @@ function confirmedVisualContact(stimulusId: string, position: { x: number; y: nu
     deltaSeconds: 1,
     nowSeconds: 0,
     source: 'visual',
-    explanationRu: ['Начальный подтверждённый контакт для regression smoke.'],
+    explanationRu,
   });
 }
 
