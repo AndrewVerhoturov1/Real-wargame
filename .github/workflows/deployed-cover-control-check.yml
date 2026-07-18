@@ -1,0 +1,134 @@
+name: Deployed soldier control check
+
+on:
+  push:
+    branches:
+      - ci/cover-rollback-validation-2026-07-18
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  control-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TARGET_URL: https://real-wargame-cover-rollback-backup-4yrocl6uw.vercel.app/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright
+        run: |
+          npm install --no-save @playwright/test
+          npx playwright install --with-deps chromium
+      - name: Run deployed control check
+        shell: bash
+        run: |
+          mkdir -p artifacts/deployed-control
+          cat > /tmp/deployed-control-check.mjs <<'EOF'
+          import { chromium } from '@playwright/test';
+          import fs from 'node:fs';
+
+          const targetUrl = process.env.TARGET_URL;
+          const result = {
+            targetUrl,
+            loaded: false,
+            editorOpened: false,
+            fighterPlaced: false,
+            simulationOpened: false,
+            soldierSelected: false,
+            moveOrderIssued: false,
+            simulationStarted: false,
+            initialOrder: '',
+            finalOrder: '',
+            unitName: '',
+            consoleErrors: [],
+            pageErrors: [],
+          };
+
+          const browser = await chromium.launch({ headless: true });
+          const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+          page.on('console', (message) => {
+            if (message.type() === 'error') result.consoleErrors.push(message.text());
+          });
+          page.on('pageerror', (error) => result.pageErrors.push(error.message));
+
+          const worldPoint = async (canvas, gridX, gridY) => {
+            const box = await canvas.boundingBox();
+            if (!box) throw new Error('Canvas bounds unavailable');
+            return { x: box.x + 72 + gridX * 24, y: box.y + 72 + gridY * 24 };
+          };
+
+          try {
+            await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 60_000 });
+            await page.locator('canvas').waitFor({ state: 'visible', timeout: 30_000 });
+            await page.locator('.tactical-workspace-bar').waitFor({ state: 'visible', timeout: 30_000 });
+            result.loaded = true;
+            await page.screenshot({ path: 'artifacts/deployed-control/01-loaded.png', fullPage: true });
+
+            const canvas = page.locator('canvas');
+            await page.locator('[data-mode="editor"]').click();
+            await page.locator('body').waitFor({ state: 'visible' });
+            await page.waitForFunction(() => document.body.classList.contains('workspace-editor'));
+            result.editorOpened = true;
+
+            await page.locator('.game-editor-tabs').getByRole('button', { name: 'Боец', exact: true }).click();
+            const placeButton = page.locator('.game-editor-global-tools').getByRole('button', { name: 'Поставить бойца' });
+            await placeButton.waitFor({ state: 'visible', timeout: 15_000 });
+            await placeButton.click();
+            const spawnPoint = await worldPoint(canvas, 12, 12);
+            await page.mouse.click(spawnPoint.x, spawnPoint.y);
+            await page.locator('.game-editor-selected-summary').waitFor({ state: 'visible', timeout: 15_000 });
+            const selectedSummary = (await page.locator('.game-editor-selected-summary').textContent()) ?? '';
+            result.fighterPlaced = /editor_unit_|Боец|Солдат/i.test(selectedSummary);
+            await page.screenshot({ path: 'artifacts/deployed-control/02-fighter-placed.png', fullPage: true });
+
+            await page.locator('[data-mode="simulation"]').click();
+            await page.waitForFunction(() => document.body.classList.contains('workspace-simulation'));
+            result.simulationOpened = true;
+
+            const unitName = page.locator('[data-role="unit-name"]');
+            await unitName.waitFor({ state: 'visible', timeout: 15_000 });
+            result.unitName = ((await unitName.textContent()) ?? '').trim();
+            result.soldierSelected = !/не выбран|—/i.test(result.unitName);
+
+            const order = page.locator('[data-role="order"]');
+            result.initialOrder = ((await order.textContent()) ?? '').trim();
+            const target = await worldPoint(canvas, 15, 12);
+            await page.mouse.click(target.x, target.y, { button: 'right' });
+            await page.waitForTimeout(800);
+            result.finalOrder = ((await order.textContent()) ?? '').trim();
+            result.moveOrderIssued = result.finalOrder !== result.initialOrder
+              && !/Приказ:\s*(нет|—)/i.test(result.finalOrder);
+
+            const continueButton = page.getByRole('button', { name: 'Продолжить' });
+            if (await continueButton.count()) {
+              await continueButton.click();
+              await page.waitForTimeout(1200);
+              result.simulationStarted = true;
+            }
+            await page.screenshot({ path: 'artifacts/deployed-control/03-move-order.png', fullPage: true });
+          } catch (error) {
+            result.failure = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+            await page.screenshot({ path: 'artifacts/deployed-control/failure.png', fullPage: true }).catch(() => {});
+          } finally {
+            fs.writeFileSync('artifacts/deployed-control/result.json', JSON.stringify(result, null, 2));
+            console.log(JSON.stringify(result, null, 2));
+            await browser.close();
+          }
+
+          if (!result.loaded || !result.editorOpened || !result.fighterPlaced || !result.simulationOpened || !result.soldierSelected || !result.moveOrderIssued) {
+            process.exit(1);
+          }
+          EOF
+          node /tmp/deployed-control-check.mjs 2>&1 | tee artifacts/deployed-control/run.log
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployed-soldier-control-evidence
+          path: artifacts/deployed-control/
+          retention-days: 7
