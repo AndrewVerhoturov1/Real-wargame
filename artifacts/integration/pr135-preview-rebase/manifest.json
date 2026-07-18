@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "pullRequest": 135,
   "branch": "agent/movement-environment-integration-v1",
   "target": "real-wargame-preview",
@@ -32,6 +32,12 @@
     "service six overdue graph-controlled units over three deterministic round-robin steps",
     "preserve every deferred decision instead of dropping or coalescing unit ownership",
     "retain the existing Live Windows duration and performance thresholds unchanged"
+  ],
+  "measurementEvidencePolicy": [
+    "cold-start and first active simulation steps remain inside enforced Live Windows evidence",
+    "scheduler, simulation-step and performance-phase diagnostics are not reset after warmup",
+    "the scenario identity remains active from harness start through capture completion",
+    "no performance threshold, duration or LongTask classification boundary is weakened"
   ],
   "workflowPolicy": "canonical preview workflows retained unchanged",
   "rearVisibilityPolicy": "preserve the visibility semantics actually present in exact preview; draft PR 137 was not imported",
