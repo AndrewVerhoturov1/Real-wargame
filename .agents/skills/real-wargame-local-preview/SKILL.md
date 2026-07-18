@@ -1,328 +1,271 @@
 ---
 name: real-wargame-local-preview
-description: "Use when a Real-Wargame task requires visual-QA preparation, an approved real local or CI browser launch, screenshots, preview artifacts, Playwright diagnosis, or terminal-free launch instructions."
+description: "Use when a Real-Wargame task requires visual-QA preparation, terminal-free local launch, or approved visual verification that the current Web Chat can perform through a directly controlled real browser."
 license: MIT
 ---
 
-# Real-Wargame local preview and screenshot workflow
+# Real-Wargame local preview and direct-browser visual workflow
 
 ## Overview
 
-Use this skill before preparing or running Real-Wargame visual verification.
+Use this skill for:
 
-The project is **Vite + TypeScript + PixiJS 8**, not Godot.
+- preparing visual QA for user-visible changes;
+- terminal-free launch instructions;
+- direct visual verification when the current Web Chat can control a real browser against the target application.
 
-Canonical approval policy:
+The project is Vite + TypeScript + PixiJS 8, not Godot.
+
+Canonical policy:
 
 ```text
 docs/workflow/VISUAL_QA_APPROVAL_POLICY.md
 ```
 
-## Two different states
+## Mandatory routing boundary
+
+The user does not need to name a visual skill.
+
+When the user requests visual verification, screenshots, browser verification or Playwright, first decide:
+
+```text
+Can the current Web Chat directly control a real browser against target_url?
+```
+
+### Yes
+
+Use this skill and run the direct-browser path.
+
+### No, and the target is a branch-linked Vercel Preview
+
+**REQUIRED SUB-SKILL:** Read and use `vercel-deployment-playwright-e2e`:
+
+```text
+.agents/skills/vercel-deployment-playwright-e2e/SKILL.md
+```
+
+Do not ask the user to repeat the skill name. Phrases such as `проверь визуально`, `сделай скриншоты`, `проверь через Playwright` or equivalent already trigger the route.
+
+Do not use the old local-preview GitHub Actions workflow as a substitute for deployed-Vercel verification when the task is specifically to test the Vercel deployment.
+
+## Canonical feature branch
+
+All product preparation and fixes remain on:
+
+```text
+feature/YYYYMMDD-short-kebab-slug
+```
+
+created from the exact current `real-wargame-preview` head.
+
+Never:
+
+- implement directly on `real-wargame-preview`;
+- put product fixes on temporary visual CI branches;
+- modify `main` without explicit approval;
+- create a fresh product branch for every visual defect.
+
+## Two visual states
 
 ### Visual QA prepared
 
-This means:
+Means:
 
-- the implementation is finished;
-- the relevant Playwright scenario exists or was updated;
+- implementation finished on the feature branch;
+- relevant scenario exists or was updated;
 - expected screenshots and assertions are defined;
-- focused smoke checks and the production build were run;
+- focused non-browser checks and build ran when available;
 - remaining visual risks are listed.
 
-No real browser or screenshot workflow has run yet.
+No browser run is implied.
 
 ### Visual QA completed
 
-This means:
+Means:
 
-- the user explicitly approved execution;
-- the real application ran in Chrome/Chromium;
-- fresh PNG files were created;
-- artifact SHA matches the tested commit;
-- Playwright result/log were checked;
-- changed/key PNG files were opened and inspected.
+- user approval exists;
+- the real application ran in real Chrome/Chromium;
+- requested behavior was exercised;
+- fresh evidence belongs to the tested product commit;
+- key screenshots were opened and inspected;
+- result and limitations were reported honestly.
 
-Never confuse these states.
+Never confuse prepared with completed.
 
 ## Approval gate
 
-For user-visible changes, always prepare visual QA.
+For user-visible changes, prepare visual QA but do not execute it automatically.
 
-Do **not** start a local browser run, Playwright screenshot run or GitHub screenshot workflow without explicit user approval.
-
-After preparation ask once:
+Ask once only when the user has not already approved:
 
 ```text
 Визуальная проверка подготовлена. Запустить её сейчас?
 ```
 
-An earlier explicit request such as `проверь визуально`, `сделай скриншоты`, `запусти браузерную проверку` or equivalent already counts as approval. Do not ask again.
+Earlier clear intent already counts as approval. Do not ask again.
 
-If approval is declined or absent:
+If approval is absent:
 
 - do not run the browser;
-- do not run `.github/workflows/preview-screenshots.yml`;
-- the change may still be delivered unless visual QA was an explicit release gate;
 - report `visual_qa_run: not run`;
-- do not claim the visual issue is fixed or visually verified.
+- do not claim visual success;
+- keep the feature branch ready for human live testing.
 
-## Hard rule: no surrogate preview
+## No surrogate preview
 
-A surrogate preview is forbidden.
+Do not count any of these as visual verification:
 
-Do not count any of these as a successful visual run:
-
-```text
-reading HTML/CSS/TS files only;
-rendering a reconstructed or simplified HTML page;
-opening a hand-written mockup instead of the real Vite app;
-inspecting code and claiming what the screen should look like;
-using screenshots from an older commit after new UI changes;
-checking only workflow status without downloading and inspecting PNGs;
-claiming success because Playwright tests exist but were not run;
-claiming success because a workflow is queued or in progress.
-```
-
-## Core rules
-
-1. Work in `real-wargame-preview` first unless the user requests an isolated branch.
-2. Never change `main` without explicit user approval.
-3. Focused smoke checks and production build may run automatically.
-4. Browser-based visual QA requires explicit approval.
-5. A GitHub Actions browser run is not a local PC check.
-6. Do not make the user type terminal commands when an agent, `.bat` file or artifact can do the job.
-7. Never claim screenshots were captured until the PNG artifact exists.
-8. Never claim visual success until changed/key PNGs were opened and inspected.
-9. Verify that workflow and artifact `head_sha` match the reported commit.
-10. Evidence before claims: read the result, log and actual PNGs.
+- reading source only;
+- rendering a reconstructed page;
+- opening a hand-written mockup;
+- using screenshots from another commit;
+- checking only workflow status;
+- claiming success because a Playwright test exists;
+- testing a local build when the requested target is the Vercel deployment.
 
 ## Preparation workflow
 
-Before asking for approval:
+Before execution:
 
-1. identify the visible behavior that changed;
-2. prepare/update the narrowest relevant Playwright scenario;
-3. list the key PNGs to capture;
-4. state what each PNG should prove;
-5. run focused smoke checks;
-6. run `npm run build`;
-7. state remaining visual risks;
-8. ask the approval question once.
+1. identify visible behavior and exact feature commit;
+2. identify the target URL and whether it is local or deployed;
+3. prepare the narrowest deterministic scenario;
+4. define key milestone PNGs and what each proves;
+5. run focused smoke checks and one build when available;
+6. list remaining visual risk;
+7. resolve user approval;
+8. apply the mandatory browser-capability routing decision.
 
-Do not execute Playwright as part of preparation.
+## Direct-browser execution
 
-## Launch paths after approval
+Use this path only when the current Web Chat can control a real browser against the intended target.
 
-### User PC
+Required evidence:
 
-Preferred launcher:
+- exact target URL;
+- expected product commit;
+- real application loaded;
+- state-changing interaction completed;
+- screenshots of successful milestones;
+- console/page/network error capture when possible;
+- key screenshots opened and inspected.
+
+When the app exposes build identity, compare it with the expected feature commit. If identity cannot be proven, report `product_sha_match: unproven`.
+
+## User-PC launch
+
+Canonical launcher:
 
 ```text
 Run-Real-Wargame-Lab.bat
 ```
 
-Focused fallbacks:
-
-```text
-Run-Real-Wargame.bat
-Run-AI-Node-Editor.bat
-```
-
 A user-facing launcher should:
 
-1. run from the repository root;
-2. check `node` and `npm`;
-3. install dependencies when missing;
+1. run from repository root;
+2. check Node/npm;
+3. install missing dependencies safely;
 4. start required services;
 5. wait for health endpoints;
 6. open the real route;
-7. avoid terminal steps for the user;
+7. avoid manual terminal steps;
 8. explain failures in plain language.
 
 A GitHub push does not update the user's local folder automatically.
 
-### GitHub Actions
+## Local GitHub Actions screenshot workflow
 
-Workflow:
+The existing workflow:
 
 ```text
 .github/workflows/preview-screenshots.yml
 ```
 
-It is **manual-only** and must be started through `workflow_dispatch` after approval.
+is manual-only and may be used only when the requested verification target is the checked-out Vite application rather than an already deployed external Vercel URL.
 
-A normal push or pull request must not trigger screenshots.
+A normal push or PR must not trigger it automatically.
 
-Expected artifacts:
+For a deployed Vercel URL without direct browser access, route to `vercel-deployment-playwright-e2e` instead.
 
-```text
-real-wargame-preview-screenshots
-real-wargame-preview-playwright-log
-```
+## Playwright design
 
-The workflow must:
+Prefer observable state changes over arbitrary sleeps.
 
-1. check out the approved exact ref;
-2. run `npm ci`;
-3. serve the real Vite app;
-4. open it in real Chrome/Chromium;
-5. capture PNGs;
-6. upload screenshots even after later failure;
-7. upload the Playwright log;
-8. publish a linked commit status.
+For canvas:
 
-## Browser choice
+- calculate coordinates from current canvas bounds and current world/camera data;
+- prefer an existing read-only world-to-screen test hook;
+- recalculate after panel, viewport, zoom, origin or cell-size changes;
+- verify both visible geometry and matching numeric state.
 
-Prefer system-installed Google Chrome when available.
+For soldier movement, confirm actual coordinate change after simulation continues. An order label alone is insufficient.
 
-Do not install Chromium on every run unless the system browser is unavailable.
+For overlays, confirm active control state, renderer diagnostics when available, screenshot output and persistence after bounded idle time.
 
-## Reading a workflow result
+## Failure diagnosis
 
-Use:
+Classify failures before editing:
 
-```text
-get_commit_combined_status or fetch_commit_workflow_runs
-fetch_workflow_run_jobs
-fetch_workflow_job_steps
-fetch_workflow_job_logs
-fetch_workflow_run_artifacts
-download_workflow_artifact
-```
+- `environment`: browser/URL/protection/infrastructure;
+- `test-harness`: selector, coordinate, timing or assertion defect;
+- `application`: actual product behavior or runtime failure.
 
-If a run is queued or in progress, it is not evidence. Continue checking until completion or failure.
+For direct-browser application failures, return to the same canonical feature branch. Add/update focused coverage, fix there, rerun non-browser checks, push and repeat against the updated Preview.
 
-## Required SHA verification
-
-Before reporting visual success, compare:
-
-```text
-tested commit SHA;
-workflow head_sha;
-screenshot artifact workflow_run.head_sha;
-Playwright log artifact workflow_run.head_sha.
-```
-
-They must identify the same tested version. Never reuse an older green artifact for a newer UI commit.
-
-## Failure diagnosis order
-
-When an approved screenshot run fails:
-
-1. inspect job and step outcomes;
-2. download the Playwright log;
-3. download partial screenshots;
-4. inspect the last useful PNG;
-5. identify the exact failing selector/action/timeout;
-6. decide whether the cause is application behavior, coordinates, Playwright or infrastructure;
-7. change the smallest correct layer;
-8. prepare the rerun;
-9. because this is continuation of the same approved visual check, rerun without asking again;
-10. inspect fresh PNGs.
-
-Do not fix by guesswork when evidence exists.
-
-## Playwright test design
-
-Split major surfaces into independent scenarios:
-
-```text
-tactical board;
-AI Node Editor;
-integrated AI lab;
-focused runtime/route state.
-```
-
-Prefer observable UI assertions over arbitrary sleeps.
-
-Short waits are acceptable only for deliberate rendering settle time.
-
-## Coordinate discipline
-
-Do not rely on old hard-coded screen offsets after layout changes.
-
-Calculate coordinates from current canvas bounds and current scene data.
-
-Recalculate after:
-
-```text
-opening or closing a panel;
-changing toolbar/dock/sidebar layout;
-changing viewport, zoom or cell size;
-moving units or fixtures.
-```
-
-After drag/input changes, verify both visible geometry and matching numeric fields.
-
-## Stable DOM controls
-
-If a visible control detaches during Playwright actions:
-
-1. check for `replaceChildren`, `innerHTML` or full rerenders;
-2. keep persistent controls long-lived;
-3. update only dynamic values;
-4. do not hide application instability with retries or long sleeps.
+Never hide application instability with broad retries or long sleeps.
 
 ## Visual inspection checklist
 
-Open changed/key PNGs and check, where relevant:
+Inspect, where relevant:
 
 ```text
-important controls are not covered;
-dock, toolbar and labels are not clipped;
-active tools/tabs are clear;
+controls are not covered or clipped;
+active states are clear;
 selected objects and handles are visible;
-numeric fields match map geometry;
-layers are visually distinguishable;
-labels are readable at 100%;
-closing panels restores the normal layout;
-no stale localStorage UI remains;
-runtime statuses match the actual terminal/running state.
+numeric state matches canvas geometry;
+layers are distinguishable;
+labels are readable;
+panels restore layout correctly;
+runtime status matches actual behavior;
+no flicker or disappearing layer occurs after idle.
 ```
 
-A green workflow proves the test ran, not that the screen is good.
+A green test proves execution, not visual correctness.
 
-If a PNG exposes a defect, fix it and continue the already-approved visual verification without requesting approval again.
+## User-facing evidence
 
-## AI Node Editor notes
+After successful evidence collection:
 
-- Clear localStorage before deterministic Playwright scenarios when bundled graph data changed.
-- Selectors must tolerate Russian and English labels.
-- Open transient palettes through a bounded helper that verifies visibility.
-- Use stable wrappers for range-slider hover.
-- Do not let helper UI read graph storage before the editor bootstrap owns it.
+1. verify filenames and image content;
+2. open every changed/key frame;
+3. show the most informative frames directly or through links;
+4. create a contact sheet when useful;
+5. provide full artifact/log when one exists;
+6. state whether the run was direct browser, GitHub Actions or user PC.
 
-## Sending screenshots to chat
-
-After a successful approved capture:
-
-1. download and extract the ZIP;
-2. verify count and filenames;
-3. open every changed/key frame;
-4. show the most informative 3–6 frames when possible;
-5. provide the full artifact and useful log;
-6. say whether the run was GitHub Actions, local agent or the user's PC.
-
-## Reporting format
+## Reporting
 
 ```text
-Branch: <branch>
-Commit SHA: <tested sha or untested implementation sha>
-Build: passed / failed / not run
-Visual QA prepared: yes / no / not applicable
-Visual QA approval: approved / declined / pending / not applicable
-Visual QA run: passed / failed / not run / not applicable
-Run type: local agent / GitHub Actions / user PC / not run
-Run id or PR: <id/link or none>
-Playwright scenarios: <passed>/<total> or not run
-Screenshot artifact: <name/id or none>
-Log artifact: <name/id or none>
-Artifact SHA matches commit: yes/no/not applicable
-Screenshots inspected: yes/no/not applicable
-Key frames inspected:
-- <file>: <what was verified>
-Risks / not checked: <plain-language limits>
+feature_branch:
+commit_sha:
+target_url:
+visual_qa_prepared:
+visual_qa_approval:
+visual_qa_route: direct-browser / delegated-to-vercel-deployment-playwright-e2e
+visual_qa_run:
+run_type: direct browser / GitHub Actions / user PC / not run
+expected_product_sha:
+observed_product_sha:
+product_sha_match: yes / no / unproven
+scenario_result:
+screenshots_inspected:
+key_frames:
+console_errors:
+page_errors:
+request_failures:
+failure_class:
+risks_not_checked:
+preview_transfer_approval: not granted by visual QA
 ```
 
-Keep the user-facing explanation simple.
+Keep the explanation simple and distinguish browser evidence from the human live test.
