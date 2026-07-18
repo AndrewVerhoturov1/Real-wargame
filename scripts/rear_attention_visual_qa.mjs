@@ -10,25 +10,15 @@ page.on('console', (message) => consoleLines.push(`[${message.type()}] ${message
 page.on('pageerror', (error) => consoleLines.push(`[pageerror] ${error.stack ?? error.message}`));
 
 try {
-  await page.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' });
+  await page.goto('http://127.0.0.1:4173/?visualQa=ai-state-plan', { waitUntil: 'networkidle' });
   await page.waitForSelector('#vision-toggle', { state: 'attached' });
   await page.waitForSelector('canvas', { state: 'visible' });
-  await page.waitForTimeout(1200);
+  await page.waitForFunction(() => Boolean(window.__realWargameAiStatePlanVisualQa));
+  await page.evaluate(() => window.__realWargameAiStatePlanVisualQa.setScenario('following-order'));
+  await page.waitForTimeout(600);
 
-  const selectionAttempts = [
-    [571, 309],
-    [510, 342],
-    [680, 365],
-    [780, 795],
-  ];
-  let debugText = await page.locator('#debug-panel').innerText();
-  for (const [x, y] of selectionAttempts) {
-    await page.mouse.click(x, y);
-    await page.waitForTimeout(350);
-    debugText = await page.locator('#debug-panel').innerText();
-    if (!debugText.includes('Выбрано: нет')) break;
-  }
-  if (debugText.includes('Выбрано: нет')) throw new Error('Visual QA could not select a visible unit.');
+  const debugText = await page.locator('#debug-panel').innerText();
+  if (debugText.includes('Выбрано: нет')) throw new Error('Visual QA harness did not select a unit.');
 
   await page.evaluate(() => {
     const button = document.querySelector('#vision-toggle');
