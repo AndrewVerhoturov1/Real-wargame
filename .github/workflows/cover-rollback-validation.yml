@@ -1,0 +1,87 @@
+name: Cover rollback validation
+
+on:
+  push:
+    branches:
+      - ci/cover-rollback-validation-2026-07-18
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  typescript:
+    name: TypeScript verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+
+  focused-smoke:
+    name: Cover and workspace smoke matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - name: Run focused smoke tests
+        run: |
+          npm run cover-suitability:smoke
+          npm run workspace:smoke
+          npm run danger-route-cost-cache:smoke
+          npm run danger-route-cost-parity:smoke
+          npm run danger-layer-performance:smoke
+          npm run danger-layer-movement-performance:smoke
+          npm run route-danger-semantics:smoke
+          npm run navigation-overlay:smoke
+          npm run ui-compact-route-controls:smoke
+          npm run map-revision:smoke
+          npm run navigation-profile-switch:smoke
+
+  production-build:
+    name: Production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+  preview-playwright:
+    name: Preview Playwright regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save @playwright/test
+      - name: Run preview screenshot regression
+        run: npx playwright test tests/preview-screenshots.spec.ts --project=chromium --reporter=line
+      - name: Upload Playwright artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cover-rollback-playwright-artifacts
+          path: |
+            artifacts/
+            test-results/
+          if-no-files-found: warn
+          retention-days: 7
