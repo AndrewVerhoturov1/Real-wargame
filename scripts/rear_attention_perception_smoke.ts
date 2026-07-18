@@ -136,11 +136,7 @@ function verifyRearCadenceKeepsCurrentContactStable(): void {
   const observer = state.units[0]!;
   setAttentionMode(observer, 'observe', 'player');
   const rearCheckIntervalSeconds = observer.attentionSettings.profiles.observe.rearCheckIntervalSeconds;
-  const rearExplanation = [
-    `Зона «тыл» проверяется раз в ${rearCheckIntervalSeconds.toFixed(2).replace('.', ',')} с.`,
-    'Условная длительность взгляда: 0,30 с.',
-  ];
-  observer.perceptionKnowledge.contacts = [confirmedVisualContact('threat:rear-stable', targetPosition, rearExplanation)];
+  observer.perceptionKnowledge.contacts = [confirmedVisualContact('threat:rear-stable', targetPosition)];
   observer.attentionRuntime.nextRearCheckSeconds = 100;
 
   state.simulationTimeSeconds = 0.1;
@@ -237,11 +233,7 @@ function verifyCurrentVisibilityIsDenyByDefault(): void {
   assert.equal(rearInsideRangeZone, VISIBILITY_ZONE_CODE.rear);
 }
 
-function confirmedVisualContact(
-  stimulusId: string,
-  position: { x: number; y: number },
-  explanationRu: string[] = ['Начальный подтверждённый контакт для regression smoke.'],
-) {
+function confirmedVisualContact(stimulusId: string, position: { x: number; y: number }) {
   return advanceVisualContact(null, {
     id: `perception:${stimulusId}`,
     stimulusId,
@@ -253,7 +245,7 @@ function confirmedVisualContact(
     deltaSeconds: 1,
     nowSeconds: 0,
     source: 'visual',
-    explanationRu,
+    explanationRu: ['Начальный подтверждённый контакт для regression smoke.'],
   });
 }
 
