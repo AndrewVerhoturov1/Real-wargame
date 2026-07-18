@@ -1,88 +1,105 @@
-# Chat-Only Orchestration Workflow
+# Chat Collaboration Workflow
 
-Этот маршрут предназначен для разработки `Real-Wargame` через несколько обычных чатов ChatGPT без Codex и без буквенных режимов Q/R/X/W.
+This route is for optional collaboration between several ordinary ChatGPT chats. It does not replace the canonical feature-delivery workflow.
 
-## Основная модель
+Canonical workflow:
 
 ```text
-пользователь
-→ постоянный чат-оркестратор
-→ несколько самостоятельных чатов-исполнителей
-→ чат-оркестратор сравнивает результаты
-→ один чат-интегратор собирает выбранное решение
-→ real-wargame-preview
+docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md
 ```
 
-Исполнители работают параллельно и свободно исследуют репозиторий. Они сами определяют, какие модули, тесты и документы нужно прочитать или изменить. Оркестратор не должен заранее ограничивать их жёсткими списками файлов, если этого не требует конкретный риск.
+## Core model
 
-Централизуется только финальная сборка: во время параллельной кампании общее состояние `real-wargame-preview` обновляет один интегратор. Это позволяет исполнителям предлагать пересекающиеся и даже конкурирующие решения без случайной потери чужих изменений.
+```text
+user
+→ one designated Web Chat owns one feature branch
+→ optional research or proposal chats return findings, files or patches
+→ the designated Web Chat integrates selected results into the same feature branch
+→ the designated Web Chat runs focused non-browser checks and pushes
+→ user gives the branch to Codex once for branch-linked Vercel Preview
+→ user performs live testing
+→ the designated Web Chat fixes issues on the same feature branch
+→ optional visual GitHub Actions verification after explicit approval
+→ explicit user GO
+→ designated Web Chat transfers the tested result into real-wargame-preview
+```
 
-## Роли
+Parallel chats are helpers. They do not create independent delivery routes.
 
-### Оркестратор
+## Roles
 
-Оркестратор принимает большую цель и:
+### Designated Web Chat branch owner
 
-1. читает актуальное состояние проекта;
-2. делит цель на 2–4 содержательных направления;
-3. решает, нужны независимые задачи или конкурирующие варианты одной проблемы;
-4. готовит короткие самостоятельные промпты;
-5. принимает результаты исполнителей;
-6. сравнивает архитектуру, реализацию, тесты и риски;
-7. формирует одно задание интегратору;
-8. ведёт `docs/orchestration/CURRENT_WORK.md`.
+The branch owner:
 
-Оркестратор управляет направлением работы, а не каждым изменяемым файлом.
+1. resolves the exact current `real-wargame-preview` head;
+2. creates `feature/YYYYMMDD-short-kebab-slug` from that exact commit;
+3. records `base_commit` and `current_commit`;
+4. defines the observable task result;
+5. may request research or competing proposals from other chats;
+6. evaluates and integrates selected results into the same feature branch;
+7. owns implementation, tests, commits and pushes;
+8. runs focused non-browser checks;
+9. prepares the live-test checklist;
+10. receives user defects and fixes them on the same feature branch;
+11. runs visual GitHub Actions verification only after explicit user approval;
+12. transfers the accepted result into `real-wargame-preview` only after explicit user GO.
 
-### Исполнитель
+The branch owner is the only chat that writes the canonical feature branch.
 
-Исполнитель получает одну цель и важный контекст. Он может:
+### Research or proposal worker
 
-- читать любые релевантные части репозитория;
-- менять необходимые существующие файлы;
-- добавлять новые модули и тесты;
-- расширять локальный scope, когда без этого нельзя качественно решить задачу;
-- критиковать постановку и предлагать более правильную архитектуру;
-- возвращать альтернативное решение вместо буквального исполнения плохого плана.
+A worker may:
 
-Исполнитель не должен заниматься несвязанными улучшениями. Результат обязан быть воспроизводимым: полный набор изменённых файлов, применимый patch или отдельная изолированная ветка/PR с точным отчётом.
+- inspect any relevant repository context;
+- analyse the problem;
+- propose architecture;
+- prepare complete changed files or an applicable patch;
+- identify tests, risks and performance constraints;
+- challenge a weak initial design.
 
-### Интегратор
+A worker must not:
 
-Интегратор получает актуальный репозиторий, решения исполнителей и решение оркестратора. Он:
+- push directly to `real-wargame-preview`;
+- create a competing delivery branch unless the branch owner explicitly requests an isolated experiment;
+- deploy through Codex;
+- merge or transfer any branch;
+- claim checks it did not run.
 
-1. повторно читает актуальные версии затронутых файлов;
-2. выбирает и объединяет лучшие части решений;
-3. разрешает смысловые конфликты, а не заменяет файлы вслепую;
-4. при необходимости добавляет связующие изменения;
-5. запускает общие проверки;
-6. обновляет текущую документацию только после фактической интеграции;
-7. доставляет итог в `real-wargame-preview`;
-8. возвращает честный интеграционный отчёт.
+A worker result is advisory until the designated branch owner integrates it.
 
-## Свобода и обязательные инварианты
+### Codex
 
-Исполнителям не назначаются обязательные `owned files` по умолчанию. Пересечение файлов допустимо и может использоваться для независимого поиска лучшего решения.
+Codex is not an implementation or integration role.
 
-Остаются только фундаментальные правила проекта:
+Codex only receives the already-pushed canonical feature branch, exposes it as a branch-linked Vercel Preview and returns the URL plus deployment status. Codex does not return for later revisions.
 
-- `main` не изменяется без отдельного явного разрешения пользователя;
-- core simulation и чистый AI не импортируют PixiJS или DOM;
-- `SimulationTick` остаётся владельцем физического изменения координат бойца;
-- `AiGraphRunner` остаётся чистым немедленным вычислителем;
-- `AiGraphRuntime` владеет возобновляемым многошаговым исполнением;
-- `AiGameBridge` адаптирует чистый AI к живой игре;
-- renderer отображает состояние и не становится источником истины;
-- субъективное знание бойца не раскрывает скрытое объективное состояние мира;
-- PixiJS остаётся версии 7 до отдельной задачи миграции;
-- нельзя заявлять проверки, которые фактически не выполнялись;
-- visual QA запускается только после явного разрешения пользователя.
+### Human user
 
-## Форматы результата
+The user performs the live test, decides whether visual GitHub Actions verification is needed and gives the explicit GO for transfer into preview.
 
-Исполнитель выбирает удобный формат.
+## One working cycle
 
-### Полные файлы
+1. User gives the branch owner a feature task.
+2. Branch owner creates one feature branch from the exact current preview head.
+3. Branch owner optionally prepares 1–3 bounded research prompts.
+4. Worker chats return analysis, files or patches.
+5. Branch owner compares the results and integrates the selected solution into the same feature branch.
+6. Branch owner runs focused non-browser checks, commits and pushes.
+7. Branch owner reports the exact commit and live-test checklist.
+8. User gives the branch to Codex once.
+9. Codex returns a branch-linked Vercel Preview URL and stops participating.
+10. User tests the live application.
+11. Branch owner fixes all reported defects on the same feature branch and pushes new commits.
+12. The branch-linked Preview updates without new Codex work.
+13. If requested, branch owner runs visual GitHub Actions verification against the exact feature commit and inspects artifacts.
+14. After explicit user GO, branch owner transfers the accepted commit into `real-wargame-preview`.
+
+## Result formats from workers
+
+Workers may return:
+
+### Complete files
 
 ```text
 worker-result/
@@ -98,36 +115,32 @@ RESULT.md
 changes.patch
 ```
 
-### Изолированная ветка или PR
+### Research-only report
 
-Допустимо, если конкретный чат имеет GitHub-доступ. Во время параллельной кампании такой результат не переносится в общую preview до решения оркестратора и работы интегратора.
+Use `docs/orchestration/RESULT_TEMPLATE.md` with `delivery_state: research_only`.
 
-Одного текстового описания без воспроизводимых изменений недостаточно для задачи реализации.
+A worker-created PR or branch is not a normal result. It is allowed only when the designated branch owner explicitly requests an isolated experiment and must not target preview directly.
 
-## Один рабочий цикл
+## Fundamental invariants
 
-1. Пользователь ставит оркестратору большую цель.
-2. Оркестратор обновляет `CURRENT_WORK.md` и создаёт 2–4 промпта.
-3. Пользователь запускает отдельные обычные чаты исполнителей.
-4. Исполнители возвращают результаты по `RESULT_TEMPLATE.md`.
-5. Пользователь передаёт результаты оркестратору.
-6. Оркестратор сравнивает их и готовит единое решение.
-7. Пользователь передаёт решение и пакеты отдельному интегратору.
-8. Интегратор собирает результат, проверяет его и обновляет preview.
-9. Оркестратор фиксирует итог и следующую цель в `CURRENT_WORK.md`.
+- `main` is not changed without separate explicit user GO;
+- direct implementation on `real-wargame-preview` is forbidden;
+- core simulation and pure AI do not import PixiJS or DOM;
+- `SimulationTick` owns physical coordinate changes;
+- `AiGraphRunner` remains a pure immediate evaluator;
+- `AiGraphRuntime` owns resumable multi-step execution;
+- `AiGameBridge` adapts pure AI to the live game;
+- renderers display state and do not become the source of truth;
+- subjective soldier knowledge does not reveal hidden objective state;
+- UI, selected unit and visible layers do not own gameplay computation;
+- runtime work, queues, caches and invalidation have bounded contracts;
+- async results have exact identity and stale-result rejection;
+- the project uses PixiJS 8;
+- checks, performance evidence and visual QA are reported honestly;
+- visual QA runs only after explicit user approval.
 
-## Минимальный размер кампании
+## Prohibited old orchestration
 
-Для первого использования достаточно:
+Do not use the former route where independent workers or an integrator write directly into `real-wargame-preview`, create PR-first delivery or ask Codex to implement or fix code.
 
-```text
-1 оркестратор
-2–3 исполнителя
-1 интегратор
-```
-
-Отдельный чат-проверяющий создаётся только тогда, когда независимое ревью действительно полезно.
-
-## Старые буквенные режимы
-
-`docs/ai/ZWORKER_MODES.md`, Q/R/X/W и связанные Codex-oriented документы не являются частью этого маршрута. Читать их нужно только по прямому запросу пользователя или при поддержке старого процесса.
+Q/R/X/W, r-init and related historical modes are not part of this workflow unless the user explicitly asks to inspect the legacy process.
