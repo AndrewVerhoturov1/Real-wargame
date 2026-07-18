@@ -104,7 +104,7 @@ async function selectOrCreateSoldier(page: Page, canvas: Locator): Promise<'fixt
 
   const spawn = await worldPoint(canvas, 12, 12);
   await page.mouse.click(spawn.x, spawn.y);
-  await expect(page.locator('.game-editor-selected-summary')).toContainText(/editor_unit|Боец/);
+  await expect(page.locator('.game-editor-selected-summary').filter({ hasText: /editor_unit/ }).first()).toContainText(/editor_unit/);
   await capture(page, '02-editor-created-soldier.png');
 
   await page.locator('[data-mode="simulation"]').click();
