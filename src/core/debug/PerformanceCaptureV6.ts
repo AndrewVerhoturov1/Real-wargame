@@ -85,6 +85,7 @@ export class PerformanceCaptureV6 {
   private readonly limits: PerformanceCaptureLimitsV6;
   private readonly clock: PerformanceCaptureClockV6;
   private frames: PerformanceTraceFrameV6[] = [];
+  private frameWriteIndex = 0;
   private timeline: SceneTimelineEntryV6[] = [];
   private events: PerformanceEventV6[] = [];
   private critical: PerformanceEventV6[] = [];
@@ -103,6 +104,9 @@ export class PerformanceCaptureV6 {
   private final: ScenePopulationSnapshotV6 | null = null;
   private previous: ScenePopulationSnapshotV6 | null = null;
   private lastPaused: boolean | null = null;
+  private lastPopulationScanAt = -Infinity;
+  private lastOrderScanAt = -Infinity;
+  private lastSemanticScanAt = -Infinity;
   private lastTimelineAt = -Infinity;
   private lastFrameAt = 0;
   private lastCheckpointAt = 0;
@@ -130,31 +134,51 @@ export class PerformanceCaptureV6 {
     const costStart = this.clock.now();
     const tMs = this.elapsed();
     this.lastFrameAt = tMs;
-    const population = populationOf(state, tMs);
-    if (!this.initial) this.initializeScene(state, population);
-    else this.updateScene(state, population);
+    this.observePause(state);
 
-    this.observeOrders(state, tMs);
-    this.setQueueDepth('routePlanning', population.unitsWaitingForRoute, 0, 'scene-sample', tMs);
-    this.setQueueDepth('routeReplanning', population.unitsWaitingForReplan, 0, 'scene-sample', tMs);
-    this.scanSemantic(state);
-    this.sampleMemory();
+    const slow = (input.frameMs ?? 0) >= 50 || input.applicationUpdateMs >= 25;
+    const sceneShapeChanged = !this.final
+      || state.units.length !== this.final.unitCount
+      || state.map.objects.length !== this.final.objectCount
+      || state.pressureZones.length !== this.final.pressureZoneCount;
+    const shouldScanPopulation = !this.initial || sceneShapeChanged || slow
+      || tMs - this.lastPopulationScanAt >= this.limits.sceneSampleIntervalMs;
+    const population = shouldScanPopulation
+      ? populationOf(state, tMs)
+      : { ...(this.final ?? emptyPopulation(tMs)), tMs: r1(tMs) };
+
+    if (shouldScanPopulation) {
+      if (!this.initial) this.initializeScene(state, population);
+      else this.updateScene(state, population);
+      this.lastPopulationScanAt = tMs;
+      this.previous = population;
+      this.final = population;
+      this.setQueueDepth('routePlanning', population.unitsWaitingForRoute, 0, 'scene-sample', tMs);
+      this.setQueueDepth('routeReplanning', population.unitsWaitingForReplan, 0, 'scene-sample', tMs);
+      this.sampleMemory();
+    }
+    if (tMs - this.lastOrderScanAt >= 100 || sceneShapeChanged || slow) {
+      this.observeOrders(state, tMs);
+      this.lastOrderScanAt = tMs;
+    }
+    if (tMs - this.lastSemanticScanAt >= this.limits.sceneSampleIntervalMs || sceneShapeChanged || slow) {
+      this.scanSemantic(state);
+      this.lastSemanticScanAt = tMs;
+    }
 
     const frame: PerformanceTraceFrameV6 = {
       tMs: r1(tMs), frameMs: input.frameMs === null ? null : r2(input.frameMs),
       simulationUpdateMs: r2(input.simulationUpdateMs), applicationUpdateMs: r2(input.applicationUpdateMs),
-      sceneUpdateMs: r2(input.sceneUpdateMs), unitCount: population.unitCount, movingUnits: population.movingUnits,
+      sceneUpdateMs: r2(input.sceneUpdateMs), unitCount: state.units.length, movingUnits: population.movingUnits,
       routeQueueDepth: population.unitsWaitingForRoute, replanQueueDepth: population.unitsWaitingForReplan,
       layerMode: input.layerMode, editorEnabled: input.editorEnabled,
     };
-    this.frames.push(frame);
+    this.pushFrame(frame);
     this.samplesRecorded += 1;
-    this.trimFrames(tMs);
 
-    const changed = !this.previous || population.unitCount !== this.previous.unitCount
-      || population.objectCount !== this.previous.objectCount || population.pressureZoneCount !== this.previous.pressureZoneCount;
-    const queueSpike = population.unitsWaitingForRoute > (this.previous?.unitsWaitingForRoute ?? 0) + 4;
-    const slow = (input.frameMs ?? 0) >= 50 || input.applicationUpdateMs >= 25;
+    const changed = sceneShapeChanged;
+    const lastTimeline = this.timeline[this.timeline.length - 1];
+    const queueSpike = population.unitsWaitingForRoute > (lastTimeline?.unitsWaitingForRoute ?? 0) + 4;
     if (changed || queueSpike || slow || tMs - this.lastTimelineAt >= this.limits.sceneSampleIntervalMs) {
       this.pushTimeline({
         ...population,
@@ -165,9 +189,23 @@ export class PerformanceCaptureV6 {
       });
       this.lastTimelineAt = tMs;
     }
+    this.pushCost('collection', this.clock.now() - costStart);
+  }
+
+  refreshScene(state: SceneStateLikeV6): void {
+    const tMs = this.elapsed();
+    const population = populationOf(state, tMs);
+    this.observePause(state);
+    if (!this.initial) this.initializeScene(state, population);
+    else this.updateScene(state, population);
+    this.observeOrders(state, tMs);
+    this.scanSemantic(state);
+    this.sampleMemory();
     this.previous = population;
     this.final = population;
-    this.pushCost('collection', this.clock.now() - costStart);
+    this.lastPopulationScanAt = tMs;
+    this.lastOrderScanAt = tMs;
+    this.lastSemanticScanAt = tMs;
   }
 
   addUserMarker(label: string): PerformanceEventV6 {
@@ -264,28 +302,54 @@ export class PerformanceCaptureV6 {
   recordCheckpointCost(ms: number, at = this.elapsed()): void { this.lastCheckpointAt = at; this.pushCost('checkpointWrite', ms); }
   recordSerializationCost(ms: number): void { this.pushCost('serialization', ms); }
   recordExportCost(ms: number): void { this.pushCost('export', ms); }
+  getTelemetryCostStats(kind: keyof typeof this.costs) { return buildNumericStats(this.costs[kind]); }
   startExport(): void { this.exportStartedAt = this.elapsed(); }
 
   getStatus(): PerformanceCaptureStatusV6 {
     return {
       version: PERFORMANCE_REPORT_VERSION, runtimeSeconds: r1(this.elapsed() / 1000),
       currentUnitCount: this.final?.unitCount ?? 0, maximumUnitCount: this.maximum?.unitCount ?? 0,
-      samplesDropped: this.samplesDropped, eventsDropped: this.eventsDropped,
+      samplesDropped: Math.max(this.samplesDropped, this.samplesRecorded - this.orderedFrames().length),
+      eventsDropped: this.eventsDropped,
       bufferUtilization: r3(this.frames.length / Math.max(1, this.limits.maxFrames)),
     };
   }
 
   buildReport(input: PerformanceReportBuildInputV6): PerformanceReportV6 {
+    return this.buildReportInternal(input, false);
+  }
+
+  buildCheckpoint(input: PerformanceReportBuildInputV6): PerformanceCheckpointPayloadV6 {
+    const report = this.buildReportInternal({
+      ...input, recoveredFromCheckpoint: true, exportCompleted: false,
+      possibleMissingTailMs: 0, lastCheckpointAtMs: this.elapsed(),
+    }, true);
+    return {
+      version: PERFORMANCE_REPORT_VERSION, schemaVersion: PERFORMANCE_REPORT_SCHEMA_VERSION,
+      sessionId: this.sessionId, captureId: this.captureId,
+      savedAtEpochMs: this.clock.wallNow(), savedAtCaptureMs: r1(this.elapsed()), report,
+    };
+  }
+
+  private buildReportInternal(input: PerformanceReportBuildInputV6, compactCheckpoint: boolean): PerformanceReportV6 {
     const population = this.populationSeries();
     const queues = buildQueues(this.queues);
-    const events = this.orderedEvents();
+    const allFrames = this.orderedFrames();
+    this.syncFrameTruncation(allFrames.length);
+    const allTimeline = this.finalTimeline();
+    const allEvents = this.orderedEvents();
+    const frames = compactCheckpoint ? allFrames.slice(-240) : allFrames;
+    const timeline = compactCheckpoint ? allTimeline.slice(-120) : allTimeline;
+    const events = compactCheckpoint ? compactEventsForCheckpoint(allEvents) : allEvents;
+    const operations = compactCheckpoint ? this.operations.slice(0, 20) : this.operations;
+    const phases = compactCheckpoint ? input.phases.slice(0, 64) : input.phases;
     const health = this.reportHealth(
       input.recoveredFromCheckpoint ?? false, input.possibleMissingTailMs ?? 0,
       input.exportCompleted ?? true, input.lastCheckpointAtMs ?? this.lastCheckpointAt,
     );
     const memory = this.memoryDiagnostics();
     const navigation = this.navigation(queues, input.routeFields ?? {});
-    const diagnoses = diagnose(queues, navigation.slowestSearches, this.semantic, memory, health, this.frames);
+    const diagnoses = diagnose(queues, navigation.slowestSearches, this.semantic, memory, health, frames);
     const identity: PerformanceReportIdentityV6 = {
       ...input.identity, reportVersion: PERFORMANCE_REPORT_VERSION,
       contractVersion: PERFORMANCE_REPORT_CONTRACT_VERSION, sessionId: this.sessionId, captureId: this.captureId,
@@ -303,32 +367,20 @@ export class PerformanceCaptureV6 {
       summary: {
         identity, runtimeSeconds: r1(this.elapsed() / 1000), verdict, scenePopulation: population,
         mainMetrics: { ...input.mainMetrics },
-        worstWindows: worstWindows(this.frames, this.finalTimeline(), events, input.phases, this.operations),
+        worstWindows: worstWindows(frames, timeline, events, phases, operations),
         diagnoses, criticalErrors: events.filter((event) => event.priority === 'critical' || criticalType(event.type)),
         reportHealth: health, semanticHealth: cloneSemantic(this.semantic),
       },
       report: {
-        phases: input.phases.map((item) => ({ ...item })), queues, navigation, workCounters,
+        phases: phases.map((item) => ({ ...item })), queues, navigation, workCounters,
         unitOutliers: this.unitOutliers(), workerDiagnostics: normalizeWorkers(input.workerDiagnostics ?? {}),
         memory, semanticHealth: cloneSemantic(this.semantic), legacyDiagnostics: { ...input.legacyDiagnostics },
       },
       trace: {
-        retentionMs: this.limits.traceRetentionMs, frames: [...this.frames], sceneTimeline: this.finalTimeline(), events,
-        slowOperations: [...this.operations, ...(input.slowOperations ?? [])].slice(0, this.limits.maxSlowOperations),
+        retentionMs: this.limits.traceRetentionMs, frames, sceneTimeline: timeline, events,
+        slowOperations: [...operations, ...(input.slowOperations ?? [])].slice(0, compactCheckpoint ? 20 : this.limits.maxSlowOperations),
         userMarkers: events.filter((event) => event.type === 'user.marker'),
       },
-    };
-  }
-
-  buildCheckpoint(input: PerformanceReportBuildInputV6): PerformanceCheckpointPayloadV6 {
-    const report = this.buildReport({
-      ...input, recoveredFromCheckpoint: true, exportCompleted: false,
-      possibleMissingTailMs: 0, lastCheckpointAtMs: this.elapsed(),
-    });
-    return {
-      version: PERFORMANCE_REPORT_VERSION, schemaVersion: PERFORMANCE_REPORT_SCHEMA_VERSION,
-      sessionId: this.sessionId, captureId: this.captureId,
-      savedAtEpochMs: this.clock.wallNow(), savedAtCaptureMs: r1(this.elapsed()), report,
     };
   }
 
@@ -360,12 +412,19 @@ export class PerformanceCaptureV6 {
     this.recordEvent('simulation.started', { simulationStep: state.simulationStep, simulationTimeSeconds: state.simulationTimeSeconds, paused: this.lastPaused }, 'important');
   }
 
-  private updateScene(state: SceneStateLikeV6, population: ScenePopulationSnapshotV6): void {
+  private observePause(state: SceneStateLikeV6): void {
     const paused = Boolean(state.paused);
+    if (this.lastPaused === null) {
+      this.lastPaused = paused;
+      return;
+    }
     if (this.lastPaused !== paused) {
       this.recordEvent(paused ? 'simulation.paused' : 'simulation.resumed', { simulationStep: state.simulationStep, simulationTimeSeconds: state.simulationTimeSeconds }, 'important');
       this.lastPaused = paused;
     }
+  }
+
+  private updateScene(state: SceneStateLikeV6, population: ScenePopulationSnapshotV6): void {
     this.detectSceneChanges(state, population);
     if (population.unitCount < (this.minimum?.unitCount ?? Infinity)) this.minimum = population;
     if (population.unitCount > (this.maximum?.unitCount ?? -Infinity)) this.maximum = population;
@@ -473,16 +532,35 @@ export class PerformanceCaptureV6 {
     this.semantic.violations.push(event);
   }
 
-  private trimFrames(now: number): void {
-    let dropped = 0;
-    const minTime = now - this.limits.traceRetentionMs;
-    while (this.frames.length && ((this.frames[0]?.tMs ?? 0) < minTime || this.frames.length > this.limits.maxFrames)) {
-      this.frames.shift(); dropped++;
+  private pushFrame(frame: PerformanceTraceFrameV6): void {
+    if (this.frames.length < this.limits.maxFrames) {
+      this.frames.push(frame);
+      return;
     }
-    if (dropped) {
-      this.samplesDropped += dropped;
-      this.noteTruncation('trace.frames', dropped, 'recent ring buffer evicted oldest ordinary frame samples', true, true, true);
-    }
+    this.frames[this.frameWriteIndex] = frame;
+    this.frameWriteIndex = (this.frameWriteIndex + 1) % this.limits.maxFrames;
+    this.samplesDropped += 1;
+  }
+
+  private orderedFrames(): PerformanceTraceFrameV6[] {
+    const ordered = this.frames.length < this.limits.maxFrames || this.frameWriteIndex === 0
+      ? [...this.frames]
+      : [...this.frames.slice(this.frameWriteIndex), ...this.frames.slice(0, this.frameWriteIndex)];
+    const minTime = this.lastFrameAt - this.limits.traceRetentionMs;
+    return ordered.filter((frame) => frame.tMs >= minTime);
+  }
+
+  private syncFrameTruncation(retainedCount: number): void {
+    const lost = Math.max(0, this.samplesRecorded - retainedCount);
+    if (lost === 0) return;
+    this.truncation.set('trace.frames', {
+      section: 'trace.frames',
+      lost,
+      reason: 'recent ring buffer retained only the configured time window and frame limit',
+      worstSamplesPreserved: true,
+      errorsPreserved: true,
+      recentTailPreserved: true,
+    });
   }
 
   private pushTimeline(entry: SceneTimelineEntryV6): void {
@@ -499,7 +577,7 @@ export class PerformanceCaptureV6 {
     queue.currentDepth = Math.max(0, depth); queue.currentInFlight = Math.max(0, inFlight);
     queue.maximumDepth = Math.max(queue.maximumDepth, queue.currentDepth);
     queue.maximumInFlight = Math.max(queue.maximumInFlight, queue.currentInFlight);
-    const last = queue.timeline.at(-1);
+    const last = queue.timeline[queue.timeline.length - 1];
     if (!last || last.depth !== queue.currentDepth || last.inFlight !== queue.currentInFlight) {
       queue.timeline.push({ tMs: r1(tMs), depth: queue.currentDepth, inFlight: queue.currentInFlight, reason });
     }
@@ -572,7 +650,8 @@ export class PerformanceCaptureV6 {
   private finalTimeline(): SceneTimelineEntryV6[] {
     const final = this.final;
     if (!final) return [...this.timeline];
-    const last = this.frames.at(-1);
+    const frames = this.orderedFrames();
+    const last = frames[frames.length - 1];
     const entry: SceneTimelineEntryV6 = {
       ...final, reason: 'final', routeQueueDepth: final.unitsWaitingForRoute,
       replanQueueDepth: final.unitsWaitingForReplan, frameMs: last?.frameMs ?? null,
@@ -586,7 +665,7 @@ export class PerformanceCaptureV6 {
   }
 
   private memoryDiagnostics(): MemoryDiagnosticsV6 {
-    const telemetryBytes = this.frames.length * 100 + this.timeline.length * 350
+    const telemetryBytes = this.orderedFrames().length * 100 + this.timeline.length * 350
       + (this.events.length + this.critical.length) * 320 + this.operations.length * 450;
     return {
       supported: this.memory.supported, approximate: true, initialBytes: this.memory.initial,
@@ -619,7 +698,7 @@ export class PerformanceCaptureV6 {
       samplesRecorded: this.samplesRecorded, samplesDropped: this.samplesDropped,
       eventsRecorded: this.eventsRecorded, eventsDropped: this.eventsDropped,
       buffers: {
-        frames: { used: this.frames.length, limit: this.limits.maxFrames },
+        frames: { used: this.orderedFrames().length, limit: this.limits.maxFrames },
         sceneTimeline: { used: this.timeline.length, limit: this.limits.maxSceneTimeline },
         events: { used: this.events.length, limit: this.limits.maxEvents },
         criticalEvents: { used: this.critical.length, limit: this.limits.maxCriticalEvents },
@@ -632,7 +711,7 @@ export class PerformanceCaptureV6 {
         collection: buildNumericStats(this.costs.collection), serialization: buildNumericStats(this.costs.serialization),
         checkpointWrite: buildNumericStats(this.costs.checkpointWrite), export: buildNumericStats(this.costs.export),
       },
-      estimatedReportBytes: this.frames.length * 100 + this.timeline.length * 350 + (this.events.length + this.critical.length) * 320 + 24_000,
+      estimatedReportBytes: this.orderedFrames().length * 100 + this.timeline.length * 350 + (this.events.length + this.critical.length) * 320 + 24_000,
       recoveredFromCheckpoint: recovered, possibleMissingTailMs: r1(Math.max(0, missing)),
     };
   }
@@ -671,6 +750,13 @@ function sanitizeValue(value: unknown): unknown {
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 100).map(([key, nested]) => [key, sanitizeValue(nested)]));
   return value;
 }
+function compactEventsForCheckpoint(events: PerformanceEventV6[]): PerformanceEventV6[] {
+  const protectedEvents = events.filter((event) => event.priority === 'critical' || criticalType(event.type)).slice(-256);
+  const recentNormal = events.filter((event) => event.priority !== 'critical' && !criticalType(event.type)).slice(-128);
+  return [...protectedEvents, ...recentNormal]
+    .sort((left, right) => left.tMs - right.tMs || left.eventId.localeCompare(right.eventId));
+}
+
 function criticalType(type: string): boolean { return /^(long-task\.detected|worker\.(error|timeout)|semantic\.violation|telemetry\.truncated|user\.marker|memory\.spike)$/.test(type); }
 function browserHeap(): number | null {
   const value = (performance as Performance & { memory?: { usedJSHeapSize?: number } }).memory?.usedJSHeapSize;

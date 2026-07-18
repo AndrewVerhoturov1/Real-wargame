@@ -138,6 +138,7 @@ export class PerformanceMonitor {
   private readonly startedAt = performance.now();
   private readonly capture = new PerformanceCaptureV6();
   private readonly samples: PerformanceFrameSample[] = [];
+  private sampleWriteIndex = 0;
   private readonly longTasks: BrowserLongTaskDiagnostic[] = [];
   private readonly longAnimationFrames: LongAnimationFrameDiagnostic[] = [];
   private pendingSimulationUpdateMs = 0;
@@ -210,8 +211,7 @@ export class PerformanceMonitor {
       selectedObject: state.editor.selectedObjectId !== null,
       selectedZone: state.editor.selectedZoneId !== null,
     };
-    this.samples.push(sample);
-    if (this.samples.length > MAX_LEGACY_SAMPLES) this.samples.splice(0, this.samples.length - MAX_LEGACY_SAMPLES);
+    this.pushLegacySample(sample);
     this.capture.recordFrame(state, {
       frameMs,
       simulationUpdateMs,
@@ -232,8 +232,17 @@ export class PerformanceMonitor {
   buildReport(state: SimulationState, zoom: number, renderer: Record<string, unknown>): PerformanceReportV6 {
     const startedAt = performance.now();
     this.capture.startExport();
+    this.capture.refreshScene(state);
     const report = this.capture.buildReport(this.buildInput(state, zoom, renderer, true));
     this.capture.recordExportCost(performance.now() - startedAt);
+    report.summary.reportHealth.telemetryCostMs.export = this.capture.getTelemetryCostStats('export');
+
+    // A single export-only sizing pass measures serialization without adding work to the frame path.
+    const serializationStartedAt = performance.now();
+    const sizingText = JSON.stringify(report);
+    this.capture.recordSerializationCost(performance.now() - serializationStartedAt);
+    report.summary.reportHealth.telemetryCostMs.serialization = this.capture.getTelemetryCostStats('serialization');
+    report.summary.reportHealth.estimatedReportBytes = utf8ByteLength(sizingText);
     return report;
   }
 
@@ -244,6 +253,7 @@ export class PerformanceMonitor {
     exportCompleted: boolean,
   ): PerformanceReportBuildInputV6 {
     const build = getRealWargameBuildIdentity();
+    const samples = this.getLegacySamples();
     const phaseMeasures = this.getPhaseMeasures();
     const applicationAttribution = buildApplicationIntervalAttribution(this.longTasks, phaseMeasures);
     const longTaskClassification = classifyLongTasks(
@@ -251,7 +261,7 @@ export class PerformanceMonitor {
       applicationAttribution,
       phaseMeasures,
       this.longAnimationFrames,
-      this.samples,
+      samples,
     );
     const selectedUnit = state.selectedUnitId ? state.units.find((unit) => unit.id === state.selectedUnitId) : undefined;
     const worker = getRouteCostWorkerDiagnostics(state.map);
@@ -288,11 +298,11 @@ export class PerformanceMonitor {
       },
       mainMetrics: {
         runtimeSeconds: roundOne(runtimeSeconds),
-        sampleCount: this.samples.length,
-        effectiveFps: effectiveFps(this.samples),
-        frameMs: stats(this.samples.flatMap((sample) => sample.frameMs === null ? [] : [sample.frameMs])),
-        simulationUpdateMs: stats(this.samples.map((sample) => sample.simulationUpdateMs)),
-        applicationUpdateMs: stats(this.samples.map((sample) => sample.applicationUpdateMs)),
+        sampleCount: samples.length,
+        effectiveFps: effectiveFps(samples),
+        frameMs: stats(samples.flatMap((sample) => sample.frameMs === null ? [] : [sample.frameMs])),
+        simulationUpdateMs: stats(samples.map((sample) => sample.simulationUpdateMs)),
+        applicationUpdateMs: stats(samples.map((sample) => sample.applicationUpdateMs)),
         longTaskCount: this.longTasks.length,
         longAnimationFrameCount: this.longAnimationFrames.length,
       },
@@ -340,7 +350,7 @@ export class PerformanceMonitor {
         },
         compatibility: {
           v5SceneUnitCount: state.units.length,
-          v5Samples: this.samples,
+          v5Samples: samples,
           note: 'Explicit legacy compatibility payload. This file remains performance-report-v6 and must not be parsed as v5.',
         },
         zoom: roundThree(zoom),
@@ -349,18 +359,57 @@ export class PerformanceMonitor {
     };
   }
 
+  private buildCheckpointInput(state: SimulationState): PerformanceReportBuildInputV6 {
+    const build = getRealWargameBuildIdentity();
+    const samples = this.getLegacySamples();
+    const recentSamples = samples.slice(-300);
+    return {
+      identity: {
+        branch: build.branch,
+        commitSha: build.commitSha,
+        buildId: build.buildId,
+        generatedAt: new Date().toISOString(),
+        launchSource: detectLaunchSource(),
+        mode: detectMode(),
+        page: typeof location === 'undefined' ? 'unknown' : `${location.pathname}${location.search}`,
+        browser: getBrowserInfo(),
+        platform: navigator.platform || 'unknown',
+        cpuConcurrency: Number.isFinite(navigator.hardwareConcurrency) ? navigator.hardwareConcurrency : null,
+        deviceMemoryGb: readDeviceMemory(),
+        viewport: getViewportInfo(),
+        renderer: { checkpoint: true },
+        featureFlags: { editor: state.editor.enabled },
+      },
+      mainMetrics: {
+        sampleCount: samples.length,
+        currentUnitCount: state.units.length,
+        frameMs: stats(recentSamples.flatMap((sample) => sample.frameMs === null ? [] : [sample.frameMs])),
+        simulationUpdateMs: stats(recentSamples.map((sample) => sample.simulationUpdateMs)),
+      },
+      phases: [],
+      routeFields: {},
+      workerDiagnostics: {},
+      legacyDiagnostics: {
+        checkpoint: true,
+        note: 'Compact checkpoint intentionally omits expensive subsystem snapshots; final export restores them.',
+      },
+      exportCompleted: false,
+    };
+  }
+
   private scheduleCheckpoint(now: number): void {
     if (this.checkpointPending || now - this.lastCheckpointScheduledAt < CHECKPOINT_INTERVAL_MS) return;
     this.lastCheckpointScheduledAt = now;
     this.checkpointPending = true;
-    window.setTimeout(() => {
+    scheduleIdleWork(() => {
       const startedAt = performance.now();
       const state = this.latestState;
       if (!state || this.destroyed) {
         this.checkpointPending = false;
         return;
       }
-      const payload = this.capture.buildCheckpoint(this.buildInput(state, this.latestZoom, { checkpoint: true }, false));
+      this.capture.refreshScene(state);
+      const payload = this.capture.buildCheckpoint(this.buildCheckpointInput(state));
       void savePerformanceCheckpoint(payload)
         .catch((error) => {
           this.capture.recordEvent('worker.error', {
@@ -372,7 +421,21 @@ export class PerformanceMonitor {
           this.capture.recordCheckpointCost(performance.now() - startedAt, payload.savedAtCaptureMs);
           this.checkpointPending = false;
         });
-    }, 0);
+    });
+  }
+
+  private pushLegacySample(sample: PerformanceFrameSample): void {
+    if (this.samples.length < MAX_LEGACY_SAMPLES) {
+      this.samples.push(sample);
+      return;
+    }
+    this.samples[this.sampleWriteIndex] = sample;
+    this.sampleWriteIndex = (this.sampleWriteIndex + 1) % MAX_LEGACY_SAMPLES;
+  }
+
+  private getLegacySamples(): PerformanceFrameSample[] {
+    if (this.samples.length < MAX_LEGACY_SAMPLES || this.sampleWriteIndex === 0) return [...this.samples];
+    return [...this.samples.slice(this.sampleWriteIndex), ...this.samples.slice(0, this.sampleWriteIndex)];
   }
 
   private getPhaseMeasures(): PerformancePhaseMeasureDiagnostic[] {
@@ -454,6 +517,8 @@ export class PerformanceMonitor {
     });
   };
 }
+
+
 
 function collectNumericCounters(value: unknown, prefix = '', depth = 0): Record<string, number> {
   const result: Record<string, number> = {};
@@ -604,6 +669,22 @@ function trimOldest<T>(items: T[], maximum: number): void {
 
 function relativeTimestamp(value: number | undefined, startedAt: number): number | null {
   return Number.isFinite(value) ? roundOne((value as number) - startedAt) : null;
+}
+
+function scheduleIdleWork(callback: () => void): void {
+  const idleWindow = window as Window & {
+    requestIdleCallback?: (handler: () => void, options?: { timeout: number }) => number;
+  };
+  if (typeof idleWindow.requestIdleCallback === 'function') {
+    idleWindow.requestIdleCallback(callback, { timeout: 2000 });
+    return;
+  }
+  window.setTimeout(callback, 0);
+}
+
+function utf8ByteLength(value: string): number {
+  if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(value).byteLength;
+  return value.length * 2;
 }
 
 function roundOne(value: number): number { return Math.round(value * 10) / 10; }
