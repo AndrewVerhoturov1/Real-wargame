@@ -434,18 +434,23 @@ function verifyDeterministicOrdinaryDecisionBudget(): void {
 
   state.simulationStep = 1;
   const first = tickAiSimulationScheduler(state, { cycleStartMs: 0, cycleEndMs: 0 });
-  assert.equal(first.ordinaryDecisionUnitIds.length, 3, 'one scheduler cycle must own a fixed ordinary-decision budget');
-  assert.equal(first.ordinaryDeferredUnitIds.length, 3, 'overdue ordinary decisions beyond the budget must be deferred, not dropped');
-  assert.equal(first.graphTickedUnitIds.length, 3);
+  assert.equal(first.ordinaryDecisionUnitIds.length, 2, 'one scheduler cycle must own a fixed ordinary-decision budget');
+  assert.equal(first.ordinaryDeferredUnitIds.length, 4, 'overdue ordinary decisions beyond the budget must be deferred, not dropped');
+  assert.equal(first.graphTickedUnitIds.length, 2);
 
   state.simulationStep = 2;
   const second = tickAiSimulationScheduler(state, { cycleStartMs: 0, cycleEndMs: 0 });
-  assert.equal(second.ordinaryDecisionUnitIds.length, 3);
-  assert.equal(second.ordinaryDeferredUnitIds.length, 0, 'round-robin selection must service the previously deferred half next');
+  assert.equal(second.ordinaryDecisionUnitIds.length, 2);
+  assert.equal(second.ordinaryDeferredUnitIds.length, 2, 'round-robin selection must continue servicing deferred units fairly');
+
+  state.simulationStep = 3;
+  const third = tickAiSimulationScheduler(state, { cycleStartMs: 0, cycleEndMs: 0 });
+  assert.equal(third.ordinaryDecisionUnitIds.length, 2);
+  assert.equal(third.ordinaryDeferredUnitIds.length, 0, 'three bounded cycles must service all six overdue units');
   assert.deepEqual(
     state.units.map((unit) => unit.behaviorRuntime.aiDecisionTickCount),
     [1, 1, 1, 1, 1, 1],
-    'all six units must receive one ordinary decision after two bounded cycles',
+    'all six units must receive one ordinary decision after three bounded cycles',
   );
 
   const catchup = createInitialState(mapData, [unitData('catchup', 2, 2)], []);

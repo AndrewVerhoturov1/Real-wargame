@@ -16,7 +16,7 @@ import {
 import { resolveRuntimeGraphSnapshot } from './AiGameBridge';
 import { tickStatefulMoveBridgeForTrustedUnit } from './AiStatefulMoveGameBridge';
 
-const MAX_ORDINARY_DECISIONS_PER_CYCLE = 3;
+const MAX_ORDINARY_DECISIONS_PER_CYCLE = 2;
 
 export interface AiSimulationSchedulerOptions {
   readonly cycleStartMs?: number;
