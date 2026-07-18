@@ -1,0 +1,48 @@
+name: Apply Performance v6 Marker Wait
+
+on:
+  push:
+    branches:
+      - agent/performance-report-v6-observability
+    paths:
+      - scripts/apply_performance_v6_marker_wait.py
+      - .github/workflows/apply-performance-v6-marker-wait.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-performance-v6-marker-wait
+  cancel-in-progress: false
+
+jobs:
+  patch-verify-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout current branch head
+        uses: actions/checkout@v4
+        with:
+          ref: agent/performance-report-v6-observability
+          fetch-depth: 0
+      - name: Apply marker wait patch
+        run: python scripts/apply_performance_v6_marker_wait.py
+      - name: Verify compile and v6 contracts
+        run: |
+          npm ci
+          npm run build
+          npm run performance-report-v6:smoke
+          node scripts/performance_report_contract_smoke.mjs
+          grep -q "waitForFunction.*data-performance-marker" tests/performance-report-v6-browser.spec.ts
+      - name: Publish verified browser test
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch='agent/performance-report-v6-observability'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/performance-report-v6-browser.spec.ts
+          git diff --cached --check
+          git commit -m 'test(perf): wait for marker control across editor rerenders'
+          git pull --rebase origin "$branch"
+          git push origin "HEAD:$branch"
