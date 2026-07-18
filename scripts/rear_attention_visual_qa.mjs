@@ -22,7 +22,7 @@ try {
   await page.mouse.click(canvasBox.x + 108.9 * 4.8, canvasBox.y + 36.5 * 4.8);
   await page.waitForTimeout(400);
   await page.evaluate(() => {
-    const button = document.querySelector<HTMLButtonElement>('#vision-toggle');
+    const button = document.querySelector('#vision-toggle');
     if (!button) throw new Error('Vision toggle is missing.');
     button.click();
   });
@@ -34,7 +34,7 @@ try {
   await page.waitForTimeout(1000);
   const attentionControl = page.getByText('Профили внимания', { exact: true }).first();
   if (await attentionControl.count()) {
-    await attentionControl.evaluate((element) => (element as HTMLElement).click());
+    await attentionControl.evaluate((element) => element.click());
   }
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${outputDir}/attention-profile-editor.png`, fullPage: true });
