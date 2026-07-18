@@ -1,7 +1,8 @@
 import { distance, type GridPosition } from '../core/geometry';
 import { placeConfiguredEditorEntity } from '../core/editor/GameEditorPlacement';
-import { paintEditorTerrainAt, isTerrainPaintTool } from '../core/map/MapPaint';
+import { isTerrainPaintTool, paintEditorTerrainAt } from '../core/map/MapPaint';
 import { worldToGrid } from '../core/map/MapModel';
+import { faceSelectedUnitsToward, facingRadiansFromPoints } from '../core/orders/UnitFacingCommands';
 import { issueRoutedMoveOrderToSelectedUnits } from '../core/orders/RoutedMoveOrders';
 import {
   beginEditorPointerAction,
@@ -30,24 +31,20 @@ import {
   selectAiTestLabTargetAtPosition,
 } from '../core/testing/AiTestLabSelection';
 import {
-  hoverSimulationCoverAtPosition,
-  selectSimulationCoverAtPosition,
-} from '../core/knowledge/SimulationCoverSelection';
-import {
   consumeTurnTool,
-  getSimulationLayerState,
+  cycleTacticalOverlayMode,
   getUnitCommandToolState,
   setRouteFacingDraft,
   setTurnToolActive,
   setVisibilityProbe,
 } from '../core/ui/RuntimeUiState';
-import { faceSelectedUnitsToward, facingRadiansFromPoints } from '../core/orders/UnitFacingCommands';
 import { findUnitAtGridPosition } from '../core/units/UnitModel';
 import type { CameraController } from './CameraController';
 
 const DRAG_SELECT_THRESHOLD_CELLS = 0.18;
 const RIGHT_DRAG_FACING_THRESHOLD_CELLS = 0.35;
 const COMMAND_TOOL_CHANGED_EVENT = 'real-wargame:unit-command-tool-changed';
+const TACTICAL_OVERLAY_MODE_CHANGED_EVENT = 'real-wargame:tactical-overlay-mode-changed';
 
 interface PointerMoveSnapshot {
   clientX: number;
@@ -115,6 +112,13 @@ export class BoardInputController {
 
     if (isTextInput(event.target)) return;
 
+    if (!this.state.editor.enabled && !getAiLabRuntime(this.state).open && event.key.toLowerCase() === 'v') {
+      event.preventDefault();
+      cycleTacticalOverlayMode(this.state);
+      window.dispatchEvent(new CustomEvent(TACTICAL_OVERLAY_MODE_CHANGED_EVENT));
+      return;
+    }
+
     if (!this.state.editor.enabled && !getAiLabRuntime(this.state).open && event.key === 'Escape') {
       event.preventDefault();
       setTurnToolActive(this.state, false);
@@ -140,20 +144,17 @@ export class BoardInputController {
     }
 
     if (!getAiLabRuntime(this.state).open) return;
-
     if (event.key === 'Escape') {
       event.preventDefault();
       cancelAiLabPointerAction(this.state);
       this.updateCursor();
       return;
     }
-
     if (event.key === 'Delete') {
       event.preventDefault();
       deleteSelectedEditorTargets(this.state);
       return;
     }
-
     if (event.ctrlKey && event.key.toLowerCase() === 'd') {
       event.preventDefault();
       duplicateSelectedLabEntity(this.state);
@@ -168,9 +169,7 @@ export class BoardInputController {
 
   private readonly handlePointerDown = (event: PointerEvent): void => {
     if (this.camera.isPanGesture(event)) return;
-
-    const world = this.camera.screenToWorld(event);
-    const grid = worldToGrid(this.state.map, world);
+    const grid = worldToGrid(this.state.map, this.camera.screenToWorld(event));
     this.lastPointerGrid = grid;
     this.updateAltProbe(event, grid);
 
@@ -179,25 +178,20 @@ export class BoardInputController {
       this.leftStartGrid = grid;
       this.isDragSelecting = false;
       this.canvas.setPointerCapture(event.pointerId);
-
       if (!this.state.editor.enabled && getAiLabRuntime(this.state).open) {
         event.preventDefault();
         beginAiLabPointerAction(this.state, grid);
         this.updateCursor();
         return;
       }
-
       if (this.state.editor.enabled) {
         event.preventDefault();
         if (beginAiLabPointerAction(this.state, grid)) {
           this.updateCursor();
           return;
         }
-        if (isTerrainPaintTool(String(this.state.editor.tool))) {
-          paintEditorTerrainAt(this.state, grid);
-        } else if (!placeConfiguredEditorEntity(this.state, grid)) {
-          beginEditorPointerAction(this.state, grid);
-        }
+        if (isTerrainPaintTool(String(this.state.editor.tool))) paintEditorTerrainAt(this.state, grid);
+        else if (!placeConfiguredEditorEntity(this.state, grid)) beginEditorPointerAction(this.state, grid);
         this.updateCursor();
       }
       return;
@@ -218,11 +212,7 @@ export class BoardInputController {
         this.rightStartGrid = grid;
         this.rightCurrentGrid = grid;
         this.canvas.setPointerCapture(event.pointerId);
-        setRouteFacingDraft(this.state, {
-          target: grid,
-          pointer: grid,
-          finalFacingRadians: null,
-        });
+        setRouteFacingDraft(this.state, { target: grid, pointer: grid, finalFacingRadians: null });
       }
     }
   };
@@ -234,56 +224,40 @@ export class BoardInputController {
       pointerId: event.pointerId,
       altKey: event.altKey,
     };
-
-    if (this.pointerMoveFrameId === null) {
-      this.pointerMoveFrameId = window.requestAnimationFrame(this.flushPointerMove);
-    }
+    if (this.pointerMoveFrameId === null) this.pointerMoveFrameId = window.requestAnimationFrame(this.flushPointerMove);
   };
 
   private readonly flushPointerMove = (): void => {
     this.pointerMoveFrameId = null;
     const event = this.pendingPointerMove;
     this.pendingPointerMove = null;
-    if (!event) return;
-    this.processPointerMove(event);
+    if (event) this.processPointerMove(event);
   };
 
   private processPointerMove(event: PointerMoveSnapshot): void {
-    const world = this.camera.screenToWorld(event);
-    const grid = worldToGrid(this.state.map, world);
+    const grid = worldToGrid(this.state.map, this.camera.screenToWorld(event));
     this.lastPointerGrid = grid;
     setMouseGridPosition(this.state, grid);
     this.updateAltProbe(event, grid);
-
-    if (!this.state.editor.enabled && getSimulationLayerState(this.state).mode !== 'info') {
-      hoverSimulationCoverAtPosition(this.state, grid);
-    }
 
     if (this.rightPointerId === event.pointerId && this.rightStartGrid) {
       this.rightCurrentGrid = grid;
       const finalFacingRadians = distance(this.rightStartGrid, grid) >= RIGHT_DRAG_FACING_THRESHOLD_CELLS
         ? facingRadiansFromPoints(this.rightStartGrid, grid)
         : null;
-      setRouteFacingDraft(this.state, {
-        target: this.rightStartGrid,
-        pointer: grid,
-        finalFacingRadians,
-      });
+      setRouteFacingDraft(this.state, { target: this.rightStartGrid, pointer: grid, finalFacingRadians });
       return;
     }
-
     if (!this.state.editor.enabled && getAiLabRuntime(this.state).open) {
       updateAiLabPointerAction(this.state, grid);
       this.updateCursor();
       return;
     }
-
     if (this.state.editor.enabled && getAiLabRuntime(this.state).drag?.kind === 'threat') {
       updateAiLabPointerAction(this.state, grid);
       this.updateCursor();
       return;
     }
-
     if (this.leftPointerId !== event.pointerId || !this.leftStartGrid) {
       if (this.state.editor.enabled) {
         updateAiLabPointerAction(this.state, grid);
@@ -291,31 +265,23 @@ export class BoardInputController {
       }
       return;
     }
-
     if (this.state.editor.enabled) {
-      if (isTerrainPaintTool(String(this.state.editor.tool))) {
-        paintEditorTerrainAt(this.state, grid);
-      } else if (!isSpawnTool(String(this.state.editor.tool))) {
-        updateEditorPointerAction(this.state, grid);
-      }
+      if (isTerrainPaintTool(String(this.state.editor.tool))) paintEditorTerrainAt(this.state, grid);
+      else if (!isSpawnTool(String(this.state.editor.tool))) updateEditorPointerAction(this.state, grid);
       return;
     }
-
     if (getAiTestLabSelectionTarget(this.state)) return;
-
     if (!this.isDragSelecting && distance(this.leftStartGrid, grid) >= DRAG_SELECT_THRESHOLD_CELLS) {
       this.isDragSelecting = true;
       startSelectionBox(this.state, this.leftStartGrid);
     }
-
     if (this.isDragSelecting) updateSelectionBox(this.state, grid);
   }
 
   private readonly handlePointerUp = (event: PointerEvent): void => {
     this.cancelPendingPointerMove();
     if (event.button === 2 && this.rightPointerId === event.pointerId && this.rightStartGrid) {
-      const world = this.camera.screenToWorld(event);
-      const grid = worldToGrid(this.state.map, world);
+      const grid = worldToGrid(this.state.map, this.camera.screenToWorld(event));
       const finalFacingRadians = distance(this.rightStartGrid, grid) >= RIGHT_DRAG_FACING_THRESHOLD_CELLS
         ? facingRadiansFromPoints(this.rightStartGrid, grid) ?? undefined
         : undefined;
@@ -324,9 +290,7 @@ export class BoardInputController {
       return;
     }
     if (this.leftPointerId !== event.pointerId || !this.leftStartGrid) return;
-
-    const world = this.camera.screenToWorld(event);
-    const grid = worldToGrid(this.state.map, world);
+    const grid = worldToGrid(this.state.map, this.camera.screenToWorld(event));
     this.lastPointerGrid = grid;
     this.updateAltProbe(event, grid);
 
@@ -336,41 +300,29 @@ export class BoardInputController {
       this.updateCursor();
       return;
     }
-
     if (this.state.editor.enabled) {
-      if (getAiLabRuntime(this.state).drag?.kind === 'threat') {
-        finishAiLabPointerAction(this.state, grid);
-      } else if (!isTerrainPaintTool(String(this.state.editor.tool)) && !isSpawnTool(String(this.state.editor.tool))) {
+      if (getAiLabRuntime(this.state).drag?.kind === 'threat') finishAiLabPointerAction(this.state, grid);
+      else if (!isTerrainPaintTool(String(this.state.editor.tool)) && !isSpawnTool(String(this.state.editor.tool))) {
         finishEditorPointerAction(this.state, grid);
       }
       this.clearLeftPointer(event.pointerId);
       this.updateCursor();
       return;
     }
-
     const labSelectionTarget = getAiTestLabSelectionTarget(this.state);
     if (!this.isDragSelecting && labSelectionTarget) {
       selectAiTestLabTargetAtPosition(this.state, grid);
       this.clearLeftPointer(event.pointerId);
       return;
     }
-
     if (this.isDragSelecting && this.state.selectionBox) {
       updateSelectionBox(this.state, grid);
       selectUnitsInBox(this.state, this.state.selectionBox);
       clearSelectionBox(this.state);
     } else {
       const unit = findUnitAtGridPosition(this.state.units, grid);
-      if (unit) {
-        selectUnit(this.state, unit.id);
-      } else if (getSimulationLayerState(this.state).mode !== 'info') {
-        const cover = selectSimulationCoverAtPosition(this.state, grid);
-        if (!cover) selectUnit(this.state, null);
-      } else {
-        selectUnit(this.state, null);
-      }
+      selectUnit(this.state, unit?.id ?? null);
     }
-
     this.clearLeftPointer(event.pointerId);
   };
 
@@ -390,7 +342,6 @@ export class BoardInputController {
     this.cancelPendingPointerMove();
     this.lastPointerGrid = null;
     setMouseGridPosition(this.state, null);
-    hoverSimulationCoverAtPosition(this.state, null);
     setVisibilityProbe(this.state, false, null);
     this.clearRightPointer();
     this.updateCursor();
@@ -404,13 +355,12 @@ export class BoardInputController {
   }
 
   private updateCursor(): void {
-    if (getUnitCommandToolState(this.state).turnToolActive) {
-      this.canvas.style.cursor = 'crosshair';
-    } else {
-      const cursor = resolveAiLabCursor(this.state);
-      this.canvas.style.cursor = cursor;
-    }
-    document.body.classList.toggle('cursor-crosshair-threat', getAiLabRuntime(this.state).open && getAiLabRuntime(this.state).tool === 'place_threat');
+    if (getUnitCommandToolState(this.state).turnToolActive) this.canvas.style.cursor = 'crosshair';
+    else this.canvas.style.cursor = resolveAiLabCursor(this.state);
+    document.body.classList.toggle(
+      'cursor-crosshair-threat',
+      getAiLabRuntime(this.state).open && getAiLabRuntime(this.state).tool === 'place_threat',
+    );
   }
 
   private clearLeftPointer(pointerId: number): void {
