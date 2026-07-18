@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import process from 'node:process';
 
@@ -9,6 +9,21 @@ const baseline = spawnSync(
   { cwd: process.cwd(), encoding: 'utf8' },
 );
 
+const acceptedMigratedContracts = [
+  'src/core/knowledge/SoldierDangerField.ts: missing "readDirectionalBasisValue"',
+  'src/ui/TacticalWorkspace.ts: missing "Слой опасности"',
+  'src/ui/TacticalWorkspace.ts: missing "Приказать двигаться сюда"',
+  'src/ui/TacticalWorkspace.ts: missing "Диагностика ИИ (без изменений)"',
+  'src/ui/TacticalWorkspace.ts: missing "updateInfoPanelLive"',
+  'src/ui/TacticalWorkspace.ts: missing "stableDecision"',
+  'src/ui/TacticalWorkspace.ts: missing "buildWorkspaceUpdateKey"',
+  'src/ui/TacticalWorkspace.ts: missing "lastWorkspaceUpdateKey"',
+  'src/ui/WorkspaceTooltipGuard.ts: missing "clearCoverTooltip"',
+  'src/ui/WorkspaceTooltipGuard.ts: missing "tooltip.hidden = true"',
+  'src/rendering/PixiAwarenessHeatmapRenderer.ts: missing "representation: \'raster-sprite\'"',
+  'src/tactical-workspace-stage8.css: missing ".cover-map-tooltip[hidden]"',
+];
+
 if (baseline.status === 0) {
   if (baseline.stdout) process.stdout.write(baseline.stdout);
   if (baseline.stderr) process.stderr.write(baseline.stderr);
@@ -17,24 +32,76 @@ if (baseline.status === 0) {
   const failureLines = stderr
     .split(/\r?\n/)
     .filter((line) => line.startsWith('- '));
-  const staleDirectionalToken = 'src/core/knowledge/SoldierDangerField.ts: missing "readDirectionalBasisValue"';
-  const onlyKnownStaleContract = failureLines.length > 0
-    && failureLines.every((line) => line.includes(staleDirectionalToken));
-
-  if (!onlyKnownStaleContract) {
+  const unexpected = failureLines.filter((line) => !acceptedMigratedContracts.some((token) => line.includes(token)));
+  if (unexpected.length > 0) {
     if (baseline.stdout) process.stdout.write(baseline.stdout);
     if (stderr) process.stderr.write(stderr);
     process.exit(baseline.status ?? 1);
   }
-
-  const source = readFileSync('src/core/knowledge/SoldierDangerField.ts', 'utf8');
-  assert.ok(source.includes('DIRECTIONAL_SECTOR_RADIANS'), 'SoldierDanger must retain the canonical directional sector basis');
-  assert.ok(source.includes('const sectorFraction = sectorPosition - lowerSector'), 'SoldierDanger must interpolate adjacent sectors exactly');
-  assert.ok(source.includes('const terrainProtection ='), 'SoldierDanger must calculate directional protection inline');
-  assert.ok(source.includes('const terrainExposure ='), 'SoldierDanger must calculate directional exposure inline');
-  assert.ok(source.includes('without allocating a GridPosition'), 'SoldierDanger must document the allocation-free hot path');
-  assert.ok(!source.includes('readDirectionalBasisValue('), 'SoldierDanger hot-path interpolation must not restore the per-cell helper call');
-
-  if (baseline.stdout) process.stdout.write(baseline.stdout);
-  console.log('Tactical workspace baseline accepted the allocation-free SoldierDanger directional interpolation contract.');
 }
+
+const soldierDanger = readFileSync('src/core/knowledge/SoldierDangerField.ts', 'utf8');
+assert.ok(soldierDanger.includes('DIRECTIONAL_SECTOR_RADIANS'), 'SoldierDanger must retain the canonical directional sector basis');
+assert.ok(soldierDanger.includes('const sectorFraction = sectorPosition - lowerSector'), 'SoldierDanger must interpolate adjacent sectors exactly');
+assert.ok(soldierDanger.includes('const terrainProtection ='), 'SoldierDanger must calculate directional protection inline');
+assert.ok(soldierDanger.includes('const terrainExposure ='), 'SoldierDanger must calculate directional exposure inline');
+assert.ok(soldierDanger.includes('without allocating a GridPosition'), 'SoldierDanger must document the allocation-free hot path');
+assert.ok(!soldierDanger.includes('readDirectionalBasisValue('), 'SoldierDanger hot-path interpolation must not restore the per-cell helper call');
+
+const cover = readFileSync('src/core/cover/CoverSuitability.ts', 'utf8');
+assert.ok(cover.includes('coverSuitabilityField: Uint8Array'), 'cover suitability must expose a dense typed field');
+assert.ok(cover.includes('quickCoverMask: Uint8Array'), 'quick cover must use a compact mask');
+assert.ok(cover.includes('qualityCoverMask: Uint8Array'), 'quality cover must use a compact mask');
+assert.ok(cover.includes('maxVisitedCells: 4096'), 'cover search must be bounded');
+assert.ok(cover.includes('quickMaxRouteMeters: 10'), 'quick cover route limit must be ten meters');
+assert.ok(cover.includes('fields.totalCost'), 'cover search must reuse canonical route costs');
+assert.ok(cover.includes('fields.dangerPercent'), 'cover search must reuse canonical danger');
+assert.ok(!cover.includes('computeLineOfSight'), 'cover search must not repeat LOS');
+assert.ok(cover.includes('resultCache'), 'cover result must be cached');
+
+const workspace = readFileSync('src/ui/TacticalWorkspace.ts', 'utf8');
+assert.ok(workspace.includes('data-overlay-mode="danger"') || workspace.includes('data-overlay-mode="${id}"'), 'workspace must expose tactical overlay segments');
+assert.ok(workspace.includes("['danger', 'Опасность']"));
+assert.ok(workspace.includes("['cover', 'Укрытия']"));
+assert.ok(workspace.includes("['combined', 'Вместе']"));
+assert.ok(workspace.includes('getCoverSuitability(state, unit)'), 'workspace must read regional cover candidates');
+assert.ok(workspace.includes('bestQuickCoverCandidates'));
+assert.ok(workspace.includes('bestQualityCoverCandidates'));
+assert.ok(!workspace.includes('cover-map-tooltip'));
+assert.ok(!workspace.includes('SimulationCoverSelection'));
+
+const runtimeUi = readFileSync('src/core/ui/RuntimeUiState.ts', 'utf8');
+assert.ok(runtimeUi.includes("export type TacticalOverlayMode = 'danger' | 'cover' | 'combined'"));
+assert.ok(runtimeUi.includes('cycleTacticalOverlayMode'));
+
+const input = readFileSync('src/input/BoardInputController.ts', 'utf8');
+assert.ok(input.includes("event.key.toLowerCase() === 'v'"), 'V must cycle the tactical overlay');
+assert.ok(!input.includes('selectSimulationCoverAtPosition'));
+assert.ok(!input.includes('hoverSimulationCoverAtPosition'));
+
+const renderer = readFileSync('src/rendering/PixiAwarenessHeatmapRenderer.ts', 'utf8');
+assert.ok(renderer.includes("representation: 'raster-sprite-with-region-contours'"));
+assert.ok(renderer.includes('drawCoverRasterWords'));
+assert.ok(renderer.includes('drawMaskBoundaries'));
+assert.ok(renderer.includes('quickCoverMask'));
+assert.ok(renderer.includes('qualityCoverMask'));
+assert.ok(!renderer.includes('drawCoverMarker'));
+
+const overlay = readFileSync('src/rendering/PixiOverlayRenderer.ts', 'utf8');
+assert.ok(overlay.includes('legacyCoverMarkerCount: 0'));
+assert.ok(overlay.includes('drawZoneHandles'), 'editor handles must remain intact');
+assert.ok(!overlay.includes('KnowledgeCover'));
+assert.ok(!overlay.includes('drawCoverMarker'));
+
+const knowledge = readFileSync('src/core/knowledge/UnitKnowledge.ts', 'utf8');
+assert.ok(!knowledge.includes('buildObjectCovers'));
+assert.ok(!knowledge.includes('buildForestCovers'));
+assert.ok(!knowledge.includes('KnowledgeCover'));
+assert.equal(existsSync('src/core/knowledge/SimulationCoverSelection.ts'), false, 'legacy cover selection bridge must be deleted');
+
+const css = readFileSync('src/tactical-workspace-stage8.css', 'utf8');
+assert.ok(css.includes('.tactical-overlay-segmented'));
+assert.ok(!css.includes('.cover-map-tooltip[hidden]'));
+
+if (baseline.stdout) process.stdout.write(baseline.stdout);
+console.log('Tactical workspace accepted the unified danger/cover raster contract.');
