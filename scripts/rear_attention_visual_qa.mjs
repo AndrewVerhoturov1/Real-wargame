@@ -11,7 +11,6 @@ page.on('pageerror', (error) => consoleLines.push(`[pageerror] ${error.stack ?? 
 
 try {
   await page.goto('http://127.0.0.1:4173/?visualQa=ai-state-plan', { waitUntil: 'networkidle' });
-  await page.waitForSelector('#vision-toggle', { state: 'attached' });
   await page.waitForSelector('canvas', { state: 'visible' });
   await page.waitForFunction(() => Boolean(window.__realWargameAiStatePlanVisualQa));
   await page.evaluate(() => window.__realWargameAiStatePlanVisualQa.setScenario('following-order'));
@@ -20,16 +19,19 @@ try {
   const debugText = await page.locator('#debug-panel').innerText();
   if (debugText.includes('Выбрано: нет')) throw new Error('Visual QA harness did not select a unit.');
 
-  await page.evaluate(() => {
-    const button = document.querySelector('#vision-toggle');
-    if (!button) throw new Error('Vision toggle is missing.');
-    button.click();
-  });
-  await page.waitForTimeout(1200);
-  const overlayPressed = await page.locator('#vision-toggle').getAttribute('aria-pressed');
-  if (overlayPressed !== 'true') throw new Error(`Vision overlay did not activate: aria-pressed=${overlayPressed}`);
+  await page.locator('[data-tab="memory"]').click();
+  await page.waitForFunction(() => (
+    window.__realWargameViewMemoryDebug?.visible === true
+    && window.__realWargameViewMemoryDebug?.fieldRevision > 0
+  ));
+  await page.waitForTimeout(900);
+  const overlayDebug = await page.evaluate(() => window.__realWargameViewMemoryDebug);
   await page.screenshot({ path: `${outputDir}/rear-attention-game.png`, fullPage: true });
-  await writeFile(`${outputDir}/game-debug.txt`, `${debugText}\n\n${consoleLines.join('\n')}`, 'utf8');
+  await writeFile(
+    `${outputDir}/game-debug.txt`,
+    `${debugText}\n\nOverlay diagnostics:\n${JSON.stringify(overlayDebug, null, 2)}\n\n${consoleLines.join('\n')}`,
+    'utf8',
+  );
 
   await page.goto('http://127.0.0.1:4173/ai-node-editor.html', { waitUntil: 'networkidle' });
   await page.waitForTimeout(1000);
