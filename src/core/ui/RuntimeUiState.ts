@@ -2,6 +2,7 @@ import type { GridPosition } from '../geometry';
 import type { SimulationState } from '../simulation/SimulationState';
 
 export type SimulationLayerMode = 'info' | 'danger' | 'stealth' | 'memory';
+export type TacticalOverlayMode = 'danger' | 'cover' | 'combined';
 
 export interface KnowledgeOverlayRuntimeState {
   active: boolean;
@@ -43,9 +44,10 @@ export interface AttentionOverlayRuntimeState {
 }
 
 export interface SimulationLayerRuntimeState {
+  /** Sidebar/context mode. It is intentionally independent from tacticalOverlayMode. */
   mode: SimulationLayerMode;
-  selectedCoverId: string | null;
-  hoveredCoverId: string | null;
+  /** Persistent danger/cover presentation; changing it never invalidates simulation fields. */
+  tacticalOverlayMode: TacticalOverlayMode;
 }
 
 interface RuntimeUiState {
@@ -172,20 +174,25 @@ export function getSimulationLayerState(state: SimulationState): SimulationLayer
 }
 
 export function setSimulationLayerMode(state: SimulationState, mode: SimulationLayerMode): void {
+  getRuntimeUiState(state).simulationLayer.mode = mode;
+}
+
+export function getTacticalOverlayMode(state: SimulationState): TacticalOverlayMode {
+  return getRuntimeUiState(state).simulationLayer.tacticalOverlayMode;
+}
+
+export function setTacticalOverlayMode(state: SimulationState, mode: TacticalOverlayMode): void {
+  getRuntimeUiState(state).simulationLayer.tacticalOverlayMode = mode;
+}
+
+export function cycleTacticalOverlayMode(state: SimulationState): TacticalOverlayMode {
   const layer = getRuntimeUiState(state).simulationLayer;
-  layer.mode = mode;
-  if (mode === 'info') {
-    layer.selectedCoverId = null;
-    layer.hoveredCoverId = null;
-  }
-}
-
-export function setSelectedSimulationCover(state: SimulationState, coverId: string | null): void {
-  getRuntimeUiState(state).simulationLayer.selectedCoverId = coverId;
-}
-
-export function setHoveredSimulationCover(state: SimulationState, coverId: string | null): void {
-  getRuntimeUiState(state).simulationLayer.hoveredCoverId = coverId;
+  layer.tacticalOverlayMode = layer.tacticalOverlayMode === 'danger'
+    ? 'cover'
+    : layer.tacticalOverlayMode === 'cover'
+      ? 'combined'
+      : 'danger';
+  return layer.tacticalOverlayMode;
 }
 
 function getRuntimeUiState(state: SimulationState): RuntimeUiState {
@@ -209,8 +216,7 @@ function getRuntimeUiState(state: SimulationState): RuntimeUiState {
       },
       simulationLayer: {
         mode: 'info',
-        selectedCoverId: null,
-        hoveredCoverId: null,
+        tacticalOverlayMode: 'danger',
       },
     };
     runtimeByState.set(state, runtime);
