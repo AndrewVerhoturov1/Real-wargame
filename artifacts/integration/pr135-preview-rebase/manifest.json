@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "pullRequest": 135,
   "branch": "agent/movement-environment-integration-v1",
   "target": "real-wargame-preview",
@@ -25,6 +25,13 @@
     "retain one latest graph-pass identity per unit and full effect detail only for genuinely slow scheduler passes",
     "insert bounded slowest diagnostics only when a sample qualifies instead of cloning and sorting every step",
     "prove runtime threat summary parity against the detailed canonical evaluation"
+  ],
+  "schedulerBudgetFollowupCommit": "31acd43d063dab976a19a21813fb2db86b8b9b37",
+  "schedulerBudgetFollowup": [
+    "limit ordinary AI work to two units per simulation step without delaying reactive wakes",
+    "service six overdue graph-controlled units over three deterministic round-robin steps",
+    "preserve every deferred decision instead of dropping or coalescing unit ownership",
+    "retain the existing Live Windows duration and performance thresholds unchanged"
   ],
   "workflowPolicy": "canonical preview workflows retained unchanged",
   "rearVisibilityPolicy": "preserve the visibility semantics actually present in exact preview; draft PR 137 was not imported",
