@@ -377,14 +377,16 @@ function preserveFreshForwardContact(
   checkIntervalSeconds: number,
   nowSeconds: number,
 ): void {
-  // A rear sample is a discrete glance. Between rear checks there is memory, not continuous current vision.
-  // Outside the canonical range there is never a current visual contact. Forward samples receive only a
-  // short bounded grace period so scheduler cadence does not cause one-frame flicker.
-  if (zone !== 'focus' && zone !== 'direct' && zone !== 'peripheral') return;
+  // Scheduled zones keep the most recent successful visual state until the next expected sample plus a
+  // bounded grace window. This prevents cadence-driven flicker without granting vision outside the
+  // canonical zone/range or keeping a contact indefinitely after repeated failed samples.
+  if (zone !== 'focus' && zone !== 'direct' && zone !== 'peripheral' && zone !== 'rear') return;
   const existingContactId = contactIdForStimulus(stimulusId);
   const existing = unit.perceptionKnowledge.contacts.find((item) => item.id === existingContactId) ?? null;
   if (!existing || existing.source !== 'visual' || (!existing.visibleNow && !existing.observedNow)) return;
-  const freshnessSeconds = Math.min(1.5, Math.max(0.1, checkIntervalSeconds * 1.25));
+  const freshnessSeconds = zone === 'rear'
+    ? Math.max(0.1, checkIntervalSeconds * 1.25)
+    : Math.min(1.5, Math.max(0.1, checkIntervalSeconds * 1.25));
   if (nowSeconds - existing.lastObservedSeconds <= freshnessSeconds) {
     updatedContacts.add(existingContactId);
   }
