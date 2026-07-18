@@ -27,7 +27,26 @@ jobs:
           node-version: lts/*
           cache: npm
       - run: npm ci
-      - run: npx tsc --noEmit
+      - name: Capture TypeScript diagnostics
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit > tsc.log 2>&1
+          status=$?
+          cat tsc.log
+          echo "$status" > tsc.exit
+          exit 0
+      - name: Upload TypeScript diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cover-rollback-typescript-log
+          path: |
+            tsc.log
+            tsc.exit
+          retention-days: 7
+      - name: Enforce TypeScript result
+        run: test "$(cat tsc.exit)" = "0"
 
   focused-smoke:
     name: Cover and workspace smoke matrix
@@ -42,19 +61,51 @@ jobs:
           node-version: lts/*
           cache: npm
       - run: npm ci
-      - name: Run focused smoke tests
+      - name: Capture focused smoke tests
+        shell: bash
         run: |
-          npm run cover-suitability:smoke
-          npm run workspace:smoke
-          npm run danger-route-cost-cache:smoke
-          npm run danger-route-cost-parity:smoke
-          npm run danger-layer-performance:smoke
-          npm run danger-layer-movement-performance:smoke
-          npm run route-danger-semantics:smoke
-          npm run navigation-overlay:smoke
-          npm run ui-compact-route-controls:smoke
-          npm run map-revision:smoke
-          npm run navigation-profile-switch:smoke
+          set -o pipefail
+          : > smoke.log
+          : > smoke-failures.txt
+          failed=0
+          commands=(
+            "npm run cover-suitability:smoke"
+            "npm run workspace:smoke"
+            "npm run danger-route-cost-cache:smoke"
+            "npm run danger-route-cost-parity:smoke"
+            "npm run danger-layer-performance:smoke"
+            "npm run danger-layer-movement-performance:smoke"
+            "npm run route-danger-semantics:smoke"
+            "npm run navigation-overlay:smoke"
+            "npm run ui-compact-route-controls:smoke"
+            "npm run map-revision:smoke"
+            "npm run navigation-profile-switch:smoke"
+          )
+          for command in "${commands[@]}"; do
+            echo "===== $command =====" | tee -a smoke.log
+            set +e
+            bash -lc "$command" 2>&1 | tee -a smoke.log
+            status=${PIPESTATUS[0]}
+            set -e
+            if [ "$status" -ne 0 ]; then
+              echo "$command (exit $status)" | tee -a smoke-failures.txt
+              failed=1
+            fi
+          done
+          echo "$failed" > smoke.exit
+          exit 0
+      - name: Upload smoke diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cover-rollback-smoke-log
+          path: |
+            smoke.log
+            smoke-failures.txt
+            smoke.exit
+          retention-days: 7
+      - name: Enforce smoke result
+        run: test "$(cat smoke.exit)" = "0"
 
   production-build:
     name: Production build
@@ -69,7 +120,26 @@ jobs:
           node-version: lts/*
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - name: Capture production build
+        shell: bash
+        run: |
+          set +e
+          npm run build > build.log 2>&1
+          status=$?
+          cat build.log
+          echo "$status" > build.exit
+          exit 0
+      - name: Upload build diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cover-rollback-build-log
+          path: |
+            build.log
+            build.exit
+          retention-days: 7
+      - name: Enforce build result
+        run: test "$(cat build.exit)" = "0"
 
   preview-playwright:
     name: Preview Playwright regression
@@ -85,15 +155,26 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm install --no-save @playwright/test
-      - name: Run preview screenshot regression
-        run: npx playwright test tests/preview-screenshots.spec.ts --project=chromium --reporter=line
-      - name: Upload Playwright artifacts
+      - name: Capture preview screenshot regression
+        shell: bash
+        run: |
+          set -o pipefail
+          set +e
+          npx playwright test tests/preview-screenshots.spec.ts --project=chromium --reporter=line 2>&1 | tee playwright.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > playwright.exit
+          exit 0
+      - name: Upload Playwright diagnostics
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: cover-rollback-playwright-artifacts
           path: |
+            playwright.log
+            playwright.exit
             artifacts/
             test-results/
           if-no-files-found: warn
           retention-days: 7
+      - name: Enforce Playwright result
+        run: test "$(cat playwright.exit)" = "0"
