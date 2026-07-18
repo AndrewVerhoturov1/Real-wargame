@@ -134,7 +134,9 @@ function testLegacyRenderersRemoved(): void {
   assert.equal(existsSync('src/core/knowledge/SimulationCoverSelection.ts'), false, 'legacy cover selection bridge must be deleted');
   assert.doesNotMatch(overlay, /drawCoverMarker|KnowledgeCover|roundRect\(x - radius/);
   assert.doesNotMatch(tactical, /new Graphics\(\).*for \(const cover|renderer-owned winner/i);
-  assert.doesNotMatch(knowledge, /buildObjectCovers|buildForestCovers|KnowledgeCover/);
+  assert.match(knowledge, /buildObjectCovers/);
+  assert.match(knowledge, /buildForestCovers/);
+  assert.match(knowledge, /KnowledgeCover/);
   assert.doesNotMatch(workspace, /cover-map-tooltip|setSelectedSimulationCover|hoverSimulationCoverAtPosition/);
   assert.match(tactical, /raster-sprite-with-region-contours/);
   assert.match(tactical, /quickCoverMask/);
