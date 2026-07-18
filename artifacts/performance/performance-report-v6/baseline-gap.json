@@ -1,0 +1,18 @@
+{
+  "sourceReportExpectedByTask": "real-wargame-performance-2026-07-17_16-34-38-406(1).json",
+  "rawFileCommitted": false,
+  "rawFileAvailableToExecutor": false,
+  "reportedFailureMode": {
+    "initialUnitCount": 6,
+    "editorUnitsAdded": "many",
+    "stallStage": "mass route planning",
+    "exportedUnitCount": 6,
+    "problem": "dynamic scene population and the heaviest pre-stall interval were not preserved"
+  },
+  "v6AcceptanceFixture": {
+    "initialUnitCount": 6,
+    "addedUnitCount": 94,
+    "maximumUnitCount": 100,
+    "finalUnitCount": 100
+  }
+}
