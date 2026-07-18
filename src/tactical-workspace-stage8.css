@@ -74,6 +74,30 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
+.tactical-overlay-mode-section {
+  display: grid;
+  gap: 8px;
+}
+
+.tactical-overlay-mode-section > h3 {
+  margin: 0;
+}
+
+.tactical-overlay-segmented-panel {
+  display: grid;
+  width: 100%;
+  box-sizing: border-box;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 3px;
+}
+
+.tactical-overlay-segmented-panel > button {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
 .cover-list-card {
   display: block;
   width: 100%;
@@ -193,5 +217,9 @@ body.workspace-simulation .editor-scene-tools-slot {
   .tactical-overlay-segmented > button {
     padding-inline: 6px;
     font-size: 10px;
+  }
+
+  .tactical-overlay-segmented-panel > button {
+    min-height: 32px;
   }
 }
