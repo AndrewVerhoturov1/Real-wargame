@@ -1,0 +1,1 @@
+Temporary GitHub Actions validation marker for the cover rollback backup branch.
