@@ -1,334 +1,35 @@
-# Режимы внешней работы: R, Q и X
+# External Work Modes R/Q/X — Deprecated
 
-Этот документ фиксирует рабочий v1-контур режимов внешней работы: полного ручного zworker-режима **R**, короткого GitHub-aware режима **Q** и preview-интеграционного режима **X** (r-init). Route X — отдельный механизм браузерной/GitHub-доставки, используемый r-init как транспорт, но не идентичный r-init.
+The former R, Q, X, r-init and related letter-mode workflow is historical. It must not be used as the normal development process for new Real-Wargame features.
 
-Документ не заменяет `AGENTS.md`. Он уточняет, как Codex выбирает формат внешней задачи и что потом должен проверять.
-
-## Коротко
+In particular, do not use the old meanings:
 
 ```text
-R = ручной zworker без GitHub-доступа -> ZIP с answer.md и repo-relative файлами.
-Q = внешний исполнитель с GitHub-доступом -> прямой коммит/пуш в `real-wargame-preview` (или PR fallback) и отчёт для Codex.
-X (r-init) = preview-интеграционный workflow: preview-ветка, .bat-лаунчер, чеклист, GO/NO-GO, merge-handoff. Route X — отдельный доставщик (браузер/GitHub), не идентичный r-init.
+Q = direct commit/push to real-wargame-preview or PR fallback
+X = Codex-controlled preview integration and merge handoff
+R-init = preview branch as the active implementation state
 ```
 
-R сохраняется без ухудшения. Q добавляется как более удобный режим, когда внешний исполнитель действительно умеет работать с GitHub. X добавляется как режим, когда изменение нужно сначала показать человеку вживую.
+Those routes conflict with the current canonical workflow.
 
-## Общие правила для всех режимов
-
-1. Codex остаётся контролёром процесса.
-2. Человек принимает финальное решение.
-3. `main` не является рабочей веткой для содержательных изменений.
-4. Нельзя публиковать secrets, токены, `.env`, приватные ключи и личные данные.
-5. Нельзя утверждать, что запускались локальные проверки, если они не запускались.
-6. Нельзя мержить без явного разрешения человека.
-
-## R-режим: полный ручной zworker
-
-R — это текущий обычный режим ручного `/zworker`.
-
-Использовать R, когда:
-
-- у внешнего исполнителя нет GitHub-доступа;
-- исполнитель должен работать только по явно переданным публичным raw-ссылкам;
-- нужен ZIP с `answer.md` в корне;
-- нужно получить независимый черновик, ревью, стратегию или пакет repo-relative файлов;
-- нельзя позволять исполнителю самому ходить по репозиторию;
-- важен фиксированный входной контекст: “читай только это”.
-
-В R-запросе Codex/человек вручную даёт:
-
-- zworker manual;
-- repo navigation;
-- список `Files to read`;
-- задачу;
-- ограничения;
-- ожидаемый ZIP-формат.
-
-Результат R:
+Use instead:
 
 ```text
-answer.md
-<repo-relative-file-1>
-<repo-relative-file-2>
+AGENTS.md
+docs/ai/WEB_CHAT_START.md
+docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md
+docs/orchestration/CHAT_WORKFLOW.md
 ```
 
-R-исполнитель не создаёт ветку, не пушит, не открывает PR и не утверждает, что знает локальное состояние.
-
-## Q-режим: внешний исполнитель с GitHub-доступом
-
-Q — это короткий режим для внешнего web-chat, который имеет GitHub-интеграцию и может сам:
-
-- читать репозиторий;
-- читать `AGENTS.md` и `docs/ai/*`;
-- коммитить/пушить изменения напрямую в `real-wargame-preview`;
-- открыть Pull Request в preview, если прямой пуш невозможен;
-- вернуть Codex краткий отчёт.
-
-Q нужен, чтобы не перечислять вручную десятки raw-ссылок и не гонять ZIP туда-сюда, когда результат логичнее проверить как прямой коммит в preview.
-
-## Когда использовать Q
-
-Использовать Q, если одновременно верны условия:
-
-- внешний исполнитель имеет GitHub-доступ к нужному репозиторию;
-- в репозитории уже есть правила работы: `AGENTS.md`, `docs/ai/*`, подпроектная навигация;
-- задача должна закончиться коммитом/пушем в preview (или PR, если прямой пуш невозможен), а не ZIP;
-- Codex готов после этого проверить результат;
-- человек будет принимать финальное решение;
-- контекст безопасно читать из репозитория;
-- задача ограничена и помещается в один PR.
-
-## Когда Q использовать нельзя
-
-Не использовать Q, если:
-
-- у внешнего исполнителя нет GitHub-доступа;
-- результат должен быть ZIP;
-- нужно запретить исполнителю читать соседние файлы;
-- задача требует строго фиксированного набора raw-ссылок;
-- в контексте есть риск секретов или приватных данных;
-- задача зависит от локального состояния, которого нет в GitHub;
-- человек/Codex хочет сначала получить только внешнее мнение без изменений;
-- изменение слишком большое и должно быть предварительно разбито на несколько PR;
-- нет готовности Codex проверить PR после работы.
-
-## Что Codex готовит для Q
-
-Codex не должен писать огромный R-запрос. Он готовит короткую Q-постановку:
-
-1. Project: человекочитаемое название проекта.
-2. Repository: `owner/repo`.
-3. Subproject: id подпроекта или `none`.
-4. Expected size:
-   - `small` — 1–3 файла;
-   - `medium` — несколько связанных файлов;
-   - `large` — большой, но всё равно один PR;
-   - `planning-only` — только план/ревью, без правок.
-5. Read first: только правила и навигация.
-6. Goal: короткая цель.
-7. Allowed changes: что можно менять.
-8. Forbidden changes: что нельзя менять.
-9. Requirements: конкретные требования.
-10. Output for Codex: какой отчёт вернуть.
-
-Для короткого шаблона использовать `docs/ai/TASK_PACK_Q_TEMPLATE.md`.
-
-## Что внешний исполнитель делает в Q
-
-Внешний исполнитель должен:
-
-1. Прочитать `AGENTS.md`.
-2. Прочитать указанные документы навигации.
-3. Не читать весь репозиторий без необходимости.
-4. Зафиксировать изменения прямым коммитом/пушем в `real-wargame-preview` (предпочтительно) или создать временную ветку + PR в `real-wargame-preview`, если прямой пуш невозможен.
-5. Внести только изменения в разрешённом scope.
-6. Написать отчёт для Codex.
-7. Доработать по замечаниям (прямым пушем или через тот же PR).
-
-Внешний исполнитель не должен:
-
-- писать прямо в `main`;
-- включать auto-merge;
-- мержить PR;
-- делать изменения “заодно”;
-- скрывать, что проверки не запускались;
-- заявлять локальную проверку, если он не запускал проект/тесты локально;
-- публиковать secrets, `.env` или приватные данные.
-
-## Результат Q
-
-Q-результат — это не ZIP.
-
-Минимальный ответ внешнего исполнителя для Codex:
-
-```md
-# Q-mode result
-
-## Repository
-
-owner/repo
-
-## Branch / Commit
-
-`real-wargame-preview` @ <commit-sha>
-(или task-branch-name, если использовалась временная ветка)
-
-## Pull Request (if fallback used)
-
-PR number / PR link
-
-## What changed
-
-Кратко, что изменено.
-
-## Changed files
-
-- path/file1.md
-- path/file2.md
-
-## Checks run
-
-- Проверка 1: passed/failed/not run
-- Проверка 2: passed/failed/not run
-
-## Not checked
-
-Что не проверялось и почему.
-
-## Risks
-
-Риски, спорные места, что нужно проверить Codex/человеку.
-
-## Human verification
-
-Что человеку нужно посмотреть или подтвердить.
-
-## Questions for Codex/human
-
-Открытые вопросы, если есть.
-```
-
-Если прямой пуш в preview невозможен и PR не создан, внешний исполнитель должен прямо написать:
-
-```text
-Result not delivered: <причина>
-```
-
-и не выдавать задачу за завершённую.
-
-## Что Codex проверяет после Q-доставки
-
-После Q-ответа Codex должен:
-
-1. Проверить, что изменения попали в `real-wargame-preview` (коммит SHA или PR merge).
-2. Если был PR: проверить, что PR создан из отдельной ветки, а не из `main`.
-3. Если был прямой пуш: проверить наличие коммитов в `real-wargame-preview`.
-4. Прочитать список изменённых файлов.
-5. Проверить diff.
-6. Сверить diff с `Allowed changes` и `Forbidden changes`.
-7. Проверить, что нет secrets, `.env`, приватных данных и лишних файлов.
-8. Проверить, что задача решена одной доставкой.
-9. Проверить, что внешний исполнитель честно указал, какие проверки запускались.
-9b. После подтверждения доставки в `real-wargame-preview` синхронизировать локальную preview-папку из `origin/real-wargame-preview` (git fetch + reset/pull --ff-only или `scripts/windows/update-preview.bat`). Без синхронизации локальные проверки не начинать.
-10. Запустить доступные локальные проверки, если Codex находится в локальной среде.
-11. Если локальной среды нет, написать `Needs local verification`.
-12. Объяснить человеку простыми словами:
-    - что изменилось;
-    - какие риски;
-    - что надо посмотреть;
-    - рекомендация: принять, доработать, отклонить, разделить PR или проверить локально.
-13. Не мержить без явного разрешения человека.
-
-## Минимальный Q-запрос
-
-```md
-# Q-mode GitHub task
-
-Project: <project name>
-Repository: <owner/repo>
-Subproject: <subproject id or none>
-Expected size: <small | medium | large | planning-only>
-
-## Read first
-
-- AGENTS.md
-- docs/ai/WORKFLOW_OVERVIEW.md
-- docs/ai/ZWORKER_MODES.md
-- docs/ai/TASK_PACK_Q_TEMPLATE.md
-- docs/subprojects/<id>/SUBPROJECT.md
-- docs/subprojects/<id>/subproject.json
-- docs/subprojects/<id>/JOURNAL.md
-
-Если задача связана с PixiJS/canvas/2D-графикой/assets/SVG/events/performance/migration-v8 — дополнительно:
-
-- docs/ai/PIXIJS_SKILLS_INDEX.md
-- .agents/skills/pixijs/SKILL.md
-- <релевантные PixiJS skills по таблице из PIXIJS_SKILLS_INDEX.md>
-
-## Goal
-
-<Короткая цель задачи.>
-
-## Allowed changes
-
-<Что можно менять.>
-
-## Forbidden changes
-
-<Что нельзя менять.>
-
-## Requirements
-
-- <Требование 1>
-- <Требование 2>
-
-## Output for Codex
-
-Push/commit the result directly into `real-wargame-preview` (preferred). If direct push is impossible, create a temporary task branch + PR into `real-wargame-preview`. Then reply with:
-
-- repository;
-- branch/commit SHA;
-- PR number/link (if used);
-- changed files;
-- checks run;
-- not checked;
-- risks;
-- human verification steps;
-- questions, if any.
-
-Do not push to main. Do not merge. Do not enable auto-merge. Do not claim local checks were run unless they were actually run.
-```
-
-## Двухпапочная preview-схема
-
-Проект использует две папки: `Real-wargame` (main) и `Real-wargame-preview` (real-wargame-preview). Все изменения сначала попадают в preview-ветку (прямым пушем или через PR) и тестируются в preview-папке. `main` меняется только после GO пользователя. Подробно: `docs/workflow/LOCAL_TWO_FOLDER_WORKFLOW.md`, `docs/workflow/EXTERNAL_CHAT_REQUIRED_RULES.md`.
-
-## X-режим: r-init preview-интеграция
-
-X (режим r-init) — preview-интеграционный режим для изменений, которые нужно проверить вживую до merge. Route X — отдельный механизм браузерной/GitHub-доставки, который r-init может использовать как транспорт; r-init и Route X не идентичны.
-
-### Когда использовать X
-
-Использовать X (r-init), если:
-
-- изменение влияет на поведение, интерфейс или пользовательский опыт;
-- результат нужно увидеть глазами до merge;
-- человек хочет запустить проект и проверить работу;
-- есть риск, что изменение непонятно «в сухую»;
-- нужно получить явное GO перед merge.
-
-Не использовать X для чисто документальных правок, тривиальных изменений или экстренных исправлений.
-
-### Что Codex делает в X
-
-1. Обеспечивает наличие изменений в `real-wargame-preview` (прямым пушем или через PR, если прямой пуш невозможен).
-2. Добавляет `.bat`-лаунчер для терминал-фри запуска.
-3. Даёт человеку чеклист ручного тестирования.
-4. Ждёт GO или NO-GO.
-
-### Что делает человек в X
-
-1. Запускает `.bat` двойным кликом.
-2. Проходит чеклист.
-3. Говорит GO (можно мержить) или NO-GO (доработать).
-
-### После GO
-
-Codex выполняет merge из `real-wargame-preview` в `main`, обновляет статусы компонентов и при необходимости закрывает task-ветку.
-
-### После NO-GO
-
-R-init останавливается. Codex фиксирует замечания. Доработки выносятся в отдельную задачу; повторный r-init — только как новая задача. Codex не задаёт человеку технических вопросов о merge или конфликтах.
-
-### Merge-handoff
-
-Codex фиксирует handoff-шаблон: GO-статус, чеклист, статусы компонентов (included in preview / excluded / blocked / superseded / needs follow-up).
-
-Подробно: `docs/ai/R_INIT_WORKFLOW.md`.
-
-## Статус Q-режима
-
-Q-режим — v1. Он описывает практический контур, но требует проверки на реальном внешнем исполнителе с GitHub-доступом.
-
-До проверки на практике Codex должен относиться к Q как к удобному, но не полностью обкатанному процессу: ограничивать scope, требовать отчёт, внимательно проверять diff и не мержить без человека.
+Current role split:
+
+- one designated Web Chat owns one canonical feature branch;
+- optional worker chats return research, files or patches;
+- Web Chat owns implementation, commits, pushes, fixes and final transfer;
+- Codex only exposes the already-pushed feature branch through a branch-linked Vercel Preview and returns the URL;
+- the human performs live testing and gives the explicit transfer GO;
+- visual GitHub Actions verification runs only after explicit user approval;
+- `real-wargame-preview` is an acceptance target, not the active feature-development branch;
+- `main` requires separate explicit user GO.
+
+Historical details may be inspected through Git history when the user explicitly asks about the legacy process. Agents must not reproduce the old direct-preview, PR-first or Codex-controlled route for current work.
