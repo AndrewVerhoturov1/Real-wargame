@@ -1,38 +1,27 @@
 name: AI Events Core
 
 on:
-  push:
-    branches:
-      - real-wargame-preview
-  pull_request:
-    branches:
-      - real-wargame-preview
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   ai-events-core:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 20
           cache: npm
       - run: npm ci
-      - name: Bounded event queue
-        run: npm run event-queue:smoke
-      - name: Simulation event transitions
-        run: npm run simulation-events:smoke
-      - name: Blackboard observers
-        run: npm run blackboard-observer:smoke
-      - name: Runtime session integration
-        run: npm run runtime-session:smoke
-      - name: Runtime snapshot integration
-        run: npm run runtime-snapshot:smoke
-      - name: Runtime scene integration
-        run: npm run runtime-scene:smoke
-      - name: Reactive route compatibility
-        run: npm run route-status:smoke
-      - name: Production build
-        run: npm run build
+      - run: npm run event-queue:smoke
+      - run: npm run simulation-events:smoke
+      - run: npm run blackboard-observer:smoke
+      - run: npm run runtime-session:smoke
+      - run: npm run runtime-snapshot:smoke
+      - run: npm run runtime-scene:smoke
+      - run: npm run route-status:smoke
+      - run: npm run build
