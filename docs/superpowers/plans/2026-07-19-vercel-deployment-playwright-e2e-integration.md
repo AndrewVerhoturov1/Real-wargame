@@ -28,12 +28,12 @@
 **Files:**
 - Create: `.agents/skills/vercel-deployment-playwright-e2e/SKILL.md`
 
-- [ ] Add intent-based frontmatter that triggers when deployed Vercel visual verification is requested and no directly controlled browser is available.
-- [ ] Document exact inputs, temporary branch/PR architecture and branch isolation.
-- [ ] Add protection-secret handling without committing share tokens.
-- [ ] Add deterministic state-changing Playwright requirements, canvas discipline and overlay persistence checks.
-- [ ] Add evidence JSON, screenshot, trace, video, diagnostics, artifact inspection and user presentation requirements.
-- [ ] Add failure classification, rerun ownership and cleanup rules.
+- [x] Add intent-based frontmatter that triggers when deployed Vercel visual verification is requested and no directly controlled browser is available.
+- [x] Document exact inputs, temporary branch/PR architecture and branch isolation.
+- [x] Add protection-secret handling without committing share tokens.
+- [x] Add deterministic state-changing Playwright requirements, canvas discipline and overlay persistence checks.
+- [x] Add evidence JSON, screenshot, trace, video, diagnostics, artifact inspection and user presentation requirements.
+- [x] Add failure classification, rerun ownership and cleanup rules.
 
 ### Task 2: Make routing automatic and mandatory
 
@@ -44,10 +44,10 @@
 - Modify: `docs/ai/TASK_ROUTER.md`
 - Modify: `docs/ai/repo-context.json`
 
-- [ ] State that user intent is enough and the skill name is not required.
-- [ ] Route direct controlled browser availability to `real-wargame-local-preview`.
-- [ ] Route unavailable direct browser to mandatory `vercel-deployment-playwright-e2e`.
-- [ ] Add machine-readable skill and auto-load fields.
+- [x] State that user intent is enough and the skill name is not required.
+- [x] Route direct controlled browser availability to `real-wargame-local-preview`.
+- [x] Route unavailable direct browser to mandatory `vercel-deployment-playwright-e2e`.
+- [x] Add machine-readable skill and auto-load fields.
 
 ### Task 3: Integrate the skill into visual policy and delivery
 
@@ -57,20 +57,64 @@
 - Modify: `docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md`
 - Modify: `docs/orchestration/RESULT_TEMPLATE.md`
 
-- [ ] Correct the stale local-preview instruction that still prefers direct work in preview.
-- [ ] Define the exact decision point after user approval.
-- [ ] Require temporary CI-only branches and PR when direct browser is unavailable.
-- [ ] Require artifact download, evidence inspection and screenshot presentation.
-- [ ] Extend reporting with target URL, source SHA, CI branches/PR, run/artifact identity, failure class and cleanup status.
+- [x] Correct the stale local-preview instruction that still preferred direct work in preview.
+- [x] Define the exact decision point after user approval.
+- [x] Require temporary CI-only branches and PR when direct browser is unavailable.
+- [x] Require artifact download, evidence inspection and screenshot presentation.
+- [x] Extend reporting with target URL, source SHA, CI branches/PR, run/artifact identity, failure class and cleanup status.
 
 ### Task 4: Verify the documentation contract
 
 **Files:**
 - Review all modified files.
 
-- [ ] Confirm all canonical entry points use mandatory automatic wording.
-- [ ] Confirm no text permits committing share tokens to temporary branches.
-- [ ] Confirm application fixes cannot be made on CI branches.
-- [ ] Confirm a product commit change invalidates previous CI evidence.
-- [ ] Validate `repo-context.json` as JSON.
-- [ ] Compare the feature branch with `real-wargame-preview` and report unavailable executable checks honestly.
+- [x] Confirm all canonical entry points use mandatory automatic wording.
+- [x] Confirm no text permits committing share tokens to temporary branches.
+- [x] Confirm application fixes cannot be made on CI branches.
+- [x] Confirm a product commit change invalidates previous CI evidence.
+- [x] Validate `repo-context.json` as JSON.
+- [x] Compare the feature branch with `real-wargame-preview` and report unavailable executable checks honestly.
+
+## RED/GREEN process evidence
+
+### Baseline RED
+
+Before this change:
+
+- only `real-wargame-local-preview` was registered for visual work;
+- its core rules still said to work in `real-wargame-preview` first;
+- no canonical entry point required the deployed-Vercel CI skill by user intent;
+- no rule separated test-harness fixes from application fixes across CI and product branches;
+- no machine-readable automatic fallback existed.
+
+Therefore a future Web Chat could legally miss the supplied skill unless the user named it explicitly.
+
+### GREEN
+
+After this change:
+
+- the new skill frontmatter matches visual/screenshot/browser/Playwright requests for deployed Vercel Preview when direct browser is unavailable;
+- `AGENTS.md`, `WEB_CHAT_START.md`, `SKILLS_INDEX.md`, `TASK_ROUTER.md`, the local-preview skill, visual policy and canonical delivery workflow all contain the same mandatory automatic route;
+- `repo-context.json` encodes auto-load, branch isolation and evidence invalidation;
+- report template requires run/artifact/product identity, evidence inspection and cleanup.
+
+## Verification result
+
+```text
+repo-context JSON parse: passed
+schemaVersion: 3
+automatic Vercel visual fallback: true
+feature branch vs real-wargame-preview: ahead
+behind_by: 0
+merge base: 0ead877ea6ab04025e494c363769245a30207141
+new project skill fetched from branch: passed
+mandatory routing fetched from AGENTS.md: passed
+mandatory routing fetched from SKILLS_INDEX.md: passed
+secret-in-branch permission: absent; explicit prohibition present
+application fixes on CI branch: explicitly prohibited
+new product SHA reuses old evidence: explicitly prohibited
+GitHub Actions: not run; this task defines the workflow skill but does not execute visual verification
+Playwright/browser: not run
+local npm/docs commands: not run; no local checkout/network-capable git environment available
+subagent pressure scenarios: not run; no subagent execution tool available
+```
