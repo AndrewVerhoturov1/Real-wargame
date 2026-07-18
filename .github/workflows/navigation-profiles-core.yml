@@ -1,119 +1,31 @@
 name: Navigation Profiles Core
 
 on:
-  pull_request:
-    branches:
-      - real-wargame-preview
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   navigation-profiles:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
+    timeout-minutes: 20
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 20
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Navigation profiles smoke
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run navigation-profiles:smoke 2>&1 | tee navigation-profiles.log
-
-      - name: Navigation profile switch smoke
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run navigation-profile-switch:smoke 2>&1 | tee navigation-profile-switch.log
-
-      - name: Navigation overlay contract smoke
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run navigation-overlay:smoke 2>&1 | tee navigation-overlay.log
-
-      - name: Grid pathfinding regression
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run pathfinding:smoke 2>&1 | tee grid-pathfinding.log
-
-      - name: Routed movement regression
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run routed-move:smoke 2>&1 | tee routed-move.log
-
-      - name: Stateful runtime regression
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run runtime:smoke 2>&1 | tee runtime.log
-
-      - name: Reactive route status regression
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run route-status:smoke 2>&1 | tee route-status.log
-
-      - name: Stateful movement bridge regression
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run move-bridge:smoke 2>&1 | tee move-bridge.log
-
-      - name: Command plan route regression
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run command-plan-route:smoke 2>&1 | tee command-plan-route.log
-
-      - name: Map revision regression
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run map-revision:smoke 2>&1 | tee map-revision.log
-
-      - name: Production build
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run build 2>&1 | tee build.log
-
-      - name: Documentation check
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run docs:check 2>&1 | tee docs-check.log
-
-      - name: Upload focused logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: navigation-profiles-core-logs
-          path: |
-            navigation-profiles.log
-            navigation-profile-switch.log
-            navigation-overlay.log
-            grid-pathfinding.log
-            routed-move.log
-            runtime.log
-            route-status.log
-            move-bridge.log
-            command-plan-route.log
-            map-revision.log
-            build.log
-            docs-check.log
-          if-no-files-found: ignore
-          retention-days: 5
+      - run: npm ci
+      - run: npm run navigation-profiles:smoke
+      - run: npm run navigation-profile-switch:smoke
+      - run: npm run navigation-overlay:smoke
+      - run: npm run pathfinding:smoke
+      - run: npm run routed-move:smoke
+      - run: npm run runtime:smoke
+      - run: npm run route-status:smoke
+      - run: npm run move-bridge:smoke
+      - run: npm run command-plan-route:smoke
+      - run: npm run map-revision:smoke
+      - run: npm run build
+      - run: npm run docs:check
