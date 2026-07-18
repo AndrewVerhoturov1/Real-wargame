@@ -1,3 +1,8 @@
+import {
+  DEFAULT_ENVIRONMENT_PROFILE_ID,
+  legacyForestLayerToVegetationMaterialId,
+  terrainKindToSurfaceMaterialId,
+} from '../core/map/EnvironmentMaterialProfile';
 import type {
   ElevationLevel,
   ForestLayerKind,
@@ -101,12 +106,16 @@ function restoreMap(snapshot: Extract<RouteCostWorkerRequest, { type: 'configure
   for (let y = 0; y < snapshot.height; y += 1) {
     for (let x = 0; x < snapshot.width; x += 1) {
       const index = y * snapshot.width + x;
+      const terrain = TERRAIN_KINDS[snapshot.terrainCodes[index] ?? 0] ?? 'field';
+      const forest = clampForest(snapshot.forestKinds[index] ?? 0);
       cells[index] = {
         x,
         y,
-        terrain: TERRAIN_KINDS[snapshot.terrainCodes[index] ?? 0] ?? 'field',
+        surfaceMaterialId: terrainKindToSurfaceMaterialId(terrain),
+        vegetationMaterialId: legacyForestLayerToVegetationMaterialId(forest),
+        terrain,
         height: clampHeight(snapshot.heightLevels[index] ?? 0),
-        forest: clampForest(snapshot.forestKinds[index] ?? 0),
+        forest,
       };
     }
   }
@@ -116,6 +125,7 @@ function restoreMap(snapshot: Extract<RouteCostWorkerRequest, { type: 'configure
     cellSize: snapshot.cellSize,
     metersPerCell: snapshot.metersPerCell,
     sourceToRuntimeCellScale: snapshot.sourceToRuntimeCellScale,
+    environmentProfileId: DEFAULT_ENVIRONMENT_PROFILE_ID,
     defaultTerrain: TERRAIN_KINDS[snapshot.defaultTerrainCode] ?? 'field',
     defaultHeight: clampHeight(snapshot.defaultHeight),
     cells,

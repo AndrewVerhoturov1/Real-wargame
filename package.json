@@ -37,7 +37,7 @@
     "routed-move:smoke": "node scripts/routed_move_smoke.mjs",
     "live-navigation-replan:smoke": "node scripts/live_navigation_replan_smoke.mjs",
     "command-plan-route:smoke": "node scripts/command_plan_route_smoke.mjs",
-    "tactical-order:smoke": "node scripts/tactical_order_radial_menu_smoke.mjs",
+    "tactical-order:smoke": "node scripts/movement_intent_ai_integration_smoke.mjs && node scripts/tactical_order_radial_menu_smoke.mjs",
     "navigation-profiles:smoke": "node scripts/navigation_profiles_smoke.mjs",
     "navigation-profile-switch:smoke": "node scripts/navigation_replan_profile_switch_smoke.mjs",
     "navigation-overlay:smoke": "node scripts/navigation_overlay_contract_smoke.mjs",
@@ -87,7 +87,16 @@
     "long-task-classification:smoke": "node scripts/long_task_classification_smoke.mjs",
     "route-danger-semantics:smoke": "node scripts/route_danger_semantics_smoke.mjs",
     "point-los-differential:smoke": "node scripts/point_visibility_differential_smoke.mjs",
-    "simulation-slowest-pass:smoke": "node scripts/simulation_slowest_pass_attribution_smoke.mjs"
+    "simulation-slowest-pass:smoke": "node scripts/simulation_slowest_pass_attribution_smoke.mjs",
+    "movement-profiles:smoke": "node scripts/movement_profiles_smoke.mjs",
+    "physical-movement:smoke": "node scripts/physical_movement_runtime_smoke.mjs",
+    "shared-vegetation-source-contract:smoke": "node scripts/shared_vegetation_source_contract_smoke.mjs",
+    "movement-intent-ai:smoke": "node scripts/movement_intent_ai_integration_smoke.mjs",
+    "movement-environment-integration:smoke": "node scripts/movement_environment_integration_smoke.mjs",
+    "environment-materials:smoke": "node scripts/environment_materials_smoke.mjs",
+    "environment-material-migration:smoke": "node scripts/environment_material_migration_smoke.mjs",
+    "environment-profile-revisions:smoke": "node scripts/environment_profile_revisions_smoke.mjs",
+    "vegetation-chunk-raster:smoke": "node scripts/vegetation_chunk_raster_smoke.mjs"
   },
   "dependencies": {
     "pixi.js": "^8.19.0"

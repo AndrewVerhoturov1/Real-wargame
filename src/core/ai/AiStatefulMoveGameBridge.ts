@@ -1,4 +1,10 @@
 import type { GridPosition } from '../geometry';
+import {
+  MOVEMENT_PROFILE_MEMORY_KEYS,
+  MOVEMENT_PROFILE_SOURCES,
+  type MovementProfileRegistryEntry,
+  type MovementProfileSource,
+} from '../movement/MovementProfiles';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../navigation/NavigationRuntime';
 import type { MoveOrder } from '../orders/MoveOrder';
 import { planMoveOrder } from '../orders/MoveOrderPlanning';
@@ -24,6 +30,7 @@ import {
   type AiRouteStatusSettings,
   type AiRouteStatusState,
 } from './AiRouteStatus';
+import { reconcileMovementProfileRuntime } from './MovementProfileRuntimeResolver';
 
 const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 const GRAPH_STORAGE_KEY = 'real-wargame.ai-node-editor.graph.v6';
@@ -53,6 +60,8 @@ export interface TickOptions {
   readonly cycleStartMs?: number;
   readonly cycleEndMs?: number;
   readonly diagnosticPreview?: boolean;
+  readonly deferOrdinaryDecision?: boolean;
+  readonly movementProfileRegistryEntries?: readonly MovementProfileRegistryEntry[];
 }
 
 interface ActiveMoveSnapshot {
@@ -62,6 +71,18 @@ interface ActiveMoveSnapshot {
   readonly acceptanceRadiusCells: number;
   readonly ownerToken: string;
   readonly targetAvailable: boolean;
+}
+
+interface BeginMoveMovementProfileFields {
+  readonly movementProfileId?: unknown;
+  readonly movementProfileSource?: unknown;
+  readonly movementProfileOwnerToken?: unknown;
+}
+
+interface BeginMoveMovementProfileSnapshot {
+  readonly profileId?: string;
+  readonly source?: MovementProfileSource;
+  readonly ownerToken?: string;
 }
 
 export function installAiStatefulMoveGameBridge(state: SimulationState): AiGameBridgeHandle {
@@ -131,7 +152,9 @@ export function tickStatefulMoveBridgeForTrustedUnit(
   nowMs = getSimulationNowMs(state),
   options: TickOptions = { force: false, applyEffects: true },
 ): AiGraphRuntimeResult | null {
+  reconcileMovementProfileRuntime(unit, options.movementProfileRegistryEntries);
   syncMoveOrderMemoryForUnit(unit);
+  const orderBeforeRuntimeTick = unit.order;
 
   let routeResult: AiRouteStatusResult | null = null;
   let runtimeOptions = options;
@@ -142,12 +165,27 @@ export function tickStatefulMoveBridgeForTrustedUnit(
   }
 
   const result = tickAiGameBridgeForTrustedUnit(state, unit, nowMs, runtimeOptions);
-  if (result && runtimeOptions.applyEffects) applyOwnedMoveEffectsForUnit(state, unit, result);
-  syncMoveOrderMemoryForUnit(unit);
+  const movementReconciledByBegin = result && runtimeOptions.applyEffects
+    ? applyOwnedMoveEffectsForUnit(state, unit, result, options.movementProfileRegistryEntries)
+    : false;
+
+  const moveEffectState = describeMoveEffectState(result);
+  const orderChanged = unit.order !== orderBeforeRuntimeTick;
+  const requiresPostReconcile = moveEffectState.hasClear
+    || (moveEffectState.hasMovementProfileMemoryWrite && !movementReconciledByBegin)
+    || (!result && orderChanged);
+  if (requiresPostReconcile) {
+    reconcileMovementProfileRuntime(unit, options.movementProfileRegistryEntries);
+  }
+  if (orderChanged || moveEffectState.hasBegin || moveEffectState.hasClear) {
+    syncMoveOrderMemoryForUnit(unit);
+  }
 
   if (options.applyEffects) {
-    const afterEffects = updateRouteStatusForTrustedUnit(state, unit, nowMs, options.graphSnapshot);
-    if (afterEffects) routeResult = afterEffects;
+    if (result || orderChanged || options.cancel) {
+      const afterEffects = updateRouteStatusForTrustedUnit(state, unit, nowMs, options.graphSnapshot);
+      if (afterEffects) routeResult = afterEffects;
+    }
     publishSimulationAiEvents(unit, nowMs);
   }
 
@@ -167,11 +205,11 @@ export function syncMoveOrderMemoryForUnit(unit: UnitModel): void {
   const runtime = unit.behaviorRuntime as AiMoveRuntime;
   const memory = getRuntimeMemory(runtime);
   const order = unit.order;
-  memory.active_move_source = order
+  setMemoryIfChanged(memory, 'active_move_source', order
     ? order.source ?? (order.ownerToken ? 'ai' : 'player')
-    : null;
-  memory.active_move_owner_token = order?.ownerToken ?? null;
-  memory.active_move_target = order ? { ...order.target } : null;
+    : null);
+  setMemoryIfChanged(memory, 'active_move_owner_token', order?.ownerToken ?? null);
+  setGridPositionMemoryIfChanged(memory, 'active_move_target', order?.target ?? null);
   if (order) publishPathOrderMemory(memory, order);
 }
 
@@ -226,19 +264,25 @@ export function updateRouteStatusForTrustedUnit(
   return routeResult;
 }
 
-export function applyOwnedMoveEffects(state: SimulationState, result: AiGraphRuntimeResult): void {
+export function applyOwnedMoveEffects(
+  state: SimulationState,
+  result: AiGraphRuntimeResult,
+  registryEntries?: readonly MovementProfileRegistryEntry[],
+): void {
   const unit = state.units.find((candidate) => candidate.id === result.unitId);
   if (!unit) return;
-  applyOwnedMoveEffectsForUnit(state, unit, result);
+  applyOwnedMoveEffectsForUnit(state, unit, result, registryEntries);
 }
 
 export function applyOwnedMoveEffectsForUnit(
   state: SimulationState,
   unit: UnitModel,
   result: AiGraphRuntimeResult,
-): void {
+  registryEntries?: readonly MovementProfileRegistryEntry[],
+): boolean {
   const runtime = unit.behaviorRuntime as AiMoveRuntime;
   const memory = getRuntimeMemory(runtime);
+  let movementReconciled = false;
 
   for (const [index, rawEffect] of result.effects.entries()) {
     const effect = readAiGraphRuntimeMoveEffect(rawEffect);
@@ -247,6 +291,7 @@ export function applyOwnedMoveEffectsForUnit(
     if (effect.type === 'begin_move') {
       runtime.aiRouteStatusState = null;
       const resolvedNavigation = resolveUnitNavigationProfile(unit, null);
+      const movementSnapshot = readBeginMoveMovementProfileSnapshot(rawEffect);
       const planned = planMoveOrder(state.map, unit.position, effect.targetPosition, {
         source: 'ai',
         ownerToken: effect.ownerToken,
@@ -254,6 +299,9 @@ export function applyOwnedMoveEffectsForUnit(
         movementMode: unit.navigationMovementMode ?? 'normal',
         navigationProfile: resolvedNavigation.profile,
         navigationProfileSource: resolvedNavigation.source,
+        movementProfileId: movementSnapshot.profileId,
+        movementProfileSource: movementSnapshot.source,
+        movementProfileOwnerToken: movementSnapshot.ownerToken,
         calculatedAtSimulationStep: state.simulationStep,
         tacticalContext: buildUnitTacticalRouteContext(unit, {
           freshness: 'immediate',
@@ -270,6 +318,8 @@ export function applyOwnedMoveEffectsForUnit(
       }
 
       unit.order = planned.order;
+      reconcileMovementProfileRuntime(unit, registryEntries);
+      movementReconciled = true;
       unit.behaviorRuntime.currentAction = 'move';
       unit.behaviorRuntime.reason = planned.path.reasonRu;
       unit.behaviorRuntime.lastEvent = 'ai_graph_owned_move_started';
@@ -294,6 +344,7 @@ export function applyOwnedMoveEffectsForUnit(
       unit.behaviorRuntime.lastEvent = 'ai_graph_owned_move_cleanup_skipped';
     }
   }
+  return movementReconciled;
 }
 
 function getSelectedUnit(state: SimulationState): UnitModel | undefined {
@@ -374,6 +425,21 @@ function loadRouteSettings(activeNodeId: string, graph?: { readonly nodes: reado
   }
 }
 
+function readBeginMoveMovementProfileSnapshot(rawEffect: unknown): BeginMoveMovementProfileSnapshot {
+  if (!isRecord(rawEffect)) return {};
+  const fields = rawEffect as BeginMoveMovementProfileFields;
+  const profileId = cleanOptionalText(fields.movementProfileId);
+  const source = MOVEMENT_PROFILE_SOURCES.includes(fields.movementProfileSource as MovementProfileSource)
+    ? fields.movementProfileSource as MovementProfileSource
+    : undefined;
+  if (!profileId || !source) return {};
+  return {
+    profileId,
+    source,
+    ownerToken: cleanOptionalText(fields.movementProfileOwnerToken),
+  };
+}
+
 function publishRouteMemory(memory: Record<string, AiBlackboardValue>, result: AiRouteStatusResult): void {
   memory.active_move_route_status = result.status;
   memory.active_move_no_progress_ms = result.noProgressMs;
@@ -383,12 +449,65 @@ function publishRouteMemory(memory: Record<string, AiBlackboardValue>, result: A
 }
 
 function publishPathOrderMemory(memory: Record<string, AiBlackboardValue>, order: MoveOrder): void {
-  memory.active_move_path_status = order.routeStatus ?? 'direct';
-  memory.active_move_path_waypoint_count = order.waypoints?.length ?? 0;
-  memory.active_move_path_waypoint_index = order.waypointIndex ?? 0;
-  memory.active_move_path_requested_target = order.requestedTarget ? { ...order.requestedTarget } : { ...order.target };
-  memory.active_move_path_resolved_target = { ...order.target };
-  memory.active_move_path_reason = order.pathReasonRu ?? order.pathReason ?? null;
+  setMemoryIfChanged(memory, 'active_move_path_status', order.routeStatus ?? 'direct');
+  setMemoryIfChanged(memory, 'active_move_path_waypoint_count', order.waypoints?.length ?? 0);
+  setMemoryIfChanged(memory, 'active_move_path_waypoint_index', order.waypointIndex ?? 0);
+  setGridPositionMemoryIfChanged(
+    memory,
+    'active_move_path_requested_target',
+    order.requestedTarget ?? order.target,
+  );
+  setGridPositionMemoryIfChanged(memory, 'active_move_path_resolved_target', order.target);
+  setMemoryIfChanged(memory, 'active_move_path_reason', order.pathReasonRu ?? order.pathReason ?? null);
+}
+
+interface MoveEffectState {
+  readonly hasBegin: boolean;
+  readonly hasClear: boolean;
+  readonly hasMovementProfileMemoryWrite: boolean;
+}
+
+function describeMoveEffectState(result: AiGraphRuntimeResult | null): MoveEffectState {
+  let hasBegin = false;
+  let hasClear = false;
+  let hasMovementProfileMemoryWrite = false;
+  for (const effect of result?.effects ?? []) {
+    const moveEffect = readAiGraphRuntimeMoveEffect(effect);
+    if (moveEffect?.type === 'begin_move') hasBegin = true;
+    else if (moveEffect?.type === 'clear_move') hasClear = true;
+    if (effect.type === 'write_memory' && isMovementProfileAuthorityMemoryKey(effect.key)) {
+      hasMovementProfileMemoryWrite = true;
+    }
+  }
+  return { hasBegin, hasClear, hasMovementProfileMemoryWrite };
+}
+
+function isMovementProfileAuthorityMemoryKey(key: string): boolean {
+  return key === MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideProfileId
+    || key === MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideOwnerToken
+    || key === MOVEMENT_PROFILE_MEMORY_KEYS.aiOverrideReason;
+}
+
+function setMemoryIfChanged(
+  memory: Record<string, AiBlackboardValue>,
+  key: string,
+  value: AiBlackboardValue,
+): void {
+  if (memory[key] !== value) memory[key] = value;
+}
+
+function setGridPositionMemoryIfChanged(
+  memory: Record<string, AiBlackboardValue>,
+  key: string,
+  value: GridPosition | null,
+): void {
+  const current = memory[key];
+  if (value === null) {
+    if (current !== null) memory[key] = null;
+    return;
+  }
+  if (isGridPosition(current) && current.x === value.x && current.y === value.y) return;
+  memory[key] = { ...value };
 }
 
 function publishPathFailureMemory(
@@ -459,6 +578,12 @@ function writePathDebugFields(
   payload.pathRequestedTarget = memory.active_move_path_requested_target;
   payload.pathResolvedTarget = memory.active_move_path_resolved_target;
   payload.pathReasonRu = memory.active_move_path_reason;
+  payload.requestedMovementProfileId = memory[MOVEMENT_PROFILE_MEMORY_KEYS.requestedProfileId];
+  payload.activeMovementProfileId = memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId];
+  payload.activeMovementProfileSource = memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileSource];
+  payload.activeMovementGait = memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeGait];
+  payload.movementForcedFallback = memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedFallback];
+  payload.movementForcedReason = memory[MOVEMENT_PROFILE_MEMORY_KEYS.forcedReason];
 }
 
 function updateDebugPayload(update: (payload: Record<string, unknown>) => void): void {
@@ -492,4 +617,12 @@ function isGridPosition(value: unknown): value is GridPosition {
 
 function finiteNonNegative(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : fallback;
+}
+
+function cleanOptionalText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

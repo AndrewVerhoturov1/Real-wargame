@@ -15,7 +15,17 @@ import { buildBoundedRouteDangerDiagnostic, routeDangerDiagnosticInputsMatch } f
 
 const ROUTE_LOOKAHEAD_CELLS = 6;
 
-export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationState): boolean {
+export interface NavigationReplanWorkBudget {
+  remainingSearches: number;
+  readonly claimedUnitIds: string[];
+  readonly deferredUnitIds: string[];
+}
+
+export function ensureNavigationRouteCurrent(
+  unit: UnitModel,
+  state: SimulationState,
+  workBudget?: NavigationReplanWorkBudget,
+): boolean {
   const order = unit.order;
   const routeCells = order?.routeCells;
   const requestedTarget = order?.requestedTarget;
@@ -66,6 +76,20 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
     return !blocked;
   }
   if (asynchronous.status === 'ready') routeFields = asynchronous.fields;
+  if (workBudget && workBudget.remainingSearches <= 0) {
+    if (!workBudget.deferredUnitIds.includes(unit.id)) workBudget.deferredUnitIds.push(unit.id);
+    unit.behaviorRuntime.lastEvent = blocked
+      ? 'move_blocked_route_replan_deferred'
+      : 'move_route_replan_deferred';
+    unit.behaviorRuntime.reason = blocked
+      ? 'Текущий маршрут заблокирован; точное перестроение безопасно отложено до следующего лимита маршрутов.'
+      : 'Точное перестроение маршрута отложено по детерминированному бюджету; текущий маршрут сохранён.';
+    return !blocked;
+  }
+  if (workBudget) {
+    workBudget.remainingSearches -= 1;
+    workBudget.claimedUnitIds.push(unit.id);
+  }
   if (!routeFields) {
     routeFields = measurePerformancePhase(
       'route.fields.prepare',
@@ -95,6 +119,12 @@ export function ensureNavigationRouteCurrent(unit: UnitModel, state: SimulationS
       ?? 'normal',
     navigationProfile: resolved.profile,
     navigationProfileSource: resolved.source,
+    movementProfileId: order.movementProfileId
+      ?? unit.playerCommand?.intent.movementProfileId,
+    movementProfileSource: order.movementProfileSource,
+    movementProfileOwnerToken: order.movementProfileOwnerToken,
+    movementProfileDefinitionRevision: order.movementProfileDefinitionRevision,
+    movementProfileSelectionRevision: order.movementProfileSelectionRevision,
     finalFacingRadians: order.finalFacingRadians,
     calculatedAtSimulationStep: state.simulationStep,
     tacticalContext,

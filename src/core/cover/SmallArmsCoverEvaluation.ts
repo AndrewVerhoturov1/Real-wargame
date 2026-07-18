@@ -6,6 +6,7 @@ import {
   type MapObject,
   type TacticalMap,
 } from '../map/MapModel';
+import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 
 export interface SmallArmsCoverContribution {
   kind: 'object' | 'forest' | 'relief';
@@ -127,27 +128,38 @@ export function evaluateForestCover(
   if (length < 0.5) return null;
 
   const samples = Math.max(4, Math.ceil(length * 3));
-  let lightCells = 0;
-  let denseCells = 0;
+  let sparseSamples = 0;
+  let denseSamples = 0;
+  let density = 0;
+  const materialWeights = new Map<string, { nameRu: string; weight: number }>();
 
   for (let index = 1; index < samples; index += 1) {
     const t = index / samples;
     const point = lerpPoint(threatPosition, targetPosition, t);
     const cell = getCell(map, Math.floor(point.x), Math.floor(point.y));
-    if (cell?.forest === 1) lightCells += 1;
-    if (cell?.forest === 2) denseCells += 1;
+    const vegetation = resolveCellVegetationDefinition(cell);
+    density += vegetation.fire.densityWeight;
+    if (vegetation.fire.densityWeight > 0) {
+      const current = materialWeights.get(vegetation.id);
+      materialWeights.set(vegetation.id, {
+        nameRu: vegetation.nameRu.toLowerCase(),
+        weight: (current?.weight ?? 0) + vegetation.fire.densityWeight,
+      });
+    }
+    if (vegetation.id === 'sparse_forest') sparseSamples += 1;
+    if (vegetation.id === 'dense_forest') denseSamples += 1;
   }
 
-  const density = denseCells * 1.7 + lightCells * 0.8;
   if (density <= 0) return null;
 
   const strength = clampPercent(8 + Math.min(34, density * 2.1));
   const reliability = clampPercent(18 + Math.min(72, density * 4.2));
   const concealment = clampPercent(20 + Math.min(78, density * 6));
 
+  const strongestMaterial = [...materialWeights.values()].sort((left, right) => right.weight - left.weight)[0];
   return {
     kind: 'forest',
-    labelRu: denseCells > lightCells ? 'густой лес' : 'лес и кустарник',
+    labelRu: strongestMaterial?.nameRu ?? (denseSamples > sparseSamples ? 'густой лес' : 'лес и кустарник'),
     strength,
     reliability,
     expectedProtection: clampPercent(strength * reliability / 100),

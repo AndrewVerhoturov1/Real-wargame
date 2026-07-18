@@ -1,5 +1,17 @@
 import { distance, type GridPosition } from '../../../geometry';
+import {
+  MOVEMENT_PROFILE_SELECTION_MODES,
+  MOVEMENT_PROFILE_SOURCES,
+  resolveMovementProfileSelection,
+  type MovementProfileSelectionMode,
+  type MovementProfileSource,
+} from '../../../movement/MovementProfiles';
 import type { AiGraphEffect } from '../../AiGraphRunner';
+import {
+  buildClearAiMovementProfileUpdates,
+  buildSetAiMovementProfileUpdates,
+  type AiMemoryUpdate,
+} from '../../MovementProfileAiMemory';
 import type { AiNodeLifecycle } from '../AiNodeLifecycle';
 
 export interface MoveToBlackboardPositionActionState {
@@ -9,6 +21,12 @@ export interface MoveToBlackboardPositionActionState {
   readonly acceptanceRadiusCells: number;
   readonly timeoutMs: number;
   readonly actionToken: string;
+  /** Added after the initial state format; omitted legacy snapshots mean automatic. */
+  readonly movementProfileSelection?: MovementProfileSelectionMode;
+  readonly movementProfileId?: string;
+  readonly movementProfileSource?: MovementProfileSource;
+  readonly movementProfileDiagnosticReason?: string;
+  readonly movementProfileDiagnosticReasonRu?: string;
 }
 
 export const moveToBlackboardPositionLifecycle: AiNodeLifecycle<MoveToBlackboardPositionActionState> = {
@@ -32,6 +50,14 @@ export const moveToBlackboardPositionLifecycle: AiNodeLifecycle<MoveToBlackboard
       };
     }
 
+    const movementSelection = resolveMovementProfileSelection({
+      mode: context.node.parameters?.movementProfileSource,
+      specificProfileId: context.node.parameters?.movementProfileId,
+      playerOrderActive: context.blackboard.player_command_active,
+      playerOrderProfileId: context.blackboard.player_order_movement_profile,
+      activeProfileId: context.blackboard.active_movement_profile_id,
+      activeProfileSource: context.blackboard.active_movement_profile_source,
+    });
     const state: MoveToBlackboardPositionActionState = {
       kind: 'move_to_blackboard_position',
       targetKey,
@@ -39,6 +65,11 @@ export const moveToBlackboardPositionLifecycle: AiNodeLifecycle<MoveToBlackboard
       acceptanceRadiusCells: readNumber(context.node.parameters?.acceptanceRadiusCells, 0.2),
       timeoutMs: toMilliseconds(readNumber(context.node.parameters?.timeoutSeconds, 15)),
       actionToken: makeActionToken(context.unitId, context.node.id, context.nowMs),
+      movementProfileSelection: movementSelection.mode,
+      movementProfileId: movementSelection.profileId,
+      movementProfileSource: movementSelection.source,
+      movementProfileDiagnosticReason: movementSelection.diagnosticReason,
+      movementProfileDiagnosticReasonRu: movementSelection.diagnosticReasonRu,
     };
     const remaining = distance(selfPosition, state.target);
     if (remaining <= state.acceptanceRadiusCells) {
@@ -53,9 +84,13 @@ export const moveToBlackboardPositionLifecycle: AiNodeLifecycle<MoveToBlackboard
     return {
       status: 'running',
       state,
-      effects: [beginMoveEffect(state)],
-      reason: `Move ${context.node.id} started toward ${targetKey}.`,
-      reasonRu: `Движение «${nodeNameRu(context.node)}» начато к цели «${targetKey}».`,
+      effects: [...startMovementProfileEffects(state), beginMoveEffect(state)],
+      reason: movementSelection.diagnosticReason
+        ? `Move ${context.node.id} started toward ${targetKey}. ${movementSelection.diagnosticReason}`
+        : `Move ${context.node.id} started toward ${targetKey}.`,
+      reasonRu: movementSelection.diagnosticReasonRu
+        ? `Движение «${nodeNameRu(context.node)}» начато к цели «${targetKey}». ${movementSelection.diagnosticReasonRu}`
+        : `Движение «${nodeNameRu(context.node)}» начато к цели «${targetKey}».`,
       details: moveDetails(state, remaining),
     };
   },
@@ -138,7 +173,7 @@ export const moveToBlackboardPositionLifecycle: AiNodeLifecycle<MoveToBlackboard
     reasonRu: cancellation.reasonRu,
     details: moveDetails(state),
   }),
-  cleanup: (_context, state, outcome) => {
+  cleanup: (context, state, outcome) => {
     if (!state) return [];
     const reason = outcome === 'success'
       ? 'AI movement completed.'
@@ -150,7 +185,10 @@ export const moveToBlackboardPositionLifecycle: AiNodeLifecycle<MoveToBlackboard
       : outcome === 'cancelled'
         ? 'Движение ИИ отменено.'
         : 'Движение ИИ провалилось.';
-    return [clearMoveEffect(state.actionToken, reason, reasonRu)];
+    return [
+      ...cleanupMovementProfileEffects(context.blackboard, state, reasonRu),
+      clearMoveEffect(state.actionToken, reason, reasonRu),
+    ];
   },
   validateState: isMoveToBlackboardPositionActionState,
 };
@@ -164,15 +202,62 @@ export function isMoveToBlackboardPositionActionState(value: unknown): value is 
     && isFiniteNonNegative(value.acceptanceRadiusCells)
     && isFiniteNonNegative(value.timeoutMs)
     && typeof value.actionToken === 'string'
-    && value.actionToken.length > 0;
+    && value.actionToken.length > 0
+    && (
+      value.movementProfileSelection === undefined
+      || MOVEMENT_PROFILE_SELECTION_MODES.includes(value.movementProfileSelection as MovementProfileSelectionMode)
+    )
+    && (value.movementProfileId === undefined || typeof value.movementProfileId === 'string')
+    && (
+      value.movementProfileSource === undefined
+      || MOVEMENT_PROFILE_SOURCES.includes(value.movementProfileSource as MovementProfileSource)
+    )
+    && (value.movementProfileDiagnosticReason === undefined || typeof value.movementProfileDiagnosticReason === 'string')
+    && (value.movementProfileDiagnosticReasonRu === undefined || typeof value.movementProfileDiagnosticReasonRu === 'string');
+}
+
+function startMovementProfileEffects(state: MoveToBlackboardPositionActionState): readonly AiGraphEffect[] {
+  if (state.movementProfileSelection !== 'specific' || !state.movementProfileId) return [];
+  return memoryUpdatesToEffects(buildSetAiMovementProfileUpdates({
+    profileId: state.movementProfileId,
+    ownerToken: state.actionToken,
+    reason: 'Specific movement profile selected by the active move action.',
+  }));
+}
+
+function cleanupMovementProfileEffects(
+  blackboard: Readonly<Record<string, unknown>>,
+  state: MoveToBlackboardPositionActionState,
+  reasonRu: string,
+): readonly AiGraphEffect[] {
+  if (state.movementProfileSelection !== 'specific') return [];
+  const result = buildClearAiMovementProfileUpdates({
+    expectedOwnerToken: state.actionToken,
+    activeOwnerToken: blackboard.movement_profile_override_owner_token,
+    reason: reasonRu,
+  });
+  return memoryUpdatesToEffects(result.updates);
+}
+
+function memoryUpdatesToEffects(updates: readonly AiMemoryUpdate[]): readonly AiGraphEffect[] {
+  return updates.map((update) => ({
+    type: 'write_memory',
+    key: update.key,
+    value: update.value,
+  }));
 }
 
 function beginMoveEffect(state: MoveToBlackboardPositionActionState): AiGraphEffect {
+  const hasExplicitSnapshot = Boolean(state.movementProfileId && state.movementProfileSource);
+  const ownsProfileOverride = state.movementProfileSelection === 'specific';
   return {
     type: 'begin_move',
     ownerToken: state.actionToken,
     targetPosition: { ...state.target },
     targetKey: state.targetKey,
+    movementProfileId: hasExplicitSnapshot ? state.movementProfileId : undefined,
+    movementProfileSource: hasExplicitSnapshot ? state.movementProfileSource : undefined,
+    movementProfileOwnerToken: ownsProfileOverride ? state.actionToken : undefined,
     reason: `AI movement started toward ${state.targetKey}.`,
     reasonRu: `Движение ИИ начато к цели «${state.targetKey}».`,
   } as unknown as AiGraphEffect;
@@ -193,6 +278,11 @@ function moveDetails(state: MoveToBlackboardPositionActionState, remaining?: num
     targetPosition: { ...state.target },
     actionToken: state.actionToken,
     distanceRemainingCells: remaining,
+    movementProfileSelection: state.movementProfileSelection ?? 'automatic',
+    movementProfileId: state.movementProfileId,
+    movementProfileSource: state.movementProfileSource,
+    movementProfileDiagnosticReason: state.movementProfileDiagnosticReason,
+    movementProfileDiagnosticReasonRu: state.movementProfileDiagnosticReasonRu,
   };
 }
 

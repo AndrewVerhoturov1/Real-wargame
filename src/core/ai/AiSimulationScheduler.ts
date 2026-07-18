@@ -1,4 +1,5 @@
 import { isUnitCombatCapable } from '../combat/CombatDamage';
+import type { MovementProfileRegistryEntry } from '../movement/MovementProfiles';
 import {
   measurePerformancePhase,
   withPerformancePhaseContext,
@@ -8,15 +9,19 @@ import { isUnitGraphAiControlled, type UnitModel } from '../units/UnitModel';
 import {
   recordAiSchedulerCycle,
   recordAiSchedulerCycleDuration,
+  recordAiSchedulerGraphUnitPass,
   recordAiSchedulerUnitPass,
   recordAiSchedulerUnitPassDuration,
 } from './AiSchedulerPerformanceDiagnostics';
 import { resolveRuntimeGraphSnapshot } from './AiGameBridge';
 import { tickStatefulMoveBridgeForTrustedUnit } from './AiStatefulMoveGameBridge';
 
+const MAX_ORDINARY_DECISIONS_PER_CYCLE = 2;
+
 export interface AiSimulationSchedulerOptions {
   readonly cycleStartMs?: number;
   readonly cycleEndMs?: number;
+  readonly movementProfileRegistryEntries?: readonly MovementProfileRegistryEntry[];
 }
 
 export interface AiSimulationSchedulerResult {
@@ -27,6 +32,8 @@ export interface AiSimulationSchedulerResult {
   readonly eligibleUnitIds: readonly string[];
   readonly processedUnitIds: readonly string[];
   readonly graphTickedUnitIds: readonly string[];
+  readonly ordinaryDecisionUnitIds: readonly string[];
+  readonly ordinaryDeferredUnitIds: readonly string[];
   readonly duplicateSkippedUnitIds: readonly string[];
   readonly unitVisits: number;
   readonly trustedBridgeCalls: number;
@@ -64,22 +71,33 @@ export function tickAiSimulationScheduler(
     resolveRuntimeGraphSnapshot,
   );
   const graphResolutionMs = performance.now() - graphResolutionStartedAt;
+  const eligibleUnits: UnitModel[] = [];
   const eligibleUnitIds: string[] = [];
   const processedUnitIds: string[] = [];
   const graphTickedUnitIds: string[] = [];
   const duplicateSkippedUnitIds: string[] = [];
   let unitVisits = 0;
+
+  for (const unit of state.units) {
+    unitVisits += 1;
+    if (!isSimulationAiControlledUnit(unit)) continue;
+    eligibleUnits.push(unit);
+    eligibleUnitIds.push(unit.id);
+  }
+  const ordinaryDecisionUnitIds = selectOrdinaryDecisionUnits(
+    eligibleUnits,
+    cycleEndMs,
+    state.simulationStep,
+  );
+  const ordinaryDecisionUnitIdSet = new Set(ordinaryDecisionUnitIds);
+  const ordinaryDeferredUnitIds: string[] = [];
   let trustedBridgeCalls = 0;
   let unitPassDurationMs = 0;
   let maxUnitId: string | null = null;
   let maxUnitDurationMs = 0;
   let maxUnitActiveNode: string | null = null;
 
-  for (const unit of state.units) {
-    unitVisits += 1;
-    if (!isSimulationAiControlledUnit(unit)) continue;
-    eligibleUnitIds.push(unit.id);
-
+  for (const unit of eligibleUnits) {
     if (unit.behaviorRuntime.aiLastSimulationStep === state.simulationStep) {
       duplicateSkippedUnitIds.push(unit.id);
       continue;
@@ -88,6 +106,10 @@ export function tickAiSimulationScheduler(
     unit.behaviorRuntime.aiLastSimulationStep = state.simulationStep;
     processedUnitIds.push(unit.id);
     trustedBridgeCalls += 1;
+
+    const ordinaryDecisionDue = isOrdinaryDecisionDue(unit, cycleEndMs);
+    const deferOrdinaryDecision = ordinaryDecisionDue && !ordinaryDecisionUnitIdSet.has(unit.id);
+    if (deferOrdinaryDecision) ordinaryDeferredUnitIds.push(unit.id);
 
     const decisionTickBefore = unit.behaviorRuntime.aiDecisionTickCount;
     const observerPollBefore = unit.behaviorRuntime.aiObserverPollCount;
@@ -109,6 +131,8 @@ export function tickAiSimulationScheduler(
           graphSnapshot,
           cycleStartMs,
           cycleEndMs,
+          deferOrdinaryDecision,
+          movementProfileRegistryEntries: options.movementProfileRegistryEntries,
         }),
       ),
     );
@@ -127,7 +151,17 @@ export function tickAiSimulationScheduler(
     const observerPollDelta = unit.behaviorRuntime.aiObserverPollCount - observerPollBefore;
     const reactiveWakeDelta = unit.behaviorRuntime.aiReactiveWakeCount - reactiveWakeBefore;
     recordAiSchedulerUnitPassDuration(unitDurationMs, graphTicked);
-    if (graphTicked || unitDurationMs >= 8) {
+    if (graphTicked) {
+      recordAiSchedulerGraphUnitPass(
+        state.simulationStep,
+        cycleStartMs,
+        cycleEndMs,
+        unit.id,
+        unit.behaviorRuntime.currentAction,
+        unit.behaviorRuntime.lastEvent ?? null,
+      );
+    }
+    if (unitDurationMs >= 8) {
       recordAiSchedulerUnitPass({
         simulationStep: state.simulationStep,
         cycleStartMs,
@@ -153,7 +187,7 @@ export function tickAiSimulationScheduler(
   const schedulerOverheadMs = Math.max(0, schedulerDurationMs - graphResolutionMs - unitPassDurationMs);
   const decisionCycle = graphTickedUnitIds.length > 0;
   recordAiSchedulerCycleDuration(schedulerDurationMs, decisionCycle);
-  if (decisionCycle || schedulerDurationMs >= 8) {
+  if (schedulerDurationMs >= 8) {
     recordAiSchedulerCycle({
       simulationStep: state.simulationStep,
       cycleStartMs,
@@ -178,6 +212,8 @@ export function tickAiSimulationScheduler(
     eligibleUnitIds,
     processedUnitIds,
     graphTickedUnitIds,
+    ordinaryDecisionUnitIds,
+    ordinaryDeferredUnitIds,
     duplicateSkippedUnitIds,
     unitVisits,
     trustedBridgeCalls,
@@ -193,6 +229,27 @@ export function tickAiSimulationScheduler(
     maxUnitDurationMs: roundTwo(maxUnitDurationMs),
     maxUnitActiveNode,
   };
+}
+
+
+function selectOrdinaryDecisionUnits(
+  eligibleUnits: readonly UnitModel[],
+  cycleEndMs: number,
+  simulationStep: number,
+): string[] {
+  if (eligibleUnits.length === 0) return [];
+  const selected: string[] = [];
+  const startIndex = simulationStep % eligibleUnits.length;
+  for (let offset = 0; offset < eligibleUnits.length && selected.length < MAX_ORDINARY_DECISIONS_PER_CYCLE; offset += 1) {
+    const unit = eligibleUnits[(startIndex + offset) % eligibleUnits.length];
+    if (isOrdinaryDecisionDue(unit, cycleEndMs)) selected.push(unit.id);
+  }
+  return selected;
+}
+
+function isOrdinaryDecisionDue(unit: UnitModel, cycleEndMs: number): boolean {
+  return unit.behaviorRuntime.aiDecisionTickCount === 0
+    || Math.max(0, unit.behaviorRuntime.aiNextDecisionAtMs) <= cycleEndMs;
 }
 
 export function isSimulationAiControlledUnit(unit: UnitModel): boolean {

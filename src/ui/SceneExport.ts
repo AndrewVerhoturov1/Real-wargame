@@ -1,6 +1,13 @@
-import { buildAiRuntimeSceneSnapshot } from '../core/ai/runtime/AiRuntimeSnapshot';
+import { buildAiRuntimeSceneSnapshot, serializeMoveOrder } from '../core/ai/runtime/AiRuntimeSnapshot';
+import { saveMovementProfileRegistry } from '../ai-node-editor/MovementProfileBrowserStorage';
 import { getCombatRuntime } from '../core/combat/CombatDamage';
 import { getWeaponRuntime } from '../core/combat/WeaponModel';
+import { serializeMovementRuntime } from '../core/movement/MovementRuntime';
+import { createMovementProfileRegistry, serializeMovementProfileRegistry, type MovementProfileRegistryData } from '../core/movement/MovementProfiles';
+import {
+  EnvironmentProfileRegistry,
+  type EnvironmentProfileRegistryData,
+} from '../core/map/EnvironmentMaterialProfile';
 import {
   resolveObjectCoverProperties,
   type TacticalMapData,
@@ -12,6 +19,7 @@ import {
 import { replaceSceneAtRuntimeResolution } from '../core/simulation/ResolutionAwareScene';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { refreshAiTestLabSceneSnapshot } from '../core/testing/AiTestLabRuntime';
+import { getEnvironmentProfileRegistry, saveEnvironmentProfileRegistry } from './EnvironmentProfileStorage';
 import type { UnitData, UnitModel } from '../core/units/UnitModel';
 
 export interface ExportedSceneData {
@@ -25,10 +33,15 @@ export interface ExportedSceneData {
     metersPerCell: number;
     defaultTerrain: string;
     defaultHeight: number;
+    environmentProfileId: string;
     heightMap: number[][];
     forestMap: number[][];
+    surfaceMaterialMap: string[][];
+    vegetationMaterialMap: string[][];
     objects: Array<Record<string, unknown>>;
   };
+  environmentProfiles: EnvironmentProfileRegistryData;
+  movementProfiles: MovementProfileRegistryData;
   units: Array<Record<string, unknown>>;
   pressureZones: Array<Record<string, unknown>>;
 }
@@ -44,7 +57,23 @@ export async function loadSceneJsonFromFile(state: SimulationState, file: File):
   }
 
   const scene = normalizeImportedScene(parsed);
+  const environmentRegistry = scene.environmentProfiles === undefined
+    ? getEnvironmentProfileRegistry()
+    : EnvironmentProfileRegistry.fromUnknown(scene.environmentProfiles);
+  const requestedEnvironmentProfileId = scene.map.environmentProfileId?.trim();
+  if (requestedEnvironmentProfileId && environmentRegistry.hasProfile(requestedEnvironmentProfileId)) {
+    environmentRegistry.setActiveProfile(requestedEnvironmentProfileId);
+  }
+  saveEnvironmentProfileRegistry(environmentRegistry);
   replaceSceneAtRuntimeResolution(state, scene.map, scene.units, scene.pressureZones);
+  state.movementProfiles = createMovementProfileRegistry(scene.movementProfiles);
+  saveMovementProfileRegistry(state.movementProfiles);
+  if (environmentRegistry.hasProfile(state.map.environmentProfileId)) {
+    environmentRegistry.setActiveProfile(state.map.environmentProfileId);
+    saveEnvironmentProfileRegistry(environmentRegistry);
+  } else {
+    state.map.environmentProfileId = environmentRegistry.activeProfileId;
+  }
   state.editor.selectedObjectId = null;
   state.editor.selectedZoneId = null;
   state.editor.drag = null;
@@ -81,6 +110,8 @@ export function normalizeImportedScene(value: unknown): {
   map: TacticalMapData;
   units: UnitData[];
   pressureZones: PressureZoneData[];
+  environmentProfiles: unknown;
+  movementProfiles: unknown;
 } {
   const scene = requireRecord(value, 'Файл должен содержать объект сцены.');
   const map = requireRecord(scene.map, 'В JSON сцены нет блока map.');
@@ -89,6 +120,8 @@ export function normalizeImportedScene(value: unknown): {
     map: map as unknown as TacticalMapData,
     units: readArray(scene.units) as unknown as UnitData[],
     pressureZones: readArray(scene.pressureZones) as unknown as PressureZoneData[],
+    environmentProfiles: scene.environmentProfiles,
+    movementProfiles: scene.movementProfiles,
   };
 }
 
@@ -96,7 +129,7 @@ export function buildExportedScene(state: SimulationState): ExportedSceneData {
   return {
     version: 'scene-export-v9-minimal-target-visibility-ai-runtime-2m-grid',
     exportedAt: new Date().toISOString(),
-    noteRu: 'Экспорт полигона ИИ с тактическим намерением PlayerCommand, слоем «Обзор и память», типом видимой цели у источников угроз, метрическими настройками зрения, навигационными профилями и активным runtime. Старые сцены без новых полей получают безопасные значения по умолчанию; сцены 10 м преобразуются в текущую сетку при загрузке.',
+    noteRu: 'Экспорт полигона ИИ с тактическим намерением PlayerCommand, профилями физического движения, environment materials, выносливостью, фактическим способом движения, слоем «Обзор и память», навигационными профилями и активным runtime. Новые поля добавляются совместимо в envelope v9; старые сцены без них получают безопасные значения по умолчанию, а сцены 10 м преобразуются в текущую сетку при загрузке.',
     map: {
       width: state.map.width,
       height: state.map.height,
@@ -104,8 +137,11 @@ export function buildExportedScene(state: SimulationState): ExportedSceneData {
       metersPerCell: state.map.metersPerCell,
       defaultTerrain: state.map.defaultTerrain,
       defaultHeight: state.map.defaultHeight,
+      environmentProfileId: state.map.environmentProfileId,
       heightMap: buildHeightMap(state),
       forestMap: buildForestMap(state),
+      surfaceMaterialMap: buildMaterialMap(state, 'surfaceMaterialId'),
+      vegetationMaterialMap: buildMaterialMap(state, 'vegetationMaterialId'),
       objects: state.map.objects.map((object) => {
         const cover = resolveObjectCoverProperties(object);
         return {
@@ -127,6 +163,8 @@ export function buildExportedScene(state: SimulationState): ExportedSceneData {
         };
       }),
     },
+    environmentProfiles: getEnvironmentProfileRegistry().toData(),
+    movementProfiles: serializeMovementProfileRegistry(state.movementProfiles),
     units: state.units.map(exportUnit),
     pressureZones: state.pressureZones.map((zone) => {
       const settings = resolvePressureZoneSettings(zone);
@@ -189,6 +227,17 @@ function buildForestMap(state: SimulationState): number[][] {
   return rows;
 }
 
+
+function buildMaterialMap(state: SimulationState, field: 'surfaceMaterialId' | 'vegetationMaterialId'): string[][] {
+  const rows: string[][] = [];
+  for (let y = 0; y < state.map.height; y += 1) {
+    const row: string[] = [];
+    for (let x = 0; x < state.map.width; x += 1) row.push(state.map.cells[y * state.map.width + x]?.[field] ?? (field === 'surfaceMaterialId' ? 'field' : 'none'));
+    rows.push(row);
+  }
+  return rows;
+}
+
 function exportUnit(unit: UnitModel): Record<string, unknown> {
   return {
     id: unit.id,
@@ -196,7 +245,6 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
     labelRu: unit.labels.ru,
     type: unit.type,
     side: unit.side,
-    aiControl: unit.aiControl,
     x: roundThree(unit.position.x - 0.5),
     y: roundThree(unit.position.y - 0.5),
     speedCellsPerSecond: roundThree(unit.speedCellsPerSecond),
@@ -223,6 +271,7 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
     perceptionKnowledge: JSON.parse(JSON.stringify(unit.perceptionKnowledge)),
     navigationProfileId: unit.unitRoleNavigationProfileId ?? undefined,
     navigationMovementMode: unit.navigationMovementMode ?? undefined,
+    movementProfileId: unit.unitRoleMovementProfileId ?? undefined,
     playerCommand: unit.playerCommand ? JSON.parse(JSON.stringify(unit.playerCommand)) : undefined,
     runtime: {
       stress: roundOne(unit.behaviorRuntime.stress),
@@ -232,6 +281,8 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
       posture: unit.behaviorRuntime.posture,
       weapon: { ...getWeaponRuntime(unit) },
       combat: JSON.parse(JSON.stringify(getCombatRuntime(unit))),
+      movement: serializeMovementRuntime(unit.movementRuntime),
+      moveOrder: unit.order ? serializeMoveOrder(unit.order) : undefined,
       aiRuntime: buildAiRuntimeSceneSnapshot(
         unit.behaviorRuntime.aiRuntimeSession,
         unit.order,

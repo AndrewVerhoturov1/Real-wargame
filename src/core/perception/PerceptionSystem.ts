@@ -1,5 +1,6 @@
 import { isUnitCombatCapable } from '../combat/CombatDamage';
 import { distance } from '../geometry';
+import { getMovementObservationTargetMultiplier } from '../movement/MovementRuntime';
 import { getSelectedUnit, type SimulationState } from '../simulation/SimulationState';
 import { areUnitsHostile } from '../units/SideRelations';
 import type { UnitModel } from '../units/UnitModel';
@@ -194,6 +195,10 @@ export function tickUnitPerception(
       attention,
       visibility,
     });
+    visualSignal.evidencePerSecond *= getMovementObservationTargetMultiplier(
+      unit,
+      stimulus.movement !== 'stationary',
+    );
     if (visualSignal.evidencePerSecond <= 0) continue;
 
     const contactId = contactIdForStimulus(stimulus.id);
@@ -377,6 +382,10 @@ function processSoundEvents(
     const stimulusId = event.sourceId ? `unit:${event.sourceId}` : `sound:${event.id}`;
     const contactId = event.sourceId ? contactIdForStimulus(stimulusId) : `perception:sound:${event.id}`;
     const previous = unit.perceptionKnowledge.contacts.find((item) => item.id === contactId) ?? null;
+    if (previous?.source === 'visual' && previous.lastUpdatedSeconds === now) {
+      updatedContacts.add(contactId);
+      continue;
+    }
     const contact = advanceReportedContact(previous, {
       id: contactId,
       stimulusId,
@@ -436,7 +445,7 @@ function scheduleNextChecks(
   now: number,
   due: DueAttentionChecks,
 ): void {
-  const profile = unit.attentionSettings.profiles[unit.attentionRuntime.mode];
+  const profile = effectiveProfile(unit);
   if (due.focus) unit.attentionRuntime.nextFocusCheckSeconds = now + profile.focusCheckIntervalSeconds;
   if (due.direct) unit.attentionRuntime.nextDirectCheckSeconds = now + profile.directCheckIntervalSeconds;
   if (due.peripheral) unit.attentionRuntime.nextPeripheralCheckSeconds = now + profile.peripheralCheckIntervalSeconds;
@@ -452,10 +461,27 @@ function intervalForZone(profile: AttentionModeProfile, zone: AttentionZone): nu
 function effectiveProfile(unit: UnitModel): AttentionModeProfile {
   const base = unit.attentionSettings.profiles[unit.attentionRuntime.mode];
   const narrowing = 1 - Math.min(0.35, unit.behaviorRuntime.suppression * 0.0035);
+  const movement = unit.movementRuntime.isMoving ? unit.movementRuntime.diagnostics : null;
+  const focusMultiplier = movement?.observationFocusMultiplier ?? 1;
+  const directMultiplier = movement?.observationDirectMultiplier ?? 1;
+  const peripheralMultiplier = movement?.observationPeripheralMultiplier ?? 1;
+  const rearMultiplier = movement?.observationRearMultiplier ?? 1;
+  const scanSpeedMultiplier = movement?.observationScanSpeedMultiplier ?? 1;
   return {
     ...base,
     focusAngleDegrees: Math.max(4, base.focusAngleDegrees * narrowing),
     directAngleDegrees: Math.max(base.focusAngleDegrees * narrowing, base.directAngleDegrees * narrowing),
+    focusWeight: base.focusWeight * focusMultiplier,
+    directWeight: base.directWeight * directMultiplier,
+    peripheralWeight: base.peripheralWeight * peripheralMultiplier,
+    focusCheckIntervalSeconds: base.focusCheckIntervalSeconds
+      / Math.max(0.05, focusMultiplier * scanSpeedMultiplier),
+    directCheckIntervalSeconds: base.directCheckIntervalSeconds
+      / Math.max(0.05, directMultiplier * scanSpeedMultiplier),
+    peripheralCheckIntervalSeconds: base.peripheralCheckIntervalSeconds
+      / Math.max(0.05, peripheralMultiplier * scanSpeedMultiplier),
+    rearCheckIntervalSeconds: base.rearCheckIntervalSeconds
+      / Math.max(0.05, rearMultiplier * scanSpeedMultiplier),
   };
 }
 

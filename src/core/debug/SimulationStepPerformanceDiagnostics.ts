@@ -36,8 +36,14 @@ const slowestSteps: SimulationStepPerformanceDiagnostic[] = [];
 export function recordSimulationStepPerformance(
   value: SimulationStepPerformanceDiagnostic,
 ): void {
-  slowestSteps.push(clone(value));
-  slowestSteps.sort((left, right) => right.totalDurationMs - left.totalDurationMs);
+  if (
+    slowestSteps.length >= MAX_SLOWEST_SIMULATION_STEPS
+    && value.totalDurationMs <= (slowestSteps[slowestSteps.length - 1]?.totalDurationMs ?? 0)
+  ) return;
+  const snapshot = clone(value);
+  let index = slowestSteps.length;
+  while (index > 0 && slowestSteps[index - 1].totalDurationMs < snapshot.totalDurationMs) index -= 1;
+  slowestSteps.splice(index, 0, snapshot);
   if (slowestSteps.length > MAX_SLOWEST_SIMULATION_STEPS) slowestSteps.length = MAX_SLOWEST_SIMULATION_STEPS;
 }
 

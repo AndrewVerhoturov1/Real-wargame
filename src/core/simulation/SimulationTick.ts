@@ -1,4 +1,5 @@
 import { tickAiSimulationScheduler, type AiSimulationSchedulerResult } from '../ai/AiSimulationScheduler';
+import { reconcileMovementProfileRuntime } from '../ai/MovementProfileRuntimeResolver';
 import { measurePerformancePhase, withPerformancePhaseContext } from '../debug/PerformancePhases';
 import { getThreatRelativeCoverFieldDiagnostics } from '../cover/ThreatRelativeCoverField';
 import { getSoldierDangerFieldDiagnostics } from '../knowledge/SoldierDangerField';
@@ -11,18 +12,20 @@ import { publishSimulationAiEvents } from '../ai/events/SimulationAiEvents';
 import { clampPercent, POSTURE_MOVE_MULTIPLIER } from '../behavior/BehaviorModel';
 import { getCombatMovementMultiplier, getCombatRuntime, isUnitCombatCapable } from '../combat/CombatDamage';
 import { tickAutomaticCombatEngagements } from '../combat/CombatEngagement';
-import { getFireAction, tickAllFireActions } from '../combat/FireAction';
+import { getFireAction, reconcileAllPendingFireIntents, tickAllFireActions } from '../combat/FireAction';
 import { getCombatSuppressionSnapshot } from '../combat/CombatSuppression';
 import type { GridPosition } from '../geometry';
 import { syncSoldierThreatMemory } from '../knowledge/SoldierThreatMemory';
 import { clampGridPositionToMap } from '../map/MapModel';
-import { ensureNavigationRouteCurrent } from '../navigation/NavigationRouteReplanner';
+import { commitPhysicalMovementStep, preparePhysicalMovementStep } from '../movement/MovementRuntime';
+import type { MovementProfileRegistryEntry } from '../movement/MovementProfileTypes';
+import { ensureNavigationRouteCurrent, type NavigationReplanWorkBudget } from '../navigation/NavigationRouteReplanner';
 import type { MoveOrder } from '../orders/MoveOrder';
 import { updatePlayerCommandStatus } from '../orders/PlayerCommand';
 import { updateAttentionController } from '../perception/AttentionController';
 import { normalizeRadians } from '../perception/AttentionModel';
 import { tickAllUnitPerception } from '../perception/PerceptionSystem';
-import { evaluateThreatsAtPosition } from '../pressure/ThreatEvaluation';
+import { createThreatRuntimeEvaluation, evaluateThreatRuntimeAtPosition } from '../pressure/ThreatEvaluation';
 import { getAiTestTimeScale } from '../testing/AiTestLabRuntime';
 import type { UnitModel } from '../units/UnitModel';
 import type { SimulationState } from './SimulationState';
@@ -32,6 +35,8 @@ const UNIT_VISUAL_BODY_RADIUS_CELLS = 0.42;
 const UNIT_COLLISION_RADIUS_CELLS = UNIT_VISUAL_BODY_RADIUS_CELLS / 3;
 const UNIT_MIN_CENTER_DISTANCE_CELLS = UNIT_COLLISION_RADIUS_CELLS * 2;
 const COLLISION_PASSES = 3;
+const MAX_ROUTE_REPLAN_SEARCHES_PER_STEP = 1;
+const threatRuntimeEvaluation = createThreatRuntimeEvaluation();
 
 export function tickSimulation(state: SimulationState, deltaSeconds: number): void {
   const scaledDeltaSeconds = deltaSeconds * getAiTestTimeScale(state);
@@ -44,6 +49,7 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
   const pointBefore = getPerceptionGeometryPreparationDiagnostics(state);
   const tacticalBefore = tacticalBuildCount(state);
   const schedulerAttribution: { result: AiSimulationSchedulerResult | null } = { result: null };
+  const movementProfileRegistryEntries = state.movementProfiles.listProfileEntries();
   let routeNavigationDurationMs = 0;
   const phases: SimulationStepPhaseDurations = {
     metricsMs: 0,
@@ -74,17 +80,36 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
     });
 
     phases.aiSchedulerMs = measureTimedPhase('simulation.ai-scheduler', () => {
-      schedulerAttribution.result = tickAiSimulationScheduler(state, { cycleStartMs, cycleEndMs });
+      schedulerAttribution.result = tickAiSimulationScheduler(state, {
+        cycleStartMs,
+        cycleEndMs,
+        movementProfileRegistryEntries,
+      });
     });
     phases.combatMs = measureTimedPhase('simulation.combat', () => {
+      reconcileAllPendingFireIntents(state);
       tickAutomaticCombatEngagements(state);
       tickAllFireActions(state, scaledDeltaSeconds);
     });
 
     const simulationTimeMs = Math.max(0, Math.round(state.simulationTimeSeconds * 1000));
     phases.movementEventsMs = measureTimedPhase('simulation.movement-events', () => {
-      for (const unit of state.units) {
-        routeNavigationDurationMs += moveUnit(unit, state, scaledDeltaSeconds);
+      const routeReplanWorkBudget: NavigationReplanWorkBudget = {
+        remainingSearches: MAX_ROUTE_REPLAN_SEARCHES_PER_STEP,
+        claimedUnitIds: [],
+        deferredUnitIds: [],
+      };
+      const unitCount = state.units.length;
+      const movementStartIndex = unitCount > 0 ? state.simulationStep % unitCount : 0;
+      for (let offset = 0; offset < unitCount; offset += 1) {
+        const unit = state.units[(movementStartIndex + offset) % unitCount];
+        routeNavigationDurationMs += moveUnit(
+          unit,
+          state,
+          scaledDeltaSeconds,
+          movementProfileRegistryEntries,
+          routeReplanWorkBudget,
+        );
         publishSimulationAiEvents(unit, simulationTimeMs);
       }
     });
@@ -145,19 +170,19 @@ function tacticalBuildCount(state: SimulationState): number {
 }
 
 function updateMetrics(unit: UnitModel, state: SimulationState, deltaSeconds: number): void {
-  const report = evaluateThreatsAtPosition(state.map, unit, state.pressureZones);
+  const report = evaluateThreatRuntimeAtPosition(state.map, unit, state.pressureZones, threatRuntimeEvaluation);
   const combatPressure = getCombatSuppressionSnapshot(unit, state.simulationTimeSeconds);
 
   unit.behaviorRuntime.rawDanger = report.danger;
   unit.behaviorRuntime.danger = clampPercent(report.danger + combatPressure.suppression * 0.45);
   unit.behaviorRuntime.suppression = combinePercent(report.suppression, combatPressure.suppression);
 
-  const strongestId = report.strongest?.zone.id ?? report.strongestKnown?.threat.id ?? null;
+  const strongestId = report.strongestScenarioId ?? report.strongestKnownId;
   if (strongestId) {
     unit.behaviorRuntime.stress = clampPercent(
       unit.behaviorRuntime.stress + report.stressPerSecond * unit.behaviorSettings.fear * deltaSeconds,
     );
-    unit.behaviorRuntime.lastEvent = report.strongest
+    unit.behaviorRuntime.lastEvent = report.strongestScenarioId
       ? `pressure:${strongestId}`
       : `known_threat:${strongestId}`;
     unit.behaviorRuntime.reason = `under threat from ${strongestId}`;
@@ -203,26 +228,76 @@ function updateStateLabels(unit: UnitModel): void {
   setState(unit, unit.behaviorRuntime.state === 'idle' ? 'idle' : 'observing', 'no active move order');
 }
 
-function moveUnit(unit: UnitModel, state: SimulationState, deltaSeconds: number): number {
-  if (!unit.order || deltaSeconds <= 0 || !isUnitCombatCapable(unit) || getFireAction(unit)) return 0;
-  const routeStartedAt = performance.now();
-  const routePassable = ensureRoutePassable(unit, state);
-  const routeNavigationDurationMs = performance.now() - routeStartedAt;
-  if (!routePassable) return routeNavigationDurationMs;
+function moveUnit(
+  unit: UnitModel,
+  state: SimulationState,
+  deltaSeconds: number,
+  movementProfileRegistryEntries: readonly MovementProfileRegistryEntry[],
+  routeReplanWorkBudget: NavigationReplanWorkBudget,
+): number {
+  const previousMovementAuthority = {
+    profileId: unit.movementRuntime.effectiveProfileId,
+    source: unit.movementRuntime.effectiveProfileSource,
+  } as const;
+  reconcileMovementProfileRuntime(
+    unit,
+    movementProfileRegistryEntries,
+    { profileId: null },
+    { commit: false },
+  );
+
+  const combatCapable = isUnitCombatCapable(unit);
+  const firing = Boolean(getFireAction(unit));
+  let routeNavigationDurationMs = 0;
+  let routeReady = false;
+  if (unit.order && combatCapable && !firing && deltaSeconds > 0) {
+    const routeStartedAt = performance.now();
+    routeReady = ensureRoutePassable(unit, state, routeReplanWorkBudget);
+    routeNavigationDurationMs = performance.now() - routeStartedAt;
+  }
+
+  const postureMultiplier = POSTURE_MOVE_MULTIPLIER[unit.behaviorRuntime.posture];
+  const woundMultiplier = getCombatMovementMultiplier(unit);
+  const step = preparePhysicalMovementStep(
+    state,
+    unit,
+    deltaSeconds,
+    routeReady && Boolean(unit.order),
+    postureMultiplier,
+    woundMultiplier,
+  );
+  reconcileMovementProfileRuntime(unit, movementProfileRegistryEntries, {
+    profileId: unit.movementRuntime.forcedFallbackReason
+      ? unit.movementRuntime.effectiveProfileId
+      : null,
+    reason: unit.movementRuntime.forcedFallbackReason,
+  }, {
+    previousProfileId: previousMovementAuthority.profileId,
+    previousProfileSource: previousMovementAuthority.source,
+  });
+
   const order = unit.order;
-  if (!order) return routeNavigationDurationMs;
+  if (!order) {
+    commitPhysicalMovementStep(state, unit, step, unit.position, unit.position, deltaSeconds);
+    return routeNavigationDurationMs;
+  }
 
   const waypointIndex = order.waypointIndex ?? 0;
   const movementTarget = order.waypoints?.[waypointIndex] ?? order.target;
-  const remainingDistance = getDistance(unit.position, movementTarget);
-  const postureMultiplier = POSTURE_MOVE_MULTIPLIER[unit.behaviorRuntime.posture];
-  const conditionMultiplier = Math.max(0.35, unit.soldier.condition.speed / 100);
-  const woundMultiplier = getCombatMovementMultiplier(unit);
-  const stepDistance = unit.speedCellsPerSecond * postureMultiplier * conditionMultiplier * woundMultiplier * deltaSeconds;
   updateFacingAlongRoute(unit, movementTarget);
-  unit.position = moveToPoint(unit.position, movementTarget, stepDistance);
+  if (step.maxDistanceCells <= 0) {
+    commitPhysicalMovementStep(state, unit, step, unit.position, unit.position, deltaSeconds);
+    return routeNavigationDurationMs;
+  }
 
-  if (remainingDistance > stepDistance + ORDER_COMPLETION_EPSILON_CELLS) return routeNavigationDurationMs;
+  const remainingDistance = getDistance(unit.position, movementTarget);
+  const startPosition = { ...unit.position };
+  unit.position = moveToPoint(unit.position, movementTarget, step.maxDistanceCells);
+  commitPhysicalMovementStep(state, unit, step, startPosition, unit.position, deltaSeconds);
+
+  if (remainingDistance > step.maxDistanceCells + ORDER_COMPLETION_EPSILON_CELLS) {
+    return routeNavigationDurationMs;
+  }
   unit.position = { ...movementTarget };
 
   const waypoints = order.waypoints;
@@ -264,8 +339,12 @@ function applyFinalFacing(unit: UnitModel, order: MoveOrder): void {
   unit.behaviorRuntime.lastEvent = 'move_final_facing_applied';
 }
 
-function ensureRoutePassable(unit: UnitModel, state: SimulationState): boolean {
-  return ensureNavigationRouteCurrent(unit, state);
+function ensureRoutePassable(
+  unit: UnitModel,
+  state: SimulationState,
+  routeReplanWorkBudget: NavigationReplanWorkBudget,
+): boolean {
+  return ensureNavigationRouteCurrent(unit, state, routeReplanWorkBudget);
 }
 
 function completeLinkedPlayerCommand(unit: UnitModel, order: MoveOrder): void {

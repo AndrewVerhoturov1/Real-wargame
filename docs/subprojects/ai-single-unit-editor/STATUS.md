@@ -14,11 +14,11 @@
 
 ## Current focus
 
-Draft PR #127 follow-up hardens the accepted simulation-owned per-unit scheduler: explicit paused steps advance all simulation systems, selected-unit diagnostics are read-only, observer polling and graph decisions use partition-invariant simulation-time cadence, the scheduler is one O(n) pass with one frozen graph snapshot, and ai-scheduler:smoke is blocking CI. It is not yet part of real-wargame-preview.
+Draft PR #130 implements canonical surface/vegetation material profiles, the visible «Профили местности» editor, independent presentation/visibility/fire/movement revisions, continuous dirty-chunk vegetation raster rendering and canonical worker material snapshots from preview base 4adb42650f0fb6ad61b31f9521cec4508a5a40ec. Performance investigation is intentionally delegated to a separate follow-up.
 
 ## Next step
 
-Review the corrected exact head of draft PR #127 and its Combat Foundation Core scheduler-smoke evidence; if accepted, integrate it with PR #126 while preserving canonical world-threat semantics and the scheduler phase order.
+Review the exact-head material, migration, revision, renderer and integration checks for PR #130. Run the prepared forest/profile screenshot QA only after explicit user approval.
 
 ## Read first
 
@@ -132,6 +132,12 @@ Review the corrected exact head of draft PR #127 and its Combat Foundation Core 
 - `src/core/ai/AiGraphRuntime.ts`
 - `src/ai-node-editor/runtime-debug-overlay.ts`
 - `src/core/ai/AiSimulationScheduler.ts`
+- `src/core/map/EnvironmentMaterialProfile.ts`
+- `src/core/map/EnvironmentProfileRuntime.ts`
+- `src/ui/EnvironmentProfileStorage.ts`
+- `src/core/knowledge/AwarenessWorkerMapSnapshot.ts`
+- `src/rendering/VegetationChunkRaster.ts`
+- `src/ai-node-editor/EnvironmentProfileEditorPanel.ts`
 
 ## Suggested verification
 
@@ -179,6 +185,10 @@ Review the corrected exact head of draft PR #127 and its Combat Foundation Core 
 - `npm run runtime-debug-v2:smoke`
 - `npm run graph-v2-cli:smoke`
 - `npm run ai-scheduler:smoke`
+- `npm run environment-materials:smoke`
+- `npm run environment-material-migration:smoke`
+- `npm run environment-profile-revisions:smoke`
+- `npm run vegetation-chunk-raster:smoke`
 
 ## Safety rules
 
@@ -214,3 +224,6 @@ Review the corrected exact head of draft PR #127 and its Combat Foundation Core 
 - Selected-unit evaluate/tick/cancel-preview diagnostics must execute on a detached state and never mutate gameplay state.
 - Observer-relative direction/range changes for unit contacts do not increment semantic tacticalKnowledge revision or trigger route replanning.
 - Canonical scene/editor units declare aiControl='graph'; externally scripted fixtures declare aiControl='manual'.
+- Cells reference canonical surfaceMaterialId and vegetationMaterialId; legacy terrain/forest values are compatibility projections only.
+- Simulation and AI read material profile values and never infer gameplay from raster pixels, texture colors or Pixi display objects.
+- Presentation, visibility, fire and movement profile changes invalidate only their owned consumers.

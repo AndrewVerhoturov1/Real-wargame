@@ -1,4 +1,5 @@
 import type { GridPosition } from '../geometry';
+import type { MovementProfileSource } from '../movement/MovementProfiles';
 import { cloneRouteDangerDiagnostic, type RouteDangerDiagnostic } from '../navigation/RouteDangerDiagnostic';
 import type { NavigationProfileSource } from '../navigation/NavigationProfileResolver';
 import type { NavigationMovementMode } from '../navigation/NavigationProfiles';
@@ -37,6 +38,11 @@ export interface MoveOrderOptions {
   readonly navigationProfileId?: string;
   readonly navigationProfileRevision?: number;
   readonly navigationProfileSource?: NavigationProfileSource;
+  readonly movementProfileId?: string;
+  readonly movementProfileSource?: MovementProfileSource;
+  readonly movementProfileOwnerToken?: string;
+  readonly movementProfileDefinitionRevision?: number;
+  readonly movementProfileSelectionRevision?: number;
   readonly finalFacingRadians?: number;
   readonly knowledgeRevision?: number;
   readonly replanSearchCount?: number;
@@ -74,6 +80,11 @@ export interface MoveOrder {
   navigationProfileId?: string;
   navigationProfileRevision?: number;
   navigationProfileSource?: NavigationProfileSource;
+  movementProfileId?: string;
+  movementProfileSource?: MovementProfileSource;
+  movementProfileOwnerToken?: string;
+  movementProfileDefinitionRevision?: number;
+  movementProfileSelectionRevision?: number;
   finalFacingRadians?: number;
   knowledgeRevision?: number;
   replanSearchCount?: number;
@@ -112,6 +123,11 @@ export function createMoveOrder(target: GridPosition, options: MoveOrderOptions 
     navigationProfileId: options.navigationProfileId,
     navigationProfileRevision: options.navigationProfileRevision,
     navigationProfileSource: options.navigationProfileSource,
+    movementProfileId: options.movementProfileId,
+    movementProfileSource: options.movementProfileSource,
+    movementProfileOwnerToken: options.movementProfileOwnerToken,
+    movementProfileDefinitionRevision: options.movementProfileDefinitionRevision,
+    movementProfileSelectionRevision: options.movementProfileSelectionRevision,
     finalFacingRadians: options.finalFacingRadians,
     knowledgeRevision: options.knowledgeRevision,
     replanSearchCount: options.replanSearchCount,

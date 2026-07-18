@@ -37,7 +37,7 @@ Core modules must not depend on:
 
 ### Shared vegetation and visibility fields
 
-Vegetation is a cell property, not a renderer object. `VegetationDefinition.ts` is the shared catalog for presentation, visual transmission, target concealment, fire transmission/protection and base movement resistance. The serialized `forest: 0 | 1 | 2` format remains supported; legacy cells with `terrain='forest'` and no explicit forest layer normalize to sparse forest for core consumers.
+Vegetation is a cell material, not a renderer object. Canonical cells reference `surfaceMaterialId` and `vegetationMaterialId`; `EnvironmentMaterialProfile.ts` is the versioned physical/presentation catalog and `VegetationDefinition.ts` is the compatibility adapter for existing consumers. The serialized `forest: 0 | 1 | 2` format remains supported and normalizes to `none`, `sparse_forest` or `dense_forest`. Presentation, visibility, fire and movement revisions are independent, and every cache key includes the active profile identity. See `docs/subprojects/ai-single-unit-editor/ENVIRONMENT_MATERIAL_PROFILES_V1.md`.
 
 `VisibilityStaticGrid` contains map-derived height, object blocker and vegetation data. `VisibilityGeometryField` builds bounded cached typed-array fields for an arbitrary origin:
 
@@ -55,7 +55,11 @@ subjective observation                 SoldierDangerField
 
 The current-view adapter may add attention, viewing direction, distance falloff and observer condition. Those observer-dependent factors must not be reused as the fire mask of another unit. Directional-fire danger uses the same geometry provider with the subjective last-known threat position as origin. Unknown area threats keep area semantics and do not invent a precise point-source shadow.
 
-Overlay visibility and selected-unit state are presentation concerns. Machine consumers may request a field for any unit or known source while every relevant overlay is hidden. Renderers read core fields and vegetation presentation settings; they never become a simulation input.
+Overlay visibility and selected-unit state are presentation concerns. Machine consumers may request a field for any unit or known source while every relevant overlay is hidden. Renderers read core fields and material presentation settings; they never become a simulation input. Broad vegetation is rendered as dirty 32 × 32-cell raster chunks, not one Pixi object per cell.
+
+### Physical movement
+
+Navigation chooses a route; physical movement executes that route. The canonical built-ins are `normal_walk`, `stealth_move`, `crouched_move`, `run`, `sprint` and `crawl`. `MovementProfile.settings` is the single editable numeric contract for runtime and the visual editor; gait code contains only structural posture invariants. `MovementRuntimeState` keeps requested authority separate from effective `hard_safety` constraints. `SimulationTick.ts` is the only coordinate integrator. Physical surface effects enter through `MovementMaterialProfileProvider`, with an explicit legacy fallback until canonical material profiles are integrated. Movement sound is distance-based, stamina threshold crossing is partition-invariant, intent-owned weapon preparation stores remaining duration rather than an absolute simulation timestamp, and fallback never deletes the active order.
 
 ### Rendering
 

@@ -39,8 +39,10 @@ expectExcludes('src/rendering/PixiOverlayRenderer.ts', [
 ]);
 
 expectIncludes('src/rendering/PixiMapRenderer.ts', [
-  'const terrainGraphics = new Map<keyof typeof TERRAIN_STYLE, Graphics>();',
-  'graphics.fill({ color: TERRAIN_STYLE[terrain].fill });',
+  'const materialGraphics = new Map<string, Graphics>();',
+  'const material = getSurfaceMaterial(environment, materialId);',
+  'color: material.presentation.colorTint,',
+  'alpha: material.presentation.opacity,',
   'const selectedControlStroke = { width: 3, color: 0xfff2a8, alpha: 0.95 };',
   'graphics.fill({ color: 0xfff2a8 }).stroke(selectedControlStroke);',
   'graphics.circle(0, 0, radius * 0.55).fill({ color: 0x293844 }).stroke(outline);',

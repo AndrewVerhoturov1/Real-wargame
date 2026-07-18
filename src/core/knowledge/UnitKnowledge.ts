@@ -1,6 +1,7 @@
 import { distance, type GridPosition } from '../geometry';
 import { type MapObject, type MapObjectKind, type TacticalMap } from '../map/MapModel';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
+import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 import type { PressureZone } from '../pressure/PressureZone';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
@@ -167,7 +168,9 @@ function buildForestCovers(map: TacticalMap, unit: UnitModel): KnowledgeCover[] 
   const usedFarBuckets = new Set<string>();
 
   for (const cell of map.cells) {
-    if (cell.forest === 0) {
+    const vegetation = resolveCellVegetationDefinition(cell);
+    if (vegetation.id === 'none'
+      || (vegetation.visibility.localConcealment <= 0 && vegetation.fire.maximumProtection <= 0)) {
       continue;
     }
 
@@ -180,7 +183,7 @@ function buildForestCovers(map: TacticalMap, unit: UnitModel): KnowledgeCover[] 
 
     const isNear = distanceMeters <= NEAR_COVER_METERS;
     if (!isNear) {
-      const bucket = `${Math.floor(cell.x / FAR_FOREST_BUCKET_CELLS)}:${Math.floor(cell.y / FAR_FOREST_BUCKET_CELLS)}:${cell.forest}`;
+      const bucket = `${Math.floor(cell.x / FAR_FOREST_BUCKET_CELLS)}:${Math.floor(cell.y / FAR_FOREST_BUCKET_CELLS)}:${vegetation.id}`;
       if (usedFarBuckets.has(bucket)) {
         continue;
       }
@@ -195,12 +198,12 @@ function buildForestCovers(map: TacticalMap, unit: UnitModel): KnowledgeCover[] 
 
     covers.push({
       id: `forest-${cell.x}-${cell.y}`,
-      labelRu: cell.forest === 2 ? 'густой лес' : 'редкий лес',
-      kindRu: cell.forest === 2 ? 'густой лес' : 'редкий лес',
+      labelRu: vegetation.nameRu,
+      kindRu: vegetation.nameRu.toLowerCase(),
       x,
       y,
       distanceMeters,
-      quality: Math.max(20, Math.min(85, (cell.forest === 2 ? 70 : 48) - distanceMeters * 0.06)),
+      quality: Math.max(20, Math.min(85, vegetation.visibility.localConcealment - distanceMeters * 0.06)),
       sourceRu: visibleNow ? 'вижу сам' : 'рядом / по памяти',
       visibleNow,
       currentCover: isNear,

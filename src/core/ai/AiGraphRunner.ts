@@ -1,6 +1,11 @@
 import { distance, type GridPosition } from '../geometry';
 import type { AiBlackboardValue } from './AiBlackboard';
 import type { AiBranchScore, AiGraph, AiNode, AiNodeId, ScoreBreakdownItem } from './AiGraph';
+import {
+  buildClearAiMovementProfileUpdates,
+  buildSetAiMovementProfileUpdates,
+  legacyMovementModeToProfileId,
+} from './MovementProfileAiMemory';
 import { cloneTacticalQueries, createTacticalQuery, filterTacticalQuery, scoreTacticalQuery, selectBestTacticalPosition, type TacticalQuery, type TacticalQueryGenerationRequest, type TacticalQueryGenerationResult } from './tactical/TacticalQuery';
 
 export type AiGraphRunnerBlackboard = Record<string, AiBlackboardValue>;
@@ -480,14 +485,41 @@ function executeNodeOwnLogic(context: ExecutionContext, node: AiNode): boolean {
       });
       return true;
     }
-    case 'SetMovementMode':
-      context.effects.push({
-        type: 'set_movement_mode',
-        mode: readString(parameters.mode, 'careful'),
-        reason: `AI graph movement mode: ${readString(parameters.mode, 'careful')}.`,
-        reasonRu: `AI-граф выбрал режим движения: ${readString(parameters.mode, 'careful')}.`,
+    case 'SetMovementProfile': {
+      const ownerToken = readOptionalString(parameters.ownerToken) ?? `${context.unitId}:${node.id}`;
+      const updates = buildSetAiMovementProfileUpdates({
+        profileId: parameters.profileId,
+        ownerToken,
+        reason: parameters.reasonRu,
       });
+      for (const update of updates) writeMemory(context, update.key, update.value);
       return true;
+    }
+    case 'ClearMovementProfileOverride': {
+      const fallbackSource = readOptionalString(context.blackboard.player_order_movement_profile)
+        ? 'player_order' as const
+        : 'default' as const;
+      const result = buildClearAiMovementProfileUpdates({
+        expectedOwnerToken: parameters.ownerToken,
+        activeOwnerToken: context.blackboard.movement_profile_override_owner_token,
+        requestedProfileId: context.blackboard.requested_movement_profile_id,
+        fallbackSource,
+        reason: parameters.reasonRu,
+      });
+      for (const update of result.updates) writeMemory(context, update.key, update.value);
+      return true;
+    }
+    case 'SetMovementMode': {
+      const legacyMode = readString(parameters.mode, 'careful');
+      const updates = buildSetAiMovementProfileUpdates({
+        profileId: legacyMovementModeToProfileId(legacyMode),
+        ownerToken: `${context.unitId}:${node.id}`,
+        reason: `Legacy movement mode migrated from ${legacyMode}.`,
+      });
+      for (const update of updates) writeMemory(context, update.key, update.value);
+      writeMemory(context, 'movement_profile_legacy_migrated_from', legacyMode);
+      return true;
+    }
     case 'SetAttentionMode': {
       const rawMode = readString(parameters.mode, 'observe');
       const mode = rawMode === 'march' || rawMode === 'search' || rawMode === 'engage' ? rawMode : 'observe';
@@ -858,7 +890,6 @@ function deterministicPercent(seed: string): number {
   }
   return Math.abs(hash) % 101;
 }
-
 
 function normalizeAiStateId(value: unknown): 'Idle' | 'FollowingOrder' | 'Contact' | 'Suppressed' {
   return value === 'FollowingOrder' || value === 'Contact' || value === 'Suppressed' ? value : 'Idle';

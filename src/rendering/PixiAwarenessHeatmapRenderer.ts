@@ -18,10 +18,12 @@ import type { SoldierAwarenessCell } from '../core/knowledge/SoldierAwarenessGri
 import type {
   AwarenessWorkerBuildSnapshot,
   AwarenessWorkerFieldPayload,
-  AwarenessWorkerMapSnapshot,
   AwarenessWorkerResponse,
 } from '../core/knowledge/AwarenessWorldWorkerProtocol';
-import type { TacticalMap, TerrainKind } from '../core/map/MapModel';
+import { buildAwarenessWorkerMapSnapshot } from '../core/knowledge/AwarenessWorkerMapSnapshot';
+import { getEnvironmentProfileDomainKey } from '../core/map/EnvironmentMaterialProfile';
+import { getActiveEnvironmentProfile } from '../core/map/EnvironmentProfileRuntime';
+import type { TacticalMap } from '../core/map/MapModel';
 import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { getSimulationLayerState } from '../core/ui/RuntimeUiState';
@@ -91,10 +93,6 @@ let nextMapIdentity = 1;
 const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([0x01020304]).buffer)[0] === 0x04;
 const DANGER_PIXEL_LUT = buildPixelLut('danger');
 const STEALTH_PIXEL_LUT = buildPixelLut('stealth');
-const TERRAIN_KINDS: readonly TerrainKind[] = ['field', 'forest', 'road', 'swamp', 'rough', 'water'];
-const TERRAIN_CODE = new Map<TerrainKind, number>(
-  TERRAIN_KINDS.map((kind, index) => [kind, index]),
-);
 const FINAL_EXACT_DELAY_MS = 120;
 
 export class PixiAwarenessHeatmapRenderer {
@@ -280,11 +278,11 @@ export class PixiAwarenessHeatmapRenderer {
       this.publishDiagnostics();
     };
 
-    const snapshot = buildWorkerMapSnapshot(map, mapKey);
+    const snapshot = buildAwarenessWorkerMapSnapshot(map, mapKey, getActiveEnvironmentProfile());
     this.worker.postMessage({ type: 'configure', map: snapshot }, [
-      snapshot.terrainCodes.buffer,
+      snapshot.surfaceMaterialCodes.buffer,
+      snapshot.vegetationMaterialCodes.buffer,
       snapshot.heightLevels.buffer,
-      snapshot.forestKinds.buffer,
     ]);
   }
 
@@ -557,6 +555,7 @@ export function drawAwarenessRasterWords(
 
 function buildAwarenessMapKey(map: TacticalMap): string {
   const revisions = getMapRevisionSnapshot(map);
+  const environment = getActiveEnvironmentProfile();
   return [
     `map:${getMapIdentity(map)}`,
     `size:${map.width}x${map.height}`,
@@ -566,6 +565,9 @@ function buildAwarenessMapKey(map: TacticalMap): string {
     `height:${revisions.height}`,
     `forest:${revisions.forest}`,
     `objects:${revisions.objects}`,
+    `visibility:${getEnvironmentProfileDomainKey(environment, 'visibility')}`,
+    `fire:${getEnvironmentProfileDomainKey(environment, 'fire')}`,
+    `movement:${getEnvironmentProfileDomainKey(environment, 'movement')}`,
   ].join(';');
 }
 
@@ -588,36 +590,6 @@ function buildPendingWorldSnapshot(
     knowledgeRevision: unit.tacticalKnowledge.revision,
     orderTarget: unit.order ? { ...unit.order.target } : null,
     finalExact,
-  };
-}
-
-function buildWorkerMapSnapshot(map: TacticalMap, mapKey: string): AwarenessWorkerMapSnapshot {
-  const count = map.width * map.height;
-  const terrainCodes = new Uint8Array(count);
-  const heightLevels = new Int8Array(count);
-  const forestKinds = new Uint8Array(count);
-  for (let index = 0; index < count; index += 1) {
-    const cell = map.cells[index];
-    terrainCodes[index] = TERRAIN_CODE.get(cell?.terrain ?? map.defaultTerrain) ?? 0;
-    heightLevels[index] = cell?.height ?? map.defaultHeight;
-    forestKinds[index] = cell?.forest ?? 0;
-  }
-  return {
-    mapKey,
-    width: map.width,
-    height: map.height,
-    cellSize: map.cellSize,
-    metersPerCell: map.metersPerCell,
-    sourceToRuntimeCellScale: map.sourceToRuntimeCellScale,
-    defaultTerrainCode: TERRAIN_CODE.get(map.defaultTerrain) ?? 0,
-    defaultHeight: map.defaultHeight,
-    terrainCodes,
-    heightLevels,
-    forestKinds,
-    objects: map.objects.map((object) => ({
-      ...object,
-      labels: object.labels ? { ...object.labels } : null,
-    })),
   };
 }
 

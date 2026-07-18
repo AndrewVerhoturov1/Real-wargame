@@ -1,5 +1,7 @@
 import { measurePerformancePhase } from '../debug/PerformancePhases';
 import { distance, type GridPosition } from '../geometry';
+import { getEnvironmentProfileDomainKey } from '../map/EnvironmentMaterialProfile';
+import { getActiveEnvironmentProfile } from '../map/EnvironmentProfileRuntime';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
 import type { AttentionSample } from '../perception/AttentionModel';
 import type { SimulationState } from '../simulation/SimulationState';
@@ -174,6 +176,7 @@ function buildPerceptionPointKey(
     revisions.height,
     revisions.forest,
     revisions.objects,
+    getEnvironmentProfileDomainKey(getActiveEnvironmentProfile(), 'visibility'),
   ].join(':');
 }
 

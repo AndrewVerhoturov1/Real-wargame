@@ -1,6 +1,7 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import { getCell } from '../map/MapModel';
+import { getMovementTargetVisibilityMultiplier } from '../movement/MovementRuntime';
 import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 import { resolvePressureZoneSettings } from '../pressure/PressureZone';
 import type { SimulationState } from '../simulation/SimulationState';
@@ -31,6 +32,7 @@ export interface PerceptionStimulus {
   baseSize: number;
   concealment: number;
   lateralMotion: number;
+  movementSignatureMultiplier: number;
   visibleSource: boolean;
   knownSource: boolean;
 }
@@ -63,6 +65,7 @@ export function buildPerceptionStimuli(state: SimulationState, observer?: UnitMo
       baseSize: targetProfile.baseSize * modeSizeMultiplier,
       concealment,
       lateralMotion: 0,
+      movementSignatureMultiplier: 1,
       visibleSource: settings.sourceVisible,
       knownSource: settings.sourceKnown,
     });
@@ -75,8 +78,13 @@ export function buildPerceptionStimuli(state: SimulationState, observer?: UnitMo
     const posture = unit.behaviorRuntime.posture;
     const targetType: PerceptionTargetType = 'soldier';
     const targetProfile = resolvePerceptionTargetProfile(targetType);
-    const moving = Boolean(unit.order);
+    const moving = unit.movementRuntime.isMoving;
+    const gait = unit.movementRuntime.actualGait;
     const currentAction = unit.behaviorRuntime.currentAction;
+    const relativeLateral = resolveRelativeLateralMotion(observer, unit);
+    const stealthContribution = unit.soldier.condition.stealth
+      * 0.12
+      * (moving ? unit.movementRuntime.diagnostics.stealthSkillShare : 1);
     stimuli.push({
       id: `unit:${unit.id}`,
       sourceUnitId: unit.id,
@@ -85,7 +93,7 @@ export function buildPerceptionStimuli(state: SimulationState, observer?: UnitMo
       kind: 'unit',
       position: { ...unit.position },
       posture,
-      movement: moving ? 'walking' : 'stationary',
+      movement: moving ? (gait === 'run' || gait === 'sprint' ? 'running' : 'walking') : 'stationary',
       action: currentAction === 'fire'
         ? 'fire'
         : currentAction === 'suppress'
@@ -98,12 +106,27 @@ export function buildPerceptionStimuli(state: SimulationState, observer?: UnitMo
       targetType,
       targetHeightMeters: getPerceptionTargetHeightMeters(targetType, posture),
       baseSize: targetProfile.baseSize,
-      concealment: Math.max(0, Math.min(92, terrainConcealment + unit.soldier.condition.stealth * 0.12)),
-      lateralMotion: moving ? 0.35 : 0,
+      concealment: Math.max(0, Math.min(92, terrainConcealment + stealthContribution)),
+      lateralMotion: moving ? relativeLateral : 0,
+      movementSignatureMultiplier: moving ? getMovementTargetVisibilityMultiplier(unit) : 1,
       visibleSource: true,
       knownSource: false,
     });
   }
 
   return stimuli;
+}
+
+
+function resolveRelativeLateralMotion(observer: UnitModel | undefined, target: UnitModel): number {
+  const velocity = target.movementRuntime.velocityCellsPerSecond;
+  const speed = Math.hypot(velocity.x, velocity.y);
+  if (speed <= 0.0001) return 0;
+  if (!observer) return Math.min(1, speed / 1.5) * target.movementRuntime.diagnostics.lateralVisibility;
+  const lineX = target.position.x - observer.position.x;
+  const lineY = target.position.y - observer.position.y;
+  const lineLength = Math.max(0.0001, Math.hypot(lineX, lineY));
+  const velocityLength = Math.max(0.0001, speed);
+  const lateral = Math.abs((lineX / lineLength) * (velocity.y / velocityLength) - (lineY / lineLength) * (velocity.x / velocityLength));
+  return Math.max(0, Math.min(1, lateral * Math.min(1, speed / 1.5) * target.movementRuntime.diagnostics.lateralVisibility));
 }

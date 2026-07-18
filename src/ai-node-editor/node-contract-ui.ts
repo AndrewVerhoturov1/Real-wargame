@@ -3,6 +3,7 @@ import type { AiNodeContract, AiParameterDefinition } from '../core/ai/contracts
 import { DEFAULT_AI_NODE_CONTRACT_REGISTRY } from '../core/ai/contracts/AiNodeContractRegistry';
 import type { AiPortDefinition, AiPortValueKind } from '../core/ai/contracts/AiPortTypes';
 import { areAiPortKindsCompatible } from '../core/ai/contracts/AiPortTypes';
+import { listMovementProfileSelectorEntries } from './MovementProfileSelectorProvider';
 import { getSubgraphChoice } from './subgraph-ui';
 
 export interface NodeContractUiModel {
@@ -49,7 +50,9 @@ function renderParameter(parameter: AiParameterDefinition, value: unknown): stri
     : '';
   const attrs = `${parameter.minimum !== undefined ? ` min="${parameter.minimum}"` : ''}${parameter.maximum !== undefined ? ` max="${parameter.maximum}"` : ''}${parameter.integer ? ' step="1"' : parameter.kind === 'number' ? ' step="any"' : ''}`;
   let control = '';
-  if (parameter.kind === 'boolean') {
+  if (parameter.selector === 'movement_profile_registry') {
+    control = renderMovementProfileRegistrySelector(parameter.id, String(actual));
+  } else if (parameter.kind === 'boolean') {
     control = `<input class="contract-parameter-field" data-param-id="${escapeAttribute(parameter.id)}" data-param-kind="boolean" type="checkbox" ${actual === true ? 'checked' : ''} />`;
   } else if (parameter.kind === 'enum') {
     control = `<select class="contract-parameter-field" data-param-id="${escapeAttribute(parameter.id)}" data-param-kind="enum">${(parameter.options ?? []).map((option) => `<option value="${escapeAttribute(option.value)}" ${option.value === actual ? 'selected' : ''}>${escapeHtml(option.labelRu)} · ${escapeHtml(option.value)}</option>`).join('')}</select>`;
@@ -73,6 +76,15 @@ export function readContractParameterFields(container: ParentNode, fallback: Rec
         : field.value;
   });
   return next;
+}
+
+function renderMovementProfileRegistrySelector(parameterId: string, selectedId: string): string {
+  const profiles = listMovementProfileSelectorEntries();
+  const options = profiles.map((profile) => `<option value="${escapeAttribute(profile.id)}" ${profile.id === selectedId ? 'selected' : ''}>${escapeHtml(profile.nameRu)} · ${escapeHtml(profile.id)}</option>`);
+  if (selectedId && !profiles.some((profile) => profile.id === selectedId)) {
+    options.unshift(`<option value="${escapeAttribute(selectedId)}" selected>Недоступен: ${escapeHtml(selectedId)}</option>`);
+  }
+  return `<select class="contract-parameter-field movement-profile-registry-selector" data-param-id="${escapeAttribute(parameterId)}" data-param-kind="string" data-selector="movement_profile_registry">${options.join('')}</select>`;
 }
 
 function portKindRu(kind: AiPortValueKind): string {

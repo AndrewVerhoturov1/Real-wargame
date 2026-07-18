@@ -5,6 +5,7 @@ import { createDirectPlayerMovePlan } from '../src/core/ai/UnitPlan';
 import { traceProjectile } from '../src/core/combat/BallisticRaycast';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../src/core/navigation/NavigationRuntime';
 import { evaluateNavigationRouteCost } from '../src/core/navigation/NavigationRouteCost';
+import { ensureNavigationRouteCurrent, type NavigationReplanWorkBudget } from '../src/core/navigation/NavigationRouteReplanner';
 import {
   createDefaultNavigationProfileRegistry,
   type NavigationProfile,
@@ -18,8 +19,9 @@ import type { UnitModel } from '../src/core/units/UnitModel';
 
 verifyAcceptedLiveReplanAndCompletion();
 verifyHysteresisAndCooldownBoundSearches();
+verifyRouteReplanWorkBudgetDefersWithoutDroppingOrder();
 
-console.log('Live navigation replan smoke passed: real fire drives SimulationTick search, hysteresis, accepted replacement, bounded A*, final facing and strict ownership.');
+console.log('Live navigation replan smoke passed: real fire drives SimulationTick search, hysteresis, accepted replacement, bounded A*, deterministic route-search defer, final facing and strict ownership.');
 
 function verifyAcceptedLiveReplanAndCompletion(): void {
   const registry = createReplanRegistry('live-accept', 10, 0.05, 1.5);
@@ -197,6 +199,47 @@ function verifyHysteresisAndCooldownBoundSearches(): void {
     assert.equal(order.replanSearchCount, 2, 'a fresh danger revision may search again after cooldown expires');
     assert.equal(order.replanCount, replanCountBefore, 'the second insufficient candidate must still be rejected');
     assert.deepEqual(order.routeCells, routeCellsBefore);
+  } finally {
+    saveNavigationProfileRegistry(createDefaultNavigationProfileRegistry(), null);
+  }
+}
+
+function verifyRouteReplanWorkBudgetDefersWithoutDroppingOrder(): void {
+  const registry = createReplanRegistry('live-budget', 1, 1, 0);
+  saveNavigationProfileRegistry(registry, null);
+  try {
+    const state = makeCorridorState();
+    const mover = unit(state, 'blue-mover');
+    const { order } = installPlannedPlayerLinkedOrder(
+      state,
+      mover,
+      { x: 21.5, y: 3.5 },
+      0,
+      'live-route-owner:budget',
+      'live-budget',
+    );
+    order.navigationProfileRevision = -1;
+
+    const exhausted: NavigationReplanWorkBudget = {
+      remainingSearches: 0,
+      claimedUnitIds: [],
+      deferredUnitIds: [],
+    };
+    assert.equal(ensureNavigationRouteCurrent(mover, state, exhausted), true);
+    assert.equal(mover.order, order, 'budget exhaustion must preserve the active command and route');
+    assert.equal(order.replanSearchCount, 0, 'deferred work must not masquerade as an A* search');
+    assert.deepEqual(exhausted.deferredUnitIds, [mover.id]);
+    assert.equal(mover.behaviorRuntime.lastEvent, 'move_route_replan_deferred');
+
+    const available: NavigationReplanWorkBudget = {
+      remainingSearches: 1,
+      claimedUnitIds: [],
+      deferredUnitIds: [],
+    };
+    assert.equal(ensureNavigationRouteCurrent(mover, state, available), true);
+    assert.deepEqual(available.claimedUnitIds, [mover.id]);
+    assert.equal(available.remainingSearches, 0);
+    assert.equal(mover.order?.replanSearchCount, 1, 'the deferred search must make progress when the next budget is available');
   } finally {
     saveNavigationProfileRegistry(createDefaultNavigationProfileRegistry(), null);
   }

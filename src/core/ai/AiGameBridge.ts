@@ -76,6 +76,8 @@ export interface AiGameBridgeTickOptions {
   readonly cycleStartMs?: number;
   readonly cycleEndMs?: number;
   readonly diagnosticPreview?: boolean;
+  /** Defer only the ordinary cadence decision; observer polling and reactive wakes remain active. */
+  readonly deferOrdinaryDecision?: boolean;
 }
 
 export function installAiGameBridge(state: SimulationState): AiGameBridgeHandle {
@@ -200,9 +202,12 @@ export function tickAiGameBridgeForTrustedUnit(
       : Math.max(0, unit.behaviorRuntime.aiObserverNextPollMs);
     let observerGuard = 0;
     let decisionGuard = 0;
+    let ordinaryDecisionCount = 0;
 
     while (true) {
-      const ordinaryInCycle = decisionGuard < 64 && ordinaryDueAtMs <= cycleEndMs
+      const ordinaryInCycle = !options.deferOrdinaryDecision
+        && ordinaryDecisionCount < 1
+        && ordinaryDueAtMs <= cycleEndMs
         ? ordinaryDueAtMs
         : Number.POSITIVE_INFINITY;
       const observerInCycle = observerGuard < 256 && observerDueAtMs <= cycleEndMs
@@ -245,6 +250,7 @@ export function tickAiGameBridgeForTrustedUnit(
       if (ordinaryDue) {
         ordinaryDueAtMs += AI_GRAPH_TICK_INTERVAL_MS;
         nextOrdinaryAtMs = ordinaryDueAtMs;
+        ordinaryDecisionCount += 1;
       }
       if (ordinaryDue || reactiveWake) {
         runDecisionAt(atMs);

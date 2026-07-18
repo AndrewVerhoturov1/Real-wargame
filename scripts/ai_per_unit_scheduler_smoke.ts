@@ -153,6 +153,7 @@ verifyInitialDecisionAndUiExecutionContract();
 verifyPausedExplicitSimulationStep();
 verifyDiagnosticDeepImmutability();
 verifyLinearTraversalAndSingleGraphResolution();
+verifyDeterministicOrdinaryDecisionBudget();
 verifyObserverPartitionInvariance();
 verifyQuietObserverPollFastForward();
 verifySelectionInvarianceAndConcurrentExecution();
@@ -163,7 +164,7 @@ verifyThreatKnowledgeRevisionIsolation();
 verifyAiControlOwnershipPolicy();
 verifyPersistentCiContract();
 
-console.log('AI per-unit scheduler smoke passed: paused explicit steps, read-only diagnostics, O(n) traversal, one graph snapshot, deterministic observer cadence, delta partition invariance, first-step decisions, selection independence, per-unit ownership, threat revision isolation, aiControl policy and blocking CI coverage.');
+console.log('AI per-unit scheduler smoke passed: paused explicit steps, read-only diagnostics, O(n) traversal, one graph snapshot, fair bounded ordinary decisions, deterministic observer cadence, delta partition invariance, first-step decisions, selection independence, per-unit ownership, threat revision isolation, aiControl policy and blocking CI coverage.');
 
 function verifyInitialDecisionAndUiExecutionContract(): void {
   setGraph(firstDecisionGraph);
@@ -316,7 +317,23 @@ function verifyLinearTraversalAndSingleGraphResolution(): void {
   const moveBridgeSource = readFileSync('src/core/ai/AiStatefulMoveGameBridge.ts', 'utf8');
   assert.doesNotMatch(schedulerSource, /state\.units\.includes/);
   assert.doesNotMatch(extractFunction(gameBridgeSource, 'tickAiGameBridgeForTrustedUnit'), /state\.units\.includes/);
-  assert.doesNotMatch(extractFunction(moveBridgeSource, 'tickStatefulMoveBridgeForTrustedUnit'), /state\.units\.includes/);
+  const trustedMoveBridge = extractFunction(moveBridgeSource, 'tickStatefulMoveBridgeForTrustedUnit');
+  assert.doesNotMatch(trustedMoveBridge, /state\.units\.includes/);
+  assert.match(
+    schedulerSource,
+    /movementProfileRegistryEntries:\s*options\.movementProfileRegistryEntries/,
+    'the scheduler must forward the stable registry snapshot instead of rebuilding profile lookup inputs per unit',
+  );
+  assert.match(
+    trustedMoveBridge,
+    /requiresPostReconcile/,
+    'quiet scheduler passes must not unconditionally repeat movement authority reconciliation',
+  );
+  assert.match(
+    trustedMoveBridge,
+    /if \(result \|\| orderChanged \|\| options\.cancel\)/,
+    'quiet scheduler passes must reuse the first route-status result instead of evaluating it twice',
+  );
   assert.doesNotMatch(extractFunction(moveBridgeSource, 'updateRouteStatusForTrustedUnit'), /state\.units\.includes/);
 }
 
@@ -402,6 +419,49 @@ function verifyQuietObserverPollFastForward(): void {
       laterUnitFairnessPreserved: reactiveSecond.behaviorRuntime.aiReactiveWakeCount === 1,
     }, null, 2));
   }
+}
+
+function verifyDeterministicOrdinaryDecisionBudget(): void {
+  setGraph(firstDecisionGraph);
+  const state = createInitialState(mapData, [
+    unitData('budget-0', 2, 2),
+    unitData('budget-1', 3, 2),
+    unitData('budget-2', 4, 2),
+    unitData('budget-3', 5, 2),
+    unitData('budget-4', 6, 2),
+    unitData('budget-5', 7, 2),
+  ], []);
+
+  state.simulationStep = 1;
+  const first = tickAiSimulationScheduler(state, { cycleStartMs: 0, cycleEndMs: 0 });
+  assert.equal(first.ordinaryDecisionUnitIds.length, 2, 'one scheduler cycle must own a fixed ordinary-decision budget');
+  assert.equal(first.ordinaryDeferredUnitIds.length, 4, 'overdue ordinary decisions beyond the budget must be deferred, not dropped');
+  assert.equal(first.graphTickedUnitIds.length, 2);
+
+  state.simulationStep = 2;
+  const second = tickAiSimulationScheduler(state, { cycleStartMs: 0, cycleEndMs: 0 });
+  assert.equal(second.ordinaryDecisionUnitIds.length, 2);
+  assert.equal(second.ordinaryDeferredUnitIds.length, 2, 'round-robin selection must continue servicing deferred units fairly');
+
+  state.simulationStep = 3;
+  const third = tickAiSimulationScheduler(state, { cycleStartMs: 0, cycleEndMs: 0 });
+  assert.equal(third.ordinaryDecisionUnitIds.length, 2);
+  assert.equal(third.ordinaryDeferredUnitIds.length, 0, 'three bounded cycles must service all six overdue units');
+  assert.deepEqual(
+    state.units.map((unit) => unit.behaviorRuntime.aiDecisionTickCount),
+    [1, 1, 1, 1, 1, 1],
+    'all six units must receive one ordinary decision after three bounded cycles',
+  );
+
+  const catchup = createInitialState(mapData, [unitData('catchup', 2, 2)], []);
+  catchup.simulationStep = 1;
+  tickAiSimulationScheduler(catchup, { cycleStartMs: 0, cycleEndMs: 1800 });
+  assert.equal(
+    findUnit(catchup, 'catchup').behaviorRuntime.aiDecisionTickCount,
+    1,
+    'one unit may execute at most one ordinary cadence decision in a single large-delta step',
+  );
+  assert.equal(findUnit(catchup, 'catchup').behaviorRuntime.aiNextDecisionAtMs, 600);
 }
 
 function verifyObserverPartitionInvariance(): void {

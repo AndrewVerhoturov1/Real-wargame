@@ -4,12 +4,15 @@ export type AiNodeCategory = 'flow' | 'condition' | 'score' | 'query' | 'action'
 export type AiNodeChildPolicy = 'none' | 'one' | 'many';
 export type AiNodeLifecycleKind = 'instant' | 'stateful' | 'composite' | 'modifier';
 export type AiParameterValueKind = AiPortValueKind | 'enum';
+export type AiParameterSelector = 'movement_profile_registry';
 export interface AiParameterOption { readonly value: string; readonly label: string; readonly labelRu: string; }
 export interface AiParameterDefinition {
   readonly id: string; readonly kind: AiParameterValueKind; readonly label: string; readonly labelRu: string;
   readonly description?: string; readonly descriptionRu?: string; readonly required?: boolean; readonly nullable?: boolean;
   readonly defaultValue?: AiBlackboardValue; readonly minimum?: number; readonly maximum?: number; readonly integer?: boolean;
   readonly options?: readonly AiParameterOption[];
+  /** UI selector source. The serialized node value remains the plain string ID. */
+  readonly selector?: AiParameterSelector;
 }
 export interface AiNodeContract {
   readonly type: string; readonly category: AiNodeCategory; readonly label: string; readonly labelRu: string;

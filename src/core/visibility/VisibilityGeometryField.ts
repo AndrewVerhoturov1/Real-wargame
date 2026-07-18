@@ -2,9 +2,11 @@ import type { GridPosition } from '../geometry';
 import { measurePerformancePhase } from '../debug/PerformancePhases';
 import type { TacticalMap } from '../map/MapModel';
 import {
+  getVegetationDefinitionKey,
+  getVegetationDefinitionRevision,
   resolveVegetationDefinition,
-  VEGETATION_DEFINITION_REVISION,
 } from '../map/VegetationDefinition';
+import { getEnvironmentProfileRuntimeSnapshot } from '../map/EnvironmentProfileRuntime';
 import { getVisibilityStaticGrid } from './VisibilityStaticGrid';
 
 const CACHE_LIMIT = 24;
@@ -19,6 +21,7 @@ export interface VisibilityGeometryFieldOptions {
   readonly originHeightAboveGroundMeters: number;
   readonly targetHeightAboveGroundMeters: number;
   readonly rangeCells: number;
+  readonly channel?: 'visual' | 'fire' | 'combined';
 }
 
 export interface VisibilityGeometryField {
@@ -35,6 +38,10 @@ export interface VisibilityGeometryField {
   /** 0 none, 1 terrain/horizon, 2 map object. */
   readonly blockerKind: Uint8Array;
   readonly mapVisualRevision: number;
+  readonly channel: 'visual' | 'fire' | 'combined';
+  readonly profileId: string;
+  readonly profileRevision: number;
+  readonly profileKey: string;
 }
 
 export interface VisibilityGeometryFieldDiagnostics {
@@ -160,7 +167,10 @@ function buildField(
     + options.originHeightAboveGroundMeters;
   let processedCellCount = 0;
   let rayCount = 0;
-  const vegetationTransmission = createVegetationTransmissionLuts(map.metersPerCell);
+  const vegetationTransmission = createVegetationTransmissionLuts(
+    staticGrid.vegetationMaterialIds,
+    map.metersPerCell,
+  );
 
   writeVisibleCell(
     hardBlocked,
@@ -217,13 +227,17 @@ function buildField(
         terrainHeight + options.targetHeightAboveGroundMeters - originEye
       ) / Math.max(0.001, distanceMeters);
       const blockedByHorizon = targetSlope + HORIZON_MARGIN < horizonSlope;
-      const vegetationKind = staticGrid.forestKind[mapIndex] ?? 0;
-      visual *= diagonal
-        ? vegetationTransmission.visualDiagonal[vegetationKind] ?? 1
-        : vegetationTransmission.visualAxis[vegetationKind] ?? 1;
-      fire *= diagonal
-        ? vegetationTransmission.fireDiagonal[vegetationKind] ?? 1
-        : vegetationTransmission.fireAxis[vegetationKind] ?? 1;
+      const vegetationCode = staticGrid.vegetationMaterialCodes[mapIndex] ?? 0;
+      if (options.channel !== 'fire') {
+        visual *= diagonal
+          ? vegetationTransmission.visualDiagonal[vegetationCode] ?? 1
+          : vegetationTransmission.visualAxis[vegetationCode] ?? 1;
+      }
+      if (options.channel !== 'visual') {
+        fire *= diagonal
+          ? vegetationTransmission.fireDiagonal[vegetationCode] ?? 1
+          : vegetationTransmission.fireAxis[vegetationCode] ?? 1;
+      }
 
       const blockedByObject = staticGrid.blockingFlags[mapIndex] === 1;
       if (blockedByHorizon) {
@@ -291,32 +305,48 @@ function buildField(
       fireTransmission,
       blockerKind,
       mapVisualRevision: staticGrid.mapVisualRevision,
+      channel: options.channel,
+      profileId: getEnvironmentProfileRuntimeSnapshot().activeProfileId,
+      profileRevision: options.channel === 'visual'
+        ? getVegetationDefinitionRevision('visibility')
+        : options.channel === 'fire'
+          ? getVegetationDefinitionRevision('fire')
+          : Math.max(getVegetationDefinitionRevision('visibility'), getVegetationDefinitionRevision('fire')),
+      profileKey: options.channel === 'visual'
+        ? getVegetationDefinitionKey('visibility')
+        : options.channel === 'fire'
+          ? getVegetationDefinitionKey('fire')
+          : `${getVegetationDefinitionKey('visibility')}|${getVegetationDefinitionKey('fire')}`,
     },
     processedCellCount,
     rayCount,
   };
 }
 
-function createVegetationTransmissionLuts(metersPerCell: number): {
+function createVegetationTransmissionLuts(
+  materialIds: readonly string[],
+  metersPerCell: number,
+): {
   readonly visualAxis: readonly number[];
   readonly visualDiagonal: readonly number[];
   readonly fireAxis: readonly number[];
   readonly fireDiagonal: readonly number[];
 } {
-  const visualLoss = [0, 0, 0];
-  const fireLoss = [0, 0, 0];
-  for (let kind = 0; kind <= 2; kind += 1) {
-    const vegetation = resolveVegetationDefinition(kind);
-    visualLoss[kind] = vegetation.visibility.transmissionLossPerMeter;
-    fireLoss[kind] = vegetation.fire.transmissionLossPerMeter;
-  }
+  const visualAxis = new Array<number>(materialIds.length);
+  const visualDiagonal = new Array<number>(materialIds.length);
+  const fireAxis = new Array<number>(materialIds.length);
+  const fireDiagonal = new Array<number>(materialIds.length);
   const diagonalMeters = Math.SQRT2 * metersPerCell;
-  return {
-    visualAxis: visualLoss.map((loss) => Math.exp(-loss * metersPerCell)),
-    visualDiagonal: visualLoss.map((loss) => Math.exp(-loss * diagonalMeters)),
-    fireAxis: fireLoss.map((loss) => Math.exp(-loss * metersPerCell)),
-    fireDiagonal: fireLoss.map((loss) => Math.exp(-loss * diagonalMeters)),
-  };
+  for (let code = 0; code < materialIds.length; code += 1) {
+    const vegetation = resolveVegetationDefinition(materialIds[code]);
+    const visualLoss = vegetation.visibility.transmissionLossPerMeter;
+    const fireLoss = vegetation.fire.transmissionLossPerMeter;
+    visualAxis[code] = Math.exp(-visualLoss * metersPerCell);
+    visualDiagonal[code] = Math.exp(-visualLoss * diagonalMeters);
+    fireAxis[code] = Math.exp(-fireLoss * metersPerCell);
+    fireDiagonal[code] = Math.exp(-fireLoss * diagonalMeters);
+  }
+  return { visualAxis, visualDiagonal, fireAxis, fireDiagonal };
 }
 
 function normalizeOptions(map: TacticalMap, options: VisibilityGeometryFieldOptions) {
@@ -328,6 +358,7 @@ function normalizeOptions(map: TacticalMap, options: VisibilityGeometryFieldOpti
     originHeightAboveGroundMeters: Math.max(0.05, finite(options.originHeightAboveGroundMeters)),
     targetHeightAboveGroundMeters: Math.max(0.05, finite(options.targetHeightAboveGroundMeters)),
     rangeCells: Math.max(0.5, Math.min(Math.hypot(map.width, map.height), finite(options.rangeCells))),
+    channel: options.channel ?? 'combined',
   };
 }
 
@@ -342,8 +373,13 @@ function buildKey(
     quantize(options.originHeightAboveGroundMeters, HEIGHT_QUANTUM_METERS),
     quantize(options.targetHeightAboveGroundMeters, HEIGHT_QUANTUM_METERS),
     quantize(options.rangeCells, 0.25),
+    options.channel,
     mapVisualRevision,
-    VEGETATION_DEFINITION_REVISION,
+    options.channel === 'visual'
+      ? getVegetationDefinitionKey('visibility')
+      : options.channel === 'fire'
+        ? getVegetationDefinitionKey('fire')
+        : `${getVegetationDefinitionKey('visibility')}|${getVegetationDefinitionKey('fire')}`,
   ].join(':');
 }
 

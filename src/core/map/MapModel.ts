@@ -1,4 +1,11 @@
 import type { GridPosition, WorldPosition } from '../geometry';
+import {
+  DEFAULT_ENVIRONMENT_PROFILE_ID,
+  legacyForestLayerToVegetationMaterialId,
+  surfaceMaterialIdToTerrainKind,
+  terrainKindToSurfaceMaterialId,
+  vegetationMaterialIdToLegacyForestLayer,
+} from './EnvironmentMaterialProfile';
 
 export type TerrainKind = 'field' | 'forest' | 'road' | 'swamp' | 'rough' | 'water';
 export type ElevationLevel = -2 | -1 | 0 | 1 | 2 | 3 | 4;
@@ -34,6 +41,8 @@ export interface MapCellData {
   terrain?: TerrainKind;
   height?: number;
   forest?: number;
+  surfaceMaterialId?: string;
+  vegetationMaterialId?: string;
 }
 
 export interface MapCellRunData {
@@ -43,6 +52,8 @@ export interface MapCellRunData {
   terrain?: TerrainKind;
   height?: number;
   forest?: number;
+  surfaceMaterialId?: string;
+  vegetationMaterialId?: string;
 }
 
 export interface MapCellRectData {
@@ -53,6 +64,8 @@ export interface MapCellRectData {
   terrain?: TerrainKind;
   height?: number;
   forest?: number;
+  surfaceMaterialId?: string;
+  vegetationMaterialId?: string;
 }
 
 export interface MapObjectData {
@@ -83,10 +96,13 @@ export interface TacticalMapData {
    * normalization expands them into this finer grid without changing physical/map pixel size.
    */
   runtimeMetersPerCell?: number;
+  environmentProfileId?: string;
   defaultTerrain?: TerrainKind;
   defaultHeight?: number;
   heightMap?: number[][];
   forestMap?: number[][];
+  surfaceMaterialMap?: string[][];
+  vegetationMaterialMap?: string[][];
   cellRuns?: MapCellRunData[];
   cellRects?: MapCellRectData[];
   cells?: MapCellData[];
@@ -96,8 +112,14 @@ export interface TacticalMapData {
 export interface MapCell {
   x: number;
   y: number;
-  terrain: TerrainKind;
+  /** Canonical physical surface material reference. */
+  surfaceMaterialId: string;
+  /** Canonical vegetation material reference. */
+  vegetationMaterialId: string;
   height: ElevationLevel;
+  /** @deprecated Compatibility projection; never use as authoritative state. */
+  terrain: TerrainKind;
+  /** @deprecated Compatibility projection; never use as authoritative state. */
   forest: ForestLayerKind;
 }
 
@@ -128,6 +150,7 @@ export interface TacticalMap {
   metersPerCell: number;
   /** Scale applied to source coordinates. Native-resolution maps use 1. */
   sourceToRuntimeCellScale: number;
+  environmentProfileId: string;
   defaultTerrain: TerrainKind;
   defaultHeight: ElevationLevel;
   cells: MapCell[];
@@ -153,6 +176,8 @@ export function normalizeMap(data: TacticalMapData): TacticalMap {
           terrain: rect.terrain,
           height: rect.height,
           forest: rect.forest,
+          surfaceMaterialId: rect.surfaceMaterialId,
+          vegetationMaterialId: rect.vegetationMaterialId,
         });
       }
     }
@@ -166,6 +191,8 @@ export function normalizeMap(data: TacticalMapData): TacticalMap {
         terrain: run.terrain,
         height: run.height,
         forest: run.forest,
+        surfaceMaterialId: run.surfaceMaterialId,
+        vegetationMaterialId: run.vegetationMaterialId,
       });
     }
   }
@@ -180,12 +207,21 @@ export function normalizeMap(data: TacticalMapData): TacticalMap {
       const override = overrides.get(cellKey(sourceX, sourceY));
       const heightFromMap = readMatrixValue(data.heightMap, sourceX, sourceY);
       const forestFromMap = readMatrixValue(data.forestMap, sourceX, sourceY);
+      const surfaceFromMap = readStringMatrixValue(data.surfaceMaterialMap, sourceX, sourceY);
+      const vegetationFromMap = readStringMatrixValue(data.vegetationMaterialMap, sourceX, sourceY);
+      const legacyTerrain = override?.terrain ?? defaultTerrain;
+      const legacyForest = normalizeForestLayer(override?.forest ?? forestFromMap ?? 0);
+      const surfaceMaterialId = override?.surfaceMaterialId ?? surfaceFromMap ?? terrainKindToSurfaceMaterialId(legacyTerrain);
+      const vegetationMaterialId = override?.vegetationMaterialId ?? vegetationFromMap
+        ?? legacyForestLayerToVegetationMaterialId(legacyForest > 0 ? legacyForest : legacyTerrain === 'forest' ? 1 : 0);
       cells[y * runtimeWidth + x] = {
         x,
         y,
-        terrain: override?.terrain ?? defaultTerrain,
+        surfaceMaterialId,
+        vegetationMaterialId,
+        terrain: surfaceMaterialIdToTerrainKind(surfaceMaterialId),
         height: normalizeElevationLevel(override?.height ?? heightFromMap ?? defaultHeight),
-        forest: normalizeForestLayer(override?.forest ?? forestFromMap ?? 0),
+        forest: vegetationMaterialIdToLegacyForestLayer(vegetationMaterialId),
       };
     }
   }
@@ -196,11 +232,23 @@ export function normalizeMap(data: TacticalMapData): TacticalMap {
     cellSize: data.cellSize / sourceToRuntimeCellScale,
     metersPerCell: runtimeMetersPerCell,
     sourceToRuntimeCellScale,
+    environmentProfileId: data.environmentProfileId?.trim() || DEFAULT_ENVIRONMENT_PROFILE_ID,
     defaultTerrain,
     defaultHeight,
     cells,
     objects: normalizeMapObjects(data.objects ?? [], sourceToRuntimeCellScale),
   };
+}
+
+
+export function setCellSurfaceMaterialId(cell: MapCell, materialId: string): void {
+  cell.surfaceMaterialId = materialId || 'field';
+  cell.terrain = surfaceMaterialIdToTerrainKind(cell.surfaceMaterialId);
+}
+
+export function setCellVegetationMaterialId(cell: MapCell, materialId: string): void {
+  cell.vegetationMaterialId = materialId || 'none';
+  cell.forest = vegetationMaterialIdToLegacyForestLayer(cell.vegetationMaterialId);
 }
 
 export function normalizeElevationLevel(value: number | undefined): ElevationLevel {
@@ -341,6 +389,11 @@ function normalizeResolutionScale(value: number): number {
 
 function readMatrixValue(matrix: number[][] | undefined, x: number, y: number): number | undefined {
   return matrix?.[y]?.[x];
+}
+
+function readStringMatrixValue(matrix: string[][] | undefined, x: number, y: number): string | undefined {
+  const value = matrix?.[y]?.[x];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 function cellKey(x: number, y: number): string {
