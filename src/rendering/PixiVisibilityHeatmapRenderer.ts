@@ -2,14 +2,18 @@ import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import type { PerceptionContactMemory } from '../core/perception/PerceptionContact';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { getAttentionOverlayState } from '../core/ui/RuntimeUiState';
-const UNSEEN_OVERLAY_COLOR = 0x101820;
-const UNSEEN_OVERLAY_ALPHA = 0.52;
-
 import {
   getSelectedUnitVisibilityField,
   getVisibilityFieldDiagnostics,
+  VISIBILITY_ZONE_CODE,
   type SelectedUnitVisibilityField,
+  type VisibilityZoneCode,
 } from '../core/visibility/SelectedUnitVisibilityField';
+
+const UNSEEN_OVERLAY_COLOR = 0x101820;
+const UNSEEN_OVERLAY_ALPHA = 0.52;
+const REAR_ATTENTION_COLOR = 0x8b70d6;
+const NEAR_ATTENTION_COLOR = 0xfff0ad;
 
 export interface ViewMemoryOverlayDiagnostics {
   representation: 'raster-sprite';
@@ -188,6 +192,7 @@ export function drawVisibilityRaster(
   const unseenRed = (UNSEEN_OVERLAY_COLOR >> 16) & 0xff;
   const unseenGreen = (UNSEEN_OVERLAY_COLOR >> 8) & 0xff;
   const unseenBlue = UNSEEN_OVERLAY_COLOR & 0xff;
+  // Deny by default: the complete map is shadow before any visible sample is painted.
   for (let pixel = 0; pixel < image.data.length; pixel += 4) {
     image.data[pixel] = unseenRed;
     image.data[pixel + 1] = unseenGreen;
@@ -202,21 +207,31 @@ export function drawVisibilityRaster(
     if (mapX < 0 || mapY < 0 || mapX >= mapWidth || mapY >= mapHeight) continue;
     const quality = field.quality[index] / 255;
     if (quality <= 0.01) continue;
-    const color = heatmapColor(quality);
+    const zoneCode = (field.zone[index] ?? VISIBILITY_ZONE_CODE.unseen) as VisibilityZoneCode;
+    const color = heatmapColor(quality, zoneCode);
     const pixel = (mapY * mapWidth + mapX) * 4;
     image.data[pixel] = (color >> 16) & 0xff;
     image.data[pixel + 1] = (color >> 8) & 0xff;
     image.data[pixel + 2] = color & 0xff;
-    image.data[pixel + 3] = Math.round((0.12 + quality * 0.48) * 255);
+    image.data[pixel + 3] = Math.round(visibilityAlpha(quality, zoneCode) * 255);
   }
   context.putImageData(image, 0, 0);
 }
 
-function heatmapColor(quality: number): number {
+function heatmapColor(quality: number, zoneCode: VisibilityZoneCode): number {
+  if (zoneCode === VISIBILITY_ZONE_CODE.rear) return REAR_ATTENTION_COLOR;
+  if (zoneCode === VISIBILITY_ZONE_CODE.near) return NEAR_ATTENTION_COLOR;
   if (quality >= 0.82) return 0xffe88a;
   if (quality >= 0.58) return 0x69d7a2;
   if (quality >= 0.32) return 0x4aa9b8;
   return 0x315a78;
+}
+
+function visibilityAlpha(quality: number, zoneCode: VisibilityZoneCode): number {
+  // Rear is intentionally legible even with a small gameplay weight; opacity is not the weight itself.
+  if (zoneCode === VISIBILITY_ZONE_CODE.rear) return Math.min(0.52, 0.22 + quality * 0.38);
+  if (zoneCode === VISIBILITY_ZONE_CODE.near) return Math.min(0.64, 0.28 + quality * 0.36);
+  return Math.min(0.6, 0.12 + quality * 0.48);
 }
 
 function drawContactMarker(
