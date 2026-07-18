@@ -146,7 +146,6 @@ export class PixiAwarenessHeatmapRenderer {
 
   render(state: SimulationState): void {
     if (this.destroyed) return;
-    const layer = getSimulationLayerState(state);
     const unit = state.selectedUnitId
       ? state.units.find((candidate) => candidate.id === state.selectedUnitId)
       : undefined;
@@ -176,10 +175,22 @@ export class PixiAwarenessHeatmapRenderer {
       this.requestWorldBuild(buildPendingWorldSnapshot(state, unit, worldKey, mapKey, canonical));
     }
 
-    this.coverResult = mode === 'cover' || mode === 'combined'
-      ? getCoverSuitability(state, unit)
-      : null;
-    const coverKey = this.coverResult?.cacheKey ?? 'no-cover';
+    if (mode === 'cover' || mode === 'combined') {
+      const nextCoverResult = getCoverSuitability(state, unit);
+      const sameUnit = this.coverResult?.unitId === unit.id;
+      if (
+        nextCoverResult.preparationStatus === 'ready'
+        || !this.coverResult
+        || !sameUnit
+        || this.coverResult.preparationStatus !== 'ready'
+      ) {
+        this.coverResult = nextCoverResult;
+      }
+    }
+
+    const coverKey = this.coverResult?.unitId === unit.id
+      ? this.coverResult.cacheKey
+      : 'no-cover';
     const rasterKey = `${worldKey};mode:${mode};cover:${coverKey}`;
     const canApply = mode === 'cover'
       || (this.worldField !== null && this.lastAppliedWorldKey === worldKey);
@@ -188,7 +199,7 @@ export class PixiAwarenessHeatmapRenderer {
     const contourKey = `${mode};${coverKey};cell:${state.map.cellSize}`;
     if (contourKey !== this.lastContourKey) {
       this.lastContourKey = contourKey;
-      this.drawCoverContours(mode, state.map.cellSize);
+      this.drawCoverContours(mode, state.map.cellSize, unit.id);
     }
     this.title.text = modeLabel(mode);
     this.publishDiagnostics();
@@ -374,7 +385,10 @@ export class PixiAwarenessHeatmapRenderer {
     const startedAt = performance.now();
     if (mode === 'cover') {
       drawCoverRasterWords(this.rasterPixelWords, this.coverResult);
-    } else if (mode === 'combined' || mode === 'danger') {
+    } else if (mode === 'combined') {
+      copyRasterWords(this.rasterPixelWords, this.worldField?.dangerPixels);
+      blendCoverRasterWords(this.rasterPixelWords, this.coverResult);
+    } else if (mode === 'danger') {
       copyRasterWords(this.rasterPixelWords, this.worldField?.dangerPixels);
     } else {
       copyRasterWords(this.rasterPixelWords, this.worldField?.stealthPixels);
@@ -390,9 +404,15 @@ export class PixiAwarenessHeatmapRenderer {
     this.movement.maxMainThreadApplyMs = Math.max(this.movement.maxMainThreadApplyMs, this.movement.lastMainThreadApplyMs);
   }
 
-  private drawCoverContours(mode: VisibleTacticalOverlayMode | 'off', cellSize: number): void {
+  private drawCoverContours(mode: VisibleTacticalOverlayMode | 'off', cellSize: number, unitId: string): void {
     this.contourGraphics.clear();
-    if ((mode !== 'cover' && mode !== 'combined') || !this.coverResult) return;
+    if (
+      (mode !== 'cover' && mode !== 'combined')
+      || !this.coverResult
+      || this.coverResult.unitId !== unitId
+      || this.coverResult.preparationStatus !== 'ready'
+    ) return;
+
     drawMaskBoundaries(
       this.contourGraphics,
       this.coverResult.quickCoverMask,
@@ -401,7 +421,17 @@ export class PixiAwarenessHeatmapRenderer {
       cellSize,
       false,
     );
-    this.contourGraphics.stroke({ width: 2.25, color: 0xf2f2ec, alpha: mode === 'combined' ? 0.9 : 0.95 });
+    this.contourGraphics.stroke({ width: 4.4, color: 0x111411, alpha: 0.82 });
+    drawMaskBoundaries(
+      this.contourGraphics,
+      this.coverResult.quickCoverMask,
+      this.coverResult.width,
+      this.coverResult.height,
+      cellSize,
+      false,
+    );
+    this.contourGraphics.stroke({ width: 2.35, color: 0xffffff, alpha: mode === 'combined' ? 0.98 : 0.96 });
+
     drawMaskBoundaries(
       this.contourGraphics,
       this.coverResult.qualityCoverMask,
@@ -410,7 +440,16 @@ export class PixiAwarenessHeatmapRenderer {
       cellSize,
       true,
     );
-    this.contourGraphics.stroke({ width: 1.6, color: 0xb9bbb6, alpha: mode === 'combined' ? 0.82 : 0.88 });
+    this.contourGraphics.stroke({ width: 3.5, color: 0x171a17, alpha: 0.78 });
+    drawMaskBoundaries(
+      this.contourGraphics,
+      this.coverResult.qualityCoverMask,
+      this.coverResult.width,
+      this.coverResult.height,
+      cellSize,
+      true,
+    );
+    this.contourGraphics.stroke({ width: 1.75, color: 0xd9ddd7, alpha: mode === 'combined' ? 0.96 : 0.9 });
     this.coverContourBuildCount += 1;
   }
 
@@ -524,7 +563,7 @@ function resolveVisibleMode(state: SimulationState): VisibleTacticalOverlayMode 
 
 function drawCoverRasterWords(pixels: Uint32Array, result: CoverSuitabilityResult | null): void {
   pixels.fill(0);
-  if (!result) return;
+  if (!result || result.preparationStatus !== 'ready') return;
   const length = Math.min(pixels.length, result.coverSuitabilityField.length);
   for (let index = 0; index < length; index += 1) {
     const quick = result.quickCoverMask[index] === 1;
@@ -534,9 +573,36 @@ function drawCoverRasterWords(pixels: Uint32Array, result: CoverSuitabilityResul
     const x = index % result.width;
     const y = Math.floor(index / result.width);
     const hatch = ((x + y) & 1) === 0;
-    const shade = quick ? Math.round(150 + suitability * 0.65) : Math.round(118 + suitability * 0.52);
-    const alpha = quick ? Math.round((0.18 + suitability / 100 * 0.28) * 255) : Math.round((hatch ? 0.24 : 0.11) * 255);
-    pixels[index] = packRgba(shade, shade, Math.min(255, shade + 3), alpha);
+    const shade = quick ? Math.round(174 + suitability * 0.7) : Math.round(142 + suitability * 0.56);
+    const alpha = quick
+      ? Math.round((0.34 + suitability / 100 * 0.3) * 255)
+      : Math.round((hatch ? 0.34 : 0.2) * 255);
+    pixels[index] = packRgba(Math.min(255, shade), Math.min(255, shade), Math.min(255, shade + 3), alpha);
+  }
+}
+
+function blendCoverRasterWords(pixels: Uint32Array, result: CoverSuitabilityResult | null): void {
+  if (!result || result.preparationStatus !== 'ready') return;
+  const length = Math.min(pixels.length, result.coverSuitabilityField.length);
+  for (let index = 0; index < length; index += 1) {
+    const quick = result.quickCoverMask[index] === 1;
+    const quality = result.qualityCoverMask[index] === 1;
+    if (!quick && !quality) continue;
+    const x = index % result.width;
+    const y = Math.floor(index / result.width);
+    const hatch = ((x + y) & 1) === 0;
+    const suitability = result.coverSuitabilityField[index] ?? 0;
+    const mix = quick
+      ? 0.34 + suitability / 100 * 0.18
+      : (hatch ? 0.3 : 0.18);
+    const shade = quick ? 246 : 208;
+    const base = unpackRgba(pixels[index]);
+    pixels[index] = packRgba(
+      Math.round(base.red * (1 - mix) + shade * mix),
+      Math.round(base.green * (1 - mix) + shade * mix),
+      Math.round(base.blue * (1 - mix) + Math.min(255, shade + 4) * mix),
+      Math.max(base.alpha, quick ? 174 : hatch ? 142 : 112),
+    );
   }
 }
 
@@ -646,6 +712,23 @@ function packRgba(red: number, green: number, blue: number, alpha: number): numb
   return LITTLE_ENDIAN
     ? (red | green << 8 | blue << 16 | alpha << 24) >>> 0
     : (red << 24 | green << 16 | blue << 8 | alpha) >>> 0;
+}
+
+function unpackRgba(value: number): { red: number; green: number; blue: number; alpha: number } {
+  if (LITTLE_ENDIAN) {
+    return {
+      red: value & 0xff,
+      green: value >>> 8 & 0xff,
+      blue: value >>> 16 & 0xff,
+      alpha: value >>> 24 & 0xff,
+    };
+  }
+  return {
+    red: value >>> 24 & 0xff,
+    green: value >>> 16 & 0xff,
+    blue: value >>> 8 & 0xff,
+    alpha: value & 0xff,
+  };
 }
 
 function getMapIdentity(map: object): number {
