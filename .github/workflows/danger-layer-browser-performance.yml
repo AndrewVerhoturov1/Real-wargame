@@ -22,6 +22,7 @@ on:
       - 'src/testing/DangerLayerMovementPerformanceHarness.ts'
       - 'src/workers/**'
       - 'tests/danger-layer-browser-performance.spec.ts'
+      - 'tests/performance-report-compat.ts'
       - 'tests/danger-layer-movement-performance.spec.ts'
       - 'tests/danger-layer-long-task-attribution.spec.ts'
       - 'scripts/compare_danger_layer_browser_performance.mjs'
@@ -72,6 +73,7 @@ jobs:
         run: |
           mkdir -p browser-artifacts baseline/src/core/debug
           cp source/tests/danger-layer-browser-performance.spec.ts baseline/tests/danger-layer-browser-performance.spec.ts
+          cp source/tests/performance-report-compat.ts baseline/tests/performance-report-compat.ts
           cp source/playwright.performance.config.ts baseline/playwright.performance.config.ts
           cp source/vite.config.ts baseline/vite.config.ts
           cp source/src/core/debug/AwarenessMovementDiagnostics.ts baseline/src/core/debug/AwarenessMovementDiagnostics.ts
