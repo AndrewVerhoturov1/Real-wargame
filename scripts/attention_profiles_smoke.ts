@@ -111,6 +111,7 @@ const editorSource = readFileSync(new URL('../src/ai-node-editor/AttentionProfil
 const perceptionSource = readFileSync(new URL('../src/core/perception/PerceptionSystem.ts', import.meta.url), 'utf8');
 const visibilityFieldSource = readFileSync(new URL('../src/core/visibility/SelectedUnitVisibilityField.ts', import.meta.url), 'utf8');
 const rendererSource = readFileSync(new URL('../src/rendering/PixiVisibilityHeatmapRenderer.ts', import.meta.url), 'utf8');
+const sceneExportSource = readFileSync(new URL('../src/ui/SceneExport.ts', import.meta.url), 'utf8');
 for (const label of [
   'Внешний угол периферии',
   'Задний сектор:',
@@ -134,5 +135,7 @@ assert.match(visibilityFieldSource, /let currentVisibilityQuality = 0/);
 assert.match(visibilityFieldSource, /Deny by default/);
 assert.match(rendererSource, /0x8b70d6/);
 assert.match(rendererSource, /complete map is shadow/);
+assert.match(sceneExportSource, /nearAwarenessRangeMeters:\s*unit\.attentionSettings\.nearAwarenessRangeMeters/);
+assert.match(sceneExportSource, /nearMinimumVisibilityQuality:\s*unit\.attentionSettings\.nearMinimumVisibilityQuality/);
 
-console.log('Attention profiles smoke passed: rear zones, bounded samples, near awareness, migration, editor and deny-by-default visibility.');
+console.log('Attention profiles smoke passed: rear zones, bounded samples, near awareness, migration, serialization, editor and deny-by-default visibility.');
