@@ -38,7 +38,10 @@ for (const token of ['getPerformancePhaseRuntimeDiagnostics', 'MAX_DURATION_SAMP
 for (const token of ['PerformanceCaptureV6', 'recordFrame', 'scheduleCheckpoint', 'longTaskClassification', 'buildApplicationIntervalAttribution', 'getAiSchedulerPerformanceDiagnostics', 'getPerceptionGeometryPreparationDiagnostics']) {
   assert.ok(monitor.includes(token), `PerformanceMonitor missing ${token}`);
 }
-for (const token of ['Добавить метку производительности', 'Экспортировать аварийный отчёт', 'dropped samples']) {
+for (const token of [
+  'Добавить метку производительности', 'Экспортировать аварийный отчёт', 'dropped samples',
+  'new MutationObserver', 'tryMount', "window.addEventListener('beforeunload', destroy",
+]) {
   assert.ok(controls.includes(token), `Performance report UI missing ${token}`);
 }
 for (const token of ['recordAiSchedulerUnitPass', 'recordAiSchedulerCycle', 'simulation.ai-scheduler.unit-bridge']) {
@@ -53,4 +56,4 @@ assert.ok(principles.includes('cause of launch'), 'Performance principles must r
 assert.ok(documentation.includes('Worst windows'), 'Performance Report v6 documentation must explain worst windows.');
 
 await import('./performance_report_v6_smoke.mjs');
-console.log('Performance report contract smoke passed: v6 schema, dynamic population, bounded trace/events, causal route diagnostics, checkpoint recovery, UI markers and explicit legacy handling are present.');
+console.log('Performance report contract smoke passed: v6 schema, dynamic population, bounded trace/events, causal route diagnostics, deferred UI mounting, checkpoint recovery and explicit legacy handling are present.');
