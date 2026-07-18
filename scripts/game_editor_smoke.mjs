@@ -45,9 +45,13 @@ expectIncludes('src/core/editor/GameEditorPlacement.ts', [
   'side: draft.side',
   'soldier:',
   'directionDegrees: draft.directionDegrees',
+  'allocateUniqueEditorId',
+  'const occupied = new Set',
+  'while (occupied.has(`${prefix}${index}`)) index += 1',
 ]);
 expectExcludes('src/core/editor/GameEditorPlacement.ts', [
   "side: 'player'",
+  'const id = `editor_unit_${index}`',
 ]);
 
 expectIncludes('src/ui/GameEditorWorkbench.ts', [
