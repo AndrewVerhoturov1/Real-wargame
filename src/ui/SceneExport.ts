@@ -227,7 +227,6 @@ function buildForestMap(state: SimulationState): number[][] {
   return rows;
 }
 
-
 function buildMaterialMap(state: SimulationState, field: 'surfaceMaterialId' | 'vegetationMaterialId'): string[][] {
   const rows: string[][] = [];
   for (let y = 0; y < state.map.height; y += 1) {
@@ -265,6 +264,8 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
         Object.entries(unit.attentionSettings.profiles).map(([mode, profile]) => [mode, { ...profile }]),
       ),
       vision: { ...unit.attentionSettings.vision },
+      nearAwarenessRangeMeters: unit.attentionSettings.nearAwarenessRangeMeters,
+      nearMinimumVisibilityQuality: unit.attentionSettings.nearMinimumVisibilityQuality,
     },
     initialState: { ...unit.initialState },
     tacticalKnowledge: JSON.parse(JSON.stringify(unit.tacticalKnowledge)),
