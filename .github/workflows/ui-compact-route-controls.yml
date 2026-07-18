@@ -1,64 +1,28 @@
 name: Compact Route Controls Core
 
 on:
-  pull_request:
-    branches:
-      - real-wargame-preview
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   compact-route-controls:
     runs-on: ubuntu-latest
     timeout-minutes: 18
-    permissions:
-      contents: read
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 20
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Existing editor smoke
-        run: npm run editor:smoke
-
-      - name: Existing workspace smoke
-        run: npm run workspace:smoke
-
-      - name: Existing command plan route smoke
-        run: npm run command-plan-route:smoke
-
-      - name: Existing navigation profile switch smoke
-        run: npm run navigation-profile-switch:smoke
-
-      - name: Existing navigation overlay smoke
-        run: npm run navigation-overlay:smoke
-
-      - name: Existing routed movement smoke
-        run: npm run routed-move:smoke
-
-      - name: Production build
-        run: npm run build
-
-      - name: Documentation check
-        run: npm run docs:check
-
-      - name: Compact route controls contract
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run ui-compact-route-controls:smoke 2>&1 | tee ui-compact-route-controls.log
-
-      - name: Upload focused log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: compact-route-controls-core-log
-          path: ui-compact-route-controls.log
-          if-no-files-found: ignore
-          retention-days: 5
+      - run: npm ci
+      - run: npm run editor:smoke
+      - run: npm run workspace:smoke
+      - run: npm run command-plan-route:smoke
+      - run: npm run navigation-profile-switch:smoke
+      - run: npm run navigation-overlay:smoke
+      - run: npm run routed-move:smoke
+      - run: npm run ui-compact-route-controls:smoke
+      - run: npm run build
+      - run: npm run docs:check
