@@ -1,0 +1,38 @@
+name: Vercel Soldier Control E2E
+
+on:
+  pull_request:
+    branches:
+      - ci/vercel-soldier-e2e-base-final-2026-07-19
+
+permissions:
+  contents: read
+
+jobs:
+  browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TARGET_URL: https://real-wargame-cover-rollback-backup-4yrocl6uw.vercel.app/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Playwright
+        run: npm install --no-save --package-lock=false @playwright/test@1.55.0
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run deployed soldier control test
+        run: npx playwright test ci/vercel-soldier-control.spec.ts --workers=1 --reporter=line --trace=on --video=retain-on-failure --screenshot=only-on-failure
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-soldier-control-evidence-${{ github.run_id }}
+          path: |
+            artifacts/vercel-control/**
+            test-results/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
