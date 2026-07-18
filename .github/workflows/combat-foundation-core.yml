@@ -1,10 +1,26 @@
-name: Combat Foundation Core
+name: Per-unit AI scheduler smoke and Combat Foundation Core
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# Documentation-only ownership markers retained for the scheduler contract smoke.
+# The lightweight PR path classification itself is centralized in PR Risk CI.
+env:
+  AI_SCHEDULER_CONTRACT_PATHS: >-
+    'src/core/ai/AiSimulationScheduler.ts'
+    'src/core/ai/AiGameBridge.ts'
+    'src/core/ai/AiStatefulMoveGameBridge.ts'
+    'src/core/simulation/SimulationTick.ts'
+    'src/core/simulation/SimulationState.ts'
+    'src/core/behavior/BehaviorModel.ts'
+    'src/core/units/UnitModel.ts'
+    'scripts/ai_per_unit_scheduler_smoke.mjs'
+    'scripts/ai_per_unit_scheduler_smoke.ts'
+    'package.json'
+  AI_SCHEDULER_EVIDENCE_FILE: ai-scheduler-smoke.log
 
 jobs:
   combat-foundation:

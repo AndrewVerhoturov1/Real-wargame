@@ -1,7 +1,8 @@
 import {
   normalizeSignedDegrees,
   radiansToDegrees,
-  sampleAttentionWeight,
+  resolveAttentionSample,
+  type AttentionZone,
 } from '../perception/AttentionModel';
 import { resolveVegetationDefinition } from '../map/VegetationDefinition';
 import { getSelectedUnit, type SimulationState } from '../simulation/SimulationState';
@@ -18,6 +19,17 @@ const POSITION_QUANTUM_CELLS = 0.25;
 const TARGET_EYE_HEIGHT_METERS = 1.4;
 const MIN_VISUAL_TRANSMISSION = resolveVegetationDefinition('none').visibility.minimumTransmission;
 
+export const VISIBILITY_ZONE_CODE = {
+  unseen: 0,
+  focus: 1,
+  direct: 2,
+  peripheral: 3,
+  rear: 4,
+  near: 5,
+} as const;
+
+export type VisibilityZoneCode = typeof VISIBILITY_ZONE_CODE[keyof typeof VISIBILITY_ZONE_CODE];
+
 export interface SelectedUnitVisibilityField {
   observerId: string;
   originCellX: number;
@@ -27,6 +39,7 @@ export interface SelectedUnitVisibilityField {
   width: number;
   height: number;
   quality: Uint8Array;
+  zone: Uint8Array;
   blocker: Uint8Array;
   revision: number;
   calculationKey: string;
@@ -151,6 +164,17 @@ export function sampleSelectedUnitVisibilityField(
   return field.quality[y * field.width + x] ?? 0;
 }
 
+export function sampleSelectedUnitVisibilityZone(
+  field: SelectedUnitVisibilityField,
+  cellX: number,
+  cellY: number,
+): VisibilityZoneCode {
+  const x = Math.floor(cellX) - field.minCellX;
+  const y = Math.floor(cellY) - field.minCellY;
+  if (x < 0 || y < 0 || x >= field.width || y >= field.height) return VISIBILITY_ZONE_CODE.unseen;
+  return (field.zone[y * field.width + x] ?? VISIBILITY_ZONE_CODE.unseen) as VisibilityZoneCode;
+}
+
 function buildVisibilityField(
   state: SimulationState,
   unit: UnitModel,
@@ -171,6 +195,7 @@ function buildVisibilityField(
   const width = maxCellX - minCellX + 1;
   const height = maxCellY - minCellY + 1;
   const quality = new Uint8Array(width * height);
+  const zone = new Uint8Array(width * height);
   const blocker = new Uint8Array(width * height);
   const profile = unit.attentionSettings.profiles[unit.attentionRuntime.mode];
   const observerCondition = observerVisibilityCondition({
@@ -184,19 +209,38 @@ function buildVisibilityField(
     for (let x = minCellX; x <= maxCellX; x += 1) {
       const localIndex = (y - minCellY) * width + (x - minCellX);
       const mapIndex = y * state.map.width + x;
+      // Deny by default: every cell remains unseen until all canonical checks explicitly allow it.
+      let currentVisibilityQuality = 0;
+      let currentZoneCode: VisibilityZoneCode = VISIBILITY_ZONE_CODE.unseen;
       const dx = x + 0.5 - unit.position.x;
       const dy = y + 0.5 - unit.position.y;
       const distanceCells = Math.hypot(dx, dy);
       const distanceMeters = distanceCells * state.map.metersPerCell;
-      if (distanceMeters > unit.attentionSettings.vision.maximumVisualRangeMeters) continue;
+      if (distanceMeters > unit.attentionSettings.vision.maximumVisualRangeMeters) {
+        quality[localIndex] = currentVisibilityQuality;
+        zone[localIndex] = currentZoneCode;
+        continue;
+      }
 
-      const visualTransmission = (geometry.visualTransmission[mapIndex] ?? 0) / 255;
-      const hardBlocked = geometry.hardBlocked[mapIndex] === 1;
       const bearing = Math.atan2(dy, dx);
       const angleDifferenceDegrees = normalizeSignedDegrees(
         radiansToDegrees(bearing - unit.attentionRuntime.focusDirectionRadians),
       );
-      const attention = sampleAttentionWeight(profile, angleDifferenceDegrees);
+      const attention = resolveAttentionSample(
+        profile,
+        angleDifferenceDegrees,
+        distanceMeters,
+        unit.attentionSettings.nearAwarenessRangeMeters,
+        unit.attentionSettings.nearMinimumVisibilityQuality,
+      );
+      if (attention.zone === 'outside' || attention.weight <= 0 || distanceMeters > attention.maximumRangeMeters) {
+        quality[localIndex] = currentVisibilityQuality;
+        zone[localIndex] = currentZoneCode;
+        continue;
+      }
+
+      const visualTransmission = (geometry.visualTransmission[mapIndex] ?? 0) / 255;
+      const hardBlocked = geometry.hardBlocked[mapIndex] === 1;
       const evaluated = evaluateCellVisibilityQuality({
         blocked: hardBlocked || visualTransmission <= MIN_VISUAL_TRANSMISSION,
         visualTransmission,
@@ -204,8 +248,14 @@ function buildVisibilityField(
         attentionWeight: attention.weight,
         observerCondition,
         vision: unit.attentionSettings.vision,
+        minimumVisibilityQuality: attention.minimumVisibilityQuality,
       });
-      quality[localIndex] = Math.round(evaluated.quality01 * 255);
+      if (!evaluated.blocked && evaluated.quality01 > 0) {
+        currentVisibilityQuality = Math.round(evaluated.quality01 * 255);
+        currentZoneCode = visibilityZoneCode(attention.zone);
+      }
+      quality[localIndex] = currentVisibilityQuality;
+      zone[localIndex] = currentZoneCode;
       blocker[localIndex] = evaluated.blocked ? 1 : 0;
     }
   }
@@ -219,6 +269,7 @@ function buildVisibilityField(
     width,
     height,
     quality,
+    zone,
     blocker,
     revision,
     calculationKey,
@@ -234,7 +285,7 @@ function buildCalculationKey(
 ): string {
   const profile = unit.attentionSettings.profiles[unit.attentionRuntime.mode];
   return [
-    'current-unit-view:v2',
+    'current-unit-view:v3-rear-attention',
     unit.id,
     geometryKey,
     quantize(unit.position.x, POSITION_QUANTUM_CELLS),
@@ -244,9 +295,14 @@ function buildCalculationKey(
     quantize(unit.attentionRuntime.focusDirectionRadians, 0.05),
     profile.focusAngleDegrees.toFixed(1),
     profile.directAngleDegrees.toFixed(1),
+    profile.peripheralAngleDegrees.toFixed(1),
     profile.focusWeight.toFixed(3),
     profile.directWeight.toFixed(3),
     profile.peripheralWeight.toFixed(3),
+    profile.rearWeight.toFixed(3),
+    profile.rearMaximumRangeMeters.toFixed(1),
+    unit.attentionSettings.nearAwarenessRangeMeters.toFixed(2),
+    unit.attentionSettings.nearMinimumVisibilityQuality.toFixed(3),
     unit.attentionSettings.vision.maximumVisualRangeMeters.toFixed(1),
     unit.attentionSettings.vision.distanceFalloffStartMeters.toFixed(1),
     unit.attentionSettings.vision.distanceFalloffExponent.toFixed(2),
@@ -256,6 +312,15 @@ function buildCalculationKey(
     quantize(unit.behaviorRuntime.suppression, 1),
     state.map.metersPerCell.toFixed(3),
   ].join(':');
+}
+
+function visibilityZoneCode(zone: AttentionZone): VisibilityZoneCode {
+  if (zone === 'focus') return VISIBILITY_ZONE_CODE.focus;
+  if (zone === 'direct') return VISIBILITY_ZONE_CODE.direct;
+  if (zone === 'peripheral') return VISIBILITY_ZONE_CODE.peripheral;
+  if (zone === 'rear') return VISIBILITY_ZONE_CODE.rear;
+  if (zone === 'near') return VISIBILITY_ZONE_CODE.near;
+  return VISIBILITY_ZONE_CODE.unseen;
 }
 
 function getRuntime(state: SimulationState): VisibilityFieldRuntime {

@@ -9,7 +9,7 @@ import { updateAttentionController } from './AttentionController';
 import {
   normalizeSignedDegrees,
   radiansToDegrees,
-  sampleAttentionWeight,
+  resolveAttentionSample,
   type AttentionModeProfile,
   type AttentionZone,
 } from './AttentionModel';
@@ -34,12 +34,11 @@ import { evaluateVisualSignal } from './VisualSignal';
 
 export { getPerceptionDiagnostics } from './PerceptionDiagnostics';
 
-const REAR_SECTOR_START_DEGREES = 135;
 const perceptionStimulusCursorByState = new WeakMap<SimulationState, Map<string, number>>();
 
-interface DueAttentionChecks extends Record<AttentionZone, boolean> {
-  rear: boolean;
-}
+type ScheduledAttentionZone = 'focus' | 'direct' | 'peripheral' | 'rear';
+
+interface DueAttentionChecks extends Record<ScheduledAttentionZone, boolean> {}
 
 export function tickSelectedSoldierPerception(state: SimulationState, deltaSeconds: number): void {
   const unit = getSelectedUnit(state);
@@ -164,9 +163,24 @@ export function tickUnitPerception(
     const angleDifferenceDegrees = normalizeSignedDegrees(
       radiansToDegrees(bearingRadians - unit.attentionRuntime.focusDirectionRadians),
     );
-    const attention = sampleAttentionWeight(profile, angleDifferenceDegrees);
-    const rearSector = Math.abs(angleDifferenceDegrees) >= REAR_SECTOR_START_DEGREES;
-    const checkDue = rearSector ? due.rear : due[attention.zone];
+    const distanceMeters = distanceCells * state.map.metersPerCell;
+    const attention = resolveAttentionSample(
+      profile,
+      angleDifferenceDegrees,
+      distanceMeters,
+      unit.attentionSettings.nearAwarenessRangeMeters,
+      unit.attentionSettings.nearMinimumVisibilityQuality,
+    );
+
+    // Deny by default: outside the canonical zone/range there is no current visual sample and no LOS work.
+    if (attention.zone === 'outside' || attention.weight <= 0) {
+      preserveExistingContact(unit, stimulus.id, updatedContacts);
+      continue;
+    }
+
+    const checkDue = attention.zone === 'near'
+      ? true
+      : isScheduledAttentionZone(attention.zone) && due[attention.zone];
     if (!checkDue) {
       if (diagnostics) diagnostics.skippedNotDueCount += 1;
       preserveExistingContact(unit, stimulus.id, updatedContacts);
@@ -199,7 +213,7 @@ export function tickUnitPerception(
       unit,
       stimulus.movement !== 'stationary',
     );
-    if (visualSignal.evidencePerSecond <= 0) continue;
+    if (visualSignal.evidencePerSecond <= 0 || attention.sampleDurationSeconds <= 0) continue;
 
     const contactId = contactIdForStimulus(stimulus.id);
     const previous = unit.perceptionKnowledge.contacts.find((item) => item.id === contactId) ?? null;
@@ -216,13 +230,17 @@ export function tickUnitPerception(
       position: stimulus.position,
       evidencePerSecond: visualSignal.evidencePerSecond,
       detectionVariance,
-      deltaSeconds: rearSector ? profile.rearCheckIntervalSeconds : intervalForZone(profile, attention.zone),
+      // A check grants one bounded observation sample, never the whole time since the previous check.
+      deltaSeconds: attention.sampleDurationSeconds,
       nowSeconds: now,
       explanationRu: [
         ...visualSignal.explanationRu,
-        rearSector ? `Тыл проверяется раз в ${profile.rearCheckIntervalSeconds.toFixed(1).replace('.', ',')} с.` : '',
+        attention.zone === 'near'
+          ? `Ближний круговой обзор до ${unit.attentionSettings.nearAwarenessRangeMeters.toFixed(1).replace('.', ',')} м.`
+          : `Зона «${attentionZoneLabelRu(attention.zone)}» проверяется раз в ${attention.checkIntervalSeconds.toFixed(2).replace('.', ',')} с.`,
+        `Условная длительность взгляда: ${attention.sampleDurationSeconds.toFixed(2).replace('.', ',')} с.`,
         `Небольшая стабильная вариативность обнаружения: ×${detectionVariance.toFixed(2).replace('.', ',')}.`,
-      ].filter(Boolean),
+      ],
     });
     upsertPerceptionContact(unit.perceptionKnowledge, contact);
     updatedContacts.add(contactId);
@@ -452,12 +470,6 @@ function scheduleNextChecks(
   if (due.rear) unit.attentionRuntime.nextRearCheckSeconds = now + profile.rearCheckIntervalSeconds;
 }
 
-function intervalForZone(profile: AttentionModeProfile, zone: AttentionZone): number {
-  if (zone === 'focus') return profile.focusCheckIntervalSeconds;
-  if (zone === 'direct') return profile.directCheckIntervalSeconds;
-  return profile.peripheralCheckIntervalSeconds;
-}
-
 function effectiveProfile(unit: UnitModel): AttentionModeProfile {
   const base = unit.attentionSettings.profiles[unit.attentionRuntime.mode];
   const narrowing = 1 - Math.min(0.35, unit.behaviorRuntime.suppression * 0.0035);
@@ -467,13 +479,18 @@ function effectiveProfile(unit: UnitModel): AttentionModeProfile {
   const peripheralMultiplier = movement?.observationPeripheralMultiplier ?? 1;
   const rearMultiplier = movement?.observationRearMultiplier ?? 1;
   const scanSpeedMultiplier = movement?.observationScanSpeedMultiplier ?? 1;
+  const focusAngleDegrees = Math.max(4, base.focusAngleDegrees * narrowing);
+  const directAngleDegrees = Math.max(focusAngleDegrees, base.directAngleDegrees * narrowing);
+  const peripheralAngleDegrees = Math.max(directAngleDegrees, base.peripheralAngleDegrees * narrowing);
   return {
     ...base,
-    focusAngleDegrees: Math.max(4, base.focusAngleDegrees * narrowing),
-    directAngleDegrees: Math.max(base.focusAngleDegrees * narrowing, base.directAngleDegrees * narrowing),
+    focusAngleDegrees,
+    directAngleDegrees,
+    peripheralAngleDegrees,
     focusWeight: base.focusWeight * focusMultiplier,
     directWeight: base.directWeight * directMultiplier,
     peripheralWeight: base.peripheralWeight * peripheralMultiplier,
+    rearWeight: base.rearWeight * rearMultiplier,
     focusCheckIntervalSeconds: base.focusCheckIntervalSeconds
       / Math.max(0.05, focusMultiplier * scanSpeedMultiplier),
     directCheckIntervalSeconds: base.directCheckIntervalSeconds
@@ -483,6 +500,17 @@ function effectiveProfile(unit: UnitModel): AttentionModeProfile {
     rearCheckIntervalSeconds: base.rearCheckIntervalSeconds
       / Math.max(0.05, rearMultiplier * scanSpeedMultiplier),
   };
+}
+
+function isScheduledAttentionZone(zone: AttentionZone): zone is ScheduledAttentionZone {
+  return zone === 'focus' || zone === 'direct' || zone === 'peripheral' || zone === 'rear';
+}
+
+function attentionZoneLabelRu(zone: ScheduledAttentionZone): string {
+  if (zone === 'focus') return 'фокус';
+  if (zone === 'direct') return 'прямой обзор';
+  if (zone === 'peripheral') return 'периферия';
+  return 'тыл';
 }
 
 function decayContacts(

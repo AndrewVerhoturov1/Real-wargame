@@ -70,6 +70,8 @@ export function evaluatePointVisibility(
     observer.attentionSettings.vision.maximumVisualRangeMeters / Math.max(0.001, state.map.metersPerCell),
   );
   if (distanceCells > rangeCells) return null;
+  // Deny by default: an unresolved/out-of-zone sample never consumes a LOS probe.
+  if (attention.zone === 'outside' || attention.weight <= 0 || distanceMeters > attention.maximumRangeMeters) return null;
 
   const lineOfSight = getPerceptionPointProbe(
     state,
@@ -92,6 +94,7 @@ export function evaluatePointVisibility(
     attentionWeight: attention.weight,
     observerCondition,
     vision: observer.attentionSettings.vision,
+    minimumVisibilityQuality: attention.minimumVisibilityQuality,
   });
 
   return {
