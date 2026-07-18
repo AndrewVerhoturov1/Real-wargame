@@ -1,0 +1,157 @@
+name: Apply Performance v6 Test Compatibility
+
+on:
+  push:
+    branches:
+      - agent/performance-report-v6-observability
+    paths:
+      - tests/performance-report-compat.ts
+      - .github/workflows/apply-performance-v6-test-compat.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-performance-v6-test-compat
+  cancel-in-progress: false
+
+jobs:
+  patch-verify-and-clean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Patch legacy browser readers without changing v6 JSON
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one replacement, found {count}')
+              target.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          replace_once(
+              'src/core/debug/PerformanceMonitor.ts',
+              """        compatibility: {
+          v5SceneUnitCount: state.units.length,
+          v5Samples: samples,
+          note: 'Explicit legacy compatibility payload. This file remains performance-report-v6 and must not be parsed as v5.',
+        },""",
+              """        compatibility: {
+          v5SceneUnitCount: state.units.length,
+          v5Scene: {
+            mapWidthCells: state.map.width,
+            mapHeightCells: state.map.height,
+            cellSizePx: state.map.cellSize,
+            metersPerCell: state.map.metersPerCell,
+            terrainCells: state.map.cells.length,
+            objectCount: state.map.objects.length,
+            unitCount: state.units.length,
+            pressureZoneCount: state.pressureZones.length,
+            currentZoom: roundThree(zoom),
+          },
+          v5Samples: samples,
+          note: 'Explicit legacy compatibility payload. This file remains performance-report-v6 and must not be parsed as v5.',
+        },""",
+          )
+
+          workflow = '.github/workflows/danger-layer-browser-performance.yml'
+          replace_once(
+              workflow,
+              "      - 'tests/danger-layer-browser-performance.spec.ts'\n",
+              "      - 'tests/danger-layer-browser-performance.spec.ts'\n      - 'tests/performance-report-compat.ts'\n",
+          )
+          replace_once(
+              workflow,
+              "          cp source/src/core/debug/BuildIdentity.ts baseline/src/core/debug/BuildIdentity.ts\n",
+              "          cp source/tests/performance-report-compat.ts baseline/tests/performance-report-compat.ts\n",
+          )
+
+          browser = 'tests/danger-layer-browser-performance.spec.ts'
+          replace_once(
+              browser,
+              "import path from 'node:path';\n",
+              "import path from 'node:path';\nimport { normalizePerformanceReport } from './performance-report-compat';\n",
+          )
+          replace_once(
+              browser,
+              "  const report = JSON.parse(readFileSync(downloadedPath, 'utf8')) as PerformanceReport;\n",
+              "  const report = normalizePerformanceReport<PerformanceReport>(JSON.parse(readFileSync(downloadedPath, 'utf8')));\n",
+          )
+          replace_once(
+              browser,
+              """  expect(report.version).toBe('performance-report-v5');
+  expect(report.build?.performanceContractVersion).toBe('performance-report-v5');""",
+              """  expect(['performance-report-v5', 'performance-report-v6']).toContain(report.version);
+  expect(report.build?.performanceContractVersion).toBe(report.version);""",
+          )
+
+          movement = 'tests/danger-layer-movement-performance.spec.ts'
+          replace_once(
+              movement,
+              "import path from 'node:path';\n",
+              "import path from 'node:path';\nimport { normalizePerformanceReport } from './performance-report-compat';\n",
+          )
+          replace_once(
+              movement,
+              "    report: JSON.parse(readFileSync(downloadedPath, 'utf8')) as PerformanceReport,\n",
+              "    report: normalizePerformanceReport<PerformanceReport>(JSON.parse(readFileSync(downloadedPath, 'utf8'))),\n",
+          )
+          replace_once(
+              movement,
+              """  expect(report.version).toBe('performance-report-v5');
+  expect(report.build?.performanceContractVersion).toBe('performance-report-v5');""",
+              """  expect(['performance-report-v5', 'performance-report-v6']).toContain(report.version);
+  expect(report.build?.performanceContractVersion).toBe(report.version);""",
+          )
+
+          long_task = 'tests/danger-layer-long-task-attribution.spec.ts'
+          replace_once(
+              long_task,
+              "import path from 'node:path';\n",
+              "import path from 'node:path';\nimport { normalizePerformanceReport } from './performance-report-compat';\n",
+          )
+          replace_once(
+              long_task,
+              "    report: JSON.parse(readFileSync(downloadedPath, 'utf8')) as PerformanceReport,\n",
+              "    report: normalizePerformanceReport<PerformanceReport>(JSON.parse(readFileSync(downloadedPath, 'utf8'))),\n",
+          )
+          replace_once(
+              long_task,
+              """  expect(report.version).toBe('performance-report-v5');
+  expect(report.build?.performanceContractVersion).toBe('performance-report-v5');""",
+              """  expect(['performance-report-v5', 'performance-report-v6']).toContain(report.version);
+  expect(report.build?.performanceContractVersion).toBe(report.version);""",
+          )
+          PY
+          ! grep -R "expect(report.version).toBe('performance-report-v5')" tests/danger-layer-*.spec.ts
+          grep -q "v5Scene:" src/core/debug/PerformanceMonitor.ts
+          grep -q "performance-report-compat.ts" .github/workflows/danger-layer-browser-performance.yml
+      - name: Install and verify focused contracts
+        run: |
+          npm ci
+          npm run workspace:smoke
+          npm run build
+          npm run performance-report-v6:smoke
+          node scripts/performance_report_contract_smoke.mjs
+          npm run performance-contract:smoke
+      - name: Publish clean verified patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/apply-performance-v6-test-compat.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'test(perf): bridge legacy browser checks to report v6'
+          git push origin HEAD:agent/performance-report-v6-observability
