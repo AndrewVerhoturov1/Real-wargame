@@ -5,39 +5,20 @@ on:
     inputs:
       base_sha:
         description: Exact preview base SHA for acceptance evidence
+        required: true
+        type: string
+      head_sha:
+        description: Exact candidate SHA; defaults to the selected ref
         required: false
+        type: string
+      performance_reason:
+        description: Concrete regression this run can detect after this change
+        required: true
         type: string
   pull_request:
     branches:
       - real-wargame-preview
-    paths:
-      - '.github/workflows/live-windows-ai-browser-performance.yml'
-      - 'playwright.performance.config.ts'
-      - 'src/core/ai/**'
-      - 'src/core/cover/**'
-      - 'src/core/debug/**'
-      - 'src/core/knowledge/**'
-      - 'src/core/navigation/**'
-      - 'src/core/perception/**'
-      - 'src/core/simulation/**'
-      - 'src/core/terrain/**'
-      - 'src/core/visibility/**'
-      - 'src/rendering/PixiApp.ts'
-      - 'src/rendering/PixiRouteCostOverlayRenderer.ts'
-      - 'src/workers/RouteCostWorker.ts'
-      - 'src/testing/LiveWindowsPerformanceHarness.ts'
-      - 'src/ui/TacticalWorkspace.ts'
-      - 'src/main.ts'
-      - 'tests/live-windows-ai-performance.spec.ts'
-      - 'scripts/performance_report_contract_smoke.mjs'
-      - 'scripts/perception_performance_smoke.ts'
-      - 'scripts/danger_layer_performance_smoke.ts'
-      - 'scripts/live_windows_workflow_enforce_contract_smoke.mjs'
-      - 'scripts/long_task_classification_smoke.*'
-      - 'scripts/route_danger_semantics_smoke.*'
-      - 'scripts/point_visibility_differential_smoke.*'
-      - 'scripts/simulation_slowest_pass_attribution_smoke.*'
-      - 'scripts/finalize_live_performance_acceptance.mjs'
+    types: [labeled]
 
 permissions:
   contents: read
@@ -49,46 +30,79 @@ concurrency:
 
 jobs:
   capture-live-ai:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'ci:live-performance'
     runs-on: ubuntu-latest
-    env:
-      LIVE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      LIVE_HEAD_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
-      LIVE_BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha || '' }}
     timeout-minutes: 35
+    env:
+      LIVE_HEAD_SHA: ${{ github.event.pull_request.head.sha || inputs.head_sha || github.sha }}
+      LIVE_HEAD_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+      LIVE_BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha }}
+      PR_BODY: ${{ github.event.pull_request.body || '' }}
+      DISPATCH_REASON: ${{ inputs.performance_reason || '' }}
+
     steps:
-      - name: Checkout exact PR head
+      - name: Require a concrete performance reason
+        shell: bash
+        run: |
+          set -euo pipefail
+          reason="$DISPATCH_REASON"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            reason="$(printf '%s\n' "$PR_BODY" | sed -n 's/^PERFORMANCE_REASON:[[:space:]]*//p' | head -n 1)"
+          fi
+          normalized="$(printf '%s' "$reason" | tr '[:upper:]' '[:lower:]')"
+          if [ -z "$reason" ] || printf '%s' "$normalized" | grep -Eq '^(none|n/a|for reliability|just in case|на всякий случай|для над[её]жности)$'; then
+            echo 'A concrete PERFORMANCE_REASON is required. Explain the regression this scenario can detect.' >&2
+            exit 1
+          fi
+          if [ -z "$LIVE_BASE_SHA" ] || [ -z "$LIVE_HEAD_SHA" ]; then
+            echo 'Both exact base and head SHA are required.' >&2
+            exit 1
+          fi
+          echo "Performance reason: $reason" >> "$GITHUB_STEP_SUMMARY"
+          echo "Base: $LIVE_BASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Head: $LIVE_HEAD_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Checkout exact candidate
         uses: actions/checkout@v4
         with:
           ref: ${{ env.LIVE_HEAD_SHA }}
           fetch-depth: 0
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
+
       - name: Install dependencies and Chromium
         run: |
           npm ci
           npm install --no-save @playwright/test
           npx playwright install chromium
-      - name: Verify exact source
+
+      - name: Verify exact source once
         env:
           PERFORMANCE_EVIDENCE_DIR: artifacts/performance/live-performance-contract-followup/ci-${{ env.LIVE_HEAD_SHA }}
+        shell: bash
         run: |
+          set -o pipefail
           mkdir -p "$PERFORMANCE_EVIDENCE_DIR"
-          npx tsc --noEmit
-          npm run build
-          node scripts/performance_report_contract_smoke.mjs
-          npm run live-windows-workflow-contract:smoke
-          npm run long-task-classification:smoke
-          npm run route-danger-semantics:smoke
-          npm run point-los-differential:smoke
-          npm run simulation-slowest-pass:smoke
-          npm run ai-scheduler:smoke
-          npm run workspace:smoke
-          npm run shared-visibility-vegetation:smoke
-          npm run perception-performance:smoke
-          npm run danger-layer-performance:smoke
+          {
+            npx tsc --noEmit
+            npm run build
+            node scripts/performance_report_contract_smoke.mjs
+            npm run live-windows-workflow-contract:smoke
+            npm run long-task-classification:smoke
+            npm run route-danger-semantics:smoke
+            npm run point-los-differential:smoke
+            npm run simulation-slowest-pass:smoke
+            npm run ai-scheduler:smoke
+            npm run workspace:smoke
+            npm run shared-visibility-vegetation:smoke
+            npm run perception-performance:smoke
+            npm run danger-layer-performance:smoke
+          } 2>&1 | tee "$PERFORMANCE_EVIDENCE_DIR/verify-exact-source.log"
+
       - name: Run 90-second live AI capture
         env:
           REAL_WARGAME_BRANCH: ${{ env.LIVE_HEAD_BRANCH }}
@@ -108,6 +122,7 @@ jobs:
             --config=playwright.performance.config.ts \
             --project=chromium \
             --reporter=line 2>&1 | tee "artifacts/performance/live-performance-contract-followup/ci-${{ env.LIVE_HEAD_SHA }}/playwright.log"
+
       - name: Finalize exact-head run identity
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -115,6 +130,7 @@ jobs:
           LIVE_WINDOWS_PERF_EXPECTED_SHA: ${{ env.LIVE_HEAD_SHA }}
           LIVE_WINDOWS_PERF_OUTPUT: artifacts/performance/live-performance-contract-followup/ci-${{ env.LIVE_HEAD_SHA }}/after-browser.json
         run: node scripts/finalize_live_performance_acceptance.mjs
+
       - name: Upload live browser evidence
         if: always()
         uses: actions/upload-artifact@v4

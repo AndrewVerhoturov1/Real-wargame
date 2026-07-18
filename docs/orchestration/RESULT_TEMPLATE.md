@@ -43,11 +43,26 @@ stale-result rejection:
 teardown:
 before metrics:
 after metrics:
-exact-head enforced workflow:
+performance scenario affected:
+performance reason:
+tested implementation head:
 remaining performance risks:
 ```
 
-Не используй фразу «изменение небольшое и не должно повлиять» вместо анализа.
+Не используй фразу «изменение небольшое и не должно повлиять» вместо анализа. Не запускай performance только ради нового SHA.
+
+## Verification selection
+
+```text
+change risk:
+mandatory automatic checks:
+risk-selected focused checks:
+manual integration checks:
+heavy checks deliberately not run:
+why omitted heavy checks cannot detect a regression from this change:
+TESTED_IMPLEMENTATION_HEAD: <40-char SHA or none>
+PERFORMANCE_REASON: <concrete reason or none>
+```
 
 ## Changed files
 
@@ -68,7 +83,7 @@ remaining performance risks:
 
 ## Not checked
 
-Что не проверялось и почему.
+Что не проверялось и почему. Пропущенная неприменимая тяжёлая проверка не является дефектом результата.
 
 ## Risks
 
