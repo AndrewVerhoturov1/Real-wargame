@@ -354,10 +354,11 @@ function assertIdentity(report: BrowserPerformanceReportV6): void {
 }
 
 async function addMarkerThroughUi(page: Page, label: string): Promise<void> {
+  await page.waitForFunction(() => Boolean(document.querySelector('[data-performance-marker="add"]')));
   page.once('dialog', async (dialog) => dialog.accept(label));
   await page.evaluate(() => {
     const button = document.querySelector<HTMLButtonElement>('[data-performance-marker="add"]');
-    if (!button) throw new Error('Performance marker control is missing.');
+    if (!button) throw new Error('Performance marker control disappeared before activation.');
     button.click();
   });
   await page.waitForTimeout(250);
