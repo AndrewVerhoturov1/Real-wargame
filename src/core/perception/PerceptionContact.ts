@@ -223,7 +223,7 @@ export function upsertPerceptionContact(
     || right.lastUpdatedSeconds - left.lastUpdatedSeconds
   ));
   knowledge.lastUpdatedSeconds = Math.max(knowledge.lastUpdatedSeconds, contact.lastUpdatedSeconds);
-  if (!previous || contactFingerprint(previous) !== contactFingerprint(contact)) knowledge.revision += 1;
+  if (!previous || hasContactFingerprintChanged(previous, contact)) knowledge.revision += 1;
 }
 
 function normalizeContact(value: Partial<PerceptionContactMemory>): PerceptionContactMemory {
@@ -266,20 +266,21 @@ function normalizePosition(value: unknown): GridPosition {
   return { x: 0, y: 0 };
 }
 
-function contactFingerprint(contact: PerceptionContactMemory): string {
-  return JSON.stringify({
-    sourceUnitId: contact.sourceUnitId,
-    stage: contact.stage,
-    source: contact.source,
-    evidence: Math.round(contact.evidence * 10),
-    confidence: Math.round(contact.confidence),
-    uncertainty: Math.round(contact.uncertaintyCells * 10),
-    x: Math.round(contact.lastKnownPosition.x * 10),
-    y: Math.round(contact.lastKnownPosition.y * 10),
-    visibleNow: contact.visibleNow,
-    observedNow: contact.observedNow,
-    detectionVariance: Math.round(contact.detectionVariance * 1000),
-  });
+function hasContactFingerprintChanged(
+  previous: PerceptionContactMemory,
+  next: PerceptionContactMemory,
+): boolean {
+  return previous.sourceUnitId !== next.sourceUnitId
+    || previous.stage !== next.stage
+    || previous.source !== next.source
+    || Math.round(previous.evidence * 10) !== Math.round(next.evidence * 10)
+    || Math.round(previous.confidence) !== Math.round(next.confidence)
+    || Math.round(previous.uncertaintyCells * 10) !== Math.round(next.uncertaintyCells * 10)
+    || Math.round(previous.lastKnownPosition.x * 10) !== Math.round(next.lastKnownPosition.x * 10)
+    || Math.round(previous.lastKnownPosition.y * 10) !== Math.round(next.lastKnownPosition.y * 10)
+    || previous.visibleNow !== next.visibleNow
+    || previous.observedNow !== next.observedNow
+    || Math.round(previous.detectionVariance * 1000) !== Math.round(next.detectionVariance * 1000);
 }
 
 function hashString(value: string): number {

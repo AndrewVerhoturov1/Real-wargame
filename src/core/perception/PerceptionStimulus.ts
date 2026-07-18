@@ -1,8 +1,10 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
+import { getVegetationMaterial } from '../map/EnvironmentMaterialProfile';
+import { getActiveEnvironmentProfile } from '../map/EnvironmentProfileRuntime';
 import { getCell } from '../map/MapModel';
 import { getMovementTargetVisibilityMultiplier } from '../movement/MovementRuntime';
-import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
+import { resolveCellVegetationMaterialId } from '../map/VegetationDefinition';
 import { resolvePressureZoneSettings } from '../pressure/PressureZone';
 import type { SimulationState } from '../simulation/SimulationState';
 import { areUnitsHostile } from '../units/SideRelations';
@@ -39,13 +41,17 @@ export interface PerceptionStimulus {
 
 export function buildPerceptionStimuli(state: SimulationState, observer?: UnitModel): PerceptionStimulus[] {
   const stimuli: PerceptionStimulus[] = [];
+  const environmentProfile = getActiveEnvironmentProfile();
 
   for (const zone of state.pressureZones) {
     const settings = resolvePressureZoneSettings(zone);
     if (!settings.enabled) continue;
     const position = { x: zone.x, y: zone.y };
     const cell = getCell(state.map, Math.floor(position.x), Math.floor(position.y));
-    const concealment = resolveCellVegetationDefinition(cell).visibility.targetConcealment;
+    const concealment = getVegetationMaterial(
+      environmentProfile,
+      resolveCellVegetationMaterialId(cell),
+    ).visibility.targetConcealment;
     const targetType = zone.sourceTargetType ?? 'soldier';
     const targetProfile = resolvePerceptionTargetProfile(targetType);
     const posture: UnitPosture = 'standing';
@@ -74,7 +80,10 @@ export function buildPerceptionStimuli(state: SimulationState, observer?: UnitMo
   for (const unit of state.units) {
     if (observer && (unit.id === observer.id || !areUnitsHostile(observer, unit))) continue;
     const cell = getCell(state.map, Math.floor(unit.position.x), Math.floor(unit.position.y));
-    const terrainConcealment = resolveCellVegetationDefinition(cell).visibility.targetConcealment;
+    const terrainConcealment = getVegetationMaterial(
+      environmentProfile,
+      resolveCellVegetationMaterialId(cell),
+    ).visibility.targetConcealment;
     const posture = unit.behaviorRuntime.posture;
     const targetType: PerceptionTargetType = 'soldier';
     const targetProfile = resolvePerceptionTargetProfile(targetType);

@@ -36,6 +36,7 @@ export { getPerceptionDiagnostics } from './PerceptionDiagnostics';
 
 const REAR_SECTOR_START_DEGREES = 135;
 const perceptionStimulusCursorByState = new WeakMap<SimulationState, Map<string, number>>();
+const updatedContactIdsByUnit = new WeakMap<UnitModel, Set<string>>();
 
 interface DueAttentionChecks extends Record<AttentionZone, boolean> {
   rear: boolean;
@@ -80,21 +81,18 @@ export function tickAllUnitPerception(
     state.simulationStep,
   );
   const sharedStimuli: readonly PerceptionStimulus[] = buildPerceptionStimuli(state);
-  const sourceUnitsById = new Map(state.units.map((unit) => [unit.id, unit] as const));
+  const sourceUnitsById = new Map<string, UnitModel>();
+  for (const sourceUnit of state.units) sourceUnitsById.set(sourceUnit.id, sourceUnit);
   let observerEvaluationCount = 0;
   for (const unit of units) {
-    const unitStimuli = sharedStimuli.filter((stimulus) => {
-      if (stimulus.sourceUnitId === null) return true;
-      const source = sourceUnitsById.get(stimulus.sourceUnitId);
-      return Boolean(source && source.id !== unit.id && areUnitsHostile(unit, source));
-    });
     observerEvaluationCount += 1;
     tickUnitPerception(
       state,
       unit,
       deltaSeconds,
       unit.id === selected?.id ? diagnostics : null,
-      unitStimuli,
+      sharedStimuli,
+      sourceUnitsById,
     );
   }
 
@@ -115,12 +113,13 @@ export function tickUnitPerception(
   deltaSeconds: number,
   diagnostics: MutablePerceptionDiagnostics | null = null,
   preparedStimuli?: readonly PerceptionStimulus[],
+  preparedSourceUnitsById?: ReadonlyMap<string, UnitModel>,
 ): void {
   if (deltaSeconds <= 0 || !isUnitCombatCapable(unit)) return;
   updateAttentionController(unit, deltaSeconds);
   const now = state.simulationTimeSeconds;
   const due = resolveDueZones(unit, now);
-  const updatedContacts = new Set<string>();
+  const updatedContacts = getUpdatedContactIds(unit);
   const stimuli = preparedStimuli ?? buildPerceptionStimuli(state, unit);
   const stimulusCursor = resolveStimulusStartIndex(state, unit, stimuli);
   let firstDeferredStimulusIndex: number | null = null;
@@ -133,6 +132,10 @@ export function tickUnitPerception(
   for (let offset = 0; offset < stimuli.length; offset += 1) {
     const stimulusIndex = (stimulusCursor + offset) % stimuli.length;
     const stimulus = stimuli[stimulusIndex]!;
+    if (preparedSourceUnitsById && stimulus.sourceUnitId !== null) {
+      const sourceUnit = preparedSourceUnitsById.get(stimulus.sourceUnitId);
+      if (!sourceUnit || sourceUnit.id === unit.id || !areUnitsHostile(unit, sourceUnit)) continue;
+    }
     const distanceCells = distance(unit.position, stimulus.position);
     if (distanceCells > broadPhaseCells) continue;
     if (diagnostics) diagnostics.candidateCount += 1;
@@ -237,7 +240,7 @@ export function tickUnitPerception(
   );
   processSoundEvents(state, unit, updatedContacts);
   decayContacts(state, unit, updatedContacts, deltaSeconds);
-  scheduleNextChecks(unit, now, due);
+  scheduleNextChecks(unit, now, due, profile);
   unit.perceptionKnowledge.lastUpdatedSeconds = now;
 }
 
@@ -336,6 +339,17 @@ function rotateUnits(units: readonly UnitModel[], simulationStep: number): UnitM
   if (units.length <= 1) return [...units];
   const startIndex = ((simulationStep % units.length) + units.length) % units.length;
   return Array.from({ length: units.length }, (_, offset) => units[(startIndex + offset) % units.length]!);
+}
+
+function getUpdatedContactIds(unit: UnitModel): Set<string> {
+  let updatedContactIds = updatedContactIdsByUnit.get(unit);
+  if (!updatedContactIds) {
+    updatedContactIds = new Set<string>();
+    updatedContactIdsByUnit.set(unit, updatedContactIds);
+  } else {
+    updatedContactIds.clear();
+  }
+  return updatedContactIds;
 }
 
 function preserveExistingContact(
@@ -444,8 +458,8 @@ function scheduleNextChecks(
   unit: UnitModel,
   now: number,
   due: DueAttentionChecks,
+  profile: AttentionModeProfile,
 ): void {
-  const profile = effectiveProfile(unit);
   if (due.focus) unit.attentionRuntime.nextFocusCheckSeconds = now + profile.focusCheckIntervalSeconds;
   if (due.direct) unit.attentionRuntime.nextDirectCheckSeconds = now + profile.directCheckIntervalSeconds;
   if (due.peripheral) unit.attentionRuntime.nextPeripheralCheckSeconds = now + profile.peripheralCheckIntervalSeconds;
@@ -491,11 +505,14 @@ function decayContacts(
   updatedContacts: Set<string>,
   deltaSeconds: number,
 ): void {
-  const next: PerceptionContactMemory[] = [];
+  const contacts = unit.perceptionKnowledge.contacts;
+  let writeIndex = 0;
   let changed = false;
-  for (const contact of unit.perceptionKnowledge.contacts) {
+  for (let readIndex = 0; readIndex < contacts.length; readIndex += 1) {
+    const contact = contacts[readIndex]!;
     if (updatedContacts.has(contact.id)) {
-      next.push(contact);
+      contacts[writeIndex] = contact;
+      writeIndex += 1;
       continue;
     }
     const decayed = decayUnobservedContact(contact, {
@@ -503,10 +520,14 @@ function decayContacts(
       nowSeconds: state.simulationTimeSeconds,
       metersPerCell: state.map.metersPerCell,
     });
-    if (decayed) next.push(decayed);
+    if (decayed) {
+      contacts[writeIndex] = decayed;
+      writeIndex += 1;
+    }
     if (!decayed || decayed.confidence !== contact.confidence || decayed.uncertaintyCells !== contact.uncertaintyCells) changed = true;
   }
-  unit.perceptionKnowledge.contacts = next;
+  if (writeIndex !== contacts.length) changed = true;
+  contacts.length = writeIndex;
   if (changed) unit.perceptionKnowledge.revision += 1;
 }
 
