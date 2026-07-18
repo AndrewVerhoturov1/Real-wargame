@@ -16,8 +16,12 @@ export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: Gri
 
   if (tool === 'spawn_object') {
     const draft = drafts.object;
-    const index = state.editor.nextObjectIndex;
-    const id = `editor_object_${index}`;
+    const allocation = allocateUniqueEditorId(
+      'editor_object_',
+      state.editor.nextObjectIndex,
+      state.map.objects.map((object) => object.id),
+    );
+    const id = allocation.id;
     const object: MapObject = {
       id,
       kind: draft.kind,
@@ -35,7 +39,7 @@ export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: Gri
       labels: { en: draft.name || id, ru: draft.name || id },
     };
     state.map.objects.push(object);
-    state.editor.nextObjectIndex = index + 1;
+    state.editor.nextObjectIndex = allocation.nextIndex;
     state.editor.selectedObjectId = id;
     state.editor.selectedZoneId = null;
     selectUnit(state, null);
@@ -45,8 +49,12 @@ export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: Gri
 
   if (tool === 'spawn_unit') {
     const draft = drafts.unit;
-    const index = state.editor.nextUnitIndex;
-    const id = `editor_unit_${index}`;
+    const allocation = allocateUniqueEditorId(
+      'editor_unit_',
+      state.editor.nextUnitIndex,
+      state.units.map((unit) => unit.id),
+    );
+    const id = allocation.id;
     const unit = normalizeUnits([{
       id,
       label: draft.name || id,
@@ -80,7 +88,7 @@ export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: Gri
       },
     }])[0];
     state.units.push(unit);
-    state.editor.nextUnitIndex = index + 1;
+    state.editor.nextUnitIndex = allocation.nextIndex;
     state.editor.selectedObjectId = null;
     state.editor.selectedZoneId = null;
     selectUnit(state, id);
@@ -90,8 +98,12 @@ export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: Gri
   }
 
   const draft = drafts.threat;
-  const index = state.editor.nextZoneIndex;
-  const id = `editor_zone_${index}`;
+  const allocation = allocateUniqueEditorId(
+    'editor_zone_',
+    state.editor.nextZoneIndex,
+    state.pressureZones.map((zone) => zone.id),
+  );
+  const id = allocation.id;
   const zone = normalizePressureZones([{
     id,
     label: draft.name || id,
@@ -122,12 +134,23 @@ export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: Gri
     reasonRu: 'Источник угрозы создан в игровом редакторе.',
   }])[0];
   state.pressureZones.push(zone);
-  state.editor.nextZoneIndex = index + 1;
+  state.editor.nextZoneIndex = allocation.nextIndex;
   state.editor.selectedObjectId = null;
   state.editor.selectedZoneId = id;
   selectUnit(state, null);
   state.editor.lastMessage = `Создана угроза «${zone.labels.ru}» со всеми заданными параметрами.`;
   return true;
+}
+
+function allocateUniqueEditorId(
+  prefix: string,
+  requestedIndex: number,
+  existingIds: readonly (string | undefined)[],
+): { id: string; nextIndex: number } {
+  const occupied = new Set(existingIds.filter((id): id is string => Boolean(id)));
+  let index = Math.max(0, Math.floor(requestedIndex));
+  while (occupied.has(`${prefix}${index}`)) index += 1;
+  return { id: `${prefix}${index}`, nextIndex: index + 1 };
 }
 
 function degreesToRadians(degrees: number): number {
