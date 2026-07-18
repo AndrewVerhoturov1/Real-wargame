@@ -1,298 +1,47 @@
 name: Preview Core Checks
 
 on:
-  push:
-    branches:
-      - real-wargame-preview
-  pull_request:
-    branches:
-      - real-wargame-preview
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  core-checks:
+  full-preview-core:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
-    permissions:
-      contents: read
-      statuses: write
+    timeout-minutes: 25
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 20
           cache: npm
-
-      - name: Install dependencies
-        id: install
-        continue-on-error: true
-        run: npm ci
-
-      - name: Tactical workspace smoke
-        id: workspace
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run workspace:smoke
-
-      - name: AI test lab smoke
-        id: lab
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run lab:smoke
-
-      - name: Unified game editor smoke
-        id: game_editor
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run game-editor:smoke
-
-      - name: AI node editor smoke
-        id: editor
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run editor:smoke
-
-      - name: Local AI engine smoke
-        id: engine
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run engine:smoke
-
-      - name: Validate bundled AI graph
-        id: graph
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run validate:ai-graph
-
-      - name: Stateful AI runtime smoke
-        id: runtime
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run runtime:smoke
-
-      - name: AI runtime session smoke
-        id: runtime_session
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run runtime-session:smoke
-
-      - name: AI runtime snapshot smoke
-        id: runtime_snapshot
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run runtime-snapshot:smoke
-
-      - name: AI runtime scene integration smoke
-        id: runtime_scene
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run runtime-scene:smoke
-
-      - name: AI event queue smoke
-        id: event_queue
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run event-queue:smoke
-
-      - name: AI action lifecycle smoke
-        id: lifecycle
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run lifecycle:smoke
-
-      - name: AI composite runtime smoke
-        id: composite
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run composite:smoke
-
-      - name: AI reload runtime smoke
-        id: reload
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run reload:smoke
-
-      - name: Stateful AI movement bridge smoke
-        id: move_bridge
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        shell: bash
+      - run: npm ci
+      - name: Run preserved preview core matrix
         run: |
-          set -o pipefail
-          npm run move-bridge:smoke 2>&1 | tee move-bridge.log
-
-      - name: Upload movement bridge smoke log
-        if: always() && steps.install.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: preview-core-move-bridge-log
-          path: move-bridge.log
-          if-no-files-found: ignore
-          retention-days: 3
-
-      - name: Reactive route status smoke
-        id: route_status
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run route-status:smoke
-
-      - name: Grid pathfinding smoke
-        id: pathfinding
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run pathfinding:smoke
-
-      - name: Routed movement smoke
-        id: routed_move
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run routed-move:smoke
-
-      - name: Map revision smoke
-        id: map_revision
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run map-revision:smoke
-
-      - name: Map resolution migration smoke
-        id: map_resolution
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run map-resolution:smoke
-
-      - name: Map grid LOD smoke
-        id: map_grid_lod
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run map-grid-lod:smoke
-
-      - name: Smooth terrain cache smoke
-        id: smooth_terrain
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run smooth-terrain:smoke
-
-      - name: Spatial index smoke
-        id: spatial_index
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run spatial-index:smoke
-
-      - name: Visibility probe cache smoke
-        id: visibility_probe
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run visibility-probe:smoke
-
-      - name: Awareness field cache smoke
-        id: awareness_field
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        run: npm run awareness-field:smoke
-
-      - name: Production build
-        id: build
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run build 2>&1 | tee build.log
-
-      - name: Upload build log
-        if: always() && steps.install.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: preview-core-build-log
-          path: build.log
-          if-no-files-found: ignore
-          retention-days: 3
-
-      - name: Publish commit statuses and fail on real check errors
-        if: always()
-        uses: actions/github-script@v7
-        env:
-          INSTALL_OUTCOME: ${{ steps.install.outcome }}
-          WORKSPACE_OUTCOME: ${{ steps.workspace.outcome }}
-          LAB_OUTCOME: ${{ steps.lab.outcome }}
-          GAME_EDITOR_OUTCOME: ${{ steps.game_editor.outcome }}
-          EDITOR_OUTCOME: ${{ steps.editor.outcome }}
-          ENGINE_OUTCOME: ${{ steps.engine.outcome }}
-          GRAPH_OUTCOME: ${{ steps.graph.outcome }}
-          RUNTIME_OUTCOME: ${{ steps.runtime.outcome }}
-          RUNTIME_SESSION_OUTCOME: ${{ steps.runtime_session.outcome }}
-          RUNTIME_SNAPSHOT_OUTCOME: ${{ steps.runtime_snapshot.outcome }}
-          RUNTIME_SCENE_OUTCOME: ${{ steps.runtime_scene.outcome }}
-          EVENT_QUEUE_OUTCOME: ${{ steps.event_queue.outcome }}
-          LIFECYCLE_OUTCOME: ${{ steps.lifecycle.outcome }}
-          COMPOSITE_OUTCOME: ${{ steps.composite.outcome }}
-          RELOAD_OUTCOME: ${{ steps.reload.outcome }}
-          MOVE_BRIDGE_OUTCOME: ${{ steps.move_bridge.outcome }}
-          ROUTE_STATUS_OUTCOME: ${{ steps.route_status.outcome }}
-          PATHFINDING_OUTCOME: ${{ steps.pathfinding.outcome }}
-          ROUTED_MOVE_OUTCOME: ${{ steps.routed_move.outcome }}
-          MAP_REVISION_OUTCOME: ${{ steps.map_revision.outcome }}
-          MAP_RESOLUTION_OUTCOME: ${{ steps.map_resolution.outcome }}
-          MAP_GRID_LOD_OUTCOME: ${{ steps.map_grid_lod.outcome }}
-          SMOOTH_TERRAIN_OUTCOME: ${{ steps.smooth_terrain.outcome }}
-          SPATIAL_INDEX_OUTCOME: ${{ steps.spatial_index.outcome }}
-          VISIBILITY_PROBE_OUTCOME: ${{ steps.visibility_probe.outcome }}
-          AWARENESS_FIELD_OUTCOME: ${{ steps.awareness_field.outcome }}
-          BUILD_OUTCOME: ${{ steps.build.outcome }}
-        with:
-          script: |
-            const outcomes = {
-              install: process.env.INSTALL_OUTCOME,
-              workspace: process.env.WORKSPACE_OUTCOME,
-              lab: process.env.LAB_OUTCOME,
-              game_editor: process.env.GAME_EDITOR_OUTCOME,
-              editor: process.env.EDITOR_OUTCOME,
-              engine: process.env.ENGINE_OUTCOME,
-              graph: process.env.GRAPH_OUTCOME,
-              runtime: process.env.RUNTIME_OUTCOME,
-              runtime_session: process.env.RUNTIME_SESSION_OUTCOME,
-              runtime_snapshot: process.env.RUNTIME_SNAPSHOT_OUTCOME,
-              runtime_scene: process.env.RUNTIME_SCENE_OUTCOME,
-              event_queue: process.env.EVENT_QUEUE_OUTCOME,
-              lifecycle: process.env.LIFECYCLE_OUTCOME,
-              composite: process.env.COMPOSITE_OUTCOME,
-              reload: process.env.RELOAD_OUTCOME,
-              move_bridge: process.env.MOVE_BRIDGE_OUTCOME,
-              route_status: process.env.ROUTE_STATUS_OUTCOME,
-              pathfinding: process.env.PATHFINDING_OUTCOME,
-              routed_move: process.env.ROUTED_MOVE_OUTCOME,
-              map_revision: process.env.MAP_REVISION_OUTCOME,
-              map_resolution: process.env.MAP_RESOLUTION_OUTCOME,
-              map_grid_lod: process.env.MAP_GRID_LOD_OUTCOME,
-              smooth_terrain: process.env.SMOOTH_TERRAIN_OUTCOME,
-              spatial_index: process.env.SPATIAL_INDEX_OUTCOME,
-              visibility_probe: process.env.VISIBILITY_PROBE_OUTCOME,
-              awareness_field: process.env.AWARENESS_FIELD_OUTCOME,
-              build: process.env.BUILD_OUTCOME,
-            };
-            const targetUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            for (const [name, value] of Object.entries(outcomes)) {
-              await github.rest.repos.createCommitStatus({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                sha: context.sha,
-                state: value === 'success' ? 'success' : 'failure',
-                context: `preview-core/${name}`,
-                description: `${name}: ${value}`,
-                target_url: targetUrl,
-              });
-            }
-            const passed = Object.values(outcomes).every((value) => value === 'success');
-            await github.rest.repos.createCommitStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha: context.sha,
-              state: passed ? 'success' : 'failure',
-              context: 'preview-core-checks',
-              description: Object.entries(outcomes).map(([key, value]) => `${key}:${value}`).join(' ').slice(0, 140),
-              target_url: targetUrl,
-            });
-            if (!passed) core.setFailed(`One or more core checks failed: ${JSON.stringify(outcomes)}`);
+          npm run workspace:smoke
+          npm run lab:smoke
+          npm run game-editor:smoke
+          npm run editor:smoke
+          npm run engine:smoke
+          npm run validate:ai-graph
+          npm run runtime:smoke
+          npm run runtime-session:smoke
+          npm run runtime-snapshot:smoke
+          npm run runtime-scene:smoke
+          npm run event-queue:smoke
+          npm run lifecycle:smoke
+          npm run composite:smoke
+          npm run reload:smoke
+          npm run move-bridge:smoke
+          npm run route-status:smoke
+          npm run pathfinding:smoke
+          npm run routed-move:smoke
+          npm run map-revision:smoke
+          npm run map-resolution:smoke
+          npm run map-grid-lod:smoke
+          npm run smooth-terrain:smoke
+          npm run spatial-index:smoke
+          npm run visibility-probe:smoke
+          npm run awareness-field:smoke
+      - run: npm run build
