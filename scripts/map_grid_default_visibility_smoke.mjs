@@ -7,7 +7,11 @@ const [pixiAppSource, mainSource, indexSource] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
 ]);
 
-assert.match(pixiAppSource, /private showGrid = false;/, 'Grid rendering must start disabled.');
+assert.match(
+  mainSource,
+  /\(board as unknown as \{ showGrid: boolean \}\)\.showGrid = false;[\s\S]*board\.start\(\);/,
+  'Grid rendering must be disabled before the first board render.',
+);
 assert.match(mainSource, /gridButton\.textContent = 'Сетка: выкл';/, 'Russian controls must show the grid as disabled.');
 assert.match(mainSource, /gridButton\.setAttribute\('aria-pressed', 'false'\);/, 'Grid button accessibility state must start disabled.');
 assert.match(mainSource, /gridButton\.classList\.add\('hud-toggle-off'\);/, 'Grid button must keep the disabled visual style.');
