@@ -5,6 +5,7 @@ import type { SimulationState } from '../simulation/SimulationState';
 import {
   createDefaultTacticalPositionSettings,
   getTacticalPositionSettings,
+  getTacticalPositionSettingsRevision,
 } from './TacticalPositionSettings';
 
 const MAX_VISIBLE_TACTICAL_POSITIONS = 12;
@@ -19,6 +20,7 @@ interface TacticalPositionSelectionRuntime {
   hoveredId: string | null;
   lastAcceptedAtSeconds: number;
   lastNonEmptyAtSeconds: number;
+  settingsRevision: number;
 }
 
 export interface TacticalPositionPresentation {
@@ -40,11 +42,13 @@ export function publishVisibleTacticalPositions(
   const nowSeconds = finiteTime(state.simulationTimeSeconds);
   const unit = state.units?.find((candidate) => candidate.id === unitId);
   const settings = unit ? getTacticalPositionSettings(unit) : createDefaultTacticalPositionSettings();
+  const settingsRevision = unit ? getTacticalPositionSettingsRevision(unit) : 0;
+  const settingsChanged = runtime.settingsRevision !== settingsRevision;
   const bounded = candidates.length <= MAX_VISIBLE_TACTICAL_POSITIONS
     ? candidates
     : candidates.slice(0, MAX_VISIBLE_TACTICAL_POSITIONS);
 
-  if (!ownerChanged && runtime.candidates.length > 0) {
+  if (!ownerChanged && !settingsChanged && runtime.candidates.length > 0) {
     if (bounded.length === 0) {
       if (nowSeconds - runtime.lastNonEmptyAtSeconds < settings.emptyResultHoldSeconds) return;
     } else if (nowSeconds - runtime.lastAcceptedAtSeconds < settings.markerRefreshIntervalSeconds) {
@@ -55,6 +59,7 @@ export function publishVisibleTacticalPositions(
   runtime.unitId = unitId;
   runtime.candidates = bounded;
   runtime.lastAcceptedAtSeconds = nowSeconds;
+  runtime.settingsRevision = settingsRevision;
   if (bounded.length > 0) runtime.lastNonEmptyAtSeconds = nowSeconds;
 
   if (ownerChanged) {
@@ -74,6 +79,7 @@ export function clearVisibleTacticalPositions(state: SimulationState): void {
   runtime.hoveredId = null;
   runtime.lastAcceptedAtSeconds = 0;
   runtime.lastNonEmptyAtSeconds = 0;
+  runtime.settingsRevision = 0;
 }
 
 export function findVisibleTacticalPositionAt(
@@ -165,6 +171,7 @@ function getRuntime(state: SimulationState): TacticalPositionSelectionRuntime {
       hoveredId: null,
       lastAcceptedAtSeconds: 0,
       lastNonEmptyAtSeconds: 0,
+      settingsRevision: 0,
     };
     runtimeByState.set(state, runtime);
   }
