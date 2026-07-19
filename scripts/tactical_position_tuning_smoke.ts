@@ -4,6 +4,7 @@ import { normalizeUnits } from '../src/core/units/UnitModel';
 import type { SimulationState } from '../src/core/simulation/SimulationState';
 import {
   createDefaultTacticalPositionSettings,
+  getTacticalPositionSettings,
   selectHighestSafePosture,
   setTacticalPositionSettings,
 } from '../src/core/tactical/TacticalPositionSettings';
@@ -20,8 +21,9 @@ import type { TacticalPositionCandidateSeedV2 } from '../src/core/tactical/Tacti
 verifyHighestSafePosture();
 verifyOccupationSurvivesAiOverwriteAndClearsOnNewMove();
 verifyMarkerPublicationIsRateLimitedAndKeepsOldResult();
+verifySettingsNormalizeFromSceneData();
 
-console.log('Tactical position tuning smoke passed: highest-safe posture, stable markers and occupied-position lock.');
+console.log('Tactical position tuning smoke passed: highest-safe posture, stable markers, occupied-position lock and scene settings normalization.');
 
 function verifyHighestSafePosture(): void {
   const settings = createDefaultTacticalPositionSettings();
@@ -97,6 +99,24 @@ function verifyMarkerPublicationIsRateLimitedAndKeepsOldResult(): void {
   state.simulationTimeSeconds = 2.8;
   publishVisibleTacticalPositions(state, unit.id, []);
   assert.equal(getTacticalPositionPresentation(state).candidates.length, 0);
+}
+
+function verifySettingsNormalizeFromSceneData(): void {
+  const unit = normalizeUnits([{
+    id: 'unit-persisted',
+    type: 'infantry_squad',
+    side: 'blue',
+    x: 0,
+    y: 0,
+    tacticalPositionSettings: {
+      standingMaximumDanger: 11,
+      markerRefreshIntervalSeconds: 2.5,
+    },
+  }])[0]!;
+  const settings = getTacticalPositionSettings(unit);
+  assert.equal(settings.standingMaximumDanger, 11);
+  assert.equal(settings.markerRefreshIntervalSeconds, 2.5);
+  assert.equal(settings.crouchedMaximumDanger, createDefaultTacticalPositionSettings().crouchedMaximumDanger);
 }
 
 function candidate(id: string, x: number, y: number): TacticalPositionCandidateSeedV2 {
