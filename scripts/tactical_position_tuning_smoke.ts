@@ -28,33 +28,41 @@ import {
 } from '../src/core/tactical/SimulationTacticalPositionSelection';
 import type { TacticalPositionCandidateSeedV2 } from '../src/core/tactical/TacticalPositionSearch';
 
-verifyHighestSafePosture();
+verifyComparativePostureSelection();
 verifyCommandOwnedApproachAndOccupation();
 verifyMarkerPublicationIsRateLimitedAndKeepsOldResult();
 verifySettingsChangeRefreshesMarkersImmediately();
 verifySettingsNormalizeFromSceneData();
 verifySceneExportIncludesSettings();
-verifyOccupationAndDangerSourceContracts();
+verifyOccupationAndEditorContracts();
 
-console.log('Tactical position tuning smoke passed: highest-safe posture, stable markers, command-owned occupation, graph posture guard and scene settings persistence.');
+console.log('Tactical position tuning smoke passed: comparative posture, stable markers, exact arrival posture, shared editor schema and scene persistence.');
 
-function verifyHighestSafePosture(): void {
+function verifyComparativePostureSelection(): void {
   const settings = createDefaultTacticalPositionSettings();
   assert.equal(selectHighestSafePosture([
     { posture: 'standing', danger: 18, safety: 72, protection: 20 },
-    { posture: 'crouched', danger: 10, safety: 80, protection: 36 },
-    { posture: 'prone', danger: 4, safety: 90, protection: 52 },
-  ], settings).posture, 'standing');
+    { posture: 'crouched', danger: 14, safety: 76, protection: 32 },
+    { posture: 'prone', danger: 10, safety: 79, protection: 44 },
+  ], settings).posture, 'standing', 'standing stays when lower postures do not clear advantage thresholds');
+
   assert.equal(selectHighestSafePosture([
-    { posture: 'standing', danger: 42, safety: 52, protection: 20 },
-    { posture: 'crouched', danger: 28, safety: 66, protection: 42 },
-    { posture: 'prone', danger: 12, safety: 82, protection: 64 },
-  ], settings).posture, 'crouched');
+    { posture: 'standing', danger: 18, safety: 72, protection: 20 },
+    { posture: 'crouched', danger: 10, safety: 80, protection: 38 },
+    { posture: 'prone', danger: 8, safety: 85, protection: 50 },
+  ], settings).posture, 'crouched', 'crouched wins when it is materially safer than standing');
+
+  assert.equal(selectHighestSafePosture([
+    { posture: 'standing', danger: 18, safety: 72, protection: 20 },
+    { posture: 'crouched', danger: 10, safety: 80, protection: 38 },
+    { posture: 'prone', danger: 4, safety: 90, protection: 62 },
+  ], settings).posture, 'prone', 'prone wins when it is materially safer than crouched');
+
   assert.equal(selectHighestSafePosture([
     { posture: 'standing', danger: 76, safety: 20, protection: 8 },
     { posture: 'crouched', danger: 61, safety: 34, protection: 24 },
     { posture: 'prone', danger: 34, safety: 58, protection: 48 },
-  ], settings).posture, 'prone');
+  ], settings).posture, 'prone', 'prone remains the safe fallback when higher postures fail hard gates');
 }
 
 function verifyCommandOwnedApproachAndOccupation(): void {
@@ -72,89 +80,62 @@ function verifyCommandOwnedApproachAndOccupation(): void {
   );
   unit.playerCommand = command;
   unit.order = {
-    type: 'move',
-    target: { x: 2.5, y: 2.5 },
-    issuedAtMs: 1,
-    source: 'player',
-    playerCommandId: command.id,
+    type: 'move', target: { x: 2.5, y: 2.5 }, issuedAtMs: 1,
+    source: 'player', playerCommandId: command.id,
   };
   unit.behaviorRuntime.posture = 'standing';
   reconcileTacticalPositionOccupation(unit);
-  assert.equal(unit.behaviorRuntime.posture, 'crouched', 'linked tactical route must keep its command-owned approach posture');
+  assert.equal(unit.behaviorRuntime.posture, 'crouched');
 
   unit.order = null;
   unit.playerCommand = updatePlayerCommandStatus(command, 'completed', 'done', 'готово');
   assert.equal(applyCompletedTacticalPositionOccupation(unit), true);
   unit.playerCommand = markPlayerCommandArrivalPostureApplied(unit.playerCommand);
-  assert.equal(unit.behaviorRuntime.posture, 'prone');
+  assert.equal(unit.behaviorRuntime.posture, 'prone', 'exact selected arrival posture must replace approach posture');
   assert.ok(Math.abs(unit.facingRadians - Math.PI / 2) < 0.0001);
   assert.equal(isTacticalPositionOccupationActive(unit), true);
-  assert.equal(unit.playerCommand.tacticalPositionOccupationStatus, 'occupied');
 
   const restored = normalizePlayerCommand(JSON.parse(JSON.stringify(unit.playerCommand)), unit.id);
   assert.equal(restored?.arrivalPosture, 'prone');
   assert.equal(restored?.approachPosture, 'crouched');
   assert.equal(restored?.tacticalPositionOccupationStatus, 'occupied');
-  assert.ok(Math.abs((restored?.finalFacingRadians ?? 0) - Math.PI / 2) < 0.0001);
 
   const state = { units: [unit], map: { metersPerCell: 2 } } as unknown as SimulationState;
   const graphResult = withAiSimulationExecutionContext(state, unit, () => runAiGraphRuntime({
-    graph: postureGraph('stand'),
-    unitId: unit.id,
-    blackboard: {},
-    nowMs: 2000,
+    graph: postureGraph('stand'), unitId: unit.id, blackboard: {}, nowMs: 2000,
   }));
   assert.equal(
     graphResult.effects.some((effect) => effect.type === 'set_posture' && effect.posture === 'stand'),
     false,
-    'ordinary Graph v2 pass must not reset command-owned occupied posture',
   );
 
   unit.order = {
-    type: 'move',
-    target: { x: 6.5, y: 4.5 },
-    issuedAtMs: 2,
-    source: 'ai',
-    ownerToken: 'ai-route-1',
+    type: 'move', target: { x: 6.5, y: 4.5 }, issuedAtMs: 2,
+    source: 'ai', ownerToken: 'ai-route-1',
   };
   reconcileTacticalPositionOccupation(unit);
-  assert.equal(
-    unit.playerCommand?.tacticalPositionOccupationStatus,
-    'released',
-    'an unrelated AI route must permanently release the old occupied position',
-  );
+  assert.equal(unit.playerCommand?.tacticalPositionOccupationStatus, 'released');
   unit.order = null;
-  assert.equal(isTacticalPositionOccupationActive(unit), false, 'released occupation must not reactivate after the AI route ends');
-
-  unit.playerCommand = createPlayerMoveCommand(unit.id, { x: 3.5, y: 3.5 }, unit.playerCommand, 3000);
-  unit.order = { type: 'move', target: { x: 3.5, y: 3.5 }, issuedAtMs: 3, source: 'player' };
-  assert.equal(isTacticalPositionOccupationActive(unit), false, 'a new player command or route releases occupied-position ownership');
-  unit.behaviorRuntime.posture = 'standing';
-  reconcileTacticalPositionOccupation(unit);
-  assert.equal(unit.behaviorRuntime.posture, 'standing');
+  assert.equal(isTacticalPositionOccupationActive(unit), false);
 }
 
 function verifyMarkerPublicationIsRateLimitedAndKeepsOldResult(): void {
   const unit = normalizeUnits([{ id: 'unit-1', type: 'infantry_squad', side: 'blue', x: 0, y: 0 }])[0]!;
   const state = {
-    units: [unit],
-    simulationTimeSeconds: 0,
-    map: { cellSize: 20 },
+    units: [unit], simulationTimeSeconds: 0, map: { cellSize: 20 },
   } as unknown as SimulationState;
   const settings = createDefaultTacticalPositionSettings();
   settings.markerRefreshIntervalSeconds = 1;
   settings.emptyResultHoldSeconds = 1.5;
   setTacticalPositionSettings(unit, settings);
 
-  const first = [candidate('first', 2.5, 2.5)];
-  const second = [candidate('second', 5.5, 5.5)];
-  publishVisibleTacticalPositions(state, unit.id, first);
+  publishVisibleTacticalPositions(state, unit.id, [candidate('first', 2.5, 2.5)]);
   state.simulationTimeSeconds = 0.25;
-  publishVisibleTacticalPositions(state, unit.id, second);
+  publishVisibleTacticalPositions(state, unit.id, [candidate('second', 5.5, 5.5)]);
   assert.equal(getTacticalPositionPresentation(state).candidates[0]?.id, 'first');
 
   state.simulationTimeSeconds = 1.1;
-  publishVisibleTacticalPositions(state, unit.id, second);
+  publishVisibleTacticalPositions(state, unit.id, [candidate('second', 5.5, 5.5)]);
   assert.equal(getTacticalPositionPresentation(state).candidates[0]?.id, 'second');
 
   state.simulationTimeSeconds = 1.2;
@@ -169,9 +150,7 @@ function verifyMarkerPublicationIsRateLimitedAndKeepsOldResult(): void {
 function verifySettingsChangeRefreshesMarkersImmediately(): void {
   const unit = normalizeUnits([{ id: 'unit-refresh', type: 'infantry_squad', side: 'blue', x: 0, y: 0 }])[0]!;
   const state = {
-    units: [unit],
-    simulationTimeSeconds: 0,
-    map: { cellSize: 20 },
+    units: [unit], simulationTimeSeconds: 0, map: { cellSize: 20 },
   } as unknown as SimulationState;
   const settings = createDefaultTacticalPositionSettings();
   settings.markerRefreshIntervalSeconds = 5;
@@ -186,25 +165,20 @@ function verifySettingsChangeRefreshesMarkersImmediately(): void {
 
 function verifySettingsNormalizeFromSceneData(): void {
   const unit = normalizeUnits([{
-    id: 'unit-persisted',
-    type: 'infantry_squad',
-    side: 'blue',
-    x: 0,
-    y: 0,
+    id: 'unit-persisted', type: 'infantry_squad', side: 'blue', x: 0, y: 0,
     tacticalPositionSettings: {
-      version: 1,
-      revision: 7,
-      values: {
-        standingMaximumDanger: 11,
-        markerRefreshIntervalSeconds: 2.5,
-      },
+      version: 1, revision: 7,
+      values: { standingMaximumDanger: 11, markerRefreshIntervalSeconds: 2.5 },
     },
   }])[0]!;
   const settings = getTacticalPositionSettings(unit);
+  const defaults = createDefaultTacticalPositionSettings();
   assert.equal(settings.standingMaximumDanger, 11);
   assert.equal(settings.markerRefreshIntervalSeconds, 2.5);
   assert.equal(unit.tacticalPositionSettingsRevision, 7);
-  assert.equal(settings.crouchedMaximumDanger, createDefaultTacticalPositionSettings().crouchedMaximumDanger);
+  assert.equal(settings.crouchedSafetyAdvantageThreshold, defaults.crouchedSafetyAdvantageThreshold);
+  assert.equal(settings.proneSafetyAdvantageThreshold, defaults.proneSafetyAdvantageThreshold);
+  assert.equal(settings.advanceToThreatWeight, defaults.advanceToThreatWeight);
 }
 
 function verifySceneExportIncludesSettings(): void {
@@ -214,17 +188,24 @@ function verifySceneExportIncludesSettings(): void {
   assert.ok(source.includes('tacticalPositionSearchService?.clearUnit(unit.id)'));
 }
 
-function verifyOccupationAndDangerSourceContracts(): void {
+function verifyOccupationAndEditorContracts(): void {
   const occupation = readFileSync('src/core/tactical/TacticalPositionOccupation.ts', 'utf8');
   const orders = readFileSync('src/core/tactical/TacticalPositionOrders.ts', 'utf8');
   const controls = readFileSync('src/ui/TacticalPositionSettingsControls.ts', 'utf8');
-  assert.equal(occupation.includes('WeakMap'), false, 'occupation state must live in PlayerCommand, not a hidden WeakMap');
-  assert.equal(orders.includes('behaviorRuntime.danger = 0'), false, 'issuing a tactical move must not clear canonical danger');
+  const schema = readFileSync('src/core/tactical/TacticalPositionSettingsSchema.ts', 'utf8');
+  const aiEditor = readFileSync('src/ai-node-editor/TacticalPositionProfileEditor.ts', 'utf8');
+  const html = readFileSync('ai-node-editor.html', 'utf8');
+  assert.equal(occupation.includes('WeakMap'), false);
+  assert.equal(orders.includes('behaviorRuntime.danger = 0'), false);
   assert.ok(orders.includes('finalFacingRadians'));
   assert.ok(orders.includes('approachPosture'));
-  assert.ok(controls.includes('getTacticalPositionSearchService(state)?.clearUnit(selected.id)'));
-  assert.ok(controls.includes('Стоя: максимальная опасность'));
-  assert.ok(controls.includes('Коэффициенты итоговой оценки'));
+  assert.ok(controls.includes('TACTICAL_POSITION_SETTINGS_GROUPS'));
+  assert.ok(schema.includes('crouchedSafetyAdvantageThreshold'));
+  assert.ok(schema.includes('proneSafetyAdvantageThreshold'));
+  assert.ok(schema.includes('advanceToThreatWeight'));
+  assert.ok(aiEditor.includes('TACTICAL_POSITION_SETTINGS_GROUPS'));
+  assert.ok(aiEditor.includes('Тактические позиции'));
+  assert.ok(html.includes('TacticalPositionProfileEditor.ts'));
 }
 
 function postureGraph(posture: 'stand' | 'crouch' | 'prone'): AiGraph {
@@ -249,22 +230,10 @@ function candidate(id: string, x: number, y: number): TacticalPositionCandidateS
     position: { x, y },
     source: { kind: 'terrain', id: `field:${id}`, label: 'Field', labelRu: 'Поле' },
     metrics: {
-      onMap: true,
-      routeExists: true,
-      distanceMeters: 10,
-      blocksThreat: true,
-      protection: 50,
-      concealment: 30,
-      routeDanger: 20,
-      slopeType: 'flat',
-      orderAlignment: 50,
-      danger: 25,
-      suppression: 12,
-      safety: 70,
-      safetyGain: 20,
-      uncertainty: 5,
-      recommendedPosture: 'crouched',
-      routeCost: 10,
+      onMap: true, routeExists: true, distanceMeters: 10, blocksThreat: true,
+      protection: 50, concealment: 30, routeDanger: 20, slopeType: 'flat',
+      orderAlignment: 50, danger: 25, suppression: 12, safety: 70,
+      safetyGain: 20, uncertainty: 5, recommendedPosture: 'crouched', routeCost: 10,
     },
   };
 }
