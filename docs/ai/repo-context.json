@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "project": {
     "name": "Real-Wargame",
     "repository": "AndrewVerhoturov1/Real-wargame",
@@ -38,7 +38,7 @@
     "ai-single-unit-editor"
   ],
   "delivery": {
-    "preferred": "feature-branch-with-automatic-vercel-preview",
+    "preferred": "feature-branch-with-explicit-manual-vercel-preview",
     "target": "real-wargame-preview",
     "fallback": "pull-request-to-preview-when-technically-required",
     "owner": "web-chat",
@@ -51,13 +51,19 @@
     "codexMayModifyCode": false,
     "codexDeploymentRequired": false,
     "vercelProjectMode": "single-permanent-git-connected-project",
-    "vercelAutomaticDeploymentsRequired": true,
+    "vercelGitAutomaticDeploymentsEnabled": false,
+    "vercelManualDeploymentRequired": true,
+    "vercelDeploymentTrigger": "explicit-user-request-only",
+    "manualVercelDeploymentWorkflow": "docs/workflow/MANUAL_VERCEL_DEPLOYMENT.md",
+    "manualVercelDeploymentSkill": ".agents/skills/real-wargame-manual-vercel-deploy/SKILL.md",
+    "emptyCommitForDeploymentAllowed": false,
+    "deploymentSecretMayBeCommitted": false,
     "requiredDeploymentPages": [
       "/",
       "/ai-node-editor.html"
     ],
     "permanentVercelProjectMayBeDeleted": false,
-    "legacyTemporaryVercelProjectCleanup": "only-after-preview-ready-and-both-pages-verified",
+    "legacyTemporaryVercelProjectCleanup": "only-after-manual-preview-ready-and-both-pages-verified",
     "featureBranchCleanupAfterTransfer": true,
     "visualQaTrigger": "explicit-user-intent-only",
     "visualQaSkillNameNeedNotBeStatedByUser": true,
@@ -70,24 +76,28 @@
     "visualCiMayModifyProductBranches": false,
     "visualEvidenceInvalidatedByProductShaChange": true,
     "previewTransferRequiresExplicitUserGo": true,
+    "previewTransferAlsoAuthorizesDeployment": false,
     "pullRequestIsDefault": false,
     "mainRequiresExplicitUserGo": true,
     "autoMergeAllowed": false
   },
   "canonicalWorkflow": "docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md",
+  "canonicalDeploymentWorkflow": "docs/workflow/MANUAL_VERCEL_DEPLOYMENT.md",
   "canonicalVisualPolicy": "docs/workflow/VISUAL_QA_APPROVAL_POLICY.md",
   "agentEntryPoints": [
     "AGENTS.md",
     "docs/ai/WEB_CHAT_START.md",
     "docs/architecture/ENGINE_MIGRATION_READINESS.md",
     "docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md",
+    "docs/workflow/MANUAL_VERCEL_DEPLOYMENT.md",
     "docs/subprojects/index.json"
   ],
   "defaultSkills": {
     "localPreview": ".agents/skills/real-wargame-local-preview/SKILL.md",
+    "manualVercelDeploy": ".agents/skills/real-wargame-manual-vercel-deploy/SKILL.md",
     "deployedVercelVisualE2E": ".agents/skills/vercel-deployment-playwright-e2e/SKILL.md",
     "pixiJs": ".agents/skills/real-wargame-pixijs/SKILL.md",
     "aiRuntime": ".agents/skills/real-wargame-ai-runtime/SKILL.md"
   },
-  "updatedAt": "2026-07-19"
+  "updatedAt": "2026-07-20"
 }
