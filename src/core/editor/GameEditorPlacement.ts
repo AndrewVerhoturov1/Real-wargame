@@ -2,6 +2,7 @@ import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap, type MapObject } from '../map/MapModel';
 import { normalizePressureZones } from '../pressure/PressureZone';
 import { selectUnit, type SimulationState } from '../simulation/SimulationState';
+import { applyTacticalPositionSettingsDraftToUnit } from '../tactical/TacticalPositionSettings';
 import { rememberSelectedUnitForTest } from '../testing/AiTestLabRuntime';
 import { normalizeUnits } from '../units/UnitModel';
 import { cloneAttentionSettings, getGameEditorDrafts, syncLegacyEditorFields } from './GameEditorDrafts';
@@ -79,6 +80,7 @@ export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: Gri
         health: draft.condition.health,
       },
     }])[0];
+    applyTacticalPositionSettingsDraftToUnit(state, unit);
     state.units.push(unit);
     state.editor.nextUnitIndex = index + 1;
     state.editor.selectedObjectId = null;
