@@ -7,6 +7,10 @@ import {
   clearTacticalPositionProvider,
   installTacticalPositionProvider,
 } from '../core/tactical/TacticalPositionProvider';
+import {
+  getTacticalPositionSettings,
+  tacticalPositionSettingsCacheNudge,
+} from '../core/tactical/TacticalPositionSettings';
 import type { AwarenessWorldRuntime } from './AwarenessWorldRuntime';
 
 const MAX_LOCAL_SAMPLE_CELLS = 4096;
@@ -66,12 +70,14 @@ function generateFromAwarenessRuntime(
     1,
     Math.min(MAX_LOCAL_ROUTE_EXPANSIONS, localAreaUpperBound, requestedWork),
   );
+  const settings = getTacticalPositionSettings(unit);
   const snapshot = runtime.requestTacticalPositions(state, unit, {
     searchRadiusMeters: request.searchRadiusMeters,
     maxSampledCells,
     maxRouteExpansions,
     maxCandidates: request.maxCandidates,
-    minimumSeparationMeters: DEFAULT_MINIMUM_SEPARATION_METERS,
+    minimumSeparationMeters: DEFAULT_MINIMUM_SEPARATION_METERS + tacticalPositionSettingsCacheNudge(unit),
+    settings,
   });
 
   if (!snapshot) {
@@ -91,7 +97,6 @@ function generateFromAwarenessRuntime(
 
   return {
     candidates: snapshot.candidates,
-    // Wall-clock timing must not participate in gameplay identity or stopping.
     elapsedMs: 0,
     stopReason: snapshot.diagnostics.sampleBudgetExhausted
       ? {
