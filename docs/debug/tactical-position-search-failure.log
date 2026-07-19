@@ -1,0 +1,14 @@
+Tactical position search smoke passed: field-owned candidates, highest-safe posture, tunable thresholds, non-maximum suppression and deterministic work budgets.
+Tactical position interaction smoke passed: bounded marker selection, B2 glyphs and one-time arrival posture.
+Tactical position Graph v2 smoke passed: one exact simulation request is persisted, polled statefully and reused by Filter/Score/Select.
+file:///home/runner/work/Real-wargame/Real-wargame/scripts/tactical_workspace_smoke_incremental_directional.mjs:147
+  assert.ok(!searchControls.includes("[data-role="sidebar-body"]"), 'position controls must not mount into the shared sidebar body');
+                                     ^^^^^^^^^^^^^
+
+SyntaxError: missing ) after argument list
+    at compileSourceTextModule (node:internal/modules/esm/utils:346:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:146:18)
+    at #translate (node:internal/modules/esm/loader:497:12)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:544:27)
+
+Node.js v20.20.2
