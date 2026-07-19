@@ -19,6 +19,7 @@ import {
   type TacticalPositionSearchServiceDiagnostics,
 } from '../core/tactical/TacticalPositionSearchService';
 import { getSimulationLayerState } from '../core/ui/RuntimeUiState';
+import { isTacticalPositionWorkspaceTabActive } from '../ui/TacticalPositionWorkspaceTab';
 import type { UnitModel } from '../core/units/UnitModel';
 import { TacticalPositionInputController } from '../input/TacticalPositionInputController';
 import { buildAwarenessWorldKey as buildSharedAwarenessWorldKey } from '../runtime/AwarenessWorldRuntime';
@@ -121,7 +122,8 @@ export class PixiAwarenessHeatmapRenderer {
     this.attachState(state);
     const service = this.searchService;
     const layer = getSimulationLayerState(state);
-    const mode: VisibleAwarenessMode | null = layer.mode === 'danger'
+    const positionsActive = layer.mode === 'positions' && isTacticalPositionWorkspaceTabActive(state);
+    const mode: VisibleAwarenessMode | null = layer.mode === 'danger' || layer.mode === 'positions'
       ? 'danger'
       : layer.mode === 'stealth'
         ? 'stealth'
@@ -150,8 +152,8 @@ export class PixiAwarenessHeatmapRenderer {
       }
     }
 
-    if (mode === 'danger') this.renderTacticalPositions(state, unit, service);
-    else this.hideTacticalMarkers('stealth');
+    if (positionsActive) this.renderTacticalPositions(state, unit, service);
+    else this.hideTacticalMarkers(`layer:${layer.mode}`, mode);
     this.publishDiagnostics();
   }
 
@@ -232,7 +234,7 @@ export class PixiAwarenessHeatmapRenderer {
     const candidates = result?.candidates.slice(0, MAX_VISIBLE_CANDIDATES) ?? [];
     if (candidates.length === 0) {
       clearVisibleTacticalPositions(state);
-      this.hideTacticalMarkers(`empty:${latest?.requestId ?? unit.id}`);
+      this.hideTacticalMarkers(`empty:${latest?.requestId ?? unit.id}`, 'danger');
       return;
     }
 
@@ -284,12 +286,12 @@ export class PixiAwarenessHeatmapRenderer {
     this.overlayText.visible = true;
   }
 
-  private hideTacticalMarkers(key: string): void {
+  private hideTacticalMarkers(key: string, mode: VisibleAwarenessMode): void {
     if (this.lastDrawKey === key && this.tacticalMarkerCount === 0) return;
     this.lastDrawKey = key;
     this.tacticalGraphics.clear();
     this.tacticalGraphics.visible = false;
-    this.updateOverlayText(null, 1, 'stealth');
+    this.updateOverlayText(null, 1, mode);
     this.tacticalMarkerCount = 0;
     this.tacticalMarkerRebuildCount += 1;
   }

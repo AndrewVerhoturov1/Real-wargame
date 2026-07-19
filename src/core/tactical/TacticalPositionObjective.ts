@@ -1,5 +1,6 @@
 import type { GridPosition } from '../geometry';
 import type { UnitModel } from '../units/UnitModel';
+import type { TacticalPositionSettings } from './TacticalPositionSettings';
 import {
   searchTacticalPositions,
   type TacticalPositionCandidateSeedV2,
@@ -116,7 +117,7 @@ export function searchTacticalPositionsForObjective(
     };
     return {
       candidate: enriched,
-      score: objectiveSortScore(enriched, request.objective),
+      score: objectiveSortScore(enriched, request.objective, request.settings),
       originalIndex,
     };
   });
@@ -149,6 +150,7 @@ export function readTacticalPositionObjectiveMetrics(
 function objectiveSortScore(
   candidate: TacticalPositionCandidateWithObjective,
   objective: TacticalPositionSearchObjective,
+  settings: TacticalPositionSettings,
 ): number {
   const metrics = candidate.metrics;
   const base = metrics.safety * 0.45
@@ -156,7 +158,12 @@ function objectiveSortScore(
     + metrics.protection * 0.2
     + (100 - metrics.routeDanger) * 0.15;
   if (objective === 'balanced') return base;
-  return base + metrics.objectiveAlignment * 0.45;
+  const modeWeight = objective === 'advance_to_threat'
+    ? settings.advanceToThreatWeight
+    : objective === 'withdraw_from_threat'
+      ? settings.withdrawFromThreatWeight
+      : settings.orderTargetDistanceWeight;
+  return base + metrics.objectiveAlignment * (modeWeight + settings.objectiveAlignmentWeight);
 }
 
 function calculateObjectiveAlignment(

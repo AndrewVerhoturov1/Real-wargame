@@ -1,6 +1,5 @@
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { clearVisibleTacticalPositions } from '../core/tactical/SimulationTacticalPositionSelection';
-import { getTacticalPositionSearchService } from '../core/tactical/TacticalPositionSearchService';
 import { setSimulationLayerMode } from '../core/ui/RuntimeUiState';
 
 const TAB_CHANGED_EVENT = 'real-wargame:tactical-position-tab-changed';
@@ -50,7 +49,7 @@ export function installTacticalPositionWorkspaceTab(
     activeByState.set(state, true);
     // Reuse the soldier-owned danger raster while keeping marker interaction
     // isolated behind this dedicated tab flag.
-    setSimulationLayerMode(state, 'danger');
+    setSimulationLayerMode(state, 'positions');
     renderPositionsBody();
     publishTabChange();
     onChanged();
@@ -63,8 +62,6 @@ export function installTacticalPositionWorkspaceTab(
       : null;
     if (!target || !isTacticalPositionWorkspaceTabActive(state)) return;
     activeByState.set(state, false);
-    const selectedUnitId = state.selectedUnitId;
-    if (selectedUnitId) getTacticalPositionSearchService(state)?.clearUnit(selectedUnitId);
     clearVisibleTacticalPositions(state);
     publishTabChange();
   };

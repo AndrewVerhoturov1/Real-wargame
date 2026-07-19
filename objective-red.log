@@ -1,0 +1,48 @@
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: zero objective weights must disable directional reranking
++ actual - expected
+
+  [
++   'tactical:10:0:crouched',
++   'tactical:11:0:crouched',
++   'tactical:9:1:crouched',
++   'tactical:10:1:crouched',
++   'tactical:11:1:crouched',
++   'tactical:12:1:crouched'
+-   'tactical:1:0:crouched',
+-   'tactical:2:0:crouched',
+-   'tactical:3:0:crouched',
+-   'tactical:4:0:crouched',
+-   'tactical:5:0:crouched',
+-   'tactical:6:0:crouched'
+  ]
+    at verifyObjectiveWeightsControlDirectionalPreference (file:///home/runner/work/Real-wargame/Real-wargame/.tmp-tactical-position-objective-smoke/tactical-position-objective-smoke.mjs?run=1784504682639:575:10)
+    at file:///home/runner/work/Real-wargame/Real-wargame/.tmp-tactical-position-objective-smoke/tactical-position-objective-smoke.mjs?run=1784504682639:491:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async file:///home/runner/work/Real-wargame/Real-wargame/scripts/tactical_position_objective_smoke.mjs:29:3 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: [
+    'tactical:10:0:crouched',
+    'tactical:11:0:crouched',
+    'tactical:9:1:crouched',
+    'tactical:10:1:crouched',
+    'tactical:11:1:crouched',
+    'tactical:12:1:crouched'
+  ],
+  expected: [
+    'tactical:1:0:crouched',
+    'tactical:2:0:crouched',
+    'tactical:3:0:crouched',
+    'tactical:4:0:crouched',
+    'tactical:5:0:crouched',
+    'tactical:6:0:crouched'
+  ],
+  operator: 'deepStrictEqual'
+}
+
+Node.js v20.20.2

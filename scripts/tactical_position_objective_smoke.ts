@@ -8,6 +8,7 @@ import type { TacticalPositionFieldView } from '../src/core/tactical/TacticalPos
 
 verifyThreatObjectives();
 verifyContinueOrderObjective();
+verifyObjectiveWeightsControlDirectionalPreference();
 
 console.log('Tactical position objective smoke passed: advance, withdraw, continue-order metrics and ranking.');
 
@@ -74,6 +75,40 @@ function search(
     referenceThreatId: 'threat-east',
     referenceThreatPosition: { x: 12.5, y: 1.5 },
   });
+}
+
+
+function verifyObjectiveWeightsControlDirectionalPreference(): void {
+  const field = createField();
+  const settings = createDefaultTacticalPositionSettings();
+  settings.minimumPositionImprovement = 0;
+  settings.minimumDirectionalProtection = 1;
+  settings.minimumReverseSlopeQuality = 0;
+  settings.advanceToThreatWeight = 0;
+  settings.withdrawFromThreatWeight = 0;
+  settings.orderTargetDistanceWeight = 0;
+  settings.objectiveAlignmentWeight = 0;
+  const common = {
+    origin: { x: 6.5, y: 1.5 },
+    currentPosture: 'standing' as const,
+    orderTarget: null,
+    threatCount: 1,
+    searchRadiusMeters: 6,
+    maxSampledCells: 128,
+    maxRouteExpansions: 128,
+    maxCandidates: 6,
+    minimumSeparationMeters: 1,
+    settings,
+    referenceThreatId: 'threat-east',
+    referenceThreatPosition: { x: 12.5, y: 1.5 },
+  };
+  const balanced = searchTacticalPositionsForObjective(field, { ...common, objective: 'balanced' });
+  const advance = searchTacticalPositionsForObjective(field, { ...common, objective: 'advance_to_threat' });
+  assert.deepEqual(
+    advance.candidates.map((candidate) => candidate.id),
+    balanced.candidates.map((candidate) => candidate.id),
+    'zero objective weights must disable directional reranking',
+  );
 }
 
 function createField(): TacticalPositionFieldView {

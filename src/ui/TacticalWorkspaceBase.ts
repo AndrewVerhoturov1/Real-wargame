@@ -44,7 +44,7 @@ import {
 } from '../core/ui/RuntimeUiState';
 import { applyInitialStateToRuntime, type UnitModel } from '../core/units/UnitModel';
 import { bindTacticalStatePlanPanel, renderTacticalStatePlanPanelMarkup } from './AiStatePlanPanel';
-import { exitLab } from '../shared/AppShellMenu';
+import { exitLab, openEditorTab } from '../shared/AppShellMenu';
 
 export type TacticalWorkspaceMode = 'simulation' | 'editor';
 type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory';
@@ -244,7 +244,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
     onChanged();
   });
 
-  q<HTMLButtonElement>('[data-action="ai-editor"]').onclick = () => window.open('/ai-node-editor.html', '_blank');
+  q<HTMLButtonElement>('[data-action="ai-editor"]').onclick = openEditorTab;
   q<HTMLButtonElement>('[data-action="new-game"]').onclick = () => window.location.reload();
   q<HTMLButtonElement>('[data-action="exit"]').onclick = exitLab;
   q<HTMLButtonElement>('[data-action="collapse"]').onclick = () => { collapsed = !collapsed; syncLayout(); onChanged(); };
