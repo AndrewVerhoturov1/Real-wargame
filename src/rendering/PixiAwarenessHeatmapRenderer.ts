@@ -2,6 +2,7 @@ import { BufferImageSource, Container, Graphics, Sprite, Text, Texture } from 'p
 import type { UnitPosture } from '../core/behavior/BehaviorModel';
 import type { TacticalPositionCandidateSeed } from '../core/ai/tactical/TacticalQuery';
 import type { SoldierAwarenessCell } from '../core/knowledge/SoldierAwarenessGrid';
+import type { AwarenessWorkerFieldPayload } from '../core/knowledge/AwarenessWorldWorkerProtocol';
 import type { CanonicalWorldThreatSetSnapshot } from '../core/knowledge/CanonicalWorldThreat';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import {
@@ -11,7 +12,10 @@ import {
   recommendedPostureOf,
   syncHoveredTacticalPosition,
 } from '../core/tactical/SimulationTacticalPositionSelection';
-import type { TacticalPositionSearchService } from '../core/tactical/TacticalPositionSearchService';
+import {
+  getTacticalPositionSearchService,
+  type TacticalPositionSearchService,
+} from '../core/tactical/TacticalPositionSearchService';
 import { getSimulationLayerState } from '../core/ui/RuntimeUiState';
 import type { UnitModel } from '../core/units/UnitModel';
 import { TacticalPositionInputController } from '../input/TacticalPositionInputController';
@@ -45,7 +49,7 @@ export interface AwarenessOverlayDiagnostics {
   readonly lastAppliedFieldIdentity: string;
   readonly lastAppliedJobId: number;
   readonly lastAppliedRaster: AwarenessAppliedRasterDiagnostics | null;
-  readonly movement: ReturnType<TacticalPositionSearchService['getDiagnostics']>;
+  readonly movement: ReturnType<TacticalPositionSearchService['getDiagnostics']> | null;
 }
 
 type AwarenessDebugWindow = Window & {
@@ -59,7 +63,8 @@ const MAX_VISIBLE_CANDIDATES = 12;
 
 /**
  * Pure presentation of immutable simulation-owned awareness/search snapshots.
- * It never queues field preparation or tactical-position search.
+ * Opening a layer, rendering a frame, moving the camera or hovering a marker
+ * never creates a field/search request.
  */
 export class PixiAwarenessHeatmapRenderer {
   readonly container = new Container();
@@ -75,6 +80,8 @@ export class PixiAwarenessHeatmapRenderer {
       lineHeight: 14,
     },
   });
+  private readonly injectedSearchService: TacticalPositionSearchService | null;
+  private searchService: TacticalPositionSearchService | null;
   private attachedState: SimulationState | null = null;
   private inputController: TacticalPositionInputController | null = null;
   private lastRasterKey = '';
@@ -84,9 +91,7 @@ export class PixiAwarenessHeatmapRenderer {
   private lastAppliedFieldIdentity = '';
   private lastAppliedRasterDigest = '';
   private lastAppliedJobId = 0;
-  private worldField: ReturnType<TacticalPositionSearchService['readReadyWorldField']> extends infer Snapshot
-    ? Snapshot extends { field: infer Field } ? Field : never
-    : never = null as never;
+  private worldField: AwarenessWorkerFieldPayload | null = null;
   private rasterPixels: Uint8Array | null = null;
   private rasterPixelWords: Uint32Array | null = null;
   private rasterWidth = 0;
@@ -100,7 +105,9 @@ export class PixiAwarenessHeatmapRenderer {
   private lastBuildMs = 0;
   private maxBuildMs = 0;
 
-  constructor(private readonly searchService: TacticalPositionSearchService) {
+  constructor(searchService?: TacticalPositionSearchService) {
+    this.injectedSearchService = searchService ?? null;
+    this.searchService = this.injectedSearchService;
     this.tacticalGraphics.eventMode = 'none';
     this.overlayText.eventMode = 'none';
     this.container.visible = false;
@@ -109,6 +116,7 @@ export class PixiAwarenessHeatmapRenderer {
   render(state: SimulationState): void {
     if (this.destroyed) return;
     this.attachState(state);
+    const service = this.searchService;
     const layer = getSimulationLayerState(state);
     const mode: VisibleAwarenessMode | null = layer.mode === 'danger'
       ? 'danger'
@@ -117,7 +125,7 @@ export class PixiAwarenessHeatmapRenderer {
         : null;
     const unit = selectedUnit(state);
 
-    if (state.editor.enabled || !mode || !unit) {
+    if (!service || state.editor.enabled || !mode || !unit) {
       this.container.visible = false;
       this.publishDiagnostics();
       return;
@@ -125,11 +133,11 @@ export class PixiAwarenessHeatmapRenderer {
 
     this.container.visible = true;
     this.ensureRaster(state.map.width, state.map.height, state.map.cellSize);
-    const prepared = this.searchService.readReadyWorldField(unit.id);
+    const prepared = service.readReadyWorldField(unit.id);
     if (prepared) {
       const rasterKey = `${prepared.worldKey};mode:${mode}`;
       if (rasterKey !== this.lastRasterKey || prepared.jobId !== this.lastAppliedJobId) {
-        this.worldField = prepared.field as typeof this.worldField;
+        this.worldField = prepared.field;
         this.lastAppliedWorldKey = prepared.worldKey;
         this.lastAppliedCanonicalThreatKey = prepared.canonicalThreatKey;
         this.lastAppliedFieldIdentity = prepared.fieldIdentity;
@@ -139,7 +147,7 @@ export class PixiAwarenessHeatmapRenderer {
       }
     }
 
-    if (mode === 'danger') this.renderTacticalPositions(state, unit);
+    if (mode === 'danger') this.renderTacticalPositions(state, unit, service);
     else this.hideTacticalMarkers('stealth');
     this.publishDiagnostics();
   }
@@ -150,6 +158,7 @@ export class PixiAwarenessHeatmapRenderer {
     this.inputController?.destroy();
     this.inputController = null;
     this.attachedState = null;
+    this.searchService = null;
     this.container.removeChildren();
     this.rasterSprite?.destroy();
     this.rasterTexture?.destroy(true);
@@ -157,7 +166,7 @@ export class PixiAwarenessHeatmapRenderer {
     this.rasterTexture = null;
     this.rasterPixelWords = null;
     this.rasterPixels = null;
-    this.worldField = null as never;
+    this.worldField = null;
     this.tacticalGraphics.destroy();
     this.overlayText.destroy();
     this.container.destroy();
@@ -165,8 +174,9 @@ export class PixiAwarenessHeatmapRenderer {
   }
 
   getDiagnostics(): AwarenessOverlayDiagnostics {
-    const latest = this.attachedState?.selectedUnitId
-      ? this.searchService.readLatestForUnit(this.attachedState.selectedUnitId)
+    const service = this.searchService;
+    const latest = service && this.attachedState?.selectedUnitId
+      ? service.readLatestForUnit(this.attachedState.selectedUnitId)
       : null;
     return {
       representation: 'raster-sprite',
@@ -194,7 +204,7 @@ export class PixiAwarenessHeatmapRenderer {
             threatIds: [...this.worldField.threatIds],
           }
         : null,
-      movement: this.searchService.getDiagnostics(),
+      movement: service?.getDiagnostics() ?? null,
     };
   }
 
@@ -202,13 +212,18 @@ export class PixiAwarenessHeatmapRenderer {
     if (this.attachedState === state) return;
     this.inputController?.destroy();
     this.attachedState = state;
+    this.searchService = this.injectedSearchService ?? getTacticalPositionSearchService(state);
     this.inputController = new TacticalPositionInputController(state);
     this.inputController.attach();
     this.lastDrawKey = '';
   }
 
-  private renderTacticalPositions(state: SimulationState, unit: UnitModel): void {
-    const latest = this.searchService.readLatestForUnit(unit.id);
+  private renderTacticalPositions(
+    state: SimulationState,
+    unit: UnitModel,
+    service: TacticalPositionSearchService,
+  ): void {
+    const latest = service.readLatestForUnit(unit.id);
     const result = latest?.status === 'ready' ? latest.result : null;
     const candidates = result?.candidates.slice(0, MAX_VISIBLE_CANDIDATES) ?? [];
     if (candidates.length === 0) {
@@ -342,11 +357,8 @@ function drawB2TacticalPositionMarker(
   drawDiamond(graphics, x, y, radius)
     .fill({ color, alpha: winner ? 0.34 : hovered ? 0.28 : 0.18 })
     .stroke({ width: winner ? 3 : 2, color, alpha: winner || hovered ? 1 : 0.84 });
-  if (selected) {
-    drawDiamond(graphics, x, y, radius + 5).stroke({ width: 2.5, color: 0xffffff, alpha: 0.98 });
-  } else if (hovered) {
-    drawDiamond(graphics, x, y, radius + 3).stroke({ width: 1.5, color: 0xffffff, alpha: 0.72 });
-  }
+  if (selected) drawDiamond(graphics, x, y, radius + 5).stroke({ width: 2.5, color: 0xffffff, alpha: 0.98 });
+  else if (hovered) drawDiamond(graphics, x, y, radius + 3).stroke({ width: 1.5, color: 0xffffff, alpha: 0.72 });
   drawB2PostureGlyph(graphics, x, y, recommendedPostureOf(candidate), color);
 }
 
@@ -418,7 +430,8 @@ export function drawAwarenessRasterWords(
   const dangerMode = mode === 'danger';
   for (let cellIndex = 0; cellIndex < length; cellIndex += 1) {
     const cell = cells[cellIndex]!;
-    pixels[cellIndex] = lut[Math.max(0, Math.min(100, Math.round(dangerMode ? cell.danger : cell.concealment)))] ?? 0;
+    const value = dangerMode ? cell.danger : cell.concealment;
+    pixels[cellIndex] = lut[Math.max(0, Math.min(100, Math.round(value)))] ?? 0;
   }
   if (length < pixels.length) pixels.fill(0, length);
 }
