@@ -5,12 +5,18 @@ import type { UnitModel } from '../units/UnitModel';
 import type { PreparedAwarenessWorldSnapshot } from '../../runtime/AwarenessWorldRuntime';
 import { AwarenessWorldRuntime } from '../../runtime/AwarenessWorldRuntime';
 import {
-  searchTacticalPositions,
   type TacticalPositionCandidateSeedV2,
   type TacticalPositionSearchDiagnostics,
   type TacticalPositionSearchResult,
 } from './TacticalPositionSearch';
 import {
+  normalizeTacticalPositionSearchObjective,
+  resolveTacticalPositionReferenceThreat,
+  searchTacticalPositionsForObjective,
+  type TacticalPositionSearchObjective,
+} from './TacticalPositionObjective';
+import {
+  createDefaultTacticalPositionSettings,
   getTacticalPositionSettings,
   getTacticalPositionSettingsRevision,
   type TacticalPositionSettings,
@@ -39,12 +45,15 @@ export type TacticalPositionSearchReasonCode =
   | 'owner_missing'
   | 'input_changed'
   | 'field_identity_changed'
+  | 'reference_threat_missing'
+  | 'order_target_missing'
   | 'replaced'
   | 'cancelled'
   | 'destroyed'
   | 'search_failed';
 
 export interface TacticalPositionSearchParameters {
+  readonly objective: TacticalPositionSearchObjective;
   readonly searchRadiusMeters: number;
   readonly maxCandidates: number;
   readonly maxSampledCells: number;
@@ -70,9 +79,13 @@ export interface TacticalPositionSearchRequestSnapshotV1 extends TacticalPositio
   readonly requestId: string;
   readonly ownerUnitId: string;
   readonly kind: TacticalPositionSearchKind;
+  /** Actual origin used by the local bounded search. Updated once when the field becomes ready. */
   readonly origin: GridPosition;
   readonly currentPosture: UnitPosture;
   readonly orderTarget: GridPosition | null;
+  readonly orderIdentity: string | null;
+  readonly referenceThreatId: string | null;
+  readonly referenceThreatPosition: GridPosition | null;
   readonly threatCount: number;
   readonly tacticalKnowledgeRevision: number;
   readonly settingsRevision: number;
@@ -118,6 +131,7 @@ export interface TacticalPositionSearchServiceDiagnostics {
 }
 
 const DEFAULT_PARAMETERS: TacticalPositionSearchParameters = Object.freeze({
+  objective: 'balanced',
   searchRadiusMeters: 50,
   maxCandidates: 12,
   maxSampledCells: 2048,
@@ -203,6 +217,9 @@ export class TacticalPositionSearchService {
       origin: { ...input.origin },
       currentPosture: input.currentPosture,
       orderTarget: input.orderTarget ? { ...input.orderTarget } : null,
+      orderIdentity: input.orderIdentity,
+      referenceThreatId: input.referenceThreatId,
+      referenceThreatPosition: input.referenceThreatPosition ? { ...input.referenceThreatPosition } : null,
       threatCount: input.threatCount,
       tacticalKnowledgeRevision: input.tacticalKnowledgeRevision,
       settingsRevision: input.settingsRevision,
@@ -377,11 +394,27 @@ export class TacticalPositionSearchService {
       });
       return;
     }
+    if (request.objective !== 'balanced' && request.objective !== 'continue_order' && !request.referenceThreatPosition) {
+      this.updateRequest(request, {
+        status: 'failed', reasonCode: 'reference_threat_missing',
+        reason: 'The selected tactical-position objective requires a reference threat.',
+        reasonRu: 'Для выбранной цели поиска нужна известная угроза.',
+      });
+      return;
+    }
+    if (request.objective === 'continue_order' && !request.orderTarget) {
+      this.updateRequest(request, {
+        status: 'failed', reasonCode: 'order_target_missing',
+        reason: 'Continue-order search requires an active order target.',
+        reasonRu: 'Для продолжения приказа нужна активная точка приказа.',
+      });
+      return;
+    }
     if (buildCurrentInputIdentity(this.state, unit, request) !== request.inputIdentity) {
       this.updateRequest(request, {
         status: 'stale', reasonCode: 'input_changed',
-        reason: 'Unit, order, knowledge or settings changed before the request completed.',
-        reasonRu: 'Боец, приказ, знания или настройки изменились до завершения запроса.',
+        reason: 'The command, objective, map or settings changed before the request completed.',
+        reasonRu: 'Приказ, цель поиска, карта или настройки изменились до завершения запроса.',
       });
       return;
     }
@@ -396,14 +429,21 @@ export class TacticalPositionSearchService {
       return;
     }
 
-    this.updateRequest(request, {
+    // Origin and posture are intentionally captured at execution time. Walking
+    // while the shared field is prepared does not invalidate the request.
+    Object.assign(request, {
+      origin: { ...unit.position },
+      currentPosture: unit.behaviorRuntime.posture,
+      threatCount: unit.tacticalKnowledge.threats.length,
+      tacticalKnowledgeRevision: unit.tacticalKnowledge.revision,
       status: 'calculating',
       requestedWorldKey: prepared.worldKey,
       fieldIdentity: prepared.fieldIdentity,
       reasonCode: null,
       reason: null,
       reasonRu: null,
-    }, false);
+      updatedAtSimulationStep: this.state.simulationStep,
+    });
 
     try {
       this.localSearchCount += 1;
@@ -421,8 +461,8 @@ export class TacticalPositionSearchService {
       if (buildCurrentInputIdentity(this.state, unit, request) !== request.inputIdentity) {
         this.updateRequest(request, {
           status: 'stale', reasonCode: 'input_changed',
-          reason: 'Tactical request input changed during local search.',
-          reasonRu: 'Входные данные тактического запроса изменились во время поиска.',
+          reason: 'Stable tactical request inputs changed during local search.',
+          reasonRu: 'Стабильные входные данные запроса изменились во время поиска.',
           result: null,
         });
         return;
@@ -434,7 +474,7 @@ export class TacticalPositionSearchService {
         kind: request.kind,
         fieldIdentity: prepared.fieldIdentity,
         worldKey: prepared.worldKey,
-        searchIdentity: `${request.inputIdentity}|field:${prepared.fieldIdentity}`,
+        searchIdentity: `${request.inputIdentity}|origin:${quantize(request.origin.x)}:${quantize(request.origin.y)}|posture:${request.currentPosture}|field:${prepared.fieldIdentity}`,
         candidates: result.candidates.slice(0, request.maxCandidates).map(cloneCandidate),
         diagnostics: { ...result.diagnostics },
         completedAtSimulationStep: this.state.simulationStep,
@@ -456,11 +496,7 @@ export class TacticalPositionSearchService {
     }
   }
 
-  private updateRequest(
-    request: MutableRequest,
-    patch: Partial<MutableRequest>,
-    publish = true,
-  ): void {
+  private updateRequest(request: MutableRequest, patch: Partial<MutableRequest>, publish = true): void {
     Object.assign(request, patch, { updatedAtSimulationStep: this.state.simulationStep });
     if (publish) this.publish();
   }
@@ -480,11 +516,9 @@ export class TacticalPositionSearchService {
       const oldest = this.requests.entries().next().value as [string, MutableRequest] | undefined;
       if (!oldest) return;
       const [requestId, request] = oldest;
+      this.requests.delete(requestId);
       if (this.latestRequestIdByUnit.get(request.ownerUnitId) === requestId) {
-        this.requests.delete(requestId);
         this.latestRequestIdByUnit.delete(request.ownerUnitId);
-      } else {
-        this.requests.delete(requestId);
       }
     }
   }
@@ -512,7 +546,7 @@ function runPreparedSearch(
   request: TacticalPositionSearchRequestSnapshotV1,
 ): TacticalPositionSearchResult {
   const field = prepared.field;
-  return searchTacticalPositions({
+  return searchTacticalPositionsForObjective({
     width: field.width,
     height: field.height,
     metersPerCell: field.metersPerCell,
@@ -542,6 +576,9 @@ function runPreparedSearch(
     maxCandidates: request.maxCandidates,
     minimumSeparationMeters: request.minimumSeparationMeters,
     settings: request.settings,
+    objective: request.objective,
+    referenceThreatId: request.referenceThreatId,
+    referenceThreatPosition: request.referenceThreatPosition,
   });
 }
 
@@ -553,7 +590,9 @@ function captureInput(
 ) {
   const origin = { ...unit.position };
   const currentPosture = unit.behaviorRuntime.posture;
-  const orderTarget = unit.order ? { ...unit.order.target } : null;
+  const orderTarget = unit.order ? { ...unit.order.target } : unit.playerCommand?.target ? { ...unit.playerCommand.target } : null;
+  const orderIdentity = resolveOrderIdentity(unit, orderTarget);
+  const referenceThreat = resolveTacticalPositionReferenceThreat(unit);
   const threatCount = unit.tacticalKnowledge.threats.length;
   const tacticalKnowledgeRevision = unit.tacticalKnowledge.revision;
   const settingsRevision = getTacticalPositionSettingsRevision(unit);
@@ -561,16 +600,28 @@ function captureInput(
   const inputIdentity = buildInputIdentity({
     ownerUnitId: unit.id,
     kind,
-    origin,
-    currentPosture,
+    objective: parameters.objective,
     orderTarget,
-    threatCount,
-    tacticalKnowledgeRevision,
+    orderIdentity,
+    referenceThreatId: referenceThreat?.id ?? null,
+    referenceThreatPosition: referenceThreat?.position ?? null,
     settingsRevision,
     parameters,
     simulationMapMetersPerCell: state.map.metersPerCell,
   });
-  return { origin, currentPosture, orderTarget, threatCount, tacticalKnowledgeRevision, settingsRevision, settings, inputIdentity };
+  return {
+    origin,
+    currentPosture,
+    orderTarget,
+    orderIdentity,
+    referenceThreatId: referenceThreat?.id ?? null,
+    referenceThreatPosition: referenceThreat?.position ?? null,
+    threatCount,
+    tacticalKnowledgeRevision,
+    settingsRevision,
+    settings,
+    inputIdentity,
+  };
 }
 
 function buildCurrentInputIdentity(
@@ -578,14 +629,15 @@ function buildCurrentInputIdentity(
   unit: UnitModel,
   request: TacticalPositionSearchRequestSnapshotV1,
 ): string {
+  const currentOrderTarget = unit.order ? unit.order.target : unit.playerCommand?.target ?? null;
   return buildInputIdentity({
     ownerUnitId: unit.id,
     kind: request.kind,
-    origin: unit.position,
-    currentPosture: unit.behaviorRuntime.posture,
-    orderTarget: unit.order?.target ?? null,
-    threatCount: unit.tacticalKnowledge.threats.length,
-    tacticalKnowledgeRevision: unit.tacticalKnowledge.revision,
+    objective: request.objective,
+    orderTarget: currentOrderTarget,
+    orderIdentity: resolveOrderIdentity(unit, currentOrderTarget),
+    referenceThreatId: request.referenceThreatId,
+    referenceThreatPosition: request.referenceThreatPosition,
     settingsRevision: getTacticalPositionSettingsRevision(unit),
     parameters: request,
     simulationMapMetersPerCell: state.map.metersPerCell,
@@ -595,11 +647,11 @@ function buildCurrentInputIdentity(
 function buildInputIdentity(value: {
   ownerUnitId: string;
   kind: TacticalPositionSearchKind;
-  origin: GridPosition;
-  currentPosture: UnitPosture;
+  objective: TacticalPositionSearchObjective;
   orderTarget: GridPosition | null;
-  threatCount: number;
-  tacticalKnowledgeRevision: number;
+  orderIdentity: string | null;
+  referenceThreatId: string | null;
+  referenceThreatPosition: GridPosition | null;
   settingsRevision: number;
   parameters: TacticalPositionSearchParameters;
   simulationMapMetersPerCell: number;
@@ -607,10 +659,10 @@ function buildInputIdentity(value: {
   return [
     `owner:${value.ownerUnitId}`,
     `kind:${value.kind}`,
-    `origin:${quantize(value.origin.x)}:${quantize(value.origin.y)}`,
-    `posture:${value.currentPosture}`,
+    `objective:${value.objective}`,
     `order:${value.orderTarget ? `${quantize(value.orderTarget.x)}:${quantize(value.orderTarget.y)}` : 'none'}`,
-    `threats:${value.threatCount}:${value.tacticalKnowledgeRevision}`,
+    `orderIdentity:${value.orderIdentity ?? 'none'}`,
+    `threat:${value.referenceThreatId ?? 'none'}:${value.referenceThreatPosition ? `${quantize(value.referenceThreatPosition.x)}:${quantize(value.referenceThreatPosition.y)}` : 'none'}`,
     `settings:${value.settingsRevision}`,
     `meters:${quantize(value.simulationMapMetersPerCell)}`,
     `radius:${quantize(value.parameters.searchRadiusMeters)}`,
@@ -621,11 +673,20 @@ function buildInputIdentity(value: {
   ].join('|');
 }
 
+function resolveOrderIdentity(unit: UnitModel, target: GridPosition | null): string | null {
+  if (unit.playerCommand?.id) return unit.playerCommand.id;
+  if (!target) return null;
+  return `${unit.order?.source ?? 'order'}:${quantize(target.x)}:${quantize(target.y)}`;
+}
+
 function cloneRequest(request: TacticalPositionSearchRequestSnapshotV1): TacticalPositionSearchRequestSnapshotV1 {
   return Object.freeze({
     ...request,
     origin: Object.freeze({ ...request.origin }),
     orderTarget: request.orderTarget ? Object.freeze({ ...request.orderTarget }) : null,
+    referenceThreatPosition: request.referenceThreatPosition
+      ? Object.freeze({ ...request.referenceThreatPosition })
+      : null,
     settings: Object.freeze({ ...request.settings }),
     result: request.result ? cloneResult(request.result) : null,
   });
@@ -642,7 +703,7 @@ function cloneResult(result: TacticalPositionSearchResultSnapshotV1): TacticalPo
 function freezeResult(result: TacticalPositionSearchResultSnapshotV1): TacticalPositionSearchResultSnapshotV1 {
   return Object.freeze({
     ...result,
-    candidates: Object.freeze(result.candidates.map((candidate) => Object.freeze(candidate))),
+    candidates: Object.freeze(result.candidates.map((candidate) => Object.freeze(cloneCandidate(candidate)))),
     diagnostics: Object.freeze({ ...result.diagnostics }),
   });
 }
@@ -658,6 +719,7 @@ function cloneCandidate(candidate: TacticalPositionCandidateSeedV2): TacticalPos
 
 function normalizeParameters(value: Partial<TacticalPositionSearchParameters>): TacticalPositionSearchParameters {
   return {
+    objective: normalizeTacticalPositionSearchObjective(value.objective),
     searchRadiusMeters: bounded(value.searchRadiusMeters, DEFAULT_PARAMETERS.searchRadiusMeters, 1, 500),
     maxCandidates: clampInt(value.maxCandidates ?? DEFAULT_PARAMETERS.maxCandidates, 1, 12),
     maxSampledCells: clampInt(value.maxSampledCells ?? DEFAULT_PARAMETERS.maxSampledCells, 1, 4096),
@@ -703,10 +765,13 @@ function failedRequest(
     origin: Object.freeze({ x: 0, y: 0 }),
     currentPosture: 'standing',
     orderTarget: null,
+    orderIdentity: null,
+    referenceThreatId: null,
+    referenceThreatPosition: null,
     threatCount: 0,
     tacticalKnowledgeRevision: 0,
     settingsRevision: 0,
-    settings: Object.freeze({ ...getFallbackSettings() }),
+    settings: Object.freeze({ ...createDefaultTacticalPositionSettings() }),
     createdAtSimulationStep: state.simulationStep,
     updatedAtSimulationStep: state.simulationStep,
     status: 'failed',
@@ -718,23 +783,6 @@ function failedRequest(
     reasonRu,
     result: null,
   });
-}
-
-function getFallbackSettings(): TacticalPositionSettings {
-  return {
-    standingMaximumDanger: 28, standingMinimumSafety: 60,
-    crouchedMaximumDanger: 55, crouchedMinimumSafety: 42,
-    crouchedTransitionPenalty: 2, proneTransitionPenalty: 4,
-    postureProtectionGainFactor: 0.6, dangerReductionSafetyWeight: 0.72,
-    protectionGainSafetyWeight: 0.25, minimumPositionImprovement: 3,
-    minimumDirectionalProtection: 12, minimumReverseSlopeQuality: 30,
-    safetyWeight: 0.34, lowDangerWeight: 0.22, protectionWeight: 0.2,
-    concealmentWeight: 0.08, safetyGainWeight: 0.12, reverseSlopeWeight: 0.08,
-    routeSafetyWeight: 0.08, orderAlignmentWeight: 0.04,
-    uncertaintyPenaltyWeight: 0.04, forwardSlopePenaltyWeight: 0.06,
-    markerRefreshIntervalSeconds: 1, emptyResultHoldSeconds: 1.5,
-    moveCrouchedToProtectedPosition: true,
-  };
 }
 
 function isReusableStatus(status: TacticalPositionSearchStatus): boolean {
