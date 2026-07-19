@@ -1,10 +1,13 @@
 import type { SimulationState } from '../core/simulation/SimulationState';
-import { getSimulationLayerState, setSimulationLayerMode } from '../core/ui/RuntimeUiState';
+import { clearVisibleTacticalPositions } from '../core/tactical/SimulationTacticalPositionSelection';
+import { getTacticalPositionSearchService } from '../core/tactical/TacticalPositionSearchService';
+import { setSimulationLayerMode } from '../core/ui/RuntimeUiState';
 
 const TAB_CHANGED_EVENT = 'real-wargame:tactical-position-tab-changed';
+const activeByState = new WeakMap<SimulationState, boolean>();
 
 export function isTacticalPositionWorkspaceTabActive(state: SimulationState): boolean {
-  return getSimulationLayerState(state).mode === 'positions';
+  return activeByState.get(state) === true;
 }
 
 export function installTacticalPositionWorkspaceTab(
@@ -17,6 +20,7 @@ export function installTacticalPositionWorkspaceTab(
   const sidebarBody = shell?.querySelector<HTMLElement>('[data-role="sidebar-body"]');
   if (!shell || !tabs || !sidebarTitle || !sidebarBody) return () => undefined;
 
+  activeByState.set(state, false);
   const button = document.createElement('button');
   button.type = 'button';
   button.dataset.tacticalPositionTab = 'true';
@@ -43,7 +47,10 @@ export function installTacticalPositionWorkspaceTab(
   const openPositions = (event: Event): void => {
     event.preventDefault();
     event.stopPropagation();
-    setSimulationLayerMode(state, 'positions');
+    activeByState.set(state, true);
+    // Reuse the soldier-owned danger raster while keeping marker interaction
+    // isolated behind this dedicated tab flag.
+    setSimulationLayerMode(state, 'danger');
     renderPositionsBody();
     publishTabChange();
     onChanged();
@@ -55,9 +62,13 @@ export function installTacticalPositionWorkspaceTab(
       ? event.target.closest<HTMLButtonElement>('[data-tab]')
       : null;
     if (!target || !isTacticalPositionWorkspaceTabActive(state)) return;
+    activeByState.set(state, false);
+    const selectedUnitId = state.selectedUnitId;
+    if (selectedUnitId) getTacticalPositionSearchService(state)?.clearUnit(selectedUnitId);
+    clearVisibleTacticalPositions(state);
     publishTabChange();
   };
-  tabs.addEventListener('click', handleOtherTab);
+  tabs.addEventListener('click', handleOtherTab, { capture: true });
 
   let scheduled = false;
   const observer = new MutationObserver(() => {
@@ -72,9 +83,10 @@ export function installTacticalPositionWorkspaceTab(
   observer.observe(sidebarBody, { childList: true, subtree: true });
 
   return () => {
+    activeByState.delete(state);
     observer.disconnect();
     button.removeEventListener('click', openPositions);
-    tabs.removeEventListener('click', handleOtherTab);
+    tabs.removeEventListener('click', handleOtherTab, { capture: true });
     button.remove();
   };
 }
