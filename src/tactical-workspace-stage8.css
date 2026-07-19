@@ -61,11 +61,6 @@ body.workspace-editor .game-editor-body [data-editor-tool="paint_forest"] {
   display: none !important;
 }
 
-/* Author CSS uses display:grid for the tooltip, so explicitly restore hidden semantics. */
-.cover-map-tooltip[hidden] {
-  display: none !important;
-}
-
 body.workspace-editor #hud .editor-header-placement {
   color: #121612;
   border-color: #fff2a8;
