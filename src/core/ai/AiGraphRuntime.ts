@@ -5,6 +5,7 @@ import {
   type AiGraphRuntimeResult,
 } from './AiGraphRuntimeLegacy';
 import { generateSimulationTacticalPositions } from '../tactical/SimulationTacticalPositionGraphHost';
+import { occupiedTacticalPositionPosture } from '../tactical/TacticalPositionOccupation';
 
 export * from './AiGraphRuntimeLegacy';
 
@@ -16,7 +17,7 @@ export * from './AiGraphRuntimeLegacy';
 export function runAiGraphRuntime(input: AiGraphRuntimeInput): AiGraphRuntimeResult {
   const context = readAiSimulationExecutionContext(input.unitId);
   if (!context) return runLegacyAiGraphRuntime(input);
-  return runLegacyAiGraphRuntime({
+  const result = runLegacyAiGraphRuntime({
     ...input,
     tacticalHost: {
       ...input.tacticalHost,
@@ -27,4 +28,16 @@ export function runAiGraphRuntime(input: AiGraphRuntimeInput): AiGraphRuntimeRes
       ),
     },
   });
+
+  const occupiedPosture = occupiedTacticalPositionPosture(context.unit);
+  if (!occupiedPosture) return result;
+  const graphPosture = occupiedPosture === 'standing'
+    ? 'stand'
+    : occupiedPosture === 'crouched'
+      ? 'crouch'
+      : 'prone';
+  const effects = result.effects.filter((effect) => (
+    effect.type !== 'set_posture' || effect.posture === graphPosture
+  ));
+  return effects.length === result.effects.length ? result : { ...result, effects };
 }
