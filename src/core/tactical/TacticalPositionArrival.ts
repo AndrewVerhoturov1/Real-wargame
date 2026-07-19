@@ -1,6 +1,6 @@
 import type { SimulationState } from '../simulation/SimulationState';
 import { markPlayerCommandArrivalPostureApplied } from '../orders/PlayerCommand';
-import { activateRegisteredTacticalPositionOccupation } from './TacticalPositionOccupation';
+import { applyCompletedTacticalPositionOccupation } from './TacticalPositionOccupation';
 
 export function reconcileCompletedTacticalPositionArrivals(state: SimulationState): void {
   for (const unit of state.units) {
@@ -12,13 +12,9 @@ export function reconcileCompletedTacticalPositionArrivals(state: SimulationStat
       || unit.order
     ) continue;
 
-    const previousPosture = unit.behaviorRuntime.posture;
-    unit.behaviorRuntime.previousPosture = previousPosture;
-    unit.behaviorRuntime.posture = command.arrivalPosture;
-    unit.behaviorRuntime.postureChangedBecause = 'tactical_position_arrival';
+    if (!applyCompletedTacticalPositionOccupation(unit)) continue;
     unit.behaviorRuntime.lastEvent = 'tactical_position_posture_applied';
-    unit.behaviorRuntime.reason = `Тактическая позиция занята: ${postureLabel(command.arrivalPosture)}; боец удерживает позу и направление на угрозу.`;
-    activateRegisteredTacticalPositionOccupation(unit, command.id, command.arrivalPosture);
+    unit.behaviorRuntime.reason = `Тактическая позиция занята: ${postureLabel(command.arrivalPosture)}; боец развернулся к выбранной угрозе.`;
     unit.playerCommand = markPlayerCommandArrivalPostureApplied(command);
   }
 }
