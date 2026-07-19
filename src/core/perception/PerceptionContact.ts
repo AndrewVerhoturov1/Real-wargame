@@ -155,6 +155,14 @@ export function advanceReportedContact(
   previous: PerceptionContactMemory | null,
   input: ReportedContactInput,
 ): PerceptionContactMemory {
+  if (
+    input.source === 'sound'
+    && previous?.source === 'visual'
+    && (previous.visibleNow || previous.observedNow)
+  ) {
+    return previous;
+  }
+
   const confidence = clamp(input.confidence, 0, 100);
   const reportedEvidence = input.source === 'sound'
     ? Math.min(CONTACT_STAGE_THRESHOLDS.suspicion + 10, confidence * 0.85)
