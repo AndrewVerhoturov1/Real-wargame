@@ -7,6 +7,8 @@ export interface TacticalPositionSettings {
   standingMinimumSafety: number;
   crouchedMaximumDanger: number;
   crouchedMinimumSafety: number;
+  crouchedSafetyAdvantageThreshold: number;
+  proneSafetyAdvantageThreshold: number;
   crouchedTransitionPenalty: number;
   proneTransitionPenalty: number;
   postureProtectionGainFactor: number;
@@ -23,6 +25,10 @@ export interface TacticalPositionSettings {
   reverseSlopeWeight: number;
   routeSafetyWeight: number;
   orderAlignmentWeight: number;
+  advanceToThreatWeight: number;
+  withdrawFromThreatWeight: number;
+  orderTargetDistanceWeight: number;
+  objectiveAlignmentWeight: number;
   uncertaintyPenaltyWeight: number;
   forwardSlopePenaltyWeight: number;
   markerRefreshIntervalSeconds: number;
@@ -57,6 +63,8 @@ export function createDefaultTacticalPositionSettings(): TacticalPositionSetting
     standingMinimumSafety: 60,
     crouchedMaximumDanger: 55,
     crouchedMinimumSafety: 42,
+    crouchedSafetyAdvantageThreshold: 6,
+    proneSafetyAdvantageThreshold: 8,
     crouchedTransitionPenalty: 2,
     proneTransitionPenalty: 4,
     postureProtectionGainFactor: 0.6,
@@ -73,6 +81,10 @@ export function createDefaultTacticalPositionSettings(): TacticalPositionSetting
     reverseSlopeWeight: 0.08,
     routeSafetyWeight: 0.08,
     orderAlignmentWeight: 0.04,
+    advanceToThreatWeight: 0.18,
+    withdrawFromThreatWeight: 0.18,
+    orderTargetDistanceWeight: 0.18,
+    objectiveAlignmentWeight: 0.12,
     uncertaintyPenaltyWeight: 0.04,
     forwardSlopePenaltyWeight: 0.06,
     markerRefreshIntervalSeconds: 1,
@@ -93,6 +105,14 @@ export function normalizeTacticalPositionSettings(value: TacticalPositionSetting
     standingMinimumSafety: percent(source.standingMinimumSafety, defaults.standingMinimumSafety),
     crouchedMaximumDanger: percent(source.crouchedMaximumDanger, defaults.crouchedMaximumDanger),
     crouchedMinimumSafety: percent(source.crouchedMinimumSafety, defaults.crouchedMinimumSafety),
+    crouchedSafetyAdvantageThreshold: percent(
+      source.crouchedSafetyAdvantageThreshold,
+      defaults.crouchedSafetyAdvantageThreshold,
+    ),
+    proneSafetyAdvantageThreshold: percent(
+      source.proneSafetyAdvantageThreshold,
+      defaults.proneSafetyAdvantageThreshold,
+    ),
     crouchedTransitionPenalty: bounded(source.crouchedTransitionPenalty, defaults.crouchedTransitionPenalty, 0, 50),
     proneTransitionPenalty: bounded(source.proneTransitionPenalty, defaults.proneTransitionPenalty, 0, 50),
     postureProtectionGainFactor: bounded(source.postureProtectionGainFactor, defaults.postureProtectionGainFactor, 0, 2),
@@ -109,6 +129,10 @@ export function normalizeTacticalPositionSettings(value: TacticalPositionSetting
     reverseSlopeWeight: weight(source.reverseSlopeWeight, defaults.reverseSlopeWeight),
     routeSafetyWeight: weight(source.routeSafetyWeight, defaults.routeSafetyWeight),
     orderAlignmentWeight: weight(source.orderAlignmentWeight, defaults.orderAlignmentWeight),
+    advanceToThreatWeight: weight(source.advanceToThreatWeight, defaults.advanceToThreatWeight),
+    withdrawFromThreatWeight: weight(source.withdrawFromThreatWeight, defaults.withdrawFromThreatWeight),
+    orderTargetDistanceWeight: weight(source.orderTargetDistanceWeight, defaults.orderTargetDistanceWeight),
+    objectiveAlignmentWeight: weight(source.objectiveAlignmentWeight, defaults.objectiveAlignmentWeight),
     uncertaintyPenaltyWeight: weight(source.uncertaintyPenaltyWeight, defaults.uncertaintyPenaltyWeight),
     forwardSlopePenaltyWeight: weight(source.forwardSlopePenaltyWeight, defaults.forwardSlopePenaltyWeight),
     markerRefreshIntervalSeconds: bounded(source.markerRefreshIntervalSeconds, defaults.markerRefreshIntervalSeconds, 0, 10),
@@ -178,28 +202,54 @@ export function applyTacticalPositionSettingsDraftToUnit(
   return setTacticalPositionSettings(unit, getTacticalPositionSettingsDraft(state));
 }
 
+/**
+ * Select the highest posture that does not sacrifice a meaningful amount of
+ * safety. Absolute standing/crouched thresholds remain hard gates, while the
+ * two advantage thresholds allow a lower posture to win when it materially
+ * improves the tactical situation.
+ */
 export function selectHighestSafePosture(
   evaluations: readonly TacticalPostureEvaluation[],
   settings: TacticalPositionSettings,
 ): TacticalPostureEvaluation {
   const standing = evaluations.find((item) => item.posture === 'standing');
-  if (
+  const crouched = evaluations.find((item) => item.posture === 'crouched');
+  const prone = evaluations.find((item) => item.posture === 'prone');
+  const standingAllowed = Boolean(
     standing
     && standing.danger <= settings.standingMaximumDanger
-    && standing.safety >= settings.standingMinimumSafety
-  ) return standing;
-
-  const crouched = evaluations.find((item) => item.posture === 'crouched');
-  if (
+    && standing.safety >= settings.standingMinimumSafety,
+  );
+  const crouchedAllowed = Boolean(
     crouched
     && crouched.danger <= settings.crouchedMaximumDanger
-    && crouched.safety >= settings.crouchedMinimumSafety
-  ) return crouched;
+    && crouched.safety >= settings.crouchedMinimumSafety,
+  );
 
-  return evaluations.find((item) => item.posture === 'prone')
-    ?? crouched
-    ?? standing
-    ?? { posture: 'standing', danger: 100, protection: 0, safety: 0 };
+  let selected = standingAllowed
+    ? standing!
+    : crouchedAllowed
+      ? crouched!
+      : prone ?? crouched ?? standing;
+
+  if (!selected) return { posture: 'standing', danger: 100, protection: 0, safety: 0 };
+
+  if (
+    selected.posture === 'standing'
+    && crouchedAllowed
+    && crouched!.safety - selected.safety >= settings.crouchedSafetyAdvantageThreshold
+  ) {
+    selected = crouched!;
+  }
+
+  if (
+    prone
+    && prone.safety - selected.safety >= settings.proneSafetyAdvantageThreshold
+  ) {
+    selected = prone;
+  }
+
+  return selected;
 }
 
 function readValues(value: TacticalPositionSettingsInput): Partial<TacticalPositionSettings> {
