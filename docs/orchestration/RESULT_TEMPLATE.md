@@ -1,21 +1,40 @@
 # Web Chat and Worker Result Template
 
-Use this template for the canonical Web Chat feature branch and optional research/proposal workers.
-
-The user-facing part must come first. Technical details follow only when they help a decision or provide evidence.
+Use this template for canonical feature work. Put the practical Russian summary first; technical evidence follows only when useful.
 
 ## 1. User-facing summary
+
+### Code ready, not deployed
 
 ```md
 # Результат
 
-**Статус:** готово / готово к проверке / частично / заблокировано
+**Статус:** код готов, не задеплоен
 
 **Что изменилось:**
-Короткое объяснение обычным русским языком.
+Короткое объяснение.
+
+**Ветка:** `feature/...`
+**Коммит:** `short-sha`
+
+**Проверки:**
+- фактически выполненные проверки
+
+**Деплой:** не запускался; требуется отдельная команда пользователя.
+```
+
+### Manual Preview ready
+
+```md
+# Результат
+
+**Статус:** готово к проверке
+
+**Что изменилось:**
+Короткое объяснение.
 
 **Открыть:**
-- [Игра](<game-preview-url>)
+- [Игра](<game-preview-url>/)
 - [Редактор ИИ](<game-preview-url>/ai-node-editor.html)
 
 **Ветка:** `feature/...`
@@ -26,123 +45,39 @@ The user-facing part must come first. Technical details follow only when they he
 2. Ожидаемый результат.
 ```
 
-Mandatory presentation rules:
+## 2. Presentation rules
 
-- write in simple Russian, as for an intelligent high-school student;
-- avoid unnecessary English terms and abbreviations;
-- explain an unavoidable technical term once;
-- make all useful URLs clickable;
-- never make the user search for links in logs;
-- when screenshots exist, show the most useful screenshots directly after the summary;
-- provide the full artifact link separately;
-- put long hashes, workflow IDs and raw diagnostics after the practical result.
+- Use simple Russian.
+- Make useful URLs clickable.
+- Never make the user search logs for links.
+- Show useful screenshots directly when available.
+- Put long hashes, workflow IDs and diagnostics after the practical result.
+- Never invent a deployment URL when deployment was not requested or did not succeed.
 
-## 2. Useful screenshots
-
-When screenshots exist, present them in a convenient order:
-
-```md
-## Скриншоты
-
-### Основной результат
-![Короткое понятное описание](<direct-screenshot-or-artifact-link>)
-
-### Дополнительная проверка
-![Короткое понятное описание](<direct-screenshot-or-artifact-link>)
-
-[Открыть полный набор материалов](<artifact-link>)
-```
-
-Do not dump every frame. Select the frames that prove the requested behavior.
-
-## 3. Task and status
+## 3. Task and branch identity
 
 ```text
 task:
 status: COMPLETED / PARTIAL / BLOCKED / RESEARCH_ONLY
-delivery_state: research_only / implementation / ready_for_live_test / live_test_revision / visual_qa / approved_for_preview / transferred_to_preview
-```
-
-## 4. Canonical branch identity
-
-```text
+delivery_state: implementation / code_ready / manual_deployment / ready_for_live_test / live_test_revision / visual_qa / transferred_to_preview
 feature_branch:
 base_branch: real-wargame-preview
 base_commit:
 current_commit:
 ```
 
-Research-only workers without a branch use:
+## 4. Verification selection
 
 ```text
-feature_branch: owned by designated Web Chat
-```
-
-They do not invent commit identities.
-
-## 5. Solution
-
-Explain:
-
-- how the problem was understood;
-- what was changed;
-- why this approach fits the current systems;
-- what was intentionally not changed.
-
-Keep the first explanation understandable without repository jargon.
-
-## 6. Performance impact
-
-Mandatory for runtime-affecting work. For truly non-runtime work, use `not applicable` and give the exact reason.
-
-```text
-hot path:
-worst-case complexity:
-main-thread work:
-full-map builds:
-shared prepared data:
-worker and queue budget:
-cache owner/key/limit:
-invalidation revisions:
-memory estimate:
-stale-result rejection:
-teardown:
-before metrics:
-after metrics:
-performance scenario affected:
-performance reason:
-tested implementation head:
-remaining performance risks:
-```
-
-Do not replace analysis with “small change should not affect performance”. Do not run performance checks only because a SHA changed.
-
-## 7. Verification selection
-
-```text
-change risk:
-mandatory non-browser checks:
-risk-selected focused checks:
-manual live checks:
-visual verification requested: yes / no
-visual route selected: direct-browser / vercel-deployment-playwright-e2e / not run / not applicable
-heavy checks deliberately not run:
-why omitted heavy checks cannot detect regression:
+change_risk:
+mandatory_non_browser_checks:
+risk_selected_focused_checks:
+manual_live_checks:
+deployment_requested: yes / no
+visual_verification_requested: yes / no
+heavy_checks_deliberately_not_run:
 TESTED_IMPLEMENTATION_HEAD:
-PERFORMANCE_REASON:
 ```
-
-The user does not need to name the visual skill.
-
-## 8. Changed files
-
-List only relevant files:
-
-```text
-path/to/file — what changed
-```
-
-## 9. Checks actually run
 
 List only commands that actually ran:
 
@@ -150,17 +85,29 @@ List only commands that actually ran:
 <command> — passed / failed
 ```
 
-Always distinguish:
+Always distinguish local checks, Vercel deployment, human live testing, browser verification and GitHub Actions.
 
-- local or Web Chat checks;
-- Vercel deployment;
-- human live testing;
-- direct-browser verification;
-- GitHub Actions verification.
+## 5. Performance impact
 
-Never claim one as another.
+Mandatory for runtime-affecting work:
 
-## 10. Required deployment pages
+```text
+hot_path:
+worst_case_complexity:
+main_thread_work:
+full_map_builds:
+shared_prepared_data:
+worker_and_queue_budget:
+cache_owner_key_limit:
+invalidation_revisions:
+stale_result_rejection:
+teardown:
+remaining_performance_risks:
+```
+
+For non-runtime documentation work, state `not applicable` and why.
+
+## 6. Required deployment pages
 
 Every build and deployment must include:
 
@@ -176,27 +123,33 @@ game_build_output: present / missing / not checked
 ai_node_editor_build_output: present / missing / not checked
 ```
 
-A deployment with only the game page is incomplete.
+## 7. Manual Vercel deployment
 
-## 11. Vercel Preview
-
-Use the one permanent Git-connected Vercel project.
+Git pushes do not deploy.
 
 ```text
-game_preview: clickable URL / pending / failed
-ai_node_editor_preview: clickable URL / pending / failed
-deployment_status: ready / failed / pending / not checked
+deployment_requested: yes / no
+deployment_trigger: explicit_user_request / not_requested
+deployment_status: ready / failed / pending / not_run
+deployment_id:
 deployed_branch:
 deployed_commit:
-product_sha_match: yes / no / unproven
+product_sha_match: yes / no / unproven / not_applicable
+game_preview: clickable URL / unavailable / not_deployed
+ai_node_editor_preview: clickable URL / unavailable / not_deployed
 permanent_vercel_project_touched: no
 ```
 
-Codex is not required for deployment. Do not report a manual Codex handoff as the normal route.
+When deployment was requested, follow:
 
-## 12. Manual live-test checklist
+```text
+.agents/skills/real-wargame-manual-vercel-deploy/SKILL.md
+docs/workflow/MANUAL_VERCEL_DEPLOYMENT.md
+```
 
-For user-visible work, provide short task-specific steps for both pages.
+Do not claim `ready` before Vercel reports `READY`. Do not claim an exact SHA when identity is unproven.
+
+## 8. Manual live-test checklist
 
 ### Game
 
@@ -207,160 +160,66 @@ For user-visible work, provide short task-specific steps for both pages.
 ### AI Node Editor
 
 1. Confirm `ai-node-editor.html` opens.
-2. Open the task-relevant editor section.
-3. Confirm controls, styles and state updates work.
+2. Open the task-relevant section.
+3. Confirm controls and state updates work.
 
-Do not require full-project manual regression for every focused change.
-
-## 13. Human live-test status
+## 9. Human live-test status
 
 ```text
-live_test_status: pending / passed / failed / not run
+live_test_status: pending / passed / failed / not_run
 live_tested_commit:
 reported_issues:
 ```
 
-Product issues are fixed on the same feature branch. Later pushes update Vercel automatically.
+Product issues stay on the same feature branch. Later pushes do not update Vercel automatically.
 
-## 14. Visual QA preparation and approval
-
-```text
-visual_qa_prepared: yes / no / not applicable
-visual_qa_approval: approved / declined / pending / not applicable
-visual_qa_route: direct-browser / vercel-deployment-playwright-e2e / not run / not applicable
-visual_qa_run: passed / failed / not run / not applicable
-```
-
-Clear intent such as `проверь визуально`, `сделай скриншоты` or `проверь через Playwright` already counts as approval.
-
-## 15. Visual product identity
+## 10. Visual QA
 
 ```text
-target_game_url: clean URL without secrets
-target_ai_node_editor_url: clean URL without secrets
+visual_qa_prepared: yes / no / not_applicable
+visual_qa_approval: approved / declined / pending / not_applicable
+visual_qa_route: direct_browser / vercel_deployment_playwright_e2e / not_run / not_applicable
+visual_qa_run: passed / failed / not_run / not_applicable
 expected_product_sha:
 observed_product_sha:
-product_sha_match: yes / no / unproven
+visual_product_sha_match: yes / no / unproven / not_applicable
 ```
 
-A new product SHA invalidates previous visual acceptance evidence.
+Visual permission does not imply deployment permission. The deployed-Vercel Playwright skill tests an existing deployment and must not deploy it.
 
-## 16. Deployed Vercel CI identity
+## 11. Changed files
 
-Complete when the route is `vercel-deployment-playwright-e2e`:
+List only relevant files:
 
 ```text
-temporary_base_branch:
-temporary_head_branch:
-temporary_pr:
-final_run_id:
-final_workflow_head_sha:
-workflow_conclusion:
-artifact_id:
-artifact_digest: value / unavailable
+path/to/file — what changed
 ```
 
-The temporary PR must never be merged. CI harness files must not enter product branches.
-
-## 17. Visual scenario result
-
-Adjust fields to the task, but verify actual state change rather than only element presence.
+## 12. Transfer and cleanup
 
 ```text
-game_load: passed / failed / not applicable
-ai_node_editor_load: passed / failed / not applicable
-soldier_creation: passed / failed / not applicable
-soldier_selection: passed / failed / not applicable
-order_issue: passed / failed / not applicable
-actual_movement: passed / failed / not applicable
-danger: passed / failed / not applicable
-cover: passed / failed / not applicable
-combined: passed / failed / not applicable
-persistence: passed / failed / not applicable
-```
-
-## 18. Diagnostics
-
-```text
-console_errors:
-page_errors:
-request_failures:
-ignored_service_failures:
-failure_class: none / environment / test-harness / application
-```
-
-Classify before edits:
-
-- environment/configuration changes stay in the CI or deployment layer;
-- test-harness changes stay in the temporary CI head branch;
-- application changes return to the canonical feature branch.
-
-Never fix product code on CI branches.
-
-## 19. Evidence inspection
-
-```text
-evidence_json_inspected: yes / no
-screenshots_inspected: yes / no
-trace_inspected: yes / no / not needed
-contact_sheet:
-key_frames:
-artifact_link: clickable URL
-workflow_run_link: clickable URL
-```
-
-A green workflow alone is insufficient. Inspect the evidence and show useful screenshots to the user.
-
-## 20. Preview transfer
-
-```text
-preview_transfer_approval: approved / not approved
+preview_transfer_approval: approved / declined / pending
 approved_feature_commit:
 preview_commit:
 transfer_method:
-preview_touched: no / explicit approved transfer
-main_touched: no / explicit approved change
+preview_deployment_requested: yes / no
+feature_branch_cleanup:
+temporary_ci_cleanup:
+legacy_temporary_vercel_project_cleanup:
+main_touched: no
 ```
 
-Visual success does not grant transfer permission. Transfer requires separate explicit user GO for the exact accepted commit.
+Transfer into `real-wargame-preview` and deployment of that branch are separate permissions unless the user explicitly requests both.
 
-## 21. Post-transfer deployment check
+## 13. Required honesty
 
-After transfer into `real-wargame-preview`:
+Never claim one as another:
 
-```text
-preview_deployment_status: ready / failed / pending
-preview_game_url: clickable URL
-preview_ai_node_editor_url: clickable URL
-preview_game_checked: yes / no
-preview_ai_node_editor_checked: yes / no
-preview_deployed_commit:
-```
+- commit/push;
+- local checks;
+- Vercel deployment;
+- human live testing;
+- direct-browser verification;
+- GitHub Actions evidence.
 
-The transfer is not complete from the user's perspective until both pages work or the failure is reported.
-
-## 22. Cleanup
-
-```text
-feature_branch_cleanup: deleted / kept by user request / pending
-temporary_pr_closed_without_merge: yes / no / not applicable
-ci_branch_cleanup: deleted / pending with exact names / not applicable
-legacy_temporary_vercel_project: none / deleted / kept with reason
-legacy_temporary_vercel_project_cleanup_condition_met: yes / no / not applicable
-permanent_vercel_project_deleted: no
-```
-
-Rules:
-
-- delete the feature branch only after the accepted preview deployment works;
-- delete an old separate temporary Vercel project only after both replacement pages work;
-- never delete the permanent Git-connected Vercel project;
-- old deployments inside the permanent project may be handled by Vercel retention settings.
-
-## 23. Risks and limitations
-
-List known technical, behavioral, performance, visual, deployment-identity and cleanup limitations in plain Russian first. Add detailed diagnostics only when useful.
-
-## 24. Alternative approaches and open questions
-
-Include only real alternatives or unresolved decisions. Do not add filler.
+A green workflow alone is not visual proof. A successful build alone is not a deployment. A push alone is not a deployment request.
