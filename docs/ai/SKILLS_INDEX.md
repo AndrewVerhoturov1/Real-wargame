@@ -19,63 +19,90 @@ The user does not need to name a skill. Route by intent and current environment 
 |---|---|---|
 | Real-Wargame performance contract | `.agents/skills/real-wargame-performance/SKILL.md` | Mandatory for simulation, AI, perception, navigation, tactical fields, map data, rendering, recurring UI, workers, queues, caches, revisions, lifecycle, diagnostics or browser-performance gates. |
 | Real-Wargame local preview | `.agents/skills/real-wargame-local-preview/SKILL.md` | Visual-QA preparation, terminal-free local launch, or approved visual verification when the current Web Chat can directly control a real browser against the target. |
-| Vercel deployment Playwright E2E | `.agents/skills/vercel-deployment-playwright-e2e/SKILL.md` | **Mandatory automatically** when the user requests visual, screenshot, browser or Playwright verification of a branch-linked Vercel Preview and the current Web Chat cannot directly control a real browser against that URL. The user does not need to name this skill. |
+| Real-Wargame manual Vercel deploy | `.agents/skills/real-wargame-manual-vercel-deploy/SKILL.md` | **Mandatory** when the user explicitly asks to deploy, redeploy, create/update a Vercel Preview or check a manual deployment. |
+| Vercel deployment Playwright E2E | `.agents/skills/vercel-deployment-playwright-e2e/SKILL.md` | **Mandatory automatically** when the user requests visual, screenshot, browser or Playwright verification of an already deployed Vercel Preview and the current Web Chat cannot directly control a real browser against that URL. |
 | Real-Wargame PixiJS 8 guide | `.agents/skills/real-wargame-pixijs/SKILL.md` | Any PixiJS, canvas, renderer, camera, pointer event, visual layer or rendering-performance task. Read before general PixiJS skills. |
 | Real-Wargame AI Runtime | `.agents/skills/real-wargame-ai-runtime/SKILL.md` | Soldier AI graph, Utility scoring, Blackboard, Runtime, lifecycle, cancellation, Bridge, AI Dictionary, node authoring or live trace. |
+
+## Mandatory deployment routing
+
+Git automatic deployments are disabled. A push never authorizes or triggers Vercel.
+
+The following intent loads `real-wargame-manual-vercel-deploy`:
+
+```text
+деплой
+задеплой
+создай Preview
+обнови Preview
+задеплой эту ветку
+проверь почему ручной деплой упал
+```
+
+Implementation, commit, push, transfer and merge requests do not imply deployment unless the user explicitly includes deployment.
+
+One deployment request covers the exact current HEAD and necessary retries after build-failure fixes for the same task. A later product change requires a new request.
 
 ## Mandatory visual routing decision
 
 When user intent includes visual verification, screenshots, browser verification or Playwright:
 
 ```text
-Can the current Web Chat directly control a real browser against target_url?
+Is a suitable Vercel deployment already available?
 
-YES
+NO
+→ do not deploy implicitly
+→ report that explicit deployment is required
+
+YES, and direct controlled browser is available
 → real-wargame-local-preview
 
-NO, and target is a branch-linked Vercel Preview
-→ MUST read vercel-deployment-playwright-e2e
+YES, but direct controlled browser is unavailable
+→ vercel-deployment-playwright-e2e
 ```
 
-Examples that trigger this decision without naming any skill:
-
-```text
-проверь визуально
-запусти визуальную проверку
-сделай скриншоты
-проверь через Playwright
-проверь живой Vercel Preview
-```
-
-Do not ask the user to repeat the skill name. If the user already requested visual verification, approval is already present.
+Visual verification permission is not deployment permission, and deployment permission is not Playwright/Chromium permission.
 
 ## Common routes
 
 | User task | Skills |
 |---|---|
+| Deploy or redeploy exact branch HEAD | `real-wargame-manual-vercel-deploy` mandatory |
 | Run or show the local game | `real-wargame-local-preview` |
 | Visually verify deployed Vercel Preview with direct browser available | `real-wargame-local-preview` |
 | Visually verify deployed Vercel Preview without direct browser | `vercel-deployment-playwright-e2e` mandatory |
 | Change simulation, AI, perception, navigation, map runtime, UI runtime or caches | `real-wargame-performance`, then relevant domain skill |
-| Change map/unit/overlay visual | `real-wargame-performance`, `real-wargame-pixijs`, then prepare visual verification; select direct-browser or deployed-Vercel skill at execution time |
+| Change map/unit/overlay visual | `real-wargame-performance`, `real-wargame-pixijs`; prepare visual verification separately |
 | Diagnose FPS or overlay stalls | `real-wargame-performance`, `real-wargame-pixijs`, then narrow Pixi performance reference |
 | Change GraphRunner or Utility score | `real-wargame-performance`, `real-wargame-ai-runtime` |
-| Add a multi-tick action | `real-wargame-performance`, `real-wargame-ai-runtime`, then prepare visual verification when visible behavior changes |
-| Change AI Node Editor controls | `real-wargame-performance` when recurring/runtime work changes, then `real-wargame-ai-runtime`; select visual skill at execution time |
+| Add a multi-tick action | `real-wargame-performance`, `real-wargame-ai-runtime` |
+| Change AI Node Editor controls | `real-wargame-performance` when recurring/runtime work changes, then `real-wargame-ai-runtime` |
 | Change documentation/navigation | no domain skill; use canonical JSON and `npm run docs:sync` |
 
-## Deployed-Vercel skill invariants
+## Manual deployment invariants
+
+When `real-wargame-manual-vercel-deploy` is selected:
+
+- resolve exact remote branch HEAD before deployment;
+- use only an authenticated route that can prove exact source identity;
+- never enable Git automatic deployments;
+- never create a dummy commit to trigger deployment;
+- never commit Deploy Hook URLs, tokens or protected share URLs;
+- verify status `READY` and both required pages;
+- report deployed branch, commit and identity proof or `unproven`;
+- do not deploy `main` without separate explicit approval.
+
+## Deployed-Vercel visual invariants
 
 When `vercel-deployment-playwright-e2e` is selected:
 
+- it tests an existing deployment and must not deploy the application;
 - CI harness files exist only on temporary `ci/**` branches;
 - temporary PR is never merged;
-- share tokens and bypass secrets are never committed;
-- test-harness defects are fixed only on the temporary CI head branch;
+- secrets are never committed;
 - application defects are fixed only on the canonical feature branch;
-- every new product SHA requires fresh CI branches and fresh evidence;
-- artifact ZIP is downloaded, extracted and inspected;
-- key screenshots are shown to the user;
+- every new product SHA requires fresh evidence;
+- artifact ZIP and key screenshots are inspected;
 - visual success does not grant preview-transfer approval.
 
 ## General PixiJS skills
@@ -94,8 +121,9 @@ Do not introduce deprecated v7 compatibility aliases.
 ## Required honesty
 
 - GitHub Actions is not a local run on the user's PC.
-- A green workflow is not proof of correct visuals until fresh evidence is inspected.
-- A diagnostic performance capture without enforcement is not an acceptance gate.
+- A Vercel deployment is not created by a push.
+- A green build is not proof of correct visuals.
+- Do not claim exact-SHA deployment when identity is unproven.
 - Do not claim a skill was followed unless its required steps actually ran.
 - Do not reuse evidence for a different product SHA.
 - Do not read all `.agents/skills/` by default.
