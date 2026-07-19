@@ -75,8 +75,8 @@ interface LocalRouteField {
   readonly minY: number;
   readonly width: number;
   readonly height: number;
-  readonly cost: Float32Array;
-  readonly dangerSum: Float32Array;
+  readonly cost: Float64Array;
+  readonly dangerSum: Float64Array;
   readonly steps: Uint16Array;
   readonly settled: Uint8Array;
   readonly expandedCells: number;
@@ -92,7 +92,7 @@ interface PostureEvaluation {
 
 interface RankedCandidate {
   readonly candidate: TacticalPositionCandidateSeedV2;
-  readonly preselectionScore: number;
+  readonly score: number;
   readonly cellIndex: number;
 }
 
@@ -102,11 +102,9 @@ interface HeapNode {
 }
 
 /**
- * Extracts a small deterministic set of tactical positions from prepared soldier fields.
- *
- * The function never scans the full map, never calls A*, and never uses wall-clock time
- * to stop gameplay work. One bounded local route expansion supplies reachability and a
- * route-danger estimate for every candidate in the request.
+ * Extracts deterministic position-plus-posture candidates from prepared soldier fields.
+ * Work is bounded by cell counts; it never scans the whole map, calls A* per candidate,
+ * or uses elapsed wall-clock time to alter gameplay results.
  */
 export function searchTacticalPositions(
   field: TacticalPositionFieldView,
@@ -162,9 +160,7 @@ export function searchTacticalPositions(
         && dangerGain < MIN_POSITION_IMPROVEMENT
         && protection < MIN_DIRECTIONAL_PROTECTION
         && reverseSlope < 30
-      ) {
-        continue;
-      }
+      ) continue;
 
       const routeSteps = Math.max(1, route.steps[routeIndex] ?? 0);
       const routeDanger = clampPercent((route.dangerSum[routeIndex] ?? 0) / routeSteps);
@@ -203,23 +199,25 @@ export function searchTacticalPositions(
           routeCost: roundTwo(route.cost[routeIndex] ?? Number.POSITIVE_INFINITY),
         },
       };
-      const preselectionScore = candidatePreselectionScore(candidate, current.danger, reverseSlope, forwardSlope);
-      insertRankedCandidate(provisional, { candidate, preselectionScore, cellIndex }, poolLimit);
+      insertRankedCandidate(provisional, {
+        candidate,
+        score: candidatePreselectionScore(candidate, current.danger, reverseSlope, forwardSlope),
+        cellIndex,
+      }, poolLimit);
     }
   }
 
-  const minimumSeparationCells = Math.max(1, request.minimumSeparationMeters / Math.max(0.001, field.metersPerCell));
+  const minimumSeparationCells = Math.max(
+    1,
+    request.minimumSeparationMeters / Math.max(0.001, field.metersPerCell),
+  );
   const candidates: TacticalPositionCandidateSeedV2[] = [];
   for (const ranked of provisional) {
     if (candidates.length >= maxCandidates) break;
-    if (candidates.some((existing) => (
-      Math.hypot(
-        existing.position.x - ranked.candidate.position.x,
-        existing.position.y - ranked.candidate.position.y,
-      ) < minimumSeparationCells
-    ))) {
-      continue;
-    }
+    if (candidates.some((existing) => Math.hypot(
+      existing.position.x - ranked.candidate.position.x,
+      existing.position.y - ranked.candidate.position.y,
+    ) < minimumSeparationCells)) continue;
     candidates.push(ranked.candidate);
   }
 
@@ -250,9 +248,9 @@ function buildLocalRouteField(
   const width = maxX - minX + 1;
   const height = maxY - minY + 1;
   const count = width * height;
-  const cost = new Float32Array(count);
+  const cost = new Float64Array(count);
   cost.fill(Number.POSITIVE_INFINITY);
-  const dangerSum = new Float32Array(count);
+  const dangerSum = new Float64Array(count);
   const steps = new Uint16Array(count);
   const settled = new Uint8Array(count);
   const start = (originY - minY) * width + originX - minX;
@@ -262,7 +260,7 @@ function buildLocalRouteField(
 
   while (heap.length > 0 && expandedCells < maximumExpansions) {
     const current = popHeap(heap)!;
-    if (settled[current.index] === 1 || current.cost !== cost[current.index]) continue;
+    if (settled[current.index] === 1 || current.cost > cost[current.index]!) continue;
     settled[current.index] = 1;
     expandedCells += 1;
     const localX = current.index % width;
@@ -293,7 +291,7 @@ function buildLocalRouteField(
         const danger = clampPercent(field.danger[globalIndex] ?? 0);
         const stepDistance = offsetX !== 0 && offsetY !== 0 ? DIAGONAL_COST : 1;
         const nextCost = current.cost + stepDistance * movement * (1 + danger / 100 * 1.5);
-        if (nextCost >= cost[nextLocalIndex]) continue;
+        if (nextCost >= cost[nextLocalIndex]!) continue;
         cost[nextLocalIndex] = nextCost;
         dangerSum[nextLocalIndex] = (dangerSum[current.index] ?? 0) + danger;
         steps[nextLocalIndex] = Math.min(65535, (steps[current.index] ?? 0) + 1);
@@ -345,15 +343,22 @@ function evaluateBestPosture(
     );
     const danger = clampPercent(baseDanger * exposureRatio * nextUncovered / baseUncovered);
     const transitionPenalty = posture === currentPosture ? 0 : posture === 'prone' ? 4 : 2;
-    const safety = clampPercent(baseSafety + (baseDanger - danger) * 0.72 + (protection - baseProtection) * 0.25 - transitionPenalty);
+    const safety = clampPercent(
+      baseSafety
+        + (baseDanger - danger) * 0.72
+        + (protection - baseProtection) * 0.25
+        - transitionPenalty,
+    );
     const candidate = { posture, danger, protection, safety };
     if (
       candidate.safety > best.safety
       || (candidate.safety === best.safety && candidate.danger < best.danger)
-      || (candidate.safety === best.safety && candidate.danger === best.danger && postureRank(candidate.posture) < postureRank(best.posture))
-    ) {
-      best = candidate;
-    }
+      || (
+        candidate.safety === best.safety
+        && candidate.danger === best.danger
+        && postureRank(candidate.posture) < postureRank(best.posture)
+      )
+    ) best = candidate;
   }
   return best;
 }
@@ -399,10 +404,7 @@ function insertRankedCandidate(
   let insertAt = target.length;
   for (let index = 0; index < target.length; index += 1) {
     const current = target[index]!;
-    if (
-      candidate.preselectionScore > current.preselectionScore
-      || (candidate.preselectionScore === current.preselectionScore && candidate.cellIndex < current.cellIndex)
-    ) {
+    if (candidate.score > current.score || (candidate.score === current.score && candidate.cellIndex < current.cellIndex)) {
       insertAt = index;
       break;
     }
