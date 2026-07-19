@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createPlayerMoveCommand, updatePlayerCommandStatus } from '../src/core/orders/PlayerCommand';
 import { normalizeUnits } from '../src/core/units/UnitModel';
 import type { SimulationState } from '../src/core/simulation/SimulationState';
@@ -22,8 +23,9 @@ verifyHighestSafePosture();
 verifyOccupationSurvivesAiOverwriteAndClearsOnNewMove();
 verifyMarkerPublicationIsRateLimitedAndKeepsOldResult();
 verifySettingsNormalizeFromSceneData();
+verifySceneExportIncludesSettings();
 
-console.log('Tactical position tuning smoke passed: highest-safe posture, stable markers, occupied-position lock and scene settings normalization.');
+console.log('Tactical position tuning smoke passed: highest-safe posture, stable markers, occupied-position lock and scene settings persistence.');
 
 function verifyHighestSafePosture(): void {
   const settings = createDefaultTacticalPositionSettings();
@@ -117,6 +119,11 @@ function verifySettingsNormalizeFromSceneData(): void {
   assert.equal(settings.standingMaximumDanger, 11);
   assert.equal(settings.markerRefreshIntervalSeconds, 2.5);
   assert.equal(settings.crouchedMaximumDanger, createDefaultTacticalPositionSettings().crouchedMaximumDanger);
+}
+
+function verifySceneExportIncludesSettings(): void {
+  const source = readFileSync('src/ui/SceneExport.ts', 'utf8');
+  assert.ok(source.includes('tacticalPositionSettings: cloneTacticalPositionSettings(getTacticalPositionSettings(unit))'));
 }
 
 function candidate(id: string, x: number, y: number): TacticalPositionCandidateSeedV2 {
