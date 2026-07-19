@@ -14,25 +14,37 @@ function expectIncludes(relativePath, snippets) {
     failures.push(`${relativePath}: file is missing`);
     return;
   }
-  for (const snippet of snippets) {
-    if (!content.includes(snippet)) failures.push(`${relativePath}: missing ${JSON.stringify(snippet)}`);
-  }
+  expectContentIncludes(relativePath, content, snippets);
 }
 
 function expectExcludes(relativePath, snippets) {
   const content = read(relativePath);
+  expectContentExcludes(relativePath, content, snippets);
+}
+
+function expectContentIncludes(label, content, snippets) {
   for (const snippet of snippets) {
-    if (content.includes(snippet)) failures.push(`${relativePath}: must not contain ${JSON.stringify(snippet)}`);
+    if (!content.includes(snippet)) failures.push(`${label}: missing ${JSON.stringify(snippet)}`);
   }
 }
 
-expectIncludes('src/rendering/PixiOverlayRenderer.ts', [
+function expectContentExcludes(label, content, snippets) {
+  for (const snippet of snippets) {
+    if (content.includes(snippet)) failures.push(`${label}: must not contain ${JSON.stringify(snippet)}`);
+  }
+}
+
+const overlaySource = [
+  read('src/rendering/PixiOverlayRendererBase.ts'),
+  read('src/rendering/PixiOverlayRenderer.ts'),
+].join('\n');
+expectContentIncludes('Pixi overlay implementation', overlaySource, [
   'STABLE_DIRECTIONAL_FIRE_COLOR', 'CURRENT_CONTACT_MARKER_COLOR',
   'drawZoneHandles(graphics, zone, cellSize, stroke);',
   'graphics.fill({ color: 0xfff2a8 }).stroke(stroke);',
   ".fill({ color: isSelected ? 0xfff2a8 : 0xff765f, alpha: activeAlpha })\n    .stroke(directionStroke);",
 ]);
-expectExcludes('src/rendering/PixiOverlayRenderer.ts', [
+expectContentExcludes('Pixi overlay implementation', overlaySource, [
   'const dangerColor = threat.visibleNow ? 0xff4e3d : 0xf09a55;',
   'graphics.rect(x * cellSize - handleSize / 2, y * cellSize - handleSize / 2, handleSize, handleSize).fill({ color: 0xfff2a8 });',
   'graphics.circle(centerX, centerY, isSelected ? 7 : 5).fill({ color: isSelected ? 0xfff2a8 : 0xff765f, alpha: activeAlpha });',
