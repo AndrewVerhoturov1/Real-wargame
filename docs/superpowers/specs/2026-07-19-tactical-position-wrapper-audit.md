@@ -7,6 +7,10 @@ Branch: `feature/20260719-tactical-position-system`
 
 This audit covers wrapper/base modules touched or relied on by the tactical-position migration. It intentionally avoids a broad refactor of unrelated renderer, simulation, or Graph v2 code.
 
+## Removed global fallback
+
+`TacticalPositionProvider.ts` and `AwarenessTacticalPositionAdapter.ts` were deleted. The old bounded global registry searched active simulations by a string `unitId`; it is not an acceptable final ownership model. Graph v2 now receives the service through the exact scheduler simulation/unit execution context.
+
 ## Wrappers retained
 
 ### `AiGraphRunner.ts` → `AiGraphRunnerLegacy.ts`
@@ -41,11 +45,11 @@ This audit covers wrapper/base modules touched or relied on by the tactical-posi
 
 **Removal path:** delete the old cover-marker pass from the base renderer and restore one canonical renderer class.
 
-## Wrapper retired
+## Compatibility wrapper retained
 
 ### `PixiAwarenessHeatmapRendererLegacy.ts`
 
-The previous renderer-owned search implementation is retired. The active renderer reads only immutable prepared-field and search-result snapshots. This legacy file should remain empty/deprecated only while old imports or source-contract tests are being removed; it can then be deleted in a focused cleanup.
+The previous renderer-owned search implementation is gone. This file now only re-exports the snapshot-only renderer for older imports and contains no calculation. It can be deleted after a focused import-name cleanup.
 
 ## Remaining tactical WeakMaps
 
