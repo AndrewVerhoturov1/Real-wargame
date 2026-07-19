@@ -11,6 +11,32 @@ import {
 import { normalizeUnits } from '../src/core/units/UnitModel';
 import type { PreparedAwarenessWorldSnapshot } from '../src/runtime/AwarenessWorldRuntime';
 
+class GraphFieldRuntime implements TacticalPositionFieldRuntime {
+  ready: PreparedAwarenessWorldSnapshot | null = null;
+  private readonly listeners = new Set<() => void>();
+  requestCalls = 0;
+  destroyed = false;
+
+  get listenerCount(): number { return this.listeners.size; }
+
+  requestWorldField(): PreparedAwarenessWorldSnapshot | null {
+    this.requestCalls += 1;
+    return this.ready;
+  }
+
+  readReadyWorldField(): PreparedAwarenessWorldSnapshot | null {
+    return this.ready;
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  emit(): void { for (const listener of this.listeners) listener(); }
+  destroy(): void { this.destroyed = true; this.listeners.clear(); this.ready = null; }
+}
+
 const unit = normalizeUnits([{ id: 'field-driven-unit', type: 'infantry_squad', side: 'blue', x: 1, y: 4 }])[0]!;
 unit.tacticalKnowledge.threats.push({
   id: 'known-threat', labelRu: 'Угроза', mode: 'circle', x: 12, y: 4,
@@ -133,32 +159,6 @@ function runWithContext(blackboard: Record<string, unknown>, nowMs: number) {
 
 function runScheduled(): void {
   while (scheduled.length > 0) scheduled.shift()!();
-}
-
-class GraphFieldRuntime implements TacticalPositionFieldRuntime {
-  ready: PreparedAwarenessWorldSnapshot | null = null;
-  private readonly listeners = new Set<() => void>();
-  requestCalls = 0;
-  destroyed = false;
-
-  get listenerCount(): number { return this.listeners.size; }
-
-  requestWorldField(): PreparedAwarenessWorldSnapshot | null {
-    this.requestCalls += 1;
-    return this.ready;
-  }
-
-  readReadyWorldField(): PreparedAwarenessWorldSnapshot | null {
-    return this.ready;
-  }
-
-  subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-
-  emit(): void { for (const listener of this.listeners) listener(); }
-  destroy(): void { this.destroyed = true; this.listeners.clear(); this.ready = null; }
 }
 
 function prepared(unitId: string, fieldIdentity: string): PreparedAwarenessWorldSnapshot {
