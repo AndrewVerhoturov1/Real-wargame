@@ -11,11 +11,11 @@ Generated from canonical repository and subproject metadata.
 - **Stable branch:** `main`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
 - **PixiJS major:** 8
-- **Updated:** 2026-07-19
+- **Updated:** 2026-07-20
 
 ## Delivery policy
 
-- Preferred: `feature-branch-with-automatic-vercel-preview` to `real-wargame-preview`.
+- Preferred: `feature-branch-with-explicit-manual-vercel-preview` to `real-wargame-preview`.
 - Fallback: `pull-request-to-preview-when-technically-required`.
 - Changing `main` requires explicit human GO: **yes**.
 - Auto-merge allowed: **no**.
