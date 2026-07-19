@@ -7,11 +7,14 @@ import type {
   TacticalPositionCandidateSeed,
   TacticalSlopeType,
 } from '../ai/tactical/TacticalQuery';
+import {
+  createDefaultTacticalPositionSettings,
+  selectHighestSafePosture,
+  type TacticalPositionSettings,
+} from './TacticalPositionSettings';
 
 const POSTURES: readonly UnitPosture[] = ['standing', 'crouched', 'prone'];
 const DIAGONAL_COST = Math.SQRT2;
-const MIN_POSITION_IMPROVEMENT = 3;
-const MIN_DIRECTIONAL_PROTECTION = 12;
 const CANDIDATE_POOL_MULTIPLIER = 8;
 
 export interface TacticalPositionFieldView {
@@ -41,6 +44,7 @@ export interface TacticalPositionSearchRequest {
   readonly maxRouteExpansions: number;
   readonly maxCandidates: number;
   readonly minimumSeparationMeters: number;
+  readonly settings?: TacticalPositionSettings;
 }
 
 export interface TacticalPositionCandidateMetricsV2 {
@@ -111,6 +115,7 @@ export function searchTacticalPositions(
   request: TacticalPositionSearchRequest,
 ): TacticalPositionSearchResult {
   assertFieldShape(field);
+  const settings = request.settings ?? createDefaultTacticalPositionSettings();
   const maxCandidates = clampInt(request.maxCandidates, 1, 256);
   const maxSampledCells = clampInt(request.maxSampledCells, 1, 65536);
   const maxRouteExpansions = clampInt(request.maxRouteExpansions, 1, 65536);
@@ -124,7 +129,7 @@ export function searchTacticalPositions(
   }
 
   const route = buildLocalRouteField(field, originX, originY, radiusCells, maxRouteExpansions);
-  const current = evaluateBestPosture(field, originIndex, request.currentPosture);
+  const current = evaluateBestPosture(field, originIndex, request.currentPosture, settings);
   const poolLimit = Math.max(24, maxCandidates * CANDIDATE_POOL_MULTIPLIER);
   const provisional: RankedCandidate[] = [];
   let sampledCells = 0;
@@ -148,7 +153,7 @@ export function searchTacticalPositions(
       const routeIndex = localIndex(route, point.x, point.y);
       if (routeIndex < 0 || route.settled[routeIndex] !== 1) continue;
 
-      const posture = evaluateBestPosture(field, cellIndex, request.currentPosture);
+      const posture = evaluateBestPosture(field, cellIndex, request.currentPosture, settings);
       const safetyGain = posture.safety - current.safety;
       const dangerGain = current.danger - posture.danger;
       const protection = posture.protection;
@@ -156,16 +161,16 @@ export function searchTacticalPositions(
       const reverseSlope = field.reverseSlopeQuality[cellIndex] ?? 0;
       const forwardSlope = field.forwardSlopeRisk[cellIndex] ?? 0;
       if (
-        safetyGain < MIN_POSITION_IMPROVEMENT
-        && dangerGain < MIN_POSITION_IMPROVEMENT
-        && protection < MIN_DIRECTIONAL_PROTECTION
-        && reverseSlope < 30
+        safetyGain < settings.minimumPositionImprovement
+        && dangerGain < settings.minimumPositionImprovement
+        && protection < settings.minimumDirectionalProtection
+        && reverseSlope < settings.minimumReverseSlopeQuality
       ) continue;
 
       const routeSteps = Math.max(1, route.steps[routeIndex] ?? 0);
       const routeDanger = clampPercent((route.dangerSum[routeIndex] ?? 0) / routeSteps);
       const distanceMeters = Math.hypot(dx, dy) * field.metersPerCell;
-      const slopeType = classifySlope(reverseSlope, forwardSlope);
+      const slopeType = classifySlope(reverseSlope, forwardSlope, settings.minimumReverseSlopeQuality);
       const orderAlignment = request.orderTarget
         ? clampPercent(100 - distanceBetweenCellAndPoint(point.x, point.y, request.orderTarget)
           * field.metersPerCell / Math.max(1, request.searchRadiusMeters) * 100)
@@ -184,7 +189,7 @@ export function searchTacticalPositions(
           onMap: true,
           routeExists: true,
           distanceMeters,
-          blocksThreat: protection >= MIN_DIRECTIONAL_PROTECTION || posture.danger <= 5,
+          blocksThreat: protection >= settings.minimumDirectionalProtection || posture.danger <= 5,
           protection,
           concealment,
           routeDanger,
@@ -201,7 +206,7 @@ export function searchTacticalPositions(
       };
       insertRankedCandidate(provisional, {
         candidate,
-        score: candidatePreselectionScore(candidate, current.danger, reverseSlope, forwardSlope),
+        score: candidatePreselectionScore(candidate, current.danger, reverseSlope, forwardSlope, settings),
         cellIndex,
       }, poolLimit);
     }
@@ -318,21 +323,17 @@ function evaluateBestPosture(
   field: TacticalPositionFieldView,
   cellIndex: number,
   currentPosture: UnitPosture,
+  settings: TacticalPositionSettings,
 ): PostureEvaluation {
   const baseDanger = clampPercent(field.danger[cellIndex] ?? 0);
   const baseProtection = clampPercent(field.expectedProtectionAgainstThreat[cellIndex] ?? 0);
   const currentStatic = clampPercent(field.staticProtectionByPosture[currentPosture][cellIndex] ?? 0);
   const baseSafety = clampPercent(field.safety[cellIndex] ?? 0);
-  let best: PostureEvaluation = {
-    posture: currentPosture,
-    danger: baseDanger,
-    protection: baseProtection,
-    safety: baseSafety,
-  };
+  const evaluations: PostureEvaluation[] = [];
 
   for (const posture of POSTURES) {
     const staticProtection = clampPercent(field.staticProtectionByPosture[posture][cellIndex] ?? 0);
-    const postureProtectionGain = Math.max(0, staticProtection - currentStatic) * 0.6;
+    const postureProtectionGain = Math.max(0, staticProtection - currentStatic) * settings.postureProtectionGainFactor;
     const protection = combinePercent(baseProtection, postureProtectionGain);
     const baseUncovered = Math.max(0.05, 1 - baseProtection / 100);
     const nextUncovered = Math.max(0.02, 1 - protection / 100);
@@ -342,25 +343,21 @@ function evaluateBestPosture(
       1,
     );
     const danger = clampPercent(baseDanger * exposureRatio * nextUncovered / baseUncovered);
-    const transitionPenalty = posture === currentPosture ? 0 : posture === 'prone' ? 4 : 2;
+    const transitionPenalty = posture === currentPosture
+      ? 0
+      : posture === 'prone'
+        ? settings.proneTransitionPenalty
+        : settings.crouchedTransitionPenalty;
     const safety = clampPercent(
       baseSafety
-        + (baseDanger - danger) * 0.72
-        + (protection - baseProtection) * 0.25
+        + (baseDanger - danger) * settings.dangerReductionSafetyWeight
+        + (protection - baseProtection) * settings.protectionGainSafetyWeight
         - transitionPenalty,
     );
-    const candidate = { posture, danger, protection, safety };
-    if (
-      candidate.safety > best.safety
-      || (candidate.safety === best.safety && candidate.danger < best.danger)
-      || (
-        candidate.safety === best.safety
-        && candidate.danger === best.danger
-        && postureRank(candidate.posture) < postureRank(best.posture)
-      )
-    ) best = candidate;
+    evaluations.push({ posture, danger, protection, safety });
   }
-  return best;
+
+  return selectHighestSafePosture(evaluations, settings);
 }
 
 function estimateSuppression(
@@ -380,19 +377,20 @@ function candidatePreselectionScore(
   currentDanger: number,
   reverseSlope: number,
   forwardSlope: number,
+  settings: TacticalPositionSettings,
 ): number {
   const metrics = candidate.metrics;
   return roundTwo(
-    metrics.safety * 0.34
-      + (100 - metrics.danger) * 0.22
-      + metrics.protection * 0.20
-      + metrics.concealment * 0.08
-      + Math.max(0, currentDanger - metrics.danger) * 0.12
-      + reverseSlope * 0.08
-      + (100 - metrics.routeDanger) * 0.08
-      + metrics.orderAlignment * 0.04
-      - metrics.uncertainty * 0.04
-      - forwardSlope * 0.06,
+    metrics.safety * settings.safetyWeight
+      + (100 - metrics.danger) * settings.lowDangerWeight
+      + metrics.protection * settings.protectionWeight
+      + metrics.concealment * settings.concealmentWeight
+      + Math.max(0, currentDanger - metrics.danger) * settings.safetyGainWeight
+      + reverseSlope * settings.reverseSlopeWeight
+      + (100 - metrics.routeDanger) * settings.routeSafetyWeight
+      + metrics.orderAlignment * settings.orderAlignmentWeight
+      - metrics.uncertainty * settings.uncertaintyPenaltyWeight
+      - forwardSlope * settings.forwardSlopePenaltyWeight,
   );
 }
 
@@ -424,9 +422,9 @@ function sourceForCell(
   return { label: 'Safer tactical position', labelRu: 'Более безопасная тактическая позиция' };
 }
 
-function classifySlope(reverseSlope: number, forwardSlope: number): TacticalSlopeType {
-  if (reverseSlope >= Math.max(30, forwardSlope + 8)) return 'reverse';
-  if (forwardSlope >= Math.max(30, reverseSlope + 8)) return 'direct';
+function classifySlope(reverseSlope: number, forwardSlope: number, threshold: number): TacticalSlopeType {
+  if (reverseSlope >= Math.max(threshold, forwardSlope + 8)) return 'reverse';
+  if (forwardSlope >= Math.max(threshold, reverseSlope + 8)) return 'direct';
   return 'flat';
 }
 
@@ -531,10 +529,6 @@ function emptyResult(): TacticalPositionSearchResult {
       routeBudgetExhausted: false,
     },
   };
-}
-
-function postureRank(posture: UnitPosture): number {
-  return posture === 'prone' ? 0 : posture === 'crouched' ? 1 : 2;
 }
 
 function combinePercent(base: number, addition: number): number {
