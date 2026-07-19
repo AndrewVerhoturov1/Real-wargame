@@ -1,4 +1,4 @@
-name: Fix Tactical Core Patcher
+name: Diagnose Tactical Core Patcher Fix
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  fix:
+  diagnose:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,50 +20,35 @@ jobs:
           fetch-depth: 1
           show-progress: false
 
-      - name: Replace first malformed nested template block
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('.github/patches/apply-tactical-core-v2.mjs')
-          lines = path.read_text().splitlines(keepends=True)
-          needle = next(i for i, line in enumerate(lines) if '`kind:${value.kind}`' in line)
-          start = next(i for i in range(needle, -1, -1) if lines[i].strip() == 'replaceExact(')
-          end = next(i for i in range(needle, len(lines)) if lines[i].strip() == ');')
-          replacement = r'''replaceExact(
-            'src/core/tactical/TacticalPositionSearchService.ts',
-            [
-              "    `kind:${value.kind}`,",
-              "    `origin:${quantize(value.origin.x)}:${quantize(value.origin.y)}`,",
-              "    `posture:${value.currentPosture}`,",
-              "    `order:${value.orderTarget ? `${quantize(value.orderTarget.x)}:${quantize(value.orderTarget.y)}` : 'none'}`,",
-              "    `threats:${value.threatCount}:${value.tacticalKnowledgeRevision}`,",
-            ].join('\n'),
-            [
-              "    `kind:${value.kind}`,",
-              "    `objective:${value.parameters.objective}`,",
-              "    `order:${value.parameters.objective === 'continue_order' && value.orderTarget ? `${quantize(value.orderTarget.x)}:${quantize(value.orderTarget.y)}` : 'ignored'}`,",
-              "    `threat:${value.referenceThreatId ?? 'none'}:${value.referenceThreatPosition ? `${quantize(value.referenceThreatPosition.x)}:${quantize(value.referenceThreatPosition.y)}` : 'none'}`,",
-            ].join('\n'),
-          );
-          '''
-          path.write_text(''.join(lines[:start]) + replacement + ''.join(lines[end + 1:]))
-          PY
-
-      - name: Capture parser result
+      - name: Capture Python traceback
         run: |
           mkdir -p docs/debug
           set +e
-          node --check .github/patches/apply-tactical-core-v2.mjs > docs/debug/tactical-core-node-check.log 2>&1
+          python - <<'PY' > docs/debug/tactical-patcher-fixer-traceback.log 2>&1
+          from pathlib import Path
+          import traceback
+
+          try:
+              path = Path('.github/patches/apply-tactical-core-v2.mjs')
+              lines = path.read_text().splitlines(keepends=True)
+              print('line_count', len(lines))
+              matches = [i for i, line in enumerate(lines) if 'kind:${value.kind}' in line]
+              print('matches', matches)
+              needle = matches[0]
+              print('needle_line', repr(lines[needle]))
+              starts = [i for i in range(needle, -1, -1) if lines[i].strip() == 'replaceExact(']
+              ends = [i for i in range(needle, len(lines)) if lines[i].strip() == ');']
+              print('starts', starts[:3])
+              print('ends', ends[:3])
+          except Exception:
+              traceback.print_exc()
+              raise
+          PY
           status=$?
           set -e
-          echo "node_check_status=$status" >> docs/debug/tactical-core-node-check.log
-
-      - name: Commit partial repair and diagnostic
-        run: |
-          rm -f docs/debug/tactical-core-patcher.log
+          echo "status=$status" >> docs/debug/tactical-patcher-fixer-traceback.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "debug: capture remaining tactical patch syntax"
+          git add docs/debug/tactical-patcher-fixer-traceback.log
+          git commit -m "debug: capture tactical patch fixer traceback"
           git push origin HEAD:feature/20260719-tactical-position-system
