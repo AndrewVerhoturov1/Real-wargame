@@ -30,3 +30,5 @@ try {
 } finally {
   await rm(outDir, { recursive: true, force: true });
 }
+
+await import('./tactical_position_graph_runtime_smoke.mjs');
