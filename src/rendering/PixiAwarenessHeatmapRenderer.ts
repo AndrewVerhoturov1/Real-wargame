@@ -1,5 +1,4 @@
 import { BufferImageSource, Container, Sprite, Text, Texture } from 'pixi.js';
-import type { GridPosition } from '../core/geometry';
 import type { SoldierAwarenessCell } from '../core/knowledge/SoldierAwarenessGrid';
 import type { AwarenessWorkerFieldPayload } from '../core/knowledge/AwarenessWorldWorkerProtocol';
 import type { SimulationState } from '../core/simulation/SimulationState';
@@ -75,7 +74,7 @@ export class PixiAwarenessHeatmapRenderer {
   private lastBuildMs = 0;
   private maxBuildMs = 0;
 
-  constructor(private readonly runtime: AwarenessWorldRuntime) {
+  constructor(private readonly runtime: AwarenessWorldRuntime = new AwarenessWorldRuntime()) {
     this.title.position.set(8, 8);
     this.container.visible = false;
   }
@@ -123,6 +122,7 @@ export class PixiAwarenessHeatmapRenderer {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.runtime.destroy();
     this.container.removeChildren();
     this.rasterSprite?.destroy();
     this.rasterTexture?.destroy(true);
