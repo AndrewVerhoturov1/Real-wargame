@@ -4,10 +4,12 @@ import {
   createDefaultTacticalPositionSettings,
   getTacticalPositionSettings,
   getTacticalPositionSettingsDraft,
+  getTacticalPositionSettingsRevision,
   replaceTacticalPositionSettingsDraft,
   setTacticalPositionSettings,
   type TacticalPositionSettings,
 } from '../core/tactical/TacticalPositionSettings';
+import { getTacticalPositionSearchService } from '../core/tactical/TacticalPositionSearchService';
 
 export function installTacticalPositionSettingsControls(
   state: SimulationState,
@@ -84,6 +86,7 @@ export function installTacticalPositionSettingsControls(
           const selected = getSelectedUnit(state);
           if (!selected) return;
           setTacticalPositionSettings(selected, getTacticalPositionSettingsDraft(state));
+          getTacticalPositionSearchService(state)?.clearUnit(selected.id);
           state.editor.lastMessage = `Настройки тактических позиций применены к бойцу: ${selected.id}`;
           onChanged();
           render(true);
@@ -197,7 +200,7 @@ function selectedSummary(state: SimulationState): HTMLElement {
   const selected = getSelectedUnit(state);
   const block = document.createElement('div');
   block.className = 'game-editor-selected-summary';
-  block.innerHTML = `<span>Выбранный боец</span><strong>${escapeHtml(selected ? `${selected.labels.ru} · ${selected.id}` : 'не выбран')}</strong>`;
+  block.innerHTML = `<span>Выбранный боец</span><strong>${escapeHtml(selected ? `${selected.labels.ru} · ${selected.id} · revision ${getTacticalPositionSettingsRevision(selected)}` : 'не выбран')}</strong>`;
   return block;
 }
 
