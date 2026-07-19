@@ -20,32 +20,36 @@ jobs:
           fetch-depth: 1
           show-progress: false
 
-      - name: Replace nested template literals with literal line arrays
+      - name: Replace malformed nested template block
         run: |
           python - <<'PY'
           from pathlib import Path
+
           path = Path('.github/patches/apply-tactical-core-v2.mjs')
-          source = path.read_text()
-          start = source.index("replaceExact(\n  'src/core/tactical/TacticalPositionSearchService.ts',\n  `    \\`kind:${value.kind}\\`,`")
-          end = source.index("\nreplaceExact(\n  'src/core/tactical/TacticalPositionSearchService.ts',\n  `    origin: Object.freeze", start)
+          lines = path.read_text().splitlines(keepends=True)
+          needle = next(i for i, line in enumerate(lines) if '`kind:${value.kind}`' in line)
+          start = next(i for i in range(needle, -1, -1) if lines[i].strip() == 'replaceExact(')
+          end = next(i for i in range(needle, len(lines)) if lines[i].strip() == ');')
           replacement = r'''replaceExact(
             'src/core/tactical/TacticalPositionSearchService.ts',
             [
-              "    `kind:${value.kind}` ,".replace('` ,', '`,'),
-              "    `origin:${quantize(value.origin.x)}:${quantize(value.origin.y)}` ,".replace('` ,', '`,'),
-              "    `posture:${value.currentPosture}` ,".replace('` ,', '`,'),
-              "    `order:${value.orderTarget ? `${quantize(value.orderTarget.x)}:${quantize(value.orderTarget.y)}` : 'none'}` ,".replace('` ,', '`,'),
-              "    `threats:${value.threatCount}:${value.tacticalKnowledgeRevision}` ,".replace('` ,', '`,'),
-            ].join('\\n'),
+              "    `kind:${value.kind}`,",
+              "    `origin:${quantize(value.origin.x)}:${quantize(value.origin.y)}`,",
+              "    `posture:${value.currentPosture}`,",
+              "    `order:${value.orderTarget ? `${quantize(value.orderTarget.x)}:${quantize(value.orderTarget.y)}` : 'none'}`,",
+              "    `threats:${value.threatCount}:${value.tacticalKnowledgeRevision}`,",
+            ].join('\n'),
             [
-              "    `kind:${value.kind}` ,".replace('` ,', '`,'),
-              "    `objective:${value.parameters.objective}` ,".replace('` ,', '`,'),
-              "    `order:${value.parameters.objective === 'continue_order' && value.orderTarget ? `${quantize(value.orderTarget.x)}:${quantize(value.orderTarget.y)}` : 'ignored'}` ,".replace('` ,', '`,'),
-              "    `threat:${value.referenceThreatId ?? 'none'}:${value.referenceThreatPosition ? `${quantize(value.referenceThreatPosition.x)}:${quantize(value.referenceThreatPosition.y)}` : 'none'}` ,".replace('` ,', '`,'),
-            ].join('\\n'),
-          );'''
-          path.write_text(source[:start] + replacement + source[end:])
+              "    `kind:${value.kind}`,",
+              "    `objective:${value.parameters.objective}`,",
+              "    `order:${value.parameters.objective === 'continue_order' && value.orderTarget ? `${quantize(value.orderTarget.x)}:${quantize(value.orderTarget.y)}` : 'ignored'}`,",
+              "    `threat:${value.referenceThreatId ?? 'none'}:${value.referenceThreatPosition ? `${quantize(value.referenceThreatPosition.x)}:${quantize(value.referenceThreatPosition.y)}` : 'none'}`,",
+            ].join('\n'),
+          );
+          '''
+          path.write_text(''.join(lines[:start]) + replacement + ''.join(lines[end + 1:]))
           PY
+          node --check .github/patches/apply-tactical-core-v2.mjs
 
       - name: Commit patcher fix
         run: |
