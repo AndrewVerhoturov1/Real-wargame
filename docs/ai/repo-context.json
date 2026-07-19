@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "project": {
     "name": "Real-Wargame",
     "repository": "AndrewVerhoturov1/Real-wargame",
@@ -15,6 +15,16 @@
     "viteMajor": 5,
     "typescriptMajor": 5,
     "pixiJsMajor": 8
+  },
+  "architecture": {
+    "longTermEngineTarget": "Unreal Engine 5/6",
+    "browserPrototypeRole": "executable-reference-implementation",
+    "engineMigrationReadinessPolicy": "docs/architecture/ENGINE_MIGRATION_READINESS.md",
+    "parallelUnrealPortAllowedWithoutSeparateUserTask": false,
+    "coreMustBePlatformIndependent": true,
+    "renderersAreNonAuthoritative": true,
+    "versionedSerializableContractsRequired": true,
+    "deterministicHeadlessFixturesRequiredForMajorMechanics": true
   },
   "communication": {
     "userLanguage": "ru",
@@ -69,6 +79,7 @@
   "agentEntryPoints": [
     "AGENTS.md",
     "docs/ai/WEB_CHAT_START.md",
+    "docs/architecture/ENGINE_MIGRATION_READINESS.md",
     "docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md",
     "docs/subprojects/index.json"
   ],
