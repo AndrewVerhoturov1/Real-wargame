@@ -9,10 +9,8 @@ import { createPlayerMoveCommand, updatePlayerCommandStatus } from '../orders/Pl
 import { createTacticalOrderIntent, withTacticalOrderNavigationProfile } from '../orders/TacticalOrderIntent';
 import { clearAttentionOverride } from '../perception/AttentionController';
 import { getBestPerceptionContact } from '../perception/PerceptionSystem';
-import { getPressureReportAtPosition } from '../pressure/PressureZone';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
-import { registerTacticalPositionOccupation } from './TacticalPositionOccupation';
 import { getTacticalPositionSettings } from './TacticalPositionSettings';
 
 export function issueTacticalPositionMoveOrderToSelectedUnit(
@@ -26,6 +24,8 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
   if (!unit) return false;
 
   const target = clampGridPositionToMap(state.map, rawTarget);
+  const finalFacingRadians = resolveThreatFacingAtPosition(unit, target);
+  const approachPosture = resolveApproachPosture(unit, arrivalPosture);
   const intent = withTacticalOrderNavigationProfile(
     createTacticalOrderIntent('move'),
     unit.playerNavigationProfileId ?? 'normal',
@@ -37,8 +37,9 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
     Date.now(),
     intent,
     null,
-    null,
+    finalFacingRadians,
     arrivalPosture,
+    approachPosture,
   );
 
   unit.playerCommand = command;
@@ -79,20 +80,12 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
     return false;
   }
 
-  const finalFacingRadians = resolveThreatFacingAtPosition(unit, target);
-  const approachPosture = resolveApproachPosture(unit, arrivalPosture);
-  if (finalFacingRadians !== null) planned.order.finalFacingRadians = finalFacingRadians;
-  registerTacticalPositionOccupation(
-    unit,
-    command.id,
-    arrivalPosture,
-    finalFacingRadians,
-    approachPosture,
-  );
-
+  if (typeof command.finalFacingRadians === 'number') {
+    planned.order.finalFacingRadians = command.finalFacingRadians;
+  }
   unit.order = planned.order;
   unit.plan = createDirectPlayerMovePlan(unit.plan, command, planned.order.target);
-  applyPressurePreview(state, unit, planned.order.target, approachPosture);
+  applyApproachPosture(unit, approachPosture);
   unit.behaviorRuntime.lastEvent = 'tactical_position_order_received';
   unit.behaviorRuntime.reason = finalFacingRadians === null
     ? `Боец направлен на тактическую позицию; после прибытия: ${postureLabel(arrivalPosture)}.`
@@ -108,13 +101,7 @@ function resolveApproachPosture(unit: UnitModel, arrivalPosture: UnitPosture): U
     : 'standing';
 }
 
-function applyPressurePreview(
-  state: SimulationState,
-  unit: UnitModel,
-  target: GridPosition,
-  movementPosture: UnitPosture,
-): void {
-  const report = getPressureReportAtPosition(target, state.pressureZones);
+function applyApproachPosture(unit: UnitModel, movementPosture: UnitPosture): void {
   if (unit.behaviorRuntime.posture !== movementPosture) {
     unit.behaviorRuntime.previousPosture = unit.behaviorRuntime.posture;
     unit.behaviorRuntime.posture = movementPosture;
@@ -122,16 +109,8 @@ function applyPressurePreview(
   }
   unit.behaviorRuntime.state = 'moving';
   unit.behaviorRuntime.currentAction = 'move';
-
-  if (!report) {
-    unit.behaviorRuntime.danger = 0;
-    unit.behaviorRuntime.reason = 'move_target_clear';
-    return;
-  }
-
-  unit.behaviorRuntime.rawDanger = report.rawPressure;
-  unit.behaviorRuntime.danger = Math.round(report.rawPressure);
-  unit.behaviorRuntime.reason = `move_target_pressure:${report.zone.id}`;
+  // Canonical danger remains owned by the normal threat/perception/suppression update.
+  // Issuing a movement command must not synthesize a safe or dangerous state.
 }
 
 function resolveThreatFacingAtPosition(unit: UnitModel, position: GridPosition): number | null {
