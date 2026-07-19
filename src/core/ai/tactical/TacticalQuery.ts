@@ -3,6 +3,7 @@ import type { GridPosition } from '../../geometry';
 
 export type TacticalQueryKind = 'cover';
 export type TacticalQueryStatus = 'generated' | 'filtered' | 'scored' | 'selected' | 'stopped';
+export type TacticalQueryGenerationStatus = 'queued' | 'calculating' | 'ready' | 'stale' | 'cancelled' | 'failed';
 export type TacticalSlopeType = 'direct' | 'reverse' | 'flat';
 export type TacticalQueryStopReasonCode =
   | 'max_candidates'
@@ -88,10 +89,14 @@ export interface TacticalQuery {
   readonly elapsedMs: number;
   readonly stopReason?: TacticalQueryStopReason;
   readonly winnerCandidateId?: string;
+  readonly searchRequestId?: string;
+  readonly searchRequestStatus?: TacticalQueryGenerationStatus;
 }
 
 export interface TacticalQueryGenerationRequest extends TacticalQueryBudget {
   readonly unitId: string;
+  readonly queryKey: string;
+  readonly requestId?: string;
   readonly blackboard: Readonly<Record<string, unknown>>;
 }
 
@@ -99,6 +104,8 @@ export interface TacticalQueryGenerationResult {
   readonly candidates: readonly TacticalPositionCandidateSeed[];
   readonly elapsedMs: number;
   readonly stopReason?: TacticalQueryStopReason;
+  readonly requestId?: string;
+  readonly requestStatus?: TacticalQueryGenerationStatus;
 }
 
 export interface TacticalQueryFilterOptions {
@@ -149,6 +156,8 @@ export function createTacticalQuery(
     candidates: limited.map(seedToCandidate),
     elapsedMs: round(Math.max(0, generation.elapsedMs)),
     stopReason,
+    searchRequestId: generation.requestId,
+    searchRequestStatus: generation.requestStatus,
   };
 }
 
