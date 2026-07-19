@@ -2,6 +2,7 @@ import type {
   TacticalQueryGenerationRequest,
   TacticalQueryGenerationResult,
 } from '../ai/tactical/TacticalQuery';
+import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
 
 /**
@@ -14,4 +15,23 @@ export interface TacticalPositionProvider {
     unit: UnitModel,
     request: TacticalQueryGenerationRequest,
   ): TacticalQueryGenerationResult;
+}
+
+const providerByState = new WeakMap<SimulationState, TacticalPositionProvider>();
+
+export function installTacticalPositionProvider(
+  state: SimulationState,
+  provider: TacticalPositionProvider,
+): void {
+  providerByState.set(state, provider);
+}
+
+export function getTacticalPositionProvider(
+  state: SimulationState,
+): TacticalPositionProvider | null {
+  return providerByState.get(state) ?? null;
+}
+
+export function clearTacticalPositionProvider(state: SimulationState): void {
+  providerByState.delete(state);
 }
