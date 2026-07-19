@@ -79,25 +79,3 @@ jobs:
           git add -A
           git commit -m "deploy: tactical positions ${SOURCE_SHA}"
           git push --force origin HEAD:gh-pages
-
-      - name: Configure Pages to publish gh-pages root
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPOSITORY: ${{ github.repository }}
-        run: |
-          response_file="$(mktemp)"
-          status_code="$(curl --silent --show-error --location \
-            --output "$response_file" \
-            --write-out '%{http_code}' \
-            --request PUT \
-            --header 'Accept: application/vnd.github+json' \
-            --header "Authorization: Bearer ${GH_TOKEN}" \
-            --header 'X-GitHub-Api-Version: 2022-11-28' \
-            "https://api.github.com/repos/${GH_REPOSITORY}/pages" \
-            --data '{"build_type":"legacy","source":{"branch":"gh-pages","path":"/"}}')"
-          if [ "$status_code" != "204" ]; then
-            echo "Unable to select gh-pages as the Pages source. HTTP ${status_code}:"
-            cat "$response_file"
-            exit 1
-          fi
-          echo "GitHub Pages source configured: gh-pages /"
