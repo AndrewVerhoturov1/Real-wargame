@@ -18,10 +18,8 @@ import {
 } from '../core/pressure/PressureZone';
 import { replaceSceneAtRuntimeResolution } from '../core/simulation/ResolutionAwareScene';
 import type { SimulationState } from '../core/simulation/SimulationState';
-import {
-  cloneTacticalPositionSettings,
-  getTacticalPositionSettings,
-} from '../core/tactical/TacticalPositionSettings';
+import { getTacticalPositionSearchService } from '../core/tactical/TacticalPositionSearchService';
+import { serializeTacticalPositionSettings } from '../core/tactical/TacticalPositionSettings';
 import { refreshAiTestLabSceneSnapshot } from '../core/testing/AiTestLabRuntime';
 import { getEnvironmentProfileRegistry, saveEnvironmentProfileRegistry } from './EnvironmentProfileStorage';
 import type { UnitData, UnitModel } from '../core/units/UnitModel';
@@ -69,6 +67,8 @@ export async function loadSceneJsonFromFile(state: SimulationState, file: File):
     environmentRegistry.setActiveProfile(requestedEnvironmentProfileId);
   }
   saveEnvironmentProfileRegistry(environmentRegistry);
+  const tacticalPositionSearchService = getTacticalPositionSearchService(state);
+  for (const unit of state.units) tacticalPositionSearchService?.clearUnit(unit.id);
   replaceSceneAtRuntimeResolution(state, scene.map, scene.units, scene.pressureZones);
   state.movementProfiles = createMovementProfileRegistry(scene.movementProfiles);
   saveMovementProfileRegistry(state.movementProfiles);
@@ -271,7 +271,7 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
       nearAwarenessRangeMeters: unit.attentionSettings.nearAwarenessRangeMeters,
       nearMinimumVisibilityQuality: unit.attentionSettings.nearMinimumVisibilityQuality,
     },
-    tacticalPositionSettings: cloneTacticalPositionSettings(getTacticalPositionSettings(unit)),
+    tacticalPositionSettings: serializeTacticalPositionSettings(unit),
     initialState: { ...unit.initialState },
     tacticalKnowledge: JSON.parse(JSON.stringify(unit.tacticalKnowledge)),
     perceptionKnowledge: JSON.parse(JSON.stringify(unit.perceptionKnowledge)),
