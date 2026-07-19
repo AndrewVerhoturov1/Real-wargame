@@ -1,5 +1,22 @@
 import type { SimulationState } from '../core/simulation/SimulationState';
+import { getTacticalPositionPresentation } from '../core/tactical/SimulationTacticalPositionSelection';
+import {
+  readTacticalPositionObjectiveMetrics,
+  tacticalPositionObjectiveLabelRu,
+  type TacticalPositionSearchObjective,
+} from '../core/tactical/TacticalPositionObjective';
 import { getTacticalPositionSearchService } from '../core/tactical/TacticalPositionSearchService';
+import {
+  isTacticalPositionWorkspaceTabActive,
+  subscribeTacticalPositionWorkspaceTab,
+} from './TacticalPositionWorkspaceTab';
+
+const OBJECTIVES: readonly TacticalPositionSearchObjective[] = [
+  'balanced',
+  'advance_to_threat',
+  'withdraw_from_threat',
+  'continue_order',
+];
 
 export function installTacticalPositionSearchControls(
   state: SimulationState,
@@ -7,13 +24,32 @@ export function installTacticalPositionSearchControls(
 ): () => void {
   const service = getTacticalPositionSearchService(state);
   let destroyed = false;
-  let scheduled = false;
   let section: HTMLElement | null = null;
   let status: HTMLElement | null = null;
+  let diagnostics: HTMLElement | null = null;
+  let objectiveSelect: HTMLSelectElement | null = null;
+  let selectedObjective: TacticalPositionSearchObjective = 'balanced';
+
+  const unmount = (): void => {
+    section?.remove();
+    section = null;
+    status = null;
+    diagnostics = null;
+    objectiveSelect = null;
+  };
+
+  const render = (): void => {
+    if (destroyed) return;
+    if (!isTacticalPositionWorkspaceTabActive(state)) {
+      unmount();
+      return;
+    }
+    ensureMounted();
+    renderStatus();
+    renderDiagnostics();
+  };
 
   const renderStatus = (): void => {
-    if (destroyed) return;
-    ensureMounted();
     if (!status) return;
     const unitId = state.selectedUnitId;
     if (!unitId) {
@@ -27,40 +63,75 @@ export function installTacticalPositionSearchControls(
       status.dataset.state = 'idle';
       return;
     }
+    selectedObjective = request.objective;
+    if (objectiveSelect) objectiveSelect.value = request.objective;
     status.dataset.state = request.status;
     if (request.status === 'queued') status.textContent = 'Запрос создан.';
-    else if (request.status === 'calculating' && request.reasonCode === 'field_preparing') status.textContent = 'Поле готовится…';
-    else if (request.status === 'calculating') status.textContent = 'Поиск выполняется…';
+    else if (request.status === 'calculating' && request.reasonCode === 'field_preparing') {
+      status.textContent = 'Подготавливается тактическое поле… Боец может продолжать движение.';
+    } else if (request.status === 'calculating') status.textContent = 'Поиск выполняется…';
     else if (request.status === 'ready' && (request.result?.candidates.length ?? 0) > 0) {
-      status.textContent = `Поиск выполнен: ${request.result!.candidates.length} позиций.`;
-    } else if (request.status === 'ready') status.textContent = 'Позиции не найдены.';
-    else if (request.status === 'stale') status.textContent = 'Результат устарел. Создайте новый запрос.';
+      status.textContent = `Найдено позиций: ${request.result!.candidates.length}. Цель: ${tacticalPositionObjectiveLabelRu(request.objective)}.`;
+    } else if (request.status === 'ready') status.textContent = 'Подходящие позиции не найдены.';
+    else if (request.status === 'stale') status.textContent = 'Запрос устарел из-за изменения приказа или настроек.';
     else if (request.status === 'cancelled') status.textContent = 'Запрос отменён.';
     else status.textContent = `Ошибка: ${request.reasonRu ?? 'поиск не выполнен'}`;
   };
 
-  const scheduleRender = (): void => {
-    if (scheduled || destroyed) return;
-    scheduled = true;
-    window.requestAnimationFrame(() => {
-      scheduled = false;
-      renderStatus();
-    });
+  const renderDiagnostics = (): void => {
+    if (!diagnostics) return;
+    const presentation = getTacticalPositionPresentation(state);
+    const unitId = state.selectedUnitId;
+    const request = unitId ? service?.readLatestForUnit(unitId) : null;
+    const candidate = presentation.selected
+      ?? presentation.hovered
+      ?? request?.result?.candidates[0]
+      ?? null;
+    if (!candidate) {
+      diagnostics.innerHTML = '<span>После поиска выберите ромб, чтобы увидеть числовые показатели.</span>';
+      return;
+    }
+    const objective = readTacticalPositionObjectiveMetrics(candidate);
+    diagnostics.innerHTML = [
+      metric('Поза', postureLabel(candidate.metrics.recommendedPosture)),
+      metric('До угрозы', meters(objective.distanceToThreatMeters)),
+      metric('Изменение дистанции', signedMeters(objective.threatDistanceDeltaMeters)),
+      metric('До точки приказа', meters(objective.distanceToOrderTargetMeters)),
+      metric('Соответствие цели', `${Math.round(objective.objectiveAlignment)} / 100`),
+      metric('Безопасность', `${Math.round((candidate.metrics as { safety?: number }).safety ?? 0)} / 100`),
+      metric('Защита', `${Math.round(candidate.metrics.protection)} / 100`),
+    ].join('');
   };
 
   const ensureMounted = (): void => {
     if (section?.isConnected) return;
-    const shell = document.querySelector<HTMLElement>('.tactical-workspace-shell');
-    const sidebarBody = shell?.querySelector<HTMLElement>('[data-role="sidebar-body"]');
-    if (!sidebarBody) return;
+    const host = document.querySelector<HTMLElement>('[data-role="tactical-position-tab-body"]');
+    if (!host) return;
 
     section = document.createElement('section');
     section.className = 'workspace-panel-section tactical-position-search-controls';
     section.dataset.role = 'tactical-position-search-controls';
+
     const title = document.createElement('h3');
     title.textContent = 'Поиск тактических позиций';
     const description = document.createElement('p');
-    description.textContent = 'Поиск и движение — разные действия. Команда только создаёт bounded-запрос для выбранного бойца.';
+    description.textContent = 'Поиск не отменяет текущий маршрут. После расчёта выберите ромб левой кнопкой или отправьте бойца правой.';
+
+    const objectiveLabel = document.createElement('label');
+    objectiveLabel.className = 'tactical-position-objective-field';
+    const objectiveCaption = document.createElement('span');
+    objectiveCaption.textContent = 'Цель поиска';
+    objectiveSelect = document.createElement('select');
+    objectiveSelect.dataset.role = 'tactical-position-objective';
+    objectiveSelect.innerHTML = OBJECTIVES.map((objective) => (
+      `<option value="${objective}">${escapeHtml(tacticalPositionObjectiveLabelRu(objective))}</option>`
+    )).join('');
+    objectiveSelect.value = selectedObjective;
+    objectiveSelect.addEventListener('change', () => {
+      selectedObjective = objectiveSelect?.value as TacticalPositionSearchObjective;
+    });
+    objectiveLabel.append(objectiveCaption, objectiveSelect);
+
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'primary';
@@ -73,32 +144,69 @@ export function installTacticalPositionSearchControls(
         renderStatus();
         return;
       }
-      const request = service.enqueueCoverSearch(unit);
-      state.editor.lastMessage = `Запрос тактических позиций создан: ${request.requestId}`;
+      const request = service.enqueueCoverSearch(unit, { objective: selectedObjective });
+      state.editor.lastMessage = `Запрос создан: ${tacticalPositionObjectiveLabelRu(request.objective)}.`;
       renderStatus();
       onChanged();
     });
+
     status = document.createElement('p');
     status.className = 'tactical-position-search-status';
     status.dataset.role = 'tactical-position-search-status';
-    section.append(title, description, button, status);
-    sidebarBody.prepend(section);
+
+    const legend = document.createElement('p');
+    legend.className = 'tactical-position-search-legend';
+    legend.textContent = 'Ромб: вертикаль — стоя, угол — пригнувшись, горизонталь — лёжа. Отрицательная дельта означает продвижение к угрозе, положительная — отход.';
+
+    diagnostics = document.createElement('div');
+    diagnostics.className = 'workspace-info-grid tactical-position-metrics';
+    diagnostics.dataset.role = 'tactical-position-metrics';
+
+    section.append(title, description, objectiveLabel, button, status, legend, diagnostics);
+    host.replaceChildren(section);
   };
 
-  const unsubscribe = service?.subscribe(() => {
-    renderStatus();
+  const unsubscribeService = service?.subscribe(() => {
+    render();
     onChanged();
   }) ?? (() => undefined);
-  const observer = new MutationObserver(scheduleRender);
-  observer.observe(document.body, { childList: true, subtree: true });
-  renderStatus();
+  const unsubscribeTab = subscribeTacticalPositionWorkspaceTab(render);
+  const selectionRefresh = window.setInterval(() => {
+    if (!document.hidden && isTacticalPositionWorkspaceTabActive(state)) renderDiagnostics();
+  }, 300);
+  render();
 
   return () => {
     destroyed = true;
-    observer.disconnect();
-    unsubscribe();
-    section?.remove();
-    section = null;
-    status = null;
+    window.clearInterval(selectionRefresh);
+    unsubscribeTab();
+    unsubscribeService();
+    unmount();
   };
+}
+
+function metric(label: string, value: string): string {
+  return `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+}
+
+function postureLabel(value: unknown): string {
+  if (value === 'prone') return 'лёжа';
+  if (value === 'crouched') return 'пригнувшись';
+  return 'стоя';
+}
+
+function meters(value: number | null): string {
+  return value === null ? '—' : `${value.toFixed(1)} м`;
+}
+
+function signedMeters(value: number | null): string {
+  if (value === null) return '—';
+  const prefix = value > 0 ? '+' : '';
+  return `${prefix}${value.toFixed(1)} м`;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[character] ?? character));
 }
