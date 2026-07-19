@@ -7,10 +7,7 @@ import {
   clearTacticalPositionProvider,
   installTacticalPositionProvider,
 } from '../core/tactical/TacticalPositionProvider';
-import {
-  getTacticalPositionSettings,
-  tacticalPositionSettingsCacheNudge,
-} from '../core/tactical/TacticalPositionSettings';
+import { getTacticalPositionSettings } from '../core/tactical/TacticalPositionSettings';
 import type { AwarenessWorldRuntime } from './AwarenessWorldRuntime';
 
 const MAX_LOCAL_SAMPLE_CELLS = 4096;
@@ -21,6 +18,7 @@ const DEFAULT_MINIMUM_SEPARATION_METERS = 4;
 
 const installedRuntimeByState = new WeakMap<SimulationState, AwarenessWorldRuntime>();
 
+/** @deprecated Replaced by the simulation-owned TacticalPositionSearchService. */
 export function ensureAwarenessTacticalPositionProvider(
   state: SimulationState,
   runtime: AwarenessWorldRuntime,
@@ -32,6 +30,7 @@ export function ensureAwarenessTacticalPositionProvider(
   });
 }
 
+/** @deprecated Replaced by the simulation-owned TacticalPositionSearchService. */
 export function releaseAwarenessTacticalPositionProvider(
   state: SimulationState,
   runtime: AwarenessWorldRuntime,
@@ -62,22 +61,15 @@ function generateFromAwarenessRuntime(
     MIN_LOCAL_WORK_CELLS,
     Math.floor(request.maxCandidates) * CELLS_PER_REQUESTED_CANDIDATE,
   );
-  const maxSampledCells = Math.max(
-    1,
-    Math.min(MAX_LOCAL_SAMPLE_CELLS, localAreaUpperBound, requestedWork),
-  );
-  const maxRouteExpansions = Math.max(
-    1,
-    Math.min(MAX_LOCAL_ROUTE_EXPANSIONS, localAreaUpperBound, requestedWork),
-  );
-  const settings = getTacticalPositionSettings(unit);
+  const maxSampledCells = Math.max(1, Math.min(MAX_LOCAL_SAMPLE_CELLS, localAreaUpperBound, requestedWork));
+  const maxRouteExpansions = Math.max(1, Math.min(MAX_LOCAL_ROUTE_EXPANSIONS, localAreaUpperBound, requestedWork));
   const snapshot = runtime.requestTacticalPositions(state, unit, {
     searchRadiusMeters: request.searchRadiusMeters,
     maxSampledCells,
     maxRouteExpansions,
     maxCandidates: request.maxCandidates,
-    minimumSeparationMeters: DEFAULT_MINIMUM_SEPARATION_METERS + tacticalPositionSettingsCacheNudge(unit),
-    settings,
+    minimumSeparationMeters: DEFAULT_MINIMUM_SEPARATION_METERS,
+    settings: getTacticalPositionSettings(unit),
   });
 
   if (!snapshot) {
@@ -113,9 +105,5 @@ function stopped(
   reason: string,
   reasonRu: string,
 ): TacticalQueryGenerationResult {
-  return {
-    candidates: [],
-    elapsedMs: 0,
-    stopReason: { code, reason, reasonRu },
-  };
+  return { candidates: [], elapsedMs: 0, stopReason: { code, reason, reasonRu } };
 }
