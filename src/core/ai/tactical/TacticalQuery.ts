@@ -1,3 +1,4 @@
+import type { UnitPosture } from '../../behavior/BehaviorModel';
 import type { GridPosition } from '../../geometry';
 
 export type TacticalQueryKind = 'cover';
@@ -45,6 +46,8 @@ export interface TacticalCandidateMetrics {
   readonly routeDanger: number;
   readonly slopeType: TacticalSlopeType;
   readonly orderAlignment: number;
+  /** Position meaning is incomplete without the posture required to use it. */
+  readonly recommendedPosture?: UnitPosture;
 }
 
 export interface TacticalPositionCandidateSeed {
