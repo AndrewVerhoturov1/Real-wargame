@@ -6,6 +6,12 @@ on:
       - feature/20260719-tactical-position-system
     paths:
       - '.github/workflows/deploy-tactical-position-pages.yml'
+      - 'src/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'index.html'
+      - 'ai-node-editor.html'
   workflow_dispatch:
 
 permissions:
@@ -62,13 +68,14 @@ jobs:
           } > pages-build.log 2>&1
           status=$?
           if [ "$status" -ne 0 ]; then
-            echo "Pages build failed. Last 220 log lines:"
-            tail -n 220 pages-build.log
+            echo "Pages verification failed. Last 260 log lines:"
+            tail -n 260 pages-build.log
             exit "$status"
           fi
-          tail -n 100 pages-build.log
+          tail -n 120 pages-build.log
 
       - name: Publish complete build to gh-pages branch
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           SOURCE_SHA: ${{ github.sha }}
         run: |
