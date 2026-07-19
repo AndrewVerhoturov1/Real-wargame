@@ -49,7 +49,7 @@ export class PixiTacticalBoardApp {
   private readonly fixedScaleLabel = document.createElement('div');
   private readonly performanceMonitor = new PerformanceMonitor();
   private locale: Locale = 'en';
-  private showGrid = true;
+  private showGrid = false;
   private showViewCones = false;
   private showHeightLabels = false;
   private lastMapRenderKey = '';
