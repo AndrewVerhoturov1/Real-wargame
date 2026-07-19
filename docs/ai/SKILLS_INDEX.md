@@ -19,24 +19,41 @@ The user does not need to name a skill. Route by intent and current environment 
 |---|---|---|
 | Real-Wargame performance contract | `.agents/skills/real-wargame-performance/SKILL.md` | Mandatory for simulation, AI, perception, navigation, tactical fields, map data, rendering, recurring UI, workers, queues, caches, revisions, lifecycle, diagnostics or browser-performance gates. |
 | Real-Wargame local preview | `.agents/skills/real-wargame-local-preview/SKILL.md` | Visual-QA preparation, terminal-free local launch, or approved visual verification when the current Web Chat can directly control a real browser against the target. |
-| Real-Wargame manual Vercel deploy | `.agents/skills/real-wargame-manual-vercel-deploy/SKILL.md` | **Mandatory** when the user explicitly asks to deploy, redeploy, create/update a Vercel Preview or check a manual deployment. |
+| Real-Wargame manual Vercel deploy | `.agents/skills/real-wargame-manual-vercel-deploy/SKILL.md` | **Mandatory** when the user explicitly asks to deploy, redeploy, create/update a Vercel Preview or check a manual Vercel deployment. |
+| Real-Wargame GitHub Pages deploy | `.agents/skills/real-wargame-github-pages-deploy/SKILL.md` | **Mandatory** when the user explicitly asks to deploy, publish, redeploy or update a branch on GitHub Pages / Pages / «пайдж». |
 | Vercel deployment Playwright E2E | `.agents/skills/vercel-deployment-playwright-e2e/SKILL.md` | **Mandatory automatically** when the user requests visual, screenshot, browser or Playwright verification of an already deployed Vercel Preview and the current Web Chat cannot directly control a real browser against that URL. |
 | Real-Wargame PixiJS 8 guide | `.agents/skills/real-wargame-pixijs/SKILL.md` | Any PixiJS, canvas, renderer, camera, pointer event, visual layer or rendering-performance task. Read before general PixiJS skills. |
 | Real-Wargame AI Runtime | `.agents/skills/real-wargame-ai-runtime/SKILL.md` | Soldier AI graph, Utility scoring, Blackboard, Runtime, lifecycle, cancellation, Bridge, AI Dictionary, node authoring or live trace. |
 
 ## Mandatory deployment routing
 
-Git automatic deployments are disabled. A push never authorizes or triggers Vercel.
+Git automatic Vercel deployments are disabled. A push never authorizes or triggers Vercel.
 
 The following intent loads `real-wargame-manual-vercel-deploy`:
 
 ```text
-деплой
-задеплой
+деплой на Vercel
+задеплой на Vercel
 создай Preview
 обнови Preview
-задеплой эту ветку
-проверь почему ручной деплой упал
+проверь почему ручной Vercel-деплой упал
+```
+
+The following intent loads `real-wargame-github-pages-deploy`:
+
+```text
+задеплой на GitHub Pages
+задеплой на Pages
+задеплой на пайдж
+обнови деплой на пайдж
+опубликуй эту ветку на GitHub Pages
+```
+
+For GitHub Pages, the game and AI Node Editor are inseparable deployment targets. Success requires both:
+
+```text
+https://andrewverhoturov1.github.io/Real-wargame/
+https://andrewverhoturov1.github.io/Real-wargame/ai-node-editor.html
 ```
 
 Implementation, commit, push, transfer and merge requests do not imply deployment unless the user explicitly includes deployment.
@@ -67,7 +84,8 @@ Visual verification permission is not deployment permission, and deployment perm
 
 | User task | Skills |
 |---|---|
-| Deploy or redeploy exact branch HEAD | `real-wargame-manual-vercel-deploy` mandatory |
+| Deploy or redeploy exact branch HEAD to Vercel | `real-wargame-manual-vercel-deploy` mandatory |
+| Deploy or update exact branch HEAD on GitHub Pages | `real-wargame-github-pages-deploy` mandatory |
 | Run or show the local game | `real-wargame-local-preview` |
 | Visually verify deployed Vercel Preview with direct browser available | `real-wargame-local-preview` |
 | Visually verify deployed Vercel Preview without direct browser | `vercel-deployment-playwright-e2e` mandatory |
@@ -79,7 +97,7 @@ Visual verification permission is not deployment permission, and deployment perm
 | Change AI Node Editor controls | `real-wargame-performance` when recurring/runtime work changes, then `real-wargame-ai-runtime` |
 | Change documentation/navigation | no domain skill; use canonical JSON and `npm run docs:sync` |
 
-## Manual deployment invariants
+## Vercel deployment invariants
 
 When `real-wargame-manual-vercel-deploy` is selected:
 
@@ -91,6 +109,20 @@ When `real-wargame-manual-vercel-deploy` is selected:
 - verify status `READY` and both required pages;
 - report deployed branch, commit and identity proof or `unproven`;
 - do not deploy `main` without separate explicit approval.
+
+## GitHub Pages deployment invariants
+
+When `real-wargame-github-pages-deploy` is selected:
+
+- resolve exact remote feature-branch HEAD before deployment;
+- build with base path `/Real-wargame/`;
+- require TypeScript, tactical-position, tactical-query, workspace, AI editor and deployment-page checks;
+- publish the complete `dist` directory to `gh-pages`;
+- confirm the system `pages build and deployment` workflow succeeds;
+- verify both the game and `ai-node-editor.html`;
+- never report success after checking only the game;
+- do not use Vercel for a GitHub Pages request;
+- do not modify `main` or `real-wargame-preview` without separate permission.
 
 ## Deployed-Vercel visual invariants
 
