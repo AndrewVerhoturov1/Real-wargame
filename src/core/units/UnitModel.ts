@@ -56,8 +56,10 @@ import {
 } from '../perception/PerceptionContact';
 import type { PressureZoneMode } from '../pressure/PressureZone';
 import {
-  setTacticalPositionSettings,
+  createDefaultTacticalPositionSettings,
+  initializeTacticalPositionSettings,
   type TacticalPositionSettings,
+  type TacticalPositionSettingsInput,
 } from '../tactical/TacticalPositionSettings';
 
 export type UnitSide = 'blue' | 'red';
@@ -130,7 +132,7 @@ export interface UnitData {
   soldier?: SoldierParameterOverrides;
   attention?: UnitAttentionSettingsInput;
   attentionProfileId?: string;
-  tacticalPositionSettings?: Partial<TacticalPositionSettings>;
+  tacticalPositionSettings?: TacticalPositionSettingsInput;
   initialState?: Partial<UnitInitialState>;
   tacticalKnowledge?: Partial<UnitTacticalKnowledge>;
   perceptionKnowledge?: Partial<UnitPerceptionKnowledge>;
@@ -168,6 +170,8 @@ export interface UnitModel {
   attentionSettings: UnitAttentionSettings;
   attentionRuntime: AttentionRuntimeState;
   playerAttentionProfileId?: string | null;
+  tacticalPositionSettings: TacticalPositionSettings;
+  tacticalPositionSettingsRevision: number;
   initialState: UnitInitialState;
   tacticalKnowledge: UnitTacticalKnowledge;
   perceptionKnowledge: UnitPerceptionKnowledge;
@@ -243,6 +247,8 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
       attentionSettings,
       attentionRuntime: createAttentionRuntime(attentionSettings, facingRadians),
       playerAttentionProfileId: unit.attentionProfileId ?? null,
+      tacticalPositionSettings: createDefaultTacticalPositionSettings(),
+      tacticalPositionSettingsRevision: 0,
       initialState,
       tacticalKnowledge: unit.tacticalKnowledge
         ? normalizeTacticalKnowledge(unit.tacticalKnowledge, scale)
@@ -262,7 +268,7 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
         ? requestedMovementProfileId
         : null,
     };
-    setTacticalPositionSettings(model, unit.tacticalPositionSettings ?? {});
+    initializeTacticalPositionSettings(model, unit.tacticalPositionSettings);
     applyInitialStateToRuntime(model, false);
     model.movementRuntime = createMovementRuntime(
       rawMovementProfileId,
