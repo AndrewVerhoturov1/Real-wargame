@@ -2,10 +2,6 @@ import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import type { MapObject } from '../map/MapModel';
 import type { EnvironmentMaterialProfile } from '../map/EnvironmentMaterialProfile';
-import type {
-  TacticalPositionCandidateSeedV2,
-  TacticalPositionSearchDiagnostics,
-} from '../tactical/TacticalPositionSearch';
 import type { CanonicalWorldThreatSnapshot } from './CanonicalWorldThreat';
 
 export interface AwarenessWorkerMapSnapshot {
@@ -27,14 +23,6 @@ export interface AwarenessWorkerMapSnapshot {
   readonly objects: MapObject[];
 }
 
-export interface AwarenessWorkerTacticalSearchBudget {
-  readonly searchRadiusMeters: number;
-  readonly maxSampledCells: number;
-  readonly maxRouteExpansions: number;
-  readonly maxCandidates: number;
-  readonly minimumSeparationMeters: number;
-}
-
 export interface AwarenessWorkerBuildSnapshot {
   readonly jobId: number;
   readonly rasterKey: string;
@@ -43,15 +31,15 @@ export interface AwarenessWorkerBuildSnapshot {
   readonly unitId: string;
   readonly posture: UnitPosture;
   /**
-   * The local origin is not part of canonical danger-raster identity. It is used
-   * only by the bounded tactical-position extractor and current-cell diagnostics.
+   * Compatibility origin is intentionally excluded from canonical world-field
+   * identity. Local tactical-position searches consume the transferred fields
+   * without asking the worker to rescan the world when the soldier moves.
    */
   readonly compatibilityOrigin: GridPosition;
   readonly threats: readonly CanonicalWorldThreatSnapshot[];
   readonly knowledgeRevision: number;
   readonly orderTarget: GridPosition | null;
   readonly finalExact: boolean;
-  readonly tacticalSearch?: AwarenessWorkerTacticalSearchBudget;
 }
 
 export type AwarenessWorkerRequest =
@@ -61,6 +49,9 @@ export type AwarenessWorkerRequest =
 export interface AwarenessWorkerFieldPayload {
   readonly width: number;
   readonly height: number;
+  readonly metersPerCell: number;
+  readonly passable: Uint8Array;
+  readonly movementCost: Float32Array;
   readonly danger: Uint8Array;
   readonly suppression: Uint8Array;
   readonly concealment: Uint8Array;
@@ -70,13 +61,14 @@ export interface AwarenessWorkerFieldPayload {
   readonly expectedProtectionAgainstThreat: Uint8Array;
   readonly reverseSlopeQuality: Uint8Array;
   readonly forwardSlopeRisk: Uint8Array;
+  readonly staticProtectionStanding: Uint8Array;
+  readonly staticProtectionCrouched: Uint8Array;
+  readonly staticProtectionProne: Uint8Array;
   readonly protectedThreatIndex: Int16Array;
   readonly dangerPixels: Uint32Array;
   readonly stealthPixels: Uint32Array;
   readonly threatIds: string[];
   readonly threatConfidence: number;
-  readonly tacticalPositions: readonly TacticalPositionCandidateSeedV2[];
-  readonly tacticalPositionDiagnostics: TacticalPositionSearchDiagnostics;
 }
 
 export interface AwarenessWorkerComputationDelta {
@@ -112,6 +104,8 @@ export type AwarenessWorkerResponse =
 
 export function awarenessWorkerTransferables(response: Extract<AwarenessWorkerResponse, { type: 'result' }>): Transferable[] {
   return [
+    response.field.passable.buffer,
+    response.field.movementCost.buffer,
     response.field.danger.buffer,
     response.field.suppression.buffer,
     response.field.concealment.buffer,
@@ -121,6 +115,9 @@ export function awarenessWorkerTransferables(response: Extract<AwarenessWorkerRe
     response.field.expectedProtectionAgainstThreat.buffer,
     response.field.reverseSlopeQuality.buffer,
     response.field.forwardSlopeRisk.buffer,
+    response.field.staticProtectionStanding.buffer,
+    response.field.staticProtectionCrouched.buffer,
+    response.field.staticProtectionProne.buffer,
     response.field.protectedThreatIndex.buffer,
     response.field.dangerPixels.buffer,
     response.field.stealthPixels.buffer,
