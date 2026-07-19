@@ -57,7 +57,7 @@ export function installTacticalWorkspace(
         const help = document.createElement('section');
         help.className = 'workspace-panel-section';
         help.dataset.role = 'tactical-position-help';
-        help.innerHTML = '<h3>Тактические позиции</h3><p>Внешний ромб обозначает позицию. Вертикаль внутри — стоя, угол — пригнувшись, горизонталь — лёжа. Правый клик отправляет бойца; после прибытия он принимает указанную позу и разворачивается к известной угрозе.</p>';
+        help.innerHTML = '<h3>Тактические позиции</h3><p>Ромбы на карте рассчитаны из личного поля опасности бойца. Внешний ромб обозначает позицию: вертикаль внутри — стоя, угол — пригнувшись, горизонталь — лёжа. Правый клик отправляет бойца; после прибытия он принимает указанную позу и разворачивается к известной угрозе.</p>';
         sidebarBody.append(help);
       }
     } finally {
@@ -75,7 +75,7 @@ export function installTacticalWorkspace(
   let observer: MutationObserver | null = null;
   if (shell) {
     observer = new MutationObserver(scheduleCleanup);
-    observer.observe(shell, { childList: true, subtree: true });
+    observer?.observe(shell, { childList: true, subtree: true });
   }
   cleanRemovedCoverUi();
 
