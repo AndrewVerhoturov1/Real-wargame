@@ -18,6 +18,10 @@ import {
 } from '../core/pressure/PressureZone';
 import { replaceSceneAtRuntimeResolution } from '../core/simulation/ResolutionAwareScene';
 import type { SimulationState } from '../core/simulation/SimulationState';
+import {
+  cloneTacticalPositionSettings,
+  getTacticalPositionSettings,
+} from '../core/tactical/TacticalPositionSettings';
 import { refreshAiTestLabSceneSnapshot } from '../core/testing/AiTestLabRuntime';
 import { getEnvironmentProfileRegistry, saveEnvironmentProfileRegistry } from './EnvironmentProfileStorage';
 import type { UnitData, UnitModel } from '../core/units/UnitModel';
@@ -129,7 +133,7 @@ export function buildExportedScene(state: SimulationState): ExportedSceneData {
   return {
     version: 'scene-export-v9-minimal-target-visibility-ai-runtime-2m-grid',
     exportedAt: new Date().toISOString(),
-    noteRu: 'Экспорт полигона ИИ с тактическим намерением PlayerCommand, профилями физического движения, environment materials, выносливостью, фактическим способом движения, слоем «Обзор и память», навигационными профилями и активным runtime. Новые поля добавляются совместимо в envelope v9; старые сцены без них получают безопасные значения по умолчанию, а сцены 10 м преобразуются в текущую сетку при загрузке.',
+    noteRu: 'Экспорт полигона ИИ с тактическим намерением PlayerCommand, профилями физического движения, environment materials, выносливостью, фактическим способом движения, слоем «Обзор и память», навигационными профилями, настройками тактических позиций и активным runtime. Новые поля добавляются совместимо в envelope v9; старые сцены без них получают безопасные значения по умолчанию, а сцены 10 м преобразуются в текущую сетку при загрузке.',
     map: {
       width: state.map.width,
       height: state.map.height,
@@ -267,6 +271,7 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
       nearAwarenessRangeMeters: unit.attentionSettings.nearAwarenessRangeMeters,
       nearMinimumVisibilityQuality: unit.attentionSettings.nearMinimumVisibilityQuality,
     },
+    tacticalPositionSettings: cloneTacticalPositionSettings(getTacticalPositionSettings(unit)),
     initialState: { ...unit.initialState },
     tacticalKnowledge: JSON.parse(JSON.stringify(unit.tacticalKnowledge)),
     perceptionKnowledge: JSON.parse(JSON.stringify(unit.perceptionKnowledge)),
