@@ -1,3 +1,4 @@
+import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import { normalizeMovementProfileId } from '../movement/MovementProfiles';
 import type { NavigationMovementMode } from '../navigation/NavigationProfiles';
@@ -23,6 +24,8 @@ export interface PlayerCommand {
   readonly navigationProfileId?: string;
   readonly movementProfileId?: string;
   readonly finalFacingRadians?: number;
+  readonly arrivalPosture?: UnitPosture;
+  readonly arrivalPostureApplied?: boolean;
   readonly status: PlayerCommandStatus;
   readonly revision: number;
   readonly issuedAtMs: number;
@@ -38,10 +41,12 @@ export function createPlayerMoveCommand(
   intentOrMovementMode: TacticalOrderIntent | NavigationMovementMode = 'normal',
   navigationProfileId: string | null = null,
   finalFacingRadians: number | null = null,
+  arrivalPosture: UnitPosture | null = null,
 ): PlayerCommand {
   const revision = (previous?.revision ?? 0) + 1;
   const intent = resolveCreatedIntent(intentOrMovementMode, navigationProfileId);
   const movementMode = normalizeMovementMode(intent.navigationProfileId);
+  const normalizedArrivalPosture = normalizeOptionalPosture(arrivalPosture);
   return {
     id: `${unitId}:player-command:${revision}:${Math.max(0, Math.round(nowMs))}`,
     unitId,
@@ -52,6 +57,8 @@ export function createPlayerMoveCommand(
     navigationProfileId: intent.navigationProfileId,
     movementProfileId: intent.movementProfileId,
     finalFacingRadians: normalizeOptionalRadians(finalFacingRadians),
+    arrivalPosture: normalizedArrivalPosture,
+    arrivalPostureApplied: normalizedArrivalPosture ? false : undefined,
     status: 'active',
     revision,
     issuedAtMs: nowMs,
@@ -79,6 +86,7 @@ export function normalizePlayerCommand(value: unknown, fallbackUnitId = ''): Pla
     withTacticalOrderNavigationProfile(intent, navigationProfileId),
     movementProfileId,
   );
+  const arrivalPosture = normalizeOptionalPosture(value.arrivalPosture);
   return {
     id: cleanText(value.id, `${unitId}:player-command:${revision}:${Math.max(0, Math.round(issuedAtMs))}`),
     unitId,
@@ -89,6 +97,8 @@ export function normalizePlayerCommand(value: unknown, fallbackUnitId = ''): Pla
     navigationProfileId: normalizedIntent.navigationProfileId,
     movementProfileId: normalizedIntent.movementProfileId,
     finalFacingRadians: normalizeOptionalRadians(value.finalFacingRadians),
+    arrivalPosture,
+    arrivalPostureApplied: arrivalPosture ? value.arrivalPostureApplied === true : undefined,
     status,
     revision,
     issuedAtMs,
@@ -119,6 +129,17 @@ export function updatePlayerCommandStatus(
     revision: command.revision + 1,
     reason,
     reasonRu,
+  };
+}
+
+export function markPlayerCommandArrivalPostureApplied(command: PlayerCommand): PlayerCommand {
+  if (!command.arrivalPosture || command.arrivalPostureApplied) return command;
+  return {
+    ...command,
+    target: { ...command.target },
+    intent: normalizeTacticalOrderIntent(command.intent),
+    arrivalPostureApplied: true,
+    revision: command.revision + 1,
   };
 }
 
@@ -195,6 +216,11 @@ function normalizeMovementMode(value: unknown): NavigationMovementMode {
 function normalizeStatus(value: unknown): PlayerCommandStatus {
   if (value === 'completed' || value === 'blocked' || value === 'cancelled') return value;
   return 'active';
+}
+
+function normalizeOptionalPosture(value: unknown): UnitPosture | undefined {
+  if (value === 'standing' || value === 'crouched' || value === 'prone') return value;
+  return undefined;
 }
 
 function normalizeOptionalRadians(value: unknown): number | undefined {
