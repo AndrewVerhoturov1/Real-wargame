@@ -95,7 +95,7 @@ export interface TacticalQuery {
 
 export interface TacticalQueryGenerationRequest extends TacticalQueryBudget {
   readonly unitId: string;
-  readonly queryKey: string;
+  readonly queryKey?: string;
   readonly requestId?: string;
   readonly blackboard: Readonly<Record<string, unknown>>;
 }
