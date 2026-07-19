@@ -1,5 +1,6 @@
 import { BufferImageSource, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import type { UnitPosture } from '../core/behavior/BehaviorModel';
+import type { AwarenessMovementDiagnostics } from '../core/debug/AwarenessMovementDiagnostics';
 import type { TacticalPositionCandidateSeed } from '../core/ai/tactical/TacticalQuery';
 import type { SoldierAwarenessCell } from '../core/knowledge/SoldierAwarenessGrid';
 import type { AwarenessWorkerFieldPayload } from '../core/knowledge/AwarenessWorldWorkerProtocol';
@@ -15,6 +16,7 @@ import {
 import {
   getTacticalPositionSearchService,
   type TacticalPositionSearchService,
+  type TacticalPositionSearchServiceDiagnostics,
 } from '../core/tactical/TacticalPositionSearchService';
 import { getSimulationLayerState } from '../core/ui/RuntimeUiState';
 import type { UnitModel } from '../core/units/UnitModel';
@@ -49,7 +51,8 @@ export interface AwarenessOverlayDiagnostics {
   readonly lastAppliedFieldIdentity: string;
   readonly lastAppliedJobId: number;
   readonly lastAppliedRaster: AwarenessAppliedRasterDiagnostics | null;
-  readonly movement: ReturnType<TacticalPositionSearchService['getDiagnostics']> | null;
+  readonly movement: AwarenessMovementDiagnostics | null;
+  readonly tacticalSearch: TacticalPositionSearchServiceDiagnostics | null;
 }
 
 type AwarenessDebugWindow = Window & {
@@ -204,7 +207,8 @@ export class PixiAwarenessHeatmapRenderer {
             threatIds: [...this.worldField.threatIds],
           }
         : null,
-      movement: service?.getDiagnostics() ?? null,
+      movement: null,
+      tacticalSearch: service?.getDiagnostics() ?? null,
     };
   }
 
