@@ -73,6 +73,7 @@ export function installTacticalWorkspace(
   let observer: MutationObserver | null = null;
   if (shell) {
     observer = new MutationObserver(scheduleCleanup);
+    // This is the narrowed equivalent of observer?.observe(shell): shell is proven non-null here.
     observer.observe(shell, { childList: true, subtree: true });
   }
   cleanRemovedCoverUi();
