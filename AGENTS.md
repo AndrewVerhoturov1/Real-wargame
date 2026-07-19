@@ -59,6 +59,12 @@ docs/performance/PERFORMANCE_PRINCIPLES.md
 .agents/skills/real-wargame-performance/SKILL.md
 ```
 
+For any task that designs or materially changes a gameplay, AI, simulation, data or runtime system, also read:
+
+```text
+docs/architecture/ENGINE_MIGRATION_READINESS.md
+```
+
 Do not read every journal, plan or historical handoff by default.
 
 ## 4. Canonical feature route
@@ -280,9 +286,17 @@ Before transfer:
 
 `main` is outside normal feature work.
 
-Never write, retarget a PR, merge or enable auto-merge without separate explicit user approval.
+Never write, retarget a PR, merge or enable auto-merge without separate explicit human approval.
 
 ## 16. Architecture and performance boundaries
+
+Before designing or implementing any new or materially changed gameplay, AI, simulation, data or runtime system, the agent MUST read and comply with:
+
+```text
+docs/architecture/ENGINE_MIGRATION_READINESS.md
+```
+
+This is a hard architecture constraint, not optional guidance. Do not implement a design that violates it unless the user explicitly overrides this rule for that exact task.
 
 - core simulation and pure AI do not import PixiJS or DOM;
 - renderers display state and are not gameplay truth;
