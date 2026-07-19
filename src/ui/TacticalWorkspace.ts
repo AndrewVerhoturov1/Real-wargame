@@ -3,6 +3,7 @@ import type { SimulationState } from '../core/simulation/SimulationState';
 import {
   installTacticalWorkspace as installTacticalWorkspaceBase,
 } from './TacticalWorkspaceBase';
+import { installTacticalPositionSearchControls } from './TacticalPositionSearchControls';
 import { installTacticalPositionSettingsControls } from './TacticalPositionSettingsControls';
 
 export * from './TacticalWorkspaceBase';
@@ -30,6 +31,7 @@ export function installTacticalWorkspace(
 
   const teardownBase = installTacticalWorkspaceBase(state, aiBridge, onChanged);
   const teardownSettings = installTacticalPositionSettingsControls(state, onChanged);
+  const teardownSearch = installTacticalPositionSearchControls(state, onChanged);
   const shell = document.querySelector<HTMLElement>('.tactical-workspace-shell');
   let cleaning = false;
   let scheduledFrame = 0;
@@ -57,7 +59,7 @@ export function installTacticalWorkspace(
         const help = document.createElement('section');
         help.className = 'workspace-panel-section';
         help.dataset.role = 'tactical-position-help';
-        help.innerHTML = '<h3>Тактические позиции</h3><p>Ромбы на карте рассчитаны из личного поля опасности бойца. Внешний ромб обозначает позицию: вертикаль внутри — стоя, угол — пригнувшись, горизонталь — лёжа. Правый клик отправляет бойца; после прибытия он принимает указанную позу и разворачивается к известной угрозе.</p>';
+        help.innerHTML = '<h3>Тактические позиции</h3><p>Ромбы на карте публикуются simulation-owned сервисом только после явного запроса игрока или Graph v2. Внешний ромб обозначает позицию: вертикаль внутри — стоя, угол — пригнувшись, горизонталь — лёжа. Правый клик отправляет бойца; поиск и движение остаются разными действиями.</p>';
         sidebarBody.append(help);
       }
     } finally {
@@ -75,7 +77,7 @@ export function installTacticalWorkspace(
   let observer: MutationObserver | null = null;
   if (shell) {
     observer = new MutationObserver(scheduleCleanup);
-    observer?.observe(shell, { childList: true, subtree: true });
+    observer.observe(shell, { childList: true, subtree: true });
   }
   cleanRemovedCoverUi();
 
@@ -83,6 +85,7 @@ export function installTacticalWorkspace(
     observer?.disconnect();
     if (scheduledFrame !== 0) window.cancelAnimationFrame(scheduledFrame);
     style.remove();
+    teardownSearch();
     teardownSettings();
     teardownBase();
   };
