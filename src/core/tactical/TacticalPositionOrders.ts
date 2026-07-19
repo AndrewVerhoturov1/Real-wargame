@@ -8,9 +8,12 @@ import { planMoveOrder } from '../orders/MoveOrderPlanning';
 import { createPlayerMoveCommand, updatePlayerCommandStatus } from '../orders/PlayerCommand';
 import { createTacticalOrderIntent, withTacticalOrderNavigationProfile } from '../orders/TacticalOrderIntent';
 import { clearAttentionOverride } from '../perception/AttentionController';
+import { getBestPerceptionContact } from '../perception/PerceptionSystem';
 import { getPressureReportAtPosition } from '../pressure/PressureZone';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
+import { registerTacticalPositionOccupation } from './TacticalPositionOccupation';
+import { getTacticalPositionSettings } from './TacticalPositionSettings';
 
 export function issueTacticalPositionMoveOrderToSelectedUnit(
   state: SimulationState,
@@ -76,11 +79,17 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
     return false;
   }
 
+  const finalFacingRadians = resolveThreatFacingAtPosition(unit, target);
+  if (finalFacingRadians !== null) planned.order.finalFacingRadians = finalFacingRadians;
+  registerTacticalPositionOccupation(unit, command.id, arrivalPosture, finalFacingRadians);
+
   unit.order = planned.order;
   unit.plan = createDirectPlayerMovePlan(unit.plan, command, planned.order.target);
-  applyPressurePreview(state, unit, planned.order.target);
+  applyPressurePreview(state, unit, planned.order.target, arrivalPosture);
   unit.behaviorRuntime.lastEvent = 'tactical_position_order_received';
-  unit.behaviorRuntime.reason = `Боец направлен на тактическую позицию; после прибытия: ${postureLabel(arrivalPosture)}.`;
+  unit.behaviorRuntime.reason = finalFacingRadians === null
+    ? `Боец направлен на тактическую позицию; после прибытия: ${postureLabel(arrivalPosture)}.`
+    : `Боец направлен на тактическую позицию; после прибытия: ${postureLabel(arrivalPosture)} и разворот к угрозе.`;
   setUnitDirection(unit, planned.order.waypoints?.[0] ?? planned.order.target);
   return true;
 }
@@ -89,10 +98,19 @@ function applyPressurePreview(
   state: SimulationState,
   unit: UnitModel,
   target: GridPosition,
+  arrivalPosture: UnitPosture,
 ): void {
   const report = getPressureReportAtPosition(target, state.pressureZones);
+  const settings = getTacticalPositionSettings(unit);
+  const movementPosture: UnitPosture = settings.moveCrouchedToProtectedPosition && arrivalPosture !== 'standing'
+    ? 'crouched'
+    : 'standing';
+  if (unit.behaviorRuntime.posture !== movementPosture) {
+    unit.behaviorRuntime.previousPosture = unit.behaviorRuntime.posture;
+    unit.behaviorRuntime.posture = movementPosture;
+    unit.behaviorRuntime.postureChangedBecause = 'tactical_position_approach';
+  }
   unit.behaviorRuntime.state = 'moving';
-  unit.behaviorRuntime.posture = 'standing';
   unit.behaviorRuntime.currentAction = 'move';
 
   if (!report) {
@@ -104,6 +122,31 @@ function applyPressurePreview(
   unit.behaviorRuntime.rawDanger = report.rawPressure;
   unit.behaviorRuntime.danger = Math.round(report.rawPressure);
   unit.behaviorRuntime.reason = `move_target_pressure:${report.zone.id}`;
+}
+
+function resolveThreatFacingAtPosition(unit: UnitModel, position: GridPosition): number | null {
+  const contact = getBestPerceptionContact(unit);
+  if (contact) return directionTo(position, contact.lastKnownPosition);
+
+  let strongest: UnitModel['tacticalKnowledge']['threats'][number] | null = null;
+  let strongestScore = Number.NEGATIVE_INFINITY;
+  for (const threat of unit.tacticalKnowledge.threats) {
+    const score = threat.confidence * 2
+      + threat.strength
+      + threat.suppression * 0.5
+      + (threat.visibleNow ? 1000 : 0);
+    if (score <= strongestScore) continue;
+    strongest = threat;
+    strongestScore = score;
+  }
+  return strongest ? directionTo(position, strongest) : null;
+}
+
+function directionTo(from: GridPosition, to: GridPosition): number | null {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.hypot(dx, dy) < 0.0001) return null;
+  return Math.atan2(dy, dx);
 }
 
 function postureLabel(posture: UnitPosture): string {
