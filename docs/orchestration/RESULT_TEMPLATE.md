@@ -2,30 +2,68 @@
 
 Use this template for the canonical Web Chat feature branch and optional research/proposal workers.
 
+The user-facing part must come first. Technical details follow only when they help a decision or provide evidence.
+
+## 1. User-facing summary
+
 ```md
-# Result
+# Результат
 
-## Task
+**Статус:** готово / готово к проверке / частично / заблокировано
 
-Short task name and formulation.
+**Что изменилось:**
+Короткое объяснение обычным русским языком.
 
-## Status
+**Открыть:**
+- [Игра](<game-preview-url>)
+- [Редактор ИИ](<game-preview-url>/ai-node-editor.html)
 
-`COMPLETED`, `PARTIAL`, `BLOCKED` or `RESEARCH_ONLY`.
+**Ветка:** `feature/...`
+**Коммит:** `short-sha`
 
-## Delivery state
-
-```text
-research_only
-implementation
-ready_for_live_test
-live_test_revision
-visual_qa
-approved_for_preview
-transferred_to_preview
+**Что проверить:**
+1. Короткий шаг.
+2. Ожидаемый результат.
 ```
 
-## Canonical branch identity
+Mandatory presentation rules:
+
+- write in simple Russian, as for an intelligent high-school student;
+- avoid unnecessary English terms and abbreviations;
+- explain an unavoidable technical term once;
+- make all useful URLs clickable;
+- never make the user search for links in logs;
+- when screenshots exist, show the most useful screenshots directly after the summary;
+- provide the full artifact link separately;
+- put long hashes, workflow IDs and raw diagnostics after the practical result.
+
+## 2. Useful screenshots
+
+When screenshots exist, present them in a convenient order:
+
+```md
+## Скриншоты
+
+### Основной результат
+![Короткое понятное описание](<direct-screenshot-or-artifact-link>)
+
+### Дополнительная проверка
+![Короткое понятное описание](<direct-screenshot-or-artifact-link>)
+
+[Открыть полный набор материалов](<artifact-link>)
+```
+
+Do not dump every frame. Select the frames that prove the requested behavior.
+
+## 3. Task and status
+
+```text
+task:
+status: COMPLETED / PARTIAL / BLOCKED / RESEARCH_ONLY
+delivery_state: research_only / implementation / ready_for_live_test / live_test_revision / visual_qa / approved_for_preview / transferred_to_preview
+```
+
+## 4. Canonical branch identity
 
 ```text
 feature_branch:
@@ -34,23 +72,28 @@ base_commit:
 current_commit:
 ```
 
-Research-only workers without a branch use `feature_branch: owned by designated Web Chat` and do not invent commit identities.
+Research-only workers without a branch use:
 
-## Understanding of the problem
+```text
+feature_branch: owned by designated Web Chat
+```
 
-How the problem was understood and what assumptions were made.
+They do not invent commit identities.
 
-## Solution
+## 5. Solution
 
-What was implemented or proposed.
+Explain:
 
-## Architecture
+- how the problem was understood;
+- what was changed;
+- why this approach fits the current systems;
+- what was intentionally not changed.
 
-Why this approach was selected and how it fits existing systems.
+Keep the first explanation understandable without repository jargon.
 
-## Performance impact
+## 6. Performance impact
 
-Mandatory for runtime-affecting work. For truly non-runtime work, use `not applicable` with exact reason.
+Mandatory for runtime-affecting work. For truly non-runtime work, use `not applicable` and give the exact reason.
 
 ```text
 hot path:
@@ -72,9 +115,9 @@ tested implementation head:
 remaining performance risks:
 ```
 
-Do not replace analysis with “small change should not affect performance”. Do not run performance checks only because SHA changed.
+Do not replace analysis with “small change should not affect performance”. Do not run performance checks only because a SHA changed.
 
-## Verification selection
+## 7. Verification selection
 
 ```text
 change risk:
@@ -89,43 +132,87 @@ TESTED_IMPLEMENTATION_HEAD:
 PERFORMANCE_REASON:
 ```
 
-The user does not need to name the visual skill. When visual verification is requested and no directly controlled browser can open the Vercel Preview, `vercel-deployment-playwright-e2e` is mandatory.
+The user does not need to name the visual skill.
 
-## Changed files
+## 8. Changed files
 
-- `path/to/file`
-
-## Checks actually run
-
-- `<command>` — passed/failed;
-- list only commands that actually ran.
-
-## Not checked
-
-Distinguish:
-
-- Web Chat workspace checks;
-- Vercel deployment;
-- human live testing;
-- direct-browser visual verification;
-- GitHub Actions visual verification.
-
-## Manual live-test checklist
-
-For user-visible work, list task-specific steps for the human in the branch-linked Vercel Preview and expected results.
-
-## Vercel Preview
+List only relevant files:
 
 ```text
-vercel_branch_preview: URL / pending / not requested
-vercel_commit_preview: URL / unavailable / pending / not requested
-deployment_status: ready / failed / pending / not requested
-deployed_commit:
+path/to/file — what changed
 ```
 
-Codex is deployment-only. Do not report Codex implementation, fixes, merge or transfer.
+## 9. Checks actually run
 
-## Human live-test status
+List only commands that actually ran:
+
+```text
+<command> — passed / failed
+```
+
+Always distinguish:
+
+- local or Web Chat checks;
+- Vercel deployment;
+- human live testing;
+- direct-browser verification;
+- GitHub Actions verification.
+
+Never claim one as another.
+
+## 10. Required deployment pages
+
+Every build and deployment must include:
+
+```text
+/                     → game
+/ai-node-editor.html  → AI Node Editor
+```
+
+Report:
+
+```text
+game_build_output: present / missing / not checked
+ai_node_editor_build_output: present / missing / not checked
+```
+
+A deployment with only the game page is incomplete.
+
+## 11. Vercel Preview
+
+Use the one permanent Git-connected Vercel project.
+
+```text
+game_preview: clickable URL / pending / failed
+ai_node_editor_preview: clickable URL / pending / failed
+deployment_status: ready / failed / pending / not checked
+deployed_branch:
+deployed_commit:
+product_sha_match: yes / no / unproven
+permanent_vercel_project_touched: no
+```
+
+Codex is not required for deployment. Do not report a manual Codex handoff as the normal route.
+
+## 12. Manual live-test checklist
+
+For user-visible work, provide short task-specific steps for both pages.
+
+### Game
+
+1. What to open or select.
+2. What action to perform.
+3. What should visibly change.
+
+### AI Node Editor
+
+1. Confirm `ai-node-editor.html` opens.
+2. Open the task-relevant editor section.
+3. Confirm controls, styles and state updates work.
+
+Do not require full-project manual regression for every focused change.
+
+## 13. Human live-test status
 
 ```text
 live_test_status: pending / passed / failed / not run
@@ -133,9 +220,9 @@ live_tested_commit:
 reported_issues:
 ```
 
-Product issues are fixed on the same feature branch.
+Product issues are fixed on the same feature branch. Later pushes update Vercel automatically.
 
-## Visual QA preparation and approval
+## 14. Visual QA preparation and approval
 
 ```text
 visual_qa_prepared: yes / no / not applicable
@@ -144,24 +231,23 @@ visual_qa_route: direct-browser / vercel-deployment-playwright-e2e / not run / n
 visual_qa_run: passed / failed / not run / not applicable
 ```
 
-Clear user intent such as `проверь визуально`, `сделай скриншоты` or `проверь через Playwright` already counts as approval. Do not ask the user to name the skill.
+Clear intent such as `проверь визуально`, `сделай скриншоты` or `проверь через Playwright` already counts as approval.
 
-## Visual product identity
+## 15. Visual product identity
 
 ```text
-target_url: clean URL without secrets
+target_game_url: clean URL without secrets
+target_ai_node_editor_url: clean URL without secrets
 expected_product_sha:
 observed_product_sha:
 product_sha_match: yes / no / unproven
 ```
 
-If deployed identity cannot be independently proven, do not describe the result as exact-SHA acceptance.
+A new product SHA invalidates previous visual acceptance evidence.
 
-A new product SHA invalidates previous visual evidence for acceptance.
+## 16. Deployed Vercel CI identity
 
-## Deployed Vercel CI identity
-
-Complete when route is `vercel-deployment-playwright-e2e`:
+Complete when the route is `vercel-deployment-playwright-e2e`:
 
 ```text
 temporary_base_branch:
@@ -174,12 +260,15 @@ artifact_id:
 artifact_digest: value / unavailable
 ```
 
-Temporary PR must never be merged. CI harness files must not enter product branches.
+The temporary PR must never be merged. CI harness files must not enter product branches.
 
-## Visual scenario result
+## 17. Visual scenario result
+
+Adjust fields to the task, but verify actual state change rather than only element presence.
 
 ```text
-application_load: passed / failed / not applicable
+game_load: passed / failed / not applicable
+ai_node_editor_load: passed / failed / not applicable
 soldier_creation: passed / failed / not applicable
 soldier_selection: passed / failed / not applicable
 order_issue: passed / failed / not applicable
@@ -190,9 +279,7 @@ combined: passed / failed / not applicable
 persistence: passed / failed / not applicable
 ```
 
-Adjust scenario fields for the task, but always verify actual state change rather than only DOM presence.
-
-## Diagnostics
+## 18. Diagnostics
 
 ```text
 console_errors:
@@ -204,13 +291,13 @@ failure_class: none / environment / test-harness / application
 
 Classify before edits:
 
-- environment/configuration changes stay in CI layer;
-- test-harness changes stay in temporary CI head branch;
-- application changes return to canonical feature branch.
+- environment/configuration changes stay in the CI or deployment layer;
+- test-harness changes stay in the temporary CI head branch;
+- application changes return to the canonical feature branch.
 
 Never fix product code on CI branches.
 
-## Evidence inspection and presentation
+## 19. Evidence inspection
 
 ```text
 evidence_json_inspected: yes / no
@@ -218,24 +305,13 @@ screenshots_inspected: yes / no
 trace_inspected: yes / no / not needed
 contact_sheet:
 key_frames:
-artifact_link:
-workflow_run_link:
+artifact_link: clickable URL
+workflow_run_link: clickable URL
 ```
 
-A green workflow alone is insufficient. Download/extract artifact, read `evidence.json`, inspect key PNGs and show useful screenshots to the user.
+A green workflow alone is insufficient. Inspect the evidence and show useful screenshots to the user.
 
-## Temporary CI cleanup
-
-```text
-temporary_pr_closed_without_merge: yes / no
-ci_branch_cleanup: deleted / pending with exact names
-ci_cleanup_limitation:
-feature_branch_modified_by_ci_harness: no
-```
-
-Do not transfer temporary workflow/tests into product branches without separate user instruction.
-
-## Preview transfer
+## 20. Preview transfer
 
 ```text
 preview_transfer_approval: approved / not approved
@@ -246,35 +322,45 @@ preview_touched: no / explicit approved transfer
 main_touched: no / explicit approved change
 ```
 
-Visual success does not grant transfer permission. Transfer requires separate explicit user GO for exact accepted commit.
+Visual success does not grant transfer permission. Transfer requires separate explicit user GO for the exact accepted commit.
 
-## Feature branch cleanup
+## 21. Post-transfer deployment check
+
+After transfer into `real-wargame-preview`:
 
 ```text
-branch_cleanup_status: open / deleted / kept by user request
-branch_cleanup_reason:
+preview_deployment_status: ready / failed / pending
+preview_game_url: clickable URL
+preview_ai_node_editor_url: clickable URL
+preview_game_checked: yes / no
+preview_ai_node_editor_checked: yes / no
+preview_deployed_commit:
 ```
 
-## Risks and limitations
+The transfer is not complete from the user's perspective until both pages work or the failure is reported.
 
-Known technical, behavioral, performance, visual, deployment-identity and cleanup limitations.
+## 22. Cleanup
 
-## Result package for research/proposal workers
-
-One option:
-
-- complete files with repository-relative paths;
-- applicable patch;
-- research-only report;
-- exact commit in explicitly assigned isolated experiment branch.
-
-Workers do not update preview and do not create an independent Codex or visual-delivery route.
-
-## Alternative approaches
-
-Alternatives considered and why not selected.
-
-## Open questions
-
-Unresolved questions for designated Web Chat or human user.
+```text
+feature_branch_cleanup: deleted / kept by user request / pending
+temporary_pr_closed_without_merge: yes / no / not applicable
+ci_branch_cleanup: deleted / pending with exact names / not applicable
+legacy_temporary_vercel_project: none / deleted / kept with reason
+legacy_temporary_vercel_project_cleanup_condition_met: yes / no / not applicable
+permanent_vercel_project_deleted: no
 ```
+
+Rules:
+
+- delete the feature branch only after the accepted preview deployment works;
+- delete an old separate temporary Vercel project only after both replacement pages work;
+- never delete the permanent Git-connected Vercel project;
+- old deployments inside the permanent project may be handled by Vercel retention settings.
+
+## 23. Risks and limitations
+
+List known technical, behavioral, performance, visual, deployment-identity and cleanup limitations in plain Russian first. Add detailed diagnostics only when useful.
+
+## 24. Alternative approaches and open questions
+
+Include only real alternatives or unresolved decisions. Do not add filler.
