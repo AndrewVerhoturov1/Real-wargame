@@ -2,6 +2,10 @@ import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import type { TacticalPositionCandidateSeed } from '../ai/tactical/TacticalQuery';
 import type { SimulationState } from '../simulation/SimulationState';
+import {
+  createDefaultTacticalPositionSettings,
+  getTacticalPositionSettings,
+} from './TacticalPositionSettings';
 
 const MAX_VISIBLE_TACTICAL_POSITIONS = 12;
 const MIN_HIT_RADIUS_CELLS = 0.55;
@@ -13,6 +17,8 @@ interface TacticalPositionSelectionRuntime {
   candidates: readonly TacticalPositionCandidateSeed[];
   selectedId: string | null;
   hoveredId: string | null;
+  lastAcceptedAtSeconds: number;
+  lastNonEmptyAtSeconds: number;
 }
 
 export interface TacticalPositionPresentation {
@@ -31,10 +37,25 @@ export function publishVisibleTacticalPositions(
 ): void {
   const runtime = getRuntime(state);
   const ownerChanged = runtime.unitId !== unitId;
-  runtime.unitId = unitId;
-  runtime.candidates = candidates.length <= MAX_VISIBLE_TACTICAL_POSITIONS
+  const nowSeconds = finiteTime(state.simulationTimeSeconds);
+  const unit = state.units?.find((candidate) => candidate.id === unitId);
+  const settings = unit ? getTacticalPositionSettings(unit) : createDefaultTacticalPositionSettings();
+  const bounded = candidates.length <= MAX_VISIBLE_TACTICAL_POSITIONS
     ? candidates
     : candidates.slice(0, MAX_VISIBLE_TACTICAL_POSITIONS);
+
+  if (!ownerChanged && runtime.candidates.length > 0) {
+    if (bounded.length === 0) {
+      if (nowSeconds - runtime.lastNonEmptyAtSeconds < settings.emptyResultHoldSeconds) return;
+    } else if (nowSeconds - runtime.lastAcceptedAtSeconds < settings.markerRefreshIntervalSeconds) {
+      return;
+    }
+  }
+
+  runtime.unitId = unitId;
+  runtime.candidates = bounded;
+  runtime.lastAcceptedAtSeconds = nowSeconds;
+  if (bounded.length > 0) runtime.lastNonEmptyAtSeconds = nowSeconds;
 
   if (ownerChanged) {
     runtime.selectedId = null;
@@ -51,6 +72,8 @@ export function clearVisibleTacticalPositions(state: SimulationState): void {
   runtime.candidates = [];
   runtime.selectedId = null;
   runtime.hoveredId = null;
+  runtime.lastAcceptedAtSeconds = 0;
+  runtime.lastNonEmptyAtSeconds = 0;
 }
 
 export function findVisibleTacticalPositionAt(
@@ -140,6 +163,8 @@ function getRuntime(state: SimulationState): TacticalPositionSelectionRuntime {
       candidates: [],
       selectedId: null,
       hoveredId: null,
+      lastAcceptedAtSeconds: 0,
+      lastNonEmptyAtSeconds: 0,
     };
     runtimeByState.set(state, runtime);
   }
@@ -156,4 +181,8 @@ function candidateById(
 
 function containsCandidate(runtime: TacticalPositionSelectionRuntime, candidateId: string | null): boolean {
   return candidateId !== null && runtime.candidates.some((candidate) => candidate.id === candidateId);
+}
+
+function finiteTime(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0;
 }
