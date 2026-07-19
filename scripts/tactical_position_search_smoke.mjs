@@ -32,3 +32,4 @@ try {
 }
 
 await import('./tactical_position_graph_runtime_smoke.mjs');
+await import('./tactical_workspace_smoke.mjs');
