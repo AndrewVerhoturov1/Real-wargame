@@ -41,8 +41,23 @@ jobs:
       - name: TypeScript
         run: npx tsc
 
-      - name: Tactical position smoke
-        run: npm run tactical-position:smoke
+      - name: Tactical position search smoke
+        run: node scripts/tactical_position_search_smoke.mjs
+
+      - name: Tactical position interaction smoke
+        run: node scripts/tactical_position_interaction_smoke.mjs
+
+      - name: Tactical position tuning smoke
+        run: node scripts/tactical_position_tuning_smoke.mjs
+
+      - name: Tactical position request service smoke
+        run: node scripts/tactical_position_request_service_smoke.mjs
+
+      - name: Tactical position graph runtime smoke
+        run: node scripts/tactical_position_graph_runtime_smoke.mjs
+
+      - name: Tactical position objective smoke
+        run: node scripts/tactical_position_objective_smoke.mjs
 
       - name: Tactical query smoke
         run: npm run tactical-query:smoke
