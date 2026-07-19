@@ -235,15 +235,15 @@ function forceRussianTopControls(
 ): void {
   document.documentElement.lang = 'ru';
   languageButton.textContent = 'Русский';
-  gridButton.textContent = 'Сетка: вкл';
+  gridButton.textContent = 'Сетка: выкл';
   visionButton.textContent = 'Обзор: выкл';
   heightButton.textContent = 'Цифры высоты: выкл';
   aiEditorButton.textContent = 'Редактор ИИ';
   updatePauseToggle(pauseButton);
-  gridButton.setAttribute('aria-pressed', 'true');
+  gridButton.setAttribute('aria-pressed', 'false');
   visionButton.setAttribute('aria-pressed', 'false');
   heightButton.setAttribute('aria-pressed', 'false');
-  gridButton.classList.remove('hud-toggle-off');
+  gridButton.classList.add('hud-toggle-off');
   visionButton.classList.add('hud-toggle-off');
   heightButton.classList.add('hud-toggle-off');
 }
