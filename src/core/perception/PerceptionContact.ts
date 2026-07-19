@@ -70,6 +70,9 @@ export const CONTACT_STAGE_THRESHOLDS = {
   confirmed: 150,
 } as const;
 
+const SCHEDULED_CHECK_INTERVAL_EXPLANATION = /^Зона «[^»]+» проверяется раз в ([0-9]+(?:[.,][0-9]+)?) с\.$/;
+const SCHEDULED_VISUAL_CUE_GRACE_MULTIPLIER = 1.25;
+
 export function createEmptyPerceptionKnowledge(): UnitPerceptionKnowledge {
   return {
     contacts: [],
@@ -200,8 +203,9 @@ export function decayUnobservedContact(
   const confidence = Math.max(0, contact.confidence - 0.55 * delta);
   const uncertaintyGrowthCells = (0.12 / Math.max(0.001, input.metersPerCell)) * delta;
   const uncertaintyCells = contact.uncertaintyCells + uncertaintyGrowthCells;
+  const retainScheduledVisualCue = shouldRetainScheduledVisualCue(contact, input.nowSeconds);
 
-  if (evidence < 4 && confidence < 4) return null;
+  if (evidence < 4 && confidence < 4 && !retainScheduledVisualCue) return null;
 
   return {
     ...contact,
@@ -232,6 +236,27 @@ export function upsertPerceptionContact(
   ));
   knowledge.lastUpdatedSeconds = Math.max(knowledge.lastUpdatedSeconds, contact.lastUpdatedSeconds);
   if (!previous || contactFingerprint(previous) !== contactFingerprint(contact)) knowledge.revision += 1;
+}
+
+function shouldRetainScheduledVisualCue(
+  contact: PerceptionContactMemory,
+  nowSeconds: number,
+): boolean {
+  if (contact.source !== 'visual' || contact.visibleNow || contact.observedNow) return false;
+  const checkIntervalSeconds = scheduledCheckIntervalSeconds(contact.explanationRu);
+  if (checkIntervalSeconds === null) return false;
+  const freshnessSeconds = Math.max(0.1, checkIntervalSeconds * SCHEDULED_VISUAL_CUE_GRACE_MULTIPLIER);
+  return nowSeconds - contact.lastObservedSeconds <= freshnessSeconds;
+}
+
+function scheduledCheckIntervalSeconds(explanationRu: readonly string[]): number | null {
+  for (const line of explanationRu) {
+    const match = SCHEDULED_CHECK_INTERVAL_EXPLANATION.exec(line);
+    if (!match) continue;
+    const parsed = Number(match[1]!.replace(',', '.'));
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return null;
 }
 
 function normalizeContact(value: Partial<PerceptionContactMemory>): PerceptionContactMemory {
