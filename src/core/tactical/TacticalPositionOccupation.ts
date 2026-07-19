@@ -1,4 +1,5 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
+import { releasePlayerCommandTacticalPosition } from '../orders/PlayerCommand';
 import { updateAttentionController } from '../perception/AttentionController';
 import type { UnitModel } from '../units/UnitModel';
 
@@ -9,9 +10,23 @@ import type { UnitModel } from '../units/UnitModel';
  */
 export function reconcileTacticalPositionOccupation(unit: UnitModel): void {
   const command = unit.playerCommand;
+  if (!command?.arrivalPosture) return;
+
   if (
-    !command?.arrivalPosture
-    || command.status !== 'active'
+    unit.order
+    && unit.order.playerCommandId !== command.id
+    && command.tacticalPositionOccupationStatus !== 'released'
+  ) {
+    unit.playerCommand = releasePlayerCommandTacticalPosition(
+      command,
+      'Tactical position released by an unrelated route.',
+      'Занятая тактическая позиция освобождена новым маршрутом.',
+    );
+    return;
+  }
+
+  if (
+    command.status !== 'active'
     || command.tacticalPositionOccupationStatus !== 'approaching'
     || !unit.order
     || unit.order.playerCommandId !== command.id
