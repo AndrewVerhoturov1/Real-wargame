@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "project": {
     "name": "Real-Wargame",
     "repository": "AndrewVerhoturov1/Real-wargame",
@@ -16,19 +16,39 @@
     "typescriptMajor": 5,
     "pixiJsMajor": 8
   },
+  "communication": {
+    "userLanguage": "ru",
+    "style": "simple-russian-for-intelligent-high-school-student",
+    "avoidUnnecessaryAnglicisms": true,
+    "explainUnavoidableTechnicalTermsOnce": true,
+    "practicalResultFirst": true,
+    "userShouldNotNeedGitOrTerminal": true
+  },
   "activeSubprojects": [
     "ai-single-unit-editor"
   ],
   "delivery": {
+    "preferred": "feature-branch-with-automatic-vercel-preview",
+    "target": "real-wargame-preview",
+    "fallback": "pull-request-to-preview-when-technically-required",
     "owner": "web-chat",
     "baseBranch": "real-wargame-preview",
     "featureBranchRequired": true,
     "directImplementationPushToPreviewAllowed": false,
     "sameBranchRevisionLoop": true,
     "focusedNonBrowserChecksRequired": true,
-    "codexRole": "branch-linked-vercel-preview-only",
+    "codexRole": "optional-code-or-analysis-helper-not-deployment-gate",
     "codexMayModifyCode": false,
-    "codexReentryRequiredAfterFeaturePush": false,
+    "codexDeploymentRequired": false,
+    "vercelProjectMode": "single-permanent-git-connected-project",
+    "vercelAutomaticDeploymentsRequired": true,
+    "requiredDeploymentPages": [
+      "/",
+      "/ai-node-editor.html"
+    ],
+    "permanentVercelProjectMayBeDeleted": false,
+    "legacyTemporaryVercelProjectCleanup": "only-after-preview-ready-and-both-pages-verified",
+    "featureBranchCleanupAfterTransfer": true,
     "visualQaTrigger": "explicit-user-intent-only",
     "visualQaSkillNameNeedNotBeStatedByUser": true,
     "directBrowserVisualSkill": ".agents/skills/real-wargame-local-preview/SKILL.md",
