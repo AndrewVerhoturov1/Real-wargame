@@ -80,12 +80,19 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
   }
 
   const finalFacingRadians = resolveThreatFacingAtPosition(unit, target);
+  const approachPosture = resolveApproachPosture(unit, arrivalPosture);
   if (finalFacingRadians !== null) planned.order.finalFacingRadians = finalFacingRadians;
-  registerTacticalPositionOccupation(unit, command.id, arrivalPosture, finalFacingRadians);
+  registerTacticalPositionOccupation(
+    unit,
+    command.id,
+    arrivalPosture,
+    finalFacingRadians,
+    approachPosture,
+  );
 
   unit.order = planned.order;
   unit.plan = createDirectPlayerMovePlan(unit.plan, command, planned.order.target);
-  applyPressurePreview(state, unit, planned.order.target, arrivalPosture);
+  applyPressurePreview(state, unit, planned.order.target, approachPosture);
   unit.behaviorRuntime.lastEvent = 'tactical_position_order_received';
   unit.behaviorRuntime.reason = finalFacingRadians === null
     ? `Боец направлен на тактическую позицию; после прибытия: ${postureLabel(arrivalPosture)}.`
@@ -94,17 +101,20 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
   return true;
 }
 
+function resolveApproachPosture(unit: UnitModel, arrivalPosture: UnitPosture): UnitPosture {
+  const settings = getTacticalPositionSettings(unit);
+  return settings.moveCrouchedToProtectedPosition && arrivalPosture !== 'standing'
+    ? 'crouched'
+    : 'standing';
+}
+
 function applyPressurePreview(
   state: SimulationState,
   unit: UnitModel,
   target: GridPosition,
-  arrivalPosture: UnitPosture,
+  movementPosture: UnitPosture,
 ): void {
   const report = getPressureReportAtPosition(target, state.pressureZones);
-  const settings = getTacticalPositionSettings(unit);
-  const movementPosture: UnitPosture = settings.moveCrouchedToProtectedPosition && arrivalPosture !== 'standing'
-    ? 'crouched'
-    : 'standing';
   if (unit.behaviorRuntime.posture !== movementPosture) {
     unit.behaviorRuntime.previousPosture = unit.behaviorRuntime.posture;
     unit.behaviorRuntime.posture = movementPosture;
