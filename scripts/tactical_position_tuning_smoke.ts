@@ -112,9 +112,25 @@ function verifyCommandOwnedApproachAndOccupation(): void {
     'ordinary Graph v2 pass must not reset command-owned occupied posture',
   );
 
+  unit.order = {
+    type: 'move',
+    target: { x: 6.5, y: 4.5 },
+    issuedAtMs: 2,
+    source: 'ai',
+    ownerToken: 'ai-route-1',
+  };
+  reconcileTacticalPositionOccupation(unit);
+  assert.equal(
+    unit.playerCommand?.tacticalPositionOccupationStatus,
+    'released',
+    'an unrelated AI route must permanently release the old occupied position',
+  );
+  unit.order = null;
+  assert.equal(isTacticalPositionOccupationActive(unit), false, 'released occupation must not reactivate after the AI route ends');
+
   unit.playerCommand = createPlayerMoveCommand(unit.id, { x: 3.5, y: 3.5 }, unit.playerCommand, 3000);
-  unit.order = { type: 'move', target: { x: 3.5, y: 3.5 }, issuedAtMs: 2, source: 'player' };
-  assert.equal(isTacticalPositionOccupationActive(unit), false, 'a new command or route releases occupied-position ownership');
+  unit.order = { type: 'move', target: { x: 3.5, y: 3.5 }, issuedAtMs: 3, source: 'player' };
+  assert.equal(isTacticalPositionOccupationActive(unit), false, 'a new player command or route releases occupied-position ownership');
   unit.behaviorRuntime.posture = 'standing';
   reconcileTacticalPositionOccupation(unit);
   assert.equal(unit.behaviorRuntime.posture, 'standing');
@@ -196,10 +212,14 @@ function verifySceneExportIncludesSettings(): void {
 function verifyOccupationAndDangerSourceContracts(): void {
   const occupation = readFileSync('src/core/tactical/TacticalPositionOccupation.ts', 'utf8');
   const orders = readFileSync('src/core/tactical/TacticalPositionOrders.ts', 'utf8');
+  const controls = readFileSync('src/ui/TacticalPositionSettingsControls.ts', 'utf8');
   assert.equal(occupation.includes('WeakMap'), false, 'occupation state must live in PlayerCommand, not a hidden WeakMap');
   assert.equal(orders.includes('behaviorRuntime.danger = 0'), false, 'issuing a tactical move must not clear canonical danger');
   assert.ok(orders.includes('finalFacingRadians'));
   assert.ok(orders.includes('approachPosture'));
+  assert.ok(controls.includes('getTacticalPositionSearchService(state)?.clearUnit(selected.id)'));
+  assert.ok(controls.includes('Стоя: максимальная опасность'));
+  assert.ok(controls.includes('Коэффициенты итоговой оценки'));
 }
 
 function postureGraph(posture: 'stand' | 'crouch' | 'prone'): AiGraph {
