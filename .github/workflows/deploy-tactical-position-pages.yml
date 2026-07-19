@@ -38,7 +38,7 @@ jobs:
         with:
           enablement: true
 
-      - name: Run required checks and build for Pages
+      - name: Run required checks and build game plus AI editor
         env:
           REAL_WARGAME_COMMIT_SHA: ${{ github.sha }}
           REAL_WARGAME_BRANCH: ${{ github.ref_name }}
@@ -53,19 +53,22 @@ jobs:
             npm run tactical-query:smoke
             npm run ai-scheduler:smoke
             npm run workspace:smoke
+            npm run editor:smoke
             npx vite build --base="${PAGES_BASE_PATH}/"
+            test -f dist/index.html
+            test -f dist/ai-node-editor.html
             npm run deployment-pages:smoke
             touch dist/.nojekyll
           } > pages-build.log 2>&1
           status=$?
           if [ "$status" -ne 0 ]; then
-            echo "Pages build failed. Last 180 log lines:"
-            tail -n 180 pages-build.log
+            echo "Pages build failed. Last 220 log lines:"
+            tail -n 220 pages-build.log
             exit "$status"
           fi
-          tail -n 80 pages-build.log
+          tail -n 100 pages-build.log
 
-      - name: Publish built files to gh-pages branch
+      - name: Publish complete build to gh-pages branch
         env:
           SOURCE_SHA: ${{ github.sha }}
         run: |
@@ -77,5 +80,5 @@ jobs:
           git rm -rf .
           cp -a /tmp/real-wargame-pages/. .
           git add -A
-          git commit -m "deploy: tactical positions ${SOURCE_SHA}"
+          git commit -m "deploy: game and AI editor ${SOURCE_SHA}"
           git push --force origin HEAD:gh-pages
