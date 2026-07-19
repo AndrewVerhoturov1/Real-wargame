@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createPlayerMoveCommand, updatePlayerCommandStatus } from '../src/core/orders/PlayerCommand';
+import type { AiGraph } from '../src/core/ai/AiGraph';
+import { withAiSimulationExecutionContext } from '../src/core/ai/AiSimulationExecutionContext';
+import { runAiGraphRuntime } from '../src/core/ai/AiGraphRuntime';
+import {
+  createPlayerMoveCommand,
+  markPlayerCommandArrivalPostureApplied,
+  normalizePlayerCommand,
+  updatePlayerCommandStatus,
+} from '../src/core/orders/PlayerCommand';
 import { normalizeUnits } from '../src/core/units/UnitModel';
 import type { SimulationState } from '../src/core/simulation/SimulationState';
 import {
@@ -10,9 +18,9 @@ import {
   setTacticalPositionSettings,
 } from '../src/core/tactical/TacticalPositionSettings';
 import {
-  activateTacticalPositionOccupation,
+  applyCompletedTacticalPositionOccupation,
+  isTacticalPositionOccupationActive,
   reconcileTacticalPositionOccupation,
-  registerTacticalPositionOccupation,
 } from '../src/core/tactical/TacticalPositionOccupation';
 import {
   getTacticalPositionPresentation,
@@ -21,13 +29,14 @@ import {
 import type { TacticalPositionCandidateSeedV2 } from '../src/core/tactical/TacticalPositionSearch';
 
 verifyHighestSafePosture();
-verifyApproachAndOccupationSurviveAiOverwrite();
+verifyCommandOwnedApproachAndOccupation();
 verifyMarkerPublicationIsRateLimitedAndKeepsOldResult();
 verifySettingsChangeRefreshesMarkersImmediately();
 verifySettingsNormalizeFromSceneData();
 verifySceneExportIncludesSettings();
+verifyOccupationAndDangerSourceContracts();
 
-console.log('Tactical position tuning smoke passed: highest-safe posture, stable markers, immediate tuning refresh, approach/occupation locks and scene settings persistence.');
+console.log('Tactical position tuning smoke passed: highest-safe posture, stable markers, command-owned occupation, graph posture guard and scene settings persistence.');
 
 function verifyHighestSafePosture(): void {
   const settings = createDefaultTacticalPositionSettings();
@@ -50,36 +59,65 @@ function verifyHighestSafePosture(): void {
   ], settings).posture, 'prone');
 }
 
-function verifyApproachAndOccupationSurviveAiOverwrite(): void {
+function verifyCommandOwnedApproachAndOccupation(): void {
   const unit = normalizeUnits([{ id: 'unit-1', type: 'infantry_squad', side: 'blue', x: 0, y: 0 }])[0]!;
-  unit.playerCommand = createPlayerMoveCommand(unit.id, { x: 2.5, y: 2.5 }, null, 1000);
-  const commandId = unit.playerCommand.id;
+  const command = createPlayerMoveCommand(
+    unit.id,
+    { x: 2.5, y: 2.5 },
+    null,
+    1000,
+    'normal',
+    null,
+    Math.PI / 2,
+    'prone',
+    'crouched',
+  );
+  unit.playerCommand = command;
   unit.order = {
     type: 'move',
     target: { x: 2.5, y: 2.5 },
     issuedAtMs: 1,
     source: 'player',
-    playerCommandId: commandId,
+    playerCommandId: command.id,
   };
-  registerTacticalPositionOccupation(unit, commandId, 'prone', Math.PI / 2, 'crouched');
   unit.behaviorRuntime.posture = 'standing';
   reconcileTacticalPositionOccupation(unit);
-  assert.equal(unit.behaviorRuntime.posture, 'crouched', 'approach posture must survive an AI overwrite while the linked route is active');
+  assert.equal(unit.behaviorRuntime.posture, 'crouched', 'linked tactical route must keep its command-owned approach posture');
 
   unit.order = null;
-  unit.playerCommand = updatePlayerCommandStatus(unit.playerCommand, 'completed', 'done', 'готово');
-  activateTacticalPositionOccupation(unit, commandId, 'prone', Math.PI / 2);
-  unit.behaviorRuntime.posture = 'standing';
-  unit.facingRadians = 0;
-  reconcileTacticalPositionOccupation(unit);
+  unit.playerCommand = updatePlayerCommandStatus(command, 'completed', 'done', 'готово');
+  assert.equal(applyCompletedTacticalPositionOccupation(unit), true);
+  unit.playerCommand = markPlayerCommandArrivalPostureApplied(unit.playerCommand);
   assert.equal(unit.behaviorRuntime.posture, 'prone');
   assert.ok(Math.abs(unit.facingRadians - Math.PI / 2) < 0.0001);
+  assert.equal(isTacticalPositionOccupationActive(unit), true);
+  assert.equal(unit.playerCommand.tacticalPositionOccupationStatus, 'occupied');
 
-  unit.order = { type: 'move', target: { x: 3, y: 3 }, issuedAtMs: 2 };
-  reconcileTacticalPositionOccupation(unit);
+  const restored = normalizePlayerCommand(JSON.parse(JSON.stringify(unit.playerCommand)), unit.id);
+  assert.equal(restored?.arrivalPosture, 'prone');
+  assert.equal(restored?.approachPosture, 'crouched');
+  assert.equal(restored?.tacticalPositionOccupationStatus, 'occupied');
+  assert.ok(Math.abs((restored?.finalFacingRadians ?? 0) - Math.PI / 2) < 0.0001);
+
+  const state = { units: [unit], map: { metersPerCell: 2 } } as unknown as SimulationState;
+  const graphResult = withAiSimulationExecutionContext(state, unit, () => runAiGraphRuntime({
+    graph: postureGraph('stand'),
+    unitId: unit.id,
+    blackboard: {},
+    nowMs: 2000,
+  }));
+  assert.equal(
+    graphResult.effects.some((effect) => effect.type === 'set_posture' && effect.posture === 'stand'),
+    false,
+    'ordinary Graph v2 pass must not reset command-owned occupied posture',
+  );
+
+  unit.playerCommand = createPlayerMoveCommand(unit.id, { x: 3.5, y: 3.5 }, unit.playerCommand, 3000);
+  unit.order = { type: 'move', target: { x: 3.5, y: 3.5 }, issuedAtMs: 2, source: 'player' };
+  assert.equal(isTacticalPositionOccupationActive(unit), false, 'a new command or route releases occupied-position ownership');
   unit.behaviorRuntime.posture = 'standing';
   reconcileTacticalPositionOccupation(unit);
-  assert.equal(unit.behaviorRuntime.posture, 'standing', 'a new route must release occupied-position posture');
+  assert.equal(unit.behaviorRuntime.posture, 'standing');
 }
 
 function verifyMarkerPublicationIsRateLimitedAndKeepsOldResult(): void {
@@ -153,6 +191,31 @@ function verifySettingsNormalizeFromSceneData(): void {
 function verifySceneExportIncludesSettings(): void {
   const source = readFileSync('src/ui/SceneExport.ts', 'utf8');
   assert.ok(source.includes('tacticalPositionSettings: cloneTacticalPositionSettings(getTacticalPositionSettings(unit))'));
+}
+
+function verifyOccupationAndDangerSourceContracts(): void {
+  const occupation = readFileSync('src/core/tactical/TacticalPositionOccupation.ts', 'utf8');
+  const orders = readFileSync('src/core/tactical/TacticalPositionOrders.ts', 'utf8');
+  assert.equal(occupation.includes('WeakMap'), false, 'occupation state must live in PlayerCommand, not a hidden WeakMap');
+  assert.equal(orders.includes('behaviorRuntime.danger = 0'), false, 'issuing a tactical move must not clear canonical danger');
+  assert.ok(orders.includes('finalFacingRadians'));
+  assert.ok(orders.includes('approachPosture'));
+}
+
+function postureGraph(posture: 'stand' | 'crouch' | 'prone'): AiGraph {
+  return {
+    version: 2,
+    id: 'occupied-posture-guard',
+    name: 'Occupied posture guard',
+    rootNodeId: 'root',
+    blackboardDefaults: {},
+    blackboardSchema: [],
+    subgraphRefs: [],
+    nodes: [
+      { id: 'root', type: 'Root', children: ['set-posture'], parameters: {} },
+      { id: 'set-posture', type: 'SetPosture', children: [], parameters: { posture } },
+    ],
+  };
 }
 
 function candidate(id: string, x: number, y: number): TacticalPositionCandidateSeedV2 {
