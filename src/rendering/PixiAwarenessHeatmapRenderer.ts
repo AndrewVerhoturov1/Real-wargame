@@ -1,9 +1,15 @@
-import { BufferImageSource, Container, Sprite, Text, Texture } from 'pixi.js';
+import { BufferImageSource, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import type { SoldierAwarenessCell } from '../core/knowledge/SoldierAwarenessGrid';
 import type { AwarenessWorkerFieldPayload } from '../core/knowledge/AwarenessWorldWorkerProtocol';
+import type { CanonicalWorldThreatSetSnapshot } from '../core/knowledge/CanonicalWorldThreat';
 import type { SimulationState } from '../core/simulation/SimulationState';
+import type { TacticalPositionCandidateSeedV2 } from '../core/tactical/TacticalPositionSearch';
 import { getSimulationLayerState } from '../core/ui/RuntimeUiState';
 import type { UnitModel } from '../core/units/UnitModel';
+import {
+  ensureAwarenessTacticalPositionProvider,
+  releaseAwarenessTacticalPositionProvider,
+} from '../runtime/AwarenessTacticalPositionAdapter';
 import {
   AwarenessWorldRuntime,
   buildAwarenessWorldKey as buildSharedAwarenessWorldKey,
@@ -23,6 +29,8 @@ export interface AwarenessOverlayDiagnostics {
   readonly representation: 'raster-sprite';
   readonly visible: boolean;
   readonly rebuildCount: number;
+  readonly tacticalMarkerRebuildCount: number;
+  readonly tacticalMarkerCount: number;
   readonly lastBuildMs: number;
   readonly maxBuildMs: number;
   readonly displayObjectCount: number;
@@ -45,6 +53,11 @@ type AwarenessDebugWindow = Window & {
 const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([0x01020304]).buffer)[0] === 0x04;
 const DANGER_PIXEL_LUT = buildPixelLut('danger');
 const STEALTH_PIXEL_LUT = buildPixelLut('stealth');
+const DISPLAY_SEARCH_RADIUS_METERS = 50;
+const DISPLAY_MAX_SAMPLED_CELLS = 2048;
+const DISPLAY_MAX_ROUTE_EXPANSIONS = 2048;
+const DISPLAY_MAX_CANDIDATES = 12;
+const DISPLAY_MINIMUM_SEPARATION_METERS = 4;
 
 /**
  * Presentation-only raster consumer. Full-map preparation and tactical-position
@@ -52,11 +65,15 @@ const STEALTH_PIXEL_LUT = buildPixelLut('stealth');
  */
 export class PixiAwarenessHeatmapRenderer {
   readonly container = new Container();
+  private readonly tacticalGraphics = new Graphics();
   private readonly title = new Text({ text: '', style: {
     fontFamily: 'Arial, sans-serif', fontSize: 12, fontWeight: '700', fill: 0xffffff,
     stroke: { color: 0x111510, width: 4 },
   } });
+  private attachedState: SimulationState | null = null;
   private lastRasterKey = '';
+  private lastTacticalKey = '';
+  private lastTacticalUnitId = '';
   private lastAppliedWorldKey = '';
   private lastAppliedCanonicalThreatKey = '';
   private lastAppliedFieldIdentity = '';
@@ -71,16 +88,20 @@ export class PixiAwarenessHeatmapRenderer {
   private rasterSprite: Sprite | null = null;
   private destroyed = false;
   private rebuildCount = 0;
+  private tacticalMarkerRebuildCount = 0;
+  private tacticalMarkerCount = 0;
   private lastBuildMs = 0;
   private maxBuildMs = 0;
 
   constructor(private readonly runtime: AwarenessWorldRuntime = new AwarenessWorldRuntime()) {
     this.title.position.set(8, 8);
+    this.tacticalGraphics.eventMode = 'none';
     this.container.visible = false;
   }
 
   render(state: SimulationState): void {
     if (this.destroyed) return;
+    this.attachState(state);
     const layer = getSimulationLayerState(state);
     const mode: VisibleAwarenessMode | null = layer.mode === 'danger'
       ? 'danger'
@@ -94,6 +115,7 @@ export class PixiAwarenessHeatmapRenderer {
     if (state.editor.enabled || !mode || !unit) {
       this.container.visible = false;
       this.lastRasterKey = 'hidden';
+      this.clearTacticalMarkers('hidden');
       this.publishDiagnostics();
       return;
     }
@@ -102,6 +124,7 @@ export class PixiAwarenessHeatmapRenderer {
     this.ensureRaster(state.map.width, state.map.height, state.map.cellSize);
     const prepared = this.runtime.requestWorldField(state, unit);
     if (!prepared) {
+      if (unit.id !== this.lastTacticalUnitId) this.clearTacticalMarkers(`pending:${unit.id}`);
       this.publishDiagnostics();
       return;
     }
@@ -116,12 +139,17 @@ export class PixiAwarenessHeatmapRenderer {
       this.lastAppliedJobId = prepared.jobId;
       this.applyRaster(mode, rasterKey);
     }
+    this.renderTacticalPositions(state, unit, mode);
     this.publishDiagnostics();
   }
 
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    if (this.attachedState) {
+      releaseAwarenessTacticalPositionProvider(this.attachedState, this.runtime);
+      this.attachedState = null;
+    }
     this.runtime.destroy();
     this.container.removeChildren();
     this.rasterSprite?.destroy();
@@ -131,6 +159,7 @@ export class PixiAwarenessHeatmapRenderer {
     this.rasterPixelWords = null;
     this.rasterPixels = null;
     this.worldField = null;
+    this.tacticalGraphics.destroy();
     this.title.destroy();
     this.container.destroy();
     delete (window as AwarenessDebugWindow).__realWargameAwarenessDebug;
@@ -142,6 +171,8 @@ export class PixiAwarenessHeatmapRenderer {
       representation: 'raster-sprite',
       visible: this.container.visible,
       rebuildCount: this.rebuildCount,
+      tacticalMarkerRebuildCount: this.tacticalMarkerRebuildCount,
+      tacticalMarkerCount: this.tacticalMarkerCount,
       lastBuildMs: roundMs(this.lastBuildMs),
       maxBuildMs: roundMs(this.maxBuildMs),
       displayObjectCount: this.container.children.length,
@@ -164,6 +195,59 @@ export class PixiAwarenessHeatmapRenderer {
         : null,
       movement,
     };
+  }
+
+  private attachState(state: SimulationState): void {
+    if (this.attachedState === state) return;
+    if (this.attachedState) releaseAwarenessTacticalPositionProvider(this.attachedState, this.runtime);
+    this.attachedState = state;
+    ensureAwarenessTacticalPositionProvider(state, this.runtime);
+  }
+
+  private renderTacticalPositions(
+    state: SimulationState,
+    unit: UnitModel,
+    mode: VisibleAwarenessMode,
+  ): void {
+    if (mode !== 'danger' || unit.tacticalKnowledge.threats.length === 0) {
+      this.clearTacticalMarkers(`inactive:${mode}:${unit.id}`);
+      return;
+    }
+    const snapshot = this.runtime.requestTacticalPositions(state, unit, {
+      searchRadiusMeters: DISPLAY_SEARCH_RADIUS_METERS,
+      maxSampledCells: DISPLAY_MAX_SAMPLED_CELLS,
+      maxRouteExpansions: DISPLAY_MAX_ROUTE_EXPANSIONS,
+      maxCandidates: DISPLAY_MAX_CANDIDATES,
+      minimumSeparationMeters: DISPLAY_MINIMUM_SEPARATION_METERS,
+    });
+    if (!snapshot) {
+      if (unit.id !== this.lastTacticalUnitId) this.clearTacticalMarkers(`pending:${unit.id}`);
+      return;
+    }
+    const key = `${snapshot.searchKey};cellSize:${state.map.cellSize}`;
+    if (key === this.lastTacticalKey) return;
+    this.lastTacticalKey = key;
+    this.lastTacticalUnitId = unit.id;
+    this.tacticalGraphics.clear();
+    for (let index = 0; index < snapshot.candidates.length; index += 1) {
+      drawTacticalPositionMarker(
+        this.tacticalGraphics,
+        snapshot.candidates[index]!,
+        state.map.cellSize,
+        index === 0,
+      );
+    }
+    this.tacticalMarkerCount = snapshot.candidates.length;
+    this.tacticalMarkerRebuildCount += 1;
+  }
+
+  private clearTacticalMarkers(key: string): void {
+    if (this.lastTacticalKey === key && this.tacticalMarkerCount === 0) return;
+    this.lastTacticalKey = key;
+    this.lastTacticalUnitId = '';
+    this.tacticalGraphics.clear();
+    this.tacticalMarkerCount = 0;
+    this.tacticalMarkerRebuildCount += 1;
   }
 
   private applyRaster(mode: VisibleAwarenessMode, rasterKey: string): void {
@@ -195,6 +279,7 @@ export class PixiAwarenessHeatmapRenderer {
       this.rasterSprite = null;
       this.rasterTexture = null;
       this.lastRasterKey = '';
+      this.lastTacticalKey = '';
       this.rasterWidth = width;
       this.rasterHeight = height;
       this.rasterPixels = new Uint8Array(width * height * 4);
@@ -209,7 +294,7 @@ export class PixiAwarenessHeatmapRenderer {
         }),
       });
       this.rasterSprite = new Sprite(this.rasterTexture);
-      this.container.addChild(this.rasterSprite, this.title);
+      this.container.addChild(this.rasterSprite, this.tacticalGraphics, this.title);
     }
     this.rasterSprite?.scale.set(cellSize, cellSize);
   }
@@ -217,6 +302,35 @@ export class PixiAwarenessHeatmapRenderer {
   private publishDiagnostics(): void {
     (window as AwarenessDebugWindow).__realWargameAwarenessDebug = this.getDiagnostics();
   }
+}
+
+function drawTacticalPositionMarker(
+  graphics: Graphics,
+  candidate: TacticalPositionCandidateSeedV2,
+  cellSize: number,
+  winner: boolean,
+): void {
+  const x = candidate.position.x * cellSize;
+  const y = candidate.position.y * cellSize;
+  const radius = winner ? 9 : 6;
+  const color = winner ? 0x65f08a : 0xf4da66;
+  graphics.moveTo(x, y - radius)
+    .lineTo(x + radius, y)
+    .lineTo(x, y + radius)
+    .lineTo(x - radius, y)
+    .closePath()
+    .fill({ color, alpha: winner ? 0.34 : 0.18 })
+    .stroke({ width: winner ? 3 : 2, color, alpha: winner ? 1 : 0.84 });
+  const postureLines = candidate.metrics.recommendedPosture === 'prone'
+    ? 3
+    : candidate.metrics.recommendedPosture === 'crouched'
+      ? 2
+      : 1;
+  for (let line = 0; line < postureLines; line += 1) {
+    const offset = (line - (postureLines - 1) / 2) * 3;
+    graphics.moveTo(x - 3, y + offset).lineTo(x + 3, y + offset);
+  }
+  graphics.stroke({ width: 1.5, color, alpha: 0.95 });
 }
 
 export function buildAwarenessRenderKey(
@@ -230,8 +344,12 @@ export function buildAwarenessRenderKey(
 export function buildAwarenessWorldKey(
   state: SimulationState,
   unit: UnitModel,
+  canonicalThreatKey?: string | CanonicalWorldThreatSetSnapshot,
 ): string {
-  return buildSharedAwarenessWorldKey(state, unit);
+  const key = typeof canonicalThreatKey === 'string'
+    ? canonicalThreatKey
+    : canonicalThreatKey?.key;
+  return buildSharedAwarenessWorldKey(state, unit, key);
 }
 
 export function createAwarenessTexture(
