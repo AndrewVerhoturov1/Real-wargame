@@ -98,7 +98,15 @@ assert.equal(localSearchCalls, 1);
 assert.equal(service.readRequest(String(requestId))?.status, 'ready');
 
 const third = runWithContext(second.blackboard, 2200);
-assert.equal(third.ok, true);
+assert.equal(third.ok, true, JSON.stringify({
+  status: third.status,
+  explanation: third.explanation,
+  explanationRu: third.explanationRu,
+  blackboard: third.blackboard,
+  tacticalQuery: third.tacticalQueries.cover_query,
+  trace: third.trace,
+  serviceRequest: service.readRequest(String(requestId)),
+}, null, 2));
 assert.equal(third.status, 'success');
 assert.equal(third.blackboard.cover_query_request_id, requestId);
 assert.deepEqual(third.blackboard.best_cover_position, { x: 8.5, y: 4.5 });
