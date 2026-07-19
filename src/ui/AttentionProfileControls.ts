@@ -7,7 +7,6 @@ import {
   type UnitVisionSettings,
 } from '../core/perception/AttentionModel';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
-import { installTacticalPositionSettingsControls } from './TacticalPositionSettingsControls';
 
 const MODE_LABELS: Record<AttentionMode, string> = {
   march: 'Марш',
@@ -22,7 +21,6 @@ export function installAttentionProfileControls(
 ): () => void {
   let activeMode: AttentionMode = 'march';
   let scheduled = false;
-  const destroyTacticalPositionSettingsControls = installTacticalPositionSettingsControls(state, onChanged);
 
   const render = (force = false) => {
     scheduled = false;
@@ -98,10 +96,7 @@ export function installAttentionProfileControls(
   const observer = new MutationObserver(scheduleRender);
   observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
   scheduleRender();
-  return () => {
-    observer.disconnect();
-    destroyTacticalPositionSettingsControls();
-  };
+  return () => observer.disconnect();
 }
 
 function visionGrid(vision: UnitVisionSettings, onChanged: () => void): HTMLElement {
