@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 1
           show-progress: false
 
-      - name: Replace malformed nested template block
+      - name: Replace first malformed nested template block
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -49,14 +49,21 @@ jobs:
           '''
           path.write_text(''.join(lines[:start]) + replacement + ''.join(lines[end + 1:]))
           PY
-          node --check .github/patches/apply-tactical-core-v2.mjs
 
-      - name: Commit patcher fix
+      - name: Capture parser result
         run: |
-          rm -f .github/workflows/fix-tactical-core-patcher.yml
+          mkdir -p docs/debug
+          set +e
+          node --check .github/patches/apply-tactical-core-v2.mjs > docs/debug/tactical-core-node-check.log 2>&1
+          status=$?
+          set -e
+          echo "node_check_status=$status" >> docs/debug/tactical-core-node-check.log
+
+      - name: Commit partial repair and diagnostic
+        run: |
           rm -f docs/debug/tactical-core-patcher.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "fix: repair tactical core patch generator"
+          git commit -m "debug: capture remaining tactical patch syntax"
           git push origin HEAD:feature/20260719-tactical-position-system
