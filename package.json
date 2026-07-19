@@ -84,7 +84,7 @@
     "plan-runtime:smoke": "node scripts/ai_plan_runtime_smoke.mjs",
     "state-plan-scenario:smoke": "node scripts/ai_state_plan_scenario_smoke.mjs",
     "tactical-query:smoke": "node scripts/tactical_query_system_smoke.mjs",
-    "tactical-position:smoke": "node scripts/tactical_position_search_smoke.mjs",
+    "tactical-position:smoke": "node scripts/tactical_position_search_smoke.mjs && node scripts/tactical_position_interaction_smoke.mjs && node scripts/tactical_position_tuning_smoke.mjs",
     "tactical-query-ui:smoke": "node scripts/tactical_query_ui_smoke.mjs",
     "ai-scheduler:smoke": "node scripts/ai_per_unit_scheduler_smoke.mjs",
     "live-windows-workflow-contract:smoke": "node scripts/live_windows_workflow_enforce_contract_smoke.mjs",
