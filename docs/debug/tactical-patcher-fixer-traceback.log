@@ -1,6 +1,0 @@
-line_count 349
-matches [240, 241]
-needle_line "  `    \\`kind:${value.kind}\\`,\\n    \\`origin:${quantize(value.origin.x)}:${quantize(value.origin.y)}\\`,\\n    \\`posture:${value.currentPosture}\\`,\\n    \\`order:${value.orderTarget ? \\`${quantize(value.orderTarget.x)}:${quantize(value.orderTarget.y)}\\` : 'none'}\\`,\\n    \\`threats:${value.threatCount}:${value.tacticalKnowledgeRevision}\\`,`,\n"
-starts [238, 233, 228]
-ends [242, 247, 252]
-status=0

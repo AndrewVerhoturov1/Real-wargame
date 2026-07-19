@@ -238,8 +238,19 @@ replaceExact(
 );
 replaceExact(
   'src/core/tactical/TacticalPositionSearchService.ts',
-  `    \`kind:${value.kind}\`,\n    \`origin:${quantize(value.origin.x)}:${quantize(value.origin.y)}\`,\n    \`posture:${value.currentPosture}\`,\n    \`order:${value.orderTarget ? \`${quantize(value.orderTarget.x)}:${quantize(value.orderTarget.y)}\` : 'none'}\`,\n    \`threats:${value.threatCount}:${value.tacticalKnowledgeRevision}\`,`,
-  `    \`kind:${value.kind}\`,\n    \`objective:${value.parameters.objective}\`,\n    \`order:${value.parameters.objective === 'continue_order' && value.orderTarget ? \`${quantize(value.orderTarget.x)}:${quantize(value.orderTarget.y)}\` : 'ignored'}\`,\n    \`threat:${value.referenceThreatId ?? 'none'}:${value.referenceThreatPosition ? \`${quantize(value.referenceThreatPosition.x)}:${quantize(value.referenceThreatPosition.y)}\` : 'none'}\`,`,
+  [
+    "    `kind:${value.kind}`,",
+    "    `origin:${quantize(value.origin.x)}:${quantize(value.origin.y)}`,",
+    "    `posture:${value.currentPosture}`,",
+    "    `order:${value.orderTarget ? `${quantize(value.orderTarget.x)}:${quantize(value.orderTarget.y)}` : 'none'}`,",
+    "    `threats:${value.threatCount}:${value.tacticalKnowledgeRevision}`,",
+  ].join('\n'),
+  [
+    "    `kind:${value.kind}`,",
+    "    `objective:${value.parameters.objective}`,",
+    "    `order:${value.parameters.objective === 'continue_order' && value.orderTarget ? `${quantize(value.orderTarget.x)}:${quantize(value.orderTarget.y)}` : 'ignored'}`,",
+    "    `threat:${value.referenceThreatId ?? 'none'}:${value.referenceThreatPosition ? `${quantize(value.referenceThreatPosition.x)}:${quantize(value.referenceThreatPosition.y)}` : 'none'}`,",
+  ].join('\n'),
 );
 replaceExact(
   'src/core/tactical/TacticalPositionSearchService.ts',
