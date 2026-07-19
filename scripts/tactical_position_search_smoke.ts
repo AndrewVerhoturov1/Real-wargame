@@ -3,13 +3,15 @@ import {
   searchTacticalPositions,
   type TacticalPositionFieldView,
 } from '../src/core/tactical/TacticalPositionSearch';
+import { createDefaultTacticalPositionSettings } from '../src/core/tactical/TacticalPositionSettings';
 
 verifyThreatRelativeFieldChoosesProtectedSide();
 verifyBlockedCellsAndDuplicatePlateausAreExcluded();
 verifyPostureRecommendationUsesPreparedPostureFields();
+verifyConfiguredThresholdCanForceProne();
 verifyDeterministicBudgetsBoundRouteWork();
 
-console.log('Tactical position search smoke passed: field-owned candidates, posture recommendation, non-maximum suppression and deterministic work budgets.');
+console.log('Tactical position search smoke passed: field-owned candidates, highest-safe posture, tunable thresholds, non-maximum suppression and deterministic work budgets.');
 
 function verifyThreatRelativeFieldChoosesProtectedSide(): void {
   const field = createField(14, 9);
@@ -109,9 +111,39 @@ function verifyPostureRecommendationUsesPreparedPostureFields(): void {
 
   const candidate = result.candidates.find((item) => Math.floor(item.position.x) === 7 && Math.floor(item.position.y) === 3);
   assert.ok(candidate, 'the prepared low-cover cell should remain a candidate after posture evaluation');
-  assert.equal(candidate.metrics.recommendedPosture, 'prone');
+  assert.equal(candidate.metrics.recommendedPosture, 'crouched');
   assert.ok(candidate.metrics.protection > field.expectedProtectionAgainstThreat[targetIndex]!);
   assert.ok(candidate.metrics.danger < field.danger[targetIndex]!);
+}
+
+function verifyConfiguredThresholdCanForceProne(): void {
+  const field = createField(10, 7);
+  const targetIndex = index(field, 7, 3);
+  field.danger[targetIndex] = 62;
+  field.safety[targetIndex] = 48;
+  field.expectedProtectionAgainstThreat[targetIndex] = 28;
+  field.staticProtectionByPosture.standing[targetIndex] = 12;
+  field.staticProtectionByPosture.crouched[targetIndex] = 55;
+  field.staticProtectionByPosture.prone[targetIndex] = 88;
+  const settings = createDefaultTacticalPositionSettings();
+  settings.crouchedMaximumDanger = 20;
+
+  const result = searchTacticalPositions(field, {
+    origin: { x: 2.5, y: 3.5 },
+    currentPosture: 'standing',
+    orderTarget: null,
+    threatCount: 1,
+    searchRadiusMeters: 20,
+    maxSampledCells: 140,
+    maxRouteExpansions: 140,
+    maxCandidates: 6,
+    minimumSeparationMeters: 2,
+    settings,
+  });
+
+  const candidate = result.candidates.find((item) => Math.floor(item.position.x) === 7 && Math.floor(item.position.y) === 3);
+  assert.ok(candidate);
+  assert.equal(candidate.metrics.recommendedPosture, 'prone');
 }
 
 function verifyDeterministicBudgetsBoundRouteWork(): void {
