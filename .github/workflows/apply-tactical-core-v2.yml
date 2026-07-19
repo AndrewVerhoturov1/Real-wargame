@@ -6,6 +6,7 @@ on:
       - feature/20260719-tactical-position-system
     paths:
       - '.github/workflows/apply-tactical-core-v2.yml'
+      - '.github/patches/apply-tactical-core-v2.mjs'
   workflow_dispatch:
 
 permissions:
