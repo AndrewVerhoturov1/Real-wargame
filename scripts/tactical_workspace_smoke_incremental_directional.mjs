@@ -28,6 +28,7 @@ verifyOverlayMigration();
 verifySharedAwarenessRuntime();
 verifyBoundedTacticalSearch();
 verifyLegacyCoverDiscoveryIsGone();
+verifyLegacyAuxiliaryUiIsGone();
 verifyGraphRuntimeConnection();
 
 if (baseline.stdout) process.stdout.write(baseline.stdout);
@@ -75,6 +76,13 @@ function isExpectedMigrationFailure(line) {
       'AwarenessWorldWorker.ts',
     ].some((token) => line.includes(token));
   }
+  if (line.includes('src/ui/WorkspaceTooltipGuard.ts: missing')) {
+    return ['clearCoverTooltip', '[data-tab], [data-mode]', 'tooltip.hidden = true']
+      .some((token) => line.includes(token));
+  }
+  if (line.includes('src/tactical-workspace-stage8.css: missing')) {
+    return line.includes('.cover-map-tooltip[hidden]');
+  }
   return line.includes('src/core/knowledge/SoldierDangerField.ts: missing "readDirectionalBasisValue"');
 }
 
@@ -108,9 +116,12 @@ function verifyWorkspaceMigration() {
     'Ромбы на карте рассчитаны из личного поля опасности бойца',
     '.cover-map-tooltip',
     '.selected-cover-card',
+    'observer?.observe(shell',
+    'requestAnimationFrame',
   ]) {
     assert.ok(wrapper.includes(token), `workspace migration shell must contain ${token}`);
   }
+  assert.ok(!wrapper.includes('observer.observe(document.body'), 'workspace migration must not observe the full document');
   assert.ok(!wrapper.includes('getSimulationCovers'), 'workspace shell must not call removed cover discovery');
   assert.ok(!wrapper.includes('hoverSimulationCoverAtPosition'), 'workspace shell must not hit-test old cover markers');
   assert.ok(!wrapper.includes('Приказать двигаться сюда'), 'old object-cover movement control must not survive in active workspace code');
@@ -186,6 +197,19 @@ function verifyLegacyCoverDiscoveryIsGone() {
   assert.ok(!selection.includes('buildUnitKnowledgeReport'));
   assert.ok(selection.includes('return [];'));
   assert.ok(selection.includes('return null;'));
+}
+
+function verifyLegacyAuxiliaryUiIsGone() {
+  const guard = readFileSync('src/ui/WorkspaceTooltipGuard.ts', 'utf8');
+  const coverDirection = readFileSync('src/rendering/PixiCoverDirectionRenderer.ts', 'utf8');
+  const stage8Css = readFileSync('src/tactical-workspace-stage8.css', 'utf8');
+  assert.ok(!guard.includes('addEventListener'), 'removed cover tooltip must not leave global listeners');
+  assert.ok(!guard.includes('.cover-map-tooltip'), 'removed cover tooltip must not remain in its former guard');
+  for (const token of ['objectCenter', 'resolveObjectCoverProperties', 'getSelectedMapObject', 'selectedCoverProtectsUnit']) {
+    assert.ok(!coverDirection.includes(token), `cover-direction compatibility renderer must not contain ${token}`);
+  }
+  assert.ok(coverDirection.includes('Directional protection is now calculated only by the shared soldier awareness fields'));
+  assert.ok(!stage8Css.includes('.cover-map-tooltip'), 'legacy tooltip CSS must be deleted');
 }
 
 function verifyGraphRuntimeConnection() {
