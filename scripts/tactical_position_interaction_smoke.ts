@@ -94,10 +94,13 @@ function verifyB2SourceContracts(): void {
   const renderer = readFileSync('src/rendering/PixiAwarenessHeatmapRenderer.ts', 'utf8');
   const input = readFileSync('src/input/TacticalPositionInputController.ts', 'utf8');
   assert.ok(renderer.includes('drawB2PostureGlyph'));
-  assert.ok(renderer.includes("case 'standing'"));
-  assert.ok(renderer.includes("case 'crouched'"));
-  assert.ok(renderer.includes("case 'prone'"));
-  assert.ok(renderer.includes('tacticalLabel'));
+  assert.ok(renderer.includes("posture === 'standing'"), 'standing glyph must be a distinct vertical mark');
+  assert.ok(renderer.includes("posture === 'crouched'"), 'crouched glyph must be a distinct angled mark');
+  assert.ok(
+    renderer.includes('graphics.moveTo(x - 4, y).lineTo(x + 4, y)'),
+    'prone glyph must be a distinct horizontal mark',
+  );
+  assert.ok(renderer.includes('overlayText'), 'one reusable text object must label hovered or selected positions');
   assert.ok(input.includes("addEventListener('pointerdown'"));
   assert.ok(input.includes("addEventListener('pointerup'"));
   assert.ok(input.includes('capture: true'));
