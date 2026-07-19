@@ -1,7 +1,7 @@
 import type { GridPosition } from '../geometry';
 import type { SimulationState } from '../simulation/SimulationState';
 
-export type SimulationLayerMode = 'info' | 'danger' | 'stealth' | 'memory';
+export type SimulationLayerMode = 'info' | 'danger' | 'positions' | 'stealth' | 'memory';
 
 export interface KnowledgeOverlayRuntimeState {
   active: boolean;
