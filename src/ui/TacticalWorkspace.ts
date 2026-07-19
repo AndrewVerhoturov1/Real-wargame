@@ -8,8 +8,8 @@ export * from './TacticalWorkspaceBase';
 
 /**
  * Compatibility shell around the existing workspace while the danger tab is
- * migrated to the field-owned tactical-position UI. The removed object-cover
- * list and tooltip are stripped synchronously whenever the base panel updates.
+ * migrated to the field-owned tactical-position UI. Observation is scoped to
+ * one workspace subtree and coalesced to at most one cleanup per animation frame.
  */
 export function installTacticalWorkspace(
   state: SimulationState,
@@ -28,23 +28,25 @@ export function installTacticalWorkspace(
   document.head.append(style);
 
   const teardownBase = installTacticalWorkspaceBase(state, aiBridge, onChanged);
+  const shell = document.querySelector<HTMLElement>('.tactical-workspace-shell');
   let cleaning = false;
+  let scheduledFrame = 0;
   const cleanRemovedCoverUi = (): void => {
-    if (cleaning) return;
+    if (!shell || cleaning) return;
     cleaning = true;
     try {
-      document.querySelectorAll<HTMLElement>('.cover-map-tooltip, .selected-cover-card').forEach((element) => element.remove());
-      document.querySelectorAll<HTMLElement>('.workspace-panel-section').forEach((section) => {
+      shell.querySelectorAll<HTMLElement>('.cover-map-tooltip, .selected-cover-card').forEach((element) => element.remove());
+      shell.querySelectorAll<HTMLElement>('.workspace-panel-section').forEach((section) => {
         const title = section.querySelector('h3')?.textContent?.trim() ?? '';
         if (title === 'Известные укрытия' || title === 'Известные предметы и укрытия') section.remove();
       });
-      document.querySelectorAll<HTMLElement>('.workspace-info-grid > div').forEach((row) => {
+      shell.querySelectorAll<HTMLElement>('.workspace-info-grid > div').forEach((row) => {
         const label = row.querySelector('span')?.textContent?.trim() ?? '';
         if (label === 'Известных укрытий') row.remove();
       });
-      const sidebarTitle = document.querySelector<HTMLElement>('[data-role="sidebar-title"]');
+      const sidebarTitle = shell.querySelector<HTMLElement>('[data-role="sidebar-title"]');
       if (sidebarTitle?.textContent === 'Опасность и укрытия') sidebarTitle.textContent = 'Опасность и тактические позиции';
-      const sidebarBody = document.querySelector<HTMLElement>('[data-role="sidebar-body"]');
+      const sidebarBody = shell.querySelector<HTMLElement>('[data-role="sidebar-body"]');
       if (
         sidebarTitle?.textContent === 'Опасность и тактические позиции'
         && sidebarBody
@@ -60,13 +62,21 @@ export function installTacticalWorkspace(
       cleaning = false;
     }
   };
+  const scheduleCleanup = (): void => {
+    if (scheduledFrame !== 0) return;
+    scheduledFrame = window.requestAnimationFrame(() => {
+      scheduledFrame = 0;
+      cleanRemovedCoverUi();
+    });
+  };
 
-  const observer = new MutationObserver(cleanRemovedCoverUi);
-  observer.observe(document.body, { childList: true, subtree: true });
+  const observer = shell ? new MutationObserver(scheduleCleanup) : null;
+  observer?.observe(shell, { childList: true, subtree: true });
   cleanRemovedCoverUi();
 
   return () => {
-    observer.disconnect();
+    observer?.disconnect();
+    if (scheduledFrame !== 0) window.cancelAnimationFrame(scheduledFrame);
     style.remove();
     teardownBase();
   };
