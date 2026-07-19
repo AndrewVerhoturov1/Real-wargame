@@ -27,6 +27,24 @@ jobs:
           fetch-depth: 1
           show-progress: false
 
+      - name: Apply regression tests or persist patch diagnostic
+        run: |
+          set +e
+          node .github/patches/apply-tactical-core-v2.mjs tests > tactical-core-patcher.log 2>&1
+          patch_status=$?
+          set -e
+          if [ "$patch_status" -ne 0 ]; then
+            mkdir -p docs/debug
+            cp tactical-core-patcher.log docs/debug/tactical-core-patcher.log
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add docs/debug/tactical-core-patcher.log
+            git commit -m "debug: capture tactical core patch failure"
+            git push origin HEAD:feature/20260719-tactical-position-system
+            cat tactical-core-patcher.log
+            exit "$patch_status"
+          fi
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -36,9 +54,8 @@ jobs:
       - name: Install dependencies
         run: npm ci --silent
 
-      - name: RED — apply regression tests and prove old implementation fails
+      - name: RED — prove old implementation fails regression tests
         run: |
-          node .github/patches/apply-tactical-core-v2.mjs tests
           set +e
           npm run tactical-position:smoke > tactical-core-red.log 2>&1
           red_status=$?
@@ -74,6 +91,7 @@ jobs:
         run: |
           rm -f .github/patches/apply-tactical-core-v2.mjs
           rm -f .github/workflows/apply-tactical-core-v2.yml
+          rm -f docs/debug/tactical-core-patcher.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
