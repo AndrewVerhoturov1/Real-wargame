@@ -70,8 +70,11 @@ export function installTacticalWorkspace(
     });
   };
 
-  const observer = shell ? new MutationObserver(scheduleCleanup) : null;
-  observer?.observe(shell, { childList: true, subtree: true });
+  let observer: MutationObserver | null = null;
+  if (shell) {
+    observer = new MutationObserver(scheduleCleanup);
+    observer.observe(shell, { childList: true, subtree: true });
+  }
   cleanRemovedCoverUi();
 
   return () => {
