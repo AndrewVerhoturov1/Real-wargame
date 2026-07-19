@@ -45,13 +45,11 @@ function verifyHighestSafePosture(): void {
     { posture: 'crouched', danger: 10, safety: 80, protection: 36 },
     { posture: 'prone', danger: 4, safety: 90, protection: 52 },
   ], settings).posture, 'standing');
-
   assert.equal(selectHighestSafePosture([
     { posture: 'standing', danger: 42, safety: 52, protection: 20 },
     { posture: 'crouched', danger: 28, safety: 66, protection: 42 },
     { posture: 'prone', danger: 12, safety: 82, protection: 64 },
   ], settings).posture, 'crouched');
-
   assert.equal(selectHighestSafePosture([
     { posture: 'standing', danger: 76, safety: 20, protection: 8 },
     { posture: 'crouched', danger: 61, safety: 34, protection: 24 },
@@ -194,19 +192,26 @@ function verifySettingsNormalizeFromSceneData(): void {
     x: 0,
     y: 0,
     tacticalPositionSettings: {
-      standingMaximumDanger: 11,
-      markerRefreshIntervalSeconds: 2.5,
+      version: 1,
+      revision: 7,
+      values: {
+        standingMaximumDanger: 11,
+        markerRefreshIntervalSeconds: 2.5,
+      },
     },
   }])[0]!;
   const settings = getTacticalPositionSettings(unit);
   assert.equal(settings.standingMaximumDanger, 11);
   assert.equal(settings.markerRefreshIntervalSeconds, 2.5);
+  assert.equal(unit.tacticalPositionSettingsRevision, 7);
   assert.equal(settings.crouchedMaximumDanger, createDefaultTacticalPositionSettings().crouchedMaximumDanger);
 }
 
 function verifySceneExportIncludesSettings(): void {
   const source = readFileSync('src/ui/SceneExport.ts', 'utf8');
-  assert.ok(source.includes('tacticalPositionSettings: cloneTacticalPositionSettings(getTacticalPositionSettings(unit))'));
+  assert.ok(source.includes('tacticalPositionSettings: serializeTacticalPositionSettings(unit)'));
+  assert.ok(source.includes('getTacticalPositionSearchService(state)'));
+  assert.ok(source.includes('tacticalPositionSearchService?.clearUnit(unit.id)'));
 }
 
 function verifyOccupationAndDangerSourceContracts(): void {
