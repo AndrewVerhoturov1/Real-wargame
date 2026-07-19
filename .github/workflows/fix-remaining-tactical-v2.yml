@@ -42,7 +42,23 @@ jobs:
         run: npx tsc
 
       - name: Tactical position search smoke
-        run: node scripts/tactical_position_search_smoke.mjs
+        run: |
+          set +e
+          node scripts/tactical_position_search_smoke.mjs > tactical-position-search-failure.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            mkdir -p docs/debug
+            cp tactical-position-search-failure.log docs/debug/tactical-position-search-failure.log
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add docs/debug/tactical-position-search-failure.log
+            git commit -m "debug: capture tactical position search failure"
+            git push origin HEAD:feature/20260719-tactical-position-system
+            cat tactical-position-search-failure.log
+            exit "$status"
+          fi
+          cat tactical-position-search-failure.log
 
       - name: Tactical position interaction smoke
         run: node scripts/tactical_position_interaction_smoke.mjs
@@ -84,8 +100,9 @@ jobs:
           rm -f scripts/fix_remaining_tactical_v2.py
           rm -f .github/workflows/fix-remaining-tactical-v2.yml
           rm -f finalize-v2.log objective-red.log
+          rm -f docs/debug/tactical-position-search-failure.log
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "4189828+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "fix: complete tactical positions and AI editor integration"
           git push origin HEAD:feature/20260719-tactical-position-system
