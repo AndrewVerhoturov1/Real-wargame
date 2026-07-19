@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createPlayerMoveCommand, updatePlayerCommandStatus } from '../src/core/orders/PlayerCommand';
 import { normalizeUnits } from '../src/core/units/UnitModel';
 import type { SimulationState } from '../src/core/simulation/SimulationState';
 import {
@@ -45,7 +46,14 @@ function verifyHighestSafePosture(): void {
 
 function verifyOccupationSurvivesAiOverwriteAndClearsOnNewMove(): void {
   const unit = normalizeUnits([{ id: 'unit-1', type: 'infantry_squad', side: 'blue', x: 0, y: 0 }])[0]!;
-  activateTacticalPositionOccupation(unit, 'command-1', 'crouched', Math.PI / 2);
+  unit.playerCommand = updatePlayerCommandStatus(
+    createPlayerMoveCommand(unit.id, { x: 2.5, y: 2.5 }, null, 1000),
+    'completed',
+    'done',
+    'готово',
+  );
+  const commandId = unit.playerCommand.id;
+  activateTacticalPositionOccupation(unit, commandId, 'crouched', Math.PI / 2);
   unit.behaviorRuntime.posture = 'standing';
   unit.facingRadians = 0;
   reconcileTacticalPositionOccupation(unit);
