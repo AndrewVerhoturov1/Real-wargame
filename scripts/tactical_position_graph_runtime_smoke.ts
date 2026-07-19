@@ -39,6 +39,7 @@ installTacticalPositionProvider(state, {
           routeDanger: 18,
           slopeType: 'reverse',
           orderAlignment: 60,
+          recommendedPosture: 'prone',
         },
       }],
     };
@@ -56,8 +57,10 @@ assert.equal(result.ok, true);
 assert.equal(result.status, 'success');
 assert.equal(providerCalls, 1, 'Graph v2 must query the registered prepared-field provider exactly once');
 assert.deepEqual(result.blackboard.best_cover_position, { x: 8.5, y: 4.5 });
+assert.equal(result.blackboard.best_cover_position_posture, 'prone');
 assert.equal(result.tacticalQueries.cover_query?.winnerCandidateId, 'tactical:8:4:prone');
 assert.equal(result.tacticalQueries.cover_query?.candidates[0]?.source.kind, 'terrain');
+assert.equal(result.tacticalQueries.cover_query?.candidates[0]?.metrics.recommendedPosture, 'prone');
 
 clearTacticalPositionProvider(state);
 const unavailable = runAiGraphRuntime({
@@ -69,7 +72,7 @@ const unavailable = runAiGraphRuntime({
 assert.equal(unavailable.ok, false);
 assert.equal(unavailable.tacticalQueries.cover_query?.stopReason?.code, 'host_unavailable');
 
-console.log('Tactical position Graph v2 smoke passed: registered field provider supplies candidates and teardown removes access without synchronous fallback.');
+console.log('Tactical position Graph v2 smoke passed: registered field provider supplies position plus posture and teardown removes access without synchronous fallback.');
 
 function tacticalPositionGraph(): AiGraph {
   return {
