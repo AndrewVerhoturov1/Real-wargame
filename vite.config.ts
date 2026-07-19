@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
 const generatedAt = new Date().toISOString();
@@ -22,6 +23,14 @@ const buildId = firstNonEmpty(
 );
 
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      input: {
+        game: fileURLToPath(new URL('./index.html', import.meta.url)),
+        aiNodeEditor: fileURLToPath(new URL('./ai-node-editor.html', import.meta.url)),
+      },
+    },
+  },
   define: {
     __REAL_WARGAME_BUILD_IDENTITY__: JSON.stringify({
       branch,
