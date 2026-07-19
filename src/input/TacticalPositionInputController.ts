@@ -81,7 +81,7 @@ export class TacticalPositionInputController {
   private canHandle(event: PointerEvent): boolean {
     return event.target instanceof HTMLCanvasElement
       && !this.state.editor.enabled
-      && getSimulationLayerState(this.state).mode === 'danger'
+      && getSimulationLayerState(this.state).mode === 'positions'
       && this.state.selectedUnitId !== null;
   }
 }
