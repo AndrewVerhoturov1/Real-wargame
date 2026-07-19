@@ -1,0 +1,58 @@
+name: Fix Tactical Core Patcher
+
+on:
+  push:
+    branches:
+      - feature/20260719-tactical-position-system
+    paths:
+      - '.github/workflows/fix-tactical-core-patcher.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/20260719-tactical-position-system
+          fetch-depth: 1
+          show-progress: false
+
+      - name: Replace nested template literals with literal line arrays
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/patches/apply-tactical-core-v2.mjs')
+          source = path.read_text()
+          start = source.index("replaceExact(\n  'src/core/tactical/TacticalPositionSearchService.ts',\n  `    \\`kind:${value.kind}\\`,`")
+          end = source.index("\nreplaceExact(\n  'src/core/tactical/TacticalPositionSearchService.ts',\n  `    origin: Object.freeze", start)
+          replacement = r'''replaceExact(
+            'src/core/tactical/TacticalPositionSearchService.ts',
+            [
+              "    `kind:${value.kind}` ,".replace('` ,', '`,'),
+              "    `origin:${quantize(value.origin.x)}:${quantize(value.origin.y)}` ,".replace('` ,', '`,'),
+              "    `posture:${value.currentPosture}` ,".replace('` ,', '`,'),
+              "    `order:${value.orderTarget ? `${quantize(value.orderTarget.x)}:${quantize(value.orderTarget.y)}` : 'none'}` ,".replace('` ,', '`,'),
+              "    `threats:${value.threatCount}:${value.tacticalKnowledgeRevision}` ,".replace('` ,', '`,'),
+            ].join('\\n'),
+            [
+              "    `kind:${value.kind}` ,".replace('` ,', '`,'),
+              "    `objective:${value.parameters.objective}` ,".replace('` ,', '`,'),
+              "    `order:${value.parameters.objective === 'continue_order' && value.orderTarget ? `${quantize(value.orderTarget.x)}:${quantize(value.orderTarget.y)}` : 'ignored'}` ,".replace('` ,', '`,'),
+              "    `threat:${value.referenceThreatId ?? 'none'}:${value.referenceThreatPosition ? `${quantize(value.referenceThreatPosition.x)}:${quantize(value.referenceThreatPosition.y)}` : 'none'}` ,".replace('` ,', '`,'),
+            ].join('\\n'),
+          );'''
+          path.write_text(source[:start] + replacement + source[end:])
+          PY
+
+      - name: Commit patcher fix
+        run: |
+          rm -f .github/workflows/fix-tactical-core-patcher.yml
+          rm -f docs/debug/tactical-core-patcher.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: repair tactical core patch generator"
+          git push origin HEAD:feature/20260719-tactical-position-system
