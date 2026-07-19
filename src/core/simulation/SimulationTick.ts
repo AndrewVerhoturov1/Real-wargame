@@ -12,7 +12,8 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
 }
 
 /**
- * The legacy movement implementation owns route progress and finalFacingRadians.
- * This wrapper then applies and retains the tactical-position posture/facing after
- * Graph v2 has completed its ordinary tick, until another route or command begins.
+ * The legacy movement implementation still owns applyFinalFacing, reads
+ * order.finalFacingRadians, and performs
+ * unit.facingRadians = order.finalFacingRadians before this wrapper applies and
+ * retains tactical-position posture/facing after the ordinary Graph v2 tick.
  */
