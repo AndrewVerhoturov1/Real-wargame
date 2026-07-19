@@ -12,6 +12,7 @@ Short entry point for a GitHub-aware Web Chat working on `Real-Wargame`.
 - This is not a Godot project.
 - Canonical development names are English.
 - Russian is the default human-facing language.
+- Git-triggered Vercel deployments are disabled.
 
 Machine-readable source:
 
@@ -19,10 +20,11 @@ Machine-readable source:
 docs/ai/repo-context.json
 ```
 
-Canonical delivery workflow:
+Canonical workflows:
 
 ```text
 docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md
+docs/workflow/MANUAL_VERCEL_DEPLOYMENT.md
 ```
 
 ## 2. How to speak with the user
@@ -31,7 +33,7 @@ Use simple Russian, as with an intelligent high-school student.
 
 - Put the useful result first.
 - Avoid unnecessary English terms.
-- Explain unavoidable technical terms once in plain Russian.
+- Explain unavoidable technical terms once.
 - Use clickable links.
 - Show useful screenshots directly when available.
 - Put long hashes and diagnostics after the practical result.
@@ -54,7 +56,11 @@ docs/performance/PERFORMANCE_PRINCIPLES.md
 .agents/skills/real-wargame-performance/SKILL.md
 ```
 
-Do not read all journals, plans, screenshots or skills by default.
+For a deployment request, always read:
+
+```text
+.agents/skills/real-wargame-manual-vercel-deploy/SKILL.md
+```
 
 ## 4. Mandatory task start
 
@@ -63,7 +69,7 @@ For every implementation task:
 1. resolve the exact current head of `real-wargame-preview`;
 2. record it as `base_commit`;
 3. create one `feature/YYYYMMDD-short-kebab-slug` branch from that exact commit;
-4. implement, commit, push and fix later product defects on that branch;
+4. implement, commit, push and fix later defects on that branch;
 5. do not modify `real-wargame-preview` during development;
 6. do not modify `main`.
 
@@ -71,7 +77,7 @@ A Pull Request is not the default development route.
 
 ## 5. Focused verification
 
-Before live testing, run the smallest sufficient matrix:
+Before reporting readiness, run the smallest sufficient matrix:
 
 ```text
 npx tsc --noEmit
@@ -80,7 +86,7 @@ npx tsc --noEmit
 + docs checks when applicable
 ```
 
-`npm run build` must produce both:
+`npm run build` must produce:
 
 ```text
 dist/index.html
@@ -89,37 +95,45 @@ dist/ai-node-editor.html
 
 Do not run every smoke test, broad matrices, Chromium, Playwright, GitHub Actions or performance workflows by default.
 
-## 6. Automatic Vercel Preview
+## 6. Manual Vercel Preview
 
-The repository is connected to one permanent Vercel project.
+A push does not deploy. Do not wait for an automatic Preview and do not create a dummy commit.
 
-After every feature-branch push:
-
-1. Vercel automatically creates or updates the branch Preview;
-2. wait for deployment status `Ready`;
-3. report two clickable links:
-   - game: `<branch-preview>/`;
-   - AI Node Editor: `<branch-preview>/ai-node-editor.html`.
-
-Codex is not required for deployment. Do not ask the user to redeploy manually after each push.
-
-Do not create a separate Vercel project for every branch. Never delete the permanent Git-connected project.
-
-## 7. Readiness report
-
-Start with:
+Deploy only after explicit user intent such as:
 
 ```text
-Статус:
-Что изменилось:
-Игра: <clickable URL>
-Редактор ИИ: <clickable URL>/ai-node-editor.html
-Ветка:
-Коммит:
-Что проверить:
+деплой
+задеплой
+создай Preview
+обнови Preview
 ```
 
-Then add only relevant technical details.
+Then:
+
+1. load `real-wargame-manual-vercel-deploy`;
+2. resolve exact branch and remote HEAD;
+3. deploy through an authenticated route that proves exact source identity;
+4. inspect status and build logs;
+5. verify status `READY`;
+6. report both links:
+   - game: `<preview>/`;
+   - AI Node Editor: `<preview>/ai-node-editor.html`.
+
+An implementation, commit, push or transfer request does not imply deployment unless deployment is explicit.
+
+## 7. Readiness report without deployment
+
+When code is ready but deployment was not requested, say so directly:
+
+```text
+Статус: код готов, не задеплоен
+Ветка:
+Коммит:
+Проверки:
+Деплой: не запускался — требуется отдельная команда пользователя
+```
+
+Do not invent Preview URLs.
 
 ## 8. Live-test correction loop
 
@@ -131,78 +145,51 @@ When the user reports a product problem:
 4. fix product code there;
 5. rerun focused checks;
 6. commit and push the same branch;
-7. let Vercel update automatically;
-8. report the new commit and the same two Preview links.
-
-Do not create a new feature branch for every defect.
+7. do not deploy automatically;
+8. deploy again only after a new explicit request, except necessary retries inside an already authorized failed-deployment task.
 
 ## 9. Visual verification
 
-The user does not need to name a skill. Clear intent such as these phrases is sufficient:
+Visual verification permission is separate from deployment permission.
+
+When a suitable deployment already exists:
 
 ```text
-проверь визуально
-запусти визуальную проверку
-сделай скриншоты
-проверь через Playwright
-проверь Vercel Preview
+direct controlled browser available
+→ .agents/skills/real-wargame-local-preview/SKILL.md
+
+direct controlled browser unavailable
+→ .agents/skills/vercel-deployment-playwright-e2e/SKILL.md
 ```
 
-Route selection:
+When no deployment exists, do not create one implicitly. Report that an explicit deployment request is required.
 
-### Direct browser available
+Never commit Vercel tokens, Deploy Hook URLs, share tokens or bypass secrets.
 
-Use:
-
-```text
-.agents/skills/real-wargame-local-preview/SKILL.md
-```
-
-### Direct browser unavailable
-
-Use:
-
-```text
-.agents/skills/vercel-deployment-playwright-e2e/SKILL.md
-```
-
-The deployed-Vercel route uses temporary CI-only branches and a temporary PR that must never be merged. Product defects are fixed only on the canonical feature branch. A new product SHA requires fresh evidence.
-
-Never commit Vercel tokens or bypass secrets.
-
-## 10. Evidence presentation
-
-When screenshots or browser evidence exist:
-
-- inspect the evidence first;
-- show the most useful screenshots directly;
-- provide clickable links to the game, AI Node Editor, workflow and full artifact;
-- explain the result in simple Russian;
-- place raw IDs and detailed diagnostics after the practical summary.
-
-A green workflow alone is not visual proof.
-
-## 11. Transfer and cleanup
+## 10. Transfer and cleanup
 
 Transfer into `real-wargame-preview` only after explicit user GO for the exact accepted feature commit.
 
-After transfer:
+Transfer permission does not automatically grant deployment permission. After transfer:
 
-1. wait for automatic `real-wargame-preview` deployment;
-2. verify `/`;
-3. verify `/ai-node-editor.html`;
-4. delete the feature branch unless the user asks to keep it;
-5. if an old separate temporary Vercel project exists, delete it only after both replacement pages work;
-6. never delete the permanent Git-connected Vercel project.
+- report the new preview commit;
+- state whether it is deployed;
+- deploy `real-wargame-preview` only when the user explicitly asks to deploy or explicitly requested transfer and deployment together.
 
 A PR may be used only when explicitly requested or technically required.
 
-## 12. Main branch
+## 11. Main branch
 
-Never write to `main`, retarget a PR to `main`, merge or enable auto-merge without separate explicit human approval.
+Never write to `main`, deploy `main`, retarget a PR to `main`, merge or enable auto-merge without separate explicit human approval.
 
-## 13. Required final report
+## 12. Required final report
 
 Use `AGENTS.md` and `docs/orchestration/RESULT_TEMPLATE.md`.
 
-Explain the result in simple Russian. The user is not required to work with Git or the terminal.
+Always distinguish:
+
+- code committed;
+- local/focused checks;
+- Vercel deployment;
+- human live test;
+- visual/browser evidence.
