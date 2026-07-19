@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && npm run deployment-pages:smoke",
     "preview": "vite preview",
+    "deployment-pages:smoke": "node scripts/deployment_pages_smoke.mjs",
     "validate:ai-graph": "node scripts/validate_ai_graph.mjs",
     "engine:dev": "node scripts/local_ai_engine.mjs",
     "engine:smoke": "node scripts/local_ai_engine_smoke.mjs",
