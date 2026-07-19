@@ -30,6 +30,18 @@ export interface TacticalPositionSettings {
   moveCrouchedToProtectedPosition: boolean;
 }
 
+export interface TacticalPositionSettingsDataV1 {
+  readonly version: 1;
+  readonly revision: number;
+  readonly values: TacticalPositionSettings;
+}
+
+export type TacticalPositionSettingsInput =
+  | Partial<TacticalPositionSettings>
+  | Partial<TacticalPositionSettingsDataV1>
+  | null
+  | undefined;
+
 export interface TacticalPostureEvaluation {
   readonly posture: UnitPosture;
   readonly danger: number;
@@ -37,12 +49,6 @@ export interface TacticalPostureEvaluation {
   readonly safety: number;
 }
 
-interface SettingsEntry {
-  settings: TacticalPositionSettings;
-  revision: number;
-}
-
-const settingsByUnit = new WeakMap<UnitModel, SettingsEntry>();
 const draftByState = new WeakMap<SimulationState, TacticalPositionSettings>();
 
 export function createDefaultTacticalPositionSettings(): TacticalPositionSettings {
@@ -79,11 +85,9 @@ export function cloneTacticalPositionSettings(settings: TacticalPositionSettings
   return { ...settings };
 }
 
-export function normalizeTacticalPositionSettings(
-  value: Partial<TacticalPositionSettings> | null | undefined,
-): TacticalPositionSettings {
+export function normalizeTacticalPositionSettings(value: TacticalPositionSettingsInput): TacticalPositionSettings {
   const defaults = createDefaultTacticalPositionSettings();
-  const source = value ?? {};
+  const source = readValues(value);
   return {
     standingMaximumDanger: percent(source.standingMaximumDanger, defaults.standingMaximumDanger),
     standingMinimumSafety: percent(source.standingMinimumSafety, defaults.standingMinimumSafety),
@@ -115,22 +119,38 @@ export function normalizeTacticalPositionSettings(
   };
 }
 
+export function initializeTacticalPositionSettings(
+  unit: UnitModel,
+  input: TacticalPositionSettingsInput,
+): void {
+  unit.tacticalPositionSettings = normalizeTacticalPositionSettings(input);
+  unit.tacticalPositionSettingsRevision = readRevision(input);
+}
+
 export function getTacticalPositionSettings(unit: UnitModel): TacticalPositionSettings {
-  return ensureEntry(unit).settings;
+  return unit.tacticalPositionSettings;
 }
 
 export function getTacticalPositionSettingsRevision(unit: UnitModel): number {
-  return ensureEntry(unit).revision;
+  return unit.tacticalPositionSettingsRevision;
 }
 
 export function setTacticalPositionSettings(
   unit: UnitModel,
   settings: Partial<TacticalPositionSettings>,
 ): TacticalPositionSettings {
-  const previous = ensureEntry(unit);
   const normalized = normalizeTacticalPositionSettings(settings);
-  settingsByUnit.set(unit, { settings: normalized, revision: previous.revision + 1 });
+  unit.tacticalPositionSettings = normalized;
+  unit.tacticalPositionSettingsRevision = Math.max(0, unit.tacticalPositionSettingsRevision) + 1;
   return normalized;
+}
+
+export function serializeTacticalPositionSettings(unit: UnitModel): TacticalPositionSettingsDataV1 {
+  return {
+    version: 1,
+    revision: Math.max(0, Math.floor(unit.tacticalPositionSettingsRevision)),
+    values: cloneTacticalPositionSettings(unit.tacticalPositionSettings),
+  };
 }
 
 export function getTacticalPositionSettingsDraft(state: SimulationState): TacticalPositionSettings {
@@ -182,17 +202,21 @@ export function selectHighestSafePosture(
     ?? { posture: 'standing', danger: 100, protection: 0, safety: 0 };
 }
 
-export function tacticalPositionSettingsCacheNudge(unit: UnitModel): number {
-  return getTacticalPositionSettingsRevision(unit) * 0.000001;
+function readValues(value: TacticalPositionSettingsInput): Partial<TacticalPositionSettings> {
+  if (!value || typeof value !== 'object') return {};
+  const candidate = value as Partial<TacticalPositionSettingsDataV1>;
+  if (candidate.version === 1 && candidate.values && typeof candidate.values === 'object') {
+    return candidate.values;
+  }
+  return value as Partial<TacticalPositionSettings>;
 }
 
-function ensureEntry(unit: UnitModel): SettingsEntry {
-  let entry = settingsByUnit.get(unit);
-  if (!entry) {
-    entry = { settings: createDefaultTacticalPositionSettings(), revision: 0 };
-    settingsByUnit.set(unit, entry);
-  }
-  return entry;
+function readRevision(value: TacticalPositionSettingsInput): number {
+  if (!value || typeof value !== 'object') return 0;
+  const candidate = value as Partial<TacticalPositionSettingsDataV1>;
+  return candidate.version === 1 && typeof candidate.revision === 'number' && Number.isFinite(candidate.revision)
+    ? Math.max(0, Math.floor(candidate.revision))
+    : 0;
 }
 
 function percent(value: unknown, fallback: number): number {
