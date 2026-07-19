@@ -9,6 +9,11 @@ import {
   setTacticalPositionSettings,
   type TacticalPositionSettings,
 } from '../core/tactical/TacticalPositionSettings';
+import {
+  TACTICAL_POSITION_SETTINGS_GROUPS,
+  type TacticalPositionBooleanFieldDefinition,
+  type TacticalPositionNumericFieldDefinition,
+} from '../core/tactical/TacticalPositionSettingsSchema';
 import { getTacticalPositionSearchService } from '../core/tactical/TacticalPositionSearchService';
 
 export function installTacticalPositionSettingsControls(
@@ -36,45 +41,22 @@ export function installTacticalPositionSettingsControls(
     summary.textContent = 'Тактические позиции';
     const content = document.createElement('div');
     content.className = 'game-editor-details-body attention-profile-body';
+    content.append(hint(
+      'Эти параметры используют общую схему с самостоятельным редактором ИИ. '
+      + 'Сравнительные пороги возвращают реальные позиции пригнувшись и лёжа, а веса целей управляют продвижением, отходом и продолжением приказа.',
+    ));
+
+    for (const definition of TACTICAL_POSITION_SETTINGS_GROUPS) {
+      content.append(
+        group(definition.titleRu),
+        grid([
+          ...definition.numericFields.map((field) => numericSettingField(draft, field)),
+          ...(definition.booleanFields ?? []).map((field) => booleanSettingField(draft, field)),
+        ], onChanged),
+      );
+    }
+
     content.append(
-      hint('Настройки определяют, какие позиции считаются полезными, какую позу боец выбирает и насколько часто обновляются ромбы. Поиск остаётся ограниченным и использует готовые поля.'),
-      group('Выбор позы'),
-      grid([
-        numberField('Стоя: максимальная опасность', draft.standingMaximumDanger, 0, 100, 1, (value) => draft.standingMaximumDanger = value),
-        numberField('Стоя: минимальная безопасность', draft.standingMinimumSafety, 0, 100, 1, (value) => draft.standingMinimumSafety = value),
-        numberField('Пригнувшись: максимальная опасность', draft.crouchedMaximumDanger, 0, 100, 1, (value) => draft.crouchedMaximumDanger = value),
-        numberField('Пригнувшись: минимальная безопасность', draft.crouchedMinimumSafety, 0, 100, 1, (value) => draft.crouchedMinimumSafety = value),
-        numberField('Штраф перехода в положение сидя', draft.crouchedTransitionPenalty, 0, 50, 0.5, (value) => draft.crouchedTransitionPenalty = value),
-        numberField('Штраф перехода лёжа', draft.proneTransitionPenalty, 0, 50, 0.5, (value) => draft.proneTransitionPenalty = value),
-        numberField('Влияние защиты позы', draft.postureProtectionGainFactor, 0, 2, 0.05, (value) => draft.postureProtectionGainFactor = value),
-        numberField('Опасность → безопасность', draft.dangerReductionSafetyWeight, 0, 2, 0.05, (value) => draft.dangerReductionSafetyWeight = value),
-        numberField('Защита → безопасность', draft.protectionGainSafetyWeight, 0, 2, 0.05, (value) => draft.protectionGainSafetyWeight = value),
-        checkboxField('К опасной позиции двигаться пригнувшись', draft.moveCrouchedToProtectedPosition, (value) => draft.moveCrouchedToProtectedPosition = value),
-      ], onChanged),
-      group('Отбор позиции'),
-      grid([
-        numberField('Минимальное улучшение', draft.minimumPositionImprovement, 0, 100, 1, (value) => draft.minimumPositionImprovement = value),
-        numberField('Минимальная защита от угрозы', draft.minimumDirectionalProtection, 0, 100, 1, (value) => draft.minimumDirectionalProtection = value),
-        numberField('Минимум обратного склона', draft.minimumReverseSlopeQuality, 0, 100, 1, (value) => draft.minimumReverseSlopeQuality = value),
-      ], onChanged),
-      group('Коэффициенты итоговой оценки'),
-      grid([
-        numberField('Безопасность', draft.safetyWeight, 0, 2, 0.01, (value) => draft.safetyWeight = value),
-        numberField('Низкая опасность', draft.lowDangerWeight, 0, 2, 0.01, (value) => draft.lowDangerWeight = value),
-        numberField('Защита', draft.protectionWeight, 0, 2, 0.01, (value) => draft.protectionWeight = value),
-        numberField('Скрытность', draft.concealmentWeight, 0, 2, 0.01, (value) => draft.concealmentWeight = value),
-        numberField('Улучшение относительно текущего места', draft.safetyGainWeight, 0, 2, 0.01, (value) => draft.safetyGainWeight = value),
-        numberField('Обратный склон', draft.reverseSlopeWeight, 0, 2, 0.01, (value) => draft.reverseSlopeWeight = value),
-        numberField('Безопасность маршрута', draft.routeSafetyWeight, 0, 2, 0.01, (value) => draft.routeSafetyWeight = value),
-        numberField('Направление приказа', draft.orderAlignmentWeight, 0, 2, 0.01, (value) => draft.orderAlignmentWeight = value),
-        numberField('Штраф неопределённости', draft.uncertaintyPenaltyWeight, 0, 2, 0.01, (value) => draft.uncertaintyPenaltyWeight = value),
-        numberField('Штраф переднего склона', draft.forwardSlopePenaltyWeight, 0, 2, 0.01, (value) => draft.forwardSlopePenaltyWeight = value),
-      ], onChanged),
-      group('Стабильность ромбов'),
-      grid([
-        numberField('Обновлять не чаще, секунд', draft.markerRefreshIntervalSeconds, 0, 10, 0.1, (value) => draft.markerRefreshIntervalSeconds = value),
-        numberField('Удерживать старые при пустом результате, секунд', draft.emptyResultHoldSeconds, 0, 15, 0.1, (value) => draft.emptyResultHoldSeconds = value),
-      ], onChanged),
       buttonRow([
         actionButton('Взять настройки выбранного', () => {
           const selected = getSelectedUnit(state);
@@ -114,6 +96,33 @@ export function installTacticalPositionSettingsControls(
   return () => observer.disconnect();
 }
 
+function numericSettingField(
+  draft: TacticalPositionSettings,
+  definition: TacticalPositionNumericFieldDefinition,
+): HTMLElement {
+  return numberField(
+    definition.labelRu,
+    definition.helpRu,
+    draft[definition.key],
+    definition.min,
+    definition.max,
+    definition.step,
+    (value) => { draft[definition.key] = value; },
+  );
+}
+
+function booleanSettingField(
+  draft: TacticalPositionSettings,
+  definition: TacticalPositionBooleanFieldDefinition,
+): HTMLElement {
+  return checkboxField(
+    definition.labelRu,
+    definition.helpRu,
+    draft[definition.key],
+    (value) => { draft[definition.key] = value; },
+  );
+}
+
 function grid(fields: HTMLElement[], onChanged: () => void): HTMLElement {
   const element = document.createElement('div');
   element.className = 'attention-profile-grid';
@@ -126,6 +135,7 @@ function grid(fields: HTMLElement[], onChanged: () => void): HTMLElement {
 
 function numberField(
   label: string,
+  help: string,
   value: number,
   min: number,
   max: number,
@@ -138,28 +148,36 @@ function numberField(
   input.min = String(min);
   input.max = String(max);
   input.step = String(step);
+  input.title = help;
   input.addEventListener('change', () => {
     const parsed = Number(input.value);
     const next = Math.max(min, Math.min(max, Number.isFinite(parsed) ? parsed : value));
     input.value = formatStepNumber(next, step);
     onChange(next);
   });
-  return wrapField(label, input);
+  return wrapField(label, help, input);
 }
 
-function checkboxField(label: string, value: boolean, onChange: (value: boolean) => void): HTMLElement {
+function checkboxField(
+  label: string,
+  help: string,
+  value: boolean,
+  onChange: (value: boolean) => void,
+): HTMLElement {
   const input = document.createElement('input');
   input.type = 'checkbox';
   input.checked = value;
+  input.title = help;
   input.addEventListener('change', () => onChange(input.checked));
-  const wrapper = wrapField(label, input);
+  const wrapper = wrapField(label, help, input);
   wrapper.classList.add('checkbox');
   return wrapper;
 }
 
-function wrapField(label: string, input: HTMLElement): HTMLElement {
+function wrapField(label: string, help: string, input: HTMLElement): HTMLElement {
   const wrapper = document.createElement('label');
   wrapper.className = 'game-editor-field attention-profile-field';
+  wrapper.title = help;
   const text = document.createElement('span');
   text.textContent = label;
   wrapper.append(text, input);
