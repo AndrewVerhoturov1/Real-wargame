@@ -1,6 +1,6 @@
 # Web Chat Feature Delivery Workflow
 
-This is the canonical implementation, live-test and optional visual-verification workflow for `Real-Wargame`.
+This is the canonical implementation, automatic Vercel Preview, live-test and optional visual-verification workflow for `Real-Wargame`.
 
 ## 1. Start a task
 
@@ -18,28 +18,53 @@ feature/YYYYMMDD-short-kebab-slug
 
 Do not implement directly on preview or main.
 
-## 2. Implement in Web Chat
+## 2. Implement on one feature branch
 
 Web Chat owns the complete product cycle:
 
 - inspect relevant repository context;
-- implement feature;
-- add/update focused regression tests;
-- prepare visual scenario when user-visible;
-- commit and push feature branch;
-- keep all later product fixes on same feature branch.
+- implement the feature or fix;
+- add or update focused regression tests;
+- prepare a visual scenario when the change is visible;
+- commit and push the feature branch;
+- keep all later product fixes on the same feature branch.
 
 Do not create a new product branch for each live-test defect.
 
-## 3. Focused non-browser checks
+## 3. Communication with the user
 
-Before declaring ready for live testing, run the smallest sufficient matrix:
+Use simple Russian, as with an intelligent high-school student.
+
+- Put the practical result first.
+- Avoid unnecessary English terms and abbreviations.
+- Explain unavoidable technical terms once in plain Russian.
+- Use clickable links.
+- Show useful screenshots directly when available.
+- Put long commit hashes, workflow IDs and diagnostics after the useful summary.
+- Do not ask the user to operate Git or a terminal when the agent can do it.
+
+## 4. Required application pages
+
+Every production build and every Vercel deployment must contain both pages:
+
+```text
+/                     → index.html
+/ai-node-editor.html  → ai-node-editor.html
+```
+
+The Vite build uses both HTML files as explicit inputs. `npm run build` must fail if either output file is missing.
+
+The AI Node Editor is not optional. A deployment that serves only the game page is incomplete.
+
+## 5. Focused non-browser checks
+
+Before declaring a branch ready for live testing, run the smallest sufficient matrix:
 
 ```text
 TypeScript check
 + focused subsystem smoke tests
 + one production build
-+ docs checks when applicable
++ documentation checks when applicable
 ```
 
 Typical commands:
@@ -50,6 +75,8 @@ npm run <focused-smoke-script>
 npm run build
 ```
 
+The production build includes the deployment-page check.
+
 For documentation/generated state:
 
 ```bash
@@ -59,90 +86,102 @@ git diff --exit-code
 npm run docs:check
 ```
 
-Do not run Chromium, Playwright, broad integration matrices, unjustified performance workflows or Vercel deployment by default.
+Do not run Chromium, Playwright, broad integration matrices, GitHub Actions, unjustified performance workflows or duplicate builds by default.
 
-If Node commands are unavailable, report honestly. A small non-browser Actions check is an optional fallback.
+If Node commands are unavailable, report that honestly. A small non-browser Actions check is only an optional fallback with user approval.
 
-## 4. Report readiness
+## 6. Push and automatic Vercel Preview
+
+The repository uses one permanent Vercel project connected to GitHub.
+
+After a push to the feature branch:
+
+1. Vercel automatically detects the commit;
+2. Vercel creates or updates the branch Preview;
+3. wait for status `Ready`;
+4. identify the deployed branch and commit when possible;
+5. prepare both live links.
+
+Required links:
 
 ```text
-feature_branch:
-base_branch: real-wargame-preview
+game_preview: <branch-preview>/
+ai_node_editor_preview: <branch-preview>/ai-node-editor.html
+```
+
+Codex is not a required deployment step. Do not ask Codex or the user to redeploy after later pushes.
+
+Do not create a separate Vercel project for every feature branch. Never delete the permanent Git-connected project during normal delivery.
+
+## 7. Readiness report
+
+Start with a compact practical block:
+
+```text
+Статус: готово к проверке / сборка не готова
+Что изменилось: <one short paragraph>
+Игра: <clickable URL>
+Редактор ИИ: <clickable URL>/ai-node-editor.html
+Ветка: <branch>
+Коммит: <short hash>
+Что проверить: <short task-specific checklist>
+```
+
+Then report only relevant technical details:
+
+```text
 base_commit:
 current_commit:
-changed_files:
 checks_run:
 not_checked:
-manual_checks_needed:
-visual_qa_prepared:
-preview_touched: no
-main_touched: no
-```
-
-For user-visible work, explain what the human should test and remaining visual risk.
-
-## 5. One-time Codex deployment
-
-The user gives Codex repository, feature branch and exact commit.
-
-Codex only:
-
-1. verifies branch/commit;
-2. exposes branch as branch-linked Vercel Preview;
-3. returns branch Preview URL;
-4. returns immutable commit Preview URL when available;
-5. reports deployment status and commit.
-
-Codex does not change code, commit, push, create replacement branch, fix bugs, merge or transfer.
-
-The deployment must follow later pushes to same feature branch without Codex re-entry.
-
-Codex report:
-
-```text
-feature_branch:
-current_commit:
-vercel_branch_preview:
-vercel_commit_preview:
 deployment_status:
-code_changed: no
+deployed_commit:
 preview_touched: no
 main_touched: no
 ```
 
-## 6. Human live test
+Do not make the user search for URLs inside logs or raw Vercel output.
 
-User opens Vercel Preview and checks task-specific behavior in real time.
+## 8. Human live test
 
-Common baseline:
+The user opens both Vercel Preview links.
+
+Game baseline:
 
 1. application loads;
 2. canvas renders;
 3. relevant unit/editor state can be selected;
 4. changed interaction works;
-5. actual state changes, not only label;
+5. actual state changes, not only a label;
 6. pause/resume works when relevant;
-7. no new visible artifacts;
-8. no new console errors;
-9. exact requested behavior is verified.
+7. no new visible artifacts appear.
 
-Do not require full-project manual regression for every local change.
+AI Node Editor baseline:
 
-## 7. Same-branch correction loop
+1. `ai-node-editor.html` loads;
+2. the graph/editor interface appears;
+3. the task-relevant editor section opens;
+4. controls react and save/update when relevant;
+5. no obvious broken styles or missing modules appear.
 
-When user reports product defect, Web Chat:
+Do not require full-project manual regression for every focused change.
 
-1. returns to same feature branch;
-2. reproduces issue;
-3. adds/updates focused regression test when practical;
+## 9. Same-branch correction loop
+
+When the user reports a product defect, Web Chat:
+
+1. returns to the same feature branch;
+2. reproduces the issue;
+3. adds or updates focused regression coverage when practical;
 4. fixes product code;
 5. reruns focused checks;
-6. commits and pushes same branch;
-7. reports new exact commit.
+6. commits and pushes the same branch;
+7. waits for automatic Vercel update;
+8. reports the new commit and the same two branch links.
 
-Branch-linked Vercel Preview updates without Codex.
+No Codex re-entry or manual Vercel redeploy is required.
 
-## 8. Optional visual verification
+## 10. Optional visual verification
 
 Visual execution is manual-only and requires explicit user intent. The user does not need to name a skill.
 
@@ -153,51 +192,47 @@ Examples:
 запусти визуальную проверку
 сделай скриншоты
 проверь через Playwright
+проверь живой Vercel Preview
 ```
 
-When intent is explicit, do not ask again. Automatically choose route:
+When intent is explicit, do not ask again. Automatically choose a route.
 
 ### Direct controlled browser available
 
-Read/use:
+Read and use:
 
 ```text
 .agents/skills/real-wargame-local-preview/SKILL.md
 ```
 
-### Direct controlled browser unavailable and target is Vercel Preview
+### Direct controlled browser unavailable
 
-**MUST read/use:**
+Read and use:
 
 ```text
 .agents/skills/vercel-deployment-playwright-e2e/SKILL.md
 ```
 
-Do not ask user to say skill name.
+## 11. Deployed Vercel CI route
 
-## 9. Deployed Vercel CI route
-
-The mandatory fallback skill creates two temporary CI-only branches from the exact product SHA:
+The fallback skill creates two temporary CI-only branches from the exact product SHA:
 
 ```text
 ci/<scenario>-base-<timestamp>-<short-sha>
 ci/<scenario>-head-<timestamp>-<short-sha>
 ```
 
-Base contains only temporary PR workflow. Head contains only temporary Playwright config/scenario. Temporary PR runs head against base and is never merged.
+Base contains only the temporary PR workflow. Head contains only temporary Playwright configuration/scenario. The temporary PR runs head against base and is never merged.
 
 Product branch, preview and main must not contain CI harness files.
 
 Secrets:
 
-- try clean public URL first;
-- prefer `VERCEL_AUTOMATION_BYPASS_SECRET` from GitHub Actions secrets;
-- if share URL is necessary, store complete protected URL in GitHub Actions secret;
-- never commit token or protected URL to any branch, PR text, log or report.
+- try a clean public URL first;
+- prefer a Vercel automation bypass secret stored in GitHub Actions secrets;
+- never commit a token or protected URL to any branch, PR text, log or report.
 
-Required scenario proves actual behavior/state change. For movement, verify coordinates change. For visual modes, verify control state, renderer diagnostics when available, screenshot and persistence after idle.
-
-Required artifacts:
+Required evidence normally includes:
 
 ```text
 evidence.json
@@ -209,69 +244,105 @@ Playwright report
 console/page/network diagnostics
 ```
 
-Web Chat must download, extract, inspect and present evidence. A green workflow alone is insufficient.
+## 12. Visual failure ownership
 
-## 10. Visual failure ownership
-
-Classify before edits:
+Classify before edits.
 
 ### Environment
 
-Deployment/protection/browser/Actions infrastructure. Fix only CI/environment layer.
+Deployment, protection, browser or Actions infrastructure. Fix only the environment/CI layer.
 
 ### Test harness
 
-Selector/coordinates/timeout/assertion. Fix only temporary CI head branch and rerun same temporary PR.
+Selector, coordinates, timeout or assertion. Fix only the temporary CI head branch.
 
 ### Application
 
-Actual product behavior/runtime. Fix only canonical feature branch, rerun focused checks, push and wait for updated Vercel Preview.
+Actual product behavior. Fix only the canonical feature branch, rerun focused checks and wait for the updated automatic Preview.
 
-New product SHA invalidates previous acceptance evidence. Close old temporary PR and create fresh CI branch pair from new exact SHA.
+New product SHA invalidates previous acceptance evidence. Create fresh CI branches and fresh evidence.
 
 Never fix product code on CI branches.
 
-## 11. Visual evidence presentation
+## 13. Evidence presentation
 
-After final run:
+After a visual run:
 
-1. verify conclusion and jobs;
-2. inspect failed logs when needed;
-3. download artifact;
-4. read `evidence.json`;
-5. inspect key PNGs;
-6. inspect trace when needed;
-7. create contact sheet when useful;
-8. provide direct screenshot links, full artifact and workflow run;
-9. close temporary PR without merge;
-10. delete CI branches when supported or report exact cleanup limitation.
+1. verify workflow conclusion and exact source;
+2. download and inspect the artifact;
+3. read `evidence.json`;
+4. open and inspect key PNGs;
+5. inspect trace when needed;
+6. show the most useful screenshots directly in the response;
+7. provide clickable links to both application pages, the workflow run and the full artifact;
+8. explain the result in simple Russian;
+9. close the temporary PR without merge;
+10. delete temporary CI branches when supported or report the limitation.
 
-Report exact run/artifact/product identity and whether deployed SHA was proven.
+A green workflow alone is insufficient.
 
-## 12. Transfer into real-wargame-preview
+## 14. Transfer into real-wargame-preview
 
-Transfer is forbidden until user gives explicit GO for exact tested feature commit.
+Transfer is forbidden until the user gives explicit GO for the exact tested feature commit.
 
 Before transfer, Web Chat:
 
-1. confirms approved commit;
-2. checks whether feature branch must be updated from current preview;
-3. resolves conflicts on feature branch;
-4. reruns focused checks required by final diff;
-5. transfers accepted result into preview;
-6. reports resulting preview commit.
+1. confirms the approved commit;
+2. checks whether the feature branch must be updated from current preview;
+3. resolves conflicts on the feature branch;
+4. reruns focused checks required by the final diff;
+5. transfers the accepted result into `real-wargame-preview`;
+6. reports the resulting preview commit.
 
-PR may be used only when explicitly requested or technically required. PR-first development is not canonical.
+PR may be used only when explicitly requested or technically required.
 
-After successful transfer, close/delete feature branch unless user asks to keep it.
+## 15. Post-transfer deployment check
 
-## 13. Main branch
+After transfer:
+
+1. wait for the automatic `real-wargame-preview` Vercel deployment;
+2. verify deployment status `Ready`;
+3. open the preview game page `/`;
+4. open `/ai-node-editor.html`;
+5. confirm both pages represent the transferred commit when identity is available;
+6. report both clickable links to the user.
+
+Transfer is not complete from the user's perspective until both pages are available or the failure is reported.
+
+## 16. Cleanup
+
+After the accepted preview deployment works:
+
+1. delete the feature branch unless the user asks to keep it;
+2. close any temporary CI PR without merge;
+3. delete temporary CI branches when supported;
+4. remove old temporary deployment links from the final user summary;
+5. if an old separate temporary Vercel project exists, delete it only after the replacement preview game and AI Node Editor both work.
+
+Never delete the permanent Git-connected Vercel project.
+
+Old Preview deployments inside the permanent project may remain in deployment history or be removed by Vercel deployment-retention settings.
+
+## 17. Main branch
 
 `main` is outside normal feature workflow.
 
-Never write, retarget PR, merge or enable auto-merge without separate explicit user approval and `MAIN_GO_APPROVED_BY_USER: yes` where applicable.
+Never write, retarget a PR, merge or enable auto-merge without separate explicit user approval and `MAIN_GO_APPROVED_BY_USER: yes` where applicable.
 
-## 14. Final report
+## 18. Final report
+
+Put this user-facing block first:
+
+```text
+Статус:
+Что сделано:
+Игра:
+Редактор ИИ:
+Что проверено:
+Что осталось:
+```
+
+Technical fields may follow:
 
 ```text
 feature_branch:
@@ -279,33 +350,17 @@ approved_feature_commit:
 preview_commit:
 transfer_method:
 checks_run:
-visual_qa_prepared:
-visual_qa_approval:
-visual_qa_route:
-visual_qa_run:
-target_url:
-expected_product_sha:
-observed_product_sha:
-product_sha_match:
-temporary_base_branch:
-temporary_head_branch:
-temporary_pr:
-workflow_run:
-workflow_conclusion:
-artifact_id:
-artifact_digest:
-evidence_json_inspected:
-screenshots_inspected:
-key_frames:
-trace_inspected:
-failure_class:
-temporary_pr_closed_without_merge:
-ci_branch_cleanup:
+game_preview:
+ai_node_editor_preview:
+deployment_status:
+deployed_commit:
 live_test_status:
-remaining_risks:
-branch_cleanup_status:
+visual_qa_status:
+feature_branch_cleanup:
+legacy_temporary_vercel_project_cleanup:
+permanent_vercel_project_touched: no
 preview_touched:
 main_touched:
 ```
 
-Distinguish Web Chat checks, Vercel deployment, human live test, direct browser and GitHub Actions evidence. Never claim one as another.
+Distinguish local checks, Vercel deployment, human live testing, direct browser and GitHub Actions evidence. Never claim one as another.
