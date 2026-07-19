@@ -4,33 +4,29 @@ import type { SimulationState } from '../src/core/simulation/SimulationState';
 import {
   TacticalPositionSearchService,
   type TacticalPositionFieldRuntime,
+  type TacticalPositionSearchRequestSnapshotV1,
 } from '../src/core/tactical/TacticalPositionSearchService';
 import { normalizeUnits } from '../src/core/units/UnitModel';
 import type { PreparedAwarenessWorldSnapshot } from '../src/runtime/AwarenessWorldRuntime';
 
 verifyRendererDoesNotOwnTacticalSearch();
-verifyRequestLifecycle();
+verifyRequestLifecycleAndMovingOrigin();
 
-console.log('Tactical position request service smoke passed: renderer ownership, dedupe, replacement, stale rejection, multi-unit isolation and teardown.');
+console.log('Tactical position request service smoke passed: renderer ownership, moving-origin search, dedupe, replacement, stale rejection, multi-unit isolation and teardown.');
 
 function verifyRendererDoesNotOwnTacticalSearch(): void {
   const renderer = readFileSync('src/rendering/PixiAwarenessHeatmapRenderer.ts', 'utf8');
   const legacyRenderer = readFileSync('src/rendering/PixiAwarenessHeatmapRendererLegacy.ts', 'utf8');
   const combined = `${renderer}\n${legacyRenderer}`;
-
   for (const forbidden of [
-    'getTacticalPositionProvider',
-    'provider?.generate',
-    'provider.generate',
-    'requestTacticalPositions(',
-    'requestWorldField(',
-    'ensureAwarenessTacticalPositionProvider',
+    'getTacticalPositionProvider', 'provider?.generate', 'provider.generate',
+    'requestTacticalPositions(', 'requestWorldField(', 'ensureAwarenessTacticalPositionProvider',
   ]) {
     assert.equal(combined.includes(forbidden), false, `renderer source must not own tactical calculation: found ${forbidden}`);
   }
 }
 
-function verifyRequestLifecycle(): void {
+function verifyRequestLifecycleAndMovingOrigin(): void {
   const units = normalizeUnits([
     { id: 'alpha', type: 'infantry_squad', side: 'blue', x: 1, y: 1 },
     { id: 'bravo', type: 'infantry_squad', side: 'blue', x: 3, y: 3 },
@@ -55,11 +51,13 @@ function verifyRequestLifecycle(): void {
   } as unknown as SimulationState;
   const scheduled: Array<() => void> = [];
   const runtime = new FakeFieldRuntime();
+  const evaluatedRequests: TacticalPositionSearchRequestSnapshotV1[] = [];
   let searchCalls = 0;
   const service = new TacticalPositionSearchService(state, runtime, {
     schedule: (callback) => scheduled.push(callback),
     searchPrepared: (_prepared, request) => {
       searchCalls += 1;
+      evaluatedRequests.push(request);
       runtime.afterSearch?.();
       runtime.afterSearch = null;
       return {
@@ -77,17 +75,22 @@ function verifyRequestLifecycle(): void {
 
   const first = service.enqueueCoverSearch(units[0]!, { searchRadiusMeters: 40 });
   const duplicate = service.enqueueCoverSearch(units[0]!, { searchRadiusMeters: 40 });
-  assert.equal(duplicate.requestId, first.requestId, 'identical pending request must be deduplicated');
-  assert.equal(scheduled.length, 1, 'one user action must schedule one service pump');
+  assert.equal(duplicate.requestId, first.requestId);
+  assert.equal(scheduled.length, 1);
 
   runScheduled(scheduled);
   assert.equal(runtime.requestCallsByUnit.get('alpha'), 1);
-  assert.equal(searchCalls, 0, 'local search waits for the prepared field');
+  assert.equal(searchCalls, 0);
   assert.equal(service.readRequest(first.requestId)?.status, 'calculating');
 
-  const replacement = service.enqueueCoverSearch(units[0]!, { searchRadiusMeters: 55 });
+  const replacement = service.enqueueCoverSearch(units[0]!, { searchRadiusMeters: 55, objective: 'advance_to_threat' });
   assert.notEqual(replacement.requestId, first.requestId);
   assert.equal(service.readRequest(first.requestId)?.status, 'stale');
+
+  // This is the regression: movement and approach-posture changes while the
+  // shared field is prepared must not invalidate the pending request.
+  units[0]!.position = { x: 2.25, y: 1.75 };
+  units[0]!.behaviorRuntime.posture = 'crouched';
 
   const other = service.enqueueCoverSearch(units[1]!, { searchRadiusMeters: 35 });
   runtime.readyByUnit.set('alpha', prepared('alpha', 'field-alpha-new'));
@@ -96,19 +99,25 @@ function verifyRequestLifecycle(): void {
   runScheduled(scheduled);
   assert.equal(service.readRequest(replacement.requestId)?.status, 'ready');
   assert.equal(service.readRequest(other.requestId)?.status, 'ready');
-  assert.equal(searchCalls, 2, 'two owners execute independently exactly once');
+  assert.equal(searchCalls, 2);
+
+  const evaluatedAlpha = evaluatedRequests.find((request) => request.ownerUnitId === 'alpha');
+  assert.deepEqual(evaluatedAlpha?.origin, { x: 2.25, y: 1.75 }, 'local search must use the latest moving origin');
+  assert.equal(evaluatedAlpha?.currentPosture, 'crouched', 'local search must use the latest moving posture');
+  assert.equal(evaluatedAlpha?.objective, 'advance_to_threat');
+  assert.equal(evaluatedAlpha?.referenceThreatId, 'threat-alpha');
 
   const readyBefore = service.readRequest(replacement.requestId);
   runtime.emit();
   runScheduled(scheduled);
-  assert.equal(searchCalls, 2, 'repeated runtime/render notifications must not repeat a ready search');
+  assert.equal(searchCalls, 2);
   assert.deepEqual(service.readRequest(replacement.requestId), readyBefore);
 
   const stale = service.enqueueCoverSearch(units[0]!, { searchRadiusMeters: 65 });
   runtime.readyByUnit.set('alpha', prepared('alpha', 'field-alpha-stale'));
   runtime.afterSearch = () => runtime.readyByUnit.set('alpha', prepared('alpha', 'field-alpha-replaced'));
   runScheduled(scheduled);
-  assert.equal(service.readRequest(stale.requestId)?.status, 'stale', 'a result from replaced field identity must be rejected');
+  assert.equal(service.readRequest(stale.requestId)?.status, 'stale');
 
   service.destroy();
   assert.equal(runtime.destroyed, true);
