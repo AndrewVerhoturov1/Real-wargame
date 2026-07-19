@@ -5,6 +5,7 @@ import type { UnitModel } from '../units/UnitModel';
 interface TacticalPositionOccupationState {
   commandId: string;
   posture: UnitPosture;
+  approachPosture: UnitPosture;
   facingRadians: number | null;
   active: boolean;
 }
@@ -16,10 +17,12 @@ export function registerTacticalPositionOccupation(
   commandId: string,
   posture: UnitPosture,
   facingRadians: number | null,
+  approachPosture: UnitPosture = 'standing',
 ): void {
   occupationByUnit.set(unit, {
     commandId,
     posture,
+    approachPosture,
     facingRadians: finiteFacing(facingRadians),
     active: false,
   });
@@ -34,6 +37,7 @@ export function activateTacticalPositionOccupation(
   occupationByUnit.set(unit, {
     commandId,
     posture,
+    approachPosture: posture,
     facingRadians: finiteFacing(facingRadians),
     active: true,
   });
@@ -56,9 +60,24 @@ export function activateRegisteredTacticalPositionOccupation(
 
 export function reconcileTacticalPositionOccupation(unit: UnitModel): void {
   const occupation = occupationByUnit.get(unit);
-  if (!occupation?.active) return;
+  if (!occupation) return;
 
-  if (unit.order || unit.playerCommand?.id !== occupation.commandId) {
+  if (unit.playerCommand?.id !== occupation.commandId) {
+    occupationByUnit.delete(unit);
+    return;
+  }
+
+  if (!occupation.active) {
+    if (!unit.order) return;
+    if (unit.order.playerCommandId !== occupation.commandId) {
+      occupationByUnit.delete(unit);
+      return;
+    }
+    enforcePosture(unit, occupation.approachPosture, 'tactical_position_approach');
+    return;
+  }
+
+  if (unit.order) {
     occupationByUnit.delete(unit);
     return;
   }
@@ -75,11 +94,7 @@ function enforceOccupation(
   posture: UnitPosture,
   facingRadians: number | null,
 ): void {
-  if (unit.behaviorRuntime.posture !== posture) {
-    unit.behaviorRuntime.previousPosture = unit.behaviorRuntime.posture;
-    unit.behaviorRuntime.posture = posture;
-    unit.behaviorRuntime.postureChangedBecause = 'tactical_position_occupied';
-  }
+  enforcePosture(unit, posture, 'tactical_position_occupied');
 
   const facing = finiteFacing(facingRadians);
   if (facing !== null && angularDistance(unit.facingRadians, facing) > 0.0001) {
@@ -87,6 +102,17 @@ function enforceOccupation(
     if (unit.attentionRuntime.mode === 'search') unit.attentionRuntime.searchCenterRadians = facing;
     updateAttentionController(unit, 0);
   }
+}
+
+function enforcePosture(
+  unit: UnitModel,
+  posture: UnitPosture,
+  reason: string,
+): void {
+  if (unit.behaviorRuntime.posture === posture) return;
+  unit.behaviorRuntime.previousPosture = unit.behaviorRuntime.posture;
+  unit.behaviorRuntime.posture = posture;
+  unit.behaviorRuntime.postureChangedBecause = reason;
 }
 
 function finiteFacing(value: number | null): number | null {
