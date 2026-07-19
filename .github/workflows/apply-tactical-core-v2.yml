@@ -1,4 +1,4 @@
-name: Apply Tactical Position Core V2
+name: Verify Tactical Position Product V2
 
 on:
   push:
@@ -6,18 +6,17 @@ on:
       - feature/20260719-tactical-position-system
     paths:
       - '.github/workflows/apply-tactical-core-v2.yml'
-      - '.github/patches/apply-tactical-core-v2.mjs'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: apply-tactical-position-core-v2
-  cancel-in-progress: false
+  group: verify-tactical-position-product-v2
+  cancel-in-progress: true
 
 jobs:
-  apply:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact branch HEAD
@@ -26,24 +25,6 @@ jobs:
           ref: feature/20260719-tactical-position-system
           fetch-depth: 1
           show-progress: false
-
-      - name: Apply regression tests or persist patch diagnostic
-        run: |
-          set +e
-          node .github/patches/apply-tactical-core-v2.mjs tests > tactical-core-patcher.log 2>&1
-          patch_status=$?
-          set -e
-          if [ "$patch_status" -ne 0 ]; then
-            mkdir -p docs/debug
-            cp tactical-core-patcher.log docs/debug/tactical-core-patcher.log
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add docs/debug/tactical-core-patcher.log
-            git commit -m "debug: capture tactical core patch failure"
-            git push origin HEAD:feature/20260719-tactical-position-system
-            cat tactical-core-patcher.log
-            exit "$patch_status"
-          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -54,46 +35,24 @@ jobs:
       - name: Install dependencies
         run: npm ci --silent
 
-      - name: RED — prove old implementation fails regression tests
-        run: |
-          set +e
-          npm run tactical-position:smoke > tactical-core-red.log 2>&1
-          red_status=$?
-          set -e
-          if [ "$red_status" -eq 0 ]; then
-            echo "Expected tactical-position regression tests to fail on the old implementation, but they passed."
-            exit 1
-          fi
-          echo "Expected RED confirmed. Last 80 lines:"
-          tail -n 80 tactical-core-red.log
-
-      - name: GREEN — apply production implementation
-        run: node .github/patches/apply-tactical-core-v2.mjs prod
-
-      - name: Verify tactical core implementation
+      - name: Verify tactical product and AI editor
         run: |
           set +e
           {
             npx tsc
             npm run tactical-position:smoke
             npm run tactical-query:smoke
-          } > tactical-core-green.log 2>&1
+            npm run workspace:smoke
+            npm run editor:smoke
+            npx vite build --base="/Real-wargame/"
+            test -f dist/index.html
+            test -f dist/ai-node-editor.html
+          } > tactical-product-v2.log 2>&1
           status=$?
           set -e
           if [ "$status" -ne 0 ]; then
-            echo "Tactical core verification failed. Last 240 lines:"
-            tail -n 240 tactical-core-green.log
+            echo "Tactical product verification failed. Last 320 lines:"
+            tail -n 320 tactical-product-v2.log
             exit "$status"
           fi
-          tail -n 120 tactical-core-green.log
-
-      - name: Commit verified product changes and remove one-shot tooling
-        run: |
-          rm -f .github/patches/apply-tactical-core-v2.mjs
-          rm -f .github/workflows/apply-tactical-core-v2.yml
-          rm -f docs/debug/tactical-core-patcher.log
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "feat: add tactical position objectives and movement-safe search"
-          git push origin HEAD:feature/20260719-tactical-position-system
+          tail -n 160 tactical-product-v2.log
