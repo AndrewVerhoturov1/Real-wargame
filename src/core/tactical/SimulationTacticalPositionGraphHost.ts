@@ -4,6 +4,7 @@ import type {
 } from '../ai/tactical/TacticalQuery';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
+import { normalizeTacticalPositionSearchObjective } from './TacticalPositionObjective';
 import { getTacticalPositionSearchService } from './TacticalPositionSearchService';
 
 const MAX_LOCAL_SAMPLE_CELLS = 4096;
@@ -102,6 +103,7 @@ function buildSearchParameters(
     Math.floor(request.maxCandidates) * CELLS_PER_REQUESTED_CANDIDATE,
   );
   return {
+    objective: normalizeTacticalPositionSearchObjective(request.objective),
     searchRadiusMeters: request.searchRadiusMeters,
     maxCandidates: Math.min(12, Math.max(1, Math.floor(request.maxCandidates))),
     maxSampledCells: Math.max(1, Math.min(MAX_LOCAL_SAMPLE_CELLS, localAreaUpperBound, requestedWork)),
