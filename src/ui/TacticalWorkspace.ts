@@ -5,13 +5,14 @@ import {
 } from './TacticalWorkspaceBase';
 import { installTacticalPositionSearchControls } from './TacticalPositionSearchControls';
 import { installTacticalPositionSettingsControls } from './TacticalPositionSettingsControls';
+import { installTacticalPositionWorkspaceTab } from './TacticalPositionWorkspaceTab';
 
 export * from './TacticalWorkspaceBase';
 
 /**
- * Compatibility shell around the existing workspace while the danger tab is
- * migrated to the field-owned tactical-position UI. Observation is scoped to
- * one workspace subtree and coalesced to at most one cleanup per animation frame.
+ * Compatibility shell around the existing workspace while legacy cover widgets
+ * are removed. Tactical-position search owns a dedicated Positions tab and is
+ * never mounted into the shared Info/Danger/Stealth body.
  */
 export function installTacticalWorkspace(
   state: SimulationState,
@@ -30,6 +31,7 @@ export function installTacticalWorkspace(
   document.head.append(style);
 
   const teardownBase = installTacticalWorkspaceBase(state, aiBridge, onChanged);
+  const teardownTab = installTacticalPositionWorkspaceTab(state, onChanged);
   const teardownSettings = installTacticalPositionSettingsControls(state, onChanged);
   const teardownSearch = installTacticalPositionSearchControls(state, onChanged);
   const shell = document.querySelector<HTMLElement>('.tactical-workspace-shell');
@@ -49,19 +51,7 @@ export function installTacticalWorkspace(
         if (label === 'Известных укрытий') row.remove();
       });
       const sidebarTitle = shell.querySelector<HTMLElement>('[data-role="sidebar-title"]');
-      if (sidebarTitle?.textContent === 'Опасность и укрытия') sidebarTitle.textContent = 'Опасность и тактические позиции';
-      const sidebarBody = shell.querySelector<HTMLElement>('[data-role="sidebar-body"]');
-      if (
-        sidebarTitle?.textContent === 'Опасность и тактические позиции'
-        && sidebarBody
-        && !sidebarBody.querySelector('[data-role="tactical-position-help"]')
-      ) {
-        const help = document.createElement('section');
-        help.className = 'workspace-panel-section';
-        help.dataset.role = 'tactical-position-help';
-        help.innerHTML = '<h3>Тактические позиции</h3><p>Ромбы на карте публикуются simulation-owned сервисом только после явного запроса игрока или Graph v2. Внешний ромб обозначает позицию: вертикаль внутри — стоя, угол — пригнувшись, горизонталь — лёжа. Правый клик отправляет бойца; поиск и движение остаются разными действиями.</p>';
-        sidebarBody.append(help);
-      }
+      if (sidebarTitle?.textContent === 'Опасность и укрытия') sidebarTitle.textContent = 'Опасность';
     } finally {
       cleaning = false;
     }
@@ -87,6 +77,7 @@ export function installTacticalWorkspace(
     style.remove();
     teardownSearch();
     teardownSettings();
+    teardownTab();
     teardownBase();
   };
 }
