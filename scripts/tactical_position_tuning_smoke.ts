@@ -12,6 +12,7 @@ import {
 import {
   activateTacticalPositionOccupation,
   reconcileTacticalPositionOccupation,
+  registerTacticalPositionOccupation,
 } from '../src/core/tactical/TacticalPositionOccupation';
 import {
   getTacticalPositionPresentation,
@@ -20,12 +21,13 @@ import {
 import type { TacticalPositionCandidateSeedV2 } from '../src/core/tactical/TacticalPositionSearch';
 
 verifyHighestSafePosture();
-verifyOccupationSurvivesAiOverwriteAndClearsOnNewMove();
+verifyApproachAndOccupationSurviveAiOverwrite();
 verifyMarkerPublicationIsRateLimitedAndKeepsOldResult();
+verifySettingsChangeRefreshesMarkersImmediately();
 verifySettingsNormalizeFromSceneData();
 verifySceneExportIncludesSettings();
 
-console.log('Tactical position tuning smoke passed: highest-safe posture, stable markers, occupied-position lock and scene settings persistence.');
+console.log('Tactical position tuning smoke passed: highest-safe posture, stable markers, immediate tuning refresh, approach/occupation locks and scene settings persistence.');
 
 function verifyHighestSafePosture(): void {
   const settings = createDefaultTacticalPositionSettings();
@@ -48,23 +50,32 @@ function verifyHighestSafePosture(): void {
   ], settings).posture, 'prone');
 }
 
-function verifyOccupationSurvivesAiOverwriteAndClearsOnNewMove(): void {
+function verifyApproachAndOccupationSurviveAiOverwrite(): void {
   const unit = normalizeUnits([{ id: 'unit-1', type: 'infantry_squad', side: 'blue', x: 0, y: 0 }])[0]!;
-  unit.playerCommand = updatePlayerCommandStatus(
-    createPlayerMoveCommand(unit.id, { x: 2.5, y: 2.5 }, null, 1000),
-    'completed',
-    'done',
-    'готово',
-  );
+  unit.playerCommand = createPlayerMoveCommand(unit.id, { x: 2.5, y: 2.5 }, null, 1000);
   const commandId = unit.playerCommand.id;
-  activateTacticalPositionOccupation(unit, commandId, 'crouched', Math.PI / 2);
+  unit.order = {
+    type: 'move',
+    target: { x: 2.5, y: 2.5 },
+    issuedAtMs: 1,
+    source: 'player',
+    playerCommandId: commandId,
+  };
+  registerTacticalPositionOccupation(unit, commandId, 'prone', Math.PI / 2, 'crouched');
+  unit.behaviorRuntime.posture = 'standing';
+  reconcileTacticalPositionOccupation(unit);
+  assert.equal(unit.behaviorRuntime.posture, 'crouched', 'approach posture must survive an AI overwrite while the linked route is active');
+
+  unit.order = null;
+  unit.playerCommand = updatePlayerCommandStatus(unit.playerCommand, 'completed', 'done', 'готово');
+  activateTacticalPositionOccupation(unit, commandId, 'prone', Math.PI / 2);
   unit.behaviorRuntime.posture = 'standing';
   unit.facingRadians = 0;
   reconcileTacticalPositionOccupation(unit);
-  assert.equal(unit.behaviorRuntime.posture, 'crouched');
+  assert.equal(unit.behaviorRuntime.posture, 'prone');
   assert.ok(Math.abs(unit.facingRadians - Math.PI / 2) < 0.0001);
 
-  unit.order = { type: 'move', target: { x: 3, y: 3 }, issuedAtMs: 1 };
+  unit.order = { type: 'move', target: { x: 3, y: 3 }, issuedAtMs: 2 };
   reconcileTacticalPositionOccupation(unit);
   unit.behaviorRuntime.posture = 'standing';
   reconcileTacticalPositionOccupation(unit);
@@ -101,6 +112,24 @@ function verifyMarkerPublicationIsRateLimitedAndKeepsOldResult(): void {
   state.simulationTimeSeconds = 2.8;
   publishVisibleTacticalPositions(state, unit.id, []);
   assert.equal(getTacticalPositionPresentation(state).candidates.length, 0);
+}
+
+function verifySettingsChangeRefreshesMarkersImmediately(): void {
+  const unit = normalizeUnits([{ id: 'unit-refresh', type: 'infantry_squad', side: 'blue', x: 0, y: 0 }])[0]!;
+  const state = {
+    units: [unit],
+    simulationTimeSeconds: 0,
+    map: { cellSize: 20 },
+  } as unknown as SimulationState;
+  const settings = createDefaultTacticalPositionSettings();
+  settings.markerRefreshIntervalSeconds = 5;
+  setTacticalPositionSettings(unit, settings);
+  publishVisibleTacticalPositions(state, unit.id, [candidate('before', 1.5, 1.5)]);
+
+  state.simulationTimeSeconds = 0.1;
+  setTacticalPositionSettings(unit, { ...settings, standingMaximumDanger: 12 });
+  publishVisibleTacticalPositions(state, unit.id, [candidate('after', 4.5, 4.5)]);
+  assert.equal(getTacticalPositionPresentation(state).candidates[0]?.id, 'after');
 }
 
 function verifySettingsNormalizeFromSceneData(): void {
