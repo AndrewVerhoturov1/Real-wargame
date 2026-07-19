@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc && npm run perception-contact-priority:smoke && vite build && npm run deployment-pages:smoke",
+    "build": "tsc && npm run perception-contact-priority:smoke && npm run tactical-position:smoke && vite build && npm run deployment-pages:smoke",
     "preview": "vite preview",
     "deployment-pages:smoke": "node scripts/deployment_pages_smoke.mjs",
     "validate:ai-graph": "node scripts/validate_ai_graph.mjs",
