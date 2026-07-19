@@ -144,6 +144,7 @@ async function bootstrap(): Promise<void> {
   const destroyFrontZoneControls = installFrontZoneControls(state, forceRenderAtNativeMapQuality);
   const destroyEditorHeaderPlacement = installEditorHeaderPlacement();
   const destroyWorkspaceTooltipGuard = installWorkspaceTooltipGuard();
+  (board as unknown as { showGrid: boolean }).showGrid = false;
   board.start();
   const destroyTacticalOrderRadialInput = installTacticalOrderRadialInput(board, state, refreshTacticalOrderUi);
   const destroyAdaptiveGridLod = installAdaptiveGridLod(board, state, gridToggle);
