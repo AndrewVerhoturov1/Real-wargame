@@ -1,5 +1,4 @@
 import type { SimulationState } from '../core/simulation/SimulationState';
-import { getSimulationLayerState } from '../core/ui/RuntimeUiState';
 import {
   findVisibleTacticalPositionAt,
   getVisibleTacticalPositionById,
@@ -7,6 +6,7 @@ import {
   selectVisibleTacticalPositionById,
 } from '../core/tactical/SimulationTacticalPositionSelection';
 import { issueTacticalPositionMoveOrderToSelectedUnit } from '../core/tactical/TacticalPositionOrders';
+import { isTacticalPositionWorkspaceTabActive } from '../ui/TacticalPositionWorkspaceTab';
 
 interface PendingMarkerPointer {
   readonly pointerId: number;
@@ -81,7 +81,7 @@ export class TacticalPositionInputController {
   private canHandle(event: PointerEvent): boolean {
     return event.target instanceof HTMLCanvasElement
       && !this.state.editor.enabled
-      && getSimulationLayerState(this.state).mode === 'positions'
+      && isTacticalPositionWorkspaceTabActive(this.state)
       && this.state.selectedUnitId !== null;
   }
 }
