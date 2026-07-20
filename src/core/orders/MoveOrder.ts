@@ -3,6 +3,11 @@ import type { MovementProfileSource } from '../movement/MovementProfiles';
 import { cloneRouteDangerDiagnostic, type RouteDangerDiagnostic } from '../navigation/RouteDangerDiagnostic';
 import type { NavigationProfileSource } from '../navigation/NavigationProfileResolver';
 import type { NavigationMovementMode } from '../navigation/NavigationProfiles';
+import {
+  cloneTacticalTraversalPlan,
+  type TacticalTraversalPlanStatus,
+  type TacticalTraversalPlanV1,
+} from '../navigation/TacticalTraversalPlan';
 import type { GridPathCostBreakdown } from '../pathfinding/GridPathfinder';
 
 export type MoveOrderSource = 'player' | 'ai';
@@ -43,6 +48,13 @@ export interface MoveOrderOptions {
   readonly movementProfileOwnerToken?: string;
   readonly movementProfileDefinitionRevision?: number;
   readonly movementProfileSelectionRevision?: number;
+  readonly traversalBaseMovementProfileId?: string;
+  readonly traversalPlan?: TacticalTraversalPlanV1;
+  readonly traversalPlanStatus?: TacticalTraversalPlanStatus;
+  readonly activeTraversalSegmentIndex?: number;
+  readonly traversalPlanRevision?: number;
+  readonly traversalPlanReason?: string;
+  readonly traversalPlanReasonRu?: string;
   readonly finalFacingRadians?: number;
   readonly knowledgeRevision?: number;
   readonly replanSearchCount?: number;
@@ -85,6 +97,13 @@ export interface MoveOrder {
   movementProfileOwnerToken?: string;
   movementProfileDefinitionRevision?: number;
   movementProfileSelectionRevision?: number;
+  traversalBaseMovementProfileId?: string;
+  traversalPlan?: TacticalTraversalPlanV1;
+  traversalPlanStatus?: TacticalTraversalPlanStatus;
+  activeTraversalSegmentIndex?: number;
+  traversalPlanRevision?: number;
+  traversalPlanReason?: string;
+  traversalPlanReasonRu?: string;
   finalFacingRadians?: number;
   knowledgeRevision?: number;
   replanSearchCount?: number;
@@ -95,6 +114,8 @@ export interface MoveOrder {
 }
 
 export function createMoveOrder(target: GridPosition, options: MoveOrderOptions = {}): MoveOrder {
+  const routeCells = options.routeCells?.map((cell) => ({ ...cell }));
+  const hasPlannableRoute = Boolean(routeCells && routeCells.length > 0);
   return {
     type: 'move',
     target: { ...target },
@@ -105,7 +126,7 @@ export function createMoveOrder(target: GridPosition, options: MoveOrderOptions 
     requestedTarget: options.requestedTarget ? { ...options.requestedTarget } : undefined,
     waypoints: options.waypoints?.map((point) => ({ ...point })),
     waypointIndex: options.waypointIndex,
-    routeCells: options.routeCells?.map((cell) => ({ ...cell })),
+    routeCells,
     routeCellIndex: options.routeCellIndex,
     routeStatus: options.routeStatus,
     routeRevision: options.routeRevision,
@@ -128,6 +149,13 @@ export function createMoveOrder(target: GridPosition, options: MoveOrderOptions 
     movementProfileOwnerToken: options.movementProfileOwnerToken,
     movementProfileDefinitionRevision: options.movementProfileDefinitionRevision,
     movementProfileSelectionRevision: options.movementProfileSelectionRevision,
+    traversalBaseMovementProfileId: options.traversalBaseMovementProfileId ?? options.movementProfileId,
+    traversalPlan: cloneTacticalTraversalPlan(options.traversalPlan),
+    traversalPlanStatus: options.traversalPlanStatus ?? (hasPlannableRoute ? 'pending' : undefined),
+    activeTraversalSegmentIndex: options.activeTraversalSegmentIndex,
+    traversalPlanRevision: options.traversalPlanRevision,
+    traversalPlanReason: options.traversalPlanReason,
+    traversalPlanReasonRu: options.traversalPlanReasonRu,
     finalFacingRadians: options.finalFacingRadians,
     knowledgeRevision: options.knowledgeRevision,
     replanSearchCount: options.replanSearchCount,
