@@ -1,0 +1,58 @@
+name: Sync Preview History for Tactical Position Transfer
+
+on:
+  push:
+    branches:
+      - feature/20260719-tactical-position-system
+    paths:
+      - '.github/workflows/sync-preview-history-for-transfer.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch with history
+        uses: actions/checkout@v4
+        with:
+          ref: feature/20260719-tactical-position-system
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Merge preview history while preserving verified feature resolutions
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin real-wargame-preview
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git merge --no-ff --no-commit -X ours origin/real-wargame-preview
+          rm .github/workflows/sync-preview-history-for-transfer.yml
+
+      - name: Install dependencies
+        run: npm ci --silent
+
+      - name: Verify merged tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run docs:smoke
+          npx tsc
+          npm run tactical-position:smoke
+          npm run ai-scheduler:smoke
+          npm run workspace:smoke
+          npm run editor:smoke
+          npx vite build
+
+      - name: Commit synchronized history
+        run: |
+          git add -A
+          git commit -m 'merge: synchronize preview history for tactical position transfer'
+          git push origin HEAD:feature/20260719-tactical-position-system
