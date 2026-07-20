@@ -3,10 +3,13 @@ import { readFileSync } from 'node:fs';
 
 const controller = readFileSync(new URL('../src/ui/CellInspector.ts', import.meta.url), 'utf8');
 const content = readFileSync(new URL('../src/ui/CellInspectorContent.ts', import.meta.url), 'utf8');
+const memoryContent = readFileSync(new URL('../src/ui/CellInspectorMemoryContent.ts', import.meta.url), 'utf8');
 const workspace = readFileSync(new URL('../src/ui/TacticalWorkspace.ts', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../src/cell-inspector.css', import.meta.url), 'utf8');
 
 assert.match(controller, /event\.key !== 'Control'/, 'cell inspector must react specifically to the Control key');
+assert.match(controller, /event\.repeat\s*\|\|\s*controlHeld|controlHeld\s*\|\|\s*event\.repeat/, 'repeated Control keydown must not refresh the inspector');
+assert.match(controller, /buildCachedMemoryCellInspectorContent/, 'memory hover must use the revision-cached visibility snapshot');
 assert.match(controller, /addEventListener\('keydown'/, 'cell inspector must install keydown handling');
 assert.match(controller, /addEventListener\('keyup'/, 'cell inspector must install keyup handling');
 assert.match(controller, /addEventListener\('blur'/, 'cell inspector must hide when the window loses focus');
@@ -27,6 +30,11 @@ assert.match(content, /fieldRevision/, 'memory view must check for an already pr
 assert.doesNotMatch(content, /GridPathfinder|findPath|searchTacticalPositions\(/, 'hover inspection must not run pathfinding or tactical searches');
 assert.doesNotMatch(content, /for\s*\(let\s+y\s*=\s*0;\s*y\s*<\s*state\.map\.height/, 'hover inspection must not scan the full map');
 assert.doesNotMatch(controller, /requestAnimationFrame\([^)]*refresh/, 'hover inspection must not poll every animation frame');
+
+assert.match(memoryContent, /WeakMap<SimulationState, MemoryFieldCacheEntry>/, 'memory inspector must cache prepared fields per simulation state');
+assert.match(memoryContent, /cached\.fieldRevision === fieldRevision/, 'memory inspector must reuse one field for the same revision');
+assert.match(memoryContent, /sampleSelectedUnitVisibilityField/, 'memory inspector must perform direct cell sampling');
+assert.doesNotMatch(memoryContent, /\.filter\(|\.sort\(/, 'memory contact lookup must avoid per-hover array allocations');
 
 assert.match(workspace, /installCellInspector\(state\)/, 'workspace must install the cell inspector');
 assert.match(workspace, /teardownCellInspector\(\)/, 'workspace teardown must destroy the cell inspector');
