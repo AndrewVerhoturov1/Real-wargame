@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { normalizeMap, type TacticalMapData } from '../src/core/map/MapModel';
 import { markMapCellsDirty } from '../src/core/map/MapRuntimeState';
+import { buildPerceptionStimuli } from '../src/core/perception/PerceptionStimulus';
 import { createInitialState } from '../src/core/simulation/SimulationState';
 import { computeLineOfSight } from '../src/core/visibility/LineOfSight';
 import {
@@ -40,6 +41,16 @@ assert.deepEqual(exactOpen.origin, { x: 2.13, y: 2.31 });
 assert.deepEqual(exactOpen.target, { x: 10.87, y: 4.74 });
 assert.ok(exactOpen.traversedCellCount > 0);
 
+const boundaryTarget = traceVisibilityRay(normalizeMap(baseMap()), {
+  origin: { x: 2.5, y: 2.5 },
+  target: { x: 10, y: 4 },
+  originHeightAboveGroundMeters: 1.7,
+  targetHeightAboveGroundMeters: 1.7,
+  channel: 'visual',
+});
+assert.equal(boundaryTarget.hardBlocked, false, 'an exact integer-coordinate target inside the map must be evaluated in its owning cell');
+assert.deepEqual(boundaryTarget.target, { x: 10, y: 4 });
+
 const shortForest = traceVisibilityRay(normalizeMap(forestLengthMap()), {
   origin: { x: 2.1, y: 3.2 },
   target: { x: 8.1, y: 3.2 },
@@ -71,6 +82,24 @@ assert.equal(partial.blocked, false);
 const hidden = probeTargetVisibility(partialMap, partialObserver, partialTarget, 0.35);
 assert.equal(hidden.visibleSampleCount, 0);
 assert.equal(hidden.blocked, true);
+
+const actualTargetState = createInitialState(baseMap(), [
+  unitData('stimulus-observer', 2, 3),
+  { ...unitData('stimulus-target', 10, 3), side: 'red' as const, runtime: { posture: 'prone' as const } },
+]);
+const stimulusObserver = actualTargetState.units[0]!;
+const stimulusTarget = actualTargetState.units[1]!;
+let targetStimulus = buildPerceptionStimuli(actualTargetState, stimulusObserver)
+  .find((stimulus) => stimulus.sourceUnitId === stimulusTarget.id);
+assert.ok(targetStimulus);
+assert.deepEqual(targetStimulus.position, stimulusTarget.position, 'perception stimulus must preserve the target exact position');
+assert.equal(targetStimulus.targetHeightMeters, 0.35, 'prone target posture must produce the prone silhouette height');
+stimulusTarget.behaviorRuntime.posture = 'standing';
+targetStimulus = buildPerceptionStimuli(actualTargetState, stimulusObserver)
+  .find((stimulus) => stimulus.sourceUnitId === stimulusTarget.id);
+assert.ok(targetStimulus);
+assert.deepEqual(targetStimulus.position, stimulusTarget.position);
+assert.equal(targetStimulus.targetHeightMeters, 1.7, 'standing target posture must produce the standing silhouette height');
 
 const parityCases: Array<{
   name: string;
@@ -108,12 +137,12 @@ for (const result of results) {
 const nearReliefMap = normalizeMap(postureSensitiveNearReliefMap());
 const proneState = createInitialState(nearReliefMap, [unitData('near-relief-observer', 2, 3)]);
 const nearObserver = proneState.units[0]!;
-nearObserver.position = { x: 2.8, y: 3.5 };
+nearObserver.position = { x: 2.2, y: 3.5 };
 nearObserver.attentionSettings.vision.maximumVisualRangeMeters = 2_000;
 nearObserver.behaviorRuntime.posture = 'prone';
 const nearTarget = { x: 10.8, y: 3.5 };
 const proneResult = computeLineOfSight(nearReliefMap, nearObserver, nearTarget, 1.7);
-assert.equal(proneResult.blocked, true, 'near relief must hide the target from a prone observer');
+assert.equal(proneResult.blocked, true, 'near relief must hide the target from an exact off-center prone observer');
 nearObserver.behaviorRuntime.posture = 'standing';
 const standingResult = computeLineOfSight(nearReliefMap, nearObserver, nearTarget, 1.7);
 assert.equal(standingResult.blocked, false, 'the same exact target must clear relief after the observer stands');
@@ -158,11 +187,13 @@ const evidence = {
   transmissionTolerance: TRANSMISSION_TOLERANCE,
   cases: results,
   exactOpenPositionPreserved: true,
+  exactIntegerTargetSupported: true,
   exactVegetationPathLength: true,
   partialSilhouette: {
     visibleSampleCount: partial.visibleSampleCount,
     visualTransmission: round(partial.visualTransmission),
   },
+  actualTargetPostureAndPositionPropagated: true,
   proneSilhouetteHidden: true,
   postureSensitiveNearRelief: true,
   postureSensitiveOffCenterPositions: true,
@@ -172,7 +203,7 @@ const evidence = {
   mapRevisionInvalidatedCache: true,
 };
 writeEvidence('point-los-parity.json', evidence);
-console.log(`Unified visibility differential smoke passed: ${results.length} parity scenes, exact DDA, silhouette and cache coverage.`);
+console.log(`Unified visibility differential smoke passed: ${results.length} parity scenes, exact DDA, target posture, silhouette and cache coverage.`);
 
 function compareCenterParity(fixture: typeof parityCases[number]) {
   const map = normalizeMap(fixture.map);
