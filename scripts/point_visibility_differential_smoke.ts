@@ -48,8 +48,8 @@ const shortForest = traceVisibilityRay(normalizeMap(forestLengthMap()), {
   channel: 'visual',
 });
 const diagonalForest = traceVisibilityRay(normalizeMap(forestLengthMap()), {
-  origin: { x: 2.1, y: 2.1 },
-  target: { x: 8.1, y: 5.9 },
+  origin: { x: 2.1, y: 1.1 },
+  target: { x: 8.1, y: 6.4 },
   originHeightAboveGroundMeters: 1.7,
   targetHeightAboveGroundMeters: 1.7,
   channel: 'visual',
@@ -228,7 +228,7 @@ function partialSilhouetteMap(): TacticalMapData {
       widthCells: 1,
       heightCells: 1,
       rotationRadians: 0,
-      losHeightMeters: 1.1,
+      losHeightMeters: 1.5,
     }],
   };
 }
