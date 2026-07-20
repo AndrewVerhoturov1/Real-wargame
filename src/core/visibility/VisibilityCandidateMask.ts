@@ -139,7 +139,7 @@ function buildMaskKey(
 ): string {
   const profile = unit.attentionSettings.profiles[unit.attentionRuntime.mode];
   return [
-    'visibility-candidate-mask:v1',
+    'visibility-candidate-mask:v2-quality-key',
     unit.id,
     exact(unit.position.x),
     exact(unit.position.y),
@@ -156,6 +156,8 @@ function buildMaskKey(
     unit.attentionSettings.nearAwarenessRangeMeters,
     unit.attentionSettings.nearMinimumVisibilityQuality,
     unit.attentionSettings.vision.maximumVisualRangeMeters,
+    unit.attentionSettings.vision.distanceFalloffStartMeters,
+    unit.attentionSettings.vision.distanceFalloffExponent,
     state.map.metersPerCell,
     minCellX,
     minCellY,
