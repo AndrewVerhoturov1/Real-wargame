@@ -20,14 +20,13 @@ jobs:
           ref: feature/20260719-tactical-position-system
           fetch-depth: 1
 
-      - name: Trace posture ownership after tactical arrival
+      - name: Trace occupied posture consumers
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== tactical occupation and arrival ==='
-          sed -n '1,220p' src/core/tactical/TacticalPositionOccupation.ts
-          sed -n '1,180p' src/core/tactical/TacticalPositionArrival.ts
-          echo '=== all occupied posture references ==='
-          rg -n "occupiedTacticalPositionPosture|isTacticalPositionOccupationActive|arrivalPostureApplied|tactical_position_arrival|arrivalPosture" src scripts || true
-          echo '=== all runtime posture assignments / SetPosture handling ==='
-          rg -n "behaviorRuntime\.posture\s*=|previousPosture\s*=|SetPosture|postureChangedBecause" src/core src/ui scripts | head -n 500
+          echo '=== occupied posture symbols ==='
+          rg -n "occupiedTacticalPositionPosture|isTacticalPositionOccupationActive|arrivalPostureApplied|tactical_position_arrival" src scripts || true
+          echo '=== posture writers ==='
+          rg -n "behaviorRuntime\.posture\s*=|previousPosture\s*=|postureChangedBecause" src/core src/ui scripts || true
+          echo '=== SetPosture runtime ==='
+          rg -n "SetPosture" src/core src/ui scripts || true
