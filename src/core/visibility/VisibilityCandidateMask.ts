@@ -53,6 +53,7 @@ export function buildVisibilityCandidateMask(
   const zone = new Uint8Array(width * height);
   const distanceMeters = new Float32Array(width * height);
   const profile = unit.attentionSettings.profiles[unit.attentionRuntime.mode];
+  const nearEnabled = unit.attentionSettings.nearAwarenessRangeMeters > 0;
   let candidateCellCount = 0;
   let skippedOutsideAttentionCellCount = 0;
 
@@ -80,7 +81,8 @@ export function buildVisibilityCandidateMask(
       );
       const allowed = attention.zone !== 'outside'
         && attention.weight > 0
-        && currentDistanceMeters <= attention.maximumRangeMeters;
+        && currentDistanceMeters <= attention.maximumRangeMeters
+        && (attention.zone !== 'near' || nearEnabled);
       if (!allowed) {
         skippedOutsideAttentionCellCount += 1;
         continue;
