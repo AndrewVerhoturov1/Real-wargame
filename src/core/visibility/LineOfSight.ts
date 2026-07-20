@@ -62,16 +62,30 @@ export function computeLineOfSight(
     target,
     Math.max(0.5, 2 / map.metersPerCell),
   );
+  const postureEyeHeightMeters = eyeHeightForPosture(unit.behaviorRuntime.posture);
+  const normalizedTargetHeightMeters = normalizeTargetHeightMeters(targetHeightMeters);
   const originGround = sampleSmoothHeightLevel(map, origin.x, origin.y) * ELEVATION_STEP_METERS;
   const targetGround = sampleSmoothHeightLevel(map, target.x, target.y) * ELEVATION_STEP_METERS;
-  const originEye = originGround + eyeHeightForPosture(unit.behaviorRuntime.posture);
-  const targetEye = targetGround + normalizeTargetHeightMeters(targetHeightMeters);
+  const originEye = originGround + postureEyeHeightMeters;
+  const targetEye = targetGround + normalizedTargetHeightMeters;
+  const terrainOriginCell = cellCenterForPosition(map, origin);
+  const terrainTargetCell = cellCenterForPosition(map, target);
+  const terrainOriginEye = sampleSmoothHeightLevel(
+    map,
+    terrainOriginCell.x,
+    terrainOriginCell.y,
+  ) * ELEVATION_STEP_METERS + postureEyeHeightMeters;
+  const terrainTargetEye = sampleSmoothHeightLevel(
+    map,
+    terrainTargetCell.x,
+    terrainTargetCell.y,
+  ) * ELEVATION_STEP_METERS + normalizedTargetHeightMeters;
   const terrainBlocker = findTerrainHorizonBlocker(
     map,
     origin,
-    target,
-    originEye,
-    targetEye,
+    terrainTargetCell,
+    terrainOriginEye,
+    terrainTargetEye,
   );
   const steps = Math.max(2, Math.ceil(totalDistanceMeters / SAMPLE_STEP_METERS));
   let accumulatedForestMeters = 0;
@@ -392,6 +406,13 @@ function eyeHeightForPosture(posture: UnitModel['behaviorRuntime']['posture']): 
 
 function normalizeTargetHeightMeters(value: number): number {
   return Number.isFinite(value) ? Math.max(0.05, value) : 1.4;
+}
+
+function cellCenterForPosition(map: TacticalMap, position: GridPosition): GridPosition {
+  return {
+    x: clampInt(Math.floor(position.x), 0, map.width - 1) + 0.5,
+    y: clampInt(Math.floor(position.y), 0, map.height - 1) + 0.5,
+  };
 }
 
 function formatSigned(value: number): string {
