@@ -1,16 +1,27 @@
 ---
 name: real-wargame-github-pages-deploy
-description: Use when the user explicitly asks to deploy, redeploy, publish, or update a Real-Wargame branch on GitHub Pages.
+description: Use for Real-Wargame GitHub Pages publishing and after every verified product fix on the active tactical-position feature branch.
 license: MIT
 ---
 
 # Real-Wargame GitHub Pages Deploy
 
-## Authorization
+## Standing authorization
 
-Run this workflow only after an explicit request such as `задеплой на GitHub Pages`, `задеплой на пайдж`, `обнови деплой на пайдж` or `опубликуй эту ветку на Pages`.
+The user gave standing authorization on 2026-07-20 to update GitHub Pages after every successfully verified product change on:
 
-A commit, push, implementation request, transfer or merge does not imply Pages deployment permission.
+```text
+feature/20260719-tactical-position-system
+```
+
+For that branch:
+
+- do not ask again after each fix;
+- after focused checks pass, update GitHub Pages in the same task;
+- deployment failure keeps the task incomplete until fixed or clearly reported;
+- an explicit user instruction such as `не деплой`, `не обновляй Pages` or `остановись перед деплоем` overrides the standing authorization for that task.
+
+Other branches still require an explicit Pages deployment request unless a newer repository instruction grants standing authorization.
 
 ## Required source identity
 
@@ -18,7 +29,7 @@ Before deployment, resolve and record:
 
 ```text
 repository: AndrewVerhoturov1/Real-wargame
-branch: exact requested feature branch
+branch: exact feature branch
 source_sha: exact current remote HEAD
 ```
 
@@ -37,20 +48,33 @@ npm run workspace:smoke
 npm run deployment-pages:smoke
 ```
 
-The production build must use the repository base path `/Real-wargame/` and must contain both entry pages:
+The production build must use the repository base path `/Real-wargame/` and contain both entry pages:
 
 ```text
 dist/index.html
 dist/ai-node-editor.html
 ```
 
-## Publication route
+A failing command must stop publication. Do not use shell command groups where a later successful command can hide an earlier failure.
 
-1. Build the exact feature-branch HEAD.
-2. Publish the complete `dist` directory to the `gh-pages` branch.
-3. Confirm the system workflow `pages build and deployment` completes successfully for the resulting `gh-pages` commit.
-4. Do not modify `main` or `real-wargame-preview` unless separately authorized.
-5. Do not use Vercel for a GitHub Pages deployment request.
+## Automatic feature-branch route
+
+The canonical workflow is:
+
+```text
+.github/workflows/deploy-tactical-position-pages.yml
+```
+
+For `feature/20260719-tactical-position-system` it must:
+
+1. run automatically after product-code or product-test changes;
+2. skip documentation-only pushes;
+3. publish only after every required check and the production build pass;
+4. publish the complete `dist` directory to `gh-pages`;
+5. preserve the exact source SHA in build metadata and the `gh-pages` commit message;
+6. confirm the system workflow `pages build and deployment` completes successfully.
+
+Do not modify `main` or `real-wargame-preview` unless separately authorized. Do not use Vercel for a GitHub Pages deployment.
 
 ## Mandatory live targets
 
@@ -82,4 +106,4 @@ AI Node Editor URL
 checks that actually passed
 ```
 
-A green build is not visual proof. State separately whether each page was only fetched or interactively verified.
+A green build is not visual proof. State separately whether each page was fetched or interactively verified.
