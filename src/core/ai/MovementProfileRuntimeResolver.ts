@@ -43,6 +43,7 @@ const preparedMovementRegistryIndexByEntries = new WeakMap<
   readonly MovementProfileRegistryEntry[],
   PreparedMovementRegistryIndex
 >();
+const TACTICAL_TRAVERSAL_OWNER_PREFIX = 'tactical-traversal:';
 
 /**
  * Canonical finalizer for physical movement-profile selection.
@@ -134,6 +135,9 @@ export function reconcileMovementProfileRuntime(
   const ownerToken = resolved.source === 'player_order'
     ? activePlayerCommand?.id
     : resolved.ownerToken;
+  const traversalPhysicalOverride = resolved.source === 'ai_override'
+    && typeof ownerToken === 'string'
+    && ownerToken.startsWith(TACTICAL_TRAVERSAL_OWNER_PREFIX);
   const previousId = cleanOptionalText(options.previousProfileId)
     ?? cleanOptionalText(unit.movementRuntime.effectiveProfileId)
     ?? cleanOptionalText(memory[MOVEMENT_PROFILE_MEMORY_KEYS.activeProfileId])
@@ -179,9 +183,9 @@ export function reconcileMovementProfileRuntime(
   setRuntimeIfChanged(unit.movementRuntime, 'effectiveProfileId', resolved.profileId);
   setRuntimeIfChanged(unit.movementRuntime, 'effectiveProfileSource', resolved.source);
 
-  // MoveOrder is the route/request snapshot. A transient physical fallback is
-  // effective runtime state only and must never rewrite player/AI intent or route revisions.
-  if (order && commit && !resolved.forcedFallback) {
+  // MoveOrder stores route intent. Tactical traversal owns only the temporary
+  // physical segment override and must not replace that base preference.
+  if (order && commit && !resolved.forcedFallback && !traversalPhysicalOverride) {
     const orderSelectionChanged = cleanOptionalText(order.movementProfileId) !== resolved.profileId
       || normalizeOptionalSource(order.movementProfileSource) !== resolved.source;
     const orderSelectionRevision = orderSelectionChanged
