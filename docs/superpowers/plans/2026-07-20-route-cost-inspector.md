@@ -1,289 +1,107 @@
-# Route Cost Inspector Implementation Plan
+# Route Inspector Consolidation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Move the route-cost overlay controls into a dedicated right-inspector tab and remove duplicate controls from the bottom unit bar and the top «Вид» menu.
+**Goal:** Make the right-inspector tab «Маршрут» the single place for enabling the route-cost layer, selecting the movement profile and reading movement execution diagnostics.
 
-**Architecture:** `RouteCostOverlayState` and `PixiRouteCostOverlayRenderer` remain unchanged. `TacticalWorkspaceBase` owns the new inspector tab and emits a narrow render event after creating its host. `RouteCostOverlayUi` mounts its existing toggle and mode selector into that host, while continuing to update route diagnostics in the bottom details popover.
+**Architecture:** Keep all route state, calculation and rendering unchanged. `TacticalWorkspace` moves the already-bound profile and diagnostics DOM nodes into the inspector and owns automatic overlay activation based on the selected tab. `RouteCostOverlayUi` keeps only the cost-view selector and cost diagnostics updates.
 
 **Tech Stack:** TypeScript 5, DOM, PixiJS 8, Vite smoke scripts.
 
 ## Global Constraints
 
-- Base branch is `real-wargame-preview`; implementation branch is `feature/20260720-route-cost-inspector`.
+- Work only on `feature/20260720-route-cost-inspector`, based on `real-wargame-preview`.
 - Do not modify `main` or `real-wargame-preview`.
-- Russian is required for all user-facing labels.
-- Do not add a second route-cost state, renderer, field build, cache, interval, worker or full-map scan.
-- Do not run Playwright, Chromium or GitHub Actions without separate approval.
-- Preserve bottom route diagnostics; remove only the bottom layer-control button.
+- Use Russian labels.
+- Do not duplicate route state, handlers, intervals, workers, caches or full-map calculations.
+- Do not run GitHub Actions, Chromium or Playwright without separate authorization.
+- Redeploy the exact final feature-branch SHA because deployment was part of the original task.
 
 ---
 
-### Task 1: Lock the UI contract with a failing smoke test
+### Task 1: Lock the revised contract
 
 **Files:**
+- Modify: `scripts/route_cost_inspector_smoke.mjs`
 - Modify: `scripts/ui_compact_route_controls_smoke.ts`
 
 **Interfaces:**
-- Consumes: raw source text from `src/ui/TacticalWorkspaceBase.ts`, `src/ui/RouteCostOverlayUi.ts`, and `src/core/ui/RuntimeUiState.ts`.
-- Produces: assertions describing the new single-control location.
+- Consumes: source files for workspace, route-cost UI and route CSS.
+- Produces: assertions for automatic activation and consolidated route UI.
 
-- [ ] **Step 1: Replace stale workspace source lookup and add the new expectations**
-
-Use `src/ui/TacticalWorkspaceBase.ts` for workspace markup. Assert that it contains:
-
-```ts
-"type SimulationTab = 'info' | 'danger' | 'positions' | 'stealth' | 'routeCost' | 'memory'"
-"['routeCost', 'Стоимость маршрута']"
-'data-role="route-cost-inspector-host"'
-"routeCost:'Стоимость маршрута'"
-```
-
-Assert that it does not contain:
-
-```ts
-'data-action="route-cost-quick-toggle"'
-```
-
-Assert that `RouteCostOverlayUi.ts` contains:
-
-```ts
-'ROUTE_COST_INSPECTOR_RENDERED_EVENT'
-'[data-role="route-cost-inspector-host"]'
-'toggleRouteCostOverlay(state)'
-'setRouteCostOverlayMode(state, mode.value as RouteCostOverlayMode)'
-'[data-role="route-details-profile"]'
-```
-
-Assert that it does not contain:
-
-```ts
-'.workspace-display-panel'
-'[data-action="route-cost-quick-toggle"]'
-```
-
-Assert that `RuntimeUiState.ts` contains `routeCost` in `SimulationLayerMode`.
-
-- [ ] **Step 2: Run the focused smoke test and verify RED**
-
-Run:
-
-```bash
-npm run ui-compact-route-controls:smoke
-```
-
-Expected: failure because the route-cost inspector tab and host do not yet exist.
-
-- [ ] **Step 3: Commit the failing contract**
-
-```bash
-git add scripts/ui_compact_route_controls_smoke.ts
-git commit -m "test: define route cost inspector contract"
-```
+- [ ] Require the tab markup `data-tab="routeCost">Маршрут`.
+- [ ] Require `setRouteCostOverlayActive(state, true)` on route-tab selection.
+- [ ] Require `setRouteCostOverlayActive(state, false)` when another tab or mode is selected.
+- [ ] Require movement-profile and route-details nodes to be appended to `[data-role="route-cost-inspector-host"]`.
+- [ ] Reject `toggleRouteCostOverlay`, `data-action="route-cost-overlay"` and the old bottom quick toggle in active UI code.
+- [ ] Require inspector-specific CSS for the moved profile and always-visible route details.
+- [ ] Commit the failing contract before production changes.
 
 ---
 
-### Task 2: Add the right-inspector tab and remove the bottom control
+### Task 2: Make the tab own overlay visibility and move existing controls
 
 **Files:**
-- Modify: `src/ui/TacticalWorkspaceBase.ts`
-- Modify: `src/core/ui/RuntimeUiState.ts`
+- Modify: `src/ui/TacticalWorkspace.ts`
 
 **Interfaces:**
-- Consumes: `setSimulationLayerMode(state, mode)` and existing sidebar rendering.
-- Produces: `routeCost` as a valid `SimulationLayerMode`, a `Стоимость маршрута` tab, and `[data-role="route-cost-inspector-host"]`.
+- Consumes: `setRouteCostOverlayActive(state, active)`, existing movement-profile label and existing route-details element.
+- Produces: one «Маршрут» tab, one inspector host and automatic overlay activation.
 
-- [ ] **Step 1: Extend the layer and tab unions**
-
-Change the two unions to include `routeCost`:
-
-```ts
-export type SimulationLayerMode = 'info' | 'danger' | 'positions' | 'stealth' | 'routeCost' | 'memory';
-type SimulationTab = 'info' | 'danger' | 'positions' | 'stealth' | 'routeCost' | 'memory';
-```
-
-- [ ] **Step 2: Add the tab label and remove the bottom quick toggle**
-
-Add:
-
-```ts
-['routeCost', 'Стоимость маршрута']
-```
-
-between `Скрытность` and `Обзор и память`.
-
-Delete:
-
-```html
-<button type="button" data-action="route-cost-quick-toggle" aria-pressed="false">Карта стоимости: выкл</button>
-```
-
-Keep the existing `unit-route-details` block unchanged.
-
-- [ ] **Step 3: Render the inspector host and announce it**
-
-Add the sidebar title mapping:
-
-```ts
-routeCost: 'Стоимость маршрута'
-```
-
-Add a branch before the memory branch:
-
-```ts
-} else if (tab === 'routeCost') {
-  sidebarBody.innerHTML = '<div class="workspace-panel-section route-cost-inspector-panel" data-role="route-cost-inspector-host"></div>';
-  window.dispatchEvent(new CustomEvent('real-wargame:route-cost-inspector-rendered'));
-```
-
-- [ ] **Step 4: Commit the workspace change**
-
-```bash
-git add src/ui/TacticalWorkspaceBase.ts src/core/ui/RuntimeUiState.ts
-git commit -m "feat: add route cost inspector tab"
-```
+- [ ] Import `setRouteCostOverlayActive`.
+- [ ] Rename the inserted tab from «Стоимость маршрута» to «Маршрут».
+- [ ] Locate `.unit-route-profile`, `.unit-route-details` and `.unit-bar-route-controls` after base workspace installation.
+- [ ] Append the existing profile and details nodes to the inspector host; set the details element open and change its profile label to «Профиль движения».
+- [ ] Add a migrated class to the lower control container so attention and turn controls reflow without empty route slots.
+- [ ] On route-tab click: set the route-cost overlay active, show the inspector and request one render.
+- [ ] On other tab/mode click: deactivate the route-cost overlay, restore the normal sidebar and request one render.
+- [ ] Preserve teardown and restore no duplicated listeners.
 
 ---
 
-### Task 3: Move the existing controls into the inspector host
+### Task 3: Remove the redundant layer button
 
 **Files:**
 - Modify: `src/ui/RouteCostOverlayUi.ts`
 
 **Interfaces:**
-- Consumes: existing `getRouteCostOverlayState`, `toggleRouteCostOverlay`, `setRouteCostOverlayMode` and the host event `real-wargame:route-cost-inspector-rendered`.
-- Produces: one mounted controls section inside `[data-role="route-cost-inspector-host"]`.
+- Consumes: `[data-role="route-cost-inspector-host"]`, `getRouteCostOverlayState`, `setRouteCostOverlayMode` and existing diagnostic fields.
+- Produces: explanatory copy plus one cost-view selector.
 
-- [ ] **Step 1: Replace the display-menu and quick-toggle bindings**
-
-Add:
-
-```ts
-const ROUTE_COST_INSPECTOR_RENDERED_EVENT = 'real-wargame:route-cost-inspector-rendered';
-```
-
-Keep one long-lived `controls`, `menuToggle`, and `mode` element. Remove the `.workspace-display-panel` query and all `quickToggle` logic.
-
-- [ ] **Step 2: Add explicit inspector copy**
-
-Build controls as:
-
-```ts
-controls.className = 'route-cost-controls';
-controls.innerHTML = '<h3>Слой стоимости маршрута</h3><p>Показывает цену перемещения по клеткам. Итоговая стоимость использует профиль и известные данные выбранного бойца.</p>';
-```
-
-Append the existing toggle and labelled selector after this explanation.
-
-- [ ] **Step 3: Mount only into the current inspector host**
-
-Implement:
-
-```ts
-const mountInspectorControls = () => {
-  const host = document.querySelector<HTMLElement>('[data-role="route-cost-inspector-host"]');
-  if (host && controls.parentElement !== host) host.append(controls);
-};
-```
-
-Call it once during installation and from a window listener for `ROUTE_COST_INSPECTOR_RENDERED_EVENT`.
-
-- [ ] **Step 4: Preserve state synchronisation and teardown**
-
-The existing 300 ms interval continues to synchronise mode, toggle state and bottom route diagnostics. Teardown must clear the interval, remove the event listener and remove `controls`.
-
-- [ ] **Step 5: Run the focused smoke test and verify GREEN**
-
-Run:
-
-```bash
-npm run ui-compact-route-controls:smoke
-```
-
-Expected: `Compact route controls and editor navigation smoke passed.`
-
-- [ ] **Step 6: Commit the control move**
-
-```bash
-git add src/ui/RouteCostOverlayUi.ts
-git commit -m "feat: mount route cost controls in inspector"
-```
+- [ ] Remove the `toggleRouteCostOverlay` import and all button creation/listeners.
+- [ ] Keep the heading, explanation and `baseTerrain`/`finalCost` selector.
+- [ ] Keep the 300 ms synchronisation of mode, profile, cost and reason fields.
+- [ ] Keep mount-event handling and teardown.
 
 ---
 
-### Task 4: Verify the focused integration matrix
+### Task 4: Restyle the moved controls
 
 **Files:**
-- No production changes expected.
+- Modify: `src/tactical-workspace-compact-route.css`
 
 **Interfaces:**
-- Consumes: completed feature branch.
-- Produces: exact command results for the final report and deployment gate.
+- Consumes: `.route-cost-inspector-panel`, `.unit-route-profile`, `.unit-route-details`, `.unit-route-details-panel` and `.route-controls-migrated`.
+- Produces: normal sidebar layout without fixed popovers or empty lower-grid slots.
 
-- [ ] **Step 1: Run TypeScript**
-
-```bash
-npx tsc --noEmit
-```
-
-Expected: exit code 0.
-
-- [ ] **Step 2: Run focused UI and overlay checks**
-
-```bash
-npm run ui-compact-route-controls:smoke
-npm run navigation-overlay:smoke
-npm run workspace:smoke
-```
-
-Expected: all exit code 0.
-
-- [ ] **Step 3: Run the production build**
-
-```bash
-npm run build
-```
-
-Expected: exit code 0 with `dist/index.html` and `dist/ai-node-editor.html` verified by `deployment-pages:smoke`.
-
-- [ ] **Step 4: Confirm branch scope**
-
-Compare with `real-wargame-preview` and verify that only the spec, plan, focused smoke contract and the three intended runtime files changed.
-
-- [ ] **Step 5: Publish the exact branch head**
-
-Record the remote feature SHA. Do not transfer it into `real-wargame-preview`.
+- [ ] Make the moved profile a full-width grid field in the inspector.
+- [ ] Make the route details panel static, always visible and width-constrained by the inspector.
+- [ ] Hide the moved `<summary>` because the diagnostics are continuously visible.
+- [ ] Reflow the remaining lower controls into attention profile, attention mode and turn columns.
 
 ---
 
-### Task 5: Deploy the exact feature head to Vercel
+### Task 5: Verify and deploy
 
 **Files:**
-- No repository changes expected unless the authorized deployment build exposes a defect.
+- No further production changes expected.
 
-**Interfaces:**
-- Consumes: exact remote feature SHA and passed focused checks.
-- Produces: one READY Vercel Preview with both required pages.
-
-- [ ] **Step 1: Resolve exact remote identity**
-
-Record repository, branch and current remote SHA for `feature/20260720-route-cost-inspector`.
-
-- [ ] **Step 2: Deploy through an authenticated exact-source route**
-
-Use the connected Vercel project or another repository-approved authenticated route. Do not enable Git automatic deployments and do not create a dummy commit.
-
-- [ ] **Step 3: Inspect build status and logs**
-
-Require Vercel status `READY`. If the build fails, fix only this feature branch, rerun the focused checks and redeploy the corrected exact head under the same authorization.
-
-- [ ] **Step 4: Verify both required pages exist**
-
-Report:
-
-```text
-<preview>/
-<preview>/ai-node-editor.html
-```
-
-Do not claim browser visual QA; it was not authorized.
+- [ ] Run `npx tsc --noEmit`.
+- [ ] Run `node scripts/route_cost_inspector_smoke.mjs`.
+- [ ] Run `npm run ui-compact-route-controls:smoke`.
+- [ ] Run `npx vite build`.
+- [ ] Run `npm run deployment-pages:smoke`.
+- [ ] Record the exact remote feature SHA.
+- [ ] Deploy that exact SHA to the existing Vercel preview project without enabling Git deployment.
+- [ ] Require Vercel `READY` and verify `/` plus `/ai-node-editor.html` return successfully.
+- [ ] Report that broad legacy `workspace:smoke` and `navigation-overlay:smoke` remain excluded for their already-observed stale unrelated assertions.
