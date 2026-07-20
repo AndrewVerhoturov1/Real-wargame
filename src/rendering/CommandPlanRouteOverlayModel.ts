@@ -1,5 +1,10 @@
 import type { GridPosition } from '../core/geometry';
 import type { TacticalMap } from '../core/map/MapModel';
+import type { UnitPosture } from '../core/behavior/BehaviorModel';
+import type {
+  TacticalTraversalAttentionPolicy,
+  TacticalTraversalBodyFacingPolicy,
+} from '../core/navigation/TacticalTraversalPlan';
 import { isPlayerCommandOutstanding } from '../core/orders/PlayerCommand';
 import type { UnitPlanStageStatus } from '../core/ai/UnitPlan';
 import type { UnitModel } from '../core/units/UnitModel';
@@ -17,6 +22,19 @@ export interface PlanStageOverlaySnapshot {
   readonly target: GridPosition | null;
 }
 
+export interface TraversalSegmentOverlaySnapshot {
+  readonly id: string;
+  readonly movementProfileId: string;
+  readonly posture: UnitPosture;
+  readonly points: readonly GridPosition[];
+  readonly active: boolean;
+  readonly bodyFacingPolicy: TacticalTraversalBodyFacingPolicy;
+  readonly attentionPolicy: TacticalTraversalAttentionPolicy;
+  readonly bodyFacingRadians: number | null;
+  readonly attentionCenterRadians: number | null;
+  readonly attentionArcRadians: number | null;
+}
+
 export interface CommandPlanRouteOverlaySnapshot {
   readonly key: string;
   readonly unitId: string;
@@ -27,6 +45,7 @@ export interface CommandPlanRouteOverlaySnapshot {
   readonly activeStageIndex: number;
   readonly planStages: readonly PlanStageOverlaySnapshot[];
   readonly routePoints: readonly GridPosition[];
+  readonly traversalSegments: readonly TraversalSegmentOverlaySnapshot[];
   readonly currentWaypointIndex: number;
   readonly waypointCount: number;
 }
@@ -51,7 +70,8 @@ export function buildCommandPlanRouteOverlaySnapshot(
     status: stage.status,
     target: stage.target ? { ...stage.target } : null,
   }));
-  const routePoints = selected ? remainingRoutePoints(unit) : [];
+  const traversalSegments = selected ? buildTraversalSegments(unit) : [];
+  const routePoints = selected && traversalSegments.length === 0 ? remainingRoutePoints(unit) : [];
   const currentWaypointIndex = unit.order?.waypointIndex ?? 0;
   const waypointCount = unit.order?.waypoints?.length ?? (unit.order ? 1 : 0);
   const key = [
@@ -62,6 +82,7 @@ export function buildCommandPlanRouteOverlaySnapshot(
     `c:${unit.playerCommand?.revision ?? 0}:${unit.playerCommand?.status ?? 'none'}:${command ? pointKey(command.target) : '-'}:${command?.finalFacingRadians?.toFixed(4) ?? '-'}`,
     `plan:${unit.plan?.revision ?? 0}:${unit.plan?.status ?? 'none'}`,
     `order:${unit.order?.issuedAtMs ?? 0}:${unit.order?.routeRevision ?? 0}:${currentWaypointIndex}:${waypointCount}:${unit.order ? pointKey(unit.order.target) : '-'}`,
+    `traversal:${unit.order?.traversalPlanRevision ?? 0}:${unit.order?.traversalPlanStatus ?? 'none'}:${unit.order?.activeTraversalSegmentIndex ?? -1}:${unit.order?.routeCellIndex ?? 0}`,
   ].join('|');
 
   return {
@@ -74,9 +95,48 @@ export function buildCommandPlanRouteOverlaySnapshot(
     activeStageIndex: activePlan?.activeStageIndex ?? 0,
     planStages,
     routePoints,
+    traversalSegments,
     currentWaypointIndex,
     waypointCount,
   };
+}
+
+function buildTraversalSegments(unit: UnitModel): TraversalSegmentOverlaySnapshot[] {
+  const order = unit.order;
+  const plan = order?.traversalPlan;
+  const route = order?.routeCells;
+  if (!order || order.traversalPlanStatus !== 'ready' || !plan || !route || route.length === 0) return [];
+  const currentRouteIndex = Math.max(0, Math.min(route.length - 1, order.routeCellIndex ?? 0));
+  const activeIndex = Math.max(0, order.activeTraversalSegmentIndex ?? 0);
+  const result: TraversalSegmentOverlaySnapshot[] = [];
+  for (let segmentIndex = activeIndex; segmentIndex < plan.segments.length; segmentIndex += 1) {
+    const segment = plan.segments[segmentIndex]!;
+    const start = Math.max(currentRouteIndex, segment.startRouteCellIndex);
+    const end = Math.min(route.length - 1, segment.endRouteCellIndex);
+    if (end < start) continue;
+    const points: GridPosition[] = [];
+    if (segmentIndex === activeIndex) points.push({ ...unit.position });
+    for (let routeIndex = start; routeIndex <= end; routeIndex += 1) {
+      const cell = route[routeIndex]!;
+      const point = { x: cell.x + 0.5, y: cell.y + 0.5 };
+      const previous = points[points.length - 1];
+      if (!previous || Math.hypot(previous.x - point.x, previous.y - point.y) > 0.001) points.push(point);
+    }
+    if (points.length < 2) continue;
+    result.push({
+      id: segment.id,
+      movementProfileId: segment.movementProfileId,
+      posture: segment.posture,
+      points,
+      active: segmentIndex === activeIndex,
+      bodyFacingPolicy: segment.bodyFacingPolicy,
+      attentionPolicy: segment.attentionPolicy,
+      bodyFacingRadians: segment.resolvedBodyFacingRadians,
+      attentionCenterRadians: segment.resolvedAttentionCenterRadians,
+      attentionArcRadians: segment.attentionArcRadians,
+    });
+  }
+  return result;
 }
 
 function remainingRoutePoints(unit: UnitModel): GridPosition[] {
