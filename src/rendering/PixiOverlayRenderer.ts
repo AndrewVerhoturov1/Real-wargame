@@ -1,5 +1,6 @@
 import type { Container } from 'pixi.js';
 import type { SimulationState } from '../core/simulation/SimulationState';
+import { getSimulationLayerState } from '../core/ui/RuntimeUiState';
 import {
   PixiOverlayRenderer as PixiOverlayRendererBase,
 } from './PixiOverlayRendererBase';
@@ -7,6 +8,7 @@ import {
 export * from './PixiOverlayRendererBase';
 
 interface OverlayRendererInternals {
+  threatGeometryContainer: Container;
   renderZoneLayerIfNeeded(state: SimulationState, showPressureZones: boolean): void;
   renderRealReliefLayerIfNeeded(state: SimulationState): void;
   renderThreatLayersIfNeeded(state: SimulationState): void;
@@ -25,6 +27,8 @@ export class PixiOverlayRenderer extends PixiOverlayRendererBase {
     renderer.renderZoneLayerIfNeeded(state, showPressureZones && state.editor.enabled);
     renderer.renderRealReliefLayerIfNeeded(state);
     renderer.renderThreatLayersIfNeeded(state);
+    const layer = getSimulationLayerState(state);
+    renderer.threatGeometryContainer.visible = layer.mode !== 'danger' || layer.showThreatCones;
     renderer.renderProbeLayerIfNeeded(state);
     renderer.renderInteractionLayerIfNeeded(state, showGrid);
   }
