@@ -1,8 +1,9 @@
 import type { TacticalMapData } from '../map/MapModel';
+import { initializeTacticalTraversalProfiles } from '../navigation/TacticalTraversalProfileStore';
 import type { PressureZoneData } from '../pressure/PressureZone';
 import { normalizePressureZones } from '../pressure/PressureZone';
-import { createInitialState, type SimulationState } from './SimulationState';
 import { normalizeUnits, type UnitData } from '../units/UnitModel';
+import { createInitialState, type SimulationState } from './SimulationState';
 
 export const DEFAULT_RUNTIME_METERS_PER_CELL = 2;
 
@@ -25,6 +26,7 @@ export function createResolutionAwareInitialState(
   );
   const scale = state.map.sourceToRuntimeCellScale;
   state.units = normalizeUnits(unitsData, scale);
+  initializeTacticalTraversalProfiles(state.units, unitsData);
   state.pressureZones = normalizePressureZones(pressureZoneData, scale);
   applyPhysicalEditorDefaults(state);
   return state;
