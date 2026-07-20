@@ -57,35 +57,44 @@ assert.equal(second, first, 'identical probe reads must share one result object'
 let diagnostics = getVisibilityProbeDiagnostics(state);
 assert.equal(diagnostics.calculationCount, 1);
 assert.equal(diagnostics.cacheHitCount, 1);
+const firstKey = diagnostics.lastKey;
 
-const unit = state.units[0];
-unit.position.x += 0.25;
-const moved = getVisibilityProbeResult(state);
-assert.notEqual(moved, first);
-assert.equal(getVisibilityProbeDiagnostics(state).calculationCount, 2);
+const unit = state.units[0]!;
+unit.position.x += 0.01;
+const movedInsideCell = getVisibilityProbeResult(state);
+assert.notEqual(movedInsideCell, first, '0.01-cell observer movement must not reuse a coarse position bucket');
+diagnostics = getVisibilityProbeDiagnostics(state);
+assert.equal(diagnostics.calculationCount, 2);
+assert.notEqual(diagnostics.lastKey, firstKey);
 
 unit.behaviorRuntime.posture = 'crouched';
 getVisibilityProbeResult(state);
 assert.equal(getVisibilityProbeDiagnostics(state).calculationCount, 3);
 
-setVisibilityProbe(state, true, { x: 15.5, y: 7.5 });
+setVisibilityProbe(state, true, { x: 15.501, y: 7.501 });
 getVisibilityProbeResult(state);
+const targetKeyA = getVisibilityProbeDiagnostics(state).lastKey;
 assert.equal(getVisibilityProbeDiagnostics(state).calculationCount, 4);
+setVisibilityProbe(state, true, { x: 15.511, y: 7.501 });
+getVisibilityProbeResult(state);
+diagnostics = getVisibilityProbeDiagnostics(state);
+assert.equal(diagnostics.calculationCount, 5, '0.01-cell target movement must invalidate exact probe identity');
+assert.notEqual(diagnostics.lastKey, targetKeyA);
 
 const heightCell = getCell(state.map, 6, 6);
 assert.ok(heightCell);
 heightCell.height = 2;
 markMapCellsDirty(state.map, 'height', { minX: 6, minY: 6, maxX: 6, maxY: 6 });
 getVisibilityProbeResult(state);
-assert.equal(getVisibilityProbeDiagnostics(state).calculationCount, 5);
+assert.equal(getVisibilityProbeDiagnostics(state).calculationCount, 6);
 
-state.map.objects[0].x += 1;
+state.map.objects[0]!.x += 1;
 getVisibilityProbeResult(state);
 diagnostics = getVisibilityProbeDiagnostics(state);
-assert.equal(diagnostics.calculationCount, 6);
-assert.ok(diagnostics.lastObjectCandidateCount <= state.map.objects.length);
+assert.equal(diagnostics.calculationCount, 7);
+assert.equal(diagnostics.lastObjectCandidateCount, 0, 'canonical raster visibility no longer performs a separate spatial-index query');
 
 setVisibilityProbe(state, false, null);
 assert.equal(getVisibilityProbeResult(state), null);
 
-console.log('Visibility probe cache smoke passed: shared results and precise invalidation by probe, unit and map revisions.');
+console.log('Visibility probe cache smoke passed: canonical LOS wrapper and exact observer/target/map invalidation.');
