@@ -53,8 +53,8 @@ for (const needle of [
   'data-tab="routeCost"',
   'Стоимость маршрута',
   'data-role="route-cost-inspector-host"',
-  'routeCostInspectorPanel.hidden = false',
-  'sidebarBody.hidden = true',
+  'routeCostInspectorPanel.hidden = !routeCostTabActive',
+  'sidebarBody.hidden = routeCostTabActive',
   "setSimulationLayerMode(state, 'info')",
   "shell.querySelector<HTMLButtonElement>('[data-action=\"route-cost-quick-toggle\"]')?.remove();",
 ]) expectContains(tacticalWorkspace, needle, `Tactical workspace shell is missing route-cost inspector contract: ${needle}`);
