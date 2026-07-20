@@ -32,10 +32,18 @@ export function reconcileTacticalPositionOccupation(unit: UnitModel): void {
     || unit.order.playerCommandId !== command.id
   ) return;
 
+  // A ready traversal plan owns posture during movement. approachPosture remains
+  // the safe fallback while the plan is pending, stale, failed or unavailable.
+  if (
+    unit.order.traversalPlanStatus === 'ready'
+    && unit.order.traversalPlan
+    && unit.order.traversalPlan.segments.length > 0
+  ) return;
+
   enforcePosture(
     unit,
     command.approachPosture ?? 'standing',
-    'tactical_position_approach',
+    'tactical_position_approach_fallback',
   );
 }
 
