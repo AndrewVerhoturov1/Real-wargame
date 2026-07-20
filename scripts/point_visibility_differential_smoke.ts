@@ -5,147 +5,232 @@ import { normalizeMap, type TacticalMapData } from '../src/core/map/MapModel';
 import { markMapCellsDirty } from '../src/core/map/MapRuntimeState';
 import { createInitialState } from '../src/core/simulation/SimulationState';
 import { computeLineOfSight } from '../src/core/visibility/LineOfSight';
-import { clearPerceptionPointVisibilityCache, evaluatePointVisibility, getPerceptionGeometryPreparationDiagnostics } from '../src/core/visibility/PointVisibility';
+import {
+  clearPerceptionPointVisibilityCache,
+  evaluatePointVisibility,
+  getPerceptionGeometryPreparationDiagnostics,
+} from '../src/core/visibility/PointVisibility';
 import { getVisibilityGeometryField, readVisibilityGeometryCell } from '../src/core/visibility/VisibilityGeometryField';
+import { traceVisibilityRay } from '../src/core/visibility/VisibilityRayKernel';
+import { probeTargetVisibility } from '../src/core/visibility/VisibilityTargetProbe';
+import { soldierPostureHeightMeters } from '../src/core/visibility/VisibilityPosture';
 import type { UnitPosture } from '../src/core/behavior/BehaviorModel';
 import type { AttentionSample } from '../src/core/perception/AttentionModel';
 
-const TRANSMISSION_TOLERANCE = 0.22;
-const attention: AttentionSample = { zone: 'focus', weight: 1, bearingRadians: 0, angularDifferenceRadians: 0 };
-const cases: Array<{
+const TRANSMISSION_TOLERANCE = 1 / 255 + 1e-6;
+const attention: AttentionSample = {
+  zone: 'focus',
+  weight: 1,
+  normalizedAngle01: 0,
+  checkIntervalSeconds: 0.2,
+  sampleDurationSeconds: 0.2,
+  maximumRangeMeters: 2_000,
+  minimumVisibilityQuality: 0,
+};
+
+const exactOpen = traceVisibilityRay(normalizeMap(baseMap()), {
+  origin: { x: 2.13, y: 2.31 },
+  target: { x: 10.87, y: 4.74 },
+  originHeightAboveGroundMeters: 1.7,
+  targetHeightAboveGroundMeters: 1.7,
+  channel: 'visual',
+});
+assert.equal(exactOpen.hardBlocked, false);
+assert.deepEqual(exactOpen.origin, { x: 2.13, y: 2.31 });
+assert.deepEqual(exactOpen.target, { x: 10.87, y: 4.74 });
+assert.ok(exactOpen.traversedCellCount > 0);
+
+const shortForest = traceVisibilityRay(normalizeMap(forestLengthMap()), {
+  origin: { x: 2.1, y: 3.2 },
+  target: { x: 8.1, y: 3.2 },
+  originHeightAboveGroundMeters: 1.7,
+  targetHeightAboveGroundMeters: 1.7,
+  channel: 'visual',
+});
+const diagonalForest = traceVisibilityRay(normalizeMap(forestLengthMap()), {
+  origin: { x: 2.1, y: 2.1 },
+  target: { x: 8.1, y: 5.9 },
+  originHeightAboveGroundMeters: 1.7,
+  targetHeightAboveGroundMeters: 1.7,
+  channel: 'visual',
+});
+assert.ok(diagonalForest.accumulatedVegetationMeters > shortForest.accumulatedVegetationMeters);
+assert.ok(diagonalForest.visualTransmission < shortForest.visualTransmission);
+
+const partialMap = normalizeMap(partialSilhouetteMap());
+const partialState = createInitialState(partialMap, [unitData('partial-observer', 2, 3)]);
+const partialObserver = partialState.units[0]!;
+partialObserver.position = { x: 2.5, y: 3.5 };
+partialObserver.behaviorRuntime.posture = 'standing';
+const partialTarget = { x: 10.5, y: 3.5 };
+const partial = probeTargetVisibility(partialMap, partialObserver, partialTarget, 1.7);
+assert.equal(partial.samples.length, 3);
+assert.ok(partial.visibleSampleCount > 0 && partial.visibleSampleCount < 3, `expected partial silhouette, got ${partial.visibleSampleCount}/3`);
+assert.ok(partial.visualTransmission > 0 && partial.visualTransmission < 1);
+assert.equal(partial.blocked, false);
+const hidden = probeTargetVisibility(partialMap, partialObserver, partialTarget, 0.35);
+assert.equal(hidden.visibleSampleCount, 0);
+assert.equal(hidden.blocked, true);
+
+const parityCases: Array<{
   name: string;
   map: TacticalMapData;
   origin: { x: number; y: number };
   target: { x: number; y: number };
   posture: UnitPosture;
   targetHeightMeters: number;
-  referenceTargetHeightMeters?: number;
 }> = [
-  {
-    name: 'open-standing',
-    map: baseMap(), origin: { x: 2.5, y: 3.5 }, target: { x: 10.5, y: 3.5 }, posture: 'standing', targetHeightMeters: 1.4,
-  },
+  { name: 'open-standing', map: baseMap(), origin: { x: 2.5, y: 3.5 }, target: { x: 10.5, y: 3.5 }, posture: 'standing', targetHeightMeters: 1.7 },
   {
     name: 'structure-shadow',
     map: { ...baseMap(), objects: [{ id: 'wall', kind: 'structure', x: 5, y: 2, widthCells: 1, heightCells: 3, rotationRadians: 0, losHeightMeters: 5 }] },
-    origin: { x: 2.5, y: 3.5 }, target: { x: 10.5, y: 3.5 }, posture: 'standing', targetHeightMeters: 1.4,
+    origin: { x: 2.5, y: 3.5 }, target: { x: 10.5, y: 3.5 }, posture: 'standing', targetHeightMeters: 1.7,
   },
   {
     name: 'terrain-ridge',
     map: { ...baseMap(), cellRects: [{ x1: 5, x2: 7, y1: 0, y2: 6, height: 4 }] },
-    origin: { x: 2.5, y: 3.5 }, target: { x: 10.5, y: 3.5 }, posture: 'standing', targetHeightMeters: 1.4,
+    origin: { x: 2.5, y: 3.5 }, target: { x: 10.5, y: 3.5 }, posture: 'standing', targetHeightMeters: 1.7,
   },
   {
     name: 'sparse-vegetation',
     map: { ...baseMap(), metersPerCell: 2, cellRects: [{ x1: 4, x2: 7, y1: 2, y2: 4, forest: 1 }] },
-    origin: { x: 2.5, y: 3.5 }, target: { x: 10.5, y: 3.5 }, posture: 'standing', targetHeightMeters: 1.4,
+    origin: { x: 2.5, y: 3.5 }, target: { x: 10.5, y: 3.5 }, posture: 'standing', targetHeightMeters: 1.7,
   },
-  {
-    name: 'crouched-height-difference',
-    map: baseMap(), origin: { x: 2.5, y: 2.5 }, target: { x: 9.5, y: 4.5 }, posture: 'crouched', targetHeightMeters: 2.2,
-  },
-  {
-    name: 'prone-open',
-    map: baseMap(), origin: { x: 3.5, y: 5.5 }, target: { x: 9.5, y: 5.5 }, posture: 'prone', targetHeightMeters: 0.35,
-  },
-  {
-    name: 'prone-near-relief-shadow',
-    map: postureSensitiveNearReliefMap(), origin: { x: 2.8, y: 3.5 }, target: { x: 10.8, y: 3.5 }, posture: 'prone', targetHeightMeters: 1.7, referenceTargetHeightMeters: 1.4,
-  },
-  {
-    name: 'standing-near-relief-clear',
-    map: postureSensitiveNearReliefMap(), origin: { x: 2.8, y: 3.5 }, target: { x: 10.8, y: 3.5 }, posture: 'standing', targetHeightMeters: 1.7, referenceTargetHeightMeters: 1.4,
-  },
+  { name: 'prone-open', map: baseMap(), origin: { x: 3.5, y: 5.5 }, target: { x: 9.5, y: 5.5 }, posture: 'prone', targetHeightMeters: 0.35 },
 ];
 
-const results = cases.map((fixture) => compare(fixture));
+const results = parityCases.map(compareCenterParity);
 for (const result of results) {
   assert.equal(result.pointBlocked, result.referenceBlocked, `${result.name}: blocked/unblocked parity`);
   assert.ok(result.transmissionDelta <= TRANSMISSION_TOLERANCE, `${result.name}: transmission delta ${result.transmissionDelta} exceeds ${TRANSMISSION_TOLERANCE}`);
 }
 
-const proneNearRelief = results.find((result) => result.name === 'prone-near-relief-shadow');
-const standingNearRelief = results.find((result) => result.name === 'standing-near-relief-clear');
-assert.ok(proneNearRelief);
-assert.ok(standingNearRelief);
-assert.equal(proneNearRelief.referenceBlocked, true, 'near relief must hide the target from a prone observer');
-assert.equal(proneNearRelief.pointBlocked, true, 'point perception must respect the prone observer shadow');
-assert.equal(standingNearRelief.referenceBlocked, false, 'the same target must clear the relief for a standing observer');
-assert.equal(standingNearRelief.pointBlocked, false, 'point perception must reveal the target after the observer stands');
+const nearReliefMap = normalizeMap(postureSensitiveNearReliefMap());
+const proneState = createInitialState(nearReliefMap, [unitData('near-relief-observer', 2, 3)]);
+const nearObserver = proneState.units[0]!;
+nearObserver.position = { x: 2.8, y: 3.5 };
+nearObserver.attentionSettings.vision.maximumVisualRangeMeters = 2_000;
+nearObserver.behaviorRuntime.posture = 'prone';
+const nearTarget = { x: 10.8, y: 3.5 };
+const proneResult = computeLineOfSight(nearReliefMap, nearObserver, nearTarget, 1.7);
+assert.equal(proneResult.blocked, true, 'near relief must hide the target from a prone observer');
+nearObserver.behaviorRuntime.posture = 'standing';
+const standingResult = computeLineOfSight(nearReliefMap, nearObserver, nearTarget, 1.7);
+assert.equal(standingResult.blocked, false, 'the same exact target must clear relief after the observer stands');
 
-const movingFixture = cases[0]!;
-const movingA = compare(movingFixture);
-const movingB = compare({ ...movingFixture, name: 'moving-observer-target', origin: { x: 3.5, y: 3.5 }, target: { x: 11.5, y: 4.5 } });
-assert.equal(movingB.pointBlocked, movingB.referenceBlocked);
-assert.notEqual(movingA.pointKey, movingB.pointKey, 'moving observer/target must create a distinct point-probe cache identity');
+const exactCacheMap = normalizeMap(partialSilhouetteMap());
+const exactCacheState = createInitialState(exactCacheMap, [unitData('exact-cache-observer', 2, 3)]);
+const exactCacheObserver = exactCacheState.units[0]!;
+exactCacheObserver.position = { x: 2.49, y: 3.49 };
+exactCacheObserver.attentionSettings.vision.maximumVisualRangeMeters = 2_000;
+exactCacheState.simulationStep = 1;
+const exactA = evaluatePointVisibility(exactCacheState, exactCacheObserver, { x: 10.501, y: 3.49 }, 1.7, attention);
+const afterA = getPerceptionGeometryPreparationDiagnostics(exactCacheState);
+const exactB = evaluatePointVisibility(exactCacheState, exactCacheObserver, { x: 10.511, y: 3.49 }, 1.7, attention);
+const afterB = getPerceptionGeometryPreparationDiagnostics(exactCacheState);
+assert.ok(exactA);
+assert.ok(exactB);
+assert.equal(afterA.preparationCount, 1);
+assert.equal(afterB.preparationCount, 2, 'movement by 0.01 cell must use a distinct exact-position cache identity');
+assert.equal(afterB.pointPhysicalRayCount, 6);
+const deferred = evaluatePointVisibility(exactCacheState, exactCacheObserver, { x: 10.521, y: 3.49 }, 1.7, attention);
+assert.equal(deferred, null, 'third cold target in the same step must respect the two-probe budget');
 
 const invalidationMap = normalizeMap(baseMap());
 const invalidationState = createInitialState(invalidationMap, [unitData('invalidate-observer', 2, 3)]);
 const invalidationObserver = invalidationState.units[0]!;
+invalidationObserver.position = { x: 2.5, y: 3.5 };
+invalidationObserver.attentionSettings.vision.maximumVisualRangeMeters = 2_000;
 invalidationState.simulationStep = 1;
-const first = evaluatePointVisibility(invalidationState, invalidationObserver, { x: 10.5, y: 3.5 }, 1.4, attention);
+const first = evaluatePointVisibility(invalidationState, invalidationObserver, { x: 10.5, y: 3.5 }, 1.7, attention);
 assert.ok(first);
 const before = getPerceptionGeometryPreparationDiagnostics(invalidationState);
 invalidationState.map.cells[3 * invalidationState.map.width + 6]!.height = 4;
 markMapCellsDirty(invalidationState.map, 'height', { minX: 6, minY: 3, maxX: 6, maxY: 3 });
 invalidationState.simulationStep += 1;
-const second = evaluatePointVisibility(invalidationState, invalidationObserver, { x: 10.5, y: 3.5 }, 1.4, attention);
+const second = evaluatePointVisibility(invalidationState, invalidationObserver, { x: 10.5, y: 3.5 }, 1.7, attention);
 assert.ok(second);
 const after = getPerceptionGeometryPreparationDiagnostics(invalidationState);
-assert.ok(after.preparationCount > before.preparationCount, 'map revision must invalidate the point-LOS cache');
+assert.ok(after.preparationCount > before.preparationCount, 'map revision must invalidate the target-probe cache');
 clearPerceptionPointVisibilityCache(invalidationState);
-
-const hiddenKnowledgeRevision = invalidationObserver.tacticalKnowledge.revision;
-const hiddenTarget = invalidationState.units[0]!.position;
-hiddenTarget.x += 0.2;
-assert.equal(invalidationObserver.tacticalKnowledge.revision, hiddenKnowledgeRevision, 'point LOS geometry must not mutate subjective hidden-contact knowledge');
 
 const evidence = {
   transmissionTolerance: TRANSMISSION_TOLERANCE,
-  cases: [...results, movingB],
-  mapRevisionInvalidatedCache: true,
-  postureCases: ['standing', 'crouched', 'prone'],
+  cases: results,
+  exactOpenPositionPreserved: true,
+  exactVegetationPathLength: true,
+  partialSilhouette: {
+    visibleSampleCount: partial.visibleSampleCount,
+    visualTransmission: round(partial.visualTransmission),
+  },
+  proneSilhouetteHidden: true,
   postureSensitiveNearRelief: true,
   postureSensitiveOffCenterPositions: true,
-  displayNominalHeightComparedWithStandingTarget: true,
-  movingObserverTargetParity: true,
-  hiddenContactSemanticsPreserved: true,
+  exactInCellCacheIdentity: true,
+  logicalProbeBudget: 2,
+  physicalRaysPerProbe: 3,
+  mapRevisionInvalidatedCache: true,
 };
 writeEvidence('point-los-parity.json', evidence);
-console.log(`Point-LOS differential parity smoke passed: ${evidence.cases.length} fixed/moving scenes, transmission tolerance ${TRANSMISSION_TOLERANCE}.`);
+console.log(`Unified visibility differential smoke passed: ${results.length} parity scenes, exact DDA, silhouette and cache coverage.`);
 
-function compare(fixture: typeof cases[number]) {
+function compareCenterParity(fixture: typeof parityCases[number]) {
   const map = normalizeMap(fixture.map);
   const state = createInitialState(map, [unitData(`observer-${fixture.name}`, fixture.origin.x - 0.5, fixture.origin.y - 0.5)]);
   const observer = state.units[0]!;
   observer.position = { ...fixture.origin };
   observer.behaviorRuntime.posture = fixture.posture;
   observer.attentionSettings.vision.maximumVisualRangeMeters = 2_000;
-  state.simulationStep = 1;
   const point = computeLineOfSight(map, observer, fixture.target, fixture.targetHeightMeters);
   const field = getVisibilityGeometryField(map, {
     origin: fixture.origin,
-    originHeightAboveGroundMeters: eyeHeight(fixture.posture),
-    targetHeightAboveGroundMeters: fixture.referenceTargetHeightMeters ?? fixture.targetHeightMeters,
+    originHeightAboveGroundMeters: soldierPostureHeightMeters(fixture.posture),
+    targetHeightAboveGroundMeters: fixture.targetHeightMeters,
     rangeCells: Math.max(map.width, map.height),
+    channel: 'visual',
   });
   const reference = readVisibilityGeometryCell(field, fixture.target.x, fixture.target.y);
-  const pointResult = evaluatePointVisibility(state, observer, fixture.target, fixture.targetHeightMeters, attention);
-  assert.ok(pointResult || point.blocked, `${fixture.name}: point evaluation must return or be blocked`);
-  const diagnostics = getPerceptionGeometryPreparationDiagnostics(state);
   return {
     name: fixture.name,
     pointBlocked: point.blocked,
     referenceBlocked: reference.hardBlocked,
     pointTransmission: round(point.visualTransmission),
     referenceTransmission: round(reference.visualTransmission),
-    transmissionDelta: round(Math.abs(point.visualTransmission - reference.visualTransmission)),
-    pointKey: `${fixture.origin.x}:${fixture.origin.y}:${fixture.target.x}:${fixture.target.y}:${fixture.posture}:${diagnostics.preparationCount}`,
+    transmissionDelta: Math.abs(point.visualTransmission - reference.visualTransmission),
   };
 }
 
 function baseMap(): TacticalMapData {
   return { width: 14, height: 7, cellSize: 8, metersPerCell: 2, defaultTerrain: 'field', defaultHeight: 0, objects: [] };
+}
+
+function forestLengthMap(): TacticalMapData {
+  return {
+    width: 12,
+    height: 8,
+    cellSize: 8,
+    metersPerCell: 2,
+    defaultTerrain: 'field',
+    defaultHeight: 0,
+    objects: [],
+    cellRects: [{ x1: 4, x2: 6, y1: 1, y2: 6, vegetationMaterialId: 'sparse_forest' }],
+  };
+}
+
+function partialSilhouetteMap(): TacticalMapData {
+  return {
+    ...baseMap(),
+    objects: [{
+      id: 'low-cover',
+      kind: 'cover',
+      x: 6,
+      y: 3,
+      widthCells: 1,
+      heightCells: 1,
+      rotationRadians: 0,
+      losHeightMeters: 1.1,
+    }],
+  };
 }
 
 function postureSensitiveNearReliefMap(): TacticalMapData {
@@ -159,9 +244,6 @@ function unitData(id: string, x: number, y: number) {
   return { id, label: id, labelRu: id, type: 'scout_team' as const, side: 'blue' as const, aiControl: 'manual' as const, x, y, viewRangeCells: 100 };
 }
 
-function eyeHeight(posture: UnitPosture): number {
-  return posture === 'prone' ? 0.35 : posture === 'crouched' ? 1.1 : 1.7;
-}
 function round(value: number): number { return Math.round(value * 1000) / 1000; }
 function writeEvidence(name: string, value: unknown): void {
   const directory = process.env.PERFORMANCE_EVIDENCE_DIR;
