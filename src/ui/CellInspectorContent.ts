@@ -1,3 +1,5 @@
+import type { UnitPosture } from '../core/behavior/BehaviorModel';
+import type { AwarenessWorkerFieldPayload } from '../core/knowledge/AwarenessWorldWorkerProtocol';
 import { getCell } from '../core/map/MapModel';
 import { getSurfaceMaterial, getVegetationMaterial } from '../core/map/EnvironmentMaterialProfile';
 import { getActiveEnvironmentProfile } from '../core/map/EnvironmentProfileRuntime';
@@ -5,6 +7,7 @@ import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../
 import { readRouteCostCell, type RouteCostCellBreakdown } from '../core/navigation/RouteCostField';
 import { getRouteCostOverlayState } from '../core/navigation/RouteCostOverlayState';
 import { getOrRequestAsyncRouteCostFields } from '../core/navigation/RouteCostWorkerClient';
+import type { PerceptionContactMemory } from '../core/perception/PerceptionContact';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { findVisibleTacticalPositionAt, getTacticalPositionPresentation } from '../core/tactical/SimulationTacticalPositionSelection';
 import { getTacticalPositionSearchService } from '../core/tactical/TacticalPositionSearchService';
@@ -16,8 +19,6 @@ import {
   sampleSelectedUnitVisibilityZone,
   VISIBILITY_ZONE_CODE,
 } from '../core/visibility/SelectedUnitVisibilityField';
-import type { PerceptionContactMemory } from '../core/perception/PerceptionContact';
-import type { UnitPosture } from '../core/behavior/BehaviorModel';
 
 export type CellInspectorLayer = 'info' | 'danger' | 'positions' | 'stealth' | 'memory' | 'routeCost';
 
@@ -94,9 +95,7 @@ function buildInfoContent(state: SimulationState, cellX: number, cellY: number):
 function buildDangerContent(
   state: SimulationState,
   unitId: string,
-  field: ReturnType<NonNullable<ReturnType<typeof getTacticalPositionSearchService>>['readReadyWorldField']> extends infer R
-    ? NonNullable<R>['field']
-    : never,
+  field: AwarenessWorkerFieldPayload,
   index: number,
 ): CellInspectorContent {
   const danger = field.danger[index] ?? 0;
@@ -134,9 +133,7 @@ function buildDangerContent(
 function buildStealthContent(
   state: SimulationState,
   posture: UnitPosture,
-  field: ReturnType<NonNullable<ReturnType<typeof getTacticalPositionSearchService>>['readReadyWorldField']> extends infer R
-    ? NonNullable<R>['field']
-    : never,
+  field: AwarenessWorkerFieldPayload,
   index: number,
   cellX: number,
   cellY: number,
