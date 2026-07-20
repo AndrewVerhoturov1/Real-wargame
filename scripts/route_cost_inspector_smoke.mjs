@@ -5,6 +5,7 @@ const workspace = readFileSync('src/ui/TacticalWorkspace.ts', 'utf8');
 const workspaceBase = readFileSync('src/ui/TacticalWorkspaceBase.ts', 'utf8');
 const routeCostUi = readFileSync('src/ui/RouteCostOverlayUi.ts', 'utf8');
 const workspaceCss = readFileSync('src/tactical-workspace-compact-route.css', 'utf8');
+const routeCostCss = readFileSync('src/route-cost-overlay.css', 'utf8');
 
 for (const token of [
   'ROUTE_COST_INSPECTOR_RENDERED_EVENT',
@@ -49,8 +50,24 @@ for (const token of [
   '.route-cost-inspector-panel .unit-route-details-panel',
   '.route-cost-inspector-panel .unit-route-details > summary',
   '.unit-bar-route-controls.route-controls-migrated',
+  '.route-cost-inspector-panel > *',
+  'grid-template-columns: minmax(0, 1fr)',
+  'grid-area: auto',
+  'white-space: normal',
+  'overflow-wrap: anywhere',
+  '[data-role="route-details-cost"]',
+  '[data-role="route-details-reason"]',
 ]) {
   assert.ok(workspaceCss.includes(token), `route inspector CSS contract must contain ${token}`);
+}
+
+for (const token of [
+  '.route-cost-inspector-panel .route-cost-controls',
+  'margin-top: 0',
+  'padding-top: 0',
+  'border-top: 0',
+]) {
+  assert.ok(routeCostCss.includes(token), `route cost CSS must normalize inspector controls: ${token}`);
 }
 
 console.log('Route inspector smoke passed.');
