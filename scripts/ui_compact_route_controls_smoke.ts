@@ -50,29 +50,34 @@ expectContains(tacticalWorkspaceBase, 'updatePlayerCommandNavigationProfile', 'C
 const tacticalWorkspace = read('src/ui/TacticalWorkspace.ts');
 for (const needle of [
   'ROUTE_COST_INSPECTOR_RENDERED_EVENT',
-  'data-tab="routeCost"',
-  'Стоимость маршрута',
+  'data-tab="routeCost">Маршрут',
   'data-role="route-cost-inspector-host"',
   'routeCostInspectorPanel.hidden = !routeCostTabActive',
   'sidebarBody.hidden = routeCostTabActive',
-  "setSimulationLayerMode(state, 'info')",
+  'setRouteCostOverlayActive(state, true)',
+  'setRouteCostOverlayActive(state, false)',
+  "shell.querySelector<HTMLElement>('.unit-route-profile')",
+  "shell.querySelector<HTMLDetailsElement>('.unit-route-details')",
+  'routeCostInspectorHost.append(routeProfileLabel, routeDetails)',
+  "routeControls?.classList.add('route-controls-migrated')",
   "shell.querySelector<HTMLButtonElement>('[data-action=\"route-cost-quick-toggle\"]')?.remove();",
-]) expectContains(tacticalWorkspace, needle, `Tactical workspace shell is missing route-cost inspector contract: ${needle}`);
+]) expectContains(tacticalWorkspace, needle, `Tactical workspace shell is missing consolidated route inspector contract: ${needle}`);
 
 const routeCostUi = read('src/ui/RouteCostOverlayUi.ts');
 expectContains(routeCostUi, 'ROUTE_COST_INSPECTOR_RENDERED_EVENT', 'Route cost UI must react when its inspector host is rendered.');
 expectContains(routeCostUi, '[data-role="route-cost-inspector-host"]', 'Route cost UI must mount into the right inspector.');
-expectContains(routeCostUi, 'toggleRouteCostOverlay(state)', 'Route cost UI must reuse the canonical overlay toggle.');
 expectContains(routeCostUi, 'setRouteCostOverlayMode(state, mode.value as RouteCostOverlayMode)', 'Route cost UI must reuse the canonical overlay mode setter.');
-expectContains(routeCostUi, '[data-role="route-details-profile"]', 'Route cost UI must keep updating the compact route details popover.');
+expectContains(routeCostUi, '[data-role="route-details-profile"]', 'Route cost UI must keep updating route details in the inspector.');
+expectNotContains(routeCostUi, 'toggleRouteCostOverlay', 'Selecting the route tab must own overlay activation without another button.');
+expectNotContains(routeCostUi, 'data-action="route-cost-overlay"', 'The route inspector must not contain a redundant layer button.');
 expectNotContains(routeCostUi, '.workspace-display-panel', 'The top View menu must not contain a second route-cost control block.');
 expectNotContains(routeCostUi, '[data-action="route-cost-quick-toggle"]', 'Route cost UI must not bind a removed bottom quick toggle.');
-expectNotContains(routeCostUi, 'currentBlock?.append(profileStatus, routeCostStatus, routeReasonStatus)', 'Route cost UI must not append three unbounded rows to the soldier card.');
-expectNotContains(routeCostUi, 'route-profile-override', 'The misleading diagnostic profile override must be replaced by the real unit profile selector.');
+expectNotContains(routeCostUi, 'currentBlock?.append(profileStatus, routeCostStatus, routeReasonStatus)', 'Route cost UI must not append unbounded rows to the soldier card.');
+expectNotContains(routeCostUi, 'route-profile-override', 'The misleading diagnostic profile override must stay removed.');
 
 const commandPlanUi = read('src/ui/CommandPlanRouteUi.ts');
-expectContains(commandPlanUi, '[data-role="route-details-command"]', 'Command UI must bind the compact details popover.');
-expectNotContains(commandPlanUi, 'currentBlock.append(command, plan, route)', 'Command UI must not append three unbounded rows to the soldier card.');
+expectContains(commandPlanUi, '[data-role="route-details-command"]', 'Command UI must keep updating command execution in the moved inspector block.');
+expectNotContains(commandPlanUi, 'currentBlock.append(command, plan, route)', 'Command UI must not append unbounded rows to the soldier card.');
 
 const unitModel = read('src/core/units/UnitModel.ts');
 expectContains(unitModel, 'playerNavigationProfileId', 'Unit runtime must store the selected player navigation profile.');
@@ -100,8 +105,12 @@ const routeCostRenderer = read('src/rendering/PixiRouteCostOverlayRenderer.ts');
 expectContains(routeCostRenderer, 'this.legend.position.set(8, 34)', 'The route-cost legend must sit below front-zone labels.');
 
 const workspaceCss = read('src/tactical-workspace-compact-route.css');
-expectContains(workspaceCss, '.unit-route-details-panel', 'Compact route details need an above-bar popover.');
-expectContains(workspaceCss, '.unit-bar-route-controls', 'Compact profile and route details need dedicated layout styles.');
+for (const needle of [
+  '.route-cost-inspector-panel .unit-route-profile',
+  '.route-cost-inspector-panel .unit-route-details-panel',
+  '.route-cost-inspector-panel .unit-route-details > summary',
+  '.unit-bar-route-controls.route-controls-migrated',
+]) expectContains(workspaceCss, needle, `Consolidated route inspector needs layout style: ${needle}`);
 
 const profileCss = read('src/ai-node-editor/navigation-profile-editor.css');
 expectNotContains(profileCss, 'margin: -20px -24px 18px', 'The profile heading must not overlap content through a negative sticky margin.');
