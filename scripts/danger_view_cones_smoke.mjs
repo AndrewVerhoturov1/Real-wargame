@@ -8,7 +8,7 @@ const renderer = readFileSync('src/rendering/PixiViewConeRenderer.ts', 'utf8');
 for (const token of [
   "document.querySelector<HTMLButtonElement>('#vision-toggle')",
   'dangerConeToggle',
-  'data-role="danger-cone-controls"',
+  "dangerConeControls.dataset.role = 'danger-cone-controls'",
   'Конусы угроз: вкл',
   'Конусы угроз: выкл',
   '.workspace-display-panel #vision-toggle',
