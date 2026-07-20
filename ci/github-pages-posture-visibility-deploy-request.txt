@@ -1,0 +1,3 @@
+Exact product source: feature/20260720-posture-aware-visibility
+Exact product SHA: 8af9e3c856cbdcfa17873b633626fa611c1a3a72
+Purpose: temporary CI-only GitHub Pages deployment request; do not merge.
