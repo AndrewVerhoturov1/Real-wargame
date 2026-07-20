@@ -7,9 +7,8 @@ import type { UnitModel } from '../units/UnitModel';
 
 const ELEVATION_STEP_METERS = 2;
 const SAMPLE_STEP_METERS = 1.2;
-const ENDPOINT_RELIEF_GRACE_METERS = 7;
 const OBJECT_ORIGIN_IGNORE_METERS = 1.25;
-const TERRAIN_BLOCK_MARGIN_METERS = 0.95;
+const TERRAIN_HORIZON_MARGIN = 0.02;
 const OBJECT_BLOCK_MARGIN_METERS = 0.15;
 
 export interface LineOfSightProbeResult {
@@ -24,6 +23,12 @@ export interface LineOfSightProbeResult {
   partialObscuration: boolean;
   accumulatedForestMeters: number;
   obscurationReasonRu: string;
+}
+
+interface TerrainHorizonBlocker {
+  position: GridPosition;
+  distanceMeters: number;
+  smoothHeightLevel: number;
 }
 
 export function computeLineOfSight(
@@ -61,6 +66,13 @@ export function computeLineOfSight(
   const targetGround = sampleSmoothHeightLevel(map, target.x, target.y) * ELEVATION_STEP_METERS;
   const originEye = originGround + eyeHeightForPosture(unit.behaviorRuntime.posture);
   const targetEye = targetGround + normalizeTargetHeightMeters(targetHeightMeters);
+  const terrainBlocker = findTerrainHorizonBlocker(
+    map,
+    origin,
+    target,
+    originEye,
+    targetEye,
+  );
   const steps = Math.max(2, Math.ceil(totalDistanceMeters / SAMPLE_STEP_METERS));
   let accumulatedForestMeters = 0;
   let visualTransmission = 1;
@@ -137,19 +149,14 @@ export function computeLineOfSight(
       }
     }
 
-    const smoothHeightLevel = sampleSmoothHeightLevel(map, sample.x, sample.y);
-    const groundHeight = smoothHeightLevel * ELEVATION_STEP_METERS;
-    const isNearOrigin = currentDistanceMeters < ENDPOINT_RELIEF_GRACE_METERS;
-    const isNearTarget = totalDistanceMeters - currentDistanceMeters < ENDPOINT_RELIEF_GRACE_METERS;
-
-    if (!isNearOrigin && !isNearTarget && groundHeight > lineHeight + TERRAIN_BLOCK_MARGIN_METERS) {
+    if (terrainBlocker && currentDistanceMeters >= terrainBlocker.distanceMeters) {
       return blockedResult(
         origin,
         target,
         totalDistanceMeters,
-        currentDistanceMeters,
-        sample,
-        `плавный склон / рельеф ${formatSigned(smoothHeightLevel)}`,
+        terrainBlocker.distanceMeters,
+        terrainBlocker.position,
+        `плавный склон / рельеф ${formatSigned(terrainBlocker.smoothHeightLevel)}`,
         0,
         accumulatedForestMeters,
         forestReason(strongestForestKind, accumulatedForestMeters, strongestVegetationNameRu),
@@ -171,6 +178,79 @@ export function computeLineOfSight(
     accumulatedForestMeters,
     obscurationReasonRu: forestReason(strongestForestKind, accumulatedForestMeters, strongestVegetationNameRu),
   };
+}
+
+function findTerrainHorizonBlocker(
+  map: TacticalMap,
+  origin: GridPosition,
+  target: GridPosition,
+  originEyeMeters: number,
+  targetEyeMeters: number,
+): TerrainHorizonBlocker | null {
+  const originCellX = clampInt(Math.floor(origin.x), 0, map.width - 1);
+  const originCellY = clampInt(Math.floor(origin.y), 0, map.height - 1);
+  const targetCellX = clampInt(Math.floor(target.x), 0, map.width - 1);
+  const targetCellY = clampInt(Math.floor(target.y), 0, map.height - 1);
+  if (originCellX === targetCellX && originCellY === targetCellY) return null;
+
+  const totalDistanceMeters = Math.max(0.001, distance(origin, target) * map.metersPerCell);
+  const targetSlope = (targetEyeMeters - originEyeMeters) / totalDistanceMeters;
+  const deltaX = targetCellX - originCellX;
+  const deltaY = targetCellY - originCellY;
+  const stepsX = Math.abs(deltaX);
+  const stepsY = Math.abs(deltaY);
+  const signX = deltaX > 0 ? 1 : deltaX < 0 ? -1 : 0;
+  const signY = deltaY > 0 ? 1 : deltaY < 0 ? -1 : 0;
+  let cellX = originCellX;
+  let cellY = originCellY;
+  let completedX = 0;
+  let completedY = 0;
+  let horizonSlope = Number.NEGATIVE_INFINITY;
+  let horizonPosition: GridPosition | null = null;
+  let horizonDistanceMeters = 0;
+  let horizonHeightLevel = 0;
+
+  while (completedX < stepsX || completedY < stepsY) {
+    const decision = (1 + 2 * completedX) * stepsY - (1 + 2 * completedY) * stepsX;
+    if (decision === 0) {
+      cellX += signX;
+      cellY += signY;
+      completedX += 1;
+      completedY += 1;
+    } else if (decision < 0) {
+      cellX += signX;
+      completedX += 1;
+    } else {
+      cellY += signY;
+      completedY += 1;
+    }
+
+    if (cellX === targetCellX && cellY === targetCellY) {
+      if (horizonPosition && targetSlope + TERRAIN_HORIZON_MARGIN < horizonSlope) {
+        return {
+          position: horizonPosition,
+          distanceMeters: horizonDistanceMeters,
+          smoothHeightLevel: horizonHeightLevel,
+        };
+      }
+      return null;
+    }
+
+    const position = { x: cellX + 0.5, y: cellY + 0.5 };
+    const currentDistanceMeters = distance(origin, position) * map.metersPerCell;
+    if (currentDistanceMeters <= 0.001) continue;
+    const smoothHeightLevel = sampleSmoothHeightLevel(map, position.x, position.y);
+    const groundHeightMeters = smoothHeightLevel * ELEVATION_STEP_METERS;
+    const groundSlope = (groundHeightMeters - originEyeMeters) / currentDistanceMeters;
+    if (groundSlope > horizonSlope) {
+      horizonSlope = groundSlope;
+      horizonPosition = position;
+      horizonDistanceMeters = currentDistanceMeters;
+      horizonHeightLevel = smoothHeightLevel;
+    }
+  }
+
+  return null;
 }
 
 function blockedResult(
@@ -317,6 +397,10 @@ function normalizeTargetHeightMeters(value: number): number {
 function formatSigned(value: number): string {
   const rounded = Math.round(value * 10) / 10;
   return rounded > 0 ? `+${rounded}` : String(rounded);
+}
+
+function clampInt(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, Math.round(value)));
 }
 
 function lerp(start: number, end: number, factor: number): number {
