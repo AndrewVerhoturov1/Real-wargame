@@ -1,7 +1,11 @@
 import type { AiGameBridgeHandle } from '../core/ai/AiGameBridge';
 import { setRouteCostOverlayActive } from '../core/navigation/RouteCostOverlayState';
 import type { SimulationState } from '../core/simulation/SimulationState';
-import { setSimulationLayerMode } from '../core/ui/RuntimeUiState';
+import {
+  getSimulationLayerState,
+  setSimulationLayerMode,
+  toggleThreatCones,
+} from '../core/ui/RuntimeUiState';
 import {
   installTacticalWorkspace as installTacticalWorkspaceBase,
 } from './TacticalWorkspaceBase';
@@ -88,12 +92,11 @@ export function installTacticalWorkspace(
   const modeButtons = shell
     ? Array.from(shell.querySelectorAll<HTMLButtonElement>('[data-mode]'))
     : [];
-  const visionToggle = document.querySelector<HTMLButtonElement>('#vision-toggle');
   const dangerConeControls = document.createElement('section');
   dangerConeControls.className = 'danger-cone-controls';
   dangerConeControls.dataset.role = 'danger-cone-controls';
   const dangerConeDescription = document.createElement('span');
-  dangerConeDescription.textContent = 'Показывает направления и дальность обзора бойцов поверх карты опасности.';
+  dangerConeDescription.textContent = 'Показывает направленные сектора известных угроз поверх карты опасности.';
   const dangerConeToggle = document.createElement('button');
   dangerConeToggle.type = 'button';
   dangerConeControls.append(dangerConeDescription, dangerConeToggle);
@@ -133,11 +136,10 @@ export function installTacticalWorkspace(
   }
 
   const syncDangerConeToggle = (): void => {
-    const active = visionToggle?.getAttribute('aria-pressed') === 'true';
+    const active = getSimulationLayerState(state).showThreatCones;
     dangerConeToggle.textContent = active ? 'Конусы угроз: вкл' : 'Конусы угроз: выкл';
     dangerConeToggle.setAttribute('aria-pressed', String(active));
     dangerConeToggle.classList.toggle('active', active);
-    dangerConeToggle.disabled = !visionToggle;
   };
 
   const mountDangerConeControls = (): void => {
@@ -157,8 +159,7 @@ export function installTacticalWorkspace(
   };
 
   const handleDangerConeToggle = (): void => {
-    if (!visionToggle) return;
-    visionToggle.click();
+    toggleThreatCones(state);
     syncDangerConeToggle();
     onChanged();
   };
