@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const workspace = readFileSync('src/ui/TacticalWorkspaceBase.ts', 'utf8');
+const runtimeUiState = readFileSync('src/core/ui/RuntimeUiState.ts', 'utf8');
+const routeCostUi = readFileSync('src/ui/RouteCostOverlayUi.ts', 'utf8');
+
+for (const token of [
+  "type SimulationTab = 'info' | 'danger' | 'positions' | 'stealth' | 'routeCost' | 'memory'",
+  "['routeCost', 'Стоимость маршрута']",
+  'data-role="route-cost-inspector-host"',
+  "routeCost:'Стоимость маршрута'",
+  "tab === 'routeCost'",
+  "real-wargame:route-cost-inspector-rendered",
+]) {
+  assert.ok(workspace.includes(token), `route-cost inspector workspace contract must contain ${token}`);
+}
+assert.ok(!workspace.includes('data-action="route-cost-quick-toggle"'), 'bottom unit bar must not own the route-cost layer toggle');
+assert.ok(
+  runtimeUiState.includes("export type SimulationLayerMode = 'info' | 'danger' | 'positions' | 'stealth' | 'routeCost' | 'memory';"),
+  'routeCost must be a valid right-inspector simulation layer mode',
+);
+for (const token of [
+  'ROUTE_COST_INSPECTOR_RENDERED_EVENT',
+  '[data-role="route-cost-inspector-host"]',
+  'toggleRouteCostOverlay(state)',
+  'setRouteCostOverlayMode(state, mode.value as RouteCostOverlayMode)',
+  '[data-role="route-details-profile"]',
+]) {
+  assert.ok(routeCostUi.includes(token), `route-cost inspector UI contract must contain ${token}`);
+}
+assert.ok(!routeCostUi.includes('.workspace-display-panel'), 'top View menu must not own duplicate route-cost controls');
+assert.ok(!routeCostUi.includes('[data-action="route-cost-quick-toggle"]'), 'route-cost UI must not bind a removed bottom toggle');
+
+console.log('Route cost inspector smoke passed.');
