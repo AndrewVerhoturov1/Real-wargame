@@ -15,13 +15,16 @@ export interface TacticalPostureEvaluation {
   readonly danger: number;
   readonly protection: number;
   readonly safety: number;
-  readonly transitionPenalty?: number;
-  readonly reasonCodes?: readonly string[];
+}
+
+export interface TacticalPostureEvaluationDetail extends TacticalPostureEvaluation {
+  readonly transitionPenalty: number;
+  readonly reasonCodes: readonly string[];
 }
 
 export interface TacticalPostureEvaluationResult {
-  readonly evaluations: readonly TacticalPostureEvaluation[];
-  readonly recommended: TacticalPostureEvaluation;
+  readonly evaluations: readonly TacticalPostureEvaluationDetail[];
+  readonly recommended: TacticalPostureEvaluationDetail;
   readonly reasonCodes: readonly string[];
 }
 
@@ -34,7 +37,7 @@ export function evaluateTacticalPostures(
   const baseProtection = clampPercent(sample.protection);
   const currentStatic = clampPercent(sample.staticProtectionByPosture[currentPosture]);
   const baseSafety = clampPercent(sample.safety);
-  const evaluations = TACTICAL_POSTURES.map((posture): TacticalPostureEvaluation => {
+  const evaluations = TACTICAL_POSTURES.map((posture): TacticalPostureEvaluationDetail => {
     const staticProtection = clampPercent(sample.staticProtectionByPosture[posture]);
     const postureProtectionGain = Math.max(0, staticProtection - currentStatic) * settings.postureProtectionGainFactor;
     const protection = combinePercent(baseProtection, postureProtectionGain);
@@ -71,15 +74,15 @@ export function evaluateTacticalPostures(
     recommended,
     reasonCodes: [
       `recommended_posture:${recommended.posture}`,
-      ...(recommended.reasonCodes ?? []),
+      ...recommended.reasonCodes,
     ],
   };
 }
 
-export function selectHighestSafePosture(
-  evaluations: readonly TacticalPostureEvaluation[],
+export function selectHighestSafePosture<T extends TacticalPostureEvaluation>(
+  evaluations: readonly T[],
   settings: TacticalPositionSettings,
-): TacticalPostureEvaluation {
+): T {
   const standing = evaluations.find((item) => item.posture === 'standing');
   const crouched = evaluations.find((item) => item.posture === 'crouched');
   const prone = evaluations.find((item) => item.posture === 'prone');
@@ -96,9 +99,7 @@ export function selectHighestSafePosture(
       danger: 100,
       protection: 0,
       safety: 0,
-      transitionPenalty: 0,
-      reasonCodes: ['posture_data_missing'],
-    };
+    } as T;
   }
   if (selected.posture === 'standing' && crouchedAllowed
     && crouched!.safety - selected.safety >= settings.crouchedSafetyAdvantageThreshold) {
