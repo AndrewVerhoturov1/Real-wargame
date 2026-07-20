@@ -3,11 +3,8 @@ import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
 import type { TacticalTraversalFieldView } from './TacticalTraversalFieldView';
 import { hashTraversalRoute } from './TacticalTraversalPlan';
-import {
-  createDefaultTacticalTraversalProfile,
-  normalizeTacticalTraversalProfile,
-  type TacticalTraversalProfile,
-} from './TacticalTraversalProfile';
+import type { TacticalTraversalProfile } from './TacticalTraversalProfile';
+import { getUnitTacticalTraversalProfile } from './TacticalTraversalProfileStore';
 
 export interface TacticalTraversalStableInput {
   readonly identity: string;
@@ -33,7 +30,7 @@ export function captureTacticalTraversalStableInput(
   const command = unit.playerCommand && (!order.playerCommandId || unit.playerCommand.id === order.playerCommandId)
     ? unit.playerCommand
     : null;
-  const profile = readUnitTacticalTraversalProfile(unit);
+  const profile = getUnitTacticalTraversalProfile(unit);
   const routeRevision = revision(order.routeRevision, 1);
   const routeHash = hashTraversalRoute(routeCells);
   const commandId = order.playerCommandId ?? command?.id ?? order.ownerToken ?? null;
@@ -72,12 +69,6 @@ export function captureTacticalTraversalStableInput(
     traversalProfile: profile,
     movementProfileRevision,
   };
-}
-
-export function readUnitTacticalTraversalProfile(unit: UnitModel): TacticalTraversalProfile {
-  const candidate = (unit as UnitModel & { tacticalTraversalProfile?: TacticalTraversalProfile })
-    .tacticalTraversalProfile;
-  return normalizeTacticalTraversalProfile(candidate ?? createDefaultTacticalTraversalProfile());
 }
 
 export function buildTacticalTraversalFieldView(
