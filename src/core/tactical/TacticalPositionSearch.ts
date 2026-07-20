@@ -1,19 +1,16 @@
-import {
-  POSTURE_EXPOSURE_MULTIPLIER,
-  type UnitPosture,
-} from '../behavior/BehaviorModel';
+import type { TacticalPositionCandidateSeed, TacticalSlopeType } from '../ai/tactical/TacticalQuery';
+import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
-import type {
-  TacticalPositionCandidateSeed,
-  TacticalSlopeType,
-} from '../ai/tactical/TacticalQuery';
+import {
+  estimatePostureSuppression,
+  evaluateTacticalPostures,
+  type TacticalPostureEvaluation,
+} from './TacticalPostureEvaluation';
 import {
   createDefaultTacticalPositionSettings,
-  selectHighestSafePosture,
   type TacticalPositionSettings,
 } from './TacticalPositionSettings';
 
-const POSTURES: readonly UnitPosture[] = ['standing', 'crouched', 'prone'];
 const DIAGONAL_COST = Math.SQRT2;
 const CANDIDATE_POOL_MULTIPLIER = 8;
 
@@ -87,13 +84,6 @@ interface LocalRouteField {
   readonly budgetExhausted: boolean;
 }
 
-interface PostureEvaluation {
-  readonly posture: UnitPosture;
-  readonly danger: number;
-  readonly protection: number;
-  readonly safety: number;
-}
-
 interface RankedCandidate {
   readonly candidate: TacticalPositionCandidateSeedV2;
   readonly score: number;
@@ -106,9 +96,9 @@ interface HeapNode {
 }
 
 /**
- * Extracts deterministic position-plus-posture candidates from prepared soldier fields.
- * Work is bounded by cell counts; it never scans the whole map, calls A* per candidate,
- * or uses elapsed wall-clock time to alter gameplay results.
+ * Extracts deterministic position-plus-posture candidates from one prepared
+ * subjective field. It is bounded by cell counts and never calls A* per
+ * candidate, scans the full map, or reads wall-clock time.
  */
 export function searchTacticalPositions(
   field: TacticalPositionFieldView,
@@ -324,52 +314,30 @@ function evaluateBestPosture(
   cellIndex: number,
   currentPosture: UnitPosture,
   settings: TacticalPositionSettings,
-): PostureEvaluation {
-  const baseDanger = clampPercent(field.danger[cellIndex] ?? 0);
-  const baseProtection = clampPercent(field.expectedProtectionAgainstThreat[cellIndex] ?? 0);
-  const currentStatic = clampPercent(field.staticProtectionByPosture[currentPosture][cellIndex] ?? 0);
-  const baseSafety = clampPercent(field.safety[cellIndex] ?? 0);
-  const evaluations: PostureEvaluation[] = [];
-
-  for (const posture of POSTURES) {
-    const staticProtection = clampPercent(field.staticProtectionByPosture[posture][cellIndex] ?? 0);
-    const postureProtectionGain = Math.max(0, staticProtection - currentStatic) * settings.postureProtectionGainFactor;
-    const protection = combinePercent(baseProtection, postureProtectionGain);
-    const baseUncovered = Math.max(0.05, 1 - baseProtection / 100);
-    const nextUncovered = Math.max(0.02, 1 - protection / 100);
-    const exposureRatio = finite(
-      POSTURE_EXPOSURE_MULTIPLIER[posture]
-        / Math.max(0.05, POSTURE_EXPOSURE_MULTIPLIER[currentPosture]),
-      1,
-    );
-    const danger = clampPercent(baseDanger * exposureRatio * nextUncovered / baseUncovered);
-    const transitionPenalty = posture === currentPosture
-      ? 0
-      : posture === 'prone'
-        ? settings.proneTransitionPenalty
-        : settings.crouchedTransitionPenalty;
-    const safety = clampPercent(
-      baseSafety
-        + (baseDanger - danger) * settings.dangerReductionSafetyWeight
-        + (protection - baseProtection) * settings.protectionGainSafetyWeight
-        - transitionPenalty,
-    );
-    evaluations.push({ posture, danger, protection, safety });
-  }
-
-  return selectHighestSafePosture(evaluations, settings);
+): TacticalPostureEvaluation {
+  return evaluateTacticalPostures({
+    danger: field.danger[cellIndex] ?? 0,
+    protection: field.expectedProtectionAgainstThreat[cellIndex] ?? 0,
+    safety: field.safety[cellIndex] ?? 0,
+    staticProtectionByPosture: {
+      standing: field.staticProtectionByPosture.standing[cellIndex] ?? 0,
+      crouched: field.staticProtectionByPosture.crouched[cellIndex] ?? 0,
+      prone: field.staticProtectionByPosture.prone[cellIndex] ?? 0,
+    },
+  }, currentPosture, settings).recommended;
 }
 
 function estimateSuppression(
   field: TacticalPositionFieldView,
   cellIndex: number,
-  posture: PostureEvaluation,
+  posture: TacticalPostureEvaluation,
   currentPosture: UnitPosture,
 ): number {
-  const base = clampPercent(field.suppression[cellIndex] ?? 0);
-  const exposureRatio = POSTURE_EXPOSURE_MULTIPLIER[posture.posture]
-    / Math.max(0.05, POSTURE_EXPOSURE_MULTIPLIER[currentPosture]);
-  return clampPercent(base * exposureRatio * (1 - posture.protection / 100));
+  return estimatePostureSuppression(
+    clampPercent(field.suppression[cellIndex] ?? 0),
+    posture,
+    currentPosture,
+  );
 }
 
 function candidatePreselectionScore(
@@ -529,12 +497,6 @@ function emptyResult(): TacticalPositionSearchResult {
       routeBudgetExhausted: false,
     },
   };
-}
-
-function combinePercent(base: number, addition: number): number {
-  const base01 = clampPercent(base) / 100;
-  const addition01 = clampPercent(addition) / 100;
-  return clampPercent((1 - (1 - base01) * (1 - addition01)) * 100);
 }
 
 function clampPercent(value: number): number {
