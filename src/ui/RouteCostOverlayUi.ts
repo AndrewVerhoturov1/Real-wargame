@@ -9,18 +9,23 @@ import { getSelectedUnit, type SimulationState } from '../core/simulation/Simula
 import type { UnitModel } from '../core/units/UnitModel';
 
 const UPDATE_INTERVAL_MS = 300;
+const ROUTE_COST_INSPECTOR_RENDERED_EVENT = 'real-wargame:route-cost-inspector-rendered';
 
 export function installRouteCostOverlayUi(
   state: SimulationState,
   onChanged: () => void,
 ): () => void {
-  const displayPanel = document.querySelector<HTMLElement>('.workspace-display-panel');
-  const quickToggle = document.querySelector<HTMLButtonElement>('[data-action="route-cost-quick-toggle"]');
   const profileStatus = document.querySelector<HTMLElement>('[data-role="route-details-profile"]');
   const routeCostStatus = document.querySelector<HTMLElement>('[data-role="route-details-cost"]');
   const routeReasonStatus = document.querySelector<HTMLElement>('[data-role="route-details-reason"]');
   const controls = document.createElement('section');
   controls.className = 'route-cost-controls';
+
+  const heading = document.createElement('h3');
+  heading.textContent = 'Слой стоимости маршрута';
+
+  const description = document.createElement('p');
+  description.textContent = 'Показывает цену перемещения по клеткам. Итоговая стоимость использует профиль и известные данные выбранного бойца.';
 
   const menuToggle = document.createElement('button');
   menuToggle.type = 'button';
@@ -29,11 +34,9 @@ export function installRouteCostOverlayUi(
   const toggle = () => {
     const active = toggleRouteCostOverlay(state);
     updateToggle(menuToggle, active, 'Стоимость маршрута');
-    if (quickToggle) updateToggle(quickToggle, active, 'Карта стоимости');
     onChanged();
   };
   menuToggle.addEventListener('click', toggle);
-  quickToggle?.addEventListener('click', toggle);
 
   const mode = document.createElement('select');
   mode.dataset.action = 'route-cost-mode';
@@ -50,13 +53,18 @@ export function installRouteCostOverlayUi(
   const modeLabel = document.createElement('label');
   modeLabel.textContent = 'Вид стоимости';
   modeLabel.append(mode);
-  controls.append(menuToggle, modeLabel);
-  displayPanel?.append(controls);
+  controls.append(heading, description, menuToggle, modeLabel);
+
+  const mountInspectorControls = () => {
+    const host = document.querySelector<HTMLElement>('[data-role="route-cost-inspector-host"]');
+    if (host && controls.parentElement !== host) host.append(controls);
+  };
+  window.addEventListener(ROUTE_COST_INSPECTOR_RENDERED_EVENT, mountInspectorControls);
+  mountInspectorControls();
 
   const overlay = getRouteCostOverlayState(state);
   mode.value = overlay.mode === 'directionalTerrain' ? 'finalCost' : overlay.mode;
   updateToggle(menuToggle, overlay.active, 'Стоимость маршрута');
-  if (quickToggle) updateToggle(quickToggle, overlay.active, 'Карта стоимости');
   updateStatus(profileStatus, routeCostStatus, routeReasonStatus, getSelectedUnit(state));
 
   const interval = window.setInterval(() => {
@@ -64,13 +72,13 @@ export function installRouteCostOverlayUi(
     const visibleMode = current.mode === 'directionalTerrain' ? 'finalCost' : current.mode;
     if (mode.value !== visibleMode) mode.value = visibleMode;
     updateToggle(menuToggle, current.active, 'Стоимость маршрута');
-    if (quickToggle) updateToggle(quickToggle, current.active, 'Карта стоимости');
     updateStatus(profileStatus, routeCostStatus, routeReasonStatus, getSelectedUnit(state));
   }, UPDATE_INTERVAL_MS);
 
   return () => {
     window.clearInterval(interval);
-    quickToggle?.removeEventListener('click', toggle);
+    window.removeEventListener(ROUTE_COST_INSPECTOR_RENDERED_EVENT, mountInspectorControls);
+    menuToggle.removeEventListener('click', toggle);
     controls.remove();
   };
 }
