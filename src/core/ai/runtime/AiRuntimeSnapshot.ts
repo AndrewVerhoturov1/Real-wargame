@@ -6,6 +6,12 @@ import {
   type MovementProfileSource,
 } from '../../movement/MovementProfiles';
 import { cloneRouteDangerDiagnostic, normalizeRouteDangerDiagnostic, type RouteDangerDiagnostic } from '../../navigation/RouteDangerDiagnostic';
+import {
+  cloneTacticalTraversalPlan,
+  normalizeTacticalTraversalPlan,
+  type TacticalTraversalPlanStatus,
+  type TacticalTraversalPlanV1,
+} from '../../navigation/TacticalTraversalPlan';
 import type {
   MoveOrder,
   MoveOrderRouteCell,
@@ -43,6 +49,15 @@ export interface SerializedMoveOrder {
   readonly movementProfileOwnerToken?: string;
   readonly movementProfileDefinitionRevision?: number;
   readonly movementProfileSelectionRevision?: number;
+  readonly traversalBaseMovementProfileId?: string;
+  readonly traversalPlan?: TacticalTraversalPlanV1;
+  readonly traversalPlanStatus?: TacticalTraversalPlanStatus;
+  readonly activeTraversalSegmentIndex?: number;
+  readonly traversalPlanRevision?: number;
+  readonly traversalPlanReason?: string;
+  readonly traversalPlanReasonRu?: string;
+  readonly finalFacingRadians?: number;
+  readonly knowledgeRevision?: number;
   /** Legacy serialized input only. New snapshots never write this field. */
   readonly movementProfileRevision?: number;
 }
@@ -78,9 +93,9 @@ const ROUTE_STATUSES: readonly AiRouteStatus[] = [
   'order_missing',
   'cancelled',
 ];
-
 const MOVE_ROUTE_STATUSES: readonly MoveOrderRouteStatus[] = ['planned', 'following', 'replanned'];
 const MOVE_SOURCES: readonly MoveOrderSource[] = ['player', 'ai'];
+const TRAVERSAL_STATUSES: readonly TacticalTraversalPlanStatus[] = ['pending', 'ready', 'stale', 'failed'];
 
 export function buildAiRuntimeSceneSnapshot(
   session: AiRuntimeSessionSnapshotV1 | null | undefined,
@@ -201,10 +216,20 @@ export function serializeMoveOrder(order: MoveOrder): SerializedMoveOrder {
     movementProfileOwnerToken: order.movementProfileOwnerToken,
     movementProfileDefinitionRevision: integerNonNegative(order.movementProfileDefinitionRevision),
     movementProfileSelectionRevision: integerNonNegative(order.movementProfileSelectionRevision),
+    traversalBaseMovementProfileId: order.traversalBaseMovementProfileId,
+    traversalPlan: cloneTacticalTraversalPlan(order.traversalPlan),
+    traversalPlanStatus: order.traversalPlanStatus,
+    activeTraversalSegmentIndex: integerNonNegative(order.activeTraversalSegmentIndex),
+    traversalPlanRevision: integerNonNegative(order.traversalPlanRevision),
+    traversalPlanReason: order.traversalPlanReason,
+    traversalPlanReasonRu: order.traversalPlanReasonRu,
+    finalFacingRadians: finiteOptional(order.finalFacingRadians),
+    knowledgeRevision: integerNonNegative(order.knowledgeRevision),
   };
 }
 
 export function restoreMoveOrder(value: SerializedMoveOrder): MoveOrder {
+  const restoredPlan = cloneTacticalTraversalPlan(value.traversalPlan);
   return {
     type: 'move',
     target: { ...value.target },
@@ -229,6 +254,15 @@ export function restoreMoveOrder(value: SerializedMoveOrder): MoveOrder {
     movementProfileOwnerToken: value.movementProfileOwnerToken,
     movementProfileDefinitionRevision: value.movementProfileDefinitionRevision,
     movementProfileSelectionRevision: value.movementProfileSelectionRevision ?? value.movementProfileRevision,
+    traversalBaseMovementProfileId: value.traversalBaseMovementProfileId ?? value.movementProfileId,
+    traversalPlan: restoredPlan,
+    traversalPlanStatus: restoredPlan ? value.traversalPlanStatus ?? 'stale' : value.traversalPlanStatus,
+    activeTraversalSegmentIndex: value.activeTraversalSegmentIndex,
+    traversalPlanRevision: value.traversalPlanRevision,
+    traversalPlanReason: value.traversalPlanReason,
+    traversalPlanReasonRu: value.traversalPlanReasonRu,
+    finalFacingRadians: value.finalFacingRadians,
+    knowledgeRevision: value.knowledgeRevision,
   };
 }
 
@@ -243,8 +277,12 @@ export function normalizeSerializedMoveOrder(value: unknown): SerializedMoveOrde
   const movementProfileSource = MOVEMENT_PROFILE_SOURCES.includes(value.movementProfileSource as MovementProfileSource)
     ? value.movementProfileSource as MovementProfileSource
     : undefined;
+  const traversalPlanStatus = TRAVERSAL_STATUSES.includes(value.traversalPlanStatus as TacticalTraversalPlanStatus)
+    ? value.traversalPlanStatus as TacticalTraversalPlanStatus
+    : undefined;
   const waypoints = normalizePositions(value.waypoints);
   const routeCells = normalizeRouteCells(value.routeCells);
+  const traversalPlan = normalizeTacticalTraversalPlan(value.traversalPlan);
   return {
     type: 'move',
     target: cloneRequiredPosition(value.target),
@@ -275,6 +313,17 @@ export function normalizeSerializedMoveOrder(value: unknown): SerializedMoveOrde
     movementProfileSelectionRevision: integerNonNegative(
       value.movementProfileSelectionRevision ?? value.movementProfileRevision,
     ),
+    traversalBaseMovementProfileId: typeof value.traversalBaseMovementProfileId === 'string'
+      ? normalizeMovementProfileId(value.traversalBaseMovementProfileId)
+      : undefined,
+    traversalPlan,
+    traversalPlanStatus: traversalPlan ? traversalPlanStatus ?? 'stale' : traversalPlanStatus,
+    activeTraversalSegmentIndex: integerNonNegative(value.activeTraversalSegmentIndex),
+    traversalPlanRevision: integerNonNegative(value.traversalPlanRevision),
+    traversalPlanReason: typeof value.traversalPlanReason === 'string' ? value.traversalPlanReason : undefined,
+    traversalPlanReasonRu: typeof value.traversalPlanReasonRu === 'string' ? value.traversalPlanReasonRu : undefined,
+    finalFacingRadians: finiteOptional(value.finalFacingRadians),
+    knowledgeRevision: integerNonNegative(value.knowledgeRevision),
   };
 }
 
