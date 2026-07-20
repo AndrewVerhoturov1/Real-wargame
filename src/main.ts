@@ -22,6 +22,10 @@ import {
 } from './ai-node-editor/MovementProfileBrowserStorage';
 import type { TacticalMapData } from './core/map/MapModel';
 import { installEnvironmentMovementMaterialProvider } from './core/movement/MovementMaterialAdapter';
+import {
+  installTacticalTraversalPlanningService,
+  TacticalTraversalPlanningService,
+} from './core/navigation/TacticalTraversalPlanningService';
 import { clearAsyncRouteCostWorker } from './core/navigation/RouteCostWorkerClient';
 import type { PressureZoneData } from './core/pressure/PressureZone';
 import { createResolutionAwareInitialState } from './core/simulation/ResolutionAwareScene';
@@ -36,6 +40,7 @@ import { installAdaptiveGridLod } from './rendering/AdaptiveGridLodInstaller';
 import { installAttentionOverlayRenderer } from './rendering/AttentionOverlayInstaller';
 import { installCombatEffectsRenderer } from './rendering/CombatEffectsInstaller';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
+import { getSharedAwarenessWorldRuntime } from './runtime/SharedAwarenessWorldRuntime';
 import { installAppShellMenu } from './shared/AppShellMenu';
 import { installAiStatePlanVisualQaHarness } from './testing/AiStatePlanVisualQaHarness';
 import { installCombatTacticalIntegrationVisualQaHarness } from './testing/CombatTacticalIntegrationVisualQaHarness';
@@ -64,6 +69,7 @@ const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 let state: ReturnType<typeof createResolutionAwareInitialState>;
 let tacticalBoard: PixiTacticalBoardApp | null = null;
 let tacticalPositionSearchService: TacticalPositionSearchService | null = null;
+let tacticalTraversalPlanningService: TacticalTraversalPlanningService | null = null;
 type PausableRuntimeState = typeof state & { paused?: boolean };
 
 const root = document.querySelector<HTMLElement>('#app')!;
@@ -99,8 +105,11 @@ state.map.environmentProfileId = environmentProfileRegistry.activeProfileId;
 state.movementProfiles = getMovementProfileRegistry();
 installEnvironmentMovementMaterialProvider(state);
 initializeAiTestLabRuntime(state);
-tacticalPositionSearchService = new TacticalPositionSearchService(state);
+const awarenessWorldRuntime = getSharedAwarenessWorldRuntime();
+tacticalPositionSearchService = new TacticalPositionSearchService(state, awarenessWorldRuntime);
 installTacticalPositionSearchService(state, tacticalPositionSearchService);
+tacticalTraversalPlanningService = new TacticalTraversalPlanningService(state, awarenessWorldRuntime);
+installTacticalTraversalPlanningService(state, tacticalTraversalPlanningService);
 
 void bootstrap().catch(reportBootstrapFailure);
 
@@ -187,6 +196,8 @@ async function bootstrap(): Promise<void> {
     clearAsyncRouteCostWorker(state.map);
     aiGameBridge.destroy();
     board.destroy();
+    tacticalTraversalPlanningService?.destroy();
+    tacticalTraversalPlanningService = null;
     tacticalPositionSearchService?.destroy();
     tacticalPositionSearchService = null;
     if (tacticalBoard === board) tacticalBoard = null;
@@ -210,6 +221,8 @@ function reportBootstrapFailure(error: unknown): void {
   } catch (destroyError) {
     console.error('Failed to clean up the tactical board after bootstrap failure.', destroyError);
   }
+  tacticalTraversalPlanningService?.destroy();
+  tacticalTraversalPlanningService = null;
   tacticalPositionSearchService?.destroy();
   tacticalPositionSearchService = null;
   clearNativeMapQualityDiagnostics();
