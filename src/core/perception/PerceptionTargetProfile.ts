@@ -1,4 +1,5 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
+import { soldierPostureHeightMeters } from '../visibility/VisibilityPosture';
 
 export type PerceptionTargetType =
   | 'sniper'
@@ -15,26 +16,24 @@ export interface PerceptionTargetProfile {
   heightMetersByPosture: Record<UnitPosture, number>;
 }
 
+const SOLDIER_POSTURE_HEIGHTS: Record<UnitPosture, number> = {
+  standing: soldierPostureHeightMeters('standing'),
+  crouched: soldierPostureHeightMeters('crouched'),
+  prone: soldierPostureHeightMeters('prone'),
+};
+
 const TARGET_PROFILES: Record<PerceptionTargetType, PerceptionTargetProfile> = {
   sniper: {
     type: 'sniper',
     labelRu: 'Снайпер / малый силуэт',
     baseSize: 0.85,
-    heightMetersByPosture: {
-      standing: 1.7,
-      crouched: 1.1,
-      prone: 0.35,
-    },
+    heightMetersByPosture: SOLDIER_POSTURE_HEIGHTS,
   },
   soldier: {
     type: 'soldier',
     labelRu: 'Обычный боец',
     baseSize: 1,
-    heightMetersByPosture: {
-      standing: 1.7,
-      crouched: 1.1,
-      prone: 0.35,
-    },
+    heightMetersByPosture: SOLDIER_POSTURE_HEIGHTS,
   },
   support_weapon: {
     type: 'support_weapon',
