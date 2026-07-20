@@ -30,6 +30,7 @@ export function getVisibilityProbeResult(state: SimulationState): LineOfSightPro
   const probe = getVisibilityProbeState(state);
   const unit = getSelectedUnit(state);
   if (!probe.active || !probe.target || !unit) return null;
+  if (!isFinitePosition(unit.position) || !isFinitePosition(probe.target)) return null;
 
   const revisions = getMapRevisionSnapshot(state.map);
   const key = [
@@ -40,6 +41,7 @@ export function getVisibilityProbeResult(state: SimulationState): LineOfSightPro
     unit.behaviorRuntime.posture,
     exactCoordinateKey(probe.target.x),
     exactCoordinateKey(probe.target.y),
+    exactCoordinateKey(state.map.metersPerCell),
     revisions.terrain,
     revisions.height,
     revisions.forest,
@@ -87,6 +89,10 @@ export function getVisibilityProbeDiagnostics(state: SimulationState): Visibilit
 
 export function clearVisibilityProbeCache(state: SimulationState): void {
   cacheByState.delete(state);
+}
+
+function isFinitePosition(position: { x: number; y: number }): boolean {
+  return Number.isFinite(position.x) && Number.isFinite(position.y);
 }
 
 function exactCoordinateKey(value: number): string {
