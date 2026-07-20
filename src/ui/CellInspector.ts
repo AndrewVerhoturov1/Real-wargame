@@ -4,6 +4,7 @@ import {
   resolveCellInspectorLayer,
   type CellInspectorContent,
 } from './CellInspectorContent';
+import { buildDetailedDangerCellInspectorContent } from './CellInspectorDangerContent';
 import { buildCachedMemoryCellInspectorContent } from './CellInspectorMemoryContent';
 import { resolveCellInspectorTarget } from './CellInspectorTarget';
 
@@ -55,7 +56,9 @@ export function installCellInspector(state: SimulationState): () => void {
     const layer = resolveCellInspectorLayer(state);
     const rawContent = layer === 'memory'
       ? buildCachedMemoryCellInspectorContent(state, target.cellX, target.cellY)
-      : buildCellInspectorContent(state, layer, target.cellX, target.cellY);
+      : layer === 'danger'
+        ? buildDetailedDangerCellInspectorContent(state, target.cellX, target.cellY)
+        : buildCellInspectorContent(state, layer, target.cellX, target.cellY);
     if (!rawContent) {
       hide();
       return;
