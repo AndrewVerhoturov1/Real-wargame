@@ -121,6 +121,9 @@ export function traceVisibilityRayPath(
   let visualTransmission = 1;
   let fireTransmission = 1;
   let accumulatedVegetationMeters = 0;
+  let visualBlockingThreshold = 0;
+  let vegetationBlockerPosition: GridPosition | null = null;
+  let vegetationBlockerDistanceMeters: number | null = null;
   let horizonSlope = Number.NEGATIVE_INFINITY;
   let horizonKind: VisibilityTraceBlockerKind = 'terrain';
   let horizonPosition: GridPosition | null = null;
@@ -165,11 +168,15 @@ export function traceVisibilityRayPath(
     const pathMeters = Math.max(0, traversed.pathLengthMeters);
     const visualLoss = context.visualLossPerMeter[materialCode] ?? 0;
     const fireLoss = context.fireLossPerMeter[materialCode] ?? 0;
+    const materialMinimum = context.visualMinimumTransmission[materialCode] ?? 0;
     if (visualLoss > 0 || fireLoss > 0) accumulatedVegetationMeters += pathMeters;
     visualTransmission *= Math.exp(-visualLoss * pathMeters);
     fireTransmission *= Math.exp(-fireLoss * pathMeters);
+    visualBlockingThreshold = Math.max(visualBlockingThreshold, materialMinimum);
 
-    const currentDistanceMeters = distance(origin, traversed.representative) * map.metersPerCell;
+    const currentDistanceMeters = traversed.targetCell
+      ? totalDistanceMeters
+      : distance(origin, traversed.representative) * map.metersPerCell;
     const sampleGround = traversed.targetCell
       ? targetGround
       : context.staticGrid.terrainHeightMeters[mapIndex] ?? 0;
@@ -178,11 +185,13 @@ export function traceVisibilityRayPath(
       ? exactTargetSlope
       : (samplePoint - originEye) / Math.max(0.001, currentDistanceMeters);
     const blockedByHorizon = horizonPosition !== null && sampleSlope + HORIZON_MARGIN < horizonSlope;
-    const blockedByVegetation = vegetationExhausted(
-      channel,
-      visualTransmission,
-      context.visualMinimumTransmission[materialCode] ?? 0,
-    );
+    const blockedByVegetation = channel === 'visual'
+      && visualBlockingThreshold > 0
+      && visualTransmission <= visualBlockingThreshold;
+    if (blockedByVegetation && vegetationBlockerPosition === null) {
+      vegetationBlockerPosition = { ...traversed.representative };
+      vegetationBlockerDistanceMeters = currentDistanceMeters;
+    }
     const hardBlocked = blockedByHorizon || blockedByVegetation;
     const blockerKind = blockedByHorizon ? horizonKind : blockedByVegetation ? 'vegetation' : 'none';
     const sampleVisual = blockedByHorizon ? 0 : clamp01(visualTransmission);
@@ -200,10 +209,12 @@ export function traceVisibilityRayPath(
 
     if (traversed.targetCell) {
       if (hardBlocked) {
-        const blockerPosition = blockedByHorizon ? horizonPosition! : traversed.representative;
+        const blockerPosition = blockedByHorizon
+          ? horizonPosition!
+          : vegetationBlockerPosition ?? traversed.representative;
         const blockerDistance = blockedByHorizon
           ? horizonDistanceMeters ?? currentDistanceMeters
-          : currentDistanceMeters;
+          : vegetationBlockerDistanceMeters ?? currentDistanceMeters;
         return {
           result: blockedResult(
             origin,
@@ -332,6 +343,19 @@ export function traverseVisibilitySegmentCells(
     }
     entryT = safeExitT;
   }
+
+  const last = cells[cells.length - 1];
+  if (!last || last.x !== targetCellX || last.y !== targetCellY) {
+    cells.push({
+      x: targetCellX,
+      y: targetCellY,
+      entryT: 1,
+      exitT: 1,
+      pathLengthMeters: 0,
+      representative: { ...target },
+      targetCell: true,
+    });
+  }
   return cells;
 }
 
@@ -364,15 +388,6 @@ function getTraceContext(map: TacticalMap): VisibilityTraceContext {
   };
   contextByMap.set(map, context);
   return context;
-}
-
-function vegetationExhausted(
-  channel: VisibilityTraceChannel,
-  visual: number,
-  visualMinimum: number,
-): boolean {
-  const visualBlocked = visualMinimum > 0 && visual <= visualMinimum;
-  return channel === 'visual' ? visualBlocked : false;
 }
 
 function visibleResult(
