@@ -47,6 +47,14 @@ const cases: Array<{
     name: 'prone-open',
     map: baseMap(), origin: { x: 3.5, y: 5.5 }, target: { x: 9.5, y: 5.5 }, posture: 'prone', targetHeightMeters: 0.35,
   },
+  {
+    name: 'prone-near-relief-shadow',
+    map: postureSensitiveNearReliefMap(), origin: { x: 2.5, y: 3.5 }, target: { x: 10.5, y: 3.5 }, posture: 'prone', targetHeightMeters: 1.7,
+  },
+  {
+    name: 'standing-near-relief-clear',
+    map: postureSensitiveNearReliefMap(), origin: { x: 2.5, y: 3.5 }, target: { x: 10.5, y: 3.5 }, posture: 'standing', targetHeightMeters: 1.7,
+  },
 ];
 
 const results = cases.map((fixture) => compare(fixture));
@@ -54,6 +62,15 @@ for (const result of results) {
   assert.equal(result.pointBlocked, result.referenceBlocked, `${result.name}: blocked/unblocked parity`);
   assert.ok(result.transmissionDelta <= TRANSMISSION_TOLERANCE, `${result.name}: transmission delta ${result.transmissionDelta} exceeds ${TRANSMISSION_TOLERANCE}`);
 }
+
+const proneNearRelief = results.find((result) => result.name === 'prone-near-relief-shadow');
+const standingNearRelief = results.find((result) => result.name === 'standing-near-relief-clear');
+assert.ok(proneNearRelief);
+assert.ok(standingNearRelief);
+assert.equal(proneNearRelief.referenceBlocked, true, 'near relief must hide the target from a prone observer');
+assert.equal(proneNearRelief.pointBlocked, true, 'point perception must respect the prone observer shadow');
+assert.equal(standingNearRelief.referenceBlocked, false, 'the same target must clear the relief for a standing observer');
+assert.equal(standingNearRelief.pointBlocked, false, 'point perception must reveal the target after the observer stands');
 
 const movingFixture = cases[0]!;
 const movingA = compare(movingFixture);
@@ -87,6 +104,7 @@ const evidence = {
   cases: [...results, movingB],
   mapRevisionInvalidatedCache: true,
   postureCases: ['standing', 'crouched', 'prone'],
+  postureSensitiveNearRelief: true,
   movingObserverTargetParity: true,
   hiddenContactSemanticsPreserved: true,
 };
@@ -125,6 +143,13 @@ function compare(fixture: typeof cases[number]) {
 
 function baseMap(): TacticalMapData {
   return { width: 14, height: 7, cellSize: 8, metersPerCell: 2, defaultTerrain: 'field', defaultHeight: 0, objects: [] };
+}
+
+function postureSensitiveNearReliefMap(): TacticalMapData {
+  return {
+    ...baseMap(),
+    cellRects: [{ x1: 3, x2: 3, y1: 0, y2: 6, height: 1 }],
+  };
 }
 
 function unitData(id: string, x: number, y: number) {
