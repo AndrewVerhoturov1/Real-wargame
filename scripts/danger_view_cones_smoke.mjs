@@ -1,47 +1,56 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
+const runtimeUi = readFileSync('src/core/ui/RuntimeUiState.ts', 'utf8');
 const workspace = readFileSync('src/ui/TacticalWorkspace.ts', 'utf8');
 const app = readFileSync('src/rendering/PixiApp.ts', 'utf8');
-const renderer = readFileSync('src/rendering/PixiViewConeRenderer.ts', 'utf8');
+const overlayRenderer = readFileSync('src/rendering/PixiOverlayRendererBase.ts', 'utf8');
+const legacyViewConeRenderer = readFileSync('src/rendering/PixiViewConeRenderer.ts', 'utf8');
 
 for (const token of [
-  "document.querySelector<HTMLButtonElement>('#vision-toggle')",
+  'showThreatCones: boolean',
+  'export function toggleThreatCones',
+  'layer.showThreatCones = !layer.showThreatCones',
+  'showThreatCones: false',
+]) {
+  assert.ok(runtimeUi.includes(token), `runtime danger-cone contract must contain ${token}`);
+}
+
+for (const token of [
+  'getSimulationLayerState',
+  'toggleThreatCones',
   'dangerConeToggle',
   "dangerConeControls.dataset.role = 'danger-cone-controls'",
   'Конусы угроз: вкл',
   'Конусы угроз: выкл',
-  '.workspace-display-panel #vision-toggle',
-  'visionToggle.click()',
+  'getSimulationLayerState(state).showThreatCones',
+  'toggleThreatCones(state)',
 ]) {
   assert.ok(workspace.includes(token), `danger workspace shell must contain ${token}`);
 }
-
-for (const token of [
-  'private showViewCones = false',
-  'this.viewConeRenderer.clear()',
+for (const obsoleteToken of [
+  "document.querySelector<HTMLButtonElement>('#vision-toggle')",
+  'visionToggle.click()',
 ]) {
-  assert.ok(app.includes(token), `Pixi app cone state contract must contain ${token}`);
+  assert.equal(workspace.includes(obsoleteToken), false, `danger toggle must not control legacy view cones: ${obsoleteToken}`);
 }
 
 for (const token of [
-  'private readonly graphics = new Graphics()',
-  'this.container.addChild(this.graphics)',
-  "private lastRenderKey = ''",
-  'if (!isDangerWorkspaceTabActive())',
-  '[data-tab="danger"].active',
-  'if (renderKey === this.lastRenderKey) return',
-  'this.graphics.clear()',
-  'this.graphics.fill(',
-  'this.graphics.stroke(',
-  'destroy(): void',
+  "const showThreatCones = layer.mode === 'danger' && layer.showThreatCones",
+  "`cones:${showThreatCones ? '1' : '0'}`",
+  'drawRememberedThreat(this.threatGeometryGraphics, threat, cellSize, layer.mode === \'memory\', showThreatCones)',
+  'showThreatCones: boolean',
+  'if (showThreatCones)',
 ]) {
-  assert.ok(renderer.includes(token), `retained danger view cone renderer must contain ${token}`);
+  assert.ok(overlayRenderer.includes(token), `danger threat renderer must contain ${token}`);
 }
+
+assert.ok(app.includes('private showViewCones = false'), 'legacy view-cone renderer must remain disabled by default');
+assert.ok(legacyViewConeRenderer.includes('this.clear();'), 'legacy view-cone compatibility renderer must stay inert');
 assert.equal(
-  renderer.includes('new Graphics();\n      this.container.addChild'),
+  legacyViewConeRenderer.includes('this.graphics.fill('),
   false,
-  'renderer must not allocate one child Graphics object per unit per frame',
+  'danger sectors must not be implemented through the legacy view-cone renderer',
 );
 
-console.log('Danger view cones smoke passed.');
+console.log('Danger threat cones smoke passed.');
