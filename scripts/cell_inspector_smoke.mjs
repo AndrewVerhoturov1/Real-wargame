@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 const controller = readFileSync(new URL('../src/ui/CellInspector.ts', import.meta.url), 'utf8');
 const content = readFileSync(new URL('../src/ui/CellInspectorContent.ts', import.meta.url), 'utf8');
 const dangerContent = readFileSync(new URL('../src/ui/CellInspectorDangerContent.ts', import.meta.url), 'utf8');
+const dangerVisibility = readFileSync(new URL('../src/ui/CellInspectorDangerVisibility.ts', import.meta.url), 'utf8');
 const memoryContent = readFileSync(new URL('../src/ui/CellInspectorMemoryContent.ts', import.meta.url), 'utf8');
 const targetResolver = readFileSync(new URL('../src/ui/CellInspectorTarget.ts', import.meta.url), 'utf8');
 const workspace = readFileSync(new URL('../src/ui/TacticalWorkspace.ts', import.meta.url), 'utf8');
@@ -33,12 +34,23 @@ for (const layer of ['info', 'danger', 'positions', 'stealth', 'memory', 'routeC
 assert.match(content, /readReadyWorldField/, 'danger and stealth compatibility content must consume a prepared awareness snapshot');
 assert.match(dangerContent, /readReadyWorldField/, 'detailed danger hover must consume a prepared awareness snapshot');
 assert.match(dangerContent, /protectedThreatIndex/, 'danger explanation must resolve the threat against which the cell has protection');
+assert.match(dangerContent, /readDangerVisibilityExplanation/, 'low-danger explanation must consume exact visibility diagnostics');
 assert.match(dangerContent, /Основная причина/, 'danger content must state the dominant reason in plain language');
 assert.match(dangerContent, /Известных угроз/, 'danger content must show how many known threats are considered');
 assert.match(dangerContent, /Открытость склона/, 'danger content must expose slope-driven exposure');
 assert.match(dangerContent, /Надёжность оценки/, 'danger content must expose estimate reliability');
 assert.doesNotMatch(dangerContent, /getOrRequest|buildSoldierAwarenessReport|GridPathfinder|findPath/, 'danger hover must not trigger field construction or pathfinding');
 assert.doesNotMatch(dangerContent, /for\s*\(let\s+y\s*=\s*0;\s*y\s*<\s*state\.map\.height/, 'danger hover must not scan the full map');
+
+assert.match(dangerVisibility, /traceVisibilityRay/, 'low-danger explanation must use the canonical single-ray visibility kernel');
+assert.match(dangerVisibility, /getMapRevisionSnapshot/, 'visibility explanation cache must invalidate when map visibility changes');
+assert.match(dangerVisibility, /trace\.hardBlocked/, 'visibility explanation must distinguish a blocked line of sight');
+assert.match(dangerVisibility, /trace\.blockerKind/, 'visibility explanation must preserve whether terrain, an object, or vegetation blocks sight');
+assert.match(dangerVisibility, /potentialThreatCount/, 'visibility explanation must distinguish threats that are in range and sector');
+assert.match(dangerVisibility, /blockedThreatCount/, 'visibility explanation must count blocked known firing lines');
+assert.match(dangerVisibility, /CACHE_LIMIT/, 'single-ray diagnostics must be cached by cell and revision');
+assert.doesNotMatch(dangerVisibility, /for\s*\(let\s+y\s*=\s*0;\s*y\s*</, 'visibility explanation must never scan the full map');
+
 assert.match(content, /__realWargameRouteCostDebug/, 'route cost must check that the worker result is already ready');
 assert.match(content, /fieldRevision/, 'memory view must check for an already prepared visibility field');
 assert.doesNotMatch(content, /GridPathfinder|findPath|searchTacticalPositions\(/, 'hover inspection must not run pathfinding or tactical searches');
