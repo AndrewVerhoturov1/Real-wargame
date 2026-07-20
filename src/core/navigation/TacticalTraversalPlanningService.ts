@@ -89,7 +89,10 @@ export class TacticalTraversalPlanningService {
     this.planPrepared = options.planPrepared ?? planTacticalTraversal;
     this.maximumOwners = clampInteger(options.maximumOwners ?? DEFAULT_MAXIMUM_OWNERS, 1, 64);
     this.maximumRequests = clampInteger(options.maximumRequests ?? DEFAULT_MAXIMUM_REQUESTS, 4, 256);
-    this.unsubscribeFieldRuntime = this.fieldRuntime.subscribe(() => this.schedulePump());
+    this.unsubscribeFieldRuntime = this.fieldRuntime.subscribe(() => {
+      this.invalidateReadyRequestsForChangedField();
+      this.schedulePump();
+    });
   }
 
   ensureForUnit(unit: UnitModel): TacticalTraversalPlanningRequestSnapshotV1 | null {
@@ -204,6 +207,38 @@ export class TacticalTraversalPlanningService {
     this.requests.clear();
     this.latestRequestIdByUnit.clear();
     if (serviceByState.get(this.state) === this) serviceByState.delete(this.state);
+  }
+
+  private invalidateReadyRequestsForChangedField(): void {
+    if (this.destroyed) return;
+    for (const requestId of [...this.latestRequestIdByUnit.values()]) {
+      const request = this.requests.get(requestId);
+      if (!request || request.status !== 'ready' || !request.worldKey || !request.fieldIdentity) continue;
+      const prepared = this.fieldRuntime.readReadyWorldField(request.ownerUnitId);
+      if (!prepared) continue;
+      if (prepared.worldKey === request.worldKey && prepared.fieldIdentity === request.fieldIdentity) continue;
+
+      this.stale(
+        request,
+        'field_identity_changed',
+        'Shared tactical field identity changed.',
+        'Идентичность общего тактического поля изменилась.',
+      );
+      const unit = this.state.units.find((candidate) => candidate.id === request.ownerUnitId);
+      const order = unit?.order;
+      if (!unit || !order?.routeCells || order.routeCells.length === 0) continue;
+      if (
+        order.traversalPlanStatus === 'ready'
+        && order.traversalPlan?.worldKey === request.worldKey
+        && order.traversalPlan.fieldIdentity === request.fieldIdentity
+      ) {
+        order.traversalPlanStatus = 'stale';
+        order.activeTraversalSegmentIndex = undefined;
+        order.traversalPlanReason = 'Shared tactical field changed.';
+        order.traversalPlanReasonRu = 'Общее тактическое поле изменилось; нужен новый план.';
+      }
+      this.ensureForUnit(unit);
+    }
   }
 
   private schedulePump(): void {
