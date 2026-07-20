@@ -5,6 +5,7 @@ import {
   type CellInspectorContent,
 } from './CellInspectorContent';
 import { buildCachedMemoryCellInspectorContent } from './CellInspectorMemoryContent';
+import { resolveCellInspectorTarget } from './CellInspectorTarget';
 
 const REFRESH_INTERVAL_MS = 250;
 const POINTER_OFFSET_X = 18;
@@ -28,10 +29,13 @@ export function installCellInspector(state: SimulationState): () => void {
   let pointerClientY = 0;
   let refreshTimer = 0;
   let lastRenderKey = '';
+  let snappedUnitId: string | null = null;
 
   const hide = (): void => {
     popover.hidden = true;
     lastRenderKey = '';
+    snappedUnitId = null;
+    delete popover.dataset.snappedUnitId;
   };
 
   const stopRefreshTimer = (): void => {
@@ -45,16 +49,24 @@ export function installCellInspector(state: SimulationState): () => void {
       hide();
       return;
     }
-    const cellX = Math.floor(state.mouseGridPosition.x);
-    const cellY = Math.floor(state.mouseGridPosition.y);
+
+    const target = resolveCellInspectorTarget(state, state.mouseGridPosition, snappedUnitId);
+    snappedUnitId = target.snappedUnitId;
     const layer = resolveCellInspectorLayer(state);
-    const content = layer === 'memory'
-      ? buildCachedMemoryCellInspectorContent(state, cellX, cellY)
-      : buildCellInspectorContent(state, layer, cellX, cellY);
-    if (!content) {
+    const rawContent = layer === 'memory'
+      ? buildCachedMemoryCellInspectorContent(state, target.cellX, target.cellY)
+      : buildCellInspectorContent(state, layer, target.cellX, target.cellY);
+    if (!rawContent) {
       hide();
       return;
     }
+
+    const content = target.snappedUnitLabel
+      ? withSnapContext(rawContent, target.snappedUnitLabel)
+      : rawContent;
+    if (target.snappedUnitId) popover.dataset.snappedUnitId = target.snappedUnitId;
+    else delete popover.dataset.snappedUnitId;
+
     const renderKey = JSON.stringify(content);
     if (renderKey !== lastRenderKey) {
       popover.dataset.layer = content.layer;
@@ -110,12 +122,21 @@ export function installCellInspector(state: SimulationState): () => void {
 
   return () => {
     stopRefreshTimer();
+    snappedUnitId = null;
     canvas.removeEventListener('pointermove', handlePointerMove);
     canvas.removeEventListener('pointerleave', handlePointerLeave);
     window.removeEventListener('keydown', handleKeyDown);
     window.removeEventListener('keyup', handleKeyUp);
     window.removeEventListener('blur', handleBlur);
     popover.remove();
+  };
+}
+
+function withSnapContext(content: CellInspectorContent, unitLabel: string): CellInspectorContent {
+  const snapNote = `Привязано к бойцу «${unitLabel}»: показана клетка, в которой он находится.`;
+  return {
+    ...content,
+    note: content.note ? `${content.note} ${snapNote}` : snapNote,
   };
 }
 
