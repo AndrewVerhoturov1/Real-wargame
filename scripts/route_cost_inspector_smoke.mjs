@@ -19,6 +19,9 @@ for (const token of [
   "shell.querySelector<HTMLDetailsElement>('.unit-route-details')",
   'routeCostInspectorHost.append(routeProfileLabel, routeDetails)',
   "routeControls?.classList.add('route-controls-migrated')",
+  'color-scheme: dark',
+  '.route-cost-inspector-panel select option',
+  'background: #11170e',
 ]) {
   assert.ok(workspace.includes(token), `route inspector workspace contract must contain ${token}`);
 }
@@ -57,9 +60,6 @@ for (const token of [
   'overflow-wrap: anywhere',
   '[data-role="route-details-cost"]',
   '[data-role="route-details-reason"]',
-  'color-scheme: dark',
-  '.route-cost-inspector-panel select option',
-  'background: #11170e',
 ]) {
   assert.ok(workspaceCss.includes(token), `route inspector CSS contract must contain ${token}`);
 }
