@@ -19,6 +19,7 @@ const cases: Array<{
   target: { x: number; y: number };
   posture: UnitPosture;
   targetHeightMeters: number;
+  referenceTargetHeightMeters?: number;
 }> = [
   {
     name: 'open-standing',
@@ -49,11 +50,11 @@ const cases: Array<{
   },
   {
     name: 'prone-near-relief-shadow',
-    map: postureSensitiveNearReliefMap(), origin: { x: 2.8, y: 3.5 }, target: { x: 10.8, y: 3.5 }, posture: 'prone', targetHeightMeters: 1.7,
+    map: postureSensitiveNearReliefMap(), origin: { x: 2.8, y: 3.5 }, target: { x: 10.8, y: 3.5 }, posture: 'prone', targetHeightMeters: 1.7, referenceTargetHeightMeters: 1.4,
   },
   {
     name: 'standing-near-relief-clear',
-    map: postureSensitiveNearReliefMap(), origin: { x: 2.8, y: 3.5 }, target: { x: 10.8, y: 3.5 }, posture: 'standing', targetHeightMeters: 1.7,
+    map: postureSensitiveNearReliefMap(), origin: { x: 2.8, y: 3.5 }, target: { x: 10.8, y: 3.5 }, posture: 'standing', targetHeightMeters: 1.7, referenceTargetHeightMeters: 1.4,
   },
 ];
 
@@ -106,6 +107,7 @@ const evidence = {
   postureCases: ['standing', 'crouched', 'prone'],
   postureSensitiveNearRelief: true,
   postureSensitiveOffCenterPositions: true,
+  displayNominalHeightComparedWithStandingTarget: true,
   movingObserverTargetParity: true,
   hiddenContactSemanticsPreserved: true,
 };
@@ -124,7 +126,7 @@ function compare(fixture: typeof cases[number]) {
   const field = getVisibilityGeometryField(map, {
     origin: fixture.origin,
     originHeightAboveGroundMeters: eyeHeight(fixture.posture),
-    targetHeightAboveGroundMeters: fixture.targetHeightMeters,
+    targetHeightAboveGroundMeters: fixture.referenceTargetHeightMeters ?? fixture.targetHeightMeters,
     rangeCells: Math.max(map.width, map.height),
   });
   const reference = readVisibilityGeometryCell(field, fixture.target.x, fixture.target.y);
