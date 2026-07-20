@@ -1,0 +1,86 @@
+name: Deploy Verified Tactical Product SHA
+
+on:
+  push:
+    branches:
+      - feature/20260719-tactical-position-system
+    paths:
+      - '.github/workflows/deploy-tactical-v2-product-sha.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: github-pages-tactical-position
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      PRODUCT_SHA: 46e7447670776eff82c9eb692355be4fb041387d
+      PRODUCT_BRANCH: feature/20260719-tactical-position-system
+    steps:
+      - name: Checkout exact verified product SHA
+        uses: actions/checkout@v4
+        with:
+          ref: 46e7447670776eff82c9eb692355be4fb041387d
+          fetch-depth: 1
+          show-progress: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --silent
+
+      - name: Confirm exact source identity
+        run: |
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          echo "Deploying $PRODUCT_BRANCH at $PRODUCT_SHA"
+
+      - name: TypeScript
+        run: npx tsc
+
+      - name: Tactical position product checks
+        run: npm run tactical-position:smoke
+
+      - name: Tactical query checks
+        run: npm run tactical-query:smoke
+
+      - name: Workspace and positions tab checks
+        run: npm run workspace:smoke
+
+      - name: AI editor and tactical profile checks
+        run: npm run editor:smoke
+
+      - name: Build game and AI editor for GitHub Pages
+        env:
+          REAL_WARGAME_COMMIT_SHA: ${{ env.PRODUCT_SHA }}
+          REAL_WARGAME_BRANCH: ${{ env.PRODUCT_BRANCH }}
+          REAL_WARGAME_BUILD_ID: github-pages-product-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          npx vite build --base="/Real-wargame/"
+          touch dist/.nojekyll
+
+      - name: Verify both built applications
+        run: |
+          npm run deployment-pages:smoke
+          test -s dist/index.html
+          test -s dist/ai-node-editor.html
+
+      - name: Publish complete dist to gh-pages
+        run: |
+          mkdir -p /tmp/real-wargame-pages
+          cp -a dist/. /tmp/real-wargame-pages/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan gh-pages
+          git rm -rf .
+          cp -a /tmp/real-wargame-pages/. .
+          git add -A
+          git commit -m "deploy: tactical product $PRODUCT_SHA with AI editor"
+          git push --force origin HEAD:gh-pages
