@@ -15,6 +15,7 @@
     "lab:smoke": "node scripts/ai_test_lab_smoke.mjs",
     "game-editor:smoke": "node scripts/game_editor_smoke.mjs",
     "workspace:smoke": "node scripts/tactical_workspace_smoke.mjs",
+    "cell-inspector:smoke": "node scripts/cell_inspector_smoke.mjs",
     "ui-compact-route-controls:smoke": "node scripts/ui_compact_route_controls_smoke.mjs",
     "dictionary:smoke": "node scripts/ai_dictionary_smoke.mjs",
     "runtime:smoke": "node scripts/ai_graph_runtime_smoke.mjs",
