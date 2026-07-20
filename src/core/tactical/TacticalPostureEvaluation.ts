@@ -100,7 +100,7 @@ export function selectHighestSafePosture<T extends TacticalPostureEvaluation>(
       protection: 0,
       safety: 0,
       reasonCodes: ['posture_data_missing'],
-    } as T;
+    } as unknown as T;
   }
   if (selected.posture === 'standing' && crouchedAllowed
     && crouched!.safety - selected.safety >= settings.crouchedSafetyAdvantageThreshold) {
