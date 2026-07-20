@@ -26,11 +26,11 @@ jobs:
           set -euo pipefail
           {
             echo '=== occupied posture symbols ==='
-            rg -n "occupiedTacticalPositionPosture|isTacticalPositionOccupationActive|arrivalPostureApplied|tactical_position_arrival" src scripts || true
+            grep -RInE "occupiedTacticalPositionPosture|isTacticalPositionOccupationActive|arrivalPostureApplied|tactical_position_arrival" src scripts || true
             echo '=== posture writers ==='
-            rg -n "behaviorRuntime\.posture\s*=|previousPosture\s*=|postureChangedBecause" src/core src/ui scripts || true
+            grep -RInE "behaviorRuntime\.posture[[:space:]]*=|previousPosture[[:space:]]*=|postureChangedBecause" src/core src/ui scripts || true
             echo '=== SetPosture runtime ==='
-            rg -n "SetPosture" src/core src/ui scripts || true
+            grep -RIn "SetPosture" src/core src/ui scripts || true
           } > prone-posture-trace.txt
 
       - name: Upload posture ownership trace
