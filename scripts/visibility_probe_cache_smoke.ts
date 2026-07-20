@@ -94,7 +94,11 @@ diagnostics = getVisibilityProbeDiagnostics(state);
 assert.equal(diagnostics.calculationCount, 7);
 assert.equal(diagnostics.lastObjectCandidateCount, 0, 'canonical raster visibility no longer performs a separate spatial-index query');
 
+setVisibilityProbe(state, true, { x: Number.NaN, y: 6.5 });
+assert.equal(getVisibilityProbeResult(state), null, 'invalid public probe positions must be rejected without geometry work');
+assert.equal(getVisibilityProbeDiagnostics(state).calculationCount, 7);
+
 setVisibilityProbe(state, false, null);
 assert.equal(getVisibilityProbeResult(state), null);
 
-console.log('Visibility probe cache smoke passed: canonical LOS wrapper and exact observer/target/map invalidation.');
+console.log('Visibility probe cache smoke passed: canonical LOS wrapper, invalid input rejection and exact observer/target/map invalidation.');
