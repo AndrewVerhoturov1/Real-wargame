@@ -34,13 +34,9 @@ const dictionaryWorkbench = read('src/ai-node-editor/AiDictionaryWorkbench.ts');
 expectContains(dictionaryWorkbench, '[data-editor-global-actions]', 'AI Tools must install into the unified editor menu.');
 expectNotContains(dictionaryWorkbench, "document.querySelector('.ai-editor-actions')", 'AI Tools must not live in the graph-local toolbar.');
 
-const tacticalWorkspace = read('src/ui/TacticalWorkspaceBase.ts');
+const tacticalWorkspaceBase = read('src/ui/TacticalWorkspaceBase.ts');
 for (const needle of [
-  "type SimulationTab = 'info' | 'danger' | 'positions' | 'stealth' | 'routeCost' | 'memory'",
-  "['routeCost', 'Стоимость маршрута']",
   'data-action="unit-navigation-profile"',
-  'data-role="route-cost-inspector-host"',
-  "routeCost:'Стоимость маршрута'",
   'data-role="route-summary"',
   'data-role="route-details-command"',
   'data-role="route-details-plan"',
@@ -48,16 +44,20 @@ for (const needle of [
   'data-role="route-details-profile"',
   'data-role="route-details-cost"',
   'data-role="route-details-reason"',
-]) expectContains(tacticalWorkspace, needle, `Tactical workspace is missing stable route inspector contract: ${needle}`);
-expectNotContains(tacticalWorkspace, 'data-action="route-cost-quick-toggle"', 'The bottom unit bar must not own the route-cost layer toggle.');
-expectContains(tacticalWorkspace, 'updatePlayerCommandNavigationProfile', 'Changing the game profile must update an outstanding player command without direct path search.');
+]) expectContains(tacticalWorkspaceBase, needle, `Tactical workspace base is missing stable route diagnostics: ${needle}`);
+expectContains(tacticalWorkspaceBase, 'updatePlayerCommandNavigationProfile', 'Changing the game profile must update an outstanding player command without direct path search.');
 
-const runtimeUiState = read('src/core/ui/RuntimeUiState.ts');
-expectContains(
-  runtimeUiState,
-  "export type SimulationLayerMode = 'info' | 'danger' | 'positions' | 'stealth' | 'routeCost' | 'memory';",
-  'The right inspector route-cost tab must be a valid simulation layer mode.',
-);
+const tacticalWorkspace = read('src/ui/TacticalWorkspace.ts');
+for (const needle of [
+  'ROUTE_COST_INSPECTOR_RENDERED_EVENT',
+  'data-tab="routeCost"',
+  'Стоимость маршрута',
+  'data-role="route-cost-inspector-host"',
+  'routeCostInspectorPanel.hidden = false',
+  'sidebarBody.hidden = true',
+  "setSimulationLayerMode(state, 'info')",
+  "shell.querySelector<HTMLButtonElement>('[data-action=\"route-cost-quick-toggle\"]')?.remove();",
+]) expectContains(tacticalWorkspace, needle, `Tactical workspace shell is missing route-cost inspector contract: ${needle}`);
 
 const routeCostUi = read('src/ui/RouteCostOverlayUi.ts');
 expectContains(routeCostUi, 'ROUTE_COST_INSPECTOR_RENDERED_EVENT', 'Route cost UI must react when its inspector host is rendered.');
