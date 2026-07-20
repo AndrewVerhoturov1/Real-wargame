@@ -175,15 +175,21 @@ for (let tick = 0; tick < 30; tick += 1) {
 }
 const staging = getPerceptionGeometryPreparationDiagnostics(stagedState);
 assert.ok(
-  staging.maxPreparationsPerStep > 0 && staging.maxPreparationsPerStep <= 4,
-  'one simulation step must execute at most four bounded point LOS probes',
+  staging.maxPreparationsPerStep > 0 && staging.maxPreparationsPerStep <= 2,
+  'one simulation step must execute at most two logical target visibility probes',
 );
 assert.ok(staging.deferredCount > 0, 'simultaneous cold observers must be deferred instead of blocking one tick');
 assert.ok(
   staging.preparationCount >= stagedObservers.length,
   'all deferred observer probes must become eligible on later attention cadences',
 );
-assert.ok(staging.cacheHitCount > 0, 'stable observer-target pairs must reuse cached point LOS results');
+assert.ok(staging.cacheHitCount > 0, 'stable observer-target pairs must reuse cached target visibility results');
+assert.ok(staging.pointTargetProbeCount > 0);
+assert.equal(
+  staging.pointPhysicalRayCount,
+  staging.pointTargetProbeCount * 3,
+  'every cold logical target probe must execute exactly three silhouette rays',
+);
 for (const unit of stagedState.units) {
   assert.ok(
     unit.perceptionKnowledge.contacts.length > 0,
@@ -269,4 +275,4 @@ assert.ok(
   'ambient targets must still receive remaining perception opportunities',
 );
 
-console.log(`Perception performance smoke passed: ${diagnostics.losCalculationCount} LOS calculations for ${diagnostics.candidateCount} candidates across 600 ticks; ${staging.preparationCount} bounded point probes with ${staging.cacheHitCount} cache hits and max ${staging.maxPreparationsPerStep} probes per step; tracked hostile movement stayed current across mixed target heights.`);
+console.log(`Perception performance smoke passed: ${diagnostics.losCalculationCount} LOS calculations for ${diagnostics.candidateCount} candidates across 600 ticks; ${staging.pointTargetProbeCount} logical target probes used ${staging.pointPhysicalRayCount} physical silhouette rays with max ${staging.maxPreparationsPerStep} logical probes per step; tracked hostile movement stayed current.`);
