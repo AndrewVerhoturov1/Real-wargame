@@ -216,6 +216,7 @@ function verifyOccupationAndEditorContracts(): void {
   assert.ok(workspaceBase.includes("type SimulationTab = 'info' | 'danger' | 'positions' | 'stealth' | 'memory'"));
   assert.ok(workspaceBase.includes("['positions', 'Позиции']"));
   assert.ok(workspaceBase.includes("tab === 'positions'"));
+  assert.ok(workspaceBase.includes("if (tab === 'info' || tab === 'positions') return `${tab}|${unit.id}`;"), "positions panel structure must remain stable while the unit moves");
   assert.equal(workspaceTab.includes("document.createElement('button')"), false);
   assert.ok(workspaceTab.includes("getSimulationLayerState(state).mode === 'positions'"));
   assert.ok(runtimeUi.includes("runtime.attentionOverlay.active = mode === 'memory'"));

@@ -681,7 +681,10 @@ function memoryPanel(state: SimulationState, unit: UnitModel): string {
 function sidebarKey(state: SimulationState, tab: SimulationTab): string {
   const unit = getSelectedUnit(state);
   if (!unit) return `${tab}|none`;
-  if (tab === 'info') return `${tab}|${unit.id}`;
+  // Info updates its live values in place, and Positions owns its own
+  // service subscriptions. Neither panel should be structurally rebuilt while
+  // the selected unit crosses map cells.
+  if (tab === 'info' || tab === 'positions') return `${tab}|${unit.id}`;
   const layer = getSimulationLayerState(state);
   const position = `${Math.floor(unit.position.x)}:${Math.floor(unit.position.y)}`;
   const order = unit.order ? `${Math.floor(unit.order.target.x)}:${Math.floor(unit.order.target.y)}` : 'none';
