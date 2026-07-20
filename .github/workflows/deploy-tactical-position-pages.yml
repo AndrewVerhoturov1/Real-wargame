@@ -1,5 +1,5 @@
 name: Deploy Tactical Position Branch to GitHub Pages
-# Manual deploy trigger: verifies game and AI editor from the exact feature-branch HEAD.
+# Manual deploy trigger: verifies game and AI editor from the exact clean feature-branch HEAD.
 
 on:
   push:
