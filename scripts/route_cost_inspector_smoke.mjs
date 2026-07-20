@@ -4,34 +4,53 @@ import { readFileSync } from 'node:fs';
 const workspace = readFileSync('src/ui/TacticalWorkspace.ts', 'utf8');
 const workspaceBase = readFileSync('src/ui/TacticalWorkspaceBase.ts', 'utf8');
 const routeCostUi = readFileSync('src/ui/RouteCostOverlayUi.ts', 'utf8');
+const workspaceCss = readFileSync('src/tactical-workspace-compact-route.css', 'utf8');
 
 for (const token of [
   'ROUTE_COST_INSPECTOR_RENDERED_EVENT',
-  'data-tab="routeCost"',
-  'Стоимость маршрута',
+  'data-tab="routeCost">Маршрут',
   'data-role="route-cost-inspector-host"',
   'routeCostInspectorPanel.hidden = !routeCostTabActive',
   'sidebarBody.hidden = routeCostTabActive',
-  "setSimulationLayerMode(state, 'info')",
+  'setRouteCostOverlayActive(state, true)',
+  'setRouteCostOverlayActive(state, false)',
+  "shell.querySelector<HTMLElement>('.unit-route-profile')",
+  "shell.querySelector<HTMLDetailsElement>('.unit-route-details')",
+  'routeCostInspectorHost.append(routeProfileLabel, routeDetails)',
+  "routeControls?.classList.add('route-controls-migrated')",
 ]) {
-  assert.ok(workspace.includes(token), `route-cost inspector workspace contract must contain ${token}`);
+  assert.ok(workspace.includes(token), `route inspector workspace contract must contain ${token}`);
 }
 assert.ok(
   workspace.includes("shell.querySelector<HTMLButtonElement>('[data-action=\"route-cost-quick-toggle\"]')?.remove();"),
   'workspace shell must remove the obsolete bottom route-cost toggle',
 );
-assert.ok(workspaceBase.includes('data-action="route-cost-quick-toggle"'), 'baseline still owns the legacy markup until the compatibility shell removes it');
+assert.ok(workspaceBase.includes('data-action="route-cost-quick-toggle"'), 'baseline keeps legacy markup until the compatibility shell removes it');
 
 for (const token of [
   'ROUTE_COST_INSPECTOR_RENDERED_EVENT',
   '[data-role="route-cost-inspector-host"]',
-  'toggleRouteCostOverlay(state)',
   'setRouteCostOverlayMode(state, mode.value as RouteCostOverlayMode)',
   '[data-role="route-details-profile"]',
 ]) {
   assert.ok(routeCostUi.includes(token), `route-cost inspector UI contract must contain ${token}`);
 }
-assert.ok(!routeCostUi.includes('.workspace-display-panel'), 'top View menu must not own duplicate route-cost controls');
-assert.ok(!routeCostUi.includes('[data-action="route-cost-quick-toggle"]'), 'route-cost UI must not bind a removed bottom toggle');
+for (const token of [
+  'toggleRouteCostOverlay',
+  'data-action = \'route-cost-overlay\'',
+  'data-action="route-cost-quick-toggle"',
+  '.workspace-display-panel',
+]) {
+  assert.ok(!routeCostUi.includes(token), `route-cost inspector must not contain redundant layer control: ${token}`);
+}
 
-console.log('Route cost inspector smoke passed.');
+for (const token of [
+  '.route-cost-inspector-panel .unit-route-profile',
+  '.route-cost-inspector-panel .unit-route-details-panel',
+  '.route-cost-inspector-panel .unit-route-details > summary',
+  '.unit-bar-route-controls.route-controls-migrated',
+]) {
+  assert.ok(workspaceCss.includes(token), `route inspector CSS contract must contain ${token}`);
+}
+
+console.log('Route inspector smoke passed.');
