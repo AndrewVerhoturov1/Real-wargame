@@ -7,8 +7,8 @@ declare module '../units/UnitModel' {
   }
 
   interface UnitModel {
-    tacticalTraversalProfile: TacticalTraversalProfile;
-    tacticalTraversalProfileRevision: number;
+    tacticalTraversalProfile?: TacticalTraversalProfile;
+    tacticalTraversalProfileRevision?: number;
   }
 }
 
