@@ -1,6 +1,6 @@
 name: Deploy Tactical Position Branch to GitHub Pages
 # Standing user authorization: publish every verified product fix from this feature branch.
-# Deployment refresh includes canonical scheduler contract fix 5bb8c1921970ef1902c21dac1e0ef06abdd277b4.
+# Deployment refresh includes the prone tactical-position arrival fix verified on 2026-07-20.
 
 on:
   push:
