@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 const runtimeUi = readFileSync('src/core/ui/RuntimeUiState.ts', 'utf8');
 const workspace = readFileSync('src/ui/TacticalWorkspace.ts', 'utf8');
 const app = readFileSync('src/rendering/PixiApp.ts', 'utf8');
-const overlayRenderer = readFileSync('src/rendering/PixiOverlayRendererBase.ts', 'utf8');
+const overlayRenderer = readFileSync('src/rendering/PixiOverlayRenderer.ts', 'utf8');
 const legacyViewConeRenderer = readFileSync('src/rendering/PixiViewConeRenderer.ts', 'utf8');
 
 for (const token of [
@@ -36,11 +36,9 @@ for (const obsoleteToken of [
 }
 
 for (const token of [
-  "const showThreatCones = layer.mode === 'danger' && layer.showThreatCones",
-  "`cones:${showThreatCones ? '1' : '0'}`",
-  'drawRememberedThreat(this.threatGeometryGraphics, threat, cellSize, layer.mode === \'memory\', showThreatCones)',
-  'showThreatCones: boolean',
-  'if (showThreatCones)',
+  'threatGeometryContainer: Container',
+  'const layer = getSimulationLayerState(state)',
+  "renderer.threatGeometryContainer.visible = layer.mode !== 'danger' || layer.showThreatCones",
 ]) {
   assert.ok(overlayRenderer.includes(token), `danger threat renderer must contain ${token}`);
 }
