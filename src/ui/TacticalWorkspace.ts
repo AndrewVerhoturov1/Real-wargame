@@ -40,6 +40,20 @@ export function installTacticalWorkspace(
       display: none !important;
     }
 
+    .route-cost-inspector-panel select {
+      color-scheme: dark;
+    }
+
+    .route-cost-inspector-panel select option,
+    .route-cost-inspector-panel select optgroup {
+      color: #fff0a1;
+      background: #11170e;
+    }
+
+    .route-cost-inspector-panel select option:disabled {
+      color: #777d6d;
+    }
+
     .workspace-display-panel #vision-toggle {
       display: none !important;
     }
