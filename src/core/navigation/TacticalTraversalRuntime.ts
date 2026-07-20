@@ -11,13 +11,13 @@ import {
 import type { SimulationState } from '../simulation/SimulationState';
 import { isTacticalPositionOccupationActive } from '../tactical/TacticalPositionOccupation';
 import type { UnitModel } from '../units/UnitModel';
-import { captureTacticalTraversalStableInput } from './TacticalTraversalPlanningIdentity';
 import { getTacticalTraversalPlanningService } from './TacticalTraversalPlanningService';
 import {
   findTraversalSegmentIndex,
   type TacticalTraversalPlanV1,
   type TacticalTraversalSegmentV1,
 } from './TacticalTraversalPlan';
+import { getUnitTacticalTraversalProfile } from './TacticalTraversalProfileStore';
 
 const BODY_TURN_SPEED_RADIANS_PER_SECOND = Math.PI * 1.35;
 const BODY_DIRECTION_DEADBAND_RADIANS = Math.PI / 180 * 2;
@@ -38,9 +38,8 @@ export function reconcileTacticalTraversalBeforeMovement(
       continue;
     }
 
-    const stable = captureTacticalTraversalStableInput(state, unit);
     const plan = order.traversalPlan;
-    if (!plan || order.traversalPlanStatus !== 'ready' || !planMatchesStable(plan, stable)) {
+    if (!plan || order.traversalPlanStatus !== 'ready' || !planMatchesCurrentOrder(state, unit, order, plan)) {
       if (plan && order.traversalPlanStatus === 'ready') {
         order.traversalPlanStatus = 'stale';
         order.activeTraversalSegmentIndex = undefined;
@@ -195,20 +194,28 @@ function routeCellDistanceSquared(unit: UnitModel, cell: { x: number; y: number 
   return dx * dx + dy * dy;
 }
 
-function planMatchesStable(
+function planMatchesCurrentOrder(
+  state: SimulationState,
+  unit: UnitModel,
+  order: MoveOrder,
   plan: TacticalTraversalPlanV1,
-  stable: ReturnType<typeof captureTacticalTraversalStableInput>,
 ): boolean {
+  const command = unit.playerCommand && (!order.playerCommandId || unit.playerCommand.id === order.playerCommandId)
+    ? unit.playerCommand
+    : null;
+  const commandId = order.playerCommandId ?? command?.id ?? order.ownerToken ?? null;
+  const commandRevision = finiteRevision(command?.revision ?? order.movementProfileSelectionRevision, 0);
+  const intentVersion = finiteRevision(command?.intent.formatVersion, 1);
+  const traversalProfileRevision = getUnitTacticalTraversalProfile(unit).revision;
   return plan.version === 1
-    && plan.routeRevision === stable.routeRevision
-    && plan.routeHash === stable.routeHash
-    && plan.commandId === stable.commandId
-    && plan.commandRevision === stable.commandRevision
-    && plan.knowledgeRevision === stable.knowledgeRevision
-    && plan.tacticalPositionSettingsRevision === stable.settingsRevision
-    && plan.tacticalTraversalProfileRevision === stable.traversalProfile.revision
-    && plan.movementProfileRevision === stable.movementProfileRevision
-    && plan.intentVersion === stable.intentVersion;
+    && plan.routeRevision === finiteRevision(order.routeRevision, 1)
+    && plan.commandId === commandId
+    && plan.commandRevision === commandRevision
+    && plan.knowledgeRevision === finiteRevision(unit.tacticalKnowledge.revision, 0)
+    && plan.tacticalPositionSettingsRevision === finiteRevision(unit.tacticalPositionSettingsRevision, 0)
+    && plan.tacticalTraversalProfileRevision === traversalProfileRevision
+    && plan.movementProfileRevision === finiteRevision(state.movementProfiles.revision, 0)
+    && plan.intentVersion === intentVersion;
 }
 
 function traversalOwnerToken(order: MoveOrder): string {
@@ -225,6 +232,12 @@ function getMovementMemory(unit: UnitModel): Record<string, AiBlackboardValue> {
   const memory = runtime.aiGraphMemory ?? {};
   runtime.aiGraphMemory = memory;
   return memory;
+}
+
+function finiteRevision(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.floor(value))
+    : fallback;
 }
 
 function signedAngle(value: number): number {
