@@ -38,7 +38,7 @@ A visual stimulus for a concrete unit uses:
 - the target's current posture and corresponding silhouette height;
 - the canonical terrain, object and vegetation geometry between them.
 
-A unit is not reduced to the center of its cell.
+A unit is not reduced to the center of its cell. Perception cache identity must not coarsely quantize either unit to a cell-center or `0.05`/`0.25`-cell bucket.
 
 ### 2.2 Partial silhouette
 
@@ -167,24 +167,38 @@ The context is cached by map and canonical revision identity. No renderer, DOM o
 
 Use deterministic 2-D grid DDA traversal over the exact segment from `origin` to `target`.
 
-The traversal must provide for every crossed cell:
+The kernel exposes one canonical streaming primitive:
+
+```text
+walkVisibilityRay(context, request, visitor)
+```
+
+The traversal provides for every crossed cell:
 
 - entry distance;
 - exit distance;
 - exact path length inside the cell;
 - representative segment point;
 - whether the cell is the target cell;
-- whether traversal is axial, diagonal or partial.
+- current terrain/object horizon before evaluating the cell as a target;
+- current visual and fire transmission before and after crossing the cell.
+
+Two thin wrappers use this same walker:
+
+- `traceVisibilityRayToTarget(...)` returns one exact point-target result;
+- the geometry-field builder visits every candidate cell encountered on a perimeter ray and evaluates that cell as a hypothetical target at the configured preview height.
+
+The field builder must not implement a second terrain, object or vegetation formula around the walker.
 
 This replaces:
 
-- the current cell-center-only terrain horizon path;
+- the current cell-center-only point terrain horizon path;
 - the separate fixed `1.2 m` point-sampling loop;
 - separate field vegetation step math.
 
 ### 5.4 Origin and target height
 
-For every trace:
+For every exact target trace:
 
 ```text
 originEye = smoothTerrainHeight(exactOrigin) + originHeightAboveGround
@@ -192,11 +206,13 @@ originEye = smoothTerrainHeight(exactOrigin) + originHeightAboveGround
 targetPoint = smoothTerrainHeight(exactTarget) + targetHeightAboveGround
 ```
 
-Intermediate terrain uses the canonical static-grid terrain sample for the crossed cell. The origin and target are never snapped to cell centers.
+For a heatmap cell, the target position is that cell's center because the cell represents a hypothetical location rather than a concrete unit. The observer origin remains the selected unit's exact position.
+
+Intermediate terrain uses the canonical static-grid terrain sample for the crossed cell. Concrete observers and concrete targets are never snapped to cell centers.
 
 ### 5.5 Terrain horizon
 
-The kernel maintains the maximum occluding slope encountered before the target.
+The kernel maintains the maximum occluding slope encountered before the current target sample.
 
 For each intermediate cell:
 
@@ -204,7 +220,7 @@ For each intermediate cell:
 groundSlope = (terrainHeight - originEye) / distanceFromExactOrigin
 ```
 
-The target sample is terrain-blocked when:
+The current target sample is terrain-blocked when:
 
 ```text
 targetSlope + 0.02 < maximumHorizonSlope
@@ -273,12 +289,14 @@ One three-sample silhouette probe consumes one logical budget slot. Diagnostics 
 The cache key includes:
 
 - observer ID and posture;
-- observer exact position quantized to `0.05` cell;
-- target exact position quantized to `0.05` cell;
-- target height quantized to `0.05 m`;
+- exact normalized observer position without coarse position bucketing;
+- exact normalized target position without coarse position bucketing;
+- target height;
 - silhouette sampling version;
 - terrain, height, forest and object revisions;
 - active visibility-material profile key.
+
+Canonical coordinate serialization may normalize floating-point representation, but it must preserve at least `0.001` cell precision and must not reuse a result across positions that can traverse a different set of cells.
 
 ## 7. Compatibility LOS API
 
@@ -301,7 +319,7 @@ Create:
 src/core/visibility/VisibilityCandidateMask.ts
 ```
 
-The mask builder receives the selected unit and the heatmap preview target posture.
+The mask builder receives the selected unit and its current attention state. Hypothetical target posture is not part of attention masking; it is applied later by geometry.
 
 It produces bounded arrays for the current visibility rectangle:
 
@@ -317,14 +335,16 @@ The candidate pass may inspect every cell in the bounded maximum-range rectangle
 
 `VisibilityGeometryField` is refactored to use `VisibilityRayKernel`.
 
-For the selected-unit heatmap it receives the candidate mask.
+For the selected-unit heatmap it receives the candidate mask and hypothetical target height.
 
 The field still uses perimeter rays to preserve bounded field construction, but each perimeter ray first performs a cheap mask-only walk:
 
 1. if the ray touches no candidate cell, skip it completely;
 2. otherwise find the farthest candidate cell on that ray;
-3. run canonical geometry only up to that cell;
-4. write results only for candidate cells encountered by the ray.
+3. run the canonical ray walker only up to that cell;
+4. evaluate and write only candidate cells encountered by the ray.
+
+Every candidate cell that the current full-perimeter algorithm can reach must remain covered after filtering. Differential tests compare masked coverage against an unfiltered reference build.
 
 This preserves the existing radial coverage while avoiding terrain/object/vegetation evaluation for inactive sectors and excessive distance beyond the active zone.
 
@@ -345,9 +365,12 @@ Field arrays may remain map-sized typed arrays for simple indexed access and one
 - builds the attention candidate mask before geometry;
 - computes visibility quality only for candidate/evaluated cells;
 - uses the same `evaluateCellVisibilityQuality` formula as point perception;
-- includes preview posture and candidate-mask identity in the calculation key;
+- includes exact observer position at build time, preview posture and candidate-mask identity in the calculation key;
+- removes coarse `0.25`-cell origin quantization from field geometry cache identity;
 - preserves the `0.2 s` moving rebuild throttle;
 - preserves per-unit field caching.
+
+The moving throttle may display the last exact field for up to `0.2 s`, but every rebuild must use the unit's exact current position.
 
 The final quality remains:
 
@@ -417,7 +440,8 @@ The implementation must preserve these boundaries:
 - no work triggered by pointer or camera movement;
 - point probes remain limited to two logical preparations per simulation step;
 - heatmap field rebuilds remain throttled while the unit moves;
-- field and probe caches reject stale map/profile revisions.
+- field and probe caches reject stale map/profile revisions;
+- exact-position correctness is not traded for coarse position cache buckets.
 
 The three-sample target probe increases physical rays per logical target from one to three. The implementation must expose this cost in diagnostics and verify it with the focused perception performance smoke before readiness is claimed.
 
@@ -462,7 +486,7 @@ The three-sample target probe increases physical rays per logical target from on
 9. `PerceptionStimulus.targetHeightMeters` from actual target posture reaches the target probe unchanged.
 10. A partially exposed target receives reduced aggregate transmission rather than full visibility.
 11. A fully hidden target produces no visual evidence.
-12. Exact target movement within one cell can change visibility when crossing an occluding edge.
+12. Exact target movement within one cell changes cache identity and can change visibility when the segment crosses a different occluding edge.
 13. Cache identity changes with observer position, target position, posture, height and map revisions.
 14. Two-logical-probe-per-step budget and deferral behavior remain intact.
 
@@ -476,12 +500,13 @@ The three-sample target probe increases physical rays per logical target from on
 20. Standing/crouched/prone preview modes match canonical target heights.
 21. Hidden overlay performs zero field work.
 22. Pointer and camera movement do not rebuild the field.
+23. Masked field coverage matches the candidate cells produced by an unfiltered reference build.
 
 ### Regression
 
-23. Existing near-relief posture regression remains covered.
-24. Existing perception, variance, view-memory heatmap and visibility-probe scenarios continue to pass.
-25. Renderer still uses one raster sprite and only uploads on field revision changes.
+24. Existing near-relief posture regression remains covered.
+25. Existing perception, variance, view-memory heatmap and visibility-probe scenarios continue to pass.
+26. Renderer still uses one raster sprite and only uploads on field revision changes.
 
 ## 17. Focused verification matrix
 
@@ -508,6 +533,7 @@ The implementation is accepted when all of the following are true:
 - one canonical ray kernel owns terrain, object and vegetation visibility math;
 - no independent geometry algorithm remains in `LineOfSight.ts`;
 - perception uses exact observer/target positions and actual target posture height;
+- no coarse point/field cache bucket can reuse geometry across materially different positions;
 - partial silhouette exposure affects aggregate visual transmission;
 - heatmap has standing/crouched/prone hypothetical-target modes;
 - heatmap never reads hidden targets;
