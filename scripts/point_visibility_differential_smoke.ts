@@ -101,6 +101,30 @@ assert.ok(targetStimulus);
 assert.deepEqual(targetStimulus.position, stimulusTarget.position);
 assert.equal(targetStimulus.targetHeightMeters, 1.7, 'standing target posture must produce the standing silhouette height');
 
+const edgeMap = normalizeMap({
+  ...baseMap(),
+  height: 9,
+  objects: [{
+    id: 'edge-blocker',
+    kind: 'structure',
+    x: 7,
+    y: 5,
+    widthCells: 1,
+    heightCells: 1,
+    rotationDegrees: 0,
+    losHeightMeters: 5,
+  }],
+});
+const edgeState = createInitialState(edgeMap, [unitData('edge-observer', 2, 3)]);
+const edgeObserver = edgeState.units[0]!;
+edgeObserver.position = { x: 2.2, y: 3.2 };
+edgeObserver.behaviorRuntime.posture = 'standing';
+const sameCellClear = computeLineOfSight(edgeMap, edgeObserver, { x: 10.2, y: 5.01 }, 1.7);
+const sameCellBlocked = computeLineOfSight(edgeMap, edgeObserver, { x: 10.2, y: 5.71 }, 1.7);
+assert.equal(Math.floor(5.01), Math.floor(5.71));
+assert.equal(sameCellClear.blocked, false, 'first exact point in target cell must pass beside the blocker');
+assert.equal(sameCellBlocked.blocked, true, 'movement inside the same target cell must cross the blocker edge and change visibility');
+
 const parityCases: Array<{
   name: string;
   map: TacticalMapData;
@@ -112,7 +136,7 @@ const parityCases: Array<{
   { name: 'open-standing', map: baseMap(), origin: { x: 2.5, y: 3.5 }, target: { x: 10.5, y: 3.5 }, posture: 'standing', targetHeightMeters: 1.7 },
   {
     name: 'structure-shadow',
-    map: { ...baseMap(), objects: [{ id: 'wall', kind: 'structure', x: 5, y: 2, widthCells: 1, heightCells: 3, rotationRadians: 0, losHeightMeters: 5 }] },
+    map: { ...baseMap(), objects: [{ id: 'wall', kind: 'structure', x: 5, y: 2, widthCells: 1, heightCells: 3, rotationDegrees: 0, losHeightMeters: 5 }] },
     origin: { x: 2.5, y: 3.5 }, target: { x: 10.5, y: 3.5 }, posture: 'standing', targetHeightMeters: 1.7,
   },
   {
@@ -189,6 +213,7 @@ const evidence = {
   exactOpenPositionPreserved: true,
   exactIntegerTargetSupported: true,
   exactVegetationPathLength: true,
+  exactWithinCellOccluderEdge: true,
   partialSilhouette: {
     visibleSampleCount: partial.visibleSampleCount,
     visualTransmission: round(partial.visualTransmission),
@@ -203,7 +228,7 @@ const evidence = {
   mapRevisionInvalidatedCache: true,
 };
 writeEvidence('point-los-parity.json', evidence);
-console.log(`Unified visibility differential smoke passed: ${results.length} parity scenes, exact DDA, target posture, silhouette and cache coverage.`);
+console.log(`Unified visibility differential smoke passed: ${results.length} parity scenes, exact DDA, in-cell blocker edge, target posture, silhouette and cache coverage.`);
 
 function compareCenterParity(fixture: typeof parityCases[number]) {
   const map = normalizeMap(fixture.map);
@@ -258,7 +283,7 @@ function partialSilhouetteMap(): TacticalMapData {
       y: 3,
       widthCells: 1,
       heightCells: 1,
-      rotationRadians: 0,
+      rotationDegrees: 0,
       losHeightMeters: 1.5,
     }],
   };
