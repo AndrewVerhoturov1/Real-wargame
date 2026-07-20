@@ -69,7 +69,6 @@ interface VisibilityTraceContext {
   readonly visualLossPerMeter: Float64Array;
   readonly fireLossPerMeter: Float64Array;
   readonly visualMinimumTransmission: Float64Array;
-  readonly fireMinimumTransmission: Float64Array;
 }
 
 const contextByMap = new WeakMap<TacticalMap, VisibilityTraceContext>();
@@ -82,9 +81,8 @@ export function traceVisibilityRay(
 }
 
 /**
- * Canonical geometry trace. Field builders may consume the cell samples, while
- * concrete point probes consume the final result. Both paths therefore share
- * exactly the same terrain, object and vegetation rules.
+ * Canonical geometry trace. Field builders consume the cell samples and point
+ * probes consume the final result, so both paths share one implementation.
  */
 export function traceVisibilityRayPath(
   map: TacticalMap,
@@ -165,15 +163,11 @@ export function traceVisibilityRayPath(
     const mapIndex = traversed.y * map.width + traversed.x;
     const materialCode = context.staticGrid.vegetationMaterialCodes[mapIndex] ?? 0;
     const pathMeters = Math.max(0, traversed.pathLengthMeters);
-    const hasVegetation = (context.visualLossPerMeter[materialCode] ?? 0) > 0
-      || (context.fireLossPerMeter[materialCode] ?? 0) > 0;
-    if (hasVegetation) accumulatedVegetationMeters += pathMeters;
-    if (channel !== 'fire') {
-      visualTransmission *= Math.exp(-(context.visualLossPerMeter[materialCode] ?? 0) * pathMeters);
-    }
-    if (channel !== 'visual') {
-      fireTransmission *= Math.exp(-(context.fireLossPerMeter[materialCode] ?? 0) * pathMeters);
-    }
+    const visualLoss = context.visualLossPerMeter[materialCode] ?? 0;
+    const fireLoss = context.fireLossPerMeter[materialCode] ?? 0;
+    if (visualLoss > 0 || fireLoss > 0) accumulatedVegetationMeters += pathMeters;
+    visualTransmission *= Math.exp(-visualLoss * pathMeters);
+    fireTransmission *= Math.exp(-fireLoss * pathMeters);
 
     const currentDistanceMeters = distance(origin, traversed.representative) * map.metersPerCell;
     const sampleGround = traversed.targetCell
@@ -187,9 +181,7 @@ export function traceVisibilityRayPath(
     const blockedByVegetation = vegetationExhausted(
       channel,
       visualTransmission,
-      fireTransmission,
       context.visualMinimumTransmission[materialCode] ?? 0,
-      context.fireMinimumTransmission[materialCode] ?? 0,
     );
     const hardBlocked = blockedByHorizon || blockedByVegetation;
     const blockerKind = blockedByHorizon ? horizonKind : blockedByVegetation ? 'vegetation' : 'none';
@@ -357,13 +349,11 @@ function getTraceContext(map: TacticalMap): VisibilityTraceContext {
   const visualLossPerMeter = new Float64Array(staticGrid.vegetationMaterialIds.length);
   const fireLossPerMeter = new Float64Array(staticGrid.vegetationMaterialIds.length);
   const visualMinimumTransmission = new Float64Array(staticGrid.vegetationMaterialIds.length);
-  const fireMinimumTransmission = new Float64Array(staticGrid.vegetationMaterialIds.length);
   for (let index = 0; index < staticGrid.vegetationMaterialIds.length; index += 1) {
     const definition = resolveVegetationDefinition(staticGrid.vegetationMaterialIds[index]);
     visualLossPerMeter[index] = definition.visibility.transmissionLossPerMeter;
     fireLossPerMeter[index] = definition.fire.transmissionLossPerMeter;
     visualMinimumTransmission[index] = definition.visibility.minimumTransmission;
-    fireMinimumTransmission[index] = definition.fire.minimumTransmission;
   }
   const context: VisibilityTraceContext = {
     staticGrid,
@@ -371,7 +361,6 @@ function getTraceContext(map: TacticalMap): VisibilityTraceContext {
     visualLossPerMeter,
     fireLossPerMeter,
     visualMinimumTransmission,
-    fireMinimumTransmission,
   };
   contextByMap.set(map, context);
   return context;
@@ -380,15 +369,10 @@ function getTraceContext(map: TacticalMap): VisibilityTraceContext {
 function vegetationExhausted(
   channel: VisibilityTraceChannel,
   visual: number,
-  fire: number,
   visualMinimum: number,
-  fireMinimum: number,
 ): boolean {
   const visualBlocked = visualMinimum > 0 && visual <= visualMinimum;
-  const fireBlocked = fireMinimum > 0 && fire <= fireMinimum;
-  if (channel === 'visual') return visualBlocked;
-  if (channel === 'fire') return fireBlocked;
-  return visualBlocked && fireBlocked;
+  return channel === 'visual' ? visualBlocked : false;
 }
 
 function visibleResult(
