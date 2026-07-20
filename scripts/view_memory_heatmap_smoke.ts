@@ -171,15 +171,26 @@ const clearAhead = sampleSelectedUnitVisibilityField(fullField, 13, 15);
 const behindHouse = sampleSelectedUnitVisibilityField(fullField, 25, 15);
 assert.ok(clearAhead > behindHouse, 'building must create a lower-quality shadow behind itself');
 
+const distantQualityBefore = sampleSelectedUnitVisibilityField(fullField, 10, 30);
+observer.attentionSettings.vision.distanceFalloffStartMeters = 5;
+observer.attentionSettings.vision.distanceFalloffExponent = 2.5;
+state.simulationTimeSeconds += 0.3;
+const falloffField = getSelectedUnitVisibilityField(state);
+assert.ok(falloffField && falloffField !== fullField, 'distance quality settings must invalidate the heatmap key');
+assert.ok(
+  sampleSelectedUnitVisibilityField(falloffField, 10, 30) < distantQualityBefore,
+  'earlier and steeper distance falloff must reduce distant heatmap quality',
+);
+
 assert.equal(getAttentionOverlayState(state).heatmapTargetPosture, 'standing');
 const originalObserverPosture = observer.behaviorRuntime.posture;
 const originalKnowledgeRevision = observer.perceptionKnowledge.revision;
-const standingBehindCover = sampleSelectedUnitVisibilityField(fullField, 18, 15);
+const standingBehindCover = sampleSelectedUnitVisibilityField(falloffField, 18, 15);
 setAttentionHeatmapTargetPosture(state, 'prone');
 state.simulationTimeSeconds += 0.3;
 const proneField = getSelectedUnitVisibilityField(state);
 assert.ok(proneField);
-assert.notEqual(proneField.calculationKey, fullField.calculationKey);
+assert.notEqual(proneField.calculationKey, falloffField.calculationKey);
 const proneBehindCover = sampleSelectedUnitVisibilityField(proneField, 18, 15);
 assert.ok(standingBehindCover > proneBehindCover, `standing preview ${standingBehindCover} must exceed prone preview ${proneBehindCover} behind low cover`);
 assert.equal(observer.behaviorRuntime.posture, originalObserverPosture, 'heatmap target selector must not change observer posture');
@@ -204,7 +215,7 @@ const forest = getSelectedUnitVisibilityField(state);
 assert.ok(forest && forest.revision > moved.revision, 'map visual revision must invalidate the field');
 assert.ok(sampleSelectedUnitVisibilityField(forest, 19, 15) < sampleSelectedUnitVisibilityField(moved, 19, 15), 'forest must reduce current visibility quality');
 
-console.log('View and memory heatmap smoke passed: attention mask, canonical geometry, posture preview, cache and invalidation.');
+console.log('View and memory heatmap smoke passed: attention mask, canonical geometry, distance quality, posture preview, cache and invalidation.');
 
 function localFieldIndex(
   field: { minCellX: number; minCellY: number; width: number; height: number },
