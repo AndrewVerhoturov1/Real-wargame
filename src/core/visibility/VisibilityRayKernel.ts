@@ -101,6 +101,12 @@ export function traceVisibilityRayPath(
       samples: [],
     };
   }
+  if (!isFinitePosition(target)) {
+    return {
+      result: blockedResult(origin, target, totalDistanceMeters, 0, 'boundary', origin, 1, 1, 0, 0),
+      samples: [],
+    };
+  }
   if (totalDistanceMeters <= 0.02) {
     return {
       result: visibleResult(origin, target, 0, 0, 1, 1, 0),
@@ -121,7 +127,7 @@ export function traceVisibilityRayPath(
   let visualTransmission = 1;
   let fireTransmission = 1;
   let accumulatedVegetationMeters = 0;
-  let visualBlockingThreshold = 0;
+  let vegetationBlocked = false;
   let vegetationBlockerPosition: GridPosition | null = null;
   let vegetationBlockerDistanceMeters: number | null = null;
   let horizonSlope = Number.NEGATIVE_INFINITY;
@@ -172,11 +178,19 @@ export function traceVisibilityRayPath(
     if (visualLoss > 0 || fireLoss > 0) accumulatedVegetationMeters += pathMeters;
     visualTransmission *= Math.exp(-visualLoss * pathMeters);
     fireTransmission *= Math.exp(-fireLoss * pathMeters);
-    visualBlockingThreshold = Math.max(visualBlockingThreshold, materialMinimum);
 
     const currentDistanceMeters = traversed.targetCell
       ? totalDistanceMeters
       : distance(origin, traversed.representative) * map.metersPerCell;
+    const materialExhausted = channel === 'visual'
+      && materialMinimum > 0
+      && visualTransmission <= materialMinimum;
+    if (materialExhausted && !vegetationBlocked) {
+      vegetationBlocked = true;
+      vegetationBlockerPosition = { ...traversed.representative };
+      vegetationBlockerDistanceMeters = currentDistanceMeters;
+    }
+
     const sampleGround = traversed.targetCell
       ? targetGround
       : context.staticGrid.terrainHeightMeters[mapIndex] ?? 0;
@@ -185,13 +199,7 @@ export function traceVisibilityRayPath(
       ? exactTargetSlope
       : (samplePoint - originEye) / Math.max(0.001, currentDistanceMeters);
     const blockedByHorizon = horizonPosition !== null && sampleSlope + HORIZON_MARGIN < horizonSlope;
-    const blockedByVegetation = channel === 'visual'
-      && visualBlockingThreshold > 0
-      && visualTransmission <= visualBlockingThreshold;
-    if (blockedByVegetation && vegetationBlockerPosition === null) {
-      vegetationBlockerPosition = { ...traversed.representative };
-      vegetationBlockerDistanceMeters = currentDistanceMeters;
-    }
+    const blockedByVegetation = channel === 'visual' && vegetationBlocked;
     const hardBlocked = blockedByHorizon || blockedByVegetation;
     const blockerKind = blockedByHorizon ? horizonKind : blockedByVegetation ? 'vegetation' : 'none';
     const sampleVisual = blockedByHorizon ? 0 : clamp01(visualTransmission);
@@ -461,13 +469,16 @@ function finitePosition(position: GridPosition): GridPosition {
   };
 }
 
+function isFinitePosition(position: GridPosition): boolean {
+  return Number.isFinite(position.x) && Number.isFinite(position.y);
+}
+
 function normalizeHeight(value: number): number {
   return Math.max(0.05, Number.isFinite(value) ? value : 0.05);
 }
 
 function insideMap(map: TacticalMap, position: GridPosition): boolean {
-  return Number.isFinite(position.x)
-    && Number.isFinite(position.y)
+  return isFinitePosition(position)
     && position.x >= 0
     && position.y >= 0
     && position.x < map.width
