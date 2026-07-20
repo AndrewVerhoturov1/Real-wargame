@@ -1,5 +1,7 @@
+import '../cell-inspector.css';
 import type { AiGameBridgeHandle } from '../core/ai/AiGameBridge';
 import type { SimulationState } from '../core/simulation/SimulationState';
+import { installCellInspector } from './CellInspector';
 import {
   installTacticalWorkspace as installTacticalWorkspaceBase,
 } from './TacticalWorkspaceBase';
@@ -34,6 +36,7 @@ export function installTacticalWorkspace(
   const teardownTab = installTacticalPositionWorkspaceTab(state, onChanged);
   const teardownSettings = installTacticalPositionSettingsControls(state, onChanged);
   const teardownSearch = installTacticalPositionSearchControls(state, onChanged);
+  const teardownCellInspector = installCellInspector(state);
   const shell = document.querySelector<HTMLElement>('.tactical-workspace-shell');
   let cleaning = false;
   let scheduledFrame = 0;
@@ -75,6 +78,7 @@ export function installTacticalWorkspace(
     observer?.disconnect();
     if (scheduledFrame !== 0) window.cancelAnimationFrame(scheduledFrame);
     style.remove();
+    teardownCellInspector();
     teardownSearch();
     teardownSettings();
     teardownTab();
