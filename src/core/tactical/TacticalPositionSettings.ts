@@ -1,6 +1,7 @@
-import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
+export { selectHighestSafePosture } from './TacticalPostureEvaluation';
+export type { TacticalPostureEvaluation } from './TacticalPostureEvaluation';
 
 export interface TacticalPositionSettings {
   standingMaximumDanger: number;
@@ -47,13 +48,6 @@ export type TacticalPositionSettingsInput =
   | Partial<TacticalPositionSettingsDataV1>
   | null
   | undefined;
-
-export interface TacticalPostureEvaluation {
-  readonly posture: UnitPosture;
-  readonly danger: number;
-  readonly protection: number;
-  readonly safety: number;
-}
 
 const draftByState = new WeakMap<SimulationState, TacticalPositionSettings>();
 
@@ -200,56 +194,6 @@ export function applyTacticalPositionSettingsDraftToUnit(
   unit: UnitModel,
 ): TacticalPositionSettings {
   return setTacticalPositionSettings(unit, getTacticalPositionSettingsDraft(state));
-}
-
-/**
- * Select the highest posture that does not sacrifice a meaningful amount of
- * safety. Absolute standing/crouched thresholds remain hard gates, while the
- * two advantage thresholds allow a lower posture to win when it materially
- * improves the tactical situation.
- */
-export function selectHighestSafePosture(
-  evaluations: readonly TacticalPostureEvaluation[],
-  settings: TacticalPositionSettings,
-): TacticalPostureEvaluation {
-  const standing = evaluations.find((item) => item.posture === 'standing');
-  const crouched = evaluations.find((item) => item.posture === 'crouched');
-  const prone = evaluations.find((item) => item.posture === 'prone');
-  const standingAllowed = Boolean(
-    standing
-    && standing.danger <= settings.standingMaximumDanger
-    && standing.safety >= settings.standingMinimumSafety,
-  );
-  const crouchedAllowed = Boolean(
-    crouched
-    && crouched.danger <= settings.crouchedMaximumDanger
-    && crouched.safety >= settings.crouchedMinimumSafety,
-  );
-
-  let selected = standingAllowed
-    ? standing!
-    : crouchedAllowed
-      ? crouched!
-      : prone ?? crouched ?? standing;
-
-  if (!selected) return { posture: 'standing', danger: 100, protection: 0, safety: 0 };
-
-  if (
-    selected.posture === 'standing'
-    && crouchedAllowed
-    && crouched!.safety - selected.safety >= settings.crouchedSafetyAdvantageThreshold
-  ) {
-    selected = crouched!;
-  }
-
-  if (
-    prone
-    && prone.safety - selected.safety >= settings.proneSafetyAdvantageThreshold
-  ) {
-    selected = prone;
-  }
-
-  return selected;
 }
 
 function readValues(value: TacticalPositionSettingsInput): Partial<TacticalPositionSettings> {
