@@ -84,7 +84,9 @@ function isExpectedMigrationFailure(line) {
     return line.includes('.cover-map-tooltip[hidden]');
   }
   if (line.includes('src/core/simulation/SimulationTick.ts: missing')) {
-    return line.includes('applyFinalFacing') || line.includes('unit.facingRadians = order.finalFacingRadians');
+    return line.includes('applyFinalFacing')
+      || line.includes('order.finalFacingRadians')
+      || line.includes('unit.facingRadians = order.finalFacingRadians');
   }
   return line.includes('src/core/knowledge/SoldierDangerField.ts: missing "readDirectionalBasisValue"');
 }
