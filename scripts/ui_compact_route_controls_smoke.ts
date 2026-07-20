@@ -34,10 +34,13 @@ const dictionaryWorkbench = read('src/ai-node-editor/AiDictionaryWorkbench.ts');
 expectContains(dictionaryWorkbench, '[data-editor-global-actions]', 'AI Tools must install into the unified editor menu.');
 expectNotContains(dictionaryWorkbench, "document.querySelector('.ai-editor-actions')", 'AI Tools must not live in the graph-local toolbar.');
 
-const tacticalWorkspace = read('src/ui/TacticalWorkspace.ts');
+const tacticalWorkspace = read('src/ui/TacticalWorkspaceBase.ts');
 for (const needle of [
+  "type SimulationTab = 'info' | 'danger' | 'positions' | 'stealth' | 'routeCost' | 'memory'",
+  "['routeCost', 'Стоимость маршрута']",
   'data-action="unit-navigation-profile"',
-  'data-action="route-cost-quick-toggle"',
+  'data-role="route-cost-inspector-host"',
+  "routeCost:'Стоимость маршрута'",
   'data-role="route-summary"',
   'data-role="route-details-command"',
   'data-role="route-details-plan"',
@@ -45,12 +48,25 @@ for (const needle of [
   'data-role="route-details-profile"',
   'data-role="route-details-cost"',
   'data-role="route-details-reason"',
-]) expectContains(tacticalWorkspace, needle, `Tactical workspace is missing stable compact route control: ${needle}`);
+]) expectContains(tacticalWorkspace, needle, `Tactical workspace is missing stable route inspector contract: ${needle}`);
+expectNotContains(tacticalWorkspace, 'data-action="route-cost-quick-toggle"', 'The bottom unit bar must not own the route-cost layer toggle.');
 expectContains(tacticalWorkspace, 'updatePlayerCommandNavigationProfile', 'Changing the game profile must update an outstanding player command without direct path search.');
 
+const runtimeUiState = read('src/core/ui/RuntimeUiState.ts');
+expectContains(
+  runtimeUiState,
+  "export type SimulationLayerMode = 'info' | 'danger' | 'positions' | 'stealth' | 'routeCost' | 'memory';",
+  'The right inspector route-cost tab must be a valid simulation layer mode.',
+);
+
 const routeCostUi = read('src/ui/RouteCostOverlayUi.ts');
-expectContains(routeCostUi, '[data-action="route-cost-quick-toggle"]', 'Route cost UI must bind the obvious bottom quick toggle.');
-expectContains(routeCostUi, '[data-role="route-details-profile"]', 'Route cost UI must update the compact details popover.');
+expectContains(routeCostUi, 'ROUTE_COST_INSPECTOR_RENDERED_EVENT', 'Route cost UI must react when its inspector host is rendered.');
+expectContains(routeCostUi, '[data-role="route-cost-inspector-host"]', 'Route cost UI must mount into the right inspector.');
+expectContains(routeCostUi, 'toggleRouteCostOverlay(state)', 'Route cost UI must reuse the canonical overlay toggle.');
+expectContains(routeCostUi, 'setRouteCostOverlayMode(state, mode.value as RouteCostOverlayMode)', 'Route cost UI must reuse the canonical overlay mode setter.');
+expectContains(routeCostUi, '[data-role="route-details-profile"]', 'Route cost UI must keep updating the compact route details popover.');
+expectNotContains(routeCostUi, '.workspace-display-panel', 'The top View menu must not contain a second route-cost control block.');
+expectNotContains(routeCostUi, '[data-action="route-cost-quick-toggle"]', 'Route cost UI must not bind a removed bottom quick toggle.');
 expectNotContains(routeCostUi, 'currentBlock?.append(profileStatus, routeCostStatus, routeReasonStatus)', 'Route cost UI must not append three unbounded rows to the soldier card.');
 expectNotContains(routeCostUi, 'route-profile-override', 'The misleading diagnostic profile override must be replaced by the real unit profile selector.');
 
@@ -85,7 +101,7 @@ expectContains(routeCostRenderer, 'this.legend.position.set(8, 34)', 'The route-
 
 const workspaceCss = read('src/tactical-workspace-compact-route.css');
 expectContains(workspaceCss, '.unit-route-details-panel', 'Compact route details need an above-bar popover.');
-expectContains(workspaceCss, '.unit-bar-route-controls', 'Compact profile/cost controls need dedicated layout styles.');
+expectContains(workspaceCss, '.unit-bar-route-controls', 'Compact profile and route details need dedicated layout styles.');
 
 const profileCss = read('src/ai-node-editor/navigation-profile-editor.css');
 expectNotContains(profileCss, 'margin: -20px -24px 18px', 'The profile heading must not overlap content through a negative sticky margin.');
