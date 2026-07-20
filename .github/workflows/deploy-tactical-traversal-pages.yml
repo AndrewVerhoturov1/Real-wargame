@@ -30,7 +30,26 @@ jobs:
         run: npm ci
 
       - name: Run repository build and checks
-        run: npm run build
+        id: repository-build
+        shell: bash
+        run: |
+          set +e
+          npm run build 2>&1 | tee build.log
+          exit_code=${PIPESTATUS[0]}
+          echo "exit_code=${exit_code}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-pages-build-log
+          path: build.log
+          if-no-files-found: error
+
+      - name: Stop after failed repository build
+        if: steps.repository-build.outputs.exit_code != '0'
+        run: exit 1
 
       - name: Rebuild for the GitHub Pages repository path
         run: npx vite build --base /Real-wargame/
