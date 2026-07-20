@@ -92,9 +92,20 @@ const observerData: UnitData = {
   viewRangeCells: 30,
   attention: { vision },
 };
-const state = createInitialState(mapData, [observerData]);
+const hiddenTargetData: UnitData = {
+  ...observerData,
+  id: 'hidden-target',
+  label: 'Hidden target',
+  labelRu: 'Скрытая цель',
+  side: 'red',
+  x: 18,
+  y: 15,
+  runtime: { posture: 'prone' },
+};
+const state = createInitialState(mapData, [observerData, hiddenTargetData]);
 selectUnit(state, 'observer');
 const observer = state.units[0]!;
+const hiddenTarget = state.units[1]!;
 
 setAttentionMode(observer, 'observe', 'player');
 const observeDirection = observer.attentionRuntime.focusDirectionRadians;
@@ -171,6 +182,16 @@ const clearAhead = sampleSelectedUnitVisibilityField(fullField, 13, 15);
 const behindHouse = sampleSelectedUnitVisibilityField(fullField, 25, 15);
 assert.ok(clearAhead > behindHouse, 'building must create a lower-quality shadow behind itself');
 
+hiddenTarget.position.x += 0.37;
+hiddenTarget.position.y += 0.19;
+hiddenTarget.behaviorRuntime.posture = 'standing';
+state.simulationTimeSeconds += 0.3;
+assert.equal(
+  getSelectedUnitVisibilityField(state),
+  fullField,
+  'moving or changing a hidden target must not alter the hypothetical heatmap',
+);
+
 const distantQualityBefore = sampleSelectedUnitVisibilityField(fullField, 10, 30);
 observer.attentionSettings.vision.distanceFalloffStartMeters = 5;
 observer.attentionSettings.vision.distanceFalloffExponent = 2.5;
@@ -215,7 +236,7 @@ const forest = getSelectedUnitVisibilityField(state);
 assert.ok(forest && forest.revision > moved.revision, 'map visual revision must invalidate the field');
 assert.ok(sampleSelectedUnitVisibilityField(forest, 19, 15) < sampleSelectedUnitVisibilityField(moved, 19, 15), 'forest must reduce current visibility quality');
 
-console.log('View and memory heatmap smoke passed: attention mask, canonical geometry, distance quality, posture preview, cache and invalidation.');
+console.log('View and memory heatmap smoke passed: attention mask, hidden-target isolation, canonical geometry, distance quality, posture preview, cache and invalidation.');
 
 function localFieldIndex(
   field: { minCellX: number; minCellY: number; width: number; height: number },
