@@ -49,11 +49,11 @@ const cases: Array<{
   },
   {
     name: 'prone-near-relief-shadow',
-    map: postureSensitiveNearReliefMap(), origin: { x: 2.5, y: 3.5 }, target: { x: 10.5, y: 3.5 }, posture: 'prone', targetHeightMeters: 1.7,
+    map: postureSensitiveNearReliefMap(), origin: { x: 2.8, y: 3.5 }, target: { x: 10.8, y: 3.5 }, posture: 'prone', targetHeightMeters: 1.7,
   },
   {
     name: 'standing-near-relief-clear',
-    map: postureSensitiveNearReliefMap(), origin: { x: 2.5, y: 3.5 }, target: { x: 10.5, y: 3.5 }, posture: 'standing', targetHeightMeters: 1.7,
+    map: postureSensitiveNearReliefMap(), origin: { x: 2.8, y: 3.5 }, target: { x: 10.8, y: 3.5 }, posture: 'standing', targetHeightMeters: 1.7,
   },
 ];
 
@@ -105,6 +105,7 @@ const evidence = {
   mapRevisionInvalidatedCache: true,
   postureCases: ['standing', 'crouched', 'prone'],
   postureSensitiveNearRelief: true,
+  postureSensitiveOffCenterPositions: true,
   movingObserverTargetParity: true,
   hiddenContactSemanticsPreserved: true,
 };
