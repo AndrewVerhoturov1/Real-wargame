@@ -8,6 +8,7 @@ import {
   TacticalTraversalPlanningService,
   type TacticalTraversalPlanningFieldRuntime,
 } from '../src/core/navigation/TacticalTraversalPlanningService';
+import { planTacticalTraversal } from '../src/core/navigation/TacticalTraversalPlanner';
 import { createDefaultTacticalTraversalProfile } from '../src/core/navigation/TacticalTraversalProfile';
 
 function equal(left: unknown, right: unknown, label: string): void {
@@ -18,11 +19,11 @@ function ok(value: unknown, label: string): void {
   if (!value) throw new Error(label);
 }
 
-function createField(identity = 'field-1'): PreparedAwarenessWorldSnapshot {
+function createField(identity = 'field-1', worldKey = 'world-1'): PreparedAwarenessWorldSnapshot {
   const length = 8;
   return {
     unitId: 'unit-1',
-    worldKey: 'world-1',
+    worldKey,
     canonicalThreatKey: 'threats-none',
     mapKey: 'map-1',
     fieldIdentity: identity,
@@ -56,7 +57,7 @@ function createField(identity = 'field-1'): PreparedAwarenessWorldSnapshot {
 }
 
 function createUnit(): UnitModel {
-  const unit = {
+  return {
     id: 'unit-1',
     position: { x: 0.5, y: 0.5 },
     order: createMoveOrder({ x: 7.5, y: 0.5 }, {
@@ -79,7 +80,6 @@ function createUnit(): UnitModel {
       reason: '',
     },
   } as unknown as UnitModel;
-  return unit;
 }
 
 class FieldRuntime implements TacticalTraversalPlanningFieldRuntime {
@@ -112,6 +112,10 @@ function createState(unit: UnitModel): SimulationState {
   } as unknown as SimulationState;
 }
 
+function flush(scheduled: Array<() => void>): void {
+  while (scheduled.length > 0) scheduled.shift()!();
+}
+
 {
   const unit = createUnit();
   const state = createState(unit);
@@ -124,7 +128,7 @@ function createState(unit: UnitModel): SimulationState {
   const first = service.ensureForUnit(unit);
   equal(first?.status, 'queued', 'new route must queue one request');
   equal(unit.order?.traversalPlanStatus, 'pending', 'new route must remain on fallback while pending');
-  while (scheduled.length > 0) scheduled.shift()!();
+  flush(scheduled);
   equal(unit.order?.traversalPlanStatus, 'ready', 'prepared field should produce ready plan');
   ok(unit.order?.traversalPlan, 'ready order must contain a plan');
   const planningCount = service.getDiagnostics().planningCount;
@@ -133,13 +137,22 @@ function createState(unit: UnitModel): SimulationState {
   equal(reused?.status, 'ready', 'same exact identity must reuse ready request');
   equal(service.getDiagnostics().planningCount, planningCount, 'same identity must not replan every step');
 
-  const oldRequestId = reused!.requestId;
+  const fieldRequestId = reused!.requestId;
+  fieldRuntime.current = createField('field-2', 'world-2');
+  fieldRuntime.publish();
+  equal(service.readRequest(fieldRequestId)?.status, 'stale', 'new shared field identity must stale ready request');
+  equal(unit.order?.traversalPlanStatus, 'stale', 'new shared field must stale attached plan');
+  flush(scheduled);
+  equal(unit.order?.traversalPlanStatus, 'ready', 'new shared field should produce replacement plan');
+  equal(unit.order?.traversalPlan?.fieldIdentity, 'field-2', 'replacement plan must own new field identity');
+
+  const routeRequest = service.readLatestForUnit(unit.id)!;
   unit.order!.routeRevision = 2;
   unit.order!.routeCells = unit.order!.routeCells!.slice(0, 6);
   service.ensureForUnit(unit);
-  equal(service.readRequest(oldRequestId)?.status, 'stale', 'route revision must stale old request');
+  equal(service.readRequest(routeRequest.requestId)?.status, 'stale', 'route revision must stale old request');
   equal(unit.order?.traversalPlanStatus, 'stale', 'old ready plan must become stale after route change');
-  while (scheduled.length > 0) scheduled.shift()!();
+  flush(scheduled);
   equal(unit.order?.traversalPlanStatus, 'ready', 'changed route should receive a new plan');
   equal(unit.order?.traversalPlan?.routeRevision, 2, 'new plan must belong to new route revision');
   service.destroy();
@@ -154,7 +167,6 @@ function createState(unit: UnitModel): SimulationState {
   const service = new TacticalTraversalPlanningService(state, fieldRuntime, {
     schedule: (callback) => scheduled.push(callback),
     planPrepared: (input) => {
-      const { planTacticalTraversal } = requirePlanner();
       const result = planTacticalTraversal(input);
       if (!mutated) {
         mutated = true;
@@ -164,18 +176,10 @@ function createState(unit: UnitModel): SimulationState {
     },
   });
   const request = service.ensureForUnit(unit)!;
-  while (scheduled.length > 0) scheduled.shift()!();
+  flush(scheduled);
   equal(service.readRequest(request.requestId)?.status, 'stale', 'result changed during planning must be discarded');
   ok(!unit.order?.traversalPlan, 'stale asynchronous-equivalent result must not attach to changed order');
   service.destroy();
 }
 
 console.log('tactical traversal service smoke: ok');
-
-function requirePlanner(): typeof import('../src/core/navigation/TacticalTraversalPlanner') {
-  // Static import would make the test less explicit about the injected planning seam;
-  // Vite resolves this ESM require-like helper at bundle time.
-  return { planTacticalTraversal };
-}
-
-import { planTacticalTraversal } from '../src/core/navigation/TacticalTraversalPlanner';
