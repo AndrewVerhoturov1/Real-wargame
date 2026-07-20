@@ -11,7 +11,7 @@ const sharedUse = {
 
 export default defineConfig({
   testDir: '.',
-  testMatch: 'github-pages-launch.spec.ts',
+  testMatch: ['github-pages-launch.spec.ts', 'github-pages-mobile-map.spec.ts'],
   timeout: 150_000,
   expect: { timeout: 30_000 },
   workers: 1,
