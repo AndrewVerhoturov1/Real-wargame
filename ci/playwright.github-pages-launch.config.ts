@@ -1,5 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const sharedUse = {
+  trace: 'on' as const,
+  screenshot: 'only-on-failure' as const,
+  video: 'retain-on-failure' as const,
+  launchOptions: {
+    args: ['--use-gl=swiftshader', '--ignore-gpu-blocklist', '--enable-unsafe-swiftshader'],
+  },
+};
+
 export default defineConfig({
   testDir: '.',
   testMatch: 'github-pages-launch.spec.ts',
@@ -11,16 +20,24 @@ export default defineConfig({
     ['html', { outputFolder: '../playwright-report/github-pages-e2e', open: 'never' }],
   ],
   outputDir: '../test-results/github-pages-e2e',
-  use: {
-    ...devices['Desktop Chrome'],
-    viewport: { width: 1440, height: 900 },
-    deviceScaleFactor: 1,
-    trace: 'on',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
-    launchOptions: {
-      args: ['--use-gl=swiftshader', '--ignore-gpu-blocklist'],
+  projects: [
+    {
+      name: 'desktop-chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1440, height: 900 },
+        deviceScaleFactor: 1,
+        browserName: 'chromium',
+        ...sharedUse,
+      },
     },
-  },
-  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+    {
+      name: 'android-chromium',
+      use: {
+        ...devices['Pixel 7'],
+        browserName: 'chromium',
+        ...sharedUse,
+      },
+    },
+  ],
 });
