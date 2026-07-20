@@ -1,7 +1,10 @@
+import type { UnitPosture } from '../../behavior/BehaviorModel';
 import type { GridPosition } from '../../geometry';
+import type { TacticalPositionSearchObjective } from '../../tactical/TacticalPositionObjective';
 
 export type TacticalQueryKind = 'cover';
 export type TacticalQueryStatus = 'generated' | 'filtered' | 'scored' | 'selected' | 'stopped';
+export type TacticalQueryGenerationStatus = 'queued' | 'calculating' | 'ready' | 'stale' | 'cancelled' | 'failed';
 export type TacticalSlopeType = 'direct' | 'reverse' | 'flat';
 export type TacticalQueryStopReasonCode =
   | 'max_candidates'
@@ -13,6 +16,9 @@ export type TacticalCandidateExclusionCode =
   | 'route_unavailable'
   | 'distance_too_short'
   | 'distance_too_long'
+  | 'threat_delta_too_small'
+  | 'threat_delta_too_large'
+  | 'order_target_too_far'
   | 'does_not_block_threat'
   | 'route_too_dangerous';
 
@@ -45,6 +51,14 @@ export interface TacticalCandidateMetrics {
   readonly routeDanger: number;
   readonly slopeType: TacticalSlopeType;
   readonly orderAlignment: number;
+  readonly referenceThreatId?: string | null;
+  readonly distanceToThreatMeters?: number | null;
+  /** Candidate distance to threat minus search-origin distance to threat. */
+  readonly threatDistanceDeltaMeters?: number | null;
+  readonly distanceToOrderTargetMeters?: number | null;
+  readonly objectiveAlignment?: number;
+  /** Position meaning is incomplete without the posture required to use it. */
+  readonly recommendedPosture?: UnitPosture;
 }
 
 export interface TacticalPositionCandidateSeed {
@@ -67,6 +81,7 @@ export interface TacticalCandidateScoreBreakdown {
   readonly routeDanger: number;
   readonly slope: number;
   readonly orderAlignment: number;
+  readonly objectiveAlignment: number;
 }
 
 export interface TacticalPositionCandidate extends TacticalPositionCandidateSeed {
@@ -85,10 +100,15 @@ export interface TacticalQuery {
   readonly elapsedMs: number;
   readonly stopReason?: TacticalQueryStopReason;
   readonly winnerCandidateId?: string;
+  readonly searchRequestId?: string;
+  readonly searchRequestStatus?: TacticalQueryGenerationStatus;
 }
 
 export interface TacticalQueryGenerationRequest extends TacticalQueryBudget {
   readonly unitId: string;
+  readonly queryKey?: string;
+  readonly requestId?: string;
+  readonly objective?: TacticalPositionSearchObjective;
   readonly blackboard: Readonly<Record<string, unknown>>;
 }
 
@@ -96,6 +116,8 @@ export interface TacticalQueryGenerationResult {
   readonly candidates: readonly TacticalPositionCandidateSeed[];
   readonly elapsedMs: number;
   readonly stopReason?: TacticalQueryStopReason;
+  readonly requestId?: string;
+  readonly requestStatus?: TacticalQueryGenerationStatus;
 }
 
 export interface TacticalQueryFilterOptions {
@@ -103,6 +125,9 @@ export interface TacticalQueryFilterOptions {
   readonly requireRoute: boolean;
   readonly minimumDistanceMeters: number;
   readonly maximumDistanceMeters: number;
+  readonly minimumThreatDistanceDeltaMeters?: number;
+  readonly maximumThreatDistanceDeltaMeters?: number;
+  readonly maximumOrderTargetDistanceMeters?: number;
   readonly requireDirectionalCover: boolean;
   readonly maxRouteDanger: number;
 }
@@ -114,6 +139,7 @@ export interface TacticalQueryScoreWeights {
   readonly routeDanger: number;
   readonly slope: number;
   readonly orderAlignment: number;
+  readonly objectiveAlignment?: number;
 }
 
 const ZERO_BREAKDOWN: TacticalCandidateScoreBreakdown = Object.freeze({
@@ -123,6 +149,7 @@ const ZERO_BREAKDOWN: TacticalCandidateScoreBreakdown = Object.freeze({
   routeDanger: 0,
   slope: 0,
   orderAlignment: 0,
+  objectiveAlignment: 0,
 });
 
 export function createTacticalQuery(
@@ -146,6 +173,8 @@ export function createTacticalQuery(
     candidates: limited.map(seedToCandidate),
     elapsedMs: round(Math.max(0, generation.elapsedMs)),
     stopReason,
+    searchRequestId: generation.requestId,
+    searchRequestStatus: generation.requestStatus,
   };
 }
 
@@ -169,6 +198,41 @@ export function filterTacticalQuery(
     }
     if (candidate.metrics.distanceMeters > maximumDistanceMeters) {
       reasons.push(exclusion('distance_too_long', 'Position is farther than the allowed distance.', 'Позиция находится дальше допустимой дистанции.'));
+    }
+    const threatDelta = finiteOrNull(candidate.metrics.threatDistanceDeltaMeters);
+    if (
+      threatDelta !== null
+      && typeof options.minimumThreatDistanceDeltaMeters === 'number'
+      && threatDelta < options.minimumThreatDistanceDeltaMeters
+    ) {
+      reasons.push(exclusion(
+        'threat_delta_too_small',
+        'Position changes threat distance less than the allowed minimum.',
+        'Позиция изменяет дистанцию до угрозы меньше допустимого минимума.',
+      ));
+    }
+    if (
+      threatDelta !== null
+      && typeof options.maximumThreatDistanceDeltaMeters === 'number'
+      && threatDelta > options.maximumThreatDistanceDeltaMeters
+    ) {
+      reasons.push(exclusion(
+        'threat_delta_too_large',
+        'Position changes threat distance more than the allowed maximum.',
+        'Позиция изменяет дистанцию до угрозы больше допустимого максимума.',
+      ));
+    }
+    const orderDistance = finiteOrNull(candidate.metrics.distanceToOrderTargetMeters);
+    if (
+      orderDistance !== null
+      && typeof options.maximumOrderTargetDistanceMeters === 'number'
+      && orderDistance > Math.max(0, options.maximumOrderTargetDistanceMeters)
+    ) {
+      reasons.push(exclusion(
+        'order_target_too_far',
+        'Position is too far from the active order target.',
+        'Позиция находится слишком далеко от точки действующего приказа.',
+      ));
     }
     if (options.requireDirectionalCover && !candidate.metrics.blocksThreat) {
       reasons.push(exclusion(
@@ -227,6 +291,9 @@ export function scoreTacticalQuery(
       routeDanger: round(routeSafety * weights.routeDanger),
       slope: round(slopeQuality * weights.slope),
       orderAlignment: round(clampPercent(candidate.metrics.orderAlignment) * weights.orderAlignment),
+      objectiveAlignment: round(
+        clampPercent(candidate.metrics.objectiveAlignment ?? 50) * (weights.objectiveAlignment ?? 0),
+      ),
     };
     return {
       ...candidate,
@@ -307,6 +374,10 @@ function seedToCandidate(seed: TacticalPositionCandidateSeed): TacticalPositionC
       concealment: clampPercent(seed.metrics.concealment),
       routeDanger: clampPercent(seed.metrics.routeDanger),
       orderAlignment: clampPercent(seed.metrics.orderAlignment),
+      distanceToThreatMeters: nullableRound(seed.metrics.distanceToThreatMeters),
+      threatDistanceDeltaMeters: nullableRound(seed.metrics.threatDistanceDeltaMeters),
+      distanceToOrderTargetMeters: nullableRound(seed.metrics.distanceToOrderTargetMeters),
+      objectiveAlignment: clampPercent(seed.metrics.objectiveAlignment ?? 50),
     },
     totalScore: 0,
     scoreBreakdown: { ...ZERO_BREAKDOWN },
@@ -329,6 +400,15 @@ function exclusion(
   reasonRu: string,
 ): TacticalCandidateExclusionReason {
   return { code, reason, reasonRu };
+}
+
+function finiteOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function nullableRound(value: unknown): number | null {
+  const finite = finiteOrNull(value);
+  return finite === null ? null : round(finite);
 }
 
 function clampPercent(value: number): number {

@@ -187,7 +187,7 @@ function verifyInitialDecisionAndUiExecutionContract(): void {
   assert.equal(findUnit(executeState, 'execute').behaviorRuntime.aiDecisionTickCount, 1, 'one UI-facing execute step must not miss graph execution');
 
   const labSource = readFileSync('src/ui/AiTestLabControls.ts', 'utf8');
-  const workspaceSource = readFileSync('src/ui/TacticalWorkspace.ts', 'utf8');
+  const workspaceSource = readFileSync('src/ui/TacticalWorkspaceBase.ts', 'utf8');
   assert.match(labSource, /Один шаг[\s\S]*tickSimulation\(state, 0\.1\)/);
   assert.match(labSource, /Рассчитать и выполнить[\s\S]*tickSimulation\(state, 0\.1\)/);
   assert.match(labSource, /Диагностика ИИ \(без изменений\)[\s\S]*evaluateNow\(\)/);

@@ -1,0 +1,103 @@
+name: Deploy Tactical Position Branch to GitHub Pages
+# Standing user authorization: publish every verified product fix from this feature branch.
+# Deployment refresh includes the preview-history synchronization verified on 2026-07-20.
+
+on:
+  push:
+    branches:
+      - feature/20260719-tactical-position-system
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'public/**'
+      - 'index.html'
+      - 'ai-node-editor.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'tsconfig.json'
+      - '.github/workflows/deploy-tactical-position-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: github-pages-tactical-position
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch commit
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --silent
+
+      - name: Configure GitHub Pages metadata
+        id: pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: TypeScript
+        run: npx tsc
+
+      - name: Perception contact priority smoke
+        run: npm run perception-contact-priority:smoke
+
+      - name: Tactical position smoke
+        run: npm run tactical-position:smoke
+
+      - name: Tactical query smoke
+        run: npm run tactical-query:smoke
+
+      - name: AI scheduler smoke
+        run: npm run ai-scheduler:smoke
+
+      - name: Workspace smoke
+        run: npm run workspace:smoke
+
+      - name: AI editor smoke
+        run: npm run editor:smoke
+
+      - name: Build game plus AI editor
+        env:
+          REAL_WARGAME_COMMIT_SHA: ${{ github.sha }}
+          REAL_WARGAME_BRANCH: ${{ github.ref_name }}
+          REAL_WARGAME_BUILD_ID: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
+          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx vite build --base="${PAGES_BASE_PATH}/"
+          test -f dist/index.html
+          test -f dist/ai-node-editor.html
+          touch dist/.nojekyll
+
+      - name: GitHub Pages deployment contract smoke
+        run: npm run deployment-pages:smoke
+
+      - name: Publish complete build to gh-pages branch
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p /tmp/real-wargame-pages
+          cp -a dist/. /tmp/real-wargame-pages/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan gh-pages
+          git rm -rf .
+          cp -a /tmp/real-wargame-pages/. .
+          git add -A
+          git commit -m "deploy: game and AI editor ${SOURCE_SHA}"
+          git push --force origin HEAD:gh-pages

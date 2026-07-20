@@ -5,6 +5,7 @@ import type { SimulationState } from '../simulation/SimulationState';
 import { getDirectionalTacticalFieldDiagnostics } from '../terrain/DirectionalTacticalField';
 import { getDirectionalTerrainSectorBasisDiagnostics } from '../terrain/DirectionalTerrainSectorBasis';
 import type { UnitModel } from '../units/UnitModel';
+import { getAwarenessStaticField } from './AwarenessStaticField';
 import { getAwarenessDynamicRescoreDiagnostics } from './AwarenessDynamicRescore';
 import { buildSoldierAwarenessReport } from './SoldierAwarenessGrid';
 import { buildCanonicalWorldThreatKey } from './CanonicalWorldThreat';
@@ -17,7 +18,13 @@ import type {
 const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([0x01020304]).buffer)[0] === 0x04;
 const DANGER_PIXEL_LUT = buildPixelLut('danger');
 const STEALTH_PIXEL_LUT = buildPixelLut('stealth');
-const passabilityByMap = new WeakMap<TacticalMap, Uint8Array>();
+
+interface PreparedNavigationField {
+  readonly passable: Uint8Array;
+  readonly movementCost: Float32Array;
+}
+
+const navigationByMap = new WeakMap<TacticalMap, PreparedNavigationField>();
 
 export interface AwarenessWorldFieldBuildResult {
   readonly reusableUnit: UnitModel;
@@ -47,6 +54,9 @@ export function buildAwarenessWorldField(
   const beforeBasis = getDirectionalTerrainSectorBasisDiagnostics(map);
   const beforeRescore = getAwarenessDynamicRescoreDiagnostics(unit);
   const report = buildSoldierAwarenessReport(state, unit);
+  const standingStatic = getAwarenessStaticField(map, 'standing');
+  const crouchedStatic = getAwarenessStaticField(map, 'crouched');
+  const proneStatic = getAwarenessStaticField(map, 'prone');
   const afterCover = getThreatRelativeCoverFieldDiagnostics(map);
   const afterDirectional = getDirectionalTacticalFieldDiagnostics(map);
   const afterBasis = getDirectionalTerrainSectorBasisDiagnostics(map);
@@ -54,12 +64,21 @@ export function buildAwarenessWorldField(
   const threatIds = snapshot.threats.map((threat) => threat.id);
   const threatIndexById = new Map(threatIds.map((id, index) => [id, index]));
   const count = map.width * map.height;
-  const passable = getPassabilityMask(map);
+  const navigation = getPreparedNavigationField(map);
+  const passable = new Uint8Array(navigation.passable);
+  const movementCost = new Float32Array(navigation.movementCost);
   const danger = new Uint8Array(count);
+  const suppression = new Uint8Array(count);
   const concealment = new Uint8Array(count);
   const safety = new Uint8Array(count);
+  const uncertainty = new Uint8Array(count);
   const expectedProtection = new Uint8Array(count);
   const expectedProtectionAgainstThreat = new Uint8Array(count);
+  const reverseSlopeQuality = new Uint8Array(count);
+  const forwardSlopeRisk = new Uint8Array(count);
+  const staticProtectionStanding = new Uint8Array(standingStatic.expectedProtection);
+  const staticProtectionCrouched = new Uint8Array(crouchedStatic.expectedProtection);
+  const staticProtectionProne = new Uint8Array(proneStatic.expectedProtection);
   const protectedThreatIndex = new Int16Array(count);
   protectedThreatIndex.fill(-1);
   const dangerPixels = new Uint32Array(count);
@@ -69,7 +88,11 @@ export function buildAwarenessWorldField(
     const cell = report.cells[index];
     if (!cell) continue;
     danger[index] = clampByte(cell.danger);
+    suppression[index] = clampByte(cell.suppression);
     concealment[index] = clampByte(cell.concealment);
+    uncertainty[index] = clampByte(cell.uncertainty);
+    reverseSlopeQuality[index] = clampByte(cell.reverseSlopeQuality);
+    forwardSlopeRisk[index] = clampByte(cell.forwardSlopeRisk);
     if (passable[index] === 1) {
       safety[index] = clampByte(cell.safety);
       expectedProtection[index] = clampByte(cell.expectedProtection);
@@ -79,11 +102,15 @@ export function buildAwarenessWorldField(
         : threatIndexById.get(cell.protectedAgainstThreatId) ?? -1;
     } else {
       // Awareness values may describe terrain around a structure, but a blocked
-      // structure cell can never be a reachable safe-position winner.
+      // structure cell can never be a reachable tactical-position winner.
       safety[index] = 0;
       expectedProtection[index] = 0;
       expectedProtectionAgainstThreat[index] = 0;
+      staticProtectionStanding[index] = 0;
+      staticProtectionCrouched[index] = 0;
+      staticProtectionProne[index] = 0;
       protectedThreatIndex[index] = -1;
+      movementCost[index] = Number.POSITIVE_INFINITY;
     }
     dangerPixels[index] = DANGER_PIXEL_LUT[danger[index]] ?? 0;
     stealthPixels[index] = STEALTH_PIXEL_LUT[concealment[index]] ?? 0;
@@ -92,11 +119,21 @@ export function buildAwarenessWorldField(
   const field: AwarenessWorkerFieldPayload = {
     width: map.width,
     height: map.height,
+    metersPerCell: map.metersPerCell,
+    passable,
+    movementCost,
     danger,
+    suppression,
     concealment,
     safety,
+    uncertainty,
     expectedProtection,
     expectedProtectionAgainstThreat,
+    reverseSlopeQuality,
+    forwardSlopeRisk,
+    staticProtectionStanding,
+    staticProtectionCrouched,
+    staticProtectionProne,
     protectedThreatIndex,
     dangerPixels,
     stealthPixels,
@@ -123,23 +160,29 @@ export function buildAwarenessWorldField(
 
 export function digestAwarenessWorldField(field: AwarenessWorkerFieldPayload): string {
   let hash = 0x811c9dc5;
+  hash = hashTypedArray(hash, field.passable);
   hash = hashTypedArray(hash, field.danger);
+  hash = hashTypedArray(hash, field.suppression);
   hash = hashTypedArray(hash, field.safety);
-  hash = hashTypedArray(hash, field.dangerPixels);
+  hash = hashTypedArray(hash, field.expectedProtectionAgainstThreat);
   hash = hashTypedArray(hash, field.protectedThreatIndex);
   return hash.toString(16).padStart(8, '0');
 }
 
-function getPassabilityMask(map: TacticalMap): Uint8Array {
-  const cached = passabilityByMap.get(map);
+function getPreparedNavigationField(map: TacticalMap): PreparedNavigationField {
+  const cached = navigationByMap.get(map);
   if (cached) return cached;
   const grid = buildNavigationGrid(map);
   const passable = new Uint8Array(grid.cells.length);
+  const movementCost = new Float32Array(grid.cells.length);
   for (let index = 0; index < grid.cells.length; index += 1) {
-    passable[index] = grid.cells[index]?.passable ? 1 : 0;
+    const cell = grid.cells[index];
+    passable[index] = cell?.passable ? 1 : 0;
+    movementCost[index] = cell?.passable ? Math.max(0.05, cell.movementCost) : Number.POSITIVE_INFINITY;
   }
-  passabilityByMap.set(map, passable);
-  return passable;
+  const prepared = { passable, movementCost };
+  navigationByMap.set(map, prepared);
+  return prepared;
 }
 
 function prepareUnit(snapshot: AwarenessWorkerBuildSnapshot, reusableUnit: UnitModel | null): UnitModel {

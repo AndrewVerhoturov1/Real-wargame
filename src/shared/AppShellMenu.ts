@@ -31,11 +31,11 @@ export function installAppShellMenu(options: AppShellMenuOptions): void {
 }
 
 export function openGameTab(): void {
-  window.open('/', '_blank');
+  window.open(gamePageUrl(), '_blank');
 }
 
 export function openEditorTab(): void {
-  window.open('/ai-node-editor.html', '_blank');
+  window.open(new URL('ai-node-editor.html', gamePageUrl()).toString(), '_blank');
 }
 
 export function requestLabShutdown(): Promise<void> {
@@ -86,10 +86,17 @@ function renderMenu(mode: AppShellMenuMode): string {
   `;
 }
 
+function gamePageUrl(newGameStamp?: string): string {
+  const url = new URL('./', window.location.href);
+  url.search = newGameStamp ? `newGame=${encodeURIComponent(newGameStamp)}` : '';
+  url.hash = '';
+  return url.toString();
+}
+
 function startNewGame(): void {
   const stamp = String(Date.now());
   localStorage.setItem(NEW_GAME_SIGNAL_KEY, stamp);
-  window.location.href = `/?newGame=${encodeURIComponent(stamp)}`;
+  window.location.href = gamePageUrl(stamp);
 }
 
 function installCloseListeners(): void {
@@ -113,7 +120,7 @@ function installCloseListeners(): void {
       closeThisTab();
     }
     if (event.key === NEW_GAME_SIGNAL_KEY && event.newValue && isGamePage()) {
-      window.location.href = `/?newGame=${encodeURIComponent(event.newValue)}`;
+      window.location.href = gamePageUrl(event.newValue);
     }
   });
 }
@@ -140,5 +147,5 @@ function setShellStatus(message: string): void {
 }
 
 function isGamePage(): boolean {
-  return window.location.pathname === '/' || window.location.pathname.endsWith('/index.html');
+  return window.location.pathname.endsWith('/') || window.location.pathname.endsWith('/index.html');
 }

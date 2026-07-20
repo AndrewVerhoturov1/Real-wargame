@@ -1,3 +1,4 @@
+import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import { normalizeMovementProfileId } from '../movement/MovementProfiles';
 import type { NavigationMovementMode } from '../navigation/NavigationProfiles';
@@ -12,6 +13,7 @@ import {
 
 export type PlayerCommandType = 'move_to_position';
 export type PlayerCommandStatus = 'active' | 'completed' | 'blocked' | 'cancelled';
+export type TacticalPositionOccupationStatus = 'approaching' | 'occupied' | 'released';
 
 export interface PlayerCommand {
   readonly id: string;
@@ -23,6 +25,10 @@ export interface PlayerCommand {
   readonly navigationProfileId?: string;
   readonly movementProfileId?: string;
   readonly finalFacingRadians?: number;
+  readonly approachPosture?: UnitPosture;
+  readonly arrivalPosture?: UnitPosture;
+  readonly arrivalPostureApplied?: boolean;
+  readonly tacticalPositionOccupationStatus?: TacticalPositionOccupationStatus;
   readonly status: PlayerCommandStatus;
   readonly revision: number;
   readonly issuedAtMs: number;
@@ -38,10 +44,16 @@ export function createPlayerMoveCommand(
   intentOrMovementMode: TacticalOrderIntent | NavigationMovementMode = 'normal',
   navigationProfileId: string | null = null,
   finalFacingRadians: number | null = null,
+  arrivalPosture: UnitPosture | null = null,
+  approachPosture: UnitPosture | null = null,
 ): PlayerCommand {
   const revision = (previous?.revision ?? 0) + 1;
   const intent = resolveCreatedIntent(intentOrMovementMode, navigationProfileId);
   const movementMode = normalizeMovementMode(intent.navigationProfileId);
+  const normalizedArrivalPosture = normalizeOptionalPosture(arrivalPosture);
+  const normalizedApproachPosture = normalizedArrivalPosture
+    ? normalizeOptionalPosture(approachPosture) ?? 'standing'
+    : undefined;
   return {
     id: `${unitId}:player-command:${revision}:${Math.max(0, Math.round(nowMs))}`,
     unitId,
@@ -52,6 +64,10 @@ export function createPlayerMoveCommand(
     navigationProfileId: intent.navigationProfileId,
     movementProfileId: intent.movementProfileId,
     finalFacingRadians: normalizeOptionalRadians(finalFacingRadians),
+    approachPosture: normalizedApproachPosture,
+    arrivalPosture: normalizedArrivalPosture,
+    arrivalPostureApplied: normalizedArrivalPosture ? false : undefined,
+    tacticalPositionOccupationStatus: normalizedArrivalPosture ? 'approaching' : undefined,
     status: 'active',
     revision,
     issuedAtMs: nowMs,
@@ -79,6 +95,15 @@ export function normalizePlayerCommand(value: unknown, fallbackUnitId = ''): Pla
     withTacticalOrderNavigationProfile(intent, navigationProfileId),
     movementProfileId,
   );
+  const arrivalPosture = normalizeOptionalPosture(value.arrivalPosture);
+  const arrivalPostureApplied = arrivalPosture ? value.arrivalPostureApplied === true : undefined;
+  const occupationStatus = arrivalPosture
+    ? normalizeTacticalPositionOccupationStatus(
+        value.tacticalPositionOccupationStatus,
+        status,
+        arrivalPostureApplied === true,
+      )
+    : undefined;
   return {
     id: cleanText(value.id, `${unitId}:player-command:${revision}:${Math.max(0, Math.round(issuedAtMs))}`),
     unitId,
@@ -89,6 +114,12 @@ export function normalizePlayerCommand(value: unknown, fallbackUnitId = ''): Pla
     navigationProfileId: normalizedIntent.navigationProfileId,
     movementProfileId: normalizedIntent.movementProfileId,
     finalFacingRadians: normalizeOptionalRadians(value.finalFacingRadians),
+    approachPosture: arrivalPosture
+      ? normalizeOptionalPosture(value.approachPosture) ?? 'standing'
+      : undefined,
+    arrivalPosture,
+    arrivalPostureApplied,
+    tacticalPositionOccupationStatus: occupationStatus,
     status,
     revision,
     issuedAtMs,
@@ -103,10 +134,14 @@ export function updatePlayerCommandStatus(
   reason: string,
   reasonRu = reason,
 ): PlayerCommand {
+  const releaseOccupation = (status === 'blocked' || status === 'cancelled')
+    && command.tacticalPositionOccupationStatus !== undefined
+    && command.tacticalPositionOccupationStatus !== 'released';
   if (
     command.status === status
     && command.reason === reason
     && command.reasonRu === reasonRu
+    && !releaseOccupation
   ) {
     return command;
   }
@@ -115,11 +150,68 @@ export function updatePlayerCommandStatus(
     ...command,
     target: { ...command.target },
     intent: normalizeTacticalOrderIntent(command.intent),
+    tacticalPositionOccupationStatus: releaseOccupation
+      ? 'released'
+      : command.tacticalPositionOccupationStatus,
     status,
     revision: command.revision + 1,
     reason,
     reasonRu,
   };
+}
+
+export function markPlayerCommandArrivalPostureApplied(command: PlayerCommand): PlayerCommand {
+  if (!command.arrivalPosture) return command;
+  if (
+    command.arrivalPostureApplied
+    && command.tacticalPositionOccupationStatus === 'occupied'
+  ) return command;
+  return {
+    ...command,
+    target: { ...command.target },
+    intent: normalizeTacticalOrderIntent(command.intent),
+    arrivalPostureApplied: true,
+    tacticalPositionOccupationStatus: 'occupied',
+    revision: command.revision + 1,
+    reason: 'Tactical position occupied.',
+    reasonRu: 'Тактическая позиция занята.',
+  };
+}
+
+export function releasePlayerCommandTacticalPosition(
+  command: PlayerCommand,
+  reason = 'Tactical position released by a new command or route.',
+  reasonRu = 'Занятая тактическая позиция освобождена новой командой или маршрутом.',
+): PlayerCommand {
+  if (
+    command.tacticalPositionOccupationStatus === undefined
+    || command.tacticalPositionOccupationStatus === 'released'
+  ) return command;
+  return {
+    ...command,
+    target: { ...command.target },
+    intent: normalizeTacticalOrderIntent(command.intent),
+    tacticalPositionOccupationStatus: 'released',
+    revision: command.revision + 1,
+    reason,
+    reasonRu,
+  };
+}
+
+export function getPlayerCommandOwnedPosture(command: PlayerCommand | null): UnitPosture | null {
+  if (!command) return null;
+  if (command.tacticalPositionOccupationStatus === 'approaching') {
+    return command.approachPosture ?? null;
+  }
+  if (command.tacticalPositionOccupationStatus === 'occupied') {
+    return command.arrivalPosture ?? null;
+  }
+  return null;
+}
+
+export function isPlayerCommandTacticalPositionOccupied(command: PlayerCommand | null): boolean {
+  return command?.tacticalPositionOccupationStatus === 'occupied'
+    && command.arrivalPosture !== undefined;
 }
 
 export function updatePlayerCommandNavigationProfile(
@@ -195,6 +287,22 @@ function normalizeMovementMode(value: unknown): NavigationMovementMode {
 function normalizeStatus(value: unknown): PlayerCommandStatus {
   if (value === 'completed' || value === 'blocked' || value === 'cancelled') return value;
   return 'active';
+}
+
+function normalizeTacticalPositionOccupationStatus(
+  value: unknown,
+  commandStatus: PlayerCommandStatus,
+  arrivalApplied: boolean,
+): TacticalPositionOccupationStatus {
+  if (value === 'approaching' || value === 'occupied' || value === 'released') return value;
+  if (arrivalApplied && commandStatus === 'completed') return 'occupied';
+  if (commandStatus === 'active') return 'approaching';
+  return 'released';
+}
+
+function normalizeOptionalPosture(value: unknown): UnitPosture | undefined {
+  if (value === 'standing' || value === 'crouched' || value === 'prone') return value;
+  return undefined;
 }
 
 function normalizeOptionalRadians(value: unknown): number | undefined {

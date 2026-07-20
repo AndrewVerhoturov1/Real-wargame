@@ -1,0 +1,211 @@
+.tactical-position-profile-workbench {
+  min-height: 0;
+  height: calc(100vh - 64px);
+  overflow: hidden;
+  color: #e9f2ef;
+  background: #0b1214;
+}
+
+.tactical-position-profile-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 330px) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.tactical-position-profile-list,
+.tactical-position-profile-form {
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+}
+
+.tactical-position-profile-list {
+  border-right: 1px solid rgba(170, 207, 196, 0.16);
+  background: #101a1d;
+}
+
+.tactical-position-profile-heading,
+.tactical-position-profile-form-header,
+.tactical-position-profile-actions,
+.tactical-position-profile-list-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tactical-position-profile-heading h2,
+.tactical-position-profile-form-header h2,
+.tactical-position-profile-group h3 {
+  margin: 0;
+}
+
+.tactical-position-profile-heading p,
+.tactical-position-profile-form-header p,
+.tactical-position-profile-help {
+  color: #9cb0aa;
+}
+
+.tactical-position-profile-items {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.tactical-position-profile-items button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 11px 12px;
+  text-align: left;
+  color: inherit;
+  border: 1px solid rgba(170, 207, 196, 0.18);
+  border-radius: 10px;
+  background: #152327;
+}
+
+.tactical-position-profile-items button.active {
+  border-color: #66d5ac;
+  background: #21463c;
+}
+
+.tactical-position-profile-items small {
+  color: #8fa39e;
+}
+
+.tactical-position-profile-list-actions,
+.tactical-position-profile-actions {
+  justify-content: flex-start;
+}
+
+.tactical-position-profile-workbench button,
+.tactical-position-profile-workbench input,
+.tactical-position-profile-workbench select,
+.tactical-position-profile-workbench textarea {
+  font: inherit;
+  color: inherit;
+  border: 1px solid rgba(170, 207, 196, 0.24);
+  border-radius: 8px;
+  background: #17272a;
+}
+
+.tactical-position-profile-workbench button {
+  min-height: 36px;
+  padding: 7px 11px;
+  cursor: pointer;
+}
+
+.tactical-position-profile-workbench button.primary {
+  border-color: #62d4a8;
+  background: #28634f;
+}
+
+.tactical-position-profile-workbench button.danger {
+  border-color: #c86e6e;
+  background: #542b2d;
+}
+
+.tactical-position-profile-workbench button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.tactical-position-profile-form {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.tactical-position-profile-form-header {
+  align-items: flex-start;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(170, 207, 196, 0.14);
+}
+
+.tactical-position-profile-identity,
+.tactical-position-profile-group {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(170, 207, 196, 0.14);
+  border-radius: 12px;
+  background: #111d20;
+}
+
+.tactical-position-profile-identity {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tactical-position-profile-field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+.tactical-position-profile-field {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid rgba(170, 207, 196, 0.1);
+  border-radius: 9px;
+  background: #162428;
+}
+
+.tactical-position-profile-field > span {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tactical-position-profile-field small {
+  min-height: 32px;
+  color: #90a59f;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.tactical-position-profile-field input,
+.tactical-position-profile-field select,
+.tactical-position-profile-field textarea {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 9px;
+  box-sizing: border-box;
+}
+
+.tactical-position-profile-field.checkbox {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.tactical-position-profile-field.checkbox small {
+  grid-column: 1 / -1;
+}
+
+.tactical-position-profile-field.checkbox input {
+  width: 20px;
+  min-height: 20px;
+}
+
+.tactical-position-profile-message {
+  margin: 0;
+  color: #9ddcbf;
+}
+
+@media (max-width: 900px) {
+  .tactical-position-profile-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .tactical-position-profile-list {
+    max-height: 280px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(170, 207, 196, 0.16);
+  }
+
+  .tactical-position-profile-identity {
+    grid-template-columns: 1fr;
+  }
+}

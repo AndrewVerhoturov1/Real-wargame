@@ -14,6 +14,7 @@ import {
   recordAiSchedulerUnitPassDuration,
 } from './AiSchedulerPerformanceDiagnostics';
 import { resolveRuntimeGraphSnapshot } from './AiGameBridge';
+import { withAiSimulationExecutionContext } from './AiSimulationExecutionContext';
 import { tickStatefulMoveBridgeForTrustedUnit } from './AiStatefulMoveGameBridge';
 
 const MAX_ORDINARY_DECISIONS_PER_CYCLE = 2;
@@ -125,15 +126,19 @@ export function tickAiSimulationScheduler(
       },
       () => measurePerformancePhase(
         'simulation.ai-scheduler.unit-bridge',
-        () => tickStatefulMoveBridgeForTrustedUnit(state, unit, cycleEndMs, {
-          force: false,
-          applyEffects: true,
-          graphSnapshot,
-          cycleStartMs,
-          cycleEndMs,
-          deferOrdinaryDecision,
-          movementProfileRegistryEntries: options.movementProfileRegistryEntries,
-        }),
+        () => withAiSimulationExecutionContext(
+          state,
+          unit,
+          () => tickStatefulMoveBridgeForTrustedUnit(state, unit, cycleEndMs, {
+            force: false,
+            applyEffects: true,
+            graphSnapshot,
+            cycleStartMs,
+            cycleEndMs,
+            deferOrdinaryDecision,
+            movementProfileRegistryEntries: options.movementProfileRegistryEntries,
+          }),
+        ),
       ),
     );
     const unitDurationMs = performance.now() - unitStartedAt;
@@ -230,7 +235,6 @@ export function tickAiSimulationScheduler(
     maxUnitActiveNode,
   };
 }
-
 
 function selectOrdinaryDecisionUnits(
   eligibleUnits: readonly UnitModel[],

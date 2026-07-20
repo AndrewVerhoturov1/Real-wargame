@@ -31,8 +31,9 @@ export interface AwarenessWorkerBuildSnapshot {
   readonly unitId: string;
   readonly posture: UnitPosture;
   /**
-   * Required only by the legacy report API for local lookups. Canonical world
-   * threats make every transferred raster byte independent of this position.
+   * Compatibility origin is intentionally excluded from canonical world-field
+   * identity. Local tactical-position searches consume the transferred fields
+   * without asking the worker to rescan the world when the soldier moves.
    */
   readonly compatibilityOrigin: GridPosition;
   readonly threats: readonly CanonicalWorldThreatSnapshot[];
@@ -48,11 +49,21 @@ export type AwarenessWorkerRequest =
 export interface AwarenessWorkerFieldPayload {
   readonly width: number;
   readonly height: number;
+  readonly metersPerCell: number;
+  readonly passable: Uint8Array;
+  readonly movementCost: Float32Array;
   readonly danger: Uint8Array;
+  readonly suppression: Uint8Array;
   readonly concealment: Uint8Array;
   readonly safety: Uint8Array;
+  readonly uncertainty: Uint8Array;
   readonly expectedProtection: Uint8Array;
   readonly expectedProtectionAgainstThreat: Uint8Array;
+  readonly reverseSlopeQuality: Uint8Array;
+  readonly forwardSlopeRisk: Uint8Array;
+  readonly staticProtectionStanding: Uint8Array;
+  readonly staticProtectionCrouched: Uint8Array;
+  readonly staticProtectionProne: Uint8Array;
   readonly protectedThreatIndex: Int16Array;
   readonly dangerPixels: Uint32Array;
   readonly stealthPixels: Uint32Array;
@@ -93,11 +104,20 @@ export type AwarenessWorkerResponse =
 
 export function awarenessWorkerTransferables(response: Extract<AwarenessWorkerResponse, { type: 'result' }>): Transferable[] {
   return [
+    response.field.passable.buffer,
+    response.field.movementCost.buffer,
     response.field.danger.buffer,
+    response.field.suppression.buffer,
     response.field.concealment.buffer,
     response.field.safety.buffer,
+    response.field.uncertainty.buffer,
     response.field.expectedProtection.buffer,
     response.field.expectedProtectionAgainstThreat.buffer,
+    response.field.reverseSlopeQuality.buffer,
+    response.field.forwardSlopeRisk.buffer,
+    response.field.staticProtectionStanding.buffer,
+    response.field.staticProtectionCrouched.buffer,
+    response.field.staticProtectionProne.buffer,
     response.field.protectedThreatIndex.buffer,
     response.field.dangerPixels.buffer,
     response.field.stealthPixels.buffer,

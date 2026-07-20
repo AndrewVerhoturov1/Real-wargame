@@ -1,61 +1,30 @@
-import { BufferImageSource, Container, Sprite, Text, Texture } from 'pixi.js';
-import {
-  getAwarenessMovementDiagnostics,
-  publishAwarenessMovementDiagnostics,
-  resetAwarenessMovementDiagnostics,
-  type AwarenessMovementDiagnostics,
-} from '../core/debug/AwarenessMovementDiagnostics';
-import type { GridPosition } from '../core/geometry';
-import {
-  buildPositionIndependentAwarenessKnowledgeSnapshot,
-} from '../core/knowledge/AwarenessWorldKey';
-import type {
-  CanonicalWorldThreatSetSnapshot,
-  CanonicalWorldThreatSnapshot,
-} from '../core/knowledge/CanonicalWorldThreat';
-import { cloneCanonicalWorldThreat } from '../core/knowledge/CanonicalWorldThreat';
+import { BufferImageSource, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import type { UnitPosture } from '../core/behavior/BehaviorModel';
+import type { AwarenessMovementDiagnostics } from '../core/debug/AwarenessMovementDiagnostics';
+import type { TacticalPositionCandidateSeed } from '../core/ai/tactical/TacticalQuery';
 import type { SoldierAwarenessCell } from '../core/knowledge/SoldierAwarenessGrid';
-import type {
-  AwarenessWorkerBuildSnapshot,
-  AwarenessWorkerFieldPayload,
-  AwarenessWorkerResponse,
-} from '../core/knowledge/AwarenessWorldWorkerProtocol';
-import { buildAwarenessWorkerMapSnapshot } from '../core/knowledge/AwarenessWorkerMapSnapshot';
-import { getEnvironmentProfileDomainKey } from '../core/map/EnvironmentMaterialProfile';
-import { getActiveEnvironmentProfile } from '../core/map/EnvironmentProfileRuntime';
-import type { TacticalMap } from '../core/map/MapModel';
-import { getMapRevisionSnapshot } from '../core/map/MapRuntimeState';
+import type { AwarenessWorkerFieldPayload } from '../core/knowledge/AwarenessWorldWorkerProtocol';
+import type { CanonicalWorldThreatSetSnapshot } from '../core/knowledge/CanonicalWorldThreat';
 import type { SimulationState } from '../core/simulation/SimulationState';
+import {
+  clearVisibleTacticalPositions,
+  getTacticalPositionPresentation,
+  publishVisibleTacticalPositions,
+  recommendedPostureOf,
+  syncHoveredTacticalPosition,
+} from '../core/tactical/SimulationTacticalPositionSelection';
+import {
+  getTacticalPositionSearchService,
+  type TacticalPositionSearchService,
+  type TacticalPositionSearchServiceDiagnostics,
+} from '../core/tactical/TacticalPositionSearchService';
 import { getSimulationLayerState } from '../core/ui/RuntimeUiState';
+import { isTacticalPositionWorkspaceTabActive } from '../ui/TacticalPositionWorkspaceTab';
 import type { UnitModel } from '../core/units/UnitModel';
+import { TacticalPositionInputController } from '../input/TacticalPositionInputController';
+import { buildAwarenessWorldKey as buildSharedAwarenessWorldKey } from '../runtime/AwarenessWorldRuntime';
 
-type VisibleAwarenessMode = 'danger' | 'stealth';
-type MutableMovementDiagnostics = {
-  -readonly [Key in keyof AwarenessMovementDiagnostics]: AwarenessMovementDiagnostics[Key];
-};
-
-interface PendingWorldBuild {
-  readonly rasterKey: string;
-  readonly canonicalThreatKey: string;
-  readonly mapKey: string;
-  readonly unitId: string;
-  readonly posture: UnitModel['behaviorRuntime']['posture'];
-  readonly compatibilityOrigin: GridPosition;
-  readonly threats: readonly CanonicalWorldThreatSnapshot[];
-  readonly knowledgeRevision: number;
-  readonly orderTarget: GridPosition | null;
-  readonly finalExact: boolean;
-}
-
-interface InFlightWorldBuild {
-  readonly jobId: number;
-  readonly rasterKey: string;
-  readonly canonicalThreatKey: string;
-  readonly mapKey: string;
-  readonly requestedAt: number;
-  readonly finalExact: boolean;
-}
-
+export type VisibleAwarenessMode = 'danger' | 'stealth';
 
 export interface AwarenessAppliedRasterDiagnostics {
   readonly width: number;
@@ -69,6 +38,8 @@ export interface AwarenessOverlayDiagnostics {
   readonly representation: 'raster-sprite';
   readonly visible: boolean;
   readonly rebuildCount: number;
+  readonly tacticalMarkerRebuildCount: number;
+  readonly tacticalMarkerCount: number;
   readonly lastBuildMs: number;
   readonly maxBuildMs: number;
   readonly displayObjectCount: number;
@@ -81,121 +52,118 @@ export interface AwarenessOverlayDiagnostics {
   readonly lastAppliedFieldIdentity: string;
   readonly lastAppliedJobId: number;
   readonly lastAppliedRaster: AwarenessAppliedRasterDiagnostics | null;
-  readonly movement: AwarenessMovementDiagnostics;
+  readonly movement: AwarenessMovementDiagnostics | null;
+  readonly tacticalSearch: TacticalPositionSearchServiceDiagnostics | null;
 }
 
 type AwarenessDebugWindow = Window & {
   __realWargameAwarenessDebug?: AwarenessOverlayDiagnostics;
 };
 
-const mapIdentity = new WeakMap<object, number>();
-let nextMapIdentity = 1;
 const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([0x01020304]).buffer)[0] === 0x04;
 const DANGER_PIXEL_LUT = buildPixelLut('danger');
 const STEALTH_PIXEL_LUT = buildPixelLut('stealth');
-const FINAL_EXACT_DELAY_MS = 120;
+const MAX_VISIBLE_CANDIDATES = 12;
 
+/**
+ * Pure presentation of immutable simulation-owned awareness/search snapshots.
+ * Opening a layer, rendering a frame, moving the camera or hovering a marker
+ * never creates a field/search request.
+ */
 export class PixiAwarenessHeatmapRenderer {
   readonly container = new Container();
-
-  private readonly title = new Text({ text: '', style: {
-    fontFamily: 'Arial, sans-serif', fontSize: 12, fontWeight: '700', fill: 0xffffff,
-    stroke: { color: 0x111510, width: 4 },
-  } });
-  private readonly movement: MutableMovementDiagnostics = createMovementDiagnostics();
-
+  private readonly tacticalGraphics = new Graphics();
+  private readonly overlayText = new Text({
+    text: '',
+    style: {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: 11,
+      fontWeight: '700',
+      fill: 0xffffff,
+      stroke: { color: 0x111510, width: 4 },
+      lineHeight: 14,
+    },
+  });
+  private readonly injectedSearchService: TacticalPositionSearchService | null;
+  private searchService: TacticalPositionSearchService | null;
+  private attachedState: SimulationState | null = null;
+  private inputController: TacticalPositionInputController | null = null;
   private lastRasterKey = '';
-  private latestRequestedWorldKey = '';
-  private latestRequestedCanonicalThreatKey = '';
+  private lastDrawKey = '';
   private lastAppliedWorldKey = '';
   private lastAppliedCanonicalThreatKey = '';
   private lastAppliedFieldIdentity = '';
   private lastAppliedRasterDigest = '';
   private lastAppliedJobId = 0;
-  private currentMode: VisibleAwarenessMode = 'danger';
+  private worldField: AwarenessWorkerFieldPayload | null = null;
   private rasterPixels: Uint8Array | null = null;
   private rasterPixelWords: Uint32Array | null = null;
   private rasterWidth = 0;
   private rasterHeight = 0;
   private rasterTexture: Texture | null = null;
   private rasterSprite: Sprite | null = null;
-  private worldField: AwarenessWorkerFieldPayload | null = null;
-  private worker: Worker | null = null;
-  private workerMapKey = '';
-  private nextJobId = 1;
-  private inFlight: InFlightWorldBuild | null = null;
-  private pending: PendingWorldBuild | null = null;
-  private latestBuildSnapshot: PendingWorldBuild | null = null;
-  private finalRefreshTimer: number | null = null;
   private destroyed = false;
   private rebuildCount = 0;
+  private tacticalMarkerRebuildCount = 0;
+  private tacticalMarkerCount = 0;
   private lastBuildMs = 0;
   private maxBuildMs = 0;
 
-  constructor() {
-    this.title.position.set(8, 8);
+  constructor(searchService?: TacticalPositionSearchService) {
+    this.injectedSearchService = searchService ?? null;
+    this.searchService = this.injectedSearchService;
+    this.tacticalGraphics.eventMode = 'none';
+    this.overlayText.eventMode = 'none';
     this.container.visible = false;
-    resetAwarenessMovementDiagnostics();
   }
 
   render(state: SimulationState): void {
     if (this.destroyed) return;
+    this.attachState(state);
+    const service = this.searchService;
     const layer = getSimulationLayerState(state);
-    const mode = layer.mode === 'danger'
+    const positionsActive = layer.mode === 'positions' && isTacticalPositionWorkspaceTabActive(state);
+    const mode: VisibleAwarenessMode | null = layer.mode === 'danger' || layer.mode === 'positions'
       ? 'danger'
       : layer.mode === 'stealth'
         ? 'stealth'
-        : 'off';
-    const unit = state.selectedUnitId
-      ? state.units.find((candidate) => candidate.id === state.selectedUnitId)
-      : undefined;
+        : null;
+    const unit = selectedUnit(state);
 
-    if (state.editor.enabled || mode === 'off' || !unit) {
+    if (!service || state.editor.enabled || !mode || !unit) {
       this.container.visible = false;
-      this.lastRasterKey = 'hidden';
       this.publishDiagnostics();
       return;
     }
 
     this.container.visible = true;
-    this.currentMode = mode;
     this.ensureRaster(state.map.width, state.map.height, state.map.cellSize);
-
-    const mapKey = buildAwarenessMapKey(state.map);
-    this.ensureWorkerConfigured(state.map, mapKey);
-    const canonical = buildPositionIndependentAwarenessKnowledgeSnapshot(unit, state.map.metersPerCell);
-    const worldKey = buildAwarenessWorldKey(state, unit, canonical.key);
-    const rasterKey = `${worldKey};mode:${mode}`;
-    if (worldKey !== this.latestRequestedWorldKey) {
-      const snapshot = buildPendingWorldSnapshot(state, unit, worldKey, mapKey, canonical, false);
-      this.latestRequestedWorldKey = worldKey;
-      this.latestRequestedCanonicalThreatKey = canonical.key;
-      this.latestBuildSnapshot = snapshot;
-      this.movement.lastRequestedRasterKey = worldKey;
-      this.movement.lastRequestedWorldKey = worldKey;
-      this.movement.lastRequestedCanonicalThreatKey = canonical.key;
-      this.requestWorldBuild(snapshot);
-      this.scheduleFinalExactRefresh();
+    const prepared = service.readReadyWorldField(unit.id);
+    if (prepared) {
+      const rasterKey = `${prepared.worldKey};mode:${mode}`;
+      if (rasterKey !== this.lastRasterKey || prepared.jobId !== this.lastAppliedJobId) {
+        this.worldField = prepared.field;
+        this.lastAppliedWorldKey = prepared.worldKey;
+        this.lastAppliedCanonicalThreatKey = prepared.canonicalThreatKey;
+        this.lastAppliedFieldIdentity = prepared.fieldIdentity;
+        this.lastAppliedRasterDigest = prepared.rasterDigest;
+        this.lastAppliedJobId = prepared.jobId;
+        this.applyRaster(mode, rasterKey);
+      }
     }
 
-    if (this.worldField && this.lastAppliedWorldKey === worldKey && rasterKey !== this.lastRasterKey) {
-      this.applyRaster(mode, rasterKey);
-    }
-
+    if (positionsActive) this.renderTacticalPositions(state, unit, service);
+    else this.hideTacticalMarkers(`layer:${layer.mode}`, mode);
     this.publishDiagnostics();
   }
 
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    if (this.finalRefreshTimer !== null) window.clearTimeout(this.finalRefreshTimer);
-    this.finalRefreshTimer = null;
-    this.worker?.terminate();
-    this.worker = null;
-    this.pending = null;
-    this.inFlight = null;
-    this.latestBuildSnapshot = null;
-    this.worldField = null;
+    this.inputController?.destroy();
+    this.inputController = null;
+    this.attachedState = null;
+    this.searchService = null;
     this.container.removeChildren();
     this.rasterSprite?.destroy();
     this.rasterTexture?.destroy(true);
@@ -203,25 +171,32 @@ export class PixiAwarenessHeatmapRenderer {
     this.rasterTexture = null;
     this.rasterPixelWords = null;
     this.rasterPixels = null;
-    this.title.destroy();
+    this.worldField = null;
+    this.tacticalGraphics.destroy();
+    this.overlayText.destroy();
     this.container.destroy();
     delete (window as AwarenessDebugWindow).__realWargameAwarenessDebug;
-    resetAwarenessMovementDiagnostics();
   }
 
   getDiagnostics(): AwarenessOverlayDiagnostics {
+    const service = this.searchService;
+    const latest = service && this.attachedState?.selectedUnitId
+      ? service.readLatestForUnit(this.attachedState.selectedUnitId)
+      : null;
     return {
       representation: 'raster-sprite',
       visible: this.container.visible,
       rebuildCount: this.rebuildCount,
+      tacticalMarkerRebuildCount: this.tacticalMarkerRebuildCount,
+      tacticalMarkerCount: this.tacticalMarkerCount,
       lastBuildMs: roundMs(this.lastBuildMs),
       maxBuildMs: roundMs(this.maxBuildMs),
       displayObjectCount: this.container.children.length,
       rasterWidth: this.rasterWidth,
       rasterHeight: this.rasterHeight,
-      lastRequestedWorldKey: this.latestRequestedWorldKey,
+      lastRequestedWorldKey: latest?.requestedWorldKey ?? '',
       lastAppliedWorldKey: this.lastAppliedWorldKey,
-      lastRequestedCanonicalThreatKey: this.latestRequestedCanonicalThreatKey,
+      lastRequestedCanonicalThreatKey: '',
       lastAppliedCanonicalThreatKey: this.lastAppliedCanonicalThreatKey,
       lastAppliedFieldIdentity: this.lastAppliedFieldIdentity,
       lastAppliedJobId: this.lastAppliedJobId,
@@ -234,236 +209,113 @@ export class PixiAwarenessHeatmapRenderer {
             threatIds: [...this.worldField.threatIds],
           }
         : null,
-      movement: getAwarenessMovementDiagnostics(),
+      movement: null,
+      tacticalSearch: service?.getDiagnostics() ?? null,
     };
   }
 
-  private ensureWorkerConfigured(map: TacticalMap, mapKey: string): void {
-    if (this.destroyed) return;
-    if (this.worker && this.workerMapKey === mapKey) return;
-
-    if (this.worker) {
-      if (this.inFlight) this.movement.workerJobsCancelled += 1;
-      if (this.pending) this.movement.workerJobsCancelled += 1;
-      this.worker.terminate();
-    }
-
-    this.worker = new Worker(new URL('../workers/AwarenessWorldWorker.ts', import.meta.url), {
-      type: 'module',
-    });
-    this.workerMapKey = mapKey;
-    this.inFlight = null;
-    this.pending = null;
-    this.worldField = null;
-    this.lastAppliedWorldKey = '';
-    this.lastAppliedCanonicalThreatKey = '';
-    this.lastAppliedFieldIdentity = '';
-    this.lastAppliedRasterDigest = '';
-    this.lastAppliedJobId = 0;
-    this.movement.workerInFlight = false;
-    this.movement.lastAppliedRasterKey = '';
-    this.movement.lastAppliedWorldKey = '';
-    this.movement.lastAppliedCanonicalThreatKey = '';
-    this.movement.lastAppliedFieldIdentity = '';
-    this.movement.lastAppliedRasterDigest = '';
-    this.updatePendingDepth();
-
-    this.worker.onmessage = (event: MessageEvent<AwarenessWorkerResponse>) => {
-      this.handleWorkerResponse(event.data);
-    };
-    this.worker.onerror = (event): void => {
-      if (this.destroyed) return;
-      this.movement.lastWorkerError = event.message || 'Unknown awareness worker error.';
-      this.finishInFlight();
-      this.publishDiagnostics();
-    };
-
-    const snapshot = buildAwarenessWorkerMapSnapshot(map, mapKey, getActiveEnvironmentProfile());
-    this.worker.postMessage({ type: 'configure', map: snapshot }, [
-      snapshot.surfaceMaterialCodes.buffer,
-      snapshot.vegetationMaterialCodes.buffer,
-      snapshot.heightLevels.buffer,
-    ]);
+  private attachState(state: SimulationState): void {
+    if (this.attachedState === state) return;
+    this.inputController?.destroy();
+    this.attachedState = state;
+    this.searchService = this.injectedSearchService ?? getTacticalPositionSearchService(state);
+    this.inputController = new TacticalPositionInputController(state);
+    this.inputController.attach();
+    this.lastDrawKey = '';
   }
 
-  private requestWorldBuild(snapshot: PendingWorldBuild): void {
-    if (this.destroyed) return;
-    this.latestBuildSnapshot = snapshot;
-    if (this.inFlight) {
-      this.movement.workerJobsCoalesced += 1;
-      if (this.pending) this.movement.workerJobsCancelled += 1;
-      this.pending = snapshot;
-      this.updatePendingDepth();
-      this.publishDiagnostics();
-      return;
-    }
-    this.startWorldBuild(snapshot);
-  }
-
-  private startWorldBuild(snapshot: PendingWorldBuild): void {
-    if (this.destroyed || !this.worker || snapshot.mapKey !== this.workerMapKey) return;
-
-    const jobId = this.nextJobId;
-    this.nextJobId += 1;
-    this.inFlight = {
-      jobId,
-      rasterKey: snapshot.rasterKey,
-      canonicalThreatKey: snapshot.canonicalThreatKey,
-      mapKey: snapshot.mapKey,
-      requestedAt: performance.now(),
-      finalExact: snapshot.finalExact,
-    };
-    this.movement.workerJobsStarted += 1;
-    this.movement.workerInFlight = true;
-
-    const request: AwarenessWorkerBuildSnapshot = { jobId, ...snapshot };
-    this.worker.postMessage({ type: 'build', snapshot: request });
-    this.updatePendingDepth();
-    this.publishDiagnostics();
-  }
-
-  private handleWorkerResponse(response: AwarenessWorkerResponse): void {
-    if (this.destroyed) return;
-    const inFlight = this.inFlight;
-    if (!inFlight || response.jobId !== inFlight.jobId) {
-      this.movement.workerResultsStaleDropped += 1;
-      this.publishDiagnostics();
+  private renderTacticalPositions(
+    state: SimulationState,
+    unit: UnitModel,
+    service: TacticalPositionSearchService,
+  ): void {
+    const latest = service.readLatestForUnit(unit.id);
+    const result = latest?.status === 'ready' ? latest.result : null;
+    const candidates = result?.candidates.slice(0, MAX_VISIBLE_CANDIDATES) ?? [];
+    if (candidates.length === 0) {
+      clearVisibleTacticalPositions(state);
+      this.hideTacticalMarkers(`empty:${latest?.requestId ?? unit.id}`, 'danger');
       return;
     }
 
-    const latency = performance.now() - inFlight.requestedAt;
-    this.movement.workerJobsCompleted += 1;
-    this.movement.lastCompletedJobId = response.jobId;
-    this.movement.lastCompletedJobFinalExact = inFlight.finalExact;
-    this.movement.lastWorkerLatencyMs = roundMs(latency);
-    this.movement.maxWorkerLatencyMs = Math.max(
-      this.movement.maxWorkerLatencyMs,
-      this.movement.lastWorkerLatencyMs,
-    );
-    if (inFlight.finalExact) {
-      this.movement.lastFinalRefreshLatencyMs = roundMs(latency);
-      this.movement.maxFinalRefreshLatencyMs = Math.max(
-        this.movement.maxFinalRefreshLatencyMs,
-        this.movement.lastFinalRefreshLatencyMs,
+    const candidateKey = `${result!.requestId};${result!.fieldIdentity};${candidates.map((candidate) => (
+      `${candidate.id}:${recommendedPostureOf(candidate)}`
+    )).join('|')}`;
+    publishVisibleTacticalPositions(state, unit.id, candidates);
+    syncHoveredTacticalPosition(state);
+    const presentation = getTacticalPositionPresentation(state);
+    const drawKey = [
+      candidateKey,
+      `cellSize:${state.map.cellSize}`,
+      `selected:${presentation.selected?.id ?? 'none'}`,
+      `hovered:${presentation.hovered?.id ?? 'none'}`,
+    ].join(';');
+    if (drawKey === this.lastDrawKey) return;
+    this.lastDrawKey = drawKey;
+
+    this.tacticalGraphics.visible = true;
+    this.tacticalGraphics.clear();
+    for (let index = 0; index < presentation.candidates.length && index < MAX_VISIBLE_CANDIDATES; index += 1) {
+      const candidate = presentation.candidates[index]!;
+      drawB2TacticalPositionMarker(
+        this.tacticalGraphics,
+        candidate,
+        state.map.cellSize,
+        index === 0,
+        candidate.id === presentation.selected?.id,
+        candidate.id === presentation.hovered?.id,
       );
     }
-    this.inFlight = null;
-    this.movement.workerInFlight = false;
+    this.updateOverlayText(presentation.hovered ?? presentation.selected, state.map.cellSize, 'danger');
+    this.tacticalMarkerCount = Math.min(presentation.candidates.length, MAX_VISIBLE_CANDIDATES);
+    this.tacticalMarkerRebuildCount += 1;
+  }
 
-    if (response.type === 'error') {
-      this.movement.lastWorkerError = response.message;
+  private updateOverlayText(
+    candidate: TacticalPositionCandidateSeed | null,
+    cellSize: number,
+    mode: VisibleAwarenessMode,
+  ): void {
+    if (candidate) {
+      this.overlayText.text = `${postureLabel(recommendedPostureOf(candidate))}\nЛКМ: выбрать · ПКМ: отправить`;
+      this.overlayText.position.set(candidate.position.x * cellSize + 13, candidate.position.y * cellSize - 18);
     } else {
-      this.movement.lastWorkerComputeMs = roundMs(response.computeMs);
-      this.movement.maxWorkerComputeMs = Math.max(
-        this.movement.maxWorkerComputeMs,
-        this.movement.lastWorkerComputeMs,
-      );
-      this.movement.workerThreatRelativeGeometryBuilds += response.computation.threatRelativeGeometryBuilds;
-      this.movement.workerDirectionalFieldBuilds += response.computation.directionalFieldBuilds;
-      this.movement.workerDirectionalBasisBuilds += response.computation.directionalBasisBuilds;
-      this.movement.workerAwarenessGeometryBuilds += response.computation.awarenessGeometryBuilds;
-      this.movement.workerAwarenessRescores += response.computation.awarenessRescores;
-      this.movement.directionalBasisBuilds = this.movement.workerDirectionalBasisBuilds;
-
-      const stale = response.mapKey !== this.workerMapKey
-        || response.rasterKey !== this.latestRequestedWorldKey
-        || response.canonicalThreatKey !== this.latestRequestedCanonicalThreatKey
-        || response.canonicalThreatKey !== inFlight.canonicalThreatKey;
-
-      if (stale) {
-        this.movement.workerResultsStaleDropped += 1;
-      } else {
-        this.worldField = response.field;
-        this.lastAppliedWorldKey = response.rasterKey;
-        this.lastAppliedCanonicalThreatKey = response.canonicalThreatKey;
-        this.lastAppliedFieldIdentity = response.fieldIdentity;
-        this.lastAppliedRasterDigest = response.rasterDigest;
-        this.lastAppliedJobId = response.jobId;
-        this.movement.lastAppliedRasterKey = response.rasterKey;
-        this.movement.lastAppliedWorldKey = response.rasterKey;
-        this.movement.lastAppliedCanonicalThreatKey = response.canonicalThreatKey;
-        this.movement.lastAppliedFieldIdentity = response.fieldIdentity;
-        this.movement.lastAppliedRasterDigest = response.rasterDigest;
-        this.movement.lastAppliedJobId = response.jobId;
-        this.movement.worldRasterBuilds += 1;
-        if (response.finalExact) this.movement.finalRefreshApplied += 1;
-        this.applyRaster(this.currentMode, `${response.rasterKey};mode:${this.currentMode}`);
-      }
+      this.overlayText.text = `СЛОЙ БОЙЦА: ${modeLabel(mode)}`;
+      this.overlayText.position.set(8, 8);
     }
-
-    const next = this.pending;
-    this.pending = null;
-    this.updatePendingDepth();
-    this.publishDiagnostics();
-    if (next) this.startWorldBuild(next);
+    this.overlayText.visible = true;
   }
 
-  private finishInFlight(): void {
-    if (this.destroyed) return;
-    this.inFlight = null;
-    this.movement.workerInFlight = false;
-    const next = this.pending;
-    this.pending = null;
-    this.updatePendingDepth();
-    if (next) this.startWorldBuild(next);
-  }
-
-  private scheduleFinalExactRefresh(): void {
-    if (this.finalRefreshTimer !== null) window.clearTimeout(this.finalRefreshTimer);
-    this.finalRefreshTimer = window.setTimeout(() => {
-      this.finalRefreshTimer = null;
-      if (this.destroyed || !this.latestBuildSnapshot) return;
-      this.movement.finalRefreshRequests += 1;
-      this.requestWorldBuild({ ...this.latestBuildSnapshot, finalExact: true });
-    }, FINAL_EXACT_DELAY_MS);
+  private hideTacticalMarkers(key: string, mode: VisibleAwarenessMode): void {
+    if (this.lastDrawKey === key && this.tacticalMarkerCount === 0) return;
+    this.lastDrawKey = key;
+    this.tacticalGraphics.clear();
+    this.tacticalGraphics.visible = false;
+    this.updateOverlayText(null, 1, mode);
+    this.tacticalMarkerCount = 0;
+    this.tacticalMarkerRebuildCount += 1;
   }
 
   private applyRaster(mode: VisibleAwarenessMode, rasterKey: string): void {
     if (!this.worldField || !this.rasterPixelWords || !this.rasterTexture) return;
-
     const startedAt = performance.now();
-    const source = mode === 'danger'
-      ? this.worldField.dangerPixels
-      : this.worldField.stealthPixels;
+    const source = mode === 'danger' ? this.worldField.dangerPixels : this.worldField.stealthPixels;
     this.rasterPixelWords.set(source.subarray(0, this.rasterPixelWords.length));
-    if (source.length < this.rasterPixelWords.length) {
-      this.rasterPixelWords.fill(0, source.length);
-    }
+    if (source.length < this.rasterPixelWords.length) this.rasterPixelWords.fill(0, source.length);
     this.rasterTexture.source.update();
-    this.title.text = `СЛОЙ БОЙЦА: ${modeLabel(mode)}`;
     this.lastRasterKey = rasterKey;
     this.rebuildCount += 1;
-    this.movement.mainThreadRasterSwaps += 1;
-
     const elapsed = performance.now() - startedAt;
     this.lastBuildMs = elapsed;
     this.maxBuildMs = Math.max(this.maxBuildMs, elapsed);
-    this.movement.lastMainThreadApplyMs = roundMs(elapsed);
-    this.movement.maxMainThreadApplyMs = Math.max(
-      this.movement.maxMainThreadApplyMs,
-      this.movement.lastMainThreadApplyMs,
-    );
-  }
-
-  private updatePendingDepth(): void {
-    this.movement.pendingQueueDepth = this.pending ? 1 : 0;
-    this.movement.maxPendingQueueDepth = Math.max(
-      this.movement.maxPendingQueueDepth,
-      this.movement.pendingQueueDepth,
-    );
   }
 
   private ensureRaster(width: number, height: number, cellSize: number): void {
-    const needsNewRaster = !this.rasterPixels
-      || this.rasterWidth !== width
-      || this.rasterHeight !== height;
+    const needsNewRaster = !this.rasterPixels || this.rasterWidth !== width || this.rasterHeight !== height;
     if (needsNewRaster) {
       this.container.removeChildren();
       this.rasterSprite?.destroy();
       this.rasterTexture?.destroy(true);
-      this.rasterSprite = null;
-      this.rasterTexture = null;
-      this.lastRasterKey = '';
       this.rasterWidth = width;
       this.rasterHeight = height;
       this.rasterPixels = new Uint8Array(width * height * 4);
@@ -478,15 +330,57 @@ export class PixiAwarenessHeatmapRenderer {
         }),
       });
       this.rasterSprite = new Sprite(this.rasterTexture);
-      this.container.addChild(this.rasterSprite, this.title);
+      this.container.addChild(this.rasterSprite, this.tacticalGraphics, this.overlayText);
+      this.lastRasterKey = '';
+      this.lastDrawKey = '';
     }
     this.rasterSprite?.scale.set(cellSize, cellSize);
   }
 
   private publishDiagnostics(): void {
-    publishAwarenessMovementDiagnostics(this.movement);
     (window as AwarenessDebugWindow).__realWargameAwarenessDebug = this.getDiagnostics();
   }
+}
+
+function selectedUnit(state: SimulationState): UnitModel | undefined {
+  return state.selectedUnitId
+    ? state.units.find((candidate) => candidate.id === state.selectedUnitId)
+    : undefined;
+}
+
+function drawB2TacticalPositionMarker(
+  graphics: Graphics,
+  candidate: TacticalPositionCandidateSeed,
+  cellSize: number,
+  winner: boolean,
+  selected: boolean,
+  hovered: boolean,
+): void {
+  const x = candidate.position.x * cellSize;
+  const y = candidate.position.y * cellSize;
+  const radius = winner ? 9 : 7;
+  const color = winner ? 0x65f08a : 0xf4da66;
+  drawDiamond(graphics, x, y, radius)
+    .fill({ color, alpha: winner ? 0.34 : hovered ? 0.28 : 0.18 })
+    .stroke({ width: winner ? 3 : 2, color, alpha: winner || hovered ? 1 : 0.84 });
+  if (selected) drawDiamond(graphics, x, y, radius + 5).stroke({ width: 2.5, color: 0xffffff, alpha: 0.98 });
+  else if (hovered) drawDiamond(graphics, x, y, radius + 3).stroke({ width: 1.5, color: 0xffffff, alpha: 0.72 });
+  drawB2PostureGlyph(graphics, x, y, recommendedPostureOf(candidate), color);
+}
+
+function drawDiamond(graphics: Graphics, x: number, y: number, radius: number): Graphics {
+  return graphics.moveTo(x, y - radius)
+    .lineTo(x + radius, y)
+    .lineTo(x, y + radius)
+    .lineTo(x - radius, y)
+    .closePath();
+}
+
+function drawB2PostureGlyph(graphics: Graphics, x: number, y: number, posture: UnitPosture, color: number): void {
+  if (posture === 'standing') graphics.moveTo(x, y - 4).lineTo(x, y + 4);
+  else if (posture === 'crouched') graphics.moveTo(x - 4, y - 2).lineTo(x, y + 3).lineTo(x + 4, y - 2);
+  else graphics.moveTo(x - 4, y).lineTo(x + 4, y);
+  graphics.stroke({ width: 2, color, alpha: 1 });
 }
 
 export function buildAwarenessRenderKey(
@@ -494,21 +388,16 @@ export function buildAwarenessRenderKey(
   unit: UnitModel,
   mode: VisibleAwarenessMode,
 ): string {
-  const canonical = buildPositionIndependentAwarenessKnowledgeSnapshot(unit, state.map.metersPerCell);
-  return `${buildAwarenessWorldKey(state, unit, canonical.key)};mode:${mode}`;
+  return `${buildSharedAwarenessWorldKey(state, unit)};mode:${mode}`;
 }
 
 export function buildAwarenessWorldKey(
   state: SimulationState,
   unit: UnitModel,
-  canonicalThreatKey = buildPositionIndependentAwarenessKnowledgeSnapshot(unit, state.map.metersPerCell).key,
+  canonicalThreatKey?: string | CanonicalWorldThreatSetSnapshot,
 ): string {
-  return [
-    buildAwarenessMapKey(state.map),
-    `unit:${unit.id}`,
-    `posture:${unit.behaviorRuntime.posture}`,
-    `canonicalThreats:${canonicalThreatKey}`,
-  ].join(';');
+  const key = typeof canonicalThreatKey === 'string' ? canonicalThreatKey : canonicalThreatKey?.key;
+  return buildSharedAwarenessWorldKey(state, unit, key);
 }
 
 export function createAwarenessTexture(
@@ -546,51 +435,11 @@ export function drawAwarenessRasterWords(
   const lut = mode === 'danger' ? DANGER_PIXEL_LUT : STEALTH_PIXEL_LUT;
   const dangerMode = mode === 'danger';
   for (let cellIndex = 0; cellIndex < length; cellIndex += 1) {
-    const cell = cells[cellIndex];
+    const cell = cells[cellIndex]!;
     const value = dangerMode ? cell.danger : cell.concealment;
     pixels[cellIndex] = lut[Math.max(0, Math.min(100, Math.round(value)))] ?? 0;
   }
   if (length < pixels.length) pixels.fill(0, length);
-}
-
-function buildAwarenessMapKey(map: TacticalMap): string {
-  const revisions = getMapRevisionSnapshot(map);
-  const environment = getActiveEnvironmentProfile();
-  return [
-    `map:${getMapIdentity(map)}`,
-    `size:${map.width}x${map.height}`,
-    `cellSize:${map.cellSize}`,
-    `meters:${map.metersPerCell}`,
-    `terrain:${revisions.terrain}`,
-    `height:${revisions.height}`,
-    `forest:${revisions.forest}`,
-    `objects:${revisions.objects}`,
-    `visibility:${getEnvironmentProfileDomainKey(environment, 'visibility')}`,
-    `fire:${getEnvironmentProfileDomainKey(environment, 'fire')}`,
-    `movement:${getEnvironmentProfileDomainKey(environment, 'movement')}`,
-  ].join(';');
-}
-
-function buildPendingWorldSnapshot(
-  _state: SimulationState,
-  unit: UnitModel,
-  rasterKey: string,
-  mapKey: string,
-  canonical: CanonicalWorldThreatSetSnapshot,
-  finalExact: boolean,
-): PendingWorldBuild {
-  return {
-    rasterKey,
-    canonicalThreatKey: canonical.key,
-    mapKey,
-    unitId: unit.id,
-    posture: unit.behaviorRuntime.posture,
-    compatibilityOrigin: { x: 0.5, y: 0.5 },
-    threats: canonical.threats.map(cloneCanonicalWorldThreat),
-    knowledgeRevision: unit.tacticalKnowledge.revision,
-    orderTarget: unit.order ? { ...unit.order.target } : null,
-    finalExact,
-  };
 }
 
 function buildPixelLut(mode: VisibleAwarenessMode): Uint32Array {
@@ -601,36 +450,13 @@ function buildPixelLut(mode: VisibleAwarenessMode): Uint32Array {
     let green: number;
     let blue: number;
     if (mode === 'danger') {
-      if (value >= 70) {
-        red = 0xe8;
-        green = 0x3d;
-        blue = 0x32;
-      } else if (value >= 40) {
-        red = 0xff;
-        green = 0x7a;
-        blue = 0x31;
-      } else {
-        red = 0xf2;
-        green = 0xc8;
-        blue = 0x4b;
-      }
-    } else if (value >= 75) {
-      red = 0x1c;
-      green = 0x6b;
-      blue = 0x45;
-    } else if (value >= 50) {
-      red = 0x3d;
-      green = 0xa8;
-      blue = 0x5f;
-    } else if (value >= 25) {
-      red = 0xd7;
-      green = 0xb9;
-      blue = 0x4b;
-    } else {
-      red = 0xd9;
-      green = 0x77;
-      blue = 0x32;
-    }
+      if (value >= 70) { red = 0xe8; green = 0x3d; blue = 0x32; }
+      else if (value >= 40) { red = 0xff; green = 0x7a; blue = 0x31; }
+      else { red = 0xf2; green = 0xc8; blue = 0x4b; }
+    } else if (value >= 75) { red = 0x1c; green = 0x6b; blue = 0x45; }
+    else if (value >= 50) { red = 0x3d; green = 0xa8; blue = 0x5f; }
+    else if (value >= 25) { red = 0xd7; green = 0xb9; blue = 0x4b; }
+    else { red = 0xd9; green = 0x77; blue = 0x32; }
     const alpha = Math.round(Math.min(0.55, 0.08 + value / 100 * 0.46) * 255);
     result[value] = packRgba(red, green, blue, alpha);
   }
@@ -643,60 +469,14 @@ function packRgba(red: number, green: number, blue: number, alpha: number): numb
     : (red << 24 | green << 16 | blue << 8 | alpha) >>> 0;
 }
 
-function createMovementDiagnostics(): MutableMovementDiagnostics {
-  return {
-    worldRasterBuilds: 0,
-    directionalBasisBuilds: 0,
-    workerThreatRelativeGeometryBuilds: 0,
-    workerDirectionalFieldBuilds: 0,
-    workerDirectionalBasisBuilds: 0,
-    workerAwarenessGeometryBuilds: 0,
-    workerAwarenessRescores: 0,
-    workerJobsStarted: 0,
-    workerJobsCompleted: 0,
-    workerJobsCancelled: 0,
-    workerJobsCoalesced: 0,
-    workerResultsStaleDropped: 0,
-    mainThreadRasterSwaps: 0,
-    finalRefreshRequests: 0,
-    finalRefreshApplied: 0,
-    pendingQueueDepth: 0,
-    maxPendingQueueDepth: 0,
-    workerInFlight: false,
-    lastWorkerLatencyMs: 0,
-    maxWorkerLatencyMs: 0,
-    lastWorkerComputeMs: 0,
-    maxWorkerComputeMs: 0,
-    lastMainThreadApplyMs: 0,
-    maxMainThreadApplyMs: 0,
-    lastRequestedRasterKey: '',
-    lastAppliedRasterKey: '',
-    lastRequestedWorldKey: '',
-    lastAppliedWorldKey: '',
-    lastRequestedCanonicalThreatKey: '',
-    lastAppliedCanonicalThreatKey: '',
-    lastCompletedJobId: 0,
-    lastAppliedJobId: 0,
-    lastCompletedJobFinalExact: false,
-    lastFinalRefreshLatencyMs: 0,
-    maxFinalRefreshLatencyMs: 0,
-    lastAppliedFieldIdentity: '',
-    lastAppliedRasterDigest: '',
-    lastWorkerError: null,
-  };
-}
-
-function getMapIdentity(map: object): number {
-  const existing = mapIdentity.get(map);
-  if (existing !== undefined) return existing;
-  const identity = nextMapIdentity;
-  nextMapIdentity += 1;
-  mapIdentity.set(map, identity);
-  return identity;
-}
-
 function modeLabel(mode: VisibleAwarenessMode): string {
   return mode === 'danger' ? 'опасность' : 'скрытность';
+}
+
+function postureLabel(posture: UnitPosture): string {
+  if (posture === 'standing') return 'СТОЯ';
+  if (posture === 'crouched') return 'СИДЯ';
+  return 'ЛЁЖА';
 }
 
 function roundMs(value: number): number {
