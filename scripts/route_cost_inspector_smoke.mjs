@@ -10,8 +10,8 @@ for (const token of [
   'data-tab="routeCost"',
   'Стоимость маршрута',
   'data-role="route-cost-inspector-host"',
-  'routeCostInspectorPanel.hidden = false',
-  'sidebarBody.hidden = true',
+  'routeCostInspectorPanel.hidden = !routeCostTabActive',
+  'sidebarBody.hidden = routeCostTabActive',
   "setSimulationLayerMode(state, 'info')",
 ]) {
   assert.ok(workspace.includes(token), `route-cost inspector workspace contract must contain ${token}`);
