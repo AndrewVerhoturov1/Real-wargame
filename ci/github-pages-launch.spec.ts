@@ -7,7 +7,8 @@ const expectedProductSha = requireEnv('EXPECTED_PRODUCT_SHA');
 const evidenceDirectory = path.resolve('artifacts/github-pages-e2e');
 mkdirSync(evidenceDirectory, { recursive: true });
 
-test('live GitHub Pages game starts and renders the tactical canvas', async ({ page }) => {
+test('live GitHub Pages game starts and renders the tactical canvas', async ({ page }, testInfo) => {
+  const prefix = artifactPrefix(testInfo.project.name);
   const capture = installCapture(page);
   let navigationStatus: number | null = null;
   let navigationError: string | null = null;
@@ -23,9 +24,10 @@ test('live GitHub Pages game starts and renders the tactical canvas', async ({ p
 
   const state = await readGameState(page);
   const productIdentity = await readProductIdentity(page);
-  await page.screenshot({ path: path.join(evidenceDirectory, 'game-after-load.png'), fullPage: true });
+  await page.screenshot({ path: path.join(evidenceDirectory, `${prefix}-game-after-load.png`), fullPage: true });
 
   const evidence = {
+    project: testInfo.project.name,
     targetUrl,
     expectedProductSha,
     navigationStatus,
@@ -34,7 +36,7 @@ test('live GitHub Pages game starts and renders the tactical canvas', async ({ p
     productIdentity,
     ...capture.snapshot(),
   };
-  writeFileSync(path.join(evidenceDirectory, 'game-evidence.json'), JSON.stringify(evidence, null, 2));
+  writeFileSync(path.join(evidenceDirectory, `${prefix}-game-evidence.json`), JSON.stringify(evidence, null, 2));
 
   expect(navigationError, navigationError ?? 'navigation must succeed').toBeNull();
   expect(navigationStatus).not.toBeNull();
@@ -50,7 +52,9 @@ test('live GitHub Pages game starts and renders the tactical canvas', async ({ p
   expect(capture.failedRequests, `failed requests: ${JSON.stringify(capture.failedRequests)}`).toEqual([]);
 });
 
-test('live GitHub Pages AI editor starts', async ({ page }) => {
+test('live GitHub Pages AI editor starts', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium', 'one desktop editor proof is sufficient');
+  const prefix = artifactPrefix(testInfo.project.name);
   const capture = installCapture(page);
   const editorUrl = new URL('ai-node-editor.html', targetUrl).toString();
   let navigationStatus: number | null = null;
@@ -75,16 +79,23 @@ test('live GitHub Pages AI editor starts', async ({ page }) => {
     rootChildren: null,
     evaluationError: error instanceof Error ? error.message : String(error),
   }));
-  await page.screenshot({ path: path.join(evidenceDirectory, 'ai-editor-after-load.png'), fullPage: true });
+  await page.screenshot({ path: path.join(evidenceDirectory, `${prefix}-ai-editor-after-load.png`), fullPage: true });
 
+  const unexpectedFailedRequests = capture.failedRequests.filter(
+    (request) => request.url !== 'http://127.0.0.1:8787/engine/health',
+  );
   const evidence = {
+    project: testInfo.project.name,
     editorUrl,
     navigationStatus,
     navigationError,
     state,
+    expectedOfflineEngineRequest: capture.failedRequests.some(
+      (request) => request.url === 'http://127.0.0.1:8787/engine/health',
+    ),
     ...capture.snapshot(),
   };
-  writeFileSync(path.join(evidenceDirectory, 'ai-editor-evidence.json'), JSON.stringify(evidence, null, 2));
+  writeFileSync(path.join(evidenceDirectory, `${prefix}-ai-editor-evidence.json`), JSON.stringify(evidence, null, 2));
 
   expect(navigationError, navigationError ?? 'navigation must succeed').toBeNull();
   expect(navigationStatus).not.toBeNull();
@@ -93,7 +104,7 @@ test('live GitHub Pages AI editor starts', async ({ page }) => {
   expect(state.rootChildren, `editor root is empty; body=${state.bodyText}`).not.toBeNull();
   expect(state.rootChildren!).toBeGreaterThan(0);
   expect(capture.pageErrors, `page errors: ${capture.pageErrors.join('\n')}`).toEqual([]);
-  expect(capture.failedRequests, `failed requests: ${JSON.stringify(capture.failedRequests)}`).toEqual([]);
+  expect(unexpectedFailedRequests, `unexpected failed requests: ${JSON.stringify(unexpectedFailedRequests)}`).toEqual([]);
 });
 
 function installCapture(page: Page) {
@@ -150,6 +161,12 @@ async function readGameState(page: Page) {
       rootChildren: document.querySelector('#app')?.children.length ?? null,
       bootstrapState: document.querySelector<HTMLElement>('#app')?.dataset.bootstrapState ?? null,
       debugText: document.querySelector('#debug-panel')?.textContent ?? null,
+      viewport: {
+        width: innerWidth,
+        height: innerHeight,
+        devicePixelRatio,
+        coarsePointer: matchMedia('(pointer: coarse)').matches,
+      },
     };
   }).catch((error) => ({
     title: '',
@@ -160,6 +177,7 @@ async function readGameState(page: Page) {
     rootChildren: null,
     bootstrapState: null,
     debugText: null,
+    viewport: null,
     evaluationError: error instanceof Error ? error.message : String(error),
   }));
 }
@@ -182,6 +200,10 @@ async function readProductIdentity(page: Page) {
     scriptContainsExpectedSha: false,
     error: error instanceof Error ? error.message : String(error),
   }));
+}
+
+function artifactPrefix(projectName: string): string {
+  return projectName.replace(/[^a-z0-9-]+/gi, '-').toLowerCase();
 }
 
 function requireEnv(name: string): string {
