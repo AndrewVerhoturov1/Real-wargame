@@ -1,0 +1,102 @@
+name: Deploy Posture-Aware Visibility Exact SHA to GitHub Pages
+
+on:
+  pull_request:
+    branches:
+      - ci/github-pages-visibility-base-20260720-8af9e3c
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: github-pages-posture-visibility-8af9e3c
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact product source
+        uses: actions/checkout@v4
+        with:
+          ref: 8af9e3c856cbdcfa17873b633626fa611c1a3a72
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --silent
+
+      - name: Configure GitHub Pages metadata
+        id: pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: TypeScript
+        run: npx tsc
+
+      - name: Point LOS differential smoke
+        run: npm run point-los-differential:smoke
+
+      - name: Visibility probe smoke
+        run: npm run visibility-probe:smoke
+
+      - name: View and memory heatmap smoke
+        run: npm run view-memory-heatmap:smoke
+
+      - name: Shared visibility and vegetation smoke
+        run: npm run shared-visibility-vegetation:smoke
+
+      - name: Tactical position smoke
+        run: npm run tactical-position:smoke
+
+      - name: Tactical query smoke
+        run: npm run tactical-query:smoke
+
+      - name: Workspace smoke
+        run: npm run workspace:smoke
+
+      - name: AI editor smoke
+        run: npm run editor:smoke
+
+      - name: Build game plus AI editor
+        env:
+          REAL_WARGAME_COMMIT_SHA: 8af9e3c856cbdcfa17873b633626fa611c1a3a72
+          REAL_WARGAME_BRANCH: feature/20260720-posture-aware-visibility
+          REAL_WARGAME_BUILD_ID: github-pages-posture-visibility-${{ github.run_id }}-${{ github.run_attempt }}
+          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${PAGES_BASE_PATH}" = "/Real-wargame"
+          npx vite build --base="${PAGES_BASE_PATH}/"
+          test -f dist/index.html
+          test -f dist/ai-node-editor.html
+          touch dist/.nojekyll
+
+      - name: GitHub Pages deployment contract smoke
+        run: npm run deployment-pages:smoke
+
+      - name: Publish complete build to gh-pages branch
+        env:
+          SOURCE_SHA: 8af9e3c856cbdcfa17873b633626fa611c1a3a72
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/real-wargame-pages
+          cp -a dist/. /tmp/real-wargame-pages/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan gh-pages
+          git rm -rf .
+          cp -a /tmp/real-wargame-pages/. .
+          git add -A
+          git commit -m "deploy: posture-aware visibility ${SOURCE_SHA}"
+          git push --force origin HEAD:gh-pages
