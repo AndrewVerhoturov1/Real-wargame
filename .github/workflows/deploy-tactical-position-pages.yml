@@ -1,11 +1,20 @@
 name: Deploy Tactical Position Branch to GitHub Pages
-# Manual deploy trigger: live verification for the stabilized search objective and exclusive layer state.
+# Standing user authorization: publish every verified product fix from this feature branch.
 
 on:
   push:
     branches:
       - feature/20260719-tactical-position-system
     paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'public/**'
+      - 'index.html'
+      - 'ai-node-editor.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'tsconfig.json'
       - '.github/workflows/deploy-tactical-position-pages.yml'
   workflow_dispatch:
 
@@ -45,8 +54,9 @@ jobs:
           REAL_WARGAME_BRANCH: ${{ github.ref_name }}
           REAL_WARGAME_BUILD_ID: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
           PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+        shell: bash
         run: |
-          set +e
+          set -euo pipefail
           {
             npx tsc
             npm run perception-contact-priority:smoke
@@ -60,17 +70,9 @@ jobs:
             test -f dist/ai-node-editor.html
             npm run deployment-pages:smoke
             touch dist/.nojekyll
-          } > pages-build.log 2>&1
-          status=$?
-          if [ "$status" -ne 0 ]; then
-            echo "Pages verification failed. Last 260 log lines:"
-            tail -n 260 pages-build.log
-            exit "$status"
-          fi
-          tail -n 120 pages-build.log
+          } 2>&1 | tee pages-build.log
 
       - name: Publish complete build to gh-pages branch
-        if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy-pages]') }}
         env:
           SOURCE_SHA: ${{ github.sha }}
         run: |
