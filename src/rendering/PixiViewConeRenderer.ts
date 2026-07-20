@@ -21,6 +21,11 @@ export class PixiViewConeRenderer {
 
   render(map: TacticalMap, units: readonly UnitModel[], selectedUnitIds: readonly string[]): void {
     if (this.destroyed) return;
+    if (!isDangerWorkspaceTabActive()) {
+      this.clear();
+      return;
+    }
+
     const selectedIds = new Set(selectedUnitIds);
     const renderKey = buildRenderKey(map, units, selectedIds);
     this.container.visible = true;
@@ -86,4 +91,8 @@ function buildRenderKey(
       selectedIds.has(unit.id) ? 1 : 0,
     ].join(':')),
   ].join('|');
+}
+
+function isDangerWorkspaceTabActive(): boolean {
+  return Boolean(document.querySelector('.tactical-workspace-shell [data-tab="danger"].active'));
 }
