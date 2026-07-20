@@ -1,21 +1,24 @@
 Tactical position search smoke passed: field-owned candidates, highest-safe posture, tunable thresholds, non-maximum suppression and deterministic work budgets.
 Tactical position interaction smoke passed: bounded marker selection, B2 glyphs and one-time arrival posture.
 Tactical position Graph v2 smoke passed: one exact simulation request is persisted, polled statefully and reused by Filter/Score/Select.
-node:fs:448
-    return binding.readFileUtf8(path, stringToFlags(options.flag));
-                   ^
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
 
-Error: ENOENT: no such file or directory, open 'src/core/tactical/TacticalPositionProvider.ts'
-    at readFileSync (node:fs:448:20)
-    at verifyGraphRuntimeConnection (file:///home/runner/work/Real-wargame/Real-wargame/scripts/tactical_workspace_smoke_incremental_directional.mjs:240:20)
+AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+  assert.ok(service.includes('evaluatedOrigin'))
+
+    at verifyGraphRuntimeConnection (file:///home/runner/work/Real-wargame/Real-wargame/scripts/tactical_workspace_smoke_incremental_directional.mjs:248:10)
     at file:///home/runner/work/Real-wargame/Real-wargame/scripts/tactical_workspace_smoke_incremental_directional.mjs:32:1
     at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
     at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
     at async file:///home/runner/work/Real-wargame/Real-wargame/scripts/tactical_position_search_smoke.mjs:36:1 {
-  errno: -2,
-  code: 'ENOENT',
-  syscall: 'open',
-  path: 'src/core/tactical/TacticalPositionProvider.ts'
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '=='
 }
 
 Node.js v20.20.2
