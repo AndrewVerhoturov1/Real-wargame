@@ -1,3 +1,4 @@
+import '../cell-inspector.css';
 import type { AiGameBridgeHandle } from '../core/ai/AiGameBridge';
 import { setRouteCostOverlayActive } from '../core/navigation/RouteCostOverlayState';
 import type { SimulationState } from '../core/simulation/SimulationState';
@@ -6,6 +7,7 @@ import {
   setSimulationLayerMode,
   toggleThreatCones,
 } from '../core/ui/RuntimeUiState';
+import { installCellInspector } from './CellInspector';
 import {
   installTacticalWorkspace as installTacticalWorkspaceBase,
 } from './TacticalWorkspaceBase';
@@ -96,6 +98,7 @@ export function installTacticalWorkspace(
   const teardownTab = installTacticalPositionWorkspaceTab(state, onChanged);
   const teardownSettings = installTacticalPositionSettingsControls(state, onChanged);
   const teardownSearch = installTacticalPositionSearchControls(state, onChanged);
+  const teardownCellInspector = installCellInspector(state);
   const shell = document.querySelector<HTMLElement>('.tactical-workspace-shell');
   const sidebarBody = shell?.querySelector<HTMLElement>('[data-role="sidebar-body"]') ?? null;
   const sidebarTitle = shell?.querySelector<HTMLElement>('[data-role="sidebar-title"]') ?? null;
@@ -269,6 +272,7 @@ export function installTacticalWorkspace(
     routeCostInspectorPanel?.remove();
     routeCostTab?.remove();
     style.remove();
+    teardownCellInspector();
     teardownSearch();
     teardownSettings();
     teardownTab();
