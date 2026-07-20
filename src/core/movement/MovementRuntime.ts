@@ -3,6 +3,7 @@ import type { GridPosition } from '../geometry';
 import { emitPerceptionSound } from '../perception/PerceptionSound';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
+import { occupiedTacticalPositionPosture } from '../tactical/TacticalPositionOccupation';
 import { resolveMovementMaterialFactors, type MovementMaterialFactors } from './MovementMaterialAdapter';
 import {
   DEFAULT_MOVEMENT_PROFILE_ID,
@@ -601,6 +602,10 @@ function evaluateMovementSegment(
 
 function applyMovementPosture(unit: UnitModel, profile: MovementProfile, gait: MovementGait): void {
   const runtime = unit.movementRuntime;
+  if (occupiedTacticalPositionPosture(unit)) {
+    runtime.lastMovementPosture = null;
+    return;
+  }
   const structuralPosture = REQUIRED_GAIT_POSTURES[gait];
   const desired = structuralPosture ?? (profile.stancePolicy === 'adaptive' ? unit.behaviorRuntime.posture : profile.stancePolicy);
   const required = structuralPosture !== undefined || profile.stancePolicy !== 'adaptive';

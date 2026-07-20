@@ -10,7 +10,8 @@ import {
   updatePlayerCommandStatus,
 } from '../src/core/orders/PlayerCommand';
 import { normalizeUnits } from '../src/core/units/UnitModel';
-import type { SimulationState } from '../src/core/simulation/SimulationState';
+import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
+import { preparePhysicalMovementStep } from '../src/core/movement/MovementRuntime';
 import {
   createDefaultTacticalPositionSettings,
   getTacticalPositionSettings,
@@ -30,6 +31,7 @@ import type { TacticalPositionCandidateSeedV2 } from '../src/core/tactical/Tacti
 
 verifyComparativePostureSelection();
 verifyCommandOwnedApproachAndOccupation();
+verifyOccupiedPostureSurvivesStaleMovementOwnership();
 verifyMarkerPublicationIsRateLimitedAndKeepsOldResult();
 verifySettingsChangeRefreshesMarkersImmediately();
 verifySettingsNormalizeFromSceneData();
@@ -117,6 +119,48 @@ function verifyCommandOwnedApproachAndOccupation(): void {
   assert.equal(unit.playerCommand?.tacticalPositionOccupationStatus, 'released');
   unit.order = null;
   assert.equal(isTacticalPositionOccupationActive(unit), false);
+}
+
+function verifyOccupiedPostureSurvivesStaleMovementOwnership(): void {
+  const state = createInitialState({
+    width: 12,
+    height: 8,
+    cellSize: 8,
+    metersPerCell: 2,
+    defaultTerrain: 'field',
+    defaultHeight: 0,
+    cellRuns: [],
+    cellRects: [],
+    cells: [],
+    objects: [],
+  }, [{ id: 'occupied-prone', type: 'infantry_squad', side: 'blue', x: 2, y: 2 }], []);
+  const unit = state.units[0]!;
+  const command = createPlayerMoveCommand(
+    unit.id,
+    { x: 3.5, y: 2.5 },
+    null,
+    1000,
+    'normal',
+    null,
+    null,
+    'prone',
+    'crouched',
+  );
+  unit.playerCommand = updatePlayerCommandStatus(command, 'completed', 'done', 'готово');
+  assert.equal(applyCompletedTacticalPositionOccupation(unit), true);
+  unit.playerCommand = markPlayerCommandArrivalPostureApplied(unit.playerCommand);
+  unit.movementRuntime.requestedGait = 'sprint';
+  unit.movementRuntime.actualGait = 'sprint';
+  unit.movementRuntime.isMoving = true;
+  unit.movementRuntime.lastMovementPosture = 'standing';
+
+  preparePhysicalMovementStep(state, unit, 0.1, false, 1, 1);
+
+  assert.equal(
+    unit.behaviorRuntime.posture,
+    'prone',
+    'stale movement gait must not replace an occupied prone tactical posture',
+  );
 }
 
 function verifyMarkerPublicationIsRateLimitedAndKeepsOldResult(): void {
