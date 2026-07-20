@@ -27,13 +27,13 @@ const TARGET_PROFILES: Record<PerceptionTargetType, PerceptionTargetProfile> = {
     type: 'sniper',
     labelRu: 'Снайпер / малый силуэт',
     baseSize: 0.85,
-    heightMetersByPosture: SOLDIER_POSTURE_HEIGHTS,
+    heightMetersByPosture: { ...SOLDIER_POSTURE_HEIGHTS },
   },
   soldier: {
     type: 'soldier',
     labelRu: 'Обычный боец',
     baseSize: 1,
-    heightMetersByPosture: SOLDIER_POSTURE_HEIGHTS,
+    heightMetersByPosture: { ...SOLDIER_POSTURE_HEIGHTS },
   },
   support_weapon: {
     type: 'support_weapon',
