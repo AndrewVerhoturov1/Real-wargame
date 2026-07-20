@@ -4,6 +4,7 @@ import {
   resolveCellInspectorLayer,
   type CellInspectorContent,
 } from './CellInspectorContent';
+import { buildCachedMemoryCellInspectorContent } from './CellInspectorMemoryContent';
 
 const REFRESH_INTERVAL_MS = 250;
 const POINTER_OFFSET_X = 18;
@@ -47,7 +48,9 @@ export function installCellInspector(state: SimulationState): () => void {
     const cellX = Math.floor(state.mouseGridPosition.x);
     const cellY = Math.floor(state.mouseGridPosition.y);
     const layer = resolveCellInspectorLayer(state);
-    const content = buildCellInspectorContent(state, layer, cellX, cellY);
+    const content = layer === 'memory'
+      ? buildCachedMemoryCellInspectorContent(state, cellX, cellY)
+      : buildCellInspectorContent(state, layer, cellX, cellY);
     if (!content) {
       hide();
       return;
@@ -80,7 +83,7 @@ export function installCellInspector(state: SimulationState): () => void {
   };
 
   const handleKeyDown = (event: KeyboardEvent): void => {
-    if (event.key !== 'Control') return;
+    if (event.key !== 'Control' || event.repeat || controlHeld) return;
     controlHeld = true;
     startRefreshTimer();
     refresh();
