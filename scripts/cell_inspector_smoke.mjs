@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const controller = readFileSync(new URL('../src/ui/CellInspector.ts', import.meta.url), 'utf8');
 const content = readFileSync(new URL('../src/ui/CellInspectorContent.ts', import.meta.url), 'utf8');
+const dangerContent = readFileSync(new URL('../src/ui/CellInspectorDangerContent.ts', import.meta.url), 'utf8');
 const memoryContent = readFileSync(new URL('../src/ui/CellInspectorMemoryContent.ts', import.meta.url), 'utf8');
 const targetResolver = readFileSync(new URL('../src/ui/CellInspectorTarget.ts', import.meta.url), 'utf8');
 const workspace = readFileSync(new URL('../src/ui/TacticalWorkspace.ts', import.meta.url), 'utf8');
@@ -11,6 +12,7 @@ const css = readFileSync(new URL('../src/cell-inspector.css', import.meta.url), 
 assert.match(controller, /event\.key !== 'Control'/, 'cell inspector must react specifically to the Control key');
 assert.match(controller, /event\.repeat\s*\|\|\s*controlHeld|controlHeld\s*\|\|\s*event\.repeat/, 'repeated Control keydown must not refresh the inspector');
 assert.match(controller, /buildCachedMemoryCellInspectorContent/, 'memory hover must use the revision-cached visibility snapshot');
+assert.match(controller, /buildDetailedDangerCellInspectorContent/, 'danger hover must use the detailed prepared-field explanation');
 assert.match(controller, /resolveCellInspectorTarget/, 'controller must resolve the effective hover target before reading layer content');
 assert.match(controller, /snappedUnitId/, 'controller must retain magnetic hover state between refreshes');
 assert.match(controller, /dataset\.snappedUnitId/, 'popover must expose whether inspection is snapped to a soldier');
@@ -28,12 +30,15 @@ assert.match(controller, /renderKey !== lastRenderKey/, 'unchanged content must 
 for (const layer of ['info', 'danger', 'positions', 'stealth', 'memory', 'routeCost']) {
   assert.match(content, new RegExp(`'${layer}'`), `cell inspector content must support ${layer}`);
 }
-assert.match(content, /readReadyWorldField/, 'danger and stealth must consume a prepared awareness snapshot');
-assert.match(content, /protectedThreatIndex/, 'danger explanation must resolve the threat against which the cell has protection');
-assert.match(content, /Основная причина/, 'danger content must state the dominant reason in plain language');
-assert.match(content, /Известных угроз/, 'danger content must show how many known threats affect the field');
-assert.match(content, /Открытость склона/, 'danger content must expose slope-driven exposure');
-assert.match(content, /Надёжность оценки/, 'danger content must expose estimate reliability');
+assert.match(content, /readReadyWorldField/, 'danger and stealth compatibility content must consume a prepared awareness snapshot');
+assert.match(dangerContent, /readReadyWorldField/, 'detailed danger hover must consume a prepared awareness snapshot');
+assert.match(dangerContent, /protectedThreatIndex/, 'danger explanation must resolve the threat against which the cell has protection');
+assert.match(dangerContent, /Основная причина/, 'danger content must state the dominant reason in plain language');
+assert.match(dangerContent, /Известных угроз/, 'danger content must show how many known threats are considered');
+assert.match(dangerContent, /Открытость склона/, 'danger content must expose slope-driven exposure');
+assert.match(dangerContent, /Надёжность оценки/, 'danger content must expose estimate reliability');
+assert.doesNotMatch(dangerContent, /getOrRequest|buildSoldierAwarenessReport|GridPathfinder|findPath/, 'danger hover must not trigger field construction or pathfinding');
+assert.doesNotMatch(dangerContent, /for\s*\(let\s+y\s*=\s*0;\s*y\s*<\s*state\.map\.height/, 'danger hover must not scan the full map');
 assert.match(content, /__realWargameRouteCostDebug/, 'route cost must check that the worker result is already ready');
 assert.match(content, /fieldRevision/, 'memory view must check for an already prepared visibility field');
 assert.doesNotMatch(content, /GridPathfinder|findPath|searchTacticalPositions\(/, 'hover inspection must not run pathfinding or tactical searches');
@@ -47,7 +52,7 @@ assert.match(targetResolver, /unit\.id === state\.selectedUnitId/, 'selected sol
 assert.match(targetResolver, /contact\.sourceUnitId === unit\.id/, 'enemy snap eligibility must require an exact contact-to-unit match');
 assert.match(targetResolver, /contact\.source === 'visual'/, 'enemy snap eligibility must require a visual contact');
 assert.match(targetResolver, /contact\.visibleNow/, 'enemy snap eligibility must require the enemy to be currently visible');
-assert.match(targetResolver, /distanceSquared < bestDistanceSquared/, 'nearest eligible soldier must win magnetic targeting');
+assert.match(targetResolver, /candidateDistanceSquared < bestDistanceSquared/, 'nearest eligible soldier must win magnetic targeting');
 assert.doesNotMatch(targetResolver, /\.filter\(|\.sort\(|\.map\(/, 'magnetic hover hot path must avoid per-refresh array allocations');
 
 assert.match(memoryContent, /WeakMap<SimulationState, MemoryFieldCacheEntry>/, 'memory inspector must cache prepared fields per simulation state');
