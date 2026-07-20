@@ -1,25 +1,27 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const workspace = readFileSync('src/ui/TacticalWorkspaceBase.ts', 'utf8');
-const runtimeUiState = readFileSync('src/core/ui/RuntimeUiState.ts', 'utf8');
+const workspace = readFileSync('src/ui/TacticalWorkspace.ts', 'utf8');
+const workspaceBase = readFileSync('src/ui/TacticalWorkspaceBase.ts', 'utf8');
 const routeCostUi = readFileSync('src/ui/RouteCostOverlayUi.ts', 'utf8');
 
 for (const token of [
-  "type SimulationTab = 'info' | 'danger' | 'positions' | 'stealth' | 'routeCost' | 'memory'",
-  "['routeCost', 'Стоимость маршрута']",
+  'ROUTE_COST_INSPECTOR_RENDERED_EVENT',
+  'data-tab="routeCost"',
+  'Стоимость маршрута',
   'data-role="route-cost-inspector-host"',
-  "routeCost:'Стоимость маршрута'",
-  "tab === 'routeCost'",
-  "real-wargame:route-cost-inspector-rendered",
+  'routeCostInspectorPanel.hidden = false',
+  'sidebarBody.hidden = true',
+  "setSimulationLayerMode(state, 'info')",
 ]) {
   assert.ok(workspace.includes(token), `route-cost inspector workspace contract must contain ${token}`);
 }
-assert.ok(!workspace.includes('data-action="route-cost-quick-toggle"'), 'bottom unit bar must not own the route-cost layer toggle');
 assert.ok(
-  runtimeUiState.includes("export type SimulationLayerMode = 'info' | 'danger' | 'positions' | 'stealth' | 'routeCost' | 'memory';"),
-  'routeCost must be a valid right-inspector simulation layer mode',
+  workspace.includes("shell.querySelector<HTMLButtonElement>('[data-action=\"route-cost-quick-toggle\"]')?.remove();"),
+  'workspace shell must remove the obsolete bottom route-cost toggle',
 );
+assert.ok(workspaceBase.includes('data-action="route-cost-quick-toggle"'), 'baseline still owns the legacy markup until the compatibility shell removes it');
+
 for (const token of [
   'ROUTE_COST_INSPECTOR_RENDERED_EVENT',
   '[data-role="route-cost-inspector-host"]',
