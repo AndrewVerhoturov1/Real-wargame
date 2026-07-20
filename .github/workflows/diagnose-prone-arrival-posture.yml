@@ -1,0 +1,33 @@
+name: Diagnose Prone Tactical Position Arrival
+
+on:
+  push:
+    branches:
+      - feature/20260719-tactical-position-system
+    paths:
+      - '.github/workflows/diagnose-prone-arrival-posture.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/20260719-tactical-position-system
+          fetch-depth: 1
+
+      - name: Trace posture ownership after tactical arrival
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== tactical occupation and arrival ==='
+          sed -n '1,220p' src/core/tactical/TacticalPositionOccupation.ts
+          sed -n '1,180p' src/core/tactical/TacticalPositionArrival.ts
+          echo '=== all occupied posture references ==='
+          rg -n "occupiedTacticalPositionPosture|isTacticalPositionOccupationActive|arrivalPostureApplied|tactical_position_arrival|arrivalPosture" src scripts || true
+          echo '=== all runtime posture assignments / SetPosture handling ==='
+          rg -n "behaviorRuntime\.posture\s*=|previousPosture\s*=|SetPosture|postureChangedBecause" src/core src/ui scripts | head -n 500
