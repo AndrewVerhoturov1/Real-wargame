@@ -29,6 +29,8 @@ export function installTacticalPositionSearchControls(
   let diagnostics: HTMLElement | null = null;
   let objectiveSelect: HTMLSelectElement | null = null;
   let selectedObjective: TacticalPositionSearchObjective = 'balanced';
+  const objectiveDraftByUnit = new Map<string, TacticalPositionSearchObjective>();
+  let objectiveUnitId: string | null = null;
 
   const unmount = (): void => {
     section?.remove();
@@ -52,6 +54,13 @@ export function installTacticalPositionSearchControls(
   const renderStatus = (): void => {
     if (!status) return;
     const unitId = state.selectedUnitId;
+    if (objectiveUnitId !== unitId) {
+      objectiveUnitId = unitId;
+      selectedObjective = unitId
+        ? objectiveDraftByUnit.get(unitId) ?? service?.readLatestForUnit(unitId)?.objective ?? 'balanced'
+        : 'balanced';
+      if (objectiveSelect) objectiveSelect.value = selectedObjective;
+    }
     if (!unitId) {
       status.textContent = 'Выберите бойца.';
       status.dataset.state = 'idle';
@@ -63,8 +72,6 @@ export function installTacticalPositionSearchControls(
       status.dataset.state = 'idle';
       return;
     }
-    selectedObjective = request.objective;
-    if (objectiveSelect) objectiveSelect.value = request.objective;
     status.dataset.state = request.status;
     if (request.status === 'queued') status.textContent = 'Запрос создан.';
     else if (request.status === 'calculating' && request.reasonCode === 'field_preparing') {
@@ -126,9 +133,18 @@ export function installTacticalPositionSearchControls(
     objectiveSelect.innerHTML = OBJECTIVES.map((objective) => (
       `<option value="${objective}">${escapeHtml(tacticalPositionObjectiveLabelRu(objective))}</option>`
     )).join('');
+    const unitId = state.selectedUnitId;
+    if (unitId) {
+      selectedObjective = objectiveDraftByUnit.get(unitId)
+        ?? service?.readLatestForUnit(unitId)?.objective
+        ?? selectedObjective;
+      objectiveUnitId = unitId;
+    }
     objectiveSelect.value = selectedObjective;
     objectiveSelect.addEventListener('change', () => {
       selectedObjective = objectiveSelect?.value as TacticalPositionSearchObjective;
+      const selectedUnitId = state.selectedUnitId;
+      if (selectedUnitId) objectiveDraftByUnit.set(selectedUnitId, selectedObjective);
     });
     objectiveLabel.append(objectiveCaption, objectiveSelect);
 
@@ -144,7 +160,12 @@ export function installTacticalPositionSearchControls(
         renderStatus();
         return;
       }
-      const request = service.enqueueCoverSearch(unit, { objective: selectedObjective });
+      objectiveDraftByUnit.set(unit.id, selectedObjective);
+      const request = service.enqueueCoverSearch(
+        unit,
+        { objective: selectedObjective },
+        { forceRefresh: true },
+      );
       state.editor.lastMessage = `Запрос создан: ${tacticalPositionObjectiveLabelRu(request.objective)}.`;
       renderStatus();
       onChanged();
@@ -172,7 +193,7 @@ export function installTacticalPositionSearchControls(
   }) ?? (() => undefined);
   const unsubscribeTab = subscribeTacticalPositionWorkspaceTab(render);
   const selectionRefresh = window.setInterval(() => {
-    if (!document.hidden && isTacticalPositionWorkspaceTabActive(state)) renderDiagnostics();
+    if (!document.hidden && isTacticalPositionWorkspaceTabActive(state)) render();
   }, 300);
   render();
 

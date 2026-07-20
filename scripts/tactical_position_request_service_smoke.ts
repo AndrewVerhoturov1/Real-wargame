@@ -108,6 +108,23 @@ function verifyRequestLifecycleAndMovingOrigin(): void {
   assert.equal(searchCalls, 2);
   assert.deepEqual(service.readRequest(replacement.requestId), readyBefore);
 
+  units[0]!.position = { x: 6.25, y: 5.75 };
+  runtime.readyByUnit.set('alpha', prepared('alpha', 'field-alpha-refresh'));
+  const refreshed = service.enqueueCoverSearch(
+    units[0]!,
+    { searchRadiusMeters: 55, objective: 'advance_to_threat' },
+    { forceRefresh: true },
+  );
+  assert.notEqual(refreshed.requestId, replacement.requestId, 'explicit refresh must not reuse a ready request');
+  assert.equal(service.readRequest(replacement.requestId)?.status, 'stale');
+  runScheduled(scheduled);
+  assert.equal(service.readRequest(refreshed.requestId)?.status, 'ready');
+  assert.deepEqual(
+    evaluatedRequests.at(-1)?.origin,
+    { x: 6.25, y: 5.75 },
+    'explicit refresh must search from the unit current position',
+  );
+
   const stale = service.enqueueCoverSearch(units[0]!, { searchRadiusMeters: 65 });
   runtime.readyByUnit.set('alpha', prepared('alpha', 'field-alpha-stale'));
   runtime.afterSearch = () => runtime.readyByUnit.set('alpha', prepared('alpha', 'field-alpha-replaced'));

@@ -36,7 +36,7 @@ console.log('Tactical workspace migration smoke passed: old cover UI is absent a
 
 function isExpectedMigrationFailure(line) {
   const tacticalWorkspaceRelocations = [
-    "type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory'",
+    "type SimulationTab = 'info' | 'danger' | 'positions' | 'stealth' | 'memory'",
     'Симуляция',
     'Редактирование',
     'Слой опасности',
@@ -104,9 +104,9 @@ function verifyWorkspaceMigration() {
   const wrapper = readFileSync('src/ui/TacticalWorkspace.ts', 'utf8');
   const positionsTab = readFileSync('src/ui/TacticalPositionWorkspaceTab.ts', 'utf8');
   const searchControls = readFileSync('src/ui/TacticalPositionSearchControls.ts', 'utf8');
-  for (const token of ["type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory'", 'Диагностика ИИ (без изменений)', 'Рассчитать и выполнить', 'data-action="turn-unit"', 'data-action="unit-attention-mode"', 'setAttentionMode', 'clearAttentionOverride']) assert.ok(base.includes(token), `workspace compatibility base must retain ${token}`);
+  for (const token of ["type SimulationTab = 'info' | 'danger' | 'positions' | 'stealth' | 'memory'", 'Диагностика ИИ (без изменений)', 'Рассчитать и выполнить', 'data-action="turn-unit"', 'data-action="unit-attention-mode"', 'setAttentionMode', 'clearAttentionOverride']) assert.ok(base.includes(token), `workspace compatibility base must retain ${token}`);
   for (const token of ['installTacticalPositionWorkspaceTab', 'installTacticalPositionSearchControls', 'installTacticalPositionSettingsControls', '.cover-map-tooltip', '.selected-cover-card', 'observer.observe(shell', 'requestAnimationFrame']) assert.ok(wrapper.includes(token), `workspace migration shell must contain ${token}`);
-  for (const token of ["button.textContent = 'Позиции'", "setSimulationLayerMode(state, 'positions')", 'data-role="tactical-position-tab-body"', 'TAB_CHANGED_EVENT']) assert.ok(positionsTab.includes(token), `dedicated positions tab must contain ${token}`);
+  for (const token of ["getSimulationLayerState(state).mode === 'positions'", 'clearVisibleTacticalPositions', 'TAB_CHANGED_EVENT']) assert.ok(positionsTab.includes(token), `positions tab bridge must contain ${token}`);
   for (const token of ["'advance_to_threat'", "'withdraw_from_threat'", "'continue_order'", "objectiveSelect.dataset.role = 'tactical-position-objective'", "diagnostics.dataset.role = 'tactical-position-metrics'", 'isTacticalPositionWorkspaceTabActive']) assert.ok(searchControls.includes(token), `positions controls must contain ${token}`);
   assert.ok(!searchControls.includes('[data-role="sidebar-body"]'));
   assert.ok(!wrapper.includes('observer.observe(document.body'));

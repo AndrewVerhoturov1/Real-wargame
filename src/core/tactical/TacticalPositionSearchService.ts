@@ -130,6 +130,11 @@ export interface TacticalPositionSearchServiceDiagnostics {
   readonly destroyed: boolean;
 }
 
+export interface TacticalPositionSearchEnqueueOptions {
+  /** Create a new request even when the stable tactical identity is unchanged. */
+  readonly forceRefresh?: boolean;
+}
+
 const DEFAULT_PARAMETERS: TacticalPositionSearchParameters = Object.freeze({
   objective: 'balanced',
   searchRadiusMeters: 50,
@@ -176,14 +181,16 @@ export class TacticalPositionSearchService {
   enqueueCoverSearch(
     unit: UnitModel,
     overrides: Partial<TacticalPositionSearchParameters> = {},
+    options: TacticalPositionSearchEnqueueOptions = {},
   ): TacticalPositionSearchRequestSnapshotV1 {
-    return this.enqueue(unit, 'cover', overrides);
+    return this.enqueue(unit, 'cover', overrides, options);
   }
 
   enqueue(
     unit: UnitModel,
     kind: TacticalPositionSearchKind,
     overrides: Partial<TacticalPositionSearchParameters> = {},
+    options: TacticalPositionSearchEnqueueOptions = {},
   ): TacticalPositionSearchRequestSnapshotV1 {
     if (this.destroyed) return failedDestroyedRequest(this.state, unit, kind, overrides);
     if (!this.state.units.includes(unit)) return failedMissingOwnerRequest(this.state, unit.id, kind, overrides);
@@ -192,7 +199,7 @@ export class TacticalPositionSearchService {
     const input = captureInput(this.state, unit, kind, parameters);
     const latestId = this.latestRequestIdByUnit.get(unit.id);
     const latest = latestId ? this.requests.get(latestId) : undefined;
-    if (latest && latest.inputIdentity === input.inputIdentity && isReusableStatus(latest.status)) {
+    if (!options.forceRefresh && latest && latest.inputIdentity === input.inputIdentity && isReusableStatus(latest.status)) {
       return cloneRequest(latest);
     }
 

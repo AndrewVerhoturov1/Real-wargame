@@ -47,7 +47,7 @@ import { bindTacticalStatePlanPanel, renderTacticalStatePlanPanelMarkup } from '
 import { exitLab, openEditorTab } from '../shared/AppShellMenu';
 
 export type TacticalWorkspaceMode = 'simulation' | 'editor';
-type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory';
+type SimulationTab = 'info' | 'danger' | 'positions' | 'stealth' | 'memory';
 
 type StableDecision = {
   signature: string;
@@ -58,7 +58,7 @@ type StableDecision = {
 };
 
 const TABS: Array<[SimulationTab, string]> = [
-  ['info', 'Инфо'], ['danger', 'Опасность'], ['stealth', 'Скрытность'], ['memory', 'Обзор и память'],
+  ['info', 'Инфо'], ['danger', 'Опасность'], ['positions', 'Позиции'], ['stealth', 'Скрытность'], ['memory', 'Обзор и память'],
 ];
 
 export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGameBridgeHandle, onChanged: () => void): () => void {
@@ -257,6 +257,7 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
   for (const tabButton of shell.querySelectorAll<HTMLButtonElement>('[data-tab]')) tabButton.onclick = () => {
     tab = tabButton.dataset.tab as SimulationTab;
     setSimulationLayerMode(state, tab as SimulationLayerMode);
+    window.dispatchEvent(new CustomEvent('real-wargame:tactical-position-tab-changed'));
     lastSidebarKey = '';
     update(true);
     onChanged();
@@ -399,13 +400,15 @@ export function installTacticalWorkspace(state: SimulationState, aiBridge: AiGam
     if (key !== lastSidebarKey) {
       const scrollTop = sidebarBody.scrollTop;
       lastSidebarKey = key;
-      sidebarTitle.textContent = ({ info:'Информация о бойце', danger:'Опасность и укрытия', stealth:'Скрытность', memory:'Обзор и память' })[tab];
+      sidebarTitle.textContent = ({ info:'Информация о бойце', danger:'Опасность и укрытия', positions:'Тактические позиции', stealth:'Скрытность', memory:'Обзор и память' })[tab];
       if (!unit) {
         sidebarBody.innerHTML = empty('Выберите бойца на карте. Левая кнопка выбирает, правая отдаёт приказ движения.');
       } else if (tab === 'info') {
         sidebarBody.innerHTML = infoPanel();
       } else if (tab === 'danger') {
         renderDanger(sidebarBody, state, unit, onChanged, () => { lastSidebarKey=''; renderSidebar(); });
+      } else if (tab === 'positions') {
+        sidebarBody.innerHTML = '<div data-role="tactical-position-tab-body"></div>';
       } else if (tab === 'stealth') {
         renderStealth(sidebarBody, state, unit, onChanged);
       } else {

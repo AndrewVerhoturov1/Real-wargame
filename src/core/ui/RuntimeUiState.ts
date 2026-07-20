@@ -172,8 +172,10 @@ export function getSimulationLayerState(state: SimulationState): SimulationLayer
 }
 
 export function setSimulationLayerMode(state: SimulationState, mode: SimulationLayerMode): void {
-  const layer = getRuntimeUiState(state).simulationLayer;
+  const runtime = getRuntimeUiState(state);
+  const layer = runtime.simulationLayer;
   layer.mode = mode;
+  runtime.attentionOverlay.active = mode === 'memory';
   if (mode === 'info') {
     layer.selectedCoverId = null;
     layer.hoveredCoverId = null;

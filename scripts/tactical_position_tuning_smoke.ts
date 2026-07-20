@@ -195,6 +195,10 @@ function verifyOccupationAndEditorContracts(): void {
   const schema = readFileSync('src/core/tactical/TacticalPositionSettingsSchema.ts', 'utf8');
   const aiEditor = readFileSync('src/ai-node-editor/TacticalPositionProfileEditor.ts', 'utf8');
   const html = readFileSync('ai-node-editor.html', 'utf8');
+  const searchControls = readFileSync('src/ui/TacticalPositionSearchControls.ts', 'utf8');
+  const workspaceBase = readFileSync('src/ui/TacticalWorkspaceBase.ts', 'utf8');
+  const workspaceTab = readFileSync('src/ui/TacticalPositionWorkspaceTab.ts', 'utf8');
+  const runtimeUi = readFileSync('src/core/ui/RuntimeUiState.ts', 'utf8');
   assert.equal(occupation.includes('WeakMap'), false);
   assert.equal(orders.includes('behaviorRuntime.danger = 0'), false);
   assert.ok(orders.includes('finalFacingRadians'));
@@ -206,6 +210,15 @@ function verifyOccupationAndEditorContracts(): void {
   assert.ok(aiEditor.includes('TACTICAL_POSITION_SETTINGS_GROUPS'));
   assert.ok(aiEditor.includes('Тактические позиции'));
   assert.ok(html.includes('TacticalPositionProfileEditor.ts'));
+  assert.ok(searchControls.includes('objectiveDraftByUnit'));
+  assert.ok(searchControls.includes('{ forceRefresh: true }'));
+  assert.equal(searchControls.includes('selectedObjective = request.objective'), false);
+  assert.ok(workspaceBase.includes("type SimulationTab = 'info' | 'danger' | 'positions' | 'stealth' | 'memory'"));
+  assert.ok(workspaceBase.includes("['positions', 'Позиции']"));
+  assert.ok(workspaceBase.includes("tab === 'positions'"));
+  assert.equal(workspaceTab.includes("document.createElement('button')"), false);
+  assert.ok(workspaceTab.includes("getSimulationLayerState(state).mode === 'positions'"));
+  assert.ok(runtimeUi.includes("runtime.attentionOverlay.active = mode === 'memory'"));
 }
 
 function postureGraph(posture: 'stand' | 'crouch' | 'prone'): AiGraph {
