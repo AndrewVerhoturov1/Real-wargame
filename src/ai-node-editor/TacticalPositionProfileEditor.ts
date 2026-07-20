@@ -188,7 +188,7 @@ function installTacticalPositionProfileEditor(
       input.addEventListener('change', () => {
         const key = input.dataset.tacticalSetting as keyof TacticalPositionSettings;
         if (input.type === 'checkbox') {
-          (draft.settings as Record<string, number | boolean>)[key] = input.checked;
+          (draft.settings as unknown as Record<string, number | boolean>)[key] = input.checked;
           return;
         }
         const definition = findNumericDefinition(key);
@@ -196,7 +196,7 @@ function installTacticalPositionProfileEditor(
         const parsed = Number(input.value);
         const next = Math.max(definition.min, Math.min(definition.max, Number.isFinite(parsed) ? parsed : 0));
         input.value = formatStepNumber(next, definition.step);
-        (draft.settings as Record<string, number | boolean>)[key] = next;
+        (draft.settings as unknown as Record<string, number | boolean>)[key] = next;
       });
     });
 

@@ -9,11 +9,6 @@ import {
 import { normalizeUnits } from '../src/core/units/UnitModel';
 import type { PreparedAwarenessWorldSnapshot } from '../src/runtime/AwarenessWorldRuntime';
 
-verifyRendererDoesNotOwnTacticalSearch();
-verifyRequestLifecycleAndMovingOrigin();
-
-console.log('Tactical position request service smoke passed: renderer ownership, moving-origin search, dedupe, replacement, stale rejection, multi-unit isolation and teardown.');
-
 function verifyRendererDoesNotOwnTacticalSearch(): void {
   const renderer = readFileSync('src/rendering/PixiAwarenessHeatmapRenderer.ts', 'utf8');
   const legacyRenderer = readFileSync('src/rendering/PixiAwarenessHeatmapRendererLegacy.ts', 'utf8');
@@ -183,3 +178,9 @@ function candidate(id: string) {
     },
   };
 }
+
+verifyRendererDoesNotOwnTacticalSearch();
+verifyRequestLifecycleAndMovingOrigin();
+
+console.log('Tactical position request service smoke passed: renderer ownership, moving-origin search, dedupe, replacement, stale rejection, multi-unit isolation and teardown.');
+

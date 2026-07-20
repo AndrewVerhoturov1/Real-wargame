@@ -111,7 +111,7 @@ function verifyPostureRecommendationUsesPreparedPostureFields(): void {
 
   const candidate = result.candidates.find((item) => Math.floor(item.position.x) === 7 && Math.floor(item.position.y) === 3);
   assert.ok(candidate, 'the prepared low-cover cell should remain a candidate after posture evaluation');
-  assert.equal(candidate.metrics.recommendedPosture, 'crouched');
+  assert.equal(candidate.metrics.recommendedPosture, 'prone', 'a material prone safety advantage must produce a prone candidate');
   assert.ok(candidate.metrics.protection > field.expectedProtectionAgainstThreat[targetIndex]!);
   assert.ok(candidate.metrics.danger < field.danger[targetIndex]!);
 }

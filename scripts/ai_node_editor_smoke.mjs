@@ -25,6 +25,11 @@ const requiredFiles = [
   'src/rendering/PixiApp.ts',
   'src/core/ai/AiGameBridge.ts',
   'src/core/ai/AiGraphRunner.ts',
+  'src/core/ai/AiGraphRunnerLegacy.ts',
+  'src/ai-node-editor/TacticalPositionProfileEditor.ts',
+  'src/ai-node-editor/tactical-position-profile-editor.css',
+  'src/core/tactical/TacticalPositionProfileStorage.ts',
+  'src/core/tactical/TacticalPositionSettingsSchema.ts',
   'src/data/ai/soldier_default_survival_graph.json',
   'scripts/ai_engine_core.mjs',
   'scripts/local_ai_engine.mjs',
@@ -45,6 +50,8 @@ expectContains(html, '/src/ai-node-editor/human-node-ui.ts', 'HTML должен 
 expectContains(html, '/src/ai-node-editor/stateful-node-ui.ts', 'HTML должен подключать stateful node UI layer.');
 expectContains(html, '/src/ai-node-editor/runtime-debug-overlay.ts', 'HTML должен подключать runtime debug overlay.');
 expectContains(html, '/src/ai-node-editor/runtime-debug-overlay.css', 'HTML должен подключать стили runtime debug overlay.');
+expectContains(html, '/src/ai-node-editor/TacticalPositionProfileEditor.ts', 'HTML должен подключать редактор профилей тактических позиций.');
+expectContains(html, '/src/ai-node-editor/tactical-position-profile-editor.css', 'HTML должен подключать стили профилей тактических позиций.');
 expectContains(html, 'real-wargame.ai-node-editor.graph.v6', 'HTML должен bootstrap-ить новый чистый graph storage v6.');
 expectNotContains(html, 'graph.v5', 'Старый graph storage v5 не должен поднимать старый грязный canvas.');
 
@@ -86,6 +93,8 @@ for (const needle of ['Данные бойца', 'data-editor-global-actions', '
   expectContains(profileEditor, needle, `Единое меню редактора должно содержать: ${needle}`);
 }
 expectNotContains(profileEditor, 'data-navigation-tab="diagnostics"', 'Отдельная вкладка Диагностика должна быть удалена.');
+const tacticalProfileEditor = readText('src/ai-node-editor/TacticalPositionProfileEditor.ts');
+for (const needle of ['Тактические позиции', 'TACTICAL_POSITION_SETTINGS_GROUPS', 'defaultObjective', 'updateTacticalPositionProfile', 'importTacticalPositionProfile', 'exportTacticalPositionProfile']) expectContains(tacticalProfileEditor, needle, `Редактор тактических профилей должен содержать: ${needle}`);
 expectContains(main, 'addNodeFromPalette', 'Редактор должен уметь добавлять ноды из палитры.');
 expectContains(main, 'startConnectionDrag', 'Связи должны создаваться протягиванием из порта.');
 expectContains(main, 'createDefaultParameters', 'Новые ноды должны получать человекочитаемые параметры по умолчанию.');
@@ -153,22 +162,14 @@ expectContains(labBat, 'WindowStyle Hidden', 'Общий запуск долже
 expectContains(labBat, 'lab-launch.html', 'Общий запуск должен открыть страницу, которая открывает игру и редактор.');
 
 const graphRunner = readText('src/core/ai/AiGraphRunner.ts');
-for (const needle of [
-  'runAiGraph',
-  'executeUtilitySelector',
-  'evaluateBranch',
-  'ParameterScore',
-  'DistanceScore',
-  'DecisionInertia',
-  'RandomChance',
-  'StableThreshold',
-  'ForbidAction',
-  'AiGraphEffect',
-  'ScoreBreakdownItem',
-]) expectContains(graphRunner, needle, `GraphRunner должен содержать: ${needle}`);
-expectNotContains(graphRunner, 'SimulationState', 'GraphRunner не должен зависеть от игровой SimulationState.');
-expectNotContains(graphRunner, 'pixi.js', 'GraphRunner не должен зависеть от PixiJS.');
-expectNotContains(graphRunner, 'localStorage', 'GraphRunner не должен читать localStorage напрямую.');
+const graphRunnerLegacy = readText('src/core/ai/AiGraphRunnerLegacy.ts');
+const graphRunnerSources = `${graphRunner}
+${graphRunnerLegacy}`;
+for (const needle of ['runAiGraph', 'executeUtilitySelector', 'evaluateBranch', 'ParameterScore', 'DistanceScore', 'DecisionInertia', 'RandomChance', 'StableThreshold', 'ForbidAction', 'AiGraphEffect', 'ScoreBreakdownItem']) expectContains(graphRunnerSources, needle, `GraphRunner должен содержать: ${needle}`);
+for (const needle of ['wrapStatefulTacticalHost', 'tacticalRequestMemoryKey', '_posture']) expectContains(graphRunner, needle, `GraphRunner wrapper должен содержать: ${needle}`);
+expectNotContains(graphRunnerSources, 'SimulationState', 'GraphRunner не должен зависеть от игровой SimulationState.');
+expectNotContains(graphRunnerSources, 'pixi.js', 'GraphRunner не должен зависеть от PixiJS.');
+expectNotContains(graphRunnerSources, 'localStorage', 'GraphRunner не должен читать localStorage напрямую.');
 
 const gameBridge = readText('src/core/ai/AiGameBridge.ts');
 expectContains(gameBridge, 'runAiGraph', 'Мост должен вызывать нормальный GraphRunner.');

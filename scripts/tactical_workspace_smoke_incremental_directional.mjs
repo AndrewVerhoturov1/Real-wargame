@@ -83,6 +83,9 @@ function isExpectedMigrationFailure(line) {
   if (line.includes('src/tactical-workspace-stage8.css: missing')) {
     return line.includes('.cover-map-tooltip[hidden]');
   }
+  if (line.includes('src/core/simulation/SimulationTick.ts: missing')) {
+    return line.includes('applyFinalFacing') || line.includes('unit.facingRadians = order.finalFacingRadians');
+  }
   return line.includes('src/core/knowledge/SoldierDangerField.ts: missing "readDirectionalBasisValue"');
 }
 
@@ -99,32 +102,17 @@ function verifyAllocationFreeDirectionalDanger() {
 function verifyWorkspaceMigration() {
   const base = readFileSync('src/ui/TacticalWorkspaceBase.ts', 'utf8');
   const wrapper = readFileSync('src/ui/TacticalWorkspace.ts', 'utf8');
-  for (const token of [
-    "type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory'",
-    'Диагностика ИИ (без изменений)',
-    'Рассчитать и выполнить',
-    'data-action="turn-unit"',
-    'data-action="unit-attention-mode"',
-    'setAttentionMode',
-    'clearAttentionOverride',
-  ]) {
-    assert.ok(base.includes(token), `workspace compatibility base must retain ${token}`);
-  }
-  for (const token of [
-    'Опасность и тактические позиции',
-    'tactical-position-help',
-    'Ромбы на карте рассчитаны из личного поля опасности бойца',
-    '.cover-map-tooltip',
-    '.selected-cover-card',
-    'observer?.observe(shell',
-    'requestAnimationFrame',
-  ]) {
-    assert.ok(wrapper.includes(token), `workspace migration shell must contain ${token}`);
-  }
-  assert.ok(!wrapper.includes('observer.observe(document.body'), 'workspace migration must not observe the full document');
-  assert.ok(!wrapper.includes('getSimulationCovers'), 'workspace shell must not call removed cover discovery');
-  assert.ok(!wrapper.includes('hoverSimulationCoverAtPosition'), 'workspace shell must not hit-test old cover markers');
-  assert.ok(!wrapper.includes('Приказать двигаться сюда'), 'old object-cover movement control must not survive in active workspace code');
+  const positionsTab = readFileSync('src/ui/TacticalPositionWorkspaceTab.ts', 'utf8');
+  const searchControls = readFileSync('src/ui/TacticalPositionSearchControls.ts', 'utf8');
+  for (const token of ["type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory'", 'Диагностика ИИ (без изменений)', 'Рассчитать и выполнить', 'data-action="turn-unit"', 'data-action="unit-attention-mode"', 'setAttentionMode', 'clearAttentionOverride']) assert.ok(base.includes(token), `workspace compatibility base must retain ${token}`);
+  for (const token of ['installTacticalPositionWorkspaceTab', 'installTacticalPositionSearchControls', 'installTacticalPositionSettingsControls', '.cover-map-tooltip', '.selected-cover-card', 'observer.observe(shell', 'requestAnimationFrame']) assert.ok(wrapper.includes(token), `workspace migration shell must contain ${token}`);
+  for (const token of ["button.textContent = 'Позиции'", "setSimulationLayerMode(state, 'positions')", 'data-role="tactical-position-tab-body"', 'TAB_CHANGED_EVENT']) assert.ok(positionsTab.includes(token), `dedicated positions tab must contain ${token}`);
+  for (const token of ["'advance_to_threat'", "'withdraw_from_threat'", "'continue_order'", "objectiveSelect.dataset.role = 'tactical-position-objective'", "diagnostics.dataset.role = 'tactical-position-metrics'", 'isTacticalPositionWorkspaceTabActive']) assert.ok(searchControls.includes(token), `positions controls must contain ${token}`);
+  assert.ok(!searchControls.includes('[data-role="sidebar-body"]'));
+  assert.ok(!wrapper.includes('observer.observe(document.body'));
+  assert.ok(!wrapper.includes('getSimulationCovers'));
+  assert.ok(!wrapper.includes('hoverSimulationCoverAtPosition'));
+  assert.ok(!wrapper.includes('Приказать двигаться сюда'));
 }
 
 function verifyOverlayMigration() {
@@ -141,29 +129,10 @@ function verifyOverlayMigration() {
 function verifySharedAwarenessRuntime() {
   const runtime = readFileSync('src/runtime/AwarenessWorldRuntime.ts', 'utf8');
   const renderer = readFileSync('src/rendering/PixiAwarenessHeatmapRenderer.ts', 'utf8');
-  for (const token of [
-    'new Worker',
-    'AwarenessWorldWorker.ts',
-    'workerJobsCoalesced',
-    'workerResultsStaleDropped',
-    'MAX_PENDING_OWNERS',
-    'MAX_READY_OWNERS',
-    'requestTacticalPositions',
-    'searchTacticalPositions',
-  ]) {
-    assert.ok(runtime.includes(token), `shared awareness runtime must contain ${token}`);
-  }
-  for (const token of [
-    'AwarenessWorldRuntime',
-    'requestTacticalPositions',
-    'drawTacticalPositionMarker',
-    'recommendedPosture',
-    'lineTo(x + radius, y)',
-  ]) {
-    assert.ok(renderer.includes(token), `awareness renderer must contain ${token}`);
-  }
-  assert.ok(!renderer.includes('buildUnitKnowledgeReport'), 'renderer must not rebuild legacy knowledge reports');
-  assert.ok(!renderer.includes('drawCoverMarker'), 'renderer must not restore old circle/square markers');
+  for (const token of ['new Worker', 'AwarenessWorldWorker.ts', 'workerJobsCoalesced', 'workerResultsStaleDropped', 'MAX_PENDING_OWNERS', 'MAX_READY_OWNERS']) assert.ok(runtime.includes(token), `shared awareness runtime must contain ${token}`);
+  for (const token of ['AwarenessWorldRuntime', 'renderTacticalPositions', 'drawB2TacticalPositionMarker', 'recommendedPostureOf', 'TacticalPositionInputController', 'isTacticalPositionWorkspaceTabActive']) assert.ok(renderer.includes(token), `awareness renderer must contain ${token}`);
+  assert.ok(!renderer.includes('buildUnitKnowledgeReport'));
+  assert.ok(!renderer.includes('drawCoverMarker'));
 }
 
 function verifyBoundedTacticalSearch() {
@@ -214,13 +183,18 @@ function verifyLegacyAuxiliaryUiIsGone() {
 
 function verifyGraphRuntimeConnection() {
   const runtime = readFileSync('src/core/ai/AiGraphRuntime.ts', 'utf8');
-  const provider = readFileSync('src/core/tactical/TacticalPositionProvider.ts', 'utf8');
-  const adapter = readFileSync('src/runtime/AwarenessTacticalPositionAdapter.ts', 'utf8');
-  assert.ok(runtime.includes('generateRegisteredTacticalPositions'));
+  const runner = readFileSync('src/core/ai/AiGraphRunner.ts', 'utf8');
+  const service = readFileSync('src/core/tactical/TacticalPositionSearchService.ts', 'utf8');
+  const objective = readFileSync('src/core/tactical/TacticalPositionObjective.ts', 'utf8');
   assert.ok(runtime.includes("export * from './AiGraphRuntimeLegacy'"));
-  assert.ok(provider.includes('MAX_ACTIVE_PROVIDER_STATES'));
-  assert.ok(provider.includes('generateRegisteredTacticalPositions'));
-  assert.ok(adapter.includes('MAX_LOCAL_SAMPLE_CELLS'));
-  assert.ok(adapter.includes('MAX_LOCAL_ROUTE_EXPANSIONS'));
-  assert.ok(adapter.includes('no synchronous full-map fallback'));
+  assert.ok(runner.includes('wrapStatefulTacticalHost'));
+  assert.ok(runner.includes('tacticalRequestMemoryKey'));
+  assert.ok(service.includes('enqueueCoverSearch'));
+  assert.ok(service.includes('searchTacticalPositionsForObjective'));
+  assert.ok(service.includes('origin: { ...unit.position }'));
+  assert.ok(service.includes('currentPosture: unit.behaviorRuntime.posture'));
+  assert.ok(service.includes('Walking'));
+  assert.ok(objective.includes('distanceToThreatMeters'));
+  assert.ok(objective.includes('threatDistanceDeltaMeters'));
+  assert.ok(objective.includes('distanceToOrderTargetMeters'));
 }

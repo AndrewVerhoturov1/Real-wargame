@@ -1,6 +1,10 @@
 import type { GridPosition } from '../geometry';
 import type { UnitModel } from '../units/UnitModel';
-import type { TacticalPositionSettings } from './TacticalPositionSettings';
+import type { TacticalPositionCandidateSeed } from '../ai/tactical/TacticalQuery';
+import {
+  createDefaultTacticalPositionSettings,
+  type TacticalPositionSettings,
+} from './TacticalPositionSettings';
 import {
   searchTacticalPositions,
   type TacticalPositionCandidateSeedV2,
@@ -77,10 +81,12 @@ export function searchTacticalPositionsForObjective(
 ): TacticalPositionSearchResult {
   const requestedLimit = Math.max(1, Math.floor(request.maxCandidates));
   const expandedLimit = Math.min(96, Math.max(24, requestedLimit * 4));
+  const settings = request.settings ?? createDefaultTacticalPositionSettings();
   const base = searchTacticalPositions(field, {
     ...request,
     maxCandidates: expandedLimit,
     orderTarget: request.orderTarget,
+    settings,
   });
   const originThreatDistance = request.referenceThreatPosition
     ? distanceMeters(request.origin, request.referenceThreatPosition, field.metersPerCell)
@@ -117,7 +123,7 @@ export function searchTacticalPositionsForObjective(
     };
     return {
       candidate: enriched,
-      score: objectiveSortScore(enriched, request.objective, request.settings),
+      score: objectiveSortScore(enriched, request.objective, settings),
       originalIndex,
     };
   });
@@ -135,9 +141,9 @@ export function searchTacticalPositionsForObjective(
 }
 
 export function readTacticalPositionObjectiveMetrics(
-  candidate: TacticalPositionCandidateSeedV2,
+  candidate: TacticalPositionCandidateSeed,
 ): TacticalPositionObjectiveMetrics {
-  const metrics = candidate.metrics as TacticalPositionCandidateSeedV2['metrics'] & Partial<TacticalPositionObjectiveMetrics>;
+  const metrics = candidate.metrics as TacticalPositionCandidateSeed['metrics'] & Partial<TacticalPositionObjectiveMetrics>;
   return {
     referenceThreatId: typeof metrics.referenceThreatId === 'string' ? metrics.referenceThreatId : null,
     distanceToThreatMeters: finiteOrNull(metrics.distanceToThreatMeters),
