@@ -1,4 +1,5 @@
 import type { TacticalMapData } from '../map/MapModel';
+import { getTacticalTraversalPlanningService } from '../navigation/TacticalTraversalPlanningService';
 import { initializeTacticalTraversalProfiles } from '../navigation/TacticalTraversalProfileStore';
 import type { PressureZoneData } from '../pressure/PressureZone';
 import { normalizePressureZones } from '../pressure/PressureZone';
@@ -39,6 +40,8 @@ export function replaceSceneAtRuntimeResolution(
   pressureZoneData: PressureZoneData[] = [],
   preferredRuntimeMetersPerCell = DEFAULT_RUNTIME_METERS_PER_CELL,
 ): void {
+  const traversalService = getTacticalTraversalPlanningService(state);
+  for (const unit of state.units) traversalService?.clearUnit(unit.id);
   const loaded = createResolutionAwareInitialState(
     mapData,
     unitsData,
