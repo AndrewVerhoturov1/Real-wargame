@@ -74,6 +74,17 @@ For `feature/20260719-tactical-position-system` it must:
 5. preserve the exact source SHA in build metadata and the `gh-pages` commit message;
 6. confirm the system workflow `pages build and deployment` completes successfully.
 
+## Trigger guarantee
+
+Never assume that the Pages workflow started. Confirm a run exists for the final branch HEAD.
+
+A commit pushed from another GitHub Actions workflow with its default `GITHUB_TOKEN` may not trigger a second push workflow. After an Actions-authored final fix:
+
+1. verify whether the Pages run exists for that SHA;
+2. when it does not, start `deploy-tactical-position-pages.yml` through `workflow_dispatch` or make a GitHub-App-authored deployment marker/workflow update;
+3. deploy the resulting exact HEAD and report that SHA;
+4. do not stop after merely noting that the automatic trigger was suppressed.
+
 Do not modify `main` or `real-wargame-preview` unless separately authorized. Do not use Vercel for a GitHub Pages deployment.
 
 ## Mandatory live targets
