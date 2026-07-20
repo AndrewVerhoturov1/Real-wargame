@@ -10,7 +10,6 @@ import { soldierPostureHeightMeters } from './VisibilityPosture';
 
 export const VISIBILITY_SILHOUETTE_VERSION = 1;
 const SAMPLE_FRACTIONS = [0.3, 0.6, 0.9] as const;
-const MINIMUM_VISUAL_TRANSMISSION = resolveVegetationDefinition('none').visibility.minimumTransmission;
 
 export interface VisibilitySilhouetteSample {
   readonly heightFraction: 0.3 | 0.6 | 0.9;
@@ -64,7 +63,8 @@ export function probeTargetVisibility(
     (sum, sample) => sum + (sample.trace.hardBlocked ? 0 : sample.trace.fireTransmission),
     0,
   ) / samples.length;
-  const blocked = visible.length === 0 || visualTransmission <= MINIMUM_VISUAL_TRANSMISSION;
+  const minimumVisualTransmission = resolveVegetationDefinition('none').visibility.minimumTransmission;
+  const blocked = visible.length === 0 || visualTransmission <= minimumVisualTransmission;
   return {
     origin: { ...observer.position },
     target: { ...target },
