@@ -1,6 +1,6 @@
 # Unified Posture-Aware Visibility — Design
 
-**Status:** awaiting user review  
+**Status:** approved for implementation  
 **Date:** 2026-07-20  
 **Repository:** `AndrewVerhoturov1/Real-wargame`  
 **Base branch:** `real-wargame-preview`  
@@ -167,38 +167,24 @@ The context is cached by map and canonical revision identity. No renderer, DOM o
 
 Use deterministic 2-D grid DDA traversal over the exact segment from `origin` to `target`.
 
-The kernel exposes one canonical streaming primitive:
-
-```text
-walkVisibilityRay(context, request, visitor)
-```
-
-The traversal provides for every crossed cell:
+The traversal must provide for every crossed cell:
 
 - entry distance;
 - exit distance;
 - exact path length inside the cell;
 - representative segment point;
 - whether the cell is the target cell;
-- current terrain/object horizon before evaluating the cell as a target;
-- current visual and fire transmission before and after crossing the cell.
-
-Two thin wrappers use this same walker:
-
-- `traceVisibilityRayToTarget(...)` returns one exact point-target result;
-- the geometry-field builder visits every candidate cell encountered on a perimeter ray and evaluates that cell as a hypothetical target at the configured preview height.
-
-The field builder must not implement a second terrain, object or vegetation formula around the walker.
+- whether traversal is axial, diagonal or partial.
 
 This replaces:
 
-- the current cell-center-only point terrain horizon path;
+- the current cell-center-only terrain horizon path;
 - the separate fixed `1.2 m` point-sampling loop;
 - separate field vegetation step math.
 
 ### 5.4 Origin and target height
 
-For every exact target trace:
+For every trace:
 
 ```text
 originEye = smoothTerrainHeight(exactOrigin) + originHeightAboveGround
@@ -206,13 +192,11 @@ originEye = smoothTerrainHeight(exactOrigin) + originHeightAboveGround
 targetPoint = smoothTerrainHeight(exactTarget) + targetHeightAboveGround
 ```
 
-For a heatmap cell, the target position is that cell's center because the cell represents a hypothetical location rather than a concrete unit. The observer origin remains the selected unit's exact position.
-
-Intermediate terrain uses the canonical static-grid terrain sample for the crossed cell. Concrete observers and concrete targets are never snapped to cell centers.
+Intermediate terrain uses the canonical static-grid terrain sample for the crossed cell. The origin and target are never snapped to cell centers.
 
 ### 5.5 Terrain horizon
 
-The kernel maintains the maximum occluding slope encountered before the current target sample.
+The kernel maintains the maximum occluding slope encountered before the target.
 
 For each intermediate cell:
 
@@ -220,7 +204,7 @@ For each intermediate cell:
 groundSlope = (terrainHeight - originEye) / distanceFromExactOrigin
 ```
 
-The current target sample is terrain-blocked when:
+The target sample is terrain-blocked when:
 
 ```text
 targetSlope + 0.02 < maximumHorizonSlope
@@ -289,14 +273,12 @@ One three-sample silhouette probe consumes one logical budget slot. Diagnostics 
 The cache key includes:
 
 - observer ID and posture;
-- exact normalized observer position without coarse position bucketing;
-- exact normalized target position without coarse position bucketing;
+- observer exact position serialized with sufficient precision to distinguish materially different paths;
+- target exact position serialized with sufficient precision to distinguish materially different paths;
 - target height;
 - silhouette sampling version;
 - terrain, height, forest and object revisions;
 - active visibility-material profile key.
-
-Canonical coordinate serialization may normalize floating-point representation, but it must preserve at least `0.001` cell precision and must not reuse a result across positions that can traverse a different set of cells.
 
 ## 7. Compatibility LOS API
 
@@ -319,7 +301,7 @@ Create:
 src/core/visibility/VisibilityCandidateMask.ts
 ```
 
-The mask builder receives the selected unit and its current attention state. Hypothetical target posture is not part of attention masking; it is applied later by geometry.
+The mask builder receives the selected unit and the heatmap preview target posture.
 
 It produces bounded arrays for the current visibility rectangle:
 
@@ -335,16 +317,14 @@ The candidate pass may inspect every cell in the bounded maximum-range rectangle
 
 `VisibilityGeometryField` is refactored to use `VisibilityRayKernel`.
 
-For the selected-unit heatmap it receives the candidate mask and hypothetical target height.
+For the selected-unit heatmap it receives the candidate mask.
 
 The field still uses perimeter rays to preserve bounded field construction, but each perimeter ray first performs a cheap mask-only walk:
 
 1. if the ray touches no candidate cell, skip it completely;
 2. otherwise find the farthest candidate cell on that ray;
-3. run the canonical ray walker only up to that cell;
-4. evaluate and write only candidate cells encountered by the ray.
-
-Every candidate cell that the current full-perimeter algorithm can reach must remain covered after filtering. Differential tests compare masked coverage against an unfiltered reference build.
+3. run canonical geometry only up to that cell;
+4. write results only for candidate cells encountered by the ray.
 
 This preserves the existing radial coverage while avoiding terrain/object/vegetation evaluation for inactive sectors and excessive distance beyond the active zone.
 
@@ -365,12 +345,9 @@ Field arrays may remain map-sized typed arrays for simple indexed access and one
 - builds the attention candidate mask before geometry;
 - computes visibility quality only for candidate/evaluated cells;
 - uses the same `evaluateCellVisibilityQuality` formula as point perception;
-- includes exact observer position at build time, preview posture and candidate-mask identity in the calculation key;
-- removes coarse `0.25`-cell origin quantization from field geometry cache identity;
+- includes preview posture and candidate-mask identity in the calculation key;
 - preserves the `0.2 s` moving rebuild throttle;
 - preserves per-unit field caching.
-
-The moving throttle may display the last exact field for up to `0.2 s`, but every rebuild must use the unit's exact current position.
 
 The final quality remains:
 
