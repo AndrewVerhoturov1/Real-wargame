@@ -68,6 +68,7 @@ export function evaluatePointVisibility(
   targetHeightMeters: number,
   attention: AttentionSample,
 ): PointVisibilityResult | null {
+  if (!isFinitePosition(observer.position) || !isFinitePosition(target)) return null;
   const distanceCells = distance(observer.position, target);
   const distanceMeters = distanceCells * state.map.metersPerCell;
   const rangeCells = Math.max(
@@ -192,6 +193,7 @@ function buildPerceptionPointKey(
     exactCoordinateKey(target.x),
     exactCoordinateKey(target.y),
     exactCoordinateKey(targetHeightMeters),
+    exactCoordinateKey(state.map.metersPerCell),
     revisions.terrain,
     revisions.height,
     revisions.forest,
@@ -275,6 +277,10 @@ function targetProbeToCompatibilityLineOfSight(
       ? `Растительность: пройдено около ${Math.round(vegetationMeters)} м; видно ${Math.round(probe.visibleFraction * 100)}% силуэта.`
       : `Видно ${Math.round(probe.visibleFraction * 100)}% силуэта.`,
   };
+}
+
+function isFinitePosition(position: GridPosition): boolean {
+  return Number.isFinite(position.x) && Number.isFinite(position.y);
 }
 
 function exactCoordinateKey(value: number): string {
