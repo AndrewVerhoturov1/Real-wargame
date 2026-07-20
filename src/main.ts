@@ -36,6 +36,8 @@ import { installAdaptiveGridLod } from './rendering/AdaptiveGridLodInstaller';
 import { installAttentionOverlayRenderer } from './rendering/AttentionOverlayInstaller';
 import { installCombatEffectsRenderer } from './rendering/CombatEffectsInstaller';
 import { PixiTacticalBoardApp } from './rendering/PixiApp';
+import { installAwarenessLayerFieldController } from './runtime/AwarenessLayerFieldController';
+import { AwarenessWorldRuntime } from './runtime/AwarenessWorldRuntime';
 import { installAppShellMenu } from './shared/AppShellMenu';
 import { installAiStatePlanVisualQaHarness } from './testing/AiStatePlanVisualQaHarness';
 import { installCombatTacticalIntegrationVisualQaHarness } from './testing/CombatTacticalIntegrationVisualQaHarness';
@@ -64,6 +66,7 @@ const DEBUG_STORAGE_KEY = 'real-wargame.ai-node-editor.debug.v1';
 let state: ReturnType<typeof createResolutionAwareInitialState>;
 let tacticalBoard: PixiTacticalBoardApp | null = null;
 let tacticalPositionSearchService: TacticalPositionSearchService | null = null;
+let destroyAwarenessLayerFieldController: (() => void) | null = null;
 type PausableRuntimeState = typeof state & { paused?: boolean };
 
 const root = document.querySelector<HTMLElement>('#app')!;
@@ -99,8 +102,12 @@ state.map.environmentProfileId = environmentProfileRegistry.activeProfileId;
 state.movementProfiles = getMovementProfileRegistry();
 installEnvironmentMovementMaterialProvider(state);
 initializeAiTestLabRuntime(state);
-tacticalPositionSearchService = new TacticalPositionSearchService(state);
+const awarenessWorldRuntime = new AwarenessWorldRuntime();
+tacticalPositionSearchService = new TacticalPositionSearchService(state, awarenessWorldRuntime);
 installTacticalPositionSearchService(state, tacticalPositionSearchService);
+destroyAwarenessLayerFieldController = installAwarenessLayerFieldController(state, {
+  requestWorldField: (unit) => awarenessWorldRuntime.requestWorldField(state, unit),
+});
 
 void bootstrap().catch(reportBootstrapFailure);
 
@@ -187,6 +194,8 @@ async function bootstrap(): Promise<void> {
     clearAsyncRouteCostWorker(state.map);
     aiGameBridge.destroy();
     board.destroy();
+    destroyAwarenessLayerFieldController?.();
+    destroyAwarenessLayerFieldController = null;
     tacticalPositionSearchService?.destroy();
     tacticalPositionSearchService = null;
     if (tacticalBoard === board) tacticalBoard = null;
@@ -210,6 +219,8 @@ function reportBootstrapFailure(error: unknown): void {
   } catch (destroyError) {
     console.error('Failed to clean up the tactical board after bootstrap failure.', destroyError);
   }
+  destroyAwarenessLayerFieldController?.();
+  destroyAwarenessLayerFieldController = null;
   tacticalPositionSearchService?.destroy();
   tacticalPositionSearchService = null;
   clearNativeMapQualityDiagnostics();
