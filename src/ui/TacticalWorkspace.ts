@@ -1,4 +1,5 @@
 import type { AiGameBridgeHandle } from '../core/ai/AiGameBridge';
+import { setRouteCostOverlayActive } from '../core/navigation/RouteCostOverlayState';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { setSimulationLayerMode } from '../core/ui/RuntimeUiState';
 import {
@@ -14,7 +15,7 @@ const ROUTE_COST_INSPECTOR_RENDERED_EVENT = 'real-wargame:route-cost-inspector-r
 
 /**
  * Compatibility shell around the existing workspace while legacy cover widgets
- * are removed. Tactical-position search and route-cost diagnostics own dedicated
+ * are removed. Tactical-position search and route diagnostics own dedicated
  * inspector tabs and are never mounted into the shared Info/Danger/Stealth body.
  */
 export function installTacticalWorkspace(
@@ -58,7 +59,7 @@ export function installTacticalWorkspace(
 
   if (shell && sidebarBody && tabs) {
     const memoryTab = tabs.querySelector<HTMLButtonElement>('[data-tab="memory"]');
-    const markup = '<button data-tab="routeCost">Стоимость маршрута</button>';
+    const markup = '<button data-tab="routeCost">Маршрут</button>';
     if (memoryTab) memoryTab.insertAdjacentHTML('beforebegin', markup);
     else tabs.insertAdjacentHTML('beforeend', markup);
     routeCostTab = tabs.querySelector<HTMLButtonElement>('[data-tab="routeCost"]');
@@ -69,7 +70,20 @@ export function installTacticalWorkspace(
     routeCostInspectorPanel.innerHTML = '<div class="workspace-panel-section route-cost-inspector-panel" data-role="route-cost-inspector-host"></div>';
     sidebarBody.after(routeCostInspectorPanel);
 
+    const routeCostInspectorHost = routeCostInspectorPanel.querySelector<HTMLElement>('[data-role="route-cost-inspector-host"]');
+    const routeProfileLabel = shell.querySelector<HTMLElement>('.unit-route-profile');
+    const routeDetails = shell.querySelector<HTMLDetailsElement>('.unit-route-details');
+    const routeControls = shell.querySelector<HTMLElement>('.unit-bar-route-controls');
+    const routeProfileCaption = routeProfileLabel?.querySelector<HTMLElement>('span');
+    if (routeProfileCaption) routeProfileCaption.textContent = 'Профиль движения';
+    if (routeDetails) routeDetails.open = true;
+    if (routeCostInspectorHost && routeProfileLabel && routeDetails) {
+      routeCostInspectorHost.append(routeProfileLabel, routeDetails);
+    }
+    routeControls?.classList.add('route-controls-migrated');
+
     shell.querySelector<HTMLButtonElement>('[data-action="route-cost-quick-toggle"]')?.remove();
+    setRouteCostOverlayActive(state, false);
     window.dispatchEvent(new CustomEvent(ROUTE_COST_INSPECTOR_RENDERED_EVENT));
   }
 
@@ -79,7 +93,7 @@ export function installTacticalWorkspace(
     sidebarBody.hidden = routeCostTabActive;
     if (!routeCostTabActive) return;
 
-    if (sidebarTitle.textContent !== 'Стоимость маршрута') sidebarTitle.textContent = 'Стоимость маршрута';
+    if (sidebarTitle.textContent !== 'Маршрут') sidebarTitle.textContent = 'Маршрут';
     shell.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((button) => {
       button.classList.toggle('active', button === routeCostTab);
     });
@@ -88,17 +102,22 @@ export function installTacticalWorkspace(
   const handleRouteCostTabClick = (): void => {
     routeCostTabActive = true;
     setSimulationLayerMode(state, 'info');
+    setRouteCostOverlayActive(state, true);
     syncRouteCostInspectorUi();
     window.dispatchEvent(new CustomEvent(ROUTE_COST_INSPECTOR_RENDERED_EVENT));
     onChanged();
   };
   const handleOtherTabClick = (): void => {
     routeCostTabActive = false;
+    setRouteCostOverlayActive(state, false);
     syncRouteCostInspectorUi();
+    onChanged();
   };
   const handleModeClick = (): void => {
     routeCostTabActive = false;
+    setRouteCostOverlayActive(state, false);
     syncRouteCostInspectorUi();
+    onChanged();
   };
 
   routeCostTab?.addEventListener('click', handleRouteCostTabClick);
@@ -144,6 +163,7 @@ export function installTacticalWorkspace(
   return () => {
     observer?.disconnect();
     if (scheduledFrame !== 0) window.cancelAnimationFrame(scheduledFrame);
+    setRouteCostOverlayActive(state, false);
     routeCostTab?.removeEventListener('click', handleRouteCostTabClick);
     originalTabButtons.forEach((button) => button.removeEventListener('click', handleOtherTabClick));
     modeButtons.forEach((button) => button.removeEventListener('click', handleModeClick));
