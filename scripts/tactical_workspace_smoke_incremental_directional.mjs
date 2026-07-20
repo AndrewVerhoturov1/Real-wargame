@@ -36,7 +36,7 @@ console.log('Tactical workspace migration smoke passed: old cover UI is absent a
 
 function isExpectedMigrationFailure(line) {
   const tacticalWorkspaceRelocations = [
-    "type SimulationTab = 'info' | 'danger' | 'positions' | 'stealth' | 'memory'",
+    "type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory'",
     'Симуляция',
     'Редактирование',
     'Слой опасности',
