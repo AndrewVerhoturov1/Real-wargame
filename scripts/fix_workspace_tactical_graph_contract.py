@@ -25,8 +25,9 @@ new = """function verifyGraphRuntimeConnection() {
   assert.ok(runner.includes('tacticalRequestMemoryKey'));
   assert.ok(service.includes('enqueueCoverSearch'));
   assert.ok(service.includes('searchTacticalPositionsForObjective'));
-  assert.ok(service.includes('evaluatedOrigin'));
-  assert.ok(service.includes('evaluatedPosture'));
+  assert.ok(service.includes('origin: { ...unit.position }'));
+  assert.ok(service.includes('currentPosture: unit.behaviorRuntime.posture'));
+  assert.ok(service.includes('Walking'));
   assert.ok(objective.includes('distanceToThreatMeters'));
   assert.ok(objective.includes('threatDistanceDeltaMeters'));
   assert.ok(objective.includes('distanceToOrderTargetMeters'));
