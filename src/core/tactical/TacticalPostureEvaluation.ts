@@ -15,11 +15,11 @@ export interface TacticalPostureEvaluation {
   readonly danger: number;
   readonly protection: number;
   readonly safety: number;
+  readonly reasonCodes: readonly string[];
 }
 
 export interface TacticalPostureEvaluationDetail extends TacticalPostureEvaluation {
   readonly transitionPenalty: number;
-  readonly reasonCodes: readonly string[];
 }
 
 export interface TacticalPostureEvaluationResult {
@@ -99,6 +99,7 @@ export function selectHighestSafePosture<T extends TacticalPostureEvaluation>(
       danger: 100,
       protection: 0,
       safety: 0,
+      reasonCodes: ['posture_data_missing'],
     } as T;
   }
   if (selected.posture === 'standing' && crouchedAllowed
@@ -111,7 +112,7 @@ export function selectHighestSafePosture<T extends TacticalPostureEvaluation>(
 
 export function estimatePostureSuppression(
   baseSuppression: number,
-  evaluation: TacticalPostureEvaluation,
+  evaluation: Pick<TacticalPostureEvaluation, 'posture' | 'protection'>,
   currentPosture: UnitPosture,
 ): number {
   const exposureRatio = POSTURE_EXPOSURE_MULTIPLIER[evaluation.posture]
