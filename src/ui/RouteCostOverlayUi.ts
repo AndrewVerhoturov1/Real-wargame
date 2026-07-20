@@ -2,7 +2,6 @@ import { getNavigationProfileRegistry } from '../core/navigation/NavigationProfi
 import {
   getRouteCostOverlayState,
   setRouteCostOverlayMode,
-  toggleRouteCostOverlay,
   type RouteCostOverlayMode,
 } from '../core/navigation/RouteCostOverlayState';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
@@ -22,21 +21,10 @@ export function installRouteCostOverlayUi(
   controls.className = 'route-cost-controls';
 
   const heading = document.createElement('h3');
-  heading.textContent = 'Слой стоимости маршрута';
+  heading.textContent = 'Стоимость движения';
 
   const description = document.createElement('p');
-  description.textContent = 'Показывает цену перемещения по клеткам. Итоговая стоимость использует профиль и известные данные выбранного бойца.';
-
-  const menuToggle = document.createElement('button');
-  menuToggle.type = 'button';
-  menuToggle.dataset.action = 'route-cost-overlay';
-
-  const toggle = () => {
-    const active = toggleRouteCostOverlay(state);
-    updateToggle(menuToggle, active, 'Стоимость маршрута');
-    onChanged();
-  };
-  menuToggle.addEventListener('click', toggle);
+  description.textContent = 'Цвет показывает цену перемещения по клеткам для выбранного бойца и профиля движения.';
 
   const mode = document.createElement('select');
   mode.dataset.action = 'route-cost-mode';
@@ -45,40 +33,39 @@ export function installRouteCostOverlayUi(
     <option value="baseTerrain">Базовая местность</option>
     <option value="finalCost">Итоговая стоимость</option>
   `;
-  mode.addEventListener('change', () => {
+  const handleModeChange = (): void => {
     setRouteCostOverlayMode(state, mode.value as RouteCostOverlayMode);
     onChanged();
-  });
+  };
+  mode.addEventListener('change', handleModeChange);
 
   const modeLabel = document.createElement('label');
   modeLabel.textContent = 'Вид стоимости';
   modeLabel.append(mode);
-  controls.append(heading, description, menuToggle, modeLabel);
+  controls.append(heading, description, modeLabel);
 
-  const mountInspectorControls = () => {
+  const mountInspectorControls = (): void => {
     const host = document.querySelector<HTMLElement>('[data-role="route-cost-inspector-host"]');
-    if (host && controls.parentElement !== host) host.append(controls);
+    if (host && controls.parentElement !== host) host.prepend(controls);
   };
   window.addEventListener(ROUTE_COST_INSPECTOR_RENDERED_EVENT, mountInspectorControls);
   mountInspectorControls();
 
   const overlay = getRouteCostOverlayState(state);
   mode.value = overlay.mode === 'directionalTerrain' ? 'finalCost' : overlay.mode;
-  updateToggle(menuToggle, overlay.active, 'Стоимость маршрута');
   updateStatus(profileStatus, routeCostStatus, routeReasonStatus, getSelectedUnit(state));
 
   const interval = window.setInterval(() => {
     const current = getRouteCostOverlayState(state);
     const visibleMode = current.mode === 'directionalTerrain' ? 'finalCost' : current.mode;
     if (mode.value !== visibleMode) mode.value = visibleMode;
-    updateToggle(menuToggle, current.active, 'Стоимость маршрута');
     updateStatus(profileStatus, routeCostStatus, routeReasonStatus, getSelectedUnit(state));
   }, UPDATE_INTERVAL_MS);
 
   return () => {
     window.clearInterval(interval);
     window.removeEventListener(ROUTE_COST_INSPECTOR_RENDERED_EVENT, mountInspectorControls);
-    menuToggle.removeEventListener('click', toggle);
+    mode.removeEventListener('change', handleModeChange);
     controls.remove();
   };
 }
@@ -124,13 +111,6 @@ function updateStatus(
     `Цена: ${formatNumber(order.pathCost)} · длина: ${formatMeters(order.pathDistanceMeters)} · обход: +${detour}${directionalSummary} · перестроений: ${order.replanCount ?? 0}`,
   );
   setText(reasonElement, `Причина: ${order.pathReasonRu ?? 'нет диагностической сводки'}`);
-}
-
-function updateToggle(button: HTMLButtonElement, active: boolean, label: string): void {
-  const value = `${label}: ${active ? 'вкл' : 'выкл'}`;
-  if (button.textContent !== value) button.textContent = value;
-  button.classList.toggle('active', active);
-  button.setAttribute('aria-pressed', String(active));
 }
 
 function sourceLabel(source: string): string {
