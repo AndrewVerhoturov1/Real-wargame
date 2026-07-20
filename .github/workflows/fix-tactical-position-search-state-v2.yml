@@ -1,0 +1,216 @@
+name: Fix Tactical Position Search State V2
+
+on:
+  push:
+    branches:
+      - feature/20260719-tactical-position-system
+    paths:
+      - '.github/workflows/fix-tactical-position-search-state-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/20260719-tactical-position-system
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply root-cause fixes and regression contracts
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'Expected source fragment not found in {path}: {old[:120]!r}')
+              file.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          def replace_all(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'Expected source fragment not found in {path}: {old[:120]!r}')
+              file.write_text(text.replace(old, new), encoding='utf-8')
+
+          replace(
+              'src/core/tactical/TacticalPositionSearchService.ts',
+              "export interface TacticalPositionSearchServiceDiagnostics {\n  readonly requestCount: number;\n  readonly ownerCount: number;\n  readonly queuedCount: number;\n  readonly readyCount: number;\n  readonly staleCount: number;\n  readonly listenerCount: number;\n  readonly localSearchCount: number;\n  readonly destroyed: boolean;\n}\n",
+              "export interface TacticalPositionSearchServiceDiagnostics {\n  readonly requestCount: number;\n  readonly ownerCount: number;\n  readonly queuedCount: number;\n  readonly readyCount: number;\n  readonly staleCount: number;\n  readonly listenerCount: number;\n  readonly localSearchCount: number;\n  readonly destroyed: boolean;\n}\n\nexport interface TacticalPositionSearchEnqueueOptions {\n  /** Create a new request even when the stable tactical identity is unchanged. */\n  readonly forceRefresh?: boolean;\n}\n",
+          )
+          replace(
+              'src/core/tactical/TacticalPositionSearchService.ts',
+              "  enqueueCoverSearch(\n    unit: UnitModel,\n    overrides: Partial<TacticalPositionSearchParameters> = {},\n  ): TacticalPositionSearchRequestSnapshotV1 {\n    return this.enqueue(unit, 'cover', overrides);\n  }\n\n  enqueue(\n    unit: UnitModel,\n    kind: TacticalPositionSearchKind,\n    overrides: Partial<TacticalPositionSearchParameters> = {},\n  ): TacticalPositionSearchRequestSnapshotV1 {",
+              "  enqueueCoverSearch(\n    unit: UnitModel,\n    overrides: Partial<TacticalPositionSearchParameters> = {},\n    options: TacticalPositionSearchEnqueueOptions = {},\n  ): TacticalPositionSearchRequestSnapshotV1 {\n    return this.enqueue(unit, 'cover', overrides, options);\n  }\n\n  enqueue(\n    unit: UnitModel,\n    kind: TacticalPositionSearchKind,\n    overrides: Partial<TacticalPositionSearchParameters> = {},\n    options: TacticalPositionSearchEnqueueOptions = {},\n  ): TacticalPositionSearchRequestSnapshotV1 {",
+          )
+          replace(
+              'src/core/tactical/TacticalPositionSearchService.ts',
+              "    if (latest && latest.inputIdentity === input.inputIdentity && isReusableStatus(latest.status)) {",
+              "    if (!options.forceRefresh && latest && latest.inputIdentity === input.inputIdentity && isReusableStatus(latest.status)) {",
+          )
+
+          replace(
+              'src/ui/TacticalPositionSearchControls.ts',
+              "  let selectedObjective: TacticalPositionSearchObjective = 'balanced';\n",
+              "  let selectedObjective: TacticalPositionSearchObjective = 'balanced';\n  const objectiveDraftByUnit = new Map<string, TacticalPositionSearchObjective>();\n  let objectiveUnitId: string | null = null;\n",
+          )
+          replace(
+              'src/ui/TacticalPositionSearchControls.ts',
+              "  const renderStatus = (): void => {\n    if (!status) return;\n    const unitId = state.selectedUnitId;\n    if (!unitId) {",
+              "  const renderStatus = (): void => {\n    if (!status) return;\n    const unitId = state.selectedUnitId;\n    if (objectiveUnitId !== unitId) {\n      objectiveUnitId = unitId;\n      selectedObjective = unitId\n        ? objectiveDraftByUnit.get(unitId) ?? service?.readLatestForUnit(unitId)?.objective ?? 'balanced'\n        : 'balanced';\n      if (objectiveSelect) objectiveSelect.value = selectedObjective;\n    }\n    if (!unitId) {",
+          )
+          replace(
+              'src/ui/TacticalPositionSearchControls.ts',
+              "    selectedObjective = request.objective;\n    if (objectiveSelect) objectiveSelect.value = request.objective;\n",
+              "",
+          )
+          replace(
+              'src/ui/TacticalPositionSearchControls.ts',
+              "    objectiveSelect.value = selectedObjective;\n    objectiveSelect.addEventListener('change', () => {\n      selectedObjective = objectiveSelect?.value as TacticalPositionSearchObjective;\n    });",
+              "    const unitId = state.selectedUnitId;\n    if (unitId) {\n      selectedObjective = objectiveDraftByUnit.get(unitId)\n        ?? service?.readLatestForUnit(unitId)?.objective\n        ?? selectedObjective;\n      objectiveUnitId = unitId;\n    }\n    objectiveSelect.value = selectedObjective;\n    objectiveSelect.addEventListener('change', () => {\n      selectedObjective = objectiveSelect?.value as TacticalPositionSearchObjective;\n      const selectedUnitId = state.selectedUnitId;\n      if (selectedUnitId) objectiveDraftByUnit.set(selectedUnitId, selectedObjective);\n    });",
+          )
+          replace(
+              'src/ui/TacticalPositionSearchControls.ts',
+              "      const request = service.enqueueCoverSearch(unit, { objective: selectedObjective });",
+              "      objectiveDraftByUnit.set(unit.id, selectedObjective);\n      const request = service.enqueueCoverSearch(\n        unit,\n        { objective: selectedObjective },\n        { forceRefresh: true },\n      );",
+          )
+          replace(
+              'src/ui/TacticalPositionSearchControls.ts',
+              "    if (!document.hidden && isTacticalPositionWorkspaceTabActive(state)) renderDiagnostics();",
+              "    if (!document.hidden && isTacticalPositionWorkspaceTabActive(state)) render();",
+          )
+
+          replace(
+              'src/ui/TacticalWorkspaceBase.ts',
+              "type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory';",
+              "type SimulationTab = 'info' | 'danger' | 'positions' | 'stealth' | 'memory';",
+          )
+          replace(
+              'src/ui/TacticalWorkspaceBase.ts',
+              "const TABS: Array<[SimulationTab, string]> = [\n  ['info', 'Инфо'], ['danger', 'Опасность'], ['stealth', 'Скрытность'], ['memory', 'Обзор и память'],\n];",
+              "const TABS: Array<[SimulationTab, string]> = [\n  ['info', 'Инфо'], ['danger', 'Опасность'], ['positions', 'Позиции'], ['stealth', 'Скрытность'], ['memory', 'Обзор и память'],\n];",
+          )
+          replace(
+              'src/ui/TacticalWorkspaceBase.ts',
+              "    setSimulationLayerMode(state, tab as SimulationLayerMode);\n    lastSidebarKey = '';",
+              "    setSimulationLayerMode(state, tab as SimulationLayerMode);\n    window.dispatchEvent(new CustomEvent('real-wargame:tactical-position-tab-changed'));\n    lastSidebarKey = '';",
+          )
+          replace(
+              'src/ui/TacticalWorkspaceBase.ts',
+              "      sidebarTitle.textContent = ({ info:'Информация о бойце', danger:'Опасность и укрытия', stealth:'Скрытность', memory:'Обзор и память' })[tab];",
+              "      sidebarTitle.textContent = ({ info:'Информация о бойце', danger:'Опасность и укрытия', positions:'Тактические позиции', stealth:'Скрытность', memory:'Обзор и память' })[tab];",
+          )
+          replace(
+              'src/ui/TacticalWorkspaceBase.ts',
+              "      } else if (tab === 'danger') {\n        renderDanger(sidebarBody, state, unit, onChanged, () => { lastSidebarKey=''; renderSidebar(); });\n      } else if (tab === 'stealth') {",
+              "      } else if (tab === 'danger') {\n        renderDanger(sidebarBody, state, unit, onChanged, () => { lastSidebarKey=''; renderSidebar(); });\n      } else if (tab === 'positions') {\n        sidebarBody.innerHTML = '<div data-role=\"tactical-position-tab-body\"></div>';\n      } else if (tab === 'stealth') {",
+          )
+
+          replace(
+              'src/core/ui/RuntimeUiState.ts',
+              "export function setSimulationLayerMode(state: SimulationState, mode: SimulationLayerMode): void {\n  const layer = getRuntimeUiState(state).simulationLayer;\n  layer.mode = mode;",
+              "export function setSimulationLayerMode(state: SimulationState, mode: SimulationLayerMode): void {\n  const runtime = getRuntimeUiState(state);\n  const layer = runtime.simulationLayer;\n  layer.mode = mode;\n  runtime.attentionOverlay.active = mode === 'memory';",
+          )
+
+          Path('src/ui/TacticalPositionWorkspaceTab.ts').write_text("""import type { SimulationState } from '../core/simulation/SimulationState';
+          import { clearVisibleTacticalPositions } from '../core/tactical/SimulationTacticalPositionSelection';
+          import { getSimulationLayerState } from '../core/ui/RuntimeUiState';
+
+          const TAB_CHANGED_EVENT = 'real-wargame:tactical-position-tab-changed';
+
+          export function isTacticalPositionWorkspaceTabActive(state: SimulationState): boolean {
+            return getSimulationLayerState(state).mode === 'positions';
+          }
+
+          export function installTacticalPositionWorkspaceTab(
+            state: SimulationState,
+            onChanged: () => void,
+          ): () => void {
+            let wasActive = isTacticalPositionWorkspaceTabActive(state);
+            const handleTabChange = (): void => {
+              const active = isTacticalPositionWorkspaceTabActive(state);
+              if (wasActive && !active) clearVisibleTacticalPositions(state);
+              wasActive = active;
+              onChanged();
+            };
+            window.addEventListener(TAB_CHANGED_EVENT, handleTabChange);
+            handleTabChange();
+            return () => window.removeEventListener(TAB_CHANGED_EVENT, handleTabChange);
+          }
+
+          export function subscribeTacticalPositionWorkspaceTab(listener: () => void): () => void {
+            window.addEventListener(TAB_CHANGED_EVENT, listener);
+            return () => window.removeEventListener(TAB_CHANGED_EVENT, listener);
+          }
+          """, encoding='utf-8')
+
+          replace(
+              'scripts/tactical_position_request_service_smoke.ts',
+              "  assert.equal(searchCalls, 2);\n  assert.deepEqual(service.readRequest(replacement.requestId), readyBefore);\n\n  const stale = service.enqueueCoverSearch(units[0]!, { searchRadiusMeters: 65 });",
+              "  assert.equal(searchCalls, 2);\n  assert.deepEqual(service.readRequest(replacement.requestId), readyBefore);\n\n  units[0]!.position = { x: 6.25, y: 5.75 };\n  runtime.readyByUnit.set('alpha', prepared('alpha', 'field-alpha-refresh'));\n  const refreshed = service.enqueueCoverSearch(\n    units[0]!,\n    { searchRadiusMeters: 55, objective: 'advance_to_threat' },\n    { forceRefresh: true },\n  );\n  assert.notEqual(refreshed.requestId, replacement.requestId, 'explicit refresh must not reuse a ready request');\n  assert.equal(service.readRequest(replacement.requestId)?.status, 'stale');\n  runScheduled(scheduled);\n  assert.equal(service.readRequest(refreshed.requestId)?.status, 'ready');\n  assert.deepEqual(\n    evaluatedRequests.at(-1)?.origin,\n    { x: 6.25, y: 5.75 },\n    'explicit refresh must search from the unit current position',\n  );\n\n  const stale = service.enqueueCoverSearch(units[0]!, { searchRadiusMeters: 65 });",
+          )
+
+          replace(
+              'scripts/tactical_position_tuning_smoke.ts',
+              "  const html = readFileSync('ai-node-editor.html', 'utf8');",
+              "  const html = readFileSync('ai-node-editor.html', 'utf8');\n  const searchControls = readFileSync('src/ui/TacticalPositionSearchControls.ts', 'utf8');\n  const workspaceBase = readFileSync('src/ui/TacticalWorkspaceBase.ts', 'utf8');\n  const workspaceTab = readFileSync('src/ui/TacticalPositionWorkspaceTab.ts', 'utf8');\n  const runtimeUi = readFileSync('src/core/ui/RuntimeUiState.ts', 'utf8');",
+          )
+          replace(
+              'scripts/tactical_position_tuning_smoke.ts',
+              "  assert.ok(html.includes('TacticalPositionProfileEditor.ts'));\n}",
+              "  assert.ok(html.includes('TacticalPositionProfileEditor.ts'));\n  assert.ok(searchControls.includes('objectiveDraftByUnit'));\n  assert.ok(searchControls.includes('{ forceRefresh: true }'));\n  assert.equal(searchControls.includes('selectedObjective = request.objective'), false);\n  assert.ok(workspaceBase.includes(\"type SimulationTab = 'info' | 'danger' | 'positions' | 'stealth' | 'memory'\"));\n  assert.ok(workspaceBase.includes(\"['positions', 'Позиции']\"));\n  assert.ok(workspaceBase.includes(\"tab === 'positions'\"));\n  assert.equal(workspaceTab.includes(\"document.createElement('button')\"), false);\n  assert.ok(workspaceTab.includes(\"getSimulationLayerState(state).mode === 'positions'\"));\n  assert.ok(runtimeUi.includes(\"runtime.attentionOverlay.active = mode === 'memory'\"));\n}",
+          )
+
+          replace_all(
+              'scripts/tactical_workspace_smoke_incremental_directional.mjs',
+              "type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory'",
+              "type SimulationTab = 'info' | 'danger' | 'positions' | 'stealth' | 'memory'",
+          )
+          replace(
+              'scripts/tactical_workspace_smoke_incremental_directional.mjs',
+              "  for (const token of [\"button.textContent = 'Позиции'\", \"setSimulationLayerMode(state, 'positions')\", 'data-role=\"tactical-position-tab-body\"', 'TAB_CHANGED_EVENT']) assert.ok(positionsTab.includes(token), `dedicated positions tab must contain ${token}`);",
+              "  for (const token of [\"getSimulationLayerState(state).mode === 'positions'\", 'clearVisibleTacticalPositions', 'TAB_CHANGED_EVENT']) assert.ok(positionsTab.includes(token), `positions tab bridge must contain ${token}`);",
+          )
+          PY
+
+      - name: Install dependencies
+        run: npm ci --silent
+
+      - name: Verify focused contracts and production build
+        run: |
+          set +e
+          {
+            echo '=== TypeScript ==='
+            npx tsc
+            echo '=== Tactical position smoke ==='
+            npm run tactical-position:smoke
+            echo '=== Workspace smoke ==='
+            npm run workspace:smoke
+            echo '=== Production build ==='
+            npx vite build
+          } > tactical-position-fix-verification.log 2>&1
+          status=$?
+          cat tactical-position-fix-verification.log
+          exit "$status"
+
+      - name: Commit verified product fix and remove temporary workflows
+        run: |
+          rm .github/workflows/fix-tactical-position-search-state.yml
+          rm .github/workflows/fix-tactical-position-search-state-v2.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: stabilize tactical position search and layers"
+          git push origin HEAD:feature/20260719-tactical-position-system
