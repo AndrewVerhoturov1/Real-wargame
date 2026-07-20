@@ -37,6 +37,11 @@
   overflow: hidden;
   box-sizing: border-box;
 }
+.unit-bar-route-controls.route-controls-migrated {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, .78fr);
+  grid-template-areas: "attentionprofile attentionmode turn";
+  align-items: end;
+}
 .unit-route-profile { grid-area: routeprofile; }
 .unit-attention-profile { grid-area: attentionprofile; }
 .unit-attention-mode { grid-area: attentionmode; }
@@ -59,6 +64,66 @@
 .unit-route-details-panel { position: fixed; z-index: 125; right: 18px; bottom: calc(var(--workspace-bottom) + 8px); width: min(520px, calc(100vw - 36px)); display: grid; gap: 4px; padding: 8px 9px; border: 1px solid rgba(255,240,161,.28); border-radius: 10px; color: var(--workspace-text); background: rgba(10,14,9,.98); box-shadow: 0 14px 32px rgba(0,0,0,.52); }
 .unit-route-details:not([open]) .unit-route-details-panel { display: none; }
 .unit-route-details-panel span { display: block; overflow-wrap: anywhere; color: var(--workspace-muted); font-size: 10px; line-height: 1.25; }
+
+.route-cost-inspector-panel {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.route-cost-inspector-panel .route-cost-controls {
+  display: grid;
+  gap: 7px;
+}
+.route-cost-inspector-panel .route-cost-controls h3,
+.route-cost-inspector-panel .route-cost-controls p {
+  margin: 0;
+}
+.route-cost-inspector-panel .route-cost-controls label,
+.route-cost-inspector-panel .unit-route-profile {
+  display: grid;
+  gap: 5px;
+  overflow: visible;
+  color: var(--workspace-muted);
+  font-size: 10px;
+}
+.route-cost-inspector-panel .route-cost-controls select,
+.route-cost-inspector-panel .unit-route-profile select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 4px 7px;
+  border: 1px solid rgba(255, 240, 161, .24);
+  border-radius: 7px;
+  color: var(--workspace-text);
+  background: rgba(255, 242, 168, .06);
+  font-size: 10px;
+  font-weight: 700;
+}
+.route-cost-inspector-panel .unit-route-details {
+  position: static;
+  display: block;
+  max-width: none;
+  overflow: visible;
+}
+.route-cost-inspector-panel .unit-route-details > summary {
+  display: none;
+}
+.route-cost-inspector-panel .unit-route-details-panel {
+  position: static;
+  width: auto;
+  max-width: 100%;
+  display: grid;
+  gap: 6px;
+  padding: 9px;
+  border-radius: 8px;
+  box-shadow: none;
+  background: rgba(255, 242, 168, .035);
+}
+.route-cost-inspector-panel .unit-route-details-panel span {
+  font-size: 10px;
+  line-height: 1.35;
+}
 
 .unit-bar-command-group, .unit-bar-speed-group { min-width: 0; flex-wrap: nowrap; overflow: hidden; }
 .simulation-controls {
