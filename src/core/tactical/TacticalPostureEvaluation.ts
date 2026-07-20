@@ -15,8 +15,8 @@ export interface TacticalPostureEvaluation {
   readonly danger: number;
   readonly protection: number;
   readonly safety: number;
-  readonly transitionPenalty: number;
-  readonly reasonCodes: readonly string[];
+  readonly transitionPenalty?: number;
+  readonly reasonCodes?: readonly string[];
 }
 
 export interface TacticalPostureEvaluationResult {
@@ -71,7 +71,7 @@ export function evaluateTacticalPostures(
     recommended,
     reasonCodes: [
       `recommended_posture:${recommended.posture}`,
-      ...recommended.reasonCodes,
+      ...(recommended.reasonCodes ?? []),
     ],
   };
 }
