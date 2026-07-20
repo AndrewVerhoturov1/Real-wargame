@@ -5,10 +5,12 @@ import {
   getAttentionOverlayState,
   setAttentionCurrentContacts,
   setAttentionCurrentView,
+  setAttentionHeatmapTargetPosture,
   setAttentionMemoryMarkers,
   setAttentionOverlayActive,
   setAttentionUncertainty,
   setSelectedAttentionContact,
+  type HeatmapTargetPosture,
 } from '../core/ui/RuntimeUiState';
 import { getVisibilityFieldDiagnostics } from '../core/visibility/SelectedUnitVisibilityField';
 
@@ -26,6 +28,12 @@ const STAGE_LABELS = {
   identified: 'опознано',
   confirmed: 'подтверждено',
 } as const;
+
+const TARGET_POSTURE_LABELS: Record<HeatmapTargetPosture, string> = {
+  standing: 'Стоит',
+  crouched: 'Пригнулся',
+  prone: 'Лежит',
+};
 
 export function installAttentionRuntimePanel(
   state: SimulationState,
@@ -131,10 +139,19 @@ export function installAttentionRuntimePanel(
         ${metric('Полей в кеше', String(fieldDiagnostics.cachedFieldCount))}
         ${metric('Повторных использований с запуска', String(fieldDiagnostics.cacheHitCount))}
         ${metric('Причина обновления', fieldDiagnostics.lastBuildReason)}
-        ${metric('Обработано шагов', String(fieldDiagnostics.processedCellCount))}
+        ${metric('Клеток-кандидатов', String(fieldDiagnostics.candidateCellCount))}
+        ${metric('Проверено геометрией', String(fieldDiagnostics.evaluatedTargetCellCount))}
+        ${metric('Пройдено клеток лучами', String(fieldDiagnostics.geometryTraversedCellCount))}
+        ${metric('Лучей поля', String(fieldDiagnostics.geometryRayCount))}
       </div>
       <div class="attention-runtime-toggles">
         ${checkbox('Текущий обзор', 'current-view', overlay.showCurrentView)}
+        <label class="attention-runtime-target-posture">
+          <span>Высота условной цели</span>
+          <select data-heatmap-target-posture>
+            ${(['standing', 'crouched', 'prone'] as HeatmapTargetPosture[]).map((posture) => `<option value="${posture}" ${overlay.heatmapTargetPosture === posture ? 'selected' : ''}>${TARGET_POSTURE_LABELS[posture]}</option>`).join('')}
+          </select>
+        </label>
         ${checkbox('Метки памяти', 'memory-markers', overlay.showMemoryMarkers)}
         ${checkbox('Текущие контакты', 'current-contacts', overlay.showCurrentContacts)}
         ${checkbox('Области неопределённости', 'uncertainty', overlay.showUncertainty)}
@@ -147,6 +164,11 @@ export function installAttentionRuntimePanel(
     bindCheckbox(panel, 'memory-markers', (active) => setAttentionMemoryMarkers(state, active), onChanged);
     bindCheckbox(panel, 'current-contacts', (active) => setAttentionCurrentContacts(state, active), onChanged);
     bindCheckbox(panel, 'uncertainty', (active) => setAttentionUncertainty(state, active), onChanged);
+    panel.querySelector<HTMLSelectElement>('[data-heatmap-target-posture]')?.addEventListener('change', (event) => {
+      setAttentionHeatmapTargetPosture(state, (event.currentTarget as HTMLSelectElement).value as HeatmapTargetPosture);
+      render();
+      onChanged();
+    });
     for (const button of panel.querySelectorAll<HTMLButtonElement>('[data-contact-id]')) {
       button.addEventListener('click', () => {
         const next = button.dataset.contactId ?? null;
