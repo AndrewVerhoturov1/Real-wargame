@@ -2,7 +2,13 @@ import type { AwarenessWorkerFieldPayload } from '../core/knowledge/AwarenessWor
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { getTacticalPositionSearchService } from '../core/tactical/TacticalPositionSearchService';
 import type { KnownThreatMemory } from '../core/units/UnitModel';
-import type { CellInspectorContent } from './CellInspectorContent';
+import type { CellInspectorContent, CellInspectorMetric } from './CellInspectorContent';
+import {
+  readDangerVisibilityExplanation,
+  type DangerVisibilityExplanation,
+} from './CellInspectorDangerVisibility';
+
+const LOW_DANGER_VISIBILITY_DIAGNOSTIC_LIMIT = 20;
 
 export function buildDetailedDangerCellInspectorContent(
   state: SimulationState,
@@ -27,6 +33,9 @@ export function buildDetailedDangerCellInspectorContent(
   const reverseSlope = field.reverseSlopeQuality[index] ?? 0;
   const threatCount = field.threatIds.length;
   const protectedThreat = resolveProtectedThreat(unit.tacticalKnowledge.threats, field, index);
+  const visibility = danger <= LOW_DANGER_VISIBILITY_DIAGNOSTIC_LIMIT
+    ? readDangerVisibilityExplanation(state, unit, cellX, cellY)
+    : null;
   const reasons = buildDangerReasons({
     danger,
     suppression,
@@ -36,7 +45,23 @@ export function buildDetailedDangerCellInspectorContent(
     reverseSlope,
     threatCount,
     protectedThreat,
+    visibility,
   });
+  const metrics: CellInspectorMetric[] = [
+    { label: 'Подавление', value: score(suppression) },
+    { label: 'Защита от известного огня', value: score(protection) },
+    { label: 'Открытость склона', value: score(forwardSlope) },
+    { label: 'Надёжность оценки', value: score(100 - uncertainty) },
+    { label: 'Известных угроз', value: String(threatCount) },
+  ];
+  if (visibility && visibility.directionalThreatCount > 0) {
+    metrics.push({
+      label: 'Линии огня',
+      value: visibility.potentialThreatCount === 0
+        ? 'вне сектора / дальности'
+        : `${visibility.clearThreatCount} открыто · ${visibility.blockedThreatCount} перекрыто`,
+    });
+  }
 
   return {
     layer: 'danger',
@@ -44,13 +69,7 @@ export function buildDetailedDangerCellInspectorContent(
     value: score(danger),
     level: dangerLevel(danger),
     reasons,
-    metrics: [
-      { label: 'Подавление', value: score(suppression) },
-      { label: 'Защита от известного огня', value: score(protection) },
-      { label: 'Открытость склона', value: score(forwardSlope) },
-      { label: 'Надёжность оценки', value: score(100 - uncertainty) },
-      { label: 'Известных угроз', value: String(threatCount) },
-    ],
+    metrics,
     note: threatCount === 0
       ? 'Это субъективная оценка бойца: отсутствие известных угроз не гарантирует безопасность.'
       : 'Оценка использует только известные выбранному бойцу угрозы и уже подготовленное поле опасности.',
@@ -66,6 +85,7 @@ interface DangerReasonInput {
   readonly reverseSlope: number;
   readonly threatCount: number;
   readonly protectedThreat: KnownThreatMemory | null;
+  readonly visibility: DangerVisibilityExplanation | null;
 }
 
 function buildDangerReasons(input: DangerReasonInput): string[] {
@@ -76,10 +96,16 @@ function buildDangerReasons(input: DangerReasonInput): string[] {
     ];
   }
 
+  if (input.danger <= LOW_DANGER_VISIBILITY_DIAGNOSTIC_LIMIT && input.visibility?.primaryReason) {
+    return input.visibility.secondaryReason
+      ? [input.visibility.primaryReason, input.visibility.secondaryReason]
+      : [input.visibility.primaryReason];
+  }
+
   const dominant = dominantDangerCause(input);
   const reasons = [`Основная причина: ${dominant}`];
 
-  if (input.protectedThreat) {
+  if (input.protectedThreat && input.protection >= 25) {
     reasons.push(
       `Лучшая защита клетки направлена против угрозы «${input.protectedThreat.labelRu}» и составляет ${score(input.protection)}.`,
     );
@@ -102,7 +128,7 @@ function dominantDangerCause(input: DangerReasonInput): string {
     ? `ожидается сильное подавление (${score(input.suppression)}).`
     : `клетка находится под воздействием известного огня (${score(input.danger)}).`;
 
-  const exposureFromLowProtection = input.danger > 2 ? 100 - input.protection : 0;
+  const exposureFromLowProtection = input.danger > 2 && input.protection < 50 ? 100 - input.protection : 0;
   if (exposureFromLowProtection > scoreValue) {
     scoreValue = exposureFromLowProtection;
     message = input.protection < 25
