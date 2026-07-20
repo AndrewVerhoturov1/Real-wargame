@@ -35,6 +35,42 @@ export function installTacticalWorkspace(
     .route-cost-inspector-body[hidden] {
       display: none !important;
     }
+
+    .workspace-display-panel #vision-toggle {
+      display: none !important;
+    }
+
+    .danger-cone-controls {
+      display: grid;
+      gap: 6px;
+      margin: 0 0 12px;
+      padding: 10px;
+      border: 1px solid rgba(255, 240, 161, 0.13);
+      border-radius: 10px;
+      background: rgba(255, 242, 168, 0.035);
+    }
+
+    .danger-cone-controls > span {
+      color: var(--workspace-muted);
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .danger-cone-controls button {
+      width: 100%;
+      min-height: 36px;
+      padding: 7px 10px;
+      border-radius: 8px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .danger-cone-controls button.active {
+      color: #141910;
+      border-color: var(--workspace-accent);
+      background: var(--workspace-accent);
+    }
   `;
   document.head.append(style);
 
@@ -52,6 +88,15 @@ export function installTacticalWorkspace(
   const modeButtons = shell
     ? Array.from(shell.querySelectorAll<HTMLButtonElement>('[data-mode]'))
     : [];
+  const visionToggle = document.querySelector<HTMLButtonElement>('#vision-toggle');
+  const dangerConeControls = document.createElement('section');
+  dangerConeControls.className = 'danger-cone-controls';
+  dangerConeControls.dataset.role = 'danger-cone-controls';
+  const dangerConeDescription = document.createElement('span');
+  dangerConeDescription.textContent = 'Показывает направления и дальность обзора бойцов поверх карты опасности.';
+  const dangerConeToggle = document.createElement('button');
+  dangerConeToggle.type = 'button';
+  dangerConeControls.append(dangerConeDescription, dangerConeToggle);
 
   let routeCostTab: HTMLButtonElement | null = null;
   let routeCostInspectorPanel: HTMLElement | null = null;
@@ -87,6 +132,38 @@ export function installTacticalWorkspace(
     window.dispatchEvent(new CustomEvent(ROUTE_COST_INSPECTOR_RENDERED_EVENT));
   }
 
+  const syncDangerConeToggle = (): void => {
+    const active = visionToggle?.getAttribute('aria-pressed') === 'true';
+    dangerConeToggle.textContent = active ? 'Конусы угроз: вкл' : 'Конусы угроз: выкл';
+    dangerConeToggle.setAttribute('aria-pressed', String(active));
+    dangerConeToggle.classList.toggle('active', active);
+    dangerConeToggle.disabled = !visionToggle;
+  };
+
+  const mountDangerConeControls = (): void => {
+    if (!shell || !sidebarBody || routeCostTabActive) {
+      dangerConeControls.remove();
+      return;
+    }
+    const dangerActive = Boolean(shell.querySelector<HTMLButtonElement>('[data-tab="danger"].active'));
+    if (!dangerActive) {
+      dangerConeControls.remove();
+      return;
+    }
+    const heading = sidebarBody.querySelector<HTMLElement>('.workspace-panel-heading');
+    if (heading) heading.after(dangerConeControls);
+    else sidebarBody.prepend(dangerConeControls);
+    syncDangerConeToggle();
+  };
+
+  const handleDangerConeToggle = (): void => {
+    if (!visionToggle) return;
+    visionToggle.click();
+    syncDangerConeToggle();
+    onChanged();
+  };
+  dangerConeToggle.addEventListener('click', handleDangerConeToggle);
+
   const syncRouteCostInspectorUi = (): void => {
     if (!shell || !sidebarBody || !sidebarTitle || !routeCostTab || !routeCostInspectorPanel) return;
     routeCostInspectorPanel.hidden = !routeCostTabActive;
@@ -103,6 +180,7 @@ export function installTacticalWorkspace(
     routeCostTabActive = true;
     setSimulationLayerMode(state, 'info');
     setRouteCostOverlayActive(state, true);
+    dangerConeControls.remove();
     syncRouteCostInspectorUi();
     window.dispatchEvent(new CustomEvent(ROUTE_COST_INSPECTOR_RENDERED_EVENT));
     onChanged();
@@ -111,12 +189,14 @@ export function installTacticalWorkspace(
     routeCostTabActive = false;
     setRouteCostOverlayActive(state, false);
     syncRouteCostInspectorUi();
+    window.requestAnimationFrame(mountDangerConeControls);
     onChanged();
   };
   const handleModeClick = (): void => {
     routeCostTabActive = false;
     setRouteCostOverlayActive(state, false);
     syncRouteCostInspectorUi();
+    window.requestAnimationFrame(mountDangerConeControls);
     onChanged();
   };
 
@@ -141,6 +221,7 @@ export function installTacticalWorkspace(
       });
       if (sidebarTitle?.textContent === 'Опасность и укрытия') sidebarTitle.textContent = 'Опасность';
       syncRouteCostInspectorUi();
+      mountDangerConeControls();
     } finally {
       cleaning = false;
     }
@@ -158,12 +239,15 @@ export function installTacticalWorkspace(
     observer = new MutationObserver(scheduleCleanup);
     observer.observe(shell, { childList: true, subtree: true });
   }
+  syncDangerConeToggle();
   cleanRemovedCoverUi();
 
   return () => {
     observer?.disconnect();
     if (scheduledFrame !== 0) window.cancelAnimationFrame(scheduledFrame);
     setRouteCostOverlayActive(state, false);
+    dangerConeToggle.removeEventListener('click', handleDangerConeToggle);
+    dangerConeControls.remove();
     routeCostTab?.removeEventListener('click', handleRouteCostTabClick);
     originalTabButtons.forEach((button) => button.removeEventListener('click', handleOtherTabClick));
     modeButtons.forEach((button) => button.removeEventListener('click', handleModeClick));
