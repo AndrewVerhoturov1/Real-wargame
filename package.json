@@ -43,7 +43,7 @@
     "navigation-profiles:smoke": "node scripts/navigation_profiles_smoke.mjs",
     "navigation-profile-switch:smoke": "node scripts/navigation_replan_profile_switch_smoke.mjs",
     "navigation-overlay:smoke": "node scripts/navigation_overlay_contract_smoke.mjs",
-    "tactical-traversal:smoke": "node scripts/tactical_traversal_smoke.mjs",
+    "tactical-traversal:smoke": "node scripts/tactical_traversal_smoke.mjs && node scripts/tactical_traversal_service_smoke.mjs",
     "tactical-snapshot:smoke": "node scripts/tactical_snapshot_coalescing_smoke.mjs",
     "directional-terrain:smoke": "node scripts/directional_terrain_smoke.mjs",
     "reverse-slope-comparative:smoke": "node scripts/reverse_slope_comparative_smoke.mjs",
