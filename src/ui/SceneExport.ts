@@ -2,8 +2,8 @@ import { buildAiRuntimeSceneSnapshot, serializeMoveOrder } from '../core/ai/runt
 import { saveMovementProfileRegistry } from '../ai-node-editor/MovementProfileBrowserStorage';
 import { getCombatRuntime } from '../core/combat/CombatDamage';
 import { getWeaponRuntime } from '../core/combat/WeaponModel';
-import { serializeMovementRuntime } from '../core/movement/MovementRuntime';
 import { createMovementProfileRegistry, serializeMovementProfileRegistry, type MovementProfileRegistryData } from '../core/movement/MovementProfiles';
+import { serializeMovementRuntime } from '../core/movement/MovementRuntime';
 import {
   EnvironmentProfileRegistry,
   type EnvironmentProfileRegistryData,
@@ -12,6 +12,7 @@ import {
   resolveObjectCoverProperties,
   type TacticalMapData,
 } from '../core/map/MapModel';
+import { serializeUnitTacticalTraversalProfile } from '../core/navigation/TacticalTraversalProfileStore';
 import {
   resolvePressureZoneSettings,
   type PressureZoneData,
@@ -21,8 +22,8 @@ import type { SimulationState } from '../core/simulation/SimulationState';
 import { getTacticalPositionSearchService } from '../core/tactical/TacticalPositionSearchService';
 import { serializeTacticalPositionSettings } from '../core/tactical/TacticalPositionSettings';
 import { refreshAiTestLabSceneSnapshot } from '../core/testing/AiTestLabRuntime';
-import { getEnvironmentProfileRegistry, saveEnvironmentProfileRegistry } from './EnvironmentProfileStorage';
 import type { UnitData, UnitModel } from '../core/units/UnitModel';
+import { getEnvironmentProfileRegistry, saveEnvironmentProfileRegistry } from './EnvironmentProfileStorage';
 
 export interface ExportedSceneData {
   version: string;
@@ -131,9 +132,9 @@ export function normalizeImportedScene(value: unknown): {
 
 export function buildExportedScene(state: SimulationState): ExportedSceneData {
   return {
-    version: 'scene-export-v9-minimal-target-visibility-ai-runtime-2m-grid',
+    version: 'scene-export-v10-tactical-traversal-ai-runtime-2m-grid',
     exportedAt: new Date().toISOString(),
-    noteRu: 'Экспорт полигона ИИ с тактическим намерением PlayerCommand, профилями физического движения, environment materials, выносливостью, фактическим способом движения, слоем «Обзор и память», навигационными профилями, настройками тактических позиций и активным runtime. Новые поля добавляются совместимо в envelope v9; старые сцены без них получают безопасные значения по умолчанию, а сцены 10 м преобразуются в текущую сетку при загрузке.',
+    noteRu: 'Экспорт полигона ИИ с тактическим намерением PlayerCommand, профилями физического движения, полным разрешённым профилем прохождения маршрута, environment materials, выносливостью, слоем «Обзор и память», навигационными профилями, настройками тактических позиций и активным runtime. Старые сцены без новых полей получают безопасные значения по умолчанию.',
     map: {
       width: state.map.width,
       height: state.map.height,
@@ -231,11 +232,16 @@ function buildForestMap(state: SimulationState): number[][] {
   return rows;
 }
 
-function buildMaterialMap(state: SimulationState, field: 'surfaceMaterialId' | 'vegetationMaterialId'): string[][] {
+function buildMaterialMap(
+  state: SimulationState,
+  field: 'surfaceMaterialId' | 'vegetationMaterialId',
+): string[][] {
   const rows: string[][] = [];
   for (let y = 0; y < state.map.height; y += 1) {
     const row: string[] = [];
-    for (let x = 0; x < state.map.width; x += 1) row.push(state.map.cells[y * state.map.width + x]?.[field] ?? (field === 'surfaceMaterialId' ? 'field' : 'none'));
+    for (let x = 0; x < state.map.width; x += 1) {
+      row.push(state.map.cells[y * state.map.width + x]?.[field] ?? (field === 'surfaceMaterialId' ? 'field' : 'none'));
+    }
     rows.push(row);
   }
   return rows;
@@ -272,6 +278,7 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
       nearMinimumVisibilityQuality: unit.attentionSettings.nearMinimumVisibilityQuality,
     },
     tacticalPositionSettings: serializeTacticalPositionSettings(unit),
+    tacticalTraversalProfile: serializeUnitTacticalTraversalProfile(unit),
     initialState: { ...unit.initialState },
     tacticalKnowledge: JSON.parse(JSON.stringify(unit.tacticalKnowledge)),
     perceptionKnowledge: JSON.parse(JSON.stringify(unit.perceptionKnowledge)),
