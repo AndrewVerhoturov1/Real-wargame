@@ -1,4 +1,8 @@
 import type { SimulationState } from './SimulationState';
+import {
+  reconcileTacticalTraversalAfterMovement,
+  reconcileTacticalTraversalBeforeMovement,
+} from '../navigation/TacticalTraversalRuntime';
 import { reconcileCompletedTacticalPositionArrivals } from '../tactical/TacticalPositionArrival';
 import { reconcileTacticalPositionOccupation } from '../tactical/TacticalPositionOccupation';
 import { tickSimulation as tickSimulationLegacy } from './SimulationTickLegacy';
@@ -6,14 +10,16 @@ import { tickSimulation as tickSimulationLegacy } from './SimulationTickLegacy';
 export * from './SimulationTickLegacy';
 
 export function tickSimulation(state: SimulationState, deltaSeconds: number): void {
+  reconcileTacticalTraversalBeforeMovement(state, deltaSeconds);
   tickSimulationLegacy(state, deltaSeconds);
+  reconcileTacticalTraversalAfterMovement(state, deltaSeconds);
   reconcileCompletedTacticalPositionArrivals(state);
   for (const unit of state.units) reconcileTacticalPositionOccupation(unit);
 }
 
 /**
- * The legacy movement implementation still owns waypoint movement and applies
- * order.finalFacingRadians at completion. This wrapper only finalizes the
- * serializable PlayerCommand occupation state and maintains its approach posture;
- * occupied posture conflicts are filtered inside the exact Graph v2 runtime.
+ * SimulationTickLegacy remains the only owner of coordinate changes. The wrapper
+ * prepares a ready traversal segment before physical movement and reapplies its
+ * body/attention policies after legacy route-facing code. Tactical-position
+ * arrival remains authoritative after the order completes.
  */
