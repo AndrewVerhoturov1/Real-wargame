@@ -6,7 +6,12 @@ import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
 import type { AttentionSample } from '../perception/AttentionModel';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
-import { computeLineOfSight, type LineOfSightProbeResult } from './LineOfSight';
+import type { LineOfSightProbeResult } from './LineOfSight';
+import {
+  probeTargetVisibility,
+  VISIBILITY_SILHOUETTE_VERSION,
+  type VisibilityTargetProbeResult,
+} from './VisibilityTargetProbe';
 import {
   evaluateCellVisibilityQuality,
   observerVisibilityCondition,
@@ -15,10 +20,9 @@ import {
 
 const MAX_PERCEPTION_POINT_PROBES_PER_SIMULATION_STEP = 2;
 const MAX_PERCEPTION_POINT_CACHE_ENTRIES = 512;
-const POINT_POSITION_QUANTUM_CELLS = 0.05;
 
 interface PerceptionPointCacheEntry {
-  readonly result: LineOfSightProbeResult;
+  readonly result: VisibilityTargetProbeResult;
 }
 
 interface PerceptionGeometryPreparationRuntime {
@@ -29,6 +33,8 @@ interface PerceptionGeometryPreparationRuntime {
   cacheHitCount: number;
   deferredCount: number;
   maxPreparationsPerStep: number;
+  pointTargetProbeCount: number;
+  pointPhysicalRayCount: number;
 }
 
 const perceptionPointCacheByState = new WeakMap<
@@ -39,21 +45,20 @@ const perceptionGeometryPreparationByState = new WeakMap<SimulationState, Percep
 
 export interface PointVisibilityResult {
   lineOfSight: LineOfSightProbeResult;
+  targetProbe: VisibilityTargetProbeResult;
   quality: CellVisibilityQuality;
   distanceMeters: number;
   explanationRu: string[];
 }
 
-/**
- * Compatibility name retained for report/smoke consumers. The runtime now
- * prepares bounded point probes instead of full 64,000-cell geometry fields.
- */
 export interface PerceptionGeometryPreparationDiagnostics {
   readonly preparationCount: number;
   readonly cacheHitCount: number;
   readonly deferredCount: number;
   readonly preparationsThisStep: number;
   readonly maxPreparationsPerStep: number;
+  readonly pointTargetProbeCount: number;
+  readonly pointPhysicalRayCount: number;
 }
 
 export function evaluatePointVisibility(
@@ -63,6 +68,7 @@ export function evaluatePointVisibility(
   targetHeightMeters: number,
   attention: AttentionSample,
 ): PointVisibilityResult | null {
+  if (!isFinitePosition(observer.position) || !isFinitePosition(target)) return null;
   const distanceCells = distance(observer.position, target);
   const distanceMeters = distanceCells * state.map.metersPerCell;
   const rangeCells = Math.max(
@@ -70,16 +76,15 @@ export function evaluatePointVisibility(
     observer.attentionSettings.vision.maximumVisualRangeMeters / Math.max(0.001, state.map.metersPerCell),
   );
   if (distanceCells > rangeCells) return null;
-  // Deny by default: an unresolved/out-of-zone sample never consumes a LOS probe.
   if (attention.zone === 'outside' || attention.weight <= 0 || distanceMeters > attention.maximumRangeMeters) return null;
 
-  const lineOfSight = getPerceptionPointProbe(
+  const targetProbe = getPerceptionTargetProbe(
     state,
     observer,
     target,
     targetHeightMeters,
   );
-  if (!lineOfSight) return null;
+  if (!targetProbe) return null;
 
   const observerCondition = observerVisibilityCondition({
     fatigue: observer.soldier.condition.fatigue,
@@ -88,25 +93,29 @@ export function evaluatePointVisibility(
     suppression: observer.behaviorRuntime.suppression,
   });
   const quality = evaluateCellVisibilityQuality({
-    blocked: lineOfSight.blocked,
-    visualTransmission: lineOfSight.visualTransmission,
+    blocked: targetProbe.blocked,
+    visualTransmission: targetProbe.visualTransmission,
     distanceMeters,
     attentionWeight: attention.weight,
     observerCondition,
     vision: observer.attentionSettings.vision,
     minimumVisibilityQuality: attention.minimumVisibilityQuality,
   });
+  const lineOfSight = targetProbeToCompatibilityLineOfSight(targetProbe);
 
   return {
     lineOfSight,
+    targetProbe,
     quality,
     distanceMeters,
     explanationRu: [
       `Качество зоны обзора: ${Math.round(quality.quality01 * 100)}%.`,
+      `Видимая доля силуэта: ${Math.round(targetProbe.visibleFraction * 100)}%.`,
       `Дистанция в расчёте обзора: ×${format(quality.distanceFactor)}.`,
       `Направление внимания в расчёте обзора: ×${format(quality.attentionFactor)}.`,
       `Проходимость линии обзора: ×${format(quality.transmissionFactor)}.`,
       `Состояние наблюдателя в расчёте обзора: ×${format(quality.observerConditionFactor)}.`,
+      ...targetProbe.explanationRu,
     ],
   };
 }
@@ -121,12 +130,16 @@ export function getPerceptionGeometryPreparationDiagnostics(
     deferredCount: runtime.deferredCount,
     preparationsThisStep: runtime.preparationsThisStep,
     maxPreparationsPerStep: runtime.maxPreparationsPerStep,
+    pointTargetProbeCount: runtime.pointTargetProbeCount,
+    pointPhysicalRayCount: runtime.pointPhysicalRayCount,
   } : {
     preparationCount: 0,
     cacheHitCount: 0,
     deferredCount: 0,
     preparationsThisStep: 0,
     maxPreparationsPerStep: 0,
+    pointTargetProbeCount: 0,
+    pointPhysicalRayCount: 0,
   };
 }
 
@@ -135,12 +148,12 @@ export function clearPerceptionPointVisibilityCache(state: SimulationState): voi
   perceptionGeometryPreparationByState.delete(state);
 }
 
-function getPerceptionPointProbe(
+function getPerceptionTargetProbe(
   state: SimulationState,
   observer: UnitModel,
   target: GridPosition,
   targetHeightMeters: number,
-): LineOfSightProbeResult | null {
+): VisibilityTargetProbeResult | null {
   const cache = getPerceptionPointCache(state);
   const key = buildPerceptionPointKey(state, observer, target, targetHeightMeters);
   const cached = cache.get(key);
@@ -153,8 +166,11 @@ function getPerceptionPointProbe(
   if (!consumePointProbeBudget(state)) return null;
   const result = measurePerformancePhase(
     'perception.point-los',
-    () => computeLineOfSight(state.map, observer, target, targetHeightMeters),
+    () => probeTargetVisibility(state.map, observer, target, targetHeightMeters),
   );
+  const runtime = getPreparationRuntime(state);
+  runtime.pointTargetProbeCount += 1;
+  runtime.pointPhysicalRayCount += result.physicalRayCount;
   cache.set(key, { result });
   trim(cache, MAX_PERCEPTION_POINT_CACHE_ENTRIES);
   return result;
@@ -168,13 +184,16 @@ function buildPerceptionPointKey(
 ): string {
   const revisions = getMapRevisionSnapshot(state.map);
   return [
+    'visibility-target-probe',
+    VISIBILITY_SILHOUETTE_VERSION,
     observer.id,
     observer.behaviorRuntime.posture,
-    quantize(observer.position.x, POINT_POSITION_QUANTUM_CELLS),
-    quantize(observer.position.y, POINT_POSITION_QUANTUM_CELLS),
-    quantize(target.x, POINT_POSITION_QUANTUM_CELLS),
-    quantize(target.y, POINT_POSITION_QUANTUM_CELLS),
-    quantize(targetHeightMeters, 0.05),
+    exactCoordinateKey(observer.position.x),
+    exactCoordinateKey(observer.position.y),
+    exactCoordinateKey(target.x),
+    exactCoordinateKey(target.y),
+    exactCoordinateKey(targetHeightMeters),
+    exactCoordinateKey(state.map.metersPerCell),
     revisions.terrain,
     revisions.height,
     revisions.forest,
@@ -206,6 +225,8 @@ function getPreparationRuntime(state: SimulationState): PerceptionGeometryPrepar
       cacheHitCount: 0,
       deferredCount: 0,
       maxPreparationsPerStep: 0,
+      pointTargetProbeCount: 0,
+      pointPhysicalRayCount: 0,
     };
     perceptionGeometryPreparationByState.set(state, runtime);
   }
@@ -229,6 +250,43 @@ function getPerceptionPointCache(state: SimulationState): Map<string, Perception
   return cache;
 }
 
+function targetProbeToCompatibilityLineOfSight(
+  probe: VisibilityTargetProbeResult,
+): LineOfSightProbeResult {
+  const representativeTrace = probe.blocked
+    ? probe.samples[probe.samples.length - 1]!.trace
+    : probe.samples.find((sample) => !sample.trace.hardBlocked)?.trace ?? probe.samples[0]!.trace;
+  const vegetationMeters = probe.samples[0]?.trace.accumulatedVegetationMeters ?? 0;
+  const partialObscuration = probe.visibleFraction < 1 || probe.visualTransmission < 0.995;
+  return {
+    origin: probe.origin,
+    target: probe.target,
+    totalDistanceMeters: representativeTrace.totalDistanceMeters,
+    visibleDistanceMeters: representativeTrace.blockerDistanceMeters ?? representativeTrace.totalDistanceMeters,
+    blocked: probe.blocked,
+    blockedAt: probe.blocked ? representativeTrace.blockerPosition : null,
+    blockerReasonRu: probe.blocked
+      ? representativeTrace.reasonRu
+      : partialObscuration
+        ? 'цель видна только частично'
+        : 'прямая видимость есть',
+    visualTransmission: probe.visualTransmission,
+    partialObscuration,
+    accumulatedForestMeters: vegetationMeters,
+    obscurationReasonRu: vegetationMeters > 0
+      ? `Растительность: пройдено около ${Math.round(vegetationMeters)} м; видно ${Math.round(probe.visibleFraction * 100)}% силуэта.`
+      : `Видно ${Math.round(probe.visibleFraction * 100)}% силуэта.`,
+  };
+}
+
+function isFinitePosition(position: GridPosition): boolean {
+  return Number.isFinite(position.x) && Number.isFinite(position.y);
+}
+
+function exactCoordinateKey(value: number): string {
+  return Number.isFinite(value) ? Number(value).toPrecision(15) : 'invalid';
+}
+
 function touch<T>(cache: Map<string, T>, key: string, value: T): void {
   cache.delete(key);
   cache.set(key, value);
@@ -240,10 +298,6 @@ function trim<T>(cache: Map<string, T>, maximum: number): void {
     if (oldest === undefined) break;
     cache.delete(oldest);
   }
-}
-
-function quantize(value: number, step: number): string {
-  return (Math.round(value / step) * step).toFixed(3);
 }
 
 function format(value: number): string {

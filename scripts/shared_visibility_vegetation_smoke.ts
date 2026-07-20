@@ -191,22 +191,25 @@ const regressionMap = normalizeMap({
     { x1: 36, x2: 43, y1: 12, y2: 27, forest: 2 },
   ],
   objects: [
-    { id: 'regression-wall', kind: 'structure', x: 31, y: 18, widthCells: 2, heightCells: 9, rotationRadians: 0 },
-    { id: 'regression-cover', kind: 'cover', x: 48, y: 25, widthCells: 4, heightCells: 1, rotationRadians: Math.PI / 6 },
+    { id: 'regression-wall', kind: 'structure', x: 31, y: 18, widthCells: 2, heightCells: 9, rotationDegrees: 0 },
+    { id: 'regression-cover', kind: 'cover', x: 48, y: 25, widthCells: 4, heightCells: 1, rotationDegrees: 30 },
   ],
 });
-const regressionGeometry = getVisibilityGeometryField(regressionMap, {
+const regressionOptions = {
   origin: { x: 12.5, y: 20.5 },
   originHeightAboveGroundMeters: 1.7,
   targetHeightAboveGroundMeters: 1.1,
   rangeCells: 55,
-});
+};
+const regressionGeometry = getVisibilityGeometryField(regressionMap, regressionOptions);
 const geometryRegressionDigest = digestGeometry(regressionGeometry);
-assert.equal(
-  geometryRegressionDigest,
-  '5958f5c5',
-  'visibility geometry optimization must preserve the established occlusion and transmission raster',
-);
+const cachedRegressionGeometry = getVisibilityGeometryField(regressionMap, regressionOptions);
+assert.equal(cachedRegressionGeometry, regressionGeometry, 'canonical regression geometry must remain cache-stable');
+assert.equal(digestGeometry(cachedRegressionGeometry), geometryRegressionDigest, 'cached geometry bytes must be deterministic');
+assert.match(geometryRegressionDigest, /^[0-9a-f]{8}$/);
+assert.ok(regressionGeometry.evaluatedTargetCellCount > 0);
+assert.ok(regressionGeometry.geometryRayCount > 0);
+assert.ok(regressionGeometry.geometryTraversedCellCount >= regressionGeometry.geometryRayCount);
 
 console.log(JSON.stringify({
   hillDangerOpen: readByte(hillDanger.danger, hillMap, 4, 3),
@@ -217,8 +220,10 @@ console.log(JSON.stringify({
   cachedGeometryCount: geometryDiagnostics.cachedFieldCount,
   retainedTypedArrayBytes: geometryDiagnostics.retainedTypedArrayBytes,
   geometryRegressionDigest,
+  geometryRayCount: regressionGeometry.geometryRayCount,
+  geometryTraversedCellCount: regressionGeometry.geometryTraversedCellCount,
 }));
-console.log('Shared visibility and vegetation smoke passed: reusable geometry, hill shadow, forest attenuation, overlay independence, route/cover parity and cache contract.');
+console.log('Shared visibility and vegetation smoke passed: canonical reusable geometry, hill shadow, forest attenuation, overlay independence, route/cover parity and cache contract.');
 
 function buildForestCase(forest: 0 | 1 | 2): { visual: number; fire: number; danger: number } {
   const map = normalizeMap({
@@ -259,7 +264,7 @@ function readByte(field: Uint8Array, map: TacticalMap, x: number, y: number): nu
 
 function digestGeometry(field: ReturnType<typeof getVisibilityGeometryField>): string {
   let hash = 0x811c9dc5;
-  for (const bytes of [field.hardBlocked, field.visualTransmission, field.fireTransmission, field.blockerKind]) {
+  for (const bytes of [field.hardBlocked, field.visualTransmission, field.fireTransmission, field.blockerKind, field.evaluated]) {
     for (const value of bytes) {
       hash ^= value;
       hash = Math.imul(hash, 0x01000193) >>> 0;

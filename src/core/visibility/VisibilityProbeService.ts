@@ -1,12 +1,14 @@
+import { getEnvironmentProfileDomainKey } from '../map/EnvironmentMaterialProfile';
+import { getActiveEnvironmentProfile } from '../map/EnvironmentProfileRuntime';
 import { getMapRevisionSnapshot } from '../map/MapRuntimeState';
 import { getSelectedUnit, type SimulationState } from '../simulation/SimulationState';
-import { getMapObjectSpatialIndexDiagnostics } from '../spatial/MapObjectSpatialIndex';
 import { getVisibilityProbeState } from '../ui/RuntimeUiState';
 import { computeLineOfSight, type LineOfSightProbeResult } from './LineOfSight';
 
 export interface VisibilityProbeDiagnostics {
   calculationCount: number;
   cacheHitCount: number;
+  /** Retained compatibility field; canonical raster geometry no longer queries the point spatial index. */
   lastObjectCandidateCount: number;
   lastKey: string;
 }
@@ -28,18 +30,23 @@ export function getVisibilityProbeResult(state: SimulationState): LineOfSightPro
   const probe = getVisibilityProbeState(state);
   const unit = getSelectedUnit(state);
   if (!probe.active || !probe.target || !unit) return null;
+  if (!isFinitePosition(unit.position) || !isFinitePosition(probe.target)) return null;
 
   const revisions = getMapRevisionSnapshot(state.map);
   const key = [
+    'visibility-probe:v2-kernel',
     unit.id,
-    unit.position.x.toFixed(4),
-    unit.position.y.toFixed(4),
+    exactCoordinateKey(unit.position.x),
+    exactCoordinateKey(unit.position.y),
     unit.behaviorRuntime.posture,
-    probe.target.x.toFixed(4),
-    probe.target.y.toFixed(4),
+    exactCoordinateKey(probe.target.x),
+    exactCoordinateKey(probe.target.y),
+    exactCoordinateKey(state.map.metersPerCell),
+    revisions.terrain,
     revisions.height,
     revisions.forest,
     revisions.objects,
+    getEnvironmentProfileDomainKey(getActiveEnvironmentProfile(), 'visibility'),
   ].join(':');
 
   const cached = cacheByState.get(state);
@@ -52,7 +59,6 @@ export function getVisibilityProbeResult(state: SimulationState): LineOfSightPro
 
   const previousDiagnostics = diagnosticsByState.get(state);
   const result = computeLineOfSight(state.map, unit, probe.target);
-  const spatialDiagnostics = getMapObjectSpatialIndexDiagnostics(state.map);
   const diagnostics: VisibilityProbeDiagnostics = previousDiagnostics ?? {
     calculationCount: 0,
     cacheHitCount: 0,
@@ -60,7 +66,7 @@ export function getVisibilityProbeResult(state: SimulationState): LineOfSightPro
     lastKey: '',
   };
   diagnostics.calculationCount += 1;
-  diagnostics.lastObjectCandidateCount = spatialDiagnostics.lastCandidateCount;
+  diagnostics.lastObjectCandidateCount = 0;
   diagnostics.lastKey = key;
   diagnosticsByState.set(state, diagnostics);
   cacheByState.set(state, { key, result, diagnostics });
@@ -83,6 +89,14 @@ export function getVisibilityProbeDiagnostics(state: SimulationState): Visibilit
 
 export function clearVisibilityProbeCache(state: SimulationState): void {
   cacheByState.delete(state);
+}
+
+function isFinitePosition(position: { x: number; y: number }): boolean {
+  return Number.isFinite(position.x) && Number.isFinite(position.y);
+}
+
+function exactCoordinateKey(value: number): string {
+  return Number.isFinite(value) ? Number(value).toPrecision(15) : 'invalid';
 }
 
 function publishDiagnostics(diagnostics: VisibilityProbeDiagnostics): void {

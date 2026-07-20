@@ -4,17 +4,24 @@ import type { TacticalMap } from '../map/MapModel';
 import {
   getVegetationDefinitionKey,
   getVegetationDefinitionRevision,
-  resolveVegetationDefinition,
 } from '../map/VegetationDefinition';
 import { getEnvironmentProfileRuntimeSnapshot } from '../map/EnvironmentProfileRuntime';
+import {
+  visibilityMaskIndex,
+  type VisibilityCandidateMask,
+} from './VisibilityCandidateMask';
+import {
+  traceVisibilityRayPath,
+  traverseVisibilitySegmentCells,
+  type VisibilityTraceBlockerKind,
+  type VisibilityTraceCellSample,
+} from './VisibilityRayKernel';
 import { getVisibilityStaticGrid } from './VisibilityStaticGrid';
 
 const CACHE_LIMIT = 24;
-const POSITION_QUANTUM_CELLS = 0.25;
-const HEIGHT_QUANTUM_METERS = 0.05;
-const HORIZON_MARGIN = 0.02;
+const EPSILON = 1e-6;
 
-export type VisibilityBlockerKind = 0 | 1 | 2;
+export type VisibilityBlockerKind = 0 | 1 | 2 | 3 | 4;
 
 export interface VisibilityGeometryFieldOptions {
   readonly origin: GridPosition;
@@ -22,6 +29,7 @@ export interface VisibilityGeometryFieldOptions {
   readonly targetHeightAboveGroundMeters: number;
   readonly rangeCells: number;
   readonly channel?: 'visual' | 'fire' | 'combined';
+  readonly candidateMask?: VisibilityCandidateMask;
 }
 
 export interface VisibilityGeometryField {
@@ -31,12 +39,14 @@ export interface VisibilityGeometryField {
   readonly width: number;
   readonly height: number;
   readonly rangeCells: number;
-  /** 1 only for terrain/object occlusion. Vegetation remains transmissive. */
   readonly hardBlocked: Uint8Array;
   readonly visualTransmission: Uint8Array;
   readonly fireTransmission: Uint8Array;
-  /** 0 none, 1 terrain/horizon, 2 map object. */
   readonly blockerKind: Uint8Array;
+  readonly evaluated: Uint8Array;
+  readonly evaluatedTargetCellCount: number;
+  readonly geometryTraversedCellCount: number;
+  readonly geometryRayCount: number;
   readonly mapVisualRevision: number;
   readonly channel: 'visual' | 'fire' | 'combined';
   readonly profileId: string;
@@ -89,15 +99,15 @@ export function getVisibilityGeometryField(
 
   const build = measurePerformancePhase(
     'field.visibility-geometry.build',
-    () => buildField(map, staticGrid, normalized, key),
+    () => buildField(map, normalized, key),
   );
-  cache.fields.set(key, build.field);
+  cache.fields.set(key, build);
   trimCache(cache.fields, CACHE_LIMIT);
   cache.diagnostics.geometryBuildCount += 1;
-  cache.diagnostics.processedCellCount += build.processedCellCount;
-  cache.diagnostics.rayCount += build.rayCount;
+  cache.diagnostics.processedCellCount += build.evaluatedTargetCellCount;
+  cache.diagnostics.rayCount += build.geometryRayCount;
   cache.diagnostics.lastKey = key;
-  return build.field;
+  return build;
 }
 
 export function getVisibilityGeometryFieldDiagnostics(
@@ -110,7 +120,8 @@ export function getVisibilityGeometryFieldDiagnostics(
     retainedTypedArrayBytes += field.hardBlocked.byteLength
       + field.visualTransmission.byteLength
       + field.fireTransmission.byteLength
-      + field.blockerKind.byteLength;
+      + field.blockerKind.byteLength
+      + field.evaluated.byteLength;
   }
   return {
     ...cache.diagnostics,
@@ -127,11 +138,17 @@ export function readVisibilityGeometryCell(
   field: VisibilityGeometryField,
   x: number,
   y: number,
-): { hardBlocked: boolean; visualTransmission: number; fireTransmission: number; blockerKind: VisibilityBlockerKind } {
+): {
+  hardBlocked: boolean;
+  visualTransmission: number;
+  fireTransmission: number;
+  blockerKind: VisibilityBlockerKind;
+  evaluated: boolean;
+} {
   const cellX = Math.floor(x);
   const cellY = Math.floor(y);
   if (cellX < 0 || cellY < 0 || cellX >= field.width || cellY >= field.height) {
-    return { hardBlocked: true, visualTransmission: 0, fireTransmission: 0, blockerKind: 1 };
+    return { hardBlocked: true, visualTransmission: 0, fireTransmission: 0, blockerKind: 4, evaluated: false };
   }
   const index = cellY * field.width + cellX;
   return {
@@ -139,226 +156,204 @@ export function readVisibilityGeometryCell(
     visualTransmission: (field.visualTransmission[index] ?? 0) / 255,
     fireTransmission: (field.fireTransmission[index] ?? 0) / 255,
     blockerKind: (field.blockerKind[index] ?? 0) as VisibilityBlockerKind,
+    evaluated: field.evaluated[index] === 1,
   };
 }
 
 function buildField(
   map: TacticalMap,
-  staticGrid: ReturnType<typeof getVisibilityStaticGrid>,
   options: ReturnType<typeof normalizeOptions>,
   key: string,
-): { field: VisibilityGeometryField; processedCellCount: number; rayCount: number } {
+): VisibilityGeometryField {
   const cellCount = map.width * map.height;
   const hardBlocked = new Uint8Array(cellCount);
   const visualTransmission = new Uint8Array(cellCount);
   const fireTransmission = new Uint8Array(cellCount);
   const blockerKind = new Uint8Array(cellCount);
+  const evaluated = new Uint8Array(cellCount);
   hardBlocked.fill(1);
 
-  const originCellX = clampInt(Math.floor(options.origin.x), 0, map.width - 1);
-  const originCellY = clampInt(Math.floor(options.origin.y), 0, map.height - 1);
-  const radius = Math.max(1, Math.ceil(options.rangeCells));
-  const minX = Math.max(0, originCellX - radius);
-  const minY = Math.max(0, originCellY - radius);
-  const maxX = Math.min(map.width - 1, originCellX + radius);
-  const maxY = Math.min(map.height - 1, originCellY + radius);
-  const originIndex = originCellY * map.width + originCellX;
-  const originEye = staticGrid.terrainHeightMeters[originIndex]
-    + options.originHeightAboveGroundMeters;
-  let processedCellCount = 0;
-  let rayCount = 0;
-  const vegetationTransmission = createVegetationTransmissionLuts(
-    staticGrid.vegetationMaterialIds,
-    map.metersPerCell,
-  );
+  const bounds = fieldBounds(map, options);
+  let evaluatedTargetCellCount = 0;
+  let geometryTraversedCellCount = 0;
+  let geometryRayCount = 0;
+  const tracedEndpoints = new Set<string>();
 
-  writeVisibleCell(
+  const candidateAllowed = (x: number, y: number): boolean => {
+    const dx = x + 0.5 - options.origin.x;
+    const dy = y + 0.5 - options.origin.y;
+    if (Math.hypot(dx, dy) > options.rangeCells + 0.001) return false;
+    if (!options.candidateMask) return true;
+    const local = visibilityMaskIndex(options.candidateMask, x, y);
+    return local >= 0 && options.candidateMask.candidate[local] === 1;
+  };
+
+  const writeSample = (sample: VisibilityTraceCellSample): void => {
+    if (!candidateAllowed(sample.x, sample.y)) return;
+    const index = sample.mapIndex;
+    if (evaluated[index] === 0) {
+      evaluated[index] = 1;
+      evaluatedTargetCellCount += 1;
+    }
+    if (sample.hardBlocked) {
+      if (hardBlocked[index] === 1) {
+        visualTransmission[index] = Math.max(visualTransmission[index] ?? 0, encodeTransmission(sample.visualTransmission));
+        fireTransmission[index] = Math.max(fireTransmission[index] ?? 0, encodeTransmission(sample.fireTransmission));
+        blockerKind[index] = encodeBlockerKind(sample.blockerKind);
+      }
+      return;
+    }
+    const visual = encodeTransmission(sample.visualTransmission);
+    const fire = encodeTransmission(sample.fireTransmission);
+    if (hardBlocked[index] === 1 || visual > visualTransmission[index] || fire > fireTransmission[index]) {
+      hardBlocked[index] = 0;
+      visualTransmission[index] = Math.max(visualTransmission[index] ?? 0, visual);
+      fireTransmission[index] = Math.max(fireTransmission[index] ?? 0, fire);
+      blockerKind[index] = 0;
+    }
+  };
+
+  const traceEndpoint = (targetX: number, targetY: number): void => {
+    const endpointKey = `${targetX}:${targetY}`;
+    if (tracedEndpoints.has(endpointKey)) return;
+    tracedEndpoints.add(endpointKey);
+    const trace = traceVisibilityRayPath(map, {
+      origin: options.origin,
+      target: { x: targetX + 0.5, y: targetY + 0.5 },
+      originHeightAboveGroundMeters: options.originHeightAboveGroundMeters,
+      targetHeightAboveGroundMeters: options.targetHeightAboveGroundMeters,
+      channel: options.channel,
+    });
+    geometryRayCount += 1;
+    geometryTraversedCellCount += trace.samples.length;
+    for (const sample of trace.samples) writeSample(sample);
+  };
+
+  const findFarthestCandidate = (targetX: number, targetY: number): { x: number; y: number } | null => {
+    const cells = traverseVisibilitySegmentCells(
+      map,
+      options.origin,
+      { x: targetX + 0.5, y: targetY + 0.5 },
+    );
+    let farthest: { x: number; y: number } | null = null;
+    for (const cell of cells) {
+      if (cell.x < bounds.minX || cell.y < bounds.minY || cell.x > bounds.maxX || cell.y > bounds.maxY) continue;
+      if (candidateAllowed(cell.x, cell.y)) farthest = { x: cell.x, y: cell.y };
+    }
+    return farthest;
+  };
+
+  if (!options.candidateMask || options.candidateMask.candidateCellCount > 0) {
+    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+      const top = findFarthestCandidate(x, bounds.minY);
+      if (top) traceEndpoint(top.x, top.y);
+      if (bounds.maxY !== bounds.minY) {
+        const bottom = findFarthestCandidate(x, bounds.maxY);
+        if (bottom) traceEndpoint(bottom.x, bottom.y);
+      }
+    }
+    for (let y = bounds.minY + 1; y < bounds.maxY; y += 1) {
+      const left = findFarthestCandidate(bounds.minX, y);
+      if (left) traceEndpoint(left.x, left.y);
+      if (bounds.maxX !== bounds.minX) {
+        const right = findFarthestCandidate(bounds.maxX, y);
+        if (right) traceEndpoint(right.x, right.y);
+      }
+    }
+
+    // DDA perimeter rays can leave isolated candidate cells between directions.
+    // A bounded correctness fallback traces only those still unevaluated.
+    for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+      for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+        if (!candidateAllowed(x, y)) continue;
+        const index = y * map.width + x;
+        if (evaluated[index] === 1) continue;
+        traceEndpoint(x, y);
+      }
+    }
+  }
+
+  const originCellX = Math.floor(options.origin.x);
+  const originCellY = Math.floor(options.origin.y);
+  if (candidateAllowed(originCellX, originCellY)) {
+    const originIndex = originCellY * map.width + originCellX;
+    if (evaluated[originIndex] === 0) evaluatedTargetCellCount += 1;
+    evaluated[originIndex] = 1;
+    hardBlocked[originIndex] = 0;
+    visualTransmission[originIndex] = 255;
+    fireTransmission[originIndex] = 255;
+    blockerKind[originIndex] = 0;
+  }
+
+  const profile = getEnvironmentProfileRuntimeSnapshot();
+  const profileRevision = options.channel === 'visual'
+    ? getVegetationDefinitionRevision('visibility')
+    : options.channel === 'fire'
+      ? getVegetationDefinitionRevision('fire')
+      : Math.max(getVegetationDefinitionRevision('visibility'), getVegetationDefinitionRevision('fire'));
+  const profileKey = options.channel === 'visual'
+    ? getVegetationDefinitionKey('visibility')
+    : options.channel === 'fire'
+      ? getVegetationDefinitionKey('fire')
+      : `${getVegetationDefinitionKey('visibility')}|${getVegetationDefinitionKey('fire')}`;
+
+  return {
+    key,
+    originX: options.origin.x,
+    originY: options.origin.y,
+    width: map.width,
+    height: map.height,
+    rangeCells: options.rangeCells,
     hardBlocked,
     visualTransmission,
     fireTransmission,
     blockerKind,
-    originIndex,
-    255,
-    255,
-  );
-
-  const traceRay = (targetX: number, targetY: number): void => {
-    rayCount += 1;
-    let visual = 1;
-    let fire = 1;
-    let horizonSlope = Number.NEGATIVE_INFINITY;
-    let horizonKind: VisibilityBlockerKind = 1;
-    const deltaX = targetX - originCellX;
-    const deltaY = targetY - originCellY;
-    const stepsX = Math.abs(deltaX);
-    const stepsY = Math.abs(deltaY);
-    const signX = deltaX > 0 ? 1 : deltaX < 0 ? -1 : 0;
-    const signY = deltaY > 0 ? 1 : deltaY < 0 ? -1 : 0;
-    let cellX = originCellX;
-    let cellY = originCellY;
-    let completedX = 0;
-    let completedY = 0;
-
-    while (completedX < stepsX || completedY < stepsY) {
-      const decision = (1 + 2 * completedX) * stepsY - (1 + 2 * completedY) * stepsX;
-      let diagonal = false;
-      if (decision === 0) {
-        cellX += signX;
-        cellY += signY;
-        completedX += 1;
-        completedY += 1;
-        diagonal = true;
-      } else if (decision < 0) {
-        cellX += signX;
-        completedX += 1;
-      } else {
-        cellY += signY;
-        completedY += 1;
-      }
-
-      const dx = cellX + 0.5 - options.origin.x;
-      const dy = cellY + 0.5 - options.origin.y;
-      const distanceCells = Math.hypot(dx, dy);
-      if (distanceCells > options.rangeCells + 0.001) break;
-      const distanceMeters = distanceCells * map.metersPerCell;
-      const mapIndex = cellY * map.width + cellX;
-      const terrainHeight = staticGrid.terrainHeightMeters[mapIndex];
-      const targetSlope = (
-        terrainHeight + options.targetHeightAboveGroundMeters - originEye
-      ) / Math.max(0.001, distanceMeters);
-      const blockedByHorizon = targetSlope + HORIZON_MARGIN < horizonSlope;
-      const vegetationCode = staticGrid.vegetationMaterialCodes[mapIndex] ?? 0;
-      if (options.channel !== 'fire') {
-        visual *= diagonal
-          ? vegetationTransmission.visualDiagonal[vegetationCode] ?? 1
-          : vegetationTransmission.visualAxis[vegetationCode] ?? 1;
-      }
-      if (options.channel !== 'visual') {
-        fire *= diagonal
-          ? vegetationTransmission.fireDiagonal[vegetationCode] ?? 1
-          : vegetationTransmission.fireAxis[vegetationCode] ?? 1;
-      }
-
-      const blockedByObject = staticGrid.blockingFlags[mapIndex] === 1;
-      if (blockedByHorizon) {
-        writeBlockedCell(
-          hardBlocked,
-          visualTransmission,
-          fireTransmission,
-          blockerKind,
-          mapIndex,
-          horizonKind,
-        );
-      } else {
-        // The occluding terrain/object cell itself remains observable and targetable.
-        // Its height enters the horizon below, so the hard shadow starts on later cells.
-        writeVisibleCell(
-          hardBlocked,
-          visualTransmission,
-          fireTransmission,
-          blockerKind,
-          mapIndex,
-          encodeTransmission(visual),
-          encodeTransmission(fire),
-        );
-      }
-      processedCellCount += 1;
-
-      const groundSlope = (terrainHeight - originEye) / Math.max(0.001, distanceMeters);
-      if (groundSlope > horizonSlope) {
-        horizonSlope = groundSlope;
-        horizonKind = 1;
-      }
-      if (blockedByObject) {
-        const objectSlope = (
-          staticGrid.objectTopHeightMeters[mapIndex] - originEye
-        ) / Math.max(0.001, distanceMeters);
-        if (objectSlope > horizonSlope) {
-          horizonSlope = objectSlope;
-          horizonKind = 2;
-        }
-      }
-    }
-  };
-
-  // Keep the original perimeter order so competing rays preserve their exact
-  // max-transmission tie behaviour, without allocating one object per target.
-  for (let x = minX; x <= maxX; x += 1) {
-    traceRay(x, minY);
-    if (maxY !== minY) traceRay(x, maxY);
-  }
-  for (let y = minY + 1; y < maxY; y += 1) {
-    traceRay(minX, y);
-    if (maxX !== minX) traceRay(maxX, y);
-  }
-
-  return {
-    field: {
-      key,
-      originX: options.origin.x,
-      originY: options.origin.y,
-      width: map.width,
-      height: map.height,
-      rangeCells: options.rangeCells,
-      hardBlocked,
-      visualTransmission,
-      fireTransmission,
-      blockerKind,
-      mapVisualRevision: staticGrid.mapVisualRevision,
-      channel: options.channel,
-      profileId: getEnvironmentProfileRuntimeSnapshot().activeProfileId,
-      profileRevision: options.channel === 'visual'
-        ? getVegetationDefinitionRevision('visibility')
-        : options.channel === 'fire'
-          ? getVegetationDefinitionRevision('fire')
-          : Math.max(getVegetationDefinitionRevision('visibility'), getVegetationDefinitionRevision('fire')),
-      profileKey: options.channel === 'visual'
-        ? getVegetationDefinitionKey('visibility')
-        : options.channel === 'fire'
-          ? getVegetationDefinitionKey('fire')
-          : `${getVegetationDefinitionKey('visibility')}|${getVegetationDefinitionKey('fire')}`,
-    },
-    processedCellCount,
-    rayCount,
+    evaluated,
+    evaluatedTargetCellCount,
+    geometryTraversedCellCount,
+    geometryRayCount,
+    mapVisualRevision: getVisibilityStaticGrid(map).mapVisualRevision,
+    channel: options.channel,
+    profileId: profile.activeProfileId,
+    profileRevision,
+    profileKey,
   };
 }
 
-function createVegetationTransmissionLuts(
-  materialIds: readonly string[],
-  metersPerCell: number,
-): {
-  readonly visualAxis: readonly number[];
-  readonly visualDiagonal: readonly number[];
-  readonly fireAxis: readonly number[];
-  readonly fireDiagonal: readonly number[];
-} {
-  const visualAxis = new Array<number>(materialIds.length);
-  const visualDiagonal = new Array<number>(materialIds.length);
-  const fireAxis = new Array<number>(materialIds.length);
-  const fireDiagonal = new Array<number>(materialIds.length);
-  const diagonalMeters = Math.SQRT2 * metersPerCell;
-  for (let code = 0; code < materialIds.length; code += 1) {
-    const vegetation = resolveVegetationDefinition(materialIds[code]);
-    const visualLoss = vegetation.visibility.transmissionLossPerMeter;
-    const fireLoss = vegetation.fire.transmissionLossPerMeter;
-    visualAxis[code] = Math.exp(-visualLoss * metersPerCell);
-    visualDiagonal[code] = Math.exp(-visualLoss * diagonalMeters);
-    fireAxis[code] = Math.exp(-fireLoss * metersPerCell);
-    fireDiagonal[code] = Math.exp(-fireLoss * diagonalMeters);
+function fieldBounds(
+  map: TacticalMap,
+  options: ReturnType<typeof normalizeOptions>,
+): { minX: number; minY: number; maxX: number; maxY: number } {
+  if (options.candidateMask) {
+    return {
+      minX: options.candidateMask.minCellX,
+      minY: options.candidateMask.minCellY,
+      maxX: options.candidateMask.minCellX + options.candidateMask.width - 1,
+      maxY: options.candidateMask.minCellY + options.candidateMask.height - 1,
+    };
   }
-  return { visualAxis, visualDiagonal, fireAxis, fireDiagonal };
+  const originCellX = Math.floor(options.origin.x);
+  const originCellY = Math.floor(options.origin.y);
+  const radius = Math.max(1, Math.ceil(options.rangeCells));
+  return {
+    minX: Math.max(0, originCellX - radius),
+    minY: Math.max(0, originCellY - radius),
+    maxX: Math.min(map.width - 1, originCellX + radius),
+    maxY: Math.min(map.height - 1, originCellY + radius),
+  };
 }
 
 function normalizeOptions(map: TacticalMap, options: VisibilityGeometryFieldOptions) {
   return {
     origin: {
-      x: clamp(finite(options.origin.x), 0.5, Math.max(0.5, map.width - 0.5)),
-      y: clamp(finite(options.origin.y), 0.5, Math.max(0.5, map.height - 0.5)),
+      x: clamp(finite(options.origin.x), 0, Math.max(0, map.width - EPSILON)),
+      y: clamp(finite(options.origin.y), 0, Math.max(0, map.height - EPSILON)),
     },
     originHeightAboveGroundMeters: Math.max(0.05, finite(options.originHeightAboveGroundMeters)),
     targetHeightAboveGroundMeters: Math.max(0.05, finite(options.targetHeightAboveGroundMeters)),
     rangeCells: Math.max(0.5, Math.min(Math.hypot(map.width, map.height), finite(options.rangeCells))),
     channel: options.channel ?? 'combined',
+    candidateMask: options.candidateMask,
   };
 }
 
@@ -367,12 +362,12 @@ function buildKey(
   options: ReturnType<typeof normalizeOptions>,
 ): string {
   return [
-    'visibility-geometry:v1',
-    quantize(options.origin.x, POSITION_QUANTUM_CELLS),
-    quantize(options.origin.y, POSITION_QUANTUM_CELLS),
-    quantize(options.originHeightAboveGroundMeters, HEIGHT_QUANTUM_METERS),
-    quantize(options.targetHeightAboveGroundMeters, HEIGHT_QUANTUM_METERS),
-    quantize(options.rangeCells, 0.25),
+    'visibility-geometry:v2-kernel',
+    exact(options.origin.x),
+    exact(options.origin.y),
+    exact(options.originHeightAboveGroundMeters),
+    exact(options.targetHeightAboveGroundMeters),
+    exact(options.rangeCells),
     options.channel,
     mapVisualRevision,
     options.channel === 'visual'
@@ -380,39 +375,17 @@ function buildKey(
       : options.channel === 'fire'
         ? getVegetationDefinitionKey('fire')
         : `${getVegetationDefinitionKey('visibility')}|${getVegetationDefinitionKey('fire')}`,
+    options.candidateMask?.key ?? 'unmasked',
   ].join(':');
 }
 
-function writeVisibleCell(
-  hardBlocked: Uint8Array,
-  visualTransmission: Uint8Array,
-  fireTransmission: Uint8Array,
-  blockerKind: Uint8Array,
-  index: number,
-  visual: number,
-  fire: number,
-): void {
-  if (visual > visualTransmission[index] || fire > fireTransmission[index]) {
-    visualTransmission[index] = Math.max(visualTransmission[index], visual);
-    fireTransmission[index] = Math.max(fireTransmission[index], fire);
-    hardBlocked[index] = 0;
-    blockerKind[index] = 0;
-  }
+function encodeBlockerKind(kind: VisibilityTraceBlockerKind): VisibilityBlockerKind {
+  if (kind === 'terrain') return 1;
+  if (kind === 'object') return 2;
+  if (kind === 'vegetation') return 3;
+  if (kind === 'boundary') return 4;
+  return 0;
 }
-
-function writeBlockedCell(
-  hardBlocked: Uint8Array,
-  visualTransmission: Uint8Array,
-  fireTransmission: Uint8Array,
-  blockerKind: Uint8Array,
-  index: number,
-  kind: VisibilityBlockerKind,
-): void {
-  if (visualTransmission[index] > 0 || fireTransmission[index] > 0) return;
-  hardBlocked[index] = 1;
-  blockerKind[index] = kind;
-}
-
 
 function getMapCache(map: TacticalMap): MapCache {
   const existing = cacheByMap.get(map);
@@ -462,8 +435,8 @@ function encodeTransmission(value: number): number {
   return Math.max(0, Math.min(255, Math.round(value * 255)));
 }
 
-function quantize(value: number, step: number): string {
-  return (Math.round(value / step) * step).toFixed(3);
+function exact(value: number): string {
+  return Number.isFinite(value) ? Number(value).toPrecision(15) : 'invalid';
 }
 
 function finite(value: number): number {
@@ -472,8 +445,4 @@ function finite(value: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
-}
-
-function clampInt(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, Math.round(value)));
 }

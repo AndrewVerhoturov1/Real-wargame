@@ -147,6 +147,28 @@
   flex: 0 0 auto;
 }
 
+.attention-runtime-target-posture {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) minmax(104px, 132px);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  color: #ccd8ca;
+  font-size: 11px;
+}
+
+.attention-runtime-target-posture select {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid rgba(118, 173, 180, 0.38);
+  border-radius: 5px;
+  background: rgba(13, 24, 26, 0.92);
+  color: #e4ece2;
+}
+
 .attention-explanation,
 .attention-contact-list {
   margin-top: 12px;

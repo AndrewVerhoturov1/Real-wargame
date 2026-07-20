@@ -1,34 +1,22 @@
-import {
-  normalizeSignedDegrees,
-  radiansToDegrees,
-  resolveAttentionSample,
-  type AttentionZone,
-} from '../perception/AttentionModel';
 import { resolveVegetationDefinition } from '../map/VegetationDefinition';
 import { getSelectedUnit, type SimulationState } from '../simulation/SimulationState';
-import { getAttentionOverlayState } from '../ui/RuntimeUiState';
+import { getAttentionOverlayState, type HeatmapTargetPosture } from '../ui/RuntimeUiState';
 import type { UnitModel } from '../units/UnitModel';
 import { evaluateCellVisibilityQuality, observerVisibilityCondition } from './VisibilityQuality';
 import {
-  getVisibilityGeometryField,
-  getVisibilityGeometryFieldDiagnostics,
-} from './VisibilityGeometryField';
+  buildVisibilityCandidateMask,
+  VISIBILITY_ZONE_CODE,
+  type VisibilityCandidateMask,
+  type VisibilityZoneCode,
+} from './VisibilityCandidateMask';
+import { getVisibilityGeometryField } from './VisibilityGeometryField';
+import { soldierPostureHeightMeters } from './VisibilityPosture';
 
 const MOVING_REBUILD_INTERVAL_SECONDS = 0.2;
-const POSITION_QUANTUM_CELLS = 0.25;
-const TARGET_EYE_HEIGHT_METERS = 1.4;
 const MIN_VISUAL_TRANSMISSION = resolveVegetationDefinition('none').visibility.minimumTransmission;
 
-export const VISIBILITY_ZONE_CODE = {
-  unseen: 0,
-  focus: 1,
-  direct: 2,
-  peripheral: 3,
-  rear: 4,
-  near: 5,
-} as const;
-
-export type VisibilityZoneCode = typeof VISIBILITY_ZONE_CODE[keyof typeof VISIBILITY_ZONE_CODE];
+export { VISIBILITY_ZONE_CODE } from './VisibilityCandidateMask';
+export type { VisibilityZoneCode } from './VisibilityCandidateMask';
 
 export interface SelectedUnitVisibilityField {
   observerId: string;
@@ -41,10 +29,17 @@ export interface SelectedUnitVisibilityField {
   quality: Uint8Array;
   zone: Uint8Array;
   blocker: Uint8Array;
+  evaluated: Uint8Array;
   revision: number;
   calculationKey: string;
   mapVisualRevision: number;
   builtAtSeconds: number;
+  candidateCellCount: number;
+  evaluatedTargetCellCount: number;
+  skippedOutsideAttentionCellCount: number;
+  geometryTraversedCellCount: number;
+  geometryRayCount: number;
+  heatmapTargetPosture: HeatmapTargetPosture;
 }
 
 export interface VisibilityFieldDiagnostics {
@@ -52,6 +47,11 @@ export interface VisibilityFieldDiagnostics {
   cacheHitCount: number;
   processedCellCount: number;
   rayCount: number;
+  candidateCellCount: number;
+  evaluatedTargetCellCount: number;
+  skippedOutsideAttentionCellCount: number;
+  geometryTraversedCellCount: number;
+  geometryRayCount: number;
   lastBuildReason: string;
   lastBuildDurationMs: number;
   lastKey: string;
@@ -92,18 +92,21 @@ export function getUnitVisibilityField(
     return current;
   }
 
+  const overlay = getAttentionOverlayState(state);
+  const mask = buildVisibilityCandidateMask(state, unit);
   const radiusCells = Math.max(
     1,
-    Math.ceil(unit.attentionSettings.vision.maximumVisualRangeMeters / state.map.metersPerCell),
+    Math.ceil(unit.attentionSettings.vision.maximumVisualRangeMeters / Math.max(0.001, state.map.metersPerCell)),
   );
   const geometry = getVisibilityGeometryField(state.map, {
     origin: unit.position,
-    originHeightAboveGroundMeters: eyeHeightForPosture(unit.behaviorRuntime.posture),
-    targetHeightAboveGroundMeters: TARGET_EYE_HEIGHT_METERS,
+    originHeightAboveGroundMeters: soldierPostureHeightMeters(unit.behaviorRuntime.posture),
+    targetHeightAboveGroundMeters: heatmapTargetHeightMeters(overlay.heatmapTargetPosture),
     rangeCells: radiusCells,
     channel: 'visual',
+    candidateMask: mask,
   });
-  const key = buildCalculationKey(state, unit, geometry.key);
+  const key = buildCalculationKey(state, unit, mask, geometry.key, overlay.heatmapTargetPosture);
   if (current?.calculationKey === key) {
     runtime.diagnostics.cacheHitCount += 1;
     return current;
@@ -113,16 +116,20 @@ export function getUnitVisibilityField(
     ? 'initial'
     : current.mapVisualRevision !== geometry.mapVisualRevision
       ? 'map-visual-revision'
-      : moved
-        ? 'observer-moved'
-        : 'observer-state';
+      : current.heatmapTargetPosture !== overlay.heatmapTargetPosture
+        ? 'target-posture-preview'
+        : moved
+          ? 'observer-moved'
+          : 'observer-state';
   const started = nowMilliseconds();
   const field = buildVisibilityField(
     state,
     unit,
+    mask,
     geometry,
     key,
     runtime.diagnostics.fieldRevision + 1,
+    overlay.heatmapTargetPosture,
   );
   runtime.fieldsByUnit.set(unit.id, field);
   runtime.lastObserverPositionByUnit.set(unit.id, { ...unit.position });
@@ -132,15 +139,19 @@ export function getUnitVisibilityField(
   runtime.diagnostics.lastBuildDurationMs = Math.max(0, nowMilliseconds() - started);
   runtime.diagnostics.lastKey = key;
   runtime.diagnostics.fieldRevision = field.revision;
-  runtime.diagnostics.processedCellCount = field.width * field.height;
-  runtime.diagnostics.rayCount = getVisibilityGeometryFieldDiagnostics(state.map).rayCount;
+  runtime.diagnostics.processedCellCount = field.evaluatedTargetCellCount;
+  runtime.diagnostics.rayCount = field.geometryRayCount;
+  runtime.diagnostics.candidateCellCount = field.candidateCellCount;
+  runtime.diagnostics.evaluatedTargetCellCount = field.evaluatedTargetCellCount;
+  runtime.diagnostics.skippedOutsideAttentionCellCount = field.skippedOutsideAttentionCellCount;
+  runtime.diagnostics.geometryTraversedCellCount = field.geometryTraversedCellCount;
+  runtime.diagnostics.geometryRayCount = field.geometryRayCount;
   runtime.diagnostics.cachedFieldCount = runtime.fieldsByUnit.size;
   return field;
 }
 
 export function getVisibilityFieldDiagnostics(state: SimulationState): VisibilityFieldDiagnostics {
   const runtime = getRuntime(state);
-  // Legacy v1 exposed `cachedFieldCount: runtime.field ? 1 : 0`; v2 reports every requested unit field.
   return { ...runtime.diagnostics, cachedFieldCount: runtime.fieldsByUnit.size };
 }
 
@@ -151,6 +162,11 @@ export function invalidateSelectedUnitVisibilityField(state: SimulationState, re
   runtime.diagnostics.lastBuildReason = reason;
   runtime.diagnostics.lastKey = '';
   runtime.diagnostics.cachedFieldCount = 0;
+  runtime.diagnostics.candidateCellCount = 0;
+  runtime.diagnostics.evaluatedTargetCellCount = 0;
+  runtime.diagnostics.skippedOutsideAttentionCellCount = 0;
+  runtime.diagnostics.geometryTraversedCellCount = 0;
+  runtime.diagnostics.geometryRayCount = 0;
 }
 
 export function sampleSelectedUnitVisibilityField(
@@ -158,10 +174,8 @@ export function sampleSelectedUnitVisibilityField(
   cellX: number,
   cellY: number,
 ): number {
-  const x = Math.floor(cellX) - field.minCellX;
-  const y = Math.floor(cellY) - field.minCellY;
-  if (x < 0 || y < 0 || x >= field.width || y >= field.height) return 0;
-  return field.quality[y * field.width + x] ?? 0;
+  const index = localFieldIndex(field, cellX, cellY);
+  return index < 0 ? 0 : field.quality[index] ?? 0;
 }
 
 export function sampleSelectedUnitVisibilityZone(
@@ -169,35 +183,28 @@ export function sampleSelectedUnitVisibilityZone(
   cellX: number,
   cellY: number,
 ): VisibilityZoneCode {
-  const x = Math.floor(cellX) - field.minCellX;
-  const y = Math.floor(cellY) - field.minCellY;
-  if (x < 0 || y < 0 || x >= field.width || y >= field.height) return VISIBILITY_ZONE_CODE.unseen;
-  return (field.zone[y * field.width + x] ?? VISIBILITY_ZONE_CODE.unseen) as VisibilityZoneCode;
+  const index = localFieldIndex(field, cellX, cellY);
+  if (index < 0) return VISIBILITY_ZONE_CODE.unseen;
+  return (field.zone[index] ?? VISIBILITY_ZONE_CODE.unseen) as VisibilityZoneCode;
+}
+
+export function heatmapTargetHeightMeters(posture: HeatmapTargetPosture): number {
+  return soldierPostureHeightMeters(posture);
 }
 
 function buildVisibilityField(
   state: SimulationState,
   unit: UnitModel,
+  mask: VisibilityCandidateMask,
   geometry: ReturnType<typeof getVisibilityGeometryField>,
   calculationKey: string,
   revision: number,
+  heatmapTargetPosture: HeatmapTargetPosture,
 ): SelectedUnitVisibilityField {
-  const radiusCells = Math.max(
-    1,
-    Math.ceil(unit.attentionSettings.vision.maximumVisualRangeMeters / state.map.metersPerCell),
-  );
-  const originCellX = clamp(Math.floor(unit.position.x), 0, state.map.width - 1);
-  const originCellY = clamp(Math.floor(unit.position.y), 0, state.map.height - 1);
-  const minCellX = Math.max(0, originCellX - radiusCells);
-  const minCellY = Math.max(0, originCellY - radiusCells);
-  const maxCellX = Math.min(state.map.width - 1, originCellX + radiusCells);
-  const maxCellY = Math.min(state.map.height - 1, originCellY + radiusCells);
-  const width = maxCellX - minCellX + 1;
-  const height = maxCellY - minCellY + 1;
-  const quality = new Uint8Array(width * height);
-  const zone = new Uint8Array(width * height);
-  const blocker = new Uint8Array(width * height);
-  const profile = unit.attentionSettings.profiles[unit.attentionRuntime.mode];
+  const quality = new Uint8Array(mask.width * mask.height);
+  const zone = new Uint8Array(mask.zone);
+  const blocker = new Uint8Array(mask.width * mask.height);
+  const evaluated = new Uint8Array(mask.width * mask.height);
   const observerCondition = observerVisibilityCondition({
     fatigue: unit.soldier.condition.fatigue,
     confusion: unit.soldier.condition.confusion,
@@ -205,122 +212,82 @@ function buildVisibilityField(
     suppression: unit.behaviorRuntime.suppression,
   });
 
-  for (let y = minCellY; y <= maxCellY; y += 1) {
-    for (let x = minCellX; x <= maxCellX; x += 1) {
-      const localIndex = (y - minCellY) * width + (x - minCellX);
-      const mapIndex = y * state.map.width + x;
-      // Deny by default: every cell remains unseen until all canonical checks explicitly allow it.
-      let currentVisibilityQuality = 0;
-      let currentZoneCode: VisibilityZoneCode = VISIBILITY_ZONE_CODE.unseen;
-      const dx = x + 0.5 - unit.position.x;
-      const dy = y + 0.5 - unit.position.y;
-      const distanceCells = Math.hypot(dx, dy);
-      const distanceMeters = distanceCells * state.map.metersPerCell;
-      if (distanceMeters > unit.attentionSettings.vision.maximumVisualRangeMeters) {
-        quality[localIndex] = currentVisibilityQuality;
-        zone[localIndex] = currentZoneCode;
-        continue;
-      }
-
-      const bearing = Math.atan2(dy, dx);
-      const angleDifferenceDegrees = normalizeSignedDegrees(
-        radiansToDegrees(bearing - unit.attentionRuntime.focusDirectionRadians),
-      );
-      const attention = resolveAttentionSample(
-        profile,
-        angleDifferenceDegrees,
-        distanceMeters,
-        unit.attentionSettings.nearAwarenessRangeMeters,
-        unit.attentionSettings.nearMinimumVisibilityQuality,
-      );
-      if (attention.zone === 'outside' || attention.weight <= 0 || distanceMeters > attention.maximumRangeMeters) {
-        quality[localIndex] = currentVisibilityQuality;
-        zone[localIndex] = currentZoneCode;
-        continue;
-      }
-
-      const visualTransmission = (geometry.visualTransmission[mapIndex] ?? 0) / 255;
-      const hardBlocked = geometry.hardBlocked[mapIndex] === 1;
-      const evaluated = evaluateCellVisibilityQuality({
-        blocked: hardBlocked || visualTransmission <= MIN_VISUAL_TRANSMISSION,
-        visualTransmission,
-        distanceMeters,
-        attentionWeight: attention.weight,
-        observerCondition,
-        vision: unit.attentionSettings.vision,
-        minimumVisibilityQuality: attention.minimumVisibilityQuality,
-      });
-      if (!evaluated.blocked && evaluated.quality01 > 0) {
-        currentVisibilityQuality = Math.round(evaluated.quality01 * 255);
-        currentZoneCode = visibilityZoneCode(attention.zone);
-      }
-      quality[localIndex] = currentVisibilityQuality;
-      zone[localIndex] = currentZoneCode;
-      blocker[localIndex] = evaluated.blocked ? 1 : 0;
+  for (let localIndex = 0; localIndex < mask.candidate.length; localIndex += 1) {
+    if (mask.candidate[localIndex] !== 1) continue;
+    const localX = localIndex % mask.width;
+    const localY = Math.floor(localIndex / mask.width);
+    const mapX = mask.minCellX + localX;
+    const mapY = mask.minCellY + localY;
+    const mapIndex = mapY * state.map.width + mapX;
+    if (geometry.evaluated[mapIndex] !== 1) continue;
+    evaluated[localIndex] = 1;
+    const visualTransmission = (geometry.visualTransmission[mapIndex] ?? 0) / 255;
+    const hardBlocked = geometry.hardBlocked[mapIndex] === 1;
+    const zoneCode = (mask.zone[localIndex] ?? VISIBILITY_ZONE_CODE.unseen) as VisibilityZoneCode;
+    const evaluatedQuality = evaluateCellVisibilityQuality({
+      blocked: hardBlocked || visualTransmission <= MIN_VISUAL_TRANSMISSION,
+      visualTransmission,
+      distanceMeters: mask.distanceMeters[localIndex] ?? 0,
+      attentionWeight: (mask.attentionWeight[localIndex] ?? 0) / 255,
+      observerCondition,
+      vision: unit.attentionSettings.vision,
+      minimumVisibilityQuality: zoneCode === VISIBILITY_ZONE_CODE.near
+        ? unit.attentionSettings.nearMinimumVisibilityQuality
+        : 0,
+    });
+    if (!evaluatedQuality.blocked && evaluatedQuality.quality01 > 0) {
+      quality[localIndex] = Math.round(evaluatedQuality.quality01 * 255);
+    } else {
+      zone[localIndex] = VISIBILITY_ZONE_CODE.unseen;
     }
+    blocker[localIndex] = evaluatedQuality.blocked ? geometry.blockerKind[mapIndex] || 1 : 0;
   }
 
   return {
     observerId: unit.id,
-    originCellX,
-    originCellY,
-    minCellX,
-    minCellY,
-    width,
-    height,
+    originCellX: Math.floor(unit.position.x),
+    originCellY: Math.floor(unit.position.y),
+    minCellX: mask.minCellX,
+    minCellY: mask.minCellY,
+    width: mask.width,
+    height: mask.height,
     quality,
     zone,
     blocker,
+    evaluated,
     revision,
     calculationKey,
     mapVisualRevision: geometry.mapVisualRevision,
     builtAtSeconds: state.simulationTimeSeconds,
+    candidateCellCount: mask.candidateCellCount,
+    evaluatedTargetCellCount: geometry.evaluatedTargetCellCount,
+    skippedOutsideAttentionCellCount: mask.skippedOutsideAttentionCellCount,
+    geometryTraversedCellCount: geometry.geometryTraversedCellCount,
+    geometryRayCount: geometry.geometryRayCount,
+    heatmapTargetPosture,
   };
 }
 
 function buildCalculationKey(
   state: SimulationState,
   unit: UnitModel,
+  mask: VisibilityCandidateMask,
   geometryKey: string,
+  heatmapTargetPosture: HeatmapTargetPosture,
 ): string {
-  const profile = unit.attentionSettings.profiles[unit.attentionRuntime.mode];
   return [
-    'current-unit-view:v3-rear-attention',
+    'current-unit-view:v4-unified-kernel',
     unit.id,
+    mask.key,
     geometryKey,
-    quantize(unit.position.x, POSITION_QUANTUM_CELLS),
-    quantize(unit.position.y, POSITION_QUANTUM_CELLS),
     unit.behaviorRuntime.posture,
-    unit.attentionRuntime.mode,
-    quantize(unit.attentionRuntime.focusDirectionRadians, 0.05),
-    profile.focusAngleDegrees.toFixed(1),
-    profile.directAngleDegrees.toFixed(1),
-    profile.peripheralAngleDegrees.toFixed(1),
-    profile.focusWeight.toFixed(3),
-    profile.directWeight.toFixed(3),
-    profile.peripheralWeight.toFixed(3),
-    profile.rearWeight.toFixed(3),
-    profile.rearMaximumRangeMeters.toFixed(1),
-    unit.attentionSettings.nearAwarenessRangeMeters.toFixed(2),
-    unit.attentionSettings.nearMinimumVisibilityQuality.toFixed(3),
-    unit.attentionSettings.vision.maximumVisualRangeMeters.toFixed(1),
-    unit.attentionSettings.vision.distanceFalloffStartMeters.toFixed(1),
-    unit.attentionSettings.vision.distanceFalloffExponent.toFixed(2),
-    quantize(unit.soldier.condition.fatigue, 1),
-    quantize(unit.soldier.condition.confusion, 1),
-    quantize(unit.soldier.condition.health, 1),
-    quantize(unit.behaviorRuntime.suppression, 1),
-    state.map.metersPerCell.toFixed(3),
+    heatmapTargetPosture,
+    exact(unit.soldier.condition.fatigue),
+    exact(unit.soldier.condition.confusion),
+    exact(unit.soldier.condition.health),
+    exact(unit.behaviorRuntime.suppression),
+    state.map.metersPerCell,
   ].join(':');
-}
-
-function visibilityZoneCode(zone: AttentionZone): VisibilityZoneCode {
-  if (zone === 'focus') return VISIBILITY_ZONE_CODE.focus;
-  if (zone === 'direct') return VISIBILITY_ZONE_CODE.direct;
-  if (zone === 'peripheral') return VISIBILITY_ZONE_CODE.peripheral;
-  if (zone === 'rear') return VISIBILITY_ZONE_CODE.rear;
-  if (zone === 'near') return VISIBILITY_ZONE_CODE.near;
-  return VISIBILITY_ZONE_CODE.unseen;
 }
 
 function getRuntime(state: SimulationState): VisibilityFieldRuntime {
@@ -334,6 +301,11 @@ function getRuntime(state: SimulationState): VisibilityFieldRuntime {
         cacheHitCount: 0,
         processedCellCount: 0,
         rayCount: 0,
+        candidateCellCount: 0,
+        evaluatedTargetCellCount: 0,
+        skippedOutsideAttentionCellCount: 0,
+        geometryTraversedCellCount: 0,
+        geometryRayCount: 0,
         lastBuildReason: 'none',
         lastBuildDurationMs: 0,
         lastKey: '',
@@ -355,18 +327,19 @@ function trimUnitFields(runtime: VisibilityFieldRuntime, state: SimulationState)
   }
 }
 
-function eyeHeightForPosture(posture: UnitModel['behaviorRuntime']['posture']): number {
-  if (posture === 'prone') return 0.35;
-  if (posture === 'crouched') return 1.1;
-  return 1.7;
+function localFieldIndex(
+  field: Pick<SelectedUnitVisibilityField, 'minCellX' | 'minCellY' | 'width' | 'height'>,
+  cellX: number,
+  cellY: number,
+): number {
+  const x = Math.floor(cellX) - field.minCellX;
+  const y = Math.floor(cellY) - field.minCellY;
+  if (x < 0 || y < 0 || x >= field.width || y >= field.height) return -1;
+  return y * field.width + x;
 }
 
-function quantize(value: number, step: number): string {
-  return (Math.round(value / step) * step).toFixed(3);
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
+function exact(value: number): string {
+  return Number.isFinite(value) ? Number(value).toPrecision(15) : 'invalid';
 }
 
 function nowMilliseconds(): number {

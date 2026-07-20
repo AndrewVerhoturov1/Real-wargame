@@ -1,16 +1,8 @@
-import { distance, type GridPosition } from '../geometry';
-import { getCell, type MapObject, type MapObjectKind, type TacticalMap } from '../map/MapModel';
-import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
-import { getMapObjectSpatialIndex } from '../spatial/MapObjectSpatialIndex';
-import { sampleSmoothHeightLevel } from '../terrain/SmoothTerrain';
+import type { GridPosition } from '../geometry';
+import type { TacticalMap } from '../map/MapModel';
 import type { UnitModel } from '../units/UnitModel';
-
-const ELEVATION_STEP_METERS = 2;
-const SAMPLE_STEP_METERS = 1.2;
-const ENDPOINT_RELIEF_GRACE_METERS = 7;
-const OBJECT_ORIGIN_IGNORE_METERS = 1.25;
-const TERRAIN_BLOCK_MARGIN_METERS = 0.95;
-const OBJECT_BLOCK_MARGIN_METERS = 0.15;
+import { traceVisibilityRay } from './VisibilityRayKernel';
+import { soldierPostureHeightMeters } from './VisibilityPosture';
 
 export interface LineOfSightProbeResult {
   origin: GridPosition;
@@ -26,299 +18,36 @@ export interface LineOfSightProbeResult {
   obscurationReasonRu: string;
 }
 
+/**
+ * Compatibility facade retained for probes, reports and older smoke tests.
+ * All physical visibility math lives in VisibilityRayKernel.
+ */
 export function computeLineOfSight(
   map: TacticalMap,
   unit: UnitModel,
   target: GridPosition,
   targetHeightMeters = 1.4,
 ): LineOfSightProbeResult {
-  const origin = unit.position;
-  const totalDistanceCells = distance(origin, target);
-  const totalDistanceMeters = totalDistanceCells * map.metersPerCell;
-
-  if (totalDistanceMeters <= 0.02) {
-    return {
-      origin,
-      target,
-      totalDistanceMeters: 0,
-      visibleDistanceMeters: 0,
-      blocked: false,
-      blockedAt: null,
-      blockerReasonRu: 'видимость не проверялась: точка рядом с юнитом',
-      visualTransmission: 1,
-      partialObscuration: false,
-      accumulatedForestMeters: 0,
-      obscurationReasonRu: 'препятствий нет',
-    };
-  }
-
-  const objectCandidates = getMapObjectSpatialIndex(map).querySegment(
-    origin,
+  const trace = traceVisibilityRay(map, {
+    origin: unit.position,
     target,
-    Math.max(0.5, 2 / map.metersPerCell),
-  );
-  const originGround = sampleSmoothHeightLevel(map, origin.x, origin.y) * ELEVATION_STEP_METERS;
-  const targetGround = sampleSmoothHeightLevel(map, target.x, target.y) * ELEVATION_STEP_METERS;
-  const originEye = originGround + eyeHeightForPosture(unit.behaviorRuntime.posture);
-  const targetEye = targetGround + normalizeTargetHeightMeters(targetHeightMeters);
-  const steps = Math.max(2, Math.ceil(totalDistanceMeters / SAMPLE_STEP_METERS));
-  let accumulatedForestMeters = 0;
-  let visualTransmission = 1;
-  let strongestForestKind = 0;
-  let strongestVegetationNameRu = '';
-  let strongestVegetationLoss = 0;
-
-  for (let step = 1; step <= steps; step += 1) {
-    const factor = step / steps;
-    const sample = {
-      x: lerp(origin.x, target.x, factor),
-      y: lerp(origin.y, target.y, factor),
-    };
-    const currentDistanceMeters = totalDistanceMeters * factor;
-    const cell = getCell(map, Math.floor(sample.x), Math.floor(sample.y));
-    const lineHeight = lerp(originEye, targetEye, factor);
-
-    if (!cell) {
-      return blockedResult(
-        origin,
-        target,
-        totalDistanceMeters,
-        currentDistanceMeters,
-        sample,
-        'край карты',
-        0,
-        accumulatedForestMeters,
-        forestReason(strongestForestKind, accumulatedForestMeters, strongestVegetationNameRu),
-      );
-    }
-
-    const objectBlocker = findObjectBlocker(objectCandidates, map, sample, origin, lineHeight);
-    if (objectBlocker) {
-      return blockedResult(
-        origin,
-        target,
-        totalDistanceMeters,
-        currentDistanceMeters,
-        sample,
-        `${formatObjectBlocker(objectBlocker)} / высота ${getObjectHeightMeters(objectBlocker)} м`,
-        0,
-        accumulatedForestMeters,
-        forestReason(strongestForestKind, accumulatedForestMeters, strongestVegetationNameRu),
-      );
-    }
-
-    const stepMeters = totalDistanceMeters / steps;
-    const vegetation = resolveCellVegetationDefinition(cell);
-    const hasVegetation = vegetation.id !== 'none'
-      && (vegetation.visibility.transmissionLossPerMeter > 0
-        || vegetation.visibility.localConcealment > 0
-        || vegetation.visibility.targetConcealment > 0);
-    if (hasVegetation) {
-      accumulatedForestMeters += stepMeters;
-      strongestForestKind = Math.max(strongestForestKind, vegetation.layer);
-      if (vegetation.visibility.transmissionLossPerMeter >= strongestVegetationLoss) {
-        strongestVegetationLoss = vegetation.visibility.transmissionLossPerMeter;
-        strongestVegetationNameRu = vegetation.nameRu;
-      }
-      visualTransmission *= Math.exp(-vegetation.visibility.transmissionLossPerMeter * stepMeters);
-      if (vegetation.visibility.minimumTransmission > 0
-        && visualTransmission <= vegetation.visibility.minimumTransmission) {
-        return blockedResult(
-          origin,
-          target,
-          totalDistanceMeters,
-          currentDistanceMeters,
-          sample,
-          `${vegetation.nameRu.toLowerCase()} почти полностью закрыл обзор`,
-          visualTransmission,
-          accumulatedForestMeters,
-          forestReason(strongestForestKind, accumulatedForestMeters, strongestVegetationNameRu),
-        );
-      }
-    }
-
-    const smoothHeightLevel = sampleSmoothHeightLevel(map, sample.x, sample.y);
-    const groundHeight = smoothHeightLevel * ELEVATION_STEP_METERS;
-    const isNearOrigin = currentDistanceMeters < ENDPOINT_RELIEF_GRACE_METERS;
-    const isNearTarget = totalDistanceMeters - currentDistanceMeters < ENDPOINT_RELIEF_GRACE_METERS;
-
-    if (!isNearOrigin && !isNearTarget && groundHeight > lineHeight + TERRAIN_BLOCK_MARGIN_METERS) {
-      return blockedResult(
-        origin,
-        target,
-        totalDistanceMeters,
-        currentDistanceMeters,
-        sample,
-        `плавный склон / рельеф ${formatSigned(smoothHeightLevel)}`,
-        0,
-        accumulatedForestMeters,
-        forestReason(strongestForestKind, accumulatedForestMeters, strongestVegetationNameRu),
-      );
-    }
-  }
-
-  const partialObscuration = visualTransmission < 0.995;
+    originHeightAboveGroundMeters: soldierPostureHeightMeters(unit.behaviorRuntime.posture),
+    targetHeightAboveGroundMeters: targetHeightMeters,
+    channel: 'visual',
+  });
   return {
-    origin,
-    target,
-    totalDistanceMeters,
-    visibleDistanceMeters: totalDistanceMeters,
-    blocked: false,
-    blockedAt: null,
-    blockerReasonRu: partialObscuration ? 'прямая видимость есть, но обзор частично ухудшен' : 'прямая видимость есть',
-    visualTransmission,
-    partialObscuration,
-    accumulatedForestMeters,
-    obscurationReasonRu: forestReason(strongestForestKind, accumulatedForestMeters, strongestVegetationNameRu),
+    origin: trace.origin,
+    target: trace.target,
+    totalDistanceMeters: trace.totalDistanceMeters,
+    visibleDistanceMeters: trace.blockerDistanceMeters ?? trace.totalDistanceMeters,
+    blocked: trace.hardBlocked,
+    blockedAt: trace.blockerPosition,
+    blockerReasonRu: trace.reasonRu,
+    visualTransmission: trace.visualTransmission,
+    partialObscuration: trace.visualTransmission < 0.995,
+    accumulatedForestMeters: trace.accumulatedVegetationMeters,
+    obscurationReasonRu: trace.accumulatedVegetationMeters > 0
+      ? `Растительность: пройдено около ${Math.round(trace.accumulatedVegetationMeters)} м.`
+      : 'Препятствий растительностью нет',
   };
-}
-
-function blockedResult(
-  origin: GridPosition,
-  target: GridPosition,
-  totalDistanceMeters: number,
-  visibleDistanceMeters: number,
-  blockedAt: GridPosition,
-  reason: string,
-  visualTransmission: number,
-  accumulatedForestMeters: number,
-  obscurationReasonRu: string,
-): LineOfSightProbeResult {
-  return {
-    origin,
-    target,
-    totalDistanceMeters,
-    visibleDistanceMeters,
-    blocked: true,
-    blockedAt,
-    blockerReasonRu: reason,
-    visualTransmission: Math.max(0, Math.min(1, visualTransmission)),
-    partialObscuration: accumulatedForestMeters > 0 || visualTransmission > 0,
-    accumulatedForestMeters,
-    obscurationReasonRu,
-  };
-}
-
-function forestReason(kind: number, meters: number, materialNameRu = ''): string {
-  if (meters <= 0) return 'препятствий растительностью нет';
-  const label = materialNameRu || (kind === 2 ? 'Густой лес' : kind === 1 ? 'Редкий лес' : 'Растительность');
-  return `${label.toLowerCase()}: пройдено около ${Math.round(meters)} м растительности`;
-}
-
-function findObjectBlocker(
-  candidates: MapObject[],
-  map: TacticalMap,
-  sample: GridPosition,
-  origin: GridPosition,
-  lineHeightMeters: number,
-): MapObject | null {
-  for (const object of candidates) {
-    if (!blocksLineOfSight(object)) continue;
-    const centerX = object.x + 0.5;
-    const centerY = object.y + 0.5;
-    if (distance(origin, { x: centerX, y: centerY }) * map.metersPerCell < OBJECT_ORIGIN_IGNORE_METERS) continue;
-
-    const dx = sample.x - centerX;
-    const dy = sample.y - centerY;
-    const cos = Math.cos(-object.rotationRadians);
-    const sin = Math.sin(-object.rotationRadians);
-    const localX = dx * cos - dy * sin;
-    const localY = dx * sin + dy * cos;
-    const halfWidth = Math.max(0.35, object.widthCells / 2);
-    const halfHeight = Math.max(0.35, object.heightCells / 2);
-
-    if (Math.abs(localX) > halfWidth || Math.abs(localY) > halfHeight) continue;
-
-    const objectGround = sampleSmoothHeightLevel(map, centerX, centerY) * ELEVATION_STEP_METERS;
-    const objectTop = objectGround + getObjectHeightMeters(object);
-
-    if (objectTop + OBJECT_BLOCK_MARGIN_METERS >= lineHeightMeters) return object;
-  }
-
-  return null;
-}
-
-function blocksLineOfSight(object: MapObject): boolean {
-  if (getObjectHeightMeters(object) <= 0.05) return false;
-
-  switch (object.kind) {
-    case 'structure':
-    case 'rock':
-    case 'cover':
-    case 'crates':
-    case 'logs':
-    case 'fence':
-    case 'tree':
-    case 'post':
-    case 'well':
-      return true;
-    case 'ditch':
-    case 'bridge':
-    default:
-      return false;
-  }
-}
-
-function getObjectHeightMeters(object: MapObject): number {
-  if (typeof object.losHeightMeters === 'number' && Number.isFinite(object.losHeightMeters)) {
-    return object.losHeightMeters;
-  }
-  return fallbackObjectHeightMeters(object.kind);
-}
-
-function fallbackObjectHeightMeters(kind: MapObjectKind): number {
-  switch (kind) {
-    case 'tree': return 6;
-    case 'structure': return 5;
-    case 'post': return 1.35;
-    case 'crates': return 1.25;
-    case 'rock':
-    case 'fence': return 1.2;
-    case 'cover':
-    case 'well': return 1.1;
-    case 'logs':
-    case 'bridge': return 0.8;
-    case 'ditch':
-    default: return 0.2;
-  }
-}
-
-function formatObjectBlocker(object: MapObject): string {
-  const label = object.labels?.ru;
-  if (label) return label;
-
-  switch (object.kind) {
-    case 'structure': return 'строение';
-    case 'rock': return 'камень';
-    case 'cover': return 'укрытие';
-    case 'crates': return 'ящики / бочки';
-    case 'logs': return 'брёвна';
-    case 'fence': return 'забор';
-    case 'tree': return 'дерево';
-    case 'post': return 'пост / бочки';
-    case 'well': return 'колодец / круглый объект';
-    default: return object.kind;
-  }
-}
-
-function eyeHeightForPosture(posture: UnitModel['behaviorRuntime']['posture']): number {
-  switch (posture) {
-    case 'prone': return 0.35;
-    case 'crouched': return 1.1;
-    case 'standing':
-    default: return 1.7;
-  }
-}
-
-function normalizeTargetHeightMeters(value: number): number {
-  return Number.isFinite(value) ? Math.max(0.05, value) : 1.4;
-}
-
-function formatSigned(value: number): string {
-  const rounded = Math.round(value * 10) / 10;
-  return rounded > 0 ? `+${rounded}` : String(rounded);
-}
-
-function lerp(start: number, end: number, factor: number): number {
-  return start + (end - start) * factor;
 }

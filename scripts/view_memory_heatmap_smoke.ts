@@ -4,8 +4,17 @@ import { getCell, setCellVegetationMaterialId } from '../src/core/map/MapModel';
 import { markMapCellsDirty } from '../src/core/map/MapRuntimeState';
 import { setAttentionMode, setSearchSector, updateAttentionController } from '../src/core/perception/AttentionController';
 import { createInitialState, selectUnit } from '../src/core/simulation/SimulationState';
-import { setAttentionOverlayActive } from '../src/core/ui/RuntimeUiState';
+import {
+  getAttentionOverlayState,
+  setAttentionHeatmapTargetPosture,
+  setAttentionOverlayActive,
+} from '../src/core/ui/RuntimeUiState';
 import type { UnitData } from '../src/core/units/UnitModel';
+import {
+  buildVisibilityCandidateMask,
+  VISIBILITY_ZONE_CODE,
+  visibilityMaskIndex,
+} from '../src/core/visibility/VisibilityCandidateMask';
 import {
   calculateDistanceVisibilityFactor,
   evaluateCellVisibilityQuality,
@@ -50,15 +59,26 @@ const mapData: TacticalMapData = {
   metersPerCell: 2,
   defaultTerrain: 'field',
   defaultHeight: 0,
-  objects: [{
-    id: 'house',
-    kind: 'structure',
-    x: 20,
-    y: 14,
-    widthCells: 3,
-    heightCells: 4,
-    losHeightMeters: 5,
-  }],
+  objects: [
+    {
+      id: 'low-cover',
+      kind: 'cover',
+      x: 15,
+      y: 15,
+      widthCells: 1,
+      heightCells: 1,
+      losHeightMeters: 1.1,
+    },
+    {
+      id: 'house',
+      kind: 'structure',
+      x: 20,
+      y: 14,
+      widthCells: 3,
+      heightCells: 4,
+      losHeightMeters: 5,
+    },
+  ],
 };
 const observerData: UnitData = {
   id: 'observer',
@@ -72,9 +92,20 @@ const observerData: UnitData = {
   viewRangeCells: 30,
   attention: { vision },
 };
-const state = createInitialState(mapData, [observerData]);
+const hiddenTargetData: UnitData = {
+  ...observerData,
+  id: 'hidden-target',
+  label: 'Hidden target',
+  labelRu: 'Скрытая цель',
+  side: 'red',
+  x: 18,
+  y: 15,
+  runtime: { posture: 'prone' },
+};
+const state = createInitialState(mapData, [observerData, hiddenTargetData]);
 selectUnit(state, 'observer');
-const observer = state.units[0];
+const observer = state.units[0]!;
+const hiddenTarget = state.units[1]!;
 
 setAttentionMode(observer, 'observe', 'player');
 const observeDirection = observer.attentionRuntime.focusDirectionRadians;
@@ -88,32 +119,111 @@ setAttentionMode(observer, 'march', 'player');
 observer.facingRadians = 1.1;
 updateAttentionController(observer, 4);
 assert.equal(observer.attentionRuntime.focusDirectionRadians, observer.facingRadians, 'march must follow facing without sweep');
+setAttentionMode(observer, 'observe', 'player');
+observer.attentionRuntime.focusDirectionRadians = 0;
+
+const profile = observer.attentionSettings.profiles.observe;
+profile.focusAngleDegrees = 30;
+profile.directAngleDegrees = 80;
+profile.peripheralAngleDegrees = 80;
+profile.focusWeight = 1;
+profile.directWeight = 0.7;
+profile.peripheralWeight = 0;
+profile.rearWeight = 0;
+const narrowMask = buildVisibilityCandidateMask(state, observer);
+assert.ok(narrowMask.candidateCellCount > 0);
+const rearOutside = visibilityMaskIndex(narrowMask, 2, 15);
+assert.ok(rearOutside >= 0);
+assert.equal(narrowMask.candidate[rearOutside], 0);
+assert.equal(narrowMask.zone[rearOutside], VISIBILITY_ZONE_CODE.unseen);
+
+const savedNearRange = observer.attentionSettings.nearAwarenessRangeMeters;
+observer.attentionSettings.nearAwarenessRangeMeters = 0;
+profile.focusWeight = 0;
+profile.directWeight = 0;
+const emptyMask = buildVisibilityCandidateMask(state, observer);
+assert.equal(emptyMask.candidateCellCount, 0, 'zero-weight profile must produce an empty candidate mask');
+observer.attentionSettings.nearAwarenessRangeMeters = savedNearRange;
+profile.focusWeight = 1;
+profile.directWeight = 0.7;
 
 assert.equal(getSelectedUnitVisibilityField(state), null, 'hidden layer must not build a field');
 assert.equal(getVisibilityFieldDiagnostics(state).rebuildCount, 0);
 setAttentionOverlayActive(state, true);
 state.simulationTimeSeconds = 1;
-const first = getSelectedUnitVisibilityField(state);
-assert.ok(first);
-assert.ok(first.quality instanceof Uint8Array);
-assert.ok(first.quality.length === first.width * first.height);
+const narrowField = getSelectedUnitVisibilityField(state);
+assert.ok(narrowField);
+assert.ok(narrowField.quality instanceof Uint8Array);
+assert.ok(narrowField.evaluated instanceof Uint8Array);
+assert.equal(narrowField.quality.length, narrowField.width * narrowField.height);
 assert.equal(getVisibilityFieldDiagnostics(state).rebuildCount, 1);
-const cached = getSelectedUnitVisibilityField(state);
-assert.equal(cached, first, 'unchanged observer and map must reuse the same field');
+const rearFieldIndex = localFieldIndex(narrowField, 2, 15);
+assert.ok(rearFieldIndex >= 0);
+assert.equal(narrowField.evaluated[rearFieldIndex], 0, 'cell outside attention must receive no geometry target evaluation');
+assert.equal(narrowField.quality[rearFieldIndex], 0);
+assert.equal(narrowField.zone[rearFieldIndex], VISIBILITY_ZONE_CODE.unseen);
+const cachedNarrow = getSelectedUnitVisibilityField(state);
+assert.equal(cachedNarrow, narrowField, 'unchanged observer and map must reuse the same field');
 assert.ok(getVisibilityFieldDiagnostics(state).cacheHitCount >= 1);
-assert.equal(getVisibilityFieldDiagnostics(state).cachedFieldCount, 1, 'only the latest field may be retained');
+assert.equal(getVisibilityFieldDiagnostics(state).cachedFieldCount, 1);
 
-const clearAhead = sampleSelectedUnitVisibilityField(first, 17, 15);
-const behindHouse = sampleSelectedUnitVisibilityField(first, 25, 15);
+profile.directAngleDegrees = 360;
+profile.peripheralAngleDegrees = 360;
+profile.peripheralWeight = 0.25;
+profile.rearWeight = 0.1;
+state.simulationTimeSeconds += 0.3;
+const fullField = getSelectedUnitVisibilityField(state);
+assert.ok(fullField && fullField !== narrowField);
+assert.ok(fullField.candidateCellCount > narrowField.candidateCellCount, '360-degree profile must have more candidate cells than narrow attention');
+assert.ok(fullField.geometryRayCount > 0);
+assert.ok(fullField.geometryTraversedCellCount >= fullField.geometryRayCount);
+
+const clearAhead = sampleSelectedUnitVisibilityField(fullField, 13, 15);
+const behindHouse = sampleSelectedUnitVisibilityField(fullField, 25, 15);
 assert.ok(clearAhead > behindHouse, 'building must create a lower-quality shadow behind itself');
+
+hiddenTarget.position.x += 0.37;
+hiddenTarget.position.y += 0.19;
+hiddenTarget.behaviorRuntime.posture = 'standing';
+state.simulationTimeSeconds += 0.3;
+assert.equal(
+  getSelectedUnitVisibilityField(state),
+  fullField,
+  'moving or changing a hidden target must not alter the hypothetical heatmap',
+);
+
+const distantQualityBefore = sampleSelectedUnitVisibilityField(fullField, 10, 30);
+observer.attentionSettings.vision.distanceFalloffStartMeters = 5;
+observer.attentionSettings.vision.distanceFalloffExponent = 2.5;
+state.simulationTimeSeconds += 0.3;
+const falloffField = getSelectedUnitVisibilityField(state);
+assert.ok(falloffField && falloffField !== fullField, 'distance quality settings must invalidate the heatmap key');
+assert.ok(
+  sampleSelectedUnitVisibilityField(falloffField, 10, 30) < distantQualityBefore,
+  'earlier and steeper distance falloff must reduce distant heatmap quality',
+);
+
+assert.equal(getAttentionOverlayState(state).heatmapTargetPosture, 'standing');
+const originalObserverPosture = observer.behaviorRuntime.posture;
+const originalKnowledgeRevision = observer.perceptionKnowledge.revision;
+const standingBehindCover = sampleSelectedUnitVisibilityField(falloffField, 18, 15);
+setAttentionHeatmapTargetPosture(state, 'prone');
+state.simulationTimeSeconds += 0.3;
+const proneField = getSelectedUnitVisibilityField(state);
+assert.ok(proneField);
+assert.notEqual(proneField.calculationKey, falloffField.calculationKey);
+const proneBehindCover = sampleSelectedUnitVisibilityField(proneField, 18, 15);
+assert.ok(standingBehindCover > proneBehindCover, `standing preview ${standingBehindCover} must exceed prone preview ${proneBehindCover} behind low cover`);
+assert.equal(observer.behaviorRuntime.posture, originalObserverPosture, 'heatmap target selector must not change observer posture');
+assert.equal(observer.perceptionKnowledge.revision, originalKnowledgeRevision, 'heatmap target selector must not mutate subjective contacts');
 
 observer.position.x += 0.05;
 state.simulationTimeSeconds += 0.05;
-assert.equal(getSelectedUnitVisibilityField(state), first, 'sub-cell movement must reuse quantized cache');
+assert.equal(getSelectedUnitVisibilityField(state), proneField, 'movement inside throttle window must reuse the last field');
 observer.position.x += 0.4;
 state.simulationTimeSeconds += 0.3;
 const moved = getSelectedUnitVisibilityField(state);
-assert.ok(moved && moved !== first, 'meaningful movement after throttle window must rebuild');
+assert.ok(moved && moved !== proneField, 'exact observer movement after throttle window must rebuild');
 
 for (let x = 14; x <= 18; x += 1) {
   const cell = getCell(state.map, x, 15);
@@ -126,4 +236,15 @@ const forest = getSelectedUnitVisibilityField(state);
 assert.ok(forest && forest.revision > moved.revision, 'map visual revision must invalidate the field');
 assert.ok(sampleSelectedUnitVisibilityField(forest, 19, 15) < sampleSelectedUnitVisibilityField(moved, 19, 15), 'forest must reduce current visibility quality');
 
-console.log('View and memory heatmap smoke passed: stable coverage, quality falloff, occlusion, cache and invalidation.');
+console.log('View and memory heatmap smoke passed: attention mask, hidden-target isolation, canonical geometry, distance quality, posture preview, cache and invalidation.');
+
+function localFieldIndex(
+  field: { minCellX: number; minCellY: number; width: number; height: number },
+  cellX: number,
+  cellY: number,
+): number {
+  const x = cellX - field.minCellX;
+  const y = cellY - field.minCellY;
+  if (x < 0 || y < 0 || x >= field.width || y >= field.height) return -1;
+  return y * field.width + x;
+}

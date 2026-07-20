@@ -2,6 +2,7 @@ import type { GridPosition } from '../geometry';
 import type { SimulationState } from '../simulation/SimulationState';
 
 export type SimulationLayerMode = 'info' | 'danger' | 'positions' | 'stealth' | 'memory';
+export type HeatmapTargetPosture = 'standing' | 'crouched' | 'prone';
 
 export interface KnowledgeOverlayRuntimeState {
   active: boolean;
@@ -37,6 +38,8 @@ export interface AttentionOverlayRuntimeState {
   showMemoryMarkers: boolean;
   showCurrentContacts: boolean;
   showUncertainty: boolean;
+  /** Display-only hypothetical target posture for the current-view heatmap. */
+  heatmapTargetPosture: HeatmapTargetPosture;
   /** Legacy compatibility flag. The rotating diagnostic fan is no longer rendered. */
   showVisibilityFan: boolean;
   selectedContactId: string | null;
@@ -159,6 +162,13 @@ export function setAttentionUncertainty(state: SimulationState, active: boolean)
   getRuntimeUiState(state).attentionOverlay.showUncertainty = active;
 }
 
+export function setAttentionHeatmapTargetPosture(
+  state: SimulationState,
+  posture: HeatmapTargetPosture,
+): void {
+  getRuntimeUiState(state).attentionOverlay.heatmapTargetPosture = posture;
+}
+
 export function setAttentionVisibilityFan(state: SimulationState, active: boolean): void {
   getRuntimeUiState(state).attentionOverlay.showVisibilityFan = active;
 }
@@ -206,6 +216,7 @@ function getRuntimeUiState(state: SimulationState): RuntimeUiState {
         showMemoryMarkers: true,
         showCurrentContacts: true,
         showUncertainty: true,
+        heatmapTargetPosture: 'standing',
         showVisibilityFan: false,
         selectedContactId: null,
       },
