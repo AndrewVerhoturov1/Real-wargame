@@ -5,11 +5,15 @@ import {
   buildCommandPlanRouteOverlaySnapshot,
   type CommandPlanRouteOverlaySnapshot,
   type PlanStageOverlaySnapshot,
+  type TraversalSegmentOverlaySnapshot,
 } from './CommandPlanRouteOverlayModel';
 
 const COMMAND_COLOR = 0xffd85a;
 const PLAN_COLOR = 0x62aaff;
 const ROUTE_COLOR = 0x66e38a;
+const CROUCHED_ROUTE_COLOR = 0x55dbe8;
+const PRONE_ROUTE_COLOR = 0xb77cff;
+const ATTENTION_COLOR = 0xffe28a;
 const FAILURE_COLOR = 0xff755f;
 const PLAN_LANE_OFFSET_PX = 8;
 const OVERLAY_OFF_CLASS = 'command-plan-route-overlay-off';
@@ -145,7 +149,11 @@ export class PixiOrderRenderer {
 
 function hasVisibleContent(snapshot: CommandPlanRouteOverlaySnapshot): boolean {
   return Boolean(snapshot.command)
-    || (snapshot.selected && (snapshot.planStages.length > 0 || snapshot.routePoints.length > 1));
+    || (snapshot.selected && (
+      snapshot.planStages.length > 0
+      || snapshot.routePoints.length > 1
+      || snapshot.traversalSegments.length > 0
+    ));
 }
 
 function drawCommand(
@@ -227,23 +235,108 @@ function drawRoute(
   snapshot: CommandPlanRouteOverlaySnapshot,
 ): void {
   graphics.clear();
-  if (!snapshot.selected || snapshot.routePoints.length < 2) return;
+  if (!snapshot.selected) return;
+  if (snapshot.traversalSegments.length > 0) {
+    for (const segment of snapshot.traversalSegments) drawTraversalSegment(map, graphics, segment);
+    return;
+  }
+  if (snapshot.routePoints.length < 2) return;
 
-  const first = gridToWorld(map, snapshot.routePoints[0]);
+  const first = gridToWorld(map, snapshot.routePoints[0]!);
   graphics.moveTo(first.x, first.y);
   for (let index = 1; index < snapshot.routePoints.length; index += 1) {
-    const point = gridToWorld(map, snapshot.routePoints[index]);
+    const point = gridToWorld(map, snapshot.routePoints[index]!);
     graphics.lineTo(point.x, point.y);
   }
   graphics.stroke({ width: 4, color: ROUTE_COLOR, alpha: 0.95 });
 
   for (let index = 1; index < snapshot.routePoints.length; index += 1) {
-    const point = gridToWorld(map, snapshot.routePoints[index]);
+    const point = gridToWorld(map, snapshot.routePoints[index]!);
     const current = index === 1;
     graphics.circle(point.x, point.y, current ? 6 : 4)
       .fill({ color: 0x173523, alpha: current ? 0.92 : 0.7 })
       .stroke({ width: current ? 3 : 2, color: ROUTE_COLOR, alpha: current ? 1 : 0.72 });
   }
+}
+
+function drawTraversalSegment(
+  map: TacticalMap,
+  graphics: Graphics,
+  segment: TraversalSegmentOverlaySnapshot,
+): void {
+  if (segment.points.length < 2) return;
+  const color = postureColor(segment.posture);
+  const alpha = segment.active ? 1 : 0.82;
+  const width = segment.active ? 5 : 4;
+  for (let index = 1; index < segment.points.length; index += 1) {
+    const from = gridToWorld(map, segment.points[index - 1]!);
+    const to = gridToWorld(map, segment.points[index]!);
+    drawMovementLine(graphics, from.x, from.y, to.x, to.y, segment.movementProfileId, color, width, alpha);
+  }
+
+  const boundary = gridToWorld(map, segment.points[0]!);
+  graphics.circle(boundary.x, boundary.y, segment.active ? 5 : 4)
+    .fill({ color: 0x111820, alpha: 0.82 })
+    .stroke({ width: 2, color, alpha });
+  if (segment.bodyFacingRadians !== null) {
+    drawFacingArrow(graphics, boundary.x, boundary.y, segment.bodyFacingRadians, 17, color, 0.9);
+  }
+
+  const attentionAnchor = gridToWorld(map, segment.points[Math.floor(segment.points.length / 2)]!);
+  if (segment.attentionCenterRadians !== null) {
+    drawFacingArrow(
+      graphics,
+      attentionAnchor.x,
+      attentionAnchor.y,
+      segment.attentionCenterRadians,
+      14,
+      ATTENTION_COLOR,
+      0.72,
+      1.5,
+    );
+    if (segment.attentionPolicy === 'search_sector' && segment.attentionArcRadians !== null) {
+      const half = segment.attentionArcRadians / 2;
+      graphics.arc(
+        attentionAnchor.x,
+        attentionAnchor.y,
+        18,
+        segment.attentionCenterRadians - half,
+        segment.attentionCenterRadians + half,
+      ).stroke({ width: 1, color: ATTENTION_COLOR, alpha: 0.5 });
+    }
+  }
+}
+
+function drawMovementLine(
+  graphics: Graphics,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  movementProfileId: string,
+  color: number,
+  width: number,
+  alpha: number,
+): void {
+  if (movementProfileId === 'run' || movementProfileId === 'sprint') {
+    drawDashedLine(graphics, fromX, fromY, toX, toY, 14, 5, color, width, alpha);
+    return;
+  }
+  if (movementProfileId === 'crawl') {
+    drawDashedLine(graphics, fromX, fromY, toX, toY, 3, 5, color, width + 1, alpha);
+    return;
+  }
+  if (movementProfileId === 'stealth_move' || movementProfileId === 'crouched_move') {
+    drawDashedLine(graphics, fromX, fromY, toX, toY, 7, 3, color, width, alpha);
+    return;
+  }
+  graphics.moveTo(fromX, fromY).lineTo(toX, toY).stroke({ width, color, alpha });
+}
+
+function postureColor(posture: TraversalSegmentOverlaySnapshot['posture']): number {
+  if (posture === 'crouched') return CROUCHED_ROUTE_COLOR;
+  if (posture === 'prone') return PRONE_ROUTE_COLOR;
+  return ROUTE_COLOR;
 }
 
 function updateActiveStageLabel(
@@ -258,7 +351,7 @@ function updateActiveStageLabel(
   }
 
   const activeIndex = Math.max(0, Math.min(snapshot.planStages.length - 1, snapshot.activeStageIndex));
-  const stage = snapshot.planStages[activeIndex];
+  const stage = snapshot.planStages[activeIndex]!;
   label.text = stage.labelRu;
   label.visible = true;
   const anchor = resolvePlanStageAnchor(map, snapshot, activeIndex);
@@ -328,6 +421,7 @@ function drawFacingArrow(
   length: number,
   color: number,
   alpha: number,
+  width = 3,
 ): void {
   const endX = x + Math.cos(finalFacingRadians) * length;
   const endY = y + Math.sin(finalFacingRadians) * length;
@@ -335,7 +429,7 @@ function drawFacingArrow(
   graphics.moveTo(x, y).lineTo(endX, endY);
   graphics.moveTo(endX, endY).lineTo(endX - Math.cos(finalFacingRadians - Math.PI / 6) * size, endY - Math.sin(finalFacingRadians - Math.PI / 6) * size);
   graphics.moveTo(endX, endY).lineTo(endX - Math.cos(finalFacingRadians + Math.PI / 6) * size, endY - Math.sin(finalFacingRadians + Math.PI / 6) * size);
-  graphics.stroke({ width: 3, color, alpha });
+  graphics.stroke({ width, color, alpha });
 }
 
 function drawDashedLine(
