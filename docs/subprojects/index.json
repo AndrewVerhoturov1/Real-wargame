@@ -25,6 +25,20 @@
       "metadata_path": "docs/subprojects/ai-single-unit-editor/subproject.json"
     },
     {
+      "id": "tactical-route-traversal",
+      "title": "Tactical Route Traversal — Posture, Movement and Attention Planning",
+      "status": "active",
+      "updated_at": "2026-07-20",
+      "goal": "Добавить после A* отдельное детерминированное планирование способа прохождения готового маршрута: физический профиль движения, позу, направление корпуса, внимание, объяснения и ограниченную асинхронную подготовку без второго поля укрытий и без тяжёлой работы каждый кадр.",
+      "current_focus": "Реализация находится в feature/20260720-tactical-route-traversal от preview HEAD 5070ce210862c1e997dada4a22c53866676f3bcc: добавлены общий расчёт позы, ограниченный планировщик, служба точной идентичности, MoveOrder/runtime-интеграция, сериализация и снимок отображения. Исправление высоты лежащих и пригнувшихся целей выполняется параллельно; эта механика читает готовое общее поле и не дублирует LOS.",
+      "next_step": "На машине с полной локальной копией выполнить разрешённую матрицу TypeScript, smoke и production build; затем, только после отдельного разрешения, проверить в браузере цвета участков, штрихи движения, стрелки корпуса и сектора внимания. Не переносить ветку в preview до отдельного явного решения.",
+      "canonical_launcher": "Run-Real-Wargame-Lab.bat",
+      "last_verified_commit": null,
+      "superseded_by": null,
+      "status_path": "docs/subprojects/tactical-route-traversal/STATUS.md",
+      "metadata_path": "docs/subprojects/tactical-route-traversal/subproject.json"
+    },
+    {
       "id": "real-wargame-start",
       "title": "2D Tactical Command Game — RTS Foundation / Soldier Behavior Lab",
       "status": "maintenance",
