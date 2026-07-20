@@ -1,12 +1,18 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { markMapCellsDirty } from '../src/core/map/MapRuntimeState';
 import type { SimulationState } from '../src/core/simulation/SimulationState';
 import {
   TacticalPositionSearchService,
   type TacticalPositionFieldRuntime,
   type TacticalPositionSearchRequestSnapshotV1,
 } from '../src/core/tactical/TacticalPositionSearchService';
+import { setSimulationLayerMode } from '../src/core/ui/RuntimeUiState';
 import { normalizeUnits } from '../src/core/units/UnitModel';
+import {
+  AwarenessLayerFieldController,
+  type AwarenessWorldFieldRequester,
+} from '../src/runtime/AwarenessLayerFieldController';
 import type { PreparedAwarenessWorldSnapshot } from '../src/runtime/AwarenessWorldRuntime';
 
 function verifyRendererDoesNotOwnTacticalSearch(): void {
@@ -19,6 +25,87 @@ function verifyRendererDoesNotOwnTacticalSearch(): void {
   ]) {
     assert.equal(combined.includes(forbidden), false, `renderer source must not own tactical calculation: found ${forbidden}`);
   }
+}
+
+function verifyVisibleAwarenessLayersRequestLiveFields(): void {
+  const units = normalizeUnits([
+    { id: 'alpha', type: 'infantry_squad', side: 'blue', x: 1, y: 1 },
+    { id: 'bravo', type: 'infantry_squad', side: 'blue', x: 3, y: 3 },
+  ]);
+  const state = {
+    units,
+    selectedUnitId: 'alpha',
+    selectedUnitIds: ['alpha'],
+    simulationStep: 10,
+    simulationTimeSeconds: 1,
+    map: {
+      width: 12,
+      height: 8,
+      cellSize: 4,
+      metersPerCell: 2,
+      cells: [],
+      objects: [],
+    },
+    editor: { enabled: false },
+  } as unknown as SimulationState;
+  const requestedUnits: string[] = [];
+  const requester: AwarenessWorldFieldRequester = {
+    requestWorldField: (unit) => {
+      requestedUnits.push(unit.id);
+      return null;
+    },
+  };
+  const controller = new AwarenessLayerFieldController(state, () => requester);
+
+  controller.update();
+  assert.deepEqual(requestedUnits, [], 'the default info layer must not prepare a danger field');
+
+  setSimulationLayerMode(state, 'danger');
+  controller.update();
+  assert.deepEqual(requestedUnits, ['alpha'], 'opening danger must immediately request the selected-unit field');
+
+  controller.update();
+  assert.deepEqual(requestedUnits, ['alpha'], 'unchanged render frames must not duplicate the field request');
+
+  units[0]!.tacticalKnowledge.revision += 1;
+  controller.update();
+  assert.deepEqual(requestedUnits, ['alpha', 'alpha'], 'new subjective knowledge must refresh the live danger field');
+
+  units[0]!.behaviorRuntime.posture = 'crouched';
+  controller.update();
+  assert.deepEqual(requestedUnits, ['alpha', 'alpha', 'alpha'], 'posture changes must refresh danger geometry');
+
+  markMapCellsDirty(state.map, 'terrain', { minX: 0, minY: 0, maxX: 0, maxY: 0 });
+  controller.update();
+  assert.deepEqual(requestedUnits, ['alpha', 'alpha', 'alpha', 'alpha'], 'map revisions must refresh the live field');
+
+  state.selectedUnitId = 'bravo';
+  state.selectedUnitIds = ['bravo'];
+  controller.update();
+  assert.deepEqual(requestedUnits.at(-1), 'bravo', 'changing the selected soldier must request that soldier field');
+
+  state.editor.enabled = true;
+  controller.update();
+  const beforeHidden = requestedUnits.length;
+  state.editor.enabled = false;
+  setSimulationLayerMode(state, 'info');
+  controller.update();
+  assert.equal(requestedUnits.length, beforeHidden, 'editor and unrelated layers must not request awareness fields');
+
+  setSimulationLayerMode(state, 'stealth');
+  controller.update();
+  assert.equal(requestedUnits.length, beforeHidden + 1, 'opening stealth must request the shared live field');
+
+  setSimulationLayerMode(state, 'info');
+  controller.update();
+  setSimulationLayerMode(state, 'positions');
+  controller.update();
+  assert.equal(requestedUnits.length, beforeHidden + 2, 'positions must prepare the shared field without requiring Search');
+
+  controller.destroy();
+  units[1]!.tacticalKnowledge.revision += 1;
+  controller.update();
+  assert.equal(requestedUnits.length, beforeHidden + 2, 'destroyed controller must not request more work');
 }
 
 function verifyRequestLifecycleAndMovingOrigin(): void {
@@ -197,7 +284,7 @@ function candidate(id: string) {
 }
 
 verifyRendererDoesNotOwnTacticalSearch();
+verifyVisibleAwarenessLayersRequestLiveFields();
 verifyRequestLifecycleAndMovingOrigin();
 
-console.log('Tactical position request service smoke passed: renderer ownership, moving-origin search, dedupe, replacement, stale rejection, multi-unit isolation and teardown.');
-
+console.log('Tactical position request service smoke passed: live danger/stealth preparation, renderer ownership, moving-origin search, dedupe, replacement, stale rejection, multi-unit isolation and teardown.');
