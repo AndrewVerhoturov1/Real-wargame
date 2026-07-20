@@ -6,6 +6,12 @@
   border-top: 1px solid rgba(142, 168, 139, 0.22);
 }
 
+.route-cost-inspector-panel .route-cost-controls {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
 .route-cost-controls > button,
 .route-cost-controls label,
 .route-cost-controls select {
