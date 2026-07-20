@@ -3,7 +3,7 @@ name: Deploy tactical traversal to GitHub Pages
 on:
   push:
     branches:
-      - feature/20260720-tactical-route-traversal
+      - gh-pages
   workflow_dispatch:
 
 permissions:
