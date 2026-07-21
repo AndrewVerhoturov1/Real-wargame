@@ -4,7 +4,7 @@ import {
   EnvironmentProfileRegistry,
 } from '../core/map/EnvironmentMaterialProfile';
 import { installEnvironmentProfileRegistry } from '../core/map/EnvironmentProfileRuntime';
-import { buildStaticTacticalPositionBasis } from '../core/tactical/static/StaticTacticalPositionBuilder';
+import { buildHighQualityStaticTacticalPositionBasis } from '../core/tactical/static/HighQualityStaticTacticalPositionBuilder';
 import {
   staticTacticalPositionWorkerTransferables,
   type StaticTacticalPositionWorkerRequest,
@@ -22,7 +22,7 @@ workerScope.onmessage = (event: MessageEvent<StaticTacticalPositionWorkerRequest
       activeProfileId: request.environmentProfile.id,
       profiles: [request.environmentProfile],
     }));
-    const result = buildStaticTacticalPositionBasis(request.map, request.identity, request.settings);
+    const result = buildHighQualityStaticTacticalPositionBasis(request.map, request.identity, request.settings);
     const response: Extract<StaticTacticalPositionWorkerResponse, { type: 'result' }> = {
       type: 'result',
       jobId: request.jobId,
