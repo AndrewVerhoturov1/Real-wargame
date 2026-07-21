@@ -197,8 +197,9 @@ export function searchGeneralizedTacticalPositions(
 
   const exact: ExactCandidate[] = [];
   let exactRayCount = 0;
+  const exactRequiresRay = Boolean(field.map && targetPoint(request.target, request.referenceThreatPosition));
   for (const candidate of preliminary.slice(0, limits.exactCandidates)) {
-    if (exactRayCount >= limits.exactRayLimit) break;
+    if (exactRequiresRay && exactRayCount >= limits.exactRayLimit) break;
     const exactEvaluation = evaluateExact(field, request, kind, candidate, limits.exactRayLimit - exactRayCount);
     exactRayCount += exactEvaluation.exactRays;
     if (exactEvaluation.lineQuality < limits.minimumLineQuality) continue;
