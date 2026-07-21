@@ -339,6 +339,7 @@ export class TacticalPositionSearchService {
       ownerUnitId: unit.id,
       kind,
       ...parameters,
+      target: cloneTarget(input.target),
       origin: { ...input.origin },
       currentPosture: input.currentPosture,
       orderTarget: input.orderTarget ? { ...input.orderTarget } : null,
@@ -504,14 +505,17 @@ export class TacticalPositionSearchService {
   private pump(): void {
     if (this.destroyed || this.pumping || this.inFlight) return;
     this.pumping = true;
+    let result: 'dispatched' | 'waiting' | 'terminal' | null = null;
     try {
       const next = this.takeNextPending();
-      if (!next) return;
-      const result = this.process(next);
-      if (result === 'waiting') this.enqueuePending(next.ownerUnitId, next.requestId);
+      if (next) {
+        result = this.process(next);
+        if (result === 'waiting') this.enqueuePending(next.ownerUnitId, next.requestId);
+      }
     } finally {
       this.pumping = false;
     }
+    if (result === 'terminal' && !this.inFlight && this.pendingOwnerOrder.length > 0) this.schedulePump();
   }
 
   private process(request: MutableRequest): 'dispatched' | 'waiting' | 'terminal' {
