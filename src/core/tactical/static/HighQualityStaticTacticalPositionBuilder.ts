@@ -42,6 +42,13 @@ export function buildHighQualityStaticTacticalPositionBasis(
     const postureObservationScores: number[] = [];
     const postureFiringScores: number[] = [];
     const postureProtectionScores: number[] = [];
+    const baseObservationDirections = readDirections(snapshot.observationByDirection, cellIndex, sectorCount);
+    const baseFiringDirections = readDirections(snapshot.firingByDirection, cellIndex, sectorCount);
+    const baseProtectionDirections = readDirections(snapshot.protectionByDirection, cellIndex, sectorCount);
+    const refinedObservationDirections = new Array<number>(sectorCount).fill(0);
+    const refinedFiringDirections = new Array<number>(sectorCount).fill(0);
+    const refinedProtectionDirections = new Array<number>(sectorCount).fill(0);
+    const refinedClearanceDirections = new Array<number>(sectorCount).fill(0);
 
     for (const posture of POSTURES) {
       const observationBySector: number[] = [];
@@ -70,18 +77,14 @@ export function buildHighQualityStaticTacticalPositionBasis(
         );
         observationRays += observationSamples.rayCount;
         firingRays += firingSamples.rayCount;
-        const directionalOffset = cellIndex * sectorCount + sector;
-        const oldObservation = decodeByte(snapshot.observationByDirection[directionalOffset] ?? 0);
-        const oldFiring = decodeByte(snapshot.firingByDirection[directionalOffset] ?? 0);
-        const oldProtection = decodeByte(snapshot.protectionByDirection[directionalOffset] ?? 0);
-        const refinedObservation = clampPercent(oldObservation * 0.28 + observationSamples.observation * 0.72);
-        const refinedFiring = clampPercent(oldFiring * 0.24 + firingSamples.firing * 0.76);
-        const refinedProtection = clampPercent(oldProtection * 0.45 + firingSamples.protection * 0.55);
+        const refinedObservation = clampPercent((baseObservationDirections[sector] ?? 0) * 0.28 + observationSamples.observation * 0.72);
+        const refinedFiring = clampPercent((baseFiringDirections[sector] ?? 0) * 0.24 + firingSamples.firing * 0.76);
+        const refinedProtection = clampPercent((baseProtectionDirections[sector] ?? 0) * 0.45 + firingSamples.protection * 0.55);
         const refinedClearance = clampPercent(firingSamples.immediateClearance);
-        snapshot.observationByDirection[directionalOffset] = encodeByte(refinedObservation);
-        snapshot.firingByDirection[directionalOffset] = encodeByte(refinedFiring);
-        snapshot.protectionByDirection[directionalOffset] = encodeByte(refinedProtection);
-        snapshot.immediateFireClearanceByDirection[directionalOffset] = encodeByte(refinedClearance);
+        refinedObservationDirections[sector] = Math.max(refinedObservationDirections[sector] ?? 0, refinedObservation);
+        refinedFiringDirections[sector] = Math.max(refinedFiringDirections[sector] ?? 0, refinedFiring);
+        refinedProtectionDirections[sector] = Math.max(refinedProtectionDirections[sector] ?? 0, refinedProtection);
+        refinedClearanceDirections[sector] = Math.max(refinedClearanceDirections[sector] ?? 0, refinedClearance);
         observationBySector.push(refinedObservation);
         firingBySector.push(refinedFiring);
         protectionBySector.push(refinedProtection);
@@ -116,16 +119,19 @@ export function buildHighQualityStaticTacticalPositionBasis(
       postureProtectionScores.push(postureProtection);
     }
 
-    const observationDirections = readDirections(snapshot.observationByDirection, cellIndex, sectorCount);
-    const firingDirections = readDirections(snapshot.firingByDirection, cellIndex, sectorCount);
-    const protectionDirections = readDirections(snapshot.protectionByDirection, cellIndex, sectorCount);
-    const clearanceDirections = readDirections(snapshot.immediateFireClearanceByDirection, cellIndex, sectorCount);
-    const reverseSlopeDirections = readDirections(snapshot.reverseSlopeByDirection, cellIndex, sectorCount);
-    const observationAggregate = aggregate(observationDirections);
-    const firingAggregate = aggregate(firingDirections);
-    const protectionAggregate = aggregate(protectionDirections);
-    const clearanceAggregate = aggregate(clearanceDirections);
-    const reverseSlopeAggregate = aggregate(reverseSlopeDirections);
+    const directionalOffset = cellIndex * sectorCount;
+    for (let sector = 0; sector < sectorCount; sector += 1) {
+      snapshot.observationByDirection[directionalOffset + sector] = encodeByte(refinedObservationDirections[sector] ?? 0);
+      snapshot.firingByDirection[directionalOffset + sector] = encodeByte(refinedFiringDirections[sector] ?? 0);
+      snapshot.protectionByDirection[directionalOffset + sector] = encodeByte(refinedProtectionDirections[sector] ?? 0);
+      snapshot.immediateFireClearanceByDirection[directionalOffset + sector] = encodeByte(refinedClearanceDirections[sector] ?? 0);
+    }
+
+    const observationAggregate = aggregate(refinedObservationDirections);
+    const firingAggregate = aggregate(refinedFiringDirections);
+    const protectionAggregate = aggregate(refinedProtectionDirections);
+    const clearanceAggregate = aggregate(refinedClearanceDirections);
+    const reverseSlopeAggregate = aggregate(readDirections(snapshot.reverseSlopeByDirection, cellIndex, sectorCount));
     const concealment = decodeByte(snapshot.concealment[cellIndex] ?? 0);
     const surfaceSuitability = decodeByte(snapshot.surfaceSuitability[cellIndex] ?? 0);
     const bestObservationPosture = Math.max(...postureObservationScores);
