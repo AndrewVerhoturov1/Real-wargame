@@ -2,7 +2,7 @@
 
 import { EnvironmentProfileRegistry } from '../core/map/EnvironmentMaterialProfile';
 import { installEnvironmentProfileRegistry } from '../core/map/EnvironmentProfileRuntime';
-import { searchGeneralizedTacticalPositions } from '../core/tactical/GeneralizedTacticalPositionSearch';
+import { searchObjectiveAwareTacticalPositions } from '../core/tactical/ObjectiveAwareTacticalPositionSearch';
 import type {
   TacticalPositionQueryWorkerConfiguration,
   TacticalPositionQueryWorkerRequest,
@@ -51,7 +51,7 @@ workerScope.onmessage = (event: MessageEvent<TacticalPositionQueryWorkerRequest>
   }
 
   try {
-    const result = searchGeneralizedTacticalPositions({
+    const result = searchObjectiveAwareTacticalPositions({
       ...request.field,
       staticProtectionByPosture: {
         standing: request.field.staticProtectionStanding,
