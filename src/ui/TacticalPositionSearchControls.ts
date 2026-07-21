@@ -20,7 +20,7 @@ const OBJECTIVES: readonly TacticalPositionSearchObjective[] = [
 ];
 const KINDS: readonly TacticalPositionKind[] = ['observation', 'defense', 'firing'];
 
-type TargetMode = 'automatic' | 'order_point' | 'facing_sector';
+type TargetMode = 'order_point' | 'facing_sector';
 
 export function installTacticalPositionSearchControls(
   state: SimulationState,
@@ -36,7 +36,7 @@ export function installTacticalPositionSearchControls(
   let targetModeSelect: HTMLSelectElement | null = null;
   let selectedObjective: TacticalPositionSearchObjective = 'balanced';
   let selectedKind: TacticalPositionKind = 'defense';
-  let selectedTargetMode: TargetMode = 'automatic';
+  let selectedTargetMode: TargetMode = 'facing_sector';
   const objectiveDraftByUnit = new Map<string, TacticalPositionSearchObjective>();
   const kindDraftByUnit = new Map<string, TacticalPositionKind>();
   const targetModeDraftByUnit = new Map<string, TargetMode>();
@@ -76,8 +76,8 @@ export function installTacticalPositionSearchControls(
       ? kindDraftByUnit.get(unitId) ?? canonicalKind(latest?.kind) ?? 'defense'
       : 'defense';
     selectedTargetMode = unitId
-      ? targetModeDraftByUnit.get(unitId) ?? 'automatic'
-      : 'automatic';
+      ? targetModeDraftByUnit.get(unitId) ?? 'facing_sector'
+      : 'facing_sector';
     if (objectiveSelect) objectiveSelect.value = selectedObjective;
     if (kindSelect) kindSelect.value = selectedKind;
     if (targetModeSelect) targetModeSelect.value = selectedTargetMode;
@@ -237,8 +237,8 @@ export function installTacticalPositionSearchControls(
       kindDraftByUnit.set(unit.id, selectedKind);
       targetModeDraftByUnit.set(unit.id, selectedTargetMode);
       const target = buildTarget(state, unit.id, selectedKind, selectedTargetMode);
-      if (selectedTargetMode === 'order_point' && !target) {
-        state.editor.lastMessage = 'У бойца нет точки действующего приказа.';
+      if (!target) {
+        state.editor.lastMessage = 'Не удалось определить точку или сектор запроса.';
         renderStatus();
         return;
       }
@@ -277,9 +277,8 @@ export function installTacticalPositionSearchControls(
     if (!targetModeSelect) return;
     const previous = selectedTargetMode;
     targetModeSelect.innerHTML = [
-      '<option value="automatic">Автоматически по задаче и знаниям</option>',
+      `<option value="facing_sector">Автоматический сектор перед бойцом (${selectedKind === 'defense' ? 'ожидаемая угроза' : selectedKind === 'observation' ? 'наблюдение' : 'ведение огня'})</option>`,
       '<option value="order_point">Точка действующего приказа</option>',
-      `<option value="facing_sector">Сектор перед бойцом (${selectedKind === 'defense' ? 'ожидаемая угроза' : selectedKind === 'observation' ? 'наблюдение' : 'ведение огня'})</option>`,
     ].join('');
     selectedTargetMode = previous;
     targetModeSelect.value = selectedTargetMode;
@@ -310,7 +309,6 @@ function buildTarget(
   kind: TacticalPositionKind,
   mode: TargetMode,
 ): TacticalPositionTargetSpec | null {
-  if (mode === 'automatic') return null;
   const unit = state.units.find((candidate) => candidate.id === unitId);
   if (!unit) return null;
   if (mode === 'order_point') {
