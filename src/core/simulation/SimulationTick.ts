@@ -1,3 +1,4 @@
+import { reconcileLegacyWeaponReloadRequest } from '../actions/LegacyWeaponReloadBridge';
 import { tickPhysicalActionWithTimeBudget } from '../actions/PhysicalActionClock';
 import { reconcileMovementPostureRequest } from '../actions/PostureTransition';
 import {
@@ -19,6 +20,7 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
 
   for (const unit of state.units) {
     reconcileTacticalPositionOccupation(state, unit);
+    reconcileLegacyWeaponReloadRequest(state, unit);
     reconcileMovementPostureRequest(state, unit);
     const physicalActionTick = tickPhysicalActionWithTimeBudget(
       unit,
