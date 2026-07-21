@@ -256,10 +256,13 @@ export function installTacticalWorkspace(
     sidebarBody.hidden = routeCostTabActive || staticActive;
     if (routeCostTabActive) sidebarTitle.textContent = 'Маршрут';
     else if (activeStaticTacticalTab) sidebarTitle.textContent = staticLayerTitle(activeStaticTacticalTab.kind);
-    shell.querySelectorAll<HTMLButtonElement>('[data-tab], [data-static-tactical-kind]').forEach((button) => {
-      const kind = button.dataset.staticTacticalKind as StaticTacticalPositionKind | undefined;
-      button.classList.toggle('active', routeCostTabActive ? button === routeCostTab : Boolean(kind && kind === activeStaticTacticalTab?.kind));
-    });
+    if (routeCostTabActive || staticActive) {
+      originalTabButtons.forEach((button) => button.classList.remove('active'));
+    }
+    routeCostTab.classList.toggle('active', routeCostTabActive);
+    for (const [kind, button] of staticTacticalTabButtons) {
+      button.classList.toggle('active', kind === activeStaticTacticalTab?.kind);
+    }
   };
 
   const renderStaticTacticalInspector = (): void => {
