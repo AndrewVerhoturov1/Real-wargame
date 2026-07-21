@@ -14,7 +14,7 @@ const RETRYABLE_REASON_CODES = new Set([
 ]);
 
 interface ResilienceState {
-  readonly unsubscribe: () => void;
+  unsubscribe: () => void;
   readonly scheduledRequestIds: Set<string>;
   readonly retryAttemptsByOwnerKey: Map<string, number>;
 }
@@ -59,7 +59,7 @@ function ensureResilience(service: TacticalPositionSearchService): void {
     scheduledRequestIds,
     retryAttemptsByOwnerKey,
   };
-  const unsubscribe = service.subscribe(() => {
+  resilience.unsubscribe = service.subscribe(() => {
     for (const unit of state.units) {
       const request = service.readLatestForUnit(unit.id);
       if (!request) continue;
@@ -89,7 +89,6 @@ function ensureResilience(service: TacticalPositionSearchService): void {
       });
     }
   });
-  resilience.unsubscribe = unsubscribe;
   resilienceByService.set(service, resilience);
 }
 
