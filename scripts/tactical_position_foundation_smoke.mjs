@@ -14,6 +14,7 @@ const scenarios = [
   ['tactical-position-queue-fairness', 'tactical_position_queue_fairness_smoke.ts'],
   ['tactical-position-generalized-search', 'tactical_position_generalized_search_smoke.ts'],
   ['tactical-position-graph-target', 'tactical_position_graph_target_smoke.ts'],
+  ['tactical-position-graph-compatibility', 'tactical_position_graph_compatibility_smoke.ts'],
   ['tactical-workspace-tab-state', 'tactical_workspace_tab_state_smoke.ts'],
   ['tactical-position-renderer-allocation', 'tactical_position_renderer_allocation_smoke.ts'],
   ['tactical-position-command-metadata', 'tactical_position_command_metadata_smoke.ts'],
