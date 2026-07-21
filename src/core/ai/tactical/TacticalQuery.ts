@@ -2,7 +2,8 @@ import type { UnitPosture } from '../../behavior/BehaviorModel';
 import type { GridPosition } from '../../geometry';
 import type { TacticalPositionSearchObjective } from '../../tactical/TacticalPositionObjective';
 
-export type TacticalQueryKind = 'cover';
+export type TacticalPositionKind = 'observation' | 'defense' | 'firing';
+export type TacticalQueryKind = TacticalPositionKind | 'cover';
 export type TacticalQueryStatus = 'generated' | 'filtered' | 'scored' | 'selected' | 'stopped';
 export type TacticalQueryGenerationStatus = 'queued' | 'calculating' | 'ready' | 'stale' | 'cancelled' | 'failed';
 export type TacticalSlopeType = 'direct' | 'reverse' | 'flat';
@@ -20,7 +21,47 @@ export type TacticalCandidateExclusionCode =
   | 'threat_delta_too_large'
   | 'order_target_too_far'
   | 'does_not_block_threat'
-  | 'route_too_dangerous';
+  | 'route_too_dangerous'
+  | 'posture_unsupported'
+  | 'observation_insufficient'
+  | 'firing_line_blocked'
+  | 'weapon_range_mismatch'
+  | 'position_too_dangerous';
+
+export interface TacticalObservationPointTarget {
+  readonly mode: 'point';
+  readonly point: GridPosition;
+  readonly desiredDistanceMeters?: number;
+}
+
+export interface TacticalObservationSectorTarget {
+  readonly mode: 'sector';
+  readonly bearingRadians: number;
+  readonly arcRadians: number;
+  readonly desiredDistanceMeters?: number;
+}
+
+export interface TacticalDefenseTarget {
+  readonly mode: 'known_threats' | 'sector';
+  readonly bearingRadians?: number;
+  readonly arcRadians?: number;
+}
+
+export interface TacticalFiringTarget {
+  readonly mode: 'known_target' | 'estimated_position' | 'area' | 'sector';
+  readonly point?: GridPosition;
+  readonly bearingRadians?: number;
+  readonly arcRadians?: number;
+  readonly minimumRangeMeters?: number;
+  readonly effectiveRangeMeters?: number;
+  readonly maximumRangeMeters?: number;
+}
+
+export type TacticalPositionTargetSpec =
+  | TacticalObservationPointTarget
+  | TacticalObservationSectorTarget
+  | TacticalDefenseTarget
+  | TacticalFiringTarget;
 
 export interface TacticalQueryBudget {
   readonly maxCandidates: number;
@@ -35,7 +76,7 @@ export interface TacticalQueryStopReason {
 }
 
 export interface TacticalCandidateSource {
-  readonly kind: 'map_object' | 'terrain';
+  readonly kind: 'map_object' | 'terrain' | 'static_basis';
   readonly id: string;
   readonly label: string;
   readonly labelRu: string;
@@ -59,6 +100,17 @@ export interface TacticalCandidateMetrics {
   readonly objectiveAlignment?: number;
   /** Position meaning is incomplete without the posture required to use it. */
   readonly recommendedPosture?: UnitPosture;
+  readonly alternativePostureMask?: number;
+  readonly recommendedFacingRadians?: number;
+  readonly postureReason?: string;
+  readonly postureReasonRu?: string;
+  readonly staticPotential?: number;
+  readonly directionalFit?: number;
+  readonly lineQuality?: number;
+  readonly rangeFit?: number;
+  readonly uncertainty?: number;
+  readonly positionDanger?: number;
+  readonly withdrawalQuality?: number;
 }
 
 export interface TacticalPositionCandidateSeed {
@@ -66,6 +118,9 @@ export interface TacticalPositionCandidateSeed {
   readonly position: GridPosition;
   readonly source: TacticalCandidateSource;
   readonly metrics: TacticalCandidateMetrics;
+  readonly kind?: TacticalPositionKind;
+  readonly objective?: TacticalPositionSearchObjective;
+  readonly requestIdentity?: string;
 }
 
 export interface TacticalCandidateExclusionReason {
@@ -82,6 +137,13 @@ export interface TacticalCandidateScoreBreakdown {
   readonly slope: number;
   readonly orderAlignment: number;
   readonly objectiveAlignment: number;
+  readonly staticPotential?: number;
+  readonly directionalFit?: number;
+  readonly lineQuality?: number;
+  readonly positionRisk?: number;
+  readonly uncertainty?: number;
+  readonly rangeFit?: number;
+  readonly withdrawal?: number;
 }
 
 export interface TacticalPositionCandidate extends TacticalPositionCandidateSeed {
@@ -106,13 +168,16 @@ export interface TacticalQuery {
 
 export interface TacticalQueryGenerationRequest extends TacticalQueryBudget {
   readonly unitId: string;
+  readonly kind?: TacticalQueryKind;
   readonly queryKey?: string;
   readonly requestId?: string;
   readonly objective?: TacticalPositionSearchObjective;
+  readonly target?: TacticalPositionTargetSpec | null;
   readonly blackboard: Readonly<Record<string, unknown>>;
 }
 
 export interface TacticalQueryGenerationResult {
+  readonly kind?: TacticalQueryKind;
   readonly candidates: readonly TacticalPositionCandidateSeed[];
   readonly elapsedMs: number;
   readonly stopReason?: TacticalQueryStopReason;
@@ -152,6 +217,11 @@ const ZERO_BREAKDOWN: TacticalCandidateScoreBreakdown = Object.freeze({
   objectiveAlignment: 0,
 });
 
+export function normalizeTacticalPositionKind(kind: TacticalQueryKind | null | undefined): TacticalPositionKind {
+  if (kind === 'observation' || kind === 'firing') return kind;
+  return 'defense';
+}
+
 export function createTacticalQuery(
   id: string,
   budget: TacticalQueryBudget,
@@ -167,7 +237,7 @@ export function createTacticalQuery(
   } : undefined);
   return {
     id,
-    kind: 'cover',
+    kind: generation.kind ?? 'cover',
     status: stopReason ? 'stopped' : 'generated',
     budget: normalizedBudget,
     candidates: limited.map(seedToCandidate),
@@ -298,7 +368,7 @@ export function scoreTacticalQuery(
     return {
       ...candidate,
       scoreBreakdown,
-      totalScore: round(Object.values(scoreBreakdown).reduce((sum, value) => sum + value, 0)),
+      totalScore: round(Object.values(scoreBreakdown).reduce((sum, value) => sum + (value ?? 0), 0)),
     };
   });
   return {
@@ -364,6 +434,7 @@ export function cloneTacticalQuery(query: TacticalQuery): TacticalQuery {
 
 function seedToCandidate(seed: TacticalPositionCandidateSeed): TacticalPositionCandidate {
   return {
+    ...seed,
     id: seed.id,
     position: { ...seed.position },
     source: { ...seed.source },
@@ -378,6 +449,13 @@ function seedToCandidate(seed: TacticalPositionCandidateSeed): TacticalPositionC
       threatDistanceDeltaMeters: nullableRound(seed.metrics.threatDistanceDeltaMeters),
       distanceToOrderTargetMeters: nullableRound(seed.metrics.distanceToOrderTargetMeters),
       objectiveAlignment: clampPercent(seed.metrics.objectiveAlignment ?? 50),
+      staticPotential: optionalPercent(seed.metrics.staticPotential),
+      directionalFit: optionalPercent(seed.metrics.directionalFit),
+      lineQuality: optionalPercent(seed.metrics.lineQuality),
+      rangeFit: optionalPercent(seed.metrics.rangeFit),
+      uncertainty: optionalPercent(seed.metrics.uncertainty),
+      positionDanger: optionalPercent(seed.metrics.positionDanger),
+      withdrawalQuality: optionalPercent(seed.metrics.withdrawalQuality),
     },
     totalScore: 0,
     scoreBreakdown: { ...ZERO_BREAKDOWN },
@@ -409,6 +487,10 @@ function finiteOrNull(value: unknown): number | null {
 function nullableRound(value: unknown): number | null {
   const finite = finiteOrNull(value);
   return finite === null ? null : round(finite);
+}
+
+function optionalPercent(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? clampPercent(value) : undefined;
 }
 
 function clampPercent(value: number): number {
