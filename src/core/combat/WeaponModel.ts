@@ -163,8 +163,16 @@ export function syncLegacyWeaponFields(unit: UnitModel, runtime = getWeaponRunti
   unit.behaviorRuntime.weaponReady = runtime.ready && runtime.roundsLoaded > 0;
 }
 
+/**
+ * Legacy callers used this function to discard canonical state and rebuild it
+ * from mutable compatibility fields. That would let Graph v2 create ammunition.
+ * The compatibility name remains, but canonical state is retained and mirrors
+ * are immediately restored from it. Unit resets explicitly call
+ * `replaceWeaponRuntime` afterwards.
+ */
 export function clearWeaponRuntime(unit: UnitModel): void {
-  runtimeByUnit.delete(unit);
+  const runtime = runtimeByUnit.get(unit);
+  if (runtime) syncLegacyWeaponFields(unit, runtime);
 }
 
 function getWeaponRuntimeUnsafe(unit: UnitModel): WeaponRuntimeState | undefined {
