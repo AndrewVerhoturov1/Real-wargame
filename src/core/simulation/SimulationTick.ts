@@ -1,3 +1,4 @@
+import { reconcilePlayerPostureMovementAuthority } from '../actions/PlayerPostureMovementSync';
 import { reconcileMovementPostureRequest } from '../actions/PostureTransition';
 import { reconcileCompletedTacticalPositionArrivals } from '../tactical/TacticalPositionArrival';
 import { reconcileTacticalPositionOccupation } from '../tactical/TacticalPositionOccupation';
@@ -13,6 +14,7 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
   requestStaticTacticalPositionBasis(state);
 
   for (const unit of state.units) {
+    reconcilePlayerPostureMovementAuthority(unit);
     reconcileTacticalPositionOccupation(state, unit);
     reconcileMovementPostureRequest(state, unit);
   }
