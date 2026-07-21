@@ -24,10 +24,12 @@ const twoThreats = buildMultiThreatAwarenessWorldField(map, snapshot([first, sec
 const singleDanger = oneThreat.field.danger[targetIndex] ?? 0;
 const combinedDanger = twoThreats.field.danger[targetIndex] ?? 0;
 assert.ok(singleDanger > 0, 'the open target cell must be threatened by one visible rifleman');
-assert.ok(
-  combinedDanger > singleDanger + 5,
-  `two independent riflemen must increase danger: one=${singleDanger}, two=${combinedDanger}`,
+assert.equal(
+  combinedDanger,
+  Math.min(100, singleDanger * 2),
+  `independent rifle threats must add and clamp: one=${singleDanger}, two=${combinedDanger}`,
 );
+assert.ok(combinedDanger > 78, 'two exposed rifle threats must exceed the default tactical-position danger limit');
 assert.equal(
   twoThreats.field.protectedThreatIndex[targetIndex],
   0,
