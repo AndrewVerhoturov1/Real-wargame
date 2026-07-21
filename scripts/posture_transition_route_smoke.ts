@@ -26,13 +26,20 @@ function verifyRoutePausesAndResumes(): void {
     speedCellsPerSecond: 4,
   }]);
   const unit = state.units[0];
+  unit.movementRuntime.requestedGait = 'crouch_walk';
+  unit.movementRuntime.actualGait = 'crouch_walk';
   const route = createMoveOrder(
     { x: 40.5, y: unit.position.y },
     { source: 'player', ownerToken: 'route-owner' },
   );
   unit.order = route;
   const startX = unit.position.x;
-  const result = request(unit, state.simulationTimeSeconds, 'crouched', 'route-owner');
+  const result = request(
+    unit,
+    state.simulationTimeSeconds,
+    'crouched',
+    'movement-posture:route-owner',
+  );
   assert.equal(result.accepted, true);
 
   tickSimulation(state, 0.2);
