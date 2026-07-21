@@ -83,13 +83,13 @@ A code failure is fixed and retested before the next deployment. Vercel must not
 
 A normal successful request creates one deployment for one verified SHA.
 
-A further deployment is allowed only after:
+A further manual deployment run is allowed only after:
 
-- the source SHA changed and the user explicitly requested publication of the new state;
+- the source SHA changed within the same already authorized deployment task;
 - an infrastructure failure prevented the same verified output from being published or inspected;
 - a new explicit deployment request was given.
 
-Do not repeatedly publish the same source to diagnose code failures.
+A push still never starts that run automatically. Do not repeatedly publish the same source to diagnose code failures.
 
 ## Permanent project proof
 
@@ -126,7 +126,7 @@ The fallback necessarily starts a Vercel build before it can test the cloned sou
 
 ## Failure classification
 
-- **code failure** — TypeScript, a current smoke scenario or production compilation proves a product defect. Fix the authorized branch and rerun checks before another deployment request.
+- **code failure** — TypeScript, a current smoke scenario or production compilation proves a product defect. Fix the authorized branch and rerun checks before another manual deployment run of its new SHA.
 - **infrastructure failure** — checkout transport, authentication, package installation, Vercel CLI or Vercel infrastructure failed. Repair the route and retry the same verified SHA without product changes.
 - **stale test contract** — a smoke checks an obsolete owner or removed architecture. Compare the test with the current implementation owner and update the contract separately; never delete it merely to make the gate green.
 
