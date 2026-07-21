@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { requestPlayerPostureTransition } from '../src/core/actions/PostureTransition';
 import type { UnitPosture } from '../src/core/behavior/BehaviorModel';
 import type { TacticalMapData } from '../src/core/map/MapModel';
 import type { MovementGait } from '../src/core/movement/MovementProfiles';
@@ -11,12 +12,14 @@ import { clearStaticTacticalPositionService } from '../src/core/tactical/static/
 const createdStates = new Set<SimulationState>();
 
 verifyOrdinaryMovementPreservesPostureAndUsesMatchingGait();
+verifyManualPostureChangeRetargetsActiveRoute();
 verifyStandingUnitUsesCrouchedProtectedApproach();
 verifyLowerPostureSurvivesTacticalApproach();
+verifyManualPostureChangeRetargetsTacticalApproach();
 
 for (const state of createdStates) clearStaticTacticalPositionService(state);
 
-console.log('Posture-adaptive movement smoke passed: standing walks, crouched crouch-walks, prone crawls, and tactical approaches advance without posture oscillation.');
+console.log('Posture-adaptive movement smoke passed: starting posture selects gait, manual posture changes retarget active routes, and tactical approaches advance without posture rollback or oscillation.');
 
 function verifyOrdinaryMovementPreservesPostureAndUsesMatchingGait(): void {
   const scenarios: readonly [UnitPosture, MovementGait][] = [
@@ -40,6 +43,43 @@ function verifyOrdinaryMovementPreservesPostureAndUsesMatchingGait(): void {
     assert.ok(unit.position.x > startX, `${posture} ordinary movement must translate during the first movement step`);
     assert.notEqual(unit.behaviorRuntime.physicalAction?.status, 'running', `${posture} ordinary movement must not start a conflicting posture transition`);
   }
+}
+
+function verifyManualPostureChangeRetargetsActiveRoute(): void {
+  const state = makeState('manual-posture-active-route');
+  const unit = state.units[0]!;
+  selectOnlyUnit(state, unit.id);
+  issueRoutedMoveOrderToSelectedUnits(state, { x: 50.5, y: unit.position.y });
+  tickSimulation(state, 0.4);
+  const route = unit.order;
+  const beforeProneX = unit.position.x;
+
+  const proneRequest = requestPlayerPostureTransition(unit, 'prone', state.simulationTimeSeconds);
+  assert.equal(proneRequest.accepted, true);
+  for (let index = 0; index < 13; index += 1) tickSimulation(state, 0.1);
+  tickSimulation(state, 0.4);
+
+  assert.equal(unit.order, route, 'manual posture change must retain the active route');
+  assert.equal(unit.behaviorRuntime.posture, 'prone', 'manual prone command must survive after the transition completes');
+  assert.equal(unit.movementRuntime.requestedProfileId, 'crawl');
+  assert.equal(unit.movementRuntime.requestedGait, 'crawl');
+  assert.equal(unit.movementRuntime.actualGait, 'crawl');
+  assert.equal(unit.playerCommand?.movementProfileId, 'crawl');
+  assert.ok(unit.position.x > beforeProneX, 'unit must resume the same route by crawling');
+
+  for (let index = 0; index < 10; index += 1) tickSimulation(state, 0.1);
+  assert.equal(unit.behaviorRuntime.posture, 'prone', 'old standing movement authority must not restore the starting posture');
+
+  const crouchedRequest = requestPlayerPostureTransition(unit, 'crouched', state.simulationTimeSeconds);
+  assert.equal(crouchedRequest.accepted, true);
+  for (let index = 0; index < 7; index += 1) tickSimulation(state, 0.1);
+  tickSimulation(state, 0.3);
+
+  assert.equal(unit.behaviorRuntime.posture, 'crouched');
+  assert.equal(unit.movementRuntime.requestedProfileId, 'crouched_move');
+  assert.equal(unit.movementRuntime.actualGait, 'crouch_walk');
+  assert.equal(unit.playerCommand?.movementProfileId, 'crouched_move');
+  assert.equal(unit.order, route, 'a second manual posture change must still retain the route');
 }
 
 function verifyStandingUnitUsesCrouchedProtectedApproach(): void {
@@ -84,6 +124,31 @@ function verifyLowerPostureSurvivesTacticalApproach(): void {
     assert.ok(unit.order, 'the distant tactical route must remain active while approaching');
     assert.notEqual(unit.behaviorRuntime.physicalAction?.status, 'running', `${posture} tactical approach must not create a redundant posture transition`);
   }
+}
+
+function verifyManualPostureChangeRetargetsTacticalApproach(): void {
+  const state = makeState('manual-posture-tactical-approach');
+  const unit = state.units[0]!;
+  selectOnlyUnit(state, unit.id);
+  issueProtectedTacticalOrder(state, 'prone', 'manual-tactical-posture-change');
+  for (let index = 0; index < 10; index += 1) tickSimulation(state, 0.1);
+  const route = unit.order;
+  const beforeChangeX = unit.position.x;
+
+  const request = requestPlayerPostureTransition(unit, 'prone', state.simulationTimeSeconds);
+  assert.equal(request.accepted, true);
+  for (let index = 0; index < 9; index += 1) tickSimulation(state, 0.1);
+  tickSimulation(state, 0.4);
+
+  assert.equal(unit.order, route, 'manual tactical approach posture change must retain the route');
+  assert.equal(unit.playerCommand?.approachPosture, 'prone', 'manual posture must replace the stored tactical approach posture');
+  assert.equal(unit.playerCommand?.arrivalPosture, 'prone', 'arrival posture contract must remain intact');
+  assert.equal(unit.behaviorRuntime.posture, 'prone');
+  assert.equal(unit.movementRuntime.actualGait, 'crawl');
+  assert.ok(unit.position.x > beforeChangeX, 'tactical approach must resume by crawling');
+
+  for (let index = 0; index < 10; index += 1) tickSimulation(state, 0.1);
+  assert.equal(unit.behaviorRuntime.posture, 'prone', 'old crouched approach authority must not restore the previous posture');
 }
 
 function issueProtectedTacticalOrder(
