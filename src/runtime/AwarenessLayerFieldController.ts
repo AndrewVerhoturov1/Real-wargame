@@ -1,3 +1,4 @@
+import '../core/tactical/TacticalPositionSearchResilience';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { getSimulationLayerState, type SimulationLayerMode } from '../core/ui/RuntimeUiState';
 import type { UnitModel } from '../core/units/UnitModel';
