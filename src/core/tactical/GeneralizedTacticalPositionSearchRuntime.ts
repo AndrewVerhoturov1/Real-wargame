@@ -245,7 +245,7 @@ export function searchGeneralizedTacticalPositions(
 function resolveSettings(request: GeneralizedTacticalPositionSearchRequest, kind: TacticalPositionKind): TacticalPositionSearchSettings {
   if (request.settings) return normalizeTacticalPositionSearchSettings(request.settings, kind, request.objective);
   const base = normalizeTacticalPositionSearchSettings(undefined, kind, request.objective);
-  return normalizeTacticalPositionSearchSettings({
+  const normalized = normalizeTacticalPositionSearchSettings({
     ...base,
     constraints: { ...base.constraints, maxPositionDanger: request.limits?.maxPositionDanger ?? base.constraints.maxPositionDanger, minimumLineQuality: request.limits?.minimumLineQuality ?? base.constraints.minimumLineQuality },
     searchBudget: {
@@ -259,6 +259,13 @@ function resolveSettings(request: GeneralizedTacticalPositionSearchRequest, kind
       minimumSeparationMeters: request.minimumSeparationMeters,
     },
   }, kind, request.objective);
+  return Object.freeze({
+    ...normalized,
+    searchBudget: Object.freeze({
+      ...normalized.searchBudget,
+      maxRouteExpansions: clampInt(request.maxRouteExpansions, 1, 8192),
+    }),
+  });
 }
 
 function evaluateExact(
