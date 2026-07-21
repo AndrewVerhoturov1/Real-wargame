@@ -14,6 +14,7 @@ for (const token of [
   'cache: npm',
   'npm ci',
   'git rev-parse HEAD',
+  'refs/remotes/origin/main',
   'npm run verify:preview',
   'vercel@56.4.1 pull',
   'verify_vercel_project_link.mjs',
