@@ -9,7 +9,10 @@ import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap } from '../map/MapModel';
-import { movementProfileIdForPosture } from '../movement/PostureMovementProfile';
+import {
+  movementGaitForPosture,
+  movementProfileIdForPosture,
+} from '../movement/PostureMovementProfile';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../navigation/NavigationRuntime';
 import { planMoveOrder } from '../orders/MoveOrderPlanning';
 import {
@@ -85,6 +88,7 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
 
   unit.playerCommand = command;
   unit.playerNavigationProfileId = command.intent.navigationProfileId;
+  unit.movementRuntime.requestedGait = movementGaitForPosture(approachPosture);
   publishTacticalOrderIntentToAiMemory(unit, command.intent);
   clearAttentionOverride(unit);
 
