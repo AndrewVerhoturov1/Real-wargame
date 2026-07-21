@@ -1,0 +1,40 @@
+name: One-time Metadata Path Patch
+
+on:
+  push:
+    branches:
+      - feature/20260721-tactical-position-basis
+    paths:
+      - .github/workflows/metadata-path-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/20260721-tactical-position-basis
+      - name: Replace removed legacy owner
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('docs/subprojects/ai-single-unit-editor/subproject.json')
+          source = path.read_text(encoding='utf-8')
+          old = '"src/core/cover/CoverTacticalCandidates.ts"'
+          new = '"src/core/tactical/TacticalPositionSearchService.ts"'
+          if source.count(old) != 1:
+              raise SystemExit(f'Expected exactly one legacy path, found {source.count(old)}')
+          path.write_text(source.replace(old, new), encoding='utf-8')
+          PY
+      - name: Commit exact metadata correction
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/subprojects/ai-single-unit-editor/subproject.json
+          git commit -m "docs: replace removed tactical candidate owner"
+          git push origin HEAD:feature/20260721-tactical-position-basis
