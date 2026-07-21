@@ -3,6 +3,9 @@ import type { StaticTacticalCandidateIndexSnapshot } from './StaticTacticalCandi
 import type { StaticTacticalPositionBasisIdentity } from './StaticTacticalPositionIdentity';
 import type { StaticTacticalPositionSettings } from './StaticTacticalPositionSettings';
 
+export { readStaticTacticalCandidatesInBounds } from './StaticTacticalCandidateIndex';
+export type { StaticTacticalCandidateView } from './StaticTacticalCandidateIndex';
+
 export type StaticTacticalPositionKind = 'observation' | 'defense' | 'firing';
 
 export const STATIC_TACTICAL_POSTURE_STANDING = 1;
