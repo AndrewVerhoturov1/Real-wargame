@@ -1,10 +1,16 @@
 # Manual Vercel Deployment Workflow
 
-This is the canonical deployment policy for `AndrewVerhoturov1/Real-wargame`.
+This is the canonical publication policy for `AndrewVerhoturov1/Real-wargame`.
 
-## 1. Core rule
+## 1. Normal process
 
-Git-triggered Vercel deployments are disabled through:
+```text
+exact checkout -> verification gate -> one build -> one prebuilt deployment -> published-page verification
+```
+
+Vercel is publication, not a remote test runner. Product defects must be found before a Vercel deployment starts.
+
+Git-triggered deployments remain disabled in `vercel.json`:
 
 ```json
 {
@@ -14,211 +20,218 @@ Git-triggered Vercel deployments are disabled through:
 }
 ```
 
-Therefore:
+Therefore commits and pushes do not publish anything. A Preview starts only after explicit user intent such as `деплой`, `задеплой`, `создай Preview` or `обнови Preview`.
 
-- commits and pushes do not deploy;
-- intermediate development commits remain deployment-free;
-- a deployment starts only after explicit user intent;
-- the permanent Git-connected Vercel project remains the only normal project.
+## 2. Primary route: manual GitHub Actions
 
-Phrases that authorize deployment include:
+Use:
 
 ```text
-деплой
-задеплой
-создай Preview
-обнови Preview
-задеплой эту ветку
+.github/workflows/manual-vercel-preview.yml
 ```
 
-A request to implement, commit, push, transfer or merge does not authorize deployment unless deployment is also stated.
+The workflow has only `workflow_dispatch`. It does not react to push or pull request events.
 
-## 2. Mandatory skill
-
-For every manual deployment request, read and use:
+Required inputs:
 
 ```text
-.agents/skills/real-wargame-manual-vercel-deploy/SKILL.md
+ref             exact branch, tag or commit ref
+expected_sha    expected 40-character SHA
+allow_main      separate explicit permission for main; false by default
 ```
 
-Visual verification is separate and may additionally require:
+Optional controlled reduction:
 
 ```text
-.agents/skills/real-wargame-local-preview/SKILL.md
-.agents/skills/vercel-deployment-playwright-e2e/SKILL.md
+allow_skipped_checks   explicit permission to skip the Preview smoke scenarios
+skip_reason            mandatory explanation for those skipped checks
 ```
 
-## 3. Required source identity
+The workflow performs these stages in order:
 
-Before deploying, resolve:
+1. checkout the exact `ref`;
+2. compare `git rev-parse HEAD` with `expected_sha` before `npm ci`;
+3. reject `main` unless `allow_main=true`;
+4. set up Node.js 24 with npm cache;
+5. run `npm ci --no-audit --no-fund`;
+6. run `npm run verify:preview -- --report <file>`;
+7. stop before Vercel if TypeScript, a smoke scenario or a timeout failed;
+8. pull the permanent Vercel project settings;
+9. verify project IDs and project name `repo` without printing secrets;
+10. run one `vercel build`;
+11. add `deployment-source.json` to the prebuilt output;
+12. verify the output pages;
+13. publish once with `vercel deploy --prebuilt`;
+14. wait for `READY` and verify `/`, `/ai-node-editor.html` and `/deployment-source.json`;
+15. write ref, SHA, checks, skipped checks, deployment ID, URL and status to the GitHub Actions summary.
+
+## 3. Secrets
+
+Use only GitHub Secrets:
 
 ```text
-repository: AndrewVerhoturov1/Real-wargame
-branch: exact requested branch
-source_sha: exact remote HEAD
-base_branch: when relevant
-checks_run: only checks that actually ran
+VERCEL_TOKEN
+VERCEL_ORG_ID
+VERCEL_PROJECT_ID
 ```
 
-Do not deploy when the branch or source SHA is guessed, stale or uncommitted.
+Do not print, commit or copy their values into workflow files. The workflow must fail if `.vercel/project.json` does not match the secrets and the permanent project name `repo`.
 
-## 4. Pre-deployment checks
+## 4. Node and Vercel CLI versions
 
-Inspect the current `package.json` scripts before selecting commands. `npm run build` may contain TypeScript, broad historical smoke tests and the Vite build; do not treat its name as proof of what it runs.
+The permanent Vercel project uses Node.js 24.x. GitHub Actions and the emergency fallback therefore use Node.js 24.
 
-Use the smallest sufficient non-browser matrix:
+Vercel CLI is pinned:
 
 ```text
-npx tsc --noEmit
-+ focused smoke tests for every changed subsystem
-+ an integration smoke when multiple feature branches were combined
-+ npx vite build
-+ npm run deployment-pages:smoke
+vercel@56.4.1
 ```
 
-For an integration branch, use the union of the focused checks that protected all merged branches. Add a current integration contract such as `workspace:smoke` when the merged work changes shared workspace ownership.
+Do not use `latest` in the workflow.
 
-Do not run GitHub Actions, Chromium, Playwright or broad performance matrices without separate authorization.
-
-If the environment cannot run checks before deployment, report that limitation. Do not describe the branch as locally green.
-
-## 5. Supported manual deployment routes
-
-Use the first authenticated route that can prove the exact source.
-
-### Connected Vercel project with an exact checkout
-
-Use the connected deployment action directly only when its current workspace is proven to represent the requested branch and SHA.
-
-### Exact-source bootstrap for the connected Vercel project
-
-When the connected Vercel action accepts deployment files but no exact local checkout is available, create ephemeral copies of:
+## 5. npm command boundaries
 
 ```text
-.agents/skills/real-wargame-manual-vercel-deploy/templates/exact-source-package.json
-.agents/skills/real-wargame-manual-vercel-deploy/templates/exact-source-deploy-build.mjs
-.agents/skills/real-wargame-manual-vercel-deploy/templates/exact-source-vercel.json
+npm run typecheck
+  TypeScript only.
+
+npm run test:preview
+  Curated Preview smoke scenarios. Every scenario runs in its own child process.
+
+npm run verify:preview -- --report <file>
+  TypeScript, deployment contracts and the curated Preview smoke matrix.
+
+npm run build:app
+  Vite production compilation only.
+
+npm run verify:deployment-pages
+  Validate the built HTML pages. With --require-source it also validates deployment-source.json.
+
+npm run build
+  Local production build plus built-page validation. It does not hide the Preview test matrix.
 ```
 
-In the ephemeral deployment copy:
+No existing focused smoke command is deleted merely to obtain a green result.
 
-1. replace `__EXACT_BRANCH__` with the authorized branch;
-2. replace `__EXACT_SOURCE_SHA__` with its freshly resolved 40-character remote HEAD;
-3. populate `focusedChecks` with command/argument arrays for the selected matrix;
-4. send only these three bootstrap files to the existing permanent Vercel project;
-5. require the build to clone the branch and compare `git rev-parse HEAD` to `source_sha` before `npm ci`;
-6. require the log line `Verified deployment source: <branch> @ <sha>`;
-7. preserve `deployment-source.json` in the published output.
+## 6. Isolated smoke scenarios
 
-Generated bootstrap files containing a branch or SHA are temporary deployment inputs. Do not commit them. The reusable placeholder templates are safe to keep in the repository.
+The Preview matrix is run through `scripts/lib/isolated_process_runner.mjs`.
 
-### Branch-specific Deploy Hook
+Each scenario:
 
-A Deploy Hook may be used only when it is already configured for the exact branch. The hook URL is a secret and stays outside the repository, commits, logs and user-facing reports.
+- starts in a separate child Node process;
+- has an explicit timeout;
+- captures its own stdout and stderr;
+- returns its own exit code;
+- receives exit code `124` when timed out;
+- has its process tree terminated after timeout;
+- cannot hold the complete gate open with a timer, Worker, MessagePort or endless microtask chain.
 
-### Authenticated Vercel CLI
+The report names the failed or timed-out scenario.
 
-From a checkout of the exact requested branch:
+## 7. Prebuilt publication
 
-```bash
-vercel deploy --yes
-```
-
-Never use `--prod` unless the user separately authorizes production.
-
-If no route proves exact source identity, stop with:
+After the gate passes, the workflow runs:
 
 ```text
-deployment source identity unproven
+vercel pull
+vercel build
+vercel deploy --prebuilt
 ```
 
-## 6. Failed build loop
+The Vercel build output is produced once. Vercel receives `.vercel/output`; it does not repeat TypeScript or smoke tests as part of the normal route.
 
-Classify every failure before changing code.
+`deployment-source.json` contains:
+
+```text
+repository
+ref
+sourceSha
+verificationStatus
+checks actually executed
+skipped checks and their reason
+generation time
+```
+
+A deployment is not fully verified when the report contains skipped checks.
+
+## 8. Retry policy
+
+The successful normal case is one deployment for one verified SHA.
+
+Another deployment is allowed only when:
+
+- the SHA changed and publication of the new state was explicitly requested;
+- the same verified output was blocked by an infrastructure failure;
+- the user gave a new explicit deployment request.
+
+When code fails, fix it and rerun local/CI checks before the next deployment. Do not use repeated deployments to reveal errors one at a time.
+
+## 9. Exact local checkout
+
+When an authenticated exact checkout is available, it may follow the same commands and target the permanent project `repo`.
+
+It must prove branch/ref and SHA before installation, run the same gate, create one prebuilt output and publish it once. It must not call project creation or select another project.
+
+## 10. Emergency fallback only
+
+When GitHub Actions and an exact local checkout are both unavailable, use the templates under:
+
+```text
+.agents/skills/real-wargame-manual-vercel-deploy/templates/
+```
+
+The fallback clones the requested branch inside the Vercel build, compares the exact SHA before `npm ci`, runs the curated Preview gate, builds the application and writes `deployment-source.json`.
+
+This route starts a Vercel deployment before source tests can run, so it is **Emergency fallback only**. It is not the normal TDD or defect-fixing loop and must always target `repo`.
+
+## 11. Failure classification
 
 ### Code failure
 
-TypeScript, a current focused test or the production compilation proves a product defect. Fix only the authorized branch, rerun the matrix and deploy the corrected HEAD. The original deployment request authorizes necessary retries for that same task.
+TypeScript, an active smoke contract or production compilation proves a product problem. Fix the authorized branch, rerun the gate and request publication of the new SHA.
 
-### Environment failure
+### Infrastructure failure
 
-Cloning, authentication, dependency installation, Vercel infrastructure or the deployment transport failed. Repair the route and retry the same source. Do not change product code to hide an infrastructure problem.
+Checkout transport, credentials, package installation, Vercel CLI or Vercel infrastructure failed. Repair the route and retry the same verified SHA without product changes.
 
 ### Stale test contract
 
-A test checks an obsolete file owner, removed module or superseded architecture. Prove the current owner by reading both the failing test and the current implementation. Then fix the test contract on an authorized branch or stop and report the blocker.
+Read the failing test and the current implementation owner. Update the obsolete contract separately when ownership demonstrably changed. Do not silently delete or omit it.
 
-Do not silently remove a failing check. A reduced matrix requires explicit user approval. When approved, report the omitted command and reason under `not_checked`; do not call the result a fully green build.
+## 12. Temporary diagnostic projects
 
-Never restore automatic deployment or create a dummy commit.
+Temporary diagnostic projects such as `repo-retry-*`, `repo-contract-*`, `repo-scheduler-*`, `repo-source-*` and similar names are not part of the normal architecture.
 
-## 7. Required deployment verification
+Do not delete projects automatically. List them in the final report, identify the permanent project `repo`, and ask for separate confirmation before deletion.
 
-A successful deployment must reach `READY` and expose:
+Prevention is structural: the workflow receives the permanent project through secrets, verifies `.vercel/project.json`, and contains no project-create command.
 
-```text
-/                     → game
-/ai-node-editor.html  → AI Node Editor
-```
+## 13. Required successful result
 
-The build log must prove the branch and SHA. `deployment-source.json` should contain the same identity and the commands that actually ran.
-
-If Vercel protection is active, create a temporary share link. Reuse the same share token for `/` and `/ai-node-editor.html` instead of creating unrelated links.
-
-If exact identity cannot be proven, state:
+A successful Preview requires:
 
 ```text
-product_sha_match: unproven
+Vercel status: READY
+/                     available
+/ai-node-editor.html  available
+/deployment-source.json matches exact ref and SHA
 ```
 
-## 8. User-facing result
-
-Report:
+The GitHub Actions summary must show:
 
 ```text
-Статус:
-Игра: <clickable URL>
-Редактор ИИ: <clickable URL>/ai-node-editor.html
-Ветка:
-Коммит:
-Статус Vercel:
-Что проверить:
+ref
+expected and verified SHA
+executed checks
+skipped checks
+one deployment ID
+Preview URL
+final status
 ```
 
-Technical fields may follow:
+## 14. Authorization boundaries
 
-```text
-deployment_id:
-deployed_branch:
-deployed_commit:
-product_sha_match:
-checks_run:
-not_checked:
-```
+Transfer into `real-wargame-preview` and Vercel deployment are separate permissions unless both are explicitly requested together.
 
-## 9. Authorization boundaries
-
-One explicit deployment request authorizes:
-
-- one deployment of the exact current HEAD;
-- necessary retries after a code or environment failure for that same task.
-
-A later product or process change requires a new explicit deployment request.
-
-Transfer into `real-wargame-preview` and deployment of that branch are separate permissions unless both are explicitly requested.
-
-`main` always requires separate explicit approval.
-
-## 10. Prohibited routes
-
-Never:
-
-- enable automatic Git deployments as a shortcut;
-- deploy on every push;
-- create dummy commits for deployment;
-- create a separate Vercel project per feature branch;
-- delete the permanent Git-connected Vercel project;
-- commit Vercel tokens, Deploy Hook URLs, share tokens or bypass secrets;
-- claim deployment success before `READY`;
-- claim exact-SHA deployment when identity is unproven;
-- bypass a failing check without the required explicit approval.
+`main` always requires separate explicit approval. Automatic deployment on every push remains prohibited.
