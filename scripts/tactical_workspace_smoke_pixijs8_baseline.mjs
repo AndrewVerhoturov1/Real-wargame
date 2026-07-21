@@ -33,21 +33,6 @@ function expectExcludes(relativePath, snippets) {
   }
 }
 
-function expectCombinedIncludes(label, relativePaths, snippets) {
-  let content = '';
-  for (const relativePath of relativePaths) {
-    try {
-      content += `\n${read(relativePath)}`;
-    } catch {
-      failures.push(`${relativePath}: file is missing`);
-      return;
-    }
-  }
-  for (const snippet of snippets) {
-    if (!content.includes(snippet)) failures.push(`${label}: missing ${JSON.stringify(snippet)}`);
-  }
-}
-
 const ACTIVE_SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']);
 const LEGACY_PIXI_PACKAGES = new Set(['pixi.js-legacy', 'pixi-legacy']);
 const LEGACY_PIXI_MEMBERS = new Set([
@@ -99,7 +84,7 @@ function directThisProperty(expression) {
     : null;
 }
 
-function applicationReceiverKey(expression) {
+function receiverKey(expression) {
   if (ts.isIdentifier(expression)) return expression.text;
   return directThisProperty(expression);
 }
@@ -149,10 +134,9 @@ function inspectPixiV8Baseline() {
       }
     }
 
-    const applicationRecords = new Map();
-    const applicationProperties = new Map();
-
-    const visit = (node) => {
+    const constructionKeys = new Map();
+    const initCallsByKey = new Map();
+    const inspect = (node) => {
       const specifier = moduleSpecifier(node);
       if (specifier && isLegacyPixiPackage(specifier)) {
         failures.push(`${relativePath}:${lineOf(sourceFile, node)}: legacy/split Pixi import is forbidden: ${specifier}`);
@@ -176,21 +160,15 @@ function inspectPixiV8Baseline() {
           failures.push(`${relativePath}:${lineOf(sourceFile, node)}: Application must be constructed without synchronous options`);
         }
         const parent = node.parent;
-        if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
-          applicationRecords.set(parent.name.text, { construction: node, initCalls: [] });
-        } else if (ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-          const property = directThisProperty(parent.left);
-          if (property) applicationRecords.set(property, { construction: node, initCalls: [] });
-          else failures.push(`${relativePath}:${lineOf(sourceFile, node)}: Application construction must use a direct variable or this.<property> binding`);
-        } else {
+        const key = ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)
+          ? parent.name.text
+          : ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken
+            ? directThisProperty(parent.left)
+            : null;
+        if (!key) {
           failures.push(`${relativePath}:${lineOf(sourceFile, node)}: Application construction must use a direct variable or this.<property> binding`);
-        }
-      }
-
-      if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-        const property = directThisProperty(node.left);
-        if (property && ts.isIdentifier(node.right) && applicationRecords.has(node.right.text)) {
-          applicationProperties.set(property, applicationRecords.get(node.right.text));
+        } else {
+          constructionKeys.set(key, node);
         }
       }
 
@@ -210,42 +188,43 @@ function inspectPixiV8Baseline() {
       if (ts.isCallExpression(node)
         && (ts.isPropertyAccessExpression(node.expression) || ts.isElementAccessExpression(node.expression))
         && syntaxName(node.expression) === 'init') {
-        const key = applicationReceiverKey(node.expression.expression);
-        const record = key ? (applicationRecords.get(key) ?? applicationProperties.get(key)) : null;
-        if (record) record.initCalls.push({ call: node, awaited: isAwaitedCall(node), webgl: hasWebglPreference(node) });
+        const key = receiverKey(node.expression.expression);
+        if (key) {
+          const calls = initCallsByKey.get(key) ?? [];
+          calls.push({ call: node, awaited: isAwaitedCall(node), webgl: hasWebglPreference(node) });
+          initCallsByKey.set(key, calls);
+        }
       }
 
-      if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
-        const key = applicationReceiverKey(node.expression);
-        const record = key ? (applicationRecords.get(key) ?? applicationProperties.get(key)) : null;
-        if (record && member === 'view') {
-          failures.push(`${relativePath}:${lineOf(sourceFile, node)}: use ${key}.canvas instead of ${key}.view`);
-        }
-        if (record && member === 'canvas') totals.canvas += 1;
+      if ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && member === 'view'
+        && applicationAliases.size > 0) {
+        failures.push(`${relativePath}:${lineOf(sourceFile, node)}: use Application.canvas instead of Application.view`);
       }
+      if ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && member === 'canvas'
+        && applicationAliases.size > 0) totals.canvas += 1;
       if (ts.isCallExpression(node) && syntaxName(node.expression) === 'update'
         && (ts.isPropertyAccessExpression(node.expression) || ts.isElementAccessExpression(node.expression))
         && syntaxName(node.expression.expression) === 'source') totals.sourceUpdate += 1;
 
-      ts.forEachChild(node, visit);
+      ts.forEachChild(node, inspect);
     };
-    visit(sourceFile);
+    inspect(sourceFile);
 
-    const uniqueRecords = new Set([...applicationRecords.values(), ...applicationProperties.values()]);
-    for (const record of uniqueRecords) {
-      if (record.initCalls.length === 0) {
-        failures.push(`${relativePath}:${lineOf(sourceFile, record.construction)}: Application must call awaited init()`);
+    for (const [key, construction] of constructionKeys) {
+      const calls = initCallsByKey.get(key) ?? [];
+      if (calls.length === 0) {
+        failures.push(`${relativePath}:${lineOf(sourceFile, construction)}: ${key} must call awaited init()`);
         continue;
       }
-      for (const init of record.initCalls) {
-        if (!init.awaited) failures.push(`${relativePath}:${lineOf(sourceFile, init.call)}: Application.init() must be awaited`);
-        if (!init.webgl) failures.push(`${relativePath}:${lineOf(sourceFile, init.call)}: Application.init() must include WebGL preference`);
+      for (const init of calls) {
+        if (!init.awaited) failures.push(`${relativePath}:${lineOf(sourceFile, init.call)}: ${key}.init() must be awaited`);
+        if (!init.webgl) failures.push(`${relativePath}:${lineOf(sourceFile, init.call)}: ${key}.init() must include WebGL preference`);
       }
     }
   }
 
   if (totals.applications === 0) failures.push('src: no PixiJS Application construction found');
-  if (totals.canvas === 0) failures.push('src: no tracked Application canvas access found');
+  if (totals.canvas === 0) failures.push('src: no Application canvas access found');
   if (totals.sourceUpdate === 0) failures.push('src: no TextureSource update call found for mutable raster data');
 }
 
