@@ -1,0 +1,31 @@
+name: One-time Agent Docs Sync
+
+on:
+  push:
+    branches:
+      - feature/20260721-tactical-position-basis
+    paths:
+      - .github/workflows/agent-docs-sync-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync-docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/20260721-tactical-position-basis
+      - name: Generate canonical documents
+        run: node scripts/generate_agent_docs.mjs
+      - name: Commit generated output
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/ai/CURRENT_STATE.md docs/subprojects/index.json docs/subprojects/INDEX.md docs/subprojects/*/STATUS.md
+          git diff --cached --quiet && exit 0
+          git commit -m "docs: synchronize generated agent status"
+          git push origin HEAD:feature/20260721-tactical-position-basis
