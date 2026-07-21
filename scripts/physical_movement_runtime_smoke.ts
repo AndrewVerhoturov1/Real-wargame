@@ -27,10 +27,19 @@ import { createMoveOrder } from '../src/core/orders/MoveOrder';
 import { planMoveOrder } from '../src/core/orders/MoveOrderPlanning';
 import { buildPerceptionStimuli } from '../src/core/perception/PerceptionStimulus';
 import { evaluateVisualSignal } from '../src/core/perception/VisualSignal';
-import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
+import { createInitialState as createInitialStateBase, type SimulationState } from '../src/core/simulation/SimulationState';
 import { tickSimulation } from '../src/core/simulation/SimulationTick';
+import { clearStaticTacticalPositionService } from '../src/core/tactical/static/StaticTacticalPositionService';
 import type { UnitData, UnitModel } from '../src/core/units/UnitModel';
 import { buildExportedScene, normalizeImportedScene } from '../src/ui/SceneExport';
+
+const createdStates = new Set<SimulationState>();
+
+function createInitialState(...args: Parameters<typeof createInitialStateBase>): SimulationState {
+  const state = createInitialStateBase(...args);
+  createdStates.add(state);
+  return state;
+}
 
 verifyCanonicalIdsAndAliases();
 verifyProfileOwnedSpeedOrder();
@@ -45,6 +54,8 @@ verifyLegacyAndCustomProfileSerialization();
 verifyMaterialProviderBoundary();
 verifySelectionIndependence();
 verifyRouteReplanKeepsMovementProfile();
+
+for (const state of createdStates) clearStaticTacticalPositionService(state);
 
 console.log('Physical movement runtime smoke passed: canonical profile IDs and aliases, unified editable settings, deterministic stamina, gait-aware perception, sensor precedence, intent-owned weapon preparation, remaining-duration serialization, material adapter boundary, UI independence and route replan persistence.');
 

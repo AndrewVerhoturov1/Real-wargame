@@ -1,3 +1,8 @@
+import {
+  isPostureTransitionRunning,
+  reconcileMovementPostureRequest,
+} from '../actions/PostureTransition';
+import { tickPostureTransitionWithinInterval } from '../actions/PostureTransitionClock';
 import { tickAiSimulationScheduler, type AiSimulationSchedulerResult } from '../ai/AiSimulationScheduler';
 import { reconcileMovementProfileRuntime } from '../ai/MovementProfileRuntimeResolver';
 import { measurePerformancePhase, withPerformancePhaseContext } from '../debug/PerformancePhases';
@@ -12,7 +17,12 @@ import { publishSimulationAiEvents } from '../ai/events/SimulationAiEvents';
 import { clampPercent, POSTURE_MOVE_MULTIPLIER } from '../behavior/BehaviorModel';
 import { getCombatMovementMultiplier, getCombatRuntime, isUnitCombatCapable } from '../combat/CombatDamage';
 import { tickAutomaticCombatEngagements } from '../combat/CombatEngagement';
-import { getFireAction, reconcileAllPendingFireIntents, tickAllFireActions } from '../combat/FireAction';
+import {
+  getFireAction,
+  processDueCombatEvents,
+  reconcileAllPendingFireIntents,
+  tickFireAction,
+} from '../combat/FireAction';
 import { getCombatSuppressionSnapshot } from '../combat/CombatSuppression';
 import type { GridPosition } from '../geometry';
 import { syncSoldierThreatMemory } from '../knowledge/SoldierThreatMemory';
@@ -38,7 +48,10 @@ const COLLISION_PASSES = 3;
 const MAX_ROUTE_REPLAN_SEARCHES_PER_STEP = 1;
 const threatRuntimeEvaluation = createThreatRuntimeEvaluation();
 
-export function tickSimulation(state: SimulationState, deltaSeconds: number): void {
+export function tickSimulation(
+  state: SimulationState,
+  deltaSeconds: number,
+): void {
   const scaledDeltaSeconds = deltaSeconds * getAiTestTimeScale(state);
   const cycleStartMs = Math.max(0, Math.round(state.simulationTimeSeconds * 1000));
   state.simulationStep += 1;
@@ -86,10 +99,34 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
         movementProfileRegistryEntries,
       });
     });
+    const physicalActionDeltaSecondsByUnitId = new Map<string, number>();
+    for (const unit of state.units) {
+      // A graph decision can create a move order or a direct posture request at
+      // an exact time inside this cycle. Reconcile movement after the scheduler,
+      // then charge only the interval during which the body action existed.
+      reconcileMovementPostureRequest(state, unit);
+      const postureTick = tickPostureTransitionWithinInterval(
+        unit,
+        cycleStartMs / 1000,
+        cycleEndMs / 1000,
+        isUnitCombatCapable(unit),
+      );
+      if (postureTick.wasRunning) {
+        physicalActionDeltaSecondsByUnitId.set(unit.id, postureTick.remainingSeconds);
+      }
+    }
     phases.combatMs = measureTimedPhase('simulation.combat', () => {
       reconcileAllPendingFireIntents(state);
       tickAutomaticCombatEngagements(state);
-      tickAllFireActions(state, scaledDeltaSeconds);
+      processDueCombatEvents(state);
+      for (const unit of state.units) {
+        tickFireAction(
+          state,
+          unit,
+          physicalActionDeltaSecondsByUnitId.get(unit.id) ?? scaledDeltaSeconds,
+        );
+      }
+      processDueCombatEvents(state);
     });
 
     const simulationTimeMs = Math.max(0, Math.round(state.simulationTimeSeconds * 1000));
@@ -106,7 +143,7 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
         routeNavigationDurationMs += moveUnit(
           unit,
           state,
-          scaledDeltaSeconds,
+          physicalActionDeltaSecondsByUnitId.get(unit.id) ?? scaledDeltaSeconds,
           movementProfileRegistryEntries,
           routeReplanWorkBudget,
         );
@@ -210,6 +247,11 @@ function updateStateLabels(unit: UnitModel): void {
     setState(unit, 'stressed', 'unit is out of combat');
     return;
   }
+  if (isPostureTransitionRunning(unit)) {
+    unit.behaviorRuntime.currentAction = 'change_posture';
+    setState(unit, 'observing', 'active physical posture transition');
+    return;
+  }
   if (getFireAction(unit)) {
     setState(unit, 'observing', 'active fire action');
     return;
@@ -248,9 +290,14 @@ function moveUnit(
 
   const combatCapable = isUnitCombatCapable(unit);
   const firing = Boolean(getFireAction(unit));
+  const postureTransitionRunning = isPostureTransitionRunning(unit);
+  if (postureTransitionRunning) {
+    unit.movementRuntime.isMoving = false;
+    unit.movementRuntime.velocityCellsPerSecond = { x: 0, y: 0 };
+  }
   let routeNavigationDurationMs = 0;
   let routeReady = false;
-  if (unit.order && combatCapable && !firing && deltaSeconds > 0) {
+  if (unit.order && combatCapable && !firing && !postureTransitionRunning && deltaSeconds > 0) {
     const routeStartedAt = performance.now();
     routeReady = ensureRoutePassable(unit, state, routeReplanWorkBudget);
     routeNavigationDurationMs = performance.now() - routeStartedAt;

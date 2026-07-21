@@ -1,3 +1,9 @@
+import {
+  cancelReplaceablePostureTransitionForNewPlayerCommand,
+  isPostureTransitionRunning,
+  postureOwnerTokenForPlayerCommand,
+  requestPostureTransition,
+} from '../actions/PostureTransition';
 import { publishTacticalOrderIntentToAiMemory } from '../ai/TacticalOrderBlackboard';
 import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import type { UnitPosture } from '../behavior/BehaviorModel';
@@ -46,6 +52,7 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
     createTacticalOrderIntent('move'),
     unit.playerNavigationProfileId ?? 'normal',
   );
+  cancelReplaceablePostureTransitionForNewPlayerCommand(unit);
   const baseCommand = createPlayerMoveCommand(
     unit.id,
     target,
@@ -111,8 +118,18 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
   }
   unit.order = planned.order;
   unit.plan = createDirectPlayerMovePlan(unit.plan, command, planned.order.target);
-  unit.behaviorRuntime.state = 'moving';
-  unit.behaviorRuntime.currentAction = 'move';
+  requestPostureTransition(unit, {
+    targetPosture: approachPosture,
+    owner: { source: 'tactical_position', id: command.id },
+    ownerToken: postureOwnerTokenForPlayerCommand(command.id),
+    startedSeconds: state.simulationTimeSeconds,
+    reasonCode: 'tactical_position_approach',
+    reasonRu: 'Боец физически принимает позу подхода к тактической позиции.',
+  });
+  if (!isPostureTransitionRunning(unit)) {
+    unit.behaviorRuntime.state = 'moving';
+    unit.behaviorRuntime.currentAction = 'move';
+  }
   unit.behaviorRuntime.lastEvent = 'tactical_position_order_received';
   unit.behaviorRuntime.reason = finalFacingRadians === null
     ? `Боец направлен на тактическую позицию; после прибытия: ${postureLabel(arrivalPosture)}.`

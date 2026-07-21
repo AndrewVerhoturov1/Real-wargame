@@ -1,3 +1,4 @@
+import { cancelReplaceablePostureTransitionForNewPlayerCommand } from '../actions/PostureTransition';
 import { publishTacticalOrderIntentToAiMemory } from '../ai/TacticalOrderBlackboard';
 import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import type { GridPosition } from '../geometry';
@@ -68,6 +69,7 @@ function issueTacticalOrderIntentToSelectedUnits(
           y: target.y + unit.position.y - center.y,
         });
     const intent = resolveIntent(unit);
+    cancelReplaceablePostureTransitionForNewPlayerCommand(unit);
     const command = createPlayerMoveCommand(
       unit.id,
       requestedTarget,
@@ -148,7 +150,6 @@ function applyPressurePreview(
 ): void {
   const report = getPressureReportAtPosition(target, state.pressureZones);
   unit.behaviorRuntime.state = 'moving';
-  unit.behaviorRuntime.posture = 'standing';
   unit.behaviorRuntime.currentAction = 'move';
 
   if (!report) {

@@ -12,6 +12,10 @@ import {
   type SerializedMoveOrder,
 } from '../ai/runtime/AiRuntimeSnapshot';
 import {
+  normalizeUnitPhysicalAction,
+  synchronizeEffectivePostureFromAction,
+} from '../actions/PostureTransition';
+import {
   createBehaviorRuntime,
   createBehaviorSettings,
   createSoldierParameters,
@@ -111,6 +115,7 @@ export interface UnitRuntimeData extends Partial<Pick<UnitBehaviorRuntime, 'stre
   aiRuntime?: AiRuntimeSceneSnapshotV1;
   moveOrder?: SerializedMoveOrder;
   movement?: MovementRuntimeState;
+  physicalAction?: unknown;
 }
 
 export interface UnitData {
@@ -280,6 +285,8 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
           ?? (unit.movementProfileId ? 'unit' : 'default'),
       },
     );
+    model.behaviorRuntime.physicalAction = normalizeUnitPhysicalAction(unit.runtime?.physicalAction, model.id);
+    synchronizeEffectivePostureFromAction(model);
     if (unit.runtime?.weapon) replaceWeaponRuntime(model, unit.runtime.weapon);
     restoreAiRuntimeSnapshot(model, unit.runtime?.aiRuntime);
     if (!model.order) restorePlayerMoveOrderSnapshot(model, unit.runtime?.moveOrder);
@@ -290,6 +297,10 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
     if (model.playerCommand) publishTacticalOrderIntentToAiMemory(model, model.playerCommand.intent);
     else publishMovementProfileStateToAiMemory(model);
     if (unit.runtime?.combat) replaceCombatRuntime(model, unit.runtime.combat);
+    if (model.behaviorRuntime.physicalAction?.status === 'running') {
+      model.behaviorRuntime.currentAction = 'change_posture';
+      model.behaviorRuntime.reason = model.behaviorRuntime.physicalAction.reasonRu;
+    }
     initializeSimulationAiEventFacts(model);
     return model;
   });
@@ -355,6 +366,7 @@ export function applyInitialStateToRuntime(unit: UnitModel, clearPerceptionKnowl
   unit.behaviorRuntime.aiRuntimeSession = null;
   unit.behaviorRuntime.aiRouteStatusState = null;
   unit.behaviorRuntime.aiSimulationEventFacts = null;
+  unit.behaviorRuntime.physicalAction = null;
   unit.soldier.condition.fatigue = initial.fatigue;
   unit.soldier.condition.morale = initial.morale;
   unit.soldier.condition.confusion = initial.confusion;

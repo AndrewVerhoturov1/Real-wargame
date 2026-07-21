@@ -109,6 +109,7 @@
     "simulation-slowest-pass:smoke": "node scripts/simulation_slowest_pass_attribution_smoke.mjs",
     "movement-profiles:smoke": "node scripts/movement_profiles_smoke.mjs",
     "physical-movement:smoke": "node scripts/physical_movement_runtime_smoke.mjs",
+    "posture-transition:smoke": "node scripts/posture_transition_smoke.mjs",
     "shared-vegetation-source-contract:smoke": "node scripts/shared_vegetation_source_contract_smoke.mjs",
     "movement-intent-ai:smoke": "node scripts/movement_intent_ai_integration_smoke.mjs",
     "movement-environment-integration:smoke": "node scripts/movement_environment_integration_smoke.mjs",

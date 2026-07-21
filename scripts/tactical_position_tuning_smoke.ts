@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { postureTransitionDurationSeconds } from '../src/core/actions/PostureTransition';
+import { tickPostureTransitionWithTimeBudget } from '../src/core/actions/PostureTransitionClock';
 import type { AiGraph } from '../src/core/ai/AiGraph';
 import { withAiSimulationExecutionContext } from '../src/core/ai/AiSimulationExecutionContext';
 import { runAiGraphRuntime } from '../src/core/ai/AiGraphRuntime';
@@ -86,12 +88,29 @@ function verifyCommandOwnedApproachAndOccupation(): void {
     source: 'player', playerCommandId: command.id,
   };
   unit.behaviorRuntime.posture = 'standing';
-  reconcileTacticalPositionOccupation(unit);
+  const state = {
+    units: [unit],
+    simulationTimeSeconds: 0,
+    map: { metersPerCell: 2 },
+  } as unknown as SimulationState;
+  reconcileTacticalPositionOccupation(state, unit);
+  assert.equal(unit.behaviorRuntime.posture, 'standing');
+  tickPostureTransitionWithTimeBudget(
+    unit,
+    postureTransitionDurationSeconds('standing', 'crouched'),
+    true,
+  );
   assert.equal(unit.behaviorRuntime.posture, 'crouched');
 
   unit.order = null;
   unit.playerCommand = updatePlayerCommandStatus(command, 'completed', 'done', 'готово');
-  assert.equal(applyCompletedTacticalPositionOccupation(unit), true);
+  assert.equal(applyCompletedTacticalPositionOccupation(state, unit), false);
+  tickPostureTransitionWithTimeBudget(
+    unit,
+    postureTransitionDurationSeconds('crouched', 'prone'),
+    true,
+  );
+  assert.equal(applyCompletedTacticalPositionOccupation(state, unit), true);
   unit.playerCommand = markPlayerCommandArrivalPostureApplied(unit.playerCommand);
   assert.equal(unit.behaviorRuntime.posture, 'prone', 'exact selected arrival posture must replace approach posture');
   assert.ok(Math.abs(unit.facingRadians - Math.PI / 2) < 0.0001);
@@ -102,7 +121,6 @@ function verifyCommandOwnedApproachAndOccupation(): void {
   assert.equal(restored?.approachPosture, 'crouched');
   assert.equal(restored?.tacticalPositionOccupationStatus, 'occupied');
 
-  const state = { units: [unit], map: { metersPerCell: 2 } } as unknown as SimulationState;
   const graphResult = withAiSimulationExecutionContext(state, unit, () => runAiGraphRuntime({
     graph: postureGraph('stand'), unitId: unit.id, blackboard: {}, nowMs: 2000,
   }));
@@ -115,7 +133,7 @@ function verifyCommandOwnedApproachAndOccupation(): void {
     type: 'move', target: { x: 6.5, y: 4.5 }, issuedAtMs: 2,
     source: 'ai', ownerToken: 'ai-route-1',
   };
-  reconcileTacticalPositionOccupation(unit);
+  reconcileTacticalPositionOccupation(state, unit);
   assert.equal(unit.playerCommand?.tacticalPositionOccupationStatus, 'released');
   unit.order = null;
   assert.equal(isTacticalPositionOccupationActive(unit), false);
@@ -147,7 +165,13 @@ function verifyOccupiedPostureSurvivesStaleMovementOwnership(): void {
     'crouched',
   );
   unit.playerCommand = updatePlayerCommandStatus(command, 'completed', 'done', 'готово');
-  assert.equal(applyCompletedTacticalPositionOccupation(unit), true);
+  assert.equal(applyCompletedTacticalPositionOccupation(state, unit), false);
+  tickPostureTransitionWithTimeBudget(
+    unit,
+    postureTransitionDurationSeconds('standing', 'prone'),
+    true,
+  );
+  assert.equal(applyCompletedTacticalPositionOccupation(state, unit), true);
   unit.playerCommand = markPlayerCommandArrivalPostureApplied(unit.playerCommand);
   unit.movementRuntime.requestedGait = 'sprint';
   unit.movementRuntime.actualGait = 'sprint';
