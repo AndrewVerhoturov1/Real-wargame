@@ -13,7 +13,12 @@ import { publishSimulationAiEvents } from '../ai/events/SimulationAiEvents';
 import { clampPercent, POSTURE_MOVE_MULTIPLIER } from '../behavior/BehaviorModel';
 import { getCombatMovementMultiplier, getCombatRuntime, isUnitCombatCapable } from '../combat/CombatDamage';
 import { tickAutomaticCombatEngagements } from '../combat/CombatEngagement';
-import { getFireAction, reconcileAllPendingFireIntents, tickAllFireActions } from '../combat/FireAction';
+import {
+  getFireAction,
+  processDueCombatEvents,
+  reconcileAllPendingFireIntents,
+  tickFireAction,
+} from '../combat/FireAction';
 import { getCombatSuppressionSnapshot } from '../combat/CombatSuppression';
 import type { GridPosition } from '../geometry';
 import { syncSoldierThreatMemory } from '../knowledge/SoldierThreatMemory';
@@ -40,7 +45,7 @@ const MAX_ROUTE_REPLAN_SEARCHES_PER_STEP = 1;
 const threatRuntimeEvaluation = createThreatRuntimeEvaluation();
 
 export interface SimulationTickLegacyOptions {
-  readonly movementDeltaSecondsByUnitId?: ReadonlyMap<string, number>;
+  readonly physicalActionDeltaSecondsByUnitId?: ReadonlyMap<string, number>;
 }
 
 export function tickSimulation(
@@ -98,7 +103,13 @@ export function tickSimulation(
     phases.combatMs = measureTimedPhase('simulation.combat', () => {
       reconcileAllPendingFireIntents(state);
       tickAutomaticCombatEngagements(state);
-      tickAllFireActions(state, scaledDeltaSeconds);
+      processDueCombatEvents(state);
+      for (const unit of state.units) {
+        const physicalActionDeltaSeconds = options.physicalActionDeltaSecondsByUnitId?.get(unit.id)
+          ?? scaledDeltaSeconds;
+        tickFireAction(state, unit, physicalActionDeltaSeconds);
+      }
+      processDueCombatEvents(state);
     });
 
     const simulationTimeMs = Math.max(0, Math.round(state.simulationTimeSeconds * 1000));
@@ -112,12 +123,12 @@ export function tickSimulation(
       const movementStartIndex = unitCount > 0 ? state.simulationStep % unitCount : 0;
       for (let offset = 0; offset < unitCount; offset += 1) {
         const unit = state.units[(movementStartIndex + offset) % unitCount];
-        const movementDeltaSeconds = options.movementDeltaSecondsByUnitId?.get(unit.id)
+        const physicalActionDeltaSeconds = options.physicalActionDeltaSecondsByUnitId?.get(unit.id)
           ?? scaledDeltaSeconds;
         routeNavigationDurationMs += moveUnit(
           unit,
           state,
-          movementDeltaSeconds,
+          physicalActionDeltaSeconds,
           movementProfileRegistryEntries,
           routeReplanWorkBudget,
         );
