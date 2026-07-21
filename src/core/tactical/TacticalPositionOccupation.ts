@@ -97,10 +97,14 @@ export function isTacticalPositionOccupationActive(unit: UnitModel): boolean {
 }
 
 export function occupiedTacticalPositionPosture(unit: UnitModel): UnitPosture | null {
-  // MovementRuntime already calls this canonical guard before applying a gait
-  // posture. Returning the current effective posture while any transition is
-  // running prevents a second subsystem from changing the silhouette mid-tick.
-  if (isPostureTransitionRunning(unit)) return unit.behaviorRuntime.posture;
+  // MovementRuntime historically owns a last-resort direct posture write. The
+  // common physical action and weapon handling now lock that legacy path by
+  // returning the one canonical effective posture. This prevents movement from
+  // changing the silhouette after a physical action was accepted or rejected
+  // because the same body resources are occupied.
+  if (isPostureTransitionRunning(unit) || isBodyPostureLocked(unit)) {
+    return unit.behaviorRuntime.posture;
+  }
   return isTacticalPositionOccupationActive(unit)
     ? unit.playerCommand?.arrivalPosture ?? null
     : null;
@@ -130,6 +134,13 @@ function requestCommandPosture(
     reasonCode,
     reasonRu,
   });
+}
+
+function isBodyPostureLocked(unit: UnitModel): boolean {
+  return unit.behaviorRuntime.currentAction === 'aim'
+    || unit.behaviorRuntime.currentAction === 'fire'
+    || unit.behaviorRuntime.currentAction === 'reload'
+    || unit.movementRuntime.weaponPreparation !== null;
 }
 
 function finiteFacing(value: number | null | undefined): number | null {
