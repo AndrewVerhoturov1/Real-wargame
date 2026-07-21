@@ -15,8 +15,10 @@ import { isFireAllowed, setFireAllowed } from '../src/core/combat/CombatRules';
 import { getUnitHitShapes, intersectRayWithUnitHitShapes } from '../src/core/combat/UnitHitShapes';
 import {
   DEFAULT_RIFLE_ID,
+  getWeaponDefinition,
   getWeaponRuntime,
   reloadWeapon,
+  setWeaponReady,
   tryConsumeRound,
 } from '../src/core/combat/WeaponModel';
 import { tickAllUnitPerception } from '../src/core/perception/PerceptionSystem';
@@ -201,16 +203,23 @@ function verifyThreatRuntimeSummaryParity(): void {
 
 function verifyWeaponRuntime(): void {
   const state = makeState();
-  const weapon = getWeaponRuntime(state.units[0]);
+  const unit = state.units[0];
+  const weapon = getWeaponRuntime(unit);
   assert.equal(weapon.weaponId, DEFAULT_RIFLE_ID);
   assert.equal(weapon.roundsLoaded, 5);
-  assert.equal(tryConsumeRound(state.units[0], 0), true);
-  assert.equal(getWeaponRuntime(state.units[0]).roundsLoaded, 4);
-  getWeaponRuntime(state.units[0]).roundsReserve = 3;
-  getWeaponRuntime(state.units[0]).roundsLoaded = 0;
-  assert.equal(reloadWeapon(state.units[0]), 3);
-  assert.equal(getWeaponRuntime(state.units[0]).roundsLoaded, 3);
-  assert.equal(getWeaponRuntime(state.units[0]).roundsReserve, 0);
+  assert.equal(tryConsumeRound(unit, 0), true);
+  assert.equal(getWeaponRuntime(unit).roundsLoaded, 4);
+  getWeaponRuntime(unit).roundsReserve = 3;
+  getWeaponRuntime(unit).roundsLoaded = 0;
+  getWeaponRuntime(unit).ready = false;
+  const reload = reloadWeapon(unit);
+  assert.equal(reload.accepted, true);
+  assert.equal(reload.reasonCode, 'reload_started');
+  assert.equal(getWeaponRuntime(unit).roundsLoaded, 0, 'reload must not transfer rounds immediately');
+  assert.equal(getWeaponRuntime(unit).roundsReserve, 3);
+  tickSimulation(state, getWeaponDefinition(DEFAULT_RIFLE_ID).reloadTimeSeconds);
+  assert.equal(getWeaponRuntime(unit).roundsLoaded, 3);
+  assert.equal(getWeaponRuntime(unit).roundsReserve, 0);
 }
 
 function verifyHitShapes(): void {
@@ -451,7 +460,7 @@ function restoreTargetForContinuedFire(target: UnitModel): void {
   target.soldier.condition.health = 100;
   replaceCombatRuntime(target, { capability: 'effective', lastHit: null });
   target.behaviorRuntime.currentAction = 'observe';
-  target.behaviorRuntime.weaponReady = true;
+  setWeaponReady(target, true);
 }
 
 verifySides();
