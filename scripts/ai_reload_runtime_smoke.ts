@@ -88,10 +88,13 @@ const cancelled = runAiGraphRuntime({
 });
 assert.equal(cancelled.status, 'cancelled');
 assert.equal(cancelled.executionState, undefined);
-assert.deepEqual(reloadEffectTypes(cancelled.effects), ['cancel_reload']);
-const cancelEffect = readReloadEffect(cancelled.effects[0]);
-assert.equal(cancelEffect?.type, 'cancel_reload');
-assert.equal(cancelEffect?.initialAmmo, 3, 'cancel effect may report only the observed compatibility total');
+assert.deepEqual(reloadEffectTypes(cancelled.effects), []);
+assert.deepEqual(cancelled.effects.map((effect) => effect.type), ['set_action']);
+assert.equal(
+  (cancelled.effects[0] as { action?: string }).action,
+  'reload_cancelled',
+  'stateful cancellation must request owner-aware physical cancellation',
+);
 assert.equal(cancelled.lifecycle.filter((event) => event.phase === 'cancel').length, 1);
 
 const completed = runAiGraphRuntime({
@@ -101,14 +104,13 @@ const completed = runAiGraphRuntime({
 });
 assert.equal(completed.status, 'success');
 assert.equal(completed.executionState, undefined);
-assert.deepEqual(completed.effects.map((effect) => effect.type), ['complete_reload', 'set_action']);
-const completeEffect = readReloadEffect(completed.effects[0]);
-assert.equal(completeEffect?.type, 'complete_reload');
-assert.equal(
-  completeEffect?.targetAmmo,
-  3,
-  'legacy completion effect must not restore a configured refill amount; physical WeaponRuntime owns completion',
+assert.deepEqual(
+  completed.effects.map((effect) => effect.type),
+  ['set_action'],
+  'stateful completion must not emit a refill or physical completion effect',
 );
+assert.equal((completed.effects[0] as { action?: string }).action, 'continue_order');
+assert.deepEqual(reloadEffectTypes(completed.effects), []);
 assert.equal(completed.lifecycle.filter((event) => event.phase === 'complete').length, 1);
 
 const legacyGraph: AiGraph = {
@@ -140,7 +142,7 @@ assert.equal(
   'legacy SetAction reload cannot carry an ammunition target',
 );
 
-console.log('AI reload runtime smoke passed: physical-action request, exact cancellation, no arbitrary targetAmmo and no instant refill.');
+console.log('AI reload runtime smoke passed: physical-action request, owner-aware cancellation, no arbitrary targetAmmo and no instant refill.');
 
 function reloadEffectTypes(effects: readonly { readonly type: string }[]): string[] {
   return effects
