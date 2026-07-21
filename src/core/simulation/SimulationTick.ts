@@ -1,5 +1,9 @@
 import { tickPhysicalActionWithTimeBudget } from '../actions/PhysicalActionClock';
 import { reconcileMovementPostureRequest } from '../actions/PostureTransition';
+import {
+  isWeaponReloadRunning,
+  synchronizeWeaponReloadRuntimeAfterRestore,
+} from '../actions/WeaponReload';
 import { isUnitCombatCapable } from '../combat/CombatDamage';
 import { reconcileCompletedTacticalPositionArrivals } from '../tactical/TacticalPositionArrival';
 import { reconcileTacticalPositionOccupation } from '../tactical/TacticalPositionOccupation';
@@ -27,6 +31,9 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
   }
 
   tickSimulationLegacy(state, deltaSeconds, { physicalActionDeltaSecondsByUnitId });
+  for (const unit of state.units) {
+    if (isWeaponReloadRunning(unit)) synchronizeWeaponReloadRuntimeAfterRestore(unit);
+  }
   reconcileCompletedTacticalPositionArrivals(state);
   for (const unit of state.units) reconcileTacticalPositionOccupation(state, unit);
 }
