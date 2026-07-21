@@ -159,13 +159,13 @@ A deployment is not fully verified when the report contains skipped checks.
 
 The successful normal case is one deployment for one verified SHA.
 
-Another deployment is allowed only when:
+Another manual deployment run is allowed only when:
 
-- the SHA changed and publication of the new state was explicitly requested;
+- the SHA changed within the same already authorized deployment task;
 - the same verified output was blocked by an infrastructure failure;
 - the user gave a new explicit deployment request.
 
-When code fails, fix it and rerun local/CI checks before the next deployment. Do not use repeated deployments to reveal errors one at a time.
+A push still never starts the run automatically. When code fails, fix it and rerun local/CI checks before manually publishing the next SHA. Do not use repeated deployments to reveal errors one at a time.
 
 ## 9. Exact local checkout
 
@@ -189,7 +189,7 @@ This route starts a Vercel deployment before source tests can run, so it is **Em
 
 ### Code failure
 
-TypeScript, an active smoke contract or production compilation proves a product problem. Fix the authorized branch, rerun the gate and request publication of the new SHA.
+TypeScript, an active smoke contract or production compilation proves a product problem. Fix the authorized branch, rerun the gate and manually publish its new SHA within the current authorization or after a new explicit request.
 
 ### Infrastructure failure
 
