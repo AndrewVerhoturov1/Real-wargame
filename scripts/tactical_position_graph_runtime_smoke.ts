@@ -109,54 +109,61 @@ const service = new TacticalPositionSearchService(state, fieldRuntime, {
 });
 installTacticalPositionSearchService(state, service);
 
-const first = runWithContext({ self_position: { x: 1.5, y: 4.5 } }, 1000);
-const requestId = first.blackboard.cover_query_request_id;
-assert.equal(typeof requestId, 'string');
-assert.equal(first.tacticalQueries.cover_query?.searchRequestId, requestId);
-assert.equal(first.tacticalQueries.cover_query?.searchRequestStatus, 'queued');
-assert.equal(service.getDiagnostics().requestCount, 1);
-assert.equal(localSearchCalls, 0);
-runScheduled();
-assert.equal(service.readRequest(String(requestId))?.status, 'calculating');
+void runSmoke().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});
 
-const second = runWithContext(first.blackboard, 1600);
-assert.equal(second.blackboard.cover_query_request_id, requestId);
-assert.equal(second.tacticalQueries.cover_query?.searchRequestStatus, 'calculating');
-assert.equal(service.getDiagnostics().requestCount, 1, 'ordinary graph polling must not create another request');
-assert.equal(localSearchCalls, 0);
+async function runSmoke(): Promise<void> {
+  const first = runWithContext({ self_position: { x: 1.5, y: 4.5 } }, 1000);
+  const requestId = first.blackboard.cover_query_request_id;
+  assert.equal(typeof requestId, 'string');
+  assert.equal(first.tacticalQueries.cover_query?.searchRequestId, requestId);
+  assert.equal(first.tacticalQueries.cover_query?.searchRequestStatus, 'queued');
+  assert.equal(service.getDiagnostics().requestCount, 1);
+  assert.equal(localSearchCalls, 0);
+  runScheduled();
+  assert.equal(service.readRequest(String(requestId))?.status, 'calculating');
 
-await nextTask();
-runScheduled();
-fieldRuntime.ready = prepared(unit.id, 'field-ready-1');
-fieldRuntime.emit();
-runScheduled();
-assert.equal(localSearchCalls, 1);
-assert.equal(service.readRequest(String(requestId))?.status, 'ready');
+  const second = runWithContext(first.blackboard, 1600);
+  assert.equal(second.blackboard.cover_query_request_id, requestId);
+  assert.equal(second.tacticalQueries.cover_query?.searchRequestStatus, 'calculating');
+  assert.equal(service.getDiagnostics().requestCount, 1, 'ordinary graph polling must not create another request');
+  assert.equal(localSearchCalls, 0);
 
-const third = runWithContext(second.blackboard, 2200);
-assert.equal(third.ok, true, JSON.stringify({
-  status: third.status,
-  explanation: third.explanation,
-  explanationRu: third.explanationRu,
-  blackboard: third.blackboard,
-  tacticalQuery: third.tacticalQueries.cover_query,
-  trace: third.trace,
-  serviceRequest: service.readRequest(String(requestId)),
-}, null, 2));
-assert.equal(third.status, 'success');
-assert.equal(third.blackboard.cover_query_request_id, requestId);
-assert.deepEqual(third.blackboard.best_cover_position, { x: 8.5, y: 4.5 });
-assert.equal(third.blackboard.best_cover_position_posture, 'prone');
-assert.equal(third.tacticalQueries.cover_query?.winnerCandidateId, 'tactical:8:4:prone');
-assert.equal(third.tacticalQueries.cover_query?.searchRequestStatus, 'ready');
-assert.equal(localSearchCalls, 1, 'ready polling must reuse the same immutable result');
-assert.equal(getAiSimulationExecutionContextDepth(), 0, 'execution context must always unwind');
+  await nextTask();
+  runScheduled();
+  fieldRuntime.ready = prepared(unit.id, 'field-ready-1');
+  fieldRuntime.emit();
+  runScheduled();
+  assert.equal(localSearchCalls, 1);
+  assert.equal(service.readRequest(String(requestId))?.status, 'ready');
 
-service.destroy();
-assert.equal(fieldRuntime.destroyed, true);
-assert.equal(fieldRuntime.listenerCount, 0);
+  const third = runWithContext(second.blackboard, 2200);
+  assert.equal(third.ok, true, JSON.stringify({
+    status: third.status,
+    explanation: third.explanation,
+    explanationRu: third.explanationRu,
+    blackboard: third.blackboard,
+    tacticalQuery: third.tacticalQueries.cover_query,
+    trace: third.trace,
+    serviceRequest: service.readRequest(String(requestId)),
+  }, null, 2));
+  assert.equal(third.status, 'success');
+  assert.equal(third.blackboard.cover_query_request_id, requestId);
+  assert.deepEqual(third.blackboard.best_cover_position, { x: 8.5, y: 4.5 });
+  assert.equal(third.blackboard.best_cover_position_posture, 'prone');
+  assert.equal(third.tacticalQueries.cover_query?.winnerCandidateId, 'tactical:8:4:prone');
+  assert.equal(third.tacticalQueries.cover_query?.searchRequestStatus, 'ready');
+  assert.equal(localSearchCalls, 1, 'ready polling must reuse the same immutable result');
+  assert.equal(getAiSimulationExecutionContextDepth(), 0, 'execution context must always unwind');
 
-console.log('Tactical position Graph v2 smoke passed: one exact simulation request is persisted, polled statefully and reused by Filter/Score/Select.');
+  service.destroy();
+  assert.equal(fieldRuntime.destroyed, true);
+  assert.equal(fieldRuntime.listenerCount, 0);
+
+  console.log('Tactical position Graph v2 smoke passed: one exact simulation request is persisted, polled statefully and reused by Filter/Score/Select.');
+}
 
 function runWithContext(blackboard: Record<string, unknown>, nowMs: number) {
   return withAiSimulationExecutionContext(state, unit, () => runAiGraphRuntime({
