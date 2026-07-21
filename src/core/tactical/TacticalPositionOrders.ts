@@ -1,3 +1,10 @@
+import {
+  cancelPostureTransitionBySystem,
+  getRunningPostureTransition,
+  isPostureTransitionRunning,
+  postureOwnerTokenForPlayerCommand,
+  requestPostureTransition,
+} from '../actions/PostureTransition';
 import { publishTacticalOrderIntentToAiMemory } from '../ai/TacticalOrderBlackboard';
 import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import type { UnitPosture } from '../behavior/BehaviorModel';
@@ -30,6 +37,7 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
     createTacticalOrderIntent('move'),
     unit.playerNavigationProfileId ?? 'normal',
   );
+  cancelReplaceablePostureAction(unit);
   const command = createPlayerMoveCommand(
     unit.id,
     target,
@@ -85,7 +93,18 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
   }
   unit.order = planned.order;
   unit.plan = createDirectPlayerMovePlan(unit.plan, command, planned.order.target);
-  applyApproachPosture(unit, approachPosture);
+  requestPostureTransition(unit, {
+    targetPosture: approachPosture,
+    owner: { source: 'tactical_position', id: command.id },
+    ownerToken: postureOwnerTokenForPlayerCommand(command.id),
+    startedSeconds: state.simulationTimeSeconds,
+    reasonCode: 'tactical_position_approach',
+    reasonRu: 'Боец физически принимает позу подхода к тактической позиции.',
+  });
+  if (!isPostureTransitionRunning(unit)) {
+    unit.behaviorRuntime.state = 'moving';
+    unit.behaviorRuntime.currentAction = 'move';
+  }
   unit.behaviorRuntime.lastEvent = 'tactical_position_order_received';
   unit.behaviorRuntime.reason = finalFacingRadians === null
     ? `Боец направлен на тактическую позицию; после прибытия: ${postureLabel(arrivalPosture)}.`
@@ -94,23 +113,26 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
   return true;
 }
 
+function cancelReplaceablePostureAction(unit: UnitModel): void {
+  const action = getRunningPostureTransition(unit);
+  if (!action) return;
+  if (
+    action.owner.source !== 'tactical_position'
+    && action.owner.source !== 'player_command'
+    && action.owner.source !== 'movement'
+  ) return;
+  cancelPostureTransitionBySystem(
+    unit,
+    'posture_transition_replaced_by_new_tactical_position_order',
+    'Смена позы отменена новым приказом на тактическую позицию.',
+  );
+}
+
 function resolveApproachPosture(unit: UnitModel, arrivalPosture: UnitPosture): UnitPosture {
   const settings = getTacticalPositionSettings(unit);
   return settings.moveCrouchedToProtectedPosition && arrivalPosture !== 'standing'
     ? 'crouched'
     : 'standing';
-}
-
-function applyApproachPosture(unit: UnitModel, movementPosture: UnitPosture): void {
-  if (unit.behaviorRuntime.posture !== movementPosture) {
-    unit.behaviorRuntime.previousPosture = unit.behaviorRuntime.posture;
-    unit.behaviorRuntime.posture = movementPosture;
-    unit.behaviorRuntime.postureChangedBecause = 'tactical_position_approach';
-  }
-  unit.behaviorRuntime.state = 'moving';
-  unit.behaviorRuntime.currentAction = 'move';
-  // Canonical danger remains owned by the normal threat/perception/suppression update.
-  // Issuing a movement command must not synthesize a safe or dangerous state.
 }
 
 function resolveThreatFacingAtPosition(unit: UnitModel, position: GridPosition): number | null {
@@ -140,7 +162,7 @@ function directionTo(from: GridPosition, to: GridPosition): number | null {
 
 function postureLabel(posture: UnitPosture): string {
   if (posture === 'standing') return 'стоять';
-  if (posture === 'crouched') return 'сесть';
+  if (posture === 'crouched') return 'пригнуться';
   return 'лечь';
 }
 
