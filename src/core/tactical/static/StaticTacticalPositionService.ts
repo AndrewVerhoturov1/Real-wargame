@@ -1,6 +1,6 @@
 import { getActiveEnvironmentProfile } from '../../map/EnvironmentProfileRuntime';
 import type { SimulationState } from '../../simulation/SimulationState';
-import { buildStaticTacticalPositionBasis } from './StaticTacticalPositionBuilder';
+import { buildHighQualityStaticTacticalPositionBasis } from './HighQualityStaticTacticalPositionBuilder';
 import type { StaticTacticalPositionBasisSnapshot } from './StaticTacticalPositionBasis';
 import {
   createStaticTacticalPositionBasisIdentity,
@@ -215,7 +215,7 @@ export class StaticTacticalPositionService {
   private runFallback(jobId: number, pending: PendingBuild): void {
     if (this.destroyed || this.inFlight?.jobId !== jobId) return;
     try {
-      const result = buildStaticTacticalPositionBasis(this.state.map, pending.identity, pending.settings);
+      const result = buildHighQualityStaticTacticalPositionBasis(this.state.map, pending.identity, pending.settings);
       this.acceptResult(jobId, pending.identity, result.snapshot);
     } catch (error) {
       this.finishWithError(jobId, error instanceof Error ? error.message : String(error));
