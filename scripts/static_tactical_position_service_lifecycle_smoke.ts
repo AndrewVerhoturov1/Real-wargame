@@ -9,8 +9,36 @@ import type {
   StaticTacticalPositionWorkerResponse,
 } from '../src/core/tactical/static/StaticTacticalPositionWorkerProtocol';
 
-const originalWorker = globalThis.Worker;
 const instances: FakeWorker[] = [];
+
+class FakeWorker {
+  onmessage: ((event: MessageEvent<StaticTacticalPositionWorkerResponse>) => void) | null = null;
+  onerror: ((event: ErrorEvent) => void) | null = null;
+  readonly requests: Array<Extract<StaticTacticalPositionWorkerRequest, { type: 'build' }>> = [];
+  terminated = false;
+
+  constructor(_url: URL, _options?: WorkerOptions) {
+    instances.push(this);
+  }
+
+  postMessage(message: StaticTacticalPositionWorkerRequest): void {
+    if (message.type === 'build') this.requests.push(message);
+  }
+
+  emit(response: StaticTacticalPositionWorkerResponse): void {
+    this.onmessage?.({ data: response } as MessageEvent<StaticTacticalPositionWorkerResponse>);
+  }
+
+  fail(message: string): void {
+    this.onerror?.({ message } as ErrorEvent);
+  }
+
+  terminate(): void {
+    this.terminated = true;
+  }
+}
+
+const originalWorker = globalThis.Worker;
 (globalThis as { Worker: typeof Worker }).Worker = FakeWorker as unknown as typeof Worker;
 
 try {
@@ -79,33 +107,6 @@ try {
 }
 
 console.log('static tactical position service lifecycle smoke: ok');
-
-class FakeWorker {
-  onmessage: ((event: MessageEvent<StaticTacticalPositionWorkerResponse>) => void) | null = null;
-  onerror: ((event: ErrorEvent) => void) | null = null;
-  readonly requests: Array<Extract<StaticTacticalPositionWorkerRequest, { type: 'build' }>> = [];
-  terminated = false;
-
-  constructor(_url: URL, _options?: WorkerOptions) {
-    instances.push(this);
-  }
-
-  postMessage(message: StaticTacticalPositionWorkerRequest): void {
-    if (message.type === 'build') this.requests.push(message);
-  }
-
-  emit(response: StaticTacticalPositionWorkerResponse): void {
-    this.onmessage?.({ data: response } as MessageEvent<StaticTacticalPositionWorkerResponse>);
-  }
-
-  fail(message: string): void {
-    this.onerror?.({ message } as ErrorEvent);
-  }
-
-  terminate(): void {
-    this.terminated = true;
-  }
-}
 
 function resultFor(
   request: Extract<StaticTacticalPositionWorkerRequest, { type: 'build' }>,
