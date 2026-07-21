@@ -73,7 +73,9 @@ jobs:
 
           normalized_ref="${REQUESTED_REF#refs/heads/}"
           normalized_ref="${normalized_ref#origin/}"
-          if [[ "$normalized_ref" == 'main' && "$ALLOW_MAIN" != 'true' ]]; then
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          main_sha="$(git rev-parse refs/remotes/origin/main)"
+          if [[ ("$normalized_ref" == 'main' || "$actual_sha" == "$main_sha") && "$ALLOW_MAIN" != 'true' ]]; then
             echo 'Deploying main requires allow_main=true.' >&2
             exit 1
           fi
