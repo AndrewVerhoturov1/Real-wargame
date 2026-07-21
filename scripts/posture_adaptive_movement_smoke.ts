@@ -54,7 +54,7 @@ function verifyProtectedTacticalApproachDoesNotOscillate(): void {
       { x: 40.5, y: unit.position.y },
       'prone',
       {
-        kind: 'cover',
+        kind: 'defense',
         requestIdentity: 'posture-adaptive-regression',
         candidateId: 'protected-prone-position',
         recommendedFacingRadians: 0,
