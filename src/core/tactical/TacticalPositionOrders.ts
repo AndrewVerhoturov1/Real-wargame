@@ -111,7 +111,8 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
   }
   unit.order = planned.order;
   unit.plan = createDirectPlayerMovePlan(unit.plan, command, planned.order.target);
-  applyApproachPosture(unit, approachPosture);
+  unit.behaviorRuntime.state = 'moving';
+  unit.behaviorRuntime.currentAction = 'move';
   unit.behaviorRuntime.lastEvent = 'tactical_position_order_received';
   unit.behaviorRuntime.reason = finalFacingRadians === null
     ? `Боец направлен на тактическую позицию; после прибытия: ${postureLabel(arrivalPosture)}.`
@@ -125,18 +126,6 @@ function resolveApproachPosture(unit: UnitModel, arrivalPosture: UnitPosture): U
   return settings.moveCrouchedToProtectedPosition && arrivalPosture !== 'standing'
     ? 'crouched'
     : 'standing';
-}
-
-function applyApproachPosture(unit: UnitModel, movementPosture: UnitPosture): void {
-  if (unit.behaviorRuntime.posture !== movementPosture) {
-    unit.behaviorRuntime.previousPosture = unit.behaviorRuntime.posture;
-    unit.behaviorRuntime.posture = movementPosture;
-    unit.behaviorRuntime.postureChangedBecause = 'tactical_position_approach';
-  }
-  unit.behaviorRuntime.state = 'moving';
-  unit.behaviorRuntime.currentAction = 'move';
-  // Canonical danger remains owned by the normal threat/perception/suppression update.
-  // Issuing a movement command must not synthesize a safe or dangerous state.
 }
 
 function resolveThreatFacingAtPosition(unit: UnitModel, position: GridPosition): number | null {
