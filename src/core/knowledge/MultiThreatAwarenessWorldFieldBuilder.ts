@@ -18,9 +18,10 @@ const DANGER_PIXEL_LUT = buildDangerPixelLut();
  *
  * The legacy danger scorer intentionally collapsed all rifle contacts to one
  * maximum. That made two exposed riflemen look no more dangerous than one. We
- * retain its cached geometry and single-threat scoring, then combine every
- * known source into the published field consumed by the map, Ctrl inspector
- * and tactical-position search.
+ * retain its cached geometry and single-threat scoring, then add every known
+ * source into the published field consumed by the map, Ctrl inspector and
+ * tactical-position search, matching the simulation runtime's capped additive
+ * danger semantics.
  */
 export function buildMultiThreatAwarenessWorldField(
   map: TacticalMap,
@@ -46,8 +47,8 @@ export function buildMultiThreatAwarenessWorldField(
     const previousDanger = field.danger[cellIndex] ?? 0;
     const previousSuppression = field.suppression[cellIndex] ?? 0;
     const previousUncertainty = field.uncertainty[cellIndex] ?? 0;
-    let remainingSafe = 1;
-    let remainingUnsuppressed = 1;
+    let dangerTotal = 0;
+    let suppressionTotal = 0;
     let uncertainty = 0;
     let strongestResidualDanger = -1;
     let protectionAgainstStrongest = 0;
@@ -57,8 +58,8 @@ export function buildMultiThreatAwarenessWorldField(
       const individual = individualFields[threatIndex]!;
       const danger = individual.danger[cellIndex] ?? 0;
       const suppression = individual.suppression[cellIndex] ?? 0;
-      remainingSafe *= 1 - danger / 100;
-      remainingUnsuppressed *= 1 - suppression / 100;
+      dangerTotal += danger;
+      suppressionTotal += suppression;
       uncertainty = Math.max(uncertainty, individual.uncertainty[cellIndex] ?? 0);
       if (danger > strongestResidualDanger) {
         strongestResidualDanger = danger;
@@ -67,8 +68,8 @@ export function buildMultiThreatAwarenessWorldField(
       }
     }
 
-    const combinedDanger = clampByte(100 * (1 - remainingSafe));
-    const combinedSuppression = clampByte(100 * (1 - remainingUnsuppressed));
+    const combinedDanger = clampByte(dangerTotal);
+    const combinedSuppression = clampByte(suppressionTotal);
     field.danger[cellIndex] = combinedDanger;
     field.suppression[cellIndex] = combinedSuppression;
     field.uncertainty[cellIndex] = clampByte(uncertainty);
