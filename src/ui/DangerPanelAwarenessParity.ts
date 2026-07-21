@@ -16,7 +16,7 @@ type PublishedMetric = typeof VALUE_BY_LABEL[keyof typeof VALUE_BY_LABEL];
  * the map heatmap, Ctrl cell inspector and tactical-position search.
  */
 export function syncDangerPanelFromAwareness(state: SimulationState): void {
-  if (getSimulationLayerState(state).mode !== 'danger') return;
+  if (typeof document === 'undefined' || getSimulationLayerState(state).mode !== 'danger') return;
   const activeTab = document.querySelector<HTMLButtonElement>('.simulation-tabs [data-tab="danger"].active');
   const body = document.querySelector<HTMLElement>('.simulation-sidebar [data-role="sidebar-body"]');
   if (!activeTab || !body || body.hidden) return;
