@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { normalizeMap } from '../src/core/map/MapModel';
 import { searchObjectiveAwareTacticalPositions } from '../src/core/tactical/ObjectiveAwareTacticalPositionSearch';
 import type {
@@ -9,6 +10,12 @@ import { buildHighQualityStaticTacticalPositionBasis } from '../src/core/tactica
 import { buildStaticTacticalCandidateIndex } from '../src/core/tactical/static/StaticTacticalCandidateIndex';
 import { createStaticTacticalPositionBasisIdentity } from '../src/core/tactical/static/StaticTacticalPositionIdentity';
 import { normalizeStaticTacticalPositionSettings } from '../src/core/tactical/static/StaticTacticalPositionSettings';
+
+const workerSource = readFileSync('src/workers/TacticalPositionQueryWorker.ts', 'utf8');
+assert.ok(
+  workerSource.includes('searchObjectiveAwareTacticalPositions'),
+  'production tactical query worker must use objective-aware ranking',
+);
 
 const map = normalizeMap({
   width: 32,
