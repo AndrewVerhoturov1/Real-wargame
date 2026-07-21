@@ -1,13 +1,17 @@
 import {
-  normalizeTacticalPositionKind,
   type TacticalPositionKind,
+  type TacticalPositionTargetSpec,
   type TacticalQueryGenerationRequest,
   type TacticalQueryGenerationResult,
 } from '../ai/tactical/TacticalQuery';
+import { getWeaponDefinition, getWeaponRuntime } from '../combat/WeaponModel';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
-import { normalizeTacticalPositionSearchObjective } from './TacticalPositionObjective';
-import { getTacticalPositionSearchService } from './TacticalPositionSearchService';
+import {
+  normalizeTacticalPositionSearchObjective,
+  resolveTacticalPositionReferenceThreat,
+} from './TacticalPositionObjective';
+import { getTacticalPositionSearchService, type TacticalPositionSearchKind } from './TacticalPositionSearchService';
 
 const MAX_LOCAL_SAMPLE_CELLS = 4096;
 const MAX_LOCAL_ROUTE_EXPANSIONS = 8192;
@@ -21,22 +25,24 @@ export function generateSimulationTacticalPositions(
   request: TacticalQueryGenerationRequest,
 ): TacticalQueryGenerationResult {
   const service = getTacticalPositionSearchService(state);
-  const kind = normalizeTacticalPositionKind(request.kind ?? 'cover');
-  if (!service) {
+  const kind = canonicalKind(request.kind ?? 'cover');
+  if (!service || !kind) {
     return stopped(
-      kind,
+      kind ?? 'defense',
       'host_unavailable',
       'The simulation-owned tactical-position service is unavailable.',
       'Сервис тактических позиций симуляции недоступен.',
     );
   }
 
+  const parameters = buildSearchParameters(state, unit, request, kind);
   const snapshot = request.requestId
     ? service.readRequest(request.requestId)
     : request.kind === 'cover' || request.kind === undefined
-      ? service.enqueueCoverSearch(unit, buildSearchParameters(state, request, kind))
-      : service.enqueueTacticalSearch(unit, kind, buildSearchParameters(state, request, kind));
-  if (!snapshot || snapshot.ownerUnitId !== unit.id || normalizeTacticalPositionKind(snapshot.kind) !== kind) {
+      ? service.enqueueCoverSearch(unit, parameters)
+      : service.enqueueTacticalSearch(unit, kind, parameters);
+  const snapshotKind = snapshot ? canonicalServiceKind(snapshot.kind) : null;
+  if (!snapshot || snapshot.ownerUnitId !== unit.id || snapshotKind !== kind) {
     return {
       ...stopped(
         kind,
@@ -105,6 +111,7 @@ export function generateSimulationTacticalPositions(
 
 function buildSearchParameters(
   state: SimulationState,
+  unit: UnitModel,
   request: TacticalQueryGenerationRequest,
   kind: TacticalPositionKind,
 ) {
@@ -117,7 +124,7 @@ function buildSearchParameters(
   return {
     objective: normalizeTacticalPositionSearchObjective(request.objective),
     queryKey: request.queryKey ?? `${kind}:graph`,
-    target: request.target ?? null,
+    target: resolveGraphTarget(unit, kind, request.target ?? null),
     searchRadiusMeters: request.searchRadiusMeters,
     maxCandidates: Math.min(16, Math.max(1, Math.floor(request.maxCandidates))),
     maxSampledCells: Math.max(1, Math.min(MAX_LOCAL_SAMPLE_CELLS, localAreaUpperBound, requestedWork)),
@@ -127,6 +134,61 @@ function buildSearchParameters(
     exactCandidates: 12,
     exactRayLimit: 32,
   };
+}
+
+function resolveGraphTarget(
+  unit: UnitModel,
+  kind: TacticalPositionKind,
+  explicit: TacticalPositionTargetSpec | null,
+): TacticalPositionTargetSpec {
+  if (explicit) return explicit;
+  const referenceThreat = resolveTacticalPositionReferenceThreat(unit);
+  const orderPoint = unit.order?.target ?? unit.playerCommand?.target ?? null;
+  if (kind === 'observation') {
+    const point = referenceThreat?.position ?? orderPoint;
+    return point
+      ? { mode: 'point', point: { ...point } }
+      : { mode: 'sector', bearingRadians: unit.facingRadians, arcRadians: Math.PI / 2 };
+  }
+  if (kind === 'defense') {
+    const point = referenceThreat?.position ?? orderPoint;
+    return point
+      ? {
+          mode: 'sector',
+          bearingRadians: Math.atan2(point.y - unit.position.y, point.x - unit.position.x),
+          arcRadians: Math.PI / 3,
+        }
+      : { mode: 'sector', bearingRadians: unit.facingRadians, arcRadians: Math.PI / 2 };
+  }
+  const runtime = getWeaponRuntime(unit);
+  const weapon = getWeaponDefinition(runtime.weaponId);
+  const point = referenceThreat?.position ?? orderPoint;
+  return point
+    ? {
+        mode: referenceThreat ? 'known_target' : 'estimated_position',
+        point: { ...point },
+        minimumRangeMeters: 0,
+        effectiveRangeMeters: weapon.effectiveRangeMetres,
+        maximumRangeMeters: weapon.maximumRangeMetres,
+      }
+    : {
+        mode: 'sector',
+        bearingRadians: unit.facingRadians,
+        arcRadians: Math.PI / 2,
+        minimumRangeMeters: 0,
+        effectiveRangeMeters: weapon.effectiveRangeMetres,
+        maximumRangeMeters: weapon.maximumRangeMetres,
+      };
+}
+
+function canonicalKind(value: unknown): TacticalPositionKind | null {
+  if (value === 'observation' || value === 'firing') return value;
+  if (value === 'cover' || value === 'defense') return 'defense';
+  return null;
+}
+
+function canonicalServiceKind(value: TacticalPositionSearchKind): TacticalPositionKind | null {
+  return canonicalKind(value);
 }
 
 function stopped(
