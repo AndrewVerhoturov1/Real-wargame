@@ -1,7 +1,15 @@
 import type { GridPosition } from '../geometry';
 import type { SimulationState } from '../simulation/SimulationState';
 
-export type SimulationLayerMode = 'info' | 'danger' | 'positions' | 'stealth' | 'memory';
+export type SimulationLayerMode =
+  | 'info'
+  | 'danger'
+  | 'positions'
+  | 'observation_positions'
+  | 'defense_positions'
+  | 'firing_positions'
+  | 'stealth'
+  | 'memory';
 export type HeatmapTargetPosture = 'standing' | 'crouched' | 'prone';
 
 export interface KnowledgeOverlayRuntimeState {
