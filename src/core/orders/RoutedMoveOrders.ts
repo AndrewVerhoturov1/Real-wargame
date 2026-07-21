@@ -3,7 +3,10 @@ import { publishTacticalOrderIntentToAiMemory } from '../ai/TacticalOrderBlackbo
 import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap } from '../map/MapModel';
-import { movementProfileIdForPosture } from '../movement/PostureMovementProfile';
+import {
+  movementGaitForPosture,
+  movementProfileIdForPosture,
+} from '../movement/PostureMovementProfile';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../navigation/NavigationRuntime';
 import { clearAttentionOverride, setAttentionMode, setSearchSector } from '../perception/AttentionController';
 import { degreesToRadians } from '../perception/AttentionModel';
@@ -86,6 +89,9 @@ function issueTacticalOrderIntentToSelectedUnits(
     );
     unit.playerCommand = command;
     unit.playerNavigationProfileId = command.intent.navigationProfileId;
+    if (command.intent.presetId === 'move') {
+      unit.movementRuntime.requestedGait = movementGaitForPosture(unit.behaviorRuntime.posture);
+    }
     publishTacticalOrderIntentToAiMemory(unit, command.intent);
     applyIntentAttention(unit, command.intent);
     const resolvedNavigation = resolveUnitNavigationProfile(unit, command);
