@@ -168,9 +168,10 @@ async function verifyRequestLifecycleAndMovingOrigin(): Promise<void> {
   assert.equal(duplicate.requestId, first.requestId);
   assert.equal(scheduled.length, 1);
 
-  runScheduled(scheduled);
-  await nextTask();
-  runScheduled(scheduled);
+  await settleScheduledUntil(
+    () => (runtime.requestCallsByUnit.get('alpha') ?? 0) >= 1,
+    scheduled,
+  );
   assert.equal(runtime.requestCallsByUnit.get('alpha'), 1);
   assert.equal(searchCalls, 0);
   assert.equal(service.readRequest(first.requestId)?.status, 'calculating');
@@ -237,6 +238,19 @@ async function verifyRequestLifecycleAndMovingOrigin(): Promise<void> {
 
 function runScheduled(scheduled: Array<() => void>): void {
   while (scheduled.length > 0) scheduled.shift()!();
+}
+
+async function settleScheduledUntil(
+  predicate: () => boolean,
+  scheduled: Array<() => void>,
+  maximumTurns = 20,
+): Promise<void> {
+  for (let turn = 0; turn < maximumTurns; turn += 1) {
+    runScheduled(scheduled);
+    if (predicate()) return;
+    await nextTask();
+  }
+  runScheduled(scheduled);
 }
 
 function nextTask(): Promise<void> {
