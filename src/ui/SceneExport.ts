@@ -1,5 +1,6 @@
 import { buildAiRuntimeSceneSnapshot, serializeMoveOrder } from '../core/ai/runtime/AiRuntimeSnapshot';
 import { saveMovementProfileRegistry } from '../ai-node-editor/MovementProfileBrowserStorage';
+import { serializeUnitPhysicalAction } from '../core/actions/PostureTransition';
 import { getCombatRuntime } from '../core/combat/CombatDamage';
 import { getWeaponRuntime } from '../core/combat/WeaponModel';
 import { serializeMovementRuntime } from '../core/movement/MovementRuntime';
@@ -131,9 +132,9 @@ export function normalizeImportedScene(value: unknown): {
 
 export function buildExportedScene(state: SimulationState): ExportedSceneData {
   return {
-    version: 'scene-export-v9-minimal-target-visibility-ai-runtime-2m-grid',
+    version: 'scene-export-v10-physical-posture-action-2m-grid',
     exportedAt: new Date().toISOString(),
-    noteRu: 'Экспорт полигона ИИ с тактическим намерением PlayerCommand, профилями физического движения, environment materials, выносливостью, фактическим способом движения, слоем «Обзор и память», навигационными профилями, настройками тактических позиций и активным runtime. Новые поля добавляются совместимо в envelope v9; старые сцены без них получают безопасные значения по умолчанию, а сцены 10 м преобразуются в текущую сетку при загрузке.',
+    noteRu: 'Экспорт полигона ИИ с тактическим намерением PlayerCommand, профилями физического движения, environment materials, выносливостью, фактическим способом движения, слоем «Обзор и память», навигационными профилями, настройками тактических позиций, активным runtime ИИ и сериализуемой физической сменой позы. Старые сцены без физического действия получают безопасное значение по умолчанию.',
     map: {
       width: state.map.width,
       height: state.map.height,
@@ -285,6 +286,7 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
       ammo: Math.round(unit.behaviorRuntime.ammo),
       weaponReady: unit.behaviorRuntime.weaponReady,
       posture: unit.behaviorRuntime.posture,
+      physicalAction: serializeUnitPhysicalAction(unit.behaviorRuntime.physicalAction),
       weapon: { ...getWeaponRuntime(unit) },
       combat: JSON.parse(JSON.stringify(getCombatRuntime(unit))),
       movement: serializeMovementRuntime(unit.movementRuntime),
