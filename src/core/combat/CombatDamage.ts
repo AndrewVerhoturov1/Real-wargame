@@ -1,5 +1,6 @@
 import type { UnitModel } from '../units/UnitModel';
 import type { HitZone } from './UnitHitShapes';
+import { setWeaponReady } from './WeaponModel';
 
 export type CombatCapability = 'effective' | 'wounded' | 'severely_wounded' | 'incapacitated' | 'dead';
 
@@ -45,7 +46,7 @@ export function replaceCombatRuntime(unit: UnitModel, value: Partial<CombatRunti
   if (capability === 'incapacitated' || capability === 'dead') {
     unit.order = null;
     unit.playerCommand = null;
-    unit.behaviorRuntime.weaponReady = false;
+    setWeaponReady(unit, false);
     unit.behaviorRuntime.currentAction = capability;
   }
 }
@@ -79,7 +80,7 @@ export function applyUnitHit(unit: UnitModel, input: UnitHitInput): UnitHitResul
     unit.playerCommand = null;
     unit.behaviorRuntime.currentAction = capability;
     unit.behaviorRuntime.state = 'stressed';
-    unit.behaviorRuntime.weaponReady = false;
+    setWeaponReady(unit, false);
     unit.behaviorRuntime.reason = capability === 'dead' ? 'Боец погиб.' : 'Боец выведен из строя.';
     unit.behaviorRuntime.lastEvent = capability === 'dead' ? 'combat_unit_dead' : 'combat_unit_incapacitated';
   } else {
