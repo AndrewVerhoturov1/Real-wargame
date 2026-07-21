@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import '../src/core/tactical/TacticalPositionSearchResilience';
 import { normalizeMap } from '../src/core/map/MapModel';
 import type { SimulationState } from '../src/core/simulation/SimulationState';
 import {
@@ -120,19 +121,19 @@ runScheduled(scheduled);
 assert.equal(service.readRequest(request.requestId)?.status, 'calculating');
 
 // The broad tactical-knowledge revision may change for metadata that does not
-// alter the tactical snapshot used by this request. This must not force the
-// player to click in a narrow timing window.
+// alter the requested task. The application runtime must transparently issue
+// an updated request instead of requiring another player click.
 unit.tacticalKnowledge.revision += 1;
 runtime.ready = prepared('alpha', 'field-current');
 runtime.emit();
 runScheduled(scheduled);
+await Promise.resolve();
+runScheduled(scheduled);
 
-assert.equal(searches, 1, 'the request must continue once the prepared field is available');
-assert.equal(
-  service.readRequest(request.requestId)?.status,
-  'ready',
-  'a revision-only refresh must not terminate the request as stale',
-);
+const latest = service.readLatestForUnit(unit.id);
+assert.equal(searches, 1, 'the automatically refreshed request must continue once the field is available');
+assert.notEqual(latest?.requestId, request.requestId, 'a stale snapshot must be replaced by a fresh request');
+assert.equal(latest?.status, 'ready', 'the latest request must become ready without a second player click');
 
 service.destroy();
 console.log('tactical position request refresh smoke: ok');
