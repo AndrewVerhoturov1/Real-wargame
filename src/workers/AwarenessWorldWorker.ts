@@ -1,4 +1,4 @@
-import { buildMultiThreatAwarenessWorldField } from '../core/knowledge/MultiThreatAwarenessWorldFieldBuilder';
+import { buildMultiThreatAwarenessWorldField as buildAwarenessWorldField } from '../core/knowledge/MultiThreatAwarenessWorldFieldBuilder';
 import {
   awarenessWorkerTransferables,
   type AwarenessWorkerRequest,
@@ -36,7 +36,7 @@ workerGlobal.onmessage = (event): void => {
     if (!configuredMap || configuredMapKey !== snapshot.mapKey) {
       throw new Error(`Awareness worker map mismatch: configured=${configuredMapKey || 'none'}, requested=${snapshot.mapKey}`);
     }
-    const result = buildMultiThreatAwarenessWorldField(configuredMap, snapshot, workerUnit);
+    const result = buildAwarenessWorldField(configuredMap, snapshot, workerUnit);
     workerUnit = result.reusableUnit;
     const response: Extract<AwarenessWorkerResponse, { type: 'result' }> = {
       type: 'result',
