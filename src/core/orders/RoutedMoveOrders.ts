@@ -1,3 +1,7 @@
+import {
+  cancelPostureTransitionBySystem,
+  getRunningPostureTransition,
+} from '../actions/PostureTransition';
 import { publishTacticalOrderIntentToAiMemory } from '../ai/TacticalOrderBlackboard';
 import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import type { GridPosition } from '../geometry';
@@ -67,6 +71,7 @@ function issueTacticalOrderIntentToSelectedUnits(
           x: target.x + unit.position.x - center.x,
           y: target.y + unit.position.y - center.y,
         });
+    cancelReplaceablePostureAction(unit);
     const intent = resolveIntent(unit);
     const command = createPlayerMoveCommand(
       unit.id,
@@ -124,6 +129,21 @@ function issueTacticalOrderIntentToSelectedUnits(
   }
 }
 
+function cancelReplaceablePostureAction(unit: UnitModel): void {
+  const action = getRunningPostureTransition(unit);
+  if (!action) return;
+  if (
+    action.owner.source !== 'tactical_position'
+    && action.owner.source !== 'player_command'
+    && action.owner.source !== 'movement'
+  ) return;
+  cancelPostureTransitionBySystem(
+    unit,
+    'posture_transition_replaced_by_new_player_order',
+    'Смена позы отменена новым приказом игрока; новый приказ получит отдельного владельца позы.',
+  );
+}
+
 function applyIntentAttention(unit: UnitModel, intent: TacticalOrderIntent): void {
   if (intent.attentionPolicy === 'automatic') {
     clearAttentionOverride(unit);
@@ -148,7 +168,6 @@ function applyPressurePreview(
 ): void {
   const report = getPressureReportAtPosition(target, state.pressureZones);
   unit.behaviorRuntime.state = 'moving';
-  unit.behaviorRuntime.posture = 'standing';
   unit.behaviorRuntime.currentAction = 'move';
 
   if (!report) {
