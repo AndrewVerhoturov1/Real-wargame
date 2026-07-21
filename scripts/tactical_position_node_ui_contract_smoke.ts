@@ -1,18 +1,21 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import {
   TACTICAL_POSITION_NODE_PARAMETER_DESCRIPTORS,
   TACTICAL_POSITION_NODE_PARAMETER_GROUPS,
   createDefaultTacticalPositionNodeParameters,
 } from '../src/core/tactical/TacticalPositionNodeSettings';
 
-const uiSource = readFileSync(new URL('../src/ai-node-editor/tactical-position-node-ui.ts', import.meta.url), 'utf8');
-const cssSource = readFileSync(new URL('../src/ai-node-editor/tactical-position-node-ui.css', import.meta.url), 'utf8');
-const contractUiSource = readFileSync(new URL('../src/ai-node-editor/node-contract-ui.ts', import.meta.url), 'utf8');
-const runnerSource = readFileSync(new URL('../src/core/ai/AiGraphRunner.ts', import.meta.url), 'utf8');
-const hostSource = readFileSync(new URL('../src/core/tactical/SimulationTacticalPositionGraphHost.ts', import.meta.url), 'utf8');
-const workerWrapperSource = readFileSync(new URL('../src/core/tactical/ConfiguredGeneralizedTacticalPositionSearch.ts', import.meta.url), 'utf8');
-const staticIdentitySource = readFileSync(new URL('../src/core/tactical/static/StaticTacticalPositionBasis.ts', import.meta.url), 'utf8');
+const repoRoot = process.cwd();
+const readSource = (relativePath: string): string => readFileSync(path.join(repoRoot, relativePath), 'utf8');
+const uiSource = readSource('src/ai-node-editor/tactical-position-node-ui.ts');
+const cssSource = readSource('src/ai-node-editor/tactical-position-node-ui.css');
+const contractUiSource = readSource('src/ai-node-editor/node-contract-ui.ts');
+const runnerSource = readSource('src/core/ai/AiGraphRunner.ts');
+const hostSource = readSource('src/core/tactical/SimulationTacticalPositionGraphHost.ts');
+const workerWrapperSource = readSource('src/core/tactical/ConfiguredGeneralizedTacticalPositionSearch.ts');
+const staticIdentitySource = readSource('src/core/tactical/static/StaticTacticalPositionBasis.ts');
 
 assert.deepEqual(TACTICAL_POSITION_NODE_PARAMETER_GROUPS.map((group) => group.id), [
   'main', 'ranking', 'movement', 'constraints', 'posture', 'performance',
@@ -42,6 +45,7 @@ assert.match(contractUiSource, /readTacticalPositionParameterFields/);
 assert.match(runnerSource, /tacticalPositionSearchSettingsDigest/);
 assert.match(runnerSource, /tacticalConfigMemoryKey/);
 assert.match(runnerSource, /storedIdentity === currentIdentity/);
+assert.match(runnerSource, /node\.type !== 'CreateCoverCandidates'/);
 assert.match(hostSource, /attachTacticalPositionSearchSettings/);
 assert.match(workerWrapperSource, /readTacticalPositionSearchSettings/);
 assert.doesNotMatch(staticIdentitySource, /TacticalPositionNodeSettings|nodeSearchSettings/, 'subjective node settings must not enter static basis identity');
