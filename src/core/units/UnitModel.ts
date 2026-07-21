@@ -12,6 +12,10 @@ import {
   type SerializedMoveOrder,
 } from '../ai/runtime/AiRuntimeSnapshot';
 import {
+  normalizeUnitPhysicalAction,
+  synchronizeEffectivePostureFromAction,
+} from '../actions/PostureTransition';
+import {
   createBehaviorRuntime,
   createBehaviorSettings,
   createSoldierParameters,
@@ -111,6 +115,7 @@ export interface UnitRuntimeData extends Partial<Pick<UnitBehaviorRuntime, 'stre
   aiRuntime?: AiRuntimeSceneSnapshotV1;
   moveOrder?: SerializedMoveOrder;
   movement?: MovementRuntimeState;
+  physicalAction?: unknown;
 }
 
 export interface UnitData {
@@ -280,6 +285,12 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
           ?? (unit.movementProfileId ? 'unit' : 'default'),
       },
     );
+    model.behaviorRuntime.physicalAction = normalizeUnitPhysicalAction(unit.runtime?.physicalAction, model.id);
+    synchronizeEffectivePostureFromAction(model);
+    if (model.behaviorRuntime.physicalAction?.status === 'running') {
+      model.behaviorRuntime.currentAction = 'change_posture';
+      model.behaviorRuntime.reason = model.behaviorRuntime.physicalAction.reasonRu;
+    }
     if (unit.runtime?.weapon) replaceWeaponRuntime(model, unit.runtime.weapon);
     restoreAiRuntimeSnapshot(model, unit.runtime?.aiRuntime);
     if (!model.order) restorePlayerMoveOrderSnapshot(model, unit.runtime?.moveOrder);
@@ -330,6 +341,7 @@ export function applyInitialStateToRuntime(unit: UnitModel, clearPerceptionKnowl
   clearWeaponRuntime(unit);
   clearCombatRuntime(unit);
   const initial = unit.initialState;
+  unit.behaviorRuntime.physicalAction = null;
   unit.behaviorRuntime.previousPosture = initial.posture;
   unit.behaviorRuntime.posture = initial.posture;
   unit.behaviorRuntime.stress = initial.stress;
