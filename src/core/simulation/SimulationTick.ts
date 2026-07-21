@@ -11,7 +11,7 @@ export * from './SimulationTickLegacy';
 
 export function tickSimulation(state: SimulationState, deltaSeconds: number): void {
   const scaledDeltaSeconds = deltaSeconds * getAiTestTimeScale(state);
-  const movementDeltaSecondsByUnitId = new Map<string, number>();
+  const physicalActionDeltaSecondsByUnitId = new Map<string, number>();
 
   for (const unit of state.units) {
     reconcileTacticalPositionOccupation(state, unit);
@@ -22,18 +22,17 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
       isUnitCombatCapable(unit),
     );
     if (postureTick.wasRunning) {
-      movementDeltaSecondsByUnitId.set(unit.id, postureTick.remainingSeconds);
+      physicalActionDeltaSecondsByUnitId.set(unit.id, postureTick.remainingSeconds);
     }
   }
 
-  tickSimulationLegacy(state, deltaSeconds, { movementDeltaSecondsByUnitId });
+  tickSimulationLegacy(state, deltaSeconds, { physicalActionDeltaSecondsByUnitId });
   reconcileCompletedTacticalPositionArrivals(state);
   for (const unit of state.units) reconcileTacticalPositionOccupation(state, unit);
 }
 
 /**
- * The legacy movement implementation still owns waypoint integration and final
- * facing. This wrapper owns the serializable posture action clock and tactical
- * position reconciliation. While a transition is running, the route remains
- * intact; on the completion tick movement receives only the unused remainder.
+ * The legacy simulation still owns combat phases, waypoint integration and
+ * final facing. This wrapper owns the serializable posture-action clock. On the
+ * completion tick, combat and movement receive only the unused time remainder.
  */
