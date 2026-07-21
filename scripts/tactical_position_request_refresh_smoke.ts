@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import '../src/core/tactical/TacticalPositionSearchResilience';
 import { normalizeMap } from '../src/core/map/MapModel';
 import type { SimulationState } from '../src/core/simulation/SimulationState';
+import { installTacticalPositionSearchResilience } from '../src/core/tactical/TacticalPositionSearchResilience';
 import {
   TacticalPositionSearchService,
   type TacticalPositionFieldRuntime,
@@ -110,6 +110,7 @@ const service = new TacticalPositionSearchService(state, runtime, {
     };
   },
 });
+const destroyResilience = installTacticalPositionSearchResilience(state, service);
 
 const request = service.enqueueTacticalSearch(unit, 'firing', {
   queryKey: 'ui:firing',
@@ -139,6 +140,7 @@ assert.equal(searches, 1, 'the automatically refreshed request must continue onc
 assert.notEqual(latest?.requestId, request.requestId, 'a stale snapshot must be replaced by a fresh request');
 assert.equal(latest?.status, 'ready', 'the latest request must become ready without a second player click');
 
+destroyResilience();
 service.destroy();
 globalThis.queueMicrotask = previousQueueMicrotask;
 console.log('tactical position request refresh smoke: ok');
