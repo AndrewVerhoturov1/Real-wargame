@@ -12,7 +12,7 @@ try {
     root,
     logLevel: 'warn',
     build: {
-      ssr: path.join(root, 'scripts', 'posture_transition_smoke.ts'),
+      ssr: path.join(root, 'scripts', 'posture_transition_suite.ts'),
       outDir,
       emptyOutDir: true,
       minify: false,
