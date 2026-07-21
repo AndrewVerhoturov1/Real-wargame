@@ -127,11 +127,17 @@ function verifyGraphRuntimeConnection() {
   assert.ok(runtime.includes("export * from './AiGraphRuntimeLegacy'"));
   assert.ok(runner.includes('wrapStatefulTacticalHost'));
   assert.ok(runner.includes('tacticalRequestMemoryKey'));
-  assert.ok(service.includes('enqueueCoverSearch'));
-  assert.ok(service.includes('searchTacticalPositionsForObjective'));
-  assert.ok(service.includes('origin: { ...unit.position }'));
-  assert.ok(service.includes('currentPosture: unit.behaviorRuntime.posture'));
-  assert.ok(service.includes('Walking'));
+  for (const token of [
+    'enqueueCoverSearch',
+    'enqueueTacticalSearch',
+    'searchGeneralizedTacticalPositions',
+    'staticService.request()',
+    'buildTacticalPositionQueryField',
+    'origin: { ...unit.position }',
+    'currentPosture: unit.behaviorRuntime.posture',
+  ]) {
+    assert.ok(service.includes(token), `generalized tactical-position service must contain ${token}`);
+  }
   assert.ok(objective.includes('distanceToThreatMeters'));
   assert.ok(objective.includes('threatDistanceDeltaMeters'));
   assert.ok(objective.includes('distanceToOrderTargetMeters'));
