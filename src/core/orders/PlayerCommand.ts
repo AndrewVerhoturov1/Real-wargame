@@ -14,6 +14,13 @@ import {
 export type PlayerCommandType = 'move_to_position';
 export type PlayerCommandStatus = 'active' | 'completed' | 'blocked' | 'cancelled';
 export type TacticalPositionOccupationStatus = 'approaching' | 'occupied' | 'released';
+export type PlayerCommandTacticalPositionKind = 'observation' | 'defense' | 'firing';
+
+export interface PlayerCommandTacticalPositionMetadata {
+  readonly kind: PlayerCommandTacticalPositionKind;
+  readonly requestIdentity: string;
+  readonly candidateId: string;
+}
 
 export interface PlayerCommand {
   readonly id: string;
@@ -29,6 +36,9 @@ export interface PlayerCommand {
   readonly arrivalPosture?: UnitPosture;
   readonly arrivalPostureApplied?: boolean;
   readonly tacticalPositionOccupationStatus?: TacticalPositionOccupationStatus;
+  readonly tacticalPositionKind?: PlayerCommandTacticalPositionKind;
+  readonly tacticalPositionRequestIdentity?: string;
+  readonly tacticalPositionCandidateId?: string;
   readonly status: PlayerCommandStatus;
   readonly revision: number;
   readonly issuedAtMs: number;
@@ -76,6 +86,24 @@ export function createPlayerMoveCommand(
   };
 }
 
+export function withPlayerCommandTacticalPositionMetadata(
+  command: PlayerCommand,
+  metadata: PlayerCommandTacticalPositionMetadata | null,
+): PlayerCommand {
+  if (!metadata) return command;
+  const requestIdentity = cleanOptionalText(metadata.requestIdentity);
+  const candidateId = cleanOptionalText(metadata.candidateId);
+  if (!requestIdentity || !candidateId) return command;
+  return {
+    ...command,
+    target: { ...command.target },
+    intent: normalizeTacticalOrderIntent(command.intent),
+    tacticalPositionKind: normalizeTacticalPositionKind(metadata.kind),
+    tacticalPositionRequestIdentity: requestIdentity,
+    tacticalPositionCandidateId: candidateId,
+  };
+}
+
 export function normalizePlayerCommand(value: unknown, fallbackUnitId = ''): PlayerCommand | null {
   if (!isRecord(value)) return null;
   const target = normalizeGridPosition(value.target);
@@ -104,6 +132,13 @@ export function normalizePlayerCommand(value: unknown, fallbackUnitId = ''): Pla
         arrivalPostureApplied === true,
       )
     : undefined;
+  const tacticalPositionKind = normalizeOptionalTacticalPositionKind(value.tacticalPositionKind);
+  const tacticalPositionRequestIdentity = tacticalPositionKind
+    ? cleanOptionalText(value.tacticalPositionRequestIdentity)
+    : undefined;
+  const tacticalPositionCandidateId = tacticalPositionKind
+    ? cleanOptionalText(value.tacticalPositionCandidateId)
+    : undefined;
   return {
     id: cleanText(value.id, `${unitId}:player-command:${revision}:${Math.max(0, Math.round(issuedAtMs))}`),
     unitId,
@@ -120,6 +155,9 @@ export function normalizePlayerCommand(value: unknown, fallbackUnitId = ''): Pla
     arrivalPosture,
     arrivalPostureApplied,
     tacticalPositionOccupationStatus: occupationStatus,
+    tacticalPositionKind,
+    tacticalPositionRequestIdentity,
+    tacticalPositionCandidateId,
     status,
     revision,
     issuedAtMs,
@@ -300,6 +338,16 @@ function normalizeTacticalPositionOccupationStatus(
   return 'released';
 }
 
+function normalizeTacticalPositionKind(value: PlayerCommandTacticalPositionKind): PlayerCommandTacticalPositionKind {
+  if (value === 'observation' || value === 'firing') return value;
+  return 'defense';
+}
+
+function normalizeOptionalTacticalPositionKind(value: unknown): PlayerCommandTacticalPositionKind | undefined {
+  if (value === 'observation' || value === 'defense' || value === 'firing') return value;
+  return undefined;
+}
+
 function normalizeOptionalPosture(value: unknown): UnitPosture | undefined {
   if (value === 'standing' || value === 'crouched' || value === 'prone') return value;
   return undefined;
@@ -335,6 +383,10 @@ function normalizeFiniteNumber(value: unknown, fallback: number): number {
 
 function cleanText(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+function cleanOptionalText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
