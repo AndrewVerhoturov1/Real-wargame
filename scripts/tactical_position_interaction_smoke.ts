@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { normalizeUnits } from '../src/core/units/UnitModel';
+import {
+  isPostureTransitionRunning,
+  postureTransitionDurationSeconds,
+} from '../src/core/actions/PostureTransition';
+import type { TacticalMapData } from '../src/core/map/MapModel';
 import { createPlayerMoveCommand, updatePlayerCommandStatus } from '../src/core/orders/PlayerCommand';
-import type { SimulationState } from '../src/core/simulation/SimulationState';
+import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
+import { tickSimulation } from '../src/core/simulation/SimulationTick';
 import type { TacticalPositionCandidateSeedV2 } from '../src/core/tactical/TacticalPositionSearch';
 import {
   findVisibleTacticalPositionAt,
@@ -14,11 +19,11 @@ import {
 import { reconcileCompletedTacticalPositionArrivals } from '../src/core/tactical/TacticalPositionArrival';
 
 verifyBoundedMarkerSelection();
-verifyArrivalPostureAppliesOnce();
+verifyArrivalPostureAppliesOnceAfterPhysicalTransition();
 verifyOrdinaryCommandDoesNotChangePosture();
 verifyB2SourceContracts();
 
-console.log('Tactical position interaction smoke passed: bounded marker selection, B2 glyphs and one-time arrival posture.');
+console.log('Tactical position interaction smoke passed: bounded marker selection, B2 glyphs and one-time timed arrival posture.');
 
 function verifyBoundedMarkerSelection(): void {
   const state = {
@@ -47,8 +52,11 @@ function verifyBoundedMarkerSelection(): void {
   assert.equal(getTacticalPositionPresentation(state).selected, null, 'changing the owning soldier must clear stale selection');
 }
 
-function verifyArrivalPostureAppliesOnce(): void {
-  const unit = normalizeUnits([{ id: 'unit-1', type: 'infantry_squad', side: 'blue', x: 0, y: 0 }])[0]!;
+function verifyArrivalPostureAppliesOnceAfterPhysicalTransition(): void {
+  const state = createInitialState(mapData(), [
+    { id: 'unit-1', type: 'infantry_squad', side: 'blue', x: 0, y: 0 },
+  ]);
+  const unit = state.units[0]!;
   const command = createPlayerMoveCommand(
     unit.id,
     { x: 4.5, y: 5.5 },
@@ -61,11 +69,15 @@ function verifyArrivalPostureAppliesOnce(): void {
   );
   unit.playerCommand = updatePlayerCommandStatus(command, 'completed', 'done', 'готово');
   unit.order = null;
-  const state = { units: [unit] } as unknown as SimulationState;
 
   reconcileCompletedTacticalPositionArrivals(state);
+  assert.equal(unit.behaviorRuntime.posture, 'standing');
+  assert.equal(isPostureTransitionRunning(unit), true);
+  assert.equal(unit.playerCommand?.arrivalPostureApplied, false);
+
+  tickSimulation(state, postureTransitionDurationSeconds('standing', 'prone'));
   assert.equal(unit.behaviorRuntime.posture, 'prone');
-  assert.equal(unit.behaviorRuntime.previousPosture, 'standing');
+  assert.equal(unit.behaviorRuntime.previousPosture, 'crouched');
   assert.equal(unit.playerCommand?.arrivalPostureApplied, true);
   assert.equal(unit.behaviorRuntime.lastEvent, 'tactical_position_posture_applied');
 
@@ -75,7 +87,10 @@ function verifyArrivalPostureAppliesOnce(): void {
 }
 
 function verifyOrdinaryCommandDoesNotChangePosture(): void {
-  const unit = normalizeUnits([{ id: 'unit-2', type: 'infantry_squad', side: 'blue', x: 0, y: 0 }])[0]!;
+  const state = createInitialState(mapData(), [
+    { id: 'unit-2', type: 'infantry_squad', side: 'blue', x: 0, y: 0 },
+  ]);
+  const unit = state.units[0]!;
   unit.playerCommand = updatePlayerCommandStatus(
     createPlayerMoveCommand(unit.id, { x: 2.5, y: 2.5 }, null, 2000),
     'completed',
@@ -83,11 +98,11 @@ function verifyOrdinaryCommandDoesNotChangePosture(): void {
     'готово',
   );
   unit.order = null;
-  const state = { units: [unit] } as unknown as SimulationState;
 
   reconcileCompletedTacticalPositionArrivals(state);
   assert.equal(unit.behaviorRuntime.posture, 'standing');
   assert.equal(unit.playerCommand?.arrivalPosture, undefined);
+  assert.equal(isPostureTransitionRunning(unit), false);
 }
 
 function verifyB2SourceContracts(): void {
@@ -130,5 +145,17 @@ function candidate(posture: 'standing' | 'crouched' | 'prone', x: number, y: num
       recommendedPosture: posture,
       routeCost: 12,
     },
+  };
+}
+
+function mapData(): TacticalMapData {
+  return {
+    width: 16,
+    height: 16,
+    cellSize: 20,
+    metersPerCell: 2,
+    defaultTerrain: 'field',
+    defaultHeight: 0,
+    objects: [],
   };
 }
