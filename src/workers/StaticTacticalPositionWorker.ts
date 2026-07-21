@@ -4,7 +4,7 @@ import {
   EnvironmentProfileRegistry,
 } from '../core/map/EnvironmentMaterialProfile';
 import { installEnvironmentProfileRegistry } from '../core/map/EnvironmentProfileRuntime';
-import { buildHighQualityStaticTacticalPositionBasis } from '../core/tactical/static/HighQualityStaticTacticalPositionBuilder';
+import { buildRuntimeStaticTacticalPositionBasis } from '../core/tactical/static/RuntimeStaticTacticalPositionBuilder';
 import {
   staticTacticalPositionWorkerTransferables,
   type StaticTacticalPositionWorkerRequest,
@@ -22,7 +22,9 @@ workerScope.onmessage = (event: MessageEvent<StaticTacticalPositionWorkerRequest
       activeProfileId: request.environmentProfile.id,
       profiles: [request.environmentProfile],
     }));
-    const result = buildHighQualityStaticTacticalPositionBasis(request.map, request.identity, request.settings);
+    // The runtime wrapper delegates to buildHighQualityStaticTacticalPositionBasis
+    // only for bounded maps; large live scenarios retain the proven base pass.
+    const result = buildRuntimeStaticTacticalPositionBasis(request.map, request.identity, request.settings);
     const response: Extract<StaticTacticalPositionWorkerResponse, { type: 'result' }> = {
       type: 'result',
       jobId: request.jobId,
