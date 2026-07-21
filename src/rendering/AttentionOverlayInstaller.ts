@@ -3,6 +3,7 @@ import type { SimulationState } from '../core/simulation/SimulationState';
 import type { PixiTacticalBoardApp } from './PixiApp';
 import { PixiAttentionOverlayRenderer } from './PixiAttentionOverlayRenderer';
 import { PixiStaticTacticalPositionRenderer } from './PixiStaticTacticalPositionRenderer';
+import { PixiTacticalPositionCandidateRenderer } from './PixiTacticalPositionCandidateRenderer';
 
 interface PixiBoardInternals {
   app: Application;
@@ -16,20 +17,31 @@ export function installAttentionOverlayRenderer(
   const internals = board as unknown as PixiBoardInternals;
   const staticTacticalRenderer = new PixiStaticTacticalPositionRenderer();
   const attentionRenderer = new PixiAttentionOverlayRenderer();
-  // The objective tactical raster belongs below subjective awareness markers.
-  internals.worldContainer.addChild(staticTacticalRenderer.container, attentionRenderer.container);
+  const tacticalCandidateRenderer = new PixiTacticalPositionCandidateRenderer();
+  // Objective tactical raster belongs below subjective awareness and candidate markers.
+  internals.worldContainer.addChild(
+    staticTacticalRenderer.container,
+    attentionRenderer.container,
+    tacticalCandidateRenderer.container,
+  );
 
   const render = () => {
     staticTacticalRenderer.render(state);
     attentionRenderer.render(state);
+    tacticalCandidateRenderer.render(state);
   };
   internals.app.ticker.add(render);
   render();
 
   return () => {
     internals.app.ticker.remove(render);
-    internals.worldContainer.removeChild(staticTacticalRenderer.container, attentionRenderer.container);
+    internals.worldContainer.removeChild(
+      staticTacticalRenderer.container,
+      attentionRenderer.container,
+      tacticalCandidateRenderer.container,
+    );
     staticTacticalRenderer.destroy();
     attentionRenderer.destroy();
+    tacticalCandidateRenderer.destroy();
   };
 }
