@@ -1,3 +1,4 @@
+import { isPostureTransitionRunning } from '../actions/PostureTransition';
 import { tickAiSimulationScheduler, type AiSimulationSchedulerResult } from '../ai/AiSimulationScheduler';
 import { reconcileMovementProfileRuntime } from '../ai/MovementProfileRuntimeResolver';
 import { measurePerformancePhase, withPerformancePhaseContext } from '../debug/PerformancePhases';
@@ -210,6 +211,11 @@ function updateStateLabels(unit: UnitModel): void {
     setState(unit, 'stressed', 'unit is out of combat');
     return;
   }
+  if (isPostureTransitionRunning(unit)) {
+    unit.behaviorRuntime.currentAction = 'change_posture';
+    setState(unit, 'observing', 'active physical posture transition');
+    return;
+  }
   if (getFireAction(unit)) {
     setState(unit, 'observing', 'active fire action');
     return;
@@ -248,9 +254,14 @@ function moveUnit(
 
   const combatCapable = isUnitCombatCapable(unit);
   const firing = Boolean(getFireAction(unit));
+  const postureTransitionRunning = isPostureTransitionRunning(unit);
+  if (postureTransitionRunning) {
+    unit.movementRuntime.isMoving = false;
+    unit.movementRuntime.velocityCellsPerSecond = { x: 0, y: 0 };
+  }
   let routeNavigationDurationMs = 0;
   let routeReady = false;
-  if (unit.order && combatCapable && !firing && deltaSeconds > 0) {
+  if (unit.order && combatCapable && !firing && !postureTransitionRunning && deltaSeconds > 0) {
     const routeStartedAt = performance.now();
     routeReady = ensureRoutePassable(unit, state, routeReplanWorkBudget);
     routeNavigationDurationMs = performance.now() - routeStartedAt;
@@ -262,7 +273,7 @@ function moveUnit(
     state,
     unit,
     deltaSeconds,
-    routeReady && Boolean(unit.order),
+    routeReady && Boolean(unit.order) && !postureTransitionRunning,
     postureMultiplier,
     woundMultiplier,
   );
