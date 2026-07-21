@@ -1,5 +1,5 @@
+import { tickPhysicalActionWithTimeBudget } from '../actions/PhysicalActionClock';
 import { reconcileMovementPostureRequest } from '../actions/PostureTransition';
-import { tickPostureTransitionWithTimeBudget } from '../actions/PostureTransitionClock';
 import { isUnitCombatCapable } from '../combat/CombatDamage';
 import { reconcileCompletedTacticalPositionArrivals } from '../tactical/TacticalPositionArrival';
 import { reconcileTacticalPositionOccupation } from '../tactical/TacticalPositionOccupation';
@@ -16,13 +16,13 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
   for (const unit of state.units) {
     reconcileTacticalPositionOccupation(state, unit);
     reconcileMovementPostureRequest(state, unit);
-    const postureTick = tickPostureTransitionWithTimeBudget(
+    const physicalActionTick = tickPhysicalActionWithTimeBudget(
       unit,
       scaledDeltaSeconds,
       isUnitCombatCapable(unit),
     );
-    if (postureTick.wasRunning) {
-      physicalActionDeltaSecondsByUnitId.set(unit.id, postureTick.remainingSeconds);
+    if (physicalActionTick.wasRunning) {
+      physicalActionDeltaSecondsByUnitId.set(unit.id, physicalActionTick.remainingSeconds);
     }
   }
 
@@ -33,6 +33,7 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
 
 /**
  * The legacy simulation still owns combat phases, waypoint integration and
- * final facing. This wrapper owns the serializable posture-action clock. On the
- * completion tick, combat and movement receive only the unused time remainder.
+ * final facing. This wrapper owns the single serializable physical-action
+ * clock. On a completion tick, combat and movement receive only the unused
+ * time remainder after posture transition or weapon reload.
  */
