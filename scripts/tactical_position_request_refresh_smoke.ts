@@ -37,6 +37,10 @@ class FakeFieldRuntime implements TacticalPositionFieldRuntime {
   }
 }
 
+const microtasks: Array<() => void> = [];
+const previousQueueMicrotask = globalThis.queueMicrotask;
+globalThis.queueMicrotask = (callback): void => microtasks.push(callback);
+
 const unit = normalizeUnits([
   { id: 'alpha', type: 'infantry_squad', side: 'blue', x: 1, y: 1 },
 ])[0]!;
@@ -127,7 +131,7 @@ unit.tacticalKnowledge.revision += 1;
 runtime.ready = prepared('alpha', 'field-current');
 runtime.emit();
 runScheduled(scheduled);
-await Promise.resolve();
+runScheduled(microtasks);
 runScheduled(scheduled);
 
 const latest = service.readLatestForUnit(unit.id);
@@ -136,6 +140,7 @@ assert.notEqual(latest?.requestId, request.requestId, 'a stale snapshot must be 
 assert.equal(latest?.status, 'ready', 'the latest request must become ready without a second player click');
 
 service.destroy();
+globalThis.queueMicrotask = previousQueueMicrotask;
 console.log('tactical position request refresh smoke: ok');
 
 function runScheduled(queue: Array<() => void>): void {
