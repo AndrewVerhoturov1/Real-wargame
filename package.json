@@ -30,6 +30,7 @@
     "lifecycle:smoke": "node scripts/ai_action_lifecycle_smoke.mjs",
     "composite:smoke": "node scripts/ai_composite_runtime_smoke.mjs",
     "reload:smoke": "node scripts/ai_reload_runtime_smoke.mjs",
+    "physical-reload:smoke": "node scripts/physical_reload_smoke.mjs",
     "attention-ai-nodes:smoke": "node scripts/attention_ai_nodes_smoke.mjs",
     "attention-profiles:smoke": "node scripts/attention_profiles_smoke.mjs",
     "threat-display-stability:smoke": "node scripts/threat_display_stability_smoke.mjs",
