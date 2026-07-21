@@ -7,7 +7,7 @@ import {
   type StaticTacticalPositionSettings,
 } from './StaticTacticalPositionSettings';
 
-export const STATIC_TACTICAL_POSITION_ALGORITHM_VERSION = 1 as const;
+export const STATIC_TACTICAL_POSITION_ALGORITHM_VERSION = 2 as const;
 
 export interface StaticTacticalPositionBasisIdentity {
   readonly algorithmVersion: typeof STATIC_TACTICAL_POSITION_ALGORITHM_VERSION;
