@@ -1,50 +1,43 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
+import {
+  PHYSICAL_ACTION_SCHEMA_VERSION,
+  POSTURE_TRANSITION_ACTION_TYPE,
+  acceptedPhysicalAction,
+  clampPhysicalActionProgress,
+  cleanPhysicalActionText,
+  finiteNonNegativePhysicalActionNumber,
+  finitePhysicalActionNumber,
+  finitePositivePhysicalActionNumber,
+  isPhysicalActionRecord,
+  normalizePhysicalActionOwner,
+  normalizePhysicalActionStatus,
+  nullablePhysicalActionText,
+  physicalActionInteger,
+  rejectedPhysicalAction,
+  type PhysicalActionBaseV1,
+  type PhysicalActionCommandResult,
+  type PhysicalActionOwner,
+  type PhysicalActionOwnerSource,
+  type PhysicalActionStatus,
+  type UnitPhysicalAction,
+} from './PhysicalAction';
 
-export const PHYSICAL_ACTION_SCHEMA_VERSION = 1 as const;
-export const POSTURE_TRANSITION_ACTION_TYPE = 'posture_transition' as const;
+export {
+  PHYSICAL_ACTION_SCHEMA_VERSION,
+  POSTURE_TRANSITION_ACTION_TYPE,
+  type PhysicalActionCommandResult,
+  type PhysicalActionOwner,
+  type PhysicalActionOwnerSource,
+  type PhysicalActionStatus,
+  type UnitPhysicalAction,
+} from './PhysicalAction';
 
-export type PhysicalActionStatus = 'running' | 'completed' | 'cancelled' | 'failed';
-export type PhysicalActionOwnerSource =
-  | 'player'
-  | 'player_command'
-  | 'movement'
-  | 'tactical_position'
-  | 'test'
-  | 'system'
-  | 'future_ai';
-
-export interface PhysicalActionOwner {
-  readonly source: PhysicalActionOwnerSource;
-  readonly id: string;
-}
-
-export interface PostureTransitionActionV1 {
-  readonly schemaVersion: typeof PHYSICAL_ACTION_SCHEMA_VERSION;
-  readonly id: string;
-  readonly sequence: number;
+export interface PostureTransitionActionV1 extends PhysicalActionBaseV1 {
   readonly type: typeof POSTURE_TRANSITION_ACTION_TYPE;
-  readonly owner: PhysicalActionOwner;
-  readonly ownerToken: string;
   readonly sourcePosture: UnitPosture;
   readonly targetPosture: UnitPosture;
-  readonly startedSeconds: number;
-  readonly durationSeconds: number;
-  progress: number;
-  status: PhysicalActionStatus;
-  readonly reasonCode: string;
-  readonly reasonRu: string;
-  resultCode: string | null;
-  resultRu: string | null;
-}
-
-export type UnitPhysicalAction = PostureTransitionActionV1;
-
-declare module '../behavior/BehaviorModel' {
-  interface UnitBehaviorRuntime {
-    physicalAction?: UnitPhysicalAction | null;
-  }
 }
 
 export interface RequestPostureTransitionInput {
@@ -52,13 +45,6 @@ export interface RequestPostureTransitionInput {
   readonly owner: PhysicalActionOwner;
   readonly ownerToken: string;
   readonly startedSeconds: number;
-  readonly reasonCode: string;
-  readonly reasonRu: string;
-}
-
-export interface PhysicalActionCommandResult {
-  readonly accepted: boolean;
-  readonly action: UnitPhysicalAction | null;
   readonly reasonCode: string;
   readonly reasonRu: string;
 }
@@ -94,13 +80,28 @@ export function requestPostureTransition(
   unit: UnitModel,
   input: RequestPostureTransitionInput,
 ): PhysicalActionCommandResult {
+  const activePhysicalAction = unit.behaviorRuntime.physicalAction ?? null;
+  if (activePhysicalAction?.status === 'running' && activePhysicalAction.type !== POSTURE_TRANSITION_ACTION_TYPE) {
+    return rejectedPhysicalAction(
+      activePhysicalAction,
+      'posture_transition_physical_action_conflict',
+      activePhysicalAction.type === 'weapon_reload'
+        ? 'Смена позы запрещена во время физической перезарядки.'
+        : 'Смена позы запрещена: тело уже занято другим физическим действием.',
+    );
+  }
+
   const running = getRunningPostureTransition(unit);
   if (running) {
     if (running.ownerToken === input.ownerToken && running.targetPosture === input.targetPosture) {
-      return accepted(running, 'posture_transition_already_running', 'Такая смена позы уже выполняется этим владельцем.');
+      return acceptedPhysicalAction(
+        running,
+        'posture_transition_already_running',
+        'Такая смена позы уже выполняется этим владельцем.',
+      );
     }
     if (running.ownerToken !== input.ownerToken) {
-      return rejected(
+      return rejectedPhysicalAction(
         running,
         'posture_transition_owned_by_other',
         `Смена позы уже принадлежит другому владельцу: ${running.owner.source}:${running.owner.id}.`,
@@ -116,16 +117,16 @@ export function requestPostureTransition(
   }
 
   if (isWeaponHandlingBusy(unit)) {
-    return rejected(
+    return rejectedPhysicalAction(
       unit.behaviorRuntime.physicalAction ?? null,
       'posture_transition_weapon_conflict',
-      'Смена позы запрещена во время наведения, выстрела или перезарядки.',
+      'Смена позы запрещена во время наведения, выстрела или подготовки оружия.',
     );
   }
 
   const sourcePosture = unit.behaviorRuntime.posture;
   if (sourcePosture === input.targetPosture) {
-    return accepted(
+    return acceptedPhysicalAction(
       unit.behaviorRuntime.physicalAction ?? null,
       'posture_transition_not_required',
       'Боец уже находится в требуемой позе.',
@@ -133,21 +134,22 @@ export function requestPostureTransition(
   }
 
   const sequence = Math.max(0, unit.behaviorRuntime.physicalAction?.sequence ?? 0) + 1;
+  const owner = normalizePhysicalActionOwner(input.owner, unit.id);
   const action: PostureTransitionActionV1 = {
     schemaVersion: PHYSICAL_ACTION_SCHEMA_VERSION,
     id: `${unit.id}:physical-action:${sequence}`,
     sequence,
     type: POSTURE_TRANSITION_ACTION_TYPE,
-    owner: normalizeOwner(input.owner),
-    ownerToken: cleanText(input.ownerToken, `${input.owner.source}:${input.owner.id}`),
+    owner,
+    ownerToken: cleanPhysicalActionText(input.ownerToken, `${owner.source}:${owner.id}`),
     sourcePosture,
     targetPosture: input.targetPosture,
-    startedSeconds: finiteNonNegative(input.startedSeconds, 0),
+    startedSeconds: finiteNonNegativePhysicalActionNumber(input.startedSeconds, 0),
     durationSeconds: postureTransitionDurationSeconds(sourcePosture, input.targetPosture),
     progress: 0,
     status: 'running',
-    reasonCode: cleanText(input.reasonCode, 'posture_transition_requested'),
-    reasonRu: cleanText(input.reasonRu, 'Начата физическая смена позы.'),
+    reasonCode: cleanPhysicalActionText(input.reasonCode, 'posture_transition_requested'),
+    reasonRu: cleanPhysicalActionText(input.reasonRu, 'Начата физическая смена позы.'),
     resultCode: null,
     resultRu: null,
   };
@@ -157,7 +159,7 @@ export function requestPostureTransition(
   unit.behaviorRuntime.lastEvent = 'posture_transition_started';
   unit.behaviorRuntime.postureChangedBecause = action.reasonCode;
   stopPhysicalTranslation(unit);
-  return accepted(action, 'posture_transition_started', action.reasonRu);
+  return acceptedPhysicalAction(action, 'posture_transition_started', action.reasonRu);
 }
 
 export function cancelPostureTransition(
@@ -168,17 +170,21 @@ export function cancelPostureTransition(
 ): PhysicalActionCommandResult {
   const action = getRunningPostureTransition(unit);
   if (!action) {
-    return rejected(unit.behaviorRuntime.physicalAction ?? null, 'posture_transition_not_running', 'Активной смены позы нет.');
+    return rejectedPhysicalAction(
+      unit.behaviorRuntime.physicalAction ?? null,
+      'posture_transition_not_running',
+      'Активной смены позы нет.',
+    );
   }
   if (action.ownerToken !== ownerToken) {
-    return rejected(
+    return rejectedPhysicalAction(
       action,
       'posture_transition_cancel_denied_owner',
       'Чужой владелец не может отменить эту смену позы.',
     );
   }
   finishPostureActionAtCurrentEffectivePosture(unit, action, 'cancelled', reasonCode, reasonRu);
-  return accepted(action, reasonCode, reasonRu);
+  return acceptedPhysicalAction(action, reasonCode, reasonRu);
 }
 
 export function cancelPostureTransitionBySystem(
@@ -188,10 +194,14 @@ export function cancelPostureTransitionBySystem(
 ): PhysicalActionCommandResult {
   const action = getRunningPostureTransition(unit);
   if (!action) {
-    return rejected(unit.behaviorRuntime.physicalAction ?? null, 'posture_transition_not_running', 'Активной смены позы нет.');
+    return rejectedPhysicalAction(
+      unit.behaviorRuntime.physicalAction ?? null,
+      'posture_transition_not_running',
+      'Активной смены позы нет.',
+    );
   }
   finishPostureActionAtCurrentEffectivePosture(unit, action, 'cancelled', reasonCode, reasonRu);
-  return accepted(action, reasonCode, reasonRu);
+  return acceptedPhysicalAction(action, reasonCode, reasonRu);
 }
 
 export function tickPostureTransition(
@@ -211,9 +221,11 @@ export function tickPostureTransition(
     );
     return;
   }
-  const delta = Math.max(0, Number.isFinite(deltaSeconds) ? deltaSeconds : 0);
+  const delta = finiteNonNegativePhysicalActionNumber(deltaSeconds, 0);
   if (delta <= 0) return;
-  action.progress = clamp01(action.progress + delta / Math.max(0.001, action.durationSeconds));
+  action.progress = clampPhysicalActionProgress(
+    action.progress + delta / Math.max(0.001, action.durationSeconds),
+  );
   applyEffectivePostureForProgress(unit, action);
   if (action.progress + 1e-9 < 1) {
     unit.behaviorRuntime.currentAction = 'change_posture';
@@ -222,7 +234,7 @@ export function tickPostureTransition(
     return;
   }
   action.progress = 1;
-  setEffectivePosture(unit, action.targetPosture, 'posture_transition_completed');
+  applyEffectivePostureForProgress(unit, action);
   action.status = 'completed';
   action.resultCode = 'posture_transition_completed';
   action.resultRu = 'Физическая смена позы завершена.';
@@ -231,11 +243,14 @@ export function tickPostureTransition(
   unit.behaviorRuntime.lastEvent = 'posture_transition_completed';
 }
 
-export function reconcileMovementPostureRequest(state: SimulationState, unit: UnitModel): PhysicalActionCommandResult | null {
+export function reconcileMovementPostureRequest(
+  state: SimulationState,
+  unit: UnitModel,
+): PhysicalActionCommandResult | null {
   if (!unit.order) return null;
   const desired = resolveMovementDesiredPosture(state, unit);
   if (!desired) return null;
-  if (isPostureTransitionRunning(unit)) {
+  if (unit.behaviorRuntime.physicalAction?.status === 'running') {
     stopPhysicalTranslation(unit);
     return null;
   }
@@ -283,7 +298,9 @@ export function getRunningPostureTransition(
 export function getPostureTransitionDiagnostics(
   unit: Pick<UnitModel, 'behaviorRuntime'>,
 ): PostureTransitionDiagnostics {
-  const action = unit.behaviorRuntime.physicalAction ?? null;
+  const action = unit.behaviorRuntime.physicalAction?.type === POSTURE_TRANSITION_ACTION_TYPE
+    ? unit.behaviorRuntime.physicalAction as PostureTransitionActionV1
+    : null;
   return {
     effectivePosture: unit.behaviorRuntime.posture,
     sourcePosture: action?.sourcePosture ?? null,
@@ -313,52 +330,50 @@ export function postureTransitionDurationSeconds(source: UnitPosture, target: Un
     + POSTURE_TRANSITION_DURATIONS_SECONDS.crouchedToStanding;
 }
 
-export function normalizeUnitPhysicalAction(
+export function normalizePostureTransitionAction(
   value: unknown,
   fallbackUnitId: string,
-): UnitPhysicalAction | null {
-  if (!isRecord(value) || value.type !== POSTURE_TRANSITION_ACTION_TYPE) return null;
+): PostureTransitionActionV1 | null {
+  if (!isPhysicalActionRecord(value) || value.type !== POSTURE_TRANSITION_ACTION_TYPE) return null;
   const sourcePosture = normalizePosture(value.sourcePosture);
   const targetPosture = normalizePosture(value.targetPosture);
   if (!sourcePosture || !targetPosture || sourcePosture === targetPosture) return null;
-  const status = normalizeStatus(value.status);
-  const sequence = integer(value.sequence, 1, 1, Number.MAX_SAFE_INTEGER);
-  const owner = normalizeOwner(isRecord(value.owner) ? value.owner : { source: 'system', id: fallbackUnitId });
-  const durationSeconds = finitePositive(
+  const status = normalizePhysicalActionStatus(value.status);
+  const sequence = physicalActionInteger(value.sequence, 1, 1, Number.MAX_SAFE_INTEGER);
+  const owner = normalizePhysicalActionOwner(
+    isPhysicalActionRecord(value.owner) ? value.owner : { source: 'system', id: fallbackUnitId },
+    fallbackUnitId,
+  );
+  const durationSeconds = finitePositivePhysicalActionNumber(
     value.durationSeconds,
     postureTransitionDurationSeconds(sourcePosture, targetPosture),
   );
+  const progress = status === 'completed'
+    ? 1
+    : clampPhysicalActionProgress(finitePhysicalActionNumber(value.progress, 0));
   return {
     schemaVersion: PHYSICAL_ACTION_SCHEMA_VERSION,
-    id: cleanText(value.id, `${fallbackUnitId}:physical-action:${sequence}`),
+    id: cleanPhysicalActionText(value.id, `${fallbackUnitId}:physical-action:${sequence}`),
     sequence,
     type: POSTURE_TRANSITION_ACTION_TYPE,
     owner,
-    ownerToken: cleanText(value.ownerToken, `${owner.source}:${owner.id}`),
+    ownerToken: cleanPhysicalActionText(value.ownerToken, `${owner.source}:${owner.id}`),
     sourcePosture,
     targetPosture,
-    startedSeconds: finiteNonNegative(value.startedSeconds, 0),
+    startedSeconds: finiteNonNegativePhysicalActionNumber(value.startedSeconds, 0),
     durationSeconds,
-    progress: clamp01(finite(value.progress, status === 'completed' ? 1 : 0)),
+    progress,
     status,
-    reasonCode: cleanText(value.reasonCode, 'posture_transition_restored'),
-    reasonRu: cleanText(value.reasonRu, 'Смена позы восстановлена из сохранения.'),
-    resultCode: nullableText(value.resultCode),
-    resultRu: nullableText(value.resultRu),
-  };
-}
-
-export function serializeUnitPhysicalAction(action: UnitPhysicalAction | null | undefined): UnitPhysicalAction | undefined {
-  if (!action) return undefined;
-  return {
-    ...action,
-    owner: { ...action.owner },
+    reasonCode: cleanPhysicalActionText(value.reasonCode, 'posture_transition_restored'),
+    reasonRu: cleanPhysicalActionText(value.reasonRu, 'Смена позы восстановлена из сохранения.'),
+    resultCode: nullablePhysicalActionText(value.resultCode),
+    resultRu: nullablePhysicalActionText(value.resultRu),
   };
 }
 
 export function synchronizeEffectivePostureFromAction(unit: UnitModel): void {
   const action = unit.behaviorRuntime.physicalAction;
-  if (!action) return;
+  if (action?.type !== POSTURE_TRANSITION_ACTION_TYPE) return;
   applyEffectivePostureForProgress(unit, action);
 }
 
@@ -380,20 +395,31 @@ function resolveMovementDesiredPosture(state: SimulationState, unit: UnitModel):
 }
 
 function applyEffectivePostureForProgress(unit: UnitModel, action: PostureTransitionActionV1): void {
-  setEffectivePosture(unit, effectivePostureAtProgress(action), 'posture_transition_progress');
-}
-
-function effectivePostureAtProgress(action: PostureTransitionActionV1): UnitPosture {
-  if (action.progress + 1e-9 >= 1) return action.targetPosture;
   if (action.sourcePosture === 'standing' && action.targetPosture === 'prone') {
     const threshold = POSTURE_TRANSITION_DURATIONS_SECONDS.standingToCrouched / action.durationSeconds;
-    return action.progress + 1e-9 >= threshold ? 'crouched' : 'standing';
+    if (action.progress + 1e-9 >= threshold) {
+      setEffectivePosture(unit, 'crouched', 'posture_transition_progress');
+    }
+    if (action.progress + 1e-9 >= 1) {
+      setEffectivePosture(unit, 'prone', 'posture_transition_completed');
+    }
+    return;
   }
   if (action.sourcePosture === 'prone' && action.targetPosture === 'standing') {
     const threshold = POSTURE_TRANSITION_DURATIONS_SECONDS.proneToCrouched / action.durationSeconds;
-    return action.progress + 1e-9 >= threshold ? 'crouched' : 'prone';
+    if (action.progress + 1e-9 >= threshold) {
+      setEffectivePosture(unit, 'crouched', 'posture_transition_progress');
+    }
+    if (action.progress + 1e-9 >= 1) {
+      setEffectivePosture(unit, 'standing', 'posture_transition_completed');
+    }
+    return;
   }
-  return action.sourcePosture;
+  setEffectivePosture(
+    unit,
+    action.progress + 1e-9 >= 1 ? action.targetPosture : action.sourcePosture,
+    action.progress + 1e-9 >= 1 ? 'posture_transition_completed' : 'posture_transition_progress',
+  );
 }
 
 function finishPostureActionAtCurrentEffectivePosture(
@@ -405,11 +431,19 @@ function finishPostureActionAtCurrentEffectivePosture(
 ): void {
   applyEffectivePostureForProgress(unit, action);
   action.status = status;
-  action.resultCode = cleanText(reasonCode, status === 'cancelled' ? 'posture_transition_cancelled' : 'posture_transition_failed');
-  action.resultRu = cleanText(reasonRu, status === 'cancelled' ? 'Смена позы отменена.' : 'Смена позы завершилась ошибкой.');
+  action.resultCode = cleanPhysicalActionText(
+    reasonCode,
+    status === 'cancelled' ? 'posture_transition_cancelled' : 'posture_transition_failed',
+  );
+  action.resultRu = cleanPhysicalActionText(
+    reasonRu,
+    status === 'cancelled' ? 'Смена позы отменена.' : 'Смена позы завершилась ошибкой.',
+  );
   unit.behaviorRuntime.currentAction = unit.order ? 'move' : 'observe';
   unit.behaviorRuntime.reason = action.resultRu;
-  unit.behaviorRuntime.lastEvent = status === 'cancelled' ? 'posture_transition_cancelled' : 'posture_transition_failed';
+  unit.behaviorRuntime.lastEvent = status === 'cancelled'
+    ? 'posture_transition_cancelled'
+    : 'posture_transition_failed';
 }
 
 function setEffectivePosture(unit: UnitModel, posture: UnitPosture, reason: string): void {
@@ -427,85 +461,9 @@ function stopPhysicalTranslation(unit: UnitModel): void {
 function isWeaponHandlingBusy(unit: UnitModel): boolean {
   return unit.behaviorRuntime.currentAction === 'aim'
     || unit.behaviorRuntime.currentAction === 'fire'
-    || unit.behaviorRuntime.currentAction === 'reload'
     || unit.movementRuntime.weaponPreparation !== null;
-}
-
-function accepted(
-  action: UnitPhysicalAction | null,
-  reasonCode: string,
-  reasonRu: string,
-): PhysicalActionCommandResult {
-  return { accepted: true, action, reasonCode, reasonRu };
-}
-
-function rejected(
-  action: UnitPhysicalAction | null,
-  reasonCode: string,
-  reasonRu: string,
-): PhysicalActionCommandResult {
-  return { accepted: false, action, reasonCode, reasonRu };
-}
-
-function normalizeOwner(value: Partial<PhysicalActionOwner> | Record<string, unknown>): PhysicalActionOwner {
-  const source = normalizeOwnerSource(value.source);
-  return {
-    source,
-    id: cleanText(value.id, source),
-  };
-}
-
-function normalizeOwnerSource(value: unknown): PhysicalActionOwnerSource {
-  if (
-    value === 'player'
-    || value === 'player_command'
-    || value === 'movement'
-    || value === 'tactical_position'
-    || value === 'test'
-    || value === 'system'
-    || value === 'future_ai'
-  ) return value;
-  return 'system';
 }
 
 function normalizePosture(value: unknown): UnitPosture | null {
   return value === 'standing' || value === 'crouched' || value === 'prone' ? value : null;
-}
-
-function normalizeStatus(value: unknown): PhysicalActionStatus {
-  if (value === 'completed' || value === 'cancelled' || value === 'failed') return value;
-  return 'running';
-}
-
-function cleanText(value: unknown, fallback: string): string {
-  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
-}
-
-function nullableText(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
-function finite(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
-
-function finiteNonNegative(value: unknown, fallback: number): number {
-  return Math.max(0, finite(value, fallback));
-}
-
-function finitePositive(value: unknown, fallback: number): number {
-  const normalized = finite(value, fallback);
-  return normalized > 0 ? normalized : fallback;
-}
-
-function integer(value: unknown, fallback: number, minimum: number, maximum: number): number {
-  return Math.max(minimum, Math.min(maximum, Math.round(finite(value, fallback))));
-}
-
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
