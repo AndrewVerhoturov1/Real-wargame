@@ -190,7 +190,7 @@ function differs(left: Uint8Array, right: Uint8Array): boolean {
   return false;
 }
 
-function cellAndDirectionalArrayKeys(): readonly Array<
+function cellAndDirectionalArrayKeys(): ReadonlyArray<
   | 'observationPotential'
   | 'defensePotential'
   | 'firingPotential'
