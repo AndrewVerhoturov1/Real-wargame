@@ -21,6 +21,7 @@ const DEFAULT_MINIMUM_SEPARATION_METERS = 4;
 
 interface ExtendedTacticalQueryGenerationRequest extends TacticalQueryGenerationRequest {
   readonly targetMode?: 'automatic' | 'order_point' | 'facing_sector';
+  readonly targetPoint?: { readonly x: number; readonly y: number } | null;
   readonly sectorCenterDegrees?: number;
   readonly sectorArcDegrees?: number;
   readonly maximumRouteCost?: number;
@@ -160,6 +161,25 @@ function resolveGraphTarget(
   const referenceThreat = resolveTacticalPositionReferenceThreat(unit);
   const weaponRuntime = getWeaponRuntime(unit);
   const weapon = getWeaponDefinition(weaponRuntime.weaponId);
+
+  if (request.targetPoint) {
+    const point = { ...request.targetPoint };
+    if (kind === 'observation') return { mode: 'point', point };
+    if (kind === 'firing') {
+      return {
+        mode: 'estimated_position',
+        point,
+        minimumRangeMeters: 0,
+        effectiveRangeMeters: weapon.effectiveRangeMetres,
+        maximumRangeMeters: weapon.maximumRangeMetres,
+      };
+    }
+    return {
+      mode: 'sector',
+      bearingRadians: Math.atan2(point.y - unit.position.y, point.x - unit.position.x),
+      arcRadians: bounded(request.sectorArcDegrees, 90, 1, 360) * Math.PI / 180,
+    };
+  }
 
   if (mode === 'order_point' && orderPoint) {
     if (kind === 'observation') return { mode: 'point', point: { ...orderPoint } };
