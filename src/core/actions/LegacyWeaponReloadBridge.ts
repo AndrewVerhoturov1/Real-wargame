@@ -1,6 +1,6 @@
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
-import { isPhysicalActionRunning, type PhysicalActionCommandResult } from './PhysicalAction';
+import type { PhysicalActionCommandResult } from './PhysicalAction';
 import {
   cancelWeaponReload,
   getRunningWeaponReload,
@@ -33,7 +33,7 @@ export function reconcileLegacyWeaponReloadRequest(
     return result;
   }
 
-  if (unit.behaviorRuntime.currentAction !== 'reload' || isPhysicalActionRunning(unit)) return null;
+  if (unit.behaviorRuntime.currentAction !== 'reload') return null;
   const result = requestWeaponReload(unit, {
     owner: { source: 'future_ai', id: ownerToken },
     ownerToken,
@@ -42,7 +42,9 @@ export function reconcileLegacyWeaponReloadRequest(
     reasonRu: 'Старая команда перезарядки перенаправлена в физическое действие.',
   });
   if (!result.accepted || result.reasonCode === 'reload_not_required') {
-    unit.behaviorRuntime.currentAction = unit.order ? 'move' : 'observe';
+    unit.behaviorRuntime.currentAction = unit.behaviorRuntime.physicalAction?.status === 'running'
+      ? unit.behaviorRuntime.physicalAction.type === 'weapon_reload' ? 'reload' : 'change_posture'
+      : unit.order ? 'move' : 'observe';
     unit.behaviorRuntime.reason = result.reasonRu;
     unit.behaviorRuntime.lastEvent = result.reasonCode;
   }
