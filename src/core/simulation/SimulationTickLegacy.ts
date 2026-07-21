@@ -39,7 +39,15 @@ const COLLISION_PASSES = 3;
 const MAX_ROUTE_REPLAN_SEARCHES_PER_STEP = 1;
 const threatRuntimeEvaluation = createThreatRuntimeEvaluation();
 
-export function tickSimulation(state: SimulationState, deltaSeconds: number): void {
+export interface SimulationTickLegacyOptions {
+  readonly movementDeltaSecondsByUnitId?: ReadonlyMap<string, number>;
+}
+
+export function tickSimulation(
+  state: SimulationState,
+  deltaSeconds: number,
+  options: SimulationTickLegacyOptions = {},
+): void {
   const scaledDeltaSeconds = deltaSeconds * getAiTestTimeScale(state);
   const cycleStartMs = Math.max(0, Math.round(state.simulationTimeSeconds * 1000));
   state.simulationStep += 1;
@@ -104,10 +112,12 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
       const movementStartIndex = unitCount > 0 ? state.simulationStep % unitCount : 0;
       for (let offset = 0; offset < unitCount; offset += 1) {
         const unit = state.units[(movementStartIndex + offset) % unitCount];
+        const movementDeltaSeconds = options.movementDeltaSecondsByUnitId?.get(unit.id)
+          ?? scaledDeltaSeconds;
         routeNavigationDurationMs += moveUnit(
           unit,
           state,
-          scaledDeltaSeconds,
+          movementDeltaSeconds,
           movementProfileRegistryEntries,
           routeReplanWorkBudget,
         );
