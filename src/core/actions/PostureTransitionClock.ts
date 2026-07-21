@@ -1,5 +1,6 @@
 import type { UnitModel } from '../units/UnitModel';
 import { tickPhysicalActionWithTimeBudget } from './PhysicalActionClock';
+import { isPostureTransitionRunning } from './PostureTransition';
 
 export interface PostureTransitionTickResult {
   readonly wasRunning: boolean;
@@ -14,15 +15,16 @@ export function tickPostureTransitionWithTimeBudget(
   deltaSeconds: number,
   combatCapable: boolean,
 ): PostureTransitionTickResult {
-  const result = tickPhysicalActionWithTimeBudget(unit, deltaSeconds, combatCapable);
-  if (result.actionType !== 'posture_transition') {
+  const normalizedDelta = Number.isFinite(deltaSeconds) ? Math.max(0, deltaSeconds) : 0;
+  if (!isPostureTransitionRunning(unit)) {
     return {
       wasRunning: false,
       consumedSeconds: 0,
-      remainingSeconds: Number.isFinite(deltaSeconds) ? Math.max(0, deltaSeconds) : 0,
+      remainingSeconds: normalizedDelta,
       completed: false,
     };
   }
+  const result = tickPhysicalActionWithTimeBudget(unit, normalizedDelta, combatCapable);
   return {
     wasRunning: result.wasRunning,
     consumedSeconds: result.consumedSeconds,
