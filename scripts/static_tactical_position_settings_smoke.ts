@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import {
+  HIGH_QUALITY_STATIC_TACTICAL_CELL_LIMIT,
+  shouldUseHighQualityStaticTacticalPositionBasis,
+} from '../src/core/tactical/static/RuntimeStaticTacticalPositionBuilder';
+import {
   createDefaultStaticTacticalPositionSettings,
   normalizeStaticTacticalPositionSettings,
   staticTacticalPositionSettingsDigest,
@@ -21,5 +25,13 @@ const changed = normalizeStaticTacticalPositionSettings({
   },
 });
 assert.notEqual(staticTacticalPositionSettingsDigest(defaults), staticTacticalPositionSettingsDigest(changed));
+
+assert.equal(shouldUseHighQualityStaticTacticalPositionBasis(64, 64), true);
+assert.equal(64 * 64, HIGH_QUALITY_STATIC_TACTICAL_CELL_LIMIT);
+assert.equal(
+  shouldUseHighQualityStaticTacticalPositionBasis(320, 200),
+  false,
+  'the live 320x200 scenario must not run the per-cell quality ray pass',
+);
 
 console.log('static tactical position settings smoke: ok');
