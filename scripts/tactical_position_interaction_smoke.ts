@@ -54,7 +54,7 @@ function verifyBoundedMarkerSelection(): void {
 
 function verifyArrivalPostureAppliesOnceAfterPhysicalTransition(): void {
   const state = createInitialState(mapData(), [
-    { id: 'unit-1', type: 'infantry_squad', side: 'blue', x: 0, y: 0 },
+    { id: 'unit-1', type: 'infantry_squad', side: 'blue', aiControl: 'manual', x: 0, y: 0 },
   ]);
   const unit = state.units[0]!;
   const command = createPlayerMoveCommand(
@@ -88,7 +88,7 @@ function verifyArrivalPostureAppliesOnceAfterPhysicalTransition(): void {
 
 function verifyOrdinaryCommandDoesNotChangePosture(): void {
   const state = createInitialState(mapData(), [
-    { id: 'unit-2', type: 'infantry_squad', side: 'blue', x: 0, y: 0 },
+    { id: 'unit-2', type: 'infantry_squad', side: 'blue', aiControl: 'manual', x: 0, y: 0 },
   ]);
   const unit = state.units[0]!;
   unit.playerCommand = updatePlayerCommandStatus(
