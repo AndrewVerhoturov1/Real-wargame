@@ -1,19 +1,26 @@
 import assert from 'node:assert/strict';
 import {
   cancelPostureTransition,
+  postureOwnerTokenForPlayerCommand,
   requestPostureTransition,
 } from '../src/core/actions/PostureTransition';
 import { reloadWeapon } from '../src/core/combat/WeaponModel';
 import type { TacticalMapData } from '../src/core/map/MapModel';
 import { createMoveOrder } from '../src/core/orders/MoveOrder';
+import {
+  createPlayerMoveCommand,
+  updatePlayerCommandStatus,
+} from '../src/core/orders/PlayerCommand';
 import { createInitialState } from '../src/core/simulation/SimulationState';
 import { tickSimulation } from '../src/core/simulation/SimulationTick';
+import { reconcileTacticalPositionOccupation } from '../src/core/tactical/TacticalPositionOccupation';
 import type { UnitModel } from '../src/core/units/UnitModel';
 
 verifyRoutePausesAndResumes();
 verifyReloadAndPostureConflictsAreSymmetric();
+verifyCancelledTacticalCommandCancelsItsPostureAction();
 
-console.log('Posture transition route smoke passed: route retention, deterministic stop/resume and reload conflict.');
+console.log('Posture transition route smoke passed: route retention, deterministic stop/resume, reload conflict and tactical cancellation.');
 
 function verifyRoutePausesAndResumes(): void {
   const state = createInitialState(mapData(), [{
@@ -75,6 +82,51 @@ function verifyReloadAndPostureConflictsAreSymmetric(): void {
   const rejected = request(unit, state.simulationTimeSeconds, 'standing', 'reload-conflict-owner');
   assert.equal(rejected.accepted, false);
   assert.equal(rejected.reasonCode, 'posture_transition_weapon_conflict');
+}
+
+function verifyCancelledTacticalCommandCancelsItsPostureAction(): void {
+  const state = createInitialState(mapData(), [{
+    id: 'cancelled-tactical-posture-unit',
+    type: 'infantry_squad',
+    side: 'blue',
+    aiControl: 'manual',
+    x: 1,
+    y: 2,
+  }]);
+  const unit = state.units[0];
+  const activeCommand = createPlayerMoveCommand(
+    unit.id,
+    { x: 5.5, y: 2.5 },
+    null,
+    10,
+    'normal',
+    null,
+    null,
+    'prone',
+    'crouched',
+  );
+  unit.playerCommand = updatePlayerCommandStatus(
+    activeCommand,
+    'cancelled',
+    'cancelled in posture test',
+    'Приказ отменён в проверке позы.',
+  );
+  const ownerToken = postureOwnerTokenForPlayerCommand(activeCommand.id);
+  requestPostureTransition(unit, {
+    targetPosture: 'crouched',
+    owner: { source: 'tactical_position', id: activeCommand.id },
+    ownerToken,
+    startedSeconds: state.simulationTimeSeconds,
+    reasonCode: 'tactical_position_approach',
+    reasonRu: 'Проверка отмены тактической позы.',
+  });
+
+  reconcileTacticalPositionOccupation(state, unit);
+  assert.equal(unit.behaviorRuntime.physicalAction?.status, 'cancelled');
+  assert.equal(
+    unit.behaviorRuntime.physicalAction?.resultCode,
+    'tactical_position_posture_cancelled_by_command',
+  );
 }
 
 function request(
