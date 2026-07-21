@@ -1,3 +1,4 @@
+import type { TacticalPositionKind, TacticalPositionTargetSpec } from '../core/ai/tactical/TacticalQuery';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { getTacticalPositionPresentation } from '../core/tactical/SimulationTacticalPositionSelection';
 import {
@@ -17,6 +18,9 @@ const OBJECTIVES: readonly TacticalPositionSearchObjective[] = [
   'withdraw_from_threat',
   'continue_order',
 ];
+const KINDS: readonly TacticalPositionKind[] = ['observation', 'defense', 'firing'];
+
+type TargetMode = 'automatic' | 'order_point' | 'facing_sector';
 
 export function installTacticalPositionSearchControls(
   state: SimulationState,
@@ -28,9 +32,15 @@ export function installTacticalPositionSearchControls(
   let status: HTMLElement | null = null;
   let diagnostics: HTMLElement | null = null;
   let objectiveSelect: HTMLSelectElement | null = null;
+  let kindSelect: HTMLSelectElement | null = null;
+  let targetModeSelect: HTMLSelectElement | null = null;
   let selectedObjective: TacticalPositionSearchObjective = 'balanced';
+  let selectedKind: TacticalPositionKind = 'defense';
+  let selectedTargetMode: TargetMode = 'automatic';
   const objectiveDraftByUnit = new Map<string, TacticalPositionSearchObjective>();
-  let objectiveUnitId: string | null = null;
+  const kindDraftByUnit = new Map<string, TacticalPositionKind>();
+  const targetModeDraftByUnit = new Map<string, TargetMode>();
+  let draftUnitId: string | null = null;
 
   const unmount = (): void => {
     section?.remove();
@@ -38,6 +48,8 @@ export function installTacticalPositionSearchControls(
     status = null;
     diagnostics = null;
     objectiveSelect = null;
+    kindSelect = null;
+    targetModeSelect = null;
   };
 
   const render = (): void => {
@@ -47,20 +59,33 @@ export function installTacticalPositionSearchControls(
       return;
     }
     ensureMounted();
+    syncDraftForSelectedUnit();
     renderStatus();
     renderDiagnostics();
+  };
+
+  const syncDraftForSelectedUnit = (): void => {
+    const unitId = state.selectedUnitId;
+    if (draftUnitId === unitId) return;
+    draftUnitId = unitId;
+    const latest = unitId ? service?.readLatestForUnit(unitId) : null;
+    selectedObjective = unitId
+      ? objectiveDraftByUnit.get(unitId) ?? latest?.objective ?? 'balanced'
+      : 'balanced';
+    selectedKind = unitId
+      ? kindDraftByUnit.get(unitId) ?? canonicalKind(latest?.kind) ?? 'defense'
+      : 'defense';
+    selectedTargetMode = unitId
+      ? targetModeDraftByUnit.get(unitId) ?? 'automatic'
+      : 'automatic';
+    if (objectiveSelect) objectiveSelect.value = selectedObjective;
+    if (kindSelect) kindSelect.value = selectedKind;
+    if (targetModeSelect) targetModeSelect.value = selectedTargetMode;
   };
 
   const renderStatus = (): void => {
     if (!status) return;
     const unitId = state.selectedUnitId;
-    if (objectiveUnitId !== unitId) {
-      objectiveUnitId = unitId;
-      selectedObjective = unitId
-        ? objectiveDraftByUnit.get(unitId) ?? service?.readLatestForUnit(unitId)?.objective ?? 'balanced'
-        : 'balanced';
-      if (objectiveSelect) objectiveSelect.value = selectedObjective;
-    }
     if (!unitId) {
       status.textContent = 'Выберите бойца.';
       status.dataset.state = 'idle';
@@ -73,14 +98,17 @@ export function installTacticalPositionSearchControls(
       return;
     }
     status.dataset.state = request.status;
-    if (request.status === 'queued') status.textContent = 'Запрос создан.';
-    else if (request.status === 'calculating' && request.reasonCode === 'field_preparing') {
-      status.textContent = 'Подготавливается тактическое поле… Боец может продолжать движение.';
-    } else if (request.status === 'calculating') status.textContent = 'Поиск выполняется…';
+    const kind = kindLabelRu(canonicalKind(request.kind) ?? selectedKind);
+    if (request.status === 'queued') status.textContent = `Запрос создан: ${kind}.`;
+    else if (request.status === 'calculating' && request.reasonCode === 'static_basis_preparing') {
+      status.textContent = 'Строится постоянная основа позиций. Это может занять заметное время.';
+    } else if (request.status === 'calculating' && request.reasonCode === 'field_preparing') {
+      status.textContent = 'Подготавливается субъективное поле бойца. Боец может продолжать движение.';
+    } else if (request.status === 'calculating') status.textContent = `Выполняется поиск: ${kind}…`;
     else if (request.status === 'ready' && (request.result?.candidates.length ?? 0) > 0) {
-      status.textContent = `Найдено позиций: ${request.result!.candidates.length}. Цель: ${tacticalPositionObjectiveLabelRu(request.objective)}.`;
+      status.textContent = `Найдено позиций: ${request.result!.candidates.length}. Тип: ${kind}. Цель: ${tacticalPositionObjectiveLabelRu(request.objective)}.`;
     } else if (request.status === 'ready') status.textContent = 'Подходящие позиции не найдены.';
-    else if (request.status === 'stale') status.textContent = 'Запрос устарел из-за изменения приказа или настроек.';
+    else if (request.status === 'stale') status.textContent = 'Запрос устарел из-за изменения задачи, знаний, карты или настроек.';
     else if (request.status === 'cancelled') status.textContent = 'Запрос отменён.';
     else status.textContent = `Ошибка: ${request.reasonRu ?? 'поиск не выполнен'}`;
   };
@@ -95,18 +123,40 @@ export function installTacticalPositionSearchControls(
       ?? request?.result?.candidates[0]
       ?? null;
     if (!candidate) {
-      diagnostics.innerHTML = '<span>После поиска выберите ромб, чтобы увидеть числовые показатели.</span>';
+      diagnostics.innerHTML = '<span>После поиска выберите метку позиции, чтобы увидеть оценку и причину выбранной позы.</span>';
       return;
     }
     const objective = readTacticalPositionObjectiveMetrics(candidate);
+    const metrics = candidate.metrics as typeof candidate.metrics & {
+      finalScore?: number;
+      staticPotential?: number;
+      directionalFit?: number;
+      lineQuality?: number;
+      rangeFit?: number;
+      positionDanger?: number;
+      uncertainty?: number;
+      recommendedFacingRadians?: number;
+      postureReasonRu?: string;
+    };
     diagnostics.innerHTML = [
-      metric('Поза', postureLabel(candidate.metrics.recommendedPosture)),
+      metric('Тип', kindLabelRu(canonicalKind(candidate.kind) ?? canonicalKind(request?.kind) ?? 'defense')),
+      metric('Итоговая оценка', score(metrics.finalScore ?? metrics.staticPotential)),
+      metric('Поза', postureLabel(metrics.recommendedPosture)),
+      metric('Причина позы', metrics.postureReasonRu ?? 'лучшая доступная поза для этой клетки'),
+      metric('Направление', degrees(metrics.recommendedFacingRadians)),
+      metric('Статический потенциал', score(metrics.staticPotential)),
+      metric('Соответствие направлению', score(metrics.directionalFit)),
+      metric('Качество линии', score(metrics.lineQuality)),
+      metric('Соответствие дальности', score(metrics.rangeFit)),
+      metric('Защита', score(metrics.protection)),
+      metric('Скрытность', score(metrics.concealment)),
+      metric('Опасность позиции', score(metrics.positionDanger ?? metrics.danger)),
+      metric('Опасность маршрута', score(metrics.routeDanger)),
+      metric('Неопределённость', score(metrics.uncertainty)),
       metric('До угрозы', meters(objective.distanceToThreatMeters)),
       metric('Изменение дистанции', signedMeters(objective.threatDistanceDeltaMeters)),
       metric('До точки приказа', meters(objective.distanceToOrderTargetMeters)),
-      metric('Соответствие цели', `${Math.round(objective.objectiveAlignment)} / 100`),
-      metric('Безопасность', `${Math.round((candidate.metrics as { safety?: number }).safety ?? 0)} / 100`),
-      metric('Защита', `${Math.round(candidate.metrics.protection)} / 100`),
+      metric('Соответствие задаче', score(objective.objectiveAlignment)),
     ].join('');
   };
 
@@ -122,31 +172,54 @@ export function installTacticalPositionSearchControls(
     const title = document.createElement('h3');
     title.textContent = 'Поиск тактических позиций';
     const description = document.createElement('p');
-    description.textContent = 'Поиск не отменяет текущий маршрут. После расчёта выберите ромб левой кнопкой или отправьте бойца правой.';
+    description.textContent = 'Кнопка только создаёт запрос. Расчёт выполняется общим фоновым обработчиком и использует лишь известные бойцу угрозы.';
+
+    const kindLabel = document.createElement('label');
+    kindLabel.className = 'tactical-position-objective-field';
+    const kindCaption = document.createElement('span');
+    kindCaption.textContent = 'Тип позиции';
+    kindSelect = document.createElement('select');
+    kindSelect.dataset.role = 'tactical-position-kind';
+    kindSelect.innerHTML = KINDS.map((kind) => `<option value="${kind}">${escapeHtml(kindLabelRu(kind))}</option>`).join('');
+    kindSelect.value = selectedKind;
+    kindSelect.addEventListener('change', () => {
+      selectedKind = kindSelect?.value as TacticalPositionKind;
+      const unitId = state.selectedUnitId;
+      if (unitId) kindDraftByUnit.set(unitId, selectedKind);
+      syncTargetModeOptions();
+    });
+    kindLabel.append(kindCaption, kindSelect);
 
     const objectiveLabel = document.createElement('label');
     objectiveLabel.className = 'tactical-position-objective-field';
     const objectiveCaption = document.createElement('span');
-    objectiveCaption.textContent = 'Цель поиска';
+    objectiveCaption.textContent = 'Задача движения';
     objectiveSelect = document.createElement('select');
     objectiveSelect.dataset.role = 'tactical-position-objective';
     objectiveSelect.innerHTML = OBJECTIVES.map((objective) => (
       `<option value="${objective}">${escapeHtml(tacticalPositionObjectiveLabelRu(objective))}</option>`
     )).join('');
-    const unitId = state.selectedUnitId;
-    if (unitId) {
-      selectedObjective = objectiveDraftByUnit.get(unitId)
-        ?? service?.readLatestForUnit(unitId)?.objective
-        ?? selectedObjective;
-      objectiveUnitId = unitId;
-    }
     objectiveSelect.value = selectedObjective;
     objectiveSelect.addEventListener('change', () => {
       selectedObjective = objectiveSelect?.value as TacticalPositionSearchObjective;
-      const selectedUnitId = state.selectedUnitId;
-      if (selectedUnitId) objectiveDraftByUnit.set(selectedUnitId, selectedObjective);
+      const unitId = state.selectedUnitId;
+      if (unitId) objectiveDraftByUnit.set(unitId, selectedObjective);
     });
     objectiveLabel.append(objectiveCaption, objectiveSelect);
+
+    const targetLabel = document.createElement('label');
+    targetLabel.className = 'tactical-position-objective-field';
+    const targetCaption = document.createElement('span');
+    targetCaption.textContent = 'Цель или сектор';
+    targetModeSelect = document.createElement('select');
+    targetModeSelect.dataset.role = 'tactical-position-target-mode';
+    targetModeSelect.addEventListener('change', () => {
+      selectedTargetMode = targetModeSelect?.value as TargetMode;
+      const unitId = state.selectedUnitId;
+      if (unitId) targetModeDraftByUnit.set(unitId, selectedTargetMode);
+    });
+    targetLabel.append(targetCaption, targetModeSelect);
+    syncTargetModeOptions();
 
     const button = document.createElement('button');
     button.type = 'button';
@@ -161,12 +234,25 @@ export function installTacticalPositionSearchControls(
         return;
       }
       objectiveDraftByUnit.set(unit.id, selectedObjective);
-      const request = service.enqueueCoverSearch(
+      kindDraftByUnit.set(unit.id, selectedKind);
+      targetModeDraftByUnit.set(unit.id, selectedTargetMode);
+      const target = buildTarget(state, unit.id, selectedKind, selectedTargetMode);
+      if (selectedTargetMode === 'order_point' && !target) {
+        state.editor.lastMessage = 'У бойца нет точки действующего приказа.';
+        renderStatus();
+        return;
+      }
+      const request = service.enqueueTacticalSearch(
         unit,
-        { objective: selectedObjective },
+        selectedKind,
+        {
+          objective: selectedObjective,
+          target,
+          queryKey: `ui:${selectedKind}`,
+        },
         { forceRefresh: true },
       );
-      state.editor.lastMessage = `Запрос создан: ${tacticalPositionObjectiveLabelRu(request.objective)}.`;
+      state.editor.lastMessage = `Запрос создан: ${kindLabelRu(selectedKind)}, ${tacticalPositionObjectiveLabelRu(request.objective)}.`;
       renderStatus();
       onChanged();
     });
@@ -177,14 +263,26 @@ export function installTacticalPositionSearchControls(
 
     const legend = document.createElement('p');
     legend.className = 'tactical-position-search-legend';
-    legend.textContent = 'Ромб: вертикаль — стоя, угол — пригнувшись, горизонталь — лёжа. Отрицательная дельта означает продвижение к угрозе, положительная — отход.';
+    legend.textContent = 'Тип позиции и задача движения задаются отдельно. Метка показывает рекомендуемую позу и направление корпуса.';
 
     diagnostics = document.createElement('div');
     diagnostics.className = 'workspace-info-grid tactical-position-metrics';
     diagnostics.dataset.role = 'tactical-position-metrics';
 
-    section.append(title, description, objectiveLabel, button, status, legend, diagnostics);
+    section.append(title, description, kindLabel, objectiveLabel, targetLabel, button, status, legend, diagnostics);
     host.replaceChildren(section);
+  };
+
+  const syncTargetModeOptions = (): void => {
+    if (!targetModeSelect) return;
+    const previous = selectedTargetMode;
+    targetModeSelect.innerHTML = [
+      '<option value="automatic">Автоматически по задаче и знаниям</option>',
+      '<option value="order_point">Точка действующего приказа</option>',
+      `<option value="facing_sector">Сектор перед бойцом (${selectedKind === 'defense' ? 'ожидаемая угроза' : selectedKind === 'observation' ? 'наблюдение' : 'ведение огня'})</option>`,
+    ].join('');
+    selectedTargetMode = previous;
+    targetModeSelect.value = selectedTargetMode;
   };
 
   const unsubscribeService = service?.subscribe(() => {
@@ -206,14 +304,63 @@ export function installTacticalPositionSearchControls(
   };
 }
 
+function buildTarget(
+  state: SimulationState,
+  unitId: string,
+  kind: TacticalPositionKind,
+  mode: TargetMode,
+): TacticalPositionTargetSpec | null {
+  if (mode === 'automatic') return null;
+  const unit = state.units.find((candidate) => candidate.id === unitId);
+  if (!unit) return null;
+  if (mode === 'order_point') {
+    const point = unit.order?.target ?? unit.playerCommand?.target ?? null;
+    if (!point) return null;
+    if (kind === 'observation') return { mode: 'point', point: { ...point } };
+    if (kind === 'firing') return { mode: 'estimated_position', point: { ...point } };
+    return {
+      mode: 'sector',
+      bearingRadians: Math.atan2(point.y - unit.position.y, point.x - unit.position.x),
+      arcRadians: Math.PI / 3,
+    };
+  }
+  return {
+    mode: 'sector',
+    bearingRadians: unit.facingRadians,
+    arcRadians: Math.PI / 2,
+  };
+}
+
 function metric(label: string, value: string): string {
   return `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+}
+
+function canonicalKind(value: unknown): TacticalPositionKind | null {
+  if (value === 'observation' || value === 'firing') return value;
+  if (value === 'defense' || value === 'cover') return 'defense';
+  return null;
+}
+
+function kindLabelRu(kind: TacticalPositionKind): string {
+  if (kind === 'observation') return 'наблюдение';
+  if (kind === 'defense') return 'оборона';
+  return 'огневая позиция';
 }
 
 function postureLabel(value: unknown): string {
   if (value === 'prone') return 'лёжа';
   if (value === 'crouched') return 'пригнувшись';
   return 'стоя';
+}
+
+function score(value: number | undefined): string {
+  return value === undefined || !Number.isFinite(value) ? '—' : `${Math.round(value)} / 100`;
+}
+
+function degrees(radians: number | undefined): string {
+  if (radians === undefined || !Number.isFinite(radians)) return '—';
+  const normalized = ((radians * 180 / Math.PI) % 360 + 360) % 360;
+  return `${Math.round(normalized)}°`;
 }
 
 function meters(value: number | null): string {
