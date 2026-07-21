@@ -169,7 +169,24 @@ function buildKindList(
       const cellIndex = y * input.width + x;
       const score = potential[cellIndex] ?? 0;
       const postureMask = input.availablePostureMask[cellIndex] ?? 0;
-      if (score < threshold || postureMask === 0 || !isLocalMaximum(potential, input.width, input.height, x, y, score)) continue;
+      if (score < threshold || postureMask === 0) continue;
+      const dominantSectorMask = buildDirectionalSignature(
+        directional,
+        cellIndex,
+        input.sectorCount,
+        diversityThreshold,
+      );
+      const scalarMaximum = isLocalMaximum(potential, input.width, input.height, x, y, score);
+      const directionalMaximum = isDirectionalLocalMaximum(
+        directional,
+        input.width,
+        input.height,
+        input.sectorCount,
+        x,
+        y,
+        dominantSectorMask,
+      );
+      if (!scalarMaximum && !directionalMaximum) continue;
       const chunkX = Math.floor(x / chunkSizeCells);
       const chunkY = Math.floor(y / chunkSizeCells);
       const chunkIndex = chunkY * chunksX + chunkX;
@@ -179,12 +196,7 @@ function buildKindList(
         y,
         score,
         postureMask,
-        dominantSectorMask: buildDirectionalSignature(
-          directional,
-          cellIndex,
-          input.sectorCount,
-          diversityThreshold,
-        ),
+        dominantSectorMask,
       });
     }
   }
@@ -278,6 +290,39 @@ function isLocalMaximum(
     }
   }
   return true;
+}
+
+function isDirectionalLocalMaximum(
+  values: Uint8Array,
+  width: number,
+  height: number,
+  sectorCount: number,
+  x: number,
+  y: number,
+  dominantSectorMask: number,
+): boolean {
+  const cellIndex = y * width + x;
+  for (let sector = 0; sector < Math.min(sectorCount, 32); sector += 1) {
+    if ((dominantSectorMask & (1 << sector)) === 0) continue;
+    const score = values[cellIndex * sectorCount + sector] ?? 0;
+    let maximum = true;
+    for (let offsetY = -1; offsetY <= 1 && maximum; offsetY += 1) {
+      for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+        if (offsetX === 0 && offsetY === 0) continue;
+        const nextX = x + offsetX;
+        const nextY = y + offsetY;
+        if (nextX < 0 || nextY < 0 || nextX >= width || nextY >= height) continue;
+        const nextIndex = nextY * width + nextX;
+        const next = values[nextIndex * sectorCount + sector] ?? 0;
+        if (next > score || (next === score && nextIndex < cellIndex)) {
+          maximum = false;
+          break;
+        }
+      }
+    }
+    if (maximum) return true;
+  }
+  return false;
 }
 
 function buildDirectionalSignature(
