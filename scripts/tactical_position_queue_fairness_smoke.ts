@@ -9,6 +9,33 @@ import { getStaticTacticalPositionService } from '../src/core/tactical/static/St
 import { normalizeUnits } from '../src/core/units/UnitModel';
 import type { PreparedAwarenessWorldSnapshot } from '../src/runtime/AwarenessWorldRuntime';
 
+class FieldRuntime implements TacticalPositionFieldRuntime {
+  readonly readyByUnit = new Map<string, PreparedAwarenessWorldSnapshot>();
+  private readonly listeners = new Set<() => void>();
+
+  requestWorldField(_state: SimulationState, unit: ReturnType<typeof normalizeUnits>[number]) {
+    return this.readyByUnit.get(unit.id) ?? null;
+  }
+
+  readReadyWorldField(unitId: string) {
+    return this.readyByUnit.get(unitId) ?? null;
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  emit(): void {
+    for (const listener of this.listeners) listener();
+  }
+
+  destroy(): void {
+    this.listeners.clear();
+    this.readyByUnit.clear();
+  }
+}
+
 const units = normalizeUnits([
   { id: 'waiting-owner', type: 'infantry_squad', side: 'blue', x: 1, y: 1 },
   { id: 'ready-owner', type: 'infantry_squad', side: 'blue', x: 3, y: 3 },
@@ -89,33 +116,6 @@ function runScheduled(): void {
     scheduled.shift()!();
   }
   assert.ok(safety > 0, 'scheduled work must remain bounded');
-}
-
-class FieldRuntime implements TacticalPositionFieldRuntime {
-  readonly readyByUnit = new Map<string, PreparedAwarenessWorldSnapshot>();
-  private readonly listeners = new Set<() => void>();
-
-  requestWorldField(_state: SimulationState, unit: ReturnType<typeof normalizeUnits>[number]) {
-    return this.readyByUnit.get(unit.id) ?? null;
-  }
-
-  readReadyWorldField(unitId: string) {
-    return this.readyByUnit.get(unitId) ?? null;
-  }
-
-  subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-
-  emit(): void {
-    for (const listener of this.listeners) listener();
-  }
-
-  destroy(): void {
-    this.listeners.clear();
-    this.readyByUnit.clear();
-  }
 }
 
 function prepared(unitId: string, fieldIdentity: string): PreparedAwarenessWorldSnapshot {
