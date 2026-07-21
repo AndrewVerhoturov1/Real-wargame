@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import type { AiGraph } from '../src/core/ai/AiGraph';
 import { withAiSimulationExecutionContext, getAiSimulationExecutionContextDepth } from '../src/core/ai/AiSimulationExecutionContext';
 import { runAiGraphRuntime } from '../src/core/ai/AiGraphRuntime';
+import { normalizeMap } from '../src/core/map/MapModel';
 import type { SimulationState } from '../src/core/simulation/SimulationState';
 import {
   installTacticalPositionSearchService,
@@ -51,7 +52,14 @@ const state = {
   units: [unit],
   simulationStep: 10,
   simulationTimeSeconds: 1,
-  map: { metersPerCell: 2 },
+  map: normalizeMap({
+    width: 16,
+    height: 8,
+    cellSize: 10,
+    metersPerCell: 2,
+    defaultTerrain: 'field',
+    defaultHeight: 0,
+  }),
 } as unknown as SimulationState;
 const scheduled: Array<() => void> = [];
 const fieldRuntime = new GraphFieldRuntime();
@@ -117,6 +125,8 @@ assert.equal(second.tacticalQueries.cover_query?.searchRequestStatus, 'calculati
 assert.equal(service.getDiagnostics().requestCount, 1, 'ordinary graph polling must not create another request');
 assert.equal(localSearchCalls, 0);
 
+await nextTask();
+runScheduled();
 fieldRuntime.ready = prepared(unit.id, 'field-ready-1');
 fieldRuntime.emit();
 runScheduled();
@@ -159,6 +169,10 @@ function runWithContext(blackboard: Record<string, unknown>, nowMs: number) {
 
 function runScheduled(): void {
   while (scheduled.length > 0) scheduled.shift()!();
+}
+
+function nextTask(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function prepared(unitId: string, fieldIdentity: string): PreparedAwarenessWorldSnapshot {
