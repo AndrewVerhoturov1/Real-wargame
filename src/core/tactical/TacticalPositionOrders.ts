@@ -9,6 +9,7 @@ import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap } from '../map/MapModel';
+import { movementProfileIdForPosture } from '../movement/PostureMovementProfile';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../navigation/NavigationRuntime';
 import { planMoveOrder } from '../orders/MoveOrderPlanning';
 import {
@@ -17,7 +18,11 @@ import {
   withPlayerCommandTacticalPositionMetadata,
   type PlayerCommandTacticalPositionKind,
 } from '../orders/PlayerCommand';
-import { createTacticalOrderIntent, withTacticalOrderNavigationProfile } from '../orders/TacticalOrderIntent';
+import {
+  createTacticalOrderIntent,
+  withTacticalOrderMovementProfile,
+  withTacticalOrderNavigationProfile,
+} from '../orders/TacticalOrderIntent';
 import { clearAttentionOverride } from '../perception/AttentionController';
 import { getBestPerceptionContact } from '../perception/PerceptionSystem';
 import type { SimulationState } from '../simulation/SimulationState';
@@ -48,9 +53,12 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
     resolveThreatFacingAtPosition(unit, target),
   );
   const approachPosture = resolveApproachPosture(unit, arrivalPosture);
-  const intent = withTacticalOrderNavigationProfile(
-    createTacticalOrderIntent('move'),
-    unit.playerNavigationProfileId ?? 'normal',
+  const intent = withTacticalOrderMovementProfile(
+    withTacticalOrderNavigationProfile(
+      createTacticalOrderIntent('move'),
+      unit.playerNavigationProfileId ?? 'normal',
+    ),
+    movementProfileIdForPosture(approachPosture),
   );
   cancelReplaceablePostureTransitionForNewPlayerCommand(unit);
   const baseCommand = createPlayerMoveCommand(
