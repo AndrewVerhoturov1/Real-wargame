@@ -1,0 +1,147 @@
+.tactical-position-settings {
+  display: grid;
+  gap: 7px;
+}
+
+.tactical-setting-group {
+  border: 1px solid rgba(255, 242, 168, 0.16);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
+  overflow: hidden;
+}
+
+.tactical-setting-group > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 7px;
+  cursor: pointer;
+  color: #fff2a8;
+  font-size: 11px;
+  font-weight: 800;
+  list-style-position: inside;
+}
+
+.tactical-setting-summary-copy {
+  min-width: 0;
+}
+
+.tactical-setting-summary-copy small {
+  display: block;
+  margin-top: 2px;
+  color: #a9a28e;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.tactical-setting-group-reset,
+.tactical-setting-reset {
+  border: 1px solid rgba(255, 242, 168, 0.2);
+  border-radius: 6px;
+  color: #d9d2bc;
+  background: rgba(255, 242, 168, 0.05);
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tactical-setting-group-reset {
+  min-height: 22px;
+  padding: 3px 6px;
+}
+
+.tactical-setting-group-body {
+  display: grid;
+  gap: 6px;
+  padding: 0 7px 8px;
+}
+
+.tactical-setting-field {
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.tactical-setting-field-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.tactical-setting-field-head span {
+  min-width: 0;
+  color: #eee8d6;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.tactical-setting-reset {
+  width: 22px;
+  height: 20px;
+  padding: 0;
+}
+
+.tactical-setting-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px;
+  align-items: center;
+}
+
+.tactical-setting-control-row.has-slider {
+  grid-template-columns: minmax(70px, 1fr) 72px auto;
+}
+
+.tactical-setting-control-row input,
+.tactical-setting-control-row select {
+  min-width: 0;
+  width: 100%;
+  min-height: 27px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 242, 168, 0.18);
+  border-radius: 6px;
+  color: #f2ecdc;
+  background: rgba(9, 12, 8, 0.82);
+  font-size: 10px;
+}
+
+.tactical-setting-control-row input[type="range"] {
+  min-height: 20px;
+  padding: 0;
+}
+
+.tactical-setting-control-row input[type="checkbox"] {
+  width: 18px;
+  min-height: 18px;
+  justify-self: start;
+}
+
+.tactical-setting-unit {
+  min-width: 25px;
+  color: #b8b09a;
+  font-size: 9px;
+  text-align: right;
+}
+
+.tactical-setting-position {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.tactical-setting-help {
+  color: #9f9988;
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+.tactical-setting-range {
+  color: #817c6f;
+  font-size: 8px;
+}

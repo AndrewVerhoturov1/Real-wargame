@@ -6,32 +6,21 @@ import {
   type AiGraphTacticalHost,
 } from './AiGraphRunnerLegacy';
 import type {
-  TacticalPositionKind,
   TacticalQueryGenerationRequest,
   TacticalQueryGenerationResult,
 } from './tactical/TacticalQuery';
-import type { TacticalPositionSearchObjective } from '../tactical/TacticalPositionObjective';
+import {
+  readTacticalPositionNodeSettings,
+  tacticalPositionSearchSettingsDigest,
+  type TacticalPositionNodeSettings,
+  type TacticalPositionSearchSettings,
+} from '../tactical/TacticalPositionNodeSettings';
 
 export * from './AiGraphRunnerLegacy';
 
-interface TacticalNodeQueryConfig {
-  readonly queryKey: string;
-  readonly kind: TacticalPositionKind;
-  readonly objective: TacticalPositionSearchObjective;
-  readonly targetMode: 'automatic' | 'order_point' | 'facing_sector';
-  readonly targetPoint: { readonly x: number; readonly y: number } | null;
-  readonly sectorCenterDegrees: number;
-  readonly sectorArcDegrees: number;
-  readonly maximumRouteCost: number;
-  readonly maxPositionDanger: number;
-  readonly preliminaryCandidates: number;
-  readonly exactCandidates: number;
-  readonly exactRayLimit: number;
-}
-
 interface ExtendedTacticalQueryGenerationRequest extends TacticalQueryGenerationRequest {
-  readonly targetMode?: TacticalNodeQueryConfig['targetMode'];
-  readonly targetPoint?: TacticalNodeQueryConfig['targetPoint'];
+  readonly targetMode?: TacticalPositionNodeSettings['target']['mode'];
+  readonly targetPoint?: TacticalPositionNodeSettings['target']['point'];
   readonly sectorCenterDegrees?: number;
   readonly sectorArcDegrees?: number;
   readonly maximumRouteCost?: number;
@@ -39,6 +28,7 @@ interface ExtendedTacticalQueryGenerationRequest extends TacticalQueryGeneration
   readonly preliminaryCandidates?: number;
   readonly exactCandidates?: number;
   readonly exactRayLimit?: number;
+  readonly searchSettings?: TacticalPositionSearchSettings;
 }
 
 /**
@@ -47,12 +37,12 @@ interface ExtendedTacticalQueryGenerationRequest extends TacticalQueryGeneration
  * nodes are adapted to the legacy evaluator without changing saved cover graphs.
  */
 export function runAiGraph(input: AiGraphRunnerInput): AiGraphRunnerResult {
-  const tacticalConfigs = new Map<string, TacticalNodeQueryConfig>();
+  const tacticalConfigs = new Map<string, TacticalPositionNodeSettings>();
   const graph = {
     ...input.graph,
     nodes: input.graph.nodes.map((node) => {
       if (node.type !== 'CreateTacticalPositionCandidates') return node;
-      const config = readTacticalNodeConfig(node.parameters);
+      const config = readTacticalPositionNodeSettings(node.parameters);
       tacticalConfigs.set(config.queryKey, config);
       return {
         ...node,
@@ -60,9 +50,9 @@ export function runAiGraph(input: AiGraphRunnerInput): AiGraphRunnerResult {
         parameters: {
           ...node.parameters,
           queryKey: config.queryKey,
-          maxCandidates: readNumber(node.parameters?.maxCandidates, 12),
-          searchRadiusMeters: readNumber(node.parameters?.searchRadiusMeters, 50),
-          maxCalculationMs: readNumber(node.parameters?.maxCalculationMs, 12),
+          maxCandidates: config.searchBudget.maxCandidates,
+          searchRadiusMeters: config.searchRadiusMeters,
+          maxCalculationMs: config.maxCalculationMs,
         },
       };
     }),
@@ -71,20 +61,12 @@ export function runAiGraph(input: AiGraphRunnerInput): AiGraphRunnerResult {
     if (node.type !== 'CreateCoverCandidates') continue;
     const queryKey = readString(node.parameters?.queryKey, 'cover_query');
     if (!tacticalConfigs.has(queryKey)) {
-      tacticalConfigs.set(queryKey, {
+      tacticalConfigs.set(queryKey, readTacticalPositionNodeSettings({
+        ...node.parameters,
         queryKey,
         kind: 'defense',
         objective: 'balanced',
-        targetMode: 'automatic',
-        targetPoint: null,
-        sectorCenterDegrees: 0,
-        sectorArcDegrees: 90,
-        maximumRouteCost: 100000,
-        maxPositionDanger: 78,
-        preliminaryCandidates: 36,
-        exactCandidates: 12,
-        exactRayLimit: 32,
-      });
+      }));
     }
   }
   const queryKeys = [...tacticalConfigs.keys()];
@@ -108,20 +90,25 @@ export function runAiGraph(input: AiGraphRunnerInput): AiGraphRunnerResult {
   };
 
   for (const [queryKey, query] of Object.entries(result.tacticalQueries)) {
-    const memoryKey = tacticalRequestMemoryKey(queryKey);
+    const requestKey = tacticalRequestMemoryKey(queryKey);
+    const identityKey = tacticalConfigMemoryKey(queryKey);
+    const config = tacticalConfigs.get(queryKey);
+    const configIdentity = config ? tacticalConfigIdentity(config) : null;
     if (
       query.searchRequestId
       && query.searchRequestStatus !== 'stale'
       && query.searchRequestStatus !== 'cancelled'
       && query.searchRequestStatus !== 'failed'
     ) {
-      if (blackboard[memoryKey] !== query.searchRequestId) writeMemory(memoryKey, query.searchRequestId);
+      if (blackboard[requestKey] !== query.searchRequestId) writeMemory(requestKey, query.searchRequestId);
+      if (configIdentity && blackboard[identityKey] !== configIdentity) writeMemory(identityKey, configIdentity);
     } else if (
       query.searchRequestStatus === 'stale'
       || query.searchRequestStatus === 'cancelled'
       || query.searchRequestStatus === 'failed'
     ) {
-      if (blackboard[memoryKey] !== null) writeMemory(memoryKey, null);
+      if (blackboard[requestKey] !== null) writeMemory(requestKey, null);
+      if (blackboard[identityKey] !== null) writeMemory(identityKey, null);
     }
   }
 
@@ -135,23 +122,20 @@ export function runAiGraph(input: AiGraphRunnerInput): AiGraphRunnerResult {
         ? query.candidates.find((candidate) => candidate.id === query.winnerCandidateId)
         : undefined;
       const posture = winner?.metrics.recommendedPosture;
-      if (posture === 'standing' || posture === 'crouched' || posture === 'prone') {
-        writeMemory(`${writeTo}_posture`, posture);
-      }
+      if (posture === 'standing' || posture === 'crouched' || posture === 'prone') writeMemory(`${writeTo}_posture`, posture);
       const facing = winner?.metrics.recommendedFacingRadians;
       if (typeof facing === 'number' && Number.isFinite(facing)) writeMemory(`${writeTo}_facing`, facing);
       if (winner?.kind) writeMemory(`${writeTo}_kind`, winner.kind);
       if (winner?.requestIdentity) writeMemory(`${writeTo}_request_identity`, winner.requestIdentity);
     }
   }
-
   return changed ? { ...result, blackboard, effects } : result;
 }
 
 function wrapStatefulTacticalHost(
   input: AiGraphRunnerInput,
   queryKeys: readonly string[],
-  tacticalConfigs: ReadonlyMap<string, TacticalNodeQueryConfig>,
+  tacticalConfigs: ReadonlyMap<string, TacticalPositionNodeSettings>,
 ): AiGraphTacticalHost | undefined {
   const original = input.tacticalHost;
   const generate = original?.generateCoverCandidates;
@@ -164,25 +148,31 @@ function wrapStatefulTacticalHost(
         ?? queryKeys[Math.min(callIndex, Math.max(0, queryKeys.length - 1))]
         ?? 'cover_query';
       callIndex += 1;
-      const stored = input.blackboard[tacticalRequestMemoryKey(queryKey)];
       const config = tacticalConfigs.get(queryKey);
-      const target = config ? null : request.target;
+      const storedRequest = input.blackboard[tacticalRequestMemoryKey(queryKey)];
+      const storedIdentity = input.blackboard[tacticalConfigMemoryKey(queryKey)];
+      const currentIdentity = config ? tacticalConfigIdentity(config) : null;
+      const canReuse = typeof storedRequest === 'string'
+        && storedRequest.length > 0
+        && currentIdentity !== null
+        && storedIdentity === currentIdentity;
       const extended: ExtendedTacticalQueryGenerationRequest = {
         ...request,
         queryKey,
-        requestId: typeof stored === 'string' && stored.length > 0 ? stored : undefined,
+        requestId: canReuse ? storedRequest : undefined,
         kind: config?.kind ?? request.kind ?? 'cover',
         objective: config?.objective ?? request.objective,
-        target,
-        targetMode: config?.targetMode,
-        targetPoint: config?.targetPoint,
-        sectorCenterDegrees: config?.sectorCenterDegrees,
-        sectorArcDegrees: config?.sectorArcDegrees,
-        maximumRouteCost: config?.maximumRouteCost,
-        maxPositionDanger: config?.maxPositionDanger,
-        preliminaryCandidates: config?.preliminaryCandidates,
-        exactCandidates: config?.exactCandidates,
-        exactRayLimit: config?.exactRayLimit,
+        target: config ? null : request.target,
+        targetMode: config?.target.mode,
+        targetPoint: config?.target.point,
+        sectorCenterDegrees: config?.target.sectorCenterDegrees,
+        sectorArcDegrees: config?.target.sectorArcDegrees,
+        maximumRouteCost: config?.searchBudget.maximumRouteCost,
+        maxPositionDanger: config?.constraints.maxPositionDanger,
+        preliminaryCandidates: config?.searchBudget.preliminaryCandidates,
+        exactCandidates: config?.searchBudget.exactCandidates,
+        exactRayLimit: config?.searchBudget.exactRayLimit,
+        searchSettings: config?.search,
       };
       return generate(extended);
     },
@@ -192,56 +182,22 @@ function wrapStatefulTacticalHost(
 export function tacticalRequestMemoryKey(queryKey: string): string {
   return `${queryKey}_request_id`;
 }
-
-function readTacticalNodeConfig(parameters: Readonly<Record<string, unknown>> | undefined): TacticalNodeQueryConfig {
-  return {
-    queryKey: readString(parameters?.queryKey, 'tactical_position_query'),
-    kind: readKind(parameters?.kind),
-    objective: readObjective(parameters?.objective),
-    targetMode: readTargetMode(parameters?.targetMode),
-    targetPoint: readPosition(parameters?.targetPoint),
-    sectorCenterDegrees: readNumber(parameters?.sectorCenterDegrees, 0),
-    sectorArcDegrees: clamp(readNumber(parameters?.sectorArcDegrees, 90), 1, 360),
-    maximumRouteCost: Math.max(1, readNumber(parameters?.maximumRouteCost, 100000)),
-    maxPositionDanger: clamp(readNumber(parameters?.maxPositionDanger, 78), 0, 100),
-    preliminaryCandidates: Math.round(clamp(readNumber(parameters?.preliminaryCandidates, 36), 8, 128)),
-    exactCandidates: Math.round(clamp(readNumber(parameters?.exactCandidates, 12), 1, 32)),
-    exactRayLimit: Math.round(clamp(readNumber(parameters?.exactRayLimit, 32), 0, 128)),
-  };
+export function tacticalConfigMemoryKey(queryKey: string): string {
+  return `${queryKey}_config_identity`;
 }
-
-function readKind(value: unknown): TacticalPositionKind {
-  if (value === 'observation' || value === 'firing') return value;
-  return 'defense';
+function tacticalConfigIdentity(config: TacticalPositionNodeSettings): string {
+  return [
+    config.kind,
+    config.objective,
+    config.target.mode,
+    config.target.point ? `${config.target.point.x}:${config.target.point.y}` : 'none',
+    config.target.sectorCenterDegrees,
+    config.target.sectorArcDegrees,
+    config.searchRadiusMeters,
+    config.maxCalculationMs,
+    tacticalPositionSearchSettingsDigest(config.search),
+  ].join('|');
 }
-
-function readObjective(value: unknown): TacticalPositionSearchObjective {
-  if (value === 'advance_to_threat' || value === 'withdraw_from_threat' || value === 'continue_order') return value;
-  return 'balanced';
-}
-
-function readTargetMode(value: unknown): TacticalNodeQueryConfig['targetMode'] {
-  if (value === 'order_point' || value === 'facing_sector') return value;
-  return 'automatic';
-}
-
-function readPosition(value: unknown): { x: number; y: number } | null {
-  if (!value || typeof value !== 'object') return null;
-  const x = (value as { x?: unknown }).x;
-  const y = (value as { y?: unknown }).y;
-  return typeof x === 'number' && Number.isFinite(x) && typeof y === 'number' && Number.isFinite(y)
-    ? { x, y }
-    : null;
-}
-
 function readString(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.length > 0 ? value : fallback;
-}
-
-function readNumber(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.max(minimum, Math.min(maximum, value));
 }
