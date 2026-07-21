@@ -20,7 +20,11 @@ const reloadGraph: AiGraph = {
       displayName: 'Reload weapon',
       displayNameRu: 'Перезарядить оружие',
       children: [],
-      parameters: { durationSeconds: 3, targetAmmo: 30, failIfNoWeapon: true },
+      parameters: {
+        durationSeconds: 3,
+        targetAmmo: 30,
+        failIfNoWeapon: true,
+      },
     },
     {
       id: 'continue',
@@ -49,10 +53,17 @@ assert.equal(started.activeNodeId, 'reload');
 assert.equal(started.elapsedMs, 0);
 assert.ok(started.executionState);
 assert.deepEqual(reloadEffectTypes(started.effects), ['begin_reload']);
-assert.equal(readReloadEffect(started.effects[0])?.type, 'begin_reload');
-assert.equal(readReloadEffect(started.effects[0])?.initialAmmo, 3);
-assert.equal(readReloadEffect(started.effects[0])?.targetAmmo, 30);
+const beginEffect = readReloadEffect(started.effects[0]);
+assert.equal(beginEffect?.type, 'begin_reload');
+assert.equal(beginEffect?.initialAmmo, 3);
+assert.equal(beginEffect?.targetAmmo, 3, 'legacy targetAmmo parameter must not create or prescribe ammunition');
 assert.equal(started.executionState.activeData?.kind, 'reload');
+assert.equal(
+  Object.prototype.hasOwnProperty.call(started.executionState.activeData ?? {}, 'targetAmmo'),
+  false,
+  'stateful reload action must not own an arbitrary targetAmmo value',
+);
+assert.equal((started.executionState.activeData as { observedAmmo?: number } | undefined)?.observedAmmo, 3);
 
 const midway = runAiGraphRuntime({
   ...base,
@@ -80,7 +91,7 @@ assert.equal(cancelled.executionState, undefined);
 assert.deepEqual(reloadEffectTypes(cancelled.effects), ['cancel_reload']);
 const cancelEffect = readReloadEffect(cancelled.effects[0]);
 assert.equal(cancelEffect?.type, 'cancel_reload');
-assert.equal(cancelEffect?.initialAmmo, 3, 'cancel must preserve the original ammo count');
+assert.equal(cancelEffect?.initialAmmo, 3, 'cancel effect may report only the observed compatibility total');
 assert.equal(cancelled.lifecycle.filter((event) => event.phase === 'cancel').length, 1);
 
 const completed = runAiGraphRuntime({
@@ -93,7 +104,11 @@ assert.equal(completed.executionState, undefined);
 assert.deepEqual(completed.effects.map((effect) => effect.type), ['complete_reload', 'set_action']);
 const completeEffect = readReloadEffect(completed.effects[0]);
 assert.equal(completeEffect?.type, 'complete_reload');
-assert.equal(completeEffect?.targetAmmo, 30);
+assert.equal(
+  completeEffect?.targetAmmo,
+  3,
+  'legacy completion effect must not restore a configured refill amount; physical WeaponRuntime owns completion',
+);
 assert.equal(completed.lifecycle.filter((event) => event.phase === 'complete').length, 1);
 
 const legacyGraph: AiGraph = {
@@ -119,8 +134,13 @@ assert.equal(legacy.status, 'success');
 assert.equal(legacy.executionState, undefined);
 assert.deepEqual(legacy.effects.map((effect) => effect.type), ['set_action']);
 assert.deepEqual(reloadEffectTypes(legacy.effects), []);
+assert.equal(
+  Object.prototype.hasOwnProperty.call(legacy.effects[0] ?? {}, 'targetAmmo'),
+  false,
+  'legacy SetAction reload cannot carry an ammunition target',
+);
 
-console.log('AI reload runtime smoke passed: running progress, exact cancel cleanup, completion refill and legacy instant reload.');
+console.log('AI reload runtime smoke passed: physical-action request, exact cancellation, no arbitrary targetAmmo and no instant refill.');
 
 function reloadEffectTypes(effects: readonly { readonly type: string }[]): string[] {
   return effects
