@@ -13,8 +13,8 @@ import {
 } from '../ai/runtime/AiRuntimeSnapshot';
 import {
   normalizeUnitPhysicalAction,
-  synchronizeEffectivePostureFromAction,
-} from '../actions/PostureTransition';
+  synchronizePhysicalActionAfterRestore,
+} from '../actions/PhysicalActionNormalization';
 import {
   createBehaviorRuntime,
   createBehaviorSettings,
@@ -29,7 +29,13 @@ import {
   type UnitInitialState,
 } from '../behavior/BehaviorModel';
 import { clearCombatRuntime, replaceCombatRuntime, type CombatRuntimeState } from '../combat/CombatDamage';
-import { clearWeaponRuntime, replaceWeaponRuntime, type WeaponRuntimeState } from '../combat/WeaponModel';
+import {
+  clearWeaponRuntime,
+  createDefaultWeaponRuntime,
+  getWeaponRuntime,
+  replaceWeaponRuntime,
+  type WeaponRuntimeState,
+} from '../combat/WeaponModel';
 import type { GridPosition } from '../geometry';
 import { createMovementRuntime, type MovementRuntimeState } from '../movement/MovementRuntime';
 import {
@@ -285,13 +291,22 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
           ?? (unit.movementProfileId ? 'unit' : 'default'),
       },
     );
-    model.behaviorRuntime.physicalAction = normalizeUnitPhysicalAction(unit.runtime?.physicalAction, model.id);
-    synchronizeEffectivePostureFromAction(model);
+
+    if (unit.runtime?.weapon) replaceWeaponRuntime(model, unit.runtime.weapon);
+    const weaponRuntime = getWeaponRuntime(model);
+    model.behaviorRuntime.physicalAction = normalizeUnitPhysicalAction(
+      unit.runtime?.physicalAction,
+      model.id,
+      weaponRuntime,
+    );
+    synchronizePhysicalActionAfterRestore(model);
     if (model.behaviorRuntime.physicalAction?.status === 'running') {
-      model.behaviorRuntime.currentAction = 'change_posture';
+      model.behaviorRuntime.currentAction = model.behaviorRuntime.physicalAction.type === 'weapon_reload'
+        ? 'reload'
+        : 'change_posture';
       model.behaviorRuntime.reason = model.behaviorRuntime.physicalAction.reasonRu;
     }
-    if (unit.runtime?.weapon) replaceWeaponRuntime(model, unit.runtime.weapon);
+
     restoreAiRuntimeSnapshot(model, unit.runtime?.aiRuntime);
     if (!model.order) restorePlayerMoveOrderSnapshot(model, unit.runtime?.moveOrder);
     if (!model.order) {
@@ -346,8 +361,9 @@ export function applyInitialStateToRuntime(unit: UnitModel, clearPerceptionKnowl
   unit.behaviorRuntime.posture = initial.posture;
   unit.behaviorRuntime.stress = initial.stress;
   unit.behaviorRuntime.suppression = initial.suppression;
-  unit.behaviorRuntime.ammo = initial.ammo;
-  unit.behaviorRuntime.weaponReady = initial.weaponReady;
+  const weaponRuntime = createDefaultWeaponRuntime(initial.ammo);
+  weaponRuntime.ready = initial.weaponReady && weaponRuntime.roundsLoaded > 0;
+  replaceWeaponRuntime(unit, weaponRuntime);
   unit.behaviorRuntime.danger = 0;
   unit.behaviorRuntime.rawDanger = 0;
   unit.behaviorRuntime.state = 'idle';
@@ -382,12 +398,13 @@ export function applyInitialStateToRuntime(unit: UnitModel, clearPerceptionKnowl
 }
 
 export function copyRuntimeToInitialState(unit: UnitModel): void {
+  const weaponRuntime = getWeaponRuntime(unit);
   unit.initialState = createUnitInitialState(unit.soldier, {
     posture: unit.behaviorRuntime.posture,
     stress: unit.behaviorRuntime.stress,
     suppression: unit.behaviorRuntime.suppression,
-    ammo: unit.behaviorRuntime.ammo,
-    weaponReady: unit.behaviorRuntime.weaponReady,
+    ammo: weaponRuntime.roundsLoaded + weaponRuntime.roundsReserve,
+    weaponReady: weaponRuntime.ready && weaponRuntime.roundsLoaded > 0,
     fatigue: unit.soldier.condition.fatigue,
     morale: unit.soldier.condition.morale,
     confusion: unit.soldier.condition.confusion,
