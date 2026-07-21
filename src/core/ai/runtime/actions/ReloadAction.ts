@@ -5,13 +5,13 @@ export interface ReloadActionState {
   readonly kind: 'reload';
   readonly startedAtMs: number;
   readonly durationMs: number;
-  readonly initialAmmo: number;
-  readonly targetAmmo: number;
+  readonly observedAmmo: number;
 }
 
 export interface AiGraphRuntimeBeginReloadEffect {
   readonly type: 'begin_reload';
   readonly initialAmmo: number;
+  /** Deprecated compatibility snapshot; never read as physical ammunition. */
   readonly targetAmmo: number;
   readonly reason: string;
   readonly reasonRu?: string;
@@ -19,6 +19,7 @@ export interface AiGraphRuntimeBeginReloadEffect {
 
 export interface AiGraphRuntimeCompleteReloadEffect {
   readonly type: 'complete_reload';
+  /** Deprecated compatibility snapshot; never read as physical ammunition. */
   readonly targetAmmo: number;
   readonly reason: string;
   readonly reasonRu?: string;
@@ -38,11 +39,10 @@ export type AiGraphRuntimeReloadEffect =
 
 export const reloadActionLifecycle: AiNodeLifecycle<ReloadActionState> = {
   start: (context) => {
-    const initialAmmo = readAmmo(context.blackboard.ammo, 0);
-    const targetAmmo = readAmmo(context.node.parameters?.targetAmmo, 30);
+    const observedAmmo = readAmmo(context.blackboard.ammo, 0);
     const failIfNoWeapon = readBoolean(context.node.parameters?.failIfNoWeapon, true);
     const weaponReady = readBoolean(context.blackboard.weaponReady, true);
-    if (failIfNoWeapon && !weaponReady && initialAmmo <= 0) {
+    if (failIfNoWeapon && !weaponReady && observedAmmo <= 0) {
       return {
         status: 'failure',
         reason: 'Reload cannot start because no usable weapon is available.',
@@ -54,15 +54,15 @@ export const reloadActionLifecycle: AiNodeLifecycle<ReloadActionState> = {
       kind: 'reload',
       startedAtMs: context.nowMs,
       durationMs: toMilliseconds(readNumber(context.node.parameters?.durationSeconds, 3)),
-      initialAmmo,
-      targetAmmo,
+      observedAmmo,
     };
     if (state.durationMs <= 0) {
       return {
         status: 'success',
         state,
-        reason: 'Reload completed immediately.',
-        reasonRu: 'Перезарядка завершена сразу.',
+        effects: [beginReloadEffect(state)],
+        reason: 'Physical reload action requested.',
+        reasonRu: 'Запрошено физическое действие перезарядки.',
         progress: 1,
       };
     }
@@ -70,8 +70,8 @@ export const reloadActionLifecycle: AiNodeLifecycle<ReloadActionState> = {
       status: 'running',
       state,
       effects: [beginReloadEffect(state)],
-      reason: `Reload started for ${state.durationMs} ms.`,
-      reasonRu: `Перезарядка начата на ${formatSeconds(state.durationMs)} сек.`,
+      reason: `Physical reload action requested; legacy node waits ${state.durationMs} ms.`,
+      reasonRu: `Запрошена физическая перезарядка; старая нода ожидает ${formatSeconds(state.durationMs)} сек.`,
       progress: 0,
     };
   },
@@ -81,16 +81,16 @@ export const reloadActionLifecycle: AiNodeLifecycle<ReloadActionState> = {
       return {
         status: 'success',
         state,
-        reason: `Reload completed after ${elapsedMs} ms.`,
-        reasonRu: `Перезарядка завершена через ${formatSeconds(elapsedMs)} сек.`,
+        reason: `Legacy reload node finished after ${elapsedMs} ms; physical runtime owns completion.`,
+        reasonRu: `Старая нода завершилась через ${formatSeconds(elapsedMs)} сек.; патронами владеет физический runtime.`,
         progress: 1,
       };
     }
     return {
       status: 'running',
       state,
-      reason: `Reload is active at ${elapsedMs} ms.`,
-      reasonRu: `Перезарядка выполняется: ${formatSeconds(elapsedMs)} сек.`,
+      reason: `Physical reload request is active at ${elapsedMs} ms.`,
+      reasonRu: `Запрос физической перезарядки активен: ${formatSeconds(elapsedMs)} сек.`,
       progress: state.durationMs > 0 ? Math.min(1, elapsedMs / state.durationMs) : 1,
     };
   },
@@ -110,22 +110,20 @@ export const reloadActionLifecycle: AiNodeLifecycle<ReloadActionState> = {
 
 export function readAiGraphRuntimeReloadEffect(effect: AiGraphEffect): AiGraphRuntimeReloadEffect | null {
   const candidate = effect as unknown as Partial<AiGraphRuntimeReloadEffect>;
-  if (candidate.type === 'begin_reload'
-    && isFiniteNonNegative(candidate.initialAmmo)
-    && isFiniteNonNegative(candidate.targetAmmo)) {
+  if (candidate.type === 'begin_reload' && isFiniteNonNegative(candidate.initialAmmo)) {
     return {
       type: 'begin_reload',
       initialAmmo: candidate.initialAmmo,
-      targetAmmo: candidate.targetAmmo,
-      reason: typeof candidate.reason === 'string' ? candidate.reason : 'Reload started.',
+      targetAmmo: candidate.initialAmmo,
+      reason: typeof candidate.reason === 'string' ? candidate.reason : 'Physical reload requested.',
       reasonRu: typeof candidate.reasonRu === 'string' ? candidate.reasonRu : undefined,
     };
   }
-  if (candidate.type === 'complete_reload' && isFiniteNonNegative(candidate.targetAmmo)) {
+  if (candidate.type === 'complete_reload') {
     return {
       type: 'complete_reload',
-      targetAmmo: candidate.targetAmmo,
-      reason: typeof candidate.reason === 'string' ? candidate.reason : 'Reload completed.',
+      targetAmmo: isFiniteNonNegative(candidate.targetAmmo) ? candidate.targetAmmo : 0,
+      reason: typeof candidate.reason === 'string' ? candidate.reason : 'Legacy reload node completed.',
       reasonRu: typeof candidate.reasonRu === 'string' ? candidate.reasonRu : undefined,
     };
   }
@@ -145,33 +143,32 @@ export function isReloadActionState(value: unknown): value is ReloadActionState 
     && value.kind === 'reload'
     && isFiniteNonNegative(value.startedAtMs)
     && isFiniteNonNegative(value.durationMs)
-    && isFiniteNonNegative(value.initialAmmo)
-    && isFiniteNonNegative(value.targetAmmo);
+    && isFiniteNonNegative(value.observedAmmo);
 }
 
 function beginReloadEffect(state: ReloadActionState): AiGraphEffect {
   return {
     type: 'begin_reload',
-    initialAmmo: state.initialAmmo,
-    targetAmmo: state.targetAmmo,
-    reason: 'Reload started.',
-    reasonRu: 'Перезарядка начата.',
+    initialAmmo: state.observedAmmo,
+    targetAmmo: state.observedAmmo,
+    reason: 'Physical reload requested.',
+    reasonRu: 'Запрошена физическая перезарядка.',
   } as unknown as AiGraphEffect;
 }
 
 function completeReloadEffect(state: ReloadActionState): AiGraphEffect {
   return {
     type: 'complete_reload',
-    targetAmmo: state.targetAmmo,
-    reason: 'Reload completed.',
-    reasonRu: 'Перезарядка завершена.',
+    targetAmmo: state.observedAmmo,
+    reason: 'Legacy reload node completed without changing ammunition.',
+    reasonRu: 'Старая нода завершилась без изменения боезапаса.',
   } as unknown as AiGraphEffect;
 }
 
 function cancelReloadEffect(state: ReloadActionState, outcome: 'failure' | 'cancelled'): AiGraphEffect {
   return {
     type: 'cancel_reload',
-    initialAmmo: state.initialAmmo,
+    initialAmmo: state.observedAmmo,
     reason: outcome === 'cancelled' ? 'Reload cancelled.' : 'Reload failed.',
     reasonRu: outcome === 'cancelled' ? 'Перезарядка отменена.' : 'Перезарядка провалилась.',
   } as unknown as AiGraphEffect;
