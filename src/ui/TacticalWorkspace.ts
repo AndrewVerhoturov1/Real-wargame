@@ -2,10 +2,13 @@ import '../cell-inspector.css';
 import type { AiGameBridgeHandle } from '../core/ai/AiGameBridge';
 import { setRouteCostOverlayActive } from '../core/navigation/RouteCostOverlayState';
 import type { SimulationState } from '../core/simulation/SimulationState';
+import { getStaticTacticalPositionService } from '../core/tactical/static/StaticTacticalPositionService';
+import type { StaticTacticalPositionKind } from '../core/tactical/static/StaticTacticalPositionBasis';
 import {
   getSimulationLayerState,
   setSimulationLayerMode,
   toggleThreatCones,
+  type SimulationLayerMode,
 } from '../core/ui/RuntimeUiState';
 import { installCellInspector } from './CellInspector';
 import {
@@ -19,10 +22,23 @@ export * from './TacticalWorkspaceBase';
 
 const ROUTE_COST_INSPECTOR_RENDERED_EVENT = 'real-wargame:route-cost-inspector-rendered';
 
+interface StaticTacticalTabDefinition {
+  readonly kind: StaticTacticalPositionKind;
+  readonly mode: SimulationLayerMode;
+  readonly label: string;
+}
+
+const STATIC_TACTICAL_TABS: readonly StaticTacticalTabDefinition[] = Object.freeze([
+  { kind: 'observation', mode: 'observation_positions', label: 'Наблюдение' },
+  { kind: 'defense', mode: 'defense_positions', label: 'Оборона' },
+  { kind: 'firing', mode: 'firing_positions', label: 'Огонь' },
+]);
+
 /**
  * Compatibility shell around the existing workspace while legacy cover widgets
- * are removed. Tactical-position search and route diagnostics own dedicated
- * inspector tabs and are never mounted into the shared Info/Danger/Stealth body.
+ * are removed. Tactical-position search, objective tactical layers and route
+ * diagnostics own dedicated inspector tabs and are never mounted into the
+ * shared Info/Danger/Stealth body.
  */
 export function installTacticalWorkspace(
   state: SimulationState,
@@ -38,7 +54,8 @@ export function installTacticalWorkspace(
       display: none !important;
     }
 
-    .route-cost-inspector-body[hidden] {
+    .route-cost-inspector-body[hidden],
+    .static-tactical-inspector-body[hidden] {
       display: none !important;
     }
 
@@ -60,7 +77,8 @@ export function installTacticalWorkspace(
       display: none !important;
     }
 
-    .danger-cone-controls {
+    .danger-cone-controls,
+    .static-tactical-inspector-panel {
       display: grid;
       gap: 6px;
       margin: 0 0 12px;
@@ -70,7 +88,9 @@ export function installTacticalWorkspace(
       background: rgba(255, 242, 168, 0.035);
     }
 
-    .danger-cone-controls > span {
+    .danger-cone-controls > span,
+    .static-tactical-inspector-panel p,
+    .static-tactical-inspector-panel span {
       color: var(--workspace-muted);
       font-size: 11px;
       line-height: 1.4;
@@ -91,6 +111,35 @@ export function installTacticalWorkspace(
       border-color: var(--workspace-accent);
       background: var(--workspace-accent);
     }
+
+    .static-tactical-layer-tabs {
+      display: contents;
+    }
+
+    .static-tactical-inspector-panel h3 {
+      margin: 0;
+      color: var(--workspace-accent);
+      font-size: 13px;
+    }
+
+    .static-tactical-inspector-panel dl {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 5px 10px;
+      margin: 4px 0 0;
+      font-size: 11px;
+    }
+
+    .static-tactical-inspector-panel dt {
+      color: var(--workspace-muted);
+    }
+
+    .static-tactical-inspector-panel dd {
+      margin: 0;
+      color: #fff0a1;
+      font-weight: 700;
+      text-align: right;
+    }
   `;
   document.head.append(style);
 
@@ -99,6 +148,7 @@ export function installTacticalWorkspace(
   const teardownSettings = installTacticalPositionSettingsControls(state, onChanged);
   const teardownSearch = installTacticalPositionSearchControls(state, onChanged);
   const teardownCellInspector = installCellInspector(state);
+  const staticService = getStaticTacticalPositionService(state);
   const shell = document.querySelector<HTMLElement>('.tactical-workspace-shell');
   const sidebarBody = shell?.querySelector<HTMLElement>('[data-role="sidebar-body"]') ?? null;
   const sidebarTitle = shell?.querySelector<HTMLElement>('[data-role="sidebar-title"]') ?? null;
@@ -121,19 +171,35 @@ export function installTacticalWorkspace(
   let routeCostTab: HTMLButtonElement | null = null;
   let routeCostInspectorPanel: HTMLElement | null = null;
   let routeCostTabActive = false;
+  let staticTacticalInspectorPanel: HTMLElement | null = null;
+  let activeStaticTacticalTab: StaticTacticalTabDefinition | null = null;
+  const staticTacticalTabButtons = new Map<StaticTacticalPositionKind, HTMLButtonElement>();
 
   if (shell && sidebarBody && tabs) {
     const memoryTab = tabs.querySelector<HTMLButtonElement>('[data-tab="memory"]');
-    const markup = '<button data-tab="routeCost">Маршрут</button>';
+    const staticMarkup = STATIC_TACTICAL_TABS
+      .map((definition) => `<button data-static-tactical-kind="${definition.kind}">${definition.label}</button>`)
+      .join('');
+    const markup = `${staticMarkup}<button data-tab="routeCost">Маршрут</button>`;
     if (memoryTab) memoryTab.insertAdjacentHTML('beforebegin', markup);
     else tabs.insertAdjacentHTML('beforeend', markup);
     routeCostTab = tabs.querySelector<HTMLButtonElement>('[data-tab="routeCost"]');
+    for (const definition of STATIC_TACTICAL_TABS) {
+      const button = tabs.querySelector<HTMLButtonElement>(`[data-static-tactical-kind="${definition.kind}"]`);
+      if (button) staticTacticalTabButtons.set(definition.kind, button);
+    }
 
     routeCostInspectorPanel = document.createElement('div');
     routeCostInspectorPanel.className = `${sidebarBody.className} route-cost-inspector-body`;
     routeCostInspectorPanel.hidden = true;
     routeCostInspectorPanel.innerHTML = '<div class="workspace-panel-section route-cost-inspector-panel" data-role="route-cost-inspector-host"></div>';
     sidebarBody.after(routeCostInspectorPanel);
+
+    staticTacticalInspectorPanel = document.createElement('div');
+    staticTacticalInspectorPanel.className = `${sidebarBody.className} static-tactical-inspector-body`;
+    staticTacticalInspectorPanel.hidden = true;
+    staticTacticalInspectorPanel.innerHTML = '<section class="static-tactical-inspector-panel" data-role="static-tactical-inspector-panel"></section>';
+    routeCostInspectorPanel.after(staticTacticalInspectorPanel);
 
     const routeCostInspectorHost = routeCostInspectorPanel.querySelector<HTMLElement>('[data-role="route-cost-inspector-host"]');
     const routeProfileLabel = shell.querySelector<HTMLElement>('.unit-route-profile');
@@ -160,7 +226,7 @@ export function installTacticalWorkspace(
   };
 
   const mountDangerConeControls = (): void => {
-    if (!shell || !sidebarBody || routeCostTabActive) {
+    if (!shell || !sidebarBody || routeCostTabActive || activeStaticTacticalTab) {
       dangerConeControls.remove();
       return;
     }
@@ -182,45 +248,96 @@ export function installTacticalWorkspace(
   };
   dangerConeToggle.addEventListener('click', handleDangerConeToggle);
 
-  const syncRouteCostInspectorUi = (): void => {
-    if (!shell || !sidebarBody || !sidebarTitle || !routeCostTab || !routeCostInspectorPanel) return;
+  const syncInspectorUi = (): void => {
+    if (!shell || !sidebarBody || !sidebarTitle || !routeCostTab || !routeCostInspectorPanel || !staticTacticalInspectorPanel) return;
+    const staticActive = activeStaticTacticalTab !== null;
     routeCostInspectorPanel.hidden = !routeCostTabActive;
-    sidebarBody.hidden = routeCostTabActive;
-    if (!routeCostTabActive) return;
-
-    if (sidebarTitle.textContent !== 'Маршрут') sidebarTitle.textContent = 'Маршрут';
-    shell.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((button) => {
-      button.classList.toggle('active', button === routeCostTab);
+    staticTacticalInspectorPanel.hidden = !staticActive;
+    sidebarBody.hidden = routeCostTabActive || staticActive;
+    if (routeCostTabActive) sidebarTitle.textContent = 'Маршрут';
+    else if (activeStaticTacticalTab) sidebarTitle.textContent = staticLayerTitle(activeStaticTacticalTab.kind);
+    shell.querySelectorAll<HTMLButtonElement>('[data-tab], [data-static-tactical-kind]').forEach((button) => {
+      const kind = button.dataset.staticTacticalKind as StaticTacticalPositionKind | undefined;
+      button.classList.toggle('active', routeCostTabActive ? button === routeCostTab : Boolean(kind && kind === activeStaticTacticalTab?.kind));
     });
+  };
+
+  const renderStaticTacticalInspector = (): void => {
+    const host = staticTacticalInspectorPanel?.querySelector<HTMLElement>('[data-role="static-tactical-inspector-panel"]');
+    const active = activeStaticTacticalTab;
+    if (!host || !active) return;
+    const diagnostics = staticService.getDiagnostics();
+    const basis = staticService.readAnyReady();
+    const candidates = basis ? candidateCount(basis, active.kind) : 0;
+    const fieldLabel = active.kind === 'observation'
+      ? 'Обзор, скрытность и частичная защита'
+      : active.kind === 'defense'
+        ? 'Направленная защита, обратные склоны и укрытия'
+        : 'Линии огня, проницаемость и защита стрелка';
+    host.innerHTML = `
+      <h3>${staticLayerTitle(active.kind)}</h3>
+      <p>${fieldLabel}. Слой показывает объективный потенциал местности и не использует положение неизвестного противника.</p>
+      <dl>
+        <dt>Состояние</dt><dd>${staticStatusLabel(diagnostics.status)}</dd>
+        <dt>Кандидатов в индексе</dt><dd>${candidates}</dd>
+        <dt>Время построения</dt><dd>${basis ? `${basis.diagnostics.buildMs.toFixed(1)} мс` : '—'}</dd>
+        <dt>Обработано клеток</dt><dd>${basis?.diagnostics.cellsProcessed ?? '—'}</dd>
+        <dt>Лучи наблюдения</dt><dd>${basis?.diagnostics.observationRays ?? '—'}</dd>
+        <dt>Лучи прострела</dt><dd>${basis?.diagnostics.firingRays ?? '—'}</dd>
+      </dl>`;
   };
 
   const handleRouteCostTabClick = (): void => {
     routeCostTabActive = true;
+    activeStaticTacticalTab = null;
     setSimulationLayerMode(state, 'info');
     setRouteCostOverlayActive(state, true);
     dangerConeControls.remove();
-    syncRouteCostInspectorUi();
+    syncInspectorUi();
     window.dispatchEvent(new CustomEvent(ROUTE_COST_INSPECTOR_RENDERED_EVENT));
+    onChanged();
+  };
+  const handleStaticTacticalTabClick = (definition: StaticTacticalTabDefinition): void => {
+    routeCostTabActive = false;
+    activeStaticTacticalTab = definition;
+    setRouteCostOverlayActive(state, false);
+    setSimulationLayerMode(state, definition.mode);
+    dangerConeControls.remove();
+    renderStaticTacticalInspector();
+    syncInspectorUi();
     onChanged();
   };
   const handleOtherTabClick = (): void => {
     routeCostTabActive = false;
+    activeStaticTacticalTab = null;
     setRouteCostOverlayActive(state, false);
-    syncRouteCostInspectorUi();
+    syncInspectorUi();
     window.requestAnimationFrame(mountDangerConeControls);
     onChanged();
   };
   const handleModeClick = (): void => {
     routeCostTabActive = false;
+    activeStaticTacticalTab = null;
     setRouteCostOverlayActive(state, false);
-    syncRouteCostInspectorUi();
+    syncInspectorUi();
     window.requestAnimationFrame(mountDangerConeControls);
     onChanged();
   };
 
   routeCostTab?.addEventListener('click', handleRouteCostTabClick);
+  const staticTabHandlers = new Map<StaticTacticalPositionKind, () => void>();
+  for (const definition of STATIC_TACTICAL_TABS) {
+    const handler = () => handleStaticTacticalTabClick(definition);
+    staticTabHandlers.set(definition.kind, handler);
+    staticTacticalTabButtons.get(definition.kind)?.addEventListener('click', handler);
+  }
   originalTabButtons.forEach((button) => button.addEventListener('click', handleOtherTabClick));
   modeButtons.forEach((button) => button.addEventListener('click', handleModeClick));
+  const unsubscribeStatic = staticService.subscribe(() => {
+    if (!activeStaticTacticalTab) return;
+    renderStaticTacticalInspector();
+    onChanged();
+  });
 
   let cleaning = false;
   let scheduledFrame = 0;
@@ -238,7 +355,8 @@ export function installTacticalWorkspace(
         if (label === 'Известных укрытий') row.remove();
       });
       if (sidebarTitle?.textContent === 'Опасность и укрытия') sidebarTitle.textContent = 'Опасность';
-      syncRouteCostInspectorUi();
+      syncInspectorUi();
+      renderStaticTacticalInspector();
       mountDangerConeControls();
     } finally {
       cleaning = false;
@@ -262,13 +380,21 @@ export function installTacticalWorkspace(
 
   return () => {
     observer?.disconnect();
+    unsubscribeStatic();
     if (scheduledFrame !== 0) window.cancelAnimationFrame(scheduledFrame);
     setRouteCostOverlayActive(state, false);
     dangerConeToggle.removeEventListener('click', handleDangerConeToggle);
     dangerConeControls.remove();
     routeCostTab?.removeEventListener('click', handleRouteCostTabClick);
+    for (const definition of STATIC_TACTICAL_TABS) {
+      const button = staticTacticalTabButtons.get(definition.kind);
+      const handler = staticTabHandlers.get(definition.kind);
+      if (button && handler) button.removeEventListener('click', handler);
+      button?.remove();
+    }
     originalTabButtons.forEach((button) => button.removeEventListener('click', handleOtherTabClick));
     modeButtons.forEach((button) => button.removeEventListener('click', handleModeClick));
+    staticTacticalInspectorPanel?.remove();
     routeCostInspectorPanel?.remove();
     routeCostTab?.remove();
     style.remove();
@@ -278,4 +404,29 @@ export function installTacticalWorkspace(
     teardownTab();
     teardownBase();
   };
+}
+
+function staticLayerTitle(kind: StaticTacticalPositionKind): string {
+  if (kind === 'observation') return 'Наблюдательные позиции';
+  if (kind === 'defense') return 'Оборонительные позиции';
+  return 'Огневые позиции';
+}
+
+function staticStatusLabel(status: ReturnType<ReturnType<typeof getStaticTacticalPositionService>['getDiagnostics']>['status']): string {
+  if (status === 'ready') return 'готово';
+  if (status === 'queued') return 'в очереди';
+  if (status === 'calculating') return 'рассчитывается';
+  if (status === 'stale') return 'устарело, ожидается новый расчёт';
+  if (status === 'failed') return 'ошибка';
+  if (status === 'destroyed') return 'сервис остановлен';
+  return 'ожидание';
+}
+
+function candidateCount(
+  basis: NonNullable<ReturnType<ReturnType<typeof getStaticTacticalPositionService>['readAnyReady']>>,
+  kind: StaticTacticalPositionKind,
+): number {
+  if (kind === 'observation') return basis.candidateIndex.observation.cellIndices.length;
+  if (kind === 'defense') return basis.candidateIndex.defense.cellIndices.length;
+  return basis.candidateIndex.firing.cellIndices.length;
 }
