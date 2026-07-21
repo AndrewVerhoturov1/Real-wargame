@@ -30,11 +30,16 @@ jobs:
   docs-diagnostic:
     runs-on: ubuntu-latest
     timeout-minutes: 3
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - name: Checkout exact source head
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          show-progress: false
+      - name: Quiet exact checkout
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git init -q .
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch -q --depth=1 origin "${SOURCE_SHA}"
+          git checkout -q FETCH_HEAD
       - name: Print documentation integrity errors
         run: node scripts/check_agent_docs.mjs
