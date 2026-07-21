@@ -151,6 +151,9 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
 }
 
 function resolveApproachPosture(unit: UnitModel, arrivalPosture: UnitPosture): UnitPosture {
+  const currentPosture = unit.behaviorRuntime.posture;
+  if (currentPosture === 'prone') return 'prone';
+  if (currentPosture === 'crouched') return 'crouched';
   const settings = getTacticalPositionSettings(unit);
   return settings.moveCrouchedToProtectedPosition && arrivalPosture !== 'standing'
     ? 'crouched'
