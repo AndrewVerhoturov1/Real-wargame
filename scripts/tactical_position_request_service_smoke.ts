@@ -170,6 +170,7 @@ async function verifyRequestLifecycleAndMovingOrigin(): Promise<void> {
   });
 
   const first = service.enqueueCoverSearch(units[0]!, { searchRadiusMeters: 40 });
+  assert.equal(first.target?.mode, 'sector', 'the resolved default threat sector must be persisted in the request snapshot');
   const duplicate = service.enqueueCoverSearch(units[0]!, { searchRadiusMeters: 40 });
   assert.equal(duplicate.requestId, first.requestId);
   assert.equal(scheduled.length, 1);
