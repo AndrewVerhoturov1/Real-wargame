@@ -62,11 +62,12 @@ const limited = readTacticalPositionNodeSettings({
   preliminaryCandidates: 8, exactCandidates: 1, exactRayLimit: 0, maxRouteExpansions: 64,
 }).search;
 const limitedResult = searchGeneralizedTacticalPositions(field(), request('balanced', limited));
+const diagnostics = limitedResult.diagnostics as typeof limitedResult.diagnostics & TacticalPositionDiagnostics;
 assert.equal(limitedResult.candidates.length, 1);
-assert.ok(limitedResult.diagnostics.provisionalCandidates <= 8);
-assert.ok((limitedResult.diagnostics as TacticalPositionDiagnostics).exactCandidates <= 1);
-assert.equal((limitedResult.diagnostics as TacticalPositionDiagnostics).exactRays, 0);
-assert.ok(limitedResult.diagnostics.routeExpandedCells <= 64);
+assert.ok(diagnostics.provisionalCandidates <= 8);
+assert.ok(diagnostics.exactCandidates <= 1);
+assert.equal(diagnostics.exactRays, 0);
+assert.ok(diagnostics.routeExpandedCells <= 64);
 console.log('generalized tactical position settings smoke passed');
 
 interface TacticalPositionDiagnostics { readonly exactCandidates: number; readonly exactRays: number; }
