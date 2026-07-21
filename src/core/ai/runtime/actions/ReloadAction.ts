@@ -11,20 +11,21 @@ export interface ReloadActionState {
 export interface AiGraphRuntimeBeginReloadEffect {
   readonly type: 'begin_reload';
   readonly initialAmmo: number;
-  /** Deprecated compatibility snapshot; never read as physical ammunition. */
+  /** Deprecated compatibility snapshot; always equals initialAmmo. */
   readonly targetAmmo: number;
   readonly reason: string;
   readonly reasonRu?: string;
 }
 
+/** Read-only compatibility shape for obsolete effects from older runtimes. */
 export interface AiGraphRuntimeCompleteReloadEffect {
   readonly type: 'complete_reload';
-  /** Deprecated compatibility snapshot; never read as physical ammunition. */
   readonly targetAmmo: number;
   readonly reason: string;
   readonly reasonRu?: string;
 }
 
+/** Read-only compatibility shape for obsolete effects from older runtimes. */
 export interface AiGraphRuntimeCancelReloadEffect {
   readonly type: 'cancel_reload';
   readonly initialAmmo: number;
@@ -101,9 +102,8 @@ export const reloadActionLifecycle: AiNodeLifecycle<ReloadActionState> = {
     reasonRu: cancellation.reasonRu ?? 'Перезарядка отменена.',
   }),
   cleanup: (_context, state, outcome) => {
-    if (!state) return [];
-    if (outcome === 'success') return [completeReloadEffect(state)];
-    return [cancelReloadEffect(state, outcome)];
+    if (!state || outcome === 'success') return [];
+    return [cancelPhysicalReloadEffect(outcome)];
   },
   validateState: isReloadActionState,
 };
@@ -123,7 +123,7 @@ export function readAiGraphRuntimeReloadEffect(effect: AiGraphEffect): AiGraphRu
     return {
       type: 'complete_reload',
       targetAmmo: isFiniteNonNegative(candidate.targetAmmo) ? candidate.targetAmmo : 0,
-      reason: typeof candidate.reason === 'string' ? candidate.reason : 'Legacy reload node completed.',
+      reason: typeof candidate.reason === 'string' ? candidate.reason : 'Obsolete reload completion effect ignored.',
       reasonRu: typeof candidate.reasonRu === 'string' ? candidate.reasonRu : undefined,
     };
   }
@@ -131,7 +131,7 @@ export function readAiGraphRuntimeReloadEffect(effect: AiGraphEffect): AiGraphRu
     return {
       type: 'cancel_reload',
       initialAmmo: candidate.initialAmmo,
-      reason: typeof candidate.reason === 'string' ? candidate.reason : 'Reload cancelled.',
+      reason: typeof candidate.reason === 'string' ? candidate.reason : 'Obsolete reload cancellation effect.',
       reasonRu: typeof candidate.reasonRu === 'string' ? candidate.reasonRu : undefined,
     };
   }
@@ -156,22 +156,15 @@ function beginReloadEffect(state: ReloadActionState): AiGraphEffect {
   } as unknown as AiGraphEffect;
 }
 
-function completeReloadEffect(state: ReloadActionState): AiGraphEffect {
+function cancelPhysicalReloadEffect(outcome: 'failure' | 'cancelled'): AiGraphEffect {
   return {
-    type: 'complete_reload',
-    targetAmmo: state.observedAmmo,
-    reason: 'Legacy reload node completed without changing ammunition.',
-    reasonRu: 'Старая нода завершилась без изменения боезапаса.',
-  } as unknown as AiGraphEffect;
-}
-
-function cancelReloadEffect(state: ReloadActionState, outcome: 'failure' | 'cancelled'): AiGraphEffect {
-  return {
-    type: 'cancel_reload',
-    initialAmmo: state.observedAmmo,
-    reason: outcome === 'cancelled' ? 'Reload cancelled.' : 'Reload failed.',
-    reasonRu: outcome === 'cancelled' ? 'Перезарядка отменена.' : 'Перезарядка провалилась.',
-  } as unknown as AiGraphEffect;
+    type: 'set_action',
+    action: 'reload_cancelled',
+    reason: outcome === 'cancelled' ? 'Physical reload cancellation requested.' : 'Physical reload failure cancellation requested.',
+    reasonRu: outcome === 'cancelled'
+      ? 'Запрошена отмена физической перезарядки.'
+      : 'Запрошена системная отмена физической перезарядки после ошибки старой ноды.',
+  };
 }
 
 function readNumber(value: unknown, fallback: number): number {
