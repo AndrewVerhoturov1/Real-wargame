@@ -3,14 +3,14 @@ import { readFileSync } from 'node:fs';
 import type { AiGraph } from '../src/core/ai/AiGraph';
 import { withAiSimulationExecutionContext } from '../src/core/ai/AiSimulationExecutionContext';
 import { runAiGraphRuntime } from '../src/core/ai/AiGraphRuntime';
+import { postureTransitionDurationSeconds } from '../src/core/actions/PostureTransition';
 import {
   createPlayerMoveCommand,
-  markPlayerCommandArrivalPostureApplied,
   normalizePlayerCommand,
   updatePlayerCommandStatus,
 } from '../src/core/orders/PlayerCommand';
-import { normalizeUnits } from '../src/core/units/UnitModel';
 import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
+import { tickSimulation } from '../src/core/simulation/SimulationTick';
 import { preparePhysicalMovementStep } from '../src/core/movement/MovementRuntime';
 import {
   createDefaultTacticalPositionSettings,
@@ -38,7 +38,7 @@ verifySettingsNormalizeFromSceneData();
 verifySceneExportIncludesSettings();
 verifyOccupationAndEditorContracts();
 
-console.log('Tactical position tuning smoke passed: comparative posture, stable markers, exact arrival posture, shared editor schema and scene persistence.');
+console.log('Tactical position tuning smoke passed: comparative posture, stable markers, timed exact arrival posture, shared editor schema and scene persistence.');
 
 function verifyComparativePostureSelection(): void {
   const settings = createDefaultTacticalPositionSettings();
@@ -68,7 +68,10 @@ function verifyComparativePostureSelection(): void {
 }
 
 function verifyCommandOwnedApproachAndOccupation(): void {
-  const unit = normalizeUnits([{ id: 'unit-1', type: 'infantry_squad', side: 'blue', x: 0, y: 0 }])[0]!;
+  const state = createInitialState(tacticalTestMap(), [
+    { id: 'unit-1', type: 'infantry_squad', side: 'blue', aiControl: 'manual', x: 0, y: 0 },
+  ], []);
+  const unit = state.units[0]!;
   const command = createPlayerMoveCommand(
     unit.id,
     { x: 2.5, y: 2.5 },
@@ -86,14 +89,17 @@ function verifyCommandOwnedApproachAndOccupation(): void {
     source: 'player', playerCommandId: command.id,
   };
   unit.behaviorRuntime.posture = 'standing';
-  reconcileTacticalPositionOccupation(unit);
+  reconcileTacticalPositionOccupation(state, unit);
+  assert.equal(unit.behaviorRuntime.posture, 'standing', 'approach posture must not switch instantly');
+  tickSimulation(state, postureTransitionDurationSeconds('standing', 'crouched'));
   assert.equal(unit.behaviorRuntime.posture, 'crouched');
 
   unit.order = null;
   unit.playerCommand = updatePlayerCommandStatus(command, 'completed', 'done', 'готово');
-  assert.equal(applyCompletedTacticalPositionOccupation(unit), true);
-  unit.playerCommand = markPlayerCommandArrivalPostureApplied(unit.playerCommand);
-  assert.equal(unit.behaviorRuntime.posture, 'prone', 'exact selected arrival posture must replace approach posture');
+  assert.equal(applyCompletedTacticalPositionOccupation(state, unit), false, 'arrival starts a physical action first');
+  tickSimulation(state, postureTransitionDurationSeconds('crouched', 'prone'));
+  assert.equal(unit.behaviorRuntime.posture, 'prone', 'exact selected arrival posture must replace approach posture after its duration');
+  assert.equal(unit.playerCommand?.arrivalPostureApplied, true);
   assert.ok(Math.abs(unit.facingRadians - Math.PI / 2) < 0.0001);
   assert.equal(isTacticalPositionOccupationActive(unit), true);
 
@@ -102,7 +108,6 @@ function verifyCommandOwnedApproachAndOccupation(): void {
   assert.equal(restored?.approachPosture, 'crouched');
   assert.equal(restored?.tacticalPositionOccupationStatus, 'occupied');
 
-  const state = { units: [unit], map: { metersPerCell: 2 } } as unknown as SimulationState;
   const graphResult = withAiSimulationExecutionContext(state, unit, () => runAiGraphRuntime({
     graph: postureGraph('stand'), unitId: unit.id, blackboard: {}, nowMs: 2000,
   }));
@@ -115,25 +120,16 @@ function verifyCommandOwnedApproachAndOccupation(): void {
     type: 'move', target: { x: 6.5, y: 4.5 }, issuedAtMs: 2,
     source: 'ai', ownerToken: 'ai-route-1',
   };
-  reconcileTacticalPositionOccupation(unit);
+  reconcileTacticalPositionOccupation(state, unit);
   assert.equal(unit.playerCommand?.tacticalPositionOccupationStatus, 'released');
   unit.order = null;
   assert.equal(isTacticalPositionOccupationActive(unit), false);
 }
 
 function verifyOccupiedPostureSurvivesStaleMovementOwnership(): void {
-  const state = createInitialState({
-    width: 12,
-    height: 8,
-    cellSize: 8,
-    metersPerCell: 2,
-    defaultTerrain: 'field',
-    defaultHeight: 0,
-    cellRuns: [],
-    cellRects: [],
-    cells: [],
-    objects: [],
-  }, [{ id: 'occupied-prone', type: 'infantry_squad', side: 'blue', x: 2, y: 2 }], []);
+  const state = createInitialState(tacticalTestMap(), [
+    { id: 'occupied-prone', type: 'infantry_squad', side: 'blue', aiControl: 'manual', x: 2, y: 2 },
+  ], []);
   const unit = state.units[0]!;
   const command = createPlayerMoveCommand(
     unit.id,
@@ -147,8 +143,10 @@ function verifyOccupiedPostureSurvivesStaleMovementOwnership(): void {
     'crouched',
   );
   unit.playerCommand = updatePlayerCommandStatus(command, 'completed', 'done', 'готово');
-  assert.equal(applyCompletedTacticalPositionOccupation(unit), true);
-  unit.playerCommand = markPlayerCommandArrivalPostureApplied(unit.playerCommand);
+  assert.equal(applyCompletedTacticalPositionOccupation(state, unit), false);
+  tickSimulation(state, postureTransitionDurationSeconds('standing', 'prone'));
+  assert.equal(unit.playerCommand?.arrivalPostureApplied, true);
+  assert.equal(unit.behaviorRuntime.posture, 'prone');
   unit.movementRuntime.requestedGait = 'sprint';
   unit.movementRuntime.actualGait = 'sprint';
   unit.movementRuntime.isMoving = true;
@@ -164,10 +162,10 @@ function verifyOccupiedPostureSurvivesStaleMovementOwnership(): void {
 }
 
 function verifyMarkerPublicationIsRateLimitedAndKeepsOldResult(): void {
-  const unit = normalizeUnits([{ id: 'unit-1', type: 'infantry_squad', side: 'blue', x: 0, y: 0 }])[0]!;
-  const state = {
-    units: [unit], simulationTimeSeconds: 0, map: { cellSize: 20 },
-  } as unknown as SimulationState;
+  const state = createInitialState(tacticalTestMap(), [
+    { id: 'unit-marker', type: 'infantry_squad', side: 'blue', aiControl: 'manual', x: 0, y: 0 },
+  ], []);
+  const unit = state.units[0]!;
   const settings = createDefaultTacticalPositionSettings();
   settings.markerRefreshIntervalSeconds = 1;
   settings.emptyResultHoldSeconds = 1.5;
@@ -192,10 +190,10 @@ function verifyMarkerPublicationIsRateLimitedAndKeepsOldResult(): void {
 }
 
 function verifySettingsChangeRefreshesMarkersImmediately(): void {
-  const unit = normalizeUnits([{ id: 'unit-refresh', type: 'infantry_squad', side: 'blue', x: 0, y: 0 }])[0]!;
-  const state = {
-    units: [unit], simulationTimeSeconds: 0, map: { cellSize: 20 },
-  } as unknown as SimulationState;
+  const state = createInitialState(tacticalTestMap(), [
+    { id: 'unit-refresh', type: 'infantry_squad', side: 'blue', aiControl: 'manual', x: 0, y: 0 },
+  ], []);
+  const unit = state.units[0]!;
   const settings = createDefaultTacticalPositionSettings();
   settings.markerRefreshIntervalSeconds = 5;
   setTacticalPositionSettings(unit, settings);
@@ -208,13 +206,14 @@ function verifySettingsChangeRefreshesMarkersImmediately(): void {
 }
 
 function verifySettingsNormalizeFromSceneData(): void {
-  const unit = normalizeUnits([{
-    id: 'unit-persisted', type: 'infantry_squad', side: 'blue', x: 0, y: 0,
+  const state = createInitialState(tacticalTestMap(), [{
+    id: 'unit-persisted', type: 'infantry_squad', side: 'blue', aiControl: 'manual', x: 0, y: 0,
     tacticalPositionSettings: {
       version: 1, revision: 7,
       values: { standingMaximumDanger: 11, markerRefreshIntervalSeconds: 2.5 },
     },
-  }])[0]!;
+  }], []);
+  const unit = state.units[0]!;
   const settings = getTacticalPositionSettings(unit);
   const defaults = createDefaultTacticalPositionSettings();
   assert.equal(settings.standingMaximumDanger, 11);
@@ -264,6 +263,21 @@ function verifyOccupationAndEditorContracts(): void {
   assert.equal(workspaceTab.includes("document.createElement('button')"), false);
   assert.ok(workspaceTab.includes("getSimulationLayerState(state).mode === 'positions'"));
   assert.ok(runtimeUi.includes("runtime.attentionOverlay.active = mode === 'memory'"));
+}
+
+function tacticalTestMap() {
+  return {
+    width: 12,
+    height: 8,
+    cellSize: 8,
+    metersPerCell: 2,
+    defaultTerrain: 'field' as const,
+    defaultHeight: 0,
+    cellRuns: [],
+    cellRects: [],
+    cells: [],
+    objects: [],
+  };
 }
 
 function postureGraph(posture: 'stand' | 'crouch' | 'prone'): AiGraph {
