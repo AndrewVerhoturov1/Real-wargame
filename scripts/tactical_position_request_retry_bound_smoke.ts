@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import '../src/core/tactical/TacticalPositionSearchResilience';
 import { normalizeMap } from '../src/core/map/MapModel';
 import type { SimulationState } from '../src/core/simulation/SimulationState';
+import { installTacticalPositionSearchResilience } from '../src/core/tactical/TacticalPositionSearchResilience';
 import {
   TacticalPositionSearchService,
   type TacticalPositionFieldRuntime,
@@ -76,6 +76,7 @@ const service = new TacticalPositionSearchService(state, new ReadyFieldRuntime()
     };
   },
 });
+const destroyResilience = installTacticalPositionSearchResilience(state, service);
 
 service.enqueueTacticalSearch(unit, 'firing', {
   queryKey: 'ui:firing',
@@ -95,6 +96,7 @@ assert.ok(searches <= 4, `one initial search plus at most three automatic retrie
 assert.equal(microtasks.length, 0, 'an unstable request must stop scheduling retry microtasks');
 assert.equal(service.readLatestForUnit(unit.id)?.status, 'stale');
 
+destroyResilience();
 service.destroy();
 globalThis.queueMicrotask = previousQueueMicrotask;
 console.log(`tactical position request retry bound smoke: searches=${searches}`);
