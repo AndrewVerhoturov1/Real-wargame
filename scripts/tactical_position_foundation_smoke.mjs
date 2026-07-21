@@ -8,6 +8,7 @@ const scenarios = [
   ['static-tactical-position-settings', 'static_tactical_position_settings_smoke.ts'],
   ['static-tactical-candidate-index', 'static_tactical_candidate_index_smoke.ts'],
   ['static-tactical-position-basis', 'static_tactical_position_basis_smoke.ts'],
+  ['static-tactical-position-service-lifecycle', 'static_tactical_position_service_lifecycle_smoke.ts'],
   ['tactical-position-worker-transfer', 'tactical_position_worker_transfer_smoke.ts'],
   ['tactical-position-target-units', 'tactical_position_target_units_smoke.ts'],
   ['tactical-position-queue-fairness', 'tactical_position_queue_fairness_smoke.ts'],
