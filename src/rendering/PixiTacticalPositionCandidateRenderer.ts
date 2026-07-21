@@ -29,6 +29,7 @@ export class PixiTacticalPositionCandidateRenderer {
   readonly container = new Container();
   private readonly graphics = new Graphics();
   private readonly labels = new Container();
+  private readonly labelPool: Text[] = [];
   private markerCount = 0;
   private destroyed = false;
 
@@ -44,8 +45,8 @@ export class PixiTacticalPositionCandidateRenderer {
     const visible = !state.editor.enabled && isTacticalPositionWorkspaceTabActive(state);
     this.container.visible = visible;
     this.graphics.clear();
-    this.labels.removeChildren().forEach((child) => child.destroy());
     this.markerCount = 0;
+    for (const label of this.labelPool) label.visible = false;
     if (!visible) return;
 
     const presentation = getTacticalPositionPresentation(state);
@@ -70,19 +71,11 @@ export class PixiTacticalPositionCandidateRenderer {
           .lineTo(x + Math.cos(facing) * lineLength, y + Math.sin(facing) * lineLength)
           .stroke({ color: style.stroke, width: selected ? 3 : 2, alpha: 0.95 });
       }
-      const label = new Text({
-        text: `${style.label} ${postureGlyph(recommendedPostureOf(candidate))}`,
-        style: {
-          fontFamily: 'Arial, sans-serif',
-          fontSize: Math.max(9, Math.min(13, cellSize * 0.27)),
-          fontWeight: '700',
-          fill: 0xffffff,
-          stroke: { color: 0x111611, width: 3 },
-        },
-      });
-      label.anchor.set(0.5, 1);
+      const label = this.ensureLabel(this.markerCount);
+      label.text = `${style.label} ${postureGlyph(recommendedPostureOf(candidate))}`;
+      label.style.fontSize = Math.max(9, Math.min(13, cellSize * 0.27));
       label.position.set(x, y - markerRadius - 2);
-      this.labels.addChild(label);
+      label.visible = true;
       this.markerCount += 1;
     }
   }
@@ -92,17 +85,39 @@ export class PixiTacticalPositionCandidateRenderer {
       visible: this.container.visible,
       markerCount: this.markerCount,
       graphicsCount: 1,
-      textCount: this.labels.children.length,
+      textCount: this.markerCount,
     };
   }
 
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.labels.removeChildren().forEach((child) => child.destroy());
+    for (const label of this.labelPool) label.destroy();
+    this.labelPool.length = 0;
     this.graphics.destroy();
     this.labels.destroy();
     this.container.destroy();
+  }
+
+  private ensureLabel(index: number): Text {
+    const existing = this.labelPool[index];
+    if (existing) return existing;
+    const label = new Text({
+      text: '',
+      style: {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: 11,
+        fontWeight: '700',
+        fill: 0xffffff,
+        stroke: { color: 0x111611, width: 3 },
+      },
+    });
+    label.anchor.set(0.5, 1);
+    label.eventMode = 'none';
+    label.visible = false;
+    this.labelPool.push(label);
+    this.labels.addChild(label);
+    return label;
   }
 }
 
