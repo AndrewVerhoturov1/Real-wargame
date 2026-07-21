@@ -18,6 +18,7 @@ const scenarios = [
   ['tactical-workspace-tab-state', 'tactical_workspace_tab_state_smoke.ts'],
   ['tactical-position-renderer-allocation', 'tactical_position_renderer_allocation_smoke.ts'],
   ['tactical-position-command-metadata', 'tactical_position_command_metadata_smoke.ts'],
+  ['tactical-position-posture-path', 'tactical_position_posture_path_smoke.ts'],
   ['tactical-position-result-refiner', 'tactical_position_result_refiner_smoke.ts'],
 ];
 
