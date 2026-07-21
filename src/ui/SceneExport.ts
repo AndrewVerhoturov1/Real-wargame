@@ -1,6 +1,6 @@
 import { buildAiRuntimeSceneSnapshot, serializeMoveOrder } from '../core/ai/runtime/AiRuntimeSnapshot';
 import { saveMovementProfileRegistry } from '../ai-node-editor/MovementProfileBrowserStorage';
-import { serializeUnitPhysicalAction } from '../core/actions/PostureTransition';
+import { serializeUnitPhysicalAction } from '../core/actions/PhysicalAction';
 import { getCombatRuntime } from '../core/combat/CombatDamage';
 import { getWeaponRuntime } from '../core/combat/WeaponModel';
 import { serializeMovementRuntime } from '../core/movement/MovementRuntime';
@@ -132,9 +132,9 @@ export function normalizeImportedScene(value: unknown): {
 
 export function buildExportedScene(state: SimulationState): ExportedSceneData {
   return {
-    version: 'scene-export-v10-physical-posture-action-2m-grid',
+    version: 'scene-export-v11-physical-reload-action-2m-grid',
     exportedAt: new Date().toISOString(),
-    noteRu: 'Экспорт полигона ИИ с тактическим намерением PlayerCommand, профилями физического движения, environment materials, выносливостью, фактическим способом движения, слоем «Обзор и память», навигационными профилями, настройками тактических позиций, активным runtime ИИ и сериализуемой физической сменой позы. Старые сцены без физического действия получают безопасное значение по умолчанию.',
+    noteRu: 'Экспорт полигона ИИ с каноническим WeaponRuntime, сериализуемыми физическими действиями смены позы и перезарядки, тактическим намерением PlayerCommand, профилями движения, environment materials, навигацией и активным runtime ИИ. Legacy ammo и weaponReady экспортируются только как производные совместимые поля.',
     map: {
       width: state.map.width,
       height: state.map.height,
@@ -243,6 +243,7 @@ function buildMaterialMap(state: SimulationState, field: 'surfaceMaterialId' | '
 }
 
 function exportUnit(unit: UnitModel): Record<string, unknown> {
+  const weapon = getWeaponRuntime(unit);
   return {
     id: unit.id,
     label: unit.labels.en,
@@ -283,11 +284,11 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
     runtime: {
       stress: roundOne(unit.behaviorRuntime.stress),
       suppression: roundOne(unit.behaviorRuntime.suppression),
-      ammo: Math.round(unit.behaviorRuntime.ammo),
-      weaponReady: unit.behaviorRuntime.weaponReady,
+      ammo: weapon.roundsLoaded + weapon.roundsReserve,
+      weaponReady: weapon.ready && weapon.roundsLoaded > 0,
       posture: unit.behaviorRuntime.posture,
       physicalAction: serializeUnitPhysicalAction(unit.behaviorRuntime.physicalAction),
-      weapon: { ...getWeaponRuntime(unit) },
+      weapon: { ...weapon },
       combat: JSON.parse(JSON.stringify(getCombatRuntime(unit))),
       movement: serializeMovementRuntime(unit.movementRuntime),
       moveOrder: unit.order ? serializeMoveOrder(unit.order) : undefined,
