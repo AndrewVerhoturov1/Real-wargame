@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { normalizeMap } from '../src/core/map/MapModel';
 import { markMapCellsDirty } from '../src/core/map/MapRuntimeState';
 import type { SimulationState } from '../src/core/simulation/SimulationState';
 import {
@@ -38,14 +39,14 @@ function verifyVisibleAwarenessLayersRequestLiveFields(): void {
     selectedUnitIds: ['alpha'],
     simulationStep: 10,
     simulationTimeSeconds: 1,
-    map: {
+    map: normalizeMap({
       width: 12,
       height: 8,
       cellSize: 4,
       metersPerCell: 2,
-      cells: [],
-      objects: [],
-    },
+      defaultTerrain: 'field',
+      defaultHeight: 0,
+    }),
     editor: { enabled: false },
   } as unknown as SimulationState;
   const requestedUnits: string[] = [];
@@ -108,7 +109,7 @@ function verifyVisibleAwarenessLayersRequestLiveFields(): void {
   assert.equal(requestedUnits.length, beforeHidden + 2, 'destroyed controller must not request more work');
 }
 
-function verifyRequestLifecycleAndMovingOrigin(): void {
+async function verifyRequestLifecycleAndMovingOrigin(): Promise<void> {
   const units = normalizeUnits([
     { id: 'alpha', type: 'infantry_squad', side: 'blue', x: 1, y: 1 },
     { id: 'bravo', type: 'infantry_squad', side: 'blue', x: 3, y: 3 },
@@ -129,7 +130,14 @@ function verifyRequestLifecycleAndMovingOrigin(): void {
     units,
     simulationStep: 10,
     simulationTimeSeconds: 1,
-    map: { metersPerCell: 2 },
+    map: normalizeMap({
+      width: 12,
+      height: 12,
+      cellSize: 4,
+      metersPerCell: 2,
+      defaultTerrain: 'field',
+      defaultHeight: 0,
+    }),
   } as unknown as SimulationState;
   const scheduled: Array<() => void> = [];
   const runtime = new FakeFieldRuntime();
@@ -160,6 +168,8 @@ function verifyRequestLifecycleAndMovingOrigin(): void {
   assert.equal(duplicate.requestId, first.requestId);
   assert.equal(scheduled.length, 1);
 
+  runScheduled(scheduled);
+  await nextTask();
   runScheduled(scheduled);
   assert.equal(runtime.requestCallsByUnit.get('alpha'), 1);
   assert.equal(searchCalls, 0);
@@ -229,6 +239,10 @@ function runScheduled(scheduled: Array<() => void>): void {
   while (scheduled.length > 0) scheduled.shift()!();
 }
 
+function nextTask(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 class FakeFieldRuntime implements TacticalPositionFieldRuntime {
   readonly readyByUnit = new Map<string, PreparedAwarenessWorldSnapshot>();
   readonly requestCallsByUnit = new Map<string, number>();
@@ -283,8 +297,14 @@ function candidate(id: string) {
   };
 }
 
-verifyRendererDoesNotOwnTacticalSearch();
-verifyVisibleAwarenessLayersRequestLiveFields();
-verifyRequestLifecycleAndMovingOrigin();
+void runSmoke().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});
 
-console.log('Tactical position request service smoke passed: live danger/stealth preparation, renderer ownership, moving-origin search, dedupe, replacement, stale rejection, multi-unit isolation and teardown.');
+async function runSmoke(): Promise<void> {
+  verifyRendererDoesNotOwnTacticalSearch();
+  verifyVisibleAwarenessLayersRequestLiveFields();
+  await verifyRequestLifecycleAndMovingOrigin();
+  console.log('Tactical position request service smoke passed: live danger/stealth preparation, renderer ownership, moving-origin search, dedupe, replacement, stale rejection, multi-unit isolation and teardown.');
+}
