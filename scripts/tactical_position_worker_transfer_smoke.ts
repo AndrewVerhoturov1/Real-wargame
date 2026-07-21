@@ -51,7 +51,7 @@ function verifyStaticBasisTransferListIsUniqueAndComplete(): void {
     identity,
     snapshot,
   });
-  assert.equal(transferables.length, 32, '14 basis arrays and 18 candidate-index arrays must be transferred');
+  assert.equal(transferables.length, 29, '14 basis arrays and 15 candidate-index arrays must be transferred');
   assert.equal(new Set(transferables).size, transferables.length, 'static transfer list must not contain duplicate buffers');
   assert.ok(transferables.every((value) => value instanceof ArrayBuffer));
 }
