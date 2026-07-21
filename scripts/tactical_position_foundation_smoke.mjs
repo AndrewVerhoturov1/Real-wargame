@@ -12,6 +12,7 @@ const scenarios = [
   ['tactical-position-worker-transfer', 'tactical_position_worker_transfer_smoke.ts'],
   ['soldier-danger-multi-threat', 'soldier_danger_multi_threat_smoke.ts'],
   ['tactical-position-request-refresh', 'tactical_position_request_refresh_smoke.ts'],
+  ['tactical-position-request-retry-bound', 'tactical_position_request_retry_bound_smoke.ts'],
   ['danger-ui-source-parity', 'danger_ui_source_parity_smoke.ts'],
   ['tactical-position-target-units', 'tactical_position_target_units_smoke.ts'],
   ['tactical-position-queue-fairness', 'tactical_position_queue_fairness_smoke.ts'],
