@@ -8,6 +8,7 @@ import {
   postureTransitionDurationSeconds,
   requestPostureTransition,
 } from '../src/core/actions/PostureTransition';
+import { tickPostureTransitionWithTimeBudget } from '../src/core/actions/PostureTransitionClock';
 import { evaluateFireRequest } from '../src/core/combat/CombatDecision';
 import { replaceCombatRuntime } from '../src/core/combat/CombatDamage';
 import { getUnitHitShapes } from '../src/core/combat/UnitHitShapes';
@@ -27,18 +28,19 @@ verifyStandingToCrouchedIsTimed();
 verifyCrouchedToProneIsTimed();
 verifyProneToStandingUsesTwoPhases();
 verifyStepPartitionInvariance();
+verifyPostureConsumesOnlyRequiredSimulationTime();
 verifyCanonicalEffectivePostureConsumers();
 verifySecondIncompatibleTransitionIsRejected();
 verifyOwnerCancellation();
 verifyForeignCancellationIsRejected();
 verifyCombatCapabilityLossCancelsTransition();
-verifyMidTransitionSaveRestore();
+verifySaveRestoreAtRequiredCheckpoints();
 verifyTacticalArrivalStartsPhysicalTransition();
 verifyNewOrderDoesNotCreateTwoPostureOwners();
 verifyTransitionBlocksAiming();
 verifyEffectivePostureNeverFlickers();
 
-console.log('Posture transition smoke passed: timed phases, deterministic progress, canonical effective posture, ownership, cancellation, save/restore, tactical arrival and aiming conflict.');
+console.log('Posture transition smoke passed: timed phases, deterministic tick budgets, canonical effective posture, ownership, cancellation, save/restore, tactical arrival and aiming conflict.');
 
 function verifyStandingToCrouchedIsTimed(): void {
   const state = makeState('standing');
@@ -81,6 +83,27 @@ function verifyStepPartitionInvariance(): void {
   const coarse = runTransition('standing', 'prone', [1.2]);
   const fine = runTransition('standing', 'prone', Array.from({ length: 12 }, () => 0.1));
   assert.deepEqual(coarse, fine);
+}
+
+function verifyPostureConsumesOnlyRequiredSimulationTime(): void {
+  const total = postureTransitionDurationSeconds('standing', 'prone');
+  const coarseState = makeState('standing');
+  const coarseUnit = coarseState.units[0];
+  start(coarseUnit, coarseState, 'prone', 'owner-budget');
+  const coarse = tickPostureTransitionWithTimeBudget(coarseUnit, total + 0.8, true);
+  assert.equal(coarse.completed, true);
+  assert.ok(approximately(coarse.consumedSeconds, total));
+  assert.ok(approximately(coarse.remainingSeconds, 0.8));
+
+  const fineState = makeState('standing');
+  const fineUnit = fineState.units[0];
+  start(fineUnit, fineState, 'prone', 'owner-budget');
+  let fineRemaining = 0;
+  for (let index = 0; index < 20; index += 1) {
+    fineRemaining += tickPostureTransitionWithTimeBudget(fineUnit, 0.1, true).remainingSeconds;
+  }
+  assert.equal(fineUnit.behaviorRuntime.physicalAction?.status, 'completed');
+  assert.ok(approximately(fineRemaining, coarse.remainingSeconds));
 }
 
 function verifyCanonicalEffectivePostureConsumers(): void {
@@ -140,27 +163,53 @@ function verifyCombatCapabilityLossCancelsTransition(): void {
   assert.equal(unit.behaviorRuntime.physicalAction?.resultCode, 'posture_transition_combat_capability_lost');
 }
 
-function verifyMidTransitionSaveRestore(): void {
-  const state = makeState('standing');
-  const unit = state.units[0];
-  start(unit, state, 'prone', 'owner-save');
-  tickSimulation(state, 0.6);
-  const before = getPostureTransitionDiagnostics(unit);
-  const exported = buildExportedScene(state);
-  const normalized = normalizeImportedScene(exported);
-  const restored = createInitialState(normalized.map, normalized.units, normalized.pressureZones);
-  const restoredUnit = restored.units[0];
-  const after = getPostureTransitionDiagnostics(restoredUnit);
-  assert.equal(after.progress, before.progress);
-  assert.deepEqual(after.owner, before.owner);
-  assert.equal(after.ownerToken, before.ownerToken);
-  assert.equal(restoredUnit.behaviorRuntime.physicalAction?.durationSeconds, unit.behaviorRuntime.physicalAction?.durationSeconds);
-  const remaining = (1 - after.progress) * (restoredUnit.behaviorRuntime.physicalAction?.durationSeconds ?? 0);
-  tickSimulation(restored, remaining);
+function verifySaveRestoreAtRequiredCheckpoints(): void {
+  const total = postureTransitionDurationSeconds('standing', 'prone');
+  for (const elapsed of [0, total / 2, total - 0.01]) {
+    const state = makeState('standing');
+    const unit = state.units[0];
+    start(unit, state, 'prone', 'owner-save');
+    if (elapsed > 0) tickSimulation(state, elapsed);
+    const before = unit.behaviorRuntime.physicalAction;
+    assert.ok(before);
+    const restored = restoreScene(state);
+    const after = restored.units[0].behaviorRuntime.physicalAction;
+    assert.ok(after);
+    assert.equal(after.id, before.id);
+    assert.equal(after.progress, before.progress);
+    assert.deepEqual(after.owner, before.owner);
+    assert.equal(after.ownerToken, before.ownerToken);
+    assert.equal(after.durationSeconds, before.durationSeconds);
+    assert.equal(after.status, before.status);
+  }
+
+  const middle = makeState('standing');
+  const middleUnit = middle.units[0];
+  start(middleUnit, middle, 'prone', 'owner-save');
+  tickSimulation(middle, total / 2);
+  const restoredMiddle = restoreScene(middle);
+  const restoredUnit = restoredMiddle.units[0];
+  const remaining = (1 - (restoredUnit.behaviorRuntime.physicalAction?.progress ?? 0))
+    * (restoredUnit.behaviorRuntime.physicalAction?.durationSeconds ?? 0);
+  tickSimulation(restoredMiddle, remaining);
   assert.equal(restoredUnit.behaviorRuntime.physicalAction?.status, 'completed');
   const event = restoredUnit.behaviorRuntime.lastEvent;
-  tickSimulation(restored, 0.1);
+  tickSimulation(restoredMiddle, 0.1);
   assert.equal(restoredUnit.behaviorRuntime.lastEvent, event, 'terminal action must not emit completion twice');
+
+  const cancelled = makeState('standing');
+  const cancelledUnit = cancelled.units[0];
+  start(cancelledUnit, cancelled, 'prone', 'owner-save');
+  tickSimulation(cancelled, total / 2);
+  cancelPostureTransition(cancelledUnit, 'owner-save', 'test_saved_cancel', 'Переход отменён до сохранения.');
+  const restoredCancelled = restoreScene(cancelled);
+  const restoredCancelledUnit = restoredCancelled.units[0];
+  assert.equal(restoredCancelledUnit.behaviorRuntime.physicalAction?.status, 'cancelled');
+  assert.equal(restoredCancelledUnit.behaviorRuntime.physicalAction?.ownerToken, 'owner-save');
+  const cancelledProgress = restoredCancelledUnit.behaviorRuntime.physicalAction?.progress;
+  tickSimulation(restoredCancelled, 0.5);
+  assert.equal(restoredCancelledUnit.behaviorRuntime.physicalAction?.status, 'cancelled');
+  assert.equal(restoredCancelledUnit.behaviorRuntime.physicalAction?.progress, cancelledProgress);
 }
 
 function verifyTacticalArrivalStartsPhysicalTransition(): void {
@@ -239,6 +288,12 @@ function runTransition(source: UnitModel['behaviorRuntime']['posture'], target: 
   };
 }
 
+function restoreScene(state: SimulationState): SimulationState {
+  const exported = buildExportedScene(state);
+  const normalized = normalizeImportedScene(exported);
+  return createInitialState(normalized.map, normalized.units, normalized.pressureZones);
+}
+
 function start(
   unit: UnitModel,
   state: SimulationState,
@@ -298,4 +353,8 @@ function mapData(): TacticalMapData {
     defaultHeight: 0,
     objects: [],
   };
+}
+
+function approximately(left: number, right: number, epsilon = 1e-9): boolean {
+  return Math.abs(left - right) <= epsilon;
 }
