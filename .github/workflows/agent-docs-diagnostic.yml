@@ -13,6 +13,15 @@ on:
       - scripts/agent_docs_*.mjs
       - scripts/check_agent_docs.mjs
       - scripts/performance_principles_contract_smoke.mjs
+  pull_request:
+    paths:
+      - .github/workflows/agent-docs-diagnostic.yml
+      - docs/**
+      - AGENTS.md
+      - README.md
+      - scripts/agent_docs_*.mjs
+      - scripts/check_agent_docs.mjs
+      - scripts/performance_principles_contract_smoke.mjs
 
 permissions:
   contents: read
@@ -25,7 +34,7 @@ jobs:
       - name: Checkout exact source head
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           show-progress: false
       - name: Print documentation integrity errors
         run: node scripts/check_agent_docs.mjs
