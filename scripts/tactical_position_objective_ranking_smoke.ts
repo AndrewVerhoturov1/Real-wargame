@@ -50,8 +50,20 @@ directions[nearCell * settings.sectors.count] = 255;
 const postureMask = new Uint8Array(cellCount);
 postureMask[farCell] = 7;
 postureMask[nearCell] = 7;
+const postureValues = new Uint8Array(cellCount * 3).fill(255);
 const basis = {
   ...builtBasis,
+  observationPotential: potentials,
+  defensePotential: potentials,
+  firingPotential: potentials,
+  observationByDirection: directions,
+  protectionByDirection: directions,
+  firingByDirection: directions,
+  availablePostureMask: postureMask,
+  staticProtectionByPosture: postureValues,
+  observationByPosture: postureValues,
+  firingByPosture: postureValues,
+  surfaceSuitability: new Uint8Array(cellCount).fill(255),
   candidateIndex: buildStaticTacticalCandidateIndex({
     width: map.width,
     height: map.height,
