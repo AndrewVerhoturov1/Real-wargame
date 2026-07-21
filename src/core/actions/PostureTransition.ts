@@ -380,20 +380,35 @@ function resolveMovementDesiredPosture(state: SimulationState, unit: UnitModel):
 }
 
 function applyEffectivePostureForProgress(unit: UnitModel, action: PostureTransitionActionV1): void {
-  setEffectivePosture(unit, effectivePostureAtProgress(action), 'posture_transition_progress');
-}
+  const completed = action.progress + 1e-9 >= 1;
 
-function effectivePostureAtProgress(action: PostureTransitionActionV1): UnitPosture {
-  if (action.progress + 1e-9 >= 1) return action.targetPosture;
   if (action.sourcePosture === 'standing' && action.targetPosture === 'prone') {
-    const threshold = POSTURE_TRANSITION_DURATIONS_SECONDS.standingToCrouched / action.durationSeconds;
-    return action.progress + 1e-9 >= threshold ? 'crouched' : 'standing';
+    const crouchedThreshold = POSTURE_TRANSITION_DURATIONS_SECONDS.standingToCrouched / action.durationSeconds;
+    if (action.progress + 1e-9 < crouchedThreshold) {
+      setEffectivePosture(unit, 'standing', 'posture_transition_progress');
+      return;
+    }
+    setEffectivePosture(unit, 'crouched', 'posture_transition_progress');
+    if (completed) setEffectivePosture(unit, 'prone', 'posture_transition_progress');
+    return;
   }
+
   if (action.sourcePosture === 'prone' && action.targetPosture === 'standing') {
-    const threshold = POSTURE_TRANSITION_DURATIONS_SECONDS.proneToCrouched / action.durationSeconds;
-    return action.progress + 1e-9 >= threshold ? 'crouched' : 'prone';
+    const crouchedThreshold = POSTURE_TRANSITION_DURATIONS_SECONDS.proneToCrouched / action.durationSeconds;
+    if (action.progress + 1e-9 < crouchedThreshold) {
+      setEffectivePosture(unit, 'prone', 'posture_transition_progress');
+      return;
+    }
+    setEffectivePosture(unit, 'crouched', 'posture_transition_progress');
+    if (completed) setEffectivePosture(unit, 'standing', 'posture_transition_progress');
+    return;
   }
-  return action.sourcePosture;
+
+  setEffectivePosture(
+    unit,
+    completed ? action.targetPosture : action.sourcePosture,
+    'posture_transition_progress',
+  );
 }
 
 function finishPostureActionAtCurrentEffectivePosture(
