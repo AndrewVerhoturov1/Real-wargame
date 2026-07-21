@@ -128,7 +128,7 @@ Review the exact-head material, migration, revision, renderer and integration ch
 - `src/ai-node-editor/state-machine-ui.ts`
 - `src/testing/AiStatePlanVisualQaHarness.ts`
 - `src/core/ai/tactical/TacticalQuery.ts`
-- `src/core/cover/CoverTacticalCandidates.ts`
+- `src/core/tactical/TacticalPositionSearchService.ts`
 - `src/core/ai/AiGraphRuntime.ts`
 - `src/ai-node-editor/runtime-debug-overlay.ts`
 - `src/core/ai/AiSimulationScheduler.ts`
