@@ -8,6 +8,7 @@ import {
   type TacticalPositionFieldRuntime,
   type TacticalPositionSearchRequestSnapshotV1,
 } from '../src/core/tactical/TacticalPositionSearchService';
+import { getStaticTacticalPositionService } from '../src/core/tactical/static/StaticTacticalPositionService';
 import { setSimulationLayerMode } from '../src/core/ui/RuntimeUiState';
 import { normalizeUnits } from '../src/core/units/UnitModel';
 import {
@@ -139,6 +140,11 @@ async function verifyRequestLifecycleAndMovingOrigin(): Promise<void> {
       defaultHeight: 0,
     }),
   } as unknown as SimulationState;
+  const staticService = getStaticTacticalPositionService(state);
+  const injectedBasis = { identityKey: 'request-service-test-basis' } as NonNullable<ReturnType<typeof staticService.request>>;
+  staticService.request = () => injectedBasis;
+  staticService.readReady = () => injectedBasis;
+
   const scheduled: Array<() => void> = [];
   const runtime = new FakeFieldRuntime();
   const evaluatedRequests: TacticalPositionSearchRequestSnapshotV1[] = [];
