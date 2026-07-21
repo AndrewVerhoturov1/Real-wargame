@@ -5,7 +5,12 @@ import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap } from '../map/MapModel';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../navigation/NavigationRuntime';
 import { planMoveOrder } from '../orders/MoveOrderPlanning';
-import { createPlayerMoveCommand, updatePlayerCommandStatus } from '../orders/PlayerCommand';
+import {
+  createPlayerMoveCommand,
+  updatePlayerCommandStatus,
+  withPlayerCommandTacticalPositionMetadata,
+  type PlayerCommandTacticalPositionKind,
+} from '../orders/PlayerCommand';
 import { createTacticalOrderIntent, withTacticalOrderNavigationProfile } from '../orders/TacticalOrderIntent';
 import { clearAttentionOverride } from '../perception/AttentionController';
 import { getBestPerceptionContact } from '../perception/PerceptionSystem';
@@ -13,10 +18,18 @@ import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
 import { getTacticalPositionSettings } from './TacticalPositionSettings';
 
+export interface TacticalPositionMoveOrderMetadata {
+  readonly kind: PlayerCommandTacticalPositionKind;
+  readonly requestIdentity: string;
+  readonly candidateId: string;
+  readonly recommendedFacingRadians?: number | null;
+}
+
 export function issueTacticalPositionMoveOrderToSelectedUnit(
   state: SimulationState,
   rawTarget: GridPosition,
   arrivalPosture: UnitPosture,
+  metadata: TacticalPositionMoveOrderMetadata | null = null,
 ): boolean {
   const unitId = state.selectedUnitId;
   if (!unitId) return false;
@@ -24,13 +37,16 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
   if (!unit) return false;
 
   const target = clampGridPositionToMap(state.map, rawTarget);
-  const finalFacingRadians = resolveThreatFacingAtPosition(unit, target);
+  const finalFacingRadians = normalizeFacing(
+    metadata?.recommendedFacingRadians,
+    resolveThreatFacingAtPosition(unit, target),
+  );
   const approachPosture = resolveApproachPosture(unit, arrivalPosture);
   const intent = withTacticalOrderNavigationProfile(
     createTacticalOrderIntent('move'),
     unit.playerNavigationProfileId ?? 'normal',
   );
-  const command = createPlayerMoveCommand(
+  const baseCommand = createPlayerMoveCommand(
     unit.id,
     target,
     unit.playerCommand,
@@ -40,6 +56,16 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
     finalFacingRadians,
     arrivalPosture,
     approachPosture,
+  );
+  const command = withPlayerCommandTacticalPositionMetadata(
+    baseCommand,
+    metadata
+      ? {
+          kind: metadata.kind,
+          requestIdentity: metadata.requestIdentity,
+          candidateId: metadata.candidateId,
+        }
+      : null,
   );
 
   unit.playerCommand = command;
@@ -89,7 +115,7 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
   unit.behaviorRuntime.lastEvent = 'tactical_position_order_received';
   unit.behaviorRuntime.reason = finalFacingRadians === null
     ? `Боец направлен на тактическую позицию; после прибытия: ${postureLabel(arrivalPosture)}.`
-    : `Боец направлен на тактическую позицию; после прибытия: ${postureLabel(arrivalPosture)} и разворот к угрозе.`;
+    : `Боец направлен на тактическую позицию; после прибытия: ${postureLabel(arrivalPosture)} и разворот к рекомендуемому направлению.`;
   setUnitDirection(unit, planned.order.waypoints?.[0] ?? planned.order.target);
   return true;
 }
@@ -136,6 +162,10 @@ function directionTo(from: GridPosition, to: GridPosition): number | null {
   const dy = to.y - from.y;
   if (Math.hypot(dx, dy) < 0.0001) return null;
   return Math.atan2(dy, dx);
+}
+
+function normalizeFacing(preferred: number | null | undefined, fallback: number | null): number | null {
+  return typeof preferred === 'number' && Number.isFinite(preferred) ? preferred : fallback;
 }
 
 function postureLabel(posture: UnitPosture): string {
