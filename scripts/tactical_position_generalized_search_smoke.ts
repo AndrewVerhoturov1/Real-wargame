@@ -83,8 +83,8 @@ function run(kind: GeneralizedTacticalPositionSearchRequest['kind']) {
     origin: { x: 5.5, y: 5.5 },
     currentPosture: 'standing',
     orderTarget: null,
-    referenceThreatId: kind === 'defense' || kind === 'cover' ? 'known-threat' : null,
-    referenceThreatPosition: kind === 'defense' || kind === 'cover' ? { x: 10.5, y: 5.5 } : null,
+    referenceThreatId: null,
+    referenceThreatPosition: null,
     target: {
       mode: 'sector',
       bearingRadians: 0,
