@@ -1,3 +1,4 @@
+import type { TacticalPositionKind } from '../core/ai/tactical/TacticalQuery';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import {
   findVisibleTacticalPositionAt,
@@ -62,10 +63,20 @@ export class TacticalPositionInputController {
 
     selectVisibleTacticalPositionById(this.state, candidate.id);
     if (event.button === 2) {
+      const kind = canonicalKind(candidate.kind);
+      const requestIdentity = cleanIdentity(candidate.requestIdentity);
       issueTacticalPositionMoveOrderToSelectedUnit(
         this.state,
         candidate.position,
         recommendedPostureOf(candidate),
+        kind && requestIdentity
+          ? {
+              kind,
+              requestIdentity,
+              candidateId: candidate.id,
+              recommendedFacingRadians: candidate.metrics.recommendedFacingRadians ?? null,
+            }
+          : null,
       );
     }
     event.preventDefault();
@@ -84,4 +95,14 @@ export class TacticalPositionInputController {
       && isTacticalPositionWorkspaceTabActive(this.state)
       && this.state.selectedUnitId !== null;
   }
+}
+
+function canonicalKind(value: unknown): TacticalPositionKind | null {
+  if (value === 'observation' || value === 'firing') return value;
+  if (value === 'defense' || value === 'cover') return 'defense';
+  return null;
+}
+
+function cleanIdentity(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
