@@ -7,7 +7,6 @@ import {
 } from './AiGraphRunnerLegacy';
 import type {
   TacticalPositionKind,
-  TacticalPositionTargetSpec,
   TacticalQueryGenerationRequest,
   TacticalQueryGenerationResult,
 } from './tactical/TacticalQuery';
@@ -167,7 +166,7 @@ function wrapStatefulTacticalHost(
       callIndex += 1;
       const stored = input.blackboard[tacticalRequestMemoryKey(queryKey)];
       const config = tacticalConfigs.get(queryKey);
-      const target = config ? targetFromConfig(config) : request.target;
+      const target = config ? null : request.target;
       const extended: ExtendedTacticalQueryGenerationRequest = {
         ...request,
         queryKey,
@@ -209,26 +208,6 @@ function readTacticalNodeConfig(parameters: Readonly<Record<string, unknown>> | 
     exactCandidates: Math.round(clamp(readNumber(parameters?.exactCandidates, 12), 1, 32)),
     exactRayLimit: Math.round(clamp(readNumber(parameters?.exactRayLimit, 32), 0, 128)),
   };
-}
-
-function targetFromConfig(config: TacticalNodeQueryConfig): TacticalPositionTargetSpec | null {
-  if (config.targetPoint) {
-    if (config.kind === 'observation') return { mode: 'point', point: { ...config.targetPoint } };
-    if (config.kind === 'firing') return { mode: 'estimated_position', point: { ...config.targetPoint } };
-    return {
-      mode: 'sector',
-      bearingRadians: config.sectorCenterDegrees * Math.PI / 180,
-      arcRadians: config.sectorArcDegrees * Math.PI / 180,
-    };
-  }
-  if (config.targetMode === 'facing_sector') {
-    return {
-      mode: 'sector',
-      bearingRadians: config.sectorCenterDegrees * Math.PI / 180,
-      arcRadians: config.sectorArcDegrees * Math.PI / 180,
-    };
-  }
-  return null;
 }
 
 function readKind(value: unknown): TacticalPositionKind {
