@@ -1,0 +1,31 @@
+name: Agent Docs Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/20260721-tactical-position-basis
+    paths:
+      - .github/workflows/agent-docs-diagnostic.yml
+      - docs/**
+      - AGENTS.md
+      - README.md
+      - scripts/agent_docs_*.mjs
+      - scripts/check_agent_docs.mjs
+      - scripts/performance_principles_contract_smoke.mjs
+
+permissions:
+  contents: read
+
+jobs:
+  docs-diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout exact source head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          show-progress: false
+      - name: Print documentation integrity errors
+        run: node scripts/check_agent_docs.mjs
