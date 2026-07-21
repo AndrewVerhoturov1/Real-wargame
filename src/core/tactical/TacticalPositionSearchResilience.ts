@@ -18,7 +18,7 @@ interface ResilienceState {
 }
 
 const resilienceByService = new WeakMap<TacticalPositionSearchService, ResilienceState>();
-const prototype = TacticalPositionSearchService.prototype as TacticalPositionSearchService['prototype'] & Record<PropertyKey, unknown>;
+const prototype = TacticalPositionSearchService.prototype as TacticalPositionSearchService & Record<PropertyKey, unknown>;
 
 if (!prototype[PATCH_FLAG]) {
   prototype[PATCH_FLAG] = true;
