@@ -37,6 +37,11 @@
   overflow: hidden;
   box-sizing: border-box;
 }
+.unit-bar-route-controls.route-controls-migrated {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, .78fr);
+  grid-template-areas: "attentionprofile attentionmode turn";
+  align-items: end;
+}
 .unit-route-profile { grid-area: routeprofile; }
 .unit-attention-profile { grid-area: attentionprofile; }
 .unit-attention-mode { grid-area: attentionmode; }
@@ -59,6 +64,125 @@
 .unit-route-details-panel { position: fixed; z-index: 125; right: 18px; bottom: calc(var(--workspace-bottom) + 8px); width: min(520px, calc(100vw - 36px)); display: grid; gap: 4px; padding: 8px 9px; border: 1px solid rgba(255,240,161,.28); border-radius: 10px; color: var(--workspace-text); background: rgba(10,14,9,.98); box-shadow: 0 14px 32px rgba(0,0,0,.52); }
 .unit-route-details:not([open]) .unit-route-details-panel { display: none; }
 .unit-route-details-panel span { display: block; overflow-wrap: anywhere; color: var(--workspace-muted); font-size: 10px; line-height: 1.25; }
+
+.route-cost-inspector-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-content: start;
+  width: 100%;
+  min-width: 0;
+  margin-top: 0;
+}
+.route-cost-inspector-panel > *,
+.route-cost-inspector-panel .unit-route-profile,
+.route-cost-inspector-panel .unit-route-details {
+  grid-area: auto;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+}
+.route-cost-inspector-panel .route-cost-controls {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(255, 240, 161, .13);
+  border-radius: 10px;
+  background: rgba(255, 242, 168, .035);
+}
+.route-cost-inspector-panel .route-cost-controls h3,
+.route-cost-inspector-panel .route-cost-controls p {
+  margin: 0;
+}
+.route-cost-inspector-panel .route-cost-controls h3 {
+  color: var(--workspace-accent);
+  font-size: 12px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+.route-cost-inspector-panel .route-cost-controls p {
+  color: var(--workspace-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.route-cost-inspector-panel .route-cost-controls label,
+.route-cost-inspector-panel .unit-route-profile {
+  display: grid;
+  gap: 6px;
+  overflow: visible;
+  color: var(--workspace-muted);
+  font-size: 11px;
+}
+.route-cost-inspector-panel .unit-route-profile {
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 240, 161, .13);
+  border-radius: 10px;
+  background: rgba(255, 242, 168, .035);
+}
+.route-cost-inspector-panel .route-cost-controls select,
+.route-cost-inspector-panel .unit-route-profile select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 240, 161, .28);
+  border-radius: 8px;
+  color: var(--workspace-text);
+  background: rgba(255, 242, 168, .065);
+  font-size: 11px;
+  font-weight: 700;
+}
+.route-cost-inspector-panel .unit-route-details {
+  position: static;
+  display: block;
+  overflow: visible;
+}
+.route-cost-inspector-panel .unit-route-details > summary {
+  display: none;
+}
+.route-cost-inspector-panel .unit-route-details-panel {
+  position: static;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 240, 161, .13);
+  border-radius: 10px;
+  box-shadow: none;
+  overflow: hidden;
+  background: rgba(255, 242, 168, .035);
+}
+.route-cost-inspector-panel .unit-route-details-panel span {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border-bottom: 1px solid rgba(255, 240, 161, .08);
+  color: var(--workspace-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.route-cost-inspector-panel .unit-route-details-panel span:last-child {
+  border-bottom: 0;
+}
+.route-cost-inspector-panel .unit-route-details-panel [data-role="route-details-profile"] {
+  color: #f3d86d;
+}
+.route-cost-inspector-panel .unit-route-details-panel [data-role="route-details-cost"] {
+  color: #f2a15d;
+}
+.route-cost-inspector-panel .unit-route-details-panel [data-role="route-details-reason"] {
+  color: #b9d8b8;
+}
 
 .unit-bar-command-group, .unit-bar-speed-group { min-width: 0; flex-wrap: nowrap; overflow: hidden; }
 .simulation-controls {

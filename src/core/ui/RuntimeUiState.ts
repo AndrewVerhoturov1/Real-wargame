@@ -49,6 +49,7 @@ export interface SimulationLayerRuntimeState {
   mode: SimulationLayerMode;
   selectedCoverId: string | null;
   hoveredCoverId: string | null;
+  showThreatCones: boolean;
 }
 
 interface RuntimeUiState {
@@ -181,6 +182,12 @@ export function getSimulationLayerState(state: SimulationState): SimulationLayer
   return getRuntimeUiState(state).simulationLayer;
 }
 
+export function toggleThreatCones(state: SimulationState): boolean {
+  const layer = getRuntimeUiState(state).simulationLayer;
+  layer.showThreatCones = !layer.showThreatCones;
+  return layer.showThreatCones;
+}
+
 export function setSimulationLayerMode(state: SimulationState, mode: SimulationLayerMode): void {
   const runtime = getRuntimeUiState(state);
   const layer = runtime.simulationLayer;
@@ -224,6 +231,7 @@ function getRuntimeUiState(state: SimulationState): RuntimeUiState {
         mode: 'info',
         selectedCoverId: null,
         hoveredCoverId: null,
+        showThreatCones: false,
       },
     };
     runtimeByState.set(state, runtime);

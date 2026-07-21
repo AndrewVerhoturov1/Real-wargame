@@ -10,16 +10,9 @@ const baseline = spawnSync(
 );
 
 if (baseline.status !== 0) {
-  const stderr = baseline.stderr ?? '';
-  const failureLines = stderr
-    .split(/\r?\n/)
-    .filter((line) => line.startsWith('- '));
-  const unexpected = failureLines.filter((line) => !isExpectedMigrationFailure(line));
-  if (unexpected.length > 0 || failureLines.length === 0) {
-    if (baseline.stdout) process.stdout.write(baseline.stdout);
-    if (stderr) process.stderr.write(stderr);
-    process.exit(baseline.status ?? 1);
-  }
+  if (baseline.stdout) process.stdout.write(baseline.stdout);
+  if (baseline.stderr) process.stderr.write(baseline.stderr);
+  process.exit(baseline.status ?? 1);
 }
 
 verifyAllocationFreeDirectionalDanger();
@@ -33,61 +26,6 @@ verifyGraphRuntimeConnection();
 
 if (baseline.stdout) process.stdout.write(baseline.stdout);
 console.log('Tactical workspace migration smoke passed: old cover UI is absent and field-driven tactical positions share bounded awareness data with Graph v2.');
-
-function isExpectedMigrationFailure(line) {
-  const tacticalWorkspaceRelocations = [
-    "type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory'",
-    'Симуляция',
-    'Редактирование',
-    'Слой опасности',
-    'Слой скрытности',
-    'Обзор и память',
-    'Приказать двигаться сюда',
-    'Диагностика ИИ (без изменений)',
-    'Рассчитать и выполнить',
-    'workspace-file-menu',
-    'updateInfoPanelLive',
-    'stableDecision',
-    'buildWorkspaceUpdateKey',
-    'lastWorkspaceUpdateKey',
-    'data-action=\\"turn-unit\\"',
-    'Повернуть',
-    'data-action=\\"unit-attention-mode\\"',
-    'Автоматически',
-    'Наблюдение',
-    'Поиск',
-    'Стрельба',
-    'setAttentionMode',
-    'clearAttentionOverride',
-  ];
-  if (line.includes('src/ui/TacticalWorkspace.ts: missing')) {
-    return tacticalWorkspaceRelocations.some((token) => line.includes(token));
-  }
-  if (line.includes('src/rendering/PixiOverlayRenderer.ts: missing')) {
-    return line.includes('STABLE_DIRECTIONAL_FIRE_COLOR')
-      || line.includes('CURRENT_CONTACT_MARKER_COLOR');
-  }
-  if (line.includes('src/rendering/PixiAwarenessHeatmapRenderer.ts: missing')) {
-    return [
-      'latestRequestedWorldKey',
-      'workerJobsCoalesced',
-      'workerResultsStaleDropped',
-      'new Worker',
-      'AwarenessWorldWorker.ts',
-    ].some((token) => line.includes(token));
-  }
-  if (line.includes('src/ui/WorkspaceTooltipGuard.ts: missing')) {
-    return ['clearCoverTooltip', '[data-tab], [data-mode]', 'tooltip.hidden = true']
-      .some((token) => line.includes(token));
-  }
-  if (line.includes('src/tactical-workspace-stage8.css: missing')) {
-    return line.includes('.cover-map-tooltip[hidden]');
-  }
-  if (line.includes('src/core/simulation/SimulationTick.ts: missing')) {
-    return line.includes('applyFinalFacing') || line.includes('unit.facingRadians = order.finalFacingRadians');
-  }
-  return line.includes('src/core/knowledge/SoldierDangerField.ts: missing "readDirectionalBasisValue"');
-}
 
 function verifyAllocationFreeDirectionalDanger() {
   const source = readFileSync('src/core/knowledge/SoldierDangerField.ts', 'utf8');

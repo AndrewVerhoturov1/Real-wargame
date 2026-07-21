@@ -2,38 +2,29 @@ import { getNavigationProfileRegistry } from '../core/navigation/NavigationProfi
 import {
   getRouteCostOverlayState,
   setRouteCostOverlayMode,
-  toggleRouteCostOverlay,
   type RouteCostOverlayMode,
 } from '../core/navigation/RouteCostOverlayState';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import type { UnitModel } from '../core/units/UnitModel';
 
 const UPDATE_INTERVAL_MS = 300;
+const ROUTE_COST_INSPECTOR_RENDERED_EVENT = 'real-wargame:route-cost-inspector-rendered';
 
 export function installRouteCostOverlayUi(
   state: SimulationState,
   onChanged: () => void,
 ): () => void {
-  const displayPanel = document.querySelector<HTMLElement>('.workspace-display-panel');
-  const quickToggle = document.querySelector<HTMLButtonElement>('[data-action="route-cost-quick-toggle"]');
   const profileStatus = document.querySelector<HTMLElement>('[data-role="route-details-profile"]');
   const routeCostStatus = document.querySelector<HTMLElement>('[data-role="route-details-cost"]');
   const routeReasonStatus = document.querySelector<HTMLElement>('[data-role="route-details-reason"]');
   const controls = document.createElement('section');
   controls.className = 'route-cost-controls';
 
-  const menuToggle = document.createElement('button');
-  menuToggle.type = 'button';
-  menuToggle.dataset.action = 'route-cost-overlay';
+  const heading = document.createElement('h3');
+  heading.textContent = 'Стоимость движения';
 
-  const toggle = () => {
-    const active = toggleRouteCostOverlay(state);
-    updateToggle(menuToggle, active, 'Стоимость маршрута');
-    if (quickToggle) updateToggle(quickToggle, active, 'Карта стоимости');
-    onChanged();
-  };
-  menuToggle.addEventListener('click', toggle);
-  quickToggle?.addEventListener('click', toggle);
+  const description = document.createElement('p');
+  description.textContent = 'Цвет показывает цену перемещения по клеткам для выбранного бойца и профиля движения.';
 
   const mode = document.createElement('select');
   mode.dataset.action = 'route-cost-mode';
@@ -42,35 +33,39 @@ export function installRouteCostOverlayUi(
     <option value="baseTerrain">Базовая местность</option>
     <option value="finalCost">Итоговая стоимость</option>
   `;
-  mode.addEventListener('change', () => {
+  const handleModeChange = (): void => {
     setRouteCostOverlayMode(state, mode.value as RouteCostOverlayMode);
     onChanged();
-  });
+  };
+  mode.addEventListener('change', handleModeChange);
 
   const modeLabel = document.createElement('label');
   modeLabel.textContent = 'Вид стоимости';
   modeLabel.append(mode);
-  controls.append(menuToggle, modeLabel);
-  displayPanel?.append(controls);
+  controls.append(heading, description, modeLabel);
+
+  const mountInspectorControls = (): void => {
+    const host = document.querySelector<HTMLElement>('[data-role="route-cost-inspector-host"]');
+    if (host && controls.parentElement !== host) host.prepend(controls);
+  };
+  window.addEventListener(ROUTE_COST_INSPECTOR_RENDERED_EVENT, mountInspectorControls);
+  mountInspectorControls();
 
   const overlay = getRouteCostOverlayState(state);
   mode.value = overlay.mode === 'directionalTerrain' ? 'finalCost' : overlay.mode;
-  updateToggle(menuToggle, overlay.active, 'Стоимость маршрута');
-  if (quickToggle) updateToggle(quickToggle, overlay.active, 'Карта стоимости');
   updateStatus(profileStatus, routeCostStatus, routeReasonStatus, getSelectedUnit(state));
 
   const interval = window.setInterval(() => {
     const current = getRouteCostOverlayState(state);
     const visibleMode = current.mode === 'directionalTerrain' ? 'finalCost' : current.mode;
     if (mode.value !== visibleMode) mode.value = visibleMode;
-    updateToggle(menuToggle, current.active, 'Стоимость маршрута');
-    if (quickToggle) updateToggle(quickToggle, current.active, 'Карта стоимости');
     updateStatus(profileStatus, routeCostStatus, routeReasonStatus, getSelectedUnit(state));
   }, UPDATE_INTERVAL_MS);
 
   return () => {
     window.clearInterval(interval);
-    quickToggle?.removeEventListener('click', toggle);
+    window.removeEventListener(ROUTE_COST_INSPECTOR_RENDERED_EVENT, mountInspectorControls);
+    mode.removeEventListener('change', handleModeChange);
     controls.remove();
   };
 }
@@ -116,13 +111,6 @@ function updateStatus(
     `Цена: ${formatNumber(order.pathCost)} · длина: ${formatMeters(order.pathDistanceMeters)} · обход: +${detour}${directionalSummary} · перестроений: ${order.replanCount ?? 0}`,
   );
   setText(reasonElement, `Причина: ${order.pathReasonRu ?? 'нет диагностической сводки'}`);
-}
-
-function updateToggle(button: HTMLButtonElement, active: boolean, label: string): void {
-  const value = `${label}: ${active ? 'вкл' : 'выкл'}`;
-  if (button.textContent !== value) button.textContent = value;
-  button.classList.toggle('active', active);
-  button.setAttribute('aria-pressed', String(active));
 }
 
 function sourceLabel(source: string): string {
