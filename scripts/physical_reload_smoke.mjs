@@ -14,7 +14,7 @@ async function main() {
       root: repoRoot,
       logLevel: 'warn',
       build: {
-        ssr: path.join(repoRoot, 'scripts', 'physical_reload_suite.ts'),
+        ssr: path.join(repoRoot, 'scripts', 'physical_reload_suite_v2.ts'),
         outDir,
         emptyOutDir: true,
         minify: false,
