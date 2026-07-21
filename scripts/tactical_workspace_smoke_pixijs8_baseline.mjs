@@ -21,9 +21,30 @@ function expectIncludes(relativePath, snippets) {
 }
 
 function expectExcludes(relativePath, snippets) {
-  const content = read(relativePath);
+  let content = '';
+  try {
+    content = read(relativePath);
+  } catch {
+    failures.push(`${relativePath}: file is missing`);
+    return;
+  }
   for (const snippet of snippets) {
     if (content.includes(snippet)) failures.push(`${relativePath}: must not contain ${JSON.stringify(snippet)}`);
+  }
+}
+
+function expectCombinedIncludes(label, relativePaths, snippets) {
+  let content = '';
+  for (const relativePath of relativePaths) {
+    try {
+      content += `\n${read(relativePath)}`;
+    } catch {
+      failures.push(`${relativePath}: file is missing`);
+      return;
+    }
+  }
+  for (const snippet of snippets) {
+    if (!content.includes(snippet)) failures.push(`${label}: missing ${JSON.stringify(snippet)}`);
   }
 }
 
@@ -72,61 +93,15 @@ function lineOf(sourceFile, node) {
   return sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
 }
 
-function isFunctionLikeScope(node) {
-  return ts.isFunctionDeclaration(node)
-    || ts.isFunctionExpression(node)
-    || ts.isArrowFunction(node)
-    || ts.isMethodDeclaration(node)
-    || ts.isConstructorDeclaration(node)
-    || ts.isGetAccessorDeclaration(node)
-    || ts.isSetAccessorDeclaration(node);
+function directThisProperty(expression) {
+  return ts.isPropertyAccessExpression(expression) && expression.expression.kind === ts.SyntaxKind.ThisKeyword
+    ? `this.${expression.name.text}`
+    : null;
 }
 
-function createsLexicalScope(node) {
-  return ts.isSourceFile(node)
-    || ts.isBlock(node)
-    || ts.isModuleBlock(node)
-    || ts.isCatchClause(node)
-    || isFunctionLikeScope(node);
-}
-
-function registerBindingName(name, value, scope) {
-  if (!scope) return;
-  if (ts.isIdentifier(name)) {
-    scope.bindings.set(name.text, value);
-    return;
-  }
-  for (const element of name.elements) {
-    if (ts.isOmittedExpression(element)) continue;
-    registerBindingName(element.name, value, scope);
-  }
-}
-
-function resolveApplicationBinding(name, scope) {
-  for (let current = scope; current; current = current.parent) {
-    if (current.bindings.has(name)) return current.bindings.get(name);
-  }
-  return null;
-}
-
-function classOwnerKey(node) {
-  for (let current = node.parent; current; current = current.parent) {
-    if (ts.isClassDeclaration(current) || ts.isClassExpression(current)) {
-      return `class:${current.name?.text ?? '<anonymous>'}`;
-    }
-  }
-  return 'module';
-}
-
-function directThisPropertyKey(node) {
-  if (!ts.isPropertyAccessExpression(node) || node.expression.kind !== ts.SyntaxKind.ThisKeyword) return null;
-  return `${classOwnerKey(node)}:this.${node.name.text}`;
-}
-
-function resolveApplicationExpression(expression, scope, ownedProperties) {
-  if (ts.isIdentifier(expression)) return resolveApplicationBinding(expression.text, scope);
-  const propertyKey = directThisPropertyKey(expression);
-  return propertyKey ? (ownedProperties.get(propertyKey) ?? null) : null;
+function applicationReceiverKey(expression) {
+  if (ts.isIdentifier(expression)) return expression.text;
+  return directThisProperty(expression);
 }
 
 function isAwaitedCall(call) {
@@ -174,60 +149,10 @@ function inspectPixiV8Baseline() {
       }
     }
 
-    const scopeByNode = new Map();
-    const applicationRecords = [];
-    const trackedConstructions = new Set();
-    const ownedProperties = new Map();
+    const applicationRecords = new Map();
+    const applicationProperties = new Map();
 
-    // Deterministic supported pattern: a PixiJS Application must be assigned directly to
-    // an identifier variable, with an optional direct transfer to this.<property>. This
-    // intentionally does not claim arbitrary control-flow or interprocedural data-flow analysis.
-    const collectBindings = (node, parentScope) => {
-      const scope = createsLexicalScope(node)
-        ? { parent: parentScope, bindings: new Map() }
-        : parentScope;
-      if (createsLexicalScope(node)) scopeByNode.set(node, scope);
-
-      if (isFunctionLikeScope(node)) {
-        for (const parameter of node.parameters) registerBindingName(parameter.name, null, scope);
-      }
-      if (ts.isCatchClause(node) && node.variableDeclaration) {
-        registerBindingName(node.variableDeclaration.name, null, scope);
-      }
-      if (ts.isVariableDeclaration(node)) {
-        let record = null;
-        if (ts.isIdentifier(node.name) && node.initializer && ts.isNewExpression(node.initializer)
-          && applicationAliases.has(node.initializer.expression.getText(sourceFile))) {
-          record = {
-            name: node.name.text,
-            construction: node.initializer,
-            initCalls: [],
-          };
-          applicationRecords.push(record);
-          trackedConstructions.add(node.initializer);
-        }
-        registerBindingName(node.name, record, scope);
-      }
-      if (ts.isPropertyDeclaration(node) && ts.isIdentifier(node.name) && node.type
-        && applicationAliases.has(node.type.getText(sourceFile))) {
-        ownedProperties.set(`${classOwnerKey(node)}:this.${node.name.text}`, {
-          name: `this.${node.name.text}`,
-        });
-      }
-      if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-        const propertyKey = directThisPropertyKey(node.left);
-        if (propertyKey && ts.isIdentifier(node.right)) {
-          const record = resolveApplicationBinding(node.right.text, scope);
-          if (record) ownedProperties.set(propertyKey, record);
-        }
-      }
-
-      ts.forEachChild(node, (child) => collectBindings(child, scope));
-    };
-    collectBindings(sourceFile, null);
-
-    const inspect = (node, parentScope) => {
-      const scope = scopeByNode.get(node) ?? parentScope;
+    const visit = (node) => {
       const specifier = moduleSpecifier(node);
       if (specifier && isLegacyPixiPackage(specifier)) {
         failures.push(`${relativePath}:${lineOf(sourceFile, node)}: legacy/split Pixi import is forbidden: ${specifier}`);
@@ -247,11 +172,25 @@ function inspectPixiV8Baseline() {
 
       if (ts.isNewExpression(node) && applicationAliases.has(node.expression.getText(sourceFile))) {
         totals.applications += 1;
-        if (!trackedConstructions.has(node)) {
-          failures.push(`${relativePath}:${lineOf(sourceFile, node)}: Application construction must use a direct identifier variable binding`);
-        }
         if ((node.arguments?.length ?? 0) > 0) {
           failures.push(`${relativePath}:${lineOf(sourceFile, node)}: Application must be constructed without synchronous options`);
+        }
+        const parent = node.parent;
+        if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
+          applicationRecords.set(parent.name.text, { construction: node, initCalls: [] });
+        } else if (ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+          const property = directThisProperty(parent.left);
+          if (property) applicationRecords.set(property, { construction: node, initCalls: [] });
+          else failures.push(`${relativePath}:${lineOf(sourceFile, node)}: Application construction must use a direct variable or this.<property> binding`);
+        } else {
+          failures.push(`${relativePath}:${lineOf(sourceFile, node)}: Application construction must use a direct variable or this.<property> binding`);
+        }
+      }
+
+      if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+        const property = directThisProperty(node.left);
+        if (property && ts.isIdentifier(node.right) && applicationRecords.has(node.right.text)) {
+          applicationProperties.set(property, applicationRecords.get(node.right.text));
         }
       }
 
@@ -271,18 +210,16 @@ function inspectPixiV8Baseline() {
       if (ts.isCallExpression(node)
         && (ts.isPropertyAccessExpression(node.expression) || ts.isElementAccessExpression(node.expression))
         && syntaxName(node.expression) === 'init') {
-        const receiver = node.expression.expression;
-        if (ts.isIdentifier(receiver)) {
-          const record = resolveApplicationBinding(receiver.text, scope);
-          if (record) record.initCalls.push({ call: node, awaited: isAwaitedCall(node), webgl: hasWebglPreference(node) });
-        }
+        const key = applicationReceiverKey(node.expression.expression);
+        const record = key ? (applicationRecords.get(key) ?? applicationProperties.get(key)) : null;
+        if (record) record.initCalls.push({ call: node, awaited: isAwaitedCall(node), webgl: hasWebglPreference(node) });
       }
 
       if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
-        const receiver = node.expression;
-        const record = resolveApplicationExpression(receiver, scope, ownedProperties);
+        const key = applicationReceiverKey(node.expression);
+        const record = key ? (applicationRecords.get(key) ?? applicationProperties.get(key)) : null;
         if (record && member === 'view') {
-          failures.push(`${relativePath}:${lineOf(sourceFile, node)}: use ${record.name}.canvas instead of ${record.name}.view`);
+          failures.push(`${relativePath}:${lineOf(sourceFile, node)}: use ${key}.canvas instead of ${key}.view`);
         }
         if (record && member === 'canvas') totals.canvas += 1;
       }
@@ -290,22 +227,19 @@ function inspectPixiV8Baseline() {
         && (ts.isPropertyAccessExpression(node.expression) || ts.isElementAccessExpression(node.expression))
         && syntaxName(node.expression.expression) === 'source') totals.sourceUpdate += 1;
 
-      ts.forEachChild(node, (child) => inspect(child, scope));
+      ts.forEachChild(node, visit);
     };
-    inspect(sourceFile, null);
+    visit(sourceFile);
 
-    for (const record of applicationRecords) {
+    const uniqueRecords = new Set([...applicationRecords.values(), ...applicationProperties.values()]);
+    for (const record of uniqueRecords) {
       if (record.initCalls.length === 0) {
-        failures.push(`${relativePath}:${lineOf(sourceFile, record.construction)}: ${record.name} must call awaited init()`);
+        failures.push(`${relativePath}:${lineOf(sourceFile, record.construction)}: Application must call awaited init()`);
         continue;
       }
       for (const init of record.initCalls) {
-        if (!init.awaited) {
-          failures.push(`${relativePath}:${lineOf(sourceFile, init.call)}: ${record.name}.init() must be awaited`);
-        }
-        if (!init.webgl) {
-          failures.push(`${relativePath}:${lineOf(sourceFile, init.call)}: ${record.name}.init() must include WebGL preference`);
-        }
+        if (!init.awaited) failures.push(`${relativePath}:${lineOf(sourceFile, init.call)}: Application.init() must be awaited`);
+        if (!init.webgl) failures.push(`${relativePath}:${lineOf(sourceFile, init.call)}: Application.init() must include WebGL preference`);
       }
     }
   }
@@ -317,16 +251,24 @@ function inspectPixiV8Baseline() {
 
 inspectPixiV8Baseline();
 
-expectIncludes('src/ui/TacticalWorkspace.ts', [
-  "type SimulationTab = 'info' | 'danger' | 'stealth' | 'memory'",
-  'Симуляция', 'Редактирование', 'Слой опасности', 'Слой скрытности', 'Обзор и память',
-  'Приказать двигаться сюда', 'Диагностика ИИ (без изменений)', 'Рассчитать и выполнить',
+expectIncludes('src/ui/TacticalWorkspaceBase.ts', [
+  "type SimulationTab = 'info' | 'danger' | 'positions' | 'stealth' | 'memory'",
+  'Симуляция', 'Редактирование', 'Обзор и память',
+  'Диагностика ИИ (без изменений)', 'Рассчитать и выполнить',
   'workspace-file-menu', 'updateInfoPanelLive', 'stableDecision', 'buildWorkspaceUpdateKey', 'lastWorkspaceUpdateKey',
   'data-action="turn-unit"', 'Повернуть',
   'data-action="unit-attention-mode"', 'Автоматически', 'Наблюдение', 'Поиск', 'Стрельба',
   'setAttentionMode', 'clearAttentionOverride',
 ]);
-expectExcludes('src/ui/TacticalWorkspace.ts', ['u?.position.x.toFixed(2)', 'u?.behaviorRuntime.reason']);
+expectExcludes('src/ui/TacticalWorkspaceBase.ts', ['u?.position.x.toFixed(2)', 'u?.behaviorRuntime.reason']);
+expectIncludes('src/ui/TacticalWorkspace.ts', [
+  'installTacticalPositionWorkspaceTab', 'installTacticalPositionSearchControls',
+  'installTacticalPositionSettingsControls', 'installCellInspector',
+  'data-tab="routeCost"', 'setRouteCostOverlayActive', 'observer.observe(shell',
+]);
+expectExcludes('src/ui/TacticalWorkspace.ts', [
+  'observer.observe(document.body', 'getSimulationCovers', 'hoverSimulationCoverAtPosition', 'Приказать двигаться сюда',
+]);
 
 expectIncludes('src/core/ui/RuntimeUiState.ts', [
   'UnitCommandToolRuntimeState', 'turnToolActive', 'routeFacingDraft',
@@ -342,7 +284,7 @@ expectIncludes('src/core/orders/PlayerCommand.ts', ['finalFacingRadians']);
 expectIncludes('src/core/orders/MoveOrder.ts', ['finalFacingRadians']);
 expectIncludes('src/core/orders/MoveOrderPlanning.ts', ['finalFacingRadians: options.finalFacingRadians']);
 expectIncludes('src/core/orders/RoutedMoveOrders.ts', ['finalFacingRadians?: number', 'finalFacingRadians,']);
-expectIncludes('src/core/simulation/SimulationTick.ts', [
+expectIncludes('src/core/simulation/SimulationTickLegacy.ts', [
   'applyFinalFacing', 'order.finalFacingRadians', 'unit.facingRadians = order.finalFacingRadians',
 ]);
 expectIncludes('src/rendering/CommandPlanRouteOverlayModel.ts', ['finalFacingRadians']);
@@ -363,14 +305,20 @@ expectIncludes('src/perception-attention.css', [
   '.attention-compact-legend', '.attention-legend-gradient', '.attention-legend-marker',
 ]);
 expectIncludes('src/core/visibility/SelectedUnitVisibilityField.ts', [
-  'cachedFieldCount', 'cachedFieldCount: runtime.field ? 1 : 0',
+  'readonly fieldsByUnit: Map<string, SelectedUnitVisibilityField>',
+  'cachedFieldCount: runtime.fieldsByUnit.size',
+  'runtime.fieldsByUnit.clear()',
 ]);
 
-expectIncludes('src/rendering/PixiOverlayRenderer.ts', [
+expectIncludes('src/rendering/PixiOverlayRendererBase.ts', [
   'STABLE_DIRECTIONAL_FIRE_COLOR', 'CURRENT_CONTACT_MARKER_COLOR',
+]);
+expectIncludes('src/rendering/PixiOverlayRenderer.ts', [
+  'renderThreatLayersIfNeeded', 'must not perform a second lookup',
 ]);
 expectExcludes('src/rendering/PixiOverlayRenderer.ts', [
   'const dangerColor = threat.visibleNow ? 0xff4e3d : 0xf09a55;',
+  'renderKnowledgeLayerIfNeeded(state)', 'drawCoverMarker',
 ]);
 
 expectIncludes('src/ui/EditorHeaderPlacement.ts', [
@@ -380,9 +328,8 @@ expectIncludes('src/ui/EditorHeaderPlacement.ts', [
   "{ id: 'spawn_zone', label: 'Поставить угрозу' }",
   'data-header-placement-tool', '[data-action="editor-place"]',
 ]);
-expectIncludes('src/ui/WorkspaceTooltipGuard.ts', [
-  'installWorkspaceTooltipGuard', 'clearCoverTooltip', '[data-tab], [data-mode]', 'tooltip.hidden = true',
-]);
+expectIncludes('src/ui/WorkspaceTooltipGuard.ts', ['@deprecated', 'return () => undefined']);
+expectExcludes('src/ui/WorkspaceTooltipGuard.ts', ['clearCoverTooltip', 'addEventListener', '.cover-map-tooltip']);
 
 expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
   'buildAwarenessField', 'buildRouteKey',
@@ -394,11 +341,14 @@ expectIncludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
 expectIncludes('src/core/knowledge/SoldierDangerField.ts', [
   'getSoldierDangerField', 'getSoldierDangerFieldDiagnostics',
   'getThreatRelativeCoverField', 'getDirectionalTerrainSectorBasis',
-  'readDirectionalBasisValue',
+  'DIRECTIONAL_SECTOR_RADIANS', 'const sectorFraction = sectorPosition - lowerSector',
+  'const terrainProtection =', 'const terrainExposure =',
   'fireThreatClassForAggregation', "'rifle_fire'", "'machine_gun_fire'",
   'THREAT_GEOMETRY_CACHE_LIMIT', 'FIELD_CACHE_LIMIT', 'cachedThreatGeometryCount', 'retainedTypedArrayBytes',
 ]);
-expectExcludes('src/core/knowledge/SoldierDangerField.ts', ['pixi.js', '../rendering/', '../ui/']);
+expectExcludes('src/core/knowledge/SoldierDangerField.ts', [
+  'readDirectionalBasisValue(', 'pixi.js', '../rendering/', '../ui/',
+]);
 expectExcludes('src/core/knowledge/SoldierAwarenessGrid.ts', [
   'const orderCellX', 'const orderCellY',
   'evaluateSmallArmsCover', 'getCachedCover', 'coverCacheByMap', 'buildMapHash',
@@ -417,20 +367,22 @@ expectIncludes('src/core/terrain/DirectionalTacticalField.ts', [
   'getDirectionalTacticalFieldDiagnostics',
 ]);
 
-expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
-  'buildAwarenessRenderKey', 'buildAwarenessWorldKey',
-  'latestRequestedWorldKey', 'workerJobsCoalesced', 'workerResultsStaleDropped',
-  'lastRasterKey',
-  'new Worker', 'AwarenessWorldWorker.ts', 'dangerPixels', 'stealthPixels',
-  'Sprite', 'Texture', 'BufferImageSource', "scaleMode: 'nearest'", 'createAwarenessTexture', 'drawAwarenessRaster',
-  "representation: 'raster-sprite'", 'getDiagnostics()', '__realWargameAwarenessDebug',
+expectIncludes('src/runtime/AwarenessWorldRuntime.ts', [
+  'buildAwarenessWorldKey', 'latestWorldKeyByUnit',
+  'workerJobsCoalesced', 'workerResultsStaleDropped',
+  'new Worker', 'AwarenessWorldWorker.ts', 'MAX_PENDING_OWNERS', 'MAX_READY_OWNERS',
   'lastRequestedCanonicalThreatKey', 'lastAppliedFieldIdentity',
 ]);
+expectIncludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
+  'lastRasterKey', 'dangerPixels', 'stealthPixels',
+  'Sprite', 'Texture', 'BufferImageSource', "scaleMode: 'nearest'", 'createAwarenessTexture',
+  "representation: 'raster-sprite'", 'getDiagnostics()', '__realWargameAwarenessDebug',
+  'renderTacticalPositions', 'drawB2TacticalPositionMarker', 'TacticalPositionInputController',
+]);
 expectExcludes('src/rendering/PixiAwarenessHeatmapRenderer.ts', [
-  'buildSoldierAwarenessReport',
+  'new Worker', 'AwarenessWorldWorker.ts', 'buildSoldierAwarenessReport',
   'orderCell:', 'for (const cell of report.cells) drawCell', 'graphics.drawRect(cell.x * cellSize',
 ]);
-
 expectIncludes('src/workers/AwarenessWorldWorker.ts', [
   'buildAwarenessWorldField', 'awarenessWorkerTransferables', 'fieldIdentity', 'rasterDigest',
 ]);
@@ -471,15 +423,15 @@ expectIncludes('src/rendering/CombatEffectsInstaller.ts', [
   'installCombatEffectsRenderer', 'worldContainer.addChild', 'app.ticker.add',
 ]);
 expectIncludes('src/tactical-workspace-stage8.css', [
-  '.cover-map-tooltip[hidden]', '[data-action="editor-place"]', '.editor-header-placement',
+  '[data-action="editor-place"]', '.editor-header-placement',
   '[data-editor-tool="spawn_object"]', '[data-editor-tool="paint_height"]',
 ]);
+expectExcludes('src/tactical-workspace-stage8.css', ['.cover-map-tooltip']);
 
 expectIncludes('Run-Real-Wargame-Lab.bat', [
   "Invoke-WebRequest -Uri 'http://127.0.0.1:%APP_PORT%/'",
   'start "" "http://127.0.0.1:%APP_PORT%/"', 'intentionally not opened',
 ]);
-
 expectIncludes('tests/preview-screenshots.spec.ts', [
   '01-simulation-info.png', '03-simulation-danger-layer.png', '07-editor-object-palette.png',
   '10-node-editor-unchanged.png', '11-editor-spawned-fighter-playable.png',
