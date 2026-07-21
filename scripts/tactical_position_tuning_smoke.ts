@@ -264,7 +264,10 @@ function verifyOccupationAndEditorContracts(): void {
   const aiEditor = readFileSync('src/ai-node-editor/TacticalPositionProfileEditor.ts', 'utf8');
   const html = readFileSync('ai-node-editor.html', 'utf8');
   const searchControls = readFileSync('src/ui/TacticalPositionSearchControls.ts', 'utf8');
-  const workspaceBase = readFileSync('src/ui/TacticalWorkspaceBase.ts', 'utf8');
+  const workspaceBase = [
+    readFileSync('src/ui/TacticalWorkspaceBase.ts', 'utf8'),
+    readFileSync('src/ui/TacticalWorkspaceBaseLegacy.ts', 'utf8'),
+  ].join('\n');
   const workspaceTab = readFileSync('src/ui/TacticalPositionWorkspaceTab.ts', 'utf8');
   const runtimeUi = readFileSync('src/core/ui/RuntimeUiState.ts', 'utf8');
   assert.equal(occupation.includes('WeakMap'), false);

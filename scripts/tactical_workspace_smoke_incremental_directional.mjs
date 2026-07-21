@@ -38,7 +38,10 @@ function verifyAllocationFreeDirectionalDanger() {
 }
 
 function verifyWorkspaceMigration() {
-  const base = readFileSync('src/ui/TacticalWorkspaceBase.ts', 'utf8');
+  const base = [
+    readFileSync('src/ui/TacticalWorkspaceBase.ts', 'utf8'),
+    readFileSync('src/ui/TacticalWorkspaceBaseLegacy.ts', 'utf8'),
+  ].join('\n');
   const wrapper = readFileSync('src/ui/TacticalWorkspace.ts', 'utf8');
   const positionsTab = readFileSync('src/ui/TacticalPositionWorkspaceTab.ts', 'utf8');
   const searchControls = readFileSync('src/ui/TacticalPositionSearchControls.ts', 'utf8');
