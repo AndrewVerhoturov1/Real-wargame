@@ -9,6 +9,33 @@ import { getStaticTacticalPositionService } from '../src/core/tactical/static/St
 import { normalizeUnits } from '../src/core/units/UnitModel';
 import type { PreparedAwarenessWorldSnapshot } from '../src/runtime/AwarenessWorldRuntime';
 
+class FakeFieldRuntime implements TacticalPositionFieldRuntime {
+  private readonly listeners = new Set<() => void>();
+  ready: PreparedAwarenessWorldSnapshot | null = null;
+
+  requestWorldField(): PreparedAwarenessWorldSnapshot | null {
+    return this.ready;
+  }
+
+  readReadyWorldField(): PreparedAwarenessWorldSnapshot | null {
+    return this.ready;
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  emit(): void {
+    for (const listener of this.listeners) listener();
+  }
+
+  destroy(): void {
+    this.listeners.clear();
+    this.ready = null;
+  }
+}
+
 const unit = normalizeUnits([
   { id: 'alpha', type: 'infantry_squad', side: 'blue', x: 1, y: 1 },
 ])[0]!;
@@ -112,33 +139,6 @@ console.log('tactical position request refresh smoke: ok');
 
 function runScheduled(queue: Array<() => void>): void {
   while (queue.length > 0) queue.shift()!();
-}
-
-class FakeFieldRuntime implements TacticalPositionFieldRuntime {
-  private readonly listeners = new Set<() => void>();
-  ready: PreparedAwarenessWorldSnapshot | null = null;
-
-  requestWorldField(): PreparedAwarenessWorldSnapshot | null {
-    return this.ready;
-  }
-
-  readReadyWorldField(): PreparedAwarenessWorldSnapshot | null {
-    return this.ready;
-  }
-
-  subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-
-  emit(): void {
-    for (const listener of this.listeners) listener();
-  }
-
-  destroy(): void {
-    this.listeners.clear();
-    this.ready = null;
-  }
 }
 
 function prepared(unitId: string, fieldIdentity: string): PreparedAwarenessWorldSnapshot {
