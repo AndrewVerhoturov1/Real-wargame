@@ -504,18 +504,20 @@ export class TacticalPositionSearchService {
 
   private pump(): void {
     if (this.destroyed || this.pumping || this.inFlight) return;
+    const maximumAttempts = [...this.pendingByOwner.values()].reduce((sum, queue) => sum + queue.length, 0);
+    if (maximumAttempts === 0) return;
     this.pumping = true;
-    let result: 'dispatched' | 'waiting' | 'terminal' | null = null;
     try {
-      const next = this.takeNextPending();
-      if (next) {
-        result = this.process(next);
+      for (let attempt = 0; attempt < maximumAttempts && !this.inFlight; attempt += 1) {
+        const next = this.takeNextPending();
+        if (!next) break;
+        const result = this.process(next);
         if (result === 'waiting') this.enqueuePending(next.ownerUnitId, next.requestId);
+        if (result === 'dispatched') break;
       }
     } finally {
       this.pumping = false;
     }
-    if (result === 'terminal' && !this.inFlight && this.pendingOwnerOrder.length > 0) this.schedulePump();
   }
 
   private process(request: MutableRequest): 'dispatched' | 'waiting' | 'terminal' {
@@ -911,7 +913,14 @@ function captureInput(
   const settingsRevision = getTacticalPositionSettingsRevision(unit);
   const settings = { ...getTacticalPositionSettings(unit) };
   const weapon = captureWeapon(unit, kind);
-  const target = parameters.target ?? defaultTarget(unit, kind, orderTarget, referenceThreat?.position ?? null, weapon);
+  const target = parameters.target ?? defaultTarget(
+    unit,
+    kind,
+    orderTarget,
+    referenceThreat?.position ?? null,
+    state.map.metersPerCell,
+    weapon,
+  );
   const staticIdentity = createStaticTacticalPositionBasisIdentity(state.map, staticService.getSettings());
   const inputIdentity = buildInputIdentity({
     ownerUnitId: unit.id,
@@ -1036,13 +1045,18 @@ function defaultTarget(
   kind: TacticalPositionSearchKind,
   orderTarget: GridPosition | null,
   referenceThreat: GridPosition | null,
+  metersPerCell: number,
   weapon: TacticalPositionWeaponSnapshot | null,
 ): TacticalPositionTargetSpec {
   const canonical = canonicalKindOrNull(kind) ?? 'defense';
   if (canonical === 'observation') {
     const point = orderTarget ?? referenceThreat;
     return point
-      ? { mode: 'point', point: { ...point }, desiredDistanceMeters: unit.viewRangeCells }
+      ? {
+          mode: 'point',
+          point: { ...point },
+          desiredDistanceMeters: unit.viewRangeCells * Math.max(0.001, metersPerCell),
+        }
       : { mode: 'sector', bearingRadians: unit.facingRadians, arcRadians: Math.PI / 2 };
   }
   if (canonical === 'firing') {
