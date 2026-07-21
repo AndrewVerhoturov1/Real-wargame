@@ -1,3 +1,4 @@
+import { isPostureTransitionRunning } from '../actions/PostureTransition';
 import type { GridPosition } from '../geometry';
 import { contactStageRank, type PerceptionContactMemory } from '../perception/PerceptionContact';
 import type { SimulationState } from '../simulation/SimulationState';
@@ -46,6 +47,12 @@ export function evaluateFireRequest(
 ): FireDecisionResult {
   if (!isUnitCombatCapable(shooter)) {
     return denied('Shooter is not combat capable.', 'Боец не способен продолжать бой.');
+  }
+  if (isPostureTransitionRunning(shooter)) {
+    return denied(
+      'Shooter is changing posture.',
+      'Нельзя начать наведение или выстрел во время физической смены позы.',
+    );
   }
   const contact = shooter.perceptionKnowledge.contacts.find((item) => item.id === contactId) ?? null;
   if (!contact) return denied('Target contact is missing.', 'Контакт цели отсутствует.');
