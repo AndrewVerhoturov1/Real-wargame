@@ -19,6 +19,17 @@ const MIN_LOCAL_WORK_CELLS = 256;
 const CELLS_PER_REQUESTED_CANDIDATE = 72;
 const DEFAULT_MINIMUM_SEPARATION_METERS = 4;
 
+interface ExtendedTacticalQueryGenerationRequest extends TacticalQueryGenerationRequest {
+  readonly targetMode?: 'automatic' | 'order_point' | 'facing_sector';
+  readonly sectorCenterDegrees?: number;
+  readonly sectorArcDegrees?: number;
+  readonly maximumRouteCost?: number;
+  readonly maxPositionDanger?: number;
+  readonly preliminaryCandidates?: number;
+  readonly exactCandidates?: number;
+  readonly exactRayLimit?: number;
+}
+
 export function generateSimulationTacticalPositions(
   state: SimulationState,
   unit: UnitModel,
@@ -35,7 +46,7 @@ export function generateSimulationTacticalPositions(
     );
   }
 
-  const parameters = buildSearchParameters(state, unit, request, kind);
+  const parameters = buildSearchParameters(state, unit, request as ExtendedTacticalQueryGenerationRequest, kind);
   const snapshot = request.requestId
     ? service.readRequest(request.requestId)
     : request.kind === 'cover' || request.kind === undefined
@@ -112,7 +123,7 @@ export function generateSimulationTacticalPositions(
 function buildSearchParameters(
   state: SimulationState,
   unit: UnitModel,
-  request: TacticalQueryGenerationRequest,
+  request: ExtendedTacticalQueryGenerationRequest,
   kind: TacticalPositionKind,
 ) {
   const radiusCells = Math.max(0, request.searchRadiusMeters / Math.max(0.001, state.map.metersPerCell));
@@ -124,26 +135,60 @@ function buildSearchParameters(
   return {
     objective: normalizeTacticalPositionSearchObjective(request.objective),
     queryKey: request.queryKey ?? `${kind}:graph`,
-    target: resolveGraphTarget(unit, kind, request.target ?? null),
+    target: resolveGraphTarget(unit, kind, request),
     searchRadiusMeters: request.searchRadiusMeters,
     maxCandidates: Math.min(16, Math.max(1, Math.floor(request.maxCandidates))),
     maxSampledCells: Math.max(1, Math.min(MAX_LOCAL_SAMPLE_CELLS, localAreaUpperBound, requestedWork)),
     maxRouteExpansions: Math.max(1, Math.min(MAX_LOCAL_ROUTE_EXPANSIONS, localAreaUpperBound, requestedWork * 2)),
     minimumSeparationMeters: DEFAULT_MINIMUM_SEPARATION_METERS,
-    preliminaryCandidates: 36,
-    exactCandidates: 12,
-    exactRayLimit: 32,
+    maximumRouteCost: bounded(request.maximumRouteCost, 100000, 1, 1000000),
+    maxPositionDanger: bounded(request.maxPositionDanger, 78, 0, 100),
+    preliminaryCandidates: integer(request.preliminaryCandidates, 36, 8, 128),
+    exactCandidates: integer(request.exactCandidates, 12, 1, 32),
+    exactRayLimit: integer(request.exactRayLimit, 32, 0, 128),
   };
 }
 
 function resolveGraphTarget(
   unit: UnitModel,
   kind: TacticalPositionKind,
-  explicit: TacticalPositionTargetSpec | null,
+  request: ExtendedTacticalQueryGenerationRequest,
 ): TacticalPositionTargetSpec {
-  if (explicit) return explicit;
-  const referenceThreat = resolveTacticalPositionReferenceThreat(unit);
+  if (request.target) return request.target;
+  const mode = request.targetMode ?? 'automatic';
   const orderPoint = unit.order?.target ?? unit.playerCommand?.target ?? null;
+  const referenceThreat = resolveTacticalPositionReferenceThreat(unit);
+  const weaponRuntime = getWeaponRuntime(unit);
+  const weapon = getWeaponDefinition(weaponRuntime.weaponId);
+
+  if (mode === 'order_point' && orderPoint) {
+    if (kind === 'observation') return { mode: 'point', point: { ...orderPoint } };
+    if (kind === 'firing') {
+      return {
+        mode: 'estimated_position',
+        point: { ...orderPoint },
+        minimumRangeMeters: 0,
+        effectiveRangeMeters: weapon.effectiveRangeMetres,
+        maximumRangeMeters: weapon.maximumRangeMetres,
+      };
+    }
+    return {
+      mode: 'sector',
+      bearingRadians: Math.atan2(orderPoint.y - unit.position.y, orderPoint.x - unit.position.x),
+      arcRadians: Math.PI / 3,
+    };
+  }
+
+  if (mode === 'facing_sector') {
+    return createSectorTarget(
+      kind,
+      unit.facingRadians + bounded(request.sectorCenterDegrees, 0, -360, 360) * Math.PI / 180,
+      bounded(request.sectorArcDegrees, 90, 1, 360) * Math.PI / 180,
+      weapon.effectiveRangeMetres,
+      weapon.maximumRangeMetres,
+    );
+  }
+
   if (kind === 'observation') {
     const point = referenceThreat?.position ?? orderPoint;
     return point
@@ -160,8 +205,6 @@ function resolveGraphTarget(
         }
       : { mode: 'sector', bearingRadians: unit.facingRadians, arcRadians: Math.PI / 2 };
   }
-  const runtime = getWeaponRuntime(unit);
-  const weapon = getWeaponDefinition(runtime.weaponId);
   const point = referenceThreat?.position ?? orderPoint;
   return point
     ? {
@@ -171,14 +214,33 @@ function resolveGraphTarget(
         effectiveRangeMeters: weapon.effectiveRangeMetres,
         maximumRangeMeters: weapon.maximumRangeMetres,
       }
-    : {
-        mode: 'sector',
-        bearingRadians: unit.facingRadians,
-        arcRadians: Math.PI / 2,
-        minimumRangeMeters: 0,
-        effectiveRangeMeters: weapon.effectiveRangeMetres,
-        maximumRangeMeters: weapon.maximumRangeMetres,
-      };
+    : createSectorTarget(
+        kind,
+        unit.facingRadians,
+        Math.PI / 2,
+        weapon.effectiveRangeMetres,
+        weapon.maximumRangeMetres,
+      );
+}
+
+function createSectorTarget(
+  kind: TacticalPositionKind,
+  bearingRadians: number,
+  arcRadians: number,
+  effectiveRangeMeters: number,
+  maximumRangeMeters: number,
+): TacticalPositionTargetSpec {
+  if (kind === 'firing') {
+    return {
+      mode: 'sector',
+      bearingRadians,
+      arcRadians,
+      minimumRangeMeters: 0,
+      effectiveRangeMeters,
+      maximumRangeMeters,
+    };
+  }
+  return { mode: 'sector', bearingRadians, arcRadians };
 }
 
 function canonicalKind(value: unknown): TacticalPositionKind | null {
@@ -203,4 +265,14 @@ function stopped(
     elapsedMs: 0,
     stopReason: { code, reason, reasonRu },
   };
+}
+
+function integer(value: unknown, fallback: number, minimum: number, maximum: number): number {
+  const numeric = typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : fallback;
+  return Math.max(minimum, Math.min(maximum, numeric));
+}
+
+function bounded(value: unknown, fallback: number, minimum: number, maximum: number): number {
+  const numeric = typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+  return Math.max(minimum, Math.min(maximum, numeric));
 }
