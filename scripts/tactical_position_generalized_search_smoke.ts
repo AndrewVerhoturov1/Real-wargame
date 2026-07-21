@@ -6,6 +6,7 @@ import {
   type GeneralizedTacticalPositionSearchRequest,
 } from '../src/core/tactical/GeneralizedTacticalPositionSearch';
 import { buildHighQualityStaticTacticalPositionBasis } from '../src/core/tactical/static/HighQualityStaticTacticalPositionBuilder';
+import { buildStaticTacticalCandidateIndex } from '../src/core/tactical/static/StaticTacticalCandidateIndex';
 import { createStaticTacticalPositionBasisIdentity } from '../src/core/tactical/static/StaticTacticalPositionIdentity';
 import { normalizeStaticTacticalPositionSettings } from '../src/core/tactical/static/StaticTacticalPositionSettings';
 
@@ -28,8 +29,30 @@ const settings = normalizeStaticTacticalPositionSettings({
   },
 });
 const identity = createStaticTacticalPositionBasisIdentity(map, settings);
-const basis = buildHighQualityStaticTacticalPositionBasis(map, identity, settings).snapshot;
+const builtBasis = buildHighQualityStaticTacticalPositionBasis(map, identity, settings).snapshot;
 const cellCount = map.width * map.height;
+const indexedCell = 5 * map.width + 6;
+const indexedPotential = new Uint8Array(cellCount);
+indexedPotential[indexedCell] = 255;
+const indexedDirections = new Uint8Array(cellCount * settings.sectors.count);
+indexedDirections[indexedCell * settings.sectors.count] = 255;
+const indexedPostureMask = new Uint8Array(cellCount);
+indexedPostureMask[indexedCell] = 7;
+const basis = {
+  ...builtBasis,
+  candidateIndex: buildStaticTacticalCandidateIndex({
+    width: map.width,
+    height: map.height,
+    sectorCount: settings.sectors.count,
+    observationPotential: indexedPotential,
+    defensePotential: indexedPotential,
+    firingPotential: indexedPotential,
+    observationByDirection: indexedDirections,
+    protectionByDirection: indexedDirections,
+    firingByDirection: indexedDirections,
+    availablePostureMask: indexedPostureMask,
+  }, settings.index),
+};
 const field: GeneralizedTacticalPositionFieldView = {
   width: map.width,
   height: map.height,
