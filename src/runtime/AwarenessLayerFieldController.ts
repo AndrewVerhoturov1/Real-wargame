@@ -1,5 +1,6 @@
-import '../core/tactical/TacticalPositionSearchResilience';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
+import { installTacticalPositionSearchResilience } from '../core/tactical/TacticalPositionSearchResilience';
+import { getTacticalPositionSearchService } from '../core/tactical/TacticalPositionSearchService';
 import { getSimulationLayerState, type SimulationLayerMode } from '../core/ui/RuntimeUiState';
 import type { UnitModel } from '../core/units/UnitModel';
 import { syncDangerPanelFromAwareness } from '../ui/DangerPanelAwarenessParity';
@@ -70,6 +71,10 @@ export function installAwarenessLayerFieldController(
   requester: AwarenessWorldFieldRequester,
 ): () => void {
   const controller = new AwarenessLayerFieldController(state, () => requester);
+  const tacticalSearchService = getTacticalPositionSearchService(state);
+  const destroySearchResilience = tacticalSearchService
+    ? installTacticalPositionSearchResilience(state, tacticalSearchService)
+    : () => undefined;
   const update = (): void => controller.update();
   let disposed = false;
 
@@ -82,6 +87,7 @@ export function installAwarenessLayerFieldController(
     disposed = true;
     window.clearInterval(interval);
     window.removeEventListener(LAYER_CHANGED_EVENT, update);
+    destroySearchResilience();
     controller.destroy();
   };
 }
