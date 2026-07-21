@@ -1,4 +1,5 @@
-import { isPostureTransitionRunning } from '../actions/PostureTransition';
+import { isWeaponReloadRunning, requestWeaponReload, type RequestWeaponReloadInput } from '../actions/WeaponReload';
+import type { PhysicalActionCommandResult } from '../actions/PhysicalAction';
 import type { UnitModel } from '../units/UnitModel';
 
 export const DEFAULT_RIFLE_ID = 'rifle_mosin_v1';
@@ -56,8 +57,12 @@ const DEFINITIONS: Record<string, WeaponDefinition> = {
 
 const runtimeByUnit = new WeakMap<UnitModel, WeaponRuntimeState>();
 
+export function findWeaponDefinition(weaponId: string): WeaponDefinition | null {
+  return DEFINITIONS[weaponId] ?? null;
+}
+
 export function getWeaponDefinition(weaponId = DEFAULT_RIFLE_ID): WeaponDefinition {
-  return DEFINITIONS[weaponId] ?? DEFINITIONS[DEFAULT_RIFLE_ID];
+  return findWeaponDefinition(weaponId) ?? DEFINITIONS[DEFAULT_RIFLE_ID];
 }
 
 export function createDefaultWeaponRuntime(totalRounds = 30): WeaponRuntimeState {
@@ -87,13 +92,14 @@ export function getWeaponRuntime(unit: UnitModel): WeaponRuntimeState {
 
 export function replaceWeaponRuntime(unit: UnitModel, runtime: WeaponRuntimeState): void {
   const definition = getWeaponDefinition(runtime.weaponId);
+  const roundsLoaded = clampRounds(runtime.roundsLoaded, definition.magazineCapacity);
   const normalized: WeaponRuntimeState = {
     weaponId: definition.id,
-    roundsLoaded: clampRounds(runtime.roundsLoaded, definition.magazineCapacity),
-    roundsReserve: Math.max(0, Math.round(runtime.roundsReserve)),
-    ready: Boolean(runtime.ready) && runtime.roundsLoaded > 0,
-    currentRecoil: Math.max(0, runtime.currentRecoil),
-    nextAllowedShotSeconds: Math.max(0, runtime.nextAllowedShotSeconds),
+    roundsLoaded,
+    roundsReserve: wholeNonNegative(runtime.roundsReserve),
+    ready: Boolean(runtime.ready) && roundsLoaded > 0,
+    currentRecoil: finiteNonNegative(runtime.currentRecoil),
+    nextAllowedShotSeconds: finiteNonNegative(runtime.nextAllowedShotSeconds),
   };
   runtimeByUnit.set(unit, normalized);
   syncLegacyWeaponFields(unit, normalized);
@@ -102,7 +108,12 @@ export function replaceWeaponRuntime(unit: UnitModel, runtime: WeaponRuntimeStat
 export function tryConsumeRound(unit: UnitModel, nowSeconds: number): boolean {
   const runtime = getWeaponRuntime(unit);
   const definition = getWeaponDefinition(runtime.weaponId);
-  if (!runtime.ready || runtime.roundsLoaded <= 0 || nowSeconds < runtime.nextAllowedShotSeconds) return false;
+  if (
+    isWeaponReloadRunning(unit)
+    || !runtime.ready
+    || runtime.roundsLoaded <= 0
+    || nowSeconds < runtime.nextAllowedShotSeconds
+  ) return false;
   runtime.roundsLoaded -= 1;
   runtime.currentRecoil += definition.recoilPerShot;
   runtime.nextAllowedShotSeconds = nowSeconds + definition.shotCycleSeconds;
@@ -111,28 +122,38 @@ export function tryConsumeRound(unit: UnitModel, nowSeconds: number): boolean {
   return true;
 }
 
-export function reloadWeapon(unit: UnitModel): number {
-  if (isPostureTransitionRunning(unit)) {
-    unit.behaviorRuntime.reason = 'Перезарядка запрещена во время физической смены позы.';
-    unit.behaviorRuntime.lastEvent = 'combat_reload_rejected_posture_transition';
-    return 0;
-  }
-  const runtime = getWeaponRuntime(unit);
-  const definition = getWeaponDefinition(runtime.weaponId);
-  const need = Math.max(0, definition.magazineCapacity - runtime.roundsLoaded);
-  const moved = Math.min(need, runtime.roundsReserve);
-  runtime.roundsLoaded += moved;
-  runtime.roundsReserve -= moved;
-  runtime.ready = runtime.roundsLoaded > 0;
-  syncLegacyWeaponFields(unit, runtime);
-  return moved;
+/**
+ * Compatibility facade. Reload no longer transfers ammunition synchronously;
+ * it requests the shared physical-action slot and returns the request result.
+ */
+export function reloadWeapon(
+  unit: UnitModel,
+  input?: RequestWeaponReloadInput,
+): PhysicalActionCommandResult {
+  return requestWeaponReload(unit, input ?? {
+    owner: { source: 'system', id: 'legacy-reload-api' },
+    ownerToken: 'legacy-reload-api',
+    startedSeconds: 0,
+    reasonCode: 'legacy_reload_requested',
+    reasonRu: 'Старый API запросил физическую перезарядку.',
+  });
 }
 
 export function recoverWeapon(unit: UnitModel, deltaSeconds: number): void {
   const runtime = getWeaponRuntime(unit);
   const definition = getWeaponDefinition(runtime.weaponId);
-  runtime.currentRecoil = Math.max(0, runtime.currentRecoil - definition.recoilRecoveryPerSecond * Math.max(0, deltaSeconds));
-  if (runtime.roundsLoaded > 0) runtime.ready = true;
+  runtime.currentRecoil = Math.max(
+    0,
+    runtime.currentRecoil - definition.recoilRecoveryPerSecond * Math.max(0, deltaSeconds),
+  );
+  if (!isWeaponReloadRunning(unit) && runtime.roundsLoaded > 0) runtime.ready = true;
+  if (isWeaponReloadRunning(unit)) runtime.ready = false;
+  syncLegacyWeaponFields(unit, runtime);
+}
+
+export function setWeaponReady(unit: UnitModel, ready: boolean): void {
+  const runtime = getWeaponRuntime(unit);
+  runtime.ready = Boolean(ready) && runtime.roundsLoaded > 0 && !isWeaponReloadRunning(unit);
   syncLegacyWeaponFields(unit, runtime);
 }
 
@@ -151,5 +172,13 @@ function getWeaponRuntimeUnsafe(unit: UnitModel): WeaponRuntimeState | undefined
 }
 
 function clampRounds(value: number, capacity: number): number {
-  return Math.max(0, Math.min(capacity, Math.round(value)));
+  return Math.max(0, Math.min(capacity, Math.round(Number.isFinite(value) ? value : 0)));
+}
+
+function wholeNonNegative(value: number): number {
+  return Math.max(0, Math.round(Number.isFinite(value) ? value : 0));
+}
+
+function finiteNonNegative(value: number): number {
+  return Math.max(0, Number.isFinite(value) ? value : 0);
 }
