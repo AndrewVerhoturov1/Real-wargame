@@ -1,4 +1,5 @@
 import { isPostureTransitionRunning } from '../actions/PostureTransition';
+import { isWeaponReloadRunning } from '../actions/WeaponReload';
 import type { GridPosition } from '../geometry';
 import { contactStageRank, type PerceptionContactMemory } from '../perception/PerceptionContact';
 import type { SimulationState } from '../simulation/SimulationState';
@@ -52,6 +53,12 @@ export function evaluateFireRequest(
     return denied(
       'Shooter is changing posture.',
       'Нельзя начать наведение или выстрел во время физической смены позы.',
+    );
+  }
+  if (isWeaponReloadRunning(shooter)) {
+    return denied(
+      'Shooter is reloading weapon.',
+      'Нельзя начать наведение или выстрел во время физической перезарядки.',
     );
   }
   const contact = shooter.perceptionKnowledge.contacts.find((item) => item.id === contactId) ?? null;
