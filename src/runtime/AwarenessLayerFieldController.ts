@@ -2,6 +2,7 @@ import '../core/tactical/TacticalPositionSearchResilience';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
 import { getSimulationLayerState, type SimulationLayerMode } from '../core/ui/RuntimeUiState';
 import type { UnitModel } from '../core/units/UnitModel';
+import { syncDangerPanelFromAwareness } from '../ui/DangerPanelAwarenessParity';
 import {
   buildAwarenessMapKey,
   type PreparedAwarenessWorldSnapshot,
@@ -44,6 +45,7 @@ export class AwarenessLayerFieldController {
       return;
     }
 
+    syncDangerPanelFromAwareness(this.state);
     const requester = this.resolveRequester(this.state);
     if (!requester) {
       this.lastRequestedIdentity = '';
