@@ -1,9 +1,15 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
+import { getWeaponDefinition, getWeaponRuntime } from '../combat/WeaponModel';
 import type { GridPosition } from '../geometry';
-import type { SimulationState } from '../simulation/SimulationState';
-import type { UnitModel } from '../units/UnitModel';
 import type { PreparedAwarenessWorldSnapshot } from '../../runtime/AwarenessWorldRuntime';
 import { AwarenessWorldRuntime } from '../../runtime/AwarenessWorldRuntime';
+import type { SimulationState } from '../simulation/SimulationState';
+import type { UnitModel } from '../units/UnitModel';
+import {
+  normalizeTacticalPositionKind,
+  type TacticalPositionKind,
+  type TacticalPositionTargetSpec,
+} from '../ai/tactical/TacticalQuery';
 import {
   type TacticalPositionCandidateSeedV2,
   type TacticalPositionSearchDiagnostics,
@@ -12,7 +18,6 @@ import {
 import {
   normalizeTacticalPositionSearchObjective,
   resolveTacticalPositionReferenceThreat,
-  searchTacticalPositionsForObjective,
   type TacticalPositionSearchObjective,
 } from './TacticalPositionObjective';
 import {
@@ -21,9 +26,32 @@ import {
   getTacticalPositionSettingsRevision,
   type TacticalPositionSettings,
 } from './TacticalPositionSettings';
+import {
+  searchGeneralizedTacticalPositions,
+  type GeneralizedTacticalPositionSearchLimits,
+  type GeneralizedTacticalPositionSearchRequest,
+} from './GeneralizedTacticalPositionSearch';
+import {
+  buildTacticalPositionQueryField,
+  type TacticalPositionQuerySubjectiveFieldSnapshot,
+  type TacticalPositionQueryWorkerResponse,
+} from './TacticalPositionQueryWorkerProtocol';
+import {
+  buildStaticTacticalPositionWorkerMapSnapshot,
+} from './static/StaticTacticalPositionWorkerProtocol';
+import {
+  createStaticTacticalPositionBasisIdentity,
+  staticTacticalPositionIdentityKey,
+} from './static/StaticTacticalPositionIdentity';
+import {
+  getStaticTacticalPositionService,
+  type StaticTacticalPositionService,
+} from './static/StaticTacticalPositionService';
+import { getActiveEnvironmentProfile } from '../map/EnvironmentProfileRuntime';
 
 export type TacticalPositionSearchKind =
   | 'cover'
+  | 'defense'
   | 'observation'
   | 'firing'
   | 'fallback'
@@ -40,11 +68,13 @@ export type TacticalPositionSearchStatus =
 
 export type TacticalPositionSearchReasonCode =
   | 'field_preparing'
+  | 'static_basis_preparing'
   | 'no_candidates'
   | 'unsupported_kind'
   | 'owner_missing'
   | 'input_changed'
   | 'field_identity_changed'
+  | 'static_basis_identity_changed'
   | 'reference_threat_missing'
   | 'order_target_missing'
   | 'replaced'
@@ -54,11 +84,36 @@ export type TacticalPositionSearchReasonCode =
 
 export interface TacticalPositionSearchParameters {
   readonly objective: TacticalPositionSearchObjective;
+  readonly queryKey?: string;
+  readonly target?: TacticalPositionTargetSpec | null;
   readonly searchRadiusMeters: number;
   readonly maxCandidates: number;
   readonly maxSampledCells: number;
   readonly maxRouteExpansions: number;
   readonly minimumSeparationMeters: number;
+  readonly maximumRouteCost?: number;
+  readonly preliminaryCandidates?: number;
+  readonly exactCandidates?: number;
+  readonly exactRayLimit?: number;
+  readonly maxPositionDanger?: number;
+  readonly minimumLineQuality?: number;
+}
+
+export interface TacticalPositionKnownThreatSnapshot {
+  readonly id: string;
+  readonly position: GridPosition;
+  readonly confidence: number;
+  readonly uncertaintyCells: number;
+  readonly strength: number;
+  readonly visibleNow: boolean;
+}
+
+export interface TacticalPositionWeaponSnapshot {
+  readonly weaponId: string;
+  readonly ready: boolean;
+  readonly minimumRangeMeters: number;
+  readonly effectiveRangeMeters: number;
+  readonly maximumRangeMeters: number;
 }
 
 export interface TacticalPositionSearchResultSnapshotV1 {
@@ -67,6 +122,7 @@ export interface TacticalPositionSearchResultSnapshotV1 {
   readonly ownerUnitId: string;
   readonly kind: TacticalPositionSearchKind;
   readonly fieldIdentity: string;
+  readonly staticBasisIdentity: string;
   readonly worldKey: string;
   readonly searchIdentity: string;
   readonly candidates: readonly TacticalPositionCandidateSeedV2[];
@@ -79,13 +135,16 @@ export interface TacticalPositionSearchRequestSnapshotV1 extends TacticalPositio
   readonly requestId: string;
   readonly ownerUnitId: string;
   readonly kind: TacticalPositionSearchKind;
-  /** Actual origin used by the local bounded search. Updated once when the field becomes ready. */
+  readonly queryKey: string;
+  /** Actual origin used by the bounded search. Updated once when all fields are ready. */
   readonly origin: GridPosition;
   readonly currentPosture: UnitPosture;
   readonly orderTarget: GridPosition | null;
   readonly orderIdentity: string | null;
   readonly referenceThreatId: string | null;
   readonly referenceThreatPosition: GridPosition | null;
+  readonly knownThreats: readonly TacticalPositionKnownThreatSnapshot[];
+  readonly weapon: TacticalPositionWeaponSnapshot | null;
   readonly threatCount: number;
   readonly tacticalKnowledgeRevision: number;
   readonly settingsRevision: number;
@@ -96,6 +155,7 @@ export interface TacticalPositionSearchRequestSnapshotV1 extends TacticalPositio
   readonly inputIdentity: string;
   readonly requestedWorldKey: string | null;
   readonly fieldIdentity: string | null;
+  readonly staticBasisIdentity: string | null;
   readonly reasonCode: TacticalPositionSearchReasonCode | null;
   readonly reason: string | null;
   readonly reasonRu: string | null;
@@ -111,6 +171,7 @@ export interface TacticalPositionFieldRuntime {
 
 export interface TacticalPositionSearchServiceOptions {
   readonly schedule?: (callback: () => void) => void;
+  /** Test/fallback injection. Browser production uses one long-lived query worker. */
   readonly searchPrepared?: (
     prepared: PreparedAwarenessWorldSnapshot,
     request: TacticalPositionSearchRequestSnapshotV1,
@@ -127,6 +188,11 @@ export interface TacticalPositionSearchServiceDiagnostics {
   readonly staleCount: number;
   readonly listenerCount: number;
   readonly localSearchCount: number;
+  readonly workerJobsStarted: number;
+  readonly workerJobsCompleted: number;
+  readonly workerResultsStaleDropped: number;
+  readonly workerQueueDepth: number;
+  readonly synchronousFallbackSearches: number;
   readonly destroyed: boolean;
 }
 
@@ -135,36 +201,77 @@ export interface TacticalPositionSearchEnqueueOptions {
   readonly forceRefresh?: boolean;
 }
 
-const DEFAULT_PARAMETERS: TacticalPositionSearchParameters = Object.freeze({
-  objective: 'balanced',
-  searchRadiusMeters: 50,
-  maxCandidates: 12,
-  maxSampledCells: 2048,
-  maxRouteExpansions: 2048,
-  minimumSeparationMeters: 4,
-});
-const DEFAULT_MAX_REQUESTS = 36;
-const DEFAULT_MAX_OWNERS = 12;
-const serviceByState = new WeakMap<SimulationState, TacticalPositionSearchService>();
+interface NormalizedParameters extends TacticalPositionSearchParameters {
+  readonly objective: TacticalPositionSearchObjective;
+  readonly queryKey: string;
+  readonly target: TacticalPositionTargetSpec | null;
+  readonly maximumRouteCost: number;
+  readonly preliminaryCandidates: number;
+  readonly exactCandidates: number;
+  readonly exactRayLimit: number;
+  readonly maxPositionDanger: number;
+  readonly minimumLineQuality: number;
+}
 
 interface MutableRequest extends Omit<TacticalPositionSearchRequestSnapshotV1, 'result'> {
   result: TacticalPositionSearchResultSnapshotV1 | null;
 }
 
+interface InFlightQuery {
+  readonly jobId: number;
+  readonly requestId: string;
+  readonly ownerKey: string;
+  readonly fieldIdentity: string;
+  readonly staticBasisIdentity: string;
+}
+
+const DEFAULT_PARAMETERS: NormalizedParameters = Object.freeze({
+  objective: 'balanced',
+  queryKey: 'default',
+  target: null,
+  searchRadiusMeters: 50,
+  maxCandidates: 12,
+  maxSampledCells: 2048,
+  maxRouteExpansions: 2048,
+  minimumSeparationMeters: 4,
+  maximumRouteCost: 100000,
+  preliminaryCandidates: 36,
+  exactCandidates: 12,
+  exactRayLimit: 32,
+  maxPositionDanger: 78,
+  minimumLineQuality: 18,
+});
+const DEFAULT_MAX_REQUESTS = 48;
+const DEFAULT_MAX_OWNERS = 12;
+const serviceByState = new WeakMap<SimulationState, TacticalPositionSearchService>();
+
 export class TacticalPositionSearchService {
   private readonly requests = new Map<string, MutableRequest>();
-  private readonly latestRequestIdByUnit = new Map<string, string>();
+  private readonly latestRequestIdByOwnerKey = new Map<string, string>();
+  private readonly latestAnyRequestIdByUnit = new Map<string, string>();
+  private readonly pendingByOwner = new Map<string, string[]>();
+  private readonly pendingOwnerOrder: string[] = [];
   private readonly listeners = new Set<() => void>();
   private readonly schedule: (callback: () => void) => void;
-  private readonly searchPrepared: NonNullable<TacticalPositionSearchServiceOptions['searchPrepared']>;
+  private readonly injectedSearch: TacticalPositionSearchServiceOptions['searchPrepared'];
   private readonly maxRequests: number;
   private readonly maxOwners: number;
+  private readonly staticService: StaticTacticalPositionService;
   private readonly unsubscribeRuntime: () => void;
+  private readonly unsubscribeStatic: () => void;
+  private worker: Worker | null = null;
+  private workerConfiguredBasisIdentity = '';
+  private inFlight: InFlightQuery | null = null;
   private nextRequestSequence = 1;
+  private nextWorkerJobId = 1;
   private pumpScheduled = false;
   private pumping = false;
   private destroyed = false;
   private localSearchCount = 0;
+  private workerJobsStarted = 0;
+  private workerJobsCompleted = 0;
+  private workerResultsStaleDropped = 0;
+  private synchronousFallbackSearches = 0;
 
   constructor(
     private readonly state: SimulationState,
@@ -172,10 +279,12 @@ export class TacticalPositionSearchService {
     options: TacticalPositionSearchServiceOptions = {},
   ) {
     this.schedule = options.schedule ?? ((callback) => queueMicrotask(callback));
-    this.searchPrepared = options.searchPrepared ?? runPreparedSearch;
+    this.injectedSearch = options.searchPrepared;
     this.maxRequests = clampInt(options.maxRequests ?? DEFAULT_MAX_REQUESTS, 4, 256);
     this.maxOwners = clampInt(options.maxOwners ?? DEFAULT_MAX_OWNERS, 1, 64);
+    this.staticService = getStaticTacticalPositionService(state);
     this.unsubscribeRuntime = this.fieldRuntime.subscribe(() => this.schedulePump());
+    this.unsubscribeStatic = this.staticService.subscribe(() => this.schedulePump());
   }
 
   enqueueCoverSearch(
@@ -184,6 +293,15 @@ export class TacticalPositionSearchService {
     options: TacticalPositionSearchEnqueueOptions = {},
   ): TacticalPositionSearchRequestSnapshotV1 {
     return this.enqueue(unit, 'cover', overrides, options);
+  }
+
+  enqueueTacticalSearch(
+    unit: UnitModel,
+    kind: TacticalPositionKind,
+    overrides: Partial<TacticalPositionSearchParameters> = {},
+    options: TacticalPositionSearchEnqueueOptions = {},
+  ): TacticalPositionSearchRequestSnapshotV1 {
+    return this.enqueue(unit, kind, overrides, options);
   }
 
   enqueue(
@@ -196,24 +314,24 @@ export class TacticalPositionSearchService {
     if (!this.state.units.includes(unit)) return failedMissingOwnerRequest(this.state, unit.id, kind, overrides);
 
     const parameters = normalizeParameters(overrides);
-    const input = captureInput(this.state, unit, kind, parameters);
-    const latestId = this.latestRequestIdByUnit.get(unit.id);
+    const input = captureInput(this.state, this.staticService, unit, kind, parameters);
+    const ownerKey = buildOwnerKey(unit.id, parameters.queryKey);
+    const latestId = this.latestRequestIdByOwnerKey.get(ownerKey);
     const latest = latestId ? this.requests.get(latestId) : undefined;
     if (!options.forceRefresh && latest && latest.inputIdentity === input.inputIdentity && isReusableStatus(latest.status)) {
       return cloneRequest(latest);
     }
-
     if (latest && isActiveOrReady(latest.status)) {
       this.updateRequest(latest, {
         status: 'stale',
         reasonCode: 'replaced',
-        reason: 'A newer tactical-position request replaced this request.',
-        reasonRu: 'Этот запрос тактических позиций заменён более новым.',
-      });
+        reason: 'A newer tactical-position request replaced this owner/key request.',
+        reasonRu: 'Этот запрос тактической позиции заменён новым запросом с тем же ключом.',
+      }, false);
     }
 
     this.enforceOwnerBudget(unit.id);
-    const requestId = `${unit.id}:tactical-position:${this.nextRequestSequence}:${Math.max(0, this.state.simulationStep)}`;
+    const requestId = `${unit.id}:tactical-position:${parameters.queryKey}:${this.nextRequestSequence}:${Math.max(0, this.state.simulationStep)}`;
     this.nextRequestSequence += 1;
     const request: MutableRequest = {
       version: 1,
@@ -227,7 +345,9 @@ export class TacticalPositionSearchService {
       orderIdentity: input.orderIdentity,
       referenceThreatId: input.referenceThreatId,
       referenceThreatPosition: input.referenceThreatPosition ? { ...input.referenceThreatPosition } : null,
-      threatCount: input.threatCount,
+      knownThreats: input.knownThreats.map(cloneKnownThreat),
+      weapon: input.weapon ? { ...input.weapon } : null,
+      threatCount: input.knownThreats.length,
       tacticalKnowledgeRevision: input.tacticalKnowledgeRevision,
       settingsRevision: input.settingsRevision,
       settings: { ...input.settings },
@@ -237,26 +357,16 @@ export class TacticalPositionSearchService {
       inputIdentity: input.inputIdentity,
       requestedWorldKey: null,
       fieldIdentity: null,
+      staticBasisIdentity: null,
       reasonCode: null,
       reason: null,
       reasonRu: null,
       result: null,
     };
     this.requests.set(requestId, request);
-    this.latestRequestIdByUnit.delete(unit.id);
-    this.latestRequestIdByUnit.set(unit.id, requestId);
-    trimMap(this.latestRequestIdByUnit, this.maxOwners, (evictedUnitId, evictedRequestId) => {
-      const evicted = this.requests.get(evictedRequestId);
-      if (evicted && isActiveOrReady(evicted.status)) {
-        this.updateRequest(evicted, {
-          status: 'cancelled',
-          reasonCode: 'cancelled',
-          reason: 'Owner queue budget evicted the request.',
-          reasonRu: 'Запрос удалён из-за ограничения очереди владельцев.',
-        }, false);
-      }
-      this.latestRequestIdByUnit.delete(evictedUnitId);
-    });
+    this.latestRequestIdByOwnerKey.set(ownerKey, requestId);
+    this.latestAnyRequestIdByUnit.set(unit.id, requestId);
+    this.enqueuePending(unit.id, requestId);
     this.trimRequests();
     this.publish();
     this.schedulePump();
@@ -269,7 +379,12 @@ export class TacticalPositionSearchService {
   }
 
   readLatestForUnit(unitId: string): TacticalPositionSearchRequestSnapshotV1 | null {
-    const requestId = this.latestRequestIdByUnit.get(unitId);
+    const requestId = this.latestAnyRequestIdByUnit.get(unitId);
+    return requestId ? this.readRequest(requestId) : null;
+  }
+
+  readLatestForOwnerKey(unitId: string, queryKey: string): TacticalPositionSearchRequestSnapshotV1 | null {
+    const requestId = this.latestRequestIdByOwnerKey.get(buildOwnerKey(unitId, queryKey));
     return requestId ? this.readRequest(requestId) : null;
   }
 
@@ -295,19 +410,24 @@ export class TacticalPositionSearchService {
   }
 
   clearUnit(unitId: string): void {
-    const latestId = this.latestRequestIdByUnit.get(unitId);
-    this.latestRequestIdByUnit.delete(unitId);
-    for (const [requestId, request] of this.requests) {
-      if (request.ownerUnitId !== unitId) continue;
-      if (requestId === latestId && isActiveOrReady(request.status)) {
+    this.latestAnyRequestIdByUnit.delete(unitId);
+    this.pendingByOwner.delete(unitId);
+    removeValue(this.pendingOwnerOrder, unitId);
+    for (const [ownerKey, requestId] of this.latestRequestIdByOwnerKey) {
+      if (!ownerKey.startsWith(`${unitId}|`)) continue;
+      this.latestRequestIdByOwnerKey.delete(ownerKey);
+      const request = this.requests.get(requestId);
+      if (request && isActiveOrReady(request.status)) {
         this.updateRequest(request, {
           status: 'cancelled',
           reasonCode: 'cancelled',
           reason: 'Tactical-position owner was cleared.',
-          reasonRu: 'Владелец запроса тактических позиций очищен.',
+          reasonRu: 'Владелец запроса тактической позиции очищен.',
         }, false);
       }
-      this.requests.delete(requestId);
+    }
+    for (const [requestId, request] of this.requests) {
+      if (request.ownerUnitId === unitId) this.requests.delete(requestId);
     }
     this.publish();
   }
@@ -329,12 +449,17 @@ export class TacticalPositionSearchService {
     }
     return {
       requestCount: this.requests.size,
-      ownerCount: this.latestRequestIdByUnit.size,
+      ownerCount: this.pendingByOwner.size + new Set([...this.latestRequestIdByOwnerKey.keys()].map((key) => key.split('|')[0])).size,
       queuedCount,
       readyCount,
       staleCount,
       listenerCount: this.listeners.size,
       localSearchCount: this.localSearchCount,
+      workerJobsStarted: this.workerJobsStarted,
+      workerJobsCompleted: this.workerJobsCompleted,
+      workerResultsStaleDropped: this.workerResultsStaleDropped,
+      workerQueueDepth: [...this.pendingByOwner.values()].reduce((sum, queue) => sum + queue.length, 0),
+      synchronousFallbackSearches: this.synchronousFallbackSearches,
       destroyed: this.destroyed,
     };
   }
@@ -343,6 +468,10 @@ export class TacticalPositionSearchService {
     if (this.destroyed) return;
     this.destroyed = true;
     this.unsubscribeRuntime();
+    this.unsubscribeStatic();
+    this.worker?.terminate();
+    this.worker = null;
+    this.inFlight = null;
     for (const request of this.requests.values()) {
       if (!isTerminal(request.status)) {
         this.updateRequest(request, {
@@ -354,7 +483,10 @@ export class TacticalPositionSearchService {
       }
     }
     this.requests.clear();
-    this.latestRequestIdByUnit.clear();
+    this.latestRequestIdByOwnerKey.clear();
+    this.latestAnyRequestIdByUnit.clear();
+    this.pendingByOwner.clear();
+    this.pendingOwnerOrder.length = 0;
     this.listeners.clear();
     this.fieldRuntime.destroy();
     if (serviceByState.get(this.state) === this) serviceByState.delete(this.state);
@@ -370,74 +502,63 @@ export class TacticalPositionSearchService {
   }
 
   private pump(): void {
-    if (this.destroyed || this.pumping) return;
+    if (this.destroyed || this.pumping || this.inFlight) return;
     this.pumping = true;
     try {
-      for (const requestId of this.latestRequestIdByUnit.values()) {
-        const request = this.requests.get(requestId);
-        if (!request || (request.status !== 'queued' && request.status !== 'calculating')) continue;
-        this.process(request);
-      }
+      const next = this.takeNextPending();
+      if (!next) return;
+      const result = this.process(next);
+      if (result === 'waiting') this.enqueuePending(next.ownerUnitId, next.requestId);
     } finally {
       this.pumping = false;
     }
   }
 
-  private process(request: MutableRequest): void {
+  private process(request: MutableRequest): 'dispatched' | 'waiting' | 'terminal' {
     const unit = this.state.units.find((candidate) => candidate.id === request.ownerUnitId);
     if (!unit) {
-      this.updateRequest(request, {
-        status: 'failed', reasonCode: 'owner_missing',
-        reason: 'Tactical-position owner no longer exists.',
-        reasonRu: 'Владелец запроса тактических позиций больше не существует.',
-      });
-      return;
+      this.fail(request, 'owner_missing', 'Tactical-position owner no longer exists.', 'Владелец запроса тактической позиции больше не существует.');
+      return 'terminal';
     }
-    if (request.kind !== 'cover') {
-      this.updateRequest(request, {
-        status: 'failed', reasonCode: 'unsupported_kind',
-        reason: `Tactical-position kind ${request.kind} is not implemented.`,
-        reasonRu: `Тип тактической позиции «${request.kind}» пока не реализован.`,
-      });
-      return;
+    const kind = canonicalKindOrNull(request.kind);
+    if (!kind) {
+      this.fail(request, 'unsupported_kind', `Tactical-position kind ${request.kind} is not implemented.`, `Тип тактической позиции «${request.kind}» пока не реализован.`);
+      return 'terminal';
     }
-    if (request.objective !== 'balanced' && request.objective !== 'continue_order' && !request.referenceThreatPosition) {
-      this.updateRequest(request, {
-        status: 'failed', reasonCode: 'reference_threat_missing',
-        reason: 'The selected tactical-position objective requires a reference threat.',
-        reasonRu: 'Для выбранной цели поиска нужна известная угроза.',
-      });
-      return;
+    if (kind === 'defense' && request.objective !== 'balanced' && request.objective !== 'continue_order' && !request.referenceThreatPosition) {
+      this.fail(request, 'reference_threat_missing', 'The selected tactical-position objective requires a known reference threat.', 'Для выбранной цели поиска нужна известная бойцу угроза.');
+      return 'terminal';
     }
     if (request.objective === 'continue_order' && !request.orderTarget) {
-      this.updateRequest(request, {
-        status: 'failed', reasonCode: 'order_target_missing',
-        reason: 'Continue-order search requires an active order target.',
-        reasonRu: 'Для продолжения приказа нужна активная точка приказа.',
-      });
-      return;
+      this.fail(request, 'order_target_missing', 'Continue-order search requires an active order target.', 'Для продолжения приказа нужна активная точка приказа.');
+      return 'terminal';
     }
-    if (buildCurrentInputIdentity(this.state, unit, request) !== request.inputIdentity) {
-      this.updateRequest(request, {
-        status: 'stale', reasonCode: 'input_changed',
-        reason: 'The command, objective, map or settings changed before the request completed.',
-        reasonRu: 'Приказ, цель поиска, карта или настройки изменились до завершения запроса.',
-      });
-      return;
+    if (buildCurrentInputIdentity(this.state, this.staticService, unit, request) !== request.inputIdentity) {
+      this.stale(request, 'input_changed', 'The task, legal knowledge, map or settings changed before calculation.', 'Задача, разрешённые знания, карта или настройки изменились до расчёта.');
+      return 'terminal';
     }
 
+    const basis = this.staticService.request();
+    if (!basis) {
+      this.updateRequest(request, {
+        status: 'calculating',
+        reasonCode: 'static_basis_preparing',
+        reason: 'Static tactical-position basis is being prepared.',
+        reasonRu: 'Подготавливается постоянная основа тактических позиций.',
+      });
+      return 'waiting';
+    }
     const prepared = this.fieldRuntime.requestWorldField(this.state, unit);
     if (!prepared) {
       this.updateRequest(request, {
-        status: 'calculating', reasonCode: 'field_preparing',
-        reason: 'Shared tactical field is being prepared.',
-        reasonRu: 'Подготавливается общее тактическое поле.',
+        status: 'calculating',
+        reasonCode: 'field_preparing',
+        reason: 'Subjective tactical field is being prepared.',
+        reasonRu: 'Подготавливается субъективное тактическое поле бойца.',
       });
-      return;
+      return 'waiting';
     }
 
-    // Origin and posture are intentionally captured at execution time. Walking
-    // while the shared field is prepared does not invalidate the request.
     Object.assign(request, {
       origin: { ...unit.position },
       currentPosture: unit.behaviorRuntime.posture,
@@ -446,61 +567,202 @@ export class TacticalPositionSearchService {
       status: 'calculating',
       requestedWorldKey: prepared.worldKey,
       fieldIdentity: prepared.fieldIdentity,
+      staticBasisIdentity: basis.identityKey,
       reasonCode: null,
       reason: null,
       reasonRu: null,
       updatedAtSimulationStep: this.state.simulationStep,
     });
 
-    try {
+    if (this.injectedSearch) {
       this.localSearchCount += 1;
-      const result = this.searchPrepared(prepared, cloneRequest(request));
-      const currentPrepared = this.fieldRuntime.readReadyWorldField(unit.id);
-      if (!currentPrepared || currentPrepared.fieldIdentity !== prepared.fieldIdentity) {
-        this.updateRequest(request, {
-          status: 'stale', reasonCode: 'field_identity_changed',
-          reason: 'Prepared tactical field identity changed during local search.',
-          reasonRu: 'Идентичность подготовленного тактического поля изменилась во время поиска.',
-          result: null,
-        });
-        return;
+      try {
+        const result = this.injectedSearch(prepared, cloneRequest(request));
+        this.acceptResult(request, prepared.fieldIdentity, basis.identityKey, result);
+      } catch (error) {
+        this.fail(request, 'search_failed', error instanceof Error ? error.message : String(error), 'Поиск тактической позиции завершился ошибкой.');
       }
-      if (buildCurrentInputIdentity(this.state, unit, request) !== request.inputIdentity) {
-        this.updateRequest(request, {
-          status: 'stale', reasonCode: 'input_changed',
-          reason: 'Stable tactical request inputs changed during local search.',
-          reasonRu: 'Стабильные входные данные запроса изменились во время поиска.',
-          result: null,
-        });
-        return;
-      }
-      const snapshot = freezeResult({
-        version: 1,
-        requestId: request.requestId,
-        ownerUnitId: request.ownerUnitId,
-        kind: request.kind,
-        fieldIdentity: prepared.fieldIdentity,
-        worldKey: prepared.worldKey,
-        searchIdentity: `${request.inputIdentity}|origin:${quantize(request.origin.x)}:${quantize(request.origin.y)}|posture:${request.currentPosture}|field:${prepared.fieldIdentity}`,
-        candidates: result.candidates.slice(0, request.maxCandidates).map(cloneCandidate),
-        diagnostics: { ...result.diagnostics },
-        completedAtSimulationStep: this.state.simulationStep,
-      });
-      this.updateRequest(request, {
-        status: 'ready',
-        result: snapshot,
-        reasonCode: snapshot.candidates.length === 0 ? 'no_candidates' : null,
-        reason: snapshot.candidates.length === 0 ? 'No tactical positions matched the bounded search.' : null,
-        reasonRu: snapshot.candidates.length === 0 ? 'Ограниченный поиск не нашёл подходящих тактических позиций.' : null,
-      });
-    } catch (error) {
-      this.updateRequest(request, {
-        status: 'failed', reasonCode: 'search_failed',
-        reason: error instanceof Error ? error.message : String(error),
-        reasonRu: 'Локальный поиск тактических позиций завершился ошибкой.',
-        result: null,
-      });
+      return 'terminal';
     }
+
+    const generalizedRequest = buildGeneralizedRequest(request, kind);
+    if (typeof Worker === 'undefined') {
+      this.synchronousFallbackSearches += 1;
+      this.localSearchCount += 1;
+      try {
+        const result = searchGeneralizedTacticalPositions({
+          ...preparedFieldView(prepared),
+          staticBasis: basis,
+          map: this.state.map,
+        }, generalizedRequest);
+        this.acceptResult(request, prepared.fieldIdentity, basis.identityKey, result);
+      } catch (error) {
+        this.fail(request, 'search_failed', error instanceof Error ? error.message : String(error), 'Поиск тактической позиции завершился ошибкой.');
+      }
+      return 'terminal';
+    }
+
+    try {
+      const worker = this.ensureWorker(basis.identityKey, basis);
+      const jobId = this.nextWorkerJobId;
+      this.nextWorkerJobId += 1;
+      this.inFlight = {
+        jobId,
+        requestId: request.requestId,
+        ownerKey: buildOwnerKey(request.ownerUnitId, request.queryKey),
+        fieldIdentity: prepared.fieldIdentity,
+        staticBasisIdentity: basis.identityKey,
+      };
+      this.workerJobsStarted += 1;
+      const field = buildTacticalPositionQueryField(prepared.field);
+      worker.postMessage({
+        type: 'search',
+        jobId,
+        basisIdentityKey: basis.identityKey,
+        fieldIdentity: prepared.fieldIdentity,
+        field,
+        request: generalizedRequest,
+      }, fieldTransferables(field));
+      return 'dispatched';
+    } catch (error) {
+      this.fail(request, 'search_failed', error instanceof Error ? error.message : String(error), 'Не удалось запустить фоновый поиск тактической позиции.');
+      return 'terminal';
+    }
+  }
+
+  private ensureWorker(basisIdentity: string, basis: ReturnType<StaticTacticalPositionService['readReady']>): Worker {
+    if (!basis) throw new Error('Static tactical basis is unavailable.');
+    if (!this.worker) {
+      this.worker = new Worker(new URL('../../workers/TacticalPositionQueryWorker.ts', import.meta.url), { type: 'module' });
+      this.worker.onmessage = (event: MessageEvent<TacticalPositionQueryWorkerResponse>): void => this.handleWorkerResponse(event.data);
+      this.worker.onerror = (event): void => {
+        const inFlight = this.inFlight;
+        if (!inFlight) return;
+        const request = this.requests.get(inFlight.requestId);
+        this.inFlight = null;
+        if (request) this.fail(request, 'search_failed', event.message || 'Unknown tactical query worker error.', 'Фоновый поиск тактической позиции завершился ошибкой.');
+        this.schedulePump();
+      };
+    }
+    if (this.workerConfiguredBasisIdentity !== basisIdentity) {
+      this.worker.postMessage({
+        type: 'configure',
+        configuration: {
+          basisIdentityKey: basisIdentity,
+          map: buildStaticTacticalPositionWorkerMapSnapshot(this.state.map),
+          environmentProfile: getActiveEnvironmentProfile(),
+          basis,
+        },
+      });
+      this.workerConfiguredBasisIdentity = basisIdentity;
+    }
+    return this.worker;
+  }
+
+  private handleWorkerResponse(response: TacticalPositionQueryWorkerResponse): void {
+    if (response.type === 'configured') return;
+    const inFlight = this.inFlight;
+    if (!inFlight || response.jobId !== inFlight.jobId) {
+      if (response.type !== 'error' || response.jobId !== null) this.workerResultsStaleDropped += 1;
+      this.publish();
+      return;
+    }
+    this.inFlight = null;
+    const request = this.requests.get(inFlight.requestId);
+    if (!request) {
+      this.workerResultsStaleDropped += 1;
+      this.schedulePump();
+      return;
+    }
+    if (response.type === 'error') {
+      this.fail(request, 'search_failed', response.message, 'Фоновый поиск тактической позиции завершился ошибкой.');
+      this.schedulePump();
+      return;
+    }
+    this.workerJobsCompleted += 1;
+    if (response.fieldIdentity !== inFlight.fieldIdentity || response.basisIdentityKey !== inFlight.staticBasisIdentity) {
+      this.workerResultsStaleDropped += 1;
+      this.stale(request, 'field_identity_changed', 'Worker result identities do not match the dispatched query.', 'Идентичность результата фонового поиска не совпала с запросом.');
+      this.schedulePump();
+      return;
+    }
+    this.acceptResult(request, response.fieldIdentity, response.basisIdentityKey, response.result);
+    this.schedulePump();
+  }
+
+  private acceptResult(
+    request: MutableRequest,
+    fieldIdentity: string,
+    staticBasisIdentity: string,
+    result: TacticalPositionSearchResult,
+  ): void {
+    const unit = this.state.units.find((candidate) => candidate.id === request.ownerUnitId);
+    const currentField = this.fieldRuntime.readReadyWorldField(request.ownerUnitId);
+    const currentBasis = this.staticService.readReady();
+    const ownerKey = buildOwnerKey(request.ownerUnitId, request.queryKey);
+    if (
+      !unit
+      || this.latestRequestIdByOwnerKey.get(ownerKey) !== request.requestId
+      || !currentField
+      || currentField.fieldIdentity !== fieldIdentity
+      || !currentBasis
+      || currentBasis.identityKey !== staticBasisIdentity
+      || buildCurrentInputIdentity(this.state, this.staticService, unit, request) !== request.inputIdentity
+    ) {
+      this.workerResultsStaleDropped += 1;
+      this.stale(request, 'input_changed', 'Tactical request inputs changed before the result could be applied.', 'Входные данные тактического запроса изменились до применения результата.');
+      return;
+    }
+    const snapshot = freezeResult({
+      version: 1,
+      requestId: request.requestId,
+      ownerUnitId: request.ownerUnitId,
+      kind: request.kind,
+      fieldIdentity,
+      staticBasisIdentity,
+      worldKey: currentField.worldKey,
+      searchIdentity: `${request.inputIdentity}|origin:${quantize(request.origin.x)}:${quantize(request.origin.y)}|posture:${request.currentPosture}|field:${fieldIdentity}|basis:${staticBasisIdentity}`,
+      candidates: result.candidates.slice(0, request.maxCandidates).map(cloneCandidate),
+      diagnostics: { ...result.diagnostics },
+      completedAtSimulationStep: this.state.simulationStep,
+    });
+    this.updateRequest(request, {
+      status: 'ready',
+      result: snapshot,
+      reasonCode: snapshot.candidates.length === 0 ? 'no_candidates' : null,
+      reason: snapshot.candidates.length === 0 ? 'No tactical positions matched the bounded search.' : null,
+      reasonRu: snapshot.candidates.length === 0 ? 'Ограниченный поиск не нашёл подходящих тактических позиций.' : null,
+    });
+  }
+
+  private takeNextPending(): MutableRequest | null {
+    while (this.pendingOwnerOrder.length > 0) {
+      const ownerId = this.pendingOwnerOrder.shift()!;
+      const queue = this.pendingByOwner.get(ownerId);
+      if (!queue || queue.length === 0) {
+        this.pendingByOwner.delete(ownerId);
+        continue;
+      }
+      const requestId = queue.shift()!;
+      if (queue.length > 0) this.pendingOwnerOrder.push(ownerId);
+      else this.pendingByOwner.delete(ownerId);
+      const request = this.requests.get(requestId);
+      if (!request || (request.status !== 'queued' && request.status !== 'calculating')) continue;
+      const ownerKey = buildOwnerKey(request.ownerUnitId, request.queryKey);
+      if (this.latestRequestIdByOwnerKey.get(ownerKey) !== requestId) continue;
+      return request;
+    }
+    return null;
+  }
+
+  private enqueuePending(ownerId: string, requestId: string): void {
+    let queue = this.pendingByOwner.get(ownerId);
+    if (!queue) {
+      queue = [];
+      this.pendingByOwner.set(ownerId, queue);
+    }
+    if (!queue.includes(requestId)) queue.push(requestId);
+    if (!this.pendingOwnerOrder.includes(ownerId)) this.pendingOwnerOrder.push(ownerId);
   }
 
   private updateRequest(request: MutableRequest, patch: Partial<MutableRequest>, publish = true): void {
@@ -508,14 +770,33 @@ export class TacticalPositionSearchService {
     if (publish) this.publish();
   }
 
+  private fail(
+    request: MutableRequest,
+    reasonCode: TacticalPositionSearchReasonCode,
+    reason: string,
+    reasonRu: string,
+  ): void {
+    this.updateRequest(request, { status: 'failed', reasonCode, reason, reasonRu, result: null });
+  }
+
+  private stale(
+    request: MutableRequest,
+    reasonCode: TacticalPositionSearchReasonCode,
+    reason: string,
+    reasonRu: string,
+  ): void {
+    this.updateRequest(request, { status: 'stale', reasonCode, reason, reasonRu, result: null });
+  }
+
   private publish(): void {
     for (const listener of this.listeners) listener();
   }
 
   private enforceOwnerBudget(incomingUnitId: string): void {
-    if (this.latestRequestIdByUnit.has(incomingUnitId) || this.latestRequestIdByUnit.size < this.maxOwners) return;
-    const oldestUnitId = this.latestRequestIdByUnit.keys().next().value as string | undefined;
-    if (oldestUnitId) this.clearUnit(oldestUnitId);
+    const owners = new Set([...this.latestRequestIdByOwnerKey.keys()].map((key) => key.split('|')[0]));
+    if (owners.has(incomingUnitId) || owners.size < this.maxOwners) return;
+    const oldestOwner = owners.values().next().value as string | undefined;
+    if (oldestOwner) this.clearUnit(oldestOwner);
   }
 
   private trimRequests(): void {
@@ -524,9 +805,9 @@ export class TacticalPositionSearchService {
       if (!oldest) return;
       const [requestId, request] = oldest;
       this.requests.delete(requestId);
-      if (this.latestRequestIdByUnit.get(request.ownerUnitId) === requestId) {
-        this.latestRequestIdByUnit.delete(request.ownerUnitId);
-      }
+      const ownerKey = buildOwnerKey(request.ownerUnitId, request.queryKey);
+      if (this.latestRequestIdByOwnerKey.get(ownerKey) === requestId) this.latestRequestIdByOwnerKey.delete(ownerKey);
+      if (this.latestAnyRequestIdByUnit.get(request.ownerUnitId) === requestId) this.latestAnyRequestIdByUnit.delete(request.ownerUnitId);
     }
   }
 }
@@ -548,12 +829,9 @@ export function clearTacticalPositionSearchService(state: SimulationState): void
   serviceByState.delete(state);
 }
 
-function runPreparedSearch(
-  prepared: PreparedAwarenessWorldSnapshot,
-  request: TacticalPositionSearchRequestSnapshotV1,
-): TacticalPositionSearchResult {
+function preparedFieldView(prepared: PreparedAwarenessWorldSnapshot) {
   const field = prepared.field;
-  return searchTacticalPositionsForObjective({
+  return {
     width: field.width,
     height: field.height,
     metersPerCell: field.metersPerCell,
@@ -572,47 +850,78 @@ function runPreparedSearch(
       crouched: field.staticProtectionCrouched,
       prone: field.staticProtectionProne,
     },
-  }, {
-    origin: request.origin,
+  };
+}
+
+function buildGeneralizedRequest(
+  request: TacticalPositionSearchRequestSnapshotV1,
+  kind: TacticalPositionKind,
+): GeneralizedTacticalPositionSearchRequest {
+  const limits: Partial<GeneralizedTacticalPositionSearchLimits> = {
+    preliminaryCandidates: request.preliminaryCandidates,
+    exactCandidates: request.exactCandidates,
+    exactRayLimit: request.exactRayLimit,
+    maxPositionDanger: request.maxPositionDanger,
+    minimumLineQuality: request.minimumLineQuality,
+    maximumRouteCost: request.maximumRouteCost,
+  };
+  return {
+    requestIdentity: request.inputIdentity,
+    kind,
+    objective: request.objective,
+    origin: { ...request.origin },
     currentPosture: request.currentPosture,
-    orderTarget: request.orderTarget,
-    threatCount: request.threatCount,
+    orderTarget: request.orderTarget ? { ...request.orderTarget } : null,
+    referenceThreatId: request.referenceThreatId,
+    referenceThreatPosition: request.referenceThreatPosition ? { ...request.referenceThreatPosition } : null,
+    target: cloneTarget(request.target ?? null),
     searchRadiusMeters: request.searchRadiusMeters,
-    maxSampledCells: request.maxSampledCells,
     maxRouteExpansions: request.maxRouteExpansions,
     maxCandidates: request.maxCandidates,
     minimumSeparationMeters: request.minimumSeparationMeters,
-    settings: request.settings,
-    objective: request.objective,
-    referenceThreatId: request.referenceThreatId,
-    referenceThreatPosition: request.referenceThreatPosition,
-  });
+    limits,
+  };
 }
 
 function captureInput(
   state: SimulationState,
+  staticService: StaticTacticalPositionService,
   unit: UnitModel,
   kind: TacticalPositionSearchKind,
-  parameters: TacticalPositionSearchParameters,
+  parameters: NormalizedParameters,
 ) {
   const origin = { ...unit.position };
   const currentPosture = unit.behaviorRuntime.posture;
   const orderTarget = unit.order ? { ...unit.order.target } : unit.playerCommand?.target ? { ...unit.playerCommand.target } : null;
   const orderIdentity = resolveOrderIdentity(unit, orderTarget);
   const referenceThreat = resolveTacticalPositionReferenceThreat(unit);
-  const threatCount = unit.tacticalKnowledge.threats.length;
+  const knownThreats = unit.tacticalKnowledge.threats.map((threat): TacticalPositionKnownThreatSnapshot => ({
+    id: threat.id,
+    position: { x: threat.x, y: threat.y },
+    confidence: threat.confidence,
+    uncertaintyCells: threat.uncertaintyCells,
+    strength: threat.strength,
+    visibleNow: threat.visibleNow,
+  }));
   const tacticalKnowledgeRevision = unit.tacticalKnowledge.revision;
   const settingsRevision = getTacticalPositionSettingsRevision(unit);
   const settings = { ...getTacticalPositionSettings(unit) };
+  const weapon = captureWeapon(unit, kind);
+  const target = parameters.target ?? defaultTarget(unit, kind, orderTarget, referenceThreat?.position ?? null, weapon);
+  const staticIdentity = createStaticTacticalPositionBasisIdentity(state.map, staticService.getSettings());
   const inputIdentity = buildInputIdentity({
     ownerUnitId: unit.id,
+    queryKey: parameters.queryKey,
     kind,
     objective: parameters.objective,
+    target,
     orderTarget,
     orderIdentity,
-    referenceThreatId: referenceThreat?.id ?? null,
-    referenceThreatPosition: referenceThreat?.position ?? null,
+    knownThreats,
+    tacticalKnowledgeRevision,
     settingsRevision,
+    weapon,
+    staticBasisIdentity: staticTacticalPositionIdentityKey(staticIdentity),
     parameters,
     simulationMapMetersPerCell: state.map.metersPerCell,
   });
@@ -623,67 +932,175 @@ function captureInput(
     orderIdentity,
     referenceThreatId: referenceThreat?.id ?? null,
     referenceThreatPosition: referenceThreat?.position ?? null,
-    threatCount,
+    knownThreats,
     tacticalKnowledgeRevision,
     settingsRevision,
     settings,
+    weapon,
+    target,
     inputIdentity,
   };
 }
 
 function buildCurrentInputIdentity(
   state: SimulationState,
+  staticService: StaticTacticalPositionService,
   unit: UnitModel,
   request: TacticalPositionSearchRequestSnapshotV1,
 ): string {
   const currentOrderTarget = unit.order ? unit.order.target : unit.playerCommand?.target ?? null;
+  const knownThreats = unit.tacticalKnowledge.threats.map((threat): TacticalPositionKnownThreatSnapshot => ({
+    id: threat.id,
+    position: { x: threat.x, y: threat.y },
+    confidence: threat.confidence,
+    uncertaintyCells: threat.uncertaintyCells,
+    strength: threat.strength,
+    visibleNow: threat.visibleNow,
+  }));
+  const staticIdentity = createStaticTacticalPositionBasisIdentity(state.map, staticService.getSettings());
   return buildInputIdentity({
     ownerUnitId: unit.id,
+    queryKey: request.queryKey,
     kind: request.kind,
     objective: request.objective,
+    target: request.target ?? null,
     orderTarget: currentOrderTarget,
     orderIdentity: resolveOrderIdentity(unit, currentOrderTarget),
-    referenceThreatId: request.referenceThreatId,
-    referenceThreatPosition: request.referenceThreatPosition,
+    knownThreats,
+    tacticalKnowledgeRevision: unit.tacticalKnowledge.revision,
     settingsRevision: getTacticalPositionSettingsRevision(unit),
-    parameters: request,
+    weapon: captureWeapon(unit, request.kind),
+    staticBasisIdentity: staticTacticalPositionIdentityKey(staticIdentity),
+    parameters: normalizeParameters(request),
     simulationMapMetersPerCell: state.map.metersPerCell,
   });
 }
 
 function buildInputIdentity(value: {
   ownerUnitId: string;
+  queryKey: string;
   kind: TacticalPositionSearchKind;
   objective: TacticalPositionSearchObjective;
+  target: TacticalPositionTargetSpec | null;
   orderTarget: GridPosition | null;
   orderIdentity: string | null;
-  referenceThreatId: string | null;
-  referenceThreatPosition: GridPosition | null;
+  knownThreats: readonly TacticalPositionKnownThreatSnapshot[];
+  tacticalKnowledgeRevision: number;
   settingsRevision: number;
+  weapon: TacticalPositionWeaponSnapshot | null;
+  staticBasisIdentity: string;
   parameters: TacticalPositionSearchParameters;
   simulationMapMetersPerCell: number;
 }): string {
   return [
     `owner:${value.ownerUnitId}`,
-    `kind:${value.kind}`,
+    `key:${value.queryKey}`,
+    `kind:${normalizeTacticalPositionKind(value.kind === 'cover' ? 'cover' : canonicalKindOrNull(value.kind) ?? 'defense')}`,
     `objective:${value.objective}`,
+    `target:${stableSerialize(value.target)}`,
     `order:${value.objective === 'continue_order' && value.orderTarget ? `${quantize(value.orderTarget.x)}:${quantize(value.orderTarget.y)}` : 'ignored'}`,
     `orderIdentity:${value.objective === 'continue_order' ? value.orderIdentity ?? 'none' : 'ignored'}`,
-    `threat:${value.referenceThreatId ?? 'none'}:${value.referenceThreatPosition ? `${quantize(value.referenceThreatPosition.x)}:${quantize(value.referenceThreatPosition.y)}` : 'none'}`,
+    `knowledge:${value.tacticalKnowledgeRevision}:${stableSerialize(value.knownThreats.map((threat) => ({
+      id: threat.id,
+      x: quantize(threat.position.x),
+      y: quantize(threat.position.y),
+      confidence: quantize(threat.confidence),
+      uncertainty: quantize(threat.uncertaintyCells),
+      strength: quantize(threat.strength),
+      visible: threat.visibleNow,
+    })))}`,
     `settings:${value.settingsRevision}`,
+    `weapon:${stableSerialize(value.weapon)}`,
+    `basis:${value.staticBasisIdentity}`,
     `meters:${quantize(value.simulationMapMetersPerCell)}`,
     `radius:${quantize(value.parameters.searchRadiusMeters)}`,
     `candidates:${value.parameters.maxCandidates}`,
     `samples:${value.parameters.maxSampledCells}`,
     `routes:${value.parameters.maxRouteExpansions}`,
     `separation:${quantize(value.parameters.minimumSeparationMeters)}`,
+    `routeCost:${quantize(value.parameters.maximumRouteCost ?? DEFAULT_PARAMETERS.maximumRouteCost)}`,
+    `preliminary:${value.parameters.preliminaryCandidates ?? DEFAULT_PARAMETERS.preliminaryCandidates}`,
+    `exact:${value.parameters.exactCandidates ?? DEFAULT_PARAMETERS.exactCandidates}`,
+    `rays:${value.parameters.exactRayLimit ?? DEFAULT_PARAMETERS.exactRayLimit}`,
+    `danger:${quantize(value.parameters.maxPositionDanger ?? DEFAULT_PARAMETERS.maxPositionDanger)}`,
+    `line:${quantize(value.parameters.minimumLineQuality ?? DEFAULT_PARAMETERS.minimumLineQuality)}`,
   ].join('|');
 }
 
-function resolveOrderIdentity(unit: UnitModel, target: GridPosition | null): string | null {
-  if (unit.playerCommand?.id) return unit.playerCommand.id;
-  if (!target) return null;
-  return `${unit.order?.source ?? 'order'}:${quantize(target.x)}:${quantize(target.y)}`;
+function defaultTarget(
+  unit: UnitModel,
+  kind: TacticalPositionSearchKind,
+  orderTarget: GridPosition | null,
+  referenceThreat: GridPosition | null,
+  weapon: TacticalPositionWeaponSnapshot | null,
+): TacticalPositionTargetSpec {
+  const canonical = canonicalKindOrNull(kind) ?? 'defense';
+  if (canonical === 'observation') {
+    const point = orderTarget ?? referenceThreat;
+    return point
+      ? { mode: 'point', point: { ...point }, desiredDistanceMeters: unit.viewRangeCells }
+      : { mode: 'sector', bearingRadians: unit.facingRadians, arcRadians: Math.PI / 2 };
+  }
+  if (canonical === 'firing') {
+    const point = referenceThreat ?? orderTarget;
+    return point
+      ? {
+          mode: referenceThreat ? 'known_target' : 'estimated_position',
+          point: { ...point },
+          minimumRangeMeters: weapon?.minimumRangeMeters ?? 0,
+          effectiveRangeMeters: weapon?.effectiveRangeMeters ?? 500,
+          maximumRangeMeters: weapon?.maximumRangeMeters ?? 1200,
+        }
+      : {
+          mode: 'sector',
+          bearingRadians: unit.facingRadians,
+          arcRadians: Math.PI / 2,
+          minimumRangeMeters: weapon?.minimumRangeMeters ?? 0,
+          effectiveRangeMeters: weapon?.effectiveRangeMeters ?? 500,
+          maximumRangeMeters: weapon?.maximumRangeMeters ?? 1200,
+        };
+  }
+  return referenceThreat
+    ? { mode: 'sector', bearingRadians: Math.atan2(referenceThreat.y - unit.position.y, referenceThreat.x - unit.position.x), arcRadians: Math.PI / 3 }
+    : { mode: 'known_threats' };
+}
+
+function captureWeapon(unit: UnitModel, kind: TacticalPositionSearchKind): TacticalPositionWeaponSnapshot | null {
+  if (canonicalKindOrNull(kind) !== 'firing') return null;
+  const runtime = getWeaponRuntime(unit);
+  const definition = getWeaponDefinition(runtime.weaponId);
+  return {
+    weaponId: definition.id,
+    ready: runtime.ready && runtime.roundsLoaded > 0,
+    minimumRangeMeters: 0,
+    effectiveRangeMeters: definition.effectiveRangeMetres,
+    maximumRangeMeters: definition.maximumRangeMetres,
+  };
+}
+
+function canonicalKindOrNull(kind: TacticalPositionSearchKind): TacticalPositionKind | null {
+  if (kind === 'cover' || kind === 'defense') return 'defense';
+  if (kind === 'observation' || kind === 'firing') return kind;
+  return null;
+}
+
+function normalizeParameters(value: Partial<TacticalPositionSearchParameters>): NormalizedParameters {
+  return {
+    objective: normalizeTacticalPositionSearchObjective(value.objective),
+    queryKey: normalizeQueryKey(value.queryKey),
+    target: cloneTarget(value.target ?? null),
+    searchRadiusMeters: bounded(value.searchRadiusMeters, DEFAULT_PARAMETERS.searchRadiusMeters, 1, 500),
+    maxCandidates: clampInt(value.maxCandidates ?? DEFAULT_PARAMETERS.maxCandidates, 1, 16),
+    maxSampledCells: clampInt(value.maxSampledCells ?? DEFAULT_PARAMETERS.maxSampledCells, 1, 4096),
+    maxRouteExpansions: clampInt(value.maxRouteExpansions ?? DEFAULT_PARAMETERS.maxRouteExpansions, 1, 8192),
+    minimumSeparationMeters: bounded(value.minimumSeparationMeters, DEFAULT_PARAMETERS.minimumSeparationMeters, 0, 100),
+    maximumRouteCost: bounded(value.maximumRouteCost, DEFAULT_PARAMETERS.maximumRouteCost, 1, 1000000),
+    preliminaryCandidates: clampInt(value.preliminaryCandidates ?? DEFAULT_PARAMETERS.preliminaryCandidates, 8, 128),
+    exactCandidates: clampInt(value.exactCandidates ?? DEFAULT_PARAMETERS.exactCandidates, 1, 32),
+    exactRayLimit: clampInt(value.exactRayLimit ?? DEFAULT_PARAMETERS.exactRayLimit, 0, 128),
+    maxPositionDanger: bounded(value.maxPositionDanger, DEFAULT_PARAMETERS.maxPositionDanger, 0, 100),
+    minimumLineQuality: bounded(value.minimumLineQuality, DEFAULT_PARAMETERS.minimumLineQuality, 0, 100),
+  };
 }
 
 function cloneRequest(request: TacticalPositionSearchRequestSnapshotV1): TacticalPositionSearchRequestSnapshotV1 {
@@ -691,9 +1108,10 @@ function cloneRequest(request: TacticalPositionSearchRequestSnapshotV1): Tactica
     ...request,
     origin: Object.freeze({ ...request.origin }),
     orderTarget: request.orderTarget ? Object.freeze({ ...request.orderTarget }) : null,
-    referenceThreatPosition: request.referenceThreatPosition
-      ? Object.freeze({ ...request.referenceThreatPosition })
-      : null,
+    referenceThreatPosition: request.referenceThreatPosition ? Object.freeze({ ...request.referenceThreatPosition }) : null,
+    knownThreats: Object.freeze(request.knownThreats.map((threat) => Object.freeze(cloneKnownThreat(threat)))),
+    weapon: request.weapon ? Object.freeze({ ...request.weapon }) : null,
+    target: cloneTarget(request.target ?? null),
     settings: Object.freeze({ ...request.settings }),
     result: request.result ? cloneResult(request.result) : null,
   });
@@ -724,15 +1142,15 @@ function cloneCandidate(candidate: TacticalPositionCandidateSeedV2): TacticalPos
   };
 }
 
-function normalizeParameters(value: Partial<TacticalPositionSearchParameters>): TacticalPositionSearchParameters {
-  return {
-    objective: normalizeTacticalPositionSearchObjective(value.objective),
-    searchRadiusMeters: bounded(value.searchRadiusMeters, DEFAULT_PARAMETERS.searchRadiusMeters, 1, 500),
-    maxCandidates: clampInt(value.maxCandidates ?? DEFAULT_PARAMETERS.maxCandidates, 1, 12),
-    maxSampledCells: clampInt(value.maxSampledCells ?? DEFAULT_PARAMETERS.maxSampledCells, 1, 4096),
-    maxRouteExpansions: clampInt(value.maxRouteExpansions ?? DEFAULT_PARAMETERS.maxRouteExpansions, 1, 4096),
-    minimumSeparationMeters: bounded(value.minimumSeparationMeters, DEFAULT_PARAMETERS.minimumSeparationMeters, 0, 100),
-  };
+function cloneKnownThreat(threat: TacticalPositionKnownThreatSnapshot): TacticalPositionKnownThreatSnapshot {
+  return { ...threat, position: { ...threat.position } };
+}
+
+function cloneTarget(target: TacticalPositionTargetSpec | null): TacticalPositionTargetSpec | null {
+  if (!target) return null;
+  return 'point' in target && target.point
+    ? Object.freeze({ ...target, point: Object.freeze({ ...target.point }) })
+    : Object.freeze({ ...target });
 }
 
 function failedDestroyedRequest(
@@ -775,6 +1193,8 @@ function failedRequest(
     orderIdentity: null,
     referenceThreatId: null,
     referenceThreatPosition: null,
+    knownThreats: Object.freeze([]),
+    weapon: null,
     threatCount: 0,
     tacticalKnowledgeRevision: 0,
     settingsRevision: 0,
@@ -785,11 +1205,46 @@ function failedRequest(
     inputIdentity: 'failed',
     requestedWorldKey: null,
     fieldIdentity: null,
+    staticBasisIdentity: null,
     reasonCode,
     reason,
     reasonRu,
     result: null,
   });
+}
+
+function fieldTransferables(field: TacticalPositionQuerySubjectiveFieldSnapshot): Transferable[] {
+  return [
+    field.passable.buffer,
+    field.movementCost.buffer,
+    field.danger.buffer,
+    field.suppression.buffer,
+    field.concealment.buffer,
+    field.safety.buffer,
+    field.expectedProtectionAgainstThreat.buffer,
+    field.uncertainty.buffer,
+    field.reverseSlopeQuality.buffer,
+    field.forwardSlopeRisk.buffer,
+    field.staticProtectionStanding.buffer,
+    field.staticProtectionCrouched.buffer,
+    field.staticProtectionProne.buffer,
+  ];
+}
+
+function resolveOrderIdentity(unit: UnitModel, target: GridPosition | null): string | null {
+  if (unit.playerCommand?.id) return unit.playerCommand.id;
+  if (!target) return null;
+  return `${unit.order?.source ?? 'order'}:${quantize(target.x)}:${quantize(target.y)}`;
+}
+
+function buildOwnerKey(unitId: string, queryKey: string): string {
+  return `${unitId}|${queryKey}`;
+}
+
+function normalizeQueryKey(value: unknown): string {
+  if (typeof value !== 'string') return 'default';
+  const cleaned = value.trim().replace(/[^a-zA-Z0-9_.:-]/g, '_').slice(0, 80);
+  return cleaned || 'default';
 }
 
 function isReusableStatus(status: TacticalPositionSearchStatus): boolean {
@@ -804,16 +1259,23 @@ function isTerminal(status: TacticalPositionSearchStatus): boolean {
   return status === 'ready' || status === 'stale' || status === 'cancelled' || status === 'failed';
 }
 
-function trimMap<Key, Value>(
-  map: Map<Key, Value>,
-  limit: number,
-  onEvict: (key: Key, value: Value) => void,
-): void {
-  while (map.size > limit) {
-    const oldest = map.entries().next().value as [Key, Value] | undefined;
-    if (!oldest) return;
-    onEvict(oldest[0], oldest[1]);
+function removeValue(values: string[], value: string): void {
+  let index = values.indexOf(value);
+  while (index >= 0) {
+    values.splice(index, 1);
+    index = values.indexOf(value);
   }
+}
+
+function stableSerialize(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, child]) => `${JSON.stringify(key)}:${stableSerialize(child)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function clampInt(value: number, minimum: number, maximum: number): number {
