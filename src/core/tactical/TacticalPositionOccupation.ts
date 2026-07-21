@@ -20,9 +20,22 @@ export function reconcileTacticalPositionOccupation(state: SimulationState, unit
   if (!command?.arrivalPosture) return;
 
   if (
+    command.status === 'blocked'
+    || command.status === 'cancelled'
+    || command.tacticalPositionOccupationStatus === 'released'
+  ) {
+    cancelPostureTransition(
+      unit,
+      postureOwnerTokenForPlayerCommand(command.id),
+      'tactical_position_posture_cancelled_by_command',
+      'Смена позы отменена: приказ тактической позиции больше не действует.',
+    );
+    return;
+  }
+
+  if (
     unit.order
     && unit.order.playerCommandId !== command.id
-    && command.tacticalPositionOccupationStatus !== 'released'
   ) {
     cancelPostureTransition(
       unit,
