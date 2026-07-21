@@ -1,0 +1,278 @@
+name: Manual Vercel Preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Exact branch, tag, or commit ref to deploy.
+        required: true
+        type: string
+      expected_sha:
+        description: Expected 40-character commit SHA for the selected ref.
+        required: true
+        type: string
+      allow_main:
+        description: Explicitly permit deploying the main ref.
+        required: false
+        default: false
+        type: boolean
+      allow_skipped_checks:
+        description: Explicitly permit skipping the Preview smoke scenarios.
+        required: false
+        default: false
+        type: boolean
+      skip_reason:
+        description: Required explanation when skipped checks are permitted.
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual-vercel-preview-${{ inputs.expected_sha }}
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    name: Verify and publish exact Preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_VERCEL_PROJECT_NAME: repo
+    steps:
+      - name: Checkout requested ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Verify exact source before installation
+        id: source
+        shell: bash
+        env:
+          REQUESTED_REF: ${{ inputs.ref }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          ALLOW_MAIN: ${{ inputs.allow_main }}
+        run: |
+          set -euo pipefail
+          expected_sha="$(printf '%s' "$EXPECTED_SHA" | tr '[:upper:]' '[:lower:]')"
+          if [[ ! "$expected_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'expected_sha must be a 40-character hexadecimal commit SHA.' >&2
+            exit 1
+          fi
+
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Requested ref: $REQUESTED_REF"
+          echo "Checked out SHA: $actual_sha"
+          if [[ "$actual_sha" != "$expected_sha" ]]; then
+            echo "Source mismatch: expected $expected_sha but checked out $actual_sha." >&2
+            exit 1
+          fi
+
+          normalized_ref="${REQUESTED_REF#refs/heads/}"
+          normalized_ref="${normalized_ref#origin/}"
+          if [[ "$normalized_ref" == 'main' && "$ALLOW_MAIN" != 'true' ]]; then
+            echo 'Deploying main requires allow_main=true.' >&2
+            exit 1
+          fi
+
+          echo "ref=$REQUESTED_REF" >> "$GITHUB_OUTPUT"
+          echo "sha=$actual_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run deployment verification gate
+        id: gate
+        shell: bash
+        env:
+          ALLOW_SKIPPED_CHECKS: ${{ inputs.allow_skipped_checks }}
+          SKIP_REASON: ${{ inputs.skip_reason }}
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/preview-verification.json"
+          if [[ "$ALLOW_SKIPPED_CHECKS" == 'true' ]]; then
+            if [[ -z "${SKIP_REASON// }" ]]; then
+              echo 'skip_reason is required when allow_skipped_checks=true.' >&2
+              exit 1
+            fi
+            npm run verify:preview -- --report "$report" --skip-preview-smokes --skip-reason "$SKIP_REASON"
+          else
+            if [[ -n "${SKIP_REASON// }" ]]; then
+              echo 'skip_reason is not allowed unless allow_skipped_checks=true.' >&2
+              exit 1
+            fi
+            npm run verify:preview -- --report "$report"
+          fi
+          echo "report=$report" >> "$GITHUB_OUTPUT"
+
+      - name: Pull permanent Vercel project settings
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx --yes vercel@56.4.1 pull --yes --environment=preview --token="$VERCEL_TOKEN"
+
+      - name: Verify permanent Vercel project link
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: >-
+          node scripts/verify_vercel_project_link.mjs
+          --file .vercel/project.json
+          --expected-org-id "$VERCEL_ORG_ID"
+          --expected-project-id "$VERCEL_PROJECT_ID"
+          --expected-project-name "$EXPECTED_VERCEL_PROJECT_NAME"
+
+      - name: Build Vercel output once
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          REAL_WARGAME_BRANCH: ${{ steps.source.outputs.ref }}
+          REAL_WARGAME_COMMIT_SHA: ${{ steps.source.outputs.sha }}
+        run: npx --yes vercel@56.4.1 build --token="$VERCEL_TOKEN"
+
+      - name: Add exact deployment identity
+        run: >-
+          node scripts/write_deployment_source.mjs
+          --root .vercel/output/static
+          --ref "${{ steps.source.outputs.ref }}"
+          --sha "${{ steps.source.outputs.sha }}"
+          --report "${{ steps.gate.outputs.report }}"
+
+      - name: Verify prebuilt output pages
+        run: npm run verify:deployment-pages -- --root .vercel/output/static --require-source
+
+      - name: Publish one prebuilt Preview deployment
+        id: deploy
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          deployment_url="$(npx --yes vercel@56.4.1 deploy --prebuilt --yes --token="$VERCEL_TOKEN")"
+          deployment_url="$(printf '%s\n' "$deployment_url" | tail -n 1 | tr -d '\r')"
+          if [[ ! "$deployment_url" =~ ^https://[^[:space:]]+$ ]]; then
+            echo 'Vercel CLI did not return a valid deployment URL.' >&2
+            exit 1
+          fi
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for READY and inspect deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: >-
+          npx --yes vercel@56.4.1 inspect "${{ steps.deploy.outputs.url }}"
+          --wait --token="$VERCEL_TOKEN"
+
+      - name: Read deployment ID and status
+        id: deployment
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          deployment_host="${DEPLOYMENT_URL#https://}"
+          response="$RUNNER_TEMP/vercel-deployment.json"
+          curl --fail --silent --show-error --get \
+            --url "https://api.vercel.com/v13/deployments/$deployment_host" \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --data-urlencode "teamId=$VERCEL_ORG_ID" \
+            --output "$response"
+
+          RESPONSE="$response" node <<'NODE'
+          const fs = require('node:fs');
+          const deployment = JSON.parse(fs.readFileSync(process.env.RESPONSE, 'utf8'));
+          if (deployment.projectId !== process.env.VERCEL_PROJECT_ID) {
+            throw new Error('Published deployment does not belong to the permanent Vercel project.');
+          }
+          if (deployment.readyState !== 'READY') {
+            throw new Error(`Published deployment is not READY: ${deployment.readyState ?? 'unknown'}.`);
+          }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `id=${deployment.id}\nstatus=${deployment.readyState}\n`);
+          NODE
+
+      - name: Verify published pages and identity
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          EXPECTED_REF: ${{ steps.source.outputs.ref }}
+          EXPECTED_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          npx --yes vercel@56.4.1 curl / --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > /dev/null
+          npx --yes vercel@56.4.1 curl /ai-node-editor.html --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > /dev/null
+          source_file="$RUNNER_TEMP/published-deployment-source.json"
+          npx --yes vercel@56.4.1 curl /deployment-source.json --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > "$source_file"
+          SOURCE_FILE="$source_file" node <<'NODE'
+          const fs = require('node:fs');
+          const source = JSON.parse(fs.readFileSync(process.env.SOURCE_FILE, 'utf8'));
+          if (source.ref !== process.env.EXPECTED_REF || source.sourceSha !== process.env.EXPECTED_SHA) {
+            throw new Error('Published deployment identity does not match the requested ref and SHA.');
+          }
+          NODE
+
+      - name: Publish run summary
+        if: always()
+        shell: bash
+        env:
+          RUN_STATUS: ${{ job.status }}
+          REQUESTED_REF: ${{ inputs.ref }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          VERIFIED_SHA: ${{ steps.source.outputs.sha }}
+          GATE_REPORT: ${{ steps.gate.outputs.report }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          DEPLOYMENT_STATUS: ${{ steps.deployment.outputs.status }}
+        run: |
+          {
+            echo '## Manual Vercel Preview'
+            echo
+            echo "- status: ${RUN_STATUS:-unknown}"
+            echo "- ref: ${REQUESTED_REF:-unknown}"
+            echo "- expected SHA: ${EXPECTED_SHA:-unknown}"
+            echo "- verified SHA: ${VERIFIED_SHA:-not verified}"
+            echo "- deployment ID: ${DEPLOYMENT_ID:-not created}"
+            echo "- Preview URL: ${DEPLOYMENT_URL:-not created}"
+            echo "- Vercel status: ${DEPLOYMENT_STATUS:-not available}"
+            echo
+            echo '### Verification gate'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ -n "${GATE_REPORT:-}" && -f "$GATE_REPORT" ]]; then
+            REPORT="$GATE_REPORT" node <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+            const fs = require('node:fs');
+            const report = JSON.parse(fs.readFileSync(process.env.REPORT, 'utf8'));
+            console.log(`- gate status: ${report.status}`);
+            console.log('- executed checks:');
+            for (const check of report.checks ?? []) {
+              console.log(`  - ${check.name}: ${check.status} — \`${check.command}\``);
+            }
+            console.log('- skipped checks:');
+            if ((report.skippedChecks ?? []).length === 0) console.log('  - none');
+            for (const check of report.skippedChecks ?? []) {
+              console.log(`  - ${check.name}: ${check.reason}`);
+            }
+            NODE
+          else
+            echo '- gate report: not produced' >> "$GITHUB_STEP_SUMMARY"
+          fi
