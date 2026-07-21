@@ -5,6 +5,11 @@ import type { AiPortDefinition, AiPortValueKind } from '../core/ai/contracts/AiP
 import { areAiPortKindsCompatible } from '../core/ai/contracts/AiPortTypes';
 import { listMovementProfileSelectorEntries } from './MovementProfileSelectorProvider';
 import { getSubgraphChoice } from './subgraph-ui';
+import {
+  isTacticalPositionParameterContainer,
+  readTacticalPositionParameterFields,
+  renderTacticalPositionParameterFields,
+} from './tactical-position-node-ui';
 
 export interface NodeContractUiModel {
   readonly contract?: AiNodeContract;
@@ -37,6 +42,9 @@ export function explainPortIncompatibilityRu(
 }
 
 export function renderContractParameterFields(node: Pick<AiNode, 'id' | 'type' | 'parameters'>): string {
+  if (node.type === 'CreateTacticalPositionCandidates') {
+    return renderTacticalPositionParameterFields(node.parameters);
+  }
   const contract = DEFAULT_AI_NODE_CONTRACT_REGISTRY.get(String(node.type));
   if (!contract || contract.parameters.length === 0) return '<p class="toolbar-note">У этой ноды нет настраиваемых параметров.</p>';
   return contract.parameters.map((parameter) => renderParameter(parameter, node.parameters?.[parameter.id])).join('');
@@ -64,6 +72,9 @@ function renderParameter(parameter: AiParameterDefinition, value: unknown): stri
 }
 
 export function readContractParameterFields(container: ParentNode, fallback: Record<string, unknown>): Record<string, unknown> {
+  if (isTacticalPositionParameterContainer(container)) {
+    return readTacticalPositionParameterFields(container, fallback);
+  }
   const next: Record<string, unknown> = { ...fallback };
   container.querySelectorAll<HTMLInputElement | HTMLSelectElement>('.contract-parameter-field').forEach((field) => {
     const id = field.dataset.paramId;
