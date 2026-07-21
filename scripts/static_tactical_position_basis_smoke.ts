@@ -75,7 +75,29 @@ function verifyDeterminismAndIndependentFields(): void {
 }
 
 function verifyWallDirectionAndPostures(): void {
-  const map = normalizeMap({
+  const directionalMap = normalizeMap({
+    ...openMapData(11, 7),
+    objects: [{
+      id: 'east-tall-wall', kind: 'cover', x: 6, y: 3,
+      widthCells: 1, heightCells: 5, losHeightMeters: 2.4,
+      coverProtection: 90, coverReliability: 95, penetrable: false,
+    }],
+  });
+  const directionalBasis = build(directionalMap);
+  const cellIndex = 3 * directionalMap.width + 4;
+  const east = 0;
+  const west = 4;
+  const eastProtection = readStaticTacticalDirectionalValue(directionalBasis.protectionByDirection, directionalBasis, cellIndex, east);
+  const westProtection = readStaticTacticalDirectionalValue(directionalBasis.protectionByDirection, directionalBasis, cellIndex, west);
+  const eastObservation = readStaticTacticalDirectionalValue(directionalBasis.observationByDirection, directionalBasis, cellIndex, east);
+  const westObservation = readStaticTacticalDirectionalValue(directionalBasis.observationByDirection, directionalBasis, cellIndex, west);
+  const eastFiring = readStaticTacticalDirectionalValue(directionalBasis.firingByDirection, directionalBasis, cellIndex, east);
+  const westFiring = readStaticTacticalDirectionalValue(directionalBasis.firingByDirection, directionalBasis, cellIndex, west);
+  assert.ok(eastProtection > westProtection, 'wall-facing defense must exceed the open side');
+  assert.ok(eastObservation < westObservation, 'tall wall must reduce observation in its direction');
+  assert.ok(eastFiring < westFiring, 'tall wall must reduce firing in its direction');
+
+  const postureMap = normalizeMap({
     ...openMapData(11, 7),
     objects: [{
       id: 'east-low-wall', kind: 'cover', x: 6, y: 3,
@@ -83,29 +105,17 @@ function verifyWallDirectionAndPostures(): void {
       coverProtection: 90, coverReliability: 95, penetrable: false,
     }],
   });
-  const basis = build(map);
-  const cellIndex = 3 * map.width + 4;
-  const east = 0;
-  const west = 4;
-  const eastProtection = readStaticTacticalDirectionalValue(basis.protectionByDirection, basis, cellIndex, east);
-  const westProtection = readStaticTacticalDirectionalValue(basis.protectionByDirection, basis, cellIndex, west);
-  const eastObservation = readStaticTacticalDirectionalValue(basis.observationByDirection, basis, cellIndex, east);
-  const westObservation = readStaticTacticalDirectionalValue(basis.observationByDirection, basis, cellIndex, west);
-  const eastFiring = readStaticTacticalDirectionalValue(basis.firingByDirection, basis, cellIndex, east);
-  const westFiring = readStaticTacticalDirectionalValue(basis.firingByDirection, basis, cellIndex, west);
-  assert.ok(eastProtection > westProtection, 'wall-facing defense must exceed the open side');
-  assert.ok(eastObservation < westObservation, 'wall must reduce observation in its direction');
-  assert.ok(eastFiring < westFiring, 'wall must reduce firing in its direction');
-
+  const postureBasis = build(postureMap);
+  const postureCellIndex = 3 * postureMap.width + 4;
   const observationByPosture = [
-    readStaticTacticalPostureValue(basis.observationByPosture, cellIndex, 'standing'),
-    readStaticTacticalPostureValue(basis.observationByPosture, cellIndex, 'crouched'),
-    readStaticTacticalPostureValue(basis.observationByPosture, cellIndex, 'prone'),
+    readStaticTacticalPostureValue(postureBasis.observationByPosture, postureCellIndex, 'standing'),
+    readStaticTacticalPostureValue(postureBasis.observationByPosture, postureCellIndex, 'crouched'),
+    readStaticTacticalPostureValue(postureBasis.observationByPosture, postureCellIndex, 'prone'),
   ];
   const firingByPosture = [
-    readStaticTacticalPostureValue(basis.firingByPosture, cellIndex, 'standing'),
-    readStaticTacticalPostureValue(basis.firingByPosture, cellIndex, 'crouched'),
-    readStaticTacticalPostureValue(basis.firingByPosture, cellIndex, 'prone'),
+    readStaticTacticalPostureValue(postureBasis.firingByPosture, postureCellIndex, 'standing'),
+    readStaticTacticalPostureValue(postureBasis.firingByPosture, postureCellIndex, 'crouched'),
+    readStaticTacticalPostureValue(postureBasis.firingByPosture, postureCellIndex, 'prone'),
   ];
   assert.ok(new Set(observationByPosture).size > 1 || new Set(firingByPosture).size > 1, 'postures must remain physically distinct near low cover');
 }
