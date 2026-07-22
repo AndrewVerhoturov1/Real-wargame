@@ -102,6 +102,8 @@
     "state-plan-scenario:smoke": "node scripts/ai_state_plan_scenario_smoke.mjs",
     "tactical-query:smoke": "node scripts/tactical_query_system_smoke.mjs",
     "tactical-position-foundation:smoke": "node scripts/tactical_position_foundation_smoke.mjs",
+    "static-tactical-persistent:smoke": "node scripts/static_tactical_position_persistent_smoke.mjs",
+    "tactical-action-ports:smoke": "node scripts/tactical_action_ports_smoke.mjs",
     "tactical-position-settings:smoke": "node scripts/tactical_position_node_settings_smoke.mjs",
     "tactical-position:smoke": "npm run tactical-position-foundation:smoke && npm run tactical-position-settings:smoke && node scripts/tactical_position_search_smoke.mjs && node scripts/tactical_position_interaction_smoke.mjs && node scripts/tactical_position_tuning_smoke.mjs && node scripts/tactical_position_request_service_smoke.mjs && node scripts/tactical_position_graph_runtime_smoke.mjs && node scripts/tactical_position_objective_smoke.mjs",
     "tactical-query-ui:smoke": "node scripts/tactical_query_ui_smoke.mjs",
