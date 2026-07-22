@@ -1,0 +1,31 @@
+patch-and-verify	Verify perception and posture regressions	﻿2026-07-22T00:15:37.4831259Z ##[group]Run npm run perception:smoke
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:37.4831646Z ^[[36;1mnpm run perception:smoke^[[0m
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:37.4831985Z ^[[36;1mnpm run posture-transition:smoke^[[0m
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:37.4832280Z ^[[36;1mnpm run typecheck^[[0m
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:37.4888142Z shell: /usr/bin/bash -e {0}
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:37.4888414Z ##[endgroup]
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:37.5995134Z 
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:37.5995828Z > real-wargame@0.1.0 perception:smoke
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:37.5996953Z > node scripts/perception_system_smoke.mjs && node scripts/rear_attention_perception_smoke.mjs
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:37.5997382Z 
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7433591Z node:internal/modules/run_main:123
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7434270Z     triggerUncaughtException(
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7434857Z     ^
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7435108Z 
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7435651Z AssertionError [ERR_ASSERTION]: low cover must hide a prone-height target
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7436225Z 
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7436673Z false !== true
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7436901Z 
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7438043Z     at file:///home/runner/work/Real-wargame/Real-wargame/.tmp-perception-system-smoke/perception-system-smoke.mjs?run=1784679338689:6996:8
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7439695Z     at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7440622Z     at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7441832Z     at async file:///home/runner/work/Real-wargame/Real-wargame/scripts/perception_system_smoke.mjs:31:3 {
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7442811Z   generatedMessage: false,
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7443269Z   code: 'ERR_ASSERTION',
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7443691Z   actual: false,
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7444080Z   expected: true,
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7444478Z   operator: 'strictEqual'
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7444930Z }
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7445118Z 
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7445289Z Node.js v20.20.2
+patch-and-verify	Verify perception and posture regressions	2026-07-22T00:15:38.7635904Z ##[error]Process completed with exit code 1.
