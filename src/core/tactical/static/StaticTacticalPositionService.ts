@@ -161,8 +161,9 @@ export class StaticTacticalPositionService {
     if (this.destroyed) {
       return { ok: false, reason: 'malformed', message: 'Static tactical service is destroyed.', decodedBytes: 0, decodeMs: 0 };
     }
-    const identity = createStaticTacticalPositionBasisIdentity(this.state.map, this.settings);
-    const fingerprint = createStaticTacticalPositionFingerprint(this.state.map, this.settings, getActiveEnvironmentProfile());
+    const artifactSettings = readArtifactSettings(value, this.settings);
+    const identity = createStaticTacticalPositionBasisIdentity(this.state.map, artifactSettings);
+    const fingerprint = createStaticTacticalPositionFingerprint(this.state.map, artifactSettings, getActiveEnvironmentProfile());
     const decoded = decodeStaticTacticalPositionArtifact(value, fingerprint, identity);
     this.persistentDecodedBytes = decoded.decodedBytes;
     this.persistentDecodeMs = decoded.decodeMs;
@@ -179,7 +180,7 @@ export class StaticTacticalPositionService {
     this.readyFingerprint = decoded.fingerprint;
     this.requestedIdentity = identity;
     this.pending = null;
-    this.settings = decoded.snapshot.settings;
+    this.settings = artifactSettings;
     this.status = 'ready';
     this.lastError = '';
     this.persistentCacheHits += 1;
@@ -431,6 +432,15 @@ export function buildStaticTacticalPositionArtifactForExport(state: SimulationSt
 export function clearStaticTacticalPositionService(state: SimulationState): void {
   serviceByState.get(state)?.destroy();
   serviceByState.delete(state);
+}
+
+function readArtifactSettings(
+  value: unknown,
+  fallback: StaticTacticalPositionSettings,
+): StaticTacticalPositionSettings {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
+  const input = (value as { readonly settings?: StaticTacticalPositionSettingsInput }).settings;
+  return input === undefined ? fallback : normalizeStaticTacticalPositionSettings(input);
 }
 
 function scheduleFallback(callback: () => void): void {
