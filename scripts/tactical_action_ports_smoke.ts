@@ -96,8 +96,8 @@ function verifyDirectionPurposeAndPurity(): void {
   const directionalProbes = (upper: boolean): TacticalActionPortProbeContext => ({
     probeVisibility: () => visibilityResult(true),
     probeBallistic: (request) => ballisticResult(true, upper
-      ? request.origin.yMetres / 4
-      : (map.height * map.metersPerCell - request.origin.yMetres) / 4),
+      ? request.origin.yMetres / 20
+      : (map.height * map.metersPerCell - request.origin.yMetres) / 20),
   });
   const north = solveTacticalActionPorts({
     ...baseRequest(map, directionalProbes(true)),
