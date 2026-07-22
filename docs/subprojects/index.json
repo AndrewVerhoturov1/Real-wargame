@@ -16,10 +16,10 @@
       "status": "active",
       "updated_at": "2026-07-22",
       "goal": "Один пехотный отряд атакует другой; оружие — винтовки, ППШ и пулемёт; главная проверка — понятное поведение ИИ в атаке и обороне.",
-      "current_focus": "Этап 1: каноническая геометрия объектов и чистая баллистическая проба перенесены в real-wargame-preview. Следующая работа — сохраняемый статический предрасчёт карты и локальные рабочие точки позиции.",
-      "next_step": "Реализовать версионированный предрасчёт статической тактической основы и чистый ограниченный решатель рабочих точек наблюдения и огня.",
+      "current_focus": "Этап 1: сохраняемый статический предрасчёт и чистый решатель локальных рабочих точек проверены и перенесены в real-wargame-preview. Текущая работа — физическое выполнение временного действия от защищённого якоря.",
+      "next_step": "Реализовать общий runtime anchor → action port → требуемая поза → observation/fire → return с отменой, сохранением и диагностикой.",
       "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-      "last_verified_commit": "8a2b3b5bb344eaafa41871315c51b07e98eb9eb3",
+      "last_verified_commit": "86071bb3d0c4ebd95adf4e87ee4d575fa7108da3",
       "superseded_by": null,
       "status_path": "docs/subprojects/infantry-combat-prototype-v1/STATUS.md",
       "metadata_path": "docs/subprojects/infantry-combat-prototype-v1/subproject.json"
