@@ -96,10 +96,12 @@ try {
 
   let result = await validateAgentDocuments(root);
   assert.deepEqual(result.errors, []);
+  assert.deepEqual(result.warnings, []);
 
   await writeText(root, 'docs/ai/CURRENT_STATE.md', '# stale\n');
   result = await validateAgentDocuments(root);
-  assert.equal(result.errors.some((error) => error.includes('stale generated file: docs/ai/CURRENT_STATE.md')), true);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.warnings.some((warning) => warning.includes('stale generated file: docs/ai/CURRENT_STATE.md')), true);
   await generateAgentDocuments(root, { write: true });
 
   const activePath = path.join(root, 'docs/subprojects/active-project/subproject.json');
@@ -107,29 +109,43 @@ try {
   active.status = 'legacy_custom_status';
   await writeFile(activePath, `${JSON.stringify(active, null, 2)}\n`, 'utf8');
   result = await validateAgentDocuments(root);
-  assert.equal(result.errors.some((error) => error.includes('unsupported status')), true);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.warnings.some((warning) => warning.includes('unsupported status')), true);
   active.status = 'active';
   active.main_files = ['src/missing.ts'];
   await writeFile(activePath, `${JSON.stringify(active, null, 2)}\n`, 'utf8');
   result = await validateAgentDocuments(root);
-  assert.equal(result.errors.some((error) => error.includes('missing referenced path: src/missing.ts')), true);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.warnings.some((warning) => warning.includes('missing referenced path: src/missing.ts')), true);
   active.main_files = ['src/main.ts'];
   await writeFile(activePath, `${JSON.stringify(active, null, 2)}\n`, 'utf8');
 
   await writeText(root, 'AGENTS.md', '# Fixture\n\n[Broken route](missing-route.md)\n');
   result = await validateAgentDocuments(root);
-  assert.equal(result.errors.some((error) => error.includes('broken Markdown link') && error.includes('missing-route.md')), true);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.warnings.some((warning) => warning.includes('broken Markdown link') && warning.includes('missing-route.md')), true);
   await writeText(root, 'AGENTS.md');
 
   await writeJson(root, 'package.json', { type: 'module', dependencies: { 'pixi.js': '^8.0.0' } });
   result = await validateAgentDocuments(root);
-  assert.equal(result.errors.some((error) => error.includes('PixiJS major mismatch')), true);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.warnings.some((warning) => warning.includes('PixiJS major mismatch')), true);
   await writeJson(root, 'package.json', { type: 'module', dependencies: { 'pixi.js': '^7.4.3' } });
+
+  const contextPath = path.join(root, 'docs/ai/repo-context.json');
+  const context = JSON.parse(await readFile(contextPath, 'utf8'));
+  context.activeSubprojects = ['missing-project'];
+  await writeFile(contextPath, `${JSON.stringify(context, null, 2)}\n`, 'utf8');
+  result = await validateAgentDocuments(root);
+  assert.equal(result.errors.some((error) => error.includes('active subproject not found: missing-project')), true);
+  context.activeSubprojects = ['active-project'];
+  await writeFile(contextPath, `${JSON.stringify(context, null, 2)}\n`, 'utf8');
 
   await generateAgentDocuments(root, { write: true });
   result = await validateAgentDocuments(root);
   assert.deepEqual(result.errors, []);
-  console.log('Agent docs smoke passed: generation, stale output, status, path, Markdown link and PixiJS validation.');
+  assert.deepEqual(result.warnings, []);
+  console.log('Agent docs smoke passed: advisory documentation issues do not block, while a missing active subproject remains fatal.');
 } finally {
   await rm(root, { recursive: true, force: true });
 }
