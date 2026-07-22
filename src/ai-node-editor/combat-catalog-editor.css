@@ -1,0 +1,383 @@
+.navigation-profile-workbench[data-active-ai-editor-section="combatCatalogs"] {
+  overflow: auto;
+  padding: 0;
+  background: #101722;
+}
+
+.combat-catalog-editor {
+  min-height: 100%;
+  color: #e8edf5;
+  background: #101722;
+  font: 14px/1.45 Inter, system-ui, sans-serif;
+}
+
+.combat-catalog-editor button,
+.combat-catalog-editor input,
+.combat-catalog-editor select,
+.combat-catalog-editor textarea {
+  font: inherit;
+}
+
+.combat-catalog-editor button {
+  border: 1px solid #44516a;
+  border-radius: 7px;
+  padding: 8px 12px;
+  color: #e8edf5;
+  background: #202b3d;
+  cursor: pointer;
+}
+
+.combat-catalog-editor button:hover:not(:disabled) {
+  border-color: #7286aa;
+  background: #2a3850;
+}
+
+.combat-catalog-editor button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.combat-catalog-editor button.primary {
+  border-color: #4e83bd;
+  background: #285d91;
+}
+
+.combat-catalog-editor button.danger {
+  border-color: #8d4c55;
+  color: #ffd8dc;
+  background: #512c34;
+}
+
+.combat-catalog-toolbar,
+.combat-catalog-form-header,
+.combat-catalog-group-heading,
+.combat-catalog-list-heading,
+.combat-catalog-validation > div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.combat-catalog-toolbar {
+  padding: 22px 26px 16px;
+  border-bottom: 1px solid #2c374a;
+  background: #151e2c;
+}
+
+.combat-catalog-toolbar h1,
+.combat-catalog-toolbar p,
+.combat-catalog-form-header h2,
+.combat-catalog-list-heading h2,
+.combat-catalog-group h3,
+.combat-catalog-validation h3 {
+  margin: 0;
+}
+
+.combat-catalog-toolbar p,
+.combat-catalog-form-header p,
+.combat-catalog-list-heading p,
+.combat-catalog-group-heading p {
+  margin: 4px 0 0;
+  color: #9ba8bc;
+}
+
+.combat-catalog-kicker {
+  display: block;
+  margin-bottom: 3px;
+  color: #8eb7e7;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.combat-catalog-global-actions,
+.combat-catalog-form-actions,
+.combat-catalog-reserve-add,
+.combat-catalog-reload-stage footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.combat-catalog-subtabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 26px;
+  border-bottom: 1px solid #2c374a;
+  background: #151e2c;
+}
+
+.combat-catalog-subtabs > button.active {
+  border-color: #79aee5;
+  background: #315f8f;
+}
+
+.combat-catalog-archived-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  color: #b7c1d1;
+}
+
+.combat-catalog-alert {
+  display: grid;
+  gap: 4px;
+  margin: 14px 26px 0;
+  padding: 12px 14px;
+  border: 1px solid #8b6f3f;
+  border-radius: 8px;
+  background: #3b311f;
+}
+
+.combat-catalog-layout {
+  display: grid;
+  grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px 26px 28px;
+}
+
+.combat-catalog-list-panel,
+.combat-catalog-form-panel {
+  min-width: 0;
+  border: 1px solid #2d394d;
+  border-radius: 10px;
+  background: #151e2c;
+}
+
+.combat-catalog-list-panel {
+  align-self: start;
+  position: sticky;
+  top: 12px;
+  overflow: hidden;
+}
+
+.combat-catalog-list-heading,
+.combat-catalog-form-header {
+  padding: 16px;
+  border-bottom: 1px solid #2d394d;
+}
+
+.combat-catalog-entry-list {
+  display: grid;
+  gap: 7px;
+  max-height: calc(100vh - 310px);
+  overflow: auto;
+  padding: 10px;
+}
+
+.combat-catalog-entry {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+}
+
+.combat-catalog-entry > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.combat-catalog-entry.active {
+  border-color: #6ca4dd;
+  box-shadow: inset 3px 0 #6ca4dd;
+  background: #263b55;
+}
+
+.combat-catalog-new-button {
+  width: calc(100% - 20px);
+  margin: 0 10px 10px;
+}
+
+.combat-catalog-group,
+.combat-catalog-validation {
+  margin: 16px 18px;
+  padding: 16px;
+  border: 1px solid #303d52;
+  border-radius: 9px;
+  background: #192435;
+}
+
+.combat-catalog-field-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 13px;
+}
+
+.combat-catalog-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.combat-catalog-field,
+.combat-catalog-choice,
+.combat-catalog-reload-stage {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #334158;
+  border-radius: 7px;
+  background: #141d2b;
+}
+
+.combat-catalog-field > small,
+.combat-catalog-entry small,
+.combat-catalog-choice small {
+  color: #929fb3;
+  font-size: 12px;
+}
+
+.combat-catalog-field input,
+.combat-catalog-field select,
+.combat-catalog-reserve-row input,
+.combat-catalog-reserve-add select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #475672;
+  border-radius: 6px;
+  padding: 8px 9px;
+  color: #eef3fa;
+  background: #0f1723;
+}
+
+.combat-catalog-field.has-error,
+.combat-catalog-group.has-error,
+.combat-catalog-reload-stage.has-error {
+  border-color: #c75c68;
+  box-shadow: 0 0 0 1px rgba(199, 92, 104, 0.18);
+}
+
+.combat-catalog-toggle {
+  display: inline-flex;
+  align-items: center;
+}
+
+.combat-catalog-toggle input {
+  position: absolute;
+  opacity: 0;
+}
+
+.combat-catalog-toggle span {
+  position: relative;
+  width: 42px;
+  height: 22px;
+  border-radius: 11px;
+  background: #4a5568;
+}
+
+.combat-catalog-toggle span::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #eef3fa;
+  transition: transform 120ms ease;
+}
+
+.combat-catalog-toggle input:checked + span {
+  background: #3978b7;
+}
+
+.combat-catalog-toggle input:checked + span::after {
+  transform: translateX(20px);
+}
+
+.combat-catalog-reload-list,
+.combat-catalog-validation ol {
+  display: grid;
+  gap: 10px;
+}
+
+.combat-catalog-reload-stage header {
+  display: flex;
+  justify-content: space-between;
+}
+
+.combat-catalog-reserve-table {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.combat-catalog-reserve-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 2fr) minmax(100px, 1fr) minmax(100px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: #121b28;
+}
+
+.combat-catalog-validation.has-issues {
+  border-color: #8d4c55;
+}
+
+.combat-catalog-validation ol {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.combat-catalog-validation li {
+  display: grid;
+  grid-template-columns: auto minmax(160px, 1fr) auto;
+  gap: 7px 10px;
+  padding: 10px;
+  border-left: 3px solid #c75c68;
+  background: #2b2028;
+}
+
+.combat-catalog-validation li p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.combat-catalog-status {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.combat-catalog-status.draft { color: #ffe6aa; background: #685322; }
+.combat-catalog-status.published { color: #ccebd5; background: #285c3b; }
+.combat-catalog-status.archived { color: #c5cad3; background: #48505d; }
+
+.combat-catalog-message,
+.combat-catalog-empty,
+.combat-catalog-empty-form {
+  margin: 16px 18px 20px;
+  color: #b6c6da;
+}
+
+@media (max-width: 1050px) {
+  .combat-catalog-layout { grid-template-columns: 1fr; }
+  .combat-catalog-list-panel { position: static; }
+  .combat-catalog-field-grid,
+  .combat-catalog-choice-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .combat-catalog-toolbar,
+  .combat-catalog-form-header,
+  .combat-catalog-group-heading { flex-direction: column; }
+  .combat-catalog-subtabs { flex-wrap: wrap; }
+  .combat-catalog-archived-toggle { width: 100%; margin-left: 0; }
+  .combat-catalog-field-grid,
+  .combat-catalog-choice-grid,
+  .combat-catalog-reserve-row { grid-template-columns: 1fr; }
+}
