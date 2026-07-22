@@ -21,12 +21,15 @@ Open this file after `docs/ai/TASK_ROUTER.md` when the task needs code-level ori
 | Physical movement runtime | `src/core/movement/MovementRuntime.ts`, `MovementMaterialAdapter.ts` | requested/effective authority, stamina fallback, material provider, movement sound, intent-owned weapon preparation |
 | Move order ownership | `src/core/orders/MoveOrder.ts` | player orders, stateful AI movement bridge, SimulationTick |
 | Map model | `src/core/map/MapModel.ts` | terrain, forest, JSON data |
-| Smooth terrain | `src/core/terrain/SmoothTerrain.ts` | line of sight, map renderer |
-| Visibility | `src/core/visibility/LineOfSight.ts` | terrain, forest, object height |
+| Map object geometry | `src/core/map/MapObjectGeometry.ts` | map model, object revisions, spatial index, navigation, visibility, cover, ballistics |
+| Map object spatial index | `src/core/spatial/MapObjectSpatialIndex.ts` | canonical object bounds, object-layer revision |
+| Smooth terrain | `src/core/terrain/SmoothTerrain.ts` | line of sight, map renderer, ballistics |
+| Visibility | `src/core/visibility/LineOfSight.ts`, `VisibilityStaticGrid.ts` | smooth terrain, canonical object geometry |
+| Ballistic geometry and pure line probe | `src/core/combat/BallisticTrace.ts`, `BallisticLineProbe.ts` | `BallisticRaycast.ts`, UnitHitShapes, smooth terrain, object spatial index |
 | Unit knowledge | `src/core/knowledge/UnitKnowledge.ts` | sensors, cover, overlays |
 | Threat memory | `src/core/knowledge/SoldierThreatMemory.ts` | pressure zones, awareness grid |
 | Awareness grid | `src/core/knowledge/SoldierAwarenessGrid.ts` | cover evaluation, memory, heatmap renderer |
-| Cover evaluation | `src/core/cover/SmallArmsCoverEvaluation.ts` | objects, forest, threat direction |
+| Cover evaluation | `src/core/cover/SmallArmsCoverEvaluation.ts` | canonical object geometry, object spatial index, forest, threat direction |
 | Pressure and danger | `src/core/pressure/PressureZone.ts`, `ThreatEvaluation.ts` | threat renderer, Blackboard |
 | Immediate AI evaluation | `src/core/ai/AiGraphRunner.ts` | graph, nodes, Blackboard, validation |
 | Multi-tick AI lifecycle | `src/core/ai/AiGraphRuntime.ts` | Runner, frozen targets, execution state, runtime smoke |
