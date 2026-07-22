@@ -10,7 +10,9 @@ import {
 } from '../../map/MapModel';
 import { getMapObjectHeightMetres } from '../../map/MapObjectGeometry';
 import { STATIC_TACTICAL_POSITION_BASIS_SNAPSHOT_VERSION } from './StaticTacticalPositionBasis';
-import { STATIC_TACTICAL_POSITION_ALGORITHM_VERSION } from './StaticTacticalPositionIdentity';
+import {
+  STATIC_TACTICAL_POSITION_ALGORITHM_VERSION,
+} from './StaticTacticalPositionIdentity';
 import {
   STATIC_TACTICAL_POSITION_SETTINGS_VERSION,
   staticTacticalPositionSettingsDigest,
@@ -47,7 +49,10 @@ interface CanonicalObjectRecord {
   readonly coverPosture: string;
 }
 
-/** Cross-session identity of the runtime-normalized static physical map. */
+/**
+ * Cross-session identity of the runtime-normalized static physical map.
+ * Runtime revisions, dates, jobs, units, threats and UI state are deliberately absent.
+ */
 export function createStaticTacticalPositionFingerprint(
   map: TacticalMap,
   settings: StaticTacticalPositionSettings,
@@ -115,15 +120,15 @@ function canonicalObjectRecord(object: MapObject): CanonicalObjectRecord {
   const cover = resolveObjectCoverProperties(object);
   return {
     kind: object.kind,
-    x: finite(object.x),
-    y: finite(object.y),
-    rotationRadians: normalizeRadians(object.rotationRadians),
-    widthCells: finite(object.widthCells),
-    heightCells: finite(object.heightCells),
-    losHeightMetres: getMapObjectHeightMetres(object),
-    coverProtection: finite(cover.coverProtection),
-    coverReliability: finite(cover.coverReliability),
-    concealment: finite(cover.concealment),
+    x: roundDecimal(object.x, 3),
+    y: roundDecimal(object.y, 3),
+    rotationRadians: normalizeRadians(degreesToRadians(roundDecimal(radiansToDegrees(object.rotationRadians), 1))),
+    widthCells: roundDecimal(object.widthCells, 3),
+    heightCells: roundDecimal(object.heightCells, 3),
+    losHeightMetres: roundDecimal(getMapObjectHeightMetres(object), 1),
+    coverProtection: roundDecimal(cover.coverProtection, 1),
+    coverReliability: roundDecimal(cover.coverReliability, 1),
+    concealment: roundDecimal(cover.concealment, 1),
     penetrable: cover.penetrable,
     coverPosture: cover.coverPosture,
   };
@@ -166,11 +171,28 @@ function writePhysicalEnvironmentProfile(writer: FingerprintWriter, profile: Env
 }
 
 function writeCanonicalValue(writer: FingerprintWriter, value: unknown): void {
-  if (value === null) { writer.byte(0); return; }
-  if (value === undefined) { writer.byte(1); return; }
-  if (typeof value === 'boolean') { writer.byte(value ? 3 : 2); return; }
-  if (typeof value === 'number') { writer.byte(4); writer.float64(value); return; }
-  if (typeof value === 'string') { writer.byte(5); writer.string(value); return; }
+  if (value === null) {
+    writer.byte(0);
+    return;
+  }
+  if (value === undefined) {
+    writer.byte(1);
+    return;
+  }
+  if (typeof value === 'boolean') {
+    writer.byte(value ? 3 : 2);
+    return;
+  }
+  if (typeof value === 'number') {
+    writer.byte(4);
+    writer.float64(value);
+    return;
+  }
+  if (typeof value === 'string') {
+    writer.byte(5);
+    writer.string(value);
+    return;
+  }
   if (Array.isArray(value)) {
     writer.byte(6);
     writer.uint32(value.length);
@@ -236,6 +258,19 @@ class FingerprintWriter {
   hex(): string {
     return `${this.left.toString(16).padStart(8, '0')}${this.right.toString(16).padStart(8, '0')}`;
   }
+}
+
+function roundDecimal(value: number, digits: number): number {
+  const multiplier = 10 ** digits;
+  return Math.round(finite(value) * multiplier) / multiplier;
+}
+
+function radiansToDegrees(value: number): number {
+  return finite(value) * 180 / Math.PI;
+}
+
+function degreesToRadians(value: number): number {
+  return finite(value) * Math.PI / 180;
 }
 
 function normalizeRadians(value: number): number {
