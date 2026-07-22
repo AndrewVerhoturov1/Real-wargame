@@ -149,12 +149,16 @@ export interface TacticalActionPortSolverDiagnostics {
   readonly ballisticProbes: number;
   readonly routeExpansions: number;
   readonly routeFieldBuilds: 1;
+  readonly routeExtent: number;
+  readonly routeFieldNodesAllocated: number;
   readonly routeBudgetExhausted: boolean;
   readonly visibilityBudgetExhausted: boolean;
   readonly ballisticBudgetExhausted: boolean;
   readonly objectsFromSpatialIndex: number;
   readonly navigationPositionChecks: number;
   readonly fullMapScans: 0;
+  readonly acceptedCandidatesBeforeLimit: number;
+  readonly acceptedCandidatesOmitted: number;
   readonly finalCandidates: number;
 }
 
@@ -173,6 +177,7 @@ interface RouteField {
   readonly spacingCells: number;
   readonly costs: Float64Array;
   readonly settled: Uint8Array;
+  readonly passability: Uint8Array;
   readonly expanded: number;
   readonly budgetExhausted: boolean;
   readonly navigationPositionChecks: number;
@@ -223,9 +228,11 @@ export function solveTacticalActionPorts(
     Math.max(0.125, soldierRadiusCells),
     Math.max(0.125, searchRadiusCells),
   );
+  const routeBounds = resolveLocalRouteBounds(searchRadiusCells, spacingCells, maxRouteExpansions);
+  const boundedSearchRadiusCells = Math.min(searchRadiusCells, routeBounds.extent * spacingCells);
   const nearbyObjects = [...getMapObjectSpatialIndex(request.map).queryCircle(
     request.anchor,
-    searchRadiusCells + soldierRadiusCells + spacingCells,
+    boundedSearchRadiusCells + soldierRadiusCells + spacingCells,
   )].sort(compareObjectsStable);
   const route = buildLocalRouteField(
     request,
@@ -234,6 +241,7 @@ export function solveTacticalActionPorts(
     soldierRadiusCells,
     spacingCells,
     maxRouteExpansions,
+    routeBounds,
   );
   const candidateNodes = generateCandidateNodes(
     request.anchor,
@@ -275,16 +283,8 @@ export function solveTacticalActionPorts(
     }
     const routeIndex = localNodeIndex(route, node.offsetX, node.offsetY);
     const routeReachable = routeIndex >= 0 && route.settled[routeIndex] === 1;
-    const navigation = baseReasons.length === 0
-      ? evaluateNavigationPosition(
-          request.map,
-          node.position,
-          soldierRadiusCells,
-          nearbyObjects,
-          request.environmentProfile,
-        )
-      : null;
-    if (baseReasons.length === 0 && navigation?.passable !== true) {
+    const routePassability = routeIndex >= 0 ? route.passability[routeIndex] ?? 0 : 0;
+    if (baseReasons.length === 0 && routePassability === 2) {
       baseReasons.push('navigation_blocked');
       rejectedByNavigation += 1;
     } else if (baseReasons.length === 0 && !routeReachable) {
@@ -354,12 +354,16 @@ export function solveTacticalActionPorts(
       ballisticProbes,
       routeExpansions: route.expanded,
       routeFieldBuilds: 1,
+      routeExtent: route.extent,
+      routeFieldNodesAllocated: route.side * route.side,
       routeBudgetExhausted: route.budgetExhausted,
       visibilityBudgetExhausted,
       ballisticBudgetExhausted,
       objectsFromSpatialIndex: nearbyObjects.length,
-      navigationPositionChecks: route.navigationPositionChecks + candidateNodes.length,
+      navigationPositionChecks: route.navigationPositionChecks,
       fullMapScans: 0,
+      acceptedCandidatesBeforeLimit: accepted.length,
+      acceptedCandidatesOmitted: Math.max(0, accepted.length - candidates.length),
       finalCandidates: candidates.length,
     }),
   });
@@ -372,12 +376,9 @@ function buildLocalRouteField(
   soldierRadiusCells: number,
   spacingCells: number,
   maximumExpansions: number,
+  bounds: LocalRouteBounds,
 ): RouteField {
-  const requestedExtent = Math.max(0, Math.ceil(searchRadiusCells / spacingCells));
-  const maximumNodesFromBudget = Math.max(9, maximumExpansions * 4);
-  const budgetExtent = Math.max(1, Math.floor((Math.sqrt(maximumNodesFromBudget) - 1) / 2));
-  const extent = Math.min(requestedExtent, budgetExtent, MAX_LOCAL_ROUTE_EXTENT);
-  const extentClamped = extent < requestedExtent;
+  const { extent, extentClamped } = bounds;
   const side = extent * 2 + 1;
   const count = side * side;
   const costs = new Float64Array(count);
@@ -484,10 +485,28 @@ function buildLocalRouteField(
     spacingCells,
     costs,
     settled,
+    passability,
     expanded,
     budgetExhausted: extentClamped || heap.length > 0,
     navigationPositionChecks,
   };
+}
+
+interface LocalRouteBounds {
+  readonly extent: number;
+  readonly extentClamped: boolean;
+}
+
+function resolveLocalRouteBounds(
+  searchRadiusCells: number,
+  spacingCells: number,
+  maximumExpansions: number,
+): LocalRouteBounds {
+  const requestedExtent = Math.max(0, Math.ceil(searchRadiusCells / spacingCells));
+  const maximumNodesFromBudget = Math.max(9, maximumExpansions * 4);
+  const budgetExtent = Math.max(1, Math.floor((Math.sqrt(maximumNodesFromBudget) - 1) / 2));
+  const extent = Math.min(requestedExtent, budgetExtent, MAX_LOCAL_ROUTE_EXTENT);
+  return { extent, extentClamped: extent < requestedExtent };
 }
 
 function generateCandidateNodes(
