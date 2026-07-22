@@ -171,7 +171,11 @@ expectNotContains(graphRunnerSources, 'SimulationState', 'GraphRunner не до�
 expectNotContains(graphRunnerSources, 'pixi.js', 'GraphRunner не должен зависеть от PixiJS.');
 expectNotContains(graphRunnerSources, 'localStorage', 'GraphRunner не должен читать localStorage напрямую.');
 
-const gameBridge = readText('src/core/ai/AiGameBridge.ts');
+const gameBridgeFacade = readText('src/core/ai/AiGameBridge.ts');
+const gameBridgeLegacy = readText('src/core/ai/AiGameBridgeLegacy.ts');
+const gameBridge = `${gameBridgeFacade}
+${gameBridgeLegacy}`;
+expectContains(gameBridgeFacade, "export * from './AiGameBridgeLegacy';", 'AI Game Bridge facade должен переэкспортировать полную реализацию.');
 expectContains(gameBridge, 'runAiGraph', 'Мост должен вызывать нормальный GraphRunner.');
 expectContains(gameBridge, 'createTacticalHost', 'Мост должен давать runner-у tactical callbacks.');
 expectContains(gameBridge, 'applyGraphEffects', 'Мост должен применять effects runner-а к UnitModel.');
@@ -182,7 +186,7 @@ expectContains(gameBridge, 'publishRuntimeDebugTrace', 'Мост должен п
 expectContains(gameBridge, 'cloneSimulationStateForDiagnostic', 'Диагностический мост должен работать на глубокой копии состояния.');
 expectContains(gameBridge, 'applyEffects: false', 'Selected-unit мост должен оставаться read-only диагностикой.');
 expectNotContains(gameBridge, 'setInterval(', 'Gameplay AI не должен иметь отдельный browser timer внутри bridge.');
-expectNotContains(gameBridge, 'case \'ParameterScore\'', 'Score-ноды не должны быть заглушками внутри bridge.');
+expectNotContains(gameBridge, "case 'ParameterScore'", 'Score-ноды не должны быть заглушками внутри bridge.');
 expectNotContains(gameBridge, 'is accepted by the game bridge but not used', 'Bridge больше не должен говорить, что score-ноды только допустимы.');
 
 const behaviorModel = readText('src/core/behavior/BehaviorModel.ts');

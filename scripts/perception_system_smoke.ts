@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import type { TacticalMapData } from '../src/core/map/MapModel';
+import { markMapCellsDirty } from '../src/core/map/MapRuntimeState';
 import { getCell, setCellVegetationMaterialId } from '../src/core/map/MapModel';
 import { setAttentionMode, setSearchSector, updateAttentionController } from '../src/core/perception/AttentionController';
 import {
@@ -141,6 +142,7 @@ for (let x = 7; x <= 11; x += 1) {
   assert.ok(cell);
   setCellVegetationMaterialId(cell, 'sparse_forest');
 }
+markMapCellsDirty(forestMap.map, 'forest', { minX: 7, minY: 5, maxX: 11, maxY: 5 });
 const forestObserver = forestMap.units[0];
 const partial = computeLineOfSight(forestMap.map, forestObserver, { x: 16.5, y: 5.5 });
 assert.equal(partial.blocked, false);
@@ -152,6 +154,7 @@ for (let x = 7; x <= 34; x += 1) {
   assert.ok(cell);
   setCellVegetationMaterialId(cell, 'dense_forest');
 }
+markMapCellsDirty(forestMap.map, 'forest', { minX: 7, minY: 5, maxX: 34, maxY: 5 });
 const dense = computeLineOfSight(forestMap.map, forestObserver, { x: 39.5, y: 5.5 });
 assert.equal(dense.blocked, true);
 assert.ok(dense.visualTransmission <= 0.04);
