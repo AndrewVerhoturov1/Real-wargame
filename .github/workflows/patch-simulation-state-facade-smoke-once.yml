@@ -1,5 +1,6 @@
 name: Patch Simulation State Facade Smoke Once
 
+# One-time semantic contract repair for the compatibility facade.
 on:
   push:
     branches:
