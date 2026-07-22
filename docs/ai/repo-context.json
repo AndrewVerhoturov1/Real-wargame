@@ -35,7 +35,7 @@
     "userShouldNotNeedGitOrTerminal": true
   },
   "activeSubprojects": [
-    "ai-single-unit-editor"
+    "infantry-combat-prototype-v1"
   ],
   "delivery": {
     "preferred": "feature-branch-with-explicit-manual-vercel-preview",
@@ -87,6 +87,7 @@
   "agentEntryPoints": [
     "AGENTS.md",
     "docs/ai/WEB_CHAT_START.md",
+    "docs/subprojects/infantry-combat-prototype-v1/STATUS.md",
     "docs/architecture/ENGINE_MIGRATION_READINESS.md",
     "docs/workflow/WEB_CHAT_FEATURE_DELIVERY.md",
     "docs/workflow/MANUAL_VERCEL_DEPLOYMENT.md",
@@ -99,5 +100,5 @@
     "pixiJs": ".agents/skills/real-wargame-pixijs/SKILL.md",
     "aiRuntime": ".agents/skills/real-wargame-ai-runtime/SKILL.md"
   },
-  "updatedAt": "2026-07-20"
+  "updatedAt": "2026-07-22"
 }
