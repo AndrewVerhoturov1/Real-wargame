@@ -3,7 +3,7 @@
 ## Состояние программы
 
 - **Программа:** новая система стрелкового боя.
-- **Статус:** этап 1A реализован исполнителем, проверен оркестратором и возвращён на корректирующий проход; приёмка не выполнена.
+- **Статус:** код этапа 1A и корректирующий проход проверены оркестратором; технических замечаний больше нет, но формальная приёмка заблокирована отсутствием обязательных общепроектных проверок.
 - **Оркестраторская ветка:** `planning/20260722-shooting-system-implementation`.
 - **Базовая ветка:** `real-wargame-preview`.
 - **Проверенный preview HEAD:** `fe0ba5f16d91bb765366c0ad56525684b3e47527`.
@@ -12,8 +12,8 @@
 - **Источник истины:** `docs/subprojects/infantry-combat-prototype-v1/SHOOTING_SYSTEM_ARCHITECTURE.md` из architecture-ветки.
 - **Расхождение preview с архитектурным baseline:** отсутствует.
 - **Рабочая ветка этапа 1A:** `feature/20260722-shooting-stage-01a-catalog-core`.
-- **Проверенный HEAD реализации:** `a99419d5143e2814936fde3a1645a9266a4412ce`.
-- **Сравнение с базой:** один commit впереди, ноль позади, 15 изменённых файлов.
+- **Проверенный HEAD реализации:** `2792b09378b16ce5efda95d441168465d8abab2b`.
+- **Сравнение с базой:** семь commits впереди, ноль позади, 15 изменённых файлов.
 - **Preview изменён:** нет.
 - **Main изменён:** нет.
 - **Deployment:** не запускался.
@@ -44,36 +44,58 @@
 |---|---|---|
 | 0. Архитектура | выполнен | `planning/20260722-shooting-system-architecture` @ `58309fd1...` |
 | План внедрения | подготовлен | `plans/2026-07-22-shooting-system-rebuild.md` |
-| 1A. Ядро каталогов | изменения запрошены | `feature/20260722-shooting-stage-01a-catalog-core` @ `a99419d...` |
-| 1B. Редакторы каталогов | заблокирован | только после формальной приёмки 1A |
+| 1A. Ядро каталогов | ожидает verification-only приёмки | `feature/20260722-shooting-stage-01a-catalog-core` @ `2792b093...` |
+| 1B. Редакторы каталогов | заблокирован | только после полного PASS этапа 1A |
 | 2A–3B | не начаты | coordinator, rifle shot и reload |
 | 4–15 | не начаты | последовательные независимые этапы |
 
 ## Проверка этапа 1A
 
-### Подтверждено
+### Подтверждено оркестратором
 
-- обязательный base SHA соблюдён;
-- ветка находится ровно на один commit впереди базы и не отстаёт;
-- изменены только catalog-core, четыре smoke-файла и три package commands;
+- обязательный preview SHA соблюдён;
+- рабочая ветка точно находится на `2792b09378b16ce5efda95d441168465d8abab2b`;
+- полный этап находится на семь commits впереди базы и не отстаёт;
+- полный diff содержит ровно 15 файлов этапа 1A;
+- корректирующий diff содержит шесть commits, шесть изменённых файлов и не содержит новых файлов;
 - runtime, save/load, UI, Graph v2, preview и main не затронуты;
 - основные обязательные типы и публичные имена присутствуют;
 - default definitions, exact revision lookup, defensive clone, transactional mutation и canonical serialization реализованы;
-- локальные целевые smoke по отчёту исполнителя прошли.
+- stable weapon/loadout больше не могут зависеть от mutable draft;
+- публикация с unstable dependency отклоняется до mutation;
+- archived exact targets остаются допустимыми;
+- multiple drafts одного definition ID запрещены для всех трёх каталогов;
+- validation issues для multiple drafts не зависят от порядка массивов;
+- `Date.now()` удалён из smoke wrappers;
+- по отчёту исполнителя узкие smoke, node syntax checks, детерминированный source scan и целевая TypeScript-проверка прошли.
 
-### Блокирующие замечания
+### Оставшийся блокер
 
-1. **Stable revision может зависеть от mutable draft.** Текущая reference validation принимает target любой status. Published/archived weapon может ссылаться на draft ammo, а published/archived loadout — на draft weapon. Последующее сохранение draft меняет фактический смысл опубликованной записи.
-2. **Validator допускает несколько draft одного ID.** Проверяется только уникальность `ID + revision`, хотя registry APIs предполагают единственный draft для definition ID.
-3. **В smoke wrappers используется wall-clock.** Оба `.mjs` применяют `Date.now()` для query suffix, несмотря на прямой запрет этапа.
-4. **Scope-процесс нарушен.** Помимо закрытого исходного списка без согласования созданы четыре дополнительных validation helper-файла. Оркестратор ретроспективно разрешил их сохранить как узкий внутренний scope amendment, но нарушение зафиксировано.
-5. **Общепроектные проверки отсутствуют.** `npm run typecheck` и `npm run build` не выполнялись. Они обязательны перед формальной приёмкой корректирующего HEAD.
+На полном рабочем дереве с установленными зависимостями ещё не выполнены:
 
-### Корректирующий промт
+```bash
+npm run combat-catalogs:smoke
+npm run typecheck
+npm run build
+node --check scripts/combat_catalog_core_smoke.mjs
+node --check scripts/combat_catalog_serialization_smoke.mjs
+grep -R -nE 'Date\.now|performance\.now|Math\.random|randomUUID' \
+  src/core/infantry-combat/catalogs \
+  scripts/combat_catalog_core_smoke.ts \
+  scripts/combat_catalog_core_smoke.mjs \
+  scripts/combat_catalog_serialization_smoke.ts \
+  scripts/combat_catalog_serialization_smoke.mjs
+git diff --check fe0ba5f16d91bb765366c0ad56525684b3e47527...HEAD
+git status --short
+```
 
-`docs/subprojects/infantry-combat-prototype-v1/prompts/stage-01a-catalog-core-review-fixes.md`
+Без полного PASS этой матрицы этап 1A формально не принимается и этап 1B не начинается.
 
-Исправления выполняются на той же рабочей ветке поверх `a99419d...`. Этап 1B не начинается.
+### Verification-only промт
+
+`docs/subprojects/infantry-combat-prototype-v1/prompts/stage-01a-verification-only.md`
+
+Верификатор не меняет код и проверяет точный HEAD `2792b093...` на полном checkout.
 
 ## Временные адаптеры
 
@@ -88,7 +110,7 @@
 
 ## Gates программы
 
-- Stage 1B не начинается до принятия 1A.
+- Stage 1B не начинается до полного PASS и формальной приёмки 1A.
 - Stage 2B не начинается до принятия 2A.
 - Stage 3A не начинается до принятия 1B и 2B.
 - Stage 3B не начинается до принятия 3A.
@@ -101,4 +123,4 @@
 
 ## Следующее действие оркестратора
 
-Передать корректирующий промт отдельному исполнителю. После нового отчёта повторно проверить branch HEAD, diff от `a99419d...` и от base, semantic invariants, full typecheck/build и catalog smoke. Оркестратор не реализует исправления вместо исполнителя.
+Передать verification-only промт отдельному верификатору. После отчёта `PASS` повторно подтвердить точный HEAD и чистый diff, формально принять 1A и только затем готовить исполнительский промт 1B. Оркестратор не выполняет 1B до этой приёмки.
