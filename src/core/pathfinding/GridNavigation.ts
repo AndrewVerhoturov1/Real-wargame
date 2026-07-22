@@ -4,9 +4,15 @@ import type {
   TacticalMap,
   TerrainKind,
 } from '../map/MapModel';
+import {
+  circleIntersectsMapObject,
+  getMapObjectBounds,
+  isPointInsideMapObject,
+} from '../map/MapObjectGeometry';
 import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
 import { getSurfaceMaterial } from '../map/EnvironmentMaterialProfile';
 import { getActiveEnvironmentProfile } from '../map/EnvironmentProfileRuntime';
+import { getMapObjectSpatialIndex } from '../spatial/MapObjectSpatialIndex';
 
 export const INFANTRY_NAVIGATION_RADIUS_CELLS = 0.18;
 
@@ -40,18 +46,6 @@ const HARD_BLOCKING_OBJECTS = new Set<MapObjectKind>([
 ]);
 
 const PASSABLE_OBJECTS = new Set<MapObjectKind>(['ditch', 'bridge']);
-
-const BODY_SAMPLES: ReadonlyArray<readonly [number, number]> = [
-  [0, 0],
-  [INFANTRY_NAVIGATION_RADIUS_CELLS, 0],
-  [-INFANTRY_NAVIGATION_RADIUS_CELLS, 0],
-  [0, INFANTRY_NAVIGATION_RADIUS_CELLS],
-  [0, -INFANTRY_NAVIGATION_RADIUS_CELLS],
-  [INFANTRY_NAVIGATION_RADIUS_CELLS * 0.70710678, INFANTRY_NAVIGATION_RADIUS_CELLS * 0.70710678],
-  [-INFANTRY_NAVIGATION_RADIUS_CELLS * 0.70710678, INFANTRY_NAVIGATION_RADIUS_CELLS * 0.70710678],
-  [INFANTRY_NAVIGATION_RADIUS_CELLS * 0.70710678, -INFANTRY_NAVIGATION_RADIUS_CELLS * 0.70710678],
-  [-INFANTRY_NAVIGATION_RADIUS_CELLS * 0.70710678, -INFANTRY_NAVIGATION_RADIUS_CELLS * 0.70710678],
-];
 
 export function buildNavigationGrid(map: TacticalMap): NavigationGrid {
   const bridgeMask = new Uint8Array(map.width * map.height);
@@ -109,12 +103,16 @@ export function isMapCellPassable(map: TacticalMap, x: number, y: number): boole
 
   const cell = map.cells[y * map.width + x];
   if (!cell) return false;
-  const bridge = map.objects.some((object) => object.kind === 'bridge' && objectOccupiesCell(object, x, y, false));
+  const center = navigationCellCenter(x, y);
+  const candidates = getMapObjectSpatialIndex(map).queryCircle(center, INFANTRY_NAVIGATION_RADIUS_CELLS);
+  const bridge = candidates.some((object) => (
+    object.kind === 'bridge' && isPointInsideMapObject(object, center)
+  ));
   const surface = getSurfaceMaterial(getActiveEnvironmentProfile(), cell.surfaceMaterialId);
   if (!surface.movement.passable && !bridge) return false;
-  return !map.objects.some((object) => (
+  return !candidates.some((object) => (
     isMapObjectMovementBlocking(object.kind)
-    && objectOccupiesCell(object, x, y, true)
+    && circleIntersectsMapObject(object, center, INFANTRY_NAVIGATION_RADIUS_CELLS)
   ));
 }
 
@@ -154,14 +152,12 @@ function markObjectCells(
   mark: (index: number) => void,
   includeBodyRadius: boolean,
 ): void {
-  const centerX = object.x + 0.5;
-  const centerY = object.y + 0.5;
-  const radius = Math.hypot(object.widthCells, object.heightCells) / 2
-    + (includeBodyRadius ? INFANTRY_NAVIGATION_RADIUS_CELLS : 0);
-  const minX = clamp(Math.floor(centerX - radius - 1), 0, map.width - 1);
-  const maxX = clamp(Math.floor(centerX + radius + 1), 0, map.width - 1);
-  const minY = clamp(Math.floor(centerY - radius - 1), 0, map.height - 1);
-  const maxY = clamp(Math.floor(centerY + radius + 1), 0, map.height - 1);
+  const bounds = getMapObjectBounds(object);
+  const padding = includeBodyRadius ? INFANTRY_NAVIGATION_RADIUS_CELLS : 0;
+  const minX = clamp(Math.floor(bounds.minX - padding), 0, map.width - 1);
+  const maxX = clamp(Math.floor(bounds.maxX + padding), 0, map.width - 1);
+  const minY = clamp(Math.floor(bounds.minY - padding), 0, map.height - 1);
+  const maxY = clamp(Math.floor(bounds.maxY + padding), 0, map.height - 1);
 
   for (let y = minY; y <= maxY; y += 1) {
     for (let x = minX; x <= maxX; x += 1) {
@@ -177,27 +173,10 @@ function objectOccupiesCell(
   cellY: number,
   includeBodyRadius: boolean,
 ): boolean {
-  const centerX = cellX + 0.5;
-  const centerY = cellY + 0.5;
-  const samples = includeBodyRadius ? BODY_SAMPLES : BODY_SAMPLES.slice(0, 1);
-  return samples.some(([offsetX, offsetY]) => pointInsideRotatedObject(
-    centerX + offsetX,
-    centerY + offsetY,
-    object,
-  ));
-}
-
-function pointInsideRotatedObject(x: number, y: number, object: MapObject): boolean {
-  const objectCenterX = object.x + 0.5;
-  const objectCenterY = object.y + 0.5;
-  const dx = x - objectCenterX;
-  const dy = y - objectCenterY;
-  const cosine = Math.cos(-object.rotationRadians);
-  const sine = Math.sin(-object.rotationRadians);
-  const localX = dx * cosine - dy * sine;
-  const localY = dx * sine + dy * cosine;
-  return Math.abs(localX) <= object.widthCells / 2
-    && Math.abs(localY) <= object.heightCells / 2;
+  const center = navigationCellCenter(cellX, cellY);
+  return includeBodyRadius
+    ? circleIntersectsMapObject(object, center, INFANTRY_NAVIGATION_RADIUS_CELLS)
+    : isPointInsideMapObject(object, center);
 }
 
 function terrainMovementCost(
