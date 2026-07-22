@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { evaluateFireRequest, getMuzzlePoint } from '../src/core/combat/CombatDecision';
 import { resolveDirectFireSolution } from '../src/core/combat/DirectFireSolution';
 import { createInitialState } from '../src/core/simulation/SimulationState';
+import { sampleSmoothHeightLevel } from '../src/core/terrain/SmoothTerrain';
 import { soldierPostureHeightMeters } from '../src/core/visibility/VisibilityPosture';
 import { probeTargetVisibility } from '../src/core/visibility/VisibilityTargetProbe';
 import type { UnitModel } from '../src/core/units/UnitModel';
@@ -56,10 +57,12 @@ for (let y = 4; y <= 6; y += 1) {
 }
 
 const eyeHeight = soldierPostureHeightMeters(shooter.behaviorRuntime.posture);
+const localGroundMetres = sampleSmoothHeightLevel(state.map, shooter.position.x, shooter.position.y) * 2;
 const muzzle = getMuzzlePoint(state, shooter);
+const muzzleHeightAboveGround = muzzle.zMetres - localGroundMetres;
 assert.ok(
-  eyeHeight - muzzle.zMetres >= 0.04 && eyeHeight - muzzle.zMetres <= 0.1,
-  `shouldered rifle muzzle must stay close below eye line; eye=${eyeHeight}, muzzle=${muzzle.zMetres}`,
+  eyeHeight - muzzleHeightAboveGround >= 0.04 && eyeHeight - muzzleHeightAboveGround <= 0.1,
+  `shouldered rifle muzzle must stay close below eye line; eye=${eyeHeight}, muzzle=${muzzleHeightAboveGround}`,
 );
 
 const visibility = probeTargetVisibility(
