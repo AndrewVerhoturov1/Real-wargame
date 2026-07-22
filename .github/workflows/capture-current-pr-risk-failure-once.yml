@@ -1,5 +1,6 @@
 name: Capture Current PR Risk Failure Once
 
+# One-time diagnostic trigger: 2026-07-22
 on:
   push:
     branches:
