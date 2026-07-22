@@ -1,0 +1,114 @@
+name: Verification Only - Shooting Stage 01A
+
+on:
+  push:
+    branches:
+      - ci/verify-shooting-stage-01a-2792b093
+  pull_request:
+    branches:
+      - real-wargame-preview
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  exact-stage-01a-matrix:
+    name: Exact Stage 01A verification matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact product commit with full history
+        uses: actions/checkout@v4
+        with:
+          ref: 2792b09378b16ce5efda95d441168465d8abab2b
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Verify exact immutable source
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_head="$(git rev-parse HEAD)"
+          expected_head="2792b09378b16ce5efda95d441168465d8abab2b"
+          expected_preview="fe0ba5f16d91bb765366c0ad56525684b3e47527"
+          printf 'HEAD=%s\n' "$actual_head"
+          printf 'PREVIEW=%s\n' "$expected_preview"
+          test "$actual_head" = "$expected_head"
+          git cat-file -e "$expected_preview^{commit}"
+          git merge-base --is-ancestor "$expected_preview" "$actual_head"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run exact verification matrix
+        id: matrix
+        shell: bash
+        run: |
+          set +e
+          report="$RUNNER_TEMP/stage-01a-verification.txt"
+          overall=0
+          : > "$report"
+
+          run_zero() {
+            local command="$1"
+            {
+              echo "COMMAND: $command"
+              bash -o pipefail -c "$command"
+              code=$?
+              echo "EXIT_CODE: $code"
+              echo
+            } 2>&1 | tee -a "$report"
+            code=${PIPESTATUS[0]}
+            if [ "$code" -ne 0 ]; then overall=1; fi
+          }
+
+          run_one() {
+            local command="$1"
+            {
+              echo "COMMAND: $command"
+              bash -o pipefail -c "$command"
+              code=$?
+              echo "EXIT_CODE: $code (expected 1)"
+              echo
+              exit "$code"
+            } 2>&1 | tee -a "$report"
+            code=${PIPESTATUS[0]}
+            if [ "$code" -ne 1 ]; then overall=1; fi
+          }
+
+          run_zero 'npm run combat-catalogs:smoke'
+          run_zero 'npm run typecheck'
+          run_zero 'npm run build'
+          run_zero 'node --check scripts/combat_catalog_core_smoke.mjs'
+          run_zero 'node --check scripts/combat_catalog_serialization_smoke.mjs'
+          run_one "grep -R -nE 'Date\\.now|performance\\.now|Math\\.random|randomUUID' src/core/infantry-combat/catalogs scripts/combat_catalog_core_smoke.ts scripts/combat_catalog_core_smoke.mjs scripts/combat_catalog_serialization_smoke.ts scripts/combat_catalog_serialization_smoke.mjs"
+          run_zero 'git diff --check fe0ba5f16d91bb765366c0ad56525684b3e47527...HEAD'
+
+          status_output="$(git status --short)"
+          status_code=$?
+          {
+            echo 'COMMAND: git status --short'
+            printf '%s' "$status_output"
+            if [ -n "$status_output" ]; then echo; fi
+            echo "EXIT_CODE: $status_code"
+            echo
+          } | tee -a "$report"
+          if [ "$status_code" -ne 0 ] || [ -n "$status_output" ]; then overall=1; fi
+
+          echo "OVERALL_EXIT_CODE: $overall" | tee -a "$report"
+          cp "$report" stage-01a-verification.txt
+          exit "$overall"
+
+      - name: Upload verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shooting-stage-01a-verification-2792b093
+          path: stage-01a-verification.txt
+          if-no-files-found: error
