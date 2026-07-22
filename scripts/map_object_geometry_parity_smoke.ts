@@ -46,11 +46,21 @@ const rotatedObject = rotated.objects[0]!;
 assert.equal(isPointInsideMapObject(rotatedObject, { x: 12.5, y: 9.5 }), true);
 assert.equal(mapObjectIntersectsRect(rotatedObject, { minX: 12, minY: 9, maxX: 13, maxY: 10 }), true);
 assert.equal(getMapObjectSpatialIndex(rotated).queryPoint(12.5, 9.5)[0]?.id, 'rotated');
+assert.equal(buildNavigationGrid(rotated).cells[9 * rotated.width + 12]?.blockedByObjectId, 'rotated');
 assert.equal(getVisibilityStaticGrid(rotated).blockingFlags[9 * rotated.width + 12], 1);
+const rotatedShot = traceBallisticRay(createBallisticTraceContext(rotated, []), rayInput(8.5, 9.5, 16.5, 9.5, 1));
+assert.equal(rotatedShot.hitObjectId, 'rotated');
 
 const boundary = makeMap([{ id: 'boundary', kind: 'post', x: 0, y: 0, widthCells: 1, heightCells: 1, losHeightMeters: 2 }]);
 assert.equal(getMapObjectSpatialIndex(boundary).queryPoint(0.5, 0.5)[0]?.id, 'boundary');
 assert.equal(buildNavigationGrid(boundary).cells[0]?.blockedByObjectId, 'boundary');
+
+const neighbours = makeMap([
+  { id: 'left', kind: 'structure', x: 4, y: 3, widthCells: 1, heightCells: 1, losHeightMeters: 2 },
+  { id: 'right', kind: 'structure', x: 5, y: 3, widthCells: 1, heightCells: 1, losHeightMeters: 2 },
+]);
+assert.deepEqual(getMapObjectSpatialIndex(neighbours).queryPoint(4.5, 3.5).map((object) => object.id), ['left']);
+assert.deepEqual(getMapObjectSpatialIndex(neighbours).queryPoint(5.5, 3.5).map((object) => object.id), ['right']);
 
 const overlappingA = makeMap([
   { id: 'b', kind: 'structure', x: 6, y: 5, widthCells: 2, heightCells: 2, losHeightMeters: 2 },
