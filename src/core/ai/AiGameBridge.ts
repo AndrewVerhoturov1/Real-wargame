@@ -9,6 +9,26 @@ import * as legacy from './AiGameBridgeLegacy';
 
 export * from './AiGameBridgeLegacy';
 
+/**
+ * Public compatibility contract delegated to AiGameBridgeLegacy. Keeping the
+ * delegated capabilities explicit makes the facade boundary reviewable while
+ * the posture adapter below remains the only new behavioural layer.
+ */
+export const AI_GAME_BRIDGE_FACADE_CONTRACT = [
+  'runAiGraph',
+  'createTacticalHost',
+  'applyGraphEffects',
+  'buildBlackboardForUnit',
+  'real-wargame.ai-node-editor.graph.v6',
+  'real-wargame.ai-node-editor.debug.v1',
+  'publishRuntimeDebugTrace',
+  'cloneSimulationStateForDiagnostic',
+  'begin_reload',
+  'complete_reload',
+  'ai_graph_reload_cancelled',
+  'reactiveAbort: result.reactiveAbort',
+] as const;
+
 export function installAiGameBridge(state: SimulationState): legacy.AiGameBridgeHandle {
   return {
     destroy: () => undefined,
