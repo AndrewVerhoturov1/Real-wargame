@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { evaluateSmallArmsCover } from '../src/core/cover/SmallArmsCoverEvaluation';
 import {
   getMapObjectBounds,
   getMapObjectCenter,
@@ -28,6 +29,8 @@ const navigation = buildNavigationGrid(wide);
 assert.equal(isNavigationCellPassable(navigation, 8, 5), false, 'navigation must block at the rendered object center');
 const visibility = getVisibilityStaticGrid(wide);
 assert.equal(visibility.blockingFlags[5 * wide.width + 8], 1, 'visibility must rasterize the same occupied cell');
+const cover = evaluateSmallArmsCover(wide, { x: 2.5, y: 5.5 }, { x: 14.5, y: 5.5 }, 'standing');
+assert.equal(cover.object?.id, 'wide', 'cover evaluation must intersect the same object footprint');
 
 const crossing = traceBallisticRay(createBallisticTraceContext(wide, []), rayInput(2.5, 5.5, 14.5, 5.5, 1));
 assert.equal(crossing.hitType, 'object');
