@@ -6,6 +6,7 @@ const EDITOR_CONTROL_SELECTOR = [
   '.developer-json-details',
   '.ai-debug-panel-dock',
   '.app-shell-menu',
+  '.combat-catalog-editor',
   'select',
   'input',
   'textarea',
