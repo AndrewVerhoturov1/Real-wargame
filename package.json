@@ -64,6 +64,8 @@
     "combat-catalog-core:smoke": "node scripts/combat_catalog_core_smoke.mjs",
     "combat-catalog-serialization:smoke": "node scripts/combat_catalog_serialization_smoke.mjs",
     "combat-catalogs:smoke": "npm run combat-catalog-core:smoke && npm run combat-catalog-serialization:smoke",
+    "combat-catalog-storage:smoke": "node scripts/combat_catalog_storage_smoke.mjs",
+    "combat-catalog-editor:smoke": "node scripts/combat_catalog_editor_smoke.mjs",
     "perception:smoke": "node scripts/perception_system_smoke.mjs && node scripts/rear_attention_perception_smoke.mjs",
     "rear-attention:smoke": "node scripts/rear_attention_perception_smoke.mjs",
     "perception-performance:smoke": "node scripts/perception_performance_smoke.mjs",
