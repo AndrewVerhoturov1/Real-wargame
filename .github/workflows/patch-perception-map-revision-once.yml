@@ -1,0 +1,108 @@
+name: Patch Perception Map Revision Once
+
+on:
+  push:
+    branches:
+      - feature/20260721-tactical-position-basis
+    paths:
+      - .github/workflows/patch-perception-map-revision-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TARGET_BRANCH: feature/20260721-tactical-position-basis
+      EXPECTED_HEAD: ${{ github.sha }}
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/20260721-tactical-position-basis
+          fetch-depth: 0
+
+      - name: Verify branch has not moved
+        run: |
+          set -euo pipefail
+          remote_head="$(git ls-remote origin "refs/heads/${TARGET_BRANCH}" | cut -f1)"
+          [[ "$remote_head" == "$EXPECTED_HEAD" ]] || {
+            echo "Refusing patch: expected branch head $EXPECTED_HEAD, found $remote_head." >&2
+            exit 1
+          }
+
+      - name: Mark vegetation edits dirty in perception fixture
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/perception_system_smoke.ts')
+          source = path.read_text(encoding='utf-8')
+          import_anchor = "import type { TacticalMapData } from '../src/core/map/MapModel';\n"
+          import_line = "import { markMapCellsDirty } from '../src/core/map/MapRuntimeState';\n"
+          if import_line not in source:
+              if source.count(import_anchor) != 1:
+                  raise SystemExit(f'Expected one map import anchor, found {source.count(import_anchor)}')
+              source = source.replace(import_anchor, import_anchor + import_line)
+
+          sparse_anchor = """for (let x = 7; x <= 11; x += 1) {
+            const cell = getCell(forestMap.map, x, 5);
+            assert.ok(cell);
+            setCellVegetationMaterialId(cell, 'sparse_forest');
+          }
+          const forestObserver = forestMap.units[0];""".replace('          ', '')
+          sparse_replacement = """for (let x = 7; x <= 11; x += 1) {
+            const cell = getCell(forestMap.map, x, 5);
+            assert.ok(cell);
+            setCellVegetationMaterialId(cell, 'sparse_forest');
+          }
+          markMapCellsDirty(forestMap.map, 'forest', { minX: 7, minY: 5, maxX: 11, maxY: 5 });
+          const forestObserver = forestMap.units[0];""".replace('          ', '')
+          if source.count(sparse_anchor) != 1:
+              raise SystemExit(f'Expected one sparse fixture anchor, found {source.count(sparse_anchor)}')
+          source = source.replace(sparse_anchor, sparse_replacement)
+
+          dense_anchor = """for (let x = 7; x <= 34; x += 1) {
+            const cell = getCell(forestMap.map, x, 5);
+            assert.ok(cell);
+            setCellVegetationMaterialId(cell, 'dense_forest');
+          }
+          const dense = computeLineOfSight""".replace('          ', '')
+          dense_replacement = """for (let x = 7; x <= 34; x += 1) {
+            const cell = getCell(forestMap.map, x, 5);
+            assert.ok(cell);
+            setCellVegetationMaterialId(cell, 'dense_forest');
+          }
+          markMapCellsDirty(forestMap.map, 'forest', { minX: 7, minY: 5, maxX: 34, maxY: 5 });
+          const dense = computeLineOfSight""".replace('          ', '')
+          if source.count(dense_anchor) != 1:
+              raise SystemExit(f'Expected one dense fixture anchor, found {source.count(dense_anchor)}')
+          source = source.replace(dense_anchor, dense_replacement)
+
+          path.write_text(source, encoding='utf-8')
+          PY
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify perception and posture regressions
+        run: |
+          npm run perception:smoke
+          npm run posture-transition:smoke
+          npm run typecheck
+
+      - name: Commit verified fixture fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/perception_system_smoke.ts
+          git commit -m "test: invalidate visibility cache after vegetation edits [skip ci]"
+          git push origin HEAD:feature/20260721-tactical-position-basis
