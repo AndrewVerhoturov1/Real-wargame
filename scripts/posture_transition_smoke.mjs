@@ -31,7 +31,10 @@ async function run() {
       'src/ui/GameEditorWorkbench.ts',
     ].map((value) => `    '${value}',`).join('\n');
     await writeFile(adaptedSmoke, source.replace(marker, `${marker}\n${compatibilityPaths}`));
-    await writeFile(adaptedSuite, "import './.tmp-posture-transition-smoke';\nimport './posture_transition_route_smoke';\n");
+    await writeFile(
+      adaptedSuite,
+      "import './.tmp-posture-transition-smoke';\nimport './posture_transition_route_smoke';\nimport './player_posture_movement_sync_smoke';\n",
+    );
     await build({
       root,
       logLevel: 'warn',
