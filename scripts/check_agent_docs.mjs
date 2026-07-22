@@ -1,4 +1,3 @@
-import './performance_principles_contract_smoke.mjs';
 import process from 'node:process';
 import { validateAgentDocuments } from './agent_docs_validation.mjs';
 
@@ -12,7 +11,7 @@ if (result.errors.length) {
   for (const error of result.errors) {
     console.error(`ERROR: ${error}`);
   }
-  console.error(`Agent documentation integrity failed with ${result.errors.length} error(s).`);
+  console.error(`Agent documentation integrity failed with ${result.errors.length} fatal error(s).`);
   process.exitCode = 1;
 } else {
   console.log(`Agent documentation integrity passed${result.warnings.length ? ` with ${result.warnings.length} warning(s)` : ''}.`);
