@@ -24,7 +24,7 @@ Generated from canonical repository and subproject metadata.
 
 - **ID:** `infantry-combat-prototype-v1`
 - **Updated:** 2026-07-22
-- **Current focus:** Этап 1: каноническая геометрия объектов и чистая баллистическая проба перенесены в real-wargame-preview. Следующая работа — сохраняемый статический предрасчёт карты и локальные рабочие точки позиции.
-- **Next step:** Реализовать версионированный предрасчёт статической тактической основы и чистый ограниченный решатель рабочих точек наблюдения и огня.
-- **Last verified commit:** `8a2b3b5bb344eaafa41871315c51b07e98eb9eb3`
+- **Current focus:** Этап 1: сохраняемый статический предрасчёт и чистый решатель локальных рабочих точек проверены и перенесены в real-wargame-preview. Текущая работа — физическое выполнение временного действия от защищённого якоря.
+- **Next step:** Реализовать общий runtime anchor → action port → требуемая поза → observation/fire → return с отменой, сохранением и диагностикой.
+- **Last verified commit:** `86071bb3d0c4ebd95adf4e87ee4d575fa7108da3`
 - **Status:** [generated status](../subprojects/infantry-combat-prototype-v1/STATUS.md)
