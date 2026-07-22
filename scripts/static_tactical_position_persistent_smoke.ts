@@ -28,6 +28,7 @@ verifyRoundTrip();
 verifyOldSceneCompatibility();
 verifyFingerprintStabilityAndInvalidation();
 verifyArtifactRejections();
+verifyRejectedArtifactsDoNotChangeActiveSettings();
 verifyServiceHitAndStaleExport();
 await verifyCoalescingAndStaleWorkerRejection();
 verifySourceContracts();
@@ -106,6 +107,60 @@ function verifyArtifactRejections(): void {
   const algorithmResult = decodeStaticTacticalPositionArtifact(wrongAlgorithm, fingerprint, runtimeIdentity);
   assert.equal(algorithmResult.ok, false);
   if (!algorithmResult.ok) assert.equal(algorithmResult.reason, 'algorithm_version');
+}
+
+function verifyRejectedArtifactsDoNotChangeActiveSettings(): void {
+  const customSettings = {
+    ...settings,
+    geometry: {
+      ...settings.geometry,
+      immediateClearanceMeters: settings.geometry.immediateClearanceMeters + 1,
+    },
+  };
+  const customIdentity = createStaticTacticalPositionBasisIdentity(map, customSettings);
+  const customSnapshot = buildHighQualityStaticTacticalPositionBasis(map, customIdentity, customSettings).snapshot;
+  const customFingerprint = createStaticTacticalPositionFingerprint(map, customSettings, profile);
+  const customArtifact = encodeStaticTacticalPositionArtifact(customSnapshot, customFingerprint);
+
+  const rejectedCases: ReadonlyArray<readonly [string, (value: any) => void]> = [
+    ['unknown format version', (value) => { value.version += 1; }],
+    ['unknown settings version', (value) => { value.settingsVersion += 1; }],
+    ['missing settings', (value) => { delete value.settings; }],
+    ['invalid settings structure', (value) => { value.settings.geometry = null; }],
+    ['invalid settings digest', (value) => { value.settingsDigest = 'deadbeef'; }],
+    ['corrupted manifest', (value) => { value.payload.arrays[1].byteOffset = value.payload.arrays[0].byteOffset; }],
+    ['corrupted payload', (value) => { value.payload.data = `${value.payload.data.slice(0, -4)}AAAA`; }],
+    ['unsupported candidate index structure', (value) => { value.candidateIndex.version += 1; }],
+  ];
+
+  for (const [label, corrupt] of rejectedCases) {
+    const service = new StaticTacticalPositionService({ map: testMap() } as SimulationState);
+    const before = service.getDiagnostics().settingsRevision;
+    const rejected = structuredClone(customArtifact) as any;
+    corrupt(rejected);
+    const result = service.hydratePersistentArtifact(rejected);
+    assert.equal(result.ok, false, `${label} must be rejected`);
+    assert.equal(
+      service.getDiagnostics().settingsRevision,
+      before,
+      `${label} must not change active service settings`,
+    );
+    service.destroy();
+  }
+
+  const mismatchedMap = testMap();
+  mismatchedMap.objects[0]!.x += 1;
+  const missService = new StaticTacticalPositionService({ map: mismatchedMap } as SimulationState);
+  const beforeMiss = missService.getDiagnostics().settingsRevision;
+  const miss = missService.hydratePersistentArtifact(customArtifact);
+  assert.equal(miss.ok, false, 'valid artifact for another map must miss');
+  if (!miss.ok) assert.equal(miss.reason, 'fingerprint');
+  assert.equal(
+    missService.getDiagnostics().settingsRevision,
+    beforeMiss + 1,
+    'fully valid artifact with a map fingerprint miss must preserve its settings for rebuild',
+  );
+  missService.destroy();
 }
 
 function verifyServiceHitAndStaleExport(): void {
