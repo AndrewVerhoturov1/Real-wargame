@@ -14,27 +14,30 @@
 
 ## Current focus
 
-Этап 1: оптимизация выбора тактических позиций. Физическая длительная смена позы принята и находится в real-wargame-preview.
+Этап 1: каноническая геометрия объектов и чистая баллистическая проба перенесены в real-wargame-preview. Следующая работа — сохраняемый статический предрасчёт карты и локальные рабочие точки позиции.
 
 ## Next step
 
-Закончить оптимизацию поиска и диагностику выбора; затем закрыть этап 1 и перейти к стрелковому бою.
+Реализовать версионированный предрасчёт статической тактической основы и чистый ограниченный решатель рабочих точек наблюдения и огня.
 
 ## Read first
 
 - `AGENTS.md`
 - `docs/subprojects/infantry-combat-prototype-v1/ROADMAP.md`
 - `plans/2026-07-22-tactical-position-basis.md`
+- `docs/subprojects/infantry-combat-prototype-v1/MAP_OBJECT_GEOMETRY_AND_BALLISTIC_LINE_PROBE.md`
 - `docs/subprojects/infantry-combat-prototype-v1/ACCEPTANCE.md`
 - `docs/subprojects/infantry-combat-prototype-v1/DECISIONS.md`
 - `docs/subprojects/infantry-combat-prototype-v1/WORKLOG.md`
 
 ## Main files
 
+- `src/core/tactical/static/StaticTacticalPositionBasis.ts`
+- `src/core/tactical/static/StaticTacticalPositionService.ts`
+- `src/core/tactical/static/StaticTacticalCandidateIndex.ts`
 - `src/core/tactical/TacticalPositionSearchService.ts`
-- `src/core/units/UnitModel.ts`
-- `src/core/simulation/SimulationTick.ts`
-- `src/core/ai/AiGraphRuntime.ts`
+- `src/core/map/MapObjectGeometry.ts`
+- `src/core/combat/BallisticLineProbe.ts`
 
 ## Suggested verification
 
