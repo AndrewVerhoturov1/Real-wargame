@@ -1,13 +1,13 @@
 import type { GridPosition } from '../geometry';
+import {
+  getMapObjectBounds,
+  mapObjectBoundsOverlap,
+  type MapObjectBounds,
+} from '../map/MapObjectGeometry';
 import type { MapObject, TacticalMap } from '../map/MapModel';
 import { getMapLayerRevision } from '../map/MapRuntimeState';
 
-export interface MapObjectBounds {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-}
+export { getMapObjectBounds, type MapObjectBounds } from '../map/MapObjectGeometry';
 
 export interface MapObjectSpatialIndexDiagnostics {
   objectsRevision: number;
@@ -58,7 +58,7 @@ export class MapObjectSpatialIndex {
 
     const filtered = new Set<MapObject>();
     for (const object of candidates) {
-      if (boundsOverlap(getMapObjectBounds(object), bounds)) filtered.add(object);
+      if (mapObjectBoundsOverlap(getMapObjectBounds(object), bounds)) filtered.add(object);
     }
     return this.sortCandidates(filtered);
   }
@@ -148,30 +148,6 @@ export function getMapObjectSpatialIndexDiagnostics(map: TacticalMap): MapObject
     };
   }
   return { ...existing.diagnostics };
-}
-
-export function getMapObjectBounds(object: MapObject): MapObjectBounds {
-  const halfWidth = Math.max(0.05, object.widthCells / 2);
-  const halfHeight = Math.max(0.05, object.heightCells / 2);
-  const cos = Math.abs(Math.cos(object.rotationRadians));
-  const sin = Math.abs(Math.sin(object.rotationRadians));
-  const extentX = cos * halfWidth + sin * halfHeight;
-  const extentY = sin * halfWidth + cos * halfHeight;
-  const centerX = object.x + 0.5;
-  const centerY = object.y + 0.5;
-  return {
-    minX: centerX - extentX,
-    minY: centerY - extentY,
-    maxX: centerX + extentX,
-    maxY: centerY + extentY,
-  };
-}
-
-function boundsOverlap(left: MapObjectBounds, right: MapObjectBounds): boolean {
-  return left.maxX >= right.minX
-    && left.minX <= right.maxX
-    && left.maxY >= right.minY
-    && left.minY <= right.maxY;
 }
 
 function instrumentQueries(

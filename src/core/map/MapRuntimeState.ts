@@ -1,3 +1,4 @@
+import { getMapObjectBounds } from './MapObjectGeometry';
 import type { MapObject, TacticalMap } from './MapModel';
 
 export type MapRevisionLayer = 'terrain' | 'height' | 'forest' | 'objects';
@@ -116,20 +117,7 @@ export function fullMapRegion(map: TacticalMap): MapDirtyRegion {
 }
 
 export function getMapObjectDirtyRegion(map: TacticalMap, object: MapObject): MapDirtyRegion {
-  const halfWidth = Math.max(0.05, object.widthCells / 2);
-  const halfHeight = Math.max(0.05, object.heightCells / 2);
-  const cos = Math.abs(Math.cos(object.rotationRadians));
-  const sin = Math.abs(Math.sin(object.rotationRadians));
-  const extentX = cos * halfWidth + sin * halfHeight;
-  const extentY = sin * halfWidth + cos * halfHeight;
-  const centerX = object.x + 0.5;
-  const centerY = object.y + 0.5;
-  return clampRegionToMap(map, {
-    minX: centerX - extentX,
-    minY: centerY - extentY,
-    maxX: centerX + extentX,
-    maxY: centerY + extentY,
-  });
+  return clampRegionToMap(map, getMapObjectBounds(object));
 }
 
 function getRuntimeState(map: TacticalMap): MapRuntimeState {

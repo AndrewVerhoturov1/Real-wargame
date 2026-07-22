@@ -1,5 +1,6 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
 import { distance, type GridPosition } from '../geometry';
+import { getMapObjectCenter, intersectSegmentWithMapObject } from '../map/MapObjectGeometry';
 import {
   getCell,
   resolveObjectCoverProperties,
@@ -7,6 +8,7 @@ import {
   type TacticalMap,
 } from '../map/MapModel';
 import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
+import { getMapObjectSpatialIndex } from '../spatial/MapObjectSpatialIndex';
 
 export interface SmallArmsCoverContribution {
   kind: 'object' | 'forest' | 'relief';
@@ -88,17 +90,18 @@ function evaluateObjectCover(
   posture: UnitPosture,
 ): SmallArmsCoverContribution[] {
   const results: SmallArmsCoverContribution[] = [];
+  const candidates = getMapObjectSpatialIndex(map).querySegment(threatPosition, targetPosition, 0);
 
-  for (const object of map.objects) {
+  for (const object of candidates) {
     const properties = resolveObjectCoverProperties(object);
     if (!postureFitsCover(posture, properties.coverPosture)) continue;
+    const footprint = intersectSegmentWithMapObject(object, threatPosition, targetPosition);
+    if (!footprint || footprint.exitT <= 0.035 || footprint.entryT >= 0.985) continue;
 
-    const center = objectCenter(object);
+    const center = getMapObjectCenter(object);
     const segment = distanceToSegment(center, threatPosition, targetPosition);
     const hitRadius = Math.max(0.28, Math.min(object.widthCells, object.heightCells) * 0.72);
-    if (segment.t <= 0.035 || segment.t >= 0.985 || segment.distance > hitRadius) continue;
-
-    const angleReliability = clampPercent(100 - (segment.distance / hitRadius) * 52);
+    const angleReliability = clampPercent(100 - Math.min(1, segment.distance / hitRadius) * 52);
     const sizeReliability = clampPercent(35 + Math.min(55, Math.max(object.widthCells, object.heightCells) * 18));
     const baseReliability = properties.coverReliability;
     const reliability = clampPercent(baseReliability * 0.55 + angleReliability * 0.3 + sizeReliability * 0.15);
@@ -215,13 +218,6 @@ export function evaluateReliefCover(
     expectedProtection: clampPercent(strength * reliability / 100),
     concealment: clampPercent(45 + bestClearance * 14),
     object: null,
-  };
-}
-
-function objectCenter(object: MapObject): GridPosition {
-  return {
-    x: object.x + object.widthCells / 2,
-    y: object.y + object.heightCells / 2,
   };
 }
 
