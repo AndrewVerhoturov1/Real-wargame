@@ -1,0 +1,40 @@
+{
+  "id": "infantry-combat-prototype-v1",
+  "title": "Первый прототип пехотного боя",
+  "status": "active",
+  "updated_at": "2026-07-22",
+  "goal": "Один пехотный отряд атакует другой; оружие — винтовки, ППШ и пулемёт; главная проверка — понятное поведение ИИ в атаке и обороне.",
+  "current_focus": "Этап 1: тактические позиции и физическая смена позы. Рабочая ветка: feature/20260721-tactical-position-basis.",
+  "next_step": "Закончить оптимизацию выбора позиций, длительную смену позы и целевые проверки; затем зафиксировать контракт позиций и перейти к стрелковому бою.",
+  "current_stage": 1,
+  "current_task": "Тактические позиции и физическая смена позы",
+  "current_branch": "feature/20260721-tactical-position-basis",
+  "current_plan": "plans/2026-07-22-tactical-position-basis.md",
+  "blockers": [],
+  "canonical_launcher": "Run-Real-Wargame-Lab.bat",
+  "must_read_first": [
+    "docs/subprojects/infantry-combat-prototype-v1/ROADMAP.md",
+    "plans/2026-07-22-tactical-position-basis.md",
+    "docs/subprojects/infantry-combat-prototype-v1/ACCEPTANCE.md",
+    "docs/subprojects/infantry-combat-prototype-v1/DECISIONS.md",
+    "docs/subprojects/infantry-combat-prototype-v1/WORKLOG.md",
+    "AGENTS.md"
+  ],
+  "main_files": [
+    "src/core/tactical/TacticalPositionSearchService.ts",
+    "src/core/units/UnitModel.ts",
+    "src/core/simulation/SimulationTick.ts",
+    "src/core/ai/AiGraphRuntime.ts"
+  ],
+  "suggested_verification": [
+    "npm run docs:check",
+    "npm run docs:smoke"
+  ],
+  "safety_rules": [
+    "Не расширять текущий этап после выполнения его стоп-критерия.",
+    "Не создавать вторую систему восприятия, опасности или поведения.",
+    "Код задаёт физику и факты; Graph v2 задаёт выбор поведения.",
+    "Общий статус меняет оркестратор; исполнитель меняет только свою задачу и отчёт.",
+    "Не переносить изменения в real-wargame-preview без явного разрешения пользователя."
+  ]
+}
