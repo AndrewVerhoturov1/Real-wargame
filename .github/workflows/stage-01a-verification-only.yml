@@ -1,0 +1,113 @@
+name: Stage 01A Verification Only
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - '.github/workflows/stage-01a-verification-only.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-exact-stage-01a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PREVIEW_SHA: fe0ba5f16d91bb765366c0ad56525684b3e47527
+      FEATURE_SHA: 2792b09378b16ce5efda95d441168465d8abab2b
+    steps:
+      - name: Checkout exact feature SHA with history
+        uses: actions/checkout@v4
+        with:
+          ref: 2792b09378b16ce5efda95d441168465d8abab2b
+          fetch-depth: 0
+
+      - name: Verify immutable refs and scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            real-wargame-preview:refs/remotes/origin/real-wargame-preview \
+            feature/20260722-shooting-stage-01a-catalog-core:refs/remotes/origin/feature/20260722-shooting-stage-01a-catalog-core
+          actual_head="$(git rev-parse HEAD)"
+          remote_feature="$(git rev-parse refs/remotes/origin/feature/20260722-shooting-stage-01a-catalog-core)"
+          remote_preview="$(git rev-parse refs/remotes/origin/real-wargame-preview)"
+          printf 'HEAD=%s\nFEATURE_REF=%s\nPREVIEW_REF=%s\n' "$actual_head" "$remote_feature" "$remote_preview"
+          test "$actual_head" = "$FEATURE_SHA"
+          test "$remote_feature" = "$FEATURE_SHA"
+          test "$remote_preview" = "$PREVIEW_SHA"
+          counts="$(git rev-list --left-right --count "$PREVIEW_SHA...$FEATURE_SHA")"
+          files="$(git diff --name-only "$PREVIEW_SHA...$FEATURE_SHA" | wc -l | tr -d ' ')"
+          printf 'AHEAD_BEHIND=%s\nFULL_DIFF_FILES=%s\n' "$counts" "$files"
+          test "$counts" = $'0\t7'
+          test "$files" = '15'
+
+      - name: Setup repository Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Catalog smoke matrix
+        run: npm run combat-catalogs:smoke
+
+      - name: TypeScript verification
+        run: npm run typecheck
+
+      - name: Production build
+        run: npm run build
+
+      - name: Core wrapper syntax
+        run: node --check scripts/combat_catalog_core_smoke.mjs
+
+      - name: Serialization wrapper syntax
+        run: node --check scripts/combat_catalog_serialization_smoke.mjs
+
+      - name: Reject wall-clock and randomness sources
+        shell: bash
+        run: |
+          set +e
+          grep -R -nE 'Date\.now|performance\.now|Math\.random|randomUUID' \
+            src/core/infantry-combat/catalogs \
+            scripts/combat_catalog_core_smoke.ts \
+            scripts/combat_catalog_core_smoke.mjs \
+            scripts/combat_catalog_serialization_smoke.ts \
+            scripts/combat_catalog_serialization_smoke.mjs
+          rc=$?
+          set -e
+          echo "GREP_EXIT=$rc"
+          test "$rc" -eq 1
+
+      - name: Diff whitespace verification
+        run: git diff --check fe0ba5f16d91bb765366c0ad56525684b3e47527...HEAD
+
+      - name: Verify corrective diff scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(mktemp)"
+          actual="$(mktemp)"
+          cat > "$expected" <<'EOF'
+          scripts/combat_catalog_core_smoke.mjs
+          scripts/combat_catalog_core_smoke.ts
+          scripts/combat_catalog_serialization_smoke.mjs
+          scripts/combat_catalog_serialization_smoke.ts
+          src/core/infantry-combat/catalogs/CombatCatalogValidationReferences.ts
+          src/core/infantry-combat/catalogs/CombatCatalogValidationSupport.ts
+          EOF
+          git diff --name-only a99419d5143e2814936fde3a1645a9266a4412ce...HEAD | sort > "$actual"
+          diff -u "$expected" "$actual"
+
+      - name: Remove ignored build artifacts and verify clean checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist .tmp-combat-catalog-core-smoke .tmp-combat-catalog-serialization-smoke
+          status="$(git status --short)"
+          printf 'FINAL_GIT_STATUS_BEGIN\n%s\nFINAL_GIT_STATUS_END\n' "$status"
+          test -z "$status"
