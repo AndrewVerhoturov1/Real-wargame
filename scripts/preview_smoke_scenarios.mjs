@@ -6,6 +6,7 @@ const DEFAULT_SMOKE_TIMEOUT_MS = 120_000;
 export function createPreviewSmokeScenarios(root = process.cwd()) {
   return [
     scenario('perception contact priority', 'perception_contact_priority_smoke.mjs'),
+    scenario('posture-adaptive movement', 'posture_adaptive_movement_smoke.mjs'),
     scenario('tactical position foundation', 'tactical_position_foundation_smoke.mjs'),
     scenario('tactical position search', 'tactical_position_search_smoke.mjs'),
     scenario('tactical position interaction', 'tactical_position_interaction_smoke.mjs'),

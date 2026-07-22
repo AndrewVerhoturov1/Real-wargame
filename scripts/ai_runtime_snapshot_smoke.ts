@@ -292,9 +292,9 @@ function verifySceneExportRoundTrip(): void {
   );
 
   const exported = buildExportedScene(state);
-  assert.equal(exported.version, 'scene-export-v9-minimal-target-visibility-ai-runtime-2m-grid');
-  assert.ok(exported.movementProfiles.profiles.length >= 6, 'shared v9 envelope must include movement profiles');
-  assert.ok(exported.environmentProfiles.profiles.length >= 1, 'shared v9 envelope must include environment profiles');
+  assert.equal(exported.version, 'scene-export-v10-physical-posture-action-2m-grid');
+  assert.ok(exported.movementProfiles.profiles.length >= 6, 'shared v10 envelope must include movement profiles');
+  assert.ok(exported.environmentProfiles.profiles.length >= 1, 'shared v10 envelope must include environment profiles');
   const exportedUnit = exported.units.find((candidate) => candidate.id === unit.id) as {
     attention?: { vision?: { maximumVisualRangeMeters?: number; distanceFalloffStartMeters?: number } };
     runtime?: { aiRuntime?: { version?: number; session?: { graphId?: string } } };

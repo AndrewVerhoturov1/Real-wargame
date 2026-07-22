@@ -1,8 +1,18 @@
+import {
+  cancelReplaceablePostureTransitionForNewPlayerCommand,
+  isPostureTransitionRunning,
+  postureOwnerTokenForPlayerCommand,
+  requestPostureTransition,
+} from '../actions/PostureTransition';
 import { publishTacticalOrderIntentToAiMemory } from '../ai/TacticalOrderBlackboard';
 import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap } from '../map/MapModel';
+import {
+  movementGaitForPosture,
+  movementProfileIdForPosture,
+} from '../movement/PostureMovementProfile';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../navigation/NavigationRuntime';
 import { planMoveOrder } from '../orders/MoveOrderPlanning';
 import {
@@ -11,7 +21,11 @@ import {
   withPlayerCommandTacticalPositionMetadata,
   type PlayerCommandTacticalPositionKind,
 } from '../orders/PlayerCommand';
-import { createTacticalOrderIntent, withTacticalOrderNavigationProfile } from '../orders/TacticalOrderIntent';
+import {
+  createTacticalOrderIntent,
+  withTacticalOrderMovementProfile,
+  withTacticalOrderNavigationProfile,
+} from '../orders/TacticalOrderIntent';
 import { clearAttentionOverride } from '../perception/AttentionController';
 import { getBestPerceptionContact } from '../perception/PerceptionSystem';
 import type { SimulationState } from '../simulation/SimulationState';
@@ -42,10 +56,14 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
     resolveThreatFacingAtPosition(unit, target),
   );
   const approachPosture = resolveApproachPosture(unit, arrivalPosture);
-  const intent = withTacticalOrderNavigationProfile(
-    createTacticalOrderIntent('move'),
-    unit.playerNavigationProfileId ?? 'normal',
+  const intent = withTacticalOrderMovementProfile(
+    withTacticalOrderNavigationProfile(
+      createTacticalOrderIntent('move'),
+      unit.playerNavigationProfileId ?? 'normal',
+    ),
+    movementProfileIdForPosture(approachPosture),
   );
+  cancelReplaceablePostureTransitionForNewPlayerCommand(unit);
   const baseCommand = createPlayerMoveCommand(
     unit.id,
     target,
@@ -70,6 +88,7 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
 
   unit.playerCommand = command;
   unit.playerNavigationProfileId = command.intent.navigationProfileId;
+  unit.movementRuntime.requestedGait = movementGaitForPosture(approachPosture);
   publishTacticalOrderIntentToAiMemory(unit, command.intent);
   clearAttentionOverride(unit);
 
@@ -111,8 +130,18 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
   }
   unit.order = planned.order;
   unit.plan = createDirectPlayerMovePlan(unit.plan, command, planned.order.target);
-  unit.behaviorRuntime.state = 'moving';
-  unit.behaviorRuntime.currentAction = 'move';
+  requestPostureTransition(unit, {
+    targetPosture: approachPosture,
+    owner: { source: 'tactical_position', id: command.id },
+    ownerToken: postureOwnerTokenForPlayerCommand(command.id),
+    startedSeconds: state.simulationTimeSeconds,
+    reasonCode: 'tactical_position_approach',
+    reasonRu: 'Боец физически принимает позу подхода к тактической позиции.',
+  });
+  if (!isPostureTransitionRunning(unit)) {
+    unit.behaviorRuntime.state = 'moving';
+    unit.behaviorRuntime.currentAction = 'move';
+  }
   unit.behaviorRuntime.lastEvent = 'tactical_position_order_received';
   unit.behaviorRuntime.reason = finalFacingRadians === null
     ? `Боец направлен на тактическую позицию; после прибытия: ${postureLabel(arrivalPosture)}.`
@@ -122,6 +151,9 @@ export function issueTacticalPositionMoveOrderToSelectedUnit(
 }
 
 function resolveApproachPosture(unit: UnitModel, arrivalPosture: UnitPosture): UnitPosture {
+  const currentPosture = unit.behaviorRuntime.posture;
+  if (currentPosture === 'prone') return 'prone';
+  if (currentPosture === 'crouched') return 'crouched';
   const settings = getTacticalPositionSettings(unit);
   return settings.moveCrouchedToProtectedPosition && arrivalPosture !== 'standing'
     ? 'crouched'

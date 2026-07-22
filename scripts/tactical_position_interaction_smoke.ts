@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import {
+  isPostureTransitionRunning,
+  postureTransitionDurationSeconds,
+} from '../src/core/actions/PostureTransition';
+import { tickPostureTransitionWithTimeBudget } from '../src/core/actions/PostureTransitionClock';
 import { normalizeUnits } from '../src/core/units/UnitModel';
 import { createPlayerMoveCommand, updatePlayerCommandStatus } from '../src/core/orders/PlayerCommand';
 import type { SimulationState } from '../src/core/simulation/SimulationState';
@@ -64,8 +69,18 @@ function verifyArrivalPostureAppliesOnce(): void {
   const state = { units: [unit] } as unknown as SimulationState;
 
   reconcileCompletedTacticalPositionArrivals(state);
+  assert.equal(unit.behaviorRuntime.posture, 'standing');
+  assert.equal(isPostureTransitionRunning(unit), true);
+  assert.equal(unit.playerCommand?.arrivalPostureApplied, false);
+
+  tickPostureTransitionWithTimeBudget(
+    unit,
+    postureTransitionDurationSeconds('standing', 'prone'),
+    true,
+  );
+  reconcileCompletedTacticalPositionArrivals(state);
   assert.equal(unit.behaviorRuntime.posture, 'prone');
-  assert.equal(unit.behaviorRuntime.previousPosture, 'standing');
+  assert.equal(unit.behaviorRuntime.previousPosture, 'crouched');
   assert.equal(unit.playerCommand?.arrivalPostureApplied, true);
   assert.equal(unit.behaviorRuntime.lastEvent, 'tactical_position_posture_applied');
 

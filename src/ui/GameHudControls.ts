@@ -1,3 +1,4 @@
+import { requestPlayerPostureTransition } from '../core/actions/PostureTransition';
 import type { UnitPosture } from '../core/behavior/BehaviorModel';
 import { buildUnitKnowledgeReport, type KnowledgeCover, type KnowledgeDanger } from '../core/knowledge/UnitKnowledge';
 import { getCell, gridToCellLabel, type MapCell } from '../core/map/MapModel';
@@ -186,7 +187,7 @@ function renderUnitCommandCard(unitCard: HTMLElement, state: SimulationState): v
     button.type = 'button';
     button.textContent = `${option.icon} ${option.label}`;
     button.className = runtime.posture === option.posture ? 'active' : '';
-    button.addEventListener('click', () => setManualPosture(unit, option.posture, option.label));
+    button.addEventListener('click', () => setManualPosture(state, unit, option.posture, option.label));
     actions.appendChild(button);
   }
 
@@ -339,12 +340,11 @@ function renderSensorsTab(unit: UnitModel, state: SimulationState): string {
   ]);
 }
 
-function setManualPosture(unit: UnitModel, posture: UnitPosture, label: string): void {
-  unit.behaviorRuntime.previousPosture = unit.behaviorRuntime.posture;
-  unit.behaviorRuntime.posture = posture;
-  unit.behaviorRuntime.postureChangedBecause = `ручной выбор: ${label}`;
-  unit.behaviorRuntime.lastEvent = `ручное положение: ${label}`;
-  unit.behaviorRuntime.reason = `положение задано вручную: ${label}`;
+function setManualPosture(state: SimulationState, unit: UnitModel, posture: UnitPosture, label: string): void {
+  const result = requestPlayerPostureTransition(unit, posture, state.simulationTimeSeconds);
+  unit.behaviorRuntime.reason = result.accepted
+    ? `Принят приказ изменить позу: ${label}.`
+    : result.reasonRu;
 }
 
 function toggleEditorModeFromGame(state: SimulationState): void {

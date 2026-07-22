@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const workspace = readFileSync('src/ui/TacticalWorkspace.ts', 'utf8');
-const workspaceBase = readFileSync('src/ui/TacticalWorkspaceBase.ts', 'utf8');
+const workspaceBase = [
+  readFileSync('src/ui/TacticalWorkspaceBase.ts', 'utf8'),
+  readFileSync('src/ui/TacticalWorkspaceBaseLegacy.ts', 'utf8'),
+].join('\n');
 const routeCostUi = readFileSync('src/ui/RouteCostOverlayUi.ts', 'utf8');
 const workspaceCss = readFileSync('src/tactical-workspace-compact-route.css', 'utf8');
 const routeCostCss = readFileSync('src/route-cost-overlay.css', 'utf8');

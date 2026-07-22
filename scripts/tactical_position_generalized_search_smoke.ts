@@ -38,8 +38,17 @@ const indexedDirections = new Uint8Array(cellCount * settings.sectors.count);
 indexedDirections[indexedCell * settings.sectors.count] = 255;
 const indexedPostureMask = new Uint8Array(cellCount);
 indexedPostureMask[indexedCell] = 7;
+const indexedPostures = new Uint8Array(cellCount * 3);
+indexedPostures.fill(255, indexedCell * 3, indexedCell * 3 + 3);
 const basis = {
   ...builtBasis,
+  observationByDirection: indexedDirections,
+  protectionByDirection: indexedDirections,
+  firingByDirection: indexedDirections,
+  availablePostureMask: indexedPostureMask,
+  staticProtectionByPosture: indexedPostures,
+  observationByPosture: indexedPostures,
+  firingByPosture: indexedPostures,
   candidateIndex: buildStaticTacticalCandidateIndex({
     width: map.width,
     height: map.height,

@@ -1,3 +1,4 @@
+import { isPostureTransitionRunning } from '../actions/PostureTransition';
 import type { UnitModel } from '../units/UnitModel';
 
 export const DEFAULT_RIFLE_ID = 'rifle_mosin_v1';
@@ -111,6 +112,11 @@ export function tryConsumeRound(unit: UnitModel, nowSeconds: number): boolean {
 }
 
 export function reloadWeapon(unit: UnitModel): number {
+  if (isPostureTransitionRunning(unit)) {
+    unit.behaviorRuntime.reason = 'Перезарядка запрещена во время физической смены позы.';
+    unit.behaviorRuntime.lastEvent = 'combat_reload_rejected_posture_transition';
+    return 0;
+  }
   const runtime = getWeaponRuntime(unit);
   const definition = getWeaponDefinition(runtime.weaponId);
   const need = Math.max(0, definition.magazineCapacity - runtime.roundsLoaded);
@@ -137,6 +143,7 @@ export function syncLegacyWeaponFields(unit: UnitModel, runtime = getWeaponRunti
 }
 
 export function clearWeaponRuntime(unit: UnitModel): void {
+  if (isPostureTransitionRunning(unit)) return;
   runtimeByUnit.delete(unit);
 }
 

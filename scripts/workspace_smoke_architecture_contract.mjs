@@ -1,8 +1,19 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const baseline = readFileSync('scripts/tactical_workspace_smoke_pixijs8_baseline.mjs', 'utf8');
+const baselineWrapper = readFileSync('scripts/tactical_workspace_smoke_pixijs8_baseline.mjs', 'utf8');
+const baselineLegacy = readFileSync('scripts/tactical_workspace_smoke_pixijs8_baseline_legacy.mjs', 'utf8');
+const baseline = `${baselineWrapper}\n${baselineLegacy}`;
 const migration = readFileSync('scripts/tactical_workspace_smoke_incremental_directional.mjs', 'utf8');
+
+assert.ok(
+  baselineWrapper.includes("await import('./tactical_workspace_smoke_pixijs8_baseline_legacy.mjs')"),
+  'workspace baseline wrapper must execute the compatibility baseline',
+);
+assert.ok(
+  baselineWrapper.includes('TacticalWorkspaceBaseLegacy.ts'),
+  'workspace baseline wrapper must join the active workspace compatibility source',
+);
 
 for (const token of [
   "expectIncludes('src/ui/TacticalWorkspaceBase.ts'",

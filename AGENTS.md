@@ -121,7 +121,7 @@ head: feature/YYYYMMDD-short-kebab-slug
 - Do not implement directly on `real-wargame-preview`.
 - Keep product fixes on the same feature branch.
 - Do not transfer before explicit user GO.
-- Do not touch or deploy `main` without separate explicit user approval.
+- Do not touch or deploy `main` without separate explicit approval.
 - Do not merge or enable auto-merge without explicit approval.
 - PR is not the default feature route.
 
@@ -171,6 +171,10 @@ The Playwright skill tests an existing deployment and must not deploy the applic
 
 ## 11. Architecture and performance boundaries
 
+### Mandatory performance contract
+
+The performance document is a mandatory repository contract, not optional advice.
+
 - core simulation and pure AI do not import PixiJS or DOM;
 - renderers display state and are not gameplay truth;
 - subjective knowledge does not reveal hidden objective state;
@@ -205,6 +209,7 @@ Always distinguish:
 feature_branch:
 current_commit:
 checks_run:
+performance_impact: completed / not applicable with reason
 deployment_requested:
 deployment_status:
 deployed_commit:

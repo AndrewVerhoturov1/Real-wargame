@@ -1,3 +1,4 @@
+import { requestPlayerPostureTransition } from '../core/actions/PostureTransition';
 import type { UnitPosture } from '../core/behavior/BehaviorModel';
 import { buildEnvironmentSensorReport } from '../core/sensors/EnvironmentSensors';
 import { getSelectedUnit, type SimulationState } from '../core/simulation/SimulationState';
@@ -43,11 +44,14 @@ export function installPostureControls(debugPanel: HTMLElement, state: Simulatio
         return;
       }
 
-      selectedUnit.behaviorRuntime.previousPosture = selectedUnit.behaviorRuntime.posture;
-      selectedUnit.behaviorRuntime.posture = option.posture;
-      selectedUnit.behaviorRuntime.postureChangedBecause = `ручной выбор: ${option.label}`;
-      selectedUnit.behaviorRuntime.lastEvent = `ручное положение: ${option.label}`;
-      selectedUnit.behaviorRuntime.reason = `положение задано вручную: ${option.label}`;
+      const result = requestPlayerPostureTransition(
+        selectedUnit,
+        option.posture,
+        state.simulationTimeSeconds,
+      );
+      selectedUnit.behaviorRuntime.reason = result.accepted
+        ? `Принят приказ изменить позу: ${option.label}.`
+        : result.reasonRu;
     });
     controls.appendChild(button);
   }

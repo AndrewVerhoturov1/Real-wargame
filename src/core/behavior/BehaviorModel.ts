@@ -1,6 +1,7 @@
 import type { AiRouteStatusState } from '../ai/AiRouteStatus';
 import type { SimulationAiFacts } from '../ai/events/SimulationAiEvents';
 import type { AiRuntimeSessionSnapshotV1 } from '../ai/runtime/AiRuntimeSession';
+import type { UnitPhysicalAction } from '../actions/PostureTransition';
 
 export type UnitState = 'idle' | 'moving' | 'observing' | 'taking_cover' | 'stressed';
 export type UnitPosture = 'standing' | 'crouched' | 'prone';
@@ -93,6 +94,7 @@ export interface UnitBehaviorRuntime {
   aiRuntimeSession: AiRuntimeSessionSnapshotV1 | null;
   aiRouteStatusState: AiRouteStatusState | null;
   aiSimulationEventFacts: SimulationAiFacts | null;
+  physicalAction: UnitPhysicalAction | null;
 }
 
 export const DEFAULT_BEHAVIOR_PROFILE: BehaviorProfileId = 'regular';
@@ -361,6 +363,7 @@ export function createBehaviorRuntime(initialState?: Partial<UnitInitialState>):
     aiRuntimeSession: null,
     aiRouteStatusState: null,
     aiSimulationEventFacts: null,
+    physicalAction: null,
   };
 }
 
