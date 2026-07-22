@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { getActiveEnvironmentProfile } from '../src/core/map/EnvironmentProfileRuntime';
+import { markMapObjectsDirty } from '../src/core/map/MapRuntimeState';
 import { normalizeMap, type TacticalMap, type TacticalMapData } from '../src/core/map/MapModel';
 import type { SimulationState } from '../src/core/simulation/SimulationState';
+import { createResolutionAwareInitialState, replaceSceneAtRuntimeResolution } from '../src/core/simulation/ResolutionAwareScene';
 import {
   decodeStaticTacticalPositionArtifact,
   encodeStaticTacticalPositionArtifact,
@@ -10,8 +12,16 @@ import {
   type StaticTacticalPositionArtifact,
 } from '../src/core/tactical/static/StaticTacticalPositionArtifact';
 import { buildHighQualityStaticTacticalPositionBasis } from '../src/core/tactical/static/HighQualityStaticTacticalPositionBuilder';
+import {
+  createStaticTacticalPositionBasisArrays,
+  type StaticTacticalPositionBasisSnapshot,
+} from '../src/core/tactical/static/StaticTacticalPositionBasis';
+import { createEmptyStaticTacticalCandidateIndex } from '../src/core/tactical/static/StaticTacticalCandidateIndex';
 import { createStaticTacticalPositionFingerprint } from '../src/core/tactical/static/StaticTacticalPositionFingerprint';
-import { createStaticTacticalPositionBasisIdentity } from '../src/core/tactical/static/StaticTacticalPositionIdentity';
+import {
+  createStaticTacticalPositionBasisIdentity,
+  staticTacticalPositionIdentityKey,
+} from '../src/core/tactical/static/StaticTacticalPositionIdentity';
 import { StaticTacticalPositionService } from '../src/core/tactical/static/StaticTacticalPositionService';
 import { createDefaultStaticTacticalPositionSettings } from '../src/core/tactical/static/StaticTacticalPositionSettings';
 import { normalizeImportedScene } from '../src/ui/SceneExport';
@@ -30,11 +40,13 @@ verifyFingerprintStabilityAndInvalidation();
 verifyArtifactRejections();
 verifyRejectedArtifactsDoNotChangeActiveSettings();
 verifyServiceHitAndStaleExport();
+await verifyPersistentLifecycle();
 await verifyCoalescingAndStaleWorkerRejection();
 verifySourceContracts();
+const performanceMeasurements = verifyPerformanceMeasurements();
 
 const size = estimateStaticTacticalPositionArtifactBytes(snapshot);
-console.log(`persistent static tactical basis smoke: ok; raw=${size.rawBytes}; base64=${size.base64Bytes}`);
+console.log(`persistent static tactical basis smoke: ok; raw=${size.rawBytes}; base64=${size.base64Bytes}; performance=${JSON.stringify(performanceMeasurements)}`);
 
 function verifyRoundTrip(): void {
   const cloned = JSON.parse(JSON.stringify(artifact)) as StaticTacticalPositionArtifact;
@@ -44,6 +56,16 @@ function verifyRoundTrip(): void {
   if (!decoded.ok) return;
   for (const key of basisArrayKeys()) assert.deepEqual(decoded.snapshot[key], snapshot[key], `${key} round-trip`);
   assert.deepEqual(decoded.snapshot.candidateIndex, snapshot.candidateIndex, 'candidateIndex round-trip');
+  for (const key of basisArrayKeys()) assert.ok(decoded.snapshot[key] instanceof Uint8Array, `${key} type`);
+  for (const kind of ['observation', 'defense', 'firing'] as const) {
+    const list = decoded.snapshot.candidateIndex[kind];
+    assert.ok(list.chunkOffsets instanceof Uint32Array);
+    assert.ok(list.chunkCounts instanceof Uint16Array);
+    assert.ok(list.cellIndices instanceof Uint32Array);
+    assert.ok(list.scores instanceof Uint8Array);
+    assert.ok(list.postureMasks instanceof Uint8Array);
+    assert.ok(list.dominantSectorMasks instanceof Uint32Array);
+  }
   assert.notEqual(decoded.snapshot.identityKey, '', 'runtime identity must be restored');
 }
 
@@ -63,6 +85,14 @@ function verifyFingerprintStabilityAndInvalidation(): void {
   const reordered = cloneMapData(map);
   reordered.objects = [...(reordered.objects ?? [])].reverse();
   assert.equal(createStaticTacticalPositionFingerprint(normalizeMap(reordered), settings, profile).value, fingerprint.value);
+
+  const revised = testMap();
+  markMapObjectsDirty(revised);
+  assert.equal(
+    createStaticTacticalPositionFingerprint(revised, settings, profile).value,
+    fingerprint.value,
+    'runtime-only revisions must not affect persistent identity',
+  );
 
   assertFingerprintChanges((data) => { data.heightMap![2]![2] = 3; }, 'height');
   assertFingerprintChanges((data) => { data.surfaceMaterialMap![1]![1] = 'rough'; }, 'terrain');
@@ -107,6 +137,33 @@ function verifyArtifactRejections(): void {
   const algorithmResult = decodeStaticTacticalPositionArtifact(wrongAlgorithm, fingerprint, runtimeIdentity);
   assert.equal(algorithmResult.ok, false);
   if (!algorithmResult.ok) assert.equal(algorithmResult.reason, 'algorithm_version');
+
+  expectArtifactReject('malformed base64', (value) => { value.payload.data = '%%%='; }, 'payload_encoding');
+  expectArtifactReject('too short payload', (value) => {
+    const bytes = Buffer.from(value.payload.data, 'base64');
+    value.payload.data = bytes.subarray(0, bytes.length - 1).toString('base64');
+  }, 'payload_length');
+  expectArtifactReject('too long payload', (value) => {
+    const bytes = Buffer.from(value.payload.data, 'base64');
+    value.payload.data = Buffer.concat([bytes, Buffer.from([0])]).toString('base64');
+  }, 'payload_length');
+  expectArtifactReject('overlapping manifest ranges', (value) => {
+    value.payload.arrays[1].byteOffset = value.payload.arrays[0].byteOffset;
+  }, 'manifest');
+  expectArtifactReject('unaligned u16 array', (value) => {
+    const descriptor = value.payload.arrays.find((entry: any) => entry.type === 'u16');
+    descriptor.byteOffset += 1;
+  }, 'manifest');
+  expectArtifactReject('unaligned u32 array', (value) => {
+    const descriptor = value.payload.arrays.find((entry: any) => entry.type === 'u32');
+    descriptor.byteOffset += 2;
+  }, 'manifest');
+  expectArtifactReject('wrong candidate chunk offset', (value) => {
+    mutatePayloadArray(value, 'candidateIndex.observation.chunkOffsets', (view, offset) => view.setUint32(offset, 1, true));
+  }, 'candidate_index');
+  expectArtifactReject('wrong candidate chunk count', (value) => {
+    mutatePayloadArray(value, 'candidateIndex.observation.chunkCounts', (view, offset) => view.setUint16(offset, 0xffff, true));
+  }, 'candidate_index');
 }
 
 function verifyRejectedArtifactsDoNotChangeActiveSettings(): void {
@@ -177,6 +234,68 @@ function verifyServiceHitAndStaleExport(): void {
   service.destroy();
 }
 
+async function verifyPersistentLifecycle(): Promise<void> {
+  const missingService = new StaticTacticalPositionService({ map: testMap() } as SimulationState);
+  const missingRevision = missingService.getDiagnostics().settingsRevision;
+  const missing = missingService.hydratePersistentArtifact(undefined);
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert.equal(missing.reason, 'missing');
+  assert.equal(missingService.getDiagnostics().settingsRevision, missingRevision, 'missing artifact must not change settings');
+  missingService.destroy();
+
+  const hitMap = testMap();
+  const hitService = new StaticTacticalPositionService({ map: hitMap } as SimulationState);
+  hitService.request();
+  const accepted = hitService.hydratePersistentArtifact(artifact);
+  assert.equal(accepted.ok, true, 'hydration must supersede an older in-flight build');
+  const hydratedFingerprint = hitService.getDiagnostics().readyPersistentFingerprint;
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(hitService.getDiagnostics().readyPersistentFingerprint, hydratedFingerprint, 'old fallback result must not replace hydrated snapshot');
+  assert.equal(hitService.getDiagnostics().workerJobsCompleted, 0, 'cancelled old build must not complete');
+  hitMap.objects[0]!.x += 0.25;
+  hitService.request();
+  await waitFor(() => hitService.getDiagnostics().status === 'ready' || hitService.getDiagnostics().status === 'failed', 3000);
+  assert.equal(hitService.getDiagnostics().workerJobsStarted, 2, 'map edit after cache hit must start one new build');
+  const exported = hitService.buildPersistentArtifactForExport();
+  assert.ok(exported, 'export after rebuilt edited map must contain the new current snapshot');
+  assert.notEqual(exported?.fingerprint.value, fingerprint.value, 'export must not reuse old persistent fingerprint');
+  hitService.destroy();
+
+  const missMap = testMap();
+  missMap.objects[0]!.x += 0.5;
+  const missService = new StaticTacticalPositionService({ map: missMap } as SimulationState);
+  const miss = missService.hydratePersistentArtifact(artifact);
+  assert.equal(miss.ok, false);
+  if (!miss.ok) assert.equal(miss.reason, 'fingerprint');
+  missService.request();
+  missService.request();
+  await waitFor(() => missService.getDiagnostics().status === 'ready' || missService.getDiagnostics().status === 'failed', 3000);
+  const missDiagnostics = missService.getDiagnostics();
+  assert.equal(missDiagnostics.workerBuildsAfterPersistentMiss, 1, 'cache miss must launch exactly one current rebuild');
+  assert.equal(missDiagnostics.workerJobsStarted, 1, 'duplicate requests during cache miss must coalesce');
+  const started = missDiagnostics.workerJobsStarted;
+  missService.request();
+  assert.equal(missService.getDiagnostics().workerJobsStarted, started, 'ready snapshot must prevent redundant heavy rebuild');
+  missService.destroy();
+
+  const sourceMapData = {
+    ...openMapData(4, 3),
+    metersPerCell: 4,
+    runtimeMetersPerCell: 2,
+    objects: [{ id: 'scaled-rock', kind: 'rock' as const, x: 1, y: 1, widthCells: 1, heightCells: 1 }],
+  };
+  const runtimeState = createResolutionAwareInitialState(sourceMapData, []);
+  const runtimeIdentity = createStaticTacticalPositionBasisIdentity(runtimeState.map, settings);
+  const runtimeSnapshot = buildHighQualityStaticTacticalPositionBasis(runtimeState.map, runtimeIdentity, settings).snapshot;
+  const runtimeFingerprint = createStaticTacticalPositionFingerprint(runtimeState.map, settings, profile);
+  const runtimeArtifact = encodeStaticTacticalPositionArtifact(runtimeSnapshot, runtimeFingerprint);
+  const loadedState = createResolutionAwareInitialState(openMapData(1, 1), []);
+  replaceSceneAtRuntimeResolution(loadedState, sourceMapData, []);
+  const resolutionService = new StaticTacticalPositionService(loadedState);
+  assert.equal(resolutionService.hydratePersistentArtifact(runtimeArtifact).ok, true, 'runtime resolution conversion must happen before fingerprint check');
+  resolutionService.destroy();
+}
+
 async function verifyCoalescingAndStaleWorkerRejection(): Promise<void> {
   const movingMap = testMap();
   const service = new StaticTacticalPositionService({ map: movingMap } as SimulationState);
@@ -201,11 +320,132 @@ function verifySourceContracts(): void {
   assert.ok(!sceneSource.includes('await buildStaticTacticalPositionArtifactForExport'));
 }
 
+function verifyPerformanceMeasurements(): {
+  readonly fingerprintMs: number;
+  readonly encodeMs: number;
+  readonly decodeMs: number;
+  readonly rawPayloadBytes: number;
+  readonly base64Bytes: number;
+  readonly observedPeakAdditionalBytes: number;
+} {
+  const largeMap = normalizeMap({
+    width: 200,
+    height: 200,
+    cellSize: 4,
+    metersPerCell: 2,
+    defaultTerrain: 'field',
+    defaultHeight: 0,
+    environmentProfileId: profile.id,
+  });
+  const before = observedMemoryBytes();
+  const fingerprintStarted = performance.now();
+  const largeFingerprint = createStaticTacticalPositionFingerprint(largeMap, settings, profile);
+  const fingerprintMs = round(performance.now() - fingerprintStarted, 3);
+  let peak = Math.max(before, observedMemoryBytes());
+  const largeSnapshot = syntheticSnapshot(largeMap);
+  peak = Math.max(peak, observedMemoryBytes());
+  const encodeStarted = performance.now();
+  const largeArtifact = encodeStaticTacticalPositionArtifact(largeSnapshot, largeFingerprint);
+  const encodeMs = round(performance.now() - encodeStarted, 3);
+  peak = Math.max(peak, observedMemoryBytes());
+  const decodeStarted = performance.now();
+  const decoded = decodeStaticTacticalPositionArtifact(
+    largeArtifact,
+    largeFingerprint,
+    createStaticTacticalPositionBasisIdentity(largeMap, settings),
+  );
+  const decodeMs = round(performance.now() - decodeStarted, 3);
+  peak = Math.max(peak, observedMemoryBytes());
+  assert.equal(decoded.ok, true, '200x200 measurement artifact must decode');
+  return {
+    fingerprintMs,
+    encodeMs,
+    decodeMs,
+    rawPayloadBytes: largeArtifact.payload.byteLength,
+    base64Bytes: largeArtifact.payload.data.length,
+    observedPeakAdditionalBytes: Math.max(0, peak - before),
+  };
+}
+
+function syntheticSnapshot(largeMap: TacticalMap): StaticTacticalPositionBasisSnapshot {
+  const identity = createStaticTacticalPositionBasisIdentity(largeMap, settings);
+  const arrays = createStaticTacticalPositionBasisArrays(largeMap.width, largeMap.height, settings.sectors.count);
+  arrays.availablePostureMask.fill(7);
+  return Object.freeze({
+    version: 1,
+    identity,
+    identityKey: staticTacticalPositionIdentityKey(identity),
+    width: largeMap.width,
+    height: largeMap.height,
+    metersPerCell: largeMap.metersPerCell,
+    sectorCount: settings.sectors.count,
+    ...arrays,
+    candidateIndex: createEmptyStaticTacticalCandidateIndex(largeMap.width, largeMap.height, settings.sectors.count),
+    settings,
+    diagnostics: Object.freeze({
+      buildMs: 0,
+      cellsProcessed: largeMap.width * largeMap.height,
+      observationRays: 0,
+      firingRays: 0,
+      blockedCells: 0,
+      observationCandidates: 0,
+      defenseCandidates: 0,
+      firingCandidates: 0,
+    }),
+    builtAtMs: 0,
+  });
+}
+
 function assertFingerprintChanges(edit: (data: TacticalMapData) => void, label: string): void {
   const data = cloneMapData(map);
   edit(data);
   const changed = createStaticTacticalPositionFingerprint(normalizeMap(data), settings, profile);
   assert.notEqual(changed.value, fingerprint.value, label);
+}
+
+function expectArtifactReject(
+  label: string,
+  mutate: (value: any) => void,
+  expectedReason: string,
+): void {
+  const value = structuredClone(artifact) as any;
+  mutate(value);
+  const result = decodeStaticTacticalPositionArtifact(
+    value,
+    fingerprint,
+    createStaticTacticalPositionBasisIdentity(map, settings),
+  );
+  assert.equal(result.ok, false, `${label} must be rejected`);
+  if (!result.ok) assert.equal(result.reason, expectedReason, label);
+}
+
+function mutatePayloadArray(
+  value: any,
+  name: string,
+  mutate: (view: DataView, byteOffset: number) => void,
+): void {
+  const descriptor = value.payload.arrays.find((entry: any) => entry.name === name);
+  assert.ok(descriptor, `missing descriptor ${name}`);
+  const bytes = Uint8Array.from(Buffer.from(value.payload.data, 'base64'));
+  mutate(new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), descriptor.byteOffset);
+  value.payload.data = Buffer.from(bytes).toString('base64');
+  value.payload.byteLength = bytes.length;
+  value.payload.checksum = testChecksumBytes(bytes);
+}
+
+function testChecksumBytes(bytes: Uint8Array): string {
+  let left = 0x811c9dc5;
+  let right = 0x9e3779b9;
+  for (const byte of bytes) {
+    left = Math.imul(left ^ byte, 0x01000193) >>> 0;
+    right = Math.imul(right ^ (byte + 0x9d), 0x85ebca6b) >>> 0;
+  }
+  return `stpc-${left.toString(16).padStart(8, '0')}${right.toString(16).padStart(8, '0')}`;
+}
+
+function observedMemoryBytes(): number {
+  const memory = process.memoryUsage();
+  return memory.heapUsed + memory.arrayBuffers;
 }
 
 function testMap(): TacticalMap {
