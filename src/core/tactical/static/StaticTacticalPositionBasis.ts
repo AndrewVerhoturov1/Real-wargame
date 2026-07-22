@@ -6,6 +6,7 @@ import type { StaticTacticalPositionSettings } from './StaticTacticalPositionSet
 export { readStaticTacticalCandidatesInBounds } from './StaticTacticalCandidateIndex';
 export type { StaticTacticalCandidateView } from './StaticTacticalCandidateIndex';
 
+export const STATIC_TACTICAL_POSITION_BASIS_SNAPSHOT_VERSION = 1 as const;
 export type StaticTacticalPositionKind = 'observation' | 'defense' | 'firing';
 
 export const STATIC_TACTICAL_POSTURE_STANDING = 1;
@@ -25,7 +26,7 @@ export interface StaticTacticalPositionBuildDiagnostics {
 }
 
 export interface StaticTacticalPositionBasisSnapshot {
-  readonly version: 1;
+  readonly version: typeof STATIC_TACTICAL_POSITION_BASIS_SNAPSHOT_VERSION;
   readonly identity: StaticTacticalPositionBasisIdentity;
   readonly identityKey: string;
   readonly width: number;

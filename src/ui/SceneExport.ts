@@ -20,6 +20,12 @@ import {
 import { replaceSceneAtRuntimeResolution } from '../core/simulation/ResolutionAwareScene';
 import type { SimulationState } from '../core/simulation/SimulationState';
 import { getTacticalPositionSearchService } from '../core/tactical/TacticalPositionSearchService';
+import {
+  buildStaticTacticalPositionArtifactForExport,
+  getStaticTacticalPositionService,
+  hydrateStaticTacticalPositionArtifact,
+} from '../core/tactical/static/StaticTacticalPositionService';
+import type { StaticTacticalPositionArtifact } from '../core/tactical/static/StaticTacticalPositionArtifact';
 import { serializeTacticalPositionSettings } from '../core/tactical/TacticalPositionSettings';
 import { refreshAiTestLabSceneSnapshot } from '../core/testing/AiTestLabRuntime';
 import { getEnvironmentProfileRegistry, saveEnvironmentProfileRegistry } from './EnvironmentProfileStorage';
@@ -47,6 +53,7 @@ export interface ExportedSceneData {
   movementProfiles: MovementProfileRegistryData;
   units: Array<Record<string, unknown>>;
   pressureZones: Array<Record<string, unknown>>;
+  staticTacticalPositionArtifact?: StaticTacticalPositionArtifact;
 }
 
 export async function loadSceneJsonFromFile(state: SimulationState, file: File): Promise<void> {
@@ -79,6 +86,8 @@ export async function loadSceneJsonFromFile(state: SimulationState, file: File):
   } else {
     state.map.environmentProfileId = environmentRegistry.activeProfileId;
   }
+  const persistentBasis = hydrateStaticTacticalPositionArtifact(state, scene.staticTacticalPositionArtifact);
+  if (!persistentBasis.ok) getStaticTacticalPositionService(state).request();
   state.editor.selectedObjectId = null;
   state.editor.selectedZoneId = null;
   state.editor.drag = null;
@@ -94,7 +103,12 @@ export async function loadSceneJsonFromFile(state: SimulationState, file: File):
     : resetRuntimeCount > 0
       ? ` Runtime сброшен у бойцов: ${resetRuntimeCount}.`
       : ' Старый формат сцены загружен без активного действия ИИ.';
-  state.editor.lastMessage = `JSON сцены загружен в сетку ${state.map.metersPerCell} м: карта ${state.map.width}×${state.map.height}, юнитов ${state.units.length}, зон ${state.pressureZones.length}.${runtimeMessage}`;
+  const basisMessage = persistentBasis.ok
+    ? ` Статическая тактическая основа загружена из предрасчёта (${formatBytes(persistentBasis.decodedBytes)}, ${persistentBasis.decodeMs} мс).`
+    : scene.staticTacticalPositionArtifact === undefined
+      ? ' Предрасчёт статической тактической основы отсутствует; запущено штатное построение.'
+      : ` Предрасчёт статической тактической основы отклонён (${persistentBasis.reason}); запущено штатное построение.`;
+  state.editor.lastMessage = `JSON сцены загружен в сетку ${state.map.metersPerCell} м: карта ${state.map.width}×${state.map.height}, юнитов ${state.units.length}, зон ${state.pressureZones.length}.${runtimeMessage}${basisMessage}`;
 }
 
 export function downloadCurrentSceneJson(state: SimulationState): void {
@@ -108,7 +122,10 @@ export function downloadCurrentSceneJson(state: SimulationState): void {
   link.download = `real-wargame-scene-${buildTimestampForFileName()}.json`;
   link.click();
   URL.revokeObjectURL(url);
-  state.editor.lastMessage = `JSON испытательной сцены скачан: ${state.map.metersPerCell} м/клетка.`;
+  const basisMessage = scene.staticTacticalPositionArtifact
+    ? ` Предрасчёт статической тактической основы приложен (${formatBytes(scene.staticTacticalPositionArtifact.payload.byteLength)} без base64).`
+    : ' Готового актуального предрасчёта нет; сцена сохранена без него.';
+  state.editor.lastMessage = `JSON испытательной сцены скачан: ${state.map.metersPerCell} м/клетка.${basisMessage}`;
 }
 
 export function normalizeImportedScene(value: unknown): {
@@ -117,6 +134,7 @@ export function normalizeImportedScene(value: unknown): {
   pressureZones: PressureZoneData[];
   environmentProfiles: unknown;
   movementProfiles: unknown;
+  staticTacticalPositionArtifact: unknown;
 } {
   const scene = requireRecord(value, 'Файл должен содержать объект сцены.');
   const map = requireRecord(scene.map, 'В JSON сцены нет блока map.');
@@ -127,14 +145,16 @@ export function normalizeImportedScene(value: unknown): {
     pressureZones: readArray(scene.pressureZones) as unknown as PressureZoneData[],
     environmentProfiles: scene.environmentProfiles,
     movementProfiles: scene.movementProfiles,
+    staticTacticalPositionArtifact: scene.staticTacticalPositionArtifact,
   };
 }
 
 export function buildExportedScene(state: SimulationState): ExportedSceneData {
+  const staticTacticalPositionArtifact = buildStaticTacticalPositionArtifactForExport(state);
   return {
     version: 'scene-export-v10-physical-posture-action-2m-grid',
     exportedAt: new Date().toISOString(),
-    noteRu: 'Экспорт полигона ИИ с тактическим намерением PlayerCommand, профилями физического движения, environment materials, выносливостью, фактическим способом движения, слоем «Обзор и память», навигационными профилями, настройками тактических позиций и активным runtime. Новые поля добавляются совместимо в envelope v10; старые сцены без них получают безопасные значения по умолчанию, а сцены 10 м преобразуются в текущую сетку при загрузке.',
+    noteRu: 'Экспорт полигона ИИ с тактическим намерением PlayerCommand, профилями физического движения, environment materials, выносливостью, фактическим способом движения, слоем «Обзор и память», навигационными профилями, настройками тактических позиций, необязательным предрасчётом статической тактической основы и активным runtime. Новые поля добавляются совместимо в envelope v10; старые сцены без них получают безопасные значения по умолчанию, а сцены 10 м преобразуются в текущую сетку при загрузке.',
     map: {
       width: state.map.width,
       height: state.map.height,
@@ -205,6 +225,7 @@ export function buildExportedScene(state: SimulationState): ExportedSceneData {
         reasonRu: zone.reasons.ru,
       };
     }),
+    ...(staticTacticalPositionArtifact ? { staticTacticalPositionArtifact } : {}),
   };
 }
 
@@ -339,4 +360,10 @@ function roundOne(value: number): number {
 
 function roundThree(value: number): number {
   return Math.round(value * 1000) / 1000;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} Б`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 102.4) / 10} КБ`;
+  return `${Math.round(bytes / 1024 / 102.4) / 10} МБ`;
 }

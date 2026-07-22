@@ -18,13 +18,32 @@ function field() {
     danger: zero(), suppression: zero(), concealment: zero(), uncertainty: zero(), reverseSlopeQuality: zero(), forwardSlopeRisk: zero(),
     staticBasis: {
       width, height, sectorCount: sectors,
-      candidateIndex: { candidates: [
-        { cellIndex: cell(2), score: 255, postureMask: 7, dominantSectorMask: 1 },
-        { cellIndex: cell(8), score: 255, postureMask: 7, dominantSectorMask: 1 },
-      ] },
+      candidateIndex: candidateIndex(),
       observationByDirection: direction(), protectionByDirection: direction(), firingByDirection: direction(),
       staticProtectionByPosture: posture(), observationByPosture: posture(), firingByPosture: posture(), concealment: zero(),
     },
+  };
+}
+function candidateIndex() {
+  const list = () => ({
+    chunkOffsets: new Uint32Array([0]),
+    chunkCounts: new Uint16Array([2]),
+    cellIndices: new Uint32Array([cell(2), cell(8)]),
+    scores: new Uint8Array([255, 255]),
+    postureMasks: new Uint8Array([7, 7]),
+    dominantSectorMasks: new Uint32Array([1, 1]),
+  });
+  return {
+    version: 1 as const,
+    width,
+    height,
+    sectorCount: sectors,
+    chunkSizeCells: 16,
+    chunksX: 1,
+    chunksY: 1,
+    observation: list(),
+    defense: list(),
+    firing: list(),
   };
 }
 function request(objective: 'balanced' | 'advance_to_threat' | 'withdraw_from_threat', settings: ReturnType<typeof readTacticalPositionNodeSettings>['search']) {
