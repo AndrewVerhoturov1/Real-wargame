@@ -1,4 +1,5 @@
 import type { GridPosition } from '../geometry';
+import { getMapObjectAnchorFromCenter } from '../map/MapObjectGeometry';
 import { clampGridPositionToMap, type MapObject } from '../map/MapModel';
 import { normalizePressureZones } from '../pressure/PressureZone';
 import { selectUnit, type SimulationState } from '../simulation/SimulationState';
@@ -19,11 +20,12 @@ export function placeConfiguredEditorEntity(state: SimulationState, rawGrid: Gri
     const draft = drafts.object;
     const index = state.editor.nextObjectIndex;
     const id = `editor_object_${index}`;
+    const anchor = getMapObjectAnchorFromCenter(grid);
     const object: MapObject = {
       id,
       kind: draft.kind,
-      x: grid.x - draft.widthCells / 2,
-      y: grid.y - draft.heightCells / 2,
+      x: anchor.x,
+      y: anchor.y,
       rotationRadians: degreesToRadians(draft.rotationDegrees),
       widthCells: draft.widthCells,
       heightCells: draft.heightCells,
