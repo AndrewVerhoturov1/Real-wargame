@@ -2,9 +2,9 @@
 
 ## Состояние этапа
 
-Работа выполняется в ветке `feature/20260722-map-object-geometry-ballistic-probe` от `real-wargame-preview` с исходным коммитом `74726d572da6560b5d2dc1e01b0a22f6b09b9599`.
+Работа реализована в ветке `feature/20260722-map-object-geometry-ballistic-probe` с итоговым коммитом `8c4877b4340c625992db7c41bb013e19c70f61a7` и перенесена в `real-wargame-preview` коммитом `c27982425869128e94ddbc15f80ce509720a82c4`.
 
-Кодовая часть этапа реализована. Полная приёмка остаётся открытой до выполнения обязательных команд TypeScript, целевых smoke-проверок и production build в полноценном рабочем каталоге. GitHub Actions, Playwright, Chromium и deployment для этого этапа не запускаются.
+Пользователь частично проверил результат в живой игре и не обнаружил визуальных проблем. GitHub Actions, Playwright, Chromium и deployment для переноса не запускались; автоматическая полная приёмка этого SHA отдельно не заявляется.
 
 ## Каноническая семантика координат
 
@@ -102,7 +102,8 @@ O(длина луча / 0.5 м + кандидаты MapObjectSpatialIndex + чи
 Добавлены:
 
 - `npm run map-object-geometry-parity:smoke`;
-- `npm run ballistic-line-probe:smoke`.
+- `npm run ballistic-line-probe:smoke`;
+- `npm run direct-fire-line:smoke`.
 
 Они проверяют крупные и повёрнутые объекты, границы, соседние клетки, порядок объектов, согласие индекса, навигации, видимости, укрытий и баллистики, чистоту пробы, позу бойца, детерминизм и согласие реального выстрела с пробой.
 

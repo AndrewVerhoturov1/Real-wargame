@@ -4,28 +4,34 @@
   "status": "active",
   "updated_at": "2026-07-22",
   "goal": "Один пехотный отряд атакует другой; оружие — винтовки, ППШ и пулемёт; главная проверка — понятное поведение ИИ в атаке и обороне.",
-  "current_focus": "Этап 1: оптимизация выбора тактических позиций. Физическая длительная смена позы принята и находится в real-wargame-preview.",
-  "next_step": "Закончить оптимизацию поиска и диагностику выбора; затем закрыть этап 1 и перейти к стрелковому бою.",
+  "current_focus": "Этап 1: каноническая геометрия объектов и чистая баллистическая проба перенесены в real-wargame-preview. Следующая работа — сохраняемый статический предрасчёт карты и локальные рабочие точки позиции.",
+  "next_step": "Реализовать версионированный предрасчёт статической тактической основы и чистый ограниченный решатель рабочих точек наблюдения и огня.",
   "current_stage": 1,
-  "current_task": "Оптимизация выбора тактических позиций",
+  "current_task": "Сохраняемый статический предрасчёт и локальные рабочие точки",
   "current_branch": "real-wargame-preview",
   "current_plan": "plans/2026-07-22-tactical-position-basis.md",
   "blockers": [],
   "canonical_launcher": "Run-Real-Wargame-Lab.bat",
   "last_verified_commit": "8a2b3b5bb344eaafa41871315c51b07e98eb9eb3",
+  "last_transferred_commit": "c27982425869128e94ddbc15f80ce509720a82c4",
+  "last_live_tested_commit": "8c4877b4340c625992db7c41bb013e19c70f61a7",
+  "live_test_status": "Пользователь частично проверил геометрию и баллистическую пробу в живой игре; автоматические проверки итогового merge-коммита не запускались.",
   "must_read_first": [
     "AGENTS.md",
     "docs/subprojects/infantry-combat-prototype-v1/ROADMAP.md",
     "plans/2026-07-22-tactical-position-basis.md",
+    "docs/subprojects/infantry-combat-prototype-v1/MAP_OBJECT_GEOMETRY_AND_BALLISTIC_LINE_PROBE.md",
     "docs/subprojects/infantry-combat-prototype-v1/ACCEPTANCE.md",
     "docs/subprojects/infantry-combat-prototype-v1/DECISIONS.md",
     "docs/subprojects/infantry-combat-prototype-v1/WORKLOG.md"
   ],
   "main_files": [
+    "src/core/tactical/static/StaticTacticalPositionBasis.ts",
+    "src/core/tactical/static/StaticTacticalPositionService.ts",
+    "src/core/tactical/static/StaticTacticalCandidateIndex.ts",
     "src/core/tactical/TacticalPositionSearchService.ts",
-    "src/core/units/UnitModel.ts",
-    "src/core/simulation/SimulationTick.ts",
-    "src/core/ai/AiGraphRuntime.ts"
+    "src/core/map/MapObjectGeometry.ts",
+    "src/core/combat/BallisticLineProbe.ts"
   ],
   "suggested_verification": [
     "npm run docs:sync"
