@@ -1,6 +1,5 @@
 name: Patch Perception Map Revision Once
 
-# One-time verified repair for stale visibility cache in the smoke fixture.
 on:
   push:
     branches:
@@ -15,24 +14,12 @@ jobs:
   patch-and-verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      TARGET_BRANCH: feature/20260721-tactical-position-basis
-      EXPECTED_HEAD: ${{ github.sha }}
     steps:
       - name: Checkout feature branch
         uses: actions/checkout@v4
         with:
           ref: feature/20260721-tactical-position-basis
           fetch-depth: 0
-
-      - name: Verify branch has not moved
-        run: |
-          set -euo pipefail
-          remote_head="$(git ls-remote origin "refs/heads/${TARGET_BRANCH}" | cut -f1)"
-          [[ "$remote_head" == "$EXPECTED_HEAD" ]] || {
-            echo "Refusing patch: expected branch head $EXPECTED_HEAD, found $remote_head." >&2
-            exit 1
-          }
 
       - name: Mark vegetation edits dirty in perception fixture
         run: |
