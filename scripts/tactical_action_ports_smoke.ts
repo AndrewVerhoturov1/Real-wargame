@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import type { BallisticLineProbeResult } from '../src/core/combat/BallisticLineProbe';
 import { getActiveEnvironmentProfile } from '../src/core/map/EnvironmentProfileRuntime';
 import { normalizeMap, type TacticalMap, type TacticalMapData } from '../src/core/map/MapModel';
+import { getMapObjectSpatialIndex } from '../src/core/spatial/MapObjectSpatialIndex';
 import type { VisibilityTraceResult } from '../src/core/visibility/VisibilityRayKernel';
 import {
   solveTacticalActionPorts,
@@ -21,6 +22,10 @@ verifyGeometryRadiusAndRotation();
 verifyPostureAndLines();
 verifyDirectionPurposeAndPurity();
 verifyBudgetsAndArchitecture();
+verifyInputPurityAndProbeAccounting();
+verifyInvalidTargetAndBudgetReasons();
+verifyCandidateAndRouteBounds();
+verifyCornerHeightAndAnchorSemantics();
 
 console.log('tactical action ports smoke: ok');
 
@@ -136,6 +141,7 @@ function verifyBudgetsAndArchitecture(): void {
   assert.ok(lowProbe.diagnostics.routeExpansions <= 3);
   assert.equal(lowProbe.diagnostics.routeFieldBuilds, 1);
   assert.equal(lowProbe.diagnostics.fullMapScans, 0);
+  assert.equal(lowProbe.diagnostics.routeFieldNodesAllocated, (lowProbe.diagnostics.routeExtent * 2 + 1) ** 2);
   assert.ok(lowProbe.rejected.some((candidate) => candidate.rejectionReasons.length > 0));
 
   const source = readFileSync('src/core/tactical/action-ports/TacticalActionPortSolver.ts', 'utf8');
@@ -145,7 +151,157 @@ function verifyBudgetsAndArchitecture(): void {
   assert.ok(!source.includes('new Worker'));
   assert.ok(!source.includes('SimulationTick'));
   assert.ok(!source.includes('state.units'));
+  assert.ok(!source.includes('route.navigationPositionChecks + candidateNodes.length'), 'navigation diagnostics must not contain an estimated constant');
   assert.ok(!/\bA\*\b|aStar|astar/i.test(source), 'solver must not run A* per candidate');
+}
+
+function verifyInputPurityAndProbeAccounting(): void {
+  const map = actionMap([]);
+  getMapObjectSpatialIndex(map);
+  const basis = buildBasis(map);
+  const anchor = { x: 4.5, y: 4.5 };
+  const task = {
+    purpose: 'observation' as const,
+    directionRadians: 0,
+    probePoint: { x: 8.5, y: 4.5 },
+    probeDistanceMeters: 20,
+    targetHeightAboveGroundMeters: 1.7,
+  };
+  const mapBefore = JSON.stringify(map);
+  const basisBefore = basis.observationPotential.slice();
+  const anchorBefore = structuredClone(anchor);
+  const taskBefore = structuredClone(task);
+  let visibilityCalls = 0;
+  const probes: TacticalActionPortProbeContext = {
+    probeVisibility: () => {
+      visibilityCalls += 1;
+      return visibilityResult(true);
+    },
+    probeBallistic: () => {
+      throw new Error('observation must not call ballistic probe');
+    },
+  };
+  const result = solveTacticalActionPorts({ ...baseRequest(map, probes), basis, anchor, task });
+  assert.equal(JSON.stringify(map), mapBefore, 'solver must not mutate map values');
+  assert.deepEqual(basis.observationPotential, basisBefore, 'solver must not mutate basis arrays');
+  assert.deepEqual(anchor, anchorBefore, 'solver must not mutate anchor');
+  assert.deepEqual(task, taskBefore, 'solver must not mutate task');
+  assert.equal(result.diagnostics.visibilityProbes, visibilityCalls, 'visibility diagnostic must equal actual calls');
+  assert.equal(result.diagnostics.ballisticProbes, 0);
+  assert.equal(
+    [...result.candidates, ...result.rejected].reduce((sum, candidate) => sum + candidate.metrics.visibilityProbesUsed, 0),
+    visibilityCalls,
+    'per-candidate visibility counts must sum to actual calls',
+  );
+}
+
+function verifyInvalidTargetAndBudgetReasons(): void {
+  const map = actionMap([]);
+  let ballisticCalls = 0;
+  const probes: TacticalActionPortProbeContext = {
+    probeVisibility: () => visibilityResult(true),
+    probeBallistic: () => {
+      ballisticCalls += 1;
+      return ballisticResult(true);
+    },
+  };
+  const invalid = solveTacticalActionPorts({
+    ...baseRequest(map, probes),
+    allowedPostures: ['standing'],
+    task: {
+      purpose: 'firing', directionRadians: 0,
+      target: { position: { x: Number.NaN, y: 4.5 }, heightAboveGroundMeters: 1.2, maximumDistanceMeters: 100 },
+    },
+  });
+  assert.equal(ballisticCalls, 0, 'invalid target must not spend ballistic budget');
+  assert.equal(invalid.diagnostics.ballisticProbes, 0);
+  assert.ok(invalid.rejected.every((candidate) => candidate.rejectionReasons.includes('invalid_target')));
+
+  const exhausted = solveTacticalActionPorts({
+    ...baseRequest(map, probes),
+    allowedPostures: ['standing'],
+    maxBallisticProbes: 1,
+    task: {
+      purpose: 'firing', directionRadians: 0,
+      target: { position: { x: 8.5, y: 4.5 }, heightAboveGroundMeters: 1.2, maximumDistanceMeters: 100 },
+    },
+  });
+  assert.equal(exhausted.diagnostics.ballisticProbes, 1);
+  assert.equal(exhausted.diagnostics.ballisticBudgetExhausted, true);
+  assert.ok(exhausted.rejected.some((candidate) => candidate.rejectionReasons.includes('ballistic_budget_exhausted')));
+}
+
+function verifyCandidateAndRouteBounds(): void {
+  const map = actionMap([]);
+  const limited = solveTacticalActionPorts({
+    ...baseRequest(map, clearProbes()),
+    maxCandidates: 5,
+  });
+  assert.equal(limited.diagnostics.candidatePositionsGenerated, 5, 'maxCandidates limits evaluated positions');
+  assert.equal(limited.diagnostics.generatedCandidates, 15, 'each bounded position expands only allowed postures');
+  assert.ok(limited.candidates.length <= 5, 'maxCandidates also limits returned accepted candidates');
+  assert.ok(limited.rejected.length <= 15, 'rejected diagnostics remain bounded by evaluated variants');
+
+  const huge = solveTacticalActionPorts({
+    ...baseRequest(map, clearProbes()),
+    searchRadiusMeters: 1_000_000,
+    movement: { nodeSpacingMeters: 0.001, maximumStepHeightLevels: 1, allowDiagonal: true },
+    maxCandidates: 256,
+    maxRouteExpansions: 4,
+  });
+  assert.ok(huge.diagnostics.routeFieldNodesAllocated <= 129 * 129, 'route arrays must remain absolutely bounded');
+  assert.ok(huge.diagnostics.routeExpansions <= 4);
+  assert.equal(huge.diagnostics.routeBudgetExhausted, true, 'clamped radius must report route budget exhaustion');
+}
+
+function verifyCornerHeightAndAnchorSemantics(): void {
+  const cornerMap = normalizeMap({
+    width: 5, height: 5, cellSize: 4, metersPerCell: 2,
+    defaultTerrain: 'field', defaultHeight: 0, environmentProfileId: profile.id,
+    objects: [
+      { id: 'east-block', kind: 'rock', x: 2, y: 1, widthCells: 0.8, heightCells: 0.8 },
+      { id: 'south-block', kind: 'rock', x: 1, y: 2, widthCells: 0.8, heightCells: 0.8 },
+    ],
+  });
+  const corner = solveTacticalActionPorts({
+    ...baseRequest(cornerMap, clearProbes()),
+    basis: buildBasis(cornerMap),
+    anchor: { x: 1.5, y: 1.5 },
+    allowedPostures: ['standing'],
+    searchRadiusMeters: 4,
+    movement: { nodeSpacingMeters: 2, maximumStepHeightLevels: 1, allowDiagonal: true },
+  });
+  const diagonal = corner.rejected.find((candidate) => candidate.id === 'action-port:observation:1:1:standing');
+  assert.ok(diagonal?.rejectionReasons.includes('route_unreachable'), 'diagonal movement must not cut through a blocked corner');
+
+  const heightMap = normalizeMap({
+    width: 5, height: 5, cellSize: 4, metersPerCell: 2,
+    defaultTerrain: 'field', defaultHeight: 0, environmentProfileId: profile.id,
+    heightMap: Array.from({ length: 5 }, (_, y) => Array.from({ length: 5 }, (_, x) => x === 2 && y === 1 ? 4 : 0)),
+  });
+  const height = solveTacticalActionPorts({
+    ...baseRequest(heightMap, clearProbes()),
+    basis: buildBasis(heightMap),
+    anchor: { x: 1.5, y: 1.5 },
+    allowedPostures: ['standing'],
+    searchRadiusMeters: 2,
+    movement: { nodeSpacingMeters: 2, maximumStepHeightLevels: 0, allowDiagonal: false },
+  });
+  const high = height.rejected.find((candidate) => candidate.id === 'action-port:observation:1:0:standing');
+  assert.ok(high?.rejectionReasons.includes('route_unreachable'), 'height step limit must affect reachability');
+
+  const blockedAnchor = solveTacticalActionPorts({
+    ...baseRequest(actionMap([]), blockedProbes()),
+    allowedPostures: ['standing'], maxCandidates: 1,
+  });
+  assert.equal(blockedAnchor.best, null, 'anchor cannot remain best when it fails the physical task');
+  assert.ok(blockedAnchor.rejected[0]?.id.includes(':0:0:standing'));
+  const clearAnchor = solveTacticalActionPorts({
+    ...baseRequest(actionMap([]), clearProbes()),
+    allowedPostures: ['standing'], maxCandidates: 1,
+  });
+  assert.deepEqual(clearAnchor.best?.position, clearAnchor.anchor, 'anchor may remain best when it physically satisfies the task');
+  assert.ok(clearAnchor.candidates.every((candidate) => candidate.metrics.returnAvailable === candidate.metrics.reachable));
 }
 
 function baseRequest(map: TacticalMap, probes: TacticalActionPortProbeContext): TacticalActionPortSolverRequest {
