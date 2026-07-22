@@ -1,9 +1,9 @@
-# Shooting System Implementation Status
+# Статус внедрения новой системы стрелкового боя
 
 ## Состояние программы
 
 - **Программа:** новая система стрелкового боя.
-- **Статус:** implementation planning complete; runtime implementation not started.
+- **Статус:** технический план подготовлен; реализация runtime не начиналась.
 - **Оркестраторская ветка:** `planning/20260722-shooting-system-implementation`.
 - **Базовая ветка:** `real-wargame-preview`.
 - **Проверенный preview HEAD:** `fe0ba5f16d91bb765366c0ad56525684b3e47527`.
@@ -32,20 +32,21 @@
 | Этап | Статус | Ветка / результат |
 |---|---|---|
 | 0. Архитектура | выполнен | `planning/20260722-shooting-system-architecture` @ `58309fd1...` |
-| Implementation plan | подготовлен | `plans/2026-07-22-shooting-system-rebuild.md` |
-| 1A. Catalog core | ожидает разрешения | proposed `feature/20260722-shooting-stage-01a-catalog-core` |
-| 1B. Catalog editors | заблокирован зависимостью | после принятия 1A |
-| 2A–15 | не начаты | последовательные независимые этапы |
+| План внедрения | подготовлен | `plans/2026-07-22-shooting-system-rebuild.md` |
+| 1A. Ядро каталогов | ожидает разрешения | `feature/20260722-shooting-stage-01a-catalog-core` пока не создана |
+| 1B. Редакторы каталогов | заблокирован зависимостью | после принятия 1A |
+| 2A–3B | не начаты | coordinator, rifle shot и reload |
+| 4–15 | не начаты | последовательные независимые этапы |
 
 ## Первый предлагаемый этап
 
-**1A — чистые каталоги, revisions, validation и JSON round-trip.**
+**1A — чистые каталоги, ревизии, проверка данных и JSON round-trip.**
 
 Разрешённый scope:
 
 - `src/core/infantry-combat/catalogs/**`;
-- четыре focused smoke files;
-- три package scripts.
+- четыре узких smoke-файла;
+- три команды в `package.json`.
 
 Запрещённый scope:
 
@@ -65,7 +66,7 @@
 
 ## Временные адаптеры
 
-Пока отсутствуют. После появления каждый адаптер обязан быть перечислен здесь с:
+Пока отсутствуют. После появления каждый временный адаптер обязан быть перечислен здесь с:
 
 - путём;
 - причиной;
@@ -78,8 +79,9 @@
 
 - Stage 1B не начинается до принятия 1A.
 - Stage 2B не начинается до принятия 2A.
-- Stage 3 не начинается до принятия 1B и 2B.
-- Stage 5 не начинается до passing benchmark stage 4.
+- Stage 3A не начинается до принятия 1B и 2B.
+- Stage 3B не начинается до принятия 3A.
+- Stage 5 не начинается до принятого benchmark stage 4.
 - Graph v2 не меняется до stage 13.
 - Action-port firing не переводится на новую систему до stage 14.
 - Старый runtime не отключается и не удаляется до stage 15.
