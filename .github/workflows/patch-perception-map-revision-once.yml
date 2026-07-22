@@ -1,5 +1,6 @@
 name: Patch Perception Map Revision Once
 
+# One-time verified repair for stale visibility cache in the smoke fixture.
 on:
   push:
     branches:
