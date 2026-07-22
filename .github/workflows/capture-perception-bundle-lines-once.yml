@@ -1,0 +1,58 @@
+name: Capture Perception Bundle Lines Once
+
+on:
+  push:
+    branches:
+      - feature/20260721-tactical-position-basis
+    paths:
+      - .github/workflows/capture-perception-bundle-lines-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout failing clean head
+        uses: actions/checkout@v4
+        with:
+          ref: b12435ca1ccc2fb5449a87ea5751ea88d5132329
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build perception smoke without executing it
+        run: |
+          node --input-type=module <<'NODE'
+          import path from 'node:path';
+          import { build } from 'vite';
+          const root = process.cwd();
+          await build({
+            root,
+            logLevel: 'warn',
+            build: {
+              ssr: path.join(root, 'scripts', 'perception_system_smoke.ts'),
+              outDir: '.tmp-perception-line-capture',
+              emptyOutDir: true,
+              minify: false,
+              sourcemap: false,
+              rollupOptions: { output: { entryFileNames: 'perception-system-smoke.mjs', format: 'es' } },
+            },
+          });
+          NODE
+          mkdir -p docs/workflow
+          nl -ba .tmp-perception-line-capture/perception-system-smoke.mjs | sed -n '6940,6970p' > docs/workflow/PERCEPTION_BUNDLE_LINES.txt
+      - name: Commit exact bundle lines
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin feature/20260721-tactical-position-basis
+          git checkout -B diagnostic origin/feature/20260721-tactical-position-basis
+          git add -f docs/workflow/PERCEPTION_BUNDLE_LINES.txt
+          git commit -m "ci: capture perception bundle assertion [skip ci]"
+          git push origin HEAD:feature/20260721-tactical-position-basis

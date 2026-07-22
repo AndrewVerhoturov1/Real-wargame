@@ -1,7 +1,12 @@
+import { cancelReplaceablePostureTransitionForNewPlayerCommand } from '../actions/PostureTransition';
 import { publishTacticalOrderIntentToAiMemory } from '../ai/TacticalOrderBlackboard';
 import { createDirectPlayerMovePlan } from '../ai/UnitPlan';
 import type { GridPosition } from '../geometry';
 import { clampGridPositionToMap } from '../map/MapModel';
+import {
+  movementGaitForPosture,
+  movementProfileIdForPosture,
+} from '../movement/PostureMovementProfile';
 import { buildUnitTacticalRouteContext, resolveUnitNavigationProfile } from '../navigation/NavigationRuntime';
 import { clearAttentionOverride, setAttentionMode, setSearchSector } from '../perception/AttentionController';
 import { degreesToRadians } from '../perception/AttentionModel';
@@ -12,6 +17,7 @@ import { planMoveOrder } from './MoveOrderPlanning';
 import { createPlayerMoveCommand, updatePlayerCommandStatus } from './PlayerCommand';
 import {
   createTacticalOrderIntent,
+  withTacticalOrderMovementProfile,
   withTacticalOrderNavigationProfile,
   type TacticalOrderIntent,
   type TacticalOrderPresetId,
@@ -39,9 +45,12 @@ export function issueRoutedMoveOrderToSelectedUnits(
   issueTacticalOrderIntentToSelectedUnits(
     state,
     rawTarget,
-    (unit) => withTacticalOrderNavigationProfile(
-      createTacticalOrderIntent('move'),
-      unit.playerNavigationProfileId ?? 'normal',
+    (unit) => withTacticalOrderMovementProfile(
+      withTacticalOrderNavigationProfile(
+        createTacticalOrderIntent('move'),
+        unit.playerNavigationProfileId ?? 'normal',
+      ),
+      movementProfileIdForPosture(unit.behaviorRuntime.posture),
     ),
     finalFacingRadians,
   );
@@ -68,6 +77,7 @@ function issueTacticalOrderIntentToSelectedUnits(
           y: target.y + unit.position.y - center.y,
         });
     const intent = resolveIntent(unit);
+    cancelReplaceablePostureTransitionForNewPlayerCommand(unit);
     const command = createPlayerMoveCommand(
       unit.id,
       requestedTarget,
@@ -79,6 +89,9 @@ function issueTacticalOrderIntentToSelectedUnits(
     );
     unit.playerCommand = command;
     unit.playerNavigationProfileId = command.intent.navigationProfileId;
+    if (command.intent.presetId === 'move') {
+      unit.movementRuntime.requestedGait = movementGaitForPosture(unit.behaviorRuntime.posture);
+    }
     publishTacticalOrderIntentToAiMemory(unit, command.intent);
     applyIntentAttention(unit, command.intent);
     const resolvedNavigation = resolveUnitNavigationProfile(unit, command);
@@ -148,7 +161,6 @@ function applyPressurePreview(
 ): void {
   const report = getPressureReportAtPosition(target, state.pressureZones);
   unit.behaviorRuntime.state = 'moving';
-  unit.behaviorRuntime.posture = 'standing';
   unit.behaviorRuntime.currentAction = 'move';
 
   if (!report) {

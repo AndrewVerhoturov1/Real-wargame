@@ -33,41 +33,52 @@ if (/npx playwright|playwright install|Upload screenshots/.test(previewPolicyWor
   fail('preview-policy.yml must not execute browser or screenshot commands');
 }
 
-const requiredFiles = [
-  'AGENTS.md',
-  '.agents/skills/real-wargame-local-preview/SKILL.md',
-  '.agents/skills/real-wargame-ai-runtime/SKILL.md',
-  '.agents/skills/real-wargame-pixijs/SKILL.md',
-];
+const agents = read('AGENTS.md');
+const localSkill = read('.agents/skills/real-wargame-local-preview/SKILL.md');
+const aiRuntimeSkill = read('.agents/skills/real-wargame-ai-runtime/SKILL.md');
+const pixiSkill = read('.agents/skills/real-wargame-pixijs/SKILL.md');
+const policy = read('docs/workflow/VISUAL_QA_APPROVAL_POLICY.md');
 
-for (const path of requiredFiles) {
-  const content = read(path);
+for (const [path, content] of [
+  ['.agents/skills/real-wargame-local-preview/SKILL.md', localSkill],
+  ['.agents/skills/real-wargame-ai-runtime/SKILL.md', aiRuntimeSkill],
+  ['.agents/skills/real-wargame-pixijs/SKILL.md', pixiSkill],
+]) {
   if (!content.includes('VISUAL_QA_APPROVAL_POLICY.md')) {
     fail(`${path} must reference the canonical visual QA approval policy`);
   }
 }
 
-const agents = read('AGENTS.md');
+if (!agents.includes('.agents/skills/real-wargame-local-preview/SKILL.md')) {
+  fail('AGENTS.md must route direct-browser visual work through the local preview skill');
+}
+if (!agents.includes('Visual permission is separate from deployment permission.')) {
+  fail('AGENTS.md must keep visual permission separate from deployment permission');
+}
+if (!agents.includes('visual_qa_status')) {
+  fail('AGENTS.md must keep visual QA status in the final report contract');
+}
+
 for (const token of [
   'Визуальная проверка подготовлена. Запустить её сейчас?',
   'visual_qa_prepared',
   'visual_qa_approval',
   'visual_qa_run',
 ]) {
-  if (!agents.includes(token)) fail(`AGENTS.md is missing ${token}`);
+  if (!localSkill.includes(token)) fail(`local preview skill is missing ${token}`);
 }
 
-const localSkill = read('.agents/skills/real-wargame-local-preview/SKILL.md');
-if (!localSkill.includes('Do **not** start a local browser run')) {
+if (!localSkill.includes('do not run the browser')) {
   fail('local preview skill must forbid unapproved browser execution');
 }
 if (!localSkill.includes('manual-only')) {
   fail('local preview skill must describe the screenshot workflow as manual-only');
 }
 
-const policy = read('docs/workflow/VISUAL_QA_APPROVAL_POLICY.md');
-if (!policy.includes('Do not restore `push` or `pull_request` triggers')) {
-  fail('canonical policy must forbid restoring automatic screenshot triggers');
+const forbidsAutomaticBrowserRun = policy.includes('Do not restore `push` or `pull_request` triggers')
+  || policy.includes('A normal feature push, Vercel deployment or product PR must not automatically launch browser verification.');
+if (!forbidsAutomaticBrowserRun) {
+  fail('canonical policy must forbid automatic browser verification from push or pull request');
 }
 
 if (process.exitCode) process.exit(process.exitCode);

@@ -1,22 +1,48 @@
+import {
+  cancelPostureTransition,
+  isPostureTransitionRunning,
+  postureOwnerTokenForPlayerCommand,
+  requestPostureTransition,
+} from '../actions/PostureTransition';
 import type { UnitPosture } from '../behavior/BehaviorModel';
 import { releasePlayerCommandTacticalPosition } from '../orders/PlayerCommand';
 import { updateAttentionController } from '../perception/AttentionController';
+import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
 
 /**
  * Tactical-position occupation is serialized inside PlayerCommand. This module
- * only applies the command-owned approach/arrival contract; it owns no hidden
- * per-object state and performs no perpetual occupied-state correction.
+ * applies the command-owned approach/arrival contract through the common
+ * physical posture action; it owns no hidden per-object state.
  */
-export function reconcileTacticalPositionOccupation(unit: UnitModel): void {
+export function reconcileTacticalPositionOccupation(state: SimulationState, unit: UnitModel): void {
   const command = unit.playerCommand;
   if (!command?.arrivalPosture) return;
 
   if (
+    command.status === 'blocked'
+    || command.status === 'cancelled'
+    || command.tacticalPositionOccupationStatus === 'released'
+  ) {
+    cancelPostureTransition(
+      unit,
+      postureOwnerTokenForPlayerCommand(command.id),
+      'tactical_position_posture_cancelled_by_command',
+      'Смена позы отменена: приказ тактической позиции больше не действует.',
+    );
+    return;
+  }
+
+  if (
     unit.order
     && unit.order.playerCommandId !== command.id
-    && command.tacticalPositionOccupationStatus !== 'released'
   ) {
+    cancelPostureTransition(
+      unit,
+      postureOwnerTokenForPlayerCommand(command.id),
+      'tactical_position_released_by_route',
+      'Смена позы отменена: тактическая позиция освобождена новым маршрутом.',
+    );
     unit.playerCommand = releasePlayerCommandTacticalPosition(
       command,
       'Tactical position released by an unrelated route.',
@@ -32,14 +58,19 @@ export function reconcileTacticalPositionOccupation(unit: UnitModel): void {
     || unit.order.playerCommandId !== command.id
   ) return;
 
-  enforcePosture(
+  requestCommandPosture(
+    state,
     unit,
     command.approachPosture ?? 'standing',
     'tactical_position_approach',
+    'Боец физически принимает позу подхода к тактической позиции.',
   );
 }
 
-export function applyCompletedTacticalPositionOccupation(unit: UnitModel): boolean {
+export function applyCompletedTacticalPositionOccupation(
+  state: SimulationState,
+  unit: UnitModel,
+): boolean {
   const command = unit.playerCommand;
   if (
     !command?.arrivalPosture
@@ -48,7 +79,16 @@ export function applyCompletedTacticalPositionOccupation(unit: UnitModel): boole
     || unit.order
   ) return false;
 
-  enforcePosture(unit, command.arrivalPosture, 'tactical_position_arrival');
+  const result = requestCommandPosture(
+    state,
+    unit,
+    command.arrivalPosture,
+    'tactical_position_arrival',
+    'Боец физически принимает позу прибытия в тактическую позицию.',
+  );
+  if (!result.accepted) return false;
+  if (isPostureTransitionRunning(unit) || unit.behaviorRuntime.posture !== command.arrivalPosture) return false;
+
   const facing = finiteFacing(command.finalFacingRadians);
   if (facing !== null && angularDistance(unit.facingRadians, facing) > 0.0001) {
     unit.facingRadians = facing;
@@ -75,15 +115,30 @@ export function occupiedTacticalPositionPosture(unit: UnitModel): UnitPosture | 
     : null;
 }
 
-function enforcePosture(
+function requestCommandPosture(
+  state: SimulationState,
   unit: UnitModel,
   posture: UnitPosture,
-  reason: string,
-): void {
-  if (unit.behaviorRuntime.posture === posture) return;
-  unit.behaviorRuntime.previousPosture = unit.behaviorRuntime.posture;
-  unit.behaviorRuntime.posture = posture;
-  unit.behaviorRuntime.postureChangedBecause = reason;
+  reasonCode: string,
+  reasonRu: string,
+) {
+  const command = unit.playerCommand;
+  if (!command) {
+    return {
+      accepted: false,
+      action: unit.behaviorRuntime.physicalAction ?? null,
+      reasonCode: 'tactical_position_command_missing',
+      reasonRu: 'Команда тактической позиции отсутствует.',
+    };
+  }
+  return requestPostureTransition(unit, {
+    targetPosture: posture,
+    owner: { source: 'tactical_position', id: command.id },
+    ownerToken: postureOwnerTokenForPlayerCommand(command.id),
+    startedSeconds: state.simulationTimeSeconds,
+    reasonCode,
+    reasonRu,
+  });
 }
 
 function finiteFacing(value: number | null | undefined): number | null {

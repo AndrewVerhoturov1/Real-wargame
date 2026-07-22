@@ -26,11 +26,20 @@ import {
   evaluateThreatRuntimeAtPosition,
   evaluateThreatsAtPosition,
 } from '../src/core/pressure/ThreatEvaluation';
-import { createInitialState } from '../src/core/simulation/SimulationState';
+import { createInitialState as createInitialStateBase, type SimulationState } from '../src/core/simulation/SimulationState';
 import { tickSimulation } from '../src/core/simulation/SimulationTick';
+import { clearStaticTacticalPositionService } from '../src/core/tactical/static/StaticTacticalPositionService';
 import { areUnitsHostile, getSideRelation } from '../src/core/units/SideRelations';
 import type { UnitModel } from '../src/core/units/UnitModel';
 import { buildExportedScene, normalizeImportedScene } from '../src/ui/SceneExport';
+
+const createdStates = new Set<SimulationState>();
+
+function createInitialState(...args: Parameters<typeof createInitialStateBase>): SimulationState {
+  const state = createInitialStateBase(...args);
+  createdStates.add(state);
+  return state;
+}
 
 function makeState() {
   return createInitialState(
@@ -466,5 +475,7 @@ verifyDamage();
 verifyCombatPersistence();
 verifyFirePermissionAndContinuedFire();
 verifyStatefulFire();
+
+for (const state of createdStates) clearStaticTacticalPositionService(state);
 
 console.log('Combat foundation smoke passed.');

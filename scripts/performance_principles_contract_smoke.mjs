@@ -17,6 +17,13 @@ function requireIncludes(relativePath, requiredFragments) {
   }
 }
 
+function requireAny(relativePath, alternatives, label) {
+  const content = read(relativePath);
+  if (!alternatives.some((fragment) => content.includes(fragment))) {
+    throw new Error(`${relativePath} must include ${label}: one of ${alternatives.join(' | ')}`);
+  }
+}
+
 const canonicalPath = 'docs/performance/PERFORMANCE_PRINCIPLES.md';
 const skillPath = '.agents/skills/real-wargame-performance/SKILL.md';
 const ciPolicyPath = 'docs/workflow/CI_RISK_BASED_ACCEPTANCE.md';
@@ -64,9 +71,17 @@ requireIncludes('AGENTS.md', [
 requireIncludes('docs/ai/WEB_CHAT_START.md', [
   canonicalPath,
   skillPath,
-  'Mandatory performance route',
-  'Performance impact',
 ]);
+requireAny(
+  'docs/ai/WEB_CHAT_START.md',
+  ['Mandatory performance route', 'For runtime-affecting work also read:'],
+  'the mandatory performance reading route',
+);
+requireAny(
+  'docs/ai/WEB_CHAT_START.md',
+  ['Performance impact', 'docs/orchestration/RESULT_TEMPLATE.md'],
+  'performance impact reporting route',
+);
 
 requireIncludes('docs/ai/SKILLS_INDEX.md', [
   'Real-Wargame performance contract',
@@ -77,16 +92,28 @@ requireIncludes('docs/ai/SKILLS_INDEX.md', [
 requireIncludes('docs/orchestration/ORCHESTRATOR_PROMPT.md', [
   canonicalPath,
   skillPath,
-  'обязательным performance-контрактом',
-  'Performance impact',
 ]);
+requireAny(
+  'docs/orchestration/ORCHESTRATOR_PROMPT.md',
+  ['обязательным performance-контрактом', 'обязательно также прочитай'],
+  'the mandatory performance contract instruction',
+);
+requireAny(
+  'docs/orchestration/ORCHESTRATOR_PROMPT.md',
+  ['Performance impact', 'performance impact'],
+  'performance impact reporting',
+);
 
 requireIncludes('docs/orchestration/WORKER_PROMPT.md', [
   canonicalPath,
   skillPath,
-  'Это обязательный контракт',
   'Performance impact',
 ]);
+requireAny(
+  'docs/orchestration/WORKER_PROMPT.md',
+  ['Это обязательный контракт', 'до проектирования обязательно прочитай'],
+  'the mandatory worker performance instruction',
+);
 
 requireIncludes('docs/orchestration/INTEGRATOR_PROMPT.md', [
   canonicalPath,
@@ -98,13 +125,12 @@ requireIncludes('docs/orchestration/INTEGRATOR_PROMPT.md', [
 ]);
 
 requireIncludes('docs/orchestration/RESULT_TEMPLATE.md', [
-  '## Performance impact',
-  'worst-case complexity:',
-  'full-map builds:',
-  'cache owner/key/limit:',
-  'tested implementation head:',
-  'performance reason:',
-  '## Verification selection',
+  '## 5. Performance impact',
+  'worst_case_complexity:',
+  'full_map_builds:',
+  'cache_owner_key_limit:',
+  'TESTED_IMPLEMENTATION_HEAD:',
+  '## 4. Verification selection',
 ]);
 
 requireIncludes('scripts/check_agent_docs.mjs', [
