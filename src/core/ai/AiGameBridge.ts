@@ -11,8 +11,8 @@ export * from './AiGameBridgeLegacy';
 
 /**
  * Public compatibility contract delegated to AiGameBridgeLegacy. Keeping the
- * delegated capabilities explicit makes the facade boundary reviewable while
- * the posture adapter below remains the only new behavioural layer.
+ * delegated capabilities explicit makes the facade boundary reviewable and
+ * statically verifiable while the posture adapter remains the only new layer.
  */
 export const AI_GAME_BRIDGE_FACADE_CONTRACT = [
   'runAiGraph',
