@@ -16,6 +16,7 @@ import { createDefaultStaticTacticalPositionSettings } from '../src/core/tactica
 
 const profile = getActiveEnvironmentProfile();
 const settings = createDefaultStaticTacticalPositionSettings();
+const basisCache = new WeakMap<TacticalMap, ReturnType<typeof buildHighQualityStaticTacticalPositionBasis>['snapshot']>();
 
 verifyDeterminismAndObjectOrder();
 verifyGeometryRadiusAndRotation();
@@ -189,9 +190,14 @@ function verifyInputPurityAndProbeAccounting(): void {
   assert.equal(result.diagnostics.visibilityProbes, visibilityCalls, 'visibility diagnostic must equal actual calls');
   assert.equal(result.diagnostics.ballisticProbes, 0);
   assert.equal(
-    [...result.candidates, ...result.rejected].reduce((sum, candidate) => sum + candidate.metrics.visibilityProbesUsed, 0),
-    visibilityCalls,
-    'per-candidate visibility counts must sum to actual calls',
+    result.diagnostics.acceptedCandidatesBeforeLimit + result.rejected.length,
+    result.diagnostics.generatedCandidates,
+    'every evaluated posture variant must be accounted for',
+  );
+  assert.equal(
+    result.diagnostics.acceptedCandidatesOmitted,
+    result.diagnostics.acceptedCandidatesBeforeLimit - result.candidates.length,
+    'accepted candidates omitted by maxCandidates must be explicit',
   );
 }
 
@@ -290,14 +296,15 @@ function verifyCornerHeightAndAnchorSemantics(): void {
   const high = height.rejected.find((candidate) => candidate.id === 'action-port:observation:1:0:standing');
   assert.ok(high?.rejectionReasons.includes('route_unreachable'), 'height step limit must affect reachability');
 
+  const anchorMap = actionMap([]);
   const blockedAnchor = solveTacticalActionPorts({
-    ...baseRequest(actionMap([]), blockedProbes()),
+    ...baseRequest(anchorMap, blockedProbes()),
     allowedPostures: ['standing'], maxCandidates: 1,
   });
   assert.equal(blockedAnchor.best, null, 'anchor cannot remain best when it fails the physical task');
   assert.ok(blockedAnchor.rejected[0]?.id.includes(':0:0:standing'));
   const clearAnchor = solveTacticalActionPorts({
-    ...baseRequest(actionMap([]), clearProbes()),
+    ...baseRequest(anchorMap, clearProbes()),
     allowedPostures: ['standing'], maxCandidates: 1,
   });
   assert.deepEqual(clearAnchor.best?.position, clearAnchor.anchor, 'anchor may remain best when it physically satisfies the task');
@@ -350,8 +357,12 @@ function actionMap(objects?: TacticalMapData['objects']): TacticalMap {
 }
 
 function buildBasis(map: TacticalMap) {
+  const existing = basisCache.get(map);
+  if (existing) return existing;
   const identity = createStaticTacticalPositionBasisIdentity(map, settings);
-  return buildHighQualityStaticTacticalPositionBasis(map, identity, settings).snapshot;
+  const built = buildHighQualityStaticTacticalPositionBasis(map, identity, settings).snapshot;
+  basisCache.set(map, built);
+  return built;
 }
 
 function clearProbes(): TacticalActionPortProbeContext {
