@@ -64,8 +64,8 @@ function verifyFingerprintStabilityAndInvalidation(): void {
   assert.equal(createStaticTacticalPositionFingerprint(normalizeMap(reordered), settings, profile).value, fingerprint.value);
 
   assertFingerprintChanges((data) => { data.heightMap![2]![2] = 3; }, 'height');
-  assertFingerprintChanges((data) => { data.cellRects = [{ x1: 1, x2: 1, y1: 1, y2: 1, terrain: 'rough' }]; }, 'terrain');
-  assertFingerprintChanges((data) => { data.forestMap![2]![2] = 2; }, 'vegetation');
+  assertFingerprintChanges((data) => { data.surfaceMaterialMap![1]![1] = 'rough'; }, 'terrain');
+  assertFingerprintChanges((data) => { data.vegetationMaterialMap![2]![2] = 'dense_forest'; }, 'vegetation');
   assertFingerprintChanges((data) => { data.surfaceMaterialMap![2]![2] = 'road'; }, 'surface material');
   assertFingerprintChanges((data) => { data.objects![0]!.x = Number(data.objects![0]!.x ?? 0) + 1; }, 'object');
 
