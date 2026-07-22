@@ -8,7 +8,7 @@ import { sampleSmoothHeightLevel } from '../terrain/SmoothTerrain';
 import { getVisibilityStaticGrid, type VisibilityStaticGrid } from './VisibilityStaticGrid';
 
 const ELEVATION_STEP_METERS = 2;
-const HORIZON_MARGIN = 0.02;
+const HORIZON_CLEARANCE_METERS = 0.02;
 const EPSILON = 1e-9;
 
 export type VisibilityTraceChannel = 'visual' | 'fire' | 'combined';
@@ -198,7 +198,8 @@ export function traceVisibilityRayPath(
     const sampleSlope = traversed.targetCell
       ? exactTargetSlope
       : (samplePoint - originEye) / Math.max(0.001, currentDistanceMeters);
-    const blockedByHorizon = horizonPosition !== null && sampleSlope + HORIZON_MARGIN < horizonSlope;
+    const horizonClearanceSlope = HORIZON_CLEARANCE_METERS / Math.max(0.001, currentDistanceMeters);
+    const blockedByHorizon = horizonPosition !== null && sampleSlope + horizonClearanceSlope < horizonSlope;
     const blockedByVegetation = channel === 'visual' && vegetationBlocked;
     const hardBlocked = blockedByHorizon || blockedByVegetation;
     const blockerKind = blockedByHorizon ? horizonKind : blockedByVegetation ? 'vegetation' : 'none';
