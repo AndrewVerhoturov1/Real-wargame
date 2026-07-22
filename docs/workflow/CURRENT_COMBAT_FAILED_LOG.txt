@@ -1,0 +1,72 @@
+Minimal sufficient verification	Focused combat and perception contracts	﻿2026-07-22T00:07:13.5288132Z ##[group]Run npm run combat-foundation:smoke
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:13.5288442Z ^[[36;1mnpm run combat-foundation:smoke^[[0m
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:13.5288672Z ^[[36;1mnpm run perception:smoke^[[0m
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:13.5338965Z shell: /usr/bin/bash -e {0}
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:13.5339179Z ##[endgroup]
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:13.6296257Z 
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:13.6296998Z > real-wargame@0.1.0 combat-foundation:smoke
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:13.6298480Z > node scripts/combat_foundation_smoke.mjs
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:13.6298784Z 
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:15.3937447Z Combat foundation smoke passed.
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:15.5040974Z 
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:15.5041623Z > real-wargame@0.1.0 perception:smoke
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:15.5042213Z > node scripts/perception_system_smoke.mjs && node scripts/rear_attention_perception_smoke.mjs
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:15.5042516Z 
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3801151Z node:internal/modules/run_main:123
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3801658Z     triggerUncaughtException(
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3801936Z     ^
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3802101Z 
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3802572Z AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3803059Z 
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3803181Z false !== true
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3803321Z 
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3803950Z     at file:///home/runner/work/Real-wargame/Real-wargame/.tmp-perception-system-smoke/perception-system-smoke.mjs?run=1784678836344:6957:8
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3804994Z     at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3805618Z     at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3806464Z     at async file:///home/runner/work/Real-wargame/Real-wargame/scripts/perception_system_smoke.mjs:31:3 {
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3807093Z   generatedMessage: true,
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3807415Z   code: 'ERR_ASSERTION',
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3807706Z   actual: false,
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3807960Z   expected: true,
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3808219Z   operator: 'strictEqual'
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3808498Z }
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3808620Z 
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3808725Z Node.js v20.20.2
+Minimal sufficient verification	Focused combat and perception contracts	2026-07-22T00:07:16.3985323Z ##[error]Process completed with exit code 1.
+Risk decision and evidence validity	Publish selected matrix	﻿2026-07-22T00:07:21.9792303Z ##[group]Run {
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9793429Z ^[[36;1m{^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9794104Z ^[[36;1m  echo '## PR Risk CI decision'^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9794811Z ^[[36;1m  echo^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9795641Z ^[[36;1m  echo "- focused verification: $VERIFY_RESULT"^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9796560Z ^[[36;1m  echo "- full non-browser matrix: $FULL_MATRIX"^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9797409Z ^[[36;1m  echo "- tested implementation head: $TESTED_HEAD"^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9798236Z ^[[36;1m  echo "- evidence status: $EVIDENCE_STATUS"^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9799095Z ^[[36;1m  echo "- danger performance recommended: $DANGER_RECOMMENDED"^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9800045Z ^[[36;1m  echo "- live performance recommended: $LIVE_RECOMMENDED"^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9801014Z ^[[36;1m  echo "- performance reason: $PERFORMANCE_REASON"^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9801774Z ^[[36;1m  echo^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9802653Z ^[[36;1m  echo 'Heavy browser performance is intentionally not an implicit required job.'^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9804512Z ^[[36;1m  echo 'Run it by applying ci:danger-performance / ci:live-performance or through workflow_dispatch with a concrete PERFORMANCE_REASON.'^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9805991Z ^[[36;1m} >> "$GITHUB_STEP_SUMMARY"^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9806653Z ^[[36;1m^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9807319Z ^[[36;1mif [ "$VERIFY_RESULT" != "success" ]; then^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9911559Z ^[[36;1m  echo "Focused verification did not succeed: $VERIFY_RESULT" >&2^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9913057Z ^[[36;1m  exit 1^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9913695Z ^[[36;1mfi^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9914377Z ^[[36;1mif [ "$EVIDENCE_VALID" != "true" ]; then^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9915644Z ^[[36;1m  echo "Declared tested implementation head is invalid: $EVIDENCE_STATUS" >&2^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9916864Z ^[[36;1m  exit 1^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:21.9917506Z ^[[36;1mfi^[[0m
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:22.0473269Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:22.0474419Z env:
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:22.0474860Z   VERIFY_RESULT: failure
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:22.0475400Z   EVIDENCE_STATUS: not-declared
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:22.0475919Z   EVIDENCE_VALID: true
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:22.0476383Z   TESTED_HEAD: none
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:22.0477312Z   PERFORMANCE_REASON: simulation_ai_navigation_or_perception_hot_path_changed,performance_contract_or_harness_changed
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:22.0478327Z   DANGER_RECOMMENDED: false
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:22.0479138Z   LIVE_RECOMMENDED: true
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:22.0479616Z   FULL_MATRIX: false
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:22.0480068Z ##[endgroup]
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:22.0819242Z Focused verification did not succeed: failure
+Risk decision and evidence validity	Publish selected matrix	2026-07-22T00:07:22.0837761Z ##[error]Process completed with exit code 1.
