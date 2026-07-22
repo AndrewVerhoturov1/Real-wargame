@@ -1,0 +1,174 @@
+name: One-shot Vercel Preview 6ee9c638
+
+on:
+  push:
+    branches:
+      - deploy/20260722-real-wargame-preview-6ee9c638
+
+permissions:
+  contents: read
+
+concurrency:
+  group: one-shot-vercel-preview-6ee9c638
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    name: Verify and publish exact Preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      REQUESTED_REF: real-wargame-preview
+      EXPECTED_SHA: 6ee9c6381f21165e3b1b043d3a8d15b9d947a2f3
+      EXPECTED_VERCEL_PROJECT_NAME: repo
+    steps:
+      - name: Checkout exact preview ref
+        uses: actions/checkout@v4
+        with:
+          ref: real-wargame-preview
+          fetch-depth: 0
+
+      - name: Verify exact source before installation
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Requested ref: $REQUESTED_REF"
+          echo "Checked out SHA: $actual_sha"
+          if [[ "$actual_sha" != "$EXPECTED_SHA" ]]; then
+            echo "Source mismatch: expected $EXPECTED_SHA but checked out $actual_sha." >&2
+            exit 1
+          fi
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          main_sha="$(git rev-parse refs/remotes/origin/main)"
+          if [[ "$actual_sha" == "$main_sha" ]]; then
+            echo 'Refusing to deploy main without separate authorization.' >&2
+            exit 1
+          fi
+          echo "ref=$REQUESTED_REF" >> "$GITHUB_OUTPUT"
+          echo "sha=$actual_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run deployment verification gate
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/preview-verification.json"
+          npm run verify:preview -- --report "$report"
+          echo "report=$report" >> "$GITHUB_OUTPUT"
+
+      - name: Pull permanent Vercel project settings
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx --yes vercel@56.4.1 pull --yes --environment=preview --token="$VERCEL_TOKEN"
+
+      - name: Verify permanent Vercel project link
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: >-
+          node scripts/verify_vercel_project_link.mjs
+          --file .vercel/project.json
+          --expected-org-id "$VERCEL_ORG_ID"
+          --expected-project-id "$VERCEL_PROJECT_ID"
+          --expected-project-name "$EXPECTED_VERCEL_PROJECT_NAME"
+
+      - name: Build Vercel output once
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_OR_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          REAL_WARGAME_BRANCH: ${{ steps.source.outputs.ref }}
+          REAL_WARGAME_COMMIT_SHA: ${{ steps.source.outputs.sha }}
+        run: npx --yes vercel@56.4.1 build --token="$VERCEL_TOKEN"
+
+      - name: Add exact deployment identity
+        run: >-
+          node scripts/write_deployment_source.mjs
+          --root .vercel/output/static
+          --ref "${{ steps.source.outputs.ref }}"
+          --sha "${{ steps.source.outputs.sha }}"
+          --report "${{ steps.gate.outputs.report }}"
+
+      - name: Verify prebuilt output pages
+        run: npm run verify:deployment-pages -- --root .vercel/output/static --require-source
+
+      - name: Publish one prebuilt Preview deployment
+        id: deploy
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          deployment_url="$(npx --yes vercel@56.4.1 deploy --prebuilt --yes --token="$VERCEL_TOKEN")"
+          deployment_url="$(printf '%s\n' "$deployment_url" | tail -n 1 | tr -d '\r')"
+          if [[ ! "$deployment_url" =~ ^https://[^[:space:]]+$ ]]; then
+            echo 'Vercel CLI did not return a valid deployment URL.' >&2
+            exit 1
+          fi
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "Deployment URL: $deployment_url"
+
+      - name: Wait for READY
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: >-
+          npx --yes vercel@56.4.1 inspect "${{ steps.deploy.outputs.url }}"
+          --wait --token="$VERCEL_TOKEN"
+
+      - name: Verify published pages and identity
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          EXPECTED_REF: ${{ steps.source.outputs.ref }}
+          VERIFIED_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          npx --yes vercel@56.4.1 curl / --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > /dev/null
+          npx --yes vercel@56.4.1 curl /ai-node-editor.html --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > /dev/null
+          source_file="$RUNNER_TEMP/published-deployment-source.json"
+          npx --yes vercel@56.4.1 curl /deployment-source.json --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > "$source_file"
+          SOURCE_FILE="$source_file" node <<'NODE'
+          const fs = require('node:fs');
+          const source = JSON.parse(fs.readFileSync(process.env.SOURCE_FILE, 'utf8'));
+          if (source.ref !== process.env.EXPECTED_REF || source.sourceSha !== process.env.VERIFIED_SHA) {
+            throw new Error('Published deployment identity does not match the requested ref and SHA.');
+          }
+          NODE
+
+      - name: Publish run summary
+        if: always()
+        shell: bash
+        env:
+          RUN_STATUS: ${{ job.status }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          VERIFIED_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          {
+            echo '## One-shot Vercel Preview'
+            echo
+            echo "- status: ${RUN_STATUS:-unknown}"
+            echo "- ref: $REQUESTED_REF"
+            echo "- expected SHA: $EXPECTED_SHA"
+            echo "- verified SHA: ${VERIFIED_SHA:-not verified}"
+            echo "- Preview URL: ${DEPLOYMENT_URL:-not created}"
+          } >> "$GITHUB_STEP_SUMMARY"
