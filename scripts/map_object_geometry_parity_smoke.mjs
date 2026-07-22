@@ -3,6 +3,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'vite';
 
+await import('./map_object_geometry_source_contract_smoke.mjs');
+
 const repoRoot = process.cwd();
 const outDir = path.join(repoRoot, '.tmp-map-object-geometry-parity-smoke');
 const entryFile = path.join(outDir, 'map-object-geometry-parity-smoke.mjs');
