@@ -23,10 +23,20 @@ export function orderedArray(value: unknown, idField: string, path: string, issu
 
 export function duplicateRevisions(entries: unknown[], idField: string, path: string, issues: Issues): void {
   const seen = new Set<string>();
+  const draftIds = new Set<string>();
+  const multipleDraftIds = new Set<string>();
   for (const raw of entries) if (isObject(raw) && validIdRevision(raw, idField)) {
-    const key = refKey(raw[idField] as string, raw.revision as number);
+    const definitionId = raw[idField] as string;
+    const key = refKey(definitionId, raw.revision as number);
     if (seen.has(key)) add(issues, `${path}[${key}]`, 'duplicate_definition_revision', 'Сочетание ID и ревизии должно быть уникальным.');
     seen.add(key);
+    if (raw.status === 'draft') {
+      if (draftIds.has(definitionId)) multipleDraftIds.add(definitionId);
+      draftIds.add(definitionId);
+    }
+  }
+  for (const definitionId of [...multipleDraftIds].sort()) {
+    add(issues, `${path}[${definitionId}]`, 'multiple_drafts_for_definition', 'Для одного ID допускается не более одной draft-ревизии.');
   }
 }
 
