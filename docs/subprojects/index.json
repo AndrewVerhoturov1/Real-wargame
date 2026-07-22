@@ -11,74 +11,18 @@
   ],
   "subprojects": [
     {
-      "id": "ai-single-unit-editor",
-      "title": "AI Single-Unit Editor — Stateful Tactical Awareness, Hierarchical States and Plans",
-      "status": "active",
-      "updated_at": "2026-07-16",
-      "goal": "Создать понятную человеку лабораторию поведения одиночного бойца: Utility AI выбирает решение, stateful runtime исполняет длительные действия, общий A* ведёт бойца по карте, постоянные профили маршрута задают стоимость местности, а гибридная система обзора и внимания формирует субъективные визуальные и звуковые контакты без всезнания ИИ.",
-      "current_focus": "Draft PR #130 implements canonical surface/vegetation material profiles, the visible «Профили местности» editor, independent presentation/visibility/fire/movement revisions, continuous dirty-chunk vegetation raster rendering and canonical worker material snapshots from preview base 4adb42650f0fb6ad61b31f9521cec4508a5a40ec. Performance investigation is intentionally delegated to a separate follow-up.",
-      "next_step": "Review the exact-head material, migration, revision, renderer and integration checks for PR #130. Run the prepared forest/profile screenshot QA only after explicit user approval.",
-      "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-      "last_verified_commit": "3f01f4ba9b96daa1b8951bdd08f4005a482fee8c",
-      "superseded_by": null,
-      "status_path": "docs/subprojects/ai-single-unit-editor/STATUS.md",
-      "metadata_path": "docs/subprojects/ai-single-unit-editor/subproject.json"
-    },
-    {
       "id": "infantry-combat-prototype-v1",
       "title": "Первый прототип пехотного боя",
       "status": "active",
       "updated_at": "2026-07-22",
       "goal": "Один пехотный отряд атакует другой; оружие — винтовки, ППШ и пулемёт; главная проверка — понятное поведение ИИ в атаке и обороне.",
-      "current_focus": "Этап 1: тактические позиции и физическая смена позы. Рабочая ветка: feature/20260721-tactical-position-basis.",
-      "next_step": "Закончить оптимизацию выбора позиций, длительную смену позы и целевые проверки; затем зафиксировать контракт позиций и перейти к стрелковому бою.",
+      "current_focus": "Этап 1: оптимизация выбора тактических позиций. Физическая длительная смена позы принята и находится в real-wargame-preview.",
+      "next_step": "Закончить оптимизацию поиска и диагностику выбора; затем закрыть этап 1 и перейти к стрелковому бою.",
       "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-      "last_verified_commit": null,
+      "last_verified_commit": "8a2b3b5bb344eaafa41871315c51b07e98eb9eb3",
       "superseded_by": null,
       "status_path": "docs/subprojects/infantry-combat-prototype-v1/STATUS.md",
       "metadata_path": "docs/subprojects/infantry-combat-prototype-v1/subproject.json"
-    },
-    {
-      "id": "real-wargame-start",
-      "title": "2D Tactical Command Game — RTS Foundation / Soldier Behavior Lab",
-      "status": "maintenance",
-      "updated_at": "2026-07-12",
-      "goal": "Собрать рабочую основу 2D Tactical Command Game / Soldier Behavior Lab на PixiJS + TypeScript + Vite: карта, юниты, редактор, высоты, лес, укрытия, видимость, базовый интерфейс и удобная проверка через preview. Главный фокус — будущие мозги солдат, а не стратегический ИИ командира.",
-      "current_focus": "RTS-заготовка завершена как рабочая основа и поддерживается по мере необходимости. Активная разработка перенесена в подпроект ai-single-unit-editor.",
-      "next_step": "Исправлять карту, интерфейс, редактор, видимость и укрытия только когда это требуется активным вертикальным срезом поведения солдата.",
-      "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-      "last_verified_commit": "f0bc53566be4451e9dd9fb8aa5df6a7027de759b",
-      "superseded_by": "ai-single-unit-editor",
-      "status_path": "docs/subprojects/real-wargame-start/STATUS.md",
-      "metadata_path": "docs/subprojects/real-wargame-start/subproject.json"
-    },
-    {
-      "id": "github-collaboration",
-      "title": "GitHub Collaboration",
-      "status": "maintenance",
-      "updated_at": "2026-07-12",
-      "goal": "Создать и поддерживать понятную систему совместной разработки через GitHub, где человек принимает решения, а агенты безопасно работают через preview, ограниченные задачи и честные проверки.",
-      "current_focus": "Основной workflow работает. Подпроект переведён в режим поддержки: активные документы должны использовать прямой push в real-wargame-preview как предпочтительный путь и PR в preview как fallback.",
-      "next_step": "Поддерживать единый контракт во всех agent-facing документах и развивать автоматическую проверку их целостности без расширения процесса разработки игры.",
-      "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-      "last_verified_commit": "f0bc53566be4451e9dd9fb8aa5df6a7027de759b",
-      "superseded_by": null,
-      "status_path": "docs/subprojects/github-collaboration/STATUS.md",
-      "metadata_path": "docs/subprojects/github-collaboration/subproject.json"
-    },
-    {
-      "id": "repo-migration",
-      "title": "Repo Migration",
-      "status": "historical",
-      "updated_at": "2026-07-12",
-      "goal": "Сохранить историю первоначальной подготовки Real-wargame к работе с локальными и глобальными агентскими инструментами.",
-      "current_focus": "Миграция завершена и больше не является рабочим подпроектом. Актуальная навигация находится в docs/ai/repo-context.json и docs/subprojects/index.json.",
-      "next_step": "Не развивать этот подпроект. Обращаться к нему только для исторического контекста первоначальной настройки.",
-      "canonical_launcher": "Run-Real-Wargame-Lab.bat",
-      "last_verified_commit": "f0bc53566be4451e9dd9fb8aa5df6a7027de759b",
-      "superseded_by": "github-collaboration",
-      "status_path": "docs/subprojects/repo-migration/STATUS.md",
-      "metadata_path": "docs/subprojects/repo-migration/subproject.json"
     }
   ]
 }
