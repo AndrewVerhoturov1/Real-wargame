@@ -4,6 +4,7 @@ import { buildHighQualityStaticTacticalPositionBasis } from './HighQualityStatic
 import {
   decodeStaticTacticalPositionArtifact,
   encodeStaticTacticalPositionArtifact,
+  inspectStaticTacticalPositionArtifactSettings,
   type StaticTacticalPositionArtifact,
   type StaticTacticalPositionArtifactDecodeResult,
   type StaticTacticalPositionArtifactRejectReason,
@@ -161,26 +162,30 @@ export class StaticTacticalPositionService {
     if (this.destroyed) {
       return { ok: false, reason: 'malformed', message: 'Static tactical service is destroyed.', decodedBytes: 0, decodeMs: 0 };
     }
-    const artifactSettings = readArtifactSettings(value, this.settings);
-    const previousSettingsIdentity = createStaticTacticalPositionBasisIdentity(this.state.map, this.settings);
-    const identity = createStaticTacticalPositionBasisIdentity(this.state.map, artifactSettings);
-    if (!sameStaticTacticalPositionIdentity(previousSettingsIdentity, identity)) {
-      this.settings = artifactSettings;
-      this.settingsRevision += 1;
+    const inspected = inspectStaticTacticalPositionArtifactSettings(value);
+    if (!inspected.ok) {
+      const decoded: StaticTacticalPositionArtifactDecodeResult = {
+        ok: false,
+        reason: inspected.reason,
+        message: inspected.message,
+        decodedBytes: 0,
+        decodeMs: 0,
+      };
+      this.recordPersistentMiss(decoded);
+      return decoded;
     }
+    const artifactSettings = inspected.settings;
+    const identity = createStaticTacticalPositionBasisIdentity(this.state.map, artifactSettings);
     const fingerprint = createStaticTacticalPositionFingerprint(this.state.map, artifactSettings, getActiveEnvironmentProfile());
     const decoded = decodeStaticTacticalPositionArtifact(value, fingerprint, identity);
     this.persistentDecodedBytes = decoded.decodedBytes;
     this.persistentDecodeMs = decoded.decodeMs;
     if (!decoded.ok) {
-      this.persistentCacheMisses += 1;
-      this.buildAfterPersistentMissPending = true;
-      this.persistentLastRejectReason = decoded.reason;
-      this.persistentLastRejectMessage = decoded.message;
-      if (decoded.reason !== 'missing') this.persistentCacheRejected += 1;
-      this.publish();
+      if (decoded.reason === 'fingerprint') this.adoptPersistentSettings(artifactSettings);
+      this.recordPersistentMiss(decoded);
       return decoded;
     }
+    this.adoptPersistentSettings(artifactSettings);
     if (this.inFlight) {
       this.worker?.terminate();
       this.worker = null;
@@ -198,6 +203,25 @@ export class StaticTacticalPositionService {
     this.buildAfterPersistentMissPending = false;
     this.publish();
     return decoded;
+  }
+
+  private adoptPersistentSettings(settings: StaticTacticalPositionSettings): void {
+    const previousIdentity = createStaticTacticalPositionBasisIdentity(this.state.map, this.settings);
+    const nextIdentity = createStaticTacticalPositionBasisIdentity(this.state.map, settings);
+    if (sameStaticTacticalPositionIdentity(previousIdentity, nextIdentity)) return;
+    this.settings = settings;
+    this.settingsRevision += 1;
+  }
+
+  private recordPersistentMiss(decoded: Extract<StaticTacticalPositionArtifactDecodeResult, { readonly ok: false }>): void {
+    this.persistentDecodedBytes = decoded.decodedBytes;
+    this.persistentDecodeMs = decoded.decodeMs;
+    this.persistentCacheMisses += 1;
+    this.buildAfterPersistentMissPending = true;
+    this.persistentLastRejectReason = decoded.reason;
+    this.persistentLastRejectMessage = decoded.message;
+    if (decoded.reason !== 'missing') this.persistentCacheRejected += 1;
+    this.publish();
   }
 
   buildPersistentArtifactForExport(): StaticTacticalPositionArtifact | null {
@@ -441,20 +465,6 @@ export function buildStaticTacticalPositionArtifactForExport(state: SimulationSt
 export function clearStaticTacticalPositionService(state: SimulationState): void {
   serviceByState.get(state)?.destroy();
   serviceByState.delete(state);
-}
-
-function readArtifactSettings(
-  value: unknown,
-  fallback: StaticTacticalPositionSettings,
-): StaticTacticalPositionSettings {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
-  const input = (value as { readonly settings?: StaticTacticalPositionSettingsInput }).settings;
-  if (input === undefined) return fallback;
-  try {
-    return normalizeStaticTacticalPositionSettings(input);
-  } catch {
-    return fallback;
-  }
 }
 
 function scheduleFallback(callback: () => void): void {

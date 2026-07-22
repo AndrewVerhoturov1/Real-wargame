@@ -106,6 +106,17 @@ export type StaticTacticalPositionArtifactDecodeResult =
       readonly decodeMs: number;
     };
 
+export type StaticTacticalPositionArtifactSettingsInspectionResult =
+  | {
+      readonly ok: true;
+      readonly settings: StaticTacticalPositionSettings;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: StaticTacticalPositionArtifactRejectReason;
+      readonly message: string;
+    };
+
 type SupportedArray = Uint8Array | Uint16Array | Uint32Array;
 
 interface NamedArray {
@@ -192,29 +203,8 @@ export function decodeStaticTacticalPositionArtifact(
   const startedAt = nowMs();
   let decodedBytes = 0;
   try {
-    if (value === null || value === undefined) return rejected('missing', 'Static tactical artifact is absent.', 0, startedAt);
-    const artifact = requireRecord(value, 'Artifact must be an object.') as unknown as StaticTacticalPositionArtifact;
-    if (artifact.version !== STATIC_TACTICAL_POSITION_ARTIFACT_VERSION) {
-      return rejected('format_version', 'Unsupported static tactical artifact format version.', 0, startedAt);
-    }
-    if (!sameStaticTacticalPositionFingerprint(artifact.fingerprint, expectedFingerprint)) {
-      return rejected('fingerprint', 'Persistent fingerprint does not match the runtime-normalized map.', 0, startedAt);
-    }
-    if (artifact.algorithmVersion !== STATIC_TACTICAL_POSITION_ALGORITHM_VERSION) {
-      return rejected('algorithm_version', 'Static tactical algorithm version does not match.', 0, startedAt);
-    }
-    if (artifact.snapshotVersion !== STATIC_TACTICAL_POSITION_BASIS_SNAPSHOT_VERSION) {
-      return rejected('snapshot_version', 'Static tactical snapshot version does not match.', 0, startedAt);
-    }
-    if (artifact.settingsVersion !== STATIC_TACTICAL_POSITION_SETTINGS_VERSION) {
-      return rejected('settings_version', 'Static tactical settings version does not match.', 0, startedAt);
-    }
-    assertArtifactDimensions(artifact, expectedFingerprint);
-    const settings = normalizeStaticTacticalPositionSettings(artifact.settings);
-    const settingsDigest = staticTacticalPositionSettingsDigest(settings);
-    if (artifact.settingsDigest !== settingsDigest || settingsDigest !== expectedFingerprint.settingsDigest) {
-      return rejected('settings_digest', 'Static tactical settings digest does not match.', 0, startedAt);
-    }
+    const { artifact, fingerprint, settings } = validateArtifactEnvelope(value);
+    assertArtifactDimensions(artifact, fingerprint);
     const payload = requireRecord(artifact.payload, 'Artifact payload must be an object.') as unknown as StaticTacticalPositionArtifactPayload;
     if (payload.encoding !== 'base64') return rejected('payload_encoding', 'Unsupported artifact payload encoding.', 0, startedAt);
     const bytes = decodeBase64(requireString(payload.data, 'Artifact payload data must be base64 text.'));
@@ -257,17 +247,35 @@ export function decodeStaticTacticalPositionArtifact(
       builtAtMs: finiteNumber(artifact.builtAtMs, 'builtAtMs'),
     });
     assertStaticTacticalPositionBasisShape(snapshot);
+    if (!sameStaticTacticalPositionFingerprint(fingerprint, expectedFingerprint)) {
+      return rejected('fingerprint', 'Persistent fingerprint does not match the runtime-normalized map.', decodedBytes, startedAt);
+    }
     return {
       ok: true,
       snapshot,
-      fingerprint: expectedFingerprint,
+      fingerprint,
       decodedBytes,
       decodeMs: roundMs(nowMs() - startedAt),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const reason = classifyDecodeError(message);
+    const reason = error instanceof ArtifactValidationError ? error.reason : classifyDecodeError(message);
     return rejected(reason, message, decodedBytes, startedAt);
+  }
+}
+
+export function inspectStaticTacticalPositionArtifactSettings(
+  value: unknown,
+): StaticTacticalPositionArtifactSettingsInspectionResult {
+  try {
+    return { ok: true, settings: validateArtifactEnvelope(value).settings };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false,
+      reason: error instanceof ArtifactValidationError ? error.reason : classifyDecodeError(message),
+      message,
+    };
   }
 }
 
@@ -382,13 +390,111 @@ function assertSnapshotMatchesFingerprint(snapshot: StaticTacticalPositionBasisS
   }
 }
 
+function validateArtifactEnvelope(value: unknown): {
+  readonly artifact: StaticTacticalPositionArtifact;
+  readonly fingerprint: StaticTacticalPositionFingerprint;
+  readonly settings: StaticTacticalPositionSettings;
+} {
+  if (value === null || value === undefined) {
+    throw new ArtifactValidationError('missing', 'Static tactical artifact is absent.');
+  }
+  const artifact = requireRecord(value, 'Artifact must be an object.') as unknown as StaticTacticalPositionArtifact;
+  if (artifact.version !== STATIC_TACTICAL_POSITION_ARTIFACT_VERSION) {
+    throw new ArtifactValidationError('format_version', 'Unsupported static tactical artifact format version.');
+  }
+  if (artifact.algorithmVersion !== STATIC_TACTICAL_POSITION_ALGORITHM_VERSION) {
+    throw new ArtifactValidationError('algorithm_version', 'Static tactical algorithm version does not match.');
+  }
+  if (artifact.snapshotVersion !== STATIC_TACTICAL_POSITION_BASIS_SNAPSHOT_VERSION) {
+    throw new ArtifactValidationError('snapshot_version', 'Static tactical snapshot version does not match.');
+  }
+  if (artifact.settingsVersion !== STATIC_TACTICAL_POSITION_SETTINGS_VERSION) {
+    throw new ArtifactValidationError('settings_version', 'Static tactical settings version does not match.');
+  }
+  const settings = validateArtifactSettings(artifact.settings);
+  const settingsDigest = staticTacticalPositionSettingsDigest(settings);
+  if (typeof artifact.settingsDigest !== 'string' || artifact.settingsDigest !== settingsDigest) {
+    throw new ArtifactValidationError('settings_digest', 'Static tactical settings digest does not match.');
+  }
+  const fingerprint = validateArtifactFingerprint(artifact.fingerprint);
+  if (fingerprint.settingsDigest !== settingsDigest) {
+    throw new ArtifactValidationError('settings_digest', 'Persistent fingerprint settings digest does not match.');
+  }
+  return { artifact, fingerprint, settings };
+}
+
+function validateArtifactSettings(value: unknown): StaticTacticalPositionSettings {
+  const settings = requireRecord(value, 'Static tactical settings must be an object.');
+  assertExactKeys(settings, ['version', 'geometry', 'observation', 'defense', 'firing', 'index', 'postures', 'sectors'], 'settings');
+  if (settings.version !== STATIC_TACTICAL_POSITION_SETTINGS_VERSION) {
+    throw new ArtifactValidationError('settings_version', 'Embedded static tactical settings version does not match.');
+  }
+  const groupKeys = {
+    geometry: ['maximumObservationRangeMeters', 'maximumFiringRangeMeters', 'observationSamplesPerSector', 'firingSamplesPerSector', 'immediateClearanceMeters'],
+    observation: ['primary', 'directionalBreadth', 'concealment', 'protection', 'exposurePenalty', 'slopePenalty'],
+    defense: ['primary', 'directionalBreadth', 'concealment', 'protection', 'exposurePenalty', 'slopePenalty'],
+    firing: ['primary', 'directionalBreadth', 'concealment', 'protection', 'exposurePenalty', 'slopePenalty'],
+    index: ['chunkSizeCells', 'maximumCandidatesPerKindPerChunk', 'minimumSeparationCells', 'observationThreshold', 'defenseThreshold', 'firingThreshold', 'directionalDiversityThreshold'],
+    postures: ['standingHeightMeters', 'crouchedHeightMeters', 'proneHeightMeters', 'standingExposure', 'crouchedExposure', 'proneExposure'],
+    sectors: ['count', 'minimumUsefulTransmission', 'nearSampleWeight', 'farSampleWeight'],
+  } as const;
+  for (const [groupName, keys] of Object.entries(groupKeys)) {
+    const group = requireRecord(settings[groupName], `settings.${groupName} must be an object.`);
+    assertExactKeys(group, keys, `settings.${groupName}`);
+    for (const key of keys) finiteNumber(group[key], `settings.${groupName}.${key}`);
+  }
+  const normalized = normalizeStaticTacticalPositionSettings(settings as unknown as StaticTacticalPositionSettings);
+  if (!sameCanonicalSettings(settings, normalized)) {
+    throw new ArtifactValidationError('malformed', 'Static tactical settings are not canonical.');
+  }
+  return normalized;
+}
+
+function validateArtifactFingerprint(value: unknown): StaticTacticalPositionFingerprint {
+  const fingerprint = requireRecord(value, 'Persistent fingerprint must be an object.');
+  assertExactKeys(fingerprint, ['version', 'value', 'settingsDigest', 'width', 'height', 'cellSize', 'metersPerCell', 'sectorCount'], 'fingerprint');
+  if (fingerprint.version !== 1) throw new ArtifactValidationError('fingerprint', 'Unsupported persistent fingerprint version.');
+  return Object.freeze({
+    version: 1,
+    value: requireString(fingerprint.value, 'Persistent fingerprint value must be text.'),
+    settingsDigest: requireString(fingerprint.settingsDigest, 'Persistent fingerprint settings digest must be text.'),
+    width: requirePositiveInteger(fingerprint.width, 'fingerprint.width'),
+    height: requirePositiveInteger(fingerprint.height, 'fingerprint.height'),
+    cellSize: finiteNumber(fingerprint.cellSize, 'fingerprint.cellSize'),
+    metersPerCell: finiteNumber(fingerprint.metersPerCell, 'fingerprint.metersPerCell'),
+    sectorCount: requirePositiveInteger(fingerprint.sectorCount, 'fingerprint.sectorCount'),
+  });
+}
+
+function assertExactKeys(record: Record<string, unknown>, expected: readonly string[], label: string): void {
+  const actual = Object.keys(record).sort();
+  const canonical = [...expected].sort();
+  if (actual.length !== canonical.length || actual.some((key, index) => key !== canonical[index])) {
+    throw new ArtifactValidationError('malformed', `${label} has an unsupported structure.`);
+  }
+}
+
+function sameCanonicalSettings(raw: Record<string, unknown>, normalized: StaticTacticalPositionSettings): boolean {
+  for (const [groupName, normalizedValue] of Object.entries(normalized)) {
+    if (groupName === 'version') {
+      if (raw.version !== normalized.version) return false;
+      continue;
+    }
+    const rawGroup = raw[groupName] as Record<string, unknown>;
+    for (const [key, value] of Object.entries(normalizedValue as Record<string, number>)) {
+      if (rawGroup[key] !== value) return false;
+    }
+  }
+  return true;
+}
+
 function assertArtifactDimensions(artifact: StaticTacticalPositionArtifact, expected: StaticTacticalPositionFingerprint): void {
   if (artifact.width !== expected.width
     || artifact.height !== expected.height
     || artifact.cellSize !== expected.cellSize
     || artifact.metersPerCell !== expected.metersPerCell
     || artifact.sectorCount !== expected.sectorCount) {
-    throw new Error('dimensions: artifact dimensions or scale do not match the runtime map.');
+    throw new Error('dimensions: artifact dimensions or scale do not match its persistent fingerprint.');
   }
 }
 
@@ -533,6 +639,16 @@ function classifyDecodeError(message: string): StaticTacticalPositionArtifactRej
   if (message.startsWith('array_shape:')) return 'array_shape';
   if (message.startsWith('candidate_index:')) return 'candidate_index';
   return 'malformed';
+}
+
+class ArtifactValidationError extends Error {
+  constructor(
+    readonly reason: StaticTacticalPositionArtifactRejectReason,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ArtifactValidationError';
+  }
 }
 
 function rejected(reason: StaticTacticalPositionArtifactRejectReason, message: string, decodedBytes: number, startedAt: number): StaticTacticalPositionArtifactDecodeResult {
