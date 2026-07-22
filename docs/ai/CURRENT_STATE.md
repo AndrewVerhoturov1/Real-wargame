@@ -11,7 +11,7 @@ Generated from canonical repository and subproject metadata.
 - **Stable branch:** `main`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
 - **PixiJS major:** 8
-- **Updated:** 2026-07-20
+- **Updated:** 2026-07-22
 
 ## Delivery policy
 
@@ -20,11 +20,11 @@ Generated from canonical repository and subproject metadata.
 - Changing `main` requires explicit human GO: **yes**.
 - Auto-merge allowed: **no**.
 
-## Active subproject: AI Single-Unit Editor — Stateful Tactical Awareness, Hierarchical States and Plans
+## Active subproject: Первый прототип пехотного боя
 
-- **ID:** `ai-single-unit-editor`
-- **Updated:** 2026-07-16
-- **Current focus:** Draft PR #130 implements canonical surface/vegetation material profiles, the visible «Профили местности» editor, independent presentation/visibility/fire/movement revisions, continuous dirty-chunk vegetation raster rendering and canonical worker material snapshots from preview base 4adb42650f0fb6ad61b31f9521cec4508a5a40ec. Performance investigation is intentionally delegated to a separate follow-up.
-- **Next step:** Review the exact-head material, migration, revision, renderer and integration checks for PR #130. Run the prepared forest/profile screenshot QA only after explicit user approval.
-- **Last verified commit:** `3f01f4ba9b96daa1b8951bdd08f4005a482fee8c`
-- **Status:** [generated status](../subprojects/ai-single-unit-editor/STATUS.md)
+- **ID:** `infantry-combat-prototype-v1`
+- **Updated:** 2026-07-22
+- **Current focus:** Этап 1: тактические позиции и физическая смена позы. Рабочая ветка: feature/20260721-tactical-position-basis.
+- **Next step:** Закончить оптимизацию выбора позиций, длительную смену позы и целевые проверки; затем зафиксировать контракт позиций и перейти к стрелковому бою.
+- **Last verified commit:** not recorded
+- **Status:** [generated status](../subprojects/infantry-combat-prototype-v1/STATUS.md)
