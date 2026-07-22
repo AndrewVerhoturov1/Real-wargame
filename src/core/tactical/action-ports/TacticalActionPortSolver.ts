@@ -37,6 +37,7 @@ const POSTURES: readonly UnitPosture[] = ['standing', 'crouched', 'prone'];
 const DIAGONAL_DISTANCE = Math.SQRT2;
 const HEIGHT_LEVEL_METRES = 2;
 const POSITION_EPSILON = 1e-7;
+const MAX_LOCAL_ROUTE_EXTENT = 64;
 
 export type TacticalActionPortPurpose = 'observation' | 'firing';
 
@@ -372,7 +373,11 @@ function buildLocalRouteField(
   spacingCells: number,
   maximumExpansions: number,
 ): RouteField {
-  const extent = Math.max(0, Math.ceil(searchRadiusCells / spacingCells));
+  const requestedExtent = Math.max(0, Math.ceil(searchRadiusCells / spacingCells));
+  const maximumNodesFromBudget = Math.max(9, maximumExpansions * 4);
+  const budgetExtent = Math.max(1, Math.floor((Math.sqrt(maximumNodesFromBudget) - 1) / 2));
+  const extent = Math.min(requestedExtent, budgetExtent, MAX_LOCAL_ROUTE_EXTENT);
+  const extentClamped = extent < requestedExtent;
   const side = extent * 2 + 1;
   const count = side * side;
   const costs = new Float64Array(count);
@@ -480,7 +485,7 @@ function buildLocalRouteField(
     costs,
     settled,
     expanded,
-    budgetExhausted: heap.length > 0,
+    budgetExhausted: extentClamped || heap.length > 0,
     navigationPositionChecks,
   };
 }
