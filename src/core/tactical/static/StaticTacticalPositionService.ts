@@ -176,6 +176,11 @@ export class StaticTacticalPositionService {
       this.publish();
       return decoded;
     }
+    if (this.inFlight) {
+      this.worker?.terminate();
+      this.worker = null;
+      this.inFlight = null;
+    }
     this.ready = decoded.snapshot;
     this.readyFingerprint = decoded.fingerprint;
     this.requestedIdentity = identity;
@@ -440,7 +445,12 @@ function readArtifactSettings(
 ): StaticTacticalPositionSettings {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
   const input = (value as { readonly settings?: StaticTacticalPositionSettingsInput }).settings;
-  return input === undefined ? fallback : normalizeStaticTacticalPositionSettings(input);
+  if (input === undefined) return fallback;
+  try {
+    return normalizeStaticTacticalPositionSettings(input);
+  } catch {
+    return fallback;
+  }
 }
 
 function scheduleFallback(callback: () => void): void {
