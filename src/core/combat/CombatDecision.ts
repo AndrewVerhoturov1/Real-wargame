@@ -6,7 +6,13 @@ import { sampleSmoothHeightLevel } from '../terrain/SmoothTerrain';
 import { areUnitsHostile } from '../units/SideRelations';
 import type { UnitModel } from '../units/UnitModel';
 import { isUnitCombatCapable } from './CombatDamage';
+import {
+  getShoulderedRifleMuzzleHeightMetres,
+  resolveDirectFireSolution,
+  type DirectFireResolution,
+} from './DirectFireSolution';
 import type { BallisticPoint3 } from './UnitHitShapes';
+import { getWeaponDefinition, getWeaponRuntime } from './WeaponModel';
 
 export interface ResolvedFireTarget {
   contact: PerceptionContactMemory;
@@ -64,16 +70,27 @@ export function evaluateFireRequest(
   if (!contact.visibleNow || (contact.stage !== 'identified' && contact.stage !== 'confirmed')) {
     return denied('Direct fire requires a currently identified target.', 'Для прицельного огня цель должна быть опознана сейчас.');
   }
+
+  const target: ResolvedFireTarget = {
+    contact,
+    targetUnit,
+    aimGridPosition: { ...contact.lastKnownPosition },
+    aimHeightMetres: aimHeightForPosture(targetUnit.behaviorRuntime.posture),
+  };
+  const weapon = getWeaponDefinition(getWeaponRuntime(shooter).weaponId);
+  const directFire = resolveDirectFireSolution(state, shooter, {
+    targetUnit,
+    aimGridPosition: target.aimGridPosition,
+    preferredAimHeightMetres: target.aimHeightMetres,
+  }, weapon.maximumRangeMetres);
+  if (!directFire.solution) return deniedForBlockedLine(state, shooter, directFire);
+  target.aimHeightMetres = directFire.solution.aimHeightMetres;
+
   return {
     allowed: true,
-    reason: 'Hostile visible contact is valid for direct fire.',
-    reasonRu: 'Видимый вражеский контакт подходит для прицельного огня.',
-    target: {
-      contact,
-      targetUnit,
-      aimGridPosition: { ...contact.lastKnownPosition },
-      aimHeightMetres: aimHeightForPosture(targetUnit.behaviorRuntime.posture),
-    },
+    reason: 'Hostile visible contact has a clear ballistic line.',
+    reasonRu: 'Видимый вражеский контакт имеет свободную линию огня.',
+    target,
   };
 }
 
@@ -83,7 +100,7 @@ export function getMuzzlePoint(state: SimulationState, shooter: UnitModel): Ball
   return {
     xMetres: shooter.position.x * state.map.metersPerCell + Math.cos(shooter.facingRadians) * forwardOffsetMetres,
     yMetres: shooter.position.y * state.map.metersPerCell + Math.sin(shooter.facingRadians) * forwardOffsetMetres,
-    zMetres: ground + muzzleHeightForPosture(shooter.behaviorRuntime.posture),
+    zMetres: ground + getShoulderedRifleMuzzleHeightMetres(shooter.behaviorRuntime.posture),
   };
 }
 
@@ -100,16 +117,43 @@ function denied(reason: string, reasonRu: string): FireDecisionResult {
   return { allowed: false, reason, reasonRu, target: null };
 }
 
+function deniedForBlockedLine(
+  state: SimulationState,
+  shooter: UnitModel,
+  resolution: DirectFireResolution,
+): FireDecisionResult {
+  if (resolution.blockedBy === 'terrain') {
+    return denied(
+      'Target is visible, but terrain blocks every visible aim point.',
+      'Цель видна, но рельеф перекрывает линию огня ко всем видимым частям силуэта.',
+    );
+  }
+  if (resolution.blockedBy === 'map_object') {
+    return denied(
+      'Target is visible, but a map object blocks every visible aim point.',
+      'Цель видна, но объект карты перекрывает линию огня ко всем видимым частям силуэта.',
+    );
+  }
+  if (resolution.blockedBy === 'range') {
+    return denied('Target is beyond weapon range.', 'Цель находится вне дальности оружия.');
+  }
+  if (resolution.blockedBy === 'unit' && resolution.obstructionId) {
+    const obstruction = state.units.find((unit) => unit.id === resolution.obstructionId) ?? null;
+    if (obstruction && !areUnitsHostile(shooter, obstruction)) {
+      return denied('Friendly unit blocks the line of fire.', 'Союзник перекрывает линию огня.');
+    }
+    return denied('Another unit blocks the line of fire.', 'Другой боец перекрывает линию огня.');
+  }
+  return denied(
+    'Target is visible, but no visible silhouette point has a clear ballistic line.',
+    'Цель видна, но ни одна видимая часть силуэта не простреливается из текущего положения.',
+  );
+}
+
 function aimHeightForPosture(posture: UnitModel['behaviorRuntime']['posture']): number {
   if (posture === 'prone') return 0.28;
   if (posture === 'crouched') return 0.76;
   return 1.12;
-}
-
-function muzzleHeightForPosture(posture: UnitModel['behaviorRuntime']['posture']): number {
-  if (posture === 'prone') return 0.31;
-  if (posture === 'crouched') return 0.95;
-  return 1.45;
 }
 
 function getGroundHeightMetres(state: SimulationState, position: GridPosition): number {
