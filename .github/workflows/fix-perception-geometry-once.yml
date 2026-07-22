@@ -1,0 +1,122 @@
+name: Fix Perception Geometry Once
+
+on:
+  push:
+    branches:
+      - feature/20260721-tactical-position-basis
+    paths:
+      - .github/workflows/fix-perception-geometry-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/20260721-tactical-position-basis
+          fetch-depth: 0
+
+      - name: Apply map-revision fixture contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/perception_system_smoke.ts')
+          source = path.read_text(encoding='utf-8')
+          import_anchor = "import type { TacticalMapData } from '../src/core/map/MapModel';\n"
+          import_line = "import { markMapCellsDirty } from '../src/core/map/MapRuntimeState';\n"
+          if import_line not in source:
+              if source.count(import_anchor) != 1:
+                  raise SystemExit(f'Expected one map import anchor, found {source.count(import_anchor)}')
+              source = source.replace(import_anchor, import_anchor + import_line)
+
+          sparse_anchor = """for (let x = 7; x <= 11; x += 1) {
+            const cell = getCell(forestMap.map, x, 5);
+            assert.ok(cell);
+            setCellVegetationMaterialId(cell, 'sparse_forest');
+          }
+          const forestObserver = forestMap.units[0];""".replace('          ', '')
+          sparse_replacement = """for (let x = 7; x <= 11; x += 1) {
+            const cell = getCell(forestMap.map, x, 5);
+            assert.ok(cell);
+            setCellVegetationMaterialId(cell, 'sparse_forest');
+          }
+          markMapCellsDirty(forestMap.map, 'forest', { minX: 7, minY: 5, maxX: 11, maxY: 5 });
+          const forestObserver = forestMap.units[0];""".replace('          ', '')
+          if sparse_anchor in source:
+              source = source.replace(sparse_anchor, sparse_replacement)
+
+          dense_anchor = """for (let x = 7; x <= 34; x += 1) {
+            const cell = getCell(forestMap.map, x, 5);
+            assert.ok(cell);
+            setCellVegetationMaterialId(cell, 'dense_forest');
+          }
+          const dense = computeLineOfSight""".replace('          ', '')
+          dense_replacement = """for (let x = 7; x <= 34; x += 1) {
+            const cell = getCell(forestMap.map, x, 5);
+            assert.ok(cell);
+            setCellVegetationMaterialId(cell, 'dense_forest');
+          }
+          markMapCellsDirty(forestMap.map, 'forest', { minX: 7, minY: 5, maxX: 34, maxY: 5 });
+          const dense = computeLineOfSight""".replace('          ', '')
+          if dense_anchor in source:
+              source = source.replace(dense_anchor, dense_replacement)
+
+          if source.count("markMapCellsDirty(forestMap.map, 'forest'") != 2:
+              raise SystemExit('Expected exactly two forest revision marks after patch.')
+          path.write_text(source, encoding='utf-8')
+          PY
+
+      - name: Replace angular horizon tolerance with physical clearance
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/core/visibility/VisibilityRayKernel.ts')
+          source = path.read_text(encoding='utf-8')
+          old_constant = 'const HORIZON_MARGIN = 0.02;'
+          new_constant = 'const HORIZON_CLEARANCE_METERS = 0.02;'
+          if source.count(old_constant) != 1:
+              raise SystemExit(f'Expected one horizon margin constant, found {source.count(old_constant)}')
+          source = source.replace(old_constant, new_constant)
+
+          old_check = 'const blockedByHorizon = horizonPosition !== null && sampleSlope + HORIZON_MARGIN < horizonSlope;'
+          new_check = """const horizonClearanceSlope = HORIZON_CLEARANCE_METERS / Math.max(0.001, currentDistanceMeters);
+              const blockedByHorizon = horizonPosition !== null && sampleSlope + horizonClearanceSlope < horizonSlope;""".replace('              ', '')
+          if source.count(old_check) != 1:
+              raise SystemExit(f'Expected one horizon check, found {source.count(old_check)}')
+          source = source.replace(old_check, new_check)
+          path.write_text(source, encoding='utf-8')
+          PY
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify perception and shared visibility
+        run: |
+          npm run perception:smoke
+          npm run shared-visibility-vegetation:smoke
+          npm run posture-transition:smoke
+          npm run combat-foundation:smoke
+          npm run typecheck
+
+      - name: Commit verified fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/perception_system_smoke.ts
+          git commit -m "test: invalidate visibility cache after vegetation edits [skip ci]"
+          git add src/core/visibility/VisibilityRayKernel.ts
+          git commit -m "fix: use physical clearance for visibility horizon [skip ci]"
+          git push origin HEAD:feature/20260721-tactical-position-basis
