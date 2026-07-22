@@ -13,6 +13,7 @@ try {
     logLevel: 'warn',
     build: {
       ssr: path.join(repoRoot, 'scripts', 'static_tactical_position_persistent_smoke.ts'),
+      target: 'esnext',
       outDir,
       emptyOutDir: true,
       minify: false,
