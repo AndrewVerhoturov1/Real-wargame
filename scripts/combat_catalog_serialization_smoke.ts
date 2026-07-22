@@ -24,6 +24,19 @@ function reverseObjectKeys(value: unknown): unknown {
   return result;
 }
 
+function createMultipleDraftBundle(source: CombatCatalogBundleV1): CombatCatalogBundleV1 {
+  const result = structuredClone(source);
+  for (const collectionKey of ['ammoDefinitions', 'weaponDefinitions', 'loadoutTemplates'] as const) {
+    const entries = result[collectionKey] as unknown as Array<Record<string, unknown>>;
+    const entry = structuredClone(entries[0]);
+    entries.push(
+      { ...structuredClone(entry), revision: 2, status: 'draft', nameEn: 'First draft' },
+      { ...structuredClone(entry), revision: 3, status: 'draft', nameEn: 'Second draft' },
+    );
+  }
+  return result;
+}
+
 const registry = createDefaultCombatCatalogRegistry();
 const bundle = registry.toData();
 const canonical = serializeCombatCatalogBundle(bundle);
@@ -39,6 +52,19 @@ assert.deepEqual(
   validateCombatCatalogBundle(reverseInputArrays(bundle)).issues,
   validateCombatCatalogBundle(bundle).issues,
   'validation output must not depend on input array order',
+);
+
+const multipleDraftBundle = createMultipleDraftBundle(bundle);
+const multipleDraftIssues = validateCombatCatalogBundle(multipleDraftBundle).issues;
+assert.equal(
+  multipleDraftIssues.filter((issue) => issue.code === 'multiple_drafts_for_definition').length,
+  3,
+  'each catalog collection must reject multiple drafts for one definition ID',
+);
+assert.deepEqual(
+  validateCombatCatalogBundle(reverseInputArrays(multipleDraftBundle)).issues,
+  multipleDraftIssues,
+  'multiple-draft issues must not depend on input array order',
 );
 
 const firstRoundTrip = CombatCatalogRegistry.importJson(canonical).exportJson();
