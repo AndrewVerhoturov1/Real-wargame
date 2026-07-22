@@ -3,7 +3,7 @@
   "workingBranch": "real-wargame-preview",
   "canonicalLauncher": "Run-Real-Wargame-Lab.bat",
   "activeSubprojects": [
-    "ai-single-unit-editor"
+    "infantry-combat-prototype-v1"
   ],
   "generatedFrom": [
     "docs/ai/repo-context.json",
@@ -23,6 +23,20 @@
       "superseded_by": null,
       "status_path": "docs/subprojects/ai-single-unit-editor/STATUS.md",
       "metadata_path": "docs/subprojects/ai-single-unit-editor/subproject.json"
+    },
+    {
+      "id": "infantry-combat-prototype-v1",
+      "title": "Первый прототип пехотного боя",
+      "status": "active",
+      "updated_at": "2026-07-22",
+      "goal": "Один пехотный отряд атакует другой; оружие — винтовки, ППШ и пулемёт; главная проверка — понятное поведение ИИ в атаке и обороне.",
+      "current_focus": "Этап 1: тактические позиции и физическая смена позы. Рабочая ветка: feature/20260721-tactical-position-basis.",
+      "next_step": "Закончить оптимизацию выбора позиций, длительную смену позы и целевые проверки; затем зафиксировать контракт позиций и перейти к стрелковому бою.",
+      "canonical_launcher": "Run-Real-Wargame-Lab.bat",
+      "last_verified_commit": null,
+      "superseded_by": null,
+      "status_path": "docs/subprojects/infantry-combat-prototype-v1/STATUS.md",
+      "metadata_path": "docs/subprojects/infantry-combat-prototype-v1/subproject.json"
     },
     {
       "id": "real-wargame-start",
