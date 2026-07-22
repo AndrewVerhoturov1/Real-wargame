@@ -1,43 +1,28 @@
-patch-and-verify	Update editor smoke for AI bridge facade	﻿2026-07-22T00:36:46.3096958Z ##[group]Run python - <<'PY'
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3097780Z ^[[36;1mpython - <<'PY'^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3098423Z ^[[36;1mfrom pathlib import Path^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3099063Z ^[[36;1m^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3099695Z ^[[36;1mpath = Path('scripts/ai_node_editor_smoke.mjs')^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3100586Z ^[[36;1msource = path.read_text(encoding='utf-8')^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3101592Z ^[[36;1mold = """const gameBridge = readText('src/core/ai/AiGameBridge.ts');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3103015Z ^[[36;1mexpectContains(gameBridge, 'runAiGraph', 'Мост должен вызывать нормальный GraphRunner.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3104702Z ^[[36;1mexpectContains(gameBridge, 'createTacticalHost', 'Мост должен давать runner-у tactical callbacks.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3106670Z ^[[36;1mexpectContains(gameBridge, 'applyGraphEffects', 'Мост должен применять effects runner-а к UnitModel.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3108511Z ^[[36;1mexpectContains(gameBridge, 'buildBlackboardForUnit', 'Мост должен собирать blackboard из состояния игры.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3110479Z ^[[36;1mexpectContains(gameBridge, 'real-wargame.ai-node-editor.graph.v6', 'Мост должен брать граф из localStorage v6.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3112486Z ^[[36;1mexpectContains(gameBridge, 'real-wargame.ai-node-editor.debug.v1', 'Мост должен писать runtime debug trace для редактора.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3114465Z ^[[36;1mexpectContains(gameBridge, 'publishRuntimeDebugTrace', 'Мост должен публиковать последний след решения GraphRunner.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3116596Z ^[[36;1mexpectContains(gameBridge, 'cloneSimulationStateForDiagnostic', 'Диагностический мост должен работать на глубокой копии состояния.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3118656Z ^[[36;1mexpectContains(gameBridge, 'applyEffects: false', 'Selected-unit мост должен оставаться read-only диагностикой.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3120817Z ^[[36;1mexpectNotContains(gameBridge, 'setInterval(', 'Gameplay AI не должен иметь отдельный browser timer внутри bridge.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3122764Z ^[[36;1mexpectNotContains(gameBridge, 'case \'ParameterScore\'', 'Score-ноды не должны быть заглушками внутри bridge.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3125074Z ^[[36;1mexpectNotContains(gameBridge, 'is accepted by the game bridge but not used', 'Bridge больше не должен говорить, что score-ноды только допустимы.');""".replace('          ', '')^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3127251Z ^[[36;1mnew = """const gameBridgeFacade = readText('src/core/ai/AiGameBridge.ts');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3128669Z ^[[36;1mconst gameBridgeLegacy = readText('src/core/ai/AiGameBridgeLegacy.ts');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3130009Z ^[[36;1mconst gameBridgeSources = `${gameBridgeFacade}\n${gameBridgeLegacy}`;^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3131936Z ^[[36;1mexpectContains(gameBridgeFacade, "export * from './AiGameBridgeLegacy';", 'AI Game Bridge facade должен переэкспортировать полную реализацию.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3134093Z ^[[36;1mexpectContains(gameBridgeSources, 'runAiGraph', 'Мост должен вызывать нормальный GraphRunner.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3136120Z ^[[36;1mexpectContains(gameBridgeSources, 'createTacticalHost', 'Мост должен давать runner-у tactical callbacks.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3138120Z ^[[36;1mexpectContains(gameBridgeSources, 'applyGraphEffects', 'Мост должен применять effects runner-а к UnitModel.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3140117Z ^[[36;1mexpectContains(gameBridgeSources, 'buildBlackboardForUnit', 'Мост должен собирать blackboard из состояния игры.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3142251Z ^[[36;1mexpectContains(gameBridgeSources, 'real-wargame.ai-node-editor.graph.v6', 'Мост должен брать граф из localStorage v6.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3144497Z ^[[36;1mexpectContains(gameBridgeSources, 'real-wargame.ai-node-editor.debug.v1', 'Мост должен писать runtime debug trace для редактора.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3146932Z ^[[36;1mexpectContains(gameBridgeSources, 'publishRuntimeDebugTrace', 'Мост должен публиковать последний след решения GraphRunner.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3149284Z ^[[36;1mexpectContains(gameBridgeSources, 'cloneSimulationStateForDiagnostic', 'Диагностический мост должен работать на глубокой копии состояния.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3151829Z ^[[36;1mexpectContains(gameBridgeSources, 'applyEffects: false', 'Selected-unit мост должен оставаться read-only диагностикой.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3153977Z ^[[36;1mexpectNotContains(gameBridgeSources, 'setInterval(', 'Gameplay AI не должен иметь отдельный browser timer внутри bridge.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3156203Z ^[[36;1mexpectNotContains(gameBridgeSources, 'case \'ParameterScore\'', 'Score-ноды не должны быть заглушками внутри bridge.');^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3158683Z ^[[36;1mexpectNotContains(gameBridgeSources, 'is accepted by the game bridge but not used', 'Bridge больше не должен говорить, что score-ноды только допустимы.');""".replace('          ', '')^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3160490Z ^[[36;1mif source.count(old) != 1:^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3161616Z ^[[36;1m    raise SystemExit(f'Expected one legacy AI bridge smoke block, found {source.count(old)}')^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3162980Z ^[[36;1mpath.write_text(source.replace(old, new), encoding='utf-8')^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3163879Z ^[[36;1mPY^[[0m
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3250607Z shell: /usr/bin/bash -e {0}
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3251267Z ##[endgroup]
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3587739Z Expected one legacy AI bridge smoke block, found 0
-patch-and-verify	Update editor smoke for AI bridge facade	2026-07-22T00:36:46.3641487Z ##[error]Process completed with exit code 1.
+patch-and-verify	Verify editor and workspace contracts	﻿2026-07-22T00:39:27.9804660Z ##[group]Run npm run editor:smoke
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:27.9804997Z ^[[36;1mnpm run editor:smoke^[[0m
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:27.9805256Z ^[[36;1mnpm run workspace:smoke^[[0m
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:27.9805512Z ^[[36;1mnpm run typecheck^[[0m
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:27.9862067Z shell: /usr/bin/bash -e {0}
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:27.9862336Z ##[endgroup]
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.0918376Z 
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.0918849Z > real-wargame@0.1.0 editor:smoke
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.0919712Z > node scripts/ai_node_editor_smoke.mjs && node scripts/ai_node_editor_v2_only_smoke.mjs
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.0920130Z 
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1267566Z file:///home/runner/work/Real-wargame/Real-wargame/scripts/ai_node_editor_smoke.mjs:189
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1269159Z expectNotContains(gameBridge, 'case 'ParameterScore'', 'Score-ноды не должны быть заглушками внутри bridge.');
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1269796Z                               ^^^^^^^
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1269992Z 
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1270211Z SyntaxError: missing ) after argument list
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1270755Z     at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1271458Z     at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1272038Z     at #translate (node:internal/modules/esm/loader:434:20)
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1272503Z     at afterLoad (node:internal/modules/esm/loader:502:29)
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1273450Z     at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1274805Z     at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1275743Z     at afterResolve (node:internal/modules/esm/loader:607:52)
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1276793Z     at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1277560Z     at node:internal/modules/esm/loader:632:32
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1278283Z     at TracingChannel.tracePromise (node:diagnostics_channel:362:14)
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1278759Z 
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1278927Z Node.js v24.18.0
+patch-and-verify	Verify editor and workspace contracts	2026-07-22T00:39:28.1387109Z ##[error]Process completed with exit code 1.
