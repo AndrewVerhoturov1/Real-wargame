@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import path from 'node:path';
 import {
   BUILT_IN_AMMO_DEFINITION_IDS,
   BUILT_IN_LOADOUT_TEMPLATE_IDS,
@@ -113,5 +115,113 @@ assert.equal(registry.resolveWeapon({ definitionId: 'weapon_mosin_m9130', revisi
 assert.equal(registry.resolveWeapon({ definitionId: 'weapon_mosin_m9130', revision: 1 }).ammo.definitionId, 'ammo_762x54r_ball');
 
 assert.throws(() => CombatCatalogRegistry.fromUnknown({ ...defaults, formatVersion: 2 }), /formatVersion|верс/i);
+
+for (const collectionKey of ['ammoDefinitions', 'weaponDefinitions', 'loadoutTemplates'] as const) {
+  const bundle = createDefaultCombatCatalogRegistry().toData();
+  const entries = bundle[collectionKey] as unknown as Array<Record<string, unknown>>;
+  const source = structuredClone(entries[0]);
+  entries.push(
+    { ...structuredClone(source), revision: 2, status: 'draft', nameEn: 'First draft' },
+    { ...structuredClone(source), revision: 3, status: 'draft', nameEn: 'Second draft' },
+  );
+  const validation = validateCombatCatalogBundle(bundle);
+  assert.ok(
+    hasIssue(validation.issues, 'multiple_drafts_for_definition'),
+    `${collectionKey} must reject multiple drafts for one definition ID`,
+  );
+}
+
+const dependencyRegistry = createDefaultCombatCatalogRegistry();
+const dependencyAmmoRevision1 = dependencyRegistry.resolveAmmo({ definitionId: 'ammo_762x54r_ball', revision: 1 });
+const dependencyAmmoDraft = dependencyRegistry.saveAmmoDraft({
+  ...dependencyAmmoRevision1,
+  status: 'draft',
+  nameEn: 'Draft rifle cartridge dependency',
+});
+assert.equal(dependencyAmmoDraft.revision, 2);
+const dependencyWeaponRevision1 = dependencyRegistry.resolveWeapon({ definitionId: 'weapon_mosin_m9130', revision: 1 });
+dependencyRegistry.saveWeaponDraft({
+  ...dependencyWeaponRevision1,
+  status: 'draft',
+  nameEn: 'Weapon with draft ammo dependency',
+  ammo: { definitionId: dependencyAmmoDraft.ammoDefinitionId, revision: dependencyAmmoDraft.revision },
+});
+const beforeRejectedWeaponPublish = dependencyRegistry.exportJson();
+assert.throws(
+  () => dependencyRegistry.publishWeaponRevision('weapon_mosin_m9130'),
+  /unstable_ammo_reference/,
+  'published weapon must not depend on a draft ammo revision',
+);
+assert.equal(
+  dependencyRegistry.exportJson(),
+  beforeRejectedWeaponPublish,
+  'rejected weapon publication must not mutate the registry',
+);
+assert.equal(dependencyRegistry.publishAmmoRevision('ammo_762x54r_ball').revision, 2);
+const stableWeaponRevision2 = dependencyRegistry.publishWeaponRevision('weapon_mosin_m9130');
+assert.equal(stableWeaponRevision2.revision, 2);
+
+const dependencyWeaponDraft = dependencyRegistry.saveWeaponDraft({
+  ...stableWeaponRevision2,
+  status: 'draft',
+  nameEn: 'Draft weapon dependency for loadout',
+});
+assert.equal(dependencyWeaponDraft.revision, 3);
+const dependencyLoadoutRevision1 = dependencyRegistry.resolveLoadout({ definitionId: 'loadout_rifleman', revision: 1 });
+dependencyRegistry.saveLoadoutDraft({
+  ...dependencyLoadoutRevision1,
+  status: 'draft',
+  nameEn: 'Loadout with draft weapon dependency',
+  primary: {
+    ...dependencyLoadoutRevision1.primary,
+    definition: { definitionId: dependencyWeaponDraft.weaponDefinitionId, revision: dependencyWeaponDraft.revision },
+  },
+});
+const beforeRejectedLoadoutPublish = dependencyRegistry.exportJson();
+assert.throws(
+  () => dependencyRegistry.publishLoadoutRevision('loadout_rifleman'),
+  /unstable_weapon_reference/,
+  'published loadout must not depend on a draft weapon revision',
+);
+assert.equal(
+  dependencyRegistry.exportJson(),
+  beforeRejectedLoadoutPublish,
+  'rejected loadout publication must not mutate the registry',
+);
+assert.equal(dependencyRegistry.publishWeaponRevision('weapon_mosin_m9130').revision, 3);
+assert.equal(dependencyRegistry.publishLoadoutRevision('loadout_rifleman').revision, 2);
+assert.equal(
+  dependencyRegistry.archiveAmmoRevision({ definitionId: 'ammo_762x54r_ball', revision: 1 }).status,
+  'archived',
+  'archived ammo revisions remain stable dependency targets',
+);
+assert.equal(
+  dependencyRegistry.archiveWeaponRevision({ definitionId: 'weapon_mosin_m9130', revision: 1 }).status,
+  'archived',
+  'archived weapon revisions remain stable dependency targets',
+);
+
+const catalogSourceDirectory = path.join(process.cwd(), 'src', 'core', 'infantry-combat', 'catalogs');
+const deterministicSourceFiles = [
+  ...readdirSync(catalogSourceDirectory)
+    .filter((fileName) => fileName.endsWith('.ts'))
+    .map((fileName) => path.join(catalogSourceDirectory, fileName)),
+  path.join(process.cwd(), 'scripts', 'combat_catalog_core_smoke.ts'),
+  path.join(process.cwd(), 'scripts', 'combat_catalog_core_smoke.mjs'),
+  path.join(process.cwd(), 'scripts', 'combat_catalog_serialization_smoke.ts'),
+  path.join(process.cwd(), 'scripts', 'combat_catalog_serialization_smoke.mjs'),
+].sort();
+const forbiddenSourceFragments = [
+  ['Date', 'now'].join('.'),
+  ['performance', 'now'].join('.'),
+  ['Math', 'random'].join('.'),
+  ['random', 'UUID'].join(''),
+];
+for (const fileName of deterministicSourceFiles) {
+  const source = readFileSync(fileName, 'utf8');
+  for (const fragment of forbiddenSourceFragments) {
+    assert.equal(source.includes(fragment), false, `${fileName} must not use ${fragment}`);
+  }
+}
 
 console.log('combat-catalog-core: smoke passed');
