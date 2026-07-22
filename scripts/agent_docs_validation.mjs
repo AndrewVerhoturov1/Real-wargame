@@ -8,8 +8,7 @@ const FATAL_CORE_ERRORS = [
 
 function isFatalCoreError(error) {
   return FATAL_CORE_ERRORS.some((prefix) => error.startsWith(prefix))
-    || error === 'docs/ai/repo-context.json: missing required field activeSubprojects'
-    || error.endsWith('configured active subproject must have status active');
+    || error === 'docs/ai/repo-context.json: missing required field activeSubprojects';
 }
 
 export async function validateAgentDocuments(root) {
