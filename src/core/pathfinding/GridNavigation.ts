@@ -9,8 +9,12 @@ import {
   getMapObjectBounds,
   isPointInsideMapObject,
 } from '../map/MapObjectGeometry';
-import { resolveCellVegetationDefinition } from '../map/VegetationDefinition';
-import { getSurfaceMaterial } from '../map/EnvironmentMaterialProfile';
+import { resolveCellVegetationMaterialId } from '../map/VegetationDefinition';
+import {
+  getSurfaceMaterial,
+  getVegetationMaterial,
+  type EnvironmentMaterialProfile,
+} from '../map/EnvironmentMaterialProfile';
 import { getActiveEnvironmentProfile } from '../map/EnvironmentProfileRuntime';
 import { getMapObjectSpatialIndex } from '../spatial/MapObjectSpatialIndex';
 
@@ -31,6 +35,14 @@ export interface NavigationGrid {
   readonly width: number;
   readonly height: number;
   readonly cells: readonly NavigationCell[];
+}
+
+export interface NavigationPositionEvaluation {
+  readonly passable: boolean;
+  readonly movementCost: number;
+  readonly bridge: boolean;
+  readonly blockedByObjectId: string | null;
+  readonly objectCandidateCount: number;
 }
 
 const HARD_BLOCKING_OBJECTS = new Set<MapObjectKind>([
@@ -96,24 +108,57 @@ export function isMapObjectMovementBlocking(kind: MapObjectKind): boolean {
   return true;
 }
 
-export function isMapCellPassable(map: TacticalMap, x: number, y: number): boolean {
-  if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= map.width || y >= map.height) {
-    return false;
+/** Exact local navigation query used by bounded tactical solvers. */
+export function evaluateNavigationPosition(
+  map: TacticalMap,
+  position: { readonly x: number; readonly y: number },
+  radiusCells = INFANTRY_NAVIGATION_RADIUS_CELLS,
+  objectCandidates?: readonly MapObject[],
+  environmentProfile: EnvironmentMaterialProfile = getActiveEnvironmentProfile(),
+): NavigationPositionEvaluation {
+  const x = Math.floor(position.x);
+  const y = Math.floor(position.y);
+  if (!Number.isFinite(position.x) || !Number.isFinite(position.y)
+    || x < 0 || y < 0 || x >= map.width || y >= map.height) {
+    return {
+      passable: false,
+      movementCost: Number.POSITIVE_INFINITY,
+      bridge: false,
+      blockedByObjectId: null,
+      objectCandidateCount: 0,
+    };
   }
-
   const cell = map.cells[y * map.width + x];
-  if (!cell) return false;
-  const center = navigationCellCenter(x, y);
-  const candidates = getMapObjectSpatialIndex(map).queryCircle(center, INFANTRY_NAVIGATION_RADIUS_CELLS);
-  const bridge = candidates.some((object) => (
-    object.kind === 'bridge' && isPointInsideMapObject(object, center)
-  ));
-  const surface = getSurfaceMaterial(getActiveEnvironmentProfile(), cell.surfaceMaterialId);
-  if (!surface.movement.passable && !bridge) return false;
-  return !candidates.some((object) => (
+  if (!cell) {
+    return {
+      passable: false,
+      movementCost: Number.POSITIVE_INFINITY,
+      bridge: false,
+      blockedByObjectId: null,
+      objectCandidateCount: 0,
+    };
+  }
+  const safeRadius = Math.max(0, Number.isFinite(radiusCells) ? radiusCells : INFANTRY_NAVIGATION_RADIUS_CELLS);
+  const candidates = objectCandidates ?? getMapObjectSpatialIndex(map).queryCircle(position, safeRadius);
+  const bridge = candidates.some((object) => object.kind === 'bridge' && isPointInsideMapObject(object, position));
+  const blocker = candidates.find((object) => (
     isMapObjectMovementBlocking(object.kind)
-    && circleIntersectsMapObject(object, center, INFANTRY_NAVIGATION_RADIUS_CELLS)
+    && circleIntersectsMapObject(object, position, safeRadius)
   ));
+  const surface = getSurfaceMaterial(environmentProfile, cell.surfaceMaterialId);
+  const passable = !blocker && (surface.movement.passable || bridge);
+  return {
+    passable,
+    movementCost: passable ? (bridge ? 0.9 : terrainMovementCost(cell.terrain, cell, environmentProfile)) : Number.POSITIVE_INFINITY,
+    bridge,
+    blockedByObjectId: blocker?.id ?? null,
+    objectCandidateCount: candidates.length,
+  };
+}
+
+export function isMapCellPassable(map: TacticalMap, x: number, y: number): boolean {
+  if (!Number.isInteger(x) || !Number.isInteger(y)) return false;
+  return evaluateNavigationPosition(map, navigationCellCenter(x, y)).passable;
 }
 
 export function isNavigationCellPassable(grid: NavigationGrid, x: number, y: number): boolean {
@@ -182,9 +227,13 @@ function objectOccupiesCell(
 function terrainMovementCost(
   terrain: TerrainKind,
   cell: TacticalMap['cells'][number],
+  environmentProfile: EnvironmentMaterialProfile = getActiveEnvironmentProfile(),
 ): number {
-  const vegetationResistance = resolveCellVegetationDefinition(cell).movement.resistance;
-  const surface = getSurfaceMaterial(getActiveEnvironmentProfile(), cell.surfaceMaterialId);
+  const vegetationResistance = getVegetationMaterial(
+    environmentProfile,
+    resolveCellVegetationMaterialId(cell),
+  ).movement.resistance;
+  const surface = getSurfaceMaterial(environmentProfile, cell.surfaceMaterialId);
   if (!surface.movement.passable || terrain === 'water') return Number.POSITIVE_INFINITY;
   return Math.max(0.05, 1
     + (surface.movement.resistance - 1)
