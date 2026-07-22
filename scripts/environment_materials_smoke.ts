@@ -197,10 +197,10 @@ assert.doesNotMatch(panelSource, /Технический id|Новое англ�
 assert.match(panelSource, /textField\('nameRu', 'Название'/, 'material names must be editable in Russian without exposing technical IDs');
 assert.match(panelSource, /selectField\('presentation\.textureId'/, 'texture choice must be a user-facing selector, not a raw technical-id input');
 const hudSource = readFileSync('src/ui/GameHudControls.ts', 'utf8');
-const workspaceSource = readFileSync('src/ui/TacticalWorkspace.ts', 'utf8');
+const workspaceSource = readFileSync('src/ui/TacticalWorkspaceBaseLegacy.ts', 'utf8');
 const pixiAppSource = readFileSync('src/rendering/PixiApp.ts', 'utf8');
 assert.match(hudSource, /getVegetationMaterial\(getActiveEnvironmentProfile\(\), cell\.vegetationMaterialId\)/, 'HUD must display canonical vegetation material names');
-assert.match(workspaceSource, /getVegetationMaterial\(profile,cell\.vegetationMaterialId\)/, 'workspace must display canonical vegetation material names');
+assert.match(workspaceSource, /getVegetationMaterial\(profile,\s*cell\.vegetationMaterialId\)/, 'workspace must display canonical vegetation material names');
 assert.match(pixiAppSource, /getVegetationMaterial\(environment, cell\.vegetationMaterialId\)/, 'Pixi hover diagnostics must display canonical vegetation material names');
 assert.doesNotMatch(pixiAppSource, /formatForestLayer\(cell\.forest/, 'Pixi hover diagnostics must not fall back to legacy forest codes');
 console.log('environment-materials: smoke passed');
