@@ -73,6 +73,7 @@ export function resolveDirectFireSolution(
   const visibleAimHeightMetres = visibleSamples.map((sample) => sample.heightMeters);
   const origin = buildMuzzlePointTowardTarget(state, shooter, target.aimGridPosition);
   const context = createBallisticLineProbeContext(state);
+  const ignoredUnitIds = state.units.map((unit) => unit.id);
   let firstBlockedLine: BallisticLineProbeResult | null = null;
 
   for (const sample of visibleSamples) {
@@ -81,7 +82,9 @@ export function resolveDirectFireSolution(
       origin,
       target: aimPoint,
       shooterId: shooter.id,
-      ignoreUnitIds: [shooter.id, target.targetUnit.id],
+      // Moving units are handled by FireAction's last-moment friendly-fire corridor check.
+      // Keeping them out of this cached result prevents stale unit blockers.
+      ignoreUnitIds: ignoredUnitIds,
       maximumDistanceMetres,
     });
     if (line.clear) {
