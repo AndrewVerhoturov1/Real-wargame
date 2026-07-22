@@ -46,8 +46,14 @@ for (const needle of [
 
 const storage = read('src/core/infantry-combat/catalogs/CombatCatalogStorage.ts');
 contains(storage, 'real-wargame.combat-catalog.bundle.v1', 'Хранилище должно использовать постоянный ключ.');
+const forbiddenDeterminism = [
+  ['Date', 'now'].join('.'),
+  ['performance', 'now'].join('.'),
+  ['Math', 'random'].join('.'),
+  ['random', 'UUID'].join(''),
+];
 for (const source of [editor, schema, storage]) {
-  for (const forbidden of ['Date.now', 'performance.now', 'Math.random', 'randomUUID']) {
+  for (const forbidden of forbiddenDeterminism) {
     notContains(source, forbidden, `Запрещена недетерминированность: ${forbidden}`);
   }
 }
