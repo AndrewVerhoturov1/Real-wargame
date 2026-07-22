@@ -6,15 +6,26 @@ import * as legacy from './SimulationStateLegacy';
 export * from './SimulationStateLegacy';
 
 /**
+ * Keep the public state contract explicit at the compatibility boundary. The
+ * implementation and editor helpers still live in SimulationStateLegacy, but
+ * callers continue to receive the complete state shape and the established
+ * getSelectedUnits / beginEditorPointerAction API from this module. The
+ * internal spawnEditorUnit path remains behind beginEditorPointerAction.
+ */
+export interface SimulationState extends legacy.SimulationState {}
+export const getSelectedUnits = legacy.getSelectedUnits;
+export const beginEditorPointerAction = legacy.beginEditorPointerAction;
+
+/**
  * Compatibility facade for the old selection-box command path. It delegates
  * editor pressure/facing bookkeeping to the established implementation, while
  * preventing that legacy path from changing the canonical posture instantly.
  */
 export function issueMoveOrderToSelectedUnit(
-  state: legacy.SimulationState,
+  state: SimulationState,
   rawTarget: GridPosition,
 ): void {
-  const selected = legacy.getSelectedUnits(state);
+  const selected = getSelectedUnits(state);
   const postureSnapshots = new Map<string, Pick<UnitModel['behaviorRuntime'],
     'posture' | 'previousPosture' | 'postureChangedBecause'>>();
 
