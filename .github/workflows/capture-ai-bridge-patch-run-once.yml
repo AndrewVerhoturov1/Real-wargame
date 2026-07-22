@@ -1,5 +1,6 @@
 name: Capture AI Bridge Patch Run Once
 
+# Refresh the latest robust facade patch run.
 on:
   push:
     branches:
