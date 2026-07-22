@@ -24,7 +24,7 @@ Generated from canonical repository and subproject metadata.
 
 - **ID:** `infantry-combat-prototype-v1`
 - **Updated:** 2026-07-22
-- **Current focus:** Этап 1: тактические позиции и физическая смена позы. Рабочая ветка: feature/20260721-tactical-position-basis.
-- **Next step:** Закончить оптимизацию выбора позиций, длительную смену позы и целевые проверки; затем зафиксировать контракт позиций и перейти к стрелковому бою.
-- **Last verified commit:** not recorded
+- **Current focus:** Этап 1: оптимизация выбора тактических позиций. Физическая длительная смена позы принята и находится в real-wargame-preview.
+- **Next step:** Закончить оптимизацию поиска и диагностику выбора; затем закрыть этап 1 и перейти к стрелковому бою.
+- **Last verified commit:** `8a2b3b5bb344eaafa41871315c51b07e98eb9eb3`
 - **Status:** [generated status](../subprojects/infantry-combat-prototype-v1/STATUS.md)
