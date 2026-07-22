@@ -21,7 +21,7 @@ try {
       rollupOptions: { output: { entryFileNames: 'combat-catalog-serialization-smoke.mjs', format: 'es' } },
     },
   });
-  await import(`${pathToFileURL(entryFile).href}?run=${Date.now()}`);
+  await import(pathToFileURL(entryFile).href);
 } finally {
   await rm(outDir, { recursive: true, force: true });
 }
