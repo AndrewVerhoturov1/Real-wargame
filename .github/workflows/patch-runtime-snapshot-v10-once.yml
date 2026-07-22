@@ -1,0 +1,76 @@
+name: Patch Runtime Snapshot V10 Once
+
+on:
+  push:
+    branches:
+      - feature/20260721-tactical-position-basis
+    paths:
+      - .github/workflows/patch-runtime-snapshot-v10-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TARGET_BRANCH: feature/20260721-tactical-position-basis
+      EXPECTED_HEAD: ${{ github.sha }}
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/20260721-tactical-position-basis
+          fetch-depth: 0
+
+      - name: Verify branch has not moved
+        run: |
+          set -euo pipefail
+          remote_head="$(git ls-remote origin "refs/heads/${TARGET_BRANCH}" | cut -f1)"
+          [[ "$remote_head" == "$EXPECTED_HEAD" ]] || {
+            echo "Refusing patch: expected branch head $EXPECTED_HEAD, found $remote_head." >&2
+            exit 1
+          }
+
+      - name: Update scene export schema expectation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/ai_runtime_snapshot_smoke.ts')
+          source = path.read_text(encoding='utf-8')
+          replacements = {
+              "scene-export-v9-minimal-target-visibility-ai-runtime-2m-grid": "scene-export-v10-physical-posture-action-2m-grid",
+              "shared v9 envelope must include movement profiles": "shared v10 envelope must include movement profiles",
+              "shared v9 envelope must include environment profiles": "shared v10 envelope must include environment profiles",
+          }
+          for old, new in replacements.items():
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one occurrence of {old!r}, found {count}')
+              source = source.replace(old, new)
+          path.write_text(source, encoding='utf-8')
+          PY
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify snapshot and posture regressions
+        run: |
+          npm run runtime-snapshot:smoke
+          npm run posture-transition:smoke
+
+      - name: Commit verified fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/ai_runtime_snapshot_smoke.ts
+          git commit -m "test: update AI snapshot contract for scene export v10 [skip ci]"
+          git push origin HEAD:feature/20260721-tactical-position-basis
