@@ -162,7 +162,12 @@ export class StaticTacticalPositionService {
       return { ok: false, reason: 'malformed', message: 'Static tactical service is destroyed.', decodedBytes: 0, decodeMs: 0 };
     }
     const artifactSettings = readArtifactSettings(value, this.settings);
+    const previousSettingsIdentity = createStaticTacticalPositionBasisIdentity(this.state.map, this.settings);
     const identity = createStaticTacticalPositionBasisIdentity(this.state.map, artifactSettings);
+    if (!sameStaticTacticalPositionIdentity(previousSettingsIdentity, identity)) {
+      this.settings = artifactSettings;
+      this.settingsRevision += 1;
+    }
     const fingerprint = createStaticTacticalPositionFingerprint(this.state.map, artifactSettings, getActiveEnvironmentProfile());
     const decoded = decodeStaticTacticalPositionArtifact(value, fingerprint, identity);
     this.persistentDecodedBytes = decoded.decodedBytes;
@@ -185,7 +190,6 @@ export class StaticTacticalPositionService {
     this.readyFingerprint = decoded.fingerprint;
     this.requestedIdentity = identity;
     this.pending = null;
-    this.settings = artifactSettings;
     this.status = 'ready';
     this.lastError = '';
     this.persistentCacheHits += 1;
