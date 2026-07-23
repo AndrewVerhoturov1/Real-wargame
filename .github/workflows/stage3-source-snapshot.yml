@@ -14,7 +14,7 @@ jobs:
   snapshot:
     if: github.head_ref == 'feature/20260723-shooting-stage-03-single-rifle-shot'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout exact candidate
         uses: actions/checkout@v4
@@ -27,14 +27,23 @@ jobs:
         run: |
           test "$(git merge-base HEAD fa4c75a9cdec8fc2a2a7eaabad8cda1ce3258978)" = "fa4c75a9cdec8fc2a2a7eaabad8cda1ce3258978"
 
-      - name: Pack source tree
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Pack source tree and dependencies
         shell: bash
-        run: tar --exclude=.git -czf /tmp/real-wargame-stage3-source.tgz .
+        run: tar --exclude=.git -czf /tmp/real-wargame-stage3-source-with-deps.tgz .
 
       - name: Upload source snapshot
         uses: actions/upload-artifact@v4
         with:
-          name: real-wargame-stage3-source
-          path: /tmp/real-wargame-stage3-source.tgz
+          name: real-wargame-stage3-source-with-deps
+          path: /tmp/real-wargame-stage3-source-with-deps.tgz
           if-no-files-found: error
           retention-days: 1
