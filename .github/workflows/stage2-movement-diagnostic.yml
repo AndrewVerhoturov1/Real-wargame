@@ -1,0 +1,88 @@
+name: Stage 2 Movement Diagnostic
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+
+permissions:
+  contents: write
+
+jobs:
+  apply-movement-smoke-migration:
+    if: github.event.pull_request.head.ref == 'feature/20260723-shooting-stage-02-physical-action-coordinator'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout working branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/20260723-shooting-stage-02-physical-action-coordinator
+          fetch-depth: 0
+
+      - name: Migrate stale preparation fixture
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/physical_movement_runtime_smoke.ts')
+          source = path.read_text(encoding='utf-8')
+          old_import = "  preparePhysicalMovementStep,\n  setMovementProfileRequest,"
+          new_import = "  preparePhysicalMovementStep,\n  requestMovementWeaponPreparation,\n  setMovementProfileRequest,"
+          if old_import in source:
+              source = source.replace(old_import, new_import, 1)
+          elif '  requestMovementWeaponPreparation,\n' not in source:
+              raise SystemExit('movement import marker not found')
+
+          old = """  assert.equal(requestFireAction(state, shooter, contactId), false);
+  const stale = getMovementWeaponPreparation(shooter);
+  assert.ok(stale);
+  shooter.movementRuntime.weaponPreparationRevision += 1;
+  shooter.movementRuntime.weaponPreparation = {
+    ownerToken: 'fire-intent:newer-contact',
+    contactId: 'newer-contact',
+    orderIssuedAtMs: shooter.order?.issuedAtMs ?? null,
+    remainingSeconds: 1,
+    revision: shooter.movementRuntime.weaponPreparationRevision,
+  };
+  assert.equal(cancelMovementWeaponPreparation(shooter, { ownerToken: stale.ownerToken, revision: stale.revision }), false, 'stale cleanup must not cancel newer preparation');
+  assert.equal(getMovementWeaponPreparation(shooter)?.contactId, 'newer-contact');
+
+  shooter.movementRuntime.weaponPreparation = null;
+"""
+          new = """  assert.equal(requestFireAction(state, shooter, contactId), false);
+  const stale = getMovementWeaponPreparation(shooter);
+  assert.ok(stale);
+  const newerRequest = requestMovementWeaponPreparation(state, shooter, {
+    contactId: 'newer-contact',
+    ownerToken: 'fire-intent:newer-contact',
+  });
+  assert.equal(newerRequest.allowed, false);
+  const newer = getMovementWeaponPreparation(shooter);
+  assert.ok(newer);
+  assert.equal(newer.contactId, 'newer-contact');
+  assert.equal(cancelMovementWeaponPreparation(shooter, { ownerToken: stale.ownerToken, revision: stale.revision }), false, 'stale cleanup must not cancel newer preparation');
+  assert.equal(getMovementWeaponPreparation(shooter)?.contactId, 'newer-contact');
+  assert.equal(cancelMovementWeaponPreparation(shooter, {
+    ownerToken: newer.ownerToken,
+    revision: newer.revision,
+    contactId: newer.contactId,
+  }), true, 'current preparation cleanup must release its exact coordinator lease');
+"""
+          if old in source:
+              source = source.replace(old, new, 1)
+          elif 'const newerRequest = requestMovementWeaponPreparation' not in source:
+              raise SystemExit('stale preparation fixture not found')
+          path.write_text(source, encoding='utf-8')
+          PY
+
+      - name: Commit migration when needed
+        shell: bash
+        run: |
+          if git diff --quiet -- scripts/physical_movement_runtime_smoke.ts; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/physical_movement_runtime_smoke.ts
+          git commit -m "test: migrate movement preparation ownership fixture"
+          git push origin HEAD:feature/20260723-shooting-stage-02-physical-action-coordinator
