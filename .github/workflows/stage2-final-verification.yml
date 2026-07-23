@@ -11,7 +11,7 @@ permissions:
 jobs:
   verify-complete-stage-2:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Checkout exact candidate
         uses: actions/checkout@v4
@@ -27,40 +27,62 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Run and capture complete Stage 2 matrix
-        id: matrix
+      - name: TypeScript
+        id: typescript
         continue-on-error: true
-        shell: bash
-        run: |
-          set +e
-          status=0
-          run_check() {
-            echo "===== $1 =====" | tee -a stage2-complete-verification.log
-            shift
-            "$@" 2>&1 | tee -a stage2-complete-verification.log
-            code=${PIPESTATUS[0]}
-            echo "EXIT_CODE=$code" | tee -a stage2-complete-verification.log
-            if [ "$code" -ne 0 ]; then status=1; fi
-          }
-          run_check TypeScript npx tsc --noEmit
-          run_check PhysicalActionCoordinator npm run physical-action-coordinator:smoke
-          run_check PostureTransition npm run posture-transition:smoke
-          run_check PhysicalMovement npm run physical-movement:smoke
-          run_check CombatFoundation npm run combat-foundation:smoke
-          run_check CombatTacticalIntegration npm run combat-tactical-integration:smoke
-          run_check TacticalActionPorts npm run tactical-action-ports:smoke
-          run_check ProductionBuild npm run build
-          exit "$status"
+        timeout-minutes: 5
+        run: npx tsc --noEmit
 
-      - name: Upload complete Stage 2 verification log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: stage2-complete-verification-${{ github.event.pull_request.head.sha }}
-          path: stage2-complete-verification.log
-          if-no-files-found: error
-          retention-days: 1
+      - name: Physical action coordinator
+        id: coordinator
+        continue-on-error: true
+        timeout-minutes: 5
+        run: npm run physical-action-coordinator:smoke
+
+      - name: Posture transition
+        id: posture
+        continue-on-error: true
+        timeout-minutes: 5
+        run: npm run posture-transition:smoke
+
+      - name: Physical movement
+        id: movement
+        continue-on-error: true
+        timeout-minutes: 5
+        run: npm run physical-movement:smoke
+
+      - name: Combat foundation
+        id: combat_foundation
+        continue-on-error: true
+        timeout-minutes: 5
+        run: npm run combat-foundation:smoke
+
+      - name: Combat tactical integration
+        id: combat_tactical
+        continue-on-error: true
+        timeout-minutes: 5
+        run: npm run combat-tactical-integration:smoke
+
+      - name: Tactical action ports
+        id: tactical_ports
+        continue-on-error: true
+        timeout-minutes: 5
+        run: npm run tactical-action-ports:smoke
+
+      - name: Production build
+        id: production_build
+        continue-on-error: true
+        timeout-minutes: 10
+        run: npm run build
 
       - name: Preserve verification failure
-        if: steps.matrix.outcome == 'failure'
+        if: >-
+          steps.typescript.outcome == 'failure' ||
+          steps.coordinator.outcome == 'failure' ||
+          steps.posture.outcome == 'failure' ||
+          steps.movement.outcome == 'failure' ||
+          steps.combat_foundation.outcome == 'failure' ||
+          steps.combat_tactical.outcome == 'failure' ||
+          steps.tactical_ports.outcome == 'failure' ||
+          steps.production_build.outcome == 'failure'
         run: exit 1
