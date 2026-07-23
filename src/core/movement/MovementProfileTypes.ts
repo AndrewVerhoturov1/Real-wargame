@@ -177,7 +177,8 @@ export interface MovementWeaponPreparationState {
   orderIssuedAtMs: number | null;
   remainingSeconds: number;
   revision: number;
-  actionHandle: PhysicalActionHandleV1 | null;
+  /** Optional only for legacy scene payloads; every newly requested preparation stores an exact handle. */
+  actionHandle?: PhysicalActionHandleV1 | null;
 }
 
 
