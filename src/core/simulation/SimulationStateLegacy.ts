@@ -1,3 +1,4 @@
+import { createReferenceProjectileRuntimeState, type ReferenceProjectileRuntimeStateV1 } from '../infantry-combat/runtime';
 import { getGameEditorDrafts } from '../editor/GameEditorDrafts';
 import { distance, type GridPosition } from '../geometry';
 import {
@@ -112,6 +113,7 @@ export interface SimulationState {
   selectionBox: SelectionBox | null;
   simulationTimeSeconds: number;
   simulationStep: number;
+  infantryCombatProjectiles: ReferenceProjectileRuntimeStateV1;
   editor: EditorState;
 }
 
@@ -132,6 +134,7 @@ export function createInitialState(
     selectionBox: null,
     simulationTimeSeconds: 0,
     simulationStep: 0,
+    infantryCombatProjectiles: createReferenceProjectileRuntimeState(),
     editor: {
       enabled: false,
       panelOpen: false,

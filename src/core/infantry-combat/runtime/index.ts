@@ -4,3 +4,6 @@ export * from './InfantryWeaponInstance';
 export * from './FireTaskRuntime';
 export * from './MuzzleGeometry';
 export * from './FriendlyFireRisk';
+export * from './ProjectileRuntimeTypes';
+export * from './ReferenceProjectileRuntime';
+export * from './ShotCommitService';

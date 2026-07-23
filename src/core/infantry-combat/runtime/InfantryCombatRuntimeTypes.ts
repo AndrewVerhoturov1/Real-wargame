@@ -72,10 +72,36 @@ export interface FireTaskRuntimeV1 {
   resultRu: string | null;
 }
 
+
+export type ShotCommitStatus =
+  | 'committed'
+  | 'already_committed'
+  | 'task_not_firing'
+  | 'ownership_lost'
+  | 'weapon_missing'
+  | 'unsupported_mode'
+  | 'empty_weapon'
+  | 'muzzle_blocked'
+  | 'friendly_risk_exceeded'
+  | 'projectile_capacity_exceeded'
+  | 'invalid_target';
+
+export interface ShotCommitDiagnosticV1 {
+  readonly status: ShotCommitStatus;
+  readonly muzzlePosition: BallisticPoint3 | null;
+  readonly muzzleBlocked: boolean;
+  readonly friendlyRisk: number;
+  readonly roundsBefore: number | null;
+  readonly roundsAfter: number | null;
+  readonly shotId: string | null;
+  readonly projectileId: string | null;
+}
+
 export interface InfantryCombatUnitRuntimeV1 {
   readonly schemaVersion: typeof INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION;
   nextFireTaskSequence: number;
   primaryWeapon: InfantryWeaponInstanceV1 | null;
   activeFireTask: FireTaskRuntimeV1 | null;
   lastFireResult: FireTaskTerminalResultV1 | null;
+  lastShotCommit: ShotCommitDiagnosticV1 | null;
 }
