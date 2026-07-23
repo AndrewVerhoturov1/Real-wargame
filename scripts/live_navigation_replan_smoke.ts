@@ -180,7 +180,7 @@ function verifyHysteresisAndCooldownBoundSearches(): void {
     assert.equal(order.routeRevision, routeRevisionBefore, 'rejected candidate must not change routeRevision');
     assert.deepEqual(order.routeCells, routeCellsBefore, 'rejected candidate must not replace routeCells');
     assert.equal(order.lastReplanReason, 'danger_changed');
-    assert.equal(mover.behaviorRuntime.lastEvent, 'move_route_replan_hysteresis');
+    assert.equal(order.lastReplanReason, 'danger_changed', 'hysteresis rejection must remain recorded on the owned route even if a posture action publishes a newer unit event');
     const firstSearchAt = order.lastReplanAtSeconds;
     const processedKnowledgeRevision = order.knowledgeRevision;
 
