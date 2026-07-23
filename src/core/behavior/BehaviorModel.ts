@@ -1,6 +1,8 @@
 import type { AiRouteStatusState } from '../ai/AiRouteStatus';
 import type { SimulationAiFacts } from '../ai/events/SimulationAiEvents';
 import type { AiRuntimeSessionSnapshotV1 } from '../ai/runtime/AiRuntimeSession';
+import { createPhysicalActionCoordinatorState } from '../actions/PhysicalActionCoordinator';
+import type { PhysicalActionCoordinatorStateV1 } from '../actions/PhysicalActionCoordinatorTypes';
 import type { UnitPhysicalAction } from '../actions/PostureTransition';
 
 export type UnitState = 'idle' | 'moving' | 'observing' | 'taking_cover' | 'stressed';
@@ -94,6 +96,7 @@ export interface UnitBehaviorRuntime {
   aiRuntimeSession: AiRuntimeSessionSnapshotV1 | null;
   aiRouteStatusState: AiRouteStatusState | null;
   aiSimulationEventFacts: SimulationAiFacts | null;
+  physicalActionCoordinator: PhysicalActionCoordinatorStateV1;
   physicalAction: UnitPhysicalAction | null;
 }
 
@@ -363,6 +366,7 @@ export function createBehaviorRuntime(initialState?: Partial<UnitInitialState>):
     aiRuntimeSession: null,
     aiRouteStatusState: null,
     aiSimulationEventFacts: null,
+    physicalActionCoordinator: createPhysicalActionCoordinatorState(),
     physicalAction: null,
   };
 }
