@@ -541,7 +541,11 @@ function handlePanelChange(event: Event): void {
 
   if (input.matches('[data-combat-show-archived]')) {
     includeArchived = (input as HTMLInputElement).checked;
-    ensureSelection(true);
+    if (!includeArchived && draft?.status === 'archived') {
+      selection = null;
+      draft = null;
+      ensureSelection();
+    }
     render();
     return;
   }
@@ -774,6 +778,7 @@ function archiveCurrentRevision(): void {
     const candidateRegistry = CombatCatalogRegistry.fromUnknown(registry.toData());
     archiveRevisionInRegistry(candidateRegistry, { definitionId, revision: draft.revision });
     registry = storage.save(candidateRegistry);
+    loadError = null;
     dirty = false;
     currentIssues = [];
     message = `Ревизия ${definitionId} · r${draft.revision} архивирована без физического удаления.`;
@@ -811,6 +816,7 @@ async function importBundle(input: HTMLInputElement): Promise<void> {
   const file = input.files?.[0];
   input.value = '';
   if (!file) return;
+  if (dirty && !window.confirm('Импорт заменит текущий bundle и отменит несохранённые изменения. Продолжить?')) return;
   try {
     registry = storage.importJson(await file.text());
     loadError = null;
