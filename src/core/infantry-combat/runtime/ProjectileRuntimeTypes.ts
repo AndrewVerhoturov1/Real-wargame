@@ -61,6 +61,7 @@ export interface ProjectileImpactV1 {
   readonly hitZone: HitZone | null;
   readonly materialId: string | null;
   readonly normal: BallisticDirection3 | null;
+  readonly velocityBeforeImpact: BallisticDirection3;
 }
 
 export type ProjectileTerminationReason = 'impact' | 'lifetime' | 'out_of_bounds';

@@ -154,6 +154,7 @@ function normalizeImpact(value: unknown): ProjectileImpactV1 | null {
     hitZone: value.hitZone === 'head' || value.hitZone === 'torso' || value.hitZone === 'limbs' ? value.hitZone : null,
     materialId: nullableText(value.materialId),
     normal: normalizeDirection(value.normal),
+    velocityBeforeImpact: normalizeDirection(value.velocityBeforeImpact) ?? { x: 0, y: 0, z: 0 },
   };
 }
 

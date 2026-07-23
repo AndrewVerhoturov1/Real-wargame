@@ -7,3 +7,4 @@ export * from './FriendlyFireRisk';
 export * from './ProjectileRuntimeTypes';
 export * from './ReferenceProjectileRuntime';
 export * from './ShotCommitService';
+export * from './ReferenceProjectileStepper';

@@ -44,6 +44,10 @@ export interface BallisticRayResult {
   hitObjectId?: string;
   hitUnitId?: string;
   hitZone?: HitZone;
+  /** Reference-path diagnostics for Stage 3 projectile stepping. */
+  objectCandidateCount: number;
+  /** Number of unit hit-shape checks after ignored units are excluded. */
+  unitCheckCount: number;
 }
 
 export interface BallisticTraceContext {
@@ -111,6 +115,7 @@ export function traceBallisticRay(
     y: endPoint.yMetres / context.map.metersPerCell,
   };
   const objectCandidates = context.objectSpatialIndex.querySegment(segmentStart, segmentEnd, 0);
+  let unitCheckCount = 0;
   for (const object of objectCandidates) {
     const trace = traceMapObject(
       context.map,
@@ -132,6 +137,7 @@ export function traceBallisticRay(
 
   for (const unit of context.units) {
     if (ignored.has(unit.id)) continue;
+    unitCheckCount += 1;
     const intersection = intersectRayWithUnitHitShapes(
       input.origin,
       direction,
@@ -165,6 +171,8 @@ export function traceBallisticRay(
     hitObjectId: nearest?.objectId,
     hitUnitId: nearest?.unitId,
     hitZone: nearest?.zone,
+    objectCandidateCount: objectCandidates.length,
+    unitCheckCount,
   };
 }
 
