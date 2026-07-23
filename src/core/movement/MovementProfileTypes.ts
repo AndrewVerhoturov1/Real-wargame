@@ -1,3 +1,4 @@
+import type { PhysicalActionHandleV1 } from '../actions/PhysicalActionCoordinatorTypes';
 import type { UnitPosture } from '../behavior/BehaviorModel';
 
 export const MOVEMENT_PROFILE_FORMAT_VERSION = 1 as const;
@@ -176,6 +177,7 @@ export interface MovementWeaponPreparationState {
   orderIssuedAtMs: number | null;
   remainingSeconds: number;
   revision: number;
+  actionHandle: PhysicalActionHandleV1 | null;
 }
 
 
