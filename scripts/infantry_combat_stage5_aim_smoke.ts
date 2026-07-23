@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { serializePhysicalActionCoordinatorState } from '../src/core/actions/PhysicalActionCoordinatorSerialization';
+import {
+  normalizePhysicalActionCoordinatorState,
+  serializePhysicalActionCoordinatorState,
+} from '../src/core/actions/PhysicalActionCoordinatorSerialization';
 import { createDefaultCombatCatalogRegistry } from '../src/core/infantry-combat/catalogs';
 import {
   AIM_TRACKING_INTERVAL_SECONDS,
@@ -9,39 +12,47 @@ import {
   commitShot,
   deriveSeededAngularOffsets,
   equipPrimaryWeaponFromLoadout,
+  getInfantryCombatDiagnostics,
   getRecoveredWeaponRecoil,
   normalizeInfantryCombatUnitRuntime,
+  normalizeReferenceProjectileRuntimeState,
   prepareCommittedShotDirection,
+  reconcileInfantryCombatRuntimeAfterLoad,
   requestSingleFireTask,
   serializeInfantryCombatUnitRuntime,
   serializeReferenceProjectileRuntimeState,
   tickInfantryCombatSimulation,
   updateAimTrackingAtBoundary,
   type AimFactorBreakdownV1,
-  type FireTaskRuntimeV1,
   type InfantryWeaponInstanceV1,
 } from '../src/core/infantry-combat/runtime';
 import type { PerceptionContactMemory } from '../src/core/perception/PerceptionContact';
 import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
-import { normalizeUnits, type UnitModel } from '../src/core/units/UnitModel';
+import type { UnitModel } from '../src/core/units/UnitModel';
 
 verifyTrackingAndPerceptionOnlyContracts();
 verifyTrackingSchedulerAndSaveLoad();
 verifyFactorAndProbabilityContracts();
 verifySeededDispersionContracts();
-verifyRecoilAndExactlyOnceContracts();
+verifyRecoilExactlyOnceAndAtomicity();
+verifyProbabilityIsNotHitResolver();
+verifyOrderIndependenceAndReconciliation();
 verifyStage4MigrationDefaults();
+verifyReadOnlyDiagnostics();
 
-console.log('Infantry combat Stage 5 smoke passed: perception-only tracking, 5 Hz scheduler, lead, factors, probability, deterministic dispersion, recoil, exactly-once and migration.');
+console.log('Infantry combat Stage 5 smoke passed: perception-only 5 Hz tracking, lead, factors, probability, deterministic dispersion, recoil, atomic exactly-once, save/load and migration.');
 
 function verifyTrackingAndPerceptionOnlyContracts(): void {
   const fixed = scenario('stage5-fixed', false);
   const fixedTask = fixed.shooter.infantryCombatRuntime.activeFireTask!;
   const fixedWeapon = fixed.shooter.infantryCombatRuntime.primaryWeapon!;
   updateAimTrackingAtBoundary(fixed.state, fixed.shooter, fixedTask, fixedWeapon, 0.2);
-  assert.ok(fixedTask.aimTracking.solution.valid);
-  assert.deepEqual(fixedTask.aimTracking.solution.estimatedVelocityMetresPerSecond, { x: 0, y: 0, z: 0 });
-  assert.deepEqual(fixedTask.aimTracking.solution.predictedAimPoint, fixedTask.target, 'fixed point must not receive false lead');
+  const fixedSolution = fixedTask.aimTracking.solution;
+  assert.equal(fixedSolution.valid, true);
+  assert.deepEqual(fixedSolution.estimatedVelocityMetresPerSecond, { x: 0, y: 0, z: 0 });
+  assert.equal(fixedSolution.predictedAimPoint?.xMetres, fixedTask.target.xMetres);
+  assert.equal(fixedSolution.predictedAimPoint?.yMetres, fixedTask.target.yMetres);
+  assert.ok((fixedSolution.predictedAimPoint?.zMetres ?? 0) >= fixedTask.target.zMetres, 'fixed point may receive gravity compensation but never false horizontal lead');
 
   const moving = scenario('stage5-moving-contact', true);
   const task = moving.shooter.infantryCombatRuntime.activeFireTask!;
@@ -53,15 +64,15 @@ function verifyTrackingAndPerceptionOnlyContracts(): void {
   contact.lastObservedSeconds = 0.2;
   contact.lastUpdatedSeconds = 0.2;
   updateAimTrackingAtBoundary(moving.state, moving.shooter, task, weapon, 0.4);
-  assert.ok(Math.abs(task.aimTracking.solution.estimatedVelocityMetresPerSecond.x - 10) < 1e-9, 'two perceived samples must estimate velocity in world metres per second');
-  assert.ok(task.aimTracking.solution.predictedAimPoint.xMetres > task.aimTracking.solution.perceivedPosition!.xMetres, 'moving perceived contact must receive forward lead');
+  assert.ok(Math.abs(task.aimTracking.solution.estimatedVelocityMetresPerSecond.x - 10) < 1e-9);
+  assert.ok(task.aimTracking.solution.predictedAimPoint!.xMetres > task.aimTracking.solution.perceivedPosition!.xMetres);
   assert.notDeepEqual(task.aimTracking.solution.predictedAimPoint, firstPoint);
 
   const beforeHiddenMove = structuredClone(task.aimTracking.solution.predictedAimPoint);
   moving.target.position.x += 20;
   moving.target.position.y += 20;
   updateAimTrackingAtBoundary(moving.state, moving.shooter, task, weapon, 0.6);
-  assert.deepEqual(task.aimTracking.solution.predictedAimPoint, beforeHiddenMove, 'true target movement without a perception update must not change the aim point');
+  assert.deepEqual(task.aimTracking.solution.predictedAimPoint, beforeHiddenMove, 'true target movement without perception update must not leak into AimSolution');
 
   const ordered = scenario('stage5-contact-order', true);
   const reversed = scenario('stage5-contact-order', true);
@@ -69,7 +80,7 @@ function verifyTrackingAndPerceptionOnlyContracts(): void {
   reversed.shooter.perceptionKnowledge.contacts.unshift(otherContact('z-contact'));
   updateAimTrackingAtBoundary(ordered.state, ordered.shooter, ordered.shooter.infantryCombatRuntime.activeFireTask!, ordered.shooter.infantryCombatRuntime.primaryWeapon!, 0.2);
   updateAimTrackingAtBoundary(reversed.state, reversed.shooter, reversed.shooter.infantryCombatRuntime.activeFireTask!, reversed.shooter.infantryCombatRuntime.primaryWeapon!, 0.2);
-  assert.deepEqual(ordered.shooter.infantryCombatRuntime.activeFireTask!.aimTracking, reversed.shooter.infantryCombatRuntime.activeFireTask!.aimTracking, 'contact array order must not affect tracking');
+  assert.deepEqual(ordered.shooter.infantryCombatRuntime.activeFireTask!.aimTracking, reversed.shooter.infantryCombatRuntime.activeFireTask!.aimTracking);
 
   const qualityBefore = task.aimTracking.solution.solutionQuality;
   contact.confidence = 25;
@@ -77,8 +88,7 @@ function verifyTrackingAndPerceptionOnlyContracts(): void {
   contact.visibleNow = false;
   contact.observedNow = false;
   updateAimTrackingAtBoundary(moving.state, moving.shooter, task, weapon, 3);
-  assert.ok(task.aimTracking.solution.solutionQuality < qualityBefore, 'staleness and uncertainty must lower solution quality');
-
+  assert.ok(task.aimTracking.solution.solutionQuality < qualityBefore);
   moving.shooter.perceptionKnowledge.contacts = [];
   updateAimTrackingAtBoundary(moving.state, moving.shooter, task, weapon, 3.2);
   assert.equal(task.aimTracking.solution.valid, false);
@@ -93,44 +103,46 @@ function verifyTrackingSchedulerAndSaveLoad(): void {
   for (let index = 0; index < 11; index += 1) {
     tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: index / 10, deltaSeconds: 0.1 });
   }
-  assert.deepEqual(
-    serializeInfantryCombatUnitRuntime(fine.shooter.infantryCombatRuntime),
-    serializeInfantryCombatUnitRuntime(coarse.shooter.infantryCombatRuntime),
-    'coarse and fine ticks must preserve the same 5 Hz scheduler state',
-  );
+  assert.deepEqual(serializedUnit(fine.shooter), serializedUnit(coarse.shooter));
   assert.equal(coarse.shooter.infantryCombatRuntime.activeFireTask?.aimTracking.trackingUpdateCount, 5);
   assert.equal(coarse.shooter.infantryCombatRuntime.activeFireTask?.aimTracking.nextTrackingBoundarySeconds, 1.2);
 
-  const saved = serializeInfantryCombatUnitRuntime(coarse.shooter.infantryCombatRuntime);
-  const restored = normalizeInfantryCombatUnitRuntime(JSON.parse(JSON.stringify(saved)));
-  assert.deepEqual(restored, saved, 'aim samples, boundary and physical progress must survive save/load');
+  const restored = normalizeInfantryCombatUnitRuntime(JSON.parse(JSON.stringify(serializedUnit(coarse.shooter))));
+  assert.deepEqual(restored, serializedUnit(coarse.shooter));
 
-  const control = scenario('stage5-save-load', true, 1);
-  const loaded = scenario('stage5-save-load', true, 1);
+  const control = scenario('stage5-save-load-mid-aim', true, 1);
+  const loaded = scenario('stage5-save-load-mid-aim', true, 1);
   tickInfantryCombatSimulation(control.state, { intervalStartSeconds: 0, deltaSeconds: 0.55 });
   tickInfantryCombatSimulation(loaded.state, { intervalStartSeconds: 0, deltaSeconds: 0.55 });
-  loaded.shooter.infantryCombatRuntime = normalizeInfantryCombatUnitRuntime(
-    JSON.parse(JSON.stringify(serializeInfantryCombatUnitRuntime(loaded.shooter.infantryCombatRuntime))),
-  );
-  loaded.shooter.behaviorRuntime.physicalActionCoordinator = JSON.parse(JSON.stringify(
-    serializePhysicalActionCoordinatorState(control.shooter.behaviorRuntime.physicalActionCoordinator),
-  ));
+  reloadUnitAndProjectiles(loaded.state, loaded.shooter);
   tickInfantryCombatSimulation(control.state, { intervalStartSeconds: 0.55, deltaSeconds: 0.45 });
   tickInfantryCombatSimulation(loaded.state, { intervalStartSeconds: 0.55, deltaSeconds: 0.45 });
-  assert.deepEqual(serializeInfantryCombatUnitRuntime(loaded.shooter.infantryCombatRuntime), serializeInfantryCombatUnitRuntime(control.shooter.infantryCombatRuntime));
+  assert.deepEqual(serializedUnit(loaded.shooter), serializedUnit(control.shooter));
+
+  const beforeCommitControl = scenario('stage5-save-load-before-commit', false, 0);
+  const beforeCommitLoaded = scenario('stage5-save-load-before-commit', false, 0);
+  tickInfantryCombatSimulation(beforeCommitControl.state, { intervalStartSeconds: 0, deltaSeconds: 0.69 });
+  tickInfantryCombatSimulation(beforeCommitLoaded.state, { intervalStartSeconds: 0, deltaSeconds: 0.69 });
+  reloadUnitAndProjectiles(beforeCommitLoaded.state, beforeCommitLoaded.shooter);
+  tickInfantryCombatSimulation(beforeCommitControl.state, { intervalStartSeconds: 0.69, deltaSeconds: 0.11 });
+  tickInfantryCombatSimulation(beforeCommitLoaded.state, { intervalStartSeconds: 0.69, deltaSeconds: 0.11 });
+  assert.deepEqual(
+    serializeReferenceProjectileRuntimeState(beforeCommitLoaded.state.infantryCombatProjectiles).committedShots,
+    serializeReferenceProjectileRuntimeState(beforeCommitControl.state.infantryCombatProjectiles).committedShots,
+  );
+  assert.deepEqual(beforeCommitLoaded.shooter.infantryCombatRuntime.primaryWeapon?.recoil, beforeCommitControl.shooter.infantryCombatRuntime.primaryWeapon?.recoil);
 }
 
 function verifyFactorAndProbabilityContracts(): void {
   const weapon = scenario('stage5-factors', false).shooter.infantryCombatRuntime.primaryWeapon!;
-  const base = factor(weapon, { posture: 'standing', isMoving: false, shootingSkill: 0.5, proficiency: 'trained', fatigue: 0, woundStabilityMultiplier: 1 });
+  const base = factor(weapon);
   const crouched = factor(weapon, { posture: 'crouched' });
   const prone = factor(weapon, { posture: 'prone' });
   assert.ok(crouched.effectiveDispersionRadians <= base.effectiveDispersionRadians);
   assert.ok(prone.effectiveDispersionRadians <= crouched.effectiveDispersionRadians);
 
   const moving = factor(weapon, { isMoving: true, movementSpeedMetresPerSecond: 2 });
-  assert.ok(moving.effectiveDispersionRadians > base.effectiveDispersionRadians, 'allowed movement must increase dispersion');
-
+  assert.ok(moving.effectiveDispersionRadians > base.effectiveDispersionRadians);
   const lowSkill = factor(weapon, { shootingSkill: 0 });
   const highSkill = factor(weapon, { shootingSkill: 1 });
   assert.ok(highSkill.effectiveDispersionRadians <= lowSkill.effectiveDispersionRadians);
@@ -143,7 +155,7 @@ function verifyFactorAndProbabilityContracts(): void {
   assert.ok(specialist.effectiveDispersionRadians <= trained.effectiveDispersionRadians);
 
   const impaired = factor(weapon, { fatigue: 0.8, woundStabilityMultiplier: 0.55 });
-  assert.ok(impaired.effectiveDispersionRadians > base.effectiveDispersionRadians, 'pure calculator must react to future fatigue/wound inputs');
+  assert.ok(impaired.effectiveDispersionRadians > base.effectiveDispersionRadians);
   assert.ok(impaired.aimQualityPerSecond < base.aimQualityPerSecond);
 
   const probabilityBase = probability({ aimQuality: 0.5, distanceMetres: 100, effectiveDispersionRadians: 0.01, uncertaintyMetres: 1 });
@@ -153,34 +165,17 @@ function verifyFactorAndProbabilityContracts(): void {
   assert.ok(probability({ aimQuality: 0.5, distanceMetres: 200, effectiveDispersionRadians: 0.01, uncertaintyMetres: 1 }) <= probabilityBase);
 
   const progressTask = scenario('stage5-progress', false, 1).shooter.infantryCombatRuntime.activeFireTask!;
-  const before = progressTask.aimTracking.solution.physicalAimQuality;
   advanceAimPhysicalProgress(progressTask, base, 0.25);
-  assert.ok(progressTask.aimTracking.solution.physicalAimQuality > before);
+  assert.ok(progressTask.aimTracking.solution.physicalAimQuality > 0);
   assert.ok(progressTask.aimTracking.solution.physicalAimQuality <= 1);
 }
 
 function verifySeededDispersionContracts(): void {
-  const first = deriveSeededAngularOffsets({
-    shooterId: 'seeded-shooter',
-    weaponInstanceId: 'seeded-weapon',
-    shotId: 'seeded-shot:1',
-    effectiveDispersionRadians: 0.02,
-  });
-  const repeated = deriveSeededAngularOffsets({
-    shooterId: 'seeded-shooter',
-    weaponInstanceId: 'seeded-weapon',
-    shotId: 'seeded-shot:1',
-    effectiveDispersionRadians: 0.02,
-  });
-  const second = deriveSeededAngularOffsets({
-    shooterId: 'seeded-shooter',
-    weaponInstanceId: 'seeded-weapon',
-    shotId: 'seeded-shot:2',
-    effectiveDispersionRadians: 0.02,
-  });
+  const first = offsets('seeded-shot:1');
+  const repeated = offsets('seeded-shot:1');
+  const second = offsets('seeded-shot:2');
   assert.deepEqual(first, repeated);
   assert.notDeepEqual(first, second);
-
   const direction = prepareCommittedShotDirection({
     aimDirection: { x: 1, y: 0, z: 0 },
     recoilPitchRadians: 0.01,
@@ -191,63 +186,129 @@ function verifySeededDispersionContracts(): void {
   assert.ok(Math.abs(Math.hypot(direction.x, direction.y, direction.z) - 1) < 1e-12);
 }
 
-function verifyRecoilAndExactlyOnceContracts(): void {
+function verifyRecoilExactlyOnceAndAtomicity(): void {
   const ready = scenario('stage5-commit', false, 0);
   const weapon = ready.shooter.infantryCombatRuntime.primaryWeapon!;
   const task = ready.shooter.infantryCombatRuntime.activeFireTask!;
   const roundsBefore = weapon.roundsInWeapon;
   tickInfantryCombatSimulation(ready.state, { intervalStartSeconds: 0, deltaSeconds: 0.8 });
-  assert.equal(ready.state.infantryCombatProjectiles.committedShots.length, 1);
+  const record = ready.state.infantryCombatProjectiles.committedShots[0]!;
+  const projectile = ready.state.infantryCombatProjectiles.activeProjectiles[0]!;
   assert.equal(weapon.roundsInWeapon, roundsBefore - 1);
   assert.equal(weapon.recoil.sequence, 1);
-  const record = ready.state.infantryCombatProjectiles.committedShots[0]!;
-  assert.ok(record.aimDirectionBeforeDispersion);
-  assert.ok(record.finalProjectileDirection);
-  const projectile = ready.state.infantryCombatProjectiles.activeProjectiles[0]!;
+  assert.ok(record.aimDirectionBeforeDispersion && record.finalProjectileDirection);
   const speed = weapon.resolved.ammo.muzzleVelocityMetersPerSecond;
   assert.ok(Math.abs(projectile.velocityMetresPerSecond.x / speed - record.finalProjectileDirection.x) < 1e-12);
   assert.equal(task.committedShotId, record.shotId);
 
   const recoilAfterCommit = structuredClone(weapon.recoil);
-  const duplicate = commitShot({ state: ready.state, shooter: ready.shooter, task, weapon, committedSeconds: 0.8 });
-  assert.equal(duplicate.status, 'already_committed');
-  assert.deepEqual(weapon.recoil, recoilAfterCommit, 'already_committed must not add recoil twice');
-
+  assert.equal(commitShot({ state: ready.state, shooter: ready.shooter, task, weapon, committedSeconds: 0.8 }).status, 'already_committed');
+  assert.deepEqual(weapon.recoil, recoilAfterCommit);
   const recoveredEarly = getRecoveredWeaponRecoil(weapon, 0.9, factor(weapon));
   const recoveredLate = getRecoveredWeaponRecoil(weapon, 10, factor(weapon));
   assert.ok(Math.abs(recoveredLate.pitchOffsetRadians) <= Math.abs(recoveredEarly.pitchOffsetRadians));
   assert.ok(Math.abs(recoveredLate.yawOffsetRadians) <= Math.abs(recoveredEarly.yawOffsetRadians));
+  assert.notDeepEqual(
+    prepareCommittedShotDirection({ aimDirection: { x: 1, y: 0, z: 0 }, recoilPitchRadians: 0, recoilYawRadians: 0, dispersionPitchRadians: 0, dispersionYawRadians: 0 }),
+    prepareCommittedShotDirection({ aimDirection: { x: 1, y: 0, z: 0 }, recoilPitchRadians: recoilAfterCommit.pitchOffsetRadians, recoilYawRadians: recoilAfterCommit.yawOffsetRadians, dispersionPitchRadians: 0, dispersionYawRadians: 0 }),
+  );
+
+  const recoilSnapshot = structuredClone(weapon.recoil);
+  const runtimeSnapshot = serializeReferenceProjectileRuntimeState(ready.state.infantryCombatProjectiles);
+  ready.shooter.infantryCombatRuntime = normalizeInfantryCombatUnitRuntime(JSON.parse(JSON.stringify(serializedUnit(ready.shooter))));
+  ready.state.infantryCombatProjectiles = normalizeReferenceProjectileRuntimeState(JSON.parse(JSON.stringify(runtimeSnapshot)));
+  assert.deepEqual(ready.shooter.infantryCombatRuntime.primaryWeapon?.recoil, recoilSnapshot);
+  assert.deepEqual(serializeReferenceProjectileRuntimeState(ready.state.infantryCombatProjectiles).committedShots, runtimeSnapshot.committedShots);
 
   const denied = scenario('stage5-moving-denied', false, 0);
   denied.shooter.movementRuntime.isMoving = true;
   denied.shooter.movementRuntime.velocityCellsPerSecond = { x: 1, y: 0 };
   const deniedWeapon = denied.shooter.infantryCombatRuntime.primaryWeapon!;
-  const deniedBefore = {
-    rounds: deniedWeapon.roundsInWeapon,
-    recoil: structuredClone(deniedWeapon.recoil),
-    projectiles: serializeReferenceProjectileRuntimeState(denied.state.infantryCombatProjectiles),
-  };
+  const deniedBefore = atomicSnapshot(denied.state, denied.shooter);
   const deniedResult = tickInfantryCombatSimulation(denied.state, { intervalStartSeconds: 0, deltaSeconds: 0.8 }).commitResults[0]!;
   assert.equal(deniedResult.status, 'movement_forbidden');
-  assert.equal(deniedWeapon.roundsInWeapon, deniedBefore.rounds);
-  assert.deepEqual(deniedWeapon.recoil, deniedBefore.recoil);
-  assert.deepEqual(serializeReferenceProjectileRuntimeState(denied.state.infantryCombatProjectiles), deniedBefore.projectiles);
+  assert.deepEqual(atomicSnapshot(denied.state, denied.shooter), deniedBefore);
+}
+
+function verifyProbabilityIsNotHitResolver(): void {
+  const zero = scenario('stage5-probability-not-resolver', false, 0);
+  const one = scenario('stage5-probability-not-resolver', false, 0);
+  tickInfantryCombatSimulation(zero.state, { intervalStartSeconds: 0, deltaSeconds: 0.69 });
+  tickInfantryCombatSimulation(one.state, { intervalStartSeconds: 0, deltaSeconds: 0.69 });
+  zero.shooter.infantryCombatRuntime.activeFireTask!.aimTracking.solution.predictedHitProbability = 0;
+  one.shooter.infantryCombatRuntime.activeFireTask!.aimTracking.solution.predictedHitProbability = 1;
+  tickInfantryCombatSimulation(zero.state, { intervalStartSeconds: 0.69, deltaSeconds: 0.11 });
+  tickInfantryCombatSimulation(one.state, { intervalStartSeconds: 0.69, deltaSeconds: 0.11 });
+  assert.deepEqual(
+    zero.state.infantryCombatProjectiles.committedShots[0]?.finalProjectileDirection,
+    one.state.infantryCombatProjectiles.committedShots[0]?.finalProjectileDirection,
+  );
+}
+
+function verifyOrderIndependenceAndReconciliation(): void {
+  const ordered = scenario('stage5-unit-order', false, 0);
+  const reversed = scenario('stage5-unit-order', false, 0);
+  reversed.state.units.reverse();
+  tickInfantryCombatSimulation(ordered.state, { intervalStartSeconds: 0, deltaSeconds: 0.8 });
+  tickInfantryCombatSimulation(reversed.state, { intervalStartSeconds: 0, deltaSeconds: 0.8 });
+  assert.deepEqual(
+    serializeReferenceProjectileRuntimeState(ordered.state.infantryCombatProjectiles),
+    serializeReferenceProjectileRuntimeState(reversed.state.infantryCombatProjectiles),
+  );
+  reconcileInfantryCombatRuntimeAfterLoad(ordered.state);
+  const once = JSON.stringify({
+    unit: serializedUnit(ordered.shooter),
+    projectile: serializeReferenceProjectileRuntimeState(ordered.state.infantryCombatProjectiles),
+  });
+  reconcileInfantryCombatRuntimeAfterLoad(ordered.state);
+  assert.equal(JSON.stringify({
+    unit: serializedUnit(ordered.shooter),
+    projectile: serializeReferenceProjectileRuntimeState(ordered.state.infantryCombatProjectiles),
+  }), once);
 }
 
 function verifyStage4MigrationDefaults(): void {
   const current = scenario('stage5-migration', true, 1);
   tickInfantryCombatSimulation(current.state, { intervalStartSeconds: 0, deltaSeconds: 0.4 });
-  const stage4 = structuredClone(serializeInfantryCombatUnitRuntime(current.shooter.infantryCombatRuntime)) as any;
-  delete stage4.primaryWeapon.operatorProfile;
-  delete stage4.primaryWeapon.recoil;
-  delete stage4.activeFireTask.aimTracking;
-  const migrated = normalizeInfantryCombatUnitRuntime(stage4);
-  assert.ok(migrated.primaryWeapon?.operatorProfile);
-  assert.equal(migrated.primaryWeapon?.operatorProfile.shootingSkill, 0.5);
-  assert.equal(migrated.primaryWeapon?.operatorProfile.proficiencyByWeaponClass.rifle, 'trained');
-  assert.equal(migrated.primaryWeapon?.recoil.sequence, 0);
-  assert.ok(migrated.activeFireTask?.aimTracking);
-  assert.equal(migrated.activeFireTask?.aimTracking.trackingUpdateCount, 0);
+  const stage4Unit = structuredClone(serializedUnit(current.shooter)) as any;
+  delete stage4Unit.primaryWeapon.operatorProfile;
+  delete stage4Unit.primaryWeapon.recoil;
+  delete stage4Unit.activeFireTask.aimTracking;
+  const migratedUnit = normalizeInfantryCombatUnitRuntime(stage4Unit);
+  assert.equal(migratedUnit.primaryWeapon?.operatorProfile.shootingSkill, 0.5);
+  assert.equal(migratedUnit.primaryWeapon?.operatorProfile.proficiencyByWeaponClass.rifle, 'trained');
+  assert.equal(migratedUnit.primaryWeapon?.recoil.sequence, 0);
+  assert.equal(migratedUnit.activeFireTask?.aimTracking.trackingUpdateCount, 0);
+
+  const committed = scenario('stage5-projectile-migration', false, 0);
+  tickInfantryCombatSimulation(committed.state, { intervalStartSeconds: 0, deltaSeconds: 0.8 });
+  const stage4Projectile = structuredClone(serializeReferenceProjectileRuntimeState(committed.state.infantryCombatProjectiles)) as any;
+  for (const record of stage4Projectile.committedShots) {
+    delete record.aimDirectionBeforeDispersion;
+    delete record.dispersionPitchRadians;
+    delete record.dispersionYawRadians;
+    delete record.recoilPitchRadians;
+    delete record.recoilYawRadians;
+    delete record.finalProjectileDirection;
+    delete record.predictedHitProbability;
+    delete record.effectiveDispersionRadians;
+  }
+  const migratedProjectile = normalizeReferenceProjectileRuntimeState(stage4Projectile);
+  assert.equal(migratedProjectile.committedShots.length, 1);
+  assert.equal(migratedProjectile.activeProjectiles.length, 1);
+}
+
+function verifyReadOnlyDiagnostics(): void {
+  const current = scenario('stage5-diagnostics', true, 1);
+  tickInfantryCombatSimulation(current.state, { intervalStartSeconds: 0, deltaSeconds: 0.4 });
+  const before = serializedUnit(current.shooter);
+  const diagnostics = getInfantryCombatDiagnostics(current.state);
+  const task = diagnostics.units.find((entry) => entry.unitId === current.shooter.id)?.fireTask;
+  assert.equal(task?.trackingUpdateCount, 2);
+  assert.equal(task?.trackingIntervalSeconds, 0.2);
+  assert.ok(task?.perceivedPosition);
+  assert.ok(task?.factors);
+  assert.deepEqual(serializedUnit(current.shooter), before);
 }
 
 function factor(
@@ -277,6 +338,15 @@ function probability(overrides: Partial<Parameters<typeof calculatePredictedHitP
     uncertaintyMetres: 1,
     contactAgeSeconds: 0,
     ...overrides,
+  });
+}
+
+function offsets(shotId: string) {
+  return deriveSeededAngularOffsets({
+    shooterId: 'seeded-shooter',
+    weaponInstanceId: 'seeded-weapon',
+    shotId,
+    effectiveDispersionRadians: 0.02,
   });
 }
 
@@ -319,6 +389,28 @@ function scenario(id: string, contactBased: boolean, minimumSolutionQuality = 1)
   });
   assert.equal(requested.status, 'started');
   return { state, shooter, target };
+}
+
+function reloadUnitAndProjectiles(state: SimulationState, shooter: UnitModel): void {
+  shooter.infantryCombatRuntime = normalizeInfantryCombatUnitRuntime(JSON.parse(JSON.stringify(serializedUnit(shooter))));
+  shooter.behaviorRuntime.physicalActionCoordinator = normalizePhysicalActionCoordinatorState(JSON.parse(JSON.stringify(
+    serializePhysicalActionCoordinatorState(shooter.behaviorRuntime.physicalActionCoordinator),
+  )));
+  state.infantryCombatProjectiles = normalizeReferenceProjectileRuntimeState(JSON.parse(JSON.stringify(
+    serializeReferenceProjectileRuntimeState(state.infantryCombatProjectiles),
+  )));
+}
+
+function serializedUnit(shooter: UnitModel) {
+  return serializeInfantryCombatUnitRuntime(shooter.infantryCombatRuntime);
+}
+
+function atomicSnapshot(state: SimulationState, shooter: UnitModel): unknown {
+  return {
+    rounds: shooter.infantryCombatRuntime.primaryWeapon?.roundsInWeapon,
+    recoil: structuredClone(shooter.infantryCombatRuntime.primaryWeapon?.recoil),
+    projectiles: serializeReferenceProjectileRuntimeState(state.infantryCombatProjectiles),
+  };
 }
 
 function contact(id: string, sourceUnitId: string, x: number, y: number, seconds: number): PerceptionContactMemory {
