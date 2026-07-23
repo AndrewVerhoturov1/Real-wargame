@@ -61,6 +61,7 @@
     "reverse-slope-comparative:smoke": "node scripts/reverse_slope_comparative_smoke.mjs",
     "combat-foundation:smoke": "node scripts/combat_foundation_smoke.mjs",
     "combat-tactical-integration:smoke": "node scripts/combat_tactical_integration_smoke.mjs",
+    "physical-action-coordinator:smoke": "node scripts/physical_action_coordinator_smoke.mjs",
     "combat-catalog-core:smoke": "node scripts/combat_catalog_core_smoke.mjs",
     "combat-catalog-serialization:smoke": "node scripts/combat_catalog_serialization_smoke.mjs",
     "combat-catalogs:smoke": "npm run combat-catalog-core:smoke && npm run combat-catalog-serialization:smoke",
