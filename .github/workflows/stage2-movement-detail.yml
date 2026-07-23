@@ -6,119 +6,101 @@ on:
       - real-wargame-preview
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  trace-movement-lifecycle:
+  apply-movement-smoke-correction:
     if: github.event.pull_request.head.ref == 'feature/20260723-shooting-stage-02-physical-action-coordinator'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
     steps:
-      - name: Checkout exact candidate
+      - name: Checkout working branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: feature/20260723-shooting-stage-02-physical-action-coordinator
+          fetch-depth: 0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund
-
-      - name: Add internal request trace
+      - name: Correct movement lifecycle fixture
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
+          path = Path('scripts/physical_movement_runtime_smoke.ts')
+          source = path.read_text(encoding='utf-8')
 
-          test_path = Path('scripts/physical_movement_runtime_smoke.ts')
-          source = test_path.read_text(encoding='utf-8')
-          source = source.replace(
-              "  assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');",
-              "  console.log('T15 countdown completed');\n  assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');",
-              1,
-          )
-          source = source.replace(
-              "  installIdentifiedContact(shooter, target, state.simulationTimeSeconds);\n  assert.equal(requestFireAction(state, shooter, contactId), false);\n  shooter.order = createMoveOrder({ x: 30.5, y: 2.5 }, { source: 'player' });",
-              "  console.log('T16 before final contact install');\n  installIdentifiedContact(shooter, target, state.simulationTimeSeconds);\n  console.log('T17 before final fire request');\n  assert.equal(requestFireAction(state, shooter, contactId), false);\n  console.log('T18 after final fire request');\n  shooter.order = createMoveOrder({ x: 30.5, y: 2.5 }, { source: 'player' });",
-              1,
-          )
-          test_path.write_text(source, encoding='utf-8')
+          unindented = """  assert.equal(requestFireAction(state, shooter, contactId), false);
+const stale = getMovementWeaponPreparation(shooter);
+assert.ok(stale);
+const newerRequest = requestMovementWeaponPreparation(state, shooter, {
+  contactId: 'newer-contact',
+  ownerToken: 'fire-intent:newer-contact',
+});
+assert.equal(newerRequest.allowed, false);
+const newer = getMovementWeaponPreparation(shooter);
+assert.ok(newer);
+assert.equal(newer.contactId, 'newer-contact');
+assert.equal(cancelMovementWeaponPreparation(shooter, { ownerToken: stale.ownerToken, revision: stale.revision }), false, 'stale cleanup must not cancel newer preparation');
+assert.equal(getMovementWeaponPreparation(shooter)?.contactId, 'newer-contact');
+assert.equal(cancelMovementWeaponPreparation(shooter, {
+  ownerToken: newer.ownerToken,
+  revision: newer.revision,
+  contactId: newer.contactId,
+}), true, 'current preparation cleanup must release its exact coordinator lease');
+"""
+          indented = """  assert.equal(requestFireAction(state, shooter, contactId), false);
+  const stale = getMovementWeaponPreparation(shooter);
+  assert.ok(stale);
+  const newerRequest = requestMovementWeaponPreparation(state, shooter, {
+    contactId: 'newer-contact',
+    ownerToken: 'fire-intent:newer-contact',
+  });
+  assert.equal(newerRequest.allowed, false);
+  const newer = getMovementWeaponPreparation(shooter);
+  assert.ok(newer);
+  assert.equal(newer.contactId, 'newer-contact');
+  assert.equal(cancelMovementWeaponPreparation(shooter, { ownerToken: stale.ownerToken, revision: stale.revision }), false, 'stale cleanup must not cancel newer preparation');
+  assert.equal(getMovementWeaponPreparation(shooter)?.contactId, 'newer-contact');
+  assert.equal(cancelMovementWeaponPreparation(shooter, {
+    ownerToken: newer.ownerToken,
+    revision: newer.revision,
+    contactId: newer.contactId,
+  }), true, 'current preparation cleanup must release its exact coordinator lease');
+"""
+          if unindented in source:
+              source = source.replace(unindented, indented, 1)
 
-          fire_path = Path('src/core/combat/FireAction.ts')
-          source = fire_path.read_text(encoding='utf-8')
-          source = source.replace(
-              "export function requestFireAction(state: SimulationState, unit: UnitModel, contactId: string): boolean {",
-              "export function requestFireAction(state: SimulationState, unit: UnitModel, contactId: string): boolean {\n  console.log('F00 requestFireAction', contactId, unit.movementRuntime.isMoving, unit.movementRuntime.weaponPreparation?.contactId ?? null);",
-              1,
-          )
-          source = source.replace(
-              "  const decision = evaluateFireRequest(state, unit, contactId);",
-              "  console.log('F01 before evaluate');\n  const decision = evaluateFireRequest(state, unit, contactId);\n  console.log('F02 after evaluate', decision.allowed);",
-              1,
-          )
-          source = source.replace(
-              "  const movementPermission = requestMovementWeaponPreparation(state, unit, { contactId, ownerToken });",
-              "  console.log('F03 before movement preparation');\n  const movementPermission = requestMovementWeaponPreparation(state, unit, { contactId, ownerToken });\n  console.log('F04 after movement preparation', movementPermission.allowed);",
-              1,
-          )
-          source = source.replace(
-              "  const physicalAction = requestPhysicalActionChannels(unit, {",
-              "  console.log('F05 before weapon lease');\n  const physicalAction = requestPhysicalActionChannels(unit, {",
-              1,
-          )
-          source = source.replace(
-              "  if (!physicalAction.accepted || !physicalAction.handle) {",
-              "  console.log('F06 after weapon lease', physicalAction.accepted, physicalAction.status);\n  if (!physicalAction.accepted || !physicalAction.handle) {",
-              1,
-          )
-          fire_path.write_text(source, encoding='utf-8')
-
-          movement_path = Path('src/core/movement/MovementRuntime.ts')
-          source = movement_path.read_text(encoding='utf-8')
-          source = source.replace(
-              "export function requestMovementWeaponPreparation(\n  state: SimulationState,\n  unit: UnitModel,\n  request: legacy.MovementWeaponPreparationRequest,\n): { allowed: boolean; reasonRu: string; handle: legacy.MovementWeaponPreparationHandle | null } {",
-              "export function requestMovementWeaponPreparation(\n  state: SimulationState,\n  unit: UnitModel,\n  request: legacy.MovementWeaponPreparationRequest,\n): { allowed: boolean; reasonRu: string; handle: legacy.MovementWeaponPreparationHandle | null } {\n  console.log('M00 request prep', request.contactId, unit.movementRuntime.isMoving, unit.movementRuntime.weaponPreparation?.contactId ?? null);",
-              1,
-          )
-          source = source.replace(
-              "  if (!runtime.isMoving || profile.settings.weapon.allowFireWhileMoving) {",
-              "  console.log('M01 before moving check', runtime.isMoving, profile.settings.weapon.allowFireWhileMoving);\n  if (!runtime.isMoving || profile.settings.weapon.allowFireWhileMoving) {",
-              1,
-          )
-          source = source.replace(
-              "  const acquisition = requestPhysicalActionChannels(unit, {",
-              "  console.log('M02 before coordinator request');\n  const acquisition = requestPhysicalActionChannels(unit, {",
-              1,
-          )
-          source = source.replace(
-              "  if (!acquisition.accepted || !acquisition.handle) {",
-              "  console.log('M03 after coordinator request', acquisition.accepted, acquisition.status);\n  if (!acquisition.accepted || !acquisition.handle) {",
-              1,
-          )
-          movement_path.write_text(source, encoding='utf-8')
+          old_completion = """  installIdentifiedContact(shooter, target, state.simulationTimeSeconds);
+  assert.equal(requestFireAction(state, shooter, contactId), false);
+  const unattended = getMovementWeaponPreparation(shooter);
+  assert.ok(unattended);
+  const resumedWithoutRepeat = preparePhysicalMovementStep(
+    state, shooter, unattended.remainingSeconds + 0.2, true, 1, 1,
+  );
+  assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');
+  assert.ok(resumedWithoutRepeat.maxDistanceCells > 0, 'movement must resume during time remaining after preparation completes');
+"""
+          new_completion = """  installIdentifiedContact(shooter, target, state.simulationTimeSeconds);
+  assert.equal(requestFireAction(state, shooter, contactId), false);
+  const unattended = getMovementWeaponPreparation(shooter);
+  assert.ok(unattended);
+  const positionBeforeUnattendedCompletion = { ...shooter.position };
+  tickSimulation(state, unattended.remainingSeconds + 0.2);
+  assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');
+  assert.ok(shooter.position.x > positionBeforeUnattendedCompletion.x, 'movement must resume during time remaining after preparation completes');
+"""
+          if old_completion not in source:
+              raise SystemExit('movement completion fixture not found')
+          source = source.replace(old_completion, new_completion, 1)
+          path.write_text(source, encoding='utf-8')
           PY
 
-      - name: Capture physical movement lifecycle
-        id: movement
-        continue-on-error: true
+      - name: Commit correction when needed
         shell: bash
         run: |
-          set -o pipefail
-          timeout --signal=TERM --kill-after=10s 90s npm run physical-movement:smoke 2>&1 | tee stage2-movement-detail.log
-
-      - name: Upload lifecycle log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: stage2-movement-detail-${{ github.event.pull_request.head.sha }}
-          path: stage2-movement-detail.log
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Preserve failure
-        if: steps.movement.outcome == 'failure'
-        run: exit 1
+          if git diff --quiet -- scripts/physical_movement_runtime_smoke.ts; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/physical_movement_runtime_smoke.ts
+          git commit -m "test: commit resumed movement before repeated fire intent"
+          git push origin HEAD:feature/20260723-shooting-stage-02-physical-action-coordinator
