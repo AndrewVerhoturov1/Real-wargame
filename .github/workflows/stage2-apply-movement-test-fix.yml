@@ -1,0 +1,106 @@
+name: Stage 2 Apply Movement Smoke Migration
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+
+permissions:
+  contents: write
+
+jobs:
+  apply-movement-smoke-correction:
+    if: github.event.pull_request.head.ref == 'feature/20260723-shooting-stage-02-physical-action-coordinator'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout working branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/20260723-shooting-stage-02-physical-action-coordinator
+          fetch-depth: 0
+
+      - name: Correct movement lifecycle fixture
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/physical_movement_runtime_smoke.ts')
+          source = path.read_text(encoding='utf-8')
+
+          unindented = """  assert.equal(requestFireAction(state, shooter, contactId), false);
+const stale = getMovementWeaponPreparation(shooter);
+assert.ok(stale);
+const newerRequest = requestMovementWeaponPreparation(state, shooter, {
+  contactId: 'newer-contact',
+  ownerToken: 'fire-intent:newer-contact',
+});
+assert.equal(newerRequest.allowed, false);
+const newer = getMovementWeaponPreparation(shooter);
+assert.ok(newer);
+assert.equal(newer.contactId, 'newer-contact');
+assert.equal(cancelMovementWeaponPreparation(shooter, { ownerToken: stale.ownerToken, revision: stale.revision }), false, 'stale cleanup must not cancel newer preparation');
+assert.equal(getMovementWeaponPreparation(shooter)?.contactId, 'newer-contact');
+assert.equal(cancelMovementWeaponPreparation(shooter, {
+  ownerToken: newer.ownerToken,
+  revision: newer.revision,
+  contactId: newer.contactId,
+}), true, 'current preparation cleanup must release its exact coordinator lease');
+"""
+          indented = """  assert.equal(requestFireAction(state, shooter, contactId), false);
+  const stale = getMovementWeaponPreparation(shooter);
+  assert.ok(stale);
+  const newerRequest = requestMovementWeaponPreparation(state, shooter, {
+    contactId: 'newer-contact',
+    ownerToken: 'fire-intent:newer-contact',
+  });
+  assert.equal(newerRequest.allowed, false);
+  const newer = getMovementWeaponPreparation(shooter);
+  assert.ok(newer);
+  assert.equal(newer.contactId, 'newer-contact');
+  assert.equal(cancelMovementWeaponPreparation(shooter, { ownerToken: stale.ownerToken, revision: stale.revision }), false, 'stale cleanup must not cancel newer preparation');
+  assert.equal(getMovementWeaponPreparation(shooter)?.contactId, 'newer-contact');
+  assert.equal(cancelMovementWeaponPreparation(shooter, {
+    ownerToken: newer.ownerToken,
+    revision: newer.revision,
+    contactId: newer.contactId,
+  }), true, 'current preparation cleanup must release its exact coordinator lease');
+"""
+          if unindented in source:
+              source = source.replace(unindented, indented, 1)
+
+          old_completion = """  installIdentifiedContact(shooter, target, state.simulationTimeSeconds);
+  assert.equal(requestFireAction(state, shooter, contactId), false);
+  const unattended = getMovementWeaponPreparation(shooter);
+  assert.ok(unattended);
+  const resumedWithoutRepeat = preparePhysicalMovementStep(
+    state, shooter, unattended.remainingSeconds + 0.2, true, 1, 1,
+  );
+  assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');
+  assert.ok(resumedWithoutRepeat.maxDistanceCells > 0, 'movement must resume during time remaining after preparation completes');
+"""
+          new_completion = """  installIdentifiedContact(shooter, target, state.simulationTimeSeconds);
+  assert.equal(requestFireAction(state, shooter, contactId), false);
+  const unattended = getMovementWeaponPreparation(shooter);
+  assert.ok(unattended);
+  const positionBeforeUnattendedCompletion = { ...shooter.position };
+  tickSimulation(state, unattended.remainingSeconds + 0.2);
+  assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');
+  assert.ok(shooter.position.x > positionBeforeUnattendedCompletion.x, 'movement must resume during time remaining after preparation completes');
+"""
+          if old_completion not in source:
+              raise SystemExit('movement completion fixture not found')
+          source = source.replace(old_completion, new_completion, 1)
+          path.write_text(source, encoding='utf-8')
+          PY
+
+      - name: Commit correction when needed
+        shell: bash
+        run: |
+          if git diff --quiet -- scripts/physical_movement_runtime_smoke.ts; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/physical_movement_runtime_smoke.ts
+          git commit -m "test: commit resumed movement before repeated fire intent"
+          git push origin HEAD:feature/20260723-shooting-stage-02-physical-action-coordinator
