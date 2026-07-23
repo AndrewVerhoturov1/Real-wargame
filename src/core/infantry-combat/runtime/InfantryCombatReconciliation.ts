@@ -1,3 +1,4 @@
+import { normalizeDirection } from '../../combat/UnitHitShapes';
 import type { SimulationState } from '../../simulation/SimulationState';
 import type { UnitModel } from '../../units/UnitModel';
 import { beginFireTaskRecovery, failActiveFireTask } from './FireTaskRuntime';
@@ -113,6 +114,7 @@ function reconstructCommitRecord(
   fallbackSeconds: number,
 ): ShotCommitRecordV1 {
   const weapon = unit.infantryCombatRuntime.primaryWeapon!;
+  const finalDirection = normalizeDirection(projectile.velocityMetresPerSecond);
   return {
     schemaVersion: SHOT_COMMIT_RECORD_SCHEMA_VERSION,
     shotId: projectile.shotId,
@@ -123,7 +125,15 @@ function reconstructCommitRecord(
     ammoDefinitionRef: structuredClone(weapon.resolved.ammoDefinitionRef),
     committedSimulationSeconds: canonicalSeconds(Math.max(0, fallbackSeconds - projectile.ageSeconds)),
     muzzlePosition: structuredClone(projectile.position),
+    aimDirectionBeforeDispersion: structuredClone(finalDirection),
+    dispersionPitchRadians: 0,
+    dispersionYawRadians: 0,
+    recoilPitchRadians: 0,
+    recoilYawRadians: 0,
+    finalProjectileDirection: structuredClone(finalDirection),
     initialVelocityMetresPerSecond: structuredClone(projectile.velocityMetresPerSecond),
+    predictedHitProbability: 0,
+    effectiveDispersionRadians: 0,
     roundsBefore: weapon.roundsInWeapon + 1,
     roundsAfter: weapon.roundsInWeapon,
   };
