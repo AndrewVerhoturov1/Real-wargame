@@ -1,0 +1,27 @@
+name: Stage 2 Source Export
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    if: github.event.pull_request.head.ref == 'feature/20260723-shooting-stage-02-physical-action-coordinator'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Upload movement smoke source
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage2-movement-smoke-source-${{ github.event.pull_request.head.sha }}
+          path: scripts/physical_movement_runtime_smoke.ts
+          if-no-files-found: error
+          retention-days: 1
