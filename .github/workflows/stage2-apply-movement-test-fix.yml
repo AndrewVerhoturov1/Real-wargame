@@ -1,16 +1,16 @@
 name: Stage 2 Apply Movement Smoke Migration
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/20260723-shooting-stage-02-physical-action-coordinator
+      - real-wargame-preview
 
 permissions:
   contents: write
 
 jobs:
   apply-movement-smoke-migration:
-    if: github.actor != 'github-actions[bot]'
+    if: github.event.pull_request.head.ref == 'feature/20260723-shooting-stage-02-physical-action-coordinator'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout working branch
