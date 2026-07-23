@@ -1,4 +1,5 @@
 import { createBallisticTraceContext, traceBallisticRay } from '../../combat/BallisticTrace';
+import { queryUnitsNearBallisticSegment } from '../../combat/CombatUnitSpatialIndex';
 import { normalizeDirection, type BallisticDirection3, type BallisticPoint3 } from '../../combat/UnitHitShapes';
 import { getCell } from '../../map/MapModel';
 import type { SimulationState } from '../../simulation/SimulationState';
@@ -19,6 +20,7 @@ import {
 
 const TIME_EPSILON_SECONDS = 1e-10;
 const DISTANCE_EPSILON_METRES = 1e-7;
+const REFERENCE_PROJECTILE_UNIT_BROAD_PHASE_PADDING_METRES = 2;
 
 export interface TickReferenceProjectilesInput {
   readonly intervalStartSeconds: number;
@@ -34,12 +36,12 @@ export interface TickReferenceProjectilesResult {
 /**
  * Stage 3 reference projectile stepper.
  *
- * It intentionally uses object-per-projectile storage and the existing unit scan in
- * BallisticTrace under a small explicit cap. Stage 4 replaces the storage and unit
- * broad phase without changing this fixed-step/exactly-once contract.
+ * It intentionally uses object-per-projectile storage under a small explicit cap.
+ * Map objects and units are narrowed through the existing spatial indexes before the
+ * shared BallisticTrace geometry runs. Stage 4 replaces only the storage/batching.
  */
 export function tickReferenceProjectiles(
-  state: Pick<SimulationState, 'map' | 'units' | 'infantryCombatProjectiles'>,
+  state: SimulationState,
   input: TickReferenceProjectilesInput,
 ): TickReferenceProjectilesResult {
   const runtime = state.infantryCombatProjectiles;
@@ -90,12 +92,11 @@ export function tickReferenceProjectiles(
 }
 
 function executeFixedSubstep(
-  state: Pick<SimulationState, 'map' | 'units' | 'infantryCombatProjectiles'>,
+  state: SimulationState,
   substepStartSeconds: number,
   fixedStepSeconds: number,
 ): TickReferenceProjectilesResult {
   const runtime = state.infantryCombatProjectiles;
-  const traceContext = createBallisticTraceContext(state.map, state.units);
   const survivors: ProjectileStateV1[] = [];
   const impacts: ProjectileImpactV1[] = [];
   const terminations: ProjectileTerminationV1[] = [];
@@ -122,6 +123,14 @@ function executeFixedSubstep(
     let collision: ReturnType<typeof traceBallisticRay> | null = null;
 
     if (traceDistanceMetres > DISTANCE_EPSILON_METRES) {
+      const metresPerCell = Math.max(0.001, state.map.metersPerCell);
+      const unitCandidates = queryUnitsNearBallisticSegment(
+        state,
+        { x: start.xMetres / metresPerCell, y: start.yMetres / metresPerCell },
+        { x: end.xMetres / metresPerCell, y: end.yMetres / metresPerCell },
+        REFERENCE_PROJECTILE_UNIT_BROAD_PHASE_PADDING_METRES,
+      );
+      const traceContext = createBallisticTraceContext(state.map, unitCandidates);
       collision = traceBallisticRay(traceContext, {
         shotId: projectile.shotId,
         shooterId: projectile.shooterId,
