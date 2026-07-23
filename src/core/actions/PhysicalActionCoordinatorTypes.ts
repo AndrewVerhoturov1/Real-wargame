@@ -72,6 +72,9 @@ export interface PhysicalActionCoordinatorUnitLike {
   readonly id: string;
   readonly behaviorRuntime: {
     physicalActionCoordinator: PhysicalActionCoordinatorStateV1;
+    readonly physicalAction?: {
+      readonly sequence?: unknown;
+    } | null;
   };
 }
 
