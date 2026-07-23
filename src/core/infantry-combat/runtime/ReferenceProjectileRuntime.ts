@@ -31,7 +31,17 @@ export function normalizeReferenceProjectileRuntimeState(value: unknown): Projec
 export function serializeReferenceProjectileRuntimeState(
   value: ProjectileRuntimeStateV2,
 ): ProjectileRuntimeSnapshotV2 {
-  return serializeProjectileRuntimeState(value);
+  const serialized = serializeProjectileRuntimeState(value);
+  const sourceRecords = new Map(value.committedShots.map((record) => [record.shotId, record]));
+  return {
+    ...serialized,
+    committedShots: serialized.committedShots.map((record) => {
+      const source = sourceRecords.get(record.shotId);
+      return source
+        ? mergeStage5Fields(record, source as unknown as Record<string, unknown>)
+        : record;
+    }),
+  };
 }
 
 export { appendBoundedCommitRecord };
