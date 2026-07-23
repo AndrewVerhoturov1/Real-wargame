@@ -28,33 +28,78 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Add detailed lifecycle trace
+      - name: Add internal request trace
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          path = Path('scripts/physical_movement_runtime_smoke.ts')
-          source = path.read_text(encoding='utf-8')
-          replacements = [
-            ("function verifyWeaponPreparationLifecycle(): void {\n", "function verifyWeaponPreparationLifecycle(): void {\n  console.log('L00 enter lifecycle');\n"),
-            ("  assert.equal(requestFireAction(state, shooter, contactId), false, 'sprint must create pending preparation');", "  console.log('L01 before first request');\n  assert.equal(requestFireAction(state, shooter, contactId), false, 'sprint must create pending preparation');\n  console.log('L02 after first request');"),
-            ("  reconcilePendingFireIntent(state, shooter);", "  console.log('L03 before missing-target reconcile');\n  reconcilePendingFireIntent(state, shooter);\n  console.log('L04 after missing-target reconcile');", 1),
-            ("  assert.equal(cancelPendingFireIntent(shooter, contactId), true, 'explicit intent cancellation must clear pending preparation');", "  console.log('L05 before explicit cancellation');\n  assert.equal(cancelPendingFireIntent(shooter, contactId), true, 'explicit intent cancellation must clear pending preparation');\n  console.log('L06 after explicit cancellation');"),
-            ("  const stepAfterCancel = preparePhysicalMovementStep(state, shooter, 0.1, true, 1, 1);", "  console.log('L07 before movement resume');\n  const stepAfterCancel = preparePhysicalMovementStep(state, shooter, 0.1, true, 1, 1);\n  console.log('L08 after movement resume');"),
-            ("  const newerRequest = requestMovementWeaponPreparation(state, shooter, {", "  console.log('L09 before replacement request');\n  const newerRequest = requestMovementWeaponPreparation(state, shooter, {") ,
-            ("  assert.equal(newerRequest.allowed, false);", "  console.log('L10 after replacement request');\n  assert.equal(newerRequest.allowed, false);"),
-            ("  assert.equal(cancelMovementWeaponPreparation(shooter, {\n    ownerToken: newer.ownerToken,", "  console.log('L11 before exact replacement cancellation');\n  assert.equal(cancelMovementWeaponPreparation(shooter, {\n    ownerToken: newer.ownerToken,"),
-            ("  }), true, 'current preparation cleanup must release its exact coordinator lease');", "  }), true, 'current preparation cleanup must release its exact coordinator lease');\n  console.log('L12 after exact replacement cancellation');"),
-            ("  const unattended = getMovementWeaponPreparation(shooter);", "  console.log('L13 after unattended request');\n  const unattended = getMovementWeaponPreparation(shooter);"),
-            ("  const resumedWithoutRepeat = preparePhysicalMovementStep(", "  console.log('L14 before countdown completion');\n  const resumedWithoutRepeat = preparePhysicalMovementStep("),
-            ("  assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');", "  console.log('L15 after countdown completion');\n  assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');"),
-            ("  shooter.order = createMoveOrder({ x: 30.5, y: 2.5 }, { source: 'player' });", "  console.log('L16 before replacement order');\n  shooter.order = createMoveOrder({ x: 30.5, y: 2.5 }, { source: 'player' });"),
-            ("  reconcilePendingFireIntent(state, shooter);", "  reconcilePendingFireIntent(state, shooter);\n  console.log('L17 after replacement-order reconcile');", 1),
-          ]
-          for item in replacements:
-              old, new, *count = item
-              source = source.replace(old, new, count[0] if count else 1)
-          path.write_text(source, encoding='utf-8')
+
+          test_path = Path('scripts/physical_movement_runtime_smoke.ts')
+          source = test_path.read_text(encoding='utf-8')
+          source = source.replace(
+              "  assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');",
+              "  console.log('T15 countdown completed');\n  assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');",
+              1,
+          )
+          source = source.replace(
+              "  installIdentifiedContact(shooter, target, state.simulationTimeSeconds);\n  assert.equal(requestFireAction(state, shooter, contactId), false);\n  shooter.order = createMoveOrder({ x: 30.5, y: 2.5 }, { source: 'player' });",
+              "  console.log('T16 before final contact install');\n  installIdentifiedContact(shooter, target, state.simulationTimeSeconds);\n  console.log('T17 before final fire request');\n  assert.equal(requestFireAction(state, shooter, contactId), false);\n  console.log('T18 after final fire request');\n  shooter.order = createMoveOrder({ x: 30.5, y: 2.5 }, { source: 'player' });",
+              1,
+          )
+          test_path.write_text(source, encoding='utf-8')
+
+          fire_path = Path('src/core/combat/FireAction.ts')
+          source = fire_path.read_text(encoding='utf-8')
+          source = source.replace(
+              "export function requestFireAction(state: SimulationState, unit: UnitModel, contactId: string): boolean {",
+              "export function requestFireAction(state: SimulationState, unit: UnitModel, contactId: string): boolean {\n  console.log('F00 requestFireAction', contactId, unit.movementRuntime.isMoving, unit.movementRuntime.weaponPreparation?.contactId ?? null);",
+              1,
+          )
+          source = source.replace(
+              "  const decision = evaluateFireRequest(state, unit, contactId);",
+              "  console.log('F01 before evaluate');\n  const decision = evaluateFireRequest(state, unit, contactId);\n  console.log('F02 after evaluate', decision.allowed);",
+              1,
+          )
+          source = source.replace(
+              "  const movementPermission = requestMovementWeaponPreparation(state, unit, { contactId, ownerToken });",
+              "  console.log('F03 before movement preparation');\n  const movementPermission = requestMovementWeaponPreparation(state, unit, { contactId, ownerToken });\n  console.log('F04 after movement preparation', movementPermission.allowed);",
+              1,
+          )
+          source = source.replace(
+              "  const physicalAction = requestPhysicalActionChannels(unit, {",
+              "  console.log('F05 before weapon lease');\n  const physicalAction = requestPhysicalActionChannels(unit, {",
+              1,
+          )
+          source = source.replace(
+              "  if (!physicalAction.accepted || !physicalAction.handle) {",
+              "  console.log('F06 after weapon lease', physicalAction.accepted, physicalAction.status);\n  if (!physicalAction.accepted || !physicalAction.handle) {",
+              1,
+          )
+          fire_path.write_text(source, encoding='utf-8')
+
+          movement_path = Path('src/core/movement/MovementRuntime.ts')
+          source = movement_path.read_text(encoding='utf-8')
+          source = source.replace(
+              "export function requestMovementWeaponPreparation(\n  state: SimulationState,\n  unit: UnitModel,\n  request: legacy.MovementWeaponPreparationRequest,\n): { allowed: boolean; reasonRu: string; handle: legacy.MovementWeaponPreparationHandle | null } {",
+              "export function requestMovementWeaponPreparation(\n  state: SimulationState,\n  unit: UnitModel,\n  request: legacy.MovementWeaponPreparationRequest,\n): { allowed: boolean; reasonRu: string; handle: legacy.MovementWeaponPreparationHandle | null } {\n  console.log('M00 request prep', request.contactId, unit.movementRuntime.isMoving, unit.movementRuntime.weaponPreparation?.contactId ?? null);",
+              1,
+          )
+          source = source.replace(
+              "  if (!runtime.isMoving || profile.settings.weapon.allowFireWhileMoving) {",
+              "  console.log('M01 before moving check', runtime.isMoving, profile.settings.weapon.allowFireWhileMoving);\n  if (!runtime.isMoving || profile.settings.weapon.allowFireWhileMoving) {",
+              1,
+          )
+          source = source.replace(
+              "  const acquisition = requestPhysicalActionChannels(unit, {",
+              "  console.log('M02 before coordinator request');\n  const acquisition = requestPhysicalActionChannels(unit, {",
+              1,
+          )
+          source = source.replace(
+              "  if (!acquisition.accepted || !acquisition.handle) {",
+              "  console.log('M03 after coordinator request', acquisition.accepted, acquisition.status);\n  if (!acquisition.accepted || !acquisition.handle) {",
+              1,
+          )
+          movement_path.write_text(source, encoding='utf-8')
           PY
 
       - name: Capture physical movement lifecycle
