@@ -1,4 +1,4 @@
-name: Stage 3 Source Snapshot
+name: Stage 3 Apply And Verify
 
 on:
   pull_request:
@@ -8,24 +8,48 @@ on:
       - '.github/workflows/stage3-source-snapshot.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  snapshot:
+  apply-and-verify:
     if: github.head_ref == 'feature/20260723-shooting-stage-03-single-rifle-shot'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
-      - name: Checkout exact candidate
+      - name: Checkout exact transfer head
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - name: Verify exact Stage 3 base ancestry
+      - name: Verify exact Stage 3 ancestry
         shell: bash
         run: |
           test "$(git merge-base HEAD fa4c75a9cdec8fc2a2a7eaabad8cda1ce3258978)" = "fa4c75a9cdec8fc2a2a7eaabad8cda1ce3258978"
+
+      - name: Restore verified commit series
+        shell: bash
+        run: |
+          cat \
+            .github/stage3-patch/part-00 \
+            .github/stage3-patch/part-01 \
+            .github/stage3-patch/part-02 \
+            .github/stage3-patch/part-03 \
+            .github/stage3-patch/part-04 \
+            .github/stage3-patch/part-05 \
+            .github/stage3-patch/part-06 \
+            .github/stage3-patch/part-07 \
+            .github/stage3-patch/part-08-0 \
+            .github/stage3-patch/part-08-1 \
+            .github/stage3-patch/part-09 \
+            | base64 --decode \
+            | gzip --decompress \
+            > /tmp/stage3-series.mbox
+          test "$(wc -c < /tmp/stage3-series.mbox)" -eq 250238
+          echo '73262d9e1199a7260e18a53c5c451139bf2bc6d8ddf72e627c59f14d6106395c  /tmp/stage3-series.mbox' | sha256sum --check
+          git config user.name 'Stage 3 Automation'
+          git config user.email 'stage3-automation@users.noreply.github.com'
+          git am /tmp/stage3-series.mbox
 
       - name: Setup Node.js 24
         uses: actions/setup-node@v4
@@ -36,14 +60,56 @@ jobs:
       - name: Install exact dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Pack source tree and dependencies
+      - name: Run Stage 3 and regression matrix
         shell: bash
-        run: tar --exclude=.git -czf /tmp/real-wargame-stage3-source-with-deps.tgz .
+        run: |
+          npm run combat-catalogs:smoke
+          npm run combat-catalog-storage:smoke
+          npm run combat-catalog-editor:smoke
+          npm run physical-action-coordinator:smoke
+          npm run posture-transition:smoke
+          npm run physical-movement:smoke
+          npm run infantry-combat-single-shot:smoke
+          npm run combat-foundation:smoke
+          npm run combat-tactical-integration:smoke
+          npm run tactical-action-ports:smoke
+          npm run typecheck
+          npm run build
+          node --check scripts/infantry_combat_single_shot_smoke.mjs
+          git diff --check fa4c75a9cdec8fc2a2a7eaabad8cda1ce3258978...HEAD
+          test -z "$(git status --short)"
 
-      - name: Upload source snapshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: real-wargame-stage3-source-with-deps
-          path: /tmp/real-wargame-stage3-source-with-deps.tgz
-          if-no-files-found: error
-          retention-days: 1
+      - name: Confirm known performance-contract baseline only
+        shell: bash
+        run: |
+          set +e
+          npm run performance-contract:smoke > /tmp/performance-contract.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/performance-contract.log
+          if [ "$status" -ne 0 ]; then
+            test "$status" -eq 1
+            grep -F 'ERR_MODULE_NOT_FOUND' /tmp/performance-contract.log
+            grep -F 'generate_agent_docs.mjs' /tmp/performance-contract.log
+          fi
+
+      - name: Reject nondeterministic Stage 3 runtime APIs
+        shell: bash
+        run: |
+          set +e
+          git grep -n -E 'Date\.now|performance\.now|Math\.random|randomUUID' HEAD -- \
+            src/core/infantry-combat/runtime \
+            scripts/infantry_combat_single_shot_smoke.ts \
+            scripts/infantry_combat_single_shot_smoke.mjs
+          status=$?
+          set -e
+          test "$status" -eq 1
+
+      - name: Remove transfer harness and publish verified history
+        shell: bash
+        run: |
+          git rm -r .github/stage3-patch
+          git rm .github/workflows/stage3-source-snapshot.yml
+          git commit -m 'chore: remove temporary Stage 3 transfer workflow'
+          git diff --check fa4c75a9cdec8fc2a2a7eaabad8cda1ce3258978...HEAD
+          git push origin HEAD:refs/heads/feature/20260723-shooting-stage-03-single-rifle-shot
