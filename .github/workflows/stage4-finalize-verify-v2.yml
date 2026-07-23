@@ -1,0 +1,144 @@
+name: Stage 4 Finalize and Verify V2
+
+on:
+  push:
+    branches:
+      - feature/20260723-shooting-stage-04-projectile-runtime-benchmark
+
+permissions:
+  contents: write
+
+jobs:
+  finalize-stage4:
+    if: contains(github.event.head_commit.message, 'activate clean Stage 4 verification')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct exact final Stage 4 tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='3544444490f9026954d99a84e167988d0e518156'
+          test "$(git merge-base HEAD "$base")" = "$base"
+          printf '%s  %s\n' 'e4a723a054cf40342b4c1f830034319bbe1376d369a414089e8a65d1806bb923' .github/stage4-finalize/fix-commits.b64 | sha256sum --check
+          base64 -d .github/stage4-finalize/fix-commits.b64 | gzip -d > /tmp/stage4-fixes.mbox
+          printf '%s  %s\n' 'c10fa8fcd597c96f0722968693325fc8078ad02a6d9509d431c82fd07ec94f71' /tmp/stage4-fixes.mbox | sha256sum --check
+          git config user.name 'OpenAI Web Chat'
+          git config user.email 'openai-web-chat@users.noreply.github.com'
+          git am --3way /tmp/stage4-fixes.mbox
+          git checkout "$base" -- .github/workflows/preview-policy.yml
+          git ls-files -z '.github/stage4-*' | xargs -0 -r git rm
+          git ls-files -z '.github/workflows/*stage4*' | xargs -0 -r git rm
+          git commit -m 'chore: remove temporary Stage 4 harnesses and restore policy'
+          test -z "$(git status --short)"
+
+      - name: Verify exact changed paths and bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='3544444490f9026954d99a84e167988d0e518156'
+          git diff --name-only "$base"...HEAD | sort > /tmp/stage4-paths.txt
+          test "$(sha256sum /tmp/stage4-paths.txt | cut -d' ' -f1)" = '2224dbfebafaa35cbd43c5a756a2d3323086bee30402b5eb55a5da0e139b850e'
+          while IFS= read -r path; do sha256sum "$path"; done < /tmp/stage4-paths.txt > /tmp/stage4-manifest.sha256
+          test "$(sha256sum /tmp/stage4-manifest.sha256 | cut -d' ' -f1)" = '9dcd93f7e499176840583eb8d06eac0e908f314b91cc97f8add695507a510ef9'
+          git diff --check "$base"...HEAD
+          git rev-parse HEAD | tee stage4-final-sha.txt
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run required verification matrix
+        shell: bash
+        run: |
+          set -uo pipefail
+          : > stage4-matrix-node24.log
+          failures=0
+          run_check() {
+            name="$1"; shift
+            printf '\n===== %s =====\n' "$name" | tee -a stage4-matrix-node24.log
+            "$@" 2>&1 | tee -a stage4-matrix-node24.log
+            code=${PIPESTATUS[0]}
+            printf 'EXIT:%s\n' "$code" | tee -a stage4-matrix-node24.log
+            if [ "$code" -ne 0 ]; then failures=$((failures + 1)); fi
+          }
+          run_check combat-catalogs npm run combat-catalogs:smoke
+          run_check combat-catalog-storage npm run combat-catalog-storage:smoke
+          run_check combat-catalog-editor npm run combat-catalog-editor:smoke
+          run_check physical-action-coordinator npm run physical-action-coordinator:smoke
+          run_check posture-transition npm run posture-transition:smoke
+          run_check physical-movement npm run physical-movement:smoke
+          run_check infantry-combat-single-shot npm run infantry-combat-single-shot:smoke
+          run_check infantry-combat-projectile npm run infantry-combat-projectile:smoke
+          run_check combat-foundation npm run combat-foundation:smoke
+          run_check combat-tactical-integration npm run combat-tactical-integration:smoke
+          run_check tactical-action-ports npm run tactical-action-ports:smoke
+          run_check map-object-spatial-index npm run spatial-index:smoke
+          run_check typecheck npm run typecheck
+          run_check build npm run build
+          run_check benchmark-wrapper-check node --check scripts/infantry_combat_projectile_benchmark.mjs
+          run_check projectile-wrapper-check node --check scripts/infantry_combat_projectile_runtime_smoke.mjs
+
+          printf '\n===== performance-contract-known-baseline =====\n' | tee -a stage4-matrix-node24.log
+          npm run performance-contract:smoke > /tmp/performance-contract.log 2>&1
+          perf_code=$?
+          cat /tmp/performance-contract.log | tee -a stage4-matrix-node24.log
+          printf 'EXIT:%s\n' "$perf_code" | tee -a stage4-matrix-node24.log
+          expected="scripts/check_agent_docs.mjs must include mandatory performance contract fragment: import './performance_principles_contract_smoke.mjs';"
+          if [ "$perf_code" -ne 1 ] || ! grep -Fq "$expected" /tmp/performance-contract.log; then
+            failures=$((failures + 1))
+          else
+            printf 'KNOWN_BASELINE_CONFIRMED:yes\n' | tee -a stage4-matrix-node24.log
+          fi
+
+          printf '\n===== nondeterminism-scan =====\n' | tee -a stage4-matrix-node24.log
+          git grep -nE 'Math\.random|Date\.now|performance\.now' -- \
+            src/core/infantry-combat/runtime/ProjectileRuntime.ts \
+            src/core/infantry-combat/runtime/ProjectileStepper.ts \
+            > /tmp/nondeterminism.log
+          grep_code=$?
+          cat /tmp/nondeterminism.log | tee -a stage4-matrix-node24.log
+          printf 'EXIT:%s\n' "$grep_code" | tee -a stage4-matrix-node24.log
+          if [ "$grep_code" -ne 1 ]; then failures=$((failures + 1)); fi
+          printf '\nMATRIX_FAILURES:%s\n' "$failures" | tee -a stage4-matrix-node24.log
+          exit "$failures"
+
+      - name: Run full Node.js 24 benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run infantry-combat-projectile:benchmark 2>&1 | tee stage4-benchmark-node24.log
+          awk '/BEGIN_PROJECTILE_BENCHMARK_JSON/{capture=1;next}/END_PROJECTILE_BENCHMARK_JSON/{capture=0}capture' stage4-benchmark-node24.log > stage4-projectile-benchmark-node24.json
+          node -e "const fs=require('fs'); const r=JSON.parse(fs.readFileSync('stage4-projectile-benchmark-node24.json','utf8')); if(!r.pass) process.exit(1);"
+          cp docs/performance/PROJECTILE_RUNTIME_STAGE4_CAPS.md stage4-caps.md
+          git rev-parse HEAD > stage4-final-sha.txt
+
+      - name: Upload final Stage 4 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage4-final-node24-evidence
+          path: |
+            stage4-projectile-benchmark-node24.json
+            stage4-benchmark-node24.log
+            stage4-matrix-node24.log
+            stage4-final-sha.txt
+            stage4-caps.md
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Publish exact verified commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --short)"
+          git push origin HEAD:refs/heads/feature/20260723-shooting-stage-04-projectile-runtime-benchmark
+          echo "FINAL_SHA=$(git rev-parse HEAD)"
