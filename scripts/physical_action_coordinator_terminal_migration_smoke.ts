@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { reconcilePhysicalActionCoordinatorState } from '../src/core/actions/PhysicalActionCoordinatorReconciliation';
 import {
   requestPostureTransition,
   tickPostureTransition,
@@ -42,7 +43,20 @@ assert.ok(
   'terminal legacy posture payload must advance nextSequence without restoring a lease',
 );
 
-console.log('Physical action coordinator terminal migration smoke passed: terminal posture stays lease-free and advances nextSequence.');
+const reconciledStateBeforeRepeat = JSON.stringify(restoredUnit.behaviorRuntime.physicalActionCoordinator);
+const repeated = reconcilePhysicalActionCoordinatorState(restoredUnit, {
+  actions: [],
+  knownActionTypes: ['posture_transition', 'movement_weapon_preparation', 'legacy_fire_action'],
+  reconciledSeconds: 0,
+});
+assert.equal(repeated.changed, false, 'terminal sequence migration must be idempotent');
+assert.equal(
+  JSON.stringify(restoredUnit.behaviorRuntime.physicalActionCoordinator),
+  reconciledStateBeforeRepeat,
+  'repeated reconciliation must not mutate the restored terminal state',
+);
+
+console.log('Physical action coordinator terminal migration smoke passed: terminal posture stays lease-free, advances nextSequence and reconciles idempotently.');
 
 function unitData(): UnitData {
   return {
