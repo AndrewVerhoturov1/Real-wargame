@@ -5,30 +5,40 @@ import { build } from 'vite';
 
 const repoRoot = process.cwd();
 const outDir = path.join(repoRoot, '.tmp-physical-action-coordinator-smoke');
-const entryFile = path.join(outDir, 'physical-action-coordinator-smoke.mjs');
 
 await rm(outDir, { recursive: true, force: true });
 
 try {
+  await runSmoke(
+    path.join(repoRoot, 'scripts', 'physical_action_coordinator_smoke.ts'),
+    'physical-action-coordinator-contract.mjs',
+  );
+  await runSmoke(
+    path.join(repoRoot, 'scripts', 'physical_action_coordinator_integration_smoke.ts'),
+    'physical-action-coordinator-integration.mjs',
+  );
+} finally {
+  await rm(outDir, { recursive: true, force: true });
+}
+
+async function runSmoke(sourceFile, outputFile) {
   await build({
     root: repoRoot,
     logLevel: 'warn',
     build: {
-      ssr: path.join(repoRoot, 'scripts', 'physical_action_coordinator_suite.ts'),
+      ssr: sourceFile,
       outDir,
-      emptyOutDir: true,
+      emptyOutDir: false,
       minify: false,
       sourcemap: false,
       rollupOptions: {
         output: {
-          entryFileNames: 'physical-action-coordinator-smoke.mjs',
+          entryFileNames: outputFile,
           format: 'es',
         },
       },
     },
   });
 
-  await import(`${pathToFileURL(entryFile).href}?run=${Date.now()}`);
-} finally {
-  await rm(outDir, { recursive: true, force: true });
+  await import(`${pathToFileURL(path.join(outDir, outputFile)).href}?run=${Date.now()}`);
 }
