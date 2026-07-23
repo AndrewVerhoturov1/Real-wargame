@@ -113,8 +113,8 @@ export function tryConsumeRound(unit: UnitModel, nowSeconds: number): boolean {
 
 export function reloadWeapon(unit: UnitModel): number {
   if (!isPhysicalActionChannelAvailable(unit, 'weapon')) {
-    unit.behaviorRuntime.reason = 'Перезарядка запрещена: канал оружия занят физическим действием.';
-    unit.behaviorRuntime.lastEvent = 'combat_reload_rejected_physical_action';
+    unit.behaviorRuntime.reason = 'Перезарядка запрещена во время физической смены позы.';
+    unit.behaviorRuntime.lastEvent = 'combat_reload_rejected_posture_transition';
     return 0;
   }
   const runtime = getWeaponRuntime(unit);
