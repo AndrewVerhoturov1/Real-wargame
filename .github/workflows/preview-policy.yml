@@ -1,4 +1,4 @@
-name: Stage 4 Development Dependencies
+name: Stage 4 Baseline Matrix
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  dependencies:
+  baseline:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact branch
@@ -26,14 +26,40 @@ jobs:
       - name: Install exact dependencies
         run: npm ci
 
-      - name: Pack dependencies
+      - name: Run Stage 3 baseline matrix
         shell: bash
-        run: tar -czf stage4-node-modules.tgz node_modules
+        run: |
+          set +e
+          : > stage4-baseline.log
+          printf 'node=%s\nhead=%s\nbase=%s\n' "$(node --version)" "$(git rev-parse HEAD)" "$(git merge-base HEAD 3544444490f9026954d99a84e167988d0e518156)" | tee -a stage4-baseline.log
+          failures=0
+          run_check() {
+            name="$1"
+            shift
+            printf '\n===== %s =====\n' "$name" | tee -a stage4-baseline.log
+            "$@" 2>&1 | tee -a stage4-baseline.log
+            code=${PIPESTATUS[0]}
+            printf 'EXIT:%s\n' "$code" | tee -a stage4-baseline.log
+            if [ "$name" = "performance-contract" ]; then
+              printf 'KNOWN_BASELINE_EXPECTED_EXIT:1\n' | tee -a stage4-baseline.log
+              [ "$code" -eq 1 ] || failures=$((failures + 1))
+            elif [ "$code" -ne 0 ]; then
+              failures=$((failures + 1))
+            fi
+          }
+          run_check infantry-combat-single-shot npm run infantry-combat-single-shot:smoke
+          run_check physical-action-coordinator npm run physical-action-coordinator:smoke
+          run_check combat-foundation npm run combat-foundation:smoke
+          run_check typecheck npm run typecheck
+          run_check build npm run build
+          run_check performance-contract npm run performance-contract:smoke
+          printf '\nBASELINE_FAILURES:%s\n' "$failures" | tee -a stage4-baseline.log
+          exit "$failures"
 
-      - name: Upload dependencies
+      - name: Upload baseline output
         uses: actions/upload-artifact@v4
         with:
-          name: stage4-node-modules
-          path: stage4-node-modules.tgz
+          name: stage4-baseline-output
+          path: stage4-baseline.log
           if-no-files-found: error
           retention-days: 1
