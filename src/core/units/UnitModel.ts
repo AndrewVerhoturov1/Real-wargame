@@ -12,6 +12,15 @@ import {
   type SerializedMoveOrder,
 } from '../ai/runtime/AiRuntimeSnapshot';
 import {
+  createPhysicalActionCoordinatorState,
+} from '../actions/PhysicalActionCoordinator';
+import {
+  reconcilePhysicalActionCoordinatorState,
+  type PhysicalActionReconciliationActionV1,
+} from '../actions/PhysicalActionCoordinatorReconciliation';
+import { normalizePhysicalActionCoordinatorState } from '../actions/PhysicalActionCoordinatorSerialization';
+import {
+  POSTURE_TRANSITION_ACTION_TYPE,
   normalizeUnitPhysicalAction,
   synchronizeEffectivePostureFromAction,
 } from '../actions/PostureTransition';
@@ -31,7 +40,11 @@ import {
 import { clearCombatRuntime, replaceCombatRuntime, type CombatRuntimeState } from '../combat/CombatDamage';
 import { clearWeaponRuntime, replaceWeaponRuntime, type WeaponRuntimeState } from '../combat/WeaponModel';
 import type { GridPosition } from '../geometry';
-import { createMovementRuntime, type MovementRuntimeState } from '../movement/MovementRuntime';
+import {
+  MOVEMENT_WEAPON_PREPARATION_ACTION_TYPE,
+  createMovementRuntime,
+  type MovementRuntimeState,
+} from '../movement/MovementRuntime';
 import {
   DEFAULT_MOVEMENT_PROFILE_ID,
   BUILT_IN_MOVEMENT_PROFILES,
@@ -115,6 +128,7 @@ export interface UnitRuntimeData extends Partial<Pick<UnitBehaviorRuntime, 'stre
   aiRuntime?: AiRuntimeSceneSnapshotV1;
   moveOrder?: SerializedMoveOrder;
   movement?: MovementRuntimeState;
+  physicalActionCoordinator?: unknown;
   physicalAction?: unknown;
 }
 
@@ -275,6 +289,9 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
     };
     initializeTacticalPositionSettings(model, unit.tacticalPositionSettings);
     applyInitialStateToRuntime(model, false);
+    model.behaviorRuntime.physicalActionCoordinator = normalizePhysicalActionCoordinatorState(
+      unit.runtime?.physicalActionCoordinator,
+    );
     model.movementRuntime = createMovementRuntime(
       rawMovementProfileId,
       requestedMovementGait,
@@ -286,6 +303,7 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
       },
     );
     model.behaviorRuntime.physicalAction = normalizeUnitPhysicalAction(unit.runtime?.physicalAction, model.id);
+    reconcileKnownPhysicalActions(model);
     synchronizeEffectivePostureFromAction(model);
     if (unit.runtime?.weapon) replaceWeaponRuntime(model, unit.runtime.weapon);
     restoreAiRuntimeSnapshot(model, unit.runtime?.aiRuntime);
@@ -297,13 +315,80 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
     if (model.playerCommand) publishTacticalOrderIntentToAiMemory(model, model.playerCommand.intent);
     else publishMovementProfileStateToAiMemory(model);
     if (unit.runtime?.combat) replaceCombatRuntime(model, unit.runtime.combat);
-    if (model.behaviorRuntime.physicalAction?.status === 'running') {
+    if (model.behaviorRuntime.physicalAction?.status === 'running' && model.behaviorRuntime.physicalAction.actionHandle) {
       model.behaviorRuntime.currentAction = 'change_posture';
       model.behaviorRuntime.reason = model.behaviorRuntime.physicalAction.reasonRu;
     }
     initializeSimulationAiEventFacts(model);
     return model;
   });
+}
+
+function reconcileKnownPhysicalActions(unit: UnitModel): void {
+  const actions: PhysicalActionReconciliationActionV1[] = [];
+  const posture = unit.behaviorRuntime.physicalAction;
+  const preparation = unit.movementRuntime.weaponPreparation;
+  const postureActionId = posture?.id ?? null;
+  const preparationSequence = preparation?.actionHandle?.sequence
+    ?? Math.max(1, preparation?.revision ?? unit.behaviorRuntime.physicalActionCoordinator.nextSequence);
+  const preparationActionId = preparation
+    ? preparation.actionHandle?.actionId ?? `${unit.id}:physical-action:${preparationSequence}`
+    : null;
+
+  if (posture?.status === 'running') {
+    actions.push({
+      payload: posture,
+      actionId: posture.id,
+      sequence: posture.sequence,
+      actionType: POSTURE_TRANSITION_ACTION_TYPE,
+      owner: posture.owner,
+      ownerToken: posture.ownerToken,
+      channels: ['locomotion', 'posture', 'weapon'],
+      startedSeconds: posture.startedSeconds,
+      reasonCode: posture.reasonCode,
+      reasonRu: posture.reasonRu,
+    });
+  }
+  if (preparation && preparation.remainingSeconds > 1e-9 && preparationActionId) {
+    actions.push({
+      payload: preparation,
+      actionId: preparationActionId,
+      sequence: preparationSequence,
+      actionType: MOVEMENT_WEAPON_PREPARATION_ACTION_TYPE,
+      owner: { source: 'movement', id: preparation.contactId },
+      ownerToken: preparation.ownerToken,
+      channels: ['locomotion', 'weapon'],
+      startedSeconds: preparation.actionHandle
+        ? unit.behaviorRuntime.physicalActionCoordinator.activeLeases.find(
+          (lease) => lease.handle.actionId === preparation.actionHandle?.actionId,
+        )?.startedSeconds ?? 0
+        : 0,
+      reasonCode: 'movement_weapon_preparation_restored',
+      reasonRu: 'Подготовка оружия после движения восстановлена.',
+    });
+  } else if (preparation) {
+    unit.movementRuntime.weaponPreparation = null;
+  }
+
+  const result = reconcilePhysicalActionCoordinatorState(unit, {
+    actions,
+    knownActionTypes: [
+      POSTURE_TRANSITION_ACTION_TYPE,
+      MOVEMENT_WEAPON_PREPARATION_ACTION_TYPE,
+      'legacy_fire_action',
+    ],
+    reconciledSeconds: 0,
+  });
+
+  if (postureActionId && result.blockedActionIds.includes(postureActionId) && posture?.status === 'running') {
+    posture.status = 'failed';
+    posture.resultCode = 'posture_transition_reconciliation_blocked';
+    posture.resultRu = 'Смена позы не восстановлена из-за конфликта физических каналов.';
+    posture.actionHandle = null;
+  }
+  if (preparationActionId && result.blockedActionIds.includes(preparationActionId)) {
+    unit.movementRuntime.weaponPreparation = null;
+  }
 }
 
 function restorePlayerMoveOrderSnapshot(unit: UnitModel, value: unknown): void {
@@ -366,6 +451,7 @@ export function applyInitialStateToRuntime(unit: UnitModel, clearPerceptionKnowl
   unit.behaviorRuntime.aiRuntimeSession = null;
   unit.behaviorRuntime.aiRouteStatusState = null;
   unit.behaviorRuntime.aiSimulationEventFacts = null;
+  unit.behaviorRuntime.physicalActionCoordinator = createPhysicalActionCoordinatorState();
   unit.behaviorRuntime.physicalAction = null;
   unit.soldier.condition.fatigue = initial.fatigue;
   unit.soldier.condition.morale = initial.morale;
