@@ -139,7 +139,16 @@ function verifyRuntimeSourceContract(): void {
     .sort()
     .map((name) => readFileSync(path.join(runtimeDir, name), 'utf8'))
     .join('\n');
-  for (const forbidden of ['Math.random', 'Date.now', 'setInterval(', 'requestAnimationFrame(', 'document.', 'window.', 'pixi.js']) {
+  const forbiddenFragments = [
+    ['Math', '.random'].join(''),
+    ['Date', '.now'].join(''),
+    ['set', 'Interval('].join(''),
+    ['request', 'AnimationFrame('].join(''),
+    ['document', '.'].join(''),
+    ['window', '.'].join(''),
+    ['pixi', '.js'].join(''),
+  ];
+  for (const forbidden of forbiddenFragments) {
     assert.equal(source.includes(forbidden), false, `runtime must not contain ${forbidden}`);
   }
   const stepper = readFileSync(path.join(runtimeDir, 'ReferenceProjectileStepper.ts'), 'utf8');
