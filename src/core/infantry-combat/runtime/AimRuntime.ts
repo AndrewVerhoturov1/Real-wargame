@@ -92,9 +92,9 @@ export function createAimTrackingRuntime(
       contactAgeSeconds: 0,
       uncertaintyCells: 0,
       predictedAimPoint: null,
-      desiredDirection: direction,
-      currentDirection: direction,
-      directionSegmentStart: direction,
+      desiredDirection: { ...direction },
+      currentDirection: { ...direction },
+      directionSegmentStart: { ...direction },
       directionProgress: 0,
       physicalAimQuality: 0,
       solutionQuality: 0,
@@ -139,10 +139,7 @@ export function calculateAimFactorBreakdown(input: AimFactorInput): AimFactorBre
   const fatigue = clamp01(input.fatigue);
   const woundStabilityMultiplier = clamp(input.woundStabilityMultiplier, 0.2, 1);
   const movementSpeed = Math.max(0, finite(input.movementSpeedMetresPerSecond, 0));
-  const postureDispersionMultiplier = positive(
-    input.weapon.postureDispersionMultiplier[input.posture],
-    1,
-  );
+  const postureDispersionMultiplier = positive(input.weapon.postureDispersionMultiplier[input.posture], 1);
   const movementIntensity = input.isMoving ? clamp01(movementSpeed / 4) : 0;
   const movementDispersionMultiplier = input.isMoving
     ? positive(input.weapon.movingDispersionMultiplier, 1) * (1 + 0.25 * movementIntensity)
@@ -163,7 +160,11 @@ export function calculateAimFactorBreakdown(input: AimFactorInput): AimFactorBre
     * fatigueAimMultiplier
     * woundStabilityMultiplier;
   const recoilRecoveryMultiplier = clamp(
-    postureAimMultiplier * lerp(0.75, 1.35, shootingSkill) * proficiencyAimMultiplier * fatigueAimMultiplier * woundStabilityMultiplier,
+    postureAimMultiplier
+      * lerp(0.75, 1.35, shootingSkill)
+      * proficiencyAimMultiplier
+      * fatigueAimMultiplier
+      * woundStabilityMultiplier,
     0.1,
     3,
   );
@@ -206,7 +207,7 @@ export function calculateAimFactorBreakdown(input: AimFactorInput): AimFactorBre
   };
 }
 
-/** Stage 5 deliberately keeps Stage 6-7 capability inputs neutral in production. */
+/** Stage 6-7 inputs are explicit but neutral in production Stage 5. */
 export function getNeutralAimCapabilityModifiers(): { readonly fatigue: 0; readonly woundStabilityMultiplier: 1 } {
   return { fatigue: 0, woundStabilityMultiplier: 1 };
 }
@@ -243,7 +244,7 @@ export function updateAimTrackingAtBoundary(
   const tracking = task.aimTracking;
   const factors = resolveProductionAimFactors(state, shooter, weapon);
   const muzzle = getWeaponAnchor(state.map, shooter);
-  let perceivedPosition: BallisticPoint3 | null = null;
+  let perceivedPosition: BallisticPoint3;
   let solutionQuality = 1;
   let contactAgeSeconds = 0;
   let uncertaintyCells = 0;
@@ -252,7 +253,7 @@ export function updateAimTrackingAtBoundary(
     const contact = shooter.perceptionKnowledge.contacts.find((entry) => entry.id === task.contactId) ?? null;
     if (!contact) {
       invalidateSolution(task, factors, 'contact_missing', boundary);
-      return task.aimTracking.solution;
+      return tracking.solution;
     }
     const contactPosition: BallisticPoint3 = {
       xMetres: contact.lastKnownPosition.x * state.map.metersPerCell,
@@ -261,7 +262,7 @@ export function updateAimTrackingAtBoundary(
     };
     if (!isFinitePoint(contactPosition)) {
       invalidateSolution(task, factors, 'invalid_perceived_position', boundary);
-      return task.aimTracking.solution;
+      return tracking.solution;
     }
     const sourceUpdatedSeconds = canonicalSeconds(Math.max(0, contact.lastUpdatedSeconds));
     if (!tracking.lastSample || sourceUpdatedSeconds > tracking.lastSample.sourceUpdatedSeconds + EPSILON) {
@@ -294,7 +295,7 @@ export function updateAimTrackingAtBoundary(
   const muzzleVelocity = weapon.resolved.ammo.muzzleVelocityMetersPerSecond;
   if (!(muzzleVelocity > 0) || !Number.isFinite(muzzleVelocity)) {
     invalidateSolution(task, factors, 'invalid_muzzle_velocity', boundary);
-    return task.aimTracking.solution;
+    return tracking.solution;
   }
   const predictedAimPoint = calculateLeadPoint(
     muzzle,
@@ -305,7 +306,7 @@ export function updateAimTrackingAtBoundary(
   const desiredDirection = directionBetween(muzzle, predictedAimPoint);
   if (!desiredDirection) {
     invalidateSolution(task, factors, 'invalid_geometry', boundary);
-    return task.aimTracking.solution;
+    return tracking.solution;
   }
 
   const solution = tracking.solution;
@@ -390,7 +391,9 @@ export function deriveSeededAngularOffsets(input: SeededAngularOffsetInput): See
 
 export function prepareCommittedShotDirection(input: PreparedShotDirectionInput): BallisticDirection3 {
   const forward = normalizeDirection(input.aimDirection);
-  const referenceUp = Math.abs(forward.z) > 0.95 ? { x: 0, y: 1, z: 0 } : { x: 0, y: 0, z: 1 };
+  const referenceUp: BallisticDirection3 = Math.abs(forward.z) > 0.95
+    ? { x: 0, y: 1, z: 0 }
+    : { x: 0, y: 0, z: 1 };
   const right = normalizeDirection(cross(referenceUp, forward));
   const up = normalizeDirection(cross(forward, right));
   const yaw = finite(input.recoilYawRadians, 0) + finite(input.dispersionYawRadians, 0);
@@ -429,14 +432,13 @@ export function getRecoveredWeaponRecoil(
   factors: AimFactorBreakdownV1,
 ): WeaponRecoilRuntimeV1 {
   const elapsed = Math.max(0, finite(simulationSeconds, 0) - weapon.recoil.lastUpdatedSeconds);
-  const pitchRecovery = Math.max(0, weapon.resolved.weapon.recoilRecoveryPitchRadiansPerSecond)
-    * factors.recoilRecoveryMultiplier * elapsed;
-  const yawRecovery = Math.max(0, weapon.resolved.weapon.recoilRecoveryYawRadiansPerSecond)
-    * factors.recoilRecoveryMultiplier * elapsed;
+  const recovery = Math.max(0, weapon.resolved.weapon.recoilRecoveryPerSecond)
+    * factors.recoilRecoveryMultiplier
+    * elapsed;
   return {
     schemaVersion: WEAPON_RECOIL_RUNTIME_SCHEMA_VERSION,
-    pitchOffsetRadians: approachZero(weapon.recoil.pitchOffsetRadians, pitchRecovery),
-    yawOffsetRadians: approachZero(weapon.recoil.yawOffsetRadians, yawRecovery),
+    pitchOffsetRadians: approachZero(weapon.recoil.pitchOffsetRadians, recovery),
+    yawOffsetRadians: approachZero(weapon.recoil.yawOffsetRadians, recovery),
     lastUpdatedSeconds: canonicalSeconds(Math.max(weapon.recoil.lastUpdatedSeconds, simulationSeconds)),
     sequence: weapon.recoil.sequence,
   };
@@ -453,9 +455,9 @@ export function applySuccessfulShotRecoil(
   weapon.recoil = {
     schemaVersion: WEAPON_RECOIL_RUNTIME_SCHEMA_VERSION,
     pitchOffsetRadians: recovered.pitchOffsetRadians
-      + weapon.resolved.weapon.recoilPitchRadians * factors.recoilImpulseMultiplier,
+      + weapon.resolved.weapon.recoilPitchRadiansPerShot * factors.recoilImpulseMultiplier,
     yawOffsetRadians: recovered.yawOffsetRadians
-      + weapon.resolved.weapon.recoilYawRadians * yawUnit * factors.recoilImpulseMultiplier,
+      + weapon.resolved.weapon.recoilYawRadiansPerShot * yawUnit * factors.recoilImpulseMultiplier,
     lastUpdatedSeconds: canonicalSeconds(simulationSeconds),
     sequence: recovered.sequence + 1,
   };
@@ -581,7 +583,6 @@ function createNeutralAimFactorBreakdown(): AimFactorBreakdownV1 {
 function normalizeAimSolution(value: unknown, fallback: AimSolutionRuntimeV1): AimSolutionRuntimeV1 {
   if (!isRecord(value) || value.schemaVersion !== AIM_SOLUTION_RUNTIME_SCHEMA_VERSION) return structuredClone(fallback);
   const currentDirection = normalizeStoredDirection(value.currentDirection, fallback.currentDirection);
-  const factors = normalizeFactors(value.factors, fallback.factors);
   return {
     schemaVersion: AIM_SOLUTION_RUNTIME_SCHEMA_VERSION,
     valid: value.valid === true,
@@ -590,7 +591,11 @@ function normalizeAimSolution(value: unknown, fallback: AimSolutionRuntimeV1): A
     previousPerceivedPosition: normalizePoint(value.previousPerceivedPosition),
     perceivedSampleSeconds: nullableSeconds(value.perceivedSampleSeconds),
     previousPerceivedSampleSeconds: nullableSeconds(value.previousPerceivedSampleSeconds),
-    estimatedVelocityMetresPerSecond: normalizeStoredDirection(value.estimatedVelocityMetresPerSecond, { x: 0, y: 0, z: 0 }, false),
+    estimatedVelocityMetresPerSecond: normalizeStoredDirection(
+      value.estimatedVelocityMetresPerSecond,
+      { x: 0, y: 0, z: 0 },
+      false,
+    ),
     contactAgeSeconds: finiteNonNegative(value.contactAgeSeconds, 0),
     uncertaintyCells: finiteNonNegative(value.uncertaintyCells, 0),
     predictedAimPoint: normalizePoint(value.predictedAimPoint),
@@ -603,13 +608,12 @@ function normalizeAimSolution(value: unknown, fallback: AimSolutionRuntimeV1): A
     usableAimQuality: clamp01(finite(value.usableAimQuality, 0)),
     predictedHitProbability: clamp01(finite(value.predictedHitProbability, 0)),
     effectiveDispersionRadians: finiteNonNegative(value.effectiveDispersionRadians, 0),
-    factors,
+    factors: normalizeFactors(value.factors, fallback.factors),
   };
 }
 
 function normalizeFactors(value: unknown, fallback: AimFactorBreakdownV1): AimFactorBreakdownV1 {
   if (!isRecord(value) || value.schemaVersion !== AIM_FACTOR_BREAKDOWN_SCHEMA_VERSION) return structuredClone(fallback);
-  const proficiency = normalizeProficiency(value.proficiency);
   const posture = value.posture === 'crouched' || value.posture === 'prone' ? value.posture : 'standing';
   return {
     schemaVersion: AIM_FACTOR_BREAKDOWN_SCHEMA_VERSION,
@@ -617,7 +621,7 @@ function normalizeFactors(value: unknown, fallback: AimFactorBreakdownV1): AimFa
     isMoving: value.isMoving === true,
     movementSpeedMetresPerSecond: finiteNonNegative(value.movementSpeedMetresPerSecond, 0),
     shootingSkill: clamp01(finite(value.shootingSkill, 0.5)),
-    proficiency,
+    proficiency: normalizeProficiency(value.proficiency),
     fatigue: clamp01(finite(value.fatigue, 0)),
     woundStabilityMultiplier: clamp(finite(value.woundStabilityMultiplier, 1), 0.2, 1),
     postureDispersionMultiplier: positive(value.postureDispersionMultiplier, 1),
@@ -732,16 +736,31 @@ function unitFloat(value: number): number {
   return (value >>> 0) / 0x1_0000_0000;
 }
 
-function normalizeStoredDirection(value: unknown, fallback: BallisticDirection3, normalize = true): BallisticDirection3 {
-  if (!isRecord(value) || !Number.isFinite(value.x) || !Number.isFinite(value.y) || !Number.isFinite(value.z)) return structuredClone(fallback);
+function normalizeStoredDirection(
+  value: unknown,
+  fallback: BallisticDirection3,
+  normalize = true,
+): BallisticDirection3 {
+  if (!isRecord(value) || !Number.isFinite(value.x) || !Number.isFinite(value.y) || !Number.isFinite(value.z)) {
+    return structuredClone(fallback);
+  }
   const direction = { x: value.x as number, y: value.y as number, z: value.z as number };
   if (!normalize) return direction;
-  return Math.hypot(direction.x, direction.y, direction.z) > EPSILON ? normalizeDirection(direction) : structuredClone(fallback);
+  return Math.hypot(direction.x, direction.y, direction.z) > EPSILON
+    ? normalizeDirection(direction)
+    : structuredClone(fallback);
 }
 
 function normalizePoint(value: unknown): BallisticPoint3 | null {
-  if (!isRecord(value) || !Number.isFinite(value.xMetres) || !Number.isFinite(value.yMetres) || !Number.isFinite(value.zMetres)) return null;
-  return { xMetres: value.xMetres as number, yMetres: value.yMetres as number, zMetres: value.zMetres as number };
+  if (!isRecord(value)
+    || !Number.isFinite(value.xMetres)
+    || !Number.isFinite(value.yMetres)
+    || !Number.isFinite(value.zMetres)) return null;
+  return {
+    xMetres: value.xMetres as number,
+    yMetres: value.yMetres as number,
+    zMetres: value.zMetres as number,
+  };
 }
 
 function isFinitePoint(value: BallisticPoint3): boolean {
@@ -749,7 +768,9 @@ function isFinitePoint(value: BallisticPoint3): boolean {
 }
 
 function nullableSeconds(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? canonicalSeconds(Math.max(0, value)) : null;
+  return typeof value === 'number' && Number.isFinite(value)
+    ? canonicalSeconds(Math.max(0, value))
+    : null;
 }
 
 function finite(value: unknown, fallback: number): number {
