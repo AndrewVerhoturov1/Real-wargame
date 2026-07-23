@@ -1,4 +1,4 @@
-import './physical_action_coordinator_smoke.mjs';
+import { execFileSync } from 'node:child_process';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -7,6 +7,11 @@ import { build } from 'vite';
 const repoRoot = process.cwd();
 const outDir = path.join(repoRoot, '.tmp-combat-foundation-smoke');
 const entryFile = path.join(outDir, 'combat-foundation-smoke.mjs');
+
+execFileSync(process.execPath, [path.join(repoRoot, 'scripts', 'physical_action_coordinator_smoke.mjs')], {
+  cwd: repoRoot,
+  stdio: 'inherit',
+});
 
 await rm(outDir, { recursive: true, force: true });
 
