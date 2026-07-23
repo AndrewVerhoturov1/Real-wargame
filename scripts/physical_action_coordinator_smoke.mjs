@@ -14,7 +14,7 @@ try {
     root: repoRoot,
     logLevel: 'warn',
     build: {
-      ssr: path.join(repoRoot, 'scripts', 'physical_action_coordinator_smoke.ts'),
+      ssr: path.join(repoRoot, 'scripts', 'physical_action_coordinator_suite.ts'),
       outDir,
       emptyOutDir: true,
       minify: false,
