@@ -20,6 +20,7 @@ import {
   createMovementRuntime,
   getMovementWeaponPreparation,
   preparePhysicalMovementStep,
+  requestMovementWeaponPreparation,
   setMovementProfileRequest,
   setMovementRequest,
 } from '../src/core/movement/MovementRuntime';
@@ -286,20 +287,23 @@ function verifyWeaponPreparationLifecycle(): void {
   assert.ok(stepAfterCancel.maxDistanceCells > 0, 'cancelled fire intent must not block the existing movement order');
 
   assert.equal(requestFireAction(state, shooter, contactId), false);
-  const stale = getMovementWeaponPreparation(shooter);
-  assert.ok(stale);
-  shooter.movementRuntime.weaponPreparationRevision += 1;
-  shooter.movementRuntime.weaponPreparation = {
-    ownerToken: 'fire-intent:newer-contact',
-    contactId: 'newer-contact',
-    orderIssuedAtMs: shooter.order?.issuedAtMs ?? null,
-    remainingSeconds: 1,
-    revision: shooter.movementRuntime.weaponPreparationRevision,
-  };
-  assert.equal(cancelMovementWeaponPreparation(shooter, { ownerToken: stale.ownerToken, revision: stale.revision }), false, 'stale cleanup must not cancel newer preparation');
-  assert.equal(getMovementWeaponPreparation(shooter)?.contactId, 'newer-contact');
-
-  shooter.movementRuntime.weaponPreparation = null;
+const stale = getMovementWeaponPreparation(shooter);
+assert.ok(stale);
+const newerRequest = requestMovementWeaponPreparation(state, shooter, {
+  contactId: 'newer-contact',
+  ownerToken: 'fire-intent:newer-contact',
+});
+assert.equal(newerRequest.allowed, false);
+const newer = getMovementWeaponPreparation(shooter);
+assert.ok(newer);
+assert.equal(newer.contactId, 'newer-contact');
+assert.equal(cancelMovementWeaponPreparation(shooter, { ownerToken: stale.ownerToken, revision: stale.revision }), false, 'stale cleanup must not cancel newer preparation');
+assert.equal(getMovementWeaponPreparation(shooter)?.contactId, 'newer-contact');
+assert.equal(cancelMovementWeaponPreparation(shooter, {
+  ownerToken: newer.ownerToken,
+  revision: newer.revision,
+  contactId: newer.contactId,
+}), true, 'current preparation cleanup must release its exact coordinator lease');
   installIdentifiedContact(shooter, target, state.simulationTimeSeconds);
   assert.equal(requestFireAction(state, shooter, contactId), false);
   const unattended = getMovementWeaponPreparation(shooter);
