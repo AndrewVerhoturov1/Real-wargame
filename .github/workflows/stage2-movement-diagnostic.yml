@@ -9,22 +9,14 @@ permissions:
   contents: read
 
 jobs:
-  compare-physical-movement:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: candidate
-            ref: ${{ github.event.pull_request.head.sha }}
-          - label: mandatory-base
-            ref: 3ba3ac78edd0998a8a199bba986a16dc39ffd8f0
+  trace-physical-movement:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Checkout candidate
+      - name: Checkout exact candidate
         uses: actions/checkout@v4
         with:
-          ref: ${{ matrix.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -35,20 +27,36 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      - name: Add temporary scenario trace
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          path = Path('scripts/physical_movement_runtime_smoke.ts')
+          source = path.read_text(encoding='utf-8')
+          prefix, marker, suffix = source.partition('for (const state of createdStates)')
+          if not marker:
+              raise SystemExit('cleanup marker not found')
+          pattern = re.compile(r'^(verify[A-Za-z0-9_]+)\(\);$', re.MULTILINE)
+          traced = pattern.sub(lambda m: f"console.log('START {m.group(1)}');\n{m.group(1)}();\nconsole.log('DONE {m.group(1)}');", prefix)
+          path.write_text(traced + marker + suffix, encoding='utf-8')
+          PY
+
       - name: Capture physical movement output
         id: movement
         continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
-          timeout --signal=TERM --kill-after=10s 90s npm run physical-movement:smoke 2>&1 | tee stage2-physical-movement-${{ matrix.label }}.log
+          timeout --signal=TERM --kill-after=10s 90s npm run physical-movement:smoke 2>&1 | tee stage2-physical-movement-trace.log
 
       - name: Upload physical movement output
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: stage2-physical-movement-${{ matrix.label }}-${{ github.event.pull_request.head.sha }}
-          path: stage2-physical-movement-${{ matrix.label }}.log
+          name: stage2-physical-movement-trace-${{ github.event.pull_request.head.sha }}
+          path: stage2-physical-movement-trace.log
           if-no-files-found: error
           retention-days: 1
 
