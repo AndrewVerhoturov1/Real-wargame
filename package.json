@@ -65,7 +65,7 @@
     "infantry-combat-single-shot:smoke": "node scripts/infantry_combat_single_shot_smoke.mjs",
     "infantry-combat-stage5:smoke": "node scripts/infantry_combat_stage5_aim_smoke.mjs",
     "infantry-combat-stage5:forbidden-scan": "node scripts/infantry_combat_stage5_forbidden_scan.mjs",
-    "infantry-combat-stage5:verify": "npm run infantry-combat-stage5:smoke && npm run infantry-combat-single-shot:smoke && npm run infantry-combat-projectile:smoke && npm run infantry-combat-projectile:benchmark && npm run physical-action-coordinator:smoke && npm run posture-transition:smoke && npm run physical-movement:smoke && npm run perception:smoke && npm run performance-contract:smoke && npm run infantry-combat-stage5:forbidden-scan",
+    "infantry-combat-stage5:verify": "node scripts/infantry_combat_stage5_verify.mjs",
     "combat-catalog-core:smoke": "node scripts/combat_catalog_core_smoke.mjs",
     "combat-catalog-serialization:smoke": "node scripts/combat_catalog_serialization_smoke.mjs",
     "combat-catalogs:smoke": "npm run combat-catalog-core:smoke && npm run combat-catalog-serialization:smoke",
