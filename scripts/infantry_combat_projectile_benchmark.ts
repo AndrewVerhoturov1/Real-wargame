@@ -32,8 +32,9 @@ const CAPACITY_SWEEP_SECONDS = STAGE3_PROJECTILE_FIXED_STEP_SECONDS;
 const CAPACITY_CANDIDATES = [512, 1024, 2048, 4096] as const;
 const TARGET_ACTIVE_PROJECTILES = 2000;
 const DIRECT_COMPARISON_PROJECTILES = 200;
-const MEMORY_COMPARISON_PROJECTILES = 2000;
-const MEMORY_COMPARISON_RUNTIME_COPIES = 2;
+const DIRECT_COMPARISON_CAPACITY = 256;
+const MEMORY_COMPARISON_PROJECTILES = DIRECT_COMPARISON_PROJECTILES;
+const MEMORY_COMPARISON_RUNTIME_COPIES = 16;
 const ammo = createDefaultCombatCatalogRegistry().resolveAmmo({ definitionId: 'ammo_762x54r_ball', revision: 1 });
 
 interface TimingSummary {
@@ -89,6 +90,7 @@ interface CapacitySweepReport {
 interface DirectComparisonReport {
   readonly fixture: string;
   readonly projectiles: number;
+  readonly stage4Capacity: number;
   readonly simulatedSeconds: number;
   readonly simulatedSecondsPerMeasuredRun: number;
   readonly stage3Reference: TimingSummary & {
@@ -490,6 +492,7 @@ function measureDirectComparison(): DirectComparisonReport {
   return {
     fixture: 'same 200-projectile clear-crossing fixture',
     projectiles: DIRECT_COMPARISON_PROJECTILES,
+    stage4Capacity: DIRECT_COMPARISON_CAPACITY,
     simulatedSeconds: TOTAL_MEASURED_SIMULATED_SECONDS,
     simulatedSecondsPerMeasuredRun: SIMULATED_SECONDS_PER_MEASURED_RUN,
     stage3Reference: {
@@ -526,7 +529,7 @@ function executeReferenceDirect(): Stage3ReferenceHarnessRuntime {
 }
 
 function executeProductionDirect(): ProfileExecutionResult {
-  return runPreparedProduction(prepareProductionRun('direct', 512), OUTER_STEPS);
+  return runPreparedProduction(prepareProductionRun('direct', DIRECT_COMPARISON_CAPACITY), OUTER_STEPS);
 }
 
 function runReference(state: SimulationState, runtime: Stage3ReferenceHarnessRuntime, steps: number): void {
@@ -598,38 +601,30 @@ function measureProductionIdleSample(): {
 }
 
 function measureRuntimeRetainedHeapPerProjectile(): { stage3Reference: number; stage4Production: number } {
-  const candidates = Array.from({ length: MEMORY_COMPARISON_PROJECTILES }, (_, index) => makeProjectile('direct', index));
   const referenceSamples: number[] = [];
   const productionSamples: number[] = [];
-  for (let index = 0; index < 5; index += 1) {
+  for (let sample = 0; sample < 5; sample += 1) {
     memorySink = null;
     forceGc();
     forceGc();
-    let before = process.memoryUsage().heapUsed;
-    memorySink = Array.from(
-      { length: MEMORY_COMPARISON_RUNTIME_COPIES },
-      () => createStage3ReferenceHarnessRuntime(candidates),
-    );
+    let before = retainedMemoryBytes();
+    memorySink = createMemoryReferenceRuntimes();
     forceGc();
     assert.equal((memorySink as readonly unknown[]).length, MEMORY_COMPARISON_RUNTIME_COPIES);
     referenceSamples.push(
-      Math.max(0, process.memoryUsage().heapUsed - before)
+      Math.max(0, retainedMemoryBytes() - before)
       / (MEMORY_COMPARISON_PROJECTILES * MEMORY_COMPARISON_RUNTIME_COPIES),
     );
 
     memorySink = null;
     forceGc();
     forceGc();
-    before = process.memoryUsage().heapUsed;
-    memorySink = Array.from({ length: MEMORY_COMPARISON_RUNTIME_COPIES }, () => {
-      const runtime = createProjectileRuntimeState(PRODUCTION_PROJECTILE_CAPACITY);
-      for (const candidate of candidates) assert.equal(trySpawnProjectile(runtime, candidate).status, 'spawned');
-      return runtime;
-    });
+    before = retainedMemoryBytes();
+    memorySink = createMemoryProductionRuntimes();
     forceGc();
     assert.equal((memorySink as readonly unknown[]).length, MEMORY_COMPARISON_RUNTIME_COPIES);
     productionSamples.push(
-      Math.max(0, process.memoryUsage().heapUsed - before)
+      Math.max(0, retainedMemoryBytes() - before)
       / (MEMORY_COMPARISON_PROJECTILES * MEMORY_COMPARISON_RUNTIME_COPIES),
     );
   }
@@ -639,6 +634,40 @@ function measureRuntimeRetainedHeapPerProjectile(): { stage3Reference: number; s
     stage3Reference: median(referenceSamples),
     stage4Production: median(productionSamples),
   };
+}
+
+function createMemoryReferenceRuntimes(): Stage3ReferenceHarnessRuntime[] {
+  return Array.from(
+    { length: MEMORY_COMPARISON_RUNTIME_COPIES },
+    (_, runtimeIndex) => createStage3ReferenceHarnessRuntime(
+      Array.from(
+        { length: MEMORY_COMPARISON_PROJECTILES },
+        (_, projectileIndex) => makeProjectile(
+          'direct',
+          runtimeIndex * MEMORY_COMPARISON_PROJECTILES + projectileIndex,
+        ),
+      ),
+    ),
+  );
+}
+
+function createMemoryProductionRuntimes(): ReturnType<typeof createProjectileRuntimeState>[] {
+  return Array.from({ length: MEMORY_COMPARISON_RUNTIME_COPIES }, (_, runtimeIndex) => {
+    const runtime = createProjectileRuntimeState(DIRECT_COMPARISON_CAPACITY);
+    for (let projectileIndex = 0; projectileIndex < MEMORY_COMPARISON_PROJECTILES; projectileIndex += 1) {
+      const candidate = makeProjectile(
+        'direct',
+        runtimeIndex * MEMORY_COMPARISON_PROJECTILES + projectileIndex,
+      );
+      assert.equal(trySpawnProjectile(runtime, candidate).status, 'spawned');
+    }
+    return runtime;
+  });
+}
+
+function retainedMemoryBytes(): number {
+  const memoryUsage = process.memoryUsage();
+  return memoryUsage.heapUsed + memoryUsage.arrayBuffers;
 }
 
 function verifyStressSaveLoad(): BenchmarkReport['stressSaveLoad'] {

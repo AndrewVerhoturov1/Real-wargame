@@ -55,6 +55,7 @@ verifySpatialInvalidationAndCandidateBounds();
 verifyStressAndIdleFastPath();
 verifyReconciliationIsIdempotent();
 verifyHotPathSourceContract();
+verifyBenchmarkMeasurementContract();
 
 console.log('Infantry combat projectile runtime smoke passed: pooled SoA, V1 migration, canonical V2, physics parity, deterministic batching, reusable spatial scratch, exactly-once events, save/load and 2000-projectile stress.');
 
@@ -418,6 +419,14 @@ function verifyHotPathSourceContract(): void {
   assert.equal(source.includes('queryUnitsNearBallisticSegmentInto'), true);
   assert.equal(source.includes('traceBallisticRayPrepared'), true);
   assert.equal(source.includes('getMapObjectSpatialIndex'), true);
+}
+
+function verifyBenchmarkMeasurementContract(): void {
+  const source = readFileSync(path.join(process.cwd(), 'scripts/infantry_combat_projectile_benchmark.ts'), 'utf8');
+  assert.equal(source.includes('const MEMORY_COMPARISON_PROJECTILES = DIRECT_COMPARISON_PROJECTILES;'), true);
+  assert.equal(source.includes('const DIRECT_COMPARISON_CAPACITY = 256;'), true);
+  assert.equal(source.includes('createProjectileRuntimeState(DIRECT_COMPARISON_CAPACITY)'), true);
+  assert.equal(source.includes('memoryUsage.heapUsed + memoryUsage.arrayBuffers'), true);
 }
 
 function makeState(
