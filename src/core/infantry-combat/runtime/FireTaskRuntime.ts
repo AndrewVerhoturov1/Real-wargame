@@ -221,7 +221,6 @@ function tickStage5FireTask(
       return tickResult(task.taskId, false, true, task.phase === 'failed' || task.phase === 'denied', consumedSeconds, remainingSeconds, task.resultCode);
     }
 
-    // A tracking boundary at the exact end of the tick is still part of this tick.
     if (task.aimTracking.nextTrackingBoundarySeconds <= now + TIME_EPSILON_SECONDS) {
       updateAimTrackingAtBoundary(input.state, unit, task, weapon, task.aimTracking.nextTrackingBoundarySeconds);
       if (task.phase === 'aiming' && canCommitAtCurrentQuality(task)) {
@@ -277,7 +276,7 @@ function tickStage5FireTask(
     break;
   }
 
-  return tickResult(task.taskId, task.phase === 'firing', false, false, consumedSeconds, remainingSeconds, null);
+  return tickResult(task.taskId, false, false, false, consumedSeconds, remainingSeconds, null);
 }
 
 /** Compatibility clock for old isolated Stage 3 tests without SimulationState. */
@@ -339,7 +338,7 @@ function tickLegacyActionClock(unit: UnitModel, input: TickFireTaskInput): TickF
     }
     return tickResult(task.taskId, false, isTerminalPhase(task.phase), task.phase === 'failed' || task.phase === 'denied', consumedSeconds, remainingSeconds, task.resultCode);
   }
-  return tickResult(task.taskId, task.phase === 'firing', false, false, consumedSeconds, remainingSeconds, null);
+  return tickResult(task.taskId, false, false, false, consumedSeconds, remainingSeconds, null);
 }
 
 function validateTickPrerequisites(unit: UnitModel, input: TickFireTaskInput): TickFireTaskResult | null {
@@ -368,7 +367,9 @@ function validateTickPrerequisites(unit: UnitModel, input: TickFireTaskInput): T
 
 function calculateTimeToThreshold(task: FireTaskRuntimeV1, physicalRate: number): number {
   const solution = task.aimTracking.solution;
-  if (!solution.valid || solution.solutionQuality <= TIME_EPSILON_SECONDS || physicalRate <= TIME_EPSILON_SECONDS) return Number.POSITIVE_INFINITY;
+  if (!solution.valid || solution.solutionQuality <= TIME_EPSILON_SECONDS || physicalRate <= TIME_EPSILON_SECONDS) {
+    return Number.POSITIVE_INFINITY;
+  }
   const requiredPhysical = task.minimumSolutionQuality / solution.solutionQuality;
   if (requiredPhysical > 1 + TIME_EPSILON_SECONDS) return Number.POSITIVE_INFINITY;
   return Math.max(0, (requiredPhysical - solution.physicalAimQuality) / physicalRate);
@@ -390,7 +391,12 @@ export function cancelSingleFireTask(unit: UnitModel, input: CancelSingleFireTas
     };
   }
   if (task.ownerToken !== cleanText(input.ownerToken, '')) {
-    return { accepted: false, status: 'owner_mismatch', reasonCode: 'infantry_fire_task_owner_mismatch', reasonRu: 'Владелец не может отменить чужую огневую задачу.' };
+    return {
+      accepted: false,
+      status: 'owner_mismatch',
+      reasonCode: 'infantry_fire_task_owner_mismatch',
+      reasonRu: 'Владелец не может отменить чужую огневую задачу.',
+    };
   }
   if (!task.actionHandle) {
     terminalizeWithoutLease(unit, task, 'cancelled', input.endedSeconds, input.resultCode, input.resultRu);
@@ -402,7 +408,12 @@ export function cancelSingleFireTask(unit: UnitModel, input: CancelSingleFireTas
     resultRu: input.resultRu,
   });
   if (!finish.accepted) {
-    return { accepted: false, status: finish.status === 'stale_handle' ? 'stale_handle' : 'not_found', reasonCode: finish.reasonCode, reasonRu: finish.reasonRu };
+    return {
+      accepted: false,
+      status: finish.status === 'stale_handle' ? 'stale_handle' : 'not_found',
+      reasonCode: finish.reasonCode,
+      reasonRu: finish.reasonRu,
+    };
   }
   terminalizeWithoutLease(unit, task, 'cancelled', input.endedSeconds, finish.reasonCode, finish.reasonRu);
   return { accepted: true, status: 'cancelled', reasonCode: finish.reasonCode, reasonRu: finish.reasonRu };
@@ -508,11 +519,13 @@ export function normalizeFireTaskTerminalResult(value: unknown): FireTaskTermina
 export function fireTaskHasExactLease(unit: UnitModel, task: FireTaskRuntimeV1): boolean {
   if (!task.actionHandle) return false;
   const lease = getPhysicalActionLease(unit, task.actionHandle);
-  return Boolean(lease
-    && lease.actionType === FIRE_TASK_ACTION_TYPE
-    && lease.channels.length === 1
-    && lease.channels[0] === 'weapon'
-    && physicalActionHandlesEqual(lease.handle, task.actionHandle));
+  return Boolean(
+    lease
+      && lease.actionType === FIRE_TASK_ACTION_TYPE
+      && lease.channels.length === 1
+      && lease.channels[0] === 'weapon'
+      && physicalActionHandlesEqual(lease.handle, task.actionHandle),
+  );
 }
 
 function completeActiveFireTask(unit: UnitModel, endedSeconds: number): void {
@@ -596,7 +609,13 @@ function directionFromTarget(target: BallisticPoint3): { x: number; y: number; z
 }
 
 function normalizeActivePhase(value: unknown): FireTaskRuntimeV1['phase'] | null {
-  return value === 'accepted' || value === 'weapon_ready' || value === 'aiming' || value === 'firing' || value === 'recovery' ? value : null;
+  return value === 'accepted'
+    || value === 'weapon_ready'
+    || value === 'aiming'
+    || value === 'firing'
+    || value === 'recovery'
+    ? value
+    : null;
 }
 
 function isTerminalPhase(value: FireTaskPhase): boolean {
@@ -608,7 +627,10 @@ function isTerminalResultPhase(value: unknown): value is FireTaskTerminalResultV
 }
 
 function normalizePoint(value: unknown): BallisticPoint3 | null {
-  if (!isRecord(value) || !isFiniteNumber(value.xMetres) || !isFiniteNumber(value.yMetres) || !isFiniteNumber(value.zMetres)) return null;
+  if (!isRecord(value)
+    || !isFiniteNumber(value.xMetres)
+    || !isFiniteNumber(value.yMetres)
+    || !isFiniteNumber(value.zMetres)) return null;
   return { xMetres: value.xMetres, yMetres: value.yMetres, zMetres: value.zMetres };
 }
 
