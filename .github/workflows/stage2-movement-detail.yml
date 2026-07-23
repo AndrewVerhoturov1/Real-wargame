@@ -1,0 +1,79 @@
+name: Stage 2 Movement Detail
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+
+permissions:
+  contents: read
+
+jobs:
+  trace-movement-lifecycle:
+    if: github.event.pull_request.head.ref == 'feature/20260723-shooting-stage-02-physical-action-coordinator'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Add detailed lifecycle trace
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/physical_movement_runtime_smoke.ts')
+          source = path.read_text(encoding='utf-8')
+          replacements = [
+            ("function verifyWeaponPreparationLifecycle(): void {\n", "function verifyWeaponPreparationLifecycle(): void {\n  console.log('L00 enter lifecycle');\n"),
+            ("  assert.equal(requestFireAction(state, shooter, contactId), false, 'sprint must create pending preparation');", "  console.log('L01 before first request');\n  assert.equal(requestFireAction(state, shooter, contactId), false, 'sprint must create pending preparation');\n  console.log('L02 after first request');"),
+            ("  reconcilePendingFireIntent(state, shooter);", "  console.log('L03 before missing-target reconcile');\n  reconcilePendingFireIntent(state, shooter);\n  console.log('L04 after missing-target reconcile');", 1),
+            ("  assert.equal(cancelPendingFireIntent(shooter, contactId), true, 'explicit intent cancellation must clear pending preparation');", "  console.log('L05 before explicit cancellation');\n  assert.equal(cancelPendingFireIntent(shooter, contactId), true, 'explicit intent cancellation must clear pending preparation');\n  console.log('L06 after explicit cancellation');"),
+            ("  const stepAfterCancel = preparePhysicalMovementStep(state, shooter, 0.1, true, 1, 1);", "  console.log('L07 before movement resume');\n  const stepAfterCancel = preparePhysicalMovementStep(state, shooter, 0.1, true, 1, 1);\n  console.log('L08 after movement resume');"),
+            ("  const newerRequest = requestMovementWeaponPreparation(state, shooter, {", "  console.log('L09 before replacement request');\n  const newerRequest = requestMovementWeaponPreparation(state, shooter, {") ,
+            ("  assert.equal(newerRequest.allowed, false);", "  console.log('L10 after replacement request');\n  assert.equal(newerRequest.allowed, false);"),
+            ("  assert.equal(cancelMovementWeaponPreparation(shooter, {\n    ownerToken: newer.ownerToken,", "  console.log('L11 before exact replacement cancellation');\n  assert.equal(cancelMovementWeaponPreparation(shooter, {\n    ownerToken: newer.ownerToken,"),
+            ("  }), true, 'current preparation cleanup must release its exact coordinator lease');", "  }), true, 'current preparation cleanup must release its exact coordinator lease');\n  console.log('L12 after exact replacement cancellation');"),
+            ("  const unattended = getMovementWeaponPreparation(shooter);", "  console.log('L13 after unattended request');\n  const unattended = getMovementWeaponPreparation(shooter);"),
+            ("  const resumedWithoutRepeat = preparePhysicalMovementStep(", "  console.log('L14 before countdown completion');\n  const resumedWithoutRepeat = preparePhysicalMovementStep("),
+            ("  assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');", "  console.log('L15 after countdown completion');\n  assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');"),
+            ("  shooter.order = createMoveOrder({ x: 30.5, y: 2.5 }, { source: 'player' });", "  console.log('L16 before replacement order');\n  shooter.order = createMoveOrder({ x: 30.5, y: 2.5 }, { source: 'player' });"),
+            ("  reconcilePendingFireIntent(state, shooter);", "  reconcilePendingFireIntent(state, shooter);\n  console.log('L17 after replacement-order reconcile');", 1),
+          ]
+          for item in replacements:
+              old, new, *count = item
+              source = source.replace(old, new, count[0] if count else 1)
+          path.write_text(source, encoding='utf-8')
+          PY
+
+      - name: Capture physical movement lifecycle
+        id: movement
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=10s 90s npm run physical-movement:smoke 2>&1 | tee stage2-movement-detail.log
+
+      - name: Upload lifecycle log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage2-movement-detail-${{ github.event.pull_request.head.sha }}
+          path: stage2-movement-detail.log
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Preserve failure
+        if: steps.movement.outcome == 'failure'
+        run: exit 1
