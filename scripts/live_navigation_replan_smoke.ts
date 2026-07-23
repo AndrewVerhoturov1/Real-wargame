@@ -281,7 +281,7 @@ function installPlannedPlayerLinkedOrder(
     target,
     mover.playerCommand,
     1000,
-    'cautious',
+    'normal',
     profileId,
     finalFacingRadians,
   );
