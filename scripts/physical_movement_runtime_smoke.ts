@@ -287,32 +287,31 @@ function verifyWeaponPreparationLifecycle(): void {
   assert.ok(stepAfterCancel.maxDistanceCells > 0, 'cancelled fire intent must not block the existing movement order');
 
   assert.equal(requestFireAction(state, shooter, contactId), false);
-const stale = getMovementWeaponPreparation(shooter);
-assert.ok(stale);
-const newerRequest = requestMovementWeaponPreparation(state, shooter, {
-  contactId: 'newer-contact',
-  ownerToken: 'fire-intent:newer-contact',
-});
-assert.equal(newerRequest.allowed, false);
-const newer = getMovementWeaponPreparation(shooter);
-assert.ok(newer);
-assert.equal(newer.contactId, 'newer-contact');
-assert.equal(cancelMovementWeaponPreparation(shooter, { ownerToken: stale.ownerToken, revision: stale.revision }), false, 'stale cleanup must not cancel newer preparation');
-assert.equal(getMovementWeaponPreparation(shooter)?.contactId, 'newer-contact');
-assert.equal(cancelMovementWeaponPreparation(shooter, {
-  ownerToken: newer.ownerToken,
-  revision: newer.revision,
-  contactId: newer.contactId,
-}), true, 'current preparation cleanup must release its exact coordinator lease');
+  const stale = getMovementWeaponPreparation(shooter);
+  assert.ok(stale);
+  const newerRequest = requestMovementWeaponPreparation(state, shooter, {
+    contactId: 'newer-contact',
+    ownerToken: 'fire-intent:newer-contact',
+  });
+  assert.equal(newerRequest.allowed, false);
+  const newer = getMovementWeaponPreparation(shooter);
+  assert.ok(newer);
+  assert.equal(newer.contactId, 'newer-contact');
+  assert.equal(cancelMovementWeaponPreparation(shooter, { ownerToken: stale.ownerToken, revision: stale.revision }), false, 'stale cleanup must not cancel newer preparation');
+  assert.equal(getMovementWeaponPreparation(shooter)?.contactId, 'newer-contact');
+  assert.equal(cancelMovementWeaponPreparation(shooter, {
+    ownerToken: newer.ownerToken,
+    revision: newer.revision,
+    contactId: newer.contactId,
+  }), true, 'current preparation cleanup must release its exact coordinator lease');
   installIdentifiedContact(shooter, target, state.simulationTimeSeconds);
   assert.equal(requestFireAction(state, shooter, contactId), false);
   const unattended = getMovementWeaponPreparation(shooter);
   assert.ok(unattended);
-  const resumedWithoutRepeat = preparePhysicalMovementStep(
-    state, shooter, unattended.remainingSeconds + 0.2, true, 1, 1,
-  );
+  const positionBeforeUnattendedCompletion = { ...shooter.position };
+  tickSimulation(state, unattended.remainingSeconds + 0.2);
   assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');
-  assert.ok(resumedWithoutRepeat.maxDistanceCells > 0, 'movement must resume during time remaining after preparation completes');
+  assert.ok(shooter.position.x > positionBeforeUnattendedCompletion.x, 'movement must resume during time remaining after preparation completes');
 
   installIdentifiedContact(shooter, target, state.simulationTimeSeconds);
   assert.equal(requestFireAction(state, shooter, contactId), false);
