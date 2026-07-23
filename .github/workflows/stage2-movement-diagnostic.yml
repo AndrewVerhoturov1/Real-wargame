@@ -9,14 +9,22 @@ permissions:
   contents: read
 
 jobs:
-  diagnose-physical-movement:
+  compare-physical-movement:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: candidate
+            ref: ${{ github.event.pull_request.head.sha }}
+          - label: mandatory-base
+            ref: 3ba3ac78edd0998a8a199bba986a16dc39ffd8f0
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Checkout exact candidate
+      - name: Checkout candidate
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ matrix.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -33,14 +41,14 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          timeout --signal=TERM --kill-after=10s 90s npm run physical-movement:smoke 2>&1 | tee stage2-physical-movement.log
+          timeout --signal=TERM --kill-after=10s 90s npm run physical-movement:smoke 2>&1 | tee stage2-physical-movement-${{ matrix.label }}.log
 
       - name: Upload physical movement output
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: stage2-physical-movement-${{ github.event.pull_request.head.sha }}
-          path: stage2-physical-movement.log
+          name: stage2-physical-movement-${{ matrix.label }}-${{ github.event.pull_request.head.sha }}
+          path: stage2-physical-movement-${{ matrix.label }}.log
           if-no-files-found: error
           retention-days: 1
 
