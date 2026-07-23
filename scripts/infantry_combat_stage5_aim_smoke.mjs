@@ -14,21 +14,26 @@ run().catch((error) => {
 async function run() {
   await rm(outDir, { recursive: true, force: true });
   try {
-    await build({
-      root: repoRoot,
-      logLevel: 'warn',
-      clearScreen: false,
-      build: {
-        ssr: path.join(repoRoot, 'scripts', 'infantry_combat_stage5_aim_smoke.ts'),
-        outDir,
-        emptyOutDir: true,
-        minify: false,
-        sourcemap: false,
-        rollupOptions: { output: { entryFileNames: 'stage5-aim-smoke.mjs', format: 'es' } },
-      },
-    });
-    await import(`${pathToFileURL(path.join(outDir, 'stage5-aim-smoke.mjs')).href}?run=stage5`);
+    await runSmoke('infantry_combat_stage5_aim_smoke.ts', 'stage5-aim-smoke.mjs');
+    await runSmoke('infantry_combat_stage5_tracking_stress_smoke.ts', 'stage5-tracking-stress-smoke.mjs');
   } finally {
     await rm(outDir, { recursive: true, force: true });
   }
+}
+
+async function runSmoke(sourceName, outputName) {
+  await build({
+    root: repoRoot,
+    logLevel: 'warn',
+    clearScreen: false,
+    build: {
+      ssr: path.join(repoRoot, 'scripts', sourceName),
+      outDir,
+      emptyOutDir: false,
+      minify: false,
+      sourcemap: false,
+      rollupOptions: { output: { entryFileNames: outputName, format: 'es' } },
+    },
+  });
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5`);
 }
