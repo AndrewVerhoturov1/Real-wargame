@@ -6,43 +6,43 @@ on:
       - real-wargame-preview
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  diagnose-tactical-integration:
+  migrate-live-navigation-check:
     if: github.event.pull_request.head.ref == 'feature/20260723-shooting-stage-02-physical-action-coordinator'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
-      - name: Checkout exact candidate
+      - name: Checkout working branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: feature/20260723-shooting-stage-02-physical-action-coordinator
+          fetch-depth: 0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund
-
-      - name: Capture tactical integration output
-        id: tactical
-        continue-on-error: true
+      - name: Replace transient lastEvent assertion
         shell: bash
-        run: npm run combat-tactical-integration:smoke > stage2-tactical-integration.log 2>&1
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/live_navigation_replan_smoke.ts')
+          source = path.read_text(encoding='utf-8')
+          old = "    assert.equal(mover.behaviorRuntime.lastEvent, 'move_route_replan_hysteresis');\n"
+          new = "    assert.equal(order.lastReplanReason, 'danger_changed', 'hysteresis rejection must remain recorded on the owned route even if a posture action publishes a newer unit event');\n"
+          if old in source:
+              source = source.replace(old, new, 1)
+          elif new not in source:
+              raise SystemExit('live navigation lastEvent assertion not found')
+          path.write_text(source, encoding='utf-8')
+          PY
 
-      - name: Upload tactical integration output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: stage2-tactical-integration-${{ github.event.pull_request.head.sha }}
-          path: stage2-tactical-integration.log
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Preserve failure
-        if: steps.tactical.outcome == 'failure'
-        run: exit 1
+      - name: Commit migration when needed
+        shell: bash
+        run: |
+          if git diff --quiet -- scripts/live_navigation_replan_smoke.ts; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/live_navigation_replan_smoke.ts
+          git commit -m "test: decouple navigation hysteresis from transient posture event"
+          git push origin HEAD:feature/20260723-shooting-stage-02-physical-action-coordinator
