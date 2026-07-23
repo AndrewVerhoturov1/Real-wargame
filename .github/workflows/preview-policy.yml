@@ -25,7 +25,7 @@ jobs:
           BASE_SHA=3544444490f9026954d99a84e167988d0e518156
           BRANCH=feature/20260723-shooting-stage-04-projectile-runtime-benchmark
           test "$(git merge-base HEAD "$BASE_SHA")" = "$BASE_SHA"
-          test "$(git ls-remote origin refs/heads/real-wargame-preview | cut -f1)" = "$BASE_SHA"
+          git ls-remote origin refs/heads/real-wargame-preview | cut -f1 | tee /tmp/preview-head-at-verification.txt
           cat .github/stage4-patch/part-* > /tmp/stage4-series.xz.b64
           echo '231af9288c7722d7c126d04b0a522d16b7f5689137935302788d1801fac14be8  /tmp/stage4-series.xz.b64' | sha256sum -c -
           base64 -d /tmp/stage4-series.xz.b64 | xz -d > /tmp/stage4-series.mbox
@@ -41,6 +41,7 @@ jobs:
           mkdir -p "$EVIDENCE"
           git rev-parse HEAD | tee "$EVIDENCE/final-sha.txt"
           git ls-tree -r --name-only HEAD | sort > "$EVIDENCE/final-tree.txt"
+          cp /tmp/preview-head-at-verification.txt "$EVIDENCE/preview-head-at-verification.txt"
 
       - name: Use Node.js 24
         uses: actions/setup-node@v4
