@@ -17,6 +17,7 @@ verifyEmptyLegacyRuntime();
 verifyExactRifleEquipAndIndependentSnapshot();
 verifyDraftLoadoutRejected();
 verifyRuntimeRoundTrip();
+verifyCorruptedResolvedSnapshotRejected();
 
 console.log('Infantry combat Stage 3 smoke passed: empty runtime, exact rifle equip, immutable snapshots, draft rejection and unit runtime round-trip.');
 
@@ -93,6 +94,20 @@ function verifyRuntimeRoundTrip(): void {
   assert.notEqual(restored, unit.infantryCombatRuntime);
   assert.notEqual(restored.primaryWeapon, unit.infantryCombatRuntime.primaryWeapon);
   assert.equal(Object.isFrozen(restored.primaryWeapon!.resolved.weapon), true);
+}
+
+
+function verifyCorruptedResolvedSnapshotRejected(): void {
+  const unit = makeUnit('corrupted-snapshot');
+  assert.equal(equipPrimaryWeaponFromLoadout(
+    unit,
+    createDefaultCombatCatalogRegistry(),
+    ref('loadout_rifleman', 1),
+  ).ok, true);
+  const serialized = structuredClone(serializeInfantryCombatUnitRuntime(unit.infantryCombatRuntime));
+  serialized.primaryWeapon!.resolved.weapon.readySeconds = -1;
+  const restored = normalizeInfantryCombatUnitRuntime(serialized);
+  assert.equal(restored.primaryWeapon, null, 'invalid resolved catalog snapshot must not enter runtime');
 }
 
 function makeUnit(id: string): UnitModel {

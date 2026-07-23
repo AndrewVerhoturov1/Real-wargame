@@ -1,5 +1,6 @@
 import type { UnitModel } from '../../units/UnitModel';
 import type { CombatCatalogRegistry } from '../catalogs/CombatCatalogRegistry';
+import { validateCombatCatalogBundle } from '../catalogs/CombatCatalogValidation';
 import type {
   AmmoDefinitionV1,
   DefinitionRef,
@@ -118,7 +119,16 @@ function normalizeResolvedSnapshot(value: unknown): ResolvedWeaponSnapshotV1 | n
   if (!refsEqual(value.weaponDefinitionRef, refForWeapon(value.weapon))) return null;
   if (!refsEqual(value.ammoDefinitionRef, refForAmmo(value.ammo))) return null;
   if (!refsEqual(value.weapon.ammo, value.ammoDefinitionRef)) return null;
-  return freezeResolvedSnapshot(structuredClone(value as unknown as ResolvedWeaponSnapshotV1));
+  const snapshot = structuredClone(value as unknown as ResolvedWeaponSnapshotV1);
+  const validation = validateCombatCatalogBundle({
+    formatVersion: 1,
+    revision: 1,
+    ammoDefinitions: [structuredClone(snapshot.ammo)],
+    weaponDefinitions: [structuredClone(snapshot.weapon)],
+    loadoutTemplates: [],
+  });
+  if (!validation.valid) return null;
+  return freezeResolvedSnapshot(snapshot);
 }
 
 function freezeResolvedSnapshot(value: ResolvedWeaponSnapshotV1): ResolvedWeaponSnapshotV1 {
