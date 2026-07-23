@@ -1,6 +1,11 @@
 name: Stage 3 Apply And Verify
 
 on:
+  push:
+    branches:
+      - feature/20260723-shooting-stage-03-single-rifle-shot
+    paths:
+      - '.github/workflows/stage3-source-snapshot.yml'
   pull_request:
     branches:
       - real-wargame-preview
@@ -12,14 +17,14 @@ permissions:
 
 jobs:
   apply-and-verify:
-    if: github.head_ref == 'feature/20260723-shooting-stage-03-single-rifle-shot'
+    if: github.ref == 'refs/heads/feature/20260723-shooting-stage-03-single-rifle-shot' || github.head_ref == 'feature/20260723-shooting-stage-03-single-rifle-shot'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - name: Checkout exact transfer head
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Verify exact Stage 3 ancestry
