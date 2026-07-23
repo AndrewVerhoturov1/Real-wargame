@@ -1,0 +1,39 @@
+name: Stage 3 Source Snapshot
+
+on:
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - '.github/workflows/stage3-source-snapshot.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    if: github.head_ref == 'feature/20260723-shooting-stage-03-single-rifle-shot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Verify exact Stage 3 base ancestry
+        shell: bash
+        run: |
+          test "$(git merge-base HEAD fa4c75a9cdec8fc2a2a7eaabad8cda1ce3258978)" = "fa4c75a9cdec8fc2a2a7eaabad8cda1ce3258978"
+
+      - name: Pack source tree
+        shell: bash
+        run: tar --exclude=.git -czf /tmp/real-wargame-stage3-source.tgz .
+
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-wargame-stage3-source
+          path: /tmp/real-wargame-stage3-source.tgz
+          if-no-files-found: error
+          retention-days: 1
