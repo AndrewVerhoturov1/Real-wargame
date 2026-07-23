@@ -137,7 +137,7 @@ npm run build
 
 Run documentation checks when documentation changes.
 
-Do not run broad matrices, Chromium, Playwright, GitHub Actions or unjustified performance checks without separate approval.
+GitHub Actions may be run without separate approval when they are relevant to the current task and use existing repository workflows. Separate approval is still required to create or modify workflows, create temporary CI branches, run Chromium or Playwright, or run broad or unjustified performance matrices.
 
 ## 9. Readiness without deployment
 
