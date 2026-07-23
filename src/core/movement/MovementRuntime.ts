@@ -172,6 +172,8 @@ export function cancelMovementWeaponPreparation(
   if (expected?.revision !== undefined && current.revision !== expected.revision) return false;
   if (expected?.contactId !== undefined && current.contactId !== expected.contactId) return false;
 
+  const shouldResumeOriginalOrder = Boolean(unit.order)
+    && current.orderIssuedAtMs === unit.order?.issuedAtMs;
   const lease = current.actionHandle ? getPhysicalActionLease(unit, current.actionHandle) : null;
   if (current.actionHandle && lease) {
     cancelPhysicalAction(unit, current.actionHandle, {
@@ -183,7 +185,7 @@ export function cancelMovementWeaponPreparation(
     setPhysicalActionCoordinatorDiagnostic(unit, 'movement_weapon_preparation_lease_lost', 'Подготовка оружия удалена без соответствующего захвата каналов.');
   }
   unit.movementRuntime.weaponPreparation = null;
-  unit.movementRuntime.isMoving = false;
+  unit.movementRuntime.isMoving = shouldResumeOriginalOrder;
   unit.movementRuntime.velocityCellsPerSecond = { x: 0, y: 0 };
   return true;
 }
