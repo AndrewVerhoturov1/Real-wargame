@@ -26,6 +26,7 @@ jobs:
           from pathlib import Path
           path = Path('scripts/physical_movement_runtime_smoke.ts')
           source = path.read_text(encoding='utf-8')
+
           old_import = "  preparePhysicalMovementStep,\n  setMovementProfileRequest,"
           new_import = "  preparePhysicalMovementStep,\n  requestMovementWeaponPreparation,\n  setMovementProfileRequest,"
           if old_import in source:
@@ -33,23 +34,12 @@ jobs:
           elif '  requestMovementWeaponPreparation,\n' not in source:
               raise SystemExit('movement import marker not found')
 
-          old = """  assert.equal(requestFireAction(state, shooter, contactId), false);
-          const stale = getMovementWeaponPreparation(shooter);
-          assert.ok(stale);
-          shooter.movementRuntime.weaponPreparationRevision += 1;
-          shooter.movementRuntime.weaponPreparation = {
-            ownerToken: 'fire-intent:newer-contact',
-            contactId: 'newer-contact',
-            orderIssuedAtMs: shooter.order?.issuedAtMs ?? null,
-            remainingSeconds: 1,
-            revision: shooter.movementRuntime.weaponPreparationRevision,
-          };
-          assert.equal(cancelMovementWeaponPreparation(shooter, { ownerToken: stale.ownerToken, revision: stale.revision }), false, 'stale cleanup must not cancel newer preparation');
-          assert.equal(getMovementWeaponPreparation(shooter)?.contactId, 'newer-contact');
-
-          shooter.movementRuntime.weaponPreparation = null;
-          """
-          new = """  assert.equal(requestFireAction(state, shooter, contactId), false);
+          if 'const newerRequest = requestMovementWeaponPreparation' not in source:
+              start_marker = "  assert.equal(requestFireAction(state, shooter, contactId), false);\n  const stale = getMovementWeaponPreparation(shooter);"
+              end_marker = "  installIdentifiedContact(shooter, target, state.simulationTimeSeconds);\n  assert.equal(requestFireAction(state, shooter, contactId), false);\n  const unattended"
+              start = source.index(start_marker)
+              end = source.index(end_marker, start)
+              replacement = """  assert.equal(requestFireAction(state, shooter, contactId), false);
           const stale = getMovementWeaponPreparation(shooter);
           assert.ok(stale);
           const newerRequest = requestMovementWeaponPreparation(state, shooter, {
@@ -68,10 +58,8 @@ jobs:
             contactId: newer.contactId,
           }), true, 'current preparation cleanup must release its exact coordinator lease');
           """
-          if old in source:
-              source = source.replace(old, new, 1)
-          elif 'const newerRequest = requestMovementWeaponPreparation' not in source:
-              raise SystemExit('stale preparation fixture not found')
+              source = source[:start] + replacement + source[end:]
+
           path.write_text(source, encoding='utf-8')
           PY
 
