@@ -1,5 +1,9 @@
 import type { SimulationState } from '../../simulation/SimulationState';
-import type { FireTaskRuntimeV1, InfantryCombatUnitRuntimeV1 } from './InfantryCombatRuntimeTypes';
+import type {
+  AimFactorBreakdownV1,
+  FireTaskRuntimeV1,
+  InfantryCombatUnitRuntimeV1,
+} from './InfantryCombatRuntimeTypes';
 import {
   MAX_STAGE3_ACTIVE_PROJECTILES,
   MAX_STAGE3_APPLIED_IMPACT_IDS,
@@ -72,6 +76,12 @@ export interface InfantryCombatUnitDiagnosticsV1 {
     readonly roundsInWeapon: number;
     readonly shotSequence: number;
     readonly lastCommittedShotId: string | null;
+    readonly shootingSkill: number;
+    readonly proficiency: string;
+    readonly recoilPitchRadians: number;
+    readonly recoilYawRadians: number;
+    readonly recoilLastUpdatedSeconds: number;
+    readonly recoilSequence: number;
   };
   readonly fireTask: null | {
     readonly taskId: string;
@@ -79,7 +89,24 @@ export interface InfantryCombatUnitDiagnosticsV1 {
     readonly ownerToken: string;
     readonly actionId: string | null;
     readonly target: FireTaskRuntimeV1['target'];
+    readonly trackingUpdateCount: number;
+    readonly trackingIntervalSeconds: number;
+    readonly lastTrackingBoundarySeconds: number | null;
+    readonly nextTrackingBoundarySeconds: number;
+    readonly perceivedPosition: FireTaskRuntimeV1['aimTracking']['solution']['perceivedPosition'];
+    readonly estimatedPerceivedVelocityMetresPerSecond: FireTaskRuntimeV1['aimTracking']['solution']['estimatedVelocityMetresPerSecond'];
+    readonly contactAgeSeconds: number;
+    readonly uncertaintyCells: number;
+    readonly predictedAimPoint: FireTaskRuntimeV1['aimTracking']['solution']['predictedAimPoint'];
+    readonly currentDirection: FireTaskRuntimeV1['aimTracking']['solution']['currentDirection'];
+    readonly desiredDirection: FireTaskRuntimeV1['aimTracking']['solution']['desiredDirection'];
+    readonly physicalAimQuality: number;
     readonly aimQuality: number;
+    readonly solutionQuality: number;
+    readonly predictedHitProbability: number;
+    readonly effectiveDispersionRadians: number;
+    readonly factors: AimFactorBreakdownV1;
+    readonly invalidReason: FireTaskRuntimeV1['aimTracking']['solution']['invalidReason'];
     readonly readyRemainingSeconds: number;
     readonly recoveryRemainingSeconds: number;
     readonly committedShotId: string | null;
@@ -89,10 +116,7 @@ export interface InfantryCombatUnitDiagnosticsV1 {
   readonly lastShotCommit: InfantryCombatUnitRuntimeV1['lastShotCommit'];
 }
 
-/**
- * Returns a compact read-only projection for tests, adapters and future UI.
- * Resolved catalog snapshots and active projectile bodies stay outside this view.
- */
+/** Returns a cloned, read-only projection. It never advances tracking or recoil. */
 export function getInfantryCombatDiagnostics(state: SimulationState): InfantryCombatDiagnosticsV1 {
   const runtime = state.infantryCombatProjectiles;
   const projectileDiagnostics = getProjectileRuntimeDiagnostics(runtime);
@@ -160,6 +184,12 @@ export function getInfantryCombatDiagnostics(state: SimulationState): InfantryCo
                 roundsInWeapon: weapon.roundsInWeapon,
                 shotSequence: weapon.shotSequence,
                 lastCommittedShotId: weapon.lastCommittedShotId,
+                shootingSkill: weapon.operatorProfile.shootingSkill,
+                proficiency: weapon.operatorProfile.proficiencyByWeaponClass[weapon.resolved.weapon.weaponClass],
+                recoilPitchRadians: weapon.recoil.pitchOffsetRadians,
+                recoilYawRadians: weapon.recoil.yawOffsetRadians,
+                recoilLastUpdatedSeconds: weapon.recoil.lastUpdatedSeconds,
+                recoilSequence: weapon.recoil.sequence,
               }
             : null,
           fireTask: task ? taskDiagnostics(task) : null,
@@ -172,13 +202,31 @@ export function getInfantryCombatDiagnostics(state: SimulationState): InfantryCo
 }
 
 function taskDiagnostics(task: FireTaskRuntimeV1): NonNullable<InfantryCombatUnitDiagnosticsV1['fireTask']> {
+  const solution = task.aimTracking.solution;
   return {
     taskId: task.taskId,
     phase: task.phase,
     ownerToken: task.ownerToken,
     actionId: task.actionHandle?.actionId ?? null,
     target: structuredClone(task.target),
-    aimQuality: task.aimQuality,
+    trackingUpdateCount: task.aimTracking.trackingUpdateCount,
+    trackingIntervalSeconds: task.aimTracking.trackingIntervalSeconds,
+    lastTrackingBoundarySeconds: task.aimTracking.lastTrackingBoundarySeconds,
+    nextTrackingBoundarySeconds: task.aimTracking.nextTrackingBoundarySeconds,
+    perceivedPosition: solution.perceivedPosition ? structuredClone(solution.perceivedPosition) : null,
+    estimatedPerceivedVelocityMetresPerSecond: structuredClone(solution.estimatedVelocityMetresPerSecond),
+    contactAgeSeconds: solution.contactAgeSeconds,
+    uncertaintyCells: solution.uncertaintyCells,
+    predictedAimPoint: solution.predictedAimPoint ? structuredClone(solution.predictedAimPoint) : null,
+    currentDirection: structuredClone(solution.currentDirection),
+    desiredDirection: structuredClone(solution.desiredDirection),
+    physicalAimQuality: solution.physicalAimQuality,
+    aimQuality: solution.usableAimQuality,
+    solutionQuality: solution.solutionQuality,
+    predictedHitProbability: solution.predictedHitProbability,
+    effectiveDispersionRadians: solution.effectiveDispersionRadians,
+    factors: structuredClone(solution.factors),
+    invalidReason: solution.invalidReason,
     readyRemainingSeconds: task.readyRemainingSeconds,
     recoveryRemainingSeconds: task.recoveryRemainingSeconds,
     committedShotId: task.committedShotId,
