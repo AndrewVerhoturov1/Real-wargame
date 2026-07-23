@@ -1,3 +1,4 @@
+import './physical_action_coordinator_smoke.mjs';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
