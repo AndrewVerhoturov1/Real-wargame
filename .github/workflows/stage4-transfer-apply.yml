@@ -1,0 +1,58 @@
+name: Stage 4 Authorized Transfer
+
+on:
+  push:
+    branches:
+      - feature/20260723-shooting-stage-04-projectile-runtime-benchmark
+
+permissions:
+  contents: write
+
+jobs:
+  apply-stage4:
+    if: contains(github.event.head_commit.message, 'activate authorized Stage 4 transfer')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify base and payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='3544444490f9026954d99a84e167988d0e518156'
+          actual_base="$(git merge-base HEAD "$base")"
+          test "$actual_base" = "$base"
+          cat .github/stage4-transfer-final/part-* > /tmp/stage4-series.b64
+          printf '%s  %s\n' '39a74fb5d65815a6069fecbf6cade77a7990df9efe92a93ecacd6b63c9b7fcba' /tmp/stage4-series.b64 | sha256sum --check
+          base64 -d /tmp/stage4-series.b64 | gzip -d > /tmp/stage4-series.mbox
+          printf '%s  %s\n' '62cfe7e2be2eae42549523f4ddea7b4404da6214f528e4e9db588f0bd3acf751' /tmp/stage4-series.mbox | sha256sum --check
+
+      - name: Apply verified Stage 4 commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'OpenAI Web Chat'
+          git config user.email 'openai-web-chat@users.noreply.github.com'
+          git am --3way /tmp/stage4-series.mbox
+
+      - name: Remove transfer harness and publish verified history
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in \
+            .github/stage4-transfer-final \
+            .github/stage4-transfer-20260724 \
+            .github/stage4-patch \
+            .github/workflows/stage4-transfer-apply.yml
+          do
+            if test -e "$path"; then
+              git rm -r "$path"
+            fi
+          done
+          git commit -m 'chore: remove temporary Stage 4 transfer harness'
+          git diff --check 3544444490f9026954d99a84e167988d0e518156...HEAD
+          test "$(git merge-base HEAD 3544444490f9026954d99a84e167988d0e518156)" = '3544444490f9026954d99a84e167988d0e518156'
+          git push origin HEAD:refs/heads/feature/20260723-shooting-stage-04-projectile-runtime-benchmark
