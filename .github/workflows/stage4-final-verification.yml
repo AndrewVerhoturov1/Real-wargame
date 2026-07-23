@@ -1,0 +1,162 @@
+name: Stage 4 Final Verification 0E86
+
+on:
+  push:
+    branches:
+      - ci/verify-shooting-stage-04-0e86c754
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout exact product commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="$(git rev-parse HEAD^)"
+          test "$target" = '0e86c754dfa76f9f8d7dca7dc01514415b6413de'
+          git checkout --detach "$target"
+          test "$(git merge-base HEAD 3544444490f9026954d99a84e167988d0e518156)" = '3544444490f9026954d99a84e167988d0e518156'
+          mkdir -p /tmp/stage4-evidence
+          git rev-parse HEAD > /tmp/stage4-evidence/final-sha.txt
+          git log --reverse --format='%H %s' 3544444490f9026954d99a84e167988d0e518156..HEAD > /tmp/stage4-evidence/commits.txt
+          git diff --stat 3544444490f9026954d99a84e167988d0e518156...HEAD > /tmp/stage4-evidence/diff-stat.txt
+
+      - name: Verify Stage 4 scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only 3544444490f9026954d99a84e167988d0e518156...HEAD | sort > /tmp/actual.txt
+          cat > /tmp/expected.txt <<'EOF'
+          docs/performance/PROJECTILE_RUNTIME_STAGE4_CAPS.md
+          package.json
+          scripts/infantry_combat_commit_smoke.ts
+          scripts/infantry_combat_projectile_benchmark.mjs
+          scripts/infantry_combat_projectile_benchmark.ts
+          scripts/infantry_combat_projectile_reference_harness.ts
+          scripts/infantry_combat_projectile_runtime_smoke.mjs
+          scripts/infantry_combat_projectile_runtime_smoke.ts
+          scripts/map_object_spatial_index_smoke.ts
+          src/core/combat/BallisticTrace.ts
+          src/core/combat/CombatUnitSpatialIndex.ts
+          src/core/infantry-combat/runtime/InfantryCombatDiagnostics.ts
+          src/core/infantry-combat/runtime/InfantryCombatRuntimeTypes.ts
+          src/core/infantry-combat/runtime/InfantryCombatSimulation.ts
+          src/core/infantry-combat/runtime/InfantryCombatUnitRuntime.ts
+          src/core/infantry-combat/runtime/ProjectileRuntime.ts
+          src/core/infantry-combat/runtime/ProjectileRuntimeTypes.ts
+          src/core/infantry-combat/runtime/ProjectileStepper.ts
+          src/core/infantry-combat/runtime/ReferenceProjectileRuntime.ts
+          src/core/infantry-combat/runtime/ReferenceProjectileStepper.ts
+          src/core/infantry-combat/runtime/ShotCommitService.ts
+          src/core/infantry-combat/runtime/index.ts
+          src/core/simulation/SimulationStateLegacy.ts
+          src/core/spatial/MapObjectSpatialIndex.ts
+          src/ui/SceneExport.ts
+          EOF
+          sed -i 's/^          //' /tmp/expected.txt
+          diff -u /tmp/expected.txt /tmp/actual.txt
+          cp /tmp/actual.txt /tmp/stage4-evidence/changed-paths.txt
+          git diff --check 3544444490f9026954d99a84e167988d0e518156...HEAD
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Required matrix
+        shell: bash
+        run: |
+          set +e
+          log=/tmp/stage4-evidence/matrix.log
+          : > "$log"
+          failures=0
+          passed=0
+          check() {
+            name="$1"; shift
+            printf '\n===== %s =====\n' "$name" | tee -a "$log"
+            "$@" 2>&1 | tee -a "$log"
+            code=${PIPESTATUS[0]}
+            printf 'EXIT:%s\n' "$code" | tee -a "$log"
+            if [ "$code" -eq 0 ]; then passed=$((passed+1)); else failures=$((failures+1)); fi
+          }
+          check combat-catalogs npm run combat-catalogs:smoke
+          check combat-catalog-storage npm run combat-catalog-storage:smoke
+          check combat-catalog-editor npm run combat-catalog-editor:smoke
+          check physical-action-coordinator npm run physical-action-coordinator:smoke
+          check posture-transition npm run posture-transition:smoke
+          check physical-movement npm run physical-movement:smoke
+          check infantry-combat-single-shot npm run infantry-combat-single-shot:smoke
+          check infantry-combat-projectile npm run infantry-combat-projectile:smoke
+          check combat-foundation npm run combat-foundation:smoke
+          check combat-tactical-integration npm run combat-tactical-integration:smoke
+          check tactical-action-ports npm run tactical-action-ports:smoke
+          check spatial-index npm run spatial-index:smoke
+          check typecheck npm run typecheck
+          check build npm run build
+          check projectile-wrapper node --check scripts/infantry_combat_projectile_runtime_smoke.mjs
+          check benchmark-wrapper node --check scripts/infantry_combat_projectile_benchmark.mjs
+
+          printf '\n===== performance-contract-known-baseline =====\n' | tee -a "$log"
+          rm -rf /tmp/stage4-base
+          git worktree add --detach /tmp/stage4-base 3544444490f9026954d99a84e167988d0e518156 >/dev/null
+          (cd /tmp/stage4-base && node scripts/performance_principles_contract_smoke.mjs) > /tmp/base-perf.log 2>&1
+          base_code=$?
+          npm run performance-contract:smoke > /tmp/final-perf.log 2>&1
+          final_code=$?
+          cat /tmp/base-perf.log /tmp/final-perf.log | tee -a "$log"
+          expected="scripts/check_agent_docs.mjs must include mandatory performance contract fragment: import './performance_principles_contract_smoke.mjs';"
+          if [ "$base_code" -eq 1 ] && [ "$final_code" -eq 1 ] && grep -Fq "$expected" /tmp/base-perf.log && grep -Fq "$expected" /tmp/final-perf.log; then
+            passed=$((passed+1)); echo 'KNOWN_BASELINE_CONFIRMED:yes' | tee -a "$log"
+          else
+            failures=$((failures+1)); echo 'KNOWN_BASELINE_CONFIRMED:no' | tee -a "$log"
+          fi
+          cp /tmp/base-perf.log /tmp/stage4-evidence/performance-base.log
+          cp /tmp/final-perf.log /tmp/stage4-evidence/performance-final.log
+          git worktree remove --force /tmp/stage4-base >/dev/null
+
+          printf '\n===== nondeterminism =====\n' | tee -a "$log"
+          git grep -n -E 'Date\.now|performance\.now|new Date|Math\.random|randomUUID' HEAD -- \
+            src/core/infantry-combat/runtime \
+            src/core/combat/CombatUnitSpatialIndex.ts \
+            src/core/spatial/MapObjectSpatialIndex.ts \
+            src/core/combat/BallisticTrace.ts \
+            scripts/infantry_combat_projectile_runtime_smoke.ts > /tmp/nondeterminism.log 2>&1
+          grep_code=$?
+          cat /tmp/nondeterminism.log | tee -a "$log"
+          printf 'EXIT:%s\n' "$grep_code" | tee -a "$log"
+          if [ "$grep_code" -eq 1 ]; then passed=$((passed+1)); else failures=$((failures+1)); fi
+          cp /tmp/nondeterminism.log /tmp/stage4-evidence/nondeterminism.log
+
+          status="$(git status --short)"
+          if [ -z "$status" ]; then passed=$((passed+1)); else failures=$((failures+1)); printf '%s\n' "$status" | tee -a "$log"; fi
+          printf '{"nodeVersion":"%s","finalSha":"%s","passed":%s,"failed":%s,"performanceBaseExit":%s,"performanceFinalExit":%s,"nondeterminismExit":%s}\n' \
+            "$(node --version)" "$(git rev-parse HEAD)" "$passed" "$failures" "$base_code" "$final_code" "$grep_code" > /tmp/stage4-evidence/matrix-summary.json
+          printf '\nMATRIX_PASSED:%s\nMATRIX_FAILURES:%s\n' "$passed" "$failures" | tee -a "$log"
+          exit "$failures"
+
+      - name: Full benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --expose-gc scripts/infantry_combat_projectile_benchmark.mjs 2>&1 | tee /tmp/stage4-evidence/benchmark.log
+          awk '/BEGIN_PROJECTILE_BENCHMARK_JSON/{capture=1;next}/END_PROJECTILE_BENCHMARK_JSON/{capture=0}capture' /tmp/stage4-evidence/benchmark.log > /tmp/stage4-evidence/benchmark.json
+          node -e "const fs=require('fs');const r=JSON.parse(fs.readFileSync('/tmp/stage4-evidence/benchmark.json','utf8'));if(!r.pass)process.exit(1)"
+          test -z "$(git status --short)"
+          cp docs/performance/PROJECTILE_RUNTIME_STAGE4_CAPS.md /tmp/stage4-evidence/caps.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stage4-final-0e86c754
+          path: /tmp/stage4-evidence
+          if-no-files-found: error
+          retention-days: 7
