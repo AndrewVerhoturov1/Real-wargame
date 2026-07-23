@@ -20,7 +20,7 @@ import {
 
 verifyLegacySceneGetsEmptyRuntime();
 verifyAllCriticalCheckpointsRoundTripExactly();
-verifyMissingCommittedProjectileIsRestoredOnce();
+verifyMissingCommittedProjectileFailsWithoutRecreation();
 verifyRepeatedReconciliationIsIdempotent();
 verifyOrphanProjectileIsRemovedDeterministically();
 
@@ -72,17 +72,21 @@ function verifyAllCriticalCheckpointsRoundTripExactly(): void {
   }
 }
 
-function verifyMissingCommittedProjectileIsRestoredOnce(): void {
+function verifyMissingCommittedProjectileFailsWithoutRecreation(): void {
   const original = readyScenario('save-missing-projectile');
   advance(original.state, 1.7);
   const exported = buildExportedScene(original.state);
   exported.infantryCombatRuntime.activeProjectiles = [];
   const loaded = restoreExport(exported);
   assert.equal(loaded.infantryCombatProjectiles.committedShots.length, 1);
-  assert.equal(loaded.infantryCombatProjectiles.activeProjectiles.length, 1);
-  assert.equal(loaded.infantryCombatProjectiles.activeProjectiles[0]?.shotId, 'save-missing-projectile:shot:1');
+  assert.equal(loaded.infantryCombatProjectiles.activeProjectiles.length, 0);
+  assert.equal(loaded.units[0]?.infantryCombatRuntime.primaryWeapon?.roundsInWeapon, 4);
+  assert.equal(loaded.units[0]?.infantryCombatRuntime.activeFireTask, null);
+  assert.equal(loaded.units[0]?.infantryCombatRuntime.lastFireResult?.phase, 'failed');
+  assert.equal(loaded.units[0]?.infantryCombatRuntime.lastFireResult?.resultCode, 'infantry_fire_task_reconciliation_missing_projectile');
+  const before = stage3Snapshot(loaded);
   reconcileInfantryCombatRuntimeAfterLoad(loaded);
-  assert.equal(loaded.infantryCombatProjectiles.activeProjectiles.length, 1);
+  assert.deepEqual(stage3Snapshot(loaded), before);
 }
 
 function verifyRepeatedReconciliationIsIdempotent(): void {

@@ -7,7 +7,6 @@ import {
   MAX_STAGE3_COMMIT_LEDGER_ENTRIES,
   MAX_STAGE3_IMPACT_ENTRIES,
   MAX_STAGE3_TERMINATION_ENTRIES,
-  PROJECTILE_STATE_SCHEMA_VERSION,
   PROJECTILE_TERMINATION_SCHEMA_VERSION,
   SHOT_COMMIT_RECORD_SCHEMA_VERSION,
   type ProjectileStateV1,
@@ -92,28 +91,12 @@ function reconcileCommittedTask(state: SimulationState, unit: UnitModel): void {
   const hasOutcome = hasRecordedOutcome(runtime, shotId);
   const hasActiveProjectile = runtime.activeProjectiles.some((projectile) => projectile.shotId === shotId);
   if (!hasOutcome && !hasActiveProjectile) {
-    const weapon = unit.infantryCombatRuntime.primaryWeapon;
-    if (!weapon || weapon.weaponInstanceId !== record.weaponInstanceId) {
-      failActiveFireTask(unit, {
-        endedSeconds: state.simulationTimeSeconds,
-        resultCode: 'infantry_fire_task_reconciliation_weapon_missing',
-        resultRu: 'Огневая задача не восстановлена: точный экземпляр винтовки отсутствует.',
-      });
-      return;
-    }
-    runtime.activeProjectiles.push({
-      schemaVersion: PROJECTILE_STATE_SCHEMA_VERSION,
-      projectileId: `${shotId}:projectile`,
-      shotId,
-      shooterId: record.shooterId,
-      ammoSnapshot: structuredClone(weapon.resolved.ammo),
-      position: structuredClone(record.muzzlePosition),
-      velocityMetresPerSecond: structuredClone(record.initialVelocityMetresPerSecond),
-      ageSeconds: 0,
-      maximumLifetimeSeconds: weapon.resolved.ammo.maximumLifetimeSeconds,
-      bodyPenetrationBudget: weapon.resolved.ammo.bodyPenetrationBudget,
-      impactSequence: 0,
+    failActiveFireTask(unit, {
+      endedSeconds: state.simulationTimeSeconds,
+      resultCode: 'infantry_fire_task_reconciliation_missing_projectile',
+      resultRu: 'Огневая задача не восстановлена: committed-пуля отсутствует, повторное создание запрещено.',
     });
+    return;
   }
   if (task.phase === 'firing') {
     beginFireTaskRecovery(unit, {
