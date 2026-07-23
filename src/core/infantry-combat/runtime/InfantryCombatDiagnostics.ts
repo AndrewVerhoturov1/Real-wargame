@@ -9,6 +9,7 @@ import {
   MAX_STAGE3_TERMINATION_ENTRIES,
   STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
 } from './ProjectileRuntimeTypes';
+import { getProjectileRuntimeDiagnostics } from './ProjectileRuntime';
 
 export interface InfantryCombatDiagnosticsV1 {
   readonly schemaVersion: 1;
@@ -33,7 +34,27 @@ export interface InfantryCombatDiagnosticsV1 {
     readonly sweptTraceCount: number;
     readonly unitCheckCount: number;
     readonly objectCandidateCount: number;
+    readonly capacity: number;
+    readonly freeCount: number;
+    readonly highWaterMark: number;
+    readonly spawnCount: number;
+    readonly releaseCount: number;
     readonly capRejectionCount: number;
+    readonly duplicateSpawnCount: number;
+    readonly catchUpLimitedCount: number;
+    readonly unitBroadPhaseQueryCount: number;
+    readonly unitCandidateCount: number;
+    readonly objectBroadPhaseQueryCount: number;
+    readonly terrainSampleCount: number;
+    readonly impactBufferCapacity: number;
+    readonly impactBufferHighWaterMark: number;
+    readonly terminationBufferCapacity: number;
+    readonly terminationBufferHighWaterMark: number;
+    readonly eventOverflowCount: number;
+    readonly poolAllocationCount: number;
+    readonly poolResizeCount: number;
+    readonly scratchAllocationCount: number;
+    readonly fullScanFallbackCount: number;
     readonly lastImpactId: string | null;
     readonly lastTerminationId: string | null;
   };
@@ -74,6 +95,7 @@ export interface InfantryCombatUnitDiagnosticsV1 {
  */
 export function getInfantryCombatDiagnostics(state: SimulationState): InfantryCombatDiagnosticsV1 {
   const runtime = state.infantryCombatProjectiles;
+  const projectileDiagnostics = getProjectileRuntimeDiagnostics(runtime);
   return {
     schemaVersion: 1,
     limits: {
@@ -97,9 +119,29 @@ export function getInfantryCombatDiagnostics(state: SimulationState): InfantryCo
       sweptTraceCount: runtime.diagnostics.sweptTraceCount,
       unitCheckCount: runtime.diagnostics.unitCheckCount,
       objectCandidateCount: runtime.diagnostics.objectCandidateCount,
-      capRejectionCount: runtime.diagnostics.capRejectionCount,
-      lastImpactId: runtime.diagnostics.lastImpactId,
-      lastTerminationId: runtime.diagnostics.lastTerminationId,
+      capacity: projectileDiagnostics.capacity,
+      freeCount: projectileDiagnostics.freeCount,
+      highWaterMark: projectileDiagnostics.highWaterMark,
+      spawnCount: projectileDiagnostics.spawnCount,
+      releaseCount: projectileDiagnostics.releaseCount,
+      capRejectionCount: projectileDiagnostics.capRejectionCount,
+      duplicateSpawnCount: projectileDiagnostics.duplicateSpawnCount,
+      catchUpLimitedCount: projectileDiagnostics.catchUpLimitedCount,
+      unitBroadPhaseQueryCount: projectileDiagnostics.unitBroadPhaseQueryCount,
+      unitCandidateCount: projectileDiagnostics.unitCandidateCount,
+      objectBroadPhaseQueryCount: projectileDiagnostics.objectBroadPhaseQueryCount,
+      terrainSampleCount: projectileDiagnostics.terrainSampleCount,
+      impactBufferCapacity: projectileDiagnostics.impactBufferCapacity,
+      impactBufferHighWaterMark: projectileDiagnostics.impactBufferHighWaterMark,
+      terminationBufferCapacity: projectileDiagnostics.terminationBufferCapacity,
+      terminationBufferHighWaterMark: projectileDiagnostics.terminationBufferHighWaterMark,
+      eventOverflowCount: projectileDiagnostics.eventOverflowCount,
+      poolAllocationCount: projectileDiagnostics.poolAllocationCount,
+      poolResizeCount: projectileDiagnostics.poolResizeCount,
+      scratchAllocationCount: projectileDiagnostics.scratchAllocationCount,
+      fullScanFallbackCount: projectileDiagnostics.fullScanFallbackCount,
+      lastImpactId: projectileDiagnostics.lastImpactId,
+      lastTerminationId: projectileDiagnostics.lastTerminationId,
     },
     units: state.units
       .map((unit): InfantryCombatUnitDiagnosticsV1 => {
