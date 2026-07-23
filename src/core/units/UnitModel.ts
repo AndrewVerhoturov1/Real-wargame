@@ -384,7 +384,6 @@ function reconcileKnownPhysicalActions(unit: UnitModel): void {
     posture.status = 'failed';
     posture.resultCode = 'posture_transition_reconciliation_blocked';
     posture.resultRu = 'Смена позы не восстановлена из-за конфликта физических каналов.';
-    posture.actionHandle = null;
   }
   if (preparationActionId && result.blockedActionIds.includes(preparationActionId)) {
     unit.movementRuntime.weaponPreparation = null;
