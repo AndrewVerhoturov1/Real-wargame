@@ -1,4 +1,5 @@
 import { buildAiRuntimeSceneSnapshot, serializeMoveOrder } from '../core/ai/runtime/AiRuntimeSnapshot';
+import { serializePhysicalActionCoordinatorState } from '../core/actions/PhysicalActionCoordinatorSerialization';
 import { serializeUnitPhysicalAction } from '../core/actions/PostureTransition';
 import { saveMovementProfileRegistry } from '../ai-node-editor/MovementProfileBrowserStorage';
 import { getCombatRuntime } from '../core/combat/CombatDamage';
@@ -311,6 +312,7 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
       weapon: { ...getWeaponRuntime(unit) },
       combat: JSON.parse(JSON.stringify(getCombatRuntime(unit))),
       movement: serializeMovementRuntime(unit.movementRuntime),
+      physicalActionCoordinator: serializePhysicalActionCoordinatorState(unit.behaviorRuntime.physicalActionCoordinator),
       physicalAction: serializeUnitPhysicalAction(unit.behaviorRuntime.physicalAction),
       moveOrder: unit.order ? serializeMoveOrder(unit.order) : undefined,
       aiRuntime: buildAiRuntimeSceneSnapshot(
