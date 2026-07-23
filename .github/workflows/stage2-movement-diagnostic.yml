@@ -1,16 +1,15 @@
 name: Stage 2 Movement Diagnostic
 
 on:
-  pull_request:
+  push:
     branches:
-      - real-wargame-preview
+      - feature/20260723-shooting-stage-02-physical-action-coordinator
 
 permissions:
   contents: write
 
 jobs:
   apply-movement-smoke-migration:
-    if: github.event.pull_request.head.ref == 'feature/20260723-shooting-stage-02-physical-action-coordinator'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout working branch
