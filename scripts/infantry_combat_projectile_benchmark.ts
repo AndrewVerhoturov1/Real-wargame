@@ -24,13 +24,15 @@ import {
 const DIAGNOSTIC_MODE = process.env.PROJECTILE_BENCHMARK_DIAGNOSTIC === '1';
 const WARMUP_RUNS = DIAGNOSTIC_MODE ? 0 : 3;
 const MEASURED_RUNS = DIAGNOSTIC_MODE ? 1 : 10;
-const SIMULATED_SECONDS = DIAGNOSTIC_MODE ? 1 : 10;
-const OUTER_STEPS = Math.round(SIMULATED_SECONDS / STAGE3_PROJECTILE_FIXED_STEP_SECONDS);
+const SIMULATED_SECONDS_PER_MEASURED_RUN = DIAGNOSTIC_MODE ? 1 : 10;
+const TOTAL_MEASURED_SIMULATED_SECONDS = MEASURED_RUNS * SIMULATED_SECONDS_PER_MEASURED_RUN;
+const OUTER_STEPS = Math.round(SIMULATED_SECONDS_PER_MEASURED_RUN / STAGE3_PROJECTILE_FIXED_STEP_SECONDS);
 const CAPACITY_SWEEP_SECONDS = 1;
 const CAPACITY_CANDIDATES = [512, 1024, 2048, 4096] as const;
 const TARGET_ACTIVE_PROJECTILES = 2000;
 const DIRECT_COMPARISON_PROJECTILES = 200;
 const MEMORY_COMPARISON_PROJECTILES = 2000;
+const MEMORY_COMPARISON_RUNTIME_COPIES = DIAGNOSTIC_MODE ? 2 : 8;
 const ammo = createDefaultCombatCatalogRegistry().resolveAmmo({ definitionId: 'ammo_762x54r_ball', revision: 1 });
 
 interface TimingSummary {
@@ -54,6 +56,8 @@ interface ProfileExecutionResult {
   readonly impacts: number;
   readonly terminations: number;
   readonly finalActive: number;
+  readonly projectileSubsteps: number;
+  readonly impactTypes: { readonly terrain: number; readonly object: number; readonly unit: number };
   readonly diagnostics: ProjectileRuntimeDiagnosticsV2;
   readonly passReasons: string[];
   readonly failReasons: string[];
@@ -61,6 +65,7 @@ interface ProfileExecutionResult {
 
 interface ProfileReport extends ProfileExecutionResult {
   readonly fixture: string;
+  readonly simulatedSecondsPerMeasuredRun: number;
   readonly timing: TimingSummary;
   readonly capSaturation: number;
   readonly fullScanFallbackCount: number;
@@ -69,6 +74,8 @@ interface ProfileReport extends ProfileExecutionResult {
 
 interface CapacitySweepReport {
   readonly capacity: number;
+  readonly simulatedSeconds: number;
+  readonly simulatedSecondsPerMeasuredRun: number;
   readonly requestedActive: number;
   readonly peakActive: number;
   readonly capRejections: number;
@@ -82,6 +89,7 @@ interface DirectComparisonReport {
   readonly fixture: string;
   readonly projectiles: number;
   readonly simulatedSeconds: number;
+  readonly simulatedSecondsPerMeasuredRun: number;
   readonly stage3Reference: TimingSummary & {
     readonly hotPathStructuredClones: number;
     readonly survivorsArrays: number;
@@ -95,6 +103,14 @@ interface DirectComparisonReport {
   readonly retainedHeapPerProjectileBytes: {
     readonly stage3Reference: number;
     readonly stage4Production: number;
+  };
+  readonly idleComparison: {
+    readonly stage3Reference: TimingSummary;
+    readonly stage4Production: TimingSummary;
+    readonly overheadRatioStage4OverStage3: number;
+    readonly zeroWorkFastPathProven: boolean;
+    readonly timingNoiseAccepted: boolean;
+    readonly timingGatePass: boolean;
   };
   readonly throughputRatioStage4OverStage3: number;
   readonly heapRatioStage4OverStage3: number;
@@ -110,8 +126,11 @@ interface BenchmarkReport {
   readonly cpuCount: number;
   readonly warmupRuns: number;
   readonly measuredRuns: number;
+  readonly simulatedSecondsPerMeasuredRun: number;
+  readonly totalMeasuredSimulatedSecondsPerFixture: number;
   readonly fixedStepSeconds: number;
   readonly productionCapacity: number;
+  readonly productionPoolNumericTypedArrayBytes: number;
   readonly profiles: ProfileReport[];
   readonly capacitySweep: CapacitySweepReport[];
   readonly directComparison: DirectComparisonReport;
@@ -133,11 +152,12 @@ interface PreparedProductionRun {
   nextSequence: number;
   totalImpacts: number;
   totalTerminations: number;
+  projectileSubsteps: number;
 }
 
-type FixtureProfile = 'idle' | 'single_volley' | 'sustained' | 'target_stress' | 'dense_geometry' | 'direct';
-
 let memorySink: unknown = null;
+
+type FixtureProfile = 'idle' | 'single_volley' | 'sustained' | 'target_stress' | 'dense_geometry' | 'direct';
 
 main();
 
@@ -179,8 +199,11 @@ function main(): void {
     cpuCount: os.cpus().length,
     warmupRuns: WARMUP_RUNS,
     measuredRuns: MEASURED_RUNS,
+    simulatedSecondsPerMeasuredRun: SIMULATED_SECONDS_PER_MEASURED_RUN,
+    totalMeasuredSimulatedSecondsPerFixture: TOTAL_MEASURED_SIMULATED_SECONDS,
     fixedStepSeconds: STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
     productionCapacity: PRODUCTION_PROJECTILE_CAPACITY,
+    productionPoolNumericTypedArrayBytes: estimateNumericPoolBytes(PRODUCTION_PROJECTILE_CAPACITY),
     profiles,
     capacitySweep,
     directComparison,
@@ -225,11 +248,13 @@ function measureProductionProfile(profile: Exclude<FixtureProfile, 'direct'>): P
     samples,
     heapDeltas,
     representative.simulatedSeconds,
-    representative.diagnostics.fixedSubstepsExecuted * representative.peakActive,
+    representative.projectileSubsteps,
   );
   return {
     fixture: profile,
     ...representative,
+    simulatedSeconds: representative.simulatedSeconds * MEASURED_RUNS,
+    simulatedSecondsPerMeasuredRun: representative.simulatedSeconds,
     timing,
     capSaturation: representative.peakActive / representative.capacity,
     fullScanFallbackCount: representative.diagnostics.fullScanFallbackCount,
@@ -255,6 +280,7 @@ function prepareProductionRun(profile: FixtureProfile, capacity: number): Prepar
     nextSequence: 0,
     totalImpacts: 0,
     totalTerminations: 0,
+    projectileSubsteps: 0,
   };
   replenishProduction(prepared);
   return prepared;
@@ -263,6 +289,7 @@ function prepareProductionRun(profile: FixtureProfile, capacity: number): Prepar
 function runPreparedProduction(prepared: PreparedProductionRun, steps: number): ProfileExecutionResult {
   const runtime = prepared.state.infantryCombatProjectiles;
   for (let step = 0; step < steps; step += 1) {
+    prepared.projectileSubsteps += runtime.pool.activeCount;
     const result = tickProjectileRuntime(prepared.state, {
       intervalStartSeconds: step * STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
       deltaSeconds: STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
@@ -274,6 +301,8 @@ function runPreparedProduction(prepared: PreparedProductionRun, steps: number): 
   const diagnostics = getProjectileRuntimeDiagnostics(runtime) as ProjectileRuntimeDiagnosticsV2;
   const snapshot = serializeProjectileRuntimeState(runtime);
   const activeIds = snapshot.activeProjectiles.map((projectile) => projectile.projectileId);
+  const impactTypes = { terrain: 0, object: 0, unit: 0 };
+  for (const impact of snapshot.impacts) impactTypes[impact.hitType] += 1;
   const failReasons: string[] = [];
   const passReasons: string[] = [];
   if (diagnostics.fullScanFallbackCount !== 0) failReasons.push('fullScanFallbackCount is not zero');
@@ -302,6 +331,10 @@ function runPreparedProduction(prepared: PreparedProductionRun, steps: number): 
     else passReasons.push('target peak is near 2000');
     if (diagnostics.highWaterMark > runtime.pool.capacity * 0.75) failReasons.push('target peak exceeds 75% production capacity');
     else passReasons.push('production capacity has at least 25% headroom');
+    for (const type of ['terrain', 'object', 'unit'] as const) {
+      if (impactTypes[type] <= 0) failReasons.push(`target fixture produced no ${type} impacts`);
+      else passReasons.push(`target fixture includes ${type} impacts`);
+    }
   }
   if (prepared.profile === 'dense_geometry' && diagnostics.objectBroadPhaseQueryCount > 0) {
     const averageCandidates = diagnostics.objectCandidateCount / diagnostics.objectBroadPhaseQueryCount;
@@ -324,6 +357,8 @@ function runPreparedProduction(prepared: PreparedProductionRun, steps: number): 
     impacts: prepared.totalImpacts,
     terminations: prepared.totalTerminations,
     finalActive: runtime.pool.activeCount,
+    projectileSubsteps: prepared.projectileSubsteps,
+    impactTypes,
     diagnostics,
     passReasons,
     failReasons,
@@ -363,6 +398,8 @@ function measureCapacity(capacity: number): CapacitySweepReport {
   assert.ok(representative);
   return {
     capacity,
+    simulatedSeconds: representative.simulatedSeconds * MEASURED_RUNS,
+    simulatedSecondsPerMeasuredRun: representative.simulatedSeconds,
     requestedActive: TARGET_ACTIVE_PROJECTILES,
     peakActive: representative.peakActive,
     capRejections: representative.diagnostics.capRejectionCount,
@@ -372,7 +409,7 @@ function measureCapacity(capacity: number): CapacitySweepReport {
       samples,
       heapDeltas,
       representative.simulatedSeconds,
-      representative.diagnostics.fixedSubstepsExecuted * representative.peakActive,
+      representative.projectileSubsteps,
     ),
     diagnostics: representative.diagnostics,
   };
@@ -422,27 +459,32 @@ function measureDirectComparison(): DirectComparisonReport {
   const referenceTiming = summarizeTiming(
     referenceSamples,
     referenceHeapDeltas,
-    SIMULATED_SECONDS,
-    referenceRepresentative.diagnostics.fixedSubstepsExecuted * DIRECT_COMPARISON_PROJECTILES,
+    SIMULATED_SECONDS_PER_MEASURED_RUN,
+    referenceRepresentative.diagnostics.projectileSubsteps,
   );
   const productionTiming = summarizeTiming(
     productionSamples,
     productionHeapDeltas,
-    SIMULATED_SECONDS,
-    productionRepresentative.diagnostics.fixedSubstepsExecuted * DIRECT_COMPARISON_PROJECTILES,
+    SIMULATED_SECONDS_PER_MEASURED_RUN,
+    productionRepresentative.projectileSubsteps,
   );
   const retained = measureRuntimeRetainedHeapPerProjectile();
+  const idleComparison = measureIdleComparison();
   const throughputRatio = productionTiming.projectileSubstepsPerSecond / Math.max(1, referenceTiming.projectileSubstepsPerSecond);
   const heapRatio = retained.stage4Production / Math.max(1, retained.stage3Reference);
   const failReasons: string[] = [];
   if (throughputRatio < 1) failReasons.push(`Stage 4 throughput ratio ${throughputRatio.toFixed(3)} is below 1.0`);
   if (heapRatio >= 1) failReasons.push(`Stage 4 retained heap ratio ${heapRatio.toFixed(3)} is not below 1.0`);
+  if (!idleComparison.timingGatePass) {
+    failReasons.push(`Stage 4 idle overhead ratio ${idleComparison.overheadRatioStage4OverStage3.toFixed(3)} exceeds 1.05 without a zero-work timing-noise justification`);
+  }
   if (productionRepresentative.diagnostics.scratchAllocationCount > 1) failReasons.push('Stage 4 allocated stepper scratch more than once');
   if (productionRepresentative.diagnostics.poolResizeCount !== 0) failReasons.push('Stage 4 resized the pool');
   return {
     fixture: 'same 200-projectile clear-crossing fixture',
     projectiles: DIRECT_COMPARISON_PROJECTILES,
-    simulatedSeconds: SIMULATED_SECONDS,
+    simulatedSeconds: TOTAL_MEASURED_SIMULATED_SECONDS,
+    simulatedSecondsPerMeasuredRun: SIMULATED_SECONDS_PER_MEASURED_RUN,
     stage3Reference: {
       ...referenceTiming,
       hotPathStructuredClones: referenceRepresentative.diagnostics.structuredCloneCount,
@@ -456,6 +498,7 @@ function measureDirectComparison(): DirectComparisonReport {
       poolResizes: productionRepresentative.diagnostics.poolResizeCount,
     },
     retainedHeapPerProjectileBytes: retained,
+    idleComparison,
     throughputRatioStage4OverStage3: throughputRatio,
     heapRatioStage4OverStage3: heapRatio,
     pass: failReasons.length === 0,
@@ -490,26 +533,98 @@ function runReference(state: SimulationState, runtime: Stage3ReferenceHarnessRun
   }
 }
 
+function measureIdleComparison(): DirectComparisonReport['idleComparison'] {
+  for (let index = 0; index < WARMUP_RUNS; index += 1) {
+    measureReferenceIdleSample();
+    measureProductionIdleSample();
+  }
+  const referenceSamples: number[] = [];
+  const productionSamples: number[] = [];
+  let zeroWorkFastPathProven = true;
+  for (let index = 0; index < MEASURED_RUNS; index += 1) {
+    referenceSamples.push(measureReferenceIdleSample());
+    const production = measureProductionIdleSample();
+    productionSamples.push(production.milliseconds);
+    zeroWorkFastPathProven = zeroWorkFastPathProven
+      && production.diagnostics.fixedSubstepsExecuted === 0
+      && production.diagnostics.unitBroadPhaseQueryCount === 0
+      && production.diagnostics.objectBroadPhaseQueryCount === 0
+      && production.diagnostics.scratchAllocationCount === 0;
+  }
+  const stage3Reference = summarizeTiming(referenceSamples, [], SIMULATED_SECONDS_PER_MEASURED_RUN, 0);
+  const stage4Production = summarizeTiming(productionSamples, [], SIMULATED_SECONDS_PER_MEASURED_RUN, 0);
+  const overheadRatioStage4OverStage3 = stage4Production.medianMilliseconds
+    / Math.max(1e-9, stage3Reference.medianMilliseconds);
+  const timingNoiseAccepted = overheadRatioStage4OverStage3 > 1.05
+    && zeroWorkFastPathProven
+    && Math.max(stage3Reference.medianMilliseconds, stage4Production.medianMilliseconds) < 1;
+  return {
+    stage3Reference,
+    stage4Production,
+    overheadRatioStage4OverStage3,
+    zeroWorkFastPathProven,
+    timingNoiseAccepted,
+    timingGatePass: overheadRatioStage4OverStage3 <= 1.05 || timingNoiseAccepted,
+  };
+}
+
+function measureReferenceIdleSample(): number {
+  const state = makeState([], makeUnits());
+  const runtime = createStage3ReferenceHarnessRuntime();
+  const started = process.hrtime.bigint();
+  runReference(state, runtime, OUTER_STEPS);
+  return nanosecondsToMilliseconds(process.hrtime.bigint() - started);
+}
+
+function measureProductionIdleSample(): {
+  readonly milliseconds: number;
+  readonly diagnostics: ProjectileRuntimeDiagnosticsV2;
+} {
+  const prepared = prepareProductionRun('idle', PRODUCTION_PROJECTILE_CAPACITY);
+  const started = process.hrtime.bigint();
+  runPreparedProduction(prepared, OUTER_STEPS);
+  const milliseconds = nanosecondsToMilliseconds(process.hrtime.bigint() - started);
+  return {
+    milliseconds,
+    diagnostics: getProjectileRuntimeDiagnostics(prepared.state.infantryCombatProjectiles) as ProjectileRuntimeDiagnosticsV2,
+  };
+}
+
 function measureRuntimeRetainedHeapPerProjectile(): { stage3Reference: number; stage4Production: number } {
   const candidates = Array.from({ length: MEMORY_COMPARISON_PROJECTILES }, (_, index) => makeProjectile('direct', index));
   const referenceSamples: number[] = [];
   const productionSamples: number[] = [];
-  for (let index = 0; index < 5; index += 1) {
+  for (let index = 0; index < 7; index += 1) {
     memorySink = null;
     forceGc();
-    let before = process.memoryUsage().heapUsed;
-    memorySink = createStage3ReferenceHarnessRuntime(candidates);
     forceGc();
-    referenceSamples.push((process.memoryUsage().heapUsed - before) / MEMORY_COMPARISON_PROJECTILES);
+    let before = process.memoryUsage().heapUsed;
+    memorySink = Array.from(
+      { length: MEMORY_COMPARISON_RUNTIME_COPIES },
+      () => createStage3ReferenceHarnessRuntime(candidates),
+    );
+    forceGc();
+    assert.equal((memorySink as readonly unknown[]).length, MEMORY_COMPARISON_RUNTIME_COPIES);
+    referenceSamples.push(
+      Math.max(0, process.memoryUsage().heapUsed - before)
+      / (MEMORY_COMPARISON_PROJECTILES * MEMORY_COMPARISON_RUNTIME_COPIES),
+    );
 
     memorySink = null;
     forceGc();
-    before = process.memoryUsage().heapUsed;
-    const runtime = createProjectileRuntimeState(PRODUCTION_PROJECTILE_CAPACITY);
-    for (const candidate of candidates) assert.equal(trySpawnProjectile(runtime, candidate).status, 'spawned');
-    memorySink = runtime;
     forceGc();
-    productionSamples.push((process.memoryUsage().heapUsed - before) / MEMORY_COMPARISON_PROJECTILES);
+    before = process.memoryUsage().heapUsed;
+    memorySink = Array.from({ length: MEMORY_COMPARISON_RUNTIME_COPIES }, () => {
+      const runtime = createProjectileRuntimeState(PRODUCTION_PROJECTILE_CAPACITY);
+      for (const candidate of candidates) assert.equal(trySpawnProjectile(runtime, candidate).status, 'spawned');
+      return runtime;
+    });
+    forceGc();
+    assert.equal((memorySink as readonly unknown[]).length, MEMORY_COMPARISON_RUNTIME_COPIES);
+    productionSamples.push(
+      Math.max(0, process.memoryUsage().heapUsed - before)
+      / (MEMORY_COMPARISON_PROJECTILES * MEMORY_COMPARISON_RUNTIME_COPIES),
+    );
   }
   memorySink = null;
   forceGc();
@@ -570,17 +685,17 @@ function makeProjectile(profile: FixtureProfile, sequence: number): ProjectileSt
       velocity = { x: 24, y: 0, z: -2 };
     } else if (lane === 2) {
       position = { xMetres: 30, yMetres: 28 + (row % 20) * 8, zMetres: 1.2 };
-      velocity = { x: 35, y: 0, z: 0 };
+      velocity = { x: 35, y: 0, z: 3 };
     } else if (lane === 3) {
       const targetRow = row % 10;
-      position = { xMetres: 35, yMetres: (12 + targetRow * 7) * 2, zMetres: 1.2 };
-      velocity = { x: 35, y: 0, z: 0 };
+      position = { xMetres: 35, yMetres: (12 + targetRow * 7 + 0.5) * 2, zMetres: 1.2 };
+      velocity = { x: 35, y: 0, z: 2.2 };
     }
-    maximumLifetimeSeconds = 2;
+    maximumLifetimeSeconds = 4;
   } else if (profile === 'dense_geometry') {
     position = { xMetres: 20 + (sequence % 30), yMetres: 10 + (row % 40) * 4, zMetres: 20 };
     velocity = { x: 18 + (sequence % 5), y: 0.5, z: 0 };
-    maximumLifetimeSeconds = 2;
+    maximumLifetimeSeconds = 4;
   } else if (profile === 'single_volley' || profile === 'direct') {
     const reverse = sequence % 2 === 1;
     position = reverse
@@ -626,7 +741,7 @@ function makeUnits(): Array<Record<string, unknown>> {
       units.push({
         id: `${side}-${String(index).padStart(3, '0')}`,
         side,
-        x: side === 'blue' ? 8 + column * 1.2 : 145 - column * 1.2,
+        x: side === 'blue' ? 8 + column * 1.2 : 32 - column * 0.6,
         y: 12 + row * 7,
       });
     }
@@ -640,8 +755,8 @@ function makeRepresentativeObjects(): Array<Record<string, unknown>> {
     objects.push({
       id: `wall-${String(index).padStart(3, '0')}`,
       kind: 'structure',
-      x: 80 + (index % 4) * 0.5,
-      y: 10 + Math.floor(index / 4) * 9,
+      x: 25 + (index % 2) * 0.5,
+      y: 14 + Math.floor(index / 2) * 4,
       widthCells: 0.35,
       heightCells: 1.5,
       losHeightMeters: 3,
@@ -714,7 +829,7 @@ function forceGc(): void {
 
 function printHumanTable(report: BenchmarkReport): void {
   console.log(`Projectile Runtime Benchmark — Node ${report.nodeVersion} ${report.platform}/${report.arch}`);
-  console.log(`warmup=${report.warmupRuns}, measured=${report.measuredRuns}, fixedStep=${report.fixedStepSeconds}`);
+  console.log(`warmup=${report.warmupRuns}, measured=${report.measuredRuns}, seconds/run=${report.simulatedSecondsPerMeasuredRun}, total seconds/fixture=${report.totalMeasuredSimulatedSecondsPerFixture}, fixedStep=${report.fixedStepSeconds}`);
   console.log('');
   console.log('Fixture             Units Objects Capacity Peak  Median ms  p95 ms   Sim/s     Projectile steps/s  Heap delta');
   for (const profile of report.profiles) {
@@ -739,9 +854,18 @@ function printHumanTable(report: BenchmarkReport): void {
   console.log('');
   console.log(`Direct comparison throughput ratio Stage4/Stage3: ${report.directComparison.throughputRatioStage4OverStage3.toFixed(3)}`);
   console.log(`Direct comparison retained heap ratio Stage4/Stage3: ${report.directComparison.heapRatioStage4OverStage3.toFixed(3)}`);
+  console.log(`Idle overhead ratio Stage4/Stage3: ${report.directComparison.idleComparison.overheadRatioStage4OverStage3.toFixed(3)} (${report.directComparison.idleComparison.timingNoiseAccepted ? 'noise accepted by zero-work proof' : report.directComparison.idleComparison.timingGatePass ? 'PASS' : 'FAIL'})`);
   console.log(`Stress save/load: ${report.stressSaveLoad.pass ? 'PASS' : 'FAIL'}`);
   console.log(`Overall: ${report.pass ? 'PASS' : 'FAIL'}`);
   if (report.failReasons.length > 0) for (const reason of report.failReasons) console.log(`  FAIL: ${reason}`);
+}
+
+function estimateNumericPoolBytes(capacity: number): number {
+  const float64FieldCount = 9;
+  const uint32FieldCount = 2;
+  const uint8FieldCount = 1;
+  const int32FieldCount = 1;
+  return capacity * (float64FieldCount * 8 + uint32FieldCount * 4 + uint8FieldCount + int32FieldCount * 4);
 }
 
 function formatBytes(value: number | null): string {

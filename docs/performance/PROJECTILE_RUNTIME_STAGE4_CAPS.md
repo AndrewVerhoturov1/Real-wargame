@@ -19,7 +19,7 @@ The deterministic capacity sweep covers `512`, `1024`, `2048`, and `4096` slots 
 | 2048 | no rejection | 97.66% | insufficient headroom |
 | 4096 | no rejection | 48.83% | selected |
 
-`4096` is the smallest tested power-of-two capacity that accepts the target fixture and retains at least 25% free headroom. Its numeric typed-array storage is approximately `413696` bytes before string and immutable ammo metadata.
+`4096` is the smallest tested power-of-two capacity that accepts the target fixture and retains at least 25% free headroom. Its numeric typed-array storage is approximately `348160` bytes before string and immutable ammo metadata.
 
 ## Event buffers
 

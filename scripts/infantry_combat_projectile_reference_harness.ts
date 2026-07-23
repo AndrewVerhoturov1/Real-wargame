@@ -32,6 +32,7 @@ export interface Stage3ReferenceHarnessRuntime {
     structuredCloneCount: number;
     survivorsArrayCount: number;
     eventArrayCount: number;
+    projectileSubsteps: number;
   };
 }
 
@@ -58,6 +59,7 @@ export function createStage3ReferenceHarnessRuntime(
       structuredCloneCount: 0,
       survivorsArrayCount: 0,
       eventArrayCount: 0,
+      projectileSubsteps: 0,
     },
   };
 }
@@ -110,6 +112,7 @@ function executeSubstep(
   const terminations: ProjectileTerminationV1[] = [];
   runtime.diagnostics.survivorsArrayCount += 1;
   runtime.diagnostics.eventArrayCount += 2;
+  runtime.diagnostics.projectileSubsteps += runtime.activeProjectiles.length;
 
   for (const original of [...runtime.activeProjectiles].sort(compareProjectiles)) {
     const projectile = clone(original);

@@ -99,6 +99,22 @@ function verifyPoolContract(): void {
   const corruptBefore = serializeProjectileRuntimeState(runtime).activeProjectiles;
   assert.equal(trySpawnProjectile(runtime, projectile('pool-corrupt')).status, 'capacity_exceeded');
   assert.deepEqual(serializeProjectileRuntimeState(runtime).activeProjectiles, corruptBefore);
+
+  const recoverable = createProjectileRuntimeState(3);
+  const occupied = trySpawnProjectile(recoverable, projectile('pool-recover-a'));
+  assert.equal(occupied.status, 'spawned');
+  assert.ok(occupied.handle);
+  recoverable.pool.freeSlotCount = 2;
+  recoverable.pool.freeSlots[0] = occupied.handle.slot;
+  recoverable.pool.freeSlots[1] = occupied.handle.slot;
+  const recoveredSpawn = trySpawnProjectile(recoverable, projectile('pool-recover-b'));
+  assert.equal(recoveredSpawn.status, 'spawned');
+  assert.equal(recoverable.pool.activeCount, 2);
+  assert.equal(recoverable.pool.freeSlotCount, 1);
+  assert.deepEqual(
+    serializeProjectileRuntimeState(recoverable).activeProjectiles.map((entry) => entry.projectileId),
+    ['pool-recover-a:projectile', 'pool-recover-b:projectile'],
+  );
 }
 
 function verifyV1MigrationAndCanonicalV2(): void {
