@@ -165,7 +165,7 @@ function normalizeTermination(value: unknown): ProjectileTerminationV1 | null {
   const shotId = cleanText(value.shotId, '');
   const reason = value.reason;
   const point = normalizePoint(value.point);
-  if (!terminationId || !projectileId || !shotId || !point || (reason !== 'impact' && reason !== 'lifetime' && reason !== 'out_of_bounds')) return null;
+  if (!terminationId || !projectileId || !shotId || !point || (reason !== 'impact' && reason !== 'lifetime' && reason !== 'out_of_bounds' && reason !== 'reconciled_orphan')) return null;
   return {
     schemaVersion: 1,
     terminationId,

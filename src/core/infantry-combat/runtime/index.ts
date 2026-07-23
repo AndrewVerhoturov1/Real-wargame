@@ -9,3 +9,4 @@ export * from './ReferenceProjectileRuntime';
 export * from './ShotCommitService';
 export * from './ReferenceProjectileStepper';
 export * from './InfantryCombatSimulation';
+export * from './InfantryCombatReconciliation';

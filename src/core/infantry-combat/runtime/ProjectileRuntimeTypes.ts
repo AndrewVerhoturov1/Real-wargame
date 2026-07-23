@@ -64,7 +64,7 @@ export interface ProjectileImpactV1 {
   readonly velocityBeforeImpact: BallisticDirection3;
 }
 
-export type ProjectileTerminationReason = 'impact' | 'lifetime' | 'out_of_bounds';
+export type ProjectileTerminationReason = 'impact' | 'lifetime' | 'out_of_bounds' | 'reconciled_orphan';
 
 export interface ProjectileTerminationV1 {
   readonly schemaVersion: typeof PROJECTILE_TERMINATION_SCHEMA_VERSION;

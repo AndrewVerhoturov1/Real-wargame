@@ -52,6 +52,7 @@ export function replaceSceneAtRuntimeResolution(
   state.mouseGridPosition = null;
   state.selectionBox = null;
   state.simulationTimeSeconds = 0;
+  state.infantryCombatProjectiles = loaded.infantryCombatProjectiles;
   state.editor.zoneRadiusCells = loaded.editor.zoneRadiusCells;
   state.editor.zoneWidthCells = loaded.editor.zoneWidthCells;
   state.editor.zoneHeightCells = loaded.editor.zoneHeightCells;

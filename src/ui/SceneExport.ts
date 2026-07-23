@@ -5,6 +5,13 @@ import { saveMovementProfileRegistry } from '../ai-node-editor/MovementProfileBr
 import { getCombatRuntime } from '../core/combat/CombatDamage';
 import { getWeaponRuntime } from '../core/combat/WeaponModel';
 import { serializeMovementRuntime } from '../core/movement/MovementRuntime';
+import {
+  normalizeReferenceProjectileRuntimeState,
+  reconcileInfantryCombatRuntimeAfterLoad,
+  serializeInfantryCombatUnitRuntime,
+  serializeReferenceProjectileRuntimeState,
+  type ReferenceProjectileRuntimeStateV1,
+} from '../core/infantry-combat/runtime';
 import { createMovementProfileRegistry, serializeMovementProfileRegistry, type MovementProfileRegistryData } from '../core/movement/MovementProfiles';
 import {
   EnvironmentProfileRegistry,
@@ -36,6 +43,8 @@ export interface ExportedSceneData {
   version: string;
   exportedAt: string;
   noteRu: string;
+  simulationTimeSeconds: number;
+  infantryCombatRuntime: ReferenceProjectileRuntimeStateV1;
   map: {
     width: number;
     height: number;
@@ -79,6 +88,7 @@ export async function loadSceneJsonFromFile(state: SimulationState, file: File):
   const tacticalPositionSearchService = getTacticalPositionSearchService(state);
   for (const unit of state.units) tacticalPositionSearchService?.clearUnit(unit.id);
   replaceSceneAtRuntimeResolution(state, scene.map, scene.units, scene.pressureZones);
+  restoreImportedInfantryCombatState(state, scene);
   state.movementProfiles = createMovementProfileRegistry(scene.movementProfiles);
   saveMovementProfileRegistry(state.movementProfiles);
   if (environmentRegistry.hasProfile(state.map.environmentProfileId)) {
@@ -136,6 +146,8 @@ export function normalizeImportedScene(value: unknown): {
   environmentProfiles: unknown;
   movementProfiles: unknown;
   staticTacticalPositionArtifact: unknown;
+  simulationTimeSeconds: number;
+  infantryCombatRuntime: unknown;
 } {
   const scene = requireRecord(value, 'Файл должен содержать объект сцены.');
   const map = requireRecord(scene.map, 'В JSON сцены нет блока map.');
@@ -147,7 +159,18 @@ export function normalizeImportedScene(value: unknown): {
     environmentProfiles: scene.environmentProfiles,
     movementProfiles: scene.movementProfiles,
     staticTacticalPositionArtifact: scene.staticTacticalPositionArtifact,
+    simulationTimeSeconds: finiteNonNegative(scene.simulationTimeSeconds),
+    infantryCombatRuntime: scene.infantryCombatRuntime,
   };
+}
+
+export function restoreImportedInfantryCombatState(
+  state: SimulationState,
+  scene: { readonly simulationTimeSeconds: number; readonly infantryCombatRuntime: unknown },
+): void {
+  state.simulationTimeSeconds = canonicalSeconds(scene.simulationTimeSeconds);
+  state.infantryCombatProjectiles = normalizeReferenceProjectileRuntimeState(scene.infantryCombatRuntime);
+  reconcileInfantryCombatRuntimeAfterLoad(state);
 }
 
 export function buildExportedScene(state: SimulationState): ExportedSceneData {
@@ -155,6 +178,8 @@ export function buildExportedScene(state: SimulationState): ExportedSceneData {
   return {
     version: 'scene-export-v10-physical-posture-action-2m-grid',
     exportedAt: new Date().toISOString(),
+    simulationTimeSeconds: canonicalSeconds(state.simulationTimeSeconds),
+    infantryCombatRuntime: serializeReferenceProjectileRuntimeState(state.infantryCombatProjectiles),
     noteRu: 'Экспорт полигона ИИ с тактическим намерением PlayerCommand, профилями физического движения, environment materials, выносливостью, фактическим способом движения, слоем «Обзор и память», навигационными профилями, настройками тактических позиций, необязательным предрасчётом статической тактической основы и активным runtime. Новые поля добавляются совместимо в envelope v10; старые сцены без них получают безопасные значения по умолчанию, а сцены 10 м преобразуются в текущую сетку при загрузке.',
     map: {
       width: state.map.width,
@@ -314,6 +339,7 @@ function exportUnit(unit: UnitModel): Record<string, unknown> {
       movement: serializeMovementRuntime(unit.movementRuntime),
       physicalActionCoordinator: serializePhysicalActionCoordinatorState(unit.behaviorRuntime.physicalActionCoordinator),
       physicalAction: serializeUnitPhysicalAction(unit.behaviorRuntime.physicalAction),
+      infantryCombat: serializeInfantryCombatUnitRuntime(unit.infantryCombatRuntime),
       moveOrder: unit.order ? serializeMoveOrder(unit.order) : undefined,
       aiRuntime: buildAiRuntimeSceneSnapshot(
         unit.behaviorRuntime.aiRuntimeSession,
@@ -354,6 +380,14 @@ function buildTimestampForFileName(): string {
 
 function radiansToDegrees(radians: number): number {
   return (radians * 180) / Math.PI;
+}
+
+function finiteNonNegative(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+function canonicalSeconds(value: number): number {
+  return Math.round(Math.max(0, value) * 1_000_000_000_000) / 1_000_000_000_000;
 }
 
 function roundOne(value: number): number {
