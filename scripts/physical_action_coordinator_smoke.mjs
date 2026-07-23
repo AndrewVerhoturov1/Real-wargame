@@ -6,19 +6,26 @@ import { build } from 'vite';
 const repoRoot = process.cwd();
 const outDir = path.join(repoRoot, '.tmp-physical-action-coordinator-smoke');
 
-await rm(outDir, { recursive: true, force: true });
+run().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
 
-try {
-  await runSmoke(
-    path.join(repoRoot, 'scripts', 'physical_action_coordinator_smoke.ts'),
-    'physical-action-coordinator-contract.mjs',
-  );
-  await runSmoke(
-    path.join(repoRoot, 'scripts', 'physical_action_coordinator_integration_smoke.ts'),
-    'physical-action-coordinator-integration.mjs',
-  );
-} finally {
+async function run() {
   await rm(outDir, { recursive: true, force: true });
+
+  try {
+    await runSmoke(
+      path.join(repoRoot, 'scripts', 'physical_action_coordinator_smoke.ts'),
+      'physical-action-coordinator-contract.mjs',
+    );
+    await runSmoke(
+      path.join(repoRoot, 'scripts', 'physical_action_coordinator_integration_smoke.ts'),
+      'physical-action-coordinator-integration.mjs',
+    );
+  } finally {
+    await rm(outDir, { recursive: true, force: true });
+  }
 }
 
 async function runSmoke(sourceFile, outputFile) {
