@@ -1,0 +1,76 @@
+name: Stage 4 Exact Delta
+
+on:
+  push:
+    branches:
+      - feature/20260723-shooting-stage-04-projectile-runtime-benchmark
+
+permissions:
+  contents: write
+
+jobs:
+  apply-delta:
+    if: contains(github.event.head_commit.message, 'activate exact Stage 4 delta')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify and apply exact delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=3544444490f9026954d99a84e167988d0e518156
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          test "$(git ls-remote origin refs/heads/real-wargame-preview | cut -f1)" = "$BASE"
+          cp .github/stage4-delta/series.gz.b64 /tmp/stage4-delta.gz.b64
+          echo 'daaa3a22c91ff218363bd2cc723b6af1cac05641d0f279d5aabb0ced37c49da2  /tmp/stage4-delta.gz.b64' | sha256sum -c -
+          base64 -d /tmp/stage4-delta.gz.b64 | gzip -d > /tmp/stage4-delta.mbox
+          echo '8ec7cc48c2fa40fd9afa228cd5f7da55efc8e62e729296ceb635508e573af57b  /tmp/stage4-delta.mbox' | sha256sum -c -
+          git config user.name 'OpenAI Stage 4 Executor'
+          git config user.email 'stage4-executor@users.noreply.github.com'
+          git am --3way /tmp/stage4-delta.mbox
+          test "$(git hash-object scripts/infantry_combat_projectile_benchmark.mjs)" = d33707d6a39e554e33914dbabe0bf3ed185754d8
+          test "$(git hash-object scripts/infantry_combat_projectile_benchmark.ts)" = 2ba015f8f32956dcb2d5d523c5cabc33265bb2f6
+          test "$(git hash-object scripts/infantry_combat_projectile_runtime_smoke.ts)" = 9741d316fda30215430476e72a10a9b0c0b813d1
+          test "$(git hash-object scripts/map_object_spatial_index_smoke.ts)" = 43103744691fccac0f0f2de94e08b4110bbdcc37
+          test "$(git hash-object src/core/spatial/MapObjectSpatialIndex.ts)" = 9bdf197869717cff634c7ab41432e4f954df973c
+          git status --short
+          mkdir -p "$RUNNER_TEMP/stage4-delta-evidence"
+          git rev-parse HEAD | tee "$RUNNER_TEMP/stage4-delta-evidence/product-head.txt"
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Verify corrected files and benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run infantry-combat-projectile:smoke
+          npm run spatial-index:smoke
+          npm run typecheck
+          npm run build
+          node --expose-gc scripts/infantry_combat_projectile_benchmark.mjs | tee "$RUNNER_TEMP/stage4-delta-evidence/projectile-benchmark.log"
+          git diff --check 3544444490f9026954d99a84e167988d0e518156...HEAD
+          test -z "$(git status --short)"
+
+      - name: Publish exact product delta
+        run: git push origin HEAD:refs/heads/feature/20260723-shooting-stage-04-projectile-runtime-benchmark
+
+      - name: Upload delta evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage4-exact-delta-evidence
+          path: ${{ runner.temp }}/stage4-delta-evidence
+          if-no-files-found: warn
+          retention-days: 7
