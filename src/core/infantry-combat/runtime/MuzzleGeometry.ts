@@ -32,8 +32,27 @@ export function computeMuzzleGeometry(
   const dy = target.yMetres - weaponAnchor.yMetres;
   const dz = target.zMetres - weaponAnchor.zMetres;
   if (Math.hypot(dx, dy, dz) <= DIRECTION_EPSILON_METRES) return null;
-  const weaponDirection = normalizeDirection({ x: dx, y: dy, z: dz });
+  return computeMuzzleGeometryFromDirection(map, unit, { x: dx, y: dy, z: dz }, weapon, target);
+}
+
+export function computeMuzzleGeometryFromDirection(
+  map: TacticalMap,
+  unit: UnitModel,
+  direction: BallisticDirection3,
+  weapon: InfantryWeaponInstanceV1,
+  diagnosticTarget?: BallisticPoint3,
+): MuzzleGeometryV1 | null {
+  if (!isFiniteDirection(direction) || Math.hypot(direction.x, direction.y, direction.z) <= DIRECTION_EPSILON_METRES) return null;
+  const weaponAnchor = getWeaponAnchor(map, unit);
+  const weaponDirection = normalizeDirection(direction);
   const offset = Math.max(0, finite(weapon.resolved.weapon.muzzleForwardOffsetMeters, 0));
+  const target = diagnosticTarget && isFinitePoint(diagnosticTarget)
+    ? { ...diagnosticTarget }
+    : {
+        xMetres: weaponAnchor.xMetres + weaponDirection.x,
+        yMetres: weaponAnchor.yMetres + weaponDirection.y,
+        zMetres: weaponAnchor.zMetres + weaponDirection.z,
+      };
   return {
     weaponAnchor,
     muzzle: {
@@ -41,7 +60,7 @@ export function computeMuzzleGeometry(
       yMetres: weaponAnchor.yMetres + weaponDirection.y * offset,
       zMetres: weaponAnchor.zMetres + weaponDirection.z * offset,
     },
-    target: { ...target },
+    target,
     weaponDirection,
   };
 }
@@ -57,6 +76,10 @@ export function getWeaponAnchor(map: TacticalMap, unit: UnitModel): BallisticPoi
 
 function isFinitePoint(value: BallisticPoint3): boolean {
   return Number.isFinite(value.xMetres) && Number.isFinite(value.yMetres) && Number.isFinite(value.zMetres);
+}
+
+function isFiniteDirection(value: BallisticDirection3): boolean {
+  return Number.isFinite(value.x) && Number.isFinite(value.y) && Number.isFinite(value.z);
 }
 
 function finite(value: unknown, fallback: number): number {
