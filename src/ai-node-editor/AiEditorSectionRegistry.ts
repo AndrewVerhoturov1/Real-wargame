@@ -114,21 +114,23 @@ function handleNavigationClick(event: MouseEvent): void {
     return;
   }
 
-  const builtInButton = target?.closest<HTMLButtonElement>('[data-navigation-tab]');
-  if (!builtInButton) return;
+  const navigationButton = target?.closest<HTMLButtonElement>('button');
+  const currentHost = ensureHost();
+  if (!navigationButton || !currentHost.mainTabs.contains(navigationButton)) return;
+  const builtInSectionId = navigationButton.dataset.navigationTab ?? '';
   if (bypassBuiltInClick) {
     bypassBuiltInClick = false;
-    scheduleBuiltInPanelLabel(builtInButton.dataset.navigationTab ?? '');
+    scheduleBuiltInPanelLabel(builtInSectionId);
     return;
   }
   if (!activeSectionId) {
-    scheduleBuiltInPanelLabel(builtInButton.dataset.navigationTab ?? '');
+    scheduleBuiltInPanelLabel(builtInSectionId);
     return;
   }
 
   event.preventDefault();
   event.stopImmediatePropagation();
-  void leaveForBuiltInSection(builtInButton);
+  void leaveForBuiltInSection(navigationButton);
 }
 
 async function leaveForBuiltInSection(button: HTMLButtonElement): Promise<void> {
