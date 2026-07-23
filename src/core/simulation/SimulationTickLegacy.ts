@@ -24,6 +24,7 @@ import {
   tickFireAction,
 } from '../combat/FireAction';
 import { getCombatSuppressionSnapshot } from '../combat/CombatSuppression';
+import { tickInfantryCombatSimulation } from '../infantry-combat/runtime';
 import type { GridPosition } from '../geometry';
 import { syncSoldierThreatMemory } from '../knowledge/SoldierThreatMemory';
 import { clampGridPositionToMap } from '../map/MapModel';
@@ -127,6 +128,10 @@ export function tickSimulation(
         );
       }
       processDueCombatEvents(state);
+      tickInfantryCombatSimulation(state, {
+        intervalStartSeconds: cycleStartMs / 1000,
+        deltaSeconds: scaledDeltaSeconds,
+      });
     });
 
     const simulationTimeMs = Math.max(0, Math.round(state.simulationTimeSeconds * 1000));

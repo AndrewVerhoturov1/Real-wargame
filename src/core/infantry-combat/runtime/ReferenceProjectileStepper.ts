@@ -355,7 +355,8 @@ function clamp01(value: number): number {
 }
 
 function normalizeSmall(value: number): number {
-  return Math.abs(value) < TIME_EPSILON_SECONDS ? 0 : value;
+  if (Math.abs(value) < TIME_EPSILON_SECONDS) return 0;
+  return Math.round(value * 1_000_000_000_000) / 1_000_000_000_000;
 }
 
 function emptyResult(): TickReferenceProjectilesResult {

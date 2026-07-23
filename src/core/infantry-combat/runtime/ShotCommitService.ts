@@ -204,7 +204,8 @@ function isFinitePoint(point: BallisticPoint3): boolean {
 }
 
 function finiteNonNegative(value: unknown, fallback: number): number {
-  return Math.max(0, typeof value === 'number' && Number.isFinite(value) ? value : fallback);
+  const numeric = Math.max(0, typeof value === 'number' && Number.isFinite(value) ? value : fallback);
+  return Math.round(numeric * 1_000_000_000_000) / 1_000_000_000_000;
 }
 
 function compareText(left: string, right: string): number {

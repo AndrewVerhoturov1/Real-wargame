@@ -481,11 +481,15 @@ function clamp01(value: unknown): number {
 
 function cleanDuration(value: number): number {
   if (!Number.isFinite(value) || value <= TIME_EPSILON_SECONDS) return 0;
-  return value;
+  return canonicalSeconds(value);
 }
 
 function finiteNonNegative(value: unknown, fallback: number): number {
-  return Math.max(0, isFiniteNumber(value) ? value : fallback);
+  return canonicalSeconds(Math.max(0, isFiniteNumber(value) ? value : fallback));
+}
+
+function canonicalSeconds(value: number): number {
+  return Math.round(value * 1_000_000_000_000) / 1_000_000_000_000;
 }
 
 function integer(value: unknown, fallback: number, minimum: number, maximum: number): number {
