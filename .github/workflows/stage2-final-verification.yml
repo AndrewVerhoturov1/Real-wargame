@@ -27,26 +27,40 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: TypeScript
-        run: npx tsc --noEmit
+      - name: Run and capture Stage 2 matrix
+        id: matrix
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          status=0
+          run_check() {
+            echo "===== $1 =====" | tee -a stage2-final-verification.log
+            shift
+            "$@" 2>&1 | tee -a stage2-final-verification.log
+            code=${PIPESTATUS[0]}
+            echo "EXIT_CODE=$code" | tee -a stage2-final-verification.log
+            if [ "$code" -ne 0 ]; then status=1; fi
+          }
+          run_check TypeScript npx tsc --noEmit
+          run_check PhysicalActionCoordinator npm run physical-action-coordinator:smoke
+          run_check PostureTransition npm run posture-transition:smoke
+          run_check PhysicalMovement npm run physical-movement:smoke
+          run_check CombatFoundation npm run combat-foundation:smoke
+          run_check CombatTacticalIntegration npm run combat-tactical-integration:smoke
+          run_check TacticalActionPorts npm run tactical-action-ports:smoke
+          run_check ProductionBuild npm run build
+          exit "$status"
 
-      - name: Physical action coordinator
-        run: npm run physical-action-coordinator:smoke
+      - name: Upload Stage 2 verification log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage2-final-verification-${{ github.event.pull_request.head.sha }}
+          path: stage2-final-verification.log
+          if-no-files-found: error
+          retention-days: 1
 
-      - name: Posture transition
-        run: npm run posture-transition:smoke
-
-      - name: Physical movement
-        run: npm run physical-movement:smoke
-
-      - name: Combat foundation
-        run: npm run combat-foundation:smoke
-
-      - name: Combat tactical integration
-        run: npm run combat-tactical-integration:smoke
-
-      - name: Tactical action ports
-        run: npm run tactical-action-ports:smoke
-
-      - name: Production build
-        run: npm run build
+      - name: Preserve verification failure
+        if: steps.matrix.outcome == 'failure'
+        run: exit 1
