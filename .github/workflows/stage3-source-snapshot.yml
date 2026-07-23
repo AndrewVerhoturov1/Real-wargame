@@ -88,14 +88,28 @@ jobs:
         shell: bash
         run: |
           set +e
-          npm run performance-contract:smoke > /tmp/performance-contract.log 2>&1
-          status=$?
+          npm run performance-contract:smoke > /tmp/performance-candidate.log 2>&1
+          candidate_status=$?
           set -e
-          cat /tmp/performance-contract.log
-          if [ "$status" -ne 0 ]; then
-            test "$status" -eq 1
-            grep -F 'ERR_MODULE_NOT_FOUND' /tmp/performance-contract.log
-            grep -F 'generate_agent_docs.mjs' /tmp/performance-contract.log
+          cat /tmp/performance-candidate.log
+
+          if [ "$candidate_status" -ne 0 ]; then
+            git diff --exit-code fa4c75a9cdec8fc2a2a7eaabad8cda1ce3258978...HEAD -- scripts/check_agent_docs.mjs
+            git worktree add --detach /tmp/stage3-base fa4c75a9cdec8fc2a2a7eaabad8cda1ce3258978
+            ln -s "$GITHUB_WORKSPACE/node_modules" /tmp/stage3-base/node_modules
+
+            set +e
+            (cd /tmp/stage3-base && npm run performance-contract:smoke) > /tmp/performance-base.log 2>&1
+            base_status=$?
+            set -e
+            cat /tmp/performance-base.log
+
+            test "$base_status" -ne 0
+            test "$candidate_status" -eq "$base_status"
+            sed -E "s#${GITHUB_WORKSPACE}#/repo#g; s#/tmp/stage3-base#/repo#g" /tmp/performance-candidate.log > /tmp/performance-candidate.normalized.log
+            sed -E "s#${GITHUB_WORKSPACE}#/repo#g; s#/tmp/stage3-base#/repo#g" /tmp/performance-base.log > /tmp/performance-base.normalized.log
+            diff -u /tmp/performance-base.normalized.log /tmp/performance-candidate.normalized.log
+            git worktree remove --force /tmp/stage3-base
           fi
 
       - name: Reject nondeterministic Stage 3 runtime APIs
