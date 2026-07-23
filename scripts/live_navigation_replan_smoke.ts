@@ -319,7 +319,7 @@ function makeCorridorState(): SimulationState {
       ...blockerRectangle('middle-wall', 6, 17, 5, 8),
     ],
   }, [
-    { id: 'blue-mover', label: 'Mover', labelRu: 'Двигающийся', type: 'infantry_squad', side: 'blue', x: 2, y: 3, facingDegrees: 0, viewRangeCells: 0 },
+    { id: 'blue-mover', label: 'Mover', labelRu: 'Двигающийся', type: 'infantry_squad', side: 'blue', x: 2, y: 3, facingDegrees: 0, viewRangeCells: 0, initialState: { posture: 'crouched' } },
     { id: 'red-shooter', label: 'Shooter', labelRu: 'Стрелок', type: 'infantry_squad', side: 'red', x: 0, y: 4, facingDegrees: 0, viewRangeCells: 0 },
   ]);
   const mover = unit(state, 'blue-mover');
