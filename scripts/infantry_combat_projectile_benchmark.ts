@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import {
   PRODUCTION_PROJECTILE_CAPACITY,
@@ -163,7 +164,12 @@ let memorySink: unknown = null;
 
 type FixtureProfile = 'idle' | 'single_volley' | 'sustained' | 'target_stress' | 'dense_geometry' | 'direct';
 
-main();
+const memoryProbeMode = process.env.PROJECTILE_BENCHMARK_MEMORY_PROBE;
+if (memoryProbeMode === 'stage3' || memoryProbeMode === 'stage4') {
+  runMemoryProbe(memoryProbeMode);
+} else {
+  main();
+}
 
 function main(): void {
   assert.equal(PRODUCTION_PROJECTILE_CAPACITY, 4096, 'Stage 4 selected capacity must match the measured minimum with 25% headroom.');
@@ -601,39 +607,50 @@ function measureProductionIdleSample(): {
 }
 
 function measureRuntimeRetainedHeapPerProjectile(): { stage3Reference: number; stage4Production: number } {
+  const bundlePath = process.env.PROJECTILE_BENCHMARK_BUNDLE_PATH;
+  assert.ok(bundlePath, 'benchmark wrapper must expose the built bundle path');
   const referenceSamples: number[] = [];
   const productionSamples: number[] = [];
   for (let sample = 0; sample < 5; sample += 1) {
-    memorySink = null;
-    forceGc();
-    forceGc();
-    let before = retainedMemoryBytes();
-    memorySink = createMemoryReferenceRuntimes();
-    forceGc();
-    assert.equal((memorySink as readonly unknown[]).length, MEMORY_COMPARISON_RUNTIME_COPIES);
-    referenceSamples.push(
-      Math.max(0, retainedMemoryBytes() - before)
-      / (MEMORY_COMPARISON_PROJECTILES * MEMORY_COMPARISON_RUNTIME_COPIES),
-    );
-
-    memorySink = null;
-    forceGc();
-    forceGc();
-    before = retainedMemoryBytes();
-    memorySink = createMemoryProductionRuntimes();
-    forceGc();
-    assert.equal((memorySink as readonly unknown[]).length, MEMORY_COMPARISON_RUNTIME_COPIES);
-    productionSamples.push(
-      Math.max(0, retainedMemoryBytes() - before)
-      / (MEMORY_COMPARISON_PROJECTILES * MEMORY_COMPARISON_RUNTIME_COPIES),
-    );
+    referenceSamples.push(runIsolatedMemoryProbe(bundlePath, 'stage3'));
+    productionSamples.push(runIsolatedMemoryProbe(bundlePath, 'stage4'));
   }
-  memorySink = null;
-  forceGc();
   return {
     stage3Reference: median(referenceSamples),
     stage4Production: median(productionSamples),
   };
+}
+
+function runIsolatedMemoryProbe(bundlePath: string, mode: 'stage3' | 'stage4'): number {
+  const output = execFileSync(process.execPath, ['--expose-gc', bundlePath], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PROJECTILE_BENCHMARK_MEMORY_PROBE: mode,
+      PROJECTILE_BENCHMARK_DIAGNOSTIC: '1',
+    },
+    maxBuffer: 1024 * 1024,
+  });
+  const parsed = JSON.parse(output.trim()) as { readonly bytesPerProjectile: number };
+  assert.ok(Number.isFinite(parsed.bytesPerProjectile) && parsed.bytesPerProjectile > 0);
+  return parsed.bytesPerProjectile;
+}
+
+function runMemoryProbe(mode: 'stage3' | 'stage4'): void {
+  memorySink = null;
+  forceGc();
+  forceGc();
+  const before = retainedMemoryBytes();
+  memorySink = mode === 'stage3'
+    ? createMemoryReferenceRuntimes()
+    : createMemoryProductionRuntimes();
+  forceGc();
+  assert.equal((memorySink as readonly unknown[]).length, MEMORY_COMPARISON_RUNTIME_COPIES);
+  const retainedBytes = retainedMemoryBytes() - before;
+  const bytesPerProjectile = retainedBytes
+    / (MEMORY_COMPARISON_PROJECTILES * MEMORY_COMPARISON_RUNTIME_COPIES);
+  assert.ok(Number.isFinite(bytesPerProjectile) && bytesPerProjectile > 0);
+  console.log(JSON.stringify({ mode, retainedBytes, bytesPerProjectile }));
 }
 
 function createMemoryReferenceRuntimes(): Stage3ReferenceHarnessRuntime[] {

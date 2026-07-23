@@ -427,6 +427,8 @@ function verifyBenchmarkMeasurementContract(): void {
   assert.equal(source.includes('const DIRECT_COMPARISON_CAPACITY = 256;'), true);
   assert.equal(source.includes('createProjectileRuntimeState(DIRECT_COMPARISON_CAPACITY)'), true);
   assert.equal(source.includes('memoryUsage.heapUsed + memoryUsage.arrayBuffers'), true);
+  assert.equal(source.includes('PROJECTILE_BENCHMARK_MEMORY_PROBE'), true);
+  assert.equal(source.includes('execFileSync'), true);
 }
 
 function makeState(
