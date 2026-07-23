@@ -21,6 +21,7 @@ verifyEmptyWeaponIsAtomic();
 verifyOwnershipLossIsAtomic();
 verifyInvalidTargetIsAtomic();
 verifyProjectileCapacityIsAtomic();
+verifyDuplicateProjectileIdIsAtomic();
 verifyMuzzleBlockIsAtomic();
 verifyFriendlyRiskIsAtomic();
 verifyLedgerEvictionIsDeterministic();
@@ -86,6 +87,25 @@ function verifyProjectileCapacityIsAtomic(): void {
   assert.equal(result.status, 'projectile_capacity_exceeded');
   assert.equal(ready.state.infantryCombatProjectiles.diagnostics.capRejectionCount, 1);
   assert.deepEqual(snapshot(ready.state, ready.shooter, true), before);
+}
+
+
+function verifyDuplicateProjectileIdIsAtomic(): void {
+  const ready = readyShot('commit-duplicate');
+  ready.state.infantryCombatProjectiles.activeProjectiles = [dummyProjectile('commit-duplicate:shot:1')];
+  const before = snapshot(ready.state, ready.shooter);
+  const result = commitShot({ ...ready, committedSeconds: 1.7 });
+  assert.equal(result.status, 'duplicate_projectile_id');
+  assert.equal(ready.state.infantryCombatProjectiles.diagnostics.duplicateSpawnCount, 1);
+  const after = serializeReferenceProjectileRuntimeState(ready.state.infantryCombatProjectiles);
+  after.diagnostics.duplicateSpawnCount = 0;
+  const normalizedBefore = structuredClone(before) as { projectiles: ReturnType<typeof serializeReferenceProjectileRuntimeState> };
+  normalizedBefore.projectiles.diagnostics.duplicateSpawnCount = 0;
+  assert.deepEqual({
+    weapon: structuredClone(ready.shooter.infantryCombatRuntime.primaryWeapon),
+    task: structuredClone(ready.shooter.infantryCombatRuntime.activeFireTask),
+    projectiles: after,
+  }, normalizedBefore);
 }
 
 function verifyMuzzleBlockIsAtomic(): void {

@@ -129,7 +129,9 @@
     "environment-materials:smoke": "node scripts/environment_materials_smoke.mjs",
     "environment-material-migration:smoke": "node scripts/environment_material_migration_smoke.mjs",
     "environment-profile-revisions:smoke": "node scripts/environment_profile_revisions_smoke.mjs",
-    "vegetation-chunk-raster:smoke": "node scripts/vegetation_chunk_raster_smoke.mjs"
+    "vegetation-chunk-raster:smoke": "node scripts/vegetation_chunk_raster_smoke.mjs",
+    "infantry-combat-projectile:smoke": "node scripts/infantry_combat_projectile_runtime_smoke.mjs",
+    "infantry-combat-projectile:benchmark": "node scripts/infantry_combat_projectile_benchmark.mjs"
   },
   "dependencies": {
     "pixi.js": "^8.19.0"
