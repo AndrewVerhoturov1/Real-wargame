@@ -5,13 +5,16 @@ import { beginFireTaskRecovery, fireTaskHasExactLease } from './FireTaskRuntime'
 import { evaluateCenterlineFriendlyFireRisk, evaluateMuzzleBlocked } from './FriendlyFireRisk';
 import { computeMuzzleGeometry } from './MuzzleGeometry';
 import {
-  MAX_STAGE3_ACTIVE_PROJECTILES,
   PROJECTILE_STATE_SCHEMA_VERSION,
   SHOT_COMMIT_RECORD_SCHEMA_VERSION,
   type ProjectileStateV1,
   type ShotCommitRecordV1,
 } from './ProjectileRuntimeTypes';
-import { appendBoundedCommitRecord } from './ReferenceProjectileRuntime';
+import {
+  appendBoundedCommitRecord,
+  getActiveShotIds,
+  trySpawnProjectile,
+} from './ProjectileRuntime';
 import type {
   FireTaskRuntimeV1,
   InfantryWeaponInstanceV1,
@@ -91,15 +94,6 @@ export function commitShot(input: CommitShotInput): CommitShotResult {
     });
   }
   const projectileRuntime = state.infantryCombatProjectiles;
-  if (projectileRuntime.activeProjectiles.length >= MAX_STAGE3_ACTIVE_PROJECTILES) {
-    projectileRuntime.diagnostics.capRejectionCount = Math.min(Number.MAX_SAFE_INTEGER, projectileRuntime.diagnostics.capRejectionCount + 1);
-    return failure(shooter, 'projectile_capacity_exceeded', {
-      muzzlePosition: geometry.muzzle,
-      friendlyRisk: friendly.risk,
-      roundsBefore: weapon.roundsInWeapon,
-      roundsAfter: weapon.roundsInWeapon,
-    });
-  }
 
   const nextShotSequence = weapon.shotSequence + 1;
   if (!Number.isSafeInteger(nextShotSequence) || nextShotSequence <= 0) return failure(shooter, 'projectile_capacity_exceeded');
@@ -140,17 +134,29 @@ export function commitShot(input: CommitShotInput): CommitShotResult {
     roundsBefore,
     roundsAfter,
   };
-  const activeShotIds = new Set(projectileRuntime.activeProjectiles.map((projectile) => projectile.shotId));
+  const activeShotIds = getActiveShotIds(projectileRuntime);
   activeShotIds.add(shotId);
   const nextLedger = appendBoundedCommitRecord(projectileRuntime, commitRecord, activeShotIds);
-  const nextProjectiles = [...projectileRuntime.activeProjectiles, projectileCandidate].sort((left, right) => compareText(left.projectileId, right.projectileId));
+  const spawn = trySpawnProjectile(projectileRuntime, projectileCandidate);
+  if (spawn.status !== 'spawned') {
+    const status: ShotCommitStatus = spawn.status === 'capacity_exceeded'
+      ? 'projectile_capacity_exceeded'
+      : spawn.status === 'duplicate_projectile_id'
+        ? 'duplicate_projectile_id'
+        : 'invalid_projectile_candidate';
+    return failure(shooter, status, {
+      muzzlePosition: geometry.muzzle,
+      friendlyRisk: friendly.risk,
+      roundsBefore,
+      roundsAfter: roundsBefore,
+    });
+  }
 
   weapon.shotSequence = nextShotSequence;
   weapon.roundsInWeapon = roundsAfter;
   weapon.lastCommittedShotId = shotId;
   task.committedShotId = shotId;
   projectileRuntime.committedShots = nextLedger;
-  projectileRuntime.activeProjectiles = nextProjectiles;
   beginFireTaskRecovery(shooter, {
     committedShotId: shotId,
     startedSeconds: commitRecord.committedSimulationSeconds,
@@ -206,8 +212,4 @@ function isFinitePoint(point: BallisticPoint3): boolean {
 function finiteNonNegative(value: unknown, fallback: number): number {
   const numeric = Math.max(0, typeof value === 'number' && Number.isFinite(value) ? value : fallback);
   return Math.round(numeric * 1_000_000_000_000) / 1_000_000_000_000;
-}
-
-function compareText(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
 }

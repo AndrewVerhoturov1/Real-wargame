@@ -4,7 +4,12 @@ import {
   getMapObjectHeightMetres,
   intersectSegmentWithMapObject,
 } from '../map/MapObjectGeometry';
-import { getMapObjectSpatialIndex, type MapObjectSpatialIndex } from '../spatial/MapObjectSpatialIndex';
+import {
+  createMapObjectSpatialQueryScratch,
+  getMapObjectSpatialIndex,
+  type MapObjectSpatialIndex,
+  type MapObjectSpatialQueryScratch,
+} from '../spatial/MapObjectSpatialIndex';
 import { sampleSmoothHeightLevel } from '../terrain/SmoothTerrain';
 import type { UnitModel } from '../units/UnitModel';
 import {
@@ -48,6 +53,8 @@ export interface BallisticRayResult {
   objectCandidateCount: number;
   /** Number of unit hit-shape checks after ignored units are excluded. */
   unitCheckCount: number;
+  /** Number of terrain height samples performed by this trace. */
+  terrainSampleCount: number;
 }
 
 export interface BallisticTraceContext {
@@ -67,6 +74,36 @@ interface CandidateHit {
 interface TerrainTrace {
   hitDistanceMetres: number | null;
   minimumClearanceMetres: number | null;
+  sampleCount: number;
+}
+
+export interface BallisticTraceScratch {
+  readonly ignoredUnitIds: Set<string>;
+  readonly objectCandidates: TacticalMap['objects'];
+  readonly objectQueryScratch: MapObjectSpatialQueryScratch;
+}
+
+export function createBallisticTraceScratch(): BallisticTraceScratch {
+  return {
+    ignoredUnitIds: new Set<string>(),
+    objectCandidates: [],
+    objectQueryScratch: createMapObjectSpatialQueryScratch(),
+  };
+}
+
+export function createEmptyBallisticRayResult(): BallisticRayResult {
+  return {
+    shotId: '',
+    hitType: 'none',
+    travelledMetres: 0,
+    flightTimeSeconds: 0,
+    impactPoint: { xMetres: 0, yMetres: 0, zMetres: 0 },
+    impactGridPosition: { x: 0, y: 0 },
+    clearanceMetres: null,
+    objectCandidateCount: 0,
+    unitCheckCount: 0,
+    terrainSampleCount: 0,
+  };
 }
 
 interface ObjectTrace {
@@ -90,9 +127,29 @@ export function traceBallisticRay(
   context: BallisticTraceContext,
   input: BallisticRayInput,
 ): BallisticRayResult {
+  return traceBallisticRayPrepared(
+    context,
+    input,
+    createBallisticTraceScratch(),
+    createEmptyBallisticRayResult(),
+    context.units,
+  );
+}
+
+/** Allocation-aware shared trace used by the projectile batch. */
+export function traceBallisticRayPrepared(
+  context: BallisticTraceContext,
+  input: BallisticRayInput,
+  scratch: BallisticTraceScratch,
+  output: BallisticRayResult,
+  unitCandidates: readonly UnitModel[] = context.units,
+): BallisticRayResult {
   const direction = normalizeDirection(input.direction);
   const maximumDistanceMetres = Math.max(0, input.maximumDistanceMetres);
-  const ignored = new Set<string>([input.shooterId, ...(input.ignoreUnitIds ?? [])]);
+  const ignored = scratch.ignoredUnitIds;
+  ignored.clear();
+  ignored.add(input.shooterId);
+  for (const unitId of input.ignoreUnitIds ?? []) ignored.add(unitId);
   let nearest: CandidateHit | null = null;
   let minimumClearanceMetres: number | null = null;
 
@@ -114,7 +171,14 @@ export function traceBallisticRay(
     x: endPoint.xMetres / context.map.metersPerCell,
     y: endPoint.yMetres / context.map.metersPerCell,
   };
-  const objectCandidates = context.objectSpatialIndex.querySegment(segmentStart, segmentEnd, 0);
+  const objectCandidates = scratch.objectCandidates;
+  context.objectSpatialIndex.querySegmentInto(
+    segmentStart,
+    segmentEnd,
+    0,
+    objectCandidates,
+    scratch.objectQueryScratch,
+  );
   let unitCheckCount = 0;
   for (const object of objectCandidates) {
     const trace = traceMapObject(
@@ -135,7 +199,7 @@ export function traceBallisticRay(
     });
   }
 
-  for (const unit of context.units) {
+  for (const unit of unitCandidates) {
     if (ignored.has(unit.id)) continue;
     unitCheckCount += 1;
     const intersection = intersectRayWithUnitHitShapes(
@@ -157,23 +221,23 @@ export function traceBallisticRay(
   const travelledMetres = nearest?.distanceMetres ?? maximumDistanceMetres;
   const impactPoint = pointAlongRay(input.origin, direction, travelledMetres);
   const velocity = Math.max(1, input.muzzleVelocityMetresPerSecond);
-  return {
-    shotId: input.shotId,
-    hitType: nearest?.type ?? 'none',
-    travelledMetres,
-    flightTimeSeconds: travelledMetres / velocity,
-    impactPoint,
-    impactGridPosition: {
-      x: impactPoint.xMetres / context.map.metersPerCell,
-      y: impactPoint.yMetres / context.map.metersPerCell,
-    },
-    clearanceMetres: nearest ? 0 : normalizeClearance(minimumClearanceMetres),
-    hitObjectId: nearest?.objectId,
-    hitUnitId: nearest?.unitId,
-    hitZone: nearest?.zone,
-    objectCandidateCount: objectCandidates.length,
-    unitCheckCount,
-  };
+  output.shotId = input.shotId;
+  output.hitType = nearest?.type ?? 'none';
+  output.travelledMetres = travelledMetres;
+  output.flightTimeSeconds = travelledMetres / velocity;
+  output.impactPoint.xMetres = impactPoint.xMetres;
+  output.impactPoint.yMetres = impactPoint.yMetres;
+  output.impactPoint.zMetres = impactPoint.zMetres;
+  output.impactGridPosition.x = impactPoint.xMetres / context.map.metersPerCell;
+  output.impactGridPosition.y = impactPoint.yMetres / context.map.metersPerCell;
+  output.clearanceMetres = nearest ? 0 : normalizeClearance(minimumClearanceMetres);
+  output.hitObjectId = nearest?.objectId;
+  output.hitUnitId = nearest?.unitId;
+  output.hitZone = nearest?.zone;
+  output.objectCandidateCount = objectCandidates.length;
+  output.unitCheckCount = unitCheckCount;
+  output.terrainSampleCount = terrain.sampleCount;
+  return output;
 }
 
 function traceTerrain(
@@ -183,28 +247,30 @@ function traceTerrain(
   maximumDistanceMetres: number,
 ): TerrainTrace {
   let minimumClearanceMetres: number | null = null;
+  let sampleCount = 0;
   for (
     let distanceMetres = Math.min(TERRAIN_SAMPLE_STEP_METRES, maximumDistanceMetres);
     distanceMetres > 0 && distanceMetres <= maximumDistanceMetres + DISTANCE_EPSILON_METRES;
     distanceMetres += TERRAIN_SAMPLE_STEP_METRES
   ) {
     const sampleDistance = Math.min(distanceMetres, maximumDistanceMetres);
+    sampleCount += 1;
     const point = pointAlongRay(origin, direction, sampleDistance);
     const gridX = point.xMetres / map.metersPerCell;
     const gridY = point.yMetres / map.metersPerCell;
     const cell = getCell(map, Math.floor(gridX), Math.floor(gridY));
     if (!cell) {
-      return { hitDistanceMetres: sampleDistance, minimumClearanceMetres: 0 };
+      return { hitDistanceMetres: sampleDistance, minimumClearanceMetres: 0, sampleCount };
     }
     const groundHeight = sampleSmoothHeightLevel(map, gridX, gridY) * ELEVATION_STEP_METRES;
     const clearance = point.zMetres - groundHeight;
     minimumClearanceMetres = lowerNullable(minimumClearanceMetres, clearance);
     if (clearance <= TERRAIN_IMPACT_MARGIN_METRES) {
-      return { hitDistanceMetres: sampleDistance, minimumClearanceMetres: 0 };
+      return { hitDistanceMetres: sampleDistance, minimumClearanceMetres: 0, sampleCount };
     }
     if (sampleDistance >= maximumDistanceMetres) break;
   }
-  return { hitDistanceMetres: null, minimumClearanceMetres };
+  return { hitDistanceMetres: null, minimumClearanceMetres, sampleCount };
 }
 
 function traceMapObject(

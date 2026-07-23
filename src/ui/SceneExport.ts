@@ -10,7 +10,7 @@ import {
   reconcileInfantryCombatRuntimeAfterLoad,
   serializeInfantryCombatUnitRuntime,
   serializeReferenceProjectileRuntimeState,
-  type ReferenceProjectileRuntimeStateV1,
+  type ProjectileRuntimeSnapshotV2,
 } from '../core/infantry-combat/runtime';
 import { createMovementProfileRegistry, serializeMovementProfileRegistry, type MovementProfileRegistryData } from '../core/movement/MovementProfiles';
 import {
@@ -44,7 +44,7 @@ export interface ExportedSceneData {
   exportedAt: string;
   noteRu: string;
   simulationTimeSeconds: number;
-  infantryCombatRuntime: ReferenceProjectileRuntimeStateV1;
+  infantryCombatRuntime: ProjectileRuntimeSnapshotV2;
   map: {
     width: number;
     height: number;

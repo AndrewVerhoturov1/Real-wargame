@@ -152,14 +152,18 @@ function isDeniedCommitStatus(status: Exclude<ShotCommitStatus, 'committed' | 'a
     || status === 'empty_weapon'
     || status === 'muzzle_blocked'
     || status === 'friendly_risk_exceeded'
-    || status === 'projectile_capacity_exceeded';
+    || status === 'projectile_capacity_exceeded'
+    || status === 'duplicate_projectile_id'
+    || status === 'invalid_projectile_candidate';
 }
 
 function commitFailureText(status: Exclude<ShotCommitStatus, 'committed' | 'already_committed'>): string {
   if (status === 'empty_weapon') return 'Одиночный выстрел отклонён: в винтовке нет патрона.';
   if (status === 'muzzle_blocked') return 'Одиночный выстрел отклонён: дульный срез перекрыт.';
   if (status === 'friendly_risk_exceeded') return 'Одиночный выстрел отклонён: превышен допустимый риск для союзника.';
-  if (status === 'projectile_capacity_exceeded') return 'Одиночный выстрел отклонён: заполнен ограниченный пул Stage 3.';
+  if (status === 'projectile_capacity_exceeded') return 'Одиночный выстрел отклонён: заполнен ограниченный пул физических пуль.';
+  if (status === 'duplicate_projectile_id') return 'Одиночный выстрел отклонён: обнаружен повторный идентификатор пули.';
+  if (status === 'invalid_projectile_candidate') return 'Одиночный выстрел отклонён: состояние новой пули неверно.';
   if (status === 'unsupported_mode') return 'Одиночный выстрел отклонён: режим оружия не поддерживается Stage 3.';
   if (status === 'ownership_lost') return 'Огневая задача завершилась ошибкой: потерян точный захват канала оружия.';
   if (status === 'weapon_missing') return 'Огневая задача завершилась ошибкой: экземпляр винтовки отсутствует.';
