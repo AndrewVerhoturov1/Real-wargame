@@ -35,8 +35,8 @@ interface PendingRecovery {
 }
 
 /**
- * Explicit Stage 3 combat pipeline. It never selects targets or creates tasks.
- * Callers must equip a weapon and request a FireTask through the public APIs.
+ * Explicit Stage 5 combat pipeline. It never selects targets or creates tasks.
+ * Tracking reads only the active task and the shooter's perception knowledge.
  */
 export function tickInfantryCombatSimulation(
   state: SimulationState,
@@ -60,7 +60,7 @@ export function tickInfantryCombatSimulation(
       continue;
     }
 
-    const ticked = tickFireTaskWithTimeBudget(unit, { intervalStartSeconds, deltaSeconds });
+    const ticked = tickFireTaskWithTimeBudget(unit, { intervalStartSeconds, deltaSeconds, state });
     if (!ticked.commitRequested) continue;
     const task = unit.infantryCombatRuntime.activeFireTask;
     const weapon = unit.infantryCombatRuntime.primaryWeapon;
@@ -138,10 +138,9 @@ function terminalizeCommitFailure(
   status: Exclude<ShotCommitStatus, 'committed' | 'already_committed'>,
   endedSeconds: number,
 ): void {
-  const denied = isDeniedCommitStatus(status);
   failActiveFireTask(unit, {
     endedSeconds,
-    denied,
+    denied: isDeniedCommitStatus(status),
     resultCode: `infantry_fire_task_commit_${status}`,
     resultRu: commitFailureText(status),
   });
@@ -150,6 +149,9 @@ function terminalizeCommitFailure(
 function isDeniedCommitStatus(status: Exclude<ShotCommitStatus, 'committed' | 'already_committed'>): boolean {
   return status === 'unsupported_mode'
     || status === 'empty_weapon'
+    || status === 'aim_solution_invalid'
+    || status === 'aim_solution_below_threshold'
+    || status === 'movement_forbidden'
     || status === 'muzzle_blocked'
     || status === 'friendly_risk_exceeded'
     || status === 'projectile_capacity_exceeded'
@@ -159,15 +161,18 @@ function isDeniedCommitStatus(status: Exclude<ShotCommitStatus, 'committed' | 'a
 
 function commitFailureText(status: Exclude<ShotCommitStatus, 'committed' | 'already_committed'>): string {
   if (status === 'empty_weapon') return 'Одиночный выстрел отклонён: в винтовке нет патрона.';
+  if (status === 'aim_solution_invalid') return 'Одиночный выстрел отклонён: решение прицеливания недействительно.';
+  if (status === 'aim_solution_below_threshold') return 'Одиночный выстрел отклонён: качество решения ниже заданного порога.';
+  if (status === 'movement_forbidden') return 'Одиночный выстрел отклонён: это оружие запрещает огонь во время фактического движения.';
   if (status === 'muzzle_blocked') return 'Одиночный выстрел отклонён: дульный срез перекрыт.';
   if (status === 'friendly_risk_exceeded') return 'Одиночный выстрел отклонён: превышен допустимый риск для союзника.';
   if (status === 'projectile_capacity_exceeded') return 'Одиночный выстрел отклонён: заполнен ограниченный пул физических пуль.';
   if (status === 'duplicate_projectile_id') return 'Одиночный выстрел отклонён: обнаружен повторный идентификатор пули.';
   if (status === 'invalid_projectile_candidate') return 'Одиночный выстрел отклонён: состояние новой пули неверно.';
-  if (status === 'unsupported_mode') return 'Одиночный выстрел отклонён: режим оружия не поддерживается Stage 3.';
+  if (status === 'unsupported_mode') return 'Одиночный выстрел отклонён: режим оружия не поддерживается Stage 5.';
   if (status === 'ownership_lost') return 'Огневая задача завершилась ошибкой: потерян точный захват канала оружия.';
   if (status === 'weapon_missing') return 'Огневая задача завершилась ошибкой: экземпляр винтовки отсутствует.';
-  if (status === 'invalid_target') return 'Огневая задача завершилась ошибкой: мировая точка цели неверна.';
+  if (status === 'invalid_target') return 'Огневая задача завершилась ошибкой: направление решения прицеливания неверно.';
   return 'Огневая задача завершилась ошибкой до атомарного выстрела.';
 }
 
