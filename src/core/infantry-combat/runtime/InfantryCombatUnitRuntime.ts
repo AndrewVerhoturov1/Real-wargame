@@ -3,6 +3,11 @@ import {
   type InfantryCombatUnitRuntimeV1,
 } from './InfantryCombatRuntimeTypes';
 import { normalizeInfantryWeaponInstance, serializeInfantryWeaponInstance } from './InfantryWeaponInstance';
+import {
+  normalizeFireTaskRuntime,
+  normalizeFireTaskTerminalResult,
+  serializeFireTaskRuntime,
+} from './FireTaskRuntime';
 
 export function createInfantryCombatUnitRuntime(): InfantryCombatUnitRuntimeV1 {
   return {
@@ -22,10 +27,8 @@ export function normalizeInfantryCombatUnitRuntime(value: unknown): InfantryComb
     schemaVersion: INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION,
     nextFireTaskSequence: integer(value.nextFireTaskSequence, 1, 1, Number.MAX_SAFE_INTEGER),
     primaryWeapon: normalizeInfantryWeaponInstance(value.primaryWeapon),
-    // FireTask normalization is added with the Stage 3 task runtime. Unknown
-    // task payloads are intentionally dropped instead of becoming lock state.
-    activeFireTask: null,
-    lastFireResult: null,
+    activeFireTask: normalizeFireTaskRuntime(value.activeFireTask),
+    lastFireResult: normalizeFireTaskTerminalResult(value.lastFireResult),
   };
 }
 
@@ -36,7 +39,7 @@ export function serializeInfantryCombatUnitRuntime(
     schemaVersion: INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION,
     nextFireTaskSequence: integer(value.nextFireTaskSequence, 1, 1, Number.MAX_SAFE_INTEGER),
     primaryWeapon: value.primaryWeapon ? serializeInfantryWeaponInstance(value.primaryWeapon) : null,
-    activeFireTask: value.activeFireTask ? structuredClone(value.activeFireTask) : null,
+    activeFireTask: value.activeFireTask ? serializeFireTaskRuntime(value.activeFireTask) : null,
     lastFireResult: value.lastFireResult ? structuredClone(value.lastFireResult) : null,
   };
 }

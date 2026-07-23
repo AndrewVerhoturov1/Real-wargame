@@ -40,7 +40,9 @@ import {
 import { clearCombatRuntime, replaceCombatRuntime, type CombatRuntimeState } from '../combat/CombatDamage';
 import { clearWeaponRuntime, replaceWeaponRuntime, type WeaponRuntimeState } from '../combat/WeaponModel';
 import {
+  FIRE_TASK_ACTION_TYPE,
   createInfantryCombatUnitRuntime,
+  failActiveFireTask,
   normalizeInfantryCombatUnitRuntime,
   type InfantryCombatUnitRuntimeV1,
 } from '../infantry-combat/runtime';
@@ -337,6 +339,7 @@ function reconcileKnownPhysicalActions(unit: UnitModel): void {
   const actions: PhysicalActionReconciliationActionV1[] = [];
   const posture = unit.behaviorRuntime.physicalAction;
   const preparation = unit.movementRuntime.weaponPreparation;
+  const fireTask = unit.infantryCombatRuntime.activeFireTask;
   const postureActionId = posture?.id ?? null;
   const preparationSequence = preparation?.actionHandle?.sequence
     ?? Math.max(1, preparation?.revision ?? unit.behaviorRuntime.physicalActionCoordinator.nextSequence);
@@ -378,6 +381,25 @@ function reconcileKnownPhysicalActions(unit: UnitModel): void {
   } else if (preparation) {
     unit.movementRuntime.weaponPreparation = null;
   }
+  const fireTaskActionSequence = fireTask?.actionHandle?.sequence
+    ?? Math.max(1, unit.behaviorRuntime.physicalActionCoordinator.nextSequence);
+  const fireTaskActionId = fireTask
+    ? fireTask.actionHandle?.actionId ?? `${unit.id}:physical-action:${fireTaskActionSequence}`
+    : null;
+  if (fireTask && fireTaskActionId) {
+    actions.push({
+      payload: fireTask,
+      actionId: fireTaskActionId,
+      sequence: fireTaskActionSequence,
+      actionType: FIRE_TASK_ACTION_TYPE,
+      owner: fireTask.owner,
+      ownerToken: fireTask.ownerToken,
+      channels: ['weapon'],
+      startedSeconds: fireTask.requestedSeconds,
+      reasonCode: 'infantry_fire_task_restored',
+      reasonRu: 'Огневая задача восстановлена.',
+    });
+  }
 
   const result = reconcilePhysicalActionCoordinatorState(unit, {
     actions,
@@ -385,6 +407,7 @@ function reconcileKnownPhysicalActions(unit: UnitModel): void {
       POSTURE_TRANSITION_ACTION_TYPE,
       MOVEMENT_WEAPON_PREPARATION_ACTION_TYPE,
       'legacy_fire_action',
+      FIRE_TASK_ACTION_TYPE,
     ],
     reconciledSeconds: 0,
   });
@@ -396,6 +419,13 @@ function reconcileKnownPhysicalActions(unit: UnitModel): void {
   }
   if (preparationActionId && result.blockedActionIds.includes(preparationActionId)) {
     unit.movementRuntime.weaponPreparation = null;
+  }
+  if (fireTaskActionId && result.blockedActionIds.includes(fireTaskActionId)) {
+    failActiveFireTask(unit, {
+      endedSeconds: 0,
+      resultCode: 'infantry_fire_task_reconciliation_blocked',
+      resultRu: 'Огневая задача не восстановлена из-за конфликта канала оружия.',
+    });
   }
 }
 
