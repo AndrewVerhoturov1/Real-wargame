@@ -1,4 +1,4 @@
-name: Stage 2 Apply Movement Smoke Correction
+name: Stage 2 Apply Navigation Fixture Isolation
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  apply-movement-smoke-correction:
+  apply-navigation-fixture-isolation:
     if: github.event.pull_request.head.ref == 'feature/20260723-shooting-stage-02-physical-action-coordinator'
     runs-on: ubuntu-latest
     steps:
@@ -18,95 +18,37 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Correct movement lifecycle fixture
+      - name: Isolate navigation replan from posture transition
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          path = Path('scripts/physical_movement_runtime_smoke.ts')
+          path = Path('scripts/live_navigation_replan_smoke.ts')
           source = path.read_text(encoding='utf-8')
-
-          unindented = """  assert.equal(requestFireAction(state, shooter, contactId), false);
-          const stale = getMovementWeaponPreparation(shooter);
-          assert.ok(stale);
-          const newerRequest = requestMovementWeaponPreparation(state, shooter, {
-            contactId: 'newer-contact',
-            ownerToken: 'fire-intent:newer-contact',
-          });
-          assert.equal(newerRequest.allowed, false);
-          const newer = getMovementWeaponPreparation(shooter);
-          assert.ok(newer);
-          assert.equal(newer.contactId, 'newer-contact');
-          assert.equal(cancelMovementWeaponPreparation(shooter, { ownerToken: stale.ownerToken, revision: stale.revision }), false, 'stale cleanup must not cancel newer preparation');
-          assert.equal(getMovementWeaponPreparation(shooter)?.contactId, 'newer-contact');
-          assert.equal(cancelMovementWeaponPreparation(shooter, {
-            ownerToken: newer.ownerToken,
-            revision: newer.revision,
-            contactId: newer.contactId,
-          }), true, 'current preparation cleanup must release its exact coordinator lease');
-          """
-          indented = """  assert.equal(requestFireAction(state, shooter, contactId), false);
-            const stale = getMovementWeaponPreparation(shooter);
-            assert.ok(stale);
-            const newerRequest = requestMovementWeaponPreparation(state, shooter, {
-              contactId: 'newer-contact',
-              ownerToken: 'fire-intent:newer-contact',
-            });
-            assert.equal(newerRequest.allowed, false);
-            const newer = getMovementWeaponPreparation(shooter);
-            assert.ok(newer);
-            assert.equal(newer.contactId, 'newer-contact');
-            assert.equal(cancelMovementWeaponPreparation(shooter, { ownerToken: stale.ownerToken, revision: stale.revision }), false, 'stale cleanup must not cancel newer preparation');
-            assert.equal(getMovementWeaponPreparation(shooter)?.contactId, 'newer-contact');
-            assert.equal(cancelMovementWeaponPreparation(shooter, {
-              ownerToken: newer.ownerToken,
-              revision: newer.revision,
-              contactId: newer.contactId,
-            }), true, 'current preparation cleanup must release its exact coordinator lease');
-          """
-          if unindented in source:
-              source = source.replace(unindented, indented, 1)
-
-          old_completion = """  installIdentifiedContact(shooter, target, state.simulationTimeSeconds);
-            assert.equal(requestFireAction(state, shooter, contactId), false);
-            const unattended = getMovementWeaponPreparation(shooter);
-            assert.ok(unattended);
-            const resumedWithoutRepeat = preparePhysicalMovementStep(
-              state, shooter, unattended.remainingSeconds + 0.2, true, 1, 1,
-            );
-            assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');
-            assert.ok(resumedWithoutRepeat.maxDistanceCells > 0, 'movement must resume during time remaining after preparation completes');
-          """
-          new_completion = """  installIdentifiedContact(shooter, target, state.simulationTimeSeconds);
-            assert.equal(requestFireAction(state, shooter, contactId), false);
-            const unattended = getMovementWeaponPreparation(shooter);
-            assert.ok(unattended);
-            const positionBeforeUnattendedCompletion = { ...shooter.position };
-            tickSimulation(state, unattended.remainingSeconds + 0.2);
-            assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');
-            assert.ok(shooter.position.x > positionBeforeUnattendedCompletion.x, 'movement must resume during time remaining after preparation completes');
-          """
-          if old_completion not in source:
-              raise SystemExit('movement completion fixture not found')
-          source = source.replace(old_completion, new_completion, 1)
+          old = "    { id: 'blue-mover', label: 'Mover', labelRu: 'Двигающийся', type: 'infantry_squad', side: 'blue', x: 2, y: 3, facingDegrees: 0, viewRangeCells: 0 },"
+          new = "    { id: 'blue-mover', label: 'Mover', labelRu: 'Двигающийся', type: 'infantry_squad', side: 'blue', x: 2, y: 3, facingDegrees: 0, viewRangeCells: 0, initialState: { posture: 'crouched' } },"
+          if old in source:
+              source = source.replace(old, new, 1)
+          elif new not in source:
+              raise SystemExit('blue mover fixture marker not found')
           path.write_text(source, encoding='utf-8')
           PY
 
-      - name: Commit corrected fixture through Contents API
+      - name: Commit isolated fixture through Contents API
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: feature/20260723-shooting-stage-02-physical-action-coordinator
         shell: bash
         run: |
-          if git diff --quiet -- scripts/physical_movement_runtime_smoke.ts; then
+          if git diff --quiet -- scripts/live_navigation_replan_smoke.ts; then
             exit 0
           fi
-          path='scripts/physical_movement_runtime_smoke.ts'
+          path='scripts/live_navigation_replan_smoke.ts'
           content=$(base64 -w0 "$path")
           for attempt in 1 2 3; do
             sha=$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${BRANCH}" --jq .sha)
             if gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${path}" \
-              -f message='test: commit resumed movement before repeated fire intent' \
+              -f message='test: isolate live replan from physical posture transition' \
               -f content="$content" \
               -f sha="$sha" \
               -f branch="$BRANCH"; then
