@@ -16,6 +16,7 @@ async function run() {
   try {
     await runSmoke('infantry_combat_single_shot_smoke.ts', 'infantry-combat-single-shot.mjs');
     await runSmoke('infantry_combat_fire_task_smoke.ts', 'infantry-combat-fire-task.mjs');
+    await runSmoke('infantry_combat_geometry_smoke.ts', 'infantry-combat-geometry.mjs');
   } finally {
     await rm(outDir, { recursive: true, force: true });
   }
