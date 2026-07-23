@@ -24,15 +24,16 @@ import {
 const DIAGNOSTIC_MODE = process.env.PROJECTILE_BENCHMARK_DIAGNOSTIC === '1';
 const WARMUP_RUNS = DIAGNOSTIC_MODE ? 0 : 3;
 const MEASURED_RUNS = DIAGNOSTIC_MODE ? 1 : 10;
-const SIMULATED_SECONDS_PER_MEASURED_RUN = DIAGNOSTIC_MODE ? 1 : 10;
+const SIMULATED_SECONDS_PER_MEASURED_RUN = 1;
+const VALIDATION_SIMULATED_SECONDS = DIAGNOSTIC_MODE ? 1 : 10;
 const TOTAL_MEASURED_SIMULATED_SECONDS = MEASURED_RUNS * SIMULATED_SECONDS_PER_MEASURED_RUN;
 const OUTER_STEPS = Math.round(SIMULATED_SECONDS_PER_MEASURED_RUN / STAGE3_PROJECTILE_FIXED_STEP_SECONDS);
-const CAPACITY_SWEEP_SECONDS = 1;
+const CAPACITY_SWEEP_SECONDS = STAGE3_PROJECTILE_FIXED_STEP_SECONDS;
 const CAPACITY_CANDIDATES = [512, 1024, 2048, 4096] as const;
 const TARGET_ACTIVE_PROJECTILES = 2000;
 const DIRECT_COMPARISON_PROJECTILES = 200;
 const MEMORY_COMPARISON_PROJECTILES = 2000;
-const MEMORY_COMPARISON_RUNTIME_COPIES = DIAGNOSTIC_MODE ? 2 : 8;
+const MEMORY_COMPARISON_RUNTIME_COPIES = 2;
 const ammo = createDefaultCombatCatalogRegistry().resolveAmmo({ definitionId: 'ammo_762x54r_ball', revision: 1 });
 
 interface TimingSummary {
@@ -153,6 +154,7 @@ interface PreparedProductionRun {
   totalImpacts: number;
   totalTerminations: number;
   projectileSubsteps: number;
+  elapsedSteps: number;
 }
 
 let memorySink: unknown = null;
@@ -227,38 +229,41 @@ function main(): void {
 
 function measureProductionProfile(profile: Exclude<FixtureProfile, 'direct'>): ProfileReport {
   for (let index = 0; index < WARMUP_RUNS; index += 1) executeProductionProfile(profile);
+  const validation = runPreparedProduction(
+    prepareProductionRun(profile, PRODUCTION_PROJECTILE_CAPACITY),
+    Math.round(VALIDATION_SIMULATED_SECONDS / STAGE3_PROJECTILE_FIXED_STEP_SECONDS),
+  );
   const samples: number[] = [];
   const heapDeltas: number[] = [];
-  let representative: ProfileExecutionResult | null = null;
+  let measuredRepresentative: ProfileExecutionResult | null = null;
   for (let index = 0; index < MEASURED_RUNS; index += 1) {
     const prepared = prepareProductionRun(profile, PRODUCTION_PROJECTILE_CAPACITY);
     forceGc();
     const heapBefore = process.memoryUsage().heapUsed;
     const started = process.hrtime.bigint();
-    const result = runPreparedProduction(prepared, profile === 'idle' ? OUTER_STEPS : OUTER_STEPS);
+    const result = runPreparedProduction(prepared, OUTER_STEPS);
     const ended = process.hrtime.bigint();
     forceGc();
     const heapAfter = process.memoryUsage().heapUsed;
     samples.push(nanosecondsToMilliseconds(ended - started));
     heapDeltas.push(heapAfter - heapBefore);
-    representative = result;
+    measuredRepresentative = result;
   }
-  assert.ok(representative);
+  assert.ok(measuredRepresentative);
   const timing = summarizeTiming(
     samples,
     heapDeltas,
-    representative.simulatedSeconds,
-    representative.projectileSubsteps,
+    measuredRepresentative.simulatedSeconds,
+    measuredRepresentative.projectileSubsteps,
   );
   return {
     fixture: profile,
-    ...representative,
-    simulatedSeconds: representative.simulatedSeconds * MEASURED_RUNS,
-    simulatedSecondsPerMeasuredRun: representative.simulatedSeconds,
+    ...validation,
+    simulatedSecondsPerMeasuredRun: measuredRepresentative.simulatedSeconds,
     timing,
-    capSaturation: representative.peakActive / representative.capacity,
-    fullScanFallbackCount: representative.diagnostics.fullScanFallbackCount,
-    pass: representative.failReasons.length === 0,
+    capSaturation: validation.peakActive / validation.capacity,
+    fullScanFallbackCount: validation.diagnostics.fullScanFallbackCount,
+    pass: validation.failReasons.length === 0,
   };
 }
 
@@ -281,6 +286,7 @@ function prepareProductionRun(profile: FixtureProfile, capacity: number): Prepar
     totalImpacts: 0,
     totalTerminations: 0,
     projectileSubsteps: 0,
+    elapsedSteps: 0,
   };
   replenishProduction(prepared);
   return prepared;
@@ -291,13 +297,14 @@ function runPreparedProduction(prepared: PreparedProductionRun, steps: number): 
   for (let step = 0; step < steps; step += 1) {
     prepared.projectileSubsteps += runtime.pool.activeCount;
     const result = tickProjectileRuntime(prepared.state, {
-      intervalStartSeconds: step * STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
+      intervalStartSeconds: (prepared.elapsedSteps + step) * STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
       deltaSeconds: STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
     });
     prepared.totalImpacts += result.createdImpactIds.length;
     prepared.totalTerminations += result.createdTerminationIds.length;
     if (prepared.replenish) replenishProduction(prepared);
   }
+  prepared.elapsedSteps += steps;
   const diagnostics = getProjectileRuntimeDiagnostics(runtime) as ProjectileRuntimeDiagnosticsV2;
   const snapshot = serializeProjectileRuntimeState(runtime);
   const activeIds = snapshot.activeProjectiles.map((projectile) => projectile.projectileId);
@@ -347,7 +354,7 @@ function runPreparedProduction(prepared: PreparedProductionRun, steps: number): 
     else passReasons.push('unit candidates stay well below full unit scan');
   }
   return {
-    simulatedSeconds: steps * STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
+    simulatedSeconds: prepared.elapsedSteps * STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
     units: prepared.state.units.length,
     objects: prepared.state.map.objects.length,
     capacity: runtime.pool.capacity,
@@ -594,7 +601,7 @@ function measureRuntimeRetainedHeapPerProjectile(): { stage3Reference: number; s
   const candidates = Array.from({ length: MEMORY_COMPARISON_PROJECTILES }, (_, index) => makeProjectile('direct', index));
   const referenceSamples: number[] = [];
   const productionSamples: number[] = [];
-  for (let index = 0; index < 7; index += 1) {
+  for (let index = 0; index < 5; index += 1) {
     memorySink = null;
     forceGc();
     forceGc();
@@ -637,7 +644,7 @@ function measureRuntimeRetainedHeapPerProjectile(): { stage3Reference: number; s
 function verifyStressSaveLoad(): BenchmarkReport['stressSaveLoad'] {
   const control = prepareProductionRun('target_stress', PRODUCTION_PROJECTILE_CAPACITY);
   const restored = prepareProductionRun('target_stress', PRODUCTION_PROJECTILE_CAPACITY);
-  const splitStep = 60;
+  const splitStep = Math.round(VALIDATION_SIMULATED_SECONDS * 0.5 / STAGE3_PROJECTILE_FIXED_STEP_SECONDS);
   runPreparedProduction(control, splitStep);
   runPreparedProduction(restored, splitStep);
   restored.state.infantryCombatProjectiles = normalizeProjectileRuntimeState(

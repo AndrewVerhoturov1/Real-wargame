@@ -353,6 +353,36 @@ function verifyStressAndIdleFastPath(): void {
     assert.equal(diagnostics.eventOverflowCount, 0);
     assert.equal(diagnostics.fullScanFallbackCount, 0);
     assert.equal(runtime.pool.activeCount, activeCount);
+
+    if (activeCount === 2000) {
+      let sequence = activeCount;
+      for (let step = 1; step < 300; step += 1) {
+        tickProjectileRuntime(state, {
+          intervalStartSeconds: step * STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
+          deltaSeconds: STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
+        });
+        while (runtime.pool.activeCount < activeCount) {
+          const index = sequence;
+          sequence += 1;
+          const result = trySpawnProjectile(runtime, projectile(`stress-replenish-${index}`, {
+            position: { xMetres: 4 + (index % 100) * 0.2, yMetres: 20 + Math.floor(index / 100 % 20) * 0.2, zMetres: 30 },
+            velocityMetresPerSecond: { x: 10 + (index % 7), y: 0, z: 0 },
+            maximumLifetimeSeconds: 20,
+          }));
+          assert.equal(result.status, 'spawned');
+        }
+      }
+      const sustained = getProjectileRuntimeDiagnostics(runtime);
+      assert.equal(runtime.pool.activeCount, activeCount);
+      assert.ok(sustained.spawnCount > activeCount);
+      assert.ok(sustained.releaseCount > 0);
+      assert.equal(sustained.spawnCount - sustained.releaseCount, activeCount);
+      assert.equal(sustained.releaseCount, runtime.terminations.length);
+      assert.equal(sustained.capRejectionCount, 0);
+      assert.equal(sustained.poolResizeCount, 0);
+      assert.equal(sustained.eventOverflowCount, 0);
+      assert.equal(sustained.fullScanFallbackCount, 0);
+    }
   }
 }
 
