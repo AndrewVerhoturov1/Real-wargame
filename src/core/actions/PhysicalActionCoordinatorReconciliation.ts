@@ -138,6 +138,15 @@ export function reconcilePhysicalActionCoordinatorState(
     changed = true;
   }
 
+  const knownPayloadSequence = readKnownPayloadSequence(unit);
+  if (knownPayloadSequence >= state.nextSequence) {
+    state.nextSequence = Math.min(Number.MAX_SAFE_INTEGER, knownPayloadSequence + 1);
+    state.revision += 1;
+    state.lastDiagnosticCode = 'physical_action_terminal_sequence_restored';
+    state.lastDiagnosticRu = 'При восстановлении учтён номер завершённого физического действия.';
+    changed = true;
+  }
+
   if (blockedActionIds.length > 0) {
     state.lastDiagnosticCode = 'physical_action_reconciliation_blocked';
     state.lastDiagnosticRu = `Не удалось восстановить действия из-за конфликта каналов: ${blockedActionIds.join(', ')}.`;
@@ -173,6 +182,12 @@ function isUsableAction(action: PhysicalActionReconciliationActionV1): boolean {
     && cleanText(action.ownerToken, '')
     && normalizePhysicalActionChannels(action.channels).length > 0,
   );
+}
+
+function readKnownPayloadSequence(unit: PhysicalActionCoordinatorUnitLike): number {
+  const sequence = unit.behaviorRuntime.physicalAction?.sequence;
+  if (typeof sequence !== 'number' || !Number.isFinite(sequence)) return 0;
+  return Math.max(0, Math.min(Number.MAX_SAFE_INTEGER - 1, Math.round(sequence)));
 }
 
 function replaceCoordinatorState(
