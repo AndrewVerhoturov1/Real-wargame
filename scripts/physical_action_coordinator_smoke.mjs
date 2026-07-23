@@ -20,6 +20,10 @@ async function run() {
       'physical-action-coordinator-contract.mjs',
     );
     await runSmoke(
+      path.join(repoRoot, 'scripts', 'physical_action_coordinator_reconciliation_smoke.ts'),
+      'physical-action-coordinator-reconciliation.mjs',
+    );
+    await runSmoke(
       path.join(repoRoot, 'scripts', 'physical_action_coordinator_integration_smoke.ts'),
       'physical-action-coordinator-integration.mjs',
     );
