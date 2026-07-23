@@ -1,203 +1,72 @@
-name: Stage 4 Apply And Verify
+name: Preview Policy
 
 on:
-  push:
-    branches:
-      - feature/20260723-shooting-stage-04-projectile-runtime-benchmark
-
-permissions:
-  contents: write
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
 
 jobs:
-  apply-and-verify:
+  check-preview-policy:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
     steps:
-      - name: Checkout exact branch
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Verify base and apply Stage 4 commits
+      - name: Check preview policy
+        env:
+          PR_BODY: ${{ github.event.pull_request.body || '' }}
         shell: bash
         run: |
-          set -euo pipefail
-          BASE_SHA=3544444490f9026954d99a84e167988d0e518156
-          BRANCH=feature/20260723-shooting-stage-04-projectile-runtime-benchmark
-          test "$(git merge-base HEAD "$BASE_SHA")" = "$BASE_SHA"
-          git ls-remote origin refs/heads/real-wargame-preview | cut -f1 | tee /tmp/preview-head-at-verification.txt
-          cat .github/stage4-patch/part-* > /tmp/stage4-series.xz.b64
-          echo '231af9288c7722d7c126d04b0a522d16b7f5689137935302788d1801fac14be8  /tmp/stage4-series.xz.b64' | sha256sum -c -
-          base64 -d /tmp/stage4-series.xz.b64 | xz -d > /tmp/stage4-series.mbox
-          git config user.name 'OpenAI Stage 4 Executor'
-          git config user.email 'stage4-executor@users.noreply.github.com'
-          git am /tmp/stage4-series.mbox
-          rm -rf .github/stage4-patch .github/stage4-transfer-20260724 .github/stage4-transfer-final
-          git show "$BASE_SHA":.github/workflows/preview-policy.yml > .github/workflows/preview-policy.yml
-          git add -A
-          git commit -m 'chore: remove temporary Stage 4 transfer harness'
-          git status --short
-          EVIDENCE="$RUNNER_TEMP/stage4-evidence"
-          mkdir -p "$EVIDENCE"
-          git rev-parse HEAD | tee "$EVIDENCE/final-sha.txt"
-          git ls-tree -r --name-only HEAD | sort > "$EVIDENCE/final-tree.txt"
-          cp /tmp/preview-head-at-verification.txt "$EVIDENCE/preview-head-at-verification.txt"
+          set -e
 
-      - name: Use Node.js 24
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
+          # This workflow guards PRs targeting main.
+          # Visual QA is deliberately not run here. It is manual-only through
+          # .github/workflows/preview-screenshots.yml after user approval.
+          # The preferred external delivery is direct push to real-wargame-preview, not PRs.
+          # PRs targeting main from task branches are a preview-policy violation without GO.
 
-      - name: Install exact dependencies
-        run: npm ci
+          BASE_BRANCH="${{ github.base_ref }}"
+          HEAD_BRANCH="${{ github.head_ref }}"
 
-      - name: Run final verification matrix
-        shell: bash
-        run: |
-          set +e
-          BASE_SHA=3544444490f9026954d99a84e167988d0e518156
-          export EVIDENCE="$RUNNER_TEMP/stage4-evidence"
-          mkdir -p "$EVIDENCE"
-          : > "$EVIDENCE/stage4-final.log"
-          failures=0
-          passed=0
-          failed=0
-          run_check() {
-            name="$1"
-            shift
-            printf '\n===== %s =====\n' "$name" | tee -a "$EVIDENCE/stage4-final.log"
-            timeout 300 "$@" 2>&1 | tee -a "$EVIDENCE/stage4-final.log"
-            code=${PIPESTATUS[0]}
-            printf 'EXIT:%s\n' "$code" | tee -a "$EVIDENCE/stage4-final.log"
-            if [ "$code" -eq 0 ]; then
-              passed=$((passed + 1))
+          echo "=== Preview Policy Check ==="
+          echo "Base branch: $BASE_BRANCH"
+          echo "Head branch: $HEAD_BRANCH"
+          echo ""
+
+          DEFAULT_TARGET="real-wargame-preview"
+          echo "Default target branch: $DEFAULT_TARGET"
+          echo "Default external delivery: direct push to $DEFAULT_TARGET (PR is fallback)"
+          echo ""
+
+          # Check: if base is main, flag it unless MAIN_GO is recorded
+          if [ "$BASE_BRANCH" = "main" ]; then
+            # Check head branch pattern: codex/*, preview/*, r-init/*
+            if echo "$HEAD_BRANCH" | grep -qE '^(codex/|preview/|r-init/)'; then
+              # Look for MAIN_GO marker in PR body
+              if printf '%s\n' "$PR_BODY" | grep -Eiq 'MAIN_GO_APPROVED_BY_USER:[[:space:]]*yes'; then
+                echo "PASS: PR targets main with explicit MAIN_GO approval."
+                echo "preview_policy=pass" >> $GITHUB_ENV
+                exit 0
+              else
+                echo "FAIL: PR targets main from branch '$HEAD_BRANCH'"
+                echo "      without MAIN_GO_APPROVED_BY_USER: yes marker."
+                echo ""
+                echo "Default target is '$DEFAULT_TARGET'."
+                echo "Please retarget this PR to '$DEFAULT_TARGET' or"
+                echo "add 'MAIN_GO_APPROVED_BY_USER: yes' to the PR body"
+                echo "if the user has explicitly approved a main merge."
+                echo "preview_policy=fail" >> $GITHUB_ENV
+                exit 1
+              fi
             else
-              failed=$((failed + 1))
-              failures=$((failures + 1))
+              echo "PASS: Head branch '$HEAD_BRANCH' does not match codex/*, preview/*, or r-init/* patterns."
+              echo "preview_policy=pass" >> $GITHUB_ENV
             fi
-          }
-
-          printf 'node=%s\nhead=%s\nbase=%s\npreview=%s\n' \
-            "$(node --version)" \
-            "$(git rev-parse HEAD)" \
-            "$(git merge-base HEAD "$BASE_SHA")" \
-            "$(git ls-remote origin refs/heads/real-wargame-preview | cut -f1)" | tee -a "$EVIDENCE/stage4-final.log"
-
-          run_check combat-catalogs npm run combat-catalogs:smoke
-          run_check combat-catalog-storage npm run combat-catalog-storage:smoke
-          run_check combat-catalog-editor npm run combat-catalog-editor:smoke
-          run_check physical-action-coordinator npm run physical-action-coordinator:smoke
-          run_check posture-transition npm run posture-transition:smoke
-          run_check physical-movement npm run physical-movement:smoke
-          run_check infantry-combat-single-shot npm run infantry-combat-single-shot:smoke
-          run_check infantry-combat-projectile npm run infantry-combat-projectile:smoke
-          run_check combat-foundation npm run combat-foundation:smoke
-          run_check combat-tactical-integration npm run combat-tactical-integration:smoke
-          run_check tactical-action-ports npm run tactical-action-ports:smoke
-          run_check typecheck npm run typecheck
-          run_check build npm run build
-          run_check projectile-smoke-syntax node --check scripts/infantry_combat_projectile_runtime_smoke.mjs
-          run_check projectile-benchmark-syntax node --check scripts/infantry_combat_projectile_benchmark.mjs
-          run_check diff-check git diff --check "$BASE_SHA"...HEAD
-
-          printf '\n===== performance-contract-final =====\n' | tee -a "$EVIDENCE/stage4-final.log"
-          npm run performance-contract:smoke > "$EVIDENCE/performance-final.log" 2>&1
-          final_perf_exit=$?
-          cat "$EVIDENCE/performance-final.log" | tee -a "$EVIDENCE/stage4-final.log"
-          printf 'EXIT:%s\n' "$final_perf_exit" | tee -a "$EVIDENCE/stage4-final.log"
-
-          git worktree add --detach /tmp/stage4-base "$BASE_SHA" >/dev/null 2>&1
-          ln -s "$GITHUB_WORKSPACE/node_modules" /tmp/stage4-base/node_modules
-          (cd /tmp/stage4-base && npm run performance-contract:smoke) > "$EVIDENCE/performance-base.log" 2>&1
-          base_perf_exit=$?
-          printf '\n===== performance-contract-base =====\n' | tee -a "$EVIDENCE/stage4-final.log"
-          cat "$EVIDENCE/performance-base.log" | tee -a "$EVIDENCE/stage4-final.log"
-          printf 'EXIT:%s\n' "$base_perf_exit" | tee -a "$EVIDENCE/stage4-final.log"
-          expected="scripts/check_agent_docs.mjs must include mandatory performance contract fragment: import './performance_principles_contract_smoke.mjs';"
-          if [ "$final_perf_exit" -ne 1 ] || [ "$base_perf_exit" -ne 1 ] || \
-             ! grep -Fq "$expected" "$EVIDENCE/performance-final.log" || \
-             ! grep -Fq "$expected" "$EVIDENCE/performance-base.log"; then
-            failures=$((failures + 1))
-            failed=$((failed + 1))
           else
-            passed=$((passed + 1))
+            echo "PASS: Base branch is '$BASE_BRANCH' (expected default is '$DEFAULT_TARGET')."
+            echo "preview_policy=pass" >> $GITHUB_ENV
           fi
 
-          printf '\n===== nondeterminism-scan =====\n' | tee -a "$EVIDENCE/stage4-final.log"
-          git grep -n -E 'Date\.now|performance\.now|new Date|Math\.random|randomUUID' HEAD -- \
-            src/core/infantry-combat/runtime \
-            src/core/combat/CombatUnitSpatialIndex.ts \
-            src/core/spatial/MapObjectSpatialIndex.ts \
-            src/core/combat/BallisticTrace.ts \
-            scripts/infantry_combat_projectile_runtime_smoke.ts >> "$EVIDENCE/stage4-final.log" 2>&1
-          nondeterminism_exit=$?
-          printf 'EXIT:%s\n' "$nondeterminism_exit" | tee -a "$EVIDENCE/stage4-final.log"
-          if [ "$nondeterminism_exit" -eq 1 ]; then
-            passed=$((passed + 1))
-          else
-            failures=$((failures + 1))
-            failed=$((failed + 1))
-          fi
-
-          printf '\n===== benchmark =====\n' | tee -a "$EVIDENCE/stage4-final.log"
-          timeout 1200 node --expose-gc scripts/infantry_combat_projectile_benchmark.mjs 2>&1 | tee "$EVIDENCE/projectile-benchmark.log" | tee -a "$EVIDENCE/stage4-final.log"
-          benchmark_exit=${PIPESTATUS[0]}
-          printf 'EXIT:%s\n' "$benchmark_exit" | tee -a "$EVIDENCE/stage4-final.log"
-          if [ "$benchmark_exit" -eq 0 ]; then
-            passed=$((passed + 1))
-          else
-            failures=$((failures + 1))
-            failed=$((failed + 1))
-          fi
-          awk '/BEGIN_PROJECTILE_BENCHMARK_JSON/{capture=1;next}/END_PROJECTILE_BENCHMARK_JSON/{capture=0}capture' "$EVIDENCE/projectile-benchmark.log" > "$EVIDENCE/projectile-benchmark.json"
-          node -e "JSON.parse(require('fs').readFileSync(process.env.EVIDENCE + '/projectile-benchmark.json','utf8'))" || failures=$((failures + 1))
-
-          status_short="$(git status --short)"
-          printf '\n===== tracked-status =====\n%s\n' "$status_short" | tee -a "$EVIDENCE/stage4-final.log"
-          if [ -n "$status_short" ]; then
-            failures=$((failures + 1))
-            failed=$((failed + 1))
-          else
-            passed=$((passed + 1))
-          fi
-
-          node - <<NODE
-          const fs = require('fs');
-          const summary = {
-            nodeVersion: process.version,
-            finalSha: fs.readFileSync(process.env.EVIDENCE + '/final-sha.txt', 'utf8').trim(),
-            baseSha: '$BASE_SHA',
-            passed: $passed,
-            failed: $failed,
-            failures: $failures,
-            performanceContract: {
-              baseExit: $base_perf_exit,
-              finalExit: $final_perf_exit,
-              knownBaselineMessageMatched: ${base_perf_exit:-0} === 1 && ${final_perf_exit:-0} === 1
-            },
-            nondeterminismExit: $nondeterminism_exit,
-            benchmarkExit: $benchmark_exit
-          };
-          fs.writeFileSync(process.env.EVIDENCE + '/matrix-summary.json', JSON.stringify(summary, null, 2));
-          NODE
-
-          printf '\nFINAL_FAILURES:%s\n' "$failures" | tee -a "$EVIDENCE/stage4-final.log"
-          if [ "$failures" -ne 0 ]; then
-            exit 1
-          fi
-
-      - name: Publish exact verified commit
+      - name: Print policy result
         shell: bash
         run: |
-          set -euo pipefail
-          git push origin HEAD:refs/heads/feature/20260723-shooting-stage-04-projectile-runtime-benchmark
-
-      - name: Upload final evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: stage4-final-evidence
-          path: ${{ runner.temp }}/stage4-evidence
-          if-no-files-found: warn
-          retention-days: 7
+          echo "Preview policy result: ${{ env.preview_policy }}"
+          echo "Default target for this repository is: real-wargame-preview"
+          echo "Default external delivery is: direct push to preview (PR is fallback)"
+          echo "Visual QA execution is manual-only after explicit user approval"
