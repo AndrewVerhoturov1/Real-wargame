@@ -1,4 +1,4 @@
-name: Stage 2 Apply Navigation Fixture Isolation
+name: Stage 2 Apply Navigation Assertion Correction
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  apply-navigation-fixture-isolation:
+  apply-navigation-assertion-correction:
     if: github.event.pull_request.head.ref == 'feature/20260723-shooting-stage-02-physical-action-coordinator'
     runs-on: ubuntu-latest
     steps:
@@ -18,23 +18,32 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Isolate navigation replan from posture transition
+      - name: Restore shot geometry and keep route-owned assertion
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
           path = Path('scripts/live_navigation_replan_smoke.ts')
           source = path.read_text(encoding='utf-8')
-          old = "    { id: 'blue-mover', label: 'Mover', labelRu: 'Двигающийся', type: 'infantry_squad', side: 'blue', x: 2, y: 3, facingDegrees: 0, viewRangeCells: 0 },"
-          new = "    { id: 'blue-mover', label: 'Mover', labelRu: 'Двигающийся', type: 'infantry_squad', side: 'blue', x: 2, y: 3, facingDegrees: 0, viewRangeCells: 0, initialState: { posture: 'crouched' } },"
-          if old in source:
-              source = source.replace(old, new, 1)
-          elif new not in source:
+
+          crouched = "    { id: 'blue-mover', label: 'Mover', labelRu: 'Двигающийся', type: 'infantry_squad', side: 'blue', x: 2, y: 3, facingDegrees: 0, viewRangeCells: 0, initialState: { posture: 'crouched' } },"
+          standing = "    { id: 'blue-mover', label: 'Mover', labelRu: 'Двигающийся', type: 'infantry_squad', side: 'blue', x: 2, y: 3, facingDegrees: 0, viewRangeCells: 0 },"
+          if crouched in source:
+              source = source.replace(crouched, standing, 1)
+          elif standing not in source:
               raise SystemExit('blue mover fixture marker not found')
+
+          duplicate = "    assert.equal(order.lastReplanReason, 'danger_changed');\n    assert.equal(order.lastReplanReason, 'danger_changed', 'hysteresis rejection must remain recorded on the owned route even if a posture action publishes a newer unit event');\n"
+          canonical = "    assert.equal(order.lastReplanReason, 'danger_changed', 'hysteresis rejection must remain recorded on the owned route even if a posture action publishes a newer unit event');\n"
+          if duplicate in source:
+              source = source.replace(duplicate, canonical, 1)
+          elif canonical not in source:
+              raise SystemExit('route-owned hysteresis assertion not found')
+
           path.write_text(source, encoding='utf-8')
           PY
 
-      - name: Commit isolated fixture through Contents API
+      - name: Commit corrected navigation fixture through Contents API
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: feature/20260723-shooting-stage-02-physical-action-coordinator
@@ -48,7 +57,7 @@ jobs:
           for attempt in 1 2 3; do
             sha=$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${BRANCH}" --jq .sha)
             if gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${path}" \
-              -f message='test: isolate live replan from physical posture transition' \
+              -f message='test: keep live replan assertion on owned route state' \
               -f content="$content" \
               -f sha="$sha" \
               -f branch="$BRANCH"; then
