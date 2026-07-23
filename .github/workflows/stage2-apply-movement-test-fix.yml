@@ -6,7 +6,7 @@ on:
       - real-wargame-preview
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   apply-movement-smoke-migration:
@@ -16,8 +16,7 @@ jobs:
       - name: Checkout working branch
         uses: actions/checkout@v4
         with:
-          ref: feature/20260723-shooting-stage-02-physical-action-coordinator
-          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Migrate stale preparation fixture
         shell: bash
@@ -63,14 +62,10 @@ jobs:
           path.write_text(source, encoding='utf-8')
           PY
 
-      - name: Commit migration when needed
-        shell: bash
-        run: |
-          if git diff --quiet -- scripts/physical_movement_runtime_smoke.ts; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add scripts/physical_movement_runtime_smoke.ts
-          git commit -m "test: migrate movement preparation ownership fixture"
-          git push origin HEAD:feature/20260723-shooting-stage-02-physical-action-coordinator
+      - name: Upload migrated movement smoke
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage2-migrated-movement-smoke-${{ github.event.pull_request.head.sha }}
+          path: scripts/physical_movement_runtime_smoke.ts
+          if-no-files-found: error
+          retention-days: 1
