@@ -62,7 +62,7 @@ function normalizeShotCommitDiagnostic(value: unknown): import('./InfantryCombat
   const allowed = new Set([
     'committed', 'already_committed', 'task_not_firing', 'ownership_lost', 'weapon_missing',
     'unsupported_mode', 'empty_weapon', 'muzzle_blocked', 'friendly_risk_exceeded',
-    'projectile_capacity_exceeded', 'invalid_target',
+    'projectile_capacity_exceeded', 'duplicate_projectile_id', 'invalid_projectile_candidate', 'invalid_target',
   ]);
   if (typeof value.status !== 'string' || !allowed.has(value.status)) return null;
   const point = isRecord(value.muzzlePosition)

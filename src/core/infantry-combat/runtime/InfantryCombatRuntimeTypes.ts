@@ -84,6 +84,8 @@ export type ShotCommitStatus =
   | 'muzzle_blocked'
   | 'friendly_risk_exceeded'
   | 'projectile_capacity_exceeded'
+  | 'duplicate_projectile_id'
+  | 'invalid_projectile_candidate'
   | 'invalid_target';
 
 export interface ShotCommitDiagnosticV1 {

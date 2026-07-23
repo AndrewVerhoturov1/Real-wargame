@@ -18,6 +18,10 @@ export interface MapObjectSpatialIndexDiagnostics {
   lastCandidateCount: number;
 }
 
+export interface MapObjectSpatialQueryScratch {
+  readonly seenObjectIds: Set<string>;
+}
+
 interface CachedSpatialIndex {
   revision: number;
   index: MapObjectSpatialIndex;
@@ -27,19 +31,22 @@ interface CachedSpatialIndex {
 const DEFAULT_BUCKET_SIZE_CELLS = 8;
 const cache = new WeakMap<TacticalMap, CachedSpatialIndex>();
 
+export function createMapObjectSpatialQueryScratch(): MapObjectSpatialQueryScratch {
+  return { seenObjectIds: new Set<string>() };
+}
+
 export class MapObjectSpatialIndex {
   private readonly buckets = new Map<string, MapObject[]>();
-  private readonly order = new Map<MapObject, number>();
 
   constructor(
     readonly map: TacticalMap,
     readonly bucketSizeCells = DEFAULT_BUCKET_SIZE_CELLS,
   ) {
-    for (const [index, object] of map.objects.entries()) {
-      this.order.set(object, index);
+    for (const object of map.objects) {
       const bounds = getMapObjectBounds(object);
       this.forEachBucket(bounds, (bucket) => bucket.push(object));
     }
+    for (const bucket of this.buckets.values()) bucket.sort(compareObjects);
   }
 
   get bucketCount(): number {
@@ -51,16 +58,27 @@ export class MapObjectSpatialIndex {
   }
 
   queryRect(bounds: MapObjectBounds): MapObject[] {
-    const candidates = new Set<MapObject>();
-    this.forEachBucket(bounds, (bucket) => {
-      for (const object of bucket) candidates.add(object);
-    }, false);
+    const output: MapObject[] = [];
+    this.queryRectInto(bounds, output, createMapObjectSpatialQueryScratch());
+    return output;
+  }
 
-    const filtered = new Set<MapObject>();
-    for (const object of candidates) {
-      if (mapObjectBoundsOverlap(getMapObjectBounds(object), bounds)) filtered.add(object);
-    }
-    return this.sortCandidates(filtered);
+  queryRectInto(
+    bounds: MapObjectBounds,
+    output: MapObject[],
+    scratch: MapObjectSpatialQueryScratch,
+  ): number {
+    output.length = 0;
+    scratch.seenObjectIds.clear();
+    this.forEachBucket(bounds, (bucket) => {
+      for (const object of bucket) {
+        if (scratch.seenObjectIds.has(object.id)) continue;
+        scratch.seenObjectIds.add(object.id);
+        if (mapObjectBoundsOverlap(getMapObjectBounds(object), bounds)) output.push(object);
+      }
+    }, false);
+    output.sort(compareObjects);
+    return output.length;
   }
 
   queryCircle(center: GridPosition, radiusCells: number): MapObject[] {
@@ -74,13 +92,25 @@ export class MapObjectSpatialIndex {
   }
 
   querySegment(start: GridPosition, end: GridPosition, paddingCells = 0.25): MapObject[] {
+    const output: MapObject[] = [];
+    this.querySegmentInto(start, end, paddingCells, output, createMapObjectSpatialQueryScratch());
+    return output;
+  }
+
+  querySegmentInto(
+    start: GridPosition,
+    end: GridPosition,
+    paddingCells: number,
+    output: MapObject[],
+    scratch: MapObjectSpatialQueryScratch,
+  ): number {
     const padding = Math.max(0, paddingCells);
-    return this.queryRect({
+    return this.queryRectInto({
       minX: Math.min(start.x, end.x) - padding,
       minY: Math.min(start.y, end.y) - padding,
       maxX: Math.max(start.x, end.x) + padding,
       maxY: Math.max(start.y, end.y) + padding,
-    });
+    }, output, scratch);
   }
 
   private forEachBucket(
@@ -105,13 +135,6 @@ export class MapObjectSpatialIndex {
         if (bucket) callback(bucket);
       }
     }
-  }
-
-  private sortCandidates(candidates: Set<MapObject>): MapObject[] {
-    return [...candidates].sort((left, right) => (
-      (this.order.get(left) ?? Number.MAX_SAFE_INTEGER)
-      - (this.order.get(right) ?? Number.MAX_SAFE_INTEGER)
-    ));
   }
 }
 
@@ -154,17 +177,19 @@ function instrumentQueries(
   index: MapObjectSpatialIndex,
   diagnostics: MapObjectSpatialIndexDiagnostics,
 ): MapObjectSpatialIndex {
-  for (const methodName of ['queryPoint', 'queryRect', 'queryCircle', 'querySegment'] as const) {
-    const original = index[methodName].bind(index) as (...args: unknown[]) => MapObject[];
-    Object.defineProperty(index, methodName, {
-      configurable: true,
-      value: (...args: unknown[]) => {
-        const result = original(...args);
-        diagnostics.queryCount += 1;
-        diagnostics.lastCandidateCount = result.length;
-        return result;
-      },
-    });
-  }
+  const original = index.queryRectInto.bind(index);
+  Object.defineProperty(index, 'queryRectInto', {
+    configurable: true,
+    value: (...args: Parameters<MapObjectSpatialIndex['queryRectInto']>) => {
+      const count = original(...args);
+      diagnostics.queryCount += 1;
+      diagnostics.lastCandidateCount = count;
+      return count;
+    },
+  });
   return index;
+}
+
+function compareObjects(left: MapObject, right: MapObject): number {
+  return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
 }
