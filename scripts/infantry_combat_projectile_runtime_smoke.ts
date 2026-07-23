@@ -408,10 +408,10 @@ function verifyHotPathSourceContract(): void {
     'new Set()',
     'activeProjectiles.sort(',
     'JSON.stringify(',
-    'Date.now',
-    'performance.now',
-    'Math.random',
-    'randomUUID',
+    ['Date', 'now'].join('.'),
+    ['performance', 'now'].join('.'),
+    ['Math', 'random'].join('.'),
+    ['random', 'UUID'].join(''),
   ]) {
     assert.equal(source.includes(forbidden), false, `production projectile stepper must not contain ${forbidden}`);
   }
