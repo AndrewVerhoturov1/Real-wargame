@@ -27,7 +27,9 @@ async function run() {
         rollupOptions: { output: { entryFileNames: 'projectile-benchmark.mjs', format: 'es' } },
       },
     });
-    await import(`${pathToFileURL(path.join(outDir, 'projectile-benchmark.mjs')).href}?run=stage4-benchmark`);
+    const bundlePath = path.join(outDir, 'projectile-benchmark.mjs');
+    process.env.PROJECTILE_BENCHMARK_BUNDLE_PATH = bundlePath;
+    await import(`${pathToFileURL(bundlePath).href}?run=stage4-benchmark`);
   } finally {
     await rm(outDir, { recursive: true, force: true });
   }
