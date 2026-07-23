@@ -34,12 +34,14 @@ jobs:
           set -o pipefail
           npm run typecheck > stage2-typecheck.log 2>&1
 
-      - name: Upload TypeScript output
+      - name: Upload TypeScript output and edited source
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: stage2-typecheck-${{ github.event.pull_request.head.sha }}
-          path: stage2-typecheck.log
+          path: |
+            stage2-typecheck.log
+            src/core/units/UnitModel.ts
           if-no-files-found: error
           retention-days: 1
 
