@@ -1,4 +1,4 @@
-name: Stage 2 Apply Movement Smoke Migration
+name: Stage 2 Apply Movement Smoke Correction
 
 on:
   pull_request:
@@ -13,11 +13,10 @@ jobs:
     if: github.event.pull_request.head.ref == 'feature/20260723-shooting-stage-02-physical-action-coordinator'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout working branch
+      - name: Checkout exact candidate
         uses: actions/checkout@v4
         with:
-          ref: feature/20260723-shooting-stage-02-physical-action-coordinator
-          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Correct movement lifecycle fixture
         shell: bash
@@ -28,79 +27,91 @@ jobs:
           source = path.read_text(encoding='utf-8')
 
           unindented = """  assert.equal(requestFireAction(state, shooter, contactId), false);
-const stale = getMovementWeaponPreparation(shooter);
-assert.ok(stale);
-const newerRequest = requestMovementWeaponPreparation(state, shooter, {
-  contactId: 'newer-contact',
-  ownerToken: 'fire-intent:newer-contact',
-});
-assert.equal(newerRequest.allowed, false);
-const newer = getMovementWeaponPreparation(shooter);
-assert.ok(newer);
-assert.equal(newer.contactId, 'newer-contact');
-assert.equal(cancelMovementWeaponPreparation(shooter, { ownerToken: stale.ownerToken, revision: stale.revision }), false, 'stale cleanup must not cancel newer preparation');
-assert.equal(getMovementWeaponPreparation(shooter)?.contactId, 'newer-contact');
-assert.equal(cancelMovementWeaponPreparation(shooter, {
-  ownerToken: newer.ownerToken,
-  revision: newer.revision,
-  contactId: newer.contactId,
-}), true, 'current preparation cleanup must release its exact coordinator lease');
-"""
+          const stale = getMovementWeaponPreparation(shooter);
+          assert.ok(stale);
+          const newerRequest = requestMovementWeaponPreparation(state, shooter, {
+            contactId: 'newer-contact',
+            ownerToken: 'fire-intent:newer-contact',
+          });
+          assert.equal(newerRequest.allowed, false);
+          const newer = getMovementWeaponPreparation(shooter);
+          assert.ok(newer);
+          assert.equal(newer.contactId, 'newer-contact');
+          assert.equal(cancelMovementWeaponPreparation(shooter, { ownerToken: stale.ownerToken, revision: stale.revision }), false, 'stale cleanup must not cancel newer preparation');
+          assert.equal(getMovementWeaponPreparation(shooter)?.contactId, 'newer-contact');
+          assert.equal(cancelMovementWeaponPreparation(shooter, {
+            ownerToken: newer.ownerToken,
+            revision: newer.revision,
+            contactId: newer.contactId,
+          }), true, 'current preparation cleanup must release its exact coordinator lease');
+          """
           indented = """  assert.equal(requestFireAction(state, shooter, contactId), false);
-  const stale = getMovementWeaponPreparation(shooter);
-  assert.ok(stale);
-  const newerRequest = requestMovementWeaponPreparation(state, shooter, {
-    contactId: 'newer-contact',
-    ownerToken: 'fire-intent:newer-contact',
-  });
-  assert.equal(newerRequest.allowed, false);
-  const newer = getMovementWeaponPreparation(shooter);
-  assert.ok(newer);
-  assert.equal(newer.contactId, 'newer-contact');
-  assert.equal(cancelMovementWeaponPreparation(shooter, { ownerToken: stale.ownerToken, revision: stale.revision }), false, 'stale cleanup must not cancel newer preparation');
-  assert.equal(getMovementWeaponPreparation(shooter)?.contactId, 'newer-contact');
-  assert.equal(cancelMovementWeaponPreparation(shooter, {
-    ownerToken: newer.ownerToken,
-    revision: newer.revision,
-    contactId: newer.contactId,
-  }), true, 'current preparation cleanup must release its exact coordinator lease');
-"""
+            const stale = getMovementWeaponPreparation(shooter);
+            assert.ok(stale);
+            const newerRequest = requestMovementWeaponPreparation(state, shooter, {
+              contactId: 'newer-contact',
+              ownerToken: 'fire-intent:newer-contact',
+            });
+            assert.equal(newerRequest.allowed, false);
+            const newer = getMovementWeaponPreparation(shooter);
+            assert.ok(newer);
+            assert.equal(newer.contactId, 'newer-contact');
+            assert.equal(cancelMovementWeaponPreparation(shooter, { ownerToken: stale.ownerToken, revision: stale.revision }), false, 'stale cleanup must not cancel newer preparation');
+            assert.equal(getMovementWeaponPreparation(shooter)?.contactId, 'newer-contact');
+            assert.equal(cancelMovementWeaponPreparation(shooter, {
+              ownerToken: newer.ownerToken,
+              revision: newer.revision,
+              contactId: newer.contactId,
+            }), true, 'current preparation cleanup must release its exact coordinator lease');
+          """
           if unindented in source:
               source = source.replace(unindented, indented, 1)
 
           old_completion = """  installIdentifiedContact(shooter, target, state.simulationTimeSeconds);
-  assert.equal(requestFireAction(state, shooter, contactId), false);
-  const unattended = getMovementWeaponPreparation(shooter);
-  assert.ok(unattended);
-  const resumedWithoutRepeat = preparePhysicalMovementStep(
-    state, shooter, unattended.remainingSeconds + 0.2, true, 1, 1,
-  );
-  assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');
-  assert.ok(resumedWithoutRepeat.maxDistanceCells > 0, 'movement must resume during time remaining after preparation completes');
-"""
+            assert.equal(requestFireAction(state, shooter, contactId), false);
+            const unattended = getMovementWeaponPreparation(shooter);
+            assert.ok(unattended);
+            const resumedWithoutRepeat = preparePhysicalMovementStep(
+              state, shooter, unattended.remainingSeconds + 0.2, true, 1, 1,
+            );
+            assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');
+            assert.ok(resumedWithoutRepeat.maxDistanceCells > 0, 'movement must resume during time remaining after preparation completes');
+          """
           new_completion = """  installIdentifiedContact(shooter, target, state.simulationTimeSeconds);
-  assert.equal(requestFireAction(state, shooter, contactId), false);
-  const unattended = getMovementWeaponPreparation(shooter);
-  assert.ok(unattended);
-  const positionBeforeUnattendedCompletion = { ...shooter.position };
-  tickSimulation(state, unattended.remainingSeconds + 0.2);
-  assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');
-  assert.ok(shooter.position.x > positionBeforeUnattendedCompletion.x, 'movement must resume during time remaining after preparation completes');
-"""
+            assert.equal(requestFireAction(state, shooter, contactId), false);
+            const unattended = getMovementWeaponPreparation(shooter);
+            assert.ok(unattended);
+            const positionBeforeUnattendedCompletion = { ...shooter.position };
+            tickSimulation(state, unattended.remainingSeconds + 0.2);
+            assert.equal(getMovementWeaponPreparation(shooter), null, 'preparation must clear deterministically without a repeated fire request');
+            assert.ok(shooter.position.x > positionBeforeUnattendedCompletion.x, 'movement must resume during time remaining after preparation completes');
+          """
           if old_completion not in source:
               raise SystemExit('movement completion fixture not found')
           source = source.replace(old_completion, new_completion, 1)
           path.write_text(source, encoding='utf-8')
           PY
 
-      - name: Commit correction when needed
+      - name: Commit corrected fixture through Contents API
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: feature/20260723-shooting-stage-02-physical-action-coordinator
         shell: bash
         run: |
           if git diff --quiet -- scripts/physical_movement_runtime_smoke.ts; then
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add scripts/physical_movement_runtime_smoke.ts
-          git commit -m "test: commit resumed movement before repeated fire intent"
-          git push origin HEAD:feature/20260723-shooting-stage-02-physical-action-coordinator
+          path='scripts/physical_movement_runtime_smoke.ts'
+          content=$(base64 -w0 "$path")
+          for attempt in 1 2 3; do
+            sha=$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${BRANCH}" --jq .sha)
+            if gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${path}" \
+              -f message='test: commit resumed movement before repeated fire intent' \
+              -f content="$content" \
+              -f sha="$sha" \
+              -f branch="$BRANCH"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
