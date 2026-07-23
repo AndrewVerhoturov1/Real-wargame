@@ -39,6 +39,11 @@ import {
 } from '../behavior/BehaviorModel';
 import { clearCombatRuntime, replaceCombatRuntime, type CombatRuntimeState } from '../combat/CombatDamage';
 import { clearWeaponRuntime, replaceWeaponRuntime, type WeaponRuntimeState } from '../combat/WeaponModel';
+import {
+  createInfantryCombatUnitRuntime,
+  normalizeInfantryCombatUnitRuntime,
+  type InfantryCombatUnitRuntimeV1,
+} from '../infantry-combat/runtime';
 import type { GridPosition } from '../geometry';
 import {
   MOVEMENT_WEAPON_PREPARATION_ACTION_TYPE,
@@ -130,6 +135,7 @@ export interface UnitRuntimeData extends Partial<Pick<UnitBehaviorRuntime, 'stre
   movement?: MovementRuntimeState;
   physicalActionCoordinator?: unknown;
   physicalAction?: unknown;
+  infantryCombat?: unknown;
 }
 
 export interface UnitData {
@@ -195,6 +201,7 @@ export interface UnitModel {
   tacticalKnowledge: UnitTacticalKnowledge;
   perceptionKnowledge: UnitPerceptionKnowledge;
   movementRuntime: MovementRuntimeState;
+  infantryCombatRuntime: InfantryCombatUnitRuntimeV1;
   unitRoleNavigationProfileId?: string | null;
   playerNavigationProfileId?: string | null;
   navigationMovementMode?: NavigationMovementMode | null;
@@ -273,6 +280,7 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
         ? normalizeTacticalKnowledge(unit.tacticalKnowledge, scale)
         : createEmptyTacticalKnowledge(),
       perceptionKnowledge: importedPerceptionKnowledge,
+      infantryCombatRuntime: createInfantryCombatUnitRuntime(),
       movementRuntime: createMovementRuntime(
         rawMovementProfileId,
         requestedMovementGait,
@@ -289,6 +297,7 @@ export function normalizeUnits(data: UnitData[], sourceToRuntimeCellScale = 1): 
     };
     initializeTacticalPositionSettings(model, unit.tacticalPositionSettings);
     applyInitialStateToRuntime(model, false);
+    model.infantryCombatRuntime = normalizeInfantryCombatUnitRuntime(unit.runtime?.infantryCombat);
     model.behaviorRuntime.physicalActionCoordinator = normalizePhysicalActionCoordinatorState(
       unit.runtime?.physicalActionCoordinator,
     );
@@ -424,6 +433,7 @@ function restoreAiRuntimeSnapshot(unit: UnitModel, value: unknown): void {
 export function applyInitialStateToRuntime(unit: UnitModel, clearPerceptionKnowledge = true): void {
   clearWeaponRuntime(unit);
   clearCombatRuntime(unit);
+  unit.infantryCombatRuntime = createInfantryCombatUnitRuntime();
   const initial = unit.initialState;
   unit.behaviorRuntime.previousPosture = initial.posture;
   unit.behaviorRuntime.posture = initial.posture;
