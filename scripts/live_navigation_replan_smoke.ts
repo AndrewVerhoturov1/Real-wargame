@@ -179,7 +179,6 @@ function verifyHysteresisAndCooldownBoundSearches(): void {
     assert.equal(order.replanCount, replanCountBefore, 'rejected candidate must not increment accepted replanCount');
     assert.equal(order.routeRevision, routeRevisionBefore, 'rejected candidate must not change routeRevision');
     assert.deepEqual(order.routeCells, routeCellsBefore, 'rejected candidate must not replace routeCells');
-    assert.equal(order.lastReplanReason, 'danger_changed');
     assert.equal(order.lastReplanReason, 'danger_changed', 'hysteresis rejection must remain recorded on the owned route even if a posture action publishes a newer unit event');
     const firstSearchAt = order.lastReplanAtSeconds;
     const processedKnowledgeRevision = order.knowledgeRevision;
@@ -319,7 +318,7 @@ function makeCorridorState(): SimulationState {
       ...blockerRectangle('middle-wall', 6, 17, 5, 8),
     ],
   }, [
-    { id: 'blue-mover', label: 'Mover', labelRu: 'Двигающийся', type: 'infantry_squad', side: 'blue', x: 2, y: 3, facingDegrees: 0, viewRangeCells: 0, initialState: { posture: 'crouched' } },
+    { id: 'blue-mover', label: 'Mover', labelRu: 'Двигающийся', type: 'infantry_squad', side: 'blue', x: 2, y: 3, facingDegrees: 0, viewRangeCells: 0 },
     { id: 'red-shooter', label: 'Shooter', labelRu: 'Стрелок', type: 'infantry_squad', side: 'red', x: 0, y: 4, facingDegrees: 0, viewRangeCells: 0 },
   ]);
   const mover = unit(state, 'blue-mover');
