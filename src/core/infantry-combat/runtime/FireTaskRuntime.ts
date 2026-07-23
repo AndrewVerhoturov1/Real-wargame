@@ -10,10 +10,7 @@ import {
   normalizePhysicalActionOwner,
   physicalActionHandlesEqual,
 } from '../../actions/PhysicalActionCoordinatorSerialization';
-import type {
-  PhysicalActionLeaseV1,
-  PhysicalActionOwner,
-} from '../../actions/PhysicalActionCoordinatorTypes';
+import type { PhysicalActionLeaseV1, PhysicalActionOwner } from '../../actions/PhysicalActionCoordinatorTypes';
 import type { BallisticPoint3 } from '../../combat/UnitHitShapes';
 import type { SimulationState } from '../../simulation/SimulationState';
 import type { UnitModel } from '../../units/UnitModel';
@@ -69,7 +66,7 @@ export interface RequestSingleFireTaskResult {
 export interface TickFireTaskInput {
   readonly intervalStartSeconds: number;
   readonly deltaSeconds: number;
-  /** Production Stage 5 path. Omitted only by isolated Stage 3 action-clock tests. */
+  /** Omitted only by legacy isolated action-clock tests. */
   readonly state?: Pick<SimulationState, 'map'>;
 }
 
@@ -97,10 +94,7 @@ export interface CancelSingleFireTaskResult {
   readonly reasonRu: string;
 }
 
-export function requestSingleFireTask(
-  unit: UnitModel,
-  input: RequestSingleFireTaskInput,
-): RequestSingleFireTaskResult {
+export function requestSingleFireTask(unit: UnitModel, input: RequestSingleFireTaskInput): RequestSingleFireTaskResult {
   if (input.mode !== undefined && input.mode !== 'single') {
     return requestRejected('unsupported_mode', 'infantry_fire_task_unsupported_mode', 'Stage 5 поддерживает только одиночный выстрел.');
   }
@@ -147,11 +141,7 @@ export function requestSingleFireTask(
   }
 
   const sequence = integer(unit.infantryCombatRuntime.nextFireTaskSequence, 1, 1, Number.MAX_SAFE_INTEGER);
-  const initialDirection = {
-    x: Math.cos(unit.facingRadians),
-    y: Math.sin(unit.facingRadians),
-    z: 0,
-  };
+  const initialDirection = { x: Math.cos(unit.facingRadians), y: Math.sin(unit.facingRadians), z: 0 };
   const task: FireTaskRuntimeV1 = {
     schemaVersion: FIRE_TASK_RUNTIME_SCHEMA_VERSION,
     taskId: `${unit.id}:fire-task:${sequence}`,
@@ -189,12 +179,9 @@ export function requestSingleFireTask(
   };
 }
 
-export function tickFireTaskWithTimeBudget(
-  unit: UnitModel,
-  input: TickFireTaskInput,
-): TickFireTaskResult {
-  const validation = validateTickPrerequisites(unit, input);
-  if (validation) return validation;
+export function tickFireTaskWithTimeBudget(unit: UnitModel, input: TickFireTaskInput): TickFireTaskResult {
+  const prerequisite = validateTickPrerequisites(unit, input);
+  if (prerequisite) return prerequisite;
   return input.state
     ? tickStage5FireTask(unit, input as TickFireTaskInput & { readonly state: Pick<SimulationState, 'map'> })
     : tickLegacyActionClock(unit, input);
@@ -206,22 +193,21 @@ function tickStage5FireTask(
 ): TickFireTaskResult {
   const task = unit.infantryCombatRuntime.activeFireTask!;
   const weapon = unit.infantryCombatRuntime.primaryWeapon!;
+  const intervalStartSeconds = finiteNonNegative(input.intervalStartSeconds, 0);
   let remainingSeconds = finiteNonNegative(input.deltaSeconds, 0);
   let consumedSeconds = 0;
-  const intervalStartSeconds = finiteNonNegative(input.intervalStartSeconds, 0);
 
-  while (remainingSeconds > TIME_EPSILON_SECONDS) {
+  while (true) {
     const now = canonicalSeconds(intervalStartSeconds + consumedSeconds);
     if (task.phase === 'accepted') {
       transition(task, 'weapon_ready', now);
       continue;
     }
-    if (task.phase === 'firing') {
-      return tickResult(task.taskId, true, false, false, consumedSeconds, remainingSeconds, null);
-    }
+    if (task.phase === 'firing') return tickResult(task.taskId, true, false, false, consumedSeconds, remainingSeconds, null);
     if (task.phase === 'recovery') {
+      if (remainingSeconds <= TIME_EPSILON_SECONDS) break;
       const used = Math.min(remainingSeconds, task.recoveryRemainingSeconds);
-      task.recoveryRemainingSeconds = cleanDuration(task.recoveryRemainingSeconds - used);
+      consume(task, 'recoveryRemainingSeconds', used);
       remainingSeconds = cleanDuration(remainingSeconds - used);
       consumedSeconds = cleanDuration(consumedSeconds + used);
       if (task.recoveryRemainingSeconds <= TIME_EPSILON_SECONDS) {
@@ -235,27 +221,30 @@ function tickStage5FireTask(
       return tickResult(task.taskId, false, true, task.phase === 'failed' || task.phase === 'denied', consumedSeconds, remainingSeconds, task.resultCode);
     }
 
-    const nextBoundary = task.aimTracking.nextTrackingBoundarySeconds;
-    if (nextBoundary <= now + TIME_EPSILON_SECONDS) {
-      updateAimTrackingAtBoundary(input.state, unit, task, weapon, nextBoundary);
+    // A tracking boundary at the exact end of the tick is still part of this tick.
+    if (task.aimTracking.nextTrackingBoundarySeconds <= now + TIME_EPSILON_SECONDS) {
+      updateAimTrackingAtBoundary(input.state, unit, task, weapon, task.aimTracking.nextTrackingBoundarySeconds);
       if (task.phase === 'aiming' && canCommitAtCurrentQuality(task)) {
         transition(task, 'firing', now);
         return tickResult(task.taskId, true, false, false, consumedSeconds, remainingSeconds, null);
       }
       continue;
     }
+    if (remainingSeconds <= TIME_EPSILON_SECONDS) break;
 
-    const timeToBoundary = Math.max(0, nextBoundary - now);
+    const timeToBoundary = Math.max(0, task.aimTracking.nextTrackingBoundarySeconds - now);
     if (task.phase === 'weapon_ready') {
       const used = Math.min(remainingSeconds, task.readyRemainingSeconds, timeToBoundary);
-      task.readyRemainingSeconds = cleanDuration(task.readyRemainingSeconds - used);
+      consume(task, 'readyRemainingSeconds', used);
       remainingSeconds = cleanDuration(remainingSeconds - used);
       consumedSeconds = cleanDuration(consumedSeconds + used);
+      const eventSeconds = canonicalSeconds(intervalStartSeconds + consumedSeconds);
       if (task.readyRemainingSeconds <= TIME_EPSILON_SECONDS) {
         task.readyRemainingSeconds = 0;
-        transition(task, 'aiming', intervalStartSeconds + consumedSeconds);
+        transition(task, 'aiming', eventSeconds);
+        if (task.aimTracking.nextTrackingBoundarySeconds <= eventSeconds + TIME_EPSILON_SECONDS) continue;
         if (canCommitAtCurrentQuality(task)) {
-          transition(task, 'firing', intervalStartSeconds + consumedSeconds);
+          transition(task, 'firing', eventSeconds);
           return tickResult(task.taskId, true, false, false, consumedSeconds, remainingSeconds, null);
         }
         continue;
@@ -272,53 +261,52 @@ function tickStage5FireTask(
       const factors = task.aimTracking.solution.factors;
       const timeToThreshold = calculateTimeToThreshold(task, factors.aimQualityPerSecond);
       const used = Math.min(remainingSeconds, timeToBoundary, timeToThreshold);
-      if (used <= TIME_EPSILON_SECONDS) {
-        if (timeToThreshold <= TIME_EPSILON_SECONDS && canCommitAtCurrentQuality(task)) continue;
-        break;
-      }
+      if (used <= TIME_EPSILON_SECONDS) break;
       advanceAimPhysicalProgress(task, factors, used);
       remainingSeconds = cleanDuration(remainingSeconds - used);
       consumedSeconds = cleanDuration(consumedSeconds + used);
+      const eventSeconds = canonicalSeconds(intervalStartSeconds + consumedSeconds);
+      if (task.aimTracking.nextTrackingBoundarySeconds <= eventSeconds + TIME_EPSILON_SECONDS) continue;
       if (canCommitAtCurrentQuality(task)) {
-        transition(task, 'firing', intervalStartSeconds + consumedSeconds);
+        transition(task, 'firing', eventSeconds);
         return tickResult(task.taskId, true, false, false, consumedSeconds, remainingSeconds, null);
       }
-      if (used + TIME_EPSILON_SECONDS >= timeToBoundary) continue;
-      break;
+      continue;
     }
+
+    break;
   }
 
   return tickResult(task.taskId, task.phase === 'firing', false, false, consumedSeconds, remainingSeconds, null);
 }
 
-/** Compatibility clock for old isolated tests that do not own a SimulationState. */
+/** Compatibility clock for old isolated Stage 3 tests without SimulationState. */
 function tickLegacyActionClock(unit: UnitModel, input: TickFireTaskInput): TickFireTaskResult {
   const task = unit.infantryCombatRuntime.activeFireTask!;
   const weapon = unit.infantryCombatRuntime.primaryWeapon!;
   let remainingSeconds = finiteNonNegative(input.deltaSeconds, 0);
   let consumedSeconds = 0;
-  const intervalStartSeconds = finiteNonNegative(input.intervalStartSeconds, 0);
+  const start = finiteNonNegative(input.intervalStartSeconds, 0);
   while (remainingSeconds > TIME_EPSILON_SECONDS) {
     if (task.phase === 'accepted') {
-      transition(task, 'weapon_ready', intervalStartSeconds + consumedSeconds);
+      transition(task, 'weapon_ready', start + consumedSeconds);
       continue;
     }
     if (task.phase === 'weapon_ready') {
       const used = Math.min(remainingSeconds, task.readyRemainingSeconds);
-      task.readyRemainingSeconds = cleanDuration(task.readyRemainingSeconds - used);
+      consume(task, 'readyRemainingSeconds', used);
       remainingSeconds = cleanDuration(remainingSeconds - used);
       consumedSeconds = cleanDuration(consumedSeconds + used);
       if (task.readyRemainingSeconds <= TIME_EPSILON_SECONDS) {
         task.readyRemainingSeconds = 0;
-        transition(task, 'aiming', intervalStartSeconds + consumedSeconds);
+        transition(task, 'aiming', start + consumedSeconds);
         continue;
       }
       break;
     }
     if (task.phase === 'aiming') {
       if (task.aimQuality + TIME_EPSILON_SECONDS >= task.minimumSolutionQuality) {
-        task.aimQuality = Math.max(task.aimQuality, task.minimumSolutionQuality);
-        transition(task, 'firing', intervalStartSeconds + consumedSeconds);
+        transition(task, 'firing', start + consumedSeconds);
         return tickResult(task.taskId, true, false, false, consumedSeconds, remainingSeconds, null);
       }
       const rate = finiteNonNegative(weapon.resolved.weapon.aimQualityPerSecond, 0);
@@ -332,8 +320,7 @@ function tickLegacyActionClock(unit: UnitModel, input: TickFireTaskInput): TickF
       remainingSeconds = cleanDuration(remainingSeconds - used);
       consumedSeconds = cleanDuration(consumedSeconds + used);
       if (used + TIME_EPSILON_SECONDS >= needed) {
-        task.aimQuality = Math.max(task.aimQuality, task.minimumSolutionQuality);
-        transition(task, 'firing', intervalStartSeconds + consumedSeconds);
+        transition(task, 'firing', start + consumedSeconds);
         return tickResult(task.taskId, true, false, false, consumedSeconds, remainingSeconds, null);
       }
       break;
@@ -341,11 +328,11 @@ function tickLegacyActionClock(unit: UnitModel, input: TickFireTaskInput): TickF
     if (task.phase === 'firing') return tickResult(task.taskId, true, false, false, consumedSeconds, remainingSeconds, null);
     if (task.phase === 'recovery') {
       const used = Math.min(remainingSeconds, task.recoveryRemainingSeconds);
-      task.recoveryRemainingSeconds = cleanDuration(task.recoveryRemainingSeconds - used);
+      consume(task, 'recoveryRemainingSeconds', used);
       remainingSeconds = cleanDuration(remainingSeconds - used);
       consumedSeconds = cleanDuration(consumedSeconds + used);
       if (task.recoveryRemainingSeconds <= TIME_EPSILON_SECONDS) {
-        completeActiveFireTask(unit, intervalStartSeconds + consumedSeconds);
+        completeActiveFireTask(unit, start + consumedSeconds);
         return tickResult(task.taskId, false, true, false, consumedSeconds, remainingSeconds, null);
       }
       break;
@@ -358,11 +345,11 @@ function tickLegacyActionClock(unit: UnitModel, input: TickFireTaskInput): TickF
 function validateTickPrerequisites(unit: UnitModel, input: TickFireTaskInput): TickFireTaskResult | null {
   const task = unit.infantryCombatRuntime.activeFireTask;
   const deltaSeconds = finiteNonNegative(input.deltaSeconds, 0);
-  const intervalStartSeconds = finiteNonNegative(input.intervalStartSeconds, 0);
+  const start = finiteNonNegative(input.intervalStartSeconds, 0);
   if (!task) return tickResult(null, false, false, false, 0, deltaSeconds, null);
   if (!task.actionHandle || !getPhysicalActionLease(unit, task.actionHandle)) {
     failActiveFireTask(unit, {
-      endedSeconds: intervalStartSeconds,
+      endedSeconds: start,
       resultCode: 'infantry_fire_task_ownership_lost',
       resultRu: 'Огневая задача потеряла точный захват канала оружия.',
     });
@@ -370,7 +357,7 @@ function validateTickPrerequisites(unit: UnitModel, input: TickFireTaskInput): T
   }
   if (!unit.infantryCombatRuntime.primaryWeapon) {
     failActiveFireTask(unit, {
-      endedSeconds: intervalStartSeconds,
+      endedSeconds: start,
       resultCode: 'infantry_fire_task_weapon_missing',
       resultRu: 'Основная винтовка исчезла во время огневой задачи.',
     });
@@ -392,10 +379,7 @@ function canCommitAtCurrentQuality(task: FireTaskRuntimeV1): boolean {
     && task.aimTracking.solution.usableAimQuality + TIME_EPSILON_SECONDS >= task.minimumSolutionQuality;
 }
 
-export function cancelSingleFireTask(
-  unit: UnitModel,
-  input: CancelSingleFireTaskInput,
-): CancelSingleFireTaskResult {
+export function cancelSingleFireTask(unit: UnitModel, input: CancelSingleFireTaskInput): CancelSingleFireTaskResult {
   const task = unit.infantryCombatRuntime.activeFireTask;
   if (!task) {
     return {
@@ -462,8 +446,7 @@ export function normalizeFireTaskRuntime(value: unknown): FireTaskRuntimeV1 | nu
   const sequence = integer(value.sequence, 0, 1, Number.MAX_SAFE_INTEGER);
   if (!taskId || !ownerToken || !target || !phase || sequence <= 0 || value.mode !== 'single') return null;
   const requestedSeconds = finiteNonNegative(value.requestedSeconds, 0);
-  const fallbackDirection = directionFromTarget(target);
-  const aimTracking = normalizeAimTrackingRuntime(value.aimTracking, requestedSeconds, fallbackDirection);
+  const aimTracking = normalizeAimTrackingRuntime(value.aimTracking, requestedSeconds, directionFromTarget(target));
   const legacyAimQuality = clamp01(value.aimQuality);
   if (!isRecord(value.aimTracking) && legacyAimQuality > 0) {
     aimTracking.solution.physicalAimQuality = legacyAimQuality;
@@ -525,7 +508,11 @@ export function normalizeFireTaskTerminalResult(value: unknown): FireTaskTermina
 export function fireTaskHasExactLease(unit: UnitModel, task: FireTaskRuntimeV1): boolean {
   if (!task.actionHandle) return false;
   const lease = getPhysicalActionLease(unit, task.actionHandle);
-  return Boolean(lease && lease.actionType === FIRE_TASK_ACTION_TYPE && lease.channels.length === 1 && lease.channels[0] === 'weapon' && physicalActionHandlesEqual(lease.handle, task.actionHandle));
+  return Boolean(lease
+    && lease.actionType === FIRE_TASK_ACTION_TYPE
+    && lease.channels.length === 1
+    && lease.channels[0] === 'weapon'
+    && physicalActionHandlesEqual(lease.handle, task.actionHandle));
 }
 
 function completeActiveFireTask(unit: UnitModel, endedSeconds: number): void {
@@ -560,7 +547,11 @@ function terminalizeWithoutLease(
   if (unit.infantryCombatRuntime.activeFireTask === task) unit.infantryCombatRuntime.activeFireTask = null;
 }
 
-function requestRejected(status: Exclude<RequestSingleFireTaskStatus, 'started' | 'already_running'>, reasonCode: string, reasonRu: string): RequestSingleFireTaskResult {
+function requestRejected(
+  status: Exclude<RequestSingleFireTaskStatus, 'started' | 'already_running'>,
+  reasonCode: string,
+  reasonRu: string,
+): RequestSingleFireTaskResult {
   return { accepted: false, status, task: null, lease: null, reasonCode, reasonRu };
 }
 
@@ -587,6 +578,14 @@ function tickResult(
 function transition(task: FireTaskRuntimeV1, phase: FireTaskPhase, startedSeconds: number): void {
   task.phase = phase;
   task.phaseStartedSeconds = finiteNonNegative(startedSeconds, task.phaseStartedSeconds);
+}
+
+function consume(
+  task: FireTaskRuntimeV1,
+  field: 'readyRemainingSeconds' | 'recoveryRemainingSeconds',
+  seconds: number,
+): void {
+  task[field] = cleanDuration(task[field] - seconds);
 }
 
 function directionFromTarget(target: BallisticPoint3): { x: number; y: number; z: number } {
