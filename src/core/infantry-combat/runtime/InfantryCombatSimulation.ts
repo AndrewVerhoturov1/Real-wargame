@@ -44,7 +44,11 @@ export function tickInfantryCombatSimulation(
 ): TickInfantryCombatSimulationResult {
   const intervalStartSeconds = finiteNonNegative(input.intervalStartSeconds);
   const deltaSeconds = finiteNonNegative(input.deltaSeconds);
-  const units = [...state.units].sort(compareUnits);
+  const units: UnitModel[] = [];
+  for (const unit of state.units) {
+    if (unit.infantryCombatRuntime.activeFireTask) units.push(unit);
+  }
+  units.sort(compareUnits);
   const pendingCommits: PendingCommit[] = [];
   const recoveries = new Map<string, PendingRecovery>();
 
