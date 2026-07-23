@@ -4,12 +4,17 @@ import { validateCombatCatalogBundle } from '../catalogs/CombatCatalogValidation
 import type {
   AmmoDefinitionV1,
   DefinitionRef,
+  WeaponClass,
   WeaponDefinitionV1,
+  WeaponProficiency,
 } from '../catalogs/CombatCatalogTypes';
+import { createWeaponRecoilRuntime, normalizeWeaponRecoilRuntime } from './AimRuntime';
 import {
   INFANTRY_WEAPON_INSTANCE_SCHEMA_VERSION,
+  WEAPON_OPERATOR_PROFILE_SCHEMA_VERSION,
   type InfantryWeaponInstanceV1,
   type ResolvedWeaponSnapshotV1,
+  type WeaponOperatorProfileV1,
 } from './InfantryCombatRuntimeTypes';
 
 export type EquipPrimaryWeaponStatus =
@@ -26,6 +31,8 @@ export interface EquipPrimaryWeaponResult {
   readonly reasonCode: string;
   readonly reasonRu: string;
 }
+
+const WEAPON_CLASSES: readonly WeaponClass[] = ['rifle', 'submachine_gun', 'machine_gun', 'pistol'];
 
 export function equipPrimaryWeaponFromLoadout(
   unit: UnitModel,
@@ -64,6 +71,12 @@ export function equipPrimaryWeaponFromLoadout(
     weaponInstanceId: `${unit.id}:weapon:primary`,
     slot: 'primary',
     resolved: snapshot,
+    operatorProfile: freezeOperatorProfile({
+      schemaVersion: WEAPON_OPERATOR_PROFILE_SCHEMA_VERSION,
+      shootingSkill: clamp01(unit.soldier.traits.weaponSkill / 100),
+      proficiencyByWeaponClass: normalizeProficiencies(loadout.proficiencyByWeaponClass),
+    }),
+    recoil: createWeaponRecoilRuntime(),
     roundsInWeapon: integer(loadout.primary.loadedRounds, 0, 0, weapon.capacityRounds),
     shotSequence: 0,
     lastCommittedShotId: null,
@@ -89,6 +102,8 @@ export function normalizeInfantryWeaponInstance(value: unknown): InfantryWeaponI
     weaponInstanceId,
     slot: 'primary',
     resolved,
+    operatorProfile: normalizeOperatorProfile(value.operatorProfile),
+    recoil: normalizeWeaponRecoilRuntime(value.recoil),
     roundsInWeapon: integer(value.roundsInWeapon, 0, 0, resolved.weapon.capacityRounds),
     shotSequence: integer(value.shotSequence, 0, 0, Number.MAX_SAFE_INTEGER),
     lastCommittedShotId: nullableText(value.lastCommittedShotId),
@@ -101,6 +116,8 @@ export function serializeInfantryWeaponInstance(value: InfantryWeaponInstanceV1)
     weaponInstanceId: value.weaponInstanceId,
     slot: 'primary',
     resolved: cloneResolvedSnapshot(value.resolved),
+    operatorProfile: freezeOperatorProfile(structuredClone(value.operatorProfile)),
+    recoil: normalizeWeaponRecoilRuntime(structuredClone(value.recoil)),
     roundsInWeapon: integer(value.roundsInWeapon, 0, 0, value.resolved.weapon.capacityRounds),
     shotSequence: integer(value.shotSequence, 0, 0, Number.MAX_SAFE_INTEGER),
     lastCommittedShotId: nullableText(value.lastCommittedShotId),
@@ -109,6 +126,43 @@ export function serializeInfantryWeaponInstance(value: InfantryWeaponInstanceV1)
 
 export function cloneResolvedSnapshot(value: ResolvedWeaponSnapshotV1): ResolvedWeaponSnapshotV1 {
   return freezeResolvedSnapshot(structuredClone(value));
+}
+
+function normalizeOperatorProfile(value: unknown): WeaponOperatorProfileV1 {
+  if (!isRecord(value) || value.schemaVersion !== WEAPON_OPERATOR_PROFILE_SCHEMA_VERSION) {
+    return freezeOperatorProfile({
+      schemaVersion: WEAPON_OPERATOR_PROFILE_SCHEMA_VERSION,
+      shootingSkill: 0.5,
+      proficiencyByWeaponClass: normalizeProficiencies(undefined),
+    });
+  }
+  return freezeOperatorProfile({
+    schemaVersion: WEAPON_OPERATOR_PROFILE_SCHEMA_VERSION,
+    shootingSkill: clamp01(finite(value.shootingSkill, 0.5)),
+    proficiencyByWeaponClass: normalizeProficiencies(value.proficiencyByWeaponClass),
+  });
+}
+
+function normalizeProficiencies(value: unknown): Record<WeaponClass, WeaponProficiency> {
+  const source = isRecord(value) ? value : {};
+  return {
+    rifle: normalizeProficiency(source.rifle),
+    submachine_gun: normalizeProficiency(source.submachine_gun),
+    machine_gun: normalizeProficiency(source.machine_gun),
+    pistol: normalizeProficiency(source.pistol),
+  };
+}
+
+function normalizeProficiency(value: unknown): WeaponProficiency {
+  return value === 'untrained' || value === 'specialist' ? value : 'trained';
+}
+
+function freezeOperatorProfile(value: WeaponOperatorProfileV1): WeaponOperatorProfileV1 {
+  for (const weaponClass of WEAPON_CLASSES) {
+    if (!value.proficiencyByWeaponClass[weaponClass]) throw new Error(`Missing proficiency snapshot for ${weaponClass}.`);
+  }
+  deepFreeze(value.proficiencyByWeaponClass);
+  return Object.freeze(value);
 }
 
 function normalizeResolvedSnapshot(value: unknown): ResolvedWeaponSnapshotV1 | null {
@@ -200,13 +254,21 @@ function nullableText(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+function finite(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
 function finiteNonNegative(value: unknown, fallback: number): number {
-  return Math.max(0, typeof value === 'number' && Number.isFinite(value) ? value : fallback);
+  return Math.max(0, finite(value, fallback));
 }
 
 function integer(value: unknown, fallback: number, minimum: number, maximum: number): number {
-  const numeric = typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : fallback;
-  return Math.max(minimum, Math.min(maximum, numeric));
+  const numeric = finite(value, fallback);
+  return Math.max(minimum, Math.min(maximum, Math.round(numeric)));
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
