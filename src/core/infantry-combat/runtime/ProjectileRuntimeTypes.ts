@@ -44,15 +44,16 @@ export interface ShotCommitRecordV1 {
   readonly ammoDefinitionRef: DefinitionRef;
   readonly committedSimulationSeconds: number;
   readonly muzzlePosition: BallisticPoint3;
-  readonly aimDirectionBeforeDispersion: BallisticDirection3;
-  readonly dispersionPitchRadians: number;
-  readonly dispersionYawRadians: number;
-  readonly recoilPitchRadians: number;
-  readonly recoilYawRadians: number;
-  readonly finalProjectileDirection: BallisticDirection3;
+  /** Absent only in migrated Stage 3-4 records. New Stage 5 commits always populate these fields. */
+  readonly aimDirectionBeforeDispersion?: BallisticDirection3;
+  readonly dispersionPitchRadians?: number;
+  readonly dispersionYawRadians?: number;
+  readonly recoilPitchRadians?: number;
+  readonly recoilYawRadians?: number;
+  readonly finalProjectileDirection?: BallisticDirection3;
   readonly initialVelocityMetresPerSecond: BallisticDirection3;
-  readonly predictedHitProbability: number;
-  readonly effectiveDispersionRadians: number;
+  readonly predictedHitProbability?: number;
+  readonly effectiveDispersionRadians?: number;
   readonly roundsBefore: number;
   readonly roundsAfter: number;
 }
