@@ -1,4 +1,13 @@
 import {
+  cancelPhysicalAction,
+  completePhysicalAction,
+  failPhysicalAction,
+  getPhysicalActionLease,
+  requestPhysicalActionChannels,
+  setPhysicalActionCoordinatorDiagnostic,
+} from '../actions/PhysicalActionCoordinator';
+import type { PhysicalActionHandleV1 } from '../actions/PhysicalActionCoordinatorTypes';
+import {
   cancelMovementWeaponPreparation,
   getMovementAimPreparationMultiplier,
   getMovementWeaponPreparation,
@@ -22,6 +31,8 @@ import {
   tryConsumeRound,
 } from './WeaponModel';
 
+export const LEGACY_FIRE_PHYSICAL_ACTION_TYPE = 'legacy_fire_action' as const;
+
 export type FireActionPhase =
   | 'acquire_target'
   | 'turning'
@@ -36,6 +47,7 @@ export type FireActionPhase =
 export interface FireActionState {
   id: string;
   contactId: string;
+  physicalActionHandle: PhysicalActionHandleV1;
   phase: FireActionPhase;
   startedSeconds: number;
   phaseStartedSeconds: number;
@@ -75,9 +87,24 @@ export function requestFireAction(state: SimulationState, unit: UnitModel, conta
     unit.behaviorRuntime.lastEvent = 'movement_weapon_preparation_required';
     return false;
   }
+  const physicalAction = requestPhysicalActionChannels(unit, {
+    actionType: LEGACY_FIRE_PHYSICAL_ACTION_TYPE,
+    owner: { source: 'system', id: contactId },
+    ownerToken,
+    channels: ['weapon'],
+    startedSeconds: state.simulationTimeSeconds,
+    reasonCode: 'legacy_fire_action_started',
+    reasonRu: 'Старый огневой механизм занял канал оружия.',
+  });
+  if (!physicalAction.accepted || !physicalAction.handle) {
+    unit.behaviorRuntime.reason = physicalAction.reasonRu;
+    unit.behaviorRuntime.lastEvent = 'combat_fire_physical_action_blocked';
+    return false;
+  }
   actionByUnit.set(unit, {
     id: `${unit.id}:fire:${Math.round(state.simulationTimeSeconds * 1000)}`,
     contactId,
+    physicalActionHandle: { ...physicalAction.handle },
     phase: 'acquire_target',
     startedSeconds: state.simulationTimeSeconds,
     phaseStartedSeconds: state.simulationTimeSeconds,
@@ -91,7 +118,6 @@ export function requestFireAction(state: SimulationState, unit: UnitModel, conta
   unit.behaviorRuntime.lastEvent = 'combat_fire_action_started';
   return true;
 }
-
 
 export function cancelPendingFireIntent(unit: UnitModel, contactId?: string): boolean {
   const pending = getMovementWeaponPreparation(unit);
@@ -126,7 +152,7 @@ export function reconcileAllPendingFireIntents(state: SimulationState): void {
 
 export function getFireAction(unit: UnitModel): FireActionState | null {
   const action = actionByUnit.get(unit);
-  return action ? { ...action } : null;
+  return action ? { ...action, physicalActionHandle: { ...action.physicalActionHandle } } : null;
 }
 
 export function getLastShotResult(unit: UnitModel): LastShotResult | null {
@@ -141,6 +167,13 @@ export function cancelFireAction(unit: UnitModel, reason: string, reasonRu = rea
   action.phase = 'cancelled';
   action.reason = reason;
   action.reasonRu = reasonRu;
+  if (getPhysicalActionLease(unit, action.physicalActionHandle)) {
+    cancelPhysicalAction(unit, action.physicalActionHandle, {
+      endedSeconds: action.phaseStartedSeconds,
+      resultCode: 'legacy_fire_action_cancelled',
+      resultRu: reasonRu,
+    });
+  }
   actionByUnit.delete(unit);
   unit.behaviorRuntime.currentAction = 'observe';
   unit.behaviorRuntime.reason = reasonRu;
@@ -152,6 +185,17 @@ export function tickFireAction(state: SimulationState, unit: UnitModel, deltaSec
   recoverWeapon(unit, deltaSeconds);
   const action = actionByUnit.get(unit);
   if (!action || deltaSeconds <= 0) return;
+  if (!getPhysicalActionLease(unit, action.physicalActionHandle)) {
+    action.phase = 'failed';
+    action.reason = 'Physical weapon lease was lost.';
+    action.reasonRu = 'Огневое действие остановлено: захват канала оружия потерян.';
+    actionByUnit.delete(unit);
+    setPhysicalActionCoordinatorDiagnostic(unit, 'legacy_fire_action_lease_lost', action.reasonRu);
+    unit.behaviorRuntime.currentAction = 'observe';
+    unit.behaviorRuntime.reason = action.reasonRu;
+    unit.behaviorRuntime.lastEvent = 'combat_fire_action_failed';
+    return;
+  }
   if (!isFireAllowed(state) && action.phase !== 'recovering') {
     cancelFireAction(unit, 'Fire permission was disabled.', 'Стрельба запрещена до выстрела.');
     return;
@@ -163,7 +207,7 @@ export function tickFireAction(state: SimulationState, unit: UnitModel, deltaSec
 
   const decision = evaluateFireRequest(state, unit, action.contactId);
   if (!decision.allowed || !decision.target) {
-    failAction(unit, action, decision.reason, decision.reasonRu);
+    failAction(state, unit, action, decision.reason, decision.reasonRu);
     return;
   }
 
@@ -217,7 +261,7 @@ export function tickFireAction(state: SimulationState, unit: UnitModel, deltaSec
       const friendlyIds = new Set(state.units.filter((candidate) => !areUnitsHostile(unit, candidate)).map((candidate) => candidate.id));
       const friendly = hasFriendlyUnitBeforeDistance(state, geometry.input, friendlyIds, geometry.targetDistanceMetres);
       if (friendly) {
-        failAction(unit, action, 'Friendly unit crosses the line of fire.', 'Союзник пересекает линию огня.');
+        failAction(state, unit, action, 'Friendly unit crosses the line of fire.', 'Союзник пересекает линию огня.');
         return;
       }
       transition(action, 'firing', state.simulationTimeSeconds, 'Safety check passed.', 'Линия огня свободна.');
@@ -225,12 +269,19 @@ export function tickFireAction(state: SimulationState, unit: UnitModel, deltaSec
     }
     case 'firing': {
       executeShot(state, unit, action, decision.target);
-      transition(action, 'recovering', state.simulationTimeSeconds, 'Shot fired.', 'Выстрел произведён.');
+      if (actionByUnit.has(unit)) {
+        transition(action, 'recovering', state.simulationTimeSeconds, 'Shot fired.', 'Выстрел произведён.');
+      }
       return;
     }
     case 'recovering': {
       const definition = getWeaponDefinition(getWeaponRuntime(unit).weaponId);
       if (elapsed(action, state) >= definition.recoveryTimeSeconds) {
+        completePhysicalAction(unit, action.physicalActionHandle, {
+          endedSeconds: state.simulationTimeSeconds,
+          resultCode: 'legacy_fire_action_completed',
+          resultRu: 'Старое огневое действие завершено.',
+        });
         actionByUnit.delete(unit);
         unit.behaviorRuntime.currentAction = 'observe';
         unit.behaviorRuntime.reason = 'Выстрел завершён, боец снова наблюдает.';
@@ -284,7 +335,7 @@ function executeShot(
   const weapon = getWeaponRuntime(unit);
   const definition = getWeaponDefinition(weapon.weaponId);
   if (!tryConsumeRound(unit, state.simulationTimeSeconds)) {
-    failAction(unit, action, 'Weapon cannot fire now.', 'Оружие сейчас не может выстрелить.');
+    failAction(state, unit, action, 'Weapon cannot fire now.', 'Оружие сейчас не может выстрелить.');
     return;
   }
   const geometry = buildShotGeometry(state, unit, target, action, true);
@@ -409,10 +460,23 @@ function transition(
   action.reasonRu = reasonRu;
 }
 
-function failAction(unit: UnitModel, action: FireActionState, reason: string, reasonRu: string): void {
+function failAction(
+  state: SimulationState,
+  unit: UnitModel,
+  action: FireActionState,
+  reason: string,
+  reasonRu: string,
+): void {
   action.phase = 'failed';
   action.reason = reason;
   action.reasonRu = reasonRu;
+  if (getPhysicalActionLease(unit, action.physicalActionHandle)) {
+    failPhysicalAction(unit, action.physicalActionHandle, {
+      endedSeconds: state.simulationTimeSeconds,
+      resultCode: 'legacy_fire_action_failed',
+      resultRu: reasonRu,
+    });
+  }
   actionByUnit.delete(unit);
   unit.behaviorRuntime.currentAction = 'observe';
   unit.behaviorRuntime.reason = reasonRu;
