@@ -29,7 +29,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tar --exclude=.git --exclude=stage4-source.tgz -czf stage4-source.tgz .
+          git archive --format=tar.gz --output=stage4-source.tgz HEAD
 
       - name: Upload source tree
         uses: actions/upload-artifact@v4
