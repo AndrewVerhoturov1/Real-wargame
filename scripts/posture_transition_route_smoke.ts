@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { requestPhysicalActionChannels } from '../src/core/actions/PhysicalActionCoordinator';
 import {
   cancelPostureTransition,
   postureOwnerTokenForPlayerCommand,
@@ -100,10 +101,19 @@ function verifyReloadAndPostureConflictsAreSymmetric(): void {
   assert.equal(unit.behaviorRuntime.lastEvent, 'combat_reload_rejected_posture_transition');
 
   cancelPostureTransition(unit, 'posture-owner', 'test_cancel_before_reload', 'Переход отменён перед проверкой перезарядки.');
-  unit.behaviorRuntime.currentAction = 'reload';
-  const rejected = request(unit, state.simulationTimeSeconds, 'standing', 'reload-conflict-owner');
+  const reloadLease = requestPhysicalActionChannels(unit, {
+    actionType: 'legacy_reload_test',
+    owner: { source: 'test', id: 'reload-conflict-owner' },
+    ownerToken: 'reload-conflict-owner',
+    channels: ['weapon'],
+    startedSeconds: state.simulationTimeSeconds,
+    reasonCode: 'legacy_reload_test_started',
+    reasonRu: 'Проверочная старая перезарядка заняла канал оружия.',
+  });
+  assert.equal(reloadLease.accepted, true);
+  const rejected = request(unit, state.simulationTimeSeconds, 'crouched', 'posture-during-reload-owner');
   assert.equal(rejected.accepted, false);
-  assert.equal(rejected.reasonCode, 'posture_transition_weapon_conflict');
+  assert.equal(rejected.reasonCode, 'posture_transition_channels_blocked');
 }
 
 function verifyCancelledTacticalCommandCancelsItsPostureAction(): void {
