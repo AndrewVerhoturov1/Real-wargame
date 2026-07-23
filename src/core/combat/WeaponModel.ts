@@ -1,4 +1,4 @@
-import { isPostureTransitionRunning } from '../actions/PostureTransition';
+import { isPhysicalActionChannelAvailable } from '../actions/PhysicalActionCoordinator';
 import type { UnitModel } from '../units/UnitModel';
 
 export const DEFAULT_RIFLE_ID = 'rifle_mosin_v1';
@@ -112,9 +112,9 @@ export function tryConsumeRound(unit: UnitModel, nowSeconds: number): boolean {
 }
 
 export function reloadWeapon(unit: UnitModel): number {
-  if (isPostureTransitionRunning(unit)) {
-    unit.behaviorRuntime.reason = 'Перезарядка запрещена во время физической смены позы.';
-    unit.behaviorRuntime.lastEvent = 'combat_reload_rejected_posture_transition';
+  if (!isPhysicalActionChannelAvailable(unit, 'weapon')) {
+    unit.behaviorRuntime.reason = 'Перезарядка запрещена: канал оружия занят физическим действием.';
+    unit.behaviorRuntime.lastEvent = 'combat_reload_rejected_physical_action';
     return 0;
   }
   const runtime = getWeaponRuntime(unit);
@@ -143,7 +143,7 @@ export function syncLegacyWeaponFields(unit: UnitModel, runtime = getWeaponRunti
 }
 
 export function clearWeaponRuntime(unit: UnitModel): void {
-  if (isPostureTransitionRunning(unit)) return;
+  if (!isPhysicalActionChannelAvailable(unit, 'weapon')) return;
   runtimeByUnit.delete(unit);
 }
 
