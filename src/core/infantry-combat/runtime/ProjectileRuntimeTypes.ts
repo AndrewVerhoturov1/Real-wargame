@@ -53,8 +53,9 @@ export interface ProjectileImpactV1 {
   readonly projectileId: string;
   readonly shotId: string;
   readonly shooterId: string;
-  readonly impactType: ProjectileImpactType;
-  readonly simulationSeconds: number;
+  readonly hitType: ProjectileImpactType;
+  readonly impactSeconds: number;
+  readonly projectileAgeSeconds: number;
   readonly point: BallisticPoint3;
   readonly hitObjectId: string | null;
   readonly hitUnitId: string | null;

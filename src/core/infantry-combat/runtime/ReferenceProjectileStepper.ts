@@ -150,7 +150,8 @@ function executeFixedSubstep(
         : collision.travelledMetres / segment.distanceMetres;
       const impactSeconds = substepStartSeconds + stepSeconds * clamp01(impactFraction);
       const impactVelocity = integrateVelocity(startVelocity, stepSeconds * clamp01(impactFraction));
-      const impact = createImpact(state, projectile, collision, impactSeconds, impactVelocity);
+      const projectileAgeSeconds = normalizeSmall(projectile.ageSeconds + stepSeconds * clamp01(impactFraction));
+      const impact = createImpact(state, projectile, collision, impactSeconds, projectileAgeSeconds, impactVelocity);
       if (!runtime.appliedImpactIds.includes(impact.impactId)) impacts.push(impact);
       terminations.push(createTermination(projectile, 'impact', impactSeconds, collision.impactPoint));
       continue;
@@ -186,7 +187,8 @@ function createImpact(
   state: Pick<SimulationState, 'map'>,
   projectile: ProjectileStateV1,
   collision: ReturnType<typeof traceBallisticRay>,
-  simulationSeconds: number,
+  impactSeconds: number,
+  projectileAgeSeconds: number,
   velocityBeforeImpact: BallisticDirection3,
 ): ProjectileImpactV1 {
   const impactId = `${projectile.shotId}:impact:${projectile.impactSequence + 1}`;
@@ -204,8 +206,9 @@ function createImpact(
     projectileId: projectile.projectileId,
     shotId: projectile.shotId,
     shooterId: projectile.shooterId,
-    impactType: collision.hitType as ProjectileImpactV1['impactType'],
-    simulationSeconds: normalizeSmall(simulationSeconds),
+    hitType: collision.hitType as ProjectileImpactV1['hitType'],
+    impactSeconds: normalizeSmall(impactSeconds),
+    projectileAgeSeconds: normalizeSmall(projectileAgeSeconds),
     point: structuredClone(collision.impactPoint),
     hitObjectId: collision.hitObjectId ?? null,
     hitUnitId: collision.hitUnitId ?? null,
@@ -344,7 +347,7 @@ function compareProjectiles(left: ProjectileStateV1, right: ProjectileStateV1): 
 }
 
 function compareImpacts(left: ProjectileImpactV1, right: ProjectileImpactV1): number {
-  return left.simulationSeconds - right.simulationSeconds || compareText(left.impactId, right.impactId);
+  return left.impactSeconds - right.impactSeconds || compareText(left.impactId, right.impactId);
 }
 
 function compareTerminations(left: ProjectileTerminationV1, right: ProjectileTerminationV1): number {

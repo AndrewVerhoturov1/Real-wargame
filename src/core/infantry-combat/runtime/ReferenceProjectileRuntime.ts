@@ -138,16 +138,17 @@ function normalizeImpact(value: unknown): ProjectileImpactV1 | null {
   const shotId = cleanText(value.shotId, '');
   const shooterId = cleanText(value.shooterId, '');
   const point = normalizePoint(value.point);
-  const impactType = value.impactType;
-  if (!impactId || !projectileId || !shotId || !shooterId || !point || (impactType !== 'terrain' && impactType !== 'object' && impactType !== 'unit')) return null;
+  const hitType = value.hitType ?? value.impactType;
+  if (!impactId || !projectileId || !shotId || !shooterId || !point || (hitType !== 'terrain' && hitType !== 'object' && hitType !== 'unit')) return null;
   return {
     schemaVersion: 1,
     impactId,
     projectileId,
     shotId,
     shooterId,
-    impactType,
-    simulationSeconds: finiteNonNegative(value.simulationSeconds, 0),
+    hitType,
+    impactSeconds: finiteNonNegative(value.impactSeconds ?? value.simulationSeconds, 0),
+    projectileAgeSeconds: finiteNonNegative(value.projectileAgeSeconds, 0),
     point,
     hitObjectId: nullableText(value.hitObjectId),
     hitUnitId: nullableText(value.hitUnitId),
@@ -211,7 +212,7 @@ function compareCommitRecords(left: ShotCommitRecordV1, right: ShotCommitRecordV
 }
 
 function compareImpacts(left: ProjectileImpactV1, right: ProjectileImpactV1): number {
-  return left.simulationSeconds - right.simulationSeconds || compareText(left.impactId, right.impactId);
+  return left.impactSeconds - right.impactSeconds || compareText(left.impactId, right.impactId);
 }
 
 function compareTerminations(left: ProjectileTerminationV1, right: ProjectileTerminationV1): number {

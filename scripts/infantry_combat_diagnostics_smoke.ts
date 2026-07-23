@@ -115,7 +115,8 @@ function verifyBoundedSnapshotBuffers(): void {
     impactId: `cap-impact-${index}`,
     shotId: `cap-shot-${index}`,
     projectileId: `cap-projectile-${index}`,
-    simulationSeconds: index,
+    impactSeconds: index,
+    projectileAgeSeconds: index,
   }));
   raw.terminations = Array.from({ length: MAX_STAGE3_TERMINATION_ENTRIES + 8 }, (_, index) => ({
     ...structuredClone(sourceTermination),

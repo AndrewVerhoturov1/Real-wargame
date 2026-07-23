@@ -188,7 +188,7 @@ function compareImpacts(
   left: SimulationState['infantryCombatProjectiles']['impacts'][number],
   right: SimulationState['infantryCombatProjectiles']['impacts'][number],
 ): number {
-  return left.simulationSeconds - right.simulationSeconds || compareText(left.impactId, right.impactId);
+  return left.impactSeconds - right.impactSeconds || compareText(left.impactId, right.impactId);
 }
 
 function compareTerminations(left: ProjectileTerminationV1, right: ProjectileTerminationV1): number {

@@ -92,7 +92,9 @@ function verifyFirstObjectImpactAndExactlyOnce(): void {
   assert.equal(state.infantryCombatProjectiles.impacts.length, 1);
   assert.equal(state.infantryCombatProjectiles.impacts[0]?.impactId, 'object-impact:impact:1');
   assert.equal(state.infantryCombatProjectiles.impacts[0]?.hitObjectId, 'first-wall');
-  assert.equal(state.infantryCombatProjectiles.impacts[0]?.impactType, 'object');
+  assert.equal(state.infantryCombatProjectiles.impacts[0]?.hitType, 'object');
+  assert.ok((state.infantryCombatProjectiles.impacts[0]?.projectileAgeSeconds ?? 0) > 0);
+  assert.equal(state.infantryCombatProjectiles.impacts[0]?.impactSeconds, state.infantryCombatProjectiles.terminations[0]?.simulationSeconds);
   assert.equal(state.infantryCombatProjectiles.terminations[0]?.reason, 'impact');
   assert.deepEqual(state.infantryCombatProjectiles.appliedImpactIds, ['object-impact:impact:1']);
   const after = serializeReferenceProjectileRuntimeState(state.infantryCombatProjectiles);
@@ -112,7 +114,7 @@ function verifyUnitImpactDoesNotApplyDamage(): void {
     velocityMetresPerSecond: { x: 300, y: 0, z: 0 },
   })];
   tickReferenceProjectiles(state, { intervalStartSeconds: 0, deltaSeconds: STAGE3_PROJECTILE_FIXED_STEP_SECONDS });
-  assert.equal(state.infantryCombatProjectiles.impacts[0]?.impactType, 'unit');
+  assert.equal(state.infantryCombatProjectiles.impacts[0]?.hitType, 'unit');
   assert.equal(state.infantryCombatProjectiles.impacts[0]?.hitUnitId, 'target-unit');
   assert.deepEqual(getCombatRuntime(state.units[1]!), before);
 }
@@ -124,7 +126,7 @@ function verifyTerrainImpact(): void {
     velocityMetresPerSecond: { x: 2, y: 0, z: -10 },
   })];
   tickReferenceProjectiles(state, { intervalStartSeconds: 0, deltaSeconds: STAGE3_PROJECTILE_FIXED_STEP_SECONDS });
-  assert.equal(state.infantryCombatProjectiles.impacts[0]?.impactType, 'terrain');
+  assert.equal(state.infantryCombatProjectiles.impacts[0]?.hitType, 'terrain');
   assert.equal(state.infantryCombatProjectiles.terminations[0]?.reason, 'impact');
 }
 
