@@ -177,30 +177,16 @@ function instrumentQueries(
   index: MapObjectSpatialIndex,
   diagnostics: MapObjectSpatialIndexDiagnostics,
 ): MapObjectSpatialIndex {
-  for (const methodName of ['queryPoint', 'queryRect', 'queryCircle', 'querySegment'] as const) {
-    const original = index[methodName].bind(index) as (...args: unknown[]) => MapObject[];
-    Object.defineProperty(index, methodName, {
-      configurable: true,
-      value: (...args: unknown[]) => {
-        const result = original(...args);
-        diagnostics.queryCount += 1;
-        diagnostics.lastCandidateCount = result.length;
-        return result;
-      },
-    });
-  }
-  for (const methodName of ['queryRectInto', 'querySegmentInto'] as const) {
-    const original = index[methodName].bind(index) as (...args: unknown[]) => number;
-    Object.defineProperty(index, methodName, {
-      configurable: true,
-      value: (...args: unknown[]) => {
-        const count = original(...args);
-        diagnostics.queryCount += 1;
-        diagnostics.lastCandidateCount = count;
-        return count;
-      },
-    });
-  }
+  const original = index.queryRectInto.bind(index);
+  Object.defineProperty(index, 'queryRectInto', {
+    configurable: true,
+    value: (...args: Parameters<MapObjectSpatialIndex['queryRectInto']>) => {
+      const count = original(...args);
+      diagnostics.queryCount += 1;
+      diagnostics.lastCandidateCount = count;
+      return count;
+    },
+  });
   return index;
 }
 

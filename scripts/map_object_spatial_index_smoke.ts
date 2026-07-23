@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { normalizeMap, type TacticalMapData } from '../src/core/map/MapModel';
 import { getMapRevisionSnapshot } from '../src/core/map/MapRuntimeState';
 import {
+  createMapObjectSpatialQueryScratch,
   getMapObjectSpatialIndex,
   getMapObjectSpatialIndexDiagnostics,
 } from '../src/core/spatial/MapObjectSpatialIndex';
@@ -41,6 +42,16 @@ assert.deepEqual(index.queryCircle({ x: 25.5, y: 18.5 }, 2).map((object) => obje
 let diagnostics = getMapObjectSpatialIndexDiagnostics(map);
 assert.equal(diagnostics.buildCount, 1);
 assert.equal(diagnostics.objectCount, 2);
+assert.equal(diagnostics.queryCount, 4, 'each public query must be counted exactly once');
+const segmentOutput: typeof map.objects = [];
+index.querySegmentInto(
+  { x: 2, y: 8.5 },
+  { x: 15, y: 8.5 },
+  0.25,
+  segmentOutput,
+  createMapObjectSpatialQueryScratch(),
+);
+assert.equal(getMapObjectSpatialIndexDiagnostics(map).queryCount, 5, 'prepared query must be counted exactly once');
 
 const revisionsBeforeMove = getMapRevisionSnapshot(map);
 map.objects[0].x = 18;
