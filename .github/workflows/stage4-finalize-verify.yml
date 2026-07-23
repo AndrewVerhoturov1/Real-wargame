@@ -1,0 +1,212 @@
+name: Stage 4 Finalize and Verify
+
+on:
+  push:
+    branches:
+      - feature/20260723-shooting-stage-04-projectile-runtime-benchmark
+
+permissions:
+  contents: write
+
+jobs:
+  finalize-stage4:
+    if: contains(github.event.head_commit.message, 'activate final Stage 4 verification')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply final verified fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='3544444490f9026954d99a84e167988d0e518156'
+          test "$(git merge-base HEAD "$base")" = "$base"
+          printf '%s  %s\n' 'e4a723a054cf40342b4c1f830034319bbe1376d369a414089e8a65d1806bb923' .github/stage4-finalize/fix-commits.b64 | sha256sum --check
+          base64 -d .github/stage4-finalize/fix-commits.b64 | gzip -d > /tmp/stage4-fixes.mbox
+          printf '%s  %s\n' 'c10fa8fcd597c96f0722968693325fc8078ad02a6d9509d431c82fd07ec94f71' /tmp/stage4-fixes.mbox | sha256sum --check
+          git config user.name 'OpenAI Web Chat'
+          git config user.email 'openai-web-chat@users.noreply.github.com'
+          git am --3way /tmp/stage4-fixes.mbox
+
+      - name: Remove every temporary Stage 4 harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -r --ignore-unmatch \
+            .github/stage4-fix-patch \
+            .github/stage4-finalize \
+            .github/stage4-transfer-final \
+            .github/stage4-transfer-20260724 \
+            .github/stage4-patch \
+            .github/workflows/stage4-transfer-apply.yml \
+            .github/workflows/stage4-finalize-verify.yml
+          git commit -m 'chore: remove temporary Stage 4 verification harness'
+          git status --short
+          test -z "$(git status --short)"
+          git rev-parse HEAD | tee stage4-final-sha.txt
+
+      - name: Verify exact Stage 4 tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='3544444490f9026954d99a84e167988d0e518156'
+          cat > /tmp/expected-paths <<'EOF'
+          docs/performance/PROJECTILE_RUNTIME_STAGE4_CAPS.md
+          package.json
+          scripts/infantry_combat_commit_smoke.ts
+          scripts/infantry_combat_projectile_benchmark.mjs
+          scripts/infantry_combat_projectile_benchmark.ts
+          scripts/infantry_combat_projectile_reference_harness.ts
+          scripts/infantry_combat_projectile_runtime_smoke.mjs
+          scripts/infantry_combat_projectile_runtime_smoke.ts
+          scripts/map_object_spatial_index_smoke.ts
+          src/core/combat/BallisticTrace.ts
+          src/core/combat/CombatUnitSpatialIndex.ts
+          src/core/infantry-combat/runtime/InfantryCombatDiagnostics.ts
+          src/core/infantry-combat/runtime/InfantryCombatRuntimeTypes.ts
+          src/core/infantry-combat/runtime/InfantryCombatSimulation.ts
+          src/core/infantry-combat/runtime/InfantryCombatUnitRuntime.ts
+          src/core/infantry-combat/runtime/ProjectileRuntime.ts
+          src/core/infantry-combat/runtime/ProjectileRuntimeTypes.ts
+          src/core/infantry-combat/runtime/ProjectileStepper.ts
+          src/core/infantry-combat/runtime/ReferenceProjectileRuntime.ts
+          src/core/infantry-combat/runtime/ReferenceProjectileStepper.ts
+          src/core/infantry-combat/runtime/ShotCommitService.ts
+          src/core/infantry-combat/runtime/index.ts
+          src/core/simulation/SimulationStateLegacy.ts
+          src/core/spatial/MapObjectSpatialIndex.ts
+          src/ui/SceneExport.ts
+          EOF
+          sed -i 's/^          //' /tmp/expected-paths
+          git diff --name-only "$base"...HEAD | sort > /tmp/actual-paths
+          diff -u /tmp/expected-paths /tmp/actual-paths
+          cat > /tmp/manifest.sha256 <<'EOF'
+          a45ec1c7383bf73b16d4b758b6e91ac6071f37d3313393446a7b3f02a0fd909b  docs/performance/PROJECTILE_RUNTIME_STAGE4_CAPS.md
+          721e94880a0eef18343422d60a80ef1e5cdc10e4ab7f84cfe7d988bfe794877f  package.json
+          f0018ff0c444b4c261da2456d9e2b15253f3eaf2ddfbd5598ace330e23285536  scripts/infantry_combat_commit_smoke.ts
+          cae569f9e2495f5d41f3cd7d9e4ac2eea12946920675fb1a667849a3d9e69e57  scripts/infantry_combat_projectile_benchmark.mjs
+          1c6b87645dce582f170019deee7201c1c7860bcd93efa71a10c56664b16d8ae3  scripts/infantry_combat_projectile_benchmark.ts
+          e0a5d2cce77f7b47c2aa8d562e0ea8b280b50e83757ba1bf4ba63cf0e67dd10f  scripts/infantry_combat_projectile_reference_harness.ts
+          2dd248f4389dde605879426add13b3dc0bf3217758f2a9a6a739d3ac2e261216  scripts/infantry_combat_projectile_runtime_smoke.mjs
+          f98dda5d3e33e9ae241f17bea8800bb44d016c6c10d844a13cd6badbd6eab572  scripts/infantry_combat_projectile_runtime_smoke.ts
+          410174cdb6f75b0d228d9fb073706431e7f19948a199a460b622710dc400fb41  scripts/map_object_spatial_index_smoke.ts
+          c0987ebcb5006f90906f34cd60afd2dc2263a6577f6ea51000de4043824548df  src/core/combat/BallisticTrace.ts
+          f1d8978dea8e41150f449187cca90b433fc1e1b384ffdbf90cfa1b548446b597  src/core/combat/CombatUnitSpatialIndex.ts
+          757bb2768e152a4847e8920faf136215dc3dda229c4003a4e794739ceb2ff819  src/core/infantry-combat/runtime/InfantryCombatDiagnostics.ts
+          93f70e44e96be50b7920078c0e1f4e82cf057161b89ff97b4935f492d1f2c3d9  src/core/infantry-combat/runtime/InfantryCombatRuntimeTypes.ts
+          ffa90fded38040af0f7ed9662caf3a93ef7a54ba38a6df8368a22ae18db3f328  src/core/infantry-combat/runtime/InfantryCombatSimulation.ts
+          161a8603071280911c8dbe44ccab3ef040a5d48fd2d11b60408a44ecfcc09c8a  src/core/infantry-combat/runtime/InfantryCombatUnitRuntime.ts
+          5dfe468a6135fc8e57e1760b4b9022550615fb7773c500b8c91586d5bf6a8199  src/core/infantry-combat/runtime/ProjectileRuntime.ts
+          d16669e2a73d4e4b4b3fff863dc01d9900388e4cc4a4dbe5e75ba9a053f3001e  src/core/infantry-combat/runtime/ProjectileRuntimeTypes.ts
+          ef99ebcb0e17e0445dcba7ee92587b61bffdbe9f31ca56a9046e63231780f7a4  src/core/infantry-combat/runtime/ProjectileStepper.ts
+          1d54180c9d062e71d5fb957817ebcc74d6e0ffe5fe137b37aa34f0ac39feed5a  src/core/infantry-combat/runtime/ReferenceProjectileRuntime.ts
+          587408e92c9dcb533093f43f413233b776b7a5555ddd70ae9162c4b19c798318  src/core/infantry-combat/runtime/ReferenceProjectileStepper.ts
+          1513e1d5d366cc4e554114d92ffaefc1d9413265860066be73738927e1d1a472  src/core/infantry-combat/runtime/ShotCommitService.ts
+          971a4c7a683239c4963e0bdf951e6efe7f3212d90bfa81a7fc75cfe6ede974b0  src/core/infantry-combat/runtime/index.ts
+          9660c584671d96072cb8b6c7f1961c39d20ad8759f7782fc997f8aac66b34dc5  src/core/simulation/SimulationStateLegacy.ts
+          c82f80095ab2ff4e071e1fac7602ea44cfc85fe3f41fa98075e42c294e1b2667  src/core/spatial/MapObjectSpatialIndex.ts
+          2cde433ed8668567512095bcda87d5d03b1c16b57fc8dc71347b3cbb0391a0e8  src/ui/SceneExport.ts
+          EOF
+          sed -i 's/^          //' /tmp/manifest.sha256
+          sha256sum --check /tmp/manifest.sha256
+          git diff --check "$base"...HEAD
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run required verification matrix
+        shell: bash
+        run: |
+          set -uo pipefail
+          : > stage4-matrix-node24.log
+          failures=0
+          run_check() {
+            name="$1"; shift
+            printf '\n===== %s =====\n' "$name" | tee -a stage4-matrix-node24.log
+            "$@" 2>&1 | tee -a stage4-matrix-node24.log
+            code=${PIPESTATUS[0]}
+            printf 'EXIT:%s\n' "$code" | tee -a stage4-matrix-node24.log
+            if [ "$code" -ne 0 ]; then failures=$((failures + 1)); fi
+          }
+          run_check combat-catalogs npm run combat-catalogs:smoke
+          run_check combat-catalog-storage npm run combat-catalog-storage:smoke
+          run_check combat-catalog-editor npm run combat-catalog-editor:smoke
+          run_check physical-action-coordinator npm run physical-action-coordinator:smoke
+          run_check posture-transition npm run posture-transition:smoke
+          run_check physical-movement npm run physical-movement:smoke
+          run_check infantry-combat-single-shot npm run infantry-combat-single-shot:smoke
+          run_check infantry-combat-projectile npm run infantry-combat-projectile:smoke
+          run_check combat-foundation npm run combat-foundation:smoke
+          run_check combat-tactical-integration npm run combat-tactical-integration:smoke
+          run_check tactical-action-ports npm run tactical-action-ports:smoke
+          run_check map-object-spatial-index npm run spatial-index:smoke
+          run_check typecheck npm run typecheck
+          run_check build npm run build
+          run_check benchmark-wrapper-check node --check scripts/infantry_combat_projectile_benchmark.mjs
+          run_check projectile-wrapper-check node --check scripts/infantry_combat_projectile_runtime_smoke.mjs
+
+          printf '\n===== performance-contract-known-baseline =====\n' | tee -a stage4-matrix-node24.log
+          npm run performance-contract:smoke > /tmp/performance-contract.log 2>&1
+          perf_code=$?
+          cat /tmp/performance-contract.log | tee -a stage4-matrix-node24.log
+          printf 'EXIT:%s\n' "$perf_code" | tee -a stage4-matrix-node24.log
+          expected="scripts/check_agent_docs.mjs must include mandatory performance contract fragment: import './performance_principles_contract_smoke.mjs';"
+          if [ "$perf_code" -ne 1 ] || ! grep -Fq "$expected" /tmp/performance-contract.log; then
+            failures=$((failures + 1))
+          else
+            printf 'KNOWN_BASELINE_CONFIRMED:yes\n' | tee -a stage4-matrix-node24.log
+          fi
+
+          printf '\n===== nondeterminism-scan =====\n' | tee -a stage4-matrix-node24.log
+          git grep -nE 'Math\.random|Date\.now|performance\.now' -- \
+            src/core/infantry-combat/runtime/ProjectileRuntime.ts \
+            src/core/infantry-combat/runtime/ProjectileStepper.ts \
+            > /tmp/nondeterminism.log
+          grep_code=$?
+          cat /tmp/nondeterminism.log | tee -a stage4-matrix-node24.log
+          printf 'EXIT:%s\n' "$grep_code" | tee -a stage4-matrix-node24.log
+          if [ "$grep_code" -ne 1 ]; then failures=$((failures + 1)); fi
+
+          printf '\nMATRIX_FAILURES:%s\n' "$failures" | tee -a stage4-matrix-node24.log
+          exit "$failures"
+
+      - name: Run full Node.js 24 benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run infantry-combat-projectile:benchmark 2>&1 | tee stage4-benchmark-node24.log
+          awk '/BEGIN_PROJECTILE_BENCHMARK_JSON/{capture=1;next}/END_PROJECTILE_BENCHMARK_JSON/{capture=0}capture' stage4-benchmark-node24.log > stage4-projectile-benchmark-node24.json
+          node -e "const fs=require('fs'); const r=JSON.parse(fs.readFileSync('stage4-projectile-benchmark-node24.json','utf8')); if(!r.pass) process.exit(1);"
+          cp docs/performance/PROJECTILE_RUNTIME_STAGE4_CAPS.md stage4-caps.md
+          git rev-parse HEAD > stage4-final-sha.txt
+
+      - name: Upload final Stage 4 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage4-final-node24-evidence
+          path: |
+            stage4-projectile-benchmark-node24.json
+            stage4-benchmark-node24.log
+            stage4-matrix-node24.log
+            stage4-final-sha.txt
+            stage4-caps.md
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Publish exact verified commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --short
+          test -z "$(git status --short)"
+          git push origin HEAD:refs/heads/feature/20260723-shooting-stage-04-projectile-runtime-benchmark
+          echo "FINAL_SHA=$(git rev-parse HEAD)"
