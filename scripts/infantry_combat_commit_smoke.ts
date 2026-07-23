@@ -26,7 +26,7 @@ verifyMuzzleBlockIsAtomic();
 verifyFriendlyRiskIsAtomic();
 verifyLedgerEvictionIsDeterministic();
 
-console.log('Infantry combat commit smoke passed: candidate-first atomicity, stable IDs, one round/shot/projectile, idempotency and bounded ledger.');
+console.log('Infantry combat commit smoke passed: prepared aim direction, candidate-first atomicity, stable IDs, one round/shot/projectile/recoil, idempotency and bounded ledger.');
 
 function verifySuccessfulCommitAndIdempotency(): void {
   const { state, shooter, task, weapon } = readyShot('commit-success');
@@ -37,6 +37,7 @@ function verifySuccessfulCommitAndIdempotency(): void {
   assert.equal(result.projectileId, 'commit-success:shot:1:projectile');
   assert.equal(weapon.roundsInWeapon, beforeRounds - 1);
   assert.equal(weapon.shotSequence, 1);
+  assert.equal(weapon.recoil.sequence, 1);
   assert.equal(weapon.lastCommittedShotId, result.shotId);
   assert.equal(task.committedShotId, result.shotId);
   assert.equal(task.phase, 'recovery');
@@ -45,6 +46,7 @@ function verifySuccessfulCommitAndIdempotency(): void {
   assert.equal(state.infantryCombatProjectiles.committedShots[0]?.roundsBefore, beforeRounds);
   assert.equal(state.infantryCombatProjectiles.committedShots[0]?.roundsAfter, beforeRounds - 1);
   assert.equal(state.infantryCombatProjectiles.activeProjectiles[0]?.position.xMetres, result.muzzlePosition?.xMetres);
+  assert.deepEqual(state.infantryCombatProjectiles.committedShots[0]?.finalProjectileDirection, result.finalProjectileDirection);
 
   const beforeRepeat = snapshot(state, shooter);
   const repeated = commitShot({ state, shooter, task, weapon, committedSeconds: 1.8 });
@@ -72,8 +74,8 @@ function verifyOwnershipLossIsAtomic(): void {
 
 function verifyInvalidTargetIsAtomic(): void {
   const ready = readyShot('commit-invalid-target');
-  (ready.task.target as { xMetres: number }).xMetres = Number.NaN;
-  assertAtomicFailure(ready, 'invalid_target');
+  ready.task.aimTracking.solution.currentDirection.x = Number.NaN;
+  assertAtomicFailure(ready, 'aim_solution_invalid');
 }
 
 function verifyProjectileCapacityIsAtomic(): void {
@@ -88,7 +90,6 @@ function verifyProjectileCapacityIsAtomic(): void {
   assert.equal(ready.state.infantryCombatProjectiles.diagnostics.capRejectionCount, 1);
   assert.deepEqual(snapshot(ready.state, ready.shooter, true), before);
 }
-
 
 function verifyDuplicateProjectileIdIsAtomic(): void {
   const ready = readyShot('commit-duplicate');
@@ -145,10 +146,7 @@ function verifyLedgerEvictionIsDeterministic(): void {
   assert.equal(ready.state.infantryCombatProjectiles.committedShots.some((record) => record.shotId === result.shotId), true);
 }
 
-function assertAtomicFailure(
-  ready: ReturnType<typeof readyShot>,
-  expectedStatus: string,
-): void {
+function assertAtomicFailure(ready: ReturnType<typeof readyShot>, expectedStatus: string): void {
   const before = snapshot(ready.state, ready.shooter);
   const result = commitShot({ ...ready, committedSeconds: 1.7 });
   assert.equal(result.status, expectedStatus);
@@ -181,7 +179,11 @@ function readyShot(
     requestedSeconds: 0,
   });
   assert.equal(requested.accepted, true);
-  const ticked = tickFireTaskWithTimeBudget(shooter, { intervalStartSeconds: 0, deltaSeconds: 2 });
+  const ticked = tickFireTaskWithTimeBudget(shooter, {
+    intervalStartSeconds: 0,
+    deltaSeconds: 2,
+    state,
+  });
   assert.equal(ticked.commitRequested, true);
   const task = shooter.infantryCombatRuntime.activeFireTask!;
   const weapon = shooter.infantryCombatRuntime.primaryWeapon!;
