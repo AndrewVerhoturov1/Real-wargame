@@ -1,4 +1,4 @@
-name: Stage 4 Source Snapshot
+name: Stage 4 Development Dependencies
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  snapshot:
+  dependencies:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact branch
@@ -17,28 +17,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Record source identity
-        shell: bash
-        run: |
-          set -euo pipefail
-          git rev-parse HEAD | tee stage4-source-head.txt
-          git merge-base HEAD 3544444490f9026954d99a84e167988d0e518156 | tee stage4-source-merge-base.txt
-          git status --short | tee stage4-source-status.txt
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
 
-      - name: Pack source tree
-        shell: bash
-        run: |
-          set -euo pipefail
-          git archive --format=tar.gz --output=stage4-source.tgz HEAD
+      - name: Install exact dependencies
+        run: npm ci
 
-      - name: Upload source tree
+      - name: Pack dependencies
+        shell: bash
+        run: tar -czf stage4-node-modules.tgz node_modules
+
+      - name: Upload dependencies
         uses: actions/upload-artifact@v4
         with:
-          name: stage4-source-tree
-          path: |
-            stage4-source.tgz
-            stage4-source-head.txt
-            stage4-source-merge-base.txt
-            stage4-source-status.txt
+          name: stage4-node-modules
+          path: stage4-node-modules.tgz
           if-no-files-found: error
           retention-days: 1
