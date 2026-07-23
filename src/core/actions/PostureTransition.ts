@@ -1,25 +1,31 @@
 import type { UnitPosture } from '../behavior/BehaviorModel';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
+import {
+  cancelPhysicalAction,
+  cancelPhysicalActionBySystem as cancelCoordinatorActionBySystem,
+  completePhysicalAction,
+  failPhysicalAction,
+  getPhysicalActionLease,
+  requestPhysicalActionChannels,
+  setPhysicalActionCoordinatorDiagnostic,
+} from './PhysicalActionCoordinator';
+import {
+  normalizePhysicalActionHandle,
+  normalizePhysicalActionOwner,
+} from './PhysicalActionCoordinatorSerialization';
+import type {
+  PhysicalActionHandleV1,
+  PhysicalActionOwner,
+  PhysicalActionOwnerSource,
+} from './PhysicalActionCoordinatorTypes';
+
+export type { PhysicalActionOwner, PhysicalActionOwnerSource } from './PhysicalActionCoordinatorTypes';
 
 export const PHYSICAL_ACTION_SCHEMA_VERSION = 1 as const;
 export const POSTURE_TRANSITION_ACTION_TYPE = 'posture_transition' as const;
 
 export type PhysicalActionStatus = 'running' | 'completed' | 'cancelled' | 'failed';
-export type PhysicalActionOwnerSource =
-  | 'player'
-  | 'player_command'
-  | 'movement'
-  | 'tactical_position'
-  | 'test'
-  | 'system'
-  | 'graph_v2'
-  | 'future_ai';
-
-export interface PhysicalActionOwner {
-  readonly source: PhysicalActionOwnerSource;
-  readonly id: string;
-}
 
 export interface PostureTransitionActionV1 {
   readonly schemaVersion: typeof PHYSICAL_ACTION_SCHEMA_VERSION;
@@ -28,6 +34,7 @@ export interface PostureTransitionActionV1 {
   readonly type: typeof POSTURE_TRANSITION_ACTION_TYPE;
   readonly owner: PhysicalActionOwner;
   readonly ownerToken: string;
+  readonly actionHandle: PhysicalActionHandleV1 | null;
   readonly sourcePosture: UnitPosture;
   readonly targetPosture: UnitPosture;
   readonly startedSeconds: number;
@@ -81,6 +88,8 @@ export const POSTURE_TRANSITION_DURATIONS_SECONDS = Object.freeze({
   crouchedToStanding: 0.4,
 });
 
+const POSTURE_CHANNELS = ['locomotion', 'posture', 'weapon'] as const;
+
 const REQUIRED_GAIT_POSTURES: Partial<Record<UnitModel['movementRuntime']['requestedGait'], UnitPosture>> = {
   crawl: 'prone',
   crouch_walk: 'crouched',
@@ -101,31 +110,34 @@ export function requestPostureTransition(
   const running = getRunningPostureTransition(unit);
   if (running) {
     if (running.ownerToken === input.ownerToken && running.targetPosture === input.targetPosture) {
-      stopPhysicalTranslation(unit);
-      return accepted(running, 'posture_transition_already_running', 'Такая смена позы уже выполняется этим владельцем.');
-    }
-    if (running.ownerToken !== input.ownerToken) {
+      if (running.actionHandle && getPhysicalActionLease(unit, running.actionHandle)) {
+        stopPhysicalTranslation(unit);
+        return accepted(running, 'posture_transition_already_running', 'Такая смена позы уже выполняется этим владельцем.');
+      }
+      finishPostureActionAtCurrentEffectivePosture(
+        unit,
+        running,
+        'failed',
+        'posture_transition_lease_lost',
+        'Смена позы остановлена: захват физических каналов потерян.',
+        'missing',
+      );
+    } else if (running.ownerToken !== input.ownerToken) {
       return rejected(
         running,
         'posture_transition_owned_by_other',
         `Смена позы уже принадлежит другому владельцу: ${running.owner.source}:${running.owner.id}.`,
       );
+    } else {
+      finishPostureActionAtCurrentEffectivePosture(
+        unit,
+        running,
+        'cancelled',
+        'posture_transition_replaced_by_owner',
+        'Владелец заменил собственную смену позы новой командой.',
+        'owner',
+      );
     }
-    finishPostureActionAtCurrentEffectivePosture(
-      unit,
-      running,
-      'cancelled',
-      'posture_transition_replaced_by_owner',
-      'Владелец заменил собственную смену позы новой командой.',
-    );
-  }
-
-  if (isWeaponHandlingBusy(unit)) {
-    return rejected(
-      unit.behaviorRuntime.physicalAction,
-      'posture_transition_weapon_conflict',
-      'Смена позы запрещена во время наведения, выстрела или перезарядки.',
-    );
   }
 
   const sourcePosture = unit.behaviorRuntime.posture;
@@ -137,15 +149,35 @@ export function requestPostureTransition(
     );
   }
 
-  const sequence = Math.max(0, unit.behaviorRuntime.physicalAction?.sequence ?? 0) + 1;
-  const owner = normalizeOwner(input.owner);
+  const ownerToken = cleanText(input.ownerToken, '');
+  const owner = normalizePhysicalActionOwner(input.owner, ownerToken || unit.id);
+  const acquisition = requestPhysicalActionChannels(unit, {
+    actionType: POSTURE_TRANSITION_ACTION_TYPE,
+    owner,
+    ownerToken,
+    channels: POSTURE_CHANNELS,
+    startedSeconds: finiteNonNegative(input.startedSeconds, 0),
+    reasonCode: cleanText(input.reasonCode, 'posture_transition_requested'),
+    reasonRu: cleanText(input.reasonRu, 'Начата физическая смена позы.'),
+  });
+  if (!acquisition.accepted || !acquisition.handle) {
+    return rejected(
+      unit.behaviorRuntime.physicalAction,
+      acquisition.reasonCode === 'physical_action_invalid_request'
+        ? 'posture_transition_invalid_request'
+        : 'posture_transition_channels_blocked',
+      acquisition.reasonRu,
+    );
+  }
+
   const action: PostureTransitionActionV1 = {
     schemaVersion: PHYSICAL_ACTION_SCHEMA_VERSION,
-    id: `${unit.id}:physical-action:${sequence}`,
-    sequence,
+    id: acquisition.handle.actionId,
+    sequence: acquisition.handle.sequence,
     type: POSTURE_TRANSITION_ACTION_TYPE,
     owner,
-    ownerToken: cleanText(input.ownerToken, `${owner.source}:${owner.id}`),
+    ownerToken: acquisition.handle.ownerToken,
+    actionHandle: { ...acquisition.handle },
     sourcePosture,
     targetPosture: input.targetPosture,
     startedSeconds: finiteNonNegative(input.startedSeconds, 0),
@@ -163,7 +195,7 @@ export function requestPostureTransition(
   unit.behaviorRuntime.lastEvent = 'posture_transition_started';
   unit.behaviorRuntime.postureChangedBecause = action.reasonCode;
   stopPhysicalTranslation(unit);
-  return accepted(action, 'posture_transition_started', action.reasonRu);
+  return accepted(action, acquisition.status === 'already_running' ? 'posture_transition_already_running' : 'posture_transition_started', action.reasonRu);
 }
 
 export function requestPlayerPostureTransition(
@@ -204,7 +236,7 @@ export function cancelPostureTransition(
       'Чужой владелец не может отменить эту смену позы.',
     );
   }
-  finishPostureActionAtCurrentEffectivePosture(unit, action, 'cancelled', reasonCode, reasonRu);
+  finishPostureActionAtCurrentEffectivePosture(unit, action, 'cancelled', reasonCode, reasonRu, 'owner');
   return accepted(action, reasonCode, reasonRu);
 }
 
@@ -217,7 +249,7 @@ export function cancelPostureTransitionBySystem(
   if (!action) {
     return rejected(unit.behaviorRuntime.physicalAction, 'posture_transition_not_running', 'Активной смены позы нет.');
   }
-  finishPostureActionAtCurrentEffectivePosture(unit, action, 'cancelled', reasonCode, reasonRu);
+  finishPostureActionAtCurrentEffectivePosture(unit, action, 'cancelled', reasonCode, reasonRu, 'system');
   return accepted(action, reasonCode, reasonRu);
 }
 
@@ -230,6 +262,7 @@ export function cancelReplaceablePostureTransitionForNewPlayerCommand(unit: Unit
     'cancelled',
     'posture_transition_replaced_by_player_command',
     'Смена позы отменена новым приказом игрока.',
+    'system',
   );
   return true;
 }
@@ -241,6 +274,17 @@ export function tickPostureTransition(
 ): void {
   const action = getRunningPostureTransition(unit);
   if (!action) return;
+  if (!action.actionHandle || !getPhysicalActionLease(unit, action.actionHandle)) {
+    finishPostureActionAtCurrentEffectivePosture(
+      unit,
+      action,
+      'failed',
+      'posture_transition_lease_lost',
+      'Смена позы остановлена: захват физических каналов потерян.',
+      'missing',
+    );
+    return;
+  }
   if (!combatCapable) {
     finishPostureActionAtCurrentEffectivePosture(
       unit,
@@ -248,6 +292,7 @@ export function tickPostureTransition(
       'cancelled',
       'posture_transition_combat_capability_lost',
       'Смена позы отменена: боец потерял боеспособность.',
+      'system',
     );
     return;
   }
@@ -266,6 +311,11 @@ export function tickPostureTransition(
   action.status = 'completed';
   action.resultCode = 'posture_transition_completed';
   action.resultRu = 'Физическая смена позы завершена.';
+  completePhysicalAction(unit, action.actionHandle, {
+    endedSeconds: action.startedSeconds + action.durationSeconds,
+    resultCode: action.resultCode,
+    resultRu: action.resultRu,
+  });
   unit.behaviorRuntime.currentAction = unit.order ? 'move' : 'observe';
   unit.behaviorRuntime.reason = action.resultRu;
   unit.behaviorRuntime.lastEvent = 'posture_transition_completed';
@@ -392,7 +442,7 @@ export function normalizeUnitPhysicalAction(value: unknown, fallbackUnitId: stri
     progress = 1;
   }
   const sequence = integer(value.sequence, 1, 1, Number.MAX_SAFE_INTEGER);
-  const owner = normalizeOwner(isRecord(value.owner) ? value.owner : { source: 'system', id: fallbackUnitId });
+  const owner = normalizePhysicalActionOwner(isRecord(value.owner) ? value.owner : { source: 'system', id: fallbackUnitId }, fallbackUnitId);
   const canonicalDuration = postureTransitionDurationSeconds(sourcePosture, targetPosture);
   const restoredDuration = finitePositive(value.durationSeconds, canonicalDuration);
   const durationSeconds = restoredDuration >= 0.05 && restoredDuration <= 10
@@ -405,6 +455,7 @@ export function normalizeUnitPhysicalAction(value: unknown, fallbackUnitId: stri
     type: POSTURE_TRANSITION_ACTION_TYPE,
     owner,
     ownerToken: cleanText(value.ownerToken, `${owner.source}:${owner.id}`),
+    actionHandle: normalizePhysicalActionHandle(value.actionHandle),
     sourcePosture,
     targetPosture,
     startedSeconds: finiteNonNegative(value.startedSeconds, 0),
@@ -426,7 +477,11 @@ export function normalizeUnitPhysicalAction(value: unknown, fallbackUnitId: stri
 export function serializeUnitPhysicalAction(action: UnitPhysicalAction | null): UnitPhysicalAction | undefined {
   if (!action) return undefined;
   const { restoredFromSave: _restoredFromSave, ...serializable } = action;
-  return { ...serializable, owner: { ...action.owner } };
+  return {
+    ...serializable,
+    owner: { ...action.owner },
+    actionHandle: action.actionHandle ? { ...action.actionHandle } : null,
+  };
 }
 
 export function synchronizeEffectivePostureFromAction(unit: UnitModel): void {
@@ -444,6 +499,17 @@ export function resetPostureForSceneAuthoring(
   posture: UnitPosture,
   reasonCode = 'scene_authoring_posture_reset',
 ): void {
+  const running = getRunningPostureTransition(unit);
+  if (running) {
+    finishPostureActionAtCurrentEffectivePosture(
+      unit,
+      running,
+      'cancelled',
+      reasonCode,
+      'Смена позы отменена сбросом редактора сцены.',
+      'system',
+    );
+  }
   unit.behaviorRuntime.physicalAction = null;
   setEffectivePosture(unit, posture, reasonCode);
   unit.behaviorRuntime.previousPosture = posture;
@@ -474,17 +540,42 @@ function applyEffectivePostureForProgress(unit: UnitModel, action: PostureTransi
   setEffectivePosture(unit, completed ? action.targetPosture : action.sourcePosture, 'posture_transition_progress');
 }
 
+type CoordinatorReleaseMode = 'owner' | 'system' | 'missing';
+
 function finishPostureActionAtCurrentEffectivePosture(
   unit: UnitModel,
   action: PostureTransitionActionV1,
   status: 'cancelled' | 'failed',
   reasonCode: string,
   reasonRu: string,
+  releaseMode: CoordinatorReleaseMode,
 ): void {
   applyEffectivePostureForProgress(unit, action);
   action.status = status;
   action.resultCode = cleanText(reasonCode, status === 'cancelled' ? 'posture_transition_cancelled' : 'posture_transition_failed');
   action.resultRu = cleanText(reasonRu, status === 'cancelled' ? 'Смена позы отменена.' : 'Смена позы завершилась ошибкой.');
+  const endedSeconds = action.startedSeconds + action.progress * action.durationSeconds;
+  if (releaseMode === 'missing' || !action.actionHandle) {
+    setPhysicalActionCoordinatorDiagnostic(unit, action.resultCode, action.resultRu);
+  } else if (releaseMode === 'system') {
+    cancelCoordinatorActionBySystem(unit, action.actionHandle.actionId, {
+      endedSeconds,
+      resultCode: action.resultCode,
+      resultRu: action.resultRu,
+    });
+  } else if (status === 'failed') {
+    failPhysicalAction(unit, action.actionHandle, {
+      endedSeconds,
+      resultCode: action.resultCode,
+      resultRu: action.resultRu,
+    });
+  } else {
+    cancelPhysicalAction(unit, action.actionHandle, {
+      endedSeconds,
+      resultCode: action.resultCode,
+      resultRu: action.resultRu,
+    });
+  }
   unit.behaviorRuntime.currentAction = unit.order ? 'move' : 'observe';
   unit.behaviorRuntime.reason = action.resultRu;
   unit.behaviorRuntime.lastEvent = status === 'cancelled' ? 'posture_transition_cancelled' : 'posture_transition_failed';
@@ -502,38 +593,12 @@ function stopPhysicalTranslation(unit: UnitModel): void {
   unit.movementRuntime.velocityCellsPerSecond = { x: 0, y: 0 };
 }
 
-function isWeaponHandlingBusy(unit: UnitModel): boolean {
-  return unit.behaviorRuntime.currentAction === 'aim'
-    || unit.behaviorRuntime.currentAction === 'fire'
-    || unit.behaviorRuntime.currentAction === 'reload'
-    || unit.movementRuntime.weaponPreparation !== null;
-}
-
 function accepted(action: UnitPhysicalAction | null, reasonCode: string, reasonRu: string): PhysicalActionCommandResult {
   return { accepted: true, action, reasonCode, reasonRu };
 }
 
 function rejected(action: UnitPhysicalAction | null, reasonCode: string, reasonRu: string): PhysicalActionCommandResult {
   return { accepted: false, action, reasonCode, reasonRu };
-}
-
-function normalizeOwner(value: Partial<PhysicalActionOwner> | Record<string, unknown>): PhysicalActionOwner {
-  const source = normalizeOwnerSource(value.source);
-  return { source, id: cleanText(value.id, source) };
-}
-
-function normalizeOwnerSource(value: unknown): PhysicalActionOwnerSource {
-  if (
-    value === 'player'
-    || value === 'player_command'
-    || value === 'movement'
-    || value === 'tactical_position'
-    || value === 'test'
-    || value === 'system'
-    || value === 'graph_v2'
-    || value === 'future_ai'
-  ) return value;
-  return 'system';
 }
 
 function normalizePosture(value: unknown): UnitPosture | null {
