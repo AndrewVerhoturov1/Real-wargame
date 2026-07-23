@@ -27,6 +27,10 @@ async function run() {
       path.join(repoRoot, 'scripts', 'physical_action_coordinator_integration_smoke.ts'),
       'physical-action-coordinator-integration.mjs',
     );
+    await runSmoke(
+      path.join(repoRoot, 'scripts', 'physical_action_coordinator_terminal_migration_smoke.ts'),
+      'physical-action-coordinator-terminal-migration.mjs',
+    );
   } finally {
     await rm(outDir, { recursive: true, force: true });
   }
