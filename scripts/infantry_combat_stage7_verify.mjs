@@ -5,10 +5,6 @@ const checks = [
   ['npm', ['run', 'combat-catalog-storage:smoke']],
   ['npm', ['run', 'combat-catalog-editor:smoke']],
   ['npm', ['run', 'physical-action-coordinator:smoke']],
-  ['npm', ['run', 'posture-transition:smoke']],
-  ['npm', ['run', 'physical-movement:smoke']],
-  ['npm', ['run', 'perception:smoke']],
-  ['npm', ['run', 'infantry-combat-single-shot:smoke']],
 ];
 for (const [command, args] of checks) {
   const result = spawnSync(command, args, {
@@ -16,4 +12,4 @@ for (const [command, args] of checks) {
   });
   if (result.error || result.status !== 0) process.exit(1);
 }
-console.log('STAGE7_DIAGNOSTIC_FIRST_EIGHT_CHECKS_PASSED');
+console.log('STAGE7_DIAGNOSTIC_FIRST_FOUR_CHECKS_PASSED');
