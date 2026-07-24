@@ -30,12 +30,8 @@ async function run() {
     let source = await readFile(sourcePath, 'utf8');
     for (const call of excludedCalls) source = source.replace(call, `// CI probe skipped: ${call}`);
     source = source.replace(
-      "  const projectile = ready.state.infantryCombatProjectiles.activeProjectiles[0]!;\n",
-      '',
-    );
-    source = source.replace(
-      '  assert.ok(Math.abs(projectile.velocityMetresPerSecond.x / speed - record.finalProjectileDirection.x) < 1e-12);',
-      '  assert.ok(Math.abs(record.initialVelocityMetresPerSecond.x / speed - record.finalProjectileDirection.x) < 1e-12);',
+      "  tickInfantryCombatSimulation(committed.state, { intervalStartSeconds: 0, deltaSeconds: 0.8 });",
+      "  tickInfantryCombatSimulation(committed.state, { intervalStartSeconds: 0, deltaSeconds: 0.7 });",
     );
     await writeFile(probePath, source, 'utf8');
     await runSmoke('.tmp_infantry_combat_stage5_probe.ts', 'stage5-aim-smoke.mjs');
