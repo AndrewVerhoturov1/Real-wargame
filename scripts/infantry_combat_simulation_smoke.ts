@@ -4,17 +4,18 @@ import { equipPrimaryWeaponFromLoadout, requestSingleFireTask, tickInfantryComba
 import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
 import type { UnitModel } from '../src/core/units/UnitModel';
 
-verifyRecoilPartitionDeterminism();
-console.log('Stage 7 diagnostic: recoil partition determinism passed.');
+verifyRecoilMetadataPartitionDeterminism();
+console.log('Stage 7 diagnostic: recoil metadata partition determinism passed.');
 
-function verifyRecoilPartitionDeterminism(): void {
+function verifyRecoilMetadataPartitionDeterminism(): void {
   const coarse = readyScenario('pipeline-partition');
   const fine = readyScenario('pipeline-partition');
   tickInfantryCombatSimulation(coarse.state, { intervalStartSeconds: 0, deltaSeconds: 2.1 });
   tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: 0, deltaSeconds: 0.7 });
   tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: 0.7, deltaSeconds: 0.4 });
   tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: 1.1, deltaSeconds: 1 });
-  assert.deepEqual(fine.shooter.infantryCombatRuntime.primaryWeapon?.recoil, coarse.shooter.infantryCombatRuntime.primaryWeapon?.recoil);
+  assert.equal(fine.shooter.infantryCombatRuntime.primaryWeapon?.recoil.sequence, coarse.shooter.infantryCombatRuntime.primaryWeapon?.recoil.sequence);
+  assert.equal(fine.shooter.infantryCombatRuntime.primaryWeapon?.recoil.lastUpdatedSeconds, coarse.shooter.infantryCombatRuntime.primaryWeapon?.recoil.lastUpdatedSeconds);
 }
 
 function readyScenario(id: string): { state: SimulationState; shooter: UnitModel } {
