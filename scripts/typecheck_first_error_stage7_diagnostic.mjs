@@ -8,9 +8,8 @@ const result = spawnSync(process.execPath, [compiler, '--noEmit', '--pretty', 'f
   maxBuffer: 64 * 1024 * 1024,
 });
 const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
-const firstError = output.split(/\r?\n/).find((line) => line.includes('error TS')) ?? '';
-const match = firstError.match(/^src\/core\/infantry-combat\/runtime\/WoundRuntime\.ts\((\d+),/);
-const line = match ? Number(match[1]) : Number.POSITIVE_INFINITY;
-const pivot = 221;
-console.log(line <= pivot ? 'TYPECHECK_LINE_LOWER_OR_EQUAL' : 'TYPECHECK_LINE_HIGHER');
-process.exit(line <= pivot ? 1 : 0);
+const firstError = output.split(/\r?\n/).find((line) => line.includes('error TS'));
+if (firstError) console.error(firstError);
+else if (result.error) console.error(String(result.error));
+else console.log('TypeScript diagnostic found no errors.');
+process.exit(result.status ?? 1);
