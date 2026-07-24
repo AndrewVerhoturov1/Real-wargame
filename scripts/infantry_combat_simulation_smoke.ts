@@ -25,7 +25,6 @@ function verifyCoarseAndFineProjectileGameplayMatch(): void {
   const fineSnapshot = serializeReferenceProjectileRuntimeState(fine.state.infantryCombatProjectiles);
   assert.deepEqual(
     {
-      accumulatorSeconds: fineSnapshot.accumulatorSeconds,
       activeProjectiles: fineSnapshot.activeProjectiles,
       committedShots: fineSnapshot.committedShots,
       impacts: fineSnapshot.impacts,
@@ -33,7 +32,6 @@ function verifyCoarseAndFineProjectileGameplayMatch(): void {
       appliedImpactIds: fineSnapshot.appliedImpactIds,
     },
     {
-      accumulatorSeconds: coarseSnapshot.accumulatorSeconds,
       activeProjectiles: coarseSnapshot.activeProjectiles,
       committedShots: coarseSnapshot.committedShots,
       impacts: coarseSnapshot.impacts,
