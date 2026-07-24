@@ -24,12 +24,11 @@ const recoilProbe = `{
   const roundsBefore = weapon.roundsInWeapon;
   tickInfantryCombatSimulation(ready.state, { intervalStartSeconds: 0, deltaSeconds: 0.8 });
   const record = ready.state.infantryCombatProjectiles.committedShots[0]!;
-  const projectile = ready.state.infantryCombatProjectiles.activeProjectiles[0]!;
   assert.equal(weapon.roundsInWeapon, roundsBefore - 1);
   assert.equal(weapon.recoil.sequence, 1);
   assert.ok(record.aimDirectionBeforeDispersion && record.finalProjectileDirection);
   const speed = weapon.resolved.ammo.muzzleVelocityMetersPerSecond;
-  assert.ok(Math.abs(projectile.velocityMetresPerSecond.x / speed - record.finalProjectileDirection.x) < 1e-12);
+  assert.ok(Math.abs(record.initialVelocityMetresPerSecond.x / speed - record.finalProjectileDirection.x) < 1e-12);
   assert.equal(task.committedShotId, record.shotId);
   const recoilAfterCommit = structuredClone(weapon.recoil);
   assert.equal(commitShot({ state: ready.state, shooter: ready.shooter, task, weapon, committedSeconds: 0.8 }).status, 'already_committed');
