@@ -13,7 +13,7 @@ import {
   sampleFatigueRateForNextInterval,
 } from './FatigueRuntime';
 import { tickFirstAidActionsAtBoundary } from './FirstAidRuntime';
-import { tickInfantryCombatSimulation } from './InfantryCombatSimulation';
+import { tickInfantryCombatSimulationSegment } from './InfantryCombatSimulationSegment';
 import { enforceEffectiveCombatCapabilities } from './WoundImpactApplication';
 
 const TIME_EPSILON_SECONDS = 1e-9;
@@ -48,7 +48,7 @@ export function tickInfantryPhysiologySimulation(
     const segmentEndSeconds = Math.min(endSeconds, nextBoundarySeconds);
     const segmentSeconds = canonicalSeconds(segmentEndSeconds - cursorSeconds);
     if (segmentSeconds > TIME_EPSILON_SECONDS) {
-      tickInfantryCombatSimulation(state, {
+      tickInfantryCombatSimulationSegment(state, {
         intervalStartSeconds: cursorSeconds,
         deltaSeconds: segmentSeconds,
       });
