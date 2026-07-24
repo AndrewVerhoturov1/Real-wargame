@@ -8,8 +8,8 @@ const result = spawnSync(process.execPath, [compiler, '--noEmit', '--pretty', 'f
   maxBuffer: 64 * 1024 * 1024,
 });
 const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
-const firstError = output.split(/\r?\n/).find((line) => line.includes('error TS'));
-if (firstError) console.error(firstError);
-else if (result.error) console.error(String(result.error));
-else console.log('TypeScript diagnostic found no errors.');
-process.exit(result.status ?? 1);
+const firstError = output.split(/\r?\n/).find((line) => line.includes('error TS')) ?? '';
+const firstPath = firstError.match(/^([^\s(]+)\(/)?.[1] ?? '';
+const pivot = 'src/core/infantry-combat/runtime/InfantryCombatRuntimeTypes.ts';
+console.log(firstPath && firstPath <= pivot ? 'TYPECHECK_PATH_LOWER_OR_EQUAL' : 'TYPECHECK_PATH_HIGHER');
+process.exit(firstPath && firstPath <= pivot ? 1 : 0);
