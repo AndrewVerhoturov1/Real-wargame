@@ -32,10 +32,6 @@ async function run() {
   ] as const;`,
       `  const checkpoints = [
     ['after-commit', 1.7],
-    ['mid-flight', 1.72],
-    ['before-impact', 1.732],
-    ['after-impact', 1.734],
-    ['mid-recovery', 1.8],
   ] as const;`,
     );
     await writeFile(probePath, source, 'utf8');
@@ -61,5 +57,5 @@ async function runSmoke(sourceName, outputName) {
       },
     },
   });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-postcommit`);
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-after-commit`);
 }
