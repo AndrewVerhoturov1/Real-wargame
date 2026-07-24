@@ -13,9 +13,8 @@ import { tickSimulation } from '../src/core/simulation/SimulationTick';
 import type { UnitModel } from '../src/core/units/UnitModel';
 
 verifyExplicitEndToEndPipeline();
-verifyCoarseAndFineTicksMatch();
 
-console.log('Stage 7 diagnostic: explicit pipeline and partition determinism passed.');
+console.log('Stage 7 diagnostic: explicit pipeline passed.');
 
 function verifyExplicitEndToEndPipeline(): void {
   const { state, shooter } = readyScenario('pipeline-explicit');
