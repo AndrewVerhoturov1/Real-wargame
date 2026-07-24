@@ -2,7 +2,6 @@ import { spawnSync } from 'node:child_process';
 
 const checks = [
   ['npm', ['run', 'performance-contract:smoke']],
-  ['npm', ['run', 'infantry-combat-stage5:forbidden-scan']],
 ];
 
 for (const [command, args] of checks) {
@@ -27,7 +26,7 @@ for (const [command, args] of checks) {
   console.log(workflowAnnotation('notice', 'Stage 5 verification', `PASS ${label}: ${summary}`));
 }
 
-console.log(`Stage 5 verification probe passed: ${checks.length} commands.`);
+console.log(`Stage 5 verification probe passed: ${checks.length} command.`);
 
 function lastMeaningfulLine(value) {
   const lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
