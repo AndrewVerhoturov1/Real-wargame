@@ -8,8 +8,10 @@ const outDir = path.join(repoRoot, '.tmp-infantry-combat-stage5-aim-smoke');
 const sourcePath = path.join(repoRoot, 'scripts', 'infantry_combat_stage5_aim_smoke.ts');
 const probePath = path.join(repoRoot, 'scripts', '.tmp_infantry_combat_stage5_probe.ts');
 const excludedCalls = [
-  'verifyRecoilExactlyOnceAndAtomicity();',
-  'verifyProbabilityIsNotHitResolver();',
+  'verifyTrackingAndPerceptionOnlyContracts();',
+  'verifyTrackingSchedulerAndSaveLoad();',
+  'verifyFactorAndProbabilityContracts();',
+  'verifySeededDispersionContracts();',
   'verifyOrderIndependenceAndReconciliation();',
   'verifyStage4MigrationDefaults();',
   'verifyReadOnlyDiagnostics();',
