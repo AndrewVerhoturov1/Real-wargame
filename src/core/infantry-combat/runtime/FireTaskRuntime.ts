@@ -68,7 +68,7 @@ export function tickFireTaskWithTimeBudget(
     };
   }
 
-  if (!taskAtStart || hasCurrentEffectiveAimPath(unit, taskAtStart)) {
+  if (!taskAtStart || taskAtStart.phase === 'recovery') {
     const result = tickBaseFireTaskWithTimeBudget(unit, input);
     applyEffectiveAimCapabilities(unit);
     return result;
@@ -185,17 +185,6 @@ export function applyEffectiveAimCapabilities(unit: UnitModel): void {
 /** Stage 6 compatibility alias. */
 export const applyWoundAimCapabilities = applyEffectiveAimCapabilities;
 
-function hasCurrentEffectiveAimPath(
-  unit: UnitModel,
-  task: NonNullable<UnitModel['infantryCombatRuntime']['activeFireTask']>,
-): boolean {
-  if (task.phase === 'recovery') return true;
-  const capabilities = getEffectiveCombatCapabilities(unit);
-  const desiredStability = Math.min(capabilities.stabilityMultiplier, capabilities.accuracyMultiplier);
-  const desiredFatigue = unit.infantryCombatRuntime.physiology.fatigue.fatigue;
-  return Math.abs(desiredStability - task.aimTracking.solution.factors.woundStabilityMultiplier) <= EPSILON
-    && Math.abs(desiredFatigue - task.aimTracking.solution.factors.fatigue) <= EPSILON;
-}
 function composeTickResult(
   result: TickFireTaskResult,
   consumedSeconds: number,
