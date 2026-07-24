@@ -18,12 +18,12 @@ import {
 } from '../src/ui/SceneExport';
 
 verifyCheckpointGroup();
-console.log('Stage 7 diagnostic: active-projectile save/load checkpoints passed.');
+console.log('Stage 7 diagnostic: post-impact save/load checkpoints passed.');
 
 function verifyCheckpointGroup(): void {
   const checkpoints = [
-    ['mid-flight', 1.72],
-    ['before-impact', 1.732],
+    ['after-impact', 1.734],
+    ['mid-recovery', 1.8],
   ] as const;
 
   for (const [name, checkpointSeconds] of checkpoints) {
