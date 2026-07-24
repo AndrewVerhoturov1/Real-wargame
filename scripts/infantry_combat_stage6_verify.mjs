@@ -141,7 +141,20 @@ function tail(value, maximumCharacters) {
   return value.length <= maximumCharacters ? value : value.slice(-maximumCharacters);
 }
 
+function workflowCommandValue(value) {
+  return String(value)
+    .replaceAll('%', '%25')
+    .replaceAll('\r', '%0D')
+    .replaceAll('\n', '%0A')
+    .replaceAll(':', '%3A')
+    .replaceAll(',', '%2C');
+}
+
 function fail(title, output) {
-  console.error(`${title}\n${tail(output, 12000)}`);
+  const excerpt = tail(output, 12000);
+  console.error(`${title}\n${excerpt}`);
+  if (process.env.GITHUB_ACTIONS === 'true') {
+    console.error(`::error title=${workflowCommandValue(title)}::FAILED_COMMAND=${workflowCommandValue(title)}%0A${workflowCommandValue(tail(output, 3000))}`);
+  }
   process.exit(1);
 }
