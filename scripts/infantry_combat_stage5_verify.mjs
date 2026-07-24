@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 
 const command = 'npm';
-const args = ['run', 'infantry-combat-stage5:smoke'];
+const args = ['run', 'infantry-combat-single-shot:smoke'];
 const label = [command, ...args].join(' ');
 const result = spawnSync(command, args, {
   cwd: process.cwd(),
