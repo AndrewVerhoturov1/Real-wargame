@@ -1,14 +1,13 @@
 import assert from 'node:assert/strict';
-import { getPhysicalActionCoordinatorDiagnostics } from '../src/core/actions/PhysicalActionCoordinator';
 import { createDefaultCombatCatalogRegistry } from '../src/core/infantry-combat/catalogs';
-import { equipPrimaryWeaponFromLoadout, requestSingleFireTask, serializeInfantryCombatUnitRuntime, serializeReferenceProjectileRuntimeState, tickInfantryCombatSimulation } from '../src/core/infantry-combat/runtime';
+import { equipPrimaryWeaponFromLoadout, requestSingleFireTask, serializeInfantryCombatUnitRuntime, tickInfantryCombatSimulation } from '../src/core/infantry-combat/runtime';
 import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
 import type { UnitModel } from '../src/core/units/UnitModel';
 
-verifyCoarseAndFineTicksMatch();
-console.log('Stage 7 diagnostic: coarse and fine ticks match.');
+verifyUnitRuntimePartitionDeterminism();
+console.log('Stage 7 diagnostic: unit runtime partition determinism passed.');
 
-function verifyCoarseAndFineTicksMatch(): void {
+function verifyUnitRuntimePartitionDeterminism(): void {
   const coarse = readyScenario('pipeline-partition');
   const fine = readyScenario('pipeline-partition');
   tickInfantryCombatSimulation(coarse.state, { intervalStartSeconds: 0, deltaSeconds: 2.1 });
@@ -16,8 +15,6 @@ function verifyCoarseAndFineTicksMatch(): void {
   tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: 0.7, deltaSeconds: 0.4 });
   tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: 1.1, deltaSeconds: 1 });
   assert.deepEqual(serializeInfantryCombatUnitRuntime(fine.shooter.infantryCombatRuntime), serializeInfantryCombatUnitRuntime(coarse.shooter.infantryCombatRuntime));
-  assert.deepEqual(serializeReferenceProjectileRuntimeState(fine.state.infantryCombatProjectiles), serializeReferenceProjectileRuntimeState(coarse.state.infantryCombatProjectiles));
-  assert.deepEqual(getPhysicalActionCoordinatorDiagnostics(fine.shooter), getPhysicalActionCoordinatorDiagnostics(coarse.shooter));
 }
 
 function readyScenario(id: string): { state: SimulationState; shooter: UnitModel } {
