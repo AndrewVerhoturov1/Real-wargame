@@ -168,10 +168,15 @@ function intersectVerticalCylinder(
   const rawEntry = Math.max(radialEnter, verticalEnter);
   const rawExit = Math.min(radialExit, verticalExit);
   const entry = Math.max(0, rawEntry);
+  if (
+    !Number.isFinite(entry)
+    || !Number.isFinite(rawExit)
+    || entry > maximumDistanceMetres + INTERSECTION_EPSILON
+    || rawExit + INTERSECTION_EPSILON < entry
+  ) return null;
   const exit = Math.max(entry, rawExit);
-  if (!Number.isFinite(entry) || !Number.isFinite(exit) || entry > maximumDistanceMetres + INTERSECTION_EPSILON || exit + INTERSECTION_EPSILON < entry) return null;
   const safeEntry = canonicalDistance(entry);
-  const safeExit = canonicalDistance(Math.max(entry, exit));
+  const safeExit = canonicalDistance(exit);
   const entryPoint = pointAlongRay(origin, direction, safeEntry);
   const exitPoint = pointAlongRay(origin, direction, safeExit);
   const normalPoint = rawEntry >= -INTERSECTION_EPSILON ? entryPoint : exitPoint;
