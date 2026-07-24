@@ -4,7 +4,9 @@ on:
   pull_request:
     branches:
       - real-wargame-preview
-    types: [opened, synchronize, reopened, edited]
+    # CI is a readiness gate, not an interactive debugger.
+    # New commits and PR metadata edits require an explicit workflow_dispatch rerun.
+    types: [ready_for_review, reopened]
   workflow_dispatch:
     inputs:
       base_sha:
