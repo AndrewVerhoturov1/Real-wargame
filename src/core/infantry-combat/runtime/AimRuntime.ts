@@ -1,9 +1,8 @@
 import type { SimulationState } from '../../simulation/SimulationState';
 import type { UnitModel } from '../../units/UnitModel';
 import type { InfantryWeaponInstanceV1, AimFactorBreakdownV1 } from './InfantryCombatRuntimeTypes';
-import {
-  resolveProductionAimFactors as resolveStage5ProductionAimFactors,
-} from './AimRuntimeStage5';
+import { calculateAimFactorBreakdown } from './AimRuntimeStage5';
+import { getEffectiveCombatCapabilities } from './EffectiveCombatCapabilities';
 
 export * from './AimRuntimeStage5';
 
@@ -12,26 +11,24 @@ export function resolveProductionAimFactors(
   shooter: UnitModel,
   weapon: InfantryWeaponInstanceV1,
 ): AimFactorBreakdownV1 {
-  const base = resolveStage5ProductionAimFactors(state, shooter, weapon);
-  const capabilities = shooter.infantryCombatRuntime.wounds.capabilities;
-  const desired = clamp(
-    Math.min(capabilities.stabilityMultiplier, capabilities.accuracyMultiplier),
-    0.2,
-    1,
-  );
-  const current = clamp(base.woundStabilityMultiplier, 0.2, 1);
-  const ratio = desired / current;
-  return {
-    ...base,
-    fatigue: 0,
-    woundStabilityMultiplier: desired,
-    woundDispersionMultiplier: base.woundDispersionMultiplier / ratio,
-    aimRateMultiplier: base.aimRateMultiplier * ratio,
-    recoilRecoveryMultiplier: base.recoilRecoveryMultiplier * ratio,
-    recoilImpulseMultiplier: base.recoilImpulseMultiplier / ratio,
-    effectiveDispersionRadians: base.effectiveDispersionRadians / ratio,
-    aimQualityPerSecond: base.aimQualityPerSecond * ratio,
-  };
+  const capabilities = getEffectiveCombatCapabilities(shooter);
+  return calculateAimFactorBreakdown({
+    weapon: weapon.resolved.weapon,
+    posture: shooter.behaviorRuntime.posture,
+    isMoving: shooter.movementRuntime.isMoving,
+    movementSpeedMetresPerSecond: Math.hypot(
+      shooter.movementRuntime.velocityCellsPerSecond.x,
+      shooter.movementRuntime.velocityCellsPerSecond.y,
+    ) * state.map.metersPerCell,
+    shootingSkill: weapon.operatorProfile.shootingSkill,
+    proficiency: weapon.operatorProfile.proficiencyByWeaponClass[weapon.resolved.weapon.weaponClass],
+    fatigue: shooter.infantryCombatRuntime.physiology.fatigue.fatigue,
+    woundStabilityMultiplier: clamp(
+      Math.min(capabilities.stabilityMultiplier, capabilities.accuracyMultiplier),
+      0.2,
+      1,
+    ),
+  });
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
