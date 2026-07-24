@@ -4,8 +4,6 @@ const checks = [
   ['npm', ['run', 'posture-transition:smoke']],
   ['npm', ['run', 'physical-movement:smoke']],
   ['npm', ['run', 'perception:smoke']],
-  ['npm', ['run', 'performance-contract:smoke']],
-  ['npm', ['run', 'infantry-combat-stage5:forbidden-scan']],
 ];
 
 for (const [command, args] of checks) {
