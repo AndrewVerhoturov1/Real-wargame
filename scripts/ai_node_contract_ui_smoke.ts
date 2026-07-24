@@ -82,6 +82,10 @@ for (const expected of [
   'attentionParameterAuthority',
 ]) assert.ok(attentionControlsSource.includes(expected), `Missing visible attention control: ${expected}`);
 
+const contractUiSource = readFileSync('src/ai-node-editor/node-contract-ui.ts', 'utf8');
+assert.ok(contractUiSource.includes("closest('.human-hidden-original')"), 'hidden legacy parameter fields must not overwrite the visible friendly panel');
+assert.ok(contractUiSource.includes('return { ...fallback };'), 'friendly JSON parameters must stay authoritative during save');
+
 const statefulSource = readFileSync('src/ai-node-editor/stateful-node-ui.ts', 'utf8');
 for (const expected of [
   "node.type === 'Subgraph'",
@@ -101,8 +105,6 @@ assert.ok(mainSource.includes('graph-validation-issue'));
 assert.ok(mainSource.includes('data-port-id'));
 assert.ok(mainSource.includes('Главный граф'));
 assert.ok(mainSource.includes("document.querySelector<HTMLSelectElement>('#stateful-subgraph-id')?.value"));
-assert.ok(mainSource.includes('friendlyParametersAreAuthoritative'), 'visible friendly controls must own saved parameters');
-assert.ok(mainSource.includes("'.human-node-panel, [data-attention-node-controls]'"), 'all friendly node panels must bypass stale hidden contract fields');
 assert.ok(!mainSource.includes("...(graphNavigation.length ? [editorGraph.nameRu ?? editorGraph.name] : [])"));
 
 console.log('AI node contract UI smoke passed: typed ports, convenient suspected-contact controls, authoritative friendly saves, Graph v2-only editor, errors, and visible Russian subgraph controls.');
