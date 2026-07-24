@@ -13,7 +13,10 @@ import {
   sampleFatigueRateForNextInterval,
 } from './FatigueRuntime';
 import { tickFirstAidActionsAtBoundary } from './FirstAidRuntime';
-import { tickInfantryCombatSimulationSegment } from './InfantryCombatSimulationSegment';
+import {
+  tickInfantryCombatSimulationSegment,
+  type TickInfantryCombatSimulationResult,
+} from './InfantryCombatSimulationSegment';
 import { enforceEffectiveCombatCapabilities } from './WoundImpactApplication';
 
 const TIME_EPSILON_SECONDS = 1e-9;
@@ -31,13 +34,15 @@ export interface TickInfantryPhysiologySimulationInput {
 export function tickInfantryPhysiologySimulation(
   state: SimulationState,
   input: TickInfantryPhysiologySimulationInput,
-): void {
+): TickInfantryCombatSimulationResult {
   const startSeconds = finiteNonNegative(input.intervalStartSeconds);
   const deltaSeconds = finiteNonNegative(input.deltaSeconds);
   const endSeconds = canonicalSeconds(startSeconds + deltaSeconds);
+  const commitResults: TickInfantryCombatSimulationResult['commitResults'][number][] = [];
+  let projectileSubsteps = 0;
   if (deltaSeconds <= TIME_EPSILON_SECONDS) {
     initializeFatigueSamples(state);
-    return;
+    return { commitResults, projectileSubsteps };
   }
 
   initializeFatigueSamples(state);
@@ -48,10 +53,12 @@ export function tickInfantryPhysiologySimulation(
     const segmentEndSeconds = Math.min(endSeconds, nextBoundarySeconds);
     const segmentSeconds = canonicalSeconds(segmentEndSeconds - cursorSeconds);
     if (segmentSeconds > TIME_EPSILON_SECONDS) {
-      tickInfantryCombatSimulationSegment(state, {
+      const combat = tickInfantryCombatSimulationSegment(state, {
         intervalStartSeconds: cursorSeconds,
         deltaSeconds: segmentSeconds,
       });
+      commitResults.push(...combat.commitResults);
+      projectileSubsteps += combat.projectileSubsteps;
       advanceAllBloodTo(state, segmentEndSeconds);
     }
     cursorSeconds = segmentEndSeconds;
@@ -63,6 +70,7 @@ export function tickInfantryPhysiologySimulation(
       throw new Error('Infantry physiology combined-boundary guard exceeded.');
     }
   }
+  return { commitResults, projectileSubsteps };
 }
 
 function processSharedQuarterBoundary(state: SimulationState, boundarySeconds: number): void {
