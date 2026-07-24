@@ -10,6 +10,8 @@ import {
   serializeProjectileRuntimeState,
 } from './ProjectileRuntime';
 
+const UNIT_DIRECTION_MAGNITUDE_TOLERANCE = 1e-12;
+
 /** Stage 3 compatibility name backed by the Stage 4 pooled runtime. */
 export function createReferenceProjectileRuntimeState(): ProjectileRuntimeStateV2 {
   return createProjectileRuntimeState();
@@ -83,6 +85,7 @@ function direction(value: unknown): { x: number; y: number; z: number } | null {
   if (x === null || y === null || z === null) return null;
   const magnitude = Math.hypot(x, y, z);
   if (magnitude <= 1e-9) return null;
+  if (Math.abs(magnitude - 1) <= UNIT_DIRECTION_MAGNITUDE_TOLERANCE) return { x, y, z };
   return { x: x / magnitude, y: y / magnitude, z: z / magnitude };
 }
 
