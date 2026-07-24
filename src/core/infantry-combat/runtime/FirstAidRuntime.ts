@@ -1,6 +1,7 @@
 import {
   cancelPhysicalAction,
   completePhysicalAction,
+  failPhysicalAction,
   getPhysicalActionLease,
   requestPhysicalActionChannels,
 } from '../../actions/PhysicalActionCoordinator';
@@ -16,7 +17,7 @@ import type { UnitModel } from '../../units/UnitModel';
 import type { DefinitionRef } from '../catalogs/CombatCatalogTypes';
 import { advanceBloodRuntimeTo, refreshUnitBleedingRateAt } from './BloodLossRuntime';
 import { getEffectiveCombatCapabilities } from './EffectiveCombatCapabilities';
-import { compareHitZones, isHitZone, isWoundBleedingState, woundSeverityIndex } from './InfantryBodyTypes';
+import { compareHitZones, isHitZone, woundSeverityIndex } from './InfantryBodyTypes';
 import {
   APPLY_FIRST_AID_ACTION_SCHEMA_VERSION,
   FIRST_AID_ACTION_TYPE,
@@ -102,9 +103,6 @@ export function initializeUnitMedicalInventory(
   medical.loadoutRef = ref;
   medical.firstAidCharges = charges;
   medical.maximumFirstAidCharges = charges;
-  medical.activeFirstAidAction = null;
-  medical.lastFirstAidResult = null;
-  medical.appliedFirstAidActionIds = [];
 }
 
 export function requestApplyFirstAidAction(
@@ -136,17 +134,19 @@ export function requestApplyFirstAidAction(
   if (!withinFirstAidRange(state, actor, target)) {
     return denied('infantry_first_aid_out_of_range', 'Цель находится слишком далеко для первой помощи.');
   }
-  const resolvedZone = resolveFirstAidZone(target, input.zone);
-  if (!resolvedZone) {
-    return denied('infantry_first_aid_no_treatable_bleeding', 'У цели нет кровотечения, требующего первой помощи.');
-  }
 
   const running = medical.activeFirstAidAction;
   if (running) {
-    if (running.ownerToken === ownerToken && running.targetUnitId === target.id && running.resolvedZone === resolvedZone) {
+    const zoneMatches = input.zone === null || input.zone === running.resolvedZone;
+    if (running.ownerToken === ownerToken && running.targetUnitId === target.id && zoneMatches) {
       return accepted('already_running', running, 'infantry_first_aid_already_running', 'Такая первая помощь уже выполняется.');
     }
     return blocked(running, 'infantry_first_aid_owned_by_other', 'Другое действие первой помощи уже принадлежит владельцу.');
+  }
+
+  const resolvedZone = resolveFirstAidZone(target, input.zone);
+  if (!resolvedZone) {
+    return denied('infantry_first_aid_no_treatable_bleeding', 'У цели нет кровотечения, требующего первой помощи.');
   }
 
   const sequence = medical.nextFirstAidSequence;
@@ -212,7 +212,7 @@ export function tickFirstAidActionsAtBoundary(state: SimulationState, boundarySe
 
   for (const entry of entries) {
     if (!entry.valid || entry.action.completedWorkTicks < FIRST_AID_REQUIRED_WORK_TICKS) continue;
-    completeFirstAidAction(state, entry.actor, entry.action, boundarySeconds, unitIndex.unitsById);
+    completeFirstAidAction(entry.actor, entry.action, boundarySeconds, unitIndex.unitsById);
   }
 }
 
@@ -247,7 +247,6 @@ export function resolveFirstAidZone(target: UnitModel, requestedZone: HitZone | 
 }
 
 function completeFirstAidAction(
-  state: SimulationState,
   actor: UnitModel,
   action: ApplyFirstAidActionV1,
   boundarySeconds: number,
@@ -347,7 +346,12 @@ function finishFirstAidWithoutCharge(
   const result = terminalResult(actor, action, endedSeconds, status, false, resultCode, resultRu);
   medical.lastFirstAidResult = result;
   if (action.actionHandle) {
-    cancelPhysicalAction(actor, action.actionHandle, {
+    const finish = status === 'completed'
+      ? completePhysicalAction
+      : status === 'failed'
+        ? failPhysicalAction
+        : cancelPhysicalAction;
+    finish(actor, action.actionHandle, {
       endedSeconds,
       resultCode,
       resultRu,
