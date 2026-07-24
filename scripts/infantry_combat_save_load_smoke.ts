@@ -18,9 +18,13 @@ import {
   restoreImportedInfantryCombatState,
 } from '../src/ui/SceneExport';
 
+verifyLegacySceneGetsEmptyRuntime();
 verifyAllCriticalCheckpointsRoundTripExactly();
+verifyMissingCommittedProjectileFailsWithoutRecreation();
+verifyRepeatedReconciliationIsIdempotent();
+verifyOrphanProjectileIsRemovedDeterministically();
 
-console.log('Infantry combat save/load checkpoint probe passed.');
+console.log('Infantry combat save/load smoke passed: legacy defaults, exact critical checkpoints, lease restoration, no duplicate ammo/shot/projectile/impact and idempotent reconciliation.');
 
 function verifyLegacySceneGetsEmptyRuntime(): void {
   const scene = normalizeImportedScene({
