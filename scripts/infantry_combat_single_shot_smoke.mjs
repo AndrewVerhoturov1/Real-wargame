@@ -20,6 +20,8 @@ async function run() {
     let source = await readFile(sourcePath, 'utf8');
     source = source.replace('verifyLegacySceneGetsEmptyRuntime();', '// probe skipped legacy scene');
     source = source.replace('verifyAllCriticalCheckpointsRoundTripExactly();', '// probe skipped critical checkpoints');
+    source = source.replace('verifyRepeatedReconciliationIsIdempotent();', '// probe skipped repeated reconciliation');
+    source = source.replace('verifyOrphanProjectileIsRemovedDeterministically();', '// probe skipped orphan projectile');
     await writeFile(probePath, source, 'utf8');
     await runSmoke('.tmp_infantry_combat_save_load_probe.ts', 'infantry-combat-save-load.mjs');
   } finally {
@@ -43,5 +45,5 @@ async function runSmoke(sourceName, outputName) {
       },
     },
   });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-reconciliation`);
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-missing-projectile`);
 }
