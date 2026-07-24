@@ -22,16 +22,16 @@ async function run() {
     source = source.replace('verifyAllCriticalCheckpointsRoundTripExactly();', '// probe skipped critical checkpoints');
     source = source.replace('verifyRepeatedReconciliationIsIdempotent();', '// probe skipped repeated reconciliation');
     source = source.replace('verifyOrphanProjectileIsRemovedDeterministically();', '// probe skipped orphan projectile');
-    source = source.replace('  assert.equal(loaded.infantryCombatProjectiles.committedShots.length, 1);', '// probe skipped committed ledger');
-    source = source.replace('  assert.equal(loaded.infantryCombatProjectiles.activeProjectiles.length, 0);', '// probe skipped active projectiles');
-    source = source.replace('  assert.equal(loaded.units[0]?.infantryCombatRuntime.primaryWeapon?.roundsInWeapon, 4);', '// probe skipped rounds');
-    source = source.replace("  assert.equal(loaded.units[0]?.infantryCombatRuntime.lastFireResult?.phase, 'failed');", '// probe skipped phase');
-    source = source.replace("  assert.equal(loaded.units[0]?.infantryCombatRuntime.lastFireResult?.resultCode, 'infantry_fire_task_reconciliation_missing_projectile');", '// probe skipped result code');
     source = source.replace(
-      `  const before = stage3Snapshot(loaded);
-  reconcileInfantryCombatRuntimeAfterLoad(loaded);
-  assert.deepEqual(stage3Snapshot(loaded), before);`,
-      '  return;',
+      `  const exported = buildExportedScene(original.state);
+  exported.infantryCombatRuntime.activeProjectiles = [];`,
+      `  const exported = buildExportedScene(original.state);
+  assert.ok(
+    exported.infantryCombatRuntime.impacts.length > 0
+      || exported.infantryCombatRuntime.terminations.length > 0,
+    'hardcoded 1.7s checkpoint must already contain a projectile outcome',
+  );
+  return;`,
     );
     await writeFile(probePath, source, 'utf8');
     await runSmoke('.tmp_infantry_combat_save_load_probe.ts', 'infantry-combat-save-load.mjs');
@@ -56,5 +56,5 @@ async function runSmoke(sourceName, outputName) {
       },
     },
   });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-missing-task-release`);
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-stale-missing-projectile-checkpoint`);
 }
