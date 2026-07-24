@@ -51,6 +51,7 @@ export interface FatigueRuntimeV1 {
   sampledNetRatePerSecond: number;
   lastAppliedDelta: number;
   lastSample: FatigueFactorSampleV1;
+  initialized: boolean;
 }
 
 export interface UnitPhysiologyRuntimeV1 {
