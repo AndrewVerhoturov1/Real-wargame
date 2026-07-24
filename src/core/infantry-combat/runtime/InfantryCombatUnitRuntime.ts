@@ -9,6 +9,10 @@ import {
   serializeFireTaskRuntime,
 } from './FireTaskRuntime';
 
+const DIRECTION_MAGNITUDE_EPSILON = 1e-9;
+/** Preserve an already normalized serialized direction exactly across save/load. */
+const UNIT_DIRECTION_MAGNITUDE_TOLERANCE = 1e-12;
+
 export function createInfantryCombatUnitRuntime(): InfantryCombatUnitRuntimeV1 {
   return {
     schemaVersion: INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION,
@@ -99,7 +103,9 @@ function normalizeDirection(value: unknown): { x: number; y: number; z: number }
   const z = finiteOrNull(value.z);
   if (x === null || y === null || z === null) return null;
   const magnitude = Math.hypot(x, y, z);
-  return magnitude > 1e-9 ? { x: x / magnitude, y: y / magnitude, z: z / magnitude } : null;
+  if (magnitude <= DIRECTION_MAGNITUDE_EPSILON) return null;
+  if (Math.abs(magnitude - 1) <= UNIT_DIRECTION_MAGNITUDE_TOLERANCE) return { x, y, z };
+  return { x: x / magnitude, y: y / magnitude, z: z / magnitude };
 }
 
 function nullableInteger(value: unknown): number | null {
