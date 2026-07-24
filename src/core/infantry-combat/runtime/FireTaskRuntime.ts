@@ -41,8 +41,9 @@ export function requestSingleFireTask(
 
 /**
  * Keeps the Stage 5 clock intact, but stops each delegated slice at the next
- * 5 Hz tracking boundary. This lets the Stage 6 wound factors replace the
- * neutral Stage 5 placeholder before any later aiming progress is consumed.
+ * 5 Hz tracking boundary when a wound actually changes aim factors. Healthy
+ * units use the exact Stage 5 path so partitioning and save/load remain bitwise
+ * compatible with the mandatory regression contract.
  */
 export function tickFireTaskWithTimeBudget(
   unit: UnitModel,
@@ -68,10 +69,14 @@ export function tickFireTaskWithTimeBudget(
     };
   }
 
+  if (!taskAtStart || hasNeutralWoundAimPath(unit, taskAtStart)) {
+    return tickBaseFireTaskWithTimeBudget(unit, input);
+  }
+
   let consumedSeconds = 0;
   let remainingSeconds = totalSeconds;
   let lastResult: TickFireTaskResult = {
-    taskId: taskAtStart?.taskId ?? null,
+    taskId: taskAtStart.taskId,
     commitRequested: false,
     completed: false,
     failed: false,
@@ -173,6 +178,16 @@ export function applyWoundAimCapabilities(unit: UnitModel): void {
   };
   solution.effectiveDispersionRadians = Math.max(0, solution.effectiveDispersionRadians / ratio);
   solution.predictedHitProbability = clamp01(solution.predictedHitProbability * ratio);
+}
+
+function hasNeutralWoundAimPath(
+  unit: UnitModel,
+  task: NonNullable<UnitModel['infantryCombatRuntime']['activeFireTask']>,
+): boolean {
+  const capabilities = unit.infantryCombatRuntime.wounds.capabilities;
+  const desiredStability = Math.min(capabilities.stabilityMultiplier, capabilities.accuracyMultiplier);
+  return Math.abs(desiredStability - 1) <= EPSILON
+    && Math.abs(task.aimTracking.solution.factors.woundStabilityMultiplier - 1) <= EPSILON;
 }
 
 function composeTickResult(
