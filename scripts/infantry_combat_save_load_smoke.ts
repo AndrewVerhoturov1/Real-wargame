@@ -18,6 +18,10 @@ import {
   restoreImportedInfantryCombatState,
 } from '../src/ui/SceneExport';
 
+// Small enough to stop after commitment before the fixed projectile step can resolve a nearby impact.
+const ACTIVE_PROJECTILE_PROBE_STEP_SECONDS = 0.001;
+const ACTIVE_PROJECTILE_PROBE_LIMIT_SECONDS = 3;
+
 verifyLegacySceneGetsEmptyRuntime();
 verifyAllCriticalCheckpointsRoundTripExactly();
 verifyMissingCommittedProjectileFailsWithoutRecreation();
@@ -74,8 +78,11 @@ function verifyAllCriticalCheckpointsRoundTripExactly(): void {
 
 function verifyMissingCommittedProjectileFailsWithoutRecreation(): void {
   const original = readyScenario('save-missing-projectile');
-  advance(original.state, 1.7);
+  advanceUntilCommittedProjectile(original.state);
   const exported = buildExportedScene(original.state);
+  assert.equal(exported.infantryCombatRuntime.activeProjectiles.length, 1);
+  assert.equal(exported.infantryCombatRuntime.impacts.length, 0);
+  assert.equal(exported.infantryCombatRuntime.terminations.length, 0);
   exported.infantryCombatRuntime.activeProjectiles = [];
   const loaded = restoreExport(exported);
   assert.equal(loaded.infantryCombatProjectiles.committedShots.length, 1);
@@ -91,7 +98,7 @@ function verifyMissingCommittedProjectileFailsWithoutRecreation(): void {
 
 function verifyRepeatedReconciliationIsIdempotent(): void {
   const scenario = readyScenario('save-reconcile');
-  advance(scenario.state, 1.72);
+  advanceUntilCommittedProjectile(scenario.state);
   const loaded = roundTrip(scenario.state);
   const before = stage3Snapshot(loaded);
   reconcileInfantryCombatRuntimeAfterLoad(loaded);
@@ -101,7 +108,7 @@ function verifyRepeatedReconciliationIsIdempotent(): void {
 
 function verifyOrphanProjectileIsRemovedDeterministically(): void {
   const scenario = readyScenario('save-orphan');
-  advance(scenario.state, 1.7);
+  advanceUntilCommittedProjectile(scenario.state);
   scenario.state.units[0]!.infantryCombatRuntime.activeFireTask = null;
   scenario.state.infantryCombatProjectiles.committedShots = [];
   const loaded = roundTrip(scenario.state);
@@ -129,6 +136,22 @@ function advance(state: SimulationState, deltaSeconds: number): void {
   const intervalStartSeconds = state.simulationTimeSeconds;
   state.simulationTimeSeconds = canonicalSeconds(intervalStartSeconds + deltaSeconds);
   tickInfantryCombatSimulation(state, { intervalStartSeconds, deltaSeconds });
+}
+
+function advanceUntilCommittedProjectile(state: SimulationState): void {
+  const maximumSteps = Math.ceil(ACTIVE_PROJECTILE_PROBE_LIMIT_SECONDS / ACTIVE_PROJECTILE_PROBE_STEP_SECONDS);
+  for (let step = 0; step < maximumSteps; step += 1) {
+    advance(state, ACTIVE_PROJECTILE_PROBE_STEP_SECONDS);
+    if (
+      state.infantryCombatProjectiles.committedShots.length === 1
+      && state.infantryCombatProjectiles.activeProjectiles.length === 1
+    ) {
+      assert.equal(state.infantryCombatProjectiles.impacts.length, 0);
+      assert.equal(state.infantryCombatProjectiles.terminations.length, 0);
+      return;
+    }
+  }
+  assert.fail(`active committed projectile was not observed within ${ACTIVE_PROJECTILE_PROBE_LIMIT_SECONDS} seconds`);
 }
 
 function stage3Snapshot(state: SimulationState): unknown {
