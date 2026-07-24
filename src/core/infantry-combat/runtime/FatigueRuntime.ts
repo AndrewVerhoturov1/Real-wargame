@@ -45,6 +45,7 @@ export function createFatigueRuntime(startedSeconds = 0, initialFatigue = 0): Fa
     sampledNetRatePerSecond: 0,
     lastAppliedDelta: 0,
     lastSample: neutralFatigueSample(),
+    initialized: false,
   };
 }
 
@@ -65,6 +66,7 @@ export function normalizeFatigueRuntime(value: unknown, fallbackSeconds = 0): Fa
     sampledNetRatePerSecond: canonicalRate(finite(value.sampledNetRatePerSecond, 0)),
     lastAppliedDelta: canonicalRate(finite(value.lastAppliedDelta, 0)),
     lastSample: normalizeFatigueSample(value.lastSample),
+    initialized: value.initialized === true,
   };
 }
 
@@ -135,6 +137,7 @@ export function sampleFatigueRateForNextInterval(
 ): void {
   runtime.lastSample = normalizeFatigueSample(sample);
   runtime.sampledNetRatePerSecond = runtime.lastSample.netRatePerSecond;
+  runtime.initialized = true;
 }
 
 export function calculateWoundBurden(slots: readonly WoundSlotV1[]): number {
