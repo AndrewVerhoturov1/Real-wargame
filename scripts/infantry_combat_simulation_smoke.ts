@@ -3,17 +3,17 @@ import { createDefaultCombatCatalogRegistry } from '../src/core/infantry-combat/
 import {
   equipPrimaryWeaponFromLoadout,
   requestSingleFireTask,
-  serializeInfantryCombatUnitRuntime,
+  serializeReferenceProjectileRuntimeState,
   tickInfantryCombatSimulation,
 } from '../src/core/infantry-combat/runtime';
 import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
 import type { UnitModel } from '../src/core/units/UnitModel';
 
-verifyCoarseAndFineUnitRuntimeMatch();
+verifyCoarseAndFineProjectileRuntimeMatch();
 
-console.log('Infantry combat simulation partition probe passed: unit runtime matches.');
+console.log('Infantry combat simulation partition probe passed: projectile runtime matches.');
 
-function verifyCoarseAndFineUnitRuntimeMatch(): void {
+function verifyCoarseAndFineProjectileRuntimeMatch(): void {
   const coarse = readyScenario('pipeline-partition');
   const fine = readyScenario('pipeline-partition');
   tickInfantryCombatSimulation(coarse.state, { intervalStartSeconds: 0, deltaSeconds: 2.1 });
@@ -22,8 +22,8 @@ function verifyCoarseAndFineUnitRuntimeMatch(): void {
   tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: 1.1, deltaSeconds: 1 });
 
   assert.deepEqual(
-    serializeInfantryCombatUnitRuntime(fine.shooter.infantryCombatRuntime),
-    serializeInfantryCombatUnitRuntime(coarse.shooter.infantryCombatRuntime),
+    serializeReferenceProjectileRuntimeState(fine.state.infantryCombatProjectiles),
+    serializeReferenceProjectileRuntimeState(coarse.state.infantryCombatProjectiles),
   );
 }
 
