@@ -18,9 +18,25 @@ async function run() {
   await rm(probePath, { force: true });
   try {
     let source = await readFile(sourcePath, 'utf8');
-    source = source.replace('verifyMissingCommittedProjectileFailsWithoutRecreation();', '// probe skipped missing projectile');
-    source = source.replace('verifyRepeatedReconciliationIsIdempotent();', '// probe skipped repeated reconciliation');
-    source = source.replace('verifyOrphanProjectileIsRemovedDeterministically();', '// probe skipped orphan projectile');
+    source = source.replace(
+      `  const checkpoints = [
+    ['accepted', 0],
+    ['mid-ready', 0.3],
+    ['mid-aim', 0.9],
+    ['before-commit', 1.699],
+    ['after-commit', 1.7],
+    ['mid-flight', 1.72],
+    ['before-impact', 1.732],
+    ['after-impact', 1.734],
+    ['mid-recovery', 1.8],
+  ] as const;`,
+      `  const checkpoints = [
+    ['accepted', 0],
+    ['mid-ready', 0.3],
+    ['mid-aim', 0.9],
+    ['before-commit', 1.699],
+  ] as const;`,
+    );
     await writeFile(probePath, source, 'utf8');
     await runSmoke('.tmp_infantry_combat_save_load_probe.ts', 'infantry-combat-save-load.mjs');
   } finally {
@@ -44,5 +60,5 @@ async function runSmoke(sourceName, outputName) {
       },
     },
   });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-checkpoints`);
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-precommit`);
 }
