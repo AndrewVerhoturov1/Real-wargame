@@ -31,7 +31,7 @@ async function run() {
     ['mid-recovery', 1.8],
   ] as const;`,
       `  const checkpoints = [
-    ['mid-flight', 1.72],
+    ['before-impact', 1.732],
   ] as const;`,
     );
     await writeFile(probePath, source, 'utf8');
@@ -55,5 +55,5 @@ async function runSmoke(sourceName, outputName) {
       rollupOptions: { output: { entryFileNames: outputName, format: 'es' } },
     },
   });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-mid-flight`);
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-before-impact`);
 }
