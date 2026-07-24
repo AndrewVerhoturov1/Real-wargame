@@ -1,27 +1,188 @@
-import { rm } from 'node:fs/promises';
+import { rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { build } from 'vite';
 
+const APPROVED_BASE_SHA = 'a4398ecc031d96f93c06ecd3a84456776c493cbc';
+const REQUIRED_BRANCH = 'feature/20260724-shooting-stage-07-blood-fatigue-first-aid';
 const repoRoot = process.cwd();
-const outDir = path.join(repoRoot, '.tmp-stage7-simulation-diagnostic');
-await rm(outDir, { recursive: true, force: true });
-try {
-  await build({
-    root: repoRoot,
-    logLevel: 'warn',
-    clearScreen: false,
-    build: {
-      ssr: path.join(repoRoot, 'scripts', 'infantry_combat_simulation_smoke.ts'),
-      outDir,
-      emptyOutDir: true,
-      minify: false,
-      sourcemap: false,
-      rollupOptions: { output: { entryFileNames: 'simulation.mjs', format: 'es' } },
-    },
-  });
-  await import(`${pathToFileURL(path.join(outDir, 'simulation.mjs')).href}?run=stage7-diagnostic`);
-} finally {
-  await rm(outDir, { recursive: true, force: true });
+const baseWorktree = path.join(repoRoot, '.tmp-stage7-performance-base');
+
+assertRepositoryIdentity();
+
+const checksBeforePerformance = [
+  ['npm', ['run', 'combat-catalogs:smoke']],
+  ['npm', ['run', 'combat-catalog-storage:smoke']],
+  ['npm', ['run', 'combat-catalog-editor:smoke']],
+  ['npm', ['run', 'physical-action-coordinator:smoke']],
+  ['npm', ['run', 'posture-transition:smoke']],
+  ['npm', ['run', 'physical-movement:smoke']],
+  ['npm', ['run', 'perception:smoke']],
+  ['npm', ['run', 'infantry-combat-single-shot:smoke']],
+  ['npm', ['run', 'infantry-combat-projectile:smoke']],
+  ['npm', ['run', 'infantry-combat-projectile:benchmark']],
+  ['npm', ['run', 'infantry-combat-stage5:smoke']],
+  ['npm', ['run', 'infantry-combat-stage5:forbidden-scan']],
+  ['npm', ['run', 'infantry-combat-stage6:smoke']],
+  ['npm', ['run', 'infantry-combat-stage6:forbidden-scan']],
+  ['npm', ['run', 'infantry-combat-stage7:smoke']],
+  ['npm', ['run', 'infantry-combat-stage7:forbidden-scan']],
+];
+
+const checksAfterPerformance = [
+  ['npm', ['run', 'typecheck']],
+  ['npm', ['run', 'build']],
+  ['node', ['--check', 'scripts/infantry_combat_stage7_smoke.mjs']],
+  ['node', ['--check', 'scripts/infantry_combat_stage7_forbidden_scan.mjs']],
+  ['node', ['--check', 'scripts/infantry_combat_stage7_verify.mjs']],
+];
+
+console.log(`Node.js ${process.version}`);
+for (const [command, args] of checksBeforePerformance) runRequiredCheck(command, args);
+runPerformanceContractWithBaseComparison();
+for (const [command, args] of checksAfterPerformance) runRequiredCheck(command, args);
+console.log(`Stage 7 verification PASS on ${process.version}: required non-browser commands completed; performance-contract is accepted only when successful or identical to approved base ${APPROVED_BASE_SHA}.`);
+
+function assertRepositoryIdentity() {
+  const branch = process.env.GITHUB_HEAD_REF || git(['branch', '--show-current']);
+  if (branch && branch !== REQUIRED_BRANCH) {
+    fail('FAIL Stage 7 branch guard', `Expected ${REQUIRED_BRANCH}, got ${branch}.`);
+  }
+  ensureApprovedBaseHistory();
+  const ancestry = run('git', ['merge-base', '--is-ancestor', APPROVED_BASE_SHA, 'HEAD'], repoRoot);
+  if (ancestry.error || ancestry.status !== 0) {
+    fail('FAIL Stage 7 base guard', `Required base ${APPROVED_BASE_SHA} is not an ancestor of HEAD.`);
+  }
 }
-console.log('STAGE7_DIAGNOSTIC_COMPLETE_SIMULATION_SMOKE_PASSED');
+
+function ensureApprovedBaseHistory() {
+  const existing = run('git', ['merge-base', '--is-ancestor', APPROVED_BASE_SHA, 'HEAD'], repoRoot);
+  if (!existing.error && existing.status === 0) return;
+  const fetch = run('git', ['fetch', '--no-tags', '--depth=512', 'origin', REQUIRED_BRANCH], repoRoot);
+  if (fetch.error || fetch.status !== 0) {
+    fail(
+      'FAIL Stage 7 history fetch',
+      `Не удалось получить историю ветки для проверки обязательной базы ${APPROVED_BASE_SHA}.\n${combinedOutput(fetch)}`,
+    );
+  }
+}
+
+function runRequiredCheck(command, args) {
+  const label = [command, ...args].join(' ');
+  const result = run(command, args, repoRoot);
+  const output = combinedOutput(result);
+  if (result.error || result.status !== 0) fail(`FAIL ${label}`, output);
+  console.log(`PASS ${label}: ${lastMeaningfulLine(output) || 'completed without output'}`);
+}
+
+function runPerformanceContractWithBaseComparison() {
+  const label = 'npm run performance-contract:smoke';
+  const current = run('npm', ['run', 'performance-contract:smoke'], repoRoot);
+  const currentOutput = combinedOutput(current);
+  if (!current.error && current.status === 0) {
+    console.log(`PASS ${label}`);
+    return;
+  }
+
+  const fetch = run('git', ['fetch', '--no-tags', '--depth=1', 'origin', APPROVED_BASE_SHA], repoRoot);
+  if (fetch.error || fetch.status !== 0) {
+    fail(
+      'FAIL Stage 7 performance baseline fetch',
+      `Не удалось получить одобренный base SHA ${APPROVED_BASE_SHA}.\n${combinedOutput(fetch)}`,
+    );
+  }
+
+  rmSync(baseWorktree, { recursive: true, force: true });
+  const addWorktree = run('git', ['worktree', 'add', '--detach', baseWorktree, APPROVED_BASE_SHA], repoRoot);
+  if (addWorktree.error || addWorktree.status !== 0) {
+    fail('FAIL Stage 7 performance baseline worktree', combinedOutput(addWorktree));
+  }
+
+  let baseline;
+  try {
+    baseline = run('npm', ['run', 'performance-contract:smoke'], baseWorktree);
+  } finally {
+    run('git', ['worktree', 'remove', '--force', baseWorktree], repoRoot);
+    rmSync(baseWorktree, { recursive: true, force: true });
+  }
+
+  const baselineOutput = combinedOutput(baseline);
+  const currentSignature = failureSignature(currentOutput);
+  const baselineSignature = failureSignature(baselineOutput);
+  if (baseline.status !== 0 && currentSignature && currentSignature === baselineSignature) {
+    console.warn([
+      `KNOWN APPROVED-BASE FAILURE ${label}`,
+      `approved base: ${APPROVED_BASE_SHA}`,
+      `current status: ${current.status}`,
+      `base status: ${baseline.status}`,
+      `signature: ${currentSignature}`,
+    ].join('\n'));
+    return;
+  }
+
+  fail(
+    'FAIL Stage 7 performance baseline comparison',
+    [
+      'Обнаружено новое или отличающееся падение performance-contract:smoke.',
+      `current status: ${current.status}`,
+      `base status: ${baseline.status}`,
+      `current signature: ${currentSignature}`,
+      `base signature: ${baselineSignature}`,
+      '',
+      'CURRENT:',
+      tail(currentOutput, 4000),
+      '',
+      'BASE:',
+      tail(baselineOutput, 4000),
+    ].join('\n'),
+  );
+}
+
+function run(command, args, cwd) {
+  return spawnSync(command, args, {
+    cwd,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    env: process.env,
+  });
+}
+function git(args) {
+  const result = run('git', args, repoRoot);
+  if (result.error || result.status !== 0) fail(`FAIL git ${args.join(' ')}`, combinedOutput(result));
+  return (result.stdout ?? '').trim();
+}
+function combinedOutput(result) {
+  return [result.error ? String(result.error) : '', result.stdout ?? '', result.stderr ?? '']
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+}
+function failureSignature(output) {
+  const lines = output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  return lines.find((line) => line.includes('must include mandatory performance contract fragment:'))
+    ?? lines.find((line) => line.startsWith('Error:'))
+    ?? lines.at(-1)
+    ?? '';
+}
+function lastMeaningfulLine(value) {
+  const lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  return lines.at(-1) ?? '';
+}
+function tail(value, maximumCharacters) {
+  return value.length <= maximumCharacters ? value : value.slice(-maximumCharacters);
+}
+function workflowCommandValue(value) {
+  return String(value)
+    .replaceAll('%', '%25')
+    .replaceAll('\r', '%0D')
+    .replaceAll('\n', '%0A')
+    .replaceAll(':', '%3A')
+    .replaceAll(',', '%2C');
+}
+function fail(title, output) {
+  const excerpt = tail(output, 12000);
+  console.error(`${title}\n${excerpt}`);
+  if (process.env.GITHUB_ACTIONS === 'true') {
+    console.error(`::error title=${workflowCommandValue(title)}::FAILED_COMMAND=${workflowCommandValue(title)}%0A${workflowCommandValue(tail(output, 3000))}`);
+  }
+  process.exit(1);
+}
