@@ -5,7 +5,7 @@ export type CombatCapability = 'effective' | 'wounded' | 'severely_wounded' | 'i
 
 export type LegacyCombatHitZone = HitZone | 'limbs';
 export interface UnitHitInput { shotId: string; zone: LegacyCombatHitZone; energyJoules: number; }
-export interface UnitHitRecord { shotId: string; zone: HitZone; energyJoules: number; capability: CombatCapability; healthAfter: number; }
+export interface UnitHitRecord { shotId: string; zone: LegacyCombatHitZone; energyJoules: number; capability: CombatCapability; healthAfter: number; }
 export interface CombatRuntimeState { capability: CombatCapability; lastHit: UnitHitRecord | null; }
 export interface UnitHitResult extends UnitHitRecord { changed: boolean; }
 
@@ -43,16 +43,23 @@ export function isUnitCombatCapable(unit: UnitModel): boolean {
 export function applyUnitHit(unit: UnitModel, input: UnitHitInput): UnitHitResult {
   const runtime = getCombatRuntime(unit);
   const previousCapability = runtime.capability;
+  const recordedZone = normalizeLegacyCombatHitZone(input.zone) ?? 'arms';
+  const calculationZone = canonicalCalculationZone(recordedZone);
   const energyFactor = Math.max(0.35, Math.min(1.4, input.energyJoules / 3000));
-  const zone = normalizeHitZone(input.zone) ?? 'arms';
-  const roll = deterministicUnit(`${input.shotId}:${unit.id}:${zone}`);
-  let capability = resolveCapability(previousCapability, zone, roll, energyFactor);
-  const healthLoss = resolveHealthLoss(zone, energyFactor, roll);
+  const roll = deterministicUnit(`${input.shotId}:${unit.id}:${recordedZone}`);
+  let capability = resolveCapability(previousCapability, calculationZone, roll, energyFactor);
+  const healthLoss = resolveHealthLoss(recordedZone, energyFactor, roll);
   unit.soldier.condition.health = Math.max(0, Math.round(unit.soldier.condition.health - healthLoss));
   if (capability === 'dead') unit.soldier.condition.health = 0;
   if (unit.soldier.condition.health <= 0 && capability !== 'dead' && capability !== 'incapacitated') capability = 'incapacitated';
   runtime.capability = capability;
-  runtime.lastHit = { shotId: input.shotId, zone, energyJoules: input.energyJoules, capability, healthAfter: unit.soldier.condition.health };
+  runtime.lastHit = {
+    shotId: input.shotId,
+    zone: recordedZone,
+    energyJoules: input.energyJoules,
+    capability,
+    healthAfter: unit.soldier.condition.health,
+  };
 
   if (!isUnitCombatCapable(unit)) {
     unit.order = null;
@@ -63,7 +70,7 @@ export function applyUnitHit(unit: UnitModel, input: UnitHitInput): UnitHitResul
     unit.behaviorRuntime.reason = capability === 'dead' ? 'Боец погиб.' : 'Боец выведен из строя.';
     unit.behaviorRuntime.lastEvent = capability === 'dead' ? 'combat_unit_dead' : 'combat_unit_incapacitated';
   } else {
-    unit.behaviorRuntime.stress = Math.min(100, unit.behaviorRuntime.stress + (isLimbZone(zone) ? 28 : 45));
+    unit.behaviorRuntime.stress = Math.min(100, unit.behaviorRuntime.stress + (isLimbZone(recordedZone) ? 28 : 45));
     unit.behaviorRuntime.reason = capability === 'severely_wounded' ? 'Боец тяжело ранен.' : 'Боец ранен.';
     unit.behaviorRuntime.lastEvent = 'combat_unit_wounded';
   }
@@ -112,7 +119,7 @@ function normalizeCapability(value: unknown, health: number): CombatCapability {
 }
 function normalizeLastHit(value: UnitHitRecord | null | undefined, capability: CombatCapability, healthAfter: number): UnitHitRecord | null {
   if (!value || typeof value.shotId !== 'string') return null;
-  const zone = normalizeHitZone(value.zone);
+  const zone = normalizeLegacyCombatHitZone(value.zone);
   if (!zone) return null;
   return {
     shotId: value.shotId,
@@ -122,11 +129,12 @@ function normalizeLastHit(value: UnitHitRecord | null | undefined, capability: C
     healthAfter: Math.max(0, Math.round(Number.isFinite(value.healthAfter) ? value.healthAfter : healthAfter)),
   };
 }
-function normalizeHitZone(value: unknown): HitZone | null {
-  if (value === 'head' || value === 'torso' || value === 'arms' || value === 'legs') return value;
-  return value === 'limbs' ? 'arms' : null;
+function normalizeLegacyCombatHitZone(value: unknown): LegacyCombatHitZone | null {
+  if (value === 'head' || value === 'torso' || value === 'arms' || value === 'legs' || value === 'limbs') return value;
+  return null;
 }
-function isLimbZone(zone: HitZone): boolean { return zone === 'arms' || zone === 'legs'; }
+function canonicalCalculationZone(zone: LegacyCombatHitZone): HitZone { return zone === 'limbs' ? 'arms' : zone; }
+function isLimbZone(zone: LegacyCombatHitZone): boolean { return zone === 'limbs' || zone === 'arms' || zone === 'legs'; }
 function resolveCapability(previous: CombatCapability, zone: HitZone, roll: number, energyFactor: number): CombatCapability {
   if (previous === 'dead' || previous === 'incapacitated') return previous;
   if (zone === 'head') return roll < 0.62 * energyFactor ? 'dead' : 'incapacitated';
@@ -140,8 +148,8 @@ function resolveCapability(previous: CombatCapability, zone: HitZone, roll: numb
   if (roll < 0.58 * energyFactor) return 'severely_wounded';
   return 'wounded';
 }
-function resolveHealthLoss(zone: HitZone, energyFactor: number, roll: number): number {
-  const base = zone === 'head' ? 95 : zone === 'torso' ? 72 : zone === 'legs' ? 38 : 30;
+function resolveHealthLoss(zone: LegacyCombatHitZone, energyFactor: number, roll: number): number {
+  const base = zone === 'head' ? 95 : zone === 'torso' ? 72 : zone === 'legs' ? 38 : zone === 'arms' ? 30 : 34;
   return base * energyFactor * (0.82 + roll * 0.36);
 }
 function deterministicUnit(value: string): number {
