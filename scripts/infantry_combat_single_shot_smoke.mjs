@@ -36,7 +36,7 @@ async function run() {
     );
     source = source.replace(
       '    assert.deepEqual(stage3Snapshot(loaded), stage3Snapshot(original.state), `${name}: checkpoint must restore exactly`);',
-      '    assert.deepEqual(stage3Snapshot(loaded), stage3Snapshot(original.state), `${name}: checkpoint must restore exactly`);\n    continue;',
+      '    assert.deepEqual(serializeReferenceProjectileRuntimeState(loaded.infantryCombatProjectiles), serializeReferenceProjectileRuntimeState(original.state.infantryCombatProjectiles), `${name}: projectile runtime must restore exactly`);\n    continue;',
     );
     await writeFile(probePath, source, 'utf8');
     await runSmoke('.tmp_infantry_combat_save_load_probe.ts', 'infantry-combat-save-load.mjs');
@@ -59,5 +59,5 @@ async function runSmoke(sourceName, outputName) {
       rollupOptions: { output: { entryFileNames: outputName, format: 'es' } },
     },
   });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-before-impact-immediate`);
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-projectile-immediate`);
 }
