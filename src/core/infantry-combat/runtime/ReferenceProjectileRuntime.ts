@@ -17,8 +17,10 @@ export function createReferenceProjectileRuntimeState(): ProjectileRuntimeStateV
 
 /** Stage 5 compatibility boundary preserving optional direction diagnostics from V2 saves. */
 export function normalizeReferenceProjectileRuntimeState(value: unknown): ProjectileRuntimeStateV2 {
-  const normalized = normalizeProjectileRuntimeState(value);
+  // Capture the extended Stage 5 fields before the core normalizer replaces the
+  // committed-shot array with canonical Stage 3 records on mutable V3 runtimes.
   const rawRecords = readCommitRecords(value);
+  const normalized = normalizeProjectileRuntimeState(value);
   if (rawRecords.size === 0) return normalized;
   normalized.committedShots = normalized.committedShots.map((record) => {
     const raw = rawRecords.get(record.shotId);
