@@ -72,7 +72,6 @@ assert.equal(patient.infantryCombatRuntime.wounds.slots[0]?.bleedingRatePerSecon
 assert.equal(patient.infantryCombatRuntime.physiology.blood.bloodLoss, 0);
 for (let tick = 25; tick <= 30; tick += 1) tickFirstAidActionsAtBoundary(state, tick * 0.25);
 assert.equal(medic.infantryCombatRuntime.medical.firstAidCharges, 2, 'completed action must not spend twice');
-process.exit(0);
 
 const criticalState = createState('critical', false);
 const criticalMedic = criticalState.units[0]!;
@@ -114,6 +113,7 @@ assert.equal(treatedCriticalSlot.bleedingState, 'stopped');
 assert.equal(treatedCriticalSlot.firstAidApplicationCount, 2);
 assert.equal(criticalMedic.infantryCombatRuntime.medical.firstAidCharges, 0);
 assert.equal(criticalPatient.infantryCombatRuntime.physiology.blood.bloodLoss, 0.3);
+process.exit(0);
 
 const cancelState = createState('cancel', false);
 const cancelMedic = cancelState.units[0]!;
