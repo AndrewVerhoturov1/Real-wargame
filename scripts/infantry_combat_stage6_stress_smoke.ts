@@ -29,6 +29,8 @@ assert.equal(ordered.impacts, 2_000);
 assert.equal(ordered.terminations, 400);
 assert.equal(ordered.activeProjectiles, 800);
 assert.equal(ordered.totalWoundHits, ordered.impacts);
+assert.deepEqual(ordered.impactZoneCounts, { head: 0, torso: 400, arms: 800, legs: 800 }, 'stress impact zone distribution');
+assert.deepEqual(ordered.woundSlotZoneCounts, { head: 0, torso: 100, arms: 200, legs: 200 }, 'stress wound-slot zone distribution');
 assert.equal(ordered.totalWoundSlots, 500);
 assert.equal(ordered.diagnostics.fullScanFallbackCount, 0);
 assert.equal(ordered.diagnostics.poolResizeCount, 0);
@@ -99,6 +101,15 @@ function execute(reverseUnits: boolean) {
     0,
   );
   const totalWoundSlots = unitSnapshots.reduce((sum, entry) => sum + entry.runtime.wounds.slots.length, 0);
+  const impactZoneCounts = { head: 0, torso: 0, arms: 0, legs: 0 };
+  for (const impact of snapshot.impacts) {
+    const zone = impact.bodyPhysics?.hitZone;
+    if (zone) impactZoneCounts[zone] += 1;
+  }
+  const woundSlotZoneCounts = { head: 0, torso: 0, arms: 0, legs: 0 };
+  for (const entry of unitSnapshots) {
+    for (const slot of entry.runtime.wounds.slots) woundSlotZoneCounts[slot.zone] += 1;
+  }
   return {
     spawnedProjectiles,
     impacts: snapshot.impacts.length,
@@ -106,6 +117,8 @@ function execute(reverseUnits: boolean) {
     activeProjectiles: snapshot.activeProjectiles.length,
     totalWoundHits,
     totalWoundSlots,
+    impactZoneCounts,
+    woundSlotZoneCounts,
     projectiles: snapshot.activeProjectiles,
     impactsSnapshot: snapshot.impacts,
     terminationSnapshot: snapshot.terminations,
