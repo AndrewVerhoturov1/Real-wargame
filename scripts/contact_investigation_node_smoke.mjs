@@ -13,7 +13,7 @@ try {
     root: repoRoot,
     logLevel: 'warn',
     build: {
-      ssr: path.join(repoRoot, 'scripts', 'contact_investigation_node_smoke.ts'),
+      ssr: path.join(repoRoot, 'scripts', 'contact_investigation_preview_smoke.ts'),
       outDir,
       emptyOutDir: true,
       minify: false,
