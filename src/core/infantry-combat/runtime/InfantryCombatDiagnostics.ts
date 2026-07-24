@@ -1,9 +1,5 @@
 import type { SimulationState } from '../../simulation/SimulationState';
-import type {
-  AimFactorBreakdownV1,
-  FireTaskRuntimeV1,
-  InfantryCombatUnitRuntimeV1,
-} from './InfantryCombatRuntimeTypes';
+import type { AimFactorBreakdownV1, FireTaskRuntimeV1, InfantryCombatUnitRuntimeV1 } from './InfantryCombatRuntimeTypes';
 import {
   MAX_STAGE3_ACTIVE_PROJECTILES,
   MAX_STAGE3_APPLIED_IMPACT_IDS,
@@ -61,6 +57,21 @@ export interface InfantryCombatDiagnosticsV1 {
     readonly fullScanFallbackCount: number;
     readonly lastImpactId: string | null;
     readonly lastTerminationId: string | null;
+    readonly bodyImpactCount: number;
+    readonly bodyPenetrationCount: number;
+    readonly penetratedBodyImpactCount: number;
+    readonly bodyStopCount: number;
+    readonly penetrationLimitCount: number;
+    readonly woundAppliedCount: number;
+    readonly woundDuplicateCount: number;
+    readonly woundTargetMissingCount: number;
+    readonly maximumImpactsInSingleSubstep: number;
+    readonly lastBodyImpactId: string | null;
+    readonly lastBodyBudgetBefore: number;
+    readonly lastBodyBudgetAfter: number;
+    readonly lastBodyResistance: number;
+    readonly lastBodySpeedBefore: number;
+    readonly lastBodySpeedAfter: number;
   };
   readonly units: readonly InfantryCombatUnitDiagnosticsV1[];
 }
@@ -112,11 +123,12 @@ export interface InfantryCombatUnitDiagnosticsV1 {
     readonly committedShotId: string | null;
     readonly resultCode: string | null;
   };
+  readonly wounds: InfantryCombatUnitRuntimeV1['wounds'];
   readonly lastFireResult: InfantryCombatUnitRuntimeV1['lastFireResult'];
   readonly lastShotCommit: InfantryCombatUnitRuntimeV1['lastShotCommit'];
 }
 
-/** Returns a cloned, read-only projection. It never advances tracking or recoil. */
+/** Returns a cloned, read-only projection. It never advances simulation. */
 export function getInfantryCombatDiagnostics(state: SimulationState): InfantryCombatDiagnosticsV1 {
   const runtime = state.infantryCombatProjectiles;
   const projectileDiagnostics = getProjectileRuntimeDiagnostics(runtime);
@@ -166,38 +178,50 @@ export function getInfantryCombatDiagnostics(state: SimulationState): InfantryCo
       fullScanFallbackCount: projectileDiagnostics.fullScanFallbackCount,
       lastImpactId: projectileDiagnostics.lastImpactId,
       lastTerminationId: projectileDiagnostics.lastTerminationId,
+      bodyImpactCount: projectileDiagnostics.bodyImpactCount,
+      bodyPenetrationCount: projectileDiagnostics.bodyPenetrationCount,
+      penetratedBodyImpactCount: projectileDiagnostics.penetratedBodyImpactCount,
+      bodyStopCount: projectileDiagnostics.bodyStopCount,
+      penetrationLimitCount: projectileDiagnostics.penetrationLimitCount,
+      woundAppliedCount: projectileDiagnostics.woundAppliedCount,
+      woundDuplicateCount: projectileDiagnostics.woundDuplicateCount,
+      woundTargetMissingCount: projectileDiagnostics.woundTargetMissingCount,
+      maximumImpactsInSingleSubstep: projectileDiagnostics.maximumImpactsInSingleSubstep,
+      lastBodyImpactId: projectileDiagnostics.lastBodyImpactId,
+      lastBodyBudgetBefore: projectileDiagnostics.lastBodyBudgetBefore,
+      lastBodyBudgetAfter: projectileDiagnostics.lastBodyBudgetAfter,
+      lastBodyResistance: projectileDiagnostics.lastBodyResistance,
+      lastBodySpeedBefore: projectileDiagnostics.lastBodySpeedBefore,
+      lastBodySpeedAfter: projectileDiagnostics.lastBodySpeedAfter,
     },
-    units: state.units
-      .map((unit): InfantryCombatUnitDiagnosticsV1 => {
-        const unitRuntime = unit.infantryCombatRuntime;
-        const weapon = unitRuntime.primaryWeapon;
-        const task = unitRuntime.activeFireTask;
-        return {
-          unitId: unit.id,
-          weapon: weapon
-            ? {
-                weaponInstanceId: weapon.weaponInstanceId,
-                weaponDefinitionId: weapon.resolved.weaponDefinitionRef.definitionId,
-                weaponRevision: weapon.resolved.weaponDefinitionRef.revision,
-                ammoDefinitionId: weapon.resolved.ammoDefinitionRef.definitionId,
-                ammoRevision: weapon.resolved.ammoDefinitionRef.revision,
-                roundsInWeapon: weapon.roundsInWeapon,
-                shotSequence: weapon.shotSequence,
-                lastCommittedShotId: weapon.lastCommittedShotId,
-                shootingSkill: weapon.operatorProfile.shootingSkill,
-                proficiency: weapon.operatorProfile.proficiencyByWeaponClass[weapon.resolved.weapon.weaponClass],
-                recoilPitchRadians: weapon.recoil.pitchOffsetRadians,
-                recoilYawRadians: weapon.recoil.yawOffsetRadians,
-                recoilLastUpdatedSeconds: weapon.recoil.lastUpdatedSeconds,
-                recoilSequence: weapon.recoil.sequence,
-              }
-            : null,
-          fireTask: task ? taskDiagnostics(task) : null,
-          lastFireResult: unitRuntime.lastFireResult ? structuredClone(unitRuntime.lastFireResult) : null,
-          lastShotCommit: unitRuntime.lastShotCommit ? structuredClone(unitRuntime.lastShotCommit) : null,
-        };
-      })
-      .sort((left, right) => left.unitId.localeCompare(right.unitId)),
+    units: state.units.map((unit): InfantryCombatUnitDiagnosticsV1 => {
+      const unitRuntime = unit.infantryCombatRuntime;
+      const weapon = unitRuntime.primaryWeapon;
+      const task = unitRuntime.activeFireTask;
+      return {
+        unitId: unit.id,
+        weapon: weapon ? {
+          weaponInstanceId: weapon.weaponInstanceId,
+          weaponDefinitionId: weapon.resolved.weaponDefinitionRef.definitionId,
+          weaponRevision: weapon.resolved.weaponDefinitionRef.revision,
+          ammoDefinitionId: weapon.resolved.ammoDefinitionRef.definitionId,
+          ammoRevision: weapon.resolved.ammoDefinitionRef.revision,
+          roundsInWeapon: weapon.roundsInWeapon,
+          shotSequence: weapon.shotSequence,
+          lastCommittedShotId: weapon.lastCommittedShotId,
+          shootingSkill: weapon.operatorProfile.shootingSkill,
+          proficiency: weapon.operatorProfile.proficiencyByWeaponClass[weapon.resolved.weapon.weaponClass],
+          recoilPitchRadians: weapon.recoil.pitchOffsetRadians,
+          recoilYawRadians: weapon.recoil.yawOffsetRadians,
+          recoilLastUpdatedSeconds: weapon.recoil.lastUpdatedSeconds,
+          recoilSequence: weapon.recoil.sequence,
+        } : null,
+        fireTask: task ? taskDiagnostics(task) : null,
+        wounds: structuredClone(unitRuntime.wounds),
+        lastFireResult: unitRuntime.lastFireResult ? structuredClone(unitRuntime.lastFireResult) : null,
+        lastShotCommit: unitRuntime.lastShotCommit ? structuredClone(unitRuntime.lastShotCommit) : null,
+      };
+    }).sort((left, right) => left.unitId.localeCompare(right.unitId)),
   };
 }
 
@@ -233,7 +257,4 @@ function taskDiagnostics(task: FireTaskRuntimeV1): NonNullable<InfantryCombatUni
     resultCode: task.resultCode,
   };
 }
-
-function sorted(values: string[]): string[] {
-  return values.sort((left, right) => left.localeCompare(right));
-}
+function sorted(values: string[]): string[] { return values.sort((left, right) => left.localeCompare(right)); }

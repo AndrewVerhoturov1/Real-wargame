@@ -1,333 +1,308 @@
+import { normalizeLegacyHitZone, type BallisticDirection3, type BallisticPoint3 } from '../../combat/UnitHitShapes';
+import type { AmmoDefinitionV1 } from '../catalogs/CombatCatalogTypes';
+import { isHitZone, type BodyImpactPhysicsV1 } from './InfantryBodyTypes';
 import {
   DEFAULT_PROJECTILE_EVENT_BUFFER_CAPACITY,
   MAX_STAGE3_APPLIED_IMPACT_IDS,
   MAX_STAGE3_COMMIT_LEDGER_ENTRIES,
   MAX_STAGE3_IMPACT_ENTRIES,
   MAX_STAGE3_TERMINATION_ENTRIES,
+  MAX_STAGE6_IMPACT_BUFFER_ENTRIES,
   PRODUCTION_PROJECTILE_CAPACITY,
+  PROJECTILE_IMPACT_SCHEMA_VERSION,
   PROJECTILE_RUNTIME_SCHEMA_VERSION,
+  PROJECTILE_STATE_SCHEMA_VERSION,
+  PROJECTILE_TERMINATION_SCHEMA_VERSION,
+  REFERENCE_PROJECTILE_RUNTIME_SCHEMA_VERSION,
+  SHOT_COMMIT_RECORD_SCHEMA_VERSION,
   STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
-  type AnyProjectileRuntimeSnapshot,
   type ProjectileImpactV1,
-  type ProjectilePoolV2,
-  type ProjectileRuntimeDiagnosticsV2,
-  type ProjectileRuntimeSnapshotV2,
-  type ProjectileRuntimeStateV2,
-  type ProjectileSlotHandleV2,
-  type ProjectileSpawnResult,
+  type ProjectilePoolHandleV2,
+  type ProjectilePoolV3,
+  type ProjectileRuntimeDiagnosticsV3,
+  type ProjectileRuntimeSnapshotV3,
+  type ProjectileRuntimeStateV3,
+  type ProjectileSpawnResultV2,
   type ProjectileStateV1,
   type ProjectileTerminationV1,
   type ReferenceProjectileRuntimeStateV1,
   type ShotCommitRecordV1,
 } from './ProjectileRuntimeTypes';
 
-interface ProjectileRuntimeDerivedState {
-  readonly slotByProjectileId: Map<string, number>;
+import {
+  createDiagnostics,
+  derivedByRuntime,
+  getDerived,
+  isRuntimeStateV3,
+  normalizeDiagnostics,
+  normalizeFreeList,
+  recordFromSlot,
+  syncDiagnostics,
+  writeProjectileRecord,
+  clearSlotMetadata,
+  finiteNonNegative,
+} from './ProjectileRuntimePoolInternals';
+import {
+  canonicalStrings,
+  clone,
+  compareCommitRecords,
+  compareProjectiles,
+  increment,
+  isPresent,
+  isRecord,
+  isSlot,
+  nextGeneration,
+  normalizeCapacity,
+  normalizeCommitRecord,
+  normalizeCommitRecords,
+  normalizeImpacts,
+  normalizeProjectile,
+  normalizeTerminations,
+  readArray,
+  uniqueBy,
+} from './ProjectileRuntimeSerialization';
+
+const MAX_NORMALIZED_CAPACITY = 16_384;
+export function createProjectilePool(capacity = PRODUCTION_PROJECTILE_CAPACITY): ProjectilePoolV3 {
+  const normalized = normalizeCapacity(capacity, PRODUCTION_PROJECTILE_CAPACITY, 0);
+  const freeSlots = new Uint32Array(normalized);
+  for (let index = 0; index < normalized; index += 1) freeSlots[index] = normalized - index - 1;
+  return {
+    capacity: normalized,
+    active: new Uint8Array(normalized),
+    generation: new Uint32Array(normalized),
+    projectileIds: Array<string | null>(normalized).fill(null),
+    shotIds: Array<string | null>(normalized).fill(null),
+    shooterIds: Array<string | null>(normalized).fill(null),
+    ammoSnapshots: Array<AmmoDefinitionV1 | null>(normalized).fill(null),
+    positionX: new Float64Array(normalized),
+    positionY: new Float64Array(normalized),
+    positionZ: new Float64Array(normalized),
+    velocityX: new Float64Array(normalized),
+    velocityY: new Float64Array(normalized),
+    velocityZ: new Float64Array(normalized),
+    ageSeconds: new Float64Array(normalized),
+    maximumLifetimeSeconds: new Float64Array(normalized),
+    bodyPenetrationBudget: new Float64Array(normalized),
+    bodyPenetrationCount: new Uint8Array(normalized),
+    impactSequence: new Uint32Array(normalized),
+    lastHitUnitIds: Array<string | null>(normalized).fill(null),
+    freeSlots,
+    activeCount: 0,
+    freeSlotCount: normalized,
+    highWaterMark: 0,
+  };
 }
 
-const derivedByRuntime = new WeakMap<ProjectileRuntimeStateV2, ProjectileRuntimeDerivedState>();
-const MAX_NORMALIZED_CAPACITY = 65_536;
-
-export function createProjectileRuntimeState(
-  capacity = PRODUCTION_PROJECTILE_CAPACITY,
-): ProjectileRuntimeStateV2 {
-  const safeCapacity = normalizeCapacity(capacity, PRODUCTION_PROJECTILE_CAPACITY, 0);
+export function createProjectileRuntimeState(capacity = PRODUCTION_PROJECTILE_CAPACITY): ProjectileRuntimeStateV3 {
+  const pool = createProjectilePool(capacity);
   const runtime = attachCompatibilityAccessor({
     schemaVersion: PROJECTILE_RUNTIME_SCHEMA_VERSION,
     fixedStepSeconds: STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
     accumulatorSeconds: 0,
-    pool: createProjectilePool(safeCapacity),
+    pool,
     committedShots: [],
     impacts: [],
     terminations: [],
     appliedImpactIds: [],
-    diagnostics: createDiagnostics(safeCapacity),
-  } as unknown as ProjectileRuntimeStateV2);
+    diagnostics: createDiagnostics(pool.capacity),
+  } as unknown as ProjectileRuntimeStateV3);
   derivedByRuntime.set(runtime, { slotByProjectileId: new Map() });
   return runtime;
 }
 
-export function createProjectilePool(capacity: number): ProjectilePoolV2 {
-  const safeCapacity = normalizeCapacity(capacity, PRODUCTION_PROJECTILE_CAPACITY, 0);
-  const freeSlots = new Int32Array(safeCapacity);
-  for (let index = 0; index < safeCapacity; index += 1) {
-    freeSlots[index] = safeCapacity - index - 1;
+export function normalizeProjectileRuntimeState(value: unknown): ProjectileRuntimeStateV3 {
+  if (isRuntimeStateV3(value)) {
+    normalizeFreeList(value.pool, getDerived(value).slotByProjectileId);
+    value.committedShots = normalizeCommitRecords(value.committedShots);
+    value.impacts = normalizeImpacts(value.impacts);
+    value.terminations = normalizeTerminations(value.terminations);
+    value.appliedImpactIds = canonicalStrings(value.appliedImpactIds).slice(-MAX_STAGE3_APPLIED_IMPACT_IDS);
+    value.diagnostics = normalizeDiagnostics(value.diagnostics as unknown as Record<string, unknown>, value.pool.capacity);
+    syncDiagnostics(value);
+    return attachCompatibilityAccessor(value);
   }
-  return {
-    capacity: safeCapacity,
-    activeCount: 0,
-    highWaterMark: 0,
-    active: new Uint8Array(safeCapacity),
-    generation: new Uint32Array(safeCapacity),
-    projectileIds: Array<string | null>(safeCapacity).fill(null),
-    shotIds: Array<string | null>(safeCapacity).fill(null),
-    shooterIds: Array<string | null>(safeCapacity).fill(null),
-    ammoSnapshots: Array(safeCapacity).fill(null),
-    positionX: new Float64Array(safeCapacity),
-    positionY: new Float64Array(safeCapacity),
-    positionZ: new Float64Array(safeCapacity),
-    velocityX: new Float64Array(safeCapacity),
-    velocityY: new Float64Array(safeCapacity),
-    velocityZ: new Float64Array(safeCapacity),
-    ageSeconds: new Float64Array(safeCapacity),
-    maximumLifetimeSeconds: new Float64Array(safeCapacity),
-    bodyPenetrationBudget: new Float64Array(safeCapacity),
-    impactSequence: new Uint32Array(safeCapacity),
-    freeSlots,
-    freeSlotCount: safeCapacity,
-  };
-}
-
-export function normalizeProjectileRuntimeState(value: unknown): ProjectileRuntimeStateV2 {
-  if (isRuntimeStateV2(value)) {
-    return createRuntimeFromSnapshot(serializeProjectileRuntimeState(value));
+  if (isRecord(value) && value.schemaVersion === REFERENCE_PROJECTILE_RUNTIME_SCHEMA_VERSION) {
+    return migrateReferenceSnapshot(value as unknown as ReferenceProjectileRuntimeStateV1);
   }
-  if (isRecord(value) && value.schemaVersion === PROJECTILE_RUNTIME_SCHEMA_VERSION) {
-    return createRuntimeFromSnapshot(normalizeSnapshotV2(value));
-  }
-  if (isRecord(value) && value.schemaVersion === 1) {
-    return migrateV1Snapshot(value as unknown as ReferenceProjectileRuntimeStateV1);
+  if (isRecord(value) && (value.schemaVersion === 2 || value.schemaVersion === PROJECTILE_RUNTIME_SCHEMA_VERSION)) {
+    return createRuntimeFromSnapshot(normalizeSnapshot(value));
   }
   return createProjectileRuntimeState();
 }
 
-export function serializeProjectileRuntimeState(
-  value: ProjectileRuntimeStateV2,
-): ProjectileRuntimeSnapshotV2 {
-  syncDiagnostics(value);
+export function serializeProjectileRuntimeState(runtime: ProjectileRuntimeStateV3): ProjectileRuntimeSnapshotV3 {
+  normalizeFreeList(runtime.pool, getDerived(runtime).slotByProjectileId);
+  syncDiagnostics(runtime);
   return {
     schemaVersion: PROJECTILE_RUNTIME_SCHEMA_VERSION,
     fixedStepSeconds: STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
-    accumulatorSeconds: finiteNonNegative(value.accumulatorSeconds, 0),
-    capacity: value.pool.capacity,
-    activeProjectiles: collectActiveProjectileRecords(value),
-    committedShots: value.committedShots.map(clone).sort(compareCommitRecords).slice(-MAX_STAGE3_COMMIT_LEDGER_ENTRIES),
-    impacts: value.impacts.map(clone).sort(compareImpacts).slice(-MAX_STAGE3_IMPACT_ENTRIES),
-    terminations: value.terminations.map(clone).sort(compareTerminations).slice(-MAX_STAGE3_TERMINATION_ENTRIES),
-    appliedImpactIds: canonicalStrings(value.appliedImpactIds).slice(-MAX_STAGE3_APPLIED_IMPACT_IDS),
-    diagnostics: clone(value.diagnostics),
+    accumulatorSeconds: finiteNonNegative(runtime.accumulatorSeconds, 0),
+    capacity: runtime.pool.capacity,
+    activeProjectiles: collectActiveProjectileRecords(runtime).sort(compareProjectiles),
+    committedShots: normalizeCommitRecords(runtime.committedShots),
+    impacts: normalizeImpacts(runtime.impacts),
+    terminations: normalizeTerminations(runtime.terminations),
+    appliedImpactIds: canonicalStrings(runtime.appliedImpactIds).slice(-MAX_STAGE3_APPLIED_IMPACT_IDS),
+    diagnostics: clone(runtime.diagnostics),
   };
 }
 
-export function trySpawnProjectile(
-  runtime: ProjectileRuntimeStateV2,
-  candidate: ProjectileStateV1,
-): ProjectileSpawnResult {
-  const normalizedCandidate = normalizeProjectile(candidate);
-  if (!normalizedCandidate) {
+export function trySpawnProjectile(runtime: ProjectileRuntimeStateV3, candidate: ProjectileStateV1): ProjectileSpawnResultV2 {
+  const normalized = normalizeProjectile(candidate);
+  if (!normalized) {
     runtime.diagnostics.invalidSpawnCount = increment(runtime.diagnostics.invalidSpawnCount);
     return { status: 'invalid_candidate', handle: null };
   }
   const derived = getDerived(runtime);
-  if (derived.slotByProjectileId.has(normalizedCandidate.projectileId)) {
+  normalizeFreeList(runtime.pool, derived.slotByProjectileId);
+  if (derived.slotByProjectileId.has(normalized.projectileId)) {
     runtime.diagnostics.duplicateSpawnCount = increment(runtime.diagnostics.duplicateSpawnCount);
     return { status: 'duplicate_projectile_id', handle: null };
   }
-  const pool = runtime.pool;
-  if (pool.freeSlotCount <= 0 || pool.activeCount >= pool.capacity) {
+  if (runtime.pool.freeSlotCount <= 0) {
     runtime.diagnostics.capRejectionCount = increment(runtime.diagnostics.capRejectionCount);
     return { status: 'capacity_exceeded', handle: null };
   }
-
-  let resolvedSlot = pool.freeSlots[pool.freeSlotCount - 1]!;
-  if (!isSlot(resolvedSlot, pool.capacity) || pool.active[resolvedSlot] !== 0) {
-    normalizeFreeList(pool, derived.slotByProjectileId);
-    if (pool.freeSlotCount <= 0 || pool.activeCount >= pool.capacity) {
+  const slot = runtime.pool.freeSlots[--runtime.pool.freeSlotCount]!;
+  if (!isSlot(slot, runtime.pool.capacity) || runtime.pool.active[slot] === 1) {
+    normalizeFreeList(runtime.pool, derived.slotByProjectileId);
+    if (runtime.pool.freeSlotCount <= 0) {
       runtime.diagnostics.capRejectionCount = increment(runtime.diagnostics.capRejectionCount);
       return { status: 'capacity_exceeded', handle: null };
     }
-    resolvedSlot = pool.freeSlots[pool.freeSlotCount - 1]!;
+    return trySpawnProjectile(runtime, normalized);
   }
-  pool.freeSlotCount -= 1;
-  const nextGeneration = pool.generation[resolvedSlot] === 0xffff_ffff
-    ? 1
-    : pool.generation[resolvedSlot]! + 1;
-  pool.generation[resolvedSlot] = nextGeneration;
-  writeProjectileAtSlot(runtime, resolvedSlot, normalizedCandidate);
-  pool.active[resolvedSlot] = 1;
-  pool.activeCount += 1;
-  pool.highWaterMark = Math.max(pool.highWaterMark, pool.activeCount);
-  derived.slotByProjectileId.set(normalizedCandidate.projectileId, resolvedSlot);
+  runtime.pool.generation[slot] = nextGeneration(runtime.pool.generation[slot]!);
+  writeProjectileRecord(runtime.pool, slot, normalized);
+  runtime.pool.active[slot] = 1;
+  runtime.pool.activeCount += 1;
+  runtime.pool.highWaterMark = Math.max(runtime.pool.highWaterMark, runtime.pool.activeCount);
+  derived.slotByProjectileId.set(normalized.projectileId, slot);
   runtime.diagnostics.spawnCount = increment(runtime.diagnostics.spawnCount);
   syncDiagnostics(runtime);
   return {
     status: 'spawned',
-    handle: { slot: resolvedSlot, generation: nextGeneration, projectileId: normalizedCandidate.projectileId },
+    handle: { slot, generation: runtime.pool.generation[slot]!, projectileId: normalized.projectileId },
   };
 }
 
-export function releaseProjectileSlot(
-  runtime: ProjectileRuntimeStateV2,
-  handle: ProjectileSlotHandleV2,
-): boolean {
-  const pool = runtime.pool;
-  const slot = handle.slot;
-  if (
-    !isSlot(slot, pool.capacity)
-    || pool.active[slot] !== 1
-    || pool.generation[slot] !== handle.generation
-    || pool.projectileIds[slot] !== handle.projectileId
-  ) {
-    return false;
-  }
-  releaseSlotUnchecked(runtime, slot);
+export function releaseProjectileSlot(runtime: ProjectileRuntimeStateV3, handle: ProjectilePoolHandleV2): boolean {
+  if (!isSlot(handle.slot, runtime.pool.capacity)) return false;
+  if (runtime.pool.active[handle.slot] !== 1) return false;
+  if (runtime.pool.generation[handle.slot] !== handle.generation) return false;
+  if (runtime.pool.projectileIds[handle.slot] !== handle.projectileId) return false;
+  releaseSlotUnchecked(runtime, handle.slot);
   return true;
 }
 
-export function releaseProjectileSlotByIndex(runtime: ProjectileRuntimeStateV2, slot: number): boolean {
+export function releaseProjectileSlotByIndex(runtime: ProjectileRuntimeStateV3, slot: number): boolean {
   if (!isSlot(slot, runtime.pool.capacity) || runtime.pool.active[slot] !== 1) return false;
   releaseSlotUnchecked(runtime, slot);
   return true;
 }
 
-export function getProjectileAtSlot(
-  runtime: ProjectileRuntimeStateV2,
-  slot: number,
-): ProjectileStateV1 | null {
-  const pool = runtime.pool;
-  if (!isSlot(slot, pool.capacity) || pool.active[slot] !== 1) return null;
-  const projectileId = pool.projectileIds[slot];
-  const shotId = pool.shotIds[slot];
-  const shooterId = pool.shooterIds[slot];
-  const ammoSnapshot = pool.ammoSnapshots[slot];
-  if (!projectileId || !shotId || !shooterId || !ammoSnapshot) return null;
-  return {
-    schemaVersion: 1,
-    projectileId,
-    shotId,
-    shooterId,
-    ammoSnapshot: clone(ammoSnapshot),
-    position: {
-      xMetres: pool.positionX[slot]!,
-      yMetres: pool.positionY[slot]!,
-      zMetres: pool.positionZ[slot]!,
-    },
-    velocityMetresPerSecond: {
-      x: pool.velocityX[slot]!,
-      y: pool.velocityY[slot]!,
-      z: pool.velocityZ[slot]!,
-    },
-    ageSeconds: pool.ageSeconds[slot]!,
-    maximumLifetimeSeconds: pool.maximumLifetimeSeconds[slot]!,
-    bodyPenetrationBudget: pool.bodyPenetrationBudget[slot]!,
-    impactSequence: pool.impactSequence[slot]!,
-  };
+export function getProjectileAtSlot(runtime: ProjectileRuntimeStateV3, slot: number): ProjectileStateV1 | null {
+  if (!isSlot(slot, runtime.pool.capacity) || runtime.pool.active[slot] !== 1) return null;
+  return recordFromSlot(runtime.pool, slot);
 }
 
-export function collectActiveProjectileRecords(runtime: ProjectileRuntimeStateV2): ProjectileStateV1[] {
-  const result: ProjectileStateV1[] = [];
+export function writeProjectileAtSlot(runtime: ProjectileRuntimeStateV3, slot: number, projectile: ProjectileStateV1): void {
+  const normalized = normalizeProjectile(projectile);
+  if (!normalized || !isSlot(slot, runtime.pool.capacity) || runtime.pool.active[slot] !== 1) return;
+  const previousId = runtime.pool.projectileIds[slot];
+  const derived = getDerived(runtime);
+  if (previousId !== normalized.projectileId) {
+    const occupied = derived.slotByProjectileId.get(normalized.projectileId);
+    if (occupied !== undefined && occupied !== slot) return;
+    if (previousId) derived.slotByProjectileId.delete(previousId);
+    derived.slotByProjectileId.set(normalized.projectileId, slot);
+  }
+  writeProjectileRecord(runtime.pool, slot, normalized);
+}
+
+export function collectActiveProjectileRecords(runtime: ProjectileRuntimeStateV3): ProjectileStateV1[] {
+  const output: ProjectileStateV1[] = [];
   for (let slot = 0; slot < runtime.pool.capacity; slot += 1) {
-    const record = getProjectileAtSlot(runtime, slot);
-    if (record) result.push(record);
+    if (runtime.pool.active[slot] !== 1) continue;
+    const record = recordFromSlot(runtime.pool, slot);
+    if (record) output.push(record);
   }
-  return result.sort(compareProjectiles);
+  return output;
 }
 
-export function rebuildProjectilePool(
-  runtime: ProjectileRuntimeStateV2,
-  candidates: readonly ProjectileStateV1[],
-): void {
-  const retainedDiagnostics = { ...runtime.diagnostics };
+export function rebuildProjectilePool(runtime: ProjectileRuntimeStateV3, projectiles: readonly ProjectileStateV1[]): void {
+  const historicalHighWaterMark = runtime.pool.highWaterMark;
   clearPool(runtime);
-  const normalized = candidates
-    .map(normalizeProjectile)
-    .filter(isPresent)
-    .sort(compareProjectiles);
-  const seen = new Set<string>();
-  for (const candidate of normalized) {
-    if (seen.has(candidate.projectileId)) continue;
-    seen.add(candidate.projectileId);
-    if (runtime.pool.activeCount >= runtime.pool.capacity) break;
-    trySpawnProjectile(runtime, candidate);
+  const values = uniqueBy(
+    projectiles.map(normalizeProjectile).filter(isPresent),
+    (projectile) => projectile.projectileId,
+  ).sort(compareProjectiles).slice(0, runtime.pool.capacity);
+  const derived = getDerived(runtime);
+  for (const value of values) {
+    const slot = runtime.pool.freeSlots[--runtime.pool.freeSlotCount]!;
+    runtime.pool.generation[slot] = nextGeneration(runtime.pool.generation[slot]!);
+    writeProjectileRecord(runtime.pool, slot, value);
+    runtime.pool.active[slot] = 1;
+    runtime.pool.activeCount += 1;
+    derived.slotByProjectileId.set(value.projectileId, slot);
   }
-  runtime.pool.highWaterMark = Math.max(retainedDiagnostics.highWaterMark, runtime.pool.activeCount);
-  runtime.diagnostics = {
-    ...retainedDiagnostics,
-    capacity: runtime.pool.capacity,
-    highWaterMark: runtime.pool.highWaterMark,
-  };
+  runtime.pool.highWaterMark = Math.max(historicalHighWaterMark, runtime.pool.activeCount);
   syncDiagnostics(runtime);
 }
 
-export function getProjectileRuntimeDiagnostics(
-  runtime: ProjectileRuntimeStateV2,
-): Readonly<ProjectileRuntimeDiagnosticsV2> {
-  syncDiagnostics(runtime);
-  return clone(runtime.diagnostics);
+export function hasActiveProjectileId(runtime: ProjectileRuntimeStateV3, projectileId: string): boolean {
+  return getDerived(runtime).slotByProjectileId.has(projectileId);
 }
 
-export function resetProjectileRuntimeDiagnostics(runtime: ProjectileRuntimeStateV2): void {
-  const retained = createDiagnostics(runtime.pool.capacity);
-  retained.poolAllocationCount = runtime.diagnostics.poolAllocationCount;
-  retained.scratchAllocationCount = runtime.diagnostics.scratchAllocationCount;
-  retained.highWaterMark = runtime.pool.highWaterMark;
-  retained.commitLedgerHighWaterMark = runtime.committedShots.length;
-  retained.impactLedgerHighWaterMark = runtime.impacts.length;
-  retained.terminationLedgerHighWaterMark = runtime.terminations.length;
-  retained.appliedImpactLedgerHighWaterMark = runtime.appliedImpactIds.length;
-  retained.lastImpactId = runtime.diagnostics.lastImpactId;
-  retained.lastTerminationId = runtime.diagnostics.lastTerminationId;
-  runtime.diagnostics = retained;
-  syncDiagnostics(runtime);
+export function findProjectileSlot(runtime: ProjectileRuntimeStateV3, projectileId: string): number {
+  return getDerived(runtime).slotByProjectileId.get(projectileId) ?? -1;
 }
 
 export function appendBoundedCommitRecord(
-  state: ProjectileRuntimeStateV2,
+  runtime: ProjectileRuntimeStateV3,
   record: ShotCommitRecordV1,
   activeShotIds: ReadonlySet<string>,
 ): ShotCommitRecordV1[] {
-  const next = [...state.committedShots.map(clone), clone(record)].sort(compareCommitRecords);
+  const normalized = normalizeCommitRecord(record);
+  if (!normalized) return runtime.committedShots.map(clone);
+  const next = uniqueBy([...runtime.committedShots, normalized], (entry) => entry.shotId).sort(compareCommitRecords);
   while (next.length > MAX_STAGE3_COMMIT_LEDGER_ENTRIES) {
-    const removableIndex = next.findIndex((item) => !activeShotIds.has(item.shotId));
+    const removableIndex = next.findIndex((entry) => !activeShotIds.has(entry.shotId));
     next.splice(removableIndex >= 0 ? removableIndex : 0, 1);
   }
   return next;
 }
 
-export function hasActiveProjectileId(runtime: ProjectileRuntimeStateV2, projectileId: string): boolean {
-  return getDerived(runtime).slotByProjectileId.has(projectileId);
+export function getProjectileRuntimeDiagnostics(runtime: ProjectileRuntimeStateV3): Readonly<ProjectileRuntimeDiagnosticsV3> {
+  syncDiagnostics(runtime);
+  return clone(runtime.diagnostics);
 }
 
-export function findProjectileSlot(runtime: ProjectileRuntimeStateV2, projectileId: string): number {
-  return getDerived(runtime).slotByProjectileId.get(projectileId) ?? -1;
+export function resetProjectileRuntimeDiagnostics(runtime: ProjectileRuntimeStateV3): void {
+  const capacity = runtime.pool.capacity;
+  const active = runtime.pool.activeCount;
+  const highWater = runtime.pool.highWaterMark;
+  runtime.diagnostics = createDiagnostics(capacity);
+  runtime.diagnostics.activeCount = active;
+  runtime.diagnostics.freeCount = runtime.pool.freeSlotCount;
+  runtime.diagnostics.highWaterMark = highWater;
+  runtime.diagnostics.accumulatorSeconds = runtime.accumulatorSeconds;
 }
 
-export function writeProjectileAtSlot(
-  runtime: ProjectileRuntimeStateV2,
-  slot: number,
-  projectile: ProjectileStateV1,
-): void {
-  const pool = runtime.pool;
-  pool.projectileIds[slot] = projectile.projectileId;
-  pool.shotIds[slot] = projectile.shotId;
-  pool.shooterIds[slot] = projectile.shooterId;
-  pool.ammoSnapshots[slot] = clone(projectile.ammoSnapshot);
-  pool.positionX[slot] = projectile.position.xMetres;
-  pool.positionY[slot] = projectile.position.yMetres;
-  pool.positionZ[slot] = projectile.position.zMetres;
-  pool.velocityX[slot] = projectile.velocityMetresPerSecond.x;
-  pool.velocityY[slot] = projectile.velocityMetresPerSecond.y;
-  pool.velocityZ[slot] = projectile.velocityMetresPerSecond.z;
-  pool.ageSeconds[slot] = projectile.ageSeconds;
-  pool.maximumLifetimeSeconds[slot] = projectile.maximumLifetimeSeconds;
-  pool.bodyPenetrationBudget[slot] = projectile.bodyPenetrationBudget;
-  pool.impactSequence[slot] = projectile.impactSequence;
-}
-
-export function getActiveShotIds(runtime: ProjectileRuntimeStateV2, output = new Set<string>()): Set<string> {
+export function getActiveShotIds(runtime: ProjectileRuntimeStateV3, output = new Set<string>()): Set<string> {
   output.clear();
-  const pool = runtime.pool;
-  for (let slot = 0; slot < pool.capacity; slot += 1) {
-    if (pool.active[slot] === 1 && pool.shotIds[slot]) output.add(pool.shotIds[slot]!);
+  for (let slot = 0; slot < runtime.pool.capacity; slot += 1) {
+    if (runtime.pool.active[slot] === 1 && runtime.pool.shotIds[slot]) output.add(runtime.pool.shotIds[slot]!);
   }
   return output;
 }
 
-export function syncProjectileRuntimeDiagnostics(runtime: ProjectileRuntimeStateV2): void {
+export function syncProjectileRuntimeDiagnostics(runtime: ProjectileRuntimeStateV3): void {
   syncDiagnostics(runtime);
 }
 
-function createRuntimeFromSnapshot(snapshot: ProjectileRuntimeSnapshotV2): ProjectileRuntimeStateV2 {
+function createRuntimeFromSnapshot(snapshot: ProjectileRuntimeSnapshotV3): ProjectileRuntimeStateV3 {
   const runtime = createProjectileRuntimeState(snapshot.capacity);
   runtime.accumulatorSeconds = snapshot.accumulatorSeconds;
   rebuildProjectilePool(runtime, snapshot.activeProjectiles);
@@ -342,54 +317,44 @@ function createRuntimeFromSnapshot(snapshot: ProjectileRuntimeSnapshotV2): Proje
   return runtime;
 }
 
-function migrateV1Snapshot(value: ReferenceProjectileRuntimeStateV1): ProjectileRuntimeStateV2 {
-  const diagnostics: Record<string, unknown> = isRecord(value.diagnostics) ? value.diagnostics : {};
+function migrateReferenceSnapshot(value: ReferenceProjectileRuntimeStateV1): ProjectileRuntimeStateV3 {
+  const diagnostics = isRecord(value.diagnostics) ? value.diagnostics : {};
+  const active = readArray(value.activeProjectiles).map(normalizeProjectile).filter(isPresent).sort(compareProjectiles);
   return createRuntimeFromSnapshot({
     schemaVersion: PROJECTILE_RUNTIME_SCHEMA_VERSION,
     fixedStepSeconds: STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
     accumulatorSeconds: finiteNonNegative(value.accumulatorSeconds, 0),
-    capacity: PRODUCTION_PROJECTILE_CAPACITY,
-    activeProjectiles: readArray(value.activeProjectiles).map(normalizeProjectile).filter(isPresent).sort(compareProjectiles),
-    committedShots: readArray(value.committedShots).map(normalizeCommitRecord).filter(isPresent).sort(compareCommitRecords).slice(-MAX_STAGE3_COMMIT_LEDGER_ENTRIES),
-    impacts: readArray(value.impacts).map(normalizeImpact).filter(isPresent).sort(compareImpacts).slice(-MAX_STAGE3_IMPACT_ENTRIES),
-    terminations: readArray(value.terminations).map(normalizeTermination).filter(isPresent).sort(compareTerminations).slice(-MAX_STAGE3_TERMINATION_ENTRIES),
+    capacity: Math.max(PRODUCTION_PROJECTILE_CAPACITY, active.length),
+    activeProjectiles: active,
+    committedShots: normalizeCommitRecords(value.committedShots),
+    impacts: normalizeImpacts(value.impacts),
+    terminations: normalizeTerminations(value.terminations),
     appliedImpactIds: canonicalStrings(readArray(value.appliedImpactIds)).slice(-MAX_STAGE3_APPLIED_IMPACT_IDS),
-    diagnostics: {
-      ...createDiagnostics(PRODUCTION_PROJECTILE_CAPACITY),
-      fixedSubstepsExecuted: integer(diagnostics.fixedSubstepsExecuted, 0, 0, Number.MAX_SAFE_INTEGER),
-      sweptTraceCount: integer(diagnostics.sweptTraceCount, 0, 0, Number.MAX_SAFE_INTEGER),
-      unitNarrowCheckCount: integer(diagnostics.unitCheckCount, 0, 0, Number.MAX_SAFE_INTEGER),
-      unitCheckCount: integer(diagnostics.unitCheckCount, 0, 0, Number.MAX_SAFE_INTEGER),
-      objectCandidateCount: integer(diagnostics.objectCandidateCount, 0, 0, Number.MAX_SAFE_INTEGER),
-      capRejectionCount: integer(diagnostics.capRejectionCount, 0, 0, Number.MAX_SAFE_INTEGER),
-      lastImpactId: nullableText(diagnostics.lastImpactId),
-      lastTerminationId: nullableText(diagnostics.lastTerminationId),
-    },
+    diagnostics: normalizeDiagnostics(diagnostics, Math.max(PRODUCTION_PROJECTILE_CAPACITY, active.length)),
   });
 }
 
-function normalizeSnapshotV2(value: Record<string, unknown>): ProjectileRuntimeSnapshotV2 {
-  const rawProjectiles = readArray(value.activeProjectiles).map(normalizeProjectile).filter(isPresent);
-  const capacity = normalizeCapacity(value.capacity, PRODUCTION_PROJECTILE_CAPACITY, rawProjectiles.length);
-  const diagnostics: Record<string, unknown> = isRecord(value.diagnostics) ? value.diagnostics : {};
+function normalizeSnapshot(value: Record<string, unknown>): ProjectileRuntimeSnapshotV3 {
+  const active = readArray(value.activeProjectiles).map(normalizeProjectile).filter(isPresent);
+  const capacity = normalizeCapacity(value.capacity, PRODUCTION_PROJECTILE_CAPACITY, active.length);
+  const diagnostics = isRecord(value.diagnostics) ? value.diagnostics : {};
   return {
     schemaVersion: PROJECTILE_RUNTIME_SCHEMA_VERSION,
     fixedStepSeconds: STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
     accumulatorSeconds: finiteNonNegative(value.accumulatorSeconds, 0),
     capacity,
-    activeProjectiles: uniqueBy(rawProjectiles, (item) => item.projectileId).sort(compareProjectiles).slice(0, capacity),
-    committedShots: uniqueBy(readArray(value.committedShots).map(normalizeCommitRecord).filter(isPresent), (item) => item.shotId)
-      .sort(compareCommitRecords).slice(-MAX_STAGE3_COMMIT_LEDGER_ENTRIES),
-    impacts: uniqueBy(readArray(value.impacts).map(normalizeImpact).filter(isPresent), (item) => item.impactId)
-      .sort(compareImpacts).slice(-MAX_STAGE3_IMPACT_ENTRIES),
-    terminations: uniqueBy(readArray(value.terminations).map(normalizeTermination).filter(isPresent), (item) => item.terminationId)
-      .sort(compareTerminations).slice(-MAX_STAGE3_TERMINATION_ENTRIES),
+    activeProjectiles: uniqueBy(active, (item) => item.projectileId).sort(compareProjectiles).slice(0, capacity),
+    committedShots: normalizeCommitRecords(readArray(value.committedShots)),
+    impacts: normalizeImpacts(readArray(value.impacts)),
+    terminations: normalizeTerminations(readArray(value.terminations)),
     appliedImpactIds: canonicalStrings(readArray(value.appliedImpactIds)).slice(-MAX_STAGE3_APPLIED_IMPACT_IDS),
     diagnostics: normalizeDiagnostics(diagnostics, capacity),
   };
 }
 
-function attachCompatibilityAccessor(runtime: ProjectileRuntimeStateV2): ProjectileRuntimeStateV2 {
+function attachCompatibilityAccessor(runtime: ProjectileRuntimeStateV3): ProjectileRuntimeStateV3 {
+  const descriptor = Object.getOwnPropertyDescriptor(runtime, 'activeProjectiles');
+  if (descriptor?.get) return runtime;
   Object.defineProperty(runtime, 'activeProjectiles', {
     configurable: false,
     enumerable: false,
@@ -399,396 +364,19 @@ function attachCompatibilityAccessor(runtime: ProjectileRuntimeStateV2): Project
   return runtime;
 }
 
-function releaseSlotUnchecked(runtime: ProjectileRuntimeStateV2, slot: number): void {
-  const pool = runtime.pool;
-  const projectileId = pool.projectileIds[slot];
+function releaseSlotUnchecked(runtime: ProjectileRuntimeStateV3, slot: number): void {
+  const projectileId = runtime.pool.projectileIds[slot];
   if (projectileId) getDerived(runtime).slotByProjectileId.delete(projectileId);
-  pool.active[slot] = 0;
-  pool.projectileIds[slot] = null;
-  pool.shotIds[slot] = null;
-  pool.shooterIds[slot] = null;
-  pool.ammoSnapshots[slot] = null;
-  pool.positionX[slot] = 0;
-  pool.positionY[slot] = 0;
-  pool.positionZ[slot] = 0;
-  pool.velocityX[slot] = 0;
-  pool.velocityY[slot] = 0;
-  pool.velocityZ[slot] = 0;
-  pool.ageSeconds[slot] = 0;
-  pool.maximumLifetimeSeconds[slot] = 0;
-  pool.bodyPenetrationBudget[slot] = 0;
-  pool.impactSequence[slot] = 0;
-  pool.freeSlots[pool.freeSlotCount] = slot;
-  pool.freeSlotCount += 1;
-  pool.activeCount -= 1;
+  runtime.pool.active[slot] = 0;
+  clearSlotMetadata(runtime.pool, slot);
+  runtime.pool.freeSlots[runtime.pool.freeSlotCount++] = slot;
+  runtime.pool.activeCount -= 1;
   runtime.diagnostics.releaseCount = increment(runtime.diagnostics.releaseCount);
   syncDiagnostics(runtime);
 }
 
-function clearPool(runtime: ProjectileRuntimeStateV2): void {
-  const capacity = runtime.pool.capacity;
-  const fresh = createProjectilePool(capacity);
+function clearPool(runtime: ProjectileRuntimeStateV3): void {
+  const fresh = createProjectilePool(runtime.pool.capacity);
   Object.assign(runtime.pool, fresh);
   derivedByRuntime.set(runtime, { slotByProjectileId: new Map() });
-}
-
-function normalizeFreeList(pool: ProjectilePoolV2, lookup: Map<string, number>): void {
-  let valid = pool.freeSlotCount >= 0 && pool.freeSlotCount <= pool.capacity;
-  if (valid) {
-    const seen = new Uint8Array(pool.capacity);
-    for (let index = 0; index < pool.freeSlotCount; index += 1) {
-      const slot = pool.freeSlots[index]!;
-      if (!isSlot(slot, pool.capacity) || pool.active[slot] !== 0 || seen[slot] === 1) {
-        valid = false;
-        break;
-      }
-      seen[slot] = 1;
-    }
-  }
-  if (valid && lookup.size === pool.activeCount) return;
-
-  lookup.clear();
-  pool.activeCount = 0;
-  pool.freeSlotCount = 0;
-  for (let slot = pool.capacity - 1; slot >= 0; slot -= 1) {
-    if (pool.active[slot] === 1 && pool.projectileIds[slot]) {
-      const id = pool.projectileIds[slot]!;
-      if (lookup.has(id)) {
-        pool.active[slot] = 0;
-        clearSlotMetadata(pool, slot);
-        pool.freeSlots[pool.freeSlotCount++] = slot;
-      } else {
-        lookup.set(id, slot);
-        pool.activeCount += 1;
-      }
-    } else {
-      pool.active[slot] = 0;
-      clearSlotMetadata(pool, slot);
-      pool.freeSlots[pool.freeSlotCount++] = slot;
-    }
-  }
-  pool.highWaterMark = Math.max(pool.highWaterMark, pool.activeCount);
-}
-
-function clearSlotMetadata(pool: ProjectilePoolV2, slot: number): void {
-  pool.projectileIds[slot] = null;
-  pool.shotIds[slot] = null;
-  pool.shooterIds[slot] = null;
-  pool.ammoSnapshots[slot] = null;
-  pool.positionX[slot] = 0;
-  pool.positionY[slot] = 0;
-  pool.positionZ[slot] = 0;
-  pool.velocityX[slot] = 0;
-  pool.velocityY[slot] = 0;
-  pool.velocityZ[slot] = 0;
-  pool.ageSeconds[slot] = 0;
-  pool.maximumLifetimeSeconds[slot] = 0;
-  pool.bodyPenetrationBudget[slot] = 0;
-  pool.impactSequence[slot] = 0;
-}
-
-function getDerived(runtime: ProjectileRuntimeStateV2): ProjectileRuntimeDerivedState {
-  let derived = derivedByRuntime.get(runtime);
-  if (!derived) {
-    derived = { slotByProjectileId: new Map() };
-    derivedByRuntime.set(runtime, derived);
-    normalizeFreeList(runtime.pool, derived.slotByProjectileId);
-  }
-  return derived;
-}
-
-function createDiagnostics(capacity: number): ProjectileRuntimeDiagnosticsV2 {
-  return {
-    capacity,
-    activeCount: 0,
-    freeCount: capacity,
-    highWaterMark: 0,
-    spawnCount: 0,
-    releaseCount: 0,
-    capRejectionCount: 0,
-    duplicateSpawnCount: 0,
-    invalidSpawnCount: 0,
-    fixedSubstepsExecuted: 0,
-    catchUpLimitedCount: 0,
-    accumulatorSeconds: 0,
-    sweptTraceCount: 0,
-    unitBroadPhaseQueryCount: 0,
-    unitCandidateCount: 0,
-    unitNarrowCheckCount: 0,
-    objectBroadPhaseQueryCount: 0,
-    objectCandidateCount: 0,
-    terrainSampleCount: 0,
-    impactBufferCapacity: Math.min(DEFAULT_PROJECTILE_EVENT_BUFFER_CAPACITY, capacity),
-    impactBufferHighWaterMark: 0,
-    terminationBufferCapacity: Math.min(DEFAULT_PROJECTILE_EVENT_BUFFER_CAPACITY, capacity),
-    terminationBufferHighWaterMark: 0,
-    eventOverflowCount: 0,
-    poolAllocationCount: 1,
-    poolResizeCount: 0,
-    scratchAllocationCount: 0,
-    fullScanFallbackCount: 0,
-    commitLedgerHighWaterMark: 0,
-    impactLedgerHighWaterMark: 0,
-    terminationLedgerHighWaterMark: 0,
-    appliedImpactLedgerHighWaterMark: 0,
-    lastImpactId: null,
-    lastTerminationId: null,
-    unitCheckCount: 0,
-  };
-}
-
-function normalizeDiagnostics(value: Record<string, unknown>, capacity: number): ProjectileRuntimeDiagnosticsV2 {
-  const defaults = createDiagnostics(capacity);
-  for (const key of Object.keys(defaults) as Array<keyof ProjectileRuntimeDiagnosticsV2>) {
-    if (key === 'lastImpactId' || key === 'lastTerminationId') continue;
-    const current = value[key];
-    if (typeof defaults[key] === 'number') {
-      (defaults[key] as number) = finiteNonNegative(current, defaults[key] as number);
-    }
-  }
-  defaults.capacity = capacity;
-  defaults.lastImpactId = nullableText(value.lastImpactId);
-  defaults.lastTerminationId = nullableText(value.lastTerminationId);
-  return defaults;
-}
-
-function syncDiagnostics(runtime: ProjectileRuntimeStateV2): void {
-  const diagnostics = runtime.diagnostics;
-  diagnostics.capacity = runtime.pool.capacity;
-  diagnostics.activeCount = runtime.pool.activeCount;
-  diagnostics.freeCount = runtime.pool.freeSlotCount;
-  diagnostics.highWaterMark = runtime.pool.highWaterMark;
-  diagnostics.accumulatorSeconds = runtime.accumulatorSeconds;
-  diagnostics.unitCheckCount = diagnostics.unitNarrowCheckCount;
-  diagnostics.commitLedgerHighWaterMark = Math.max(diagnostics.commitLedgerHighWaterMark, runtime.committedShots.length);
-  diagnostics.impactLedgerHighWaterMark = Math.max(diagnostics.impactLedgerHighWaterMark, runtime.impacts.length);
-  diagnostics.terminationLedgerHighWaterMark = Math.max(diagnostics.terminationLedgerHighWaterMark, runtime.terminations.length);
-  diagnostics.appliedImpactLedgerHighWaterMark = Math.max(diagnostics.appliedImpactLedgerHighWaterMark, runtime.appliedImpactIds.length);
-}
-
-function isRuntimeStateV2(value: unknown): value is ProjectileRuntimeStateV2 {
-  return isRecord(value)
-    && value.schemaVersion === PROJECTILE_RUNTIME_SCHEMA_VERSION
-    && isRecord(value.pool)
-    && value.pool.active instanceof Uint8Array
-    && value.pool.positionX instanceof Float64Array;
-}
-
-function normalizeProjectile(value: unknown): ProjectileStateV1 | null {
-  if (!isRecord(value) || value.schemaVersion !== 1) return null;
-  const projectileId = cleanText(value.projectileId, '');
-  const shotId = cleanText(value.shotId, '');
-  const shooterId = cleanText(value.shooterId, '');
-  const position = normalizePoint(value.position);
-  const velocity = normalizeDirection(value.velocityMetresPerSecond);
-  const ammo = normalizeAmmo(value.ammoSnapshot);
-  if (!projectileId || !shotId || !shooterId || !position || !velocity || !ammo) return null;
-  const ageSeconds = finiteNonNegative(value.ageSeconds, Number.NaN);
-  const maximumLifetimeSeconds = finitePositive(value.maximumLifetimeSeconds, ammo.maximumLifetimeSeconds);
-  const bodyPenetrationBudget = finiteNonNegative(value.bodyPenetrationBudget, ammo.bodyPenetrationBudget);
-  if (!Number.isFinite(ageSeconds) || !Number.isFinite(maximumLifetimeSeconds) || !Number.isFinite(bodyPenetrationBudget)) return null;
-  return {
-    schemaVersion: 1,
-    projectileId,
-    shotId,
-    shooterId,
-    ammoSnapshot: ammo,
-    position,
-    velocityMetresPerSecond: velocity,
-    ageSeconds,
-    maximumLifetimeSeconds,
-    bodyPenetrationBudget,
-    impactSequence: integer(value.impactSequence, 0, 0, 0xffff_ffff),
-  };
-}
-
-function normalizeCommitRecord(value: unknown): ShotCommitRecordV1 | null {
-  if (!isRecord(value) || value.schemaVersion !== 1) return null;
-  const weaponDefinitionRef = normalizeRef(value.weaponDefinitionRef);
-  const ammoDefinitionRef = normalizeRef(value.ammoDefinitionRef);
-  const muzzlePosition = normalizePoint(value.muzzlePosition);
-  const initialVelocity = normalizeDirection(value.initialVelocityMetresPerSecond);
-  const shotId = cleanText(value.shotId, '');
-  const shooterId = cleanText(value.shooterId, '');
-  const fireTaskId = cleanText(value.fireTaskId, '');
-  const weaponInstanceId = cleanText(value.weaponInstanceId, '');
-  if (!weaponDefinitionRef || !ammoDefinitionRef || !muzzlePosition || !initialVelocity || !shotId || !shooterId || !fireTaskId || !weaponInstanceId) return null;
-  return {
-    schemaVersion: 1,
-    shotId,
-    shooterId,
-    fireTaskId,
-    weaponInstanceId,
-    weaponDefinitionRef,
-    ammoDefinitionRef,
-    committedSimulationSeconds: finiteNonNegative(value.committedSimulationSeconds, 0),
-    muzzlePosition,
-    initialVelocityMetresPerSecond: initialVelocity,
-    roundsBefore: integer(value.roundsBefore, 0, 0, Number.MAX_SAFE_INTEGER),
-    roundsAfter: integer(value.roundsAfter, 0, 0, Number.MAX_SAFE_INTEGER),
-  };
-}
-
-function normalizeImpact(value: unknown): ProjectileImpactV1 | null {
-  if (!isRecord(value) || value.schemaVersion !== 1) return null;
-  const point = normalizePoint(value.point);
-  const hitType = value.hitType ?? value.impactType;
-  const impactId = cleanText(value.impactId, '');
-  const projectileId = cleanText(value.projectileId, '');
-  const shotId = cleanText(value.shotId, '');
-  const shooterId = cleanText(value.shooterId, '');
-  if (!point || !impactId || !projectileId || !shotId || !shooterId || (hitType !== 'terrain' && hitType !== 'object' && hitType !== 'unit')) return null;
-  return {
-    schemaVersion: 1,
-    impactId,
-    projectileId,
-    shotId,
-    shooterId,
-    hitType,
-    impactSeconds: finiteNonNegative(value.impactSeconds ?? value.simulationSeconds, 0),
-    projectileAgeSeconds: finiteNonNegative(value.projectileAgeSeconds, 0),
-    point,
-    hitObjectId: nullableText(value.hitObjectId),
-    hitUnitId: nullableText(value.hitUnitId),
-    hitZone: value.hitZone === 'head' || value.hitZone === 'torso' || value.hitZone === 'limbs' ? value.hitZone : null,
-    materialId: nullableText(value.materialId),
-    normal: normalizeDirection(value.normal),
-    velocityBeforeImpact: normalizeDirection(value.velocityBeforeImpact) ?? { x: 0, y: 0, z: 0 },
-  };
-}
-
-function normalizeTermination(value: unknown): ProjectileTerminationV1 | null {
-  if (!isRecord(value) || value.schemaVersion !== 1) return null;
-  const terminationId = cleanText(value.terminationId, '');
-  const projectileId = cleanText(value.projectileId, '');
-  const shotId = cleanText(value.shotId, '');
-  const point = normalizePoint(value.point);
-  const reason = value.reason;
-  if (!terminationId || !projectileId || !shotId || !point || (reason !== 'impact' && reason !== 'lifetime' && reason !== 'out_of_bounds' && reason !== 'reconciled_orphan')) return null;
-  return {
-    schemaVersion: 1,
-    terminationId,
-    projectileId,
-    shotId,
-    reason,
-    simulationSeconds: finiteNonNegative(value.simulationSeconds, 0),
-    point,
-  };
-}
-
-function normalizeAmmo(value: unknown): ProjectileStateV1['ammoSnapshot'] | null {
-  if (!isRecord(value) || value.schemaVersion !== 1) return null;
-  if (!cleanText(value.ammoDefinitionId, '') || integer(value.revision, 0, 1, Number.MAX_SAFE_INTEGER) <= 0) return null;
-  if (value.status !== 'published' && value.status !== 'archived') return null;
-  if (finitePositive(value.muzzleVelocityMetersPerSecond, 0) <= 0 || finitePositive(value.maximumLifetimeSeconds, 0) <= 0) return null;
-  return clone(value as unknown as ProjectileStateV1['ammoSnapshot']);
-}
-
-function normalizeRef(value: unknown): ShotCommitRecordV1['weaponDefinitionRef'] | null {
-  if (!isRecord(value)) return null;
-  const definitionId = cleanText(value.definitionId, '');
-  const revision = integer(value.revision, 0, 1, Number.MAX_SAFE_INTEGER);
-  return definitionId && revision > 0 ? { definitionId, revision } : null;
-}
-
-function normalizePoint(value: unknown): ProjectileStateV1['position'] | null {
-  if (!isRecord(value) || !isFiniteNumber(value.xMetres) || !isFiniteNumber(value.yMetres) || !isFiniteNumber(value.zMetres)) return null;
-  return { xMetres: value.xMetres, yMetres: value.yMetres, zMetres: value.zMetres };
-}
-
-function normalizeDirection(value: unknown): ProjectileStateV1['velocityMetresPerSecond'] | null {
-  if (!isRecord(value) || !isFiniteNumber(value.x) || !isFiniteNumber(value.y) || !isFiniteNumber(value.z)) return null;
-  return { x: value.x, y: value.y, z: value.z };
-}
-
-function normalizeCapacity(value: unknown, fallback: number, minimumRequired: number): number {
-  const numeric = integer(value, fallback, 1, MAX_NORMALIZED_CAPACITY);
-  return Math.max(numeric, minimumRequired, 1);
-}
-
-function compareProjectiles(left: ProjectileStateV1, right: ProjectileStateV1): number {
-  return compareText(left.projectileId, right.projectileId);
-}
-
-function compareCommitRecords(left: ShotCommitRecordV1, right: ShotCommitRecordV1): number {
-  return left.committedSimulationSeconds - right.committedSimulationSeconds || compareText(left.shotId, right.shotId);
-}
-
-function compareImpacts(left: ProjectileImpactV1, right: ProjectileImpactV1): number {
-  return left.impactSeconds - right.impactSeconds || compareText(left.impactId, right.impactId);
-}
-
-function compareTerminations(left: ProjectileTerminationV1, right: ProjectileTerminationV1): number {
-  return left.simulationSeconds - right.simulationSeconds || compareText(left.terminationId, right.terminationId);
-}
-
-function uniqueBy<T>(values: readonly T[], key: (value: T) => string): T[] {
-  const result: T[] = [];
-  const seen = new Set<string>();
-  for (const value of values) {
-    const identity = key(value);
-    if (seen.has(identity)) continue;
-    seen.add(identity);
-    result.push(clone(value));
-  }
-  return result;
-}
-
-function canonicalStrings(values: unknown[]): string[] {
-  return [...new Set(values.map((value) => cleanText(value, '')).filter(Boolean))].sort(compareText);
-}
-
-function readArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function isPresent<T>(value: T | null): value is T {
-  return value !== null;
-}
-
-function finitePositive(value: unknown, fallback: number): number {
-  const numeric = isFiniteNumber(value) ? value : fallback;
-  return numeric > 0 ? numeric : fallback;
-}
-
-function finiteNonNegative(value: unknown, fallback: number): number {
-  const numeric = isFiniteNumber(value) ? value : fallback;
-  return Number.isFinite(numeric) ? Math.max(0, numeric) : numeric;
-}
-
-function integer(value: unknown, fallback: number, minimum: number, maximum: number): number {
-  const numeric = isFiniteNumber(value) ? Math.round(value) : fallback;
-  return Math.max(minimum, Math.min(maximum, numeric));
-}
-
-function cleanText(value: unknown, fallback: string): string {
-  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
-}
-
-function nullableText(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
-function compareText(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
-function isSlot(slot: number, capacity: number): boolean {
-  return Number.isInteger(slot) && slot >= 0 && slot < capacity;
-}
-
-function increment(value: number): number {
-  return Math.min(Number.MAX_SAFE_INTEGER, value + 1);
-}
-
-function clone<T>(value: T): T {
-  return structuredClone(value);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

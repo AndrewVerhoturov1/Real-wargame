@@ -12,44 +12,19 @@ import { commitShot, type CommitShotResult } from './ShotCommitService';
 const TIME_EPSILON_SECONDS = 1e-9;
 const COMMIT_CANONICAL_SCALE = 1_000_000_000_000;
 
-export interface TickInfantryCombatSimulationInput {
-  readonly intervalStartSeconds: number;
-  readonly deltaSeconds: number;
-}
+export interface TickInfantryCombatSimulationInput { readonly intervalStartSeconds: number; readonly deltaSeconds: number; }
+export interface TickInfantryCombatSimulationResult { readonly commitResults: readonly CommitShotResult[]; readonly projectileSubsteps: number; }
+interface PendingCommit { readonly unit: UnitModel; readonly task: FireTaskRuntimeV1; readonly weapon: InfantryWeaponInstanceV1; readonly offsetSeconds: number; }
+interface PendingRecovery { readonly unit: UnitModel; readonly intervalStartSeconds: number; readonly deltaSeconds: number; }
 
-export interface TickInfantryCombatSimulationResult {
-  readonly commitResults: readonly CommitShotResult[];
-  readonly projectileSubsteps: number;
-}
-
-interface PendingCommit {
-  readonly unit: UnitModel;
-  readonly task: FireTaskRuntimeV1;
-  readonly weapon: InfantryWeaponInstanceV1;
-  readonly offsetSeconds: number;
-}
-
-interface PendingRecovery {
-  readonly unit: UnitModel;
-  readonly intervalStartSeconds: number;
-  readonly deltaSeconds: number;
-}
-
-/**
- * Explicit Stage 5 combat pipeline. It never selects targets or creates tasks.
- * Tracking reads only the active task and the shooter's perception knowledge.
- */
+/** Explicit physical combat pipeline. It never selects targets or creates tasks. */
 export function tickInfantryCombatSimulation(
   state: SimulationState,
   input: TickInfantryCombatSimulationInput,
 ): TickInfantryCombatSimulationResult {
   const intervalStartSeconds = finiteNonNegative(input.intervalStartSeconds);
   const deltaSeconds = finiteNonNegative(input.deltaSeconds);
-  const units: UnitModel[] = [];
-  for (const unit of state.units) {
-    if (unit.infantryCombatRuntime.activeFireTask) units.push(unit);
-  }
-  units.sort(compareUnits);
+  const units = state.units.filter((unit) => Boolean(unit.infantryCombatRuntime.activeFireTask)).sort(compareUnits);
   const pendingCommits: PendingCommit[] = [];
   const recoveries = new Map<string, PendingRecovery>();
 
@@ -60,18 +35,12 @@ export function tickInfantryCombatSimulation(
       recoveries.set(unit.id, { unit, intervalStartSeconds, deltaSeconds });
       continue;
     }
-
     const ticked = tickFireTaskWithTimeBudget(unit, { intervalStartSeconds, deltaSeconds, state });
     if (!ticked.commitRequested) continue;
     const task = unit.infantryCombatRuntime.activeFireTask;
     const weapon = unit.infantryCombatRuntime.primaryWeapon;
     if (!task || !weapon || task.taskId !== ticked.taskId) continue;
-    pendingCommits.push({
-      unit,
-      task,
-      weapon,
-      offsetSeconds: clamp(ticked.consumedSeconds, 0, deltaSeconds),
-    });
+    pendingCommits.push({ unit, task, weapon, offsetSeconds: clamp(ticked.consumedSeconds, 0, deltaSeconds) });
   }
 
   pendingCommits.sort(comparePendingCommits);
@@ -87,7 +56,6 @@ export function tickInfantryCombatSimulation(
         deltaSeconds: offsetSeconds - cursorSeconds,
       });
     }
-
     const committedSeconds = intervalStartSeconds + offsetSeconds;
     canonicalizeCommitAimSolution(pending.task);
     const result = commitShot({
@@ -100,19 +68,14 @@ export function tickInfantryCombatSimulation(
     commitResults.push(result);
     if (result.status === 'committed' || result.status === 'already_committed') {
       if (pending.task.phase === 'firing' && result.shotId) {
-        beginFireTaskRecovery(pending.unit, {
-          committedShotId: result.shotId,
-          startedSeconds: committedSeconds,
-        });
+        beginFireTaskRecovery(pending.unit, { committedShotId: result.shotId, startedSeconds: committedSeconds });
       }
       recoveries.set(pending.unit.id, {
         unit: pending.unit,
         intervalStartSeconds: committedSeconds,
         deltaSeconds: Math.max(0, deltaSeconds - offsetSeconds),
       });
-    } else {
-      terminalizeCommitFailure(pending.unit, result.status, committedSeconds);
-    }
+    } else terminalizeCommitFailure(pending.unit, result.status, committedSeconds);
     cursorSeconds = offsetSeconds;
   }
 
@@ -131,18 +94,9 @@ export function tickInfantryCombatSimulation(
       deltaSeconds: recovery.deltaSeconds,
     });
   }
-
   return { commitResults, projectileSubsteps };
 }
 
-/**
- * The Stage 4 stepper marks catch-up before executing its bounded batch. If all
- * active projectiles terminate inside that batch, no backlog survives and the
- * coarse tick did not actually lose continuation work. Restore the counter in
- * that narrow case so diagnostics describe real limiting events and remain
- * invariant to outer tick partitioning. The Stage 4 substep cap itself remains
- * unchanged and is still reported whenever an active backlog survives.
- */
 function tickProjectilesWithoutFalseCatchUp(
   state: SimulationState,
   input: { readonly intervalStartSeconds: number; readonly deltaSeconds: number },
@@ -150,18 +104,10 @@ function tickProjectilesWithoutFalseCatchUp(
   const runtime = state.infantryCombatProjectiles;
   const catchUpBefore = runtime.diagnostics.catchUpLimitedCount;
   const result = tickReferenceProjectiles(state, input);
-  if (runtime.pool.activeCount === 0 && runtime.accumulatorSeconds === 0) {
-    runtime.diagnostics.catchUpLimitedCount = catchUpBefore;
-  }
+  if (runtime.pool.activeCount === 0 && runtime.accumulatorSeconds === 0) runtime.diagnostics.catchUpLimitedCount = catchUpBefore;
   return result.executedSubsteps;
 }
 
-/**
- * Continuous aiming can reach the same physical commitment event through
- * slightly different floating-point partitions. Canonicalize every value that
- * becomes immutable shot truth at the commitment boundary. This preserves the
- * continuous runtime while making the committed record and projectile exact.
- */
 function canonicalizeCommitAimSolution(task: FireTaskRuntimeV1): void {
   const solution = task.aimTracking.solution;
   const direction = solution.currentDirection;
@@ -183,14 +129,12 @@ function canonicalizeCommitAimSolution(task: FireTaskRuntimeV1): void {
       }
     }
   }
-
   solution.physicalAimQuality = canonicalUnitInterval(solution.physicalAimQuality);
   solution.solutionQuality = canonicalUnitInterval(solution.solutionQuality);
   solution.usableAimQuality = canonicalUnitInterval(solution.usableAimQuality);
   solution.predictedHitProbability = canonicalUnitInterval(solution.predictedHitProbability);
   solution.effectiveDispersionRadians = canonicalNonNegative(solution.effectiveDispersionRadians);
   task.aimQuality = solution.usableAimQuality;
-
   const predicted = solution.predictedAimPoint;
   if (predicted) {
     predicted.xMetres = canonicalValue(predicted.xMetres);
@@ -222,7 +166,8 @@ function isDeniedCommitStatus(status: Exclude<ShotCommitStatus, 'committed' | 'a
     || status === 'friendly_risk_exceeded'
     || status === 'projectile_capacity_exceeded'
     || status === 'duplicate_projectile_id'
-    || status === 'invalid_projectile_candidate';
+    || status === 'invalid_projectile_candidate'
+    || status === 'weapon_capability_lost';
 }
 
 function commitFailureText(status: Exclude<ShotCommitStatus, 'committed' | 'already_committed'>): string {
@@ -235,41 +180,20 @@ function commitFailureText(status: Exclude<ShotCommitStatus, 'committed' | 'alre
   if (status === 'projectile_capacity_exceeded') return 'Одиночный выстрел отклонён: заполнен ограниченный пул физических пуль.';
   if (status === 'duplicate_projectile_id') return 'Одиночный выстрел отклонён: обнаружен повторный идентификатор пули.';
   if (status === 'invalid_projectile_candidate') return 'Одиночный выстрел отклонён: состояние новой пули неверно.';
-  if (status === 'unsupported_mode') return 'Одиночный выстрел отклонён: режим оружия не поддерживается Stage 5.';
+  if (status === 'unsupported_mode') return 'Одиночный выстрел отклонён: режим оружия не поддерживается.';
+  if (status === 'weapon_capability_lost') return 'Одиночный выстрел отклонён: ранение не позволяет пользоваться оружием.';
   if (status === 'ownership_lost') return 'Огневая задача завершилась ошибкой: потерян точный захват канала оружия.';
   if (status === 'weapon_missing') return 'Огневая задача завершилась ошибкой: экземпляр винтовки отсутствует.';
   if (status === 'invalid_target') return 'Огневая задача завершилась ошибкой: направление решения прицеливания неверно.';
   return 'Огневая задача завершилась ошибкой до атомарного выстрела.';
 }
-
 function comparePendingCommits(left: PendingCommit, right: PendingCommit): number {
   return left.offsetSeconds - right.offsetSeconds || compareText(left.task.taskId, right.task.taskId);
 }
-
-function compareUnits(left: UnitModel, right: UnitModel): number {
-  return compareText(left.id, right.id);
-}
-
-function compareText(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-
-function canonicalValue(value: number): number {
-  return Math.round(value * COMMIT_CANONICAL_SCALE) / COMMIT_CANONICAL_SCALE;
-}
-
-function canonicalNonNegative(value: number): number {
-  return canonicalValue(Math.max(0, Number.isFinite(value) ? value : 0));
-}
-
-function canonicalUnitInterval(value: number): number {
-  return canonicalValue(clamp(Number.isFinite(value) ? value : 0, 0, 1));
-}
-
-function finiteNonNegative(value: number): number {
-  return Number.isFinite(value) ? Math.max(0, value) : 0;
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.max(minimum, Math.min(maximum, value));
-}
+function compareUnits(left: UnitModel, right: UnitModel): number { return compareText(left.id, right.id); }
+function compareText(left: string, right: string): number { return left < right ? -1 : left > right ? 1 : 0; }
+function canonicalValue(value: number): number { return Math.round(value * COMMIT_CANONICAL_SCALE) / COMMIT_CANONICAL_SCALE; }
+function canonicalNonNegative(value: number): number { return canonicalValue(Math.max(0, Number.isFinite(value) ? value : 0)); }
+function canonicalUnitInterval(value: number): number { return canonicalValue(clamp(Number.isFinite(value) ? value : 0, 0, 1)); }
+function finiteNonNegative(value: number): number { return Number.isFinite(value) ? Math.max(0, value) : 0; }
+function clamp(value: number, minimum: number, maximum: number): number { return Math.max(minimum, Math.min(maximum, value)); }

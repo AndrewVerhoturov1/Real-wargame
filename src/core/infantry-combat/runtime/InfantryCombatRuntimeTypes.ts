@@ -8,6 +8,7 @@ import type {
   WeaponDefinitionV1,
   WeaponProficiency,
 } from '../catalogs/CombatCatalogTypes';
+import type { UnitWoundRuntimeV1 } from './InfantryBodyTypes';
 
 export const INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION = 1 as const;
 export const INFANTRY_WEAPON_INSTANCE_SCHEMA_VERSION = 1 as const;
@@ -24,21 +25,8 @@ export interface ResolvedWeaponSnapshotV1 {
   readonly weapon: WeaponDefinitionV1;
   readonly ammo: AmmoDefinitionV1;
 }
-
-export interface WeaponOperatorProfileV1 {
-  readonly schemaVersion: typeof WEAPON_OPERATOR_PROFILE_SCHEMA_VERSION;
-  readonly shootingSkill: number;
-  readonly proficiencyByWeaponClass: Readonly<Record<WeaponClass, WeaponProficiency>>;
-}
-
-export interface WeaponRecoilRuntimeV1 {
-  readonly schemaVersion: typeof WEAPON_RECOIL_RUNTIME_SCHEMA_VERSION;
-  pitchOffsetRadians: number;
-  yawOffsetRadians: number;
-  lastUpdatedSeconds: number;
-  sequence: number;
-}
-
+export interface WeaponOperatorProfileV1 { readonly schemaVersion: typeof WEAPON_OPERATOR_PROFILE_SCHEMA_VERSION; readonly shootingSkill: number; readonly proficiencyByWeaponClass: Readonly<Record<WeaponClass, WeaponProficiency>>; }
+export interface WeaponRecoilRuntimeV1 { readonly schemaVersion: typeof WEAPON_RECOIL_RUNTIME_SCHEMA_VERSION; pitchOffsetRadians: number; yawOffsetRadians: number; lastUpdatedSeconds: number; sequence: number; }
 export interface InfantryWeaponInstanceV1 {
   readonly schemaVersion: typeof INFANTRY_WEAPON_INSTANCE_SCHEMA_VERSION;
   readonly weaponInstanceId: string;
@@ -50,20 +38,8 @@ export interface InfantryWeaponInstanceV1 {
   shotSequence: number;
   lastCommittedShotId: string | null;
 }
-
-export type AimInvalidReason =
-  | 'not_tracked_yet'
-  | 'contact_missing'
-  | 'invalid_perceived_position'
-  | 'invalid_muzzle_velocity'
-  | 'invalid_geometry';
-
-export interface AimPerceptionSampleV1 {
-  readonly position: BallisticPoint3;
-  readonly observedSeconds: number;
-  readonly sourceUpdatedSeconds: number;
-}
-
+export type AimInvalidReason = 'not_tracked_yet' | 'contact_missing' | 'invalid_perceived_position' | 'invalid_muzzle_velocity' | 'invalid_geometry';
+export interface AimPerceptionSampleV1 { readonly position: BallisticPoint3; readonly observedSeconds: number; readonly sourceUpdatedSeconds: number; }
 export interface AimFactorBreakdownV1 {
   readonly schemaVersion: typeof AIM_FACTOR_BREAKDOWN_SCHEMA_VERSION;
   readonly posture: UnitPosture;
@@ -85,7 +61,6 @@ export interface AimFactorBreakdownV1 {
   readonly effectiveDispersionRadians: number;
   readonly aimQualityPerSecond: number;
 }
-
 export interface AimSolutionRuntimeV1 {
   readonly schemaVersion: typeof AIM_SOLUTION_RUNTIME_SCHEMA_VERSION;
   valid: boolean;
@@ -109,7 +84,6 @@ export interface AimSolutionRuntimeV1 {
   effectiveDispersionRadians: number;
   factors: AimFactorBreakdownV1;
 }
-
 export interface AimTrackingRuntimeV1 {
   readonly schemaVersion: typeof AIM_TRACKING_RUNTIME_SCHEMA_VERSION;
   readonly trackingIntervalSeconds: number;
@@ -120,27 +94,8 @@ export interface AimTrackingRuntimeV1 {
   lastSample: AimPerceptionSampleV1 | null;
   solution: AimSolutionRuntimeV1;
 }
-
-export type FireTaskPhase =
-  | 'accepted'
-  | 'weapon_ready'
-  | 'aiming'
-  | 'firing'
-  | 'recovery'
-  | 'completed'
-  | 'cancelled'
-  | 'denied'
-  | 'failed';
-
-export interface FireTaskTerminalResultV1 {
-  readonly taskId: string;
-  readonly phase: Extract<FireTaskPhase, 'completed' | 'cancelled' | 'denied' | 'failed'>;
-  readonly resultCode: string;
-  readonly resultRu: string;
-  readonly endedSeconds: number;
-  readonly committedShotId: string | null;
-}
-
+export type FireTaskPhase = 'accepted' | 'weapon_ready' | 'aiming' | 'firing' | 'recovery' | 'completed' | 'cancelled' | 'denied' | 'failed';
+export interface FireTaskTerminalResultV1 { readonly taskId: string; readonly phase: Extract<FireTaskPhase, 'completed' | 'cancelled' | 'denied' | 'failed'>; readonly resultCode: string; readonly resultRu: string; readonly endedSeconds: number; readonly committedShotId: string | null; }
 export interface FireTaskRuntimeV1 {
   readonly schemaVersion: typeof FIRE_TASK_RUNTIME_SCHEMA_VERSION;
   readonly taskId: string;
@@ -166,25 +121,12 @@ export interface FireTaskRuntimeV1 {
   resultCode: string | null;
   resultRu: string | null;
 }
-
 export type ShotCommitStatus =
-  | 'committed'
-  | 'already_committed'
-  | 'task_not_firing'
-  | 'ownership_lost'
-  | 'weapon_missing'
-  | 'unsupported_mode'
-  | 'empty_weapon'
-  | 'aim_solution_invalid'
-  | 'aim_solution_below_threshold'
-  | 'movement_forbidden'
-  | 'muzzle_blocked'
-  | 'friendly_risk_exceeded'
-  | 'projectile_capacity_exceeded'
-  | 'duplicate_projectile_id'
-  | 'invalid_projectile_candidate'
-  | 'invalid_target';
-
+  | 'committed' | 'already_committed' | 'task_not_firing' | 'ownership_lost'
+  | 'weapon_missing' | 'weapon_capability_lost' | 'unsupported_mode' | 'empty_weapon'
+  | 'aim_solution_invalid' | 'aim_solution_below_threshold' | 'movement_forbidden'
+  | 'muzzle_blocked' | 'friendly_risk_exceeded' | 'projectile_capacity_exceeded'
+  | 'duplicate_projectile_id' | 'invalid_projectile_candidate' | 'invalid_target';
 export interface ShotCommitDiagnosticV1 {
   readonly status: ShotCommitStatus;
   readonly reasonRu: string;
@@ -202,7 +144,6 @@ export interface ShotCommitDiagnosticV1 {
   readonly recoilYawRadians: number;
   readonly finalProjectileDirection: BallisticDirection3 | null;
 }
-
 export interface InfantryCombatUnitRuntimeV1 {
   readonly schemaVersion: typeof INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION;
   nextFireTaskSequence: number;
@@ -210,4 +151,5 @@ export interface InfantryCombatUnitRuntimeV1 {
   activeFireTask: FireTaskRuntimeV1 | null;
   lastFireResult: FireTaskTerminalResultV1 | null;
   lastShotCommit: ShotCommitDiagnosticV1 | null;
+  wounds: UnitWoundRuntimeV1;
 }
