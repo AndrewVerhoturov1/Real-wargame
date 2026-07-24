@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import type { AiGraph } from '../src/core/ai/AiGraph';
 import { runAiGraph } from '../src/core/ai/AiGraphRunner';
 import { validateAiGraph } from '../src/core/ai/AiGraphValidation';
@@ -119,7 +120,24 @@ const invalidSector = validateAiGraph(graphWithNode('SetSearchSector', {
 assert.equal(invalidSector.valid, false);
 assert.ok(invalidSector.issues.some((issue) => issue.code === 'SEARCH_ARC_INVALID'));
 
-console.log('Attention AI node smoke passed: modes, fixed and subjective search sectors, body-facing ownership, fallback and validation.');
+const importableExample = JSON.parse(readFileSync('public/ai-examples/suspected-contact-attention.json', 'utf8')) as AiGraph;
+const importableValidation = validateAiGraph(importableExample);
+assert.equal(importableValidation.valid, true, JSON.stringify(importableValidation.issues));
+const importableResult = runAiGraph({
+  graph: importableExample,
+  unitId: 'soldier',
+  blackboard: {
+    best_contact_confidence: 30,
+    contact_visible_now: false,
+    self_position: { x: 5, y: 5 },
+    suspected_enemy_position: { x: 5, y: 15 },
+  },
+  nowMs: 0,
+});
+assert.equal(importableResult.effects[0]?.type, 'set_search_sector');
+assert.equal(importableResult.effects[0]?.type === 'set_search_sector' ? importableResult.effects[0].centerDegrees : null, 90);
+
+console.log('Attention AI node smoke passed: modes, fixed and subjective search sectors, body-facing ownership, fallback, validation and importable example.');
 
 function graphWithNode(type: string, parameters: Record<string, string | number | boolean | null>): AiGraph {
   return {
