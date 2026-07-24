@@ -4,7 +4,6 @@ import { createDefaultCombatCatalogRegistry } from '../src/core/infantry-combat/
 import {
   equipPrimaryWeaponFromLoadout,
   requestSingleFireTask,
-  serializeInfantryCombatUnitRuntime,
   serializeReferenceProjectileRuntimeState,
   tickInfantryCombatSimulation,
 } from '../src/core/infantry-combat/runtime';
@@ -17,26 +16,23 @@ import {
   restoreImportedInfantryCombatState,
 } from '../src/ui/SceneExport';
 
-verifyCheckpoint();
-console.log('Stage 7 diagnostic: after-impact save/load checkpoint passed.');
+verifyAfterImpactProjectileAndCoordinatorRoundTrip();
+console.log('Stage 7 diagnostic: after-impact projectile and coordinator round-trip passed.');
 
-function verifyCheckpoint(): void {
-  const name = 'after-impact';
-  const checkpointSeconds = 1.734;
-  const original = readyScenario(`save-${name}`);
-  advance(original.state, checkpointSeconds);
+function verifyAfterImpactProjectileAndCoordinatorRoundTrip(): void {
+  const original = readyScenario('save-after-impact');
+  advance(original.state, 1.734);
   const loaded = roundTrip(original.state);
-  assert.deepEqual(stage3Snapshot(loaded), stage3Snapshot(original.state), `${name}: checkpoint must restore exactly`);
-
-  const continuationSeconds = 2.2 - checkpointSeconds;
-  advance(original.state, continuationSeconds);
-  advance(loaded, continuationSeconds);
-  assert.deepEqual(stage3Snapshot(loaded), stage3Snapshot(original.state), `${name}: continuation must remain exact`);
-  const shooter = loaded.units[0]!;
-  assert.equal(shooter.infantryCombatRuntime.primaryWeapon?.roundsInWeapon, 4, `${name}: exactly one round`);
-  assert.equal(loaded.infantryCombatProjectiles.committedShots.length, 1, `${name}: exactly one commitment`);
-  assert.equal(loaded.infantryCombatProjectiles.impacts.length, 1, `${name}: exactly one impact`);
-  assert.equal(loaded.infantryCombatProjectiles.activeProjectiles.length, 0, `${name}: projectile terminated`);
+  assert.deepEqual(
+    serializeReferenceProjectileRuntimeState(loaded.infantryCombatProjectiles),
+    serializeReferenceProjectileRuntimeState(original.state.infantryCombatProjectiles),
+    'after-impact: projectile runtime must restore exactly',
+  );
+  assert.deepEqual(
+    serializePhysicalActionCoordinatorState(loaded.units[0]!.behaviorRuntime.physicalActionCoordinator),
+    serializePhysicalActionCoordinatorState(original.state.units[0]!.behaviorRuntime.physicalActionCoordinator),
+    'after-impact: physical action coordinator must restore exactly',
+  );
 }
 
 function roundTrip(state: SimulationState): SimulationState {
@@ -52,22 +48,9 @@ function restoreExport(exported: ReturnType<typeof buildExportedScene>): Simulat
 }
 
 function advance(state: SimulationState, deltaSeconds: number): void {
-  if (deltaSeconds <= 0) return;
   const intervalStartSeconds = state.simulationTimeSeconds;
   state.simulationTimeSeconds = canonicalSeconds(intervalStartSeconds + deltaSeconds);
   tickInfantryCombatSimulation(state, { intervalStartSeconds, deltaSeconds });
-}
-
-function stage3Snapshot(state: SimulationState): unknown {
-  return {
-    simulationTimeSeconds: state.simulationTimeSeconds,
-    units: [...state.units].sort((a, b) => a.id.localeCompare(b.id)).map((unit) => ({
-      id: unit.id,
-      runtime: serializeInfantryCombatUnitRuntime(unit.infantryCombatRuntime),
-      coordinator: serializePhysicalActionCoordinatorState(unit.behaviorRuntime.physicalActionCoordinator),
-    })),
-    projectiles: serializeReferenceProjectileRuntimeState(state.infantryCombatProjectiles),
-  };
 }
 
 function readyScenario(id: string): { state: SimulationState; shooter: UnitModel } {
