@@ -22,6 +22,13 @@ async function run() {
     source = source.replace('verifyMainSimulationTickInvokesNewPipeline();', '// CI probe skipped main tick');
     source = source.replace('verifyCommitFailureTerminalizesTask();', '// CI probe skipped failure terminalization');
     source = source.replace(`  assert.deepEqual(
+    serializeInfantryCombatUnitRuntime(fine.shooter.infantryCombatRuntime),
+    serializeInfantryCombatUnitRuntime(coarse.shooter.infantryCombatRuntime),
+  );`, `  assert.deepEqual(
+    serializeInfantryCombatUnitRuntime(fine.shooter.infantryCombatRuntime).primaryWeapon,
+    serializeInfantryCombatUnitRuntime(coarse.shooter.infantryCombatRuntime).primaryWeapon,
+  );`);
+    source = source.replace(`  assert.deepEqual(
     serializeReferenceProjectileRuntimeState(fine.state.infantryCombatProjectiles),
     serializeReferenceProjectileRuntimeState(coarse.state.infantryCombatProjectiles),
   );`, '  // CI probe skipped projectile runtime comparison');
@@ -52,5 +59,5 @@ async function runSmoke(sourceName, outputName) {
       },
     },
   });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-unit-runtime-probe`);
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-primary-weapon-probe`);
 }
