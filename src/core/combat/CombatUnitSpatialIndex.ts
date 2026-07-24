@@ -10,22 +10,15 @@ export interface CombatUnitIndex {
   readonly mapIdentity: SimulationState['map'];
   readonly unitIds: readonly string[];
   readonly unitPositions: Float64Array;
+  readonly unitsById: ReadonlyMap<string, UnitModel>;
   readonly buckets: Map<string, UnitModel[]>;
 }
 
-export interface CombatUnitSpatialQueryScratch {
-  readonly seenUnitIds: Set<string>;
-}
-
+export interface CombatUnitSpatialQueryScratch { readonly seenUnitIds: Set<string>; }
 const cache = new WeakMap<SimulationState, CombatUnitIndex>();
 
-export function createCombatUnitSpatialQueryScratch(): CombatUnitSpatialQueryScratch {
-  return { seenUnitIds: new Set<string>() };
-}
-
-export function getCombatUnitSpatialIndex(state: SimulationState): CombatUnitIndex {
-  return getIndex(state);
-}
+export function createCombatUnitSpatialQueryScratch(): CombatUnitSpatialQueryScratch { return { seenUnitIds: new Set<string>() }; }
+export function getCombatUnitSpatialIndex(state: SimulationState): CombatUnitIndex { return getIndex(state); }
 
 export function queryUnitsNearBallisticSegment(
   state: SimulationState,
@@ -34,14 +27,7 @@ export function queryUnitsNearBallisticSegment(
   radiusMetres: number,
 ): UnitModel[] {
   const output: UnitModel[] = [];
-  queryUnitsNearBallisticSegmentInto(
-    state,
-    startGrid,
-    endGrid,
-    radiusMetres,
-    output,
-    createCombatUnitSpatialQueryScratch(),
-  );
+  queryUnitsNearBallisticSegmentInto(state, startGrid, endGrid, radiusMetres, output, createCombatUnitSpatialQueryScratch());
   return output;
 }
 
@@ -61,7 +47,6 @@ export function queryUnitsNearBallisticSegmentInto(
   const maxX = Math.floor((Math.max(startGrid.x, endGrid.x) + radiusCells) / BUCKET_SIZE_CELLS);
   const minY = Math.floor((Math.min(startGrid.y, endGrid.y) - radiusCells) / BUCKET_SIZE_CELLS);
   const maxY = Math.floor((Math.max(startGrid.y, endGrid.y) + radiusCells) / BUCKET_SIZE_CELLS);
-
   for (let bucketY = minY; bucketY <= maxY; bucketY += 1) {
     for (let bucketX = minX; bucketX <= maxX; bucketX += 1) {
       const bucket = preparedIndex.buckets.get(bucketKey(bucketX, bucketY));
@@ -77,34 +62,22 @@ export function queryUnitsNearBallisticSegmentInto(
   return output.length;
 }
 
-export function clearCombatUnitSpatialIndex(state: SimulationState): void {
-  cache.delete(state);
-}
+export function clearCombatUnitSpatialIndex(state: SimulationState): void { cache.delete(state); }
 
 function getIndex(state: SimulationState): CombatUnitIndex {
   const existing = cache.get(state);
-  if (
-    existing
-    && existing.simulationTimeSeconds === state.simulationTimeSeconds
-    && existing.unitCount === state.units.length
-    && existing.unitsIdentity === state.units
-    && existing.mapIdentity === state.map
-    && matchesUnitSnapshot(existing, state.units)
-  ) {
-    return existing;
-  }
-
+  if (existing && existing.simulationTimeSeconds === state.simulationTimeSeconds && existing.unitCount === state.units.length
+    && existing.unitsIdentity === state.units && existing.mapIdentity === state.map && matchesUnitSnapshot(existing, state.units)) return existing;
   const buckets = new Map<string, UnitModel[]>();
+  const unitsById = new Map<string, UnitModel>();
   for (const unit of state.units) {
-    const bucketX = Math.floor(unit.position.x / BUCKET_SIZE_CELLS);
-    const bucketY = Math.floor(unit.position.y / BUCKET_SIZE_CELLS);
-    const key = bucketKey(bucketX, bucketY);
+    unitsById.set(unit.id, unit);
+    const key = bucketKey(Math.floor(unit.position.x / BUCKET_SIZE_CELLS), Math.floor(unit.position.y / BUCKET_SIZE_CELLS));
     const bucket = buckets.get(key) ?? [];
     bucket.push(unit);
     buckets.set(key, bucket);
   }
   for (const bucket of buckets.values()) bucket.sort(compareUnits);
-
   const unitIds = new Array<string>(state.units.length);
   const unitPositions = new Float64Array(state.units.length * 2);
   for (let index = 0; index < state.units.length; index += 1) {
@@ -120,32 +93,20 @@ function getIndex(state: SimulationState): CombatUnitIndex {
     mapIdentity: state.map,
     unitIds,
     unitPositions,
+    unitsById,
     buckets,
   };
   cache.set(state, next);
   return next;
 }
 
-
 function matchesUnitSnapshot(index: CombatUnitIndex, units: readonly UnitModel[]): boolean {
   if (index.unitIds.length !== units.length || index.unitPositions.length !== units.length * 2) return false;
   for (let unitIndex = 0; unitIndex < units.length; unitIndex += 1) {
     const unit = units[unitIndex]!;
-    if (
-      index.unitIds[unitIndex] !== unit.id
-      || index.unitPositions[unitIndex * 2] !== unit.position.x
-      || index.unitPositions[unitIndex * 2 + 1] !== unit.position.y
-    ) {
-      return false;
-    }
+    if (index.unitIds[unitIndex] !== unit.id || index.unitPositions[unitIndex * 2] !== unit.position.x || index.unitPositions[unitIndex * 2 + 1] !== unit.position.y) return false;
   }
   return true;
 }
-
-function compareUnits(left: UnitModel, right: UnitModel): number {
-  return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
-}
-
-function bucketKey(x: number, y: number): string {
-  return `${x}:${y}`;
-}
+function compareUnits(left: UnitModel, right: UnitModel): number { return left.id < right.id ? -1 : left.id > right.id ? 1 : 0; }
+function bucketKey(x: number, y: number): string { return `${x}:${y}`; }
