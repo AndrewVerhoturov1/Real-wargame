@@ -11,6 +11,6 @@ const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
 const firstError = output.split(/\r?\n/).find((line) => line.includes('error TS')) ?? '';
 const match = firstError.match(/^src\/core\/infantry-combat\/runtime\/WoundRuntime\.ts\(224,(\d+)\): error (TS\d+):/);
 const column = match ? Number(match[1]) : Number.POSITIVE_INFINITY;
-const lowerOrEqual = column <= 20;
+const lowerOrEqual = column <= 40;
 console.log(lowerOrEqual ? 'TYPECHECK_COLUMN_LOWER_OR_EQUAL' : 'TYPECHECK_COLUMN_HIGHER');
 process.exit(lowerOrEqual ? 1 : 0);
