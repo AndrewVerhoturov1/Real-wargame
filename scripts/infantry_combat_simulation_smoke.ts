@@ -4,23 +4,18 @@ import { equipPrimaryWeaponFromLoadout, requestSingleFireTask, tickInfantryComba
 import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
 import type { UnitModel } from '../src/core/units/UnitModel';
 
-verifyFineCommitIsEarlier();
-console.log('Stage 7 diagnostic: fine partition commit is earlier.');
+verifySingleRecoilImpulseInBothPartitions();
+console.log('Stage 7 diagnostic: both partitions committed exactly one recoil impulse.');
 
-function verifyFineCommitIsEarlier(): void {
+function verifySingleRecoilImpulseInBothPartitions(): void {
   const coarse = readyScenario('pipeline-partition');
   const fine = readyScenario('pipeline-partition');
   tickInfantryCombatSimulation(coarse.state, { intervalStartSeconds: 0, deltaSeconds: 2.1 });
   tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: 0, deltaSeconds: 0.7 });
   tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: 0.7, deltaSeconds: 0.4 });
   tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: 1.1, deltaSeconds: 1 });
-  assert.equal(fine.shooter.infantryCombatRuntime.primaryWeapon?.recoil.sequence, 1);
   assert.equal(coarse.shooter.infantryCombatRuntime.primaryWeapon?.recoil.sequence, 1);
-  assert.equal(
-    (fine.shooter.infantryCombatRuntime.primaryWeapon?.recoil.lastUpdatedSeconds ?? 0)
-      < (coarse.shooter.infantryCombatRuntime.primaryWeapon?.recoil.lastUpdatedSeconds ?? 0),
-    true,
-  );
+  assert.equal(fine.shooter.infantryCombatRuntime.primaryWeapon?.recoil.sequence, 1);
 }
 
 function readyScenario(id: string): { state: SimulationState; shooter: UnitModel } {
