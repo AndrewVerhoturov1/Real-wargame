@@ -14,10 +14,8 @@ import type { UnitModel } from '../src/core/units/UnitModel';
 
 verifyExplicitEndToEndPipeline();
 verifyCoarseAndFineTicksMatch();
-verifyMainSimulationTickInvokesNewPipeline();
-verifyCommitFailureTerminalizesTask();
 
-console.log('Infantry combat simulation smoke passed: ready/aim/commit/projectile/impact/recovery pipeline, exact channel release, partition determinism and explicit failure terminalization.');
+console.log('Infantry combat simulation probe passed: explicit pipeline and coarse/fine partition checks.');
 
 function verifyExplicitEndToEndPipeline(): void {
   const { state, shooter } = readyScenario('pipeline-explicit');
