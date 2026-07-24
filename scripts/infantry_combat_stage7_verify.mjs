@@ -47,9 +47,22 @@ function assertRepositoryIdentity() {
   if (branch && branch !== REQUIRED_BRANCH) {
     fail('FAIL Stage 7 branch guard', `Expected ${REQUIRED_BRANCH}, got ${branch}.`);
   }
+  ensureApprovedBaseAvailable();
   const ancestry = run('git', ['merge-base', '--is-ancestor', APPROVED_BASE_SHA, 'HEAD'], repoRoot);
   if (ancestry.error || ancestry.status !== 0) {
     fail('FAIL Stage 7 base guard', `Required base ${APPROVED_BASE_SHA} is not an ancestor of HEAD.`);
+  }
+}
+
+function ensureApprovedBaseAvailable() {
+  const available = run('git', ['cat-file', '-e', `${APPROVED_BASE_SHA}^{commit}`], repoRoot);
+  if (!available.error && available.status === 0) return;
+  const fetch = run('git', ['fetch', '--no-tags', '--depth=1', 'origin', APPROVED_BASE_SHA], repoRoot);
+  if (fetch.error || fetch.status !== 0) {
+    fail(
+      'FAIL Stage 7 base fetch',
+      `Не удалось получить обязательный base SHA ${APPROVED_BASE_SHA}.\n${combinedOutput(fetch)}`,
+    );
   }
 }
 
@@ -70,13 +83,7 @@ function runPerformanceContractWithBaseComparison() {
     return;
   }
 
-  const fetch = run('git', ['fetch', '--no-tags', '--depth=1', 'origin', APPROVED_BASE_SHA], repoRoot);
-  if (fetch.error || fetch.status !== 0) {
-    fail(
-      'FAIL Stage 7 performance baseline fetch',
-      `Не удалось получить одобренный base SHA ${APPROVED_BASE_SHA}.\n${combinedOutput(fetch)}`,
-    );
-  }
+  ensureApprovedBaseAvailable();
 
   rmSync(baseWorktree, { recursive: true, force: true });
   const addWorktree = run('git', ['worktree', 'add', '--detach', baseWorktree, APPROVED_BASE_SHA], repoRoot);
