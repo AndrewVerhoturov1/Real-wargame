@@ -7,14 +7,12 @@ const repoRoot = process.cwd();
 const outDir = path.join(repoRoot, '.tmp-stage7-single-shot-diagnostic');
 await rm(outDir, { recursive: true, force: true });
 try {
-  await runSmoke('infantry_combat_single_shot_smoke.ts', 'single-shot.mjs');
-  await runSmoke('infantry_combat_fire_task_smoke.ts', 'fire-task.mjs');
-  await runSmoke('infantry_combat_geometry_smoke.ts', 'geometry.mjs');
-  await runSmoke('infantry_combat_commit_smoke.ts', 'commit.mjs');
+  await runSmoke('infantry_combat_projectile_smoke.ts', 'projectile.mjs');
+  await runSmoke('infantry_combat_simulation_smoke.ts', 'simulation.mjs');
 } finally {
   await rm(outDir, { recursive: true, force: true });
 }
-console.log('STAGE7_DIAGNOSTIC_SINGLE_SHOT_FIRST_FOUR_PASSED');
+console.log('STAGE7_DIAGNOSTIC_PROJECTILE_AND_SIMULATION_PASSED');
 
 async function runSmoke(sourceName, outputName) {
   await build({
