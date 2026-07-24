@@ -171,6 +171,10 @@ export function normalizeDiagnostics(value: Record<string, unknown>, capacity: n
     if (key === 'lastImpactId' || key === 'lastTerminationId' || key === 'lastBodyImpactId') continue;
     if (typeof defaults[key] === 'number') (defaults[key] as number) = finiteNonNegative(value[key], defaults[key] as number);
   }
+  if (!isFiniteNumber(value.unitNarrowCheckCount) && isFiniteNumber(value.unitCheckCount)) {
+    defaults.unitNarrowCheckCount = finiteNonNegative(value.unitCheckCount, 0);
+  }
+  defaults.unitCheckCount = defaults.unitNarrowCheckCount;
   defaults.capacity = capacity;
   defaults.impactBufferCapacity = Math.min(MAX_STAGE6_IMPACT_BUFFER_ENTRIES, capacity * 4);
   defaults.terminationBufferCapacity = Math.min(DEFAULT_PROJECTILE_EVENT_BUFFER_CAPACITY, capacity);
