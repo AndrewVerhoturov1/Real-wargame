@@ -1,56 +1,198 @@
 {
   "version": 2,
-  "id": "soldier_suspected_contact_attention_graph",
-  "name": "Soldier Suspected Contact Attention",
-  "nameRu": "Внимание бойца к предполагаемому контакту",
-  "description": "A minimal Graph v2 example that directs search attention toward the strongest subjective contact and otherwise restores automatic attention.",
-  "descriptionRu": "Минимальный пример Graph v2: направляет поиск на самый сильный предполагаемый контакт, а в остальных случаях возвращает автоматическое внимание.",
+  "id": "soldier_clean_workspace_graph",
+  "name": "Soldier Clean Workspace Graph",
+  "nameRu": "Чистый рабочий граф солдата",
+  "description": "Clean starter graph for building soldier behavior from universal nodes.",
+  "descriptionRu": "Чистый стартовый граф для сборки поведения солдата из универсальных нод.",
   "rootNodeId": "root",
   "blackboardSchema": [
     {
-      "key": "best_contact_confidence",
+      "key": "danger",
       "valueKind": "number",
-      "label": "Best Contact Confidence",
-      "description": "Confidence of the strongest subjective contact from 0 to 100.",
-      "labelRu": "Уверенность лучшего контакта",
-      "descriptionRu": "Уверенность в самом сильном субъективном контакте от 0 до 100.",
+      "label": "Danger",
+      "description": "Current danger score for the soldier from 0 to 100.",
+      "labelRu": "Опасность",
+      "descriptionRu": "Текущая оценка опасности для солдата от 0 до 100.",
       "defaultValue": 0,
       "minimum": 0,
       "maximum": 100
     },
     {
-      "key": "contact_visible_now",
+      "key": "stress",
+      "valueKind": "number",
+      "label": "Stress",
+      "description": "Current stress score for the soldier from 0 to 100.",
+      "labelRu": "Стресс",
+      "descriptionRu": "Текущий стресс солдата от 0 до 100.",
+      "defaultValue": 0,
+      "minimum": 0,
+      "maximum": 100
+    },
+    {
+      "key": "suppression",
+      "valueKind": "number",
+      "label": "suppression",
+      "description": "Migrated key suppression.",
+      "labelRu": "suppression",
+      "descriptionRu": "Перенесённый ключ suppression.",
+      "defaultValue": 0
+    },
+    {
+      "key": "fatigue",
+      "valueKind": "number",
+      "label": "fatigue",
+      "description": "Migrated key fatigue.",
+      "labelRu": "fatigue",
+      "descriptionRu": "Перенесённый ключ fatigue.",
+      "defaultValue": 0
+    },
+    {
+      "key": "morale",
+      "valueKind": "number",
+      "label": "morale",
+      "description": "Migrated key morale.",
+      "labelRu": "morale",
+      "descriptionRu": "Перенесённый ключ morale.",
+      "defaultValue": 60
+    },
+    {
+      "key": "health",
+      "valueKind": "number",
+      "label": "health",
+      "description": "Migrated key health.",
+      "labelRu": "health",
+      "descriptionRu": "Перенесённый ключ health.",
+      "defaultValue": 100
+    },
+    {
+      "key": "ammo",
+      "valueKind": "number",
+      "label": "ammo",
+      "description": "Migrated key ammo.",
+      "labelRu": "ammo",
+      "descriptionRu": "Перенесённый ключ ammo.",
+      "defaultValue": 30
+    },
+    {
+      "key": "distanceToCover",
+      "valueKind": "number",
+      "label": "distanceToCover",
+      "description": "Migrated key distanceToCover.",
+      "labelRu": "distanceToCover",
+      "descriptionRu": "Перенесённый ключ distanceToCover.",
+      "defaultValue": 20
+    },
+    {
+      "key": "enemyVisible",
       "valueKind": "boolean",
-      "label": "Contact Visible Now",
-      "description": "Whether the strongest subjective contact is visually confirmed now.",
-      "labelRu": "Контакт виден сейчас",
-      "descriptionRu": "Подтверждён ли лучший субъективный контакт зрением прямо сейчас.",
+      "label": "enemyVisible",
+      "description": "Migrated key enemyVisible.",
+      "labelRu": "enemyVisible",
+      "descriptionRu": "Перенесённый ключ enemyVisible.",
       "defaultValue": false
     },
     {
-      "key": "self_position",
-      "valueKind": "position",
-      "label": "Soldier Position",
-      "description": "Current soldier position supplied by the simulation.",
-      "labelRu": "Позиция бойца",
-      "descriptionRu": "Текущая позиция бойца, переданная симуляцией.",
-      "defaultValue": { "x": 0, "y": 0 }
+      "key": "enemyKnown",
+      "valueKind": "boolean",
+      "label": "enemyKnown",
+      "description": "Migrated key enemyKnown.",
+      "labelRu": "enemyKnown",
+      "descriptionRu": "Перенесённый ключ enemyKnown.",
+      "defaultValue": false
     },
     {
-      "key": "suspected_enemy_position",
+      "key": "underFire",
+      "valueKind": "boolean",
+      "label": "underFire",
+      "description": "Migrated key underFire.",
+      "labelRu": "underFire",
+      "descriptionRu": "Перенесённый ключ underFire.",
+      "defaultValue": false
+    },
+    {
+      "key": "hasOrder",
+      "valueKind": "boolean",
+      "label": "hasOrder",
+      "description": "Migrated key hasOrder.",
+      "labelRu": "hasOrder",
+      "descriptionRu": "Перенесённый ключ hasOrder.",
+      "defaultValue": false
+    },
+    {
+      "key": "isInCover",
+      "valueKind": "boolean",
+      "label": "isInCover",
+      "description": "Migrated key isInCover.",
+      "labelRu": "isInCover",
+      "descriptionRu": "Перенесённый ключ isInCover.",
+      "defaultValue": false
+    },
+    {
+      "key": "weaponReady",
+      "valueKind": "boolean",
+      "label": "weaponReady",
+      "description": "Migrated key weaponReady.",
+      "labelRu": "weaponReady",
+      "descriptionRu": "Перенесённый ключ weaponReady.",
+      "defaultValue": true
+    },
+    {
+      "key": "current_action",
+      "valueKind": "action",
+      "label": "Current Action",
+      "description": "Last selected action used for decision inertia.",
+      "labelRu": "Текущее действие",
+      "descriptionRu": "Последнее выбранное действие для инерции решений.",
+      "defaultValue": "wait"
+    },
+    {
+      "key": "best_cover_position",
       "valueKind": "nullablePosition",
-      "label": "Suspected Enemy Position",
-      "description": "Estimated position of the strongest subjective contact.",
-      "labelRu": "Предполагаемая позиция врага",
-      "descriptionRu": "Предполагаемая позиция самого сильного субъективного контакта.",
+      "label": "Best Cover Position",
+      "description": "Cover point selected by the local engine through a tactical query.",
+      "labelRu": "Лучшая точка укрытия",
+      "descriptionRu": "Точка укрытия, выбранная локальным движком через tactical query.",
+      "defaultValue": null
+    },
+    {
+      "key": "current_target",
+      "valueKind": "string",
+      "label": "current_target",
+      "description": "Migrated key current_target.",
+      "labelRu": "current_target",
+      "descriptionRu": "Перенесённый ключ current_target.",
+      "defaultValue": null
+    },
+    {
+      "key": "remembered_enemy_position",
+      "valueKind": "string",
+      "label": "remembered_enemy_position",
+      "description": "Migrated key remembered_enemy_position.",
+      "labelRu": "remembered_enemy_position",
+      "descriptionRu": "Перенесённый ключ remembered_enemy_position.",
       "defaultValue": null
     }
   ],
   "blackboardDefaults": {
-    "best_contact_confidence": 0,
-    "contact_visible_now": false,
-    "self_position": { "x": 0, "y": 0 },
-    "suspected_enemy_position": null
+    "danger": 0,
+    "stress": 0,
+    "suppression": 0,
+    "fatigue": 0,
+    "morale": 60,
+    "health": 100,
+    "ammo": 30,
+    "distanceToCover": 20,
+    "enemyVisible": false,
+    "enemyKnown": false,
+    "underFire": false,
+    "hasOrder": false,
+    "isInCover": false,
+    "weaponReady": true,
+    "current_action": "wait",
+    "best_cover_position": null,
+    "current_target": null,
+    "remembered_enemy_position": null
   },
   "nodes": [
     {
@@ -58,84 +200,10 @@
       "type": "Root",
       "displayName": "Start",
       "displayNameRu": "Старт",
-      "description": "Entry point for the suspected-contact attention example.",
-      "descriptionRu": "Точка входа примера внимания к предполагаемому контакту.",
-      "children": ["attention_choice"],
+      "description": "Clean start node. Add universal nodes from the palette and connect them by dragging from the right port.",
+      "descriptionRu": "Чистая стартовая нода. Добавляй универсальные ноды из палитры и связывай их протягиванием из правой точки.",
+      "children": [],
       "parameters": {}
-    },
-    {
-      "id": "attention_choice",
-      "type": "Selector",
-      "displayName": "Choose attention behavior",
-      "displayNameRu": "Выбрать поведение внимания",
-      "description": "Investigate a subjective contact when possible; otherwise restore automatic attention.",
-      "descriptionRu": "Проверить субъективный контакт, если это возможно; иначе вернуть автоматическое внимание.",
-      "children": ["investigate_contact", "automatic_attention"],
-      "parameters": {}
-    },
-    {
-      "id": "investigate_contact",
-      "type": "Sequence",
-      "displayName": "Investigate suspected contact",
-      "displayNameRu": "Проверить предполагаемый контакт",
-      "description": "Requires meaningful confidence and no current visual confirmation before directing the search sector.",
-      "descriptionRu": "Требует достаточной уверенности и отсутствия прямого визуального подтверждения, затем направляет сектор поиска.",
-      "children": ["contact_confidence", "contact_not_visible", "search_suspected_position"],
-      "parameters": {}
-    },
-    {
-      "id": "contact_confidence",
-      "type": "BlackboardValueAbove",
-      "displayName": "Contact confidence above 15",
-      "displayNameRu": "Уверенность контакта выше 15",
-      "children": [],
-      "parameters": {
-        "sourceKey": "best_contact_confidence",
-        "comparison": "above",
-        "threshold": 15
-      }
-    },
-    {
-      "id": "contact_not_visible",
-      "type": "FlagCheck",
-      "displayName": "Contact is not visible",
-      "displayNameRu": "Контакт сейчас не виден",
-      "children": [],
-      "parameters": {
-        "flagKey": "contact_visible_now",
-        "expected": false
-      }
-    },
-    {
-      "id": "search_suspected_position",
-      "type": "SetSearchSector",
-      "displayName": "Look toward suspected position",
-      "displayNameRu": "Смотреть на предполагаемую позицию",
-      "description": "Uses the existing configurable search-attention profile while focusing it on the subjective contact position.",
-      "descriptionRu": "Использует существующий настраиваемый профиль поискового внимания и направляет его на субъективную позицию контакта.",
-      "children": [],
-      "parameters": {
-        "centerSource": "blackboard_position",
-        "centerDegrees": 0,
-        "originPositionKey": "self_position",
-        "targetPositionKey": "suspected_enemy_position",
-        "arcDegrees": 120,
-        "reason": "Inspect the strongest suspected contact position.",
-        "reasonRu": "Проверить предполагаемую позицию самого сильного контакта."
-      }
-    },
-    {
-      "id": "automatic_attention",
-      "type": "ClearAttentionOverride",
-      "displayName": "Automatic attention",
-      "displayNameRu": "Автоматическое внимание",
-      "description": "Returns attention control to the current order and unit settings.",
-      "descriptionRu": "Возвращает управление вниманием текущему приказу и настройкам бойца.",
-      "children": [],
-      "parameters": {
-        "reason": "No unconfirmed suspected contact requires focused investigation.",
-        "reasonRu": "Нет неподтверждённого контакта, требующего сосредоточенной проверки."
-      }
     }
   ],
   "subgraphRefs": []
