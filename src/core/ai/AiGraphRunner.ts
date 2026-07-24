@@ -1,6 +1,9 @@
+import { isGridPositionValue } from './AiBlackboard';
+import type { AiNodeParameters } from './AiGraph';
 import {
   runAiGraph as runLegacyAiGraph,
   type AiGraphEffect,
+  type AiGraphRunnerBlackboard,
   type AiGraphRunnerInput,
   type AiGraphRunnerResult,
   type AiGraphTacticalHost,
@@ -35,12 +38,34 @@ interface ExtendedTacticalQueryGenerationRequest extends TacticalQueryGeneration
  * Adds stateful tactical request identity and preserves the selected position's
  * required posture, facing, kind and request identity. New generalized query
  * nodes are adapted to the legacy evaluator without changing saved cover graphs.
+ * Search-sector nodes may also resolve their center from subjective Blackboard
+ * positions before the legacy evaluator produces its ordinary effect.
  */
 export function runAiGraph(input: AiGraphRunnerInput): AiGraphRunnerResult {
   const tacticalConfigs = new Map<string, TacticalPositionNodeSettings>();
   const graph = {
     ...input.graph,
     nodes: input.graph.nodes.map((node) => {
+      if (node.type === 'SetSearchSector' && readString(node.parameters?.centerSource, 'fixed') === 'blackboard_position') {
+        const centerDegrees = resolveSearchSectorCenterDegrees(node.parameters, input.blackboard);
+        if (centerDegrees === null) {
+          return {
+            ...node,
+            type: 'FlagCheck',
+            parameters: {
+              flagKey: '__real_wargame_dynamic_search_sector_position_available__',
+              expected: true,
+            },
+          };
+        }
+        return {
+          ...node,
+          parameters: {
+            ...node.parameters,
+            centerDegrees,
+          },
+        };
+      }
       if (node.type !== 'CreateTacticalPositionCandidates') return node;
       const config = readTacticalPositionNodeSettings(node.parameters);
       tacticalConfigs.set(config.queryKey, config);
@@ -132,6 +157,24 @@ export function runAiGraph(input: AiGraphRunnerInput): AiGraphRunnerResult {
   return changed ? { ...result, blackboard, effects } : result;
 }
 
+export function resolveSearchSectorCenterDegrees(
+  parameters: AiNodeParameters | undefined,
+  blackboard: AiGraphRunnerBlackboard,
+): number | null {
+  if (readString(parameters?.centerSource, 'fixed') !== 'blackboard_position') {
+    return normalizeDegrees(readNumber(parameters?.centerDegrees, 0));
+  }
+  const originKey = readString(parameters?.originPositionKey, 'self_position');
+  const targetKey = readString(parameters?.targetPositionKey, 'suspected_enemy_position');
+  const origin = blackboard[originKey];
+  const target = blackboard[targetKey];
+  if (!isGridPositionValue(origin) || !isGridPositionValue(target)) return null;
+  const deltaX = target.x - origin.x;
+  const deltaY = target.y - origin.y;
+  if (Math.abs(deltaX) <= 1e-9 && Math.abs(deltaY) <= 1e-9) return null;
+  return normalizeDegrees(Math.atan2(deltaY, deltaX) * 180 / Math.PI);
+}
+
 function wrapStatefulTacticalHost(
   input: AiGraphRunnerInput,
   queryKeys: readonly string[],
@@ -182,9 +225,11 @@ function wrapStatefulTacticalHost(
 export function tacticalRequestMemoryKey(queryKey: string): string {
   return `${queryKey}_request_id`;
 }
+
 export function tacticalConfigMemoryKey(queryKey: string): string {
   return `${queryKey}_config_identity`;
 }
+
 function tacticalConfigIdentity(config: TacticalPositionNodeSettings): string {
   return [
     config.kind,
@@ -198,6 +243,15 @@ function tacticalConfigIdentity(config: TacticalPositionNodeSettings): string {
     tacticalPositionSearchSettingsDigest(config.search),
   ].join('|');
 }
+
+function normalizeDegrees(value: number): number {
+  return ((value % 360) + 360) % 360;
+}
+
+function readNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
 function readString(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.length > 0 ? value : fallback;
 }
