@@ -2,7 +2,7 @@ import { rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
-const REQUIRED_BASE_SHA = '8a08eb43c7fe93fd1343ad2a1c1a21df248fea1c';
+const APPROVED_BASE_SHA = 'efdd45cce30893ade212c6fe72efe46698109b13';
 const repoRoot = process.cwd();
 const baseWorktree = path.join(repoRoot, '.tmp-stage6-performance-base');
 
@@ -35,7 +35,7 @@ console.log(`Node.js ${process.version}`);
 for (const [command, args] of checksBeforePerformance) runRequiredCheck(command, args);
 runPerformanceContractWithBaseComparison();
 for (const [command, args] of checksAfterPerformance) runRequiredCheck(command, args);
-console.log(`Stage 6 verification PASS on ${process.version}: 20 required non-browser commands; performance-contract is accepted only when successful or identical to mandatory base ${REQUIRED_BASE_SHA}.`);
+console.log(`Stage 6 verification PASS on ${process.version}: 20 required non-browser commands; performance-contract is accepted only when successful or identical to approved base ${APPROVED_BASE_SHA}.`);
 
 function runRequiredCheck(command, args) {
   const label = [command, ...args].join(' ');
@@ -54,16 +54,16 @@ function runPerformanceContractWithBaseComparison() {
     return;
   }
 
-  const fetch = run('git', ['fetch', '--no-tags', '--depth=1', 'origin', REQUIRED_BASE_SHA], repoRoot);
+  const fetch = run('git', ['fetch', '--no-tags', '--depth=1', 'origin', APPROVED_BASE_SHA], repoRoot);
   if (fetch.error || fetch.status !== 0) {
     fail(
       'FAIL Stage 6 performance baseline fetch',
-      `Не удалось получить обязательный base SHA ${REQUIRED_BASE_SHA}.\n${combinedOutput(fetch)}`,
+      `Не удалось получить одобренный base SHA ${APPROVED_BASE_SHA}.\n${combinedOutput(fetch)}`,
     );
   }
 
   rmSync(baseWorktree, { recursive: true, force: true });
-  const addWorktree = run('git', ['worktree', 'add', '--detach', baseWorktree, REQUIRED_BASE_SHA], repoRoot);
+  const addWorktree = run('git', ['worktree', 'add', '--detach', baseWorktree, APPROVED_BASE_SHA], repoRoot);
   if (addWorktree.error || addWorktree.status !== 0) {
     fail('FAIL Stage 6 performance baseline worktree', combinedOutput(addWorktree));
   }
@@ -81,8 +81,8 @@ function runPerformanceContractWithBaseComparison() {
   const baselineSignature = failureSignature(baselineOutput);
   if (baseline.status !== 0 && currentSignature && currentSignature === baselineSignature) {
     console.warn([
-      `KNOWN BASE FAILURE ${label}`,
-      `mandatory base: ${REQUIRED_BASE_SHA}`,
+      `KNOWN APPROVED-BASE FAILURE ${label}`,
+      `approved base: ${APPROVED_BASE_SHA}`,
       `current status: ${current.status}`,
       `base status: ${baseline.status}`,
       `signature: ${currentSignature}`,
