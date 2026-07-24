@@ -218,7 +218,7 @@ function createSlot(candidate: WoundCandidateV1): WoundSlotV1 {
     hitCount: 1,
     bleedingRatePerSecond: bleedingState === 'none'
       ? 0
-      : activeBleedingRate(candidate.zone, candidate.severity, candidate.bleedingRatePerSecond),
+      : activeBleedingRate(candidate.zone, bleedingState, candidate.bleedingRatePerSecond),
     maximumTraumaScore: finiteNonNegative(candidate.traumaScore),
     lastImpactEnergyJoules: finiteNonNegative(candidate.impactEnergyJoules),
     firstImpactId: candidate.impactId,
