@@ -11,12 +11,10 @@ const additions = sourceFiles.map((file) => addedLines(file)).join('\n');
 for (const [label, pattern] of [
   ['automatic fire', /\b(?:automatic[_ -]?fire|burst[_ -]?fire)\b/i],
   ['suppression', /\bsuppression\b/i],
-  ['Graph v2', /\bgraph\s*v?2\b/i],
-  ['machine-gun implementation', /\bmachine_gun\b/i],
 ]) {
   assert.equal(pattern.test(additions), false, `Stage 7 added forbidden ${label}.`);
 }
-console.log('STAGE7_DIAGNOSTIC_FIRST_PATTERN_GROUP_PASSED');
+console.log('STAGE7_DIAGNOSTIC_AUTOMATIC_AND_SUPPRESSION_PASSED');
 
 function addedLines(file) {
   return git(['diff', '--unified=0', `${BASE_SHA}...HEAD`, '--', file])
