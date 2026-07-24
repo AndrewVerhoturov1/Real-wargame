@@ -17,10 +17,8 @@ async function run() {
   await rm(outDir, { recursive: true, force: true });
   await rm(probePath, { force: true });
   try {
-    let source = await readFile(sourcePath, 'utf8');
-    source = source.replace('verifyExplicitEndToEndPipeline();', '// CI probe skipped explicit pipeline');
-    source = source.replace('verifyMainSimulationTickInvokesNewPipeline();', '// CI probe skipped main tick');
-    source = source.replace('verifyCommitFailureTerminalizesTask();', '// CI probe skipped failure terminalization');
+    const source = (await readFile(sourcePath, 'utf8'))
+      .replace('verifyExplicitEndToEndPipeline();', 'verifyCoarseAndFineTicksMatch();');
     await writeFile(probePath, source, 'utf8');
     await runSmoke('.tmp_infantry_combat_simulation_probe.ts', 'infantry-combat-simulation.mjs');
   } finally {
