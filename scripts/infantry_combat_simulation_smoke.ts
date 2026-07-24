@@ -6,7 +6,7 @@ import { createInitialState, type SimulationState } from '../src/core/simulation
 import type { UnitModel } from '../src/core/units/UnitModel';
 
 verifyExplicitEndToEndPipeline();
-console.log('Stage 7 diagnostic: explicit projectile impact passed.');
+console.log('Stage 7 diagnostic: explicit projectile impact and task cleanup passed.');
 
 function verifyExplicitEndToEndPipeline(): void {
   const { state, shooter } = readyScenario('pipeline-explicit');
@@ -19,6 +19,7 @@ function verifyExplicitEndToEndPipeline(): void {
   assert.equal(state.infantryCombatProjectiles.activeProjectiles.length, 0);
   assert.equal(state.infantryCombatProjectiles.impacts.length, 1);
   assert.equal(state.infantryCombatProjectiles.impacts[0]?.hitObjectId, 'pipeline-wall');
+  assert.equal(shooter.infantryCombatRuntime.activeFireTask, null);
 }
 
 function readyScenario(id: string): { state: SimulationState; shooter: UnitModel } {
