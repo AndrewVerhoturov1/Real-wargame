@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import type { AiGraph } from '../src/core/ai/AiGraph';
+import { runAiGraph } from '../src/core/ai/AiGraphRunner';
+import { withAiSimulationExecutionContext } from '../src/core/ai/AiSimulationExecutionContext';
 import {
   contactInvestigationStateKey,
   createEmptyContactInvestigationState,
@@ -8,6 +11,10 @@ import {
   type AiInvestigationContactSnapshot,
   type ContactInvestigationState,
 } from '../src/core/ai/ContactInvestigation';
+import type { TacticalMapData } from '../src/core/map/MapModel';
+import { advanceVisualContact } from '../src/core/perception/PerceptionContact';
+import { createInitialState } from '../src/core/simulation/SimulationState';
+import type { UnitData } from '../src/core/units/UnitModel';
 
 verifyFirstSelection();
 verifyMinimumHoldAndDeterministicTie();
@@ -17,8 +24,9 @@ verifyCompletionHandsOffToNextContact();
 verifyTimeoutAppliesRevisitDelay();
 verifyStaleAndIdentifiedContactsAreExcluded();
 verifyStateSerialization();
+verifyGraphRuntimeSelectionAndFallback();
 
-console.log('Contact investigation selector smoke passed: stable hold, deterministic priority, urgent switching, completion, timeout, cooldown and empty fallback.');
+console.log('Contact investigation selector smoke passed: stable hold, deterministic priority, urgent switching, Graph runtime handoff, completion, timeout, cooldown and automatic-attention fallback.');
 
 function verifyFirstSelection(): void {
   const result = resolveContactInvestigation({}, [
@@ -117,6 +125,145 @@ function verifyStateSerialization(): void {
   assert.deepEqual(deserializeContactInvestigationState(serializeContactInvestigationState(state), 5), state);
   assert.equal(contactInvestigationStateKey('node-1'), '__real_wargame_investigate_contact_state__:node-1');
   assert.equal(deserializeContactInvestigationState('{broken', 7).currentContactId, null);
+}
+
+function verifyGraphRuntimeSelectionAndFallback(): void {
+  const map: TacticalMapData = {
+    width: 40,
+    height: 30,
+    cellSize: 8,
+    metersPerCell: 2,
+    defaultTerrain: 'field',
+    defaultHeight: 0,
+    objects: [],
+  };
+  const observerData: UnitData = {
+    id: 'investigation-observer',
+    label: 'Observer',
+    labelRu: 'Наблюдатель',
+    type: 'scout_team',
+    side: 'blue',
+    aiControl: 'graph',
+    x: 5,
+    y: 5,
+  };
+  const state = createInitialState(map, [observerData]);
+  const unit = state.units[0]!;
+  state.simulationTimeSeconds = 10;
+  unit.perceptionKnowledge.contacts = [
+    advanceVisualContact(null, {
+      id: 'contact-a',
+      stimulusId: 'unknown:a',
+      labelRu: 'Контакт A',
+      position: { x: 12, y: 5 },
+      evidencePerSecond: 60,
+      deltaSeconds: 1,
+      nowSeconds: 10,
+      source: 'visual',
+    }),
+    advanceVisualContact(null, {
+      id: 'contact-b',
+      stimulusId: 'unknown:b',
+      labelRu: 'Контакт B',
+      position: { x: 5, y: 18 },
+      evidencePerSecond: 55,
+      deltaSeconds: 1,
+      nowSeconds: 10,
+      source: 'visual',
+    }),
+  ];
+
+  const graph: AiGraph = {
+    version: 1,
+    id: 'contact-investigation-runtime-smoke',
+    name: 'Contact investigation runtime smoke',
+    rootNodeId: 'root',
+    blackboardDefaults: {},
+    nodes: [
+      { id: 'root', type: 'Root', children: ['selector'] },
+      { id: 'selector', type: 'Selector', children: ['investigate', 'automatic'] },
+      {
+        id: 'investigate',
+        type: 'InvestigateContact',
+        children: [],
+        parameters: {
+          minimumStage: 'cue',
+          minimumConfidence: 15,
+          completionStage: 'identified',
+          searchArcDegrees: 120,
+          maximumContactAgeSeconds: 10,
+          minimumHoldSeconds: 1.2,
+          preferredInvestigationSeconds: 3,
+          maximumInvestigationSeconds: 5,
+          revisitDelaySeconds: 4,
+          switchAdvantagePercent: 25,
+          urgentCloserMeters: 12,
+          urgentCloserRatio: 0.6,
+          reactToFreshFire: true,
+        },
+      },
+      { id: 'automatic', type: 'ClearAttentionOverride', children: [] },
+    ],
+  };
+
+  const first = withAiSimulationExecutionContext(state, unit, () => runAiGraph({
+    graph,
+    unitId: unit.id,
+    blackboard: { self_position: { ...unit.position } },
+    nowMs: 10_000,
+  }));
+  assert.equal(first.blackboard.investigation_contact_id, 'contact-a');
+  assert.equal(first.blackboard.investigation_contact_available, true);
+  const firstSector = first.effects.find((effect) => effect.type === 'set_search_sector');
+  assert.ok(firstSector && firstSector.type === 'set_search_sector');
+  assert.equal(firstSector.centerDegrees, 0);
+  assert.equal(firstSector.arcDegrees, 120);
+  assert.equal(typeof first.blackboard[contactInvestigationStateKey('investigate')], 'string');
+
+  state.simulationTimeSeconds = 11.3;
+  unit.perceptionKnowledge.contacts = unit.perceptionKnowledge.contacts.map((item) => item.id === 'contact-a'
+    ? {
+        ...item,
+        stage: 'identified',
+        evidence: 130,
+        confidence: 90,
+        visibleNow: true,
+        observedNow: true,
+        lastObservedSeconds: 11.3,
+        lastUpdatedSeconds: 11.3,
+      }
+    : item);
+  const second = withAiSimulationExecutionContext(state, unit, () => runAiGraph({
+    graph,
+    unitId: unit.id,
+    blackboard: first.blackboard,
+    nowMs: 11_300,
+  }));
+  assert.equal(second.blackboard.investigation_contact_id, 'contact-b', 'identified contact must hand off to next unknown contact');
+  assert.equal(second.blackboard.investigation_contact_changed, true);
+  assert.ok(second.trace.some((item) => item.nodeId === 'investigate' && item.reasonRu?.includes('Предыдущий контакт доразведан')));
+
+  state.simulationTimeSeconds = 12;
+  unit.perceptionKnowledge.contacts = unit.perceptionKnowledge.contacts.map((item) => ({
+    ...item,
+    stage: 'identified',
+    evidence: 130,
+    confidence: 90,
+    visibleNow: true,
+    observedNow: true,
+    lastObservedSeconds: 12,
+    lastUpdatedSeconds: 12,
+  }));
+  const third = withAiSimulationExecutionContext(state, unit, () => runAiGraph({
+    graph,
+    unitId: unit.id,
+    blackboard: second.blackboard,
+    nowMs: 12_000,
+  }));
+  assert.equal(third.blackboard.investigation_contact_available, false);
+  assert.equal(third.blackboard.investigation_contact_id, null);
+  assert.ok(third.effects.some((effect) => effect.type === 'clear_attention_override'), 'Selector must use automatic attention when no contact is eligible');
+  assert.ok(!third.effects.some((effect) => effect.type === 'set_search_sector'));
 }
 
 function stateFor(contactId: string, selectedAtSeconds: number): ContactInvestigationState {
