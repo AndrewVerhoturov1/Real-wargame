@@ -393,7 +393,7 @@ function treatmentResult(
   return { applied, reason, zone, previousBleedingState, nextBleedingState, runtime };
 }
 
-function bleedingStateForSeverity(severity: WoundSeverity): WoundBleedingState {
+function bleedingStateForSeverity(severity: WoundSeverity): 'none' | 'severe' | 'critical' {
   return severity === 'light' ? 'none' : severity;
 }
 function isActiveBleedingState(value: WoundBleedingState): value is 'severe' | 'critical' {
