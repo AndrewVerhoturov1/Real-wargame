@@ -22,6 +22,12 @@ async function run() {
     source = source.replace('verifyAllCriticalCheckpointsRoundTripExactly();', '// probe skipped critical checkpoints');
     source = source.replace('verifyRepeatedReconciliationIsIdempotent();', '// probe skipped repeated reconciliation');
     source = source.replace('verifyOrphanProjectileIsRemovedDeterministically();', '// probe skipped orphan projectile');
+    source = source.replace(
+      `  const before = stage3Snapshot(loaded);
+  reconcileInfantryCombatRuntimeAfterLoad(loaded);
+  assert.deepEqual(stage3Snapshot(loaded), before);`,
+      '  return;',
+    );
     await writeFile(probePath, source, 'utf8');
     await runSmoke('.tmp_infantry_combat_save_load_probe.ts', 'infantry-combat-save-load.mjs');
   } finally {
@@ -45,5 +51,5 @@ async function runSmoke(sourceName, outputName) {
       },
     },
   });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-missing-projectile`);
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-missing-projectile-terminal`);
 }
