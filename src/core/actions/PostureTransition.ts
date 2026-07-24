@@ -7,9 +7,9 @@ import {
   resolveMovementDesiredPosture,
   type PhysicalActionCommandResult,
   type RequestPostureTransitionInput,
-} from './PostureTransitionLegacy';
+} from './PostureTransitionLegacy.mjs';
 
-export * from './PostureTransitionLegacy';
+export * from './PostureTransitionLegacy.mjs';
 
 export function requestPostureTransition(
   unit: UnitModel,
