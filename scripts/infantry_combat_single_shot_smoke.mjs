@@ -24,15 +24,14 @@ async function run() {
     source = source.replace(`  assert.deepEqual(
     serializeInfantryCombatUnitRuntime(fine.shooter.infantryCombatRuntime),
     serializeInfantryCombatUnitRuntime(coarse.shooter.infantryCombatRuntime),
-  );`, `  const fineDirection = serializeInfantryCombatUnitRuntime(fine.shooter.infantryCombatRuntime).lastShotCommit?.aimDirectionBeforeDispersion;
-  const coarseDirection = serializeInfantryCombatUnitRuntime(coarse.shooter.infantryCombatRuntime).lastShotCommit?.aimDirectionBeforeDispersion;
-  if (JSON.stringify(fineDirection) !== JSON.stringify(coarseDirection)) {
-    throw new Error('AIM_DIRECTION_PARTITION_DIFF ' + JSON.stringify({ fineDirection, coarseDirection }));
-  }`);
+  );`, `  assert.equal(
+    serializeReferenceProjectileRuntimeState(fine.state.infantryCombatProjectiles).committedShots[0]?.committedSimulationSeconds,
+    serializeReferenceProjectileRuntimeState(coarse.state.infantryCombatProjectiles).committedShots[0]?.committedSimulationSeconds,
+  );`);
     source = source.replace(`  assert.deepEqual(
     serializeReferenceProjectileRuntimeState(fine.state.infantryCombatProjectiles),
     serializeReferenceProjectileRuntimeState(coarse.state.infantryCombatProjectiles),
-  );`, '  // CI probe skipped projectile runtime comparison');
+  );`, '  // CI probe skipped complete projectile runtime comparison');
     source = source.replace(`  assert.deepEqual(
     getPhysicalActionCoordinatorDiagnostics(fine.shooter),
     getPhysicalActionCoordinatorDiagnostics(coarse.shooter),
@@ -60,5 +59,5 @@ async function runSmoke(sourceName, outputName) {
       },
     },
   });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-aim-direction-diff`);
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-commit-time-probe`);
 }
