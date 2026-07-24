@@ -38,14 +38,15 @@ export function tickInfantryPhysiologySimulation(
   const startSeconds = finiteNonNegative(input.intervalStartSeconds);
   const deltaSeconds = finiteNonNegative(input.deltaSeconds);
   const endSeconds = canonicalSeconds(startSeconds + deltaSeconds);
+  const units = stableUnits(state);
   const commitResults: TickInfantryCombatSimulationResult['commitResults'][number][] = [];
   let projectileSubsteps = 0;
   if (deltaSeconds <= TIME_EPSILON_SECONDS) {
-    initializeFatigueSamples(state);
+    initializeFatigueSamples(state, units);
     return { commitResults, projectileSubsteps };
   }
 
-  initializeFatigueSamples(state);
+  initializeFatigueSamples(state, units);
   let cursorSeconds = startSeconds;
   let guard = 0;
   while (cursorSeconds + TIME_EPSILON_SECONDS < endSeconds) {
@@ -59,11 +60,11 @@ export function tickInfantryPhysiologySimulation(
       });
       commitResults.push(...combat.commitResults);
       projectileSubsteps += combat.projectileSubsteps;
-      advanceAllBloodTo(state, segmentEndSeconds);
+      advanceAllBloodTo(units, segmentEndSeconds);
     }
     cursorSeconds = segmentEndSeconds;
     if (Math.abs(cursorSeconds - nextBoundarySeconds) <= TIME_EPSILON_SECONDS) {
-      processSharedQuarterBoundary(state, cursorSeconds);
+      processSharedQuarterBoundary(state, units, cursorSeconds);
     }
     guard += 1;
     if (guard > MAX_COMBINED_BOUNDARIES_PER_TICK) {
@@ -73,8 +74,11 @@ export function tickInfantryPhysiologySimulation(
   return { commitResults, projectileSubsteps };
 }
 
-function processSharedQuarterBoundary(state: SimulationState, boundarySeconds: number): void {
-  const units = stableUnits(state);
+function processSharedQuarterBoundary(
+  state: SimulationState,
+  units: readonly UnitModel[],
+  boundarySeconds: number,
+): void {
   for (const unit of units) {
     const blood = unit.infantryCombatRuntime.physiology.blood;
     const previousState = blood.state;
@@ -99,8 +103,7 @@ function processSharedQuarterBoundary(state: SimulationState, boundarySeconds: n
   sampleAllFatigueRates(state, units);
 }
 
-function initializeFatigueSamples(state: SimulationState): void {
-  const units = stableUnits(state);
+function initializeFatigueSamples(state: SimulationState, units: readonly UnitModel[]): void {
   let needsInitialization = false;
   for (const unit of units) {
     if (!unit.infantryCombatRuntime.physiology.fatigue.initialized) {
@@ -114,7 +117,6 @@ function initializeFatigueSamples(state: SimulationState): void {
 function sampleAllFatigueRates(state: SimulationState, units: readonly UnitModel[]): void {
   for (const unit of units) {
     const task = unit.infantryCombatRuntime.activeFireTask;
-    const weaponClass = unit.infantryCombatRuntime.primaryWeapon?.resolved.weapon.weaponClass ?? null;
     sampleFatigueRateForNextInterval(
       unit.infantryCombatRuntime.physiology.fatigue,
       calculateFatigueFactorSample({
@@ -126,7 +128,7 @@ function sampleAllFatigueRates(state: SimulationState, units: readonly UnitModel
         posture: unit.behaviorRuntime.posture,
         isAiming: task?.phase === 'aiming',
         isApplyingFirstAid: unit.infantryCombatRuntime.medical.activeFirstAidAction !== null,
-        isHeavyWeaponActive: weaponClass === 'machine_gun' && task !== null,
+        isHeavyWeaponActive: false,
         isDeployActionActive: false,
         woundBurden: calculateWoundBurden(unit.infantryCombatRuntime.wounds.slots),
         bloodState: unit.infantryCombatRuntime.physiology.blood.state,
@@ -135,8 +137,8 @@ function sampleAllFatigueRates(state: SimulationState, units: readonly UnitModel
   }
 }
 
-function advanceAllBloodTo(state: SimulationState, seconds: number): void {
-  for (const unit of stableUnits(state)) {
+function advanceAllBloodTo(units: readonly UnitModel[], seconds: number): void {
+  for (const unit of units) {
     const blood = unit.infantryCombatRuntime.physiology.blood;
     const previousState = blood.state;
     advanceBloodRuntimeTo(blood, seconds);
