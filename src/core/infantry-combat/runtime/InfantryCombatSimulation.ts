@@ -82,10 +82,10 @@ export function tickInfantryCombatSimulation(
   for (const pending of pendingCommits) {
     const offsetSeconds = Math.max(cursorSeconds, pending.offsetSeconds);
     if (offsetSeconds > cursorSeconds + TIME_EPSILON_SECONDS) {
-      projectileSubsteps += tickReferenceProjectiles(state, {
+      projectileSubsteps += tickProjectilesWithoutFalseCatchUp(state, {
         intervalStartSeconds: intervalStartSeconds + cursorSeconds,
         deltaSeconds: offsetSeconds - cursorSeconds,
-      }).executedSubsteps;
+      });
     }
 
     const committedSeconds = intervalStartSeconds + offsetSeconds;
@@ -117,10 +117,10 @@ export function tickInfantryCombatSimulation(
   }
 
   if (deltaSeconds > cursorSeconds + TIME_EPSILON_SECONDS || pendingCommits.length === 0) {
-    projectileSubsteps += tickReferenceProjectiles(state, {
+    projectileSubsteps += tickProjectilesWithoutFalseCatchUp(state, {
       intervalStartSeconds: intervalStartSeconds + cursorSeconds,
       deltaSeconds: Math.max(0, deltaSeconds - cursorSeconds),
-    }).executedSubsteps;
+    });
   }
 
   for (const recovery of [...recoveries.values()].sort((left, right) => compareText(left.unit.id, right.unit.id))) {
@@ -133,6 +133,27 @@ export function tickInfantryCombatSimulation(
   }
 
   return { commitResults, projectileSubsteps };
+}
+
+/**
+ * The Stage 4 stepper marks catch-up before executing its bounded batch. If all
+ * active projectiles terminate inside that batch, no backlog survives and the
+ * coarse tick did not actually lose continuation work. Restore the counter in
+ * that narrow case so diagnostics describe real limiting events and remain
+ * invariant to outer tick partitioning. The Stage 4 substep cap itself remains
+ * unchanged and is still reported whenever an active backlog survives.
+ */
+function tickProjectilesWithoutFalseCatchUp(
+  state: SimulationState,
+  input: { readonly intervalStartSeconds: number; readonly deltaSeconds: number },
+): number {
+  const runtime = state.infantryCombatProjectiles;
+  const catchUpBefore = runtime.diagnostics.catchUpLimitedCount;
+  const result = tickReferenceProjectiles(state, input);
+  if (runtime.pool.activeCount === 0 && runtime.accumulatorSeconds === 0) {
+    runtime.diagnostics.catchUpLimitedCount = catchUpBefore;
+  }
+  return result.executedSubsteps;
 }
 
 /**
