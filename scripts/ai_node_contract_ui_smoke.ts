@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { getNodeContractUiModel, explainPortIncompatibilityRu, renderContractParameterFields } from '../src/ai-node-editor/node-contract-ui';
 import { applySearchDirectionChoice, resolveSearchDirectionChoice } from '../src/ai-node-editor/AttentionNodeControls';
+import { collectBlackboardSelectOptions, mergeSelectOptionsWithCurrent } from '../src/ai-node-editor/HumanSelectValueGuard';
 import { getSubgraphChoice, listSubgraphChoices } from '../src/ai-node-editor/subgraph-ui';
 
 const choices = listSubgraphChoices();
@@ -70,6 +71,36 @@ assert.deepEqual(applySearchDirectionChoice({
   targetPositionKey: 'custom_target_position',
 });
 
+assert.deepEqual(
+  mergeSelectOptionsWithCurrent(
+    [{ value: 'danger', label: 'Danger', labelRu: 'Опасность' }],
+    'best_contact_confidence',
+  ).map((option) => option.value),
+  ['best_contact_confidence', 'danger'],
+  'a custom selected value must remain an explicit select option instead of falling back to the first default',
+);
+assert.deepEqual(
+  mergeSelectOptionsWithCurrent(
+    [{ value: 'danger', label: 'Danger', labelRu: 'Опасность' }],
+    'danger',
+  ).map((option) => option.value),
+  ['danger'],
+  'an existing selected option must not be duplicated',
+);
+
+const memoryOptions = collectBlackboardSelectOptions({
+  blackboardDefaults: {
+    best_contact_confidence: 0,
+    contact_visible_now: false,
+  },
+  blackboardSchema: [
+    { key: 'best_contact_confidence', valueKind: 'number', label: 'Best contact confidence', labelRu: 'Уверенность контакта' },
+    { key: 'contact_visible_now', valueKind: 'boolean', label: 'Contact visible now', labelRu: 'Контакт виден сейчас' },
+  ],
+});
+assert.deepEqual(memoryOptions.number.map((option) => option.value), ['best_contact_confidence']);
+assert.deepEqual(memoryOptions.boolean.map((option) => option.value), ['contact_visible_now']);
+
 const attentionControlsSource = readFileSync('src/ai-node-editor/AttentionNodeControls.ts', 'utf8');
 for (const expected of [
   'Куда направить внимание',
@@ -85,6 +116,9 @@ for (const expected of [
 const contractUiSource = readFileSync('src/ai-node-editor/node-contract-ui.ts', 'utf8');
 assert.ok(contractUiSource.includes("closest('.human-hidden-original')"), 'hidden legacy parameter fields must not overwrite the visible friendly panel');
 assert.ok(contractUiSource.includes('return { ...fallback };'), 'friendly JSON parameters must stay authoritative during save');
+
+const editorHtml = readFileSync('ai-node-editor.html', 'utf8');
+assert.ok(editorHtml.includes('HumanSelectValueGuard.ts'), 'the editor must load the custom select value guard');
 
 const statefulSource = readFileSync('src/ai-node-editor/stateful-node-ui.ts', 'utf8');
 for (const expected of [
@@ -107,4 +141,4 @@ assert.ok(mainSource.includes('Главный граф'));
 assert.ok(mainSource.includes("document.querySelector<HTMLSelectElement>('#stateful-subgraph-id')?.value"));
 assert.ok(!mainSource.includes("...(graphNavigation.length ? [editorGraph.nameRu ?? editorGraph.name] : [])"));
 
-console.log('AI node contract UI smoke passed: typed ports, convenient suspected-contact controls, authoritative friendly saves, Graph v2-only editor, errors, and visible Russian subgraph controls.');
+console.log('AI node contract UI smoke passed: typed ports, convenient suspected-contact controls, persistent custom blackboard selects, authoritative friendly saves, Graph v2-only editor, errors, and visible Russian subgraph controls.');
