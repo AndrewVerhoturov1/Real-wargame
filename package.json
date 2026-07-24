@@ -5,7 +5,6 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "postinstall": "node scripts/typecheck_first_error_stage7_diagnostic.mjs",
     "typecheck": "tsc --noEmit",
     "test:preview": "node scripts/test_preview_smokes.mjs",
     "verify:preview": "node scripts/verify_preview.mjs",
