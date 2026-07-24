@@ -61,12 +61,12 @@ const lightAfterTreatment = aggregateWoundCandidate(reopenedBySevere, candidate(
 assert.equal(lightAfterTreatment.slots[0]?.bleedingState, 'stopped');
 assert.equal(lightAfterTreatment.slots[0]?.bleedingRatePerSecond, 0);
 
-const boundary = createBloodRuntime(0, 0.1);
+const boundary = createBloodRuntime(0, 0.08);
 advanceBloodRuntimeTo(boundary, 0.5);
 assert.equal(boundary.bloodLoss, 0);
-assert.equal(boundary.pendingBloodLoss, 0.05);
+assert.equal(boundary.pendingBloodLoss, 0.04);
 advanceBloodRuntimeTo(boundary, 1);
-assert.equal(boundary.bloodLoss, 0.1);
+assert.equal(boundary.bloodLoss, 0.08);
 assert.equal(boundary.pendingBloodLoss, 0);
 assert.equal(boundary.updateCount, 1);
 
@@ -76,10 +76,10 @@ advanceBloodRuntimeTo(coarse, 3.4);
 for (const time of [0.25, 0.9, 1, 1.7, 2, 2.75, 3, 3.4]) advanceBloodRuntimeTo(fine, time);
 assert.deepEqual(fine, coarse);
 
-const changed = createBloodRuntime(0, 0.1);
+const changed = createBloodRuntime(0, 0.08);
 changeBloodRuntimeRateAt(changed, 0.4, 0.02);
 advanceBloodRuntimeTo(changed, 1);
-assert.equal(changed.bloodLoss, 0.052);
+assert.equal(changed.bloodLoss, 0.044);
 
 assert.equal(deriveBloodState(0), 'stable');
 assert.equal(deriveBloodState(0.2), 'weakened');
