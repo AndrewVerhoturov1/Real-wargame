@@ -216,7 +216,15 @@ function verifyGraphRuntimeSelectionAndFallback(): void {
   assert.equal(first.blackboard.investigation_contact_available, true);
   const firstSector = first.effects.find((effect) => effect.type === 'set_search_sector');
   assert.ok(firstSector && firstSector.type === 'set_search_sector');
-  assert.equal(firstSector.centerDegrees, 0);
+  const selectedContact = unit.perceptionKnowledge.contacts.find((item) => item.id === 'contact-a')!;
+  const expectedCenterDegrees = normalizeDegrees(Math.atan2(
+    selectedContact.lastKnownPosition.y - unit.position.y,
+    selectedContact.lastKnownPosition.x - unit.position.x,
+  ) * 180 / Math.PI);
+  assert.ok(
+    Math.abs(firstSector.centerDegrees - expectedCenterDegrees) <= 1e-9,
+    'the search sector must use the normalized runtime unit position rather than raw fixture coordinates',
+  );
   assert.equal(firstSector.arcDegrees, 120);
   assert.equal(typeof first.blackboard[contactInvestigationStateKey('investigate')], 'string');
 
@@ -296,4 +304,8 @@ function contact(
     threatUrgency: 20,
     ...overrides,
   };
+}
+
+function normalizeDegrees(value: number): number {
+  return ((value % 360) + 360) % 360;
 }
