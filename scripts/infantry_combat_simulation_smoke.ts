@@ -9,11 +9,11 @@ import {
 import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
 import type { UnitModel } from '../src/core/units/UnitModel';
 
-verifyCoarseAndFineProjectileDiagnosticsMatch();
+verifyCoarseAndFineProjectilePoolMatch();
 
-console.log('Infantry combat simulation partition probe passed: projectile diagnostics match.');
+console.log('Infantry combat simulation partition probe passed: projectile pool matches.');
 
-function verifyCoarseAndFineProjectileDiagnosticsMatch(): void {
+function verifyCoarseAndFineProjectilePoolMatch(): void {
   const coarse = readyScenario('pipeline-partition');
   const fine = readyScenario('pipeline-partition');
   tickInfantryCombatSimulation(coarse.state, { intervalStartSeconds: 0, deltaSeconds: 2.1 });
@@ -23,7 +23,7 @@ function verifyCoarseAndFineProjectileDiagnosticsMatch(): void {
 
   const coarseSnapshot = serializeReferenceProjectileRuntimeState(coarse.state.infantryCombatProjectiles);
   const fineSnapshot = serializeReferenceProjectileRuntimeState(fine.state.infantryCombatProjectiles);
-  assert.deepEqual(fineSnapshot.diagnostics, coarseSnapshot.diagnostics);
+  assert.deepEqual(fineSnapshot.pool, coarseSnapshot.pool);
 }
 
 function readyScenario(id: string): { state: SimulationState; shooter: UnitModel } {
