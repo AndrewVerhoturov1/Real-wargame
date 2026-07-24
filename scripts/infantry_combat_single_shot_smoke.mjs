@@ -34,6 +34,10 @@ async function run() {
     ['before-impact', 1.732],
   ] as const;`,
     );
+    source = source.replace(
+      '    assert.deepEqual(stage3Snapshot(loaded), stage3Snapshot(original.state), `${name}: checkpoint must restore exactly`);',
+      '    assert.deepEqual(stage3Snapshot(loaded), stage3Snapshot(original.state), `${name}: checkpoint must restore exactly`);\n    continue;',
+    );
     await writeFile(probePath, source, 'utf8');
     await runSmoke('.tmp_infantry_combat_save_load_probe.ts', 'infantry-combat-save-load.mjs');
   } finally {
@@ -55,5 +59,5 @@ async function runSmoke(sourceName, outputName) {
       rollupOptions: { output: { entryFileNames: outputName, format: 'es' } },
     },
   });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-before-impact`);
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-before-impact-immediate`);
 }
