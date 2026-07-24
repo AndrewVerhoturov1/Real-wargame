@@ -1,28 +1,23 @@
 import assert from 'node:assert/strict';
 import { getPhysicalActionCoordinatorDiagnostics } from '../src/core/actions/PhysicalActionCoordinator';
 import { createDefaultCombatCatalogRegistry } from '../src/core/infantry-combat/catalogs';
-import { equipPrimaryWeaponFromLoadout, requestSingleFireTask, tickInfantryCombatSimulation } from '../src/core/infantry-combat/runtime';
+import { equipPrimaryWeaponFromLoadout, requestSingleFireTask, serializeInfantryCombatUnitRuntime, serializeReferenceProjectileRuntimeState, tickInfantryCombatSimulation } from '../src/core/infantry-combat/runtime';
 import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
 import type { UnitModel } from '../src/core/units/UnitModel';
 
-verifyExplicitEndToEndPipeline();
-console.log('Stage 7 diagnostic: complete explicit pipeline passed.');
+verifyCoarseAndFineTicksMatch();
+console.log('Stage 7 diagnostic: coarse and fine ticks match.');
 
-function verifyExplicitEndToEndPipeline(): void {
-  const { state, shooter } = readyScenario('pipeline-explicit');
-  const roundsBefore = shooter.infantryCombatRuntime.primaryWeapon!.roundsInWeapon;
-  const result = tickInfantryCombatSimulation(state, { intervalStartSeconds: 0, deltaSeconds: 2.1 });
-  assert.equal(result.commitResults.length, 1);
-  assert.equal(result.commitResults[0]?.status, 'committed');
-  assert.equal(shooter.infantryCombatRuntime.primaryWeapon!.roundsInWeapon, roundsBefore - 1);
-  assert.equal(state.infantryCombatProjectiles.committedShots.length, 1);
-  assert.equal(state.infantryCombatProjectiles.activeProjectiles.length, 0);
-  assert.equal(state.infantryCombatProjectiles.impacts.length, 1);
-  assert.equal(state.infantryCombatProjectiles.impacts[0]?.hitObjectId, 'pipeline-wall');
-  assert.equal(shooter.infantryCombatRuntime.activeFireTask, null);
-  assert.equal(shooter.infantryCombatRuntime.lastFireResult?.phase, 'completed');
-  assert.equal(shooter.infantryCombatRuntime.lastFireResult?.committedShotId, 'pipeline-explicit:shot:1');
-  assert.deepEqual(getPhysicalActionCoordinatorDiagnostics(shooter).activeLeases, []);
+function verifyCoarseAndFineTicksMatch(): void {
+  const coarse = readyScenario('pipeline-partition');
+  const fine = readyScenario('pipeline-partition');
+  tickInfantryCombatSimulation(coarse.state, { intervalStartSeconds: 0, deltaSeconds: 2.1 });
+  tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: 0, deltaSeconds: 0.7 });
+  tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: 0.7, deltaSeconds: 0.4 });
+  tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: 1.1, deltaSeconds: 1 });
+  assert.deepEqual(serializeInfantryCombatUnitRuntime(fine.shooter.infantryCombatRuntime), serializeInfantryCombatUnitRuntime(coarse.shooter.infantryCombatRuntime));
+  assert.deepEqual(serializeReferenceProjectileRuntimeState(fine.state.infantryCombatProjectiles), serializeReferenceProjectileRuntimeState(coarse.state.infantryCombatProjectiles));
+  assert.deepEqual(getPhysicalActionCoordinatorDiagnostics(fine.shooter), getPhysicalActionCoordinatorDiagnostics(coarse.shooter));
 }
 
 function readyScenario(id: string): { state: SimulationState; shooter: UnitModel } {
