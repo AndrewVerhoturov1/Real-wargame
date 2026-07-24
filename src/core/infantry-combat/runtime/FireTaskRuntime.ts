@@ -1,4 +1,5 @@
 import type { UnitModel } from '../../units/UnitModel';
+import { getEffectiveCombatCapabilities } from './EffectiveCombatCapabilities';
 import {
   requestSingleFireTask as requestBaseSingleFireTask,
   tickFireTaskWithTimeBudget as tickBaseFireTaskWithTimeBudget,
@@ -26,24 +27,22 @@ export function requestSingleFireTask(
   unit: UnitModel,
   input: RequestSingleFireTaskInput,
 ): Stage6RequestSingleFireTaskResult {
-  if (!unit.infantryCombatRuntime.wounds.capabilities.canUseWeapon) {
+  if (!getEffectiveCombatCapabilities(unit).canUseWeapon) {
     return {
       accepted: false,
       status: 'weapon_capability_lost',
       task: null,
       lease: null,
       reasonCode: 'infantry_fire_task_weapon_capability_lost',
-      reasonRu: 'Ранение не позволяет бойцу пользоваться оружием.',
+      reasonRu: 'Физическое состояние не позволяет бойцу пользоваться оружием.',
     };
   }
   return requestBaseSingleFireTask(unit, input);
 }
 
 /**
- * Keeps the Stage 5 clock intact, but stops each delegated slice at the next
- * 5 Hz tracking boundary when a wound actually changes aim factors. Healthy
- * units use the exact Stage 5 path so partitioning and save/load remain bitwise
- * compatible with the mandatory regression contract.
+ * Keeps the Stage 5 clock intact, while stopping delegated slices at tracking
+ * boundaries whenever Stage 7 fatigue or effective capabilities are non-neutral.
  */
 export function tickFireTaskWithTimeBudget(
   unit: UnitModel,
@@ -52,11 +51,11 @@ export function tickFireTaskWithTimeBudget(
   const taskAtStart = unit.infantryCombatRuntime.activeFireTask;
   const totalSeconds = finiteNonNegative(input.deltaSeconds);
   const startSeconds = finiteNonNegative(input.intervalStartSeconds);
-  if (taskAtStart && !unit.infantryCombatRuntime.wounds.capabilities.canUseWeapon) {
+  if (taskAtStart && !getEffectiveCombatCapabilities(unit).canUseWeapon) {
     failBaseActiveFireTask(unit, {
       endedSeconds: startSeconds,
       resultCode: 'infantry_fire_task_weapon_capability_lost',
-      resultRu: 'Огневая задача завершена: ранение не позволяет пользоваться оружием.',
+      resultRu: 'Огневая задача завершена: физическое состояние не позволяет пользоваться оружием.',
     });
     return {
       taskId: taskAtStart.taskId,
@@ -69,8 +68,10 @@ export function tickFireTaskWithTimeBudget(
     };
   }
 
-  if (!taskAtStart || hasNeutralWoundAimPath(unit, taskAtStart)) {
-    return tickBaseFireTaskWithTimeBudget(unit, input);
+  if (!taskAtStart || hasCurrentEffectiveAimPath(unit, taskAtStart)) {
+    const result = tickBaseFireTaskWithTimeBudget(unit, input);
+    applyEffectiveAimCapabilities(unit);
+    return result;
   }
 
   let consumedSeconds = 0;
@@ -88,11 +89,11 @@ export function tickFireTaskWithTimeBudget(
   for (let guard = 0; guard < 64; guard += 1) {
     const task = unit.infantryCombatRuntime.activeFireTask;
     if (!task) return composeTickResult(lastResult, consumedSeconds, remainingSeconds);
-    if (!unit.infantryCombatRuntime.wounds.capabilities.canUseWeapon) {
+    if (!getEffectiveCombatCapabilities(unit).canUseWeapon) {
       failBaseActiveFireTask(unit, {
         endedSeconds: startSeconds + consumedSeconds,
         resultCode: 'infantry_fire_task_weapon_capability_lost',
-        resultRu: 'Огневая задача завершена: ранение не позволяет пользоваться оружием.',
+        resultRu: 'Огневая задача завершена: физическое состояние не позволяет пользоваться оружием.',
       });
       return {
         taskId: task.taskId,
@@ -105,12 +106,10 @@ export function tickFireTaskWithTimeBudget(
       };
     }
 
-    applyWoundAimCapabilities(unit);
+    applyEffectiveAimCapabilities(unit);
     const now = startSeconds + consumedSeconds;
     const timeToBoundary = Math.max(0, task.aimTracking.nextTrackingBoundarySeconds - now);
-    const sliceSeconds = timeToBoundary <= EPSILON
-      ? 0
-      : Math.min(remainingSeconds, timeToBoundary);
+    const sliceSeconds = timeToBoundary <= EPSILON ? 0 : Math.min(remainingSeconds, timeToBoundary);
     const beforeBoundary = task.aimTracking.nextTrackingBoundarySeconds;
     const result = tickBaseFireTaskWithTimeBudget(unit, {
       ...input,
@@ -121,25 +120,18 @@ export function tickFireTaskWithTimeBudget(
     const used = Math.max(0, Math.min(sliceSeconds, result.consumedSeconds));
     consumedSeconds = cleanDuration(consumedSeconds + used);
     remainingSeconds = cleanDuration(Math.max(0, totalSeconds - consumedSeconds));
-    applyWoundAimCapabilities(unit);
+    applyEffectiveAimCapabilities(unit);
 
     if (result.commitRequested || result.completed || result.failed) {
       return composeTickResult(result, consumedSeconds, remainingSeconds);
     }
-    if (remainingSeconds <= EPSILON) {
-      return composeTickResult(result, consumedSeconds, remainingSeconds);
-    }
+    if (remainingSeconds <= EPSILON) return composeTickResult(result, consumedSeconds, remainingSeconds);
     const current = unit.infantryCombatRuntime.activeFireTask;
     const boundaryAdvanced = Boolean(
-      current
-      && current.aimTracking.nextTrackingBoundarySeconds > beforeBoundary + EPSILON,
+      current && current.aimTracking.nextTrackingBoundarySeconds > beforeBoundary + EPSILON,
     );
-    if (sliceSeconds <= EPSILON && !boundaryAdvanced) {
-      return composeTickResult(result, consumedSeconds, remainingSeconds);
-    }
-    if (sliceSeconds > EPSILON && used + EPSILON < sliceSeconds) {
-      return composeTickResult(result, consumedSeconds, remainingSeconds);
-    }
+    if (sliceSeconds <= EPSILON && !boundaryAdvanced) return composeTickResult(result, consumedSeconds, remainingSeconds);
+    if (sliceSeconds > EPSILON && used + EPSILON < sliceSeconds) return composeTickResult(result, consumedSeconds, remainingSeconds);
   }
 
   return composeTickResult(lastResult, consumedSeconds, remainingSeconds);
@@ -152,44 +144,57 @@ export function failActiveFireTask(
   failBaseActiveFireTask(unit, input);
 }
 
-export function applyWoundAimCapabilities(unit: UnitModel): void {
+export function applyEffectiveAimCapabilities(unit: UnitModel): void {
   const task = unit.infantryCombatRuntime.activeFireTask;
   if (!task) return;
   const solution = task.aimTracking.solution;
-  const capabilities = unit.infantryCombatRuntime.wounds.capabilities;
+  const capabilities = getEffectiveCombatCapabilities(unit);
   const desiredStability = clamp(
     Math.min(capabilities.stabilityMultiplier, capabilities.accuracyMultiplier),
     0.2,
     1,
   );
+  const desiredFatigue = clamp01(unit.infantryCombatRuntime.physiology.fatigue.fatigue);
   const currentStability = clamp(solution.factors.woundStabilityMultiplier, 0.2, 1);
-  const ratio = desiredStability / currentStability;
-  if (Math.abs(ratio - 1) <= EPSILON) return;
+  const currentFatigue = clamp01(solution.factors.fatigue);
+  const currentFatigueDispersion = 1 + currentFatigue * 0.6;
+  const desiredFatigueDispersion = 1 + desiredFatigue * 0.6;
+  const currentFatigueAim = 1 - currentFatigue * 0.45;
+  const desiredFatigueAim = 1 - desiredFatigue * 0.45;
+  const stabilityRatio = desiredStability / currentStability;
+  const aimRatio = (desiredFatigueAim / currentFatigueAim) * stabilityRatio;
+  const dispersionRatio = (desiredFatigueDispersion / currentFatigueDispersion) / stabilityRatio;
+  if (Math.abs(aimRatio - 1) <= EPSILON && Math.abs(dispersionRatio - 1) <= EPSILON) return;
+
   solution.factors = {
     ...solution.factors,
-    fatigue: 0,
+    fatigue: desiredFatigue,
     woundStabilityMultiplier: desiredStability,
-    woundDispersionMultiplier: solution.factors.woundDispersionMultiplier / ratio,
-    aimRateMultiplier: solution.factors.aimRateMultiplier * ratio,
-    recoilRecoveryMultiplier: solution.factors.recoilRecoveryMultiplier * ratio,
-    recoilImpulseMultiplier: solution.factors.recoilImpulseMultiplier / ratio,
-    effectiveDispersionRadians: solution.factors.effectiveDispersionRadians / ratio,
-    aimQualityPerSecond: solution.factors.aimQualityPerSecond * ratio,
+    fatigueDispersionMultiplier: desiredFatigueDispersion,
+    woundDispersionMultiplier: solution.factors.woundDispersionMultiplier / stabilityRatio,
+    aimRateMultiplier: solution.factors.aimRateMultiplier * aimRatio,
+    recoilRecoveryMultiplier: solution.factors.recoilRecoveryMultiplier * aimRatio,
+    recoilImpulseMultiplier: solution.factors.recoilImpulseMultiplier * dispersionRatio,
+    effectiveDispersionRadians: solution.factors.effectiveDispersionRadians * dispersionRatio,
+    aimQualityPerSecond: solution.factors.aimQualityPerSecond * aimRatio,
   };
-  solution.effectiveDispersionRadians = Math.max(0, solution.effectiveDispersionRadians / ratio);
-  solution.predictedHitProbability = clamp01(solution.predictedHitProbability * ratio);
+  solution.effectiveDispersionRadians = Math.max(0, solution.effectiveDispersionRadians * dispersionRatio);
+  solution.predictedHitProbability = clamp01(solution.predictedHitProbability / Math.max(EPSILON, dispersionRatio));
 }
 
-function hasNeutralWoundAimPath(
+/** Stage 6 compatibility alias. */
+export const applyWoundAimCapabilities = applyEffectiveAimCapabilities;
+
+function hasCurrentEffectiveAimPath(
   unit: UnitModel,
   task: NonNullable<UnitModel['infantryCombatRuntime']['activeFireTask']>,
 ): boolean {
-  const capabilities = unit.infantryCombatRuntime.wounds.capabilities;
+  const capabilities = getEffectiveCombatCapabilities(unit);
   const desiredStability = Math.min(capabilities.stabilityMultiplier, capabilities.accuracyMultiplier);
-  return Math.abs(desiredStability - 1) <= EPSILON
-    && Math.abs(task.aimTracking.solution.factors.woundStabilityMultiplier - 1) <= EPSILON;
+  const desiredFatigue = unit.infantryCombatRuntime.physiology.fatigue.fatigue;
+  return Math.abs(desiredStability - task.aimTracking.solution.factors.woundStabilityMultiplier) <= EPSILON
+    && Math.abs(desiredFatigue - task.aimTracking.solution.factors.fatigue) <= EPSILON;
 }
-
 function composeTickResult(
   result: TickFireTaskResult,
   consumedSeconds: number,
@@ -201,10 +206,7 @@ function composeTickResult(
     remainingSeconds: cleanDuration(remainingSeconds),
   };
 }
-
-function finiteNonNegative(value: number): number {
-  return Number.isFinite(value) ? Math.max(0, value) : 0;
-}
+function finiteNonNegative(value: number): number { return Number.isFinite(value) ? Math.max(0, value) : 0; }
 function cleanDuration(value: number): number {
   if (Math.abs(value) <= EPSILON) return 0;
   return Math.round(Math.max(0, value) * 1_000_000_000_000) / 1_000_000_000_000;
