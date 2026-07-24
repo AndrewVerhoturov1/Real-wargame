@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "postinstall": "tsc --noEmit --pretty false",
     "typecheck": "tsc --noEmit",
     "test:preview": "node scripts/test_preview_smokes.mjs",
     "verify:preview": "node scripts/verify_preview.mjs",
