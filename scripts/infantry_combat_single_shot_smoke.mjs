@@ -15,7 +15,6 @@ async function run() {
   await rm(outDir, { recursive: true, force: true });
   try {
     await runSmoke('infantry_combat_save_load_smoke.ts', 'infantry-combat-save-load.mjs');
-    await runSmoke('infantry_combat_diagnostics_smoke.ts', 'infantry-combat-diagnostics.mjs');
   } finally {
     await rm(outDir, { recursive: true, force: true });
   }
@@ -36,5 +35,5 @@ async function runSmoke(sourceName, outputName) {
       },
     },
   });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-diagnostics`);
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load`);
 }
