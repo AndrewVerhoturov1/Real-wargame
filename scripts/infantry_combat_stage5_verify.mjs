@@ -1,9 +1,8 @@
 import { spawnSync } from 'node:child_process';
 
-// Temporary CI bisection: first two Stage 5 commands.
+// Temporary CI bisection: Stage 5 smoke only.
 const checks = [
   ['npm', ['run', 'infantry-combat-stage5:smoke']],
-  ['npm', ['run', 'infantry-combat-single-shot:smoke']],
 ];
 
 for (const [command, args] of checks) {
@@ -28,7 +27,7 @@ for (const [command, args] of checks) {
   console.log(workflowAnnotation('notice', 'Stage 5 verification', `PASS ${label}: ${summary}`));
 }
 
-console.log(`Stage 5 verification probe passed: ${checks.length} commands.`);
+console.log(`Stage 5 verification probe passed: ${checks.length} command.`);
 
 function lastMeaningfulLine(value) {
   const lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
