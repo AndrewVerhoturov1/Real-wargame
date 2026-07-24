@@ -15,6 +15,7 @@ const excludedCalls = [
   'verifyRecoilExactlyOnceAndAtomicity();',
   'verifyProbabilityIsNotHitResolver();',
   'verifyOrderIndependenceAndReconciliation();',
+  'verifyReadOnlyDiagnostics();',
 ];
 
 run().catch((error) => {
