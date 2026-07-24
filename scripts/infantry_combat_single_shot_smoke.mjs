@@ -14,7 +14,14 @@ run().catch((error) => {
 async function run() {
   await rm(outDir, { recursive: true, force: true });
   try {
+    await runSmoke('infantry_combat_single_shot_smoke.ts', 'infantry-combat-single-shot.mjs');
+    await runSmoke('infantry_combat_fire_task_smoke.ts', 'infantry-combat-fire-task.mjs');
+    await runSmoke('infantry_combat_geometry_smoke.ts', 'infantry-combat-geometry.mjs');
+    await runSmoke('infantry_combat_commit_smoke.ts', 'infantry-combat-commit.mjs');
+    await runSmoke('infantry_combat_projectile_smoke.ts', 'infantry-combat-projectile.mjs');
     await runSmoke('infantry_combat_simulation_smoke.ts', 'infantry-combat-simulation.mjs');
+    await runSmoke('infantry_combat_save_load_smoke.ts', 'infantry-combat-save-load.mjs');
+    await runSmoke('infantry_combat_diagnostics_smoke.ts', 'infantry-combat-diagnostics.mjs');
   } finally {
     await rm(outDir, { recursive: true, force: true });
   }
@@ -35,5 +42,5 @@ async function runSmoke(sourceName, outputName) {
       },
     },
   });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-simulation-isolation`);
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5`);
 }
