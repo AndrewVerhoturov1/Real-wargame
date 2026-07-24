@@ -41,7 +41,13 @@ const intersection = intersectRayWithUnitHitShapes(origin, direction, 30, unit, 
 assert.ok(intersection);
 assert.equal(intersection.zone, 'torso');
 assert.ok(intersection.entryDistanceMetres <= intersection.exitDistanceMetres);
-assert.equal(intersection.pathLengthMetres, intersection.exitDistanceMetres - intersection.entryDistanceMetres);
+assert.ok(
+  Math.abs(
+    intersection.pathLengthMetres
+    - (intersection.exitDistanceMetres - intersection.entryDistanceMetres)
+  ) < 1e-12,
+  'path length must equal exit minus entry within floating-point tolerance',
+);
 assert.deepEqual(intersection.point, intersection.entryPoint);
 assert.equal(intersection.distanceMetres, intersection.entryDistanceMetres);
 assert.ok(Number.isFinite(intersection.entryNormal.x));
