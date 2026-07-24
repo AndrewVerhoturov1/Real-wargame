@@ -14,7 +14,7 @@ run().catch((error) => {
 async function run() {
   await rm(outDir, { recursive: true, force: true });
   try {
-    await runSmoke('infantry_combat_stage7_first_aid_smoke.ts', 'stage7-first-aid-smoke.mjs');
+    await runSmoke('infantry_combat_stage7_save_load_smoke.ts', 'stage7-save-load-smoke.mjs');
   } finally {
     await rm(outDir, { recursive: true, force: true });
   }
