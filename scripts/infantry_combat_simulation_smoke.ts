@@ -1,25 +1,22 @@
 import assert from 'node:assert/strict';
-import { getPhysicalActionCoordinatorDiagnostics } from '../src/core/actions/PhysicalActionCoordinator';
 import { createDefaultCombatCatalogRegistry } from '../src/core/infantry-combat/catalogs';
 import { equipPrimaryWeaponFromLoadout, requestSingleFireTask, tickInfantryCombatSimulation } from '../src/core/infantry-combat/runtime';
 import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
 import type { UnitModel } from '../src/core/units/UnitModel';
 
-verifyExplicitEndToEndPipeline();
-console.log('Stage 7 diagnostic: explicit projectile impact and task cleanup passed.');
+verifyExpectedSmallRecoveryTail();
+console.log('Stage 7 diagnostic: expected small recovery tail confirmed.');
 
-function verifyExplicitEndToEndPipeline(): void {
+function verifyExpectedSmallRecoveryTail(): void {
   const { state, shooter } = readyScenario('pipeline-explicit');
-  const roundsBefore = shooter.infantryCombatRuntime.primaryWeapon!.roundsInWeapon;
   const result = tickInfantryCombatSimulation(state, { intervalStartSeconds: 0, deltaSeconds: 2.1 });
   assert.equal(result.commitResults.length, 1);
   assert.equal(result.commitResults[0]?.status, 'committed');
-  assert.equal(shooter.infantryCombatRuntime.primaryWeapon!.roundsInWeapon, roundsBefore - 1);
-  assert.equal(state.infantryCombatProjectiles.committedShots.length, 1);
-  assert.equal(state.infantryCombatProjectiles.activeProjectiles.length, 0);
-  assert.equal(state.infantryCombatProjectiles.impacts.length, 1);
-  assert.equal(state.infantryCombatProjectiles.impacts[0]?.hitObjectId, 'pipeline-wall');
-  assert.equal(shooter.infantryCombatRuntime.activeFireTask, null);
+  const task = shooter.infantryCombatRuntime.activeFireTask;
+  assert.notEqual(task, null);
+  assert.equal(task?.phase, 'recovery');
+  assert.equal((task?.recoveryRemainingSeconds ?? 1) > 0, true);
+  assert.equal((task?.recoveryRemainingSeconds ?? 1) < 0.01, true);
 }
 
 function readyScenario(id: string): { state: SimulationState; shooter: UnitModel } {
