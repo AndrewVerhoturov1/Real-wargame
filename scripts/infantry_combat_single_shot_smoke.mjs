@@ -25,8 +25,8 @@ async function run() {
     serializeInfantryCombatUnitRuntime(fine.shooter.infantryCombatRuntime),
     serializeInfantryCombatUnitRuntime(coarse.shooter.infantryCombatRuntime),
   );`, `  assert.deepEqual(
-    serializeInfantryCombatUnitRuntime(fine.shooter.infantryCombatRuntime).primaryWeapon,
-    serializeInfantryCombatUnitRuntime(coarse.shooter.infantryCombatRuntime).primaryWeapon,
+    serializeInfantryCombatUnitRuntime(fine.shooter.infantryCombatRuntime).lastFireResult,
+    serializeInfantryCombatUnitRuntime(coarse.shooter.infantryCombatRuntime).lastFireResult,
   );`);
     source = source.replace(`  assert.deepEqual(
     serializeReferenceProjectileRuntimeState(fine.state.infantryCombatProjectiles),
@@ -59,5 +59,5 @@ async function runSmoke(sourceName, outputName) {
       },
     },
   });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-primary-weapon-probe`);
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-last-fire-result-probe`);
 }
