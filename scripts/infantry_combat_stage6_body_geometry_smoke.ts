@@ -72,11 +72,36 @@ assert.equal(inside.entryDistanceMetres, 0);
 assert.ok(inside.exitDistanceMetres > 0);
 
 const torso = shapes.find((shape) => shape.zone === 'torso')!;
+const torsoOnly = shapes.filter((shape) => shape.zone === 'torso');
+const belowTorso = intersectRayWithUnitHitShapeList(
+  {
+    xMetres: 0,
+    yMetres: torso.centerYMetres,
+    zMetres: torso.bottomZMetres - 0.1,
+  },
+  { x: 1, y: 0, z: -0.001 },
+  30,
+  torsoOnly,
+);
+assert.equal(belowTorso, null, 'ray below the vertical cylinder must not produce a zero-length body hit');
+
+const aboveTorso = intersectRayWithUnitHitShapeList(
+  {
+    xMetres: 0,
+    yMetres: torso.centerYMetres,
+    zMetres: torso.topZMetres + 0.1,
+  },
+  { x: 1, y: 0, z: 0.001 },
+  30,
+  torsoOnly,
+);
+assert.equal(aboveTorso, null, 'ray above the vertical cylinder must not produce a zero-length body hit');
+
 const tangent = intersectRayWithUnitHitShapeList(
   { xMetres: 0, yMetres: torso.centerYMetres + torso.radiusMetres, zMetres: 1.1 },
   direction,
   30,
-  shapes.filter((shape) => shape.zone === 'torso'),
+  torsoOnly,
 );
 assert.ok(tangent === null || (Number.isFinite(tangent.pathLengthMetres) && tangent.pathLengthMetres >= 0));
 assert.equal(normalizeLegacyHitZone('limbs'), 'arms');
