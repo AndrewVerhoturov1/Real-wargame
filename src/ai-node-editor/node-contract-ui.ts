@@ -47,7 +47,10 @@ export function renderContractParameterFields(node: Pick<AiNode, 'id' | 'type' |
   }
   const contract = DEFAULT_AI_NODE_CONTRACT_REGISTRY.get(String(node.type));
   if (!contract || contract.parameters.length === 0) return '<p class="toolbar-note">У этой ноды нет настраиваемых параметров.</p>';
-  return contract.parameters.map((parameter) => renderParameter(parameter, node.parameters?.[parameter.id])).join('');
+  const registered = contract.parameters.map((parameter) => renderParameter(parameter, node.parameters?.[parameter.id])).join('');
+  return node.type === 'SetSearchSector'
+    ? `${registered}${renderSearchSectorDirectionFields(node.parameters)}`
+    : registered;
 }
 
 function renderParameter(parameter: AiParameterDefinition, value: unknown): string {
@@ -69,6 +72,35 @@ function renderParameter(parameter: AiParameterDefinition, value: unknown): stri
     control = `<input class="contract-parameter-field" data-param-id="${escapeAttribute(parameter.id)}" data-param-kind="${escapeAttribute(parameter.kind)}" type="${type}" value="${escapeAttribute(String(actual))}"${attrs} />`;
   }
   return `<label class="inspector-field contract-parameter"><span>${escapeHtml(parameter.labelRu)} ${required}</span>${control}${range}${parameter.descriptionRu ? `<small>${escapeHtml(parameter.descriptionRu)}</small>` : ''}</label>`;
+}
+
+function renderSearchSectorDirectionFields(parameters: AiNode['parameters']): string {
+  const centerSource = parameters?.centerSource === 'blackboard_position' ? 'blackboard_position' : 'fixed';
+  const originPositionKey = typeof parameters?.originPositionKey === 'string' && parameters.originPositionKey.length > 0
+    ? parameters.originPositionKey
+    : 'self_position';
+  const targetPositionKey = typeof parameters?.targetPositionKey === 'string' && parameters.targetPositionKey.length > 0
+    ? parameters.targetPositionKey
+    : 'suspected_enemy_position';
+  return `
+    <label class="inspector-field contract-parameter">
+      <span>Источник направления <span class="contract-optional">необязательно</span></span>
+      <select class="contract-parameter-field" data-param-id="centerSource" data-param-kind="enum">
+        <option value="fixed" ${centerSource === 'fixed' ? 'selected' : ''}>Фиксированный угол · fixed</option>
+        <option value="blackboard_position" ${centerSource === 'blackboard_position' ? 'selected' : ''}>Позиция из памяти · blackboard_position</option>
+      </select>
+      <small>Фиксированный угол использует поле «Центральное направление». Позиция из памяти вычисляет направление на субъективный контакт.</small>
+    </label>
+    <label class="inspector-field contract-parameter">
+      <span>Ключ позиции бойца <span class="contract-optional">необязательно</span></span>
+      <input class="contract-parameter-field" data-param-id="originPositionKey" data-param-kind="string" type="text" value="${escapeAttribute(originPositionKey)}" />
+      <small>Обычно self_position.</small>
+    </label>
+    <label class="inspector-field contract-parameter">
+      <span>Ключ позиции цели <span class="contract-optional">необязательно</span></span>
+      <input class="contract-parameter-field" data-param-id="targetPositionKey" data-param-kind="string" type="text" value="${escapeAttribute(targetPositionKey)}" />
+      <small>Для следов противника используйте suspected_enemy_position.</small>
+    </label>`;
 }
 
 export function readContractParameterFields(container: ParentNode, fallback: Record<string, unknown>): Record<string, unknown> {
