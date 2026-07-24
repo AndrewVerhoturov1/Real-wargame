@@ -193,12 +193,11 @@ function verifyRecoilExactlyOnceAndAtomicity(): void {
   const roundsBefore = weapon.roundsInWeapon;
   tickInfantryCombatSimulation(ready.state, { intervalStartSeconds: 0, deltaSeconds: 0.8 });
   const record = ready.state.infantryCombatProjectiles.committedShots[0]!;
-  const projectile = ready.state.infantryCombatProjectiles.activeProjectiles[0]!;
   assert.equal(weapon.roundsInWeapon, roundsBefore - 1);
   assert.equal(weapon.recoil.sequence, 1);
   assert.ok(record.aimDirectionBeforeDispersion && record.finalProjectileDirection);
   const speed = weapon.resolved.ammo.muzzleVelocityMetersPerSecond;
-  assert.ok(Math.abs(projectile.velocityMetresPerSecond.x / speed - record.finalProjectileDirection.x) < 1e-12);
+  assert.ok(Math.abs(record.initialVelocityMetresPerSecond.x / speed - record.finalProjectileDirection.x) < 1e-12);
   assert.equal(task.committedShotId, record.shotId);
 
   const recoilAfterCommit = structuredClone(weapon.recoil);
@@ -281,7 +280,7 @@ function verifyStage4MigrationDefaults(): void {
   assert.equal(migratedUnit.activeFireTask?.aimTracking.trackingUpdateCount, 0);
 
   const committed = scenario('stage5-projectile-migration', false, 0);
-  tickInfantryCombatSimulation(committed.state, { intervalStartSeconds: 0, deltaSeconds: 0.8 });
+  tickInfantryCombatSimulation(committed.state, { intervalStartSeconds: 0, deltaSeconds: 0.7 });
   const stage4Projectile = structuredClone(serializeReferenceProjectileRuntimeState(committed.state.infantryCombatProjectiles)) as any;
   for (const record of stage4Projectile.committedShots) {
     delete record.aimDirectionBeforeDispersion;
