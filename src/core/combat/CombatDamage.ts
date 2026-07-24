@@ -1,3 +1,4 @@
+import { getEffectiveCombatCapabilities } from '../infantry-combat/runtime/EffectiveCombatCapabilities';
 import type { UnitModel } from '../units/UnitModel';
 import type { HitZone } from './UnitHitShapes';
 
@@ -36,8 +37,8 @@ export function replaceCombatRuntime(unit: UnitModel, value: Partial<CombatRunti
 export function isUnitCombatCapable(unit: UnitModel): boolean {
   const legacy = getCombatRuntime(unit).capability;
   const legacyCapable = legacy !== 'incapacitated' && legacy !== 'dead';
-  const wounds = unit.infantryCombatRuntime.wounds.capabilities;
-  return legacyCapable && wounds.alive && wounds.conscious;
+  const effective = getEffectiveCombatCapabilities(unit);
+  return legacyCapable && effective.alive && effective.conscious;
 }
 
 export function applyUnitHit(unit: UnitModel, input: UnitHitInput): UnitHitResult {
@@ -78,15 +79,15 @@ export function applyUnitHit(unit: UnitModel, input: UnitHitInput): UnitHitResul
 }
 
 export function getCombatMovementMultiplier(unit: UnitModel): number {
-  const wounds = unit.infantryCombatRuntime.wounds.capabilities;
-  const woundMultiplier = wounds.canMove ? wounds.movementSpeedMultiplier : 0;
-  return Math.min(legacyMovementMultiplier(getCombatRuntime(unit).capability), woundMultiplier);
+  const effective = getEffectiveCombatCapabilities(unit);
+  const physicalMultiplier = effective.canMove ? effective.movementSpeedMultiplier : 0;
+  return Math.min(legacyMovementMultiplier(getCombatRuntime(unit).capability), physicalMultiplier);
 }
 
 export function getCombatAimMultiplier(unit: UnitModel): number {
-  const wounds = unit.infantryCombatRuntime.wounds.capabilities;
-  const woundMultiplier = wounds.canUseWeapon ? wounds.accuracyMultiplier : 0;
-  return Math.min(legacyAimMultiplier(getCombatRuntime(unit).capability), woundMultiplier);
+  const effective = getEffectiveCombatCapabilities(unit);
+  const physicalMultiplier = effective.canUseWeapon ? effective.accuracyMultiplier : 0;
+  return Math.min(legacyAimMultiplier(getCombatRuntime(unit).capability), physicalMultiplier);
 }
 
 function legacyMovementMultiplier(capability: CombatCapability): number {
