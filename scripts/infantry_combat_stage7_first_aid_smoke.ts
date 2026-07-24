@@ -97,7 +97,8 @@ const criticalSlot = criticalPatient.infantryCombatRuntime.wounds.slots.find((sl
 assert.equal(criticalSlot.severity, 'critical');
 assert.equal(criticalSlot.bleedingState, 'severe');
 assert.equal(criticalMedic.infantryCombatRuntime.medical.firstAidCharges, 1);
-assert.equal(criticalPatient.infantryCombatRuntime.physiology.blood.bloodLoss, 0.3);
+const bloodLossBeforeSecondAid = criticalPatient.infantryCombatRuntime.physiology.blood.bloodLoss;
+assert.equal(bloodLossBeforeSecondAid, 0.3);
 const secondStage = requestApplyFirstAidAction(criticalState, criticalMedic, {
   owner: { source: 'test', id: 'critical-second' },
   ownerToken: 'critical-second',
@@ -106,14 +107,16 @@ const secondStage = requestApplyFirstAidAction(criticalState, criticalMedic, {
   requestedSeconds: 6,
 });
 assert.equal(secondStage.accepted, true);
-process.exit(0);
 for (let tick = 25; tick <= 48; tick += 1) tickFirstAidActionsAtBoundary(criticalState, tick * 0.25);
 const treatedCriticalSlot = criticalPatient.infantryCombatRuntime.wounds.slots.find((slot) => slot.zone === 'torso')!;
 assert.equal(treatedCriticalSlot.severity, 'critical');
 assert.equal(treatedCriticalSlot.bleedingState, 'stopped');
 assert.equal(treatedCriticalSlot.firstAidApplicationCount, 2);
 assert.equal(criticalMedic.infantryCombatRuntime.medical.firstAidCharges, 0);
-assert.equal(criticalPatient.infantryCombatRuntime.physiology.blood.bloodLoss, 0.3);
+assert.ok(
+  criticalPatient.infantryCombatRuntime.physiology.blood.bloodLoss >= bloodLossBeforeSecondAid,
+  'first aid must not restore blood already lost while treatment is in progress',
+);
 
 const cancelState = createState('cancel', false);
 const cancelMedic = cancelState.units[0]!;
