@@ -1,10 +1,11 @@
 import { spawnSync } from 'node:child_process';
 
 const checks = [
-  ['npm', ['run', 'infantry-combat-projectile:smoke']],
-  ['npm', ['run', 'infantry-combat-projectile:benchmark']],
-  ['npm', ['run', 'combat-catalogs:smoke']],
-  ['npm', ['run', 'physical-action-coordinator:smoke']],
+  ['npm', ['run', 'posture-transition:smoke']],
+  ['npm', ['run', 'physical-movement:smoke']],
+  ['npm', ['run', 'perception:smoke']],
+  ['npm', ['run', 'performance-contract:smoke']],
+  ['npm', ['run', 'infantry-combat-stage5:forbidden-scan']],
 ];
 
 for (const [command, args] of checks) {
