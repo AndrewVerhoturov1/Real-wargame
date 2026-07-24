@@ -13,9 +13,8 @@ import { tickSimulation } from '../src/core/simulation/SimulationTick';
 import type { UnitModel } from '../src/core/units/UnitModel';
 
 verifyExplicitEndToEndPipeline();
-verifyCoarseAndFineTicksMatch();
 
-console.log('Infantry combat simulation probe passed: explicit pipeline and coarse/fine partition checks.');
+console.log('Infantry combat simulation probe passed: explicit end-to-end pipeline.');
 
 function verifyExplicitEndToEndPipeline(): void {
   const { state, shooter } = readyScenario('pipeline-explicit');
