@@ -11,6 +11,6 @@ const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
 const firstError = output.split(/\r?\n/).find((line) => line.includes('error TS')) ?? '';
 const match = firstError.match(/^src\/core\/infantry-combat\/runtime\/WoundRuntime\.ts\((\d+),/);
 const line = match ? Number(match[1]) : Number.POSITIVE_INFINITY;
-const pivot = 125;
+const pivot = 187;
 console.log(line <= pivot ? 'TYPECHECK_LINE_LOWER_OR_EQUAL' : 'TYPECHECK_LINE_HIGHER');
 process.exit(line <= pivot ? 1 : 0);
