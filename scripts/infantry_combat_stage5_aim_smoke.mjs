@@ -13,6 +13,8 @@ const excludedCalls = [
   'verifyFactorAndProbabilityContracts();',
   'verifySeededDispersionContracts();',
   'verifyRecoilExactlyOnceAndAtomicity();',
+  'verifyStage4MigrationDefaults();',
+  'verifyReadOnlyDiagnostics();',
 ];
 
 run().catch((error) => {
