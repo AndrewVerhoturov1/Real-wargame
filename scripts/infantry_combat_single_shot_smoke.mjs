@@ -38,7 +38,13 @@ async function run() {
       '    assert.deepEqual(stage3Snapshot(loaded), stage3Snapshot(original.state), `${name}: checkpoint must restore exactly`);',
       `    const loadedCommit = serializeInfantryCombatUnitRuntime(loaded.units[0]!.infantryCombatRuntime).lastShotCommit!;
     const originalCommit = serializeInfantryCombatUnitRuntime(original.state.units[0]!.infantryCombatRuntime).lastShotCommit!;
-    assert.deepEqual(loadedCommit.muzzlePosition, originalCommit.muzzlePosition, \`${name}: muzzle position must restore exactly\`);
+    const { aimDirectionBeforeDispersion: loadedAim, finalProjectileDirection: loadedFinal, ...loadedRest } = loadedCommit;
+    const { aimDirectionBeforeDispersion: originalAim, finalProjectileDirection: originalFinal, ...originalRest } = originalCommit;
+    void loadedAim;
+    void loadedFinal;
+    void originalAim;
+    void originalFinal;
+    assert.deepEqual(loadedRest, originalRest);
     continue;`,
     );
     await writeFile(probePath, source, 'utf8');
@@ -62,5 +68,5 @@ async function runSmoke(sourceName, outputName) {
       rollupOptions: { output: { entryFileNames: outputName, format: 'es' } },
     },
   });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-muzzle-position`);
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-commit-rest-correct`);
 }
