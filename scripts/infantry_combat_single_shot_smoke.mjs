@@ -18,7 +18,7 @@ async function run() {
   await rm(probePath, { force: true });
   try {
     let source = await readFile(sourcePath, 'utf8');
-    source = source.replace('verifyCoarseAndFineTicksMatch();', '// CI probe skipped coarse/fine partition');
+    source = source.replace('verifyExplicitEndToEndPipeline();', '// CI probe skipped explicit pipeline');
     source = source.replace('verifyMainSimulationTickInvokesNewPipeline();', '// CI probe skipped main tick');
     source = source.replace('verifyCommitFailureTerminalizesTask();', '// CI probe skipped failure terminalization');
     await writeFile(probePath, source, 'utf8');
@@ -44,5 +44,5 @@ async function runSmoke(sourceName, outputName) {
       },
     },
   });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-probe`);
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-coarse-fine-probe`);
 }
