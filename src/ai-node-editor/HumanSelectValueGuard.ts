@@ -146,7 +146,11 @@ function readCurrentParameters(): Record<string, unknown> {
 function readStoredGraph(): BlackboardGraphLike {
   try {
     const parsed = JSON.parse(localStorage.getItem(GRAPH_STORAGE_KEY) ?? '{}') as unknown;
-    return isRecord(parsed) ? parsed as BlackboardGraphLike : {};
+    if (!isRecord(parsed)) return {};
+    return {
+      blackboardDefaults: isRecord(parsed.blackboardDefaults) ? parsed.blackboardDefaults : {},
+      blackboardSchema: Array.isArray(parsed.blackboardSchema) ? parsed.blackboardSchema : [],
+    };
   } catch {
     return {};
   }
