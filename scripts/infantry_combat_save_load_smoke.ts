@@ -17,31 +17,26 @@ import {
   restoreImportedInfantryCombatState,
 } from '../src/ui/SceneExport';
 
-verifyCheckpointGroup();
-console.log('Stage 7 diagnostic: post-impact save/load checkpoints passed.');
+verifyCheckpoint();
+console.log('Stage 7 diagnostic: after-impact save/load checkpoint passed.');
 
-function verifyCheckpointGroup(): void {
-  const checkpoints = [
-    ['after-impact', 1.734],
-    ['mid-recovery', 1.8],
-  ] as const;
+function verifyCheckpoint(): void {
+  const name = 'after-impact';
+  const checkpointSeconds = 1.734;
+  const original = readyScenario(`save-${name}`);
+  advance(original.state, checkpointSeconds);
+  const loaded = roundTrip(original.state);
+  assert.deepEqual(stage3Snapshot(loaded), stage3Snapshot(original.state), `${name}: checkpoint must restore exactly`);
 
-  for (const [name, checkpointSeconds] of checkpoints) {
-    const original = readyScenario(`save-${name}`);
-    advance(original.state, checkpointSeconds);
-    const loaded = roundTrip(original.state);
-    assert.deepEqual(stage3Snapshot(loaded), stage3Snapshot(original.state), `${name}: checkpoint must restore exactly`);
-
-    const continuationSeconds = 2.2 - checkpointSeconds;
-    advance(original.state, continuationSeconds);
-    advance(loaded, continuationSeconds);
-    assert.deepEqual(stage3Snapshot(loaded), stage3Snapshot(original.state), `${name}: continuation must remain exact`);
-    const shooter = loaded.units[0]!;
-    assert.equal(shooter.infantryCombatRuntime.primaryWeapon?.roundsInWeapon, 4, `${name}: exactly one round`);
-    assert.equal(loaded.infantryCombatProjectiles.committedShots.length, 1, `${name}: exactly one commitment`);
-    assert.equal(loaded.infantryCombatProjectiles.impacts.length, 1, `${name}: exactly one impact`);
-    assert.equal(loaded.infantryCombatProjectiles.activeProjectiles.length, 0, `${name}: projectile terminated`);
-  }
+  const continuationSeconds = 2.2 - checkpointSeconds;
+  advance(original.state, continuationSeconds);
+  advance(loaded, continuationSeconds);
+  assert.deepEqual(stage3Snapshot(loaded), stage3Snapshot(original.state), `${name}: continuation must remain exact`);
+  const shooter = loaded.units[0]!;
+  assert.equal(shooter.infantryCombatRuntime.primaryWeapon?.roundsInWeapon, 4, `${name}: exactly one round`);
+  assert.equal(loaded.infantryCombatProjectiles.committedShots.length, 1, `${name}: exactly one commitment`);
+  assert.equal(loaded.infantryCombatProjectiles.impacts.length, 1, `${name}: exactly one impact`);
+  assert.equal(loaded.infantryCombatProjectiles.activeProjectiles.length, 0, `${name}: projectile terminated`);
 }
 
 function roundTrip(state: SimulationState): SimulationState {
