@@ -226,22 +226,46 @@ export function resolveContactInvestigation(
 
   const currentScore = scored.find((item) => item.contact.id === activeCurrent.id)
     ?? { contact: activeCurrent, score: scoreContact(activeCurrent, settings, nowSeconds, Math.max(0, nowSeconds - workingState.selectedAtSeconds)) };
+  const alternatives = scored.filter((item) => item.contact.id !== activeCurrent.id);
+  const urgentFireCandidate = settings.reactToFreshFire
+    ? alternatives.find((item) => (
+        item.contact.recentFireEvidence
+        && item.contact.threatUrgency > activeCurrent.threatUrgency
+      ))
+    : undefined;
+  if (urgentFireCandidate) {
+    return select(
+      urgentFireCandidate,
+      workingState,
+      nowSeconds,
+      true,
+      'switched_fresh_fire',
+      reasonText('switched_fresh_fire', activeCurrent, urgentFireCandidate.contact),
+    );
+  }
+
+  const urgentCloserCandidate = alternatives
+    .filter((item) => isUrgentlyCloser(item.contact, activeCurrent, settings))
+    .sort((left, right) => (
+      left.contact.distanceMeters - right.contact.distanceMeters
+      || compareScoredContacts(left, right)
+    ))[0];
+  if (urgentCloserCandidate) {
+    return select(
+      urgentCloserCandidate,
+      workingState,
+      nowSeconds,
+      true,
+      'switched_urgent_closer',
+      reasonText('switched_urgent_closer', activeCurrent, urgentCloserCandidate.contact),
+    );
+  }
+
   if (best.contact.id === activeCurrent.id) {
     const reason: ContactInvestigationReason = heldSeconds < settings.minimumHoldSeconds
       ? 'held_minimum_time'
       : 'held_best_candidate';
     return select(currentScore, workingState, nowSeconds, false, reason, reasonText(reason, activeCurrent, activeCurrent));
-  }
-
-  const urgentFire = settings.reactToFreshFire
-    && best.contact.recentFireEvidence
-    && best.contact.threatUrgency > activeCurrent.threatUrgency;
-  const urgentCloser = isUrgentlyCloser(best.contact, activeCurrent, settings);
-  if (urgentFire) {
-    return select(best, workingState, nowSeconds, true, 'switched_fresh_fire', reasonText('switched_fresh_fire', activeCurrent, best.contact));
-  }
-  if (urgentCloser) {
-    return select(best, workingState, nowSeconds, true, 'switched_urgent_closer', reasonText('switched_urgent_closer', activeCurrent, best.contact));
   }
   if (heldSeconds < settings.minimumHoldSeconds) {
     return select(currentScore, workingState, nowSeconds, false, 'held_minimum_time', reasonText('held_minimum_time', activeCurrent, activeCurrent));
