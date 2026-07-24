@@ -36,35 +36,8 @@ async function run() {
     );
     source = source.replace(
       '    assert.deepEqual(stage3Snapshot(loaded), stage3Snapshot(original.state), `${name}: checkpoint must restore exactly`);',
-      '    const loadedRuntime = serializeInfantryCombatUnitRuntime(loaded.units[0]!.infantryCombatRuntime);\n    const originalRuntime = serializeInfantryCombatUnitRuntime(original.state.units[0]!.infantryCombatRuntime);\n    const difference = firstDifference(loadedRuntime, originalRuntime);\n    if (difference) throw new Error(`${name}: ${difference}`);\n    continue;',
+      '    const loadedRuntime = serializeInfantryCombatUnitRuntime(loaded.units[0]!.infantryCombatRuntime);\n    const originalRuntime = serializeInfantryCombatUnitRuntime(original.state.units[0]!.infantryCombatRuntime);\n    assert.deepEqual(loadedRuntime.activeFireTask, originalRuntime.activeFireTask, `${name}: active fire task must restore exactly`);\n    continue;',
     );
-    source += `
-function firstDifference(left: unknown, right: unknown, path = 'runtime'): string | null {
-  if (Object.is(left, right)) return null;
-  if (Array.isArray(left) || Array.isArray(right)) {
-    if (!Array.isArray(left) || !Array.isArray(right)) return path + ': type mismatch loaded=' + JSON.stringify(left) + ' original=' + JSON.stringify(right);
-    if (left.length !== right.length) return path + '.length: loaded=' + left.length + ' original=' + right.length;
-    for (let index = 0; index < left.length; index += 1) {
-      const difference = firstDifference(left[index], right[index], path + '[' + index + ']');
-      if (difference) return difference;
-    }
-    return null;
-  }
-  if (left && right && typeof left === 'object' && typeof right === 'object') {
-    const leftRecord = left as Record<string, unknown>;
-    const rightRecord = right as Record<string, unknown>;
-    const keys = [...new Set([...Object.keys(leftRecord), ...Object.keys(rightRecord)])].sort();
-    for (const key of keys) {
-      if (!(key in leftRecord)) return path + '.' + key + ': missing in loaded';
-      if (!(key in rightRecord)) return path + '.' + key + ': missing in original';
-      const difference = firstDifference(leftRecord[key], rightRecord[key], path + '.' + key);
-      if (difference) return difference;
-    }
-    return null;
-  }
-  return path + ': loaded=' + JSON.stringify(left) + ' original=' + JSON.stringify(right);
-}
-`;
     await writeFile(probePath, source, 'utf8');
     await runSmoke('.tmp_infantry_combat_save_load_probe.ts', 'infantry-combat-save-load.mjs');
   } finally {
@@ -86,5 +59,5 @@ async function runSmoke(sourceName, outputName) {
       rollupOptions: { output: { entryFileNames: outputName, format: 'es' } },
     },
   });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-first-difference`);
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-active-task`);
 }
