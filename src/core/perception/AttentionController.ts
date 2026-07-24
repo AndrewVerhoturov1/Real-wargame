@@ -45,6 +45,9 @@ export function setSearchSector(
   runtime.scanProgress01 = 0.5;
   runtime.focusTargetId = null;
   runtime.focusDirectionRadians = runtime.searchCenterRadians;
+  if (source === 'ai' && !unit.movementRuntime.isMoving) {
+    unit.facingRadians = runtime.searchCenterRadians;
+  }
 }
 
 export function clearAttentionOverride(unit: UnitModel): void {

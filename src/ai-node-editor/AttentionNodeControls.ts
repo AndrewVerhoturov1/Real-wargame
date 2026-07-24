@@ -1,6 +1,6 @@
-export {};
-
 type JsonParameters = Record<string, string | number | boolean | null | { x: number; y: number }>;
+
+export type SearchDirectionChoice = 'fixed' | 'suspected_contact' | 'blackboard_position';
 
 const MODE_OPTIONS = [
   ['march', 'Марш'],
@@ -9,10 +9,45 @@ const MODE_OPTIONS = [
   ['engage', 'Стрельба'],
 ] as const;
 
+const SEARCH_DIRECTION_OPTIONS = [
+  ['fixed', 'Фиксированный угол'],
+  ['suspected_contact', 'Предполагаемая позиция врага'],
+  ['blackboard_position', 'Другая позиция из памяти'],
+] as const;
+
 let scheduled = false;
 
+export function resolveSearchDirectionChoice(parameters: JsonParameters): SearchDirectionChoice {
+  if (parameters.centerSource !== 'blackboard_position') return 'fixed';
+  const originPositionKey = readString(parameters.originPositionKey, 'self_position');
+  const targetPositionKey = readString(parameters.targetPositionKey, 'suspected_enemy_position');
+  return originPositionKey === 'self_position' && targetPositionKey === 'suspected_enemy_position'
+    ? 'suspected_contact'
+    : 'blackboard_position';
+}
+
+export function applySearchDirectionChoice(
+  parameters: JsonParameters,
+  choice: SearchDirectionChoice,
+): JsonParameters {
+  const next = { ...parameters };
+  if (choice === 'fixed') {
+    next.centerSource = 'fixed';
+    return next;
+  }
+  next.centerSource = 'blackboard_position';
+  if (choice === 'suspected_contact') {
+    next.originPositionKey = 'self_position';
+    next.targetPositionKey = 'suspected_enemy_position';
+  } else {
+    next.originPositionKey = readString(next.originPositionKey, 'self_position');
+    next.targetPositionKey = readString(next.targetPositionKey, 'suspected_enemy_position');
+  }
+  return next;
+}
+
 function scheduleRender(): void {
-  if (scheduled) return;
+  if (scheduled || typeof window === 'undefined') return;
   scheduled = true;
   window.requestAnimationFrame(renderFriendlyControls);
 }
@@ -33,6 +68,7 @@ function renderFriendlyControls(): void {
   const parameters = parseParameters(textarea.value);
   const root = document.createElement('section');
   root.dataset.attentionNodeControls = 'true';
+  root.dataset.attentionParameterAuthority = 'true';
   root.className = 'attention-node-controls';
 
   const heading = document.createElement('h4');
@@ -44,7 +80,9 @@ function renderFriendlyControls(): void {
   const note = document.createElement('p');
   note.textContent = type === 'ClearAttentionOverride'
     ? 'Боец снова сам выбирает режим: марш при движении, стрельба при огне и обычное наблюдение в покое.'
-    : 'Здесь выбирается только режим. Его постоянные углы и скорость настраиваются в игровом редакторе бойца.';
+    : type === 'SetSearchSector'
+      ? 'Выбери, куда боец должен направить поиск. Углы и скорость самого профиля внимания настраиваются в данных бойца.'
+      : 'Здесь выбирается режим внимания. Его постоянные углы и скорость настраиваются в данных бойца.';
   root.append(heading, note);
 
   if (type === 'SetAttentionMode') {
@@ -55,16 +93,40 @@ function renderFriendlyControls(): void {
   }
 
   if (type === 'SetSearchSector') {
-    root.append(
-      numberField('Центр сектора, °', readNumber(parameters.centerDegrees, 0), 0, 359, 1, (value) => {
+    const directionChoice = resolveSearchDirectionChoice(parameters);
+    root.append(selectField('Куда направить внимание', SEARCH_DIRECTION_OPTIONS, directionChoice, (value) => {
+      replaceParameters(parameters, applySearchDirectionChoice(parameters, value));
+      writeParameters(textarea, parameters);
+      root.remove();
+      scheduleRender();
+    }));
+
+    if (directionChoice === 'fixed') {
+      root.append(numberField('Центр сектора, °', readNumber(parameters.centerDegrees, 0), 0, 359, 1, (value) => {
         parameters.centerDegrees = value;
         writeParameters(textarea, parameters);
-      }),
-      numberField('Ширина сектора, °', readNumber(parameters.arcDegrees, 120), 1, 360, 1, (value) => {
-        parameters.arcDegrees = value;
-        writeParameters(textarea, parameters);
-      }),
-    );
+      }));
+    } else if (directionChoice === 'suspected_contact') {
+      const presetNote = document.createElement('p');
+      presetNote.textContent = 'Направление автоматически считается от позиции бойца к предполагаемой позиции врага. Внутренние ключи подставляются автоматически.';
+      root.append(presetNote);
+    } else {
+      root.append(
+        textField('Ключ позиции бойца', readString(parameters.originPositionKey, 'self_position'), (value) => {
+          parameters.originPositionKey = value || 'self_position';
+          writeParameters(textarea, parameters);
+        }),
+        textField('Ключ позиции цели', readString(parameters.targetPositionKey, 'suspected_enemy_position'), (value) => {
+          parameters.targetPositionKey = value || 'suspected_enemy_position';
+          writeParameters(textarea, parameters);
+        }),
+      );
+    }
+
+    root.append(numberField('Ширина сектора, °', readNumber(parameters.arcDegrees, 120), 1, 360, 1, (value) => {
+      parameters.arcDegrees = value;
+      writeParameters(textarea, parameters);
+    }));
   }
 
   if (type !== 'ClearAttentionOverride') {
@@ -73,6 +135,16 @@ function renderFriendlyControls(): void {
       writeParameters(textarea, parameters);
     }));
   }
+
+  const saveButton = document.createElement('button');
+  saveButton.type = 'button';
+  saveButton.className = 'ai-editor-button primary';
+  saveButton.textContent = 'Сохранить параметры';
+  saveButton.addEventListener('click', () => {
+    writeParameters(textarea, parameters);
+    document.querySelector<HTMLButtonElement>('#save-node')?.click();
+  });
+  root.append(saveButton);
 
   const summaryCard = inspector.querySelector<HTMLElement>('.inspector-card');
   if (humanPanel) humanPanel.insertAdjacentElement('afterend', root);
@@ -98,6 +170,11 @@ function parseParameters(value: string): JsonParameters {
   } catch {
     return {};
   }
+}
+
+function replaceParameters(target: JsonParameters, source: JsonParameters): void {
+  for (const key of Object.keys(target)) delete target[key];
+  Object.assign(target, source);
 }
 
 function writeParameters(textarea: HTMLTextAreaElement, parameters: JsonParameters): void {
@@ -140,12 +217,14 @@ function numberField(
   input.min = String(min);
   input.max = String(max);
   input.step = String(step);
-  input.addEventListener('change', () => {
+  const update = (): void => {
     const parsed = Number(input.value);
     const next = Math.max(min, Math.min(max, Number.isFinite(parsed) ? parsed : value));
     input.value = String(next);
     onChange(next);
-  });
+  };
+  input.addEventListener('input', update);
+  input.addEventListener('change', update);
   wrapper.append(input);
   return wrapper;
 }
@@ -155,7 +234,7 @@ function textField(label: string, value: string, onChange: (value: string) => vo
   const input = document.createElement('input');
   input.type = 'text';
   input.value = value;
-  input.addEventListener('change', () => onChange(input.value.trim()));
+  input.addEventListener('input', () => onChange(input.value.trim()));
   wrapper.append(input);
   return wrapper;
 }
@@ -174,13 +253,15 @@ function defaultReason(type: string): string {
 }
 
 function readString(value: unknown, fallback: string): string {
-  return typeof value === 'string' ? value : fallback;
+  return typeof value === 'string' && value.length > 0 ? value : fallback;
 }
 
 function readNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
-const observer = new MutationObserver(scheduleRender);
-observer.observe(document.body, { childList: true, subtree: true });
-scheduleRender();
+if (typeof document !== 'undefined' && typeof window !== 'undefined' && typeof MutationObserver !== 'undefined') {
+  const observer = new MutationObserver(scheduleRender);
+  observer.observe(document.body, { childList: true, subtree: true });
+  scheduleRender();
+}
