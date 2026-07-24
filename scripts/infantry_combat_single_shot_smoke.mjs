@@ -22,6 +22,9 @@ async function run() {
     source = source.replace('verifyAllCriticalCheckpointsRoundTripExactly();', '// probe skipped critical checkpoints');
     source = source.replace('verifyRepeatedReconciliationIsIdempotent();', '// probe skipped repeated reconciliation');
     source = source.replace('verifyOrphanProjectileIsRemovedDeterministically();', '// probe skipped orphan projectile');
+    source = source.replace("  assert.equal(loaded.units[0]?.infantryCombatRuntime.activeFireTask, null);", '// probe skipped active task');
+    source = source.replace("  assert.equal(loaded.units[0]?.infantryCombatRuntime.lastFireResult?.phase, 'failed');", '// probe skipped phase');
+    source = source.replace("  assert.equal(loaded.units[0]?.infantryCombatRuntime.lastFireResult?.resultCode, 'infantry_fire_task_reconciliation_missing_projectile');", '// probe skipped result code');
     source = source.replace(
       `  const before = stage3Snapshot(loaded);
   reconcileInfantryCombatRuntimeAfterLoad(loaded);
@@ -51,5 +54,5 @@ async function runSmoke(sourceName, outputName) {
       },
     },
   });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-missing-projectile-terminal`);
+  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage5-save-load-missing-ledger-state`);
 }
