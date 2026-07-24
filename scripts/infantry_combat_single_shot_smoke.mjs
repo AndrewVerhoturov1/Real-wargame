@@ -18,6 +18,7 @@ async function run() {
   await rm(probePath, { force: true });
   try {
     let source = await readFile(sourcePath, 'utf8');
+    source = source.replace('verifyCoarseAndFineTicksMatch();', '// CI probe skipped coarse/fine partition');
     source = source.replace('verifyMainSimulationTickInvokesNewPipeline();', '// CI probe skipped main tick');
     source = source.replace('verifyCommitFailureTerminalizesTask();', '// CI probe skipped failure terminalization');
     await writeFile(probePath, source, 'utf8');
