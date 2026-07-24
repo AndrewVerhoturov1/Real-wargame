@@ -12,6 +12,7 @@ const excludedCalls = [
   'verifyTrackingSchedulerAndSaveLoad();',
   'verifyFactorAndProbabilityContracts();',
   'verifySeededDispersionContracts();',
+  'verifyProbabilityIsNotHitResolver();',
   'verifyOrderIndependenceAndReconciliation();',
   'verifyStage4MigrationDefaults();',
   'verifyReadOnlyDiagnostics();',
