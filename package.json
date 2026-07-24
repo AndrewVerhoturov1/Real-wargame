@@ -66,6 +66,9 @@
     "infantry-combat-stage5:smoke": "node scripts/infantry_combat_stage5_aim_smoke.mjs",
     "infantry-combat-stage5:forbidden-scan": "node scripts/infantry_combat_stage5_forbidden_scan.mjs",
     "infantry-combat-stage5:verify": "node scripts/infantry_combat_stage5_verify.mjs",
+    "infantry-combat-stage6:smoke": "node scripts/infantry_combat_stage6_smoke.mjs",
+    "infantry-combat-stage6:forbidden-scan": "node scripts/infantry_combat_stage6_forbidden_scan.mjs",
+    "infantry-combat-stage6:verify": "node scripts/infantry_combat_stage6_verify.mjs",
     "combat-catalog-core:smoke": "node scripts/combat_catalog_core_smoke.mjs",
     "combat-catalog-serialization:smoke": "node scripts/combat_catalog_serialization_smoke.mjs",
     "combat-catalogs:smoke": "npm run combat-catalog-core:smoke && npm run combat-catalog-serialization:smoke",
@@ -136,11 +139,6 @@
     "infantry-combat-projectile:smoke": "node scripts/infantry_combat_projectile_runtime_smoke.mjs",
     "infantry-combat-projectile:benchmark": "node scripts/infantry_combat_projectile_benchmark.mjs"
   },
-  "dependencies": {
-    "pixi.js": "^8.19.0"
-  },
-  "devDependencies": {
-    "typescript": "^5.5.4",
-    "vite": "^5.4.11"
-  }
+  "dependencies": { "pixi.js": "^8.19.0" },
+  "devDependencies": { "typescript": "^5.5.4", "vite": "^5.4.11" }
 }

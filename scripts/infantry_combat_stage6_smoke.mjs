@@ -18,6 +18,7 @@ async function run() {
     await runSmoke('infantry_combat_stage6_penetration_smoke.ts', 'stage6-penetration-smoke.mjs');
     await runSmoke('infantry_combat_stage6_wounds_smoke.ts', 'stage6-wounds-smoke.mjs');
     await runSmoke('infantry_combat_stage6_save_load_smoke.ts', 'stage6-save-load-smoke.mjs');
+    await runSmoke('infantry_combat_stage6_stress_smoke.ts', 'stage6-stress-smoke.mjs');
   } finally {
     await rm(outDir, { recursive: true, force: true });
   }

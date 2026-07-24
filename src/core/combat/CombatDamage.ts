@@ -3,35 +3,18 @@ import type { HitZone } from './UnitHitShapes';
 
 export type CombatCapability = 'effective' | 'wounded' | 'severely_wounded' | 'incapacitated' | 'dead';
 
-export interface UnitHitInput {
-  shotId: string;
-  zone: HitZone;
-  energyJoules: number;
-}
-
-export interface UnitHitRecord extends UnitHitInput {
-  capability: CombatCapability;
-  healthAfter: number;
-}
-
-export interface CombatRuntimeState {
-  capability: CombatCapability;
-  lastHit: UnitHitRecord | null;
-}
-
-export interface UnitHitResult extends UnitHitRecord {
-  changed: boolean;
-}
+export type LegacyCombatHitZone = HitZone | 'limbs';
+export interface UnitHitInput { shotId: string; zone: LegacyCombatHitZone; energyJoules: number; }
+export interface UnitHitRecord { shotId: string; zone: HitZone; energyJoules: number; capability: CombatCapability; healthAfter: number; }
+export interface CombatRuntimeState { capability: CombatCapability; lastHit: UnitHitRecord | null; }
+export interface UnitHitResult extends UnitHitRecord { changed: boolean; }
 
 const runtimeByUnit = new WeakMap<UnitModel, CombatRuntimeState>();
 
 export function getCombatRuntime(unit: UnitModel): CombatRuntimeState {
   let runtime = runtimeByUnit.get(unit);
   if (!runtime) {
-    runtime = {
-      capability: unit.soldier.condition.health <= 0 ? 'dead' : 'effective',
-      lastHit: null,
-    };
+    runtime = { capability: unit.soldier.condition.health <= 0 ? 'dead' : 'effective', lastHit: null };
     runtimeByUnit.set(unit, runtime);
   }
   return runtime;
@@ -51,28 +34,25 @@ export function replaceCombatRuntime(unit: UnitModel, value: Partial<CombatRunti
 }
 
 export function isUnitCombatCapable(unit: UnitModel): boolean {
-  const capability = getCombatRuntime(unit).capability;
-  return capability !== 'incapacitated' && capability !== 'dead';
+  const legacy = getCombatRuntime(unit).capability;
+  const legacyCapable = legacy !== 'incapacitated' && legacy !== 'dead';
+  const wounds = unit.infantryCombatRuntime.wounds.capabilities;
+  return legacyCapable && wounds.alive && wounds.conscious;
 }
 
 export function applyUnitHit(unit: UnitModel, input: UnitHitInput): UnitHitResult {
   const runtime = getCombatRuntime(unit);
   const previousCapability = runtime.capability;
   const energyFactor = Math.max(0.35, Math.min(1.4, input.energyJoules / 3000));
-  const roll = deterministicUnit(`${input.shotId}:${unit.id}:${input.zone}`);
-  let capability = resolveCapability(previousCapability, input.zone, roll, energyFactor);
-  const healthLoss = resolveHealthLoss(input.zone, energyFactor, roll);
+  const zone = normalizeHitZone(input.zone) ?? 'arms';
+  const roll = deterministicUnit(`${input.shotId}:${unit.id}:${zone}`);
+  let capability = resolveCapability(previousCapability, zone, roll, energyFactor);
+  const healthLoss = resolveHealthLoss(zone, energyFactor, roll);
   unit.soldier.condition.health = Math.max(0, Math.round(unit.soldier.condition.health - healthLoss));
   if (capability === 'dead') unit.soldier.condition.health = 0;
-  if (unit.soldier.condition.health <= 0 && capability !== 'dead' && capability !== 'incapacitated') {
-    capability = 'incapacitated';
-  }
+  if (unit.soldier.condition.health <= 0 && capability !== 'dead' && capability !== 'incapacitated') capability = 'incapacitated';
   runtime.capability = capability;
-  runtime.lastHit = {
-    ...input,
-    capability,
-    healthAfter: unit.soldier.condition.health,
-  };
+  runtime.lastHit = { shotId: input.shotId, zone, energyJoules: input.energyJoules, capability, healthAfter: unit.soldier.condition.health };
 
   if (!isUnitCombatCapable(unit)) {
     unit.order = null;
@@ -83,19 +63,27 @@ export function applyUnitHit(unit: UnitModel, input: UnitHitInput): UnitHitResul
     unit.behaviorRuntime.reason = capability === 'dead' ? 'Боец погиб.' : 'Боец выведен из строя.';
     unit.behaviorRuntime.lastEvent = capability === 'dead' ? 'combat_unit_dead' : 'combat_unit_incapacitated';
   } else {
-    unit.behaviorRuntime.stress = Math.min(100, unit.behaviorRuntime.stress + (input.zone === 'limbs' ? 28 : 45));
+    unit.behaviorRuntime.stress = Math.min(100, unit.behaviorRuntime.stress + (isLimbZone(zone) ? 28 : 45));
     unit.behaviorRuntime.reason = capability === 'severely_wounded' ? 'Боец тяжело ранен.' : 'Боец ранен.';
     unit.behaviorRuntime.lastEvent = 'combat_unit_wounded';
   }
-
-  return {
-    ...runtime.lastHit,
-    changed: previousCapability !== capability,
-  };
+  return { ...runtime.lastHit, changed: previousCapability !== capability };
 }
 
 export function getCombatMovementMultiplier(unit: UnitModel): number {
-  switch (getCombatRuntime(unit).capability) {
+  const wounds = unit.infantryCombatRuntime.wounds.capabilities;
+  const woundMultiplier = wounds.canMove ? wounds.movementSpeedMultiplier : 0;
+  return Math.min(legacyMovementMultiplier(getCombatRuntime(unit).capability), woundMultiplier);
+}
+
+export function getCombatAimMultiplier(unit: UnitModel): number {
+  const wounds = unit.infantryCombatRuntime.wounds.capabilities;
+  const woundMultiplier = wounds.canUseWeapon ? wounds.accuracyMultiplier : 0;
+  return Math.min(legacyAimMultiplier(getCombatRuntime(unit).capability), woundMultiplier);
+}
+
+function legacyMovementMultiplier(capability: CombatCapability): number {
+  switch (capability) {
     case 'wounded': return 0.78;
     case 'severely_wounded': return 0.42;
     case 'incapacitated':
@@ -105,8 +93,8 @@ export function getCombatMovementMultiplier(unit: UnitModel): number {
   }
 }
 
-export function getCombatAimMultiplier(unit: UnitModel): number {
-  switch (getCombatRuntime(unit).capability) {
+function legacyAimMultiplier(capability: CombatCapability): number {
+  switch (capability) {
     case 'wounded': return 0.82;
     case 'severely_wounded': return 0.52;
     case 'incapacitated':
@@ -116,40 +104,30 @@ export function getCombatAimMultiplier(unit: UnitModel): number {
   }
 }
 
-export function clearCombatRuntime(unit: UnitModel): void {
-  runtimeByUnit.delete(unit);
-}
+export function clearCombatRuntime(unit: UnitModel): void { runtimeByUnit.delete(unit); }
 
 function normalizeCapability(value: unknown, health: number): CombatCapability {
   if (value === 'wounded' || value === 'severely_wounded' || value === 'incapacitated' || value === 'dead') return value;
   return health <= 0 ? 'dead' : 'effective';
 }
-
-function normalizeLastHit(
-  value: UnitHitRecord | null | undefined,
-  capability: CombatCapability,
-  healthAfter: number,
-): UnitHitRecord | null {
-  if (!value || typeof value.shotId !== 'string' || !isHitZone(value.zone)) return null;
+function normalizeLastHit(value: UnitHitRecord | null | undefined, capability: CombatCapability, healthAfter: number): UnitHitRecord | null {
+  if (!value || typeof value.shotId !== 'string') return null;
+  const zone = normalizeHitZone(value.zone);
+  if (!zone) return null;
   return {
     shotId: value.shotId,
-    zone: value.zone,
+    zone,
     energyJoules: Math.max(0, Number.isFinite(value.energyJoules) ? value.energyJoules : 0),
     capability,
     healthAfter: Math.max(0, Math.round(Number.isFinite(value.healthAfter) ? value.healthAfter : healthAfter)),
   };
 }
-
-function isHitZone(value: unknown): value is HitZone {
-  return value === 'head' || value === 'torso' || value === 'limbs';
+function normalizeHitZone(value: unknown): HitZone | null {
+  if (value === 'head' || value === 'torso' || value === 'arms' || value === 'legs') return value;
+  return value === 'limbs' ? 'arms' : null;
 }
-
-function resolveCapability(
-  previous: CombatCapability,
-  zone: HitZone,
-  roll: number,
-  energyFactor: number,
-): CombatCapability {
+function isLimbZone(zone: HitZone): boolean { return zone === 'arms' || zone === 'legs'; }
+function resolveCapability(previous: CombatCapability, zone: HitZone, roll: number, energyFactor: number): CombatCapability {
   if (previous === 'dead' || previous === 'incapacitated') return previous;
   if (zone === 'head') return roll < 0.62 * energyFactor ? 'dead' : 'incapacitated';
   if (zone === 'torso') {
@@ -162,17 +140,12 @@ function resolveCapability(
   if (roll < 0.58 * energyFactor) return 'severely_wounded';
   return 'wounded';
 }
-
 function resolveHealthLoss(zone: HitZone, energyFactor: number, roll: number): number {
-  const base = zone === 'head' ? 95 : zone === 'torso' ? 72 : 34;
+  const base = zone === 'head' ? 95 : zone === 'torso' ? 72 : zone === 'legs' ? 38 : 30;
   return base * energyFactor * (0.82 + roll * 0.36);
 }
-
 function deterministicUnit(value: string): number {
   let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
+  for (let index = 0; index < value.length; index += 1) { hash ^= value.charCodeAt(index); hash = Math.imul(hash, 16777619); }
   return (hash >>> 0) / 0xffffffff;
 }

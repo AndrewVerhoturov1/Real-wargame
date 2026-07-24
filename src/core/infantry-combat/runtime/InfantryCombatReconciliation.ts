@@ -1,3 +1,4 @@
+import { getCombatUnitSpatialIndex } from '../../combat/CombatUnitSpatialIndex';
 import { normalizeDirection } from '../../combat/UnitHitShapes';
 import type { SimulationState } from '../../simulation/SimulationState';
 import type { UnitModel } from '../../units/UnitModel';
@@ -15,6 +16,8 @@ import {
   type ShotCommitRecordV1,
 } from './ProjectileRuntimeTypes';
 import { normalizeReferenceProjectileRuntimeState } from './ReferenceProjectileRuntime';
+import { MAX_APPLIED_WOUND_IMPACT_IDS } from './InfantryBodyTypes';
+import { applyProjectileImpactWound, enforceWoundCapabilities } from './WoundImpactApplication';
 
 /** Deterministic, idempotent repair invoked once after a scene load. */
 export function reconcileInfantryCombatRuntimeAfterLoad(state: SimulationState): void {
@@ -45,7 +48,7 @@ export function reconcileInfantryCombatRuntimeAfterLoad(state: SimulationState):
   const recordsByShotId = new Map(runtime.committedShots.map((record) => [record.shotId, record]));
   const reconciledProjectiles: ProjectileStateV1[] = [];
   for (const projectile of uniqueBy(runtime.activeProjectiles, (item) => item.projectileId).sort(compareProjectiles)) {
-    if (hasRecordedOutcome(runtime, projectile.shotId)) continue;
+    if (hasTerminalOutcome(runtime, projectile.shotId)) continue;
     let record = recordsByShotId.get(projectile.shotId);
     if (!record) {
       const unit = taskByCommittedShotId.get(projectile.shotId);
@@ -72,6 +75,30 @@ export function reconcileInfantryCombatRuntimeAfterLoad(state: SimulationState):
   runtime.activeProjectiles = uniqueBy(runtime.activeProjectiles, (projectile) => projectile.projectileId)
     .sort(compareProjectiles)
     .slice(0, MAX_STAGE3_ACTIVE_PROJECTILES);
+
+  const unitIndex = getCombatUnitSpatialIndex(state);
+  for (const impact of recentRepairableBodyImpacts(runtime.impacts)) {
+    applyProjectileImpactWound(impact, unitIndex);
+  }
+  for (const unit of units) enforceWoundCapabilities(unit, state.simulationTimeSeconds);
+}
+
+function recentRepairableBodyImpacts(
+  impacts: readonly SimulationState['infantryCombatProjectiles']['impacts'][number][],
+): SimulationState['infantryCombatProjectiles']['impacts'] {
+  const selected: SimulationState['infantryCombatProjectiles']['impacts'] = [];
+  const countByUnitId = new Map<string, number>();
+  for (let index = impacts.length - 1; index >= 0; index -= 1) {
+    const impact = impacts[index]!;
+    const unitId = impact.bodyPhysics?.hitUnitId ?? null;
+    if (!unitId || impact.schemaVersion !== 2) continue;
+    const count = countByUnitId.get(unitId) ?? 0;
+    if (count >= MAX_APPLIED_WOUND_IMPACT_IDS) continue;
+    countByUnitId.set(unitId, count + 1);
+    selected.push(impact);
+  }
+  selected.reverse();
+  return selected;
 }
 
 function reconcileCommittedTask(state: SimulationState, unit: UnitModel): void {
@@ -88,7 +115,6 @@ function reconcileCommittedTask(state: SimulationState, unit: UnitModel): void {
     });
     return;
   }
-
   const hasOutcome = hasRecordedOutcome(runtime, shotId);
   const hasActiveProjectile = runtime.activeProjectiles.some((projectile) => projectile.shotId === shotId);
   if (!hasOutcome && !hasActiveProjectile) {
@@ -100,10 +126,7 @@ function reconcileCommittedTask(state: SimulationState, unit: UnitModel): void {
     return;
   }
   if (task.phase === 'firing') {
-    beginFireTaskRecovery(unit, {
-      committedShotId: shotId,
-      startedSeconds: record.committedSimulationSeconds,
-    });
+    beginFireTaskRecovery(unit, { committedShotId: shotId, startedSeconds: record.committedSimulationSeconds });
   }
 }
 
@@ -139,10 +162,11 @@ function reconstructCommitRecord(
   };
 }
 
-function hasRecordedOutcome(
-  runtime: SimulationState['infantryCombatProjectiles'],
-  shotId: string,
-): boolean {
+function hasTerminalOutcome(runtime: SimulationState['infantryCombatProjectiles'], shotId: string): boolean {
+  return runtime.terminations.some((termination) => termination.shotId === shotId);
+}
+
+function hasRecordedOutcome(runtime: SimulationState['infantryCombatProjectiles'], shotId: string): boolean {
   return runtime.impacts.some((impact) => impact.shotId === shotId)
     || runtime.terminations.some((termination) => termination.shotId === shotId)
     || runtime.appliedImpactIds.some((impactId) => impactId.startsWith(`${shotId}:impact:`));
@@ -181,34 +205,24 @@ function uniqueBy<T>(values: readonly T[], key: (value: T) => string): T[] {
   }
   return result;
 }
-
-function compareUnits(left: UnitModel, right: UnitModel): number {
-  return compareText(left.id, right.id);
-}
-
-function compareProjectiles(left: ProjectileStateV1, right: ProjectileStateV1): number {
-  return compareText(left.projectileId, right.projectileId);
-}
-
+function compareUnits(left: UnitModel, right: UnitModel): number { return compareText(left.id, right.id); }
+function compareProjectiles(left: ProjectileStateV1, right: ProjectileStateV1): number { return compareText(left.projectileId, right.projectileId); }
 function compareCommitRecords(left: ShotCommitRecordV1, right: ShotCommitRecordV1): number {
   return left.committedSimulationSeconds - right.committedSimulationSeconds || compareText(left.shotId, right.shotId);
 }
-
 function compareImpacts(
   left: SimulationState['infantryCombatProjectiles']['impacts'][number],
   right: SimulationState['infantryCombatProjectiles']['impacts'][number],
 ): number {
-  return left.impactSeconds - right.impactSeconds || compareText(left.impactId, right.impactId);
+  return left.impactSeconds - right.impactSeconds
+    || compareText(left.shotId, right.shotId)
+    || (left.impactSequence ?? 0) - (right.impactSequence ?? 0)
+    || compareText(left.impactId, right.impactId);
 }
-
 function compareTerminations(left: ProjectileTerminationV1, right: ProjectileTerminationV1): number {
   return left.simulationSeconds - right.simulationSeconds || compareText(left.terminationId, right.terminationId);
 }
-
-function compareText(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-
+function compareText(left: string, right: string): number { return left < right ? -1 : left > right ? 1 : 0; }
 function canonicalSeconds(value: number): number {
   return Math.round(Math.max(0, value) * 1_000_000_000_000) / 1_000_000_000_000;
 }
