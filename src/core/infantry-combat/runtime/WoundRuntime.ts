@@ -6,10 +6,12 @@ import {
   WOUND_SLOT_SCHEMA_VERSION,
   compareHitZones,
   isHitZone,
+  isWoundBleedingState,
   isWoundSeverity,
   woundSeverityIndex,
   type UnitWoundRuntimeV1,
   type WoundApplicationResultV1,
+  type WoundBleedingState,
   type WoundCandidateV1,
   type WoundSeverity,
   type WoundSlotV1,
@@ -36,6 +38,15 @@ export interface AggregateWoundCandidateResult {
   readonly result: WoundApplicationResultV1;
 }
 
+export interface PreparedFirstAidTreatmentV1 {
+  readonly applied: boolean;
+  readonly reason: 'applied' | 'duplicate_action' | 'zone_missing' | 'bleeding_not_treatable' | 'invalid_request';
+  readonly zone: HitZone | null;
+  readonly previousBleedingState: WoundBleedingState | null;
+  readonly nextBleedingState: WoundBleedingState | null;
+  readonly runtime: UnitWoundRuntimeV1;
+}
+
 export function createUnitWoundRuntime(): UnitWoundRuntimeV1 {
   return {
     schemaVersion: UNIT_WOUND_RUNTIME_SCHEMA_VERSION,
@@ -58,11 +69,7 @@ export function applyWoundCandidate(
   candidate: WoundCandidateV1,
 ): ApplyWoundCandidateResult {
   const aggregated = aggregateWoundCandidate(runtime, candidate);
-  runtime.slots = aggregated.runtime.slots;
-  runtime.appliedImpactIds = aggregated.runtime.appliedImpactIds;
-  runtime.capabilities = aggregated.runtime.capabilities;
-  runtime.lastApplication = aggregated.runtime.lastApplication;
-  runtime.revision = aggregated.runtime.revision;
+  assignWoundRuntime(runtime, aggregated.runtime);
   return {
     status: aggregated.result.applied
       ? 'applied'
@@ -104,8 +111,62 @@ export function aggregateWoundCandidate(
   return { runtime, result };
 }
 
+/**
+ * Builds the complete next wound state without mutating the source. Structural
+ * severity and structural capabilities deliberately remain unchanged.
+ */
+export function prepareFirstAidTreatment(
+  source: UnitWoundRuntimeV1,
+  zone: HitZone,
+  actionId: string,
+  treatedSeconds: number,
+): PreparedFirstAidTreatmentV1 {
+  const runtime = serializeUnitWoundRuntime(source);
+  const normalizedActionId = text(actionId);
+  if (!isHitZone(zone) || !normalizedActionId || !Number.isFinite(treatedSeconds) || treatedSeconds < 0) {
+    return treatmentResult(false, 'invalid_request', null, null, null, runtime);
+  }
+  const slot = runtime.slots.find((entry) => entry.zone === zone) ?? null;
+  if (!slot) return treatmentResult(false, 'zone_missing', zone, null, null, runtime);
+  if (slot.lastFirstAidActionId === normalizedActionId) {
+    return treatmentResult(false, 'duplicate_action', zone, slot.bleedingState, slot.bleedingState, runtime);
+  }
+  const previous = slot.bleedingState;
+  if (previous !== 'severe' && previous !== 'critical') {
+    return treatmentResult(false, 'bleeding_not_treatable', zone, previous, previous, runtime);
+  }
+
+  slot.bleedingState = previous === 'critical' ? 'severe' : 'stopped';
+  slot.bleedingRatePerSecond = slot.bleedingState === 'severe'
+    ? canonicalRate(Math.min(
+      finiteNonNegative(slot.bleedingRatePerSecond),
+      bleedingRateForSeverity(slot.zone, 'severe'),
+    ))
+    : 0;
+  if (slot.bleedingState === 'severe' && slot.bleedingRatePerSecond <= 0) {
+    slot.bleedingRatePerSecond = bleedingRateForSeverity(slot.zone, 'severe');
+  }
+  slot.firstAidApplicationCount = Math.min(Number.MAX_SAFE_INTEGER, slot.firstAidApplicationCount + 1);
+  slot.lastFirstAidActionId = normalizedActionId;
+  slot.lastTreatedSeconds = canonicalSeconds(treatedSeconds);
+  runtime.revision = Math.min(Number.MAX_SAFE_INTEGER, runtime.revision + 1);
+  runtime.capabilities = deriveUnitCombatCapabilities(runtime.slots);
+  return treatmentResult(true, 'applied', zone, previous, slot.bleedingState, runtime);
+}
+
+export function applyPreparedFirstAidTreatment(
+  target: UnitWoundRuntimeV1,
+  prepared: PreparedFirstAidTreatmentV1,
+): boolean {
+  if (!prepared.applied) return false;
+  assignWoundRuntime(target, prepared.runtime);
+  return true;
+}
+
 export function normalizeUnitWoundRuntime(value: unknown): UnitWoundRuntimeV1 {
-  if (!isRecord(value) || value.schemaVersion !== UNIT_WOUND_RUNTIME_SCHEMA_VERSION) return createUnitWoundRuntime();
+  if (!isRecord(value) || (value.schemaVersion !== 1 && value.schemaVersion !== UNIT_WOUND_RUNTIME_SCHEMA_VERSION)) {
+    return createUnitWoundRuntime();
+  }
   const byZone = new Map<HitZone, WoundSlotV1>();
   const normalizedSlots = (Array.isArray(value.slots) ? value.slots : [])
     .map(normalizeSlot)
@@ -140,30 +201,48 @@ export function bleedingRateForSeverity(zone: HitZone, severity: WoundSeverity):
   );
 }
 
+export function totalWoundBleedingRatePerSecond(runtime: UnitWoundRuntimeV1): number {
+  return canonicalRate(Math.min(
+    MAX_WOUND_SLOTS * MAX_ZONE_BLEEDING_RATE_PER_SECOND,
+    runtime.slots.reduce((sum, slot) => sum + finiteNonNegative(slot.bleedingRatePerSecond), 0),
+  ));
+}
+
 function createSlot(candidate: WoundCandidateV1): WoundSlotV1 {
+  const bleedingState = bleedingStateForSeverity(candidate.severity);
   return {
     schemaVersion: WOUND_SLOT_SCHEMA_VERSION,
     zone: candidate.zone,
     severity: candidate.severity,
+    bleedingState,
     hitCount: 1,
-    bleedingRatePerSecond: finiteNonNegative(candidate.bleedingRatePerSecond),
+    bleedingRatePerSecond: bleedingState === 'none'
+      ? 0
+      : activeBleedingRate(candidate.zone, candidate.severity, candidate.bleedingRatePerSecond),
     maximumTraumaScore: finiteNonNegative(candidate.traumaScore),
     lastImpactEnergyJoules: finiteNonNegative(candidate.impactEnergyJoules),
     firstImpactId: candidate.impactId,
     lastImpactId: candidate.impactId,
     firstAppliedSeconds: finiteNonNegative(candidate.appliedSeconds),
     lastAppliedSeconds: finiteNonNegative(candidate.appliedSeconds),
+    firstAidApplicationCount: 0,
+    lastFirstAidActionId: null,
+    lastTreatedSeconds: null,
   };
 }
 
 function strengthenSlot(slot: WoundSlotV1, candidate: WoundCandidateV1): void {
   if (woundSeverityIndex(candidate.severity) > woundSeverityIndex(slot.severity)) slot.severity = candidate.severity;
   slot.hitCount = Math.min(Number.MAX_SAFE_INTEGER, slot.hitCount + 1);
-  const incomingRate = finiteNonNegative(candidate.bleedingRatePerSecond);
-  slot.bleedingRatePerSecond = canonicalRate(Math.min(
-    MAX_ZONE_BLEEDING_RATE_PER_SECOND,
-    Math.max(finiteNonNegative(slot.bleedingRatePerSecond), incomingRate) + incomingRate * 0.25,
-  ));
+  if (candidate.severity !== 'light') {
+    const incomingRate = activeBleedingRate(candidate.zone, candidate.severity, candidate.bleedingRatePerSecond);
+    slot.bleedingState = candidate.severity === 'critical'
+      ? 'critical'
+      : slot.bleedingState === 'critical'
+        ? 'critical'
+        : 'severe';
+    slot.bleedingRatePerSecond = aggregateBleedingRate(slot.bleedingRatePerSecond, incomingRate);
+  }
   slot.maximumTraumaScore = Math.max(slot.maximumTraumaScore, finiteNonNegative(candidate.traumaScore));
   slot.lastImpactEnergyJoules = finiteNonNegative(candidate.impactEnergyJoules);
   slot.lastImpactId = candidate.impactId;
@@ -173,12 +252,16 @@ function strengthenSlot(slot: WoundSlotV1, candidate: WoundCandidateV1): void {
 function mergeSlots(target: WoundSlotV1, source: WoundSlotV1): void {
   if (woundSeverityIndex(source.severity) > woundSeverityIndex(target.severity)) target.severity = source.severity;
   target.hitCount = Math.min(Number.MAX_SAFE_INTEGER, target.hitCount + source.hitCount);
-  const incomingRate = finiteNonNegative(source.bleedingRatePerSecond);
-  target.bleedingRatePerSecond = canonicalRate(Math.min(
-    MAX_ZONE_BLEEDING_RATE_PER_SECOND,
-    Math.max(finiteNonNegative(target.bleedingRatePerSecond), incomingRate) + incomingRate * 0.25,
-  ));
+  const mergedBleedingState = mergeBleedingStates(target.bleedingState, source.bleedingState);
+  target.bleedingState = mergedBleedingState;
+  target.bleedingRatePerSecond = isActiveBleedingState(mergedBleedingState)
+    ? aggregateBleedingRate(target.bleedingRatePerSecond, source.bleedingRatePerSecond)
+    : 0;
   target.maximumTraumaScore = Math.max(target.maximumTraumaScore, source.maximumTraumaScore);
+  target.firstAidApplicationCount = Math.min(
+    Number.MAX_SAFE_INTEGER,
+    target.firstAidApplicationCount + source.firstAidApplicationCount,
+  );
   if (source.firstAppliedSeconds < target.firstAppliedSeconds || (
     source.firstAppliedSeconds === target.firstAppliedSeconds && source.firstImpactId < target.firstImpactId
   )) {
@@ -192,25 +275,46 @@ function mergeSlots(target: WoundSlotV1, source: WoundSlotV1): void {
     target.lastImpactId = source.lastImpactId;
     target.lastImpactEnergyJoules = source.lastImpactEnergyJoules;
   }
+  if ((source.lastTreatedSeconds ?? -1) > (target.lastTreatedSeconds ?? -1) || (
+    source.lastTreatedSeconds === target.lastTreatedSeconds
+    && (source.lastFirstAidActionId ?? '') > (target.lastFirstAidActionId ?? '')
+  )) {
+    target.lastTreatedSeconds = source.lastTreatedSeconds;
+    target.lastFirstAidActionId = source.lastFirstAidActionId;
+  }
 }
 
 function normalizeSlot(value: unknown): WoundSlotV1 | null {
-  if (!isRecord(value) || value.schemaVersion !== WOUND_SLOT_SCHEMA_VERSION || !isHitZone(value.zone) || !isWoundSeverity(value.severity)) return null;
+  if (!isRecord(value) || (value.schemaVersion !== 1 && value.schemaVersion !== WOUND_SLOT_SCHEMA_VERSION)
+    || !isHitZone(value.zone) || !isWoundSeverity(value.severity)) return null;
   const firstImpactId = text(value.firstImpactId);
   const lastImpactId = text(value.lastImpactId);
   if (!firstImpactId || !lastImpactId) return null;
+  const legacy = value.schemaVersion === 1;
+  const bleedingState = legacy
+    ? bleedingStateForSeverity(value.severity)
+    : isWoundBleedingState(value.bleedingState)
+      ? value.bleedingState
+      : bleedingStateForSeverity(value.severity);
+  const bleedingRate = isActiveBleedingState(bleedingState)
+    ? activeBleedingRate(value.zone, bleedingState, value.bleedingRatePerSecond)
+    : 0;
   return {
     schemaVersion: WOUND_SLOT_SCHEMA_VERSION,
     zone: value.zone,
     severity: value.severity,
+    bleedingState,
     hitCount: integer(value.hitCount, 1, 1, Number.MAX_SAFE_INTEGER),
-    bleedingRatePerSecond: finiteNonNegative(value.bleedingRatePerSecond),
+    bleedingRatePerSecond: bleedingRate,
     maximumTraumaScore: finiteNonNegative(value.maximumTraumaScore),
     lastImpactEnergyJoules: finiteNonNegative(value.lastImpactEnergyJoules),
     firstImpactId,
     lastImpactId,
     firstAppliedSeconds: finiteNonNegative(value.firstAppliedSeconds),
     lastAppliedSeconds: finiteNonNegative(value.lastAppliedSeconds),
+    firstAidApplicationCount: legacy ? 0 : integer(value.firstAidApplicationCount, 0, 0, Number.MAX_SAFE_INTEGER),
+    lastFirstAidActionId: legacy ? null : nullableText(value.lastFirstAidActionId),
+    lastTreatedSeconds: legacy ? null : nullableNonNegative(value.lastTreatedSeconds),
   };
 }
 
@@ -270,6 +374,51 @@ function normalizeApplicationResult(value: unknown): WoundApplicationResultV1 | 
   };
 }
 
+function assignWoundRuntime(target: UnitWoundRuntimeV1, source: UnitWoundRuntimeV1): void {
+  target.slots = source.slots;
+  target.appliedImpactIds = source.appliedImpactIds;
+  target.capabilities = source.capabilities;
+  target.lastApplication = source.lastApplication;
+  target.revision = source.revision;
+}
+
+function treatmentResult(
+  applied: boolean,
+  reason: PreparedFirstAidTreatmentV1['reason'],
+  zone: HitZone | null,
+  previousBleedingState: WoundBleedingState | null,
+  nextBleedingState: WoundBleedingState | null,
+  runtime: UnitWoundRuntimeV1,
+): PreparedFirstAidTreatmentV1 {
+  return { applied, reason, zone, previousBleedingState, nextBleedingState, runtime };
+}
+
+function bleedingStateForSeverity(severity: WoundSeverity): WoundBleedingState {
+  return severity === 'light' ? 'none' : severity;
+}
+function isActiveBleedingState(value: WoundBleedingState): value is 'severe' | 'critical' {
+  return value === 'severe' || value === 'critical';
+}
+function mergeBleedingStates(left: WoundBleedingState, right: WoundBleedingState): WoundBleedingState {
+  if (left === 'critical' || right === 'critical') return 'critical';
+  if (left === 'severe' || right === 'severe') return 'severe';
+  if (left === 'stopped' || right === 'stopped') return 'stopped';
+  return 'none';
+}
+function activeBleedingRate(zone: HitZone, severity: 'severe' | 'critical', value: unknown): number {
+  const normalized = finiteNonNegative(value);
+  return canonicalRate(Math.min(
+    MAX_ZONE_BLEEDING_RATE_PER_SECOND,
+    normalized > 0 ? normalized : bleedingRateForSeverity(zone, severity),
+  ));
+}
+function aggregateBleedingRate(existing: unknown, incoming: unknown): number {
+  const incomingRate = finiteNonNegative(incoming);
+  return canonicalRate(Math.min(
+    MAX_ZONE_BLEEDING_RATE_PER_SECOND,
+    Math.max(finiteNonNegative(existing), incomingRate) + incomingRate * 0.25,
+  ));
+}
 function compareSlots(left: WoundSlotV1, right: WoundSlotV1): number { return compareHitZones(left.zone, right.zone); }
 function compareSlotHistory(left: WoundSlotV1, right: WoundSlotV1): number {
   return left.firstAppliedSeconds - right.firstAppliedSeconds
@@ -303,6 +452,15 @@ function insertSortedUniqueBounded(target: string[], value: string, capacity: nu
 function text(value: unknown): string { return typeof value === 'string' ? value.trim() : ''; }
 function nullableText(value: unknown): string | null { return text(value) || null; }
 function finiteNonNegative(value: unknown): number { return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0; }
-function integer(value: unknown, fallback: number, min: number, max: number): number { const n = typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : fallback; return Math.max(min, Math.min(max, n)); }
+function nullableNonNegative(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? canonicalSeconds(value) : null;
+}
+function integer(value: unknown, fallback: number, minimum: number, maximum: number): number {
+  const numeric = typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : fallback;
+  return Math.max(minimum, Math.min(maximum, numeric));
+}
 function canonicalRate(value: number): number { return Math.round(Math.max(0, value) * 1_000_000_000_000) / 1_000_000_000_000; }
-function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
+function canonicalSeconds(value: number): number { return Math.round(Math.max(0, value) * 1_000_000_000_000) / 1_000_000_000_000; }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
