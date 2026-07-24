@@ -59,7 +59,7 @@
     "tactical-snapshot:smoke": "node scripts/tactical_snapshot_coalescing_smoke.mjs",
     "directional-terrain:smoke": "node scripts/directional_terrain_smoke.mjs",
     "reverse-slope-comparative:smoke": "node scripts/reverse_slope_comparative_smoke.mjs",
-    "combat-foundation:smoke": "node scripts/combat_foundation_smoke.mjs && npm run infantry-combat-stage5:verify",
+    "combat-foundation:smoke": "node scripts/combat_foundation_smoke.mjs && npm run infantry-combat-stage5:verify && npm run infantry-combat-stage6:verify",
     "combat-tactical-integration:smoke": "node scripts/combat_tactical_integration_smoke.mjs",
     "physical-action-coordinator:smoke": "node scripts/physical_action_coordinator_smoke.mjs",
     "infantry-combat-single-shot:smoke": "node scripts/infantry_combat_single_shot_smoke.mjs",
