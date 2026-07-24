@@ -4,10 +4,10 @@ import { equipPrimaryWeaponFromLoadout, requestSingleFireTask, tickInfantryComba
 import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
 import type { UnitModel } from '../src/core/units/UnitModel';
 
-verifyFineCommitIsLater();
-console.log('Stage 7 diagnostic: fine partition commit is later.');
+verifyFineCommitIsEarlier();
+console.log('Stage 7 diagnostic: fine partition commit is earlier.');
 
-function verifyFineCommitIsLater(): void {
+function verifyFineCommitIsEarlier(): void {
   const coarse = readyScenario('pipeline-partition');
   const fine = readyScenario('pipeline-partition');
   tickInfantryCombatSimulation(coarse.state, { intervalStartSeconds: 0, deltaSeconds: 2.1 });
@@ -18,7 +18,7 @@ function verifyFineCommitIsLater(): void {
   assert.equal(coarse.shooter.infantryCombatRuntime.primaryWeapon?.recoil.sequence, 1);
   assert.equal(
     (fine.shooter.infantryCombatRuntime.primaryWeapon?.recoil.lastUpdatedSeconds ?? 0)
-      > (coarse.shooter.infantryCombatRuntime.primaryWeapon?.recoil.lastUpdatedSeconds ?? 0),
+      < (coarse.shooter.infantryCombatRuntime.primaryWeapon?.recoil.lastUpdatedSeconds ?? 0),
     true,
   );
 }
