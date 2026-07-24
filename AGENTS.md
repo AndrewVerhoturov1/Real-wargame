@@ -64,7 +64,10 @@ For deployment always read:
 user task
 → resolve exact current real-wargame-preview HEAD
 → create one feature branch from that commit
-→ implement, test, commit and push on the feature branch
+→ implement and verify without an early PR
+→ consolidate the candidate into meaningful commits
+→ push the ready candidate
+→ run PR Risk CI only as a readiness gate when relevant
 → report code readiness without inventing a Preview
 → explicit user deployment request
 → manually deploy exact current HEAD
@@ -124,6 +127,9 @@ head: feature/YYYYMMDD-short-kebab-slug
 - Do not touch or deploy `main` without separate explicit approval.
 - Do not merge or enable auto-merge without explicit approval.
 - PR is not the default feature route.
+- Do not open a PR merely to obtain an interactive remote test loop.
+- Before PR review, live testing or acceptance of an exact SHA, the owner may rewrite only its own unpublished feature branch into one to three meaningful commits.
+- Do not rewrite history after shared review starts, after a live test starts, or after an exact commit is accepted.
 
 ## 8. Focused verification
 
@@ -137,7 +143,48 @@ npm run build
 
 Run documentation checks when documentation changes.
 
-GitHub Actions may be run without separate approval when they are relevant to the current task and use existing repository workflows. Separate approval is still required to create or modify workflows, create temporary CI branches, run Chromium or Playwright, or run broad or unjustified performance matrices.
+Focused local checks do not require separate approval. One primary run of an existing focused GitHub Actions workflow and one rerun after an aggregated correction are allowed without separate approval when they are relevant to the task. Separate approval is required to create or modify workflows, create temporary CI branches, run Chromium or Playwright, run broad or unjustified performance matrices, or start a third diagnostic CI attempt.
+
+### Remote-only mode
+
+Use remote-only mode only when the executor cannot obtain a checkout capable of running the required commands.
+
+- Work on one feature branch without an early PR.
+- Batch related file changes instead of committing each file or each hypothesis separately.
+- Review the full base-to-head diff, imports, exports, package scripts, test assumptions and prohibited dependencies before the first CI run.
+- Consolidate the unpublished branch into one to three meaningful commits when the available Git route supports safe history rewriting.
+- Open or mark a PR ready only when the candidate is intended to pass.
+- Treat CI as an independent readiness gate, never as an interactive debugger.
+
+### CI correction budget
+
+The normal budget is one primary run plus one rerun after corrections.
+
+After any failed run:
+
+1. collect every relevant failure from the run;
+2. identify the shared root cause where possible;
+3. prepare one correction package;
+4. push once;
+5. rerun once explicitly.
+
+After the second failed attempt, stop trial commits. Record the failures, compare suspect checks with the exact base SHA and request approval before a third diagnostic run.
+
+### Base comparison for suspicious failures
+
+When a failure may be unrelated to the current diff, run the same command against the exact task base SHA.
+
+```text
+feature FAIL + base PASS                     → current-task regression
+feature FAIL + base FAIL + same signature    → inherited known-base failure
+feature FAIL + base FAIL + different result  → separate investigation required
+```
+
+Do not silently repair an inherited repository-wide failure inside an unrelated product task. Record it honestly unless it blocks the requested result.
+
+### Simulation test design
+
+Lifecycle tests must advance to an observable event or state when practical. Do not use an arbitrary fixed simulation timestamp as a substitute for proving states such as committed, active projectile, impact or completed action.
 
 ## 9. Readiness without deployment
 
@@ -194,6 +241,9 @@ Do not reintroduce:
 - dummy deployment commits;
 - direct product implementation in preview;
 - PR-first feature development;
+- opening a PR only to use CI as an interactive debugger;
+- one commit and one CI run per isolated error message;
+- repeated diagnostic pushes after the CI budget is exhausted;
 - mandatory Codex deployment;
 - a separate Vercel project per feature branch;
 - deletion of the permanent Vercel project;
