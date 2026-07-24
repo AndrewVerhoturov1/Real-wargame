@@ -9,9 +9,8 @@ const result = spawnSync(process.execPath, [compiler, '--noEmit', '--pretty', 'f
 });
 const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
 const firstError = output.split(/\r?\n/).find((line) => line.includes('error TS')) ?? '';
-const match = firstError.match(/^src\/core\/infantry-combat\/runtime\/WoundRuntime\.ts\((\d+),/);
-const line = match ? Number(match[1]) : Number.POSITIVE_INFINITY;
-const pivot = 224;
-const lowerOrEqual = line <= pivot;
-console.log(lowerOrEqual ? 'TYPECHECK_LINE_LOWER_OR_EQUAL' : 'TYPECHECK_LINE_HIGHER');
+const match = firstError.match(/^src\/core\/infantry-combat\/runtime\/WoundRuntime\.ts\(224,(\d+)\): error (TS\d+):/);
+const column = match ? Number(match[1]) : Number.POSITIVE_INFINITY;
+const lowerOrEqual = column <= 20;
+console.log(lowerOrEqual ? 'TYPECHECK_COLUMN_LOWER_OR_EQUAL' : 'TYPECHECK_COLUMN_HIGHER');
 process.exit(lowerOrEqual ? 1 : 0);
