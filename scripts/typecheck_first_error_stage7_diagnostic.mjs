@@ -8,8 +8,8 @@ const result = spawnSync(process.execPath, [compiler, '--noEmit', '--pretty', 'f
   maxBuffer: 64 * 1024 * 1024,
 });
 const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
-const firstError = output.split(/\r?\n/).find((line) => line.includes('error TS')) ?? '';
-const code = Number(firstError.match(/error TS(\d+):/)?.[1] ?? Number.POSITIVE_INFINITY);
-const lowerOrEqual = code <= 2344;
-console.log(lowerOrEqual ? 'TYPECHECK_CODE_LOWER_OR_EQUAL' : 'TYPECHECK_CODE_HIGHER');
-process.exit(lowerOrEqual ? 1 : 0);
+const firstError = output.split(/\r?\n/).find((line) => line.includes('error TS'));
+if (firstError) console.error(firstError);
+else if (result.error) console.error(String(result.error));
+else console.log('TypeScript diagnostic found no errors.');
+process.exit(result.status ?? 1);
