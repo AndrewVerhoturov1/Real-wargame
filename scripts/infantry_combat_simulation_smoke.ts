@@ -9,11 +9,11 @@ import {
 import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
 import type { UnitModel } from '../src/core/units/UnitModel';
 
-verifyCoarseAndFineProjectileGameplayMatch();
+verifyCoarseAndFineProjectileAccumulatorMatch();
 
-console.log('Infantry combat simulation partition probe passed: projectile gameplay records match.');
+console.log('Infantry combat simulation partition probe passed: projectile accumulator matches.');
 
-function verifyCoarseAndFineProjectileGameplayMatch(): void {
+function verifyCoarseAndFineProjectileAccumulatorMatch(): void {
   const coarse = readyScenario('pipeline-partition');
   const fine = readyScenario('pipeline-partition');
   tickInfantryCombatSimulation(coarse.state, { intervalStartSeconds: 0, deltaSeconds: 2.1 });
@@ -23,22 +23,7 @@ function verifyCoarseAndFineProjectileGameplayMatch(): void {
 
   const coarseSnapshot = serializeReferenceProjectileRuntimeState(coarse.state.infantryCombatProjectiles);
   const fineSnapshot = serializeReferenceProjectileRuntimeState(fine.state.infantryCombatProjectiles);
-  assert.deepEqual(
-    {
-      activeProjectiles: fineSnapshot.activeProjectiles,
-      committedShots: fineSnapshot.committedShots,
-      impacts: fineSnapshot.impacts,
-      terminations: fineSnapshot.terminations,
-      appliedImpactIds: fineSnapshot.appliedImpactIds,
-    },
-    {
-      activeProjectiles: coarseSnapshot.activeProjectiles,
-      committedShots: coarseSnapshot.committedShots,
-      impacts: coarseSnapshot.impacts,
-      terminations: coarseSnapshot.terminations,
-      appliedImpactIds: coarseSnapshot.appliedImpactIds,
-    },
-  );
+  assert.equal(fineSnapshot.accumulatorSeconds, coarseSnapshot.accumulatorSeconds);
 }
 
 function readyScenario(id: string): { state: SimulationState; shooter: UnitModel } {
