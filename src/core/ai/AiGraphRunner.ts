@@ -1,5 +1,17 @@
-import { isGridPositionValue } from './AiBlackboard';
+import { isGridPositionValue, type AiBlackboardValue } from './AiBlackboard';
 import type { AiNodeParameters } from './AiGraph';
+import {
+  contactInvestigationStateKey,
+  deserializeContactInvestigationState,
+  normalizeContactInvestigationSettings,
+  resolveContactInvestigation,
+  serializeContactInvestigationState,
+  type ContactInvestigationResult,
+  type ContactInvestigationSettings,
+} from './ContactInvestigation';
+import { ensureContactInvestigationNodeContractRegistered } from './ContactInvestigationNodeContract';
+import { listSubjectiveInvestigationContacts } from './ContactInvestigationRuntimeHost';
+import { readAiSimulationExecutionContext } from './AiSimulationExecutionContext';
 import {
   runAiGraph as runLegacyAiGraph,
   type AiGraphEffect,
@@ -34,18 +46,78 @@ interface ExtendedTacticalQueryGenerationRequest extends TacticalQueryGeneration
   readonly searchSettings?: TacticalPositionSearchSettings;
 }
 
+interface ContactInvestigationExecution {
+  readonly nodeId: string;
+  readonly stateKey: string;
+  readonly result: ContactInvestigationResult;
+  readonly settings: ContactInvestigationSettings;
+}
+
 /**
  * Adds stateful tactical request identity and preserves the selected position's
  * required posture, facing, kind and request identity. New generalized query
  * nodes are adapted to the legacy evaluator without changing saved cover graphs.
  * Search-sector nodes may also resolve their center from subjective Blackboard
  * positions before the legacy evaluator produces its ordinary effect.
+ * Contact investigation reads a bounded subjective contact snapshot and adapts
+ * the chosen contact to the existing search-sector effect.
  */
 export function runAiGraph(input: AiGraphRunnerInput): AiGraphRunnerResult {
+  ensureContactInvestigationNodeContractRegistered();
   const tacticalConfigs = new Map<string, TacticalPositionNodeSettings>();
+  const investigationExecutions = new Map<string, ContactInvestigationExecution>();
+  const executionContext = readAiSimulationExecutionContext(input.unitId);
+  const investigationContacts = executionContext
+    ? listSubjectiveInvestigationContacts(executionContext.state, executionContext.unit)
+    : [];
+  const nowSeconds = Math.max(0, input.nowMs / 1000);
   const graph = {
     ...input.graph,
     nodes: input.graph.nodes.map((node) => {
+      if (node.type === 'InvestigateContact') {
+        const settings = readContactInvestigationSettings(node.parameters);
+        const stateKey = contactInvestigationStateKey(node.id);
+        const previous = deserializeContactInvestigationState(input.blackboard[stateKey], nowSeconds);
+        const investigation = resolveContactInvestigation(
+          settings,
+          investigationContacts,
+          previous,
+          nowSeconds,
+        );
+        investigationExecutions.set(node.id, {
+          nodeId: node.id,
+          stateKey,
+          result: investigation,
+          settings,
+        });
+        const selection = investigation.selection;
+        const origin = executionContext?.unit.position ?? input.blackboard.self_position;
+        const centerDegrees = selection && isGridPositionValue(origin)
+          ? directionDegrees(origin, selection.contact.lastKnownPosition)
+          : null;
+        if (!selection || centerDegrees === null) {
+          return {
+            ...node,
+            type: 'FlagCheck',
+            parameters: {
+              ...node.parameters,
+              flagKey: `__real_wargame_investigation_candidate_available__:${node.id}`,
+              expected: true,
+            },
+          };
+        }
+        return {
+          ...node,
+          type: 'SetSearchSector',
+          parameters: {
+            ...node.parameters,
+            centerDegrees,
+            arcDegrees: settings.searchArcDegrees,
+            reason: `Investigate subjective contact ${selection.contact.id}.`,
+            reasonRu: selection.reasonRu,
+          },
+        };
+      }
       if (node.type === 'SetSearchSector' && readString(node.parameters?.centerSource, 'fixed') === 'blackboard_position') {
         const centerDegrees = resolveSearchSectorCenterDegrees(node.parameters, input.blackboard);
         if (centerDegrees === null) {
@@ -103,16 +175,43 @@ export function runAiGraph(input: AiGraphRunnerInput): AiGraphRunnerResult {
 
   let blackboard = result.blackboard;
   let effects = result.effects;
+  let trace = result.trace;
   let changed = false;
-  const writeMemory = (key: string, value: string | number | null): void => {
-    if (!changed) {
-      blackboard = { ...result.blackboard };
-      effects = [...result.effects];
-      changed = true;
-    }
+  const ensureMutable = (): void => {
+    if (changed) return;
+    blackboard = { ...result.blackboard };
+    effects = [...result.effects];
+    trace = [...result.trace];
+    changed = true;
+  };
+  const writeMemory = (key: string, value: AiBlackboardValue): void => {
+    ensureMutable();
     blackboard[key] = value;
     (effects as AiGraphEffect[]).push({ type: 'write_memory', key, value });
   };
+
+  for (const execution of investigationExecutions.values()) {
+    const wasExecuted = result.trace.some((item) => item.nodeId === execution.nodeId && item.status !== 'skip');
+    if (!wasExecuted) continue;
+    const selection = execution.result.selection;
+    writeMemory(execution.stateKey, serializeContactInvestigationState(execution.result.state));
+    writeMemory('investigation_contact_available', selection !== null);
+    writeMemory('investigation_contact_changed', selection?.changed ?? false);
+    writeMemory('investigation_contact_id', selection?.contact.id ?? null);
+    writeMemory('investigation_contact_position', selection ? { ...selection.contact.lastKnownPosition } : null);
+    writeMemory('investigation_contact_confidence', selection?.contact.confidence ?? 0);
+    writeMemory('investigation_contact_stage', selection?.contact.stage ?? 'none');
+    writeMemory('investigation_contact_distance', selection?.contact.distanceMeters ?? 0);
+    writeMemory('investigation_contact_score', selection?.score ?? 0);
+    const reasonRu = selection?.reasonRu ?? 'Подходящих контактов для доразведки нет.';
+    const reason = selection
+      ? `Contact ${selection.contact.id} selected for investigation: ${selection.reason}.`
+      : 'No subjective contact is eligible for investigation.';
+    ensureMutable();
+    trace = trace.map((item) => item.nodeId === execution.nodeId
+      ? { ...item, reason, reasonRu }
+      : item);
+  }
 
   for (const [queryKey, query] of Object.entries(result.tacticalQueries)) {
     const requestKey = tacticalRequestMemoryKey(queryKey);
@@ -154,7 +253,7 @@ export function runAiGraph(input: AiGraphRunnerInput): AiGraphRunnerResult {
       if (winner?.requestIdentity) writeMemory(`${writeTo}_request_identity`, winner.requestIdentity);
     }
   }
-  return changed ? { ...result, blackboard, effects } : result;
+  return changed ? { ...result, blackboard, effects, trace } : result;
 }
 
 export function resolveSearchSectorCenterDegrees(
@@ -169,10 +268,7 @@ export function resolveSearchSectorCenterDegrees(
   const origin = blackboard[originKey];
   const target = blackboard[targetKey];
   if (!isGridPositionValue(origin) || !isGridPositionValue(target)) return null;
-  const deltaX = target.x - origin.x;
-  const deltaY = target.y - origin.y;
-  if (Math.abs(deltaX) <= 1e-9 && Math.abs(deltaY) <= 1e-9) return null;
-  return normalizeDegrees(Math.atan2(deltaY, deltaX) * 180 / Math.PI);
+  return directionDegrees(origin, target);
 }
 
 function wrapStatefulTacticalHost(
@@ -244,8 +340,51 @@ function tacticalConfigIdentity(config: TacticalPositionNodeSettings): string {
   ].join('|');
 }
 
+function readContactInvestigationSettings(
+  parameters: AiNodeParameters | undefined,
+): ContactInvestigationSettings {
+  return normalizeContactInvestigationSettings({
+    minimumStage: readStage(parameters?.minimumStage, 'cue'),
+    minimumConfidence: readNumber(parameters?.minimumConfidence, 15),
+    completionStage: readStage(parameters?.completionStage, 'identified'),
+    searchArcDegrees: readNumber(parameters?.searchArcDegrees, 120),
+    maximumContactAgeSeconds: readNumber(parameters?.maximumContactAgeSeconds, 10),
+    minimumHoldSeconds: readNumber(parameters?.minimumHoldSeconds, 1.2),
+    preferredInvestigationSeconds: readNumber(parameters?.preferredInvestigationSeconds, 3),
+    maximumInvestigationSeconds: readNumber(parameters?.maximumInvestigationSeconds, 5),
+    revisitDelaySeconds: readNumber(parameters?.revisitDelaySeconds, 4),
+    switchAdvantagePercent: readNumber(parameters?.switchAdvantagePercent, 25),
+    urgentCloserMeters: readNumber(parameters?.urgentCloserMeters, 12),
+    urgentCloserRatio: readNumber(parameters?.urgentCloserRatio, 0.6),
+    reactToFreshFire: readBoolean(parameters?.reactToFreshFire, true),
+    confidenceWeight: readNumber(parameters?.confidenceWeight, 0.3),
+    proximityWeight: readNumber(parameters?.proximityWeight, 0.25),
+    freshnessWeight: readNumber(parameters?.freshnessWeight, 0.2),
+    urgencyWeight: readNumber(parameters?.urgencyWeight, 0.2),
+    uncertaintyPenaltyWeight: readNumber(parameters?.uncertaintyPenaltyWeight, 0.15),
+    currentContactBonus: readNumber(parameters?.currentContactBonus, 10),
+  });
+}
+
+function directionDegrees(from: { x: number; y: number }, to: { x: number; y: number }): number | null {
+  const deltaX = to.x - from.x;
+  const deltaY = to.y - from.y;
+  if (Math.abs(deltaX) <= 1e-9 && Math.abs(deltaY) <= 1e-9) return null;
+  return normalizeDegrees(Math.atan2(deltaY, deltaX) * 180 / Math.PI);
+}
+
 function normalizeDegrees(value: number): number {
   return ((value % 360) + 360) % 360;
+}
+
+function readStage(value: unknown, fallback: ContactInvestigationSettings['minimumStage']): ContactInvestigationSettings['minimumStage'] {
+  return value === 'cue' || value === 'suspicion' || value === 'contact' || value === 'identified' || value === 'confirmed'
+    ? value
+    : fallback;
+}
+
+function readBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
 }
 
 function readNumber(value: unknown, fallback: number): number {
