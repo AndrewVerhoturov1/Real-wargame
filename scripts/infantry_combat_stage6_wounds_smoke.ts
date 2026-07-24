@@ -123,9 +123,10 @@ function candidate(impactId: string, zone: 'head' | 'torso' | 'arms' | 'legs', s
 }
 function slot(zone: 'head' | 'torso' | 'arms' | 'legs', severity: WoundSeverity) {
   return {
-    schemaVersion: 1 as const,
+    schemaVersion: 2 as const,
     zone,
     severity,
+    bleedingState: 'none' as const,
     hitCount: 1,
     bleedingRatePerSecond: 0,
     maximumTraumaScore: 1,
@@ -134,6 +135,9 @@ function slot(zone: 'head' | 'torso' | 'arms' | 'legs', severity: WoundSeverity)
     lastImpactId: `${zone}:last`,
     firstAppliedSeconds: 1,
     lastAppliedSeconds: 1,
+    firstAidApplicationCount: 0,
+    lastFirstAidActionId: null,
+    lastTreatedSeconds: null,
   };
 }
 function bodyPhysics(zone: 'head' | 'torso' | 'arms' | 'legs', status: 'penetrated' | 'stopped' | 'penetration_limit') {
