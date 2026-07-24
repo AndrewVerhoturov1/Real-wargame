@@ -9,7 +9,8 @@ const result = spawnSync(process.execPath, [compiler, '--noEmit', '--pretty', 'f
 });
 const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
 const firstError = output.split(/\r?\n/).find((line) => line.includes('error TS')) ?? '';
-const firstPath = firstError.match(/^([^\s(]+)\(/)?.[1] ?? '';
-const pivot = 'src/core/infantry-combat/runtime/WoundImpactApplication.ts';
-console.log(firstPath && firstPath <= pivot ? 'TYPECHECK_PATH_LOWER_OR_EQUAL' : 'TYPECHECK_PATH_HIGHER');
-process.exit(firstPath && firstPath <= pivot ? 1 : 0);
+const match = firstError.match(/^src\/core\/infantry-combat\/runtime\/WoundRuntime\.ts\((\d+),/);
+const line = match ? Number(match[1]) : Number.POSITIVE_INFINITY;
+const pivot = 250;
+console.log(line <= pivot ? 'TYPECHECK_LINE_LOWER_OR_EQUAL' : 'TYPECHECK_LINE_HIGHER');
+process.exit(line <= pivot ? 1 : 0);
