@@ -10,7 +10,7 @@ import { tickReferenceProjectiles } from './ReferenceProjectileStepper';
 import { commitShot, type CommitShotResult } from './ShotCommitService';
 
 const TIME_EPSILON_SECONDS = 1e-9;
-const DIRECTION_CANONICAL_SCALE = 1_000_000_000_000;
+const COMMIT_CANONICAL_SCALE = 1_000_000_000_000;
 
 export interface TickInfantryCombatSimulationInput {
   readonly intervalStartSeconds: number;
@@ -89,7 +89,7 @@ export function tickInfantryCombatSimulation(
     }
 
     const committedSeconds = intervalStartSeconds + offsetSeconds;
-    canonicalizeCommitAimDirection(pending.task);
+    canonicalizeCommitAimSolution(pending.task);
     const result = commitShot({
       state,
       shooter: pending.unit,
@@ -136,28 +136,46 @@ export function tickInfantryCombatSimulation(
 }
 
 /**
- * Floating-point interpolation can reach the same physical direction through
- * slightly different arithmetic partitions. Canonicalize only at the
- * irreversible commit boundary so identical simulation events create exactly
- * identical projectile directions and serialized commit records.
+ * Continuous aiming can reach the same physical commitment event through
+ * slightly different floating-point partitions. Canonicalize every value that
+ * becomes immutable shot truth at the commitment boundary. This preserves the
+ * continuous runtime while making the committed record and projectile exact.
  */
-function canonicalizeCommitAimDirection(task: FireTaskRuntimeV1): void {
-  const direction = task.aimTracking.solution.currentDirection;
-  if (!Number.isFinite(direction.x) || !Number.isFinite(direction.y) || !Number.isFinite(direction.z)) return;
-  const magnitude = Math.hypot(direction.x, direction.y, direction.z);
-  if (magnitude <= TIME_EPSILON_SECONDS) return;
-  const rounded = {
-    x: canonicalDirectionComponent(direction.x / magnitude),
-    y: canonicalDirectionComponent(direction.y / magnitude),
-    z: canonicalDirectionComponent(direction.z / magnitude),
-  };
-  const roundedMagnitude = Math.hypot(rounded.x, rounded.y, rounded.z);
-  if (roundedMagnitude <= TIME_EPSILON_SECONDS) return;
-  task.aimTracking.solution.currentDirection = {
-    x: rounded.x / roundedMagnitude,
-    y: rounded.y / roundedMagnitude,
-    z: rounded.z / roundedMagnitude,
-  };
+function canonicalizeCommitAimSolution(task: FireTaskRuntimeV1): void {
+  const solution = task.aimTracking.solution;
+  const direction = solution.currentDirection;
+  if (Number.isFinite(direction.x) && Number.isFinite(direction.y) && Number.isFinite(direction.z)) {
+    const magnitude = Math.hypot(direction.x, direction.y, direction.z);
+    if (magnitude > TIME_EPSILON_SECONDS) {
+      const rounded = {
+        x: canonicalValue(direction.x / magnitude),
+        y: canonicalValue(direction.y / magnitude),
+        z: canonicalValue(direction.z / magnitude),
+      };
+      const roundedMagnitude = Math.hypot(rounded.x, rounded.y, rounded.z);
+      if (roundedMagnitude > TIME_EPSILON_SECONDS) {
+        solution.currentDirection = {
+          x: rounded.x / roundedMagnitude,
+          y: rounded.y / roundedMagnitude,
+          z: rounded.z / roundedMagnitude,
+        };
+      }
+    }
+  }
+
+  solution.physicalAimQuality = canonicalUnitInterval(solution.physicalAimQuality);
+  solution.solutionQuality = canonicalUnitInterval(solution.solutionQuality);
+  solution.usableAimQuality = canonicalUnitInterval(solution.usableAimQuality);
+  solution.predictedHitProbability = canonicalUnitInterval(solution.predictedHitProbability);
+  solution.effectiveDispersionRadians = canonicalNonNegative(solution.effectiveDispersionRadians);
+  task.aimQuality = solution.usableAimQuality;
+
+  const predicted = solution.predictedAimPoint;
+  if (predicted) {
+    predicted.xMetres = canonicalValue(predicted.xMetres);
+    predicted.yMetres = canonicalValue(predicted.yMetres);
+    predicted.zMetres = canonicalValue(predicted.zMetres);
+  }
 }
 
 function terminalizeCommitFailure(
@@ -215,8 +233,16 @@ function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function canonicalDirectionComponent(value: number): number {
-  return Math.round(value * DIRECTION_CANONICAL_SCALE) / DIRECTION_CANONICAL_SCALE;
+function canonicalValue(value: number): number {
+  return Math.round(value * COMMIT_CANONICAL_SCALE) / COMMIT_CANONICAL_SCALE;
+}
+
+function canonicalNonNegative(value: number): number {
+  return canonicalValue(Math.max(0, Number.isFinite(value) ? value : 0));
+}
+
+function canonicalUnitInterval(value: number): number {
+  return canonicalValue(clamp(Number.isFinite(value) ? value : 0, 0, 1));
 }
 
 function finiteNonNegative(value: number): number {
