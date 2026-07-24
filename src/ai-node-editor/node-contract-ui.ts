@@ -1,4 +1,5 @@
 import type { AiNode } from '../core/ai/AiGraph';
+import { ensureContactInvestigationNodeContractRegistered } from '../core/ai/ContactInvestigationNodeContract';
 import type { AiNodeContract, AiParameterDefinition } from '../core/ai/contracts/AiNodeContract';
 import { DEFAULT_AI_NODE_CONTRACT_REGISTRY } from '../core/ai/contracts/AiNodeContractRegistry';
 import type { AiPortDefinition, AiPortValueKind } from '../core/ai/contracts/AiPortTypes';
@@ -10,6 +11,8 @@ import {
   readTacticalPositionParameterFields,
   renderTacticalPositionParameterFields,
 } from './tactical-position-node-ui';
+
+ensureContactInvestigationNodeContractRegistered();
 
 export interface NodeContractUiModel {
   readonly contract?: AiNodeContract;
