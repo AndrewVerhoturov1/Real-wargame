@@ -232,9 +232,22 @@ export function collectActiveProjectileRecords(runtime: ProjectileRuntimeStateV3
 }
 
 export function rebuildProjectilePool(runtime: ProjectileRuntimeStateV3, projectiles: readonly ProjectileStateV1[]): void {
+  const historicalHighWaterMark = runtime.pool.highWaterMark;
   clearPool(runtime);
-  const values = projectiles.map(normalizeProjectile).filter(isPresent).sort(compareProjectiles).slice(0, runtime.pool.capacity);
-  for (const value of values) trySpawnProjectile(runtime, value);
+  const values = uniqueBy(
+    projectiles.map(normalizeProjectile).filter(isPresent),
+    (projectile) => projectile.projectileId,
+  ).sort(compareProjectiles).slice(0, runtime.pool.capacity);
+  const derived = getDerived(runtime);
+  for (const value of values) {
+    const slot = runtime.pool.freeSlots[--runtime.pool.freeSlotCount]!;
+    runtime.pool.generation[slot] = nextGeneration(runtime.pool.generation[slot]!);
+    writeProjectileRecord(runtime.pool, slot, value);
+    runtime.pool.active[slot] = 1;
+    runtime.pool.activeCount += 1;
+    derived.slotByProjectileId.set(value.projectileId, slot);
+  }
+  runtime.pool.highWaterMark = Math.max(historicalHighWaterMark, runtime.pool.activeCount);
   syncDiagnostics(runtime);
 }
 
