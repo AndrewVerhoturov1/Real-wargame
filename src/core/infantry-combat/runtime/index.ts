@@ -23,7 +23,6 @@ export * from './ReferenceProjectileRuntime';
 export * from './ProjectileStepper';
 export * from './ReferenceProjectileStepper';
 export * from './InfantryCombatSimulation';
-export * from './InfantryCombatSimulationSegment';
 export * from './InfantryPhysiologySimulation';
 export * from './InfantryCombatReconciliation';
 export * from './InfantryCombatDiagnostics';
