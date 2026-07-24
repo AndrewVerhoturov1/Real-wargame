@@ -15,24 +15,16 @@ import {
   restoreImportedInfantryCombatState,
 } from '../src/ui/SceneExport';
 
-verifyAfterImpactEventLedgers();
-console.log('Stage 7 diagnostic: after-impact event ledgers round-trip passed.');
+verifyAfterImpactCommitLedger();
+console.log('Stage 7 diagnostic: after-impact commit ledger round-trip passed.');
 
-function verifyAfterImpactEventLedgers(): void {
+function verifyAfterImpactCommitLedger(): void {
   const original = readyScenario('save-after-impact');
   advance(original.state, 1.734);
   const loaded = roundTrip(original.state);
   const loadedSnapshot = serializeReferenceProjectileRuntimeState(loaded.infantryCombatProjectiles);
   const originalSnapshot = serializeReferenceProjectileRuntimeState(original.state.infantryCombatProjectiles);
-  assert.deepEqual(eventLedgers(loadedSnapshot), eventLedgers(originalSnapshot));
-}
-
-function eventLedgers(snapshot: ReturnType<typeof serializeReferenceProjectileRuntimeState>) {
-  return {
-    impacts: snapshot.impacts,
-    terminations: snapshot.terminations,
-    appliedImpactIds: snapshot.appliedImpactIds,
-  };
+  assert.deepEqual(loadedSnapshot.committedShots, originalSnapshot.committedShots);
 }
 
 function roundTrip(state: SimulationState): SimulationState {
