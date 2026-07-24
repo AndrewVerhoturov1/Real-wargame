@@ -104,6 +104,9 @@ function renderSearchSectorDirectionFields(parameters: AiNode['parameters']): st
 }
 
 export function readContractParameterFields(container: ParentNode, fallback: Record<string, unknown>): Record<string, unknown> {
+  if (typeof Element !== 'undefined' && container instanceof Element && container.closest('.human-hidden-original')) {
+    return { ...fallback };
+  }
   if (isTacticalPositionParameterContainer(container)) {
     return readTacticalPositionParameterFields(container, fallback);
   }
