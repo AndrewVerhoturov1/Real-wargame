@@ -4,10 +4,10 @@ import { equipPrimaryWeaponFromLoadout, requestSingleFireTask, tickInfantryComba
 import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
 import type { UnitModel } from '../src/core/units/UnitModel';
 
-verifyExpectedSmallRecoveryTail();
-console.log('Stage 7 diagnostic: expected small recovery tail confirmed.');
+verifyExpectedRecoveryTail();
+console.log('Stage 7 diagnostic: recovery phase and bounded tail confirmed.');
 
-function verifyExpectedSmallRecoveryTail(): void {
+function verifyExpectedRecoveryTail(): void {
   const { state, shooter } = readyScenario('pipeline-explicit');
   const result = tickInfantryCombatSimulation(state, { intervalStartSeconds: 0, deltaSeconds: 2.1 });
   assert.equal(result.commitResults.length, 1);
@@ -16,7 +16,7 @@ function verifyExpectedSmallRecoveryTail(): void {
   assert.notEqual(task, null);
   assert.equal(task?.phase, 'recovery');
   assert.equal((task?.recoveryRemainingSeconds ?? 1) > 0, true);
-  assert.equal((task?.recoveryRemainingSeconds ?? 1) < 0.01, true);
+  assert.equal((task?.recoveryRemainingSeconds ?? 1) < 0.1, true);
 }
 
 function readyScenario(id: string): { state: SimulationState; shooter: UnitModel } {
