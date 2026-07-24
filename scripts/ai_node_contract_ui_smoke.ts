@@ -101,6 +101,15 @@ const memoryOptions = collectBlackboardSelectOptions({
 assert.deepEqual(memoryOptions.number.map((option) => option.value), ['best_contact_confidence']);
 assert.deepEqual(memoryOptions.boolean.map((option) => option.value), ['contact_visible_now']);
 
+const selectGuardSource = readFileSync('src/ai-node-editor/HumanSelectValueGuard.ts', 'utf8');
+for (const expected of [
+  "parameterKey === 'sourceKey'",
+  "parameterKey === 'modifierKey'",
+  "parameterKey === 'flagKey'",
+  'select.value = currentValue',
+  'selectValueGuardInitialized',
+]) assert.ok(selectGuardSource.includes(expected), `Missing custom select guard behavior: ${expected}`);
+
 const attentionControlsSource = readFileSync('src/ai-node-editor/AttentionNodeControls.ts', 'utf8');
 for (const expected of [
   'Куда направить внимание',
