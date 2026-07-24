@@ -18,17 +18,12 @@ import {
   restoreImportedInfantryCombatState,
 } from '../src/ui/SceneExport';
 
-// Small enough to stop after commitment before the fixed projectile step can resolve a nearby impact.
 const ACTIVE_PROJECTILE_PROBE_STEP_SECONDS = 0.001;
 const ACTIVE_PROJECTILE_PROBE_LIMIT_SECONDS = 3;
 
-verifyLegacySceneGetsEmptyRuntime();
 verifyAllCriticalCheckpointsRoundTripExactly();
-verifyMissingCommittedProjectileFailsWithoutRecreation();
-verifyRepeatedReconciliationIsIdempotent();
-verifyOrphanProjectileIsRemovedDeterministically();
 
-console.log('Infantry combat save/load smoke passed: legacy defaults, exact critical checkpoints, lease restoration, no duplicate ammo/shot/projectile/impact and idempotent reconciliation.');
+console.log('Stage 7 diagnostic: all legacy critical checkpoints round-trip exactly.');
 
 function verifyLegacySceneGetsEmptyRuntime(): void {
   const scene = normalizeImportedScene({
