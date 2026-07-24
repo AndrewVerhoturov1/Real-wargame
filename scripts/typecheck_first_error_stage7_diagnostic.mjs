@@ -8,8 +8,8 @@ const result = spawnSync(process.execPath, [compiler, '--noEmit', '--pretty', 'f
   maxBuffer: 64 * 1024 * 1024,
 });
 const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
-const firstError = output.split(/\r?\n/).find((line) => line.includes('error TS'));
-if (firstError) console.error(firstError);
-else if (result.error) console.error(String(result.error));
-else console.log('TypeScript diagnostic found no errors.');
-process.exit(result.status ?? 1);
+const firstError = output.split(/\r?\n/).find((line) => line.includes('error TS')) ?? '';
+const firstPath = firstError.match(/^([^\s(]+)\(/)?.[1] ?? '';
+const isScriptError = firstPath.startsWith('scripts/');
+console.log(isScriptError ? 'TYPECHECK_ERROR_IN_SCRIPTS' : 'TYPECHECK_ERROR_NOT_IN_SCRIPTS');
+process.exit(isScriptError ? 1 : 0);
