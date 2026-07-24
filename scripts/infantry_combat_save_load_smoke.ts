@@ -18,15 +18,14 @@ import {
 } from '../src/ui/SceneExport';
 
 verifyCheckpointGroup();
-console.log('Stage 7 diagnostic: first save/load checkpoint group passed.');
+console.log('Stage 7 diagnostic: second save/load checkpoint group passed.');
 
 function verifyCheckpointGroup(): void {
   const checkpoints = [
-    ['accepted', 0],
-    ['mid-ready', 0.3],
-    ['mid-aim', 0.9],
-    ['before-commit', 1.699],
-    ['after-commit', 1.7],
+    ['mid-flight', 1.72],
+    ['before-impact', 1.732],
+    ['after-impact', 1.734],
+    ['mid-recovery', 1.8],
   ] as const;
 
   for (const [name, checkpointSeconds] of checkpoints) {
