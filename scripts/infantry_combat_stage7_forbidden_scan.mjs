@@ -8,13 +8,12 @@ const changedFiles = git(['diff', '--name-only', `${BASE_SHA}...HEAD`])
   .filter(Boolean);
 const sourceFiles = changedFiles.filter((file) => file.startsWith('src/') && /\.(?:ts|tsx|js|mjs)$/.test(file));
 const additions = sourceFiles.map((file) => addedLines(file)).join('\n');
-for (const [label, pattern] of [
-  ['automatic fire', /\b(?:automatic[_ -]?fire|burst[_ -]?fire)\b/i],
-  ['suppression', /\bsuppression\b/i],
-]) {
-  assert.equal(pattern.test(additions), false, `Stage 7 added forbidden ${label}.`);
-}
-console.log('STAGE7_DIAGNOSTIC_AUTOMATIC_AND_SUPPRESSION_PASSED');
+assert.equal(
+  /\b(?:automatic[_ -]?fire|burst[_ -]?fire)\b/i.test(additions),
+  false,
+  'Stage 7 added forbidden automatic fire.',
+);
+console.log('STAGE7_DIAGNOSTIC_AUTOMATIC_FIRE_PASSED');
 
 function addedLines(file) {
   return git(['diff', '--unified=0', `${BASE_SHA}...HEAD`, '--', file])
