@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
+// Final focused probe before restoring the complete verification matrix.
 const checks = [
   ['npm', ['run', 'infantry-combat-stage5:smoke']],
   ['npm', ['run', 'infantry-combat-single-shot:smoke']],
