@@ -10,6 +10,7 @@ import { tickReferenceProjectiles } from './ReferenceProjectileStepper';
 import { commitShot, type CommitShotResult } from './ShotCommitService';
 
 const TIME_EPSILON_SECONDS = 1e-9;
+const DIRECTION_CANONICAL_SCALE = 1_000_000_000_000;
 
 export interface TickInfantryCombatSimulationInput {
   readonly intervalStartSeconds: number;
@@ -88,6 +89,7 @@ export function tickInfantryCombatSimulation(
     }
 
     const committedSeconds = intervalStartSeconds + offsetSeconds;
+    canonicalizeCommitAimDirection(pending.task);
     const result = commitShot({
       state,
       shooter: pending.unit,
@@ -131,6 +133,31 @@ export function tickInfantryCombatSimulation(
   }
 
   return { commitResults, projectileSubsteps };
+}
+
+/**
+ * Floating-point interpolation can reach the same physical direction through
+ * slightly different arithmetic partitions. Canonicalize only at the
+ * irreversible commit boundary so identical simulation events create exactly
+ * identical projectile directions and serialized commit records.
+ */
+function canonicalizeCommitAimDirection(task: FireTaskRuntimeV1): void {
+  const direction = task.aimTracking.solution.currentDirection;
+  if (!Number.isFinite(direction.x) || !Number.isFinite(direction.y) || !Number.isFinite(direction.z)) return;
+  const magnitude = Math.hypot(direction.x, direction.y, direction.z);
+  if (magnitude <= TIME_EPSILON_SECONDS) return;
+  const rounded = {
+    x: canonicalDirectionComponent(direction.x / magnitude),
+    y: canonicalDirectionComponent(direction.y / magnitude),
+    z: canonicalDirectionComponent(direction.z / magnitude),
+  };
+  const roundedMagnitude = Math.hypot(rounded.x, rounded.y, rounded.z);
+  if (roundedMagnitude <= TIME_EPSILON_SECONDS) return;
+  task.aimTracking.solution.currentDirection = {
+    x: rounded.x / roundedMagnitude,
+    y: rounded.y / roundedMagnitude,
+    z: rounded.z / roundedMagnitude,
+  };
 }
 
 function terminalizeCommitFailure(
@@ -186,6 +213,10 @@ function compareUnits(left: UnitModel, right: UnitModel): number {
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function canonicalDirectionComponent(value: number): number {
+  return Math.round(value * DIRECTION_CANONICAL_SCALE) / DIRECTION_CANONICAL_SCALE;
 }
 
 function finiteNonNegative(value: number): number {
