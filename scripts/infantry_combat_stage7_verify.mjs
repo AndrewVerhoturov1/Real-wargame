@@ -1,10 +1,27 @@
-import { spawnSync } from 'node:child_process';
+import { rm } from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { build } from 'vite';
 
-const result = spawnSync('npm', ['run', 'infantry-combat-single-shot:smoke'], {
-  cwd: process.cwd(),
-  encoding: 'utf8',
-  maxBuffer: 64 * 1024 * 1024,
-  env: process.env,
-});
-if (result.error || result.status !== 0) process.exit(1);
-console.log('STAGE7_DIAGNOSTIC_COMPLETE_SINGLE_SHOT_COMMAND_PASSED');
+const repoRoot = process.cwd();
+const outDir = path.join(repoRoot, '.tmp-stage7-save-load-diagnostic');
+await rm(outDir, { recursive: true, force: true });
+try {
+  await build({
+    root: repoRoot,
+    logLevel: 'warn',
+    clearScreen: false,
+    build: {
+      ssr: path.join(repoRoot, 'scripts', 'infantry_combat_save_load_smoke.ts'),
+      outDir,
+      emptyOutDir: true,
+      minify: false,
+      sourcemap: false,
+      rollupOptions: { output: { entryFileNames: 'save-load.mjs', format: 'es' } },
+    },
+  });
+  await import(`${pathToFileURL(path.join(outDir, 'save-load.mjs')).href}?run=stage7-diagnostic`);
+} finally {
+  await rm(outDir, { recursive: true, force: true });
+}
+console.log('STAGE7_DIAGNOSTIC_SAVE_LOAD_PASSED');
