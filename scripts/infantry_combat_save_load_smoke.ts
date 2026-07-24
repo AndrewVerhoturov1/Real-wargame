@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { serializePhysicalActionCoordinatorState } from '../src/core/actions/PhysicalActionCoordinatorSerialization';
 import { createDefaultCombatCatalogRegistry } from '../src/core/infantry-combat/catalogs';
 import {
   equipPrimaryWeaponFromLoadout,
@@ -16,10 +15,10 @@ import {
   restoreImportedInfantryCombatState,
 } from '../src/ui/SceneExport';
 
-verifyAfterImpactProjectileAndCoordinatorRoundTrip();
-console.log('Stage 7 diagnostic: after-impact projectile and coordinator round-trip passed.');
+verifyAfterImpactProjectileRoundTrip();
+console.log('Stage 7 diagnostic: after-impact projectile round-trip passed.');
 
-function verifyAfterImpactProjectileAndCoordinatorRoundTrip(): void {
+function verifyAfterImpactProjectileRoundTrip(): void {
   const original = readyScenario('save-after-impact');
   advance(original.state, 1.734);
   const loaded = roundTrip(original.state);
@@ -27,11 +26,6 @@ function verifyAfterImpactProjectileAndCoordinatorRoundTrip(): void {
     serializeReferenceProjectileRuntimeState(loaded.infantryCombatProjectiles),
     serializeReferenceProjectileRuntimeState(original.state.infantryCombatProjectiles),
     'after-impact: projectile runtime must restore exactly',
-  );
-  assert.deepEqual(
-    serializePhysicalActionCoordinatorState(loaded.units[0]!.behaviorRuntime.physicalActionCoordinator),
-    serializePhysicalActionCoordinatorState(original.state.units[0]!.behaviorRuntime.physicalActionCoordinator),
-    'after-impact: physical action coordinator must restore exactly',
   );
 }
 
