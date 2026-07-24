@@ -1,4 +1,5 @@
 import type { SimulationState } from '../../simulation/SimulationState';
+import { getEffectiveCombatCapabilities } from './EffectiveCombatCapabilities';
 import type { AimFactorBreakdownV1, FireTaskRuntimeV1, InfantryCombatUnitRuntimeV1 } from './InfantryCombatRuntimeTypes';
 import {
   MAX_STAGE3_ACTIVE_PROJECTILES,
@@ -124,6 +125,9 @@ export interface InfantryCombatUnitDiagnosticsV1 {
     readonly resultCode: string | null;
   };
   readonly wounds: InfantryCombatUnitRuntimeV1['wounds'];
+  readonly physiology: InfantryCombatUnitRuntimeV1['physiology'];
+  readonly medical: InfantryCombatUnitRuntimeV1['medical'];
+  readonly effectiveCapabilities: ReturnType<typeof getEffectiveCombatCapabilities>;
   readonly lastFireResult: InfantryCombatUnitRuntimeV1['lastFireResult'];
   readonly lastShotCommit: InfantryCombatUnitRuntimeV1['lastShotCommit'];
 }
@@ -218,6 +222,9 @@ export function getInfantryCombatDiagnostics(state: SimulationState): InfantryCo
         } : null,
         fireTask: task ? taskDiagnostics(task) : null,
         wounds: structuredClone(unitRuntime.wounds),
+        physiology: structuredClone(unitRuntime.physiology),
+        medical: structuredClone(unitRuntime.medical),
+        effectiveCapabilities: structuredClone(getEffectiveCombatCapabilities(unit)),
         lastFireResult: unitRuntime.lastFireResult ? structuredClone(unitRuntime.lastFireResult) : null,
         lastShotCommit: unitRuntime.lastShotCommit ? structuredClone(unitRuntime.lastShotCommit) : null,
       };
