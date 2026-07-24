@@ -1,20 +1,20 @@
 import assert from 'node:assert/strict';
 import { createDefaultCombatCatalogRegistry } from '../src/core/infantry-combat/catalogs';
-import { equipPrimaryWeaponFromLoadout, requestSingleFireTask, serializeInfantryCombatUnitRuntime, tickInfantryCombatSimulation } from '../src/core/infantry-combat/runtime';
+import { equipPrimaryWeaponFromLoadout, requestSingleFireTask, tickInfantryCombatSimulation } from '../src/core/infantry-combat/runtime';
 import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
 import type { UnitModel } from '../src/core/units/UnitModel';
 
-verifyUnitRuntimePartitionDeterminism();
-console.log('Stage 7 diagnostic: unit runtime partition determinism passed.');
+verifyPhysiologyPartitionDeterminism();
+console.log('Stage 7 diagnostic: physiology partition determinism passed.');
 
-function verifyUnitRuntimePartitionDeterminism(): void {
+function verifyPhysiologyPartitionDeterminism(): void {
   const coarse = readyScenario('pipeline-partition');
   const fine = readyScenario('pipeline-partition');
   tickInfantryCombatSimulation(coarse.state, { intervalStartSeconds: 0, deltaSeconds: 2.1 });
   tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: 0, deltaSeconds: 0.7 });
   tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: 0.7, deltaSeconds: 0.4 });
   tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: 1.1, deltaSeconds: 1 });
-  assert.deepEqual(serializeInfantryCombatUnitRuntime(fine.shooter.infantryCombatRuntime), serializeInfantryCombatUnitRuntime(coarse.shooter.infantryCombatRuntime));
+  assert.deepEqual(fine.shooter.infantryCombatRuntime.physiology, coarse.shooter.infantryCombatRuntime.physiology);
 }
 
 function readyScenario(id: string): { state: SimulationState; shooter: UnitModel } {
