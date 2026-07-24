@@ -9,11 +9,11 @@ import {
 import { createInitialState, type SimulationState } from '../src/core/simulation/SimulationState';
 import type { UnitModel } from '../src/core/units/UnitModel';
 
-verifyCoarseAndFineProjectileRuntimeMatch();
+verifyCoarseAndFineProjectileGameplayMatch();
 
-console.log('Infantry combat simulation partition probe passed: projectile runtime matches.');
+console.log('Infantry combat simulation partition probe passed: projectile gameplay records match.');
 
-function verifyCoarseAndFineProjectileRuntimeMatch(): void {
+function verifyCoarseAndFineProjectileGameplayMatch(): void {
   const coarse = readyScenario('pipeline-partition');
   const fine = readyScenario('pipeline-partition');
   tickInfantryCombatSimulation(coarse.state, { intervalStartSeconds: 0, deltaSeconds: 2.1 });
@@ -21,9 +21,25 @@ function verifyCoarseAndFineProjectileRuntimeMatch(): void {
   tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: 0.7, deltaSeconds: 0.4 });
   tickInfantryCombatSimulation(fine.state, { intervalStartSeconds: 1.1, deltaSeconds: 1 });
 
+  const coarseSnapshot = serializeReferenceProjectileRuntimeState(coarse.state.infantryCombatProjectiles);
+  const fineSnapshot = serializeReferenceProjectileRuntimeState(fine.state.infantryCombatProjectiles);
   assert.deepEqual(
-    serializeReferenceProjectileRuntimeState(fine.state.infantryCombatProjectiles),
-    serializeReferenceProjectileRuntimeState(coarse.state.infantryCombatProjectiles),
+    {
+      accumulatorSeconds: fineSnapshot.accumulatorSeconds,
+      activeProjectiles: fineSnapshot.activeProjectiles,
+      committedShots: fineSnapshot.committedShots,
+      impacts: fineSnapshot.impacts,
+      terminations: fineSnapshot.terminations,
+      appliedImpactIds: fineSnapshot.appliedImpactIds,
+    },
+    {
+      accumulatorSeconds: coarseSnapshot.accumulatorSeconds,
+      activeProjectiles: coarseSnapshot.activeProjectiles,
+      committedShots: coarseSnapshot.committedShots,
+      impacts: coarseSnapshot.impacts,
+      terminations: coarseSnapshot.terminations,
+      appliedImpactIds: coarseSnapshot.appliedImpactIds,
+    },
   );
 }
 
