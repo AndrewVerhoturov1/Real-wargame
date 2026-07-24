@@ -3,6 +3,9 @@ import { getCombatUnitSpatialIndex, type CombatUnitIndex } from '../../combat/Co
 import { cancelMovementWeaponPreparation } from '../../movement/MovementRuntime';
 import type { SimulationState } from '../../simulation/SimulationState';
 import type { UnitModel } from '../../units/UnitModel';
+import { refreshUnitBleedingRateAt } from './BloodLossRuntime';
+import { getEffectiveCombatCapabilities } from './EffectiveCombatCapabilities';
+import { cancelActiveFirstAidAction } from './FirstAidRuntime';
 import { failActiveFireTask } from './FireTaskRuntime';
 import type { ProjectileImpactV1 } from './ProjectileRuntimeTypes';
 import {
@@ -77,29 +80,42 @@ function applyProjectileImpactWoundCore(
     functionalPenalty: severity.traumaScore / Math.max(1, severity.traumaScore + 1),
     appliedSeconds: impact.impactSeconds,
   };
+  const duplicate = target.infantryCombatRuntime.wounds.appliedImpactIds.includes(candidate.impactId);
+  if (!duplicate) refreshUnitBleedingRateAt(target, impact.impactSeconds);
   const applied = aggregateWoundCandidate(target.infantryCombatRuntime.wounds, candidate);
   target.infantryCombatRuntime.wounds = applied.runtime;
-  if (applied.result.applied) enforceWoundCapabilities(target, impact.impactSeconds);
+  if (applied.result.applied) {
+    refreshUnitBleedingRateAt(target, impact.impactSeconds);
+    enforceEffectiveCombatCapabilities(target, impact.impactSeconds);
+  }
   return { result: applied.result, target };
 }
 
-export function enforceWoundCapabilities(unit: UnitModel, endedSeconds: number): void {
-  const capabilities = unit.infantryCombatRuntime.wounds.capabilities;
+export function enforceEffectiveCombatCapabilities(unit: UnitModel, endedSeconds: number): void {
+  const capabilities = getEffectiveCombatCapabilities(unit);
   if (!capabilities.canUseWeapon) {
     failActiveFireTask(unit, {
       endedSeconds,
       resultCode: 'infantry_fire_task_weapon_capability_lost',
-      resultRu: 'Огневая задача завершена: ранение лишило бойца способности пользоваться оружием.',
+      resultRu: 'Огневая задача завершена: физическое состояние не позволяет пользоваться оружием.',
     });
+  }
+  if (!capabilities.canUseHands || !capabilities.conscious || !capabilities.alive) {
+    cancelActiveFirstAidAction(
+      unit,
+      endedSeconds,
+      'infantry_first_aid_actor_capability_lost',
+      'Первая помощь отменена: физическое состояние бойца ухудшилось.',
+    );
   }
   if (!capabilities.canUseWeapon || !capabilities.canMove) {
     cancelMovementWeaponPreparation(
       unit,
       undefined,
-      'movement_weapon_preparation_wound_capability_lost',
+      'movement_weapon_preparation_capability_lost',
       !capabilities.canMove
-        ? 'Подготовка движения отменена: ранение лишило бойца способности двигаться.'
-        : 'Подготовка движения отменена: ранение лишило бойца способности пользоваться оружием.',
+        ? 'Подготовка движения отменена: физическое состояние не позволяет двигаться.'
+        : 'Подготовка движения отменена: физическое состояние не позволяет пользоваться оружием.',
     );
   }
   if (!capabilities.canMove) {
@@ -111,11 +127,14 @@ export function enforceWoundCapabilities(unit: UnitModel, endedSeconds: number):
   if (posture && (!capabilities.conscious || !capabilities.alive || (!capabilities.canStand && posture.targetPosture === 'standing'))) {
     cancelPostureTransitionBySystem(
       unit,
-      'posture_transition_wound_capability_lost',
-      'Смена позы отменена: ранение больше не позволяет выполнить целевую позу.',
+      'posture_transition_capability_lost',
+      'Смена позы отменена: физическое состояние больше не позволяет выполнить целевую позу.',
     );
   }
 }
+
+/** Stage 6 compatibility alias; the implementation is authoritative for Stage 7. */
+export const enforceWoundCapabilities = enforceEffectiveCombatCapabilities;
 
 function noApplication(
   reason: WoundApplicationResultV1['reason'],
@@ -134,13 +153,11 @@ function noApplication(
     appliedSeconds: Math.max(0, Number.isFinite(impact.impactSeconds) ? impact.impactSeconds : 0),
   };
 }
-
 function commandStatus(result: WoundApplicationResultV1): WoundImpactCommandResult['status'] {
   if (result.applied) return 'applied';
   if (result.reason === 'duplicate_impact') return 'duplicate';
   return result.reason;
 }
-
 function isSimulationState(value: ProjectileImpactV1 | SimulationState): value is SimulationState {
   return typeof value === 'object'
     && value !== null
