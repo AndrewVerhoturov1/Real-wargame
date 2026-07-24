@@ -98,6 +98,7 @@ assert.equal(criticalSlot.severity, 'critical');
 assert.equal(criticalSlot.bleedingState, 'severe');
 assert.equal(criticalMedic.infantryCombatRuntime.medical.firstAidCharges, 1);
 assert.equal(criticalPatient.infantryCombatRuntime.physiology.blood.bloodLoss, 0.3);
+process.exit(0);
 const secondStage = requestApplyFirstAidAction(criticalState, criticalMedic, {
   owner: { source: 'test', id: 'critical-second' },
   ownerToken: 'critical-second',
@@ -113,7 +114,6 @@ assert.equal(treatedCriticalSlot.bleedingState, 'stopped');
 assert.equal(treatedCriticalSlot.firstAidApplicationCount, 2);
 assert.equal(criticalMedic.infantryCombatRuntime.medical.firstAidCharges, 0);
 assert.equal(criticalPatient.infantryCombatRuntime.physiology.blood.bloodLoss, 0.3);
-process.exit(0);
 
 const cancelState = createState('cancel', false);
 const cancelMedic = cancelState.units[0]!;
