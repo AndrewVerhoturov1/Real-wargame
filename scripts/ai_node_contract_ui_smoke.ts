@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { getNodeContractUiModel, explainPortIncompatibilityRu, renderContractParameterFields } from '../src/ai-node-editor/node-contract-ui';
+import { applySearchDirectionChoice, resolveSearchDirectionChoice } from '../src/ai-node-editor/AttentionNodeControls';
 import { getSubgraphChoice, listSubgraphChoices } from '../src/ai-node-editor/subgraph-ui';
 
 const choices = listSubgraphChoices();
@@ -36,10 +37,50 @@ for (const expected of [
   'Ключ позиции цели',
   'self_position',
   'suspected_enemy_position',
-]) assert.match(searchSectorFields, new RegExp(expected), `Missing visible suspected-contact search setting: ${expected}`);
+]) assert.match(searchSectorFields, new RegExp(expected), `Missing suspected-contact search setting: ${expected}`);
 assert.match(searchSectorFields, /data-param-id="centerSource"/);
 assert.match(searchSectorFields, /data-param-id="originPositionKey"/);
 assert.match(searchSectorFields, /data-param-id="targetPositionKey"/);
+
+assert.equal(resolveSearchDirectionChoice({ centerSource: 'fixed' }), 'fixed');
+assert.equal(resolveSearchDirectionChoice({
+  centerSource: 'blackboard_position',
+  originPositionKey: 'self_position',
+  targetPositionKey: 'suspected_enemy_position',
+}), 'suspected_contact');
+assert.equal(resolveSearchDirectionChoice({
+  centerSource: 'blackboard_position',
+  originPositionKey: 'observer_position',
+  targetPositionKey: 'custom_target_position',
+}), 'blackboard_position');
+assert.deepEqual(applySearchDirectionChoice({ centerDegrees: 45, arcDegrees: 90 }, 'suspected_contact'), {
+  centerDegrees: 45,
+  arcDegrees: 90,
+  centerSource: 'blackboard_position',
+  originPositionKey: 'self_position',
+  targetPositionKey: 'suspected_enemy_position',
+});
+assert.deepEqual(applySearchDirectionChoice({
+  centerSource: 'blackboard_position',
+  originPositionKey: 'observer_position',
+  targetPositionKey: 'custom_target_position',
+}, 'fixed'), {
+  centerSource: 'fixed',
+  originPositionKey: 'observer_position',
+  targetPositionKey: 'custom_target_position',
+});
+
+const attentionControlsSource = readFileSync('src/ai-node-editor/AttentionNodeControls.ts', 'utf8');
+for (const expected of [
+  'Куда направить внимание',
+  'Фиксированный угол',
+  'Предполагаемая позиция врага',
+  'Другая позиция из памяти',
+  'Ключ позиции бойца',
+  'Ключ позиции цели',
+  'Сохранить параметры',
+  'attentionParameterAuthority',
+]) assert.ok(attentionControlsSource.includes(expected), `Missing visible attention control: ${expected}`);
 
 const statefulSource = readFileSync('src/ai-node-editor/stateful-node-ui.ts', 'utf8');
 for (const expected of [
@@ -60,6 +101,8 @@ assert.ok(mainSource.includes('graph-validation-issue'));
 assert.ok(mainSource.includes('data-port-id'));
 assert.ok(mainSource.includes('Главный граф'));
 assert.ok(mainSource.includes("document.querySelector<HTMLSelectElement>('#stateful-subgraph-id')?.value"));
+assert.ok(mainSource.includes('friendlyParametersAreAuthoritative'), 'visible friendly controls must own saved parameters');
+assert.ok(mainSource.includes("'.human-node-panel, [data-attention-node-controls]'"), 'all friendly node panels must bypass stale hidden contract fields');
 assert.ok(!mainSource.includes("...(graphNavigation.length ? [editorGraph.nameRu ?? editorGraph.name] : [])"));
 
-console.log('AI node contract UI smoke passed: typed ports, contract parameters, suspected-contact direction controls, Graph v2-only editor, errors, and visible Russian subgraph controls.');
+console.log('AI node contract UI smoke passed: typed ports, convenient suspected-contact controls, authoritative friendly saves, Graph v2-only editor, errors, and visible Russian subgraph controls.');
