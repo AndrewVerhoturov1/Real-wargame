@@ -189,6 +189,7 @@ function hasCurrentEffectiveAimPath(
   unit: UnitModel,
   task: NonNullable<UnitModel['infantryCombatRuntime']['activeFireTask']>,
 ): boolean {
+  if (task.phase === 'recovery') return true;
   const capabilities = getEffectiveCombatCapabilities(unit);
   const desiredStability = Math.min(capabilities.stabilityMultiplier, capabilities.accuracyMultiplier);
   const desiredFatigue = unit.infantryCombatRuntime.physiology.fatigue.fatigue;
