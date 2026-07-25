@@ -5,8 +5,8 @@ import type { BodyImpactPhysicsV1 } from './InfantryBodyTypes';
 import { MAX_BODY_PENETRATIONS_PER_PROJECTILE } from './BodyPenetration';
 
 export const REFERENCE_PROJECTILE_RUNTIME_SCHEMA_VERSION = 1 as const;
-export const PROJECTILE_RUNTIME_SCHEMA_VERSION = 3 as const;
-export const PROJECTILE_STATE_SCHEMA_VERSION = 2 as const;
+export const PROJECTILE_RUNTIME_SCHEMA_VERSION = 4 as const;
+export const PROJECTILE_STATE_SCHEMA_VERSION = 3 as const;
 export const SHOT_COMMIT_RECORD_SCHEMA_VERSION = 1 as const;
 export const PROJECTILE_IMPACT_SCHEMA_VERSION = 2 as const;
 export const PROJECTILE_TERMINATION_SCHEMA_VERSION = 1 as const;
@@ -23,7 +23,7 @@ export const MAX_STAGE3_TERMINATION_ENTRIES = 4096;
 export const MAX_STAGE3_APPLIED_IMPACT_IDS = MAX_STAGE6_IMPACT_BUFFER_ENTRIES;
 
 export interface ProjectileStateV1 {
-  readonly schemaVersion: 1 | typeof PROJECTILE_STATE_SCHEMA_VERSION;
+  readonly schemaVersion: 1 | 2 | typeof PROJECTILE_STATE_SCHEMA_VERSION;
   readonly projectileId: string;
   readonly shotId: string;
   readonly shooterId: string;
@@ -36,6 +36,7 @@ export interface ProjectileStateV1 {
   bodyPenetrationCount?: number;
   impactSequence: number;
   lastHitUnitId?: string | null;
+  suppressionContinuousFireScore: number;
 }
 
 export type ProjectileStateV2 = ProjectileStateV1;
@@ -61,6 +62,8 @@ export interface ShotCommitRecordV1 {
   readonly effectiveDispersionRadians?: number;
   readonly roundsBefore: number;
   readonly roundsAfter: number;
+  readonly fireTaskShotOrdinal?: number;
+  readonly suppressionContinuousFireScore?: number;
 }
 
 export type ProjectileImpactType = 'terrain' | 'object' | 'unit';
@@ -137,6 +140,7 @@ export interface ProjectilePoolV3 {
   readonly bodyPenetrationCount: Uint8Array;
   readonly impactSequence: Uint32Array;
   readonly lastHitUnitIds: Array<string | null>;
+  readonly suppressionContinuousFireScores: Float64Array;
   readonly freeSlots: Uint32Array;
   activeCount: number;
   freeSlotCount: number;
@@ -196,6 +200,14 @@ export interface ProjectileRuntimeDiagnosticsV3 {
   lastBodyResistance: number;
   lastBodySpeedBefore: number;
   lastBodySpeedAfter: number;
+  suppressionEventBufferCapacity: number;
+  suppressionEventBufferHighWaterMark: number;
+  suppressionEventOverflowCount: number;
+  suppressionCandidateTruncationCount: number;
+  suppressionDuplicateEventCount: number;
+  emittedNearMissCount: number;
+  emittedNearImpactCount: number;
+  emittedDirectHitCount: number;
 }
 
 export type ProjectileRuntimeDiagnosticsV2 = ProjectileRuntimeDiagnosticsV3;
@@ -231,7 +243,7 @@ export interface ProjectileRuntimeSnapshotV3 {
 export type ProjectileRuntimeSnapshotV2 = ProjectileRuntimeSnapshotV3;
 
 export interface LegacyProjectileRuntimeSnapshotV2 {
-  readonly schemaVersion: 2;
+  readonly schemaVersion: 2 | 3;
   readonly fixedStepSeconds: number;
   readonly accumulatorSeconds: number;
   readonly capacity: number;
@@ -249,13 +261,5 @@ export interface ProjectilePoolHandleV2 {
   readonly projectileId: string;
 }
 
-export type ProjectileSpawnStatusV2 =
-  | 'spawned'
-  | 'capacity_exceeded'
-  | 'duplicate_projectile_id'
-  | 'invalid_candidate';
-
-export interface ProjectileSpawnResultV2 {
-  readonly status: ProjectileSpawnStatusV2;
-  readonly handle: ProjectilePoolHandleV2 | null;
-}
+export type ProjectileSpawnStatusV2 = 'spawned' | 'capacity_exceeded' | 'duplicate_projectile_id' | 'invalid_candidate';
+export interface ProjectileSpawnResultV2 { readonly status: ProjectileSpawnStatusV2; readonly handle: ProjectilePoolHandleV2 | null; }
