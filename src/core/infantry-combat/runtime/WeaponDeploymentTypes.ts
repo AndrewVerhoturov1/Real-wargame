@@ -2,7 +2,7 @@ import type { PhysicalActionHandleV1, PhysicalActionOwner } from '../../actions/
 import type { UnitPosture } from '../../behavior/BehaviorModel';
 
 export const WEAPON_DEPLOYMENT_SCHEMA_VERSION = 1 as const;
-export const MAX_DEPLOYMENT_ACTION_RESULTS = 16;
+export const MAX_WEAPON_DEPLOYMENT_RESULTS = 1;
 
 export type WeaponDeploymentMode = 'portable' | 'deploying' | 'deployed' | 'undeploying';
 export type WeaponDeploymentActionKind = 'deploy' | 'undeploy';
@@ -29,9 +29,10 @@ export interface WeaponDeploymentActionV1 {
   readonly actionId: string;
   readonly sequence: number;
   readonly kind: WeaponDeploymentActionKind;
+  readonly weaponInstanceId: string;
   readonly owner: PhysicalActionOwner;
   readonly ownerToken: string;
-  actionHandle: PhysicalActionHandleV1;
+  actionHandle: PhysicalActionHandleV1 | null;
   helperUnitId: string | null;
   helperActionHandle: PhysicalActionHandleV1 | null;
   helperValidationCode: string | null;
@@ -51,6 +52,7 @@ export interface WeaponDeploymentRuntimeV1 {
   nextActionSequence: number;
   activeAction: WeaponDeploymentActionV1 | null;
   lastActionResult: WeaponDeploymentActionResultV1 | null;
+  /** One-element bounded exactly-once ledger retained for migration diagnostics. */
   actionResults: WeaponDeploymentActionResultV1[];
   revision: number;
   invalidationReason: string | null;
