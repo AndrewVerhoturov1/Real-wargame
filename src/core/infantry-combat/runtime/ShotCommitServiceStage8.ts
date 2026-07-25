@@ -207,7 +207,7 @@ export function commitShot(input: CommitShotInput): CommitShotResult {
     projectileId,
     shotId,
     shooterId: shooter.id,
-    ammoSnapshot: structuredClone(weapon.resolved.ammo),
+    ammoSnapshot: weapon.resolved.ammo,
     position: { ...geometry.muzzle },
     velocityMetresPerSecond: initialVelocity,
     ageSeconds: 0,
