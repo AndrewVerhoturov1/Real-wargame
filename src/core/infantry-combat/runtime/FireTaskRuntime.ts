@@ -100,7 +100,7 @@ export function tickFireTaskWithTimeBudget(
     return failedTick(taskAtStart.taskId, totalSeconds, 'infantry_fire_task_weapon_capability_lost');
   }
 
-  if (!taskAtStart || taskAtStart.phase === 'recovery') {
+  if (!input.state || !taskAtStart || taskAtStart.phase === 'recovery') {
     const result = tickBaseFireTaskWithTimeBudget(unit, input);
     applyEffectiveAimCapabilities(unit);
     return result;
