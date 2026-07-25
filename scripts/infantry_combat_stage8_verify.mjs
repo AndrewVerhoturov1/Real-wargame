@@ -62,7 +62,15 @@ function runRequiredCheck(command, args) {
   const result = runVerificationCommand(command, args, repoRoot);
   const output = combinedOutput(result);
   if (result.error || result.status !== 0) {
-    fail('Stage 8 verification failed', `FAIL ${label}\n${tail(output, 8000)}`);
+    const signature = nestedFailureSignature(output);
+    fail(
+      'Stage 8 verification failed',
+      [
+        `FAIL ${label}`,
+        signature ? `NESTED_FAILURE_SIGNATURE ${signature}` : '',
+        tail(output, 2500),
+      ].filter(Boolean).join('\n'),
+    );
   }
   console.log(workflowAnnotation(
     'notice',
@@ -154,6 +162,12 @@ function run(command, args, cwd) {
 function combinedOutput(result) {
   return [result.error ? String(result.error) : '', result.stdout ?? '', result.stderr ?? '']
     .filter(Boolean).join('\n').trim();
+}
+function nestedFailureSignature(output) {
+  const lines = output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  return lines.findLast((line) => line.includes('FAILED_COMMAND='))
+    ?? lines.findLast((line) => line.startsWith('FAIL '))
+    ?? failureSignature(output);
 }
 function failureSignature(output) {
   const lines = output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
