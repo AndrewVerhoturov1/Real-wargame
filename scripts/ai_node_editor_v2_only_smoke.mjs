@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import './ai_node_editor_ux_smoke.mjs';
 
-const main = readFileSync('src/ai-node-editor/main.ts', 'utf8');
+const facade = readFileSync('src/ai-node-editor/main.ts', 'utf8');
+const implementation = readFileSync('src/ai-node-editor/main-ux.ts', 'utf8');
+const main = `${facade}\n${implementation}`;
 const clickGuard = readFileSync('src/ai-node-editor/editor-click-guard.ts', 'utf8');
 const bundled = JSON.parse(readFileSync('src/data/ai/soldier_default_survival_graph.json', 'utf8'));
 
@@ -24,4 +27,4 @@ assert.ok(main.includes('migrateAiGraphToV2'), 'Legacy stored/imported data shou
 assert.ok(main.includes('version: 2'), 'The editor graph model must always normalize to version 2.');
 assert.ok(clickGuard.includes("'.ai-debug-panel-dock'"), 'Document click guard must not rerender the editor when diagnostics summaries are clicked.');
 
-console.log('AI node editor Graph v2-only smoke passed: Graph v1 UI is absent, legacy input is converted at the boundary, and diagnostics controls remain interactive.');
+console.log('AI node editor Graph v2-only smoke passed: Graph v1 UI is absent, legacy input is converted at the boundary, diagnostics controls remain interactive, and UX contracts are present.');
