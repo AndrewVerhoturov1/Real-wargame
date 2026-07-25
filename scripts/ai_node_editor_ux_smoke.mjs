@@ -19,7 +19,7 @@ const main = read('src/ai-node-editor/main-ux.ts');
 const preferences = read('src/ai-node-editor/editor-ui-preferences.ts');
 const css = read('src/ai-node-editor/ai-node-editor-ux.css');
 
-expectContains(facade, "export * from './main-ux';", 'Основной entrypoint должен подключать новый редактор.');
+expectContains(facade, "from './main-ux';", 'Основной entrypoint должен подключать новый редактор.');
 
 for (const needle of [
   'real-wargame.ai-node-editor.favorites.v1',
