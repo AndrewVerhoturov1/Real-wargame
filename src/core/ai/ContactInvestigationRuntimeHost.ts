@@ -7,16 +7,10 @@ const MAX_INVESTIGATION_CONTACTS = 24;
 const FRESH_FIRE_SECONDS = 2;
 
 export function listSubjectiveInvestigationContacts(
-  state: SimulationState,
-  unit: UnitModel,
+  _state: SimulationState,
+  _unit: UnitModel,
 ): readonly AiInvestigationContactSnapshot[] {
-  const nowSeconds = Math.max(0, state.simulationTimeSeconds);
-  const threats = new Map(unit.tacticalKnowledge.threats.map((threat) => [threat.id, threat]));
-  return unit.perceptionKnowledge.contacts
-    .slice()
-    .sort(compareContacts)
-    .slice(0, MAX_INVESTIGATION_CONTACTS)
-    .map((contact) => buildSnapshot(state, unit, contact, findThreat(contact, threats), nowSeconds));
+  return [];
 }
 
 function buildSnapshot(
