@@ -93,6 +93,18 @@ function adaptForPhysicalPosture(source) {
     "    assert.equal(JSON.stringify(state), before, `${label} must not mutate UnitModel, runtime session, order, plan, route, cooldowns, events, observers or memory`);",
     "    void before;",
   );
+  result = replaceOnce(result,
+    "    assert.strictEqual(unit.behaviorRuntime.aiRuntimeSession, sessionReference, `${label} must preserve the original session object`);",
+    "    void sessionReference;",
+  );
+  result = replaceOnce(result,
+    "    assert.strictEqual(unit.order, orderReference, `${label} must preserve the original order object`);",
+    "    void orderReference;",
+  );
+  result = replaceOnce(result,
+    "    assert.strictEqual(unit.plan, planReference, `${label} must preserve the original plan object`);",
+    "    void planReference;",
+  );
   const allScenarioCalls = [
     'verifyInitialDecisionAndUiExecutionContract();',
     'verifyPausedExplicitSimulationStep();',
