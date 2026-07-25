@@ -1,5 +1,6 @@
 import type { SimulationState } from '../simulation/SimulationState';
 import { getEffectiveCombatCapabilities } from '../infantry-combat/runtime/EffectiveCombatCapabilities';
+import { getWeaponDeploymentPostureLock } from '../infantry-combat/runtime/WeaponDeploymentLocks';
 import type { UnitModel } from '../units/UnitModel';
 import {
   reconcileMovementPostureRequest as reconcileLegacyMovementPostureRequest,
@@ -16,6 +17,8 @@ export function requestPostureTransition(
   unit: UnitModel,
   input: RequestPostureTransitionInput,
 ): PhysicalActionCommandResult {
+  const deploymentLock = getWeaponDeploymentPostureLock(unit);
+  if (deploymentLock.blocked) return deploymentPostureRejected(unit, deploymentLock.reasonCode!, deploymentLock.reasonRu!);
   const capabilities = getEffectiveCombatCapabilities(unit);
   if (!capabilities.alive || !capabilities.conscious) return postureCapabilityRejected(unit);
   if (input.targetPosture === 'standing' && !capabilities.canStand) return standingCapabilityRejected(unit);
@@ -28,6 +31,8 @@ export function requestPlayerPostureTransition(
   startedSeconds: number,
   ownerId = unit.id,
 ): PhysicalActionCommandResult {
+  const deploymentLock = getWeaponDeploymentPostureLock(unit);
+  if (deploymentLock.blocked) return deploymentPostureRejected(unit, deploymentLock.reasonCode!, deploymentLock.reasonRu!);
   const capabilities = getEffectiveCombatCapabilities(unit);
   if (!capabilities.alive || !capabilities.conscious) return postureCapabilityRejected(unit);
   if (targetPosture === 'standing' && !capabilities.canStand) return standingCapabilityRejected(unit);
@@ -39,6 +44,15 @@ export function reconcileMovementPostureRequest(
   unit: UnitModel,
   startedSeconds = state.simulationTimeSeconds,
 ): PhysicalActionCommandResult | null {
+  const deploymentLock = getWeaponDeploymentPostureLock(unit);
+  if (deploymentLock.blocked) {
+    unit.movementRuntime.isMoving = false;
+    unit.movementRuntime.velocityCellsPerSecond = { x: 0, y: 0 };
+    const desired = resolveMovementDesiredPosture(state, unit);
+    return desired !== unit.behaviorRuntime.posture
+      ? deploymentPostureRejected(unit, deploymentLock.reasonCode!, deploymentLock.reasonRu!)
+      : null;
+  }
   const capabilities = getEffectiveCombatCapabilities(unit);
   if (!capabilities.alive || !capabilities.conscious) {
     unit.movementRuntime.isMoving = false;
@@ -54,6 +68,11 @@ export function reconcileMovementPostureRequest(
   return reconcileLegacyMovementPostureRequest(state, unit, startedSeconds);
 }
 
+function deploymentPostureRejected(unit: UnitModel, reasonCode: string, reasonRu: string): PhysicalActionCommandResult {
+  unit.behaviorRuntime.reason = reasonRu;
+  unit.behaviorRuntime.lastEvent = reasonCode;
+  return { accepted: false, action: unit.behaviorRuntime.physicalAction, reasonCode, reasonRu };
+}
 function standingCapabilityRejected(unit: UnitModel): PhysicalActionCommandResult {
   unit.behaviorRuntime.reason = 'Физическое состояние не позволяет бойцу принять положение стоя.';
   unit.behaviorRuntime.lastEvent = 'posture_transition_cannot_stand';
