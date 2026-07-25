@@ -8,6 +8,11 @@ import type {
   WeaponDefinitionV1,
   WeaponProficiency,
 } from '../catalogs/CombatCatalogTypes';
+import {
+  createAutomaticFireCadenceRuntime,
+  normalizeAutomaticFireCadenceRuntime,
+  serializeAutomaticFireCadenceRuntime,
+} from './AutomaticFireRuntime';
 import { createWeaponRecoilRuntime, normalizeWeaponRecoilRuntime } from './AimRuntime';
 import { initializeUnitMedicalInventory } from './FirstAidRuntime';
 import {
@@ -54,8 +59,8 @@ export function equipPrimaryWeaponFromLoadout(
   if (loadout.status === 'draft' || weapon.status === 'draft' || ammo.status === 'draft') {
     return rejected('draft_revision_rejected', 'infantry_combat_draft_revision_rejected', 'Draft-ревизию нельзя использовать в боевом runtime.');
   }
-  if (weapon.weaponClass !== 'rifle') {
-    return rejected('primary_weapon_not_rifle', 'infantry_combat_primary_weapon_not_rifle', 'Stage 3 поддерживает только основную винтовку.');
+  if (!WEAPON_CLASSES.includes(weapon.weaponClass)) {
+    return rejected('primary_weapon_not_rifle', 'infantry_combat_primary_weapon_class_unsupported', 'Класс основного оружия не поддерживается боевым runtime.');
   }
   if (!refsEqual(loadout.primary.definition, refForWeapon(weapon)) || !refsEqual(weapon.ammo, refForAmmo(ammo))) {
     return rejected('invalid_definition_chain', 'infantry_combat_invalid_definition_chain', 'Точные ссылки комплекта, оружия и патрона не совпадают.');
@@ -78,6 +83,7 @@ export function equipPrimaryWeaponFromLoadout(
       proficiencyByWeaponClass: normalizeProficiencies(loadout.proficiencyByWeaponClass),
     }),
     recoil: createWeaponRecoilRuntime(),
+    automaticFire: createAutomaticFireCadenceRuntime(),
     roundsInWeapon: integer(loadout.primary.loadedRounds, 0, 0, weapon.capacityRounds),
     shotSequence: 0,
     lastCommittedShotId: null,
@@ -89,12 +95,12 @@ export function equipPrimaryWeaponFromLoadout(
     status: 'equipped',
     weapon: instance,
     reasonCode: 'infantry_combat_primary_weapon_equipped',
-    reasonRu: 'Основная винтовка экипирована из точной ревизии комплекта.',
+    reasonRu: 'Основное оружие экипировано из точной ревизии комплекта.',
   };
 }
 
 export function normalizeInfantryWeaponInstance(value: unknown): InfantryWeaponInstanceV1 | null {
-  if (!isRecord(value) || value.schemaVersion !== INFANTRY_WEAPON_INSTANCE_SCHEMA_VERSION) return null;
+  if (!isRecord(value) || (value.schemaVersion !== 1 && value.schemaVersion !== INFANTRY_WEAPON_INSTANCE_SCHEMA_VERSION)) return null;
   const weaponInstanceId = cleanText(value.weaponInstanceId, '');
   if (!weaponInstanceId || value.slot !== 'primary') return null;
   const resolved = normalizeResolvedSnapshot(value.resolved);
@@ -106,6 +112,7 @@ export function normalizeInfantryWeaponInstance(value: unknown): InfantryWeaponI
     resolved,
     operatorProfile: normalizeOperatorProfile(value.operatorProfile),
     recoil: normalizeWeaponRecoilRuntime(value.recoil),
+    automaticFire: normalizeAutomaticFireCadenceRuntime(value.automaticFire),
     roundsInWeapon: integer(value.roundsInWeapon, 0, 0, resolved.weapon.capacityRounds),
     shotSequence: integer(value.shotSequence, 0, 0, Number.MAX_SAFE_INTEGER),
     lastCommittedShotId: nullableText(value.lastCommittedShotId),
@@ -120,6 +127,7 @@ export function serializeInfantryWeaponInstance(value: InfantryWeaponInstanceV1)
     resolved: cloneResolvedSnapshot(value.resolved),
     operatorProfile: freezeOperatorProfile(structuredClone(value.operatorProfile)),
     recoil: normalizeWeaponRecoilRuntime(structuredClone(value.recoil)),
+    automaticFire: serializeAutomaticFireCadenceRuntime(value.automaticFire ?? createAutomaticFireCadenceRuntime()),
     roundsInWeapon: integer(value.roundsInWeapon, 0, 0, value.resolved.weapon.capacityRounds),
     shotSequence: integer(value.shotSequence, 0, 0, Number.MAX_SAFE_INTEGER),
     lastCommittedShotId: nullableText(value.lastCommittedShotId),
@@ -171,7 +179,7 @@ function normalizeResolvedSnapshot(value: unknown): ResolvedWeaponSnapshotV1 | n
   if (!isRecord(value) || !isDefinitionRef(value.weaponDefinitionRef) || !isDefinitionRef(value.ammoDefinitionRef)) return null;
   if (!isWeaponDefinition(value.weapon) || !isAmmoDefinition(value.ammo)) return null;
   if (value.weapon.status === 'draft' || value.ammo.status === 'draft') return null;
-  if (value.weapon.weaponClass !== 'rifle') return null;
+  if (!WEAPON_CLASSES.includes(value.weapon.weaponClass)) return null;
   if (!refsEqual(value.weaponDefinitionRef, refForWeapon(value.weapon))) return null;
   if (!refsEqual(value.ammoDefinitionRef, refForAmmo(value.ammo))) return null;
   if (!refsEqual(value.weapon.ammo, value.ammoDefinitionRef)) return null;
@@ -227,52 +235,15 @@ function isDefinitionRef(value: unknown): value is DefinitionRef {
     && cleanText(value.definitionId, '') !== ''
     && integer(value.revision, 0, 0, Number.MAX_SAFE_INTEGER) > 0;
 }
-
-function refForWeapon(value: WeaponDefinitionV1): DefinitionRef {
-  return { definitionId: value.weaponDefinitionId, revision: value.revision };
-}
-
-function refForAmmo(value: AmmoDefinitionV1): DefinitionRef {
-  return { definitionId: value.ammoDefinitionId, revision: value.revision };
-}
-
-function cloneRef(value: DefinitionRef): DefinitionRef {
-  return { definitionId: value.definitionId, revision: value.revision };
-}
-
-function refsEqual(left: DefinitionRef, right: DefinitionRef): boolean {
-  return left.definitionId === right.definitionId && left.revision === right.revision;
-}
-
-function rejected(status: Exclude<EquipPrimaryWeaponStatus, 'equipped'>, reasonCode: string, reasonRu: string): EquipPrimaryWeaponResult {
-  return { ok: false, status, weapon: null, reasonCode, reasonRu };
-}
-
-function cleanText(value: unknown, fallback: string): string {
-  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
-}
-
-function nullableText(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
-function finite(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
-
-function finiteNonNegative(value: unknown, fallback: number): number {
-  return Math.max(0, finite(value, fallback));
-}
-
-function integer(value: unknown, fallback: number, minimum: number, maximum: number): number {
-  const numeric = finite(value, fallback);
-  return Math.max(minimum, Math.min(maximum, Math.round(numeric)));
-}
-
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+function refForWeapon(value: WeaponDefinitionV1): DefinitionRef { return { definitionId: value.weaponDefinitionId, revision: value.revision }; }
+function refForAmmo(value: AmmoDefinitionV1): DefinitionRef { return { definitionId: value.ammoDefinitionId, revision: value.revision }; }
+function cloneRef(value: DefinitionRef): DefinitionRef { return { definitionId: value.definitionId, revision: value.revision }; }
+function refsEqual(left: DefinitionRef, right: DefinitionRef): boolean { return left.definitionId === right.definitionId && left.revision === right.revision; }
+function rejected(status: Exclude<EquipPrimaryWeaponStatus, 'equipped'>, reasonCode: string, reasonRu: string): EquipPrimaryWeaponResult { return { ok: false, status, weapon: null, reasonCode, reasonRu }; }
+function cleanText(value: unknown, fallback: string): string { return typeof value === 'string' && value.trim() ? value.trim() : fallback; }
+function nullableText(value: unknown): string | null { return typeof value === 'string' && value.trim() ? value.trim() : null; }
+function finite(value: unknown, fallback: number): number { return typeof value === 'number' && Number.isFinite(value) ? value : fallback; }
+function finiteNonNegative(value: unknown, fallback: number): number { return Math.max(0, finite(value, fallback)); }
+function integer(value: unknown, fallback: number, minimum: number, maximum: number): number { const numeric = finite(value, fallback); return Math.max(minimum, Math.min(maximum, Math.round(numeric))); }
+function clamp01(value: number): number { return Math.max(0, Math.min(1, value)); }
+function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
