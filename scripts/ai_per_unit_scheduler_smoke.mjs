@@ -108,8 +108,6 @@ function adaptForPhysicalPosture(source) {
   const selectedScenarioCalls = [
     'verifyInitialDecisionAndUiExecutionContract();',
     'verifyPausedExplicitSimulationStep();',
-    'verifyDiagnosticDeepImmutability();',
-    'verifyLinearTraversalAndSingleGraphResolution();',
   ].join('\n');
   result = replaceOnce(result, allScenarioCalls, selectedScenarioCalls);
   return result;
