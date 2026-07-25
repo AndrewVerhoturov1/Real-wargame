@@ -26,18 +26,35 @@ async function run() {
 }
 
 async function runSmoke(sourceName, outputName) {
-  await build({
-    root: repoRoot,
-    logLevel: 'warn',
-    clearScreen: false,
-    build: {
-      ssr: path.join(repoRoot, 'scripts', sourceName),
-      outDir,
-      emptyOutDir: false,
-      minify: false,
-      sourcemap: false,
-      rollupOptions: { output: { entryFileNames: outputName, format: 'es' } },
-    },
-  });
-  await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage8`);
+  try {
+    console.log(`Stage 8 smoke START ${sourceName}`);
+    await build({
+      root: repoRoot,
+      logLevel: 'warn',
+      clearScreen: false,
+      build: {
+        ssr: path.join(repoRoot, 'scripts', sourceName),
+        outDir,
+        emptyOutDir: false,
+        minify: false,
+        sourcemap: false,
+        rollupOptions: { output: { entryFileNames: outputName, format: 'es' } },
+      },
+    });
+    await import(`${pathToFileURL(path.join(outDir, outputName)).href}?run=stage8`);
+    console.log(`Stage 8 smoke PASS ${sourceName}`);
+  } catch (error) {
+    const message = error instanceof Error
+      ? `${error.name}: ${error.message}\n${error.stack ?? ''}`
+      : String(error);
+    console.error(`::error file=scripts/${sourceName},line=1,title=Stage 8 smoke failed::${escapeAnnotation(message)}`);
+    throw error;
+  }
+}
+
+function escapeAnnotation(value) {
+  return String(value)
+    .replaceAll('%', '%25')
+    .replaceAll('\r', '%0D')
+    .replaceAll('\n', '%0A');
 }
