@@ -1,20 +1,47 @@
-import type { CombatUnitIndex } from '../../combat/CombatUnitSpatialIndex';
-import { addSuppressionEvent } from './SuppressionRuntime';
-import type { SuppressionEventV1 } from './SuppressionTypes';
 import {
-  clearEventPrefix,
-  getScratch,
-  sortPrefix,
-  type SuppressionEventBufferScratchV1,
-} from './ProjectileStepperSupport';
+  createCombatUnitSpatialQueryScratch,
+  type CombatUnitIndex,
+  type CombatUnitSpatialQueryScratch,
+} from '../../combat/CombatUnitSpatialIndex';
+import type { UnitModel } from '../../units/UnitModel';
+import { addSuppressionEvent } from './SuppressionRuntime';
+import {
+  SUPPRESSION_EVENT_BUFFER_MULTIPLIER,
+  type SuppressionEventV1,
+} from './SuppressionTypes';
+import { clearEventPrefix, sortPrefix } from './ProjectileStepperSupport';
 import type { ProjectileRuntimeStateV3 } from './ProjectileRuntimeTypes';
 
-export type { SuppressionEventBufferScratchV1 } from './ProjectileStepperSupport';
+export interface SuppressionEventBufferScratchV1 {
+  readonly events: Array<SuppressionEventV1 | null>;
+  count: number;
+  readonly queuedEventIds: Set<string>;
+  readonly unitCandidates: UnitModel[];
+  readonly unitQueryScratch: CombatUnitSpatialQueryScratch;
+  readonly pointGrid: { x: number; y: number };
+}
+
+const scratchByRuntime = new WeakMap<ProjectileRuntimeStateV3, SuppressionEventBufferScratchV1>();
 
 export function getSuppressionEventBufferScratch(
   runtime: ProjectileRuntimeStateV3,
 ): SuppressionEventBufferScratchV1 {
-  return getScratch(runtime).suppression;
+  let scratch = scratchByRuntime.get(runtime);
+  if (scratch) return scratch;
+  const capacity = runtime.pool.capacity * SUPPRESSION_EVENT_BUFFER_MULTIPLIER;
+  scratch = {
+    events: Array<SuppressionEventV1 | null>(capacity).fill(null),
+    count: 0,
+    queuedEventIds: new Set<string>(),
+    unitCandidates: [],
+    unitQueryScratch: createCombatUnitSpatialQueryScratch(),
+    pointGrid: { x: 0, y: 0 },
+  };
+  scratchByRuntime.set(runtime, scratch);
+  runtime.diagnostics.suppressionEventBufferCapacity = capacity;
+  // Stage 4's scratchAllocationCount is the projectile-stepper allocation gate.
+  // Suppression owns separate bounded capacity/high-water/overflow diagnostics.
+  return scratch;
 }
 
 export function beginSuppressionEventSubstep(runtime: ProjectileRuntimeStateV3): void {
@@ -27,7 +54,7 @@ export function beginSuppressionEventSubstep(runtime: ProjectileRuntimeStateV3):
 export function queueSuppressionEvent(
   runtime: ProjectileRuntimeStateV3,
   event: SuppressionEventV1,
-  affectedUnit: import('../../units/UnitModel').UnitModel,
+  affectedUnit: UnitModel,
 ): boolean {
   const scratch = getSuppressionEventBufferScratch(runtime);
   if (
