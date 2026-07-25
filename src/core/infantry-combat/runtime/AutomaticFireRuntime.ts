@@ -52,7 +52,7 @@ export function getWeaponShotIntervalSeconds(
   weapon: Pick<WeaponDefinitionV1, 'roundsPerMinute'>,
 ): number {
   const roundsPerMinute = finite(weapon.roundsPerMinute, 0);
-  return roundsPerMinute > 0 ? canonicalSeconds(60 / roundsPerMinute) : Number.POSITIVE_INFINITY;
+  return roundsPerMinute > 0 ? 60 / roundsPerMinute : Number.POSITIVE_INFINITY;
 }
 
 export function advanceContinuousFireScore(
