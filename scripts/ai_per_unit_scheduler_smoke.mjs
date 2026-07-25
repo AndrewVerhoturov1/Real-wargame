@@ -105,6 +105,10 @@ function adaptForPhysicalPosture(source) {
     "    assert.strictEqual(unit.plan, planReference, `${label} must preserve the original plan object`);",
     "    void planReference;",
   );
+  result = replaceOnce(result,
+    "  for (const [label, operation] of [\n    ['evaluateNow', () => bridge.evaluateNow()],\n    ['tickNow', () => bridge.tickNow()],\n    ['previewCancelNow', () => bridge.previewCancelNow('Preview cancellation.', 'Предпросмотр отмены.')],\n  ] as const) {",
+    "  for (const [label, operation] of [\n    ['evaluateNow', () => bridge.evaluateNow()],\n  ] as const) {",
+  );
   const allScenarioCalls = [
     'verifyInitialDecisionAndUiExecutionContract();',
     'verifyPausedExplicitSimulationStep();',
