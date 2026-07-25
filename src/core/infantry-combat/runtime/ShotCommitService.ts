@@ -4,9 +4,9 @@ import {
   commitShot as commitBaseShot,
   type CommitShotInput,
   type CommitShotResult,
-} from './ShotCommitServiceStage5';
+} from './ShotCommitServiceStage8';
 
-export * from './ShotCommitServiceStage5';
+export * from './ShotCommitServiceStage8';
 
 export function commitShot(input: CommitShotInput): CommitShotResult {
   if (!getEffectiveCombatCapabilities(input.shooter).canUseWeapon) {
@@ -18,7 +18,7 @@ export function commitShot(input: CommitShotInput): CommitShotResult {
 function recordWeaponCapabilityFailure(shooter: UnitModel, rounds: number): CommitShotResult {
   const result: CommitShotResult = {
     status: 'weapon_capability_lost',
-    reasonRu: 'Одиночный выстрел отклонён: физическое состояние не позволяет пользоваться оружием.',
+    reasonRu: 'Выстрел отклонён: физическое состояние не позволяет пользоваться оружием.',
     shotId: null,
     projectileId: null,
     muzzlePosition: null,
