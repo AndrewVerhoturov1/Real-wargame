@@ -85,17 +85,42 @@ function runRequiredCheck(command, args) {
   const result = run(command, args, repoRoot);
   const output = combinedOutput(result);
   if (result.error || result.status !== 0) {
-    const compactFailure = label === 'npm run infantry-combat-projectile:benchmark'
-      ? compactProjectileBenchmarkFailure(output)
-      : null;
-    fail('Stage 9 verification failed', [
-      `FAIL ${label}`,
-      compactFailure ? `PROJECTILE_BENCHMARK_FAILURE_SUMMARY=${compactFailure}` : null,
-      tail(output, 12000),
-    ].filter(Boolean).join('\n'));
+    if (label === 'npm run infantry-combat-projectile:benchmark') {
+      runProjectileBenchmarkBaselineComparison(output, result.status);
+    }
+    fail('Stage 9 verification failed', `FAIL ${label}\n${tail(output, 12000)}`);
   }
   report(`PASS ${label}: ${lastMeaningfulLine(output) || 'completed without output'}`);
   console.log(workflowAnnotation('notice', 'Stage 9 verification', `PASS ${label}: ${lastMeaningfulLine(output) || 'completed without output'}`));
+}
+
+function runProjectileBenchmarkBaselineComparison(currentOutput, currentStatus) {
+  rmSync(baseWorktree, { recursive: true, force: true });
+  const addWorktree = run('git', ['worktree', 'add', '--detach', baseWorktree, REQUIRED_BASE_SHA], repoRoot);
+  if (addWorktree.error || addWorktree.status !== 0) {
+    fail('Stage 9 projectile benchmark baseline comparison failed', combinedOutput(addWorktree));
+  }
+  let baseline;
+  try {
+    baseline = run('npm', ['run', 'infantry-combat-projectile:benchmark'], baseWorktree);
+  } finally {
+    run('git', ['worktree', 'remove', '--force', baseWorktree], repoRoot);
+    rmSync(baseWorktree, { recursive: true, force: true });
+  }
+  const baselineOutput = combinedOutput(baseline);
+  fail('Stage 9 projectile benchmark baseline comparison', [
+    'Projectile benchmark did not pass on the Stage 9 candidate.',
+    `current status: ${currentStatus}`,
+    `base status: ${baseline.status}`,
+    `CURRENT_PROJECTILE_BENCHMARK_FAILURE_SUMMARY=${compactProjectileBenchmarkFailure(currentOutput)}`,
+    `BASE_PROJECTILE_BENCHMARK_FAILURE_SUMMARY=${compactProjectileBenchmarkFailure(baselineOutput)}`,
+    '',
+    'CURRENT:',
+    tail(currentOutput, 8000),
+    '',
+    'BASE:',
+    tail(baselineOutput, 8000),
+  ].join('\n'));
 }
 
 function compactProjectileBenchmarkFailure(output) {
