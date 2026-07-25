@@ -3,7 +3,6 @@ import {
   type CombatUnitIndex,
 } from '../../combat/CombatUnitSpatialIndex';
 import type { BallisticDirection3, BallisticPoint3 } from '../../combat/UnitHitShapes';
-import { sampleSmoothHeightLevel } from '../../terrain/SmoothTerrain';
 import type { SimulationState } from '../../simulation/SimulationState';
 import type { UnitModel } from '../../units/UnitModel';
 import { getSuppressionEventBufferScratch, queueSuppressionEvent } from './SuppressionEventBuffer';
@@ -27,8 +26,6 @@ import type { ProjectileImpactV1, ProjectileRuntimeStateV3 } from './ProjectileR
 
 const EPSILON = 1e-9;
 const BROAD_PHASE_BODY_PADDING_METRES = 0.75;
-const ELEVATION_STEP_METRES = 2;
-const MAX_UNIT_BODY_HEIGHT_METRES = 1.8;
 
 export function queueNearMissSuppressionForSegment(input: {
   readonly state: SimulationState;
@@ -48,14 +45,6 @@ export function queueNearMissSuppressionForSegment(input: {
   readonly maximumEvents: number;
 }): number {
   if (input.maximumEvents <= 0) return 0;
-  retainVerticallyReachableCandidates(
-    input.candidates,
-    input.start,
-    input.end,
-    input.state,
-    SUPPRESSION_NEAR_MISS_RADIUS_METRES,
-  );
-  if (input.candidates.length === 0) return 0;
   rankCandidatesBySegmentDistance(input.candidates, input.start, input.end, input.state);
   const candidateCount = Math.min(input.candidates.length, MAX_SUPPRESSION_CANDIDATES_PER_SEGMENT);
   if (input.candidates.length > candidateCount) input.runtime.diagnostics.suppressionCandidateTruncationCount += 1;
@@ -182,34 +171,6 @@ function getLastDirectHitUnitId(
 ): string | null {
   const slot = findProjectileSlot(runtime, projectileId);
   return slot >= 0 ? runtime.pool.lastHitUnitIds[slot] ?? null : null;
-}
-
-function retainVerticallyReachableCandidates(
-  candidates: UnitModel[],
-  start: BallisticPoint3,
-  end: BallisticPoint3,
-  state: SimulationState,
-  radiusMetres: number,
-): void {
-  const segmentBottom = Math.min(start.zMetres, end.zMetres);
-  const segmentTop = Math.max(start.zMetres, end.zMetres);
-  let retained = 0;
-  for (let index = 0; index < candidates.length; index += 1) {
-    const candidate = candidates[index]!;
-    const ground = sampleSmoothHeightLevel(
-      state.map,
-      candidate.position.x,
-      candidate.position.y,
-    ) * ELEVATION_STEP_METRES;
-    const bodyBottom = ground;
-    const bodyTop = ground + MAX_UNIT_BODY_HEIGHT_METRES;
-    if (
-      segmentTop < bodyBottom - radiusMetres - EPSILON
-      || segmentBottom > bodyTop + radiusMetres + EPSILON
-    ) continue;
-    candidates[retained++] = candidate;
-  }
-  candidates.length = retained;
 }
 
 function rankCandidatesBySegmentDistance(
