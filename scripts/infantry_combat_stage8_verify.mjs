@@ -1,11 +1,18 @@
 import { rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { runVerificationCommand } from './infantry_combat_verification_cache.mjs';
 
 const REQUIRED_BASE_SHA = 'f7eea38163be07c70d83314b5b6f3a1ae1cb5855';
 const repoRoot = process.cwd();
 const baseWorktree = path.join(repoRoot, '.tmp-stage8-performance-base');
+const verificationCachePath = path.join(
+  tmpdir(),
+  `real-wargame-infantry-verification-${process.pid}.json`,
+);
 const checks = [
+  ['node', ['scripts/infantry_combat_verification_cache_smoke.mjs']],
   ['npm', ['run', 'combat-catalogs:smoke']],
   ['npm', ['run', 'combat-catalog-storage:smoke']],
   ['npm', ['run', 'combat-catalog-editor:smoke']],
@@ -33,16 +40,26 @@ const checks = [
   ['git', ['diff', '--check', `${REQUIRED_BASE_SHA}...HEAD`]],
 ];
 
-console.log(`Node.js ${process.version}`);
-for (const [command, args] of checks) runRequiredCheck(command, args);
-runPerformanceContractWithBaseComparison();
-verifyCleanTrackedTree();
+const previousCachePath = process.env.INFANTRY_COMBAT_VERIFICATION_CACHE;
+rmSync(verificationCachePath, { force: true });
+process.env.INFANTRY_COMBAT_VERIFICATION_CACHE = verificationCachePath;
 
-console.log(`Stage 8 verification passed on Node.js ${process.version}: ${checks.length + 2} required non-browser checks; performance-contract is accepted only when green or identical to the approved base failure.`);
+try {
+  console.log(`Node.js ${process.version}`);
+  for (const [command, args] of checks) runRequiredCheck(command, args);
+  runPerformanceContractWithBaseComparison();
+  verifyCleanTrackedTree();
+
+  console.log(`Stage 8 verification passed on Node.js ${process.version}: ${checks.length + 2} required non-browser checks; successful identical commands were executed once within this exact-head job, and performance-contract is accepted only when green or identical to the approved base failure.`);
+} finally {
+  rmSync(verificationCachePath, { force: true });
+  if (previousCachePath === undefined) delete process.env.INFANTRY_COMBAT_VERIFICATION_CACHE;
+  else process.env.INFANTRY_COMBAT_VERIFICATION_CACHE = previousCachePath;
+}
 
 function runRequiredCheck(command, args) {
   const label = [command, ...args].join(' ');
-  const result = run(command, args, repoRoot);
+  const result = runVerificationCommand(command, args, repoRoot);
   const output = combinedOutput(result);
   if (result.error || result.status !== 0) {
     fail('Stage 8 verification failed', `FAIL ${label}\n${tail(output, 8000)}`);
@@ -56,7 +73,7 @@ function runRequiredCheck(command, args) {
 
 function runPerformanceContractWithBaseComparison() {
   const label = 'npm run performance-contract:smoke';
-  const current = run('npm', ['run', 'performance-contract:smoke'], repoRoot);
+  const current = runVerificationCommand('npm', ['run', 'performance-contract:smoke'], repoRoot);
   const currentOutput = combinedOutput(current);
   if (!current.error && current.status === 0) {
     console.log(workflowAnnotation('notice', 'Stage 8 verification', `PASS ${label}`));
