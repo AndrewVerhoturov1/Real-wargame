@@ -1,3 +1,4 @@
+import { getWeaponDeploymentFacingLock } from '../infantry-combat/runtime/WeaponDeploymentLocks';
 import type { UnitModel } from '../units/UnitModel';
 import {
   degreesToRadians,
@@ -46,7 +47,13 @@ export function setSearchSector(
   runtime.focusTargetId = null;
   runtime.focusDirectionRadians = runtime.searchCenterRadians;
   if (source === 'ai' && !unit.movementRuntime.isMoving) {
-    unit.facingRadians = runtime.searchCenterRadians;
+    const lock = getWeaponDeploymentFacingLock(unit);
+    if (lock.blocked) {
+      unit.behaviorRuntime.reason = lock.reasonRu!;
+      unit.behaviorRuntime.lastEvent = lock.reasonCode!;
+    } else {
+      unit.facingRadians = runtime.searchCenterRadians;
+    }
   }
 }
 
