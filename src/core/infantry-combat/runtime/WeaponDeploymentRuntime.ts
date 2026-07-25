@@ -1,3 +1,4 @@
+import type { PhysicalActionHandleV1, PhysicalActionOwner } from '../../actions/PhysicalActionCoordinatorTypes';
 import type { BallisticPoint3 } from '../../combat/UnitHitShapes';
 import type { TacticalMap } from '../../map/MapModel';
 import type { UnitModel } from '../../units/UnitModel';
@@ -9,6 +10,7 @@ import {
   type WeaponDeploymentActionResultV1,
   type WeaponDeploymentActionV1,
   type WeaponDeploymentAnchorV1,
+  type WeaponDeploymentMode,
   type WeaponDeploymentRuntimeV1,
 } from './WeaponDeploymentTypes';
 
@@ -33,16 +35,16 @@ export function createWeaponDeploymentRuntime(): WeaponDeploymentRuntimeV1 {
 
 export function normalizeWeaponDeploymentRuntime(value: unknown): WeaponDeploymentRuntimeV1 {
   if (!isRecord(value) || value.schemaVersion !== WEAPON_DEPLOYMENT_SCHEMA_VERSION) return createWeaponDeploymentRuntime();
-  const requestedMode = value.mode === 'deploying' || value.mode === 'deployed' || value.mode === 'undeploying'
+  const requestedMode: WeaponDeploymentMode = value.mode === 'deploying' || value.mode === 'deployed' || value.mode === 'undeploying'
     ? value.mode
     : 'portable';
   const anchor = normalizeAnchor(value.anchor);
   const activeAction = normalizeAction(value.activeAction);
-  let mode = requestedMode;
+  let mode: WeaponDeploymentMode = requestedMode;
   if ((mode === 'deployed' || mode === 'undeploying') && !anchor) mode = 'portable';
   if ((mode === 'deploying' || mode === 'undeploying') && !activeAction) mode = mode === 'undeploying' && anchor ? 'deployed' : 'portable';
   const results = normalizeResults(value.actionResults);
-  const lastActionResult = normalizeResult(value.lastActionResult) ?? results.at(-1) ?? null;
+  const lastActionResult = normalizeResult(value.lastActionResult) ?? results[results.length - 1] ?? null;
   return {
     schemaVersion: WEAPON_DEPLOYMENT_SCHEMA_VERSION,
     mode,
@@ -201,7 +203,7 @@ function normalizeAnchor(value: unknown): WeaponDeploymentAnchorV1 | null {
   return { xMetres, yMetres, zMetres, facingRadians: normalizeRadians(facingRadians), posture };
 }
 
-function normalizeHandle(value: unknown) {
+function normalizeHandle(value: unknown): PhysicalActionHandleV1 | null {
   if (!isRecord(value)) return null;
   const actionId = cleanText(value.actionId, '');
   const ownerToken = cleanText(value.ownerToken, '');
@@ -214,9 +216,9 @@ function normalizeHandle(value: unknown) {
   };
 }
 
-function normalizeOwner(value: unknown) {
-  if (!isRecord(value)) return { source: 'system' as const, id: 'weapon-deployment' };
-  const source = value.source === 'player' || value.source === 'player_command' || value.source === 'movement'
+function normalizeOwner(value: unknown): PhysicalActionOwner {
+  if (!isRecord(value)) return { source: 'system', id: 'weapon-deployment' };
+  const source: PhysicalActionOwner['source'] = value.source === 'player' || value.source === 'player_command' || value.source === 'movement'
     || value.source === 'tactical_position' || value.source === 'test' || value.source === 'graph_v2'
     || value.source === 'future_ai' ? value.source : 'system';
   return { source, id: cleanText(value.id, 'weapon-deployment') };
