@@ -32,6 +32,7 @@ import { normalizeReferenceProjectileRuntimeState } from './ReferenceProjectileR
 import { MAX_APPLIED_WOUND_IMPACT_IDS } from './InfantryBodyTypes';
 import { FIRST_AID_ACTION_TYPE } from './PhysiologyTypes';
 import { normalizeUnitSuppressionRuntime, advanceSuppressionRuntimeTo } from './SuppressionRuntime';
+import { reconcileStage9PhysicalActions } from './Stage9ActionReconciliation';
 import { applyProjectileImpactWound, enforceEffectiveCombatCapabilities } from './WoundImpactApplication';
 
 const TIME_EPSILON_SECONDS = 1e-9;
@@ -57,6 +58,7 @@ export function reconcileInfantryCombatRuntimeAfterLoad(state: SimulationState):
 
   const units = [...state.units].sort(compareUnits);
   for (const unit of units) reconcileUnitPersistentState(state, unit);
+  reconcileStage9PhysicalActions(state, state.simulationTimeSeconds);
 
   const taskByCommittedShotId = new Map<string, UnitModel>();
   for (const unit of units) {
