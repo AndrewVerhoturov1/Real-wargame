@@ -347,8 +347,10 @@ export function advanceAimPhysicalProgress(
   const delta = Math.max(0, finite(deltaSeconds, 0));
   const solution = task.aimTracking.solution;
   solution.factors = factors;
-  solution.physicalAimQuality = clamp01(solution.physicalAimQuality + factors.aimQualityPerSecond * delta);
-  solution.directionProgress = clamp01(
+  solution.physicalAimQuality = canonicalUnitInterval(
+    solution.physicalAimQuality + factors.aimQualityPerSecond * delta,
+  );
+  solution.directionProgress = canonicalUnitInterval(
     solution.directionProgress + AIM_DIRECTION_PROGRESS_PER_SECOND * Math.max(0.1, factors.aimRateMultiplier) * delta,
   );
   solution.currentDirection = interpolateDirection(
@@ -548,7 +550,9 @@ function completeBoundary(tracking: AimTrackingRuntimeV1, boundary: number): voi
 
 function refreshUsableAimQuality(task: FireTaskRuntimeV1): void {
   const solution = task.aimTracking.solution;
-  solution.usableAimQuality = clamp01(solution.physicalAimQuality * solution.solutionQuality);
+  solution.usableAimQuality = canonicalUnitInterval(
+    solution.physicalAimQuality * solution.solutionQuality,
+  );
   task.aimQuality = solution.usableAimQuality;
 }
 
@@ -804,6 +808,10 @@ function lerp(from: number, to: number, progress: number): number {
 
 function canonicalSeconds(value: number): number {
   return Math.round(Math.max(0, value) * 1_000_000_000_000) / 1_000_000_000_000;
+}
+
+function canonicalUnitInterval(value: number): number {
+  return clamp01(Math.round(clamp01(value) * 1_000_000_000_000) / 1_000_000_000_000);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
