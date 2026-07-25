@@ -1,10 +1,13 @@
-import { rmSync } from 'node:fs';
+import { appendFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const REQUIRED_BASE_SHA = 'f93cdbdf15497498e99dd4f63a2bfd20e5414ea9';
 const repoRoot = process.cwd();
 const baseWorktree = path.join(repoRoot, '.tmp-stage9-performance-base');
+const reportPath = process.env.RUNNER_TEMP
+  ? path.join(process.env.RUNNER_TEMP, 'stage9-verification-report.txt')
+  : null;
 const checks = [
   ['npm', ['run', 'combat-catalogs:smoke']],
   ['npm', ['run', 'combat-catalog-storage:smoke']],
@@ -45,6 +48,7 @@ const checks = [
   ['git', ['diff', '--check', `${REQUIRED_BASE_SHA}...HEAD`]],
 ];
 
+if (reportPath) writeFileSync(reportPath, `Stage 9 verification report\nHEAD=${process.env.GITHUB_SHA ?? 'unknown'}\nNode=${process.version}\n\n`);
 console.log(`Node.js ${process.version}`);
 ensureVerificationHistory();
 for (const [command, args] of checks) runRequiredCheck(command, args);
@@ -72,6 +76,7 @@ function ensureVerificationHistory() {
   if (base.error || base.status !== 0) {
     fail('Stage 9 verification history preparation failed', `Обязательный base SHA недоступен после fetch: ${REQUIRED_BASE_SHA}.\n${combinedOutput(base)}`);
   }
+  report(`PASS history: required base ${REQUIRED_BASE_SHA} available`);
   console.log(workflowAnnotation('notice', 'Stage 9 verification', `PASS full git history and required base ${REQUIRED_BASE_SHA} available`));
 }
 
@@ -80,6 +85,7 @@ function runRequiredCheck(command, args) {
   const result = run(command, args, repoRoot);
   const output = combinedOutput(result);
   if (result.error || result.status !== 0) fail('Stage 9 verification failed', `FAIL ${label}\n${tail(output, 12000)}`);
+  report(`PASS ${label}: ${lastMeaningfulLine(output) || 'completed without output'}`);
   console.log(workflowAnnotation('notice', 'Stage 9 verification', `PASS ${label}: ${lastMeaningfulLine(output) || 'completed without output'}`));
 }
 
@@ -88,6 +94,7 @@ function runPerformanceContractWithBaseComparison() {
   const current = run('npm', ['run', 'performance-contract:smoke'], repoRoot);
   const currentOutput = combinedOutput(current);
   if (!current.error && current.status === 0) {
+    report(`PASS ${label}`);
     console.log(workflowAnnotation('notice', 'Stage 9 verification', `PASS ${label}`));
     return;
   }
@@ -105,6 +112,7 @@ function runPerformanceContractWithBaseComparison() {
   const currentSignature = failureSignature(currentOutput);
   const baselineSignature = failureSignature(baselineOutput);
   if (baseline.status !== 0 && currentSignature && currentSignature === baselineSignature) {
+    report(`PASS ${label}: exact approved-base failure ${currentSignature}`);
     console.log(workflowAnnotation('warning', 'Known base performance-contract failure', `Stage 9 reproduces the exact base failure: ${currentSignature}`));
     return;
   }
@@ -127,6 +135,7 @@ function verifyCleanTrackedTree() {
   const status = run('git', ['status', '--short'], repoRoot);
   const output = combinedOutput(status);
   if (status.error || status.status !== 0 || output.trim()) fail('Stage 9 tracked-tree verification failed', `git status --short must be empty.\n${output}`);
+  report('PASS git status --short: tracked tree clean');
   console.log(workflowAnnotation('notice', 'Stage 9 verification', 'PASS git status --short: tracked tree clean'));
 }
 
@@ -143,6 +152,11 @@ function failureSignature(output) {
 }
 function lastMeaningfulLine(value) { return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).at(-1) ?? ''; }
 function tail(value, maximumCharacters) { return value.length <= maximumCharacters ? value : value.slice(-maximumCharacters); }
-function fail(title, message) { console.error(workflowAnnotation('error', title, message)); process.exit(1); }
+function report(message) { if (reportPath) appendFileSync(reportPath, `${message}\n`); }
+function fail(title, message) {
+  report(`\n${title}\n${message}`);
+  console.error(workflowAnnotation('error', title, message));
+  process.exit(1);
+}
 function workflowAnnotation(level, title, message) { return `::${level} file=package.json,line=1,title=${escapeData(title)}::${escapeData(message)}`; }
 function escapeData(value) { return String(value).replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A'); }
