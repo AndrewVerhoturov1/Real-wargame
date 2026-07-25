@@ -104,15 +104,14 @@ function createScenario(): SimulationState {
 }
 
 function roundTrip(state: SimulationState): SimulationState {
-  const plain = structuredClone({
+  const parsed = jsonClone({
     ...state,
     infantryCombatProjectiles: serializeProjectileRuntimeState(state.infantryCombatProjectiles),
     units: state.units.map((unit) => ({
-      ...structuredClone(unit),
+      ...unit,
       infantryCombatRuntime: serializeInfantryCombatUnitRuntime(unit.infantryCombatRuntime),
     })),
-  });
-  const parsed = JSON.parse(JSON.stringify(plain)) as SimulationState;
+  }) as SimulationState;
   parsed.infantryCombatProjectiles = normalizeProjectileRuntimeState(parsed.infantryCombatProjectiles);
   for (const unit of parsed.units) {
     unit.infantryCombatRuntime = normalizeInfantryCombatUnitRuntime(unit.infantryCombatRuntime);
@@ -133,13 +132,17 @@ function canonicalSnapshot(state: SimulationState) {
     roundsInWeapon: weapon.roundsInWeapon,
     shotSequence: weapon.shotSequence,
     lastCommittedShotId: weapon.lastCommittedShotId,
-    recoil: structuredClone(weapon.recoil),
-    automaticFire: structuredClone(weapon.automaticFire),
-    suppression: structuredClone(shooter.infantryCombatRuntime.suppression),
+    recoil: jsonClone(weapon.recoil),
+    automaticFire: jsonClone(weapon.automaticFire),
+    suppression: jsonClone(shooter.infantryCombatRuntime.suppression),
     committedShots: projectile.committedShots,
     activeProjectiles: projectile.activeProjectiles,
     impacts: projectile.impacts,
     terminations: projectile.terminations,
     appliedImpactIds: projectile.appliedImpactIds,
   };
+}
+
+function jsonClone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
