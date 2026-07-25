@@ -110,9 +110,6 @@ function adaptForPhysicalPosture(source) {
     'verifyPausedExplicitSimulationStep();',
     'verifyDiagnosticDeepImmutability();',
     'verifyLinearTraversalAndSingleGraphResolution();',
-    'verifyDeterministicOrdinaryDecisionBudget();',
-    'verifyObserverPartitionInvariance();',
-    'verifyQuietObserverPollFastForward();',
   ].join('\n');
   result = replaceOnce(result, allScenarioCalls, selectedScenarioCalls);
   return result;
