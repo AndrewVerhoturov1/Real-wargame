@@ -52,17 +52,30 @@ function verifyDirectHitSuppression(): void {
     unit('shooter', 'blue', 5, 10),
     unit('direct-target', 'red', 20, 10),
   ]);
-  spawn(state, 'direct-hit-shot', 'shooter', { xMetres: 5, yMetres: 10, zMetres: 1.1 }, { x: 100, y: 0, z: 0 }, 1);
+  const shooter = state.units[0]!;
+  const target = state.units[1]!;
+  spawn(
+    state,
+    'direct-hit-shot',
+    shooter.id,
+    {
+      xMetres: shooter.position.x * state.map.metersPerCell,
+      yMetres: target.position.y * state.map.metersPerCell,
+      zMetres: 1.1,
+    },
+    { x: 100, y: 0, z: 0 },
+    1,
+  );
   tickProjectileRuntime(state, { intervalStartSeconds: 0, deltaSeconds: 0.2 });
-  advanceSuppressionRuntimeTo(state.units[1]!.infantryCombatRuntime.suppression, 0.2);
-  const suppression = state.units[1]!.infantryCombatRuntime.suppression;
+  advanceSuppressionRuntimeTo(target.infantryCombatRuntime.suppression, 0.2);
+  const suppression = target.infantryCombatRuntime.suppression;
   assert.ok(suppression.suppressionLevel > 0);
   assert.equal(suppression.lastEventKind, 'direct_hit');
   assert.ok(suppression.shock > 0);
   assert.ok(state.infantryCombatProjectiles.diagnostics.emittedDirectHitCount >= 1);
   assert.equal(state.infantryCombatProjectiles.diagnostics.emittedNearMissCount, 0);
   assert.equal(state.infantryCombatProjectiles.diagnostics.emittedNearImpactCount, 0);
-  assert.ok(state.units[1]!.infantryCombatRuntime.wounds.slots.length >= 1);
+  assert.ok(target.infantryCombatRuntime.wounds.slots.length >= 1);
 }
 
 function verifyNoSuppressionWithoutPhysicalEvent(): void {
