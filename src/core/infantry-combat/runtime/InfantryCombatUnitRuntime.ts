@@ -19,6 +19,11 @@ import {
   normalizeUnitMedicalRuntime,
   serializeUnitMedicalRuntime,
 } from './FirstAidRuntime';
+import {
+  createUnitSuppressionRuntime,
+  normalizeUnitSuppressionRuntime,
+  serializeUnitSuppressionRuntime,
+} from './SuppressionRuntime';
 
 const DIRECTION_MAGNITUDE_EPSILON = 1e-9;
 const UNIT_DIRECTION_MAGNITUDE_TOLERANCE = 1e-12;
@@ -34,6 +39,7 @@ export function createInfantryCombatUnitRuntime(): InfantryCombatUnitRuntimeV1 {
     wounds: createUnitWoundRuntime(),
     physiology: createUnitPhysiologyRuntime(),
     medical: createUnitMedicalRuntime(),
+    suppression: createUnitSuppressionRuntime(),
   };
 }
 
@@ -51,6 +57,7 @@ export function normalizeInfantryCombatUnitRuntime(value: unknown): InfantryComb
     wounds: normalizeUnitWoundRuntime(value.wounds),
     physiology: normalizeUnitPhysiologyRuntime(value.physiology),
     medical: normalizeUnitMedicalRuntime(value.medical),
+    suppression: normalizeUnitSuppressionRuntime(value.suppression),
   };
 }
 
@@ -65,6 +72,7 @@ export function serializeInfantryCombatUnitRuntime(value: InfantryCombatUnitRunt
     wounds: serializeUnitWoundRuntime(value.wounds ?? createUnitWoundRuntime()),
     physiology: serializeUnitPhysiologyRuntime(value.physiology ?? createUnitPhysiologyRuntime()),
     medical: serializeUnitMedicalRuntime(value.medical ?? createUnitMedicalRuntime()),
+    suppression: serializeUnitSuppressionRuntime(value.suppression ?? createUnitSuppressionRuntime()),
   };
 }
 
@@ -73,8 +81,8 @@ function normalizeShotCommitDiagnostic(value: unknown): import('./InfantryCombat
   const allowed = new Set([
     'committed', 'already_committed', 'task_not_firing', 'ownership_lost', 'weapon_missing',
     'weapon_capability_lost', 'unsupported_mode', 'empty_weapon', 'aim_solution_invalid', 'aim_solution_below_threshold',
-    'movement_forbidden', 'muzzle_blocked', 'friendly_risk_exceeded', 'projectile_capacity_exceeded',
-    'duplicate_projectile_id', 'invalid_projectile_candidate', 'invalid_target',
+    'movement_forbidden', 'cadence_wait', 'ordinal_mismatch', 'muzzle_blocked', 'friendly_risk_exceeded',
+    'projectile_capacity_exceeded', 'duplicate_projectile_id', 'invalid_projectile_candidate', 'invalid_target',
   ]);
   if (typeof value.status !== 'string' || !allowed.has(value.status)) return null;
   return {
