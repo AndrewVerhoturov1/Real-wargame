@@ -1,61 +1,61 @@
-import { appendFileSync, rmSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
+import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import path from 'node:path';
 
 const REQUIRED_BASE_SHA = 'f93cdbdf15497498e99dd4f63a2bfd20e5414ea9';
 const repoRoot = process.cwd();
-const baseWorktree = path.join(repoRoot, '.tmp-stage9-performance-base');
-const reportPath = process.env.RUNNER_TEMP
-  ? path.join(process.env.RUNNER_TEMP, 'stage9-verification-report.txt')
-  : null;
+const stage8VerifierPath = path.join(repoRoot, 'scripts', 'infantry_combat_stage8_verify.mjs');
+const stage8RequiredFragments = [
+  'combat-catalogs:smoke',
+  'combat-catalog-storage:smoke',
+  'combat-catalog-editor:smoke',
+  'physical-action-coordinator:smoke',
+  'posture-transition:smoke',
+  'physical-movement:smoke',
+  'perception:smoke',
+  'infantry-combat-single-shot:smoke',
+  'infantry-combat-projectile:smoke',
+  'infantry-combat-projectile:benchmark',
+  'infantry-combat-stage5:verify',
+  'infantry-combat-stage6:verify',
+  'infantry-combat-stage7:verify',
+  'infantry-combat-stage8:smoke',
+  'infantry-combat-stage8:forbidden-scan',
+  'attention-ai-nodes:smoke',
+  'contact-investigation:smoke',
+  'node-contract-ui:smoke',
+  'graph-v2:smoke',
+  "['npm', ['run', 'typecheck']]",
+  "['npm', ['run', 'build']]",
+  "['git', ['diff', '--check'",
+  'runPerformanceContractWithBaseComparison();',
+  'verifyCleanTrackedTree();',
+];
+
 const checks = [
-  ['npm', ['run', 'combat-catalogs:smoke']],
-  ['npm', ['run', 'combat-catalog-storage:smoke']],
-  ['npm', ['run', 'combat-catalog-editor:smoke']],
-
-  ['npm', ['run', 'physical-action-coordinator:smoke']],
-  ['npm', ['run', 'physical-movement:smoke']],
-  ['npm', ['run', 'posture-transition:smoke']],
-
-  ['npm', ['run', 'infantry-combat-single-shot:smoke']],
-  ['npm', ['run', 'infantry-combat-projectile:smoke']],
-  ['npm', ['run', 'infantry-combat-projectile:benchmark']],
-
-  ['npm', ['run', 'infantry-combat-stage5:smoke']],
-  ['npm', ['run', 'infantry-combat-stage5:forbidden-scan']],
-
-  ['npm', ['run', 'infantry-combat-stage6:smoke']],
-  ['npm', ['run', 'infantry-combat-stage6:forbidden-scan']],
-
-  ['npm', ['run', 'infantry-combat-stage7:smoke']],
-  ['npm', ['run', 'infantry-combat-stage7:forbidden-scan']],
-
-  ['npm', ['run', 'infantry-combat-stage8:smoke']],
-  ['npm', ['run', 'infantry-combat-stage8:forbidden-scan']],
   ['npm', ['run', 'infantry-combat-stage8:verify']],
-
+  ['npm', ['run', 'infantry-combat-stage5:forbidden-scan']],
+  ['npm', ['run', 'infantry-combat-stage6:forbidden-scan']],
+  ['npm', ['run', 'infantry-combat-stage7:forbidden-scan']],
+  ['npm', ['run', 'infantry-combat-stage8:forbidden-scan']],
   ['npm', ['run', 'infantry-combat-stage9:smoke']],
   ['npm', ['run', 'infantry-combat-stage9:forbidden-scan']],
-
-  ['npm', ['run', 'perception:smoke']],
-  ['npm', ['run', 'typecheck']],
-  ['npm', ['run', 'build']],
-
   ['node', ['--check', 'scripts/infantry_combat_stage9_smoke.mjs']],
   ['node', ['--check', 'scripts/infantry_combat_stage9_forbidden_scan.mjs']],
   ['node', ['--check', 'scripts/infantry_combat_stage9_verify.mjs']],
-
   ['git', ['diff', '--check', `${REQUIRED_BASE_SHA}...HEAD`]],
 ];
 
-if (reportPath) writeFileSync(reportPath, `Stage 9 verification report\nHEAD=${process.env.GITHUB_SHA ?? 'unknown'}\nNode=${process.version}\n\n`);
 console.log(`Node.js ${process.version}`);
 ensureVerificationHistory();
+verifyStage8MatrixContract();
 for (const [command, args] of checks) runRequiredCheck(command, args);
-runPerformanceContractWithBaseComparison();
 verifyCleanTrackedTree();
 
-console.log(`Stage 9 verification passed on Node.js ${process.version}: ${checks.length + 2} required non-browser checks.`);
+console.log(
+  `Stage 9 verification passed on Node.js ${process.version}: `
+  + `${checks.length} executed commands, Stage 8 matrix source contract and clean tracked tree.`,
+);
 
 function ensureVerificationHistory() {
   const shallow = run('git', ['rev-parse', '--is-shallow-repository'], repoRoot);
@@ -74,10 +74,32 @@ function ensureVerificationHistory() {
 
   const base = run('git', ['cat-file', '-e', `${REQUIRED_BASE_SHA}^{commit}`], repoRoot);
   if (base.error || base.status !== 0) {
-    fail('Stage 9 verification history preparation failed', `Обязательный base SHA недоступен после fetch: ${REQUIRED_BASE_SHA}.\n${combinedOutput(base)}`);
+    fail(
+      'Stage 9 verification history preparation failed',
+      `Обязательный base SHA недоступен после fetch: ${REQUIRED_BASE_SHA}.\n${combinedOutput(base)}`,
+    );
   }
-  report(`PASS history: required base ${REQUIRED_BASE_SHA} available`);
-  console.log(workflowAnnotation('notice', 'Stage 9 verification', `PASS full git history and required base ${REQUIRED_BASE_SHA} available`));
+  console.log(workflowAnnotation(
+    'notice',
+    'Stage 9 verification',
+    `PASS full git history and required base ${REQUIRED_BASE_SHA} available`,
+  ));
+}
+
+function verifyStage8MatrixContract() {
+  const source = readFileSync(stage8VerifierPath, 'utf8');
+  const missing = stage8RequiredFragments.filter((fragment) => !source.includes(fragment));
+  if (missing.length > 0) {
+    fail(
+      'Stage 8 matrix source contract failed',
+      `Stage 8 verifier is missing mandatory coverage fragments:\n${missing.map((item) => `- ${item}`).join('\n')}`,
+    );
+  }
+  console.log(workflowAnnotation(
+    'notice',
+    'Stage 9 verification',
+    'PASS Stage 8 matrix contract: catalogs, physical runtime, posture, movement, perception, projectile benchmark, Stage 5–8 verification, AI regressions, TypeScript, build, diff, performance and clean-tree gates are present.',
+  ));
 }
 
 function runRequiredCheck(command, args) {
@@ -85,140 +107,61 @@ function runRequiredCheck(command, args) {
   const result = run(command, args, repoRoot);
   const output = combinedOutput(result);
   if (result.error || result.status !== 0) {
-    if (label === 'npm run infantry-combat-projectile:benchmark') {
-      runProjectileBenchmarkBaselineComparison(output, result.status);
-    }
-    fail('Stage 9 verification failed', `FAIL ${label}\n${tail(output, 12000)}`);
+    fail('Stage 9 verification failed', `FAIL ${label}\n${tail(output, 16000)}`);
   }
-  report(`PASS ${label}: ${lastMeaningfulLine(output) || 'completed without output'}`);
-  console.log(workflowAnnotation('notice', 'Stage 9 verification', `PASS ${label}: ${lastMeaningfulLine(output) || 'completed without output'}`));
-}
-
-function runProjectileBenchmarkBaselineComparison(currentOutput, currentStatus) {
-  rmSync(baseWorktree, { recursive: true, force: true });
-  const addWorktree = run('git', ['worktree', 'add', '--detach', baseWorktree, REQUIRED_BASE_SHA], repoRoot);
-  if (addWorktree.error || addWorktree.status !== 0) {
-    fail('Stage 9 projectile benchmark baseline comparison failed', combinedOutput(addWorktree));
-  }
-  let baseline;
-  try {
-    baseline = run('npm', ['run', 'infantry-combat-projectile:benchmark'], baseWorktree);
-  } finally {
-    run('git', ['worktree', 'remove', '--force', baseWorktree], repoRoot);
-    rmSync(baseWorktree, { recursive: true, force: true });
-  }
-  const baselineOutput = combinedOutput(baseline);
-  fail('Stage 9 projectile benchmark baseline comparison', [
-    'Projectile benchmark did not pass on the Stage 9 candidate.',
-    `current status: ${currentStatus}`,
-    `base status: ${baseline.status}`,
-    `CURRENT_PROJECTILE_BENCHMARK_FAILURE_SUMMARY=${compactProjectileBenchmarkFailure(currentOutput)}`,
-    `BASE_PROJECTILE_BENCHMARK_FAILURE_SUMMARY=${compactProjectileBenchmarkFailure(baselineOutput)}`,
-    '',
-    'CURRENT:',
-    tail(currentOutput, 8000),
-    '',
-    'BASE:',
-    tail(baselineOutput, 8000),
-  ].join('\n'));
-}
-
-function compactProjectileBenchmarkFailure(output) {
-  const startMarker = 'BEGIN_PROJECTILE_BENCHMARK_JSON';
-  const endMarker = 'END_PROJECTILE_BENCHMARK_JSON';
-  const start = output.lastIndexOf(startMarker);
-  const end = output.lastIndexOf(endMarker);
-  if (start < 0 || end <= start) return JSON.stringify({ parseError: 'benchmark JSON markers not found' });
-  try {
-    const benchmark = JSON.parse(output.slice(start + startMarker.length, end).trim());
-    return JSON.stringify({
-      pass: benchmark.pass,
-      failReasons: benchmark.failReasons,
-      directComparison: {
-        pass: benchmark.directComparison?.pass,
-        failReasons: benchmark.directComparison?.failReasons,
-        throughputRatioStage4OverStage3: benchmark.directComparison?.throughputRatioStage4OverStage3,
-        heapRatioStage4OverStage3: benchmark.directComparison?.heapRatioStage4OverStage3,
-        idleOverheadRatioStage4OverStage3: benchmark.directComparison?.idleComparison?.overheadRatioStage4OverStage3,
-        idleTimingGatePass: benchmark.directComparison?.idleComparison?.timingGatePass,
-        scratchAllocations: benchmark.directComparison?.stage4Production?.scratchAllocations,
-        poolResizes: benchmark.directComparison?.stage4Production?.poolResizes,
-      },
-      productionCapacitySweep: benchmark.capacitySweep?.find((entry) => entry.capacity === benchmark.productionCapacity) ?? null,
-    });
-  } catch (error) {
-    return JSON.stringify({ parseError: error instanceof Error ? error.message : String(error) });
-  }
-}
-
-function runPerformanceContractWithBaseComparison() {
-  const label = 'npm run performance-contract:smoke';
-  const current = run('npm', ['run', 'performance-contract:smoke'], repoRoot);
-  const currentOutput = combinedOutput(current);
-  if (!current.error && current.status === 0) {
-    report(`PASS ${label}`);
-    console.log(workflowAnnotation('notice', 'Stage 9 verification', `PASS ${label}`));
-    return;
-  }
-  rmSync(baseWorktree, { recursive: true, force: true });
-  const addWorktree = run('git', ['worktree', 'add', '--detach', baseWorktree, REQUIRED_BASE_SHA], repoRoot);
-  if (addWorktree.error || addWorktree.status !== 0) fail('Stage 9 performance baseline comparison failed', combinedOutput(addWorktree));
-  let baseline;
-  try {
-    baseline = run('npm', ['run', 'performance-contract:smoke'], baseWorktree);
-  } finally {
-    run('git', ['worktree', 'remove', '--force', baseWorktree], repoRoot);
-    rmSync(baseWorktree, { recursive: true, force: true });
-  }
-  const baselineOutput = combinedOutput(baseline);
-  const currentSignature = failureSignature(currentOutput);
-  const baselineSignature = failureSignature(baselineOutput);
-  if (baseline.status !== 0 && currentSignature && currentSignature === baselineSignature) {
-    report(`PASS ${label}: exact approved-base failure ${currentSignature}`);
-    console.log(workflowAnnotation('warning', 'Known base performance-contract failure', `Stage 9 reproduces the exact base failure: ${currentSignature}`));
-    return;
-  }
-  fail('Stage 9 performance baseline comparison failed', [
-    'Обнаружено новое или отличающееся падение performance-contract:smoke.',
-    `current status: ${current.status}`,
-    `base status: ${baseline.status}`,
-    `current signature: ${currentSignature}`,
-    `base signature: ${baselineSignature}`,
-    '',
-    'CURRENT:',
-    tail(currentOutput, 5000),
-    '',
-    'BASE:',
-    tail(baselineOutput, 5000),
-  ].join('\n'));
+  console.log(workflowAnnotation(
+    'notice',
+    'Stage 9 verification',
+    `PASS ${label}: ${lastMeaningfulLine(output) || 'completed without output'}`,
+  ));
 }
 
 function verifyCleanTrackedTree() {
   const status = run('git', ['status', '--short'], repoRoot);
   const output = combinedOutput(status);
-  if (status.error || status.status !== 0 || output.trim()) fail('Stage 9 tracked-tree verification failed', `git status --short must be empty.\n${output}`);
-  report('PASS git status --short: tracked tree clean');
-  console.log(workflowAnnotation('notice', 'Stage 9 verification', 'PASS git status --short: tracked tree clean'));
+  if (status.error || status.status !== 0 || output.trim()) {
+    fail('Stage 9 tracked-tree verification failed', `git status --short must be empty.\n${output}`);
+  }
+  console.log(workflowAnnotation(
+    'notice',
+    'Stage 9 verification',
+    'PASS git status --short: tracked tree clean',
+  ));
 }
 
 function run(command, args, cwd) {
-  return spawnSync(command, args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env: process.env });
+  return spawnSync(command, args, {
+    cwd,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    env: process.env,
+  });
 }
-function combinedOutput(result) { return [result.error ? String(result.error) : '', result.stdout ?? '', result.stderr ?? ''].filter(Boolean).join('\n').trim(); }
-function failureSignature(output) {
-  const lines = output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  return lines.find((line) => line.includes('must include mandatory performance contract fragment:'))
-    ?? lines.find((line) => line.startsWith('Error:'))
-    ?? lines.at(-1)
-    ?? '';
+
+function combinedOutput(result) {
+  return [result.error ? String(result.error) : '', result.stdout ?? '', result.stderr ?? '']
+    .filter(Boolean)
+    .join('\n')
+    .trim();
 }
-function lastMeaningfulLine(value) { return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).at(-1) ?? ''; }
-function tail(value, maximumCharacters) { return value.length <= maximumCharacters ? value : value.slice(-maximumCharacters); }
-function report(message) { if (reportPath) appendFileSync(reportPath, `${message}\n`); }
+
+function lastMeaningfulLine(value) {
+  return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).at(-1) ?? '';
+}
+
+function tail(value, maximumCharacters) {
+  return value.length <= maximumCharacters ? value : value.slice(-maximumCharacters);
+}
+
 function fail(title, message) {
-  report(`\n${title}\n${message}`);
   console.error(workflowAnnotation('error', title, message));
   process.exit(1);
 }
-function workflowAnnotation(level, title, message) { return `::${level} file=package.json,line=1,title=${escapeData(title)}::${escapeData(message)}`; }
-function escapeData(value) { return String(value).replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A'); }
+
+function workflowAnnotation(level, title, message) {
+  return `::${level} file=package.json,line=1,title=${escapeData(title)}::${escapeData(message)}`;
+}
+
+function escapeData(value) {
+  return String(value).replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+}
