@@ -20,7 +20,7 @@ on:
         type: boolean
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: read
 
 concurrency:
@@ -81,58 +81,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-
-      - name: Apply exact benchmark fixture correction
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feature/20260725-shooting-stage-09-machine-gun-assistant'
-        shell: bash
-        env:
-          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
-          TARGET_BRANCH: ${{ github.event.pull_request.head.ref }}
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('scripts/infantry_combat_projectile_benchmark.ts')
-          text = path.read_text()
-          replacements = [
-              (
-                  "function prepareProductionRun(profile: FixtureProfile, capacity: number): PreparedProductionRun {\n  const dense = profile === 'dense_geometry';\n  const state = makeState(dense ? makeDenseObjects() : makeRepresentativeObjects(), makeUnits());\n",
-                  "function prepareProductionRun(profile: FixtureProfile, capacity: number): PreparedProductionRun {\n  const dense = profile === 'dense_geometry';\n  const direct = profile === 'direct';\n  const state = makeState(\n    direct ? [] : dense ? makeDenseObjects() : makeRepresentativeObjects(),\n    direct ? [] : makeUnits(),\n  );\n",
-              ),
-              (
-                  "  const failReasons: string[] = [];\n  if (throughputRatio < 1) failReasons.push(`Stage 4 throughput ratio ${throughputRatio.toFixed(3)} is below 1.0`);\n",
-                  "  const failReasons: string[] = [];\n  if (\n    referenceRepresentative.diagnostics.unitCheckCount !== 0\n    || referenceRepresentative.diagnostics.objectCandidateCount !== 0\n  ) {\n    failReasons.push('Stage 3 direct fixture executed unit or object collision work');\n  }\n  if (\n    productionRepresentative.units !== 0\n    || productionRepresentative.objects !== 0\n    || productionRepresentative.diagnostics.unitCandidateCount !== 0\n    || productionRepresentative.diagnostics.objectCandidateCount !== 0\n    || productionRepresentative.diagnostics.bodyImpactCount !== 0\n    || productionRepresentative.diagnostics.emittedNearMissCount !== 0\n    || productionRepresentative.diagnostics.emittedNearImpactCount !== 0\n    || productionRepresentative.diagnostics.emittedDirectHitCount !== 0\n  ) {\n    failReasons.push('Stage 4 direct fixture executed Stage 9 unit, object, body or suppression work');\n  }\n  if (throughputRatio < 1) failReasons.push(`Stage 4 throughput ratio ${throughputRatio.toFixed(3)} is below 1.0`);\n",
-              ),
-              (
-                  "function prepareReferenceDirect(): { state: SimulationState; runtime: Stage3ReferenceHarnessRuntime } {\n  const state = makeState([], makeUnits());\n",
-                  "function prepareReferenceDirect(): { state: SimulationState; runtime: Stage3ReferenceHarnessRuntime } {\n  const state = makeState([], []);\n",
-              ),
-          ]
-          for old, new in replacements:
-              if text.count(old) != 1:
-                  raise SystemExit(f'Expected exactly one benchmark source match, found {text.count(old)}')
-              text = text.replace(old, new, 1)
-          path.write_text(text)
-          PY
-          if git diff --quiet -- scripts/infantry_combat_projectile_benchmark.ts; then
-            echo 'Benchmark patch produced no diff.' >&2
-            exit 1
-          fi
-          git diff --check -- scripts/infantry_combat_projectile_benchmark.ts
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add scripts/infantry_combat_projectile_benchmark.ts
-          git commit -m "test: restore equivalent projectile benchmark fixture"
-          git push origin "HEAD:$TARGET_BRANCH"
-
-      - name: Upload exact benchmark source snapshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: stage9-benchmark-source
-          path: scripts/infantry_combat_projectile_benchmark.ts
-          if-no-files-found: error
-          retention-days: 1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -235,15 +183,6 @@ jobs:
       - name: Production build once
         if: needs.classify.outputs.needs_build == 'true'
         run: npm run build
-
-      - name: Upload Stage 9 verification diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: stage9-verification-diagnostics
-          path: ${{ runner.temp }}/stage9-verification-report.txt
-          if-no-files-found: ignore
-          retention-days: 3
 
   decision:
     name: Risk decision and evidence validity
