@@ -4,7 +4,7 @@ import type { UnitModel } from '../../units/UnitModel';
 import type { InfantryWeaponInstanceV1 } from './InfantryCombatRuntimeTypes';
 import { getWeaponAnchor } from './MuzzleGeometry';
 import {
-  MAX_DEPLOYMENT_ACTION_RESULTS,
+  MAX_WEAPON_DEPLOYMENT_RESULTS,
   WEAPON_DEPLOYMENT_SCHEMA_VERSION,
   type WeaponDeploymentActionResultV1,
   type WeaponDeploymentActionV1,
@@ -12,7 +12,7 @@ import {
   type WeaponDeploymentRuntimeV1,
 } from './WeaponDeploymentTypes';
 
-export const DEPLOYMENT_ANCHOR_EPSILON_METRES = 0.01;
+export const DEPLOYMENT_ANCHOR_POSITION_TOLERANCE_METRES = 0.01;
 export const DEPLOYED_TRAVERSE_EPSILON_RADIANS = 1e-9;
 
 export function createWeaponDeploymentRuntime(): WeaponDeploymentRuntimeV1 {
@@ -33,20 +33,26 @@ export function createWeaponDeploymentRuntime(): WeaponDeploymentRuntimeV1 {
 
 export function normalizeWeaponDeploymentRuntime(value: unknown): WeaponDeploymentRuntimeV1 {
   if (!isRecord(value) || value.schemaVersion !== WEAPON_DEPLOYMENT_SCHEMA_VERSION) return createWeaponDeploymentRuntime();
-  const mode = value.mode === 'deploying' || value.mode === 'deployed' || value.mode === 'undeploying' ? value.mode : 'portable';
+  const requestedMode = value.mode === 'deploying' || value.mode === 'deployed' || value.mode === 'undeploying'
+    ? value.mode
+    : 'portable';
   const anchor = normalizeAnchor(value.anchor);
   const activeAction = normalizeAction(value.activeAction);
-  const normalizedMode = (mode === 'deployed' || mode === 'undeploying') && !anchor ? 'portable' : mode;
+  let mode = requestedMode;
+  if ((mode === 'deployed' || mode === 'undeploying') && !anchor) mode = 'portable';
+  if ((mode === 'deploying' || mode === 'undeploying') && !activeAction) mode = mode === 'undeploying' && anchor ? 'deployed' : 'portable';
+  const results = normalizeResults(value.actionResults);
+  const lastActionResult = normalizeResult(value.lastActionResult) ?? results.at(-1) ?? null;
   return {
     schemaVersion: WEAPON_DEPLOYMENT_SCHEMA_VERSION,
-    mode: normalizedMode,
-    anchor: normalizedMode === 'portable' ? null : anchor,
-    traverseCenterRadians: normalizedMode === 'portable' ? null : nullableFinite(value.traverseCenterRadians),
-    deployedAtSeconds: normalizedMode === 'portable' ? null : nullableNonNegative(value.deployedAtSeconds),
+    mode,
+    anchor: mode === 'portable' || mode === 'deploying' ? null : anchor,
+    traverseCenterRadians: mode === 'portable' || mode === 'deploying' ? null : nullableFinite(value.traverseCenterRadians),
+    deployedAtSeconds: mode === 'portable' || mode === 'deploying' ? null : nullableNonNegative(value.deployedAtSeconds),
     nextActionSequence: integer(value.nextActionSequence, 1, 1, Number.MAX_SAFE_INTEGER),
-    activeAction: normalizedMode === 'deploying' || normalizedMode === 'undeploying' ? activeAction : null,
-    lastActionResult: normalizeResult(value.lastActionResult),
-    actionResults: normalizeResults(value.actionResults),
+    activeAction: mode === 'deploying' || mode === 'undeploying' ? activeAction : null,
+    lastActionResult,
+    actionResults: lastActionResult ? [structuredClone(lastActionResult)] : [],
     revision: integer(value.revision, 0, 0, Number.MAX_SAFE_INTEGER),
     invalidationReason: nullableText(value.invalidationReason),
   };
@@ -70,9 +76,8 @@ export function captureWeaponDeploymentAnchor(map: TacticalMap, unit: UnitModel)
 export function deploymentAnchorStillValid(map: TacticalMap, unit: UnitModel, anchor: WeaponDeploymentAnchorV1): boolean {
   const current = captureWeaponDeploymentAnchor(map, unit);
   return Math.hypot(current.xMetres - anchor.xMetres, current.yMetres - anchor.yMetres, current.zMetres - anchor.zMetres)
-      <= DEPLOYMENT_ANCHOR_EPSILON_METRES
-    && current.posture === anchor.posture
-    && Math.abs(normalizeSignedRadians(current.facingRadians - anchor.facingRadians)) <= DEPLOYED_TRAVERSE_EPSILON_RADIANS;
+      <= DEPLOYMENT_ANCHOR_POSITION_TOLERANCE_METRES
+    && current.posture === anchor.posture;
 }
 
 export function isTargetWithinDeployedTraverse(
@@ -84,8 +89,10 @@ export function isTargetWithinDeployedTraverse(
   const dx = target.xMetres - deployment.anchor.xMetres;
   const dy = target.yMetres - deployment.anchor.yMetres;
   if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.hypot(dx, dy) <= DEPLOYED_TRAVERSE_EPSILON_RADIANS) return false;
+  const arc = weapon.resolved.weapon.deployedTraverseArcRadians;
+  if (!Number.isFinite(arc) || arc <= 0) return false;
   const targetYaw = Math.atan2(dy, dx);
-  const halfArc = clamp(weapon.resolved.weapon.deployedTraverseArcRadians, 0, Math.PI * 2) / 2;
+  const halfArc = Math.min(Math.PI * 2, arc) / 2;
   return Math.abs(normalizeSignedRadians(targetYaw - deployment.traverseCenterRadians)) <= halfArc + DEPLOYED_TRAVERSE_EPSILON_RADIANS;
 }
 
@@ -94,7 +101,7 @@ export function invalidateWeaponDeployment(
   reason: string,
 ): boolean {
   const deployment = weapon.deployment;
-  if (deployment.mode === 'portable' && !deployment.activeAction) return false;
+  if (deployment.mode === 'portable' && !deployment.activeAction && !deployment.anchor) return false;
   deployment.mode = 'portable';
   deployment.anchor = null;
   deployment.traverseCenterRadians = null;
@@ -105,16 +112,15 @@ export function invalidateWeaponDeployment(
   return true;
 }
 
-export function appendDeploymentResult(runtime: WeaponDeploymentRuntimeV1, result: WeaponDeploymentActionResultV1): void {
+export function appendDeploymentResult(runtime: WeaponDeploymentRuntimeV1, result: WeaponDeploymentActionResultV1): boolean {
   const existing = runtime.actionResults.find((entry) => entry.actionId === result.actionId);
   if (existing) {
-    runtime.lastActionResult = existing;
-    return;
+    runtime.lastActionResult = structuredClone(existing);
+    return false;
   }
-  runtime.actionResults.push(structuredClone(result));
-  runtime.actionResults.sort((left, right) => left.endedSeconds - right.endedSeconds || compareText(left.actionId, right.actionId));
-  while (runtime.actionResults.length > MAX_DEPLOYMENT_ACTION_RESULTS) runtime.actionResults.shift();
+  runtime.actionResults = [structuredClone(result)].slice(-MAX_WEAPON_DEPLOYMENT_RESULTS);
   runtime.lastActionResult = structuredClone(result);
+  return true;
 }
 
 export function normalizeSignedRadians(value: number): number {
@@ -134,17 +140,18 @@ function normalizeAction(value: unknown): WeaponDeploymentActionV1 | null {
   if (!isRecord(value) || value.schemaVersion !== WEAPON_DEPLOYMENT_SCHEMA_VERSION) return null;
   if (value.kind !== 'deploy' && value.kind !== 'undeploy') return null;
   const actionId = cleanText(value.actionId, '');
+  const weaponInstanceId = cleanText(value.weaponInstanceId, '');
   const ownerToken = cleanText(value.ownerToken, '');
-  const actionHandle = normalizeHandle(value.actionHandle);
-  if (!actionId || !ownerToken || !actionHandle) return null;
+  if (!actionId || !weaponInstanceId || !ownerToken) return null;
   return {
     schemaVersion: WEAPON_DEPLOYMENT_SCHEMA_VERSION,
     actionId,
     sequence: integer(value.sequence, 1, 1, Number.MAX_SAFE_INTEGER),
     kind: value.kind,
+    weaponInstanceId,
     owner: normalizeOwner(value.owner),
     ownerToken,
-    actionHandle,
+    actionHandle: normalizeHandle(value.actionHandle),
     helperUnitId: nullableText(value.helperUnitId),
     helperActionHandle: normalizeHandle(value.helperActionHandle),
     helperValidationCode: nullableText(value.helperValidationCode),
@@ -165,7 +172,7 @@ function normalizeResults(value: unknown): WeaponDeploymentActionResultV1[] {
   }
   return [...byId.values()]
     .sort((left, right) => left.endedSeconds - right.endedSeconds || compareText(left.actionId, right.actionId))
-    .slice(-MAX_DEPLOYMENT_ACTION_RESULTS);
+    .slice(-MAX_WEAPON_DEPLOYMENT_RESULTS);
 }
 
 function normalizeResult(value: unknown): WeaponDeploymentActionResultV1 | null {
@@ -215,7 +222,6 @@ function normalizeOwner(value: unknown) {
   return { source, id: cleanText(value.id, 'weapon-deployment') };
 }
 
-function clamp(value: number, minimum: number, maximum: number): number { return Math.max(minimum, Math.min(maximum, Number.isFinite(value) ? value : minimum)); }
 function finiteOrNull(value: unknown): number | null { return typeof value === 'number' && Number.isFinite(value) ? value : null; }
 function nullableFinite(value: unknown): number | null { return finiteOrNull(value); }
 function nullableNonNegative(value: unknown): number | null { const number = finiteOrNull(value); return number === null ? null : Math.max(0, number); }
