@@ -16,6 +16,7 @@ import {
   MAX_APPLIED_AMMO_TRANSFER_ACTION_IDS,
   type AmmoTransferActionV1,
 } from './AmmoInventoryTypes';
+import { validateMachineGunAssistant } from './MachineGunAssistant';
 import {
   DEPLOYMENT_ASSISTANT_ACTION_TYPE,
   DEPLOY_WEAPON_ACTION_TYPE,
@@ -27,7 +28,7 @@ import {
   RELOAD_WEAPON_ACTION_TYPE,
 } from './ReloadWeaponAction';
 
-const STAGE9_ACTION_TYPES = new Set([
+const STAGE9_ACTION_TYPES: ReadonlySet<string> = new Set<string>([
   DEPLOY_WEAPON_ACTION_TYPE,
   UNDEPLOY_WEAPON_ACTION_TYPE,
   DEPLOYMENT_ASSISTANT_ACTION_TYPE,
@@ -76,12 +77,13 @@ export function reconcileStage9PhysicalActions(
           setHandle: (handle) => { deployment.actionHandle = handle; },
           expected,
         });
-        const helper = deployment.helperUnitId ? index.unitsById.get(deployment.helperUnitId) : undefined;
+        const helperValidation = validateMachineGunAssistant(state, gunner, deployment.helperUnitId);
+        const helper = helperValidation.valid ? helperValidation.helper : null;
         if (!helper || !deployment.helperActionHandle) {
           if (deployment.helperUnitId || deployment.helperActionHandle) detachedHelperCount += 1;
           deployment.helperUnitId = null;
           deployment.helperActionHandle = null;
-          deployment.helperValidationCode = deployment.helperValidationCode ?? 'assistant_missing_after_load';
+          deployment.helperValidationCode = helperValidation.reasonCode;
         } else {
           const restored = ensureLease({
             unit: helper,
@@ -140,12 +142,13 @@ export function reconcileStage9PhysicalActions(
               expected,
             });
           }
-          const helper = reload.helperUnitId ? index.unitsById.get(reload.helperUnitId) : undefined;
+          const helperValidation = validateMachineGunAssistant(state, gunner, reload.helperUnitId);
+          const helper = helperValidation.valid ? helperValidation.helper : null;
           if (!helper || !reload.helperActionHandle) {
             if (reload.helperUnitId || reload.helperActionHandle) detachedHelperCount += 1;
             reload.helperUnitId = null;
             reload.helperActionHandle = null;
-            reload.helperValidationCode = reload.helperValidationCode ?? 'assistant_missing_after_load';
+            reload.helperValidationCode = helperValidation.reasonCode;
           } else {
             restoredLeaseCount += ensureLease({
               unit: helper,
@@ -183,7 +186,7 @@ export function reconcileStage9PhysicalActions(
       channels: ['locomotion', 'weapon'],
       startedSeconds: transfer.startedSeconds,
       handle: transfer.sourceHandle,
-      setHandle: (handle) => updateTransferHandles(units, transfer.actionId, handle, null),
+      setHandle: (handle) => setTransferSourceHandle(units, transfer.actionId, handle),
       expected,
     });
     restoredLeaseCount += ensureLease({
@@ -194,7 +197,7 @@ export function reconcileStage9PhysicalActions(
       channels: ['weapon'],
       startedSeconds: transfer.startedSeconds,
       handle: transfer.targetHandle,
-      setHandle: (handle) => updateTransferHandles(units, transfer.actionId, null, handle),
+      setHandle: (handle) => setTransferTargetHandle(units, transfer.actionId, handle),
       expected,
     });
   }
@@ -301,17 +304,24 @@ function ensureLease(input: {
   return 1;
 }
 
-function updateTransferHandles(
+function setTransferSourceHandle(
   units: readonly UnitModel[],
   actionId: string,
-  sourceHandle: PhysicalActionHandleV1 | null,
-  targetHandle: PhysicalActionHandleV1 | null,
+  handle: PhysicalActionHandleV1 | null,
 ): void {
   for (const unit of units) {
     const action = unit.infantryCombatRuntime.ammoInventory.activeTransfer;
-    if (action?.actionId !== actionId) continue;
-    if (sourceHandle !== null) action.sourceHandle = sourceHandle;
-    if (targetHandle !== null) action.targetHandle = targetHandle;
+    if (action?.actionId === actionId) action.sourceHandle = handle;
+  }
+}
+function setTransferTargetHandle(
+  units: readonly UnitModel[],
+  actionId: string,
+  handle: PhysicalActionHandleV1 | null,
+): void {
+  for (const unit of units) {
+    const action = unit.infantryCombatRuntime.ammoInventory.activeTransfer;
+    if (action?.actionId === actionId) action.targetHandle = handle;
   }
 }
 function clearTransferCopies(units: readonly UnitModel[], actionId: string): void {
