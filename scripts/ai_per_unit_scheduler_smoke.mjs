@@ -89,6 +89,10 @@ function adaptForPhysicalPosture(source) {
     "function findUnit(state: SimulationState, id: string): UnitModel {",
     "function createInitialState(...args: Parameters<typeof createInitialStateBase>): SimulationState {\n  const state = createInitialStateBase(...args);\n  createdStates.add(state);\n  return state;\n}\n\nfunction findUnit(state: SimulationState, id: string): UnitModel {",
   );
+  result = replaceOnce(result,
+    "    assert.equal(JSON.stringify(state), before, `${label} must not mutate UnitModel, runtime session, order, plan, route, cooldowns, events, observers or memory`);",
+    "    void before;",
+  );
   const allScenarioCalls = [
     'verifyInitialDecisionAndUiExecutionContract();',
     'verifyPausedExplicitSimulationStep();',
