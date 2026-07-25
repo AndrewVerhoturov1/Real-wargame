@@ -9,23 +9,26 @@ export interface WeaponDeploymentLockResultV1 {
 const stepLockedUnits = new WeakSet<UnitModel>();
 
 /**
- * Captures units whose deployment action existed at the outer step boundary.
- * This prevents an undeploy completed in combat from granting a full movement
- * interval later in the same outer step.
+ * Captures every facing at the outer step boundary. Units already locked are
+ * marked immediately; actions started later in the same step call
+ * markWeaponDeploymentStepLock before any legacy movement phase can run.
  */
 export function beginWeaponDeploymentStepLocks(units: readonly UnitModel[]): Map<UnitModel, number> {
   const facingByUnit = new Map<UnitModel, number>();
   for (const unit of units) {
-    if (!deploymentModeLocksBody(unit)) continue;
-    stepLockedUnits.add(unit);
     facingByUnit.set(unit, unit.facingRadians);
+    if (deploymentModeLocksBody(unit)) stepLockedUnits.add(unit);
   }
   return facingByUnit;
 }
 
+export function markWeaponDeploymentStepLock(unit: UnitModel): void {
+  stepLockedUnits.add(unit);
+}
+
 export function endWeaponDeploymentStepLocks(facingByUnit: ReadonlyMap<UnitModel, number>): void {
   for (const [unit, facingRadians] of facingByUnit) {
-    unit.facingRadians = facingRadians;
+    if (stepLockedUnits.has(unit) || deploymentModeLocksBody(unit)) unit.facingRadians = facingRadians;
     stepLockedUnits.delete(unit);
   }
 }
