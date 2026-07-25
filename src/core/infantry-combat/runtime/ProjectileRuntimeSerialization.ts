@@ -19,7 +19,7 @@ import {
 const MAX_NORMALIZED_CAPACITY = 16_384;
 
 export function normalizeProjectile(value: unknown): ProjectileStateV1 | null {
-  if (!isRecord(value) || (value.schemaVersion !== 1 && value.schemaVersion !== PROJECTILE_STATE_SCHEMA_VERSION)) return null;
+  if (!isRecord(value) || (value.schemaVersion !== 1 && value.schemaVersion !== 2 && value.schemaVersion !== PROJECTILE_STATE_SCHEMA_VERSION)) return null;
   const projectileId = cleanText(value.projectileId, '');
   const shotId = cleanText(value.shotId, '');
   const shooterId = cleanText(value.shooterId, '');
@@ -45,6 +45,7 @@ export function normalizeProjectile(value: unknown): ProjectileStateV1 | null {
     bodyPenetrationCount: integer(value.bodyPenetrationCount, 0, 0, 255),
     impactSequence: integer(value.impactSequence, 0, 0, 0xffff_ffff),
     lastHitUnitId: nullableText(value.lastHitUnitId),
+    suppressionContinuousFireScore: clamp01(isFiniteNumber(value.suppressionContinuousFireScore) ? value.suppressionContinuousFireScore : 0),
   };
 }
 
@@ -82,6 +83,8 @@ export function normalizeCommitRecord(value: unknown): ShotCommitRecordV1 | null
     ...(isFiniteNumber(value.effectiveDispersionRadians) ? { effectiveDispersionRadians: Math.max(0, value.effectiveDispersionRadians) } : {}),
     roundsBefore: integer(value.roundsBefore, 0, 0, Number.MAX_SAFE_INTEGER),
     roundsAfter: integer(value.roundsAfter, 0, 0, Number.MAX_SAFE_INTEGER),
+    ...(isFiniteNumber(value.fireTaskShotOrdinal) ? { fireTaskShotOrdinal: integer(value.fireTaskShotOrdinal, 0, 0, 63) } : {}),
+    ...(isFiniteNumber(value.suppressionContinuousFireScore) ? { suppressionContinuousFireScore: clamp01(value.suppressionContinuousFireScore) } : {}),
   };
 }
 
@@ -160,7 +163,6 @@ export function normalizeTerminations(values: unknown): ProjectileTerminationV1[
   return uniqueBy(readArray(values).map(normalizeTermination).filter(isPresent), (item) => item.terminationId)
     .sort(compareTerminations).slice(-MAX_STAGE3_TERMINATION_ENTRIES);
 }
-
 export function normalizeTermination(value: unknown): ProjectileTerminationV1 | null {
   if (!isRecord(value) || value.schemaVersion !== PROJECTILE_TERMINATION_SCHEMA_VERSION) return null;
   const terminationId = cleanText(value.terminationId, '');
@@ -168,19 +170,8 @@ export function normalizeTermination(value: unknown): ProjectileTerminationV1 | 
   const shotId = cleanText(value.shotId, '');
   const point = normalizePoint(value.point);
   const reason = value.reason;
-  if (!terminationId || !projectileId || !shotId || !point || !(
-    reason === 'impact' || reason === 'body_penetration_limit' || reason === 'lifetime'
-    || reason === 'out_of_bounds' || reason === 'reconciled_orphan'
-  )) return null;
-  return {
-    schemaVersion: PROJECTILE_TERMINATION_SCHEMA_VERSION,
-    terminationId,
-    projectileId,
-    shotId,
-    reason,
-    simulationSeconds: finiteNonNegative(value.simulationSeconds, 0),
-    point,
-  };
+  if (!terminationId || !projectileId || !shotId || !point || !(reason === 'impact' || reason === 'body_penetration_limit' || reason === 'lifetime' || reason === 'out_of_bounds' || reason === 'reconciled_orphan')) return null;
+  return { schemaVersion: PROJECTILE_TERMINATION_SCHEMA_VERSION, terminationId, projectileId, shotId, reason, simulationSeconds: finiteNonNegative(value.simulationSeconds, 0), point };
 }
 
 export function normalizeAmmo(value: unknown): AmmoDefinitionV1 | null {
@@ -190,45 +181,27 @@ export function normalizeAmmo(value: unknown): AmmoDefinitionV1 | null {
   if (finitePositive(value.muzzleVelocityMetersPerSecond, 0) <= 0 || finitePositive(value.maximumLifetimeSeconds, 0) <= 0) return null;
   return clone(value as unknown as AmmoDefinitionV1);
 }
-
 export function normalizeRef(value: unknown): ShotCommitRecordV1['weaponDefinitionRef'] | null {
   if (!isRecord(value)) return null;
   const definitionId = cleanText(value.definitionId, '');
   const revision = integer(value.revision, 0, 1, Number.MAX_SAFE_INTEGER);
   return definitionId && revision > 0 ? { definitionId, revision } : null;
 }
-
 export function normalizePoint(value: unknown): BallisticPoint3 | null {
   if (!isRecord(value) || !isFiniteNumber(value.xMetres) || !isFiniteNumber(value.yMetres) || !isFiniteNumber(value.zMetres)) return null;
   return { xMetres: value.xMetres, yMetres: value.yMetres, zMetres: value.zMetres };
 }
-
 export function normalizeVector(value: unknown): BallisticDirection3 | null {
   if (!isRecord(value) || !isFiniteNumber(value.x) || !isFiniteNumber(value.y) || !isFiniteNumber(value.z)) return null;
   return { x: value.x, y: value.y, z: value.z };
 }
-
-export function parseImpactSequence(impactId: string): number {
-  const match = /:impact:(\d+)$/.exec(impactId);
-  return match ? integer(Number(match[1]), 0, 0, 0xffff_ffff) : 0;
-}
-
-export function normalizeCapacity(value: unknown, fallback: number, minimumRequired: number): number {
-  return Math.max(integer(value, fallback, 1, MAX_NORMALIZED_CAPACITY), minimumRequired, 1);
-}
-
+export function parseImpactSequence(impactId: string): number { const match = /:impact:(\d+)$/.exec(impactId); return match ? integer(Number(match[1]), 0, 0, 0xffff_ffff) : 0; }
+export function normalizeCapacity(value: unknown, fallback: number, minimumRequired: number): number { return Math.max(integer(value, fallback, 1, MAX_NORMALIZED_CAPACITY), minimumRequired, 1); }
 export function compareProjectiles(left: ProjectileStateV1, right: ProjectileStateV1): number { return compareText(left.projectileId, right.projectileId); }
 export function compareCommitRecords(left: ShotCommitRecordV1, right: ShotCommitRecordV1): number { return left.committedSimulationSeconds - right.committedSimulationSeconds || compareText(left.shotId, right.shotId); }
 export function compareImpacts(left: ProjectileImpactV1, right: ProjectileImpactV1): number { return left.impactSeconds - right.impactSeconds || compareText(left.shotId, right.shotId) || (left.impactSequence ?? 0) - (right.impactSequence ?? 0) || compareText(left.impactId, right.impactId); }
 export function compareTerminations(left: ProjectileTerminationV1, right: ProjectileTerminationV1): number { return left.simulationSeconds - right.simulationSeconds || compareText(left.terminationId, right.terminationId); }
-
-export function insertSortedBounded<T>(target: T[], value: T, capacity: number, compare: (left: T, right: T) => number): void {
-  let low = 0; let high = target.length;
-  while (low < high) { const middle = (low + high) >>> 1; if (compare(target[middle]!, value) <= 0) low = middle + 1; else high = middle; }
-  target.splice(low, 0, value);
-  if (target.length > capacity) target.splice(0, target.length - capacity);
-}
-
+export function insertSortedBounded<T>(target: T[], value: T, capacity: number, compare: (left: T, right: T) => number): void { let low = 0; let high = target.length; while (low < high) { const middle = (low + high) >>> 1; if (compare(target[middle]!, value) <= 0) low = middle + 1; else high = middle; } target.splice(low, 0, value); if (target.length > capacity) target.splice(0, target.length - capacity); }
 export function uniqueBy<T>(values: readonly T[], key: (value: T) => string): T[] { const result: T[] = []; const seen = new Set<string>(); for (const value of values) { const identity = key(value); if (seen.has(identity)) continue; seen.add(identity); result.push(clone(value)); } return result; }
 export function canonicalStrings(values: unknown[]): string[] { return [...new Set(values.map((value) => cleanText(value, '')).filter(Boolean))].sort(compareText); }
 export function readArray(value: unknown): unknown[] { return Array.isArray(value) ? value : []; }
