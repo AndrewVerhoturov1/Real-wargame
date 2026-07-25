@@ -7,26 +7,73 @@ const repoRoot = process.cwd();
 const baseWorktree = path.join(repoRoot, '.tmp-stage9-performance-base');
 const checks = [
   ['npm', ['run', 'combat-catalogs:smoke']],
+  ['npm', ['run', 'combat-catalog-storage:smoke']],
+  ['npm', ['run', 'combat-catalog-editor:smoke']],
+
   ['npm', ['run', 'physical-action-coordinator:smoke']],
-  ['npm', ['run', 'posture-transition:smoke']],
   ['npm', ['run', 'physical-movement:smoke']],
+  ['npm', ['run', 'posture-transition:smoke']],
+
+  ['npm', ['run', 'infantry-combat-single-shot:smoke']],
+  ['npm', ['run', 'infantry-combat-projectile:smoke']],
+  ['npm', ['run', 'infantry-combat-projectile:benchmark']],
+
+  ['npm', ['run', 'infantry-combat-stage5:smoke']],
+  ['npm', ['run', 'infantry-combat-stage5:forbidden-scan']],
+
+  ['npm', ['run', 'infantry-combat-stage6:smoke']],
+  ['npm', ['run', 'infantry-combat-stage6:forbidden-scan']],
+
+  ['npm', ['run', 'infantry-combat-stage7:smoke']],
+  ['npm', ['run', 'infantry-combat-stage7:forbidden-scan']],
+
   ['npm', ['run', 'infantry-combat-stage8:smoke']],
+  ['npm', ['run', 'infantry-combat-stage8:forbidden-scan']],
+  ['npm', ['run', 'infantry-combat-stage8:verify']],
+
   ['npm', ['run', 'infantry-combat-stage9:smoke']],
   ['npm', ['run', 'infantry-combat-stage9:forbidden-scan']],
+
+  ['npm', ['run', 'perception:smoke']],
   ['npm', ['run', 'typecheck']],
   ['npm', ['run', 'build']],
+
   ['node', ['--check', 'scripts/infantry_combat_stage9_smoke.mjs']],
   ['node', ['--check', 'scripts/infantry_combat_stage9_forbidden_scan.mjs']],
   ['node', ['--check', 'scripts/infantry_combat_stage9_verify.mjs']],
+
   ['git', ['diff', '--check', `${REQUIRED_BASE_SHA}...HEAD`]],
 ];
 
 console.log(`Node.js ${process.version}`);
+ensureVerificationHistory();
 for (const [command, args] of checks) runRequiredCheck(command, args);
 runPerformanceContractWithBaseComparison();
 verifyCleanTrackedTree();
 
 console.log(`Stage 9 verification passed on Node.js ${process.version}: ${checks.length + 2} required non-browser checks.`);
+
+function ensureVerificationHistory() {
+  const shallow = run('git', ['rev-parse', '--is-shallow-repository'], repoRoot);
+  const shallowOutput = combinedOutput(shallow);
+  if (shallow.error || shallow.status !== 0) {
+    fail('Stage 9 verification history preparation failed', shallowOutput);
+  }
+
+  const fetchArgs = shallowOutput.trim() === 'true'
+    ? ['fetch', '--no-tags', '--prune', '--unshallow', 'origin']
+    : ['fetch', '--no-tags', '--prune', 'origin'];
+  const fetch = run('git', fetchArgs, repoRoot);
+  if (fetch.error || fetch.status !== 0) {
+    fail('Stage 9 verification history preparation failed', combinedOutput(fetch));
+  }
+
+  const base = run('git', ['cat-file', '-e', `${REQUIRED_BASE_SHA}^{commit}`], repoRoot);
+  if (base.error || base.status !== 0) {
+    fail('Stage 9 verification history preparation failed', `Обязательный base SHA недоступен после fetch: ${REQUIRED_BASE_SHA}.\n${combinedOutput(base)}`);
+  }
+  console.log(workflowAnnotation('notice', 'Stage 9 verification', `PASS full git history and required base ${REQUIRED_BASE_SHA} available`));
+}
 
 function runRequiredCheck(command, args) {
   const label = [command, ...args].join(' ');
@@ -44,8 +91,6 @@ function runPerformanceContractWithBaseComparison() {
     console.log(workflowAnnotation('notice', 'Stage 9 verification', `PASS ${label}`));
     return;
   }
-  const fetch = run('git', ['fetch', '--no-tags', '--depth=1', 'origin', REQUIRED_BASE_SHA], repoRoot);
-  if (fetch.error || fetch.status !== 0) fail('Stage 9 performance baseline comparison failed', `Не удалось получить base SHA ${REQUIRED_BASE_SHA}.\n${combinedOutput(fetch)}`);
   rmSync(baseWorktree, { recursive: true, force: true });
   const addWorktree = run('git', ['worktree', 'add', '--detach', baseWorktree, REQUIRED_BASE_SHA], repoRoot);
   if (addWorktree.error || addWorktree.status !== 0) fail('Stage 9 performance baseline comparison failed', combinedOutput(addWorktree));
