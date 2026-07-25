@@ -84,9 +84,46 @@ function runRequiredCheck(command, args) {
   const label = [command, ...args].join(' ');
   const result = run(command, args, repoRoot);
   const output = combinedOutput(result);
-  if (result.error || result.status !== 0) fail('Stage 9 verification failed', `FAIL ${label}\n${tail(output, 12000)}`);
+  if (result.error || result.status !== 0) {
+    const compactFailure = label === 'npm run infantry-combat-projectile:benchmark'
+      ? compactProjectileBenchmarkFailure(output)
+      : null;
+    fail('Stage 9 verification failed', [
+      `FAIL ${label}`,
+      compactFailure ? `PROJECTILE_BENCHMARK_FAILURE_SUMMARY=${compactFailure}` : null,
+      tail(output, 12000),
+    ].filter(Boolean).join('\n'));
+  }
   report(`PASS ${label}: ${lastMeaningfulLine(output) || 'completed without output'}`);
   console.log(workflowAnnotation('notice', 'Stage 9 verification', `PASS ${label}: ${lastMeaningfulLine(output) || 'completed without output'}`));
+}
+
+function compactProjectileBenchmarkFailure(output) {
+  const startMarker = 'BEGIN_PROJECTILE_BENCHMARK_JSON';
+  const endMarker = 'END_PROJECTILE_BENCHMARK_JSON';
+  const start = output.lastIndexOf(startMarker);
+  const end = output.lastIndexOf(endMarker);
+  if (start < 0 || end <= start) return JSON.stringify({ parseError: 'benchmark JSON markers not found' });
+  try {
+    const benchmark = JSON.parse(output.slice(start + startMarker.length, end).trim());
+    return JSON.stringify({
+      pass: benchmark.pass,
+      failReasons: benchmark.failReasons,
+      directComparison: {
+        pass: benchmark.directComparison?.pass,
+        failReasons: benchmark.directComparison?.failReasons,
+        throughputRatioStage4OverStage3: benchmark.directComparison?.throughputRatioStage4OverStage3,
+        heapRatioStage4OverStage3: benchmark.directComparison?.heapRatioStage4OverStage3,
+        idleOverheadRatioStage4OverStage3: benchmark.directComparison?.idleComparison?.overheadRatioStage4OverStage3,
+        idleTimingGatePass: benchmark.directComparison?.idleComparison?.timingGatePass,
+        scratchAllocations: benchmark.directComparison?.stage4Production?.scratchAllocations,
+        poolResizes: benchmark.directComparison?.stage4Production?.poolResizes,
+      },
+      productionCapacitySweep: benchmark.capacitySweep?.find((entry) => entry.capacity === benchmark.productionCapacity) ?? null,
+    });
+  } catch (error) {
+    return JSON.stringify({ parseError: error instanceof Error ? error.message : String(error) });
+  }
 }
 
 function runPerformanceContractWithBaseComparison() {
