@@ -1,3 +1,5 @@
+import './editor-refinement';
+
 export {
   addNodeFromPalette,
   createDefaultParameters,
@@ -11,6 +13,11 @@ export {
   startDrag,
   toggleFavoriteNodeType,
 } from './main-ux';
+export {
+  getOutgoingDataConsumers,
+  removeAllOutgoingLinks,
+  removeOutgoingDataLink,
+} from './editor-refinement';
 export { createContractDefaultParameters } from '../core/ai/contracts/AiNodeContractRegistry';
 export { renderContractParameterFields, readContractParameterFields } from './node-contract-ui';
 
