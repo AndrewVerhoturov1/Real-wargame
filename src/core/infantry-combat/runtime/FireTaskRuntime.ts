@@ -1,20 +1,31 @@
 import type { UnitModel } from '../../units/UnitModel';
 import { getEffectiveCombatCapabilities } from './EffectiveCombatCapabilities';
 import {
+  requestFireTask as requestBaseFireTask,
   requestSingleFireTask as requestBaseSingleFireTask,
   tickFireTaskWithTimeBudget as tickBaseFireTaskWithTimeBudget,
   failActiveFireTask as failBaseActiveFireTask,
+  type RequestFireTaskInput,
+  type RequestFireTaskResult,
   type RequestSingleFireTaskInput,
   type RequestSingleFireTaskResult,
   type TickFireTaskInput,
   type TickFireTaskResult,
-} from './FireTaskRuntimeStage5';
+} from './FireTaskRuntimeStage8';
 
-export * from './FireTaskRuntimeStage5';
+export * from './FireTaskRuntimeStage8';
 
 const EPSILON = 1e-9;
 
-export type Stage6RequestSingleFireTaskResult = RequestSingleFireTaskResult | {
+export type Stage8RequestFireTaskResult = RequestFireTaskResult | {
+  readonly accepted: false;
+  readonly status: 'weapon_capability_lost';
+  readonly task: null;
+  readonly lease: null;
+  readonly reasonCode: 'infantry_fire_task_weapon_capability_lost';
+  readonly reasonRu: string;
+};
+export type Stage8RequestSingleFireTaskResult = RequestSingleFireTaskResult | {
   readonly accepted: false;
   readonly status: 'weapon_capability_lost';
   readonly task: null;
@@ -23,26 +34,25 @@ export type Stage6RequestSingleFireTaskResult = RequestSingleFireTaskResult | {
   readonly reasonRu: string;
 };
 
+export function requestFireTask(
+  unit: UnitModel,
+  input: RequestFireTaskInput,
+): Stage8RequestFireTaskResult {
+  if (!getEffectiveCombatCapabilities(unit).canUseWeapon) return capabilityRejected();
+  return requestBaseFireTask(unit, input);
+}
+
 export function requestSingleFireTask(
   unit: UnitModel,
   input: RequestSingleFireTaskInput,
-): Stage6RequestSingleFireTaskResult {
-  if (!getEffectiveCombatCapabilities(unit).canUseWeapon) {
-    return {
-      accepted: false,
-      status: 'weapon_capability_lost',
-      task: null,
-      lease: null,
-      reasonCode: 'infantry_fire_task_weapon_capability_lost',
-      reasonRu: 'Физическое состояние не позволяет бойцу пользоваться оружием.',
-    };
-  }
+): Stage8RequestSingleFireTaskResult {
+  if (!getEffectiveCombatCapabilities(unit).canUseWeapon) return capabilityRejected();
   return requestBaseSingleFireTask(unit, input);
 }
 
 /**
- * Keeps the Stage 5 clock intact, while stopping delegated slices at tracking
- * boundaries whenever Stage 7 fatigue or effective capabilities are non-neutral.
+ * Keeps the shared clock intact while stopping delegated slices at tracking
+ * boundaries whenever production fatigue or effective capabilities are active.
  */
 export function tickFireTaskWithTimeBudget(
   unit: UnitModel,
@@ -60,6 +70,7 @@ export function tickFireTaskWithTimeBudget(
     return {
       taskId: taskAtStart.taskId,
       commitRequested: false,
+      requestedShotOrdinal: null,
       completed: false,
       failed: true,
       consumedSeconds: 0,
@@ -79,6 +90,7 @@ export function tickFireTaskWithTimeBudget(
   let lastResult: TickFireTaskResult = {
     taskId: taskAtStart.taskId,
     commitRequested: false,
+    requestedShotOrdinal: null,
     completed: false,
     failed: false,
     consumedSeconds: 0,
@@ -86,7 +98,7 @@ export function tickFireTaskWithTimeBudget(
     reasonCode: null,
   };
 
-  for (let guard = 0; guard < 64; guard += 1) {
+  for (let guard = 0; guard < 128; guard += 1) {
     const task = unit.infantryCombatRuntime.activeFireTask;
     if (!task) return composeTickResult(lastResult, consumedSeconds, remainingSeconds);
     if (!getEffectiveCombatCapabilities(unit).canUseWeapon) {
@@ -98,6 +110,7 @@ export function tickFireTaskWithTimeBudget(
       return {
         taskId: task.taskId,
         commitRequested: false,
+        requestedShotOrdinal: null,
         completed: false,
         failed: true,
         consumedSeconds,
@@ -185,23 +198,20 @@ export function applyEffectiveAimCapabilities(unit: UnitModel): void {
 /** Stage 6 compatibility alias. */
 export const applyWoundAimCapabilities = applyEffectiveAimCapabilities;
 
-function composeTickResult(
-  result: TickFireTaskResult,
-  consumedSeconds: number,
-  remainingSeconds: number,
-): TickFireTaskResult {
+function capabilityRejected(): Stage8RequestFireTaskResult {
   return {
-    ...result,
-    consumedSeconds: cleanDuration(consumedSeconds),
-    remainingSeconds: cleanDuration(remainingSeconds),
+    accepted: false,
+    status: 'weapon_capability_lost',
+    task: null,
+    lease: null,
+    reasonCode: 'infantry_fire_task_weapon_capability_lost',
+    reasonRu: 'Физическое состояние не позволяет бойцу пользоваться оружием.',
   };
 }
+function composeTickResult(result: TickFireTaskResult, consumedSeconds: number, remainingSeconds: number): TickFireTaskResult {
+  return { ...result, consumedSeconds: cleanDuration(consumedSeconds), remainingSeconds: cleanDuration(remainingSeconds) };
+}
 function finiteNonNegative(value: number): number { return Number.isFinite(value) ? Math.max(0, value) : 0; }
-function cleanDuration(value: number): number {
-  if (Math.abs(value) <= EPSILON) return 0;
-  return Math.round(Math.max(0, value) * 1_000_000_000_000) / 1_000_000_000_000;
-}
+function cleanDuration(value: number): number { if (Math.abs(value) <= EPSILON) return 0; return Math.round(Math.max(0, value) * 1_000_000_000_000) / 1_000_000_000_000; }
 function clamp01(value: number): number { return clamp(value, 0, 1); }
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.max(minimum, Math.min(maximum, Number.isFinite(value) ? value : minimum));
-}
+function clamp(value: number, minimum: number, maximum: number): number { return Math.max(minimum, Math.min(maximum, Number.isFinite(value) ? value : minimum)); }
