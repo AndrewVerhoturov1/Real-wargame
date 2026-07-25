@@ -40,7 +40,7 @@ export function queueNearMissSuppressionForSegment(input: {
   readonly segmentDurationSeconds: number;
   readonly velocity: BallisticDirection3;
   readonly continuousFireScore: number;
-  readonly directHitUnitId: string | null;
+  readonly directHitUnitId: string | null | undefined;
   readonly maximumEvents: number;
 }): number {
   if (input.maximumEvents <= 0) return 0;
