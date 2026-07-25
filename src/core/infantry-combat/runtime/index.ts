@@ -16,6 +16,7 @@ export * from './ReloadWeaponAction';
 export * from './AmmoTransferAction';
 export * from './WeaponActionRuntime';
 export * from './Stage9ActionReconciliation';
+export * from './Stage9Diagnostics';
 export * from './MuzzleGeometry';
 export * from './FriendlyFireRisk';
 export * from './InfantryBodyTypes';
