@@ -85,7 +85,6 @@ function processSharedQuarterBoundary(
     advanceBloodRuntimeTo(blood, boundarySeconds);
     if (blood.state !== previousState) enforceEffectiveCombatCapabilities(unit, boundarySeconds);
   }
-
   for (const unit of units) {
     const fatigue = unit.infantryCombatRuntime.physiology.fatigue;
     if (fatigue.nextUpdateBoundarySeconds + TIME_EPSILON_SECONDS < boundarySeconds) {
@@ -93,9 +92,7 @@ function processSharedQuarterBoundary(
     }
     applyFatigueBoundary(fatigue, boundarySeconds);
   }
-
   tickFirstAidActionsAtBoundary(state, boundarySeconds);
-
   for (const unit of units) {
     refreshUnitBleedingRateAt(unit, boundarySeconds);
     enforceEffectiveCombatCapabilities(unit, boundarySeconds);
@@ -126,7 +123,7 @@ function sampleAllFatigueRates(state: SimulationState, units: readonly UnitModel
         ) * state.map.metersPerCell,
         referenceRunSpeedMetresPerSecond: FATIGUE_REFERENCE_RUN_SPEED_METRES_PER_SECOND,
         posture: unit.behaviorRuntime.posture,
-        isAiming: task?.phase === 'aiming',
+        isAiming: task?.phase === 'aiming' || task?.phase === 'firing',
         isApplyingFirstAid: unit.infantryCombatRuntime.medical.activeFirstAidAction !== null,
         isHeavyWeaponActive: false,
         isDeployActionActive: false,
@@ -153,20 +150,11 @@ function rebaseMissedFatigueBoundary(
   runtime.lastUpdateBoundarySeconds = canonicalSeconds(boundarySeconds - FATIGUE_UPDATE_INTERVAL_SECONDS);
   runtime.nextUpdateBoundarySeconds = canonicalSeconds(boundarySeconds);
 }
-
-function stableUnits(state: SimulationState): UnitModel[] {
-  return [...state.units].sort((left, right) => compareText(left.id, right.id));
-}
+function stableUnits(state: SimulationState): UnitModel[] { return [...state.units].sort((left, right) => compareText(left.id, right.id)); }
 function nextGlobalQuarterSecondAfter(seconds: number): number {
   const step = Math.floor(Math.max(0, seconds) / FATIGUE_UPDATE_INTERVAL_SECONDS + TIME_EPSILON_SECONDS) + 1;
   return canonicalSeconds(step * FATIGUE_UPDATE_INTERVAL_SECONDS);
 }
-function finiteNonNegative(value: number): number {
-  return Number.isFinite(value) ? Math.max(0, value) : 0;
-}
-function canonicalSeconds(value: number): number {
-  return Math.round(Math.max(0, value) * 1_000_000_000_000) / 1_000_000_000_000;
-}
-function compareText(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
+function finiteNonNegative(value: number): number { return Number.isFinite(value) ? Math.max(0, value) : 0; }
+function canonicalSeconds(value: number): number { return Math.round(Math.max(0, value) * 1_000_000_000_000) / 1_000_000_000_000; }
+function compareText(left: string, right: string): number { return left < right ? -1 : left > right ? 1 : 0; }
