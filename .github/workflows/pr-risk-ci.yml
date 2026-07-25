@@ -82,6 +82,14 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
+      - name: Upload exact benchmark source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage9-benchmark-source
+          path: scripts/infantry_combat_projectile_benchmark.ts
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
