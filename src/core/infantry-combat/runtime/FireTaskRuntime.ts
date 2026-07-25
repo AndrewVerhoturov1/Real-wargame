@@ -55,6 +55,7 @@ export function requestSingleFireTask(
   input: RequestSingleFireTaskInput,
 ): Stage9RequestSingleFireTaskResult {
   if (!getEffectiveCombatCapabilities(unit).canUseWeapon) return capabilityRejected();
+  if (input.mode !== undefined && input.mode !== 'single') return unsupportedSingleModeRejected();
   if (hasIncompatibleWeaponAction(unit)) return actionInProgressRejected();
   const normalized: RequestFireTaskInput = {
     owner: input.owner,
@@ -231,6 +232,9 @@ function hasIncompatibleWeaponAction(unit: UnitModel): boolean {
 }
 function capabilityRejected(): Stage9RequestFireTaskResult {
   return { accepted: false, status: 'weapon_capability_lost', task: null, lease: null, reasonCode: 'infantry_fire_task_weapon_capability_lost', reasonRu: 'Физическое состояние не позволяет бойцу пользоваться оружием.' };
+}
+function unsupportedSingleModeRejected(): RequestSingleFireTaskResult {
+  return { accepted: false, status: 'unsupported_mode', task: null, lease: null, reasonCode: 'infantry_fire_task_unsupported_mode', reasonRu: 'Одиночная огневая задача не поддерживает запрошенный режим огня.' };
 }
 function actionInProgressRejected(): Stage9RequestFireTaskResult {
   return { accepted: false, status: 'weapon_action_in_progress', task: null, lease: null, reasonCode: 'weapon_action_in_progress', reasonRu: 'Стрельба недоступна, пока выполняется другое действие оружия.' };
