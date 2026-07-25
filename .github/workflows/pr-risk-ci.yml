@@ -184,6 +184,15 @@ jobs:
         if: needs.classify.outputs.needs_build == 'true'
         run: npm run build
 
+      - name: Upload Stage 9 verification diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage9-verification-diagnostics
+          path: ${{ runner.temp }}/stage9-verification-report.txt
+          if-no-files-found: ignore
+          retention-days: 3
+
   decision:
     name: Risk decision and evidence validity
     if: always()
