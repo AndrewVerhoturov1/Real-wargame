@@ -95,7 +95,7 @@ export function advanceSuppressionRuntimeTo(
 ): void {
   const target = canonicalSeconds(Math.max(runtime.lastExposureSeconds, finiteNonNegative(targetSeconds, runtime.lastExposureSeconds)));
   let guard = 0;
-  while (runtime.nextUpdateBoundarySeconds <= target + TIME_EPSILON_SECONDS) {
+  while (runtime.nextUpdateBoundarySeconds <= target) {
     applyDecay(runtime, runtime.nextUpdateBoundarySeconds - runtime.lastExposureSeconds, runtime.nextUpdateBoundarySeconds);
     runtime.lastExposureSeconds = runtime.nextUpdateBoundarySeconds;
     commitPendingWindow(runtime);
