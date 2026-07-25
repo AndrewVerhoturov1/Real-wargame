@@ -1,4 +1,5 @@
 import type { UnitModel } from '../../units/UnitModel';
+import { getEffectiveCombatCapabilities } from './EffectiveCombatCapabilities';
 import {
   commitShot as commitBaseShot,
   type CommitShotInput,
@@ -8,7 +9,7 @@ import {
 export * from './ShotCommitServiceStage5';
 
 export function commitShot(input: CommitShotInput): CommitShotResult {
-  if (!input.shooter.infantryCombatRuntime.wounds.capabilities.canUseWeapon) {
+  if (!getEffectiveCombatCapabilities(input.shooter).canUseWeapon) {
     return recordWeaponCapabilityFailure(input.shooter, input.weapon.roundsInWeapon);
   }
   return commitBaseShot(input);
@@ -17,7 +18,7 @@ export function commitShot(input: CommitShotInput): CommitShotResult {
 function recordWeaponCapabilityFailure(shooter: UnitModel, rounds: number): CommitShotResult {
   const result: CommitShotResult = {
     status: 'weapon_capability_lost',
-    reasonRu: 'Одиночный выстрел отклонён: ранение не позволяет пользоваться оружием.',
+    reasonRu: 'Одиночный выстрел отклонён: физическое состояние не позволяет пользоваться оружием.',
     shotId: null,
     projectileId: null,
     muzzlePosition: null,

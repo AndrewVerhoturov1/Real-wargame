@@ -1,9 +1,9 @@
 import type { BallisticDirection3, BallisticPoint3, HitZone } from '../../combat/UnitHitShapes';
 
-export const UNIT_WOUND_RUNTIME_SCHEMA_VERSION = 1 as const;
+export const UNIT_WOUND_RUNTIME_SCHEMA_VERSION = 2 as const;
 export const BODY_IMPACT_PHYSICS_SCHEMA_VERSION = 1 as const;
 export const WOUND_CANDIDATE_SCHEMA_VERSION = 1 as const;
-export const WOUND_SLOT_SCHEMA_VERSION = 1 as const;
+export const WOUND_SLOT_SCHEMA_VERSION = 2 as const;
 export const MAX_WOUND_SLOTS = 4;
 export const MAX_APPLIED_WOUND_IMPACT_IDS = 128;
 
@@ -13,6 +13,7 @@ export const HIT_ZONE_CANONICAL_ORDER: readonly HitZone[] = Object.freeze([
 
 export type BodyPenetrationStatus = 'penetrated' | 'stopped' | 'penetration_limit';
 export type WoundSeverity = 'light' | 'severe' | 'critical';
+export type WoundBleedingState = 'none' | 'severe' | 'critical' | 'stopped';
 
 export interface BodyImpactPhysicsV1 {
   readonly schemaVersion: typeof BODY_IMPACT_PHYSICS_SCHEMA_VERSION;
@@ -65,19 +66,28 @@ export interface UnitCombatCapabilitiesV1 {
   readonly accuracyMultiplier: number;
 }
 
-export interface WoundSlotV1 {
+export interface WoundSlotV2 {
   readonly schemaVersion: typeof WOUND_SLOT_SCHEMA_VERSION;
   readonly zone: HitZone;
+  /** Permanent structural damage. First aid must never lower this value. */
   severity: WoundSeverity;
-  hitCount: number;
+  /** Treatable bleeding state, kept separate from structural severity. */
+  bleedingState: WoundBleedingState;
   bleedingRatePerSecond: number;
+  hitCount: number;
   maximumTraumaScore: number;
   lastImpactEnergyJoules: number;
   firstImpactId: string;
   lastImpactId: string;
   firstAppliedSeconds: number;
   lastAppliedSeconds: number;
+  firstAidApplicationCount: number;
+  lastFirstAidActionId: string | null;
+  lastTreatedSeconds: number | null;
 }
+
+/** Compatibility name retained for Stage 6 consumers while the persisted slot is V2. */
+export type WoundSlotV1 = WoundSlotV2;
 
 export type WoundApplicationReason =
   | 'applied'
@@ -101,14 +111,17 @@ export interface WoundApplicationResultV1 {
   readonly appliedSeconds: number;
 }
 
-export interface UnitWoundRuntimeV1 {
+export interface UnitWoundRuntimeV2 {
   readonly schemaVersion: typeof UNIT_WOUND_RUNTIME_SCHEMA_VERSION;
-  slots: WoundSlotV1[];
+  slots: WoundSlotV2[];
   appliedImpactIds: string[];
   capabilities: UnitCombatCapabilitiesV1;
   lastApplication: WoundApplicationResultV1 | null;
   revision: number;
 }
+
+/** Compatibility name retained for existing public imports; its persisted schema is V2. */
+export type UnitWoundRuntimeV1 = UnitWoundRuntimeV2;
 
 export function compareHitZones(left: HitZone, right: HitZone): number {
   return HIT_ZONE_CANONICAL_ORDER.indexOf(left) - HIT_ZONE_CANONICAL_ORDER.indexOf(right);
@@ -120,6 +133,10 @@ export function isHitZone(value: unknown): value is HitZone {
 
 export function isWoundSeverity(value: unknown): value is WoundSeverity {
   return value === 'light' || value === 'severe' || value === 'critical';
+}
+
+export function isWoundBleedingState(value: unknown): value is WoundBleedingState {
+  return value === 'none' || value === 'severe' || value === 'critical' || value === 'stopped';
 }
 
 export function woundSeverityIndex(value: WoundSeverity): number {

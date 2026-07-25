@@ -9,6 +9,16 @@ import {
   serializeFireTaskRuntime,
 } from './FireTaskRuntime';
 import { createUnitWoundRuntime, normalizeUnitWoundRuntime, serializeUnitWoundRuntime } from './WoundRuntime';
+import {
+  createUnitPhysiologyRuntime,
+  normalizeUnitPhysiologyRuntime,
+  serializeUnitPhysiologyRuntime,
+} from './InfantryPhysiologyRuntime';
+import {
+  createUnitMedicalRuntime,
+  normalizeUnitMedicalRuntime,
+  serializeUnitMedicalRuntime,
+} from './FirstAidRuntime';
 
 const DIRECTION_MAGNITUDE_EPSILON = 1e-9;
 const UNIT_DIRECTION_MAGNITUDE_TOLERANCE = 1e-12;
@@ -22,11 +32,15 @@ export function createInfantryCombatUnitRuntime(): InfantryCombatUnitRuntimeV1 {
     lastFireResult: null,
     lastShotCommit: null,
     wounds: createUnitWoundRuntime(),
+    physiology: createUnitPhysiologyRuntime(),
+    medical: createUnitMedicalRuntime(),
   };
 }
 
 export function normalizeInfantryCombatUnitRuntime(value: unknown): InfantryCombatUnitRuntimeV1 {
-  if (!isRecord(value) || value.schemaVersion !== INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION) return createInfantryCombatUnitRuntime();
+  if (!isRecord(value) || (value.schemaVersion !== 1 && value.schemaVersion !== INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION)) {
+    return createInfantryCombatUnitRuntime();
+  }
   return {
     schemaVersion: INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION,
     nextFireTaskSequence: integer(value.nextFireTaskSequence, 1, 1, Number.MAX_SAFE_INTEGER),
@@ -35,6 +49,8 @@ export function normalizeInfantryCombatUnitRuntime(value: unknown): InfantryComb
     lastFireResult: normalizeFireTaskTerminalResult(value.lastFireResult),
     lastShotCommit: normalizeShotCommitDiagnostic(value.lastShotCommit),
     wounds: normalizeUnitWoundRuntime(value.wounds),
+    physiology: normalizeUnitPhysiologyRuntime(value.physiology),
+    medical: normalizeUnitMedicalRuntime(value.medical),
   };
 }
 
@@ -47,6 +63,8 @@ export function serializeInfantryCombatUnitRuntime(value: InfantryCombatUnitRunt
     lastFireResult: value.lastFireResult ? structuredClone(value.lastFireResult) : null,
     lastShotCommit: value.lastShotCommit ? structuredClone(value.lastShotCommit) : null,
     wounds: serializeUnitWoundRuntime(value.wounds ?? createUnitWoundRuntime()),
+    physiology: serializeUnitPhysiologyRuntime(value.physiology ?? createUnitPhysiologyRuntime()),
+    medical: serializeUnitMedicalRuntime(value.medical ?? createUnitMedicalRuntime()),
   };
 }
 

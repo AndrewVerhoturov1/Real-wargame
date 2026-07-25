@@ -9,8 +9,9 @@ import type {
   WeaponProficiency,
 } from '../catalogs/CombatCatalogTypes';
 import type { UnitWoundRuntimeV1 } from './InfantryBodyTypes';
+import type { UnitMedicalRuntimeV1, UnitPhysiologyRuntimeV1 } from './PhysiologyTypes';
 
-export const INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION = 1 as const;
+export const INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION = 2 as const;
 export const INFANTRY_WEAPON_INSTANCE_SCHEMA_VERSION = 1 as const;
 export const FIRE_TASK_RUNTIME_SCHEMA_VERSION = 1 as const;
 export const AIM_TRACKING_RUNTIME_SCHEMA_VERSION = 1 as const;
@@ -152,4 +153,6 @@ export interface InfantryCombatUnitRuntimeV1 {
   lastFireResult: FireTaskTerminalResultV1 | null;
   lastShotCommit: ShotCommitDiagnosticV1 | null;
   wounds: UnitWoundRuntimeV1;
+  physiology: UnitPhysiologyRuntimeV1;
+  medical: UnitMedicalRuntimeV1;
 }

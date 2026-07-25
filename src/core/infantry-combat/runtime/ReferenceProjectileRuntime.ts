@@ -10,6 +10,8 @@ import {
   serializeProjectileRuntimeState,
 } from './ProjectileRuntime';
 
+const UNIT_DIRECTION_MAGNITUDE_TOLERANCE = 1e-12;
+
 /** Stage 3 compatibility name backed by the Stage 4 pooled runtime. */
 export function createReferenceProjectileRuntimeState(): ProjectileRuntimeStateV2 {
   return createProjectileRuntimeState();
@@ -17,8 +19,10 @@ export function createReferenceProjectileRuntimeState(): ProjectileRuntimeStateV
 
 /** Stage 5 compatibility boundary preserving optional direction diagnostics from V2 saves. */
 export function normalizeReferenceProjectileRuntimeState(value: unknown): ProjectileRuntimeStateV2 {
-  const normalized = normalizeProjectileRuntimeState(value);
+  // Capture the extended Stage 5 fields before the core normalizer replaces the
+  // committed-shot array with canonical Stage 3 records on mutable V3 runtimes.
   const rawRecords = readCommitRecords(value);
+  const normalized = normalizeProjectileRuntimeState(value);
   if (rawRecords.size === 0) return normalized;
   normalized.committedShots = normalized.committedShots.map((record) => {
     const raw = rawRecords.get(record.shotId);
@@ -81,6 +85,7 @@ function direction(value: unknown): { x: number; y: number; z: number } | null {
   if (x === null || y === null || z === null) return null;
   const magnitude = Math.hypot(x, y, z);
   if (magnitude <= 1e-9) return null;
+  if (Math.abs(magnitude - 1) <= UNIT_DIRECTION_MAGNITUDE_TOLERANCE) return { x, y, z };
   return { x: x / magnitude, y: y / magnitude, z: z / magnitude };
 }
 

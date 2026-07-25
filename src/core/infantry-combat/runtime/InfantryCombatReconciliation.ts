@@ -1,8 +1,18 @@
+import { reconcilePhysicalActionCoordinatorState } from '../../actions/PhysicalActionCoordinatorReconciliation';
 import { getCombatUnitSpatialIndex } from '../../combat/CombatUnitSpatialIndex';
 import { normalizeDirection } from '../../combat/UnitHitShapes';
 import type { SimulationState } from '../../simulation/SimulationState';
 import type { UnitModel } from '../../units/UnitModel';
+import { advanceBloodRuntimeTo, refreshUnitBleedingRateAt } from './BloodLossRuntime';
+import {
+  FATIGUE_UPDATE_INTERVAL_SECONDS,
+} from './FatigueRuntime';
+import {
+  cancelActiveFirstAidAction,
+  normalizeUnitMedicalRuntime,
+} from './FirstAidRuntime';
 import { beginFireTaskRecovery, failActiveFireTask } from './FireTaskRuntime';
+import { normalizeUnitPhysiologyRuntime } from './InfantryPhysiologyRuntime';
 import {
   MAX_STAGE3_ACTIVE_PROJECTILES,
   MAX_STAGE3_APPLIED_IMPACT_IDS,
@@ -17,7 +27,10 @@ import {
 } from './ProjectileRuntimeTypes';
 import { normalizeReferenceProjectileRuntimeState } from './ReferenceProjectileRuntime';
 import { MAX_APPLIED_WOUND_IMPACT_IDS } from './InfantryBodyTypes';
-import { applyProjectileImpactWound, enforceWoundCapabilities } from './WoundImpactApplication';
+import { FIRST_AID_ACTION_TYPE } from './PhysiologyTypes';
+import { applyProjectileImpactWound, enforceEffectiveCombatCapabilities } from './WoundImpactApplication';
+
+const TIME_EPSILON_SECONDS = 1e-9;
 
 /** Deterministic, idempotent repair invoked once after a scene load. */
 export function reconcileInfantryCombatRuntimeAfterLoad(state: SimulationState): void {
@@ -39,6 +52,8 @@ export function reconcileInfantryCombatRuntimeAfterLoad(state: SimulationState):
   ])].sort(compareText).slice(-MAX_STAGE3_APPLIED_IMPACT_IDS);
 
   const units = [...state.units].sort(compareUnits);
+  for (const unit of units) reconcilePhysiologyAndMedical(state, unit);
+
   const taskByCommittedShotId = new Map<string, UnitModel>();
   for (const unit of units) {
     const task = unit.infantryCombatRuntime.activeFireTask;
@@ -80,7 +95,80 @@ export function reconcileInfantryCombatRuntimeAfterLoad(state: SimulationState):
   for (const impact of recentRepairableBodyImpacts(runtime.impacts)) {
     applyProjectileImpactWound(impact, unitIndex);
   }
-  for (const unit of units) enforceWoundCapabilities(unit, state.simulationTimeSeconds);
+  for (const unit of units) {
+    refreshUnitBleedingRateAt(unit, state.simulationTimeSeconds);
+    enforceEffectiveCombatCapabilities(unit, state.simulationTimeSeconds);
+  }
+}
+
+function reconcilePhysiologyAndMedical(state: SimulationState, unit: UnitModel): void {
+  const now = canonicalSeconds(state.simulationTimeSeconds);
+  unit.infantryCombatRuntime.physiology = normalizeUnitPhysiologyRuntime(
+    unit.infantryCombatRuntime.physiology,
+    now,
+  );
+  unit.infantryCombatRuntime.medical = normalizeUnitMedicalRuntime(unit.infantryCombatRuntime.medical);
+
+  const blood = unit.infantryCombatRuntime.physiology.blood;
+  const pristineLegacyBlood = blood.updateCount === 0
+    && blood.bloodLoss === 0
+    && blood.pendingBloodLoss === 0
+    && blood.currentBleedingRatePerSecond === 0
+    && blood.lastExposureSeconds <= TIME_EPSILON_SECONDS;
+  if (pristineLegacyBlood && now > TIME_EPSILON_SECONDS) {
+    blood.lastExposureSeconds = now;
+    blood.lastUpdateBoundarySeconds = null;
+    blood.nextUpdateBoundarySeconds = nextWholeSecondAfter(now);
+  } else {
+    advanceBloodRuntimeTo(blood, now);
+  }
+
+  const fatigue = unit.infantryCombatRuntime.physiology.fatigue;
+  if (fatigue.lastUpdateBoundarySeconds === null
+    && fatigue.updateCount === 0
+    && fatigue.nextUpdateBoundarySeconds <= now + TIME_EPSILON_SECONDS) {
+    fatigue.nextUpdateBoundarySeconds = nextQuarterSecondAfter(now);
+  }
+
+  const action = unit.infantryCombatRuntime.medical.activeFirstAidAction;
+  if (!action) return;
+  if (unit.infantryCombatRuntime.medical.appliedFirstAidActionIds.includes(action.actionId)) {
+    cancelActiveFirstAidAction(
+      unit,
+      now,
+      'infantry_first_aid_reconciliation_already_applied',
+      'Первая помощь не восстановлена: её результат уже применён.',
+    );
+    return;
+  }
+  const sequence = action.actionHandle?.sequence
+    ?? Math.max(1, unit.behaviorRuntime.physicalActionCoordinator.nextSequence);
+  const coordinatorActionId = action.actionHandle?.actionId
+    ?? `${unit.id}:physical-action:${sequence}`;
+  const result = reconcilePhysicalActionCoordinatorState(unit, {
+    actions: [{
+      payload: action,
+      actionId: coordinatorActionId,
+      sequence,
+      actionType: FIRST_AID_ACTION_TYPE,
+      owner: action.owner,
+      ownerToken: action.ownerToken,
+      channels: ['locomotion', 'weapon'],
+      startedSeconds: action.startedSeconds,
+      reasonCode: 'infantry_first_aid_restored',
+      reasonRu: 'Оказание первой помощи восстановлено.',
+    }],
+    knownActionTypes: [FIRST_AID_ACTION_TYPE],
+    reconciledSeconds: now,
+  });
+  if (result.blockedActionIds.includes(coordinatorActionId) || !action.actionHandle) {
+    cancelActiveFirstAidAction(
+      unit,
+      now,
+      'infantry_first_aid_reconciliation_blocked',
+      'Первая помощь не восстановлена из-за конфликта физических каналов.',
+    );
+  }
 }
 
 function recentRepairableBodyImpacts(
@@ -204,6 +292,13 @@ function uniqueBy<T>(values: readonly T[], key: (value: T) => string): T[] {
     result.push(structuredClone(value));
   }
   return result;
+}
+function nextWholeSecondAfter(seconds: number): number {
+  return canonicalSeconds(Math.floor(Math.max(0, seconds) + TIME_EPSILON_SECONDS) + 1);
+}
+function nextQuarterSecondAfter(seconds: number): number {
+  const step = Math.floor(Math.max(0, seconds) / FATIGUE_UPDATE_INTERVAL_SECONDS + TIME_EPSILON_SECONDS) + 1;
+  return canonicalSeconds(step * FATIGUE_UPDATE_INTERVAL_SECONDS);
 }
 function compareUnits(left: UnitModel, right: UnitModel): number { return compareText(left.id, right.id); }
 function compareProjectiles(left: ProjectileStateV1, right: ProjectileStateV1): number { return compareText(left.projectileId, right.projectileId); }

@@ -9,6 +9,7 @@ import type {
   WeaponProficiency,
 } from '../catalogs/CombatCatalogTypes';
 import { createWeaponRecoilRuntime, normalizeWeaponRecoilRuntime } from './AimRuntime';
+import { initializeUnitMedicalInventory } from './FirstAidRuntime';
 import {
   INFANTRY_WEAPON_INSTANCE_SCHEMA_VERSION,
   WEAPON_OPERATOR_PROFILE_SCHEMA_VERSION,
@@ -82,6 +83,7 @@ export function equipPrimaryWeaponFromLoadout(
     lastCommittedShotId: null,
   };
   unit.infantryCombatRuntime.primaryWeapon = instance;
+  initializeUnitMedicalInventory(unit, loadoutRef, loadout.firstAidCharges);
   return {
     ok: true,
     status: 'equipped',
