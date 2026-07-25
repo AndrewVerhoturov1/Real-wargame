@@ -1,6 +1,10 @@
 import type { UnitModel } from '../../units/UnitModel';
 import { getEffectiveCombatCapabilities } from './EffectiveCombatCapabilities';
 import {
+  beginAmmoExhaustedRecovery,
+  beginCompletedBurstRecovery,
+} from './FireTaskRuntime';
+import {
   commitShot as commitBaseShot,
   type CommitShotInput,
   type CommitShotResult,
@@ -12,7 +16,18 @@ export function commitShot(input: CommitShotInput): CommitShotResult {
   if (!getEffectiveCombatCapabilities(input.shooter).canUseWeapon) {
     return recordWeaponCapabilityFailure(input.shooter, input.weapon.roundsInWeapon);
   }
-  return commitBaseShot(input);
+  const result = commitBaseShot(input);
+  if (result.status === 'committed') {
+    const task = input.shooter.infantryCombatRuntime.activeFireTask;
+    if (task === input.task && task.phase === 'firing') {
+      if (task.nextShotOrdinal >= task.plannedRoundCount) {
+        beginCompletedBurstRecovery(input.shooter, input.committedSeconds);
+      } else if (input.weapon.roundsInWeapon <= 0) {
+        beginAmmoExhaustedRecovery(input.shooter, input.committedSeconds);
+      }
+    }
+  }
+  return result;
 }
 
 function recordWeaponCapabilityFailure(shooter: UnitModel, rounds: number): CommitShotResult {
