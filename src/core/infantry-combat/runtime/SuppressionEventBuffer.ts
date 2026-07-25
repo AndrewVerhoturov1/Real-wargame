@@ -1,46 +1,20 @@
-import {
-  createCombatUnitSpatialQueryScratch,
-  type CombatUnitIndex,
-  type CombatUnitSpatialQueryScratch,
-} from '../../combat/CombatUnitSpatialIndex';
-import type { UnitModel } from '../../units/UnitModel';
+import type { CombatUnitIndex } from '../../combat/CombatUnitSpatialIndex';
 import { addSuppressionEvent } from './SuppressionRuntime';
+import type { SuppressionEventV1 } from './SuppressionTypes';
 import {
-  SUPPRESSION_EVENT_BUFFER_MULTIPLIER,
-  type SuppressionEventV1,
-} from './SuppressionTypes';
-import { clearEventPrefix, sortPrefix } from './ProjectileStepperSupport';
+  clearEventPrefix,
+  getScratch,
+  sortPrefix,
+  type SuppressionEventBufferScratchV1,
+} from './ProjectileStepperSupport';
 import type { ProjectileRuntimeStateV3 } from './ProjectileRuntimeTypes';
 
-export interface SuppressionEventBufferScratchV1 {
-  readonly events: Array<SuppressionEventV1 | null>;
-  count: number;
-  readonly queuedEventIds: Set<string>;
-  readonly unitCandidates: UnitModel[];
-  readonly unitQueryScratch: CombatUnitSpatialQueryScratch;
-  readonly pointGrid: { x: number; y: number };
-}
-
-const scratchByRuntime = new WeakMap<ProjectileRuntimeStateV3, SuppressionEventBufferScratchV1>();
+export type { SuppressionEventBufferScratchV1 } from './ProjectileStepperSupport';
 
 export function getSuppressionEventBufferScratch(
   runtime: ProjectileRuntimeStateV3,
 ): SuppressionEventBufferScratchV1 {
-  let scratch = scratchByRuntime.get(runtime);
-  if (scratch) return scratch;
-  const capacity = runtime.pool.capacity * SUPPRESSION_EVENT_BUFFER_MULTIPLIER;
-  scratch = {
-    events: Array<SuppressionEventV1 | null>(capacity).fill(null),
-    count: 0,
-    queuedEventIds: new Set<string>(),
-    unitCandidates: [],
-    unitQueryScratch: createCombatUnitSpatialQueryScratch(),
-    pointGrid: { x: 0, y: 0 },
-  };
-  scratchByRuntime.set(runtime, scratch);
-  runtime.diagnostics.suppressionEventBufferCapacity = capacity;
-  runtime.diagnostics.scratchAllocationCount += 1;
-  return scratch;
+  return getScratch(runtime).suppression;
 }
 
 export function beginSuppressionEventSubstep(runtime: ProjectileRuntimeStateV3): void {
@@ -53,7 +27,7 @@ export function beginSuppressionEventSubstep(runtime: ProjectileRuntimeStateV3):
 export function queueSuppressionEvent(
   runtime: ProjectileRuntimeStateV3,
   event: SuppressionEventV1,
-  affectedUnit: UnitModel,
+  affectedUnit: import('../../units/UnitModel').UnitModel,
 ): boolean {
   const scratch = getSuppressionEventBufferScratch(runtime);
   if (
