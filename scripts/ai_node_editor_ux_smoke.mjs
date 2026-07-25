@@ -99,7 +99,9 @@ for (const needle of [
   'outgoing-link-menu',
   'inspector-save-bridge',
   'Сохранить ноду',
-  "data-menu-action=\"unlink-outgoing\"",
+  'data-menu-action="unlink-outgoing"',
+  "main.style.setProperty('grid-template-columns'",
+  'positionPanelResizers',
 ]) expectContains(refinement, needle, `Слой доработки редактора должен содержать: ${needle}`);
 
 for (const needle of [
@@ -108,6 +110,7 @@ for (const needle of [
   'var(--palette-width, 228px)',
   'var(--inspector-width, 300px)',
   '.panel-resizer',
+  'width: 18px',
   '[data-resize-panel="palette"]',
   '[data-resize-panel="inspector"]',
   '.palette-filter-select',
@@ -119,6 +122,8 @@ for (const needle of [
   '.refined-inspector-danger',
 ]) expectContains(refinementCss, needle, `Стили доработки редактора должны содержать: ${needle}`);
 
+expectNotContains(refinementCss, 'right: -4px', 'Зона захвата палитры не должна быть наполовину обрезана панелью.');
+expectNotContains(refinementCss, 'left: -4px', 'Зона захвата инспектора не должна быть наполовину обрезана панелью.');
 expectContains(humanUi, 'human-save-node', 'Единый человеческий интерфейс должен сохранять ноду одной кнопкой.');
 expectNotContains(css, 'calc(100vh - 90px)', 'Компактная раскладка не должна терять 90 пикселей на двухрядное меню.');
 
