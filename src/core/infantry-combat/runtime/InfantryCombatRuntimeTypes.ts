@@ -9,13 +9,15 @@ import type {
   WeaponDefinitionV1,
   WeaponProficiency,
 } from '../catalogs/CombatCatalogTypes';
+import type { AmmoInventoryRuntimeV1 } from './AmmoInventoryTypes';
 import type { AutomaticFireCadenceRuntimeV1 } from './AutomaticFireRuntime';
 import type { UnitWoundRuntimeV1 } from './InfantryBodyTypes';
 import type { UnitMedicalRuntimeV1, UnitPhysiologyRuntimeV1 } from './PhysiologyTypes';
 import type { UnitSuppressionRuntimeV1 } from './SuppressionTypes';
+import type { WeaponDeploymentRuntimeV1 } from './WeaponDeploymentTypes';
 
-export const INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION = 2 as const;
-export const INFANTRY_WEAPON_INSTANCE_SCHEMA_VERSION = 2 as const;
+export const INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION = 3 as const;
+export const INFANTRY_WEAPON_INSTANCE_SCHEMA_VERSION = 3 as const;
 export const FIRE_TASK_RUNTIME_SCHEMA_VERSION = 2 as const;
 export const AIM_TRACKING_RUNTIME_SCHEMA_VERSION = 1 as const;
 export const AIM_SOLUTION_RUNTIME_SCHEMA_VERSION = 1 as const;
@@ -33,13 +35,14 @@ export interface ResolvedWeaponSnapshotV1 {
 export interface WeaponOperatorProfileV1 { readonly schemaVersion: typeof WEAPON_OPERATOR_PROFILE_SCHEMA_VERSION; readonly shootingSkill: number; readonly proficiencyByWeaponClass: Readonly<Record<WeaponClass, WeaponProficiency>>; }
 export interface WeaponRecoilRuntimeV1 { readonly schemaVersion: typeof WEAPON_RECOIL_RUNTIME_SCHEMA_VERSION; pitchOffsetRadians: number; yawOffsetRadians: number; lastUpdatedSeconds: number; sequence: number; }
 export interface InfantryWeaponInstanceV1 {
-  readonly schemaVersion: 1 | typeof INFANTRY_WEAPON_INSTANCE_SCHEMA_VERSION;
+  readonly schemaVersion: 1 | 2 | typeof INFANTRY_WEAPON_INSTANCE_SCHEMA_VERSION;
   readonly weaponInstanceId: string;
   readonly slot: 'primary';
   readonly resolved: ResolvedWeaponSnapshotV1;
   readonly operatorProfile: WeaponOperatorProfileV1;
   recoil: WeaponRecoilRuntimeV1;
   automaticFire: AutomaticFireCadenceRuntimeV1;
+  deployment: WeaponDeploymentRuntimeV1;
   roundsInWeapon: number;
   shotSequence: number;
   lastCommittedShotId: string | null;
@@ -155,8 +158,10 @@ export interface FireTaskRuntimeV1 {
 }
 export type ShotCommitStatus =
   | 'committed' | 'already_committed' | 'task_not_firing' | 'ownership_lost'
-  | 'weapon_missing' | 'weapon_capability_lost' | 'unsupported_mode' | 'empty_weapon'
+  | 'weapon_missing' | 'weapon_capability_lost' | 'weapon_action_in_progress'
+  | 'unsupported_mode' | 'empty_weapon'
   | 'aim_solution_invalid' | 'aim_solution_below_threshold' | 'movement_forbidden'
+  | 'deployed_traverse_exceeded'
   | 'cadence_wait' | 'ordinal_mismatch'
   | 'muzzle_blocked' | 'friendly_risk_exceeded' | 'projectile_capacity_exceeded'
   | 'duplicate_projectile_id' | 'invalid_projectile_candidate' | 'invalid_target';
@@ -184,6 +189,7 @@ export interface InfantryCombatUnitRuntimeV1 {
   activeFireTask: FireTaskRuntimeV1 | null;
   lastFireResult: FireTaskTerminalResultV1 | null;
   lastShotCommit: ShotCommitDiagnosticV1 | null;
+  ammoInventory: AmmoInventoryRuntimeV1;
   wounds: UnitWoundRuntimeV1;
   physiology: UnitPhysiologyRuntimeV1;
   medical: UnitMedicalRuntimeV1;
