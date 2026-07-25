@@ -127,7 +127,6 @@ function reconcileUnitPersistentState(state: SimulationState, unit: UnitModel): 
     now,
   );
   advanceSuppressionRuntimeTo(unit.infantryCombatRuntime.suppression, now);
-
   const blood = unit.infantryCombatRuntime.physiology.blood;
   const pristineLegacyBlood = blood.updateCount === 0
     && blood.bloodLoss === 0
@@ -215,6 +214,7 @@ function reconcileCommittedTask(state: SimulationState, unit: UnitModel): void {
   const runtime = state.infantryCombatProjectiles;
   const recordsByShotId = new Map(runtime.committedShots.map((record) => [record.shotId, record]));
   let latestCommittedSeconds = task.lastShotCommittedSeconds ?? task.phaseStartedSeconds;
+  let latestCommitRecord: ShotCommitRecordV1 | null = null;
 
   for (const committed of [...task.committedShots].sort((left, right) => left.ordinal - right.ordinal)) {
     const record = recordsByShotId.get(committed.shotId);
@@ -227,6 +227,7 @@ function reconcileCommittedTask(state: SimulationState, unit: UnitModel): void {
       return;
     }
     latestCommittedSeconds = Math.max(latestCommittedSeconds, record.committedSimulationSeconds);
+    latestCommitRecord = record;
     const hasOutcome = hasRecordedOutcome(runtime, committed.shotId);
     const hasActiveProjectile = runtime.activeProjectiles.some((projectile) => projectile.shotId === committed.shotId);
     if (!hasOutcome && !hasActiveProjectile) {
@@ -239,7 +240,11 @@ function reconcileCommittedTask(state: SimulationState, unit: UnitModel): void {
     }
   }
 
-  repairWeaponCadenceFromTask(unit, latestCommittedSeconds);
+  repairWeaponCadenceFromTask(
+    unit,
+    latestCommittedSeconds,
+    latestCommitRecord?.suppressionContinuousFireScore ?? null,
+  );
   if (task.phase !== 'firing') return;
   if (task.nextShotOrdinal >= task.plannedRoundCount) {
     beginCompletedBurstRecovery(unit, Math.max(state.simulationTimeSeconds, latestCommittedSeconds));
@@ -256,7 +261,11 @@ function reconcileCommittedTask(state: SimulationState, unit: UnitModel): void {
   ));
 }
 
-function repairWeaponCadenceFromTask(unit: UnitModel, latestCommittedSeconds: number): void {
+function repairWeaponCadenceFromTask(
+  unit: UnitModel,
+  latestCommittedSeconds: number,
+  latestContinuousFireScore: number | null,
+): void {
   const weapon = unit.infantryCombatRuntime.primaryWeapon;
   const task = unit.infantryCombatRuntime.activeFireTask;
   if (!weapon || !task || task.committedShots.length === 0) return;
@@ -270,10 +279,12 @@ function repairWeaponCadenceFromTask(unit: UnitModel, latestCommittedSeconds: nu
     weapon.automaticFire.nextShotAllowedSeconds,
     latestCommittedSeconds + interval,
   ));
-  const score = task.committedShots.length > 0
-    ? Math.min(1, Math.max(weapon.automaticFire.continuousFireScore, task.committedShots.length * 0.15))
-    : weapon.automaticFire.continuousFireScore;
-  weapon.automaticFire.continuousFireScore = score;
+  if (latestContinuousFireScore !== null && Number.isFinite(latestContinuousFireScore)) {
+    weapon.automaticFire.continuousFireScore = Math.max(
+      weapon.automaticFire.continuousFireScore,
+      Math.min(1, Math.max(0, latestContinuousFireScore)),
+    );
+  }
   weapon.automaticFire.continuousFireSequence = Math.max(
     weapon.automaticFire.continuousFireSequence,
     task.committedShots.length,
