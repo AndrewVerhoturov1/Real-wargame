@@ -1,0 +1,65 @@
+{
+  "version": 2,
+  "id": "contact-investigation-example",
+  "name": "Contact investigation with automatic fallback",
+  "nameRu": "Доразведка контактов с автоматическим вниманием",
+  "description": "Investigates the best subjective unknown contact and returns to automatic attention when none remain.",
+  "descriptionRu": "Доразведывает лучший субъективный неизвестный контакт и возвращает автоматическое внимание, когда кандидатов больше нет.",
+  "rootNodeId": "root",
+  "blackboardDefaults": {},
+  "blackboardSchema": [],
+  "subgraphRefs": [],
+  "nodes": [
+    {
+      "id": "root",
+      "type": "Root",
+      "displayNameRu": "Старт",
+      "children": ["attention-selector"]
+    },
+    {
+      "id": "attention-selector",
+      "type": "Selector",
+      "displayNameRu": "Выбрать поведение внимания",
+      "children": ["investigate-contact", "automatic-attention"]
+    },
+    {
+      "id": "investigate-contact",
+      "type": "InvestigateContact",
+      "displayNameRu": "Доразведать лучший неизвестный контакт",
+      "children": [],
+      "parameters": {
+        "cooldownSeconds": 0,
+        "cooldownTiming": "on_success",
+        "minimumStage": "cue",
+        "minimumConfidence": 15,
+        "completionStage": "identified",
+        "searchArcDegrees": 120,
+        "maximumContactAgeSeconds": 10,
+        "reactToFreshFire": true,
+        "minimumHoldSeconds": 1.2,
+        "preferredInvestigationSeconds": 3,
+        "maximumInvestigationSeconds": 5,
+        "revisitDelaySeconds": 4,
+        "switchAdvantagePercent": 25,
+        "urgentCloserMeters": 12,
+        "urgentCloserRatio": 0.6,
+        "confidenceWeight": 0.3,
+        "proximityWeight": 0.25,
+        "freshnessWeight": 0.2,
+        "urgencyWeight": 0.2,
+        "uncertaintyPenaltyWeight": 0.15,
+        "currentContactBonus": 10
+      }
+    },
+    {
+      "id": "automatic-attention",
+      "type": "ClearAttentionOverride",
+      "displayNameRu": "Автоматическое внимание",
+      "children": [],
+      "parameters": {
+        "cooldownSeconds": 0,
+        "cooldownTiming": "on_success"
+      }
+    }
+  ]
+}

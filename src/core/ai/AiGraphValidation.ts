@@ -1,5 +1,6 @@
 import type { AiBlackboardSchemaEntry } from './AiBlackboard';
 import type { AiGraphV2 } from './AiGraph';
+import { ensureContactInvestigationNodeContractRegistered } from './ContactInvestigationNodeContract';
 import { DEFAULT_AI_NODE_CONTRACT_REGISTRY } from './contracts/AiNodeContractRegistry';
 import type { AiNodeContract, AiParameterDefinition } from './contracts/AiNodeContract';
 import { DEFAULT_AI_SUBGRAPH_REGISTRY } from './contracts/AiSubgraphRegistry';
@@ -11,6 +12,8 @@ export interface AiGraphValidationIssue {readonly severity:AiGraphValidationSeve
 export interface AiGraphValidationResult {readonly valid:boolean;readonly issues:readonly AiGraphValidationIssue[];}
 export interface AiGraphValidationContext {readonly subgraphs?:ReadonlyMap<string,AiGraphV2>|Readonly<Record<string,AiGraphV2>>;}
 type UnknownRecord=Record<string,unknown>;
+
+ensureContactInvestigationNodeContractRegistered();
 
 export function validateAiGraph(graph:unknown,context:AiGraphValidationContext={}):AiGraphValidationResult{
  const issues:AiGraphValidationIssue[]=[];if(!isRecord(graph))return invalid('GRAPH_NOT_OBJECT','AI graph must be a JSON object.','AI-граф должен быть JSON-объектом.');

@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { getNodeContractUiModel, explainPortIncompatibilityRu, renderContractParameterFields } from '../src/ai-node-editor/node-contract-ui';
+import { applySearchDirectionChoice, resolveSearchDirectionChoice } from '../src/ai-node-editor/AttentionNodeControls';
+import { collectBlackboardSelectOptions, mergeSelectOptionsWithCurrent } from '../src/ai-node-editor/HumanSelectValueGuard';
 import { getSubgraphChoice, listSubgraphChoices } from '../src/ai-node-editor/subgraph-ui';
+import { getAiNodeTypeDefinition } from '../src/core/ai/AiNodeTypes';
 
 const choices = listSubgraphChoices();
 assert.equal(choices.length, 4);
@@ -16,6 +19,161 @@ const timeoutFields = renderContractParameterFields({ id: 'timeout', type: 'Time
 assert.match(timeoutFields, /Максимальное время/);
 assert.match(timeoutFields, /required/);
 assert.match(timeoutFields, /min="0"/);
+
+const searchSectorFields = renderContractParameterFields({
+  id: 'suspected-sector',
+  type: 'SetSearchSector',
+  parameters: {
+    centerSource: 'blackboard_position',
+    centerDegrees: 0,
+    arcDegrees: 120,
+    originPositionKey: 'self_position',
+    targetPositionKey: 'suspected_enemy_position',
+  },
+});
+for (const expected of [
+  'Источник направления',
+  'Фиксированный угол',
+  'Позиция из памяти',
+  'Ключ позиции бойца',
+  'Ключ позиции цели',
+  'self_position',
+  'suspected_enemy_position',
+]) assert.match(searchSectorFields, new RegExp(expected), `Missing suspected-contact search setting: ${expected}`);
+assert.match(searchSectorFields, /data-param-id="centerSource"/);
+assert.match(searchSectorFields, /data-param-id="originPositionKey"/);
+assert.match(searchSectorFields, /data-param-id="targetPositionKey"/);
+
+assert.equal(resolveSearchDirectionChoice({ centerSource: 'fixed' }), 'fixed');
+assert.equal(resolveSearchDirectionChoice({
+  centerSource: 'blackboard_position',
+  originPositionKey: 'self_position',
+  targetPositionKey: 'suspected_enemy_position',
+}), 'suspected_contact');
+assert.equal(resolveSearchDirectionChoice({
+  centerSource: 'blackboard_position',
+  originPositionKey: 'observer_position',
+  targetPositionKey: 'custom_target_position',
+}), 'blackboard_position');
+assert.deepEqual(applySearchDirectionChoice({ centerDegrees: 45, arcDegrees: 90 }, 'suspected_contact'), {
+  centerDegrees: 45,
+  arcDegrees: 90,
+  centerSource: 'blackboard_position',
+  originPositionKey: 'self_position',
+  targetPositionKey: 'suspected_enemy_position',
+});
+assert.deepEqual(applySearchDirectionChoice({
+  centerSource: 'blackboard_position',
+  originPositionKey: 'observer_position',
+  targetPositionKey: 'custom_target_position',
+}, 'fixed'), {
+  centerSource: 'fixed',
+  originPositionKey: 'observer_position',
+  targetPositionKey: 'custom_target_position',
+});
+
+assert.deepEqual(
+  mergeSelectOptionsWithCurrent(
+    [{ value: 'danger', label: 'Danger', labelRu: 'Опасность' }],
+    'best_contact_confidence',
+  ).map((option) => option.value),
+  ['best_contact_confidence', 'danger'],
+  'a custom selected value must remain an explicit select option instead of falling back to the first default',
+);
+assert.deepEqual(
+  mergeSelectOptionsWithCurrent(
+    [{ value: 'danger', label: 'Danger', labelRu: 'Опасность' }],
+    'danger',
+  ).map((option) => option.value),
+  ['danger'],
+  'an existing selected option must not be duplicated',
+);
+
+const memoryOptions = collectBlackboardSelectOptions({
+  blackboardDefaults: {
+    best_contact_confidence: 0,
+    contact_visible_now: false,
+  },
+  blackboardSchema: [
+    { key: 'best_contact_confidence', valueKind: 'number', label: 'Best contact confidence', labelRu: 'Уверенность контакта' },
+    { key: 'contact_visible_now', valueKind: 'boolean', label: 'Contact visible now', labelRu: 'Контакт виден сейчас' },
+  ],
+});
+assert.deepEqual(memoryOptions.number.map((option) => option.value), ['best_contact_confidence']);
+assert.deepEqual(memoryOptions.boolean.map((option) => option.value), ['contact_visible_now']);
+
+const investigationDefinition = getAiNodeTypeDefinition('InvestigateContact');
+assert.equal(investigationDefinition.labelRu, 'Доразведать контакт');
+assert.equal(investigationDefinition.category, 'action');
+assert.equal(investigationDefinition.canHaveChildren, false);
+const investigationContractFields = renderContractParameterFields({ id: 'investigate', type: 'InvestigateContact', parameters: {} });
+for (const expected of [
+  'Минимальная стадия',
+  'Минимальная уверенность',
+  'Доразведка завершена на стадии',
+  'Ширина сектора',
+  'Максимальный возраст контакта',
+  'Минимально смотреть один контакт',
+  'Преимущество для переключения',
+  'Срочно реагировать на признаки огня',
+]) assert.match(investigationContractFields, new RegExp(expected), `Missing InvestigateContact contract field: ${expected}`);
+
+const selectGuardSource = readFileSync('src/ai-node-editor/HumanSelectValueGuard.ts', 'utf8');
+for (const expected of [
+  "parameterKey === 'sourceKey'",
+  "parameterKey === 'modifierKey'",
+  "parameterKey === 'flagKey'",
+  'select.value = currentValue',
+  'selectValueGuardInitialized',
+]) assert.ok(selectGuardSource.includes(expected), `Missing custom select guard behavior: ${expected}`);
+
+const attentionControlsSource = readFileSync('src/ai-node-editor/AttentionNodeControls.ts', 'utf8');
+for (const expected of [
+  'Куда направить внимание',
+  'Фиксированный угол',
+  'Предполагаемая позиция врага',
+  'Другая позиция из памяти',
+  'Ключ позиции бойца',
+  'Ключ позиции цели',
+  'Сохранить параметры',
+  'attentionParameterAuthority',
+]) assert.ok(attentionControlsSource.includes(expected), `Missing visible attention control: ${expected}`);
+
+const investigationControlsSource = readFileSync('src/ai-node-editor/ContactInvestigationNodeControls.ts', 'utf8');
+for (const expected of [
+  'Настройка доразведки контактов',
+  'Минимальная стадия',
+  'Минимальная уверенность, %',
+  'Доразведка завершена на стадии',
+  'Ширина сектора, °',
+  'Срочно реагировать на признаки огня',
+  'Минимально смотреть один контакт, с',
+  'Желательное время проверки, с',
+  'Максимальное время проверки, с',
+  'Пауза перед повторной проверкой, с',
+  'Преимущество для переключения, %',
+  'Переключиться, если ближе на, м',
+  'Переключиться, если дистанция меньше, % от текущей',
+  'Расширенная оценка',
+  'Вес уверенности',
+  'Вес близости',
+  'Вес свежести',
+  'Вес срочности угрозы',
+  'Штраф неопределённости',
+  'Бонус удержания текущего контакта',
+  'Сохранить параметры',
+  'contactInvestigationParameterAuthority',
+  "document.querySelector<HTMLButtonElement>('#save-node')?.click()",
+]) assert.ok(investigationControlsSource.includes(expected), `Missing visible contact investigation control: ${expected}`);
+
+const contractUiSource = readFileSync('src/ai-node-editor/node-contract-ui.ts', 'utf8');
+assert.ok(contractUiSource.includes("closest('.human-hidden-original')"), 'hidden legacy parameter fields must not overwrite the visible friendly panel');
+assert.ok(contractUiSource.includes('return { ...fallback };'), 'friendly JSON parameters must stay authoritative during save');
+assert.ok(contractUiSource.includes('ensureContactInvestigationNodeContractRegistered'));
+
+const editorHtml = readFileSync('ai-node-editor.html', 'utf8');
+assert.ok(editorHtml.includes('HumanSelectValueGuard.ts'), 'the editor must load the custom select value guard');
+assert.ok(editorHtml.includes('ContactInvestigationNodeControls.ts'), 'the editor must load the contact investigation panel');
 
 const statefulSource = readFileSync('src/ai-node-editor/stateful-node-ui.ts', 'utf8');
 for (const expected of [
@@ -38,4 +196,4 @@ assert.ok(mainSource.includes('Главный граф'));
 assert.ok(mainSource.includes("document.querySelector<HTMLSelectElement>('#stateful-subgraph-id')?.value"));
 assert.ok(!mainSource.includes("...(graphNavigation.length ? [editorGraph.nameRu ?? editorGraph.name] : [])"));
 
-console.log('AI node contract UI smoke passed: typed ports, contract parameters, Graph v2-only editor, errors, and visible Russian subgraph controls.');
+console.log('AI node contract UI smoke passed: typed ports, convenient attention and contact-investigation controls, persistent custom blackboard selects, authoritative friendly saves, Graph v2-only editor, errors, and visible Russian subgraph controls.');
