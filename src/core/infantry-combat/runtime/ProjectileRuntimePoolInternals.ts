@@ -9,6 +9,7 @@ import {
   type ProjectileRuntimeStateV3,
   type ProjectileStateV1,
 } from './ProjectileRuntimeTypes';
+import { SUPPRESSION_EVENT_BUFFER_MULTIPLIER } from './SuppressionTypes';
 
 export const derivedByRuntime = new WeakMap<ProjectileRuntimeStateV3, { slotByProjectileId: Map<string, number> }>();
 
@@ -56,6 +57,7 @@ export function clearSlotMetadata(pool: ProjectilePoolV3, slot: number): void {
   pool.bodyPenetrationCount[slot] = 0;
   pool.impactSequence[slot] = 0;
   pool.lastHitUnitIds[slot] = null;
+  pool.suppressionContinuousFireScores[slot] = 0;
 }
 
 export function writeProjectileRecord(pool: ProjectilePoolV3, slot: number, projectile: ProjectileStateV1): void {
@@ -75,6 +77,7 @@ export function writeProjectileRecord(pool: ProjectilePoolV3, slot: number, proj
   pool.bodyPenetrationCount[slot] = projectile.bodyPenetrationCount ?? 0;
   pool.impactSequence[slot] = projectile.impactSequence;
   pool.lastHitUnitIds[slot] = projectile.lastHitUnitId ?? null;
+  pool.suppressionContinuousFireScores[slot] = clamp01(projectile.suppressionContinuousFireScore ?? 0);
 }
 
 export function recordFromSlot(pool: ProjectilePoolV3, slot: number): ProjectileStateV1 | null {
@@ -97,6 +100,7 @@ export function recordFromSlot(pool: ProjectilePoolV3, slot: number): Projectile
     bodyPenetrationCount: pool.bodyPenetrationCount[slot]!,
     impactSequence: pool.impactSequence[slot]!,
     lastHitUnitId: pool.lastHitUnitIds[slot],
+    suppressionContinuousFireScore: clamp01(pool.suppressionContinuousFireScores[slot]!),
   };
 }
 
@@ -162,6 +166,14 @@ export function createDiagnostics(capacity: number): ProjectileRuntimeDiagnostic
     lastBodyResistance: 0,
     lastBodySpeedBefore: 0,
     lastBodySpeedAfter: 0,
+    suppressionEventBufferCapacity: capacity * SUPPRESSION_EVENT_BUFFER_MULTIPLIER,
+    suppressionEventBufferHighWaterMark: 0,
+    suppressionEventOverflowCount: 0,
+    suppressionCandidateTruncationCount: 0,
+    suppressionDuplicateEventCount: 0,
+    emittedNearMissCount: 0,
+    emittedNearImpactCount: 0,
+    emittedDirectHitCount: 0,
   };
 }
 
@@ -178,6 +190,7 @@ export function normalizeDiagnostics(value: Record<string, unknown>, capacity: n
   defaults.capacity = capacity;
   defaults.impactBufferCapacity = Math.min(MAX_STAGE6_IMPACT_BUFFER_ENTRIES, capacity * 4);
   defaults.terminationBufferCapacity = Math.min(DEFAULT_PROJECTILE_EVENT_BUFFER_CAPACITY, capacity);
+  defaults.suppressionEventBufferCapacity = capacity * SUPPRESSION_EVENT_BUFFER_MULTIPLIER;
   defaults.lastImpactId = nullableText(value.lastImpactId);
   defaults.lastTerminationId = nullableText(value.lastTerminationId);
   defaults.lastBodyImpactId = nullableText(value.lastBodyImpactId);
@@ -204,7 +217,8 @@ export function isRuntimeStateV3(value: unknown): value is ProjectileRuntimeStat
     && isRecord(value.pool)
     && value.pool.active instanceof Uint8Array
     && value.pool.positionX instanceof Float64Array
-    && value.pool.bodyPenetrationCount instanceof Uint8Array;
+    && value.pool.bodyPenetrationCount instanceof Uint8Array
+    && value.pool.suppressionContinuousFireScores instanceof Float64Array;
 }
 
 export function finiteNonNegative(value: unknown, fallback: number): number { const numeric = isFiniteNumber(value) ? value : fallback; return Number.isFinite(numeric) ? Math.max(0, numeric) : numeric; }
