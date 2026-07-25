@@ -106,8 +106,7 @@ function adaptForPhysicalPosture(source) {
     'verifyPersistentCiContract();',
   ].join('\n');
   const selectedScenarioCalls = [
-    'verifyInitialDecisionAndUiExecutionContract();',
-    'verifyPausedExplicitSimulationStep();',
+    'verifyDiagnosticDeepImmutability();',
   ].join('\n');
   result = replaceOnce(result, allScenarioCalls, selectedScenarioCalls);
   return result;
