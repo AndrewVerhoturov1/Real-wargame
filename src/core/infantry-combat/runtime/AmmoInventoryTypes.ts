@@ -3,8 +3,11 @@ import type { DefinitionRef } from '../catalogs/CombatCatalogTypes';
 
 export const AMMO_INVENTORY_SCHEMA_VERSION = 1 as const;
 export const MAX_AMMO_RESERVE_ENTRIES = 8;
-export const MAX_APPLIED_RELOAD_LOAD_IDS = 32;
-export const MAX_APPLIED_AMMO_TRANSFER_IDS = 32;
+export const MAX_APPLIED_RELOAD_STAGE_IDS = 128;
+export const MAX_APPLIED_AMMO_TRANSFER_ACTION_IDS = 128;
+/** Compatibility aliases used by the first Stage 9 draft. */
+export const MAX_APPLIED_RELOAD_LOAD_IDS = MAX_APPLIED_RELOAD_STAGE_IDS;
+export const MAX_APPLIED_AMMO_TRANSFER_IDS = MAX_APPLIED_AMMO_TRANSFER_ACTION_IDS;
 
 export type InfantryCombatRole =
   | 'rifleman'
@@ -22,16 +25,20 @@ export interface ReloadWeaponActionV1 {
   readonly schemaVersion: typeof AMMO_INVENTORY_SCHEMA_VERSION;
   readonly actionId: string;
   readonly sequence: number;
+  readonly weaponInstanceId: string;
+  readonly ammoDefinitionId: string;
   readonly owner: PhysicalActionOwner;
   readonly ownerToken: string;
-  weaponHandle: PhysicalActionHandleV1;
+  weaponHandle: PhysicalActionHandleV1 | null;
   locomotionHandle: PhysicalActionHandleV1 | null;
   helperUnitId: string | null;
   helperActionHandle: PhysicalActionHandleV1 | null;
   helperValidationCode: string | null;
   stageIndex: number;
+  stageId: string;
   completedBaseWorkSeconds: number;
-  stageLoadMutationApplied: boolean;
+  loadedRoundsApplied: number;
+  appliedStageCompletionIds: string[];
   readonly startedSeconds: number;
   lastAdvancedSeconds: number;
   status: 'running' | 'waiting_for_locomotion';
@@ -45,12 +52,16 @@ export interface AmmoTransferActionV1 {
   readonly targetUnitId: string;
   readonly ammoDefinitionId: string;
   readonly requestedRounds: number;
-  readonly durationSeconds: number;
-  completedBaseWorkSeconds: number;
-  readonly sourceHandle: PhysicalActionHandleV1;
-  readonly targetHandle: PhysicalActionHandleV1;
+  sourceHandle: PhysicalActionHandleV1 | null;
+  targetHandle: PhysicalActionHandleV1 | null;
+  readonly owner: PhysicalActionOwner;
+  readonly ownerToken: string;
   readonly startedSeconds: number;
+  readonly requiredBaseWorkSeconds: number;
+  completedBaseWorkSeconds: number;
   lastAdvancedSeconds: number;
+  phase: 'working' | 'completed' | 'cancelled' | 'failed';
+  transferredRounds: number;
 }
 
 export interface AmmoActionResultV1 {
