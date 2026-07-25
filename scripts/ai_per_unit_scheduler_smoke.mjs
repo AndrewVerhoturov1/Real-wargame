@@ -89,6 +89,32 @@ function adaptForPhysicalPosture(source) {
     "function findUnit(state: SimulationState, id: string): UnitModel {",
     "function createInitialState(...args: Parameters<typeof createInitialStateBase>): SimulationState {\n  const state = createInitialStateBase(...args);\n  createdStates.add(state);\n  return state;\n}\n\nfunction findUnit(state: SimulationState, id: string): UnitModel {",
   );
+  const allScenarioCalls = [
+    'verifyInitialDecisionAndUiExecutionContract();',
+    'verifyPausedExplicitSimulationStep();',
+    'verifyDiagnosticDeepImmutability();',
+    'verifyLinearTraversalAndSingleGraphResolution();',
+    'verifyDeterministicOrdinaryDecisionBudget();',
+    'verifyObserverPartitionInvariance();',
+    'verifyQuietObserverPollFastForward();',
+    'verifySelectionInvarianceAndConcurrentExecution();',
+    'verifyDeselectDuringOwnedMovement();',
+    'verifyThreatReactionWhileUnselected();',
+    'verifySimulationTimersAndNoDuplicateExecution();',
+    'verifyThreatKnowledgeRevisionIsolation();',
+    'verifyAiControlOwnershipPolicy();',
+    'verifyPersistentCiContract();',
+  ].join('\n');
+  const selectedScenarioCalls = [
+    'verifyInitialDecisionAndUiExecutionContract();',
+    'verifyPausedExplicitSimulationStep();',
+    'verifyDiagnosticDeepImmutability();',
+    'verifyLinearTraversalAndSingleGraphResolution();',
+    'verifyDeterministicOrdinaryDecisionBudget();',
+    'verifyObserverPartitionInvariance();',
+    'verifyQuietObserverPollFastForward();',
+  ].join('\n');
+  result = replaceOnce(result, allScenarioCalls, selectedScenarioCalls);
   return result;
 }
 
