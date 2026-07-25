@@ -19,6 +19,12 @@ function verifyAssistantIsExplicitAndValidated(): void {
   assert.equal(requestDeployWeapon(noAutomatic, roles.gunner, deploymentRequest('no-auto', null)).status, 'started');
   assert.equal(getPhysicalActionCoordinatorDiagnostics(roles.helper).activeLeases.length, 0);
 
+  const missingState = createStage9State();
+  const missing = equipStage9Roles(missingState);
+  assert.equal(requestDeployWeapon(missingState, missing.gunner, deploymentRequest('missing-helper', 'missing')).status, 'started');
+  assert.equal(missing.gunner.infantryCombatRuntime.primaryWeapon!.deployment.activeAction?.helperUnitId, null);
+  assert.equal(missing.gunner.infantryCombatRuntime.primaryWeapon!.deployment.activeAction?.helperValidationCode, 'assistant_missing');
+
   const wrongRoleState = createStage9State();
   const wrongRole = equipStage9Roles(wrongRoleState);
   assert.equal(requestDeployWeapon(wrongRoleState, wrongRole.gunner, deploymentRequest('wrong-role', wrongRole.rifle.id)).status, 'started');
@@ -36,6 +42,17 @@ function verifyAssistantIsExplicitAndValidated(): void {
   farRoles.helper.position.x += 10;
   assert.equal(requestDeployWeapon(farState, farRoles.gunner, deploymentRequest('far-helper', farRoles.helper.id)).status, 'started');
   assert.equal(farRoles.gunner.infantryCombatRuntime.primaryWeapon!.deployment.activeAction?.helperValidationCode, 'assistant_out_of_range');
+
+  const incapableState = createStage9State();
+  const incapable = equipStage9Roles(incapableState);
+  incapable.helper.infantryCombatRuntime.wounds.capabilities = {
+    ...incapable.helper.infantryCombatRuntime.wounds.capabilities,
+    canUseHands: false,
+    canUseWeapon: false,
+  };
+  assert.equal(requestDeployWeapon(incapableState, incapable.gunner, deploymentRequest('incapable-helper', incapable.helper.id)).status, 'started');
+  assert.equal(incapable.gunner.infantryCombatRuntime.primaryWeapon!.deployment.activeAction?.helperUnitId, null);
+  assert.equal(incapable.gunner.infantryCombatRuntime.primaryWeapon!.deployment.activeAction?.helperValidationCode, 'assistant_capability_lost');
 }
 
 function verifyDeploymentContinuesAfterAssistantLoss(): void {
