@@ -3,15 +3,18 @@ import { getCombatUnitSpatialIndex } from '../../combat/CombatUnitSpatialIndex';
 import { normalizeDirection } from '../../combat/UnitHitShapes';
 import type { SimulationState } from '../../simulation/SimulationState';
 import type { UnitModel } from '../../units/UnitModel';
+import { getWeaponShotIntervalSeconds } from './AutomaticFireRuntime';
 import { advanceBloodRuntimeTo, refreshUnitBleedingRateAt } from './BloodLossRuntime';
-import {
-  FATIGUE_UPDATE_INTERVAL_SECONDS,
-} from './FatigueRuntime';
+import { FATIGUE_UPDATE_INTERVAL_SECONDS } from './FatigueRuntime';
 import {
   cancelActiveFirstAidAction,
   normalizeUnitMedicalRuntime,
 } from './FirstAidRuntime';
-import { beginFireTaskRecovery, failActiveFireTask } from './FireTaskRuntime';
+import {
+  beginAmmoExhaustedRecovery,
+  beginCompletedBurstRecovery,
+  failActiveFireTask,
+} from './FireTaskRuntime';
 import { normalizeUnitPhysiologyRuntime } from './InfantryPhysiologyRuntime';
 import {
   MAX_STAGE3_ACTIVE_PROJECTILES,
@@ -28,6 +31,7 @@ import {
 import { normalizeReferenceProjectileRuntimeState } from './ReferenceProjectileRuntime';
 import { MAX_APPLIED_WOUND_IMPACT_IDS } from './InfantryBodyTypes';
 import { FIRST_AID_ACTION_TYPE } from './PhysiologyTypes';
+import { normalizeUnitSuppressionRuntime, advanceSuppressionRuntimeTo } from './SuppressionRuntime';
 import { applyProjectileImpactWound, enforceEffectiveCombatCapabilities } from './WoundImpactApplication';
 
 const TIME_EPSILON_SECONDS = 1e-9;
@@ -52,12 +56,14 @@ export function reconcileInfantryCombatRuntimeAfterLoad(state: SimulationState):
   ])].sort(compareText).slice(-MAX_STAGE3_APPLIED_IMPACT_IDS);
 
   const units = [...state.units].sort(compareUnits);
-  for (const unit of units) reconcilePhysiologyAndMedical(state, unit);
+  for (const unit of units) reconcileUnitPersistentState(state, unit);
 
   const taskByCommittedShotId = new Map<string, UnitModel>();
   for (const unit of units) {
     const task = unit.infantryCombatRuntime.activeFireTask;
-    if (task?.committedShotId) taskByCommittedShotId.set(task.committedShotId, unit);
+    if (!task) continue;
+    for (const committed of task.committedShots) taskByCommittedShotId.set(committed.shotId, unit);
+    if (task.committedShotId) taskByCommittedShotId.set(task.committedShotId, unit);
   }
 
   const recordsByShotId = new Map(runtime.committedShots.map((record) => [record.shotId, record]));
@@ -69,8 +75,15 @@ export function reconcileInfantryCombatRuntimeAfterLoad(state: SimulationState):
       const unit = taskByCommittedShotId.get(projectile.shotId);
       const task = unit?.infantryCombatRuntime.activeFireTask;
       const weapon = unit?.infantryCombatRuntime.primaryWeapon;
-      if (unit && task && weapon && task.committedShotId === projectile.shotId) {
-        record = reconstructCommitRecord(unit, task.taskId, projectile, state.simulationTimeSeconds);
+      const taskShot = task?.committedShots.find((candidate) => candidate.shotId === projectile.shotId) ?? null;
+      if (unit && task && weapon && taskShot) {
+        record = reconstructCommitRecord(
+          unit,
+          task.taskId,
+          taskShot.ordinal,
+          projectile,
+          taskShot.committedSeconds,
+        );
         runtime.committedShots.push(record);
         recordsByShotId.set(record.shotId, record);
       }
@@ -97,17 +110,23 @@ export function reconcileInfantryCombatRuntimeAfterLoad(state: SimulationState):
   }
   for (const unit of units) {
     refreshUnitBleedingRateAt(unit, state.simulationTimeSeconds);
+    advanceSuppressionRuntimeTo(unit.infantryCombatRuntime.suppression, state.simulationTimeSeconds);
     enforceEffectiveCombatCapabilities(unit, state.simulationTimeSeconds);
   }
 }
 
-function reconcilePhysiologyAndMedical(state: SimulationState, unit: UnitModel): void {
+function reconcileUnitPersistentState(state: SimulationState, unit: UnitModel): void {
   const now = canonicalSeconds(state.simulationTimeSeconds);
   unit.infantryCombatRuntime.physiology = normalizeUnitPhysiologyRuntime(
     unit.infantryCombatRuntime.physiology,
     now,
   );
   unit.infantryCombatRuntime.medical = normalizeUnitMedicalRuntime(unit.infantryCombatRuntime.medical);
+  unit.infantryCombatRuntime.suppression = normalizeUnitSuppressionRuntime(
+    unit.infantryCombatRuntime.suppression,
+    now,
+  );
+  advanceSuppressionRuntimeTo(unit.infantryCombatRuntime.suppression, now);
 
   const blood = unit.infantryCombatRuntime.physiology.blood;
   const pristineLegacyBlood = blood.updateCount === 0
@@ -191,36 +210,80 @@ function recentRepairableBodyImpacts(
 
 function reconcileCommittedTask(state: SimulationState, unit: UnitModel): void {
   const task = unit.infantryCombatRuntime.activeFireTask;
-  const shotId = task?.committedShotId;
-  if (!task || !shotId) return;
+  const weapon = unit.infantryCombatRuntime.primaryWeapon;
+  if (!task || !weapon || task.committedShots.length === 0) return;
   const runtime = state.infantryCombatProjectiles;
-  const record = runtime.committedShots.find((candidate) => candidate.shotId === shotId);
-  if (!record) {
-    failActiveFireTask(unit, {
-      endedSeconds: state.simulationTimeSeconds,
-      resultCode: 'infantry_fire_task_reconciliation_missing_commit',
-      resultRu: 'Огневая задача не восстановлена: отсутствует запись атомарного выстрела.',
-    });
+  const recordsByShotId = new Map(runtime.committedShots.map((record) => [record.shotId, record]));
+  let latestCommittedSeconds = task.lastShotCommittedSeconds ?? task.phaseStartedSeconds;
+
+  for (const committed of [...task.committedShots].sort((left, right) => left.ordinal - right.ordinal)) {
+    const record = recordsByShotId.get(committed.shotId);
+    if (!record) {
+      failActiveFireTask(unit, {
+        endedSeconds: state.simulationTimeSeconds,
+        resultCode: 'infantry_fire_task_reconciliation_missing_commit',
+        resultRu: 'Огневая задача не восстановлена: отсутствует запись одного из атомарных выстрелов очереди.',
+      });
+      return;
+    }
+    latestCommittedSeconds = Math.max(latestCommittedSeconds, record.committedSimulationSeconds);
+    const hasOutcome = hasRecordedOutcome(runtime, committed.shotId);
+    const hasActiveProjectile = runtime.activeProjectiles.some((projectile) => projectile.shotId === committed.shotId);
+    if (!hasOutcome && !hasActiveProjectile) {
+      failActiveFireTask(unit, {
+        endedSeconds: state.simulationTimeSeconds,
+        resultCode: 'infantry_fire_task_reconciliation_missing_projectile',
+        resultRu: 'Огневая задача не восстановлена: committed-пуля очереди отсутствует, повторное создание запрещено.',
+      });
+      return;
+    }
+  }
+
+  repairWeaponCadenceFromTask(unit, latestCommittedSeconds);
+  if (task.phase !== 'firing') return;
+  if (task.nextShotOrdinal >= task.plannedRoundCount) {
+    beginCompletedBurstRecovery(unit, Math.max(state.simulationTimeSeconds, latestCommittedSeconds));
     return;
   }
-  const hasOutcome = hasRecordedOutcome(runtime, shotId);
-  const hasActiveProjectile = runtime.activeProjectiles.some((projectile) => projectile.shotId === shotId);
-  if (!hasOutcome && !hasActiveProjectile) {
-    failActiveFireTask(unit, {
-      endedSeconds: state.simulationTimeSeconds,
-      resultCode: 'infantry_fire_task_reconciliation_missing_projectile',
-      resultRu: 'Огневая задача не восстановлена: committed-пуля отсутствует, повторное создание запрещено.',
-    });
+  if (weapon.roundsInWeapon <= 0) {
+    beginAmmoExhaustedRecovery(unit, Math.max(state.simulationTimeSeconds, latestCommittedSeconds));
     return;
   }
-  if (task.phase === 'firing') {
-    beginFireTaskRecovery(unit, { committedShotId: shotId, startedSeconds: record.committedSimulationSeconds });
-  }
+  task.nextShotBoundarySeconds = canonicalSeconds(Math.max(
+    task.nextShotBoundarySeconds ?? 0,
+    weapon.automaticFire.nextShotAllowedSeconds,
+    state.simulationTimeSeconds,
+  ));
+}
+
+function repairWeaponCadenceFromTask(unit: UnitModel, latestCommittedSeconds: number): void {
+  const weapon = unit.infantryCombatRuntime.primaryWeapon;
+  const task = unit.infantryCombatRuntime.activeFireTask;
+  if (!weapon || !task || task.committedShots.length === 0) return;
+  const interval = getWeaponShotIntervalSeconds(weapon.resolved.weapon);
+  if (!Number.isFinite(interval)) return;
+  weapon.automaticFire.lastCommittedShotSeconds = Math.max(
+    weapon.automaticFire.lastCommittedShotSeconds ?? 0,
+    latestCommittedSeconds,
+  );
+  weapon.automaticFire.nextShotAllowedSeconds = canonicalSeconds(Math.max(
+    weapon.automaticFire.nextShotAllowedSeconds,
+    latestCommittedSeconds + interval,
+  ));
+  const score = task.committedShots.length > 0
+    ? Math.min(1, Math.max(weapon.automaticFire.continuousFireScore, task.committedShots.length * 0.15))
+    : weapon.automaticFire.continuousFireScore;
+  weapon.automaticFire.continuousFireScore = score;
+  weapon.automaticFire.continuousFireSequence = Math.max(
+    weapon.automaticFire.continuousFireSequence,
+    task.committedShots.length,
+  );
 }
 
 function reconstructCommitRecord(
   unit: UnitModel,
   fireTaskId: string,
+  shotOrdinal: number,
   projectile: ProjectileStateV1,
   fallbackSeconds: number,
 ): ShotCommitRecordV1 {
@@ -234,7 +297,7 @@ function reconstructCommitRecord(
     weaponInstanceId: weapon.weaponInstanceId,
     weaponDefinitionRef: structuredClone(weapon.resolved.weaponDefinitionRef),
     ammoDefinitionRef: structuredClone(weapon.resolved.ammoDefinitionRef),
-    committedSimulationSeconds: canonicalSeconds(Math.max(0, fallbackSeconds - projectile.ageSeconds)),
+    committedSimulationSeconds: canonicalSeconds(Math.max(0, fallbackSeconds)),
     muzzlePosition: structuredClone(projectile.position),
     aimDirectionBeforeDispersion: structuredClone(finalDirection),
     dispersionPitchRadians: 0,
@@ -247,13 +310,14 @@ function reconstructCommitRecord(
     effectiveDispersionRadians: 0,
     roundsBefore: weapon.roundsInWeapon + 1,
     roundsAfter: weapon.roundsInWeapon,
+    fireTaskShotOrdinal: shotOrdinal,
+    suppressionContinuousFireScore: projectile.suppressionContinuousFireScore ?? 0,
   };
 }
 
 function hasTerminalOutcome(runtime: SimulationState['infantryCombatProjectiles'], shotId: string): boolean {
   return runtime.terminations.some((termination) => termination.shotId === shotId);
 }
-
 function hasRecordedOutcome(runtime: SimulationState['infantryCombatProjectiles'], shotId: string): boolean {
   return runtime.impacts.some((impact) => impact.shotId === shotId)
     || runtime.terminations.some((termination) => termination.shotId === shotId)
@@ -293,9 +357,7 @@ function uniqueBy<T>(values: readonly T[], key: (value: T) => string): T[] {
   }
   return result;
 }
-function nextWholeSecondAfter(seconds: number): number {
-  return canonicalSeconds(Math.floor(Math.max(0, seconds) + TIME_EPSILON_SECONDS) + 1);
-}
+function nextWholeSecondAfter(seconds: number): number { return canonicalSeconds(Math.floor(Math.max(0, seconds) + TIME_EPSILON_SECONDS) + 1); }
 function nextQuarterSecondAfter(seconds: number): number {
   const step = Math.floor(Math.max(0, seconds) / FATIGUE_UPDATE_INTERVAL_SECONDS + TIME_EPSILON_SECONDS) + 1;
   return canonicalSeconds(step * FATIGUE_UPDATE_INTERVAL_SECONDS);
