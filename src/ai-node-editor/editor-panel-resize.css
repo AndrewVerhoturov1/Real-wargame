@@ -1,0 +1,55 @@
+.panel-resize-layout-owner {
+  position: relative;
+}
+
+.palette-panel > .panel-resizer,
+.inspector-panel > .panel-resizer {
+  display: none !important;
+}
+
+.panel-resize-overlay-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 120;
+  width: 18px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.panel-resize-overlay-handle[hidden] {
+  display: none;
+}
+
+.panel-resize-overlay-handle::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  content: '';
+  background: rgba(255, 242, 168, 0.18);
+  box-shadow: 0 0 0 transparent;
+  transition: background 120ms ease, box-shadow 120ms ease, width 120ms ease;
+}
+
+.palette-resize-overlay-handle::before {
+  left: 3px;
+}
+
+.inspector-resize-overlay-handle::before {
+  right: 3px;
+}
+
+.panel-resize-overlay-handle:hover::before,
+.panel-resize-overlay-handle.active::before {
+  width: 3px;
+  background: rgba(255, 242, 168, 0.9);
+  box-shadow: 0 0 10px rgba(255, 242, 168, 0.58);
+}
+
+body.panel-resizing,
+body.panel-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
