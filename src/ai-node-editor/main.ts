@@ -1,4 +1,5 @@
 import './editor-refinement';
+import './editor-panel-resize';
 
 export {
   addNodeFromPalette,
