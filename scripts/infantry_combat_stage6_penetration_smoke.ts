@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createDefaultCombatCatalogRegistry } from '../src/core/infantry-combat/catalogs';
 import {
   MAX_BODY_PENETRATIONS_PER_PROJECTILE,
+  PROJECTILE_RUNTIME_SCHEMA_VERSION,
   calculateBodyImpactPhysics,
   createProjectileRuntimeState,
   getProjectileRuntimeDiagnostics,
@@ -64,7 +65,7 @@ assert.equal(capped.infantryCombatProjectiles.terminations[0]?.reason, 'body_pen
 assert.equal(capped.infantryCombatProjectiles.terminations.length, 1);
 
 const snapshot = serializeProjectileRuntimeState(two.infantryCombatProjectiles);
-assert.equal(snapshot.schemaVersion, 3);
+assert.equal(snapshot.schemaVersion, PROJECTILE_RUNTIME_SCHEMA_VERSION);
 assert.equal(snapshot.activeProjectiles[0]?.bodyPenetrationCount, 2);
 assert.equal(snapshot.activeProjectiles[0]?.impactSequence, 2);
 const diagnostics = getProjectileRuntimeDiagnostics(two.infantryCombatProjectiles);
