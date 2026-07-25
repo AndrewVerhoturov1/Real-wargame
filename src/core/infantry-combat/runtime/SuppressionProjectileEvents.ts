@@ -11,6 +11,7 @@ import {
   distanceFromProjectileSegmentToUnit,
   incomingSuppressionDirection,
 } from './SuppressionGeometry';
+import { findProjectileSlot } from './ProjectileRuntime';
 import {
   MAX_SUPPRESSION_CANDIDATES_PER_SEGMENT,
   SUPPRESSION_DIRECT_HIT_BASE_IMPULSE,
@@ -48,14 +49,23 @@ export function queueNearMissSuppressionForSegment(input: {
   const candidateCount = Math.min(input.candidates.length, MAX_SUPPRESSION_CANDIDATES_PER_SEGMENT);
   if (input.candidates.length > candidateCount) input.runtime.diagnostics.suppressionCandidateTruncationCount += 1;
   const incomingDirection = incomingSuppressionDirection(input.velocity);
+  const previousDirectHitUnitId = getLastDirectHitUnitId(input.runtime, input.projectileId);
   let emitted = 0;
   for (let index = 0; index < candidateCount && emitted < input.maximumEvents; index += 1) {
     const affected = input.candidates[index]!;
-    if (affected.id === input.shooterId || affected.id === input.directHitUnitId) continue;
+    if (
+      affected.id === input.shooterId
+      || affected.id === input.directHitUnitId
+      || affected.id === previousDirectHitUnitId
+    ) continue;
     const eventId = `${input.projectileId}:near-miss:${affected.id}`;
     if (affected.infantryCombatRuntime.suppression.appliedEventIds.includes(eventId)) continue;
     const distance = distanceFromProjectileSegmentToUnit(input.start, input.end, affected, input.state.map);
     if (distance.distanceMetres > SUPPRESSION_NEAR_MISS_RADIUS_METRES + EPSILON) continue;
+    // A closest point at the segment end means the projectile is still
+    // approaching the unit. Delay the near-miss fact until the projectile has
+    // actually passed it, so a later direct hit cannot be double-counted.
+    if (distance.segmentFraction >= 1 - EPSILON) continue;
     const eventSeconds = canonicalSeconds(
       input.segmentStartSeconds + input.segmentDurationSeconds * distance.segmentFraction,
     );
@@ -90,6 +100,7 @@ export function queueImpactSuppression(input: {
   const incomingDirection = incomingSuppressionDirection(input.impact.velocityBeforeImpact);
   let emitted = 0;
   const direct = input.impact.hitUnitId ? input.unitIndex.unitsById.get(input.impact.hitUnitId) ?? null : null;
+  const previousDirectHitUnitId = getLastDirectHitUnitId(input.runtime, input.impact.projectileId);
   if (direct && direct.id !== input.impact.shooterId && emitted < input.maximumEvents) {
     const directEvent: SuppressionEventV1 = Object.freeze({
       schemaVersion: SUPPRESSION_EVENT_SCHEMA_VERSION,
@@ -128,7 +139,11 @@ export function queueImpactSuppression(input: {
   if (scratch.unitCandidates.length > candidateCount) input.runtime.diagnostics.suppressionCandidateTruncationCount += 1;
   for (let index = 0; index < candidateCount && emitted < input.maximumEvents; index += 1) {
     const affected = scratch.unitCandidates[index]!;
-    if (affected.id === input.impact.shooterId || affected.id === direct?.id) continue;
+    if (
+      affected.id === input.impact.shooterId
+      || affected.id === direct?.id
+      || affected.id === previousDirectHitUnitId
+    ) continue;
     const distance = distanceFromPointToUnit(input.impact.point, affected, input.state.map);
     if (distance > SUPPRESSION_NEAR_IMPACT_RADIUS_METRES + EPSILON) continue;
     const event: SuppressionEventV1 = Object.freeze({
@@ -148,6 +163,14 @@ export function queueImpactSuppression(input: {
     if (queueSuppressionEvent(input.runtime, event, affected)) emitted += 1;
   }
   return emitted;
+}
+
+function getLastDirectHitUnitId(
+  runtime: ProjectileRuntimeStateV3,
+  projectileId: string,
+): string | null {
+  const slot = findProjectileSlot(runtime, projectileId);
+  return slot >= 0 ? runtime.pool.lastHitUnitIds[slot] ?? null : null;
 }
 
 function rankCandidatesBySegmentDistance(
