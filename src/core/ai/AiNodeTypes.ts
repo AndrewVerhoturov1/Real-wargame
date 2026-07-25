@@ -1,3 +1,4 @@
+import { ensureContactInvestigationNodeContractRegistered } from './ContactInvestigationNodeContract';
 import { DEFAULT_AI_NODE_CONTRACT_REGISTRY } from './contracts/AiNodeContractRegistry';
 import type { AiNodeCategory } from './contracts/AiNodeContract';
 
@@ -15,6 +16,8 @@ export interface AiNodeTypeDefinition {
   readonly descriptionRu: string;
   readonly canHaveChildren: boolean;
 }
+
+ensureContactInvestigationNodeContractRegistered();
 
 export const AI_NODE_TYPE_DEFINITIONS = Object.fromEntries(
   DEFAULT_AI_NODE_CONTRACT_REGISTRY.list().map((contract) => [

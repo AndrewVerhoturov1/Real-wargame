@@ -5,6 +5,7 @@ import {
 } from '../actions/PostureTransition';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
+import { withAiSimulationExecutionContext } from './AiSimulationExecutionContext';
 import * as legacy from './AiGameBridgeLegacy';
 
 export * from './AiGameBridgeLegacy';
@@ -113,9 +114,11 @@ function runAndAdapt(
 
   let result: ReturnType<typeof legacy.tickAiGameBridgeForTrustedUnit>;
   try {
-    result = trusted
-      ? legacy.tickAiGameBridgeForTrustedUnit(state, unit, nowMs, options)
-      : legacy.tickAiGameBridgeForUnit(state, unit, nowMs, options);
+    result = withAiSimulationExecutionContext(state, unit, () => (
+      trusted
+        ? legacy.tickAiGameBridgeForTrustedUnit(state, unit, nowMs, options)
+        : legacy.tickAiGameBridgeForUnit(state, unit, nowMs, options)
+    ));
   } finally {
     if (postureDescriptor) {
       Object.defineProperty(runtime, 'posture', { ...postureDescriptor, value: before.posture });
@@ -149,7 +152,7 @@ function runAndAdapt(
     runtime.lastEvent = 'ai_graph_reload_rejected_posture_transition';
   }
 
-  if (unit.order !== before.order) {
+  if (!options.diagnosticPreview && unit.order !== before.order) {
     const decisionAtMs = Number.isFinite(runtime.aiGraphLastTickMs)
       ? runtime.aiGraphLastTickMs
       : nowMs;
