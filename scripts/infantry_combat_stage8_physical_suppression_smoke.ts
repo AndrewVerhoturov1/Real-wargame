@@ -60,6 +60,8 @@ function verifyDirectHitSuppression(): void {
   assert.equal(suppression.lastEventKind, 'direct_hit');
   assert.ok(suppression.shock > 0);
   assert.ok(state.infantryCombatProjectiles.diagnostics.emittedDirectHitCount >= 1);
+  assert.equal(state.infantryCombatProjectiles.diagnostics.emittedNearMissCount, 0);
+  assert.equal(state.infantryCombatProjectiles.diagnostics.emittedNearImpactCount, 0);
   assert.ok(state.units[1]!.infantryCombatRuntime.wounds.slots.length >= 1);
 }
 
