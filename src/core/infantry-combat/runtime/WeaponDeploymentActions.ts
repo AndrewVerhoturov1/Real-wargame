@@ -5,8 +5,8 @@ import {
   getPhysicalActionLease,
   requestPhysicalActionChannels,
 } from '../../actions/PhysicalActionCoordinator';
+import type { PhysicalActionHandleV1, PhysicalActionLeaseV1, PhysicalActionOwner } from '../../actions/PhysicalActionCoordinatorTypes';
 import { getCombatUnitSpatialIndex } from '../../combat/CombatUnitSpatialIndex';
-import type { PhysicalActionLeaseV1, PhysicalActionOwner } from '../../actions/PhysicalActionCoordinatorTypes';
 import type { SimulationState } from '../../simulation/SimulationState';
 import type { UnitModel } from '../../units/UnitModel';
 import { getEffectiveCombatCapabilities } from './EffectiveCombatCapabilities';
@@ -21,6 +21,7 @@ import {
   WEAPON_DEPLOYMENT_SCHEMA_VERSION,
   type WeaponDeploymentActionKind,
   type WeaponDeploymentActionResultV1,
+  type WeaponDeploymentActionV1,
 } from './WeaponDeploymentTypes';
 
 export const DEPLOY_WEAPON_ACTION_TYPE = 'infantry_deploy_weapon' as const;
@@ -63,6 +64,7 @@ export function requestUndeployWeapon(
 }
 
 export function cancelWeaponDeploymentAction(
+  state: SimulationState,
   gunner: UnitModel,
   ownerToken: string,
   endedSeconds: number,
@@ -71,25 +73,26 @@ export function cancelWeaponDeploymentAction(
   const action = weapon?.deployment.activeAction;
   if (!weapon || !action) return { status: 'not_found' };
   if (action.ownerToken !== ownerToken) return { status: 'owner_mismatch' };
-  cancelPhysicalAction(gunner, action.actionHandle, {
-    endedSeconds,
-    resultCode: 'weapon_deployment_cancelled',
-    resultRu: 'Действие с установкой пулемёта отменено.',
-  });
-  finalizeHelperLeaseById(gunner, action.helperUnitId, action.helperActionHandle, endedSeconds, 'cancelled');
-  if (action.kind === 'deploy') {
-    weapon.deployment.mode = 'portable';
-    weapon.deployment.anchor = null;
-    weapon.deployment.traverseCenterRadians = null;
-    weapon.deployment.deployedAtSeconds = null;
-  } else {
-    weapon.deployment.mode = 'deployed';
-    weapon.deployment.anchor = action.anchorBeforeAction;
-    weapon.deployment.traverseCenterRadians = action.anchorBeforeAction?.facingRadians ?? weapon.deployment.traverseCenterRadians;
+  if (action.actionHandle && getPhysicalActionLease(gunner, action.actionHandle)) {
+    cancelPhysicalAction(gunner, action.actionHandle, {
+      endedSeconds,
+      resultCode: 'weapon_deployment_cancelled',
+      resultRu: 'Действие с установкой пулемёта отменено.',
+    });
   }
-  finishDeploymentRecord(weapon, action.actionId, action.kind, 'cancelled', endedSeconds, 'weapon_deployment_cancelled', 'Действие с установкой пулемёта отменено.');
+  releaseHelperLease(state, action.helperUnitId, action.helperActionHandle, endedSeconds, 'cancelled');
+  restoreStateAfterUnfinishedAction(weapon, action);
+  finishDeploymentRecord(
+    weapon,
+    action.actionId,
+    action.kind,
+    'cancelled',
+    endedSeconds,
+    'weapon_deployment_cancelled',
+    'Действие с установкой пулемёта отменено.',
+  );
   weapon.deployment.activeAction = null;
-  weapon.deployment.revision += 1;
+  weapon.deployment.revision = increment(weapon.deployment.revision);
   return { status: 'cancelled' };
 }
 
@@ -97,12 +100,15 @@ export function tickWeaponDeploymentActions(state: SimulationState, input: TickW
   const start = finiteNonNegative(input.intervalStartSeconds);
   const delta = finiteNonNegative(input.deltaSeconds);
   if (delta <= EPSILON) return;
-  const units = [...state.units].sort(compareUnits);
-  for (const gunner of units) {
+  for (const gunner of [...state.units].sort(compareUnits)) {
     const weapon = gunner.infantryCombatRuntime.primaryWeapon;
     const action = weapon?.deployment.activeAction;
     if (!weapon || !action) continue;
-    if (!getPhysicalActionLease(gunner, action.actionHandle)) {
+    if (action.weaponInstanceId !== weapon.weaponInstanceId) {
+      failDeployment(state, gunner, start, 'weapon_deployment_weapon_replaced', 'Экземпляр пулемёта был заменён во время действия.');
+      continue;
+    }
+    if (!action.actionHandle || !getPhysicalActionLease(gunner, action.actionHandle)) {
       failDeployment(state, gunner, start, 'weapon_deployment_ownership_lost', 'Потерян захват физических каналов пулемётчика.');
       continue;
     }
@@ -121,37 +127,49 @@ export function tickWeaponDeploymentActions(state: SimulationState, input: TickW
       action.helperUnitId = null;
       action.helperValidationCode = 'assistant_lost';
     }
+
     const multiplier = assisted ? clamp(weapon.resolved.weapon.assistantDeployMultiplier, 0.25, 1) : 1;
-    const work = delta / multiplier;
-    action.completedBaseWorkSeconds = Math.min(action.requiredBaseWorkSeconds, action.completedBaseWorkSeconds + work);
-    action.lastAdvancedSeconds = start + delta;
+    const baseRemaining = Math.max(0, action.requiredBaseWorkSeconds - action.completedBaseWorkSeconds);
+    const realSecondsToComplete = baseRemaining * multiplier;
+    const usedSeconds = Math.min(delta, realSecondsToComplete);
+    action.completedBaseWorkSeconds = Math.min(
+      action.requiredBaseWorkSeconds,
+      canonical(action.completedBaseWorkSeconds + usedSeconds / multiplier),
+    );
+    action.lastAdvancedSeconds = canonical(start + usedSeconds);
     if (action.completedBaseWorkSeconds + EPSILON < action.requiredBaseWorkSeconds) continue;
 
+    const endedSeconds = canonical(start + usedSeconds);
     completePhysicalAction(gunner, action.actionHandle, {
-      endedSeconds: start + delta,
+      endedSeconds,
       resultCode: action.kind === 'deploy' ? 'weapon_deployed' : 'weapon_undeployed',
       resultRu: action.kind === 'deploy' ? 'Пулемёт установлен.' : 'Пулемёт снят с установки.',
     });
-    releaseHelperLease(state, action.helperUnitId, action.helperActionHandle, start + delta, 'completed');
+    releaseHelperLease(state, action.helperUnitId, action.helperActionHandle, endedSeconds, 'completed');
     if (action.kind === 'deploy') {
       const anchor = captureWeaponDeploymentAnchor(state.map, gunner);
       weapon.deployment.mode = 'deployed';
       weapon.deployment.anchor = anchor;
       weapon.deployment.traverseCenterRadians = anchor.facingRadians;
-      weapon.deployment.deployedAtSeconds = start + delta;
-      weapon.deployment.invalidationReason = null;
+      weapon.deployment.deployedAtSeconds = endedSeconds;
     } else {
       weapon.deployment.mode = 'portable';
       weapon.deployment.anchor = null;
       weapon.deployment.traverseCenterRadians = null;
       weapon.deployment.deployedAtSeconds = null;
-      weapon.deployment.invalidationReason = null;
     }
-    finishDeploymentRecord(weapon, action.actionId, action.kind, 'completed', start + delta,
+    weapon.deployment.invalidationReason = null;
+    finishDeploymentRecord(
+      weapon,
+      action.actionId,
+      action.kind,
+      'completed',
+      endedSeconds,
       action.kind === 'deploy' ? 'weapon_deployed' : 'weapon_undeployed',
-      action.kind === 'deploy' ? 'Пулемёт установлен.' : 'Пулемёт снят с установки.');
+      action.kind === 'deploy' ? 'Пулемёт установлен.' : 'Пулемёт снят с установки.',
+    );
     weapon.deployment.activeAction = null;
-    weapon.deployment.revision += 1;
+    weapon.deployment.revision = increment(weapon.deployment.revision);
   }
 }
 
@@ -160,18 +178,18 @@ export function reconcileWeaponDeploymentAnchors(state: SimulationState, reconci
     const weapon = unit.infantryCombatRuntime.primaryWeapon;
     if (!weapon || weapon.deployment.mode !== 'deployed' || !weapon.deployment.anchor) continue;
     if (deploymentAnchorStillValid(state.map, unit, weapon.deployment.anchor)) continue;
-    if (invalidateWeaponDeployment(weapon, 'weapon_deployment_anchor_invalidated')) {
-      const task = unit.infantryCombatRuntime.activeFireTask;
-      if (task) {
-        const handle = task.actionHandle;
-        if (handle) failPhysicalAction(unit, handle, {
-          endedSeconds: reconciledSeconds,
-          resultCode: 'weapon_deployment_anchor_invalidated',
-          resultRu: 'Огневая задача отменена: установленный пулемёт был физически смещён.',
-        });
-        unit.infantryCombatRuntime.activeFireTask = null;
-      }
+    if (!invalidateWeaponDeployment(weapon, 'deployment_anchor_invalidated')) continue;
+    const task = unit.infantryCombatRuntime.activeFireTask;
+    if (!task) continue;
+    const handle = task.actionHandle;
+    if (handle && getPhysicalActionLease(unit, handle)) {
+      failPhysicalAction(unit, handle, {
+        endedSeconds: reconciledSeconds,
+        resultCode: 'deployment_anchor_invalidated',
+        resultRu: 'Огневая задача отменена: установленный пулемёт был физически смещён.',
+      });
     }
+    unit.infantryCombatRuntime.activeFireTask = null;
   }
 }
 
@@ -182,14 +200,18 @@ function requestDeploymentAction(
   kind: WeaponDeploymentActionKind,
 ): RequestWeaponDeploymentResult {
   const weapon = gunner.infantryCombatRuntime.primaryWeapon;
-  if (!weapon || weapon.resolved.weapon.weaponClass !== 'machine_gun') return rejected('unsupported_weapon', 'weapon_deployment_unsupported', 'У бойца нет переносного пулемёта для этого действия.');
+  if (!weapon || weapon.resolved.weapon.weaponClass !== 'machine_gun') {
+    return rejected('unsupported_weapon', 'weapon_deployment_unsupported', 'У бойца нет переносного пулемёта для этого действия.');
+  }
   const deployment = weapon.deployment;
   if (deployment.activeAction) {
     if (deployment.activeAction.ownerToken === input.ownerToken && deployment.activeAction.kind === kind) {
       return {
         accepted: true,
         status: 'already_running',
-        gunnerLease: getPhysicalActionLease(gunner, deployment.activeAction.actionHandle),
+        gunnerLease: deployment.activeAction.actionHandle
+          ? getPhysicalActionLease(gunner, deployment.activeAction.actionHandle)
+          : null,
         helperLease: helperLease(state, deployment.activeAction.helperUnitId, deployment.activeAction.helperActionHandle),
         reasonCode: 'weapon_deployment_already_running',
         reasonRu: 'Такое действие с пулемётом уже выполняется.',
@@ -197,10 +219,32 @@ function requestDeploymentAction(
     }
     return rejected('invalid_state', 'weapon_deployment_action_in_progress', 'Другое действие с установкой пулемёта уже выполняется.');
   }
-  if (kind === 'deploy' && deployment.mode !== 'portable') return rejected('invalid_state', 'weapon_deployment_invalid_state', 'Установить можно только переносной пулемёт.');
-  if (kind === 'undeploy' && deployment.mode !== 'deployed') return rejected('invalid_state', 'weapon_undeployment_invalid_state', 'Снять с установки можно только установленный пулемёт.');
-  if (gunner.infantryCombatRuntime.activeFireTask || gunner.infantryCombatRuntime.ammoInventory.activeReload || gunner.infantryCombatRuntime.ammoInventory.activeTransfer) {
+  if (kind === 'deploy' && deployment.mode !== 'portable') {
+    return rejected('invalid_state', 'weapon_deployment_invalid_state', 'Установить можно только переносной пулемёт.');
+  }
+  if (kind === 'undeploy' && deployment.mode !== 'deployed') {
+    return rejected('invalid_state', 'weapon_undeployment_invalid_state', 'Снять с установки можно только установленный пулемёт.');
+  }
+  const capabilities = getEffectiveCombatCapabilities(gunner);
+  if (!capabilities.alive || !capabilities.conscious || !capabilities.canUseWeapon || !capabilities.canMove) {
+    return rejected('invalid_state', 'weapon_deployment_capability_lost', 'Физическое состояние не позволяет выполнить действие с пулемётом.');
+  }
+  if (gunner.movementRuntime.isMoving || Math.hypot(
+    gunner.movementRuntime.velocityCellsPerSecond.x,
+    gunner.movementRuntime.velocityCellsPerSecond.y,
+  ) > EPSILON) {
+    return rejected('invalid_state', 'weapon_deployment_requires_stationary', 'Для действия с пулемётом боец должен остановиться.');
+  }
+  if (gunner.infantryCombatRuntime.activeFireTask
+    || gunner.infantryCombatRuntime.ammoInventory.activeReload
+    || gunner.infantryCombatRuntime.ammoInventory.activeTransfer) {
     return rejected('channels_blocked', 'weapon_action_in_progress', 'Канал оружия занят другим физическим действием.');
+  }
+  const requiredBaseWorkSeconds = kind === 'deploy'
+    ? finiteNonNegative(weapon.resolved.weapon.deploySeconds)
+    : finiteNonNegative(weapon.resolved.weapon.undeploySeconds);
+  if (requiredBaseWorkSeconds <= EPSILON) {
+    return rejected('invalid_state', 'weapon_deployment_duration_invalid', 'В опубликованном профиле задана неверная длительность действия.');
   }
 
   const startedSeconds = finiteNonNegative(input.requestedSeconds);
@@ -214,7 +258,9 @@ function requestDeploymentAction(
     reasonCode: kind === 'deploy' ? 'weapon_deployment_requested' : 'weapon_undeployment_requested',
     reasonRu: kind === 'deploy' ? 'Начата установка пулемёта.' : 'Начато снятие пулемёта с установки.',
   });
-  if (!gunnerRequest.accepted || !gunnerRequest.handle || !gunnerRequest.lease) return rejected('channels_blocked', gunnerRequest.reasonCode, gunnerRequest.reasonRu);
+  if (!gunnerRequest.accepted || !gunnerRequest.handle || !gunnerRequest.lease) {
+    return rejected('channels_blocked', gunnerRequest.reasonCode, gunnerRequest.reasonRu);
+  }
 
   const helperRequest = requestAssistantLease({
     state,
@@ -227,28 +273,27 @@ function requestDeploymentAction(
   });
   const helper = helperRequest.handle && helperRequest.validation.helper ? helperRequest.validation.helper : null;
   const sequence = deployment.nextActionSequence;
-  deployment.nextActionSequence = Math.min(Number.MAX_SAFE_INTEGER, sequence + 1);
+  deployment.nextActionSequence = increment(sequence);
   deployment.mode = kind === 'deploy' ? 'deploying' : 'undeploying';
   deployment.activeAction = {
     schemaVersion: WEAPON_DEPLOYMENT_SCHEMA_VERSION,
     actionId: `${weapon.weaponInstanceId}:${kind}:${sequence}`,
     sequence,
     kind,
+    weaponInstanceId: weapon.weaponInstanceId,
     owner: { ...input.owner },
     ownerToken: input.ownerToken,
     actionHandle: gunnerRequest.handle,
     helperUnitId: helper?.id ?? null,
     helperActionHandle: helperRequest.handle,
     helperValidationCode: helperRequest.validation.reasonCode,
-    requiredBaseWorkSeconds: kind === 'deploy'
-      ? finiteNonNegative(weapon.resolved.weapon.deploySeconds)
-      : finiteNonNegative(weapon.resolved.weapon.undeploySeconds),
+    requiredBaseWorkSeconds,
     completedBaseWorkSeconds: 0,
     startedSeconds,
     lastAdvancedSeconds: startedSeconds,
     anchorBeforeAction: kind === 'undeploy' ? deployment.anchor : null,
   };
-  deployment.revision += 1;
+  deployment.revision = increment(deployment.revision);
   return {
     accepted: true,
     status: 'started',
@@ -259,25 +304,40 @@ function requestDeploymentAction(
   };
 }
 
-function failDeployment(state: SimulationState, gunner: UnitModel, endedSeconds: number, code: string, text: string): void {
+function failDeployment(
+  state: SimulationState,
+  gunner: UnitModel,
+  endedSeconds: number,
+  code: string,
+  text: string,
+): void {
   const weapon = gunner.infantryCombatRuntime.primaryWeapon;
   const action = weapon?.deployment.activeAction;
   if (!weapon || !action) return;
-  failPhysicalAction(gunner, action.actionHandle, { endedSeconds, resultCode: code, resultRu: text });
+  if (action.actionHandle && getPhysicalActionLease(gunner, action.actionHandle)) {
+    failPhysicalAction(gunner, action.actionHandle, { endedSeconds, resultCode: code, resultRu: text });
+  }
   releaseHelperLease(state, action.helperUnitId, action.helperActionHandle, endedSeconds, 'failed');
+  restoreStateAfterUnfinishedAction(weapon, action);
+  finishDeploymentRecord(weapon, action.actionId, action.kind, 'failed', endedSeconds, code, text);
+  weapon.deployment.activeAction = null;
+  weapon.deployment.revision = increment(weapon.deployment.revision);
+}
+
+function restoreStateAfterUnfinishedAction(
+  weapon: NonNullable<UnitModel['infantryCombatRuntime']['primaryWeapon']>,
+  action: WeaponDeploymentActionV1,
+): void {
   if (action.kind === 'undeploy' && action.anchorBeforeAction) {
     weapon.deployment.mode = 'deployed';
     weapon.deployment.anchor = action.anchorBeforeAction;
     weapon.deployment.traverseCenterRadians = action.anchorBeforeAction.facingRadians;
-  } else {
-    weapon.deployment.mode = 'portable';
-    weapon.deployment.anchor = null;
-    weapon.deployment.traverseCenterRadians = null;
-    weapon.deployment.deployedAtSeconds = null;
+    return;
   }
-  finishDeploymentRecord(weapon, action.actionId, action.kind, 'failed', endedSeconds, code, text);
-  weapon.deployment.activeAction = null;
-  weapon.deployment.revision += 1;
+  weapon.deployment.mode = 'portable';
+  weapon.deployment.anchor = null;
+  weapon.deployment.traverseCenterRadians = null;
+  weapon.deployment.deployedAtSeconds = null;
 }
 
 function finishDeploymentRecord(
@@ -292,23 +352,48 @@ function finishDeploymentRecord(
   appendDeploymentResult(weapon.deployment, { actionId, kind, status, endedSeconds, resultCode, resultRu });
 }
 
-function helperLease(state: SimulationState, helperUnitId: string | null, handle: Parameters<typeof getPhysicalActionLease>[1] | null): PhysicalActionLeaseV1 | null {
+function helperLease(
+  state: SimulationState,
+  helperUnitId: string | null,
+  handle: PhysicalActionHandleV1 | null,
+): PhysicalActionLeaseV1 | null {
   if (!helperUnitId || !handle) return null;
   const helper = getCombatUnitSpatialIndex(state).unitsById.get(helperUnitId);
   return helper ? getPhysicalActionLease(helper, handle) : null;
 }
-function releaseHelperLease(state: SimulationState, helperUnitId: string | null, handle: Parameters<typeof getPhysicalActionLease>[1] | null, endedSeconds: number, status: 'completed' | 'cancelled' | 'failed' | 'assistant_lost'): void {
+
+function releaseHelperLease(
+  state: SimulationState,
+  helperUnitId: string | null,
+  handle: PhysicalActionHandleV1 | null,
+  endedSeconds: number,
+  status: 'completed' | 'cancelled' | 'failed' | 'assistant_lost',
+): void {
   if (!helperUnitId || !handle) return;
   const helper = getCombatUnitSpatialIndex(state).unitsById.get(helperUnitId);
   if (!helper || !getPhysicalActionLease(helper, handle)) return;
-  if (status === 'completed') completePhysicalAction(helper, handle, { endedSeconds, resultCode: 'assistant_action_completed', resultRu: 'Помощь завершена.' });
-  else if (status === 'failed') failPhysicalAction(helper, handle, { endedSeconds, resultCode: 'assistant_action_failed', resultRu: 'Помощь завершена с ошибкой.' });
-  else cancelPhysicalAction(helper, handle, { endedSeconds, resultCode: status === 'assistant_lost' ? 'assistant_lost' : 'assistant_action_cancelled', resultRu: status === 'assistant_lost' ? 'Помощник больше не может участвовать.' : 'Помощь отменена.' });
+  if (status === 'completed') {
+    completePhysicalAction(helper, handle, { endedSeconds, resultCode: 'assistant_action_completed', resultRu: 'Помощь завершена.' });
+  } else if (status === 'failed') {
+    failPhysicalAction(helper, handle, { endedSeconds, resultCode: 'assistant_action_failed', resultRu: 'Помощь завершена с ошибкой.' });
+  } else {
+    cancelPhysicalAction(helper, handle, {
+      endedSeconds,
+      resultCode: status === 'assistant_lost' ? 'assistant_lost' : 'assistant_action_cancelled',
+      resultRu: status === 'assistant_lost' ? 'Помощник больше не может участвовать.' : 'Помощь отменена.',
+    });
+  }
 }
-function finalizeHelperLeaseById(_gunner: UnitModel, _helperUnitId: string | null, _handle: Parameters<typeof getPhysicalActionLease>[1] | null, _endedSeconds: number, _status: 'cancelled'): void {
-  // Public cancellation has no SimulationState. Reconciliation removes a stale helper lease; normal callers should use tick/capability paths.
+
+function rejected(
+  status: RequestWeaponDeploymentResult['status'],
+  reasonCode: string,
+  reasonRu: string,
+): RequestWeaponDeploymentResult {
+  return { accepted: false, status, gunnerLease: null, helperLease: null, reasonCode, reasonRu };
 }
-function rejected(status: RequestWeaponDeploymentResult['status'], reasonCode: string, reasonRu: string): RequestWeaponDeploymentResult { return { accepted: false, status, gunnerLease: null, helperLease: null, reasonCode, reasonRu }; }
+function increment(value: number): number { return Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.round(value)) + 1); }
 function finiteNonNegative(value: unknown): number { return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0; }
 function clamp(value: number, minimum: number, maximum: number): number { return Math.max(minimum, Math.min(maximum, Number.isFinite(value) ? value : minimum)); }
+function canonical(value: number): number { return Math.round(Math.max(0, value) * 1_000_000_000_000) / 1_000_000_000_000; }
 function compareUnits(left: UnitModel, right: UnitModel): number { return left.id < right.id ? -1 : left.id > right.id ? 1 : 0; }
