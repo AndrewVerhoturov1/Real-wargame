@@ -1,22 +1,11 @@
-import { normalizeLegacyHitZone, type BallisticDirection3, type BallisticPoint3 } from '../../combat/UnitHitShapes';
 import type { AmmoDefinitionV1 } from '../catalogs/CombatCatalogTypes';
-import { isHitZone, type BodyImpactPhysicsV1 } from './InfantryBodyTypes';
 import {
-  DEFAULT_PROJECTILE_EVENT_BUFFER_CAPACITY,
   MAX_STAGE3_APPLIED_IMPACT_IDS,
   MAX_STAGE3_COMMIT_LEDGER_ENTRIES,
-  MAX_STAGE3_IMPACT_ENTRIES,
-  MAX_STAGE3_TERMINATION_ENTRIES,
-  MAX_STAGE6_IMPACT_BUFFER_ENTRIES,
   PRODUCTION_PROJECTILE_CAPACITY,
-  PROJECTILE_IMPACT_SCHEMA_VERSION,
   PROJECTILE_RUNTIME_SCHEMA_VERSION,
-  PROJECTILE_STATE_SCHEMA_VERSION,
-  PROJECTILE_TERMINATION_SCHEMA_VERSION,
   REFERENCE_PROJECTILE_RUNTIME_SCHEMA_VERSION,
-  SHOT_COMMIT_RECORD_SCHEMA_VERSION,
   STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
-  type ProjectileImpactV1,
   type ProjectilePoolHandleV2,
   type ProjectilePoolV3,
   type ProjectileRuntimeDiagnosticsV3,
@@ -24,11 +13,9 @@ import {
   type ProjectileRuntimeStateV3,
   type ProjectileSpawnResultV2,
   type ProjectileStateV1,
-  type ProjectileTerminationV1,
   type ReferenceProjectileRuntimeStateV1,
   type ShotCommitRecordV1,
 } from './ProjectileRuntimeTypes';
-
 import {
   createDiagnostics,
   derivedByRuntime,
@@ -62,7 +49,6 @@ import {
   uniqueBy,
 } from './ProjectileRuntimeSerialization';
 
-const MAX_NORMALIZED_CAPACITY = 16_384;
 export function createProjectilePool(capacity = PRODUCTION_PROJECTILE_CAPACITY): ProjectilePoolV3 {
   const normalized = normalizeCapacity(capacity, PRODUCTION_PROJECTILE_CAPACITY, 0);
   const freeSlots = new Uint32Array(normalized);
@@ -87,6 +73,7 @@ export function createProjectilePool(capacity = PRODUCTION_PROJECTILE_CAPACITY):
     bodyPenetrationCount: new Uint8Array(normalized),
     impactSequence: new Uint32Array(normalized),
     lastHitUnitIds: Array<string | null>(normalized).fill(null),
+    suppressionContinuousFireScores: new Float64Array(normalized),
     freeSlots,
     activeCount: 0,
     freeSlotCount: normalized,
@@ -125,7 +112,7 @@ export function normalizeProjectileRuntimeState(value: unknown): ProjectileRunti
   if (isRecord(value) && value.schemaVersion === REFERENCE_PROJECTILE_RUNTIME_SCHEMA_VERSION) {
     return migrateReferenceSnapshot(value as unknown as ReferenceProjectileRuntimeStateV1);
   }
-  if (isRecord(value) && (value.schemaVersion === 2 || value.schemaVersion === PROJECTILE_RUNTIME_SCHEMA_VERSION)) {
+  if (isRecord(value) && (value.schemaVersion === 2 || value.schemaVersion === 3 || value.schemaVersion === PROJECTILE_RUNTIME_SCHEMA_VERSION)) {
     return createRuntimeFromSnapshot(normalizeSnapshot(value));
   }
   return createProjectileRuntimeState();
@@ -181,10 +168,7 @@ export function trySpawnProjectile(runtime: ProjectileRuntimeStateV3, candidate:
   derived.slotByProjectileId.set(normalized.projectileId, slot);
   runtime.diagnostics.spawnCount = increment(runtime.diagnostics.spawnCount);
   syncDiagnostics(runtime);
-  return {
-    status: 'spawned',
-    handle: { slot, generation: runtime.pool.generation[slot]!, projectileId: normalized.projectileId },
-  };
+  return { status: 'spawned', handle: { slot, generation: runtime.pool.generation[slot]!, projectileId: normalized.projectileId } };
 }
 
 export function releaseProjectileSlot(runtime: ProjectileRuntimeStateV3, handle: ProjectilePoolHandleV2): boolean {
@@ -254,7 +238,6 @@ export function rebuildProjectilePool(runtime: ProjectileRuntimeStateV3, project
 export function hasActiveProjectileId(runtime: ProjectileRuntimeStateV3, projectileId: string): boolean {
   return getDerived(runtime).slotByProjectileId.has(projectileId);
 }
-
 export function findProjectileSlot(runtime: ProjectileRuntimeStateV3, projectileId: string): number {
   return getDerived(runtime).slotByProjectileId.get(projectileId) ?? -1;
 }
@@ -278,7 +261,6 @@ export function getProjectileRuntimeDiagnostics(runtime: ProjectileRuntimeStateV
   syncDiagnostics(runtime);
   return clone(runtime.diagnostics);
 }
-
 export function resetProjectileRuntimeDiagnostics(runtime: ProjectileRuntimeStateV3): void {
   const capacity = runtime.pool.capacity;
   const active = runtime.pool.activeCount;
@@ -289,7 +271,6 @@ export function resetProjectileRuntimeDiagnostics(runtime: ProjectileRuntimeStat
   runtime.diagnostics.highWaterMark = highWater;
   runtime.diagnostics.accumulatorSeconds = runtime.accumulatorSeconds;
 }
-
 export function getActiveShotIds(runtime: ProjectileRuntimeStateV3, output = new Set<string>()): Set<string> {
   output.clear();
   for (let slot = 0; slot < runtime.pool.capacity; slot += 1) {
@@ -297,10 +278,7 @@ export function getActiveShotIds(runtime: ProjectileRuntimeStateV3, output = new
   }
   return output;
 }
-
-export function syncProjectileRuntimeDiagnostics(runtime: ProjectileRuntimeStateV3): void {
-  syncDiagnostics(runtime);
-}
+export function syncProjectileRuntimeDiagnostics(runtime: ProjectileRuntimeStateV3): void { syncDiagnostics(runtime); }
 
 function createRuntimeFromSnapshot(snapshot: ProjectileRuntimeSnapshotV3): ProjectileRuntimeStateV3 {
   const runtime = createProjectileRuntimeState(snapshot.capacity);
@@ -374,7 +352,6 @@ function releaseSlotUnchecked(runtime: ProjectileRuntimeStateV3, slot: number): 
   runtime.diagnostics.releaseCount = increment(runtime.diagnostics.releaseCount);
   syncDiagnostics(runtime);
 }
-
 function clearPool(runtime: ProjectileRuntimeStateV3): void {
   const fresh = createProjectilePool(runtime.pool.capacity);
   Object.assign(runtime.pool, fresh);
