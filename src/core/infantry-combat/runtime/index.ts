@@ -27,7 +27,6 @@ export * from './SuppressionProjectileEvents';
 export * from './ProjectileRuntimeTypes';
 export * from './ProjectileRuntime';
 export * from './ReferenceProjectileRuntime';
-export * from './ProjectileStepper';
 export * from './ProjectileStepperStage8';
 export * from './ReferenceProjectileStepper';
 export * from './InfantryCombatSimulation';
