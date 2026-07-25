@@ -152,7 +152,7 @@ function runAndAdapt(
     runtime.lastEvent = 'ai_graph_reload_rejected_posture_transition';
   }
 
-  if (unit.order !== before.order) {
+  if (!options.diagnosticPreview && unit.order !== before.order) {
     const decisionAtMs = Number.isFinite(runtime.aiGraphLastTickMs)
       ? runtime.aiGraphLastTickMs
       : nowMs;
