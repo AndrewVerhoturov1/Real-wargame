@@ -73,6 +73,14 @@ export interface InfantryCombatDiagnosticsV1 {
     readonly lastBodyResistance: number;
     readonly lastBodySpeedBefore: number;
     readonly lastBodySpeedAfter: number;
+    readonly suppressionEventBufferCapacity: number;
+    readonly suppressionEventBufferHighWaterMark: number;
+    readonly suppressionEventOverflowCount: number;
+    readonly suppressionCandidateTruncationCount: number;
+    readonly suppressionDuplicateEventCount: number;
+    readonly emittedNearMissCount: number;
+    readonly emittedNearImpactCount: number;
+    readonly emittedDirectHitCount: number;
   };
   readonly units: readonly InfantryCombatUnitDiagnosticsV1[];
 }
@@ -94,13 +102,28 @@ export interface InfantryCombatUnitDiagnosticsV1 {
     readonly recoilYawRadians: number;
     readonly recoilLastUpdatedSeconds: number;
     readonly recoilSequence: number;
+    readonly nextShotAllowedSeconds: number;
+    readonly lastCommittedShotSeconds: number | null;
+    readonly continuousFireScore: number;
+    readonly continuousFireSequence: number;
   };
   readonly fireTask: null | {
     readonly taskId: string;
     readonly phase: FireTaskRuntimeV1['phase'];
+    readonly mode: FireTaskRuntimeV1['mode'];
     readonly ownerToken: string;
     readonly actionId: string | null;
     readonly target: FireTaskRuntimeV1['target'];
+    readonly targetRadiusMetres: number;
+    readonly plannedRoundCount: number;
+    readonly committedRoundCount: number;
+    readonly nextShotOrdinal: number;
+    readonly nextShotBoundarySeconds: number | null;
+    readonly burstStartedSeconds: number | null;
+    readonly lastShotCommittedSeconds: number | null;
+    readonly committedShotIds: readonly string[];
+    readonly supportPointIndex: number;
+    readonly lastSupportPoint: FireTaskRuntimeV1['lastSupportPoint'];
     readonly trackingUpdateCount: number;
     readonly trackingIntervalSeconds: number;
     readonly lastTrackingBoundarySeconds: number | null;
@@ -124,6 +147,7 @@ export interface InfantryCombatUnitDiagnosticsV1 {
     readonly committedShotId: string | null;
     readonly resultCode: string | null;
   };
+  readonly suppression: InfantryCombatUnitRuntimeV1['suppression'];
   readonly wounds: InfantryCombatUnitRuntimeV1['wounds'];
   readonly physiology: InfantryCombatUnitRuntimeV1['physiology'];
   readonly medical: InfantryCombatUnitRuntimeV1['medical'];
@@ -155,10 +179,10 @@ export function getInfantryCombatDiagnostics(state: SimulationState): InfantryCo
       impactIds: sorted(runtime.impacts.map((impact) => impact.impactId)),
       terminationIds: sorted(runtime.terminations.map((termination) => termination.terminationId)),
       appliedImpactCount: runtime.appliedImpactIds.length,
-      fixedSubstepsExecuted: runtime.diagnostics.fixedSubstepsExecuted,
-      sweptTraceCount: runtime.diagnostics.sweptTraceCount,
-      unitCheckCount: runtime.diagnostics.unitCheckCount,
-      objectCandidateCount: runtime.diagnostics.objectCandidateCount,
+      fixedSubstepsExecuted: projectileDiagnostics.fixedSubstepsExecuted,
+      sweptTraceCount: projectileDiagnostics.sweptTraceCount,
+      unitCheckCount: projectileDiagnostics.unitCheckCount,
+      objectCandidateCount: projectileDiagnostics.objectCandidateCount,
       capacity: projectileDiagnostics.capacity,
       freeCount: projectileDiagnostics.freeCount,
       highWaterMark: projectileDiagnostics.highWaterMark,
@@ -197,6 +221,14 @@ export function getInfantryCombatDiagnostics(state: SimulationState): InfantryCo
       lastBodyResistance: projectileDiagnostics.lastBodyResistance,
       lastBodySpeedBefore: projectileDiagnostics.lastBodySpeedBefore,
       lastBodySpeedAfter: projectileDiagnostics.lastBodySpeedAfter,
+      suppressionEventBufferCapacity: projectileDiagnostics.suppressionEventBufferCapacity,
+      suppressionEventBufferHighWaterMark: projectileDiagnostics.suppressionEventBufferHighWaterMark,
+      suppressionEventOverflowCount: projectileDiagnostics.suppressionEventOverflowCount,
+      suppressionCandidateTruncationCount: projectileDiagnostics.suppressionCandidateTruncationCount,
+      suppressionDuplicateEventCount: projectileDiagnostics.suppressionDuplicateEventCount,
+      emittedNearMissCount: projectileDiagnostics.emittedNearMissCount,
+      emittedNearImpactCount: projectileDiagnostics.emittedNearImpactCount,
+      emittedDirectHitCount: projectileDiagnostics.emittedDirectHitCount,
     },
     units: state.units.map((unit): InfantryCombatUnitDiagnosticsV1 => {
       const unitRuntime = unit.infantryCombatRuntime;
@@ -219,8 +251,13 @@ export function getInfantryCombatDiagnostics(state: SimulationState): InfantryCo
           recoilYawRadians: weapon.recoil.yawOffsetRadians,
           recoilLastUpdatedSeconds: weapon.recoil.lastUpdatedSeconds,
           recoilSequence: weapon.recoil.sequence,
+          nextShotAllowedSeconds: weapon.automaticFire.nextShotAllowedSeconds,
+          lastCommittedShotSeconds: weapon.automaticFire.lastCommittedShotSeconds,
+          continuousFireScore: weapon.automaticFire.continuousFireScore,
+          continuousFireSequence: weapon.automaticFire.continuousFireSequence,
         } : null,
         fireTask: task ? taskDiagnostics(task) : null,
+        suppression: structuredClone(unitRuntime.suppression),
         wounds: structuredClone(unitRuntime.wounds),
         physiology: structuredClone(unitRuntime.physiology),
         medical: structuredClone(unitRuntime.medical),
@@ -237,9 +274,20 @@ function taskDiagnostics(task: FireTaskRuntimeV1): NonNullable<InfantryCombatUni
   return {
     taskId: task.taskId,
     phase: task.phase,
+    mode: task.mode,
     ownerToken: task.ownerToken,
     actionId: task.actionHandle?.actionId ?? null,
     target: structuredClone(task.target),
+    targetRadiusMetres: task.targetRadiusMetres,
+    plannedRoundCount: task.plannedRoundCount,
+    committedRoundCount: task.committedShots.length,
+    nextShotOrdinal: task.nextShotOrdinal,
+    nextShotBoundarySeconds: task.nextShotBoundarySeconds,
+    burstStartedSeconds: task.burstStartedSeconds,
+    lastShotCommittedSeconds: task.lastShotCommittedSeconds,
+    committedShotIds: task.committedShots.map((record) => record.shotId),
+    supportPointIndex: task.supportPointIndex,
+    lastSupportPoint: task.lastSupportPoint ? structuredClone(task.lastSupportPoint) : null,
     trackingUpdateCount: task.aimTracking.trackingUpdateCount,
     trackingIntervalSeconds: task.aimTracking.trackingIntervalSeconds,
     lastTrackingBoundarySeconds: task.aimTracking.lastTrackingBoundarySeconds,
