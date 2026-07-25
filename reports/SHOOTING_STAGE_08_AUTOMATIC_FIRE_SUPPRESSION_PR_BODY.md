@@ -5,23 +5,28 @@
 - фиксирует каждый патрон очереди отдельным атомарным `commitShot`;
 - сохраняет темп оружия, частично выполненную очередь, отдачу, активные пули и незавершённые окна подавления;
 - создаёт подавление только из физических `near_miss`, `near_impact` и `direct_hit`;
+- исключает повторное подавление цели прямого попадания той же пулей;
 - оставляет реакцию на подавление будущему Graph v2.
 
 ## Scope boundaries
 
 Не изменялись Graph v2, `InvestigateContact`, внимание, редактор нод, примеры графов, интерфейс и рабочие процессы. Не добавлены пулемёт, установка оружия, помощник, автоматический поиск укрытия, автоматическая смена позы, deployment, Playwright или Chromium.
 
-## Verification selection
+## Verification result
 
-- обязательные автоматические проверки `PR Risk CI`;
-- `npm run infantry-combat-stage8:smoke`;
-- `npm run infantry-combat-stage8:forbidden-scan`;
-- `npm run infantry-combat-stage8:verify`;
-- сохранённые проверки Stage 5–7, каталогов, физических действий, движения, восприятия и Graph v2;
-- TypeScript и один production build;
-- браузерные и тяжёлые интерактивные проверки не запускаются: интерфейс и браузерный сценарий не изменены, а задание прямо исключает Playwright/Chromium.
+`PR Risk CI` run `#538` на кодовом HEAD `9696744e207bac166c96b4120bcd3bc3d8a44d25` завершён успешно:
 
-TESTED_IMPLEMENTATION_HEAD: none
+- документация и политика репозитория — PASS;
+- TypeScript — PASS;
+- `combat-foundation:smoke` — PASS;
+- Stage 8 smoke: автоматический огонь, опорные точки, физическое подавление, save/load и стресс `4096` пуль — PASS;
+- perception smoke — PASS;
+- production build — PASS;
+- exact-head evidence decision — PASS.
+
+Отдельный полный шлюз `npm run infantry-combat-stage8:verify` подготовлен для независимого ручного запуска. Браузерные и тяжёлые интерактивные проверки не запускались: интерфейс не изменён, а Stage 8 прямо исключает Playwright/Chromium.
+
+TESTED_IMPLEMENTATION_HEAD: set-in-live-pr-body
 
 ## Performance impact
 
@@ -47,7 +52,7 @@ teardown: scratch-состояние освобождается вместе с 
 
 before metrics: разрешённая основа `f7eea38163be07c70d83314b5b6f3a1ae1cb5855` со Stage 7;
 
-after metrics: обязательный headless-сценарий с 4096 активными пулями и точный `PR Risk CI`;
+after metrics: зелёный headless-сценарий с 4096 активными пулями и зелёный точный `PR Risk CI`;
 
 exact-head enforced workflow: `PR Risk CI` на точном PR HEAD;
 
