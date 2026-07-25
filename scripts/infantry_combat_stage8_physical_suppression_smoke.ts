@@ -18,7 +18,7 @@ verifyNoSuppressionWithoutPhysicalEvent();
 console.log('Infantry combat Stage 8 physical suppression smoke passed: near miss, near impact and direct hit originate from physical projectile events only.');
 
 function verifyNearMissSuppression(): void {
-  const state = createState('near-miss', [
+  const state = createState([
     unit('shooter', 'blue', 5, 10),
     unit('near', 'red', 20, 12),
     unit('far', 'red', 20, 20),
@@ -34,7 +34,7 @@ function verifyNearMissSuppression(): void {
 }
 
 function verifyNearImpactSuppression(): void {
-  const state = createState('near-impact', [
+  const state = createState([
     unit('shooter', 'blue', 5, 5),
     unit('near-impact-target', 'red', 20, 12),
   ]);
@@ -48,7 +48,7 @@ function verifyNearImpactSuppression(): void {
 }
 
 function verifyDirectHitSuppression(): void {
-  const state = createState('direct-hit', [
+  const state = createState([
     unit('shooter', 'blue', 5, 10),
     unit('direct-target', 'red', 20, 10),
   ]);
@@ -64,7 +64,7 @@ function verifyDirectHitSuppression(): void {
 }
 
 function verifyNoSuppressionWithoutPhysicalEvent(): void {
-  const state = createState('no-event', [unit('idle', 'red', 10, 10)]);
+  const state = createState([unit('idle', 'red', 10, 10)]);
   advanceSuppressionRuntimeTo(state.units[0]!.infantryCombatRuntime.suppression, 3);
   assert.equal(state.units[0]!.infantryCombatRuntime.suppression.suppressionLevel, 0);
   assert.equal(state.units[0]!.infantryCombatRuntime.suppression.shock, 0);
@@ -106,7 +106,7 @@ function spawn(
   assert.equal(trySpawnProjectile(state.infantryCombatProjectiles, projectile).status, 'spawned');
 }
 
-function createState(id: string, units: ReturnType<typeof unit>[]) {
+function createState(units: ReturnType<typeof unit>[]) {
   return createInitialState({
     width: 100,
     height: 40,
@@ -115,7 +115,7 @@ function createState(id: string, units: ReturnType<typeof unit>[]) {
     defaultTerrain: 'field',
     defaultHeight: 0,
     objects: [],
-  }, units.map((entry) => ({ ...entry, id: `${id}:${entry.id}` })));
+  }, units);
 }
 
 function unit(id: string, side: 'blue' | 'red', x: number, y: number) {
