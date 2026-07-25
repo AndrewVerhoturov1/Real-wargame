@@ -8,8 +8,10 @@ const outDir = path.join(repoRoot, '.tmp-ai-per-unit-scheduler-smoke');
 const sourceFile = path.join(repoRoot, 'scripts', 'ai_per_unit_scheduler_smoke.ts');
 const adaptedSourceFile = path.join(repoRoot, 'scripts', '.tmp-ai-per-unit-scheduler-posture-smoke.ts');
 const entryFile = path.join(outDir, 'ai-per-unit-scheduler-smoke.mjs');
+const diagnosticErrorFile = path.join(repoRoot, 'diagnostic-ai-error.txt');
 
 await rm(outDir, { recursive: true, force: true });
+await rm(diagnosticErrorFile, { force: true });
 try {
   const source = await readFile(sourceFile, 'utf8');
   await writeFile(adaptedSourceFile, adaptForPhysicalPosture(source));
@@ -26,6 +28,10 @@ try {
     },
   });
   await import(`${pathToFileURL(entryFile).href}?run=${Date.now()}`);
+} catch (error) {
+  const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
+  await writeFile(diagnosticErrorFile, detail);
+  throw error;
 } finally {
   await rm(outDir, { recursive: true, force: true });
   await rm(adaptedSourceFile, { force: true });
