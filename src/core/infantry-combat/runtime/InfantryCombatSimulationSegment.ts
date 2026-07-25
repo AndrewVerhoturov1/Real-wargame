@@ -1,20 +1,31 @@
 import type { SimulationState } from '../../simulation/SimulationState';
 import type { UnitModel } from '../../units/UnitModel';
 import {
-  beginFireTaskRecovery,
   failActiveFireTask,
   tickFireTaskWithTimeBudget,
 } from './FireTaskRuntime';
-import type { FireTaskRuntimeV1, InfantryWeaponInstanceV1, ShotCommitStatus } from './InfantryCombatRuntimeTypes';
+import {
+  MAX_FIRE_TASK_ROUNDS,
+  type FireTaskRuntimeV1,
+  type InfantryWeaponInstanceV1,
+  type ShotCommitStatus,
+} from './InfantryCombatRuntimeTypes';
 import { tickReferenceProjectiles } from './ReferenceProjectileStepper';
 import { commitShot, type CommitShotResult } from './ShotCommitService';
+import { advanceSuppressionRuntimeTo } from './SuppressionRuntime';
 
 const TIME_EPSILON_SECONDS = 1e-9;
 const COMMIT_CANONICAL_SCALE = 1_000_000_000_000;
 
 export interface TickInfantryCombatSimulationInput { readonly intervalStartSeconds: number; readonly deltaSeconds: number; }
 export interface TickInfantryCombatSimulationResult { readonly commitResults: readonly CommitShotResult[]; readonly projectileSubsteps: number; }
-interface PendingCommit { readonly unit: UnitModel; readonly task: FireTaskRuntimeV1; readonly weapon: InfantryWeaponInstanceV1; readonly offsetSeconds: number; }
+interface PendingCommit {
+  readonly unit: UnitModel;
+  readonly task: FireTaskRuntimeV1;
+  readonly weapon: InfantryWeaponInstanceV1;
+  readonly offsetSeconds: number;
+  readonly shotOrdinal: number;
+}
 interface PendingRecovery { readonly unit: UnitModel; readonly intervalStartSeconds: number; readonly deltaSeconds: number; }
 
 /** One physical combat segment. The Stage 7 wrapper is the only outer caller. */
@@ -35,28 +46,36 @@ export function tickInfantryCombatSimulationSegment(
       recoveries.set(unit.id, { unit, intervalStartSeconds, deltaSeconds });
       continue;
     }
-    const ticked = tickFireTaskWithTimeBudget(unit, { intervalStartSeconds, deltaSeconds, state });
-    if (!ticked.commitRequested) continue;
-    const task = unit.infantryCombatRuntime.activeFireTask;
-    const weapon = unit.infantryCombatRuntime.primaryWeapon;
-    if (!task || !weapon || task.taskId !== ticked.taskId) continue;
-    pendingCommits.push({ unit, task, weapon, offsetSeconds: clamp(ticked.consumedSeconds, 0, deltaSeconds) });
+    scheduleNextCommit(state, unit, intervalStartSeconds, deltaSeconds, 0, pendingCommits, recoveries);
   }
 
   pendingCommits.sort(comparePendingCommits);
   const commitResults: CommitShotResult[] = [];
   let projectileSubsteps = 0;
   let cursorSeconds = 0;
+  const maximumCommitEvents = Math.max(1, units.length * MAX_FIRE_TASK_ROUNDS);
+  let processedCommitEvents = 0;
 
-  for (const pending of pendingCommits) {
-    const offsetSeconds = Math.max(cursorSeconds, pending.offsetSeconds);
+  while (pendingCommits.length > 0) {
+    const pending = pendingCommits.shift()!;
+    const offsetSeconds = Math.max(cursorSeconds, clamp(pending.offsetSeconds, 0, deltaSeconds));
     if (offsetSeconds > cursorSeconds + TIME_EPSILON_SECONDS) {
       projectileSubsteps += tickProjectilesWithoutFalseCatchUp(state, {
         intervalStartSeconds: intervalStartSeconds + cursorSeconds,
         deltaSeconds: offsetSeconds - cursorSeconds,
       });
     }
-    const committedSeconds = intervalStartSeconds + offsetSeconds;
+    const currentTask = pending.unit.infantryCombatRuntime.activeFireTask;
+    const currentWeapon = pending.unit.infantryCombatRuntime.primaryWeapon;
+    if (
+      currentTask !== pending.task
+      || currentWeapon !== pending.weapon
+      || currentTask?.phase !== 'firing'
+    ) {
+      cursorSeconds = offsetSeconds;
+      continue;
+    }
+    const committedSeconds = canonicalValue(intervalStartSeconds + offsetSeconds);
     canonicalizeCommitAimSolution(pending.task);
     const result = commitShot({
       state,
@@ -64,22 +83,51 @@ export function tickInfantryCombatSimulationSegment(
       task: pending.task,
       weapon: pending.weapon,
       committedSeconds,
+      shotOrdinal: pending.shotOrdinal,
     });
     commitResults.push(result);
+    processedCommitEvents += 1;
+    if (processedCommitEvents > maximumCommitEvents) throw new Error('FireTask commit-event bound exceeded.');
+
     if (result.status === 'committed' || result.status === 'already_committed') {
-      if (pending.task.phase === 'firing' && result.shotId) {
-        beginFireTaskRecovery(pending.unit, { committedShotId: result.shotId, startedSeconds: committedSeconds });
+      const active = pending.unit.infantryCombatRuntime.activeFireTask;
+      if (active?.phase === 'recovery') {
+        recoveries.set(pending.unit.id, {
+          unit: pending.unit,
+          intervalStartSeconds: committedSeconds,
+          deltaSeconds: Math.max(0, deltaSeconds - offsetSeconds),
+        });
+      } else if (active?.phase === 'firing' && active.nextShotOrdinal < active.plannedRoundCount) {
+        scheduleNextCommit(
+          state,
+          pending.unit,
+          committedSeconds,
+          Math.max(0, deltaSeconds - offsetSeconds),
+          offsetSeconds,
+          pendingCommits,
+          recoveries,
+        );
+        pendingCommits.sort(comparePendingCommits);
       }
-      recoveries.set(pending.unit.id, {
-        unit: pending.unit,
-        intervalStartSeconds: committedSeconds,
-        deltaSeconds: Math.max(0, deltaSeconds - offsetSeconds),
-      });
-    } else terminalizeCommitFailure(pending.unit, result.status, committedSeconds);
+    } else if (result.status === 'cadence_wait') {
+      pending.task.nextShotBoundarySeconds = pending.weapon.automaticFire.nextShotAllowedSeconds;
+      scheduleNextCommit(
+        state,
+        pending.unit,
+        committedSeconds,
+        Math.max(0, deltaSeconds - offsetSeconds),
+        offsetSeconds,
+        pendingCommits,
+        recoveries,
+      );
+      pendingCommits.sort(comparePendingCommits);
+    } else {
+      terminalizeCommitFailure(pending.unit, result.status, committedSeconds);
+    }
     cursorSeconds = offsetSeconds;
   }
 
-  if (deltaSeconds > cursorSeconds + TIME_EPSILON_SECONDS || pendingCommits.length === 0) {
+  if (deltaSeconds > cursorSeconds + TIME_EPSILON_SECONDS || commitResults.length === 0) {
     projectileSubsteps += tickProjectilesWithoutFalseCatchUp(state, {
       intervalStartSeconds: intervalStartSeconds + cursorSeconds,
       deltaSeconds: Math.max(0, deltaSeconds - cursorSeconds),
@@ -94,7 +142,47 @@ export function tickInfantryCombatSimulationSegment(
       deltaSeconds: recovery.deltaSeconds,
     });
   }
+  const endSeconds = canonicalValue(intervalStartSeconds + deltaSeconds);
+  for (const unit of [...state.units].sort(compareUnits)) {
+    advanceSuppressionRuntimeTo(unit.infantryCombatRuntime.suppression, endSeconds);
+  }
   return { commitResults, projectileSubsteps };
+}
+
+function scheduleNextCommit(
+  state: SimulationState,
+  unit: UnitModel,
+  localStartSeconds: number,
+  localDeltaSeconds: number,
+  baseOffsetSeconds: number,
+  pendingCommits: PendingCommit[],
+  recoveries: Map<string, PendingRecovery>,
+): void {
+  if (localDeltaSeconds < 0) return;
+  const ticked = tickFireTaskWithTimeBudget(unit, {
+    intervalStartSeconds: localStartSeconds,
+    deltaSeconds: localDeltaSeconds,
+    state,
+  });
+  if (ticked.commitRequested && ticked.requestedShotOrdinal !== null) {
+    const task = unit.infantryCombatRuntime.activeFireTask;
+    const weapon = unit.infantryCombatRuntime.primaryWeapon;
+    if (task && weapon && task.taskId === ticked.taskId) {
+      pendingCommits.push({
+        unit,
+        task,
+        weapon,
+        offsetSeconds: canonicalValue(baseOffsetSeconds + clamp(ticked.consumedSeconds, 0, localDeltaSeconds)),
+        shotOrdinal: ticked.requestedShotOrdinal,
+      });
+    }
+  } else if (unit.infantryCombatRuntime.activeFireTask?.phase === 'recovery') {
+    recoveries.set(unit.id, {
+      unit,
+      intervalStartSeconds: canonicalValue(localStartSeconds + ticked.consumedSeconds),
+      deltaSeconds: Math.max(0, localDeltaSeconds - ticked.consumedSeconds),
+    });
+  }
 }
 
 function tickProjectilesWithoutFalseCatchUp(
@@ -114,18 +202,10 @@ function canonicalizeCommitAimSolution(task: FireTaskRuntimeV1): void {
   if (Number.isFinite(direction.x) && Number.isFinite(direction.y) && Number.isFinite(direction.z)) {
     const magnitude = Math.hypot(direction.x, direction.y, direction.z);
     if (magnitude > TIME_EPSILON_SECONDS) {
-      const rounded = {
-        x: canonicalValue(direction.x / magnitude),
-        y: canonicalValue(direction.y / magnitude),
-        z: canonicalValue(direction.z / magnitude),
-      };
+      const rounded = { x: canonicalValue(direction.x / magnitude), y: canonicalValue(direction.y / magnitude), z: canonicalValue(direction.z / magnitude) };
       const roundedMagnitude = Math.hypot(rounded.x, rounded.y, rounded.z);
       if (roundedMagnitude > TIME_EPSILON_SECONDS) {
-        solution.currentDirection = {
-          x: rounded.x / roundedMagnitude,
-          y: rounded.y / roundedMagnitude,
-          z: rounded.z / roundedMagnitude,
-        };
+        solution.currentDirection = { x: rounded.x / roundedMagnitude, y: rounded.y / roundedMagnitude, z: rounded.z / roundedMagnitude };
       }
     }
   }
@@ -155,7 +235,6 @@ function terminalizeCommitFailure(
     resultRu: commitFailureText(status),
   });
 }
-
 function isDeniedCommitStatus(status: Exclude<ShotCommitStatus, 'committed' | 'already_committed'>): boolean {
   return status === 'unsupported_mode'
     || status === 'empty_weapon'
@@ -167,28 +246,32 @@ function isDeniedCommitStatus(status: Exclude<ShotCommitStatus, 'committed' | 'a
     || status === 'projectile_capacity_exceeded'
     || status === 'duplicate_projectile_id'
     || status === 'invalid_projectile_candidate'
-    || status === 'weapon_capability_lost';
+    || status === 'weapon_capability_lost'
+    || status === 'ordinal_mismatch';
 }
-
 function commitFailureText(status: Exclude<ShotCommitStatus, 'committed' | 'already_committed'>): string {
-  if (status === 'empty_weapon') return 'Одиночный выстрел отклонён: в винтовке нет патрона.';
-  if (status === 'aim_solution_invalid') return 'Одиночный выстрел отклонён: решение прицеливания недействительно.';
-  if (status === 'aim_solution_below_threshold') return 'Одиночный выстрел отклонён: качество решения ниже заданного порога.';
-  if (status === 'movement_forbidden') return 'Одиночный выстрел отклонён: это оружие запрещает огонь во время фактического движения.';
-  if (status === 'muzzle_blocked') return 'Одиночный выстрел отклонён: дульный срез перекрыт.';
-  if (status === 'friendly_risk_exceeded') return 'Одиночный выстрел отклонён: превышен допустимый риск для союзника.';
-  if (status === 'projectile_capacity_exceeded') return 'Одиночный выстрел отклонён: заполнен ограниченный пул физических пуль.';
-  if (status === 'duplicate_projectile_id') return 'Одиночный выстрел отклонён: обнаружен повторный идентификатор пули.';
-  if (status === 'invalid_projectile_candidate') return 'Одиночный выстрел отклонён: состояние новой пули неверно.';
-  if (status === 'unsupported_mode') return 'Одиночный выстрел отклонён: режим оружия не поддерживается.';
-  if (status === 'weapon_capability_lost') return 'Одиночный выстрел отклонён: физическое состояние не позволяет пользоваться оружием.';
+  if (status === 'empty_weapon') return 'Выстрел отклонён: в оружии нет патрона.';
+  if (status === 'aim_solution_invalid') return 'Выстрел отклонён: решение прицеливания недействительно.';
+  if (status === 'aim_solution_below_threshold') return 'Выстрел отклонён: качество решения ниже заданного порога.';
+  if (status === 'movement_forbidden') return 'Выстрел отклонён: это оружие запрещает огонь во время фактического движения.';
+  if (status === 'cadence_wait') return 'Выстрел отложен до следующей разрешённой границы темпа.';
+  if (status === 'ordinal_mismatch') return 'Выстрел отклонён: нарушен порядковый номер очереди.';
+  if (status === 'muzzle_blocked') return 'Выстрел отклонён: дульный срез перекрыт.';
+  if (status === 'friendly_risk_exceeded') return 'Выстрел отклонён: превышен допустимый риск для союзника.';
+  if (status === 'projectile_capacity_exceeded') return 'Выстрел отклонён: заполнен ограниченный пул физических пуль.';
+  if (status === 'duplicate_projectile_id') return 'Выстрел отклонён: обнаружен повторный идентификатор пули.';
+  if (status === 'invalid_projectile_candidate') return 'Выстрел отклонён: состояние новой пули неверно.';
+  if (status === 'unsupported_mode') return 'Выстрел отклонён: режим оружия не поддерживается.';
+  if (status === 'weapon_capability_lost') return 'Выстрел отклонён: физическое состояние не позволяет пользоваться оружием.';
   if (status === 'ownership_lost') return 'Огневая задача завершилась ошибкой: потерян точный захват канала оружия.';
-  if (status === 'weapon_missing') return 'Огневая задача завершилась ошибкой: экземпляр винтовки отсутствует.';
+  if (status === 'weapon_missing') return 'Огневая задача завершилась ошибкой: экземпляр оружия отсутствует.';
   if (status === 'invalid_target') return 'Огневая задача завершилась ошибкой: направление решения прицеливания неверно.';
   return 'Огневая задача завершилась ошибкой до атомарного выстрела.';
 }
 function comparePendingCommits(left: PendingCommit, right: PendingCommit): number {
-  return left.offsetSeconds - right.offsetSeconds || compareText(left.task.taskId, right.task.taskId);
+  return left.offsetSeconds - right.offsetSeconds
+    || compareText(left.task.taskId, right.task.taskId)
+    || left.shotOrdinal - right.shotOrdinal;
 }
 function compareUnits(left: UnitModel, right: UnitModel): number { return compareText(left.id, right.id); }
 function compareText(left: string, right: string): number { return left < right ? -1 : left > right ? 1 : 0; }
