@@ -20,13 +20,13 @@ export function getWeaponDeploymentPostureLock(unit: UnitModel): WeaponDeploymen
 
 export function getWeaponDeploymentFacingLock(unit: UnitModel): WeaponDeploymentLockResultV1 {
   return deploymentLocksBody(unit)
-    ? blocked('weapon_deployed_facing_blocked', 'Сначала явно снимите пулемёт с установки: поворот корпуса сейчас заблокирован.')
+    ? blocked('weapon_deployed_facing_locked', 'Сначала явно снимите пулемёт с установки: поворот корпуса сейчас заблокирован.')
     : available();
 }
 
 export function deploymentLocksBody(unit: UnitModel): boolean {
   const mode = unit.infantryCombatRuntime.primaryWeapon?.deployment.mode;
-  return mode === 'deployed' || mode === 'undeploying';
+  return mode === 'deploying' || mode === 'deployed' || mode === 'undeploying';
 }
 
 function available(): WeaponDeploymentLockResultV1 { return { blocked: false, reasonCode: null, reasonRu: null }; }
