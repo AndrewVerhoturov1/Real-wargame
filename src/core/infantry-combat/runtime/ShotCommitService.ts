@@ -16,6 +16,10 @@ import { isTargetWithinDeployedTraverse } from './WeaponDeploymentRuntime';
 export * from './ShotCommitServiceStage8';
 
 export function commitShot(input: CommitShotInput): CommitShotResult {
+  const replayOrdinal = resolveCommittedReplayOrdinal(input);
+  if (replayOrdinal !== null) {
+    return commitBaseShot({ ...input, shotOrdinal: replayOrdinal });
+  }
   if (!getEffectiveCombatCapabilities(input.shooter).canUseWeapon) {
     return recordFailure(input.shooter, input.weapon.roundsInWeapon, 'weapon_capability_lost', 'Выстрел отклонён: физическое состояние не позволяет пользоваться оружием.');
   }
@@ -47,6 +51,16 @@ export function commitShot(input: CommitShotInput): CommitShotResult {
     }
   }
   return result;
+}
+
+function resolveCommittedReplayOrdinal(input: CommitShotInput): number | null {
+  if (input.shotOrdinal !== undefined) {
+    return input.task.committedShots.some((record) => record.ordinal === input.shotOrdinal)
+      ? input.shotOrdinal
+      : null;
+  }
+  if (input.task.phase === 'firing') return null;
+  return input.task.committedShots.at(-1)?.ordinal ?? null;
 }
 
 function recordFailure(shooter: UnitModel, rounds: number, status: Extract<ShotCommitStatus, 'weapon_capability_lost' | 'weapon_action_in_progress' | 'deployed_traverse_exceeded'>, reasonRu: string): CommitShotResult {
