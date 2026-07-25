@@ -64,7 +64,7 @@ export function writeProjectileRecord(pool: ProjectilePoolV3, slot: number, proj
   pool.projectileIds[slot] = projectile.projectileId;
   pool.shotIds[slot] = projectile.shotId;
   pool.shooterIds[slot] = projectile.shooterId;
-  pool.ammoSnapshots[slot] = clone(projectile.ammoSnapshot);
+  pool.ammoSnapshots[slot] = projectile.ammoSnapshot;
   pool.positionX[slot] = projectile.position.xMetres;
   pool.positionY[slot] = projectile.position.yMetres;
   pool.positionZ[slot] = projectile.position.zMetres;
