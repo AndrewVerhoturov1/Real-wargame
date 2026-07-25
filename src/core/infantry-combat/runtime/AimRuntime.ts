@@ -3,6 +3,7 @@ import type { UnitModel } from '../../units/UnitModel';
 import type { InfantryWeaponInstanceV1, AimFactorBreakdownV1 } from './InfantryCombatRuntimeTypes';
 import { calculateAimFactorBreakdown } from './AimRuntimeStage5';
 import { getEffectiveCombatCapabilities } from './EffectiveCombatCapabilities';
+import { applyMachineGunFireFactors } from './MachineGunFireModifiers';
 
 export * from './AimRuntimeStage5';
 
@@ -12,7 +13,7 @@ export function resolveProductionAimFactors(
   weapon: InfantryWeaponInstanceV1,
 ): AimFactorBreakdownV1 {
   const capabilities = getEffectiveCombatCapabilities(shooter);
-  return calculateAimFactorBreakdown({
+  const base = calculateAimFactorBreakdown({
     weapon: weapon.resolved.weapon,
     posture: shooter.behaviorRuntime.posture,
     isMoving: shooter.movementRuntime.isMoving,
@@ -29,6 +30,8 @@ export function resolveProductionAimFactors(
       1,
     ),
   });
+  const mode = shooter.infantryCombatRuntime.activeFireTask?.mode ?? 'single';
+  return applyMachineGunFireFactors(base, weapon, mode);
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
