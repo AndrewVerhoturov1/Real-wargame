@@ -4,6 +4,7 @@ import {
   serializePhysicalActionCoordinatorState,
 } from '../src/core/actions/PhysicalActionCoordinator';
 import {
+  INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION,
   advanceBloodRuntimeTo,
   applyWoundCandidate,
   initializeUnitMedicalInventory,
@@ -45,7 +46,7 @@ const migrated = normalizeInfantryCombatUnitRuntime({
     revision: 1,
   },
 });
-assert.equal(migrated.schemaVersion, 2);
+assert.equal(migrated.schemaVersion, INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION);
 assert.equal(migrated.wounds.slots[0]?.severity, 'severe');
 assert.equal(migrated.wounds.slots[0]?.bleedingState, 'severe');
 assert.equal(migrated.physiology.blood.bloodLoss, 0);
