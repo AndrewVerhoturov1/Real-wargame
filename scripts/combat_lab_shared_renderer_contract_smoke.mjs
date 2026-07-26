@@ -7,14 +7,19 @@ const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), 'utf8');
 const exists = (relativePath) => existsSync(path.join(root, relativePath));
 
+assert.ok(exists('src/game/GameApplication.ts'), 'Shared full game application is missing.');
 assert.ok(exists('src/rendering/PixiTacticalBoardAdapter.ts'), 'Shared board adapter is missing.');
+const gameApplication = read('src/game/GameApplication.ts');
 const adapter = read('src/rendering/PixiTacticalBoardAdapter.ts');
 assert.match(adapter, /interface PixiTacticalBoardAdapter/);
 assert.match(adapter, /getWorldContainer\(\): Container/);
 assert.match(adapter, /addTickerListener\(/);
-assert.match(adapter, /bindSimulationState\(state: SimulationState\)/);
-assert.match(adapter, /boardInput/);
-assert.match(adapter, /mapRenderInvalidated/);
+assert.match(gameApplication, /PixiTacticalBoardApp\.create/);
+assert.match(gameApplication, /installCombatEffectsRenderer/);
+assert.match(gameApplication, /installAttentionOverlayRenderer/);
+assert.match(gameApplication, /installAdaptiveGridLod/);
+assert.match(gameApplication, /installGameEditorWorkbench/);
+assert.match(gameApplication, /installTacticalWorkspace/);
 
 assert.ok(exists('src/combat-lab/rendering/CombatLabDiagnosticOverlayRenderer.ts'), 'Combat Lab diagnostic overlay is missing.');
 const overlay = read('src/combat-lab/rendering/CombatLabDiagnosticOverlayRenderer.ts');
@@ -27,13 +32,15 @@ assert.match(overlay, /bindSession\(/);
 const renderer = read('src/combat-lab/rendering/CombatLabRenderer.ts');
 assert.doesNotMatch(renderer, /new Application\s*\(/);
 assert.doesNotMatch(renderer, /app\.init\s*\(/);
-assert.match(renderer, /PixiTacticalBoardApp\.create/);
-assert.match(renderer, /installCombatEffectsRenderer/);
-assert.match(renderer, /installAttentionOverlayRenderer/);
-assert.match(renderer, /ensureStateBound\(/);
-assert.match(renderer, /adapter\.bindSimulationState\(this\.session\.state\)/);
+assert.doesNotMatch(renderer, /PixiTacticalBoardApp\.create/);
+assert.doesNotMatch(renderer, /installCombatEffectsRenderer|installAttentionOverlayRenderer|installAdaptiveGridLod/);
+assert.match(renderer, /context\.getWorldContainer\(\)/);
+assert.match(renderer, /context\.addTickerListener\(/);
+assert.match(renderer, /context\.restartStateBoundServices\(\)/);
+assert.match(renderer, /session\.advance\(/);
 
 const labEntry = read('src/combat-lab/main.ts');
+assert.match(labEntry, /GameApplication\.create\(/);
 assert.match(labEntry, /installAppShellMenu\(\{ mode: 'combat-lab' \}\)/);
 
 const menu = read('src/shared/AppShellMenu.ts');
@@ -47,10 +54,11 @@ const gameEntry = read('src/main.ts');
 const aiEditorMenuEntry = read('src/shared/AiEditorShellMenuEntry.ts');
 const viteConfig = read('vite.config.ts');
 const protectedAiEntry = read('src/ai-node-editor/main.ts');
+assert.match(gameEntry, /GameApplication\.create\(/);
 assert.match(gameEntry, /installAppShellMenu\(\{ mode: 'game' \}\)/);
 assert.match(aiEditorMenuEntry, /installAppShellMenu\(\{ mode: 'editor' \}\)/);
 assert.match(viteConfig, /AiEditorShellMenuEntry\.ts/);
 assert.match(viteConfig, /context\.path\.endsWith\('\/ai-node-editor\.html'\)/);
 assert.doesNotMatch(protectedAiEntry, /AppShellMenu|installAppShellMenu/);
 
-console.log('Combat Lab shared game renderer contract passed.');
+console.log('Combat Lab shared full-game renderer contract passed.');
