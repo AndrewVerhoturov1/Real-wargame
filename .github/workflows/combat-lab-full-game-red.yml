@@ -1,0 +1,31 @@
+name: Combat Lab Full Game RED
+
+on:
+  push:
+    branches:
+      - feature/20260726-shooting-stage-09v-combat-lab
+    paths:
+      - .github/workflows/combat-lab-full-game-red.yml
+      - scripts/combat_lab_full_game_contract_smoke.mjs
+      - src/game/**
+      - src/combat-lab/**
+      - combat-lab.html
+
+permissions:
+  contents: read
+
+jobs:
+  red-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Run full-game contract
+        run: node scripts/combat_lab_full_game_contract_smoke.mjs
