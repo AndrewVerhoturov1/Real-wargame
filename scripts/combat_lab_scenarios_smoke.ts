@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
+import { tickSimulation } from '../src/core/simulation/SimulationTick';
 import {
+  COMBAT_LAB_FIXED_STEP_SECONDS,
   COMBAT_LAB_SCENARIO_IDS,
+  applyDueCombatLabProgramSteps,
   buildCombatLabInitialState,
+  digestCombatLabEvents,
   digestCombatLabState,
   getCombatLabScenarioDefinition,
   listCombatLabScenarioDefinitions,
+  type CombatLabProgramRuntimeV1,
 } from '../src/core/testing/combat-lab';
 
 const expectedIds = [
@@ -28,9 +33,10 @@ for (const definition of definitions) {
   assert.ok(definition.revision >= 1);
   assert.ok(definition.titleRu.length > 0);
   assert.ok(definition.descriptionRu.length > 0);
-  assert.ok(definition.defaultSeed > 0);
+  assert.ok(Number.isInteger(definition.defaultSeed) && definition.defaultSeed > 0);
   assert.ok(definition.manualStepsRu.length >= 2 && definition.manualStepsRu.length <= 5);
   assert.ok(definition.supportedMetrics.length > 0);
+  assert.ok(!definition.supportedMetrics.some((metricId) => metricId.includes('moderate')));
   const first = buildCombatLabInitialState(definition.scenarioId, definition.revision, definition.defaultSeed);
   const second = buildCombatLabInitialState(definition.scenarioId, definition.revision, definition.defaultSeed);
   assert.equal(digestCombatLabState(first.state), digestCombatLabState(second.state));
@@ -70,5 +76,45 @@ assert.equal(
   'loadout_assistant_machine_gunner',
 );
 
+const medical = buildCombatLabInitialState('wounds-first-aid', 1, 9046);
+const medicalActor = medical.state.units.find((unit) => unit.id === 'medical-actor')!;
+const medicalPatient = medical.state.units.find((unit) => unit.id === 'medical-patient')!;
+assert.equal(medicalActor.infantryCombatRuntime.medical.firstAidCharges, 2);
+assert.deepEqual(
+  medicalPatient.infantryCombatRuntime.wounds.slots.map((slot) => slot.zone).sort(),
+  ['arms', 'head', 'legs', 'torso'],
+);
+assert.ok(medicalPatient.infantryCombatRuntime.wounds.slots.some((slot) => slot.severity === 'critical'));
+
+const saveLoadDefinition = getCombatLabScenarioDefinition('combat-save-load-boundaries');
+assert.ok(
+  saveLoadDefinition.roles.some(
+    (role) => role.unitId === 'save-rifleman' && role.selectableAs.includes('first_aid_actor'),
+  ),
+);
+
+const normalOrder = runRifleOrderVariant(false);
+const reverseOrder = runRifleOrderVariant(true);
+assert.equal(reverseOrder.stateDigest, normalOrder.stateDigest);
+assert.equal(reverseOrder.eventDigest, normalOrder.eventDigest);
+
 assert.throws(() => getCombatLabScenarioDefinition('missing-scenario'), /Unknown Combat Lab scenario/);
 console.log('Combat Lab scenario registry smoke passed.');
+
+function runRifleOrderVariant(reverseUnits: boolean): { readonly stateDigest: string; readonly eventDigest: string } {
+  const built = buildCombatLabInitialState('rifle-distance-baseline', 1, 9041);
+  if (reverseUnits) built.state.units.reverse();
+  const runtime: CombatLabProgramRuntimeV1 = {
+    appliedStepIds: new Set<string>(),
+    nextStepIndex: 0,
+    lastCommandResult: null,
+  };
+  for (let step = 0; step < 240; step += 1) {
+    applyDueCombatLabProgramSteps(built.state, built.definition, runtime);
+    tickSimulation(built.state, COMBAT_LAB_FIXED_STEP_SECONDS);
+  }
+  return {
+    stateDigest: digestCombatLabState(built.state),
+    eventDigest: digestCombatLabEvents(built.state),
+  };
+}
