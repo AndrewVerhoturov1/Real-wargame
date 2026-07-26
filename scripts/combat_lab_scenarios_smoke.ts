@@ -12,6 +12,7 @@ import {
   listCombatLabScenarioDefinitions,
   type CombatLabProgramRuntimeV1,
 } from '../src/core/testing/combat-lab';
+import { CombatLabVisualSession } from '../src/combat-lab/runtime/CombatLabVisualSession';
 
 const expectedIds = [
   'rifle-distance-baseline',
@@ -93,6 +94,13 @@ assert.ok(
     (role) => role.unitId === 'save-rifleman' && role.selectableAs.includes('first_aid_actor'),
   ),
 );
+
+const visualSession = new CombatLabVisualSession('rifle-distance-baseline', 9041);
+const stableVisualState = visualSession.state;
+visualSession.startNewRun('ppsh-burst-recoil', 9043);
+assert.equal(visualSession.state, stableVisualState, 'Visual scenario replacement must preserve SimulationState identity.');
+assert.equal(visualSession.definition.scenarioId, 'ppsh-burst-recoil');
+assert.ok(visualSession.state.units.some((unit) => unit.id === 'ppsh-shooter'));
 
 const normalOrder = runRifleOrderVariant(false);
 const reverseOrder = runRifleOrderVariant(true);
