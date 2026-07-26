@@ -24,6 +24,7 @@ export class CombatLabRenderer {
   ) {
     this.overlay = new CombatLabDiagnosticOverlayRenderer(context.getWorldContainer(), session);
     this.boundRevision = session.revision;
+    this.keepProductionTickerPaused();
     this.removeLabTicker = context.addTickerListener(this.tick);
   }
 
@@ -66,6 +67,7 @@ export class CombatLabRenderer {
   private readonly tick = (ticker: Ticker): void => {
     if (this.destroyed) return;
     this.ensureStateBound();
+    this.keepProductionTickerPaused();
     const changed = this.session.advance(ticker.elapsedMS / 1000);
     if (changed) {
       this.overlay.captureFrame();
@@ -78,8 +80,13 @@ export class CombatLabRenderer {
   private ensureStateBound(): void {
     if (this.boundRevision === this.session.revision) return;
     this.boundRevision = this.session.revision;
+    this.keepProductionTickerPaused();
     this.context.restartStateBoundServices();
     this.overlay.bindSession(this.session);
     this.overlay.clearHistory();
+  }
+
+  private keepProductionTickerPaused(): void {
+    (this.session.state as typeof this.session.state & { paused?: boolean }).paused = true;
   }
 }
