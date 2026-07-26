@@ -7,20 +7,14 @@ const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), 'utf8');
 const exists = (relativePath) => existsSync(path.join(root, relativePath));
 
-assert.ok(exists('src/rendering/PixiTacticalBoardOptions.ts'), 'Shared board options module is missing.');
-const options = read('src/rendering/PixiTacticalBoardOptions.ts');
-assert.match(options, /interface PixiTacticalBoardOptions/);
-assert.match(options, /advanceFrame\?/);
-assert.match(options, /attachBoardInput\?/);
-assert.match(options, /afterRenderFrame\?/);
-
-const pixiApp = read('src/rendering/PixiApp.ts');
-assert.match(pixiApp, /replaceState\(state: SimulationState\)/);
-assert.match(pixiApp, /getWorldOverlayContainer\(\): Container/);
-assert.match(pixiApp, /setGridVisible\(value: boolean\)/);
-assert.match(pixiApp, /setViewConesVisible\(value: boolean\)/);
-assert.match(pixiApp, /setHeightLabelsVisible\(value: boolean\)/);
-assert.match(pixiApp, /options\.advanceFrame/);
+assert.ok(exists('src/rendering/PixiTacticalBoardAdapter.ts'), 'Shared board adapter is missing.');
+const adapter = read('src/rendering/PixiTacticalBoardAdapter.ts');
+assert.match(adapter, /interface PixiTacticalBoardAdapter/);
+assert.match(adapter, /getWorldContainer\(\): Container/);
+assert.match(adapter, /addTickerListener\(/);
+assert.match(adapter, /bindSimulationState\(state: SimulationState\)/);
+assert.match(adapter, /boardInput/);
+assert.match(adapter, /mapRenderInvalidated/);
 
 assert.ok(exists('src/combat-lab/rendering/CombatLabDiagnosticOverlayRenderer.ts'), 'Combat Lab diagnostic overlay is missing.');
 const overlay = read('src/combat-lab/rendering/CombatLabDiagnosticOverlayRenderer.ts');
@@ -29,19 +23,18 @@ assert.doesNotMatch(overlay, /app\.init\s*\(/);
 assert.doesNotMatch(overlay, /drawMetreGrid|mapWidthPx|mapHeightPx/);
 assert.match(overlay, /MAX_COMBAT_LAB_TRAIL_POINTS/);
 assert.match(overlay, /bindSession\(/);
-assert.equal(exists('src/combat-lab/rendering/CombatLabRenderer.ts'), false, 'Standalone CombatLabRenderer must be removed.');
 
-assert.ok(exists('src/combat-lab/runtime/CombatLabBoardRuntime.ts'), 'Combat Lab board runtime is missing.');
-const runtime = read('src/combat-lab/runtime/CombatLabBoardRuntime.ts');
-assert.match(runtime, /PixiTacticalBoardApp\.create/);
-assert.match(runtime, /installCombatEffectsRenderer/);
-assert.match(runtime, /replaceScenarioState\(/);
-assert.match(runtime, /destroyStateBoundServices/);
-assert.match(runtime, /board\.replaceState\(this\.session\.state\)/);
+const renderer = read('src/combat-lab/rendering/CombatLabRenderer.ts');
+assert.doesNotMatch(renderer, /new Application\s*\(/);
+assert.doesNotMatch(renderer, /app\.init\s*\(/);
+assert.match(renderer, /PixiTacticalBoardApp\.create/);
+assert.match(renderer, /installCombatEffectsRenderer/);
+assert.match(renderer, /installAttentionOverlayRenderer/);
+assert.match(renderer, /ensureStateBound\(/);
+assert.match(renderer, /adapter\.bindSimulationState\(this\.session\.state\)/);
 
 const labEntry = read('src/combat-lab/main.ts');
 assert.match(labEntry, /installAppShellMenu\(\{ mode: 'combat-lab' \}\)/);
-assert.doesNotMatch(labEntry, /CombatLabRenderer/);
 
 const menu = read('src/shared/AppShellMenu.ts');
 assert.match(menu, /'combat-lab'/);
