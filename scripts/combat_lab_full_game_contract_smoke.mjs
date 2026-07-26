@@ -18,6 +18,8 @@ const gameApplication = read('src/game/GameApplication.ts');
 const labHtml = read('combat-lab.html');
 const session = read('src/combat-lab/runtime/CombatLabVisualSession.ts');
 const extension = read('src/combat-lab/CombatLabExtension.ts');
+const renderer = read('src/combat-lab/rendering/CombatLabRenderer.ts');
+const extensionBoundary = `${extension}\n${renderer}`;
 
 assert.match(gameMain, /GameApplication\.create\(/, 'Game entry must use the reusable GameApplication.');
 assert.match(labMain, /GameApplication\.create\(/, 'Combat Lab entry must use the reusable GameApplication.');
@@ -62,9 +64,9 @@ assert.match(gameApplication, /addTickerListener/);
 assert.match(gameApplication, /getWorldContainer/);
 assert.match(session, /replaceCombatLabStateInPlace/);
 assert.match(session, /const stableState\s*=\s*this\.built\.state/);
-assert.match(extension, /context\.restartStateBoundServices\(\)/);
-assert.match(extension, /context\.addTickerListener\(/);
-assert.match(extension, /context\.getWorldContainer\(\)/);
-assert.doesNotMatch(extension, /PixiTacticalBoardApp\.create\(/);
+assert.match(extensionBoundary, /context\.restartStateBoundServices\(\)/);
+assert.match(extensionBoundary, /context\.addTickerListener\(/);
+assert.match(extensionBoundary, /context\.getWorldContainer\(\)/);
+assert.doesNotMatch(extensionBoundary, /PixiTacticalBoardApp\.create\(/);
 
 console.log('Combat Lab full-game application contract passed.');
