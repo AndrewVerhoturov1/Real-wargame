@@ -47,8 +47,7 @@ export function observeCombatLabMetrics(state: SimulationState, collector: Comba
     }
     const ammoResult = unit.infantryCombatRuntime.ammoInventory.lastActionResult;
     if (ammoResult) {
-      const record = ammoResult as unknown as Record<string, unknown>;
-      const duration = durationFrom(record);
+      const duration = durationFrom(ammoResult as unknown as Record<string, unknown>);
       if (ammoResult.kind === 'reload') {
         collector.maximumReloadCompletionSeconds = Math.max(collector.maximumReloadCompletionSeconds, duration);
       }
@@ -85,7 +84,7 @@ export function finalizeCombatLabMetrics(
 
   for (const unit of state.units) {
     for (const slot of unit.infantryCombatRuntime.wounds.slots) {
-      const count = Math.max(1, slot.impactIds.length);
+      const count = Math.max(1, slot.hitCount);
       metrics[`woundsByZone.${slot.zone}`] = (metrics[`woundsByZone.${slot.zone}`] ?? 0) + count;
       metrics[`woundsBySeverity.${slot.severity}`] = (metrics[`woundsBySeverity.${slot.severity}`] ?? 0) + count;
     }
