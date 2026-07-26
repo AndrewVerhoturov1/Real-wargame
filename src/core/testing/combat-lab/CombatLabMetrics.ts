@@ -4,7 +4,7 @@ import { COMBAT_LAB_METRIC_IDS } from './CombatLabContracts';
 export interface CombatLabMetricCollectorV1 {
   readonly initialCommittedShots: number;
   readonly initialImpacts: number;
-  readonly initialWoundImpactCount: number;
+  readonly initialSpawnCount: number;
   readonly initialSuppressionEvents: number;
   readonly initialBloodLoss: number;
   readonly initialFirstAidStages: number;
@@ -21,7 +21,7 @@ export function createCombatLabMetricCollector(state: SimulationState): CombatLa
   return {
     initialCommittedShots: state.infantryCombatProjectiles.committedShots.length,
     initialImpacts: state.infantryCombatProjectiles.impacts.length,
-    initialWoundImpactCount: woundImpactCount(state),
+    initialSpawnCount: state.infantryCombatProjectiles.diagnostics.spawnCount,
     initialSuppressionEvents: suppressionEventCount(state),
     initialBloodLoss: bloodLoss(state),
     initialFirstAidStages: firstAidStages(state),
@@ -49,12 +49,11 @@ export function observeCombatLabMetrics(state: SimulationState, collector: Comba
     if (ammoResult) {
       const record = ammoResult as unknown as Record<string, unknown>;
       const duration = durationFrom(record);
-      const actionType = text(record.actionType, text(record.kind, ''));
-      if (actionType.includes('reload') || text(record.actionId, '').includes('reload')) {
+      if (ammoResult.kind === 'reload') {
         collector.maximumReloadCompletionSeconds = Math.max(collector.maximumReloadCompletionSeconds, duration);
       }
-      if (actionType.includes('transfer') || text(record.actionId, '').includes('transfer')) {
-        collector.transferRounds = Math.max(collector.transferRounds, finite(record.roundsChanged));
+      if (ammoResult.kind === 'transfer') {
+        collector.transferRounds = Math.max(collector.transferRounds, ammoResult.roundsChanged);
       }
     }
     const deploymentResults = unit.infantryCombatRuntime.primaryWeapon?.deployment.actionResults ?? [];
@@ -75,15 +74,13 @@ export function finalizeCombatLabMetrics(
   const projectiles = state.infantryCombatProjectiles;
   const committedShots = projectiles.committedShots.slice(collector.initialCommittedShots);
   const impacts = projectiles.impacts.slice(collector.initialImpacts);
-  const hitProjectileIds = new Set(impacts.filter((impact) => impact.hitType === 'unit').map((impact) => impact.projectileId));
-  const terminatedProjectileIds = new Set(projectiles.terminations.map((termination) => termination.projectileId));
-  const misses = committedShots.filter((shot) => terminatedProjectileIds.has(`${shot.shotId}:projectile`) && !hitProjectileIds.has(`${shot.shotId}:projectile`)).length;
+  const hitShotIds = new Set(impacts.filter((impact) => impact.hitType === 'unit').map((impact) => impact.shotId));
   const metrics = Object.fromEntries(COMBAT_LAB_METRIC_IDS.map((id) => [id, 0])) as Record<string, number>;
   metrics.shotsCommitted = committedShots.length;
   metrics.roundsConsumed = committedShots.reduce((sum, shot) => sum + Math.max(0, shot.roundsBefore - shot.roundsAfter), 0);
-  metrics.projectilesCreated = Math.max(0, projectiles.diagnostics.spawnCount - collector.initialCommittedShots);
-  metrics.hits = hitProjectileIds.size;
-  metrics.misses = Math.max(misses, metrics.shotsCommitted - metrics.hits - projectiles.activeProjectiles.length);
+  metrics.projectilesCreated = Math.max(0, projectiles.diagnostics.spawnCount - collector.initialSpawnCount);
+  metrics.hits = hitShotIds.size;
+  metrics.misses = Math.max(0, metrics.shotsCommitted - metrics.hits);
   metrics.bodyImpacts = impacts.filter((impact) => impact.hitType === 'unit').length;
 
   for (const unit of state.units) {
@@ -106,9 +103,6 @@ export function finalizeCombatLabMetrics(
   return metrics;
 }
 
-function woundImpactCount(state: SimulationState): number {
-  return state.units.reduce((sum, unit) => sum + unit.infantryCombatRuntime.wounds.slots.reduce((slotSum, slot) => slotSum + slot.impactIds.length, 0), 0);
-}
 function suppressionEventCount(state: SimulationState): number {
   return state.units.reduce((sum, unit) => sum + unit.infantryCombatRuntime.suppression.appliedEventIds.length, 0);
 }
@@ -136,9 +130,6 @@ function durationFrom(value: unknown): number {
 }
 function finite(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
-}
-function text(value: unknown, fallback: string): string {
-  return typeof value === 'string' ? value : fallback;
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
