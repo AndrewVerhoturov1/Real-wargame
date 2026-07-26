@@ -1,6 +1,8 @@
 import type { UnitPosture } from '../../core/behavior/BehaviorModel';
 import type { FireMode } from '../../core/infantry-combat/catalogs/CombatCatalogTypes';
+import { getEffectiveCombatCapabilities, validateMachineGunAssistant } from '../../core/infantry-combat/runtime';
 import { selectUnit } from '../../core/simulation/SimulationState';
+import type { UnitModel } from '../../core/units/UnitModel';
 import {
   cancelCombatLabWeaponAction,
   getCombatLabScenarioDefinition,
@@ -35,6 +37,17 @@ export interface CombatLabLayoutV1 {
   readonly map: HTMLElement;
   readonly right: HTMLElement;
   readonly bottom: HTMLElement;
+}
+
+interface CombatLabUiSelectionV1 {
+  readonly shooterUnitId: string;
+  readonly targetUnitId: string | null;
+  readonly targetPointMetres: { readonly xMetres: number; readonly yMetres: number };
+  readonly helperUnitId: string | null;
+  readonly firstAidActorUnitId: string;
+  readonly firstAidTargetUnitId: string;
+  readonly ammoSourceUnitId: string;
+  readonly ammoTargetUnitId: string;
 }
 
 export function createCombatLabLayout(root: HTMLElement): CombatLabLayoutV1 {
@@ -86,6 +99,19 @@ export class CombatLabShell {
     this.buildLeft();
     this.buildRight();
     this.layout.bottom.append(this.status, this.journal);
+    this.shooter.addEventListener('change', () => {
+      this.updateFireModes();
+      this.renderer.forceRender();
+      this.refreshLive(true);
+    });
+    this.target.addEventListener('change', () => {
+      if (this.target.value !== '__point__') this.setPointFromUnit(this.target.value);
+      this.refreshLive(true);
+    });
+    for (const control of [this.helper, this.aidActor, this.aidTarget, this.ammoSource, this.ammoTarget]) {
+      control.addEventListener('change', () => this.refreshLive(true));
+    }
+    for (const control of [this.targetX, this.targetY]) control.addEventListener('input', () => this.refreshLive(true));
     this.refreshScenarioControls();
     this.refreshLive(true);
   }
@@ -100,8 +126,10 @@ export class CombatLabShell {
     this.restore.disabled = !snapshot.checkpointAvailable;
     this.removeCheckpoint.disabled = !snapshot.checkpointAvailable;
     this.status.textContent = `${snapshot.scenarioId}@${snapshot.scenarioRevision} · seed ${snapshot.seed} · ${snapshot.simulatedSeconds.toFixed(3)} с · ${snapshot.interactive ? 'INTERACTIVE' : 'ЧИСТЫЙ'} · ${snapshot.paused ? 'пауза' : `×${snapshot.speed}`}`;
-    this.diagnostics.textContent = JSON.stringify(buildDiagnostics(this.session), null, 2);
-    this.journal.replaceChildren(...snapshot.eventJournal.slice(-80).reverse().map((entry) => node('div', 'combat-lab-journal-entry', entry)));
+    this.diagnostics.textContent = JSON.stringify(buildDiagnostics(this.session, this.readSelection()), null, 2);
+    this.journal.replaceChildren(
+      ...snapshot.eventJournal.slice(-80).reverse().map((entry) => node('div', 'combat-lab-journal-entry', entry)),
+    );
   }
 
   private buildTop(): void {
@@ -113,7 +141,10 @@ export class CombatLabShell {
     const speed = select();
     for (const value of COMBAT_LAB_VISUAL_SPEEDS) speed.append(option(String(value), `×${value}`));
     speed.value = '1';
-    speed.addEventListener('change', () => { this.session.setSpeed(Number(speed.value)); this.refreshLive(true); });
+    speed.addEventListener('change', () => {
+      this.session.setSpeed(Number(speed.value));
+      this.refreshLive(true);
+    });
     this.layout.top.append(
       title,
       inlineField('Стенд', this.scenario),
@@ -121,10 +152,17 @@ export class CombatLabShell {
       button('Новый visual run', () => this.startVisualRun(), 'primary'),
       button('Чистый headless run', () => this.runHeadless()),
       this.pause,
-      button('Один шаг', () => { this.session.stepOnce(); this.renderer.forceRender(); this.refreshLive(true); }),
+      button('Один шаг', () => {
+        this.session.stepOnce();
+        this.renderer.forceRender();
+        this.refreshLive(true);
+      }),
       inlineField('Скорость', speed),
       this.program,
-      button('Сохранить точку', () => { this.session.saveCheckpoint(); this.refreshLive(true); }),
+      button('Сохранить точку', () => {
+        this.session.saveCheckpoint();
+        this.refreshLive(true);
+      }),
       this.restore,
       this.removeCheckpoint,
     );
@@ -159,34 +197,60 @@ export class CombatLabShell {
     for (const zone of ['head', 'torso', 'arms', 'legs']) this.aidZone.append(option(zone, zone));
 
     this.layout.right.append(
-      panel('Прицеливание и огонь',
-        field('Стрелок', this.shooter), field('Цель-боец или точка', this.target),
-        field('X точки, м', this.targetX), field('Y точки, м', this.targetY),
-        field('Режим', this.mode), field('Радиус suppress, м', this.suppressRadius),
+      panel(
+        'Прицеливание и огонь',
+        field('Стрелок', this.shooter),
+        field('Цель-боец или точка', this.target),
+        field('X точки, м', this.targetX),
+        field('Y точки, м', this.targetY),
+        field('Режим', this.mode),
+        field('Радиус suppress, м', this.suppressRadius),
         field('Минимальное качество', this.aimQuality),
-        actionRow(button('Открыть огонь', () => this.openFire(), 'primary'), button('Прекратить задачу', () => this.cancel('fire'))),
+        actionRow(
+          button('Открыть огонь', () => this.openFire(), 'primary'),
+          button('Прекратить задачу', () => this.cancel('fire')),
+        ),
       ),
-      panel('Поза', actionRow(
-        button('Стоя', () => this.posture('standing')),
-        button('Пригнувшись', () => this.posture('crouched')),
-        button('Лёжа', () => this.posture('prone')),
-      )),
-      panel('Оружейные действия',
+      panel(
+        'Поза',
+        actionRow(
+          button('Стоя', () => this.posture('standing')),
+          button('Пригнувшись', () => this.posture('crouched')),
+          button('Лёжа', () => this.posture('prone')),
+        ),
+      ),
+      panel(
+        'Оружейные действия',
         field('Явный помощник', this.helper),
-        actionRow(button('Перезарядить', () => this.reload()), button('Отменить reload', () => this.cancel('reload'))),
+        actionRow(
+          button('Перезарядить', () => this.reload()),
+          button('Отменить reload', () => this.cancel('reload')),
+        ),
         actionRow(
           button('Установить ДП-27', () => this.deployment('deploy')),
           button('Снять ДП-27', () => this.deployment('undeploy')),
           button('Отменить', () => this.cancel('deployment')),
         ),
       ),
-      panel('Передача патронов',
-        field('Источник', this.ammoSource), field('Получатель', this.ammoTarget), field('Количество', this.transferRounds),
-        actionRow(button('Передать патроны', () => this.transfer()), button('Отменить transfer', () => this.cancel('transfer', this.ammoSource.value))),
+      panel(
+        'Передача патронов',
+        field('Источник', this.ammoSource),
+        field('Получатель', this.ammoTarget),
+        field('Количество', this.transferRounds),
+        actionRow(
+          button('Передать патроны', () => this.transfer()),
+          button('Отменить transfer', () => this.cancel('transfer', this.ammoSource.value)),
+        ),
       ),
-      panel('Первая помощь',
-        field('Оказывающий помощь', this.aidActor), field('Получатель', this.aidTarget), field('Зона', this.aidZone),
-        actionRow(button('Начать первую помощь', () => this.firstAid()), button('Отменить помощь', () => this.cancel('first_aid', this.aidActor.value))),
+      panel(
+        'Первая помощь',
+        field('Оказывающий помощь', this.aidActor),
+        field('Получатель', this.aidTarget),
+        field('Зона', this.aidZone),
+        actionRow(
+          button('Начать первую помощь', () => this.firstAid()),
+          button('Отменить помощь', () => this.cancel('first_aid', this.aidActor.value)),
+        ),
       ),
       sectionTitle('Диагностика'),
       this.diagnostics,
@@ -209,10 +273,10 @@ export class CombatLabShell {
     fillRoles(this.ammoSource, definition.roles, 'ammo_source');
     fillRoles(this.ammoTarget, definition.roles, 'ammo_target');
     const firstTarget = definition.roles.find((role) => role.selectableAs.includes('target'));
-    if (firstTarget) this.setPointFromUnit(firstTarget.unitId);
-    this.target.addEventListener('change', () => {
-      if (this.target.value !== '__point__') this.setPointFromUnit(this.target.value);
-    }, { once: true });
+    if (firstTarget) {
+      this.target.value = firstTarget.unitId;
+      this.setPointFromUnit(firstTarget.unitId);
+    }
     this.updateFireModes();
   }
 
@@ -241,10 +305,28 @@ export class CombatLabShell {
     this.diagnostics.textContent = JSON.stringify(result, null, 2);
   }
 
-  private togglePause(): void { this.session.togglePaused(); this.refreshLive(true); }
-  private toggleProgram(): void { this.session.enableRecommendedProgram(!this.session.getSnapshot().programEnabled); this.refreshLive(true); }
-  private restoreCheckpoint(): void { if (this.session.restoreCheckpoint()) { this.renderer.clearHistory(); this.renderer.forceRender(); } this.refreshLive(true); }
-  private deleteCheckpoint(): void { this.session.deleteCheckpoint(); this.refreshLive(true); }
+  private togglePause(): void {
+    this.session.togglePaused();
+    this.refreshLive(true);
+  }
+
+  private toggleProgram(): void {
+    this.session.enableRecommendedProgram(!this.session.getSnapshot().programEnabled);
+    this.refreshLive(true);
+  }
+
+  private restoreCheckpoint(): void {
+    if (this.session.restoreCheckpoint()) {
+      this.renderer.clearHistory();
+      this.renderer.forceRender();
+    }
+    this.refreshLive(true);
+  }
+
+  private deleteCheckpoint(): void {
+    this.session.deleteCheckpoint();
+    this.refreshLive(true);
+  }
 
   private openFire(): void {
     const targetUnitId = this.target.value === '__point__' ? null : this.target.value || null;
@@ -252,24 +334,57 @@ export class CombatLabShell {
       kind: 'fire',
       shooterUnitId: this.shooter.value,
       targetUnitId,
-      targetPointMetres: targetUnitId ? null : { xMetres: finite(this.targetX.value), yMetres: finite(this.targetY.value), zMetres: 1 },
+      targetPointMetres: targetUnitId
+        ? null
+        : { xMetres: finite(this.targetX.value), yMetres: finite(this.targetY.value), zMetres: 1 },
       mode: this.mode.value as FireMode,
       targetRadiusMetres: finite(this.suppressRadius.value),
       minimumSolutionQuality: finite(this.aimQuality.value),
     });
   }
 
-  private posture(targetPosture: UnitPosture): void { this.execute({ kind: 'posture', unitId: this.shooter.value, targetPosture }); }
-  private reload(): void { this.execute({ kind: 'reload', unitId: this.shooter.value, helperUnitId: this.helper.value || null }); }
-  private deployment(kind: 'deploy' | 'undeploy'): void { this.execute({ kind, unitId: this.shooter.value, helperUnitId: this.helper.value || null }); }
-  private transfer(): void { this.execute({ kind: 'transfer', sourceUnitId: this.ammoSource.value, targetUnitId: this.ammoTarget.value, requestedRounds: Math.max(1, Math.trunc(finite(this.transferRounds.value))) }); }
-  private firstAid(): void { this.execute({ kind: 'first_aid', actorUnitId: this.aidActor.value, targetUnitId: this.aidTarget.value, zone: (this.aidZone.value || null) as 'head' | 'torso' | 'arms' | 'legs' | null }); }
+  private posture(targetPosture: UnitPosture): void {
+    this.execute({ kind: 'posture', unitId: this.shooter.value, targetPosture });
+  }
 
-  private execute(command: CombatLabScriptCommandV1): void { this.show(this.session.executeInteractive(command)); }
-  private cancel(action: 'fire' | 'reload' | 'deployment' | 'transfer' | 'first_aid', unitId = this.shooter.value): void {
+  private reload(): void {
+    this.execute({ kind: 'reload', unitId: this.shooter.value, helperUnitId: this.helper.value || null });
+  }
+
+  private deployment(kind: 'deploy' | 'undeploy'): void {
+    this.execute({ kind, unitId: this.shooter.value, helperUnitId: this.helper.value || null });
+  }
+
+  private transfer(): void {
+    this.execute({
+      kind: 'transfer',
+      sourceUnitId: this.ammoSource.value,
+      targetUnitId: this.ammoTarget.value,
+      requestedRounds: Math.max(1, Math.trunc(finite(this.transferRounds.value))),
+    });
+  }
+
+  private firstAid(): void {
+    this.execute({
+      kind: 'first_aid',
+      actorUnitId: this.aidActor.value,
+      targetUnitId: this.aidTarget.value,
+      zone: (this.aidZone.value || null) as 'head' | 'torso' | 'arms' | 'legs' | null,
+    });
+  }
+
+  private execute(command: CombatLabScriptCommandV1): void {
+    this.show(this.session.executeInteractive(command));
+  }
+
+  private cancel(
+    action: 'fire' | 'reload' | 'deployment' | 'transfer' | 'first_aid',
+    unitId = this.shooter.value,
+  ): void {
     this.session.markInteractive();
     this.show(cancelCombatLabWeaponAction(this.session.state, unitId, action));
   }
+
   private show(result: CombatLabCommandResultV1): void {
     this.status.textContent = `${result.accepted ? 'Принято' : 'Отказ'}: ${result.reasonRu} [${result.reasonCode}]`;
     this.renderer.forceRender();
@@ -286,19 +401,46 @@ export class CombatLabShell {
   private updateFireModes(): void {
     const unit = this.session.state.units.find((candidate) => candidate.id === this.shooter.value);
     const modes = new Set(unit?.infantryCombatRuntime.primaryWeapon?.resolved.weapon.availableFireModes ?? []);
-    for (const item of this.mode.options) item.disabled = !modes.has(item.value as FireMode);
+    for (const item of this.mode.options) {
+      item.disabled = !modes.has(item.value as FireMode);
+      item.title = item.disabled ? 'Режим не опубликован для выбранного оружия.' : '';
+    }
     if (!modes.has(this.mode.value as FireMode)) this.mode.value = [...modes][0] ?? 'single';
     selectUnit(this.session.state, unit?.id ?? null);
   }
+
+  private readSelection(): CombatLabUiSelectionV1 {
+    return {
+      shooterUnitId: this.shooter.value,
+      targetUnitId: this.target.value === '__point__' ? null : this.target.value || null,
+      targetPointMetres: { xMetres: finite(this.targetX.value), yMetres: finite(this.targetY.value) },
+      helperUnitId: this.helper.value || null,
+      firstAidActorUnitId: this.aidActor.value,
+      firstAidTargetUnitId: this.aidTarget.value,
+      ammoSourceUnitId: this.ammoSource.value,
+      ammoTargetUnitId: this.ammoTarget.value,
+    };
+  }
 }
 
-function buildDiagnostics(session: CombatLabVisualSession): Record<string, unknown> {
+function buildDiagnostics(
+  session: CombatLabVisualSession,
+  selection: CombatLabUiSelectionV1,
+): Record<string, unknown> {
   const state = session.state;
   const snapshot = session.getSnapshot();
-  const selected = state.units.find((unit) => unit.id === state.selectedUnitId) ?? state.units[0] ?? null;
+  const shooter = findUnit(state.units, selection.shooterUnitId);
+  const target = selection.targetUnitId ? findUnit(state.units, selection.targetUnitId) : null;
+  const helper = selection.helperUnitId ? findUnit(state.units, selection.helperUnitId) : null;
+  const selected = shooter ?? state.units[0] ?? null;
   const combat = selected?.infantryCombatRuntime;
   const weapon = combat?.primaryWeapon;
   const projectileDiagnostics = state.infantryCombatProjectiles.diagnostics;
+  const assistantValidation = shooter ? validateMachineGunAssistant(state, shooter, selection.helperUnitId) : null;
+  const targetPoint = target
+    ? { xMetres: target.position.x * state.map.metersPerCell, yMetres: target.position.y * state.map.metersPerCell }
+    : selection.targetPointMetres;
+
   return {
     run: {
       scenarioId: snapshot.scenarioId,
@@ -309,29 +451,53 @@ function buildDiagnostics(session: CombatLabVisualSession): Record<string, unkno
       eventDigest: snapshot.eventDigest,
       finalStateDigest: snapshot.finalStateDigest,
     },
-    selectedUnit: selected ? {
-      name: selected.labels.ru,
-      unitId: selected.id,
-      posture: selected.behaviorRuntime.posture,
-      movement: selected.movementRuntime,
-    } : null,
-    weapon: weapon ? {
-      name: weapon.resolved.weapon.nameRu,
-      definitionId: weapon.resolved.weapon.weaponDefinitionId,
-      revision: weapon.resolved.weapon.revision,
-      deployment: weapon.deployment,
-      roundsInWeapon: weapon.roundsInWeapon,
-      reserve: combat?.ammoInventory.reserves,
-      recoil: weapon.recoil,
-      automaticFire: weapon.automaticFire,
-    } : null,
+    selection: {
+      shooter: unitIdentity(shooter),
+      target: target ? unitIdentity(target) : { kind: 'point', ...targetPoint },
+      targetDistanceMetres: shooter ? round(distanceToPointMetres(state.map.metersPerCell, shooter, targetPoint)) : null,
+      helper: unitIdentity(helper),
+      helperDistanceMetres: shooter && helper ? round(distanceBetweenUnits(state.map.metersPerCell, shooter, helper)) : null,
+      helperValidation: assistantValidation
+        ? { valid: assistantValidation.valid, reasonCode: assistantValidation.reasonCode, reasonRu: assistantValidation.reasonRu }
+        : null,
+      firstAidActorUnitId: selection.firstAidActorUnitId || null,
+      firstAidTargetUnitId: selection.firstAidTargetUnitId || null,
+      ammoSourceUnitId: selection.ammoSourceUnitId || null,
+      ammoTargetUnitId: selection.ammoTargetUnitId || null,
+    },
+    selectedUnit: selected
+      ? {
+          name: selected.labels.ru,
+          unitId: selected.id,
+          posture: selected.behaviorRuntime.posture,
+          movement: selected.movementRuntime,
+          capabilities: getEffectiveCombatCapabilities(selected),
+          physicalChannels: selected.behaviorRuntime.physicalActionCoordinator.activeLeases,
+        }
+      : null,
+    weapon: weapon
+      ? {
+          name: weapon.resolved.weapon.nameRu,
+          definitionId: weapon.resolved.weapon.weaponDefinitionId,
+          revision: weapon.resolved.weapon.revision,
+          deployment: weapon.deployment,
+          roundsInWeapon: weapon.roundsInWeapon,
+          reserve: combat?.ammoInventory.reserves,
+          recoil: weapon.recoil,
+          automaticFire: weapon.automaticFire,
+          assistantDeployMultiplier: weapon.resolved.weapon.assistantDeployMultiplier,
+          assistantReloadMultiplier: weapon.resolved.weapon.assistantReloadMultiplier,
+        }
+      : null,
     fireTask: combat?.activeFireTask ?? null,
     lastFireResult: combat?.lastFireResult ?? null,
     lastShotCommit: combat?.lastShotCommit ?? null,
     reload: combat?.ammoInventory.activeReload ?? null,
     transfer: combat?.ammoInventory.activeTransfer ?? null,
+    lastWeaponActionResult: combat?.ammoInventory.lastActionResult ?? null,
     firstAid: combat?.medical.activeFirstAidAction ?? null,
     firstAidCharges: combat?.medical.firstAidCharges ?? 0,
+    lastFirstAidResult: combat?.medical.lastFirstAidResult ?? null,
     wounds: combat?.wounds.slots ?? [],
     blood: combat?.physiology.blood ?? null,
     fatigue: combat?.physiology.fatigue ?? null,
@@ -351,21 +517,108 @@ function buildDiagnostics(session: CombatLabVisualSession): Record<string, unkno
   };
 }
 
-function fillRoles(selectElement: HTMLSelectElement, roles: readonly CombatLabRoleV1[], kind: CombatLabRoleV1['selectableAs'][number], includeEmpty = false, emptyLabel = 'Не выбрано'): void {
+function unitIdentity(unit: UnitModel | null): { readonly name: string; readonly unitId: string } | null {
+  return unit ? { name: unit.labels.ru, unitId: unit.id } : null;
+}
+
+function findUnit(units: readonly UnitModel[], unitId: string): UnitModel | null {
+  return units.find((unit) => unit.id === unitId) ?? null;
+}
+
+function distanceBetweenUnits(metresPerCell: number, left: UnitModel, right: UnitModel): number {
+  return Math.hypot(right.position.x - left.position.x, right.position.y - left.position.y) * metresPerCell;
+}
+
+function distanceToPointMetres(
+  metresPerCell: number,
+  unit: UnitModel,
+  point: { readonly xMetres: number; readonly yMetres: number },
+): number {
+  return Math.hypot(
+    point.xMetres - unit.position.x * metresPerCell,
+    point.yMetres - unit.position.y * metresPerCell,
+  );
+}
+
+function fillRoles(
+  selectElement: HTMLSelectElement,
+  roles: readonly CombatLabRoleV1[],
+  kind: CombatLabRoleV1['selectableAs'][number],
+  includeEmpty = false,
+  emptyLabel = 'Не выбрано',
+): void {
   selectElement.replaceChildren();
   if (includeEmpty) selectElement.append(option(kind === 'target' ? '__point__' : '', emptyLabel));
-  for (const role of roles.filter((candidate) => candidate.selectableAs.includes(kind))) selectElement.append(option(role.unitId, `${role.titleRu} · ${role.unitId}`));
+  for (const role of roles.filter((candidate) => candidate.selectableAs.includes(kind))) {
+    selectElement.append(option(role.unitId, `${role.titleRu} · ${role.unitId}`));
+  }
 }
-function panel(title: string, ...children: HTMLElement[]): HTMLElement { const result = node('section', 'combat-lab-panel'); result.append(sectionTitle(title), ...children); return result; }
+
+function panel(title: string, ...children: HTMLElement[]): HTMLElement {
+  const result = node('section', 'combat-lab-panel');
+  result.append(sectionTitle(title), ...children);
+  return result;
+}
 function sectionTitle(text: string): HTMLElement { return node('h2', 'combat-lab-section-title', text); }
-function field(label: string, control: HTMLElement): HTMLLabelElement { const result = document.createElement('label'); result.className = 'combat-lab-field'; result.append(node('span', '', label), control); return result; }
-function inlineField(label: string, control: HTMLElement): HTMLLabelElement { const result = field(label, control); result.classList.add('inline'); return result; }
-function actionRow(...children: HTMLElement[]): HTMLElement { const result = node('div', 'combat-lab-row'); result.append(...children); return result; }
-function button(text: string, action: () => void, className = ''): HTMLButtonElement { const result = document.createElement('button'); result.type = 'button'; result.textContent = text; result.className = className; result.addEventListener('click', action); return result; }
+function field(label: string, control: HTMLElement): HTMLLabelElement {
+  const result = document.createElement('label');
+  result.className = 'combat-lab-field';
+  result.append(node('span', '', label), control);
+  return result;
+}
+function inlineField(label: string, control: HTMLElement): HTMLLabelElement {
+  const result = field(label, control);
+  result.classList.add('inline');
+  return result;
+}
+function actionRow(...children: HTMLElement[]): HTMLElement {
+  const result = node('div', 'combat-lab-row');
+  result.append(...children);
+  return result;
+}
+function button(text: string, action: () => void, className = ''): HTMLButtonElement {
+  const result = document.createElement('button');
+  result.type = 'button';
+  result.textContent = text;
+  result.className = className;
+  result.addEventListener('click', action);
+  return result;
+}
 function select(): HTMLSelectElement { return document.createElement('select'); }
-function option(value: string, text: string): HTMLOptionElement { const result = document.createElement('option'); result.value = value; result.textContent = text; return result; }
-function numberInput(min: number, max: number, step: number): HTMLInputElement { const result = document.createElement('input'); result.type = 'number'; result.min = String(min); result.max = String(max); result.step = String(step); return result; }
-function node<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] { const result = document.createElement(tag); result.className = className; result.textContent = text; return result; }
-function orderedList(items: readonly string[]): HTMLOListElement { const list = document.createElement('ol'); for (const item of items) list.append(node('li', '', item)); return list; }
-function finite(value: string): number { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
-function validSeed(value: string, fallback: number): number { const parsed = Number(value); if (!Number.isFinite(parsed)) return fallback; const seed = Math.trunc(parsed) >>> 0; return seed || fallback; }
+function option(value: string, text: string): HTMLOptionElement {
+  const result = document.createElement('option');
+  result.value = value;
+  result.textContent = text;
+  return result;
+}
+function numberInput(min: number, max: number, step: number): HTMLInputElement {
+  const result = document.createElement('input');
+  result.type = 'number';
+  result.min = String(min);
+  result.max = String(max);
+  result.step = String(step);
+  return result;
+}
+function node<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] {
+  const result = document.createElement(tag);
+  result.className = className;
+  result.textContent = text;
+  return result;
+}
+function orderedList(items: readonly string[]): HTMLOListElement {
+  const list = document.createElement('ol');
+  for (const item of items) list.append(node('li', '', item));
+  return list;
+}
+function finite(value: string): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+function validSeed(value: string, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 0xffff_ffff) return fallback;
+  return parsed;
+}
+function round(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
