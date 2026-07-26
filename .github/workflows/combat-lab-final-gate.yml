@@ -1,0 +1,85 @@
+name: Combat Lab Final Gate
+
+on:
+  push:
+    branches:
+      - feature/20260726-shooting-stage-09v-combat-lab
+    paths:
+      - .github/workflows/combat-lab-final-gate.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: combat-lab-final-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify exact Combat Lab SHA
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify documentation
+        run: npm run docs:smoke
+
+      - name: Verify laboratory platform
+        run: npm run lab:smoke
+
+      - name: Verify Combat Lab application
+        run: npm run combat-lab:smoke
+
+      - name: Verify Combat Lab scenarios
+        run: npm run combat-lab-scenarios:smoke
+
+      - name: Verify Combat Lab runner
+        run: npm run combat-lab-runner:smoke
+
+      - name: Verify infantry combat Stage 9
+        run: npm run infantry-combat-stage9:verify
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build all application pages
+        env:
+          REAL_WARGAME_BRANCH: feature/20260726-shooting-stage-09v-combat-lab
+          REAL_WARGAME_COMMIT_SHA: ${{ github.sha }}
+        run: npm run build:app
+
+      - name: Verify deployment pages
+        run: npm run verify:deployment-pages -- --root dist
+
+      - name: Check patch whitespace
+        run: git diff --check 90043f503d7615f296118abf8f11cd4a85a8df6d...HEAD
+
+      - name: Check repository cleanliness
+        run: |
+          status="$(git status --short)"
+          if [ -n "$status" ]; then
+            printf '%s\n' "$status"
+            exit 1
+          fi
+
+      - name: Upload verified build
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-lab-dist-${{ github.sha }}
+          path: dist
+          if-no-files-found: error
+          retention-days: 3
