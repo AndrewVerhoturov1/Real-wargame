@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import process from 'node:process';
 import {
   getCombatLabScenarioDefinition,
   runCombatLabScenario,
@@ -65,3 +66,4 @@ for (const scenarioId of [
 }
 
 console.log('Combat Lab deterministic runner smoke passed.');
+process.exit(0);
