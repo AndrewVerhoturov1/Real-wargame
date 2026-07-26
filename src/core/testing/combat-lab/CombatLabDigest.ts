@@ -61,7 +61,9 @@ export function digestCombatLabEvents(state: SimulationState): string {
       wounds: unit.infantryCombatRuntime.wounds.slots.map((slot) => ({
         zone: slot.zone,
         severity: slot.severity,
-        impactIds: [...slot.impactIds].sort(compareText),
+        hitCount: slot.hitCount,
+        firstImpactId: slot.firstImpactId,
+        lastImpactId: slot.lastImpactId,
         bleedingState: slot.bleedingState,
         firstAidApplicationCount: slot.firstAidApplicationCount,
       })),
