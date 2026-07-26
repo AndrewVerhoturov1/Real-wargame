@@ -1,5 +1,6 @@
 name: Combat Lab Final Gate
 
+# Exact-SHA rerun after isolating the Vite SSR smoke child processes.
 on:
   push:
     branches:
