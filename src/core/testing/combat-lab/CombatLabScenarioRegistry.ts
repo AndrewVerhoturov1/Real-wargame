@@ -252,7 +252,7 @@ function scenario(input: {
     category: input.category,
     defaultSeed: input.defaultSeed,
     stateFactoryId: input.stateFactoryId,
-    defaultStopCondition: { kind: 'program_complete', maximumSimulationSeconds: 16 },
+    defaultStopCondition: { kind: 'program_complete', maximumSimulationSeconds: 16 } as const,
     supportedMetrics: ALL_METRICS,
     visualPreset: {
       schemaVersion: 1,
