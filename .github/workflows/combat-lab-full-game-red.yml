@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/combat-lab-full-game-red.yml
       - scripts/combat_lab_full_game_contract_smoke.mjs
+      - scripts/combat_lab_scenarios_smoke.ts
       - src/game/**
       - src/main.ts
       - src/combat-lab/**
@@ -17,6 +18,7 @@ on:
     paths:
       - .github/workflows/combat-lab-full-game-red.yml
       - scripts/combat_lab_full_game_contract_smoke.mjs
+      - scripts/combat_lab_scenarios_smoke.ts
       - src/game/**
       - src/main.ts
       - src/combat-lab/**
@@ -44,6 +46,12 @@ jobs:
         run: |
           set -o pipefail
           npm run typecheck 2>&1 | tee combat-lab-full-game-typecheck.txt
+      - name: Run stable-state scenario contract
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run combat-lab-scenarios:smoke 2>&1 | tee combat-lab-stable-state-red.txt
       - name: Run full-game contract
         shell: bash
         run: |
@@ -57,5 +65,6 @@ jobs:
           path: |
             combat-lab-full-game-red.txt
             combat-lab-full-game-typecheck.txt
+            combat-lab-stable-state-red.txt
           if-no-files-found: warn
           retention-days: 1
