@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import process from 'node:process';
 import { tickSimulation } from '../src/core/simulation/SimulationTick';
 import {
   COMBAT_LAB_FIXED_STEP_SECONDS,
@@ -100,6 +101,7 @@ assert.equal(reverseOrder.eventDigest, normalOrder.eventDigest);
 
 assert.throws(() => getCombatLabScenarioDefinition('missing-scenario'), /Unknown Combat Lab scenario/);
 console.log('Combat Lab scenario registry smoke passed.');
+process.exit(0);
 
 function runRifleOrderVariant(reverseUnits: boolean): { readonly stateDigest: string; readonly eventDigest: string } {
   const built = buildCombatLabInitialState('rifle-distance-baseline', 1, 9041);
