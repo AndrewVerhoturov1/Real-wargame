@@ -9,12 +9,15 @@ const CLOSE_SIGNAL_KEY = 'real-wargame.lab.close-tabs';
 const NEW_GAME_SIGNAL_KEY = 'real-wargame.lab.new-game';
 const CLOSE_CHANNEL_NAME = 'real-wargame.lab.close-tabs';
 const STYLE_ID = 'real-wargame-app-shell-menu-style';
+const MODE_BODY_CLASSES = ['app-shell-mode-game', 'app-shell-mode-editor', 'app-shell-mode-combat-lab', 'app-shell-mode-launcher'] as const;
 
 let closeChannel: BroadcastChannel | null = null;
 let closeListenerInstalled = false;
 
 export function installAppShellMenu(options: AppShellMenuOptions): void {
   document.body.classList.add('with-app-shell-menu');
+  document.body.classList.remove(...MODE_BODY_CLASSES);
+  document.body.classList.add(`app-shell-mode-${options.mode}`);
   installStyles();
   installCloseListeners();
   document.querySelector('.app-shell-menu')?.remove();
@@ -194,10 +197,18 @@ function installStyles(): void {
     .app-shell-exit-button { color: #ffb0a8 !important; }
     .app-shell-status { grid-column: 1 / -1; min-height: 0; color: #d6ceb2; font-size: 11px; text-align: center; }
     .app-shell-status:empty { display: none; }
+
+    .app-shell-mode-game .top-command-bar { top: 62px; }
+    .app-shell-mode-game .game-right-panel { top: 124px; max-height: calc(100vh - 238px); }
+    .app-shell-mode-game .map-scale-fixed-label { top: 126px; }
+    .app-shell-mode-editor .ai-editor-shell { height: calc(100vh - 54px); margin-top: 54px; }
+
     @media (max-width: 900px) {
       .app-shell-menu { left: 8px; right: 8px; grid-template-columns: 1fr; transform: none; }
       .app-shell-title { display: none; }
       .app-shell-mode-links, .app-shell-actions { justify-content: center; flex-wrap: wrap; }
+      .app-shell-mode-game .top-command-bar { top: 104px; }
+      .app-shell-mode-editor .ai-editor-shell { height: calc(100vh - 100px); margin-top: 100px; }
     }
   `;
   document.head.append(style);
