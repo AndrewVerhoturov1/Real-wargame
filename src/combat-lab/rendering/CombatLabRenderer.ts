@@ -2,7 +2,11 @@ import type { Ticker } from 'pixi.js';
 import { getMovementProfileRegistry } from '../../ai-node-editor/MovementProfileBrowserStorage';
 import { installEnvironmentMovementMaterialProvider } from '../../core/movement/MovementMaterialAdapter';
 import type { SimulationState } from '../../core/simulation/SimulationState';
-import { installTacticalPositionSearchService, TacticalPositionSearchService } from '../../core/tactical/TacticalPositionSearchService';
+import {
+  clearTacticalPositionSearchService,
+  installTacticalPositionSearchService,
+  TacticalPositionSearchService,
+} from '../../core/tactical/TacticalPositionSearchService';
 import { initializeAiTestLabRuntime } from '../../core/testing/AiTestLabRuntime';
 import type { CombatLabDiagnosticLayerId } from '../../core/testing/combat-lab';
 import { installAdaptiveGridLod } from '../../rendering/AdaptiveGridLodInstaller';
@@ -43,6 +47,7 @@ export class CombatLabRenderer {
   private destroyAdaptiveGrid: (() => void) | null = null;
   private destroyAwarenessField: (() => void) | null = null;
   private tacticalPositionSearchService: TacticalPositionSearchService | null = null;
+  private awarenessWorldRuntime: AwarenessWorldRuntime | null = null;
   private boundState: SimulationState;
   private destroyed = false;
 
@@ -197,6 +202,7 @@ export class CombatLabRenderer {
   private installStateBoundServices(): void {
     const state = this.boundState;
     const awarenessWorldRuntime = new AwarenessWorldRuntime();
+    this.awarenessWorldRuntime = awarenessWorldRuntime;
     this.tacticalPositionSearchService = new TacticalPositionSearchService(state, awarenessWorldRuntime);
     installTacticalPositionSearchService(state, this.tacticalPositionSearchService);
     this.destroyAwarenessField = installAwarenessLayerFieldController(state, {
@@ -216,8 +222,11 @@ export class CombatLabRenderer {
     this.destroyAttentionOverlay = null;
     this.destroyAwarenessField?.();
     this.destroyAwarenessField = null;
+    clearTacticalPositionSearchService(this.boundState);
     this.tacticalPositionSearchService?.destroy();
     this.tacticalPositionSearchService = null;
+    this.awarenessWorldRuntime?.destroy();
+    this.awarenessWorldRuntime = null;
   }
 
   private rebuildLayerControls(): void {
