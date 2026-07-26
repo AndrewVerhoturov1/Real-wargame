@@ -24,7 +24,15 @@
     "coreMustBePlatformIndependent": true,
     "renderersAreNonAuthoritative": true,
     "versionedSerializableContractsRequired": true,
-    "deterministicHeadlessFixturesRequiredForMajorMechanics": true
+    "deterministicHeadlessFixturesRequiredForMajorMechanics": true,
+    "plannedIndependentApplications": [
+      {
+        "id": "combat-lab",
+        "path": "/combat-lab.html",
+        "status": "next-stage",
+        "purpose": "Отдельное приложение испытательных стендов с общими сценариями для визуальных одиночных и будущих массовых headless-прогонов."
+      }
+    ]
   },
   "communication": {
     "userLanguage": "ru",
@@ -61,6 +69,9 @@
     "requiredDeploymentPages": [
       "/",
       "/ai-node-editor.html"
+    ],
+    "plannedDeploymentPages": [
+      "/combat-lab.html"
     ],
     "permanentVercelProjectMayBeDeleted": false,
     "legacyTemporaryVercelProjectCleanup": "only-after-manual-preview-ready-and-both-pages-verified",
@@ -100,5 +111,5 @@
     "pixiJs": ".agents/skills/real-wargame-pixijs/SKILL.md",
     "aiRuntime": ".agents/skills/real-wargame-ai-runtime/SKILL.md"
   },
-  "updatedAt": "2026-07-22"
+  "updatedAt": "2026-07-26"
 }

@@ -3,10 +3,10 @@
 
 - **ID:** `infantry-combat-prototype-v1`
 - **Status:** `active`
-- **Updated:** 2026-07-22
+- **Updated:** 2026-07-26
 - **Working branch:** `real-wargame-preview`
 - **Canonical launcher:** `Run-Real-Wargame-Lab.bat`
-- **Last verified commit:** `86071bb3d0c4ebd95adf4e87ee4d575fa7108da3`
+- **Last verified commit:** `27603b0e2e311e44680a1ca900837ed7adaf8859`
 
 ## Goal
 
@@ -14,41 +14,46 @@
 
 ## Current focus
 
-Этап 1: сохраняемый статический предрасчёт и чистый решатель локальных рабочих точек проверены и перенесены в real-wargame-preview. Текущая работа — физическое выполнение временного действия от защищённого якоря.
+Стрелковый бой Stage 3–9 принят и перенесён в real-wargame-preview: одиночный и автоматический огонь, пули, прицеливание, попадания и ранения, кровопотеря, усталость, первая помощь, подавление, ДП-27, помощник, перезарядка и передача патронов. Текущий контрольный этап — Stage 9V: отдельное приложение испытательного полигона для первой полноценной живой проверки системы.
 
 ## Next step
 
-Реализовать общий runtime anchor → action port → требуемая поза → observation/fire → return с отменой, сохранением и диагностикой.
+Создать отдельное приложение /combat-lab.html с общими детерминированными сценариями для visual single-run и будущих headless batch-прогонов; провести ручную проверку Stage 3–9 и только после неё решать переход к Stage 10.
 
 ## Read first
 
 - `AGENTS.md`
 - `docs/subprojects/infantry-combat-prototype-v1/ROADMAP.md`
-- `plans/2026-07-22-action-port-physical-runtime.md`
-- `docs/subprojects/infantry-combat-prototype-v1/STATIC_TACTICAL_BASIS_ARTIFACT_AND_ACTION_PORTS.md`
-- `docs/subprojects/infantry-combat-prototype-v1/MAP_OBJECT_GEOMETRY_AND_BALLISTIC_LINE_PROBE.md`
+- `docs/subprojects/infantry-combat-prototype-v1/COMBAT_LAB_DIRECTION.md`
+- `docs/subprojects/infantry-combat-prototype-v1/SHOOTING_STAGE_9_MACHINE_GUN_ASSISTANT.md`
 - `docs/subprojects/infantry-combat-prototype-v1/ACCEPTANCE.md`
 - `docs/subprojects/infantry-combat-prototype-v1/DECISIONS.md`
 - `docs/subprojects/infantry-combat-prototype-v1/WORKLOG.md`
+- `docs/performance/PERFORMANCE_PRINCIPLES.md`
 
 ## Main files
 
-- `src/core/tactical/action-ports/TacticalActionPortSolver.ts`
-- `src/core/movement/MovementRuntime.ts`
-- `src/core/actions/PostureTransition.ts`
-- `src/core/combat/FireAction.ts`
+- `src/core/infantry-combat/runtime/index.ts`
+- `src/core/infantry-combat/runtime/FireTaskRuntime.ts`
+- `src/core/infantry-combat/runtime/AimRuntime.ts`
+- `src/core/infantry-combat/runtime/ReloadWeaponAction.ts`
+- `src/core/infantry-combat/runtime/WeaponDeploymentRuntime.ts`
+- `src/core/infantry-combat/runtime/Stage9ActionReconciliation.ts`
 - `src/core/simulation/SimulationTick.ts`
-- `src/ui/SceneExport.ts`
+- `vite.config.ts`
 
 ## Suggested verification
 
 - `npm run docs:sync`
+- `npm run infantry-combat-stage9:verify`
+- `npm run build`
 
 ## Safety rules
 
-- Не расширять текущий этап после выполнения его стоп-критерия.
-- Не создавать вторую систему восприятия, опасности или поведения.
+- Не начинать Stage 10 до создания и ручной проверки Stage 9V.
+- Не путать автоматическую exact-head проверку, визуальную проверку инструмента и живую оценку владельцем.
+- Отдельное приложение испытательного полигона использует производственную физику и не создаёт второй боевой runtime.
+- Один испытательный сценарий должен иметь общий детерминированный источник состояния для headless- и visual-запуска.
 - Код задаёт физику и факты; Graph v2 задаёт выбор поведения.
-- Общий статус меняет оркестратор; исполнитель меняет только свою задачу и отчёт.
-- Документальные предупреждения не блокируют работу над игрой.
+- Общий статус, roadmap, решения и журнал вех меняет оркестратор; исполнитель меняет только свою задачу и отчёт.
 - Не переносить изменения в real-wargame-preview без явного разрешения пользователя.
