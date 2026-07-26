@@ -51,9 +51,9 @@ assert.match(adapter, /bindSimulationState/);
 assert.match(adapter, /boardInput\.state\s*=\s*state/);
 
 assert.match(labMain, /installAppShellMenu\(\{ mode: 'combat-lab' \}\)/);
-assert.match(menu, /href=\"\/\"/);
-assert.match(menu, /href=\"\/ai-node-editor\.html\"/);
-assert.match(menu, /href=\"\/combat-lab\.html\"/);
+assert.match(menu, /modeLink\('\/', 'game', 'Игра', mode\)/);
+assert.match(menu, /modeLink\('\/ai-node-editor\.html', 'editor', 'Редактор ИИ', mode\)/);
+assert.match(menu, /modeLink\('\/combat-lab\.html', 'combat-lab', 'Испытательный полигон', mode\)/);
 assert.match(menu, /aria-current=\"page\"/);
 
 console.log('Combat Lab UI production-boundary smoke passed.');
