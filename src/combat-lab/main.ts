@@ -1,8 +1,11 @@
 import './combat-lab.css';
 import { getCombatLabScenarioDefinition } from '../core/testing/combat-lab';
+import { installAppShellMenu } from '../shared/AppShellMenu';
 import { CombatLabRenderer } from './rendering/CombatLabRenderer';
 import { CombatLabVisualSession } from './runtime/CombatLabVisualSession';
 import { CombatLabShell, createCombatLabLayout } from './ui/CombatLabShell';
+
+installAppShellMenu({ mode: 'combat-lab' });
 
 const root = document.querySelector<HTMLElement>('#combat-lab-root');
 if (!root) throw new Error('Не найден корневой элемент испытательного полигона.');
