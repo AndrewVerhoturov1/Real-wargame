@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [shell, session, renderer, commands] = await Promise.all([
+const [shell, session, checkpoint, renderer, commands] = await Promise.all([
   readFile('src/combat-lab/ui/CombatLabShell.ts', 'utf8'),
   readFile('src/combat-lab/runtime/CombatLabVisualSession.ts', 'utf8'),
+  readFile('src/combat-lab/runtime/CombatLabCheckpoint.ts', 'utf8'),
   readFile('src/combat-lab/rendering/CombatLabRenderer.ts', 'utf8'),
   readFile('src/core/testing/combat-lab/CombatLabCommands.ts', 'utf8'),
 ]);
@@ -24,8 +25,9 @@ assert.doesNotMatch(shell, /activeFireTask\s*=/, 'UI must not create FireTask st
 assert.doesNotMatch(shell, /activeProjectiles\.(push|splice)/, 'UI must not create projectile state.');
 assert.doesNotMatch(commands, /spawnReferenceProjectile|spawnProjectile|createProjectileCandidate/);
 assert.match(session, /markInteractive/);
-assert.match(session, /buildExportedScene/);
-assert.match(session, /restoreExportedScene/);
+assert.match(checkpoint, /buildExportedScene/);
+assert.match(checkpoint, /restoreExportedScene/);
+assert.match(checkpoint, /restoreImportedInfantryCombatState/);
 assert.match(renderer, /MAX_COMBAT_LAB_TRAIL_POINTS\s*=\s*4096/);
 assert.match(renderer, /destroy\(\): void/);
 assert.match(renderer, /layer\.enabled/);
