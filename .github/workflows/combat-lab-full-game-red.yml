@@ -6,8 +6,8 @@ on:
       - feature/20260726-shooting-stage-09v-combat-lab
     paths:
       - .github/workflows/combat-lab-full-game-red.yml
-      - scripts/combat_lab_full_game_contract_smoke.mjs
-      - scripts/combat_lab_scenarios_smoke.ts
+      - scripts/combat_lab_*
+      - scripts/verify_preview.mjs
       - src/game/**
       - src/main.ts
       - src/combat-lab/**
@@ -17,8 +17,8 @@ on:
       - real-wargame-preview
     paths:
       - .github/workflows/combat-lab-full-game-red.yml
-      - scripts/combat_lab_full_game_contract_smoke.mjs
-      - scripts/combat_lab_scenarios_smoke.ts
+      - scripts/combat_lab_*
+      - scripts/verify_preview.mjs
       - src/game/**
       - src/main.ts
       - src/combat-lab/**
@@ -30,7 +30,7 @@ permissions:
 jobs:
   red-contract:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,31 +40,47 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Typecheck extracted game application
-        continue-on-error: true
+      - name: Typecheck full game application
         shell: bash
         run: |
           set -o pipefail
           npm run typecheck 2>&1 | tee combat-lab-full-game-typecheck.txt
-      - name: Run stable-state scenario contract
-        continue-on-error: true
+      - name: Verify stable laboratory state
         shell: bash
         run: |
           set -o pipefail
-          npm run combat-lab-scenarios:smoke 2>&1 | tee combat-lab-stable-state-red.txt
-      - name: Run full-game contract
+          npm run combat-lab-scenarios:smoke 2>&1 | tee combat-lab-stable-state.txt
+      - name: Verify full-game architecture
         shell: bash
         run: |
           set -o pipefail
-          node scripts/combat_lab_full_game_contract_smoke.mjs 2>&1 | tee combat-lab-full-game-red.txt
+          node scripts/combat_lab_full_game_contract_smoke.mjs 2>&1 | tee combat-lab-full-game-contract.txt
+      - name: Verify shared renderer boundary
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/combat_lab_shared_renderer_contract_smoke.mjs 2>&1 | tee combat-lab-shared-renderer.txt
+      - name: Verify Combat Lab application and UI
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run combat-lab:smoke 2>&1 | tee combat-lab-application.txt
+      - name: Verify deterministic runner
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run combat-lab-runner:smoke 2>&1 | tee combat-lab-runner.txt
+      - name: Build all pages
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build:app 2>&1 | tee combat-lab-build.txt
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: combat-lab-full-game-diagnostics-${{ github.sha }}
           path: |
-            combat-lab-full-game-red.txt
-            combat-lab-full-game-typecheck.txt
-            combat-lab-stable-state-red.txt
+            combat-lab-*.txt
           if-no-files-found: warn
           retention-days: 1
