@@ -149,6 +149,8 @@ function fixturesForFactory(factoryId: string): readonly UnitFixture[] {
 
 function applyScenarioInitialConditions(factoryId: string, units: UnitModel[]): void {
   if (factoryId === 'wounds-first-aid-v1') {
+    const actor = requireUnit(units, 'medical-actor');
+    actor.infantryCombatRuntime.medical.firstAidCharges = 2;
     const patient = requireUnit(units, 'medical-patient');
     applyWoundCandidate(patient.infantryCombatRuntime.wounds, wound('medical:head', patient.id, 'head', 'severe'));
     applyWoundCandidate(patient.infantryCombatRuntime.wounds, wound('medical:torso', patient.id, 'torso', 'critical'));
