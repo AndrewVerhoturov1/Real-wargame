@@ -38,12 +38,13 @@ export function executeCombatLabCommand(
     if (command.targetUnitId && !targetUnit) return missingUnit(command.targetUnitId);
     const target = command.targetPointMetres ?? (targetUnit ? unitAimPointMetres(state, targetUnit) : null);
     if (!target) return rejected('combat_lab_target_missing', 'Не выбрана цель-боец или точка цели.');
+    const targetContactId = targetUnit ? resolveProductionContactId(shooter, targetUnit.id) : null;
     const result = requestFireTask(shooter, {
       owner,
       ownerToken,
       target,
       targetRadiusMetres: command.mode === 'suppress' ? command.targetRadiusMetres : 0,
-      contactId: targetUnit?.id ?? null,
+      contactId: targetContactId,
       sourceUnitId: targetUnit?.id ?? null,
       mode: command.mode,
       minimumSolutionQuality: command.minimumSolutionQuality,
@@ -194,6 +195,19 @@ function unitAimPointMetres(state: SimulationState, unit: UnitModel) {
     yMetres: unit.position.y * state.map.metersPerCell,
     zMetres: unit.behaviorRuntime.posture === 'prone' ? 0.35 : unit.behaviorRuntime.posture === 'crouched' ? 1.05 : 1.45,
   };
+}
+
+function resolveProductionContactId(shooter: UnitModel, targetUnitId: string): string | null {
+  const matching = shooter.perceptionKnowledge.contacts
+    .filter((contact) => contact.sourceUnitId === targetUnitId)
+    .sort((left, right) => (
+      Number(right.visibleNow) - Number(left.visibleNow)
+      || Number(right.observedNow) - Number(left.observedNow)
+      || right.confidence - left.confidence
+      || right.lastUpdatedSeconds - left.lastUpdatedSeconds
+      || left.id.localeCompare(right.id)
+    ));
+  return matching[0]?.id ?? null;
 }
 
 function normalizeProductionResult(value: unknown, ownerToken: string | null): CombatLabCommandResultV1 {
