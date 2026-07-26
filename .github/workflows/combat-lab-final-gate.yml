@@ -1,12 +1,25 @@
 name: Combat Lab Final Gate
 
-# Exact-SHA rerun after isolating the Vite SSR smoke child processes.
+# Exact-SHA gate for the completed Combat Lab feature branch.
 on:
   push:
     branches:
       - feature/20260726-shooting-stage-09v-combat-lab
     paths:
       - .github/workflows/combat-lab-final-gate.yml
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - .github/workflows/combat-lab-final-gate.yml
+      - combat-lab.html
+      - src/combat-lab/**
+      - src/rendering/PixiTacticalBoardAdapter.ts
+      - src/shared/AppShellMenu.ts
+      - src/ai-node-editor/main.ts
+      - scripts/combat_lab_*
+      - scripts/ai_test_lab_smoke.mjs
+      - docs/subprojects/infantry-combat-prototype-v1/SHOOTING_STAGE_9V_COMBAT_LAB.md
 
 permissions:
   contents: read
