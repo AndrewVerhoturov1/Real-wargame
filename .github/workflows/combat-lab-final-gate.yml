@@ -64,6 +64,15 @@ jobs:
       - name: Verify Combat Lab runner
         run: npm run combat-lab-runner:smoke
 
+      - name: Upload runner failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-lab-runner-failure-${{ github.sha }}
+          path: combat-lab-runner-smoke-failure.txt
+          if-no-files-found: ignore
+          retention-days: 3
+
       - name: Verify infantry combat Stage 9
         run: npm run infantry-combat-stage9:verify
 
