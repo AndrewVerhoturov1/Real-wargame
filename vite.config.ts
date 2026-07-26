@@ -28,6 +28,7 @@ export default defineConfig({
       input: {
         game: fileURLToPath(new URL('./index.html', import.meta.url)),
         aiNodeEditor: fileURLToPath(new URL('./ai-node-editor.html', import.meta.url)),
+        combatLab: fileURLToPath(new URL('./combat-lab.html', import.meta.url)),
       },
     },
   },
