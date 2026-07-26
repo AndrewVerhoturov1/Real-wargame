@@ -3,14 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="color-scheme" content="dark" />
-    <meta name="description" content="Отдельное приложение для ручной и детерминированной проверки стрелкового боя Stage 3–9." />
+    <meta name="description" content="Полный игровой режим Real Wargame с инструментами испытательного полигона Stage 3–9." />
     <title>Испытательный полигон · Real Wargame</title>
   </head>
   <body>
-    <div id="combat-lab-root" aria-label="Испытательный полигон стрелкового боя">
-      <noscript>Для испытательного полигона требуется JavaScript.</noscript>
-    </div>
+    <div id="app"></div>
+    <aside id="hud" aria-label="Панель тактической карты">
+      <div class="hud-header">
+        <h1 data-i18n="title">Тактическая карта</h1>
+        <button id="language-toggle" type="button" aria-label="Переключить язык">English</button>
+      </div>
+      <p data-i18n="primaryInstruction">Левый клик выбирает юнита. Правый клик отдаёт приказ движения.</p>
+      <p data-i18n="cameraInstruction">Колесо мыши меняет масштаб. Средняя кнопка или Space + левое перетаскивание двигают карту.</p>
+      <p data-i18n="newFeatures">Зоны сейчас только считают параметры опасности и напряжения.</p>
+      <div class="hud-controls" aria-label="Настройки отображения карты">
+        <button id="grid-toggle" class="hud-toggle hud-toggle-off" type="button" aria-pressed="false">Сетка: выкл</button>
+        <button id="vision-toggle" class="hud-toggle hud-toggle-off" type="button" aria-pressed="false">Обзор: выкл</button>
+        <button id="height-toggle" class="hud-toggle hud-toggle-off" type="button" aria-pressed="false">Цифры высоты: выкл</button>
+        <button id="pause-toggle" class="hud-toggle" type="button" aria-pressed="true">Пауза: вкл</button>
+        <button id="ai-editor-open" class="hud-toggle ai-editor-open-button" type="button">Редактор ИИ</button>
+      </div>
+      <pre id="debug-panel">Загрузка испытательного полигона...</pre>
+    </aside>
+    <div id="combat-lab-extension-root" aria-label="Инструменты испытательного полигона"></div>
     <script type="module" src="/src/combat-lab/main.ts"></script>
   </body>
 </html>
