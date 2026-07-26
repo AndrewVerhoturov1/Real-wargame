@@ -8,6 +8,7 @@
 
 * { box-sizing: border-box; }
 html, body, #combat-lab-root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { background: #0c100d; }
 button, input, select { font: inherit; }
 button, select, input {
   min-height: 32px;
@@ -26,6 +27,7 @@ code { color: #d9c888; }
 #combat-lab-root {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) 156px;
+  padding-top: 54px;
   background: #0c100d;
 }
 
@@ -59,8 +61,79 @@ code { color: #d9c888; }
 }
 .combat-lab-left { border-right: 1px solid #3b443b; }
 .combat-lab-right { border-left: 1px solid #3b443b; }
-.combat-lab-map { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: #111611; }
+.combat-lab-map {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #111611;
+}
+.combat-lab-game-board {
+  position: absolute;
+  inset: 0 0 48px;
+  overflow: hidden;
+  background: #121612;
+}
 .combat-lab-map canvas { display: block; width: 100%; height: 100%; }
+.combat-lab-game-board .html-map-overlay {
+  position: absolute;
+  inset: 0;
+}
+.combat-lab-map .map-scale-fixed-label {
+  position: absolute;
+  left: 84px;
+  top: 12px;
+  z-index: 18;
+}
+.combat-lab-game-toolbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  overflow-x: auto;
+  border-top: 1px solid rgba(255, 242, 168, 0.2);
+  background: rgba(10, 13, 9, 0.94);
+  backdrop-filter: blur(6px);
+}
+.combat-lab-game-toolbar strong {
+  flex: 0 0 auto;
+  color: #fff2a8;
+  font-size: 12px;
+}
+.combat-lab-game-toolbar > button {
+  flex: 0 0 auto;
+  min-width: auto;
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+.combat-lab-standard-layer-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.combat-lab-standard-layer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 7px;
+  border: 1px solid rgba(255, 242, 168, 0.16);
+  border-radius: 8px;
+  color: #d6ceb2;
+  background: rgba(255, 242, 168, 0.045);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.combat-lab-standard-layer input { width: auto; min-height: auto; }
+.combat-lab-game-debug { display: none; }
 
 .combat-lab-section-title {
   margin: 4px 0 8px;
@@ -130,6 +203,16 @@ code { color: #d9c888; }
   padding: 2px 0;
   color: #abb5aa;
   font: 11px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.combat-lab-startup-error {
+  margin: 80px auto;
+  max-width: 720px;
+  padding: 20px;
+  border: 1px solid #8a4b45;
+  border-radius: 10px;
+  color: #ffd5cf;
+  background: #2b1716;
 }
 
 @media (max-width: 1180px) {
