@@ -39,6 +39,8 @@ assert.match(renderer, /installAttentionOverlayRenderer/);
 assert.match(renderer, /installAdaptiveGridLod/);
 assert.match(renderer, /ensureStateBound/);
 assert.match(renderer, /adapter\.bindSimulationState\(this\.session\.state\)/);
+assert.match(renderer, /clearTacticalPositionSearchService\(this\.boundState\)/);
+assert.match(renderer, /awarenessWorldRuntime\?\.destroy\(\)/);
 assert.doesNotMatch(renderer, /new Application\s*\(/, 'Combat Lab must not own a second Pixi Application.');
 assert.doesNotMatch(renderer, /tickSimulation\(/, 'Renderer must advance only through CombatLabVisualSession.');
 
