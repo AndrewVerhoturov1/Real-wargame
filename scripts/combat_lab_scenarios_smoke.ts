@@ -51,22 +51,22 @@ for (const definition of definitions) {
 
 const rifle = buildCombatLabInitialState('rifle-distance-baseline', 1, 9041);
 const rifleman = rifle.state.units.find((unit) => unit.id === 'rifle-distance-shooter')!;
-assert.equal(rifleman.infantryCombatRuntime.primaryWeapon?.loadoutRef.definitionId, 'loadout_rifleman');
-assert.equal(rifleman.infantryCombatRuntime.primaryWeapon?.loadoutRef.revision, 1);
+assert.equal(rifleman.infantryCombatRuntime.ammoInventory.loadoutRef?.definitionId, 'loadout_rifleman');
+assert.equal(rifleman.infantryCombatRuntime.ammoInventory.loadoutRef?.revision, 1);
 
 const ppsh = buildCombatLabInitialState('ppsh-burst-recoil', 1, 9043);
 assert.equal(
-  ppsh.state.units.find((unit) => unit.id === 'ppsh-shooter')?.infantryCombatRuntime.primaryWeapon?.loadoutRef.definitionId,
+  ppsh.state.units.find((unit) => unit.id === 'ppsh-shooter')?.infantryCombatRuntime.ammoInventory.loadoutRef?.definitionId,
   'loadout_submachine_gunner',
 );
 
 const dp = buildCombatLabInitialState('dp27-assistant-ammo', 1, 9045);
 assert.equal(
-  dp.state.units.find((unit) => unit.id === 'dp-assistant-gunner')?.infantryCombatRuntime.primaryWeapon?.loadoutRef.definitionId,
+  dp.state.units.find((unit) => unit.id === 'dp-assistant-gunner')?.infantryCombatRuntime.ammoInventory.loadoutRef?.definitionId,
   'loadout_machine_gunner',
 );
 assert.equal(
-  dp.state.units.find((unit) => unit.id === 'dp-assistant-helper')?.infantryCombatRuntime.primaryWeapon?.loadoutRef.definitionId,
+  dp.state.units.find((unit) => unit.id === 'dp-assistant-helper')?.infantryCombatRuntime.ammoInventory.loadoutRef?.definitionId,
   'loadout_assistant_machine_gunner',
 );
 
