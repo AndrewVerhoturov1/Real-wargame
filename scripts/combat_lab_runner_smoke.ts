@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
 import process from 'node:process';
+import { tickSimulation } from '../src/core/simulation/SimulationTick';
 import {
+  COMBAT_LAB_FIXED_STEP_SECONDS,
+  applyDueCombatLabProgramSteps,
+  buildCombatLabInitialState,
   getCombatLabScenarioDefinition,
   runCombatLabScenario,
   runCombatLabScenarioWithFixedStep,
+  type CombatLabProgramRuntimeV1,
   type CombatLabRunRequestV1,
 } from '../src/core/testing/combat-lab';
 
@@ -29,7 +34,7 @@ assert.equal(first.completed, true);
 assert.ok(first.simulatedSeconds > 0);
 assert.match(first.eventDigest, /^[0-9a-f]{16}$/);
 assert.match(first.finalStateDigest, /^[0-9a-f]{16}$/);
-assert.ok(first.metrics.shotsCommitted >= 1);
+assert.ok(first.metrics.shotsCommitted >= 1, JSON.stringify(buildRifleFireDiagnostic(), null, 2));
 assert.equal(first.metrics.shotsCommitted, first.metrics.roundsConsumed);
 assert.equal(first.metrics.shotsCommitted, first.metrics.projectilesCreated);
 
@@ -67,3 +72,38 @@ for (const scenarioId of [
 
 console.log('Combat Lab deterministic runner smoke passed.');
 process.exit(0);
+
+function buildRifleFireDiagnostic(): Record<string, unknown> {
+  const built = buildCombatLabInitialState(definition.scenarioId, definition.revision, definition.defaultSeed);
+  const runtime: CombatLabProgramRuntimeV1 = {
+    appliedStepIds: new Set<string>(),
+    nextStepIndex: 0,
+    lastCommandResult: null,
+  };
+  const commandResults = applyDueCombatLabProgramSteps(built.state, built.definition, runtime);
+  for (let step = 0; step < Math.ceil(8 / COMBAT_LAB_FIXED_STEP_SECONDS); step += 1) {
+    applyDueCombatLabProgramSteps(built.state, built.definition, runtime);
+    tickSimulation(built.state, COMBAT_LAB_FIXED_STEP_SECONDS);
+  }
+  const shooter = built.state.units.find((unit) => unit.id === 'rifle-distance-shooter');
+  return {
+    runResult: first,
+    commandResults,
+    lastCommandResult: runtime.lastCommandResult,
+    shooterContacts: shooter?.perceptionKnowledge.contacts.map((contact) => ({
+      id: contact.id,
+      visibleNow: contact.visibleNow,
+      observedNow: contact.observedNow,
+      confidence: contact.confidence,
+      lastKnownPosition: contact.lastKnownPosition,
+    })),
+    activeFireTask: shooter?.infantryCombatRuntime.activeFireTask,
+    lastFireResult: shooter?.infantryCombatRuntime.lastFireResult,
+    lastShotCommit: shooter?.infantryCombatRuntime.lastShotCommit,
+    roundsInWeapon: shooter?.infantryCombatRuntime.primaryWeapon?.roundsInWeapon,
+    committedShots: built.state.infantryCombatProjectiles.committedShots.length,
+    activeProjectiles: built.state.infantryCombatProjectiles.activeProjectiles.length,
+    impacts: built.state.infantryCombatProjectiles.impacts.length,
+    simulationTimeSeconds: built.state.simulationTimeSeconds,
+  };
+}
