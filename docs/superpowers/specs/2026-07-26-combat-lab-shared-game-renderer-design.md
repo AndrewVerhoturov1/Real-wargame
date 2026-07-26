@@ -4,196 +4,172 @@
 
 ## Контекст
 
-Текущий Combat Lab является отдельной страницей и использует собственный `CombatLabRenderer`. Он повторно рисует фон, сетку, бойцов, направление взгляда, пули и диагностические элементы. Поэтому лаборатория визуально и технически расходится с основной игрой, несмотря на использование общего производственного состояния симуляции.
+Исходный Combat Lab был отдельной страницей с собственным `CombatLabRenderer`, который повторно рисовал фон, сетку, бойцов, направление взгляда, пули и диагностику. Поэтому лаборатория визуально и технически расходилась с основной игрой.
 
-Основная игра уже имеет единый `PixiTacticalBoardApp`, который владеет:
+Основная игра уже имеет единый `PixiTacticalBoardApp`, который владеет картой, камерой, рендерингом бойцов и поз, приказами, HTML-подписями, слоями маршрутов/опасности/осведомлённости и единым PixiJS lifecycle.
 
-- игровой картой и объектами;
-- камерой, масштабированием и панорамированием;
-- рендерингом бойцов, поз, приказов и HTML-подписей;
-- слоями маршрутов, опасности, осведомлённости, обзора, укрытий и редактора угроз;
-- производственным тиком симуляции;
-- подключаемыми оверлеями боевых эффектов и внимания;
-- единым жизненным циклом PixiJS и освобождением ресурсов.
-
-Требуется превратить Combat Lab в специальный режим этой же визуальной системы, сохранив отдельный лабораторный пульт, сценарии, headless runner, метрики и контрольные точки.
+Требуется сделать Combat Lab специальным режимом этой же визуальной системы, сохранив отдельный лабораторный пульт, сценарии, headless runner, метрики и контрольные точки.
 
 ## Цели
 
-1. Combat Lab отображает карту, бойцов, движение, позы, приказы и стандартные слои теми же производственными рендерами, что обычная игра.
+1. Карта, бойцы, движение, позы, приказы и стандартные слои отображаются теми же production renderer-ами, что в игре.
 2. Лаборатория сохраняет собственный сценарный редактор и не наследует обычный игровой HUD целиком.
-3. Лабораторные диагностические элементы добавляются поверх общей игровой сцены и не повторяют карту или бойцов.
-4. Игра, редактор ИИ и Combat Lab имеют единый переключатель режимов с выделением текущего режима.
-5. Состояние лаборатории остаётся изолированным от обычной игровой сцены и браузерных сохранений игры.
-6. Переключение сценария корректно заменяет состояние, обновляет все потребители и не оставляет старые listeners, tickers, workers или Pixi-ресурсы.
+3. Лабораторная диагностика является дополнительным overlay и не повторяет карту или обычных бойцов.
+4. Игра, редактор ИИ и Combat Lab имеют общий переключатель режимов с выделением текущего.
+5. Лабораторное состояние изолировано от обычной сцены и браузерных сохранений игры.
+6. Смена сценария заменяет состояние у всех state-bound потребителей и освобождает старые ресурсы.
 
 ## Не цели
 
-- Не переносить лабораторное состояние в обычную игру.
-- Не встраивать редактор ИИ внутрь Combat Lab.
-- Не менять физику Stage 3–9 или числовые коэффициенты.
-- Не создавать новую систему слоёв вместо существующей `state.editor.layers`.
-- Не копировать `src/main.ts` целиком в лабораторию.
-- Не использовать iframe или второй вложенный игровой runtime.
+- перенос лабораторного состояния в игру;
+- встраивание редактора ИИ в Combat Lab;
+- изменение физики и коэффициентов Stage 3–9;
+- новая система слоёв вместо `state.editor.layers`;
+- копирование `src/main.ts`;
+- iframe, второй Pixi Application, вторая камера или второй ticker.
 
 ## Рассмотренные варианты
 
-### 1. Скопировать bootstrap основной игры в Combat Lab
+### Копия bootstrap игры
 
-Плюсы: быстро получить похожий экран.
+Отклонена: создаёт две расходящиеся реализации и дублирует lifecycle сервисов.
 
-Минусы: дублируется инициализация карты, сервисов, UI, workers и teardown; изменения игры придётся вручную переносить в лабораторию. Этот вариант не выполняет требование единой графической реализации.
+### iframe
 
-### 2. Встроить обычную игру через iframe
+Отклонён: создаёт отдельный `SimulationState`, canvas и ticker, а команды лаборатории перестают работать с авторитетным состоянием отображаемой сцены.
 
-Плюсы: визуальная идентичность без рефакторинга.
+### Общий production board и лабораторный overlay
 
-Минусы: отдельный `SimulationState`, отдельный Pixi ticker, сложный обмен командами, невозможность корректно использовать лабораторные сценарии как авторитетное состояние, лишняя память и ввод. Вариант отклонён.
+Выбран: один renderer карты/бойцов, одна камера, один Pixi lifecycle, общие слои и эффекты; лаборатория сохраняет собственную сессию и UI.
 
-### 3. Общий настраиваемый игровой board и лабораторный overlay
+## Реализованная архитектура
 
-Плюсы: один рендерер карты и бойцов, одна камера, один Pixi lifecycle, общие слои и эффекты; лаборатория сохраняет собственный контроллер и состояние.
+### 1. Production board остаётся неизменным владельцем hot path
 
-Минусы: требуется аккуратно отделить владение временем симуляции и вводом от `PixiTacticalBoardApp`.
+`PixiTacticalBoardApp` не получает новый условный режим и не меняет поведение обычной игры. Combat Lab создаёт его штатной фабрикой.
 
-Выбран вариант 3.
+Для интеграции используется узкий `PixiTacticalBoardAdapter`, построенный по существующему шаблону installer-модулей `CombatEffectsInstaller` и `AttentionOverlayInstaller`. Adapter централизованно предоставляет только:
 
-## Архитектура
+- `getWorldContainer()`;
+- добавление/removal listener к существующему Pixi ticker;
+- `bindSimulationState(state)` для смены сценария.
 
-### 1. `PixiTacticalBoardApp` становится настраиваемым хостом
+При перепривязке adapter:
 
-Публичная фабрика получает необязательный объект конфигурации. Значения по умолчанию полностью сохраняют поведение основной игры.
+- заменяет state у board;
+- заменяет state у `BoardInputController`;
+- обновляет подпись масштаба;
+- инвалидирует revision-driven map cache;
+- очищает старые view cones;
+- вызывает production render.
 
-Конфигурация должна позволять:
+Знание о внутренних полях `PixiTacticalBoardApp` находится только в adapter-е и защищено source-contract smoke. Основная игра не импортирует adapter и не получает дополнительной работы.
 
-- передать функцию продвижения симуляции на кадре;
-- передать функцию проверки паузы либо полностью отключить внутреннее продвижение;
-- включать или выключать стандартный `BoardInputController` независимо от камеры;
-- получать callback после общего render frame;
-- получать доступ к общему world overlay slot для подключаемых диагностических рендереров;
-- заменить `SimulationState` без уничтожения Pixi application при смене лабораторного сценария.
+### 2. Авторитетное состояние и время
 
-`PixiTacticalBoardApp` остаётся единственным владельцем:
+`CombatLabVisualSession` владеет текущим scenario definition, seed, `SimulationState`, fixed step, паузой, скоростью, программой, метриками, журналом и checkpoint.
 
-- `Application` и ticker;
-- `worldContainer`;
-- камеры;
-- общих игровых рендереров;
-- общего canvas;
-- освобождения этих ресурсов.
+В лаборатории `state.paused = true`, поэтому штатный ticker board не вызывает `tickSimulation` для этого состояния. Combat Lab добавляет listener к **тому же** Pixi ticker. Listener вызывает `session.advance(realDeltaSeconds)`, затем production board в своём обычном listener отображает обновлённое состояние.
 
-Основная игра создаёт board без специальных параметров и не меняет поведения.
+Таким образом:
 
-### 2. Авторитетное состояние Combat Lab
+- Pixi ticker один;
+- simulation authority остаётся у visual session;
+- ручной шаг использует `session.stepOnce()`;
+- renderer не вызывает `tickSimulation` напрямую.
 
-`CombatLabVisualSession` остаётся владельцем:
+### 3. Общие игровые сервисы
 
-- текущего определения сценария;
-- seed;
-- текущего `SimulationState`;
-- фиксированного шага симуляции;
-- паузы и скорости;
-- сценарной программы;
-- метрик, журнала и контрольной точки.
-
-Board не вызывает `tickSimulation` напрямую в лабораторном режиме. Его frame callback вызывает `session.advance(realDeltaSeconds)`. Ручной шаг продолжает использовать `session.stepOnce()`.
-
-После `startNewRun` session создаёт новый `SimulationState`. Combat Lab обязан вызвать метод board для замены state и затем переустановить только те подключаемые сервисы, которые содержат ссылку на старое состояние.
-
-### 3. Общие игровые сервисы в лаборатории
-
-Лабораторный bootstrap использует те же установщики, где они нужны для визуального паритета:
+Для текущего laboratory state подключаются:
 
 - `PixiTacticalBoardApp`;
 - `installCombatEffectsRenderer`;
 - `installAttentionOverlayRenderer`;
 - `installAdaptiveGridLod`;
 - environment movement material provider;
-- awareness world/runtime и field controller;
+- awareness field controller/runtime;
 - tactical position search service;
-- общие registries профилей движения и окружения.
+- общие registries movement/environment profiles.
 
-Сервисы обычного игрового управления, которые конфликтуют с лабораторным пультом, не подключаются:
+Не подключаются конфликтующие оболочки игры: обычный `CombatControls`, полный editor workbench, scene controls и AI game bridge. Камера, выбор бойца и board input остаются производственными. Боевые команды лаборатории идут через `CombatLabShell` и опубликованные production API.
 
-- обычный `CombatControls`;
-- обычный `GameEditorWorkbench`;
-- обычный tactical-order radial input;
-- обычные scene import/export controls;
-- обычный AI game bridge.
+### 4. Лабораторная диагностика
 
-Камера и выбор бойца на карте остаются доступны. Команды стрельбы, лечения, установки, перезарядки и передачи патронов идут только через `CombatLabShell` и опубликованные production API.
+`CombatLabDiagnosticOverlayRenderer` получает production `worldContainer` и использует его координатное пространство. Он не создаёт `Application`, canvas, камеру, map renderer или unit renderer.
 
-### 4. Лабораторный диагностический overlay
+Он рисует только:
 
-Текущий `CombatLabRenderer` перестаёт создавать `Application`, canvas, карту, сетку и бойцов.
-
-Он заменяется на `CombatLabDiagnosticOverlayRenderer`, который получает общий overlay container и использует координатное пространство общей игровой сцены.
-
-Он рисует только лабораторные элементы:
-
-- короткие следы активных пуль;
-- последние impacts и последнюю зону попадания;
-- направление прицеливания и фактическую точку цели;
-- сектор и якорь установленного ДП-27;
-- события подавления;
+- активные пули и bounded trails;
+- impacts и последнюю hit zone;
+- aim direction и target point;
+- DP-27 anchor/sector;
+- suppression diagnostics;
 - контрольные расстояния;
-- лабораторные идентификаторы участников.
+- лабораторные unit IDs.
 
-Стандартный `installCombatEffectsRenderer` остаётся владельцем обычной игровой графики выстрелов и попаданий. Лабораторный overlay не повторяет то, что уже хорошо отображается общим эффект-рендерером; его слои являются дополнительной диагностикой и могут отключаться независимо.
+Обычная графика выстрелов и попаданий принадлежит `installCombatEffectsRenderer`. Trails ограничены `MAX_COMBAT_LAB_TRAIL_POINTS`, impacts — ограниченным хвостом. Полного прохода карты нет.
 
-История trails остаётся ограниченной `MAX_COMBAT_LAB_TRAIL_POINTS`. Impact-проекция остаётся ограниченной. Overlay не сканирует карту и не создаёт собственную камеру.
+### 5. Совместимый фасад для UI
 
-### 5. Лабораторный UI
+Имя `CombatLabRenderer` сохранено как фасад, чтобы не смешивать UI с деталями lifecycle. Фасад:
 
-`CombatLabShell` сохраняет:
+- создаёт production board;
+- подключает adapter и diagnostic overlay;
+- устанавливает state-bound services;
+- предоставляет прежние методы layer controls, history и force render;
+- обнаруживает замену `session.state` и транзакционно перепривязывает board.
 
-- выбор сценария и seed;
-- visual/headless run;
-- pause, step, speed и рекомендованную программу;
-- выбор стрелка, цели, помощника, участников передачи и лечения;
-- команды Stage 3–9;
-- метрики, диагностику, журнал и checkpoint controls;
-- переключатели лабораторных диагностических слоёв.
+Он не является самостоятельным renderer карты.
 
-Центральный контейнер становится обычным игровым canvas. Верхняя, боковые и нижняя панели адаптируются так, чтобы не перекрывать общий `AppShellMenu` и сохранить пригодность на 1440×900.
+### 6. Стандартные и лабораторные слои
 
-Стандартные игровые слои управляются отдельным компактным разделом лабораторного пульта, который меняет существующие флаги `state.editor.layers` и общие toggle-состояния board. Лабораторные слои остаются отдельной группой.
+Под production canvas находится компактный toolbar:
 
-### 6. Единая навигация режимов
+- существующие `state.editor.layers`;
+- сетка;
+- view cones;
+- height labels.
 
-`AppShellMenuMode` расширяется режимом `combat-lab`.
+Лабораторные диагностические layers остаются отдельной группой в `CombatLabShell`. Оба набора переключателей только меняют отображение и не являются источником боевого состояния.
 
-На всех трёх страницах показываются ссылки:
+### 7. Общая навигация
+
+`AppShellMenuMode` содержит `game`, `editor`, `combat-lab` и `launcher`.
+
+На всех трёх страницах доступны:
 
 - `Игра` → `/`;
 - `Редактор ИИ` → `/ai-node-editor.html`;
 - `Испытательный полигон` → `/combat-lab.html`.
 
-Текущий режим выделяется и имеет `aria-current="page"`. Переход выполняется в текущей вкладке, чтобы меню работало как переключатель режимов. Кнопки `Новая игра`, `Обновить` и `Выход` могут оставаться как вторичные действия конкретного режима.
+Переход выполняется в текущей вкладке. Текущий режим имеет `aria-current="page"`. `Новая игра`, `Обновить` и `Выход` остаются вторичными действиями.
 
-Combat Lab вызывает `installAppShellMenu({ mode: 'combat-lab' })`. Редактор ИИ гарантированно устанавливает меню из своей основной точки входа. Старые разрозненные кнопки перехода удаляются либо становятся вторичными, чтобы не было двух конкурирующих способов навигации.
+### 8. Смена сценария
 
-### 7. Замена сценария и жизненный цикл
+После `session.startNewRun` фасад при следующем кадре/force render:
 
-Смена сценария выполняется транзакционно:
+1. уничтожает старые state-bound installers;
+2. подготавливает новый state и registries;
+3. перепривязывает board и board input через adapter;
+4. очищает diagnostic history/labels;
+5. создаёт services для нового state;
+6. перестраивает переключатели общих слоёв;
+7. UI перечитывает роли сценария.
 
-1. Lab shell запрашивает новый run у session.
-2. Старые state-bound installers уничтожаются.
-3. Board получает новый `SimulationState` и инвалидирует карту/оверлеи.
-4. State-bound installers создаются для нового state.
-5. Diagnostic overlay очищает trails, labels и references.
-6. UI перечитывает роли и значения нового сценария.
+Pixi Application, canvas и камера не пересоздаются.
 
-При `beforeunload` уничтожаются:
+### 9. Teardown
 
-- лабораторный overlay;
-- combat/attention installers;
-- awareness field controller и runtime;
+При закрытии страницы уничтожаются:
+
+- laboratory ticker listener;
+- combat/attention/adaptive-grid installers;
+- awareness field controller;
 - tactical position search service;
-- registry subscriptions;
-- общий board.
+- laboratory overlay;
+- общий board и его camera/input/renderers.
 
-Ни один listener или ticker не должен переживать страницу.
+Ни один лабораторный listener или renderer не должен переживать страницу.
 
 ## Поток данных
 
@@ -201,76 +177,76 @@ Combat Lab вызывает `installAppShellMenu({ mode: 'combat-lab' })`. Ре�
 CombatLabShell
   -> CombatLabVisualSession.executeInteractive / startNewRun / stepOnce
   -> production SimulationState
-  -> PixiTacticalBoardApp (общая карта, камера, юниты, стандартные слои)
-  -> production effect installers
-  -> CombatLabDiagnosticOverlayRenderer (только лабораторная диагностика)
-  -> CombatLabShell.refreshLive (метрики и журнал)
+  -> shared Pixi ticker
+     -> CombatLabVisualSession.advance
+     -> PixiTacticalBoardApp render
+     -> production effect installers
+     -> CombatLabDiagnosticOverlayRenderer
+  -> CombatLabShell.refreshLive
 ```
 
 Headless runner остаётся независимым от DOM и PixiJS.
 
-## Ошибки и восстановление
+## Ошибки
 
-- Ошибка создания общего board показывает русское startup-сообщение и освобождает частично созданный Pixi application.
-- Ошибка state-bound installer при смене сценария не должна оставлять смешанное старое/новое состояние; bootstrap уничтожает уже созданные новые installers и возвращает лабораторию в остановленное диагностическое состояние.
-- Команда с отсутствующим участником возвращает существующий лабораторный отказ, не падая в renderer.
-- Ошибка одного диагностического слоя не должна останавливать общий игровой renderer; overlay очищает проблемный слой и пишет ошибку в console/journal.
+- Ошибка создания board показывает русское startup-сообщение.
+- Команда с отсутствующим участником возвращает production-boundary отказ, а не падает в renderer.
+- Перепривязка сначала уничтожает старые services, поэтому один state-bound installer не обслуживает два состояния.
+- Source contract запрещает второй `Application` в Combat Lab.
 
 ## Производительность
 
-- Не создаётся второй Pixi `Application`.
-- Не создаётся второй ticker или камера.
-- Общая карта сохраняет revision-driven cache.
-- Diagnostic overlay работает только по `state.units`, bounded projectile pool, bounded impacts и bounded trails.
-- Полные проходы по клеткам карты в кадре не добавляются.
-- Смена сценария допускает полную переинициализацию state-bound сервисов, но не происходит в hot path.
-- Основная игра сохраняет прежнюю сложность и поведение через default configuration.
+- один Pixi `Application`;
+- один ticker и камера;
+- production map cache;
+- bounded projectiles/trails/impacts;
+- без полного прохода клеток карты в кадре;
+- смена сценария вне hot path;
+- обычная игра не импортирует laboratory runtime.
 
 ## Проверки
 
-### Контрактные проверки
+### Контрактные
 
-- Combat Lab импортирует `PixiTacticalBoardApp` и не создаёт `new Application()`.
-- `CombatLabRenderer` в старом виде отсутствует; диагностический renderer не рисует карту и юнитов.
-- Общий board поддерживает внешний frame advance и замену state.
-- Основная игра создаёт board с default configuration.
-- Все три entry point устанавливают `AppShellMenu` с правильным mode.
-- Menu содержит три маршрута и `aria-current`.
-- Teardown лаборатории уничтожает все state-bound installers и board.
+- Combat Lab создаёт `PixiTacticalBoardApp` и не создаёт `Application`;
+- adapter централизует board internals и state replacement;
+- diagnostic overlay не рисует карту/бойцов;
+- production effect installers подключены;
+- все entry point устанавливают правильный `AppShellMenu`;
+- menu содержит три маршрута и `aria-current`;
+- teardown уничтожает state-bound services и board.
 
-### Функциональные smoke-проверки
+### Функциональные
 
-- Сценарий запускается на общем board.
-- Пауза не продвигает simulation time.
-- Один шаг продвигает ровно один fixed step.
-- Смена сценария заменяет state и очищает diagnostic history.
-- Обычные игровые слои меняются через существующие state flags.
-- Лабораторные слои не изменяют физическое состояние.
-- Headless и visual run для одинакового request сохраняют существующие детерминированные digests.
+- восемь сценариев создаются и используют production loadouts;
+- headless runner детерминирован и независим от порядка units;
+- visual session сохраняет fixed-step pause/step/speed;
+- смена scenario очищает diagnostic history и заменяет state;
+- стандартные layers используют existing state flags;
+- laboratory layers не изменяют физику;
+- save/load boundaries сохраняют канонический путь.
 
-### Обязательный gate
+### Gate
 
-- `npm run docs:smoke`
-- `npm run lab:smoke`
-- `npm run combat-lab:smoke`
-- `npm run combat-lab-scenarios:smoke`
-- `npm run combat-lab-runner:smoke`
-- `npm run combat-lab-ui-contract:smoke`
-- `npm run infantry-combat-stage9:verify`
-- `npm run typecheck`
-- `npm run build`
-- `npm run verify:preview`
-- `git diff --check 90043f503d7615f296118abf8f11cd4a85a8df6d...HEAD`
-
-Браузерная visual QA и deployment выполняются только с отдельным разрешением пользователя либо в рамках уже данного явного указания на повторную публикацию результата.
+- `npm run docs:smoke`;
+- `npm run lab:smoke`;
+- `npm run combat-lab:smoke`;
+- `npm run combat-lab-scenarios:smoke`;
+- `npm run combat-lab-runner:smoke`;
+- `npm run combat-lab-ui-contract:smoke`;
+- `npm run infantry-combat-stage9:verify`;
+- `npm run typecheck`;
+- `npm run build`;
+- `npm run verify:preview`;
+- `git diff --check 90043f503d7615f296118abf8f11cd4a85a8df6d...HEAD`.
 
 ## Критерии готовности
 
-1. В Combat Lab визуально отображается та же карта и те же бойцы, что через production renderers основной игры.
-2. Камера и стандартные слои ведут себя одинаково в игре и лаборатории.
-3. Лабораторный пульт и восемь сценариев сохранены.
-4. Старая самостоятельная отрисовка карты и бойцов удалена.
-5. На каждой из трёх страниц есть единая навигация между режимами.
-6. Смена сценария и закрытие страницы не оставляют state-bound ресурсов.
-7. Все обязательные non-browser проверки и production build проходят на одном exact HEAD.
-8. Preview публикует exact verified SHA и содержит все три страницы.
+1. Combat Lab показывает production map/units/camera/layers.
+2. Лабораторный пульт и восемь сценариев сохранены.
+3. Самостоятельная отрисовка карты и бойцов отсутствует.
+4. Все три страницы имеют общую навигацию.
+5. Смена state и teardown не оставляют старые state-bound services.
+6. Non-browser gate и production build проходят на одном exact SHA.
+7. Preview содержит все три страницы и `deployment-source.json` с exact SHA.
+8. Визуальную пригодность и калибровку подтверждает владелец отдельной живой проверкой.
