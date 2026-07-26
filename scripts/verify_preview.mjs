@@ -25,6 +25,7 @@ const checks = [
   nodeCheck('deployment pages contract', 'deployment_pages_smoke_contract.mjs', 30_000),
   nodeCheck('manual Vercel policy contract', 'manual_vercel_deploy_skill_smoke.mjs', 30_000),
   nodeCheck('manual Vercel workflow contract', 'manual_vercel_preview_workflow_smoke.mjs', 30_000),
+  nodeCheck('Combat Lab shared renderer contract', 'combat_lab_shared_renderer_contract_smoke.mjs', 30_000),
   ...(skipPreviewSmokes ? [] : previewSmokes),
 ];
 const skippedChecks = skipPreviewSmokes
