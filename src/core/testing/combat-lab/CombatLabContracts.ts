@@ -18,7 +18,6 @@ export const COMBAT_LAB_METRIC_IDS = [
   'woundsByZone.arms',
   'woundsByZone.legs',
   'woundsBySeverity.light',
-  'woundsBySeverity.moderate',
   'woundsBySeverity.severe',
   'woundsBySeverity.critical',
   'suppressionEvents',
