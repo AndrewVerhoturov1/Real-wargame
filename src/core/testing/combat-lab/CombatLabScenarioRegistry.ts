@@ -243,7 +243,7 @@ function scenario(input: {
   readonly manualStepsRu: CombatLabScenarioDefinitionV1['manualStepsRu'];
   readonly program: CombatLabScenarioDefinitionV1['defaultProgram'];
 }): CombatLabScenarioDefinitionV1 {
-  return Object.freeze({
+  const definition: CombatLabScenarioDefinitionV1 = {
     schemaVersion: 1,
     scenarioId: input.scenarioId,
     revision: 1,
@@ -252,7 +252,7 @@ function scenario(input: {
     category: input.category,
     defaultSeed: input.defaultSeed,
     stateFactoryId: input.stateFactoryId,
-    defaultStopCondition: { kind: 'program_complete', maximumSimulationSeconds: 16 } as const,
+    defaultStopCondition: { kind: 'program_complete', maximumSimulationSeconds: 16 },
     supportedMetrics: ALL_METRICS,
     visualPreset: {
       schemaVersion: 1,
@@ -267,7 +267,8 @@ function scenario(input: {
     controlDistances: Object.freeze([...input.distances]),
     manualStepsRu: Object.freeze([...input.manualStepsRu]),
     defaultProgram: Object.freeze([...input.program]),
-  });
+  };
+  return Object.freeze(definition);
 }
 
 function role(roleId: string, unitId: string, titleRu: string, selectableAs: CombatLabScenarioDefinitionV1['roles'][number]['selectableAs']): CombatLabScenarioDefinitionV1['roles'][number] {
