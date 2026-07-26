@@ -1,3 +1,4 @@
+import '../styles.css';
 import './combat-lab.css';
 import { getCombatLabScenarioDefinition } from '../core/testing/combat-lab';
 import { installAppShellMenu } from '../shared/AppShellMenu';
