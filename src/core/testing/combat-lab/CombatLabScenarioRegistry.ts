@@ -182,7 +182,7 @@ const definitions: readonly CombatLabScenarioDefinitionV1[] = [
       'Запустите suppress с явным радиусом.',
       'Сравните источники событий, накопление, объединение и спад подавления.',
     ],
-    program: [step('suppression-fire', 0.1, fire('suppression-shooter', null, 'suppress', 5, 0.15, { xMetres: 55.5, yMetres: 40.5, zMetres: 1 }))],
+    program: [step('suppression-fire', 0.1, fire('suppression-shooter', 'suppression-near-impact', 'suppress', 5, 0.15))],
   }),
   scenario({
     scenarioId: 'combat-save-load-boundaries',
@@ -193,7 +193,7 @@ const definitions: readonly CombatLabScenarioDefinitionV1[] = [
     stateFactoryId: 'save-load-boundaries-v1',
     focusUnitId: 'save-rifleman',
     roles: [
-      role('rifleman', 'save-rifleman', 'Винтовочник', ['shooter']),
+      role('rifleman', 'save-rifleman', 'Винтовочник', ['shooter', 'first_aid_actor']),
       role('ppsh', 'save-ppsh', 'Стрелок с ППШ', ['shooter']),
       role('gunner', 'save-gunner', 'Пулемётчик', ['shooter', 'ammo_target']),
       role('assistant', 'save-assistant', 'Помощник', ['assistant', 'ammo_source']),
