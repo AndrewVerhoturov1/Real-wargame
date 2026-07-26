@@ -27,8 +27,6 @@ export function digestCombatLabState(state: SimulationState): string {
   const projectileRuntime = serializeReferenceProjectileRuntimeState(state.infantryCombatProjectiles);
   return digestStableValue({
     schemaVersion: 1,
-    simulationTimeSeconds: round(state.simulationTimeSeconds),
-    simulationStep: state.simulationStep,
     map: {
       width: state.map.width,
       height: state.map.height,
@@ -37,7 +35,15 @@ export function digestCombatLabState(state: SimulationState): string {
     },
     pressureZones: [...state.pressureZones].sort((left, right) => compareText(left.id, right.id)).map(stableClone),
     units,
-    projectileRuntime,
+    projectileRuntime: {
+      ...projectileRuntime,
+      accumulatorSeconds: 0,
+      diagnostics: {
+        ...projectileRuntime.diagnostics,
+        fixedSubstepsExecuted: 0,
+        accumulatorSeconds: 0,
+      },
+    },
   });
 }
 
