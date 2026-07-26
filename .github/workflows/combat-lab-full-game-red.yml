@@ -8,6 +8,7 @@ on:
       - .github/workflows/combat-lab-full-game-red.yml
       - scripts/combat_lab_full_game_contract_smoke.mjs
       - src/game/**
+      - src/main.ts
       - src/combat-lab/**
       - combat-lab.html
   pull_request:
@@ -17,6 +18,7 @@ on:
       - .github/workflows/combat-lab-full-game-red.yml
       - scripts/combat_lab_full_game_contract_smoke.mjs
       - src/game/**
+      - src/main.ts
       - src/combat-lab/**
       - combat-lab.html
 
@@ -36,16 +38,24 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: Typecheck extracted game application
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run typecheck 2>&1 | tee combat-lab-full-game-typecheck.txt
       - name: Run full-game contract
         shell: bash
         run: |
           set -o pipefail
           node scripts/combat_lab_full_game_contract_smoke.mjs 2>&1 | tee combat-lab-full-game-red.txt
-      - name: Upload RED diagnostic
+      - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: combat-lab-full-game-red-${{ github.sha }}
-          path: combat-lab-full-game-red.txt
-          if-no-files-found: error
+          name: combat-lab-full-game-diagnostics-${{ github.sha }}
+          path: |
+            combat-lab-full-game-red.txt
+            combat-lab-full-game-typecheck.txt
+          if-no-files-found: warn
           retention-days: 1
