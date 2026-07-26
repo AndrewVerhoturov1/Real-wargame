@@ -19,6 +19,7 @@ import { buildCombatLabInitialState } from './CombatLabScenarioRegistry';
 
 const EPSILON_SECONDS = 1e-9;
 const MAX_RUNNER_STEPS = 1_000_000;
+const MAX_UINT32 = 0xffff_ffff;
 
 export function runCombatLabScenario(request: CombatLabRunRequestV1): CombatLabRunResultV1 {
   return runCombatLabScenarioWithFixedStep(request, COMBAT_LAB_FIXED_STEP_SECONDS);
@@ -74,7 +75,7 @@ export function runCombatLabScenarioWithFixedStep(
     schemaVersion: 1,
     scenarioId: definition.scenarioId,
     scenarioRevision: definition.revision,
-    seed: request.seed,
+    seed: built.seed,
     completed,
     stopReason,
     simulatedSeconds: canonicalSeconds(state.simulationTimeSeconds),
@@ -83,7 +84,7 @@ export function runCombatLabScenarioWithFixedStep(
       productionEvents: digestCombatLabEvents(state),
       commandResults,
     }),
-    finalStateDigest: digestStableValue({ seed: request.seed, physicalState: stateDigest }),
+    finalStateDigest: digestStableValue({ seed: built.seed, physicalState: stateDigest }),
   };
 }
 
@@ -152,7 +153,9 @@ export function isCombatLabStateQuiescent(state: SimulationState): boolean {
 
 function validateRunRequest(request: CombatLabRunRequestV1, fixedStepSeconds: number): void {
   if (request.schemaVersion !== 1) throw new Error(`Unsupported Combat Lab run request schema: ${request.schemaVersion}.`);
-  if (!Number.isFinite(request.seed)) throw new Error('Combat Lab seed must be finite.');
+  if (!Number.isInteger(request.seed) || request.seed < 1 || request.seed > MAX_UINT32) {
+    throw new Error('Combat Lab seed must be an explicit integer in the uint32 range 1..4294967295.');
+  }
   if (!Number.isFinite(request.maximumSimulationSeconds) || request.maximumSimulationSeconds <= 0) {
     throw new Error('Combat Lab maximumSimulationSeconds must be positive.');
   }
