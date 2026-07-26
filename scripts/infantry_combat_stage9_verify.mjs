@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
 const REQUIRED_BASE_SHA = 'f93cdbdf15497498e99dd4f63a2bfd20e5414ea9';
+const STAGE7_IMPLEMENTATION_HEAD_SHA = '08e1bc5264bbf0497c1a48278d9b3cc077ff54f0';
 const repoRoot = process.cwd();
 const stage8VerifierPath = path.join(repoRoot, 'scripts', 'infantry_combat_stage8_verify.mjs');
 const stage8RequiredFragments = [
@@ -36,7 +37,12 @@ const checks = [
   ['npm', ['run', 'infantry-combat-stage8:verify']],
   ['npm', ['run', 'infantry-combat-stage5:forbidden-scan']],
   ['npm', ['run', 'infantry-combat-stage6:forbidden-scan']],
-  ['npm', ['run', 'infantry-combat-stage7:forbidden-scan']],
+  ['npm', ['run', 'infantry-combat-stage7:smoke']],
+  [
+    'npm',
+    ['run', 'infantry-combat-stage7:forbidden-scan'],
+    { INFANTRY_COMBAT_STAGE7_DIFF_HEAD_SHA: STAGE7_IMPLEMENTATION_HEAD_SHA },
+  ],
   ['npm', ['run', 'infantry-combat-stage8:forbidden-scan']],
   ['npm', ['run', 'infantry-combat-stage9:smoke']],
   ['npm', ['run', 'infantry-combat-stage9:forbidden-scan']],
@@ -49,7 +55,7 @@ const checks = [
 console.log(`Node.js ${process.version}`);
 ensureVerificationHistory();
 verifyStage8MatrixContract();
-for (const [command, args] of checks) runRequiredCheck(command, args);
+for (const [command, args, envOverrides] of checks) runRequiredCheck(command, args, envOverrides);
 verifyCleanTrackedTree();
 
 console.log(
@@ -72,17 +78,22 @@ function ensureVerificationHistory() {
     fail('Stage 9 verification history preparation failed', combinedOutput(fetch));
   }
 
-  const base = run('git', ['cat-file', '-e', `${REQUIRED_BASE_SHA}^{commit}`], repoRoot);
-  if (base.error || base.status !== 0) {
-    fail(
-      'Stage 9 verification history preparation failed',
-      `Обязательный base SHA недоступен после fetch: ${REQUIRED_BASE_SHA}.\n${combinedOutput(base)}`,
-    );
+  for (const [label, sha] of [
+    ['required Stage 9 base', REQUIRED_BASE_SHA],
+    ['approved Stage 7 implementation head', STAGE7_IMPLEMENTATION_HEAD_SHA],
+  ]) {
+    const commit = run('git', ['cat-file', '-e', `${sha}^{commit}`], repoRoot);
+    if (commit.error || commit.status !== 0) {
+      fail(
+        'Stage 9 verification history preparation failed',
+        `${label} SHA недоступен после fetch: ${sha}.\n${combinedOutput(commit)}`,
+      );
+    }
   }
   console.log(workflowAnnotation(
     'notice',
     'Stage 9 verification',
-    `PASS full git history and required base ${REQUIRED_BASE_SHA} available`,
+    `PASS full git history, required base ${REQUIRED_BASE_SHA} and Stage 7 head ${STAGE7_IMPLEMENTATION_HEAD_SHA} available`,
   ));
 }
 
@@ -102,9 +113,9 @@ function verifyStage8MatrixContract() {
   ));
 }
 
-function runRequiredCheck(command, args) {
+function runRequiredCheck(command, args, envOverrides = {}) {
   const label = [command, ...args].join(' ');
-  const result = run(command, args, repoRoot);
+  const result = run(command, args, repoRoot, envOverrides);
   const output = combinedOutput(result);
   if (result.error || result.status !== 0) {
     fail('Stage 9 verification failed', `FAIL ${label}\n${tail(output, 16000)}`);
@@ -129,12 +140,12 @@ function verifyCleanTrackedTree() {
   ));
 }
 
-function run(command, args, cwd) {
+function run(command, args, cwd, envOverrides = {}) {
   return spawnSync(command, args, {
     cwd,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
-    env: process.env,
+    env: { ...process.env, ...envOverrides },
   });
 }
 
