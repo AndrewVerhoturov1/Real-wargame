@@ -44,8 +44,13 @@ for (const route of ['/', '/ai-node-editor.html', '/combat-lab.html']) {
 assert.match(menu, /aria-current/);
 
 const gameEntry = read('src/main.ts');
-const aiEntry = read('src/ai-node-editor/main.ts');
+const aiEditorMenuEntry = read('src/shared/AiEditorShellMenuEntry.ts');
+const viteConfig = read('vite.config.ts');
+const protectedAiEntry = read('src/ai-node-editor/main.ts');
 assert.match(gameEntry, /installAppShellMenu\(\{ mode: 'game' \}\)/);
-assert.match(aiEntry, /installAppShellMenu\(\{ mode: 'editor' \}\)/);
+assert.match(aiEditorMenuEntry, /installAppShellMenu\(\{ mode: 'editor' \}\)/);
+assert.match(viteConfig, /AiEditorShellMenuEntry\.ts/);
+assert.match(viteConfig, /context\.path\.endsWith\('\/ai-node-editor\.html'\)/);
+assert.doesNotMatch(protectedAiEntry, /AppShellMenu|installAppShellMenu/);
 
 console.log('Combat Lab shared game renderer contract passed.');
