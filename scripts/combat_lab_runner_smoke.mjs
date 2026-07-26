@@ -1,4 +1,4 @@
-import { rm } from 'node:fs/promises';
+import { rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { spawnSync } from 'node:child_process';
@@ -7,7 +7,9 @@ import { build } from 'vite';
 const repoRoot = process.cwd();
 const outDir = path.join(repoRoot, '.tmp-combat-lab-runner-smoke');
 const entry = path.join(outDir, 'combat-lab-runner-smoke.mjs');
+const failureReport = path.join(repoRoot, 'combat-lab-runner-smoke-failure.txt');
 await rm(outDir, { recursive: true, force: true });
+await rm(failureReport, { force: true });
 try {
   await build({
     root: repoRoot,
@@ -24,12 +26,25 @@ try {
   });
   const result = spawnSync(process.execPath, [entry], {
     cwd: repoRoot,
-    stdio: 'inherit',
+    encoding: 'utf8',
     shell: false,
     timeout: 180_000,
   });
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`Combat Lab runner smoke child exited with ${String(result.status)}.`);
+  if (result.status !== 0) {
+    const report = [
+      `status=${String(result.status)}`,
+      `signal=${String(result.signal ?? '')}`,
+      '--- stdout ---',
+      result.stdout ?? '',
+      '--- stderr ---',
+      result.stderr ?? '',
+    ].join('\n');
+    await writeFile(failureReport, report);
+    throw new Error(`Combat Lab runner smoke child exited with ${String(result.status)}.`);
+  }
 } finally {
   await rm(outDir, { recursive: true, force: true });
 }
