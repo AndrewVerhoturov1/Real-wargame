@@ -22,12 +22,17 @@ export class CombatLabExtension implements GameApplicationExtension {
     root.prepend(this.toggle);
 
     let shell: CombatLabShell | null = null;
-    this.renderer = CombatLabRenderer.create(context, session, () => shell?.refreshLive());
+    const refreshUi = () => {
+      shell?.refreshLive();
+      syncGamePauseControl(session);
+    };
+    this.renderer = CombatLabRenderer.create(context, session, refreshUi);
     this.shell = new CombatLabShell(layout, session, this.renderer);
     shell = this.shell;
 
     this.toggle.addEventListener('click', this.handleToggle);
     root.dataset.combatLabExtension = 'active';
+    syncGamePauseControl(session);
     context.forceRender();
   }
 
@@ -46,6 +51,7 @@ export class CombatLabExtension implements GameApplicationExtension {
     this.renderer.destroy();
     this.root.replaceChildren();
     delete this.root.dataset.combatLabExtension;
+    document.body.classList.remove('combat-lab-drawer-collapsed');
   }
 
   private readonly handleToggle = (): void => {
@@ -81,6 +87,16 @@ function createToggle(): HTMLButtonElement {
   toggle.setAttribute('aria-expanded', 'true');
   toggle.setAttribute('aria-controls', 'combat-lab-extension-root');
   return toggle;
+}
+
+function syncGamePauseControl(session: CombatLabVisualSession): void {
+  const button = document.querySelector<HTMLButtonElement>('#pause-toggle');
+  if (!button) return;
+  const paused = session.isPaused();
+  const label = paused ? 'Пауза: вкл' : 'Пауза: выкл';
+  if (button.textContent !== label) button.textContent = label;
+  if (button.getAttribute('aria-pressed') !== String(paused)) button.setAttribute('aria-pressed', String(paused));
+  button.classList.toggle('hud-toggle-off', !paused);
 }
 
 function node<K extends keyof HTMLElementTagNameMap>(
