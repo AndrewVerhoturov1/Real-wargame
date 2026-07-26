@@ -1,4 +1,5 @@
 import { Application, Container, Graphics, Text, type Ticker } from 'pixi.js';
+import type { UnitModel } from '../../core/units/UnitModel';
 import type { CombatLabDiagnosticLayerId } from '../../core/testing/combat-lab';
 import type { CombatLabVisualSession } from '../runtime/CombatLabVisualSession';
 
@@ -24,7 +25,7 @@ export class CombatLabRenderer {
 
   private constructor(
     private readonly app: Application,
-    private readonly root: HTMLElement,
+    root: HTMLElement,
     private readonly session: CombatLabVisualSession,
     private readonly onFrame: () => void,
   ) {
@@ -33,7 +34,7 @@ export class CombatLabRenderer {
     this.graphics.eventMode = 'none';
     this.world.addChild(this.graphics);
     this.app.stage.addChild(this.world);
-    this.root.appendChild(this.app.canvas);
+    root.appendChild(this.app.canvas);
     for (const layerId of session.definition.visualPreset.recommendedLayerIds) this.layers.set(layerId, { enabled: true });
     this.app.ticker.add(this.tick);
     this.render();
@@ -74,18 +75,20 @@ export class CombatLabRenderer {
     this.lastTrailPointByProjectile.clear();
   }
 
-  forceRender(): void { this.render(); }
+  forceRender(): void {
+    this.render();
+  }
 
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
     this.app.ticker.remove(this.tick);
-    for (const label of this.labels.values()) label.destroy();
     this.labels.clear();
     this.clearHistory();
-    this.graphics.destroy();
-    this.world.destroy({ children: true });
-    this.app.destroy({ removeView: true, releaseGlobalResources: true }, { children: true, texture: true, textureSource: true });
+    this.app.destroy(
+      { removeView: true },
+      { children: true, texture: true, textureSource: true },
+    );
   }
 
   private readonly tick = (ticker: Ticker): void => {
@@ -111,7 +114,15 @@ export class CombatLabRenderer {
     drawMetreGrid(this.graphics, transform);
 
     if (this.layer('projectile_trails').enabled) drawTrails(this.graphics, this.trailPoints, transform);
-    if (this.layer('impacts').enabled) drawImpacts(this.graphics, state.infantryCombatProjectiles.impacts.slice(-MAX_RENDERED_IMPACTS), transform);
+    if (this.layer('impacts').enabled || this.layer('last_hit_zone').enabled) {
+      drawImpacts(
+        this.graphics,
+        state.infantryCombatProjectiles.impacts.slice(-MAX_RENDERED_IMPACTS),
+        transform,
+        this.layer('impacts').enabled,
+        this.layer('last_hit_zone').enabled,
+      );
+    }
     if (this.layer('active_projectiles').enabled) {
       for (const projectile of state.infantryCombatProjectiles.activeProjectiles) {
         const point = transform.point(projectile.position.xMetres, projectile.position.yMetres);
@@ -135,11 +146,30 @@ export class CombatLabRenderer {
       drawFacing(this.graphics, point.x, point.y, unit.facingRadians, 14);
       if (this.layer('suppression_events').enabled && unit.infantryCombatRuntime.suppression.lastEventKind) {
         const level = unit.infantryCombatRuntime.suppression.suppressionLevel;
-        this.graphics.circle(point.x, point.y, 10 + level * 18).stroke({ color: 0xf1ad52, width: 1.5, alpha: 0.4 + level * 0.5 });
+        this.graphics.circle(point.x, point.y, 10 + level * 18)
+          .stroke({ color: 0xf1ad52, width: 1.5, alpha: 0.4 + level * 0.5 });
       }
-      if (this.layer('aim_direction').enabled) drawAim(this.graphics, state.map.metersPerCell, unit, transform);
-      if (this.layer('dp27_anchor').enabled || this.layer('dp27_sector').enabled) drawDeployment(this.graphics, unit, transform, this.layers);
-      this.updateLabel(`unit:${unit.id}`, this.layer('unit_ids').enabled ? unit.id : unit.labels.ru, point.x + 8, point.y - 12, 11, 0xf4f0dc);
+      if (this.layer('aim_direction').enabled || this.layer('target_point').enabled) {
+        drawAim(
+          this.graphics,
+          state.map.metersPerCell,
+          unit,
+          transform,
+          this.layer('aim_direction').enabled,
+          this.layer('target_point').enabled,
+        );
+      }
+      if (this.layer('dp27_anchor').enabled || this.layer('dp27_sector').enabled) {
+        drawDeployment(this.graphics, unit, transform, this.layers);
+      }
+      this.updateLabel(
+        `unit:${unit.id}`,
+        this.layer('unit_ids').enabled ? unit.id : unit.labels.ru,
+        point.x + 8,
+        point.y - 12,
+        11,
+        0xf4f0dc,
+      );
     }
 
     if (this.layer('distances').enabled) {
@@ -149,13 +179,23 @@ export class CombatLabRenderer {
         if (!from || !to) continue;
         const a = transform.point(from.position.x * state.map.metersPerCell, from.position.y * state.map.metersPerCell);
         const b = transform.point(to.position.x * state.map.metersPerCell, to.position.y * state.map.metersPerCell);
-        this.graphics.moveTo(a.x, a.y).lineTo(b.x, b.y).stroke({ color: 0xaebda5, width: 1, alpha: 0.35 });
-        this.updateLabel(`distance:${distance.labelRu}`, `${distance.metres} м`, (a.x + b.x) / 2, (a.y + b.y) / 2 - 6, 10, 0xd7e0cf);
+        this.graphics.moveTo(a.x, a.y).lineTo(b.x, b.y)
+          .stroke({ color: 0xaebda5, width: 1, alpha: 0.35 });
+        this.updateLabel(
+          `distance:${distance.labelRu}`,
+          `${distance.metres} м`,
+          (a.x + b.x) / 2,
+          (a.y + b.y) / 2 - 6,
+          10,
+          0xd7e0cf,
+        );
       }
     }
     this.hideUnusedLabels(new Set([
       ...state.units.map((unit) => `unit:${unit.id}`),
-      ...(this.layer('distances').enabled ? this.session.definition.controlDistances.map((distance) => `distance:${distance.labelRu}`) : []),
+      ...(this.layer('distances').enabled
+        ? this.session.definition.controlDistances.map((distance) => `distance:${distance.labelRu}`)
+        : []),
     ]));
   }
 
@@ -202,57 +242,104 @@ export class CombatLabRenderer {
 }
 
 function createTransform(mapWidthMetres: number, mapHeightMetres: number, width: number, height: number) {
-  const scale = Math.max(0.1, Math.min((width - MAP_PADDING_PX * 2) / mapWidthMetres, (height - MAP_PADDING_PX * 2) / mapHeightMetres));
+  const scale = Math.max(
+    0.1,
+    Math.min((width - MAP_PADDING_PX * 2) / mapWidthMetres, (height - MAP_PADDING_PX * 2) / mapHeightMetres),
+  );
   const mapWidthPx = mapWidthMetres * scale;
   const mapHeightPx = mapHeightMetres * scale;
   const left = (width - mapWidthPx) / 2;
   const top = (height - mapHeightPx) / 2;
-  return { left, top, scale, mapWidthPx, mapHeightPx, point: (xMetres: number, yMetres: number) => ({ x: left + xMetres * scale, y: top + yMetres * scale }) };
+  return {
+    left,
+    top,
+    scale,
+    mapWidthPx,
+    mapHeightPx,
+    point: (xMetres: number, yMetres: number) => ({ x: left + xMetres * scale, y: top + yMetres * scale }),
+  };
 }
+
 function drawMetreGrid(graphics: Graphics, transform: ReturnType<typeof createTransform>): void {
   if (transform.scale < 1.2) return;
   const stepMetres = transform.scale >= 5 ? 10 : 25;
   for (let x = stepMetres; x * transform.scale < transform.mapWidthPx; x += stepMetres) {
     const px = transform.left + x * transform.scale;
-    graphics.moveTo(px, transform.top).lineTo(px, transform.top + transform.mapHeightPx).stroke({ color: 0x829181, width: 1, alpha: 0.12 });
+    graphics.moveTo(px, transform.top).lineTo(px, transform.top + transform.mapHeightPx)
+      .stroke({ color: 0x829181, width: 1, alpha: 0.12 });
   }
   for (let y = stepMetres; y * transform.scale < transform.mapHeightPx; y += stepMetres) {
     const py = transform.top + y * transform.scale;
-    graphics.moveTo(transform.left, py).lineTo(transform.left + transform.mapWidthPx, py).stroke({ color: 0x829181, width: 1, alpha: 0.12 });
+    graphics.moveTo(transform.left, py).lineTo(transform.left + transform.mapWidthPx, py)
+      .stroke({ color: 0x829181, width: 1, alpha: 0.12 });
   }
 }
+
 function drawTrails(graphics: Graphics, points: readonly TrailPoint[], transform: ReturnType<typeof createTransform>): void {
   let previous: TrailPoint | null = null;
   for (const point of points) {
     if (previous && previous.projectileId === point.projectileId) {
       const a = transform.point(previous.xMetres, previous.yMetres);
       const b = transform.point(point.xMetres, point.yMetres);
-      graphics.moveTo(a.x, a.y).lineTo(b.x, b.y).stroke({ color: 0xe8d18b, width: 1, alpha: 0.38 });
+      graphics.moveTo(a.x, a.y).lineTo(b.x, b.y)
+        .stroke({ color: 0xe8d18b, width: 1, alpha: 0.38 });
     }
     previous = point;
   }
 }
-function drawImpacts(graphics: Graphics, impacts: readonly { point: { xMetres: number; yMetres: number }; hitType: string; hitZone: string | null }[], transform: ReturnType<typeof createTransform>): void {
+
+function drawImpacts(
+  graphics: Graphics,
+  impacts: readonly { point: { xMetres: number; yMetres: number }; hitType: string; hitZone: string | null }[],
+  transform: ReturnType<typeof createTransform>,
+  showImpact: boolean,
+  showHitZone: boolean,
+): void {
   for (const impact of impacts) {
     const point = transform.point(impact.point.xMetres, impact.point.yMetres);
     const color = impact.hitType === 'unit' ? 0xff6b5f : impact.hitType === 'object' ? 0xe4b168 : 0xb8a27d;
-    graphics.moveTo(point.x - 4, point.y - 4).lineTo(point.x + 4, point.y + 4);
-    graphics.moveTo(point.x + 4, point.y - 4).lineTo(point.x - 4, point.y + 4).stroke({ color, width: 1.5 });
-    if (impact.hitZone) graphics.circle(point.x, point.y, 7).stroke({ color, width: 1, alpha: 0.7 });
+    if (showImpact) {
+      graphics.moveTo(point.x - 4, point.y - 4).lineTo(point.x + 4, point.y + 4);
+      graphics.moveTo(point.x + 4, point.y - 4).lineTo(point.x - 4, point.y + 4)
+        .stroke({ color, width: 1.5 });
+    }
+    if (showHitZone && impact.hitZone) graphics.circle(point.x, point.y, 7).stroke({ color, width: 1, alpha: 0.7 });
   }
 }
+
 function drawFacing(graphics: Graphics, x: number, y: number, radians: number, length: number): void {
-  graphics.moveTo(x, y).lineTo(x + Math.cos(radians) * length, y + Math.sin(radians) * length).stroke({ color: 0xf7f2d6, width: 1.5 });
+  graphics.moveTo(x, y).lineTo(x + Math.cos(radians) * length, y + Math.sin(radians) * length)
+    .stroke({ color: 0xf7f2d6, width: 1.5 });
 }
-function drawAim(graphics: Graphics, metresPerCell: number, unit: CombatLabVisualSession['state']['units'][number], transform: ReturnType<typeof createTransform>): void {
+
+function drawAim(
+  graphics: Graphics,
+  metresPerCell: number,
+  unit: UnitModel,
+  transform: ReturnType<typeof createTransform>,
+  showDirection: boolean,
+  showTargetPoint: boolean,
+): void {
   const task = unit.infantryCombatRuntime.activeFireTask;
   if (!task) return;
   const from = transform.point(unit.position.x * metresPerCell, unit.position.y * metresPerCell);
   const to = transform.point(task.target.xMetres, task.target.yMetres);
-  graphics.moveTo(from.x, from.y).lineTo(to.x, to.y).stroke({ color: 0x8bd5ff, width: 1.4, alpha: 0.78 });
-  graphics.circle(to.x, to.y, Math.max(3, task.targetRadiusMetres * transform.scale)).stroke({ color: 0x8bd5ff, width: 1, alpha: 0.65 });
+  if (showDirection) {
+    graphics.moveTo(from.x, from.y).lineTo(to.x, to.y)
+      .stroke({ color: 0x8bd5ff, width: 1.4, alpha: 0.78 });
+  }
+  if (showTargetPoint) {
+    graphics.circle(to.x, to.y, Math.max(3, task.targetRadiusMetres * transform.scale))
+      .stroke({ color: 0x8bd5ff, width: 1, alpha: 0.65 });
+  }
 }
-function drawDeployment(graphics: Graphics, unit: CombatLabVisualSession['state']['units'][number], transform: ReturnType<typeof createTransform>, layers: Map<CombatLabDiagnosticLayerId, LayerState>): void {
+
+function drawDeployment(
+  graphics: Graphics,
+  unit: UnitModel,
+  transform: ReturnType<typeof createTransform>,
+  layers: Map<CombatLabDiagnosticLayerId, LayerState>,
+): void {
   const weapon = unit.infantryCombatRuntime.primaryWeapon;
   const deployment = weapon?.deployment;
   if (!weapon || !deployment?.anchor) return;
@@ -264,5 +351,6 @@ function drawDeployment(graphics: Graphics, unit: CombatLabVisualSession['state'
   const left = deployment.traverseCenterRadians - halfArc;
   const right = deployment.traverseCenterRadians + halfArc;
   graphics.moveTo(anchor.x, anchor.y).lineTo(anchor.x + Math.cos(left) * radius, anchor.y + Math.sin(left) * radius);
-  graphics.moveTo(anchor.x, anchor.y).lineTo(anchor.x + Math.cos(right) * radius, anchor.y + Math.sin(right) * radius).stroke({ color: 0x82f0c2, width: 1.5, alpha: 0.8 });
+  graphics.moveTo(anchor.x, anchor.y).lineTo(anchor.x + Math.cos(right) * radius, anchor.y + Math.sin(right) * radius)
+    .stroke({ color: 0x82f0c2, width: 1.5, alpha: 0.8 });
 }
