@@ -65,6 +65,7 @@ export class CombatLabVisualSession {
   private readonly journal: string[] = [];
   private observedShots = 0;
   private observedImpacts = 0;
+  private stateRevision = 0;
 
   constructor(scenarioId: string, seed: number) {
     const definition = getCombatLabScenarioDefinition(scenarioId);
@@ -77,10 +78,15 @@ export class CombatLabVisualSession {
   get state(): SimulationState { return this.built.state; }
   get definition() { return this.built.definition; }
   get seed(): number { return this.built.seed; }
+  get revision(): number { return this.stateRevision; }
 
   startNewRun(scenarioId: string, seed: number): void {
     const definition = getCombatLabScenarioDefinition(scenarioId);
-    this.built = buildCombatLabInitialState(scenarioId, definition.revision, seed);
+    const stableState = this.built.state;
+    const nextBuilt = buildCombatLabInitialState(scenarioId, definition.revision, seed);
+    replaceCombatLabStateInPlace(stableState, nextBuilt.state);
+    this.built = { ...nextBuilt, state: stableState };
+    this.stateRevision += 1;
     this.metrics = createCombatLabMetricCollector(this.state);
     this.program.appliedStepIds.clear();
     this.program.nextStepIndex = 0;
@@ -165,6 +171,7 @@ export class CombatLabVisualSession {
   restoreCheckpoint(): boolean {
     if (!this.checkpoint || !this.checkpointBookkeeping) return false;
     restoreCombatLabCheckpoint(this.state, this.checkpoint);
+    this.stateRevision += 1;
     this.interactive = this.checkpoint.interactive;
     this.accumulatorSeconds = 0;
     this.programEnabled = false;
@@ -239,4 +246,11 @@ export class CombatLabVisualSession {
     this.journal.push(`${this.state.simulationTimeSeconds.toFixed(3)} с — ${message}`);
     if (this.journal.length > MAX_JOURNAL_ENTRIES) this.journal.splice(0, this.journal.length - MAX_JOURNAL_ENTRIES);
   }
+}
+
+export function replaceCombatLabStateInPlace(target: SimulationState, source: SimulationState): void {
+  for (const key of Object.keys(target) as Array<keyof SimulationState>) {
+    if (!(key in source)) delete (target as unknown as Record<string, unknown>)[key as string];
+  }
+  Object.assign(target, source);
 }
