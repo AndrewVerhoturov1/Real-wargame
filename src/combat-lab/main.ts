@@ -1,34 +1,62 @@
-import '../styles.css';
+import '../game/GameStyles';
 import './combat-lab.css';
 import { getCombatLabScenarioDefinition } from '../core/testing/combat-lab';
+import { collectGameApplicationElements, GameApplication } from '../game/GameApplication';
+import type { GamePauseController } from '../game/GameApplicationTypes';
 import { installAppShellMenu } from '../shared/AppShellMenu';
-import { CombatLabRenderer } from './rendering/CombatLabRenderer';
+import { CombatLabExtension } from './CombatLabExtension';
 import { CombatLabVisualSession } from './runtime/CombatLabVisualSession';
-import { CombatLabShell, createCombatLabLayout } from './ui/CombatLabShell';
+
+let application: GameApplication | null = null;
 
 installAppShellMenu({ mode: 'combat-lab' });
+void startCombatLab();
 
-const root = document.querySelector<HTMLElement>('#combat-lab-root');
-if (!root) throw new Error('Не найден корневой элемент испытательного полигона.');
+async function startCombatLab(): Promise<void> {
+  const extensionRoot = document.querySelector<HTMLElement>('#combat-lab-extension-root');
+  if (!extensionRoot) throw new Error('Не найден контейнер инструментов испытательного полигона.');
 
-void startCombatLab(root);
-
-async function startCombatLab(rootElement: HTMLElement): Promise<void> {
   const defaultDefinition = getCombatLabScenarioDefinition('rifle-distance-baseline');
   const session = new CombatLabVisualSession(defaultDefinition.scenarioId, defaultDefinition.defaultSeed);
-  const layout = createCombatLabLayout(rootElement);
-  let shell: CombatLabShell | null = null;
+  keepProductionTickerPaused(session);
 
   try {
-    const renderer = await CombatLabRenderer.create(layout.map, session, () => shell?.refreshLive());
-    shell = new CombatLabShell(layout, session, renderer);
-    window.addEventListener('beforeunload', () => renderer.destroy(), { once: true });
+    application = await GameApplication.create({
+      mode: 'combat-lab',
+      state: session.state,
+      elements: collectGameApplicationElements(),
+      pauseController: createSessionPauseController(session),
+      installExtension: (context) => CombatLabExtension.create(extensionRoot, session, context),
+    });
   } catch (error) {
     console.error(error);
-    rootElement.replaceChildren();
+    extensionRoot.replaceChildren();
     const message = document.createElement('div');
     message.className = 'combat-lab-startup-error';
     message.textContent = `Испытательный полигон не запущен: ${error instanceof Error ? error.message : String(error)}`;
-    rootElement.append(message);
+    extensionRoot.append(message);
   }
+}
+
+window.addEventListener('beforeunload', () => {
+  application?.destroy();
+  application = null;
+});
+
+function createSessionPauseController(session: CombatLabVisualSession): GamePauseController {
+  return {
+    isPaused: () => session.isPaused(),
+    toggle: () => {
+      session.togglePaused();
+      keepProductionTickerPaused(session);
+    },
+    setPaused: (value) => {
+      session.setPaused(value);
+      keepProductionTickerPaused(session);
+    },
+  };
+}
+
+function keepProductionTickerPaused(session: CombatLabVisualSession): void {
+  (session.state as typeof session.state & { paused?: boolean }).paused = true;
 }
