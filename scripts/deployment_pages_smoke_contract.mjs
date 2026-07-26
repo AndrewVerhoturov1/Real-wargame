@@ -9,6 +9,7 @@ const root = await mkdtemp(path.join(os.tmpdir(), 'deployment-pages-'));
 try {
   await writeFile(path.join(root, 'index.html'), '<!doctype html>');
   await writeFile(path.join(root, 'ai-node-editor.html'), '<!doctype html>');
+  await writeFile(path.join(root, 'combat-lab.html'), '<!doctype html>');
 
   const missingSource = run(root);
   assert.notEqual(missingSource.status, 0);
@@ -21,7 +22,7 @@ try {
   }));
   const ok = run(root);
   assert.equal(ok.status, 0, ok.stderr);
-  assert.match(ok.stdout, /index\.html, ai-node-editor\.html, deployment-source\.json/);
+  assert.match(ok.stdout, /index\.html, ai-node-editor\.html, combat-lab\.html, deployment-source\.json/);
 
   console.log('Deployment pages contract passed.');
 } finally {
