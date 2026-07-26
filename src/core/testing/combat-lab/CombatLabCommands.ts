@@ -128,6 +128,9 @@ export function executeCombatLabCommand(
     }), ownerToken);
   }
 
+  if (command.kind !== 'first_aid') {
+    return rejected('combat_lab_command_unsupported', `Команда ${command.kind} не поддерживается испытательным полигоном.`);
+  }
   const actor = findUnit(state, command.actorUnitId);
   const target = findUnit(state, command.targetUnitId);
   if (!actor) return missingUnit(command.actorUnitId);
