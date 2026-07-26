@@ -2,6 +2,11 @@ import {
   INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION,
   type InfantryCombatUnitRuntimeV1,
 } from './InfantryCombatRuntimeTypes';
+import {
+  createAmmoInventoryRuntime,
+  normalizeAmmoInventoryRuntime,
+  serializeAmmoInventoryRuntime,
+} from './AmmoInventoryRuntime';
 import { normalizeInfantryWeaponInstance, serializeInfantryWeaponInstance } from './InfantryWeaponInstance';
 import {
   normalizeFireTaskRuntime,
@@ -36,6 +41,7 @@ export function createInfantryCombatUnitRuntime(): InfantryCombatUnitRuntimeV1 {
     activeFireTask: null,
     lastFireResult: null,
     lastShotCommit: null,
+    ammoInventory: createAmmoInventoryRuntime(),
     wounds: createUnitWoundRuntime(),
     physiology: createUnitPhysiologyRuntime(),
     medical: createUnitMedicalRuntime(),
@@ -44,7 +50,7 @@ export function createInfantryCombatUnitRuntime(): InfantryCombatUnitRuntimeV1 {
 }
 
 export function normalizeInfantryCombatUnitRuntime(value: unknown): InfantryCombatUnitRuntimeV1 {
-  if (!isRecord(value) || (value.schemaVersion !== 1 && value.schemaVersion !== INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION)) {
+  if (!isRecord(value) || (value.schemaVersion !== 1 && value.schemaVersion !== 2 && value.schemaVersion !== INFANTRY_COMBAT_UNIT_RUNTIME_SCHEMA_VERSION)) {
     return createInfantryCombatUnitRuntime();
   }
   return {
@@ -54,6 +60,7 @@ export function normalizeInfantryCombatUnitRuntime(value: unknown): InfantryComb
     activeFireTask: normalizeFireTaskRuntime(value.activeFireTask),
     lastFireResult: normalizeFireTaskTerminalResult(value.lastFireResult),
     lastShotCommit: normalizeShotCommitDiagnostic(value.lastShotCommit),
+    ammoInventory: normalizeAmmoInventoryRuntime(value.ammoInventory),
     wounds: normalizeUnitWoundRuntime(value.wounds),
     physiology: normalizeUnitPhysiologyRuntime(value.physiology),
     medical: normalizeUnitMedicalRuntime(value.medical),
@@ -69,6 +76,7 @@ export function serializeInfantryCombatUnitRuntime(value: InfantryCombatUnitRunt
     activeFireTask: value.activeFireTask ? serializeFireTaskRuntime(value.activeFireTask) : null,
     lastFireResult: value.lastFireResult ? structuredClone(value.lastFireResult) : null,
     lastShotCommit: value.lastShotCommit ? structuredClone(value.lastShotCommit) : null,
+    ammoInventory: serializeAmmoInventoryRuntime(value.ammoInventory ?? createAmmoInventoryRuntime()),
     wounds: serializeUnitWoundRuntime(value.wounds ?? createUnitWoundRuntime()),
     physiology: serializeUnitPhysiologyRuntime(value.physiology ?? createUnitPhysiologyRuntime()),
     medical: serializeUnitMedicalRuntime(value.medical ?? createUnitMedicalRuntime()),
@@ -80,8 +88,9 @@ function normalizeShotCommitDiagnostic(value: unknown): import('./InfantryCombat
   if (!isRecord(value)) return null;
   const allowed = new Set([
     'committed', 'already_committed', 'task_not_firing', 'ownership_lost', 'weapon_missing',
-    'weapon_capability_lost', 'unsupported_mode', 'empty_weapon', 'aim_solution_invalid', 'aim_solution_below_threshold',
-    'movement_forbidden', 'cadence_wait', 'ordinal_mismatch', 'muzzle_blocked', 'friendly_risk_exceeded',
+    'weapon_capability_lost', 'weapon_action_in_progress', 'unsupported_mode', 'empty_weapon',
+    'aim_solution_invalid', 'aim_solution_below_threshold', 'movement_forbidden', 'deployed_traverse_exceeded',
+    'cadence_wait', 'ordinal_mismatch', 'muzzle_blocked', 'friendly_risk_exceeded',
     'projectile_capacity_exceeded', 'duplicate_projectile_id', 'invalid_projectile_candidate', 'invalid_target',
   ]);
   if (typeof value.status !== 'string' || !allowed.has(value.status)) return null;

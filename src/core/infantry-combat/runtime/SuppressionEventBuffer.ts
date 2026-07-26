@@ -39,7 +39,8 @@ export function getSuppressionEventBufferScratch(
   };
   scratchByRuntime.set(runtime, scratch);
   runtime.diagnostics.suppressionEventBufferCapacity = capacity;
-  runtime.diagnostics.scratchAllocationCount += 1;
+  // Stage 4's scratchAllocationCount is the projectile-stepper allocation gate.
+  // Suppression owns separate bounded capacity/high-water/overflow diagnostics.
   return scratch;
 }
 

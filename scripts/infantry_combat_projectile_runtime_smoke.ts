@@ -5,7 +5,7 @@ import { createBallisticTraceContext, createBallisticTraceScratch, createEmptyBa
 import { createCombatUnitSpatialQueryScratch, queryUnitsNearBallisticSegment, queryUnitsNearBallisticSegmentInto } from '../src/core/combat/CombatUnitSpatialIndex';
 import { createDefaultCombatCatalogRegistry } from '../src/core/infantry-combat/catalogs';
 import {
-  PROJECTILE_RUNTIME_SCHEMA_VERSION, REFERENCE_PROJECTILE_RUNTIME_SCHEMA_VERSION, STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
+  PROJECTILE_RUNTIME_SCHEMA_VERSION, PROJECTILE_STATE_SCHEMA_VERSION, REFERENCE_PROJECTILE_RUNTIME_SCHEMA_VERSION, STAGE3_PROJECTILE_FIXED_STEP_SECONDS,
   createProjectileRuntimeState, getProjectileAtSlot, getProjectileRuntimeDiagnostics, normalizeProjectileRuntimeState,
   reconcileInfantryCombatRuntimeAfterLoad, releaseProjectileSlot, serializeProjectileRuntimeState, tickProjectileRuntime,
   trySpawnProjectile, type ProjectileImpactV1, type ProjectileRuntimeSnapshotV2, type ProjectileStateV1,
@@ -44,7 +44,7 @@ function migration() {
   const s = serializeProjectileRuntimeState(normalizeProjectileRuntimeState(legacy));
   assert.equal(s.schemaVersion, PROJECTILE_RUNTIME_SCHEMA_VERSION); assert.equal(s.accumulatorSeconds, legacy.accumulatorSeconds);
   assert.deepEqual(s.activeProjectiles.map(projectileV1View), [...legacy.activeProjectiles].sort(compareProjectiles).map(projectileV1View));
-  assert.ok(s.activeProjectiles.every((p) => p.schemaVersion === 2 && p.bodyPenetrationCount === 0 && p.lastHitUnitId === null));
+  assert.ok(s.activeProjectiles.every((p) => p.schemaVersion === PROJECTILE_STATE_SCHEMA_VERSION && p.bodyPenetrationCount === 0 && p.lastHitUnitId === null));
   assert.equal(s.diagnostics.fixedSubstepsExecuted, 7); assert.equal(s.diagnostics.unitNarrowCheckCount, 3);
 }
 

@@ -152,8 +152,11 @@ function verifyRuntimeSourceContract(): void {
   for (const forbidden of forbiddenFragments) {
     assert.equal(source.includes(forbidden), false, `runtime must not contain ${forbidden}`);
   }
-  const stepper = readFileSync(path.join(runtimeDir, 'ReferenceProjectileStepper.ts'), 'utf8');
-  assert.equal(stepper.includes('queryUnitsNearBallisticSegment'), true, 'projectile narrow phase must reuse the existing unit spatial index');
+  const referenceStepper = readFileSync(path.join(runtimeDir, 'ReferenceProjectileStepper.ts'), 'utf8');
+  const productionStepper = readFileSync(path.join(runtimeDir, 'ProjectileStepperStage8.ts'), 'utf8');
+  assert.equal(referenceStepper.includes('tickProjectileRuntime'), true, 'reference entry point must delegate to the production projectile stepper');
+  assert.equal(productionStepper.includes('getCombatUnitSpatialIndex'), true, 'production projectile stepper must reuse the existing unit spatial index');
+  assert.equal(productionStepper.includes('queryUnitsNearBallisticSegmentInto'), true, 'projectile narrow phase must query the existing unit spatial index into bounded scratch storage');
 }
 
 function makeState(

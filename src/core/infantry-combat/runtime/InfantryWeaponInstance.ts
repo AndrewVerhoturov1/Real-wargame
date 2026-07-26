@@ -1,3 +1,4 @@
+import { cancelPhysicalAction, getPhysicalActionLease } from '../../actions/PhysicalActionCoordinator';
 import type { UnitModel } from '../../units/UnitModel';
 import type { CombatCatalogRegistry } from '../catalogs/CombatCatalogRegistry';
 import { validateCombatCatalogBundle } from '../catalogs/CombatCatalogValidation';
@@ -8,6 +9,10 @@ import type {
   WeaponDefinitionV1,
   WeaponProficiency,
 } from '../catalogs/CombatCatalogTypes';
+import {
+  createAmmoInventoryFromLoadout,
+  sameLoadoutRef,
+} from './AmmoInventoryRuntime';
 import {
   createAutomaticFireCadenceRuntime,
   normalizeAutomaticFireCadenceRuntime,
@@ -22,6 +27,11 @@ import {
   type ResolvedWeaponSnapshotV1,
   type WeaponOperatorProfileV1,
 } from './InfantryCombatRuntimeTypes';
+import {
+  createWeaponDeploymentRuntime,
+  normalizeWeaponDeploymentRuntime,
+  serializeWeaponDeploymentRuntime,
+} from './WeaponDeploymentRuntime';
 
 export type EquipPrimaryWeaponStatus =
   | 'equipped'
@@ -66,6 +76,17 @@ export function equipPrimaryWeaponFromLoadout(
     return rejected('invalid_definition_chain', 'infantry_combat_invalid_definition_chain', 'Точные ссылки комплекта, оружия и патрона не совпадают.');
   }
 
+  if (sameLoadoutRef(unit.infantryCombatRuntime.ammoInventory, loadoutRef) && unit.infantryCombatRuntime.primaryWeapon) {
+    return {
+      ok: true,
+      status: 'equipped',
+      weapon: unit.infantryCombatRuntime.primaryWeapon,
+      reasonCode: 'infantry_combat_loadout_already_equipped',
+      reasonRu: 'Точная ревизия комплекта уже экипирована; боезапас и действия не изменены.',
+    };
+  }
+
+  cancelLocalWeaponActionsForRefit(unit);
   const snapshot = freezeResolvedSnapshot({
     weaponDefinitionRef: cloneRef(loadout.primary.definition),
     ammoDefinitionRef: cloneRef(weapon.ammo),
@@ -84,23 +105,25 @@ export function equipPrimaryWeaponFromLoadout(
     }),
     recoil: createWeaponRecoilRuntime(),
     automaticFire: createAutomaticFireCadenceRuntime(),
+    deployment: createWeaponDeploymentRuntime(),
     roundsInWeapon: integer(loadout.primary.loadedRounds, 0, 0, weapon.capacityRounds),
     shotSequence: 0,
     lastCommittedShotId: null,
   };
   unit.infantryCombatRuntime.primaryWeapon = instance;
+  unit.infantryCombatRuntime.ammoInventory = createAmmoInventoryFromLoadout(loadout, loadoutRef);
   initializeUnitMedicalInventory(unit, loadoutRef, loadout.firstAidCharges);
   return {
     ok: true,
     status: 'equipped',
     weapon: instance,
     reasonCode: 'infantry_combat_primary_weapon_equipped',
-    reasonRu: 'Основное оружие экипировано из точной ревизии комплекта.',
+    reasonRu: 'Основное оружие и агрегированный резерв экипированы из точной ревизии комплекта.',
   };
 }
 
 export function normalizeInfantryWeaponInstance(value: unknown): InfantryWeaponInstanceV1 | null {
-  if (!isRecord(value) || (value.schemaVersion !== 1 && value.schemaVersion !== INFANTRY_WEAPON_INSTANCE_SCHEMA_VERSION)) return null;
+  if (!isRecord(value) || (value.schemaVersion !== 1 && value.schemaVersion !== 2 && value.schemaVersion !== INFANTRY_WEAPON_INSTANCE_SCHEMA_VERSION)) return null;
   const weaponInstanceId = cleanText(value.weaponInstanceId, '');
   if (!weaponInstanceId || value.slot !== 'primary') return null;
   const resolved = normalizeResolvedSnapshot(value.resolved);
@@ -113,6 +136,7 @@ export function normalizeInfantryWeaponInstance(value: unknown): InfantryWeaponI
     operatorProfile: normalizeOperatorProfile(value.operatorProfile),
     recoil: normalizeWeaponRecoilRuntime(value.recoil),
     automaticFire: normalizeAutomaticFireCadenceRuntime(value.automaticFire),
+    deployment: normalizeWeaponDeploymentRuntime(value.deployment),
     roundsInWeapon: integer(value.roundsInWeapon, 0, 0, resolved.weapon.capacityRounds),
     shotSequence: integer(value.shotSequence, 0, 0, Number.MAX_SAFE_INTEGER),
     lastCommittedShotId: nullableText(value.lastCommittedShotId),
@@ -128,6 +152,7 @@ export function serializeInfantryWeaponInstance(value: InfantryWeaponInstanceV1)
     operatorProfile: freezeOperatorProfile(structuredClone(value.operatorProfile)),
     recoil: normalizeWeaponRecoilRuntime(structuredClone(value.recoil)),
     automaticFire: serializeAutomaticFireCadenceRuntime(value.automaticFire ?? createAutomaticFireCadenceRuntime()),
+    deployment: serializeWeaponDeploymentRuntime(value.deployment ?? createWeaponDeploymentRuntime()),
     roundsInWeapon: integer(value.roundsInWeapon, 0, 0, value.resolved.weapon.capacityRounds),
     shotSequence: integer(value.shotSequence, 0, 0, Number.MAX_SAFE_INTEGER),
     lastCommittedShotId: nullableText(value.lastCommittedShotId),
@@ -136,6 +161,31 @@ export function serializeInfantryWeaponInstance(value: InfantryWeaponInstanceV1)
 
 export function cloneResolvedSnapshot(value: ResolvedWeaponSnapshotV1): ResolvedWeaponSnapshotV1 {
   return freezeResolvedSnapshot(structuredClone(value));
+}
+
+function cancelLocalWeaponActionsForRefit(unit: UnitModel): void {
+  const runtime = unit.infantryCombatRuntime;
+  const handles = [
+    runtime.activeFireTask?.actionHandle ?? null,
+    runtime.primaryWeapon?.deployment.activeAction?.actionHandle ?? null,
+    runtime.ammoInventory.activeReload?.locomotionHandle ?? null,
+    runtime.ammoInventory.activeReload?.weaponHandle ?? null,
+    runtime.ammoInventory.activeTransfer?.sourceUnitId === unit.id ? runtime.ammoInventory.activeTransfer.sourceHandle : null,
+    runtime.ammoInventory.activeTransfer?.targetUnitId === unit.id ? runtime.ammoInventory.activeTransfer.targetHandle : null,
+  ];
+  for (const handle of handles) {
+    if (handle && getPhysicalActionLease(unit, handle)) {
+      cancelPhysicalAction(unit, handle, {
+        endedSeconds: 0,
+        resultCode: 'loadout_refit_cancelled_action',
+        resultRu: 'Физическое действие отменено явным переоснащением.',
+      });
+    }
+  }
+  runtime.activeFireTask = null;
+  if (runtime.primaryWeapon) runtime.primaryWeapon.deployment.activeAction = null;
+  runtime.ammoInventory.activeReload = null;
+  runtime.ammoInventory.activeTransfer = null;
 }
 
 function normalizeOperatorProfile(value: unknown): WeaponOperatorProfileV1 {

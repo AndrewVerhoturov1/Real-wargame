@@ -281,7 +281,11 @@ function executeProductionProfile(profile: Exclude<FixtureProfile, 'direct'>): P
 
 function prepareProductionRun(profile: FixtureProfile, capacity: number): PreparedProductionRun {
   const dense = profile === 'dense_geometry';
-  const state = makeState(dense ? makeDenseObjects() : makeRepresentativeObjects(), makeUnits());
+  const direct = profile === 'direct';
+  const state = makeState(
+    direct ? [] : dense ? makeDenseObjects() : makeRepresentativeObjects(),
+    direct ? [] : makeUnits(),
+  );
   const runtime = createProjectileRuntimeState(capacity);
   state.infantryCombatProjectiles = runtime;
   const targetActive = targetCountForProfile(profile);
@@ -488,6 +492,24 @@ function measureDirectComparison(): DirectComparisonReport {
   const throughputRatio = productionTiming.projectileSubstepsPerSecond / Math.max(1, referenceTiming.projectileSubstepsPerSecond);
   const heapRatio = retained.stage4Production / Math.max(1, retained.stage3Reference);
   const failReasons: string[] = [];
+  if (
+    referenceRepresentative.diagnostics.unitCheckCount !== 0
+    || referenceRepresentative.diagnostics.objectCandidateCount !== 0
+  ) {
+    failReasons.push('Stage 3 direct fixture executed unit or object collision work');
+  }
+  if (
+    productionRepresentative.units !== 0
+    || productionRepresentative.objects !== 0
+    || productionRepresentative.diagnostics.unitCandidateCount !== 0
+    || productionRepresentative.diagnostics.objectCandidateCount !== 0
+    || productionRepresentative.diagnostics.bodyImpactCount !== 0
+    || productionRepresentative.diagnostics.emittedNearMissCount !== 0
+    || productionRepresentative.diagnostics.emittedNearImpactCount !== 0
+    || productionRepresentative.diagnostics.emittedDirectHitCount !== 0
+  ) {
+    failReasons.push('Stage 4 direct fixture executed Stage 9 unit, object, body or suppression work');
+  }
   if (throughputRatio < 1) failReasons.push(`Stage 4 throughput ratio ${throughputRatio.toFixed(3)} is below 1.0`);
   if (heapRatio >= 1) failReasons.push(`Stage 4 retained heap ratio ${heapRatio.toFixed(3)} is not below 1.0`);
   if (!idleComparison.timingGatePass) {
@@ -523,7 +545,7 @@ function measureDirectComparison(): DirectComparisonReport {
 }
 
 function prepareReferenceDirect(): { state: SimulationState; runtime: Stage3ReferenceHarnessRuntime } {
-  const state = makeState([], makeUnits());
+  const state = makeState([], []);
   const projectiles = Array.from({ length: DIRECT_COMPARISON_PROJECTILES }, (_, index) => makeProjectile('direct', index));
   return { state, runtime: createStage3ReferenceHarnessRuntime(projectiles) };
 }

@@ -3,8 +3,10 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 const BASE_SHA = 'a4398ecc031d96f93c06ecd3a84456776c493cbc';
-ensureBaseCommit();
-const changedFiles = git(['diff', '--name-only', BASE_SHA, 'HEAD'])
+const DIFF_HEAD_SHA = process.env.INFANTRY_COMBAT_STAGE7_DIFF_HEAD_SHA?.trim() || 'HEAD';
+ensureCommit(BASE_SHA);
+ensureCommit(DIFF_HEAD_SHA);
+const changedFiles = git(['diff', '--name-only', BASE_SHA, DIFF_HEAD_SHA])
   .split('\n')
   .map((value) => value.trim())
   .filter(Boolean);
@@ -71,20 +73,20 @@ assert.equal(
   'Stage 7 design document is required.',
 );
 
-console.log(`Infantry combat Stage 7 forbidden scan passed: ${changedFiles.length} changed files, no scope leak, non-deterministic timer or duplicate projectile owner.`);
+console.log(`Infantry combat Stage 7 forbidden scan passed: ${changedFiles.length} changed files through ${DIFF_HEAD_SHA}, no scope leak, non-deterministic timer or duplicate projectile owner.`);
 
-function ensureBaseCommit() {
+function ensureCommit(ref) {
   try {
-    git(['cat-file', '-e', `${BASE_SHA}^{commit}`]);
+    git(['cat-file', '-e', `${ref}^{commit}`]);
   } catch {
-    execFileSync('git', ['fetch', '--no-tags', '--depth=1', 'origin', BASE_SHA], {
+    execFileSync('git', ['fetch', '--no-tags', '--depth=1', 'origin', ref], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
   }
 }
 function addedLines(file) {
-  return git(['diff', '--unified=0', BASE_SHA, 'HEAD', '--', file])
+  return git(['diff', '--unified=0', BASE_SHA, DIFF_HEAD_SHA, '--', file])
     .split('\n')
     .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
     .map((line) => line.slice(1))

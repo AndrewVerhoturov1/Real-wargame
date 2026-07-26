@@ -1,5 +1,9 @@
 import { reconcilePlayerPostureMovementAuthority } from '../actions/PlayerPostureMovementSync';
 import { reconcileMovementPostureRequest } from '../actions/PostureTransition';
+import {
+  beginWeaponDeploymentStepLocks,
+  endWeaponDeploymentStepLocks,
+} from '../infantry-combat/runtime/WeaponDeploymentLocks';
 import { reconcileCompletedTacticalPositionArrivals } from '../tactical/TacticalPositionArrival';
 import { reconcileTacticalPositionOccupation } from '../tactical/TacticalPositionOccupation';
 import { requestStaticTacticalPositionBasis } from '../tactical/static/StaticTacticalPositionService';
@@ -9,8 +13,6 @@ import { tickSimulation as tickSimulationLegacy } from './SimulationTickLegacy';
 export * from './SimulationTickLegacy';
 
 export function tickSimulation(state: SimulationState, deltaSeconds: number): void {
-  // Static tactical analysis is keyed only by map/material/settings revisions.
-  // This remains a cheap identity check during ordinary movement.
   requestStaticTacticalPositionBasis(state);
 
   for (const unit of state.units) {
@@ -19,9 +21,14 @@ export function tickSimulation(state: SimulationState, deltaSeconds: number): vo
     reconcileMovementPostureRequest(state, unit);
   }
 
-  tickSimulationLegacy(state, deltaSeconds);
-  reconcileCompletedTacticalPositionArrivals(state);
-  for (const unit of state.units) reconcileTacticalPositionOccupation(state, unit);
+  const deploymentStepLocks = beginWeaponDeploymentStepLocks(state.units);
+  try {
+    tickSimulationLegacy(state, deltaSeconds);
+    reconcileCompletedTacticalPositionArrivals(state);
+    for (const unit of state.units) reconcileTacticalPositionOccupation(state, unit);
+  } finally {
+    endWeaponDeploymentStepLocks(deploymentStepLocks);
+  }
 }
 
 /**

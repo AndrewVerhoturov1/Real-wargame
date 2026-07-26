@@ -18,6 +18,7 @@ import {
   type TickInfantryCombatSimulationResult,
 } from './InfantryCombatSimulationSegment';
 import { enforceEffectiveCombatCapabilities } from './WoundImpactApplication';
+import { tickWeaponActions } from './WeaponActionRuntime';
 
 const TIME_EPSILON_SECONDS = 1e-9;
 const MAX_COMBINED_BOUNDARIES_PER_TICK = 4096;
@@ -28,8 +29,9 @@ export interface TickInfantryPhysiologySimulationInput {
 }
 
 /**
- * Stage 7 owner of the shared combat/medical timeline. Projectile simulation is
- * delegated exactly once per segment and is never advanced from a physiology loop.
+ * Stage 7 owner of the shared combat/medical timeline. Stage 9 weapon actions
+ * advance before fire tasks inside each physical segment, so reload/deploy and
+ * shot commits can never mutate the same weapon state in an ambiguous order.
  */
 export function tickInfantryPhysiologySimulation(
   state: SimulationState,
@@ -54,6 +56,10 @@ export function tickInfantryPhysiologySimulation(
     const segmentEndSeconds = Math.min(endSeconds, nextBoundarySeconds);
     const segmentSeconds = canonicalSeconds(segmentEndSeconds - cursorSeconds);
     if (segmentSeconds > TIME_EPSILON_SECONDS) {
+      tickWeaponActions(state, {
+        intervalStartSeconds: cursorSeconds,
+        deltaSeconds: segmentSeconds,
+      });
       const combat = tickInfantryCombatSimulationSegment(state, {
         intervalStartSeconds: cursorSeconds,
         deltaSeconds: segmentSeconds,
@@ -114,6 +120,8 @@ function initializeFatigueSamples(state: SimulationState, units: readonly UnitMo
 function sampleAllFatigueRates(state: SimulationState, units: readonly UnitModel[]): void {
   for (const unit of units) {
     const task = unit.infantryCombatRuntime.activeFireTask;
+    const weapon = unit.infantryCombatRuntime.primaryWeapon;
+    const deploymentMode = weapon?.deployment.mode ?? 'portable';
     sampleFatigueRateForNextInterval(
       unit.infantryCombatRuntime.physiology.fatigue,
       calculateFatigueFactorSample({
@@ -125,8 +133,9 @@ function sampleAllFatigueRates(state: SimulationState, units: readonly UnitModel
         posture: unit.behaviorRuntime.posture,
         isAiming: task?.phase === 'aiming' || task?.phase === 'firing',
         isApplyingFirstAid: unit.infantryCombatRuntime.medical.activeFirstAidAction !== null,
-        isHeavyWeaponActive: false,
-        isDeployActionActive: false,
+        isHeavyWeaponActive: weapon?.resolved.weapon.weaponClass === 'machine_gun'
+          && (task?.phase === 'aiming' || task?.phase === 'firing'),
+        isDeployActionActive: deploymentMode === 'deploying' || deploymentMode === 'undeploying',
         woundBurden: calculateWoundBurden(unit.infantryCombatRuntime.wounds.slots),
         bloodState: unit.infantryCombatRuntime.physiology.blood.state,
       }),

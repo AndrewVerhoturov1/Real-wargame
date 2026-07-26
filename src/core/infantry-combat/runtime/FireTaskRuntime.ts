@@ -1,4 +1,5 @@
 import type { UnitModel } from '../../units/UnitModel';
+import { getSuppressionSupportPoint } from './AutomaticFireSupportPoints';
 import { getEffectiveCombatCapabilities } from './EffectiveCombatCapabilities';
 import {
   requestFireTask as requestBaseFireTask,
@@ -12,41 +13,63 @@ import {
   type TickFireTaskInput,
   type TickFireTaskResult,
 } from './FireTaskRuntimeStage8';
+import { MAX_FIRE_TASK_ROUNDS } from './InfantryCombatRuntimeTypes';
+import { isTargetWithinDeployedTraverse } from './WeaponDeploymentRuntime';
 
 export * from './FireTaskRuntimeStage8';
 
 const EPSILON = 1e-9;
 
-export type Stage8RequestFireTaskResult = RequestFireTaskResult | {
+export type Stage9RequestFireTaskResult = RequestFireTaskResult | {
   readonly accepted: false;
-  readonly status: 'weapon_capability_lost';
+  readonly status: 'weapon_capability_lost' | 'weapon_action_in_progress' | 'deployed_traverse_exceeded';
   readonly task: null;
   readonly lease: null;
-  readonly reasonCode: 'infantry_fire_task_weapon_capability_lost';
+  readonly reasonCode: string;
   readonly reasonRu: string;
 };
-export type Stage8RequestSingleFireTaskResult = RequestSingleFireTaskResult | {
+export type Stage9RequestSingleFireTaskResult = RequestSingleFireTaskResult | {
   readonly accepted: false;
-  readonly status: 'weapon_capability_lost';
+  readonly status: 'weapon_capability_lost' | 'weapon_action_in_progress' | 'deployed_traverse_exceeded';
   readonly task: null;
   readonly lease: null;
-  readonly reasonCode: 'infantry_fire_task_weapon_capability_lost';
+  readonly reasonCode: string;
   readonly reasonRu: string;
 };
+/** Compatibility aliases retained for Stage 8 callers. */
+export type Stage8RequestFireTaskResult = Stage9RequestFireTaskResult;
+export type Stage8RequestSingleFireTaskResult = Stage9RequestSingleFireTaskResult;
 
 export function requestFireTask(
   unit: UnitModel,
   input: RequestFireTaskInput,
-): Stage8RequestFireTaskResult {
+): Stage9RequestFireTaskResult {
   if (!getEffectiveCombatCapabilities(unit).canUseWeapon) return capabilityRejected();
+  if (hasIncompatibleWeaponAction(unit)) return actionInProgressRejected();
+  if (!requestFitsDeploymentTraverse(unit, input)) return traverseRejected();
   return requestBaseFireTask(unit, input);
 }
 
 export function requestSingleFireTask(
   unit: UnitModel,
   input: RequestSingleFireTaskInput,
-): Stage8RequestSingleFireTaskResult {
+): Stage9RequestSingleFireTaskResult {
   if (!getEffectiveCombatCapabilities(unit).canUseWeapon) return capabilityRejected();
+  if (input.mode !== undefined && input.mode !== 'single') return unsupportedSingleModeRejected();
+  if (hasIncompatibleWeaponAction(unit)) return actionInProgressRejected();
+  const normalized: RequestFireTaskInput = {
+    owner: input.owner,
+    ownerToken: input.ownerToken,
+    target: input.target,
+    targetRadiusMetres: 0,
+    contactId: input.contactId ?? null,
+    sourceUnitId: input.sourceUnitId ?? null,
+    mode: 'single',
+    minimumSolutionQuality: input.minimumSolutionQuality,
+    maximumFriendlyFireRisk: input.maximumFriendlyFireRisk,
+    requestedSeconds: input.requestedSeconds,
+  };
+  if (!requestFitsDeploymentTraverse(unit, normalized)) return traverseRejected();
   return requestBaseSingleFireTask(unit, input);
 }
 
@@ -61,25 +84,24 @@ export function tickFireTaskWithTimeBudget(
   const taskAtStart = unit.infantryCombatRuntime.activeFireTask;
   const totalSeconds = finiteNonNegative(input.deltaSeconds);
   const startSeconds = finiteNonNegative(input.intervalStartSeconds);
+  if (taskAtStart && hasIncompatibleWeaponAction(unit)) {
+    failBaseActiveFireTask(unit, {
+      endedSeconds: startSeconds,
+      resultCode: 'weapon_action_in_progress',
+      resultRu: 'Огневая задача завершена: началось несовместимое действие оружия.',
+    });
+    return failedTick(taskAtStart.taskId, totalSeconds, 'weapon_action_in_progress');
+  }
   if (taskAtStart && !getEffectiveCombatCapabilities(unit).canUseWeapon) {
     failBaseActiveFireTask(unit, {
       endedSeconds: startSeconds,
       resultCode: 'infantry_fire_task_weapon_capability_lost',
       resultRu: 'Огневая задача завершена: физическое состояние не позволяет пользоваться оружием.',
     });
-    return {
-      taskId: taskAtStart.taskId,
-      commitRequested: false,
-      requestedShotOrdinal: null,
-      completed: false,
-      failed: true,
-      consumedSeconds: 0,
-      remainingSeconds: totalSeconds,
-      reasonCode: 'infantry_fire_task_weapon_capability_lost',
-    };
+    return failedTick(taskAtStart.taskId, totalSeconds, 'infantry_fire_task_weapon_capability_lost');
   }
 
-  if (!taskAtStart || taskAtStart.phase === 'recovery') {
+  if (!input.state || !taskAtStart || taskAtStart.phase === 'recovery') {
     const result = tickBaseFireTaskWithTimeBudget(unit, input);
     applyEffectiveAimCapabilities(unit);
     return result;
@@ -101,22 +123,21 @@ export function tickFireTaskWithTimeBudget(
   for (let guard = 0; guard < 128; guard += 1) {
     const task = unit.infantryCombatRuntime.activeFireTask;
     if (!task) return composeTickResult(lastResult, consumedSeconds, remainingSeconds);
+    if (hasIncompatibleWeaponAction(unit)) {
+      failBaseActiveFireTask(unit, {
+        endedSeconds: startSeconds + consumedSeconds,
+        resultCode: 'weapon_action_in_progress',
+        resultRu: 'Огневая задача завершена: началось несовместимое действие оружия.',
+      });
+      return failedTick(task.taskId, remainingSeconds, 'weapon_action_in_progress', consumedSeconds);
+    }
     if (!getEffectiveCombatCapabilities(unit).canUseWeapon) {
       failBaseActiveFireTask(unit, {
         endedSeconds: startSeconds + consumedSeconds,
         resultCode: 'infantry_fire_task_weapon_capability_lost',
         resultRu: 'Огневая задача завершена: физическое состояние не позволяет пользоваться оружием.',
       });
-      return {
-        taskId: task.taskId,
-        commitRequested: false,
-        requestedShotOrdinal: null,
-        completed: false,
-        failed: true,
-        consumedSeconds,
-        remainingSeconds,
-        reasonCode: 'infantry_fire_task_weapon_capability_lost',
-      };
+      return failedTick(task.taskId, remainingSeconds, 'infantry_fire_task_weapon_capability_lost', consumedSeconds);
     }
 
     applyEffectiveAimCapabilities(unit);
@@ -140,9 +161,7 @@ export function tickFireTaskWithTimeBudget(
     }
     if (remainingSeconds <= EPSILON) return composeTickResult(result, consumedSeconds, remainingSeconds);
     const current = unit.infantryCombatRuntime.activeFireTask;
-    const boundaryAdvanced = Boolean(
-      current && current.aimTracking.nextTrackingBoundarySeconds > beforeBoundary + EPSILON,
-    );
+    const boundaryAdvanced = Boolean(current && current.aimTracking.nextTrackingBoundarySeconds > beforeBoundary + EPSILON);
     if (sliceSeconds <= EPSILON && !boundaryAdvanced) return composeTickResult(result, consumedSeconds, remainingSeconds);
     if (sliceSeconds > EPSILON && used + EPSILON < sliceSeconds) return composeTickResult(result, consumedSeconds, remainingSeconds);
   }
@@ -162,11 +181,7 @@ export function applyEffectiveAimCapabilities(unit: UnitModel): void {
   if (!task) return;
   const solution = task.aimTracking.solution;
   const capabilities = getEffectiveCombatCapabilities(unit);
-  const desiredStability = clamp(
-    Math.min(capabilities.stabilityMultiplier, capabilities.accuracyMultiplier),
-    0.2,
-    1,
-  );
+  const desiredStability = clamp(Math.min(capabilities.stabilityMultiplier, capabilities.accuracyMultiplier), 0.2, 1);
   const desiredFatigue = clamp01(unit.infantryCombatRuntime.physiology.fatigue.fatigue);
   const currentStability = clamp(solution.factors.woundStabilityMultiplier, 0.2, 1);
   const currentFatigue = clamp01(solution.factors.fatigue);
@@ -198,19 +213,39 @@ export function applyEffectiveAimCapabilities(unit: UnitModel): void {
 /** Stage 6 compatibility alias. */
 export const applyWoundAimCapabilities = applyEffectiveAimCapabilities;
 
-function capabilityRejected(): Stage8RequestFireTaskResult {
-  return {
-    accepted: false,
-    status: 'weapon_capability_lost',
-    task: null,
-    lease: null,
-    reasonCode: 'infantry_fire_task_weapon_capability_lost',
-    reasonRu: 'Физическое состояние не позволяет бойцу пользоваться оружием.',
-  };
+function requestFitsDeploymentTraverse(unit: UnitModel, input: RequestFireTaskInput): boolean {
+  const weapon = unit.infantryCombatRuntime.primaryWeapon;
+  if (!weapon || weapon.deployment.mode !== 'deployed') return true;
+  if (!isTargetWithinDeployedTraverse(weapon, input.target)) return false;
+  if (input.mode !== 'suppress') return true;
+  const planned = Math.max(1, Math.min(MAX_FIRE_TASK_ROUNDS, weapon.resolved.weapon.longBurstRounds));
+  const taskId = `${unit.id}:fire-task:${unit.infantryCombatRuntime.nextFireTaskSequence}`;
+  for (let ordinal = 0; ordinal < planned; ordinal += 1) {
+    const point = getSuppressionSupportPoint(taskId, ordinal, planned, input.target, input.targetRadiusMetres);
+    if (!isTargetWithinDeployedTraverse(weapon, point)) return false;
+  }
+  return true;
 }
-function composeTickResult(result: TickFireTaskResult, consumedSeconds: number, remainingSeconds: number): TickFireTaskResult {
-  return { ...result, consumedSeconds: cleanDuration(consumedSeconds), remainingSeconds: cleanDuration(remainingSeconds) };
+function hasIncompatibleWeaponAction(unit: UnitModel): boolean {
+  const runtime = unit.infantryCombatRuntime;
+  return Boolean(runtime.primaryWeapon?.deployment.activeAction || runtime.ammoInventory.activeReload || runtime.ammoInventory.activeTransfer);
 }
+function capabilityRejected(): Stage9RequestFireTaskResult {
+  return { accepted: false, status: 'weapon_capability_lost', task: null, lease: null, reasonCode: 'infantry_fire_task_weapon_capability_lost', reasonRu: 'Физическое состояние не позволяет бойцу пользоваться оружием.' };
+}
+function unsupportedSingleModeRejected(): RequestSingleFireTaskResult {
+  return { accepted: false, status: 'unsupported_mode', task: null, lease: null, reasonCode: 'infantry_fire_task_unsupported_mode', reasonRu: 'Одиночная огневая задача не поддерживает запрошенный режим огня.' };
+}
+function actionInProgressRejected(): Stage9RequestFireTaskResult {
+  return { accepted: false, status: 'weapon_action_in_progress', task: null, lease: null, reasonCode: 'weapon_action_in_progress', reasonRu: 'Стрельба недоступна, пока выполняется другое действие оружия.' };
+}
+function traverseRejected(): Stage9RequestFireTaskResult {
+  return { accepted: false, status: 'deployed_traverse_exceeded', task: null, lease: null, reasonCode: 'deployed_traverse_exceeded', reasonRu: 'Цель или одна из опорных точек находится вне сектора установленного пулемёта.' };
+}
+function failedTick(taskId: string, remainingSeconds: number, reasonCode: string, consumedSeconds = 0): TickFireTaskResult {
+  return { taskId, commitRequested: false, requestedShotOrdinal: null, completed: false, failed: true, consumedSeconds, remainingSeconds, reasonCode };
+}
+function composeTickResult(result: TickFireTaskResult, consumedSeconds: number, remainingSeconds: number): TickFireTaskResult { return { ...result, consumedSeconds: cleanDuration(consumedSeconds), remainingSeconds: cleanDuration(remainingSeconds) }; }
 function finiteNonNegative(value: number): number { return Number.isFinite(value) ? Math.max(0, value) : 0; }
 function cleanDuration(value: number): number { if (Math.abs(value) <= EPSILON) return 0; return Math.round(Math.max(0, value) * 1_000_000_000_000) / 1_000_000_000_000; }
 function clamp01(value: number): number { return clamp(value, 0, 1); }

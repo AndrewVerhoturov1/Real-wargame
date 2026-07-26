@@ -1,6 +1,7 @@
 import { rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { runVerificationCommand } from './infantry_combat_verification_cache.mjs';
 
 const APPROVED_BASE_SHA = 'efdd45cce30893ade212c6fe72efe46698109b13';
 const repoRoot = process.cwd();
@@ -39,7 +40,7 @@ console.log(`Stage 6 verification PASS on ${process.version}: 20 required non-br
 
 function runRequiredCheck(command, args) {
   const label = [command, ...args].join(' ');
-  const result = run(command, args, repoRoot);
+  const result = runVerificationCommand(command, args, repoRoot);
   const output = combinedOutput(result);
   if (result.error || result.status !== 0) fail(`FAIL ${label}`, output);
   console.log(`PASS ${label}: ${lastMeaningfulLine(output) || 'completed without output'}`);
@@ -47,7 +48,7 @@ function runRequiredCheck(command, args) {
 
 function runPerformanceContractWithBaseComparison() {
   const label = 'npm run performance-contract:smoke';
-  const current = run('npm', ['run', 'performance-contract:smoke'], repoRoot);
+  const current = runVerificationCommand('npm', ['run', 'performance-contract:smoke'], repoRoot);
   const currentOutput = combinedOutput(current);
   if (!current.error && current.status === 0) {
     console.log(`PASS ${label}`);

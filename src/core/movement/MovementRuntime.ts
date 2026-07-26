@@ -13,6 +13,7 @@ import {
 } from '../actions/PostureTransition';
 import { tickPostureTransitionWithTimeBudget } from '../actions/PostureTransitionClock';
 import type { UnitPosture } from '../behavior/BehaviorModel';
+import { getWeaponDeploymentMovementLock } from '../infantry-combat/runtime/WeaponDeploymentLocks';
 import type { SimulationState } from '../simulation/SimulationState';
 import type { UnitModel } from '../units/UnitModel';
 import {
@@ -57,6 +58,7 @@ export function setMovementProfileRequest(
   source: MovementProfileSource,
   gait?: MovementGait,
 ): void {
+  if (rejectMovementForDeployment(unit)) return;
   cancelMovementWeaponPreparation(unit, undefined, 'movement_weapon_preparation_profile_replaced', 'Подготовка оружия отменена сменой профиля движения.');
   legacy.setMovementProfileRequest(state, unit, profileId, source, gait);
 }
@@ -67,6 +69,7 @@ export function setMovementRequest(
   source: MovementProfileSource,
   gait?: MovementGait,
 ): void {
+  if (rejectMovementForDeployment(unit)) return;
   cancelMovementWeaponPreparation(unit, undefined, 'movement_weapon_preparation_request_replaced', 'Подготовка оружия отменена новой командой движения.');
   legacy.setMovementRequest(unit, profileId, source, gait);
 }
@@ -76,6 +79,8 @@ export function requestMovementWeaponPreparation(
   unit: UnitModel,
   request: legacy.MovementWeaponPreparationRequest,
 ): { allowed: boolean; reasonRu: string; handle: legacy.MovementWeaponPreparationHandle | null } {
+  const deploymentLock = getWeaponDeploymentMovementLock(unit);
+  if (deploymentLock.blocked) return { allowed: false, reasonRu: deploymentLock.reasonRu!, handle: null };
   const runtime = unit.movementRuntime;
   const profile = resolveMovementProfile(state.movementProfiles, runtime.effectiveProfileId || runtime.requestedProfileId);
   let current = runtime.weaponPreparation;
@@ -185,7 +190,7 @@ export function cancelMovementWeaponPreparation(
     setPhysicalActionCoordinatorDiagnostic(unit, 'movement_weapon_preparation_lease_lost', 'Подготовка оружия удалена без соответствующего захвата каналов.');
   }
   unit.movementRuntime.weaponPreparation = null;
-  unit.movementRuntime.isMoving = shouldResumeOriginalOrder;
+  unit.movementRuntime.isMoving = shouldResumeOriginalOrder && !getWeaponDeploymentMovementLock(unit).blocked;
   unit.movementRuntime.velocityCellsPerSecond = { x: 0, y: 0 };
   return true;
 }
@@ -216,6 +221,14 @@ export function preparePhysicalMovementStep(
   postureMultiplier: number,
   woundMultiplier: number,
 ): legacy.MovementStep {
+  const deploymentLock = getWeaponDeploymentMovementLock(unit);
+  if (deploymentLock.blocked) {
+    unit.movementRuntime.isMoving = false;
+    unit.movementRuntime.velocityCellsPerSecond = { x: 0, y: 0 };
+    unit.behaviorRuntime.reason = deploymentLock.reasonRu!;
+    unit.behaviorRuntime.lastEvent = deploymentLock.reasonCode!;
+    return zeroMovementStep(legacy.preparePhysicalMovementStep(state, unit, 0, false, postureMultiplier, woundMultiplier));
+  }
   const preparationBefore = clonePreparation(unit.movementRuntime.weaponPreparation);
   const ownPreparationLease = preparationBefore && hasExactPreparationLease(unit, preparationBefore)
     ? getPhysicalActionLease(unit, preparationBefore.actionHandle!)
@@ -262,9 +275,6 @@ export function preparePhysicalMovementStep(
     });
   }
 
-  // The compatibility implementation may discover a hard-safety gait only
-  // while integrating this step. Convert that old instant write into the same
-  // serializable physical action used everywhere else.
   const requestedPosture = unit.behaviorRuntime.posture;
   if (requestedPosture !== postureBefore) {
     unit.behaviorRuntime.posture = postureBefore;
@@ -301,6 +311,15 @@ export function requiredPostureForMovementExecution(
   return profile.stancePolicy === 'adaptive' ? null : profile.stancePolicy;
 }
 
+function rejectMovementForDeployment(unit: UnitModel): boolean {
+  const lock = getWeaponDeploymentMovementLock(unit);
+  if (!lock.blocked) return false;
+  unit.movementRuntime.isMoving = false;
+  unit.movementRuntime.velocityCellsPerSecond = { x: 0, y: 0 };
+  unit.behaviorRuntime.reason = lock.reasonRu!;
+  unit.behaviorRuntime.lastEvent = lock.reasonCode!;
+  return true;
+}
 function completePreparation(unit: UnitModel, pending: MovementWeaponPreparationState, endedSeconds: number): void {
   if (pending.actionHandle && getPhysicalActionLease(unit, pending.actionHandle)) {
     completePhysicalAction(unit, pending.actionHandle, {
@@ -311,18 +330,15 @@ function completePreparation(unit: UnitModel, pending: MovementWeaponPreparation
   }
   unit.movementRuntime.weaponPreparation = null;
 }
-
 function hasExactPreparationLease(unit: UnitModel, preparation: MovementWeaponPreparationState): boolean {
   return Boolean(preparation.actionHandle && getPhysicalActionLease(unit, preparation.actionHandle));
 }
-
 function clonePreparation(value: MovementWeaponPreparationState | null): MovementWeaponPreparationState | null {
   return value ? {
     ...value,
     actionHandle: value.actionHandle ? { ...value.actionHandle } : null,
   } : null;
 }
-
 function zeroMovementStep(step: legacy.MovementStep): legacy.MovementStep {
   return {
     ...step,
@@ -332,7 +348,6 @@ function zeroMovementStep(step: legacy.MovementStep): legacy.MovementStep {
     staminaEnd: step.staminaStart,
   };
 }
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

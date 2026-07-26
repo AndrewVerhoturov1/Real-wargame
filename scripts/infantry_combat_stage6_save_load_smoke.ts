@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createDefaultCombatCatalogRegistry } from '../src/core/infantry-combat/catalogs';
 import {
+  PROJECTILE_STATE_SCHEMA_VERSION,
   applyWoundCandidate,
   createInfantryCombatUnitRuntime,
   createProjectileRuntimeState,
@@ -48,7 +49,7 @@ const migratedProjectileRuntime = normalizeProjectileRuntimeState({
   diagnostics: {},
 });
 const migratedProjectile = serializeProjectileRuntimeState(migratedProjectileRuntime).activeProjectiles[0]!;
-assert.equal(migratedProjectile.schemaVersion, 2);
+assert.equal(migratedProjectile.schemaVersion, PROJECTILE_STATE_SCHEMA_VERSION);
 assert.equal(migratedProjectile.bodyPenetrationCount, 0);
 assert.equal(migratedProjectile.lastHitUnitId, null);
 assert.equal(migratedProjectile.impactSequence, 1);

@@ -1,6 +1,7 @@
 import { rmSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { runVerificationCommand } from './infantry_combat_verification_cache.mjs';
 
 const REQUIRED_BASE_SHA = '6e719225d8da711fbf2d1963baa43bcd03c7dbdf';
 const repoRoot = process.cwd();
@@ -26,7 +27,7 @@ console.log(`Stage 5 verification passed on Node.js ${process.version}: 11 requi
 
 function runRequiredCheck(command, args) {
   const label = [command, ...args].join(' ');
-  const result = run(command, args, repoRoot);
+  const result = runVerificationCommand(command, args, repoRoot, { maxBuffer: 32 * 1024 * 1024 });
   const output = combinedOutput(result);
   if (result.error || result.status !== 0) {
     fail('Stage 5 verification failed', `FAIL ${label}\n${tail(output, 5000)}`);
@@ -40,7 +41,9 @@ function runRequiredCheck(command, args) {
 
 function runPerformanceContractWithBaseComparison() {
   const label = 'npm run performance-contract:smoke';
-  const current = run('npm', ['run', 'performance-contract:smoke'], repoRoot);
+  const current = runVerificationCommand('npm', ['run', 'performance-contract:smoke'], repoRoot, {
+    maxBuffer: 32 * 1024 * 1024,
+  });
   const currentOutput = combinedOutput(current);
   if (!current.error && current.status === 0) {
     console.log(workflowAnnotation('notice', 'Stage 5 verification', `PASS ${label}`));
