@@ -23,6 +23,15 @@ export const COMBAT_LAB_VISUAL_SPEEDS = [0.25, 0.5, 1, 2, 4, 8] as const;
 const MAX_ACCUMULATED_SECONDS = 0.5;
 const MAX_JOURNAL_ENTRIES = 256;
 
+interface CombatLabVisualCheckpointBookkeepingV1 {
+  readonly metrics: CombatLabMetricCollectorV1;
+  readonly appliedStepIds: readonly string[];
+  readonly nextStepIndex: number;
+  readonly lastProgramCommandResult: CombatLabCommandResultV1 | null;
+  readonly lastCommandResult: CombatLabCommandResultV1 | null;
+  readonly commandSequence: number;
+}
+
 export interface CombatLabVisualSnapshotV1 {
   readonly scenarioId: string;
   readonly scenarioRevision: number;
@@ -51,6 +60,7 @@ export class CombatLabVisualSession {
   private sequence = 0;
   private accumulatorSeconds = 0;
   private checkpoint: CombatLabCheckpointV1 | null = null;
+  private checkpointBookkeeping: CombatLabVisualCheckpointBookkeepingV1 | null = null;
   private lastCommandResult: CombatLabCommandResultV1 | null = null;
   private readonly journal: string[] = [];
   private observedShots = 0;
@@ -82,6 +92,7 @@ export class CombatLabVisualSession {
     this.sequence = 0;
     this.accumulatorSeconds = 0;
     this.checkpoint = null;
+    this.checkpointBookkeeping = null;
     this.lastCommandResult = null;
     this.journal.length = 0;
     this.resetCounters();
@@ -140,22 +151,39 @@ export class CombatLabVisualSession {
       seed: this.seed,
       interactive: this.interactive,
     });
+    this.checkpointBookkeeping = {
+      metrics: { ...this.metrics },
+      appliedStepIds: [...this.program.appliedStepIds],
+      nextStepIndex: this.program.nextStepIndex,
+      lastProgramCommandResult: this.program.lastCommandResult,
+      lastCommandResult: this.lastCommandResult,
+      commandSequence: this.sequence,
+    };
     this.log('Контрольная точка сохранена каноническим экспортом сцены.');
   }
 
   restoreCheckpoint(): boolean {
-    if (!this.checkpoint) return false;
+    if (!this.checkpoint || !this.checkpointBookkeeping) return false;
     restoreCombatLabCheckpoint(this.state, this.checkpoint);
     this.interactive = this.checkpoint.interactive;
     this.accumulatorSeconds = 0;
     this.programEnabled = false;
-    this.metrics = createCombatLabMetricCollector(this.state);
+    this.metrics = { ...this.checkpointBookkeeping.metrics };
+    this.program.appliedStepIds.clear();
+    for (const stepId of this.checkpointBookkeeping.appliedStepIds) this.program.appliedStepIds.add(stepId);
+    this.program.nextStepIndex = this.checkpointBookkeeping.nextStepIndex;
+    this.program.lastCommandResult = this.checkpointBookkeeping.lastProgramCommandResult;
+    this.lastCommandResult = this.checkpointBookkeeping.lastCommandResult;
+    this.sequence = this.checkpointBookkeeping.commandSequence;
     this.resetCounters();
     this.log('Контрольная точка восстановлена; production reconciliation выполнен.');
     return true;
   }
 
-  deleteCheckpoint(): void { this.checkpoint = null; }
+  deleteCheckpoint(): void {
+    this.checkpoint = null;
+    this.checkpointBookkeeping = null;
+  }
 
   getSnapshot(): CombatLabVisualSnapshotV1 {
     return {
