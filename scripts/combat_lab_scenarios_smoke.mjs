@@ -24,3 +24,8 @@ try {
 } finally {
   await rm(outDir, { recursive: true, force: true });
 }
+
+// Programmatic Vite/esbuild may retain a service handle after a successful
+// one-shot SSR smoke build. The imported smoke has completed and the temporary
+// output has been removed, so terminate the test harness explicitly.
+process.exit(0);
