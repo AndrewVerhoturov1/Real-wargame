@@ -24,3 +24,7 @@ try {
 } finally {
   await rm(outDir, { recursive: true, force: true });
 }
+
+// Programmatic Vite/esbuild may retain a service handle after a successful
+// one-shot SSR smoke build. All assertions and cleanup are complete here.
+process.exit(0);
