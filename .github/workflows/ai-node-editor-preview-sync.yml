@@ -1,0 +1,94 @@
+name: Sync AI node editor onto latest preview
+
+on:
+  push:
+    branches:
+      - integration/20260726-ai-node-editor-ux-preview-sync
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ai-node-editor-preview-sync
+  cancel-in-progress: false
+
+jobs:
+  rebase-and-verify:
+    if: github.repository == 'AndrewVerhoturov1/Real-wargame'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout feature branch with full history
+        uses: actions/checkout@v4
+        with:
+          ref: feature/20260725-ai-node-editor-ux
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify source branch and fetch latest Preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin \
+            feature/20260725-ai-node-editor-ux \
+            real-wargame-preview
+          actual_feature_sha="$(git rev-parse origin/feature/20260725-ai-node-editor-ux)"
+          expected_feature_sha="23d0e23b0f002114810b12fc374ec9058bb75ace"
+          if [[ "$actual_feature_sha" != "$expected_feature_sha" ]]; then
+            echo "Feature branch moved: expected $expected_feature_sha, got $actual_feature_sha" >&2
+            exit 1
+          fi
+          echo "PREVIEW_SHA=$(git rev-parse origin/real-wargame-preview)" >> "$GITHUB_ENV"
+
+      - name: Rebase feature branch onto latest Preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B feature/20260725-ai-node-editor-ux origin/feature/20260725-ai-node-editor-ux
+          git rebase origin/real-wargame-preview
+          echo "REBASING_RESULT_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify exact rebased candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run verify:preview -- --report /tmp/preview-verification.json
+          npm run build:app
+
+      - name: Ensure Preview did not move during verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin real-wargame-preview
+          latest_preview_sha="$(git rev-parse origin/real-wargame-preview)"
+          if [[ "$latest_preview_sha" != "$PREVIEW_SHA" ]]; then
+            echo "Preview moved during verification: $PREVIEW_SHA -> $latest_preview_sha" >&2
+            exit 1
+          fi
+          git merge-base --is-ancestor origin/real-wargame-preview HEAD
+
+      - name: Publish rebased feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push \
+            --force-with-lease=refs/heads/feature/20260725-ai-node-editor-ux:23d0e23b0f002114810b12fc374ec9058bb75ace \
+            origin \
+            HEAD:refs/heads/feature/20260725-ai-node-editor-ux
+
+      - name: Record result
+        shell: bash
+        run: |
+          {
+            echo "## AI node editor Preview sync"
+            echo ""
+            echo "- Preview base: \`$PREVIEW_SHA\`"
+            echo "- Rebased feature: \`$REBASING_RESULT_SHA\`"
+            echo "- Verification: passed"
+          } >> "$GITHUB_STEP_SUMMARY"
