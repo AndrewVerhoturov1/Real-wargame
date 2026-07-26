@@ -10,6 +10,15 @@ on:
       - src/game/**
       - src/combat-lab/**
       - combat-lab.html
+  pull_request:
+    branches:
+      - real-wargame-preview
+    paths:
+      - .github/workflows/combat-lab-full-game-red.yml
+      - scripts/combat_lab_full_game_contract_smoke.mjs
+      - src/game/**
+      - src/combat-lab/**
+      - combat-lab.html
 
 permissions:
   contents: read
