@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import type { AiGraph } from '../src/core/ai/AiGraph';
 import { runAiGraph } from '../src/core/ai/AiGraphRunner';
 import { validateAiGraph } from '../src/core/ai/AiGraphValidation';
+import { createInfantryCombatUnitRuntime } from '../src/core/infantry-combat/runtime';
 import { setSearchSector } from '../src/core/perception/AttentionController';
 import { degreesToRadians } from '../src/core/perception/AttentionModel';
 import type { UnitModel } from '../src/core/units/UnitModel';
@@ -196,6 +197,7 @@ function attentionUnit(isMoving: boolean, facingRadians: number): UnitModel {
   return {
     facingRadians,
     movementRuntime: { isMoving },
+    infantryCombatRuntime: createInfantryCombatUnitRuntime(),
     attentionRuntime: {
       mode: 'observe',
       modeSource: 'automatic',
