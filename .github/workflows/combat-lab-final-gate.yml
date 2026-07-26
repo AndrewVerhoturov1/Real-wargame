@@ -74,7 +74,19 @@ jobs:
           retention-days: 3
 
       - name: Verify infantry combat Stage 9
-        run: npm run infantry-combat-stage9:verify
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run infantry-combat-stage9:verify 2>&1 | tee infantry-combat-stage9-failure.txt
+
+      - name: Upload Stage 9 failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: infantry-combat-stage9-failure-${{ github.sha }}
+          path: infantry-combat-stage9-failure.txt
+          if-no-files-found: ignore
+          retention-days: 3
 
       - name: Typecheck
         run: npm run typecheck
