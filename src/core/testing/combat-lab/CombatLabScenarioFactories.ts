@@ -150,7 +150,7 @@ function fixturesForFactory(factoryId: string): readonly UnitFixture[] {
 function applyScenarioInitialConditions(factoryId: string, units: UnitModel[]): void {
   if (factoryId === 'wounds-first-aid-v1') {
     const patient = requireUnit(units, 'medical-patient');
-    applyWoundCandidate(patient.infantryCombatRuntime.wounds, wound('medical:head', patient.id, 'head', 'moderate'));
+    applyWoundCandidate(patient.infantryCombatRuntime.wounds, wound('medical:head', patient.id, 'head', 'severe'));
     applyWoundCandidate(patient.infantryCombatRuntime.wounds, wound('medical:torso', patient.id, 'torso', 'critical'));
     applyWoundCandidate(patient.infantryCombatRuntime.wounds, wound('medical:arms', patient.id, 'arms', 'light'));
     applyWoundCandidate(patient.infantryCombatRuntime.wounds, wound('medical:legs', patient.id, 'legs', 'severe'));
@@ -179,7 +179,7 @@ function wound(
   zone: 'head' | 'torso' | 'arms' | 'legs',
   severity: WoundSeverity,
 ): WoundCandidateV1 {
-  const severityFactor = severity === 'critical' ? 1 : severity === 'severe' ? 0.65 : severity === 'moderate' ? 0.35 : 0.15;
+  const severityFactor = severity === 'critical' ? 1 : severity === 'severe' ? 0.65 : 0.15;
   return {
     schemaVersion: 1,
     impactId,
@@ -191,7 +191,7 @@ function wound(
     severity,
     impactEnergyJoules: 1800,
     traumaScore: severityFactor,
-    bleedingRatePerSecond: severity === 'critical' ? 0.0104 : severity === 'severe' ? 0.0039 : severity === 'moderate' ? 0.0012 : 0,
+    bleedingRatePerSecond: severity === 'critical' ? 0.0104 : severity === 'severe' ? 0.0039 : 0,
     functionalPenalty: severityFactor,
     appliedSeconds: 0,
   };
