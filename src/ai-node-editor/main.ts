@@ -1,5 +1,8 @@
 import './editor-refinement';
 import './editor-panel-resize';
+import { installAppShellMenu } from '../shared/AppShellMenu';
+
+installAppShellMenu({ mode: 'editor' });
 
 export {
   addNodeFromPalette,
