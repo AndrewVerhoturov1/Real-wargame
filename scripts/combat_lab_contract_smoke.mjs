@@ -7,7 +7,10 @@ const [
   packageJson,
   deploymentPages,
   gameMain,
+  gameApplication,
   editorMain,
+  labMain,
+  extension,
   contracts,
   runner,
   registry,
@@ -21,7 +24,10 @@ const [
   readFile('package.json', 'utf8'),
   readFile('scripts/deployment_pages_smoke.mjs', 'utf8'),
   readFile('src/main.ts', 'utf8'),
+  readFile('src/game/GameApplication.ts', 'utf8'),
   readFile('src/ai-node-editor/main.ts', 'utf8'),
+  readFile('src/combat-lab/main.ts', 'utf8'),
+  readFile('src/combat-lab/CombatLabExtension.ts', 'utf8'),
   readFile('src/core/testing/combat-lab/CombatLabContracts.ts', 'utf8'),
   readFile('src/core/testing/combat-lab/CombatLabRunner.ts', 'utf8'),
   readFile('src/core/testing/combat-lab/CombatLabScenarioRegistry.ts', 'utf8'),
@@ -31,7 +37,18 @@ const [
   readFile('src/core/testing/combat-lab/CombatLabDigest.ts', 'utf8'),
 ]);
 
-assert.match(html, /id="combat-lab-root"/);
+for (const id of [
+  'app',
+  'hud',
+  'language-toggle',
+  'grid-toggle',
+  'vision-toggle',
+  'height-toggle',
+  'pause-toggle',
+  'ai-editor-open',
+  'debug-panel',
+  'combat-lab-extension-root',
+]) assert.match(html, new RegExp(`id=["']${id}["']`), `Missing Combat Lab game element #${id}`);
 assert.match(html, /Испытательный полигон/);
 assert.match(html, /src="\/src\/combat-lab\/main\.ts"/);
 assert.match(vite, /combatLab:\s*fileURLToPath\(new URL\('\.\/combat-lab\.html'/);
@@ -45,8 +62,22 @@ for (const name of [
   'combat-lab-ui-contract:smoke',
 ]) assert.equal(typeof scripts[name], 'string', `Missing npm script ${name}`);
 
-assert.doesNotMatch(gameMain, /combat-lab/i, 'The game entry must not import the Combat Lab shell.');
+assert.match(gameMain, /GameApplication\.create\(/);
+assert.match(labMain, /GameApplication\.create\(/);
+assert.match(extension, /CombatLabShell/);
+assert.match(extension, /combat-lab-drawer/);
+assert.doesNotMatch(gameMain, /CombatLabExtension|CombatLabVisualSession/, 'The game entry must not import Combat Lab runtime.');
+assert.doesNotMatch(gameApplication, /CombatLabExtension|CombatLabVisualSession/, 'Shared game application must remain independent from laboratory runtime.');
 assert.doesNotMatch(editorMain, /combat-lab/i, 'The AI editor entry must not import the Combat Lab shell.');
+
+for (const marker of [
+  'installGameEditorWorkbench',
+  'installTacticalWorkspace',
+  'installCombatControls',
+  'installRouteCostOverlayUi',
+  'installSceneExportControls',
+]) assert.match(gameApplication, new RegExp(marker));
+
 assert.match(contracts, /schemaVersion:\s*1/);
 assert.match(contracts, /mode:\s*'headless'\s*\|\s*'visual'/);
 assert.match(contracts, /scenarioRevision/);
@@ -71,4 +102,4 @@ assert.doesNotMatch(
   'Stage 10+ code must not be introduced by Stage 9V.',
 );
 
-console.log('Combat Lab application contract smoke passed.');
+console.log('Combat Lab full-game application contract smoke passed.');
