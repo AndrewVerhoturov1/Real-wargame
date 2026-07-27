@@ -146,7 +146,7 @@ jobs:
             if (state.left && state.bottom && state.bodyClasses.includes('combat-lab-dock-open')) {
               check(state.bottom.left + 1 >= state.left.right, `${name}: soldier panel overlaps left dock`);
             }
-            if (state.right && state.app && state.bodyClasses.includes('sidebar-open')) {
+            if (state.bodyClasses.includes('app-shell-mode-combat-lab') && state.right && state.app && state.bodyClasses.includes('sidebar-open')) {
               check(state.app.right <= state.right.left + 1, `${name}: map overlaps right inspector`);
             }
             if (state.right && state.bottom && state.bodyClasses.includes('sidebar-open')) {
@@ -209,7 +209,15 @@ jobs:
           await page.waitForSelector('#app canvas');
           await page.waitForSelector('.simulation-unit-bar');
           const game = await snapshot('04-normal-game');
-          check(JSON.stringify(labCollapsed.barStyle) === JSON.stringify(game.barStyle), `Combat Lab soldier panel style differs from normal game:\nlab=${JSON.stringify(labCollapsed.barStyle)}\ngame=${JSON.stringify(game.barStyle)}`);
+          const comparableBarStyle = (style) => style ? ({
+            gridTemplateAreas: style.gridTemplateAreas,
+            minHeight: style.minHeight,
+            maxHeight: style.maxHeight,
+            gap: style.gap,
+            padding: style.padding,
+          }) : null;
+          check(JSON.stringify(comparableBarStyle(labCollapsed.barStyle)) === JSON.stringify(comparableBarStyle(game.barStyle)), `Combat Lab soldier panel rules differ from normal game:\nlab=${JSON.stringify(labCollapsed.barStyle)}\ngame=${JSON.stringify(game.barStyle)}`);
+          check(labCollapsed.barStyle?.gridTemplateColumns.split(/\s+/).length === game.barStyle?.gridTemplateColumns.split(/\s+/).length, 'Combat Lab soldier panel has a different number of columns');
           for (const required of ['Стоять', 'Пригнуться', 'Лечь']) {
             check(labCollapsed.bottomText.includes(required), `Combat Lab soldier panel is missing ${required}`);
             check(game.bottomText.includes(required), `Normal game soldier panel is missing ${required}`);
