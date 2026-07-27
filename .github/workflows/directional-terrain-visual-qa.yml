@@ -68,3 +68,4 @@ jobs:
           name: directional-terrain-visual-log
           path: directional-terrain-playwright.log
           if-no-files-found: warn
+          retention-days: 7
