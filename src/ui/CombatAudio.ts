@@ -13,6 +13,43 @@ export async function unlockCombatAudio(): Promise<boolean> {
   }
 }
 
+/**
+ * Browser audio must be resumed from a user gesture. Install this once beside
+ * the shared combat renderer so ordinary play and Combat Lab use the same
+ * unlock path. Listeners remain bounded and are removed after success or
+ * teardown.
+ */
+export function installCombatAudioUnlock(target: Window = window): () => void {
+  let destroyed = false;
+  let unlocking = false;
+
+  const removeListeners = (): void => {
+    target.removeEventListener('pointerdown', handleGesture, true);
+    target.removeEventListener('keydown', handleGesture, true);
+  };
+  const handleGesture = (): void => {
+    if (destroyed || unlocking || audioUnlocked) {
+      if (audioUnlocked) removeListeners();
+      return;
+    }
+    unlocking = true;
+    void unlockCombatAudio().then((unlocked) => {
+      unlocking = false;
+      if (unlocked) removeListeners();
+    });
+  };
+
+  if (!audioUnlocked) {
+    target.addEventListener('pointerdown', handleGesture, { capture: true, passive: true });
+    target.addEventListener('keydown', handleGesture, true);
+  }
+
+  return () => {
+    destroyed = true;
+    removeListeners();
+  };
+}
+
 export function playRifleShot(): void {
   const context = getAudioContext();
   if (!context || !audioUnlocked || context.state !== 'running') return;
