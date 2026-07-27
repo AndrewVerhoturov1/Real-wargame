@@ -1,4 +1,4 @@
 Temporary CI-only trigger for exact Combat Lab Preview deployment.
 Product source SHA: 529ff29c2d63d2f503c10e34ef5b1ed7af3f2246
-Infrastructure retry: 1
+Trusted pull_request_target retry: 1
 Do not merge.
