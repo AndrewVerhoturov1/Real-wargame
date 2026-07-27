@@ -163,6 +163,20 @@
   opacity: 0.72;
 }
 
+/* The compact state/plan summary remains visible, but the obstructive popover is disabled in every game mode. */
+.unit-state-plan > summary {
+  cursor: default;
+  pointer-events: none;
+}
+
+.unit-state-plan[open] {
+  z-index: 1;
+}
+
+.unit-state-plan-popover {
+  display: none !important;
+}
+
 @media (max-width: 1150px) {
   .unit-state-plan-columns {
     grid-template-columns: 1fr;
