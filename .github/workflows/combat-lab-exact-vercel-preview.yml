@@ -61,11 +61,24 @@ jobs:
           echo "report=$report" >> "$GITHUB_OUTPUT"
 
       - name: Pull permanent Vercel project settings
+        shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: npx --yes vercel@56.4.1 pull --yes --environment=preview --token="$VERCEL_TOKEN"
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/deployment
+          {
+            [[ -n "${VERCEL_TOKEN:-}" ]] && echo 'VERCEL_TOKEN=present' || echo 'VERCEL_TOKEN=missing'
+            [[ -n "${VERCEL_ORG_ID:-}" ]] && echo 'VERCEL_ORG_ID=present' || echo 'VERCEL_ORG_ID=missing'
+            [[ -n "${VERCEL_PROJECT_ID:-}" ]] && echo 'VERCEL_PROJECT_ID=present' || echo 'VERCEL_PROJECT_ID=missing'
+          } > artifacts/deployment/vercel-secret-presence.txt
+          : "${VERCEL_TOKEN:?VERCEL_TOKEN is missing}"
+          : "${VERCEL_ORG_ID:?VERCEL_ORG_ID is missing}"
+          : "${VERCEL_PROJECT_ID:?VERCEL_PROJECT_ID is missing}"
+          npx --yes vercel@56.4.1 pull --yes --environment=preview --token="$VERCEL_TOKEN" 2>&1 \
+            | tee artifacts/deployment/vercel-pull.log
 
       - name: Verify permanent Vercel project link
         env:
