@@ -1,9 +1,10 @@
+import { setFireAllowed } from '../core/combat/CombatRules';
 import type { GameApplicationContext, GameApplicationExtension } from '../game/GameApplicationTypes';
 import { CombatLabRenderer } from './rendering/CombatLabRenderer';
 import type { CombatLabVisualSession } from './runtime/CombatLabVisualSession';
 import { CombatLabShell, type CombatLabLayoutV1 } from './ui/CombatLabShell';
 
-type CombatLabDockTab = 'fighter' | 'stand' | 'metrics' | 'log';
+type CombatLabDockTab = 'stand' | 'metrics' | 'log';
 
 interface DockLayout {
   readonly root: HTMLElement;
@@ -14,6 +15,11 @@ interface DockLayout {
   readonly shell: CombatLabLayoutV1;
 }
 
+interface SharedSimulationControls {
+  sync(): void;
+  destroy(): void;
+}
+
 export class CombatLabExtension implements GameApplicationExtension {
   private readonly renderer: CombatLabRenderer;
   private readonly shell: CombatLabShell;
@@ -21,7 +27,7 @@ export class CombatLabExtension implements GameApplicationExtension {
   private readonly toggle: HTMLButtonElement;
   private readonly buttons: ReadonlyMap<CombatLabDockTab, HTMLButtonElement>;
   private readonly panels: ReadonlyMap<CombatLabDockTab, HTMLElement>;
-  private readonly restoreSimulationSidebar: () => void;
+  private readonly sharedSimulationControls: SharedSimulationControls;
   private collapsed = false;
   private destroyed = false;
 
@@ -35,13 +41,15 @@ export class CombatLabExtension implements GameApplicationExtension {
     this.toggle = layout.toggle;
     this.buttons = layout.buttons;
     this.panels = layout.panels;
-    this.restoreSimulationSidebar = adoptSimulationSidebar(layout.panels.get('fighter')!);
+    this.sharedSimulationControls = installSharedSimulationControls(session, context.forceRender);
 
     let shell: CombatLabShell | null = null;
     const refreshUi = () => {
+      setFireAllowed(session.state, true);
       shell?.refreshLive();
       layout.status.textContent = compactRunStatus(session);
       syncGamePauseControl(session);
+      this.sharedSimulationControls.sync();
     };
     this.renderer = CombatLabRenderer.create(context, session, refreshUi);
     this.shell = new CombatLabShell(layout.shell, session, this.renderer);
@@ -52,8 +60,8 @@ export class CombatLabExtension implements GameApplicationExtension {
     for (const [tab, button] of this.buttons) button.addEventListener('click', () => this.activateTab(tab));
     this.root.addEventListener('combat-lab:activate-tab', this.handleTabRequest as EventListener);
     this.root.dataset.combatLabExtension = 'active';
-    document.body.classList.add('combat-lab-dock-open', 'sidebar-open');
-    document.body.classList.remove('combat-lab-dock-collapsed', 'sidebar-collapsed');
+    document.body.classList.add('combat-lab-dock-open');
+    document.body.classList.remove('combat-lab-dock-collapsed');
     this.activateTab('stand');
     refreshUi();
     context.forceRender();
@@ -68,7 +76,7 @@ export class CombatLabExtension implements GameApplicationExtension {
     this.destroyed = true;
     this.toggle.removeEventListener('click', this.handleToggle);
     this.root.removeEventListener('combat-lab:activate-tab', this.handleTabRequest as EventListener);
-    this.restoreSimulationSidebar();
+    this.sharedSimulationControls.destroy();
     this.renderer.destroy();
     this.root.replaceChildren();
     delete this.root.dataset.combatLabExtension;
@@ -92,6 +100,7 @@ export class CombatLabExtension implements GameApplicationExtension {
     this.toggle.setAttribute('aria-expanded', String(!this.collapsed));
     document.body.classList.toggle('combat-lab-dock-collapsed', this.collapsed);
     document.body.classList.toggle('combat-lab-dock-open', !this.collapsed);
+    window.requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
   };
 
   private readonly handleTabRequest = (event: CustomEvent<CombatLabDockTab>): void => {
@@ -116,7 +125,7 @@ function createCombatLabDockLayout(host: HTMLElement): DockLayout {
   const buttons = new Map<CombatLabDockTab, HTMLButtonElement>();
   const panels = new Map<CombatLabDockTab, HTMLElement>();
   for (const [tab, label] of [
-    ['fighter', 'Боец'], ['stand', 'Стенд'], ['metrics', 'Метрики'], ['log', 'Журнал'],
+    ['stand', 'Стенд'], ['metrics', 'Метрики'], ['log', 'Журнал'],
   ] as const) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -129,7 +138,7 @@ function createCombatLabDockLayout(host: HTMLElement): DockLayout {
   }
 
   const panelHost = node('div', 'combat-lab-tab-panels');
-  for (const tab of ['fighter', 'stand', 'metrics', 'log'] as const) {
+  for (const tab of ['stand', 'metrics', 'log'] as const) {
     const panel = node('section', `combat-lab-tab-panel combat-lab-${tab}-panel`);
     panel.id = `combat-lab-panel-${tab}`;
     panel.dataset.combatLabTabPanel = tab;
@@ -254,20 +263,89 @@ function renderMetricCards(host: HTMLElement, json: string): void {
   if (entries.length === 0) host.append(node('div', 'combat-lab-empty-tab', 'Метрики появятся после прогона.'));
 }
 
-function adoptSimulationSidebar(host: HTMLElement): () => void {
-  const sidebar = document.querySelector<HTMLElement>('.simulation-sidebar');
-  if (!sidebar) {
-    host.append(node('div', 'combat-lab-empty-tab', 'Панель бойца ещё не создана.'));
-    return () => undefined;
-  }
-  const originalParent = sidebar.parentNode;
-  const originalNextSibling = sidebar.nextSibling;
-  sidebar.classList.add('combat-lab-adopted-sidebar');
-  host.append(sidebar);
-  return () => {
-    sidebar.classList.remove('combat-lab-adopted-sidebar');
-    if (originalParent) originalParent.insertBefore(sidebar, originalNextSibling);
+function installSharedSimulationControls(
+  session: CombatLabVisualSession,
+  forceRender: () => void,
+): SharedSimulationControls {
+  const pauseButton = document.querySelector<HTMLButtonElement>('.simulation-controls [data-action="pause"]');
+  const stepButton = document.querySelector<HTMLButtonElement>('.simulation-controls [data-action="step"]');
+  const speedButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.unit-bar-speed-group [data-speed]'));
+  const legacyFireButton = document.querySelector<HTMLButtonElement>('.simulation-controls [data-action="fire-contact"]');
+  const firePermissionButton = document.querySelector<HTMLButtonElement>('.simulation-controls [data-action="toggle-fire-permission"]');
+
+  const originalPauseHandler = pauseButton?.onclick ?? null;
+  const originalStepHandler = stepButton?.onclick ?? null;
+  const originalSpeedHandlers = speedButtons.map((button) => button.onclick);
+  const originalLegacyFireState = legacyFireButton
+    ? { hidden: legacyFireButton.hidden, disabled: legacyFireButton.disabled }
+    : null;
+  const originalFirePermissionState = firePermissionButton
+    ? { hidden: firePermissionButton.hidden, disabled: firePermissionButton.disabled }
+    : null;
+
+  const sync = (): void => {
+    keepProductionTickerPaused(session);
+    setFireAllowed(session.state, true);
+    const snapshot = session.getSnapshot();
+    if (pauseButton) {
+      pauseButton.textContent = snapshot.paused ? 'Продолжить' : 'Пауза';
+      pauseButton.classList.toggle('active', snapshot.paused);
+      pauseButton.setAttribute('aria-pressed', String(snapshot.paused));
+    }
+    for (const button of speedButtons) {
+      const active = Number(button.dataset.speed) === snapshot.speed;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    }
   };
+
+  if (pauseButton) {
+    pauseButton.onclick = () => {
+      session.togglePaused();
+      sync();
+      forceRender();
+    };
+  }
+  if (stepButton) {
+    stepButton.onclick = () => {
+      session.stepOnce();
+      sync();
+      forceRender();
+    };
+  }
+  speedButtons.forEach((button) => {
+    button.onclick = () => {
+      session.setSpeed(Number(button.dataset.speed));
+      sync();
+    };
+  });
+  for (const button of [legacyFireButton, firePermissionButton]) {
+    if (!button) continue;
+    button.hidden = true;
+    button.disabled = true;
+  }
+  sync();
+
+  return {
+    sync,
+    destroy(): void {
+      if (pauseButton) pauseButton.onclick = originalPauseHandler;
+      if (stepButton) stepButton.onclick = originalStepHandler;
+      speedButtons.forEach((button, index) => { button.onclick = originalSpeedHandlers[index] ?? null; });
+      if (legacyFireButton && originalLegacyFireState) {
+        legacyFireButton.hidden = originalLegacyFireState.hidden;
+        legacyFireButton.disabled = originalLegacyFireState.disabled;
+      }
+      if (firePermissionButton && originalFirePermissionState) {
+        firePermissionButton.hidden = originalFirePermissionState.hidden;
+        firePermissionButton.disabled = originalFirePermissionState.disabled;
+      }
+    },
+  };
+}
+
+function keepProductionTickerPaused(session: CombatLabVisualSession): void {
+  (session.state as typeof session.state & { paused?: boolean }).paused = true;
 }
 
 function createToggle(): HTMLButtonElement {
