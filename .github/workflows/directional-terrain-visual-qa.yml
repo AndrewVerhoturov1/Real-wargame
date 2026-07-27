@@ -57,7 +57,7 @@ jobs:
       - name: Capture and verify Combat Lab at 1440x900
         run: |
           mkdir -p artifacts/screenshots
-          cat > /tmp/combat-lab-visual-qa.mjs <<'EOF'
+          cat > combat-lab-visual-qa.mjs <<'EOF'
           import { chromium } from '@playwright/test';
           import { writeFile } from 'node:fs/promises';
 
@@ -192,7 +192,7 @@ jobs:
           console.log(JSON.stringify(report, null, 2));
           if (report.fatalError || report.failures.length > 0 || report.pageErrors.length > 0) process.exit(1);
           EOF
-          node /tmp/combat-lab-visual-qa.mjs
+          node combat-lab-visual-qa.mjs
 
       - name: Upload Combat Lab screenshots
         if: always()
