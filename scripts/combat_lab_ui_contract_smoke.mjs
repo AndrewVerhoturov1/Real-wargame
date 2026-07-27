@@ -14,7 +14,8 @@ const [
   menu,
   labMain,
   statePlanCss,
-  routeCss,
+  commandRouteCss,
+  compactRouteCss,
 ] = await Promise.all([
   readFile('src/combat-lab/ui/CombatLabShell.ts', 'utf8'),
   readFile('src/combat-lab/runtime/CombatLabVisualSession.ts', 'utf8'),
@@ -28,6 +29,7 @@ const [
   readFile('src/shared/AppShellMenu.ts', 'utf8'),
   readFile('src/combat-lab/main.ts', 'utf8'),
   readFile('src/ai-state-plan-panel.css', 'utf8'),
+  readFile('src/command-plan-route-overlay.css', 'utf8'),
   readFile('src/tactical-workspace-compact-route.css', 'utf8'),
 ]);
 
@@ -92,14 +94,10 @@ assert.doesNotMatch(overlay, /drawMetreGrid|drawUnit|mapWidthPx|mapHeightPx/);
 assert.match(adapter, /getWorldContainer/);
 assert.match(adapter, /addTickerListener/);
 
-assert.doesNotMatch(statePlanCss, /\.unit-state-plan-popover\s*\{[^}]*display:\s*none\s*!important/s,
-  'State/plan diagnostics must remain available.');
-assert.doesNotMatch(statePlanCss, /\.unit-state-plan\s*>\s*summary\s*\{[^}]*pointer-events:\s*none/s,
-  'State/plan summary must remain interactive.');
-assert.match(routeCss, /\.unit-bar-route-controls\s*>\s*\.unit-route-details\s*\{[^}]*display:\s*none\s*!important/s,
-  'The obstructive command/route popover must not remain in the lower unit bar.');
-assert.match(routeCss, /\.route-cost-inspector-panel\s+\.unit-route-details\s*\{[^}]*display:\s*block/s,
-  'Command and route diagnostics must remain available in the right inspector.');
+assert.doesNotMatch(statePlanCss, /\.unit-state-plan-popover\s*\{[^}]*display:\s*none\s*!important/s);
+assert.doesNotMatch(statePlanCss, /\.unit-state-plan\s*>\s*summary\s*\{[^}]*pointer-events:\s*none/s);
+assert.match(commandRouteCss, /\.unit-bar-route-controls\s*>\s*\.unit-route-details\s*\{[^}]*display:\s*none\s*!important/s);
+assert.match(compactRouteCss, /\.route-cost-inspector-panel\s+\.unit-route-details\s*\{[^}]*display:\s*block/s);
 
 assert.match(labMain, /GameApplication\.create\(/);
 assert.match(labMain, /installAppShellMenu\(\{ mode: 'combat-lab' \}\)/);
