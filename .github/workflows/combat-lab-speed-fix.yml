@@ -1,0 +1,85 @@
+name: Combat Lab Speed Display Fix
+
+on:
+  pull_request:
+    branches:
+      - ci/combat-lab-speed-fix-base-20260727t0425z-1c18017
+    types: [opened]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PRODUCT_BRANCH: feature/20260726-shooting-stage-09v-combat-lab
+      EXPECTED_SHA: 1c180179ff32a0921f9e7f0b9eede38ab05e8cfb
+    steps:
+      - name: Checkout exact canonical branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_BRANCH }}
+          fetch-depth: 0
+
+      - name: Verify and patch exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path('src/combat-lab/ui/CombatLabShell.ts')
+          source = path.read_text(encoding='utf-8')
+
+          replacements = [
+              (
+                  "  private readonly seed = numberInput(1, 4_294_967_295, 1);\n",
+                  "  private readonly seed = numberInput(1, 4_294_967_295, 1);\n  private readonly speed = select();\n",
+              ),
+              (
+                  "    const snapshot = this.session.getSnapshot();\n    this.pause.textContent = snapshot.paused ? 'Продолжить' : 'Пауза';\n",
+                  "    const snapshot = this.session.getSnapshot();\n    this.speed.value = String(snapshot.speed);\n    this.pause.textContent = snapshot.paused ? 'Продолжить' : 'Пауза';\n",
+              ),
+              (
+                  "    const speed = select();\n    for (const value of COMBAT_LAB_VISUAL_SPEEDS) speed.append(option(String(value), `×${value}`));\n    speed.value = '1';\n    speed.addEventListener('change', () => {\n      this.session.setSpeed(Number(speed.value));\n      this.refreshLive(true);\n    });\n",
+                  "    for (const value of COMBAT_LAB_VISUAL_SPEEDS) this.speed.append(option(String(value), `×${value}`));\n    this.speed.value = String(this.session.getSnapshot().speed);\n    this.speed.addEventListener('change', () => {\n      this.session.setSpeed(Number(this.speed.value));\n      this.refreshLive(true);\n    });\n",
+              ),
+              (
+                  "      inlineField('Скорость', speed),\n",
+                  "      inlineField('Скорость', this.speed),\n",
+              ),
+          ]
+
+          for old, new in replacements:
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one replacement, found {count}: {old[:80]!r}')
+              source = source.replace(old, new)
+
+          path.write_text(source, encoding='utf-8')
+          PY
+          git diff --check
+          changed="$(git diff --name-only)"
+          test "$changed" = 'src/combat-lab/ui/CombatLabShell.ts'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify focused contract and TypeScript
+        run: |
+          node scripts/combat_lab_ui_contract_smoke.mjs
+          node scripts/combat_lab_workspace_layout_smoke.mjs
+          npm run typecheck
+
+      - name: Commit and push canonical branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/combat-lab/ui/CombatLabShell.ts
+          git commit -m 'fix: synchronize Combat Lab speed display'
+          git push origin "HEAD:$PRODUCT_BRANCH"
