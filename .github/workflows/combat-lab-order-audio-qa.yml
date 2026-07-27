@@ -122,6 +122,14 @@ jobs:
           await page.waitForTimeout(500);
 
           check(await page.locator('.tactical-order-card').count() === 0, 'Tactical order card exists before command.');
+          const labToggle = page.locator('.combat-lab-dock-toggle');
+          const rightToggle = page.locator('.simulation-sidebar [data-action="collapse"]');
+          check(await labToggle.count() === 1, 'Combat Lab collapse control is missing.');
+          check(await rightToggle.count() === 1, 'Game inspector collapse control is missing.');
+          await labToggle.click();
+          await rightToggle.click();
+          await page.waitForTimeout(500);
+
           const labels = {};
           for (const name of ['Мишень 25 м', 'Мишень 50 м', 'Мишень 100 м', 'Мишень 200 м']) {
             const label = page.locator('.unit-label', { hasText: name }).first();
@@ -140,6 +148,8 @@ jobs:
           check(await page.locator('.tactical-order-card').count() === 0, 'Tactical order card appeared after command.');
           await page.screenshot({ path: `${out}/01-after-order.png`, fullPage: false });
 
+          await labToggle.click();
+          await page.waitForTimeout(300);
           const openFire = page.getByRole('button', { name: 'Открыть огонь', exact: true });
           check(await openFire.count() === 1, 'Combat Lab fire control is missing.');
           await openFire.click();
