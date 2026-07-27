@@ -13,18 +13,38 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      TARGET_URL: https://repo-776uuc2hx-111s-projects-807221af.vercel.app/combat-lab.html
+      CLEAN_DEPLOYMENT_URL: https://repo-776uuc2hx-111s-projects-807221af.vercel.app/combat-lab.html
+      DEPLOYMENT_ID: dpl_6NtZqW8MbsgJDCvHeaHgx2Zj8vCp
       EXPECTED_PRODUCT_SHA: 672e272fd57b1424a6663c08f16facc49f6ebaa4
-      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - name: Install Playwright
         run: npm install --no-save --package-lock=false @playwright/test@1.55.0
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
+      - name: Create ephemeral protected-deployment access
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --request DELETE \
+            --url "https://api.vercel.com/v1/deployments/$DEPLOYMENT_ID/protection-bypass?teamId=$VERCEL_ORG_ID" \
+            --header "Authorization: Bearer $VERCEL_TOKEN" >/dev/null || true
+          response="$RUNNER_TEMP/vercel-share.json"
+          curl --fail --silent --show-error --request PATCH \
+            --url "https://api.vercel.com/aliases/$DEPLOYMENT_ID/protection-bypass?teamId=$VERCEL_ORG_ID" \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data '{"ttl":7200}' \
+            --output "$response"
+          TARGET_URL="$(RESPONSE="$response" node -e "const fs=require('node:fs');const value=JSON.parse(fs.readFileSync(process.env.RESPONSE,'utf8')).protectionBypassUrl;if(!value)throw new Error('Vercel did not return protectionBypassUrl');process.stdout.write(value)")"
+          echo "::add-mask::$TARGET_URL"
+          echo "TARGET_URL=$TARGET_URL" >> "$GITHUB_ENV"
       - name: Run deployed Combat Lab scenario
         run: npx playwright test --config=ci/playwright.combat-lab-baseline.config.ts
       - name: Upload browser evidence
