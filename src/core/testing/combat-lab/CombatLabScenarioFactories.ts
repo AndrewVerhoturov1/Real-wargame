@@ -1,3 +1,4 @@
+import { disableLegacyAutomaticFire } from '../../combat/CombatRules';
 import { createDefaultCombatCatalogRegistry } from '../../infantry-combat/catalogs';
 import {
   applyWoundCandidate,
@@ -53,6 +54,7 @@ export function buildCombatLabScenarioState(
     defaultHeight: 0,
     objects: [],
   }, unitsData);
+  disableLegacyAutomaticFire(state);
   state.editor.enabled = false;
   state.editor.panelOpen = false;
   state.editor.lastMessage = `Combat Lab ${definition.scenarioId}@${definition.revision}; seed=${seed}`;
