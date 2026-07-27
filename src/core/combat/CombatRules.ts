@@ -6,17 +6,24 @@ interface CombatRulesState {
 }
 
 const rulesByState = new WeakMap<SimulationState, CombatRulesState>();
+const legacyAutomaticFireDisabledStates = new WeakSet<SimulationState>();
 
 export function isFireAllowed(state: SimulationState): boolean {
+  if (legacyAutomaticFireDisabledStates.has(state)) return false;
   return rulesByState.get(state)?.fireAllowed ?? false;
 }
 
 export function setFireAllowed(state: SimulationState, allowed: boolean): void {
   const current = getCombatRulesState(state);
-  const next = Boolean(allowed);
+  const next = legacyAutomaticFireDisabledStates.has(state) ? false : Boolean(allowed);
   if (current.fireAllowed === next) return;
   current.fireAllowed = next;
   current.revision += 1;
+}
+
+export function disableLegacyAutomaticFire(state: SimulationState): void {
+  legacyAutomaticFireDisabledStates.add(state);
+  setFireAllowed(state, false);
 }
 
 export function getCombatRulesRevision(state: SimulationState): number {
@@ -25,6 +32,7 @@ export function getCombatRulesRevision(state: SimulationState): number {
 
 export function clearCombatRules(state: SimulationState): void {
   rulesByState.delete(state);
+  legacyAutomaticFireDisabledStates.delete(state);
 }
 
 function getCombatRulesState(state: SimulationState): CombatRulesState {
