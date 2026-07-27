@@ -1,7 +1,7 @@
 name: Temporary Combat Lab Exact Preview
 
 on:
-  pull_request:
+  pull_request_target:
     branches:
       - ci/combat-lab-deploy-base-20260727t040500z-529ff29
 
