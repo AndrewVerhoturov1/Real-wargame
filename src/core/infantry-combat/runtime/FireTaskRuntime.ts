@@ -1,4 +1,5 @@
 import type { UnitModel } from '../../units/UnitModel';
+import { advanceAimPhysicalProgress, isAimDirectionAligned } from './AimRuntime';
 import { getSuppressionSupportPoint } from './AutomaticFireSupportPoints';
 import { getEffectiveCombatCapabilities } from './EffectiveCombatCapabilities';
 import {
@@ -160,7 +161,21 @@ export function tickFireTaskWithTimeBudget(
       return composeTickResult(result, consumedSeconds, remainingSeconds);
     }
     if (remainingSeconds <= EPSILON) return composeTickResult(result, consumedSeconds, remainingSeconds);
+
     const current = unit.infantryCombatRuntime.activeFireTask;
+    const alignmentSeconds = Math.min(remainingSeconds, Math.max(0, sliceSeconds - used));
+    if (
+      current?.phase === 'aiming'
+      && !isAimDirectionAligned(current.aimTracking.solution)
+      && alignmentSeconds > EPSILON
+    ) {
+      advanceAimPhysicalProgress(current, current.aimTracking.solution.factors, alignmentSeconds);
+      consumedSeconds = cleanDuration(consumedSeconds + alignmentSeconds);
+      remainingSeconds = cleanDuration(Math.max(0, totalSeconds - consumedSeconds));
+      applyEffectiveAimCapabilities(unit);
+      continue;
+    }
+
     const boundaryAdvanced = Boolean(current && current.aimTracking.nextTrackingBoundarySeconds > beforeBoundary + EPSILON);
     if (sliceSeconds <= EPSILON && !boundaryAdvanced) return composeTickResult(result, consumedSeconds, remainingSeconds);
     if (sliceSeconds > EPSILON && used + EPSILON < sliceSeconds) return composeTickResult(result, consumedSeconds, remainingSeconds);
