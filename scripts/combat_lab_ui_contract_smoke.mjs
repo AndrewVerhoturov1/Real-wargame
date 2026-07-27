@@ -17,6 +17,8 @@ const [
   commandRouteCss,
   compactRouteCss,
   scenarioFactories,
+  combatRules,
+  combatEngagement,
 ] = await Promise.all([
   readFile('src/combat-lab/ui/CombatLabShell.ts', 'utf8'),
   readFile('src/combat-lab/runtime/CombatLabVisualSession.ts', 'utf8'),
@@ -33,6 +35,8 @@ const [
   readFile('src/command-plan-route-overlay.css', 'utf8'),
   readFile('src/tactical-workspace-compact-route.css', 'utf8'),
   readFile('src/core/testing/combat-lab/CombatLabScenarioFactories.ts', 'utf8'),
+  readFile('src/core/combat/CombatRules.ts', 'utf8'),
+  readFile('src/core/combat/CombatEngagement.ts', 'utf8'),
 ]);
 
 for (const marker of [
@@ -73,12 +77,14 @@ assert.match(extension, /combat-lab-drawer/);
 assert.match(extension, /combat-lab-drawer-toggle/);
 assert.match(extension, /aria-expanded/);
 assert.match(extension, /installSharedSimulationControls/);
-assert.match(extension, /setFireAllowed\(session\.state,\s*false\)/, 'Combat Lab must keep the legacy automatic fire system disabled.');
-assert.doesNotMatch(extension, /setFireAllowed\(session\.state,\s*true\)/, 'Combat Lab must never enable legacy automatic fire.');
 assert.match(extension, /data-action="fire-contact"/);
 assert.doesNotMatch(extension, /adoptSimulationSidebar/);
 assert.doesNotMatch(extension, /['"]fighter['"]/);
 assert.match(scenarioFactories, /aiControl:\s*'manual'/, 'Every Combat Lab fixture must opt out of ordinary Graph AI control.');
+assert.match(scenarioFactories, /disableLegacyAutomaticFire\(state\)/, 'Combat Lab states must lock the old automatic-fire system off.');
+assert.match(combatRules, /legacyAutomaticFireDisabledStates\s*=\s*new WeakSet/);
+assert.match(combatRules, /legacyAutomaticFireDisabledStates\.has\(state\)\s*\?\s*false/);
+assert.match(combatEngagement, /if\s*\(!isFireAllowed\(state\)\)\s*return/);
 
 for (const marker of [
   'installGameEditorWorkbench',
