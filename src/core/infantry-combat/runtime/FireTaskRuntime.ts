@@ -20,6 +20,7 @@ import { isTargetWithinDeployedTraverse } from './WeaponDeploymentRuntime';
 export * from './FireTaskRuntimeStage8';
 
 const EPSILON = 1e-9;
+const BLOCKED_ALIGNMENT_THRESHOLD = 2;
 
 export type Stage9RequestFireTaskResult = RequestFireTaskResult | {
   readonly accepted: false;
@@ -146,11 +147,17 @@ export function tickFireTaskWithTimeBudget(
     const timeToBoundary = Math.max(0, task.aimTracking.nextTrackingBoundarySeconds - now);
     const sliceSeconds = timeToBoundary <= EPSILON ? 0 : Math.min(remainingSeconds, timeToBoundary);
     const beforeBoundary = task.aimTracking.nextTrackingBoundarySeconds;
-    const result = tickBaseFireTaskWithTimeBudget(unit, {
-      ...input,
-      intervalStartSeconds: now,
-      deltaSeconds: sliceSeconds,
-    });
+    const restoreAlignmentThreshold = holdCommitUntilAligned(task);
+    let result: TickFireTaskResult;
+    try {
+      result = tickBaseFireTaskWithTimeBudget(unit, {
+        ...input,
+        intervalStartSeconds: now,
+        deltaSeconds: sliceSeconds,
+      });
+    } finally {
+      restoreAlignmentThreshold();
+    }
     lastResult = result;
     const used = Math.max(0, Math.min(sliceSeconds, result.consumedSeconds));
     consumedSeconds = cleanDuration(consumedSeconds + used);
@@ -227,6 +234,18 @@ export function applyEffectiveAimCapabilities(unit: UnitModel): void {
 
 /** Stage 6 compatibility alias. */
 export const applyWoundAimCapabilities = applyEffectiveAimCapabilities;
+
+function holdCommitUntilAligned(
+  task: NonNullable<UnitModel['infantryCombatRuntime']['activeFireTask']>,
+): () => void {
+  if (isAimDirectionAligned(task.aimTracking.solution)) return () => {};
+  const mutableTask = task as { minimumSolutionQuality: number };
+  const originalThreshold = mutableTask.minimumSolutionQuality;
+  mutableTask.minimumSolutionQuality = BLOCKED_ALIGNMENT_THRESHOLD;
+  return () => {
+    mutableTask.minimumSolutionQuality = originalThreshold;
+  };
+}
 
 function requestFitsDeploymentTraverse(unit: UnitModel, input: RequestFireTaskInput): boolean {
   const weapon = unit.infantryCombatRuntime.primaryWeapon;
