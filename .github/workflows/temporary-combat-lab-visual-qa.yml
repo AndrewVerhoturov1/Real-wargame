@@ -1,0 +1,327 @@
+name: Temporary Combat Lab Visual QA
+
+on:
+  pull_request:
+    branches:
+      - ci/combat-lab-visual-base-20260727t044500z-5e8d45a
+
+permissions:
+  contents: read
+
+concurrency:
+  group: temporary-combat-lab-visual-qa-5e8d45a
+  cancel-in-progress: false
+
+jobs:
+  chromium-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      SOURCE_SHA: 5e8d45ae32c27a2c4c23e9627904e4c1c7dd1bcb
+    steps:
+      - name: Checkout exact product SHA
+        uses: actions/checkout@v4
+        with:
+          ref: 5e8d45ae32c27a2c4c23e9627904e4c1c7dd1bcb
+          fetch-depth: 0
+
+      - name: Verify exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -z "$(git status --short)"
+          remote_sha="$(git ls-remote origin refs/heads/feature/20260726-shooting-stage-09v-combat-lab | cut -f1)"
+          test "$remote_sha" = "$SOURCE_SHA"
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build production pages
+        env:
+          REAL_WARGAME_BRANCH: feature/20260726-shooting-stage-09v-combat-lab
+          REAL_WARGAME_COMMIT_SHA: ${{ env.SOURCE_SHA }}
+        run: |
+          npm run build:app
+          node scripts/write_deployment_source.mjs --root dist --ref feature/20260726-shooting-stage-09v-combat-lab --sha "$SOURCE_SHA"
+          npm run verify:deployment-pages -- --root dist --require-source
+
+      - name: Install Chromium
+        run: |
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Run real Chromium QA at 1440x900
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/combat-lab-visual
+          cat > "$RUNNER_TEMP/combat-lab-visual-qa.mjs" <<'EOF'
+          import { chromium } from 'playwright';
+          import { createServer } from 'node:http';
+          import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+          import path from 'node:path';
+
+          const distRoot = path.resolve('dist');
+          const qaRoot = path.resolve('artifacts/combat-lab-visual');
+          const expectedSha = process.env.SOURCE_SHA ?? '';
+          if (!/^[0-9a-f]{40}$/.test(expectedSha)) throw new Error(`Invalid SOURCE_SHA: ${expectedSha}`);
+          mkdirSync(qaRoot, { recursive: true });
+
+          const mime = new Map([
+            ['.html', 'text/html; charset=utf-8'],
+            ['.js', 'text/javascript; charset=utf-8'],
+            ['.mjs', 'text/javascript; charset=utf-8'],
+            ['.css', 'text/css; charset=utf-8'],
+            ['.json', 'application/json; charset=utf-8'],
+            ['.png', 'image/png'],
+            ['.svg', 'image/svg+xml'],
+            ['.woff2', 'font/woff2'],
+          ]);
+
+          const server = createServer((request, response) => {
+            try {
+              const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+              let pathname = decodeURIComponent(url.pathname);
+              if (pathname === '/') pathname = '/index.html';
+              const resolved = path.resolve(distRoot, `.${pathname}`);
+              if (!resolved.startsWith(`${distRoot}${path.sep}`)) {
+                response.writeHead(403).end('Forbidden');
+                return;
+              }
+              const target = statSync(resolved).isDirectory() ? path.join(resolved, 'index.html') : resolved;
+              response.writeHead(200, {
+                'content-type': mime.get(path.extname(target)) ?? 'application/octet-stream',
+                'cache-control': 'no-store',
+              });
+              response.end(readFileSync(target));
+            } catch {
+              response.writeHead(404).end('Not found');
+            }
+          });
+
+          await new Promise((resolve, reject) => {
+            server.once('error', reject);
+            server.listen(0, '127.0.0.1', resolve);
+          });
+          const address = server.address();
+          if (!address || typeof address === 'string') throw new Error('Static server did not expose a port.');
+          const baseUrl = `http://127.0.0.1:${address.port}`;
+
+          const browser = await chromium.launch({
+            headless: true,
+            args: [
+              '--no-sandbox',
+              '--disable-gpu-sandbox',
+              '--use-gl=swiftshader',
+              '--enable-unsafe-swiftshader',
+            ],
+          });
+          const context = await browser.newContext({
+            viewport: { width: 1440, height: 900 },
+            deviceScaleFactor: 1,
+          });
+          const page = await context.newPage();
+          const pageErrors = [];
+          const consoleErrors = [];
+          page.on('pageerror', (error) => pageErrors.push(error.stack ?? error.message));
+          page.on('console', (message) => {
+            if (message.type() === 'error') consoleErrors.push(message.text());
+          });
+
+          const evidence = {
+            schemaVersion: 1,
+            expectedSha,
+            viewport: { width: 1440, height: 900 },
+            screenshots: [],
+            states: {},
+            pageErrors,
+            consoleErrors,
+          };
+
+          try {
+            await openReady('/combat-lab.html');
+            await assertCoreCombatLab();
+            await assertSharedTimeControls();
+            await assertModeSwitchRoundTrip();
+
+            await selectLabTab('stand');
+            evidence.states.bothOpen = await assertGeometry('both-open');
+            await shot('combat-lab-stand-both-open.png');
+
+            await selectLabTab('metrics');
+            await shot('combat-lab-metrics.png');
+
+            await selectLabTab('log');
+            await shot('combat-lab-log.png');
+
+            await selectLabTab('stand');
+            await page.locator('.combat-lab-dock-toggle').click();
+            await page.waitForFunction(() => document.body.classList.contains('combat-lab-dock-collapsed'));
+            evidence.states.leftCollapsedRightOpen = await assertGeometry('left-collapsed-right-open');
+            await shot('combat-lab-left-collapsed-right-open.png');
+
+            await page.locator('.combat-lab-dock-toggle').click();
+            await page.waitForFunction(() => document.body.classList.contains('combat-lab-dock-open'));
+            await page.locator('.simulation-sidebar [data-action="collapse"]').click();
+            await page.waitForFunction(() => document.body.classList.contains('sidebar-collapsed'));
+            evidence.states.leftOpenRightCollapsed = await assertGeometry('left-open-right-collapsed');
+            await shot('combat-lab-left-open-right-collapsed.png');
+
+            await page.locator('.combat-lab-dock-toggle').click();
+            await page.waitForFunction(() => document.body.classList.contains('combat-lab-dock-collapsed'));
+            evidence.states.bothCollapsed = await assertGeometry('both-collapsed');
+            await shot('combat-lab-both-collapsed.png');
+
+            await openReady('/');
+            const routeDetailsDisplay = await page.locator('.unit-bar-route-controls > .unit-route-details').evaluate((element) => getComputedStyle(element).display);
+            if (routeDetailsDisplay !== 'none') throw new Error(`Order/route popover visible in normal game: ${routeDetailsDisplay}`);
+            if (await page.locator('.simulation-sidebar').count() !== 1) throw new Error('Normal game must have one right inspector.');
+            if (await page.locator('canvas').count() !== 1) throw new Error('Normal game must have exactly one canvas.');
+            await assertNoHorizontalOverflow('normal-game');
+            await shot('game-no-order-route-popover.png');
+
+            if (pageErrors.length > 0) throw new Error(`Page errors observed:\n${pageErrors.join('\n')}`);
+            writeFileSync(path.join(qaRoot, 'visual-qa.json'), JSON.stringify(evidence, null, 2));
+            console.log(`Chromium visual QA passed with ${evidence.screenshots.length} screenshots.`);
+          } catch (error) {
+            try {
+              await page.screenshot({ path: path.join(qaRoot, 'failure-state.png'), fullPage: false });
+            } catch {}
+            evidence.failure = error instanceof Error ? error.stack ?? error.message : String(error);
+            writeFileSync(path.join(qaRoot, 'visual-qa.json'), JSON.stringify(evidence, null, 2));
+            throw error;
+          } finally {
+            await context.close();
+            await browser.close();
+            await new Promise((resolve) => server.close(resolve));
+          }
+
+          async function openReady(route) {
+            await page.goto(`${baseUrl}${route}`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+            await page.waitForSelector('#app[data-bootstrap-state="ready"]', { timeout: 120_000 });
+            await page.waitForFunction(() => document.querySelectorAll('canvas').length === 1, undefined, { timeout: 30_000 });
+            await page.waitForTimeout(500);
+          }
+
+          async function assertCoreCombatLab() {
+            if (await page.locator('#combat-lab-extension-root').count() !== 1) throw new Error('Left Combat Lab dock root missing.');
+            if (await page.locator('.simulation-sidebar').count() !== 1) throw new Error('Right game inspector missing or duplicated.');
+            if (await page.locator('.simulation-unit-bar').count() !== 1) throw new Error('Lower game panel missing or duplicated.');
+            if (await page.locator('canvas').count() !== 1) throw new Error('Combat Lab must have exactly one canvas.');
+            if (await page.locator('[data-combat-lab-tab="fighter"]').count() !== 0) throw new Error('Obsolete fighter tab still exists.');
+            if (await page.locator('[data-combat-lab-tab]').count() !== 3) throw new Error('Combat Lab must have exactly three lab tabs.');
+            if (await page.locator('.simulation-tabs button').count() < 5) throw new Error('Right inspector tabs incomplete.');
+            if (await page.locator('.workspace-mode-switch [data-mode="simulation"]').count() !== 1) throw new Error('Simulation mode switch missing.');
+            if (await page.locator('.workspace-mode-switch [data-mode="editor"]').count() !== 1) throw new Error('Editor mode switch missing.');
+            const legacyFire = page.locator('.simulation-controls [data-action="fire-contact"]');
+            if (await legacyFire.count() !== 1) throw new Error('Legacy fire control missing from production DOM.');
+            const hiddenLegacyFire = await legacyFire.evaluate((element) => getComputedStyle(element).display === 'none' && element.disabled);
+            if (!hiddenLegacyFire) throw new Error('Legacy manual fire remains available in Combat Lab.');
+            const permission = page.locator('.simulation-controls [data-action="toggle-fire-permission"]');
+            const hiddenPermission = await permission.evaluate((element) => getComputedStyle(element).display === 'none' && element.disabled);
+            if (!hiddenPermission) throw new Error('Legacy fire-permission control remains available in Combat Lab.');
+            if (await page.getByRole('button', { name: 'Открыть огонь', exact: true }).count() !== 1) throw new Error('Stage 9 lab fire control missing.');
+            const routeDetailsDisplay = await page.locator('.unit-bar-route-controls > .unit-route-details').evaluate((element) => getComputedStyle(element).display);
+            if (routeDetailsDisplay !== 'none') throw new Error(`Order/route popover visible in Combat Lab: ${routeDetailsDisplay}`);
+          }
+
+          async function assertSharedTimeControls() {
+            const labSpeed = page.locator('#combat-lab-extension-root .combat-lab-run-controls select');
+            await page.locator('.unit-bar-speed-group [data-speed="4"]').click();
+            await page.waitForFunction(() => document.querySelector('#combat-lab-extension-root .combat-lab-run-controls select')?.value === '4');
+            await labSpeed.selectOption('2');
+            await page.waitForFunction(() => document.querySelector('.unit-bar-speed-group [data-speed="2"]')?.classList.contains('active'));
+
+            const lowerPause = page.locator('.simulation-controls [data-action="pause"]');
+            const labPause = page.locator('#combat-lab-extension-root .combat-lab-run-controls button').filter({ hasText: /^(Пауза|Продолжить)$/ }).first();
+            const before = (await lowerPause.textContent())?.trim();
+            await lowerPause.click();
+            await page.waitForFunction((previous) => document.querySelector('.simulation-controls [data-action="pause"]')?.textContent?.trim() !== previous, before);
+            const lowerAfter = (await lowerPause.textContent())?.trim();
+            const labAfter = (await labPause.textContent())?.trim();
+            if (lowerAfter !== labAfter) throw new Error(`Pause controls diverged after lower click: lower=${lowerAfter}, lab=${labAfter}`);
+            await labPause.click();
+            await page.waitForFunction((previous) => document.querySelector('.simulation-controls [data-action="pause"]')?.textContent?.trim() !== previous, lowerAfter);
+            const lowerRestored = (await lowerPause.textContent())?.trim();
+            const labRestored = (await labPause.textContent())?.trim();
+            if (lowerRestored !== labRestored) throw new Error(`Pause controls diverged after lab click: lower=${lowerRestored}, lab=${labRestored}`);
+            const topPressed = await page.locator('#pause-toggle').getAttribute('aria-pressed');
+            if (topPressed !== String(lowerRestored === 'Продолжить')) throw new Error('Top pause control does not reflect shared session state.');
+          }
+
+          async function assertModeSwitchRoundTrip() {
+            await page.locator('.workspace-mode-switch [data-mode="editor"]').click();
+            await page.waitForFunction(() => document.body.classList.contains('workspace-editor'));
+            if (await page.locator('#hud .game-editor-workbench').count() !== 1) throw new Error('Full editor workbench unavailable in Combat Lab.');
+            await page.locator('.workspace-mode-switch [data-mode="simulation"]').click();
+            await page.waitForFunction(() => document.body.classList.contains('workspace-simulation'));
+            if (await page.locator('.simulation-sidebar').count() !== 1) throw new Error('Right inspector did not return after editor round trip.');
+          }
+
+          async function selectLabTab(tab) {
+            await page.locator(`[data-combat-lab-tab="${tab}"]`).click();
+            await page.waitForFunction((requested) => document.querySelector(`[data-combat-lab-tab="${requested}"]`)?.classList.contains('active'), tab);
+          }
+
+          async function assertGeometry(label) {
+            await page.waitForTimeout(200);
+            const geometry = await page.evaluate(() => {
+              const rect = (selector) => {
+                const element = document.querySelector(selector);
+                if (!(element instanceof HTMLElement)) return null;
+                const style = getComputedStyle(element);
+                if (style.display === 'none' || style.visibility === 'hidden') return null;
+                const r = element.getBoundingClientRect();
+                return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+              };
+              return {
+                viewport: { width: innerWidth, height: innerHeight },
+                scrollWidth: document.documentElement.scrollWidth,
+                leftDock: rect('#combat-lab-extension-root'),
+                map: rect('#app'),
+                rightInspector: rect('.simulation-sidebar'),
+                lowerBar: rect('.simulation-unit-bar'),
+                bodyClasses: [...document.body.classList],
+                canvasCount: document.querySelectorAll('canvas').length,
+              };
+            });
+            if (geometry.canvasCount !== 1) throw new Error(`${label}: expected one canvas, found ${geometry.canvasCount}`);
+            if (geometry.scrollWidth > geometry.viewport.width + 1) throw new Error(`${label}: horizontal overflow ${geometry.scrollWidth} > ${geometry.viewport.width}`);
+            for (const key of ['leftDock', 'map', 'rightInspector', 'lowerBar']) {
+              if (!geometry[key]) throw new Error(`${label}: missing geometry for ${key}`);
+            }
+            const overlapArea = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+            if (overlapArea(geometry.leftDock, geometry.map) > 1) throw new Error(`${label}: left dock overlaps map.`);
+            if (overlapArea(geometry.map, geometry.rightInspector) > 1) throw new Error(`${label}: map overlaps right inspector.`);
+            if (overlapArea(geometry.leftDock, geometry.lowerBar) > 1) throw new Error(`${label}: left dock overlaps lower panel.`);
+            if (overlapArea(geometry.rightInspector, geometry.lowerBar) > 1) throw new Error(`${label}: right inspector overlaps lower panel.`);
+            return geometry;
+          }
+
+          async function assertNoHorizontalOverflow(label) {
+            const values = await page.evaluate(() => ({ viewport: innerWidth, scrollWidth: document.documentElement.scrollWidth }));
+            if (values.scrollWidth > values.viewport + 1) throw new Error(`${label}: horizontal overflow ${values.scrollWidth} > ${values.viewport}`);
+          }
+
+          async function shot(name) {
+            await page.screenshot({ path: path.join(qaRoot, name), fullPage: false });
+            evidence.screenshots.push(name);
+          }
+          EOF
+          node "$RUNNER_TEMP/combat-lab-visual-qa.mjs"
+
+      - name: Upload Chromium evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-lab-visual-qa-${{ github.run_id }}
+          path: artifacts/combat-lab-visual/**
+          if-no-files-found: error
+          retention-days: 14
