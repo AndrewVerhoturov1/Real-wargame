@@ -4,6 +4,7 @@ import type { UnitModel } from '../core/units/UnitModel';
 
 const UNIT_RADIUS_CELL_FRACTION = 0.18;
 const MIN_UNIT_RADIUS_PX = 4.5;
+const DIRECTION_EPSILON = 1e-9;
 
 interface UnitView {
   container: Container;
@@ -154,10 +155,25 @@ function updateUnitView(
     diagnostics.geometryRebuildCount += 1;
   }
 
-  view.weapon.rotation = unit.facingRadians;
+  view.weapon.rotation = displayedWeaponRotation(unit);
   view.selection.visible = selected;
   view.stress.visible = unit.behaviorRuntime.stress > 0;
   view.stress.alpha = Math.min(0.7, Math.max(0.12, unit.behaviorRuntime.stress / 160));
+}
+
+function displayedWeaponRotation(unit: UnitModel): number {
+  const solution = unit.infantryCombatRuntime.activeFireTask?.aimTracking.solution;
+  const direction = solution?.currentDirection;
+  if (
+    solution?.valid
+    && direction
+    && Number.isFinite(direction.x)
+    && Number.isFinite(direction.y)
+    && Math.hypot(direction.x, direction.y) > DIRECTION_EPSILON
+  ) {
+    return Math.atan2(direction.y, direction.x);
+  }
+  return unit.facingRadians;
 }
 
 function redrawBody(graphics: Graphics, unit: UnitModel, unitRadius: number): void {
