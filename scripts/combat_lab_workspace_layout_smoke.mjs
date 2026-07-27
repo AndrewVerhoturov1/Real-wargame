@@ -7,12 +7,15 @@ const renderer = readFileSync('src/combat-lab/rendering/CombatLabRenderer.ts', '
 const layoutEnhancements = readFileSync('src/ui/TacticalWorkspaceLayoutEnhancements.ts', 'utf8');
 const unitBarPresentation = readFileSync('src/ui/UnitBarPresentation.ts', 'utf8');
 const uiBoundary = `${extension}\n${shell}\n${renderer}\n${layoutEnhancements}\n${unitBarPresentation}`;
+const labMain = readFileSync('src/combat-lab/main.ts', 'utf8');
 const labCss = readFileSync('src/combat-lab/combat-lab.css', 'utf8');
 const workspaceCss = readFileSync('src/combat-lab/combat-lab-workspace.css', 'utf8');
 const labPolishCss = readFileSync('src/combat-lab/combat-lab-ui-polish.css', 'utf8');
+const labHeaderCss = readFileSync('src/combat-lab/combat-lab-header-final.css', 'utf8');
 const refinedCss = readFileSync('src/tactical-workspace-refined.css', 'utf8');
 const productionCss = readFileSync('src/tactical-workspace-production.css', 'utf8');
-const css = `${labCss}\n${workspaceCss}\n${labPolishCss}\n${refinedCss}\n${productionCss}`;
+const finalFixesCss = readFileSync('src/tactical-workspace-final-fixes.css', 'utf8');
+const css = `${labCss}\n${workspaceCss}\n${labPolishCss}\n${labHeaderCss}\n${refinedCss}\n${productionCss}\n${finalFixesCss}`;
 
 for (const token of [
   'combat-lab-dock',
@@ -75,6 +78,12 @@ for (const token of [
 ]) {
   assert.ok(unitBarPresentation.includes(token), `Shared soldier panel must contain ${token}`);
 }
+
+assert.match(labMain, /combat-lab-header-final\.css/, 'The readable dock header correction must load last.');
+assert.match(labHeaderCss, /grid-template-areas:\s*\n\s*"brand toggle"\s*\n\s*"status toggle"/s, 'The dock title must own a full readable row.');
+assert.match(finalFixesCss, /\.workspace-time-controls \.unit-bar-speed-group\s*\{[^}]*grid-column:\s*auto !important/s, 'Legacy lower-panel grid placement must not push speed buttons onto a second row.');
+assert.match(finalFixesCss, /\.workspace-resize-handle-right\s*\{[^}]*left:\s*0/s, 'The right resize handle must stay inside the clickable inspector edge.');
+assert.match(finalFixesCss, /\[data-action="clear-order"\]\s*\{[^}]*grid-column:\s*1 \/ -1/s, 'The cancel-order command must fill its grid lane.');
 
 assert.ok(!css.includes('right: calc(var(--combat-lab-dock-width)'), 'Laboratory dock width must not replace the production right-inspector offset.');
 assert.ok(!css.includes('width: min(760px'), 'Combat Lab must not restore the oversized floating drawer');
