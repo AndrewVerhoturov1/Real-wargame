@@ -9,8 +9,6 @@ body.app-shell-mode-combat-lab.workspace-simulation #app {
 
 body.app-shell-mode-combat-lab.workspace-simulation #app canvas {
   display: block;
-  width: 100% !important;
-  height: 100% !important;
 }
 
 body.app-shell-mode-combat-lab #combat-lab-extension-root,
