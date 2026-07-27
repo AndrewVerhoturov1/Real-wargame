@@ -1,0 +1,241 @@
+name: Combat Lab Regression QA
+
+on:
+  pull_request:
+    branches:
+      - ci/combat-lab-regression-base-20260727t0610z-8b81a57
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PRODUCT_BRANCH: feature/20260726-shooting-stage-09v-combat-lab
+      PRODUCT_SHA: 8b81a579f2073302626452c27fe54bef38a6fb26
+      EVIDENCE_DIR: artifacts/combat-lab-regression
+    steps:
+      - name: Checkout exact product source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          fetch-depth: 0
+
+      - name: Prove exact feature source
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          branch_sha="$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')"
+          test "$actual_sha" = "$PRODUCT_SHA"
+          test "$branch_sha" = "$PRODUCT_SHA"
+          test -z "$(git status --short)"
+          echo "Verified product source: $PRODUCT_BRANCH @ $PRODUCT_SHA"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run canonical Preview gate
+        run: npm run verify:preview -- --report "$RUNNER_TEMP/preview-verification.json"
+
+      - name: Build production dist
+        run: npm run build
+
+      - name: Install Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Run Chromium QA at 1440x900
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          npm run preview -- --host 127.0.0.1 --port 4173 > "$RUNNER_TEMP/vite-preview.log" 2>&1 &
+          server_pid=$!
+          trap 'kill $server_pid || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:4173/combat-lab.html > /dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:4173/combat-lab.html > /dev/null
+          cat > .combat-lab-regression-qa.mjs <<'NODE'
+          import fs from 'node:fs';
+          import { chromium } from 'playwright';
+
+          const out = process.env.EVIDENCE_DIR;
+          fs.mkdirSync(out, { recursive: true });
+          const browser = await chromium.launch({
+            headless: true,
+            args: ['--use-gl=swiftshader', '--ignore-gpu-blocklist'],
+          });
+          const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+          const pageErrors = [];
+          page.on('pageerror', (error) => pageErrors.push(`pageerror: ${error.message}`));
+          page.on('console', (message) => {
+            if (message.type() === 'error') pageErrors.push(`console: ${message.text()}`);
+          });
+
+          function check(condition, message) {
+            if (!condition) throw new Error(message);
+          }
+
+          async function readWorkspace() {
+            return page.evaluate(() => {
+              const rect = (selector) => {
+                const element = document.querySelector(selector);
+                if (!(element instanceof HTMLElement)) return null;
+                const box = element.getBoundingClientRect();
+                return { left: box.left, right: box.right, top: box.top, bottom: box.bottom, width: box.width, height: box.height };
+              };
+              const bar = document.querySelector('.simulation-unit-bar');
+              const barStyle = bar instanceof HTMLElement ? getComputedStyle(bar) : null;
+              const summary = document.querySelector('.unit-state-plan > summary');
+              const popover = document.querySelector('.unit-state-plan-popover');
+              const statTexts = Array.from(document.querySelectorAll('.unit-bar-stat')).map((item) => item.textContent?.replace(/\s+/g, ' ').trim() ?? '');
+              const healthText = statTexts.find((text) => text.includes('Здоровье')) ?? '';
+              const healthMatch = healthText.match(/Здоровье\s*(\d+)/i);
+              return {
+                viewport: { width: innerWidth, height: innerHeight },
+                scrollWidth: document.documentElement.scrollWidth,
+                clientWidth: document.documentElement.clientWidth,
+                bodyClasses: document.body.className,
+                left: rect('#combat-lab-extension-root'),
+                app: rect('#app'),
+                right: rect('.simulation-sidebar'),
+                bottom: rect('.simulation-unit-bar'),
+                canvasCount: document.querySelectorAll('#app canvas').length,
+                popoverDisplay: popover instanceof HTMLElement ? getComputedStyle(popover).display : 'absent',
+                summaryPointerEvents: summary instanceof HTMLElement ? getComputedStyle(summary).pointerEvents : 'absent',
+                healthText,
+                health: healthMatch ? Number(healthMatch[1]) : null,
+                rightText: document.querySelector('.simulation-sidebar')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+                bottomText: bar?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+                barStyle: barStyle ? {
+                  gridTemplateAreas: barStyle.gridTemplateAreas,
+                  gridTemplateColumns: barStyle.gridTemplateColumns,
+                  minHeight: barStyle.minHeight,
+                  maxHeight: barStyle.maxHeight,
+                  gap: barStyle.gap,
+                  padding: barStyle.padding,
+                } : null,
+              };
+            });
+          }
+
+          async function snapshot(name) {
+            const state = await readWorkspace();
+            fs.writeFileSync(`${out}/${name}.json`, JSON.stringify(state, null, 2));
+            await page.screenshot({ path: `${out}/${name}.png`, fullPage: false });
+            check(state.scrollWidth <= state.clientWidth, `${name}: horizontal overflow ${state.scrollWidth}/${state.clientWidth}`);
+            check(state.canvasCount === 1, `${name}: expected one game canvas, got ${state.canvasCount}`);
+            check(state.popoverDisplay === 'none' || state.popoverDisplay === 'absent', `${name}: order popover is still visible (${state.popoverDisplay})`);
+            check(state.summaryPointerEvents === 'none' || state.summaryPointerEvents === 'absent', `${name}: disabled popover can still reopen (${state.summaryPointerEvents})`);
+            if (state.left && state.app && state.bodyClasses.includes('combat-lab-dock-open')) {
+              check(state.app.left + 1 >= state.left.right, `${name}: map overlaps left dock`);
+            }
+            if (state.left && state.bottom && state.bodyClasses.includes('combat-lab-dock-open')) {
+              check(state.bottom.left + 1 >= state.left.right, `${name}: soldier panel overlaps left dock`);
+            }
+            if (state.right && state.app && state.bodyClasses.includes('sidebar-open')) {
+              check(state.app.right <= state.right.left + 1, `${name}: map overlaps right inspector`);
+            }
+            if (state.right && state.bottom && state.bodyClasses.includes('sidebar-open')) {
+              check(state.bottom.right <= state.right.left + 1, `${name}: soldier panel overlaps right inspector`);
+            }
+            return state;
+          }
+
+          await page.goto('http://127.0.0.1:4173/combat-lab.html', { waitUntil: 'networkidle' });
+          await page.waitForSelector('#combat-lab-extension-root[data-combat-lab-extension="active"]');
+          await page.waitForSelector('#app canvas');
+          await page.waitForSelector('.simulation-sidebar');
+          await page.waitForSelector('.simulation-unit-bar');
+          const initial = await snapshot('00-lab-start');
+          check(initial.health === 100, `Test soldier did not start healthy: ${initial.healthText}`);
+          check(!initial.rightText.includes('incapacitated'), 'Test soldier starts incapacitated');
+
+          for (const selector of [
+            '.simulation-controls [data-action="fire-contact"]',
+            '.simulation-controls [data-action="toggle-fire-permission"]',
+          ]) {
+            const control = page.locator(selector);
+            if (await control.count() > 0) {
+              check(!(await control.isVisible()), `Legacy shooting control remains visible: ${selector}`);
+              check(await control.isDisabled(), `Legacy shooting control remains enabled: ${selector}`);
+            }
+          }
+
+          const speed4 = page.locator('.unit-bar-speed-group [data-speed="4"]');
+          check(await speed4.count() === 1, 'The x4 game speed control is missing');
+          await speed4.click();
+          const pause = page.locator('.simulation-controls [data-action="pause"]');
+          check(await pause.count() === 1, 'Shared game pause control is missing');
+          await pause.click();
+          await page.waitForTimeout(3000);
+          await pause.click();
+          await page.waitForTimeout(200);
+          const afterIdle = await snapshot('01-lab-after-idle');
+          check(afterIdle.health === initial.health, `Old automatic fire damaged the test soldier: ${initial.health} -> ${afterIdle.health}`);
+          check(!afterIdle.rightText.includes('incapacitated'), 'Old automatic fire incapacitated the test soldier');
+
+          const openFire = page.getByRole('button', { name: 'Открыть огонь', exact: true });
+          check(await openFire.count() === 1, 'New Combat Lab fire control is missing');
+          await openFire.click();
+          await pause.click();
+          await page.waitForTimeout(4500);
+          await pause.click();
+          await page.waitForTimeout(200);
+          await page.locator('[data-combat-lab-tab="log"]').click();
+          const journalText = await page.locator('[data-combat-lab-tab-panel="log"]').innerText();
+          check(/Выстрел/i.test(journalText), `New FireTask did not produce a committed shot. Journal: ${journalText}`);
+          await snapshot('02-lab-new-fire-journal');
+
+          await page.locator('[data-combat-lab-tab="stand"]').click();
+          await page.locator('.combat-lab-dock-toggle').click();
+          await page.waitForTimeout(200);
+          const labCollapsed = await snapshot('03-lab-left-collapsed');
+
+          await page.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' });
+          await page.waitForSelector('#app canvas');
+          await page.waitForSelector('.simulation-unit-bar');
+          const game = await snapshot('04-normal-game');
+          check(JSON.stringify(labCollapsed.barStyle) === JSON.stringify(game.barStyle), `Combat Lab soldier panel style differs from normal game:\nlab=${JSON.stringify(labCollapsed.barStyle)}\ngame=${JSON.stringify(game.barStyle)}`);
+          for (const required of ['Стоять', 'Пригнуться', 'Лечь']) {
+            check(labCollapsed.bottomText.includes(required), `Combat Lab soldier panel is missing ${required}`);
+            check(game.bottomText.includes(required), `Normal game soldier panel is missing ${required}`);
+          }
+
+          fs.writeFileSync(`${out}/evidence.json`, JSON.stringify({
+            productSha: process.env.PRODUCT_SHA,
+            initialHealth: initial.health,
+            afterIdleHealth: afterIdle.health,
+            labBarStyle: labCollapsed.barStyle,
+            gameBarStyle: game.barStyle,
+            pageErrors,
+          }, null, 2));
+          check(pageErrors.length === 0, `Browser errors detected:\n${pageErrors.join('\n')}`);
+          await browser.close();
+          NODE
+          PRODUCT_SHA="$PRODUCT_SHA" EVIDENCE_DIR="$EVIDENCE_DIR" node .combat-lab-regression-qa.mjs 2>&1 | tee "$EVIDENCE_DIR/browser.log"
+
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-lab-regression-qa-${{ github.run_id }}
+          path: |
+            artifacts/combat-lab-regression/**
+            ${{ runner.temp }}/preview-verification.json
+            ${{ runner.temp }}/vite-preview.log
+          if-no-files-found: warn
+          retention-days: 14
