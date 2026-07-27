@@ -1,0 +1,18 @@
+.unit-bar-profile .unit-bar-identity,
+.unit-bar-profile .unit-bar-current,
+.unit-bar-profile .unit-bar-weapon {
+  grid-area: auto;
+}
+
+.unit-bar-profile .unit-bar-identity {
+  align-self: stretch;
+}
+
+.unit-bar-profile .unit-bar-current {
+  width: 100%;
+}
+
+body.workspace-simulation .simulation-unit-bar,
+body.app-shell-mode-combat-lab.workspace-simulation .simulation-unit-bar {
+  width: auto;
+}
