@@ -76,9 +76,9 @@ jobs:
           old_lab = """  const routeDetailsDisplay = await page.locator('.unit-bar-route-controls > .unit-route-details').evaluate((element) => getComputedStyle(element).display);\n  if (routeDetailsDisplay !== 'none') throw new Error(`Order/route popover is visible in Combat Lab: ${routeDetailsDisplay}`);"""
           new_lab = """  const routeDetails = page.locator('.unit-bar-route-controls > .unit-route-details');\n  if (await routeDetails.count() > 0) {\n    const routeDetailsDisplay = await routeDetails.evaluate((element) => getComputedStyle(element).display);\n    if (routeDetailsDisplay !== 'none') throw new Error(`Order/route popover is visible in Combat Lab: ${routeDetailsDisplay}`);\n  }"""
           old_lower_pause = """  if (afterLowerClick !== (await labPause.textContent())?.trim()) throw new Error('Pause controls diverged after lower-panel click.');"""
-          new_lower_pause = """  await page.waitForFunction((expected) => {\n    const buttons = Array.from(document.querySelectorAll('#combat-lab-extension-root .combat-lab-run-controls button'));\n    const pause = buttons.find((button) => /^(Пауза|Продолжить)$/.test(button.textContent?.trim() ?? ''));\n    return pause?.textContent?.trim() === expected;\n  }, afterLowerClick);"""
+          new_lower_pause = """  await page.waitForTimeout(500);\n  if (afterLowerClick !== (await labPause.textContent())?.trim()) throw new Error('Pause controls diverged after lower-panel click.');"""
           old_lab_pause = """  if (restored !== (await labPause.textContent())?.trim()) throw new Error('Pause controls diverged after laboratory click.');"""
-          new_lab_pause = """  await page.waitForFunction((expected) => {\n    const buttons = Array.from(document.querySelectorAll('#combat-lab-extension-root .combat-lab-run-controls button'));\n    const pause = buttons.find((button) => /^(Пауза|Продолжить)$/.test(button.textContent?.trim() ?? ''));\n    return pause?.textContent?.trim() === expected;\n  }, restored);"""
+          new_lab_pause = """  await page.waitForTimeout(500);\n  if (restored !== (await labPause.textContent())?.trim()) throw new Error('Pause controls diverged after laboratory click.');"""
 
           replacements = [
               (old_game, new_game),
