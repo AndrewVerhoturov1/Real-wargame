@@ -19,7 +19,7 @@ import {
 } from '../../core/testing/combat-lab';
 import { createCombatLabCheckpoint, restoreCombatLabCheckpoint, type CombatLabCheckpointV1 } from './CombatLabCheckpoint';
 
-export const COMBAT_LAB_VISUAL_SPEEDS = [0.25, 0.5, 1, 2, 4, 8] as const;
+export const COMBAT_LAB_VISUAL_SPEEDS = [0.25, 0.5, 1, 2, 4, 10] as const;
 const MAX_ACCUMULATED_SECONDS = 0.5;
 const MAX_JOURNAL_ENTRIES = 256;
 
