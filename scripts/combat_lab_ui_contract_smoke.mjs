@@ -14,6 +14,7 @@ const [
   menu,
   labMain,
   statePlanCss,
+  routeCss,
 ] = await Promise.all([
   readFile('src/combat-lab/ui/CombatLabShell.ts', 'utf8'),
   readFile('src/combat-lab/runtime/CombatLabVisualSession.ts', 'utf8'),
@@ -27,6 +28,7 @@ const [
   readFile('src/shared/AppShellMenu.ts', 'utf8'),
   readFile('src/combat-lab/main.ts', 'utf8'),
   readFile('src/ai-state-plan-panel.css', 'utf8'),
+  readFile('src/tactical-workspace-compact-route.css', 'utf8'),
 ]);
 
 for (const marker of [
@@ -90,8 +92,14 @@ assert.doesNotMatch(overlay, /drawMetreGrid|drawUnit|mapWidthPx|mapHeightPx/);
 assert.match(adapter, /getWorldContainer/);
 assert.match(adapter, /addTickerListener/);
 
-assert.match(statePlanCss, /\.unit-state-plan-popover\s*\{[^}]*display:\s*none\s*!important/s);
-assert.match(statePlanCss, /\.unit-state-plan\s*>\s*summary\s*\{[^}]*pointer-events:\s*none/s);
+assert.doesNotMatch(statePlanCss, /\.unit-state-plan-popover\s*\{[^}]*display:\s*none\s*!important/s,
+  'State/plan diagnostics must remain available.');
+assert.doesNotMatch(statePlanCss, /\.unit-state-plan\s*>\s*summary\s*\{[^}]*pointer-events:\s*none/s,
+  'State/plan summary must remain interactive.');
+assert.match(routeCss, /\.unit-bar-route-controls\s*>\s*\.unit-route-details\s*\{[^}]*display:\s*none\s*!important/s,
+  'The obstructive command/route popover must not remain in the lower unit bar.');
+assert.match(routeCss, /\.route-cost-inspector-panel\s+\.unit-route-details\s*\{[^}]*display:\s*block/s,
+  'Command and route diagnostics must remain available in the right inspector.');
 
 assert.match(labMain, /GameApplication\.create\(/);
 assert.match(labMain, /installAppShellMenu\(\{ mode: 'combat-lab' \}\)/);
