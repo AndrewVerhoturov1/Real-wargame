@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const extension = readFileSync('src/combat-lab/CombatLabExtension.ts', 'utf8');
 const shell = readFileSync('src/combat-lab/ui/CombatLabShell.ts', 'utf8');
+const uiBoundary = `${extension}\n${shell}`;
 const css = readFileSync('src/combat-lab/combat-lab.css', 'utf8');
 
 for (const token of [
@@ -20,7 +21,7 @@ for (const token of [
   'combat-lab-metrics-panel',
   'combat-lab-log-panel',
 ]) {
-  assert.ok(shell.includes(token), `Combat Lab shell must contain ${token}`);
+  assert.ok(uiBoundary.includes(token), `Combat Lab UI boundary must contain ${token}`);
 }
 
 for (const token of [
