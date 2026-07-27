@@ -1,4 +1,5 @@
 Temporary CI-only trigger for Combat Lab regression verification.
 Product source SHA: 8b81a579f2073302626452c27fe54bef38a6fb26
 Canonical feature branch: feature/20260726-shooting-stage-09v-combat-lab
+Browser harness revision: 2
 Do not merge.
