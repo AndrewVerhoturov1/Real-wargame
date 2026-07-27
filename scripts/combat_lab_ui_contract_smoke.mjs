@@ -47,6 +47,8 @@ for (const marker of [
 assert.doesNotMatch(shell, /roundsInWeapon\s*=/, 'UI must not directly mutate weapon rounds.');
 assert.doesNotMatch(shell, /activeFireTask\s*=/, 'UI must not create FireTask state directly.');
 assert.doesNotMatch(shell, /activeProjectiles\.(push|splice)/, 'UI must not create projectile state.');
+assert.match(shell, /private readonly speed = select\(\)/);
+assert.match(shell, /this\.speed\.value\s*=\s*String\(snapshot\.speed\)/);
 assert.doesNotMatch(commands, /spawnReferenceProjectile|spawnProjectile|createProjectileCandidate/);
 assert.match(session, /markInteractive/);
 assert.match(session, /replaceCombatLabStateInPlace/);
