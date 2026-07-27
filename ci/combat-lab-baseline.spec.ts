@@ -2,18 +2,18 @@ import { expect, test } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 
 const targetUrl = process.env.TARGET_URL ?? '';
+const cleanDeploymentUrl = process.env.CLEAN_DEPLOYMENT_URL ?? '';
 const expectedProductSha = process.env.EXPECTED_PRODUCT_SHA ?? '';
 const evidenceDir = 'artifacts/vercel-e2e';
 
-test('capture Combat Lab baseline geometry, layout and sound path', async ({ page, context, request }) => {
+test('capture Combat Lab baseline geometry, layout and sound path', async ({ page }) => {
   await mkdir(evidenceDir, { recursive: true });
-  const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
-  if (bypass) {
-    await context.setExtraHTTPHeaders({
-      'x-vercel-protection-bypass': bypass,
-      'x-vercel-set-bypass-cookie': 'true',
-    });
-  }
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  const consoleErrors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
 
   await page.addInitScript(() => {
     const scope = window as unknown as {
@@ -76,27 +76,19 @@ test('capture Combat Lab baseline geometry, layout and sound path', async ({ pag
     scope.webkitAudioContext = ProbedAudioContext;
   });
 
-  const response = await page.goto(targetUrl, { waitUntil: 'networkidle' });
+  expect(targetUrl).toMatch(/^https:\/\//);
+  expect(cleanDeploymentUrl).toMatch(/^https:\/\//);
+  await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
+  const response = await page.goto(cleanDeploymentUrl, { waitUntil: 'networkidle' });
   expect(response?.status() ?? 200).toBeLessThan(400);
   await expect(page.locator('canvas')).toHaveCount(1);
   await expect(page.locator('.tactical-workspace-bar')).toBeVisible();
   await expect(page.locator('.combat-lab-dock')).toBeVisible();
   await page.waitForTimeout(1200);
 
-  const sourceUrl = new URL('/deployment-source.json', targetUrl).toString();
-  const sourceResponse = await request.get(sourceUrl, {
-    headers: bypass ? {
-      'x-vercel-protection-bypass': bypass,
-      'x-vercel-set-bypass-cookie': 'true',
-    } : undefined,
-  });
-  const source = sourceResponse.ok() ? await sourceResponse.json() : null;
-
-  const pageErrors: string[] = [];
-  page.on('pageerror', (error) => pageErrors.push(error.message));
-  const consoleErrors: string[] = [];
-  page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
+  const source = await page.evaluate(async () => {
+    const response = await fetch('/deployment-source.json', { credentials: 'same-origin' });
+    return response.ok ? response.json() : null;
   });
 
   const initial = await measure(page);
