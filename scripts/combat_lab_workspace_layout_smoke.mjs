@@ -40,6 +40,12 @@ for (const token of [
   'grid-template-columns: repeat(3, minmax(0, 1fr))',
   '.combat-lab-tab-panel',
   'overflow-x: hidden',
+  'combat-lab-dock-open.sidebar-open',
+  'combat-lab-dock-open.sidebar-collapsed',
+  'combat-lab-dock-collapsed.sidebar-open',
+  '"identity stateplan"',
+  '"route route route"',
+  '"speed speed"',
 ]) {
   assert.ok(css.includes(token), `Combat Lab responsive layout CSS must contain ${token}`);
 }
@@ -47,5 +53,6 @@ for (const token of [
 assert.ok(!css.includes('right: calc(var(--combat-lab-dock-width)'), 'Laboratory dock width must not replace the production right-inspector offset.');
 assert.ok(!css.includes('width: min(760px'), 'Combat Lab must not restore the oversized floating drawer');
 assert.ok(!css.includes('.combat-lab-top {\n  display: flex'), 'Combat Lab toolbar must not restore the single-line horizontally scrolling control strip');
+assert.doesNotMatch(css, /\.unit-bar-speed-group\s*\{[^}]*display:\s*none/s, 'Shared speed controls must remain visible in Combat Lab.');
 
 console.log('Combat Lab 1440x900 dual-sidebar workspace layout contract passed.');
