@@ -1,5 +1,6 @@
 import type { Container, Ticker } from 'pixi.js';
 import type { GameApplicationContext } from '../../game/GameApplicationTypes';
+import { createPixiTacticalBoardAdapter } from '../../rendering/PixiTacticalBoardAdapter';
 import type { CombatLabDiagnosticLayerId } from '../../core/testing/combat-lab';
 import { CombatLabDiagnosticOverlayRenderer } from './CombatLabDiagnosticOverlayRenderer';
 import type { CombatLabVisualSession } from '../runtime/CombatLabVisualSession';
@@ -119,6 +120,7 @@ function installStableViewportResize(
   const canvas = document.querySelector<HTMLCanvasElement>('#app canvas');
   const root = canvas?.parentElement;
   const world = context.getWorldContainer();
+  const viewportAdapter = createPixiTacticalBoardAdapter(context.board);
   if (!canvas || !root) return () => {};
 
   let previous = root.getBoundingClientRect();
@@ -156,12 +158,9 @@ function installStableViewportResize(
     previous = next;
     if (Math.abs(deltaWidth) < 0.5 && Math.abs(deltaHeight) < 0.5) return;
 
-    // Preserve the same world point under the centre of the resized viewport.
-    // Only position changes; the camera scale remains uniform and untouched.
-    world.position.set(
-      Math.round(world.x + deltaWidth / 2),
-      Math.round(world.y + deltaHeight / 2),
-    );
+    // Preserve the same world point under the centre through the camera-owned
+    // path so DOM overlays receive the same transform as PixiJS layers.
+    viewportAdapter.preserveViewportCentre(deltaWidth, deltaHeight);
     context.forceRender();
   };
 
