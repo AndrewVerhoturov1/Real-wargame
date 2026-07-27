@@ -61,6 +61,15 @@ const rifle = buildCombatLabInitialState('rifle-distance-baseline', 1, 9041);
 const rifleman = rifle.state.units.find((unit) => unit.id === 'rifle-distance-shooter')!;
 assert.equal(rifleman.infantryCombatRuntime.ammoInventory.loadoutRef?.definitionId, 'loadout_rifleman');
 assert.equal(rifleman.infantryCombatRuntime.ammoInventory.loadoutRef?.revision, 1);
+const rifleTargets = ['rifle-target-25', 'rifle-target-50', 'rifle-target-100', 'rifle-target-200']
+  .map((unitId) => rifle.state.units.find((unit) => unit.id === unitId)!);
+const rifleBearings = rifleTargets.map((target) => Math.round(
+  Math.atan2(target.position.y - rifleman.position.y, target.position.x - rifleman.position.x) * 180_000 / Math.PI,
+) / 1000);
+assert.equal(new Set(rifleBearings).size, rifleTargets.length, 'Every rifle-distance target needs a distinct firing bearing.');
+assert.ok(rifleBearings.some((bearing) => bearing < 0));
+assert.ok(rifleBearings.some((bearing) => bearing > 0));
+assert.ok(new Set(rifleTargets.map((target) => target.position.y.toFixed(3))).size > 1, 'Rifle targets must not share one firing line.');
 
 const ppsh = buildCombatLabInitialState('ppsh-burst-recoil', 1, 9043);
 assert.equal(
