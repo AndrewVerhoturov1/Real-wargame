@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: temporary-combat-lab-visual-qa-2-5e8d45a
+  group: temporary-combat-lab-visual-qa-2-9f42818
   cancel-in-progress: false
 
 jobs:
@@ -17,13 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
-      SOURCE_SHA: 5e8d45ae32c27a2c4c23e9627904e4c1c7dd1bcb
+      SOURCE_SHA: 9f428186869564f1e76c0aafc682c573572d2d0e
       QA_BASE_BRANCH: ci/combat-lab-visual2-base-20260727t045000z-5e8d45a
     steps:
       - name: Checkout exact product SHA
         uses: actions/checkout@v4
         with:
-          ref: 5e8d45ae32c27a2c4c23e9627904e4c1c7dd1bcb
+          ref: 9f428186869564f1e76c0aafc682c573572d2d0e
           fetch-depth: 0
 
       - name: Verify exact source
