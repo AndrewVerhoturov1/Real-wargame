@@ -11,10 +11,13 @@ assert.ok(exists('src/game/GameApplication.ts'), 'Reusable full GameApplication 
 assert.ok(exists('src/game/GameApplicationTypes.ts'), 'GameApplication public contracts are missing.');
 assert.ok(exists('src/game/GameStyles.ts'), 'Shared game style entry is missing.');
 assert.ok(exists('src/combat-lab/CombatLabExtension.ts'), 'Combat Lab game extension is missing.');
+assert.ok(exists('src/ui/TacticalWorkspaceLayoutEnhancements.ts'), 'Shared workspace layout enhancements are missing.');
+assert.ok(exists('src/tactical-workspace-refined.css'), 'Shared refined workspace CSS is missing.');
 
 const gameMain = read('src/main.ts');
 const labMain = read('src/combat-lab/main.ts');
 const gameApplication = read('src/game/GameApplication.ts');
+const gameStyles = read('src/game/GameStyles.ts');
 const labHtml = read('combat-lab.html');
 const session = read('src/combat-lab/runtime/CombatLabVisualSession.ts');
 const extension = read('src/combat-lab/CombatLabExtension.ts');
@@ -23,6 +26,8 @@ const orderStatusCard = read('src/ui/TacticalOrderStatusCard.ts');
 const combatAudio = read('src/ui/CombatAudio.ts');
 const combatEffectsInstaller = read('src/rendering/CombatEffectsInstaller.ts');
 const combatEffectsRenderer = read('src/rendering/PixiCombatEffectsRenderer.ts');
+const layoutEnhancements = read('src/ui/TacticalWorkspaceLayoutEnhancements.ts');
+const refinedCss = read('src/tactical-workspace-refined.css');
 const extensionBoundary = `${extension}\n${renderer}`;
 
 assert.match(gameMain, /GameApplication\.create\(/, 'Game entry must use the reusable GameApplication.');
@@ -77,9 +82,28 @@ assert.doesNotMatch(orderStatusCard, /document\.body\.append/, 'The map-obscurin
 assert.doesNotMatch(orderStatusCard, /className\s*=\s*['"]tactical-order-card/, 'The retired order card must not render hidden duplicate UI.');
 assert.match(combatAudio, /export function installCombatAudioUnlock/);
 assert.match(combatAudio, /pointerdown/);
+assert.match(combatAudio, /pointerup/);
 assert.match(combatAudio, /keydown/);
+assert.match(combatAudio, /let combatAudioEnabled = true/);
+assert.match(combatAudio, /pendingShotCount/);
+assert.match(combatAudio, /flushPendingShots/);
+assert.match(combatAudio, /latencyHint:\s*'interactive'/);
 assert.match(combatEffectsInstaller, /installCombatAudioUnlock\(\)/, 'All game modes must share one combat-audio unlock path.');
 assert.match(combatEffectsInstaller, /destroyAudioUnlock\(\)/, 'Combat-audio listeners need symmetric teardown.');
 assert.equal((combatEffectsRenderer.match(/playRifleShot\(\)/g) ?? []).length, 1, 'One committed shot must produce exactly one rifle sound.');
+
+assert.match(gameStyles, /TacticalWorkspaceLayoutEnhancements/);
+for (const marker of [
+  'workspace-time-controls',
+  'workspace-resize-handle-left',
+  'workspace-resize-handle-right',
+  "['step', 'evaluate', 'execute', 'reset-unit']",
+  '.unit-attention-profile',
+  '.unit-attention-mode',
+  '[data-role="state-plan-panel"]',
+]) assert.ok(layoutEnhancements.includes(marker), `Refined workspace must contain ${marker}.`);
+assert.match(refinedCss, /--workspace-sidebar:\s*370px/);
+assert.match(refinedCss, /--combat-lab-dock-width:\s*370px/);
+assert.match(refinedCss, /grid-template-areas:\s*\n\s*"identity stats"\s*\n\s*"posture controls"/);
 
 console.log('Combat Lab full-game application contract passed.');
