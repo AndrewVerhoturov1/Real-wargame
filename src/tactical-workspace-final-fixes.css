@@ -16,3 +16,36 @@ body.workspace-simulation .simulation-unit-bar,
 body.app-shell-mode-combat-lab.workspace-simulation .simulation-unit-bar {
   width: auto;
 }
+
+.workspace-time-controls {
+  align-items: stretch;
+}
+
+.workspace-time-controls > [data-action="pause"] {
+  grid-area: auto;
+  min-width: 68px;
+}
+
+.workspace-time-controls .unit-bar-speed-group {
+  grid-area: auto;
+  grid-column: auto !important;
+  grid-row: auto !important;
+  align-self: stretch;
+  width: auto;
+  max-width: none;
+  margin: 0;
+}
+
+.workspace-resize-handle-right {
+  left: 0;
+  z-index: 30;
+}
+
+.workspace-resize-handle-right::after {
+  left: 0;
+}
+
+.simulation-unit-bar .simulation-controls [data-action="clear-order"] {
+  grid-column: 1 / -1;
+  width: 100%;
+}
