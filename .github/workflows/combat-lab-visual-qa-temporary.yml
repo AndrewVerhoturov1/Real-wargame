@@ -1,0 +1,154 @@
+name: Combat Lab Visual QA Temporary
+
+on:
+  push:
+    branches:
+      - feature/20260726-shooting-stage-09v-combat-lab
+
+jobs:
+  visual-qa:
+    if: contains(github.event.head_commit.message, '[visual-qa]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Build production application
+        run: npm run build:app
+
+      - name: Install Chromium QA runtime
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Start exact production preview
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/combat-lab-vite.log 2>&1 &
+          echo $! > /tmp/combat-lab-vite.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:4173/combat-lab.html > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/combat-lab-vite.log
+          exit 1
+
+      - name: Capture and verify 1440x900 states
+        run: |
+          mkdir -p visual-qa
+          cat > /tmp/combat-lab-visual-qa.mjs <<'EOF'
+          import { chromium } from 'playwright';
+          import { writeFile } from 'node:fs/promises';
+
+          const browser = await chromium.launch({
+            headless: true,
+            args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'],
+          });
+          const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+          const pageErrors = [];
+          const consoleErrors = [];
+          page.on('pageerror', (error) => pageErrors.push(String(error)));
+          page.on('console', (message) => {
+            if (message.type() === 'error') consoleErrors.push(message.text());
+          });
+
+          const report = { viewport: { width: 1440, height: 900 }, states: {}, pageErrors, consoleErrors, failures: [] };
+          const fail = (message) => report.failures.push(message);
+          const round = (value) => Math.round(value * 10) / 10;
+
+          await page.goto('http://127.0.0.1:4173/combat-lab.html', { waitUntil: 'domcontentloaded', timeout: 60000 });
+          await page.waitForSelector('#app[data-bootstrap-state="ready"]', { timeout: 60000 });
+          await page.waitForSelector('.combat-lab-dock', { timeout: 30000 });
+          await page.waitForTimeout(1500);
+
+          async function measure(label) {
+            const value = await page.evaluate(() => {
+              const rect = (selector) => {
+                const element = document.querySelector(selector);
+                if (!(element instanceof HTMLElement)) return null;
+                const box = element.getBoundingClientRect();
+                return { left: box.left, top: box.top, right: box.right, bottom: box.bottom, width: box.width, height: box.height };
+              };
+              return {
+                innerWidth: window.innerWidth,
+                innerHeight: window.innerHeight,
+                htmlScrollWidth: document.documentElement.scrollWidth,
+                bodyScrollWidth: document.body.scrollWidth,
+                app: rect('#app'),
+                dock: rect('#combat-lab-extension-root'),
+                bottom: rect('.simulation-unit-bar'),
+                topBar: rect('.tactical-workspace-bar'),
+                activeTab: document.querySelector('[data-combat-lab-tab].active')?.getAttribute('data-combat-lab-tab') ?? null,
+                collapsed: document.body.classList.contains('combat-lab-dock-collapsed'),
+              };
+            });
+            report.states[label] = Object.fromEntries(Object.entries(value).map(([key, item]) => {
+              if (!item || typeof item !== 'object' || Array.isArray(item)) return [key, item];
+              return [key, Object.fromEntries(Object.entries(item).map(([name, number]) => [name, typeof number === 'number' ? round(number) : number]))];
+            }));
+            return value;
+          }
+
+          const stand = await measure('stand');
+          if (stand.htmlScrollWidth > 1441 || stand.bodyScrollWidth > 1441) fail(`Horizontal overflow in stand state: html=${stand.htmlScrollWidth}, body=${stand.bodyScrollWidth}`);
+          if (!stand.dock || stand.dock.width < 430 || stand.dock.width > 450) fail(`Dock width is not 440px: ${stand.dock?.width}`);
+          if (!stand.app || !stand.dock || stand.app.right > stand.dock.left - 6) fail(`Map overlaps dock: app.right=${stand.app?.right}, dock.left=${stand.dock?.left}`);
+          if (!stand.bottom || !stand.dock || stand.bottom.right > stand.dock.left - 6) fail(`Bottom bar overlaps dock: bottom.right=${stand.bottom?.right}, dock.left=${stand.dock?.left}`);
+          if (stand.activeTab !== 'stand') fail(`Expected stand tab active, got ${stand.activeTab}`);
+          await page.screenshot({ path: 'visual-qa/01-stand-1440x900.png' });
+
+          await page.click('[data-combat-lab-tab="fighter"]');
+          await page.waitForTimeout(400);
+          const fighter = await measure('fighter');
+          if (fighter.activeTab !== 'fighter') fail(`Expected fighter tab active, got ${fighter.activeTab}`);
+          if (await page.locator('.combat-lab-fighter-panel .simulation-sidebar').count() !== 1) fail('Production fighter sidebar was not adopted into the fighter tab.');
+          await page.screenshot({ path: 'visual-qa/02-fighter-1440x900.png' });
+
+          await page.click('[data-combat-lab-tab="metrics"]');
+          await page.waitForTimeout(250);
+          await page.screenshot({ path: 'visual-qa/03-metrics-1440x900.png' });
+
+          await page.click('[data-combat-lab-tab="log"]');
+          await page.waitForTimeout(250);
+          await page.screenshot({ path: 'visual-qa/04-log-1440x900.png' });
+
+          await page.click('.combat-lab-dock-toggle');
+          await page.waitForFunction(() => document.body.classList.contains('combat-lab-dock-collapsed'));
+          await page.waitForTimeout(500);
+          const collapsed = await measure('collapsed');
+          if (!collapsed.collapsed) fail('Dock did not enter collapsed state.');
+          if (!collapsed.dock || collapsed.dock.width < 44 || collapsed.dock.width > 48) fail(`Collapsed dock width is not 46px: ${collapsed.dock?.width}`);
+          if (!collapsed.app || !collapsed.dock || collapsed.app.right > collapsed.dock.left - 6) fail(`Map overlaps collapsed dock: app.right=${collapsed.app?.right}, dock.left=${collapsed.dock?.left}`);
+          if (collapsed.htmlScrollWidth > 1441 || collapsed.bodyScrollWidth > 1441) fail(`Horizontal overflow in collapsed state: html=${collapsed.htmlScrollWidth}, body=${collapsed.bodyScrollWidth}`);
+          await page.screenshot({ path: 'visual-qa/05-collapsed-1440x900.png' });
+
+          await writeFile('visual-qa/report.json', `${JSON.stringify(report, null, 2)}\n`);
+          await browser.close();
+          if (report.failures.length > 0 || report.pageErrors.length > 0) {
+            console.error(JSON.stringify(report, null, 2));
+            process.exit(1);
+          }
+          console.log(JSON.stringify(report, null, 2));
+          EOF
+          node /tmp/combat-lab-visual-qa.mjs
+
+      - name: Upload screenshots and measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-lab-visual-qa-1440x900
+          path: |
+            visual-qa/*.png
+            visual-qa/report.json
+            /tmp/combat-lab-vite.log
+          if-no-files-found: warn
+          retention-days: 7
