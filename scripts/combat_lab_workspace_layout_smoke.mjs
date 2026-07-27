@@ -43,6 +43,8 @@ for (const token of [
   'combat-lab-dock-open.sidebar-open',
   'combat-lab-dock-open.sidebar-collapsed',
   'combat-lab-dock-collapsed.sidebar-open',
+  'body.app-shell-mode-combat-lab.workspace-simulation.sidebar-collapsed #app',
+  'right: 58px !important',
   '"identity stateplan"',
   '"route route route"',
   '"speed speed"',
