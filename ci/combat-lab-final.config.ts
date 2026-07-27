@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Temporary exact-source QA configuration; never merge into a product branch.
 export default defineConfig({
   testDir: '.',
   testMatch: 'combat-lab-final.spec.ts',
