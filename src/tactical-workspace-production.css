@@ -1,0 +1,380 @@
+:root {
+  --workspace-bottom: 138px;
+}
+
+/* Header ownership: mode, shared time and global actions have explicit lanes. */
+.tactical-workspace-bar {
+  grid-template-columns: minmax(230px, 250px) minmax(320px, 350px) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.workspace-brand {
+  display: none;
+}
+
+.workspace-mode-switch,
+.workspace-time-controls,
+.workspace-top-actions {
+  min-width: 0;
+}
+
+.workspace-mode-switch {
+  width: 100%;
+  min-width: 0;
+}
+
+.workspace-mode-switch button {
+  min-width: 0;
+  padding-inline: 12px;
+  font-size: 11px;
+}
+
+.workspace-time-controls {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 4px;
+  padding: 3px;
+  overflow: hidden;
+}
+
+.workspace-time-controls-label {
+  display: none;
+}
+
+.workspace-time-controls > [data-action="pause"],
+.workspace-time-controls .unit-bar-speed-group button {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  height: 30px;
+  min-height: 30px;
+  padding: 4px 5px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.workspace-time-controls > [data-action="pause"] {
+  min-width: 58px;
+}
+
+.workspace-time-controls .unit-bar-speed-group {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 3px;
+  min-width: 0;
+  overflow: visible;
+}
+
+.workspace-top-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 5px;
+  overflow: visible;
+}
+
+.workspace-top-actions > button,
+.workspace-file-menu > summary,
+.workspace-display-menu > summary {
+  min-width: 0;
+  min-height: 32px;
+  padding: 6px 9px;
+  border-radius: 9px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.workspace-file-menu,
+.workspace-display-menu {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+/* Shared production soldier panel. */
+.simulation-unit-bar {
+  container-type: inline-size;
+  box-sizing: border-box;
+  min-height: 126px;
+  max-height: 132px;
+  grid-template-columns: minmax(238px, 0.9fr) minmax(0, 1.1fr);
+  grid-template-areas:
+    "profile stats"
+    "posture controls";
+  gap: 7px 10px;
+  align-items: stretch;
+  padding: 8px 10px;
+  overflow: hidden;
+}
+
+.simulation-unit-bar > * {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.unit-bar-profile {
+  grid-area: profile;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(102px, 0.72fr);
+  gap: 8px;
+  align-items: stretch;
+}
+
+.unit-bar-identity {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.unit-bar-identity strong {
+  overflow: hidden;
+  color: var(--workspace-accent);
+  font-size: 14px;
+  line-height: 1.15;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.unit-bar-friendly-meta {
+  overflow: hidden;
+  color: var(--workspace-muted);
+  font-size: 9px;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.unit-meta-diagnostic {
+  display: none !important;
+}
+
+.simulation-unit-bar .unit-bar-current {
+  min-width: 0;
+  margin-top: 3px;
+  display: grid;
+  gap: 1px;
+  color: var(--workspace-muted);
+  font-size: 9px;
+  line-height: 1.15;
+}
+
+.simulation-unit-bar .unit-bar-current span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.unit-bar-weapon {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: minmax(42px, 1fr) auto;
+  gap: 3px;
+  padding: 5px 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 240, 161, 0.13);
+  border-radius: 9px;
+  background: rgba(255, 240, 161, 0.045);
+}
+
+.unit-bar-weapon.empty {
+  opacity: 0.55;
+}
+
+.unit-bar-weapon-image {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: var(--workspace-accent);
+}
+
+.unit-bar-weapon-image svg {
+  width: 100%;
+  max-width: 132px;
+  height: 42px;
+  fill: currentColor;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45));
+}
+
+.unit-bar-weapon-text {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.unit-bar-weapon-text strong,
+.unit-bar-weapon-text span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.unit-bar-weapon-text strong {
+  color: var(--workspace-text);
+  font-size: 10px;
+}
+
+.unit-bar-weapon-text span {
+  color: var(--workspace-muted);
+  font-size: 8px;
+}
+
+.unit-bar-stats {
+  grid-area: stats;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(44px, 1fr));
+  gap: 4px;
+  align-self: stretch;
+}
+
+.unit-bar-stat {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  padding: 4px 5px;
+  overflow: hidden;
+}
+
+.unit-bar-stat span,
+.unit-bar-stat b {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.unit-bar-stat span {
+  font-size: 8px;
+}
+
+.unit-bar-stat b {
+  font-size: 10px;
+}
+
+.posture-group {
+  grid-area: posture;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  align-self: end;
+  overflow: visible;
+}
+
+.simulation-controls {
+  grid-area: controls;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  align-self: end;
+  justify-content: stretch;
+  overflow: visible;
+}
+
+.simulation-unit-bar .posture-group button,
+.simulation-unit-bar .simulation-controls button {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  height: 29px;
+  min-height: 29px;
+  padding: 4px 7px;
+  border-radius: 7px;
+  overflow: hidden;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.simulation-unit-bar .simulation-controls button:only-child {
+  grid-column: 1 / -1;
+}
+
+.simulation-unit-bar > .unit-bar-speed-group,
+.simulation-unit-bar .unit-bar-route-controls,
+.simulation-unit-bar [data-role="state-plan-panel"],
+.simulation-unit-bar .unit-attention-profile,
+.simulation-unit-bar .unit-attention-mode,
+.simulation-unit-bar [data-action="step"],
+.simulation-unit-bar [data-action="evaluate"],
+.simulation-unit-bar [data-action="execute"],
+.simulation-unit-bar [data-action="reset-unit"] {
+  display: none !important;
+}
+
+@container (min-width: 930px) {
+  .simulation-unit-bar {
+    grid-template-columns: minmax(270px, 0.86fr) minmax(360px, 1.45fr) minmax(126px, 0.48fr);
+    grid-template-areas:
+      "profile stats controls"
+      "profile posture controls";
+  }
+
+  .simulation-controls {
+    grid-template-columns: minmax(0, 1fr);
+    align-self: stretch;
+    align-content: center;
+  }
+
+  .simulation-unit-bar .simulation-controls button:only-child {
+    grid-column: auto;
+  }
+}
+
+@container (max-width: 620px) {
+  .simulation-unit-bar {
+    grid-template-columns: minmax(170px, 0.9fr) minmax(0, 1.1fr);
+    gap-inline: 7px;
+    padding-inline: 7px;
+  }
+
+  .unit-bar-profile {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .unit-bar-weapon {
+    grid-template-columns: 58px minmax(0, 1fr);
+    grid-template-rows: 1fr;
+    align-items: center;
+  }
+
+  .unit-bar-weapon-image svg {
+    height: 28px;
+  }
+
+  .unit-bar-stats {
+    grid-template-columns: repeat(3, minmax(42px, 1fr));
+  }
+}
+
+@media (min-width: 1541px) {
+  .tactical-workspace-bar {
+    grid-template-columns: minmax(140px, 0.45fr) minmax(230px, 250px) minmax(320px, 350px) minmax(0, 1fr);
+  }
+
+  .workspace-brand {
+    display: grid;
+  }
+}
+
+@media (max-width: 1180px) {
+  .tactical-workspace-bar {
+    grid-template-columns: minmax(220px, 240px) minmax(300px, 330px) minmax(0, 1fr);
+  }
+
+  .workspace-top-actions > button,
+  .workspace-file-menu > summary,
+  .workspace-display-menu > summary {
+    padding-inline: 7px;
+    font-size: 10px;
+  }
+}
