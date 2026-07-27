@@ -15,7 +15,7 @@ body.app-shell-mode-combat-lab {
 #combat-lab-extension-root {
   position: fixed;
   top: var(--workspace-top);
-  right: 8px;
+  left: 8px;
   bottom: 8px;
   z-index: 80;
   width: var(--combat-lab-dock-width);
@@ -76,7 +76,7 @@ body.app-shell-mode-combat-lab {
   border: 1px solid #475347;
   border-radius: 12px;
   background: rgba(12, 16, 13, 0.98);
-  box-shadow: -12px 16px 38px rgba(0, 0, 0, 0.46);
+  box-shadow: 12px 16px 38px rgba(0, 0, 0, 0.46);
   backdrop-filter: blur(8px);
 }
 
@@ -100,7 +100,7 @@ body.app-shell-mode-combat-lab {
 
 .combat-lab-tab-list {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   padding: 7px;
   border-bottom: 1px solid #3f493f;
@@ -249,36 +249,16 @@ body.app-shell-mode-combat-lab {
 .combat-lab-journal-entry { padding: 3px 0; color: #abb5aa; font: 10px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
 .combat-lab-empty-tab { padding: 12px; border: 1px dashed #354035; border-radius: 8px; color: #9fab9e; font-size: 11px; }
 
-.combat-lab-fighter-panel { padding: 0; overflow: hidden; }
-.combat-lab-fighter-panel .simulation-sidebar,
-.combat-lab-fighter-panel .combat-lab-adopted-sidebar {
-  position: relative !important;
-  inset: auto !important;
-  width: 100% !important;
-  height: 100% !important;
-  min-height: 0 !important;
-  grid-template-rows: auto auto minmax(0, 1fr) !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  background: #111712 !important;
-}
-.combat-lab-fighter-panel .simulation-sidebar-header { min-height: 48px; padding-block: 7px; }
-.combat-lab-fighter-panel .simulation-sidebar-header [data-action="collapse"] { display: none !important; }
-.combat-lab-fighter-panel .simulation-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 6px; }
-.combat-lab-fighter-panel .simulation-tabs button { min-height: 31px; padding-inline: 3px; font-size: 9px; }
-.combat-lab-fighter-panel .simulation-sidebar-body { padding: 10px; }
-
 body.app-shell-mode-combat-lab.workspace-simulation #app {
-  right: calc(var(--combat-lab-dock-width) + var(--combat-lab-dock-gap) + 8px) !important;
+  left: calc(var(--combat-lab-dock-width) + var(--combat-lab-dock-gap) + 8px) !important;
   bottom: var(--workspace-bottom) !important;
 }
 body.app-shell-mode-combat-lab .simulation-unit-bar {
-  right: calc(var(--combat-lab-dock-width) + var(--combat-lab-dock-gap) + 8px) !important;
+  left: calc(var(--combat-lab-dock-width) + var(--combat-lab-dock-gap) + 8px) !important;
 }
-body.app-shell-mode-combat-lab .map-scale-fixed-label { left: 18px; }
-body.app-shell-mode-combat-lab .simulation-controls [data-action="pause"],
-body.app-shell-mode-combat-lab .simulation-controls [data-action="step"] { display: none; }
+body.app-shell-mode-combat-lab .map-scale-fixed-label {
+  left: calc(var(--combat-lab-dock-width) + var(--combat-lab-dock-gap) + 18px);
+}
 body.app-shell-mode-combat-lab .cover-map-tooltip { max-height: 180px; overflow: hidden; }
 
 body.combat-lab-dock-collapsed #combat-lab-extension-root { width: var(--combat-lab-dock-collapsed-width); }
@@ -291,13 +271,16 @@ body.combat-lab-dock-collapsed .combat-lab-tab-panels { display: none; }
 body.combat-lab-dock-collapsed .combat-lab-dock-toggle { min-width: 0; width: 100%; height: 100%; padding: 7px 4px; writing-mode: vertical-rl; transform: rotate(180deg); }
 body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-collapsed #app,
 body.app-shell-mode-combat-lab.combat-lab-dock-collapsed .simulation-unit-bar {
-  right: calc(var(--combat-lab-dock-collapsed-width) + var(--combat-lab-dock-gap) + 8px) !important;
+  left: calc(var(--combat-lab-dock-collapsed-width) + var(--combat-lab-dock-gap) + 8px) !important;
+}
+body.app-shell-mode-combat-lab.combat-lab-dock-collapsed .map-scale-fixed-label {
+  left: calc(var(--combat-lab-dock-collapsed-width) + var(--combat-lab-dock-gap) + 18px);
 }
 
 .combat-lab-startup-error {
   position: fixed;
   top: 82px;
-  right: 20px;
+  left: 20px;
   z-index: 120;
   max-width: 620px;
   padding: 20px;
@@ -309,16 +292,13 @@ body.app-shell-mode-combat-lab.combat-lab-dock-collapsed .simulation-unit-bar {
 
 @media (max-width: 1180px) {
   :root { --combat-lab-dock-width: 400px; }
-  body.app-shell-mode-combat-lab .simulation-unit-bar {
-    grid-template-columns: minmax(145px, 0.8fr) minmax(270px, 1.2fr);
-    grid-template-areas: "identity stats" "current current" "posture controls" "speed speed";
-  }
 }
 
 @media (max-width: 900px) {
-  #combat-lab-extension-root { left: 8px; width: auto; }
+  #combat-lab-extension-root { right: 8px; width: auto; }
   body.app-shell-mode-combat-lab.workspace-simulation #app,
-  body.app-shell-mode-combat-lab .simulation-unit-bar { right: 8px !important; }
-  body.combat-lab-dock-collapsed #combat-lab-extension-root { left: auto; width: var(--combat-lab-dock-collapsed-width); }
+  body.app-shell-mode-combat-lab .simulation-unit-bar { left: 8px !important; }
+  body.app-shell-mode-combat-lab .map-scale-fixed-label { left: 18px; }
+  body.combat-lab-dock-collapsed #combat-lab-extension-root { right: auto; width: var(--combat-lab-dock-collapsed-width); }
   .combat-lab-scenario-row { grid-template-columns: 1fr 96px; }
 }
