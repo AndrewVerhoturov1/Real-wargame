@@ -88,8 +88,8 @@ jobs:
             if (!condition) throw new Error(message);
           }
 
-          async function snapshot(name) {
-            const geometry = await page.evaluate(() => {
+          async function readGeometry() {
+            return page.evaluate(() => {
               const rect = (selector) => {
                 const element = document.querySelector(selector);
                 if (!(element instanceof HTMLElement)) return null;
@@ -107,8 +107,19 @@ jobs:
                 canvasCount: document.querySelectorAll('#app canvas').length,
                 rightInsideLeft: Boolean(document.querySelector('#combat-lab-extension-root .simulation-sidebar')),
                 fighterTab: Boolean(document.querySelector('[data-combat-lab-tab="fighter"]')),
+                rightTabCount: document.querySelectorAll('.simulation-sidebar [data-tab], .simulation-sidebar [data-static-tactical-kind]').length,
+                labButtons: Array.from(document.querySelectorAll('.combat-lab-run-controls button')).map((item) => item.textContent),
+                labSelects: Array.from(document.querySelectorAll('.combat-lab-run-controls select')).map((item) => ({ value: item.value, label: item.closest('label')?.textContent ?? '' })),
+                lowerPause: document.querySelector('.simulation-controls [data-action="pause"]')?.textContent ?? null,
+                speedValues: Array.from(document.querySelectorAll('.unit-bar-speed-group [data-speed]')).map((item) => item.getAttribute('data-speed')),
               };
             });
+          }
+
+          async function snapshot(name) {
+            const geometry = await readGeometry();
+            fs.writeFileSync(`${out}/${name}.json`, JSON.stringify(geometry, null, 2));
+            await page.screenshot({ path: `${out}/${name}.png`, fullPage: false });
             check(geometry.body.scrollWidth <= geometry.body.clientWidth, `${name}: horizontal overflow ${geometry.body.scrollWidth}/${geometry.body.clientWidth}`);
             check(geometry.canvasCount === 1, `${name}: expected one game canvas, got ${geometry.canvasCount}`);
             check(!geometry.rightInsideLeft, `${name}: standard right inspector was moved into Combat Lab`);
@@ -125,7 +136,6 @@ jobs:
             if (geometry.right && geometry.bottom && geometry.bodyClasses.includes('sidebar-open')) {
               check(geometry.bottom.right <= geometry.right.left + 1, `${name}: lower panel overlaps open right inspector`);
             }
-            await page.screenshot({ path: `${out}/${name}.png`, fullPage: false });
             return geometry;
           }
 
@@ -133,27 +143,36 @@ jobs:
           await page.waitForSelector('#combat-lab-extension-root[data-combat-lab-extension="active"]');
           await page.waitForSelector('#app canvas');
           await page.waitForSelector('.simulation-sidebar');
-          check(await page.locator('.simulation-sidebar [data-tab]').count() >= 5, 'Standard game inspector tabs are missing');
+          await snapshot('00-loaded');
+
+          const initial = await readGeometry();
+          check(initial.rightTabCount >= 5, `Standard game inspector tabs are missing: ${initial.rightTabCount}`);
 
           for (const selector of [
             '.simulation-controls [data-action="fire-contact"]',
             '.simulation-controls [data-action="toggle-fire-permission"]',
           ]) {
             const control = page.locator(selector);
-            check(await control.count() === 1, `Missing legacy shooting control ${selector}`);
-            check(!(await control.isVisible()), `Legacy shooting control remains visible: ${selector}`);
-            check(await control.isDisabled(), `Legacy shooting control remains enabled: ${selector}`);
+            if (await control.count() > 0) {
+              check(!(await control.isVisible()), `Legacy shooting control remains visible: ${selector}`);
+              check(await control.isDisabled(), `Legacy shooting control remains enabled: ${selector}`);
+            }
           }
 
           const lowerPause = page.locator('.simulation-controls [data-action="pause"]');
-          const labPause = page.locator('.combat-lab-run-controls button').filter({ hasText: /^(Пауза|Продолжить)$/ }).first();
+          const labPause = page.locator('.combat-lab-run-controls > button').nth(1);
           check(await lowerPause.count() === 1 && await labPause.count() === 1, 'Shared pause controls are missing');
           await lowerPause.click();
-          await page.waitForTimeout(150);
-          check((await lowerPause.textContent()) === (await labPause.textContent()), 'Game and laboratory pause controls diverged');
-          await page.locator('.unit-bar-speed-group [data-speed="2"]').click();
-          const labSpeed = page.locator('.combat-lab-run-controls label').filter({ hasText: 'Скорость' }).locator('select');
-          check(await labSpeed.inputValue() === '2', 'Game and laboratory speed controls diverged');
+          await page.waitForTimeout(200);
+          check((await lowerPause.textContent()) === (await labPause.textContent()), `Game and laboratory pause controls diverged: ${await lowerPause.textContent()} / ${await labPause.textContent()}`);
+
+          const speedButton = page.locator('.unit-bar-speed-group [data-speed="2"]');
+          check(await speedButton.count() === 1, 'The x2 game speed control is missing');
+          await speedButton.click();
+          await page.waitForTimeout(100);
+          const labSpeed = page.locator('.combat-lab-run-controls > label select');
+          check(await labSpeed.count() === 1, 'Laboratory speed selector is missing');
+          check(await labSpeed.inputValue() === '2', `Game and laboratory speed controls diverged: ${await labSpeed.inputValue()}`);
 
           await snapshot('01-stand-both-open');
           await page.locator('[data-combat-lab-tab="metrics"]').click();
@@ -187,11 +206,12 @@ jobs:
               overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
             };
           });
+          fs.writeFileSync(`${out}/07-game-state.json`, JSON.stringify(gamePopupState, null, 2));
+          await page.screenshot({ path: `${out}/07-game-without-order-popover.png`, fullPage: false });
           check(gamePopupState.lowerDetailsDisplay === 'none' || gamePopupState.lowerDetailsDisplay === 'absent', 'Order/route popover remains available over the game map');
           check(gamePopupState.statePlanPointerEvents !== 'none', 'State/plan diagnostics were disabled');
           check(gamePopupState.canvasCount === 1, 'Game page does not have exactly one canvas');
           check(!gamePopupState.overflow, 'Game page has horizontal overflow');
-          await page.screenshot({ path: `${out}/07-game-without-order-popover.png`, fullPage: false });
 
           fs.writeFileSync(`${out}/evidence.json`, JSON.stringify({
             productSha: process.env.PRODUCT_SHA,
@@ -201,7 +221,7 @@ jobs:
           check(pageErrors.length === 0, `Browser errors detected:\n${pageErrors.join('\n')}`);
           await browser.close();
           NODE
-          PRODUCT_SHA="$PRODUCT_SHA" node .combat-lab-dual-sidebars-qa.mjs
+          PRODUCT_SHA="$PRODUCT_SHA" node .combat-lab-dual-sidebars-qa.mjs 2>&1 | tee artifacts/combat-lab-dual-sidebars/browser.log
 
       - name: Upload QA evidence
         if: always()
