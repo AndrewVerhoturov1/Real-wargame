@@ -3,10 +3,12 @@ import { readFileSync } from 'node:fs';
 
 const extension = readFileSync('src/combat-lab/CombatLabExtension.ts', 'utf8');
 const shell = readFileSync('src/combat-lab/ui/CombatLabShell.ts', 'utf8');
-const uiBoundary = `${extension}\n${shell}`;
+const layoutEnhancements = readFileSync('src/ui/TacticalWorkspaceLayoutEnhancements.ts', 'utf8');
+const uiBoundary = `${extension}\n${shell}\n${layoutEnhancements}`;
 const labCss = readFileSync('src/combat-lab/combat-lab.css', 'utf8');
 const workspaceCss = readFileSync('src/combat-lab/combat-lab-workspace.css', 'utf8');
-const css = `${labCss}\n${workspaceCss}`;
+const refinedCss = readFileSync('src/tactical-workspace-refined.css', 'utf8');
+const css = `${labCss}\n${workspaceCss}\n${refinedCss}`;
 
 for (const token of [
   'combat-lab-dock',
@@ -25,12 +27,16 @@ for (const token of [
   'combat-lab-advanced',
   'combat-lab-metrics-panel',
   'combat-lab-log-panel',
+  'workspace-resize-handle-left',
+  'workspace-resize-handle-right',
+  'workspace-time-controls',
 ]) {
   assert.ok(uiBoundary.includes(token), `Combat Lab UI boundary must contain ${token}`);
 }
 
 for (const token of [
-  '--combat-lab-dock-width: 440px',
+  '--combat-lab-dock-width: 370px',
+  '--workspace-sidebar: 370px',
   'body.app-shell-mode-combat-lab.workspace-simulation #app',
   'left: calc(var(--combat-lab-dock-width)',
   'body.app-shell-mode-combat-lab .simulation-unit-bar',
@@ -41,6 +47,9 @@ for (const token of [
   'overflow-x: hidden',
   'body.app-shell-mode-combat-lab.workspace-simulation.sidebar-collapsed #app',
   'right: 58px !important',
+  'grid-template-areas:',
+  '"identity stats"',
+  '"posture controls"',
 ]) {
   assert.ok(css.includes(token), `Combat Lab responsive layout CSS must contain ${token}`);
 }
@@ -48,7 +57,7 @@ for (const token of [
 assert.ok(!css.includes('right: calc(var(--combat-lab-dock-width)'), 'Laboratory dock width must not replace the production right-inspector offset.');
 assert.ok(!css.includes('width: min(760px'), 'Combat Lab must not restore the oversized floating drawer');
 assert.ok(!css.includes('.combat-lab-top {\n  display: flex'), 'Combat Lab toolbar must not restore the single-line horizontally scrolling control strip');
-assert.doesNotMatch(css, /\.unit-bar-speed-group\s*\{[^}]*display:\s*none/s, 'Shared speed controls must remain visible in Combat Lab.');
+assert.doesNotMatch(css, /\.workspace-time-controls\s+\.unit-bar-speed-group\s*\{[^}]*display:\s*none/s, 'Shared speed controls must remain visible in the header.');
 
 assert.doesNotMatch(
   workspaceCss,
