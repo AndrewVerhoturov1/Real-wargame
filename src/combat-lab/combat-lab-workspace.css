@@ -41,6 +41,12 @@ body.app-shell-mode-combat-lab .simulation-controls [data-action="toggle-fire-pe
   display: none !important;
 }
 
+/* Keep the collapsed production inspector as a real right-hand lane instead of overlaying the map. */
+body.app-shell-mode-combat-lab.workspace-simulation.sidebar-collapsed #app,
+body.app-shell-mode-combat-lab.workspace-simulation.sidebar-collapsed .simulation-unit-bar {
+  right: 58px !important;
+}
+
 /* Both sidebars open: preserve every game control in the narrow centre column. */
 body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-open.sidebar-open {
   --workspace-bottom: 214px;
