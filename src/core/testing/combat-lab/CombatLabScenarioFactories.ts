@@ -38,6 +38,7 @@ export function buildCombatLabScenarioState(
   const unitsData: UnitData[] = fixtures.map((fixture) => ({
     id: fixture.id,
     side: fixture.side,
+    aiControl: 'manual',
     x: fixture.x,
     y: fixture.y + commonYOffset,
     type: 'infantry_squad',
