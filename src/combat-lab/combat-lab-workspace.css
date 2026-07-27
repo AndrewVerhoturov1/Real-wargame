@@ -1,3 +1,8 @@
+body.app-shell-mode-combat-lab.workspace-simulation #app {
+  width: auto !important;
+  height: auto !important;
+}
+
 body.app-shell-mode-combat-lab .combat-lab-left > .combat-lab-section-title {
   display: none;
 }
