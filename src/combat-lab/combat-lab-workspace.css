@@ -3,6 +3,14 @@ body.app-shell-mode-combat-lab.workspace-simulation #app {
   height: auto !important;
 }
 
+body.app-shell-mode-combat-lab.workspace-editor #app {
+  left: calc(var(--combat-lab-dock-width) + var(--combat-lab-dock-gap) + 8px) !important;
+}
+
+body.app-shell-mode-combat-lab.workspace-editor.combat-lab-dock-collapsed #app {
+  left: calc(var(--combat-lab-dock-collapsed-width) + var(--combat-lab-dock-gap) + 8px) !important;
+}
+
 body.app-shell-mode-combat-lab .combat-lab-left > .combat-lab-section-title {
   display: none;
 }
@@ -36,5 +44,12 @@ body.app-shell-mode-combat-lab .simulation-controls [data-action="toggle-fire-pe
 @media (max-width: 1180px) {
   body.app-shell-mode-combat-lab .combat-lab-run-controls {
     grid-template-columns: minmax(110px, 1fr) 92px 68px 60px;
+  }
+}
+
+@media (max-width: 900px) {
+  body.app-shell-mode-combat-lab.workspace-editor #app,
+  body.app-shell-mode-combat-lab.workspace-editor.combat-lab-dock-collapsed #app {
+    left: 8px !important;
   }
 }
