@@ -61,26 +61,41 @@ jobs:
           import { chromium } from '@playwright/test';
           import { writeFile } from 'node:fs/promises';
 
-          const browser = await chromium.launch({
-            headless: true,
-            args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'],
-          });
-          const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+          let browser = null;
+          let page = null;
           const pageErrors = [];
-          const consoleErrors = [];
-          page.on('pageerror', (error) => pageErrors.push(String(error)));
-          page.on('console', (message) => {
-            if (message.type() === 'error') consoleErrors.push(message.text());
-          });
-
-          const report = { viewport: { width: 1440, height: 900 }, states: {}, pageErrors, consoleErrors, failures: [] };
+          const consoleMessages = [];
+          const report = {
+            viewport: { width: 1440, height: 900 },
+            states: {},
+            pageErrors,
+            consoleMessages,
+            failures: [],
+            fatalError: null,
+            startup: null,
+          };
           const fail = (message) => report.failures.push(message);
           const round = (value) => Math.round(value * 10) / 10;
 
-          await page.goto('http://127.0.0.1:4173/combat-lab.html', { waitUntil: 'domcontentloaded', timeout: 60000 });
-          await page.waitForSelector('#app[data-bootstrap-state="ready"]', { timeout: 60000 });
-          await page.waitForSelector('.combat-lab-dock', { timeout: 30000 });
-          await page.waitForTimeout(1500);
+          async function saveReport() {
+            await writeFile('artifacts/screenshots/report.json', `${JSON.stringify(report, null, 2)}\n`);
+          }
+
+          async function captureStartupState() {
+            if (!page) return null;
+            return page.evaluate(() => ({
+              url: location.href,
+              title: document.title,
+              readyState: document.readyState,
+              bodyClass: document.body.className,
+              bootstrapState: document.querySelector('#app')?.getAttribute('data-bootstrap-state') ?? null,
+              startupError: document.querySelector('.combat-lab-startup-error')?.textContent ?? null,
+              debugPanel: document.querySelector('#debug-panel')?.textContent ?? null,
+              bodyText: document.body.innerText.slice(0, 12000),
+              dockExists: Boolean(document.querySelector('.combat-lab-dock')),
+              canvasCount: document.querySelectorAll('canvas').length,
+            }));
+          }
 
           async function measure(label) {
             const value = await page.evaluate(() => {
@@ -110,43 +125,72 @@ jobs:
             return value;
           }
 
-          const stand = await measure('stand');
-          if (stand.htmlScrollWidth > 1441 || stand.bodyScrollWidth > 1441) fail(`Horizontal overflow in stand state: html=${stand.htmlScrollWidth}, body=${stand.bodyScrollWidth}`);
-          if (!stand.dock || stand.dock.width < 430 || stand.dock.width > 450) fail(`Dock width is not 440px: ${stand.dock?.width}`);
-          if (!stand.app || !stand.dock || stand.app.right > stand.dock.left - 6) fail(`Map overlaps dock: app.right=${stand.app?.right}, dock.left=${stand.dock?.left}`);
-          if (!stand.bottom || !stand.dock || stand.bottom.right > stand.dock.left - 6) fail(`Bottom bar overlaps dock: bottom.right=${stand.bottom?.right}, dock.left=${stand.dock?.left}`);
-          if (stand.activeTab !== 'stand') fail(`Expected stand tab active, got ${stand.activeTab}`);
-          await page.screenshot({ path: 'artifacts/screenshots/01-stand-1440x900.png' });
+          try {
+            browser = await chromium.launch({
+              headless: true,
+              args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'],
+            });
+            page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+            page.on('pageerror', (error) => pageErrors.push(String(error)));
+            page.on('console', (message) => consoleMessages.push({ type: message.type(), text: message.text() }));
 
-          await page.click('[data-combat-lab-tab="fighter"]');
-          await page.waitForTimeout(400);
-          const fighter = await measure('fighter');
-          if (fighter.activeTab !== 'fighter') fail(`Expected fighter tab active, got ${fighter.activeTab}`);
-          if (await page.locator('.combat-lab-fighter-panel .simulation-sidebar').count() !== 1) fail('Production fighter sidebar was not adopted into the fighter tab.');
-          await page.screenshot({ path: 'artifacts/screenshots/02-fighter-1440x900.png' });
+            await page.goto('http://127.0.0.1:4173/combat-lab.html', { waitUntil: 'domcontentloaded', timeout: 60000 });
+            await Promise.race([
+              page.waitForSelector('.combat-lab-dock', { state: 'visible', timeout: 60000 }),
+              page.waitForSelector('.combat-lab-startup-error', { state: 'visible', timeout: 60000 }).then(async () => {
+                throw new Error(`Combat Lab startup error: ${await page.locator('.combat-lab-startup-error').innerText()}`);
+              }),
+            ]);
+            await page.waitForTimeout(1500);
+            report.startup = await captureStartupState();
 
-          await page.click('[data-combat-lab-tab="metrics"]');
-          await page.waitForTimeout(250);
-          await page.screenshot({ path: 'artifacts/screenshots/03-metrics-1440x900.png' });
+            const stand = await measure('stand');
+            if (stand.htmlScrollWidth > 1441 || stand.bodyScrollWidth > 1441) fail(`Horizontal overflow in stand state: html=${stand.htmlScrollWidth}, body=${stand.bodyScrollWidth}`);
+            if (!stand.dock || stand.dock.width < 430 || stand.dock.width > 450) fail(`Dock width is not 440px: ${stand.dock?.width}`);
+            if (!stand.app || !stand.dock || stand.app.right > stand.dock.left - 6) fail(`Map overlaps dock: app.right=${stand.app?.right}, dock.left=${stand.dock?.left}`);
+            if (!stand.bottom || !stand.dock || stand.bottom.right > stand.dock.left - 6) fail(`Bottom bar overlaps dock: bottom.right=${stand.bottom?.right}, dock.left=${stand.dock?.left}`);
+            if (stand.activeTab !== 'stand') fail(`Expected stand tab active, got ${stand.activeTab}`);
+            await page.screenshot({ path: 'artifacts/screenshots/01-stand-1440x900.png' });
 
-          await page.click('[data-combat-lab-tab="log"]');
-          await page.waitForTimeout(250);
-          await page.screenshot({ path: 'artifacts/screenshots/04-log-1440x900.png' });
+            await page.click('[data-combat-lab-tab="fighter"]');
+            await page.waitForTimeout(400);
+            const fighter = await measure('fighter');
+            if (fighter.activeTab !== 'fighter') fail(`Expected fighter tab active, got ${fighter.activeTab}`);
+            if (await page.locator('.combat-lab-fighter-panel .simulation-sidebar').count() !== 1) fail('Production fighter sidebar was not adopted into the fighter tab.');
+            await page.screenshot({ path: 'artifacts/screenshots/02-fighter-1440x900.png' });
 
-          await page.click('.combat-lab-dock-toggle');
-          await page.waitForFunction(() => document.body.classList.contains('combat-lab-dock-collapsed'));
-          await page.waitForTimeout(500);
-          const collapsed = await measure('collapsed');
-          if (!collapsed.collapsed) fail('Dock did not enter collapsed state.');
-          if (!collapsed.dock || collapsed.dock.width < 44 || collapsed.dock.width > 48) fail(`Collapsed dock width is not 46px: ${collapsed.dock?.width}`);
-          if (!collapsed.app || !collapsed.dock || collapsed.app.right > collapsed.dock.left - 6) fail(`Map overlaps collapsed dock: app.right=${collapsed.app?.right}, dock.left=${collapsed.dock?.left}`);
-          if (collapsed.htmlScrollWidth > 1441 || collapsed.bodyScrollWidth > 1441) fail(`Horizontal overflow in collapsed state: html=${collapsed.htmlScrollWidth}, body=${collapsed.bodyScrollWidth}`);
-          await page.screenshot({ path: 'artifacts/screenshots/05-collapsed-1440x900.png' });
+            await page.click('[data-combat-lab-tab="metrics"]');
+            await page.waitForTimeout(250);
+            await page.screenshot({ path: 'artifacts/screenshots/03-metrics-1440x900.png' });
 
-          await writeFile('artifacts/screenshots/report.json', `${JSON.stringify(report, null, 2)}\n`);
-          await browser.close();
+            await page.click('[data-combat-lab-tab="log"]');
+            await page.waitForTimeout(250);
+            await page.screenshot({ path: 'artifacts/screenshots/04-log-1440x900.png' });
+
+            await page.click('.combat-lab-dock-toggle');
+            await page.waitForFunction(() => document.body.classList.contains('combat-lab-dock-collapsed'));
+            await page.waitForTimeout(500);
+            const collapsed = await measure('collapsed');
+            if (!collapsed.collapsed) fail('Dock did not enter collapsed state.');
+            if (!collapsed.dock || collapsed.dock.width < 44 || collapsed.dock.width > 48) fail(`Collapsed dock width is not 46px: ${collapsed.dock?.width}`);
+            if (!collapsed.app || !collapsed.dock || collapsed.app.right > collapsed.dock.left - 6) fail(`Map overlaps collapsed dock: app.right=${collapsed.app?.right}, dock.left=${collapsed.dock?.left}`);
+            if (collapsed.htmlScrollWidth > 1441 || collapsed.bodyScrollWidth > 1441) fail(`Horizontal overflow in collapsed state: html=${collapsed.htmlScrollWidth}, body=${collapsed.bodyScrollWidth}`);
+            await page.screenshot({ path: 'artifacts/screenshots/05-collapsed-1440x900.png' });
+          } catch (error) {
+            report.fatalError = error instanceof Error ? error.stack ?? error.message : String(error);
+            try {
+              report.startup = await captureStartupState();
+              if (page) await page.screenshot({ path: 'artifacts/screenshots/00-failure-1440x900.png' });
+            } catch (captureError) {
+              report.failures.push(`Failure evidence capture also failed: ${String(captureError)}`);
+            }
+          } finally {
+            await saveReport();
+            await browser?.close();
+          }
+
           console.log(JSON.stringify(report, null, 2));
-          if (report.failures.length > 0 || report.pageErrors.length > 0) process.exit(1);
+          if (report.fatalError || report.failures.length > 0 || report.pageErrors.length > 0) process.exit(1);
           EOF
           node /tmp/combat-lab-visual-qa.mjs
 
