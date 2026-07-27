@@ -1,15 +1,19 @@
-import type { BallisticDirection3 } from '../../combat/UnitHitShapes';
+import { normalizeDirection, type BallisticDirection3 } from '../../combat/UnitHitShapes';
 import type { SimulationState } from '../../simulation/SimulationState';
 import type { UnitModel } from '../../units/UnitModel';
 import type {
   AimFactorBreakdownV1,
+  AimSolutionRuntimeV1,
   AimTrackingRuntimeV1,
+  FireTaskRuntimeV1,
   InfantryWeaponInstanceV1,
 } from './InfantryCombatRuntimeTypes';
 import {
+  advanceAimPhysicalProgress as advanceAimPhysicalProgressStage5,
   calculateAimFactorBreakdown,
   normalizeAimTrackingRuntime as normalizeAimTrackingRuntimeStage5,
   serializeAimTrackingRuntime as serializeAimTrackingRuntimeStage5,
+  updateAimTrackingAtBoundary as updateAimTrackingAtBoundaryStage5,
 } from './AimRuntimeStage5';
 import { getEffectiveCombatCapabilities } from './EffectiveCombatCapabilities';
 import { applyMachineGunFireFactors } from './MachineGunFireModifiers';
@@ -18,6 +22,9 @@ export * from './AimRuntimeStage5';
 
 const UNIT_DIRECTION_MAGNITUDE_TOLERANCE = 1e-12;
 const DIRECTION_MAGNITUDE_EPSILON = 1e-9;
+const AIM_ALIGNMENT_TOLERANCE_RADIANS = Math.PI / 180;
+const NEAR_PARALLEL_DOT = 0.9995;
+const CANONICAL_SCALE = 1_000_000_000_000;
 
 /**
  * Stage 5 normalizes every stored direction on load. A direction that is
@@ -40,6 +47,53 @@ export function serializeAimTrackingRuntime(value: AimTrackingRuntimeV1): AimTra
   const serialized = serializeAimTrackingRuntimeStage5(value);
   preserveStoredUnitDirections(serialized, value);
   return serialized;
+}
+
+/**
+ * Refreshes the perception solution and then applies the physical direction
+ * gate. Aim quality alone must never authorize a shot while the weapon is
+ * still traversing toward the target.
+ */
+export function updateAimTrackingAtBoundary(
+  state: Pick<SimulationState, 'map'>,
+  shooter: UnitModel,
+  task: FireTaskRuntimeV1,
+  weapon: InfantryWeaponInstanceV1,
+  boundarySeconds: number,
+): AimSolutionRuntimeV1 {
+  const solution = updateAimTrackingAtBoundaryStage5(state, shooter, task, weapon, boundarySeconds);
+  applyDirectionGate(task);
+  return solution;
+}
+
+/**
+ * Keeps the established deterministic aim-quality clock, but replaces the
+ * normalized linear direction blend. That blend is undefined for opposite
+ * vectors and could flip a rear-facing shooter directly onto the target.
+ */
+export function advanceAimPhysicalProgress(
+  task: FireTaskRuntimeV1,
+  factors: AimFactorBreakdownV1,
+  deltaSeconds: number,
+): void {
+  const solution = task.aimTracking.solution;
+  const segmentStart = structuredClone(solution.directionSegmentStart);
+  const desiredDirection = structuredClone(solution.desiredDirection);
+  advanceAimPhysicalProgressStage5(task, factors, deltaSeconds);
+  solution.currentDirection = interpolateAimDirection(
+    segmentStart,
+    desiredDirection,
+    solution.directionProgress,
+  );
+  applyDirectionGate(task);
+}
+
+export function isAimDirectionAligned(solution: AimSolutionRuntimeV1): boolean {
+  if (!solution.valid) return false;
+  const current = normalizeDirection(solution.currentDirection);
+  const desired = normalizeDirection(solution.desiredDirection);
+  const dot = clamp(current.x * desired.x + current.y * desired.y + current.z * desired.z, -1, 1);
+  return Math.acos(dot) <= AIM_ALIGNMENT_TOLERANCE_RADIANS;
 }
 
 export function resolveProductionAimFactors(
@@ -67,6 +121,62 @@ export function resolveProductionAimFactors(
   });
   const mode = shooter.infantryCombatRuntime.activeFireTask?.mode ?? 'single';
   return applyMachineGunFireFactors(base, weapon, mode);
+}
+
+function applyDirectionGate(task: FireTaskRuntimeV1): void {
+  const solution = task.aimTracking.solution;
+  if (!isAimDirectionAligned(solution)) {
+    solution.usableAimQuality = 0;
+    task.aimQuality = 0;
+    return;
+  }
+  const usable = canonicalUnitInterval(solution.physicalAimQuality * solution.solutionQuality);
+  solution.usableAimQuality = usable;
+  task.aimQuality = usable;
+}
+
+function interpolateAimDirection(
+  fromValue: BallisticDirection3,
+  toValue: BallisticDirection3,
+  rawProgress: number,
+): BallisticDirection3 {
+  const progress = clamp(rawProgress, 0, 1);
+  const from = normalizeDirection(fromValue);
+  const to = normalizeDirection(toValue);
+  if (progress <= 0) return from;
+  if (progress >= 1) return to;
+
+  const dot = clamp(from.x * to.x + from.y * to.y + from.z * to.z, -1, 1);
+  if (dot >= NEAR_PARALLEL_DOT) {
+    return normalizeDirection({
+      x: from.x + (to.x - from.x) * progress,
+      y: from.y + (to.y - from.y) * progress,
+      z: from.z + (to.z - from.z) * progress,
+    });
+  }
+
+  if (dot <= -NEAR_PARALLEL_DOT) {
+    const reference = Math.abs(from.z) < 0.9
+      ? { x: 0, y: 0, z: 1 }
+      : { x: 0, y: 1, z: 0 };
+    const orthogonal = normalizeDirection(cross(from, reference));
+    const angle = Math.PI * progress;
+    return normalizeDirection({
+      x: from.x * Math.cos(angle) + orthogonal.x * Math.sin(angle),
+      y: from.y * Math.cos(angle) + orthogonal.y * Math.sin(angle),
+      z: from.z * Math.cos(angle) + orthogonal.z * Math.sin(angle),
+    });
+  }
+
+  const angle = Math.acos(dot);
+  const denominator = Math.sin(angle);
+  const fromWeight = Math.sin((1 - progress) * angle) / denominator;
+  const toWeight = Math.sin(progress * angle) / denominator;
+  return normalizeDirection({
+    x: from.x * fromWeight + to.x * toWeight,
+    y: from.y * fromWeight + to.y * toWeight,
+    z: from.z * fromWeight + to.z * toWeight,
+  });
 }
 
 function preserveStoredUnitDirections(target: AimTrackingRuntimeV1, source: unknown): void {
@@ -97,6 +207,18 @@ function nearUnitDirection(value: unknown): BallisticDirection3 | null {
     || Math.abs(magnitude - 1) > UNIT_DIRECTION_MAGNITUDE_TOLERANCE
   ) return null;
   return { x, y, z };
+}
+
+function cross(left: BallisticDirection3, right: BallisticDirection3): BallisticDirection3 {
+  return {
+    x: left.y * right.z - left.z * right.y,
+    y: left.z * right.x - left.x * right.z,
+    z: left.x * right.y - left.y * right.x,
+  };
+}
+
+function canonicalUnitInterval(value: number): number {
+  return Math.round(clamp(value, 0, 1) * CANONICAL_SCALE) / CANONICAL_SCALE;
 }
 
 function finiteOrNull(value: unknown): number | null {
