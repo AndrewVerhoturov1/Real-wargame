@@ -2,4 +2,4 @@ Temporary CI-only trigger.
 Do not merge.
 Exact product SHA: 9f428186869564f1e76c0aafc682c573572d2d0e
 Purpose: real Chromium 1440x900 visual QA after collapsed-right-inspector clearance fix.
-Retry: wait for mirrored pause labels.
+Retry: settle shared pause labels for 500ms before comparison.
