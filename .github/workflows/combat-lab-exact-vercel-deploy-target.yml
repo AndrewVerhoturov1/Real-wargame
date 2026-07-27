@@ -1,0 +1,191 @@
+name: Combat Lab Exact Vercel Deploy Target
+
+on:
+  pull_request_target:
+    branches:
+      - ci/combat-lab-deploy2-base-20260727t0438z-5e8d45a
+    types: [reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PRODUCT_BRANCH: feature/20260726-shooting-stage-09v-combat-lab
+      PRODUCT_SHA: 5e8d45ae32c27a2c4c23e9627904e4c1c7dd1bcb
+      EXPECTED_PROJECT_NAME: repo
+      EXPECTED_PROJECT_ID: prj_oYeFUOItTdUkzawQT99c1WcUvBss
+      EXPECTED_TEAM_ID: team_OghO4H75wJnpy5zyfySmPuSS
+    steps:
+      - name: Checkout exact verified product source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prove exact canonical source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          test "$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')" = "$PRODUCT_SHA"
+          test -z "$(git status --short)"
+          echo "Verified deployment source: $PRODUCT_BRANCH @ $PRODUCT_SHA"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run canonical Preview gate
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/preview-verification.json"
+          npm run verify:preview -- --report "$report"
+          echo "report=$report" >> "$GITHUB_OUTPUT"
+
+      - name: Pull permanent Vercel project settings
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx --yes vercel@56.4.1 pull --yes --environment=preview --token="$VERCEL_TOKEN"
+
+      - name: Verify permanent Vercel project link
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: >-
+          node scripts/verify_vercel_project_link.mjs
+          --file .vercel/project.json
+          --expected-org-id "$VERCEL_ORG_ID"
+          --expected-project-id "$VERCEL_PROJECT_ID"
+          --expected-project-name "$EXPECTED_PROJECT_NAME"
+
+      - name: Build exact Vercel output
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          REAL_WARGAME_BRANCH: ${{ env.PRODUCT_BRANCH }}
+          REAL_WARGAME_COMMIT_SHA: ${{ env.PRODUCT_SHA }}
+        run: npx --yes vercel@56.4.1 build --token="$VERCEL_TOKEN"
+
+      - name: Write exact deployment identity
+        run: >-
+          node scripts/write_deployment_source.mjs
+          --root .vercel/output/static
+          --ref "$PRODUCT_BRANCH"
+          --sha "$PRODUCT_SHA"
+          --report "${{ steps.gate.outputs.report }}"
+
+      - name: Verify prebuilt pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run verify:deployment-pages -- --root .vercel/output/static --require-source
+          test -f .vercel/output/static/index.html
+          test -f .vercel/output/static/ai-node-editor.html
+          test -f .vercel/output/static/combat-lab.html
+          test -f .vercel/output/static/deployment-source.json
+
+      - name: Publish one prebuilt Preview
+        id: publish
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          deployment_url="$(npx --yes vercel@56.4.1 deploy --prebuilt --yes --token="$VERCEL_TOKEN" | tail -n 1 | tr -d '\r')"
+          [[ "$deployment_url" =~ ^https://[^[:space:]]+$ ]] || { echo 'Vercel CLI did not return a deployment URL.' >&2; exit 1; }
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for Vercel READY
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx --yes vercel@56.4.1 inspect "${{ steps.publish.outputs.url }}" --wait --token="$VERCEL_TOKEN"
+
+      - name: Read deployment identity and status
+        id: deployment
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_URL: ${{ steps.publish.outputs.url }}
+        run: |
+          set -euo pipefail
+          deployment_host="${DEPLOYMENT_URL#https://}"
+          response="$RUNNER_TEMP/vercel-deployment.json"
+          curl --fail --silent --show-error --get \
+            --url "https://api.vercel.com/v13/deployments/$deployment_host" \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --data-urlencode "teamId=$EXPECTED_TEAM_ID" \
+            --output "$response"
+          RESPONSE="$response" node <<'NODE'
+          const fs = require('node:fs');
+          const deployment = JSON.parse(fs.readFileSync(process.env.RESPONSE, 'utf8'));
+          if (deployment.projectId !== process.env.EXPECTED_PROJECT_ID) throw new Error('Deployment belongs to another project.');
+          if (deployment.name !== process.env.EXPECTED_PROJECT_NAME) throw new Error('Deployment project name mismatch.');
+          if (deployment.readyState !== 'READY') throw new Error(`Deployment is not READY: ${deployment.readyState ?? 'unknown'}`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `id=${deployment.id}\nstatus=${deployment.readyState}\n`);
+          NODE
+
+      - name: Verify published pages and source identity
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_URL: ${{ steps.publish.outputs.url }}
+        run: |
+          set -euo pipefail
+          for page in / /ai-node-editor.html /combat-lab.html; do
+            npx --yes vercel@56.4.1 curl "$page" --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > /dev/null
+          done
+          source_file="$RUNNER_TEMP/published-deployment-source.json"
+          npx --yes vercel@56.4.1 curl /deployment-source.json --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > "$source_file"
+          SOURCE_FILE="$source_file" node <<'NODE'
+          const fs = require('node:fs');
+          const source = JSON.parse(fs.readFileSync(process.env.SOURCE_FILE, 'utf8'));
+          if (source.ref !== process.env.PRODUCT_BRANCH || source.sourceSha !== process.env.PRODUCT_SHA) throw new Error('Published source identity mismatch.');
+          if (source.status !== 'passed') throw new Error(`Published verification status is ${source.status}`);
+          NODE
+
+      - name: Save deployment evidence
+        if: always()
+        shell: bash
+        env:
+          DEPLOYMENT_URL: ${{ steps.publish.outputs.url }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
+          DEPLOYMENT_STATUS: ${{ steps.deployment.outputs.status }}
+        run: |
+          mkdir -p artifacts/combat-lab-deployment
+          node <<'NODE'
+          const fs = require('node:fs');
+          fs.writeFileSync('artifacts/combat-lab-deployment/deployment-result.json', JSON.stringify({
+            branch: process.env.PRODUCT_BRANCH,
+            sourceSha: process.env.PRODUCT_SHA,
+            deploymentUrl: process.env.DEPLOYMENT_URL || null,
+            deploymentId: process.env.DEPLOYMENT_ID || null,
+            status: process.env.DEPLOYMENT_STATUS || null,
+          }, null, 2));
+          NODE
+          cp "${{ steps.gate.outputs.report }}" artifacts/combat-lab-deployment/preview-verification.json 2>/dev/null || true
+
+      - name: Upload deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-lab-exact-target-deployment-${{ github.run_id }}
+          path: artifacts/combat-lab-deployment/**
+          if-no-files-found: warn
+          retention-days: 14
