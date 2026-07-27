@@ -12,3 +12,4 @@ import '../ai-dictionary-compat.css';
 import '../command-plan-route-overlay.css';
 import '../route-cost-overlay.css';
 import '../perception-attention.css';
+import '../ui/TacticalWorkspaceLayoutEnhancements';
