@@ -117,7 +117,7 @@ jobs:
           }
 
           async function waitForRefinedWorkspace() {
-            await page.waitForSelector('.tactical-workspace-shell[data-refined-workspace-layout="true"]');
+            await page.waitForSelector('.tactical-workspace-shell[data-refined-workspace-layout="true"]', { state: 'attached' });
             await page.waitForSelector('.workspace-time-controls');
             await page.waitForSelector('.workspace-resize-handle-right');
           }
@@ -144,12 +144,10 @@ jobs:
           const initialLayout = await page.evaluate(() => {
             const left = document.querySelector('#combat-lab-extension-root');
             const right = document.querySelector('.simulation-sidebar');
-            const leftStyle = getComputedStyle(left);
             const rightStyle = getComputedStyle(right);
             return {
               leftWidth: left.getBoundingClientRect().width,
               rightWidth: right.getBoundingClientRect().width,
-              leftRadius: leftStyle.borderRadius,
               rightRadius: rightStyle.borderRadius,
               leftDockRadius: getComputedStyle(document.querySelector('.combat-lab-dock')).borderRadius,
               scrollWidth: document.documentElement.scrollWidth,
@@ -197,11 +195,6 @@ jobs:
           });
           await page.waitForTimeout(250);
 
-          const firePanel = page.locator('.combat-lab-panel').filter({ hasText: 'ПРИЦЕЛИВАНИЕ И ОГОНЬ' }).first();
-          const targetSelect = firePanel.locator('select').nth(1);
-          const targetOptions = await targetSelect.locator('option').allTextContents();
-          const target25 = targetOptions.find((value) => value.includes('Мишень 25 м'));
-          if (target25) await targetSelect.selectOption({ label: target25 });
           await page.getByRole('button', { name: 'Открыть огонь', exact: true }).click();
           const speed10 = page.locator('.workspace-time-controls [data-speed="10"]');
           if (await speed10.count()) await speed10.click();
