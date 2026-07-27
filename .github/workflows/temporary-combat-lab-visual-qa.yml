@@ -61,11 +61,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git show "origin/$QA_BASE_BRANCH:ci/combat-lab-visual-qa.mjs" > "$RUNNER_TEMP/combat-lab-visual-qa.mjs"
-          test -s "$RUNNER_TEMP/combat-lab-visual-qa.mjs"
+          git show "origin/$QA_BASE_BRANCH:ci/combat-lab-visual-qa.mjs" > .temporary-combat-lab-visual-qa.mjs
+          test -s .temporary-combat-lab-visual-qa.mjs
 
       - name: Run real Chromium QA at 1440x900
-        run: node "$RUNNER_TEMP/combat-lab-visual-qa.mjs"
+        run: node .temporary-combat-lab-visual-qa.mjs
 
       - name: Upload Chromium evidence
         if: always()
