@@ -1,4 +1,4 @@
-Temporary CI-only trigger for exact Combat Lab Preview deployment.
-Product source SHA: 529ff29c2d63d2f503c10e34ef5b1ed7af3f2246
-Trusted pull_request_target retry: 1
+Temporary CI-only trigger for guarded Combat Lab feature correction.
+Expected feature SHA: 1c180179ff32a0921f9e7f0b9eede38ab05e8cfb
+Correction: synchronize laboratory speed display with shared simulation time.
 Do not merge.
