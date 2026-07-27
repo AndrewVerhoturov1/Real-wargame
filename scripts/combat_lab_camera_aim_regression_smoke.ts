@@ -16,7 +16,6 @@ console.log('Combat Lab camera and aim alignment regression smoke passed.');
 function verifyViewportResizeUsesCanonicalCameraTransform(): void {
   const renderer = readFileSync('src/combat-lab/rendering/CombatLabRenderer.ts', 'utf8');
   const adapter = readFileSync('src/rendering/PixiTacticalBoardAdapter.ts', 'utf8');
-  const contextTypes = readFileSync('src/game/GameApplicationTypes.ts', 'utf8');
   const polishCss = readFileSync('src/combat-lab/combat-lab-ui-polish.css', 'utf8');
 
   assert.doesNotMatch(
@@ -26,11 +25,14 @@ function verifyViewportResizeUsesCanonicalCameraTransform(): void {
   );
   assert.match(
     renderer,
-    /context\.preserveViewportCentre\s*\(/,
-    'Combat Lab viewport resizing must use the canonical camera transform API.',
+    /viewportAdapter\.preserveViewportCentre\s*\(/,
+    'Combat Lab viewport resizing must use the camera-owned board adapter path.',
   );
-  assert.match(adapter, /preserveViewportCentre/, 'The Pixi board adapter must expose canonical viewport-centre preservation.');
-  assert.match(contextTypes, /preserveViewportCentre/, 'GameApplicationContext must expose canonical viewport-centre preservation.');
+  assert.match(
+    adapter,
+    /camera\.preserveViewportCentre/,
+    'The Pixi board adapter must delegate viewport-centre preservation to CameraController.',
+  );
   assert.doesNotMatch(
     polishCss,
     /#app canvas\s*\{[^}]*width:\s*100%\s*!important[^}]*height:\s*100%\s*!important/s,
