@@ -6,11 +6,16 @@ interface MutableBoardInputInternals {
   state: SimulationState;
 }
 
+interface MutableCameraInternals {
+  preserveViewportCentre(deltaWidth: number, deltaHeight: number): void;
+}
+
 interface PixiTacticalBoardInternals {
   app: Application;
   worldContainer: Container;
   state: SimulationState;
   boardInput: MutableBoardInputInternals;
+  camera: MutableCameraInternals;
   fixedScaleLabel: HTMLElement;
   mapRenderInvalidated: boolean;
   lastMapRenderKey: string;
@@ -21,6 +26,7 @@ export interface PixiTacticalBoardAdapter {
   getWorldContainer(): Container;
   addTickerListener(listener: (ticker: Ticker) => void): () => void;
   bindSimulationState(state: SimulationState): void;
+  preserveViewportCentre(deltaWidth: number, deltaHeight: number): void;
 }
 
 /**
@@ -45,6 +51,9 @@ export function createPixiTacticalBoardAdapter(board: PixiTacticalBoardApp): Pix
       internals.mapRenderInvalidated = true;
       internals.viewConeRenderer.clear();
       board.forceRender();
+    },
+    preserveViewportCentre: (deltaWidth, deltaHeight) => {
+      internals.camera.preserveViewportCentre(deltaWidth, deltaHeight);
     },
   };
 }
