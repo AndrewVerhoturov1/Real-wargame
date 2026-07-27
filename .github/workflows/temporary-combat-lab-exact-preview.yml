@@ -53,11 +53,30 @@ jobs:
           npm run verify:preview -- --report artifacts/exact-preview/preview-verification.json
 
       - name: Pull permanent Vercel project settings
+        shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: npx --yes vercel@56.4.1 pull --yes --environment=preview --token="$VERCEL_TOKEN"
+        run: |
+          set -uo pipefail
+          mkdir -p artifacts/exact-preview
+          missing=0
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            if [ -z "${!name:-}" ]; then
+              echo "$name is unavailable" | tee -a artifacts/exact-preview/vercel-pull.log
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          set +e
+          npx --yes vercel@56.4.1 pull --yes --environment=preview --token="$VERCEL_TOKEN" > artifacts/exact-preview/vercel-pull.log 2>&1
+          status=$?
+          set -e
+          tail -n 80 artifacts/exact-preview/vercel-pull.log
+          exit "$status"
 
       - name: Verify permanent Vercel project link
         env:
