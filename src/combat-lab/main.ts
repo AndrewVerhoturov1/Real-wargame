@@ -1,6 +1,7 @@
 import '../game/GameStyles';
 import './combat-lab.css';
 import './combat-lab-workspace.css';
+import './combat-lab-ui-polish.css';
 import { getCombatLabScenarioDefinition } from '../core/testing/combat-lab';
 import { collectGameApplicationElements, GameApplication } from '../game/GameApplication';
 import type { GamePauseController } from '../game/GameApplicationTypes';
