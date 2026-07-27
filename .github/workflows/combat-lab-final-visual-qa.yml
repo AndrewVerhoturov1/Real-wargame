@@ -1,0 +1,82 @@
+name: Combat Lab Final Visual QA
+
+on:
+  pull_request:
+    branches:
+      - ci/combat-lab-final-base-20260727t155000-5487e9e
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PRODUCT_SHA: 5487e9e496f6887be7fd445481a289819194f329
+      BASE_URL: http://127.0.0.1:4173
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Verify temporary-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only "$PRODUCT_SHA" HEAD | tee /tmp/temp-files.txt
+          if grep -Ev '^(\.github/workflows/combat-lab-final-visual-qa\.yml|ci/combat-lab-final\.(spec|config)\.ts)$' /tmp/temp-files.txt | grep -q .; then
+            echo 'Temporary PR contains unexpected product changes.' >&2
+            exit 1
+          fi
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run focused contracts
+        run: |
+          node scripts/combat_lab_full_game_contract_smoke.mjs
+          node scripts/combat_lab_workspace_layout_smoke.mjs
+      - name: TypeScript
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          npm run typecheck 2>&1 | tee artifacts/typecheck.log
+      - name: Full Preview gate
+        run: npm run verify:preview -- --report artifacts/preview-verification.json
+      - name: Production build
+        run: npm run build
+      - name: Install Playwright
+        run: npm install --no-save --package-lock=false @playwright/test@1.55.0
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Start production preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/combat-lab-preview.log 2>&1 &
+          echo $! > /tmp/combat-lab-preview.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:4173/combat-lab.html >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/combat-lab-preview.log >&2
+          exit 1
+      - name: Run Chromium QA
+        run: npx playwright test --config=ci/combat-lab-final.config.ts
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-lab-final-evidence-${{ github.run_id }}
+          path: |
+            artifacts/**
+            test-results/**
+            playwright-report/**
+            /tmp/combat-lab-preview.log
+          if-no-files-found: warn
+          retention-days: 14
