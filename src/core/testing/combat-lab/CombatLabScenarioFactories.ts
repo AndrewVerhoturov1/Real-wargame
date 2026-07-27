@@ -13,6 +13,8 @@ import type { CombatLabBuiltScenarioV1, CombatLabScenarioDefinitionV1 } from './
 const MAP_WIDTH_METRES = 230;
 const MAP_HEIGHT_METRES = 90;
 const METRES_PER_CELL = 1;
+const RIFLE_DISTANCE_SHOOTER_X = 10;
+const RIFLE_DISTANCE_SHOOTER_Y = 40;
 
 type LoadoutId =
   | 'loadout_rifleman'
@@ -91,11 +93,19 @@ function fixturesForFactory(factoryId: string): readonly UnitFixture[] {
   switch (factoryId) {
     case 'rifle-distance-v1':
       return [
-        fixture('rifle-distance-shooter', 'Винтовочник', 'blue', 10, 40, 0, 'loadout_rifleman'),
-        fixture('rifle-target-25', 'Мишень 25 м', 'red', 35, 40, 180),
-        fixture('rifle-target-50', 'Мишень 50 м', 'red', 60, 40, 180),
-        fixture('rifle-target-100', 'Мишень 100 м', 'red', 110, 40, 180),
-        fixture('rifle-target-200', 'Мишень 200 м', 'red', 210, 40, 180),
+        fixture(
+          'rifle-distance-shooter',
+          'Винтовочник',
+          'blue',
+          RIFLE_DISTANCE_SHOOTER_X,
+          RIFLE_DISTANCE_SHOOTER_Y,
+          0,
+          'loadout_rifleman',
+        ),
+        rifleDistanceTarget('rifle-target-25', 'Мишень 25 м', 25, -8),
+        rifleDistanceTarget('rifle-target-50', 'Мишень 50 м', 50, 10),
+        rifleDistanceTarget('rifle-target-100', 'Мишень 100 м', 100, -14),
+        rifleDistanceTarget('rifle-target-200', 'Мишень 200 м', 200, 12),
       ];
     case 'rifle-moving-v1':
       return [
@@ -148,6 +158,27 @@ function fixturesForFactory(factoryId: string): readonly UnitFixture[] {
     default:
       throw new Error(`Unknown Combat Lab state factory: ${factoryId}`);
   }
+}
+
+function rifleDistanceTarget(
+  id: string,
+  titleRu: string,
+  distanceMetres: number,
+  bearingDegrees: number,
+): UnitFixture {
+  const bearingRadians = bearingDegrees * Math.PI / 180;
+  return fixture(
+    id,
+    titleRu,
+    'red',
+    RIFLE_DISTANCE_SHOOTER_X + Math.cos(bearingRadians) * distanceMetres,
+    RIFLE_DISTANCE_SHOOTER_Y + Math.sin(bearingRadians) * distanceMetres,
+    normalizeDegrees(bearingDegrees + 180),
+  );
+}
+
+function normalizeDegrees(value: number): number {
+  return ((value % 360) + 360) % 360;
 }
 
 function applyScenarioInitialConditions(factoryId: string, units: UnitModel[]): void {
