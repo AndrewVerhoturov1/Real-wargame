@@ -1,0 +1,4 @@
+Temporary exact-source executor.
+Canonical branch: feature/20260726-shooting-stage-09v-combat-lab
+Expected source SHA: 1c180179ff32a0921f9e7f0b9eede38ab05e8cfb
+Do not merge.
