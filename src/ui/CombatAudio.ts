@@ -261,10 +261,11 @@ function sampleOutputPeak(analyser: AnalyserNode, durationMs: number): void {
 }
 
 function warmAudioOutput(context: AudioContext): void {
-  const source = context.createBufferSource();
+  const source = context.createOscillator();
   const gain = context.createGain();
-  source.buffer = context.createBuffer(1, 1, context.sampleRate);
-  gain.gain.value = 0.0001;
+  source.type = 'sine';
+  source.frequency.value = 40;
+  gain.gain.value = 0.00001;
   source.connect(gain);
   gain.connect(context.destination);
   source.addEventListener('ended', () => {
@@ -272,6 +273,7 @@ function warmAudioOutput(context: AudioContext): void {
     gain.disconnect();
   }, { once: true });
   source.start(context.currentTime);
+  source.stop(context.currentTime + 0.01);
 }
 
 function getAudioContext(): AudioContext | null {
