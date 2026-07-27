@@ -1,3 +1,4 @@
 Temporary CI trigger for Combat Lab order-card removal, shared shot audio and exact target bearings.
 Product SHA: 6a20a57c10a1362e39e9f1d73b18a0cd6f337a35
+Rerun: expand both side panels before checking all four target labels.
 Do not merge.
