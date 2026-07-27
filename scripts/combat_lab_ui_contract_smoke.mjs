@@ -16,6 +16,7 @@ const [
   statePlanCss,
   commandRouteCss,
   compactRouteCss,
+  scenarioFactories,
 ] = await Promise.all([
   readFile('src/combat-lab/ui/CombatLabShell.ts', 'utf8'),
   readFile('src/combat-lab/runtime/CombatLabVisualSession.ts', 'utf8'),
@@ -31,6 +32,7 @@ const [
   readFile('src/ai-state-plan-panel.css', 'utf8'),
   readFile('src/command-plan-route-overlay.css', 'utf8'),
   readFile('src/tactical-workspace-compact-route.css', 'utf8'),
+  readFile('src/core/testing/combat-lab/CombatLabScenarioFactories.ts', 'utf8'),
 ]);
 
 for (const marker of [
@@ -71,10 +73,12 @@ assert.match(extension, /combat-lab-drawer/);
 assert.match(extension, /combat-lab-drawer-toggle/);
 assert.match(extension, /aria-expanded/);
 assert.match(extension, /installSharedSimulationControls/);
-assert.match(extension, /setFireAllowed/);
+assert.match(extension, /setFireAllowed\(session\.state,\s*false\)/, 'Combat Lab must keep the legacy automatic fire system disabled.');
+assert.doesNotMatch(extension, /setFireAllowed\(session\.state,\s*true\)/, 'Combat Lab must never enable legacy automatic fire.');
 assert.match(extension, /data-action="fire-contact"/);
 assert.doesNotMatch(extension, /adoptSimulationSidebar/);
 assert.doesNotMatch(extension, /['"]fighter['"]/);
+assert.match(scenarioFactories, /aiControl:\s*'manual'/, 'Every Combat Lab fixture must opt out of ordinary Graph AI control.');
 
 for (const marker of [
   'installGameEditorWorkbench',
@@ -96,8 +100,8 @@ assert.doesNotMatch(overlay, /drawMetreGrid|drawUnit|mapWidthPx|mapHeightPx/);
 assert.match(adapter, /getWorldContainer/);
 assert.match(adapter, /addTickerListener/);
 
-assert.doesNotMatch(statePlanCss, /\.unit-state-plan-popover\s*\{[^}]*display:\s*none\s*!important/s);
-assert.doesNotMatch(statePlanCss, /\.unit-state-plan\s*>\s*summary\s*\{[^}]*pointer-events:\s*none/s);
+assert.match(statePlanCss, /\.unit-state-plan-popover\s*\{[^}]*display:\s*none\s*!important/s, 'The map-obscuring order/state popover must be hidden in every game mode.');
+assert.match(statePlanCss, /\.unit-state-plan\s*>\s*summary\s*\{[^}]*pointer-events:\s*none/s, 'The disabled popover must not reopen from the compact summary.');
 assert.match(commandRouteCss, /\.unit-bar-route-controls\s*>\s*\.unit-route-details\s*\{[^}]*display:\s*none\s*!important/s);
 assert.match(compactRouteCss, /\.route-cost-inspector-panel\s+\.unit-route-details\s*\{[^}]*display:\s*block/s);
 
