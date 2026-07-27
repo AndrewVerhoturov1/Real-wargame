@@ -64,6 +64,20 @@ jobs:
           git show "origin/$QA_BASE_BRANCH:ci/combat-lab-visual-qa.mjs" > .temporary-combat-lab-visual-qa.mjs
           test -s .temporary-combat-lab-visual-qa.mjs
 
+      - name: Accept removed route popover as hidden
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('.temporary-combat-lab-visual-qa.mjs')
+          text = path.read_text()
+          old_game = """  const gameRouteDetailsDisplay = await page.locator('.unit-bar-route-controls > .unit-route-details').evaluate((element) => getComputedStyle(element).display);\n  if (gameRouteDetailsDisplay !== 'none') throw new Error(`Order/route popover is visible in normal game: ${gameRouteDetailsDisplay}`);"""
+          new_game = """  const gameRouteDetails = page.locator('.unit-bar-route-controls > .unit-route-details');\n  if (await gameRouteDetails.count() > 0) {\n    const gameRouteDetailsDisplay = await gameRouteDetails.evaluate((element) => getComputedStyle(element).display);\n    if (gameRouteDetailsDisplay !== 'none') throw new Error(`Order/route popover is visible in normal game: ${gameRouteDetailsDisplay}`);\n  }"""
+          old_lab = """  const routeDetailsDisplay = await page.locator('.unit-bar-route-controls > .unit-route-details').evaluate((element) => getComputedStyle(element).display);\n  if (routeDetailsDisplay !== 'none') throw new Error(`Order/route popover is visible in Combat Lab: ${routeDetailsDisplay}`);"""
+          new_lab = """  const routeDetails = page.locator('.unit-bar-route-controls > .unit-route-details');\n  if (await routeDetails.count() > 0) {\n    const routeDetailsDisplay = await routeDetails.evaluate((element) => getComputedStyle(element).display);\n    if (routeDetailsDisplay !== 'none') throw new Error(`Order/route popover is visible in Combat Lab: ${routeDetailsDisplay}`);\n  }"""
+          if old_game not in text or old_lab not in text:
+              raise SystemExit('Route popover assertions not found in temporary QA script')
+          path.write_text(text.replace(old_game, new_game, 1).replace(old_lab, new_lab, 1))
+
       - name: Run real Chromium QA at 1440x900
         run: node .temporary-combat-lab-visual-qa.mjs
 
