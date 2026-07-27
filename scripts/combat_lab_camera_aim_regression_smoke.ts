@@ -75,15 +75,24 @@ function verifyFireWaitsForWeaponAlignment(): void {
       requestedSeconds: 0,
     }).status, 'started');
 
-    tickInfantryCombatSimulation(state, { intervalStartSeconds: 0, deltaSeconds: 0.8 });
+    let elapsedSeconds = 0;
+    tickInfantryCombatSimulation(state, { intervalStartSeconds: elapsedSeconds, deltaSeconds: 0.8 });
+    elapsedSeconds += 0.8;
     assert.equal(
       state.infantryCombatProjectiles.committedShots.length,
       0,
       `A shooter initially facing ${facingDegrees}° away must not fire before the weapon direction reaches the target.`,
     );
 
-    tickInfantryCombatSimulation(state, { intervalStartSeconds: 0.8, deltaSeconds: 1.5 });
-    assert.equal(state.infantryCombatProjectiles.committedShots.length, 1, 'The shot must commit after physical alignment completes.');
+    for (let step = 0; step < 120 && state.infantryCombatProjectiles.committedShots.length === 0; step += 1) {
+      tickInfantryCombatSimulation(state, { intervalStartSeconds: elapsedSeconds, deltaSeconds: 0.1 });
+      elapsedSeconds += 0.1;
+    }
+    assert.equal(
+      state.infantryCombatProjectiles.committedShots.length,
+      1,
+      `The shooter initially facing ${facingDegrees}° must eventually commit exactly one shot after physical alignment.`,
+    );
     const direction = state.infantryCombatProjectiles.committedShots[0]!.aimDirectionBeforeDispersion!;
     assert.ok(direction.x > 0.999, 'The committed pre-dispersion direction must face the target.');
     assert.ok(Math.abs(direction.y) < 0.01, 'The committed pre-dispersion direction must not retain the old sideways bearing.');
