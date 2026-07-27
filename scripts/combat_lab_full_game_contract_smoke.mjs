@@ -106,6 +106,11 @@ assert.match(combatAudio, /playedShotCount/);
 assert.match(combatAudio, /__realWargameCombatAudio/);
 assert.match(combatEffectsInstaller, /installCombatAudioUnlock\(\)/, 'All game modes must share one combat-audio unlock path.');
 assert.match(combatEffectsInstaller, /destroyAudioUnlock\(\)/, 'Combat-audio listeners need symmetric teardown.');
+assert.match(combatEffectsRenderer, /state\.infantryCombatProjectiles/, 'Shared combat effects must read the new projectile runtime.');
+assert.match(combatEffectsRenderer, /consumeCommittedShots/, 'New committed shots must drive muzzle flash and sound.');
+assert.match(combatEffectsRenderer, /projectiles\.committedShots/, 'The canonical committed-shot ledger must be consumed.');
+assert.match(combatEffectsRenderer, /consumeProjectileImpacts/, 'New projectile impacts must drive shared effects.');
+assert.match(combatEffectsRenderer, /processedShotIds/, 'Shot IDs must be de-duplicated across old and new event paths.');
 assert.equal((combatEffectsRenderer.match(/playRifleShot\(\)/g) ?? []).length, 1, 'One committed shot must produce exactly one rifle sound.');
 
 for (const marker of [
