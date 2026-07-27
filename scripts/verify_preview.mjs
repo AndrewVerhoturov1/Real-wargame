@@ -27,6 +27,7 @@ const checks = [
   nodeCheck('manual Vercel workflow contract', 'manual_vercel_preview_workflow_smoke.mjs', 30_000),
   nodeCheck('Combat Lab shared renderer contract', 'combat_lab_shared_renderer_contract_smoke.mjs', 30_000),
   nodeCheck('Combat Lab full game contract', 'combat_lab_full_game_contract_smoke.mjs', 30_000),
+  nodeCheck('Combat Lab 1440x900 workspace layout contract', 'combat_lab_workspace_layout_smoke.mjs', 30_000),
   ...(skipPreviewSmokes ? [] : previewSmokes),
 ];
 const skippedChecks = skipPreviewSmokes
