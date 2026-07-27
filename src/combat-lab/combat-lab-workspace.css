@@ -41,72 +41,10 @@ body.app-shell-mode-combat-lab .simulation-controls [data-action="toggle-fire-pe
   display: none !important;
 }
 
-/* Keep the collapsed production inspector as a real right-hand lane instead of overlaying the map. */
+/* The production inspector keeps its own collapsed lane; the game canvas and the ordinary soldier panel stop before it. */
 body.app-shell-mode-combat-lab.workspace-simulation.sidebar-collapsed #app,
 body.app-shell-mode-combat-lab.workspace-simulation.sidebar-collapsed .simulation-unit-bar {
   right: 58px !important;
-}
-
-/* Both sidebars open: preserve every game control in the narrow centre column. */
-body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-open.sidebar-open {
-  --workspace-bottom: 214px;
-}
-
-body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-open.sidebar-open .simulation-unit-bar {
-  min-height: 200px;
-  max-height: 214px;
-  grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
-  grid-template-areas:
-    "identity stateplan"
-    "stats stats"
-    "route route"
-    "posture controls"
-    "speed speed";
-  gap: 4px 8px;
-  overflow: visible;
-}
-
-body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-open.sidebar-open .unit-bar-stats {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-}
-
-body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-open.sidebar-open .unit-bar-route-controls,
-body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-open.sidebar-open .unit-bar-route-controls.route-controls-migrated {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-areas: "attentionprofile attentionmode turn";
-}
-
-body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-open.sidebar-open .simulation-controls,
-body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-open.sidebar-open .unit-bar-speed-group {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  max-height: none;
-}
-
-/* Exactly one sidebar collapsed: the centre is wider, so use a compact three-column bar. */
-body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-open.sidebar-collapsed,
-body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-collapsed.sidebar-open {
-  --workspace-bottom: 172px;
-}
-
-body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-open.sidebar-collapsed .simulation-unit-bar,
-body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-collapsed.sidebar-open .simulation-unit-bar {
-  min-height: 160px;
-  max-height: 172px;
-  grid-template-columns: minmax(110px, 0.55fr) minmax(170px, 0.8fr) minmax(230px, 1.2fr);
-  grid-template-areas:
-    "identity stateplan stats"
-    "route route route"
-    "posture controls speed";
-  gap: 4px 8px;
-  overflow: visible;
-}
-
-body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-open.sidebar-collapsed .unit-bar-route-controls,
-body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-collapsed.sidebar-open .unit-bar-route-controls,
-body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-open.sidebar-collapsed .unit-bar-route-controls.route-controls-migrated,
-body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-collapsed.sidebar-open .unit-bar-route-controls.route-controls-migrated {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-areas: "attentionprofile attentionmode turn";
 }
 
 @media (max-width: 1180px) {
@@ -119,20 +57,5 @@ body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-collapsed.si
   body.app-shell-mode-combat-lab.workspace-editor #app,
   body.app-shell-mode-combat-lab.workspace-editor.combat-lab-dock-collapsed #app {
     left: 8px !important;
-  }
-
-  body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-open.sidebar-open,
-  body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-open.sidebar-collapsed,
-  body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-collapsed.sidebar-open {
-    --workspace-bottom: 236px;
-  }
-
-  body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-open.sidebar-open .simulation-unit-bar,
-  body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-open.sidebar-collapsed .simulation-unit-bar,
-  body.app-shell-mode-combat-lab.workspace-simulation.combat-lab-dock-collapsed.sidebar-open .simulation-unit-bar {
-    min-height: 222px;
-    max-height: 236px;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "identity" "stateplan" "stats" "route" "posture" "controls" "speed";
   }
 }
