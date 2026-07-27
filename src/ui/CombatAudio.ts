@@ -5,7 +5,7 @@ let pendingShotCount = 0;
 let unlockPromise: Promise<boolean> | null = null;
 let rifleShotBuffer: AudioBuffer | null = null;
 let outputAnalyser: AnalyserNode | null = null;
-let analyserSamples: Float32Array | null = null;
+let analyserSamples: Float32Array<ArrayBuffer> | null = null;
 let analyserFrame = 0;
 let analyserDeadlineMs = 0;
 let playedShotCount = 0;
@@ -237,7 +237,7 @@ function ensureOutputAnalyser(context: AudioContext): AnalyserNode {
   analyser.smoothingTimeConstant = 0;
   analyser.connect(context.destination);
   outputAnalyser = analyser;
-  analyserSamples = new Float32Array(analyser.fftSize);
+  analyserSamples = new Float32Array(new ArrayBuffer(analyser.fftSize * Float32Array.BYTES_PER_ELEMENT));
   return analyser;
 }
 
@@ -247,7 +247,8 @@ function sampleOutputPeak(analyser: AnalyserNode, durationMs: number): void {
 
   const sample = (): void => {
     analyserFrame = 0;
-    const values = analyserSamples ?? new Float32Array(analyser.fftSize);
+    const values = analyserSamples
+      ?? new Float32Array(new ArrayBuffer(analyser.fftSize * Float32Array.BYTES_PER_ELEMENT));
     analyserSamples = values;
     analyser.getFloatTimeDomainData(values);
     let peak = 0;
