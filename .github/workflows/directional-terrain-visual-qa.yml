@@ -6,9 +6,14 @@ on:
       - real-wargame-preview
     paths:
       - '.github/workflows/directional-terrain-visual-qa.yml'
-      - '.github/workflows/combat-lab-visual-qa-temporary.yml'
+      - 'tests/directional-terrain-visual.spec.ts'
+      - 'scripts/directional_terrain_smoke.ts'
+      - 'scripts/navigation_overlay_contract_smoke.ts'
       - 'src/**'
-      - 'combat-lab.html'
+      - 'docs/subprojects/ai-single-unit-editor/**'
+      - 'ai-node-editor.html'
+      - 'index.html'
+      - 'playwright.config.ts'
       - 'package.json'
       - 'package-lock.json'
 
@@ -17,9 +22,9 @@ permissions:
 
 jobs:
   visual-qa:
-    if: github.head_ref == 'feature/20260726-shooting-stage-09v-combat-lab'
+    if: github.head_ref == 'tmp/directional-terrain-analysis-20260713'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -28,180 +33,38 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: lts/*
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build exact production application
-        run: npm run build:app
+      - name: Install Playwright test runner
+        run: npm install --no-save @playwright/test
 
-      - name: Install Chromium QA runtime
+      - name: Production build
+        run: npm run build
+
+      - name: Run approved directional-terrain visual QA
+        id: visual
+        shell: bash
         run: |
-          npm install --no-save @playwright/test@1.55.0
-          npx playwright install --with-deps chromium
+          set -o pipefail
+          npx playwright test tests/directional-terrain-visual.spec.ts --project=chromium --reporter=line 2>&1 | tee directional-terrain-playwright.log
 
-      - name: Start exact production preview
-        run: |
-          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/combat-lab-vite.log 2>&1 &
-          for attempt in $(seq 1 60); do
-            if curl --fail --silent http://127.0.0.1:4173/combat-lab.html > /dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
-          cat /tmp/combat-lab-vite.log
-          exit 1
-
-      - name: Capture and verify Combat Lab at 1440x900
-        run: |
-          mkdir -p artifacts/screenshots
-          cat > combat-lab-visual-qa.mjs <<'EOF'
-          import { chromium } from '@playwright/test';
-          import { writeFile } from 'node:fs/promises';
-
-          let browser = null;
-          let page = null;
-          const pageErrors = [];
-          const consoleMessages = [];
-          const report = {
-            viewport: { width: 1440, height: 900 },
-            states: {},
-            pageErrors,
-            consoleMessages,
-            failures: [],
-            fatalError: null,
-            startup: null,
-          };
-          const fail = (message) => report.failures.push(message);
-          const round = (value) => Math.round(value * 10) / 10;
-
-          async function saveReport() {
-            await writeFile('artifacts/screenshots/report.json', `${JSON.stringify(report, null, 2)}\n`);
-          }
-
-          async function captureStartupState() {
-            if (!page) return null;
-            return page.evaluate(() => ({
-              url: location.href,
-              title: document.title,
-              readyState: document.readyState,
-              bodyClass: document.body.className,
-              bootstrapState: document.querySelector('#app')?.getAttribute('data-bootstrap-state') ?? null,
-              startupError: document.querySelector('.combat-lab-startup-error')?.textContent ?? null,
-              debugPanel: document.querySelector('#debug-panel')?.textContent ?? null,
-              bodyText: document.body.innerText.slice(0, 12000),
-              dockExists: Boolean(document.querySelector('.combat-lab-dock')),
-              canvasCount: document.querySelectorAll('canvas').length,
-            }));
-          }
-
-          async function measure(label) {
-            const value = await page.evaluate(() => {
-              const rect = (selector) => {
-                const element = document.querySelector(selector);
-                if (!(element instanceof HTMLElement)) return null;
-                const box = element.getBoundingClientRect();
-                return { left: box.left, top: box.top, right: box.right, bottom: box.bottom, width: box.width, height: box.height };
-              };
-              return {
-                innerWidth: window.innerWidth,
-                innerHeight: window.innerHeight,
-                htmlScrollWidth: document.documentElement.scrollWidth,
-                bodyScrollWidth: document.body.scrollWidth,
-                app: rect('#app'),
-                dock: rect('#combat-lab-extension-root'),
-                bottom: rect('.simulation-unit-bar'),
-                topBar: rect('.tactical-workspace-bar'),
-                activeTab: document.querySelector('[data-combat-lab-tab].active')?.getAttribute('data-combat-lab-tab') ?? null,
-                collapsed: document.body.classList.contains('combat-lab-dock-collapsed'),
-              };
-            });
-            report.states[label] = Object.fromEntries(Object.entries(value).map(([key, item]) => {
-              if (!item || typeof item !== 'object' || Array.isArray(item)) return [key, item];
-              return [key, Object.fromEntries(Object.entries(item).map(([name, number]) => [name, typeof number === 'number' ? round(number) : number]))];
-            }));
-            return value;
-          }
-
-          try {
-            browser = await chromium.launch({
-              headless: true,
-              args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'],
-            });
-            page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
-            page.on('pageerror', (error) => pageErrors.push(String(error)));
-            page.on('console', (message) => consoleMessages.push({ type: message.type(), text: message.text() }));
-
-            await page.goto('http://127.0.0.1:4173/combat-lab.html', { waitUntil: 'domcontentloaded', timeout: 60000 });
-            await Promise.race([
-              page.waitForSelector('.combat-lab-dock', { state: 'visible', timeout: 60000 }),
-              page.waitForSelector('.combat-lab-startup-error', { state: 'visible', timeout: 60000 }).then(async () => {
-                throw new Error(`Combat Lab startup error: ${await page.locator('.combat-lab-startup-error').innerText()}`);
-              }),
-            ]);
-            await page.waitForTimeout(1500);
-            report.startup = await captureStartupState();
-
-            const stand = await measure('stand');
-            if (stand.htmlScrollWidth > 1441 || stand.bodyScrollWidth > 1441) fail(`Horizontal overflow in stand state: html=${stand.htmlScrollWidth}, body=${stand.bodyScrollWidth}`);
-            if (!stand.dock || stand.dock.width < 430 || stand.dock.width > 450) fail(`Dock width is not 440px: ${stand.dock?.width}`);
-            if (!stand.app || !stand.dock || stand.app.right > stand.dock.left - 6) fail(`Map overlaps dock: app.right=${stand.app?.right}, dock.left=${stand.dock?.left}`);
-            if (!stand.bottom || !stand.dock || stand.bottom.right > stand.dock.left - 6) fail(`Bottom bar overlaps dock: bottom.right=${stand.bottom?.right}, dock.left=${stand.dock?.left}`);
-            if (stand.activeTab !== 'stand') fail(`Expected stand tab active, got ${stand.activeTab}`);
-            await page.screenshot({ path: 'artifacts/screenshots/01-stand-1440x900.png' });
-
-            await page.click('[data-combat-lab-tab="fighter"]');
-            await page.waitForTimeout(400);
-            const fighter = await measure('fighter');
-            if (fighter.activeTab !== 'fighter') fail(`Expected fighter tab active, got ${fighter.activeTab}`);
-            if (await page.locator('.combat-lab-fighter-panel .simulation-sidebar').count() !== 1) fail('Production fighter sidebar was not adopted into the fighter tab.');
-            await page.screenshot({ path: 'artifacts/screenshots/02-fighter-1440x900.png' });
-
-            await page.click('[data-combat-lab-tab="metrics"]');
-            await page.waitForTimeout(250);
-            await page.screenshot({ path: 'artifacts/screenshots/03-metrics-1440x900.png' });
-
-            await page.click('[data-combat-lab-tab="log"]');
-            await page.waitForTimeout(250);
-            await page.screenshot({ path: 'artifacts/screenshots/04-log-1440x900.png' });
-
-            await page.click('.combat-lab-dock-toggle');
-            await page.waitForFunction(() => document.body.classList.contains('combat-lab-dock-collapsed'));
-            await page.waitForTimeout(500);
-            const collapsed = await measure('collapsed');
-            if (!collapsed.collapsed) fail('Dock did not enter collapsed state.');
-            if (!collapsed.dock || collapsed.dock.width < 44 || collapsed.dock.width > 48) fail(`Collapsed dock width is not 46px: ${collapsed.dock?.width}`);
-            if (!collapsed.app || !collapsed.dock || collapsed.app.right > collapsed.dock.left - 6) fail(`Map overlaps collapsed dock: app.right=${collapsed.app?.right}, dock.left=${collapsed.dock?.left}`);
-            if (collapsed.htmlScrollWidth > 1441 || collapsed.bodyScrollWidth > 1441) fail(`Horizontal overflow in collapsed state: html=${collapsed.htmlScrollWidth}, body=${collapsed.bodyScrollWidth}`);
-            await page.screenshot({ path: 'artifacts/screenshots/05-collapsed-1440x900.png' });
-          } catch (error) {
-            report.fatalError = error instanceof Error ? error.stack ?? error.message : String(error);
-            try {
-              report.startup = await captureStartupState();
-              if (page) await page.screenshot({ path: 'artifacts/screenshots/00-failure-1440x900.png' });
-            } catch (captureError) {
-              report.failures.push(`Failure evidence capture also failed: ${String(captureError)}`);
-            }
-          } finally {
-            await saveReport();
-            await browser?.close();
-          }
-
-          console.log(JSON.stringify(report, null, 2));
-          if (report.fatalError || report.failures.length > 0 || report.pageErrors.length > 0) process.exit(1);
-          EOF
-          node combat-lab-visual-qa.mjs
-
-      - name: Upload Combat Lab screenshots
+      - name: Upload visual screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: combat-lab-visual-qa-1440x900
-          path: |
-            artifacts/screenshots/*.png
-            artifacts/screenshots/report.json
-            /tmp/combat-lab-vite.log
+          name: directional-terrain-visual-screenshots
+          path: artifacts/screenshots/directional-terrain-*.png
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Upload Playwright log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: directional-terrain-visual-log
+          path: directional-terrain-playwright.log
+          if-no-files-found: warn
