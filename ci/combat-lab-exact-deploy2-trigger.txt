@@ -1,0 +1,5 @@
+Temporary exact-source Vercel deployment retry.
+Product source SHA: 5e8d45ae32c27a2c4c23e9627904e4c1c7dd1bcb
+Canonical feature branch: feature/20260726-shooting-stage-09v-combat-lab
+Permanent project: repo
+Do not merge.
