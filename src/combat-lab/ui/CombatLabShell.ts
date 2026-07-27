@@ -66,6 +66,7 @@ export function createCombatLabLayout(root: HTMLElement): CombatLabLayoutV1 {
 export class CombatLabShell {
   private readonly scenario = select();
   private readonly seed = numberInput(1, 4_294_967_295, 1);
+  private readonly speed = select();
   private readonly shooter = select();
   private readonly target = select();
   private readonly helper = select();
@@ -121,6 +122,7 @@ export class CombatLabShell {
     if (!force && now - this.lastRefreshMs < 120) return;
     this.lastRefreshMs = now;
     const snapshot = this.session.getSnapshot();
+    this.speed.value = String(snapshot.speed);
     this.pause.textContent = snapshot.paused ? 'Продолжить' : 'Пауза';
     this.program.classList.toggle('active', snapshot.programEnabled);
     this.restore.disabled = !snapshot.checkpointAvailable;
@@ -138,11 +140,10 @@ export class CombatLabShell {
     for (const definition of listCombatLabScenarioDefinitions()) this.scenario.append(option(definition.scenarioId, definition.titleRu));
     this.scenario.value = this.session.definition.scenarioId;
     this.seed.value = String(this.session.seed);
-    const speed = select();
-    for (const value of COMBAT_LAB_VISUAL_SPEEDS) speed.append(option(String(value), `×${value}`));
-    speed.value = '1';
-    speed.addEventListener('change', () => {
-      this.session.setSpeed(Number(speed.value));
+    for (const value of COMBAT_LAB_VISUAL_SPEEDS) this.speed.append(option(String(value), `×${value}`));
+    this.speed.value = String(this.session.getSnapshot().speed);
+    this.speed.addEventListener('change', () => {
+      this.session.setSpeed(Number(this.speed.value));
       this.refreshLive(true);
     });
     this.layout.top.append(
@@ -157,7 +158,7 @@ export class CombatLabShell {
         this.renderer.forceRender();
         this.refreshLive(true);
       }),
-      inlineField('Скорость', speed),
+      inlineField('Скорость', this.speed),
       this.program,
       button('Сохранить точку', () => {
         this.session.saveCheckpoint();
