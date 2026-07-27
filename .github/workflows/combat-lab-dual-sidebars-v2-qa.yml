@@ -1,0 +1,224 @@
+name: Combat Lab Dual Sidebars V2 QA
+
+on:
+  pull_request:
+    branches:
+      - ci/combat-lab-dual-sidebars-v2-base-20260727t0428z-5e8d45a
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PRODUCT_SHA: 5e8d45ae32c27a2c4c23e9627904e4c1c7dd1bcb
+      PRODUCT_BRANCH: feature/20260726-shooting-stage-09v-combat-lab
+    steps:
+      - name: Checkout exact product source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          fetch-depth: 0
+
+      - name: Prove exact feature source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          test "$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')" = "$PRODUCT_SHA"
+          test -z "$(git status --short)"
+          echo "Verified product source: $PRODUCT_BRANCH @ $PRODUCT_SHA"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run canonical Preview gate
+        run: npm run verify:preview -- --report "$RUNNER_TEMP/preview-verification.json"
+
+      - name: Build production dist
+        run: npm run build
+
+      - name: Install Chromium tooling
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Run Chromium QA at 1440x900
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/combat-lab-dual-sidebars-v2
+          npm run preview -- --host 127.0.0.1 --port 4173 > "$RUNNER_TEMP/vite-preview.log" 2>&1 &
+          server_pid=$!
+          trap 'kill $server_pid || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:4173/combat-lab.html > /dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:4173/combat-lab.html > /dev/null
+
+          cat > .combat-lab-dual-sidebars-v2-qa.mjs <<'NODE'
+          import fs from 'node:fs';
+          import { chromium } from 'playwright';
+
+          const out = 'artifacts/combat-lab-dual-sidebars-v2';
+          fs.mkdirSync(out, { recursive: true });
+          const browser = await chromium.launch({
+            headless: true,
+            args: ['--use-gl=swiftshader', '--ignore-gpu-blocklist'],
+          });
+          const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+          const errors = [];
+          page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
+          page.on('console', (message) => {
+            if (message.type() === 'error') errors.push(`console: ${message.text()}`);
+          });
+
+          function check(condition, message) {
+            if (!condition) throw new Error(message);
+          }
+
+          async function geometry() {
+            return page.evaluate(() => {
+              const rect = (selector) => {
+                const element = document.querySelector(selector);
+                if (!(element instanceof HTMLElement)) return null;
+                const box = element.getBoundingClientRect();
+                return { left: box.left, right: box.right, top: box.top, bottom: box.bottom, width: box.width, height: box.height };
+              };
+              return {
+                viewport: { width: innerWidth, height: innerHeight },
+                bodyClasses: document.body.className,
+                scrollWidth: document.documentElement.scrollWidth,
+                clientWidth: document.documentElement.clientWidth,
+                left: rect('#combat-lab-extension-root'),
+                app: rect('#app'),
+                right: rect('.simulation-sidebar'),
+                bottom: rect('.simulation-unit-bar'),
+                canvasCount: document.querySelectorAll('#app canvas').length,
+                rightInsideLeft: Boolean(document.querySelector('#combat-lab-extension-root .simulation-sidebar')),
+                fighterTab: Boolean(document.querySelector('[data-combat-lab-tab="fighter"]')),
+                rightTabCount: document.querySelectorAll('.simulation-sidebar [data-tab], .simulation-sidebar [data-static-tactical-kind]').length,
+              };
+            });
+          }
+
+          async function capture(name) {
+            const state = await geometry();
+            fs.writeFileSync(`${out}/${name}.json`, JSON.stringify(state, null, 2));
+            await page.screenshot({ path: `${out}/${name}.png`, fullPage: false });
+            check(state.scrollWidth <= state.clientWidth, `${name}: horizontal overflow ${state.scrollWidth}/${state.clientWidth}`);
+            check(state.canvasCount === 1, `${name}: expected one canvas, got ${state.canvasCount}`);
+            check(!state.rightInsideLeft, `${name}: standard right inspector is owned by the laboratory dock`);
+            check(!state.fighterTab, `${name}: obsolete laboratory Fighter tab remains`);
+            if (state.bodyClasses.includes('combat-lab-dock-open')) {
+              check(state.left && state.app && state.app.left + 1 >= state.left.right, `${name}: left dock overlaps map`);
+              check(state.left && state.bottom && state.bottom.left + 1 >= state.left.right, `${name}: left dock overlaps lower panel`);
+            }
+            if (state.bodyClasses.includes('sidebar-open')) {
+              check(state.right && state.app && state.app.right <= state.right.left + 1, `${name}: right inspector overlaps map`);
+              check(state.right && state.bottom && state.bottom.right <= state.right.left + 1, `${name}: right inspector overlaps lower panel`);
+            }
+            return state;
+          }
+
+          await page.goto('http://127.0.0.1:4173/combat-lab.html', { waitUntil: 'networkidle' });
+          await page.waitForSelector('#combat-lab-extension-root[data-combat-lab-extension="active"]');
+          await page.waitForSelector('#app canvas');
+          await page.waitForSelector('.simulation-sidebar');
+
+          const initial = await capture('01-stand-both-open');
+          check(initial.rightTabCount >= 5, `standard right inspector tabs missing: ${initial.rightTabCount}`);
+
+          for (const selector of [
+            '.simulation-controls [data-action="fire-contact"]',
+            '.simulation-controls [data-action="toggle-fire-permission"]',
+          ]) {
+            const control = page.locator(selector);
+            if (await control.count()) {
+              check(!(await control.isVisible()), `legacy firing control visible: ${selector}`);
+              check(await control.isDisabled(), `legacy firing control enabled: ${selector}`);
+            }
+          }
+
+          const gamePause = page.locator('.simulation-controls [data-action="pause"]');
+          const labPause = page.locator('.combat-lab-run-controls > button').nth(1);
+          check(await gamePause.count() === 1 && await labPause.count() === 1, 'shared pause controls missing');
+          await gamePause.click();
+          await page.waitForTimeout(250);
+          check((await gamePause.textContent()) === (await labPause.textContent()), `pause state diverged: ${await gamePause.textContent()} / ${await labPause.textContent()}`);
+
+          const gameSpeed2 = page.locator('.unit-bar-speed-group [data-speed="2"]');
+          const labSpeed = page.locator('.combat-lab-run-controls > label select');
+          check(await gameSpeed2.count() === 1 && await labSpeed.count() === 1, 'shared speed controls missing');
+          await gameSpeed2.click();
+          await page.waitForTimeout(250);
+          check(await labSpeed.inputValue() === '2', `speed state diverged: laboratory=${await labSpeed.inputValue()}`);
+
+          await page.locator('[data-combat-lab-tab="metrics"]').click();
+          await capture('02-metrics-both-open');
+          await page.locator('[data-combat-lab-tab="log"]').click();
+          await capture('03-log-both-open');
+          await page.locator('[data-combat-lab-tab="stand"]').click();
+
+          const leftToggle = page.locator('.combat-lab-dock-toggle');
+          const rightToggle = page.locator('.simulation-sidebar [data-action="collapse"]');
+          await leftToggle.click();
+          await page.waitForTimeout(250);
+          await capture('04-left-collapsed-right-open');
+          await leftToggle.click();
+          await rightToggle.click();
+          await page.waitForTimeout(250);
+          await capture('05-left-open-right-collapsed');
+          await leftToggle.click();
+          await page.waitForTimeout(250);
+          await capture('06-both-collapsed');
+
+          await page.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' });
+          await page.waitForSelector('#app canvas');
+          const gameState = await page.evaluate(() => {
+            const lowerDetails = document.querySelector('.unit-bar-route-controls > .unit-route-details');
+            const inspectorDetails = document.querySelector('.route-cost-inspector-panel .unit-route-details');
+            const statePlan = document.querySelector('.unit-state-plan > summary');
+            return {
+              lowerDetailsDisplay: lowerDetails instanceof HTMLElement ? getComputedStyle(lowerDetails).display : 'absent',
+              inspectorDetailsPresent: Boolean(inspectorDetails),
+              statePlanPointerEvents: statePlan instanceof HTMLElement ? getComputedStyle(statePlan).pointerEvents : 'absent',
+              canvasCount: document.querySelectorAll('#app canvas').length,
+              horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+            };
+          });
+          fs.writeFileSync(`${out}/07-game-state.json`, JSON.stringify(gameState, null, 2));
+          await page.screenshot({ path: `${out}/07-game-without-order-popover.png`, fullPage: false });
+          check(gameState.lowerDetailsDisplay === 'none' || gameState.lowerDetailsDisplay === 'absent', 'lower command/order popover remains');
+          check(gameState.statePlanPointerEvents !== 'none', 'state/plan diagnostics disabled');
+          check(gameState.canvasCount === 1, 'game page must contain one canvas');
+          check(!gameState.horizontalOverflow, 'game page has horizontal overflow');
+
+          fs.writeFileSync(`${out}/evidence.json`, JSON.stringify({ productSha: process.env.PRODUCT_SHA, errors, gameState }, null, 2));
+          check(errors.length === 0, `browser errors:\n${errors.join('\n')}`);
+          await browser.close();
+          NODE
+
+          PRODUCT_SHA="$PRODUCT_SHA" node .combat-lab-dual-sidebars-v2-qa.mjs 2>&1 | tee artifacts/combat-lab-dual-sidebars-v2/browser.log
+
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-lab-dual-sidebars-v2-qa-${{ github.run_id }}
+          path: |
+            artifacts/combat-lab-dual-sidebars-v2/**
+            ${{ runner.temp }}/preview-verification.json
+            ${{ runner.temp }}/vite-preview.log
+          if-no-files-found: warn
+          retention-days: 14
