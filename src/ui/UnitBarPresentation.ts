@@ -5,6 +5,7 @@ import { getSelectedUnit } from '../core/simulation/SimulationState';
 import type { UnitModel } from '../core/units/UnitModel';
 
 type WeaponVisualKind = 'rifle' | 'submachine-gun' | 'machine-gun' | 'pistol';
+type SelectedUnit = UnitModel | null | undefined;
 
 type UnitBarElements = {
   readonly bar: HTMLElement;
@@ -99,7 +100,7 @@ function buildUnitBarPresentation(): UnitBarElements | null {
   return { bar, identity, technicalMeta, friendlyMeta, weaponCard, weaponImage, weaponName, weaponAmmo };
 }
 
-function renderSelection(elements: UnitBarElements, unit: UnitModel | null): void {
+function renderSelection(elements: UnitBarElements, unit: SelectedUnit): void {
   if (!unit) {
     elements.identity.title = '';
     elements.friendlyMeta.textContent = 'Выберите бойца на карте';
@@ -129,7 +130,7 @@ function renderSelection(elements: UnitBarElements, unit: UnitModel | null): voi
   elements.weaponAmmo.textContent = `Магазин ${runtime.roundsLoaded}/${definition.magazineCapacity} · запас ${runtime.roundsReserve}`;
 }
 
-function buildPresentationKey(unit: UnitModel | null): string {
+function buildPresentationKey(unit: SelectedUnit): string {
   if (!unit) return 'none';
   const runtime = getWeaponRuntime(unit);
   const combat = getCombatRuntime(unit);
