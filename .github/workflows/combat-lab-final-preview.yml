@@ -1,0 +1,340 @@
+name: Combat Lab Final Preview
+
+on:
+  pull_request:
+    branches:
+      - ci/combat-lab-final-base-20260727t0440z-5e8d45a
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-browser-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      PRODUCT_BRANCH: feature/20260726-shooting-stage-09v-combat-lab
+      PRODUCT_SHA: 5e8d45ae32c27a2c4c23e9627904e4c1c7dd1bcb
+      EXPECTED_VERCEL_PROJECT_NAME: repo
+      EVIDENCE_DIR: artifacts/combat-lab-final
+    steps:
+      - name: Checkout exact product source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          fetch-depth: 0
+
+      - name: Prove exact feature source
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          branch_sha="$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')"
+          test "$actual_sha" = "$PRODUCT_SHA"
+          test "$branch_sha" = "$PRODUCT_SHA"
+          test -z "$(git status --short)"
+          echo "Verified product source: $PRODUCT_BRANCH @ $PRODUCT_SHA"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run canonical Preview gate
+        shell: bash
+        run: |
+          mkdir -p "$EVIDENCE_DIR"
+          npm run verify:preview -- --report "$EVIDENCE_DIR/preview-verification.json"
+
+      - name: Build production dist
+        run: npm run build
+
+      - name: Install Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Run Chromium QA at 1440x900
+        shell: bash
+        run: |
+          set -u
+          mkdir -p "$EVIDENCE_DIR"
+          npm run preview -- --host 127.0.0.1 --port 4173 > "$EVIDENCE_DIR/vite-preview.log" 2>&1 &
+          server_pid=$!
+          trap 'kill $server_pid || true' EXIT
+          ready=false
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:4173/combat-lab.html > /dev/null; then ready=true; break; fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            echo 'Vite preview did not become ready.' | tee "$EVIDENCE_DIR/browser.log"
+            exit 1
+          fi
+          cat > .combat-lab-final-qa.mjs <<'NODE'
+          import fs from 'node:fs';
+          import { chromium } from 'playwright';
+
+          const out = process.env.EVIDENCE_DIR;
+          const productSha = process.env.PRODUCT_SHA;
+          const pageErrors = [];
+          let browser;
+
+          function check(value, message) {
+            if (!value) throw new Error(message);
+          }
+
+          async function geometry(page) {
+            return page.evaluate(() => {
+              const rect = (selector) => {
+                const element = document.querySelector(selector);
+                if (!(element instanceof HTMLElement)) return null;
+                const box = element.getBoundingClientRect();
+                return { left: box.left, right: box.right, top: box.top, bottom: box.bottom, width: box.width, height: box.height };
+              };
+              return {
+                viewport: { width: innerWidth, height: innerHeight },
+                documentWidth: document.documentElement.scrollWidth,
+                clientWidth: document.documentElement.clientWidth,
+                bodyClasses: document.body.className,
+                leftDock: rect('#combat-lab-extension-root'),
+                map: rect('#app'),
+                rightInspector: rect('.simulation-sidebar'),
+                lowerPanel: rect('.simulation-unit-bar'),
+                canvasCount: document.querySelectorAll('#app canvas').length,
+                rightInsideLeft: Boolean(document.querySelector('#combat-lab-extension-root .simulation-sidebar')),
+                fighterTab: Boolean(document.querySelector('[data-combat-lab-tab="fighter"]')),
+                labTabs: Array.from(document.querySelectorAll('[data-combat-lab-tab]')).map((item) => item.getAttribute('data-combat-lab-tab')),
+                gameTabs: document.querySelectorAll('.simulation-tabs button').length,
+              };
+            });
+          }
+
+          async function capture(page, name) {
+            const state = await geometry(page);
+            fs.writeFileSync(`${out}/${name}.json`, JSON.stringify(state, null, 2));
+            await page.screenshot({ path: `${out}/${name}.png`, fullPage: false });
+            check(state.viewport.width === 1440 && state.viewport.height === 900, `${name}: wrong viewport`);
+            check(state.documentWidth <= state.clientWidth, `${name}: horizontal overflow ${state.documentWidth}/${state.clientWidth}`);
+            check(state.canvasCount === 1, `${name}: expected one canvas, got ${state.canvasCount}`);
+            check(!state.rightInsideLeft, `${name}: right inspector was moved into the laboratory dock`);
+            check(!state.fighterTab, `${name}: obsolete laboratory Fighter tab remains`);
+            check(state.labTabs.join(',') === 'stand,metrics,log', `${name}: unexpected lab tabs ${state.labTabs.join(',')}`);
+            check(state.gameTabs >= 4, `${name}: standard game inspector tabs are missing (${state.gameTabs})`);
+            if (state.bodyClasses.includes('combat-lab-dock-open') && state.leftDock && state.map) {
+              check(state.map.left + 1 >= state.leftDock.right, `${name}: map overlaps left dock`);
+            }
+            if (state.bodyClasses.includes('combat-lab-dock-open') && state.leftDock && state.lowerPanel) {
+              check(state.lowerPanel.left + 1 >= state.leftDock.right, `${name}: lower panel overlaps left dock`);
+            }
+            if (state.bodyClasses.includes('sidebar-open') && state.rightInspector && state.map) {
+              check(state.map.right <= state.rightInspector.left + 1, `${name}: map overlaps right inspector`);
+            }
+            if (state.bodyClasses.includes('sidebar-open') && state.rightInspector && state.lowerPanel) {
+              check(state.lowerPanel.right <= state.rightInspector.left + 1, `${name}: lower panel overlaps right inspector`);
+            }
+            return state;
+          }
+
+          try {
+            browser = await chromium.launch({ headless: true, args: ['--use-gl=swiftshader', '--ignore-gpu-blocklist'] });
+            const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+            page.setDefaultTimeout(25000);
+            page.on('pageerror', (error) => pageErrors.push(`pageerror: ${error.message}`));
+            page.on('console', (message) => { if (message.type() === 'error') pageErrors.push(`console: ${message.text()}`); });
+
+            await page.goto('http://127.0.0.1:4173/combat-lab.html', { waitUntil: 'domcontentloaded' });
+            await page.waitForSelector('#combat-lab-extension-root[data-combat-lab-extension="active"]');
+            await page.waitForSelector('#app canvas');
+            await page.waitForSelector('.simulation-sidebar');
+            await page.waitForTimeout(300);
+            await capture(page, '00-stand-both-open');
+
+            for (const selector of [
+              '.simulation-controls [data-action="fire-contact"]',
+              '.simulation-controls [data-action="toggle-fire-permission"]',
+            ]) {
+              const control = page.locator(selector);
+              if (await control.count()) {
+                check(!(await control.isVisible()), `Legacy shooting control remains visible: ${selector}`);
+                check(await control.isDisabled(), `Legacy shooting control remains enabled: ${selector}`);
+              }
+            }
+
+            const lowerPause = page.locator('.simulation-controls [data-action="pause"]');
+            const labPause = page.locator('.combat-lab-run-controls > button').nth(1);
+            check(await lowerPause.count() === 1 && await labPause.count() === 1, 'Shared pause controls are missing');
+            await lowerPause.click();
+            await page.waitForTimeout(250);
+            check((await lowerPause.textContent()) === (await labPause.textContent()), `Pause controls diverged: ${await lowerPause.textContent()} / ${await labPause.textContent()}`);
+
+            const speed2 = page.locator('.unit-bar-speed-group [data-speed="2"]');
+            const labSpeed = page.locator('.combat-lab-run-controls > label select');
+            check(await speed2.count() === 1 && await labSpeed.count() === 1, 'Shared speed controls are missing');
+            await speed2.click();
+            await page.waitForTimeout(250);
+            check(await labSpeed.inputValue() === '2', `Speed controls diverged: laboratory=${await labSpeed.inputValue()}`);
+
+            await page.locator('[data-combat-lab-tab="metrics"]').click();
+            await capture(page, '01-metrics-both-open');
+            await page.locator('[data-combat-lab-tab="log"]').click();
+            await capture(page, '02-log-both-open');
+            await page.locator('[data-combat-lab-tab="stand"]').click();
+
+            const leftToggle = page.locator('.combat-lab-dock-toggle');
+            const rightToggle = page.locator('.simulation-sidebar [data-action="collapse"]');
+            check(await leftToggle.count() === 1, 'Left dock collapse control is missing');
+            check(await rightToggle.count() === 1, 'Right inspector collapse control is missing');
+            await leftToggle.click();
+            await page.waitForTimeout(300);
+            await capture(page, '03-left-collapsed-right-open');
+            await leftToggle.click();
+            await rightToggle.click();
+            await page.waitForTimeout(300);
+            await capture(page, '04-left-open-right-collapsed');
+            await leftToggle.click();
+            await page.waitForTimeout(300);
+            await capture(page, '05-both-collapsed');
+
+            await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+            await page.waitForSelector('#app canvas');
+            await page.waitForTimeout(250);
+            const gameState = await page.evaluate(() => {
+              const orderDetails = document.querySelector('.unit-bar-route-controls > .unit-route-details');
+              const statePlan = document.querySelector('.unit-state-plan > summary');
+              return {
+                orderDetailsDisplay: orderDetails instanceof HTMLElement ? getComputedStyle(orderDetails).display : 'absent',
+                statePlanPointerEvents: statePlan instanceof HTMLElement ? getComputedStyle(statePlan).pointerEvents : 'absent',
+                canvasCount: document.querySelectorAll('#app canvas').length,
+                overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+              };
+            });
+            fs.writeFileSync(`${out}/06-game-state.json`, JSON.stringify(gameState, null, 2));
+            await page.screenshot({ path: `${out}/06-game-without-order-popover.png`, fullPage: false });
+            check(gameState.orderDetailsDisplay === 'none' || gameState.orderDetailsDisplay === 'absent', 'Order popover remains available over the game map');
+            check(gameState.statePlanPointerEvents !== 'none', 'State/plan diagnostics were disabled');
+            check(gameState.canvasCount === 1 && !gameState.overflow, 'Standard game layout is invalid');
+            check(pageErrors.length === 0, `Browser errors:\n${pageErrors.join('\n')}`);
+
+            fs.writeFileSync(`${out}/browser-evidence.json`, JSON.stringify({ status: 'passed', productSha, pageErrors, gameState }, null, 2));
+          } catch (error) {
+            const failure = error instanceof Error ? { message: error.message, stack: error.stack } : { message: String(error) };
+            fs.writeFileSync(`${out}/browser-failure.json`, JSON.stringify({ status: 'failed', productSha, pageErrors, failure }, null, 2));
+            throw error;
+          } finally {
+            await browser?.close();
+          }
+          NODE
+          set +e
+          PRODUCT_SHA="$PRODUCT_SHA" EVIDENCE_DIR="$EVIDENCE_DIR" node .combat-lab-final-qa.mjs > "$EVIDENCE_DIR/browser.log" 2>&1
+          status=$?
+          cat "$EVIDENCE_DIR/browser.log"
+          exit $status
+
+      - name: Re-prove exact feature HEAD before deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch_sha="$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')"
+          test "$branch_sha" = "$PRODUCT_SHA"
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+
+      - name: Pull permanent Vercel project settings
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx --yes vercel@56.4.1 pull --yes --environment=preview --token="$VERCEL_TOKEN"
+
+      - name: Verify permanent Vercel project link
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: >-
+          node scripts/verify_vercel_project_link.mjs
+          --file .vercel/project.json
+          --expected-org-id "$VERCEL_ORG_ID"
+          --expected-project-id "$VERCEL_PROJECT_ID"
+          --expected-project-name "$EXPECTED_VERCEL_PROJECT_NAME"
+
+      - name: Build exact Vercel output
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          REAL_WARGAME_BRANCH: ${{ env.PRODUCT_BRANCH }}
+          REAL_WARGAME_COMMIT_SHA: ${{ env.PRODUCT_SHA }}
+        run: npx --yes vercel@56.4.1 build --token="$VERCEL_TOKEN"
+
+      - name: Add deployment identity and verify pages
+        run: |
+          node scripts/write_deployment_source.mjs --root .vercel/output/static --ref "$PRODUCT_BRANCH" --sha "$PRODUCT_SHA" --report "$EVIDENCE_DIR/preview-verification.json"
+          npm run verify:deployment-pages -- --root .vercel/output/static --require-source
+          test -f .vercel/output/static/index.html
+          test -f .vercel/output/static/ai-node-editor.html
+          test -f .vercel/output/static/combat-lab.html
+          test -f .vercel/output/static/deployment-source.json
+
+      - name: Publish one prebuilt Preview
+        id: deploy
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          url="$(npx --yes vercel@56.4.1 deploy --prebuilt --yes --token="$VERCEL_TOKEN" | tail -n 1 | tr -d '\r')"
+          [[ "$url" =~ ^https://[^[:space:]]+$ ]]
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for READY and record deployment
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          npx --yes vercel@56.4.1 inspect "$DEPLOYMENT_URL" --wait --token="$VERCEL_TOKEN"
+          host="${DEPLOYMENT_URL#https://}"
+          curl --fail --silent --show-error --get "https://api.vercel.com/v13/deployments/$host" --header "Authorization: Bearer $VERCEL_TOKEN" --data-urlencode "teamId=$VERCEL_ORG_ID" --output "$EVIDENCE_DIR/vercel-response.json"
+          RESPONSE="$EVIDENCE_DIR/vercel-response.json" OUTPUT="$EVIDENCE_DIR/deployment.json" node <<'NODE'
+          const fs = require('node:fs');
+          const value = JSON.parse(fs.readFileSync(process.env.RESPONSE, 'utf8'));
+          if (value.projectId !== process.env.VERCEL_PROJECT_ID) throw new Error('Wrong Vercel project.');
+          if (value.readyState !== 'READY') throw new Error(`Deployment is ${value.readyState}.`);
+          fs.writeFileSync(process.env.OUTPUT, JSON.stringify({ id: value.id, url: `https://${value.url}`, status: value.readyState, projectId: value.projectId }, null, 2));
+          NODE
+
+      - name: Verify published pages and exact identity
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          for page in / /ai-node-editor.html /combat-lab.html; do
+            npx --yes vercel@56.4.1 curl "$page" --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > /dev/null
+          done
+          npx --yes vercel@56.4.1 curl /deployment-source.json --deployment "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" > "$EVIDENCE_DIR/published-deployment-source.json"
+          SOURCE="$EVIDENCE_DIR/published-deployment-source.json" node <<'NODE'
+          const fs = require('node:fs');
+          const value = JSON.parse(fs.readFileSync(process.env.SOURCE, 'utf8'));
+          if (value.ref !== process.env.PRODUCT_BRANCH || value.sourceSha !== process.env.PRODUCT_SHA) throw new Error('Published identity mismatch.');
+          NODE
+
+      - name: Upload final evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-lab-final-preview-${{ github.run_id }}
+          path: artifacts/combat-lab-final/**
+          if-no-files-found: warn
+          retention-days: 14
