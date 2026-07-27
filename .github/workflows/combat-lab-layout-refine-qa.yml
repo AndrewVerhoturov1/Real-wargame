@@ -1,0 +1,257 @@
+name: Combat Lab Layout Refine QA
+
+on:
+  pull_request:
+    branches:
+      - ci/combat-lab-layout-refine-base-20260727-008f5a2
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PRODUCT_BRANCH: feature/20260726-shooting-stage-09v-combat-lab
+      PRODUCT_SHA: 008f5a291c9ff183376c41369db8c0839dfb109d
+      EVIDENCE_DIR: artifacts/combat-lab-layout-refine
+    steps:
+      - name: Checkout exact product source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          fetch-depth: 0
+
+      - name: Prove exact feature source
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          branch_sha="$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')"
+          test "$actual_sha" = "$PRODUCT_SHA"
+          test "$branch_sha" = "$PRODUCT_SHA"
+          test -z "$(git status --short)"
+          echo "Verified product source: $PRODUCT_BRANCH @ $PRODUCT_SHA"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run focused contracts
+        run: |
+          node scripts/combat_lab_full_game_contract_smoke.mjs
+          node scripts/combat_lab_workspace_layout_smoke.mjs
+          npm run combat-lab-ui-contract:smoke
+
+      - name: Run canonical Preview gate
+        run: npm run verify:preview -- --report "$RUNNER_TEMP/preview-verification.json"
+
+      - name: Build production dist
+        run: npm run build
+
+      - name: Install Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Run Chromium QA at 1440x900
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          npm run preview -- --host 127.0.0.1 --port 4173 > "$RUNNER_TEMP/vite-preview.log" 2>&1 &
+          server_pid=$!
+          trap 'kill $server_pid || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:4173/combat-lab.html > /dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:4173/combat-lab.html > /dev/null
+          cat > .combat-lab-layout-refine-qa.mjs <<'NODE'
+          import fs from 'node:fs';
+          import { chromium } from 'playwright';
+
+          const out = process.env.EVIDENCE_DIR;
+          fs.mkdirSync(out, { recursive: true });
+          const browser = await chromium.launch({
+            headless: true,
+            args: ['--use-gl=swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'],
+          });
+          const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+          await context.addInitScript(() => {
+            window.__combatAudioProbe = { resumes: 0, oscillatorStarts: 0 };
+            const AudioContextConstructor = window.AudioContext ?? window.webkitAudioContext;
+            if (!AudioContextConstructor) return;
+            const originalResume = AudioContextConstructor.prototype.resume;
+            AudioContextConstructor.prototype.resume = function (...args) {
+              window.__combatAudioProbe.resumes += 1;
+              return originalResume.apply(this, args);
+            };
+            const originalCreateOscillator = AudioContextConstructor.prototype.createOscillator;
+            AudioContextConstructor.prototype.createOscillator = function (...args) {
+              const oscillator = originalCreateOscillator.apply(this, args);
+              const originalStart = oscillator.start.bind(oscillator);
+              oscillator.start = (...startArgs) => {
+                window.__combatAudioProbe.oscillatorStarts += 1;
+                return originalStart(...startArgs);
+              };
+              return oscillator;
+            };
+          });
+          const page = await context.newPage();
+          const pageErrors = [];
+          page.on('pageerror', (error) => pageErrors.push(`pageerror: ${error.message}`));
+          page.on('console', (message) => {
+            if (message.type() === 'error') pageErrors.push(`console: ${message.text()}`);
+          });
+
+          function check(condition, message) {
+            if (!condition) throw new Error(message);
+          }
+
+          async function waitForRefinedWorkspace() {
+            await page.waitForSelector('.tactical-workspace-shell[data-refined-workspace-layout="true"]');
+            await page.waitForSelector('.workspace-time-controls');
+            await page.waitForSelector('.workspace-resize-handle-right');
+          }
+
+          await page.goto('http://127.0.0.1:4173/combat-lab.html', { waitUntil: 'networkidle' });
+          await page.waitForSelector('#combat-lab-extension-root[data-combat-lab-extension="active"]');
+          await page.waitForSelector('#combat-lab-extension-root[data-refined-combat-lab-layout="true"]');
+          await page.waitForSelector('#app canvas');
+          await waitForRefinedWorkspace();
+          await page.waitForTimeout(500);
+
+          const lowerBar = page.locator('.simulation-unit-bar');
+          check(await lowerBar.locator('[data-action="pause"]').count() === 0, 'Pause remains in the unit panel.');
+          check(await lowerBar.locator('.unit-bar-speed-group').count() === 0, 'Speed remains in the unit panel.');
+          for (const action of ['step', 'evaluate', 'execute', 'reset-unit']) {
+            check(await lowerBar.locator(`[data-action="${action}"]`).count() === 0, `${action} remains in the unit panel.`);
+          }
+          check(await lowerBar.locator('.unit-attention-profile, .unit-attention-mode').count() === 0, 'Attention controls remain in the unit panel.');
+          check(await lowerBar.locator('[data-role="state-plan-panel"]').count() === 0, 'AI state-plan summary remains in the unit panel.');
+          check(await page.locator('.workspace-time-controls [data-action="pause"]').count() === 1, 'Header pause control is missing.');
+          check(await page.locator('.workspace-time-controls [data-speed]').count() === 6, 'Header speed controls are incomplete.');
+          check(await page.locator('.combat-lab-run-controls').first().locator(':scope > *').count() === 1, 'Combat Lab duplicates global time controls.');
+
+          const initialLayout = await page.evaluate(() => {
+            const left = document.querySelector('#combat-lab-extension-root');
+            const right = document.querySelector('.simulation-sidebar');
+            const leftStyle = getComputedStyle(left);
+            const rightStyle = getComputedStyle(right);
+            return {
+              leftWidth: left.getBoundingClientRect().width,
+              rightWidth: right.getBoundingClientRect().width,
+              leftRadius: leftStyle.borderRadius,
+              rightRadius: rightStyle.borderRadius,
+              leftDockRadius: getComputedStyle(document.querySelector('.combat-lab-dock')).borderRadius,
+              scrollWidth: document.documentElement.scrollWidth,
+              clientWidth: document.documentElement.clientWidth,
+              canvasCount: document.querySelectorAll('#app canvas').length,
+            };
+          });
+          check(Math.abs(initialLayout.leftWidth - 370) <= 3, `Unexpected left width: ${initialLayout.leftWidth}`);
+          check(Math.abs(initialLayout.rightWidth - 370) <= 3, `Unexpected right width: ${initialLayout.rightWidth}`);
+          check(initialLayout.leftDockRadius === initialLayout.rightRadius, `Panel radii differ: ${initialLayout.leftDockRadius}/${initialLayout.rightRadius}`);
+          check(initialLayout.scrollWidth <= initialLayout.clientWidth, `Horizontal overflow ${initialLayout.scrollWidth}/${initialLayout.clientWidth}`);
+          check(initialLayout.canvasCount === 1, `Expected one canvas, got ${initialLayout.canvasCount}`);
+          await page.screenshot({ path: `${out}/00-stand-default.png`, fullPage: false });
+
+          const leftHandle = page.locator('.workspace-resize-handle-left');
+          let box = await leftHandle.boundingBox();
+          check(box, 'Left resize handle has no bounds.');
+          await page.mouse.move(box.x + box.width / 2, box.y + 80);
+          await page.mouse.down();
+          await page.mouse.move(box.x + box.width / 2 + 70, box.y + 80, { steps: 8 });
+          await page.mouse.up();
+          await page.waitForTimeout(250);
+          const widenedLeft = await page.locator('#combat-lab-extension-root').evaluate((element) => element.getBoundingClientRect().width);
+          check(widenedLeft >= initialLayout.leftWidth + 55, `Left panel did not resize: ${widenedLeft}`);
+          await page.screenshot({ path: `${out}/01-left-resized.png`, fullPage: false });
+
+          const rightHandle = page.locator('.workspace-resize-handle-right');
+          box = await rightHandle.boundingBox();
+          check(box, 'Right resize handle has no bounds.');
+          await page.mouse.move(box.x + box.width / 2, box.y + 80);
+          await page.mouse.down();
+          await page.mouse.move(box.x + box.width / 2 - 70, box.y + 80, { steps: 8 });
+          await page.mouse.up();
+          await page.waitForTimeout(250);
+          const widenedRight = await page.locator('.simulation-sidebar').evaluate((element) => element.getBoundingClientRect().width);
+          check(widenedRight >= initialLayout.rightWidth + 55, `Right panel did not resize: ${widenedRight}`);
+          await page.screenshot({ path: `${out}/02-both-resized.png`, fullPage: false });
+
+          await page.evaluate(() => {
+            document.documentElement.style.setProperty('--workspace-sidebar', '370px');
+            document.documentElement.style.setProperty('--combat-lab-dock-width', '370px');
+            localStorage.removeItem('real-wargame.workspace.sidebar-width.v1');
+            localStorage.removeItem('real-wargame.combat-lab.dock-width.v1');
+            window.dispatchEvent(new Event('resize'));
+          });
+          await page.waitForTimeout(250);
+
+          const firePanel = page.locator('.combat-lab-panel').filter({ hasText: 'ПРИЦЕЛИВАНИЕ И ОГОНЬ' }).first();
+          const targetSelect = firePanel.locator('select').nth(1);
+          const targetOptions = await targetSelect.locator('option').allTextContents();
+          const target25 = targetOptions.find((value) => value.includes('Мишень 25 м'));
+          if (target25) await targetSelect.selectOption({ label: target25 });
+          await page.getByRole('button', { name: 'Открыть огонь', exact: true }).click();
+          const speed10 = page.locator('.workspace-time-controls [data-speed="10"]');
+          if (await speed10.count()) await speed10.click();
+          const pause = page.locator('.workspace-time-controls [data-action="pause"]');
+          if (/Продолжить/i.test(await pause.innerText())) await pause.click();
+          await page.waitForFunction(() => window.__combatAudioProbe?.oscillatorStarts > 0, null, { timeout: 20000 });
+          await page.locator('[data-combat-lab-tab="log"]').click();
+          await page.waitForFunction(() => /Выстрел/i.test(document.querySelector('[data-combat-lab-tab-panel="log"]')?.textContent ?? ''), null, { timeout: 20000 });
+          const audioProbe = await page.evaluate(() => window.__combatAudioProbe);
+          check(audioProbe.oscillatorStarts >= 2, `Rifle sound did not start both oscillators: ${JSON.stringify(audioProbe)}`);
+          await page.screenshot({ path: `${out}/03-fire-sound-log.png`, fullPage: false });
+
+          await page.locator('[data-combat-lab-tab="metrics"]').click();
+          await page.screenshot({ path: `${out}/04-metrics.png`, fullPage: false });
+          await page.locator('[data-combat-lab-tab="stand"]').click();
+          await page.locator('.combat-lab-dock-toggle').click();
+          await page.waitForTimeout(200);
+          await page.locator('.simulation-sidebar [data-action="collapse"]').click();
+          await page.waitForTimeout(250);
+          await page.screenshot({ path: `${out}/05-both-collapsed.png`, fullPage: false });
+
+          await page.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' });
+          await page.waitForSelector('#app canvas');
+          await waitForRefinedWorkspace();
+          check(await page.locator('.workspace-time-controls').count() === 1, 'Ordinary game lacks shared header time controls.');
+          check(await page.locator('.simulation-unit-bar [data-action="pause"], .simulation-unit-bar .unit-bar-speed-group').count() === 0, 'Ordinary game still keeps time in the unit bar.');
+          check(await page.locator('.simulation-unit-bar [data-action="step"], .simulation-unit-bar [data-action="evaluate"], .simulation-unit-bar [data-action="execute"], .simulation-unit-bar [data-action="reset-unit"]').count() === 0, 'Removed utility actions returned in ordinary game.');
+          await page.screenshot({ path: `${out}/06-normal-game.png`, fullPage: false });
+
+          check(pageErrors.length === 0, `Browser errors detected:\n${pageErrors.join('\n')}`);
+          fs.writeFileSync(`${out}/evidence.json`, JSON.stringify({
+            productSha: process.env.PRODUCT_SHA,
+            initialLayout,
+            widenedLeft,
+            widenedRight,
+            audioProbe,
+            pageErrors,
+          }, null, 2));
+          await browser.close();
+          NODE
+          PRODUCT_SHA="$PRODUCT_SHA" EVIDENCE_DIR="$EVIDENCE_DIR" node .combat-lab-layout-refine-qa.mjs 2>&1 | tee "$EVIDENCE_DIR/browser.log"
+
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-lab-layout-refine-qa-${{ github.run_id }}
+          path: |
+            artifacts/combat-lab-layout-refine/**
+            ${{ runner.temp }}/preview-verification.json
+            ${{ runner.temp }}/vite-preview.log
+          if-no-files-found: warn
+          retention-days: 14
