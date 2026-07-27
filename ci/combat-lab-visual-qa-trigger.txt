@@ -1,0 +1,4 @@
+Temporary CI-only trigger.
+Do not merge.
+Exact product SHA: 5e8d45ae32c27a2c4c23e9627904e4c1c7dd1bcb
+Purpose: corrected real Chromium 1440x900 visual QA.
