@@ -104,6 +104,7 @@ function renderSelection(elements: UnitBarElements, unit: UnitModel | null): voi
     elements.identity.title = '';
     elements.friendlyMeta.textContent = 'Выберите бойца на карте';
     elements.weaponCard.classList.add('empty');
+    elements.weaponCard.removeAttribute('data-weapon-kind');
     elements.weaponImage.replaceChildren();
     elements.weaponName.textContent = 'Оружие не выбрано';
     elements.weaponAmmo.textContent = 'Боезапас: —';
@@ -122,7 +123,7 @@ function renderSelection(elements: UnitBarElements, unit: UnitModel | null): voi
     capabilityLabel(combat.capability),
   ].join(' · ');
   elements.weaponCard.classList.remove('empty');
-  elements.weaponCard.dataset.weaponKind = kind;
+  elements.weaponCard.setAttribute('data-weapon-kind', kind);
   elements.weaponImage.innerHTML = weaponSilhouette(kind);
   elements.weaponName.textContent = definition.labelRu;
   elements.weaponAmmo.textContent = `Магазин ${runtime.roundsLoaded}/${definition.magazineCapacity} · запас ${runtime.roundsReserve}`;
