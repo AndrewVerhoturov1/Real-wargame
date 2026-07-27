@@ -13,6 +13,7 @@ const [
   commands,
   menu,
   labMain,
+  statePlanCss,
 ] = await Promise.all([
   readFile('src/combat-lab/ui/CombatLabShell.ts', 'utf8'),
   readFile('src/combat-lab/runtime/CombatLabVisualSession.ts', 'utf8'),
@@ -25,6 +26,7 @@ const [
   readFile('src/core/testing/combat-lab/CombatLabCommands.ts', 'utf8'),
   readFile('src/shared/AppShellMenu.ts', 'utf8'),
   readFile('src/combat-lab/main.ts', 'utf8'),
+  readFile('src/ai-state-plan-panel.css', 'utf8'),
 ]);
 
 for (const marker of [
@@ -62,6 +64,11 @@ assert.match(extension, /CombatLabShell/);
 assert.match(extension, /combat-lab-drawer/);
 assert.match(extension, /combat-lab-drawer-toggle/);
 assert.match(extension, /aria-expanded/);
+assert.match(extension, /installSharedSimulationControls/);
+assert.match(extension, /setFireAllowed/);
+assert.match(extension, /data-action="fire-contact"/);
+assert.doesNotMatch(extension, /adoptSimulationSidebar/);
+assert.doesNotMatch(extension, /['"]fighter['"]/);
 
 for (const marker of [
   'installGameEditorWorkbench',
@@ -82,6 +89,9 @@ assert.doesNotMatch(overlay, /new Application\s*\(/);
 assert.doesNotMatch(overlay, /drawMetreGrid|drawUnit|mapWidthPx|mapHeightPx/);
 assert.match(adapter, /getWorldContainer/);
 assert.match(adapter, /addTickerListener/);
+
+assert.match(statePlanCss, /\.unit-state-plan-popover\s*\{[^}]*display:\s*none\s*!important/s);
+assert.match(statePlanCss, /\.unit-state-plan\s*>\s*summary\s*\{[^}]*pointer-events:\s*none/s);
 
 assert.match(labMain, /GameApplication\.create\(/);
 assert.match(labMain, /installAppShellMenu\(\{ mode: 'combat-lab' \}\)/);
