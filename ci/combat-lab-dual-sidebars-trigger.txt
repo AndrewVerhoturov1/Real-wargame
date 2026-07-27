@@ -1,4 +1,5 @@
 Temporary CI-only trigger for Combat Lab dual-sidebar verification.
 Product source SHA: 9e2f64567dc3f66ce765c58edf7c6ddd2d340c27
 Canonical feature branch: feature/20260726-shooting-stage-09v-combat-lab
+Browser harness revision: 2
 Do not merge.
