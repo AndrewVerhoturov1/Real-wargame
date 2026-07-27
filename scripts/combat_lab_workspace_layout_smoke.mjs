@@ -4,7 +4,10 @@ import { readFileSync } from 'node:fs';
 const extension = readFileSync('src/combat-lab/CombatLabExtension.ts', 'utf8');
 const shell = readFileSync('src/combat-lab/ui/CombatLabShell.ts', 'utf8');
 const uiBoundary = `${extension}\n${shell}`;
-const css = readFileSync('src/combat-lab/combat-lab.css', 'utf8');
+const css = [
+  readFileSync('src/combat-lab/combat-lab.css', 'utf8'),
+  readFileSync('src/combat-lab/combat-lab-workspace.css', 'utf8'),
+].join('\n');
 
 for (const token of [
   'combat-lab-dock',
@@ -27,6 +30,8 @@ for (const token of [
 for (const token of [
   '--combat-lab-dock-width: 440px',
   'body.app-shell-mode-combat-lab.workspace-simulation #app',
+  'width: auto !important',
+  'height: auto !important',
   'body.app-shell-mode-combat-lab .simulation-unit-bar',
   'body.app-shell-mode-combat-lab .app-shell-menu',
   '.combat-lab-tab-list',
