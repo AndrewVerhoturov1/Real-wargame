@@ -35,7 +35,7 @@ body.app-shell-mode-combat-lab.combat-lab-dock-open .simulation-unit-bar {
   grid-template-areas:
     "identity stateplan stats"
     "route route route"
-    "posture controls speed";
+    "posture controls controls";
   align-items: center;
 }
 
@@ -44,6 +44,10 @@ body.app-shell-mode-combat-lab.combat-lab-dock-open .unit-bar-route-controls.rou
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-template-areas: "attentionprofile attentionmode turn";
   gap: 3px 6px;
+}
+
+body.app-shell-mode-combat-lab.combat-lab-dock-open .unit-bar-speed-group {
+  display: none;
 }
 
 body.app-shell-mode-combat-lab .unit-bar-stat {
@@ -59,7 +63,7 @@ body.app-shell-mode-combat-lab .unit-bar-speed-group button {
 }
 
 body.app-shell-mode-combat-lab .combat-lab-run-controls {
-  grid-template-columns: minmax(112px, 1fr) 88px 76px 74px;
+  grid-template-columns: minmax(120px, 1fr) 100px 72px 64px;
 }
 
 body.app-shell-mode-combat-lab .combat-lab-run-controls button,
@@ -68,7 +72,7 @@ body.app-shell-mode-combat-lab .combat-lab-run-controls select {
 }
 
 body.app-shell-mode-combat-lab .combat-lab-fighter-panel .simulation-tabs {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 body.app-shell-mode-combat-lab .combat-lab-fighter-panel .simulation-tabs button {
