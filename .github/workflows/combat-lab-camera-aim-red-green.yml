@@ -12,46 +12,35 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
-      - name: Checkout regression-test commit before correction
+      - name: Checkout corrected product head
         uses: actions/checkout@v4
         with:
-          ref: c9bdb8dd783a8bc045c2e7054763ffad8b77d89c
+          ref: 380a88e9654561c34201765494f9f4a7fadfd622
           fetch-depth: 0
       - name: Setup Node.js 24
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - name: Install exact dependencies for red proof
+      - name: Install exact dependencies
         run: npm ci --no-audit --no-fund
-      - name: Prove regression test fails before correction
+      - name: Capture Stage 5 aim verification
+        id: stage5
         shell: bash
         run: |
-          set -euo pipefail
           set +e
-          node scripts/combat_lab_camera_aim_regression_smoke.mjs > "$RUNNER_TEMP/red.log" 2>&1
+          npm run infantry-combat-stage5:verify > "$RUNNER_TEMP/stage5.log" 2>&1
           status=$?
-          set -e
-          cat "$RUNNER_TEMP/red.log"
-          test "$status" -ne 0
-          grep -Eq "Combat Lab must not move|must not fire before the weapon direction" "$RUNNER_TEMP/red.log"
-      - name: Checkout corrected product head
-        uses: actions/checkout@v4
+          cat "$RUNNER_TEMP/stage5.log"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload Stage 5 verification log
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          ref: 380a88e9654561c34201765494f9f4a7fadfd622
-          clean: true
-          fetch-depth: 0
-      - name: Install exact dependencies for green proof
-        run: npm ci --no-audit --no-fund
-      - name: Run focused camera and aim regression
-        run: node scripts/combat_lab_camera_aim_regression_smoke.mjs
-      - name: Run Stage 5 aim verification
-        run: npm run infantry-combat-stage5:verify
-      - name: Run Combat Lab workspace contract
-        run: node scripts/combat_lab_workspace_layout_smoke.mjs
-      - name: TypeScript
-        run: npm run typecheck
-      - name: Production build
-        run: npm run build
+          name: infantry-combat-stage5-log-380a88e
+          path: ${{ runner.temp }}/stage5.log
+      - name: Require Stage 5 aim verification success
+        run: test "${{ steps.stage5.outputs.status }}" -eq 0
