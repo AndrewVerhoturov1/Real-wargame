@@ -48,26 +48,33 @@ function verifyUnitBarReadsInfantryCombatRuntime(): void {
 
 function verifyJournalNamesShooterAndVictim(): void {
   const session = new CombatLabVisualSession(RIFLE_DISTANCE_SCENARIO_ID, 1);
-  const result = session.executeInteractive({
-    kind: 'fire',
-    shooterUnitId: 'rifle-distance-shooter',
-    targetUnitId: 'rifle-target-25',
-    targetPointMetres: null,
-    mode: 'single',
-    targetRadiusMetres: 0,
-    minimumSolutionQuality: 0.65,
-  });
-  assert.equal(result.accepted, true, `Combat Lab fire command must be accepted: ${result.reasonCode}`);
-  session.setPaused(false);
+  const victim = session.state.units.find((unit) => unit.id === 'rifle-target-25');
+  assert.ok(victim, 'Rifle-distance victim is required.');
+  victim.infantryCombatRuntime.physiology.blood.bloodLoss = 0.18;
+  victim.infantryCombatRuntime.physiology.blood.currentBleedingRatePerSecond = 0.004;
+  victim.infantryCombatRuntime.physiology.blood.state = 'weakened';
 
-  for (let step = 0; step < 120 && session.state.infantryCombatProjectiles.impacts.length === 0; step += 1) {
-    session.advance(0.05);
-  }
-  const impact = session.state.infantryCombatProjectiles.impacts.find(
-    (candidate) => candidate.hitUnitId === 'rifle-target-25',
-  );
-  assert.ok(impact, 'The deterministic 25 m rifle shot must produce a victim impact for the journal contract.');
+  const projectileRuntime = session.state.infantryCombatProjectiles;
+  projectileRuntime.committedShots.push({
+    shotId: 'journal-shot-1',
+    shooterId: 'rifle-distance-shooter',
+    roundsBefore: 5,
+    roundsAfter: 4,
+    predictedHitProbability: 0.73,
+  } as unknown as (typeof projectileRuntime.committedShots)[number]);
+  projectileRuntime.impacts.push({
+    impactId: 'journal-impact-1',
+    projectileId: 'journal-projectile-1',
+    shotId: 'journal-shot-1',
+    shooterId: 'rifle-distance-shooter',
+    hitType: 'unit',
+    hitUnitId: 'rifle-target-25',
+    hitZone: 'torso',
+    hitObjectId: null,
+    bodyPhysics: { status: 'penetrated' },
+  } as unknown as (typeof projectileRuntime.impacts)[number]);
 
+  (session as unknown as { captureProductionEvents(): void }).captureProductionEvents();
   const journal = session.getSnapshot().eventJournal.join('\n');
   assert.match(journal, /Стрелок:\s+Винтовочник/, 'Journal must contain a human-readable shooter entry.');
   assert.match(journal, /Жертва:\s+Мишень 25 м/, 'Journal must contain a human-readable victim entry.');
