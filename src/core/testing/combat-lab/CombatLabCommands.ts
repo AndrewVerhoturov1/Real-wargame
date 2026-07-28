@@ -11,7 +11,9 @@ import {
   requestFireTask,
   requestReloadWeapon,
   requestUndeployWeapon,
+  setFireTaskTestOverrides,
 } from '../../infantry-combat/runtime';
+import type { PerceptionContactMemory } from '../../perception/PerceptionContact';
 import { issueMoveOrderToSelectedUnit, selectUnit, type SimulationState } from '../../simulation/SimulationState';
 import type { UnitModel } from '../../units/UnitModel';
 import type { CombatLabCommandResultV1, CombatLabScriptCommandV1 } from './CombatLabContracts';
@@ -36,22 +38,51 @@ export function executeCombatLabCommand(
     if (!shooter) return missingUnit(command.shooterUnitId);
     const targetUnit = command.targetUnitId ? findUnit(state, command.targetUnitId) : null;
     if (command.targetUnitId && !targetUnit) return missingUnit(command.targetUnitId);
-    const target = command.targetPointMetres ?? (targetUnit ? unitAimPointMetres(state, targetUnit) : null);
+
+    const targetContact = targetUnit ? resolveProductionContact(shooter, targetUnit.id) : null;
+    if (targetUnit && !targetContact) {
+      return rejected(
+        'combat_lab_target_contact_missing',
+        'Огонь по бойцу отклонён: у стрелка нет производственного контакта цели. Полигон не подставляет истинные координаты.',
+      );
+    }
+
+    const minimumPerceptionQuality = clamp(command.minimumPerceptionQuality ?? 0, 0, 1);
+    const perceptionQuality = targetContact
+      ? calculateCombatLabPerceptionQuality(targetContact, state.map.metersPerCell, now)
+      : 1;
+    if (targetContact && command.forceFire !== true && perceptionQuality < minimumPerceptionQuality) {
+      return rejected(
+        'combat_lab_perception_below_threshold',
+        `Огонь не открыт: качество контакта ${(perceptionQuality * 100).toFixed(1)}% ниже порога ${(minimumPerceptionQuality * 100).toFixed(1)}%.`,
+      );
+    }
+
+    const target = command.targetPointMetres ?? (targetContact ? contactAimPointMetres(state, targetContact) : null);
     if (!target) return rejected('combat_lab_target_missing', 'Не выбрана цель-боец или точка цели.');
-    const targetContactId = targetUnit ? resolveProductionContactId(shooter, targetUnit.id) : null;
     const result = requestFireTask(shooter, {
       owner,
       ownerToken,
       target,
       targetRadiusMetres: command.mode === 'suppress' ? command.targetRadiusMetres : 0,
-      contactId: targetContactId,
+      contactId: targetContact?.id ?? null,
       sourceUnitId: targetUnit?.id ?? null,
       mode: command.mode,
-      minimumSolutionQuality: command.minimumSolutionQuality,
+      minimumSolutionQuality: clamp(command.minimumSolutionQuality, 0, 1),
       maximumFriendlyFireRisk: 1,
       requestedSeconds: now,
     });
-    return normalizeProductionResult(result, ownerToken);
+    const normalized = normalizeProductionResult(result, ownerToken);
+    const activeTask = shooter.infantryCombatRuntime.activeFireTask;
+    if (
+      normalized.accepted
+      && command.accuracyOverrides
+      && activeTask?.ownerToken === ownerToken
+      && activeTask.owner.source === 'test'
+    ) {
+      setFireTaskTestOverrides(activeTask, command.accuracyOverrides);
+    }
+    return normalized;
   }
 
   if (command.kind === 'cancel_fire') {
@@ -189,15 +220,37 @@ export function cancelCombatLabWeaponAction(
     : rejected('combat_lab_first_aid_missing', 'Активная первая помощь не найдена.');
 }
 
-function unitAimPointMetres(state: SimulationState, unit: UnitModel) {
+export function calculateCombatLabPerceptionQuality(
+  contact: Pick<PerceptionContactMemory, 'confidence' | 'uncertaintyCells' | 'lastObservedSeconds' | 'lastUpdatedSeconds' | 'visibleNow' | 'observedNow'>,
+  metresPerCell: number,
+  nowSeconds: number,
+): number {
+  const confidence = clamp(contact.confidence / 100, 0, 1);
+  const uncertaintyMetres = Math.max(0, contact.uncertaintyCells) * Math.max(0.001, metresPerCell);
+  const freshnessSeconds = Math.max(contact.lastObservedSeconds, contact.lastUpdatedSeconds, 0);
+  const contactAgeSeconds = Math.max(0, nowSeconds - freshnessSeconds);
+  const visibilityWeight = contact.visibleNow ? 1 : contact.observedNow ? 0.9 : 0.7;
+  return clamp(
+    confidence
+      * (1 / (1 + uncertaintyMetres / 2))
+      * (1 / (1 + contactAgeSeconds / 2))
+      * visibilityWeight,
+    0,
+    1,
+  );
+}
+
+function contactAimPointMetres(state: SimulationState, contact: PerceptionContactMemory) {
   return {
-    xMetres: unit.position.x * state.map.metersPerCell,
-    yMetres: unit.position.y * state.map.metersPerCell,
-    zMetres: unit.behaviorRuntime.posture === 'prone' ? 0.35 : unit.behaviorRuntime.posture === 'crouched' ? 1.05 : 1.45,
+    xMetres: contact.lastKnownPosition.x * state.map.metersPerCell,
+    yMetres: contact.lastKnownPosition.y * state.map.metersPerCell,
+    // Contact memory currently has no observed posture/height. A neutral human-centre height
+    // is more honest than reading the selected target unit's true current posture.
+    zMetres: 1.1,
   };
 }
 
-function resolveProductionContactId(shooter: UnitModel, targetUnitId: string): string | null {
+function resolveProductionContact(shooter: UnitModel, targetUnitId: string): PerceptionContactMemory | null {
   const matching = shooter.perceptionKnowledge.contacts
     .filter((contact) => contact.sourceUnitId === targetUnitId)
     .sort((left, right) => (
@@ -207,7 +260,7 @@ function resolveProductionContactId(shooter: UnitModel, targetUnitId: string): s
       || right.lastUpdatedSeconds - left.lastUpdatedSeconds
       || left.id.localeCompare(right.id)
     ));
-  return matching[0]?.id ?? null;
+  return matching[0] ?? null;
 }
 
 function normalizeProductionResult(value: unknown, ownerToken: string | null): CombatLabCommandResultV1 {
@@ -240,4 +293,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 function text(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.max(minimum, Math.min(maximum, Number.isFinite(value) ? value : minimum));
 }
