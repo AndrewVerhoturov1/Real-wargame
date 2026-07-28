@@ -25,6 +25,7 @@ const labHtml = read('combat-lab.html');
 const session = read('src/combat-lab/runtime/CombatLabVisualSession.ts');
 const extension = read('src/combat-lab/CombatLabExtension.ts');
 const renderer = read('src/combat-lab/rendering/CombatLabRenderer.ts');
+const boardAdapter = read('src/rendering/PixiTacticalBoardAdapter.ts');
 const orderStatusCard = read('src/ui/TacticalOrderStatusCard.ts');
 const combatAudio = read('src/ui/CombatAudio.ts');
 const combatEffectsInstaller = read('src/rendering/CombatEffectsInstaller.ts');
@@ -83,7 +84,21 @@ assert.match(extensionBoundary, /context\.restartStateBoundServices\(\)/);
 assert.match(extensionBoundary, /context\.addTickerListener\(/);
 assert.match(extensionBoundary, /context\.getWorldContainer\(\)/);
 assert.match(extensionBoundary, /installStableViewportResize/);
-assert.match(extensionBoundary, /world\.position\.set/);
+assert.doesNotMatch(
+  extensionBoundary,
+  /world\.position\.set/,
+  'Combat Lab viewport resizing must not bypass CameraController by moving the Pixi world directly.',
+);
+assert.match(
+  extensionBoundary,
+  /viewportAdapter\.preserveViewportCentre\(/,
+  'Combat Lab viewport resizing must use the camera-owned board adapter path.',
+);
+assert.match(
+  boardAdapter,
+  /camera\.preserveViewportCentre/,
+  'The Pixi board adapter must delegate viewport-centre preservation to CameraController.',
+);
 assert.match(extensionBoundary, /worldScaleX/);
 assert.match(extensionBoundary, /worldScaleY/);
 assert.doesNotMatch(extensionBoundary, /PixiTacticalBoardApp\.create\(/);
