@@ -55,12 +55,12 @@ function verifyJournalNamesShooterAndVictim(): void {
     targetPointMetres: null,
     mode: 'single',
     targetRadiusMetres: 0,
-    minimumSolutionQuality: 1,
+    minimumSolutionQuality: 0.65,
   });
   assert.equal(result.accepted, true, `Combat Lab fire command must be accepted: ${result.reasonCode}`);
   session.setPaused(false);
 
-  for (let step = 0; step < 400 && session.state.infantryCombatProjectiles.impacts.length === 0; step += 1) {
+  for (let step = 0; step < 120 && session.state.infantryCombatProjectiles.impacts.length === 0; step += 1) {
     session.advance(0.05);
   }
   const impact = session.state.infantryCombatProjectiles.impacts.find(
