@@ -1,0 +1,76 @@
+.combat-lab-accuracy-controls {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid #3a473a;
+  border-radius: 8px;
+  background: #101611;
+}
+
+.combat-lab-accuracy-heading {
+  display: grid;
+  gap: 2px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #303b30;
+}
+
+.combat-lab-accuracy-heading strong {
+  color: #e7db9c;
+  font-size: 11px;
+}
+
+.combat-lab-accuracy-heading span {
+  color: #929e91;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.combat-lab-slider {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.combat-lab-slider-label {
+  color: #c8d0c5;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.combat-lab-slider-controls {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px;
+  gap: 6px;
+  align-items: center;
+}
+
+#combat-lab-extension-root .combat-lab-slider-controls input[type='range'] {
+  width: 100%;
+  min-width: 0;
+  min-height: 22px;
+  padding: 0;
+  accent-color: #d0b96e;
+}
+
+#combat-lab-extension-root .combat-lab-slider-controls input[type='number'] {
+  width: 76px;
+  min-height: 28px;
+  padding: 3px 5px;
+  font: 10px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.combat-lab-slider-output {
+  min-width: 0;
+  color: #95a394;
+  font: 9px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.combat-lab-accuracy-controls > button {
+  width: 100%;
+  min-height: 29px !important;
+  margin-top: 1px;
+  font-size: 10px;
+}
