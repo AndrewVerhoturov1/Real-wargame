@@ -164,7 +164,7 @@ function verifyAccuracyOverridesReachProductionAimRuntime(): void {
 function verifyCombatLabExposesRequestedControls(): void {
   const shell = readFileSync('src/combat-lab/ui/CombatLabShell.ts', 'utf8');
   const controls = readFileSync('src/combat-lab/ui/CombatLabAccuracyControls.ts', 'utf8');
-  const css = readFileSync('src/combat-lab/combat-lab.css', 'utf8');
+  const css = readFileSync('src/combat-lab/combat-lab-accuracy-controls.css', 'utf8');
   const commands = readFileSync('src/core/testing/combat-lab/CombatLabCommands.ts', 'utf8');
   const uiSources = `${shell}\n${controls}`;
 
