@@ -29,16 +29,16 @@ jobs:
         run: |
           set -euo pipefail
           prefix='.github/temporary-combat-lab-honest-accuracy.patch.part-'
-          final_part="${prefix}06"
+          final_part="${prefix}07"
           if [[ ! -f "$final_part" ]]; then
             echo 'Implementation patch is not complete yet; nothing to do.'
             exit 0
           fi
           patch_file='/tmp/combat-lab-honest-accuracy.patch'
-          cat "${prefix}"{00..06} > "$patch_file"
+          cat "${prefix}"{00..07} > "$patch_file"
           git apply --check "$patch_file"
           git apply "$patch_file"
-          rm -f "${prefix}"{00..06} .github/workflows/temporary-source-export.yml
+          rm -f "${prefix}"{00..07} .github/workflows/temporary-source-export.yml
           git diff --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
