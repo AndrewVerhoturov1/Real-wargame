@@ -11,6 +11,7 @@ import { createInitialState } from '../src/core/simulation/SimulationState';
 const AIM_ALIGNMENT_TOLERANCE_RADIANS = Math.PI / 180;
 
 verifyViewportResizeUsesCanonicalCameraTransform();
+verifyForwardFacingShootsAfterReady();
 verifyFireWaitsForWeaponAlignment();
 
 console.log('Combat Lab camera and aim alignment regression smoke passed.');
@@ -42,40 +43,35 @@ function verifyViewportResizeUsesCanonicalCameraTransform(): void {
   );
 }
 
+function verifyForwardFacingShootsAfterReady(): void {
+  const { state, shooter } = createRifleScenario('combat-lab-alignment-forward', 0);
+  tickInfantryCombatSimulation(state, { intervalStartSeconds: 0, deltaSeconds: 0.8 });
+  const task = shooter.infantryCombatRuntime.activeFireTask;
+  const solution = task?.aimTracking.solution;
+  const current = solution?.currentDirection;
+  const desired = solution?.desiredDirection;
+  const angleDegrees = current && desired
+    ? Math.acos(Math.max(-1, Math.min(1, current.x * desired.x + current.y * desired.y + current.z * desired.z))) * 180 / Math.PI
+    : null;
+  assert.equal(
+    state.infantryCombatProjectiles.committedShots.length,
+    1,
+    `A forward-facing shooter must fire after weapon ready time. Diagnostics: ${JSON.stringify({
+      phase: task?.phase ?? null,
+      readyRemainingSeconds: task?.readyRemainingSeconds ?? null,
+      aimQuality: task?.aimQuality ?? null,
+      physicalAimQuality: solution?.physicalAimQuality ?? null,
+      usableAimQuality: solution?.usableAimQuality ?? null,
+      current,
+      desired,
+      angleDegrees,
+    })}`,
+  );
+}
+
 function verifyFireWaitsForWeaponAlignment(): void {
   for (const facingDegrees of [20, 180]) {
-    const id = `combat-lab-alignment-${facingDegrees}`;
-    const state = createInitialState({
-      width: 100,
-      height: 30,
-      cellSize: 20,
-      metersPerCell: 2,
-      defaultTerrain: 'field',
-      defaultHeight: 0,
-      objects: [],
-    }, [
-      { id, side: 'blue', x: 2, y: 3, type: 'infantry_squad', facingDegrees },
-      { id: `${id}-target`, side: 'red', x: 10, y: 3, type: 'infantry_squad', facingDegrees: 180 },
-    ]);
-    const shooter = state.units[0]!;
-    const target = state.units[1]!;
-    assert.equal(equipPrimaryWeaponFromLoadout(
-      shooter,
-      createDefaultCombatCatalogRegistry(),
-      { definitionId: 'loadout_rifleman', revision: 1 },
-    ).status, 'equipped');
-    assert.equal(requestSingleFireTask(shooter, {
-      owner: { source: 'test', id: `${id}-owner` },
-      ownerToken: `${id}-token`,
-      target: { xMetres: 20, yMetres: 6, zMetres: 1.35 },
-      targetRadiusMetres: 0,
-      contactId: null,
-      sourceUnitId: target.id,
-      mode: 'single',
-      minimumSolutionQuality: 0,
-      maximumFriendlyFireRisk: 0,
-      requestedSeconds: 0,
-    }).status, 'started');
+    const { state, shooter } = createRifleScenario(`combat-lab-alignment-${facingDegrees}`, facingDegrees);
 
     let elapsedSeconds = 0;
     tickInfantryCombatSimulation(state, { intervalStartSeconds: elapsedSeconds, deltaSeconds: 0.8 });
@@ -116,4 +112,39 @@ function verifyFireWaitsForWeaponAlignment(): void {
       `The committed pre-dispersion direction must be within one degree of the physical aim solution; got ${(angularError * 180 / Math.PI).toFixed(4)}° for initial facing ${facingDegrees}°.`,
     );
   }
+}
+
+function createRifleScenario(id: string, facingDegrees: number) {
+  const state = createInitialState({
+    width: 100,
+    height: 30,
+    cellSize: 20,
+    metersPerCell: 2,
+    defaultTerrain: 'field',
+    defaultHeight: 0,
+    objects: [],
+  }, [
+    { id, side: 'blue', x: 2, y: 3, type: 'infantry_squad', facingDegrees },
+    { id: `${id}-target`, side: 'red', x: 10, y: 3, type: 'infantry_squad', facingDegrees: 180 },
+  ]);
+  const shooter = state.units[0]!;
+  const target = state.units[1]!;
+  assert.equal(equipPrimaryWeaponFromLoadout(
+    shooter,
+    createDefaultCombatCatalogRegistry(),
+    { definitionId: 'loadout_rifleman', revision: 1 },
+  ).status, 'equipped');
+  assert.equal(requestSingleFireTask(shooter, {
+    owner: { source: 'test', id: `${id}-owner` },
+    ownerToken: `${id}-token`,
+    target: { xMetres: 20, yMetres: 6, zMetres: 1.35 },
+    targetRadiusMetres: 0,
+    contactId: null,
+    sourceUnitId: target.id,
+    mode: 'single',
+    minimumSolutionQuality: 0,
+    maximumFriendlyFireRisk: 0,
+    requestedSeconds: 0,
+  }).status, 'started');
+  return { state, shooter, target };
 }
