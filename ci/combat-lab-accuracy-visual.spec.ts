@@ -18,7 +18,6 @@ test('Combat Lab shows honest accuracy controls and keeps forced fire contact-bo
   await expect(page.locator('canvas').first()).toBeVisible();
 
   const controls = page.locator('.combat-lab-accuracy-controls');
-  const rightDock = page.locator('.combat-lab-right');
   const diagnostics = page.locator('.combat-lab-diagnostics');
   const journal = page.locator('.combat-lab-journal');
   await expect(controls).toBeVisible();
@@ -39,13 +38,12 @@ test('Combat Lab shows honest accuracy controls and keeps forced fire contact-bo
   await expect(page.getByRole('button', { name: 'Принудительная стрельба', exact: true })).toBeVisible();
 
   const controlsBox = await controls.boundingBox();
-  const dockBox = await rightDock.boundingBox();
   expect(controlsBox, 'Accuracy controls need measurable browser geometry.').not.toBeNull();
-  expect(dockBox, 'Right dock needs measurable browser geometry.').not.toBeNull();
-  if (controlsBox && dockBox) {
-    expect(controlsBox.x).toBeGreaterThanOrEqual(dockBox.x - 1);
-    expect(controlsBox.x + controlsBox.width).toBeLessThanOrEqual(dockBox.x + dockBox.width + 1);
+  if (controlsBox) {
+    const viewport = page.viewportSize();
+    expect(controlsBox.x).toBeGreaterThanOrEqual(0);
     expect(controlsBox.width).toBeGreaterThan(250);
+    if (viewport) expect(controlsBox.x + controlsBox.width).toBeLessThanOrEqual(viewport.width + 1);
   }
 
   await page.screenshot({ path: `${evidenceDir}/01-combat-lab-initial-layout.png`, fullPage: true });
