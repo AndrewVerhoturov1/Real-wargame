@@ -12,13 +12,6 @@ import {
   type CombatLabScriptCommandV1,
 } from '../src/core/testing/combat-lab';
 
-verifyUnitTargetsRequireProductionContacts();
-verifyWeakPerceptionNeedsExplicitForce();
-verifyAccuracyOverridesReachProductionAimRuntime();
-verifyCombatLabExposesRequestedControls();
-
-console.log('Combat Lab honest accuracy controls regression smoke passed.');
-
 const accuracyOverrides = {
   schemaVersion: 1,
   dispersionMultiplier: 2,
@@ -29,6 +22,13 @@ const accuracyOverrides = {
   randomSeed: 991,
   usePhysicalAimThreshold: true,
 } as const;
+
+verifyUnitTargetsRequireProductionContacts();
+verifyWeakPerceptionNeedsExplicitForce();
+verifyAccuracyOverridesReachProductionAimRuntime();
+verifyCombatLabExposesRequestedControls();
+
+console.log('Combat Lab honest accuracy controls regression smoke passed.');
 
 function verifyUnitTargetsRequireProductionContacts(): void {
   const { state, shooter, target } = createScenario('accuracy-contact-required');
