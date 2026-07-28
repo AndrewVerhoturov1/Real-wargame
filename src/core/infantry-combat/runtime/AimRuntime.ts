@@ -9,6 +9,7 @@ import type {
   InfantryWeaponInstanceV1,
 } from './InfantryCombatRuntimeTypes';
 import {
+  AIM_DIRECTION_PROGRESS_PER_SECOND,
   advanceAimPhysicalProgress as advanceAimPhysicalProgressStage5,
   calculateAimFactorBreakdown,
   normalizeAimTrackingRuntime as normalizeAimTrackingRuntimeStage5,
@@ -62,15 +63,15 @@ export function updateAimTrackingAtBoundary(
   boundarySeconds: number,
 ): AimSolutionRuntimeV1 {
   const solution = updateAimTrackingAtBoundaryStage5(state, shooter, task, weapon, boundarySeconds);
-  synchronizeElevationWithDesiredDirection(solution);
   applyDirectionGate(task);
   return solution;
 }
 
 /**
- * Keeps the established deterministic aim-quality clock, but replaces the
- * normalized linear direction blend. That blend is undefined for opposite
- * vectors and could flip a rear-facing shooter directly onto the target.
+ * Keeps the established deterministic quality clock, but rotates the weapon
+ * with a bounded angular speed. The old normalized linear blend moved by a
+ * fraction of the remaining angle, so small corrections converged too slowly
+ * and opposite vectors could collapse through a zero vector.
  */
 export function advanceAimPhysicalProgress(
   task: FireTaskRuntimeV1,
@@ -78,23 +79,25 @@ export function advanceAimPhysicalProgress(
   deltaSeconds: number,
 ): void {
   const solution = task.aimTracking.solution;
-  const segmentStart = structuredClone(solution.directionSegmentStart);
+  const currentDirection = structuredClone(solution.currentDirection);
   const desiredDirection = structuredClone(solution.desiredDirection);
   advanceAimPhysicalProgressStage5(task, factors, deltaSeconds);
-  solution.currentDirection = interpolateAimDirection(
-    segmentStart,
-    desiredDirection,
-    solution.directionProgress,
-  );
+
+  const from = normalizeDirection(currentDirection);
+  const to = normalizeDirection(desiredDirection);
+  const angularDistance = angleBetween(from, to);
+  const angularSpeed = AIM_DIRECTION_PROGRESS_PER_SECOND * Math.max(0.1, factors.aimRateMultiplier);
+  const maximumStep = angularSpeed * Math.max(0, Number.isFinite(deltaSeconds) ? deltaSeconds : 0);
+  const progress = angularDistance <= DIRECTION_MAGNITUDE_EPSILON
+    ? 1
+    : Math.min(1, maximumStep / angularDistance);
+  solution.currentDirection = interpolateAimDirection(from, to, progress);
   applyDirectionGate(task);
 }
 
 export function isAimDirectionAligned(solution: AimSolutionRuntimeV1): boolean {
   if (!solution.valid) return false;
-  const current = normalizeDirection(solution.currentDirection);
-  const desired = normalizeDirection(solution.desiredDirection);
-  const dot = clamp(current.x * desired.x + current.y * desired.y + current.z * desired.z, -1, 1);
-  return Math.acos(dot) <= AIM_ALIGNMENT_TOLERANCE_RADIANS;
+  return angleBetween(solution.currentDirection, solution.desiredDirection) <= AIM_ALIGNMENT_TOLERANCE_RADIANS;
 }
 
 export function resolveProductionAimFactors(
@@ -122,28 +125,6 @@ export function resolveProductionAimFactors(
   });
   const mode = shooter.infantryCombatRuntime.activeFireTask?.mode ?? 'single';
   return applyMachineGunFireFactors(base, weapon, mode);
-}
-
-function synchronizeElevationWithDesiredDirection(solution: AimSolutionRuntimeV1): void {
-  if (!solution.valid) return;
-  const current = normalizeDirection(solution.currentDirection);
-  const desired = normalizeDirection(solution.desiredDirection);
-  const currentHorizontal = Math.hypot(current.x, current.y);
-  const desiredHorizontal = Math.hypot(desired.x, desired.y);
-
-  if (currentHorizontal <= DIRECTION_MAGNITUDE_EPSILON || desiredHorizontal <= DIRECTION_MAGNITUDE_EPSILON) {
-    solution.currentDirection = structuredClone(desired);
-    solution.directionSegmentStart = structuredClone(desired);
-    return;
-  }
-
-  const elevatedCurrent = normalizeDirection({
-    x: current.x / currentHorizontal * desiredHorizontal,
-    y: current.y / currentHorizontal * desiredHorizontal,
-    z: desired.z,
-  });
-  solution.currentDirection = elevatedCurrent;
-  solution.directionSegmentStart = structuredClone(elevatedCurrent);
 }
 
 function applyDirectionGate(task: FireTaskRuntimeV1): void {
@@ -200,6 +181,12 @@ function interpolateAimDirection(
     y: from.y * fromWeight + to.y * toWeight,
     z: from.z * fromWeight + to.z * toWeight,
   });
+}
+
+function angleBetween(leftValue: BallisticDirection3, rightValue: BallisticDirection3): number {
+  const left = normalizeDirection(leftValue);
+  const right = normalizeDirection(rightValue);
+  return Math.acos(clamp(left.x * right.x + left.y * right.y + left.z * right.z, -1, 1));
 }
 
 function preserveStoredUnitDirections(target: AimTrackingRuntimeV1, source: unknown): void {
