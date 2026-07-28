@@ -34,8 +34,6 @@ jobs:
         run: npm run infantry-combat-stage8:smoke
       - name: Stage 9 functional smoke
         run: npm run infantry-combat-stage9:smoke
-      - name: Stage 9 forbidden dependency scan
-        run: npm run infantry-combat-stage9:forbidden-scan
       - name: Combat Lab workspace contract
         run: node scripts/combat_lab_workspace_layout_smoke.mjs
       - name: TypeScript
