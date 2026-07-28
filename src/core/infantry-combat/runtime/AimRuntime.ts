@@ -52,8 +52,8 @@ export function serializeAimTrackingRuntime(value: AimTrackingRuntimeV1): AimTra
 
 /**
  * Refreshes the perception solution and then applies the physical direction
- * gate. Aim quality alone must never authorize a shot while the weapon is
- * still traversing toward the target.
+ * gate. During weapon preparation the soldier may already traverse the weapon,
+ * so readiness and a small aiming correction can progress at the same time.
  */
 export function updateAimTrackingAtBoundary(
   state: Pick<SimulationState, 'map'>,
@@ -62,7 +62,17 @@ export function updateAimTrackingAtBoundary(
   weapon: InfantryWeaponInstanceV1,
   boundarySeconds: number,
 ): AimSolutionRuntimeV1 {
+  const previousBoundarySeconds = task.aimTracking.lastTrackingBoundarySeconds ?? task.requestedSeconds;
+  const traversingDuringPreparation = task.phase === 'weapon_ready';
   const solution = updateAimTrackingAtBoundaryStage5(state, shooter, task, weapon, boundarySeconds);
+  if (traversingDuringPreparation && solution.valid) {
+    solution.currentDirection = rotateDirectionAtRate(
+      solution.currentDirection,
+      solution.desiredDirection,
+      solution.factors,
+      Math.max(0, boundarySeconds - previousBoundarySeconds),
+    );
+  }
   applyDirectionGate(task);
   return solution;
 }
@@ -82,16 +92,12 @@ export function advanceAimPhysicalProgress(
   const currentDirection = structuredClone(solution.currentDirection);
   const desiredDirection = structuredClone(solution.desiredDirection);
   advanceAimPhysicalProgressStage5(task, factors, deltaSeconds);
-
-  const from = normalizeDirection(currentDirection);
-  const to = normalizeDirection(desiredDirection);
-  const angularDistance = angleBetween(from, to);
-  const angularSpeed = AIM_DIRECTION_PROGRESS_PER_SECOND * Math.max(0.1, factors.aimRateMultiplier);
-  const maximumStep = angularSpeed * Math.max(0, Number.isFinite(deltaSeconds) ? deltaSeconds : 0);
-  const progress = angularDistance <= DIRECTION_MAGNITUDE_EPSILON
-    ? 1
-    : Math.min(1, maximumStep / angularDistance);
-  solution.currentDirection = interpolateAimDirection(from, to, progress);
+  solution.currentDirection = rotateDirectionAtRate(
+    currentDirection,
+    desiredDirection,
+    factors,
+    deltaSeconds,
+  );
   applyDirectionGate(task);
 }
 
@@ -125,6 +131,23 @@ export function resolveProductionAimFactors(
   });
   const mode = shooter.infantryCombatRuntime.activeFireTask?.mode ?? 'single';
   return applyMachineGunFireFactors(base, weapon, mode);
+}
+
+function rotateDirectionAtRate(
+  currentValue: BallisticDirection3,
+  desiredValue: BallisticDirection3,
+  factors: AimFactorBreakdownV1,
+  deltaSeconds: number,
+): BallisticDirection3 {
+  const from = normalizeDirection(currentValue);
+  const to = normalizeDirection(desiredValue);
+  const angularDistance = angleBetween(from, to);
+  const angularSpeed = AIM_DIRECTION_PROGRESS_PER_SECOND * Math.max(0.1, factors.aimRateMultiplier);
+  const maximumStep = angularSpeed * Math.max(0, Number.isFinite(deltaSeconds) ? deltaSeconds : 0);
+  const progress = angularDistance <= DIRECTION_MAGNITUDE_EPSILON
+    ? 1
+    : Math.min(1, maximumStep / angularDistance);
+  return interpolateAimDirection(from, to, progress);
 }
 
 function applyDirectionGate(task: FireTaskRuntimeV1): void {
