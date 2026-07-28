@@ -1,0 +1,122 @@
++    : task.aimTracking.solution.usableAimQuality;
++}
++
+ /**
+  * Keeps the shared clock intact while stopping delegated slices at tracking
+  * boundaries whenever production fatigue or effective capabilities are active.
+diff --git a/src/core/infantry-combat/runtime/FireTaskRuntimeStage8.ts b/src/core/infantry-combat/runtime/FireTaskRuntimeStage8.ts
+index ca77e621..8c3b73e3 100644
+--- a/src/core/infantry-combat/runtime/FireTaskRuntimeStage8.ts
++++ b/src/core/infantry-combat/runtime/FireTaskRuntimeStage8.ts
+@@ -14,7 +14,7 @@ import type { PhysicalActionLeaseV1, PhysicalActionOwner } from '../../actions/P
+ import type { BallisticPoint3 } from '../../combat/UnitHitShapes';
+ import type { SimulationState } from '../../simulation/SimulationState';
+ import type { UnitModel } from '../../units/UnitModel';
+-import type { FireMode } from '../catalogs/CombatCatalogTypes';
++import type { FireMode, WeaponProficiency } from '../catalogs/CombatCatalogTypes';
+ import { getWeaponShotIntervalSeconds } from './AutomaticFireRuntime';
+ import {
+   advanceAimPhysicalProgress,
+@@ -29,6 +29,7 @@ import {
+   type FireTaskCommittedShotV1,
+   type FireTaskPhase,
+   type FireTaskRuntimeV1,
++  type FireTaskTestOverridesV1,
+   type FireTaskTerminalResultV1,
+ } from './InfantryCombatRuntimeTypes';
+ 
+@@ -48,6 +49,7 @@ export interface RequestFireTaskInput {
+   readonly minimumSolutionQuality: number;
+   readonly maximumFriendlyFireRisk: number;
+   readonly requestedSeconds: number;
++  readonly testOverrides?: FireTaskTestOverridesV1 | null;
+ }
+ 
+ export interface RequestSingleFireTaskInput {
+@@ -61,6 +63,7 @@ export interface RequestSingleFireTaskInput {
+   readonly minimumSolutionQuality: number;
+   readonly maximumFriendlyFireRisk: number;
+   readonly requestedSeconds: number;
++  readonly testOverrides?: FireTaskTestOverridesV1 | null;
+ }
+ 
+ export type RequestFireTaskStatus =
+@@ -122,6 +125,14 @@ export function requestFireTask(unit: UnitModel, input: RequestFireTaskInput): R
+   const target = normalizePoint(input.target);
+   const mode = normalizeFireMode(input.mode);
+   const radius = finiteNonNegative(input.targetRadiusMetres, Number.NaN);
++  const requestedTestOverrides = input.testOverrides ?? null;
++  if (requestedTestOverrides && input.owner.source !== 'test') {
++    return requestRejected('invalid_request', 'infantry_fire_task_test_overrides_forbidden', 'Лабораторные параметры разрешены только владельцу тестового действия.');
++  }
++  const testOverrides = normalizeFireTaskTestOverrides(requestedTestOverrides);
++  if (requestedTestOverrides && !testOverrides) {
++    return requestRejected('invalid_request', 'infantry_fire_task_test_overrides_invalid', 'Лабораторные параметры огневой задачи заполнены неверно.');
++  }
+   if (!ownerToken || !target || !mode || !Number.isFinite(radius) || !validRadius(mode, radius)) {
+     return requestRejected('invalid_request', 'infantry_fire_task_invalid_request', 'Запрос огневой задачи заполнен неверно.');
+   }
+@@ -155,6 +166,7 @@ export function requestFireTask(unit: UnitModel, input: RequestFireTaskInput): R
+       && active.contactId === contactId
+       && active.sourceUnitId === sourceUnitId
+       && active.mode === mode
++      && sameTestOverrides(active.testOverrides ?? null, testOverrides)
+     ) {
+       return {
+         accepted: true,
+@@ -196,6 +208,7 @@ export function requestFireTask(unit: UnitModel, input: RequestFireTaskInput): R
+     contactId,
+     sourceUnitId,
+     mode,
++    ...(testOverrides ? { testOverrides } : {}),
+     phase: 'accepted',
+     requestedSeconds,
+     phaseStartedSeconds: requestedSeconds,
+@@ -241,6 +254,7 @@ export function requestSingleFireTask(unit: UnitModel, input: RequestSingleFireT
+     minimumSolutionQuality: input.minimumSolutionQuality,
+     maximumFriendlyFireRisk: input.maximumFriendlyFireRisk,
+     requestedSeconds: input.requestedSeconds,
++    testOverrides: input.testOverrides ?? null,
+   });
+ }
+ 
+@@ -556,6 +570,7 @@ export function normalizeFireTaskRuntime(value: unknown): FireTaskRuntimeV1 | nu
+     ? Math.min(plannedRoundCount, Math.max(...committedShots.map((record) => record.ordinal)) + 1)
+     : 0;
+   const nextShotOrdinal = integer(value.nextShotOrdinal, migratedNextOrdinal, migratedNextOrdinal, plannedRoundCount);
++  const testOverrides = normalizeFireTaskTestOverrides(value.testOverrides);
+   return {
+     schemaVersion: FIRE_TASK_RUNTIME_SCHEMA_VERSION,
+     taskId,
+@@ -570,6 +585,7 @@ export function normalizeFireTaskRuntime(value: unknown): FireTaskRuntimeV1 | nu
+     contactId: nullableText(value.contactId),
+     sourceUnitId: nullableText(value.sourceUnitId),
+     mode,
++    ...(testOverrides ? { testOverrides } : {}),
+     phase,
+     requestedSeconds,
+     phaseStartedSeconds: finiteNonNegative(value.phaseStartedSeconds, 0),
+@@ -751,13 +767,59 @@ function validRadius(mode: FireMode, radius: number): boolean {
+ }
+ function calculateTimeToThreshold(task: FireTaskRuntimeV1, physicalRate: number): number {
+   const solution = task.aimTracking.solution;
+-  if (!solution.valid || solution.solutionQuality <= TIME_EPSILON_SECONDS || physicalRate <= TIME_EPSILON_SECONDS) return Number.POSITIVE_INFINITY;
+-  const requiredPhysical = task.minimumSolutionQuality / solution.solutionQuality;
++  if (!solution.valid || physicalRate <= TIME_EPSILON_SECONDS) return Number.POSITIVE_INFINITY;
++  const requiredPhysical = task.testOverrides?.usePhysicalAimThreshold
++    ? task.minimumSolutionQuality
++    : solution.solutionQuality > TIME_EPSILON_SECONDS
++      ? task.minimumSolutionQuality / solution.solutionQuality
++      : Number.POSITIVE_INFINITY;
+   if (requiredPhysical > 1 + TIME_EPSILON_SECONDS) return Number.POSITIVE_INFINITY;
+   return Math.max(0, (requiredPhysical - solution.physicalAimQuality) / physicalRate);
+ }
+ function canCommitAtCurrentQuality(task: FireTaskRuntimeV1): boolean {
+-  return task.aimTracking.solution.valid && task.aimTracking.solution.usableAimQuality + TIME_EPSILON_SECONDS >= task.minimumSolutionQuality;
++  const solution = task.aimTracking.solution;
++  const quality = task.testOverrides?.usePhysicalAimThreshold
++    ? solution.physicalAimQuality
++    : solution.usableAimQuality;
++  return solution.valid && quality + TIME_EPSILON_SECONDS >= task.minimumSolutionQuality;
++}
++
