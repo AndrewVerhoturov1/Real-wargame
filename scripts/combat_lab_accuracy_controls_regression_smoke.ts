@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createDefaultCombatCatalogRegistry } from '../src/core/infantry-combat/catalogs';
 import {
+  calculatePerceptionSolutionQuality,
   deriveSeededAngularOffsets,
   equipPrimaryWeaponFromLoadout,
   getFireTaskTestOverrides,
@@ -10,6 +11,7 @@ import {
 } from '../src/core/infantry-combat/runtime';
 import { createInitialState } from '../src/core/simulation/SimulationState';
 import {
+  calculateCombatLabPerceptionQuality,
   executeCombatLabCommand,
   type CombatLabScriptCommandV1,
 } from '../src/core/testing/combat-lab';
@@ -27,6 +29,7 @@ const accuracyOverrides = {
 
 verifyUnitTargetsRequireProductionContacts();
 verifyWeakPerceptionNeedsExplicitForce();
+verifyPerceptionGateUsesProductionQualityFormula();
 verifyAccuracyOverridesReachProductionAimRuntime();
 verifyCombatLabExposesRequestedControls();
 
@@ -83,7 +86,15 @@ function verifyWeakPerceptionNeedsExplicitForce(): void {
   );
   assert.equal(shooter.infantryCombatRuntime.activeFireTask, null);
 
-  const forced = executeCombatLabCommand(state, fireCommand(shooter.id, target.id, true), {
+  const forcedCommand = {
+    ...fireCommand(shooter.id, target.id, true),
+    targetPointMetres: {
+      xMetres: target.position.x * state.map.metersPerCell,
+      yMetres: target.position.y * state.map.metersPerCell,
+      zMetres: 1.45,
+    },
+  } satisfies CombatLabScriptCommandV1;
+  const forced = executeCombatLabCommand(state, forcedCommand, {
     ownerId: 'accuracy-perception-gate',
     commandSequence: 2,
     interactive: true,
@@ -98,7 +109,7 @@ function verifyWeakPerceptionNeedsExplicitForce(): void {
   assert.notEqual(
     task.target.xMetres,
     target.position.x * state.map.metersPerCell,
-    'The FireTask XY target must come from contact memory, not the selected unit true position.',
+    'The FireTask XY target must come from contact memory even when a caller also supplies the selected unit true point.',
   );
 
   const tick = tickInfantryCombatSimulation(state, { intervalStartSeconds: 0, deltaSeconds: 3 });
@@ -111,6 +122,28 @@ function verifyWeakPerceptionNeedsExplicitForce(): void {
   assert.ok(shot, 'The physical projectile pipeline must record the committed shot.');
   assert.equal(Math.abs(shot.dispersionPitchRadians), 0, 'Zero randomness must remove the random pitch sample only.');
   assert.equal(Math.abs(shot.dispersionYawRadians), 0, 'Zero randomness must remove the random yaw sample only.');
+}
+
+function verifyPerceptionGateUsesProductionQualityFormula(): void {
+  const contact = {
+    confidence: 72,
+    uncertaintyCells: 1.5,
+    lastObservedSeconds: 3,
+    lastUpdatedSeconds: 4,
+    visibleNow: true,
+    observedNow: false,
+  };
+  const metresPerCell = 2;
+  const nowSeconds = 6;
+  const expected = calculatePerceptionSolutionQuality({
+    confidence: contact.confidence,
+    uncertaintyMetres: contact.uncertaintyCells * metresPerCell,
+    contactAgeSeconds: nowSeconds - Math.max(contact.lastObservedSeconds, contact.lastUpdatedSeconds),
+    visibleNow: contact.visibleNow,
+    observedNow: contact.observedNow,
+  });
+  const actual = calculateCombatLabPerceptionQuality(contact, metresPerCell, nowSeconds);
+  assert.equal(actual, expected, 'Combat Lab fire permission must use the exact production perception-quality formula.');
 }
 
 function verifyAccuracyOverridesReachProductionAimRuntime(): void {
@@ -145,10 +178,7 @@ function verifyAccuracyOverridesReachProductionAimRuntime(): void {
   const task = shooter.infantryCombatRuntime.activeFireTask;
   const weapon = shooter.infantryCombatRuntime.primaryWeapon;
   assert.ok(task && weapon);
-  assert.deepEqual(getFireTaskTestOverrides(task), {
-    ...accuracyOverrides,
-    physicalAimThreshold: 0.5,
-  });
+  assert.deepEqual(getFireTaskTestOverrides(task), accuracyOverrides);
 
   const factors = resolveProductionAimFactors(state, shooter, weapon);
   assert.equal(factors.shootingSkill, 0.25);
@@ -169,7 +199,7 @@ function verifyAccuracyOverridesReachProductionAimRuntime(): void {
   const seedTwo = deriveSeededAngularOffsets({
     shooterId: shooter.id,
     weaponInstanceId: weapon.weaponInstanceId,
-    shotId: `${shooter.id}:shot:1`,
+    shotId: `${shoooter.id}:shot:1`,
     effectiveDispersionRadians: factors.effectiveDispersionRadians,
     seedSalt: 2,
   });
@@ -184,7 +214,7 @@ function verifyCombatLabExposesRequestedControls(): void {
   const uiSources = `${shell}\n${controls}`;
 
   for (const label of [
-    'Уровень разброса',
+    'Уировень разброса',
     'Время прицеливания',
     'Порог прицеливания',
     'Навык стрельбы',
