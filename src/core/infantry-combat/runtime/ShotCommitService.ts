@@ -5,6 +5,7 @@ import {
   beginAmmoExhaustedRecovery,
   beginCompletedBurstRecovery,
 } from './FireTaskRuntime';
+import { withFireTaskTestShotRandomness } from './FireTaskTestOverrides';
 import type { ShotCommitStatus } from './InfantryCombatRuntimeTypes';
 import {
   commitShot as commitBaseShot,
@@ -39,7 +40,14 @@ export function commitShot(input: CommitShotInput): CommitShotResult {
   if (!isTargetWithinDeployedTraverse(input.weapon, diagnosticTarget)) {
     return recordFailure(input.shooter, input.weapon.roundsInWeapon, 'deployed_traverse_exceeded', 'Выстрел отклонён: фактическое направление вышло за сектор установленного пулемёта.');
   }
-  const result = commitBaseShot(input);
+  const nextShotId = `${input.shooter.id}:shot:${input.weapon.shotSequence + 1}`;
+  const result = withFireTaskTestShotRandomness(
+    input.task,
+    input.shooter.id,
+    input.weapon.weaponInstanceId,
+    nextShotId,
+    () => commitBaseShot(input),
+  );
   if (result.status === 'committed') {
     const task = input.shooter.infantryCombatRuntime.activeFireTask;
     if (task === input.task && task.phase === 'firing') {
