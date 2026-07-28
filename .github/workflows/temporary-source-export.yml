@@ -1,9 +1,9 @@
 name: Temporary Source Export
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/20260726-shooting-stage-09v-combat-lab
+      - real-wargame-preview
 
 permissions:
   contents: read
@@ -12,16 +12,17 @@ jobs:
   export:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout exact branch head
+      - name: Checkout exact PR head
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           show-progress: false
 
       - name: Record exact source
         run: |
           git rev-parse HEAD > SOURCE_SHA.txt
-          git branch --show-current > SOURCE_BRANCH.txt
+          printf '%s\n' '${{ github.event.pull_request.head.ref }}' > SOURCE_BRANCH.txt
 
       - name: Archive repository with git metadata
         run: tar --exclude='./node_modules' --exclude='./dist' -czf /tmp/real-wargame-source.tgz .
@@ -29,7 +30,7 @@ jobs:
       - name: Upload source archive
         uses: actions/upload-artifact@v4
         with:
-          name: real-wargame-source-${{ github.sha }}
+          name: real-wargame-source-${{ github.event.pull_request.head.sha }}
           path: /tmp/real-wargame-source.tgz
           if-no-files-found: error
           retention-days: 1
