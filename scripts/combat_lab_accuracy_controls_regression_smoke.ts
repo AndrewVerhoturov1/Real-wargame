@@ -6,6 +6,7 @@ import {
   equipPrimaryWeaponFromLoadout,
   getFireTaskTestOverrides,
   resolveProductionAimFactors,
+  tickInfantryCombatSimulation,
 } from '../src/core/infantry-combat/runtime';
 import { createInitialState } from '../src/core/simulation/SimulationState';
 import {
@@ -99,6 +100,17 @@ function verifyWeakPerceptionNeedsExplicitForce(): void {
     target.position.x * state.map.metersPerCell,
     'The FireTask XY target must come from contact memory, not the selected unit true position.',
   );
+
+  const tick = tickInfantryCombatSimulation(state, { intervalStartSeconds: 0, deltaSeconds: 3 });
+  assert.equal(
+    tick.commitResults.filter((result) => result.status === 'committed').length,
+    1,
+    'Forced fire must reach the physical aim threshold even when perception quality is below the decision threshold.',
+  );
+  const shot = state.infantryCombatProjectiles.committedShots[0];
+  assert.ok(shot, 'The physical projectile pipeline must record the committed shot.');
+  assert.equal(shot.dispersionPitchRadians, 0, 'Zero randomness must remove the random pitch sample only.');
+  assert.equal(shot.dispersionYawRadians, 0, 'Zero randomness must remove the random yaw sample only.');
 }
 
 function verifyAccuracyOverridesReachProductionAimRuntime(): void {
@@ -133,7 +145,10 @@ function verifyAccuracyOverridesReachProductionAimRuntime(): void {
   const task = shooter.infantryCombatRuntime.activeFireTask;
   const weapon = shooter.infantryCombatRuntime.primaryWeapon;
   assert.ok(task && weapon);
-  assert.deepEqual(getFireTaskTestOverrides(task), accuracyOverrides);
+  assert.deepEqual(getFireTaskTestOverrides(task), {
+    ...accuracyOverrides,
+    physicalAimThreshold: 0.5,
+  });
 
   const factors = resolveProductionAimFactors(state, shooter, weapon);
   assert.equal(factors.shootingSkill, 0.25);
