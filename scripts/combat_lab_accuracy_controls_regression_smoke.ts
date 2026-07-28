@@ -4,6 +4,7 @@ import { createDefaultCombatCatalogRegistry } from '../src/core/infantry-combat/
 import {
   deriveSeededAngularOffsets,
   equipPrimaryWeaponFromLoadout,
+  getFireTaskTestOverrides,
   resolveProductionAimFactors,
 } from '../src/core/infantry-combat/runtime';
 import { createInitialState } from '../src/core/simulation/SimulationState';
@@ -132,7 +133,7 @@ function verifyAccuracyOverridesReachProductionAimRuntime(): void {
   const task = shooter.infantryCombatRuntime.activeFireTask;
   const weapon = shooter.infantryCombatRuntime.primaryWeapon;
   assert.ok(task && weapon);
-  assert.deepEqual(task.testOverrides, accuracyOverrides);
+  assert.deepEqual(getFireTaskTestOverrides(task), accuracyOverrides);
 
   const factors = resolveProductionAimFactors(state, shooter, weapon);
   assert.equal(factors.shootingSkill, 0.25);
@@ -149,21 +150,23 @@ function verifyAccuracyOverridesReachProductionAimRuntime(): void {
     shotId: `${shooter.id}:shot:1`,
     effectiveDispersionRadians: factors.effectiveDispersionRadians,
     seedSalt: 1,
-  } as Parameters<typeof deriveSeededAngularOffsets>[0]);
+  });
   const seedTwo = deriveSeededAngularOffsets({
     shooterId: shooter.id,
     weaponInstanceId: weapon.weaponInstanceId,
     shotId: `${shooter.id}:shot:1`,
     effectiveDispersionRadians: factors.effectiveDispersionRadians,
     seedSalt: 2,
-  } as Parameters<typeof deriveSeededAngularOffsets>[0]);
+  });
   assert.notDeepEqual(seedOne, seedTwo, 'Combat Lab seed must alter the deterministic shot sequence.');
 }
 
 function verifyCombatLabExposesRequestedControls(): void {
   const shell = readFileSync('src/combat-lab/ui/CombatLabShell.ts', 'utf8');
+  const controls = readFileSync('src/combat-lab/ui/CombatLabAccuracyControls.ts', 'utf8');
   const css = readFileSync('src/combat-lab/combat-lab.css', 'utf8');
   const commands = readFileSync('src/core/testing/combat-lab/CombatLabCommands.ts', 'utf8');
+  const uiSources = `${shell}\n${controls}`;
 
   for (const label of [
     'Уровень разброса',
@@ -175,7 +178,7 @@ function verifyCombatLabExposesRequestedControls(): void {
     'Уровень случайности',
     'Принудительная стрельба',
   ]) {
-    assert.ok(shell.includes(label), `Combat Lab control is missing: ${label}`);
+    assert.ok(uiSources.includes(label), `Combat Lab control is missing: ${label}`);
   }
   for (const token of [
     'minimumPerceptionQuality',
@@ -186,8 +189,8 @@ function verifyCombatLabExposesRequestedControls(): void {
   ]) {
     assert.ok(commands.includes(token), `Combat Lab command path must contain ${token}.`);
   }
-  assert.ok(shell.includes("type = 'range'"), 'Accuracy controls must use real range sliders.');
-  assert.ok(shell.includes('Сбросить параметры'), 'Accuracy overrides need an explicit reset to production defaults.');
+  assert.ok(controls.includes("type = 'range'"), 'Accuracy controls must use real range sliders.');
+  assert.ok(uiSources.includes('Сбросить параметры'), 'Accuracy overrides need an explicit reset to production defaults.');
   assert.ok(css.includes('.combat-lab-slider'), 'Combat Lab must style the slider/value pairs compactly.');
 }
 
@@ -203,7 +206,7 @@ function fireCommand(shooterUnitId: string, targetUnitId: string, forceFire: boo
     minimumPerceptionQuality: 0.5,
     forceFire,
     accuracyOverrides,
-  } as unknown as CombatLabScriptCommandV1;
+  };
 }
 
 function createScenario(id: string) {
