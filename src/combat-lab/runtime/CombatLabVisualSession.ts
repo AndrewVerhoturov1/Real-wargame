@@ -1,5 +1,7 @@
+import { getEffectiveCombatCapabilities, type WoundSeverity } from '../../core/infantry-combat/runtime';
 import { tickSimulation } from '../../core/simulation/SimulationTick';
 import type { SimulationState } from '../../core/simulation/SimulationState';
+import type { UnitModel } from '../../core/units/UnitModel';
 import {
   COMBAT_LAB_FIXED_STEP_SECONDS,
   applyDueCombatLabProgramSteps,
@@ -227,11 +229,42 @@ export class CombatLabVisualSession {
     const runtime = this.state.infantryCombatProjectiles;
     for (let index = this.observedShots; index < runtime.committedShots.length; index += 1) {
       const shot = runtime.committedShots[index]!;
-      this.log(`Выстрел ${shot.shotId}: ${shot.roundsBefore}→${shot.roundsAfter} патронов.`);
+      const shooter = findUnit(this.state, shot.shooterId);
+      const probability = shot.predictedHitProbability === undefined
+        ? ''
+        : `; расчётная вероятность ${Math.round(clamp01(shot.predictedHitProbability) * 100)}%`;
+      this.log(`Стрелок: ${unitName(shooter, shot.shooterId)} — выстрел ${shot.shotId}; патроны ${shot.roundsBefore}→${shot.roundsAfter}${probability}.`);
     }
     for (let index = this.observedImpacts; index < runtime.impacts.length; index += 1) {
       const impact = runtime.impacts[index]!;
-      this.log(`Impact ${impact.impactId}: ${impact.hitType}${impact.hitUnitId ? `, ${impact.hitUnitId}/${impact.hitZone ?? 'без зоны'}` : ''}.`);
+      const shooter = findUnit(this.state, impact.shooterId);
+      if (!impact.hitUnitId) {
+        const destination = impact.hitType === 'terrain'
+          ? 'местность'
+          : impact.hitType === 'object'
+            ? `объект ${impact.hitObjectId ?? 'без идентификатора'}`
+            : impact.hitType;
+        this.log(`Стрелок: ${unitName(shooter, impact.shooterId)} — пуля ${impact.shotId} попала в ${destination}.`);
+        continue;
+      }
+
+      const victim = findUnit(this.state, impact.hitUnitId);
+      const wound = victim?.infantryCombatRuntime.wounds.slots.find((slot) => slot.lastImpactId === impact.impactId) ?? null;
+      const zone = hitZoneLabel(impact.hitZone);
+      const penetration = impact.bodyPhysics?.status ? `, ${penetrationLabel(impact.bodyPhysics.status)}` : '';
+      this.log(`Стрелок: ${unitName(shooter, impact.shooterId)} — попадание ${impact.shotId} в ${unitName(victim, impact.hitUnitId)}, зона ${zone}${penetration}.`);
+
+      if (!victim) {
+        this.log(`Жертва: ${impact.hitUnitId} — состояние недоступно: боец не найден.`);
+        continue;
+      }
+      const blood = victim.infantryCombatRuntime.physiology.blood;
+      const bloodRemainingPercent = Math.round((1 - clamp01(blood.bloodLoss)) * 100);
+      const bleedingPercentPerSecond = Math.round(Math.max(0, blood.currentBleedingRatePerSecond) * 10_000) / 100;
+      const woundDescription = wound
+        ? `${severityLabel(wound.severity)} ранение, кровотечение ${bleedingStateLabel(wound.bleedingState)}`
+        : 'зарегистрированное попадание без нового слота ранения';
+      this.log(`Жертва: ${unitName(victim, victim.id)} — ${woundDescription}; кровь ${bloodRemainingPercent}%, потеря ${Math.round(clamp01(blood.bloodLoss) * 100)}%, темп ${bleedingPercentPerSecond}%/с; состояние ${effectiveConditionLabel(victim)}.`);
     }
     this.observedShots = runtime.committedShots.length;
     this.observedImpacts = runtime.impacts.length;
@@ -253,4 +286,56 @@ export function replaceCombatLabStateInPlace(target: SimulationState, source: Si
     if (!(key in source)) delete (target as unknown as Record<string, unknown>)[key as string];
   }
   Object.assign(target, source);
+}
+
+function findUnit(state: SimulationState, unitId: string): UnitModel | null {
+  return state.units.find((unit) => unit.id === unitId) ?? null;
+}
+
+function unitName(unit: UnitModel | null, fallbackId: string): string {
+  return unit ? `${unit.labels.ru} [${unit.id}]` : fallbackId;
+}
+
+function hitZoneLabel(zone: 'head' | 'torso' | 'arms' | 'legs' | null): string {
+  if (zone === 'head') return 'голова';
+  if (zone === 'torso') return 'корпус';
+  if (zone === 'arms') return 'руки';
+  if (zone === 'legs') return 'ноги';
+  return 'не определена';
+}
+
+function severityLabel(severity: WoundSeverity): string {
+  if (severity === 'critical') return 'критическое';
+  if (severity === 'severe') return 'тяжёлое';
+  return 'лёгкое';
+}
+
+function bleedingStateLabel(state: 'none' | 'severe' | 'critical' | 'stopped'): string {
+  if (state === 'critical') return 'критическое';
+  if (state === 'severe') return 'сильное';
+  if (state === 'stopped') return 'остановлено';
+  return 'отсутствует';
+}
+
+function penetrationLabel(status: 'penetrated' | 'stopped' | 'penetration_limit'): string {
+  if (status === 'penetrated') return 'пуля прошла навылет';
+  if (status === 'penetration_limit') return 'достигнут предел пробитий';
+  return 'пуля остановилась в теле';
+}
+
+function effectiveConditionLabel(unit: UnitModel): string {
+  const capabilities = getEffectiveCombatCapabilities(unit);
+  const blood = unit.infantryCombatRuntime.physiology.blood.state;
+  const wounds = unit.infantryCombatRuntime.wounds.slots;
+  if (!capabilities.alive) return 'погиб';
+  if (!capabilities.conscious) return 'без сознания';
+  if (!capabilities.canUseWeapon || blood === 'critical' || wounds.some((wound) => wound.severity === 'critical')) {
+    return 'тяжело ранен';
+  }
+  if (blood === 'weakened' || wounds.length > 0) return 'ранен, сохраняет боеспособность';
+  return 'боеспособен';
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
 }
