@@ -24,9 +24,9 @@ import {
 import { getEffectiveCombatCapabilities } from './EffectiveCombatCapabilities';
 import {
   applyFireTaskTestAimFactorOverrides,
+  getFireTaskPhysicalAimThreshold,
   resolveFireTaskTestOperatorProfile,
   resolveFireTaskTestShotRandomness,
-  usesPhysicalFireTaskAimThreshold,
 } from './FireTaskTestOverrides';
 import { applyMachineGunFireFactors } from './MachineGunFireModifiers';
 import { getWeaponAnchor } from './MuzzleGeometry';
@@ -184,9 +184,6 @@ function applyLaboratorySolutionFactors(
     factors,
     solution.physicalAimQuality,
   );
-  task.aimQuality = usesPhysicalFireTaskAimThreshold(task)
-    ? canonicalUnitInterval(solution.physicalAimQuality)
-    : canonicalUnitInterval(solution.physicalAimQuality * solution.solutionQuality);
 }
 
 function refreshPredictedProbability(
@@ -243,11 +240,17 @@ function applyDirectionGate(task: FireTaskRuntimeV1): void {
     task.aimQuality = 0;
     return;
   }
-  const usable = canonicalUnitInterval(
-    usesPhysicalFireTaskAimThreshold(task)
-      ? solution.physicalAimQuality
-      : solution.physicalAimQuality * solution.solutionQuality,
-  );
+  const physicalThreshold = getFireTaskPhysicalAimThreshold(task);
+  const gateQuality = physicalThreshold === null
+    ? solution.solutionQuality
+    : Math.max(DIRECTION_MAGNITUDE_EPSILON, solution.solutionQuality);
+  if (physicalThreshold !== null) {
+    // Stage 8 stores a threshold in usable-quality space. Scaling both sides by
+    // the same perception quality keeps the laboratory slider purely physical,
+    // while retaining the real contact quality for diagnostics and probability.
+    task.minimumSolutionQuality = canonicalUnitInterval(physicalThreshold * gateQuality);
+  }
+  const usable = canonicalUnitInterval(solution.physicalAimQuality * gateQuality);
   solution.usableAimQuality = usable;
   task.aimQuality = usable;
 }
