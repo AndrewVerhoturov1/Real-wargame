@@ -1,0 +1,153 @@
+diff --git a/src/combat-lab/combat-lab.css b/src/combat-lab/combat-lab.css
+index 0f9d1f0b..9e29df58 100644
+--- a/src/combat-lab/combat-lab.css
++++ b/src/combat-lab/combat-lab.css
+@@ -302,3 +302,57 @@ body.app-shell-mode-combat-lab.combat-lab-dock-collapsed .map-scale-fixed-label
+   body.combat-lab-dock-collapsed #combat-lab-extension-root { right: auto; width: var(--combat-lab-dock-collapsed-width); }
+   .combat-lab-scenario-row { grid-template-columns: 1fr 96px; }
+ }
++
++.combat-lab-accuracy-controls > .combat-lab-field {
++  margin: 0 8px 8px;
++}
++
++.combat-lab-slider {
++  min-width: 0;
++  display: grid;
++  grid-template-columns: minmax(110px, 1fr) 72px minmax(58px, auto);
++  gap: 6px;
++  align-items: center;
++}
++
++#combat-lab-extension-root .combat-lab-slider input[type='range'] {
++  min-height: 24px;
++  padding: 0;
++  accent-color: #d5c16f;
++}
++
++#combat-lab-extension-root .combat-lab-slider input[type='number'] {
++  min-height: 28px;
++  padding: 4px 5px;
++  text-align: right;
++}
++
++.combat-lab-slider-output {
++  min-width: 0;
++  color: #e7db9c;
++  font: 10px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
++  text-align: right;
++  white-space: nowrap;
++}
++
++.combat-lab-accuracy-telemetry {
++  margin: 0 8px 8px;
++  padding: 8px;
++  overflow-wrap: anywhere;
++  border: 1px solid #2f382f;
++  border-radius: 6px;
++  color: #cbd2c8;
++  background: #0d120e;
++  font: 9px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
++  white-space: pre-wrap;
++}
++
++#combat-lab-extension-root button.force {
++  border-color: #b98763;
++  background: #33251d;
++}
++
++#combat-lab-extension-root button.force:hover:not(:disabled) {
++  border-color: #e0ad83;
++  background: #4a3022;
++}
+diff --git a/src/combat-lab/ui/CombatLabShell.ts b/src/combat-lab/ui/CombatLabShell.ts
+index 9d02c1f5..94598e99 100644
+--- a/src/combat-lab/ui/CombatLabShell.ts
++++ b/src/combat-lab/ui/CombatLabShell.ts
+@@ -1,6 +1,11 @@
+ import type { UnitPosture } from '../../core/behavior/BehaviorModel';
+-import type { FireMode } from '../../core/infantry-combat/catalogs/CombatCatalogTypes';
+-import { getEffectiveCombatCapabilities, validateMachineGunAssistant } from '../../core/infantry-combat/runtime';
++import type { FireMode, WeaponProficiency } from '../../core/infantry-combat/catalogs/CombatCatalogTypes';
++import {
++  calculatePerceptionSolutionQuality,
++  getEffectiveCombatCapabilities,
++  resolveBaselineProductionAimFactors,
++  validateMachineGunAssistant,
++} from '../../core/infantry-combat/runtime';
+ import { selectUnit } from '../../core/simulation/SimulationState';
+ import type { UnitModel } from '../../core/units/UnitModel';
+ import {
+@@ -39,6 +44,16 @@ export interface CombatLabLayoutV1 {
+   readonly bottom: HTMLElement;
+ }
+ 
++interface CombatLabSliderControlV1 {
++  readonly root: HTMLElement;
++  readonly range: HTMLInputElement;
++  readonly number: HTMLInputElement;
++  readonly output: HTMLElement;
++  getValue(): number;
++  setValue(value: number): void;
++  setOutput(text: string): void;
++}
++
+ interface CombatLabUiSelectionV1 {
+   readonly shooterUnitId: string;
+   readonly targetUnitId: string | null;
+@@ -78,7 +93,14 @@ export class CombatLabShell {
+   private readonly targetY = numberInput(0, 10_000, 0.1);
+   private readonly mode = select();
+   private readonly suppressRadius = numberInput(0.5, 20, 0.5);
+-  private readonly aimQuality = numberInput(0, 1, 0.05);
++  private readonly dispersionMultiplier = sliderControl(0.25, 4, 0.05, 1);
++  private readonly aimTimeSeconds = sliderControl(0.1, 10, 0.1, 2);
++  private readonly aimThresholdPercent = sliderControl(0, 100, 1, 50);
++  private readonly shootingSkillPercent = sliderControl(0, 100, 1, 50);
++  private readonly weaponProficiencyPercent = sliderControl(0, 100, 1, 50);
++  private readonly perceptionThresholdPercent = sliderControl(0, 100, 1, 50);
++  private readonly randomnessPercent = sliderControl(0, 200, 1, 100);
++  private readonly accuracyTelemetry = node('div', 'combat-lab-accuracy-telemetry');
+   private readonly transferRounds = numberInput(1, 1000, 1);
+   private readonly aidZone = select();
+   private readonly instructions = node('div', 'combat-lab-instructions');
+@@ -102,6 +124,7 @@ export class CombatLabShell {
+     this.layout.bottom.append(this.status, this.journal);
+     this.shooter.addEventListener('change', () => {
+       this.updateFireModes();
++      this.resetAccuracyControls();
+       this.renderer.forceRender();
+       this.refreshLive(true);
+     });
+@@ -113,6 +136,10 @@ export class CombatLabShell {
+       control.addEventListener('change', () => this.refreshLive(true));
+     }
+     for (const control of [this.targetX, this.targetY]) control.addEventListener('input', () => this.refreshLive(true));
++    for (const control of this.accuracyControls()) {
++      control.range.addEventListener('input', () => this.refreshLive(true));
++      control.number.addEventListener('input', () => this.refreshLive(true));
++    }
+     this.refreshScenarioControls();
+     this.refreshLive(true);
+   }
+@@ -128,6 +155,7 @@ export class CombatLabShell {
+     this.restore.disabled = !snapshot.checkpointAvailable;
+     this.removeCheckpoint.disabled = !snapshot.checkpointAvailable;
+     this.status.textContent = `${snapshot.scenarioId}@${snapshot.scenarioRevision} · seed ${snapshot.seed} · ${snapshot.simulatedSeconds.toFixed(3)} с · ${snapshot.interactive ? 'INTERACTIVE' : 'ЧИСТЫЙ'} · ${snapshot.paused ? 'пауза' : `×${snapshot.speed}`}`;
++    this.refreshAccuracyTelemetry();
+     this.diagnostics.textContent = JSON.stringify(buildDiagnostics(this.session, this.readSelection()), null, 2);
+     this.journal.replaceChildren(
+       ...snapshot.eventJournal.slice(-80).reverse().map((entry) => node('div', 'combat-lab-journal-entry', entry)),
+@@ -192,11 +220,26 @@ export class CombatLabShell {
+       ['suppress', 'Подавление'],
+     ] as const) this.mode.append(option(value, label));
+     this.suppressRadius.value = '5';
+-    this.aimQuality.value = '0.5';
+     this.transferRounds.value = '30';
+     this.aidZone.append(option('', 'Автоматический приоритет'));
+     for (const zone of ['head', 'torso', 'arms', 'legs']) this.aidZone.append(option(zone, zone));
+ 
++    const accuracyDetails = document.createElement('details');
++    accuracyDetails.className = 'combat-lab-details combat-lab-accuracy-controls';
++    accuracyDetails.open = true;
++    accuracyDetails.append(
