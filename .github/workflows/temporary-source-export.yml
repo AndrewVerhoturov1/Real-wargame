@@ -1,4 +1,4 @@
-name: Temporary Apply Combat Lab Accuracy
+name: Temporary Finalize Combat Lab Accuracy
 
 on:
   pull_request:
@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  apply:
+  finalize:
     if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feature/20260726-shooting-stage-09v-combat-lab'
     runs-on: ubuntu-latest
     steps:
@@ -24,24 +24,32 @@ jobs:
           fetch-depth: 0
           show-progress: false
 
-      - name: Apply exact reviewed patch
+      - name: Fix signed-zero assertion and remove transport files
         shell: bash
         run: |
           set -euo pipefail
-          prefix='.github/temporary-combat-lab-honest-accuracy.patch.part-'
-          final_part="${prefix}07"
-          if [[ ! -f "$final_part" ]]; then
-            echo 'Implementation patch is not complete yet; nothing to do.'
-            exit 0
-          fi
-          patch_file='/tmp/combat-lab-honest-accuracy.patch'
-          cat "${prefix}"{00..07} > "$patch_file"
-          git apply --check "$patch_file"
-          git apply "$patch_file"
-          rm -f "${prefix}"{00..07} .github/workflows/temporary-source-export.yml
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/combat_lab_accuracy_controls_regression_smoke.ts')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              "assert.equal(shot.dispersionPitchRadians, 0, 'Zero randomness must remove the random pitch sample only.');":
+                  "assert.equal(Math.abs(shot.dispersionPitchRadians), 0, 'Zero randomness must remove the random pitch sample only.');",
+              "assert.equal(shot.dispersionYawRadians, 0, 'Zero randomness must remove the random yaw sample only.');":
+                  "assert.equal(Math.abs(shot.dispersionYawRadians), 0, 'Zero randomness must remove the random yaw sample only.');",
+          }
+          for before, after in replacements.items():
+              if text.count(before) != 1:
+                  raise SystemExit(f'Expected exactly one assertion to replace: {before}')
+              text = text.replace(before, after)
+          path.write_text(text, encoding='utf-8')
+          PY
+          rm -f .github/temporary-combat-lab-honest-accuracy.patch.part-{00..07}
+          rm -f .github/workflows/temporary-source-export.yml
           git diff --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          git commit -m 'feat: add honest Combat Lab accuracy controls'
+          git commit -m 'test: accept signed zero in accuracy regression'
           git push origin HEAD:feature/20260726-shooting-stage-09v-combat-lab
