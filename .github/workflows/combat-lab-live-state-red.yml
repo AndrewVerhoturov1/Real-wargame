@@ -1,4 +1,4 @@
-name: Combat Lab Live State RED
+name: Combat Lab Live State Verification
 
 on:
   pull_request:
@@ -10,8 +10,9 @@ permissions:
   contents: read
 
 jobs:
-  red-contract:
+  verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
@@ -21,18 +22,14 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Run new regression before implementation
-        shell: bash
-        run: |
-          set +e
-          node scripts/combat_lab_live_state_regression_smoke.mjs > combat-lab-live-state.log 2>&1
-          STATUS=$?
-          tail -n 120 combat-lab-live-state.log
-          exit "$STATUS"
-      - name: Upload focused regression output
+      - name: Full Preview verification gate
+        run: npm run verify:preview -- --report combat-lab-live-state-verification.json
+      - name: Production build
+        run: npm run build:app
+      - name: Upload verification report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: combat-lab-live-state-log
-          path: combat-lab-live-state.log
-          if-no-files-found: error
+          name: combat-lab-live-state-verification
+          path: combat-lab-live-state-verification.json
+          if-no-files-found: warn
