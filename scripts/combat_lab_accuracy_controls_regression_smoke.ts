@@ -109,8 +109,8 @@ function verifyWeakPerceptionNeedsExplicitForce(): void {
   );
   const shot = state.infantryCombatProjectiles.committedShots[0];
   assert.ok(shot, 'The physical projectile pipeline must record the committed shot.');
-  assert.equal(shot.dispersionPitchRadians, 0, 'Zero randomness must remove the random pitch sample only.');
-  assert.equal(shot.dispersionYawRadians, 0, 'Zero randomness must remove the random yaw sample only.');
+  assert.equal(Math.abs(shot.dispersionPitchRadians), 0, 'Zero randomness must remove the random pitch sample only.');
+  assert.equal(Math.abs(shot.dispersionYawRadians), 0, 'Zero randomness must remove the random yaw sample only.');
 }
 
 function verifyAccuracyOverridesReachProductionAimRuntime(): void {
