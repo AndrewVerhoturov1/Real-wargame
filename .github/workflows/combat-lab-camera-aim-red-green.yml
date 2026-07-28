@@ -17,7 +17,7 @@ jobs:
       - name: Checkout corrected product head
         uses: actions/checkout@v4
         with:
-          ref: 380a88e9654561c34201765494f9f4a7fadfd622
+          ref: 527f370a2ba64aabaff51ea853e05c6a03939951
           fetch-depth: 0
       - name: Setup Node.js 24
         uses: actions/setup-node@v4
@@ -26,21 +26,21 @@ jobs:
           cache: npm
       - name: Install exact dependencies
         run: npm ci --no-audit --no-fund
-      - name: Capture Stage 5 aim verification
-        id: stage5
+      - name: Capture focused camera and aim regression
+        id: focused
         shell: bash
         run: |
           set +e
-          npm run infantry-combat-stage5:verify > "$RUNNER_TEMP/stage5.log" 2>&1
+          node scripts/combat_lab_camera_aim_regression_smoke.mjs > "$RUNNER_TEMP/focused.log" 2>&1
           status=$?
-          cat "$RUNNER_TEMP/stage5.log"
+          cat "$RUNNER_TEMP/focused.log"
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
-      - name: Upload Stage 5 verification log
+      - name: Upload focused regression log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: infantry-combat-stage5-log-380a88e
-          path: ${{ runner.temp }}/stage5.log
-      - name: Require Stage 5 aim verification success
-        run: test "${{ steps.stage5.outputs.status }}" -eq 0
+          name: combat-lab-forward-aim-diagnostic
+          path: ${{ runner.temp }}/focused.log
+      - name: Require focused regression success
+        run: test "${{ steps.focused.outputs.status }}" -eq 0
