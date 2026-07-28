@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { CombatLabVisualSession } from '../src/combat-lab/runtime/CombatLabVisualSession';
 import { buildUnitBarSnapshot } from '../src/ui/UnitBarPresentation';
 
+const RIFLE_DISTANCE_SCENARIO_ID = 'rifle-distance-baseline';
+
 verifyEditorModeKeepsInsetSizedMapRoot();
 verifyUnitBarReadsInfantryCombatRuntime();
 verifyJournalNamesShooterAndVictim();
@@ -19,7 +21,7 @@ function verifyEditorModeKeepsInsetSizedMapRoot(): void {
 }
 
 function verifyUnitBarReadsInfantryCombatRuntime(): void {
-  const session = new CombatLabVisualSession('rifle-distance-v1', 1);
+  const session = new CombatLabVisualSession(RIFLE_DISTANCE_SCENARIO_ID, 1);
   const shooter = session.state.units.find((unit) => unit.id === 'rifle-distance-shooter');
   assert.ok(shooter, 'Rifle-distance shooter is required.');
   const weapon = shooter.infantryCombatRuntime.primaryWeapon;
@@ -45,7 +47,7 @@ function verifyUnitBarReadsInfantryCombatRuntime(): void {
 }
 
 function verifyJournalNamesShooterAndVictim(): void {
-  const session = new CombatLabVisualSession('rifle-distance-v1', 1);
+  const session = new CombatLabVisualSession(RIFLE_DISTANCE_SCENARIO_ID, 1);
   const result = session.executeInteractive({
     kind: 'fire',
     shooterUnitId: 'rifle-distance-shooter',
