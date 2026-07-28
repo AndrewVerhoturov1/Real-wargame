@@ -14,16 +14,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
-      - name: Setup Node.js 24
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
       - name: Checkout corrected product head
         uses: actions/checkout@v4
         with:
           ref: 8cbad1df40eeb2699d9c2cf97866dabdacb89666
           fetch-depth: 0
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
       - name: Install current dependencies
         run: npm ci --no-audit --no-fund
       - name: Measure current projectile benchmark
