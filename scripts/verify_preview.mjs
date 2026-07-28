@@ -29,6 +29,7 @@ const checks = [
   nodeCheck('Combat Lab full game contract', 'combat_lab_full_game_contract_smoke.mjs', 30_000),
   nodeCheck('Combat Lab 1440x900 workspace layout contract', 'combat_lab_workspace_layout_smoke.mjs', 30_000),
   nodeCheck('Combat Lab camera and aim alignment regression', 'combat_lab_camera_aim_regression_smoke.mjs', 60_000),
+  nodeCheck('Combat Lab live unit state and victim journal regression', 'combat_lab_live_state_regression_smoke.mjs', 60_000),
   ...(skipPreviewSmokes ? [] : previewSmokes),
 ];
 const skippedChecks = skipPreviewSmokes
