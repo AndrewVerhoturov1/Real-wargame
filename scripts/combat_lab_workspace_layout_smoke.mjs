@@ -50,6 +50,7 @@ for (const token of [
   '--combat-lab-dock-width: 370px',
   '--workspace-sidebar: 370px',
   'body.app-shell-mode-combat-lab.workspace-simulation #app',
+  'body.app-shell-mode-combat-lab.workspace-editor #app',
   'left: calc(var(--combat-lab-dock-width)',
   'body.app-shell-mode-combat-lab .simulation-unit-bar',
   'body.app-shell-mode-combat-lab .app-shell-menu',
@@ -70,11 +71,15 @@ for (const token of [
 }
 
 for (const token of [
-  'getWeaponRuntime(unit)',
-  'getWeaponDefinition(runtime.weaponId)',
-  'weaponVisualKind(definition)',
+  'buildUnitBarSnapshot(unit)',
+  'unit.infantryCombatRuntime',
+  'primary?.roundsInWeapon',
+  'infantry.ammoInventory.reserves',
+  'infantry.physiology.blood.bloodLoss',
+  'infantry.suppression.suppressionLevel',
+  'weaponVisualKindFromText',
   'data-weapon-kind',
-  'weaponSilhouette(kind)',
+  'weaponSilhouette(snapshot.weaponVisualKind)',
   'Технический идентификатор:',
 ]) {
   assert.ok(unitBarPresentation.includes(token), `Shared soldier panel must contain ${token}`);
