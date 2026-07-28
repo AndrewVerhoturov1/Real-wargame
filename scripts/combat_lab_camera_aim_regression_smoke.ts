@@ -8,6 +8,8 @@ import {
 } from '../src/core/infantry-combat/runtime';
 import { createInitialState } from '../src/core/simulation/SimulationState';
 
+const AIM_ALIGNMENT_TOLERANCE_RADIANS = Math.PI / 180;
+
 verifyViewportResizeUsesCanonicalCameraTransform();
 verifyFireWaitsForWeaponAlignment();
 
@@ -93,8 +95,25 @@ function verifyFireWaitsForWeaponAlignment(): void {
       1,
       `The shooter initially facing ${facingDegrees}° must eventually commit exactly one shot after physical alignment.`,
     );
+
     const direction = state.infantryCombatProjectiles.committedShots[0]!.aimDirectionBeforeDispersion!;
-    assert.ok(direction.x > 0.999, 'The committed pre-dispersion direction must face the target.');
-    assert.ok(Math.abs(direction.y) < 0.01, 'The committed pre-dispersion direction must not retain the old sideways bearing.');
+    const solution = shooter.infantryCombatRuntime.activeFireTask?.aimTracking.solution;
+    assert.ok(solution?.valid, 'The committed shot must retain a valid physical aim solution during recovery.');
+    const currentMagnitude = Math.hypot(direction.x, direction.y, direction.z);
+    const desiredMagnitude = Math.hypot(
+      solution.desiredDirection.x,
+      solution.desiredDirection.y,
+      solution.desiredDirection.z,
+    );
+    const dot = (
+      direction.x * solution.desiredDirection.x
+      + direction.y * solution.desiredDirection.y
+      + direction.z * solution.desiredDirection.z
+    ) / (currentMagnitude * desiredMagnitude);
+    const angularError = Math.acos(Math.max(-1, Math.min(1, dot)));
+    assert.ok(
+      angularError <= AIM_ALIGNMENT_TOLERANCE_RADIANS + 1e-9,
+      `The committed pre-dispersion direction must be within one degree of the physical aim solution; got ${(angularError * 180 / Math.PI).toFixed(4)}° for initial facing ${facingDegrees}°.`,
+    );
   }
 }
