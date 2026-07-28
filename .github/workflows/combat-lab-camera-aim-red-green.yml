@@ -40,7 +40,7 @@ jobs:
       - name: Checkout corrected product head
         uses: actions/checkout@v4
         with:
-          ref: 22fb9ace521584443f4ecc388be80eb021d0d3fb
+          ref: 26375dd8c99c9aeb8d380515362e3f7cffa98410
           clean: true
           fetch-depth: 0
       - name: Install exact dependencies for green proof
