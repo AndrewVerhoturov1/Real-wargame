@@ -1,0 +1,130 @@
++    const baseline = shooter?.infantryCombatRuntime.primaryWeapon
++      ? resolveBaselineProductionAimFactors(state, shooter, shooter.infantryCombatRuntime.primaryWeapon)
++      : null;
++    const decision = !target
++      ? 'Точка: контакт не требуется'
++      : !contact
++        ? 'ОГОНЬ ЗАПРЕЩЁН: контакта нет'
++        : (contactQuality ?? 0) >= threshold
++          ? 'Обычный огонь разрешён'
++          : 'Обычный огонь запрещён; принудительный обходит только этот порог';
++    const lines = [
++      `Решение: ${decision}`,
++      `Контакт: ${contact ? `${contact.id} · уверенность ${contact.confidence.toFixed(1)}% · неопределённость ${(contact.uncertaintyCells * state.map.metersPerCell).toFixed(2)} м` : 'нет'}`,
++      `Качество восприятия: ${contactQuality === null ? '—' : `${(contactQuality * 100).toFixed(1)}%`} · порог ${Math.round(threshold * 100)}%`,
++      `Физическое прицеливание: ${solution ? `${(solution.physicalAimQuality * 100).toFixed(1)}%` : '—'} · качество решения ${solution ? `${(solution.solutionQuality * 100).toFixed(1)}%` : '—'}`,
++      `Разброс базы: ${baseline ? `${(baseline.effectiveDispersionRadians * 1000).toFixed(3)} mrad` : '—'} · активный ${solution ? `${(solution.effectiveDispersionRadians * 1000).toFixed(3)} mrad` : '—'}`,
++      `Случайность: ${Math.round(this.randomnessPercent.getValue())}% · seed ${validSeed(this.seed.value, this.session.seed)}`,
++    ];
++    this.accuracyTelemetry.textContent = lines.join('\n');
++  }
++
+   private posture(targetPosture: UnitPosture): void {
+     this.execute({ kind: 'posture', unitId: this.shooter.value, targetPosture });
+   }
+@@ -600,6 +736,41 @@ function numberInput(min: number, max: number, step: number): HTMLInputElement {
+   result.step = String(step);
+   return result;
+ }
++function sliderControl(min: number, max: number, step: number, initialValue: number): CombatLabSliderControlV1 {
++  const root = node('div', 'combat-lab-slider');
++  const range = document.createElement('input');
++  range.type = 'range';
++  range.min = String(min);
++  range.max = String(max);
++  range.step = String(step);
++  const number = numberInput(min, max, step);
++  const output = node('output', 'combat-lab-slider-output');
++  const decimals = decimalPlaces(step);
++  const write = (value: number): void => {
++    const normalized = clamp(value, min, max);
++    const text = normalized.toFixed(decimals);
++    range.value = text;
++    number.value = text;
++  };
++  range.addEventListener('input', () => { number.value = range.value; });
++  number.addEventListener('input', () => {
++    const value = Number(number.value);
++    if (Number.isFinite(value)) range.value = String(clamp(value, min, max));
++  });
++  number.addEventListener('change', () => write(Number(number.value)));
++  write(initialValue);
++  root.append(range, number, output);
++  return {
++    root,
++    range,
++    number,
++    output,
++    getValue: () => clamp(finite(number.value), min, max),
++    setValue: write,
++    setOutput: (text: string) => { output.textContent = text; },
++  };
++}
++
+ function node<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] {
+   const result = document.createElement(tag);
+   result.className = className;
+@@ -611,6 +782,41 @@ function orderedList(items: readonly string[]): HTMLOListElement {
+   for (const item of items) list.append(node('li', '', item));
+   return list;
+ }
++function bestContact(
++  shooter: UnitModel,
++  targetUnitId: string,
++): UnitModel['perceptionKnowledge']['contacts'][number] | null {
++  return [...shooter.perceptionKnowledge.contacts]
++    .filter((contact) => contact.sourceUnitId === targetUnitId)
++    .sort((left, right) => (
++      Number(right.visibleNow) - Number(left.visibleNow)
++      || Number(right.observedNow) - Number(left.observedNow)
++      || right.confidence - left.confidence
++      || right.lastUpdatedSeconds - left.lastUpdatedSeconds
++      || left.id.localeCompare(right.id)
++    ))[0] ?? null;
++}
++function proficiencyFromPercent(value: number): WeaponProficiency {
++  if (value < 34) return 'untrained';
++  if (value < 67) return 'trained';
++  return 'specialist';
++}
++function proficiencyPercent(value: WeaponProficiency): number {
++  return value === 'untrained' ? 0 : value === 'specialist' ? 100 : 50;
++}
++function proficiencyLabel(value: WeaponProficiency): string {
++  return value === 'untrained' ? 'Не обучен' : value === 'specialist' ? 'Специалист' : 'Обучен';
++}
++function decimalPlaces(value: number): number {
++  const text = String(value);
++  const separator = text.indexOf('.');
++  return separator < 0 ? 0 : text.length - separator - 1;
++}
++function clamp01(value: number): number { return clamp(value, 0, 1); }
++function clamp(value: number, minimum: number, maximum: number): number {
++  return Math.max(minimum, Math.min(maximum, Number.isFinite(value) ? value : minimum));
++}
++
+ function finite(value: string): number {
+   const parsed = Number(value);
+   return Number.isFinite(parsed) ? parsed : 0;
+diff --git a/src/core/infantry-combat/runtime/AimRuntime.ts b/src/core/infantry-combat/runtime/AimRuntime.ts
+index 38625df6..fc0dc568 100644
+--- a/src/core/infantry-combat/runtime/AimRuntime.ts
++++ b/src/core/infantry-combat/runtime/AimRuntime.ts
+@@ -6,6 +6,7 @@ import type {
+   AimSolutionRuntimeV1,
+   AimTrackingRuntimeV1,
+   FireTaskRuntimeV1,
++  FireTaskTestOverridesV1,
+   InfantryWeaponInstanceV1,
+ } from './InfantryCombatRuntimeTypes';
+ import {
+@@ -64,7 +65,8 @@ export function updateAimTrackingAtBoundary(
+ ): AimSolutionRuntimeV1 {
+   const previousBoundarySeconds = task.aimTracking.lastTrackingBoundarySeconds ?? task.requestedSeconds;
+   const traversingDuringPreparation = task.phase === 'weapon_ready';
+-  const solution = updateAimTrackingAtBoundaryStage5(state, shooter, task, weapon, boundarySeconds);
++  const factors = resolveProductionAimFactors(state, shooter, weapon);
++  const solution = updateAimTrackingAtBoundaryStage5(state, shooter, task, weapon, boundarySeconds, factors);
+   if (traversingDuringPreparation && solution.valid) {
+     solution.currentDirection = rotateDirectionAtRate(
+       solution.currentDirection,
