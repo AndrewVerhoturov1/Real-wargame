@@ -109,9 +109,9 @@ test('Combat Lab shows honest accuracy controls and keeps forced fire contact-bo
   if (contactQuality !== null) {
     await setSlider(page, 'Порог восприятия', '100');
     await page.getByRole('button', { name: 'Принудительная стрельба', exact: true }).click();
-    const entry = journal.locator('.combat-lab-journal-entry').first();
-    await expect(entry).toContainText('Принято:');
-    forcedWithContact = await entry.innerText();
+    const acceptedEntry = journal.locator('.combat-lab-journal-entry').filter({ hasText: 'Принято:' }).first();
+    await expect(acceptedEntry).toContainText('Принято:');
+    forcedWithContact = await acceptedEntry.innerText();
     await page.getByRole('tab', { name: 'Журнал', exact: true }).click();
     await page.screenshot({ path: `${evidenceDir}/06-force-fire-with-real-contact.png`, fullPage: true });
   }
