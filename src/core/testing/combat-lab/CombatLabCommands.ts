@@ -246,9 +246,9 @@ function contactAimPointMetres(state: SimulationState, contact: PerceptionContac
   return {
     xMetres: contact.lastKnownPosition.x * state.map.metersPerCell,
     yMetres: contact.lastKnownPosition.y * state.map.metersPerCell,
-    // Contact memory currently has no observed posture/height. A neutral human-centre height
-    // is more honest than reading the selected target unit's true current posture.
-    zMetres: 1.1,
+    // Use only what the production contact observed. Reports/sounds without a visual
+    // height retain the neutral centre fallback and never read the target unit's true posture.
+    zMetres: clamp(contact.lastKnownTargetHeightMeters ?? 1.1, 0.2, 1.1),
   };
 }
 

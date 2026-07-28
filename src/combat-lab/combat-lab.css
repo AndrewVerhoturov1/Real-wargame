@@ -135,9 +135,6 @@ body.app-shell-mode-combat-lab {
 .combat-lab-tab-panel[hidden] { display: none; }
 
 .combat-lab-run-toolbar {
-  position: sticky;
-  z-index: 3;
-  top: 0;
   display: grid;
   gap: 8px;
   margin: -10px -10px 10px;

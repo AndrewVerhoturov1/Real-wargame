@@ -3,6 +3,7 @@ import type { GameApplicationContext, GameApplicationExtension } from '../game/G
 import { CombatLabRenderer } from './rendering/CombatLabRenderer';
 import type { CombatLabVisualSession } from './runtime/CombatLabVisualSession';
 import { CombatLabShell, type CombatLabLayoutV1 } from './ui/CombatLabShell';
+import { combatLabMetricLabelRu } from './ui/CombatLabMetricLabels';
 
 type CombatLabDockTab = 'stand' | 'metrics' | 'log';
 
@@ -257,7 +258,7 @@ function renderMetricCards(host: HTMLElement, json: string): void {
   const entries = Object.entries(metrics).slice(0, 20);
   host.replaceChildren(...entries.map(([key, value]) => {
     const card = node('div', 'combat-lab-metric-card');
-    card.append(node('span', '', humanize(key)), node('strong', '', formatMetric(value)));
+    card.append(node('span', '', combatLabMetricLabelRu(key)), node('strong', '', formatMetric(value)));
     return card;
   }));
   if (entries.length === 0) host.append(node('div', 'combat-lab-empty-tab', 'Метрики появятся после прогона.'));
@@ -371,10 +372,6 @@ function syncGamePauseControl(session: CombatLabVisualSession): void {
   if (button.textContent !== label) button.textContent = label;
   if (button.getAttribute('aria-pressed') !== String(paused)) button.setAttribute('aria-pressed', String(paused));
   button.classList.toggle('hud-toggle-off', !paused);
-}
-
-function humanize(value: string): string {
-  return value.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[._-]+/g, ' ');
 }
 
 function formatMetric(value: unknown): string {

@@ -102,10 +102,10 @@ function fixturesForFactory(factoryId: string): readonly UnitFixture[] {
           0,
           'loadout_rifleman',
         ),
-        rifleDistanceTarget('rifle-target-25', 'Мишень 25 м', 25, -8),
-        rifleDistanceTarget('rifle-target-50', 'Мишень 50 м', 50, 10),
-        rifleDistanceTarget('rifle-target-100', 'Мишень 100 м', 100, -14),
-        rifleDistanceTarget('rifle-target-200', 'Мишень 200 м', 200, 12),
+        rifleDistanceTarget('rifle-target-25', 'Мишень 25 м', 25, -26),
+        rifleDistanceTarget('rifle-target-50', 'Мишень 50 м', 50, 22),
+        rifleDistanceTarget('rifle-target-100', 'Мишень 100 м', 100, -15),
+        rifleDistanceTarget('rifle-target-200', 'Мишень 200 м', 200, 10),
       ];
     case 'rifle-moving-v1':
       return [

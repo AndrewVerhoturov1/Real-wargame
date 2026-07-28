@@ -16,6 +16,8 @@ const labHeaderCss = readFileSync('src/combat-lab/combat-lab-header-final.css', 
 const refinedCss = readFileSync('src/tactical-workspace-refined.css', 'utf8');
 const productionCss = readFileSync('src/tactical-workspace-production.css', 'utf8');
 const finalFixesCss = readFileSync('src/tactical-workspace-final-fixes.css', 'utf8');
+const workspaceBase = readFileSync('src/ui/TacticalWorkspaceBaseLegacy.ts', 'utf8');
+const metricLabels = readFileSync('src/combat-lab/ui/CombatLabMetricLabels.ts', 'utf8');
 const css = `${labCss}\n${workspaceCss}\n${labPolishCss}\n${labHeaderCss}\n${refinedCss}\n${productionCss}\n${finalFixesCss}`;
 
 for (const token of [
@@ -99,6 +101,13 @@ assert.doesNotMatch(css, /\.workspace-time-controls\s+\.unit-bar-speed-group\s*\
 assert.match(productionCss, /\.tactical-workspace-bar\s*\{[^}]*grid-template-columns:[^}]*minmax\(0, 1fr\)/s, 'Header must allocate a shrinkable action lane.');
 assert.match(productionCss, /\.workspace-mode-switch,\s*\n\.workspace-time-controls,\s*\n\.workspace-top-actions\s*\{\s*min-width:\s*0/s, 'Header groups must be allowed to shrink without overlap.');
 assert.match(labPolishCss, /#combat-lab-extension-root select,[\s\S]*min-height:\s*28px/, 'Combat Lab field controls must be compact.');
+
+const toolbarRule = labCss.match(/\.combat-lab-run-toolbar\s*\{([^}]*)\}/s)?.[1] ?? '';
+assert.doesNotMatch(toolbarRule, /position:\s*sticky/, 'Combat Lab run controls must scroll instead of covering lower fields.');
+assert.match(workspaceBase, /WORKSPACE_LAYOUT_TRANSITION_MILLISECONDS\s*=\s*150/, 'Workspace must name the 150 ms layout transition.');
+assert.match(workspaceBase, /scheduleWorkspaceViewportResize\(\)/, 'Workspace mode changes must schedule stable viewport resize.');
+assert.match(metricLabels, /shotsCommitted:\s*'Выстрелы'/, 'Combat Lab metrics need explicit Russian labels.');
+assert.ok(extension.includes('combatLabMetricLabelRu(key)'), 'Metric cards must render Russian metric labels.');
 
 assert.doesNotMatch(
   workspaceCss,

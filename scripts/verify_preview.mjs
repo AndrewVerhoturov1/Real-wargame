@@ -31,6 +31,7 @@ const checks = [
   nodeCheck('Combat Lab camera and aim alignment regression', 'combat_lab_camera_aim_regression_smoke.mjs', 60_000),
   nodeCheck('Combat Lab live unit state and victim journal regression', 'combat_lab_live_state_regression_smoke.mjs', 60_000),
   nodeCheck('Combat Lab honest accuracy controls regression', 'combat_lab_accuracy_controls_regression_smoke.mjs', 60_000),
+  nodeCheck('Combat Lab prone target, survivability and UI regression', 'combat_lab_prone_survivability_ui_regression_smoke.mjs', 60_000),
   ...(skipPreviewSmokes ? [] : previewSmokes),
 ];
 const skippedChecks = skipPreviewSmokes

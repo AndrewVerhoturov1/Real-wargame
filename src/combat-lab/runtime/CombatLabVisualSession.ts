@@ -13,6 +13,7 @@ import {
   finalizeCombatLabMetrics,
   getCombatLabScenarioDefinition,
   observeCombatLabMetrics,
+  preserveCombatLabTargetSurvivability,
   type CombatLabBuiltScenarioV1,
   type CombatLabCommandResultV1,
   type CombatLabMetricCollectorV1,
@@ -221,6 +222,7 @@ export class CombatLabVisualSession {
       }
     }
     tickSimulation(this.state, COMBAT_LAB_FIXED_STEP_SECONDS);
+    preserveCombatLabTargetSurvivability(this.state, this.built.roles);
     observeCombatLabMetrics(this.state, this.metrics);
     this.captureProductionEvents();
   }
