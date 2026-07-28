@@ -17,7 +17,7 @@ jobs:
       - name: Checkout exact product commit
         uses: actions/checkout@v4
         with:
-          ref: 8cbad1df40eeb2699d9c2cf97866dabdacb89666
+          ref: dcf222268847f9954971615a20374d62168c9d33
           fetch-depth: 0
       - name: Setup Node.js 24
         uses: actions/setup-node@v4
