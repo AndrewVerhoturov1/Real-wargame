@@ -1,0 +1,124 @@
++      node('summary', '', 'Лабораторные параметры точности'),
++      field('Уровень разброса', this.dispersionMultiplier.root),
++      field('Время прицеливания', this.aimTimeSeconds.root),
++      field('Порог прицеливания', this.aimThresholdPercent.root),
++      field('Навык стрельбы', this.shootingSkillPercent.root),
++      field('Владение классом оружия', this.weaponProficiencyPercent.root),
++      field('Порог восприятия', this.perceptionThresholdPercent.root),
++      field('Уровень случайности', this.randomnessPercent.root),
++      this.accuracyTelemetry,
++      actionRow(button('Сбросить параметры', () => this.resetAccuracyControls())),
++    );
++
+     this.layout.right.append(
+       panel(
+         'Прицеливание и огонь',
+@@ -206,9 +249,10 @@ export class CombatLabShell {
+         field('Y точки, м', this.targetY),
+         field('Режим', this.mode),
+         field('Радиус suppress, м', this.suppressRadius),
+-        field('Минимальное качество', this.aimQuality),
++        accuracyDetails,
+         actionRow(
+-          button('Открыть огонь', () => this.openFire(), 'primary'),
++          button('Открыть огонь', () => this.openFire(false), 'primary'),
++          button('Принудительная стрельба', () => this.openFire(true), 'force'),
+           button('Прекратить задачу', () => this.cancel('fire')),
+         ),
+       ),
+@@ -279,6 +323,7 @@ export class CombatLabShell {
+       this.setPointFromUnit(firstTarget.unitId);
+     }
+     this.updateFireModes();
++    this.resetAccuracyControls();
+   }
+ 
+   private startVisualRun(): void {
+@@ -329,7 +374,7 @@ export class CombatLabShell {
+     this.refreshLive(true);
+   }
+ 
+-  private openFire(): void {
++  private openFire(forceFire: boolean): void {
+     const targetUnitId = this.target.value === '__point__' ? null : this.target.value || null;
+     this.execute({
+       kind: 'fire',
+@@ -340,10 +385,101 @@ export class CombatLabShell {
+         : { xMetres: finite(this.targetX.value), yMetres: finite(this.targetY.value), zMetres: 1 },
+       mode: this.mode.value as FireMode,
+       targetRadiusMetres: finite(this.suppressRadius.value),
+-      minimumSolutionQuality: finite(this.aimQuality.value),
++      minimumSolutionQuality: clamp01(this.aimThresholdPercent.getValue() / 100),
++      minimumPerceptionQuality: clamp01(this.perceptionThresholdPercent.getValue() / 100),
++      forceFire,
++      accuracyOverrides: {
++        schemaVersion: 1,
++        dispersionMultiplier: clamp(this.dispersionMultiplier.getValue(), 0.25, 4),
++        aimTimeSeconds: clamp(this.aimTimeSeconds.getValue(), 0.1, 10),
++        shootingSkill: clamp01(this.shootingSkillPercent.getValue() / 100),
++        weaponProficiency: proficiencyFromPercent(this.weaponProficiencyPercent.getValue()),
++        randomnessMultiplier: clamp(this.randomnessPercent.getValue() / 100, 0, 2),
++        randomSeed: validSeed(this.seed.value, this.session.seed),
++        usePhysicalAimThreshold: true,
++      },
+     });
+   }
+ 
++  private accuracyControls(): readonly CombatLabSliderControlV1[] {
++    return [
++      this.dispersionMultiplier,
++      this.aimTimeSeconds,
++      this.aimThresholdPercent,
++      this.shootingSkillPercent,
++      this.weaponProficiencyPercent,
++      this.perceptionThresholdPercent,
++      this.randomnessPercent,
++    ];
++  }
++
++  private resetAccuracyControls(): void {
++    const shooter = this.session.state.units.find((candidate) => candidate.id === this.shooter.value) ?? null;
++    const weapon = shooter?.infantryCombatRuntime.primaryWeapon ?? null;
++    const baseline = shooter && weapon
++      ? resolveBaselineProductionAimFactors(this.session.state, shooter, weapon)
++      : null;
++    this.dispersionMultiplier.setValue(1);
++    this.aimTimeSeconds.setValue(baseline && baseline.aimQualityPerSecond > 0
++      ? clamp(1 / baseline.aimQualityPerSecond, 0.1, 10)
++      : 2);
++    this.aimThresholdPercent.setValue(50);
++    this.shootingSkillPercent.setValue((weapon?.operatorProfile.shootingSkill ?? 0.5) * 100);
++    this.weaponProficiencyPercent.setValue(proficiencyPercent(
++      weapon?.operatorProfile.proficiencyByWeaponClass[weapon.resolved.weapon.weaponClass] ?? 'trained',
++    ));
++    this.perceptionThresholdPercent.setValue(50);
++    this.randomnessPercent.setValue(100);
++    this.refreshAccuracyTelemetry();
++  }
++
++  private refreshAccuracyTelemetry(): void {
++    this.dispersionMultiplier.setOutput(`${this.dispersionMultiplier.getValue().toFixed(2)}×`);
++    this.aimTimeSeconds.setOutput(`${this.aimTimeSeconds.getValue().toFixed(1)} с`);
++    this.aimThresholdPercent.setOutput(`${Math.round(this.aimThresholdPercent.getValue())}%`);
++    this.shootingSkillPercent.setOutput(`${Math.round(this.shootingSkillPercent.getValue())}/100`);
++    this.weaponProficiencyPercent.setOutput(proficiencyLabel(proficiencyFromPercent(this.weaponProficiencyPercent.getValue())));
++    this.perceptionThresholdPercent.setOutput(`${Math.round(this.perceptionThresholdPercent.getValue())}%`);
++    this.randomnessPercent.setOutput(`${Math.round(this.randomnessPercent.getValue())}%`);
++
++    const state = this.session.state;
++    const shooter = state.units.find((candidate) => candidate.id === this.shooter.value) ?? null;
++    const targetId = this.target.value === '__point__' ? null : this.target.value || null;
++    const target = targetId ? state.units.find((candidate) => candidate.id === targetId) ?? null : null;
++    const contact = shooter && target ? bestContact(shooter, target.id) : null;
++    const contactQuality = contact
++      ? calculatePerceptionSolutionQuality({
++          confidence: contact.confidence,
++          uncertaintyMetres: contact.uncertaintyCells * state.map.metersPerCell,
++          contactAgeSeconds: Math.max(0, state.simulationTimeSeconds - Math.max(contact.lastObservedSeconds, contact.lastUpdatedSeconds, 0)),
++          visibleNow: contact.visibleNow,
++          observedNow: contact.observedNow,
++        })
++      : null;
++    const threshold = clamp01(this.perceptionThresholdPercent.getValue() / 100);
++    const task = shooter?.infantryCombatRuntime.activeFireTask ?? null;
++    const solution = task?.aimTracking.solution ?? null;
