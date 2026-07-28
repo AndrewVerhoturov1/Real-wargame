@@ -1,0 +1,64 @@
+name: Vercel Pull Diagnostics
+
+on:
+  pull_request:
+    branches:
+      - feature/20260726-shooting-stage-09v-combat-lab
+    paths:
+      - .github/workflows/vercel-pull-diagnostics.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EXACT_SHA: 4888be515a1b4db51689ebe7d42c97e90a7aaa32
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 4888be515a1b4db51689ebe7d42c97e90a7aaa32
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Diagnose Vercel project pull
+        id: diagnose
+        continue-on-error: true
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -o pipefail
+          log="$RUNNER_TEMP/vercel-pull-diagnostics.log"
+          {
+            for variable in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+              if [[ -n "${!variable:-}" ]]; then
+                echo "$variable=present"
+              else
+                echo "$variable=missing"
+              fi
+            done
+            echo "checked_sha=$(git rev-parse HEAD)"
+            set +e
+            npx --yes vercel@56.4.1 pull --yes --environment=preview --token="$VERCEL_TOKEN" 2>&1
+            status="$?"
+            set -e
+            echo "vercel_pull_exit=$status"
+            exit "$status"
+          } 2>&1 | tee "$log"
+          status="${PIPESTATUS[0]}"
+          echo "log=$log" >> "$GITHUB_OUTPUT"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-pull-diagnostics
+          path: ${{ steps.diagnose.outputs.log }}
+          retention-days: 7
+      - name: Enforce successful pull
+        run: test "${{ steps.diagnose.outputs.status }}" = "0"
