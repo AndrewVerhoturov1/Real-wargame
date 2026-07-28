@@ -11,6 +11,7 @@ export interface FireTaskTestOverridesV1 {
   readonly schemaVersion: typeof FIRE_TASK_TEST_OVERRIDES_SCHEMA_VERSION;
   readonly dispersionMultiplier: number;
   readonly aimTimeSeconds: number;
+  readonly physicalAimThreshold: number;
   readonly shootingSkill: number;
   readonly weaponProficiency: WeaponProficiency;
   readonly randomnessMultiplier: number;
@@ -69,10 +70,11 @@ export function applyFireTaskTestAimFactorOverrides(
   };
 }
 
-export function usesPhysicalFireTaskAimThreshold(
+export function getFireTaskPhysicalAimThreshold(
   task: FireTaskRuntimeV1 | null | undefined,
-): boolean {
-  return getFireTaskTestOverrides(task)?.usePhysicalAimThreshold === true;
+): number | null {
+  const overrides = getFireTaskTestOverrides(task);
+  return overrides?.usePhysicalAimThreshold === true ? overrides.physicalAimThreshold : null;
 }
 
 export function withFireTaskTestShotRandomness<T>(
@@ -111,6 +113,7 @@ function normalizeFireTaskTestOverrides(value: FireTaskTestOverridesV1): FireTas
     schemaVersion: FIRE_TASK_TEST_OVERRIDES_SCHEMA_VERSION,
     dispersionMultiplier: clamp(finite(value.dispersionMultiplier, 1), 0.05, 10),
     aimTimeSeconds: clamp(finite(value.aimTimeSeconds, 1), 0.05, 60),
+    physicalAimThreshold: clamp(finite(value.physicalAimThreshold, 0.5), 0, 1),
     shootingSkill: clamp(finite(value.shootingSkill, 0.5), 0, 1),
     weaponProficiency: normalizeProficiency(value.weaponProficiency),
     randomnessMultiplier: clamp(finite(value.randomnessMultiplier, 1), 0, 4),
