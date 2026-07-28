@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
 const evidenceDir = 'artifacts/combat-lab-accuracy-visual';
@@ -14,7 +14,7 @@ test('Combat Lab shows honest accuracy controls and keeps forced fire contact-bo
 
   const response = await page.goto('/combat-lab.html', { waitUntil: 'domcontentloaded' });
   expect(response?.status() ?? 200).toBeLessThan(400);
-  await expect(page.getByText('Испытательный полигон', { exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Испытательный полигон' })).toBeVisible();
   await expect(page.locator('canvas').first()).toBeVisible();
 
   const controls = page.locator('.combat-lab-accuracy-controls');
@@ -22,7 +22,6 @@ test('Combat Lab shows honest accuracy controls and keeps forced fire contact-bo
   const diagnostics = page.locator('.combat-lab-diagnostics');
   const journal = page.locator('.combat-lab-journal');
   await expect(controls).toBeVisible();
-  await expect(diagnostics).toBeVisible();
 
   const expectedLabels = [
     'Уровень разброса',
@@ -61,7 +60,9 @@ test('Combat Lab shows honest accuracy controls and keeps forced fire contact-bo
   await page.getByRole('button', { name: 'Принудительная стрельба', exact: true }).click();
   await expect(journal.locator('.combat-lab-journal-entry').first()).toContainText('combat_lab_target_contact_missing');
   const forcedWithoutContact = await journal.locator('.combat-lab-journal-entry').first().innerText();
+  await page.getByRole('tab', { name: 'Журнал', exact: true }).click();
   await page.screenshot({ path: `${evidenceDir}/03-force-fire-does-not-cheat.png`, fullPage: true });
+  await page.getByRole('tab', { name: 'Стенд', exact: true }).click();
 
   await setSlider(page, 'Уровень разброса', '2.5');
   await setSlider(page, 'Время прицеливания', '3.2');
@@ -82,7 +83,7 @@ test('Combat Lab shows honest accuracy controls and keeps forced fire contact-bo
   });
   const adjustedDiagnostics = await readDiagnostics(diagnostics);
   await controls.screenshot({ path: `${evidenceDir}/04-accuracy-controls-adjusted.png` });
-  await page.screenshot({ path: `${evidenceDir}/05-adjusted-layout-and-diagnostics.png`, fullPage: true });
+  await page.screenshot({ path: `${evidenceDir}/05-adjusted-layout-and-controls.png`, fullPage: true });
 
   await page.getByRole('button', { name: 'Сбросить параметры', exact: true }).click();
   await expect.poll(async () => (await readDiagnostics(diagnostics))?.accuracyLab?.requested).toMatchObject({
@@ -92,8 +93,7 @@ test('Combat Lab shows honest accuracy controls and keeps forced fire contact-bo
     randomnessMultiplier: 1,
   });
 
-  const speed = page.locator('.combat-lab-top .combat-lab-field.inline').filter({ hasText: 'Скорость' }).locator('select');
-  await speed.selectOption('8');
+  await page.getByRole('button', { name: '×10', exact: true }).click();
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
   let contactQuality: number | null = null;
   try {
@@ -114,6 +114,7 @@ test('Combat Lab shows honest accuracy controls and keeps forced fire contact-bo
     const entry = journal.locator('.combat-lab-journal-entry').first();
     await expect(entry).toContainText('Принято:');
     forcedWithContact = await entry.innerText();
+    await page.getByRole('tab', { name: 'Журнал', exact: true }).click();
     await page.screenshot({ path: `${evidenceDir}/06-force-fire-with-real-contact.png`, fullPage: true });
   }
 
@@ -135,7 +136,7 @@ test('Combat Lab shows honest accuracy controls and keeps forced fire contact-bo
       '02-accuracy-controls-production-defaults.png',
       '03-force-fire-does-not-cheat.png',
       '04-accuracy-controls-adjusted.png',
-      '05-adjusted-layout-and-diagnostics.png',
+      '05-adjusted-layout-and-controls.png',
       ...(forcedWithContact ? ['06-force-fire-with-real-contact.png'] : []),
     ],
   }, null, 2));
@@ -150,7 +151,7 @@ async function setSlider(page: Page, label: string, value: string): Promise<void
   await expect(row.locator('output')).not.toHaveText('');
 }
 
-async function readDiagnostics(locator: ReturnType<Page['locator']>): Promise<any> {
+async function readDiagnostics(locator: Locator): Promise<any> {
   const text = await locator.textContent();
   return JSON.parse(text || '{}');
 }
