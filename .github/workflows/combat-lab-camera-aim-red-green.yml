@@ -45,8 +45,24 @@ jobs:
           fetch-depth: 0
       - name: Install exact dependencies for green proof
         run: npm ci --no-audit --no-fund
-      - name: Run focused camera and aim regression
-        run: node scripts/combat_lab_camera_aim_regression_smoke.mjs
+      - name: Capture focused camera and aim regression
+        id: focused
+        shell: bash
+        run: |
+          set +e
+          node scripts/combat_lab_camera_aim_regression_smoke.mjs > "$RUNNER_TEMP/green.log" 2>&1
+          status=$?
+          cat "$RUNNER_TEMP/green.log"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload focused regression log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combat-lab-camera-aim-log
+          path: ${{ runner.temp }}/green.log
+      - name: Require focused regression success
+        run: test "${{ steps.focused.outputs.status }}" -eq 0
       - name: Run Stage 5 aim verification
         run: npm run infantry-combat-stage5:verify
       - name: Run Combat Lab workspace contract
