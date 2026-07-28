@@ -10,14 +10,26 @@ import type {
 } from './InfantryCombatRuntimeTypes';
 import {
   AIM_DIRECTION_PROGRESS_PER_SECOND,
+  COARSE_HUMAN_TARGET_RADIUS_METRES,
   advanceAimPhysicalProgress as advanceAimPhysicalProgressStage5,
   calculateAimFactorBreakdown,
+  calculatePredictedHitProbability,
+  deriveSeededAngularOffsets as deriveSeededAngularOffsetsStage5,
   normalizeAimTrackingRuntime as normalizeAimTrackingRuntimeStage5,
   serializeAimTrackingRuntime as serializeAimTrackingRuntimeStage5,
   updateAimTrackingAtBoundary as updateAimTrackingAtBoundaryStage5,
+  type SeededAngularOffsetInput,
+  type SeededAngularOffsetsV1,
 } from './AimRuntimeStage5';
 import { getEffectiveCombatCapabilities } from './EffectiveCombatCapabilities';
+import {
+  applyFireTaskTestAimFactorOverrides,
+  resolveFireTaskTestOperatorProfile,
+  resolveFireTaskTestShotRandomness,
+  usesPhysicalFireTaskAimThreshold,
+} from './FireTaskTestOverrides';
 import { applyMachineGunFireFactors } from './MachineGunFireModifiers';
+import { getWeaponAnchor } from './MuzzleGeometry';
 
 export * from './AimRuntimeStage5';
 
@@ -65,6 +77,7 @@ export function updateAimTrackingAtBoundary(
   const previousBoundarySeconds = task.aimTracking.lastTrackingBoundarySeconds ?? task.requestedSeconds;
   const traversingDuringPreparation = task.phase === 'weapon_ready';
   const solution = updateAimTrackingAtBoundaryStage5(state, shooter, task, weapon, boundarySeconds);
+  if (solution.valid) applyLaboratorySolutionFactors(state, shooter, task, weapon, solution);
   if (traversingDuringPreparation && solution.valid) {
     solution.currentDirection = rotateDirectionAtRate(
       solution.currentDirection,
@@ -74,6 +87,7 @@ export function updateAimTrackingAtBoundary(
     );
   }
   applyDirectionGate(task);
+  if (solution.valid) refreshPredictedProbability(state, shooter, task, solution);
   return solution;
 }
 
@@ -112,6 +126,12 @@ export function resolveProductionAimFactors(
   weapon: InfantryWeaponInstanceV1,
 ): AimFactorBreakdownV1 {
   const capabilities = getEffectiveCombatCapabilities(shooter);
+  const task = shooter.infantryCombatRuntime.activeFireTask;
+  const profile = resolveFireTaskTestOperatorProfile(
+    task,
+    weapon.operatorProfile.shootingSkill,
+    weapon.operatorProfile.proficiencyByWeaponClass[weapon.resolved.weapon.weaponClass],
+  );
   const base = calculateAimFactorBreakdown({
     weapon: weapon.resolved.weapon,
     posture: shooter.behaviorRuntime.posture,
@@ -120,8 +140,8 @@ export function resolveProductionAimFactors(
       shooter.movementRuntime.velocityCellsPerSecond.x,
       shooter.movementRuntime.velocityCellsPerSecond.y,
     ) * state.map.metersPerCell,
-    shootingSkill: weapon.operatorProfile.shootingSkill,
-    proficiency: weapon.operatorProfile.proficiencyByWeaponClass[weapon.resolved.weapon.weaponClass],
+    shootingSkill: profile.shootingSkill,
+    proficiency: profile.proficiency,
     fatigue: shooter.infantryCombatRuntime.physiology.fatigue.fatigue,
     woundStabilityMultiplier: clamp(
       Math.min(capabilities.stabilityMultiplier, capabilities.accuracyMultiplier),
@@ -129,8 +149,74 @@ export function resolveProductionAimFactors(
       1,
     ),
   });
-  const mode = shooter.infantryCombatRuntime.activeFireTask?.mode ?? 'single';
-  return applyMachineGunFireFactors(base, weapon, mode);
+  const mode = task?.mode ?? 'single';
+  return applyFireTaskTestAimFactorOverrides(task, applyMachineGunFireFactors(base, weapon, mode));
+}
+
+export function deriveSeededAngularOffsets(
+  input: SeededAngularOffsetInput & { readonly seedSalt?: number | string | null },
+): SeededAngularOffsetsV1 {
+  const testRandomness = resolveFireTaskTestShotRandomness(
+    input.shooterId,
+    input.weaponInstanceId,
+    input.shotId,
+  );
+  const randomnessMultiplier = testRandomness?.randomnessMultiplier ?? 1;
+  const seedSalt = input.seedSalt ?? testRandomness?.randomSeed ?? null;
+  return deriveSeededAngularOffsetsStage5({
+    shooterId: seedSalt === null ? input.shooterId : `${input.shooterId}\u0000combat-lab-seed:${String(seedSalt)}`,
+    weaponInstanceId: input.weaponInstanceId,
+    shotId: input.shotId,
+    effectiveDispersionRadians: input.effectiveDispersionRadians * randomnessMultiplier,
+  });
+}
+
+function applyLaboratorySolutionFactors(
+  state: Pick<SimulationState, 'map'>,
+  shooter: UnitModel,
+  task: FireTaskRuntimeV1,
+  weapon: InfantryWeaponInstanceV1,
+  solution: AimSolutionRuntimeV1,
+): void {
+  const factors = resolveProductionAimFactors(state, shooter, weapon);
+  solution.factors = factors;
+  solution.effectiveDispersionRadians = effectiveDispersionForProgress(
+    factors,
+    solution.physicalAimQuality,
+  );
+  task.aimQuality = usesPhysicalFireTaskAimThreshold(task)
+    ? canonicalUnitInterval(solution.physicalAimQuality)
+    : canonicalUnitInterval(solution.physicalAimQuality * solution.solutionQuality);
+}
+
+function refreshPredictedProbability(
+  state: Pick<SimulationState, 'map'>,
+  shooter: UnitModel,
+  task: FireTaskRuntimeV1,
+  solution: AimSolutionRuntimeV1,
+): void {
+  const perceivedPosition = solution.perceivedPosition ?? task.target;
+  const muzzle = getWeaponAnchor(state.map, shooter);
+  const distanceMetres = Math.hypot(
+    perceivedPosition.xMetres - muzzle.xMetres,
+    perceivedPosition.yMetres - muzzle.yMetres,
+    perceivedPosition.zMetres - muzzle.zMetres,
+  );
+  solution.predictedHitProbability = calculatePredictedHitProbability({
+    distanceMetres,
+    targetRadiusMetres: task.targetRadiusMetres > 0
+      ? task.targetRadiusMetres
+      : COARSE_HUMAN_TARGET_RADIUS_METRES,
+    effectiveDispersionRadians: solution.effectiveDispersionRadians,
+    aimQuality: solution.usableAimQuality,
+    solutionQuality: solution.solutionQuality,
+    uncertaintyMetres: solution.uncertaintyCells * state.map.metersPerCell,
+    contactAgeSeconds: solution.contactAgeSeconds,
+  });
+}
+
+function effectiveDispersionForProgress(factors: AimFactorBreakdownV1, physicalAimQuality: number): number {
+  return factors.effectiveDispersionRadians * (1 + (1 - clamp(physicalAimQuality, 0, 1)) * 2);
 }
 
 function rotateDirectionAtRate(
@@ -157,7 +243,11 @@ function applyDirectionGate(task: FireTaskRuntimeV1): void {
     task.aimQuality = 0;
     return;
   }
-  const usable = canonicalUnitInterval(solution.physicalAimQuality * solution.solutionQuality);
+  const usable = canonicalUnitInterval(
+    usesPhysicalFireTaskAimThreshold(task)
+      ? solution.physicalAimQuality
+      : solution.physicalAimQuality * solution.solutionQuality,
+  );
   solution.usableAimQuality = usable;
   task.aimQuality = usable;
 }
