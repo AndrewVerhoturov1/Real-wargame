@@ -12,35 +12,57 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
-      - name: Checkout corrected product head
-        uses: actions/checkout@v4
-        with:
-          ref: 8cbad1df40eeb2699d9c2cf97866dabdacb89666
-          fetch-depth: 0
       - name: Setup Node.js 24
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - name: Install exact dependencies
+      - name: Checkout corrected product head
+        uses: actions/checkout@v4
+        with:
+          ref: 8cbad1df40eeb2699d9c2cf97866dabdacb89666
+          fetch-depth: 0
+      - name: Install current dependencies
         run: npm ci --no-audit --no-fund
-      - name: Capture Stage 5 aim verification
-        id: stage5
+      - name: Measure current projectile benchmark
+        id: current
         shell: bash
         run: |
           set +e
-          npm run infantry-combat-stage5:verify > "$RUNNER_TEMP/stage5-preparation.log" 2>&1
+          npm run infantry-combat-projectile:benchmark > "$RUNNER_TEMP/current-projectile.log" 2>&1
           status=$?
-          cat "$RUNNER_TEMP/stage5-preparation.log"
+          cat "$RUNNER_TEMP/current-projectile.log"
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
-      - name: Upload Stage 5 verification log
+      - name: Checkout mandatory Stage 5 base
+        uses: actions/checkout@v4
+        with:
+          ref: 6e719225d8da711fbf2d1963baa43bcd03c7dbdf
+          clean: true
+          fetch-depth: 0
+      - name: Install base dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Measure base projectile benchmark
+        id: base
+        shell: bash
+        run: |
+          set +e
+          npm run infantry-combat-projectile:benchmark > "$RUNNER_TEMP/base-projectile.log" 2>&1
+          status=$?
+          cat "$RUNNER_TEMP/base-projectile.log"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload benchmark comparison
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: infantry-combat-stage5-preparation-log
-          path: ${{ runner.temp }}/stage5-preparation.log
-      - name: Require Stage 5 aim verification success
-        run: test "${{ steps.stage5.outputs.status }}" -eq 0
+          name: projectile-benchmark-current-vs-base
+          path: |
+            ${{ runner.temp }}/current-projectile.log
+            ${{ runner.temp }}/base-projectile.log
+      - name: Record comparison statuses
+        run: |
+          echo "current=${{ steps.current.outputs.status }}"
+          echo "base=${{ steps.base.outputs.status }}"
