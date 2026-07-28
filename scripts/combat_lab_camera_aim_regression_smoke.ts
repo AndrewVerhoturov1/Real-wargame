@@ -7,12 +7,13 @@ import {
   tickInfantryCombatSimulation,
 } from '../src/core/infantry-combat/runtime';
 import { createInitialState } from '../src/core/simulation/SimulationState';
+import type { UnitModel } from '../src/core/units/UnitModel';
 
 const AIM_ALIGNMENT_TOLERANCE_RADIANS = Math.PI / 180;
 
 verifyViewportResizeUsesCanonicalCameraTransform();
-verifyForwardFacingShootsAfterReady();
-verifyFireWaitsForWeaponAlignment();
+verifyForwardAndSmallCorrectionsShootAfterReady();
+verifyRearFacingShooterWaitsForAlignment();
 
 console.log('Combat Lab camera and aim alignment regression smoke passed.');
 
@@ -43,75 +44,77 @@ function verifyViewportResizeUsesCanonicalCameraTransform(): void {
   );
 }
 
-function verifyForwardFacingShootsAfterReady(): void {
-  const { state, shooter } = createRifleScenario('combat-lab-alignment-forward', 0);
-  tickInfantryCombatSimulation(state, { intervalStartSeconds: 0, deltaSeconds: 0.8 });
-  const task = shooter.infantryCombatRuntime.activeFireTask;
-  const solution = task?.aimTracking.solution;
-  const current = solution?.currentDirection;
-  const desired = solution?.desiredDirection;
-  const angleDegrees = current && desired
-    ? Math.acos(Math.max(-1, Math.min(1, current.x * desired.x + current.y * desired.y + current.z * desired.z))) * 180 / Math.PI
-    : null;
-  assert.equal(
-    state.infantryCombatProjectiles.committedShots.length,
-    1,
-    `A forward-facing shooter must fire after weapon ready time. Diagnostics: ${JSON.stringify({
-      phase: task?.phase ?? null,
-      readyRemainingSeconds: task?.readyRemainingSeconds ?? null,
-      aimQuality: task?.aimQuality ?? null,
-      physicalAimQuality: solution?.physicalAimQuality ?? null,
-      usableAimQuality: solution?.usableAimQuality ?? null,
-      current,
-      desired,
-      angleDegrees,
-    })}`,
-  );
-}
-
-function verifyFireWaitsForWeaponAlignment(): void {
-  for (const facingDegrees of [20, 180]) {
-    const { state, shooter } = createRifleScenario(`combat-lab-alignment-${facingDegrees}`, facingDegrees);
-
-    let elapsedSeconds = 0;
-    tickInfantryCombatSimulation(state, { intervalStartSeconds: elapsedSeconds, deltaSeconds: 0.8 });
-    elapsedSeconds += 0.8;
-    assert.equal(
-      state.infantryCombatProjectiles.committedShots.length,
-      0,
-      `A shooter initially facing ${facingDegrees}° away must not fire before the weapon direction reaches the target.`,
-    );
-
-    for (let step = 0; step < 120 && state.infantryCombatProjectiles.committedShots.length === 0; step += 1) {
-      tickInfantryCombatSimulation(state, { intervalStartSeconds: elapsedSeconds, deltaSeconds: 0.1 });
-      elapsedSeconds += 0.1;
-    }
+function verifyForwardAndSmallCorrectionsShootAfterReady(): void {
+  for (const facingDegrees of [0, 20]) {
+    const { state, shooter } = createRifleScenario(`combat-lab-alignment-ready-${facingDegrees}`, facingDegrees);
+    tickInfantryCombatSimulation(state, { intervalStartSeconds: 0, deltaSeconds: 0.8 });
+    const task = shooter.infantryCombatRuntime.activeFireTask;
+    const solution = task?.aimTracking.solution;
     assert.equal(
       state.infantryCombatProjectiles.committedShots.length,
       1,
-      `The shooter initially facing ${facingDegrees}° must eventually commit exactly one shot after physical alignment.`,
+      `A shooter initially facing ${facingDegrees}° must complete a small correction during weapon preparation. Diagnostics: ${JSON.stringify({
+        phase: task?.phase ?? null,
+        readyRemainingSeconds: task?.readyRemainingSeconds ?? null,
+        aimQuality: task?.aimQuality ?? null,
+        physicalAimQuality: solution?.physicalAimQuality ?? null,
+        usableAimQuality: solution?.usableAimQuality ?? null,
+        current: solution?.currentDirection ?? null,
+        desired: solution?.desiredDirection ?? null,
+      })}`,
     );
-
-    const direction = state.infantryCombatProjectiles.committedShots[0]!.aimDirectionBeforeDispersion!;
-    const solution = shooter.infantryCombatRuntime.activeFireTask?.aimTracking.solution;
-    assert.ok(solution?.valid, 'The committed shot must retain a valid physical aim solution during recovery.');
-    const currentMagnitude = Math.hypot(direction.x, direction.y, direction.z);
-    const desiredMagnitude = Math.hypot(
-      solution.desiredDirection.x,
-      solution.desiredDirection.y,
-      solution.desiredDirection.z,
-    );
-    const dot = (
-      direction.x * solution.desiredDirection.x
-      + direction.y * solution.desiredDirection.y
-      + direction.z * solution.desiredDirection.z
-    ) / (currentMagnitude * desiredMagnitude);
-    const angularError = Math.acos(Math.max(-1, Math.min(1, dot)));
-    assert.ok(
-      angularError <= AIM_ALIGNMENT_TOLERANCE_RADIANS + 1e-9,
-      `The committed pre-dispersion direction must be within one degree of the physical aim solution; got ${(angularError * 180 / Math.PI).toFixed(4)}° for initial facing ${facingDegrees}°.`,
-    );
+    assertCommittedShotAligned(state.infantryCombatProjectiles.committedShots[0]!.aimDirectionBeforeDispersion!, shooter, facingDegrees);
   }
+}
+
+function verifyRearFacingShooterWaitsForAlignment(): void {
+  const facingDegrees = 180;
+  const { state, shooter } = createRifleScenario('combat-lab-alignment-rear', facingDegrees);
+
+  let elapsedSeconds = 0;
+  tickInfantryCombatSimulation(state, { intervalStartSeconds: elapsedSeconds, deltaSeconds: 0.8 });
+  elapsedSeconds += 0.8;
+  assert.equal(
+    state.infantryCombatProjectiles.committedShots.length,
+    0,
+    'A rear-facing shooter must not fire merely because weapon preparation has completed.',
+  );
+
+  for (let step = 0; step < 120 && state.infantryCombatProjectiles.committedShots.length === 0; step += 1) {
+    tickInfantryCombatSimulation(state, { intervalStartSeconds: elapsedSeconds, deltaSeconds: 0.1 });
+    elapsedSeconds += 0.1;
+  }
+  assert.equal(
+    state.infantryCombatProjectiles.committedShots.length,
+    1,
+    'A rear-facing shooter must eventually commit exactly one shot after the physical traverse completes.',
+  );
+  assertCommittedShotAligned(state.infantryCombatProjectiles.committedShots[0]!.aimDirectionBeforeDispersion!, shooter, facingDegrees);
+}
+
+function assertCommittedShotAligned(
+  direction: { x: number; y: number; z: number },
+  shooter: UnitModel,
+  initialFacingDegrees: number,
+): void {
+  const solution = shooter.infantryCombatRuntime.activeFireTask?.aimTracking.solution;
+  assert.ok(solution?.valid, 'The committed shot must retain a valid physical aim solution during recovery.');
+  const currentMagnitude = Math.hypot(direction.x, direction.y, direction.z);
+  const desiredMagnitude = Math.hypot(
+    solution.desiredDirection.x,
+    solution.desiredDirection.y,
+    solution.desiredDirection.z,
+  );
+  const dot = (
+    direction.x * solution.desiredDirection.x
+    + direction.y * solution.desiredDirection.y
+    + direction.z * solution.desiredDirection.z
+  ) / (currentMagnitude * desiredMagnitude);
+  const angularError = Math.acos(Math.max(-1, Math.min(1, dot)));
+  assert.ok(
+    angularError <= AIM_ALIGNMENT_TOLERANCE_RADIANS + 1e-9,
+    `The committed pre-dispersion direction must be within one degree of the physical aim solution; got ${(angularError * 180 / Math.PI).toFixed(4)}° for initial facing ${initialFacingDegrees}°.`,
+  );
 }
 
 function createRifleScenario(id: string, facingDegrees: number) {
