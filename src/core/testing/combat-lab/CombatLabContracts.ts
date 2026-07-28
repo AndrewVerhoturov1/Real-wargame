@@ -86,6 +86,7 @@ export interface CombatLabAccuracyOverridesV1 {
   readonly schemaVersion: 1;
   readonly dispersionMultiplier: number;
   readonly aimTimeSeconds: number;
+  readonly physicalAimThreshold: number;
   readonly shootingSkill: number;
   readonly weaponProficiency: WeaponProficiency;
   readonly randomnessMultiplier: number;
