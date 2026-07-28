@@ -1,4 +1,4 @@
-name: Temporary Source Export
+name: Temporary Apply Combat Lab Accuracy
 
 on:
   pull_request:
@@ -6,31 +6,39 @@ on:
       - real-wargame-preview
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: temporary-combat-lab-accuracy-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 
 jobs:
-  export:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feature/20260726-shooting-stage-09v-combat-lab'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout exact PR head
+      - name: Checkout writable feature branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: feature/20260726-shooting-stage-09v-combat-lab
           fetch-depth: 0
           show-progress: false
 
-      - name: Record exact source
+      - name: Apply exact reviewed patch
+        shell: bash
         run: |
-          git rev-parse HEAD > SOURCE_SHA.txt
-          printf '%s\n' '${{ github.event.pull_request.head.ref }}' > SOURCE_BRANCH.txt
-
-      - name: Archive repository with git metadata
-        run: tar --exclude='./node_modules' --exclude='./dist' -czf /tmp/real-wargame-source.tgz .
-
-      - name: Upload source archive
-        uses: actions/upload-artifact@v4
-        with:
-          name: real-wargame-source-${{ github.event.pull_request.head.sha }}
-          path: /tmp/real-wargame-source.tgz
-          if-no-files-found: error
-          retention-days: 1
+          set -euo pipefail
+          patch_file='.github/temporary-combat-lab-honest-accuracy.patch'
+          if [[ ! -f "$patch_file" ]]; then
+            echo 'No pending implementation patch; nothing to do.'
+            exit 0
+          fi
+          git apply --check "$patch_file"
+          git apply "$patch_file"
+          rm -f "$patch_file" .github/workflows/temporary-source-export.yml
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: add honest Combat Lab accuracy controls'
+          git push origin HEAD:feature/20260726-shooting-stage-09v-combat-lab
