@@ -58,7 +58,9 @@ export function executeCombatLabCommand(
       );
     }
 
-    const target = command.targetPointMetres ?? (targetContact ? contactAimPointMetres(state, targetContact) : null);
+    const target = targetUnit && targetContact
+      ? contactAimPointMetres(state, targetContact)
+      : command.targetPointMetres;
     if (!target) return rejected('combat_lab_target_missing', 'Не выбрана цель-боец или точка цели.');
     const result = requestFireTask(shooter, {
       owner,
@@ -229,12 +231,12 @@ export function calculateCombatLabPerceptionQuality(
   const uncertaintyMetres = Math.max(0, contact.uncertaintyCells) * Math.max(0.001, metresPerCell);
   const freshnessSeconds = Math.max(contact.lastObservedSeconds, contact.lastUpdatedSeconds, 0);
   const contactAgeSeconds = Math.max(0, nowSeconds - freshnessSeconds);
-  const visibilityWeight = contact.visibleNow ? 1 : contact.observedNow ? 0.9 : 0.7;
+  const observation = contact.observedNow ? 1 : contact.visibleNow ? 0.9 : 0.7;
   return clamp(
     confidence
       * (1 / (1 + uncertaintyMetres / 2))
       * (1 / (1 + contactAgeSeconds / 2))
-      * visibilityWeight,
+      * observation,
     0,
     1,
   );
