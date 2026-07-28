@@ -1,0 +1,77 @@
+name: Build Exact Combat Lab Static Artifact
+
+on:
+  pull_request:
+    branches:
+      - feature/20260726-shooting-stage-09v-combat-lab
+    paths:
+      - .github/workflows/build-exact-combat-lab-static-artifact.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Verify and build exact product SHA
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXACT_REF: feature/20260726-shooting-stage-09v-combat-lab
+      EXACT_SHA: 4888be515a1b4db51689ebe7d42c97e90a7aaa32
+    steps:
+      - name: Checkout exact product SHA
+        uses: actions/checkout@v4
+        with:
+          ref: 4888be515a1b4db51689ebe7d42c97e90a7aaa32
+          fetch-depth: 0
+
+      - name: Verify exact source before installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          test "$actual_sha" = "$EXACT_SHA"
+          echo "Verified exact source: $EXACT_REF @ $actual_sha"
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run canonical Preview verification gate
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/preview-verification.json"
+          npm run verify:preview -- --report "$report"
+          echo "report=$report" >> "$GITHUB_OUTPUT"
+
+      - name: Build production static output
+        env:
+          REAL_WARGAME_BRANCH: ${{ env.EXACT_REF }}
+          REAL_WARGAME_COMMIT_SHA: ${{ env.EXACT_SHA }}
+        run: npm run build
+
+      - name: Add exact deployment identity
+        run: >-
+          node scripts/write_deployment_source.mjs
+          --root dist
+          --ref "$EXACT_REF"
+          --sha "$EXACT_SHA"
+          --report "${{ steps.gate.outputs.report }}"
+
+      - name: Verify static pages and deployment identity
+        run: npm run verify:deployment-pages -- --root dist --require-source
+
+      - name: Upload exact static output
+        uses: actions/upload-artifact@v4
+        with:
+          name: exact-combat-lab-static-output
+          path: dist
+          if-no-files-found: error
+          retention-days: 7
