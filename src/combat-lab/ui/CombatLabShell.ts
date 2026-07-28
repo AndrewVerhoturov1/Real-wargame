@@ -1,9 +1,15 @@
 import type { UnitPosture } from '../../core/behavior/BehaviorModel';
 import type { FireMode } from '../../core/infantry-combat/catalogs/CombatCatalogTypes';
-import { getEffectiveCombatCapabilities, validateMachineGunAssistant } from '../../core/infantry-combat/runtime';
+import {
+  getEffectiveCombatCapabilities,
+  getFireTaskTestOverrides,
+  setFireTaskTestOverrides,
+  validateMachineGunAssistant,
+} from '../../core/infantry-combat/runtime';
 import { selectUnit } from '../../core/simulation/SimulationState';
 import type { UnitModel } from '../../core/units/UnitModel';
 import {
+  calculateCombatLabPerceptionQuality,
   cancelCombatLabWeaponAction,
   getCombatLabScenarioDefinition,
   listCombatLabScenarioDefinitions,
@@ -15,6 +21,7 @@ import {
 } from '../../core/testing/combat-lab';
 import type { CombatLabRenderer } from '../rendering/CombatLabRenderer';
 import { COMBAT_LAB_VISUAL_SPEEDS, type CombatLabVisualSession } from '../runtime/CombatLabVisualSession';
+import { CombatLabAccuracyControls } from './CombatLabAccuracyControls';
 
 const LAYER_LABELS: Record<CombatLabDiagnosticLayerId, string> = {
   active_projectiles: 'Активные пули',
@@ -78,7 +85,10 @@ export class CombatLabShell {
   private readonly targetY = numberInput(0, 10_000, 0.1);
   private readonly mode = select();
   private readonly suppressRadius = numberInput(0.5, 20, 0.5);
-  private readonly aimQuality = numberInput(0, 1, 0.05);
+  private readonly accuracyControls = new CombatLabAccuracyControls(
+    () => this.resetAccuracyControls(),
+    () => this.refreshLive(true),
+  );
   private readonly transferRounds = numberInput(1, 1000, 1);
   private readonly aidZone = select();
   private readonly instructions = node('div', 'combat-lab-instructions');
@@ -102,6 +112,7 @@ export class CombatLabShell {
     this.layout.bottom.append(this.status, this.journal);
     this.shooter.addEventListener('change', () => {
       this.updateFireModes();
+      this.resetAccuracyControls();
       this.renderer.forceRender();
       this.refreshLive(true);
     });
@@ -114,6 +125,7 @@ export class CombatLabShell {
     }
     for (const control of [this.targetX, this.targetY]) control.addEventListener('input', () => this.refreshLive(true));
     this.refreshScenarioControls();
+    this.resetAccuracyControls();
     this.refreshLive(true);
   }
 
@@ -128,7 +140,11 @@ export class CombatLabShell {
     this.restore.disabled = !snapshot.checkpointAvailable;
     this.removeCheckpoint.disabled = !snapshot.checkpointAvailable;
     this.status.textContent = `${snapshot.scenarioId}@${snapshot.scenarioRevision} · seed ${snapshot.seed} · ${snapshot.simulatedSeconds.toFixed(3)} с · ${snapshot.interactive ? 'INTERACTIVE' : 'ЧИСТЫЙ'} · ${snapshot.paused ? 'пауза' : `×${snapshot.speed}`}`;
-    this.diagnostics.textContent = JSON.stringify(buildDiagnostics(this.session, this.readSelection()), null, 2);
+    this.diagnostics.textContent = JSON.stringify(buildDiagnostics(
+      this.session,
+      this.readSelection(),
+      this.accuracyControls.diagnostics(this.session.seed),
+    ), null, 2);
     this.journal.replaceChildren(
       ...snapshot.eventJournal.slice(-80).reverse().map((entry) => node('div', 'combat-lab-journal-entry', entry)),
     );
@@ -192,7 +208,6 @@ export class CombatLabShell {
       ['suppress', 'Подавление'],
     ] as const) this.mode.append(option(value, label));
     this.suppressRadius.value = '5';
-    this.aimQuality.value = '0.5';
     this.transferRounds.value = '30';
     this.aidZone.append(option('', 'Автоматический приоритет'));
     for (const zone of ['head', 'torso', 'arms', 'legs']) this.aidZone.append(option(zone, zone));
@@ -206,11 +221,12 @@ export class CombatLabShell {
         field('Y точки, м', this.targetY),
         field('Режим', this.mode),
         field('Радиус suppress, м', this.suppressRadius),
-        field('Минимальное качество', this.aimQuality),
+        this.accuracyControls.root,
         actionRow(
-          button('Открыть огонь', () => this.openFire(), 'primary'),
-          button('Прекратить задачу', () => this.cancel('fire')),
+          button('Открыть огонь', () => this.openFire(false), 'primary'),
+          button('Принудительная стрельба', () => this.openFire(true)),
         ),
+        actionRow(button('Прекратить задачу', () => this.cancel('fire'))),
       ),
       panel(
         'Поза',
@@ -287,6 +303,7 @@ export class CombatLabShell {
     this.renderer.clearHistory();
     for (const layer of this.session.definition.visualPreset.recommendedLayerIds) this.renderer.setLayerEnabled(layer, true);
     this.refreshScenarioControls();
+    this.resetAccuracyControls();
     this.renderer.forceRender();
     this.refreshLive(true);
   }
@@ -318,6 +335,7 @@ export class CombatLabShell {
 
   private restoreCheckpoint(): void {
     if (this.session.restoreCheckpoint()) {
+      this.reapplyAccuracyControlsToActiveTask();
       this.renderer.clearHistory();
       this.renderer.forceRender();
     }
@@ -329,8 +347,9 @@ export class CombatLabShell {
     this.refreshLive(true);
   }
 
-  private openFire(): void {
+  private openFire(forceFire: boolean): void {
     const targetUnitId = this.target.value === '__point__' ? null : this.target.value || null;
+    const accuracy = this.accuracyControls.read(this.session.seed);
     this.execute({
       kind: 'fire',
       shooterUnitId: this.shooter.value,
@@ -340,7 +359,10 @@ export class CombatLabShell {
         : { xMetres: finite(this.targetX.value), yMetres: finite(this.targetY.value), zMetres: 1 },
       mode: this.mode.value as FireMode,
       targetRadiusMetres: finite(this.suppressRadius.value),
-      minimumSolutionQuality: finite(this.aimQuality.value),
+      minimumSolutionQuality: accuracy.minimumSolutionQuality,
+      minimumPerceptionQuality: accuracy.minimumPerceptionQuality,
+      forceFire,
+      accuracyOverrides: accuracy.accuracyOverrides,
     });
   }
 
@@ -410,6 +432,19 @@ export class CombatLabShell {
     selectUnit(this.session.state, unit?.id ?? null);
   }
 
+  private resetAccuracyControls(): void {
+    const unit = this.session.state.units.find((candidate) => candidate.id === this.shooter.value) ?? null;
+    this.accuracyControls.resetForUnit(this.session.state, unit);
+    this.refreshLive(true);
+  }
+
+  private reapplyAccuracyControlsToActiveTask(): void {
+    const unit = this.session.state.units.find((candidate) => candidate.id === this.shooter.value) ?? null;
+    const task = unit?.infantryCombatRuntime.activeFireTask ?? null;
+    if (!task || task.owner.source !== 'test') return;
+    setFireTaskTestOverrides(task, this.accuracyControls.read(this.session.seed).accuracyOverrides);
+  }
+
   private readSelection(): CombatLabUiSelectionV1 {
     return {
       shooterUnitId: this.shooter.value,
@@ -427,6 +462,7 @@ export class CombatLabShell {
 function buildDiagnostics(
   session: CombatLabVisualSession,
   selection: CombatLabUiSelectionV1,
+  accuracyRequest: Record<string, unknown>,
 ): Record<string, unknown> {
   const state = session.state;
   const snapshot = session.getSnapshot();
@@ -438,6 +474,7 @@ function buildDiagnostics(
   const weapon = combat?.primaryWeapon;
   const projectileDiagnostics = state.infantryCombatProjectiles.diagnostics;
   const assistantValidation = shooter ? validateMachineGunAssistant(state, shooter, selection.helperUnitId) : null;
+  const targetContact = shooter && target ? resolveDiagnosticContact(shooter, target.id) : null;
   const targetPoint = target
     ? { xMetres: target.position.x * state.map.metersPerCell, yMetres: target.position.y * state.map.metersPerCell }
     : selection.targetPointMetres;
@@ -465,6 +502,25 @@ function buildDiagnostics(
       firstAidTargetUnitId: selection.firstAidTargetUnitId || null,
       ammoSourceUnitId: selection.ammoSourceUnitId || null,
       ammoTargetUnitId: selection.ammoTargetUnitId || null,
+    },
+    accuracyLab: {
+      requested: accuracyRequest,
+      appliedToActiveTask: getFireTaskTestOverrides(combat?.activeFireTask),
+      contact: targetContact
+        ? {
+            contactId: targetContact.id,
+            confidence: targetContact.confidence,
+            uncertaintyCells: targetContact.uncertaintyCells,
+            uncertaintyMetres: targetContact.uncertaintyCells * state.map.metersPerCell,
+            ageSeconds: Math.max(0, state.simulationTimeSeconds - Math.max(targetContact.lastObservedSeconds, targetContact.lastUpdatedSeconds, 0)),
+            visibleNow: targetContact.visibleNow,
+            observedNow: targetContact.observedNow,
+            quality: calculateCombatLabPerceptionQuality(targetContact, state.map.metersPerCell, state.simulationTimeSeconds),
+            lastKnownPosition: targetContact.lastKnownPosition,
+          }
+        : target
+          ? { available: false, reason: 'production_contact_missing' }
+          : { kind: 'explicit_point' },
     },
     selectedUnit: selected
       ? {
@@ -516,6 +572,18 @@ function buildDiagnostics(
     metrics: snapshot.metrics,
     lastCommandResult: snapshot.lastCommandResult,
   };
+}
+
+function resolveDiagnosticContact(shooter: UnitModel, targetUnitId: string) {
+  return shooter.perceptionKnowledge.contacts
+    .filter((contact) => contact.sourceUnitId === targetUnitId)
+    .sort((left, right) => (
+      Number(right.visibleNow) - Number(left.visibleNow)
+      || Number(right.observedNow) - Number(left.observedNow)
+      || right.confidence - left.confidence
+      || right.lastUpdatedSeconds - left.lastUpdatedSeconds
+      || left.id.localeCompare(right.id)
+    ))[0] ?? null;
 }
 
 function unitIdentity(unit: UnitModel | null): { readonly name: string; readonly unitId: string } | null {
