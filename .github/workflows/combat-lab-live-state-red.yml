@@ -1,0 +1,23 @@
+name: Combat Lab Live State RED
+
+on:
+  pull_request:
+    branches:
+      - ci/combat-lab-live-state-red-base-20260728
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  red-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Run new regression before implementation
+        run: node scripts/combat_lab_live_state_regression_smoke.mjs
