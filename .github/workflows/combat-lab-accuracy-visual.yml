@@ -18,7 +18,15 @@ jobs:
       - name: Checkout CI head
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           show-progress: false
+
+      - name: Prove product files match exact source SHA
+        shell: bash
+        run: |
+          git diff --exit-code "$EXPECTED_PRODUCT_SHA" -- . \
+            ':(exclude)ci/**' \
+            ':(exclude).github/workflows/combat-lab-accuracy-visual.yml'
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
