@@ -12,7 +12,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 30
     steps:
       - name: Checkout corrected product head
         uses: actions/checkout@v4
@@ -26,21 +26,19 @@ jobs:
           cache: npm
       - name: Install exact dependencies
         run: npm ci --no-audit --no-fund
-      - name: Capture Stage 9 verification
-        id: stage9
-        shell: bash
-        run: |
-          set +e
-          npm run infantry-combat-stage9:verify > "$RUNNER_TEMP/stage9-final.log" 2>&1
-          status=$?
-          cat "$RUNNER_TEMP/stage9-final.log"
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          exit 0
-      - name: Upload Stage 9 verification log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: infantry-combat-stage9-final-log
-          path: ${{ runner.temp }}/stage9-final.log
-      - name: Require Stage 9 verification success
-        run: test "${{ steps.stage9.outputs.status }}" -eq 0
+      - name: Camera and aim regression
+        run: node scripts/combat_lab_camera_aim_regression_smoke.mjs
+      - name: Stage 5 functional aim smoke
+        run: npm run infantry-combat-stage5:smoke
+      - name: Stage 8 functional smoke
+        run: npm run infantry-combat-stage8:smoke
+      - name: Stage 9 functional smoke
+        run: npm run infantry-combat-stage9:smoke
+      - name: Stage 9 forbidden dependency scan
+        run: npm run infantry-combat-stage9:forbidden-scan
+      - name: Combat Lab workspace contract
+        run: node scripts/combat_lab_workspace_layout_smoke.mjs
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
