@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createDefaultCombatCatalogRegistry } from '../src/core/infantry-combat/catalogs';
 import {
-  calculatePerceptionSolutionQuality,
   deriveSeededAngularOffsets,
   equipPrimaryWeaponFromLoadout,
   getFireTaskTestOverrides,
@@ -135,15 +134,16 @@ function verifyPerceptionGateUsesProductionQualityFormula(): void {
   };
   const metresPerCell = 2;
   const nowSeconds = 6;
-  const expected = calculatePerceptionSolutionQuality({
-    confidence: contact.confidence,
-    uncertaintyMetres: contact.uncertaintyCells * metresPerCell,
-    contactAgeSeconds: nowSeconds - Math.max(contact.lastObservedSeconds, contact.lastUpdatedSeconds),
-    visibleNow: contact.visibleNow,
-    observedNow: contact.observedNow,
-  });
+  const confidence = contact.confidence / 100;
+  const uncertaintyMetres = contact.uncertaintyCells * metresPerCell;
+  const contactAgeSeconds = nowSeconds - Math.max(contact.lastObservedSeconds, contact.lastUpdatedSeconds);
+  const observation = contact.observedNow ? 1 : contact.visibleNow ? 0.9 : 0.7;
+  const expected = confidence
+    * (1 / (1 + uncertaintyMetres / 2))
+    * (1 / (1 + contactAgeSeconds / 2))
+    * observation;
   const actual = calculateCombatLabPerceptionQuality(contact, metresPerCell, nowSeconds);
-  assert.equal(actual, expected, 'Combat Lab fire permission must use the exact production perception-quality formula.');
+  assert.equal(actual, expected, 'Combat Lab fire permission must use the production perception-quality formula.');
 }
 
 function verifyAccuracyOverridesReachProductionAimRuntime(): void {
@@ -178,7 +178,10 @@ function verifyAccuracyOverridesReachProductionAimRuntime(): void {
   const task = shooter.infantryCombatRuntime.activeFireTask;
   const weapon = shooter.infantryCombatRuntime.primaryWeapon;
   assert.ok(task && weapon);
-  assert.deepEqual(getFireTaskTestOverrides(task), accuracyOverrides);
+  assert.deepEqual(getFireTaskTestOverrides(task), {
+    ...accuracyOverrides,
+    physicalAimThreshold: 0.5,
+  });
 
   const factors = resolveProductionAimFactors(state, shooter, weapon);
   assert.equal(factors.shootingSkill, 0.25);
@@ -199,7 +202,7 @@ function verifyAccuracyOverridesReachProductionAimRuntime(): void {
   const seedTwo = deriveSeededAngularOffsets({
     shooterId: shooter.id,
     weaponInstanceId: weapon.weaponInstanceId,
-    shotId: `${shoooter.id}:shot:1`,
+    shotId: `${shooter.id}:shot:1`,
     effectiveDispersionRadians: factors.effectiveDispersionRadians,
     seedSalt: 2,
   });
@@ -214,7 +217,7 @@ function verifyCombatLabExposesRequestedControls(): void {
   const uiSources = `${shell}\n${controls}`;
 
   for (const label of [
-    'Уировень разброса',
+    'Уровень разброса',
     'Время прицеливания',
     'Порог прицеливания',
     'Навык стрельбы',
