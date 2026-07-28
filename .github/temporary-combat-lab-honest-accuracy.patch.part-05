@@ -1,0 +1,101 @@
++function normalizeFireTaskTestOverrides(value: unknown): FireTaskTestOverridesV1 | null {
++  if (!isRecord(value) || value.schemaVersion !== 1) return null;
++  const proficiency = normalizeWeaponProficiency(value.weaponProficiency);
++  if (!proficiency) return null;
++  const aimTimeSeconds = finitePositive(value.aimTimeSeconds, Number.NaN);
++  if (!Number.isFinite(aimTimeSeconds)) return null;
++  return {
++    schemaVersion: 1,
++    dispersionMultiplier: clamp(finitePositive(value.dispersionMultiplier, 1), 0.01, 100),
++    aimTimeSeconds: clamp(aimTimeSeconds, 0.01, 120),
++    shootingSkill: clamp01(value.shootingSkill),
++    weaponProficiency: proficiency,
++    randomnessMultiplier: clamp(finiteNonNegativeRaw(value.randomnessMultiplier, 1), 0, 100),
++    randomSeed: integer(value.randomSeed, 1, 1, 0xffff_ffff),
++    usePhysicalAimThreshold: value.usePhysicalAimThreshold === true,
++  };
++}
++function sameTestOverrides(left: FireTaskTestOverridesV1 | null, right: FireTaskTestOverridesV1 | null): boolean {
++  return left === right || Boolean(left && right
++    && left.schemaVersion === right.schemaVersion
++    && left.dispersionMultiplier === right.dispersionMultiplier
++    && left.aimTimeSeconds === right.aimTimeSeconds
++    && left.shootingSkill === right.shootingSkill
++    && left.weaponProficiency === right.weaponProficiency
++    && left.randomnessMultiplier === right.randomnessMultiplier
++    && left.randomSeed === right.randomSeed
++    && left.usePhysicalAimThreshold === right.usePhysicalAimThreshold);
++}
++function normalizeWeaponProficiency(value: unknown): WeaponProficiency | null {
++  return value === 'untrained' || value === 'trained' || value === 'specialist' ? value : null;
++}
++function finitePositive(value: unknown, fallback: number): number {
++  return isFiniteNumber(value) && value > 0 ? value : fallback;
++}
++function finiteNonNegativeRaw(value: unknown, fallback: number): number {
++  return isFiniteNumber(value) && value >= 0 ? value : fallback;
+ }
+ function requestRejected(status: Exclude<RequestFireTaskStatus, 'started' | 'already_running'>, reasonCode: string, reasonRu: string): RequestFireTaskResult { return { accepted: false, status, task: null, lease: null, reasonCode, reasonRu }; }
+ function tickResult(taskId: string | null, commitRequested: boolean, requestedShotOrdinal: number | null, completed: boolean, failed: boolean, consumedSeconds: number, remainingSeconds: number, reasonCode: string | null): TickFireTaskResult {
+diff --git a/src/core/infantry-combat/runtime/InfantryCombatRuntimeTypes.ts b/src/core/infantry-combat/runtime/InfantryCombatRuntimeTypes.ts
+index 9c4f7157..9b1dec5d 100644
+--- a/src/core/infantry-combat/runtime/InfantryCombatRuntimeTypes.ts
++++ b/src/core/infantry-combat/runtime/InfantryCombatRuntimeTypes.ts
+@@ -34,6 +34,16 @@ export interface ResolvedWeaponSnapshotV1 {
+ }
+ export interface WeaponOperatorProfileV1 { readonly schemaVersion: typeof WEAPON_OPERATOR_PROFILE_SCHEMA_VERSION; readonly shootingSkill: number; readonly proficiencyByWeaponClass: Readonly<Record<WeaponClass, WeaponProficiency>>; }
+ export interface WeaponRecoilRuntimeV1 { readonly schemaVersion: typeof WEAPON_RECOIL_RUNTIME_SCHEMA_VERSION; pitchOffsetRadians: number; yawOffsetRadians: number; lastUpdatedSeconds: number; sequence: number; }
++export interface FireTaskTestOverridesV1 {
++  readonly schemaVersion: 1;
++  readonly dispersionMultiplier: number;
++  readonly aimTimeSeconds: number;
++  readonly shootingSkill: number;
++  readonly weaponProficiency: WeaponProficiency;
++  readonly randomnessMultiplier: number;
++  readonly randomSeed: number;
++  readonly usePhysicalAimThreshold: boolean;
++}
+ export interface InfantryWeaponInstanceV1 {
+   readonly schemaVersion: 1 | 2 | typeof INFANTRY_WEAPON_INSTANCE_SCHEMA_VERSION;
+   readonly weaponInstanceId: string;
+@@ -134,6 +144,7 @@ export interface FireTaskRuntimeV1 {
+   readonly contactId: string | null;
+   readonly sourceUnitId: string | null;
+   readonly mode: FireMode;
++  readonly testOverrides?: FireTaskTestOverridesV1 | null;
+   phase: FireTaskPhase;
+   readonly requestedSeconds: number;
+   phaseStartedSeconds: number;
+diff --git a/src/core/infantry-combat/runtime/ShotCommitServiceStage8.ts b/src/core/infantry-combat/runtime/ShotCommitServiceStage8.ts
+index ed223e74..b22d6911 100644
+--- a/src/core/infantry-combat/runtime/ShotCommitServiceStage8.ts
++++ b/src/core/infantry-combat/runtime/ShotCommitServiceStage8.ts
+@@ -13,7 +13,7 @@ import {
+   prepareAutomaticFireCommit,
+ } from './AutomaticFireRuntime';
+ import { getSuppressionSupportPoint } from './AutomaticFireSupportPoints';
+-import { fireTaskHasExactLease, recordCommittedFireTaskShot } from './FireTaskRuntime';
++import { fireTaskHasExactLease, getFireTaskCommitQuality, recordCommittedFireTaskShot } from './FireTaskRuntime';
+ import { evaluateFriendlyFireCorridorRisk, evaluateMuzzleBlocked } from './FriendlyFireRisk';
+ import { computeMuzzleGeometryFromDirection, getWeaponAnchor } from './MuzzleGeometry';
+ import {
+@@ -106,7 +106,7 @@ export function commitShot(input: CommitShotInput): CommitShotResult {
+ 
+   const solution = task.aimTracking.solution;
+   if (!solution.valid || !isFiniteDirection(solution.currentDirection)) return failure(shooter, 'aim_solution_invalid');
+-  if (solution.usableAimQuality + QUALITY_EPSILON < task.minimumSolutionQuality) return failure(shooter, 'aim_solution_below_threshold');
++  if (getFireTaskCommitQuality(task) + QUALITY_EPSILON < task.minimumSolutionQuality) return failure(shooter, 'aim_solution_below_threshold');
+   if (shooter.movementRuntime.isMoving && weapon.resolved.weapon.allowFireWhileMoving === false) {
+     return failure(shooter, 'movement_forbidden', { roundsBefore: weapon.roundsInWeapon, roundsAfter: weapon.roundsInWeapon });
+   }
+@@ -133,11 +133,14 @@ export function commitShot(input: CommitShotInput): CommitShotResult {
+     ? directionBetween(getWeaponAnchor(state.map, shooter), supportPoint)
+     : normalizeFiniteDirection(solution.currentDirection);
+   if (!aimDirectionBeforeDispersion) return failure(shooter, 'invalid_target');
++  const sampledDispersionRadians = solution.effectiveDispersionRadians
++    * (task.testOverrides?.randomnessMultiplier ?? 1);
+   const dispersion = deriveSeededAngularOffsets({
+     shooterId: shooter.id,
+     weaponInstanceId: weapon.weaponInstanceId,
+     shotId,
+-    effectiveDispersionRadians: solution.effectiveDispersionRadians,
