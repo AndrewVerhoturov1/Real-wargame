@@ -1,0 +1,132 @@
++    effectiveDispersionRadians: sampledDispersionRadians,
++    seedSalt: task.testOverrides?.randomSeed,
+   });
+   const corridorCenterDirection = prepareCommittedShotDirection({
+     aimDirection: aimDirectionBeforeDispersion,
+@@ -178,7 +181,7 @@ export function commitShot(input: CommitShotInput): CommitShotResult {
+     geometry.muzzle,
+     corridorCenterDirection,
+     corridorDistance,
+-    solution.effectiveDispersionRadians,
++    sampledDispersionRadians,
+   );
+   if (friendly.risk > task.maximumFriendlyFireRisk) {
+     return failure(shooter, 'friendly_risk_exceeded', {
+@@ -238,7 +241,7 @@ export function commitShot(input: CommitShotInput): CommitShotResult {
+     finalProjectileDirection: { ...finalProjectileDirection },
+     initialVelocityMetresPerSecond: { ...initialVelocity },
+     predictedHitProbability: solution.predictedHitProbability,
+-    effectiveDispersionRadians: solution.effectiveDispersionRadians,
++    effectiveDispersionRadians: sampledDispersionRadians,
+     roundsBefore,
+     roundsAfter,
+     fireTaskShotOrdinal: ordinal,
+diff --git a/src/core/testing/combat-lab/CombatLabCommands.ts b/src/core/testing/combat-lab/CombatLabCommands.ts
+index c53762df..ced091c7 100644
+--- a/src/core/testing/combat-lab/CombatLabCommands.ts
++++ b/src/core/testing/combat-lab/CombatLabCommands.ts
+@@ -5,6 +5,7 @@ import {
+   cancelReloadWeapon,
+   cancelSingleFireTask,
+   cancelWeaponDeploymentAction,
++  calculatePerceptionSolutionQuality,
+   requestAmmoTransfer,
+   requestApplyFirstAidAction,
+   requestDeployWeapon,
+@@ -36,20 +37,48 @@ export function executeCombatLabCommand(
+     if (!shooter) return missingUnit(command.shooterUnitId);
+     const targetUnit = command.targetUnitId ? findUnit(state, command.targetUnitId) : null;
+     if (command.targetUnitId && !targetUnit) return missingUnit(command.targetUnitId);
+-    const target = command.targetPointMetres ?? (targetUnit ? unitAimPointMetres(state, targetUnit) : null);
++    const targetContact = targetUnit ? resolveProductionContact(shooter, targetUnit.id) : null;
++    if (targetUnit && !targetContact) {
++      return rejected(
++        'combat_lab_target_contact_missing',
++        'Огонь по бойцу невозможен: у стрелка нет производственного контакта с этой целью.',
++      );
++    }
++    if (targetContact) {
++      const perceptionQuality = calculatePerceptionSolutionQuality({
++        confidence: targetContact.confidence,
++        uncertaintyMetres: targetContact.uncertaintyCells * state.map.metersPerCell,
++        contactAgeSeconds: Math.max(0, now - Math.max(targetContact.lastObservedSeconds, targetContact.lastUpdatedSeconds, 0)),
++        visibleNow: targetContact.visibleNow,
++        observedNow: targetContact.observedNow,
++      });
++      if (!command.forceFire && perceptionQuality < clamp01(command.minimumPerceptionQuality)) {
++        return rejected(
++          'combat_lab_perception_below_threshold',
++          `Качество восприятия ${(perceptionQuality * 100).toFixed(1)}% ниже порога ${(clamp01(command.minimumPerceptionQuality) * 100).toFixed(1)}%.`,
++        );
++      }
++    }
++    const target = targetContact
++      ? {
++          xMetres: targetContact.lastKnownPosition.x * state.map.metersPerCell,
++          yMetres: targetContact.lastKnownPosition.y * state.map.metersPerCell,
++          zMetres: 1,
++        }
++      : command.targetPointMetres;
+     if (!target) return rejected('combat_lab_target_missing', 'Не выбрана цель-боец или точка цели.');
+-    const targetContactId = targetUnit ? resolveProductionContactId(shooter, targetUnit.id) : null;
+     const result = requestFireTask(shooter, {
+       owner,
+       ownerToken,
+       target,
+       targetRadiusMetres: command.mode === 'suppress' ? command.targetRadiusMetres : 0,
+-      contactId: targetContactId,
++      contactId: targetContact?.id ?? null,
+       sourceUnitId: targetUnit?.id ?? null,
+       mode: command.mode,
+       minimumSolutionQuality: command.minimumSolutionQuality,
+       maximumFriendlyFireRisk: 1,
+       requestedSeconds: now,
++      testOverrides: command.accuracyOverrides,
+     });
+     return normalizeProductionResult(result, ownerToken);
+   }
+@@ -189,15 +218,10 @@ export function cancelCombatLabWeaponAction(
+     : rejected('combat_lab_first_aid_missing', 'Активная первая помощь не найдена.');
+ }
+ 
+-function unitAimPointMetres(state: SimulationState, unit: UnitModel) {
+-  return {
+-    xMetres: unit.position.x * state.map.metersPerCell,
+-    yMetres: unit.position.y * state.map.metersPerCell,
+-    zMetres: unit.behaviorRuntime.posture === 'prone' ? 0.35 : unit.behaviorRuntime.posture === 'crouched' ? 1.05 : 1.45,
+-  };
+-}
+-
+-function resolveProductionContactId(shooter: UnitModel, targetUnitId: string): string | null {
++function resolveProductionContact(
++  shooter: UnitModel,
++  targetUnitId: string,
++): UnitModel['perceptionKnowledge']['contacts'][number] | null {
+   const matching = shooter.perceptionKnowledge.contacts
+     .filter((contact) => contact.sourceUnitId === targetUnitId)
+     .sort((left, right) => (
+@@ -207,7 +231,7 @@ function resolveProductionContactId(shooter: UnitModel, targetUnitId: string): s
+       || right.lastUpdatedSeconds - left.lastUpdatedSeconds
+       || left.id.localeCompare(right.id)
+     ));
+-  return matching[0]?.id ?? null;
++  return matching[0] ?? null;
+ }
+ 
+ function normalizeProductionResult(value: unknown, ownerToken: string | null): CombatLabCommandResultV1 {
+@@ -238,6 +262,9 @@ function rejected(reasonCode: string, reasonRu: string): CombatLabCommandResultV
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === 'object' && value !== null && !Array.isArray(value);
+ }
++function clamp01(value: number): number {
++  return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
++}
+ function text(value: unknown, fallback: string): string {
+   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+ }
+diff --git a/src/core/testing/combat-lab/CombatLabContracts.ts b/src/core/testing/combat-lab/CombatLabContracts.ts
+index e394eb95..f52e65a9 100644
+--- a/src/core/testing/combat-lab/CombatLabContracts.ts
++++ b/src/core/testing/combat-lab/CombatLabContracts.ts
+@@ -1,6 +1,6 @@
+ import type { UnitPosture } from '../../behavior/BehaviorModel';
