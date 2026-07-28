@@ -17,7 +17,7 @@ jobs:
       - name: Checkout corrected product head
         uses: actions/checkout@v4
         with:
-          ref: 8cbad1df40eeb2699d9c2cf97866dabdacb89666
+          ref: dcf222268847f9954971615a20374d62168c9d33
           fetch-depth: 0
       - name: Setup Node.js 24
         uses: actions/setup-node@v4
@@ -34,6 +34,8 @@ jobs:
         run: npm run infantry-combat-stage8:smoke
       - name: Stage 9 functional smoke
         run: npm run infantry-combat-stage9:smoke
+      - name: Combat Lab full game contract
+        run: node scripts/combat_lab_full_game_contract_smoke.mjs
       - name: Combat Lab workspace contract
         run: node scripts/combat_lab_workspace_layout_smoke.mjs
       - name: TypeScript
