@@ -19,6 +19,10 @@ export interface FireTaskTestOverridesV1 {
   readonly usePhysicalAimThreshold: boolean;
 }
 
+export type FireTaskTestOverridesInputV1 = Omit<FireTaskTestOverridesV1, 'physicalAimThreshold'> & {
+  readonly physicalAimThreshold?: number;
+};
+
 interface ShotRandomnessContextV1 {
   readonly randomnessMultiplier: number;
   readonly randomSeed: number;
@@ -29,12 +33,12 @@ const shotRandomnessByKey = new Map<string, ShotRandomnessContextV1>();
 
 export function setFireTaskTestOverrides(
   task: FireTaskRuntimeV1,
-  value: FireTaskTestOverridesV1,
+  value: FireTaskTestOverridesInputV1,
 ): FireTaskTestOverridesV1 {
   if (task.owner.source !== 'test') {
     throw new Error('FireTask test overrides are allowed only for test-owned actions.');
   }
-  const normalized = normalizeFireTaskTestOverrides(value);
+  const normalized = normalizeFireTaskTestOverrides(value, task.minimumSolutionQuality);
   overridesByTask.set(task, normalized);
   return normalized;
 }
@@ -108,12 +112,19 @@ export function resolveFireTaskTestShotRandomness(
   return shotRandomnessByKey.get(shotRandomnessKey(shooterId, weaponInstanceId, shotId)) ?? null;
 }
 
-function normalizeFireTaskTestOverrides(value: FireTaskTestOverridesV1): FireTaskTestOverridesV1 {
+function normalizeFireTaskTestOverrides(
+  value: FireTaskTestOverridesInputV1,
+  fallbackPhysicalAimThreshold: number,
+): FireTaskTestOverridesV1 {
   return {
     schemaVersion: FIRE_TASK_TEST_OVERRIDES_SCHEMA_VERSION,
     dispersionMultiplier: clamp(finite(value.dispersionMultiplier, 1), 0.05, 10),
     aimTimeSeconds: clamp(finite(value.aimTimeSeconds, 1), 0.05, 60),
-    physicalAimThreshold: clamp(finite(value.physicalAimThreshold, 0.5), 0, 1),
+    physicalAimThreshold: clamp(
+      finite(value.physicalAimThreshold, fallbackPhysicalAimThreshold),
+      0,
+      1,
+    ),
     shootingSkill: clamp(finite(value.shootingSkill, 0.5), 0, 1),
     weaponProficiency: normalizeProficiency(value.weaponProficiency),
     randomnessMultiplier: clamp(finite(value.randomnessMultiplier, 1), 0, 4),
