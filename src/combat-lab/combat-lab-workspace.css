@@ -2,7 +2,8 @@
   --combat-lab-dock-width: 370px;
 }
 
-body.app-shell-mode-combat-lab.workspace-simulation #app {
+body.app-shell-mode-combat-lab.workspace-simulation #app,
+body.app-shell-mode-combat-lab.workspace-editor #app {
   width: auto !important;
   height: auto !important;
 }
