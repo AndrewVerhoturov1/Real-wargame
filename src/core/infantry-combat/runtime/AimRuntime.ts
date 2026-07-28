@@ -178,6 +178,7 @@ function applyLaboratorySolutionFactors(
   weapon: InfantryWeaponInstanceV1,
   solution: AimSolutionRuntimeV1,
 ): void {
+  void task;
   const factors = resolveProductionAimFactors(state, shooter, weapon);
   solution.factors = factors;
   solution.effectiveDispersionRadians = effectiveDispersionForProgress(
@@ -248,7 +249,9 @@ function applyDirectionGate(task: FireTaskRuntimeV1): void {
     // Stage 8 stores a threshold in usable-quality space. Scaling both sides by
     // the same perception quality keeps the laboratory slider purely physical,
     // while retaining the real contact quality for diagnostics and probability.
-    task.minimumSolutionQuality = canonicalUnitInterval(physicalThreshold * gateQuality);
+    Object.assign(task, {
+      minimumSolutionQuality: canonicalUnitInterval(physicalThreshold * gateQuality),
+    });
   }
   const usable = canonicalUnitInterval(solution.physicalAimQuality * gateQuality);
   solution.usableAimQuality = usable;
