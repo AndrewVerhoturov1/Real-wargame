@@ -1,0 +1,1 @@
+Trigger Vercel authentication diagnostics for the final Combat Lab deploy.
