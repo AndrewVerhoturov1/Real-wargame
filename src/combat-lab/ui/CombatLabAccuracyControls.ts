@@ -3,6 +3,7 @@ import { resolveProductionAimFactors } from '../../core/infantry-combat/runtime'
 import type { SimulationState } from '../../core/simulation/SimulationState';
 import type { UnitModel } from '../../core/units/UnitModel';
 import type { CombatLabAccuracyOverridesV1 } from '../../core/testing/combat-lab';
+import '../combat-lab-accuracy-controls.css';
 
 export interface CombatLabAccuracyCommandValuesV1 {
   readonly minimumSolutionQuality: number;
